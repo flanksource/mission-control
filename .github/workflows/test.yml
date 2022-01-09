@@ -21,7 +21,6 @@ jobs:
           key: cache-${{ hashFiles('**/go.sum') }}-${{ hashFiles('.bin/*') }}
           restore-keys: |
             cache-
-      - run: make bin
       - name: Test
         run: make test
       - name: Publish Unit Test Results
