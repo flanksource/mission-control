@@ -89,24 +89,11 @@ install:
 test-e2e: bin
 	./test/e2e.sh
 
-
-.bin/upx:
-ifeq (, $(shell which upx))
-ifeq ($(OS), darwin)
-	brew install upx
-	UPX=upx
-else
+.bin/upx: .bin
 	wget -nv -O upx.tar.xz https://github.com/upx/upx/releases/download/v3.96/upx-3.96-$(OS)_$(ARCH).xz
 	tar xf upx.tar.xz
 	mv upx-3.96-$(OS)_$(ARCH)/upx .bin
 	rm -rf upx-3.96-$(OS)_$(ARCH)
-	UPX=.bin/upx
-endif
-else
-	UPX=$(shell which upx)
-endif
-
-
 
 .bin:
 	mkdir -p .bin
