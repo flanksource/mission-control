@@ -65,11 +65,9 @@ windows: ui
 binaries: linux darwin windows compress
 
 .PHONY: release
-release: ui .bin/kustomize binaries
+release: binaries
 	mkdir -p .release
-	cd config/base && $(KUSTOMIZE) edit set image controller=${IMG}
-	$(KUSTOMIZE) build config/ > .release/release.yaml
-	cp .bin/canary-checker* .release/
+	cp .bin/incident-commander* .release/
 
 .PHONY: lint
 lint:
