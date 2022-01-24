@@ -26,27 +26,34 @@ var Serve = &cobra.Command{
 		db.HttpEndpoint = publicEndpoint + "/db"
 		go db.StartPostgrest()
 
-		url, err := url.Parse("http://localhost:3000")
-		if err != nil {
-			e.Logger.Fatal(err)
-		}
-
 		e.Use(middleware.Logger())
 
-		e.Group("/db").Use(middleware.ProxyWithConfig(middleware.ProxyConfig{
-			Rewrite: map[string]string{
-				"^/db/*": "/$1",
-			},
-			Balancer: middleware.NewRoundRobinBalancer([]*middleware.ProxyTarget{
-				{
-					URL: url,
-				},
-			}),
-		}))
+		forward(e, "/db", "http://localhost:3000")
+		forward(e, "/config", configDb)
+		forward(e, "/canary", canaryChecker)
+		forward(e, "/apm", apmHub)
+
 		if err := e.Start(fmt.Sprintf(":%d", httpPort)); err != nil {
 			e.Logger.Fatal(err)
 		}
 	},
+}
+
+func forward(e *echo.Echo, prefix string, target string) {
+	_url, err := url.Parse(target)
+	if err != nil {
+		e.Logger.Fatal(err)
+	}
+	e.Group(prefix).Use(middleware.ProxyWithConfig(middleware.ProxyConfig{
+		Rewrite: map[string]string{
+			fmt.Sprintf("^%s/*", prefix): "/$1",
+		},
+		Balancer: middleware.NewRoundRobinBalancer([]*middleware.ProxyTarget{
+			{
+				URL: _url,
+			},
+		}),
+	}))
 }
 
 func init() {
