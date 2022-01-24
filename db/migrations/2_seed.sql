@@ -10,7 +10,7 @@ CREATE TABLE person (
   title TEXT NULL,
   email TEXT NULL,
   phone TEXT NULL,
-  properties json null,
+  properties jsonb null,
   created_at timestamp NOT NULL DEFAULT now(),
   updated_at timestamp NOT NULL DEFAULT now()
 );
@@ -39,13 +39,15 @@ CREATE TABLE hypothesis (
   id UUID DEFAULT generate_ulid() PRIMARY KEY,
   created_by UUID NOT NULL,
   incident_id UUID NOT NULL,
+  parent_id UUID NULL,
   type TEXT NOT NULL CHECK (type IN ('root', 'factor', 'solution')),
   title TEXT NOT NULL,
   status TEXT NOT NULL,
   created_at timestamp NOT NULL DEFAULT now(),
   updated_at timestamp NOT NULL DEFAULT now(),
   FOREIGN KEY (created_by) REFERENCES person(id),
-  FOREIGN KEY (incident_id) REFERENCES incident(id)
+  FOREIGN KEY (incident_id) REFERENCES incident(id),
+  FOREIGN KEY (parent_id) REFERENCES hypothesis(id)
 );
 ---
 CREATE TABLE comment (
@@ -76,8 +78,8 @@ CREATE TABLE evidence (
       'other'
     )
   ),
-  evidence json null,
-  properties json null,
+  evidence jsonb null,
+  properties jsonb null,
   created_at timestamp NOT NULL DEFAULT now(),
   updated_at timestamp NOT NULL DEFAULT now(),
   FOREIGN KEY (created_by) REFERENCES person(id),
