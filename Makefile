@@ -20,7 +20,7 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
-test:
+test: ui
 	go test ./... -coverprofile cover.out
 
 fmt:
