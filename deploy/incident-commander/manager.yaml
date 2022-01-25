@@ -29,9 +29,9 @@ spec:
           args:
             - serve
             - -vvv
-            - --apm-hub=http://apm-hub.apm-hub.svc:8080
-            - --canary-checker=http://canary-checker.canary-checker.svc:8080
-            - --config-db=http://config-db.config-db.svc:8080
+            - --apm-hub=http://apm-hub.incident-commander.svc:8080
+            - --canary-checker=http://canary-checker.incident-commander.svc:8080
+            - --config-db=http://config-db.incident-commander.svc:8080
           resources:
             requests:
               cpu: 200m
