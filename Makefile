@@ -75,7 +75,7 @@ lint:
 
 .PHONY: ui
 ui:
-# cd ui && npm ci && npm run build
+	cd ui && npm ci && npm run build
 
 .PHONY: build
 build:
