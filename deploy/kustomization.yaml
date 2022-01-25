@@ -1,0 +1,8 @@
+resources:
+  - namespace.yaml
+bases:
+  - postgres
+  - apm-hub
+  - config-db
+  - canary-checker
+  - incident-commander

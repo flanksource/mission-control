@@ -1,0 +1,6 @@
+namespace: incident-commander
+resources:
+  - "postgres-secret.yaml"
+  - https://raw.githubusercontent.com/flanksource/canary-checker/v0.38.74/config/deploy/manifests.yaml
+patchesStrategicMerge:
+  - patch.yaml

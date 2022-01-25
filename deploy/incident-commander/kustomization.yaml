@@ -1,0 +1,4 @@
+namespace: incident-commander
+resources:
+  - "postgres-secret.yaml"
+  - "manager.yaml"

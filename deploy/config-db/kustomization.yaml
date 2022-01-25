@@ -1,0 +1,7 @@
+namespace: incident-commander
+bases:
+  - "https://github.com/flanksource/config-db/deploy"
+resources:
+  - postgres-secret.yaml
+patchesStrategicMerge:
+  - patch.yaml
