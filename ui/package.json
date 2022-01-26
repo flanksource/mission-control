@@ -1,5 +1,5 @@
 {
-  "name": "canary-checker",
+  "name": "incident-commander",
   "version": "0.1.0",
   "dependencies": {
     "@babel/plugin-syntax-jsx": "^7.14.5",
