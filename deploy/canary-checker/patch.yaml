@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    control-plane: canary-checker
+  name: canary-checker
+  namespace: canary-checker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      control-plane: canary-checker
+  template:
+    metadata:
+      labels:
+        control-plane: canary-checker
+    spec:
+      containers:
+        - name: canary-checker
+          env:
+            - name: DOCKER_API_VERSION
+              value: "1.39"
+            - name: DB_URL
+              valueFrom:
+                secretKeyRef:
+                  name: canary-checker-postgres-connection-string
+                  key: connection-string
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: canary-checker
+  labels:
+    control-plane: canary-checker
+$patch: delete
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  annotations:
+    kubernetes.io/tls-acme: "true"
+  name: canary-checker
+  namespace: canary-checker
+$patch: delete
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  labels:
+    control-plane: canary-checker
+  name: canary-checker-monitor
+  namespace: canary-checker
+$patch: delete

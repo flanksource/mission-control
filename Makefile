@@ -20,7 +20,7 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
-test:
+test: ui
 	go test ./... -coverprofile cover.out
 
 fmt:
@@ -75,7 +75,7 @@ lint:
 
 .PHONY: ui
 ui:
-# cd ui && npm ci && npm run build
+	cd ui && npm ci && npm run build
 
 .PHONY: build
 build:
@@ -103,3 +103,16 @@ test-e2e: bin
 	chmod +x .bin/octopilot
 
 bin: .bin .bin/wait4x .bin/yq .bin/karina .bin/go-junit-report .bin/restic .bin/jmeter telepresence .bin/octopilot .bin/kustomize
+
+.bin/kustomize: .bin
+	curl -L https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv4.3.0/kustomize_v4.3.0_$(OS)_$(ARCH).tar.gz -o kustomize.tar.gz && \
+    tar xf kustomize.tar.gz -C .bin/ && \
+	rm kustomize.tar.gz
+
+
+.PHONY: stack
+stack: .bin/kustomize
+	kubectl apply -f deploy/namespace.yaml
+	$(KUSTOMIZE) build deploy/postgres | kubectl apply -f -
+	kubectl wait --for=condition=ready pod -l app=postgres -n incident-commander --timeout=2m
+	$(KUSTOMIZE) build deploy | kubectl apply -f -

@@ -1,0 +1,4 @@
+namespace: incident-commander
+resources:
+  - "postgres-init-script.yaml"
+  - "postgres.yaml"

@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"net/http"
 	"net/url"
 
 	"github.com/flanksource/commons/logger"
@@ -19,9 +18,7 @@ var Serve = &cobra.Command{
 			logger.Errorf("Failed to initialize the db: %v", err)
 		}
 		e := echo.New()
-		e.GET("/", func(c echo.Context) error {
-			return c.String(http.StatusOK, "Hello, World!")
-		})
+		e.Static("/", "./ui/build")
 		// PostgREST needs to know how it is exposed to create the correct links
 		db.HttpEndpoint = publicEndpoint + "/db"
 		go db.StartPostgrest()

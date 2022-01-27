@@ -1,0 +1,12 @@
+namespace: incident-commander
+bases:
+  - "https://github.com/flanksource/apm-hub/deploy/"
+patchesStrategicMerge:
+  - |
+    apiVersion: v1
+    kind: Namespace
+    metadata:
+      name: apm-hub
+      labels:
+        control-plane: apm-hub
+    $patch: delete
