@@ -90,19 +90,13 @@ test-e2e: bin
 	./test/e2e.sh
 
 .bin/upx: .bin
-	wget -nv -O upx.tar.xz https://github.com/upx/upx/releases/download/v3.96/upx-3.96-$(OS)_$(ARCH).xz
+	wget -nv -O upx.tar.xz https://github.com/upx/upx/releases/download/v3.96/upx-3.96-$(OS)_$(ARCH).tar.xz
 	tar xf upx.tar.xz
 	mv upx-3.96-$(OS)_$(ARCH)/upx .bin
 	rm -rf upx-3.96-$(OS)_$(ARCH)
 
 .bin:
 	mkdir -p .bin
-
-.bin/octopilot:
-	curl -sSLo .bin/octopilot https://github.com/dailymotion-oss/octopilot/releases/download/v1.0.7/octopilot_1.0.7_$(OS)_$(ARCH) && \
-	chmod +x .bin/octopilot
-
-bin: .bin .bin/wait4x .bin/yq .bin/karina .bin/go-junit-report .bin/restic .bin/jmeter telepresence .bin/octopilot .bin/kustomize
 
 .bin/kustomize: .bin
 	curl -L https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv4.3.0/kustomize_v4.3.0_$(OS)_$(ARCH).tar.gz -o kustomize.tar.gz && \
