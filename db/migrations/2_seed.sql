@@ -68,16 +68,7 @@ CREATE TABLE evidence (
   description TEXT NOT NULL,
   hypothesis_id UUID NOT NULL,
   created_by UUID NOT NULL,
-  type TEXT NOT NULL CHECK (
-    type IN (
-      'metric',
-      'log',
-      'trace',
-      'health',
-      'url',
-      'other'
-    )
-  ),
+  type TEXT NOT NULL,
   evidence jsonb null,
   properties jsonb null,
   created_at timestamp NOT NULL DEFAULT now(),
