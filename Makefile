@@ -90,7 +90,7 @@ test-e2e: bin
 	./test/e2e.sh
 
 .bin/upx: .bin
-	wget -nv -O upx.tar.xz https://github.com/upx/upx/releases/download/v3.96/upx-3.96-$(OS)_$(ARCH).tar.xz
+	wget -nv -O upx.tar.xz https://github.com/upx/upx/releases/download/v3.96/upx-3.96-$(ARCH)_$(OS).tar.xz
 	tar xf upx.tar.xz
 	mv upx-3.96-$(OS)_$(ARCH)/upx .bin
 	rm -rf upx-3.96-$(OS)_$(ARCH)
