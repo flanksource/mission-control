@@ -23,7 +23,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.db.secretKeyRef | default "postgres-connection" }}
-                  key: DB_URL_INCIDENT_COMM
+                  key: DB_URL_INCIDENT_COMMANDER
           command:
             - /app/incident-commander
           args:
