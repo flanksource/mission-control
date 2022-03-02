@@ -60,3 +60,17 @@ extra:
   #             values:
   #             - e2e-az1
   #             - e2e-az2
+
+canary-checker:
+  # db:
+  #   enabled:
+  #   secretKeyRef:
+  #     name:
+  #     key:
+
+config-db:
+  # db:
+  # enabled:
+  # secretKeyRef:
+  #   name:
+  #   key:
