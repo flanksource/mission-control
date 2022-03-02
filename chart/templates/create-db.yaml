@@ -27,7 +27,9 @@ spec:
                   key: POSTGRES_PASSWORD
           command: ["bash"]
           {{ $setpgpass := (print "echo postgres." .Release.Namespace ".svc.cluster.local:5432/postgres:$POSTGRES_USER:$POSTGRES_PASSWORD > ~/.pgpass" }}
-          {{ $createdb := (print "psql -h postgres." .Release.Namespace ".svc.cluster.local:5432/postgres -u $POSTGRES_USER -c 'create database incident_commander'") }}
-          args: ["-c", "{{ $setpgpass }}", "chmod 0600 ~/.pgpass" , "{{ $createdb }}"]
+          {{ $createIncidentCommanderDb := (print "psql -h postgres." .Release.Namespace ".svc.cluster.local:5432/postgres -u $POSTGRES_USER -c 'create database incident_commander'") }}
+          {{ $createConfig_dbDb := (print "psql -h postgres." .Release.Namespace ".svc.cluster.local:5432/postgres -u $POSTGRES_USER -c 'create database config_db'") }}
+          {{ $canaryCheckerDb := (print "psql -h postgres." .Release.Namespace ".svc.cluster.local:5432/postgres -u $POSTGRES_USER -c 'create database canary_checker'") }}
+          args: ["-c", "{{ $setpgpass }}", "chmod 0600 ~/.pgpass" , "{{ $createIncidentCommanderDb }}", "{{ $createConfig_dbDb }}", "{{ $canaryCheckerDb }}" ]
       restartPolicy: Never
 {{- end }}
