@@ -17,7 +17,9 @@ db:
   enabled: false
   secretKeyRef:
     name:
-    key: 
+    configDbKey: 
+    canaryCheckerDbKey: 
+    incidentCommanderKey: 
   storageClass: 
   storage: 
 
