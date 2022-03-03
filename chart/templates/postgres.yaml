@@ -68,11 +68,11 @@ data:
   POSTGRES_USER: {{ $user | quote }}
   {{- $password := (get $secretData "POSTGRES_PASSWORD") | default (randAlphaNum 32 | b64enc) }}
   POSTGRES_PASSWORD: {{ $password | quote }}
-  {{- $configDbUrl := (get $secretData "DB_URL_CONFIG_DB") | default ( ( print "postgresql://" $user ":" $password "@postgres." $releaseNamespace ".svc.cluster.local:5432/config_db" ) | b64enc ) }}
+  {{- $configDbUrl := ( get $secretData .Values.db.secretKeyRef.configDbKey ) | default ( ( print "postgresql://" $user ":" $password "@postgres." $releaseNamespace ".svc.cluster.local:5432/config_db" ) | b64enc ) }}
   {{ .Values.db.secretKeyRef.configDbKey }}: {{ $configDbUrl | quote }}
-  {{- $canaryCheckerDbUrl := (get $secretData "DB_URL_INCIDENT_COMMANDER") | default ( ( print "postgresql://" $user ":" $password "@postgres." $releaseNamespace ".svc.cluster.local:5432/canary_checker" ) | b64enc ) }}
+  {{- $canaryCheckerDbUrl := (get $secretData .Values.db.secretKeyRef.canaryCheckerKey) | default ( ( print "postgresql://" $user ":" $password "@postgres." $releaseNamespace ".svc.cluster.local:5432/canary_checker" ) | b64enc ) }}
   {{ .Values.db.secretKeyRef.canaryCheckerKey | default 'DB_URL'}}: {{ $canaryCheckerDbUrl | quote }}
-  {{- $incidentCommanderDbUrl := (get $secretData "DB_URL_INCIDENT_COMMANDER") | default ( ( print "postgresql://" $user ":" $password "@postgres." $releaseNamespace ".svc.cluster.local:5432/incident_commander" ) | b64enc ) }}
+  {{- $incidentCommanderDbUrl := (get $secretData .Values.db.secretKeyRef.incidentCommanderKey) | default ( ( print "postgresql://" $user ":" $password "@postgres." $releaseNamespace ".svc.cluster.local:5432/incident_commander" ) | b64enc ) }}
   {{ .Values.db.secretKeyRef.incidentCommanderKey | default 'DB_URL'}}: {{ $incidentCommanderDbUrl | quote }}
 {{- end }}
 
