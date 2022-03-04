@@ -1,9 +1,0 @@
-apiVersion: v2
-name: canary-checker
-description: A Helm chart for canary-checker
-
-type: application
-
-version: 0.1.0
-
-appVersion: "0.38.75"
