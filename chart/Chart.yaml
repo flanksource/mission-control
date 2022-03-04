@@ -1,9 +1,17 @@
 apiVersion: v2
 name: incident-commander
 description: A Helm chart for incident-commander
-
 type: application
-
 version: 0.1.0
-
 appVersion: "0.0.10"
+
+dependencies:
+  - name: apm-hub
+    version: "~0.0.17"
+    repository: https://github.com/flanksource/charts/index.yaml
+  - name: config-db
+    version: "~0.0.5"
+    repository: https://github.com/flanksource/charts/index.yaml
+  - name: canary-checker
+    version: "~0.0.5"
+    repository: https://github.com/flanksource/charts/index.yaml
