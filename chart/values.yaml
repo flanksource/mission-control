@@ -16,9 +16,9 @@ image:
 db:
   enabled: false
   secretKeyRef:
-    name:
-    configDbKey: 
-    canaryCheckerDbKey: 
+    name: &secretKeyRef postgres-connection
+    configDbKey: &configDbKey CONFIG_DB_URL
+    canaryCheckerDbKey: &canaryCheckerKey CANARY_CHECKER_DB_URL
     incidentCommanderKey: 
   storageClass: 
   storage: 
@@ -62,15 +62,15 @@ extra:
   #             - e2e-az2
 
 canary-checker:
-  # db:
-  #   enabled:
-  #   secretKeyRef:
-  #     name:
-  #     key:
+  db:
+    enabled: false
+    secretKeyRef:
+      name: *secretKeyRef
+      key: *canaryCheckerKey
 
 config-db:
-  # db:
-  # enabled:
-  # secretKeyRef:
-  #   name:
-  #   key:
+  db:
+  enabled: false
+  secretKeyRef:
+    name: *secretKeyRef
+    key: *configDbKey
