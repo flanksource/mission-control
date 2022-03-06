@@ -1,0 +1,35 @@
+{{- if empty .Values.db.secretKeyRef.name }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: create-postgres-db
+  labels:
+    {{- include "incident-commander.labels" . | nindent 4 }}
+  annotations: 
+    helm.sh/hook: post-install
+    helm.sh/hook-delete-policy: hook-succeeded
+spec:
+  template:
+    spec:
+      containers:
+        - name: create-postgres-db
+          image: usql/postgres
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.db.secretKeyRef.name | default "postgres-connection" }}
+                  key: POSTGRES_USER
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.db.secretKeyRef.name | default "postgres-connection" }}
+                  key: POSTGRES_PASSWORD
+          command: ["bash"]
+          {{ $setpgpass := (print "echo postgres." .Release.Namespace ".svc.cluster.local:5432/postgres:$POSTGRES_USER:$POSTGRES_PASSWORD > ~/.pgpass" }}
+          {{ $createIncidentCommanderDb := (print "psql -h postgres." .Release.Namespace ".svc.cluster.local:5432/postgres -u $POSTGRES_USER -c 'create database incident_commander'") }}
+          {{ $createConfig_dbDb := (print "psql -h postgres." .Release.Namespace ".svc.cluster.local:5432/postgres -u $POSTGRES_USER -c 'create database config_db'") }}
+          {{ $canaryCheckerDb := (print "psql -h postgres." .Release.Namespace ".svc.cluster.local:5432/postgres -u $POSTGRES_USER -c 'create database canary_checker'") }}
+          args: ["-c", "{{ $setpgpass }}", "chmod 0600 ~/.pgpass" , "{{ $createIncidentCommanderDb }}", "{{ $createConfig_dbDb }}", "{{ $canaryCheckerDb }}" ]
+      restartPolicy: Never
+{{- end }}
