@@ -14,18 +14,19 @@ image:
   tag: "latest"
 
 db:
-  enabled: false
+  enabled: true
   secretKeyRef:
+    create: true
     name: &secretKeyRef postgres-connection
     configDbKey: &configDbKey CONFIG_DB_URL
     canaryCheckerDbKey: &canaryCheckerKey CANARY_CHECKER_DB_URL
-    incidentCommanderKey: 
-  storageClass: 
-  storage: 
+    incidentCommanderKey: INCIDENT_COMMANDER_DB_URL
+  storageClass:
+  storage:
 
 ingress:
   enabled: false
-  annotations: 
+  annotations:
     kubernetes.io/ingress.class: nginx
     # kubernetes.io/tls-acme: "true"
   host: chart-example.local
@@ -34,7 +35,7 @@ ingress:
   #    hosts:
   #      - chart-example.local
 
-resources: 
+resources:
   requests:
     cpu: 200m
     memory: 200Mi
@@ -50,7 +51,7 @@ extra:
   #     operator: "Equal"
   #     value: "value1"
   #     effect: "NoSchedule"
-  # affinity: 
+  # affinity:
   #   nodeAffinity:
   #       requiredDuringSchedulingIgnoredDuringExecution:
   #         nodeSelectorTerms:
@@ -65,12 +66,14 @@ canary-checker:
   db:
     enabled: false
     secretKeyRef:
+      create: false
       name: *secretKeyRef
       key: *canaryCheckerKey
 
 config-db:
   db:
-  enabled: false
-  secretKeyRef:
-    name: *secretKeyRef
-    key: *configDbKey
+    enabled: false
+    secretKeyRef:
+      create: false
+      name: *secretKeyRef
+      key: *configDbKey
