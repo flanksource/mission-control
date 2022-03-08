@@ -23,7 +23,7 @@ spec:
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.db.secretKeyRef.name  }}
-                  key: {{ .Values.db.secretKeyRef.incidentCommanderKey }}
+                  key: {{ .Values.db.secretKeyRef.incidentCommanderDbKey }}
           command:
             - /app/incident-commander
           args:
