@@ -26,23 +26,23 @@ spec:
         envFrom:
           - secretRef:
               name: {{ .Values.db.secretKeyRef.name }}
-    volumeClaimTemplates:
-    - metadata:
-        name: postgresql
-      spec:
-        accessModes: ["ReadWriteOnce"]
-        storageClassName: {{ .Values.db.storageClass }}
-        resources:
-          requests:
-            storage: {{ .Values.db.storage }}
+  volumeClaimTemplates:
+  - metadata:
+      name: postgresql
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: {{ .Values.db.storageClass }}
+      resources:
+        requests:
+          storage: {{ .Values.db.storage }}
 
 ---
 
 # PostgreSQL StatefulSet Service
 apiVersion: v1
 kind: Service
-  metadata:
-    name: postgres
+metadata:
+  name: postgres
 spec:
   selector:
     app: postgresql
@@ -58,16 +58,15 @@ spec:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: {{.Values.db.secretKeyRef.name}}
+  name: {{ .Values.db.secretKeyRef.name }}
   annotations:
     "helm.sh/resource-policy": "keep"
 type: Opaque
 stringData:
-  {{ $releaseNamespace :=  }}
-  {{- $secretObj := (lookup "v1" "Secret" .Release.Namespace .Values.db.secretKeyRef.name  }}
-  {{- $secretData := (get $secretObj "data")  }}
-  {{- $user :=  ((get $secretData "POSTGRES_USER") | b64dec)| default "postgres"  }}
-  {{- $password :=  ((get $secretData "POSTGRES_PASSWORD") |b64dec_) | default randAlphaNum 32  }}
+  {{- $secretObj := ( lookup "v1" "Secret" .Release.Namespace .Values.db.secretKeyRef.name ) }}
+  {{- $secretData := ( get $secretObj "stringData" ) | default dict }}
+  {{- $user :=  (( get $secretData "POSTGRES_USER" ) | b64dec ) | default "postgres"  }}
+  {{- $password :=  (( get $secretData "POSTGRES_PASSWORD") | b64dec ) | default ( randAlphaNum 32 )  }}
   {{- $host := print "postgres." .Release.Namespace  ".svc.cluster.local:5432" }}
   {{- $url := print "postgresql://" $user ":" $password "@" $host }}
 
