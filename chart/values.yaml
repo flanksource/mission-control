@@ -20,7 +20,8 @@ db:
     name: &secretKeyRef postgres-connection
     configDbKey: &configDbKey CONFIG_DB_URL
     canaryCheckerDbKey: &canaryCheckerKey CANARY_CHECKER_DB_URL
-    incidentCommanderKey: INCIDENT_COMMANDER_DB_URL
+    incidentCommanderDbKey: INCIDENT_COMMANDER_DB_URL
+  # Need to add the storage class and the storage according to the PV provisioned or according to the auto provitioning class that is configured on the cluster.
   storageClass:
   storage:
 
