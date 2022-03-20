@@ -110,3 +110,7 @@ stack: .bin/kustomize
 	$(KUSTOMIZE) build deploy/postgres | kubectl apply -f -
 	kubectl wait --for=condition=ready pod -l app=postgres -n incident-commander --timeout=2m
 	$(KUSTOMIZE) build deploy | kubectl apply -f -
+
+.PHONY: chart
+chart:
+	helm package ./chart
