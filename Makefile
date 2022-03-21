@@ -113,4 +113,5 @@ stack: .bin/kustomize
 
 .PHONY: chart
 chart:
+	helm dependency build ./chart
 	helm package ./chart
