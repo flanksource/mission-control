@@ -22,8 +22,9 @@ db:
     canaryCheckerDbKey: &canaryCheckerKey CANARY_CHECKER_DB_URL
     incidentCommanderDbKey: INCIDENT_COMMANDER_DB_URL
   # Need to add the storage class and the storage according to the PV provisioned or according to the auto provitioning class that is configured on the cluster.
+  # In case no storageClass is defined the default storage class will be used.
   storageClass:
-  storage:
+  storage: 10Gi
 
 ingress:
   enabled: false

@@ -31,7 +31,9 @@ spec:
       name: postgresql
     spec:
       accessModes: ["ReadWriteOnce"]
+      {{ if .Values.db.storageClass }}
       storageClassName: {{ .Values.db.storageClass }}
+      {{ end }}
       resources:
         requests:
           storage: {{ .Values.db.storage }}
