@@ -2,10 +2,12 @@ package cmd
 
 import (
 	"fmt"
+	"net/http"
 	"net/url"
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/ui"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/spf13/cobra"
@@ -18,7 +20,6 @@ var Serve = &cobra.Command{
 			logger.Errorf("Failed to initialize the db: %v", err)
 		}
 		e := echo.New()
-		e.Static("/", "./ui/build")
 		// PostgREST needs to know how it is exposed to create the correct links
 		db.HttpEndpoint = publicEndpoint + "/db"
 		go db.StartPostgrest()
@@ -30,6 +31,9 @@ var Serve = &cobra.Command{
 		forward(e, "/canary", canaryChecker)
 		forward(e, "/apm", apmHub)
 
+		contentHandler := echo.WrapHandler(http.FileServer(http.FS(ui.StaticContent)))
+		var contentRewrite = middleware.Rewrite(map[string]string{"/*": "/build/$1"})
+		e.GET("/*", contentHandler, contentRewrite)
 		if err := e.Start(fmt.Sprintf(":%d", httpPort)); err != nil {
 			e.Logger.Fatal(err)
 		}
