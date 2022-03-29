@@ -66,11 +66,12 @@ extra:
 
 canary-checker:
   db:
-    enabled: false
-    secretKeyRef:
-      create: false
-      name: *secretKeyRef
-      key: *canaryCheckerKey
+    external:
+      enabled: true
+      secretKeyRef:
+        create: false
+        name: *secretKeyRef
+        key: *canaryCheckerKey
 
 config-db:
   db:
