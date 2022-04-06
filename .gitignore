@@ -6,3 +6,5 @@
 cover.out
 test.test
 build/
+Chart.lock
+charts/
