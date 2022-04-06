@@ -68,6 +68,7 @@ canary-checker:
   db:
     external:
       enabled: true
+      create: false
       secretKeyRef:
         create: false
         name: *secretKeyRef
