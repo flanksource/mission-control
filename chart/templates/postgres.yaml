@@ -61,14 +61,17 @@ apiVersion: v1
 kind: Secret
 metadata:
   name: {{ .Values.db.secretKeyRef.name }}
-  annotations:
-    "helm.sh/resource-policy": "keep"
 type: Opaque
 stringData:
   {{- $secretObj := ( lookup "v1" "Secret" .Release.Namespace .Values.db.secretKeyRef.name ) }}
   {{- $secretData := ( get $secretObj "stringData" ) | default dict }}
   {{- $user :=  (( get $secretData "POSTGRES_USER" ) | b64dec ) | default "postgres"  }}
-  {{- $password :=  (( get $secretData "POSTGRES_PASSWORD") | b64dec ) | default ( randAlphaNum 32 )  }}
+  {{ $password := "" }}
+  {{- if .Release.IsInstall }}
+  {{- $password =  (( get $secretData "POSTGRES_PASSWORD") | b64dec ) | default ( randAlphaNum 32 )  }}
+  {{ else }}
+  {{- $password = (index (lookup "v1" "Secret" .Release.Namespace .Values.db.secretKeyRef.name).data "POSTGRES_PASSWORD") | b64dec }}
+  {{ end }}
   {{- $host := print "postgres." .Release.Namespace  ".svc.cluster.local:5432" }}
   {{- $url := print "postgresql://" $user ":" $password "@" $host }}
 
