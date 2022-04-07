@@ -27,12 +27,12 @@ spec:
                   key: POSTGRES_PASSWORD
           command: ["bash"]
           args:
-            - c
+            - -c
             - |
-              echo postgres/postgres:$POSTGRES_USER:$POSTGRES_PASSWORD > ~/.pgpass
-              psql -h postgres -u $POSTGRES_USER -c 'create database incident_commander'
-              psql -h postgres -u $POSTGRES_USER -c 'create database config-db'
-              psql -h postgres -u $POSTGRES_USER -c 'create database canary-checker'
+              export PGPASSWORD=$POSTGRES_PASSWORD;
+              psql -h postgres -U $POSTGRES_USER -c 'create database "incident-commander"'
+              psql -h postgres -U $POSTGRES_USER -c 'create database "config-db"'
+              psql -h postgres -U $POSTGRES_USER -c 'create database "canary-checker"'
 
 
       restartPolicy: Never
