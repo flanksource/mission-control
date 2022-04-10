@@ -16,8 +16,16 @@ module.exports = {
     },
   },
   variants: {
-    extend: {},
-  },
+    extend: {
+      backgroundColor: ["disabled", "checked"],
+      textColor: ["disabled"],
+      margin: ["first", "last"],
+      padding: ["first", "last"],
+      borderWidth: ["first", "hover", "last"],
+      borderRadius: ["first", "last"],
+      borderColor: ["hover", "checked"],
+    },
+  }, // eslint-disable-next-line global-require
   // eslint-disable-next-line global-require
   plugins: [require("@tailwindcss/forms"), require("@tailwindcss/typography")],
 };

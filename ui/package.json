@@ -4,7 +4,7 @@
   "dependencies": {
     "@babel/plugin-syntax-jsx": "^7.14.5",
     "@craco/craco": "^6.2.0",
-    "@flanksource/flanksource-ui": "^1.0.34",
+    "@flanksource/flanksource-ui": "^1.0.37",
     "@headlessui/react": "^1.4.0",
     "@heroicons/react": "^1.0.3",
     "@tailwindcss/forms": "^0.3.3",
@@ -24,7 +24,7 @@
     "timeago.js": "^4.0.2",
     "web-vitals": "^1.0.1"
   },
-  "proxy": "https://canaries.canary.lab.flanksource.com/",
+  "proxy": "https://incident-commander.canary.lab.flanksource.com/",
   "scripts": {
     "start": "DISABLE_ESLINT_PLUGIN=true craco start",
     "build": "DISABLE_ESLINT_PLUGIN=true craco build",
