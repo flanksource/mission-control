@@ -1,0 +1,10 @@
+version: 2
+updates:
+  # Keep npm dependencies up to date
+  - package-ecosystem: "npm"
+    directory: "ui/"
+    allow:
+      - dependency-name: "@flanksource*"
+    schedule:
+      interval: "daily"
+      time: "02:00"
