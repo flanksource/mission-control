@@ -7,11 +7,11 @@ appVersion: "0.0.10"
 
 dependencies:
   - name: apm-hub
-    version: ">= 0.0.17"
+    version: ">= 0.0.20"
     repository: https://flanksource.github.io/charts
   - name: config-db
-    version: ">= 0.0.17"
+    version: ">= 0.0.18"
     repository: https://flanksource.github.io/charts
   - name: canary-checker
-    version: ">= 0.38.93"
+    version: ">= 0.38.107"
     repository: https://flanksource.github.io/charts
