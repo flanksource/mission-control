@@ -30,10 +30,12 @@ var Serve = &cobra.Command{
 		forward(e, "/config", configDb)
 		forward(e, "/canary", canaryChecker)
 		forward(e, "/apm", apmHub)
-
-		contentHandler := echo.WrapHandler(http.FileServer(http.FS(ui.StaticContent)))
-		var contentRewrite = middleware.Rewrite(map[string]string{"/*": "/build/$1"})
-		e.GET("/*", contentHandler, contentRewrite)
+		e.Use(middleware.StaticWithConfig(middleware.StaticConfig{
+			Root:       "build",
+			Index:      "index.html",
+			HTML5:      true,
+			Filesystem: http.FS(ui.StaticContent),
+		}))
 		if err := e.Start(fmt.Sprintf(":%d", httpPort)); err != nil {
 			e.Logger.Fatal(err)
 		}
