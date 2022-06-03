@@ -7,7 +7,7 @@
   "proxy": "https://incident-commander.canary.lab.flanksource.com/",
   "scripts": {
     "start": "node ./scripts/serve-build.js",
-    "build": "cp -r node_modules/@flanksource/flanksource-ui/build node_modules/@flanksource/flanksource-ui/scripts ./"
+    "build": "cp -r node_modules/@flanksource/flanksource-ui/build node_modules/@flanksource/flanksource-ui/scripts ./ && sed -i -e 's/__APP_DEPLOYMENT__/INCIDENT_MANAGER/' ./build/index.html"
   },
   "devDependencies": {
     "http-proxy": "^1.18.1",
