@@ -16,7 +16,7 @@ import (
 
 const (
 	HeaderCacheControl = "Cache-Control"
-	CacheControlValue  = "max-age=600"
+	CacheControlValue  = "public, max-age=2592000, immutable"
 )
 
 var cacheSuffixes = []string{
