@@ -29,7 +29,7 @@ spec:
             - chmod -R 0750 /postgres && chown 999:999 -R /postgres
       containers:
       - name: postgresql
-        image: docker.io/supabase/postgres:14.1.0.34
+        image: docker.io/supabase/postgres:14.1.0.21
         volumeMounts:
           - name: postgresql
             mountPath: /var/lib/postgresql/
