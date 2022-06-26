@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
       - name: postgresql
-        image: postgres:14
+        image: docker.io/supabase/postgres:14.1.0.21
         volumeMounts:
           - name: postgresql
             mountPath: /data
