@@ -42,7 +42,7 @@ type IncidentResponders struct {
 	GCP        []CloudProvider `json:"gcp"`
 	ServiceNow []ServiceNow    `json:"servicenow"`
 	Slack      []Slack         `json:"slack"`
-	Teams      []Teams         `json:"teams"`
+	Teams      []TeamsChannel  `json:"teams"`
 	TeamsUser  []TeamsUser     `json:"teamsUser"`
 }
 
