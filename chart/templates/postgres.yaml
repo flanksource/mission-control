@@ -18,18 +18,21 @@ spec:
         app: postgresql
     spec:
       initContainers:
-        - name: postgres-perms
-          volumeMounts:
-            - mountPath: /postgres
-              name: postgresql
+        - command:
+          - sh
+          - -c
+          - chmod -R 0750 /postgres && chown 999:999 -R /postgres
           image: busybox
-          command:
-            - sh
-            - -c
-            - chmod -R 0750 /postgres && chown 999:999 -R /postgres
+          name: postgres-perms
+          volumeMounts:
+          - mountPath: /postgres
+            name: postgresql
       containers:
       - name: postgresql
         image: docker.io/supabase/postgres:14.1.0.21
+        env:
+          - name: PGDATA
+            value: /var/lib/postgresql/data
         volumeMounts:
           - name: postgresql
             mountPath: /var/lib/postgresql/
