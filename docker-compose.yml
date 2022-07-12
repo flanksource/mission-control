@@ -1,0 +1,16 @@
+version: '3'
+services:
+  app:
+    build: .
+    ports:
+      - 8080:8080
+    environment:
+      DB_URL: postgres://ic:ic@db:5432/ic
+    command: serve
+  db:
+    image: postgres:14-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: ic
+      POSTGRES_USER: ic
+      POSTGRES_PASSWORD: ic

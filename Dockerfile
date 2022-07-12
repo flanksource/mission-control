@@ -8,16 +8,14 @@ RUN  ls && npm run build
 
 FROM golang:1.17 as builder
 WORKDIR /app
-COPY ./ ./
-
+COPY go.mod go.mod
+COPY go.sum go.sum
 ARG VERSION
-COPY go.mod /app/go.mod
-COPY go.sum /app/go.sum
 RUN go mod download
 COPY --from=node /app/build /app/ui/build
-WORKDIR /app
-RUN go version
+COPY ./ ./
 RUN make build
+
 FROM ubuntu:bionic
 WORKDIR /app
 
