@@ -6,6 +6,9 @@ type Incident struct {
 }
 
 type Comment struct {
+	Body      string    `json:"body"`
+	CreatedBy string    `json:"created_by"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type Hypothesis struct {

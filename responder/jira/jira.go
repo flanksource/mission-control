@@ -1,4 +1,4 @@
-package responder
+package jira
 
 import (
 	"encoding/json"
@@ -57,7 +57,7 @@ func getClient() (*jira.Client, error) {
 
 }
 
-func createIssue(opts JiraOptions) error {
+func CreateIssue(opts JiraOptions) error {
 
 	i := jira.Issue{
 		Fields: &jira.IssueFields{
@@ -88,7 +88,7 @@ func createIssue(opts JiraOptions) error {
 	return nil
 }
 
-func addComment(issueID, comment string) error {
+func AddComment(issueID, comment string) error {
 	client, err := getClient()
 	if err != nil {
 		return err
@@ -106,7 +106,7 @@ func addComment(issueID, comment string) error {
 
 }
 
-func getComments(issueID string) ([]api.Comment, error) {
+func GetComments(issueID string) ([]api.Comment, error) {
 
 	client, err := getClient()
 	if err != nil {
@@ -132,7 +132,7 @@ func getComments(issueID string) ([]api.Comment, error) {
 
 }
 
-func getConfig() (json.RawMessage, error) {
+func GetConfig() (json.RawMessage, error) {
 
 	client, err := getClient()
 	if err != nil {
