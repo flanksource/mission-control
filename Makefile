@@ -115,3 +115,7 @@ stack: .bin/kustomize
 chart:
 	helm dependency build ./chart
 	helm package ./chart
+
+.PHONY: dev
+run-dev: ui
+	DB_URL=postgres://ic:ic@localhost:5432/ic air -c .air.toml

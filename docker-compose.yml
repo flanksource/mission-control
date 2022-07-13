@@ -1,16 +1,19 @@
 version: '3'
 services:
   app:
-    build: .
+    image: cosmtrek/air
+    working_dir: /app
     ports:
       - 8080:8080
     environment:
-      DB_URL: postgres://ic:ic@db:5432/ic
-    #command: air 
-    entrypoint: air
+      DB_URL: postgres://ic:ic@0.0.0.0:5432/ic
+    volumes:
+      - ./:/app/
   db:
     image: postgres:14-alpine
     restart: always
+    ports:
+      - 5432:5432
     environment:
       POSTGRES_DB: ic
       POSTGRES_USER: ic

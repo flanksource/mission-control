@@ -13,7 +13,6 @@ COPY go.sum go.sum
 ARG VERSION
 RUN go mod download
 COPY --from=node /app/build /app/ui/build
-RUN go install github.com/cosmtrek/air@latest
 COPY ./ ./
 RUN make build
 
@@ -28,8 +27,9 @@ RUN apt-get update && \
   apt-get clean
 
 COPY --from=builder /app/.bin/incident-commander /app
-COPY --from=builder /go/bin/air /usr/bin/
 
 RUN /app/incident-commander go-offline
+RUN curl -sSfL https://raw.githubusercontent.com/cosmtrek/air/master/install.sh | sh -s
+RUN air -v
 
 ENTRYPOINT ["/app/incident-commander"]
