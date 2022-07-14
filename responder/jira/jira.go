@@ -2,8 +2,6 @@ package jira
 
 import (
 	"encoding/json"
-	"fmt"
-	"os"
 	"time"
 
 	"github.com/flanksource/commons/logger"
@@ -19,45 +17,21 @@ type JiraOptions struct {
 	IssueType   string
 }
 
-// TODO: Move to utils to flanksource/commons
-func requiredEnvVars(keys ...string) error {
-	var unsetVars []string
-	for _, key := range keys {
-		_, exists := os.LookupEnv(key)
-		if !exists {
-			unsetVars = append(unsetVars, key)
-		}
-	}
-
-	if len(unsetVars) > 0 {
-		return fmt.Errorf("Required environment variables: %s", unsetVars)
-	}
-
-	return nil
-}
-
-func getClient() (*jira.Client, error) {
-
-	err := requiredEnvVars("JIRA_EMAIL", "JIRA_API_TOKEN", "JIRA_URL")
-	if err != nil {
-		return nil, err
-	}
+func GetClient(email, apiToken, url string) (*jira.Client, error) {
 
 	tp := jira.BasicAuthTransport{
-		Username: os.Getenv("JIRA_EMAIL"),
-		Password: os.Getenv("JIRA_API_TOKEN"),
+		Username: email,
+		Password: apiToken,
 	}
 
-	//client, err := jira.NewClient(tp.Client(), "https://flanksource.atlassian.net")
-	client, err := jira.NewClient(tp.Client(), os.Getenv("JIRA_URL"))
+	client, err := jira.NewClient(tp.Client(), url)
 	if err != nil {
 		return nil, err
 	}
 	return client, nil
-
 }
 
-func CreateIssue(opts JiraOptions) error {
+func CreateIssue(client *jira.Client, opts JiraOptions) error {
 
 	i := jira.Issue{
 		Fields: &jira.IssueFields{
@@ -75,10 +49,6 @@ func CreateIssue(opts JiraOptions) error {
 		},
 	}
 
-	client, err := getClient()
-	if err != nil {
-		return err
-	}
 	issue, _, err := client.Issue.Create(&i)
 	if err != nil {
 		return err
@@ -88,11 +58,7 @@ func CreateIssue(opts JiraOptions) error {
 	return nil
 }
 
-func AddComment(issueID, comment string) error {
-	client, err := getClient()
-	if err != nil {
-		return err
-	}
+func AddComment(client *jira.Client, issueID, comment string) error {
 
 	commObj := &jira.Comment{Body: comment}
 	c, _, err := client.Issue.AddComment(issueID, commObj)
@@ -103,15 +69,9 @@ func AddComment(issueID, comment string) error {
 	logger.Debugf("[Jira] Comment: [%s] added for issueID: %s", c.Body, issueID)
 
 	return nil
-
 }
 
-func GetComments(issueID string) ([]api.Comment, error) {
-
-	client, err := getClient()
-	if err != nil {
-		return nil, err
-	}
+func GetComments(client *jira.Client, issueID string) ([]api.Comment, error) {
 
 	issue, _, err := client.Issue.Get(issueID, nil)
 	if err != nil {
@@ -129,15 +89,9 @@ func GetComments(issueID string) ([]api.Comment, error) {
 	}
 
 	return comments, nil
-
 }
 
-func GetConfig() (json.RawMessage, error) {
-
-	client, err := getClient()
-	if err != nil {
-		return nil, err
-	}
+func GetConfig(client *jira.Client) (json.RawMessage, error) {
 
 	projects, _, err := client.Project.GetList()
 	if err != nil {
