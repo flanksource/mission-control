@@ -1,6 +1,10 @@
 package api
 
-import "time"
+import (
+	"time"
+
+	"github.com/flanksource/kommons"
+)
 
 type Incident struct {
 }
@@ -17,9 +21,11 @@ type Hypothesis struct {
 type Responder struct {
 }
 
-type Slack struct {
-	Notification `json:",inline"`
-	Channel      string `json:"channel"`
+type Person struct {
+	Name   string `json:"name,omitempty"`
+	Email  string `json:"email,omitempty"`
+	Avatar string `json:"avatar,omitempty"`
+	Role   string `json:"role,omitempty"`
 }
 
 type Notification struct {
@@ -27,6 +33,11 @@ type Notification struct {
 	Emoji string `json:"emoji"`
 	Title string `json:"title"`
 	Text  string `json:"text"`
+}
+
+type Slack struct {
+	Notification `json:",inline"`
+	Channel      string `json:"channel"`
 }
 
 type TeamsUser struct {
@@ -38,15 +49,16 @@ type TeamsChannel struct {
 }
 
 type IncidentResponders struct {
-	Email      []Email         `json:"email"`
-	Jira       []Jira          `json:"jira"`
-	AWS        []CloudProvider `json:"aws"`
-	AMS        []CloudProvider `json:"ams"`
-	GCP        []CloudProvider `json:"gcp"`
-	ServiceNow []ServiceNow    `json:"servicenow"`
-	Slack      []Slack         `json:"slack"`
-	Teams      []TeamsChannel  `json:"teams"`
-	TeamsUser  []TeamsUser     `json:"teamsUser"`
+	Email       []Email         `json:"email"`
+	Jira        []Jira          `json:"jira"`
+	AWS         []CloudProvider `json:"aws"`
+	AMS         []CloudProvider `json:"ams"`
+	GCP         []CloudProvider `json:"gcp"`
+	ServiceNow  []ServiceNow    `json:"servicenow"`
+	Slack       []Slack         `json:"slack"`
+	Teams       []TeamsChannel  `json:"teams"`
+	TeamsUser   []TeamsUser     `json:"teamsUser"`
+	GithubIssue []GithubIssue   `json:"github"`
 }
 
 type ServiceNow struct {
@@ -57,14 +69,13 @@ type ServiceNow struct {
 	Description string `json:"description,omitempty"`
 }
 
-type Person struct {
-	Name   string `json:"name,omitempty"`
-	Email  string `json:"email,omitempty"`
-	Avatar string `json:"avatar,omitempty"`
-	Role   string `json:"role,omitempty"`
+type AWSClient struct {
+	AccessKey kommons.EnvVar `yaml:"username" json:"username"`
+	SecretKey kommons.EnvVar `yaml:"password" json:"password"`
 }
 
 type AWSSupport struct {
+	CloudProvider   `json:",inline"`
 	ServiceCode     string `json:"serviceCode,omitempty"`
 	CategoryCode    string `json:"categoryCode,omitempty"`
 	Language        string `json:"language,omitempty"`
@@ -89,8 +100,13 @@ type GenericTicketing struct {
 	Labels      map[string]string `json:"labels,omitempty"`
 }
 
+type JiraClient struct {
+	Url      string         `json:"url,omitempty"`
+	Username kommons.EnvVar `yaml:"username" json:"username"`
+	Password kommons.EnvVar `yaml:"password" json:"password"`
+}
+
 type Jira struct {
-	Endpoint    string `json:"endpoint,omitempty"`
 	Project     string `json:"project,omitempty"`
 	IssueType   string `json:"issueType,omitempty"`
 	Priority    string `json:"priority,omitempty"`
@@ -98,7 +114,7 @@ type Jira struct {
 	Description string `json:"description,omitempty"`
 }
 
-type GithubIssues struct {
+type GithubIssue struct {
 	Repository string   `json:"repository,omitempty"`
 	Title      string   `json:"title,omitempty"`
 	Body       string   `json:"body,omitempty"`

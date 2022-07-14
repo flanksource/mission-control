@@ -11,28 +11,28 @@ CREATE TABLE incident_rule (
 );
 
 
-ALTER TABLE responder ADD  COLUMN acknowledged timestamp NULL;
-ALTER TABLE responder ADD  COLUMN resolved timestamp NULL;
-ALTER TABLE responder ADD  COLUMN closed timestamp NULL;
+ALTER TABLE responder ADD COLUMN acknowledged timestamp NULL;
+ALTER TABLE responder ADD COLUMN resolved timestamp NULL;
+ALTER TABLE responder ADD COLUMN closed timestamp NULL;
+ALTER TABLE responder ADD COLUMN external_id TEXT NULL;
 
-
-ALTER TABLE incident ADD  COLUMN acknowledged timestamp NULL;
-ALTER TABLE incident ADD  COLUMN resolved timestamp NULL;
-ALTER TABLE incident ADD  COLUMN closed timestamp NULL;
+ALTER TABLE incident ADD COLUMN acknowledged timestamp NULL;
+ALTER TABLE incident ADD COLUMN resolved timestamp NULL;
+ALTER TABLE incident ADD COLUMN closed timestamp NULL;
 
 ALTER TABLE responder DROP COLUMN acknowledge_time;
 ALTER TABLE responder DROP COLUMN signoff_time;
 
-ALTER TABLE comment ADD  COLUMN responder_id UUID NULL;
+ALTER TABLE comment ADD COLUMN responder_id UUID NULL;
 ALTER TABLE comment ADD	FOREIGN KEY (responder_id) REFERENCES responder(id);
 
 
 CREATE TABLE incident_history (
   id UUID DEFAULT generate_ulid() PRIMARY KEY,
+  incident_id UUID NOT NULL,
   created_by UUID NOT NULL,
   type TEXT NULL,
   description text NOT NULL,
-  incident_id UUID NOT NULL,
   hypothesis_id UUID NULL,
   created_at timestamp NOT NULL DEFAULT now(),
   updated_at timestamp NOT NULL DEFAULT now(),

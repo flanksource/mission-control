@@ -62,6 +62,16 @@ CREATE TABLE comment (
   FOREIGN KEY (incident_id) REFERENCES incident(id),
   FOREIGN KEY (hypothesis_id) REFERENCES hypothesis(id)
 );
+
+CREATE TABLE comment_queue (
+ comment_id UUID NOT NULL,
+ responder_id UUID NOT NULL,
+ error TEXT NULL,
+  created_at timestamp NOT NULL DEFAULT now(),
+  updated_at timestamp NOT NULL DEFAULT now(),
+
+)
+
 ---
 CREATE TABLE evidence (
   id UUID DEFAULT generate_ulid() PRIMARY KEY,

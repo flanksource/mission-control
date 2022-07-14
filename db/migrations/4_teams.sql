@@ -7,8 +7,10 @@ CREATE TABLE team (
   icon TEXT NULL,
   spec JSONB null,
   source TEXT NULL,
+  created_by UUID NOT NULL,
   created_at timestamp NOT NULL DEFAULT now(),
-  updated_at timestamp NOT NULL DEFAULT now()
+  updated_at timestamp NOT NULL DEFAULT now(),
+  FOREIGN KEY (created_by) REFERENCES person(id)
 );
 
 CREATE TABLE team_members (
@@ -28,14 +30,14 @@ CREATE TABLE team_components (
   -- FOREIGN KEY (component_id) REFERENCES component(id)
 );
 
-ALTER TABLE hypothesis ADD  COLUMN owner UUID NULL;
-ALTER TABLE hypothesis ADD	FOREIGN KEY (owner) REFERENCES person(id);
+ALTER TABLE hypothesis ADD COLUMN owner UUID NULL;
+ALTER TABLE hypothesis ADD FOREIGN KEY (owner) REFERENCES responder(id);
 
-ALTER TABLE hypothesis ADD  COLUMN team_id UUID NULL;
-ALTER TABLE hypothesis ADD	FOREIGN KEY (team_id) REFERENCES team(id);
+ALTER TABLE hypothesis ADD COLUMN team_id UUID NULL;
+ALTER TABLE hypothesis ADD FOREIGN KEY (team_id) REFERENCES team(id);
 
-ALTER TABLE person ADD  COLUMN team_id UUID NULL;
-ALTER TABLE person ADD	FOREIGN KEY (team_id) REFERENCES team(id);
+ALTER TABLE person ADD COLUMN team_id UUID NULL;
+ALTER TABLE person ADD FOREIGN KEY (team_id) REFERENCES team(id);
 
 
 -- +goose StatementEnd
