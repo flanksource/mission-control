@@ -6,7 +6,7 @@ services:
     ports:
       - 8080:8080
     environment:
-      DB_URL: postgres://ic:ic@0.0.0.0:5432/ic
+      DB_URL: postgres://ic:ic@db:5432/ic
     volumes:
       - ./:/app/
   db:

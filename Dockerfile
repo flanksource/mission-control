@@ -29,8 +29,4 @@ RUN apt-get update && \
 COPY --from=builder /app/.bin/incident-commander /app
 
 RUN /app/incident-commander go-offline
-RUN curl -sSfL https://raw.githubusercontent.com/cosmtrek/air/master/install.sh | sh -s
-RUN cp ./bin/air /usr/bin
-RUN air -v
-
 ENTRYPOINT ["/app/incident-commander"]
