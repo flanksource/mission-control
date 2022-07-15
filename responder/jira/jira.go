@@ -25,6 +25,12 @@ type JiraProject struct {
 	Statuses   []string `json:"statuses"`
 }
 
+type JiraIssueTransitions struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	ToState string `json:"to_state"`
+}
+
 type JiraClient struct {
 	client *jira.Client
 }
@@ -154,18 +160,25 @@ func (jc JiraClient) GetConfig() (map[string]JiraProject, error) {
 	return p, nil
 }
 
-func (jc JiraClient) CloseIssue(issueID string) error {
-	// TODO: How to find the state of closed issue used by the org
-	// For now, use the last of all the available transitions since that
-	// works by default
-
+func (jc JiraClient) GetIssueTransitions(issueID string) ([]JiraIssueTransitions, error) {
 	transitions, _, err := jc.client.Issue.GetTransitions(issueID)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	desiredTransition := transitions[len(transitions)-1]
-	_, err = jc.client.Issue.DoTransition(issueID, desiredTransition.ID)
+	var transitionList []JiraIssueTransitions
+	for _, transition := range transitions {
+		transitionList = append(transitionList, JiraIssueTransitions{
+			ID:      transition.ID,
+			Name:    transition.Name,
+			ToState: transition.To.Name,
+		})
+	}
+	return transitionList, err
+}
+
+func (jc JiraClient) TransitionIssue(issueID, transitionID string) error {
+	_, err := jc.client.Issue.DoTransition(issueID, transitionID)
 	if err != nil {
 		return err
 	}
