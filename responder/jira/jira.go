@@ -22,6 +22,7 @@ type JiraProject struct {
 	Name       string   `json:"name"`
 	IssueTypes []string `json:"issue_types"`
 	Priorities []string `json:"priorities"`
+	Statuses   []string `json:"statuses"`
 }
 
 type JiraClient struct {
@@ -48,9 +49,6 @@ func (jc JiraClient) CreateIssue(opts JiraIssue) (*jira.Issue, error) {
 
 	i := jira.Issue{
 		Fields: &jira.IssueFields{
-			//Reporter: &jira.User{
-			//Name: opts.Reporter,
-			//},
 			Description: opts.Description,
 			Type: jira.IssueType{
 				Name: opts.IssueType,
@@ -118,6 +116,15 @@ func (jc JiraClient) GetConfig() (map[string]JiraProject, error) {
 		priorityList = append(priorityList, priority.Name)
 	}
 
+	statuses, _, err := jc.client.Status.GetAllStatuses()
+	if err != nil {
+		return nil, err
+	}
+	var statusList []string
+	for _, status := range statuses {
+		statusList = append(statusList, status.Name)
+	}
+
 	projects, _, err := jc.client.Project.GetList()
 	if err != nil {
 		return nil, err
@@ -140,15 +147,27 @@ func (jc JiraClient) GetConfig() (map[string]JiraProject, error) {
 			Name:       project.Name,
 			IssueTypes: issueTypes,
 			Priorities: priorityList,
+			Statuses:   statusList,
 		}
 	}
 
 	return p, nil
 }
 
-func (jc JiraClient) CloseIssue(issueId string) error {
-	// Update issue state
-	// Issue state can be self defined
-	// Use `Done` for now since that is the default
+func (jc JiraClient) CloseIssue(issueID string) error {
+	// TODO: How to find the state of closed issue used by the org
+	// For now, use the last of all the available transitions since that
+	// works by default
+
+	transitions, _, err := jc.client.Issue.GetTransitions(issueID)
+	if err != nil {
+		return err
+	}
+
+	desiredTransition := transitions[len(transitions)-1]
+	_, err = jc.client.Issue.DoTransition(issueID, desiredTransition.ID)
+	if err != nil {
+		return err
+	}
 	return nil
 }
