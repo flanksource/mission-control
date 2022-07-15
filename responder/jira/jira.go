@@ -1,7 +1,6 @@
 package jira
 
 import (
-	"encoding/json"
 	"time"
 
 	"github.com/flanksource/commons/logger"
@@ -10,28 +9,42 @@ import (
 	jira "github.com/andygrunwald/go-jira"
 )
 
-type JiraOptions struct {
+type JiraIssue struct {
 	ProjectKey  string
 	Summary     string
 	Description string
 	IssueType   string
+	Priority    string
 }
 
-func GetClient(email, apiToken, url string) (*jira.Client, error) {
+type JiraProject struct {
+	Key        string   `json:"key"`
+	Name       string   `json:"name"`
+	IssueTypes []string `json:"issue_types"`
+	Priorities []string `json:"priorities"`
+}
 
-	tp := jira.BasicAuthTransport{
+type JiraClient struct {
+	client *jira.Client
+}
+
+func NewClient(email, apiToken, url string) (JiraClient, error) {
+
+	tr := jira.BasicAuthTransport{
 		Username: email,
 		Password: apiToken,
 	}
 
-	client, err := jira.NewClient(tp.Client(), url)
+	c, err := jira.NewClient(tr.Client(), url)
 	if err != nil {
-		return nil, err
+		return JiraClient{}, err
 	}
+
+	client := JiraClient{client: c}
 	return client, nil
 }
 
-func CreateIssue(client *jira.Client, opts JiraOptions) error {
+func (jc JiraClient) CreateIssue(opts JiraIssue) (*jira.Issue, error) {
 
 	i := jira.Issue{
 		Fields: &jira.IssueFields{
@@ -49,31 +62,34 @@ func CreateIssue(client *jira.Client, opts JiraOptions) error {
 		},
 	}
 
-	issue, _, err := client.Issue.Create(&i)
-	if err != nil {
-		return err
-	}
-	logger.Debugf("[Jira] Issue created with ID: [%s]", issue.ID)
-
-	return nil
-}
-
-func AddComment(client *jira.Client, issueID, comment string) error {
-
-	commObj := &jira.Comment{Body: comment}
-	c, _, err := client.Issue.AddComment(issueID, commObj)
-	if err != nil {
-		return err
+	if opts.Priority != "" {
+		i.Fields.Priority = &jira.Priority{Name: opts.Priority}
 	}
 
-	logger.Debugf("[Jira] Comment: [%s] added for issueID: %s", c.Body, issueID)
+	issue, _, err := jc.client.Issue.Create(&i)
+	if err != nil {
+		return nil, err
+	}
+	logger.Debugf("[Jira] Issue created for Project: [%s] with ID: [%s] - [%s]", opts.ProjectKey, issue.ID, opts.Summary)
 
-	return nil
+	return issue, nil
 }
 
-func GetComments(client *jira.Client, issueID string) ([]api.Comment, error) {
+func (jc JiraClient) AddComment(issueID, comment string) (*jira.Comment, error) {
 
-	issue, _, err := client.Issue.Get(issueID, nil)
+	c, _, err := jc.client.Issue.AddComment(issueID, &jira.Comment{Body: comment})
+	if err != nil {
+		return nil, err
+	}
+
+	logger.Debugf("[Jira] Comment: [%s] added for issueID: [%s]", c.Body, issueID)
+
+	return c, nil
+}
+
+func (jc JiraClient) GetComments(issueID string) ([]api.Comment, error) {
+
+	issue, _, err := jc.client.Issue.Get(issueID, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -91,32 +107,46 @@ func GetComments(client *jira.Client, issueID string) ([]api.Comment, error) {
 	return comments, nil
 }
 
-func GetConfig(client *jira.Client) (json.RawMessage, error) {
-
-	projects, _, err := client.Project.GetList()
+func (jc JiraClient) GetConfig() (map[string]JiraProject, error) {
+	priorities, _, err := jc.client.Priority.GetList()
 	if err != nil {
 		return nil, err
 	}
 
-	p := make(map[string]interface{})
+	var priorityList []string
+	for _, priority := range priorities {
+		priorityList = append(priorityList, priority.Name)
+	}
+
+	projects, _, err := jc.client.Project.GetList()
+	if err != nil {
+		return nil, err
+	}
+
+	p := make(map[string]JiraProject)
 	for _, projectMeta := range *projects {
-		project, _, err := client.Project.Get(projectMeta.ID)
+		project, _, err := jc.client.Project.Get(projectMeta.ID)
 		if err != nil {
 			return nil, err
 		}
-		p[projectMeta.Name] = project
+
+		var issueTypes []string
+		for _, issueType := range project.IssueTypes {
+			issueTypes = append(issueTypes, issueType.Name)
+		}
+
+		p[projectMeta.Name] = JiraProject{
+			Key:        project.Key,
+			Name:       project.Name,
+			IssueTypes: issueTypes,
+			Priorities: priorityList,
+		}
 	}
 
-	// TODO: Use priority service to get priorities
-	projectsJson, err := json.Marshal(p)
-	if err != nil {
-		return nil, err
-	}
-
-	return projectsJson, nil
+	return p, nil
 }
 
-func CloseIssue(issueId string) error {
+func (jc JiraClient) CloseIssue(issueId string) error {
 	// Update issue state
 	// Issue state can be self defined
 	// Use `Done` for now since that is the default
