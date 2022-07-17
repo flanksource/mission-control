@@ -13,6 +13,7 @@ CREATE OR REPLACE FUNCTION insert_responder_queue()
 RETURNS TRIGGER AS $$
 BEGIN
     INSERT INTO responder_queue(responder_id) VALUES (new.id);
+    SELECT pg_notify("responder_updates", new.id);
     RETURN NEW;
 END
 $$ LANGUAGE plpgsql;
