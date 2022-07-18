@@ -136,7 +136,7 @@ func (jc JiraClient) GetConfig() (map[string]JiraProject, error) {
 		return nil, err
 	}
 
-	p := make(map[string]JiraProject)
+	projectsMap := make(map[string]JiraProject)
 	for _, projectMeta := range *projects {
 		project, _, err := jc.client.Project.Get(projectMeta.ID)
 		if err != nil {
@@ -148,7 +148,7 @@ func (jc JiraClient) GetConfig() (map[string]JiraProject, error) {
 			issueTypes = append(issueTypes, issueType.Name)
 		}
 
-		p[projectMeta.Name] = JiraProject{
+		projectsMap[projectMeta.Name] = JiraProject{
 			Key:        project.Key,
 			Name:       project.Name,
 			IssueTypes: issueTypes,
@@ -157,7 +157,7 @@ func (jc JiraClient) GetConfig() (map[string]JiraProject, error) {
 		}
 	}
 
-	return p, nil
+	return projectsMap, nil
 }
 
 func (jc JiraClient) GetIssueTransitions(issueID string) ([]JiraIssueTransitions, error) {
@@ -174,13 +174,10 @@ func (jc JiraClient) GetIssueTransitions(issueID string) ([]JiraIssueTransitions
 			ToState: transition.To.Name,
 		})
 	}
-	return transitionList, err
+	return transitionList, nil
 }
 
 func (jc JiraClient) TransitionIssue(issueID, transitionID string) error {
 	_, err := jc.client.Issue.DoTransition(issueID, transitionID)
-	if err != nil {
-		return err
-	}
-	return nil
+	return err
 }
