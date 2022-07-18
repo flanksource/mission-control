@@ -1,15 +1,35 @@
 package responder
 
 import (
-	"github.com/flanksource/incident-commander/responder/jira"
+	"context"
+
+	"github.com/flanksource/incident-commander/db"
 )
 
-func ProcessQueue() {
+func ProcessQueue() error {
 
-	// Use conn.Exec(ctx, "listen responder_updates")
-	// Fetch the data via responder_id which is in the payload
-	// Select correct responder based on the properties column
+	ctx := context.Background()
 
-	// Initialize all the clients on start up ... use init() ?
-	jira.NewClient("", "", "")
+	conn, err := db.Pool.Acquire(ctx)
+	if err != nil {
+		return err
+	}
+
+	_, err = conn.Exec(context.Background(), "listen responder_updates")
+	if err != nil {
+		return err
+	}
+
+	for {
+		notif, err := conn.Conn().WaitForNotification(ctx)
+		if err != nil {
+			return err
+		}
+
+		// Fetch the data via responder_id which is in the payload
+		_ = notif.Payload
+
+		// TODO: Process the palyoad below in a goroutine
+
+	}
 }
