@@ -1,12 +1,9 @@
--- +goose Up
--- +goose StatementBegin
----
 CREATE TABLE team (
   id UUID DEFAULT generate_ulid() PRIMARY KEY,
   name TEXT NOT NULL,
   icon TEXT NULL,
   spec JSONB null,
-  source TEXT NULL,
+  source TEXT NULL, -- The CRD source of the rule, if specified the rule cannot be edited via API
   created_by UUID NOT NULL,
   created_at timestamp NOT NULL DEFAULT now(),
   updated_at timestamp NOT NULL DEFAULT now(),
@@ -29,15 +26,3 @@ CREATE TABLE team_components (
   FOREIGN KEY (team_id) REFERENCES team(id)
   -- FOREIGN KEY (component_id) REFERENCES component(id)
 );
-
-ALTER TABLE hypothesis ADD COLUMN owner UUID NULL;
-ALTER TABLE hypothesis ADD FOREIGN KEY (owner) REFERENCES responder(id);
-
-ALTER TABLE hypothesis ADD COLUMN team_id UUID NULL;
-ALTER TABLE hypothesis ADD FOREIGN KEY (team_id) REFERENCES team(id);
-
-ALTER TABLE person ADD COLUMN team_id UUID NULL;
-ALTER TABLE person ADD FOREIGN KEY (team_id) REFERENCES team(id);
-
-
--- +goose StatementEnd
