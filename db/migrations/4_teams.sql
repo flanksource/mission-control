@@ -1,14 +1,20 @@
+-- +goose Up
+-- +goose StatementBegin
+---
+
 CREATE TABLE team (
   id UUID DEFAULT generate_ulid() PRIMARY KEY,
   name TEXT NOT NULL,
   icon TEXT NULL,
   spec JSONB null,
-  source TEXT NULL, -- The CRD source of the rule, if specified the rule cannot be edited via API
+  source TEXT NULL,
   created_by UUID NOT NULL,
   created_at timestamp NOT NULL DEFAULT now(),
   updated_at timestamp NOT NULL DEFAULT now(),
   FOREIGN KEY (created_by) REFERENCES person(id)
 );
+
+ALTER TABLE person ADD  FOREIGN KEY (team_id) REFERENCES team(id);
 
 CREATE TABLE team_members (
   team_id UUID NOT NULL,
@@ -26,3 +32,5 @@ CREATE TABLE team_components (
   FOREIGN KEY (team_id) REFERENCES team(id)
   -- FOREIGN KEY (component_id) REFERENCES component(id)
 );
+
+-- +goose StatementEnd
