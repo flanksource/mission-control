@@ -2,7 +2,7 @@
 -- +goose StatementBegin
 ---
 
-CREATE TABLE team (
+CREATE TABLE teams (
   id UUID DEFAULT generate_ulid() PRIMARY KEY,
   name TEXT NOT NULL,
   icon TEXT NULL,
@@ -13,7 +13,7 @@ CREATE TABLE team (
   updated_at timestamp NOT NULL DEFAULT now()
 );
 
-CREATE TABLE person (
+CREATE TABLE people (
   id UUID DEFAULT generate_ulid() PRIMARY KEY,
   name TEXT NOT NULL,
   avatar TEXT NULL,
@@ -25,20 +25,20 @@ CREATE TABLE person (
   properties jsonb null,
   created_at timestamp NOT NULL DEFAULT now(),
   updated_at timestamp NULL,
-  FOREIGN KEY (team_id) REFERENCES team(id)
+  FOREIGN KEY (team_id) REFERENCES teams(id)
 );
 
 
-INSERT INTO person (name) VALUES ('System');
+INSERT INTO people (name) VALUES ('System');
 
-ALTER TABLE team ADD FOREIGN KEY (created_by) REFERENCES person(id);
+ALTER TABLE teams ADD FOREIGN KEY (created_by) REFERENCES people(id);
 
 CREATE TABLE team_members (
   team_id UUID NOT NULL,
   person_id UUID NOT NULL,
   PRIMARY KEY (team_id, person_id),
-  FOREIGN KEY (team_id) REFERENCES team(id),
-  FOREIGN KEY (person_id) REFERENCES person(id)
+  FOREIGN KEY (team_id) REFERENCES teams(id),
+  FOREIGN KEY (person_id) REFERENCES people(id)
 );
 
 CREATE TABLE team_components (
@@ -46,8 +46,8 @@ CREATE TABLE team_components (
   component_id UUID NOT NULL,
   role TEXT NULL,
   PRIMARY KEY (team_id, component_id),
-  FOREIGN KEY (team_id) REFERENCES team(id)
-  -- FOREIGN KEY (component_id) REFERENCES component(id)
+  FOREIGN KEY (team_id) REFERENCES teams(id)
+  -- FOREIGN KEY (component_id) REFERENCES components(id)
 );
 
 -- +goose StatementEnd

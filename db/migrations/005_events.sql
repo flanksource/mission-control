@@ -26,7 +26,7 @@ $$ LANGUAGE plpgsql;
 
 CREATE TRIGGER responder_enqueue
     AFTER INSERT
-    ON responder
+    ON responders
     FOR EACH ROW
     EXECUTE PROCEDURE insert_responder_in_event_queue();
 
