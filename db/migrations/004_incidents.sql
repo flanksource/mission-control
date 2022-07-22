@@ -89,6 +89,7 @@ CREATE TABLE comment (
   id UUID DEFAULT generate_ulid() PRIMARY KEY,
   created_by UUID NOT NULL ,
   comment text NOT NULL,
+  external_id TEXT NULL, -- A unique identifier for the responder in the external system e.g. Jira ticket id
   incident_id UUID NOT NULL,
   responder_id UUID NULL,
   hypothesis_id UUID NULL,
@@ -98,7 +99,7 @@ CREATE TABLE comment (
   FOREIGN KEY (created_by) REFERENCES person(id),
   FOREIGN KEY (incident_id) REFERENCES incident(id),
   FOREIGN KEY (hypothesis_id) REFERENCES hypothesis(id),
- 	FOREIGN KEY (responder_id) REFERENCES responder(id)
+  FOREIGN KEY (responder_id) REFERENCES responder(id)
 );
 
 ---
@@ -115,8 +116,5 @@ CREATE TABLE evidence (
   FOREIGN KEY (created_by) REFERENCES person(id),
   FOREIGN KEY (hypothesis_id) REFERENCES hypothesis(id)
 );
-
----
-
 
 -- +goose StatementEnd

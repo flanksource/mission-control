@@ -10,11 +10,28 @@ CREATE TABLE team (
   source TEXT NULL,
   created_by UUID NOT NULL,
   created_at timestamp NOT NULL DEFAULT now(),
-  updated_at timestamp NOT NULL DEFAULT now(),
-  FOREIGN KEY (created_by) REFERENCES person(id)
+  updated_at timestamp NOT NULL DEFAULT now()
 );
 
-ALTER TABLE person ADD  FOREIGN KEY (team_id) REFERENCES team(id);
+CREATE TABLE person (
+  id UUID DEFAULT generate_ulid() PRIMARY KEY,
+  name TEXT NOT NULL,
+  avatar TEXT NULL,
+  team_id UUID NULL, -- every team is also a person
+  organization TEXT NULL,
+  title TEXT NULL,
+  email TEXT NULL,
+  phone TEXT NULL,
+  properties jsonb null,
+  created_at timestamp NOT NULL DEFAULT now(),
+  updated_at timestamp NULL,
+  FOREIGN KEY (team_id) REFERENCES team(id)
+);
+
+
+INSERT INTO person (name) VALUES ('System');
+
+ALTER TABLE team ADD FOREIGN KEY (created_by) REFERENCES person(id);
 
 CREATE TABLE team_members (
   team_id UUID NOT NULL,
