@@ -3,6 +3,10 @@ package api
 import (
 	"time"
 
+	"github.com/google/uuid"
+
+	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/db/types"
 	"github.com/flanksource/kommons"
 )
 
@@ -19,6 +23,14 @@ type Hypothesis struct {
 }
 
 type Responder struct {
+	ID         uuid.UUID
+	Properties types.JSONStringMap `json:"properties" gorm:"type:jsonstringmap;<-:false"`
+	TeamID     uuid.UUID
+	Team       Team
+}
+
+type Team struct {
+	Spec TeamSpec
 }
 
 type Person struct {
@@ -40,12 +52,20 @@ type Slack struct {
 	Channel      string `json:"channel"`
 }
 
+type ResponderClients struct {
+	Jira JiraClient
+	AWS  AWSClient
+}
+
+type TeamSpec struct {
+	ResponderClients ResponderClients
+}
+
 type TeamsUser struct {
 	Notification `json:",inline"`
 }
 
 type TeamsChannel struct {
-	Notification `json:",inline"`
 }
 
 type IncidentResponders struct {
@@ -108,6 +128,7 @@ type JiraClient struct {
 
 type Jira struct {
 	Project     string `json:"project,omitempty"`
+	Summary     string `json:"summary"`
 	IssueType   string `json:"issueType,omitempty"`
 	Priority    string `json:"priority,omitempty"`
 	Assignee    string `json:"assignee,omitempty"`
@@ -157,4 +178,26 @@ type IncidentRule struct {
 	AutoClose          AutoClose           `json:"autoClose,omitempty"`
 	AutoResolve        AutoClose           `json:"autoResolve,omitempty"`
 	IncidentResponders IncidentResponders  `json:"responders,omitempty"`
+}
+
+type Event struct {
+	ID         uuid.UUID
+	Properties types.JSONStringMap `json:"properties" gorm:"type:jsonstringmap;<-:false"`
+}
+
+// We are using the term `Event` as it represents an event in the
+// event_queue table, but the table is named event_queue
+// to signify it's usage as a queue
+func (Event) TableName() string {
+	return "event_queue"
+}
+
+func (e Event) Done() error {
+	tx := db.Gorm.Delete(&e)
+	return tx.Error
+}
+
+func (e Event) SetErrorMessage(errorMsg string) error {
+	tx := db.Gorm.Exec("UPDATE event_queue SET error = ?, attempts = attempts + 1 WHERE id = ?", errorMsg, e.ID)
+	return tx.Error
 }

@@ -10,7 +10,7 @@ import (
 )
 
 type JiraIssue struct {
-	ProjectKey  string
+	Project     string
 	Summary     string
 	Description string
 	IssueType   string
@@ -60,7 +60,7 @@ func (jc JiraClient) CreateIssue(opts JiraIssue) (*jira.Issue, error) {
 				Name: opts.IssueType,
 			},
 			Project: jira.Project{
-				Key: opts.ProjectKey,
+				Key: opts.Project,
 			},
 			Summary: opts.Summary,
 		},
@@ -74,7 +74,7 @@ func (jc JiraClient) CreateIssue(opts JiraIssue) (*jira.Issue, error) {
 	if err != nil {
 		return nil, err
 	}
-	logger.Debugf("[Jira] Issue created for Project: [%s] with ID: [%s] - [%s]", opts.ProjectKey, issue.ID, opts.Summary)
+	logger.Debugf("[Jira] Issue created for Project: [%s] with ID: [%s] - [%s]", opts.Project, issue.Key, opts.Summary)
 
 	return issue, nil
 }

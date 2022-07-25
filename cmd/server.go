@@ -7,11 +7,13 @@ import (
 	"strings"
 
 	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/incident-commander/db"
-	"github.com/flanksource/incident-commander/ui"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/spf13/cobra"
+
+	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/events"
+	"github.com/flanksource/incident-commander/ui"
 )
 
 const (
@@ -50,6 +52,8 @@ var Serve = &cobra.Command{
 			HTML5:      true,
 			Filesystem: http.FS(ui.StaticContent),
 		}))
+
+		go events.ProcessQueue()
 		if err := e.Start(fmt.Sprintf(":%d", httpPort)); err != nil {
 			e.Logger.Fatal(err)
 		}
