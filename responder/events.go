@@ -35,7 +35,7 @@ func ReconcileEvents(events []api.Event) {
 		event := responderIDEventMap[responder.ID.String()]
 		if responder.Properties["responderType"] == "Jira" {
 			fmt.Println("Inside responder properties jira")
-			externalID, err = handleJiraResponder(responder)
+			externalID, err = NotifyJiraResponder(responder)
 			if err != nil {
 				setErr := event.SetErrorMessage(err.Error())
 				if setErr != nil {
@@ -56,14 +56,11 @@ func ReconcileEvents(events []api.Event) {
 			externalID = ""
 		}
 
-		err := event.Done()
-		if err != nil {
-			logger.Errorf("Error deleting event from event_queue table:responder with id:%s and external_id:%s", responder.ID, externalID)
-		}
+		event.Done()
 	}
 }
 
-func handleJiraResponder(responder api.Responder) (string, error) {
+func NotifyJiraResponder(responder api.Responder) (string, error) {
 	if responder.Properties["responderType"] != "Jira" {
 		return "", fmt.Errorf("invalid responderType: %s", responder.Properties["responderType"])
 	}
@@ -85,7 +82,7 @@ func handleJiraResponder(responder api.Responder) (string, error) {
 			},
 		}*/
 
-	jc, err := jira.NewClient(
+	client, err := jira.NewClient(
 		teamSpec.ResponderClients.Jira.Username.Value,
 		teamSpec.ResponderClients.Jira.Password.Value,
 		teamSpec.ResponderClients.Jira.Url,
@@ -100,7 +97,7 @@ func handleJiraResponder(responder api.Responder) (string, error) {
 		return "", err
 	}
 
-	issue, err := jc.CreateIssue(issueOptions)
+	issue, err := client.CreateIssue(issueOptions)
 
 	if err != nil {
 		return "", err

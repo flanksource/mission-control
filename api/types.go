@@ -3,11 +3,12 @@ package api
 import (
 	"time"
 
+	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/kommons"
 	"github.com/google/uuid"
 
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/db/types"
-	"github.com/flanksource/kommons"
 )
 
 type Incident struct {
@@ -182,6 +183,7 @@ type IncidentRule struct {
 
 type Event struct {
 	ID         uuid.UUID
+	Name       string
 	Properties types.JSONStringMap `json:"properties" gorm:"type:jsonstringmap;<-:false"`
 }
 
@@ -192,9 +194,11 @@ func (Event) TableName() string {
 	return "event_queue"
 }
 
-func (e Event) Done() error {
+func (e Event) Done() {
 	tx := db.Gorm.Delete(&e)
-	return tx.Error
+	if tx.Error != nil {
+		logger.Errorf("Error deleting event from event_queue table with id:%s", e.ID.String())
+	}
 }
 
 func (e Event) SetErrorMessage(errorMsg string) error {

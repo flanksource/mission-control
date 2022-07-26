@@ -4,7 +4,7 @@
 -- Event queue for events that need to be processed in the background, once succesfully processed the event is removed from the queue
 CREATE TABLE event_queue (
     id UUID DEFAULT generate_ulid() PRIMARY KEY,
-    event TEXT NOT NULL,
+    name TEXT NOT NULL,
     properties jsonb NULL,
     error TEXT NULL,
     created_at timestamp NOT NULL DEFAULT now(),
@@ -17,7 +17,7 @@ CREATE TABLE event_queue (
 CREATE OR REPLACE FUNCTION insert_responder_in_event_queue()
 RETURNS TRIGGER AS $$
 BEGIN
-    INSERT INTO event_queue(event, properties) VALUES ('responder.create', jsonb_build_object('type', 'responder', 'id', NEW.id));
+    INSERT INTO event_queue(type, properties) VALUES ('responder.create', jsonb_build_object('type', 'responder', 'id', NEW.id));
     NOTIFY event_queue_updates, 'update';
     RETURN NEW;
 END
