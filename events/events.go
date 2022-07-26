@@ -2,7 +2,8 @@ package events
 
 import (
 	"context"
-	//"fmt"
+	"errors"
+	"time"
 
 	"github.com/flanksource/commons/logger"
 	"gorm.io/gorm"
@@ -12,35 +13,59 @@ import (
 	responderPkg "github.com/flanksource/incident-commander/responder"
 )
 
-func ListenForEvents() error {
+func ListenForEvents() {
 
+	logger.Infof("Started listening for events")
+
+	// Consume pending events
+	consumeEventsWrapper()
+
+	pgNotify := make(chan bool)
+	go listenToPostgresNotify(pgNotify)
+
+	select {
+	case <-pgNotify:
+		consumeEventsWrapper()
+
+	case <-time.After(10 * time.Second):
+		logger.Debugf("timed out waiting for pgNotify")
+	}
+}
+
+func listenToPostgresNotify(pgNotify chan bool) {
 	ctx := context.Background()
 
 	conn, err := db.Pool.Acquire(ctx)
 	if err != nil {
-		return err
+		logger.Errorf("Error creating database pool: %v", err)
 	}
 
 	_, err = conn.Exec(ctx, "LISTEN event_queue_updates")
 	if err != nil {
-		return err
+		logger.Errorf("Error listening to database notify: %v", err)
 	}
 
-	logger.Infof("Started event processor")
+	_, err = conn.Conn().WaitForNotification(ctx)
+	if err != nil {
+		logger.Errorf("Error waiting for database notifications: %v", err)
+	}
 
-	// Consume pending events
-	consumeEvents()
+	pgNotify <- true
 
+}
+
+// TODO: Better function name
+func consumeEventsWrapper() {
+	// Keep on iterating till the queue is empty
 	for {
-
-		// TODO: Fetch all at once then process or keep processing till count == 0
-		// TODO: Change logic to select based as Moshe suggested
-		_, err := conn.Conn().WaitForNotification(ctx)
+		err := consumeEvents()
 		if err != nil {
-			return err
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return
+			} else {
+				logger.Errorf("Error processing event: %v", err)
+			}
 		}
-
-		consumeEvents()
 	}
 }
 
@@ -50,23 +75,29 @@ func consumeEvents() error {
 	tx := db.Gorm.Begin()
 
 	// TODO: Add attempts where clause
-	err := tx.Raw("SELECT id, properties FROM event_queue FOR UPDATE SKIP LOCKED").Scan(&event).Error
+	err := tx.Raw("SELECT id, properties FROM event_queue FOR UPDATE SKIP LOCKED LIMIT 1").First(&event).Error
 	if err != nil {
 		return err
 	}
 
 	if event.Name == "responder.create" {
-		// TODO: Make this a goroutine ?
 		err = reconcileResponderEvent(tx, event)
 	}
 
-	setErr := event.SetErrorMessage(err.Error())
-	if setErr != nil {
-		logger.Errorf("Error updating table:event_queue with id:%s and error:%s", event.ID, setErr)
-		return tx.Rollback().Error
+	if err != nil {
+		errorMsg := err.Error()
+		setErr := tx.Exec("UPDATE event_queue SET error = ?, attempts = attempts + 1 WHERE id = ?", errorMsg, event.ID).Error
+		if setErr != nil {
+			logger.Errorf("Error updating table:event_queue with id:%s and error:%s. %v", event.ID, errorMsg, setErr)
+			return tx.Rollback().Error
+		}
 	}
 
-	event.Done()
+	err = tx.Delete(&event).Error
+	if err != nil {
+		logger.Errorf("Error deleting event from event_queue table with id:%s", event.ID.String())
+		return tx.Rollback().Error
+	}
 	return tx.Commit().Error
 }
 
