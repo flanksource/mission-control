@@ -3,6 +3,7 @@ package responder
 import (
 	"fmt"
 
+	goJira "github.com/andygrunwald/go-jira"
 	"github.com/flanksource/commons/logger"
 	_ "github.com/flanksource/kommons"
 	"github.com/mitchellh/mapstructure"
@@ -97,10 +98,10 @@ func NotifyJiraResponder(responder api.Responder) (string, error) {
 		return "", err
 	}
 
-	issue, err := client.CreateIssue(issueOptions)
-
-	if err != nil {
+	var issue *goJira.Issue
+	if issue, err = client.CreateIssue(issueOptions); err != nil {
 		return "", err
 	}
+
 	return issue.Key, nil
 }
