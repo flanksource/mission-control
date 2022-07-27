@@ -23,12 +23,14 @@ func ListenForEvents() {
 	pgNotify := make(chan bool)
 	go listenToPostgresNotify(pgNotify)
 
-	select {
-	case <-pgNotify:
-		consumeEventsWrapper()
+	for {
+		select {
+		case <-pgNotify:
+			consumeEventsWrapper()
 
-	case <-time.After(10 * time.Second):
-		logger.Debugf("timed out waiting for pgNotify")
+		case <-time.After(10 * time.Second):
+			logger.Debugf("timed out waiting for pgNotify")
+		}
 	}
 }
 
@@ -45,12 +47,14 @@ func listenToPostgresNotify(pgNotify chan bool) {
 		logger.Errorf("Error listening to database notify: %v", err)
 	}
 
-	_, err = conn.Conn().WaitForNotification(ctx)
-	if err != nil {
-		logger.Errorf("Error waiting for database notifications: %v", err)
-	}
+	for {
+		_, err = conn.Conn().WaitForNotification(ctx)
+		if err != nil {
+			logger.Errorf("Error waiting for database notifications: %v", err)
+		}
 
-	pgNotify <- true
+		pgNotify <- true
+	}
 
 }
 
@@ -75,7 +79,7 @@ func consumeEvents() error {
 	tx := db.Gorm.Begin()
 
 	// TODO: Add attempts where clause
-	err := tx.Raw("SELECT id, properties FROM event_queue FOR UPDATE SKIP LOCKED LIMIT 1").First(&event).Error
+	err := tx.Raw("SELECT id, name, properties FROM event_queue FOR UPDATE SKIP LOCKED LIMIT 1").First(&event).Error
 	if err != nil {
 		return err
 	}
@@ -89,13 +93,17 @@ func consumeEvents() error {
 		setErr := tx.Exec("UPDATE event_queue SET error = ?, attempts = attempts + 1 WHERE id = ?", errorMsg, event.ID).Error
 		if setErr != nil {
 			logger.Errorf("Error updating table:event_queue with id:%s and error:%s. %v", event.ID, errorMsg, setErr)
-			return tx.Rollback().Error
 		}
+		return tx.Commit().Error
 	}
 
 	err = tx.Delete(&event).Error
 	if err != nil {
 		logger.Errorf("Error deleting event from event_queue table with id:%s", event.ID.String())
+		// TODO: In this case, the event has been processed successfully, but its deletion is failing
+		// Rolling back would lead to a dangling responder and may result in duplication
+		// But commiting the transaction would lead to the event being processed again, ie. duplication
+		// Choose lesser of the two evils
 		return tx.Rollback().Error
 	}
 	return tx.Commit().Error
@@ -105,7 +113,9 @@ func reconcileResponderEvent(tx *gorm.DB, event api.Event) error {
 	responderID := event.Properties["id"]
 
 	var responder api.Responder
-	err := tx.Find(&responder).Where("id = ? AND external_id is NULL", responderID).Preload("Team").Error
+	// TODO Add scan + value for kommons.EnvVar for preload to work
+	//err := tx.Where("id = ? AND external_id is NULL", responderID).Preload("Team").Find(&responder).Error
+	err := tx.Where("id = ? AND external_id is NULL", responderID).Find(&responder).Error
 	if err != nil {
 		return err
 	}
@@ -116,7 +126,6 @@ func reconcileResponderEvent(tx *gorm.DB, event api.Event) error {
 		if err != nil {
 			return err
 		}
-
 	}
 
 	if externalID != "" {

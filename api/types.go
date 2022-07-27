@@ -27,7 +27,8 @@ type Responder struct {
 	ID         uuid.UUID
 	Properties types.JSONStringMap `json:"properties" gorm:"type:jsonstringmap;<-:false"`
 	TeamID     uuid.UUID
-	Team       Team
+	// TODO: Impement Scan+Value for kommons.EnvVar for gorm to work correctly
+	//Team       Team
 }
 
 type Team struct {

@@ -17,7 +17,7 @@ CREATE TABLE event_queue (
 CREATE OR REPLACE FUNCTION insert_responder_in_event_queue()
 RETURNS TRIGGER AS $$
 BEGIN
-    INSERT INTO event_queue(type, properties) VALUES ('responder.create', jsonb_build_object('type', 'responder', 'id', NEW.id));
+    INSERT INTO event_queue(name, properties) VALUES ('responder.create', jsonb_build_object('type', 'responder', 'id', NEW.id));
     NOTIFY event_queue_updates, 'update';
     RETURN NEW;
 END
