@@ -28,8 +28,8 @@ func ListenForEvents() {
 		case <-pgNotify:
 			consumeEvents()
 
-		case <-time.After(10 * time.Second):
-			logger.Debugf("timed out waiting for pgNotify")
+		case <-time.After(60 * time.Second):
+			consumeEvents()
 		}
 	}
 }
@@ -65,8 +65,14 @@ func consumeEvents() {
 
 		tx := db.Gorm.Begin()
 
-		// TODO: Add attempts where clause
-		err := tx.Raw("SELECT id, name, properties FROM event_queue FOR UPDATE SKIP LOCKED LIMIT 1").First(&event).Error
+		selectEventsQuery := `
+			SELECT * FROM event_queue
+			WHERE
+				attempts <= 3 OR ((now() - last_attempt) > '1 hour'::interval)
+			FOR UPDATE SKIP LOCKED
+			LIMIT 1
+		`
+		err := tx.Raw(selectEventsQuery).First(&event).Error
 		if err != nil {
 			return err
 		}
