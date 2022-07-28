@@ -3,11 +3,9 @@ package api
 import (
 	"time"
 
-	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/kommons"
 	"github.com/google/uuid"
 
-	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/db/types"
 )
 
@@ -193,16 +191,4 @@ type Event struct {
 // to signify it's usage as a queue
 func (Event) TableName() string {
 	return "event_queue"
-}
-
-func (e Event) Done() {
-	tx := db.Gorm.Delete(&e)
-	if tx.Error != nil {
-		logger.Errorf("Error deleting event from event_queue table with id:%s", e.ID.String())
-	}
-}
-
-func (e Event) SetErrorMessage(errorMsg string) error {
-	tx := db.Gorm.Exec("UPDATE event_queue SET error = ?, attempts = attempts + 1 WHERE id = ?", errorMsg, e.ID)
-	return tx.Error
 }
