@@ -24,15 +24,15 @@ type Hypothesis struct {
 }
 
 type Responder struct {
-	ID         uuid.UUID
+	ID         uuid.UUID           `json:"id"`
 	Properties types.JSONStringMap `json:"properties" gorm:"type:jsonstringmap;<-:false"`
-	TeamID     uuid.UUID
-	// TODO: Impement Scan+Value for kommons.EnvVar for gorm to work correctly
-	//Team       Team
+	TeamID     uuid.UUID           `json:"team_id"`
+	Team       Team                `json:"team"`
 }
 
 type Team struct {
-	Spec TeamSpec
+	ID   uuid.UUID
+	Spec types.JSONMap `json:"properties" gorm:"type:jsonstringmap;<-:false"`
 }
 
 type Person struct {
@@ -55,12 +55,12 @@ type Slack struct {
 }
 
 type ResponderClients struct {
-	Jira JiraClient
-	AWS  AWSClient
+	Jira JiraClient `json:"jira_client"`
+	AWS  AWSClient  `json:"aws_client"`
 }
 
 type TeamSpec struct {
-	ResponderClients ResponderClients
+	ResponderClients ResponderClients `json:"responder_clients"`
 }
 
 type TeamsUser struct {
