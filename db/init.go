@@ -13,6 +13,8 @@ import (
 	"github.com/pressly/goose/v3"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
 )
 
 var ConnectionString string
@@ -29,6 +31,7 @@ func Flags(flags *pflag.FlagSet) {
 //go:embed migrations/*.sql
 var embedMigrations embed.FS
 var Pool *pgxpool.Pool
+var Gorm *gorm.DB
 var pgxConnectionString string
 
 func readFromEnv(v string) string {
@@ -73,6 +76,21 @@ func Init(connection string) error {
 	logger.Infof("Initialized DB: %s (%s)", config.ConnString(), size)
 
 	pgxConnectionString = stdlib.RegisterConnConfig(config.ConnConfig)
+
+	db, err := GetDB()
+	if err != nil {
+		return err
+	}
+
+	Gorm, err = gorm.Open(postgres.New(postgres.Config{
+		Conn: db,
+	}), &gorm.Config{
+		FullSaveAssociations: true,
+	})
+
+	if err != nil {
+		return err
+	}
 
 	return Migrate()
 }
