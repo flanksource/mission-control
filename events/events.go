@@ -74,6 +74,9 @@ func consumeEvents() {
 		`
 		err := tx.Raw(selectEventsQuery).First(&event).Error
 		if err != nil {
+			// Commit the transaction in case of no records found to prevent
+			// creating dangling connections and to release the locks
+			tx.Commit()
 			return err
 		}
 
