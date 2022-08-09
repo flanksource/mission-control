@@ -45,7 +45,7 @@ func NewClient(tenantID, clientID, username, password string) (MSPlannerClient, 
 		return MSPlannerClient{}, fmt.Errorf("Error creating credentials: %v\n", err)
 	}
 
-	auth, err := kiotaAuth.NewAzureIdentityAuthenticationProviderWithScopes(cred, []string{"User.Read"})
+	auth, err := kiotaAuth.NewAzureIdentityAuthenticationProvider(cred)
 	if err != nil {
 		return MSPlannerClient{}, fmt.Errorf("Error authentication provider: %v\n", err)
 	}
@@ -82,42 +82,42 @@ func (c MSPlannerClient) AddComment(taskID, comment string) error {
 		return openDataError(err)
 	}
 
-	post := getCommentPost(comment)
+	post := models.NewPost()
+	body := models.NewItemBody()
+	contentType := models.TEXT_BODYTYPE
+	body.SetContentType(&contentType)
+	body.SetContent(&comment)
+	post.SetBody(body)
 
-	// Create a new conversation thread if task does not has one
-	if task.GetConversationThreadId() == nil {
-		convBody := models.NewConversationThread()
-		topic := fmt.Sprintf("Conversation thread topic for taskID: %s", taskID)
-		convBody.SetTopic(&topic)
+	// If conversation thread exists, add a new reply
+	if task.GetConversationThreadId() != nil {
+		replyBody := reply.NewReplyPostRequestBody()
+		replyBody.SetPost(post)
 
-		convBody.SetPosts([]models.Postable{post})
-
-		result, err := c.client.GroupsById(c.groupID).Threads().Post(convBody)
-		if err != nil {
-			fmt.Println("error creating Conversation thread")
-			return openDataError(err)
-		}
-
-		// TODO: For debugging
-		fmt.Println("Conversation thread created")
-		fmt.Println(result)
-
-		// Link the created conversation thread to task
-		etag := *task.GetAdditionalData()["@odata.etag"].(*string)
-		headers := map[string]string{"If-Match": etag}
-		patchConfig := item.PlannerTaskItemRequestBuilderPatchRequestConfiguration{Headers: headers}
-
-		requestBody := models.NewPlannerTask()
-		requestBody.SetConversationThreadId(result.GetId())
-		err = c.client.Planner().TasksById(taskID).PatchWithRequestConfigurationAndResponseHandler(requestBody, &patchConfig, nil)
+		err = c.client.GroupsById(c.groupID).ThreadsById(*task.GetConversationThreadId()).Reply().Post(replyBody)
 		return openDataError(err)
 	}
 
-	// Use reply package like items
-	replyBody := reply.NewReplyPostRequestBody()
-	replyBody.SetPost(post)
+	// Create a new conversation thread if task does not has one
+	convBody := models.NewConversationThread()
+	topic := fmt.Sprintf("Conversation thread topic for taskID: %s", taskID)
+	convBody.SetTopic(&topic)
 
-	err = c.client.GroupsById(c.groupID).ThreadsById(*task.GetConversationThreadId()).Reply().Post(replyBody)
+	convBody.SetPosts([]models.Postable{post})
+
+	result, err := c.client.GroupsById(c.groupID).Threads().Post(convBody)
+	if err != nil {
+		return openDataError(err)
+	}
+
+	// Link the created conversation thread to task
+	etag := *task.GetAdditionalData()["@odata.etag"].(*string)
+	headers := map[string]string{"If-Match": etag}
+	patchConfig := item.PlannerTaskItemRequestBuilderPatchRequestConfiguration{Headers: headers}
+
+	requestBody := models.NewPlannerTask()
+	requestBody.SetConversationThreadId(result.GetId())
+	err = c.client.Planner().TasksById(taskID).PatchWithRequestConfigurationAndResponseHandler(requestBody, &patchConfig, nil)
 	return openDataError(err)
 }
 
@@ -178,16 +178,6 @@ func (c MSPlannerClient) GetConfig() (map[string]PlanConfig, error) {
 	}
 
 	return config, nil
-}
-
-func getCommentPost(comment string) *models.Post {
-	post := models.NewPost()
-	body := models.NewItemBody()
-	contentType := models.TEXT_BODYTYPE
-	body.SetContentType(&contentType)
-	body.SetContent(&comment)
-	post.SetBody(body)
-	return post
 }
 
 func openDataError(err error) error {
