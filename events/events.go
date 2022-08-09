@@ -127,9 +127,12 @@ func reconcileResponderEvent(tx *gorm.DB, event api.Event) error {
 	var externalID string
 	if responder.Properties["responderType"] == "Jira" {
 		externalID, err = responderPkg.NotifyJiraResponder(responder)
-		if err != nil {
-			return err
-		}
+	} else if responder.Properties["responderType"] == "MSPlanner" {
+		externalID, err = responderPkg.NotifyMSPlannerResponder(responder)
+	}
+
+	if err != nil {
+		return err
 	}
 
 	if externalID != "" {

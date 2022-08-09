@@ -5,10 +5,12 @@ import (
 	"fmt"
 
 	goJira "github.com/andygrunwald/go-jira"
+	msgraphModels "github.com/microsoftgraph/msgraph-sdk-go/models"
 	"github.com/mitchellh/mapstructure"
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/responder/jira"
+	"github.com/flanksource/incident-commander/responder/msplanner"
 )
 
 func NotifyJiraResponder(responder api.Responder) (string, error) {
@@ -47,4 +49,43 @@ func NotifyJiraResponder(responder api.Responder) (string, error) {
 	}
 
 	return issue.Key, nil
+}
+
+func NotifyMSPlannerResponder(responder api.Responder) (string, error) {
+	if responder.Properties["responderType"] != "MSPlanner" {
+		return "", fmt.Errorf("invalid responderType: %s", responder.Properties["responderType"])
+	}
+
+	teamSpecJson, err := responder.Team.Spec.MarshalJSON()
+	if err != nil {
+		return "", err
+	}
+
+	var teamSpec api.TeamSpec
+	if err = json.Unmarshal(teamSpecJson, &teamSpec); err != nil {
+		return "", err
+	}
+
+	client, err := msplanner.NewClient(
+		teamSpec.ResponderClients.MSPlanner.TenantID,
+		teamSpec.ResponderClients.MSPlanner.ClientID,
+		teamSpec.ResponderClients.MSPlanner.Username.Value,
+		teamSpec.ResponderClients.MSPlanner.Password.Value,
+	)
+	if err != nil {
+		return "", err
+	}
+
+	var taskOptions msplanner.MSPlannerTask
+	err = mapstructure.Decode(responder.Properties, &taskOptions)
+	if err != nil {
+		return "", err
+	}
+
+	var task msgraphModels.PlannerTaskable
+	if task, err = client.CreateTask(taskOptions); err != nil {
+		return "", err
+	}
+
+	return *task.GetId(), nil
 }
