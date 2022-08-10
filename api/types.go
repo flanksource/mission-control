@@ -130,6 +130,7 @@ type JiraClient struct {
 type MSPlannerClient struct {
 	TenantID string         `json:"tenant_id"`
 	ClientID string         `json:"client_id"`
+	GroupID  string         `json:"group_id"`
 	Username kommons.EnvVar `yaml:"username" json:"username"`
 	Password kommons.EnvVar `yaml:"password" json:"password"`
 }

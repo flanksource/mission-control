@@ -16,17 +16,17 @@ import (
 
 type MSPlannerTask struct {
 	Title       string
-	PlanID      string
-	Priority    int32
+	PlanID      string `mapstructure:"plan_id"`
+	Priority    string
 	Description string
-	BucketID    string
+	BucketID    string `mapstructure:"bucket_id"`
 }
 
 type PlanConfig struct {
-	ID         string         `json:"id"`
-	Name       string         `json:"name"`
-	Buckets    []PlanBucket   `json:"buckets"`
-	Priorities map[string]int `json:"priorities"`
+	ID         string       `json:"id"`
+	Name       string       `json:"name"`
+	Buckets    []PlanBucket `json:"buckets"`
+	Priorities []string     `json:"priorities"`
 }
 
 type PlanBucket struct {
@@ -39,7 +39,16 @@ type MSPlannerClient struct {
 	groupID string
 }
 
-func NewClient(tenantID, clientID, username, password string) (MSPlannerClient, error) {
+// Planner interprets values 0 and 1 as "urgent", 2, 3 and 4 as "important", 5, 6, and 7 as "medium", and 8, 9, and 10 as "low"
+// By default, it sets the value 1 for "urgent", 3 for "important", 5 for "medium", and 9 for "low"
+var taskPriorities = map[string]int32{
+	"urgent":    1,
+	"important": 3,
+	"medium":    5,
+	"low":       9,
+}
+
+func NewClient(tenantID, clientID, groupID, username, password string) (MSPlannerClient, error) {
 	cred, err := azidentity.NewUsernamePasswordCredential(tenantID, clientID, username, password, nil)
 	if err != nil {
 		return MSPlannerClient{}, fmt.Errorf("Error creating credentials: %v\n", err)
@@ -55,7 +64,7 @@ func NewClient(tenantID, clientID, username, password string) (MSPlannerClient, 
 		return MSPlannerClient{}, fmt.Errorf("Error creating adapter: %v\n", err)
 	}
 	client := msgraphsdk.NewGraphServiceClient(adapter)
-	return MSPlannerClient{client: client}, nil
+	return MSPlannerClient{client: client, groupID: groupID}, nil
 }
 
 func (c MSPlannerClient) CreateTask(opts MSPlannerTask) (models.PlannerTaskable, error) {
@@ -64,7 +73,12 @@ func (c MSPlannerClient) CreateTask(opts MSPlannerTask) (models.PlannerTaskable,
 	body.SetPlanId(&opts.PlanID)
 	body.SetBucketId(&opts.BucketID)
 	body.SetTitle(&opts.Title)
-	body.SetPriority(&opts.Priority)
+
+	if opts.Priority != "" {
+		if priority, exists := taskPriorities[opts.Priority]; exists {
+			body.SetPriority(&priority)
+		}
+	}
 
 	if opts.Description != "" {
 		descBody := models.NewPlannerTaskDetails()
@@ -144,14 +158,9 @@ func (c MSPlannerClient) GetComments(taskID string) ([]api.Comment, error) {
 }
 
 func (c MSPlannerClient) GetConfig() (map[string]PlanConfig, error) {
-
-	// Planner interprets values 0 and 1 as "urgent", 2, 3 and 4 as "important", 5, 6, and 7 as "medium", and 8, 9, and 10 as "low"
-	// By default, it sets the value 1 for "urgent", 3 for "important", 5 for "medium", and 9 for "low"
-	priorities := map[string]int{
-		"Urgent":    1,
-		"Important": 3,
-		"Medium":    5,
-		"Low":       9,
+	var priorities []string
+	for k := range taskPriorities {
+		priorities = append(priorities, k)
 	}
 
 	config := make(map[string]PlanConfig)

@@ -69,6 +69,7 @@ func NotifyMSPlannerResponder(responder api.Responder) (string, error) {
 	client, err := msplanner.NewClient(
 		teamSpec.ResponderClients.MSPlanner.TenantID,
 		teamSpec.ResponderClients.MSPlanner.ClientID,
+		teamSpec.ResponderClients.MSPlanner.GroupID,
 		teamSpec.ResponderClients.MSPlanner.Username.Value,
 		teamSpec.ResponderClients.MSPlanner.Password.Value,
 	)
