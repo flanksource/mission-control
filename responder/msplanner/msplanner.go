@@ -112,11 +112,10 @@ func (c MSPlannerClient) AddComment(taskID, comment string) error {
 		return openDataError(err)
 	}
 
-	// Create a new conversation thread if task does not has one
+	// Create a new conversation thread for the task
 	convBody := models.NewConversationThread()
 	topic := fmt.Sprintf("Conversation thread topic for taskID: %s", taskID)
 	convBody.SetTopic(&topic)
-
 	convBody.SetPosts([]models.Postable{post})
 
 	result, err := c.client.GroupsById(c.groupID).Threads().Post(convBody)
@@ -124,7 +123,7 @@ func (c MSPlannerClient) AddComment(taskID, comment string) error {
 		return openDataError(err)
 	}
 
-	// Link the created conversation thread to task
+	// Link the created conversation thread to the task
 	etag := *task.GetAdditionalData()["@odata.etag"].(*string)
 	headers := map[string]string{"If-Match": etag}
 	patchConfig := item.PlannerTaskItemRequestBuilderPatchRequestConfiguration{Headers: headers}
@@ -140,12 +139,17 @@ func (c MSPlannerClient) GetComments(taskID string) ([]api.Comment, error) {
 	if err != nil {
 		return nil, openDataError(err)
 	}
+
+	var comments []api.Comment
+	if task.GetConversationThreadId() == nil {
+		return comments, nil
+	}
+
 	conversations, err := c.client.GroupsById(c.groupID).ThreadsById(*task.GetConversationThreadId()).Posts().Get()
 	if err != nil {
 		return nil, openDataError(err)
 	}
 
-	var comments []api.Comment
 	for _, conv := range conversations.GetValue() {
 		comments = append(comments, api.Comment{
 			Body:      *conv.GetBody().GetContent(),
@@ -195,9 +199,8 @@ func openDataError(err error) error {
 	}
 
 	errorStr := ""
-	switch err.(type) {
+	switch typed := err.(type) {
 	case *odataerrors.ODataError:
-		typed := err.(*odataerrors.ODataError)
 		errorStr += fmt.Sprintf("error: %s.", typed.Error())
 		if terr := typed.GetError(); terr != nil {
 			errorStr += fmt.Sprintf("code: %s.", *terr.GetCode())
