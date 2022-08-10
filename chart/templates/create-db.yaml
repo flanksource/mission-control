@@ -31,9 +31,6 @@ spec:
             - |
               export PGPASSWORD=$POSTGRES_PASSWORD;
               psql -h postgres -U $POSTGRES_USER -c 'create database "incident-commander"'
-              psql -h postgres -U $POSTGRES_USER -c 'create database "config-db"'
-              psql -h postgres -U $POSTGRES_USER -c 'create database "canary-checker"'
-
 
       restartPolicy: Never
 {{- end }}
