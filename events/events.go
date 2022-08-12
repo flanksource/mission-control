@@ -14,6 +14,11 @@ import (
 	responderPkg "github.com/flanksource/incident-commander/responder"
 )
 
+const (
+	EVENT_RESPONDER_CREATE = "responder.create"
+	EVENT_COMMENT_CREATE   = "comment.create"
+)
+
 func ListenForEvents() {
 
 	logger.Infof("Started listening for events")
@@ -81,8 +86,14 @@ func consumeEvents() {
 			return err
 		}
 
-		if event.Name == "responder.create" {
+		switch event.Name {
+		case EVENT_RESPONDER_CREATE:
 			err = reconcileResponderEvent(tx, event)
+		case EVENT_COMMENT_CREATE:
+			err = reconcileCommentEvent(tx, event)
+		default:
+			logger.Errorf("Invalid event name: %s", event.Name)
+			return tx.Commit().Error
 		}
 
 		if err != nil {
@@ -133,6 +144,36 @@ func reconcileResponderEvent(tx *gorm.DB, event api.Event) error {
 		externalID, err = responderPkg.NotifyMSPlannerResponder(responder)
 	default:
 		return fmt.Errorf("Invalid responder type: %s received", responder.Properties["responderType"])
+	}
+
+	if err != nil {
+		return err
+	}
+
+	if externalID != "" {
+		// Update external id in responder table
+		return tx.Model(&api.Responder{}).Where("id = ?", responder.ID).Update("external_id", externalID).Error
+	}
+
+	return nil
+}
+
+func reconcileCommentEvent(tx *gorm.DB, event api.Event) error {
+	commentID := event.Properties["id"]
+
+	var comment api.Comment
+	err := tx.Where("id = ? AND external_id is NULL", commentID).Find(&comment).Error
+	if err != nil {
+		return err
+	}
+
+	// Get all responders related to a comment
+	// For each responder add comment there
+	var externalID string
+	if responder.Properties["responderType"] == "Jira" {
+		externalID, err = responderPkg.NotifyJiraResponder(responder)
+	} else if responder.Properties["responderType"] == "MSPlanner" {
+		externalID, err = responderPkg.NotifyMSPlannerResponder(responder)
 	}
 
 	if err != nil {
