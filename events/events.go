@@ -3,6 +3,7 @@ package events
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/flanksource/commons/logger"
@@ -125,10 +126,13 @@ func reconcileResponderEvent(tx *gorm.DB, event api.Event) error {
 	}
 
 	var externalID string
-	if responder.Properties["responderType"] == "Jira" {
+	switch responder.Properties["responderType"] {
+	case responderPkg.JiraResponder:
 		externalID, err = responderPkg.NotifyJiraResponder(responder)
-	} else if responder.Properties["responderType"] == "MSPlanner" {
+	case responderPkg.MSPlannerResponder:
 		externalID, err = responderPkg.NotifyMSPlannerResponder(responder)
+	default:
+		return fmt.Errorf("Invalid responder type: %s received", responder.Properties["responderType"])
 	}
 
 	if err != nil {

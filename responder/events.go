@@ -13,8 +13,13 @@ import (
 	"github.com/flanksource/incident-commander/responder/msplanner"
 )
 
+const (
+	JiraResponder      = "Jira"
+	MSPlannerResponder = "MSPlanner"
+)
+
 func NotifyJiraResponder(responder api.Responder) (string, error) {
-	if responder.Properties["responderType"] != "Jira" {
+	if responder.Properties["responderType"] != JiraResponder {
 		return "", fmt.Errorf("invalid responderType: %s", responder.Properties["responderType"])
 	}
 
@@ -52,7 +57,7 @@ func NotifyJiraResponder(responder api.Responder) (string, error) {
 }
 
 func NotifyMSPlannerResponder(responder api.Responder) (string, error) {
-	if responder.Properties["responderType"] != "MSPlanner" {
+	if responder.Properties["responderType"] != MSPlannerResponder {
 		return "", fmt.Errorf("invalid responderType: %s", responder.Properties["responderType"])
 	}
 
