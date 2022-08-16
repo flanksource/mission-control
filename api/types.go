@@ -10,12 +10,18 @@ import (
 )
 
 type Incident struct {
+	ID     uuid.UUID `json:"id"`
+	Title  string    `json:"title"`
+	TeamID uuid.UUID `json:"team_id"`
+	Team   Team      `json:"team"`
 }
 
 type Comment struct {
-	Body      string    `json:"body"`
-	CreatedBy string    `json:"created_by"`
-	CreatedAt time.Time `json:"created_at"`
+	Body       string    `json:"body"`
+	CreatedBy  string    `json:"created_by"`
+	CreatedAt  time.Time `json:"created_at"`
+	IncidentID uuid.UUID `json:"incident_id"`
+	Incident   Incident  `json:"incident"`
 }
 
 type Hypothesis struct {
@@ -24,6 +30,7 @@ type Hypothesis struct {
 type Responder struct {
 	ID         uuid.UUID           `json:"id"`
 	Properties types.JSONStringMap `json:"properties" gorm:"type:jsonstringmap;<-:false"`
+	ExternalID string              `json:"external_id"`
 	TeamID     uuid.UUID           `json:"team_id"`
 	Team       Team                `json:"team"`
 }
@@ -193,6 +200,7 @@ type Event struct {
 	ID         uuid.UUID
 	Name       string
 	Properties types.JSONStringMap `json:"properties" gorm:"type:jsonstringmap;<-:false"`
+	Error      string
 }
 
 // We are using the term `Event` as it represents an event in the

@@ -15,8 +15,8 @@ import (
 )
 
 const (
-	EVENT_RESPONDER_CREATE = "responder.create"
-	EVENT_COMMENT_CREATE   = "comment.create"
+	EventResponderCreate = "responder.create"
+	EventCommentCreate   = "comment.create"
 )
 
 func ListenForEvents() {
@@ -87,9 +87,9 @@ func consumeEvents() {
 		}
 
 		switch event.Name {
-		case EVENT_RESPONDER_CREATE:
+		case EventResponderCreate:
 			err = reconcileResponderEvent(tx, event)
-		case EVENT_COMMENT_CREATE:
+		case EventCommentCreate:
 			err = reconcileCommentEvent(tx, event)
 		default:
 			logger.Errorf("Invalid event name: %s", event.Name)
@@ -160,29 +160,53 @@ func reconcileResponderEvent(tx *gorm.DB, event api.Event) error {
 
 func reconcileCommentEvent(tx *gorm.DB, event api.Event) error {
 	commentID := event.Properties["id"]
-
-	var comment api.Comment
-	err := tx.Where("id = ? AND external_id is NULL", commentID).Find(&comment).Error
-	if err != nil {
-		return err
-	}
+	commentBody := event.Properties["comment"]
 
 	// Get all responders related to a comment
-	// For each responder add comment there
-	var externalID string
-	if responder.Properties["responderType"] == "Jira" {
-		externalID, err = responderPkg.NotifyJiraResponder(responder)
-	} else if responder.Properties["responderType"] == "MSPlanner" {
-		externalID, err = responderPkg.NotifyMSPlannerResponder(responder)
-	}
-
+	var responders []api.Responder
+	commentRespondersQuery := `
+        SELECT * FROM responders WHERE incident_id IN (
+            SELECT incident_id FROM comments WHERE id = ?
+        )
+    `
+	err := tx.Raw(commentRespondersQuery, commentID).Scan(&responders).Error
 	if err != nil {
 		return err
 	}
 
-	if externalID != "" {
-		// Update external id in responder table
-		return tx.Model(&api.Responder{}).Where("id = ?", responder.ID).Update("external_id", externalID).Error
+	// For each responder add the comment
+	for _, responder := range responders {
+		// Reset externalID to avoid inserting previous iteration's ID
+		externalID := ""
+
+		switch responder.Properties["responderType"] {
+		case responderPkg.JiraResponder:
+			externalID, err = responderPkg.NotifyJiraResponderAddComment(responder, commentBody)
+		case responderPkg.MSPlannerResponder:
+			externalID, err = responderPkg.NotifyMSPlannerResponderAddComment(responder, commentBody)
+		default:
+			continue
+		}
+
+		if err != nil {
+			// For now, we are only logging the error and moving on
+			// In future, we would want to associate error messages with responderType
+			// and when reprocessing, handle it only for specific responders
+			logger.Errorf("Error adding comment to responder:%s %v", responder.Properties["responderType"], err)
+			continue
+		}
+
+		// Insert into comment_responders table
+		if externalID != "" {
+			insertQuery := `
+                INSERT INTO comment_responders (comment_id, responder_id, external_id)
+                VALUES (?, ?, ?)
+            `
+			err = tx.Exec(insertQuery, commentID, responder.ID, externalID).Error
+			if err != nil {
+				logger.Errorf("Error updating comment_responders table: %v", err)
+			}
+		}
 	}
 
 	return nil
