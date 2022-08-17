@@ -160,7 +160,7 @@ func reconcileResponderEvent(tx *gorm.DB, event api.Event) error {
 
 func reconcileCommentEvent(tx *gorm.DB, event api.Event) error {
 	commentID := event.Properties["id"]
-	commentBody := event.Properties["comment"]
+	commentBody := event.Properties["body"]
 
 	// Get all responders related to a comment
 	var responders []api.Responder
@@ -169,7 +169,7 @@ func reconcileCommentEvent(tx *gorm.DB, event api.Event) error {
             SELECT incident_id FROM comments WHERE id = ?
         )
     `
-	err := tx.Raw(commentRespondersQuery, commentID).Scan(&responders).Error
+	err := tx.Raw(commentRespondersQuery, commentID).Preload("Team").Find(&responders).Error
 	if err != nil {
 		return err
 	}
