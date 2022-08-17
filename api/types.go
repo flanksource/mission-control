@@ -53,9 +53,9 @@ type Slack struct {
 }
 
 type ResponderClients struct {
-	Jira      JiraClient      `json:"jira_client"`
-	AWS       AWSClient       `json:"aws_client"`
-	MSPlanner MSPlannerClient `json:"ms_planner_client"`
+	Jira      JiraClient      `json:"jira"`
+	AWS       AWSClient       `json:"aws"`
+	MSPlanner MSPlannerClient `json:"ms_planner"`
 }
 
 type TeamSpec struct {
