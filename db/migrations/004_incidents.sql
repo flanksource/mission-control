@@ -96,8 +96,7 @@ CREATE TABLE comments (
   updated_at timestamp NOT NULL DEFAULT now(),
   FOREIGN KEY (created_by) REFERENCES people(id),
   FOREIGN KEY (incident_id) REFERENCES incidents(id),
-  FOREIGN KEY (hypothesis_id) REFERENCES hypotheses(id),
-  FOREIGN KEY (responder_id) REFERENCES responders(id)
+  FOREIGN KEY (hypothesis_id) REFERENCES hypotheses(id)
 );
 
 CREATE TABLE comment_responders (
