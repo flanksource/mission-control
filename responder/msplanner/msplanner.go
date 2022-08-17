@@ -91,10 +91,14 @@ func (c MSPlannerClient) CreateTask(opts MSPlannerTask) (models.PlannerTaskable,
 	return result, openDataError(err)
 }
 
-func (c MSPlannerClient) AddComment(taskID, comment string) error {
+func (c MSPlannerClient) AddComment(taskID, comment string) (string, error) {
+	// MS Graph API does not return the ID of the comment created
+	// so we just return a constant string for now
+	commentID := "posted"
+
 	task, err := c.client.Planner().TasksById(taskID).Get()
 	if err != nil {
-		return openDataError(err)
+		return commentID, openDataError(err)
 	}
 
 	post := models.NewPost()
@@ -110,7 +114,7 @@ func (c MSPlannerClient) AddComment(taskID, comment string) error {
 		replyBody.SetPost(post)
 
 		err = c.client.GroupsById(c.groupID).ThreadsById(*task.GetConversationThreadId()).Reply().Post(replyBody)
-		return openDataError(err)
+		return commentID, openDataError(err)
 	}
 
 	// Create a new conversation thread for the task
@@ -121,7 +125,7 @@ func (c MSPlannerClient) AddComment(taskID, comment string) error {
 
 	result, err := c.client.GroupsById(c.groupID).Threads().Post(convBody)
 	if err != nil {
-		return openDataError(err)
+		return commentID, openDataError(err)
 	}
 
 	// Link the created conversation thread to the task
@@ -132,7 +136,7 @@ func (c MSPlannerClient) AddComment(taskID, comment string) error {
 	requestBody := models.NewPlannerTask()
 	requestBody.SetConversationThreadId(result.GetId())
 	err = c.client.Planner().TasksById(taskID).PatchWithRequestConfigurationAndResponseHandler(requestBody, &patchConfig, nil)
-	return openDataError(err)
+	return commentID, openDataError(err)
 }
 
 func (c MSPlannerClient) GetComments(taskID string) ([]api.Comment, error) {

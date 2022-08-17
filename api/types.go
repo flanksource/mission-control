@@ -17,11 +17,10 @@ type Incident struct {
 }
 
 type Comment struct {
-	Body       string    `json:"body"`
-	CreatedBy  string    `json:"created_by"`
-	CreatedAt  time.Time `json:"created_at"`
-	IncidentID uuid.UUID `json:"incident_id"`
-	Incident   Incident  `json:"incident"`
+	Body      string    `json:"body"`
+	CreatedBy string    `json:"created_by"`
+	CreatedAt time.Time `json:"created_at"`
+	Incident  Incident  `json:"incident"`
 }
 
 type Hypothesis struct {

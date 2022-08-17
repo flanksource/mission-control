@@ -162,10 +162,5 @@ func NotifyMSPlannerResponderAddComment(responder api.Responder, comment string)
 	if err != nil {
 		return "", err
 	}
-
-	err = client.AddComment(responder.ExternalID, comment)
-
-	// MS Graph API does not return the ID of the comment created
-	// so we just return a constant string for now
-	return "posted", err
+	return client.AddComment(responder.ExternalID, comment)
 }

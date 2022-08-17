@@ -169,8 +169,8 @@ func reconcileCommentEvent(tx *gorm.DB, event api.Event) error {
             SELECT incident_id FROM comments WHERE id = ?
         )
     `
-	err := tx.Raw(commentRespondersQuery, commentID).Preload("Team").Find(&responders).Error
-	if err != nil {
+	var err error
+	if err = tx.Raw(commentRespondersQuery, commentID).Preload("Team").Find(&responders).Error; err != nil {
 		return err
 	}
 
@@ -189,20 +189,15 @@ func reconcileCommentEvent(tx *gorm.DB, event api.Event) error {
 		}
 
 		if err != nil {
-			// For now, we are only logging the error and moving on
-			// In future, we would want to associate error messages with responderType
-			// and when reprocessing, handle it only for specific responders
+			// TODO: Associate error messages with responderType and handle specific responders when reprocessing
 			logger.Errorf("Error adding comment to responder:%s %v", responder.Properties["responderType"], err)
 			continue
 		}
 
 		// Insert into comment_responders table
 		if externalID != "" {
-			insertQuery := `
-                INSERT INTO comment_responders (comment_id, responder_id, external_id)
-                VALUES (?, ?, ?)
-            `
-			err = tx.Exec(insertQuery, commentID, responder.ID, externalID).Error
+			err = tx.Exec("INSERT INTO comment_responders (comment_id, responder_id, external_id) VALUES (?, ?, ?)",
+				commentID, responder.ID, externalID).Error
 			if err != nil {
 				logger.Errorf("Error updating comment_responders table: %v", err)
 			}
