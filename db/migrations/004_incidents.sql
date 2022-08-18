@@ -89,13 +89,16 @@ CREATE TABLE comments (
   id UUID DEFAULT generate_ulid() PRIMARY KEY,
   created_by UUID NOT NULL ,
   comment text NOT NULL,
+  external_id TEXT NULL, -- A unique identifier for the responder in the external system e.g. Jira ticket id
   incident_id UUID NOT NULL,
+  responder_id UUID NULL,
   hypothesis_id UUID NULL,
   read smallint[] NULL,
   created_at timestamp NOT NULL DEFAULT now(),
   updated_at timestamp NOT NULL DEFAULT now(),
   FOREIGN KEY (created_by) REFERENCES people(id),
   FOREIGN KEY (incident_id) REFERENCES incidents(id),
+  FOREIGN KEY (responder_id) REFERENCES responders(id),
   FOREIGN KEY (hypothesis_id) REFERENCES hypotheses(id)
 );
 
