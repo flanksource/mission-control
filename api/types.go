@@ -10,10 +10,9 @@ import (
 )
 
 type Incident struct {
-	ID     uuid.UUID `json:"id"`
-	Title  string    `json:"title"`
-	TeamID uuid.UUID `json:"team_id"`
-	Team   Team      `json:"team"`
+	ID    uuid.UUID `json:"id"`
+	Title string    `json:"title"`
+	Team  Team      `json:"team"`
 }
 
 type Comment struct {
@@ -30,7 +29,6 @@ type Responder struct {
 	ID         uuid.UUID           `json:"id"`
 	Properties types.JSONStringMap `json:"properties" gorm:"type:jsonstringmap;<-:false"`
 	ExternalID string              `json:"external_id"`
-	TeamID     uuid.UUID           `json:"team_id"`
 	Team       Team                `json:"team"`
 }
 
