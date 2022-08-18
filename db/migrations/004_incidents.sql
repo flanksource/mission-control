@@ -98,7 +98,18 @@ CREATE TABLE comments (
   updated_at timestamp NOT NULL DEFAULT now(),
   FOREIGN KEY (created_by) REFERENCES people(id),
   FOREIGN KEY (incident_id) REFERENCES incidents(id),
-  FOREIGN KEY (hypothesis_id) REFERENCES hypotheses(id),
+  FOREIGN KEY (responder_id) REFERENCES responders(id),
+  FOREIGN KEY (hypothesis_id) REFERENCES hypotheses(id)
+);
+
+CREATE TABLE comment_responders (
+  id UUID DEFAULT generate_ulid() PRIMARY KEY,
+  comment_id UUID NOT NULL,
+  responder_id UUID NOT NULL,
+  external_id TEXT NULL, -- A unique identifier for the responder in the external system e.g. Jira ticket id
+  created_at timestamp NOT NULL DEFAULT now(),
+  updated_at timestamp NOT NULL DEFAULT now(),
+  FOREIGN KEY (comment_id) REFERENCES comments(id),
   FOREIGN KEY (responder_id) REFERENCES responders(id)
 );
 

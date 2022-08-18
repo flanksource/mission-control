@@ -14,6 +14,11 @@ import (
 	responderPkg "github.com/flanksource/incident-commander/responder"
 )
 
+const (
+	EventResponderCreate = "responder.create"
+	EventCommentCreate   = "comment.create"
+)
+
 func ListenForEvents() {
 
 	logger.Infof("Started listening for events")
@@ -81,8 +86,14 @@ func consumeEvents() {
 			return err
 		}
 
-		if event.Name == "responder.create" {
+		switch event.Name {
+		case EventResponderCreate:
 			err = reconcileResponderEvent(tx, event)
+		case EventCommentCreate:
+			err = reconcileCommentEvent(tx, event)
+		default:
+			logger.Errorf("Invalid event name: %s", event.Name)
+			return tx.Commit().Error
 		}
 
 		if err != nil {
@@ -142,6 +153,55 @@ func reconcileResponderEvent(tx *gorm.DB, event api.Event) error {
 	if externalID != "" {
 		// Update external id in responder table
 		return tx.Model(&api.Responder{}).Where("id = ?", responder.ID).Update("external_id", externalID).Error
+	}
+
+	return nil
+}
+
+func reconcileCommentEvent(tx *gorm.DB, event api.Event) error {
+	commentID := event.Properties["id"]
+	commentBody := event.Properties["body"]
+
+	// Get all responders related to a comment
+	var responders []api.Responder
+	commentRespondersQuery := `
+        SELECT * FROM responders WHERE incident_id IN (
+            SELECT incident_id FROM comments WHERE id = ?
+        )
+    `
+	var err error
+	if err = tx.Raw(commentRespondersQuery, commentID).Preload("Team").Find(&responders).Error; err != nil {
+		return err
+	}
+
+	// For each responder add the comment
+	for _, responder := range responders {
+		// Reset externalID to avoid inserting previous iteration's ID
+		externalID := ""
+
+		switch responder.Properties["responderType"] {
+		case responderPkg.JiraResponder:
+			externalID, err = responderPkg.NotifyJiraResponderAddComment(responder, commentBody)
+		case responderPkg.MSPlannerResponder:
+			externalID, err = responderPkg.NotifyMSPlannerResponderAddComment(responder, commentBody)
+		default:
+			continue
+		}
+
+		if err != nil {
+			// TODO: Associate error messages with responderType and handle specific responders when reprocessing
+			logger.Errorf("Error adding comment to responder:%s %v", responder.Properties["responderType"], err)
+			continue
+		}
+
+		// Insert into comment_responders table
+		if externalID != "" {
+			err = tx.Exec("INSERT INTO comment_responders (comment_id, responder_id, external_id) VALUES (?, ?, ?)",
+				commentID, responder.ID, externalID).Error
+			if err != nil {
+				logger.Errorf("Error updating comment_responders table: %v", err)
+			}
+		}
 	}
 
 	return nil
