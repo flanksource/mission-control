@@ -10,21 +10,16 @@ nameOverride: ""
 image:
   repository: docker.io/flanksource/incident-commander
   pullPolicy: IfNotPresent
-  # Overrides the image tag whose default is the chart appVersion.
   tag: "latest"
 
 db:
   enabled: true
   secretKeyRef:
     create: true
-    name: &secretKeyRef postgres-connection
-    configDbKey: &configDbKey CONFIG_DB_URL
-    canaryCheckerDbKey: &canaryCheckerKey CANARY_CHECKER_DB_URL
-    incidentCommanderDbKey: INCIDENT_COMMANDER_DB_URL
-  # Need to add the storage class and the storage according to the PV provisioned or according to the auto provitioning class that is configured on the cluster.
-  # In case no storageClass is defined the default storage class will be used.
+    name: postgres-connection
+    key: DB_URL
   storageClass:
-  storage: 10Gi
+    storage: 10Gi
 
 ingress:
   enabled: false
@@ -66,18 +61,14 @@ extra:
 
 canary-checker:
   db:
-    external:
-      enabled: true
+    secretKeyRef:
       create: false
-      secretKeyRef:
-        create: false
-        name: *secretKeyRef
-        key: *canaryCheckerKey
+      name: postgres-connection
+      key: DB_URL
 
 config-db:
   db:
-    enabled: false
     secretKeyRef:
       create: false
-      name: *secretKeyRef
-      key: *configDbKey
+      name: postgres-connection
+      key: DB_URL
