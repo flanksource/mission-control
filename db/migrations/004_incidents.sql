@@ -2,13 +2,31 @@
 -- +goose StatementBegin
 ---
 
+CREATE TABLE IF NOT EXISTS severities (
+  id int,
+  name text NOT NULL,
+  aliases text[],
+  icon text NULL
+);
+
+INSERT INTO severities (id, name, icon, aliases)
+   VALUES (1, 'Critical', 'error',ARRAY ['P1']),
+          (2, 'Blocker', 'error', ARRAY['P2']),
+          (3, 'High', 'warning',ARRAY ['P3']),
+          (4, 'Medium', 'info',ARRAY ['P4']),
+          (5, 'Low', 'info', ARRAY['P4']);
+
+
+
 CREATE TABLE incident_rules (
   id UUID DEFAULT generate_ulid() PRIMARY KEY,
   name TEXT NOT NULL,
   spec JSONB null,
   source TEXT NULL, -- The CRD source of the rule, if specified the rule cannot be edited via API
+  created_by UUID NO NULL,
   created_at timestamp NOT NULL DEFAULT now(),
-  updated_at timestamp NOT NULL DEFAULT now()
+  updated_at timestamp NOT NULL DEFAULT now(),
+  FOREIGN KEY (created_by) REFERENCES people (id)
 );
 
 CREATE TABLE incidents (
