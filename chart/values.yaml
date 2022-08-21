@@ -61,6 +61,7 @@ extra:
 
 canary-checker:
   db:
+    enabled: false
     secretKeyRef:
       create: false
       name: postgres-connection
@@ -68,6 +69,7 @@ canary-checker:
 
 config-db:
   db:
+    enabled: false
     secretKeyRef:
       create: false
       name: postgres-connection
