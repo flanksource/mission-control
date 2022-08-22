@@ -61,7 +61,8 @@ extra:
 
 canary-checker:
   db:
-    enabled: false
+    external:
+      enabled: true
     secretKeyRef:
       create: false
       name: postgres-connection
