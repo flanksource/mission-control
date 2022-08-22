@@ -122,6 +122,7 @@ func consumeEvents() {
 				return
 			} else {
 				logger.Errorf("Error processing event: %v", err)
+				time.Sleep(60 * time.Second)
 			}
 		}
 	}
