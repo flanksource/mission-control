@@ -19,7 +19,7 @@ db:
     name: postgres-connection
     key: DB_URL
   storageClass:
-    storage: 10Gi
+  storage: 10Gi
 
 ingress:
   enabled: false
