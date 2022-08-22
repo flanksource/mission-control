@@ -2,6 +2,7 @@
 package msplanner
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
@@ -196,6 +197,19 @@ func (c MSPlannerClient) GetConfig() (map[string]PlanConfig, error) {
 	}
 
 	return config, nil
+}
+
+func (c MSPlannerClient) GetConfigJSON() (string, error) {
+	config, err := c.GetConfig()
+	if err != nil {
+		return "", err
+	}
+
+	b, err := json.Marshal(&config)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
 }
 
 func openDataError(err error) error {

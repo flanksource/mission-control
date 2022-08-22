@@ -10,6 +10,7 @@ import (
 	"github.com/mitchellh/mapstructure"
 
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/db/types"
 	"github.com/flanksource/incident-commander/responder/jira"
 	"github.com/flanksource/incident-commander/responder/msplanner"
 )
@@ -24,21 +25,7 @@ func NotifyJiraResponder(responder api.Responder) (string, error) {
 		return "", fmt.Errorf("invalid responderType: %s", responder.Properties["responderType"])
 	}
 
-	teamSpecJson, err := responder.Team.Spec.MarshalJSON()
-	if err != nil {
-		return "", err
-	}
-
-	var teamSpec api.TeamSpec
-	if err = json.Unmarshal(teamSpecJson, &teamSpec); err != nil {
-		return "", err
-	}
-
-	client, err := jira.NewClient(
-		teamSpec.ResponderClients.Jira.Username.Value,
-		teamSpec.ResponderClients.Jira.Password.Value,
-		teamSpec.ResponderClients.Jira.Url,
-	)
+	client, err := jiraClientFromTeamSpec(responder.Team.Spec)
 	if err != nil {
 		return "", err
 	}
@@ -57,12 +44,8 @@ func NotifyJiraResponder(responder api.Responder) (string, error) {
 	return issue.Key, nil
 }
 
-func jiraClientFromResponder(responder api.Responder) (jira.JiraClient, error) {
-	if responder.Properties["responderType"] != JiraResponder {
-		return jira.JiraClient{}, fmt.Errorf("invalid responderType: %s", responder.Properties["responderType"])
-	}
-
-	teamSpecJson, err := responder.Team.Spec.MarshalJSON()
+func jiraClientFromTeamSpec(teamSpecJSONMap types.JSONMap) (jira.JiraClient, error) {
+	teamSpecJson, err := teamSpecJSONMap.MarshalJSON()
 	if err != nil {
 		return jira.JiraClient{}, err
 	}
@@ -79,28 +62,32 @@ func jiraClientFromResponder(responder api.Responder) (jira.JiraClient, error) {
 	)
 }
 
-func NotifyMSPlannerResponder(responder api.Responder) (string, error) {
-	if responder.Properties["responderType"] != MSPlannerResponder {
-		return "", fmt.Errorf("invalid responderType: %s", responder.Properties["responderType"])
-	}
-
-	teamSpecJson, err := responder.Team.Spec.MarshalJSON()
+func msPlannerClientFromTeamSpec(teamSpecJSONMap types.JSONMap) (msplanner.MSPlannerClient, error) {
+	teamSpecJson, err := teamSpecJSONMap.MarshalJSON()
 	if err != nil {
-		return "", err
+		return msplanner.MSPlannerClient{}, err
 	}
 
 	var teamSpec api.TeamSpec
 	if err = json.Unmarshal(teamSpecJson, &teamSpec); err != nil {
-		return "", err
+		return msplanner.MSPlannerClient{}, err
 	}
 
-	client, err := msplanner.NewClient(
+	return msplanner.NewClient(
 		teamSpec.ResponderClients.MSPlanner.TenantID,
 		teamSpec.ResponderClients.MSPlanner.ClientID,
 		teamSpec.ResponderClients.MSPlanner.GroupID,
 		teamSpec.ResponderClients.MSPlanner.Username.Value,
 		teamSpec.ResponderClients.MSPlanner.Password.Value,
 	)
+}
+
+func NotifyMSPlannerResponder(responder api.Responder) (string, error) {
+	if responder.Properties["responderType"] != MSPlannerResponder {
+		return "", fmt.Errorf("invalid responderType: %s", responder.Properties["responderType"])
+	}
+
+	client, err := msPlannerClientFromTeamSpec(responder.Team.Spec)
 	if err != nil {
 		return "", err
 	}
@@ -120,7 +107,11 @@ func NotifyMSPlannerResponder(responder api.Responder) (string, error) {
 }
 
 func NotifyJiraResponderAddComment(responder api.Responder, comment string) (string, error) {
-	client, err := jiraClientFromResponder(responder)
+	if responder.Properties["responderType"] != JiraResponder {
+		return "", fmt.Errorf("invalid responderType: %s", responder.Properties["responderType"])
+	}
+
+	client, err := jiraClientFromTeamSpec(responder.Team.Spec)
 	if err != nil {
 		return "", err
 	}
@@ -158,7 +149,11 @@ func msPlannerClientFromResponder(responder api.Responder) (msplanner.MSPlannerC
 }
 
 func NotifyMSPlannerResponderAddComment(responder api.Responder, comment string) (string, error) {
-	client, err := msPlannerClientFromResponder(responder)
+	if responder.Properties["responderType"] != MSPlannerResponder {
+		return "", fmt.Errorf("invalid responderType: %s", responder.Properties["responderType"])
+	}
+
+	client, err := msPlannerClientFromTeamSpec(responder.Team.Spec)
 	if err != nil {
 		return "", err
 	}
