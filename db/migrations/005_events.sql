@@ -48,3 +48,8 @@ CREATE TRIGGER comment_enqueue
     EXECUTE PROCEDURE insert_comment_in_event_queue();
 
 -- +goose StatementEnd
+
+-- +goose Down
+
+-- DROP TRIGGER responder_enqueue on responders;
+DROP TABLE event_queue;

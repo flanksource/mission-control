@@ -23,7 +23,7 @@ CREATE TABLE incident_rules (
   name TEXT NOT NULL,
   spec JSONB null,
   source TEXT NULL, -- The CRD source of the rule, if specified the rule cannot be edited via API
-  created_by UUID NO NULL,
+  created_by UUID NOT NULL,
   created_at timestamp NOT NULL DEFAULT now(),
   updated_at timestamp NOT NULL DEFAULT now(),
   FOREIGN KEY (created_by) REFERENCES people (id)
@@ -147,3 +147,16 @@ CREATE TABLE evidences (
 );
 
 -- +goose StatementEnd
+
+-- +goose Down
+DROP TABLE IF EXISTS evidences;
+DROP TABLE IF EXISTS comment_responders;
+DROP TABLE IF EXISTS comments;
+DROP TABLE IF EXISTS comment_responders;
+DROP TABLE IF EXISTS incident_histories;
+DROP TABLE IF EXISTS hypotheses;
+DROP TABLE IF EXISTS responders;
+
+DROP TABLE IF EXISTS incident_rules;
+DROP TABLE IF EXISTS incidents;
+DROP TABLE IF EXISTS severities;
