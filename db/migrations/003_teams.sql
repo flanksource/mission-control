@@ -2,7 +2,7 @@
 -- +goose StatementBegin
 ---
 
-CREATE TABLE teams (
+CREATE TABLE  IF NOT EXISTS teams (
   id UUID DEFAULT generate_ulid() PRIMARY KEY,
   name TEXT NOT NULL,
   icon TEXT NULL,
@@ -13,7 +13,7 @@ CREATE TABLE teams (
   updated_at timestamp NOT NULL DEFAULT now()
 );
 
-CREATE TABLE people (
+CREATE TABLE  IF NOT EXISTS people (
   id UUID DEFAULT generate_ulid() PRIMARY KEY,
   name TEXT NOT NULL,
   avatar TEXT NULL,
@@ -33,7 +33,7 @@ INSERT INTO people (name) VALUES ('System');
 
 ALTER TABLE teams ADD FOREIGN KEY (created_by) REFERENCES people(id);
 
-CREATE TABLE team_members (
+CREATE TABLE  IF NOT EXISTS team_members (
   team_id UUID NOT NULL,
   person_id UUID NOT NULL,
   PRIMARY KEY (team_id, person_id),
@@ -41,7 +41,7 @@ CREATE TABLE team_members (
   FOREIGN KEY (person_id) REFERENCES people(id)
 );
 
-CREATE TABLE team_components (
+CREATE TABLE  IF NOT EXISTS team_components (
   team_id UUID NOT NULL,
   component_id UUID NOT NULL,
   role TEXT NULL,
@@ -51,3 +51,10 @@ CREATE TABLE team_components (
 );
 
 -- +goose StatementEnd
+
+-- +goose Down
+
+DROP TABLE IF EXISTS team_components;
+DROP TABLE IF EXISTS team_members;
+DROP TABLE IF EXISTS teams;
+DROP TABLE IF EXISTS people;
