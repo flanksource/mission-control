@@ -26,7 +26,7 @@ func syncConfig() {
 		return
 	}
 
-	dbInsertConfigQuery := `INSERT INTO config_item (config_item, name, external_id, config) VALUES (?, ?, ?, ?)`
+	dbInsertConfigQuery := `INSERT INTO config_item (config_type, name, external_id, config) VALUES (?, ?, ?, ?)`
 
 	for _, team := range teams {
 		teamSpecJson, err := team.Spec.MarshalJSON()
