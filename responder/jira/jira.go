@@ -1,6 +1,7 @@
 package jira
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/flanksource/commons/logger"
@@ -158,6 +159,19 @@ func (jc JiraClient) GetConfig() (map[string]JiraProject, error) {
 	}
 
 	return projectsMap, nil
+}
+
+func (jc JiraClient) GetConfigJSON() (string, error) {
+	config, err := jc.GetConfig()
+	if err != nil {
+		return "", err
+	}
+
+	b, err := json.Marshal(&config)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
 }
 
 func (jc JiraClient) GetIssueTransitions(issueID string) ([]JiraIssueTransitions, error) {

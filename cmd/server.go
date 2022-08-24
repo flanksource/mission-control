@@ -13,6 +13,7 @@ import (
 
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/events"
+	"github.com/flanksource/incident-commander/responder"
 	"github.com/flanksource/incident-commander/ui"
 )
 
@@ -54,6 +55,7 @@ var Serve = &cobra.Command{
 		}))
 
 		go events.ListenForEvents()
+		go responder.StartConfigSync()
 		if err := e.Start(fmt.Sprintf(":%d", httpPort)); err != nil {
 			e.Logger.Fatal(err)
 		}

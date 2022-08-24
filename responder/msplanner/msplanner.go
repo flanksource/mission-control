@@ -2,6 +2,7 @@
 package msplanner
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
@@ -180,7 +181,11 @@ func (c MSPlannerClient) GetConfig() (map[string]PlanConfig, error) {
 
 	for _, plan := range result.GetValue() {
 		var buckets []PlanBucket
-		for _, bucket := range plan.GetBuckets() {
+		planBuckets, err := c.client.Planner().PlansById(*plan.GetId()).Buckets().Get()
+		if err != nil {
+			return config, openDataError(err)
+		}
+		for _, bucket := range planBuckets.GetValue() {
 			buckets = append(buckets, PlanBucket{
 				ID:   *bucket.GetId(),
 				Name: *bucket.GetName(),
@@ -196,6 +201,19 @@ func (c MSPlannerClient) GetConfig() (map[string]PlanConfig, error) {
 	}
 
 	return config, nil
+}
+
+func (c MSPlannerClient) GetConfigJSON() (string, error) {
+	config, err := c.GetConfig()
+	if err != nil {
+		return "", err
+	}
+
+	b, err := json.Marshal(&config)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
 }
 
 func openDataError(err error) error {
