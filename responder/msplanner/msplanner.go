@@ -181,7 +181,11 @@ func (c MSPlannerClient) GetConfig() (map[string]PlanConfig, error) {
 
 	for _, plan := range result.GetValue() {
 		var buckets []PlanBucket
-		for _, bucket := range plan.GetBuckets() {
+		planBuckets, err := c.client.Planner().PlansById(*plan.GetId()).Buckets().Get()
+		if err != nil {
+			return config, openDataError(err)
+		}
+		for _, bucket := range planBuckets.GetValue() {
 			buckets = append(buckets, PlanBucket{
 				ID:   *bucket.GetId(),
 				Name: *bucket.GetName(),
