@@ -15,8 +15,29 @@ func StartConfigSync() {
 		logger.Infof("Syncing configuration")
 		syncConfig()
 
-		time.Sleep(10 * time.Minute)
+		time.Sleep(1 * time.Hour)
 	}
+}
+
+func upsertConfig(configType, externalID, name, config string) error {
+
+	dbInsertConfigQuery := `INSERT INTO config_items (config_type, name, external_id, config) VALUES (?, ?, ARRAY[?], ?)`
+	dbUpdateConfigQuery := `UPDATE config_items SET config = ? WHERE external_id = ARRAY[?] AND config_type = ?`
+
+	query := db.Gorm.Exec(dbUpdateConfigQuery, config, externalID, configType)
+	if query.Error != nil {
+		logger.Errorf("Error updating config in database: %v", query.Error)
+		return query.Error
+	}
+
+	if query.RowsAffected == 0 {
+		if err := db.Gorm.Exec(dbInsertConfigQuery, configType, name, externalID, config).Error; err != nil {
+			logger.Errorf("Error inserting config into database: %v", err)
+			return query.Error
+		}
+	}
+
+	return nil
 }
 
 func syncConfig() {
@@ -25,8 +46,6 @@ func syncConfig() {
 		logger.Errorf("Error querying teams from database: %v", err)
 		return
 	}
-
-	dbInsertConfigQuery := `INSERT INTO config_item (config_type, name, external_id, config) VALUES (?, ?, ?, ?)`
 
 	for _, team := range teams {
 		teamSpecJson, err := team.Spec.MarshalJSON()
@@ -53,11 +72,11 @@ func syncConfig() {
 				continue
 			}
 
-			if err = db.Gorm.Exec(dbInsertConfigQuery, JiraResponder, "Jira", team.ID, jiraConfigJSON).Error; err != nil {
-				logger.Errorf("Error inserting Jira config into database: %v", err)
+			configName := teamSpec.ResponderClients.Jira.Url
+			if err = upsertConfig(JiraResponder, team.ID.String(), configName, jiraConfigJSON); err != nil {
+				logger.Errorf("Error upserting Jira config into database: %v", err)
 				continue
 			}
-
 		}
 
 		if teamSpec.ResponderClients.MSPlanner != (api.MSPlannerClient{}) {
@@ -73,11 +92,11 @@ func syncConfig() {
 				continue
 			}
 
-			if err = db.Gorm.Exec(dbInsertConfigQuery, MSPlannerResponder, "MSPlanner", team.ID, msPlannerConfigJSON).Error; err != nil {
-				logger.Errorf("Error inserting MSPlanner config into database: %v", err)
+			configName := teamSpec.ResponderClients.MSPlanner.ClientID
+			if err = upsertConfig(MSPlannerResponder, team.ID.String(), configName, msPlannerConfigJSON); err != nil {
+				logger.Errorf("Error upserting MSPlanner config into database: %v", err)
 				continue
 			}
 		}
-
 	}
 }
