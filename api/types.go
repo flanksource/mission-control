@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/flanksource/kommons"
@@ -16,10 +17,12 @@ type Incident struct {
 }
 
 type Comment struct {
-	Body      string    `json:"body"`
-	CreatedBy string    `json:"created_by"`
-	CreatedAt time.Time `json:"created_at"`
-	Incident  Incident  `json:"incident"`
+	ID         uuid.UUID `json:"id"`
+	ExternalID string    `json:"external_id"`
+	Body       string    `json:"body"`
+	CreatedBy  string    `json:"created_by"`
+	CreatedAt  time.Time `json:"created_at"`
+	Incident   Incident  `json:"incident"`
 }
 
 type Hypothesis struct {
@@ -35,6 +38,18 @@ type Responder struct {
 type Team struct {
 	ID   uuid.UUID
 	Spec types.JSONMap `json:"properties" gorm:"type:jsonstringmap;<-:false"`
+}
+
+func (t Team) GetSpec() (TeamSpec, error) {
+	var teamSpec TeamSpec
+	teamSpecJson, err := t.Spec.MarshalJSON()
+	if err != nil {
+		return teamSpec, err
+	}
+	if err = json.Unmarshal(teamSpecJson, &teamSpec); err != nil {
+		return teamSpec, err
+	}
+	return teamSpec, nil
 }
 
 type Person struct {

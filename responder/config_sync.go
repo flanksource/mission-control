@@ -1,7 +1,6 @@
 package responder
 
 import (
-	"encoding/json"
 	"time"
 
 	"github.com/flanksource/commons/logger"
@@ -24,16 +23,16 @@ func upsertConfig(configType, externalID, name, config string) error {
 	dbInsertConfigQuery := `INSERT INTO config_items (config_type, name, external_id, config) VALUES (?, ?, ARRAY[?], ?)`
 	dbUpdateConfigQuery := `UPDATE config_items SET config = ? WHERE external_id = ARRAY[?] AND config_type = ?`
 
-	query := db.Gorm.Exec(dbUpdateConfigQuery, config, externalID, configType)
-	if query.Error != nil {
-		logger.Errorf("Error updating config in database: %v", query.Error)
-		return query.Error
+	tx := db.Gorm.Exec(dbUpdateConfigQuery, config, externalID, configType)
+	if tx.Error != nil {
+		logger.Errorf("Error updating config in database: %v", tx.Error)
+		return tx.Error
 	}
 
-	if query.RowsAffected == 0 {
+	if tx.RowsAffected == 0 {
 		if err := db.Gorm.Exec(dbInsertConfigQuery, configType, name, externalID, config).Error; err != nil {
 			logger.Errorf("Error inserting config into database: %v", err)
-			return query.Error
+			return tx.Error
 		}
 	}
 
@@ -48,19 +47,14 @@ func syncConfig() {
 	}
 
 	for _, team := range teams {
-		teamSpecJson, err := team.Spec.MarshalJSON()
+		teamSpec, err := team.GetSpec()
 		if err != nil {
-			logger.Errorf("Error marshalling team spec into json: %v", err)
-			continue
-		}
-		var teamSpec api.TeamSpec
-		if err = json.Unmarshal(teamSpecJson, &teamSpec); err != nil {
-			logger.Errorf("Error unmarshalling team spec into struct: %v", err)
+			logger.Errorf("Error getting team spec: %v", err)
 			continue
 		}
 
 		if teamSpec.ResponderClients.Jira != (api.JiraClient{}) {
-			jiraClient, err := jiraClientFromTeamSpec(team.Spec)
+			jiraClient, err := jiraClientFromTeamSpec(teamSpec)
 			if err != nil {
 				logger.Errorf("Error instantiating Jira client: %v", err)
 				continue
@@ -80,7 +74,7 @@ func syncConfig() {
 		}
 
 		if teamSpec.ResponderClients.MSPlanner != (api.MSPlannerClient{}) {
-			msPlannerClient, err := msPlannerClientFromTeamSpec(team.Spec)
+			msPlannerClient, err := msPlannerClientFromTeamSpec(teamSpec)
 			if err != nil {
 				logger.Errorf("Error instantiating MSPlanner client: %v", err)
 				continue
