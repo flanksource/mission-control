@@ -58,7 +58,7 @@ func syncComments() {
 			var dbExternalIDs []string
 			err = db.Gorm.Raw(dbSelectExternalIDQuery, sql.Named("responder_id", responder.ID)).Find(&dbExternalIDs).Error
 			if err != nil {
-				logger.Errorf("TODO")
+				logger.Errorf("Error querying external_ids from database: %v", err)
 				continue
 			}
 
