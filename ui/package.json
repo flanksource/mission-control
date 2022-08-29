@@ -2,7 +2,7 @@
   "name": "incident-commander",
   "version": "0.1.0",
   "dependencies": {
-    "@flanksource/flanksource-ui": "^1.0.102"
+    "@flanksource/flanksource-ui": "^1.0.104"
   },
   "proxy": "https://incident-commander.canary.lab.flanksource.com/",
   "scripts": {
