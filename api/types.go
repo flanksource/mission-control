@@ -41,7 +41,8 @@ type Responder struct {
 }
 
 type Team struct {
-	ID   uuid.UUID
+	ID   uuid.UUID     `json:"id" gorm:"default:generate_ulid()"`
+	Name string        `json:"name"`
 	Spec types.JSONMap `json:"properties" gorm:"type:jsonstringmap;<-:false"`
 }
 
@@ -84,7 +85,8 @@ type ResponderClients struct {
 }
 
 type TeamSpec struct {
-	ResponderClients ResponderClients `json:"responder_clients"`
+	Components       []ComponentSelector `json:"components,omitempty"`
+	ResponderClients ResponderClients    `json:"responder_clients"`
 }
 
 type TeamsUser struct {
@@ -186,7 +188,15 @@ type ComponentSelector struct {
 	Name      string            `json:"name,omitempty"`
 	Namespace string            `json:"namespace,omitempty"`
 	Type      string            `json:"type,omitempty"`
+	Selector  string            `json:"selector,omitempty"`
 	Labels    map[string]string `json:"labels,omitempty"`
+}
+
+type TeamComponent struct {
+	TeamID      uuid.UUID `json:"team_id"`
+	ComponentID uuid.UUID `json:"component_id"`
+	SelectorID  string    `json:"selector_id,omitempty"`
+	Role        string    `json:"role,omitempty"`
 }
 
 type IncidentFilter struct {
