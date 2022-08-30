@@ -13,16 +13,18 @@ import (
 type Incident struct {
 	ID    uuid.UUID `json:"id"`
 	Title string    `json:"title"`
-	Team  Team      `json:"team"`
 }
 
 type Comment struct {
-	ID         uuid.UUID `json:"id"`
-	ExternalID string    `json:"external_id"`
-	Body       string    `json:"body"`
-	CreatedBy  string    `json:"created_by"`
-	CreatedAt  time.Time `json:"created_at"`
-	Incident   Incident  `json:"incident"`
+	ID                uuid.UUID `json:"id"`
+	ExternalID        string    `json:"external_id"`
+	Comment           string    `json:"comment"`
+	CreatedBy         uuid.UUID `json:"created_by"`
+	ExternalCreatedBy string    `json:"external_created_by"`
+	CreatedAt         time.Time `json:"created_at"`
+	ResponderID       uuid.UUID `json:"responder_id"`
+	IncidentID        uuid.UUID `json:"incident_id"`
+	Incident          Incident  `json:"incident"`
 }
 
 type Hypothesis struct {
@@ -32,6 +34,9 @@ type Responder struct {
 	ID         uuid.UUID           `json:"id"`
 	Properties types.JSONStringMap `json:"properties" gorm:"type:jsonstringmap;<-:false"`
 	ExternalID string              `json:"external_id"`
+	IncidentID uuid.UUID           `json:"incident_id"`
+	Incident   Incident            `json:"incident"`
+	TeamID     uuid.UUID           `json:"team_id"`
 	Team       Team                `json:"team"`
 }
 
@@ -53,10 +58,11 @@ func (t Team) GetSpec() (TeamSpec, error) {
 }
 
 type Person struct {
-	Name   string `json:"name,omitempty"`
-	Email  string `json:"email,omitempty"`
-	Avatar string `json:"avatar,omitempty"`
-	Role   string `json:"role,omitempty"`
+	ID     uuid.UUID `json:"id"`
+	Name   string    `json:"name,omitempty"`
+	Email  string    `json:"email,omitempty"`
+	Avatar string    `json:"avatar,omitempty"`
+	Role   string    `json:"role,omitempty"`
 }
 
 type Notification struct {

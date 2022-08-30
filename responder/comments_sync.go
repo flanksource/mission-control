@@ -6,6 +6,7 @@ import (
 
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
+	"github.com/google/uuid"
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
@@ -34,6 +35,13 @@ func syncComments() {
         SELECT external_id FROM comment_responders WHERE responder_id = @responder_id
     `
 
+	var systemUser api.Person
+	err = db.Gorm.Where("name = ?", "System").First(&systemUser).Error
+	if err != nil {
+		logger.Errorf("Error fetching system user from database: %v", err)
+		return
+	}
+
 	for _, responder := range responders {
 		teamSpec, err := responder.Team.GetSpec()
 		if err != nil {
@@ -41,7 +49,7 @@ func syncComments() {
 			continue
 		}
 
-		if responder.Properties["type"] == JiraResponder {
+		if responder.Properties["responderType"] == JiraResponder {
 			jiraClient, err := jiraClientFromTeamSpec(teamSpec)
 			if err != nil {
 				logger.Errorf("Error instantiating Jira client: %v", err)
@@ -65,6 +73,11 @@ func syncComments() {
 			// IDs which are in Jira but not added to database must be added in the comments table
 			for _, responderComment := range responderComments {
 				if !collections.Contains(dbExternalIDs, responderComment.ExternalID) {
+					responderComment.ID = uuid.New()
+					responderComment.IncidentID = responder.IncidentID
+					responderComment.CreatedBy = systemUser.ID
+					responderComment.ResponderID = responder.ID
+
 					err = db.Gorm.Create(&responderComment).Error
 					if err != nil {
 						logger.Errorf("Error inserting comment in database: %v", err)

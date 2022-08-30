@@ -108,6 +108,7 @@ CREATE TABLE comments (
   created_by UUID NOT NULL ,
   comment text NOT NULL,
   external_id TEXT NULL, -- A unique identifier for the responder in the external system e.g. Jira ticket id
+  external_created_by TEXT NULL, -- Author of the comment in the external system
   incident_id UUID NOT NULL,
   responder_id UUID NULL,
   hypothesis_id UUID NULL,
