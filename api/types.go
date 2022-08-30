@@ -16,7 +16,7 @@ type Incident struct {
 }
 
 type Comment struct {
-	ID                uuid.UUID `json:"id"`
+	ID                uuid.UUID `json:"id" gorm:"default:generate_ulid()"`
 	ExternalID        string    `json:"external_id"`
 	Comment           string    `json:"comment"`
 	CreatedBy         uuid.UUID `json:"created_by"`

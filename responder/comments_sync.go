@@ -6,7 +6,6 @@ import (
 
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
-	"github.com/google/uuid"
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
@@ -73,7 +72,6 @@ func syncComments() {
 			// IDs which are in Jira but not added to database must be added in the comments table
 			for _, responderComment := range responderComments {
 				if !collections.Contains(dbExternalIDs, responderComment.ExternalID) {
-					responderComment.ID = uuid.New()
 					responderComment.IncidentID = responder.IncidentID
 					responderComment.CreatedBy = systemUser.ID
 					responderComment.ResponderID = responder.ID
@@ -81,6 +79,7 @@ func syncComments() {
 					err = db.Gorm.Create(&responderComment).Error
 					if err != nil {
 						logger.Errorf("Error inserting comment in database: %v", err)
+						continue
 					}
 				}
 			}
