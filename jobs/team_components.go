@@ -3,14 +3,15 @@ package jobs
 import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/teams"
 )
 
 func TeamComponentOwnershipRun() {
 	logger.Debugf("Sync team components")
 	teamComponentMap := db.GetTeamsWithComponentSelector()
 	for teamID, compSelectors := range teamComponentMap {
-		selectedComps := db.GetComponentsWithSelectors(compSelectors)
-		teamComponents := db.GetTeamComponents(teamID, selectedComps)
-		db.PersistTeamComponents(teamComponents)
+		selectedComps := teams.GetComponentsWithSelectors(compSelectors)
+		teamComponents := teams.GetTeamComponents(teamID, selectedComps)
+		teams.PersistTeamComponents(teamComponents)
 	}
 }
