@@ -45,10 +45,14 @@ CREATE TABLE  IF NOT EXISTS team_components (
   team_id UUID NOT NULL,
   component_id UUID NOT NULL,
   role TEXT NULL,
+  selector_id TEXT,
   PRIMARY KEY (team_id, component_id),
   FOREIGN KEY (team_id) REFERENCES teams(id)
-  -- FOREIGN KEY (component_id) REFERENCES components(id)
+  FOREIGN KEY (component_id) REFERENCES components(id)
+  UNIQUE (team_id, component_id, selector_id)
 );
+
+INSERT into incident_commander_db_version(version_id, tstamp, is_applied) VALUES(6, NOW(), true);
 
 -- +goose StatementEnd
 
