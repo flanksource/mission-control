@@ -56,6 +56,7 @@ var Serve = &cobra.Command{
 
 		go events.ListenForEvents()
 		go responder.StartConfigSync()
+		go responder.StartCommentSync()
 		if err := e.Start(fmt.Sprintf(":%d", httpPort)); err != nil {
 			e.Logger.Fatal(err)
 		}

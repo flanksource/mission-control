@@ -158,9 +158,9 @@ func (c MSPlannerClient) GetComments(taskID string) ([]api.Comment, error) {
 
 	for _, conv := range conversations.GetValue() {
 		comments = append(comments, api.Comment{
-			Body:      *conv.GetBody().GetContent(),
-			CreatedBy: *conv.GetFrom().GetEmailAddress().GetName(),
-			CreatedAt: *conv.GetCreatedDateTime(),
+			Comment:           *conv.GetBody().GetContent(),
+			ExternalCreatedBy: *conv.GetFrom().GetEmailAddress().GetName(),
+			CreatedAt:         *conv.GetCreatedDateTime(),
 		})
 	}
 

@@ -2,7 +2,6 @@
 package responder
 
 import (
-	"encoding/json"
 	"fmt"
 
 	goJira "github.com/andygrunwald/go-jira"
@@ -10,7 +9,6 @@ import (
 	"github.com/mitchellh/mapstructure"
 
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/db/types"
 	"github.com/flanksource/incident-commander/responder/jira"
 	"github.com/flanksource/incident-commander/responder/msplanner"
 )
@@ -25,7 +23,11 @@ func NotifyJiraResponder(responder api.Responder) (string, error) {
 		return "", fmt.Errorf("invalid responderType: %s", responder.Properties["responderType"])
 	}
 
-	client, err := jiraClientFromTeamSpec(responder.Team.Spec)
+	teamSpec, err := responder.Team.GetSpec()
+	if err != nil {
+		return "", err
+	}
+	client, err := jiraClientFromTeamSpec(teamSpec)
 	if err != nil {
 		return "", err
 	}
@@ -44,17 +46,7 @@ func NotifyJiraResponder(responder api.Responder) (string, error) {
 	return issue.Key, nil
 }
 
-func jiraClientFromTeamSpec(teamSpecJSONMap types.JSONMap) (jira.JiraClient, error) {
-	teamSpecJson, err := teamSpecJSONMap.MarshalJSON()
-	if err != nil {
-		return jira.JiraClient{}, err
-	}
-
-	var teamSpec api.TeamSpec
-	if err = json.Unmarshal(teamSpecJson, &teamSpec); err != nil {
-		return jira.JiraClient{}, err
-	}
-
+func jiraClientFromTeamSpec(teamSpec api.TeamSpec) (jira.JiraClient, error) {
 	return jira.NewClient(
 		teamSpec.ResponderClients.Jira.Username.Value,
 		teamSpec.ResponderClients.Jira.Password.Value,
@@ -62,17 +54,7 @@ func jiraClientFromTeamSpec(teamSpecJSONMap types.JSONMap) (jira.JiraClient, err
 	)
 }
 
-func msPlannerClientFromTeamSpec(teamSpecJSONMap types.JSONMap) (msplanner.MSPlannerClient, error) {
-	teamSpecJson, err := teamSpecJSONMap.MarshalJSON()
-	if err != nil {
-		return msplanner.MSPlannerClient{}, err
-	}
-
-	var teamSpec api.TeamSpec
-	if err = json.Unmarshal(teamSpecJson, &teamSpec); err != nil {
-		return msplanner.MSPlannerClient{}, err
-	}
-
+func msPlannerClientFromTeamSpec(teamSpec api.TeamSpec) (msplanner.MSPlannerClient, error) {
 	return msplanner.NewClient(
 		teamSpec.ResponderClients.MSPlanner.TenantID,
 		teamSpec.ResponderClients.MSPlanner.ClientID,
@@ -87,7 +69,11 @@ func NotifyMSPlannerResponder(responder api.Responder) (string, error) {
 		return "", fmt.Errorf("invalid responderType: %s", responder.Properties["responderType"])
 	}
 
-	client, err := msPlannerClientFromTeamSpec(responder.Team.Spec)
+	teamSpec, err := responder.Team.GetSpec()
+	if err != nil {
+		return "", err
+	}
+	client, err := msPlannerClientFromTeamSpec(teamSpec)
 	if err != nil {
 		return "", err
 	}
@@ -111,7 +97,11 @@ func NotifyJiraResponderAddComment(responder api.Responder, comment string) (str
 		return "", fmt.Errorf("invalid responderType: %s", responder.Properties["responderType"])
 	}
 
-	client, err := jiraClientFromTeamSpec(responder.Team.Spec)
+	teamSpec, err := responder.Team.GetSpec()
+	if err != nil {
+		return "", err
+	}
+	client, err := jiraClientFromTeamSpec(teamSpec)
 	if err != nil {
 		return "", err
 	}
@@ -129,7 +119,11 @@ func NotifyMSPlannerResponderAddComment(responder api.Responder, comment string)
 		return "", fmt.Errorf("invalid responderType: %s", responder.Properties["responderType"])
 	}
 
-	client, err := msPlannerClientFromTeamSpec(responder.Team.Spec)
+	teamSpec, err := responder.Team.GetSpec()
+	if err != nil {
+		return "", err
+	}
+	client, err := msPlannerClientFromTeamSpec(teamSpec)
 	if err != nil {
 		return "", err
 	}

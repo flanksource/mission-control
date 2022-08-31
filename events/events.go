@@ -163,6 +163,17 @@ func reconcileCommentEvent(tx *gorm.DB, event api.Event) error {
 	commentID := event.Properties["id"]
 	commentBody := event.Properties["body"]
 
+	var err error
+	var comment api.Comment
+	query := tx.Where("id = ? AND external_id IS NULL", commentID).First(&comment)
+	if query.Error != nil {
+		if errors.Is(query.Error, gorm.ErrRecordNotFound) {
+			logger.Debugf("Skipping comment %s since it was added via responder", commentID)
+			return nil
+		}
+		return query.Error
+	}
+
 	// Get all responders related to a comment
 	var responders []api.Responder
 	commentRespondersQuery := `
@@ -170,7 +181,6 @@ func reconcileCommentEvent(tx *gorm.DB, event api.Event) error {
             SELECT incident_id FROM comments WHERE id = ?
         )
     `
-	var err error
 	if err = tx.Raw(commentRespondersQuery, commentID).Preload("Team").Find(&responders).Error; err != nil {
 		return err
 	}

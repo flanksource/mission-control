@@ -103,9 +103,10 @@ func (jc JiraClient) GetComments(issueID string) ([]api.Comment, error) {
 	for _, comment := range issue.Fields.Comments.Comments {
 		createdAt, _ := time.Parse("2006-01-02T15:04:05.999-0700", comment.Created)
 		comments = append(comments, api.Comment{
-			Body:      comment.Body,
-			CreatedBy: comment.Author.DisplayName,
-			CreatedAt: createdAt,
+			ExternalID:        comment.ID,
+			Comment:           comment.Body,
+			ExternalCreatedBy: comment.Author.DisplayName,
+			CreatedAt:         createdAt,
 		})
 	}
 
