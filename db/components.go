@@ -1,12 +1,10 @@
 package db
 
 import (
-	"context"
-	"encoding/json"
+	"fmt"
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/db/types"
 	"github.com/flanksource/incident-commander/utils"
 	"github.com/google/uuid"
 	"gorm.io/gorm/clause"
@@ -17,18 +15,16 @@ func GetTeamsWithComponentSelector() map[uuid.UUID][]api.ComponentSelector {
 	var teamComponentMap = make(map[uuid.UUID][]api.ComponentSelector)
 	err := Gorm.Table("teams").Where("spec::jsonb ? 'components';").Find(&teams).Error
 	if err != nil {
-		logger.Errorf("error fetching the teams with componenets: %v", err)
+		logger.Errorf("error fetching the teams with components: %v", err)
+		return teamComponentMap
 	}
 	for _, team := range teams {
-		teamSpec := &api.TeamSpec{}
-		teamSpecJson, err := team.Spec.MarshalJSON()
+		teamSpec, err := team.GetSpec()
 		if err != nil {
-			logger.Errorf("error marshalling team spec for team: %v", team.ID)
+			logger.Errorf("error fetching teamSpec: %v", err)
 			continue
 		}
-		if err := json.Unmarshal(teamSpecJson, teamSpec); err != nil {
-			logger.Errorf("error unmarshalling the teamSpec for team: %v", team.ID)
-		}
+
 		teamComponentMap[team.ID] = teamSpec.Components
 	}
 	return teamComponentMap
@@ -39,45 +35,26 @@ func GetComponentsWithSelectors(componentSelectors []api.ComponentSelector) map[
 	for _, compSelector := range componentSelectors {
 		selectedComponents[utils.GetHash(compSelector)] = getComponentsWithSelector(compSelector)
 	}
-
+	fmt.Println(selectedComponents)
 	return selectedComponents
 }
 
 func getComponentsWithSelector(selector api.ComponentSelector) []uuid.UUID {
-	sql := "select ID from components where deleted_at is null "
 	var compIds []uuid.UUID
-	args := make(map[string]interface{})
+	query := Gorm.Table("components").Where("deleted_at is null").Select("id")
 	if selector.Name != "" {
-		sql += " AND name = :name"
-		args["name"] = selector.Name
+		query = query.Where("name = ?", selector.Name)
 	}
-
 	if selector.Namespace != "" {
-		sql += " AND namespace = :namespace"
-		args["namespace"] = selector.Namespace
+		query = query.Where("namespace = ?", selector.Namespace)
 	}
-
 	if selector.Type != "" {
-		sql += " AND type = :type"
-		args["type"] = selector.Type
+		query = query.Where("type = ?", selector.Type)
 	}
-
 	if selector.Labels != nil {
-		sql += "AND labels @> :labels"
-		args["labels"] = types.JSONStringMap(selector.Labels)
+		query = query.Where("labels @> ?", selector.Labels)
 	}
-	rows, err := QueryNamed(context.Background(), sql, args)
-	if err != nil {
-		logger.Errorf("error fetching component with selector: %v", selector)
-	}
-	for rows.Next() {
-		var id uuid.UUID
-		if err := rows.Scan(&id); err != nil {
-			logger.Errorf("error scanning the id for the component")
-			continue
-		}
-		compIds = append(compIds, id)
-	}
+	query.Find(&compIds)
 	return compIds
 }
 

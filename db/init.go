@@ -4,12 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"embed"
-	"fmt"
 	"os"
-	"strings"
 
 	"github.com/flanksource/commons/logger"
-	"github.com/jackc/pgx/v4"
 	"github.com/jackc/pgx/v4/log/logrusadapter"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/jackc/pgx/v4/stdlib"
@@ -121,21 +118,4 @@ func Migrate() error {
 
 func GetDB() (*sql.DB, error) {
 	return sql.Open("pgx", pgxConnectionString)
-}
-
-func ConvertNamedParams(sql string, namedArgs map[string]interface{}) (string, []interface{}) {
-	i := 1
-	var args []interface{}
-	// Loop the named args and replace with placeholders
-	for pname, pval := range namedArgs {
-		sql = strings.ReplaceAll(sql, ":"+pname, fmt.Sprint(`$`, i))
-		args = append(args, pval)
-		i++
-	}
-	return sql, args
-}
-
-func QueryNamed(ctx context.Context, sql string, args map[string]interface{}) (pgx.Rows, error) {
-	sql, namedArgs := ConvertNamedParams(sql, args)
-	return Pool.Query(ctx, sql, namedArgs...)
 }
