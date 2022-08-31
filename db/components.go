@@ -1,8 +1,6 @@
 package db
 
 import (
-	"fmt"
-
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/utils"
@@ -35,7 +33,6 @@ func GetComponentsWithSelectors(componentSelectors []api.ComponentSelector) map[
 	for _, compSelector := range componentSelectors {
 		selectedComponents[utils.GetHash(compSelector)] = getComponentsWithSelector(compSelector)
 	}
-	fmt.Println(selectedComponents)
 	return selectedComponents
 }
 
@@ -67,12 +64,10 @@ func PersistTeamComponents(teamComps []api.TeamComponent) {
 }
 
 func PersistTeamComponent(teamComp api.TeamComponent) error {
-	tx := Gorm.Clauses(clause.OnConflict{
+	return Gorm.Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "team_id"}, {Name: "component_id"}, {Name: "selector_id"}},
 		UpdateAll: true,
-	}).Create(teamComp)
-	return tx.Error
-
+	}).Create(teamComp).Error
 }
 
 func GetTeamComponents(teamId uuid.UUID, selectedComponents map[string][]uuid.UUID) []api.TeamComponent {
