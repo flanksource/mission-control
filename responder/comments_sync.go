@@ -6,6 +6,7 @@ import (
 
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
+	"github.com/google/uuid"
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
@@ -18,6 +19,14 @@ func StartCommentSync() {
 
 		time.Sleep(1 * time.Hour)
 	}
+}
+
+func getRootHypothesisOfIncident(incidentID uuid.UUID) (api.Hypothesis, error) {
+	var hypothesis api.Hypothesis
+	if err := db.Gorm.Where("incident_id = ? AND type = ?", incidentID, "root").First(&hypothesis).Error; err != nil {
+		return hypothesis, err
+	}
+	return hypothesis, nil
 }
 
 func syncComments() {
@@ -72,9 +81,15 @@ func syncComments() {
 			// IDs which are in Jira but not added to database must be added in the comments table
 			for _, responderComment := range responderComments {
 				if !collections.Contains(dbExternalIDs, responderComment.ExternalID) {
+					rootHypothesis, err := getRootHypothesisOfIncident(responder.IncidentID)
+					if err != nil {
+						logger.Errorf("Error fetching hypothesis from database: %v", err)
+						continue
+					}
 					responderComment.IncidentID = responder.IncidentID
 					responderComment.CreatedBy = systemUser.ID
 					responderComment.ResponderID = responder.ID
+					responderComment.HypothesisID = rootHypothesis.ID
 
 					err = db.Gorm.Create(&responderComment).Error
 					if err != nil {

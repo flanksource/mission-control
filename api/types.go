@@ -24,10 +24,15 @@ type Comment struct {
 	CreatedAt         time.Time `json:"created_at"`
 	ResponderID       uuid.UUID `json:"responder_id"`
 	IncidentID        uuid.UUID `json:"incident_id"`
+	HypothesisID      uuid.UUID `json:"hypothesis_id"`
 	Incident          Incident  `json:"incident"`
 }
 
 type Hypothesis struct {
+	ID     uuid.UUID `json:"id" gorm:"default:generate_ulid()"`
+	Type   string    `json:"type"`
+	Title  string    `json:"title"`
+	Status string    `json:"status"`
 }
 
 type Responder struct {
