@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
 
@@ -39,6 +40,10 @@ type JiraConfig struct {
 type JiraClient struct {
 	client *jira.Client
 }
+
+// Jira does not support creating an issue of
+// type Sub-task so we do not set it in config
+var IssueTypeExcludeList = []string{"Sub-task"}
 
 func NewClient(email, apiToken, url string) (JiraClient, error) {
 
@@ -151,6 +156,9 @@ func (jc JiraClient) GetConfig() (JiraConfig, error) {
 
 		var issueTypes []string
 		for _, issueType := range project.IssueTypes {
+			if collections.Contains(IssueTypeExcludeList, issueType.Name) {
+				continue
+			}
 			issueTypes = append(issueTypes, issueType.Name)
 		}
 
