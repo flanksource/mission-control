@@ -21,7 +21,7 @@ type JiraIssue struct {
 type JiraProject struct {
 	Key        string   `json:"key"`
 	Name       string   `json:"name"`
-	IssueTypes []string `json:"issue_types"`
+	IssueTypes []string `json:"issueTypes"`
 	Priorities []string `json:"priorities"`
 	Statuses   []string `json:"statuses"`
 }
@@ -30,6 +30,10 @@ type JiraIssueTransitions struct {
 	ID      string `json:"id"`
 	Name    string `json:"name"`
 	ToState string `json:"to_state"`
+}
+
+type JiraConfig struct {
+	Projects map[string]JiraProject `json:"projects"`
 }
 
 type JiraClient struct {
@@ -113,10 +117,10 @@ func (jc JiraClient) GetComments(issueID string) ([]api.Comment, error) {
 	return comments, nil
 }
 
-func (jc JiraClient) GetConfig() (map[string]JiraProject, error) {
+func (jc JiraClient) GetConfig() (JiraConfig, error) {
 	priorities, _, err := jc.client.Priority.GetList()
 	if err != nil {
-		return nil, err
+		return JiraConfig{}, err
 	}
 
 	var priorityList []string
@@ -126,7 +130,7 @@ func (jc JiraClient) GetConfig() (map[string]JiraProject, error) {
 
 	statuses, _, err := jc.client.Status.GetAllStatuses()
 	if err != nil {
-		return nil, err
+		return JiraConfig{}, err
 	}
 	var statusList []string
 	for _, status := range statuses {
@@ -135,14 +139,14 @@ func (jc JiraClient) GetConfig() (map[string]JiraProject, error) {
 
 	projects, _, err := jc.client.Project.GetList()
 	if err != nil {
-		return nil, err
+		return JiraConfig{}, err
 	}
 
 	projectsMap := make(map[string]JiraProject)
 	for _, projectMeta := range *projects {
 		project, _, err := jc.client.Project.Get(projectMeta.ID)
 		if err != nil {
-			return nil, err
+			return JiraConfig{}, err
 		}
 
 		var issueTypes []string
@@ -159,7 +163,7 @@ func (jc JiraClient) GetConfig() (map[string]JiraProject, error) {
 		}
 	}
 
-	return projectsMap, nil
+	return JiraConfig{Projects: projectsMap}, nil
 }
 
 func (jc JiraClient) GetConfigJSON() (string, error) {

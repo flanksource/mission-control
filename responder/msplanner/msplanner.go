@@ -36,6 +36,10 @@ type PlanBucket struct {
 	Name string `json:"name"`
 }
 
+type MSPlannerConfig struct {
+	Plans map[string]PlanConfig `json:"plans"`
+}
+
 type MSPlannerClient struct {
 	client  *msgraphsdk.GraphServiceClient
 	groupID string
@@ -167,7 +171,7 @@ func (c MSPlannerClient) GetComments(taskID string) ([]api.Comment, error) {
 	return comments, nil
 }
 
-func (c MSPlannerClient) GetConfig() (map[string]PlanConfig, error) {
+func (c MSPlannerClient) GetConfig() (MSPlannerConfig, error) {
 	var priorities []string
 	for k := range taskPriorities {
 		priorities = append(priorities, k)
@@ -176,14 +180,14 @@ func (c MSPlannerClient) GetConfig() (map[string]PlanConfig, error) {
 	config := make(map[string]PlanConfig)
 	result, err := c.client.GroupsById(c.groupID).Planner().Plans().Get()
 	if err != nil {
-		return config, openDataError(err)
+		return MSPlannerConfig{}, openDataError(err)
 	}
 
 	for _, plan := range result.GetValue() {
 		var buckets []PlanBucket
 		planBuckets, err := c.client.Planner().PlansById(*plan.GetId()).Buckets().Get()
 		if err != nil {
-			return config, openDataError(err)
+			return MSPlannerConfig{}, openDataError(err)
 		}
 		for _, bucket := range planBuckets.GetValue() {
 			buckets = append(buckets, PlanBucket{
@@ -200,7 +204,7 @@ func (c MSPlannerClient) GetConfig() (map[string]PlanConfig, error) {
 		}
 	}
 
-	return config, nil
+	return MSPlannerConfig{Plans: config}, nil
 }
 
 func (c MSPlannerClient) GetConfigJSON() (string, error) {
