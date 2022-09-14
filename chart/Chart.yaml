@@ -14,3 +14,11 @@ dependencies:
   - name: canary-checker
     version: "0.38.158"
     repository: https://flanksource.github.io/charts
+  - name: flanksource-ui
+    version: "1.3.2"
+    repository: https://flanksource.github.io/charts
+    alias: incident-manager-ui
+  - name: flanksource-ui
+    version: "1.3.2"
+    repository: https://flanksource.github.io/charts
+    alias: canary-checker-ui
