@@ -83,10 +83,6 @@ type Slack struct {
 	Channel      string `json:"channel"`
 }
 
-type ResponderValues map[string]string
-
-type ResponderDefaults map[string]string
-
 type ResponderClients struct {
 	Jira      *JiraClient      `json:"jira,omitempty"`
 	AWS       *AWSClient       `json:"aws,omitempty"`
@@ -157,22 +153,25 @@ type GenericTicketing struct {
 	Labels      map[string]string `json:"labels,omitempty"`
 }
 
+type ResponderClientBase struct {
+	Defaults map[string]string `json:"defaults"`
+	Values   map[string]string `json:"values"`
+}
+
 type JiraClient struct {
-	Url      string            `json:"url,omitempty"`
-	Username kommons.EnvVar    `yaml:"username" json:"username"`
-	Password kommons.EnvVar    `yaml:"password" json:"password"`
-	Values   ResponderValues   `json:"values"`
-	Defaults ResponderDefaults `json:"defaults"`
+	ResponderClientBase `json:",inline"`
+	Url                 string         `json:"url,omitempty"`
+	Username            kommons.EnvVar `yaml:"username" json:"username"`
+	Password            kommons.EnvVar `yaml:"password" json:"password"`
 }
 
 type MSPlannerClient struct {
-	TenantID string            `json:"tenant_id"`
-	ClientID string            `json:"client_id"`
-	GroupID  string            `json:"group_id"`
-	Username kommons.EnvVar    `yaml:"username" json:"username"`
-	Password kommons.EnvVar    `yaml:"password" json:"password"`
-	Values   ResponderValues   `json:"values"`
-	Defaults ResponderDefaults `json:"defaults"`
+	ResponderClientBase `json:",inline"`
+	TenantID            string         `json:"tenant_id"`
+	ClientID            string         `json:"client_id"`
+	GroupID             string         `json:"group_id"`
+	Username            kommons.EnvVar `yaml:"username" json:"username"`
+	Password            kommons.EnvVar `yaml:"password" json:"password"`
 }
 
 type Jira struct {
