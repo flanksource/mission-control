@@ -1,7 +1,7 @@
-//nolint:staticcheck
 package msplanner
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -57,17 +57,17 @@ var taskPriorities = map[string]int32{
 func NewClient(tenantID, clientID, groupID, username, password string) (MSPlannerClient, error) {
 	cred, err := azidentity.NewUsernamePasswordCredential(tenantID, clientID, username, password, nil)
 	if err != nil {
-		return MSPlannerClient{}, fmt.Errorf("Error creating credentials: %v\n", err)
+		return MSPlannerClient{}, fmt.Errorf("error creating credentials: %v\n", err)
 	}
 
 	auth, err := kiotaAuth.NewAzureIdentityAuthenticationProvider(cred)
 	if err != nil {
-		return MSPlannerClient{}, fmt.Errorf("Error authentication provider: %v\n", err)
+		return MSPlannerClient{}, fmt.Errorf("error authentication provider: %v\n", err)
 	}
 
 	adapter, err := msgraphsdk.NewGraphRequestAdapter(auth)
 	if err != nil {
-		return MSPlannerClient{}, fmt.Errorf("Error creating adapter: %v\n", err)
+		return MSPlannerClient{}, fmt.Errorf("error creating adapter: %v\n", err)
 	}
 	client := msgraphsdk.NewGraphServiceClient(adapter)
 	return MSPlannerClient{client: client, groupID: groupID}, nil
@@ -92,7 +92,7 @@ func (c MSPlannerClient) CreateTask(opts MSPlannerTask) (models.PlannerTaskable,
 		body.SetDetails(descBody)
 	}
 
-	result, err := c.client.Planner().Tasks().Post(body)
+	result, err := c.client.Planner().Tasks().Post(context.Background(), body, nil)
 	return result, openDataError(err)
 }
 
@@ -101,7 +101,7 @@ func (c MSPlannerClient) AddComment(taskID, comment string) (string, error) {
 	// so we just return a constant string for now
 	commentID := "posted"
 
-	task, err := c.client.Planner().TasksById(taskID).Get()
+	task, err := c.client.Planner().TasksById(taskID).Get(context.Background(), nil)
 	if err != nil {
 		return commentID, openDataError(err)
 	}
@@ -118,7 +118,7 @@ func (c MSPlannerClient) AddComment(taskID, comment string) (string, error) {
 		replyBody := reply.NewReplyPostRequestBody()
 		replyBody.SetPost(post)
 
-		err = c.client.GroupsById(c.groupID).ThreadsById(*task.GetConversationThreadId()).Reply().Post(replyBody)
+		err = c.client.GroupsById(c.groupID).ThreadsById(*task.GetConversationThreadId()).Reply().Post(context.Background(), replyBody, nil)
 		return commentID, openDataError(err)
 	}
 
@@ -128,7 +128,7 @@ func (c MSPlannerClient) AddComment(taskID, comment string) (string, error) {
 	convBody.SetTopic(&topic)
 	convBody.SetPosts([]models.Postable{post})
 
-	result, err := c.client.GroupsById(c.groupID).Threads().Post(convBody)
+	result, err := c.client.GroupsById(c.groupID).Threads().Post(context.Background(), convBody, nil)
 	if err != nil {
 		return commentID, openDataError(err)
 	}
@@ -140,12 +140,12 @@ func (c MSPlannerClient) AddComment(taskID, comment string) (string, error) {
 
 	requestBody := models.NewPlannerTask()
 	requestBody.SetConversationThreadId(result.GetId())
-	err = c.client.Planner().TasksById(taskID).PatchWithRequestConfigurationAndResponseHandler(requestBody, &patchConfig, nil)
+	err = c.client.Planner().TasksById(taskID).Patch(context.Background(), requestBody, &patchConfig)
 	return commentID, openDataError(err)
 }
 
 func (c MSPlannerClient) GetComments(taskID string) ([]api.Comment, error) {
-	task, err := c.client.Planner().TasksById(taskID).Get()
+	task, err := c.client.Planner().TasksById(taskID).Get(context.Background(), nil)
 	if err != nil {
 		return nil, openDataError(err)
 	}
@@ -155,7 +155,7 @@ func (c MSPlannerClient) GetComments(taskID string) ([]api.Comment, error) {
 		return comments, nil
 	}
 
-	conversations, err := c.client.GroupsById(c.groupID).ThreadsById(*task.GetConversationThreadId()).Posts().Get()
+	conversations, err := c.client.GroupsById(c.groupID).ThreadsById(*task.GetConversationThreadId()).Posts().Get(context.Background(), nil)
 	if err != nil {
 		return nil, openDataError(err)
 	}
@@ -178,14 +178,14 @@ func (c MSPlannerClient) GetConfig() (MSPlannerConfig, error) {
 	}
 
 	config := make(map[string]PlanConfig)
-	result, err := c.client.GroupsById(c.groupID).Planner().Plans().Get()
+	result, err := c.client.GroupsById(c.groupID).Planner().Plans().Get(context.Background(), nil)
 	if err != nil {
 		return MSPlannerConfig{}, openDataError(err)
 	}
 
 	for _, plan := range result.GetValue() {
 		var buckets []PlanBucket
-		planBuckets, err := c.client.Planner().PlansById(*plan.GetId()).Buckets().Get()
+		planBuckets, err := c.client.Planner().PlansById(*plan.GetId()).Buckets().Get(context.Background(), nil)
 		if err != nil {
 			return MSPlannerConfig{}, openDataError(err)
 		}

@@ -1,4 +1,3 @@
-//nolint:staticcheck
 package responder
 
 import (
