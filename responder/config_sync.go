@@ -9,6 +9,11 @@ import (
 	"github.com/flanksource/incident-commander/db"
 )
 
+var responderNameConfigTypeMapping = map[string]string{
+	JiraResponder:      "Jira",
+	MSPlannerResponder: "MSPlanner",
+}
+
 func StartConfigSync() {
 	for {
 		logger.Infof("Syncing configuration")
@@ -53,7 +58,7 @@ func syncConfig() {
 			continue
 		}
 
-		if teamSpec.ResponderClients.Jira != (api.JiraClient{}) {
+		if teamSpec.ResponderClients.Jira != nil {
 			jiraClient, err := jiraClientFromTeamSpec(teamSpec)
 			if err != nil {
 				logger.Errorf("Error instantiating Jira client: %v", err)
@@ -66,14 +71,15 @@ func syncConfig() {
 				continue
 			}
 
-			configName := teamSpec.ResponderClients.Jira.Url
-			if err = upsertConfig(JiraResponder, team.ID.String(), configName, jiraConfigJSON); err != nil {
+			configName := teamSpec.ResponderClients.Jira.Values["project"]
+			configType := responderNameConfigTypeMapping[JiraResponder]
+			if err = upsertConfig(configType, team.ID.String(), configName, jiraConfigJSON); err != nil {
 				logger.Errorf("Error upserting Jira config into database: %v", err)
 				continue
 			}
 		}
 
-		if teamSpec.ResponderClients.MSPlanner != (api.MSPlannerClient{}) {
+		if teamSpec.ResponderClients.MSPlanner != nil {
 			msPlannerClient, err := msPlannerClientFromTeamSpec(teamSpec)
 			if err != nil {
 				logger.Errorf("Error instantiating MSPlanner client: %v", err)
@@ -86,8 +92,9 @@ func syncConfig() {
 				continue
 			}
 
-			configName := teamSpec.ResponderClients.MSPlanner.ClientID
-			if err = upsertConfig(MSPlannerResponder, team.ID.String(), configName, msPlannerConfigJSON); err != nil {
+			configName := teamSpec.ResponderClients.MSPlanner.Values["plan"]
+			configType := responderNameConfigTypeMapping[MSPlannerResponder]
+			if err = upsertConfig(configType, team.ID.String(), configName, msPlannerConfigJSON); err != nil {
 				logger.Errorf("Error upserting MSPlanner config into database: %v", err)
 				continue
 			}
