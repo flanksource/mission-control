@@ -61,29 +61,4 @@ spec:
   - port: 5432
     targetPort: 5432
 
----
-{{- if .Values.db.secretKeyRef.create  }}
-apiVersion: v1
-kind: Secret
-metadata:
-  name: {{ .Values.db.secretKeyRef.name }}
-type: Opaque
-stringData:
-  {{- $secretObj := ( lookup "v1" "Secret" .Release.Namespace .Values.db.secretKeyRef.name ) }}
-  {{- $secretData := ( get $secretObj "stringData" ) | default dict }}
-  {{- $user :=  (( get $secretData "POSTGRES_USER" ) | b64dec ) | default "postgres"  }}
-  {{ $password := "" }}
-  {{- if .Release.IsInstall }}
-  {{- $password =  (( get $secretData "POSTGRES_PASSWORD") | b64dec ) | default ( randAlphaNum 32 )  }}
-  {{ else }}
-  {{- $password = (index (lookup "v1" "Secret" .Release.Namespace .Values.db.secretKeyRef.name).data "POSTGRES_PASSWORD") | b64dec }}
-  {{ end }}
-  {{- $host := print "postgres." .Release.Namespace  ".svc.cluster.local:5432" }}
-
-  POSTGRES_USER: {{ $user | quote }}
-  POSTGRES_PASSWORD: {{ $password | quote }}
-  POSTGRES_HOST: {{ $host | quote }}
-  DB_URL:  {{ (print "postgresql://" $user ":" $password "@" $host "/incident_commander") | quote }}
-{{- end }}
-
 {{- end }}
