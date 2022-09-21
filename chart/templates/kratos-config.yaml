@@ -5,7 +5,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: kratos-config
-  {{- include "incident-commander.selectorLabels" . | nindent 2 }}
+  {{- include "incident-commander.labels" . | nindent 2 }}
 data:
   "kratos.yaml": |
     {{- $merge | toYaml | nindent 4 }}
