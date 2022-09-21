@@ -1,0 +1,11 @@
+{{- $configFromFile :=  tpl (.Files.Get "files/kratos-config.yaml") . | fromYaml -}}
+{{- $configFromValues := .Values.kratos.kratos.config -}}
+{{- $merge := mustMergeOverwrite (dict) $configFromFile $configFromValues -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kratos-config
+  {{- include "incident-commander.selectorLabels" . | nindent 2 }}
+data:
+  "kratos.yaml": |
+    {{- $merge | toYaml | nindent 4 }}

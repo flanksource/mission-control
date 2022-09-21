@@ -22,11 +22,11 @@ db:
   storage: 10Gi
 
 ingress:
-  enabled: false
+  enabled: true
   annotations:
     kubernetes.io/ingress.class: nginx
     # kubernetes.io/tls-acme: "true"
-  host: chart-example.local
+  host: incident-commander.canary.lab.flanksource.com
   tls: []
   #  - secretName: chart-example-tls
   #    hosts:
@@ -75,3 +75,79 @@ config-db:
       create: false
       name: postgres-connection
       key: DB_URL
+
+# canary-checker-ui:
+#   nameOverride: "canary-checker-ui"
+#   fullnameOverride: "canary-checker-ui"
+#   oryKratosURI: "http://kratos-public.default.svc.cluster.local"
+#   ingress:
+#     enabled: true
+#     host: "canary-checker-ui.local"
+
+uiHost: "http://incident-manager-ui.canary.labs.flanksource.com"
+kratosURI: http://incident-commander:8080/kratos/
+
+incident-manager-ui:
+  nameOverride: "incident-manager-ui"
+  fullnameOverride: "incident-manager-ui"
+  oryKratosURI: http://incident-commander:8080/kratos/
+  ingress:
+    enabled: true
+    host: "incident-manager-ui.canary.labs.flanksource.com"
+
+# - if chart name (incident-commander) is changed, change the urls. E.g.
+# oryKratosURI url points to the incident-commander service with a suffix.
+#
+# - deletion of configmap and using our own secrets file etc. `make chart` will
+# extract kratos and delete configmap-config.yaml, so that we can explicitly -
+# set config manually. Allows for us to use templates for config and include -
+# identity-schema json file (encoding it as part of templating process).
+#
+# - Disable kratos secret. Again, we explicitly generate secrets.yaml to include
+# database URL in it.
+kratos:
+  secret:
+    # Disable kratos secret generation. We explicitly generate kratos secret to have access to database URL for dns key in secret. See: /chart/templates/secrets.yaml
+    enabled: false
+  # don't include Release.name in kratos name
+  fullnameOverride: kratos
+  ingress:
+    public:
+      enabled: false
+
+  # NOTE(ciju): we have our own template for kratos-config. Which means kratos
+  # templates doesn't have access to the config file, to generate hash from.
+  # This could be fixed by explicitly passing hash value?
+  configmap:
+    hashSumEnabled: false
+
+  kratos:
+    development: true
+    automigration:
+      enabled: true
+      # Could be either job or initContainer. initContainer used here because
+      # job runs as a pre-install,pre-update hook, but requires values from
+      # secret, which are not yet install when the charts are being installed
+      # for the first time.
+      type: initContainer
+    serve:
+      public:
+        base_url: http://incident-commander:8080/kratos/
+        cors:
+          enabled: true
+        # annotations:
+        #   kubernetes.io/ingress.class: nginx
+        #   kubernetes.io/tls-acme: "true"
+      # admin:
+      #   base_url: http://0.0.0.0:4434/
+
+    # Config to be merged in kratos ConfigMap. See: templates/kratos-config.yaml
+    config:
+      secrets:
+        default:
+          - yet another secret
+          - lorem ipsum dolores
+          - just a random a string secret
+      courier:
+        smtp:
+          connection_uri: smtp://wrong-url
