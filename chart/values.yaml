@@ -4,7 +4,7 @@ replicas: 1
 nameOverride: ""
 
 image:
-  repository: localhost:5001/incident-commander
+  repository: docker.io/flanksource/incident-commander
   pullPolicy: IfNotPresent
   tag: "latest"
 
