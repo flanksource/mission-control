@@ -17,6 +17,12 @@ dependencies:
   - name: flanksource-ui
     version: "1.0.117"
     repository: https://flanksource.github.io/charts
+    condition: canary-checker-ui.enabled
+    alias: canary-checker-ui
+  - name: flanksource-ui
+    version: "1.0.117"
+    repository: https://flanksource.github.io/charts
+    condition: incident-manager-ui.enabled
     alias: incident-manager-ui
   - name: kratos
     version: "0.25.3"

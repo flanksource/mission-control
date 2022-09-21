@@ -1,14 +1,10 @@
-# Default values for incident-commander.
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
-
 replicas: 1
 
 # Use this only if you want to replace the default that is .Chart.Name as the name of all the objects.
 nameOverride: ""
 
 image:
-  repository: docker.io/flanksource/incident-commander
+  repository: localhost:5001/incident-commander
   pullPolicy: IfNotPresent
   tag: "latest"
 
@@ -20,44 +16,6 @@ db:
     key: DB_URL
   storageClass:
   storage: 10Gi
-
-ingress:
-  enabled: true
-  annotations:
-    kubernetes.io/ingress.class: nginx
-    # kubernetes.io/tls-acme: "true"
-  host: incident-commander.canary.lab.flanksource.com
-  tls: []
-  #  - secretName: chart-example-tls
-  #    hosts:
-  #      - chart-example.local
-
-resources:
-  requests:
-    cpu: 200m
-    memory: 200Mi
-  limits:
-    memory: 512Mi
-    cpu: 500m
-
-extra:
-  # nodeSelector:
-  #   key: value
-  # tolerations:
-  #   - key: "key1"
-  #     operator: "Equal"
-  #     value: "value1"
-  #     effect: "NoSchedule"
-  # affinity:
-  #   nodeAffinity:
-  #       requiredDuringSchedulingIgnoredDuringExecution:
-  #         nodeSelectorTerms:
-  #         - matchExpressions:
-  #           - key: kubernetes.io/e2e-az-name
-  #             operator: In
-  #             values:
-  #             - e2e-az1
-  #             - e2e-az2
 
 canary-checker:
   db:
@@ -76,18 +34,41 @@ config-db:
       name: postgres-connection
       key: DB_URL
 
-# canary-checker-ui:
-#   nameOverride: "canary-checker-ui"
-#   fullnameOverride: "canary-checker-ui"
-#   oryKratosURI: "http://kratos-public.default.svc.cluster.local"
-#   ingress:
-#     enabled: true
-#     host: "canary-checker-ui.local"
+# Enable ingress only if the UI is deployed outside of the cluster and calls public incident-commander api endpoint.
+ingress:
+  enabled: false
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+  host: incident-commander.canary.lab.flanksource.com
+  tls: []
+  #  - secretName: chart-example-tls
+  #    hosts:
+  #      - chart-example.local
+
+canary-checker-ui:
+  enabled: true                # Disable canary-checker by default.
+  image:
+    repositoryPrefix: localhost:5001
+    pullPolicy: IfNotPresent
+    tag: "latest"
+  withoutOrySession: true
+  nameOverride: "canary-checker-ui"
+  fullnameOverride: "canary-checker-ui"
+  oryKratosURI: http://incident-commander:8080/kratos/
+  ingress:
+    enabled: true
+    host: "canary-checker-ui.local"
 
 uiHost: "http://incident-manager-ui.canary.labs.flanksource.com"
 kratosURI: http://incident-commander:8080/kratos/
 
 incident-manager-ui:
+  enabled: false
+  image:
+    repositoryPrefix: localhost:5001
+    pullPolicy: IfNotPresent
+    tag: "latest"
   nameOverride: "incident-manager-ui"
   fullnameOverride: "incident-manager-ui"
   oryKratosURI: http://incident-commander:8080/kratos/
@@ -151,3 +132,12 @@ kratos:
       courier:
         smtp:
           connection_uri: smtp://wrong-url
+
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 200Mi
+  limits:
+    memory: 512Mi
+    cpu: 500m
