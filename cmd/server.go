@@ -47,6 +47,7 @@ var Serve = &cobra.Command{
 		forward(e, "/db", "http://localhost:3000")
 		forward(e, "/config", configDb)
 		forward(e, "/canary", canaryChecker)
+		forward(e, "/kratos", kratosAPI)
 		forward(e, "/apm", apmHub)
 		e.Use(middleware.StaticWithConfig(middleware.StaticConfig{
 			Root:       "build",
