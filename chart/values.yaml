@@ -40,7 +40,7 @@ ingress:
   annotations:
     kubernetes.io/ingress.class: nginx
     # kubernetes.io/tls-acme: "true"
-  host: incident-commander.canary.lab.flanksource.com
+  host: incident-commander.local
   tls: []
   #  - secretName: chart-example-tls
   #    hosts:
@@ -60,7 +60,7 @@ canary-checker-ui:
     enabled: true
     host: "canary-checker-ui.local"
 
-uiHost: "http://incident-manager-ui.canary.labs.flanksource.com"
+uiHost: "incident-manager-ui.local"
 kratosURI: http://incident-commander:8080/kratos/
 
 incident-manager-ui:
@@ -74,7 +74,7 @@ incident-manager-ui:
   oryKratosURI: http://incident-commander:8080/kratos/
   ingress:
     enabled: true
-    host: "incident-manager-ui.canary.labs.flanksource.com"
+    host: "incident-manager-ui.local"
 
 # - if chart name (incident-commander) is changed, change the urls. E.g.
 # oryKratosURI url points to the incident-commander service with a suffix.

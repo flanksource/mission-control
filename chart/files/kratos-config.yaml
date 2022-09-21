@@ -50,7 +50,3 @@ identity:
   schemas:
     - id: default
       url: base64://{{ (.Files.Get "files/kratos-identity-schema.json") | b64enc }}
-secrets:
-  default:
-    - lorem ipsum dolores
-    - just a random a string secret
