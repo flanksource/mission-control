@@ -47,7 +47,7 @@ ingress:
   #      - chart-example.local
 
 canary-checker-ui:
-  enabled: true                # Disable canary-checker by default.
+  enabled: false                # Disable canary-checker by default.
   image:
     repositoryPrefix: localhost:5001
     pullPolicy: IfNotPresent
@@ -64,7 +64,7 @@ uiHost: "incident-manager-ui.local"
 kratosURI: http://incident-commander:8080/kratos/
 
 incident-manager-ui:
-  enabled: false
+  enabled: true
   image:
     repositoryPrefix: localhost:5001
     pullPolicy: IfNotPresent
