@@ -25,6 +25,16 @@ canary-checker:
       create: false
       name: postgres-connection
       key: DB_URL
+  flanksource-ui:
+    enabled: false                # Disable canary-checker by default.
+    withoutOrySession: true
+    nameOverride: "canary-checker-ui"
+    fullnameOverride: "canary-checker-ui"
+    oryKratosURI: ""
+    ingress:
+      enabled: true
+      host: "canary-checker-ui.local"
+
 
 config-db:
   db:
@@ -45,20 +55,6 @@ ingress:
   #  - secretName: chart-example-tls
   #    hosts:
   #      - chart-example.local
-
-canary-checker-ui:
-  enabled: false                # Disable canary-checker by default.
-  image:
-    repositoryPrefix: localhost:5001
-    pullPolicy: IfNotPresent
-    tag: "latest"
-  withoutOrySession: true
-  nameOverride: "canary-checker-ui"
-  fullnameOverride: "canary-checker-ui"
-  oryKratosURI: http://incident-commander:8080/kratos/
-  ingress:
-    enabled: true
-    host: "canary-checker-ui.local"
 
 uiHost: "incident-manager-ui.local"
 kratosURI: http://incident-commander:8080/kratos/
