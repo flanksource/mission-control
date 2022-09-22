@@ -17,7 +17,6 @@ INSERT INTO severities (id, name, icon, aliases)
           (5, 'Low', 'info', ARRAY['P4']);
 
 
-
 CREATE TABLE incident_rules (
   id UUID DEFAULT generate_ulid() PRIMARY KEY,
   name TEXT NOT NULL,
@@ -26,16 +25,18 @@ CREATE TABLE incident_rules (
   created_by UUID NOT NULL,
   created_at timestamp NOT NULL DEFAULT now(),
   updated_at timestamp NOT NULL DEFAULT now(),
-  FOREIGN KEY (created_by) REFERENCES people (id)
+  FOREIGN KEY (created_by) REFERENCES people (id),
+  UNIQUE (name)
 );
 
 CREATE TABLE incidents (
   id UUID DEFAULT generate_ulid() PRIMARY KEY,
+  incident_rule_id UUID NULL,
   title TEXT NOT NULL,
   created_by UUID NOT NULL,
   commander_id UUID NULL,
   communicator_id UUID NULL,
-  severity int not null,
+  severity text not null,
   description TEXT NOT NULL,
   type TEXT NOT NULL,
   status TEXT NOT NULL,
@@ -46,7 +47,19 @@ CREATE TABLE incidents (
   updated_at timestamp NOT NULL DEFAULT now(),
   FOREIGN KEY (created_by) REFERENCES people (id),
   FOREIGN KEY (commander_id) REFERENCES people (id),
-  FOREIGN KEY (communicator_id) REFERENCES people (id)
+  FOREIGN KEY (communicator_id) REFERENCES people (id),
+  FOREIGN KEY (incident_rule_id) REFERENCES incident_rules (id)
+);
+
+
+CREATE TABLE incident_relationships (
+  incident_id UUID NOT NULL,
+  related_id UUID NOT NULL,
+  relationship TEXT NOT NULL,
+  created_at timestamp NOT NULL DEFAULT now(),
+  updated_at timestamp NOT NULL DEFAULT now(),
+  FOREIGN KEY (incident_id) REFERENCES incidents (id),
+  FOREIGN KEY (related_id) REFERENCES incidents (id)
 );
 
 CREATE TABLE responders (
@@ -137,6 +150,15 @@ CREATE TABLE evidences (
   id UUID DEFAULT generate_ulid() PRIMARY KEY,
   description TEXT NOT NULL,
   hypothesis_id UUID NOT NULL,
+  config_id UUID NULL,
+  config_change_id UUID null,
+  config_analysis_id UUID null,
+  component_id UUID null,
+  check_id UUID null,
+  definition_of_done boolean, -- This indicates this item as needing to be fixed before closing the incident
+  done boolean, -- The evidence is done / resolved
+  factor boolean,
+  mitigator boolean,
   created_by UUID NOT NULL,
   type TEXT NOT NULL,
   evidence jsonb null,
@@ -144,6 +166,11 @@ CREATE TABLE evidences (
   created_at timestamp NOT NULL DEFAULT now(),
   updated_at timestamp NOT NULL DEFAULT now(),
   FOREIGN KEY (created_by) REFERENCES people(id),
+  FOREIGN KEY (component_id) REFERENCES components(id),
+  FOREIGN KEY (check_id) REFERENCES checks(id),
+  FOREIGN KEY (config_id) REFERENCES config_items(id),
+  FOREIGN KEY (config_change_id) REFERENCES config_changes(id),
+  FOREIGN KEY (config_analysis_id) REFERENCES config_analysis(id),
   FOREIGN KEY (hypothesis_id) REFERENCES hypotheses(id)
 );
 
@@ -157,7 +184,6 @@ DROP TABLE IF EXISTS comment_responders;
 DROP TABLE IF EXISTS incident_histories;
 DROP TABLE IF EXISTS hypotheses;
 DROP TABLE IF EXISTS responders;
-
 DROP TABLE IF EXISTS incident_rules;
 DROP TABLE IF EXISTS incidents;
 DROP TABLE IF EXISTS severities;
