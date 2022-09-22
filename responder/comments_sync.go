@@ -88,8 +88,8 @@ func syncComments() {
 					}
 					responderComment.IncidentID = responder.IncidentID
 					responderComment.CreatedBy = systemUser.ID
-					responderComment.ResponderID = responder.ID
-					responderComment.HypothesisID = rootHypothesis.ID
+					responderComment.ResponderID = &responder.ID
+					responderComment.HypothesisID = &rootHypothesis.ID
 
 					err = db.Gorm.Create(&responderComment).Error
 					if err != nil {
