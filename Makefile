@@ -118,7 +118,6 @@ stack: .bin/kustomize
 
 .PHONY: chart
 chart:
-	helm dependency update ./chart
 	helm dependency build ./chart
 	cd chart && tar -xvf charts/kratos-0.25.*.tgz -C charts && rm charts/kratos-0.25.*.tgz && rm charts/kratos/templates/configmap-config.yaml && cd ..
 	helm package ./chart
