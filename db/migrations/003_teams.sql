@@ -47,8 +47,8 @@ CREATE TABLE  IF NOT EXISTS team_components (
   role TEXT NULL,
   selector_id TEXT,
   PRIMARY KEY (team_id, component_id),
-  FOREIGN KEY (team_id) REFERENCES teams(id)
-  FOREIGN KEY (component_id) REFERENCES components(id)
+  FOREIGN KEY (team_id) REFERENCES teams(id),
+  FOREIGN KEY (component_id) REFERENCES components(id),
   UNIQUE (team_id, component_id, selector_id)
 );
 
