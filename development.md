@@ -92,7 +92,7 @@ modified   chart/values.yaml
    tag: "latest"
 
 @@ -88,6 +88,11 @@ uiHost: "http://incident-manager-ui.canary.labs.flanksource.com"
- kratosURI: http://incident-commander:8080/kratos/
+ kratosURL: http://incident-commander:8080/kratos/
 
  incident-manager-ui:
 +  image:

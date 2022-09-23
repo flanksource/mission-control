@@ -17,8 +17,7 @@ dependencies:
   - name: flanksource-ui
     version: "1.0.117"
     repository: https://flanksource.github.io/charts
-    condition: incident-manager-ui.enabled
-    alias: incident-manager-ui
+    condition: flanksource-ui.enabled
   - name: kratos
     version: "0.25.3"
     repository: https://k8s.ory.sh/helm/charts

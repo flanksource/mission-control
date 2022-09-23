@@ -27,10 +27,11 @@ canary-checker:
       key: DB_URL
   flanksource-ui:
     enabled: false                # Disable canary-checker by default.
-    withoutOrySession: true
+    withoutAuth: true
     nameOverride: "canary-checker-ui"
     fullnameOverride: "canary-checker-ui"
-    oryKratosURI: ""
+    oryKratosURL: ""
+    backendURL: http://canary-checker:8080
     ingress:
       enabled: true
       host: "canary-checker-ui.local"
@@ -56,18 +57,15 @@ ingress:
   #    hosts:
   #      - chart-example.local
 
-uiHost: "incident-manager-ui.local"
-kratosURI: http://incident-commander:8080/kratos/
+uiHost: "http://incident-manager-ui.local"
+kratosURL: http://incident-commander:8080/kratos/
 
-incident-manager-ui:
+flanksource-ui:
   enabled: true
-  image:
-    repositoryPrefix: localhost:5001
-    pullPolicy: IfNotPresent
-    tag: "latest"
   nameOverride: "incident-manager-ui"
   fullnameOverride: "incident-manager-ui"
-  oryKratosURI: http://incident-commander:8080/kratos/
+  oryKratosURL: http://incident-commander:8080/kratos/
+  backendURL: http://incident-commander:8080
   ingress:
     enabled: true
     host: "incident-manager-ui.local"
