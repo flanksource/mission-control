@@ -17,7 +17,7 @@ var Root = &cobra.Command{
 var dev bool
 var httpPort, metricsPort, devGuiPort int
 var publicEndpoint = "http://localhost:8080"
-var apmHub, configDb, canaryChecker string
+var apmHub, configDb, canaryChecker, kratosAPI string
 
 func ServerFlags(flags *pflag.FlagSet) {
 	flags.IntVar(&httpPort, "httpPort", 8080, "Port to expose a health dashboard ")
@@ -28,6 +28,7 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&apmHub, "apm-hub", "apm-hub", "APM Hub URL")
 	flags.StringVar(&configDb, "config-db", "config-db", "Config DB URL")
 	flags.StringVar(&canaryChecker, "canary-checker", "canary-checker", "Canary Checker URL")
+	flags.StringVar(&kratosAPI, "kratos-api", "kratos-public", "Kratos API service")
 }
 
 func init() {

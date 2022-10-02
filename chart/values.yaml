@@ -1,7 +1,3 @@
-# Default values for incident-commander.
-# This is a YAML-formatted file.
-# Declare variables to be passed into your templates.
-
 replicas: 1
 
 # Use this only if you want to replace the default that is .Chart.Name as the name of all the objects.
@@ -21,44 +17,6 @@ db:
   storageClass:
   storage: 10Gi
 
-ingress:
-  enabled: false
-  annotations:
-    kubernetes.io/ingress.class: nginx
-    # kubernetes.io/tls-acme: "true"
-  host: chart-example.local
-  tls: []
-  #  - secretName: chart-example-tls
-  #    hosts:
-  #      - chart-example.local
-
-resources:
-  requests:
-    cpu: 200m
-    memory: 200Mi
-  limits:
-    memory: 512Mi
-    cpu: 500m
-
-extra:
-  # nodeSelector:
-  #   key: value
-  # tolerations:
-  #   - key: "key1"
-  #     operator: "Equal"
-  #     value: "value1"
-  #     effect: "NoSchedule"
-  # affinity:
-  #   nodeAffinity:
-  #       requiredDuringSchedulingIgnoredDuringExecution:
-  #         nodeSelectorTerms:
-  #         - matchExpressions:
-  #           - key: kubernetes.io/e2e-az-name
-  #             operator: In
-  #             values:
-  #             - e2e-az1
-  #             - e2e-az2
-
 canary-checker:
   db:
     external:
@@ -67,6 +25,17 @@ canary-checker:
       create: false
       name: postgres-connection
       key: DB_URL
+  flanksource-ui:
+    enabled: false                # Disable canary-checker by default.
+    withoutAuth: true
+    nameOverride: "canary-checker-ui"
+    fullnameOverride: "canary-checker-ui"
+    oryKratosURL: ""
+    backendURL: http://canary-checker:8080
+    ingress:
+      enabled: true
+      host: "canary-checker-ui.local"
+
 
 config-db:
   db:
@@ -75,3 +44,94 @@ config-db:
       create: false
       name: postgres-connection
       key: DB_URL
+
+# Enable ingress only if the UI is deployed outside of the cluster and calls public incident-commander api endpoint.
+ingress:
+  enabled: false
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    # kubernetes.io/tls-acme: "true"
+  host: incident-commander.local
+  tls: []
+  #  - secretName: chart-example-tls
+  #    hosts:
+  #      - chart-example.local
+
+uiHost: "http://incident-manager-ui.local"
+kratosURL: http://incident-commander:8080/kratos/
+
+flanksource-ui:
+  enabled: true
+  nameOverride: "incident-manager-ui"
+  fullnameOverride: "incident-manager-ui"
+  oryKratosURL: http://incident-commander:8080/kratos/
+  backendURL: http://incident-commander:8080
+  ingress:
+    enabled: true
+    host: "incident-manager-ui.local"
+
+# - if chart name (incident-commander) is changed, change the urls. E.g.
+# oryKratosURI url points to the incident-commander service with a suffix.
+#
+# - deletion of configmap and using our own secrets file etc. `make chart` will
+# extract kratos and delete configmap-config.yaml, so that we can explicitly -
+# set config manually. Allows for us to use templates for config and include -
+# identity-schema json file (encoding it as part of templating process).
+#
+# - Disable kratos secret. Again, we explicitly generate secrets.yaml to include
+# database URL in it.
+kratos:
+  secret:
+    # Disable kratos secret generation. We explicitly generate kratos secret to have access to database URL for dns key in secret. See: /chart/templates/secrets.yaml
+    enabled: false
+  # don't include Release.name in kratos name
+  fullnameOverride: kratos
+  ingress:
+    public:
+      enabled: false
+
+  # NOTE(ciju): we have our own template for kratos-config. Which means kratos
+  # templates doesn't have access to the config file, to generate hash from.
+  # This could be fixed by explicitly passing hash value?
+  configmap:
+    hashSumEnabled: false
+
+  kratos:
+    development: true
+    automigration:
+      enabled: true
+      # Could be either job or initContainer. initContainer used here because
+      # job runs as a pre-install,pre-update hook, but requires values from
+      # secret, which are not yet install when the charts are being installed
+      # for the first time.
+      type: initContainer
+    serve:
+      public:
+        base_url: http://incident-commander:8080/kratos/
+        cors:
+          enabled: true
+        # annotations:
+        #   kubernetes.io/ingress.class: nginx
+        #   kubernetes.io/tls-acme: "true"
+      # admin:
+      #   base_url: http://0.0.0.0:4434/
+
+    # Config to be merged in kratos ConfigMap. See: templates/kratos-config.yaml
+    config:
+      secrets:
+        default:
+          - yet another secret
+          - lorem ipsum dolores
+          - just a random a string secret
+      courier:
+        smtp:
+          connection_uri: smtp://wrong-url
+
+
+resources:
+  requests:
+    cpu: 200m
+    memory: 200Mi
+  limits:
+    memory: 512Mi
+    cpu: 500m

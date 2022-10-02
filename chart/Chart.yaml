@@ -14,3 +14,13 @@ dependencies:
   - name: canary-checker
     version: "0.38.171"
     repository: https://flanksource.github.io/charts
+  - name: flanksource-ui
+    version: "1.0.117"
+    repository: https://flanksource.github.io/charts
+    condition: flanksource-ui.enabled
+  - name: kratos
+    version: "0.25.3"
+    repository: https://k8s.ory.sh/helm/charts
+    import-values:
+      - child: secret
+        parent: kratossecret
