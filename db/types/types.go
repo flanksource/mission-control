@@ -128,17 +128,17 @@ func (jsonQuery *JSONQueryExpression) Build(builder clause.Builder) {
 			switch {
 			case jsonQuery.hasKeys:
 				if len(jsonQuery.keys) > 0 {
-					builder.WriteString("JSON_EXTRACT(" + stmt.Quote(jsonQuery.column) + ",")
+					_, _ = builder.WriteString("JSON_EXTRACT(" + stmt.Quote(jsonQuery.column) + ",")
 					builder.AddVar(stmt, "$."+strings.Join(jsonQuery.keys, "."))
-					builder.WriteString(") IS NOT NULL")
+					_, _ = builder.WriteString(") IS NOT NULL")
 				}
 			case jsonQuery.equals:
 				if len(jsonQuery.keys) > 0 {
-					builder.WriteString("JSON_EXTRACT(" + stmt.Quote(jsonQuery.column) + ",")
+					_, _ = builder.WriteString("JSON_EXTRACT(" + stmt.Quote(jsonQuery.column) + ",")
 					builder.AddVar(stmt, "$."+strings.Join(jsonQuery.keys, "."))
-					builder.WriteString(") = ")
+					_, _ = builder.WriteString(") = ")
 					if _, ok := jsonQuery.equalsValue.(bool); ok {
-						builder.WriteString(fmt.Sprint(jsonQuery.equalsValue))
+						_, _ = builder.WriteString(fmt.Sprint(jsonQuery.equalsValue))
 					} else {
 						stmt.AddVar(builder, jsonQuery.equalsValue)
 					}
@@ -149,26 +149,26 @@ func (jsonQuery *JSONQueryExpression) Build(builder clause.Builder) {
 			case jsonQuery.hasKeys:
 				if len(jsonQuery.keys) > 0 {
 					stmt.WriteQuoted(jsonQuery.column)
-					stmt.WriteString("::jsonb")
+					_, _ = stmt.WriteString("::jsonb")
 					for _, key := range jsonQuery.keys[0 : len(jsonQuery.keys)-1] {
-						stmt.WriteString(" -> ")
+						_, _ = stmt.WriteString(" -> ")
 						stmt.AddVar(builder, key)
 					}
 
-					stmt.WriteString(" ? ")
+					_, _ = stmt.WriteString(" ? ")
 					stmt.AddVar(builder, jsonQuery.keys[len(jsonQuery.keys)-1])
 				}
 			case jsonQuery.equals:
 				if len(jsonQuery.keys) > 0 {
-					builder.WriteString(fmt.Sprintf("json_extract_path_text(%v::json,", stmt.Quote(jsonQuery.column)))
+					_, _ = builder.WriteString(fmt.Sprintf("json_extract_path_text(%v::json,", stmt.Quote(jsonQuery.column)))
 
 					for idx, key := range jsonQuery.keys {
 						if idx > 0 {
-							builder.WriteByte(',')
+							_ = builder.WriteByte(',')
 						}
 						stmt.AddVar(builder, key)
 					}
-					builder.WriteString(") = ")
+					_, _ = builder.WriteString(") = ")
 
 					if _, ok := jsonQuery.equalsValue.(string); ok {
 						stmt.AddVar(builder, jsonQuery.equalsValue)

@@ -54,8 +54,8 @@ var Sync = &cobra.Command{
 						logger.Infof("Synced rule %s (%s)", rule.Name, rule.ID)
 					}
 				}
-				if object.GetKind() == "SystemTemplate" {
-				}
+				// if object.GetKind() == "SystemTemplate" {
+				// }
 			}
 
 		}
