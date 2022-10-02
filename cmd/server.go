@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"net/http"
 	"net/url"
 	"strings"
 
@@ -15,7 +14,6 @@ import (
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/jobs"
 	"github.com/flanksource/incident-commander/responder"
-	"github.com/flanksource/incident-commander/ui"
 )
 
 const (
@@ -47,12 +45,7 @@ var Serve = &cobra.Command{
 		forward(e, "/canary", api.CanaryCheckerPath)
 		forward(e, "/kratos", kratosAPI)
 		forward(e, "/apm", apmHub)
-		e.Use(middleware.StaticWithConfig(middleware.StaticConfig{
-			Root:       "build",
-			Index:      "index.html",
-			HTML5:      true,
-			Filesystem: http.FS(ui.StaticContent),
-		}))
+
 		jobs.Start()
 		go events.ListenForEvents()
 		go responder.StartConfigSync()
