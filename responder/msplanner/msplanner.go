@@ -140,7 +140,7 @@ func (c MSPlannerClient) AddComment(taskID, comment string) (string, error) {
 
 	requestBody := models.NewPlannerTask()
 	requestBody.SetConversationThreadId(result.GetId())
-	err = c.client.Planner().TasksById(taskID).Patch(context.Background(), requestBody, &patchConfig)
+	_, err = c.client.Planner().TasksById(taskID).Patch(context.Background(), requestBody, &patchConfig)
 	return commentID, openDataError(err)
 }
 
