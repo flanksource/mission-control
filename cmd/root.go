@@ -1,11 +1,21 @@
 package cmd
 
 import (
+	"time"
+
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/rules"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
+
+func PreRun(cmd *cobra.Command, args []string) {
+	if err := db.Init(db.ConnectionString); err != nil {
+		logger.Fatalf("Failed to initialize the db: %v", err)
+	}
+}
 
 var Root = &cobra.Command{
 	Use: "incident-commander",
@@ -17,7 +27,7 @@ var Root = &cobra.Command{
 var dev bool
 var httpPort, metricsPort, devGuiPort int
 var publicEndpoint = "http://localhost:8080"
-var apmHub, configDb, canaryChecker, kratosAPI string
+var apmHub, configDb, kratosAPI string
 
 func ServerFlags(flags *pflag.FlagSet) {
 	flags.IntVar(&httpPort, "httpPort", 8080, "Port to expose a health dashboard ")
@@ -27,12 +37,14 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&publicEndpoint, "public-endpoint", "http://localhost:8080", "Public endpoint that this instance is exposed under")
 	flags.StringVar(&apmHub, "apm-hub", "apm-hub", "APM Hub URL")
 	flags.StringVar(&configDb, "config-db", "config-db", "Config DB URL")
-	flags.StringVar(&canaryChecker, "canary-checker", "canary-checker", "Canary Checker URL")
 	flags.StringVar(&kratosAPI, "kratos-api", "kratos-public", "Kratos API service")
+	flags.DurationVar(&rules.Period, "rules-period", 5*time.Minute, "Period to run the rules")
+
 }
 
 func init() {
 	logger.BindFlags(Root.PersistentFlags())
 	db.Flags(Root.PersistentFlags())
-	Root.AddCommand(Serve, GoOffline)
+	Root.PersistentFlags().StringVar(&api.CanaryCheckerPath, "canary-checker", "http://canary-checker:8080", "Canary Checker URL")
+	Root.AddCommand(Serve, Run, Sync, GoOffline)
 }

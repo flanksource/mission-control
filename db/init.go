@@ -132,10 +132,9 @@ func Init(connection string) error {
 	system := api.Person{}
 	if err = Gorm.Find(&system, "name = ?", "System").Error; err != nil {
 		return err
-	} else {
-		api.SystemUserID = &system.ID
-		logger.Infof("System user ID: %s", system.ID.String())
 	}
+	api.SystemUserID = &system.ID
+	logger.Infof("System user ID: %s", system.ID.String())
 	return nil
 }
 

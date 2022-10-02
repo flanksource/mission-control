@@ -121,7 +121,7 @@ func consumeEvents() {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return
 			} else {
-				logger.Errorf("Error processing event: %v", err)
+				logger.Errorf("Error processing event, waiting 60s to try again %v", err)
 				time.Sleep(60 * time.Second)
 			}
 		}

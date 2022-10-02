@@ -1,0 +1,29 @@
+kind: IncidentRule
+apiVersion: commander.flanksource.com/v1
+metadata:
+  name: default
+  labels:
+    a: b
+    c: d
+priority: 1
+spec:
+  filter:
+    status:
+      - unhealthy
+      - warning
+  components:
+    - types:
+        - "!virtual"
+  autoAssignOwner: true
+
+  breakOnMatch: true
+  autoClose:
+    timeout: 15m
+  hoursOfOperation:
+
+  responders:
+    email:
+      - to: dummy@test.com
+  template:
+    severity: med
+    type: cost
