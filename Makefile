@@ -20,7 +20,7 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
-test: ui
+test:
 	go test ./... -coverprofile cover.out
 
 fmt:
@@ -48,17 +48,17 @@ compress: .bin/upx
 	upx -5 ./.bin/$(NAME)_linux_amd64 ./.bin/$(NAME)_linux_arm64 ./.bin/$(NAME)_darwin_amd64 ./.bin/$(NAME)_darwin_arm64 ./.bin/$(NAME).exe
 
 .PHONY: linux
-linux: ui
+linux:
 	GOOS=linux GOARCH=amd64 go build  -o ./.bin/$(NAME)_linux_amd64 -ldflags "-X \"main.version=$(VERSION_TAG)\""  main.go
 	GOOS=linux GOARCH=arm64 go build  -o ./.bin/$(NAME)_linux_arm64 -ldflags "-X \"main.version=$(VERSION_TAG)\""  main.go
 
 .PHONY: darwin
-darwin: ui
+darwin:
 	GOOS=darwin GOARCH=amd64 go build -o ./.bin/$(NAME)_darwin_amd64 -ldflags "-X \"main.version=$(VERSION_TAG)\""  main.go
 	GOOS=darwin GOARCH=arm64 go build -o ./.bin/$(NAME)_darwin_arm64 -ldflags "-X \"main.version=$(VERSION_TAG)\""  main.go
 
 .PHONY: windows
-windows: ui
+windows:
 	GOOS=windows GOARCH=amd64 go build -o ./.bin/$(NAME).exe -ldflags "-X \"main.version=$(VERSION_TAG)\""  main.go
 
 .PHONY: binaries
@@ -73,9 +73,6 @@ release: binaries
 lint:
 	golangci-lint run
 
-.PHONY: ui
-ui:
-	cd ui && npm ci && npm run build
 
 .PHONY: build
 build:
