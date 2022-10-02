@@ -11,7 +11,7 @@ require (
 	github.com/jackc/pgx/v4 v4.16.1
 	github.com/labstack/echo/v4 v4.6.1
 	github.com/microsoft/kiota-authentication-azure-go v0.4.1
-	github.com/microsoftgraph/msgraph-sdk-go v0.39.0
+	github.com/microsoftgraph/msgraph-sdk-go v0.41.2
 	github.com/mitchellh/mapstructure v1.4.3
 	github.com/pressly/goose/v3 v3.5.0
 	github.com/sirupsen/logrus v1.8.1
@@ -122,11 +122,11 @@ require (
 	github.com/mailru/easyjson v0.7.0 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mattn/go-isatty v0.0.14 // indirect
-	github.com/microsoft/kiota-abstractions-go v0.10.1 // indirect
-	github.com/microsoft/kiota-http-go v0.7.2 // indirect
-	github.com/microsoft/kiota-serialization-json-go v0.6.0 // indirect
-	github.com/microsoft/kiota-serialization-text-go v0.5.0 // indirect
-	github.com/microsoftgraph/msgraph-sdk-go-core v0.28.1 // indirect
+	github.com/microsoft/kiota-abstractions-go v0.11.0 // indirect
+	github.com/microsoft/kiota-http-go v0.8.1 // indirect
+	github.com/microsoft/kiota-serialization-json-go v0.7.2 // indirect
+	github.com/microsoft/kiota-serialization-text-go v0.6.0 // indirect
+	github.com/microsoftgraph/msgraph-sdk-go-core v0.29.0 // indirect
 	github.com/mitchellh/copystructure v1.0.0 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
 	github.com/mitchellh/go-testing-interface v1.0.0 // indirect
@@ -163,7 +163,7 @@ require (
 	go.uber.org/zap v1.17.0 // indirect
 	gocloud.dev v0.18.0 // indirect
 	golang.org/x/crypto v0.0.0-20220829220503-c86fa9a7ed90 // indirect
-	golang.org/x/net v0.0.0-20220909164309-bea034e7d591 // indirect
+	golang.org/x/net v0.0.0-20221002022538-bcab6841153b // indirect
 	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8 // indirect
 	golang.org/x/sys v0.0.0-20220915200043-7b5979e65e41 // indirect
 	golang.org/x/term v0.0.0-20210927222741-03fcf44c2211 // indirect
