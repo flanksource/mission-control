@@ -36,9 +36,9 @@ func GetComponentsWithSelector(selector api.ComponentSelector) []uuid.UUID {
 	if selector.Namespace != "" {
 		query = query.Where("namespace = ?", selector.Namespace)
 	}
-	if selector.Type != "" {
-		query = query.Where("type = ?", selector.Type)
-	}
+
+	query = selector.Types.Where(query, "type")
+
 	if selector.Labels != nil {
 		query = query.Where("labels @> ?", selector.Labels)
 	}

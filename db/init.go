@@ -4,18 +4,27 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"log"
 	"os"
+	"time"
+	"unsafe"
 
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/incident-commander/api"
 	"github.com/jackc/pgx/v4/log/logrusadapter"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/jackc/pgx/v4/stdlib"
+	jsoniter "github.com/json-iterator/go"
+	jsontime "github.com/liamylian/jsontime/v2/v2"
 	"github.com/pressly/goose/v3"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	glogger "gorm.io/gorm/logger"
 )
+
+const PostgresTimestampFormat = "2006-01-02T15:04:05.999"
 
 var ConnectionString string
 var Schema = "public"
@@ -43,6 +52,17 @@ func readFromEnv(v string) string {
 }
 
 func Init(connection string) error {
+	jsontime.AddTimeFormatAlias("postgres_timestamp", PostgresTimestampFormat)
+
+	jsoniter.RegisterTypeDecoderFunc("time.Duration", func(ptr unsafe.Pointer, iter *jsoniter.Iterator) {
+		t, err := time.ParseDuration(iter.ReadString())
+		if err != nil {
+			iter.Error = err
+			return
+		}
+		*((*time.Duration)(ptr)) = t
+	})
+
 	ConnectionString = readFromEnv(connection)
 	Schema = readFromEnv(Schema)
 	LogLevel = readFromEnv(LogLevel)
@@ -63,8 +83,7 @@ func Init(connection string) error {
 		}
 		config.ConnConfig.Logger = logrusadapter.NewLogger(logrusLogger)
 	}
-	Pool, err = pgxpool.ConnectConfig(context.Background(), config)
-	if err != nil {
+	if Pool, err = pgxpool.ConnectConfig(context.Background(), config); err != nil {
 		return err
 	}
 
@@ -73,7 +92,7 @@ func Init(connection string) error {
 	if err := row.Scan(&size); err != nil {
 		return err
 	}
-	logger.Infof("Initialized DB: %s (%s)", config.ConnString(), size)
+	logger.Infof("Initialized Incident Commander DB: %s (%s)", config.ConnString(), size)
 
 	pgxConnectionString = stdlib.RegisterConnConfig(config.ConnConfig)
 
@@ -82,17 +101,41 @@ func Init(connection string) error {
 		return err
 	}
 
-	Gorm, err = gorm.Open(postgres.New(postgres.Config{
+	logConfig := glogger.Config{
+		SlowThreshold:             time.Second,   // Slow SQL threshold
+		LogLevel:                  glogger.Error, // Log level
+		IgnoreRecordNotFoundError: true,          // Ignore ErrRecordNotFound error for logger
+	}
+
+	if logger.IsDebugEnabled() {
+		logConfig.LogLevel = glogger.Warn
+	}
+	if logger.IsTraceEnabled() {
+		logConfig.LogLevel = glogger.Info
+	}
+
+	for Gorm, err = gorm.Open(postgres.New(postgres.Config{
 		Conn: db,
 	}), &gorm.Config{
 		FullSaveAssociations: true,
-	})
-
-	if err != nil {
+		Logger: glogger.New(
+			log.New(os.Stderr, "\r\n", log.LstdFlags), // io writer
+			logConfig),
+	}); err != nil; {
 		return err
 	}
 
-	return Migrate()
+	if err = Migrate(); err != nil {
+		return err
+	}
+
+	system := api.Person{}
+	if err = Gorm.Find(&system, "name = ?", "System").Error; err != nil {
+		return err
+	}
+	api.SystemUserID = &system.ID
+	logger.Infof("System user ID: %s", system.ID.String())
+	return nil
 }
 
 func Migrate() error {

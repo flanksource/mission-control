@@ -2,20 +2,18 @@ package cmd
 
 import (
 	"fmt"
-	"net/http"
 	"net/url"
 	"strings"
 
-	"github.com/flanksource/commons/logger"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/spf13/cobra"
 
+	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/jobs"
 	"github.com/flanksource/incident-commander/responder"
-	"github.com/flanksource/incident-commander/ui"
 )
 
 const (
@@ -32,11 +30,9 @@ var cacheSuffixes = []string{
 }
 
 var Serve = &cobra.Command{
-	Use: "serve",
+	Use:    "serve",
+	PreRun: PreRun,
 	Run: func(cmd *cobra.Command, args []string) {
-		if err := db.Init(db.ConnectionString); err != nil {
-			logger.Errorf("Failed to initialize the db: %v", err)
-		}
 		e := echo.New()
 		// PostgREST needs to know how it is exposed to create the correct links
 		db.HttpEndpoint = publicEndpoint + "/db"
@@ -46,15 +42,10 @@ var Serve = &cobra.Command{
 		e.Use(ServerCache)
 		forward(e, "/db", "http://localhost:3000")
 		forward(e, "/config", configDb)
-		forward(e, "/canary", canaryChecker)
+		forward(e, "/canary", api.CanaryCheckerPath)
 		forward(e, "/kratos", kratosAPI)
 		forward(e, "/apm", apmHub)
-		e.Use(middleware.StaticWithConfig(middleware.StaticConfig{
-			Root:       "build",
-			Index:      "index.html",
-			HTML5:      true,
-			Filesystem: http.FS(ui.StaticContent),
-		}))
+
 		jobs.Start()
 		go events.ListenForEvents()
 		go responder.StartConfigSync()
