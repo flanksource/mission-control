@@ -9,7 +9,7 @@ dependencies:
     version: ">= 0.0.20"
     repository: https://flanksource.github.io/charts
   - name: config-db
-    version: "0.0.35"
+    version: "0.0.36"
     repository: https://flanksource.github.io/charts
   - name: canary-checker
     version: "0.38.183"
