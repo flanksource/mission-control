@@ -27,7 +27,7 @@ fmt:
 	go fmt ./...
 
 docker:
-	docker build . -t ${IMG} --build-arg=GITHUB_TOKEN=$(GITHUB_TOKEN)
+	docker build . -t ${IMG}
 
 # Build the docker image
 docker-dev: linux
