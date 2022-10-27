@@ -15,55 +15,10 @@ jobs:
         id: semantic
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-  binary:
-    runs-on: ubuntu-latest
-    needs: semantic-release
-    steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-node@v2
-        with:
-          node-version: "16"
-      - name: Install Go
-        uses: actions/setup-go@v2
-        with:
-          go-version: v1.18.x
-      - uses: actions/cache@v2
-        with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-            .bin
-          key: cache-${{ hashFiles('**/go.sum') }}-${{ hashFiles('.bin/*') }}
-          restore-keys: |
-            cache-
-
-      - run: make release
-        env:
-          VERSION: v${{ needs.semantic-release.outputs.release-version }}
-      - name: Upload binaries to release
-        uses: svenstaro/upload-release-action@v2
-        with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: ./.release/*
-          tag: v${{ needs.semantic-release.outputs.release-version }}
-          overwrite: true
-          file_glob: true
-  docker:
-    needs: semantic-release
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: Publish to Registry
-        uses: elgohr/Publish-Docker-Github-Action@master
-        with:
-          name: flanksource/incident-commander
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
-          snapshot: true
-          tags: "latest,v${{ needs.semantic-release.outputs.release-version }}"
+  
   helm:
     runs-on: ubuntu-latest
-    needs: [semantic-release, docker]
+    needs: semantic-release
     steps:
       - uses: actions/checkout@v2
       - name: Download yq
@@ -94,8 +49,8 @@ jobs:
       - name: Clone charts repo
         uses: actions/checkout@v3
         with:
-          repository: "${{ github.repository_owner }}/charts"
-          path: charts
+          repository: "${{ github.repository_owner }}/incident-commander-chart"
+          path: ./incident-commander-chart
           token: "${{ secrets.FLANKBOT }}"
       - name: Update chart repo
         run: |
@@ -107,4 +62,4 @@ jobs:
         with:
           commit_message: "Release ${{ needs.semantic-release.outputs.release-version }} of ${{ github.repository }}"
           branch: gh-pages
-          repository: ./charts
+          repository: ./incident-commander-chart
