@@ -70,6 +70,7 @@ require (
 	github.com/moby/spdystream v0.2.0 // indirect
 	github.com/monochromegane/go-gitignore v0.0.0-20200626010858-205db1a8cc00 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/ory/client-go v0.2.0-alpha.60 // indirect
 	github.com/rogpeppe/go-internal v1.6.1 // indirect
 	github.com/rs/zerolog v1.28.0 // indirect
 	github.com/xlab/treeprint v1.1.0 // indirect
