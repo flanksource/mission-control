@@ -14,6 +14,7 @@ import (
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/jobs"
 	"github.com/flanksource/incident-commander/responder"
+	"github.com/flanksource/incident-commander/utils"
 )
 
 const (
@@ -40,6 +41,9 @@ var Serve = &cobra.Command{
 
 		e.Use(middleware.Logger())
 		e.Use(ServerCache)
+		if enableAuth {
+			e.Use(utils.KratosMiddleware(kratosAdminAPI).Session)
+		}
 		forward(e, "/db", "http://localhost:3000")
 		forward(e, "/config", configDb)
 		forward(e, "/canary", api.CanaryCheckerPath)

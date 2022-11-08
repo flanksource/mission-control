@@ -27,7 +27,8 @@ var Root = &cobra.Command{
 var dev bool
 var httpPort, metricsPort, devGuiPort int
 var publicEndpoint = "http://localhost:8080"
-var apmHub, configDb, kratosAPI string
+var apmHub, configDb, kratosAPI, kratosAdminAPI string
+var enableAuth bool
 
 func ServerFlags(flags *pflag.FlagSet) {
 	flags.IntVar(&httpPort, "httpPort", 8080, "Port to expose a health dashboard ")
@@ -37,7 +38,9 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&publicEndpoint, "public-endpoint", "http://localhost:8080", "Public endpoint that this instance is exposed under")
 	flags.StringVar(&apmHub, "apm-hub", "http://apm-hub:8080", "APM Hub URL")
 	flags.StringVar(&configDb, "config-db", "http://config-db:8080", "Config DB URL")
-	flags.StringVar(&kratosAPI, "kratos-api", "http://kratos-public:8080", "Kratos API service")
+	flags.StringVar(&kratosAPI, "kratos-api", "http://kratos-public:80", "Kratos API service")
+	flags.StringVar(&kratosAdminAPI, "kratos-admin", "http://kratos-admin:80", "Kratos Admin API service")
+	flags.BoolVar(&enableAuth, "enable-auth", false, "Enable authentication via Kratos")
 	flags.DurationVar(&rules.Period, "rules-period", 5*time.Minute, "Period to run the rules")
 
 }

@@ -47,11 +47,32 @@ CREATE TABLE  IF NOT EXISTS team_components (
   team_id UUID NOT NULL,
   component_id UUID NOT NULL,
   role TEXT NULL,
+  selector_id TEXT,
   PRIMARY KEY (team_id, component_id),
   FOREIGN KEY (team_id) REFERENCES teams(id),
   FOREIGN KEY (component_id) REFERENCES components(id),
   UNIQUE (team_id, component_id, selector_id)
 );
+
+-- Create empty identities table if kratos has not created it
+-- Drop this table if it conflicts with kratos migration
+CREATE TABLE IF NOT EXISTS identities();
+
+-- Insert identities in people table
+CREATE OR REPLACE FUNCTION insert_identity_to_people()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO people(id, name, email)
+    VALUES (NEW.id, concat(NEW.traits::json->'name'->>'first', ' ', NEW.traits::json->'name'->>'last'), NEW.traits::json->>'email');
+    RETURN NEW;
+END
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER identity_to_people
+    AFTER INSERT
+    ON identities
+    FOR EACH ROW
+    EXECUTE PROCEDURE insert_identity_to_people();
 
 -- +goose StatementEnd
 
