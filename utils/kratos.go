@@ -28,10 +28,10 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		session, err := k.validateSession(c.Request())
 		if err != nil {
-			return c.Redirect(http.StatusMovedPermanently, "/login")
+			return c.String(http.StatusUnauthorized, "Unauthorized")
 		}
 		if !*session.Active {
-			return c.Redirect(http.StatusMovedPermanently, "/login")
+			return c.String(http.StatusUnauthorized, "Unauthorized")
 		}
 		return next(c)
 	}
