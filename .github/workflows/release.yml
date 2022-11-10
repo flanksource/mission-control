@@ -80,10 +80,17 @@ jobs:
             export VERSION=$(git describe --abbrev=0 --tags | sed -e 's/^v//')
             echo "RELEASE_VERSION=$VERSION" >> $GITHUB_ENV
           fi
-      - name: Update chart version
-        run: ./yq -i e '.version = "${{ env.RELEASE_VERSION }}"' chart/Chart.yaml
-      - name: Update app version
-        run: ./yq -i e '.appVersion = "${{ env.RELEASE_VERSION }}"' chart/Chart.yaml
+      - uses: actions/checkout@v3
+        with:
+          repository: "${{ github.repository_owner }}/incident-commander-chart"
+          token: ${{ secrets.FLANKBOT }}
+          path: ./incident-commander-chart
       - name: Update image tags
-        run: ./yq -i e '.image.tag = "v${{ env.RELEASE_VERSION }}"' chart/values.yaml
-      
+        run: |
+          cd incident-commander-chart && ./yq -i e '.image.tag = "v${{ env.RELEASE_VERSION }}"' chart/values.yaml
+      - name: Push changes to chart repo
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: "chore: update incident-commander image version to ${{ needs.semantic-release.outputs.release-version }}"
+          repository: ./incident-commander-chart
+          branch: main
