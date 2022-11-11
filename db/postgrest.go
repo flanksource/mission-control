@@ -5,7 +5,7 @@ import (
 	"github.com/flanksource/commons/logger"
 )
 
-var PostgRESTVersion = "v9.0.0"
+var PostgRESTVersion = "v10.0.0"
 
 func GoOffline() error {
 	return getBinary()("--help")
