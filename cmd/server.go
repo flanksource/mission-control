@@ -45,7 +45,7 @@ var Serve = &cobra.Command{
 		e.Use(middleware.Logger())
 		e.Use(ServerCache)
 		if enableAuth {
-			e.Use(utils.KratosMiddleware(kratosAdminAPI).Session)
+			e.Use(utils.KratosMiddleware(kratosAPI).Session)
 		}
 		forward(e, "/config", configDb)
 		forward(e, "/canary", api.CanaryCheckerPath)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 	client "github.com/ory/client-go"
@@ -13,11 +14,11 @@ type kratosMiddleware struct {
 	client *client.APIClient
 }
 
-func KratosMiddleware(kratosAdminAPI string) *kratosMiddleware {
+func KratosMiddleware(kratosAPI string) *kratosMiddleware {
 	configuration := client.NewConfiguration()
 	configuration.Servers = []client.ServerConfiguration{
 		{
-			URL: kratosAdminAPI, // Kratos Admin API
+			URL: kratosAPI,
 		},
 	}
 	return &kratosMiddleware{
@@ -37,6 +38,22 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 	}
 }
 func (k *kratosMiddleware) validateSession(r *http.Request) (*client.Session, error) {
+	// Skip all kratos calls
+	if strings.HasPrefix(r.URL.Path, "/kratos") {
+		return nil, nil
+	}
+
+	// TODO: Remove skipAuth once the frontend team tests previews
+	skipAuth, err := r.Cookie("skip_auth")
+	if err != nil {
+		return nil, err
+	}
+	if skipAuth != nil {
+		if skipAuth.String() != "" {
+			return nil, nil
+		}
+	}
+
 	cookie, err := r.Cookie("ory_kratos_session")
 	if err != nil {
 		return nil, err
@@ -44,9 +61,10 @@ func (k *kratosMiddleware) validateSession(r *http.Request) (*client.Session, er
 	if cookie == nil {
 		return nil, errors.New("no session found in cookie")
 	}
-	resp, _, err := k.client.V0alpha2Api.ToSession(context.Background()).Cookie(cookie.String()).Execute()
+
+	session, _, err := k.client.V0alpha2Api.ToSession(context.Background()).Cookie(cookie.String()).Execute()
 	if err != nil {
 		return nil, err
 	}
-	return resp, nil
+	return session, nil
 }
