@@ -87,7 +87,7 @@ jobs:
           path: ./incident-commander-chart
       - name: Update image tags
         run: |
-          cd incident-commander-chart && ./yq -i e '.image.tag = "v${{ env.RELEASE_VERSION }}"' chart/values.yaml
+          ./yq -i e '.image.tag = "v${{ env.RELEASE_VERSION }}"' incident-commander-chart/chart/values.yaml
       - name: Push changes to chart repo
         uses: stefanzweifel/git-auto-commit-action@v4
         with:

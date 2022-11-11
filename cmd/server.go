@@ -37,14 +37,16 @@ var Serve = &cobra.Command{
 		e := echo.New()
 		// PostgREST needs to know how it is exposed to create the correct links
 		db.HttpEndpoint = publicEndpoint + "/db"
-		go db.StartPostgrest()
 
+		if !disablePostgrest {
+			go db.StartPostgrest()
+			forward(e, "/db", "http://localhost:3000")
+		}
 		e.Use(middleware.Logger())
 		e.Use(ServerCache)
 		if enableAuth {
 			e.Use(utils.KratosMiddleware(kratosAdminAPI).Session)
 		}
-		forward(e, "/db", "http://localhost:3000")
 		forward(e, "/config", configDb)
 		forward(e, "/canary", api.CanaryCheckerPath)
 		forward(e, "/kratos", kratosAPI)

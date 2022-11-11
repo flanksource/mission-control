@@ -8,6 +8,9 @@ image:
   pullPolicy: IfNotPresent
   tag: "latest"
 
+# Set to true if you want to disable the postgrest service
+disablePostgrest: false
+
 db:
   enabled: true
   secretKeyRef:
@@ -25,6 +28,7 @@ canary-checker:
       create: false
       name: postgres-connection
       key: DB_URL
+  disablePostgrest: true
   flanksource-ui:
     enabled: false                # Disable canary-checker by default.
     withoutAuth: true
@@ -38,6 +42,7 @@ canary-checker:
 
 
 config-db:
+  disablePostgrest: false
   db:
     enabled: false
     secretKeyRef:
