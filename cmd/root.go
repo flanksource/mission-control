@@ -28,7 +28,7 @@ var dev bool
 var httpPort, metricsPort, devGuiPort int
 var publicEndpoint = "http://localhost:8080"
 var apmHub, configDb, kratosAPI, kratosAdminAPI string
-var enableAuth bool
+var enableAuth, disablePostgrest bool
 
 func ServerFlags(flags *pflag.FlagSet) {
 	flags.IntVar(&httpPort, "httpPort", 8080, "Port to expose a health dashboard ")
@@ -42,6 +42,7 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&kratosAdminAPI, "kratos-admin", "http://kratos-admin:80", "Kratos Admin API service")
 	flags.BoolVar(&enableAuth, "enable-auth", false, "Enable authentication via Kratos")
 	flags.DurationVar(&rules.Period, "rules-period", 5*time.Minute, "Period to run the rules")
+	flags.BoolVar(&disablePostgrest, "disable-postgrest", false, "Disable postgrest")
 
 }
 
