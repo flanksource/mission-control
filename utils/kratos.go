@@ -40,7 +40,8 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 func (k *kratosMiddleware) validateSession(r *http.Request) (*client.Session, error) {
 	// Skip all kratos calls
 	if strings.HasPrefix(r.URL.Path, "/kratos") {
-		return nil, nil
+		activeSession := true
+		return &client.Session{Active: &activeSession}, nil
 	}
 
 	cookie, err := r.Cookie("ory_kratos_session")
