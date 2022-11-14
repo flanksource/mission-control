@@ -43,17 +43,6 @@ func (k *kratosMiddleware) validateSession(r *http.Request) (*client.Session, er
 		return nil, nil
 	}
 
-	// TODO: Remove skipAuth once the frontend team tests previews
-	skipAuth, err := r.Cookie("skip_auth")
-	if err != nil {
-		return nil, err
-	}
-	if skipAuth != nil {
-		if skipAuth.String() != "" {
-			return nil, nil
-		}
-	}
-
 	cookie, err := r.Cookie("ory_kratos_session")
 	if err != nil {
 		return nil, err
