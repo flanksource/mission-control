@@ -46,9 +46,13 @@ func GetComponentsWithSelector(selector api.ComponentSelector) []uuid.UUID {
 	return compIds
 }
 
-func PersistTeamComponent(teamComp api.TeamComponent) error {
+func PersistTeamComponents(teamComps []api.TeamComponent) error {
+	if len(teamComps) == 0 {
+		return nil
+	}
+
 	return Gorm.Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "team_id"}, {Name: "component_id"}, {Name: "selector_id"}},
 		UpdateAll: true,
-	}).Create(teamComp).Error
+	}).Create(teamComps).Error
 }
