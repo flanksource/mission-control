@@ -10,8 +10,10 @@ func TeamComponentOwnershipRun() {
 	logger.Debugf("Sync team components")
 	teamComponentMap := db.GetTeamsWithComponentSelector()
 	for teamID, compSelectors := range teamComponentMap {
-		selectedComps := teams.GetComponentsWithSelectors(compSelectors)
-		teamComponents := teams.GetTeamComponents(teamID, selectedComps)
-		teams.PersistTeamComponents(teamComponents)
+		teamComponents := teams.GetTeamComponentsFromSelectors(teamID, compSelectors)
+		err := db.PersistTeamComponents(teamComponents)
+		if err != nil {
+			logger.Errorf("Error persisting team components: %v", err)
+		}
 	}
 }
