@@ -39,6 +39,10 @@ func Flags(flags *pflag.FlagSet) {
 
 //go:embed migrations/*.sql
 var embedMigrations embed.FS
+
+//go:embed migrations/_always/*.sql
+var embedScripts embed.FS
+
 var Pool *pgxpool.Pool
 var Gorm *gorm.DB
 var pgxConnectionString string
@@ -156,6 +160,24 @@ func Migrate() error {
 			return err
 		}
 	}
+
+	// Run idempotent migrations which are written in
+	// the pkg/db/always.sql file. There may be race conditions where certain tables
+	// may not exist or dependent on other migrations which is why it is always run
+	// after migrations are completed
+
+	scripts, _ := embedScripts.ReadDir("migrations/_always")
+
+	for _, file := range scripts {
+		script, err := embedScripts.ReadFile("migrations/_always/" + file.Name())
+		if err != nil {
+			return err
+		}
+		if _, err := Pool.Exec(context.TODO(), string(script)); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
