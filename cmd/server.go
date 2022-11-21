@@ -42,6 +42,10 @@ var Serve = &cobra.Command{
 			go db.StartPostgrest()
 			forward(e, "/db", "http://localhost:3000")
 		}
+
+		if externalPostgrestUri != "" {
+			forward(e, "/db", externalPostgrestUri)
+		}
 		e.Use(middleware.Logger())
 		e.Use(ServerCache)
 		if enableAuth {
