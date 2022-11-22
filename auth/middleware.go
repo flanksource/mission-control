@@ -1,4 +1,4 @@
-package utils
+package auth
 
 import (
 	"context"
@@ -15,16 +15,17 @@ type kratosMiddleware struct {
 }
 
 func KratosMiddleware(kratosAPI string) *kratosMiddleware {
-	configuration := client.NewConfiguration()
-	configuration.Servers = []client.ServerConfiguration{
-		{
-			URL: kratosAPI,
-		},
-	}
 	return &kratosMiddleware{
-		client: client.NewAPIClient(configuration),
+		client: newAPIClient(kratosAPI),
 	}
 }
+
+func (k *KratosHandler) KratosMiddleware() *kratosMiddleware {
+	return &kratosMiddleware{
+		client: k.client,
+	}
+}
+
 func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		session, err := k.validateSession(c.Request())
