@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/flanksource/incident-commander/utils"
 	"github.com/labstack/echo/v4"
 )
 
@@ -31,6 +32,12 @@ func (k *KratosHandler) InviteUser(c echo.Context) error {
 		return c.JSONBlob(http.StatusInternalServerError, errMsg)
 	}
 
+	body := fmt.Sprintf(inviteUserTemplate, reqData.FirstName, link)
+	mail := utils.NewMail("team@flanksource.com", reqData.Email, "User Invite", body, "text/html")
+	if err = utils.SendMail(mail); err != nil {
+		errMsg := []byte(fmt.Sprintf(`{"error": "%v", "message": "error sending email"}`, err))
+		return c.JSONBlob(http.StatusInternalServerError, errMsg)
+	}
 	respJSON := []byte(fmt.Sprintf(`{"link": "%s"}`, link))
 	return c.JSONBlob(http.StatusOK, respJSON)
 }
