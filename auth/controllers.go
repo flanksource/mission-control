@@ -33,7 +33,7 @@ func (k *KratosHandler) InviteUser(c echo.Context) error {
 	}
 
 	body := fmt.Sprintf(inviteUserTemplate, reqData.FirstName, link)
-	mail := utils.NewMail("team@flanksource.com", reqData.Email, "User Invite", body, "text/html")
+	mail := utils.NewMail(reqData.Email, "User Invite", body, "text/html")
 	if err = utils.SendMail(mail); err != nil {
 		errMsg := []byte(fmt.Sprintf(`{"error": "%v", "message": "error sending email"}`, err))
 		return c.JSONBlob(http.StatusInternalServerError, errMsg)

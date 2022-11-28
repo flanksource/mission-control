@@ -7,6 +7,7 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/rules"
+	"github.com/flanksource/incident-commander/utils"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -44,6 +45,7 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.BoolVar(&enableAuth, "enable-auth", false, "Enable authentication via Kratos")
 	flags.DurationVar(&rules.Period, "rules-period", 5*time.Minute, "Period to run the rules")
 	flags.BoolVar(&disablePostgrest, "disable-postgrest", false, "Disable postgrest")
+	flags.StringVar(&utils.FromAddress, "email-from-address", "no-reply@flanksource.com", "Email address of the sender")
 
 }
 

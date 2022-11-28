@@ -7,9 +7,11 @@ import (
 	"gopkg.in/gomail.v2"
 )
 
-func NewMail(from, to, subject, body, contentType string) *gomail.Message {
+var FromAddress string
+
+func NewMail(to, subject, body, contentType string) *gomail.Message {
 	m := gomail.NewMessage()
-	m.SetHeader("From", from)
+	m.SetHeader("From", FromAddress)
 	m.SetHeader("To", to)
 	m.SetHeader("Subject", subject)
 	m.SetBody(contentType, body)
