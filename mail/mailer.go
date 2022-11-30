@@ -1,4 +1,4 @@
-package utils
+package mail
 
 import (
 	"os"
@@ -9,20 +9,24 @@ import (
 
 var FromAddress string
 
-func NewMail(to, subject, body, contentType string) *gomail.Message {
+type Mail struct {
+	message *gomail.Message
+}
+
+func New(to, subject, body, contentType string) *Mail {
 	m := gomail.NewMessage()
 	m.SetHeader("From", FromAddress)
 	m.SetHeader("To", to)
 	m.SetHeader("Subject", subject)
 	m.SetBody(contentType, body)
-	return m
+	return &Mail{message: m}
 }
 
-func SendMail(mail *gomail.Message) error {
+func (m Mail) Send() error {
 	host := os.Getenv("SMTP_HOST")
 	user := os.Getenv("SMTP_USER")
 	password := os.Getenv("SMTP_PASSWORD")
 	port, _ := strconv.Atoi(os.Getenv("SMTP_PORT"))
 	d := gomail.NewDialer(host, port, user, password)
-	return d.DialAndSend(mail)
+	return d.DialAndSend(m.message)
 }
