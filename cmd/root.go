@@ -7,6 +7,7 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/rules"
+	"github.com/flanksource/incident-commander/mail"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -27,7 +28,7 @@ var Root = &cobra.Command{
 var dev bool
 var httpPort, metricsPort, devGuiPort int
 var publicEndpoint = "http://localhost:8080"
-var apmHub, configDb, kratosAPI, externalPostgrestUri string
+var apmHub, configDb, kratosAPI, kratosAdminAPI, externalPostgrestUri string
 var enableAuth, disablePostgrest bool
 
 func ServerFlags(flags *pflag.FlagSet) {
@@ -39,10 +40,12 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&apmHub, "apm-hub", "http://apm-hub:8080", "APM Hub URL")
 	flags.StringVar(&configDb, "config-db", "http://config-db:8080", "Config DB URL")
 	flags.StringVar(&kratosAPI, "kratos-api", "http://kratos-public:80", "Kratos API service")
+	flags.StringVar(&kratosAdminAPI, "kratos-admin", "http://kratos-admin:80", "Kratos Admin API service")
 	flags.StringVar(&externalPostgrestUri, "external-postgrest-uri", "", "URI for the postgrest instance to use")
 	flags.BoolVar(&enableAuth, "enable-auth", false, "Enable authentication via Kratos")
 	flags.DurationVar(&rules.Period, "rules-period", 5*time.Minute, "Period to run the rules")
 	flags.BoolVar(&disablePostgrest, "disable-postgrest", false, "Disable postgrest")
+	flags.StringVar(&mail.FromAddress, "email-from-address", "no-reply@flanksource.com", "Email address of the sender")
 
 }
 

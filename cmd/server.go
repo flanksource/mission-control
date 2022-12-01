@@ -10,11 +10,11 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/jobs"
 	"github.com/flanksource/incident-commander/responder"
-	"github.com/flanksource/incident-commander/utils"
 )
 
 const (
@@ -48,9 +48,13 @@ var Serve = &cobra.Command{
 		}
 		e.Use(middleware.Logger())
 		e.Use(ServerCache)
+
+		kratosHandler := auth.NewKratosHandler(kratosAPI, kratosAdminAPI)
 		if enableAuth {
-			e.Use(utils.KratosMiddleware(kratosAPI).Session)
+			e.Use(kratosHandler.KratosMiddleware().Session)
 		}
+		e.POST("/auth/invite_user", kratosHandler.InviteUser)
+
 		forward(e, "/config", configDb)
 		forward(e, "/canary", api.CanaryCheckerPath)
 		forward(e, "/kratos", kratosAPI)
