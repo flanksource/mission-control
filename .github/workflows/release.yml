@@ -66,12 +66,6 @@ jobs:
     needs: [semantic-release, docker]
     steps:
       - uses: actions/checkout@v3
-        with: 
-          repository: "${{ github.repository_owner }}/incident-commander-chart"
-      - name: Download yq
-        run: |
-          wget -nv -nc -O yq https://github.com/mikefarah/yq/releases/download/v4.20.2/yq_linux_amd64
-          chmod +x yq
       - name: Set version
         run: |
           if ${{ needs.semantic-release.outputs.new-release-published }}; then
@@ -80,6 +74,10 @@ jobs:
             export VERSION=$(git describe --abbrev=0 --tags | sed -e 's/^v//')
             echo "RELEASE_VERSION=$VERSION" >> $GITHUB_ENV
           fi
+      - name: Download yq
+        run: |
+          wget -nv -nc -O yq https://github.com/mikefarah/yq/releases/download/v4.20.2/yq_linux_amd64
+          chmod +x yq
       - uses: actions/checkout@v3
         with:
           repository: "${{ github.repository_owner }}/incident-commander-chart"
