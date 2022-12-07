@@ -8,10 +8,9 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	kiotaAuth "github.com/microsoft/kiota-authentication-azure-go"
 	msgraphsdk "github.com/microsoftgraph/msgraph-sdk-go"
-	"github.com/microsoftgraph/msgraph-sdk-go/groups/item/threads/item/reply"
 	"github.com/microsoftgraph/msgraph-sdk-go/models"
 	"github.com/microsoftgraph/msgraph-sdk-go/models/odataerrors"
-	"github.com/microsoftgraph/msgraph-sdk-go/planner/tasks/item"
+	"github.com/microsoftgraph/msgraph-sdk-go/planner"
 
 	"github.com/flanksource/incident-commander/api"
 )
@@ -115,7 +114,7 @@ func (c MSPlannerClient) AddComment(taskID, comment string) (string, error) {
 
 	// If conversation thread exists, add a new reply
 	if task.GetConversationThreadId() != nil {
-		replyBody := reply.NewReplyPostRequestBody()
+		replyBody := models.NewGroupsItemConversationsItemThreadsItemReplyPostRequestBody()
 		replyBody.SetPost(post)
 
 		err = c.client.GroupsById(c.groupID).ThreadsById(*task.GetConversationThreadId()).Reply().Post(context.Background(), replyBody, nil)
@@ -136,7 +135,7 @@ func (c MSPlannerClient) AddComment(taskID, comment string) (string, error) {
 	// Link the created conversation thread to the task
 	etag := *task.GetAdditionalData()["@odata.etag"].(*string)
 	headers := map[string]string{"If-Match": etag}
-	patchConfig := item.PlannerTaskItemRequestBuilderPatchRequestConfiguration{Headers: headers}
+	patchConfig := planner.PlannerTasksPlannerTaskItemRequestBuilderPatchRequestConfiguration{Headers: headers}
 
 	requestBody := models.NewPlannerTask()
 	requestBody.SetConversationThreadId(result.GetId())
