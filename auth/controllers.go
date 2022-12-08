@@ -3,6 +3,7 @@ package auth
 import (
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/flanksource/incident-commander/mail"
 	"github.com/labstack/echo/v4"
@@ -22,7 +23,13 @@ func (k *KratosHandler) InviteUser(c echo.Context) error {
 	}
 	identity, err := k.createUser(reqData.FirstName, reqData.LastName, reqData.Email)
 	if err != nil {
-		errMsg := []byte(fmt.Sprintf(`{"error": "%v", "message": "error creating user"}`, err))
+		var errMsg []byte
+		// User already exists
+		if strings.Contains(err.Error(), http.StatusText(http.StatusConflict)) {
+			errMsg = []byte(`{"error": "User already exists", "message": "error creating user"}`)
+		} else {
+			errMsg = []byte(fmt.Sprintf(`{"error": "%v", "message": "error creating user"}`, err))
+		}
 		return c.JSONBlob(http.StatusInternalServerError, errMsg)
 	}
 

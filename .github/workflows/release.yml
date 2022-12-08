@@ -71,6 +71,7 @@ jobs:
           if ${{ needs.semantic-release.outputs.new-release-published }}; then
             echo "RELEASE_VERSION=${{ needs.semantic-release.outputs.release-version }}" >> $GITHUB_ENV
           else
+            git fetch --prune --unshallow
             export VERSION=$(git describe --abbrev=0 --tags | sed -e 's/^v//')
             echo "RELEASE_VERSION=$VERSION" >> $GITHUB_ENV
           fi
