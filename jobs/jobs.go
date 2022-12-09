@@ -12,7 +12,7 @@ const (
 
 var FuncScheduler = cron.New()
 
-func ScheduleFunc(schedule string, fn func()) (interface{}, error) {
+func ScheduleFunc(schedule string, fn func()) (any, error) {
 	return FuncScheduler.AddFunc(schedule, fn)
 }
 
