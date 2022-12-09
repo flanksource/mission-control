@@ -6,7 +6,8 @@ import (
 )
 
 const (
-	TeamComponentOwnershipSchedule = "@every 15m"
+	TeamComponentOwnershipSchedule  = "@every 15m"
+	EvaluateEvidenceScriptsSchedule = "@every 30m"
 )
 
 var FuncScheduler = cron.New()
@@ -16,11 +17,17 @@ func ScheduleFunc(schedule string, fn func()) (interface{}, error) {
 }
 
 func Start() {
-	// running first at startup and then with the schedule
-	TeamComponentOwnershipRun()
 	if _, err := ScheduleFunc(TeamComponentOwnershipSchedule, TeamComponentOwnershipRun); err != nil {
 		logger.Errorf("Failed to schedule sync jobs for team component: %v", err)
 	}
+
+	if _, err := ScheduleFunc(EvaluateEvidenceScriptsSchedule, EvaluateEvidenceScripts); err != nil {
+		logger.Errorf("Failed to schedule job for evidence script evaluation: %v", err)
+	}
+
+	// Running first at startup and then with the schedule
+	TeamComponentOwnershipRun()
+	EvaluateEvidenceScripts()
 
 	FuncScheduler.Start()
 }

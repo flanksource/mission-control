@@ -13,6 +13,8 @@ type Evidence struct {
 	ConfigID         *uuid.UUID    `json:"config_id"`
 	ConfigChangeID   *uuid.UUID    `json:"config_change_id"`
 	ConfigAnalysisID *uuid.UUID    `json:"config_analysis_id"`
+	Config           ConfigItem    `json:"config,omitempty" gorm:"foreignKey:ConfigID;references:ID"`
+	Component        Component     `json:"component,omitempty"`
 	ComponentID      *uuid.UUID    `json:"component_id"`
 	CheckID          *uuid.UUID    `json:"check_id"`
 	Description      string        `json:"description"`
@@ -22,6 +24,8 @@ type Evidence struct {
 	Mitigator        bool          `json:"mitigator"`
 	CreatedBy        uuid.UUID     `json:"created_by"`
 	Type             string        `json:"type"`
+	Script           string        `json:"script"`
+	ScriptResult     string        `json:"script_result"`
 	Evidence         types.JSONMap `json:"evidence"`
 	Properties       types.JSONMap `json:"properties"`
 	CreatedAt        time.Time     `json:"created_at"`

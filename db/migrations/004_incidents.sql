@@ -161,7 +161,7 @@ CREATE TABLE evidences (
   config_analysis_id UUID null,
   component_id UUID null,
   check_id UUID null,
-  definition_of_done boolean, -- This indicates this item as needing to be fixed before closing the incident
+  definition_of_done boolean DEFAULT false, -- This indicates this item as needing to be fixed before closing the incident
   done boolean, -- The evidence is done / resolved
   factor boolean,
   mitigator boolean,
@@ -169,6 +169,8 @@ CREATE TABLE evidences (
   type TEXT NOT NULL,
   evidence jsonb null,
   properties jsonb null,
+  script TEXT NULL,
+  script_result TEXT NULL,
   created_at timestamp NOT NULL DEFAULT now(),
   updated_at timestamp NOT NULL DEFAULT now(),
   FOREIGN KEY (created_by) REFERENCES people(id),
