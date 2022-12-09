@@ -2,6 +2,7 @@ package db
 
 import (
 	"github.com/flanksource/incident-commander/api"
+	"github.com/google/uuid"
 
 	"github.com/flanksource/commons/logger"
 )
@@ -22,4 +23,10 @@ func GetEvidenceScripts() []api.Evidence {
 		return evidences
 	}
 	return evidences
+}
+
+func UpdateEvidenceScriptResult(id uuid.UUID, done bool, result string) error {
+	return Gorm.Table("evidences").Where("id = ?", id).
+		Updates(map[string]any{"definition_of_done": done, "script_result": result}).
+		Error
 }

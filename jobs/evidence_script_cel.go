@@ -1,6 +1,10 @@
 package jobs
 
 import (
+	"fmt"
+	"strconv"
+
+	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 
 	"github.com/flanksource/commons/logger"
@@ -8,48 +12,57 @@ import (
 )
 
 func EvaluateEvidenceScripts() {
-	//logger.Debugf("Evaluating evidence scripts")
-	logger.Infof("Evaluating evidence scripts")
+	logger.Debugf("Evaluating evidence scripts")
 
 	// Fetch all evidences of open incidents which have a script
 	evidences := db.GetEvidenceScripts()
 	for _, evidence := range evidences {
-		env, err := cel.NewEnv(
-			cel.Variable("config", cel.AnyType),
-			cel.Variable("component", cel.AnyType),
-		)
+		output, err := evaluate(evidence)
 		if err != nil {
-			logger.Errorf("Error creating cel env: %v", err)
-			// TODO: Log fail result ?
+			logger.Errorf("Error running evidence script: %v", err)
+			if err = db.UpdateEvidenceScriptResult(evidence.ID, false, err.Error()); err != nil {
+				logger.Errorf("Error persisting evidence script result: %v", err)
+			}
 			continue
 		}
 
-		ast, iss := env.Compile(evidence.Script)
-		if iss.Err() != nil {
-			logger.Errorf("Error compiling cel script: %v", iss.Err())
-			// TODO: Log fail result ?
-			continue
-		}
-
-		prg, err := env.Program(ast)
+		var result string
+		done, err := strconv.ParseBool(output)
 		if err != nil {
-			logger.Errorf("Error compiling cel script: %v", iss.Err())
-			// TODO: Log fail result ?
-			continue
+			result = "Script should evaluate to a boolean value"
 		}
-
-		out, _, err := prg.Eval(map[string]any{
-			"config":    evidence.Config.Config,
-			"component": evidence.Component.AsMap(),
-		})
-		if err != nil {
-			logger.Errorf("Error persisting team components: %v", err)
+		if err = db.UpdateEvidenceScriptResult(evidence.ID, done, result); err != nil {
+			logger.Errorf("Error persisting evidence script result: %v", err)
 		}
-
-		// Store out in ScriptResult
-		_ = out
-		logger.Infof("Result of script [%s]: %s", evidence.Script, out)
-
-		// If script result evaluate to truthy, mark dod as true
 	}
+}
+
+func evaluate(evidence api.Evidence) (string, error) {
+	env, err := cel.NewEnv(
+		cel.Variable("config", cel.AnyType),
+		cel.Variable("component", cel.AnyType),
+	)
+	if err != nil {
+		return "", err
+	}
+
+	ast, iss := env.Compile(evidence.Script)
+	if iss.Err() != nil {
+		return "", iss.Err()
+	}
+
+	prg, err := env.Program(ast)
+	if err != nil {
+		return "", err
+	}
+
+	out, _, err := prg.Eval(map[string]interface{}{
+		"config":    evidence.Config.Config,
+		"component": evidence.Component.AsMap(),
+	})
+	if err != nil {
+		return "", err
+	}
+
+	return fmt.Sprint(out), nil
 }
