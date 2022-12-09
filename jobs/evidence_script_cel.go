@@ -56,7 +56,7 @@ func evaluate(evidence api.Evidence) (string, error) {
 		return "", err
 	}
 
-	out, _, err := prg.Eval(map[string]interface{}{
+	out, _, err := prg.Eval(map[string]any{
 		"config":    evidence.Config.Config,
 		"component": evidence.Component.AsMap(),
 	})
