@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/flanksource/incident-commander/api"
+	//"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 
 	"github.com/flanksource/commons/logger"
@@ -37,10 +37,11 @@ func EvaluateEvidenceScripts() {
 	}
 }
 
-func evaluate(evidence api.Evidence) (string, error) {
+func evaluate(evidence db.EvidenceScriptInput) (string, error) {
 	env, err := cel.NewEnv(
 		cel.Variable("config", cel.AnyType),
 		cel.Variable("component", cel.AnyType),
+		cel.Variable("incident", cel.AnyType),
 	)
 	if err != nil {
 		return "", err
@@ -57,8 +58,9 @@ func evaluate(evidence api.Evidence) (string, error) {
 	}
 
 	out, _, err := prg.Eval(map[string]any{
-		"config":    evidence.Config.Config,
+		"config":    evidence.ConfigItem.Config,
 		"component": evidence.Component.AsMap(),
+		"incident":  evidence.Hypothesis.Incident,
 	})
 	if err != nil {
 		return "", err

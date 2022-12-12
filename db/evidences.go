@@ -7,15 +7,30 @@ import (
 	"github.com/flanksource/commons/logger"
 )
 
-func GetEvidenceScripts() []api.Evidence {
-	var evidences []api.Evidence
-	openIncidentsSubQuery := Gorm.Table("hypotheses").Select("id").Where("incident_id IN (?)",
-		Gorm.Table("incidents").Select("id").Where("closed IS NULL AND resolved IS NULL"))
-	err := Gorm.Table("evidences").
-		Joins("Config").Joins("Component").
-		Where("evidences.hypothesis_id IN (?)", openIncidentsSubQuery).
+type Hypothesis struct {
+	api.Hypothesis
+	Incident api.Incident `json:"incident,omitempty" gorm:"foreignKey:IncidentID;references:ID"`
+}
+
+type EvidenceScriptInput struct {
+	api.Evidence
+	ConfigItem api.ConfigItem `json:"config,omitempty" gorm:"foreignKey:ConfigID;references:ID"`
+	Component  api.Component  `json:"component,omitempty"`
+	Hypothesis Hypothesis
+}
+
+func GetEvidenceScripts() []EvidenceScriptInput {
+
+	var evidences []EvidenceScriptInput
+	incidentsSubQuery := Gorm.Table("incidents").Select("id").Where("closed IS NULL")
+	hypothesesSubQuery := Gorm.Table("hypotheses").Select("id").Where("incident_id IN (?)", incidentsSubQuery)
+	err := Gorm.Debug().Table("evidences").
+		Joins("ConfigItem").
+		Joins("Component").
+		Joins("Hypothesis").
+		Preload("Hypothesis.Incident").
+		Where("evidences.hypothesis_id IN (?)", hypothesesSubQuery).
 		Where("evidences.script IS NOT NULL").
-		Where("definition_of_done != true").
 		Find(&evidences).Error
 
 	if err != nil {
@@ -27,6 +42,6 @@ func GetEvidenceScripts() []api.Evidence {
 
 func UpdateEvidenceScriptResult(id uuid.UUID, done bool, result string) error {
 	return Gorm.Table("evidences").Where("id = ?", id).
-		Updates(map[string]any{"definition_of_done": done, "script_result": result}).
+		Updates(map[string]any{"done": done, "script_result": result}).
 		Error
 }

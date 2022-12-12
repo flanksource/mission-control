@@ -7,7 +7,7 @@ import (
 
 const (
 	TeamComponentOwnershipSchedule  = "@every 15m"
-	EvaluateEvidenceScriptsSchedule = "@every 30m"
+	EvaluateEvidenceScriptsSchedule = "@every 5m"
 )
 
 var FuncScheduler = cron.New()
