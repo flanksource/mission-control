@@ -33,7 +33,6 @@ CREATE OR REPLACE VIEW incidents_by_component AS
   WHERE component_id is not null;
 
 
-
 DROP VIEW IF EXISTS incidents_by_config;
 CREATE OR REPLACE VIEW incidents_by_config AS
   SELECT DISTINCT incidents.title, incidents.id, incidents.created_at, incidents."type", incidents.status,  incidents.severity, config_id FROM evidences
@@ -41,11 +40,13 @@ CREATE OR REPLACE VIEW incidents_by_config AS
   INNER JOIN incidents on hypotheses.incident_id = incidents.id
   WHERE evidences.config_id is not null;
 
-
+DROP VIEW IF EXISTS changes_by_component;
 CREATE OR REPLACE VIEW changes_by_component AS
-	SELECT config_changes.config_id, change_type, config_changes.created_at, component_id
-  from config_changes
-  INNER JOIN config_component_relationships relations on relations.config_id = config_changes.config_id;
+	SELECT config_changes.config_id, configs.name, configs.config_type, configs.external_type, change_type,
+         config_changes.created_at,config_changes.created_by, config_changes.id as change_id, config_changes.severity, component_id
+  FROM config_changes
+  INNER JOIN config_component_relationships relations on relations.config_id = config_changes.config_id
+  INNER JOIN config_items  configs on configs.id = config_changes.config_id;
 
 
 CREATE OR REPLACE VIEW analysis_by_component AS
