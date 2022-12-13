@@ -3,21 +3,16 @@ package jobs
 import (
 	"fmt"
 	"strconv"
-	"time"
-
-	"github.com/flanksource/incident-commander/db"
 
 	"github.com/flanksource/commons/logger"
 	"github.com/google/cel-go/cel"
 	"github.com/google/uuid"
-	"github.com/patrickmn/go-cache"
-)
 
-var prgCache *cache.Cache
+	"github.com/flanksource/incident-commander/db"
+)
 
 func EvaluateEvidenceScripts() {
 	logger.Debugf("Evaluating evidence scripts")
-	prgCache = cache.New(24*time.Hour, 1*time.Hour)
 
 	// Fetch all evidences of open incidents which have a script
 	evidences := db.GetEvidenceScripts()
@@ -54,7 +49,7 @@ func evaluate(evidence db.EvidenceScriptInput) (string, error) {
 	out, _, err := (*prg).Eval(map[string]any{
 		"config":    evidence.ConfigItem.Config,
 		"component": evidence.Component.AsMap(),
-		"incident":  evidence.Hypothesis.Incident,
+		"incident":  evidence.Hypothesis.Incident.AsMap(),
 	})
 	if err != nil {
 		return "", err

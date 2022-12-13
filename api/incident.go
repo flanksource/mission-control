@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -47,6 +48,13 @@ type Incident struct {
 	IncidentRuleID *uuid.UUID     `json:"incident_rule_id,omitempty"`
 	CommanderID    *uuid.UUID     `json:"commander_id,omitempty"`
 	CommunicatorID *uuid.UUID     `json:"communicator_id,omitempty"`
+}
+
+func (i Incident) AsMap() map[string]any {
+	m := make(map[string]any)
+	b, _ := json.Marshal(&i)
+	_ = json.Unmarshal(b, &m)
+	return m
 }
 
 func (i *Incident) BeforeCreate(tx *gorm.DB) (err error) {
