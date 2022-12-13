@@ -9,6 +9,7 @@ import (
 
 	"github.com/flanksource/commons/logger"
 	"github.com/google/cel-go/cel"
+	"github.com/google/uuid"
 	"github.com/patrickmn/go-cache"
 )
 
@@ -20,6 +21,7 @@ func EvaluateEvidenceScripts() {
 
 	// Fetch all evidences of open incidents which have a script
 	evidences := db.GetEvidenceScripts()
+	var incidentIDs []uuid.UUID
 	for _, evidence := range evidences {
 		output, err := evaluate(evidence)
 		if err != nil {
@@ -38,7 +40,10 @@ func EvaluateEvidenceScripts() {
 		if err = db.UpdateEvidenceScriptResult(evidence.ID, done, result); err != nil {
 			logger.Errorf("Error persisting evidence script result: %v", err)
 		}
+		incidentIDs = append(incidentIDs, evidence.Hypothesis.IncidentID)
 	}
+
+	db.ReconcileIncidentStatus(incidentIDs)
 }
 
 func evaluate(evidence db.EvidenceScriptInput) (string, error) {
