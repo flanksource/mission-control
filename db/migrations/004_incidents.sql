@@ -109,11 +109,17 @@ CREATE TABLE incident_histories (
   type TEXT NULL,
   description text NOT NULL,
   hypothesis_id UUID NULL,
+  responder_id UUID NULL,
+  evidence_id UUID NULL,
+  comment_id UUID NULL,
   created_at timestamp NOT NULL DEFAULT now(),
   updated_at timestamp NOT NULL DEFAULT now(),
   FOREIGN KEY (created_by) REFERENCES people(id),
   FOREIGN KEY (incident_id) REFERENCES incidents(id),
-  FOREIGN KEY (hypothesis_id) REFERENCES hypotheses(id)
+  FOREIGN KEY (hypothesis_id) REFERENCES hypotheses(id),
+  FOREIGN KEY (responder_id) REFERENCES responders(id),
+  FOREIGN KEY (evidence_id) REFERENCES evidences(id),
+  FOREIGN KEY (comment_id) REFERENCES comments(id)
 );
 
 CREATE TABLE comments (
@@ -193,7 +199,7 @@ CREATE TRIGGER incident_to_incident_history
 CREATE OR REPLACE FUNCTION insert_responder_created_in_incident_history()
 RETURNS TRIGGER AS $$
 BEGIN
-    INSERT INTO incident_histories(incident_id, created_by, type, description) VALUES (NEW.incident_id, NEW.created_by, 'responder.created', NEW.id);
+    INSERT INTO incident_histories(incident_id, created_by, type, responder_id) VALUES (NEW.incident_id, NEW.created_by, 'responder.created', NEW.id);
     RETURN NEW;
 END
 $$ LANGUAGE plpgsql;
@@ -211,7 +217,7 @@ DECLARE
 incident_id UUID;
 BEGIN
     SELECT hypotheses.incident_id INTO STRICT incident_id FROM hypotheses WHERE id = NEW.hypothesis_id;
-    INSERT INTO incident_histories(incident_id, created_by, type, hypothesis_id, description) VALUES (incident_id, NEW.created_by, 'evidence.created', NEW.hypothesis_id, NEW.id);
+    INSERT INTO incident_histories(incident_id, created_by, type, hypothesis_id, evidence_id) VALUES (incident_id, NEW.created_by, 'evidence.created', NEW.hypothesis_id, NEW.id);
     RETURN NEW;
 END
 $$ LANGUAGE plpgsql;
@@ -242,7 +248,7 @@ CREATE TRIGGER incident_status_to_incident_history
 CREATE OR REPLACE FUNCTION insert_responder_comment_in_incident_history()
 RETURNS TRIGGER AS $$
 BEGIN
-    INSERT INTO incident_histories(incident_id, created_by, type, description) VALUES (NEW.incident_id, NEW.created_by, 'responder.responded', NEW.id);
+    INSERT INTO incident_histories(incident_id, created_by, type, comment_id) VALUES (NEW.incident_id, NEW.created_by, 'responder.commented', NEW.id);
     RETURN NEW;
 END
 $$ LANGUAGE plpgsql;
@@ -254,11 +260,26 @@ CREATE TRIGGER responder_comment_to_incident_history
     WHEN (NEW.responder_id IS NOT NULL)
     EXECUTE PROCEDURE insert_incident_status_update_in_incident_history();
 
+-- Insert hypothesis creation updates in incident_histories
+CREATE OR REPLACE FUNCTION insert_hypothesis_created_in_incident_history()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO incident_histories(incident_id, created_by, type, description, hypothesis_id) VALUES (NEW.incident_id, NEW.created_by, 'hypothesis.created', NEW.status, NEW.id);
+    RETURN NEW;
+END
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER hypothesis_status_to_incident_history
+    AFTER INSERT
+    ON hypotheses
+    FOR EACH ROW
+    EXECUTE PROCEDURE insert_hypothesis_created_in_incident_history();
+
 -- Insert hypothesis status updates in incident_histories
 CREATE OR REPLACE FUNCTION insert_hypothesis_status_update_in_incident_history()
 RETURNS TRIGGER AS $$
 BEGIN
-    INSERT INTO incident_histories(incident_id, created_by, type, description, hypothesis_id) VALUES (NEW.incident_id, NEW.created_by, 'hypothesis_status.updated', NEW.status, NEW.id);
+    INSERT INTO incident_histories(incident_id, created_by, type, description, hypothesis_id) VALUES (NEW.incident_id, NEW.created_by, 'hypothesis.status_updated', NEW.status, NEW.id);
     RETURN NEW;
 END
 $$ LANGUAGE plpgsql;
