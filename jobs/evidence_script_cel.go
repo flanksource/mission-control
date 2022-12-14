@@ -12,8 +12,6 @@ import (
 )
 
 func EvaluateEvidenceScripts() {
-	logger.Debugf("Evaluating evidence scripts")
-
 	// Fetch all evidences of open incidents which have a script
 	evidences := db.GetEvidenceScripts()
 	var incidentIDs []uuid.UUID
