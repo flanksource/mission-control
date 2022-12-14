@@ -1,10 +1,7 @@
 package jobs
 
 import (
-	"time"
-
 	"github.com/flanksource/commons/logger"
-	"github.com/patrickmn/go-cache"
 	"github.com/robfig/cron/v3"
 )
 
@@ -13,9 +10,6 @@ const (
 	EvaluateEvidenceScriptsSchedule = "@every 5m"
 )
 
-// Cache for storing compiled CEL scripts
-var prgCache *cache.Cache
-
 var FuncScheduler = cron.New()
 
 func ScheduleFunc(schedule string, fn func()) (any, error) {
@@ -23,8 +17,6 @@ func ScheduleFunc(schedule string, fn func()) (any, error) {
 }
 
 func Start() {
-	prgCache = cache.New(24*time.Hour, 1*time.Hour)
-
 	// Running first at startup and then with the schedule
 	TeamComponentOwnershipRun()
 	EvaluateEvidenceScripts()

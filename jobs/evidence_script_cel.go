@@ -3,13 +3,22 @@ package jobs
 import (
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/flanksource/commons/logger"
 	"github.com/google/cel-go/cel"
 	"github.com/google/uuid"
+	"github.com/patrickmn/go-cache"
 
 	"github.com/flanksource/incident-commander/db"
 )
+
+// Cache for storing compiled CEL scripts
+var prgCache *cache.Cache
+
+func init() {
+	prgCache = cache.New(24*time.Hour, 1*time.Hour)
+}
 
 func EvaluateEvidenceScripts() {
 	// Fetch all evidences of open incidents which have a script
