@@ -20,7 +20,6 @@ type EvidenceScriptInput struct {
 }
 
 func GetEvidenceScripts() []EvidenceScriptInput {
-
 	var evidences []EvidenceScriptInput
 	incidentsSubQuery := Gorm.Table("incidents").Select("id").Where("closed IS NULL")
 	hypothesesSubQuery := Gorm.Table("hypotheses").Select("id").Where("incident_id IN (?)", incidentsSubQuery)
