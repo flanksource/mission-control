@@ -9,6 +9,7 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/spf13/cobra"
 
+	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
@@ -50,6 +51,10 @@ var Serve = &cobra.Command{
 		e.Use(ServerCache)
 
 		kratosHandler := auth.NewKratosHandler(kratosAPI, kratosAdminAPI)
+		if _, err := kratosHandler.CreateAdminUser(); err != nil {
+			logger.Fatalf("Failed to created admin user: %v", err)
+		}
+
 		if enableAuth {
 			e.Use(kratosHandler.KratosMiddleware().Session)
 		}
