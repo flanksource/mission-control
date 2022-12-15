@@ -2,15 +2,16 @@ package auth
 
 import (
 	"context"
+	"os"
 
 	"github.com/flanksource/incident-commander/db"
 	client "github.com/ory/client-go"
 )
 
 const (
-	AdminName     = "Admin"
-	AdminEmail    = "admin@local"
-	AdminPassword = "admin"
+	AdminName            = "Admin"
+	AdminEmail           = "admin@local"
+	DefaultAdminPassword = "admin"
 )
 
 func (k *KratosHandler) createUser(firstName, lastName, email string) (*client.Identity, error) {
@@ -39,8 +40,13 @@ func (k *KratosHandler) createRecoveryLink(id string) (string, error) {
 }
 
 func (k *KratosHandler) createAdminIdentity() (string, error) {
+	var adminPassword string
+	adminPassword = os.Getenv("ADMIN_PASSWORD")
+	if adminPassword == "" {
+		adminPassword = DefaultAdminPassword
+	}
 	config := *client.NewAdminCreateIdentityImportCredentialsPasswordConfig()
-	config.SetPassword(AdminPassword)
+	config.SetPassword(adminPassword)
 
 	password := *client.NewAdminCreateIdentityImportCredentialsPassword()
 	password.SetConfig(config)
