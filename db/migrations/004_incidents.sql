@@ -182,6 +182,17 @@ CREATE TABLE evidences (
   FOREIGN KEY (hypothesis_id) REFERENCES hypotheses(id)
 );
 
+-- Get current user or fallback to system user
+CREATE OR REPLACE FUNCTION get_current_user()
+RETURNS UUID AS $$
+DECLARE
+    output UUID;
+BEGIN
+    SELECT id FROM people INTO output WHERE name = 'System' ORDER BY created_at ASC LIMIT 1;
+    RETURN output;
+END
+$$ LANGUAGE plpgsql;
+
 -- Insert incident creations in incident_histories
 CREATE OR REPLACE FUNCTION insert_incident_created_in_incident_history()
 RETURNS TRIGGER AS $$
