@@ -17,7 +17,7 @@ const (
 func (k *KratosHandler) createUser(firstName, lastName, email string) (*client.Identity, error) {
 	adminCreateIdentityBody := *client.NewAdminCreateIdentityBody(
 		"default",
-		map[string]interface{}{
+		map[string]any{
 			"email": email,
 			"name": map[string]string{
 				"first": firstName,

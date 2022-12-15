@@ -8,8 +8,8 @@ import (
 	"github.com/flanksource/commons/logger"
 )
 
-func GetHash(any interface{}) string {
-	data, err := json.Marshal(any)
+func GetHash(obj any) string {
+	data, err := json.Marshal(obj)
 	if err != nil {
 		logger.Debugf("error marshalling the given input: %v", err)
 		return ""

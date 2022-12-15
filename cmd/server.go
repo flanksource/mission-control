@@ -65,7 +65,7 @@ var Serve = &cobra.Command{
 		forward(e, "/kratos", kratosAPI)
 		forward(e, "/apm", apmHub)
 
-		jobs.Start()
+		go jobs.Start()
 		go events.ListenForEvents()
 		go responder.StartConfigSync()
 		go responder.StartCommentSync()

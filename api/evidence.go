@@ -22,6 +22,8 @@ type Evidence struct {
 	Mitigator        bool          `json:"mitigator"`
 	CreatedBy        uuid.UUID     `json:"created_by"`
 	Type             string        `json:"type"`
+	Script           string        `json:"script"`
+	ScriptResult     string        `json:"script_result"`
 	Evidence         types.JSONMap `json:"evidence"`
 	Properties       types.JSONMap `json:"properties"`
 	CreatedAt        time.Time     `json:"created_at"`

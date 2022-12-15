@@ -161,7 +161,7 @@ CREATE TABLE evidences (
   config_analysis_id UUID null,
   component_id UUID null,
   check_id UUID null,
-  definition_of_done boolean, -- This indicates this item as needing to be fixed before closing the incident
+  definition_of_done boolean DEFAULT false, -- This indicates this item as needing to be fixed before closing the incident
   done boolean, -- The evidence is done / resolved
   factor boolean,
   mitigator boolean,
@@ -169,6 +169,8 @@ CREATE TABLE evidences (
   type TEXT NOT NULL,
   evidence jsonb null,
   properties jsonb null,
+  script TEXT NULL,
+  script_result TEXT NULL,
   created_at timestamp NOT NULL DEFAULT now(),
   updated_at timestamp NOT NULL DEFAULT now(),
   FOREIGN KEY (created_by) REFERENCES people(id),
@@ -179,6 +181,17 @@ CREATE TABLE evidences (
   FOREIGN KEY (config_analysis_id) REFERENCES config_analysis(id),
   FOREIGN KEY (hypothesis_id) REFERENCES hypotheses(id)
 );
+
+-- Get current user or fallback to system user
+CREATE OR REPLACE FUNCTION get_current_user()
+RETURNS UUID AS $$
+DECLARE
+    output UUID;
+BEGIN
+    SELECT id FROM people INTO output WHERE name = 'System' ORDER BY created_at ASC LIMIT 1;
+    RETURN output;
+END
+$$ LANGUAGE plpgsql;
 
 -- Insert incident creations in incident_histories
 CREATE OR REPLACE FUNCTION insert_incident_created_in_incident_history()
@@ -194,6 +207,22 @@ CREATE TRIGGER incident_to_incident_history
     ON incidents
     FOR EACH ROW
     EXECUTE PROCEDURE insert_incident_created_in_incident_history();
+
+-- Insert incident status updates in incident_histories
+CREATE OR REPLACE FUNCTION insert_incident_status_update_in_incident_history()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO incident_histories(incident_id, created_by, type, description) VALUES (NEW.id, NEW.created_by, 'incident.status_updated', NEW.status);
+    RETURN NEW;
+END
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER incident_status_to_incident_history
+    AFTER UPDATE
+    ON incidents
+    FOR EACH ROW
+    WHEN (OLD.status IS DISTINCT FROM NEW.status)
+    EXECUTE PROCEDURE insert_incident_status_update_in_incident_history();
 
 -- Insert incident responder creations in incident_histories
 CREATE OR REPLACE FUNCTION insert_responder_created_in_incident_history()
