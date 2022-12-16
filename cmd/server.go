@@ -51,11 +51,10 @@ var Serve = &cobra.Command{
 		e.Use(ServerCache)
 
 		kratosHandler := auth.NewKratosHandler(kratosAPI, kratosAdminAPI)
-		if _, err := kratosHandler.CreateAdminUser(); err != nil {
-			logger.Fatalf("Failed to created admin user: %v", err)
-		}
-
 		if enableAuth {
+			if _, err := kratosHandler.CreateAdminUser(); err != nil {
+				logger.Fatalf("Failed to created admin user: %v", err)
+			}
 			e.Use(kratosHandler.KratosMiddleware().Session)
 		}
 		e.POST("/auth/invite_user", kratosHandler.InviteUser)
