@@ -6,8 +6,9 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
-	"github.com/flanksource/incident-commander/rules"
 	"github.com/flanksource/incident-commander/mail"
+	"github.com/flanksource/incident-commander/rules"
+	"github.com/flanksource/incident-commander/snapshot"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -39,6 +40,7 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&publicEndpoint, "public-endpoint", "http://localhost:8080", "Public endpoint that this instance is exposed under")
 	flags.StringVar(&apmHub, "apm-hub", "http://apm-hub:8080", "APM Hub URL")
 	flags.StringVar(&configDb, "config-db", "http://config-db:8080", "Config DB URL")
+	flags.StringVar(&snapshot.CanaryCheckerURL, "canary-checker", "http://canary-checker:8080", "Canary Checker URL")
 	flags.StringVar(&kratosAPI, "kratos-api", "http://kratos-public:80", "Kratos API service")
 	flags.StringVar(&kratosAdminAPI, "kratos-admin", "http://kratos-admin:80", "Kratos Admin API service")
 	flags.StringVar(&externalPostgrestUri, "external-postgrest-uri", "", "URI for the postgrest instance to use")
