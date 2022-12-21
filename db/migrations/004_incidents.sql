@@ -107,7 +107,7 @@ CREATE TABLE incident_histories (
   incident_id UUID NOT NULL,
   created_by UUID NOT NULL,
   type TEXT NULL,
-  description text NOT NULL,
+  description text NULL,
   hypothesis_id UUID NULL,
   responder_id UUID NULL,
   evidence_id UUID NULL,
