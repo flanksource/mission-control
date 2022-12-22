@@ -30,6 +30,10 @@ func writeToCSVFile(pathPrefix, name string, headerRow string, dbRows []map[stri
 }
 
 func writeToJSONFile(pathPrefix, name string, data []map[string]any) error {
+	if len(data) == 0 {
+		return nil
+	}
+
 	b, err := json.Marshal(data)
 	if err != nil {
 		return err
