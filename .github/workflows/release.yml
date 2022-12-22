@@ -20,13 +20,10 @@ jobs:
     needs: semantic-release
     steps:
       - uses: actions/checkout@v2
-      - uses: actions/setup-node@v2
-        with:
-          node-version: "16"
       - name: Install Go
         uses: actions/setup-go@v2
         with:
-          go-version: v1.18.x
+          go-version: v1.19.x
       - uses: actions/cache@v2
         with:
           path: |
