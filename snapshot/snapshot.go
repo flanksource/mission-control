@@ -44,7 +44,7 @@ func (r *resource) dump(directory string) error {
 		return err
 	}
 
-	return archive(directory, directory+".tar.gz")
+	return utils.Zip(directory, directory+".zip")
 }
 
 func topologySnapshot(componentID string, related bool, directory string) error {
@@ -52,45 +52,29 @@ func topologySnapshot(componentID string, related bool, directory string) error 
 	componentIDs := []string{componentID}
 	resources.componentIDs = append(resources.componentIDs, componentIDs...)
 	if related {
-		// Get all related componentIDs
-		// from: component_relationships
 		relatedResources, err := fetchRelatedIDsForComponent(componentIDs)
 		if err != nil {
-			panic(err)
+			return err
 		}
 		resources.merge(relatedResources)
 
 		relatedConfigResources, err := fetchRelatedIDsForConfig(relatedResources.configIDs)
 		if err != nil {
-			panic(err)
+			return err
 		}
 		resources.merge(relatedConfigResources)
 	}
 
 	return resources.dump(directory)
-
-	// For all the componentIDs, get related configIDs
-	// from config_component_relationships
-
-	// For all components, get evidence-ids -> hypotheses -> incident ids
-
-	// Then you have component ids, configsIDs and incidentIDs
-
-	// Hit canary checker api to get json of this topology
-	// related = true, check for component relationships and dump their json as well
 }
 
-func IncidentSnapshot(incidentID, directory string) error {
+func incidentSnapshot(incidentID, directory string) error {
 	var resources resource
 	resources.incidentIDs = []string{incidentID}
 	return resources.dump(directory)
 }
 
-func ConfigSnapshot(configID string, related bool, directory string) error {
-	// Get config dump
-	// If related = true, get related config_ids as well
-	// Take dump of all the config changes
-	// Take dump of all the config analysis
+func configSnapshot(configID string, related bool, directory string) error {
 	var resources resource
 	configIDs := []string{configID}
 	resources.configIDs = append(resources.configIDs, configIDs...)
@@ -188,12 +172,12 @@ func fetchRelatedIDsForConfig(configIDs []string) (resource, error) {
 	}
 	related.configIDs = append(related.configIDs, relatedConfigIDs...)
 
-	// config_relationships
+	// Fetch config relationships
 	relatedConfigIDs = []string{}
 	err = db.Gorm.Raw(`
-        SELECT related_id  FROM config_relationships WHERE config_id IN (@configID)
+        SELECT related_id  FROM config_relationships WHERE config_id IN (@configIDs)
         UNION
-        SELECT config_id FROM config_relationships WHERE related_id IN (@configID)
+        SELECT config_id FROM config_relationships WHERE related_id IN (@configIDs)
     `, sql.Named("configIDs", configIDs)).Scan(&relatedConfigIDs).Error
 	if err != nil {
 		return related, err
