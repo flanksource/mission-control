@@ -23,7 +23,8 @@ func Topology(c echo.Context) error {
 		return c.JSONBlob(http.StatusInternalServerError, errMsg)
 	}
 
-	return c.String(http.StatusOK, "Stream archive")
+	return c.String(http.StatusOK, directory)
+
 }
 
 func Incident(c echo.Context) error {
@@ -34,11 +35,11 @@ func Incident(c echo.Context) error {
 		return c.JSONBlob(http.StatusInternalServerError, errMsg)
 	}
 	if err := incidentSnapshot(id, directory); err != nil {
-		errMsg := []byte(fmt.Sprintf(`{"error": "%v", "message": "error snapshotting topology"}`, err))
+		errMsg := []byte(fmt.Sprintf(`{"error": "%v", "message": "error snapshotting incident"}`, err))
 		return c.JSONBlob(http.StatusInternalServerError, errMsg)
 	}
 
-	return c.String(http.StatusOK, "Stream archive")
+	return c.String(http.StatusOK, directory)
 }
 
 func Config(c echo.Context) error {
@@ -50,9 +51,9 @@ func Config(c echo.Context) error {
 		return c.JSONBlob(http.StatusInternalServerError, errMsg)
 	}
 	if err := configSnapshot(id, related, directory); err != nil {
-		errMsg := []byte(fmt.Sprintf(`{"error": "%v", "message": "error snapshotting topology"}`, err))
+		errMsg := []byte(fmt.Sprintf(`{"error": "%v", "message": "error snapshotting config"}`, err))
 		return c.JSONBlob(http.StatusInternalServerError, errMsg)
 	}
 
-	return c.String(http.StatusOK, "Stream archive")
+	return c.String(http.StatusOK, directory)
 }

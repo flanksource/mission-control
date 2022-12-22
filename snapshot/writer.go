@@ -61,7 +61,3 @@ func writeToLogFile(pathPrefix, name string, logs []json.RawMessage) error {
 
 	return nil
 }
-
-func archive(src, dst string) error {
-	return nil
-}
