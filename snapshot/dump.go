@@ -3,7 +3,9 @@ package snapshot
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
 
+	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/utils"
 )
@@ -46,8 +48,13 @@ func dumpComponents(directory string, componentIDs []string) error {
 	}
 	var jsonBlobs []map[string]any
 	// Get entire row of components
+	endpoint, err := url.JoinPath(api.CanaryCheckerPath, "/api/topology?id=%s")
+	if err != nil {
+		return err
+	}
+
 	for _, componentID := range componentIDs {
-		data, err := utils.HTTPGet(fmt.Sprintf(CanaryCheckerURL, componentID))
+		data, err := utils.HTTPGet(fmt.Sprintf(endpoint, componentID))
 		if err != nil {
 			return err
 		}
@@ -60,7 +67,7 @@ func dumpComponents(directory string, componentIDs []string) error {
 		jsonBlobs = append(jsonBlobs, jsonBlob...)
 	}
 
-	err := writeToJSONFile(directory, "components", jsonBlobs)
+	err = writeToJSONFile(directory, "components", jsonBlobs)
 	if err != nil {
 		return err
 	}

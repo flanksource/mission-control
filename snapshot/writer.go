@@ -4,7 +4,6 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strings"
@@ -35,7 +34,7 @@ func writeToJSONFile(pathPrefix, name string, data []map[string]any) error {
 		return err
 	}
 
-	return ioutil.WriteFile(filepath.Join(pathPrefix, name), b, 0644)
+	return os.WriteFile(filepath.Join(pathPrefix, name), b, 0644)
 }
 
 func archive(src, dst string) error {
