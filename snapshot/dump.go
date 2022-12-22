@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"strings"
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
@@ -77,6 +78,11 @@ func dumpComponents(directory string, componentIDs []string) error {
 		return err
 	}
 
+	err = dumpLogs(directory, componentIDs)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -123,5 +129,60 @@ func dumpConfigs(directory string, configIDs []string) error {
 		return err
 	}
 
+	return nil
+}
+
+func dumpLogs(directory string, componentIDs []string) error {
+	type result struct {
+		ExternalID string
+		Type       string
+	}
+	var rows []result
+	err := db.Gorm.Table("components").Select("external_id", "type").Where("id IN (?)", componentIDs).Find(&rows).Error
+	if err != nil {
+		return err
+	}
+
+	type payloadBody struct {
+		ID    string `json:"id"`
+		Type  string `json:"type"`
+		Start string `json:"start"`
+	}
+	type logResponse struct {
+		Total   int               `json:"total"`
+		Results []json.RawMessage `json:"results"`
+	}
+
+	for _, row := range rows {
+		payload := payloadBody{
+			ID:   row.ExternalID,
+			Type: row.Type,
+			// TODO: Yash - Change start value
+			Start: "15m",
+		}
+		payloadBytes, err := json.Marshal(&payload)
+		if err != nil {
+			return err
+		}
+
+		endpoint, err := url.JoinPath(api.ApmHubPath, "/search")
+		if err != nil {
+			return err
+		}
+		logsResult, err := utils.HTTPPost(endpoint, payloadBytes)
+		if err != nil {
+			return err
+		}
+		var logs logResponse
+		err = json.Unmarshal([]byte(logsResult), &logs)
+		if err != nil {
+			return nil
+		}
+
+		err = writeToLogFile(directory, strings.ReplaceAll(row.ExternalID, "/", ".")+".log", logs.Results)
+		if err != nil {
+			return nil
+		}
+	}
 	return nil
 }

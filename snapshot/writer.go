@@ -1,6 +1,7 @@
 package snapshot
 
 import (
+	"bufio"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -35,6 +36,26 @@ func writeToJSONFile(pathPrefix, name string, data []map[string]any) error {
 	}
 
 	return os.WriteFile(filepath.Join(pathPrefix, name), b, 0644)
+}
+
+func writeToLogFile(pathPrefix, name string, logs []json.RawMessage) error {
+	f, err := os.Create(filepath.Join(pathPrefix, name))
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	w := bufio.NewWriter(f)
+
+	for _, log := range logs {
+		_, err = w.WriteString(string(log) + "\n")
+		if err != nil {
+			return err
+		}
+	}
+	w.Flush()
+
+	return nil
 }
 
 func archive(src, dst string) error {

@@ -43,7 +43,8 @@ func (r *resource) dump(directory string) error {
 	if err != nil {
 		return err
 	}
-	return nil
+
+	return archive(directory, directory+".tar.gz")
 }
 
 func topologySnapshot(componentID string, related bool, directory string) error {
@@ -83,9 +84,6 @@ func IncidentSnapshot(incidentID, directory string) error {
 	var resources resource
 	resources.incidentIDs = []string{incidentID}
 	return resources.dump(directory)
-	// Get incident row
-	// Get all hypotheses for that incident
-	// Get all evidence for that incident
 }
 
 func ConfigSnapshot(configID string, related bool, directory string) error {
@@ -99,7 +97,7 @@ func ConfigSnapshot(configID string, related bool, directory string) error {
 	if related {
 		relatedResources, err := fetchRelatedIDsForConfig(resources.configIDs)
 		if err != nil {
-			panic(err)
+			return err
 		}
 		resources.merge(relatedResources)
 	}
