@@ -23,7 +23,7 @@ func Topology(c echo.Context) error {
 		return c.JSONBlob(http.StatusInternalServerError, errMsg)
 	}
 
-	return c.String(http.StatusOK, directory)
+	return c.File(directory + ".zip")
 
 }
 
@@ -39,7 +39,7 @@ func Incident(c echo.Context) error {
 		return c.JSONBlob(http.StatusInternalServerError, errMsg)
 	}
 
-	return c.String(http.StatusOK, directory)
+	return c.File(directory + ".zip")
 }
 
 func Config(c echo.Context) error {
@@ -55,5 +55,5 @@ func Config(c echo.Context) error {
 		return c.JSONBlob(http.StatusInternalServerError, errMsg)
 	}
 
-	return c.String(http.StatusOK, directory)
+	return c.File(directory + ".zip")
 }
