@@ -62,7 +62,7 @@ var Serve = &cobra.Command{
 		forward(e, "/config", configDb)
 		forward(e, "/canary", api.CanaryCheckerPath)
 		forward(e, "/kratos", kratosAPI)
-		forward(e, "/apm", apmHub)
+		forward(e, "/apm", api.ApmHubPath)
 
 		go jobs.Start()
 		go events.ListenForEvents()
