@@ -48,17 +48,22 @@ func dumpComponents(directory string, componentIDs []string) error {
 		return nil
 	}
 	var jsonBlobs []map[string]any
-	// Get entire row of components
-	endpoint, err := url.JoinPath(api.CanaryCheckerPath, "/api/topology?id=%s")
+
+	endpoint, err := url.JoinPath(api.CanaryCheckerPath, "/api/topology")
 	if err != nil {
 		return err
 	}
 
 	for _, componentID := range componentIDs {
-		data, err := utils.HTTPGet(fmt.Sprintf(endpoint, componentID))
+		data, err := utils.HTTPGet(fmt.Sprintf(endpoint+"?id=%s", componentID))
 		if err != nil {
 			return err
 		}
+		// In case of topology not found
+		if data == "{}" {
+			continue
+		}
+
 		var jsonBlob []map[string]any
 		err = json.Unmarshal([]byte(data), &jsonBlob)
 		if err != nil {
@@ -68,7 +73,7 @@ func dumpComponents(directory string, componentIDs []string) error {
 		jsonBlobs = append(jsonBlobs, jsonBlob...)
 	}
 
-	err = writeToJSONFile(directory, "components", jsonBlobs)
+	err = writeToJSONFile(directory, "components.json", jsonBlobs)
 	if err != nil {
 		return err
 	}
@@ -113,7 +118,7 @@ func dumpConfigs(directory string, configIDs []string) error {
 	if len(configIDs) == 0 {
 		return nil
 	}
-	// Get entire row of configItems
+
 	err := dumpTable("config_items", "id", "?", configIDs, directory)
 	if err != nil {
 		return err
@@ -148,6 +153,7 @@ func dumpLogs(directory string, componentIDs []string) error {
 		Type  string `json:"type"`
 		Start string `json:"start"`
 	}
+
 	type logResponse struct {
 		Total   int               `json:"total"`
 		Results []json.RawMessage `json:"results"`
@@ -177,6 +183,11 @@ func dumpLogs(directory string, componentIDs []string) error {
 		err = json.Unmarshal([]byte(logsResult), &logs)
 		if err != nil {
 			return nil
+		}
+
+		// Move on if component has no logs
+		if logs.Total == 0 {
+			continue
 		}
 
 		err = writeToLogFile(directory, strings.ReplaceAll(row.ExternalID, "/", ".")+".log", logs.Results)
