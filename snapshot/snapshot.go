@@ -7,8 +7,6 @@ import (
 	"github.com/flanksource/incident-commander/utils"
 )
 
-var CanaryCheckerURL string
-
 type resource struct {
 	componentIDs []string
 	configIDs    []string
@@ -150,6 +148,9 @@ func fetchRelatedIDsForComponent(componentIDs []string) (resource, error) {
                 SELECT hypothesis_id FROM evidences WHERE component_id IN (?)
             )
         )`, componentIDs).Scan(&incidentIDs).Error
+	if err != nil {
+		return related, err
+	}
 
 	related.incidentIDs = append(related.incidentIDs, incidentIDs...)
 
@@ -158,6 +159,9 @@ func fetchRelatedIDsForComponent(componentIDs []string) (resource, error) {
 	err = db.Gorm.Raw(`
         SELECT config_id FROM config_component_relationships WHERE component_id IN (?)
     `, componentIDs).Scan(&configIDs).Error
+	if err != nil {
+		return related, err
+	}
 
 	related.configIDs = append(related.configIDs, configIDs...)
 
