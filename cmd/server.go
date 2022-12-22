@@ -16,6 +16,7 @@ import (
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/jobs"
 	"github.com/flanksource/incident-commander/responder"
+	"github.com/flanksource/incident-commander/snapshot"
 )
 
 const (
@@ -58,6 +59,10 @@ var Serve = &cobra.Command{
 			e.Use(kratosHandler.KratosMiddleware().Session)
 		}
 		e.POST("/auth/invite_user", kratosHandler.InviteUser)
+
+		e.GET("/snapshot/topology/:id", snapshot.Topology)
+		e.GET("/snapshot/incident/:id", snapshot.Incident)
+		e.GET("/snapshot/config/:id", snapshot.Config)
 
 		forward(e, "/config", configDb)
 		forward(e, "/canary", api.CanaryCheckerPath)
