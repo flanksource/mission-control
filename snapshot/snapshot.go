@@ -7,6 +7,11 @@ import (
 	"github.com/flanksource/incident-commander/utils"
 )
 
+type SnapshotContext struct {
+	Directory string
+	LogStart  string
+}
+
 type resource struct {
 	componentIDs []string
 	configIDs    []string
@@ -25,29 +30,29 @@ func (r *resource) dedup() {
 	r.incidentIDs = utils.Dedup(r.incidentIDs)
 }
 
-func (r *resource) dump(directory string) error {
+func (r *resource) dump(ctx SnapshotContext) error {
 	// Dedup since there maybe repetitions
 	r.dedup()
 
-	err := dumpComponents(directory, r.componentIDs)
+	err := dumpComponents(ctx, r.componentIDs)
 	if err != nil {
 		return err
 	}
 
-	err = dumpConfigs(directory, r.configIDs)
+	err = dumpConfigs(ctx, r.configIDs)
 	if err != nil {
 		return err
 	}
 
-	err = dumpIncidents(directory, r.incidentIDs)
+	err = dumpIncidents(ctx, r.incidentIDs)
 	if err != nil {
 		return err
 	}
 
-	return utils.Zip(directory, directory+".zip")
+	return utils.Zip(ctx.Directory, ctx.Directory+".zip")
 }
 
-func topologySnapshot(componentID string, related bool, directory string) error {
+func topologySnapshot(ctx SnapshotContext, componentID string, related bool) error {
 	var resources resource
 	componentIDs := []string{componentID}
 	resources.componentIDs = append(resources.componentIDs, componentIDs...)
@@ -65,16 +70,16 @@ func topologySnapshot(componentID string, related bool, directory string) error 
 		resources.merge(relatedConfigResources)
 	}
 
-	return resources.dump(directory)
+	return resources.dump(ctx)
 }
 
-func incidentSnapshot(incidentID, directory string) error {
+func incidentSnapshot(ctx SnapshotContext, incidentID string) error {
 	var resources resource
 	resources.incidentIDs = []string{incidentID}
-	return resources.dump(directory)
+	return resources.dump(ctx)
 }
 
-func configSnapshot(configID string, related bool, directory string) error {
+func configSnapshot(ctx SnapshotContext, configID string, related bool) error {
 	var resources resource
 	configIDs := []string{configID}
 	resources.configIDs = append(resources.configIDs, configIDs...)
@@ -86,7 +91,7 @@ func configSnapshot(configID string, related bool, directory string) error {
 		resources.merge(relatedResources)
 	}
 
-	return resources.dump(directory)
+	return resources.dump(ctx)
 }
 
 func fetchRelatedIDsForComponent(componentIDs []string) (resource, error) {
