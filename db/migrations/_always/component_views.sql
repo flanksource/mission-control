@@ -1,19 +1,3 @@
--- CREATE OR REPLACE VIEW  checks_by_component AS
-
---       SELECT check_component_relationships.component_id, json_agg(checks) from checks
---             LEFT JOIN check_component_relationships ON checks.id = check_component_relationships.check_id
---             WHERE    check_component_relationships.deleted_at is null
---             GROUP BY check_component_relationships.component_id;
-
-
--- CREATE OR REPLACE VIEW components_flat AS
--- 	SELECT components.id, components.type, components.name, jsonb_set_lax(to_jsonb(components),'{checks}',
--- 			(SELECT json_agg(checks) from checks LEFT JOIN check_component_relationships ON checks.id = check_component_relationships.check_id WHERE check_component_relationships.component_id = components.id AND check_component_relationships.deleted_at is null   GROUP BY check_component_relationships.component_id) :: jsonb
--- 			 ) :: jsonb as components from components where components.deleted_at is null;
-
--- select * from components_flat
-
-
 CREATE OR REPLACE function lookup_component_by_property(text, text)
 returns setof components
 as
@@ -24,6 +8,91 @@ begin
 end;
 $$
 language plpgsql;
+
+
+CREATE OR REPLACE function lookup_configs_by_component(id text)
+returns table (
+  config_id UUID,
+  name TEXT,
+  type TEXT,
+  icon TEXT,
+  role TEXT
+)
+as
+$$
+begin
+  RETURN QUERY
+	  SELECT config_items.id as config_id, config_items.name, config_items.config_type, config_items.icon, 'left' as role
+	  FROM config_component_relationships
+	  INNER JOIN  config_items on config_items.id = config_component_relationships.config_id
+	  WHERE config_component_relationships.component_id = $1::uuid;
+end;
+$$
+language plpgsql
+
+CREATE OR REPLACE function lookup_changes_by_component(id text)
+RETURNS SETOF config_changes as
+$$
+begin
+  RETURN QUERY select * from config_changes where config_id in (select config_id from lookup_configs_by_component($1));
+end;
+$$
+language plpgsql;
+
+CREATE OR REPLACE function lookup_components_by_config(id text)
+returns table (
+  component_id UUID,
+  name TEXT,
+  type TEXT,
+  icon TEXT,
+  role TEXT
+)
+as
+$$
+begin
+  RETURN QUERY
+	  SELECT components.id as component_id , components.name, components.type, components.icon, 'left' as role
+	  FROM config_component_relationships
+	  INNER JOIN  components on components.id = config_component_relationships.component_id
+	  WHERE config_component_relationships.config_id = $1::uuid;
+end;
+$$
+language plpgsql;
+
+DROP function lookup_related_configs;
+CREATE OR REPLACE function lookup_related_configs(id text)
+returns table (
+  config_id UUID,
+  name TEXT,
+  type TEXT,
+  icon TEXT,
+  role TEXT,
+  relation TEXT
+)
+as
+$$
+begin
+
+  RETURN QUERY
+	  SELECT parent.id as config_id, parent.name, parent.config_type, parent.icon, 'parent' as role, null
+	  FROM config_items
+	  INNER JOIN  config_items parent on config_items.parent_id = parent.id
+	  WHERE config_items.id = $1::uuid
+	UNION
+		  SELECT config_items.id as config_id, config_items.name, config_items.config_type, config_items.icon, 'left' as role, config_relationships.relation
+		  FROM config_relationships
+		  INNER JOIN  config_items on config_items.id = config_relationships.related_id
+		  WHERE config_relationships.config_id = $1::uuid
+	UNION
+		  SELECT config_items.id as config_id, config_items.name, config_items.config_type, config_items.icon, 'right' as role , config_relationships.relation
+		  FROM config_relationships
+		  INNER JOIN  config_items on config_items.id = config_relationships.config_id
+		  WHERE config_relationships.related_id = $1::uuid;
+end;
+$$
+language plpgsql;
+
+
 
 DROP VIEW IF EXISTS incidents_by_component;
 CREATE OR REPLACE VIEW incidents_by_component AS
