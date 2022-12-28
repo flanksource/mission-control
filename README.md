@@ -13,14 +13,21 @@ Incident Commander is a mission control center for enterprises, managed service 
   * Compliance
   * Performance 
 
-## DB
 
-The database is exposed via [postgREST](https://postgrest.org/en/stable/) on `/db/`
+## Components
 
-## Bumping UI Version
-
-To update the `@flanksource/flanksource-ui` dependency run:
-
-```shell
-npm install --prefix ui ./ui @flanksource/flanksource-ui@<VERSION>
-```
+* [Incident Commander](https://github.com/flanksource/incident-commander) (this repo) 
+  - Primary entrypoint for all services
+  - Bi-Directional communication with other help desk systems
+  - Incident lifeycle automation 
+* [Canary Checker](https://github.com/canary-checker) 
+  - Synethetic health checks 
+  - Topology discovery and scanning
+* [Config DB](https://github.com/flanksource/config-db)
+  - Scanning configuration from AWS, Kubernetes, Git, SQL etc..
+* [APM Hub](https://github.com/flanksource/apm-hub)
+  - Proxies requests for logs, metrics and traces
+* [Flanksource UI](https://github.com/flanksource/flanksource-ui)
+  - Frontend
+* [postgREST](https://postgrest.org/en/stable/) - REST API for Postgres
+* [ORY Kratos](https://github.com/ory/kratos) - Authentication sub-system
