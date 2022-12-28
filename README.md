@@ -20,7 +20,7 @@ Incident Commander is a mission control center for enterprises, managed service 
   - Primary entrypoint for all services
   - Bi-Directional communication with other help desk systems
   - Incident lifeycle automation 
-* [Canary Checker](https://github.com/canary-checker) 
+* [Canary Checker](https://github.com/flanksource/canary-checker) 
   - Synethetic health checks 
   - Topology discovery and scanning
 * [Config DB](https://github.com/flanksource/config-db)
