@@ -28,7 +28,7 @@ begin
 	  WHERE config_component_relationships.component_id = $1::uuid;
 end;
 $$
-language plpgsql
+language plpgsql;
 
 CREATE OR REPLACE function lookup_changes_by_component(id text)
 RETURNS SETOF config_changes as
@@ -59,7 +59,7 @@ end;
 $$
 language plpgsql;
 
-DROP function lookup_related_configs;
+DROP FUNCTION IF EXISTS lookup_related_configs;
 CREATE OR REPLACE function lookup_related_configs(id text)
 returns table (
   config_id UUID,
@@ -135,5 +135,4 @@ CREATE OR REPLACE VIEW check_names AS
 
 CREATE OR REPLACE VIEW check_labels AS
       SELECT d.key, d.value FROM checks JOIN json_each_text(labels::json) d on true GROUP BY d.key, d.value ORDER BY key, value;
-
 
