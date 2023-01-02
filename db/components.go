@@ -77,21 +77,16 @@ func LookupRelatedComponentIDs(componentID string, maxDepth int) ([]string, erro
 		Scan(&relatedRows).Error; err != nil {
 		return componentIDs, err
 	}
-	for _, id := range relatedRows {
-		componentIDs = append(componentIDs, id)
-	}
+	componentIDs = append(componentIDs, relatedRows...)
 
 	return componentIDs, nil
 }
 
 func LookupIncidentsByComponent(componentID string) ([]string, error) {
-	var incidentIDs, incidentRows []string
+	var incidentIDs []string
 	if err := Gorm.Raw(`SELECT id FROM lookup_component_incidents(?)`, componentID).
-		Scan(&incidentRows).Error; err != nil {
+		Scan(&incidentIDs).Error; err != nil {
 		return incidentIDs, err
-	}
-	for _, id := range incidentRows {
-		incidentIDs = append(incidentIDs, id)
 	}
 
 	return incidentIDs, nil

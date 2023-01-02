@@ -20,9 +20,7 @@ func LookupRelatedConfigIDs(configID string, maxDepth int) ([]string, error) {
 		Scan(&relatedRows).Error; err != nil {
 		return configIDs, err
 	}
-	for _, id := range relatedRows {
-		configIDs = append(configIDs, id)
-	}
+	configIDs = append(configIDs, relatedRows...)
 
 	return configIDs, nil
 }
