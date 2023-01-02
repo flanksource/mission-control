@@ -3,7 +3,6 @@ package snapshot
 import (
 	"bufio"
 	"encoding/csv"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -29,20 +28,15 @@ func writeToCSVFile(pathPrefix, name string, headerRow string, dbRows []map[stri
 	return w.WriteAll(rows)
 }
 
-func writeToJSONFile(pathPrefix, name string, data []map[string]any) error {
+func writeToJSONFile(pathPrefix, name string, data []byte) error {
 	if len(data) == 0 {
 		return nil
 	}
 
-	b, err := json.Marshal(data)
-	if err != nil {
-		return err
-	}
-
-	return os.WriteFile(filepath.Join(pathPrefix, name), b, 0644)
+	return os.WriteFile(filepath.Join(pathPrefix, name), data, 0644)
 }
 
-func writeToLogFile(pathPrefix, name string, logs []json.RawMessage) error {
+func writeToLogFile(pathPrefix, name string, logs []byte) error {
 	f, err := os.Create(filepath.Join(pathPrefix, name))
 	if err != nil {
 		return err

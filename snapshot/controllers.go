@@ -31,6 +31,8 @@ func Topology(c echo.Context) error {
 		return c.JSONBlob(http.StatusInternalServerError, errMsg)
 	}
 
+	defer os.RemoveAll(directory)
+	defer os.Remove(directory + ".zip")
 	return c.File(directory + ".zip")
 }
 
@@ -47,6 +49,8 @@ func Incident(c echo.Context) error {
 		return c.JSONBlob(http.StatusInternalServerError, errMsg)
 	}
 
+	defer os.RemoveAll(directory)
+	defer os.Remove(directory + ".zip")
 	return c.File(directory + ".zip")
 }
 
@@ -64,5 +68,7 @@ func Config(c echo.Context) error {
 		return c.JSONBlob(http.StatusInternalServerError, errMsg)
 	}
 
+	defer os.RemoveAll(directory)
+	defer os.Remove(directory + ".zip")
 	return c.File(directory + ".zip")
 }

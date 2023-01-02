@@ -56,3 +56,54 @@ func PersistTeamComponents(teamComps []api.TeamComponent) error {
 		UpdateAll: true,
 	}).Create(teamComps).Error
 }
+
+func LookupRelatedComponentIDs(componentID string, maxDepth int) ([]string, error) {
+	var componentIDs []string
+
+	var ancestoryRows []struct {
+		ChildID  string
+		ParentID string
+	}
+	if err := Gorm.Raw(`SELECT child_id, parent_id FROM lookup_component_ancestory(?, ?)`, componentID, maxDepth).
+		Scan(&ancestoryRows).Error; err != nil {
+		return componentIDs, err
+	}
+	for _, row := range ancestoryRows {
+		componentIDs = append(componentIDs, row.ChildID, row.ParentID)
+	}
+
+	var relatedRows []string
+	if err := Gorm.Raw(`SELECT id FROM lookup_component_relations(?)`, componentID).
+		Scan(&relatedRows).Error; err != nil {
+		return componentIDs, err
+	}
+	for _, id := range relatedRows {
+		componentIDs = append(componentIDs, id)
+	}
+
+	return componentIDs, nil
+}
+
+func LookupIncidentsByComponent(componentID string) ([]string, error) {
+	var incidentIDs, incidentRows []string
+	if err := Gorm.Raw(`SELECT id FROM lookup_component_incidents(?)`, componentID).
+		Scan(&incidentRows).Error; err != nil {
+		return incidentIDs, err
+	}
+	for _, id := range incidentRows {
+		incidentIDs = append(incidentIDs, id)
+	}
+
+	return incidentIDs, nil
+}
+
+func LookupConfigsByComponent(componentID string) ([]string, error) {
+	var configIDs []string
+	err := Gorm.Raw(`SELECT config_id FROM config_component_relationships WHERE component_id = ?`, componentID).
+		Scan(&configIDs).Error
+	if err != nil {
+		return configIDs, err
+	}
+
+	return configIDs, err
+}

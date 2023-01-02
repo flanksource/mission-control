@@ -1,14 +1,16 @@
 package snapshot
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"net/url"
-	"strings"
+
+	"github.com/antihax/optional"
+	sdk "github.com/flanksource/canary-checker/sdk"
 
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/components"
 	"github.com/flanksource/incident-commander/db"
-	"github.com/flanksource/incident-commander/utils"
 )
 
 func getColumnNames(table string) (string, error) {
@@ -47,33 +49,24 @@ func dumpComponents(ctx SnapshotContext, componentIDs []string) error {
 	if len(componentIDs) == 0 {
 		return nil
 	}
-	var jsonBlobs []map[string]any
 
-	endpoint, err := url.JoinPath(api.CanaryCheckerPath, "/api/topology")
+	var allComponents []sdk.Component
+	for _, componentID := range componentIDs {
+		components, _, err := api.Topology.TopologyQuery(context.Background(), &sdk.TopologyApiTopologyQueryOpts{
+			Id: optional.NewString(componentID),
+		})
+		if err != nil {
+			return err
+		}
+		allComponents = append(allComponents, components...)
+	}
+
+	jsonBlob, err := json.Marshal(allComponents)
 	if err != nil {
 		return err
 	}
 
-	for _, componentID := range componentIDs {
-		data, err := utils.HTTPGet(fmt.Sprintf(endpoint+"?id=%s", componentID))
-		if err != nil {
-			return err
-		}
-		// In case of topology not found
-		if data == "{}" {
-			continue
-		}
-
-		var jsonBlob []map[string]any
-		err = json.Unmarshal([]byte(data), &jsonBlob)
-		if err != nil {
-			return err
-		}
-
-		jsonBlobs = append(jsonBlobs, jsonBlob...)
-	}
-
-	err = writeToJSONFile(ctx.Directory, "components.json", jsonBlobs)
+	err = writeToJSONFile(ctx.Directory, "components.json", jsonBlob)
 	if err != nil {
 		return err
 	}
@@ -138,61 +131,26 @@ func dumpConfigs(ctx SnapshotContext, configIDs []string) error {
 }
 
 func dumpLogs(ctx SnapshotContext, componentIDs []string) error {
-	type result struct {
-		ExternalID string
-		Type       string
-	}
-	var rows []result
-	err := db.Gorm.Table("components").Select("external_id", "type").Where("id IN (?)", componentIDs).Find(&rows).Error
-	if err != nil {
-		return err
-	}
-
-	type payloadBody struct {
-		ID    string `json:"id"`
-		Type  string `json:"type"`
-		Start string `json:"start"`
-	}
-
-	type logResponse struct {
-		Total   int               `json:"total"`
-		Results []json.RawMessage `json:"results"`
-	}
-
-	for _, row := range rows {
-		payload := payloadBody{
-			ID:    row.ExternalID,
-			Type:  row.Type,
-			Start: ctx.LogStart,
-		}
-		payloadBytes, err := json.Marshal(&payload)
+	for _, componentID := range componentIDs {
+		logs, err := components.GetLogsByComponent(componentID, ctx.LogStart)
 		if err != nil {
 			return err
 		}
 
-		endpoint, err := url.JoinPath(api.ApmHubPath, "/search")
-		if err != nil {
-			return err
-		}
-		logsResult, err := utils.HTTPPost(endpoint, payloadBytes)
-		if err != nil {
-			return err
-		}
-		var logs logResponse
-		err = json.Unmarshal([]byte(logsResult), &logs)
-		if err != nil {
-			return nil
-		}
-
-		// Move on if component has no logs
 		if logs.Total == 0 {
 			continue
 		}
 
-		err = writeToLogFile(ctx.Directory, strings.ReplaceAll(row.ExternalID, "/", ".")+".log", logs.Results)
+		jsonLogs, err := json.Marshal(logs.Results)
 		if err != nil {
-			return nil
+			return err
+		}
+
+		err = writeToLogFile(ctx.Directory, componentID+".log", jsonLogs)
+		if err != nil {
+			return err
 		}
 	}
+
 	return nil
 }
