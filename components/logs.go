@@ -12,15 +12,16 @@ import (
 	"github.com/flanksource/incident-commander/db"
 )
 
-func GetLogsByComponent(componentID, logStart, logEnd string) (api.LogsResponse, error) {
+func GetLogsByComponent(componentID, logStart, logEnd string) (api.ComponentLogs, error) {
 	var logs api.LogsResponse
 	var row struct {
+		Name       string
 		ExternalID string
 		Type       string
 	}
-	err := db.Gorm.Table("components").Select("external_id", "type").Where("id = ?", componentID).Find(&row).Error
+	err := db.Gorm.Table("components").Select("name", "external_id", "type").Where("id = ?", componentID).Find(&row).Error
 	if err != nil {
-		return logs, err
+		return api.ComponentLogs{}, err
 	}
 
 	type payloadBody struct {
@@ -38,30 +39,37 @@ func GetLogsByComponent(componentID, logStart, logEnd string) (api.LogsResponse,
 	}
 	payloadBytes, err := json.Marshal(&payload)
 	if err != nil {
-		return logs, err
+		return api.ComponentLogs{}, err
 	}
 
 	endpoint, err := url.JoinPath(api.ApmHubPath, "/search")
 	if err != nil {
-		return logs, err
+		return api.ComponentLogs{}, err
 	}
 
 	client := http.NewClient(&http.Config{})
 	resp, err := client.Post(endpoint, "application/json", io.NopCloser(strings.NewReader(string(payloadBytes))))
 	if err != nil {
-		return logs, err
+		return api.ComponentLogs{}, err
 	}
 
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return logs, err
+		return api.ComponentLogs{}, err
 	}
 
 	err = json.Unmarshal(body, &logs)
 	if err != nil {
-		return logs, err
+		return api.ComponentLogs{}, err
 	}
 
-	return logs, nil
+	componentLogs := api.ComponentLogs{
+		ID:   componentID,
+		Name: row.Name,
+		Type: row.Type,
+		Logs: logs.Results,
+	}
+
+	return componentLogs, nil
 }

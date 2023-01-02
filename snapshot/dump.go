@@ -12,6 +12,7 @@ import (
 	"github.com/flanksource/incident-commander/components"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/topology"
+	"github.com/flanksource/incident-commander/utils"
 )
 
 func getColumnNames(table string) (string, error) {
@@ -134,21 +135,22 @@ func dumpConfigs(ctx SnapshotContext, configIDs []string) error {
 
 func dumpLogs(ctx SnapshotContext, componentIDs []string) error {
 	for _, componentID := range componentIDs {
-		logs, err := components.GetLogsByComponent(componentID, ctx.LogStart, ctx.LogEnd)
+		logResult, err := components.GetLogsByComponent(componentID, ctx.LogStart, ctx.LogEnd)
 		if err != nil {
 			return err
 		}
 
-		if logs.Total == 0 {
+		if len(logResult.Logs) == 0 {
 			continue
 		}
 
-		jsonLogs, err := json.Marshal(logs.Results)
+		jsonLogs, err := json.Marshal(logResult)
 		if err != nil {
 			return err
 		}
 
-		err = writeToLogFile(ctx.Directory, componentID+".log", jsonLogs)
+		logFilename := fmt.Sprintf("%s-%s-%s.log", logResult.Type, logResult.Name, utils.GetHash(componentID))
+		err = writeToLogFile(ctx.Directory, logFilename, jsonLogs)
 		if err != nil {
 			return err
 		}

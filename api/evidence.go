@@ -51,11 +51,5 @@ type EvidenceLogs struct {
 	Lines []LogLine `json:"lines"`
 }
 
-type LogLine struct {
-	Timestamp time.Time           `json:"timestamp"`
-	Message   string              `json:"message"`
-	Labels    types.JSONStringMap `json:"labels"`
-}
-
 type EvidenceCanaryCheck struct {
 }
