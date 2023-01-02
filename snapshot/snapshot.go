@@ -11,6 +11,7 @@ import (
 type SnapshotContext struct {
 	Directory string
 	LogStart  string
+	LogEnd    string
 }
 
 type resource struct {

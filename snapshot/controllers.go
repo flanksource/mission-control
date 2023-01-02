@@ -15,6 +15,7 @@ func Topology(c echo.Context) error {
 	id := c.Param("id")
 	related, _ := strconv.ParseBool(c.QueryParam("related"))
 	logStart := c.QueryParam("logStart")
+	logEnd := c.QueryParam("logEnd")
 	if logStart == "" {
 		logStart = "15m"
 	}
@@ -29,6 +30,7 @@ func Topology(c echo.Context) error {
 	ctx := SnapshotContext{
 		Directory: directory,
 		LogStart:  logStart,
+		LogEnd:    logEnd,
 	}
 	if err := topologySnapshot(ctx, id, related); err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPErrorMessage{
