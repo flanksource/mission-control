@@ -2,6 +2,7 @@ package snapshot
 
 import (
 	"github.com/flanksource/commons/files"
+	"github.com/flanksource/commons/logger"
 
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/utils"
@@ -36,16 +37,19 @@ func (r *resource) dump(ctx SnapshotContext) error {
 
 	err := dumpComponents(ctx, r.componentIDs)
 	if err != nil {
+		logger.Errorf("Error dumping components: %v", err)
 		return err
 	}
 
 	err = dumpConfigs(ctx, r.configIDs)
 	if err != nil {
+		logger.Errorf("Error dumping configs: %v", err)
 		return err
 	}
 
 	err = dumpIncidents(ctx, r.incidentIDs)
 	if err != nil {
+		logger.Errorf("Error dumping incidents: %v", err)
 		return err
 	}
 
