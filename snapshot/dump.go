@@ -7,10 +7,11 @@ import (
 
 	"github.com/antihax/optional"
 	sdk "github.com/flanksource/canary-checker/sdk"
+	"github.com/flanksource/commons/logger"
 
-	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/components"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/topology"
 )
 
 func getColumnNames(table string) (string, error) {
@@ -52,10 +53,11 @@ func dumpComponents(ctx SnapshotContext, componentIDs []string) error {
 
 	var allComponents []sdk.Component
 	for _, componentID := range componentIDs {
-		components, _, err := api.Topology.TopologyQuery(context.Background(), &sdk.TopologyApiTopologyQueryOpts{
+		components, _, err := topology.Service().TopologyQuery(context.Background(), &sdk.TopologyApiTopologyQueryOpts{
 			Id: optional.NewString(componentID),
 		})
 		if err != nil {
+			logger.Errorf("Error querying topology service: %v", err)
 			return err
 		}
 		allComponents = append(allComponents, components...)

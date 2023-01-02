@@ -12,6 +12,7 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/db/models"
+	"github.com/flanksource/incident-commander/topology"
 )
 
 var Period = time.Second * 300
@@ -38,7 +39,7 @@ func Run() error {
 		return err
 	}
 
-	components, resp, err := api.Topology.TopologyQuery(context.Background(), &sdk.TopologyApiTopologyQueryOpts{
+	components, resp, err := topology.Service().TopologyQuery(context.Background(), &sdk.TopologyApiTopologyQueryOpts{
 		Flatten: optional.NewString("true"),
 		Status:  optional.NewString(strings.Join(getAllStatii(), ",")),
 	})
