@@ -60,15 +60,15 @@ func PersistTeamComponents(teamComps []api.TeamComponent) error {
 func LookupRelatedComponentIDs(componentID string, maxDepth int) ([]string, error) {
 	var componentIDs []string
 
-	var ancestoryRows []struct {
+	var childRows []struct {
 		ChildID  string
 		ParentID string
 	}
-	if err := Gorm.Raw(`SELECT child_id, parent_id FROM lookup_component_ancestory(?, ?)`, componentID, maxDepth).
-		Scan(&ancestoryRows).Error; err != nil {
+	if err := Gorm.Raw(`SELECT child_id, parent_id FROM lookup_component_children(?, ?)`, componentID, maxDepth).
+		Scan(&childRows).Error; err != nil {
 		return componentIDs, err
 	}
-	for _, row := range ancestoryRows {
+	for _, row := range childRows {
 		componentIDs = append(componentIDs, row.ChildID, row.ParentID)
 	}
 

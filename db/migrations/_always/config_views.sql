@@ -1,5 +1,5 @@
 -- TODO stop the recursion once max_depth is reached.level <= max_depth;
-CREATE OR REPLACE FUNCTION lookup_config_ancestory(id text, max_depth int)
+CREATE OR REPLACE FUNCTION lookup_config_children(id text, max_depth int)
 RETURNS TABLE(
     child_id UUID,
     parent_id UUID,
