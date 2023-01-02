@@ -1,3 +1,4 @@
+-- TODO stop the recursion once max_depth is reached.level <= max_depth;
 CREATE OR REPLACE FUNCTION lookup_config_ancestory(id text, max_depth int)
 RETURNS TABLE(
     child_id UUID,
@@ -6,7 +7,7 @@ RETURNS TABLE(
 ) AS $$
 BEGIN
     IF max_depth < 0 THEN
-        max_depth = 9999;
+        max_depth = 10;
     END IF;
     RETURN QUERY
         WITH RECURSIVE children AS (

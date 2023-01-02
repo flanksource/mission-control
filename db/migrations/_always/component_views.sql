@@ -136,6 +136,7 @@ CREATE OR REPLACE VIEW check_names AS
 CREATE OR REPLACE VIEW check_labels AS
       SELECT d.key, d.value FROM checks JOIN json_each_text(labels::json) d on true GROUP BY d.key, d.value ORDER BY key, value;
 
+-- TODO stop the recursion once max_depth is reached.level <= max_depth;
 CREATE OR REPLACE FUNCTION lookup_component_ancestory(id text, max_depth int)
 RETURNS TABLE(
     child_id UUID,
@@ -144,7 +145,7 @@ RETURNS TABLE(
 ) AS $$
 BEGIN
     IF max_depth < 0 THEN
-        max_depth = 9999;
+        max_depth = 10;
     END IF;
     RETURN QUERY
         WITH RECURSIVE children AS (
@@ -157,7 +158,7 @@ BEGIN
             JOIN children c ON m.parent_id = c.child_id
         )
         SELECT children.child_id, children.parent_id, children.level FROM children
-        WHERE children.level <= max_depth;
+        WHERE children
 END;
 $$
 language plpgsql;
