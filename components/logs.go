@@ -12,7 +12,7 @@ import (
 	"github.com/flanksource/incident-commander/db"
 )
 
-func GetLogsByComponent(componentID, logStart, logEnd string) (api.ComponentLogs, error) {
+func GetLogsByComponent(componentID, start, end string) (api.ComponentLogs, error) {
 	var logs api.LogsResponse
 	var row struct {
 		Name       string
@@ -34,8 +34,8 @@ func GetLogsByComponent(componentID, logStart, logEnd string) (api.ComponentLogs
 	payload := payloadBody{
 		ID:    row.ExternalID,
 		Type:  row.Type,
-		Start: logStart,
-		End:   logEnd,
+		Start: start,
+		End:   end,
 	}
 	payloadBytes, err := json.Marshal(&payload)
 	if err != nil {
