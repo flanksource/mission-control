@@ -136,3 +136,57 @@ CREATE OR REPLACE VIEW check_names AS
 CREATE OR REPLACE VIEW check_labels AS
       SELECT d.key, d.value FROM checks JOIN json_each_text(labels::json) d on true GROUP BY d.key, d.value ORDER BY key, value;
 
+-- TODO stop the recursion once max_depth is reached.level <= max_depth;
+CREATE OR REPLACE FUNCTION lookup_component_children(id text, max_depth int)
+RETURNS TABLE(
+    child_id UUID,
+    parent_id UUID,
+    level int
+) AS $$
+BEGIN
+    IF max_depth < 0 THEN
+        max_depth = 10;
+    END IF;
+    RETURN QUERY
+        WITH RECURSIVE children AS (
+            SELECT components.id as child_id, components.parent_id, 0 as level
+            FROM components
+            WHERE components.id = $1::uuid
+            UNION ALL
+            SELECT m.id as child_id, m.parent_id, c.level + 1 as level
+            FROM components m
+            JOIN children c ON m.parent_id = c.child_id
+        )
+        SELECT children.child_id, children.parent_id, children.level FROM children
+        WHERE children
+END;
+$$
+language plpgsql;
+
+CREATE OR REPLACE FUNCTION lookup_component_relations(component_id text)
+RETURNS TABLE (
+    id UUID
+) AS $$
+BEGIN
+    RETURN QUERY
+        SELECT cr.relationship_id AS id FROM component_relationships cr WHERE cr.component_id = $1::UUID
+        UNION
+        SELECT cr.component_id as id FROM component_relationships cr WHERE cr.relationship_id = $1::UUID;
+END;
+$$
+language plpgsql;
+
+CREATE OR REPLACE FUNCTION lookup_component_incidents(component_id text)
+RETURNS TABLE (
+    id UUID
+) AS $$
+BEGIN
+    RETURN QUERY
+        SELECT incidents.id FROM incidents WHERE incidents.id IN (
+            SELECT incident_id FROM hypotheses WHERE hypotheses.id IN (
+                SELECT hypothesis_id FROM evidences WHERE evidences.component_id = $1::UUID
+            )
+        );
+END;
+$$
+language plpgsql;

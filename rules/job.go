@@ -12,11 +12,10 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/db/models"
+	"github.com/flanksource/incident-commander/topology"
 )
 
 var Period = time.Second * 300
-
-var Topology *sdk.TopologyApiService
 
 var Rules []models.IncidentRule
 
@@ -34,17 +33,13 @@ func getAllStatii() []string {
 func Run() error {
 	logger.Debugf("Checking rules every %v", Period)
 
-	Topology = sdk.NewAPIClient(&sdk.Configuration{
-		BasePath: api.CanaryCheckerPath,
-	}).TopologyApi
-
 	if err := db.Gorm.
 		// .Order("priority ASC")
 		Find(&Rules).Error; err != nil {
 		return err
 	}
 
-	components, resp, err := Topology.TopologyQuery(context.Background(), &sdk.TopologyApiTopologyQueryOpts{
+	components, resp, err := topology.Service().TopologyQuery(context.Background(), &sdk.TopologyApiTopologyQueryOpts{
 		Flatten: optional.NewString("true"),
 		Status:  optional.NewString(strings.Join(getAllStatii(), ",")),
 	})
