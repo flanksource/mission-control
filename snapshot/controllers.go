@@ -11,27 +11,38 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-func Topology(c echo.Context) error {
-	id := c.Param("id")
-	related, _ := strconv.ParseBool(c.QueryParam("related"))
-	logStart := c.QueryParam("logStart")
-	logEnd := c.QueryParam("logEnd")
+type SnapshotContext struct {
+	Directory string
+	LogStart  string
+	LogEnd    string
+}
+
+func NewSnapshotContext(c echo.Context) SnapshotContext {
+	directory := fmt.Sprintf("snapshot-%s", time.Now().Format(time.RFC3339))
+	logStart := c.QueryParam("start")
+	logEnd := c.QueryParam("end")
+
 	if logStart == "" {
 		logStart = "15m"
 	}
-	directory := fmt.Sprintf("snapshot-%s", time.Now().Format(time.RFC3339))
-	if err := os.MkdirAll(directory, os.ModePerm); err != nil {
+	return SnapshotContext{
+		Directory: directory,
+		LogStart:  logStart,
+		LogEnd:    logEnd,
+	}
+}
+
+func Topology(c echo.Context) error {
+	id := c.Param("id")
+	related, _ := strconv.ParseBool(c.QueryParam("related"))
+	ctx := NewSnapshotContext(c)
+	if err := os.MkdirAll(ctx.Directory, os.ModePerm); err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPErrorMessage{
 			Error:   err.Error(),
 			Message: "Error creating directory",
 		})
 	}
 
-	ctx := SnapshotContext{
-		Directory: directory,
-		LogStart:  logStart,
-		LogEnd:    logEnd,
-	}
 	if err := topologySnapshot(ctx, id, related); err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPErrorMessage{
 			Error:   err.Error(),
@@ -39,22 +50,22 @@ func Topology(c echo.Context) error {
 		})
 	}
 
-	defer os.RemoveAll(directory)
-	defer os.Remove(directory + ".zip")
-	return c.File(directory + ".zip")
+	defer os.RemoveAll(ctx.Directory)
+	defer os.Remove(ctx.Directory + ".zip")
+	return c.File(ctx.Directory + ".zip")
 }
 
 func Incident(c echo.Context) error {
 	id := c.Param("id")
-	directory := fmt.Sprintf("snapshot-%s", time.Now().Format(time.RFC3339))
-	if err := os.MkdirAll(directory, os.ModePerm); err != nil {
+
+	ctx := NewSnapshotContext(c)
+	if err := os.MkdirAll(ctx.Directory, os.ModePerm); err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPErrorMessage{
 			Error:   err.Error(),
 			Message: "Error creating directory",
 		})
 	}
 
-	ctx := SnapshotContext{Directory: directory}
 	if err := incidentSnapshot(ctx, id); err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPErrorMessage{
 			Error:   err.Error(),
@@ -62,23 +73,22 @@ func Incident(c echo.Context) error {
 		})
 	}
 
-	defer os.RemoveAll(directory)
-	defer os.Remove(directory + ".zip")
-	return c.File(directory + ".zip")
+	defer os.RemoveAll(ctx.Directory)
+	defer os.Remove(ctx.Directory + ".zip")
+	return c.File(ctx.Directory + ".zip")
 }
 
 func Config(c echo.Context) error {
 	id := c.Param("id")
 	related, _ := strconv.ParseBool(c.QueryParam("related"))
-	directory := fmt.Sprintf("snapshot-%s", time.Now().Format(time.RFC3339))
-	if err := os.MkdirAll(directory, os.ModePerm); err != nil {
+	ctx := NewSnapshotContext(c)
+	if err := os.MkdirAll(ctx.Directory, os.ModePerm); err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPErrorMessage{
 			Error:   err.Error(),
 			Message: "Error creating directory",
 		})
 	}
 
-	ctx := SnapshotContext{Directory: directory}
 	if err := configSnapshot(ctx, id, related); err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPErrorMessage{
 			Error:   err.Error(),
@@ -86,7 +96,7 @@ func Config(c echo.Context) error {
 		})
 	}
 
-	defer os.RemoveAll(directory)
-	defer os.Remove(directory + ".zip")
-	return c.File(directory + ".zip")
+	defer os.RemoveAll(ctx.Directory)
+	defer os.Remove(ctx.Directory + ".zip")
+	return c.File(ctx.Directory + ".zip")
 }

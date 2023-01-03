@@ -8,12 +8,6 @@ import (
 	"github.com/flanksource/incident-commander/utils"
 )
 
-type SnapshotContext struct {
-	Directory string
-	LogStart  string
-	LogEnd    string
-}
-
 type resource struct {
 	componentIDs []string
 	configIDs    []string
