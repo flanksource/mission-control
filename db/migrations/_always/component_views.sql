@@ -158,7 +158,7 @@ BEGIN
             JOIN children c ON m.parent_id = c.child_id
         )
         SELECT children.child_id, children.parent_id, children.level FROM children
-        WHERE children
+        WHERE children.level <= max_depth;
 END;
 $$
 language plpgsql;
