@@ -1,11 +1,11 @@
 FROM golang:1.19 as builder
 WORKDIR /app
-COPY ./ ./
 
 ARG VERSION
 COPY go.mod /app/go.mod
 COPY go.sum /app/go.sum
 RUN go mod download
+COPY ./ ./
 
 WORKDIR /app
 RUN go version

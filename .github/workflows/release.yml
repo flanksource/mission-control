@@ -10,7 +10,7 @@ jobs:
       release-version: ${{ steps.semantic.outputs.release-version }}
       new-release-published: ${{ steps.semantic.outputs.new-release-published }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: codfish/semantic-release-action@v1
         id: semantic
         env:
@@ -48,7 +48,7 @@ jobs:
     needs: semantic-release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - name: Publish to Registry
         uses: elgohr/Publish-Docker-Github-Action@master
         with:
@@ -57,7 +57,7 @@ jobs:
           password: ${{ secrets.DOCKER_PASSWORD }}
           snapshot: true
           tags: "latest,v${{ needs.semantic-release.outputs.release-version }}"
-  
+          cache: true
   update-incident-commander-chart:
     runs-on: ubuntu-latest
     needs: [semantic-release, docker]
