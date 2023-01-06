@@ -257,22 +257,6 @@ CREATE TRIGGER evidence_to_incident_history
     FOR EACH ROW
     EXECUTE PROCEDURE insert_evidence_created_in_incident_history();
 
--- Insert incident status updates in incident_histories
-CREATE OR REPLACE FUNCTION insert_incident_status_update_in_incident_history()
-RETURNS TRIGGER AS $$
-BEGIN
-    INSERT INTO incident_histories(incident_id, created_by, type, description) VALUES (NEW.id, NEW.created_by, 'incident_status.updated', NEW.status);
-    RETURN NEW;
-END
-$$ LANGUAGE plpgsql;
-
-CREATE TRIGGER incident_status_to_incident_history
-    AFTER UPDATE
-    ON incidents
-    FOR EACH ROW
-    WHEN (OLD.status IS DISTINCT FROM NEW.status)
-    EXECUTE PROCEDURE insert_incident_status_update_in_incident_history();
-
 -- Insert responder responses updates in incident_histories
 CREATE OR REPLACE FUNCTION insert_responder_comment_in_incident_history()
 RETURNS TRIGGER AS $$
