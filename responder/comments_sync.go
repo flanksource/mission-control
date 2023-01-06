@@ -2,7 +2,6 @@ package responder
 
 import (
 	"database/sql"
-	"time"
 
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
@@ -12,15 +11,6 @@ import (
 	"github.com/flanksource/incident-commander/db"
 )
 
-func StartCommentSync() {
-	for {
-		logger.Infof("Syncing comments")
-		syncComments()
-
-		time.Sleep(1 * time.Hour)
-	}
-}
-
 func getRootHypothesisOfIncident(incidentID uuid.UUID) (api.Hypothesis, error) {
 	var hypothesis api.Hypothesis
 	if err := db.Gorm.Where("incident_id = ? AND type = ?", incidentID, "root").First(&hypothesis).Error; err != nil {
@@ -29,7 +19,8 @@ func getRootHypothesisOfIncident(incidentID uuid.UUID) (api.Hypothesis, error) {
 	return hypothesis, nil
 }
 
-func syncComments() {
+func SyncComments() {
+	logger.Debugf("Syncing comments")
 	var responders []api.Responder
 	err := db.Gorm.Where("external_id IS NOT NULL").Preload("Team").Find(&responders).Error
 	if err != nil {
