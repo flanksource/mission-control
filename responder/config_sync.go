@@ -1,8 +1,6 @@
 package responder
 
 import (
-	"time"
-
 	"github.com/flanksource/commons/logger"
 
 	"github.com/flanksource/incident-commander/api"
@@ -12,15 +10,6 @@ import (
 var responderNameConfigTypeMapping = map[string]string{
 	JiraResponder:      "Jira",
 	MSPlannerResponder: "MSPlanner",
-}
-
-func StartConfigSync() {
-	for {
-		logger.Infof("Syncing configuration")
-		syncConfig()
-
-		time.Sleep(1 * time.Hour)
-	}
 }
 
 func upsertConfig(configType, externalID, name, config string) error {
@@ -44,7 +33,8 @@ func upsertConfig(configType, externalID, name, config string) error {
 	return nil
 }
 
-func syncConfig() {
+func SyncConfig() {
+	logger.Debugf("Syncing responder config")
 	var teams []api.Team
 	if err := db.Gorm.Find(&teams).Error; err != nil {
 		logger.Errorf("Error querying teams from database: %v", err)

@@ -45,7 +45,10 @@ func EvaluateEvidenceScripts() {
 		incidentIDs = append(incidentIDs, evidence.Hypothesis.IncidentID)
 	}
 
-	db.ReconcileIncidentStatus(incidentIDs)
+	err := db.ReconcileIncidentStatus(incidentIDs)
+	if err != nil {
+		logger.Errorf("Error updating incident status: %v", err)
+	}
 }
 
 func evaluate(evidence db.EvidenceScriptInput) (string, error) {

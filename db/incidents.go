@@ -1,12 +1,11 @@
 package db
 
 import (
-	"github.com/flanksource/commons/logger"
 	"github.com/google/uuid"
 )
 
-func ReconcileIncidentStatus(incidentIDs []uuid.UUID) {
-	tx := Gorm.Exec(`
+func ReconcileIncidentStatus(incidentIDs []uuid.UUID) error {
+	return Gorm.Exec(`
         WITH evidences_agg as (
             SELECT BOOL_AND(evidences.done) as done, incidents.status, incidents.id
             FROM evidences
@@ -27,9 +26,6 @@ func ReconcileIncidentStatus(incidentIDs []uuid.UUID) {
             END
         )
         FROM evidences_agg
-    `, incidentIDs)
-
-	if tx.Error != nil {
-		logger.Errorf("Error updating incident status: %v", tx.Error)
-	}
+        WHERE incidents.id = evidences_agg.id
+    `, incidentIDs).Error
 }
