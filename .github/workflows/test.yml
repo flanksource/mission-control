@@ -48,4 +48,4 @@ jobs:
         with:
           dir: db/migrations
           dir-format: goose
-          dev-url: postgres://ic:ic@localhost:5432/ic
+          dev-url: postgres://ic:ic@localhost:5432/ic?sslmode=disable
