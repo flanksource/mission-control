@@ -29,3 +29,23 @@ jobs:
         with:
           files: test/test-results.xml
           check_name: E2E - ${{matrix.suite}}
+  migration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:14-bullseye
+        env:
+          POSTGRES_USER: ic
+          POSTGRES_DB: ic
+          POSTGRES_PASSWORD: ic
+        ports:
+          - "5432:5432"
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - uses: ariga/atlas-action@v0
+        with:
+          dir: db/migrations
+          dir-format: goose
+          dev-url: postgres://ic:ic@localhost:5432/ic
