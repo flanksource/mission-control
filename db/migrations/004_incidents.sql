@@ -102,26 +102,6 @@ CREATE TABLE hypotheses (
   FOREIGN KEY (parent_id) REFERENCES hypotheses(id)
 );
 
-CREATE TABLE incident_histories (
-  id UUID DEFAULT generate_ulid() PRIMARY KEY,
-  incident_id UUID NOT NULL,
-  created_by UUID NOT NULL,
-  type TEXT NULL,
-  description text NULL,
-  hypothesis_id UUID NULL,
-  responder_id UUID NULL,
-  evidence_id UUID NULL,
-  comment_id UUID NULL,
-  created_at timestamp NOT NULL DEFAULT now(),
-  updated_at timestamp NOT NULL DEFAULT now(),
-  FOREIGN KEY (created_by) REFERENCES people(id),
-  FOREIGN KEY (incident_id) REFERENCES incidents(id),
-  FOREIGN KEY (hypothesis_id) REFERENCES hypotheses(id),
-  FOREIGN KEY (responder_id) REFERENCES responders(id),
-  FOREIGN KEY (evidence_id) REFERENCES evidences(id),
-  FOREIGN KEY (comment_id) REFERENCES comments(id)
-);
-
 CREATE TABLE comments (
   id UUID DEFAULT generate_ulid() PRIMARY KEY,
   created_by UUID NOT NULL ,
@@ -180,6 +160,26 @@ CREATE TABLE evidences (
   FOREIGN KEY (config_change_id) REFERENCES config_changes(id),
   FOREIGN KEY (config_analysis_id) REFERENCES config_analysis(id),
   FOREIGN KEY (hypothesis_id) REFERENCES hypotheses(id)
+);
+
+CREATE TABLE incident_histories (
+  id UUID DEFAULT generate_ulid() PRIMARY KEY,
+  incident_id UUID NOT NULL,
+  created_by UUID NOT NULL,
+  type TEXT NULL,
+  description text NULL,
+  hypothesis_id UUID NULL,
+  responder_id UUID NULL,
+  evidence_id UUID NULL,
+  comment_id UUID NULL,
+  created_at timestamp NOT NULL DEFAULT now(),
+  updated_at timestamp NOT NULL DEFAULT now(),
+  FOREIGN KEY (created_by) REFERENCES people(id),
+  FOREIGN KEY (incident_id) REFERENCES incidents(id),
+  FOREIGN KEY (hypothesis_id) REFERENCES hypotheses(id),
+  FOREIGN KEY (responder_id) REFERENCES responders(id),
+  FOREIGN KEY (evidence_id) REFERENCES evidences(id),
+  FOREIGN KEY (comment_id) REFERENCES comments(id)
 );
 
 -- Get current user or fallback to system user
