@@ -2,6 +2,8 @@ package responder
 
 import (
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty/models"
+	"github.com/pkg/errors"
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
@@ -42,52 +44,72 @@ func SyncConfig() {
 	}
 
 	for _, team := range teams {
+		jobHistory := models.NewJobHistory("TeamResponderConfigSync", "team", team.ID.String())
+		_ = db.PersistJobHistory(jobHistory.Start())
+
 		teamSpec, err := team.GetSpec()
 		if err != nil {
 			logger.Errorf("Error getting team spec: %v", err)
+			jobHistory.AddError(err.Error()).End()
 			continue
 		}
 
 		if teamSpec.ResponderClients.Jira != nil {
-			jiraClient, err := jiraClientFromTeamSpec(teamSpec)
-			if err != nil {
-				logger.Errorf("Error instantiating Jira client: %v", err)
-				continue
-			}
-
-			jiraConfigJSON, err := jiraClient.GetConfigJSON()
-			if err != nil {
-				logger.Errorf("Error generating config from Jira: %v", err)
-				continue
-			}
-
-			configName := teamSpec.ResponderClients.Jira.Values["project"]
-			configType := responderNameConfigTypeMapping[JiraResponder]
-			if err = upsertConfig(configType, team.ID.String(), configName, jiraConfigJSON); err != nil {
-				logger.Errorf("Error upserting Jira config into database: %v", err)
-				continue
+			if err := syncJiraConfig(team.ID.String(), teamSpec); err != nil {
+				logger.Errorf("Error syncing Jira config: %v", err)
+				jobHistory.AddError(err.Error())
+			} else {
+				jobHistory.IncrSuccess()
 			}
 		}
 
 		if teamSpec.ResponderClients.MSPlanner != nil {
-			msPlannerClient, err := msPlannerClientFromTeamSpec(teamSpec)
-			if err != nil {
-				logger.Errorf("Error instantiating MSPlanner client: %v", err)
-				continue
-			}
-
-			msPlannerConfigJSON, err := msPlannerClient.GetConfigJSON()
-			if err != nil {
-				logger.Errorf("Error generating config from MSPlanner: %v", err)
-				continue
-			}
-
-			configName := teamSpec.ResponderClients.MSPlanner.Values["plan"]
-			configType := responderNameConfigTypeMapping[MSPlannerResponder]
-			if err = upsertConfig(configType, team.ID.String(), configName, msPlannerConfigJSON); err != nil {
-				logger.Errorf("Error upserting MSPlanner config into database: %v", err)
-				continue
+			if err := syncMSPlannerConfig(team.ID.String(), teamSpec); err != nil {
+				logger.Errorf("Error syncing MSPlanner config: %v", err)
+				jobHistory.AddError(err.Error())
+			} else {
+				jobHistory.IncrSuccess()
 			}
 		}
+
+		_ = db.PersistJobHistory(jobHistory.End())
 	}
+}
+
+func syncJiraConfig(teamID string, teamSpec api.TeamSpec) error {
+	jiraClient, err := jiraClientFromTeamSpec(teamSpec)
+	if err != nil {
+		return errors.Wrap(err, "error instantiating Jira client")
+	}
+
+	jiraConfigJSON, err := jiraClient.GetConfigJSON()
+	if err != nil {
+		return errors.Wrap(err, "error generating config from Jira")
+	}
+
+	configName := teamSpec.ResponderClients.Jira.Values["project"]
+	configType := responderNameConfigTypeMapping[JiraResponder]
+	if err := upsertConfig(configType, teamID, configName, jiraConfigJSON); err != nil {
+		return errors.Wrap(err, "error upserting Jira config into database")
+	}
+	return nil
+}
+
+func syncMSPlannerConfig(teamID string, teamSpec api.TeamSpec) error {
+	msPlannerClient, err := msPlannerClientFromTeamSpec(teamSpec)
+	if err != nil {
+		return errors.Wrap(err, "error instantiating MSPlanner client")
+	}
+
+	msPlannerConfigJSON, err := msPlannerClient.GetConfigJSON()
+	if err != nil {
+		return errors.Wrap(err, "error generating config from MSPlanner")
+	}
+
+	configName := teamSpec.ResponderClients.MSPlanner.Values["plan"]
+	configType := responderNameConfigTypeMapping[MSPlannerResponder]
+	if err = upsertConfig(configType, teamID, configName, msPlannerConfigJSON); err != nil {
+		return errors.Wrap(err, "error upserting MSPlanner config into database")
+	}
+	return nil
 }
