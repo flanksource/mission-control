@@ -4,27 +4,26 @@ import (
 	"context"
 	"database/sql"
 	"embed"
+	"fmt"
 	"log"
 	"os"
 	"time"
-	"unsafe"
 
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty/functions"
+	"github.com/flanksource/duty/schema"
+	_ "github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/jackc/pgx/v4/log/logrusadapter"
 	"github.com/jackc/pgx/v4/pgxpool"
 	"github.com/jackc/pgx/v4/stdlib"
-	jsoniter "github.com/json-iterator/go"
-	jsontime "github.com/liamylian/jsontime/v2/v2"
-	"github.com/pressly/goose/v3"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	glogger "gorm.io/gorm/logger"
 )
-
-const PostgresTimestampFormat = "2006-01-02T15:04:05.999"
 
 var ConnectionString string
 var Schema = "public"
@@ -43,6 +42,9 @@ var embedMigrations embed.FS
 //go:embed migrations/_always/*.sql
 var embedScripts embed.FS
 
+//go:embed migrations/before/*.sql
+var beforeScripts embed.FS
+
 var Pool *pgxpool.Pool
 var Gorm *gorm.DB
 var pgxConnectionString string
@@ -56,16 +58,6 @@ func readFromEnv(v string) string {
 }
 
 func Init(connection string) error {
-	jsontime.AddTimeFormatAlias("postgres_timestamp", PostgresTimestampFormat)
-
-	jsoniter.RegisterTypeDecoderFunc("time.Duration", func(ptr unsafe.Pointer, iter *jsoniter.Iterator) {
-		t, err := time.ParseDuration(iter.ReadString())
-		if err != nil {
-			iter.Error = err
-			return
-		}
-		*((*time.Duration)(ptr)) = t
-	})
 
 	ConnectionString = readFromEnv(connection)
 	Schema = readFromEnv(Schema)
@@ -143,42 +135,49 @@ func Init(connection string) error {
 }
 
 func Migrate() error {
-	goose.SetTableName("incident_commander_db_version")
-	goose.SetBaseFS(embedMigrations)
-	db, err := GetDB()
+	funcs, err := functions.GetFunctions()
 	if err != nil {
 		return err
 	}
-	defer db.Close()
 
-	for {
-		err = goose.UpByOne(db, "migrations", goose.WithAllowMissing())
-		if err == goose.ErrNoNextVersion {
-			break
-		}
-		if err != nil {
-			return err
+	for file, script := range funcs {
+		logger.Debugf("Running script %s", file)
+		if _, err := Pool.Exec(context.TODO(), script); err != nil {
+			return errors.Wrapf(err, "failed to run script %s", file)
 		}
 	}
+	logger.Debugf("Applying schema migrations")
+	if err := schema.Apply(context.TODO(), ConnectionString); err != nil {
+		return err
+	}
 
-	// Run idempotent migrations which are written in
-	// the pkg/db/always.sql file. There may be race conditions where certain tables
-	// may not exist or dependent on other migrations which is why it is always run
-	// after migrations are completed
+	if err := runScripts(embedScripts, "migrations/_always"); err != nil {
+		return err
+	}
 
-	scripts, _ := embedScripts.ReadDir("migrations/_always")
+	return nil
+}
+
+func runScripts(fs embed.FS, dir string) error {
+	scripts, _ := fs.ReadDir(dir)
+
+	if len(scripts) == 0 {
+		return fmt.Errorf("No scripts found in %s", dir)
+	}
 
 	for _, file := range scripts {
-		script, err := embedScripts.ReadFile("migrations/_always/" + file.Name())
+		logger.Debugf("Running script %s", file.Name())
+		script, err := fs.ReadFile(dir + "/" + file.Name())
 		if err != nil {
 			return err
 		}
 		if _, err := Pool.Exec(context.TODO(), string(script)); err != nil {
-			return err
+			return errors.Wrapf(err, "failed to run script %s", file.Name())
 		}
 	}
 
 	return nil
+
 }
 
 func GetDB() (*sql.DB, error) {

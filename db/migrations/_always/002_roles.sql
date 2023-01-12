@@ -10,10 +10,11 @@ BEGIN
       WHERE  rolname = 'postgrest_api') THEN
 
       CREATE ROLE postgrest_api;
+      GRANT SELECT, UPDATE, DELETE, INSERT ON ALL TABLES IN SCHEMA public TO postgrest_api;
+      ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, UPDATE, DELETE, INSERT ON TABLES TO postgrest_api;
    END IF;
 END
 $$;
 
-GRANT SELECT, UPDATE, DELETE, INSERT ON ALL TABLES IN SCHEMA public TO postgrest_api;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, UPDATE, DELETE, INSERT ON TABLES TO postgrest_api;
+
 -- +goose StatementEnd
