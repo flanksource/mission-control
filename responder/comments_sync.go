@@ -42,14 +42,13 @@ func SyncComments() {
 		return
 	}
 
+	jobHistory := models.NewJobHistory("ResponderCommentSync", "", "")
+	_ = db.PersistJobHistory(jobHistory.Start())
 	for _, responder := range responders {
-		jobHistory := models.NewJobHistory("ResponderCommentSync", "responder", responder.ID.String())
-		_ = db.PersistJobHistory(jobHistory.Start())
-
 		teamSpec, err := responder.Team.GetSpec()
 		if err != nil {
 			logger.Errorf("Error getting team spec: %v", err)
-			_ = db.PersistJobHistory(jobHistory.AddError(err.Error()).End())
+			jobHistory.AddError(err.Error())
 			continue
 		}
 
@@ -57,14 +56,14 @@ func SyncComments() {
 			jiraClient, err := jiraClientFromTeamSpec(teamSpec)
 			if err != nil {
 				logger.Errorf("Error instantiating Jira client: %v", err)
-				_ = db.PersistJobHistory(jobHistory.AddError(err.Error()).End())
+				jobHistory.AddError(err.Error())
 				continue
 			}
 
 			responderComments, err := jiraClient.GetComments(responder.ExternalID)
 			if err != nil {
 				logger.Errorf("Error fetching comments from Jira: %v", err)
-				_ = db.PersistJobHistory(jobHistory.AddError(err.Error()).End())
+				jobHistory.AddError(err.Error())
 				continue
 			}
 
@@ -73,7 +72,7 @@ func SyncComments() {
 			err = db.Gorm.Raw(dbSelectExternalIDQuery, sql.Named("responder_id", responder.ID)).Find(&dbExternalIDs).Error
 			if err != nil {
 				logger.Errorf("Error querying external_ids from database: %v", err)
-				_ = db.PersistJobHistory(jobHistory.AddError(err.Error()).End())
+				jobHistory.AddError(err.Error())
 				continue
 			}
 
@@ -97,7 +96,8 @@ func SyncComments() {
 					}
 				}
 			}
-			_ = db.PersistJobHistory(jobHistory.IncrSuccess().End())
 		}
+		jobHistory.IncrSuccess()
 	}
+	_ = db.PersistJobHistory(jobHistory.End())
 }
