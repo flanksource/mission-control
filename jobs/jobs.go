@@ -11,6 +11,7 @@ const (
 	EvaluateEvidenceScriptsSchedule = "@every 5m"
 	ResponderCommentsSyncSchedule   = "@every 1h"
 	ResponderConfigSyncSchedule     = "@every 1h"
+	CleanupJobHistoryTableSchedule  = "@every 24h"
 )
 
 var FuncScheduler = cron.New()
@@ -25,6 +26,7 @@ func Start() {
 	EvaluateEvidenceScripts()
 	responder.SyncComments()
 	responder.SyncConfig()
+	CleanupJobHistoryTable()
 
 	if _, err := ScheduleFunc(TeamComponentOwnershipSchedule, TeamComponentOwnershipRun); err != nil {
 		logger.Errorf("Failed to schedule sync jobs for team component: %v", err)
@@ -40,6 +42,10 @@ func Start() {
 
 	if _, err := ScheduleFunc(ResponderConfigSyncSchedule, responder.SyncConfig); err != nil {
 		logger.Errorf("Failed to schedule job for syncing responder config: %v", err)
+	}
+
+	if _, err := ScheduleFunc(CleanupJobHistoryTableSchedule, CleanupJobHistoryTable); err != nil {
+		logger.Errorf("Failed to schedule job for cleaning up job history table: %v", err)
 	}
 
 	FuncScheduler.Start()
