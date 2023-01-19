@@ -28,7 +28,6 @@ func Flags(flags *pflag.FlagSet) {
 
 var Pool *pgxpool.Pool
 var Gorm *gorm.DB
-var pgxConnectionString string
 
 func readFromEnv(v string) string {
 	val := os.Getenv(v)
