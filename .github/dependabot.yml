@@ -1,10 +1,8 @@
 version: 2
 updates:
-  # Keep npm dependencies up to date
-  - package-ecosystem: "npm"
-    directory: "ui/"
-    allow:
-      - dependency-name: "@flanksource*"
+  - package-ecosystem: "gomod"
+    directory: "/"
     schedule:
       interval: "daily"
-      time: "02:00"
+    allow:
+      - dependency-name: "github.com/flanksource/*"
