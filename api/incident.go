@@ -33,7 +33,7 @@ var (
 )
 
 type Incident struct {
-	ID             *uuid.UUID     `json:"id" gorm:"default:generate_ulid(),omitempty"`
+	ID             *uuid.UUID     `json:"id,omitempty" gorm:"default:generate_ulid()"`
 	Title          string         `json:"title,omitempty"`
 	Description    string         `json:"description,omitempty"`
 	Type           IncidentType   `json:"type,omitempty"`
@@ -102,7 +102,7 @@ func (ih IncidentHistory) TableName() string {
 }
 
 type Comment struct {
-	ID                uuid.UUID  `json:"id" gorm:"default:generate_ulid(),omitempty"`
+	ID                uuid.UUID  `json:"id,omitempty" gorm:"default:generate_ulid()"`
 	IncidentID        uuid.UUID  `json:"incident_id,omitempty"`
 	ExternalID        string     `json:"external_id,omitempty"`
 	Comment           string     `json:"comment,omitempty"`
@@ -117,7 +117,7 @@ type Comment struct {
 
 // Gorm entity for the hpothesis table
 type Hypothesis struct {
-	ID         uuid.UUID  `json:"id" gorm:"default:generate_ulid(),omitempty"`
+	ID         uuid.UUID  `json:"id,omitempty" gorm:"default:generate_ulid()"`
 	IncidentID uuid.UUID  `json:"incident_id,omitempty"`
 	Type       string     `json:"type,omitempty"`
 	Title      string     `json:"title,omitempty"`
