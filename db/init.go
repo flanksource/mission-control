@@ -54,7 +54,7 @@ func Init(connection string) error {
 	if err := conn.Ping(context.Background()); err != nil {
 		return err
 	}
-	Gorm, err = duty.NewGorm()
+	Gorm, err = duty.NewGorm(duty.DefaultGormConfig())
 	if err != nil {
 		return err
 	}
