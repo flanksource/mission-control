@@ -13,7 +13,7 @@ import (
 
 // Gorm entity for the hpothesis table
 type IncidentRule struct {
-	ID     *uuid.UUID `json:"id" gorm:"default:generate_ulid(),omitempty"`
+	ID     *uuid.UUID `json:"id,omitempty" gorm:"default:generate_ulid()"`
 	Name   string     `json:"name,omitempty"`
 	Source string     `json:"source,omitempty"`
 	// TODO make this a custom GORM type
