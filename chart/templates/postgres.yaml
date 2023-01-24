@@ -1,4 +1,4 @@
-{{- if eq .Values.db.enabled true }}
+{{- if eq .Values.db.create true }}
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -60,5 +60,8 @@ spec:
   ports:
   - port: 5432
     targetPort: 5432
+
+---
+
 
 {{- end }}

@@ -12,10 +12,9 @@ image:
 disablePostgrest: false
 
 db:
-  enabled: true
+  create: true
   secretKeyRef:
-    create: true
-    name: postgres-connection
+    name: incident-commander-postgres
     key: DB_URL
   storageClass:
   storage: 10Gi
@@ -24,13 +23,16 @@ canary-checker:
   db:
     external:
       enabled: true
-    secretKeyRef:
+      # Must be set to false when running as sub-chart
       create: false
-      name: postgres-connection
+    secretKeyRef:
+      # must match the value of db.secretKeyRef.name
+      name: incident-commander-postgres
+      # must match the value of db.secretKeyRef.key
       key: DB_URL
   disablePostgrest: true
   flanksource-ui:
-    enabled: false                # Disable canary-checker by default.
+    enabled: false                # Disable canary-checker UI by default.
     withoutAuth: true
     nameOverride: "canary-checker-ui"
     fullnameOverride: "canary-checker-ui"
