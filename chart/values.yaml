@@ -25,11 +25,11 @@ canary-checker:
       enabled: true
       # Must be set to false when running as sub-chart
       create: false
-    secretKeyRef:
-      # must match the value of db.secretKeyRef.name
-      name: incident-commander-postgres
-      # must match the value of db.secretKeyRef.key
-      key: DB_URL
+      secretKeyRef:
+        # must match the value of db.secretKeyRef.name
+        name: incident-commander-postgres
+        # must match the value of db.secretKeyRef.key
+        key: DB_URL
   disablePostgrest: true
   flanksource-ui:
     enabled: false                # Disable canary-checker UI by default.
