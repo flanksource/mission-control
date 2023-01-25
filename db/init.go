@@ -24,6 +24,7 @@ func Flags(flags *pflag.FlagSet) {
 	flags.StringVar(&ConnectionString, "db", "DB_URL", "Connection string for the postgres database")
 	flags.StringVar(&Schema, "db-schema", "public", "")
 	flags.StringVar(&LogLevel, "db-log-level", "info", "")
+	flags.StringVar(&PostgRESTJWTSecret, "postgrest-jwt-secret", "PGRST_JWT_SECRET", "JWT Secret Token for PostgREST")
 }
 
 var Pool *pgxpool.Pool
@@ -41,6 +42,7 @@ func Init(connection string) error {
 	ConnectionString = readFromEnv(connection)
 	Schema = readFromEnv(Schema)
 	LogLevel = readFromEnv(LogLevel)
+	PostgRESTJWTSecret = readFromEnv(PostgRESTJWTSecret)
 	var err error
 	Pool, err = duty.NewPgxPool(ConnectionString)
 	if err != nil {

@@ -3,26 +3,27 @@ package auth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
+	"github.com/flanksource/commons/logger"
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/labstack/echo/v4"
 	client "github.com/ory/client-go"
 )
 
-type kratosMiddleware struct {
-	client *client.APIClient
-}
+const DefaultPostgrestRole = "postgrest_api"
 
-func KratosMiddleware(kratosAPI string) *kratosMiddleware {
-	return &kratosMiddleware{
-		client: newAPIClient(kratosAPI),
-	}
+type kratosMiddleware struct {
+	client    *client.APIClient
+	jwtSecret string
 }
 
 func (k *KratosHandler) KratosMiddleware() *kratosMiddleware {
 	return &kratosMiddleware{
-		client: k.client,
+		client:    k.client,
+		jwtSecret: k.jwtSecret,
 	}
 }
 
@@ -35,6 +36,14 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 		if !*session.Active {
 			return c.String(http.StatusUnauthorized, "Unauthorized")
 		}
+
+		// Adding Authorization Token for PostgREST
+		token, err := k.generateDBToken(session.Identity.GetId())
+		if err != nil {
+			logger.Errorf("Error generating JWT Token: %v", err)
+		}
+		c.Request().Header.Add("Authorization", fmt.Sprintf("Bearer %s", token))
+
 		return next(c)
 	}
 }
@@ -58,4 +67,12 @@ func (k *kratosMiddleware) validateSession(r *http.Request) (*client.Session, er
 		return nil, err
 	}
 	return session, nil
+}
+
+func (k *kratosMiddleware) generateDBToken(id string) (string, error) {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"role": DefaultPostgrestRole,
+		"id":   id,
+	})
+	return token.SignedString([]byte(k.jwtSecret))
 }
