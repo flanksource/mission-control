@@ -6,26 +6,28 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/flanksource/commons/logger"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/labstack/echo/v4"
 	client "github.com/ory/client-go"
+	"github.com/patrickmn/go-cache"
 )
 
 const DefaultPostgrestRole = "postgrest_api"
 
-var postgrestJWTToken string
-
 type kratosMiddleware struct {
-	client    *client.APIClient
-	jwtSecret string
+	client     *client.APIClient
+	jwtSecret  string
+	tokenCache *cache.Cache
 }
 
 func (k *KratosHandler) KratosMiddleware() *kratosMiddleware {
 	return &kratosMiddleware{
-		client:    k.client,
-		jwtSecret: k.jwtSecret,
+		client:     k.client,
+		jwtSecret:  k.jwtSecret,
+		tokenCache: cache.New(3*24*time.Hour, 12*time.Hour),
 	}
 }
 
@@ -39,14 +41,11 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 			return c.String(http.StatusUnauthorized, "Unauthorized")
 		}
 
-		if postgrestJWTToken == "" {
-			// Adding Authorization Token for PostgREST
-			postgrestJWTToken, err = k.generateDBToken(session.Identity.GetId())
-			if err != nil {
-				logger.Errorf("Error generating JWT Token: %v", err)
-			}
+		token, err := k.getDBToken(session.Id, session.Identity.GetId())
+		if err != nil {
+			logger.Errorf("Error generating JWT Token: %v", err)
 		}
-		c.Request().Header.Add("Authorization", fmt.Sprintf("Bearer %s", postgrestJWTToken))
+		c.Request().Header.Add("Authorization", fmt.Sprintf("Bearer %s", token))
 
 		return next(c)
 	}
@@ -80,4 +79,18 @@ func (k *kratosMiddleware) generateDBToken(id string) (string, error) {
 		"id":   id,
 	})
 	return token.SignedString([]byte(k.jwtSecret))
+}
+
+func (k *kratosMiddleware) getDBToken(sessionID, userID string) (string, error) {
+	cacheKey := sessionID + userID
+	if token, exists := k.tokenCache.Get(cacheKey); exists {
+		return token.(string), nil
+	}
+	// Adding Authorization Token for PostgREST
+	token, err := k.generateDBToken(userID)
+	if err != nil {
+		return "", err
+	}
+	k.tokenCache.SetDefault(cacheKey, token)
+	return token, nil
 }
