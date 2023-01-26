@@ -15,6 +15,8 @@ import (
 
 const DefaultPostgrestRole = "postgrest_api"
 
+var postgrestJWTToken string
+
 type kratosMiddleware struct {
 	client    *client.APIClient
 	jwtSecret string
@@ -37,16 +39,19 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 			return c.String(http.StatusUnauthorized, "Unauthorized")
 		}
 
-		// Adding Authorization Token for PostgREST
-		token, err := k.generateDBToken(session.Identity.GetId())
-		if err != nil {
-			logger.Errorf("Error generating JWT Token: %v", err)
+		if postgrestJWTToken == "" {
+			// Adding Authorization Token for PostgREST
+			postgrestJWTToken, err = k.generateDBToken(session.Identity.GetId())
+			if err != nil {
+				logger.Errorf("Error generating JWT Token: %v", err)
+			}
 		}
-		c.Request().Header.Add("Authorization", fmt.Sprintf("Bearer %s", token))
+		c.Request().Header.Add("Authorization", fmt.Sprintf("Bearer %s", postgrestJWTToken))
 
 		return next(c)
 	}
 }
+
 func (k *kratosMiddleware) validateSession(r *http.Request) (*client.Session, error) {
 	// Skip all kratos calls
 	if strings.HasPrefix(r.URL.Path, "/kratos") {
