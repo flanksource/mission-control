@@ -50,7 +50,7 @@ var Serve = &cobra.Command{
 		e.Use(middleware.Logger())
 		e.Use(ServerCache)
 
-		kratosHandler := auth.NewKratosHandler(kratosAPI, kratosAdminAPI)
+		kratosHandler := auth.NewKratosHandler(kratosAPI, kratosAdminAPI, db.PostgRESTJWTSecret)
 		if enableAuth {
 			if _, err := kratosHandler.CreateAdminUser(); err != nil {
 				logger.Fatalf("Failed to created admin user: %v", err)

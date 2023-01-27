@@ -3,26 +3,31 @@ package auth
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
+	"github.com/flanksource/commons/logger"
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/labstack/echo/v4"
 	client "github.com/ory/client-go"
+	"github.com/patrickmn/go-cache"
 )
 
-type kratosMiddleware struct {
-	client *client.APIClient
-}
+const DefaultPostgrestRole = "postgrest_api"
 
-func KratosMiddleware(kratosAPI string) *kratosMiddleware {
-	return &kratosMiddleware{
-		client: newAPIClient(kratosAPI),
-	}
+type kratosMiddleware struct {
+	client     *client.APIClient
+	jwtSecret  string
+	tokenCache *cache.Cache
 }
 
 func (k *KratosHandler) KratosMiddleware() *kratosMiddleware {
 	return &kratosMiddleware{
-		client: k.client,
+		client:     k.client,
+		jwtSecret:  k.jwtSecret,
+		tokenCache: cache.New(3*24*time.Hour, 12*time.Hour),
 	}
 }
 
@@ -35,9 +40,17 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 		if !*session.Active {
 			return c.String(http.StatusUnauthorized, "Unauthorized")
 		}
+
+		token, err := k.getDBToken(session.Id, session.Identity.GetId())
+		if err != nil {
+			logger.Errorf("Error generating JWT Token: %v", err)
+		}
+		c.Request().Header.Add("Authorization", fmt.Sprintf("Bearer %s", token))
+
 		return next(c)
 	}
 }
+
 func (k *kratosMiddleware) validateSession(r *http.Request) (*client.Session, error) {
 	// Skip all kratos calls
 	if strings.HasPrefix(r.URL.Path, "/kratos") {
@@ -58,4 +71,26 @@ func (k *kratosMiddleware) validateSession(r *http.Request) (*client.Session, er
 		return nil, err
 	}
 	return session, nil
+}
+
+func (k *kratosMiddleware) generateDBToken(id string) (string, error) {
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"role": DefaultPostgrestRole,
+		"id":   id,
+	})
+	return token.SignedString([]byte(k.jwtSecret))
+}
+
+func (k *kratosMiddleware) getDBToken(sessionID, userID string) (string, error) {
+	cacheKey := sessionID + userID
+	if token, exists := k.tokenCache.Get(cacheKey); exists {
+		return token.(string), nil
+	}
+	// Adding Authorization Token for PostgREST
+	token, err := k.generateDBToken(userID)
+	if err != nil {
+		return "", err
+	}
+	k.tokenCache.SetDefault(cacheKey, token)
+	return token, nil
 }

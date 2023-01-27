@@ -7,12 +7,14 @@ import (
 type KratosHandler struct {
 	client      *client.APIClient
 	adminClient *client.APIClient
+	jwtSecret   string
 }
 
-func NewKratosHandler(kratosAPI, kratosAdminAPI string) *KratosHandler {
+func NewKratosHandler(kratosAPI, kratosAdminAPI, jwtSecret string) *KratosHandler {
 	return &KratosHandler{
 		client:      newAPIClient(kratosAPI),
 		adminClient: newAdminAPIClient(kratosAdminAPI),
+		jwtSecret:   jwtSecret,
 	}
 }
 
