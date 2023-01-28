@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"net/http"
 	"net/url"
 	"strings"
 
@@ -10,12 +11,14 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty/schema/openapi"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/jobs"
 	"github.com/flanksource/incident-commander/snapshot"
+	"github.com/flanksource/incident-commander/utils"
 )
 
 const (
@@ -62,6 +65,13 @@ var Serve = &cobra.Command{
 		e.GET("/snapshot/topology/:id", snapshot.Topology)
 		e.GET("/snapshot/incident/:id", snapshot.Incident)
 		e.GET("/snapshot/config/:id", snapshot.Config)
+
+		// Serve openapi schemas
+		schemaServer, err := utils.HTTPFileserver(openapi.Schemas)
+		if err != nil {
+			logger.Fatalf("Error creating schema fileserver: %v", err)
+		}
+		e.GET("/schemas/*", echo.WrapHandler(http.StripPrefix("/schemas/", schemaServer)))
 
 		forward(e, "/config", configDb)
 		forward(e, "/canary", api.CanaryCheckerPath)
