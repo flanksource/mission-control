@@ -21,7 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: Install Go
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v3
         with:
           go-version: v1.19.x
       - uses: actions/cache@v2
@@ -64,29 +64,22 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Set version
+        # Always use git tags as semantic release can fail due to rate limit
         run: |
-          if ${{ needs.semantic-release.outputs.new-release-published }}; then
-            echo "RELEASE_VERSION=${{ needs.semantic-release.outputs.release-version }}" >> $GITHUB_ENV
-          else
-            git fetch --prune --unshallow
-            export VERSION=$(git describe --abbrev=0 --tags | sed -e 's/^v//')
-            echo "RELEASE_VERSION=$VERSION" >> $GITHUB_ENV
-          fi
-      - name: Download yq
-        run: |
-          wget -nv -nc -O yq https://github.com/mikefarah/yq/releases/download/v4.20.2/yq_linux_amd64
-          chmod +x yq
+          git fetch --prune --unshallow
+          echo "RELEASE_VERSION=$(git describe --abbrev=0 --tags | sed -e 's/^v//')" >> $GITHUB_ENV
       - uses: actions/checkout@v3
         with:
           repository: "${{ github.repository_owner }}/incident-commander-chart"
           token: ${{ secrets.FLANKBOT }}
           path: ./incident-commander-chart
       - name: Update image tags
-        run: |
-          ./yq -i e '.image.tag = "v${{ env.RELEASE_VERSION }}"' incident-commander-chart/chart/values.yaml
+        uses: mikefarah/yq@master
+        with:
+          cmd: yq -i e '.image.tag = "v${{ env.RELEASE_VERSION }}"' incident-commander-chart/chart/values.yaml
       - name: Push changes to chart repo
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
-          commit_message: "chore: update incident-commander image version to ${{ needs.semantic-release.outputs.release-version }}"
+          commit_message: "chore: update incident-commander image version to ${{ env.RELEASE_VERSION }}"
           repository: ./incident-commander-chart
           branch: main
