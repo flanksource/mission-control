@@ -7,7 +7,6 @@ import (
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty"
-	"github.com/flanksource/duty/migrate"
 	_ "github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/jackc/pgx/v4/pgxpool"
@@ -43,6 +42,7 @@ func Init(connection string) error {
 	Schema = readFromEnv(Schema)
 	LogLevel = readFromEnv(LogLevel)
 	PostgRESTJWTSecret = readFromEnv(PostgRESTJWTSecret)
+
 	var err error
 	Pool, err = duty.NewPgxPool(ConnectionString)
 	if err != nil {
@@ -56,16 +56,12 @@ func Init(connection string) error {
 	if err := conn.Ping(context.Background()); err != nil {
 		return err
 	}
-	Gorm, err = duty.NewGorm(duty.DefaultGormConfig())
+	Gorm, err = duty.NewGorm(ConnectionString, duty.DefaultGormConfig())
 	if err != nil {
 		return err
 	}
 
-	db, err := GetDB()
-	if err != nil {
-		return err
-	}
-	if err = migrate.Migrate(db, ConnectionString); err != nil {
+	if err = duty.Migrate(ConnectionString); err != nil {
 		return err
 	}
 
@@ -78,6 +74,6 @@ func Init(connection string) error {
 	return nil
 }
 
-func GetDB() (*sql.DB, error) {
-	return duty.NewDB()
+func GetDB(connnection string) (*sql.DB, error) {
+	return duty.NewDB(connnection)
 }
