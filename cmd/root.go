@@ -46,6 +46,7 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.DurationVar(&rules.Period, "rules-period", 5*time.Minute, "Period to run the rules")
 	flags.BoolVar(&disablePostgrest, "disable-postgrest", false, "Disable postgrest")
 	flags.StringVar(&mail.FromAddress, "email-from-address", "no-reply@flanksource.com", "Email address of the sender")
+	flags.StringVar(&db.PostgresDBAnonRole, "postgrest-anon-role", "postgrest_anon", "Postgres anonymous role")
 
 }
 
