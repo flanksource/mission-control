@@ -42,6 +42,9 @@ var Serve = &cobra.Command{
 		// PostgREST needs to know how it is exposed to create the correct links
 		db.HttpEndpoint = publicEndpoint + "/db"
 
+		if !enableAuth {
+			db.PostgresDBAnonRole = "postgrest_api"
+		}
 		if !disablePostgrest {
 			go db.StartPostgrest()
 			forward(e, "/db", "http://localhost:3000")
