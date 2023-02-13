@@ -18,6 +18,7 @@ import (
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/jobs"
 	"github.com/flanksource/incident-commander/snapshot"
+	"github.com/flanksource/incident-commander/upstream"
 	"github.com/flanksource/incident-commander/utils"
 )
 
@@ -75,6 +76,8 @@ var Serve = &cobra.Command{
 			logger.Fatalf("Error creating schema fileserver: %v", err)
 		}
 		e.GET("/schemas/*", echo.WrapHandler(http.StripPrefix("/schemas/", schemaServer)))
+
+		e.POST("/upstream_push", upstream.UpstreamPushesCtrl)
 
 		forward(e, "/config", configDb)
 		forward(e, "/canary", api.CanaryCheckerPath)

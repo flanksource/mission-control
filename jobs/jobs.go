@@ -1,6 +1,8 @@
 package jobs
 
 import (
+	"time"
+
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/responder"
@@ -13,7 +15,7 @@ const (
 	ResponderCommentsSyncSchedule   = "@every 1h"
 	ResponderConfigSyncSchedule     = "@every 1h"
 	CleanupJobHistoryTableSchedule  = "@every 24h"
-	upstreamPushSchedule            = "@every 1h"
+	upstreamPushSchedule            = "@every 5s"
 )
 
 var FuncScheduler = cron.New()
@@ -55,7 +57,8 @@ func Start(config JobConfig) {
 	}
 
 	if config.UpstreamConf.IsFilled() {
-		if _, err := ScheduleFunc(upstreamPushSchedule, pushToCentralUpstream); err != nil {
+		yearAgo := time.Now().Add(time.Hour * 24 * 365 * -1)
+		if _, err := FuncScheduler.AddJob(upstreamPushSchedule, newPushToUpstreamJob(yearAgo, config.UpstreamConf)); err != nil {
 			logger.Errorf("Failed to schedule job for pushing components, analysis & configs to central instance: %v", err)
 		}
 	}

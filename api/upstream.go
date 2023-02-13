@@ -1,6 +1,20 @@
 package api
 
-import "strings"
+import (
+	"strings"
+	"time"
+)
+
+// ConfigChanges consists of data about changes to
+// components, configs, analysis.
+type ConfigChanges struct {
+	PreviousCheck time.Time `json:"previous_check"`
+	CheckedAt     time.Time `json:"checked_at"`
+	Labels        map[string]string
+	Components    []Component
+	Analysis      []string
+	Configs       []ConfigItem
+}
 
 type UpstreamConfig struct {
 	URL      string
