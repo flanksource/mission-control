@@ -57,6 +57,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.17.7 // indirect
 	github.com/aws/smithy-go v1.13.5 // indirect
 	github.com/cloudflare/circl v1.3.1 // indirect
+	github.com/dlclark/regexp2 v1.8.0 // indirect
+	github.com/dop251/goja v0.0.0-20230203172422-5460598cfa32 // indirect
 	github.com/emicklei/go-restful/v3 v3.9.0 // indirect
 	github.com/flanksource/gomplate/v3 v3.20.1 // indirect
 	github.com/go-errors/errors v1.0.1 // indirect
@@ -65,6 +67,7 @@ require (
 	github.com/go-git/go-git/v5 v5.5.1 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-openapi/inflect v0.19.0 // indirect
+	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
 	github.com/google/gnostic v0.6.9 // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
@@ -74,6 +77,7 @@ require (
 	github.com/hashicorp/hcl/v2 v2.16.0 // indirect
 	github.com/jackc/pgx/v5 v5.2.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
+	github.com/jvatic/goja-babel v0.0.0-20230204121733-ac82a55cfa50 // indirect
 	github.com/klauspost/compress v1.15.13 // indirect
 	github.com/liamylian/jsontime/v2 v2.0.0 // indirect
 	github.com/lib/pq v1.10.7 // indirect
@@ -225,7 +229,7 @@ require (
 	golang.org/x/oauth2 v0.3.0 // indirect
 	golang.org/x/sys v0.5.0 // indirect
 	golang.org/x/term v0.4.0 // indirect
-	golang.org/x/text v0.6.0 // indirect
+	golang.org/x/text v0.7.0 // indirect
 	golang.org/x/time v0.0.0-20220722155302-e5dcc9cfc0b9 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/api v0.105.0 // indirect
