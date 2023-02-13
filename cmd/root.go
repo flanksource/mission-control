@@ -30,6 +30,7 @@ var httpPort, metricsPort, devGuiPort int
 var publicEndpoint = "http://localhost:8080"
 var configDb, kratosAPI, kratosAdminAPI, externalPostgrestUri string
 var enableAuth, disablePostgrest bool
+var upstreamConfig api.UpstreamConfig
 
 func ServerFlags(flags *pflag.FlagSet) {
 	flags.IntVar(&httpPort, "httpPort", 8080, "Port to expose a health dashboard ")
@@ -48,6 +49,11 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&mail.FromAddress, "email-from-address", "no-reply@flanksource.com", "Email address of the sender")
 	flags.StringVar(&db.PostgresDBAnonRole, "postgrest-anon-role", "postgrest_anon", "Postgres anonymous role")
 
+	// Flags for upstream push
+	flags.StringVarP(&upstreamConfig.URL, "upstream", "u", "https://incident-commander.canary.lab.flanksource.com", "central incident commander instance to push configs to")
+	flags.StringVar(&upstreamConfig.Username, "upstream-user", "", "upstream username")
+	flags.StringVar(&upstreamConfig.Password, "upstream-pass", "", "upstream password")
+	flags.StringSliceVar(&upstreamConfig.Labels, "upstream-labels", nil, `labels. example: "cluster=a,cluster=b"`)
 }
 
 func init() {

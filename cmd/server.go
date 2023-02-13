@@ -81,7 +81,11 @@ var Serve = &cobra.Command{
 		forward(e, "/kratos", kratosAPI)
 		forward(e, "/apm", api.ApmHubPath)
 
-		go jobs.Start()
+		jobConfg := jobs.JobConfig{
+			UpstreamConf: upstreamConfig,
+		}
+		go jobs.Start(jobConfg)
+
 		go events.ListenForEvents()
 		if err := e.Start(fmt.Sprintf(":%d", httpPort)); err != nil {
 			e.Logger.Fatal(err)

@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/responder"
 	"github.com/robfig/cron/v3"
 )
@@ -12,6 +13,7 @@ const (
 	ResponderCommentsSyncSchedule   = "@every 1h"
 	ResponderConfigSyncSchedule     = "@every 1h"
 	CleanupJobHistoryTableSchedule  = "@every 24h"
+	upstreamPushSchedule            = "@every 1h"
 )
 
 var FuncScheduler = cron.New()
@@ -20,7 +22,11 @@ func ScheduleFunc(schedule string, fn func()) (any, error) {
 	return FuncScheduler.AddFunc(schedule, fn)
 }
 
-func Start() {
+type JobConfig struct {
+	UpstreamConf api.UpstreamConfig
+}
+
+func Start(config JobConfig) {
 	// Running first at startup and then with the schedule
 	TeamComponentOwnershipRun()
 	EvaluateEvidenceScripts()
@@ -46,6 +52,12 @@ func Start() {
 
 	if _, err := ScheduleFunc(CleanupJobHistoryTableSchedule, CleanupJobHistoryTable); err != nil {
 		logger.Errorf("Failed to schedule job for cleaning up job history table: %v", err)
+	}
+
+	if config.UpstreamConf.IsFilled() {
+		if _, err := ScheduleFunc(upstreamPushSchedule, pushToCentralUpstream); err != nil {
+			logger.Errorf("Failed to schedule job for pushing components, analysis & configs to central instance: %v", err)
+		}
 	}
 
 	FuncScheduler.Start()
