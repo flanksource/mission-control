@@ -12,8 +12,7 @@ type ConfigChanges struct {
 	CheckedAt     time.Time `json:"checked_at"`
 	Labels        map[string]string
 	Components    []Component
-	Analysis      []string
-	Configs       []ConfigItem
+	ConfigItems   []ConfigItem
 }
 
 type UpstreamConfig struct {

@@ -11,6 +11,8 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/db/models"
+	"github.com/google/uuid"
 )
 
 type pushToUpstreamJob struct {
@@ -34,27 +36,78 @@ func (t *pushToUpstreamJob) Run() {
 	ctx, cancel := context.WithTimeout(context.Background(), t.maxRunTimeout)
 	defer cancel()
 
-	msg := &api.ConfigChanges{
+	if err := t.run(ctx); err != nil {
+		logger.Errorf("t.run(); %w", err)
+	}
+}
+
+// pushToUpstream pushes data from decentralized instances to central incident commander
+func (t *pushToUpstreamJob) run(ctx context.Context) error {
+	var changelogs []models.Changelog
+
+	// 1. Should fetch all the rows that were changed since X
+	if err := db.Gorm.WithContext(ctx).Table("changelog").Select("DISTINCT item_id, id, tstamp, tablename").Where("tstamp >= ?", t.lastCheckedAt.UTC()).Find(&changelogs).Error; err != nil {
+		return fmt.Errorf("error fetching changelog; %w", err)
+	}
+
+	logger.Infof("Found %d changelogs since %s", len(changelogs), t.lastCheckedAt)
+
+	if len(changelogs) == 0 {
+		return nil
+	}
+
+	upstreamMsg := &api.ConfigChanges{
 		PreviousCheck: t.lastCheckedAt,
 		CheckedAt:     time.Now(),
 	}
 
-	// 1. Should fetch all the rows that were changed since X
-	if err := db.Gorm.WithContext(ctx).Table("components").Select("*").Where("created_at > ? OR updated_at > ?", t.lastCheckedAt, t.lastCheckedAt).Order("created_at DESC").Find(&msg.Components).Error; err != nil {
-		logger.Errorf("Failed")
-	}
-
-	logger.Infof("Found %d msg.Components since %s", len(msg.Components), t.lastCheckedAt)
 	t.lastCheckedAt = time.Now()
 
-	if len(msg.Components) == 0 {
-		return
+	for tablename, cl := range groupChangelogsByTables(changelogs) {
+		switch tablename {
+		case "components":
+			if err := db.Gorm.WithContext(ctx).Table("components").Select("*").Where("id IN ?", cl).Find(&upstreamMsg.Components).Error; err != nil {
+				return fmt.Errorf("error fetching components; %w", err)
+			}
+
+		case "canaries":
+			// What struct?
+
+		case "checks":
+			// What struct?
+
+		case "config_analysis":
+			// What struct?
+
+		case "config_changes":
+			// What struct?
+
+		case "config_items":
+			if err := db.Gorm.WithContext(ctx).Table("config_items").Select("*").Where("id IN ?", cl).Find(&upstreamMsg.ConfigItems).Error; err != nil {
+				return fmt.Errorf("error fetching config_items; %w", err)
+			}
+
+		case "check_statuses":
+			// What struct?
+
+		case "config_component_relationships":
+			// What struct?
+
+		case "component_relationships":
+			// What struct?
+
+		case "config_relationship":
+			// What struct?
+
+		}
 	}
 
 	// 2. Push to upstream
-	if err := t.push(ctx, msg); err != nil {
-		logger.Errorf("Failed to publish to upstream; %v", err)
+	if err := t.push(ctx, upstreamMsg); err != nil {
+		return fmt.Errorf("failed to push to upstream; %w", err)
 	}
+
+	return nil
 }
 
 func (t *pushToUpstreamJob) push(ctx context.Context, msg *api.ConfigChanges) error {
@@ -75,5 +128,18 @@ func (t *pushToUpstreamJob) push(ctx context.Context, msg *api.ConfigChanges) er
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("upstream server returned error status; %s", resp.Status)
+	}
+
 	return nil
+}
+
+func groupChangelogsByTables(changelogs []models.Changelog) map[string][]uuid.UUID {
+	var output = make(map[string][]uuid.UUID)
+	for _, cl := range changelogs {
+		output[cl.TableName] = append(output[cl.TableName], cl.ItemID)
+	}
+
+	return output
 }

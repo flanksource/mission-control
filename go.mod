@@ -249,4 +249,5 @@ replace (
 	k8s.io/apimachinery => k8s.io/apimachinery v0.24.4
 	k8s.io/cli-runtime => k8s.io/cli-runtime v0.24.4
 	k8s.io/client-go => k8s.io/client-go v0.24.4
+	github.com/flanksource/duty => /home/gunners/Projects/flanksource/duty
 )
