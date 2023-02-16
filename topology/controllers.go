@@ -34,28 +34,26 @@ type component struct {
 // This registry needs to be used to select custom components
 // for rendering of properties and cards.
 func GetCustomRenderer(ctx echo.Context) error {
-	// 1. Read the template of the topology
-	sysTplID := ctx.QueryParams().Get("id")
-	results, err := QueryRenderComponents(ctx.Request().Context(), sysTplID)
+	id := ctx.QueryParams().Get("id")
+	results, err := QueryRenderComponents(ctx.Request().Context(), id)
 	if err != nil {
-		return errorResonse(ctx, err, http.StatusBadRequest)
+		return errorResponse(ctx, http.StatusBadRequest, err, "failed to query components by id")
 	}
 
-	// 2. Create a registry of all the components
 	var components = make(map[string]component)
 	for _, r := range results {
 		if err := compileComponents(components, r.Components, false); err != nil {
-			return errorResonse(ctx, err, http.StatusInternalServerError)
+			return errorResponse(ctx, http.StatusInternalServerError, err, "failed to compile components")
 		}
 
 		if err := compileComponents(components, r.Properties, true); err != nil {
-			return errorResonse(ctx, err, http.StatusInternalServerError)
+			return errorResponse(ctx, http.StatusInternalServerError, err, "failed to compile property components")
 		}
 	}
 
 	registryResp, err := renderComponents(components)
 	if err != nil {
-		return errorResonse(ctx, err, http.StatusInternalServerError)
+		return errorResponse(ctx, http.StatusInternalServerError, err, "failed to render components")
 	}
 
 	return ctx.Stream(http.StatusOK, "application/javascript", registryResp)
@@ -63,18 +61,18 @@ func GetCustomRenderer(ctx echo.Context) error {
 
 func compileComponents(output map[string]component, components []api.RenderComponent, isProp bool) error {
 	if err := babel.Init(len(components)); err != nil {
-		return fmt.Errorf("failed to init babel; %w", err)
+		return fmt.Errorf("failed to init babel: %w", err)
 	}
 
 	for _, c := range components {
-		res, err := babel.TransformString(c.JSX, map[string]interface{}{
+		res, err := babel.TransformString(c.JSX, map[string]any{
 			"plugins": []string{
 				"transform-react-jsx",
 				"transform-block-scoping",
 			},
 		})
 		if err != nil {
-			return fmt.Errorf("error transforming jsx; %w", err)
+			return fmt.Errorf("error transforming jsx: %w", err)
 		}
 
 		output[c.Key(isProp)] = component{
@@ -89,7 +87,7 @@ func compileComponents(output map[string]component, components []api.RenderCompo
 func renderComponents(components map[string]component) (io.Reader, error) {
 	var buf bytes.Buffer
 	if err := jsComponentTpl.Execute(&buf, components); err != nil {
-		return nil, fmt.Errorf("error generating components; %w", err)
+		return nil, fmt.Errorf("error generating components: %w", err)
 	}
 
 	return &buf, nil
@@ -105,7 +103,9 @@ const componentRegistry = {
 };
 `
 
-func errorResonse(c echo.Context, err error, code int) error {
-	e := map[string]string{"error": err.Error()}
-	return c.JSON(code, e)
+func errorResponse(c echo.Context, code int, err error, msg string) error {
+	return c.JSON(code, api.HTTPErrorMessage{
+		Error:   err.Error(),
+		Message: msg,
+	})
 }
