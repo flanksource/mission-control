@@ -57,7 +57,7 @@ func Start(config JobConfig) {
 	}
 
 	if config.UpstreamConf.IsFilled() {
-		refTime := time.Now().Add(time.Minute * -10)
+		refTime := time.Now().Add(time.Minute * -20)
 		if _, err := FuncScheduler.AddJob(upstreamPushSchedule, newPushToUpstreamJob(refTime, config.UpstreamConf)); err != nil {
 			logger.Errorf("Failed to schedule job for pushing components, analysis & configs to central instance: %v", err)
 		}

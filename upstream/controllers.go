@@ -3,12 +3,14 @@ package upstream
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/labstack/echo/v4"
+	"gorm.io/gorm/clause"
 )
 
 func UpstreamPushesCtrl(c echo.Context) error {
@@ -33,9 +35,35 @@ func UpstreamPushesCtrl(c echo.Context) error {
 }
 
 func insertUpstreamMsg(ctx context.Context, req *api.ConfigChanges) error {
-	// TODO: Only testing ....
-	if err := db.Gorm.WithContext(ctx).Table("components").CreateInBatches(req.Components, 250).Error; err != nil {
-		return err
+	if len(req.Components) > 0 {
+		if err := db.Gorm.Table("components").Clauses(clause.OnConflict{UpdateAll: true}).Create(req.Components).Error; err != nil {
+			return fmt.Errorf("error upserting components; %w", err)
+		}
+	}
+
+	if len(req.ConfigItems) > 0 {
+		if err := db.Gorm.Table("config_items").Clauses(clause.OnConflict{UpdateAll: true}).Create(req.ConfigItems).Error; err != nil {
+			return fmt.Errorf("error upserting config_items; %w", err)
+		}
+	}
+
+	if len(req.ConfigRelationships) > 0 {
+		cols := []clause.Column{{Name: "related_id"}, {Name: "config_id"}, {Name: "selector_id"}}
+		if err := db.Gorm.Table("config_relationships").Clauses(clause.OnConflict{UpdateAll: true, Columns: cols}).Create(req.ConfigRelationships).Error; err != nil {
+			return fmt.Errorf("error upserting config_relationships; %w", err)
+		}
+	}
+
+	if len(req.ConfigChanges) > 0 {
+		if err := db.Gorm.Table("config_changes").Clauses(clause.OnConflict{UpdateAll: true}).Create(req.ConfigChanges).Error; err != nil {
+			return fmt.Errorf("error upserting config_changes; %w", err)
+		}
+	}
+
+	if len(req.ConfigAnalysis) > 0 {
+		if err := db.Gorm.Table("config_analysis").Clauses(clause.OnConflict{UpdateAll: true}).Create(req.ConfigAnalysis).Error; err != nil {
+			return fmt.Errorf("error upserting config_analysis; %w", err)
+		}
 	}
 
 	return nil

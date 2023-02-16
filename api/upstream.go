@@ -3,16 +3,26 @@ package api
 import (
 	"strings"
 	"time"
+
+	"github.com/flanksource/duty/models"
 )
 
 // ConfigChanges consists of data about changes to
 // components, configs, analysis.
 type ConfigChanges struct {
-	PreviousCheck time.Time `json:"previous_check"`
-	CheckedAt     time.Time `json:"checked_at"`
-	Labels        map[string]string
-	Components    []Component
-	ConfigItems   []ConfigItem
+	PreviousCheck                time.Time `json:"previous_check"`
+	CheckedAt                    time.Time `json:"checked_at"`
+	Labels                       map[string]string
+	Canaries                     []models.Canary
+	Checks                       []models.Check
+	Components                   []models.Component
+	ConfigAnalysis               []models.ConfigAnalysis
+	ConfigChanges                []models.ConfigChange
+	ConfigItems                  []models.ConfigItem
+	CheckStatuses                []models.CheckStatus
+	ConfigRelationships          []models.ConfigRelationship
+	ComponentRelationships       []models.ComponentRelationship
+	ConfigComponentRelationships []models.ConfigComponentRelationship
 }
 
 type UpstreamConfig struct {

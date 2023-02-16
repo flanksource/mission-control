@@ -37,7 +37,7 @@ func (t *pushToUpstreamJob) Run() {
 	defer cancel()
 
 	if err := t.run(ctx); err != nil {
-		logger.Errorf("t.run(); %w", err)
+		logger.Errorf("t.run(); %v", err)
 	}
 }
 
@@ -45,12 +45,11 @@ func (t *pushToUpstreamJob) Run() {
 func (t *pushToUpstreamJob) run(ctx context.Context) error {
 	var changelogs []models.Changelog
 
-	// 1. Should fetch all the rows that were changed since X
 	if err := db.Gorm.WithContext(ctx).Table("changelog").Select("DISTINCT item_id, id, tstamp, tablename").Where("tstamp >= ?", t.lastCheckedAt.UTC()).Find(&changelogs).Error; err != nil {
 		return fmt.Errorf("error fetching changelog; %w", err)
 	}
 
-	logger.Infof("Found %d changelogs since %s", len(changelogs), t.lastCheckedAt)
+	logger.Debugf("Found %d changelogs since %s", len(changelogs), t.lastCheckedAt)
 
 	if len(changelogs) == 0 {
 		return nil
@@ -71,16 +70,24 @@ func (t *pushToUpstreamJob) run(ctx context.Context) error {
 			}
 
 		case "canaries":
-			// What struct?
+			if err := db.Gorm.WithContext(ctx).Table("canaries").Select("*").Where("id IN ?", cl).Find(&upstreamMsg.Canaries).Error; err != nil {
+				return fmt.Errorf("error fetching canaries; %w", err)
+			}
 
 		case "checks":
-			// What struct?
+			if err := db.Gorm.WithContext(ctx).Table("checks").Select("*").Where("id IN ?", cl).Find(&upstreamMsg.Checks).Error; err != nil {
+				return fmt.Errorf("error fetching checks; %w", err)
+			}
 
 		case "config_analysis":
-			// What struct?
+			if err := db.Gorm.WithContext(ctx).Table("config_analysis").Select("*").Where("id IN ?", cl).Find(&upstreamMsg.ConfigAnalysis).Error; err != nil {
+				return fmt.Errorf("error fetching config_analysis; %w", err)
+			}
 
 		case "config_changes":
-			// What struct?
+			if err := db.Gorm.WithContext(ctx).Table("config_changes").Select("*").Where("id IN ?", cl).Find(&upstreamMsg.ConfigChanges).Error; err != nil {
+				return fmt.Errorf("error fetching config_changes; %w", err)
+			}
 
 		case "config_items":
 			if err := db.Gorm.WithContext(ctx).Table("config_items").Select("*").Where("id IN ?", cl).Find(&upstreamMsg.ConfigItems).Error; err != nil {
@@ -88,21 +95,27 @@ func (t *pushToUpstreamJob) run(ctx context.Context) error {
 			}
 
 		case "check_statuses":
-			// What struct?
+			if err := db.Gorm.WithContext(ctx).Table("check_statuses").Select("*").Where("check_id IN ?", cl).Find(&upstreamMsg.CheckStatuses).Error; err != nil {
+				return fmt.Errorf("error fetching check_statuses; %w", err)
+			}
 
-		case "config_component_relationships":
-			// What struct?
+		case "config_component_relationships": // TODO: This has composite primary keys
+			if err := db.Gorm.WithContext(ctx).Table("config_component_relationships").Select("*").Where("component_id IN ?", cl).Find(&upstreamMsg.ConfigItems).Error; err != nil {
+				return fmt.Errorf("error fetching config_component_relationships; %w", err)
+			}
 
-		case "component_relationships":
-			// What struct?
+		case "component_relationships": // TODO: This has composite primary keys
+			if err := db.Gorm.WithContext(ctx).Table("component_relationships").Select("*").Where("component_id IN ?", cl).Find(&upstreamMsg.ComponentRelationships).Error; err != nil {
+				return fmt.Errorf("error fetching component_relationships; %w", err)
+			}
 
-		case "config_relationship":
-			// What struct?
-
+		case "config_relationships": // TODO: This has composite primary keys
+			if err := db.Gorm.WithContext(ctx).Table("config_relationships").Select("*").Where("config_id IN ?", cl).Find(&upstreamMsg.ConfigRelationships).Error; err != nil {
+				return fmt.Errorf("error fetching config_relationships; %w", err)
+			}
 		}
 	}
 
-	// 2. Push to upstream
 	if err := t.push(ctx, upstreamMsg); err != nil {
 		return fmt.Errorf("failed to push to upstream; %w", err)
 	}
