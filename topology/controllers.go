@@ -6,22 +6,32 @@ import (
 	"io"
 	"net/http"
 	"text/template"
+	"time"
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
 	babel "github.com/jvatic/goja-babel"
 	"github.com/labstack/echo/v4"
+	"github.com/patrickmn/go-cache"
 )
 
-var jsComponentTpl *template.Template
+var (
+	jsComponentTpl *template.Template
+	templateCache  *cache.Cache
+)
 
 func init() {
 	tpl, err := template.New("registry").Parse(jsComponentRegistryTpl)
 	if err != nil {
 		logger.Fatalf("error parsing template 'jsComponentRegistryTpl'. %v", err)
 	}
-
 	jsComponentTpl = tpl
+
+	templateCache = cache.New(time.Hour*24, time.Hour*12)
+
+	if err := babel.Init(10); err != nil {
+		logger.Fatalf("failed to init babel: %v", err)
+	}
 }
 
 type component struct {
@@ -64,17 +74,8 @@ func compileComponents(output map[string]component, components []api.RenderCompo
 		return nil
 	}
 
-	if err := babel.Init(len(components)); err != nil {
-		return fmt.Errorf("failed to init babel: %w", err)
-	}
-
 	for _, c := range components {
-		res, err := babel.TransformString(c.JSX, map[string]any{
-			"plugins": []string{
-				"transform-react-jsx",
-				"transform-block-scoping",
-			},
-		})
+		res, err := transformJSX(c.JSX)
 		if err != nil {
 			return fmt.Errorf("error transforming jsx: %w", err)
 		}
@@ -86,6 +87,28 @@ func compileComponents(output map[string]component, components []api.RenderCompo
 	}
 
 	return nil
+}
+
+// transformJSX transforms the provided jsx and also
+// caches the result.
+func transformJSX(jsx string) (string, error) {
+	if val, ok := templateCache.Get(jsx); ok {
+		return val.(string), nil
+	}
+
+	res, err := babel.TransformString(jsx, map[string]any{
+		"plugins": []string{
+			"transform-react-jsx",
+			"transform-block-scoping",
+		},
+	})
+	if err != nil {
+		return "", fmt.Errorf("error transforming jsx: %w", err)
+	}
+
+	templateCache.Set(jsx, res, cache.DefaultExpiration)
+
+	return res, nil
 }
 
 func renderComponents(components map[string]component) (io.Reader, error) {
