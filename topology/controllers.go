@@ -60,6 +60,10 @@ func GetCustomRenderer(ctx echo.Context) error {
 }
 
 func compileComponents(output map[string]component, components []api.RenderComponent, isProp bool) error {
+	if len(components) == 0 {
+		return nil
+	}
+
 	if err := babel.Init(len(components)); err != nil {
 		return fmt.Errorf("failed to init babel: %w", err)
 	}

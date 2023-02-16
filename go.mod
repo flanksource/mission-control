@@ -13,6 +13,7 @@ require (
 	github.com/google/cel-go v0.13.0
 	github.com/google/uuid v1.3.0
 	github.com/jackc/pgx/v4 v4.17.2
+	github.com/jvatic/goja-babel v0.0.0-20230204121733-ac82a55cfa50
 	github.com/labstack/echo/v4 v4.7.2
 	github.com/microsoft/kiota-authentication-azure-go v0.5.0
 	github.com/microsoftgraph/msgraph-sdk-go v0.48.0
@@ -77,7 +78,6 @@ require (
 	github.com/hashicorp/hcl/v2 v2.16.0 // indirect
 	github.com/jackc/pgx/v5 v5.2.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
-	github.com/jvatic/goja-babel v0.0.0-20230204121733-ac82a55cfa50 // indirect
 	github.com/klauspost/compress v1.15.13 // indirect
 	github.com/liamylian/jsontime/v2 v2.0.0 // indirect
 	github.com/lib/pq v1.10.7 // indirect
