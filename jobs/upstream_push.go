@@ -6,13 +6,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
-	"github.com/flanksource/incident-commander/db/models"
-	"github.com/google/uuid"
 )
 
 type pushToUpstreamJob struct {
@@ -43,13 +43,13 @@ func (t *pushToUpstreamJob) Run() {
 
 // pushToUpstream pushes data from decentralized instances to central incident commander
 func (t *pushToUpstreamJob) run(ctx context.Context) error {
-	var changelogs []models.Changelog
+	var changelogs []models.PushQueue
 
-	if err := db.Gorm.WithContext(ctx).Table("changelog").Select("DISTINCT item_id, id, tstamp, tablename").Where("tstamp >= ?", t.lastCheckedAt.UTC()).Find(&changelogs).Error; err != nil {
-		return fmt.Errorf("error fetching changelog; %w", err)
+	if err := db.Gorm.WithContext(ctx).Where("created_at >= ?", t.lastCheckedAt.UTC()).Find(&changelogs).Error; err != nil {
+		return fmt.Errorf("error querying push_queue: %w", err)
 	}
 
-	logger.Debugf("Found %d changelogs since %s", len(changelogs), t.lastCheckedAt)
+	logger.Debugf("found %d items in push_queue since %s", len(changelogs), t.lastCheckedAt)
 
 	if len(changelogs) == 0 {
 		return nil
@@ -62,55 +62,59 @@ func (t *pushToUpstreamJob) run(ctx context.Context) error {
 
 	t.lastCheckedAt = time.Now()
 
-	for tablename, cl := range groupChangelogsByTables(changelogs) {
+	for tablename, itemIDs := range groupChangelogsByTables(changelogs) {
 		switch tablename {
 		case "components":
-			if err := db.Gorm.WithContext(ctx).Table("components").Select("*").Where("id IN ?", cl).Find(&upstreamMsg.Components).Error; err != nil {
+			if err := db.Gorm.WithContext(ctx).Where("id IN ?", itemIDs).Find(&upstreamMsg.Components).Error; err != nil {
 				return fmt.Errorf("error fetching components; %w", err)
 			}
 
 		case "canaries":
-			if err := db.Gorm.WithContext(ctx).Table("canaries").Select("*").Where("id IN ?", cl).Find(&upstreamMsg.Canaries).Error; err != nil {
+			if err := db.Gorm.WithContext(ctx).Where("id IN ?", itemIDs).Find(&upstreamMsg.Canaries).Error; err != nil {
 				return fmt.Errorf("error fetching canaries; %w", err)
 			}
 
 		case "checks":
-			if err := db.Gorm.WithContext(ctx).Table("checks").Select("*").Where("id IN ?", cl).Find(&upstreamMsg.Checks).Error; err != nil {
+			if err := db.Gorm.WithContext(ctx).Where("id IN ?", itemIDs).Find(&upstreamMsg.Checks).Error; err != nil {
 				return fmt.Errorf("error fetching checks; %w", err)
 			}
 
 		case "config_analysis":
-			if err := db.Gorm.WithContext(ctx).Table("config_analysis").Select("*").Where("id IN ?", cl).Find(&upstreamMsg.ConfigAnalysis).Error; err != nil {
+			if err := db.Gorm.WithContext(ctx).Where("id IN ?", itemIDs).Find(&upstreamMsg.ConfigAnalysis).Error; err != nil {
 				return fmt.Errorf("error fetching config_analysis; %w", err)
 			}
 
 		case "config_changes":
-			if err := db.Gorm.WithContext(ctx).Table("config_changes").Select("*").Where("id IN ?", cl).Find(&upstreamMsg.ConfigChanges).Error; err != nil {
+			if err := db.Gorm.WithContext(ctx).Where("id IN ?", itemIDs).Find(&upstreamMsg.ConfigChanges).Error; err != nil {
 				return fmt.Errorf("error fetching config_changes; %w", err)
 			}
 
 		case "config_items":
-			if err := db.Gorm.WithContext(ctx).Table("config_items").Select("*").Where("id IN ?", cl).Find(&upstreamMsg.ConfigItems).Error; err != nil {
+			if err := db.Gorm.WithContext(ctx).Where("id IN ?", itemIDs).Find(&upstreamMsg.ConfigItems).Error; err != nil {
 				return fmt.Errorf("error fetching config_items; %w", err)
 			}
 
 		case "check_statuses":
-			if err := db.Gorm.WithContext(ctx).Table("check_statuses").Select("*").Where("check_id IN ?", cl).Find(&upstreamMsg.CheckStatuses).Error; err != nil {
+			compositeKeys := splitKeys(itemIDs)
+			if err := db.Gorm.WithContext(ctx).Where(`(check_id, "time") IN ?`, compositeKeys).Find(&upstreamMsg.CheckStatuses).Error; err != nil {
 				return fmt.Errorf("error fetching check_statuses; %w", err)
 			}
 
-		case "config_component_relationships": // TODO: This has composite primary keys
-			if err := db.Gorm.WithContext(ctx).Table("config_component_relationships").Select("*").Where("component_id IN ?", cl).Find(&upstreamMsg.ConfigItems).Error; err != nil {
+		case "config_component_relationships":
+			compositeKeys := splitKeys(itemIDs)
+			if err := db.Gorm.WithContext(ctx).Where("(component_id, config_id) IN ?", compositeKeys).Find(&upstreamMsg.ConfigItems).Error; err != nil {
 				return fmt.Errorf("error fetching config_component_relationships; %w", err)
 			}
 
-		case "component_relationships": // TODO: This has composite primary keys
-			if err := db.Gorm.WithContext(ctx).Table("component_relationships").Select("*").Where("component_id IN ?", cl).Find(&upstreamMsg.ComponentRelationships).Error; err != nil {
+		case "component_relationships":
+			compositeKeys := splitKeys(itemIDs)
+			if err := db.Gorm.WithContext(ctx).Where("(component_id, relationship_id, selector_id) IN ?", compositeKeys).Find(&upstreamMsg.ComponentRelationships).Error; err != nil {
 				return fmt.Errorf("error fetching component_relationships; %w", err)
 			}
 
-		case "config_relationships": // TODO: This has composite primary keys
-			if err := db.Gorm.WithContext(ctx).Table("config_relationships").Select("*").Where("config_id IN ?", cl).Find(&upstreamMsg.ConfigRelationships).Error; err != nil {
+		case "config_relationships":
+			keys := splitKeys(itemIDs)
+			if err := db.Gorm.WithContext(ctx).Where("(related_id, config_id, selector_id) IN ?", keys).Find(&upstreamMsg.ConfigRelationships).Error; err != nil {
 				return fmt.Errorf("error fetching config_relationships; %w", err)
 			}
 		}
@@ -148,10 +152,21 @@ func (t *pushToUpstreamJob) push(ctx context.Context, msg *api.PushData) error {
 	return nil
 }
 
-func groupChangelogsByTables(changelogs []models.Changelog) map[string][]uuid.UUID {
-	var output = make(map[string][]uuid.UUID)
+func groupChangelogsByTables(changelogs []models.PushQueue) map[string][]string {
+	var output = make(map[string][]string)
 	for _, cl := range changelogs {
-		output[cl.TableName] = append(output[cl.TableName], cl.ItemID)
+		output[cl.Table] = append(output[cl.Table], cl.ItemID)
+	}
+
+	return output
+}
+
+// splitKeys splits each item in the string slice by ':'
+func splitKeys(keys []string) [][]string {
+	output := make([][]string, 0, len(keys))
+	for _, k := range keys {
+		keysSplit := strings.Split(k, ":")
+		output = append(output, keysSplit)
 	}
 
 	return output

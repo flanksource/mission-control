@@ -15,7 +15,7 @@ const (
 	ResponderCommentsSyncSchedule   = "@every 1h"
 	ResponderConfigSyncSchedule     = "@every 1h"
 	CleanupJobHistoryTableSchedule  = "@every 24h"
-	upstreamPushSchedule            = "@every 5s"
+	upstreamPushSchedule            = "@every 10s"
 )
 
 var FuncScheduler = cron.New()
@@ -57,7 +57,7 @@ func Start(config JobConfig) {
 	}
 
 	if config.UpstreamConf.IsFilled() {
-		refTime := time.Now().Add(time.Minute * -20)
+		refTime := time.Now().Add(time.Minute * -60)
 		if _, err := FuncScheduler.AddJob(upstreamPushSchedule, newPushToUpstreamJob(refTime, config.UpstreamConf)); err != nil {
 			logger.Errorf("Failed to schedule job for pushing components, analysis & configs to central instance: %v", err)
 		}
