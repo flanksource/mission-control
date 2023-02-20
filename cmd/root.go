@@ -50,7 +50,7 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&db.PostgresDBAnonRole, "postgrest-anon-role", "postgrest_anon", "Postgres anonymous role")
 
 	// Flags for upstream push
-	flags.StringVarP(&upstreamConfig.URL, "upstream", "u", "https://incident-commander.canary.lab.flanksource.com", "central incident commander instance to push configs to")
+	flags.StringVar(&upstreamConfig.URL, "upstream-url", "", "central incident commander instance to push configs to")
 	flags.StringVar(&upstreamConfig.Username, "upstream-user", "", "upstream username")
 	flags.StringVar(&upstreamConfig.Password, "upstream-password", "", "upstream password")
 	flags.StringSliceVar(&upstreamConfig.Labels, "upstream-labels", nil, `labels. example: "cluster=a,cluster=b"`)

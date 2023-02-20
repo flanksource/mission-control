@@ -7,9 +7,9 @@ import (
 	"github.com/flanksource/duty/models"
 )
 
-// ConfigChanges consists of data about changes to
+// PushData consists data about changes to
 // components, configs, analysis.
-type ConfigChanges struct {
+type PushData struct {
 	PreviousCheck                time.Time `json:"previous_check"`
 	CheckedAt                    time.Time `json:"checked_at"`
 	Labels                       map[string]string
