@@ -22,7 +22,7 @@ require (
 	github.com/spf13/pflag v1.0.5
 	gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df
 	gorm.io/gorm v1.24.5
-	k8s.io/apimachinery v0.25.1
+	k8s.io/apimachinery v0.24.4
 )
 
 require (
@@ -56,7 +56,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.13.11 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.17.7 // indirect
 	github.com/aws/smithy-go v1.13.5 // indirect
-	github.com/c2h5oh/datasize v0.0.0-20220606134207-859f65c6625b // indirect
 	github.com/cloudflare/circl v1.3.1 // indirect
 	github.com/emicklei/go-restful/v3 v3.9.0 // indirect
 	github.com/flanksource/gomplate/v3 v3.20.1 // indirect
