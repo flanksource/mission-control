@@ -14,7 +14,7 @@ import (
 )
 
 func UpstreamPushesCtrl(c echo.Context) error {
-	var req api.PushData
+	var req api.ConfigChanges
 	err := json.NewDecoder(c.Request().Body).Decode(&req)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, api.HTTPErrorMessage{
@@ -34,7 +34,7 @@ func UpstreamPushesCtrl(c echo.Context) error {
 	return nil
 }
 
-func insertUpstreamMsg(ctx context.Context, req *api.PushData) error {
+func insertUpstreamMsg(ctx context.Context, req *api.ConfigChanges) error {
 	if len(req.Components) > 0 {
 		if err := db.Gorm.Table("components").Clauses(clause.OnConflict{UpdateAll: true}).Create(req.Components).Error; err != nil {
 			return fmt.Errorf("error upserting components; %w", err)
