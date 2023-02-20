@@ -55,7 +55,7 @@ func (t *pushToUpstreamJob) run(ctx context.Context) error {
 		return nil
 	}
 
-	upstreamMsg := &api.ConfigChanges{
+	upstreamMsg := &api.PushData{
 		PreviousCheck: t.lastCheckedAt,
 		CheckedAt:     time.Now(),
 	}
@@ -123,7 +123,7 @@ func (t *pushToUpstreamJob) run(ctx context.Context) error {
 	return nil
 }
 
-func (t *pushToUpstreamJob) push(ctx context.Context, msg *api.ConfigChanges) error {
+func (t *pushToUpstreamJob) push(ctx context.Context, msg *api.PushData) error {
 	payloadBuf := new(bytes.Buffer)
 	if err := json.NewEncoder(payloadBuf).Encode(msg); err != nil {
 		return fmt.Errorf("error encoding msg; %w", err)
