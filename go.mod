@@ -8,7 +8,7 @@ require (
 	github.com/antihax/optional v1.0.0
 	github.com/flanksource/canary-checker/sdk v0.0.0-20221002171205-15e7cea06125
 	github.com/flanksource/commons v1.6.2
-	github.com/flanksource/duty v1.0.12
+	github.com/flanksource/duty v1.0.14
 	github.com/flanksource/kommons v0.31.1
 	github.com/google/cel-go v0.13.0
 	github.com/google/uuid v1.3.0
@@ -187,7 +187,7 @@ require (
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.16 // indirect
-	github.com/microsoft/kiota-abstractions-go v0.17.0 // indirect
+	github.com/microsoft/kiota-abstractions-go v0.17.0
 	github.com/microsoft/kiota-http-go v0.14.0 // indirect
 	github.com/microsoft/kiota-serialization-json-go v0.8.0 // indirect
 	github.com/microsoft/kiota-serialization-text-go v0.7.0 // indirect
