@@ -10,7 +10,6 @@ import (
 // PushData consists of data about changes to
 // components, configs, analysis.
 type PushData struct {
-	PreviousCheck                time.Time `json:"previous_check"`
 	CheckedAt                    time.Time `json:"checked_at"`
 	Labels                       map[string]string
 	Canaries                     []models.Canary

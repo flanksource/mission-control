@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -84,12 +85,13 @@ var Serve = &cobra.Command{
 		forward(e, "/kratos", kratosAPI)
 		forward(e, "/apm", api.ApmHubPath)
 
-		jobConfg := jobs.JobConfig{
+		go jobs.Start()
+
+		eventHandlerConfig := events.Config{
 			UpstreamConf: upstreamConfig,
 		}
-		go jobs.Start(jobConfg)
+		go events.ListenForEvents(context.Background(), eventHandlerConfig)
 
-		go events.ListenForEvents()
 		if err := e.Start(fmt.Sprintf(":%d", httpPort)); err != nil {
 			e.Logger.Fatal(err)
 		}

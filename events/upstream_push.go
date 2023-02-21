@@ -1,4 +1,4 @@
-package jobs
+package events
 
 import (
 	"bytes"
@@ -13,54 +13,39 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
+	"gorm.io/gorm"
 )
 
-type pushToUpstreamJob struct {
-	lastCheckedAt time.Time
+type pushToUpstreamEventHandler struct {
 	maxRunTimeout time.Duration
 	conf          api.UpstreamConfig
 	httpClient    *http.Client
 }
 
-func newPushToUpstreamJob(refTime time.Time, conf api.UpstreamConfig) *pushToUpstreamJob {
-	return &pushToUpstreamJob{
+func newPushToUpstreamEventHandler(conf api.UpstreamConfig) *pushToUpstreamEventHandler {
+	return &pushToUpstreamEventHandler{
 		maxRunTimeout: time.Minute * 5,
-		lastCheckedAt: refTime,
 		conf:          conf,
 		httpClient:    &http.Client{},
 	}
 }
 
 // pushToUpstream pushes data from decentralized instances to central incident commander
-func (t *pushToUpstreamJob) Run() {
-	ctx, cancel := context.WithTimeout(context.Background(), t.maxRunTimeout)
-	defer cancel()
-
-	if err := t.run(ctx); err != nil {
-		logger.Errorf("t.run(); %v", err)
-	}
-}
-
-// pushToUpstream pushes data from decentralized instances to central incident commander
-func (t *pushToUpstreamJob) run(ctx context.Context) error {
+func (t *pushToUpstreamEventHandler) Run(ctx context.Context, tx *gorm.DB, event api.Event) error {
+	pushQueueID := event.Properties["id"]
 	var changelogs []models.PushQueue
-
-	if err := db.Gorm.WithContext(ctx).Where("created_at >= ?", t.lastCheckedAt.UTC()).Find(&changelogs).Error; err != nil {
+	if err := db.Gorm.WithContext(ctx).Where("id = ?", pushQueueID).Find(&changelogs).Error; err != nil {
 		return fmt.Errorf("error querying push_queue: %w", err)
 	}
 
-	logger.Debugf("found %d items in push_queue since %s", len(changelogs), t.lastCheckedAt)
-
+	logger.Debugf("found %d items in push_queue", len(changelogs))
 	if len(changelogs) == 0 {
 		return nil
 	}
 
 	upstreamMsg := &api.PushData{
-		PreviousCheck: t.lastCheckedAt,
-		CheckedAt:     time.Now(),
+		CheckedAt: time.Now(),
 	}
-
-	t.lastCheckedAt = time.Now()
 
 	for tablename, itemIDs := range groupChangelogsByTables(changelogs) {
 		switch tablename {
@@ -127,7 +112,7 @@ func (t *pushToUpstreamJob) run(ctx context.Context) error {
 	return nil
 }
 
-func (t *pushToUpstreamJob) push(ctx context.Context, msg *api.PushData) error {
+func (t *pushToUpstreamEventHandler) push(ctx context.Context, msg *api.PushData) error {
 	payloadBuf := new(bytes.Buffer)
 	if err := json.NewEncoder(payloadBuf).Encode(msg); err != nil {
 		return fmt.Errorf("error encoding msg; %w", err)

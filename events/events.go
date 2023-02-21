@@ -17,32 +17,34 @@ import (
 const (
 	EventResponderCreate = "responder.create"
 	EventCommentCreate   = "comment.create"
+	EventPushQueueCreate = "push_queue.create"
 )
 
-func ListenForEvents() {
+type Config struct {
+	UpstreamConf api.UpstreamConfig
+}
 
-	logger.Infof("Started listening for events")
+func ListenForEvents(ctx context.Context, config Config) {
+	logger.Infof("started listening for database notify events")
 
 	// Consume pending events
-	consumeEvents()
+	consumeEvents(ctx, config)
 
 	pgNotify := make(chan bool)
-	go listenToPostgresNotify(pgNotify)
+	go listenToPostgresNotify(ctx, pgNotify)
 
 	for {
 		select {
 		case <-pgNotify:
-			consumeEvents()
+			consumeEvents(ctx, config)
 
 		case <-time.After(60 * time.Second):
-			consumeEvents()
+			consumeEvents(ctx, config)
 		}
 	}
 }
 
-func listenToPostgresNotify(pgNotify chan bool) {
-	ctx := context.Background()
-
+func listenToPostgresNotify(ctx context.Context, pgNotify chan bool) {
 	conn, err := db.Pool.Acquire(ctx)
 	if err != nil {
 		logger.Errorf("Error creating database pool: %v", err)
@@ -61,11 +63,9 @@ func listenToPostgresNotify(pgNotify chan bool) {
 
 		pgNotify <- true
 	}
-
 }
 
-func consumeEvents() {
-
+func consumeEvents(ctx context.Context, config Config) {
 	consumeEvent := func() error {
 		var event api.Event
 
@@ -86,13 +86,19 @@ func consumeEvents() {
 			return err
 		}
 
+		upstreamPushEventHandler := newPushToUpstreamEventHandler(config.UpstreamConf)
+
 		switch event.Name {
 		case EventResponderCreate:
 			err = reconcileResponderEvent(tx, event)
 		case EventCommentCreate:
 			err = reconcileCommentEvent(tx, event)
+		case EventPushQueueCreate:
+			if config.UpstreamConf.IsFilled() {
+				err = upstreamPushEventHandler.Run(ctx, tx, event)
+			}
 		default:
-			logger.Errorf("Invalid event name: %s", event.Name)
+			logger.Errorf("invalid event name: %s", event.Name)
 			return tx.Commit().Error
 		}
 
