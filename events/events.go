@@ -28,7 +28,7 @@ func ListenForEvents(ctx context.Context, config Config) {
 	logger.Infof("started listening for database notify events")
 
 	// Consume pending events
-	consumeEvents(ctx, config)
+	consumeEventsUntilEmpty(ctx, config)
 
 	pgNotify := make(chan bool)
 	go listenToPostgresNotify(ctx, pgNotify)
@@ -36,10 +36,10 @@ func ListenForEvents(ctx context.Context, config Config) {
 	for {
 		select {
 		case <-pgNotify:
-			consumeEvents(ctx, config)
+			consumeEventsUntilEmpty(ctx, config)
 
 		case <-time.After(60 * time.Second):
-			consumeEvents(ctx, config)
+			consumeEventsUntilEmpty(ctx, config)
 		}
 	}
 }
@@ -47,87 +47,87 @@ func ListenForEvents(ctx context.Context, config Config) {
 func listenToPostgresNotify(ctx context.Context, pgNotify chan bool) {
 	conn, err := db.Pool.Acquire(ctx)
 	if err != nil {
-		logger.Errorf("Error creating database pool: %v", err)
+		logger.Errorf("error creating database pool: %v", err)
 	}
 
 	_, err = conn.Exec(ctx, "LISTEN event_queue_updates")
 	if err != nil {
-		logger.Errorf("Error listening to database notify: %v", err)
+		logger.Errorf("error listening to database notify: %v", err)
 	}
 
 	for {
 		_, err = conn.Conn().WaitForNotification(ctx)
 		if err != nil {
-			logger.Errorf("Error waiting for database notifications: %v", err)
+			logger.Errorf("error waiting for database notifications: %v", err)
 		}
 
 		pgNotify <- true
 	}
 }
 
-func consumeEvents(ctx context.Context, config Config) {
-	consumeEvent := func() error {
-		var event api.Event
-
-		tx := db.Gorm.Begin()
-
-		selectEventsQuery := `
-			SELECT * FROM event_queue
-			WHERE
-				attempts <= 3 OR ((now() - last_attempt) > '1 hour'::interval)
-			FOR UPDATE SKIP LOCKED
-			LIMIT 1
-		`
-		err := tx.Raw(selectEventsQuery).First(&event).Error
-		if err != nil {
-			// Commit the transaction in case of no records found to prevent
-			// creating dangling connections and to release the locks
-			tx.Commit()
-			return err
-		}
-
-		upstreamPushEventHandler := newPushToUpstreamEventHandler(config.UpstreamConf)
-
-		switch event.Name {
-		case EventResponderCreate:
-			err = reconcileResponderEvent(tx, event)
-		case EventCommentCreate:
-			err = reconcileCommentEvent(tx, event)
-		case EventPushQueueCreate:
-			if config.UpstreamConf.IsFilled() {
-				err = upstreamPushEventHandler.Run(ctx, tx, event)
-			}
-		default:
-			logger.Errorf("invalid event name: %s", event.Name)
-			return tx.Commit().Error
-		}
-
-		if err != nil {
-			errorMsg := err.Error()
-			setErr := tx.Exec("UPDATE event_queue SET error = ?, attempts = attempts + 1 WHERE id = ?", errorMsg, event.ID).Error
-			if setErr != nil {
-				logger.Errorf("Error updating table:event_queue with id:%s and error:%s. %v", event.ID, errorMsg, setErr)
-			}
-			return tx.Commit().Error
-		}
-
-		err = tx.Delete(&event).Error
-		if err != nil {
-			logger.Errorf("Error deleting event from event_queue table with id:%s", event.ID.String())
-			return tx.Rollback().Error
-		}
-		return tx.Commit().Error
-
+func consumeEvents(ctx context.Context, config Config) error {
+	tx := db.Gorm.Begin()
+	if tx.Error != nil {
+		return fmt.Errorf("error initiating db tx: %w", tx.Error)
 	}
 
-	// Keep on iterating till the queue is empty
+	selectEventsQuery := `
+		SELECT * FROM event_queue
+		WHERE
+			attempts <= 3 OR ((now() - last_attempt) > '1 hour'::interval)
+		FOR UPDATE SKIP LOCKED
+		LIMIT 1
+	`
+	var event api.Event
+	err := tx.Raw(selectEventsQuery).First(&event).Error
+	if err != nil {
+		// Commit the transaction in case of no records found to prevent
+		// creating dangling connections and to release the locks
+		tx.Commit()
+		return err
+	}
+
+	switch event.Name {
+	case EventResponderCreate:
+		err = reconcileResponderEvent(tx, event)
+	case EventCommentCreate:
+		err = reconcileCommentEvent(tx, event)
+	case EventPushQueueCreate:
+		if config.UpstreamConf.IsFilled() {
+			upstreamPushEventHandler := newPushToUpstreamEventHandler(config.UpstreamConf)
+			err = upstreamPushEventHandler.Run(ctx, tx, event)
+		}
+	default:
+		logger.Errorf("invalid event name: %s", event.Name)
+		return tx.Commit().Error
+	}
+
+	if err != nil {
+		errorMsg := err.Error()
+		setErr := tx.Exec("UPDATE event_queue SET error = ?, attempts = attempts + 1 WHERE id = ?", errorMsg, event.ID).Error
+		if setErr != nil {
+			logger.Errorf("error updating table:event_queue with id:%s and error:%s. %v", event.ID, errorMsg, setErr)
+		}
+		return tx.Commit().Error
+	}
+
+	err = tx.Delete(&event).Error
+	if err != nil {
+		logger.Errorf("error deleting event from event_queue table with id:%s", event.ID.String())
+		return tx.Rollback().Error
+	}
+	return tx.Commit().Error
+}
+
+// consumeEventsUntilEmpty consumes events forever until the event queue is empty.
+func consumeEventsUntilEmpty(ctx context.Context, config Config) {
 	for {
-		err := consumeEvent()
+		err := consumeEvents(ctx, config)
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return
 			} else {
-				logger.Errorf("Error processing event, waiting 60s to try again %v", err)
+				logger.Errorf("error processing event, waiting 60s to try again %v", err)
 				time.Sleep(60 * time.Second)
 			}
 		}
@@ -207,7 +207,7 @@ func reconcileCommentEvent(tx *gorm.DB, event api.Event) error {
 
 		if err != nil {
 			// TODO: Associate error messages with responderType and handle specific responders when reprocessing
-			logger.Errorf("Error adding comment to responder:%s %v", responder.Properties["responderType"], err)
+			logger.Errorf("error adding comment to responder:%s %v", responder.Properties["responderType"], err)
 			continue
 		}
 
@@ -216,7 +216,7 @@ func reconcileCommentEvent(tx *gorm.DB, event api.Event) error {
 			err = tx.Exec("INSERT INTO comment_responders (comment_id, responder_id, external_id) VALUES (?, ?, ?)",
 				commentID, responder.ID, externalID).Error
 			if err != nil {
-				logger.Errorf("Error updating comment_responders table: %v", err)
+				logger.Errorf("error updating comment_responders table: %v", err)
 			}
 		}
 	}
