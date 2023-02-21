@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/flanksource/incident-commander/api"
@@ -64,26 +63,22 @@ func (t *pushToUpstreamEventHandler) Run(ctx context.Context, tx *gorm.DB, event
 			}
 
 		case "check_statuses":
-			compositeKeys := splitKeys(itemIDs)
-			if err := tx.Where(`(check_id, "time") IN ?`, compositeKeys).Find(&upstreamMsg.CheckStatuses).Error; err != nil {
+			if err := tx.Where(`(check_id, "time") IN ?`, itemIDs).Find(&upstreamMsg.CheckStatuses).Error; err != nil {
 				return fmt.Errorf("error fetching check_statuses: %w", err)
 			}
 
 		case "config_component_relationships":
-			compositeKeys := splitKeys(itemIDs)
-			if err := tx.Where("(component_id, config_id) IN ?", compositeKeys).Find(&upstreamMsg.ConfigItems).Error; err != nil {
+			if err := tx.Where("(component_id, config_id) IN ?", itemIDs).Find(&upstreamMsg.ConfigItems).Error; err != nil {
 				return fmt.Errorf("error fetching config_component_relationships: %w", err)
 			}
 
 		case "component_relationships":
-			compositeKeys := splitKeys(itemIDs)
-			if err := tx.Where("(component_id, relationship_id, selector_id) IN ?", compositeKeys).Find(&upstreamMsg.ComponentRelationships).Error; err != nil {
+			if err := tx.Where("(component_id, relationship_id, selector_id) IN ?", itemIDs).Find(&upstreamMsg.ComponentRelationships).Error; err != nil {
 				return fmt.Errorf("error fetching component_relationships: %w", err)
 			}
 
 		case "config_relationships":
-			keys := splitKeys(itemIDs)
-			if err := tx.Where("(related_id, config_id, selector_id) IN ?", keys).Find(&upstreamMsg.ConfigRelationships).Error; err != nil {
+			if err := tx.Where("(related_id, config_id, selector_id) IN ?", itemIDs).Find(&upstreamMsg.ConfigRelationships).Error; err != nil {
 				return fmt.Errorf("error fetching config_relationships: %w", err)
 			}
 		}
@@ -121,37 +116,22 @@ func (t *pushToUpstreamEventHandler) push(ctx context.Context, msg *api.PushData
 	return nil
 }
 
-func groupChangelogsByTables(events []api.Event) map[string][]string {
-	var output = make(map[string][]string)
+func groupChangelogsByTables(events []api.Event) map[string][]any {
+	var output = make(map[string][]any)
 	for _, cl := range events {
 		tableName := cl.Properties["table"]
 		switch tableName {
 		case "component_relationships":
-			output[tableName] = append(output[tableName], concat(cl.Properties["component_id"], cl.Properties["relationship_id"], cl.Properties["selector_id"]))
+			output[tableName] = append(output[tableName], []string{cl.Properties["component_id"], cl.Properties["relationship_id"], cl.Properties["selector_id"]})
 		case "config_component_relationships":
-			output[tableName] = append(output[tableName], concat(cl.Properties["component_id"], cl.Properties["config_id"]))
+			output[tableName] = append(output[tableName], []string{cl.Properties["component_id"], cl.Properties["config_id"]})
 		case "config_relationships":
-			output[tableName] = append(output[tableName], concat(cl.Properties["related_id"], cl.Properties["config_id"], cl.Properties["selector_id"]))
+			output[tableName] = append(output[tableName], []string{cl.Properties["related_id"], cl.Properties["config_id"], cl.Properties["selector_id"]})
 		case "check_statuses":
-			output[tableName] = append(output[tableName], concat(cl.Properties["check_id"], cl.Properties["time"]))
+			output[tableName] = append(output[tableName], []string{cl.Properties["check_id"], cl.Properties["time"]})
 		default:
 			output[tableName] = append(output[tableName], cl.Properties["id"])
 		}
-	}
-
-	return output
-}
-
-func concat(item ...string) string {
-	return strings.Join(item, ":")
-}
-
-// splitKeys splits each item in the string slice by ':'
-func splitKeys(keys []string) [][]string {
-	output := make([][]string, 0, len(keys))
-	for _, k := range keys {
-		keysSplit := strings.Split(k, ":")
-		output = append(output, keysSplit)
 	}
 
 	return output
