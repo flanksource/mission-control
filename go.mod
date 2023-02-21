@@ -13,6 +13,7 @@ require (
 	github.com/google/cel-go v0.13.0
 	github.com/google/uuid v1.3.0
 	github.com/jackc/pgx/v4 v4.18.0
+	github.com/jvatic/goja-babel v0.0.0-20230204121733-ac82a55cfa50
 	github.com/labstack/echo/v4 v4.7.2
 	github.com/microsoft/kiota-authentication-azure-go v0.6.0
 	github.com/microsoftgraph/msgraph-sdk-go v0.54.0
@@ -57,6 +58,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/sts v1.17.7 // indirect
 	github.com/aws/smithy-go v1.13.5 // indirect
 	github.com/cloudflare/circl v1.3.1 // indirect
+	github.com/dlclark/regexp2 v1.8.0 // indirect
+	github.com/dop251/goja v0.0.0-20230203172422-5460598cfa32 // indirect
 	github.com/emicklei/go-restful/v3 v3.9.0 // indirect
 	github.com/flanksource/gomplate/v3 v3.20.1 // indirect
 	github.com/go-errors/errors v1.0.1 // indirect
@@ -65,6 +68,7 @@ require (
 	github.com/go-git/go-git/v5 v5.5.1 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-openapi/inflect v0.19.0 // indirect
+	github.com/go-sourcemap/sourcemap v2.1.3+incompatible // indirect
 	github.com/google/gnostic v0.6.9 // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect

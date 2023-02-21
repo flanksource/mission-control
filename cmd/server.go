@@ -19,6 +19,7 @@ import (
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/jobs"
 	"github.com/flanksource/incident-commander/snapshot"
+	"github.com/flanksource/incident-commander/topology"
 	"github.com/flanksource/incident-commander/utils"
 )
 
@@ -69,6 +70,8 @@ var Serve = &cobra.Command{
 		e.GET("/snapshot/topology/:id", snapshot.Topology)
 		e.GET("/snapshot/incident/:id", snapshot.Incident)
 		e.GET("/snapshot/config/:id", snapshot.Config)
+
+		e.GET("/custom_renderer", topology.GetCustomRenderer)
 
 		// Serve openapi schemas
 		schemaServer, err := utils.HTTPFileserver(openapi.Schemas)
