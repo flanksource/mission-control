@@ -5,8 +5,8 @@ import (
 
 	jsoniter "github.com/json-iterator/go"
 
+	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/db/types"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )

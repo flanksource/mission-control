@@ -3,7 +3,7 @@ package api
 import (
 	"time"
 
-	"github.com/flanksource/incident-commander/db/types"
+	"github.com/flanksource/duty/types"
 )
 
 type LogLine struct {
