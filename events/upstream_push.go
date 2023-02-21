@@ -9,8 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	"gorm.io/gorm"
 )
@@ -28,23 +26,12 @@ func newPushToUpstreamEventHandler(conf api.UpstreamConfig) *pushToUpstreamEvent
 }
 
 // Run pushes data from decentralized instances to central incident commander
-func (t *pushToUpstreamEventHandler) Run(ctx context.Context, tx *gorm.DB, event api.Event) error {
-	pushQueueID := event.Properties["id"]
-	var changelogs []models.PushQueue
-	if err := tx.Where("id = ?", pushQueueID).Find(&changelogs).Error; err != nil {
-		return fmt.Errorf("error querying push_queue: %w", err)
-	}
-
-	logger.Debugf("found %d items in push_queue", len(changelogs))
-	if len(changelogs) == 0 {
-		return nil
-	}
-
+func (t *pushToUpstreamEventHandler) Run(ctx context.Context, tx *gorm.DB, events []api.Event) error {
 	upstreamMsg := &api.PushData{
 		CheckedAt: time.Now(),
 	}
 
-	for tablename, itemIDs := range groupChangelogsByTables(changelogs) {
+	for tablename, itemIDs := range groupChangelogsByTables(events) {
 		switch tablename {
 		case "components":
 			if err := tx.Where("id IN ?", itemIDs).Find(&upstreamMsg.Components).Error; err != nil {
@@ -134,13 +121,29 @@ func (t *pushToUpstreamEventHandler) push(ctx context.Context, msg *api.PushData
 	return nil
 }
 
-func groupChangelogsByTables(changelogs []models.PushQueue) map[string][]string {
+func groupChangelogsByTables(events []api.Event) map[string][]string {
 	var output = make(map[string][]string)
-	for _, cl := range changelogs {
-		output[cl.Table] = append(output[cl.Table], cl.ItemID)
+	for _, cl := range events {
+		tableName := cl.Properties["table"]
+		switch tableName {
+		case "component_relationships":
+			output[tableName] = append(output[tableName], concat(cl.Properties["component_id"], cl.Properties["relationship_id"], cl.Properties["selector_id"]))
+		case "config_component_relationships":
+			output[tableName] = append(output[tableName], concat(cl.Properties["component_id"], cl.Properties["config_id"]))
+		case "config_relationships":
+			output[tableName] = append(output[tableName], concat(cl.Properties["related_id"], cl.Properties["config_id"], cl.Properties["selector_id"]))
+		case "check_statuses":
+			output[tableName] = append(output[tableName], concat(cl.Properties["check_id"], cl.Properties["time"]))
+		default:
+			output[tableName] = append(output[tableName], cl.Properties["id"])
+		}
 	}
 
 	return output
+}
+
+func concat(item ...string) string {
+	return strings.Join(item, ":")
 }
 
 // splitKeys splits each item in the string slice by ':'

@@ -20,6 +20,13 @@ const (
 	EventPushQueueCreate = "push_queue.create"
 )
 
+const (
+	eventQueueBatchSize   = 1
+	eventMaxAttempts      = 3
+	waitDurationOnFailure = time.Second * 10
+	pgNotifyTimeout       = time.Minute
+)
+
 type Config struct {
 	UpstreamConf api.UpstreamConfig
 }
@@ -38,7 +45,7 @@ func ListenForEvents(ctx context.Context, config Config) {
 		case <-pgNotify:
 			consumeEventsUntilEmpty(ctx, config)
 
-		case <-time.After(60 * time.Second):
+		case <-time.After(pgNotifyTimeout):
 			consumeEventsUntilEmpty(ctx, config)
 		}
 	}
@@ -71,13 +78,13 @@ func consumeEvents(ctx context.Context, config Config) error {
 		return fmt.Errorf("error initiating db tx: %w", tx.Error)
 	}
 
-	selectEventsQuery := `
+	selectEventsQuery := fmt.Sprintf(`
 		SELECT * FROM event_queue
-		WHERE
-			attempts <= 3 OR ((now() - last_attempt) > '1 hour'::interval)
+		WHERE attempts <= %d OR ((now() - last_attempt) > '1 hour'::interval)
 		FOR UPDATE SKIP LOCKED
-		LIMIT 1
-	`
+		LIMIT %d
+	`, eventMaxAttempts, eventQueueBatchSize)
+
 	var event api.Event
 	err := tx.Raw(selectEventsQuery).First(&event).Error
 	if err != nil {
@@ -95,10 +102,10 @@ func consumeEvents(ctx context.Context, config Config) error {
 	case EventPushQueueCreate:
 		if config.UpstreamConf.IsFilled() {
 			upstreamPushEventHandler := newPushToUpstreamEventHandler(config.UpstreamConf)
-			err = upstreamPushEventHandler.Run(ctx, tx, event)
+			err = upstreamPushEventHandler.Run(ctx, tx, []api.Event{event})
 		}
 	default:
-		logger.Errorf("invalid event name: %s", event.Name)
+		logger.Errorf("unrecognized event name: %s", event.Name)
 		return tx.Commit().Error
 	}
 
@@ -128,7 +135,7 @@ func consumeEventsUntilEmpty(ctx context.Context, config Config) {
 				return
 			} else {
 				logger.Errorf("error processing event, waiting 60s to try again %v", err)
-				time.Sleep(60 * time.Second)
+				time.Sleep(waitDurationOnFailure)
 			}
 		}
 	}
