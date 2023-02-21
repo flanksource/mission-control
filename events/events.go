@@ -66,7 +66,7 @@ func listenToPostgresNotify(ctx context.Context, pgNotify chan bool) {
 }
 
 func consumeEvents(ctx context.Context, config Config) error {
-	tx := db.Gorm.Begin()
+	tx := db.Gorm.WithContext(ctx).Begin()
 	if tx.Error != nil {
 		return fmt.Errorf("error initiating db tx: %w", tx.Error)
 	}
