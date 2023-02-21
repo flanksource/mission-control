@@ -19,21 +19,15 @@ func NewKratosHandler(kratosAPI, kratosAdminAPI, jwtSecret string) *KratosHandle
 }
 
 func newAPIClient(kratosAPI string) *client.APIClient {
-	configuration := client.NewConfiguration()
-	configuration.Servers = []client.ServerConfiguration{
-		{
-			URL: kratosAPI,
-		},
-	}
-	return client.NewAPIClient(configuration)
+	return newKratosClient(kratosAPI)
 }
 
 func newAdminAPIClient(kratosAdminAPI string) *client.APIClient {
+	return newKratosClient(kratosAdminAPI)
+}
+
+func newKratosClient(apiURL string) *client.APIClient {
 	configuration := client.NewConfiguration()
-	configuration.Servers = []client.ServerConfiguration{
-		{
-			URL: kratosAdminAPI,
-		},
-	}
+	configuration.Servers = []client.ServerConfiguration{{URL: apiURL}}
 	return client.NewAPIClient(configuration)
 }

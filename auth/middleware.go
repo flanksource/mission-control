@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -66,7 +65,7 @@ func (k *kratosMiddleware) validateSession(r *http.Request) (*client.Session, er
 		return nil, errors.New("no session found in cookie")
 	}
 
-	session, _, err := k.client.V0alpha2Api.ToSession(context.Background()).Cookie(cookie.String()).Execute()
+	session, _, err := k.client.FrontendApi.ToSession(r.Context()).Cookie(cookie.String()).Execute()
 	if err != nil {
 		return nil, err
 	}

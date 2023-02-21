@@ -14,8 +14,8 @@ const (
 	DefaultAdminPassword = "admin"
 )
 
-func (k *KratosHandler) createUser(firstName, lastName, email string) (*client.Identity, error) {
-	adminCreateIdentityBody := *client.NewAdminCreateIdentityBody(
+func (k *KratosHandler) createUser(ctx context.Context, firstName, lastName, email string) (*client.Identity, error) {
+	adminCreateIdentityBody := *client.NewCreateIdentityBody(
 		"default",
 		map[string]any{
 			"email": email,
@@ -26,35 +26,35 @@ func (k *KratosHandler) createUser(firstName, lastName, email string) (*client.I
 		},
 	)
 
-	createdIdentity, _, err := k.adminClient.V0alpha2Api.AdminCreateIdentity(context.Background()).AdminCreateIdentityBody(adminCreateIdentityBody).Execute()
+	createdIdentity, _, err := k.adminClient.IdentityApi.CreateIdentity(ctx).CreateIdentityBody(adminCreateIdentityBody).Execute()
 	return createdIdentity, err
 }
 
-func (k *KratosHandler) createRecoveryLink(id string) (string, error) {
-	adminCreateSelfServiceRecoveryLinkBody := *client.NewAdminCreateSelfServiceRecoveryLinkBody(id)
-	resp, _, err := k.adminClient.V0alpha2Api.AdminCreateSelfServiceRecoveryLink(context.Background()).AdminCreateSelfServiceRecoveryLinkBody(adminCreateSelfServiceRecoveryLinkBody).Execute()
+func (k *KratosHandler) createRecoveryLink(ctx context.Context, id string) (string, error) {
+	adminCreateSelfServiceRecoveryLinkBody := client.NewCreateRecoveryLinkForIdentityBody(id)
+	resp, _, err := k.adminClient.IdentityApi.CreateRecoveryLinkForIdentity(ctx).CreateRecoveryLinkForIdentityBody(*adminCreateSelfServiceRecoveryLinkBody).Execute()
 	if err != nil {
 		return "", err
 	}
 	return resp.GetRecoveryLink(), nil
 }
 
-func (k *KratosHandler) createAdminIdentity() (string, error) {
-	var adminPassword string
-	adminPassword = os.Getenv("ADMIN_PASSWORD")
+func (k *KratosHandler) createAdminIdentity(ctx context.Context) (string, error) {
+	adminPassword := os.Getenv("ADMIN_PASSWORD")
 	if adminPassword == "" {
 		adminPassword = DefaultAdminPassword
 	}
-	config := *client.NewAdminCreateIdentityImportCredentialsPasswordConfig()
+
+	config := *client.NewIdentityWithCredentialsPasswordConfig()
 	config.SetPassword(adminPassword)
 
-	password := *client.NewAdminCreateIdentityImportCredentialsPassword()
+	password := *client.NewIdentityWithCredentialsPassword()
 	password.SetConfig(config)
 
-	creds := *client.NewAdminIdentityImportCredentials()
+	creds := *client.NewIdentityWithCredentials()
 	creds.SetPassword(password)
 
-	body := *client.NewAdminCreateIdentityBody(
+	body := *client.NewCreateIdentityBody(
 		"default",
 		map[string]any{
 			"email": AdminEmail,
@@ -65,14 +65,15 @@ func (k *KratosHandler) createAdminIdentity() (string, error) {
 	)
 	body.SetCredentials(creds)
 
-	createdIdentity, _, err := k.adminClient.V0alpha2Api.AdminCreateIdentity(context.Background()).AdminCreateIdentityBody(body).Execute()
+	createdIdentity, _, err := k.adminClient.IdentityApi.CreateIdentity(ctx).CreateIdentityBody(body).Execute()
 	if err != nil {
 		return "", err
 	}
+
 	return createdIdentity.Id, nil
 }
 
-func (k *KratosHandler) CreateAdminUser() (string, error) {
+func (k *KratosHandler) CreateAdminUser(ctx context.Context) (string, error) {
 	var id string
 	tx := db.Gorm.Raw(`SELECT id FROM identities WHERE traits->>'email' = ?`, AdminEmail).Scan(&id)
 	if tx.Error != nil {
@@ -80,7 +81,8 @@ func (k *KratosHandler) CreateAdminUser() (string, error) {
 	}
 
 	if tx.RowsAffected == 0 {
-		return k.createAdminIdentity()
+		return k.createAdminIdentity(ctx)
 	}
+
 	return id, nil
 }
