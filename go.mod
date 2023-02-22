@@ -8,7 +8,7 @@ require (
 	github.com/antihax/optional v1.0.0
 	github.com/flanksource/canary-checker/sdk v0.0.0-20221002171205-15e7cea06125
 	github.com/flanksource/commons v1.6.2
-	github.com/flanksource/duty v1.0.18
+	github.com/flanksource/duty v1.0.22
 	github.com/flanksource/kommons v0.31.1
 	github.com/google/cel-go v0.13.0
 	github.com/google/uuid v1.3.0
@@ -99,7 +99,7 @@ require (
 	golang.org/x/mod v0.7.0 // indirect
 	golang.org/x/tools v0.4.0 // indirect
 	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
-	gorm.io/driver/postgres v1.4.7 // indirect
+	gorm.io/driver/postgres v1.4.8 // indirect
 	inet.af/netaddr v0.0.0-20220811202034-502d2d690317 // indirect
 	k8s.io/api v0.25.1 // indirect
 	k8s.io/apiextensions-apiserver v0.24.4 // indirect
@@ -244,7 +244,6 @@ require (
 )
 
 replace (
-	github.com/flanksource/duty => /home/gunners/Projects/flanksource/duty
 	github.com/spf13/viper => github.com/spf13/viper v1.13.0
 	k8s.io/api => k8s.io/api v0.24.4
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.24.4
