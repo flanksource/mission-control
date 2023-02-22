@@ -55,33 +55,33 @@ func UpdateAccountState(c echo.Context) error {
 		State string `json:"state"`
 	}
 	if err := c.Bind(&reqData); err != nil {
-		return c.JSON(http.StatusInternalServerError, api.HTTPErrorMessage{
+		return c.JSON(http.StatusInternalServerError, api.HTTPError{
 			Error:   err.Error(),
 			Message: "Invalid request body",
 		})
 	}
 
 	if !oryclient.IdentityState(reqData.State).IsValid() {
-		return c.JSON(http.StatusInternalServerError, api.HTTPErrorMessage{
+		return c.JSON(http.StatusInternalServerError, api.HTTPError{
 			Error:   fmt.Sprintf("Invalid state: %s", reqData.State),
 			Message: fmt.Sprintf("Invalid state. Allowed values are %s", oryclient.AllowedIdentityStateEnumValues),
 		})
 	}
 
 	if err := db.UpdateIdentityState(reqData.ID, reqData.State); err != nil {
-		return c.JSON(http.StatusInternalServerError, api.HTTPErrorMessage{
+		return c.JSON(http.StatusInternalServerError, api.HTTPError{
 			Error:   err.Error(),
 			Message: "Error updating database",
 		})
 	}
 
-	return c.JSON(http.StatusOK, api.HTTPSuccessMessage{Message: "success"})
+	return c.JSON(http.StatusOK, api.HTTPSuccess{Message: "success"})
 }
 
 func UpdateAccountProperties(c echo.Context) error {
 	var props api.PersonProperties
 	if err := c.Bind(&props); err != nil {
-		return c.JSON(http.StatusInternalServerError, api.HTTPErrorMessage{
+		return c.JSON(http.StatusInternalServerError, api.HTTPError{
 			Error:   err.Error(),
 			Message: "Invalid request body",
 		})
@@ -89,11 +89,11 @@ func UpdateAccountProperties(c echo.Context) error {
 
 	err := db.UpdateUserProperties(c.Param("id"), props)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, api.HTTPErrorMessage{
+		return c.JSON(http.StatusInternalServerError, api.HTTPError{
 			Error:   err.Error(),
 			Message: "Error updating database",
 		})
 	}
 
-	return c.JSON(http.StatusOK, api.HTTPSuccessMessage{Message: "success"})
+	return c.JSON(http.StatusOK, api.HTTPSuccess{Message: "success"})
 }
