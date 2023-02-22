@@ -83,6 +83,7 @@ func (t *pushToUpstreamEventHandler) Run(ctx context.Context, tx *gorm.DB, event
 		}
 	}
 
+	upstreamMsg.ApplyLabels(t.conf.LabelsMap())
 	if err := t.push(ctx, upstreamMsg); err != nil {
 		return fmt.Errorf("failed to push to upstream: %w", err)
 	}

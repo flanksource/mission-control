@@ -10,7 +10,6 @@ import (
 // PushData consists of data about changes to
 // components, configs, analysis.
 type PushData struct {
-	Labels                       map[string]string                    `json:"labels"`
 	ClusterName                  string                               `json:"cluster_name"`
 	Canaries                     []models.Canary                      `json:"canaries"`
 	Checks                       []models.Check                       `json:"checks"`
@@ -30,6 +29,31 @@ func (t *PushData) ReplaceTemplateID(id *uuid.UUID) {
 	for i := range t.Components {
 		t.Components[i].SystemTemplateID = id
 	}
+}
+
+// ApplyLabels injects additional labels to the suitable fields
+func (t *PushData) ApplyLabels(labels map[string]string) {
+	for i := range t.Components {
+		t.Components[i].Labels = mergeMap(t.Components[i].Labels, labels)
+	}
+
+	for i := range t.Checks {
+		t.Checks[i].Labels = mergeMap(t.Checks[i].Labels, labels)
+	}
+
+	for i := range t.Canaries {
+		t.Canaries[i].Labels = mergeMap(t.Canaries[i].Labels, labels)
+	}
+}
+
+// mergeMap will merge map b into a.
+// On key collision, map b takes precedence.
+func mergeMap(a, b map[string]string) map[string]string {
+	for k, v := range b {
+		a[k] = v
+	}
+
+	return a
 }
 
 type UpstreamConfig struct {
