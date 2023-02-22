@@ -34,7 +34,7 @@ func PushUpstream(c echo.Context) error {
 	req.ReplaceTemplateID(dummyTemplateID.(*uuid.UUID))
 
 	if err := db.InsertUpstreamMsg(c.Request().Context(), &req); err != nil {
-		return c.JSON(http.StatusInternalServerError, api.HTTPErrorMessage{Error: err.Error(), Message: "something went wrong"}) // TODO: better error message
+		return c.JSON(http.StatusInternalServerError, api.HTTPErrorMessage{Error: err.Error(), Message: "failed to upsert upstream message"})
 	}
 
 	return nil

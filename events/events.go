@@ -22,7 +22,7 @@ const (
 
 const (
 	eventMaxAttempts      = 3
-	waitDurationOnFailure = time.Second * 10
+	waitDurationOnFailure = time.Minute
 	pgNotifyTimeout       = time.Minute
 )
 
