@@ -18,14 +18,14 @@ func PushUpstream(c echo.Context) error {
 	var req api.PushData
 	err := json.NewDecoder(c.Request().Body).Decode(&req)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, api.HTTPErrorMessage{Error: err.Error(), Message: "invalid json request"})
+		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error(), Message: "invalid json request"})
 	}
 
 	dummyTemplateID, ok := templateIDCache.Get(req.ClusterName)
 	if !ok {
 		dummyTemplate, err := db.GetOrCreateDummyTemplateID(c.Request().Context(), req.ClusterName)
 		if err != nil {
-			return c.JSON(http.StatusBadRequest, api.HTTPErrorMessage{Error: err.Error(), Message: "failed to get dummy template"})
+			return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error(), Message: "failed to get dummy template"})
 		}
 
 		dummyTemplateID = &dummyTemplate.ID
@@ -34,7 +34,7 @@ func PushUpstream(c echo.Context) error {
 	req.ReplaceTemplateID(dummyTemplateID.(*uuid.UUID))
 
 	if err := db.InsertUpstreamMsg(c.Request().Context(), &req); err != nil {
-		return c.JSON(http.StatusInternalServerError, api.HTTPErrorMessage{Error: err.Error(), Message: "failed to upsert upstream message"})
+		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to upsert upstream message"})
 	}
 
 	return nil
