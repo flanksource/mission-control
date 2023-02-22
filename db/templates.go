@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -13,26 +14,19 @@ import (
 // downstream instances.
 const dummyTemplateNamespace = "push"
 
-// TODO: This should be in duty
-type Template struct {
-	ID        uuid.UUID `gorm:"column:id"`
-	Name      string    `gorm:"column:name"`
-	Namespace string    `gorm:"column:namespace"`
-}
-
-func getDummyTemplate(ctx context.Context, name string) (*Template, error) {
-	template := Template{Name: name, Namespace: dummyTemplateNamespace}
+func getDummyTemplate(ctx context.Context, name string) (*models.SystemTemplate, error) {
+	template := models.SystemTemplate{Name: name, Namespace: dummyTemplateNamespace}
 	tx := Gorm.WithContext(ctx).Where(template).First(&template)
 	return &template, tx.Error
 }
 
-func createDummyTemplate(ctx context.Context, name string) (*Template, error) {
-	template := Template{ID: uuid.New(), Name: name, Namespace: dummyTemplateNamespace}
+func createDummyTemplate(ctx context.Context, name string) (*models.SystemTemplate, error) {
+	template := models.SystemTemplate{ID: uuid.New(), Name: name, Namespace: dummyTemplateNamespace}
 	tx := Gorm.WithContext(ctx).Create(&template)
 	return &template, tx.Error
 }
 
-func GetOrCreateDummyTemplateID(ctx context.Context, name string) (*Template, error) {
+func GetOrCreateDummyTemplateID(ctx context.Context, name string) (*models.SystemTemplate, error) {
 	id, err := getDummyTemplate(ctx, name)
 	if nil == err {
 		return id, nil
