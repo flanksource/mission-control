@@ -7,9 +7,9 @@ import (
 	"strings"
 
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/db/models"
-	"github.com/flanksource/incident-commander/db/types"
 	"github.com/flanksource/incident-commander/utils"
 	"github.com/spf13/cobra"
 	"gorm.io/gorm/clause"

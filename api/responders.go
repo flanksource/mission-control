@@ -1,7 +1,7 @@
 package api
 
 import (
-	"github.com/flanksource/incident-commander/db/types"
+	"github.com/flanksource/duty/types"
 	"github.com/flanksource/kommons"
 	"github.com/google/uuid"
 )

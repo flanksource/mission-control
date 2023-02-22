@@ -71,6 +71,9 @@ var Serve = &cobra.Command{
 		e.GET("/snapshot/incident/:id", snapshot.Incident)
 		e.GET("/snapshot/config/:id", snapshot.Config)
 
+		e.POST("/auth/:id/update_state", auth.UpdateAccountState)
+		e.POST("/auth/:id/properties", auth.UpdateAccountProperties)
+
 		// Serve openapi schemas
 		schemaServer, err := utils.HTTPFileserver(openapi.Schemas)
 		if err != nil {
