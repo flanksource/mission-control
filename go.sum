@@ -608,8 +608,8 @@ github.com/flanksource/canary-checker/sdk v0.0.0-20221002171205-15e7cea06125 h1:
 github.com/flanksource/canary-checker/sdk v0.0.0-20221002171205-15e7cea06125/go.mod h1:JwV0Y7FcdwcgmooZRcF4OV4w+H7Td5auyFHXZla/wjU=
 github.com/flanksource/commons v1.6.2 h1:1VRCNy2Wk7v+uCXyJbsOql9XA6m7oCRd8i6Cx06/3AQ=
 github.com/flanksource/commons v1.6.2/go.mod h1:zOpjd+7WeF691Gsx30+v8X+05BXeBmA4uUK+7CSwNo4=
-github.com/flanksource/duty v1.0.18 h1:f+cJVM3AuTsMXsAAetpLTvHM+pIpHw4wjEiQ8DUPbMk=
-github.com/flanksource/duty v1.0.18/go.mod h1:uyxEeWPYFdexSZeXKHSnoM31bN3j63GpueuajJDi6wg=
+github.com/flanksource/duty v1.0.19 h1:ZxcwJU33Oc9KIEypMZoJVe1MkIBKXqHTZZU+bK8qegc=
+github.com/flanksource/duty v1.0.19/go.mod h1:uyxEeWPYFdexSZeXKHSnoM31bN3j63GpueuajJDi6wg=
 github.com/flanksource/gomplate/v3 v3.20.1 h1:aFVvR7gw534ReoEXVUtZm+lWlVq3RMRqF3GhRN3okgM=
 github.com/flanksource/gomplate/v3 v3.20.1/go.mod h1:LPpzujBIg9HBXRUngDKK/zNmEjHpEUieKa/2oRjkCzI=
 github.com/flanksource/kommons v0.31.1 h1:WZjrIYbSAR7xzIvP2uSRQcn5wPi4W9gAasuOM5CD854=
@@ -1396,8 +1396,6 @@ github.com/openzipkin-contrib/zipkin-go-opentracing v0.4.5/go.mod h1:/wsWhb9smxS
 github.com/openzipkin/zipkin-go v0.1.6/go.mod h1:QgAqvLzwWbR/WpD4A3cGpPtJrZXNIiJc5AZX7/PBEpw=
 github.com/openzipkin/zipkin-go v0.2.1/go.mod h1:NaW6tEwdmWMaCDZzg8sh+IBNOxHMPnhQw8ySjnjRyN4=
 github.com/openzipkin/zipkin-go v0.2.2/go.mod h1:NaW6tEwdmWMaCDZzg8sh+IBNOxHMPnhQw8ySjnjRyN4=
-github.com/ory/client-go v0.2.0-alpha.60 h1:sMAqrKP5eUNYyyOYbSjDTwr8EucDxYLGrQC093ZX5pU=
-github.com/ory/client-go v0.2.0-alpha.60/go.mod h1:dWbi9DBEjiDXwyuJ1+A2WT1/bIp9HwvVxZxzHzp4YHU=
 github.com/ory/client-go v1.1.17 h1:oc6+pzDoTAH+zr1a4xnc65Osu9aoX/DQbVVf4s1PC+M=
 github.com/ory/client-go v1.1.17/go.mod h1:AISu6yaCc4rbvmOr9sLuSjQxfx8Ejvs/cG6zmNvMBvU=
 github.com/pact-foundation/pact-go v1.0.4/go.mod h1:uExwJY4kCzNPcHRj+hCR/HBbOOIwwtUjcrb0b5/5kLM=
@@ -1983,7 +1981,6 @@ golang.org/x/oauth2 v0.0.0-20201208152858-08078c50e5b5/go.mod h1:KelEdhl1UZF7XfJ
 golang.org/x/oauth2 v0.0.0-20210218202405-ba52d332ba99/go.mod h1:KelEdhl1UZF7XfJ4dDtk6s++YSgaE7mD/BuKKDLBl4A=
 golang.org/x/oauth2 v0.0.0-20210220000619-9bb904979d93/go.mod h1:KelEdhl1UZF7XfJ4dDtk6s++YSgaE7mD/BuKKDLBl4A=
 golang.org/x/oauth2 v0.0.0-20210313182246-cd4f82c27b84/go.mod h1:KelEdhl1UZF7XfJ4dDtk6s++YSgaE7mD/BuKKDLBl4A=
-golang.org/x/oauth2 v0.0.0-20210323180902-22b0adad7558/go.mod h1:KelEdhl1UZF7XfJ4dDtk6s++YSgaE7mD/BuKKDLBl4A=
 golang.org/x/oauth2 v0.0.0-20210427180440-81ed05c6b58c/go.mod h1:KelEdhl1UZF7XfJ4dDtk6s++YSgaE7mD/BuKKDLBl4A=
 golang.org/x/oauth2 v0.0.0-20210514164344-f6687ab2804c/go.mod h1:KelEdhl1UZF7XfJ4dDtk6s++YSgaE7mD/BuKKDLBl4A=
 golang.org/x/oauth2 v0.0.0-20210628180205-a41e5a781914/go.mod h1:KelEdhl1UZF7XfJ4dDtk6s++YSgaE7mD/BuKKDLBl4A=
