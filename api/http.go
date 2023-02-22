@@ -1,6 +1,10 @@
 package api
 
-type HTTPErrorMessage struct {
+type HTTPError struct {
 	Error   string `json:"error"`
+	Message string `json:"message"`
+}
+
+type HTTPSuccess struct {
 	Message string `json:"message"`
 }

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flanksource/incident-commander/db/types"
+	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 )
 
