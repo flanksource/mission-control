@@ -3,14 +3,16 @@ package upstream
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+	"github.com/patrickmn/go-cache"
 )
 
-var dummyTemplateID *uuid.UUID
+var templateIDCache = cache.New(3*24*time.Hour, 12*time.Hour)
 
 func PushUpstream(c echo.Context) error {
 	var req api.PushData
@@ -19,13 +21,17 @@ func PushUpstream(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, api.HTTPErrorMessage{Error: err.Error(), Message: "invalid json request"})
 	}
 
-	if dummyTemplateID == nil {
-		dummyTemplateID, err = db.GetDummyTemplateID(c.Request().Context())
+	dummyTemplateID, ok := templateIDCache.Get(req.ClusterName)
+	if !ok {
+		dummyTemplate, err := db.GetOrCreateDummyTemplateID(c.Request().Context(), req.ClusterName)
 		if err != nil {
 			return c.JSON(http.StatusBadRequest, api.HTTPErrorMessage{Error: err.Error(), Message: "failed to get dummy template"})
 		}
+
+		dummyTemplateID = &dummyTemplate.ID
+		templateIDCache.Set(req.ClusterName, dummyTemplateID, cache.DefaultExpiration)
 	}
-	req.ReplaceTemplateID(dummyTemplateID)
+	req.ReplaceTemplateID(dummyTemplateID.(*uuid.UUID))
 
 	if err := db.InsertUpstreamMsg(c.Request().Context(), &req); err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPErrorMessage{Error: err.Error(), Message: "something went wrong"}) // TODO: better error message

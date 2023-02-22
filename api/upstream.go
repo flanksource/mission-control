@@ -2,7 +2,6 @@ package api
 
 import (
 	"strings"
-	"time"
 
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
@@ -11,18 +10,18 @@ import (
 // PushData consists of data about changes to
 // components, configs, analysis.
 type PushData struct {
-	CheckedAt                    time.Time `json:"checked_at"`
-	Labels                       map[string]string
-	Canaries                     []models.Canary
-	Checks                       []models.Check
-	Components                   []models.Component
-	ConfigAnalysis               []models.ConfigAnalysis
-	ConfigChanges                []models.ConfigChange
-	ConfigItems                  []models.ConfigItem
-	CheckStatuses                []models.CheckStatus
-	ConfigRelationships          []models.ConfigRelationship
-	ComponentRelationships       []models.ComponentRelationship
-	ConfigComponentRelationships []models.ConfigComponentRelationship
+	Labels                       map[string]string                    `json:"labels"`
+	ClusterName                  string                               `json:"cluster_name"`
+	Canaries                     []models.Canary                      `json:"canaries"`
+	Checks                       []models.Check                       `json:"checks"`
+	Components                   []models.Component                   `json:"components"`
+	ConfigAnalysis               []models.ConfigAnalysis              `json:"config_analysis"`
+	ConfigChanges                []models.ConfigChange                `json:"config_changes"`
+	ConfigItems                  []models.ConfigItem                  `json:"config_items"`
+	CheckStatuses                []models.CheckStatus                 `json:"check_statuses"`
+	ConfigRelationships          []models.ConfigRelationship          `json:"config_relationships"`
+	ComponentRelationships       []models.ComponentRelationship       `json:"component_relationships"`
+	ConfigComponentRelationships []models.ConfigComponentRelationship `json:"config_component_relationships"`
 }
 
 // ReplaceTemplateID replaces the template id for all the components
@@ -34,14 +33,19 @@ func (t *PushData) ReplaceTemplateID(id *uuid.UUID) {
 }
 
 type UpstreamConfig struct {
-	URL      string
-	Username string
-	Password string
-	Labels   []string
+	ClusterName string
+	URL         string
+	Username    string
+	Password    string
+	Labels      []string
 }
 
 func (t *UpstreamConfig) Valid() bool {
-	return t.URL != "" && t.Username != "" && t.Password != ""
+	return t.URL != "" && t.Username != "" && t.Password != "" && t.ClusterName != ""
+}
+
+func (t *UpstreamConfig) IsPartiallyFilled() bool {
+	return !t.Valid() && (t.URL != "" || t.Username != "" || t.Password != "" || t.ClusterName != "")
 }
 
 func (t *UpstreamConfig) LabelsMap() map[string]string {

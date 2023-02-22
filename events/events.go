@@ -21,7 +21,6 @@ const (
 )
 
 const (
-	eventQueueBatchSize   = 1
 	eventMaxAttempts      = 3
 	waitDurationOnFailure = time.Second * 10
 	pgNotifyTimeout       = time.Minute
@@ -82,11 +81,11 @@ func consumeEvents(ctx context.Context, config Config) error {
 		SELECT * FROM event_queue
 		WHERE attempts <= @maxAttempts OR ((now() - last_attempt) > '1 hour'::interval)
 		FOR UPDATE SKIP LOCKED
-		LIMIT @limit
+		LIMIT 1
 	`
 
 	var event api.Event
-	err := tx.Raw(selectEventsQuery, map[string]any{"maxAttempts": eventMaxAttempts, "limit": eventQueueBatchSize}).First(&event).Error
+	err := tx.Raw(selectEventsQuery, map[string]any{"maxAttempts": eventMaxAttempts}).First(&event).Error
 	if err != nil {
 		// Commit the transaction in case of no records found to prevent
 		// creating dangling connections and to release the locks

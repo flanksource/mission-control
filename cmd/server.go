@@ -78,8 +78,8 @@ var Serve = &cobra.Command{
 		}
 		e.GET("/schemas/*", echo.WrapHandler(http.StripPrefix("/schemas/", schemaServer)))
 
-		if err := db.CreateDummyTemplate(context.Background()); err != nil {
-			logger.Fatalf("error creating dummy template: %v", err)
+		if upstreamConfig.IsPartiallyFilled() {
+			logger.Warnf("please ensure that all the required flags for upstream is supplied.")
 		}
 		e.POST("/upstream_push", upstream.PushUpstream)
 

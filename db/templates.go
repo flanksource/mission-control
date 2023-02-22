@@ -2,32 +2,52 @@ package db
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
-const (
-	dummyTemplateName      = "dummy"
-	dummyTemplateNamespace = "dummy"
-)
+// dummyTemplateNamespace is a shared template namespace for
+// downstream instances.
+const dummyTemplateNamespace = "push"
 
-func CreateDummyTemplate(ctx context.Context) error {
-	tx := Gorm.WithContext(ctx).Exec(`INSERT INTO templates (name, namespace) VALUES(?, ?) ON CONFLICT DO NOTHING`, dummyTemplateName, dummyTemplateNamespace)
-	if tx.Error != nil {
-		return fmt.Errorf("failed to create dummy template: %w", tx.Error)
-	}
-
-	return nil
+// TODO: This should be in duty
+type Template struct {
+	ID        uuid.UUID `gorm:"column:id"`
+	Name      string    `gorm:"column:name"`
+	Namespace string    `gorm:"column:namespace"`
 }
 
-func GetDummyTemplateID(ctx context.Context) (*uuid.UUID, error) {
-	var id string
-	tx := Gorm.WithContext(ctx).Raw(`SELECT id FROM templates WHERE name = ? AND namespace = ?`, dummyTemplateName, dummyTemplateNamespace).Scan(&id)
-	if tx.Error != nil {
-		return nil, fmt.Errorf("failed to select dummy template: %w", tx.Error)
+func getDummyTemplate(ctx context.Context, name string) (*Template, error) {
+	template := Template{Name: name, Namespace: dummyTemplateNamespace}
+	tx := Gorm.WithContext(ctx).Where(template).First(&template)
+	return &template, tx.Error
+}
+
+func createDummyTemplate(ctx context.Context, name string) (*Template, error) {
+	template := Template{ID: uuid.New(), Name: name, Namespace: dummyTemplateNamespace}
+	tx := Gorm.WithContext(ctx).Create(&template)
+	return &template, tx.Error
+}
+
+func GetOrCreateDummyTemplateID(ctx context.Context, name string) (*Template, error) {
+	id, err := getDummyTemplate(ctx, name)
+	if nil == err {
+		return id, nil
 	}
 
-	x := uuid.MustParse(id)
-	return &x, nil
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		newDummyTpl, err := createDummyTemplate(ctx, name)
+		if nil == err {
+			return newDummyTpl, nil
+		}
+
+		if err != nil {
+			return nil, fmt.Errorf("failed to create dummy template: %w", err)
+		}
+	}
+
+	return nil, err
 }

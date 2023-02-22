@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/flanksource/incident-commander/api"
 	"gorm.io/gorm"
@@ -27,7 +26,7 @@ func newPushToUpstreamEventHandler(conf api.UpstreamConfig) *pushToUpstreamEvent
 // Run pushes data from decentralized instances to central incident commander
 func (t *pushToUpstreamEventHandler) Run(ctx context.Context, tx *gorm.DB, events []api.Event) error {
 	upstreamMsg := &api.PushData{
-		CheckedAt: time.Now(),
+		ClusterName: t.conf.ClusterName,
 	}
 
 	for tablename, itemIDs := range groupChangelogsByTables(events) {
