@@ -78,15 +78,15 @@ func consumeEvents(ctx context.Context, config Config) error {
 		return fmt.Errorf("error initiating db tx: %w", tx.Error)
 	}
 
-	selectEventsQuery := fmt.Sprintf(`
+	const selectEventsQuery = `
 		SELECT * FROM event_queue
-		WHERE attempts <= %d OR ((now() - last_attempt) > '1 hour'::interval)
+		WHERE attempts <= @maxAttempts OR ((now() - last_attempt) > '1 hour'::interval)
 		FOR UPDATE SKIP LOCKED
-		LIMIT %d
-	`, eventMaxAttempts, eventQueueBatchSize)
+		LIMIT @limit
+	`
 
 	var event api.Event
-	err := tx.Raw(selectEventsQuery).First(&event).Error
+	err := tx.Raw(selectEventsQuery, map[string]any{"maxAttempts": eventMaxAttempts, "limit": eventQueueBatchSize}).First(&event).Error
 	if err != nil {
 		// Commit the transaction in case of no records found to prevent
 		// creating dangling connections and to release the locks
@@ -100,7 +100,7 @@ func consumeEvents(ctx context.Context, config Config) error {
 	case EventCommentCreate:
 		err = reconcileCommentEvent(tx, event)
 	case EventPushQueueCreate:
-		if config.UpstreamConf.IsFilled() {
+		if config.UpstreamConf.Valid() {
 			upstreamPushEventHandler := newPushToUpstreamEventHandler(config.UpstreamConf)
 			err = upstreamPushEventHandler.Run(ctx, tx, []api.Event{event})
 		}
@@ -110,6 +110,8 @@ func consumeEvents(ctx context.Context, config Config) error {
 	}
 
 	if err != nil {
+		logger.Errorf("failed to handle event [%s]: %v", event.Name, err)
+
 		errorMsg := err.Error()
 		setErr := tx.Exec("UPDATE event_queue SET error = ?, attempts = attempts + 1 WHERE id = ?", errorMsg, event.ID).Error
 		if setErr != nil {

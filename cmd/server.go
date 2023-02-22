@@ -78,7 +78,7 @@ var Serve = &cobra.Command{
 		}
 		e.GET("/schemas/*", echo.WrapHandler(http.StripPrefix("/schemas/", schemaServer)))
 
-		e.POST("/upstream_push", upstream.UpstreamPushesCtrl)
+		e.POST("/upstream_push", upstream.PushUpstream)
 
 		forward(e, "/config", configDb)
 		forward(e, "/canary", api.CanaryCheckerPath)

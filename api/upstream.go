@@ -31,7 +31,7 @@ type UpstreamConfig struct {
 	Labels   []string
 }
 
-func (t *UpstreamConfig) IsFilled() bool {
+func (t *UpstreamConfig) Valid() bool {
 	return t.URL != "" && t.Username != "" && t.Password != ""
 }
 
