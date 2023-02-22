@@ -78,6 +78,9 @@ var Serve = &cobra.Command{
 		}
 		e.GET("/schemas/*", echo.WrapHandler(http.StripPrefix("/schemas/", schemaServer)))
 
+		if err := db.CreateDummyTemplate(context.Background()); err != nil {
+			logger.Fatalf("error creating dummy template: %v", err)
+		}
 		e.POST("/upstream_push", upstream.PushUpstream)
 
 		forward(e, "/config", configDb)

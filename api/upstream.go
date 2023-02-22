@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/flanksource/duty/models"
+	"github.com/google/uuid"
 )
 
 // PushData consists of data about changes to
@@ -22,6 +23,14 @@ type PushData struct {
 	ConfigRelationships          []models.ConfigRelationship
 	ComponentRelationships       []models.ComponentRelationship
 	ConfigComponentRelationships []models.ConfigComponentRelationship
+}
+
+// ReplaceTemplateID replaces the template id for all the components
+// with the provided id.
+func (t *PushData) ReplaceTemplateID(id *uuid.UUID) {
+	for i := range t.Components {
+		t.Components[i].SystemTemplateID = id
+	}
 }
 
 type UpstreamConfig struct {
