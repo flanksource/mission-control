@@ -1,8 +1,7 @@
 package api
 
 import (
-	"strings"
-
+	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
 )
@@ -34,26 +33,16 @@ func (t *PushData) ReplaceTemplateID(id *uuid.UUID) {
 // ApplyLabels injects additional labels to the suitable fields
 func (t *PushData) ApplyLabels(labels map[string]string) {
 	for i := range t.Components {
-		t.Components[i].Labels = mergeMap(t.Components[i].Labels, labels)
+		t.Components[i].Labels = collections.MergeMap(t.Components[i].Labels, labels)
 	}
 
 	for i := range t.Checks {
-		t.Checks[i].Labels = mergeMap(t.Checks[i].Labels, labels)
+		t.Checks[i].Labels = collections.MergeMap(t.Checks[i].Labels, labels)
 	}
 
 	for i := range t.Canaries {
-		t.Canaries[i].Labels = mergeMap(t.Canaries[i].Labels, labels)
+		t.Canaries[i].Labels = collections.MergeMap(t.Canaries[i].Labels, labels)
 	}
-}
-
-// mergeMap will merge map b into a.
-// On key collision, map b takes precedence.
-func mergeMap(a, b map[string]string) map[string]string {
-	for k, v := range b {
-		a[k] = v
-	}
-
-	return a
 }
 
 type UpstreamConfig struct {
@@ -73,19 +62,5 @@ func (t *UpstreamConfig) IsPartiallyFilled() bool {
 }
 
 func (t *UpstreamConfig) LabelsMap() map[string]string {
-	return sanitizeStringSliceVar(t.Labels)
-}
-
-func sanitizeStringSliceVar(in []string) map[string]string {
-	sanitized := make(map[string]string, len(in))
-	for _, item := range in {
-		splits := strings.SplitN(item, "=", 2)
-		if len(splits) == 1 {
-			continue // ignore this item. not in a=b format
-		}
-
-		sanitized[strings.TrimSpace(splits[0])] = strings.TrimSpace(splits[1])
-	}
-
-	return sanitized
+	return collections.KeyValueSliceToMap(t.Labels)
 }
