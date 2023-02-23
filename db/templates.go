@@ -10,36 +10,36 @@ import (
 	"gorm.io/gorm"
 )
 
-// dummyTemplateNamespace is a shared template namespace for
+// headlessTemplateNamespace is a shared template namespace for
 // downstream instances.
-const dummyTemplateNamespace = "push"
+const headlessTemplateNamespace = "push"
 
-func getDummyTemplate(ctx context.Context, name string) (*models.SystemTemplate, error) {
-	template := models.SystemTemplate{Name: name, Namespace: dummyTemplateNamespace}
+func getHeadlessTemplate(ctx context.Context, name string) (*models.SystemTemplate, error) {
+	template := models.SystemTemplate{Name: name, Namespace: headlessTemplateNamespace}
 	tx := Gorm.WithContext(ctx).Where(template).First(&template)
 	return &template, tx.Error
 }
 
-func createDummyTemplate(ctx context.Context, name string) (*models.SystemTemplate, error) {
-	template := models.SystemTemplate{ID: uuid.New(), Name: name, Namespace: dummyTemplateNamespace}
+func createHeadlessTemplate(ctx context.Context, name string) (*models.SystemTemplate, error) {
+	template := models.SystemTemplate{ID: uuid.New(), Name: name, Namespace: headlessTemplateNamespace}
 	tx := Gorm.WithContext(ctx).Create(&template)
 	return &template, tx.Error
 }
 
-func GetOrCreateDummyTemplateID(ctx context.Context, name string) (*models.SystemTemplate, error) {
-	id, err := getDummyTemplate(ctx, name)
+func GetOrCreateHeadlessTemplateID(ctx context.Context, name string) (*models.SystemTemplate, error) {
+	id, err := getHeadlessTemplate(ctx, name)
 	if nil == err {
 		return id, nil
 	}
 
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		newDummyTpl, err := createDummyTemplate(ctx, name)
+		newHeadlessTpl, err := createHeadlessTemplate(ctx, name)
 		if nil == err {
-			return newDummyTpl, nil
+			return newHeadlessTpl, nil
 		}
 
 		if err != nil {
-			return nil, fmt.Errorf("failed to create dummy template: %w", err)
+			return nil, fmt.Errorf("failed to create headless template: %w", err)
 		}
 	}
 

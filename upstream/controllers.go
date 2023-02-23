@@ -2,7 +2,9 @@ package upstream
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/flanksource/incident-commander/api"
@@ -21,17 +23,21 @@ func PushUpstream(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error(), Message: "invalid json request"})
 	}
 
-	dummyTemplateID, ok := templateIDCache.Get(req.ClusterName)
+	if strings.TrimSpace(req.ClusterName) == "" {
+		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: "cluster_name name is required", Message: "cluster name is required"})
+	}
+
+	headlessTplID, ok := templateIDCache.Get(req.ClusterName)
 	if !ok {
-		dummyTemplate, err := db.GetOrCreateDummyTemplateID(c.Request().Context(), req.ClusterName)
+		headlessTpl, err := db.GetOrCreateHeadlessTemplateID(c.Request().Context(), req.ClusterName)
 		if err != nil {
-			return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error(), Message: "failed to get dummy template"})
+			return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error(), Message: fmt.Sprintf("failed to get headless template for cluster: %s", req.ClusterName)})
 		}
 
-		dummyTemplateID = &dummyTemplate.ID
-		templateIDCache.Set(req.ClusterName, dummyTemplateID, cache.DefaultExpiration)
+		headlessTplID = &headlessTpl.ID
+		templateIDCache.Set(req.ClusterName, headlessTplID, cache.DefaultExpiration)
 	}
-	req.ReplaceTemplateID(dummyTemplateID.(*uuid.UUID))
+	req.ReplaceTemplateID(headlessTplID.(*uuid.UUID))
 
 	if err := db.InsertUpstreamMsg(c.Request().Context(), &req); err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to upsert upstream message"})
