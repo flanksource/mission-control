@@ -606,8 +606,6 @@ github.com/felixge/httpsnoop v1.0.3/go.mod h1:m8KPJKqk1gH5J9DgRY2ASl2lWCfGKXixSw
 github.com/fergusstrange/embedded-postgres v1.19.0 h1:NqDufJHeA03U7biULlPHZ0pZ10/mDOMKPILEpT50Fyk=
 github.com/flanksource/canary-checker/sdk v0.0.0-20221002171205-15e7cea06125 h1:mU173MBUDmB6HMUCpw4VBJI5IqDvEG91OS6Zgd5IBao=
 github.com/flanksource/canary-checker/sdk v0.0.0-20221002171205-15e7cea06125/go.mod h1:JwV0Y7FcdwcgmooZRcF4OV4w+H7Td5auyFHXZla/wjU=
-github.com/flanksource/commons v1.6.2 h1:1VRCNy2Wk7v+uCXyJbsOql9XA6m7oCRd8i6Cx06/3AQ=
-github.com/flanksource/commons v1.6.2/go.mod h1:zOpjd+7WeF691Gsx30+v8X+05BXeBmA4uUK+7CSwNo4=
 github.com/flanksource/commons v1.6.3 h1:U+FUcEwh1q183gqZPNxJalMkXswIx4AirjL0yRWIvYY=
 github.com/flanksource/commons v1.6.3/go.mod h1:4+SVXnqAMUSOKLmtZjzQ1qBXLhiHSNA3DyEUp0zmTCM=
 github.com/flanksource/duty v1.0.22 h1:17hiPsYqu1o/R/m8jp6zN7RMgw39p0rp3o5Mwpb/CC4=
