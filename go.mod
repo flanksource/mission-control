@@ -7,12 +7,12 @@ require (
 	github.com/andygrunwald/go-jira v1.15.1
 	github.com/antihax/optional v1.0.0
 	github.com/flanksource/canary-checker/sdk v0.0.0-20221002171205-15e7cea06125
-	github.com/flanksource/commons v1.6.2
-	github.com/flanksource/duty v1.0.22
+	github.com/flanksource/commons v1.6.3
+	github.com/flanksource/duty v1.0.23
 	github.com/flanksource/kommons v0.31.1
 	github.com/google/cel-go v0.13.0
 	github.com/google/uuid v1.3.0
-	github.com/jackc/pgx/v4 v4.18.0
+	github.com/jackc/pgx/v4 v4.18.1
 	github.com/labstack/echo/v4 v4.7.2
 	github.com/microsoft/kiota-authentication-azure-go v0.6.0
 	github.com/microsoftgraph/msgraph-sdk-go v0.54.0
@@ -72,7 +72,7 @@ require (
 	github.com/gosimple/unidecode v1.0.1 // indirect
 	github.com/hairyhenderson/yaml v0.0.0-20220618171115-2d35fca545ce // indirect
 	github.com/hashicorp/hcl/v2 v2.16.1 // indirect
-	github.com/jackc/pgx/v5 v5.3.0 // indirect
+	github.com/jackc/pgx/v5 v5.3.1 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/klauspost/compress v1.15.13 // indirect
 	github.com/liamylian/jsontime/v2 v2.0.0 // indirect
@@ -90,7 +90,7 @@ require (
 	github.com/skeema/knownhosts v1.1.0 // indirect
 	github.com/stoewer/go-strcase v1.2.0 // indirect
 	github.com/xlab/treeprint v1.1.0 // indirect
-	github.com/zclconf/go-cty v1.12.1 // indirect
+	github.com/zclconf/go-cty v1.13.0 // indirect
 	go.opentelemetry.io/otel v1.13.0 // indirect
 	go.opentelemetry.io/otel/trace v1.13.0 // indirect
 	go.starlark.net v0.0.0-20200306205701-8dd3e2ee1dd5 // indirect
