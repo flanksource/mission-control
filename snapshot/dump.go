@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/antihax/optional"
 	sdk "github.com/flanksource/canary-checker/sdk"
@@ -144,13 +145,25 @@ func dumpLogs(ctx SnapshotContext, componentIDs []string) error {
 			continue
 		}
 
-		jsonLogs, err := json.Marshal(logResult)
-		if err != nil {
-			return err
+		var logDump []byte
+		switch ctx.LogFormat {
+		case LogFormatLog:
+			var rawLogs []string
+			for _, logline := range logResult.Logs {
+				rawLogs = append(rawLogs, fmt.Sprintf("[%s] %s {%s}", logline.Timestamp, logline.Message, logline.Labels))
+			}
+			logDump = []byte(strings.Join(rawLogs, "\n"))
+		case LogFormatJSON:
+			logDump, err = json.Marshal(logResult)
+			if err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("invalid logFormat: %s", ctx.LogFormat)
 		}
 
-		logFilename := fmt.Sprintf("%s-%s-%s.log", logResult.Type, logResult.Name, utils.GetHash(componentID))
-		err = writeToLogFile(ctx.Directory, logFilename, jsonLogs)
+		logFilename := fmt.Sprintf("logs-%s-%s-%s.%s", logResult.Type, logResult.Name, utils.GetHash(componentID), ctx.LogFormat)
+		err = writeToLogFile(ctx.Directory, logFilename, logDump)
 		if err != nil {
 			return err
 		}
