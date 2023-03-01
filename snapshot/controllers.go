@@ -7,20 +7,31 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/labstack/echo/v4"
+)
+
+const (
+	LogFormatLog  = "log"
+	LogFormatJSON = "json"
 )
 
 type SnapshotContext struct {
 	Directory string
 	LogStart  string
 	LogEnd    string
+	LogFormat string
 }
 
 func NewSnapshotContext(c echo.Context) SnapshotContext {
 	directory := fmt.Sprintf("snapshot-%s", time.Now().Format(time.RFC3339))
 	logStart := c.QueryParam("start")
 	logEnd := c.QueryParam("end")
+	logFormat := c.QueryParam("logFormat")
+	if !collections.Contains([]string{LogFormatLog, LogFormatJSON}, logFormat) {
+		logFormat = LogFormatLog
+	}
 
 	if logStart == "" {
 		logStart = "15m"
@@ -29,6 +40,7 @@ func NewSnapshotContext(c echo.Context) SnapshotContext {
 		Directory: directory,
 		LogStart:  logStart,
 		LogEnd:    logEnd,
+		LogFormat: logFormat,
 	}
 }
 
