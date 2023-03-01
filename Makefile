@@ -78,6 +78,10 @@ lint:
 build:
 	go build -o ./.bin/$(NAME) -ldflags "-X \"main.version=$(VERSION_TAG)\""  main.go
 
+.PHONY: dev
+dev:
+	go build -x -v -o ./.bin/$(NAME) -gcflags="all=-N -l" main.go
+
 .PHONY: install
 install:
 	cp ./.bin/$(NAME) /usr/local/bin/

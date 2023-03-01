@@ -19,6 +19,7 @@ import (
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/jobs"
 	"github.com/flanksource/incident-commander/snapshot"
+	"github.com/flanksource/incident-commander/upstream"
 	"github.com/flanksource/incident-commander/utils"
 )
 
@@ -80,13 +81,23 @@ var Serve = &cobra.Command{
 		}
 		e.GET("/schemas/*", echo.WrapHandler(http.StripPrefix("/schemas/", schemaServer)))
 
+		if upstreamConfig.IsPartiallyFilled() {
+			logger.Warnf("please ensure that all the required flags for upstream is supplied.")
+		}
+		e.POST("/upstream_push", upstream.PushUpstream)
+
 		forward(e, "/config", configDb)
 		forward(e, "/canary", api.CanaryCheckerPath)
 		forward(e, "/kratos", kratosAPI)
 		forward(e, "/apm", api.ApmHubPath)
 
 		go jobs.Start()
-		go events.ListenForEvents()
+
+		eventHandlerConfig := events.Config{
+			UpstreamConf: upstreamConfig,
+		}
+		go events.ListenForEvents(context.Background(), eventHandlerConfig)
+
 		if err := e.Start(fmt.Sprintf(":%d", httpPort)); err != nil {
 			e.Logger.Fatal(err)
 		}

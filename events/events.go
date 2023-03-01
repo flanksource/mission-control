@@ -17,112 +17,126 @@ import (
 const (
 	EventResponderCreate = "responder.create"
 	EventCommentCreate   = "comment.create"
+	EventPushQueueCreate = "push_queue.create"
 )
 
-func ListenForEvents() {
+const (
+	eventMaxAttempts      = 3
+	waitDurationOnFailure = time.Minute
+	pgNotifyTimeout       = time.Minute
+)
 
-	logger.Infof("Started listening for events")
+type Config struct {
+	UpstreamConf api.UpstreamConfig
+}
+
+func ListenForEvents(ctx context.Context, config Config) {
+	logger.Infof("started listening for database notify events")
 
 	// Consume pending events
-	consumeEvents()
+	consumeEventsUntilEmpty(ctx, config)
 
 	pgNotify := make(chan bool)
-	go listenToPostgresNotify(pgNotify)
+	go listenToPostgresNotify(ctx, pgNotify)
 
 	for {
 		select {
 		case <-pgNotify:
-			consumeEvents()
+			consumeEventsUntilEmpty(ctx, config)
 
-		case <-time.After(60 * time.Second):
-			consumeEvents()
+		case <-time.After(pgNotifyTimeout):
+			consumeEventsUntilEmpty(ctx, config)
 		}
 	}
 }
 
-func listenToPostgresNotify(pgNotify chan bool) {
-	ctx := context.Background()
-
+func listenToPostgresNotify(ctx context.Context, pgNotify chan bool) {
 	conn, err := db.Pool.Acquire(ctx)
 	if err != nil {
-		logger.Errorf("Error creating database pool: %v", err)
+		logger.Errorf("error creating database pool: %v", err)
 	}
 
 	_, err = conn.Exec(ctx, "LISTEN event_queue_updates")
 	if err != nil {
-		logger.Errorf("Error listening to database notify: %v", err)
+		logger.Errorf("error listening to database notify: %v", err)
 	}
 
 	for {
 		_, err = conn.Conn().WaitForNotification(ctx)
 		if err != nil {
-			logger.Errorf("Error waiting for database notifications: %v", err)
+			logger.Errorf("error waiting for database notifications: %v", err)
 		}
 
 		pgNotify <- true
 	}
-
 }
 
-func consumeEvents() {
-
-	consumeEvent := func() error {
-		var event api.Event
-
-		tx := db.Gorm.Begin()
-
-		selectEventsQuery := `
-			SELECT * FROM event_queue
-			WHERE
-				attempts <= 3 OR ((now() - last_attempt) > '1 hour'::interval)
-			FOR UPDATE SKIP LOCKED
-			LIMIT 1
-		`
-		err := tx.Raw(selectEventsQuery).First(&event).Error
-		if err != nil {
-			// Commit the transaction in case of no records found to prevent
-			// creating dangling connections and to release the locks
-			tx.Commit()
-			return err
-		}
-
-		switch event.Name {
-		case EventResponderCreate:
-			err = reconcileResponderEvent(tx, event)
-		case EventCommentCreate:
-			err = reconcileCommentEvent(tx, event)
-		default:
-			logger.Errorf("Invalid event name: %s", event.Name)
-			return tx.Commit().Error
-		}
-
-		if err != nil {
-			errorMsg := err.Error()
-			setErr := tx.Exec("UPDATE event_queue SET error = ?, attempts = attempts + 1 WHERE id = ?", errorMsg, event.ID).Error
-			if setErr != nil {
-				logger.Errorf("Error updating table:event_queue with id:%s and error:%s. %v", event.ID, errorMsg, setErr)
-			}
-			return tx.Commit().Error
-		}
-
-		err = tx.Delete(&event).Error
-		if err != nil {
-			logger.Errorf("Error deleting event from event_queue table with id:%s", event.ID.String())
-			return tx.Rollback().Error
-		}
-		return tx.Commit().Error
-
+func consumeEvents(ctx context.Context, config Config) error {
+	tx := db.Gorm.WithContext(ctx).Begin()
+	if tx.Error != nil {
+		return fmt.Errorf("error initiating db tx: %w", tx.Error)
 	}
 
-	// Keep on iterating till the queue is empty
+	const selectEventsQuery = `
+		SELECT * FROM event_queue
+		WHERE attempts <= @maxAttempts OR ((now() - last_attempt) > '1 hour'::interval)
+		FOR UPDATE SKIP LOCKED
+		LIMIT 1
+	`
+
+	var event api.Event
+	err := tx.Raw(selectEventsQuery, map[string]any{"maxAttempts": eventMaxAttempts}).First(&event).Error
+	if err != nil {
+		// Commit the transaction in case of no records found to prevent
+		// creating dangling connections and to release the locks
+		tx.Commit()
+		return err
+	}
+
+	switch event.Name {
+	case EventResponderCreate:
+		err = reconcileResponderEvent(tx, event)
+	case EventCommentCreate:
+		err = reconcileCommentEvent(tx, event)
+	case EventPushQueueCreate:
+		if config.UpstreamConf.Valid() {
+			upstreamPushEventHandler := newPushToUpstreamEventHandler(config.UpstreamConf)
+			err = upstreamPushEventHandler.Run(ctx, tx, []api.Event{event})
+		}
+	default:
+		logger.Errorf("unrecognized event name: %s", event.Name)
+		return tx.Commit().Error
+	}
+
+	if err != nil {
+		logger.Errorf("failed to handle event [%s]: %v", event.Name, err)
+
+		errorMsg := err.Error()
+		setErr := tx.Exec("UPDATE event_queue SET error = ?, attempts = attempts + 1 WHERE id = ?", errorMsg, event.ID).Error
+		if setErr != nil {
+			logger.Errorf("error updating table:event_queue with id:%s and error:%s. %v", event.ID, errorMsg, setErr)
+		}
+		return tx.Commit().Error
+	}
+
+	err = tx.Delete(&event).Error
+	if err != nil {
+		logger.Errorf("error deleting event from event_queue table with id:%s", event.ID.String())
+		return tx.Rollback().Error
+	}
+	return tx.Commit().Error
+}
+
+// consumeEventsUntilEmpty consumes events forever until the event queue is empty.
+func consumeEventsUntilEmpty(ctx context.Context, config Config) {
 	for {
-		err := consumeEvent()
+		err := consumeEvents(ctx, config)
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return
 			} else {
-				logger.Errorf("Error processing event, waiting 60s to try again %v", err)
-				time.Sleep(60 * time.Second)
+				logger.Errorf("error processing event, waiting 60s to try again %v", err)
+				time.Sleep(waitDurationOnFailure)
 			}
 		}
 	}
@@ -201,7 +215,7 @@ func reconcileCommentEvent(tx *gorm.DB, event api.Event) error {
 
 		if err != nil {
 			// TODO: Associate error messages with responderType and handle specific responders when reprocessing
-			logger.Errorf("Error adding comment to responder:%s %v", responder.Properties["responderType"], err)
+			logger.Errorf("error adding comment to responder:%s %v", responder.Properties["responderType"], err)
 			continue
 		}
 
@@ -210,7 +224,7 @@ func reconcileCommentEvent(tx *gorm.DB, event api.Event) error {
 			err = tx.Exec("INSERT INTO comment_responders (comment_id, responder_id, external_id) VALUES (?, ?, ?)",
 				commentID, responder.ID, externalID).Error
 			if err != nil {
-				logger.Errorf("Error updating comment_responders table: %v", err)
+				logger.Errorf("error updating comment_responders table: %v", err)
 			}
 		}
 	}

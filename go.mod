@@ -101,7 +101,7 @@ require (
 	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
 	gorm.io/driver/postgres v1.4.8 // indirect
 	inet.af/netaddr v0.0.0-20220811202034-502d2d690317 // indirect
-	k8s.io/api v0.24.4 // indirect
+	k8s.io/api v0.25.1 // indirect
 	k8s.io/apiextensions-apiserver v0.24.4 // indirect
 	k8s.io/cli-runtime v0.24.4 // indirect
 	k8s.io/client-go v1.5.2 // indirect
