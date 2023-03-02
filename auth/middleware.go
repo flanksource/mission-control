@@ -73,10 +73,6 @@ func (k *kratosMiddleware) validateSession(r *http.Request) (*client.Session, er
 		return &login.Session, nil
 	}
 
-	if strings.HasPrefix(r.URL.Path, "/upstream_push") && !hasBasicAuth {
-		return nil, errors.New("endpoint requires basic auth")
-	}
-
 	cookie, err := r.Cookie("ory_kratos_session")
 	if err != nil {
 		return nil, err
