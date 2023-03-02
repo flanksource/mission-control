@@ -57,15 +57,11 @@ func (k *kratosMiddleware) validateSession(r *http.Request) (*client.Session, er
 		return &client.Session{Active: &activeSession}, nil
 	}
 
-	if strings.HasPrefix(r.URL.Path, "/upstream_push") {
+	username, password, hasBasicAuth := r.BasicAuth()
+	if hasBasicAuth {
 		loginFlow, _, err := k.client.FrontendApi.CreateNativeLoginFlow(r.Context()).Execute()
 		if err != nil {
 			return nil, fmt.Errorf("failed to create native login flow: %w", err)
-		}
-
-		username, password, ok := r.BasicAuth()
-		if !ok {
-			return nil, errors.New("endpoint requires basic auth")
 		}
 
 		updateLoginFlowBody := client.UpdateLoginFlowBody{UpdateLoginFlowWithPasswordMethod: client.NewUpdateLoginFlowWithPasswordMethod(username, "password", password)}
@@ -75,6 +71,10 @@ func (k *kratosMiddleware) validateSession(r *http.Request) (*client.Session, er
 		}
 
 		return &login.Session, nil
+	}
+
+	if strings.HasPrefix(r.URL.Path, "/upstream_push") && !hasBasicAuth {
+		return nil, errors.New("endpoint requires basic auth")
 	}
 
 	cookie, err := r.Cookie("ory_kratos_session")
