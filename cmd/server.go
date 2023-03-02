@@ -63,8 +63,14 @@ var Serve = &cobra.Command{
 			if _, err := kratosHandler.CreateAdminUser(context.Background()); err != nil {
 				logger.Fatalf("Failed to created admin user: %v", err)
 			}
-			e.Use(kratosHandler.KratosMiddleware().Session)
+
+			middleware, err := kratosHandler.KratosMiddleware()
+			if err != nil {
+				logger.Fatalf("failed to initialize kratos middleware: %v", err)
+			}
+			e.Use(middleware.Session)
 		}
+
 		e.POST("/auth/invite_user", kratosHandler.InviteUser)
 
 		e.GET("/snapshot/topology/:id", snapshot.Topology)

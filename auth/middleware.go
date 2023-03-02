@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/incident-commander/utils"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/labstack/echo/v4"
 	client "github.com/ory/client-go"
@@ -17,17 +18,26 @@ import (
 const DefaultPostgrestRole = "postgrest_api"
 
 type kratosMiddleware struct {
-	client     *client.APIClient
-	jwtSecret  string
-	tokenCache *cache.Cache
+	client             *client.APIClient
+	jwtSecret          string
+	tokenCache         *cache.Cache
+	authSessionCache   *cache.Cache
+	basicAuthSeparator string
 }
 
-func (k *KratosHandler) KratosMiddleware() *kratosMiddleware {
-	return &kratosMiddleware{
-		client:     k.client,
-		jwtSecret:  k.jwtSecret,
-		tokenCache: cache.New(3*24*time.Hour, 12*time.Hour),
+func (k *KratosHandler) KratosMiddleware() (*kratosMiddleware, error) {
+	randString, err := utils.GenerateRandString(30)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate random string: %w", err)
 	}
+
+	return &kratosMiddleware{
+		client:             k.client,
+		jwtSecret:          k.jwtSecret,
+		tokenCache:         cache.New(3*24*time.Hour, 12*time.Hour),
+		authSessionCache:   cache.New(30*time.Minute, time.Hour),
+		basicAuthSeparator: randString,
+	}, nil
 }
 
 func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
@@ -57,8 +67,16 @@ func (k *kratosMiddleware) validateSession(r *http.Request) (*client.Session, er
 		return &client.Session{Active: &activeSession}, nil
 	}
 
-	username, password, hasBasicAuth := r.BasicAuth()
-	if hasBasicAuth {
+	if username, password, ok := r.BasicAuth(); ok {
+		cacheKey := basicAuthCacheKey(username, k.basicAuthSeparator, password)
+
+		if val, found := k.authSessionCache.Get(cacheKey); found {
+			if session, ok := val.(*client.Session); ok {
+				return session, nil
+			}
+			logger.Errorf("unexpected value found in auth cache. It is of type [%T]", val)
+		}
+
 		loginFlow, _, err := k.client.FrontendApi.CreateNativeLoginFlow(r.Context()).Execute()
 		if err != nil {
 			return nil, fmt.Errorf("failed to create native login flow: %w", err)
@@ -68,6 +86,10 @@ func (k *kratosMiddleware) validateSession(r *http.Request) (*client.Session, er
 		login, _, err := k.client.FrontendApi.UpdateLoginFlow(r.Context()).Flow(loginFlow.Id).UpdateLoginFlowBody(updateLoginFlowBody).Execute()
 		if err != nil {
 			return nil, fmt.Errorf("failed to update native login flow: %w", err)
+		}
+
+		if err := k.authSessionCache.Add(cacheKey, &login.Session, cache.DefaultExpiration); err != nil {
+			logger.Errorf("failed to add session into cache (username=%s): %s", username, err)
 		}
 
 		return &login.Session, nil
@@ -108,4 +130,8 @@ func (k *kratosMiddleware) getDBToken(sessionID, userID string) (string, error) 
 	}
 	k.tokenCache.SetDefault(cacheKey, token)
 	return token, nil
+}
+
+func basicAuthCacheKey(username, separator, password string) string {
+	return utils.Sha256Hex(fmt.Sprintf("%s:%s:%s", username, separator, password))
 }
