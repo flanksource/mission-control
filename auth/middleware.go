@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -68,37 +69,19 @@ func (k *kratosMiddleware) validateSession(r *http.Request) (*client.Session, er
 	}
 
 	if username, password, ok := r.BasicAuth(); ok {
-		cacheKey := basicAuthCacheKey(username, k.basicAuthSeparator, password)
-
-		if val, found := k.authSessionCache.Get(cacheKey); found {
-			if session, ok := val.(*client.Session); ok {
-				return session, nil
-			}
-			logger.Errorf("unexpected value found in auth cache. It is of type [%T]", val)
-		}
-
-		loginFlow, _, err := k.client.FrontendApi.CreateNativeLoginFlow(r.Context()).Execute()
+		sess, err := k.kratosLoginWithCache(r.Context(), username, password)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create native login flow: %w", err)
+			return nil, fmt.Errorf("failed to login: %w", err)
 		}
 
-		updateLoginFlowBody := client.UpdateLoginFlowBody{UpdateLoginFlowWithPasswordMethod: client.NewUpdateLoginFlowWithPasswordMethod(username, "password", password)}
-		login, _, err := k.client.FrontendApi.UpdateLoginFlow(r.Context()).Flow(loginFlow.Id).UpdateLoginFlowBody(updateLoginFlowBody).Execute()
-		if err != nil {
-			return nil, fmt.Errorf("failed to update native login flow: %w", err)
-		}
-
-		if err := k.authSessionCache.Add(cacheKey, &login.Session, cache.DefaultExpiration); err != nil {
-			logger.Errorf("failed to add session into cache (username=%s): %s", username, err)
-		}
-
-		return &login.Session, nil
+		return sess, nil
 	}
 
 	cookie, err := r.Cookie("ory_kratos_session")
 	if err != nil {
 		return nil, err
 	}
+
 	if cookie == nil {
 		return nil, errors.New("no session found in cookie")
 	}
@@ -107,7 +90,63 @@ func (k *kratosMiddleware) validateSession(r *http.Request) (*client.Session, er
 	if err != nil {
 		return nil, err
 	}
+
 	return session, nil
+}
+
+// sessionCache is used to cache the response of a login attempt.
+type sessionCache struct {
+	session *client.Session
+	err     error
+}
+
+// kratosLoginWithCache is a wrapper around kratosLogin and adds a cache layer
+func (k *kratosMiddleware) kratosLoginWithCache(ctx context.Context, username, password string) (*client.Session, error) {
+	cacheKey := basicAuthCacheKey(username, k.basicAuthSeparator, password)
+
+	if val, found := k.authSessionCache.Get(cacheKey); found {
+		if sessCache, ok := val.(*sessionCache); ok {
+			if sessCache.err != nil {
+				return nil, sessCache.err
+			}
+
+			return sessCache.session, nil
+		}
+
+		logger.Errorf("unexpected value found in auth cache. It is of type [%T]", val)
+	}
+
+	session, err := k.kratosLogin(ctx, username, password)
+	if err != nil {
+		// Cache login failure as well
+		if err := k.authSessionCache.Add(cacheKey, &sessionCache{err: err}, time.Minute); err != nil {
+			logger.Errorf("failed to cache login failure (username=%s): %s", username, err)
+		}
+
+		return nil, fmt.Errorf("failed to login: %w", err)
+	}
+
+	if err := k.authSessionCache.Add(cacheKey, &sessionCache{session: session}, cache.DefaultExpiration); err != nil {
+		logger.Errorf("failed to cache session (username=%s): %s", username, err)
+	}
+
+	return session, nil
+}
+
+// kratosLogin performs login with password
+func (k *kratosMiddleware) kratosLogin(ctx context.Context, username, password string) (*client.Session, error) {
+	loginFlow, _, err := k.client.FrontendApi.CreateNativeLoginFlow(ctx).Execute()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create native login flow: %w", err)
+	}
+
+	updateLoginFlowBody := client.UpdateLoginFlowBody{UpdateLoginFlowWithPasswordMethod: client.NewUpdateLoginFlowWithPasswordMethod(username, "password", password)}
+	login, _, err := k.client.FrontendApi.UpdateLoginFlow(ctx).Flow(loginFlow.Id).UpdateLoginFlowBody(updateLoginFlowBody).Execute()
+	if err != nil {
+		return nil, fmt.Errorf("failed to update native login flow: %w", err)
+	}
+
+	return &login.Session, nil
 }
 
 func (k *kratosMiddleware) generateDBToken(id string) (string, error) {
