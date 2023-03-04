@@ -116,10 +116,10 @@ func (c MSPlannerClient) AddComment(taskID, comment string) (string, error) {
 
 	// If conversation thread exists, add a new reply
 	if task.GetConversationThreadId() != nil {
-		replyBody := groups.NewItemConversationsItemThreadsItemPostsItemMicrosoftGraphReplyReplyPostRequestBody()
+		replyBody := groups.NewItemConversationsItemThreadsItemPostsItemReplyPostRequestBody()
 		replyBody.SetPost(post)
 
-		err = c.client.GroupsById(c.groupID).ThreadsById(*task.GetConversationThreadId()).MicrosoftGraphReply().Post(context.Background(), replyBody, nil)
+		err = c.client.GroupsById(c.groupID).ThreadsById(*task.GetConversationThreadId()).Reply().Post(context.Background(), replyBody, nil)
 		return commentID, openDataError(err)
 	}
 
