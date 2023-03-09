@@ -8,7 +8,7 @@ require (
 	github.com/antihax/optional v1.0.0
 	github.com/flanksource/canary-checker/sdk v0.0.0-20221002171205-15e7cea06125
 	github.com/flanksource/commons v1.6.3
-	github.com/flanksource/duty v1.0.33
+	github.com/flanksource/duty v1.0.36
 	github.com/flanksource/kommons v0.31.1
 	github.com/google/cel-go v0.13.0
 	github.com/google/uuid v1.3.0
@@ -71,7 +71,7 @@ require (
 	github.com/googleapis/enterprise-certificate-proxy v0.2.1 // indirect
 	github.com/gosimple/unidecode v1.0.1 // indirect
 	github.com/hairyhenderson/yaml v0.0.0-20220618171115-2d35fca545ce // indirect
-	github.com/hashicorp/hcl/v2 v2.16.1 // indirect
+	github.com/hashicorp/hcl/v2 v2.16.2 // indirect
 	github.com/jackc/puddle/v2 v2.2.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/klauspost/compress v1.15.13 // indirect
@@ -212,7 +212,7 @@ require (
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
-	go.uber.org/multierr v1.9.0 // indirect
+	go.uber.org/multierr v1.10.0 // indirect
 	go.uber.org/zap v1.24.0 // indirect
 	gocloud.dev v0.27.0 // indirect
 	golang.org/x/crypto v0.7.0 // indirect
