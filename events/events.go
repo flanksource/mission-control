@@ -24,6 +24,9 @@ const (
 	eventMaxAttempts      = 3
 	waitDurationOnFailure = time.Minute
 	pgNotifyTimeout       = time.Minute
+
+	dbReconnectWaitDuration = time.Second * 5
+	dbReconnectMaxAttempt   = 10
 )
 
 type Config struct {
@@ -50,24 +53,51 @@ func ListenForEvents(ctx context.Context, config Config) {
 	}
 }
 
+// listenToPostgresNotify listens to postgres notifications.
+// It will retry on failure for dbReconnectMaxAttempt times.
 func listenToPostgresNotify(ctx context.Context, pgNotify chan bool) {
-	conn, err := db.Pool.Acquire(ctx)
-	if err != nil {
-		logger.Errorf("error creating database pool: %v", err)
-	}
+	var reconnectAttempts int
 
-	_, err = conn.Exec(ctx, "LISTEN event_queue_updates")
-	if err != nil {
-		logger.Errorf("error listening to database notify: %v", err)
-	}
-
-	for {
-		_, err = conn.Conn().WaitForNotification(ctx)
+	var listenToPostgresNotify = func(ctx context.Context, pgNotify chan bool) error {
+		conn, err := db.Pool.Acquire(ctx)
 		if err != nil {
-			logger.Errorf("error waiting for database notifications: %v", err)
+			return fmt.Errorf("error acquiring database connection: %v", err)
+		}
+		defer conn.Release()
+
+		reconnectAttempts = 0
+		logger.Infof("acquired database connection")
+
+		_, err = conn.Exec(ctx, "LISTEN event_queue_updates")
+		if err != nil {
+			return fmt.Errorf("error listening to database notifications: %v", err)
+		}
+		logger.Infof("listening to database notifications")
+
+		for {
+			notification, err := conn.Conn().WaitForNotification(ctx)
+			if err != nil {
+				return fmt.Errorf("error listening to database notifications: %v", err)
+			}
+
+			logger.Debugf("Received database notification: %+v", notification)
+			pgNotify <- true
+		}
+	}
+
+	// retry on failure.
+	for {
+		if err := listenToPostgresNotify(ctx, pgNotify); err != nil {
+			reconnectAttempts++
+			logger.Errorf("error listening to database notifications: %v", err)
 		}
 
-		pgNotify <- true
+		if reconnectAttempts > dbReconnectMaxAttempt {
+			logger.Fatalf("failed to reconnect to database after %d attempts", dbReconnectMaxAttempt)
+		}
+
+		logger.Debugf("attempt [%d/%d]. reconnecting to database in %v", reconnectAttempts, dbReconnectMaxAttempt, dbReconnectWaitDuration)
+		time.Sleep(dbReconnectWaitDuration)
 	}
 }
 
