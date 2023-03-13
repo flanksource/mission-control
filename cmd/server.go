@@ -58,6 +58,16 @@ var Serve = &cobra.Command{
 		e.Use(middleware.Logger())
 		e.Use(ServerCache)
 
+		e.GET("/health", func(c echo.Context) error {
+			if err := db.Pool.Ping(context.Background()); err != nil {
+				return c.JSON(http.StatusInternalServerError, api.HTTPError{
+					Error:   err.Error(),
+					Message: "Failed to ping database",
+				})
+			}
+			return c.JSON(http.StatusOK, api.HTTPSuccess{Message: "ok"})
+		})
+
 		kratosHandler := auth.NewKratosHandler(kratosAPI, kratosAdminAPI, db.PostgRESTJWTSecret)
 		if enableAuth {
 			if _, err := kratosHandler.CreateAdminUser(context.Background()); err != nil {
