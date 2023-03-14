@@ -85,7 +85,6 @@ func listenToPostgresNotify(ctx context.Context, pgNotify chan bool) {
 	for {
 		backoff := retry.WithMaxDuration(dbReconnectMaxDuration, retry.NewExponential(dbReconnectBackoffBaseDuration))
 		retry.Do(ctx, backoff, func(ctx context.Context) error {
-			logger.Debugf("reconnecting to database")
 			if err := listen(ctx, pgNotify); err != nil {
 				return retry.RetryableError(err)
 			}
