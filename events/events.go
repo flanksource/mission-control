@@ -57,7 +57,7 @@ func ListenForEvents(ctx context.Context, config Config) {
 // listenToPostgresNotify listens to postgres notifications.
 // It will retry on failure for dbReconnectMaxAttempt times.
 func listenToPostgresNotify(ctx context.Context, pgNotify chan bool) {
-	var listenToPostgresNotify = func(ctx context.Context, pgNotify chan bool) error {
+	var listen = func(ctx context.Context, pgNotify chan bool) error {
 		conn, err := db.Pool.Acquire(ctx)
 		if err != nil {
 			return fmt.Errorf("error acquiring database connection: %v", err)
@@ -86,7 +86,7 @@ func listenToPostgresNotify(ctx context.Context, pgNotify chan bool) {
 		backoff := retry.WithMaxDuration(dbReconnectMaxDuration, retry.NewExponential(dbReconnectBackoffBaseDuration))
 		retry.Do(ctx, backoff, func(ctx context.Context) error {
 			logger.Debugf("reconnecting to database")
-			if err := listenToPostgresNotify(ctx, pgNotify); err != nil {
+			if err := listen(ctx, pgNotify); err != nil {
 				return retry.RetryableError(err)
 			}
 
