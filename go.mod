@@ -12,7 +12,6 @@ require (
 	github.com/flanksource/kommons v0.31.1
 	github.com/google/cel-go v0.13.0
 	github.com/google/uuid v1.3.0
-	github.com/hashicorp/serf v0.9.7
 	github.com/jackc/pgx/v5 v5.3.1
 	github.com/labstack/echo/v4 v4.7.2
 	github.com/microsoft/kiota-authentication-azure-go v0.6.0
