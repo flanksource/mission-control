@@ -84,7 +84,7 @@ func listenToPostgresNotify(ctx context.Context, pgNotify chan bool) {
 	// retry on failure.
 	for {
 		backoff := retry.WithMaxDuration(dbReconnectMaxDuration, retry.NewExponential(dbReconnectBackoffBaseDuration))
-		retry.Do(ctx, backoff, func(ctx context.Context) error {
+		err := retry.Do(ctx, backoff, func(ctx context.Context) error {
 			if err := listen(ctx, pgNotify); err != nil {
 				return retry.RetryableError(err)
 			}
@@ -92,7 +92,7 @@ func listenToPostgresNotify(ctx context.Context, pgNotify chan bool) {
 			return nil
 		})
 
-		logger.Errorf("Failed to connect to database, retrying ...")
+		logger.Errorf("failed to connect to database: %v", err)
 	}
 }
 
