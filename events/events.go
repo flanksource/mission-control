@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/logger"
+	"github.com/sethvargo/go-retry"
 	"gorm.io/gorm"
 
 	"github.com/flanksource/incident-commander/api"
@@ -25,8 +26,8 @@ const (
 	waitDurationOnFailure = time.Minute
 	pgNotifyTimeout       = time.Minute
 
-	dbReconnectWaitDuration = time.Second * 5
-	dbReconnectMaxAttempt   = 10
+	dbReconnectMaxDuration         = time.Minute * 5
+	dbReconnectBackoffBaseDuration = time.Second
 )
 
 type Config struct {
@@ -56,17 +57,12 @@ func ListenForEvents(ctx context.Context, config Config) {
 // listenToPostgresNotify listens to postgres notifications.
 // It will retry on failure for dbReconnectMaxAttempt times.
 func listenToPostgresNotify(ctx context.Context, pgNotify chan bool) {
-	var reconnectAttempts int
-
 	var listenToPostgresNotify = func(ctx context.Context, pgNotify chan bool) error {
 		conn, err := db.Pool.Acquire(ctx)
 		if err != nil {
 			return fmt.Errorf("error acquiring database connection: %v", err)
 		}
 		defer conn.Release()
-
-		reconnectAttempts = 0
-		logger.Infof("acquired database connection")
 
 		_, err = conn.Exec(ctx, "LISTEN event_queue_updates")
 		if err != nil {
@@ -87,17 +83,17 @@ func listenToPostgresNotify(ctx context.Context, pgNotify chan bool) {
 
 	// retry on failure.
 	for {
-		if err := listenToPostgresNotify(ctx, pgNotify); err != nil {
-			reconnectAttempts++
-			logger.Errorf("error listening to database notifications: %v", err)
-		}
+		backoff := retry.WithMaxDuration(dbReconnectMaxDuration, retry.NewExponential(dbReconnectBackoffBaseDuration))
+		retry.Do(ctx, backoff, func(ctx context.Context) error {
+			logger.Debugf("reconnecting to database")
+			if err := listenToPostgresNotify(ctx, pgNotify); err != nil {
+				return retry.RetryableError(err)
+			}
 
-		if reconnectAttempts > dbReconnectMaxAttempt {
-			logger.Fatalf("failed to reconnect to database after %d attempts", dbReconnectMaxAttempt)
-		}
+			return nil
+		})
 
-		logger.Debugf("attempt [%d/%d]. reconnecting to database in %v", reconnectAttempts, dbReconnectMaxAttempt, dbReconnectWaitDuration)
-		time.Sleep(dbReconnectWaitDuration)
+		logger.Errorf("Failed to connect to database, retrying ...")
 	}
 }
 

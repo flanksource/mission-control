@@ -12,12 +12,14 @@ require (
 	github.com/flanksource/kommons v0.31.1
 	github.com/google/cel-go v0.13.0
 	github.com/google/uuid v1.3.0
+	github.com/hashicorp/serf v0.9.7
 	github.com/jackc/pgx/v5 v5.3.1
 	github.com/labstack/echo/v4 v4.7.2
 	github.com/microsoft/kiota-authentication-azure-go v0.6.0
 	github.com/microsoftgraph/msgraph-sdk-go v0.56.0
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/ory/client-go v1.1.17
+	github.com/sethvargo/go-retry v0.2.4
 	github.com/spf13/cobra v1.4.0
 	github.com/spf13/pflag v1.0.5
 	gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df
