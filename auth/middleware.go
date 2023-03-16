@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/utils"
 	"github.com/golang-jwt/jwt/v4"
@@ -41,8 +42,17 @@ func (k *KratosHandler) KratosMiddleware() (*kratosMiddleware, error) {
 	}, nil
 }
 
+var skipAuthPaths = []string{"/health"}
+
+func canSkipAuth(c echo.Context) bool {
+	return collections.Contains(skipAuthPaths, c.Path())
+}
+
 func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
+		if canSkipAuth(c) {
+			return next(c)
+		}
 		session, err := k.validateSession(c.Request())
 		if err != nil {
 			return c.String(http.StatusUnauthorized, "Unauthorized")
