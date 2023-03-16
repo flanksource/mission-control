@@ -7,7 +7,7 @@ require (
 	github.com/andygrunwald/go-jira v1.15.1
 	github.com/antihax/optional v1.0.0
 	github.com/flanksource/canary-checker/sdk v0.0.0-20221002171205-15e7cea06125
-	github.com/flanksource/commons v1.6.3
+	github.com/flanksource/commons v1.6.4
 	github.com/flanksource/duty v1.0.36
 	github.com/flanksource/kommons v0.31.1
 	github.com/google/cel-go v0.13.0
