@@ -8,7 +8,7 @@ require (
 	github.com/antihax/optional v1.0.0
 	github.com/flanksource/canary-checker/sdk v0.0.0-20221002171205-15e7cea06125
 	github.com/flanksource/commons v1.6.3
-	github.com/flanksource/duty v1.0.36
+	github.com/flanksource/duty v1.0.40
 	github.com/flanksource/kommons v0.31.1
 	github.com/google/cel-go v0.13.0
 	github.com/google/uuid v1.3.0
@@ -26,7 +26,7 @@ require (
 )
 
 require (
-	ariga.io/atlas v0.9.1 // indirect
+	ariga.io/atlas v0.10.0 // indirect
 	cloud.google.com/go/compute v1.14.0 // indirect
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
 	cloud.google.com/go/iam v0.9.0 // indirect
