@@ -7,8 +7,8 @@ require (
 	github.com/andygrunwald/go-jira v1.15.1
 	github.com/antihax/optional v1.0.0
 	github.com/flanksource/canary-checker/sdk v0.0.0-20221002171205-15e7cea06125
-	github.com/flanksource/commons v1.6.3
-	github.com/flanksource/duty v1.0.36
+	github.com/flanksource/commons v1.6.4
+	github.com/flanksource/duty v1.0.42
 	github.com/flanksource/kommons v0.31.1
 	github.com/google/cel-go v0.13.0
 	github.com/google/uuid v1.3.0
@@ -21,12 +21,12 @@ require (
 	github.com/spf13/cobra v1.4.0
 	github.com/spf13/pflag v1.0.5
 	gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df
-	gorm.io/gorm v1.24.6
+	gorm.io/gorm v1.24.7-0.20230306060331-85eaf9eeda11
 	k8s.io/apimachinery v0.24.4
 )
 
 require (
-	ariga.io/atlas v0.9.1 // indirect
+	ariga.io/atlas v0.10.0 // indirect
 	cloud.google.com/go/compute v1.14.0 // indirect
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
 	cloud.google.com/go/iam v0.9.0 // indirect
@@ -90,7 +90,7 @@ require (
 	github.com/skeema/knownhosts v1.1.0 // indirect
 	github.com/stoewer/go-strcase v1.2.0 // indirect
 	github.com/xlab/treeprint v1.1.0 // indirect
-	github.com/zclconf/go-cty v1.13.0 // indirect
+	github.com/zclconf/go-cty v1.13.1 // indirect
 	go.opentelemetry.io/otel v1.14.0 // indirect
 	go.opentelemetry.io/otel/trace v1.14.0 // indirect
 	go.starlark.net v0.0.0-20200306205701-8dd3e2ee1dd5 // indirect
@@ -100,7 +100,7 @@ require (
 	golang.org/x/sync v0.1.0 // indirect
 	golang.org/x/tools v0.6.0 // indirect
 	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
-	gorm.io/driver/postgres v1.4.8 // indirect
+	gorm.io/driver/postgres v1.5.0 // indirect
 	inet.af/netaddr v0.0.0-20220811202034-502d2d690317 // indirect
 	k8s.io/api v0.25.1 // indirect
 	k8s.io/apiextensions-apiserver v0.24.4 // indirect
