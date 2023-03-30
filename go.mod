@@ -18,6 +18,7 @@ require (
 	github.com/microsoftgraph/msgraph-sdk-go v0.56.0
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/ory/client-go v1.1.17
+	github.com/sethvargo/go-retry v0.2.4
 	github.com/spf13/cobra v1.4.0
 	github.com/spf13/pflag v1.0.5
 	gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df

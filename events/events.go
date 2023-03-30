@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/logger"
+	"github.com/sethvargo/go-retry"
 	"gorm.io/gorm"
 
 	"github.com/flanksource/incident-commander/api"
@@ -24,6 +25,9 @@ const (
 	eventMaxAttempts      = 3
 	waitDurationOnFailure = time.Minute
 	pgNotifyTimeout       = time.Minute
+
+	dbReconnectMaxDuration         = time.Minute * 5
+	dbReconnectBackoffBaseDuration = time.Second
 )
 
 type Config struct {
@@ -50,24 +54,45 @@ func ListenForEvents(ctx context.Context, config Config) {
 	}
 }
 
+// listenToPostgresNotify listens to postgres notifications.
+// It will retry on failure for dbReconnectMaxAttempt times.
 func listenToPostgresNotify(ctx context.Context, pgNotify chan bool) {
-	conn, err := db.Pool.Acquire(ctx)
-	if err != nil {
-		logger.Errorf("error creating database pool: %v", err)
-	}
-
-	_, err = conn.Exec(ctx, "LISTEN event_queue_updates")
-	if err != nil {
-		logger.Errorf("error listening to database notify: %v", err)
-	}
-
-	for {
-		_, err = conn.Conn().WaitForNotification(ctx)
+	var listen = func(ctx context.Context, pgNotify chan bool) error {
+		conn, err := db.Pool.Acquire(ctx)
 		if err != nil {
-			logger.Errorf("error waiting for database notifications: %v", err)
+			return fmt.Errorf("error acquiring database connection: %v", err)
 		}
+		defer conn.Release()
 
-		pgNotify <- true
+		_, err = conn.Exec(ctx, "LISTEN event_queue_updates")
+		if err != nil {
+			return fmt.Errorf("error listening to database notifications: %v", err)
+		}
+		logger.Infof("listening to database notifications")
+
+		for {
+			notification, err := conn.Conn().WaitForNotification(ctx)
+			if err != nil {
+				return fmt.Errorf("error listening to database notifications: %v", err)
+			}
+
+			logger.Debugf("Received database notification: %+v", notification)
+			pgNotify <- true
+		}
+	}
+
+	// retry on failure.
+	for {
+		backoff := retry.WithMaxDuration(dbReconnectMaxDuration, retry.NewExponential(dbReconnectBackoffBaseDuration))
+		err := retry.Do(ctx, backoff, func(ctx context.Context) error {
+			if err := listen(ctx, pgNotify); err != nil {
+				return retry.RetryableError(err)
+			}
+
+			return nil
+		})
+
+		logger.Errorf("failed to connect to database: %v", err)
 	}
 }
 
