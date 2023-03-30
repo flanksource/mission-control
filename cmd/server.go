@@ -15,6 +15,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty"
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/schema/openapi"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/auth"
@@ -137,19 +139,30 @@ func logSearchMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 			return next(c)
 		}
 
-		var sp = make(map[string]any)
-		if err := c.Bind(&sp); err != nil {
+		var form = make(map[string]any)
+		if err := c.Bind(&form); err != nil {
 			return fmt.Errorf("failed to parse form: %w", err)
 		}
 
-		// TODO: Fetch the log selector (type, labels and name) from the component spec
-		// Using a new duty method.
-		// Hardcoding labels for now
-		labels := map[string]string{
-			"app.kubernetes.io/name": "kibana",
+		componentID, ok := form["id"].(string)
+		if !ok {
+			return next(c) // No component ID, so no need to modify the request
 		}
 
-		modifiedForm := injectLogSelectorToForm(labels, sp)
+		selectorName, _ := form["name"].(string)
+		componentID = "01872d9f-29c6-3626-2da5-9851502cd6ba" // Test
+
+		component, err := duty.GetComponent(req.Context(), db.Gorm, componentID)
+		if err != nil {
+			return fmt.Errorf("failed to query component: %w", err)
+		}
+
+		labels := getLabelsFromLogsSelectors(component.LogsSelectors, selectorName)
+		if len(labels) == 0 {
+			return next(c) // nothing to do
+		}
+
+		modifiedForm := injectLabelsToForm(labels, form)
 		if err := modifyReqBody(req, modifiedForm); err != nil {
 			return fmt.Errorf("failed to write back search params: %w", err)
 		}
@@ -158,7 +171,30 @@ func logSearchMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 	}
 }
 
-func injectLogSelectorToForm(injectLabels map[string]string, form map[string]any) map[string]any {
+// getLabelsFromLogsSelectors returns a map of labels from the logs selectors
+func getLabelsFromLogsSelectors(selectors models.LogsSelectors, name string) map[string]string {
+	if len(selectors) == 0 {
+		return map[string]string{}
+	}
+
+	if name == "" {
+		// if the user didn't make any selection on log selector, we will use the first one
+		return selectors[0].Labels
+	}
+
+	for _, selector := range selectors {
+		if selector.Name == name {
+			// TODO: The label values could be a tempalte
+			// example: node: {{.properties.nodeName}}
+			// handle that in here.
+			return selector.Labels
+		}
+	}
+
+	return map[string]string{}
+}
+
+func injectLabelsToForm(injectLabels map[string]string, form map[string]any) map[string]any {
 	// Make sure label exists so we can inject our labels
 	if _, ok := form["labels"]; !ok {
 		form["labels"] = make(map[string]any)
