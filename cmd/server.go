@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -138,30 +137,41 @@ func logSearchMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 			return next(c)
 		}
 
+		var sp = make(map[string]any)
+		if err := c.Bind(&sp); err != nil {
+			return fmt.Errorf("failed to parse form: %w", err)
+		}
+
 		// TODO: Fetch the log selector (type, labels and name) from the component spec
+		// Using a new duty method.
 		// Hardcoding labels for now
 		labels := map[string]string{
 			"app.kubernetes.io/name": "kibana",
 		}
 
-		var sp LogSearchParam
-		if err := c.Bind(&sp); err != nil {
-			return fmt.Errorf("failed to parse form: %w", err)
-		}
-
-		if sp.Labels == nil {
-			sp.Labels = make(map[string]string)
-		}
-		for k, v := range labels {
-			sp.Labels[k] = v
-		}
-
-		if err := modifyReqBody(req, sp); err != nil {
+		modifiedForm := injectLogSelectorToForm(labels, sp)
+		if err := modifyReqBody(req, modifiedForm); err != nil {
 			return fmt.Errorf("failed to write back search params: %w", err)
 		}
 
 		return next(c)
 	}
+}
+
+func injectLogSelectorToForm(injectLabels map[string]string, form map[string]any) map[string]any {
+	// Make sure label exists so we can inject our labels
+	if _, ok := form["labels"]; !ok {
+		form["labels"] = make(map[string]any)
+	}
+
+	if labels, ok := form["labels"].(map[string]any); ok {
+		for k, v := range injectLabels {
+			labels[k] = v
+		}
+		form["labels"] = labels
+	}
+
+	return form
 }
 
 func modifyReqBody(req *http.Request, sp any) error {
@@ -224,20 +234,4 @@ func ServerCache(next echo.HandlerFunc) echo.HandlerFunc {
 		}
 		return next(c)
 	}
-}
-
-type LogSearchParam struct {
-	Limit             int64             `json:"limit,omitempty"`
-	LimitBytes        int64             `json:"limitBytes,omitempty"`
-	Page              string            `json:"page,omitempty"`
-	Labels            map[string]string `json:"labels,omitempty"`
-	Query             string            `json:"query,omitempty"`
-	Start             string            `json:"start,omitempty"`
-	End               string            `json:"end,omitempty"`
-	Type              string            `json:"type,omitempty"`
-	Id                string            `json:"id,omitempty"`
-	LimitPerItem      int64             `json:"limitPerItem,omitempty"`
-	LimitBytesPerItem int64             `json:"limitBytesPerItem,omitempty"`
-	start             *time.Time        `json:"-"`
-	end               *time.Time        `json:"-"`
 }
