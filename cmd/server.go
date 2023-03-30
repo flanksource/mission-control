@@ -1,11 +1,15 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -41,6 +45,8 @@ var Serve = &cobra.Command{
 	PreRun: PreRun,
 	Run: func(cmd *cobra.Command, args []string) {
 		e := echo.New()
+		e.HideBanner = true
+
 		// PostgREST needs to know how it is exposed to create the correct links
 		db.HttpEndpoint = publicEndpoint + "/db"
 
@@ -105,7 +111,9 @@ var Serve = &cobra.Command{
 		forward(e, "/config", configDb)
 		forward(e, "/canary", api.CanaryCheckerPath)
 		forward(e, "/kratos", kratosAPI)
-		forward(e, "/apm", api.ApmHubPath)
+		forward(e, "/apm", api.ApmHubPath) // Deprecated
+
+		forwardWithMiddlewares(e, "/logs", api.ApmHubPath, logSearchMiddleware)
 
 		go jobs.Start()
 
@@ -114,27 +122,84 @@ var Serve = &cobra.Command{
 		}
 		go events.ListenForEvents(context.Background(), eventHandlerConfig)
 
-		if err := e.Start(fmt.Sprintf(":%d", httpPort)); err != nil {
+		listenAddr := fmt.Sprintf(":%d", httpPort)
+		logger.Infof("Listening on %s", listenAddr)
+		if err := e.Start(listenAddr); err != nil {
 			e.Logger.Fatal(err)
 		}
 	},
 }
 
+// logSearchMiddleware injects additional label and query params to the request
+func logSearchMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		req := c.Request()
+		if req.Method != http.MethodPost {
+			return next(c)
+		}
+
+		// TODO: Fetch the log selector (type, labels and name) from the component spec
+		// Hardcoding labels for now
+		labels := map[string]string{
+			"app.kubernetes.io/name": "kibana",
+		}
+
+		var sp LogSearchParam
+		if err := c.Bind(&sp); err != nil {
+			return fmt.Errorf("failed to parse form: %w", err)
+		}
+
+		if sp.Labels == nil {
+			sp.Labels = make(map[string]string)
+		}
+		for k, v := range labels {
+			sp.Labels[k] = v
+		}
+
+		if err := modifyReqBody(req, sp); err != nil {
+			return fmt.Errorf("failed to write back search params: %w", err)
+		}
+
+		return next(c)
+	}
+}
+
+func modifyReqBody(req *http.Request, sp any) error {
+	encoded, err := json.Marshal(sp)
+	if err != nil {
+		return err
+	}
+
+	req.Body = io.NopCloser(bytes.NewReader(encoded))
+	req.Header.Set("Content-Length", fmt.Sprintf("%d", len(encoded)))
+	req.ContentLength = int64(len(encoded))
+	return nil
+}
+
+// forwardWithMiddlewares forwards the request to the target just like forward()
+// but attaches the given middlewares before proxying the request.
+func forwardWithMiddlewares(e *echo.Echo, prefix string, target string, middlewares ...echo.MiddlewareFunc) {
+	middlewares = append(middlewares, getProxyConfig(e, prefix, target))
+	e.Group(prefix).Use(middlewares...)
+}
+
 func forward(e *echo.Echo, prefix string, target string) {
-	_url, err := url.Parse(target)
+	e.Group(prefix).Use(getProxyConfig(e, prefix, target))
+}
+
+func getProxyConfig(e *echo.Echo, prefix, targetURL string) echo.MiddlewareFunc {
+	_url, err := url.Parse(targetURL)
 	if err != nil {
 		e.Logger.Fatal(err)
 	}
-	e.Group(prefix).Use(middleware.ProxyWithConfig(middleware.ProxyConfig{
+
+	proxyConf := middleware.ProxyConfig{
 		Rewrite: map[string]string{
 			fmt.Sprintf("^%s/*", prefix): "/$1",
 		},
-		Balancer: middleware.NewRoundRobinBalancer([]*middleware.ProxyTarget{
-			{
-				URL: _url,
-			},
-		}),
-	}))
+		Balancer: middleware.NewRoundRobinBalancer([]*middleware.ProxyTarget{{URL: _url}}),
+	}
+	return middleware.ProxyWithConfig(proxyConf)
 }
 
 func init() {
@@ -159,4 +224,20 @@ func ServerCache(next echo.HandlerFunc) echo.HandlerFunc {
 		}
 		return next(c)
 	}
+}
+
+type LogSearchParam struct {
+	Limit             int64             `json:"limit,omitempty"`
+	LimitBytes        int64             `json:"limitBytes,omitempty"`
+	Page              string            `json:"page,omitempty"`
+	Labels            map[string]string `json:"labels,omitempty"`
+	Query             string            `json:"query,omitempty"`
+	Start             string            `json:"start,omitempty"`
+	End               string            `json:"end,omitempty"`
+	Type              string            `json:"type,omitempty"`
+	Id                string            `json:"id,omitempty"`
+	LimitPerItem      int64             `json:"limitPerItem,omitempty"`
+	LimitBytesPerItem int64             `json:"limitBytesPerItem,omitempty"`
+	start             *time.Time        `json:"-"`
+	end               *time.Time        `json:"-"`
 }

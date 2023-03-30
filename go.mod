@@ -238,6 +238,7 @@ require (
 )
 
 replace (
+	github.com/flanksource/duty => /home/gunners/Projects/flanksource/duty
 	github.com/spf13/viper => github.com/spf13/viper v1.13.0
 	k8s.io/api => k8s.io/api v0.24.4
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.24.4
