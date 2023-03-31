@@ -605,8 +605,8 @@ github.com/felixge/httpsnoop v1.0.3/go.mod h1:m8KPJKqk1gH5J9DgRY2ASl2lWCfGKXixSw
 github.com/fergusstrange/embedded-postgres v1.19.0 h1:NqDufJHeA03U7biULlPHZ0pZ10/mDOMKPILEpT50Fyk=
 github.com/flanksource/canary-checker/sdk v0.0.0-20221002171205-15e7cea06125 h1:mU173MBUDmB6HMUCpw4VBJI5IqDvEG91OS6Zgd5IBao=
 github.com/flanksource/canary-checker/sdk v0.0.0-20221002171205-15e7cea06125/go.mod h1:JwV0Y7FcdwcgmooZRcF4OV4w+H7Td5auyFHXZla/wjU=
-github.com/flanksource/commons v1.6.4 h1:RSR/xfMPSwL/uj+E2fIfQC6TLJbfcMOnCU6y0KXj+Ow=
-github.com/flanksource/commons v1.6.4/go.mod h1:4+SVXnqAMUSOKLmtZjzQ1qBXLhiHSNA3DyEUp0zmTCM=
+github.com/flanksource/commons v1.6.5 h1:jlSIFJE/U7wFcO0MMkebVUYYfj2edg81/rIunWhTGhE=
+github.com/flanksource/commons v1.6.5/go.mod h1:4+SVXnqAMUSOKLmtZjzQ1qBXLhiHSNA3DyEUp0zmTCM=
 github.com/flanksource/duty v1.0.42 h1:Hw20E0tsKiQLnNJKANiyUId3GZdbXYcDKogN6mBNzDY=
 github.com/flanksource/duty v1.0.42/go.mod h1:JtPTZHKcTfS22pR0Kblz/IhTtC+9IIpI8jS4b33tJyI=
 github.com/flanksource/gomplate/v3 v3.20.1 h1:aFVvR7gw534ReoEXVUtZm+lWlVq3RMRqF3GhRN3okgM=
