@@ -26,6 +26,7 @@ import (
 	"github.com/flanksource/incident-commander/snapshot"
 	"github.com/flanksource/incident-commander/upstream"
 	"github.com/flanksource/incident-commander/utils"
+	"github.com/flanksource/kommons/ktemplate"
 )
 
 const (
@@ -157,12 +158,24 @@ func logSearchMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 			return fmt.Errorf("failed to query component: %w", err)
 		}
 
-		labels := getLabelsFromLogsSelectors(component.LogsSelectors, selectorName)
-		if len(labels) == 0 {
+		logSelector := getLabelsFromLogSelectors(component.LogSelectors, selectorName)
+		if logSelector == nil {
 			return next(c) // nothing to do
 		}
 
-		modifiedForm := injectLabelsToForm(labels, form)
+		templater := ktemplate.StructTemplater{
+			Values:         component.GetAsEnvironment(),
+			ValueFunctions: true,
+			DelimSets: []ktemplate.Delims{
+				{Left: "{{", Right: "}}"},
+				{Left: "$(", Right: ")"},
+			},
+		}
+		if err := templater.Walk(logSelector); err != nil {
+			return fmt.Errorf("failed to template the labels: %w", err)
+		}
+
+		modifiedForm := injectLabelsToForm(logSelector.Labels, form)
 		if err := modifyReqBody(req, modifiedForm); err != nil {
 			return fmt.Errorf("failed to write back search params: %w", err)
 		}
@@ -171,27 +184,25 @@ func logSearchMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 	}
 }
 
-// getLabelsFromLogsSelectors returns a map of labels from the logs selectors
-func getLabelsFromLogsSelectors(selectors models.LogsSelectors, name string) map[string]string {
+// getLabelsFromLogSelectors returns a map of labels from the logs selectors
+func getLabelsFromLogSelectors(selectors models.LogSelectors, name string) *models.LogSelector {
 	if len(selectors) == 0 {
-		return map[string]string{}
+		return nil
 	}
 
 	if name == "" {
 		// if the user didn't make any selection on log selector, we will use the first one
-		return selectors[0].Labels
+		return &selectors[0]
 	}
 
 	for _, selector := range selectors {
 		if selector.Name == name {
-			// TODO: The label values could be a tempalte
-			// example: node: {{.properties.nodeName}}
-			// handle that in here.
-			return selector.Labels
+			return &selector
 		}
 	}
 
-	return map[string]string{}
+	logger.Debugf("could not find log selector with name %s", name)
+	return nil
 }
 
 func injectLabelsToForm(injectLabels map[string]string, form map[string]any) map[string]any {
