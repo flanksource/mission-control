@@ -53,6 +53,10 @@ type ResponderClients struct {
 	MSPlanner *MSPlannerClient `json:"ms_planner,omitempty"`
 }
 
+func (r ResponderClients) IsEmpty() bool {
+	return r.Jira == nil && r.AWS == nil && r.MSPlanner == nil
+}
+
 type ServiceNow struct {
 	Project     string `json:"project,omitempty"`
 	IssueType   string `json:"issueType,omitempty"`

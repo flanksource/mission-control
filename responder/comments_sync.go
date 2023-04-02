@@ -39,6 +39,10 @@ func SyncComments() {
 	jobHistory := models.NewJobHistory("ResponderCommentSync", "", "")
 	_ = db.PersistJobHistory(jobHistory.Start())
 	for _, responder := range responders {
+		if !responder.Team.HasResponder() {
+			logger.Debugf("Skipping responder %s since it does not have a responder", responder.Team.Name)
+			continue
+		}
 		team, err := GetResponder(ctx, responder.Team)
 		if err != nil {
 			logger.Errorf("Error getting responder: %v", err)
