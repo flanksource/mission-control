@@ -6,13 +6,10 @@ import (
 	"fmt"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
-	kiotaAbstractions "github.com/microsoft/kiota-abstractions-go"
 	kiotaAuth "github.com/microsoft/kiota-authentication-azure-go"
 	msgraphsdk "github.com/microsoftgraph/msgraph-sdk-go"
-	"github.com/microsoftgraph/msgraph-sdk-go/groups"
 	"github.com/microsoftgraph/msgraph-sdk-go/models"
 	"github.com/microsoftgraph/msgraph-sdk-go/models/odataerrors"
-	"github.com/microsoftgraph/msgraph-sdk-go/planner"
 
 	"github.com/flanksource/incident-commander/api"
 )
@@ -125,80 +122,88 @@ func (c MSPlannerClient) CreateTask(opts MSPlannerTask) (models.PlannerTaskable,
 	return result, openDataError(err)
 }
 
-func (c MSPlannerClient) AddComment(taskID, comment string) (string, error) {
-	// MS Graph API does not return the ID of the comment created
-	// so we just return a constant string for now
-	commentID := "posted"
-
-	task, err := c.client.Planner().TasksById(taskID).Get(context.Background(), nil)
-	if err != nil {
-		return commentID, openDataError(err)
-	}
-
-	post := models.NewPost()
-	body := models.NewItemBody()
-	contentType := models.TEXT_BODYTYPE
-	body.SetContentType(&contentType)
-	body.SetContent(&comment)
-	post.SetBody(body)
-
-	// If conversation thread exists, add a new reply
-	if task.GetConversationThreadId() != nil {
-		replyBody := groups.NewItemConversationsItemThreadsItemPostsItemReplyPostRequestBody()
-		replyBody.SetPost(post)
-
-		err = c.client.GroupsById(c.groupID).ThreadsById(*task.GetConversationThreadId()).Reply().Post(context.Background(), replyBody, nil)
-		return commentID, openDataError(err)
-	}
-
-	// Create a new conversation thread for the task
-	convBody := models.NewConversationThread()
-	topic := fmt.Sprintf("Conversation thread topic for taskID: %s", taskID)
-	convBody.SetTopic(&topic)
-	convBody.SetPosts([]models.Postable{post})
-
-	result, err := c.client.GroupsById(c.groupID).Threads().Post(context.Background(), convBody, nil)
-	if err != nil {
-		return commentID, openDataError(err)
-	}
-
-	// Link the created conversation thread to the task
-	etag := *task.GetAdditionalData()["@odata.etag"].(*string)
-	headers := kiotaAbstractions.NewRequestHeaders()
-	headers.Add("If-Match", etag)
-	patchConfig := planner.TasksPlannerTaskItemRequestBuilderPatchRequestConfiguration{Headers: headers}
-
-	requestBody := models.NewPlannerTask()
-	requestBody.SetConversationThreadId(result.GetId())
-	_, err = c.client.Planner().TasksById(taskID).Patch(context.Background(), requestBody, &patchConfig)
-	return commentID, openDataError(err)
+func (c MSPlannerClient) GetComments(id string) ([]api.Comment, error) {
+	//FIXME: implement
+	return nil, nil
 }
 
-func (c MSPlannerClient) GetComments(taskID string) ([]api.Comment, error) {
-	task, err := c.client.Planner().TasksById(taskID).Get(context.Background(), nil)
-	if err != nil {
-		return nil, openDataError(err)
-	}
+func (c MSPlannerClient) AddComment(taskID, comment string) (string, error) {
+	// FIXME: implement
+	return "", nil
+	// 	// MS Graph API does not return the ID of the comment created
+	// 	// so we just return a constant string for now
+	// 	commentID := "posted"
 
-	var comments []api.Comment
-	if task.GetConversationThreadId() == nil {
-		return comments, nil
-	}
+	// 	task, err := c.client.Planner().TasksById(taskID).Get(context.Background(), nil)
+	// 	if err != nil {
+	// 		return commentID, openDataError(err)
+	// 	}
 
-	conversations, err := c.client.GroupsById(c.groupID).ThreadsById(*task.GetConversationThreadId()).Posts().Get(context.Background(), nil)
-	if err != nil {
-		return nil, openDataError(err)
-	}
+	// 	post := models.NewPost()
+	// 	body := models.NewItemBody()
+	// 	contentType := models.TEXT_BODYTYPE
+	// 	body.SetContentType(&contentType)
+	// 	body.SetContent(&comment)
+	// 	post.SetBody(body)
 
-	for _, conv := range conversations.GetValue() {
-		comments = append(comments, api.Comment{
-			Comment:           *conv.GetBody().GetContent(),
-			ExternalCreatedBy: *conv.GetFrom().GetEmailAddress().GetName(),
-			CreatedAt:         *conv.GetCreatedDateTime(),
-		})
-	}
+	// 	// If conversation thread exists, add a new reply
+	// 	if task.GetConversationThreadId() != nil {
+	// 		// replyBody := groups.NewItemConversationsItemThreadsItemPostsItemReplyPostRequestBody()
+	// 		replyBody := groups.NewItemCon
+	// 		replyBody.SetPost(post)
 
-	return comments, nil
+	// 		err = c.client.GroupsById(c.groupID).ThreadsById(*task.GetConversationThreadId()).Reply().Post(context.Background(), replyBody, nil)
+	// 		return commentID, openDataError(err)
+	// 	}
+
+	// 	// Create a new conversation thread for the task
+	// 	convBody := models.NewConversationThread()
+	// 	topic := fmt.Sprintf("Conversation thread topic for taskID: %s", taskID)
+	// 	convBody.SetTopic(&topic)
+	// 	convBody.SetPosts([]models.Postable{post})
+
+	// 	result, err := c.client.GroupsById(c.groupID).Threads().Post(context.Background(), convBody, nil)
+	// 	if err != nil {
+	// 		return commentID, openDataError(err)
+	// 	}
+
+	// 	// Link the created conversation thread to the task
+	// 	etag := *task.GetAdditionalData()["@odata.etag"].(*string)
+	// 	headers := kiotaAbstractions.NewRequestHeaders()
+	// 	headers.Add("If-Match", etag)
+	// 	patchConfig := planner.TasksPlannerTaskItemRequestBuilderPatchRequestConfiguration{Headers: headers}
+
+	// 	requestBody := models.NewPlannerTask()
+	// 	requestBody.SetConversationThreadId(result.GetId())
+	// 	_, err = c.client.Planner().TasksById(taskID).Patch(context.Background(), requestBody, &patchConfig)
+	// 	return commentID, openDataError(err)
+	// }
+
+	// func (c MSPlannerClient) GetComments(taskID string) ([]api.Comment, error) {
+	// 	task, err := c.client.Planner().TasksById(taskID).Get(context.Background(), nil)
+	// 	if err != nil {
+	// 		return nil, openDataError(err)
+	// 	}
+
+	// 	var comments []api.Comment
+	// 	if task.GetConversationThreadId() == nil {
+	// 		return comments, nil
+	// 	}
+
+	// 	conversations, err := c.client.GroupsById(c.groupID).ThreadsById(*task.GetConversationThreadId()).Posts().Get(context.Background(), nil)
+	// 	if err != nil {
+	// 		return nil, openDataError(err)
+	// 	}
+
+	// 	for _, conv := range conversations.GetValue() {
+	// 		comments = append(comments, api.Comment{
+	// 			Comment:           *conv.GetBody().GetContent(),
+	// 			ExternalCreatedBy: *conv.GetFrom().GetEmailAddress().GetName(),
+	// 			CreatedAt:         *conv.GetCreatedDateTime(),
+	// 		})
+	// 	}
+
+	// return comments, nil
 }
 
 func (c MSPlannerClient) GetConfig() (MSPlannerConfig, error) {

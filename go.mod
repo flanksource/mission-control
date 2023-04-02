@@ -13,8 +13,9 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/jackc/pgx/v5 v5.3.1
 	github.com/labstack/echo/v4 v4.10.2
+	github.com/lib/pq v1.10.7
 	github.com/microsoft/kiota-authentication-azure-go v0.6.0
-	github.com/microsoftgraph/msgraph-sdk-go v0.56.0
+	github.com/microsoftgraph/msgraph-sdk-go v0.54.0
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/ory/client-go v1.1.23
 	github.com/sethvargo/go-retry v0.2.4
@@ -81,7 +82,6 @@ require (
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/klauspost/compress v1.16.3 // indirect
 	github.com/liamylian/jsontime/v2 v2.0.0 // indirect
-	github.com/lib/pq v1.10.7 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/matryer/is v1.4.1 // indirect
 	github.com/microsoft/kiota-serialization-form-go v0.9.0 // indirect
@@ -170,7 +170,7 @@ require (
 	github.com/labstack/gommon v0.4.0 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.18 // indirect
-	github.com/microsoft/kiota-abstractions-go v0.19.0
+	github.com/microsoft/kiota-abstractions-go v0.19.0 // indirect
 	github.com/microsoft/kiota-http-go v0.16.1 // indirect
 	github.com/microsoft/kiota-serialization-json-go v0.9.0 // indirect
 	github.com/microsoft/kiota-serialization-text-go v0.7.0 // indirect
@@ -221,8 +221,4 @@ require (
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
 
-replace (
-	github.com/microsoftgraph/msgraph-sdk-go => github.com/microsoftgraph/msgraph-sdk-go v0.54.0
-	github.com/spf13/viper => github.com/spf13/viper v1.13.0
-
-)
+replace github.com/spf13/viper => github.com/spf13/viper v1.13.0
