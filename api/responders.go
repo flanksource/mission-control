@@ -2,7 +2,6 @@ package api
 
 import (
 	"github.com/flanksource/duty/types"
-	"github.com/flanksource/kommons"
 	"github.com/google/uuid"
 )
 
@@ -63,8 +62,8 @@ type ServiceNow struct {
 }
 
 type AWSClient struct {
-	AccessKey kommons.EnvVar `yaml:"username" json:"username,omitempty"`
-	SecretKey kommons.EnvVar `yaml:"password" json:"password,omitempty"`
+	AccessKey types.EnvVar `yaml:"username" json:"username,omitempty"`
+	SecretKey types.EnvVar `yaml:"password" json:"password,omitempty"`
 }
 
 type AWSSupport struct {
@@ -100,18 +99,18 @@ type ResponderClientBase struct {
 
 type JiraClient struct {
 	ResponderClientBase `json:",inline"`
-	Url                 string         `json:"url,omitempty"`
-	Username            kommons.EnvVar `yaml:"username" json:"username"`
-	Password            kommons.EnvVar `yaml:"password" json:"password"`
+	Url                 string       `json:"url,omitempty"`
+	Username            types.EnvVar `yaml:"username" json:"username"`
+	Password            types.EnvVar `yaml:"password" json:"password"`
 }
 
 type MSPlannerClient struct {
 	ResponderClientBase `json:",inline"`
-	TenantID            string         `json:"tenant_id"`
-	ClientID            string         `json:"client_id"`
-	GroupID             string         `json:"group_id"`
-	Username            kommons.EnvVar `yaml:"username" json:"username"`
-	Password            kommons.EnvVar `yaml:"password" json:"password"`
+	TenantID            string       `json:"tenant_id"`
+	ClientID            string       `json:"client_id"`
+	GroupID             string       `json:"group_id"`
+	Username            types.EnvVar `yaml:"username" json:"username"`
+	Password            types.EnvVar `yaml:"password" json:"password"`
 }
 
 type Jira struct {
