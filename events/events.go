@@ -12,7 +12,7 @@ import (
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
-	responderPkg "github.com/flanksource/incident-commander/responder"
+	"github.com/flanksource/incident-commander/responder"
 )
 
 const (
@@ -169,30 +169,25 @@ func consumeEventsUntilEmpty(ctx context.Context, config Config) {
 
 func reconcileResponderEvent(tx *gorm.DB, event api.Event) error {
 	responderID := event.Properties["id"]
+	ctx := api.NewContext(tx)
 
-	var responder api.Responder
-	err := tx.Where("id = ? AND external_id is NULL", responderID).Preload("Team").Find(&responder).Error
+	var _responder api.Responder
+	err := tx.Where("id = ? AND external_id is NULL", responderID).Preload("Team").Find(&_responder).Error
 	if err != nil {
 		return err
 	}
 
-	var externalID string
-	switch responder.Properties["responderType"] {
-	case responderPkg.JiraResponder:
-		externalID, err = responderPkg.NotifyJiraResponder(responder)
-	case responderPkg.MSPlannerResponder:
-		externalID, err = responderPkg.NotifyMSPlannerResponder(responder)
-	default:
-		return fmt.Errorf("Invalid responder type: %s received", responder.Properties["responderType"])
-	}
-
+	responder, err := responder.GetResponder(ctx, _responder.Team)
 	if err != nil {
 		return err
 	}
-
+	externalID, err := responder.NotifyResponder(ctx, _responder)
+	if err != nil {
+		return err
+	}
 	if externalID != "" {
 		// Update external id in responder table
-		return tx.Model(&api.Responder{}).Where("id = ?", responder.ID).Update("external_id", externalID).Error
+		return tx.Model(&api.Responder{}).Where("id = ?", _responder.ID).Update("external_id", externalID).Error
 	}
 
 	return nil
@@ -201,6 +196,7 @@ func reconcileResponderEvent(tx *gorm.DB, event api.Event) error {
 func reconcileCommentEvent(tx *gorm.DB, event api.Event) error {
 	commentID := event.Properties["id"]
 	commentBody := event.Properties["body"]
+	ctx := api.NewContext(tx)
 
 	var err error
 	var comment api.Comment
@@ -225,29 +221,26 @@ func reconcileCommentEvent(tx *gorm.DB, event api.Event) error {
 	}
 
 	// For each responder add the comment
-	for _, responder := range responders {
+	for _, _responder := range responders {
 		// Reset externalID to avoid inserting previous iteration's ID
 		externalID := ""
 
-		switch responder.Properties["responderType"] {
-		case responderPkg.JiraResponder:
-			externalID, err = responderPkg.NotifyJiraResponderAddComment(responder, commentBody)
-		case responderPkg.MSPlannerResponder:
-			externalID, err = responderPkg.NotifyMSPlannerResponderAddComment(responder, commentBody)
-		default:
-			continue
+		team, err := responder.GetResponder(ctx, _responder.Team)
+		if err != nil {
+			return err
 		}
+		externalID, err = team.NotifyResponderAddComment(ctx, _responder, commentBody)
 
 		if err != nil {
 			// TODO: Associate error messages with responderType and handle specific responders when reprocessing
-			logger.Errorf("error adding comment to responder:%s %v", responder.Properties["responderType"], err)
+			logger.Errorf("error adding comment to responder:%s %v", _responder.Properties["responderType"], err)
 			continue
 		}
 
 		// Insert into comment_responders table
 		if externalID != "" {
 			err = tx.Exec("INSERT INTO comment_responders (comment_id, responder_id, external_id) VALUES (?, ?, ?)",
-				commentID, responder.ID, externalID).Error
+				commentID, _responder.ID, externalID).Error
 			if err != nil {
 				logger.Errorf("error updating comment_responders table: %v", err)
 			}
