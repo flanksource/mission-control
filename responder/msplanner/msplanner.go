@@ -17,6 +17,8 @@ import (
 	"github.com/flanksource/incident-commander/api"
 )
 
+const ResponderType = "MSPlanner"
+
 type MSPlannerTask struct {
 	Title       string
 	PlanID      string `mapstructure:"plan_id"`
@@ -55,23 +57,49 @@ var taskPriorities = map[string]int32{
 	"low":       9,
 }
 
-func NewClient(tenantID, clientID, groupID, username, password string) (MSPlannerClient, error) {
+func NewClient(ctx *api.Context, team api.Team) (*MSPlannerClient, error) {
+
+	teamSpec, err := team.GetSpec()
+	if err != nil {
+		return nil, err
+	}
+	client := teamSpec.ResponderClients.MSPlanner
+
+	username, err := ctx.GetEnvVarValue(client.Username)
+	if err != nil {
+		return nil, err
+	}
+	password, err := ctx.GetEnvVarValue(client.Password)
+	if err != nil {
+		return nil, err
+	}
+
+	return newClient(
+		client.TenantID,
+		client.ClientID,
+		client.GroupID,
+		username,
+		password,
+	)
+}
+
+func newClient(tenantID, clientID, groupID, username, password string) (*MSPlannerClient, error) {
 	cred, err := azidentity.NewUsernamePasswordCredential(tenantID, clientID, username, password, nil)
 	if err != nil {
-		return MSPlannerClient{}, fmt.Errorf("error creating credentials: %v\n", err)
+		return nil, fmt.Errorf("error creating credentials: %v\n", err)
 	}
 
 	auth, err := kiotaAuth.NewAzureIdentityAuthenticationProvider(cred)
 	if err != nil {
-		return MSPlannerClient{}, fmt.Errorf("error authentication provider: %v\n", err)
+		return nil, fmt.Errorf("error authentication provider: %v\n", err)
 	}
 
 	adapter, err := msgraphsdk.NewGraphRequestAdapter(auth)
 	if err != nil {
-		return MSPlannerClient{}, fmt.Errorf("error creating adapter: %v\n", err)
+		return nil, fmt.Errorf("error creating adapter: %v\n", err)
 	}
 	client := msgraphsdk.NewGraphServiceClient(adapter)
-	return MSPlannerClient{client: client, groupID: groupID}, nil
+	return &MSPlannerClient{client: client, groupID: groupID}, nil
 }
 
 func (c MSPlannerClient) CreateTask(opts MSPlannerTask) (models.PlannerTaskable, error) {
