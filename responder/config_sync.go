@@ -39,6 +39,10 @@ func SyncConfig() {
 	}
 
 	for _, team := range teams {
+		if !team.HasResponder() {
+			logger.Debugf("Skipping team %s since it does not have a responder", team.Name)
+			continue
+		}
 		jobHistory := models.NewJobHistory("TeamResponderConfigSync", "team", team.ID.String())
 		_ = db.PersistJobHistory(jobHistory.Start())
 

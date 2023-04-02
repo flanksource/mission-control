@@ -14,6 +14,14 @@ type Team struct {
 	Spec types.JSONMap `json:"properties" gorm:"type:jsonstringmap;<-:false"`
 }
 
+func (t Team) HasResponder() bool {
+	teamSpec, err := t.GetSpec()
+	if err != nil {
+		return false
+	}
+	return !teamSpec.ResponderClients.IsEmpty()
+}
+
 func (t Team) GetSpec() (TeamSpec, error) {
 	var teamSpec TeamSpec
 	teamSpecJson, err := t.Spec.MarshalJSON()
