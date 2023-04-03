@@ -3,16 +3,10 @@ package responder
 import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/models"
-	"github.com/pkg/errors"
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 )
-
-var responderNameConfigTypeMapping = map[string]string{
-	JiraResponder:      "Jira",
-	MSPlannerResponder: "MSPlanner",
-}
 
 func upsertConfig(configType, externalID, name, config string) error {
 
@@ -37,6 +31,7 @@ func upsertConfig(configType, externalID, name, config string) error {
 
 func SyncConfig() {
 	logger.Debugf("Syncing responder config")
+	ctx := api.NewContext(db.Gorm)
 	var teams []api.Team
 	if err := db.Gorm.Find(&teams).Error; err != nil {
 		logger.Errorf("Error querying teams from database: %v", err)
@@ -44,72 +39,36 @@ func SyncConfig() {
 	}
 
 	for _, team := range teams {
+		if !team.HasResponder() {
+			logger.Debugf("Skipping team %s since it does not have a responder", team.Name)
+			continue
+		}
 		jobHistory := models.NewJobHistory("TeamResponderConfigSync", "team", team.ID.String())
 		_ = db.PersistJobHistory(jobHistory.Start())
 
-		teamSpec, err := team.GetSpec()
+		defer func() {
+			_ = db.PersistJobHistory(jobHistory.End())
+		}()
+
+		responder, err := GetResponder(ctx, team)
 		if err != nil {
-			logger.Errorf("Error getting team spec: %v", err)
+			logger.Errorf("Error getting responder: %v", err)
 			jobHistory.AddError(err.Error()).End()
 			continue
 		}
 
-		if teamSpec.ResponderClients.Jira != nil {
-			if err := syncJiraConfig(team.ID.String(), teamSpec); err != nil {
-				logger.Errorf("Error syncing Jira config: %v", err)
-				jobHistory.AddError(err.Error())
-			} else {
-				jobHistory.IncrSuccess()
+		if configType, configName, config, err := responder.SyncConfig(ctx, team); err != nil {
+			logger.Errorf("Error syncing config: %v", err)
+			jobHistory.AddError(err.Error()).End()
+			continue
+		} else {
+			if err := upsertConfig(configType, team.ID.String(), configName, config); err != nil {
+				logger.Errorf("Error upserting config: %v", err)
+				jobHistory.AddError(err.Error()).End()
+				continue
 			}
+			jobHistory.IncrSuccess()
+
 		}
-
-		if teamSpec.ResponderClients.MSPlanner != nil {
-			if err := syncMSPlannerConfig(team.ID.String(), teamSpec); err != nil {
-				logger.Errorf("Error syncing MSPlanner config: %v", err)
-				jobHistory.AddError(err.Error())
-			} else {
-				jobHistory.IncrSuccess()
-			}
-		}
-
-		_ = db.PersistJobHistory(jobHistory.End())
 	}
-}
-
-func syncJiraConfig(teamID string, teamSpec api.TeamSpec) error {
-	jiraClient, err := jiraClientFromTeamSpec(teamSpec)
-	if err != nil {
-		return errors.Wrap(err, "error instantiating Jira client")
-	}
-
-	jiraConfigJSON, err := jiraClient.GetConfigJSON()
-	if err != nil {
-		return errors.Wrap(err, "error generating config from Jira")
-	}
-
-	configName := teamSpec.ResponderClients.Jira.Values["project"]
-	configType := responderNameConfigTypeMapping[JiraResponder]
-	if err := upsertConfig(configType, teamID, configName, jiraConfigJSON); err != nil {
-		return errors.Wrap(err, "error upserting Jira config into database")
-	}
-	return nil
-}
-
-func syncMSPlannerConfig(teamID string, teamSpec api.TeamSpec) error {
-	msPlannerClient, err := msPlannerClientFromTeamSpec(teamSpec)
-	if err != nil {
-		return errors.Wrap(err, "error instantiating MSPlanner client")
-	}
-
-	msPlannerConfigJSON, err := msPlannerClient.GetConfigJSON()
-	if err != nil {
-		return errors.Wrap(err, "error generating config from MSPlanner")
-	}
-
-	configName := teamSpec.ResponderClients.MSPlanner.Values["plan"]
-	configType := responderNameConfigTypeMapping[MSPlannerResponder]
-	if err = upsertConfig(configType, teamID, configName, msPlannerConfigJSON); err != nil {
-		return errors.Wrap(err, "error upserting MSPlanner config into database")
-	}
-	return nil
 }

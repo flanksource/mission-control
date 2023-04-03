@@ -11,6 +11,8 @@ import (
 	jira "github.com/andygrunwald/go-jira"
 )
 
+const ResponderType = "Jira"
+
 type JiraIssue struct {
 	Project     string
 	Summary     string
@@ -45,8 +47,25 @@ type JiraClient struct {
 // type Sub-task so we do not set it in config
 var IssueTypeExcludeList = []string{"Sub-task"}
 
-func NewClient(email, apiToken, url string) (JiraClient, error) {
+func NewClient(ctx *api.Context, team api.Team) (*JiraClient, error) {
 
+	teamSpec, err := team.GetSpec()
+	if err != nil {
+		return nil, err
+	}
+	username, err := ctx.GetEnvVarValue(teamSpec.ResponderClients.Jira.Username)
+	if err != nil {
+		return nil, err
+	}
+	password, err := ctx.GetEnvVarValue(teamSpec.ResponderClients.Jira.Password)
+	if err != nil {
+		return nil, err
+	}
+
+	return newClient(username, password, teamSpec.ResponderClients.Jira.Url)
+}
+
+func newClient(email, apiToken, url string) (*JiraClient, error) {
 	tr := jira.BasicAuthTransport{
 		Username: email,
 		Password: apiToken,
@@ -54,14 +73,14 @@ func NewClient(email, apiToken, url string) (JiraClient, error) {
 
 	c, err := jira.NewClient(tr.Client(), url)
 	if err != nil {
-		return JiraClient{}, err
+		return nil, err
 	}
 
-	client := JiraClient{client: c}
+	client := &JiraClient{client: c}
 	return client, nil
 }
 
-func (jc JiraClient) CreateIssue(opts JiraIssue) (*jira.Issue, error) {
+func (jc *JiraClient) CreateIssue(opts JiraIssue) (*jira.Issue, error) {
 
 	i := jira.Issue{
 		Fields: &jira.IssueFields{
@@ -85,24 +104,20 @@ func (jc JiraClient) CreateIssue(opts JiraIssue) (*jira.Issue, error) {
 		return nil, err
 	}
 	logger.Debugf("[Jira] Issue created for Project: [%s] with ID: [%s] - [%s]", opts.Project, issue.Key, opts.Summary)
-
 	return issue, nil
 }
 
-func (jc JiraClient) AddComment(issueID, comment string) (*jira.Comment, error) {
-
+func (jc *JiraClient) AddComment(issueID, comment string) (string, error) {
 	c, _, err := jc.client.Issue.AddComment(issueID, &jira.Comment{Body: comment})
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 
 	logger.Debugf("[Jira] Comment: [%s] added for issueID: [%s]", c.Body, issueID)
-
-	return c, nil
+	return c.ID, nil
 }
 
-func (jc JiraClient) GetComments(issueID string) ([]api.Comment, error) {
-
+func (jc *JiraClient) GetComments(issueID string) ([]api.Comment, error) {
 	issue, _, err := jc.client.Issue.Get(issueID, nil)
 	if err != nil {
 		return nil, err

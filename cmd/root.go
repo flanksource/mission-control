@@ -1,21 +1,30 @@
 package cmd
 
 import (
+	"os"
 	"time"
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/k8s"
 	"github.com/flanksource/incident-commander/mail"
 	"github.com/flanksource/incident-commander/rules"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"k8s.io/client-go/kubernetes/fake"
 )
 
 func PreRun(cmd *cobra.Command, args []string) {
 	if err := db.Init(db.ConnectionString); err != nil {
 		logger.Fatalf("Failed to initialize the db: %v", err)
 	}
+	var err error
+	api.Kubernetes, err = k8s.NewClient()
+	if err != nil {
+		logger.Infof("Kubernetes client not available: %v", err)
+	}
+	api.Kubernetes = fake.NewSimpleClientset()
 }
 
 var Root = &cobra.Command{
@@ -34,6 +43,7 @@ var upstreamConfig api.UpstreamConfig
 
 func ServerFlags(flags *pflag.FlagSet) {
 	flags.IntVar(&httpPort, "httpPort", 8080, "Port to expose a health dashboard ")
+	flags.StringVar(&api.Namespace, "namespace", os.Getenv("NAMESPACE"), "Namespace to use for config/secret lookups")
 	flags.IntVar(&devGuiPort, "devGuiPort", 3004, "Port used by a local npm server in development mode")
 	flags.IntVar(&metricsPort, "metricsPort", 8081, "Port to expose a health dashboard ")
 	flags.BoolVar(&dev, "dev", false, "Run in development mode")

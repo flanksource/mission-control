@@ -7,11 +7,12 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/logger"
+	"github.com/sethvargo/go-retry"
 	"gorm.io/gorm"
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
-	responderPkg "github.com/flanksource/incident-commander/responder"
+	"github.com/flanksource/incident-commander/responder"
 )
 
 const (
@@ -24,6 +25,9 @@ const (
 	eventMaxAttempts      = 3
 	waitDurationOnFailure = time.Minute
 	pgNotifyTimeout       = time.Minute
+
+	dbReconnectMaxDuration         = time.Minute * 5
+	dbReconnectBackoffBaseDuration = time.Second
 )
 
 type Config struct {
@@ -50,24 +54,45 @@ func ListenForEvents(ctx context.Context, config Config) {
 	}
 }
 
+// listenToPostgresNotify listens to postgres notifications.
+// It will retry on failure for dbReconnectMaxAttempt times.
 func listenToPostgresNotify(ctx context.Context, pgNotify chan bool) {
-	conn, err := db.Pool.Acquire(ctx)
-	if err != nil {
-		logger.Errorf("error creating database pool: %v", err)
-	}
-
-	_, err = conn.Exec(ctx, "LISTEN event_queue_updates")
-	if err != nil {
-		logger.Errorf("error listening to database notify: %v", err)
-	}
-
-	for {
-		_, err = conn.Conn().WaitForNotification(ctx)
+	var listen = func(ctx context.Context, pgNotify chan bool) error {
+		conn, err := db.Pool.Acquire(ctx)
 		if err != nil {
-			logger.Errorf("error waiting for database notifications: %v", err)
+			return fmt.Errorf("error acquiring database connection: %v", err)
 		}
+		defer conn.Release()
 
-		pgNotify <- true
+		_, err = conn.Exec(ctx, "LISTEN event_queue_updates")
+		if err != nil {
+			return fmt.Errorf("error listening to database notifications: %v", err)
+		}
+		logger.Infof("listening to database notifications")
+
+		for {
+			notification, err := conn.Conn().WaitForNotification(ctx)
+			if err != nil {
+				return fmt.Errorf("error listening to database notifications: %v", err)
+			}
+
+			logger.Debugf("Received database notification: %+v", notification)
+			pgNotify <- true
+		}
+	}
+
+	// retry on failure.
+	for {
+		backoff := retry.WithMaxDuration(dbReconnectMaxDuration, retry.NewExponential(dbReconnectBackoffBaseDuration))
+		err := retry.Do(ctx, backoff, func(ctx context.Context) error {
+			if err := listen(ctx, pgNotify); err != nil {
+				return retry.RetryableError(err)
+			}
+
+			return nil
+		})
+
+		logger.Errorf("failed to connect to database: %v", err)
 	}
 }
 
@@ -144,30 +169,25 @@ func consumeEventsUntilEmpty(ctx context.Context, config Config) {
 
 func reconcileResponderEvent(tx *gorm.DB, event api.Event) error {
 	responderID := event.Properties["id"]
+	ctx := api.NewContext(tx)
 
-	var responder api.Responder
-	err := tx.Where("id = ? AND external_id is NULL", responderID).Preload("Team").Find(&responder).Error
+	var _responder api.Responder
+	err := tx.Where("id = ? AND external_id is NULL", responderID).Preload("Team").Find(&_responder).Error
 	if err != nil {
 		return err
 	}
 
-	var externalID string
-	switch responder.Properties["responderType"] {
-	case responderPkg.JiraResponder:
-		externalID, err = responderPkg.NotifyJiraResponder(responder)
-	case responderPkg.MSPlannerResponder:
-		externalID, err = responderPkg.NotifyMSPlannerResponder(responder)
-	default:
-		return fmt.Errorf("Invalid responder type: %s received", responder.Properties["responderType"])
-	}
-
+	responder, err := responder.GetResponder(ctx, _responder.Team)
 	if err != nil {
 		return err
 	}
-
+	externalID, err := responder.NotifyResponder(ctx, _responder)
+	if err != nil {
+		return err
+	}
 	if externalID != "" {
 		// Update external id in responder table
-		return tx.Model(&api.Responder{}).Where("id = ?", responder.ID).Update("external_id", externalID).Error
+		return tx.Model(&api.Responder{}).Where("id = ?", _responder.ID).Update("external_id", externalID).Error
 	}
 
 	return nil
@@ -176,6 +196,7 @@ func reconcileResponderEvent(tx *gorm.DB, event api.Event) error {
 func reconcileCommentEvent(tx *gorm.DB, event api.Event) error {
 	commentID := event.Properties["id"]
 	commentBody := event.Properties["body"]
+	ctx := api.NewContext(tx)
 
 	var err error
 	var comment api.Comment
@@ -200,29 +221,26 @@ func reconcileCommentEvent(tx *gorm.DB, event api.Event) error {
 	}
 
 	// For each responder add the comment
-	for _, responder := range responders {
+	for _, _responder := range responders {
 		// Reset externalID to avoid inserting previous iteration's ID
 		externalID := ""
 
-		switch responder.Properties["responderType"] {
-		case responderPkg.JiraResponder:
-			externalID, err = responderPkg.NotifyJiraResponderAddComment(responder, commentBody)
-		case responderPkg.MSPlannerResponder:
-			externalID, err = responderPkg.NotifyMSPlannerResponderAddComment(responder, commentBody)
-		default:
-			continue
+		team, err := responder.GetResponder(ctx, _responder.Team)
+		if err != nil {
+			return err
 		}
+		externalID, err = team.NotifyResponderAddComment(ctx, _responder, commentBody)
 
 		if err != nil {
 			// TODO: Associate error messages with responderType and handle specific responders when reprocessing
-			logger.Errorf("error adding comment to responder:%s %v", responder.Properties["responderType"], err)
+			logger.Errorf("error adding comment to responder:%s %v", _responder.Properties["responderType"], err)
 			continue
 		}
 
 		// Insert into comment_responders table
 		if externalID != "" {
 			err = tx.Exec("INSERT INTO comment_responders (comment_id, responder_id, external_id) VALUES (?, ?, ?)",
-				commentID, responder.ID, externalID).Error
+				commentID, _responder.ID, externalID).Error
 			if err != nil {
 				logger.Errorf("error updating comment_responders table: %v", err)
 			}
