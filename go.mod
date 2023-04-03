@@ -8,12 +8,11 @@ require (
 	github.com/antihax/optional v1.0.0
 	github.com/flanksource/canary-checker/sdk v0.0.0-20230331093950-cb1f0f05f3e5
 	github.com/flanksource/commons v1.7.0
-	github.com/flanksource/duty v1.0.45
+	github.com/flanksource/duty v1.0.48
 	github.com/google/cel-go v0.13.0
 	github.com/google/uuid v1.3.0
 	github.com/jackc/pgx/v5 v5.3.1
 	github.com/labstack/echo/v4 v4.10.2
-	github.com/lib/pq v1.10.7
 	github.com/microsoft/kiota-authentication-azure-go v0.6.0
 	github.com/microsoftgraph/msgraph-sdk-go v0.54.0
 	github.com/mitchellh/mapstructure v1.5.0
@@ -82,6 +81,7 @@ require (
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/klauspost/compress v1.16.3 // indirect
 	github.com/liamylian/jsontime/v2 v2.0.0 // indirect
+	github.com/lib/pq v1.10.7 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/matryer/is v1.4.1 // indirect
 	github.com/microsoft/kiota-serialization-form-go v0.9.0 // indirect
