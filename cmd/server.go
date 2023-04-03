@@ -151,7 +151,6 @@ func logSearchMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 		}
 
 		selectorName, _ := form["name"].(string)
-		componentID = "01872d9f-29c6-3626-2da5-9851502cd6ba" // Test
 
 		component, err := duty.GetComponent(req.Context(), db.Gorm, componentID)
 		if err != nil {
