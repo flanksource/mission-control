@@ -75,7 +75,13 @@ func LogsHandler(c echo.Context) error {
 		})
 	}
 
-	c.Stream(resp.StatusCode, resp.Header.Get("Content-Type"), resp.Body)
+	if err := c.Stream(resp.StatusCode, resp.Header.Get("Content-Type"), resp.Body); err != nil {
+		return c.JSON(http.StatusInternalServerError, api.HTTPError{
+			Error:   err.Error(),
+			Message: "failed to stream response.",
+		})
+	}
+
 	return nil
 }
 
