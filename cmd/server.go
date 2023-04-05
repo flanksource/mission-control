@@ -1,11 +1,8 @@
 package cmd
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -15,18 +12,16 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/duty"
-	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/schema/openapi"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/jobs"
+	"github.com/flanksource/incident-commander/logs"
 	"github.com/flanksource/incident-commander/snapshot"
 	"github.com/flanksource/incident-commander/upstream"
 	"github.com/flanksource/incident-commander/utils"
-	"github.com/flanksource/kommons/ktemplate"
 )
 
 const (
@@ -115,7 +110,7 @@ var Serve = &cobra.Command{
 		forward(e, "/kratos", kratosAPI)
 		forward(e, "/apm", api.ApmHubPath) // Deprecated
 
-		forwardWithMiddlewares(e, "/logs", api.ApmHubPath, logSearchMiddleware)
+		e.POST("/logs/*", logs.LogsHandler)
 
 		go jobs.Start()
 
@@ -132,118 +127,11 @@ var Serve = &cobra.Command{
 	},
 }
 
-// logSearchMiddleware injects additional label and query params to the request
-func logSearchMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
-	return func(c echo.Context) error {
-		req := c.Request()
-		if req.Method != http.MethodPost {
-			return next(c)
-		}
-
-		var form = make(map[string]any)
-		if err := c.Bind(&form); err != nil {
-			return fmt.Errorf("failed to parse form: %w", err)
-		}
-
-		componentID, ok := form["id"].(string)
-		if !ok {
-			return next(c) // No component ID, so no need to modify the request
-		}
-
-		selectorName, _ := form["name"].(string)
-
-		component, err := duty.GetComponent(req.Context(), db.Gorm, componentID)
-		if err != nil {
-			return fmt.Errorf("failed to query component: %w", err)
-		}
-
-		logSelector := getLabelsFromLogSelectors(component.LogSelectors, selectorName)
-		if logSelector == nil {
-			return next(c) // nothing to do
-		}
-
-		templater := ktemplate.StructTemplater{
-			Values:         component.GetAsEnvironment(),
-			ValueFunctions: true,
-			DelimSets: []ktemplate.Delims{
-				{Left: "{{", Right: "}}"},
-				{Left: "$(", Right: ")"},
-			},
-		}
-		if err := templater.Walk(logSelector); err != nil {
-			return fmt.Errorf("failed to template the labels: %w", err)
-		}
-
-		modifiedForm := injectLabelsToForm(logSelector.Labels, form)
-		if err := modifyReqBody(req, modifiedForm); err != nil {
-			return fmt.Errorf("failed to write back search params: %w", err)
-		}
-
-		return next(c)
-	}
-}
-
-// getLabelsFromLogSelectors returns a map of labels from the logs selectors
-func getLabelsFromLogSelectors(selectors models.LogSelectors, name string) *models.LogSelector {
-	if len(selectors) == 0 {
-		return nil
-	}
-
-	if name == "" {
-		// if the user didn't make any selection on log selector, we will use the first one
-		return &selectors[0]
-	}
-
-	for _, selector := range selectors {
-		if selector.Name == name {
-			return &selector
-		}
-	}
-
-	logger.Debugf("could not find log selector with name %s", name)
-	return nil
-}
-
-func injectLabelsToForm(injectLabels map[string]string, form map[string]any) map[string]any {
-	// Make sure label exists so we can inject our labels
-	if _, ok := form["labels"]; !ok {
-		form["labels"] = make(map[string]any)
-	}
-
-	if labels, ok := form["labels"].(map[string]any); ok {
-		for k, v := range injectLabels {
-			labels[k] = v
-		}
-		form["labels"] = labels
-	}
-
-	return form
-}
-
-func modifyReqBody(req *http.Request, sp any) error {
-	encoded, err := json.Marshal(sp)
-	if err != nil {
-		return err
-	}
-
-	req.Body = io.NopCloser(bytes.NewReader(encoded))
-	req.Header.Set("Content-Length", fmt.Sprintf("%d", len(encoded)))
-	req.ContentLength = int64(len(encoded))
-	return nil
-}
-
-// forwardWithMiddlewares forwards the request to the target just like forward()
-// but attaches the given middlewares before proxying the request.
-func forwardWithMiddlewares(e *echo.Echo, prefix string, target string, middlewares ...echo.MiddlewareFunc) {
-	middlewares = append(middlewares, getProxyConfig(e, prefix, target))
-	e.Group(prefix).Use(middlewares...)
-}
-
 func forward(e *echo.Echo, prefix string, target string) {
-	e.Group(prefix).Use(getProxyConfig(e, prefix, target))
+	e.Group(prefix).Use(getProxyMiddleware(e, prefix, target))
 }
 
-func getProxyConfig(e *echo.Echo, prefix, targetURL string) echo.MiddlewareFunc {
+func getProxyMiddleware(e *echo.Echo, prefix, targetURL string) echo.MiddlewareFunc {
 	_url, err := url.Parse(targetURL)
 	if err != nil {
 		e.Logger.Fatal(err)
