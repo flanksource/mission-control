@@ -69,7 +69,11 @@ func LookupRelatedComponentIDs(componentID string, maxDepth int) ([]string, erro
 		return componentIDs, err
 	}
 	for _, row := range childRows {
-		componentIDs = append(componentIDs, row.ChildID, row.ParentID)
+		// The parent_id will be blank when the child is the root component
+		if row.ParentID != "" {
+			componentIDs = append(componentIDs, row.ParentID)
+		}
+		componentIDs = append(componentIDs, row.ChildID)
 	}
 
 	var relatedRows []string
@@ -78,7 +82,6 @@ func LookupRelatedComponentIDs(componentID string, maxDepth int) ([]string, erro
 		return componentIDs, err
 	}
 	componentIDs = append(componentIDs, relatedRows...)
-
 	return componentIDs, nil
 }
 
