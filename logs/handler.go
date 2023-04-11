@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 
-	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/commons/template"
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
-	"github.com/flanksource/kommons/ktemplate"
 	"github.com/labstack/echo/v4"
 )
 
@@ -47,14 +47,14 @@ func LogsHandler(c echo.Context) error {
 	if logSelector == nil {
 		return c.JSON(http.StatusBadRequest, api.HTTPError{
 			Error:   "log selector was not found",
-			Message: fmt.Sprintf("log selector with the name '%s' was not found.", selectorName),
+			Message: fmt.Sprintf("log selector with the name '%s' was not found. Available names: [%s]", selectorName, strings.Join(getSelectorNames(component.LogSelectors), ", ")),
 		})
 	}
 
-	templater := ktemplate.StructTemplater{
+	templater := template.StructTemplater{
 		Values:         component.GetAsEnvironment(),
 		ValueFunctions: true,
-		DelimSets: []ktemplate.Delims{
+		DelimSets: []template.Delims{
 			{Left: "{{", Right: "}}"},
 			{Left: "$(", Right: ")"},
 		},
@@ -123,7 +123,6 @@ func getLabelsFromLogSelectors(selectors models.LogSelectors, name string) *mode
 		}
 	}
 
-	logger.Debugf("could not find log selector with name %s", name)
 	return nil
 }
 
@@ -141,4 +140,13 @@ func injectLabelsToForm(injectLabels map[string]string, form map[string]any) map
 	}
 
 	return form
+}
+
+func getSelectorNames(logSelectors models.LogSelectors) []string {
+	var names = make([]string, len(logSelectors))
+	for i, selector := range logSelectors {
+		names[i] = selector.Name
+	}
+
+	return names
 }
