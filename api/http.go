@@ -7,4 +7,5 @@ type HTTPError struct {
 
 type HTTPSuccess struct {
 	Message string `json:"message"`
+	Payload any    `json:"payload,omitempty"`
 }

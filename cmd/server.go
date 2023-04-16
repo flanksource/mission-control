@@ -19,6 +19,7 @@ import (
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/jobs"
 	"github.com/flanksource/incident-commander/logs"
+	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/snapshot"
 	"github.com/flanksource/incident-commander/upstream"
 	"github.com/flanksource/incident-commander/utils"
@@ -92,6 +93,11 @@ var Serve = &cobra.Command{
 
 		e.POST("/auth/:id/update_state", auth.UpdateAccountState)
 		e.POST("/auth/:id/properties", auth.UpdateAccountProperties)
+
+		e.POST("/rbac/:id/update_role", rbac.UpdateRoleForUser, rbac.Authorization("rbac", "write"))
+		e.GET("/yash", func(c echo.Context) error {
+			return c.HTML(200, "hello")
+		}, rbac.Authorization("health", "write"))
 
 		// Serve openapi schemas
 		schemaServer, err := utils.HTTPFileserver(openapi.Schemas)

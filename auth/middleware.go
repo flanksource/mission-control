@@ -17,7 +17,10 @@ import (
 	"github.com/patrickmn/go-cache"
 )
 
-const DefaultPostgrestRole = "postgrest_api"
+const (
+	DefaultPostgrestRole = "postgrest_api"
+	UserIDHeaderKey      = "X-User-ID"
+)
 
 type kratosMiddleware struct {
 	client             *client.APIClient
@@ -66,6 +69,7 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 			logger.Errorf("Error generating JWT Token: %v", err)
 		}
 		c.Request().Header.Add("Authorization", fmt.Sprintf("Bearer %s", token))
+		c.Request().Header.Add(UserIDHeaderKey, session.Identity.GetId())
 
 		return next(c)
 	}

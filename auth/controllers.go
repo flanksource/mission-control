@@ -23,7 +23,7 @@ func (k *KratosHandler) InviteUser(c echo.Context) error {
 	if err := c.Bind(&reqData); err != nil {
 		return c.JSON(http.StatusBadRequest, api.HTTPError{
 			Error:   err.Error(),
-			Message: "invalid request",
+			Message: "Invalid request body",
 		})
 	}
 
@@ -32,14 +32,14 @@ func (k *KratosHandler) InviteUser(c echo.Context) error {
 		// User already exists
 		if strings.Contains(err.Error(), http.StatusText(http.StatusConflict)) {
 			return c.JSON(http.StatusInternalServerError, api.HTTPError{
-				Error:   "user already exists",
-				Message: "error creating user",
+				Error:   "User already exists",
+				Message: "Error creating user",
 			})
 		}
 
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{
 			Error:   err.Error(),
-			Message: "error creating user",
+			Message: "Error creating user",
 		})
 	}
 
@@ -53,7 +53,7 @@ func (k *KratosHandler) InviteUser(c echo.Context) error {
 	if err = inviteMail.Send(); err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{
 			Error:   err.Error(),
-			Message: "error sending email",
+			Message: "Error sending email",
 		})
 	}
 
