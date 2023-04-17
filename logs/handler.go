@@ -9,7 +9,7 @@ import (
 
 	"github.com/flanksource/commons/template"
 	"github.com/flanksource/duty"
-	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/labstack/echo/v4"
@@ -107,7 +107,7 @@ func makePostRequest(url string, data any) (*http.Response, error) {
 }
 
 // getLabelsFromLogSelectors returns a map of labels from the logs selectors
-func getLabelsFromLogSelectors(selectors models.LogSelectors, name string) *models.LogSelector {
+func getLabelsFromLogSelectors(selectors types.LogSelectors, name string) *types.LogSelector {
 	if len(selectors) == 0 {
 		return nil
 	}
@@ -142,7 +142,7 @@ func injectLabelsToForm(injectLabels map[string]string, form map[string]any) map
 	return form
 }
 
-func getSelectorNames(logSelectors models.LogSelectors) []string {
+func getSelectorNames(logSelectors types.LogSelectors) []string {
 	var names = make([]string, len(logSelectors))
 	for i, selector := range logSelectors {
 		names[i] = selector.Name
