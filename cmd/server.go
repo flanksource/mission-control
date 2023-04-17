@@ -18,6 +18,7 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/jobs"
+	"github.com/flanksource/incident-commander/logs"
 	"github.com/flanksource/incident-commander/snapshot"
 	"github.com/flanksource/incident-commander/upstream"
 	"github.com/flanksource/incident-commander/utils"
@@ -41,6 +42,8 @@ var Serve = &cobra.Command{
 	PreRun: PreRun,
 	Run: func(cmd *cobra.Command, args []string) {
 		e := echo.New()
+		e.HideBanner = true
+
 		// PostgREST needs to know how it is exposed to create the correct links
 		db.HttpEndpoint = publicEndpoint + "/db"
 
@@ -105,7 +108,9 @@ var Serve = &cobra.Command{
 		forward(e, "/config", configDb)
 		forward(e, "/canary", api.CanaryCheckerPath)
 		forward(e, "/kratos", kratosAPI)
-		forward(e, "/apm", api.ApmHubPath)
+		forward(e, "/apm", api.ApmHubPath) // Deprecated
+
+		e.POST("/logs/*", logs.LogsHandler)
 
 		go jobs.Start()
 
@@ -114,27 +119,31 @@ var Serve = &cobra.Command{
 		}
 		go events.ListenForEvents(context.Background(), eventHandlerConfig)
 
-		if err := e.Start(fmt.Sprintf(":%d", httpPort)); err != nil {
+		listenAddr := fmt.Sprintf(":%d", httpPort)
+		logger.Infof("Listening on %s", listenAddr)
+		if err := e.Start(listenAddr); err != nil {
 			e.Logger.Fatal(err)
 		}
 	},
 }
 
 func forward(e *echo.Echo, prefix string, target string) {
-	_url, err := url.Parse(target)
+	e.Group(prefix).Use(getProxyMiddleware(e, prefix, target))
+}
+
+func getProxyMiddleware(e *echo.Echo, prefix, targetURL string) echo.MiddlewareFunc {
+	_url, err := url.Parse(targetURL)
 	if err != nil {
 		e.Logger.Fatal(err)
 	}
-	e.Group(prefix).Use(middleware.ProxyWithConfig(middleware.ProxyConfig{
+
+	proxyConf := middleware.ProxyConfig{
 		Rewrite: map[string]string{
 			fmt.Sprintf("^%s/*", prefix): "/$1",
 		},
-		Balancer: middleware.NewRoundRobinBalancer([]*middleware.ProxyTarget{
-			{
-				URL: _url,
-			},
-		}),
-	}))
+		Balancer: middleware.NewRoundRobinBalancer([]*middleware.ProxyTarget{{URL: _url}}),
+	}
+	return middleware.ProxyWithConfig(proxyConf)
 }
 
 func init() {
