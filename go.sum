@@ -1032,8 +1032,8 @@ github.com/flanksource/canary-checker/sdk v0.0.0-20230331093950-cb1f0f05f3e5 h1:
 github.com/flanksource/canary-checker/sdk v0.0.0-20230331093950-cb1f0f05f3e5/go.mod h1:JwV0Y7FcdwcgmooZRcF4OV4w+H7Td5auyFHXZla/wjU=
 github.com/flanksource/commons v1.7.0 h1:B87CrUFM2hcAkiJey5ermZESW7guM6ia2Z67AOeA7hQ=
 github.com/flanksource/commons v1.7.0/go.mod h1:f9gxPkf6psRWWADpVutZ4hedPrgbIJfV3WoZWQQzgxE=
-github.com/flanksource/duty v1.0.62 h1:WjXZpyd0xo4hHTZTpNUNFbMF55RlgrZmsLEYudjFIU0=
-github.com/flanksource/duty v1.0.62/go.mod h1:Xzlp3Q3OGyT7wRKUxji7jNcj9XZKZ30kgFHMzPrFXpY=
+github.com/flanksource/duty v1.0.63 h1:hBlewwbca9Am85jND3tSho5Jvhzre8btWNUf9xNOV0Q=
+github.com/flanksource/duty v1.0.63/go.mod h1:Xzlp3Q3OGyT7wRKUxji7jNcj9XZKZ30kgFHMzPrFXpY=
 github.com/flanksource/gomplate/v3 v3.20.1/go.mod h1:LPpzujBIg9HBXRUngDKK/zNmEjHpEUieKa/2oRjkCzI=
 github.com/flanksource/gomplate/v3 v3.20.3 h1:mnNaO37uwvv8Kvi4Xswj1tHKP5UMre3FLNaKvAwqhSw=
 github.com/flanksource/gomplate/v3 v3.20.3/go.mod h1:l4iCvp30TdhZk89eRGuNkPwlRjJLXdUSblr+VyuZfAk=
