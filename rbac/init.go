@@ -92,7 +92,9 @@ func Init() error {
 	// Update policies every 5 minutes
 	go func() {
 		time.Sleep(5 * time.Minute)
-		Enforcer.LoadPolicy()
+		if err := Enforcer.LoadPolicy(); err != nil {
+			logger.Errorf("Error loading rbac polices: %v", err)
+		}
 	}()
 
 	return nil
