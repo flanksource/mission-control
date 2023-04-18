@@ -41,6 +41,7 @@ const (
 	// Objects
 	ObjectDatabase = "database"
 	ObjectRBAC     = "rbac"
+	ObjectAuth     = "auth"
 )
 
 var Enforcer *casbin.Enforcer
@@ -76,6 +77,7 @@ func Init() error {
 		{RoleAdmin, ObjectDatabase, ActionRead},
 		{RoleAdmin, ObjectDatabase, ActionWrite},
 		{RoleAdmin, ObjectRBAC, ActionWrite},
+		{RoleAdmin, ObjectAuth, ActionWrite},
 
 		{RoleDeveloper, ObjectDatabase, ActionRead},
 		{RoleDeveloper, ObjectDatabase, ActionWrite},

@@ -85,7 +85,7 @@ var Serve = &cobra.Command{
 			return c.JSON(http.StatusOK, api.HTTPSuccess{Message: "ok"})
 		})
 
-		e.POST("/auth/invite_user", kratosHandler.InviteUser, rbac.Authorization("", ""))
+		e.POST("/auth/invite_user", kratosHandler.InviteUser, rbac.Authorization(rbac.ObjectAuth, rbac.ActionWrite))
 
 		e.GET("/snapshot/topology/:id", snapshot.Topology)
 		e.GET("/snapshot/incident/:id", snapshot.Incident)
