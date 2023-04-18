@@ -30,12 +30,17 @@ const (
     m = g(r.sub, p.sub) && r.obj == p.obj && r.act == p.act`
 
 	// Roles
-	RoleAdmin  = "admin"
-	RoleViewer = "viewer"
+	RoleAdmin     = "admin"
+	RoleDeveloper = "developer"
+	RoleViewer    = "viewer"
 
 	// Actions
 	ActionRead  = "read"
 	ActionWrite = "write"
+
+	// Objects
+	ObjectDatabase = "database"
+	ObjectRBAC     = "rbac"
 )
 
 var Enforcer *casbin.Enforcer
@@ -61,9 +66,21 @@ func Init() error {
 		return fmt.Errorf("error adding role for system admin user: %v", err)
 	}
 
+	if _, err := Enforcer.AddRoleForUser("viewer-user", RoleViewer); err != nil {
+		return fmt.Errorf("error adding role for system admin user: %v", err)
+	}
+
 	polices := [][]string{
-		{RoleAdmin, "health", ActionRead},
-		{RoleAdmin, "health", ActionWrite},
+		// If the user is admin, no check takes place
+		// we have these polices as placeholders
+		{RoleAdmin, ObjectDatabase, ActionRead},
+		{RoleAdmin, ObjectDatabase, ActionWrite},
+		{RoleAdmin, ObjectRBAC, ActionWrite},
+
+		{RoleDeveloper, ObjectDatabase, ActionRead},
+		{RoleDeveloper, ObjectDatabase, ActionWrite},
+
+		{RoleViewer, ObjectDatabase, ActionRead},
 	}
 
 	if _, err := Enforcer.AddPolicies(polices); err != nil {
@@ -82,7 +99,7 @@ func Init() error {
 func Check(subject, object, action string) bool {
 	allowed, err := Enforcer.Enforce(subject, object, action)
 	if err != nil {
-		logger.Errorf("TODO err: %v", err)
+		logger.Errorf("RBAC Enforce failed: %v", err)
 	}
 	return allowed
 }
