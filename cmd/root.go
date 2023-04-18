@@ -24,9 +24,8 @@ func PreRun(cmd *cobra.Command, args []string) {
 	api.Kubernetes, err = k8s.NewClient()
 	if err != nil {
 		logger.Infof("Kubernetes client not available: %v", err)
+		api.Kubernetes = fake.NewSimpleClientset()
 	}
-	// TODO: Ask moshe if it meant to be in err condition
-	api.Kubernetes = fake.NewSimpleClientset()
 
 	// Initiate RBAC
 	if err := rbac.Init(); err != nil {
