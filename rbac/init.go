@@ -31,17 +31,29 @@ const (
 
 	// Roles
 	RoleAdmin     = "admin"
-	RoleDeveloper = "developer"
+	RoleEditor    = "editor"
 	RoleViewer    = "viewer"
+	RoleCommander = "commander"
+	RoleResponder = "responder"
 
 	// Actions
-	ActionRead  = "read"
-	ActionWrite = "write"
+	ActionRead   = "read"
+	ActionWrite  = "write"
+	ActionUpdate = "update"
+	ActionCreate = "create"
 
 	// Objects
-	ObjectDatabase = "database"
 	ObjectRBAC     = "rbac"
 	ObjectAuth     = "auth"
+	ObjectDatabase = "database"
+
+	ObjectDatabaseResponder      = "database.responder"
+	ObjectDatabaseIncident       = "database.incident"
+	ObjectDatabaseEvidence       = "database.evidences"
+	ObjectDatabaseComment        = "database.comments"
+	ObjectDatabaseCanary         = "database.canaries"
+	ObjectDatabaseSystemTemplate = "database.system_templates"
+	ObjectDatabaseConfigScraper  = "database.config_scrapers"
 )
 
 var Enforcer *casbin.Enforcer
@@ -67,33 +79,56 @@ func Init() error {
 		return fmt.Errorf("error adding role for system admin user: %v", err)
 	}
 
-	if _, err := Enforcer.AddRoleForUser("viewer-user", RoleViewer); err != nil {
-		return fmt.Errorf("error adding role for system admin user: %v", err)
-	}
+	// TODO: Remove
+	//if _, err := Enforcer.AddRoleForUser("viewer-user", RoleViewer); err != nil {
+	//return fmt.Errorf("error adding role for system admin user: %v", err)
+	//}
 
-	polices := [][]string{
+	// TODO: Add  hierarchial policies
+	//if _, err := Enforcer.AddGroupingPolicy(RoleViewer, RoleAdmin); err != nil {
+	//return fmt.Errorf("error adding role for system admin user: %v", err)
+	//}
+
+	policies := [][]string{
 		// If the user is admin, no check takes place
-		// we have these polices as placeholders
+		// we have these policies as placeholders
 		{RoleAdmin, ObjectDatabase, ActionRead},
 		{RoleAdmin, ObjectDatabase, ActionWrite},
 		{RoleAdmin, ObjectRBAC, ActionWrite},
 		{RoleAdmin, ObjectAuth, ActionWrite},
 
-		{RoleDeveloper, ObjectDatabase, ActionRead},
-		{RoleDeveloper, ObjectDatabase, ActionWrite},
+		{RoleEditor, ObjectDatabaseCanary, ActionCreate},
+		{RoleEditor, ObjectDatabaseCanary, ActionUpdate},
+		{RoleEditor, ObjectDatabaseSystemTemplate, ActionCreate},
+		{RoleEditor, ObjectDatabaseSystemTemplate, ActionUpdate},
+		{RoleEditor, ObjectDatabaseConfigScraper, ActionCreate},
+		{RoleEditor, ObjectDatabaseConfigScraper, ActionUpdate},
+
+		{RoleCommander, ObjectDatabaseResponder, ActionCreate},
+		{RoleCommander, ObjectDatabaseIncident, ActionCreate},
+		{RoleCommander, ObjectDatabaseIncident, ActionUpdate},
+		{RoleCommander, ObjectDatabaseEvidence, ActionCreate},
+		{RoleCommander, ObjectDatabaseEvidence, ActionUpdate},
+
+		{RoleResponder, ObjectDatabaseComment, ActionCreate},
+		{RoleResponder, ObjectDatabaseIncident, ActionUpdate},
 
 		{RoleViewer, ObjectDatabase, ActionRead},
 	}
 
-	if _, err := Enforcer.AddPolicies(polices); err != nil {
-		return fmt.Errorf("error adding rbac polices: %v", err)
+	// Adding policies in a loop is important
+	// If we use Enforcer.AddPolicies(), new policies do not get saved
+	for _, p := range policies {
+		if _, err := Enforcer.AddPolicy(p); err != nil {
+			return fmt.Errorf("error adding rbac policy %s: %v", p, err)
+		}
 	}
 
 	// Update policies every 5 minutes
 	go func() {
 		time.Sleep(5 * time.Minute)
 		if err := Enforcer.LoadPolicy(); err != nil {
-			logger.Errorf("Error loading rbac polices: %v", err)
+			logger.Errorf("Error loading rbac policies: %v", err)
 		}
 	}()
 
