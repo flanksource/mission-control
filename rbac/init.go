@@ -79,15 +79,13 @@ func Init() error {
 		return fmt.Errorf("error adding role for system admin user: %v", err)
 	}
 
-	// TODO: Remove
-	//if _, err := Enforcer.AddRoleForUser("viewer-user", RoleViewer); err != nil {
-	//return fmt.Errorf("error adding role for system admin user: %v", err)
-	//}
-
-	// TODO: Add  hierarchial policies
-	//if _, err := Enforcer.AddGroupingPolicy(RoleViewer, RoleAdmin); err != nil {
-	//return fmt.Errorf("error adding role for system admin user: %v", err)
-	//}
+	// Hierarchial policies
+	if _, err := Enforcer.AddGroupingPolicy(RoleEditor, RoleCommander); err != nil {
+		return fmt.Errorf("error adding group policy for role editor to commander: %v", err)
+	}
+	if _, err := Enforcer.AddGroupingPolicy(RoleCommander, RoleResponder); err != nil {
+		return fmt.Errorf("error adding group policy for role commander to responder: %v", err)
+	}
 
 	policies := [][]string{
 		// If the user is admin, no check takes place

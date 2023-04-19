@@ -17,6 +17,11 @@ func Authorization(object, action string) func(echo.HandlerFunc) echo.HandlerFun
 				return c.String(http.StatusUnauthorized, "Unauthorized. User not found for RBAC")
 			}
 
+			// Everyone with an account is a viewer
+			if action == ActionRead && Check(RoleViewer, object, action) {
+				return next(c)
+			}
+
 			if isAdmin, _ := Enforcer.HasRoleForUser(userID, RoleAdmin); isAdmin {
 				return next(c)
 			}
