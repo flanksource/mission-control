@@ -4,17 +4,25 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/labstack/echo/v4"
+)
+
+const (
+	errNoUserID          = "Unauthorized. User not found for RBAC"
+	errMisconfiguredRBAC = "Unauthorized. RBAC policy not configured correctly"
+	errAccessDenied      = "Unauthorized. Access Denied"
 )
 
 func Authorization(object, action string) func(echo.HandlerFunc) echo.HandlerFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			userID := c.Request().Header.Get(auth.UserIDHeaderKey)
+			logger.Infof("USER ID IS %s", userID)
 			if userID == "" {
-				return c.String(http.StatusUnauthorized, "Unauthorized. User not found for RBAC")
+				return c.String(http.StatusUnauthorized, errNoUserID)
 			}
 
 			// Everyone with an account is a viewer
@@ -31,11 +39,11 @@ func Authorization(object, action string) func(echo.HandlerFunc) echo.HandlerFun
 				action = policyActionFromHTTPMethod(c.Request().Method)
 				resource := strings.ReplaceAll(path, "/db/", "")
 
-				// TODO: Use Contains in list than switch
 				object = postgrestDatabaseObject(resource)
 
-				isUserViewer, _ := Enforcer.HasRoleForUser(userID, RoleViewer)
-				if action == ActionRead && isUserViewer {
+				// Allow viewing of tables if access is not explicitly denied
+				if action == ActionRead && !collections.Contains(dbReadDenied, object) {
+					logger.Infof("Inside view if cond %s %s", object, resource)
 					return next(c)
 				}
 
@@ -46,11 +54,13 @@ func Authorization(object, action string) func(echo.HandlerFunc) echo.HandlerFun
 			}
 
 			if object == "" || action == "" {
-				return c.String(http.StatusUnauthorized, "Unauthorized. Check role policy")
+				logger.Infof("HERE 1")
+				return c.String(http.StatusUnauthorized, errMisconfiguredRBAC)
 			}
 
 			if !Check(userID, object, action) {
-				return c.String(http.StatusUnauthorized, "Unauthorized. Check role policy")
+				logger.Infof("HERE 2")
+				return c.String(http.StatusUnauthorized, errAccessDenied)
 			}
 
 			return next(c)

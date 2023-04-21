@@ -54,6 +54,8 @@ const (
 	ObjectDatabaseCanary         = "database.canaries"
 	ObjectDatabaseSystemTemplate = "database.system_templates"
 	ObjectDatabaseConfigScraper  = "database.config_scrapers"
+	ObjectDatabaseIdentity       = "database.identities"
+	ObjectDatabaseConnection     = "database.connections"
 )
 
 var Enforcer *casbin.Enforcer
@@ -94,13 +96,20 @@ func Init() error {
 		{RoleAdmin, ObjectDatabase, ActionWrite},
 		{RoleAdmin, ObjectRBAC, ActionWrite},
 		{RoleAdmin, ObjectAuth, ActionWrite},
+		{RoleAdmin, ObjectDatabaseIdentity, ActionRead},
+		{RoleAdmin, ObjectDatabaseConnection, ActionRead},
+		{RoleAdmin, ObjectDatabaseConnection, ActionCreate},
+		{RoleAdmin, ObjectDatabaseConnection, ActionUpdate},
 
 		{RoleEditor, ObjectDatabaseCanary, ActionCreate},
 		{RoleEditor, ObjectDatabaseCanary, ActionUpdate},
+		{RoleEditor, ObjectDatabaseCanary, ActionRead},
 		{RoleEditor, ObjectDatabaseSystemTemplate, ActionCreate},
 		{RoleEditor, ObjectDatabaseSystemTemplate, ActionUpdate},
+		{RoleEditor, ObjectDatabaseSystemTemplate, ActionRead},
 		{RoleEditor, ObjectDatabaseConfigScraper, ActionCreate},
 		{RoleEditor, ObjectDatabaseConfigScraper, ActionUpdate},
+		{RoleEditor, ObjectDatabaseConfigScraper, ActionRead},
 
 		{RoleCommander, ObjectDatabaseResponder, ActionCreate},
 		{RoleCommander, ObjectDatabaseIncident, ActionCreate},
@@ -134,9 +143,11 @@ func Init() error {
 }
 
 func Check(subject, object, action string) bool {
+	logger.Infof("Checking for %s, %s, %s", subject, object, action)
 	allowed, err := Enforcer.Enforce(subject, object, action)
 	if err != nil {
 		logger.Errorf("RBAC Enforce failed: %v", err)
 	}
+	logger.Infof("GOT result %s", allowed)
 	return allowed
 }

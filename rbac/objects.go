@@ -14,6 +14,16 @@ var dbResourceObjMap = map[string]string{
 	"canaries":         ObjectDatabaseCanary,
 	"system_templates": ObjectDatabaseSystemTemplate,
 	"config_scrapers":  ObjectDatabaseConfigScraper,
+	"identities":       ObjectDatabaseIdentity,
+	"connections":      ObjectDatabaseConnection,
+}
+
+var dbReadDenied = []string{
+	ObjectDatabaseSystemTemplate,
+	ObjectDatabaseCanary,
+	ObjectDatabaseConfigScraper,
+	ObjectDatabaseConnection,
+	ObjectDatabaseIdentity,
 }
 
 func postgrestDatabaseObject(resource string) string {
