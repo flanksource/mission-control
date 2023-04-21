@@ -35,8 +35,12 @@ func TestAuthorization(t *testing.T) {
 		}
 	}()
 
-	db.Init(pgUrl)
-	Init()
+	if err := db.Init(pgUrl); err != nil {
+		t.Fatalf("error connecting to db: %v", err)
+	}
+	if err := Init(); err != nil {
+		t.Fatalf("error instantiating rbac: %v", err)
+	}
 	e := echo.New()
 	successBody := "OK"
 	handler := func(c echo.Context) error {
@@ -92,7 +96,7 @@ func TestAuthorization(t *testing.T) {
 		rec := httptest.NewRecorder()
 
 		// Call endpoint
-		Authorization(tc.object, tc.action)(handler)(e.NewContext(req, rec))
+		_ = Authorization(tc.object, tc.action)(handler)(e.NewContext(req, rec))
 
 		if rec.Code != tc.expectedCode {
 			t.Fatalf("expected: %v, got: %v. For test case: %+v", tc.expectedCode, rec.Code, tc)
