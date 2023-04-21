@@ -143,11 +143,9 @@ func Init() error {
 }
 
 func Check(subject, object, action string) bool {
-	logger.Infof("Checking for %s, %s, %s", subject, object, action)
 	allowed, err := Enforcer.Enforce(subject, object, action)
 	if err != nil {
 		logger.Errorf("RBAC Enforce failed: %v", err)
 	}
-	logger.Infof("GOT result %s", allowed)
 	return allowed
 }

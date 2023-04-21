@@ -18,9 +18,7 @@ func UpdateRoleForUser(c echo.Context) error {
 			Message: "Invalid request body",
 		})
 	}
-	// Check role validity
 
-	// Add method for DB
 	if _, err := Enforcer.AddRolesForUser(userID, reqData.Roles); err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{
 			Message: "Role updated successfully",

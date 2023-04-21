@@ -20,7 +20,6 @@ func Authorization(object, action string) func(echo.HandlerFunc) echo.HandlerFun
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			userID := c.Request().Header.Get(auth.UserIDHeaderKey)
-			logger.Infof("USER ID IS %s", userID)
 			if userID == "" {
 				return c.String(http.StatusUnauthorized, errNoUserID)
 			}
@@ -43,7 +42,6 @@ func Authorization(object, action string) func(echo.HandlerFunc) echo.HandlerFun
 
 				// Allow viewing of tables if access is not explicitly denied
 				if action == ActionRead && !collections.Contains(dbReadDenied, object) {
-					logger.Infof("Inside view if cond %s %s", object, resource)
 					return next(c)
 				}
 
@@ -54,12 +52,10 @@ func Authorization(object, action string) func(echo.HandlerFunc) echo.HandlerFun
 			}
 
 			if object == "" || action == "" {
-				logger.Infof("HERE 1")
 				return c.String(http.StatusUnauthorized, errMisconfiguredRBAC)
 			}
 
 			if !Check(userID, object, action) {
-				logger.Infof("HERE 2")
 				return c.String(http.StatusUnauthorized, errAccessDenied)
 			}
 
