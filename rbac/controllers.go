@@ -21,7 +21,8 @@ func UpdateRoleForUser(c echo.Context) error {
 
 	if _, err := Enforcer.AddRolesForUser(userID, reqData.Roles); err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{
-			Message: "Role updated successfully",
+			Error:   err.Error(),
+			Message: "Error updating roles",
 		})
 	}
 
@@ -36,7 +37,7 @@ func GetRolesForUser(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{
 			Error:   err.Error(),
-			Message: "Role updated successfully",
+			Message: "Error getting roles",
 		})
 
 	}
