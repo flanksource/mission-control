@@ -56,6 +56,7 @@ const (
 	ObjectDatabaseConfigScraper  = "database.config_scrapers"
 	ObjectDatabaseIdentity       = "database.identities"
 	ObjectDatabaseConnection     = "database.connections"
+	ObjectDatabaseKratosTable    = "database.kratos"
 )
 
 var Enforcer *casbin.Enforcer
