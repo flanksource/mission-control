@@ -9,6 +9,7 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/k8s"
 	"github.com/flanksource/incident-commander/mail"
+	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/rules"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -23,8 +24,13 @@ func PreRun(cmd *cobra.Command, args []string) {
 	api.Kubernetes, err = k8s.NewClient()
 	if err != nil {
 		logger.Infof("Kubernetes client not available: %v", err)
+		api.Kubernetes = fake.NewSimpleClientset()
 	}
-	api.Kubernetes = fake.NewSimpleClientset()
+
+	// Initiate RBAC
+	if err := rbac.Init(); err != nil {
+		logger.Fatalf("Failed to initialize rbac: %v", err)
+	}
 }
 
 var Root = &cobra.Command{

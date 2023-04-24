@@ -19,6 +19,7 @@ import (
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/jobs"
 	"github.com/flanksource/incident-commander/logs"
+	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/snapshot"
 	"github.com/flanksource/incident-commander/upstream"
 	"github.com/flanksource/incident-commander/utils"
@@ -47,16 +48,29 @@ var Serve = &cobra.Command{
 		// PostgREST needs to know how it is exposed to create the correct links
 		db.HttpEndpoint = publicEndpoint + "/db"
 
+		kratosHandler := auth.NewKratosHandler(kratosAPI, kratosAdminAPI, db.PostgRESTJWTSecret)
+		if enableAuth {
+			if _, err := kratosHandler.CreateAdminUser(context.Background()); err != nil {
+				logger.Fatalf("Failed to created admin user: %v", err)
+			}
+
+			middleware, err := kratosHandler.KratosMiddleware()
+			if err != nil {
+				logger.Fatalf("Failed to initialize kratos middleware: %v", err)
+			}
+			e.Use(middleware.Session)
+		}
+
 		if !enableAuth {
 			db.PostgresDBAnonRole = "postgrest_api"
 		}
 		if !disablePostgrest {
 			go db.StartPostgrest()
-			forward(e, "/db", "http://localhost:3000")
+			forward(e, "/db", "http://localhost:3000", rbac.Authorization(rbac.ObjectDatabase, "any"))
 		}
 
 		if externalPostgrestUri != "" {
-			forward(e, "/db", externalPostgrestUri)
+			forward(e, "/db", externalPostgrestUri, rbac.Authorization(rbac.ObjectDatabase, "any"))
 		}
 		e.Use(middleware.Logger())
 		e.Use(ServerCache)
@@ -71,20 +85,7 @@ var Serve = &cobra.Command{
 			return c.JSON(http.StatusOK, api.HTTPSuccess{Message: "ok"})
 		})
 
-		kratosHandler := auth.NewKratosHandler(kratosAPI, kratosAdminAPI, db.PostgRESTJWTSecret)
-		if enableAuth {
-			if _, err := kratosHandler.CreateAdminUser(context.Background()); err != nil {
-				logger.Fatalf("Failed to created admin user: %v", err)
-			}
-
-			middleware, err := kratosHandler.KratosMiddleware()
-			if err != nil {
-				logger.Fatalf("failed to initialize kratos middleware: %v", err)
-			}
-			e.Use(middleware.Session)
-		}
-
-		e.POST("/auth/invite_user", kratosHandler.InviteUser)
+		e.POST("/auth/invite_user", kratosHandler.InviteUser, rbac.Authorization(rbac.ObjectAuth, rbac.ActionWrite))
 
 		e.GET("/snapshot/topology/:id", snapshot.Topology)
 		e.GET("/snapshot/incident/:id", snapshot.Incident)
@@ -92,6 +93,8 @@ var Serve = &cobra.Command{
 
 		e.POST("/auth/:id/update_state", auth.UpdateAccountState)
 		e.POST("/auth/:id/properties", auth.UpdateAccountProperties)
+
+		e.POST("/rbac/:id/update_role", rbac.UpdateRoleForUser, rbac.Authorization(rbac.ObjectRBAC, rbac.ActionWrite))
 
 		// Serve openapi schemas
 		schemaServer, err := utils.HTTPFileserver(openapi.Schemas)
@@ -101,7 +104,7 @@ var Serve = &cobra.Command{
 		e.GET("/schemas/*", echo.WrapHandler(http.StripPrefix("/schemas/", schemaServer)))
 
 		if upstreamConfig.IsPartiallyFilled() {
-			logger.Warnf("please ensure that all the required flags for upstream is supplied.")
+			logger.Warnf("Please ensure that all the required flags for upstream is supplied.")
 		}
 		e.POST("/upstream_push", upstream.PushUpstream)
 
@@ -127,8 +130,9 @@ var Serve = &cobra.Command{
 	},
 }
 
-func forward(e *echo.Echo, prefix string, target string) {
-	e.Group(prefix).Use(getProxyMiddleware(e, prefix, target))
+func forward(e *echo.Echo, prefix string, target string, middlewares ...echo.MiddlewareFunc) {
+	middlewares = append(middlewares, getProxyMiddleware(e, prefix, target))
+	e.Group(prefix).Use(middlewares...)
 }
 
 func getProxyMiddleware(e *echo.Echo, prefix, targetURL string) echo.MiddlewareFunc {
@@ -137,13 +141,12 @@ func getProxyMiddleware(e *echo.Echo, prefix, targetURL string) echo.MiddlewareF
 		e.Logger.Fatal(err)
 	}
 
-	proxyConf := middleware.ProxyConfig{
+	return middleware.ProxyWithConfig(middleware.ProxyConfig{
 		Rewrite: map[string]string{
 			fmt.Sprintf("^%s/*", prefix): "/$1",
 		},
 		Balancer: middleware.NewRoundRobinBalancer([]*middleware.ProxyTarget{{URL: _url}}),
-	}
-	return middleware.ProxyWithConfig(proxyConf)
+	})
 }
 
 func init() {
