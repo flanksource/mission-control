@@ -2,8 +2,11 @@ package upstream
 
 import (
 	"fmt"
+	"time"
 
+	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/fixtures/dummy"
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	pkgEvents "github.com/flanksource/incident-commander/events"
 	ginkgo "github.com/onsi/ginkgo/v2"
@@ -19,7 +22,7 @@ import (
 // 4. Setup event handler & provide upstream's configuration
 // 5. Now, verify those changes on the upstream's database
 
-var _ = ginkgo.Describe("Track changes on the event_queue tabe", ginkgo.Ordered, func() {
+var _ = ginkgo.Describe("Track insertion changes on the event_queue tabel", ginkgo.Ordered, func() {
 	ginkgo.It("should track changes on the event_queue table", func() {
 		var events []api.Event
 		err := testDB.Where("name = ?", pkgEvents.EventPushQueueCreate).Find(&events).Error
@@ -30,30 +33,38 @@ var _ = ginkgo.Describe("Track changes on the event_queue tabe", ginkgo.Ordered,
 			switch table {
 			case "canaries":
 				Expect(len(itemIDs)).To(Equal(len(dummy.AllDummyCanaries)))
+				Expect(itemIDs).To(Equal(getPrimaryKeys(table, dummy.AllDummyCanaries)), "Mismatch primary keys for canaries")
 
 			case "checks":
 				Expect(len(itemIDs)).To(Equal(len(dummy.AllDummyChecks)))
+				Expect(itemIDs).To(Equal(getPrimaryKeys(table, dummy.AllDummyChecks)), "Mismatch primary keys for checks")
 
 			case "components":
 				Expect(len(itemIDs)).To(Equal(len(dummy.AllDummyComponents)))
+				Expect(itemIDs).To(Equal(getPrimaryKeys(table, dummy.AllDummyComponents)), "Mismatch primary keys for components")
 
 			case "config_items":
 				Expect(len(itemIDs)).To(Equal(len(dummy.AllDummyConfigs)))
+				Expect(itemIDs).To(Equal(getPrimaryKeys(table, dummy.AllDummyConfigs)), "Mismatch primary keys for config_items")
 
 			case "config_analysis":
 				Expect(len(itemIDs)).To(Equal(len(dummy.AllDummyConfigAnalysis)))
+				Expect(itemIDs).To(Equal(getPrimaryKeys(table, dummy.AllDummyConfigAnalysis)), "Mismatch primary keys for config_analysis")
 
 			case "check_statuses":
 				Expect(len(itemIDs)).To(Equal(len(dummy.AllDummyCheckStatuses)))
+				Expect(itemIDs).To(Equal(getPrimaryKeys(table, dummy.AllDummyCheckStatuses)), "Mismatch composite primary keys for check_statuses")
 
 			case "component_relationships":
 				Expect(len(itemIDs)).To(Equal(len(dummy.AllDummyComponentRelationships)))
+				Expect(itemIDs).To(Equal(getPrimaryKeys(table, dummy.AllDummyComponentRelationships)), "Mismatch composite primary keys for component_relationships")
 
 			case "config_component_relationships":
 				Expect(len(itemIDs)).To(Equal(len(dummy.AllDummyConfigComponentRelationships)))
+				Expect(itemIDs).To(Equal(getPrimaryKeys(table, dummy.AllDummyConfigComponentRelationships)), "Mismatch composite primary keys for config_component_relationships")
 
 			default:
-				ginkgo.Fail(fmt.Sprintf("Unexpected table %s on the event queue for %s", table, pkgEvents.EventPushQueueCreate))
+				ginkgo.Fail(fmt.Sprintf("Unexpected table %q on the event queue for %q", table, pkgEvents.EventPushQueueCreate))
 			}
 		}
 
@@ -131,4 +142,84 @@ func populateMonitoredTables(gormDB *gorm.DB) error {
 	// - config relationships
 
 	return nil
+}
+
+// getPrimaryKeys extracts and returns the list of primary keys for the given table from the provided rows.
+func getPrimaryKeys(table string, rows any) [][]string {
+	var primaryKeys [][]string
+
+	switch table {
+	case "canaries":
+		canaries := rows.([]models.Canary)
+		for _, c := range canaries {
+			primaryKeys = append(primaryKeys, []string{c.ID.String()})
+		}
+
+	case "checks":
+		checks := rows.([]models.Check)
+		for _, c := range checks {
+			primaryKeys = append(primaryKeys, []string{c.ID.String()})
+		}
+
+	case "components":
+		components := rows.([]models.Component)
+		for _, c := range components {
+			primaryKeys = append(primaryKeys, []string{c.ID.String()})
+		}
+
+	case "config_items":
+		configs := rows.([]models.ConfigItem)
+		for _, c := range configs {
+			primaryKeys = append(primaryKeys, []string{c.ID.String()})
+		}
+
+	case "config_analysis":
+		configAnalyses := rows.([]models.ConfigAnalysis)
+		for _, c := range configAnalyses {
+			primaryKeys = append(primaryKeys, []string{c.ID.String()})
+		}
+
+	case "check_statuses":
+		checkStatuses := rows.([]models.CheckStatus)
+		for _, c := range checkStatuses {
+			t, err := c.GetTime()
+			if err != nil {
+				logger.Errorf("failed to get check time[%s]: %v", c.Time, err)
+				return nil
+			}
+
+			// The check statuses fixtures does not include timezone information.
+			// Postgres stores the time in the local timezone.
+			// We could modify the fixture on duty or do it this way.
+			t = replaceTimezone(t, time.Now().Local().Location())
+			primaryKeys = append(primaryKeys, []string{c.CheckID.String(), t.Format(time.RFC3339)})
+		}
+
+	case "component_relationships":
+		componentRelationships := rows.([]models.ComponentRelationship)
+		for _, c := range componentRelationships {
+			primaryKeys = append(primaryKeys, []string{c.ComponentID.String(), c.RelationshipID.String(), c.SelectorID})
+		}
+
+	case "config_component_relationships":
+		configComponentRelationships := rows.([]models.ConfigComponentRelationship)
+		for _, c := range configComponentRelationships {
+			primaryKeys = append(primaryKeys, []string{c.ComponentID.String(), c.ConfigID.String()})
+		}
+
+	default:
+		return nil
+	}
+
+	return primaryKeys
+}
+
+// replaceTimezone creates a new time.Time from the given time.Time with the provided location.
+// Timezone conversion is not performed.
+func replaceTimezone(t time.Time, newLocation *time.Location) time.Time {
+	year, month, day := t.Date()
+	hour, minute, second := t.Clock()
+	nano := t.Nanosecond()
+
+	return time.Date(year, month, day, hour, minute, second, nano, newLocation)
 }

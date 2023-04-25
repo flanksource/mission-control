@@ -127,8 +127,8 @@ func (t *pushToUpstreamEventHandler) push(ctx context.Context, msg *api.PushData
 // Return Value:
 // - A map of table names to slices of primary key values.
 //   - If the table has multiple primary keys, they're concatenated into a single string.
-func GroupChangelogsByTables(events []api.Event) map[string][]any {
-	var output = make(map[string][]any)
+func GroupChangelogsByTables(events []api.Event) map[string][][]string {
+	var output = make(map[string][][]string)
 	for _, cl := range events {
 		tableName := cl.Properties["table"]
 		switch tableName {
@@ -141,7 +141,7 @@ func GroupChangelogsByTables(events []api.Event) map[string][]any {
 		case "check_statuses":
 			output[tableName] = append(output[tableName], []string{cl.Properties["check_id"], cl.Properties["time"]})
 		default:
-			output[tableName] = append(output[tableName], cl.Properties["id"])
+			output[tableName] = append(output[tableName], []string{cl.Properties["id"]})
 		}
 	}
 
