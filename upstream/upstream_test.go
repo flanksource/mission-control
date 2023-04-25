@@ -8,6 +8,8 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/fixtures/dummy"
 	"github.com/flanksource/duty/models"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -27,7 +29,7 @@ import (
 // 4. Setup event handler & provide upstream's configuration
 // 5. Now, verify those changes on the upstream's database
 
-var _ = ginkgo.Describe("Track changes on the event_queue table", ginkgo.Ordered, func() {
+var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
 	ginkgo.It("should track insertion on the event_queue table", func() {
 		var events []api.Event
 		err := testDB.Where("name = ?", pkgEvents.EventPushQueueCreate).Find(&events).Error
@@ -111,8 +113,8 @@ var _ = ginkgo.Describe("Track changes on the event_queue table", ginkgo.Ordered
 		Expect(groupedEvents["components"]).To(Equal([][]string{{modifiedNewDummy.ID.String()}, {modifiedNewDummy.ID.String()}, {modifiedNewDummy.ID.String()}}))
 	})
 
-	ginkgo.It("start streaming events", func() {
-		// Override the global db that'll be used by the upstream server.
+	ginkgo.It("should transfer all events to upstream server", func() {
+		// Overwrite the global db that'll be used by the upstream server.
 		db.Gorm = testUpstreamDB
 		db.Pool = testUpstreamDBPGPool
 
@@ -129,12 +131,44 @@ var _ = ginkgo.Describe("Track changes on the event_queue table", ginkgo.Ordered
 		events.ConsumeEventsUntilEmpty(context.Background(), testDB, eventHandlerConfig)
 	})
 
-	ginkgo.It("should transfer all events to upstream server", func() {
-		var components []models.Component
-		err := testUpstreamDB.Find(&components).Error
-		Expect(err).NotTo(HaveOccurred())
+	ginkgo.It("should have transferred all the components", func() {
+		var fieldsToIgnore []string
+		fieldsToIgnore = append(fieldsToIgnore, "SystemTemplateID")                                              // Upstream creates its own dummy template
+		fieldsToIgnore = append(fieldsToIgnore, "Checks", "Components", "Order", "SelectorID", "RelationshipID") // These are auxiliary fields & do not represent the table columns.
+		ignoreFieldsOpt := cmpopts.IgnoreFields(models.Component{}, fieldsToIgnore...)
 
-		Expect(len(components)).To(Equal(len(dummy.AllDummyComponents)))
+		// unexported fields must be explicitly ignored.
+		ignoreUnexportedOpt := cmpopts.IgnoreUnexported(models.Component{}, models.Summary{})
+
+		compareEntities(testUpstreamDB, testDB, &[]models.Component{}, ignoreFieldsOpt, ignoreUnexportedOpt)
+	})
+
+	ginkgo.It("should have transferred all the checks", func() {
+		compareEntities(testUpstreamDB, testUpstreamDB, &[]models.Check{})
+	})
+
+	ginkgo.It("should have transferred all the check statuses", func() {
+		compareEntities(testUpstreamDB, testUpstreamDB, &[]models.CheckStatus{})
+	})
+
+	ginkgo.It("should have transferred all the canaries", func() {
+		compareEntities(testUpstreamDB, testUpstreamDB, &[]models.Canary{})
+	})
+
+	ginkgo.It("should have transferred all the configs", func() {
+		compareEntities(testUpstreamDB, testUpstreamDB, &[]models.ConfigItem{})
+	})
+
+	ginkgo.It("should have transferred all the config analyses", func() {
+		compareEntities(testUpstreamDB, testUpstreamDB, &[]models.ConfigAnalysis{})
+	})
+
+	ginkgo.It("should have transferred all the config relationships", func() {
+		compareEntities(testUpstreamDB, testUpstreamDB, &[]models.ComponentRelationship{})
+	})
+
+	ginkgo.It("should have transferred all the config component relationships", func() {
+		compareEntities(testUpstreamDB, testUpstreamDB, &[]models.ConfigComponentRelationship{})
 	})
 })
 
@@ -280,4 +314,20 @@ func replaceTimezone(t time.Time, newLocation *time.Location) time.Time {
 	nano := t.Nanosecond()
 
 	return time.Date(year, month, day, hour, minute, second, nano, newLocation)
+}
+
+// compareEntities is a helper function that compares two sets of entities from an upstream and downstream database,
+// ensuring that all records have been successfully transferred and match each other.
+func compareEntities(upstreamDB, downstreamDB *gorm.DB, entityType interface{}, ignoreOpts ...cmp.Option) {
+	var upstream, downstream []interface{}
+	err := upstreamDB.Find(entityType).Error
+	Expect(err).NotTo(HaveOccurred())
+
+	err = downstreamDB.Find(entityType).Error
+	Expect(err).NotTo(HaveOccurred())
+
+	Expect(len(upstream)).To(Equal(len(downstream)))
+
+	diff := cmp.Diff(upstream, downstream, ignoreOpts...)
+	Expect(diff).To(BeEmpty())
 }

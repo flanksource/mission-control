@@ -87,7 +87,6 @@ var _ = ginkgo.BeforeSuite(func() {
 	testEchoServer = echo.New()
 	testEchoServer.POST("/upstream_push", PushUpstream)
 	listenAddr := fmt.Sprintf(":%d", testUpstreamServerPort)
-	logger.Infof("Listening on %s", listenAddr)
 
 	go func() {
 		defer ginkgo.GinkgoRecover() // Required by ginkgo, if an assertion is made in a goroutine.
@@ -103,7 +102,9 @@ var _ = ginkgo.BeforeSuite(func() {
 
 var _ = ginkgo.AfterSuite(func() {
 	logger.Infof("Stopping upstream echo server")
-	testEchoServer.Shutdown(context.Background())
+	if err := testEchoServer.Shutdown(context.Background()); err != nil {
+		ginkgo.Fail(err.Error())
+	}
 
 	logger.Infof("Stopping postgres")
 	if err := postgresServer.Stop(); err != nil {
