@@ -34,11 +34,11 @@ type Config struct {
 	UpstreamConf api.UpstreamConfig
 }
 
-func ListenForEvents(ctx context.Context, config Config) {
+func ListenForEvents(ctx context.Context, gormDB *gorm.DB, config Config) {
 	logger.Infof("started listening for database notify events")
 
 	// Consume pending events
-	consumeEventsUntilEmpty(ctx, config)
+	consumeEventsUntilEmpty(ctx, gormDB, config)
 
 	pgNotify := make(chan bool)
 	go listenToPostgresNotify(ctx, pgNotify)
@@ -46,10 +46,10 @@ func ListenForEvents(ctx context.Context, config Config) {
 	for {
 		select {
 		case <-pgNotify:
-			consumeEventsUntilEmpty(ctx, config)
+			consumeEventsUntilEmpty(ctx, gormDB, config)
 
 		case <-time.After(pgNotifyTimeout):
-			consumeEventsUntilEmpty(ctx, config)
+			consumeEventsUntilEmpty(ctx, gormDB, config)
 		}
 	}
 }
@@ -96,8 +96,8 @@ func listenToPostgresNotify(ctx context.Context, pgNotify chan bool) {
 	}
 }
 
-func consumeEvents(ctx context.Context, config Config) error {
-	tx := db.Gorm.WithContext(ctx).Begin()
+func consumeEvents(ctx context.Context, gormDB *gorm.DB, config Config) error {
+	tx := gormDB.WithContext(ctx).Begin()
 	if tx.Error != nil {
 		return fmt.Errorf("error initiating db tx: %w", tx.Error)
 	}
@@ -153,9 +153,9 @@ func consumeEvents(ctx context.Context, config Config) error {
 }
 
 // consumeEventsUntilEmpty consumes events forever until the event queue is empty.
-func consumeEventsUntilEmpty(ctx context.Context, config Config) {
+func consumeEventsUntilEmpty(ctx context.Context, gormDB *gorm.DB, config Config) {
 	for {
-		err := consumeEvents(ctx, config)
+		err := consumeEvents(ctx, gormDB, config)
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return

@@ -120,7 +120,7 @@ var Serve = &cobra.Command{
 		eventHandlerConfig := events.Config{
 			UpstreamConf: upstreamConfig,
 		}
-		go events.ListenForEvents(context.Background(), eventHandlerConfig)
+		go events.ListenForEvents(context.Background(), db.Gorm, eventHandlerConfig)
 
 		listenAddr := fmt.Sprintf(":%d", httpPort)
 		logger.Infof("Listening on %s", listenAddr)
