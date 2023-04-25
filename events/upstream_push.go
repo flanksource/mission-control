@@ -122,11 +122,10 @@ func (t *pushToUpstreamEventHandler) push(ctx context.Context, msg *api.PushData
 	return nil
 }
 
-// Groups the given events by the table they belong to.
+// GroupChangelogsByTables groups the given events by the table they belong to.
 //
 // Return Value:
-// - A map of table names to slices of primary key values.
-//   - If the table has multiple primary keys, they're concatenated into a single string.
+// - A map of table names to slices of (composite) primary key values.
 func GroupChangelogsByTables(events []api.Event) map[string][][]string {
 	var output = make(map[string][][]string)
 	for _, cl := range events {

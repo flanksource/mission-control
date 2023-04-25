@@ -21,15 +21,15 @@ import (
 	pkgEvents "github.com/flanksource/incident-commander/events"
 )
 
-// 1. Initial setup
-// 	a. Fire up two databases with migrations ran on both of them
-// 	b. Fire up an HTTP Server for the upstream
-// 2. Update the related tables on database A
-// 3. Check that those changes are reflected on the event_queue table
-// 4. Setup event handler & provide upstream's configuration
-// 5. Now, verify those changes on the upstream's database
-
 var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
+	// 1. Initial setup
+	// 	a. Fire up a postgres server & create 2 databases for downstream & upstream servers with migrations run on both of them.
+	// 	b. Fire up an HTTP Server for the upstream
+	// 2. Insert new records for the monitored tables in downstream server & verify that those changes are reflected on the event_queue table.
+	// 3. Update and delete some records and once again verify that those changes are reflected on the event_queue table.
+	// 4. Setup event handler & provide upstream's configuration. This will transfer all the tables to upstream.
+	// 5. Now, verify those records are available on the upstream's database.
+
 	ginkgo.It("should track insertion on the event_queue table", func() {
 		var events []api.Event
 		err := testDB.Where("name = ?", pkgEvents.EventPushQueueCreate).Find(&events).Error
