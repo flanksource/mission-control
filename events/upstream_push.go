@@ -30,7 +30,7 @@ func (t *pushToUpstreamEventHandler) Run(ctx context.Context, tx *gorm.DB, event
 		ClusterName: t.conf.ClusterName,
 	}
 
-	for tablename, itemIDs := range groupChangelogsByTables(events) {
+	for tablename, itemIDs := range GroupChangelogsByTables(events) {
 		switch tablename {
 		case "components":
 			if err := tx.Where("id IN ?", itemIDs).Find(&upstreamMsg.Components).Error; err != nil {
@@ -122,7 +122,12 @@ func (t *pushToUpstreamEventHandler) push(ctx context.Context, msg *api.PushData
 	return nil
 }
 
-func groupChangelogsByTables(events []api.Event) map[string][]any {
+// Groups the given events by the table they belong to.
+//
+// Return Value:
+// - A map of table names to slices of primary key values.
+//   - If the table has multiple primary keys, they're concatenated into a single string.
+func GroupChangelogsByTables(events []api.Event) map[string][]any {
 	var output = make(map[string][]any)
 	for _, cl := range events {
 		tableName := cl.Properties["table"]
