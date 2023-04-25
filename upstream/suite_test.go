@@ -2,7 +2,9 @@ package upstream
 
 import (
 	"context"
+	"fmt"
 	"io"
+	"net/http"
 	"testing"
 
 	embeddedPG "github.com/fergusstrange/embedded-postgres"
@@ -22,7 +24,7 @@ func TestPushMode(t *testing.T) {
 
 const (
 	pgUrl                  = "postgres://postgres:postgres@localhost:9876/test?sslmode=disable"
-	upstreamPGUrl          = "postgres://postgres:postgres@localhost:9877/upstream?sslmode=disable"
+	upstreamPGUrl          = "postgres://postgres:postgres@localhost:9876/upstream?sslmode=disable"
 	testUpstreamServerPort = 11005
 )
 
@@ -31,20 +33,13 @@ var (
 	testDB         *gorm.DB
 	testDBPGPool   *pgxpool.Pool
 
-	upstreamPostgresServer *embeddedPG.EmbeddedPostgres
-	testUpstreamDB         *gorm.DB
-	testUpstreamDBPGPool   *pgxpool.Pool
+	testUpstreamDB       *gorm.DB
+	testUpstreamDBPGPool *pgxpool.Pool
 
 	testEchoServer *echo.Echo
 )
 
-func setup(pgPort uint32, dbName, connectionString string) (*gorm.DB, *pgxpool.Pool, *embeddedPG.EmbeddedPostgres) {
-	pgServer := embeddedPG.NewDatabase(embeddedPG.DefaultConfig().Database(dbName).Port(pgPort).DataPath("/tmp/embedded-pg/" + dbName).Logger(io.Discard))
-	if err := pgServer.Start(); err != nil {
-		ginkgo.Fail(err.Error())
-	}
-	logger.Infof("Started postgres on port: %d", pgPort)
-
+func setup(dbName, connectionString string) (*gorm.DB, *pgxpool.Pool) {
 	pgxpool, err := duty.NewPgxPool(connectionString)
 	if err != nil {
 		ginkgo.Fail(err.Error())
@@ -64,29 +59,51 @@ func setup(pgPort uint32, dbName, connectionString string) (*gorm.DB, *pgxpool.P
 		ginkgo.Fail(err.Error())
 	}
 
-	return gormDB, pgxpool, pgServer
+	return gormDB, pgxpool
 }
 
 var _ = ginkgo.BeforeSuite(func() {
-	db, pgxpool, pgServer := setup(9876, "test", pgUrl)
-	testDB = db
+	postgresServer = embeddedPG.NewDatabase(embeddedPG.DefaultConfig().Database("test").Port(9876).Logger(io.Discard))
+	if err := postgresServer.Start(); err != nil {
+		ginkgo.Fail(err.Error())
+	}
+	logger.Infof("Started postgres on port: %d", 9876)
+
+	gormDB, pgxpool := setup("test", pgUrl)
+	testDB = gormDB
 	testDBPGPool = pgxpool
-	postgresServer = pgServer
 
 	if err := populateMonitoredTables(testDB); err != nil {
 		ginkgo.Fail(err.Error())
 	}
 
-	udb, upgxpool, pgServer := setup(9877, "upstream", upstreamPGUrl)
+	_, err := testDBPGPool.Exec(context.TODO(), "CREATE DATABASE upstream")
+	Expect(err).NotTo(HaveOccurred())
+
+	udb, upgxpool := setup("upstream", upstreamPGUrl)
 	testUpstreamDB = udb
 	testUpstreamDBPGPool = upgxpool
-	upstreamPostgresServer = pgServer
+
+	testEchoServer = echo.New()
+	testEchoServer.POST("/upstream_push", PushUpstream)
+	listenAddr := fmt.Sprintf(":%d", testUpstreamServerPort)
+	logger.Infof("Listening on %s", listenAddr)
+
+	go func() {
+		defer ginkgo.GinkgoRecover() // Required by ginkgo, if an assertion is made in a goroutine.
+		if err := testEchoServer.Start(listenAddr); err != nil {
+			if err == http.ErrServerClosed {
+				logger.Infof("Server closed")
+			} else {
+				ginkgo.Fail(fmt.Sprintf("Failed to start test server: %v", err))
+			}
+		}
+	}()
 })
 
 var _ = ginkgo.AfterSuite(func() {
-	if testEchoServer != nil {
-		testEchoServer.Shutdown(context.Background())
-	}
+	logger.Infof("Stopping upstream echo server")
+	testEchoServer.Shutdown(context.Background())
 
 	logger.Infof("Stopping postgres")
 	if err := postgresServer.Stop(); err != nil {

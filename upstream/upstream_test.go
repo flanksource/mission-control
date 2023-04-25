@@ -1,6 +1,7 @@
 package upstream
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -8,13 +9,13 @@ import (
 	"github.com/flanksource/duty/fixtures/dummy"
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"gorm.io/gorm"
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/events"
 	pkgEvents "github.com/flanksource/incident-commander/events"
 )
 
@@ -110,30 +111,31 @@ var _ = ginkgo.Describe("Track changes on the event_queue table", ginkgo.Ordered
 		Expect(groupedEvents["components"]).To(Equal([][]string{{modifiedNewDummy.ID.String()}, {modifiedNewDummy.ID.String()}, {modifiedNewDummy.ID.String()}}))
 	})
 
-	ginkgo.It("Setup http server for upstream", func() {
-		testEchoServer = echo.New()
-		testEchoServer.POST("/upstream_push", PushUpstream)
-		listenAddr := fmt.Sprintf(":%d", testUpstreamServerPort)
-		logger.Infof("Listening on %s", listenAddr)
+	ginkgo.It("start streaming events", func() {
+		// Override the global db that'll be used by the upstream server.
 		db.Gorm = testUpstreamDB
-		go func() {
-			err := testEchoServer.Start(listenAddr)
-			Expect(err).NotTo(HaveOccurred())
-		}()
+		db.Pool = testUpstreamDBPGPool
+
+		eventHandlerConfig := events.Config{
+			UpstreamConf: api.UpstreamConfig{
+				ClusterName: "test-cluster",
+				URL:         fmt.Sprintf("http://localhost:%d/upstream_push", testUpstreamServerPort),
+				Username:    "admin@local",
+				Password:    "admin",
+				Labels:      []string{"test"},
+			},
+		}
+
+		events.ConsumeEventsUntilEmpty(context.Background(), testDB, eventHandlerConfig)
 	})
 
-	// ginkgo.It("start streaming events", func() {
-	// 	eventHandlerConfig := events.Config{
-	// 		UpstreamConf: api.UpstreamConfig{
-	// 			ClusterName: "test-cluster",
-	// 			URL:         fmt.Sprintf("http://localhost:%d/upstream_push", testUpstreamServerPort),
-	// 			Username:    "admin",
-	// 			Password:    "admin",
-	// 			Labels:      []string{"test"},
-	// 		},
-	// 	}
-	// 	events.ListenForEvents(context.Background(), testDB, eventHandlerConfig)
-	// })
+	ginkgo.It("should transfer all events to upstream server", func() {
+		var components []models.Component
+		err := testUpstreamDB.Find(&components).Error
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(len(components)).To(Equal(len(dummy.AllDummyComponents)))
+	})
 })
 
 func populateMonitoredTables(gormDB *gorm.DB) error {

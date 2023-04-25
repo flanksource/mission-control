@@ -38,7 +38,7 @@ func ListenForEvents(ctx context.Context, gormDB *gorm.DB, config Config) {
 	logger.Infof("started listening for database notify events")
 
 	// Consume pending events
-	consumeEventsUntilEmpty(ctx, gormDB, config)
+	ConsumeEventsUntilEmpty(ctx, gormDB, config)
 
 	pgNotify := make(chan bool)
 	go listenToPostgresNotify(ctx, pgNotify)
@@ -46,10 +46,10 @@ func ListenForEvents(ctx context.Context, gormDB *gorm.DB, config Config) {
 	for {
 		select {
 		case <-pgNotify:
-			consumeEventsUntilEmpty(ctx, gormDB, config)
+			ConsumeEventsUntilEmpty(ctx, gormDB, config)
 
 		case <-time.After(pgNotifyTimeout):
-			consumeEventsUntilEmpty(ctx, gormDB, config)
+			ConsumeEventsUntilEmpty(ctx, gormDB, config)
 		}
 	}
 }
@@ -152,8 +152,8 @@ func consumeEvents(ctx context.Context, gormDB *gorm.DB, config Config) error {
 	return tx.Commit().Error
 }
 
-// consumeEventsUntilEmpty consumes events forever until the event queue is empty.
-func consumeEventsUntilEmpty(ctx context.Context, gormDB *gorm.DB, config Config) {
+// ConsumeEventsUntilEmpty consumes events forever until the event queue is empty.
+func ConsumeEventsUntilEmpty(ctx context.Context, gormDB *gorm.DB, config Config) {
 	for {
 		err := consumeEvents(ctx, gormDB, config)
 		if err != nil {
