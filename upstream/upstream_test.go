@@ -22,8 +22,8 @@ import (
 // 4. Setup event handler & provide upstream's configuration
 // 5. Now, verify those changes on the upstream's database
 
-var _ = ginkgo.Describe("Track insertion changes on the event_queue tabel", ginkgo.Ordered, func() {
-	ginkgo.It("should track changes on the event_queue table", func() {
+var _ = ginkgo.Describe("Track changes on the event_queue table", ginkgo.Ordered, func() {
+	ginkgo.It("should track insertion on the event_queue table", func() {
 		var events []api.Event
 		err := testDB.Where("name = ?", pkgEvents.EventPushQueueCreate).Find(&events).Error
 		Expect(err).NotTo(HaveOccurred())
@@ -192,7 +192,7 @@ func getPrimaryKeys(table string, rows any) [][]string {
 			// Postgres stores the time in the local timezone.
 			// We could modify the fixture on duty or do it this way.
 			t = replaceTimezone(t, time.Now().Local().Location())
-			primaryKeys = append(primaryKeys, []string{c.CheckID.String(), t.Format(time.RFC3339)})
+			primaryKeys = append(primaryKeys, []string{c.CheckID.String(), t.Format("2006-01-02T15:04:05-07:00")})
 		}
 
 	case "component_relationships":

@@ -12,7 +12,6 @@ import (
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"gorm.io/gorm"
-	"k8s.io/client-go/kubernetes"
 )
 
 func TestPushMode(t *testing.T) {
@@ -26,7 +25,6 @@ var (
 	postgresServer *embeddedPG.EmbeddedPostgres
 	testDB         *gorm.DB
 	testDBPGPool   *pgxpool.Pool
-	testClient     kubernetes.Interface
 )
 
 var _ = ginkgo.BeforeSuite(func() {
