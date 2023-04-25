@@ -68,7 +68,7 @@ func (t *pushToUpstreamEventHandler) Run(ctx context.Context, tx *gorm.DB, event
 			}
 
 		case "config_component_relationships":
-			if err := tx.Where("(component_id, config_id) IN ?", itemIDs).Find(&upstreamMsg.ConfigItems).Error; err != nil {
+			if err := tx.Where("(component_id, config_id) IN ?", itemIDs).Find(&upstreamMsg.ConfigComponentRelationships).Error; err != nil {
 				return fmt.Errorf("error fetching config_component_relationships: %w", err)
 			}
 
