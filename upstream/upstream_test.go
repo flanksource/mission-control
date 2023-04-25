@@ -7,11 +7,13 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/fixtures/dummy"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/incident-commander/api"
-	pkgEvents "github.com/flanksource/incident-commander/events"
+	"github.com/google/uuid"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"gorm.io/gorm"
+
+	"github.com/flanksource/incident-commander/api"
+	pkgEvents "github.com/flanksource/incident-commander/events"
 )
 
 // 1. Initial setup
@@ -77,6 +79,33 @@ var _ = ginkgo.Describe("Track changes on the event_queue table", ginkgo.Ordered
 				len(dummy.AllDummyCheckStatuses) +
 				len(dummy.AllDummyComponentRelationships) +
 				len(dummy.AllDummyConfigComponentRelationships)))
+	})
+
+	ginkgo.It("should track updates & deletes on the event_queue table", func() {
+		start := time.Now()
+
+		modifiedNewDummy := dummy.Logistics
+		modifiedNewDummy.ID = uuid.New()
+
+		err := testDB.Create(&modifiedNewDummy).Error
+		Expect(err).NotTo(HaveOccurred())
+
+		modifiedNewDummy.Status = models.ComponentStatusUnhealthy
+		err = testDB.Save(&modifiedNewDummy).Error
+		Expect(err).NotTo(HaveOccurred())
+
+		modifiedNewDummy.Status = models.ComponentStatusUnhealthy
+		err = testDB.Delete(&modifiedNewDummy).Error
+		Expect(err).NotTo(HaveOccurred())
+
+		var events []api.Event
+		err = testDB.Where("name = ? AND created_at >= ?", pkgEvents.EventPushQueueCreate, start).Find(&events).Error
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(len(events)).To(Equal(3))
+
+		groupedEvents := pkgEvents.GroupChangelogsByTables(events)
+		Expect(groupedEvents["components"]).To(Equal([][]string{{modifiedNewDummy.ID.String()}, {modifiedNewDummy.ID.String()}, {modifiedNewDummy.ID.String()}}))
 	})
 })
 
@@ -188,9 +217,9 @@ func getPrimaryKeys(table string, rows any) [][]string {
 				return nil
 			}
 
-			// The check statuses fixtures does not include timezone information.
+			// The check statuses fixtures & .GetTime() method do not include timezone information.
 			// Postgres stores the time in the local timezone.
-			// We could modify the fixture on duty or do it this way.
+			// We could modify the fixture & struct on duty or do it this way.
 			t = replaceTimezone(t, time.Now().Local().Location())
 			primaryKeys = append(primaryKeys, []string{c.CheckID.String(), t.Format("2006-01-02T15:04:05-07:00")})
 		}
