@@ -24,9 +24,10 @@ func TestPushMode(t *testing.T) {
 }
 
 const (
-	pgUrl                  = "postgres://postgres:postgres@localhost:9876/test?sslmode=disable"
-	upstreamPGUrl          = "postgres://postgres:postgres@localhost:9876/upstream?sslmode=disable"
+	testPostgresPort       = 9879
 	testUpstreamServerPort = 11005
+	pgUrl                  = "postgres://postgres:postgres@localhost:9879/test?sslmode=disable"
+	upstreamPGUrl          = "postgres://postgres:postgres@localhost:9879/upstream?sslmode=disable"
 )
 
 var (
@@ -64,11 +65,11 @@ func setup(dbName, connectionString string) (*gorm.DB, *pgxpool.Pool) {
 }
 
 var _ = ginkgo.BeforeSuite(func() {
-	postgresServer = embeddedPG.NewDatabase(embeddedPG.DefaultConfig().Database("test").Port(9876).Logger(io.Discard))
+	postgresServer = embeddedPG.NewDatabase(embeddedPG.DefaultConfig().Database("test").Port(testPostgresPort).Logger(io.Discard))
 	if err := postgresServer.Start(); err != nil {
 		ginkgo.Fail(err.Error())
 	}
-	logger.Infof("Started postgres on port: %d", 9876)
+	logger.Infof("Started postgres on port: %d", testPostgresPort)
 
 	gormDB, pgxpool := setup("test", pgUrl)
 	testDB = gormDB

@@ -34,29 +34,43 @@ type Config struct {
 	UpstreamConf api.UpstreamConfig
 }
 
-func ListenForEvents(ctx context.Context, gormDB *gorm.DB, config Config) {
+type eventHandler struct {
+	ctx    context.Context
+	gormDB *gorm.DB
+	config Config
+}
+
+func NewEventHandler(ctx context.Context, gormDB *gorm.DB, config Config) *eventHandler {
+	return &eventHandler{
+		ctx:    ctx,
+		gormDB: gormDB,
+		config: config,
+	}
+}
+
+func (t *eventHandler) ListenForEvents() {
 	logger.Infof("started listening for database notify events")
 
 	// Consume pending events
-	ConsumeEventsUntilEmpty(ctx, gormDB, config)
+	t.ConsumeEventsUntilEmpty()
 
 	pgNotify := make(chan bool)
-	go listenToPostgresNotify(ctx, pgNotify)
+	go t.listenToPostgresNotify(pgNotify)
 
 	for {
 		select {
 		case <-pgNotify:
-			ConsumeEventsUntilEmpty(ctx, gormDB, config)
+			t.ConsumeEventsUntilEmpty()
 
 		case <-time.After(pgNotifyTimeout):
-			ConsumeEventsUntilEmpty(ctx, gormDB, config)
+			t.ConsumeEventsUntilEmpty()
 		}
 	}
 }
 
 // listenToPostgresNotify listens to postgres notifications.
 // It will retry on failure for dbReconnectMaxAttempt times.
-func listenToPostgresNotify(ctx context.Context, pgNotify chan bool) {
+func (t *eventHandler) listenToPostgresNotify(pgNotify chan bool) {
 	var listen = func(ctx context.Context, pgNotify chan bool) error {
 		conn, err := db.Pool.Acquire(ctx)
 		if err != nil {
@@ -84,7 +98,7 @@ func listenToPostgresNotify(ctx context.Context, pgNotify chan bool) {
 	// retry on failure.
 	for {
 		backoff := retry.WithMaxDuration(dbReconnectMaxDuration, retry.NewExponential(dbReconnectBackoffBaseDuration))
-		err := retry.Do(ctx, backoff, func(ctx context.Context) error {
+		err := retry.Do(t.ctx, backoff, func(ctx context.Context) error {
 			if err := listen(ctx, pgNotify); err != nil {
 				return retry.RetryableError(err)
 			}
@@ -96,8 +110,8 @@ func listenToPostgresNotify(ctx context.Context, pgNotify chan bool) {
 	}
 }
 
-func consumeEvents(ctx context.Context, gormDB *gorm.DB, config Config) error {
-	tx := gormDB.WithContext(ctx).Begin()
+func (t *eventHandler) consumeEvents() error {
+	tx := t.gormDB.WithContext(t.ctx).Begin()
 	if tx.Error != nil {
 		return fmt.Errorf("error initiating db tx: %w", tx.Error)
 	}
@@ -124,9 +138,9 @@ func consumeEvents(ctx context.Context, gormDB *gorm.DB, config Config) error {
 	case EventCommentCreate:
 		err = reconcileCommentEvent(tx, event)
 	case EventPushQueueCreate:
-		if config.UpstreamConf.Valid() {
-			upstreamPushEventHandler := newPushToUpstreamEventHandler(config.UpstreamConf)
-			err = upstreamPushEventHandler.Run(ctx, tx, []api.Event{event})
+		if t.config.UpstreamConf.Valid() {
+			upstreamPushEventHandler := newPushToUpstreamEventHandler(t.config.UpstreamConf)
+			err = upstreamPushEventHandler.Run(t.ctx, tx, []api.Event{event})
 		}
 	default:
 		logger.Errorf("unrecognized event name: %s", event.Name)
@@ -153,9 +167,9 @@ func consumeEvents(ctx context.Context, gormDB *gorm.DB, config Config) error {
 }
 
 // ConsumeEventsUntilEmpty consumes events forever until the event queue is empty.
-func ConsumeEventsUntilEmpty(ctx context.Context, gormDB *gorm.DB, config Config) {
+func (t *eventHandler) ConsumeEventsUntilEmpty() {
 	for {
-		err := consumeEvents(ctx, gormDB, config)
+		err := t.consumeEvents()
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return

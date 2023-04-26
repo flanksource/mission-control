@@ -136,7 +136,8 @@ var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
 			},
 		}
 
-		events.ConsumeEventsUntilEmpty(context.Background(), testDB, eventHandlerConfig)
+		eventHandler := events.NewEventHandler(context.Background(), testDB, eventHandlerConfig)
+		eventHandler.ConsumeEventsUntilEmpty()
 	})
 
 	ginkgo.It("should have transferred all the components", func() {
