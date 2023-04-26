@@ -10,6 +10,7 @@ import (
 	embeddedPG "github.com/fergusstrange/embedded-postgres"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty"
+	"github.com/flanksource/duty/fixtures/dummy"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 	ginkgo "github.com/onsi/ginkgo/v2"
@@ -73,7 +74,7 @@ var _ = ginkgo.BeforeSuite(func() {
 	testDB = gormDB
 	testDBPGPool = pgxpool
 
-	if err := populateMonitoredTables(testDB); err != nil {
+	if err := dummy.PopulateDBWithDummyModels(testDB); err != nil {
 		ginkgo.Fail(err.Error())
 	}
 

@@ -70,6 +70,13 @@ var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
 				Expect(len(itemIDs)).To(Equal(len(dummy.AllDummyConfigComponentRelationships)))
 				Expect(itemIDs).To(Equal(getPrimaryKeys(table, dummy.AllDummyConfigComponentRelationships)), "Mismatch composite primary keys for config_component_relationships")
 
+			case "config_changes":
+				Expect(len(itemIDs)).To(Equal(len(dummy.AllDummyConfigChanges)))
+				Expect(itemIDs).To(Equal(getPrimaryKeys(table, dummy.AllDummyConfigChanges)), "Mismatch composite primary keys for config_changes")
+
+			case "config_relationships":
+				// Do nothing (need to populate the config_relationships table)
+
 			default:
 				ginkgo.Fail(fmt.Sprintf("Unexpected table %q on the event queue for %q", table, pkgEvents.EventPushQueueCreate))
 			}
@@ -80,6 +87,7 @@ var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
 				len(dummy.AllDummyChecks) +
 				len(dummy.AllDummyComponents) +
 				len(dummy.AllDummyConfigs) +
+				len(dummy.AllDummyConfigChanges) +
 				len(dummy.AllDummyConfigAnalysis) +
 				len(dummy.AllDummyCheckStatuses) +
 				len(dummy.AllDummyComponentRelationships) +
@@ -163,6 +171,10 @@ var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
 		compareEntities(testUpstreamDB, testUpstreamDB, &[]models.ConfigAnalysis{})
 	})
 
+	ginkgo.It("should have transferred all the config changes", func() {
+		compareEntities(testUpstreamDB, testUpstreamDB, &[]models.ConfigChange{})
+	})
+
 	ginkgo.It("should have transferred all the config relationships", func() {
 		compareEntities(testUpstreamDB, testUpstreamDB, &[]models.ComponentRelationship{})
 	})
@@ -171,70 +183,6 @@ var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
 		compareEntities(testUpstreamDB, testUpstreamDB, &[]models.ConfigComponentRelationship{})
 	})
 })
-
-func populateMonitoredTables(gormDB *gorm.DB) error {
-	for _, c := range dummy.AllDummyCanaries {
-		err := gormDB.Create(&c).Error
-		if err != nil {
-			return err
-		}
-	}
-
-	for _, c := range dummy.AllDummyChecks {
-		err := gormDB.Create(&c).Error
-		if err != nil {
-			return err
-		}
-	}
-
-	for _, c := range dummy.AllDummyComponents {
-		err := gormDB.Create(&c).Error
-		if err != nil {
-			return err
-		}
-	}
-
-	for _, c := range dummy.AllDummyConfigs {
-		err := gormDB.Create(&c).Error
-		if err != nil {
-			return err
-		}
-	}
-
-	for _, c := range dummy.AllDummyConfigAnalysis {
-		err := gormDB.Create(&c).Error
-		if err != nil {
-			return err
-		}
-	}
-
-	for _, c := range dummy.AllDummyCheckStatuses {
-		err := gormDB.Create(&c).Error
-		if err != nil {
-			return err
-		}
-	}
-
-	for _, c := range dummy.AllDummyConfigComponentRelationships {
-		err := gormDB.Create(&c).Error
-		if err != nil {
-			return err
-		}
-	}
-
-	for _, c := range dummy.AllDummyComponentRelationships {
-		err := gormDB.Create(&c).Error
-		if err != nil {
-			return err
-		}
-	}
-
-	// TODO:
-	// - config changes
-	// - config relationships
-
-	return nil
-}
 
 // getPrimaryKeys extracts and returns the list of primary keys for the given table from the provided rows.
 func getPrimaryKeys(table string, rows any) [][]string {
@@ -263,6 +211,12 @@ func getPrimaryKeys(table string, rows any) [][]string {
 		configs := rows.([]models.ConfigItem)
 		for _, c := range configs {
 			primaryKeys = append(primaryKeys, []string{c.ID.String()})
+		}
+
+	case "config_changes":
+		configChanges := rows.([]models.ConfigChange)
+		for _, c := range configChanges {
+			primaryKeys = append(primaryKeys, []string{c.ID})
 		}
 
 	case "config_analysis":
