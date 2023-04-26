@@ -23,7 +23,8 @@ func PushUpstream(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error(), Message: "invalid json request"})
 	}
 
-	if strings.TrimSpace(req.ClusterName) == "" {
+	req.ClusterName = strings.TrimSpace(req.ClusterName)
+	if req.ClusterName == "" {
 		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: "cluster_name name is required", Message: "cluster name is required"})
 	}
 

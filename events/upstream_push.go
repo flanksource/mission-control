@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 
 	"github.com/flanksource/incident-commander/api"
 	"gorm.io/gorm"
@@ -97,7 +98,12 @@ func (t *pushToUpstreamEventHandler) push(ctx context.Context, msg *api.PushData
 		return fmt.Errorf("error encoding msg: %w", err)
 	}
 
-	req, err := http.NewRequest(http.MethodPost, t.conf.URL, payloadBuf)
+	endpoint, err := url.JoinPath(t.conf.Host, "upstream_push")
+	if err != nil {
+		return fmt.Errorf("error creating url endpoint for host %s: %w", t.conf.Host, err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost, endpoint, payloadBuf)
 	if err != nil {
 		return fmt.Errorf("http.NewRequest: %w", err)
 	}
