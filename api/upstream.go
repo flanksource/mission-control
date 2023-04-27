@@ -47,18 +47,18 @@ func (t *PushData) ApplyLabels(labels map[string]string) {
 
 type UpstreamConfig struct {
 	ClusterName string
-	URL         string
+	Host        string
 	Username    string
 	Password    string
 	Labels      []string
 }
 
 func (t *UpstreamConfig) Valid() bool {
-	return t.URL != "" && t.Username != "" && t.Password != "" && t.ClusterName != ""
+	return t.Host != "" && t.Username != "" && t.Password != "" && t.ClusterName != ""
 }
 
 func (t *UpstreamConfig) IsPartiallyFilled() bool {
-	return !t.Valid() && (t.URL != "" || t.Username != "" || t.Password != "" || t.ClusterName != "")
+	return !t.Valid() && (t.Host != "" || t.Username != "" || t.Password != "" || t.ClusterName != "")
 }
 
 func (t *UpstreamConfig) LabelsMap() map[string]string {
