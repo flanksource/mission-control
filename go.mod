@@ -8,9 +8,10 @@ require (
 	github.com/antihax/optional v1.0.0
 	github.com/casbin/casbin/v2 v2.66.3
 	github.com/casbin/gorm-adapter/v3 v3.15.1
+	github.com/fergusstrange/embedded-postgres v1.21.0
 	github.com/flanksource/canary-checker/sdk v0.0.0-20230331093950-cb1f0f05f3e5
 	github.com/flanksource/commons v1.7.0
-	github.com/flanksource/duty v1.0.65
+	github.com/flanksource/duty v1.0.73
 	github.com/google/cel-go v0.13.0
 	github.com/google/uuid v1.3.0
 	github.com/jackc/pgx/v5 v5.3.1
@@ -63,7 +64,6 @@ require (
 	github.com/cloudflare/circl v1.3.2 // indirect
 	github.com/emicklei/go-restful/v3 v3.10.2 // indirect
 	github.com/evanphx/json-patch v5.6.0+incompatible // indirect
-	github.com/fergusstrange/embedded-postgres v1.21.0 // indirect
 	github.com/flanksource/gomplate/v3 v3.20.3 // indirect
 	github.com/glebarez/go-sqlite v1.20.3 // indirect
 	github.com/glebarez/sqlite v1.7.0 // indirect
