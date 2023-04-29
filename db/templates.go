@@ -14,19 +14,19 @@ import (
 // downstream instances.
 const headlessTemplateNamespace = "push"
 
-func getHeadlessTemplate(ctx context.Context, name string) (*models.SystemTemplate, error) {
-	template := models.SystemTemplate{Name: name, Namespace: headlessTemplateNamespace}
+func getHeadlessTemplate(ctx context.Context, name string) (*models.Topology, error) {
+	template := models.Topology{Name: name, Namespace: headlessTemplateNamespace}
 	tx := Gorm.WithContext(ctx).Where(template).First(&template)
 	return &template, tx.Error
 }
 
-func createHeadlessTemplate(ctx context.Context, name string) (*models.SystemTemplate, error) {
-	template := models.SystemTemplate{ID: uuid.New(), Name: name, Namespace: headlessTemplateNamespace}
+func createHeadlessTemplate(ctx context.Context, name string) (*models.Topology, error) {
+	template := models.Topology{ID: uuid.New(), Name: name, Namespace: headlessTemplateNamespace}
 	tx := Gorm.WithContext(ctx).Create(&template)
 	return &template, tx.Error
 }
 
-func GetOrCreateHeadlessTemplateID(ctx context.Context, name string) (*models.SystemTemplate, error) {
+func GetOrCreateHeadlessTemplateID(ctx context.Context, name string) (*models.Topology, error) {
 	id, err := getHeadlessTemplate(ctx, name)
 	if nil == err {
 		return id, nil

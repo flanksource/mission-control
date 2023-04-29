@@ -26,7 +26,7 @@ type PushData struct {
 // with the provided id.
 func (t *PushData) ReplaceTemplateID(id *uuid.UUID) {
 	for i := range t.Components {
-		t.Components[i].SystemTemplateID = id
+		t.Components[i].TopologyID = id
 	}
 }
 
