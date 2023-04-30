@@ -52,11 +52,11 @@ func Authorization(object, action string) func(echo.HandlerFunc) echo.HandlerFun
 			}
 
 			if object == "" || action == "" {
-				return c.String(http.StatusUnauthorized, errMisconfiguredRBAC)
+				return c.String(http.StatusForbidden, errMisconfiguredRBAC)
 			}
 
 			if !Check(userID, object, action) {
-				return c.String(http.StatusUnauthorized, errAccessDenied)
+				return c.String(http.StatusForbidden, errAccessDenied)
 			}
 
 			return next(c)
