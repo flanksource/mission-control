@@ -131,11 +131,25 @@ var Serve = &cobra.Command{
 }
 
 func forward(e *echo.Echo, prefix string, target string, middlewares ...echo.MiddlewareFunc) {
-	middlewares = append(middlewares, getProxyMiddleware(e, prefix, target))
+	middlewares = append(middlewares, SetHeaderXForwardedProto, proxyMiddleware(e, prefix, target))
 	e.Group(prefix).Use(middlewares...)
 }
 
-func getProxyMiddleware(e *echo.Echo, prefix, targetURL string) echo.MiddlewareFunc {
+func SetHeaderXForwardedProto(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		// Kratos requires the header X-Forwarded-Proto but Nginx sets it as "https,http"
+		// This leads to URL malformation further upstream
+		val := utils.Coalesce(
+			c.Request().Header.Get("X-Forwarded-Scheme"),
+			c.Request().Header.Get("X-Scheme"),
+			"https",
+		)
+		c.Request().Header.Set(echo.HeaderXForwardedProto, val)
+		return next(c)
+	}
+}
+
+func proxyMiddleware(e *echo.Echo, prefix, targetURL string) echo.MiddlewareFunc {
 	_url, err := url.Parse(targetURL)
 	if err != nil {
 		e.Logger.Fatal(err)

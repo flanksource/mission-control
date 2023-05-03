@@ -27,3 +27,14 @@ func MergeStructs[T any](base, patch T) (T, error) {
 
 	return base, nil
 }
+
+// Coalesce returns the first non-zero element
+func Coalesce[T comparable](arr ...T) T {
+	var zeroVal T
+	for _, item := range arr {
+		if item != zeroVal {
+			return item
+		}
+	}
+	return zeroVal
+}
