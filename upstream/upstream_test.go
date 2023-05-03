@@ -130,7 +130,7 @@ var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
 		eventHandlerConfig := events.Config{
 			UpstreamConf: api.UpstreamConfig{
 				ClusterName: "test-cluster",
-				URL:         fmt.Sprintf("http://localhost:%d/upstream_push", testutils.TestUpstreamServerPort),
+				Host:        fmt.Sprintf("http://localhost:%d", testutils.TestUpstreamServerPort),
 				Username:    "admin@local",
 				Password:    "admin",
 				Labels:      []string{"test"},
@@ -143,7 +143,7 @@ var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
 
 	ginkgo.It("should have transferred all the components", func() {
 		var fieldsToIgnore []string
-		fieldsToIgnore = append(fieldsToIgnore, "SystemTemplateID")                                              // Upstream creates its own dummy template
+		fieldsToIgnore = append(fieldsToIgnore, "TopologyID")                                                    // Upstream creates its own dummy topology
 		fieldsToIgnore = append(fieldsToIgnore, "Checks", "Components", "Order", "SelectorID", "RelationshipID") // These are auxiliary fields & do not represent the table columns.
 		ignoreFieldsOpt := cmpopts.IgnoreFields(models.Component{}, fieldsToIgnore...)
 
