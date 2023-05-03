@@ -19,6 +19,11 @@ const (
 func Authorization(object, action string) func(echo.HandlerFunc) echo.HandlerFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
+			// Skip auth if Enforcer is not initialized
+			if Enforcer == nil {
+				return next(c)
+			}
+
 			userID := c.Request().Header.Get(auth.UserIDHeaderKey)
 			if userID == "" {
 				return c.String(http.StatusUnauthorized, errNoUserID)
@@ -34,7 +39,7 @@ func Authorization(object, action string) func(echo.HandlerFunc) echo.HandlerFun
 			}
 
 			// Database action is defined via HTTP Verb and Path
-			if path := c.Request().URL.Path; strings.HasPrefix(path, "/db") {
+			if path := c.Request().URL.Path; strings.HasPrefix(path, "/db/") {
 				action = policyActionFromHTTPMethod(c.Request().Method)
 				resource := strings.ReplaceAll(path, "/db/", "")
 

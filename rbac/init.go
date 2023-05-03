@@ -8,7 +8,6 @@ import (
 	"github.com/casbin/casbin/v2/model"
 	gormadapter "github.com/casbin/gorm-adapter/v3"
 	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 )
 
@@ -61,7 +60,7 @@ const (
 
 var Enforcer *casbin.Enforcer
 
-func Init() error {
+func Init(adminUserID string) error {
 	model, err := model.NewModelFromString(modelDefinition)
 	if err != nil {
 		return fmt.Errorf("error creating rbac model: %v", err)
@@ -78,8 +77,11 @@ func Init() error {
 		return fmt.Errorf("error creating rbac enforcer: %v", err)
 	}
 
-	if _, err := Enforcer.AddRoleForUser(api.SystemUserID.String(), RoleAdmin); err != nil {
-		return fmt.Errorf("error adding role for system admin user: %v", err)
+	if adminUserID == "" {
+		return fmt.Errorf("admin user cannot be empty")
+	}
+	if _, err := Enforcer.AddRoleForUser(adminUserID, RoleAdmin); err != nil {
+		return fmt.Errorf("error adding role for admin user: %v", err)
 	}
 
 	// Hierarchial policies

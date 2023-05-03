@@ -50,7 +50,8 @@ var Serve = &cobra.Command{
 
 		kratosHandler := auth.NewKratosHandler(kratosAPI, kratosAdminAPI, db.PostgRESTJWTSecret)
 		if enableAuth {
-			if _, err := kratosHandler.CreateAdminUser(context.Background()); err != nil {
+			adminUserID, err := kratosHandler.CreateAdminUser(context.Background())
+			if err != nil {
 				logger.Fatalf("Failed to created admin user: %v", err)
 			}
 
@@ -59,6 +60,11 @@ var Serve = &cobra.Command{
 				logger.Fatalf("Failed to initialize kratos middleware: %v", err)
 			}
 			e.Use(middleware.Session)
+
+			// Initiate RBAC
+			if err := rbac.Init(adminUserID); err != nil {
+				logger.Fatalf("Failed to initialize rbac: %v", err)
+			}
 		}
 
 		if !enableAuth {
