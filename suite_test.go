@@ -1,4 +1,4 @@
-package upstream
+package main
 
 import (
 	"context"
@@ -11,6 +11,8 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/fixtures/dummy"
+	"github.com/flanksource/incident-commander/testutils"
+	"github.com/flanksource/incident-commander/upstream"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 	ginkgo "github.com/onsi/ginkgo/v2"
@@ -23,21 +25,8 @@ func TestPushMode(t *testing.T) {
 	ginkgo.RunSpecs(t, "Push Mode Suite")
 }
 
-const (
-	testPostgresPort       = 9879
-	testUpstreamServerPort = 11005
-	pgUrl                  = "postgres://postgres:postgres@localhost:9879/test?sslmode=disable"
-	upstreamPGUrl          = "postgres://postgres:postgres@localhost:9879/upstream?sslmode=disable"
-)
-
 var (
 	postgresServer *embeddedPG.EmbeddedPostgres
-	testDB         *gorm.DB
-	testDBPGPool   *pgxpool.Pool
-
-	testUpstreamDB       *gorm.DB
-	testUpstreamDBPGPool *pgxpool.Pool
-
 	testEchoServer *echo.Echo
 )
 
@@ -65,30 +54,30 @@ func setup(dbName, connectionString string) (*gorm.DB, *pgxpool.Pool) {
 }
 
 var _ = ginkgo.BeforeSuite(func() {
-	postgresServer = embeddedPG.NewDatabase(embeddedPG.DefaultConfig().Database("test").Port(testPostgresPort).Logger(io.Discard))
+	postgresServer = embeddedPG.NewDatabase(embeddedPG.DefaultConfig().Database("test").Port(testutils.TestPostgresPort).Logger(io.Discard))
 	if err := postgresServer.Start(); err != nil {
 		ginkgo.Fail(err.Error())
 	}
-	logger.Infof("Started postgres on port: %d", testPostgresPort)
+	logger.Infof("Started postgres on port: %d", testutils.TestPostgresPort)
 
-	gormDB, pgxpool := setup("test", pgUrl)
-	testDB = gormDB
-	testDBPGPool = pgxpool
+	gormDB, pgxpool := setup("test", testutils.PGUrl)
+	testutils.TestDB = gormDB
+	testutils.TestDBPGPool = pgxpool
 
-	if err := dummy.PopulateDBWithDummyModels(testDB); err != nil {
+	if err := dummy.PopulateDBWithDummyModels(testutils.TestDB); err != nil {
 		ginkgo.Fail(err.Error())
 	}
 
-	_, err := testDBPGPool.Exec(context.TODO(), "CREATE DATABASE upstream")
+	_, err := testutils.TestDBPGPool.Exec(context.TODO(), "CREATE DATABASE upstream")
 	Expect(err).NotTo(HaveOccurred())
 
-	udb, upgxpool := setup("upstream", upstreamPGUrl)
-	testUpstreamDB = udb
-	testUpstreamDBPGPool = upgxpool
+	udb, upgxpool := setup("upstream", testutils.UpstreamPGUrl)
+	testutils.TestUpstreamDB = udb
+	testutils.TestUpstreamDBPGPool = upgxpool
 
 	testEchoServer = echo.New()
-	testEchoServer.POST("/upstream_push", PushUpstream)
-	listenAddr := fmt.Sprintf(":%d", testUpstreamServerPort)
+	testEchoServer.POST("/upstream_push", upstream.PushUpstream)
+	listenAddr := fmt.Sprintf(":%d", testutils.TestUpstreamServerPort)
 
 	go func() {
 		defer ginkgo.GinkgoRecover() // Required by ginkgo, if an assertion is made in a goroutine.
