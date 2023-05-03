@@ -38,15 +38,16 @@ func TestAuthorization(t *testing.T) {
 	if err := db.Init(pgUrl); err != nil {
 		t.Fatalf("error connecting to db: %v", err)
 	}
-	if err := Init(); err != nil {
-		t.Fatalf("error instantiating rbac: %v", err)
-	}
+
 	e := echo.New()
 	successBody := "OK"
 	handler := func(c echo.Context) error {
 		return c.String(http.StatusOK, successBody)
 	}
 
+	if err := Init("admin"); err != nil {
+		t.Fatalf("error instantiating rbac: %v", err)
+	}
 	usersAndRoles := map[string]string{
 		"admin":     RoleAdmin,
 		"editor":    RoleEditor,
@@ -75,7 +76,7 @@ func TestAuthorization(t *testing.T) {
 		{path: "/db/checks", method: http.MethodGet, user: "viewer", expectedCode: http.StatusOK, expectedBody: successBody, object: ObjectDatabase, action: "any"},
 		{path: "/db/canaries", method: http.MethodGet, user: "viewer", expectedCode: http.StatusForbidden, expectedBody: errAccessDenied, object: ObjectDatabase, action: "any"},
 		{path: "/db/canaries", method: http.MethodGet, user: "responder", expectedCode: http.StatusForbidden, expectedBody: errAccessDenied, object: ObjectDatabase, action: "any"},
-		{path: "/db/canaries", method: http.MethodGet, user: "editor", expectedCode: http.StatusOK, expectedBody: successBody, object: ObjectDatabase, action: "any"},
+		{path: "/db/canaries?id=eq.5", method: http.MethodGet, user: "editor", expectedCode: http.StatusOK, expectedBody: successBody, object: ObjectDatabase, action: "any"},
 		{path: "/db/comments", method: http.MethodPost, user: "viewer", expectedCode: http.StatusForbidden, expectedBody: errAccessDenied, object: ObjectDatabase, action: "any"},
 		{path: "/db/comments", method: http.MethodPost, user: "responder", expectedCode: http.StatusOK, expectedBody: successBody, object: ObjectDatabase, action: "any"},
 		{path: "/db/incidents", method: http.MethodPatch, user: "responder", expectedCode: http.StatusOK, expectedBody: successBody, object: ObjectDatabase, action: "any"},
