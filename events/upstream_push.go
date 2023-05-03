@@ -30,7 +30,7 @@ func (t *pushToUpstreamEventHandler) Run(ctx context.Context, tx *gorm.DB, event
 		ClusterName: t.conf.ClusterName,
 	}
 
-	for tablename, itemIDs := range groupChangelogsByTables(events) {
+	for tablename, itemIDs := range GroupChangelogsByTables(events) {
 		switch tablename {
 		case "components":
 			if err := tx.Where("id IN ?", itemIDs).Find(&upstreamMsg.Components).Error; err != nil {
@@ -68,7 +68,7 @@ func (t *pushToUpstreamEventHandler) Run(ctx context.Context, tx *gorm.DB, event
 			}
 
 		case "config_component_relationships":
-			if err := tx.Where("(component_id, config_id) IN ?", itemIDs).Find(&upstreamMsg.ConfigItems).Error; err != nil {
+			if err := tx.Where("(component_id, config_id) IN ?", itemIDs).Find(&upstreamMsg.ConfigComponentRelationships).Error; err != nil {
 				return fmt.Errorf("error fetching config_component_relationships: %w", err)
 			}
 
@@ -122,8 +122,12 @@ func (t *pushToUpstreamEventHandler) push(ctx context.Context, msg *api.PushData
 	return nil
 }
 
-func groupChangelogsByTables(events []api.Event) map[string][]any {
-	var output = make(map[string][]any)
+// GroupChangelogsByTables groups the given events by the table they belong to.
+//
+// Return Value:
+// - A map of table names to slices of (composite) primary key values.
+func GroupChangelogsByTables(events []api.Event) map[string][][]string {
+	var output = make(map[string][][]string)
 	for _, cl := range events {
 		tableName := cl.Properties["table"]
 		switch tableName {
@@ -136,7 +140,7 @@ func groupChangelogsByTables(events []api.Event) map[string][]any {
 		case "check_statuses":
 			output[tableName] = append(output[tableName], []string{cl.Properties["check_id"], cl.Properties["time"]})
 		default:
-			output[tableName] = append(output[tableName], cl.Properties["id"])
+			output[tableName] = append(output[tableName], []string{cl.Properties["id"]})
 		}
 	}
 
