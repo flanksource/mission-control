@@ -135,20 +135,26 @@ var Serve = &cobra.Command{
 }
 
 func forward(e *echo.Echo, prefix string, target string, middlewares ...echo.MiddlewareFunc) {
-	middlewares = append(middlewares, SetHeaderXForwardedProto, proxyMiddleware(e, prefix, target))
+	middlewares = append(middlewares, ModifyKratosRequestHeaders, proxyMiddleware(e, prefix, target))
 	e.Group(prefix).Use(middlewares...)
 }
 
-func SetHeaderXForwardedProto(next echo.HandlerFunc) echo.HandlerFunc {
+func ModifyKratosRequestHeaders(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
-		// Kratos requires the header X-Forwarded-Proto but Nginx sets it as "https,http"
-		// This leads to URL malformation further upstream
-		val := utils.Coalesce(
-			c.Request().Header.Get("X-Forwarded-Scheme"),
-			c.Request().Header.Get("X-Scheme"),
-			"https",
-		)
-		c.Request().Header.Set(echo.HeaderXForwardedProto, val)
+		if strings.HasPrefix(c.Request().URL.Path, "/kratos") {
+			// Kratos requires the header X-Forwarded-Proto but Nginx sets it as "https,http"
+			// This leads to URL malformation further upstream
+			val := utils.Coalesce(
+				c.Request().Header.Get("X-Forwarded-Scheme"),
+				c.Request().Header.Get("X-Scheme"),
+				"https",
+			)
+			c.Request().Header.Set(echo.HeaderXForwardedProto, val)
+
+			// Need to remove the Authorization header set by our auth middleware for kratos
+			// since it uses that header to extract token while performing certain actions
+			c.Request().Header.Del(echo.HeaderAuthorization)
+		}
 		return next(c)
 	}
 }
