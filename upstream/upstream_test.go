@@ -8,6 +8,7 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/fixtures/dummy"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/types"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
@@ -104,11 +105,11 @@ var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
 		err := testutils.TestDB.Create(&modifiedNewDummy).Error
 		Expect(err).NotTo(HaveOccurred())
 
-		modifiedNewDummy.Status = models.ComponentStatusUnhealthy
+		modifiedNewDummy.Status = types.ComponentStatusUnhealthy
 		err = testutils.TestDB.Save(&modifiedNewDummy).Error
 		Expect(err).NotTo(HaveOccurred())
 
-		modifiedNewDummy.Status = models.ComponentStatusUnhealthy
+		modifiedNewDummy.Status = types.ComponentStatusUnhealthy
 		err = testutils.TestDB.Delete(&modifiedNewDummy).Error
 		Expect(err).NotTo(HaveOccurred())
 
@@ -148,7 +149,7 @@ var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
 		ignoreFieldsOpt := cmpopts.IgnoreFields(models.Component{}, fieldsToIgnore...)
 
 		// unexported fields must be explicitly ignored.
-		ignoreUnexportedOpt := cmpopts.IgnoreUnexported(models.Component{}, models.Summary{})
+		ignoreUnexportedOpt := cmpopts.IgnoreUnexported(models.Component{}, types.Summary{})
 
 		compareEntities(testutils.TestUpstreamDB, testutils.TestDB, &[]models.Component{}, ignoreFieldsOpt, ignoreUnexportedOpt)
 	})
