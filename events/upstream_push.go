@@ -5,9 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 
+	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/incident-commander/api"
 	"gorm.io/gorm"
 )
@@ -115,8 +117,9 @@ func (t *pushToUpstreamEventHandler) push(ctx context.Context, msg *api.PushData
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("upstream server returned error status: %s", resp.Status)
+	if !collections.Contains([]int{http.StatusOK, http.StatusCreated}, resp.StatusCode) {
+		respBody, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("upstream server returned error status[%d]: %s", resp.StatusCode, string(respBody))
 	}
 
 	return nil
