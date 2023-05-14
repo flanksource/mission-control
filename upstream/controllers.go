@@ -14,7 +14,10 @@ import (
 	"github.com/patrickmn/go-cache"
 )
 
-var templateIDCache = cache.New(3*24*time.Hour, 12*time.Hour)
+var (
+	topologyIDCache = cache.New(3*24*time.Hour, 12*time.Hour)
+	agentIDCache    = cache.New(3*24*time.Hour, 12*time.Hour)
+)
 
 func PushUpstream(c echo.Context) error {
 	var req api.PushData
@@ -28,17 +31,31 @@ func PushUpstream(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: "cluster_name name is required", Message: "cluster name is required"})
 	}
 
-	headlessTplID, ok := templateIDCache.Get(req.ClusterName)
+	agentID, ok := agentIDCache.Get(req.ClusterName)
 	if !ok {
-		headlessTpl, err := db.GetOrCreateHeadlessTemplateID(c.Request().Context(), req.ClusterName)
+		agent, err := db.GetOrCreateAgent(req.ClusterName)
 		if err != nil {
-			return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error(), Message: fmt.Sprintf("failed to get headless template for cluster: %s", req.ClusterName)})
+			return c.JSON(http.StatusBadRequest, api.HTTPError{
+				Error:   err.Error(),
+				Message: "Error while creating/fetching agent",
+			})
+		}
+		agentID = &agent.ID
+		agentIDCache.Set(req.ClusterName, agentID, cache.DefaultExpiration)
+	}
+
+	headlessTopologyID, ok := topologyIDCache.Get(req.ClusterName)
+	if !ok {
+		headlessTopology, err := db.GetOrCreateHeadlessTopology(c.Request().Context(), req.ClusterName)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error(), Message: fmt.Sprintf("failed to get headless topology for cluster: %s", req.ClusterName)})
 		}
 
-		headlessTplID = &headlessTpl.ID
-		templateIDCache.Set(req.ClusterName, headlessTplID, cache.DefaultExpiration)
+		headlessTopologyID = &headlessTopology.ID
+		topologyIDCache.Set(req.ClusterName, headlessTopologyID, cache.DefaultExpiration)
 	}
-	req.ReplaceTemplateID(headlessTplID.(*uuid.UUID))
+	req.ReplaceTopologyID(headlessTopologyID.(*uuid.UUID))
+	req.PopulateAgentID(agentID.(*uuid.UUID))
 
 	if err := db.InsertUpstreamMsg(c.Request().Context(), &req); err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to upsert upstream message"})

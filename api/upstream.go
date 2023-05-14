@@ -22,11 +22,45 @@ type PushData struct {
 	ConfigComponentRelationships []models.ConfigComponentRelationship `json:"config_component_relationships"`
 }
 
-// ReplaceTemplateID replaces the template id for all the components
+// ReplaceTopologyID replaces the topology_id for all the components
 // with the provided id.
-func (t *PushData) ReplaceTemplateID(id *uuid.UUID) {
+func (t *PushData) ReplaceTopologyID(id *uuid.UUID) {
 	for i := range t.Components {
 		t.Components[i].TopologyID = id
+	}
+}
+
+// PopulateAgentID sets agent_id on all the data
+func (t *PushData) PopulateAgentID(id *uuid.UUID) {
+	for i := range t.Canaries {
+		t.Canaries[i].AgentID = id
+	}
+	for i := range t.Checks {
+		t.Checks[i].AgentID = id
+	}
+	for i := range t.Components {
+		t.Components[i].AgentID = id
+	}
+	for i := range t.ConfigAnalysis {
+		t.ConfigAnalysis[i].AgentID = id
+	}
+	for i := range t.ConfigChanges {
+		t.ConfigChanges[i].AgentID = id
+	}
+	for i := range t.ConfigItems {
+		t.ConfigItems[i].AgentID = id
+	}
+	for i := range t.CheckStatuses {
+		t.CheckStatuses[i].AgentID = id
+	}
+	for i := range t.ConfigRelationships {
+		t.ConfigRelationships[i].AgentID = id
+	}
+	for i := range t.ComponentRelationships {
+		t.ComponentRelationships[i].AgentID = id
+	}
+	for i := range t.ConfigComponentRelationships {
+		t.ConfigComponentRelationships[i].AgentID = id
 	}
 }
 

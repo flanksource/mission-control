@@ -6,42 +6,37 @@ import (
 	"fmt"
 
 	"github.com/flanksource/duty/models"
-	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
-// headlessTemplateNamespace is a shared template namespace for
+// headlessTopologyNamespace is a shared topology namespace for
 // downstream instances.
-const headlessTemplateNamespace = "push"
+const headlessTopologyNamespace = "push"
 
-func getHeadlessTemplate(ctx context.Context, name string) (*models.Topology, error) {
-	template := models.Topology{Name: name, Namespace: headlessTemplateNamespace}
-	tx := Gorm.WithContext(ctx).Where(template).First(&template)
-	return &template, tx.Error
+func getHeadlessTopology(ctx context.Context, name string) (*models.Topology, error) {
+	t := models.Topology{Name: name, Namespace: headlessTopologyNamespace}
+	tx := Gorm.WithContext(ctx).Where(t).First(&t)
+	return &t, tx.Error
 }
 
-func createHeadlessTemplate(ctx context.Context, name string) (*models.Topology, error) {
-	template := models.Topology{ID: uuid.New(), Name: name, Namespace: headlessTemplateNamespace}
-	tx := Gorm.WithContext(ctx).Create(&template)
-	return &template, tx.Error
+func createHeadlessTopology(ctx context.Context, name string) (*models.Topology, error) {
+	t := models.Topology{Name: name, Namespace: headlessTopologyNamespace}
+	tx := Gorm.WithContext(ctx).Create(&t)
+	return &t, tx.Error
 }
 
-func GetOrCreateHeadlessTemplateID(ctx context.Context, name string) (*models.Topology, error) {
-	id, err := getHeadlessTemplate(ctx, name)
-	if nil == err {
-		return id, nil
+func GetOrCreateHeadlessTopology(ctx context.Context, name string) (*models.Topology, error) {
+	t, err := getHeadlessTopology(ctx, name)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			newHeadlessTopology, err := createHeadlessTopology(ctx, name)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create headless topology: %w", err)
+			}
+			return newHeadlessTopology, nil
+		}
+		return nil, err
 	}
 
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		newHeadlessTpl, err := createHeadlessTemplate(ctx, name)
-		if nil == err {
-			return newHeadlessTpl, nil
-		}
-
-		if err != nil {
-			return nil, fmt.Errorf("failed to create headless template: %w", err)
-		}
-	}
-
-	return nil, err
+	return t, nil
 }

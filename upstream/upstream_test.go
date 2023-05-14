@@ -185,6 +185,20 @@ var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
 	ginkgo.It("should have transferred all the config component relationships", func() {
 		compareEntities(testutils.TestUpstreamDB, testutils.TestUpstreamDB, &[]models.ConfigComponentRelationship{})
 	})
+
+	ginkgo.It("should have populated the agents table", func() {
+		var count int
+		err := testutils.TestUpstreamDB.Select("COUNT(*)").Table("agents").Scan(&count).Error
+		Expect(err).ToNot(HaveOccurred())
+		Expect(count).ToNot(BeZero())
+	})
+
+	ginkgo.It("should have populated the agent_id field", func() {
+		var count int
+		err := testutils.TestUpstreamDB.Select("COUNT(*)").Table("checks").Where("agent_id IS NOT NULL").Scan(&count).Error
+		Expect(err).ToNot(HaveOccurred())
+		Expect(count).ToNot(BeZero())
+	})
 })
 
 // getPrimaryKeys extracts and returns the list of primary keys for the given table from the provided rows.
