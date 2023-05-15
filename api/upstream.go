@@ -41,12 +41,6 @@ func (t *PushData) PopulateAgentID(id *uuid.UUID) {
 	for i := range t.Components {
 		t.Components[i].AgentID = id
 	}
-	for i := range t.ConfigAnalysis {
-		t.ConfigAnalysis[i].AgentID = id
-	}
-	for i := range t.ConfigChanges {
-		t.ConfigChanges[i].AgentID = id
-	}
 	for i := range t.ConfigItems {
 		t.ConfigItems[i].AgentID = id
 	}
