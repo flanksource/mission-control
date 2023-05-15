@@ -130,11 +130,11 @@ var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
 
 		eventHandlerConfig := events.Config{
 			UpstreamConf: api.UpstreamConfig{
-				ClusterName: "test-cluster",
-				Host:        fmt.Sprintf("http://localhost:%d", testutils.TestUpstreamServerPort),
-				Username:    "admin@local",
-				Password:    "admin",
-				Labels:      []string{"test"},
+				AgentName: "test-agent",
+				Host:      fmt.Sprintf("http://localhost:%d", testutils.TestUpstreamServerPort),
+				Username:  "admin@local",
+				Password:  "admin",
+				Labels:    []string{"test"},
 			},
 		}
 

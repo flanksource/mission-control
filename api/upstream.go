@@ -9,7 +9,7 @@ import (
 // PushData consists of data about changes to
 // components, configs, analysis.
 type PushData struct {
-	ClusterName                  string                               `json:"cluster_name"`
+	AgentName                    string                               `json:"cluster_name"`
 	Canaries                     []models.Canary                      `json:"canaries"`
 	Checks                       []models.Check                       `json:"checks"`
 	Components                   []models.Component                   `json:"components"`
@@ -50,18 +50,6 @@ func (t *PushData) PopulateAgentID(id *uuid.UUID) {
 	for i := range t.ConfigItems {
 		t.ConfigItems[i].AgentID = id
 	}
-	for i := range t.CheckStatuses {
-		t.CheckStatuses[i].AgentID = id
-	}
-	for i := range t.ConfigRelationships {
-		t.ConfigRelationships[i].AgentID = id
-	}
-	for i := range t.ComponentRelationships {
-		t.ComponentRelationships[i].AgentID = id
-	}
-	for i := range t.ConfigComponentRelationships {
-		t.ConfigComponentRelationships[i].AgentID = id
-	}
 }
 
 // ApplyLabels injects additional labels to the suitable fields
@@ -80,19 +68,19 @@ func (t *PushData) ApplyLabels(labels map[string]string) {
 }
 
 type UpstreamConfig struct {
-	ClusterName string
-	Host        string
-	Username    string
-	Password    string
-	Labels      []string
+	AgentName string
+	Host      string
+	Username  string
+	Password  string
+	Labels    []string
 }
 
 func (t *UpstreamConfig) Valid() bool {
-	return t.Host != "" && t.Username != "" && t.Password != "" && t.ClusterName != ""
+	return t.Host != "" && t.Username != "" && t.Password != "" && t.AgentName != ""
 }
 
 func (t *UpstreamConfig) IsPartiallyFilled() bool {
-	return !t.Valid() && (t.Host != "" || t.Username != "" || t.Password != "" || t.ClusterName != "")
+	return !t.Valid() && (t.Host != "" || t.Username != "" || t.Password != "" || t.AgentName != "")
 }
 
 func (t *UpstreamConfig) LabelsMap() map[string]string {

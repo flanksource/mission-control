@@ -26,14 +26,14 @@ func PushUpstream(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error(), Message: "invalid json request"})
 	}
 
-	req.ClusterName = strings.TrimSpace(req.ClusterName)
-	if req.ClusterName == "" {
+	req.AgentName = strings.TrimSpace(req.AgentName)
+	if req.AgentName == "" {
 		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: "cluster_name name is required", Message: "cluster name is required"})
 	}
 
-	agentID, ok := agentIDCache.Get(req.ClusterName)
+	agentID, ok := agentIDCache.Get(req.AgentName)
 	if !ok {
-		agent, err := db.GetOrCreateAgent(req.ClusterName)
+		agent, err := db.GetOrCreateAgent(req.AgentName)
 		if err != nil {
 			return c.JSON(http.StatusBadRequest, api.HTTPError{
 				Error:   err.Error(),
@@ -41,18 +41,18 @@ func PushUpstream(c echo.Context) error {
 			})
 		}
 		agentID = &agent.ID
-		agentIDCache.Set(req.ClusterName, agentID, cache.DefaultExpiration)
+		agentIDCache.Set(req.AgentName, agentID, cache.DefaultExpiration)
 	}
 
-	headlessTopologyID, ok := topologyIDCache.Get(req.ClusterName)
+	headlessTopologyID, ok := topologyIDCache.Get(req.AgentName)
 	if !ok {
-		headlessTopology, err := db.GetOrCreateHeadlessTopology(c.Request().Context(), req.ClusterName)
+		headlessTopology, err := db.GetOrCreateHeadlessTopology(c.Request().Context(), req.AgentName)
 		if err != nil {
-			return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error(), Message: fmt.Sprintf("failed to get headless topology for cluster: %s", req.ClusterName)})
+			return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error(), Message: fmt.Sprintf("failed to get headless topology for cluster: %s", req.AgentName)})
 		}
 
 		headlessTopologyID = &headlessTopology.ID
-		topologyIDCache.Set(req.ClusterName, headlessTopologyID, cache.DefaultExpiration)
+		topologyIDCache.Set(req.AgentName, headlessTopologyID, cache.DefaultExpiration)
 	}
 	req.ReplaceTopologyID(headlessTopologyID.(*uuid.UUID))
 	req.PopulateAgentID(agentID.(*uuid.UUID))
