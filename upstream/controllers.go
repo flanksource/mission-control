@@ -40,7 +40,7 @@ func PushUpstream(c echo.Context) error {
 				Message: "Error while creating/fetching agent",
 			})
 		}
-		agentID = &agent.ID
+		agentID = agent.ID
 		agentIDCache.Set(req.AgentName, agentID, cache.DefaultExpiration)
 	}
 
@@ -55,7 +55,7 @@ func PushUpstream(c echo.Context) error {
 		topologyIDCache.Set(req.AgentName, headlessTopologyID, cache.DefaultExpiration)
 	}
 	req.ReplaceTopologyID(headlessTopologyID.(*uuid.UUID))
-	req.PopulateAgentID(agentID.(*uuid.UUID))
+	req.PopulateAgentID(agentID.(uuid.UUID))
 
 	if err := db.InsertUpstreamMsg(c.Request().Context(), &req); err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to upsert upstream message"})

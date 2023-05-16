@@ -31,7 +31,7 @@ func (t *PushData) ReplaceTopologyID(id *uuid.UUID) {
 }
 
 // PopulateAgentID sets agent_id on all the data
-func (t *PushData) PopulateAgentID(id *uuid.UUID) {
+func (t *PushData) PopulateAgentID(id uuid.UUID) {
 	for i := range t.Canaries {
 		t.Canaries[i].AgentID = id
 	}
