@@ -63,7 +63,7 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&upstreamConfig.Host, "upstream-host", "", "central incident commander instance to push configs to")
 	flags.StringVar(&upstreamConfig.Username, "upstream-user", "", "upstream username")
 	flags.StringVar(&upstreamConfig.Password, "upstream-password", "", "upstream password")
-	flags.StringVar(&upstreamConfig.ClusterName, "upstream-name", "", "name of the cluster")
+	flags.StringVar(&upstreamConfig.AgentName, "upstream-name", "", "name of the cluster")
 	flags.StringSliceVar(&upstreamConfig.Labels, "upstream-labels", nil, `labels in the format: "key1=value1,key2=value2"`)
 }
 

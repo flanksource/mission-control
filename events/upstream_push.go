@@ -29,7 +29,7 @@ func newPushToUpstreamEventHandler(conf api.UpstreamConfig) *pushToUpstreamEvent
 // Run pushes data from decentralized instances to central incident commander
 func (t *pushToUpstreamEventHandler) Run(ctx context.Context, tx *gorm.DB, events []api.Event) error {
 	upstreamMsg := &api.PushData{
-		ClusterName: t.conf.ClusterName,
+		AgentName: t.conf.AgentName,
 	}
 
 	for tablename, itemIDs := range GroupChangelogsByTables(events) {

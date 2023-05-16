@@ -117,10 +117,11 @@ var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
 		err = testutils.TestDB.Where("name = ? AND created_at >= ?", pkgEvents.EventPushQueueCreate, start).Find(&events).Error
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(len(events)).To(Equal(3))
+		// Only 1 event should get created since we are modifying the same resource
+		Expect(len(events)).To(Equal(1))
 
 		groupedEvents := pkgEvents.GroupChangelogsByTables(events)
-		Expect(groupedEvents["components"]).To(Equal([][]string{{modifiedNewDummy.ID.String()}, {modifiedNewDummy.ID.String()}, {modifiedNewDummy.ID.String()}}))
+		Expect(groupedEvents["components"]).To(Equal([][]string{{modifiedNewDummy.ID.String()}}))
 	})
 
 	ginkgo.It("should transfer all events to upstream server", func() {
@@ -130,11 +131,11 @@ var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
 
 		eventHandlerConfig := events.Config{
 			UpstreamConf: api.UpstreamConfig{
-				ClusterName: "test-cluster",
-				Host:        fmt.Sprintf("http://localhost:%d", testutils.TestUpstreamServerPort),
-				Username:    "admin@local",
-				Password:    "admin",
-				Labels:      []string{"test"},
+				AgentName: "test-agent",
+				Host:      fmt.Sprintf("http://localhost:%d", testutils.TestUpstreamServerPort),
+				Username:  "admin@local",
+				Password:  "admin",
+				Labels:    []string{"test"},
 			},
 		}
 
@@ -184,6 +185,20 @@ var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
 
 	ginkgo.It("should have transferred all the config component relationships", func() {
 		compareEntities(testutils.TestUpstreamDB, testutils.TestUpstreamDB, &[]models.ConfigComponentRelationship{})
+	})
+
+	ginkgo.It("should have populated the agents table", func() {
+		var count int
+		err := testutils.TestUpstreamDB.Select("COUNT(*)").Table("agents").Scan(&count).Error
+		Expect(err).ToNot(HaveOccurred())
+		Expect(count).ToNot(BeZero())
+	})
+
+	ginkgo.It("should have populated the agent_id field", func() {
+		var count int
+		err := testutils.TestUpstreamDB.Select("COUNT(*)").Table("checks").Where("agent_id IS NOT NULL").Scan(&count).Error
+		Expect(err).ToNot(HaveOccurred())
+		Expect(count).ToNot(BeZero())
 	})
 })
 

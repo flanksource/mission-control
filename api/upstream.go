@@ -9,7 +9,7 @@ import (
 // PushData consists of data about changes to
 // components, configs, analysis.
 type PushData struct {
-	ClusterName                  string                               `json:"cluster_name"`
+	AgentName                    string                               `json:"cluster_name"`
 	Canaries                     []models.Canary                      `json:"canaries"`
 	Checks                       []models.Check                       `json:"checks"`
 	Components                   []models.Component                   `json:"components"`
@@ -22,11 +22,27 @@ type PushData struct {
 	ConfigComponentRelationships []models.ConfigComponentRelationship `json:"config_component_relationships"`
 }
 
-// ReplaceTemplateID replaces the template id for all the components
+// ReplaceTopologyID replaces the topology_id for all the components
 // with the provided id.
-func (t *PushData) ReplaceTemplateID(id *uuid.UUID) {
+func (t *PushData) ReplaceTopologyID(id *uuid.UUID) {
 	for i := range t.Components {
 		t.Components[i].TopologyID = id
+	}
+}
+
+// PopulateAgentID sets agent_id on all the data
+func (t *PushData) PopulateAgentID(id uuid.UUID) {
+	for i := range t.Canaries {
+		t.Canaries[i].AgentID = id
+	}
+	for i := range t.Checks {
+		t.Checks[i].AgentID = id
+	}
+	for i := range t.Components {
+		t.Components[i].AgentID = id
+	}
+	for i := range t.ConfigItems {
+		t.ConfigItems[i].AgentID = id
 	}
 }
 
@@ -46,19 +62,19 @@ func (t *PushData) ApplyLabels(labels map[string]string) {
 }
 
 type UpstreamConfig struct {
-	ClusterName string
-	Host        string
-	Username    string
-	Password    string
-	Labels      []string
+	AgentName string
+	Host      string
+	Username  string
+	Password  string
+	Labels    []string
 }
 
 func (t *UpstreamConfig) Valid() bool {
-	return t.Host != "" && t.Username != "" && t.Password != "" && t.ClusterName != ""
+	return t.Host != "" && t.Username != "" && t.Password != "" && t.AgentName != ""
 }
 
 func (t *UpstreamConfig) IsPartiallyFilled() bool {
-	return !t.Valid() && (t.Host != "" || t.Username != "" || t.Password != "" || t.ClusterName != "")
+	return !t.Valid() && (t.Host != "" || t.Username != "" || t.Password != "" || t.AgentName != "")
 }
 
 func (t *UpstreamConfig) LabelsMap() map[string]string {
