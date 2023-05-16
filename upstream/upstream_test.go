@@ -117,10 +117,11 @@ var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
 		err = testutils.TestDB.Where("name = ? AND created_at >= ?", pkgEvents.EventPushQueueCreate, start).Find(&events).Error
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(len(events)).To(Equal(3))
+		// Only 1 event should get created since we are modifying the same resource
+		Expect(len(events)).To(Equal(1))
 
 		groupedEvents := pkgEvents.GroupChangelogsByTables(events)
-		Expect(groupedEvents["components"]).To(Equal([][]string{{modifiedNewDummy.ID.String()}, {modifiedNewDummy.ID.String()}, {modifiedNewDummy.ID.String()}}))
+		Expect(groupedEvents["components"]).To(Equal([][]string{{modifiedNewDummy.ID.String()}}))
 	})
 
 	ginkgo.It("should transfer all events to upstream server", func() {
