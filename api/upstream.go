@@ -6,6 +6,8 @@ import (
 	"github.com/google/uuid"
 )
 
+var UpstreamConf UpstreamConfig
+
 // PushData consists of data about changes to
 // components, configs, analysis.
 type PushData struct {

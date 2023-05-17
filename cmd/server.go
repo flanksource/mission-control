@@ -109,7 +109,7 @@ var Serve = &cobra.Command{
 		}
 		e.GET("/schemas/*", echo.WrapHandler(http.StripPrefix("/schemas/", schemaServer)))
 
-		if upstreamConfig.IsPartiallyFilled() {
+		if api.UpstreamConf.IsPartiallyFilled() {
 			logger.Warnf("Please ensure that all the required flags for upstream is supplied.")
 		}
 		e.POST("/upstream_push", upstream.PushUpstream)
@@ -123,7 +123,7 @@ var Serve = &cobra.Command{
 
 		go jobs.Start()
 
-		eventHandler := events.NewEventHandler(context.Background(), db.Gorm, events.Config{UpstreamConf: upstreamConfig})
+		eventHandler := events.NewEventHandler(context.Background(), db.Gorm, events.Config{UpstreamConf: api.UpstreamConf})
 		go eventHandler.ListenForEvents()
 
 		listenAddr := fmt.Sprintf(":%d", httpPort)
