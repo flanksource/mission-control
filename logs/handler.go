@@ -38,12 +38,12 @@ func LogsHandler(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{
 			Error:   err.Error(),
-			Message: "failed to get component by the given ID",
+			Message: fmt.Sprintf("failed to get component(id=%s)", componentID),
 		})
 	}
 
 	selectorName, _ := form["name"].(string)
-	logSelector := getLabelsFromLogSelectors(component.LogSelectors, selectorName)
+	logSelector := getLogSelectorByName(component.LogSelectors, selectorName)
 	if logSelector == nil {
 		return c.JSON(http.StatusBadRequest, api.HTTPError{
 			Error:   "log selector was not found",
@@ -106,8 +106,9 @@ func makePostRequest(url string, data any) (*http.Response, error) {
 	return resp, nil
 }
 
-// getLabelsFromLogSelectors returns a map of labels from the logs selectors
-func getLabelsFromLogSelectors(selectors types.LogSelectors, name string) *types.LogSelector {
+// getLogSelectorByName find the right log selector by the given name.
+// If name is empty, the first log selector is returned.
+func getLogSelectorByName(selectors types.LogSelectors, name string) *types.LogSelector {
 	if len(selectors) == 0 {
 		return nil
 	}
