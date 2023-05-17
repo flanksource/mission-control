@@ -119,7 +119,7 @@ var Serve = &cobra.Command{
 		forward(e, "/kratos", kratosAPI)
 		forward(e, "/apm", api.ApmHubPath) // Deprecated
 
-		e.POST("/logs/*", logs.LogsHandler)
+		e.POST("/logs", logs.LogsHandler)
 
 		go jobs.Start()
 
