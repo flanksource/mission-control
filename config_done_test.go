@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/db"
@@ -22,7 +23,7 @@ func (t dummyConfig) String() *string {
 	return &response
 }
 
-var _ = ginkgo.Describe("Config Done Test", ginkgo.Ordered, func() {
+var _ = ginkgo.Describe("Test Incident Done Definition With Config Item", ginkgo.Ordered, func() {
 	var (
 		john       *models.Person
 		incident   *models.Incident
@@ -109,18 +110,18 @@ var _ = ginkgo.Describe("Config Done Test", ginkgo.Ordered, func() {
 		Expect(tx.Error).To(BeNil())
 	})
 
-	ginkgo.It("modify the config but doesn't satisfy the done definition", func() {
+	ginkgo.It("modify the config but do not satisfy the done definition", func() {
 		config.Threshold = 75
 		configItem.Config = config.String()
 		tx := db.Gorm.Save(configItem)
 		Expect(tx.Error).To(BeNil())
 	})
 
-	ginkgo.It("should NOT mark the evidence as done", func() {
+	ginkgo.It("should NOT mark the incident as resolved", func() {
 		jobs.EvaluateEvidenceScripts()
 
 		var fetchedIncident models.Incident
-		err := db.Gorm.Find(&fetchedIncident).Where("id = ?", evidence.ID).Error
+		err := db.Gorm.Where("id = ?", incident.ID).First(&fetchedIncident).Error
 		Expect(err).To(BeNil())
 
 		Expect(fetchedIncident.Status).To(Equal(models.IncidentStatusOpen))
@@ -133,11 +134,145 @@ var _ = ginkgo.Describe("Config Done Test", ginkgo.Ordered, func() {
 		Expect(tx.Error).To(BeNil())
 	})
 
-	ginkgo.It("should mark the evidence as done", func() {
+	ginkgo.It("should mark the incident as resolved", func() {
 		jobs.EvaluateEvidenceScripts()
 
 		var fetchedIncident models.Incident
-		err := db.Gorm.Find(&fetchedIncident).Where("id = ?", evidence.ID).Error
+		err := db.Gorm.Where("id = ?", incident.ID).First(&fetchedIncident).Error
+		Expect(err).To(BeNil())
+
+		Expect(fetchedIncident.Status).To(Equal(models.IncidentStatusResolved))
+	})
+})
+
+var _ = ginkgo.Describe("Test Incident Done Definition With Health Check", ginkgo.Ordered, func() {
+	var (
+		john       *models.Person
+		component  *models.Component
+		canary     *models.Canary
+		check      *models.Check
+		incident   *models.Incident
+		hypothesis *models.Hypothesis
+		evidence   *models.Evidence
+	)
+
+	ginkgo.It("should create a person", func() {
+		john = &models.Person{
+			ID:   uuid.New(),
+			Name: "John Wick",
+		}
+		tx := db.Gorm.Create(john)
+		Expect(tx.Error).To(BeNil())
+	})
+
+	ginkgo.It("should create a new component", func() {
+		component = &models.Component{
+			ID:         uuid.New(),
+			Name:       "logistics",
+			Type:       "Entity",
+			ExternalId: "dummy/logistics",
+		}
+		tx := db.Gorm.Create(component)
+		Expect(tx.Error).To(BeNil())
+	})
+
+	ginkgo.It("should create a canary", func() {
+		canary = &models.Canary{
+			ID:        uuid.New(),
+			Name:      "flanksource homepage check",
+			Namespace: "default",
+			Spec:      []byte("{}"),
+			CreatedAt: time.Now(),
+		}
+		tx := db.Gorm.Create(canary)
+		Expect(tx.Error).To(BeNil())
+	})
+
+	ginkgo.It("should create a check", func() {
+		check = &models.Check{
+			ID:       uuid.New(),
+			CanaryID: canary.ID,
+			Name:     "flanksource-homepage-check",
+			Type:     "http",
+			Status:   "unhealthy",
+		}
+		tx := db.Gorm.Create(check)
+		Expect(tx.Error).To(BeNil())
+	})
+
+	ginkgo.It("should create an incident", func() {
+		incident = &models.Incident{
+			ID:          uuid.New(),
+			Title:       "Site is down",
+			CreatedBy:   john.ID,
+			Type:        models.IncidentTypeAvailability,
+			Status:      models.IncidentStatusOpen,
+			Severity:    "Blocker",
+			CommanderID: &john.ID,
+		}
+		tx := db.Gorm.Create(incident)
+		Expect(tx.Error).To(BeNil())
+	})
+
+	ginkgo.It("should create a new hypothesis", func() {
+		hypothesis = &models.Hypothesis{
+			ID:         uuid.New(),
+			IncidentID: incident.ID,
+			Title:      "Have you tried turning it off and on again?",
+			CreatedBy:  john.ID,
+			Type:       "solution",
+			Status:     "possible",
+		}
+		tx := db.Gorm.Create(hypothesis)
+		Expect(tx.Error).To(BeNil())
+	})
+
+	ginkgo.It("should create a new evidence from the config", func() {
+		evidence = &models.Evidence{
+			ID:               uuid.New(),
+			HypothesisID:     hypothesis.ID,
+			ComponentID:      &component.ID,
+			CreatedBy:        john.ID,
+			Description:      "Logisctics DB attached component",
+			Type:             "component",
+			Script:           `check.status == "healthy" && check.transition_duration_sec > 30`,
+			CheckID:          &check.ID,
+			DefinitionOfDone: true,
+		}
+		tx := db.Gorm.Create(evidence)
+		Expect(tx.Error).To(BeNil())
+	})
+
+	ginkgo.It("pretend the site has been up for 15 seconds", func() {
+		check.Status = "healthy"
+		past := time.Now().Add(-time.Second * 15)
+		check.LastTransitionTime = &past
+		tx := db.Gorm.Save(check)
+		Expect(tx.Error).To(BeNil())
+	})
+
+	ginkgo.It("should NOT mark the incident as resolved", func() {
+		jobs.EvaluateEvidenceScripts()
+
+		var fetchedIncident models.Incident
+		err := db.Gorm.Where("id = ?", incident.ID).First(&fetchedIncident).Error
+		Expect(err).To(BeNil())
+
+		Expect(fetchedIncident.Status).To(Equal(models.IncidentStatusOpen))
+	})
+
+	ginkgo.It("pretend the site has been up for 31 seconds", func() {
+		past := time.Now().Add(-time.Second * 31)
+		check.LastTransitionTime = &past
+		tx := db.Gorm.Save(check)
+		Expect(tx.Error).To(BeNil())
+	})
+
+	ginkgo.It("should mark the incident as resolved", func() {
+		jobs.EvaluateEvidenceScripts()
+
+		var fetchedIncident models.Incident
+		err := db.Gorm.Where("id = ?", incident.ID).First(&fetchedIncident).Error
 		Expect(err).To(BeNil())
 
 		Expect(fetchedIncident.Status).To(Equal(models.IncidentStatusResolved))

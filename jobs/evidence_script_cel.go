@@ -52,11 +52,13 @@ func EvaluateEvidenceScripts() {
 }
 
 func evaluate(evidence db.EvidenceScriptInput) (string, error) {
-	prg, err := getCELPrgFromCache(evidence)
+	prg, err := getOrCompileCELProgram(evidence)
 	if err != nil {
 		return "", err
 	}
+
 	out, _, err := (*prg).Eval(map[string]any{
+		"check":     evidence.Check.AsMap(),
 		"config":    evidence.ConfigItem.Config,
 		"component": evidence.Component.AsMap(),
 		"incident":  evidence.Hypothesis.Incident.AsMap(),
@@ -68,11 +70,14 @@ func evaluate(evidence db.EvidenceScriptInput) (string, error) {
 	return fmt.Sprint(out), nil
 }
 
-func getCELPrgFromCache(evidence db.EvidenceScriptInput) (*cel.Program, error) {
+// getOrCompileCELProgram returns a cached or compiled cel.Program for the given cel expression.
+func getOrCompileCELProgram(evidence db.EvidenceScriptInput) (*cel.Program, error) {
 	if prg, exists := prgCache.Get(evidence.Script); exists {
 		return prg.(*cel.Program), nil
 	}
+
 	env, err := cel.NewEnv(
+		cel.Variable("check", cel.AnyType),
 		cel.Variable("config", cel.AnyType),
 		cel.Variable("component", cel.AnyType),
 		cel.Variable("incident", cel.AnyType),
@@ -90,6 +95,7 @@ func getCELPrgFromCache(evidence db.EvidenceScriptInput) (*cel.Program, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	prgCache.SetDefault(evidence.Script, &prg)
 	return &prg, nil
 }
