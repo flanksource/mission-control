@@ -20,7 +20,7 @@ func (t Check) AsMap() map[string]any {
 	b, _ := json.Marshal(t)
 	_ = json.Unmarshal(b, &m)
 
-	transitionDuration := time.Now().Sub(t.LastTransitionTime)
+	transitionDuration := time.Since(t.LastTransitionTime)
 	m["transition_duration_sec"] = int(transitionDuration.Seconds())
 	m["transition_duration_min"] = int(transitionDuration.Minutes())
 	return m
