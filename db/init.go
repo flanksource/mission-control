@@ -7,6 +7,7 @@ import (
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty"
+	"github.com/flanksource/duty/migrate"
 	_ "github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -61,7 +62,11 @@ func Init(connection string) error {
 		return err
 	}
 
-	if err = duty.Migrate(ConnectionString); err != nil {
+	opts := &migrate.MigrateOptions{}
+	if !api.UpstreamConf.Valid() {
+		opts.IgnoreFiles = append(opts.IgnoreFiles, "012_changelog.sql")
+	}
+	if err = duty.Migrate(ConnectionString, opts); err != nil {
 		return err
 	}
 

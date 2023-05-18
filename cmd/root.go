@@ -39,7 +39,6 @@ var httpPort, metricsPort, devGuiPort int
 var publicEndpoint = "http://localhost:8080"
 var configDb, kratosAPI, kratosAdminAPI, externalPostgrestUri string
 var enableAuth, disablePostgrest bool
-var upstreamConfig api.UpstreamConfig
 
 func ServerFlags(flags *pflag.FlagSet) {
 	flags.IntVar(&httpPort, "httpPort", 8080, "Port to expose a health dashboard ")
@@ -60,11 +59,11 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&db.PostgresDBAnonRole, "postgrest-anon-role", "postgrest_anon", "Postgres anonymous role")
 
 	// Flags for upstream push
-	flags.StringVar(&upstreamConfig.Host, "upstream-host", "", "central incident commander instance to push configs to")
-	flags.StringVar(&upstreamConfig.Username, "upstream-user", "", "upstream username")
-	flags.StringVar(&upstreamConfig.Password, "upstream-password", "", "upstream password")
-	flags.StringVar(&upstreamConfig.AgentName, "upstream-name", "", "name of the cluster")
-	flags.StringSliceVar(&upstreamConfig.Labels, "upstream-labels", nil, `labels in the format: "key1=value1,key2=value2"`)
+	flags.StringVar(&api.UpstreamConf.Host, "upstream-host", "", "central incident commander instance to push configs to")
+	flags.StringVar(&api.UpstreamConf.Username, "upstream-user", "", "upstream username")
+	flags.StringVar(&api.UpstreamConf.Password, "upstream-password", "", "upstream password")
+	flags.StringVar(&api.UpstreamConf.AgentName, "upstream-name", "", "name of the cluster")
+	flags.StringSliceVar(&api.UpstreamConf.Labels, "upstream-labels", nil, `labels in the format: "key1=value1,key2=value2"`)
 }
 
 func init() {

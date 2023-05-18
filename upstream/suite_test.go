@@ -45,7 +45,7 @@ func setup(dbName, connectionString string) (*gorm.DB, *pgxpool.Pool) {
 		ginkgo.Fail(err.Error())
 	}
 
-	if err = duty.Migrate(connectionString); err != nil {
+	if err = duty.Migrate(connectionString, nil); err != nil {
 		ginkgo.Fail(err.Error())
 	}
 
