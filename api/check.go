@@ -10,6 +10,8 @@ import (
 type Check struct {
 	ID                 uuid.UUID `json:"id"`
 	LastTransitionTime time.Time `json:"last_transition_time"`
+	LastRuntime        time.Time `json:"last_runtime"`
+	CreatedAt          time.Time `json:"created_at"`
 	Status             string    `json:"status"`
 }
 
@@ -20,8 +22,6 @@ func (t Check) AsMap() map[string]any {
 	b, _ := json.Marshal(t)
 	_ = json.Unmarshal(b, &m)
 
-	transitionDuration := time.Since(t.LastTransitionTime)
-	m["transition_duration_sec"] = int(transitionDuration.Seconds())
-	m["transition_duration_min"] = int(transitionDuration.Minutes())
+	m["age"] = time.Since(t.LastTransitionTime)
 	return m
 }

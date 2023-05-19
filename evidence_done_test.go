@@ -235,7 +235,7 @@ var _ = ginkgo.Describe("Test Incident Done Definition With Health Check", ginkg
 			CreatedBy:        john.ID,
 			Description:      "Logisctics DB attached component",
 			Type:             "component",
-			Script:           `check.status == "healthy" && check.transition_duration_sec > 30`,
+			Script:           `check.status == "healthy" && check.age > duration("30s")`,
 			CheckID:          &check.ID,
 			DefinitionOfDone: true,
 		}
