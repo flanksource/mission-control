@@ -68,13 +68,10 @@ func LogsHandler(c echo.Context) error {
 	}
 
 	apmHubPayload := map[string]any{
-		"id":   reqData.ID,
-		"type": logSelector.Type,
+		"id":   component.ExternalId,
+		"type": component.Type,
 		// TODO: Should these be intersection or union
 		"labels": collections.MergeMap(logSelector.Labels, reqData.Labels),
-	}
-	if strings.HasPrefix(strings.ToLower(logSelector.Type), "kubernetes") {
-		apmHubPayload["id"] = fmt.Sprintf("%s/%s", component.Namespace, component.Name)
 	}
 	resp, err := makePostRequest(fmt.Sprintf("%s/%s", api.ApmHubPath, "search"), apmHubPayload)
 	if err != nil {
