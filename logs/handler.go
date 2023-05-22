@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/template"
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/types"
@@ -16,38 +17,38 @@ import (
 )
 
 func LogsHandler(c echo.Context) error {
-	req := c.Request()
-
-	var form = make(map[string]any)
-	if err := c.Bind(&form); err != nil {
+	var reqData struct {
+		ID     string            `json:"id"`
+		Name   string            `json:"name"`
+		Labels map[string]string `json:"labels"`
+	}
+	if err := c.Bind(&reqData); err != nil {
 		return c.JSON(http.StatusBadRequest, api.HTTPError{
 			Error:   err.Error(),
 			Message: "Invalid request body",
 		})
 	}
 
-	componentID, ok := form["id"].(string)
-	if !ok {
+	if reqData.ID == "" {
 		return c.JSON(http.StatusBadRequest, api.HTTPError{
-			Error:   "'id' field is required",
-			Message: "component id is required",
+			Error:   "ID field is required",
+			Message: "Component ID is required",
 		})
 	}
 
-	component, err := duty.GetComponent(req.Context(), db.Gorm, componentID)
+	component, err := duty.GetComponent(c.Request().Context(), db.Gorm, reqData.ID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{
 			Error:   err.Error(),
-			Message: fmt.Sprintf("failed to get component(id=%s)", componentID),
+			Message: fmt.Sprintf("Failed to get component[id=%s]", reqData.ID),
 		})
 	}
 
-	selectorName, _ := form["name"].(string)
-	logSelector := getLogSelectorByName(component.LogSelectors, selectorName)
+	logSelector := getLogSelectorByName(component.LogSelectors, reqData.Name)
 	if logSelector == nil {
 		return c.JSON(http.StatusBadRequest, api.HTTPError{
-			Error:   "log selector was not found",
-			Message: fmt.Sprintf("log selector with the name '%s' was not found. Available names: [%s]", selectorName, strings.Join(getSelectorNames(component.LogSelectors), ", ")),
+			Error:   "Log selector was not found",
+			Message: fmt.Sprintf("Log selector with the name '%s' was not found. Available names: [%s]", reqData.Name, strings.Join(getSelectorNames(component.LogSelectors), ", ")),
 		})
 	}
 
@@ -66,19 +67,24 @@ func LogsHandler(c echo.Context) error {
 		})
 	}
 
-	modifiedForm := injectLabelsToForm(logSelector.Labels, form)
-	resp, err := makePostRequest(fmt.Sprintf("%s/%s", api.ApmHubPath, "search"), modifiedForm)
+	apmHubPayload := map[string]any{
+		"id":   component.ExternalId,
+		"type": component.Type,
+		// TODO: Should these be intersection or union
+		"labels": collections.MergeMap(logSelector.Labels, reqData.Labels),
+	}
+	resp, err := makePostRequest(fmt.Sprintf("%s/%s", api.ApmHubPath, "search"), apmHubPayload)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{
 			Error:   err.Error(),
-			Message: "failed to query apm-hub.",
+			Message: "Failed to query apm-hub.",
 		})
 	}
 
 	if err := c.Stream(resp.StatusCode, resp.Header.Get("Content-Type"), resp.Body); err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{
 			Error:   err.Error(),
-			Message: "failed to stream response.",
+			Message: "Failed to stream response.",
 		})
 	}
 
@@ -95,7 +101,7 @@ func makePostRequest(url string, data any) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
@@ -125,22 +131,6 @@ func getLogSelectorByName(selectors types.LogSelectors, name string) *types.LogS
 	}
 
 	return nil
-}
-
-func injectLabelsToForm(injectLabels map[string]string, form map[string]any) map[string]any {
-	// Make sure label exists so we can inject our labels
-	if _, ok := form["labels"]; !ok {
-		form["labels"] = make(map[string]any)
-	}
-
-	if labels, ok := form["labels"].(map[string]any); ok {
-		for k, v := range injectLabels {
-			labels[k] = v
-		}
-		form["labels"] = labels
-	}
-
-	return form
 }
 
 func getSelectorNames(logSelectors types.LogSelectors) []string {
