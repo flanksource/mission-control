@@ -118,7 +118,9 @@ func (t *eventHandler) consumeEvents() error {
 
 	const selectEventsQuery = `
 		SELECT * FROM event_queue
-		WHERE attempts <= @maxAttempts OR ((now() - last_attempt) > '1 hour'::interval)
+		WHERE 
+			attempts = 0
+			OR (attempts <= @maxAttempts AND (now() - last_attempt) > '1 hour'::interval)
 		FOR UPDATE SKIP LOCKED
 		LIMIT 1
 	`
