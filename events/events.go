@@ -151,10 +151,11 @@ func (t *eventHandler) consumeEvents() error {
 		logger.Errorf("failed to handle event [%s]: %v", event.Name, err)
 
 		errorMsg := err.Error()
-		setErr := tx.Exec("UPDATE event_queue SET error = ?, attempts = attempts + 1 WHERE id = ?", errorMsg, event.ID).Error
+		setErr := tx.Exec("UPDATE event_queue SET error = ?, attempts = attempts + 1, last_attempt = NOW() WHERE id = ?", errorMsg, event.ID).Error
 		if setErr != nil {
 			logger.Errorf("error updating table:event_queue with id:%s and error:%s. %v", event.ID, errorMsg, setErr)
 		}
+
 		return tx.Commit().Error
 	}
 
