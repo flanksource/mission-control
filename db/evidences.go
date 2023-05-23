@@ -14,10 +14,11 @@ type Hypothesis struct {
 
 type EvidenceScriptInput struct {
 	api.Evidence
-	ConfigItem api.ConfigItem `json:"config,omitempty" gorm:"foreignKey:ConfigID;references:ID"`
-	Check      api.Check      `json:"check,omitempty" gorm:"foreignKey:CheckID;references:ID"`
-	Component  api.Component  `json:"component,omitempty"`
-	Hypothesis Hypothesis
+	ConfigAnalysis api.ConfigAnalysis `json:"config_analysis,omitempty" gorm:"foreignKey:ConfigAnalysisID;references:ID"`
+	ConfigItem     api.ConfigItem     `json:"config,omitempty" gorm:"foreignKey:ConfigID;references:ID"`
+	Check          api.Check          `json:"check,omitempty" gorm:"foreignKey:CheckID;references:ID"`
+	Component      api.Component      `json:"component,omitempty"`
+	Hypothesis     Hypothesis
 }
 
 func GetEvidenceScripts() []EvidenceScriptInput {
@@ -26,6 +27,7 @@ func GetEvidenceScripts() []EvidenceScriptInput {
 	hypothesesSubQuery := Gorm.Table("hypotheses").Select("id").Where("incident_id IN (?)", incidentsSubQuery)
 	err := Gorm.Table("evidences").
 		Joins("ConfigItem").
+		Joins("ConfigAnalysis").
 		Joins("Check").
 		Joins("Component").
 		Joins("Hypothesis").

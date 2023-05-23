@@ -23,6 +23,8 @@ func init() {
 func EvaluateEvidenceScripts() {
 	// Fetch all evidences of open incidents which have a script
 	evidences := db.GetEvidenceScripts()
+	logger.Debugf("Found %d evidences with scripts", len(evidences))
+
 	var incidentIDs []uuid.UUID
 	for _, evidence := range evidences {
 		output, err := evaluate(evidence)
@@ -58,6 +60,7 @@ func evaluate(evidence db.EvidenceScriptInput) (string, error) {
 	}
 
 	out, _, err := (*prg).Eval(map[string]any{
+		"analysis":  evidence.ConfigAnalysis.AsMap(),
 		"check":     evidence.Check.AsMap(),
 		"config":    evidence.ConfigItem.Config,
 		"component": evidence.Component.AsMap(),
@@ -77,6 +80,7 @@ func getOrCompileCELProgram(evidence db.EvidenceScriptInput) (*cel.Program, erro
 	}
 
 	env, err := cel.NewEnv(
+		cel.Variable("analysis", cel.AnyType),
 		cel.Variable("check", cel.AnyType),
 		cel.Variable("config", cel.AnyType),
 		cel.Variable("component", cel.AnyType),

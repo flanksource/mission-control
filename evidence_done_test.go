@@ -145,6 +145,137 @@ var _ = ginkgo.Describe("Test Incident Done Definition With Config Item", ginkgo
 	})
 })
 
+var _ = ginkgo.Describe("Test Incident Done Definition With Config Item", ginkgo.Ordered, func() {
+	var (
+		john           *models.Person
+		incident       *models.Incident
+		configItem     *models.ConfigItem
+		configAnalysis *models.ConfigAnalysis
+		component      *models.Component
+		hypothesis     *models.Hypothesis
+		evidence       *models.Evidence
+		config         = dummyConfig{
+			Name:      "my dummy config",
+			Threshold: 50,
+		}
+	)
+
+	ginkgo.It("should create a person", func() {
+		john = &models.Person{
+			ID:   uuid.New(),
+			Name: "James Bond",
+		}
+		tx := db.Gorm.Create(john)
+		Expect(tx.Error).To(BeNil())
+	})
+
+	ginkgo.It("should create a new component", func() {
+		component = &models.Component{
+			ID:         uuid.New(),
+			Name:       "logistics",
+			Type:       "Entity",
+			ExternalId: "dummy/logistics",
+		}
+		tx := db.Gorm.Create(component)
+		Expect(tx.Error).To(BeNil())
+	})
+
+	ginkgo.It("should create a config", func() {
+		configItem = &models.ConfigItem{
+			ID:          uuid.New(),
+			ConfigClass: "MyConfigClass",
+			Config:      config.String(),
+		}
+		tx := db.Gorm.Create(configItem)
+		Expect(tx.Error).To(BeNil())
+	})
+
+	ginkgo.It("should create a config config analysis", func() {
+		configAnalysis = &models.ConfigAnalysis{
+			ID:           uuid.New(),
+			ConfigID:     configItem.ID,
+			Summary:      "Right-size or shutdown underutilized virtual machines",
+			AnalysisType: "cost",
+			Severity:     "high",
+		}
+		tx := db.Gorm.Create(configAnalysis)
+		Expect(tx.Error).To(BeNil())
+	})
+
+	ginkgo.It("should create an incident", func() {
+		incident = &models.Incident{
+			ID:          uuid.New(),
+			Title:       "Constantly hitting threshold",
+			CreatedBy:   john.ID,
+			Type:        models.IncidentTypeCost,
+			Status:      models.IncidentStatusOpen,
+			Severity:    "Blocker",
+			CommanderID: &john.ID,
+		}
+		tx := db.Gorm.Create(incident)
+		Expect(tx.Error).To(BeNil())
+	})
+
+	ginkgo.It("should create a new hypothesis", func() {
+		hypothesis = &models.Hypothesis{
+			ID:         uuid.New(),
+			IncidentID: incident.ID,
+			Title:      "can scale down to 3 instances",
+			CreatedBy:  john.ID,
+			Type:       "solution",
+			Status:     "possible",
+		}
+		tx := db.Gorm.Create(hypothesis)
+		Expect(tx.Error).To(BeNil())
+	})
+
+	ginkgo.It("should create a new evidence from the config", func() {
+		evidence = &models.Evidence{
+			ID:               uuid.New(),
+			HypothesisID:     hypothesis.ID,
+			CreatedBy:        john.ID,
+			Description:      "Azure Advisor recommends shutting down underutilized virtual machines",
+			Script:           "analysis.status == 'resolved'",
+			ConfigAnalysisID: &configAnalysis.ID,
+			DefinitionOfDone: true,
+		}
+		tx := db.Gorm.Create(evidence)
+		Expect(tx.Error).To(BeNil())
+	})
+
+	ginkgo.It("modify the config analysis but do not satisfy the done definition", func() {
+		configAnalysis.Status = "open"
+		tx := db.Gorm.Save(configAnalysis)
+		Expect(tx.Error).To(BeNil())
+	})
+
+	ginkgo.It("should NOT mark the incident as resolved", func() {
+		jobs.EvaluateEvidenceScripts()
+
+		var fetchedIncident models.Incident
+		err := db.Gorm.Where("id = ?", incident.ID).First(&fetchedIncident).Error
+		Expect(err).To(BeNil())
+
+		Expect(fetchedIncident.Status).To(Equal(models.IncidentStatusOpen))
+	})
+
+	ginkgo.It("modify the config analysis", func() {
+		configAnalysis.Status = "resolved"
+		tx := db.Gorm.Save(configAnalysis)
+		Expect(tx.Error).To(BeNil())
+	})
+
+	ginkgo.It("should mark the incident as resolved", func() {
+		jobs.EvaluateEvidenceScripts()
+
+		var fetchedIncident models.Incident
+		err := db.Gorm.Where("id = ?", incident.ID).First(&fetchedIncident).Error
+		Expect(err).To(BeNil())
+
+		Expect(fetchedIncident.Status).To(Equal(models.IncidentStatusResolved))
+	})
+})
+
 var _ = ginkgo.Describe("Test Incident Done Definition With Health Check", ginkgo.Ordered, func() {
 	var (
 		john       *models.Person
