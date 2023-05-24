@@ -23,6 +23,8 @@ import (
 	"github.com/flanksource/incident-commander/snapshot"
 	"github.com/flanksource/incident-commander/upstream"
 	"github.com/flanksource/incident-commander/utils"
+	"github.com/flanksource/kopper"
+	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 const (
@@ -125,6 +127,23 @@ var Serve = &cobra.Command{
 
 		eventHandler := events.NewEventHandler(context.Background(), db.Gorm, events.Config{UpstreamConf: api.UpstreamConf})
 		go eventHandler.ListenForEvents()
+
+		mgr, err := kopper.Manager(&kopper.ManagerOptions{
+			MetricsBindAddress:     ":8081",
+			Reconcilers:            []string{"Connection"},
+			ConnectionOnUpsertFunc: db.PersistConnectionFromCRD,
+			ConnectionOnDeleteFunc: db.DeleteConnection,
+		})
+
+		if err != nil {
+			logger.Fatalf("error creating manager: %v", err)
+		}
+
+		go func() {
+			if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+				logger.Fatalf("error running manager: %v", err)
+			}
+		}()
 
 		listenAddr := fmt.Sprintf(":%d", httpPort)
 		logger.Infof("Listening on %s", listenAddr)
