@@ -23,7 +23,6 @@ func init() {
 func EvaluateEvidenceScripts() {
 	// Fetch all evidences of open incidents which have a script
 	evidences := db.GetEvidenceScripts()
-	logger.Debugf("Found %d evidences with scripts", len(evidences))
 
 	var incidentIDs []uuid.UUID
 	for _, evidence := range evidences {
