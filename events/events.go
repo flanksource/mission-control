@@ -243,12 +243,12 @@ func reconcileCommentEvent(tx *gorm.DB, event api.Event) error {
 		// Reset externalID to avoid inserting previous iteration's ID
 		externalID := ""
 
-		team, err := responder.GetNotifierResponder(ctx, _responder.Team)
+		responder, err := responder.GetNotifierResponder(ctx, _responder.Team)
 		if err != nil {
 			return err
 		}
-		externalID, err = team.NotifyResponderAddComment(ctx, _responder, commentBody)
 
+		externalID, err = responder.NotifyResponderAddComment(ctx, _responder, commentBody)
 		if err != nil {
 			// TODO: Associate error messages with responderType and handle specific responders when reprocessing
 			logger.Errorf("error adding comment to responder:%s %v", _responder.Properties["responderType"], err)
