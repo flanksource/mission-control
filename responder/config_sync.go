@@ -50,14 +50,10 @@ func SyncConfig() {
 			_ = db.PersistJobHistory(jobHistory.End())
 		}()
 
-		responder, err := GetResponder(ctx, team)
+		responder, err := GetBidirectionalResponder(ctx, team)
 		if err != nil {
 			logger.Errorf("Error getting responder: %v", err)
 			jobHistory.AddError(err.Error()).End()
-			continue
-		}
-
-		if _, ok := responder.(INotifierResponder); ok {
 			continue
 		}
 

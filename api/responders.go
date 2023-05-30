@@ -55,7 +55,7 @@ type ResponderClients struct {
 }
 
 func (r ResponderClients) IsEmpty() bool {
-	return r.Jira == nil && r.AWS == nil && r.MSPlanner == nil && len(r.NotificationClients) != 0
+	return r.Jira == nil && r.AWS == nil && r.MSPlanner == nil && len(r.NotificationClients) == 0
 }
 
 type ServiceNow struct {

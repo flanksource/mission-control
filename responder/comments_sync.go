@@ -44,14 +44,10 @@ func SyncComments() {
 			continue
 		}
 
-		responder, err := GetResponder(ctx, _responder.Team)
+		responder, err := GetBidirectionalResponder(ctx, _responder.Team)
 		if err != nil {
 			logger.Errorf("Error getting responder: %v", err)
 			jobHistory.AddError(err.Error())
-			continue
-		}
-
-		if _, ok := responder.(INotifierResponder); ok {
 			continue
 		}
 

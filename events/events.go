@@ -194,10 +194,11 @@ func reconcileResponderEvent(tx *gorm.DB, event api.Event) error {
 		return err
 	}
 
-	responder, err := responder.GetResponder(ctx, _responder.Team)
+	responder, err := responder.GetNotifierResponder(ctx, _responder.Team)
 	if err != nil {
 		return err
 	}
+
 	externalID, err := responder.NotifyResponder(ctx, _responder)
 	if err != nil {
 		return err
@@ -242,7 +243,7 @@ func reconcileCommentEvent(tx *gorm.DB, event api.Event) error {
 		// Reset externalID to avoid inserting previous iteration's ID
 		externalID := ""
 
-		team, err := responder.GetResponder(ctx, _responder.Team)
+		team, err := responder.GetNotifierResponder(ctx, _responder.Team)
 		if err != nil {
 			return err
 		}
