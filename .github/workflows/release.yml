@@ -83,13 +83,9 @@ jobs:
         uses: mikefarah/yq@master
         with:
           cmd: yq -i e '.image.tag = "v${{ env.RELEASE_VERSION }}"' incident-commander-chart/chart/values.yaml
-      - name: Set kopper version
+      - name: Update CRDs
         run: |
-          echo "KOPPER_VERSION=$(cat go.mod | grep kopper | awk '{print $2}' | sed -e 's/^v//')" >> $GITHUB_ENV
-      - name: Update kopper dependency
-        uses: mikefarah/yq@master
-        with:
-          cmd: yq e -i '(.dependencies[] | select(.name == "kopper")) ref $d | $d.version = "${{ env.KOPPER_VERSION }}"' incident-commander-chart/chart/Chart.yaml
+          cp config/crds/* incident-commander-chart/chart/crds/*
       - name: Push changes to chart repo
         uses: stefanzweifel/git-auto-commit-action@v4
         with:

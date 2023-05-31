@@ -14,6 +14,7 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/schema/openapi"
 	"github.com/flanksource/incident-commander/api"
+	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/events"
@@ -129,14 +130,20 @@ var Serve = &cobra.Command{
 		go eventHandler.ListenForEvents()
 
 		mgr, err := kopper.Manager(&kopper.ManagerOptions{
-			MetricsBindAddress:     ":8081",
-			Reconcilers:            []string{"Connection"},
-			ConnectionOnUpsertFunc: db.PersistConnectionFromCRD,
-			ConnectionOnDeleteFunc: db.DeleteConnection,
+			MetricsBindAddress: ":8081",
+			AddToSchemeFunc:    v1.AddToScheme,
 		})
-
 		if err != nil {
 			logger.Fatalf("error creating manager: %v", err)
+		}
+
+		if err = kopper.SetupReconciler(
+			mgr,
+			db.PersistConnectionFromCRD,
+			db.DeleteConnection,
+			"connection.mission-control.flanksource.com",
+		); err != nil {
+			logger.Fatalf("Unable to create controller for Connection: %v", err)
 		}
 
 		go func() {

@@ -1,8 +1,6 @@
-
 NAME=incident-commander
 OS   = $(shell uname -s | tr '[:upper:]' '[:lower:]')
 ARCH = $(shell uname -m | sed 's/x86_64/amd64/')
-KUSTOMIZE=$(PWD)/.bin/kustomize
 
 ifeq ($(VERSION),)
   VERSION_TAG=$(shell git describe --abbrev=0 --tags --exact-match 2>/dev/null || echo latest)
@@ -20,8 +18,13 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
-test:
-	go test ./... -coverprofile cover.out
+.PHONY: help
+help: ## Display this help.
+	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
+
+.PHONY: test
+test: manifests generate fmt vet envtest ## Run tests.
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./... -coverprofile cover.out
 
 fmt:
 	go fmt ./...
@@ -73,6 +76,14 @@ release: binaries
 lint:
 	golangci-lint run
 
+.PHONY: manifests
+manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
+	$(CONTROLLER_GEN) crd paths="./api/..." output:crd:artifacts:config=config/crds
+	cd hack/generate-schemas && go run ./main.go
+
+.PHONY: generate
+generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
+	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./api/..."
 
 .PHONY: build
 build:
@@ -99,26 +110,37 @@ test-e2e: bin
 .bin:
 	mkdir -p .bin
 
-.bin/kustomize: .bin
-	curl -L https://github.com/kubernetes-sigs/kustomize/releases/download/kustomize%2Fv4.3.0/kustomize_v4.3.0_$(OS)_$(ARCH).tar.gz -o kustomize.tar.gz && \
-    tar xf kustomize.tar.gz -C .bin/ && \
-	rm kustomize.tar.gz
+## Location to install dependencies to
+LOCALBIN ?= $(shell pwd)/.bin
+$(LOCALBIN):
+	mkdir -p $(LOCALBIN)
 
+## Tool Binaries
+KUSTOMIZE ?= $(LOCALBIN)/kustomize
+CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
+ENVTEST ?= $(LOCALBIN)/setup-envtest
 
-.PHONY: stack
-stack: .bin/kustomize
-	kubectl apply -f deploy/namespace.yaml
-	$(KUSTOMIZE) build deploy/postgres | kubectl apply -f -
-	kubectl wait --for=condition=ready pod -l app=postgres -n incident-commander --timeout=2m
-	$(KUSTOMIZE) build deploy | kubectl apply -f -
+## Tool Versions
+KUSTOMIZE_VERSION ?= v3.8.7
+CONTROLLER_TOOLS_VERSION ?= v0.11.1
 
-.PHONY: chart-local
-	helm dependency update ./chart
-	cd chart && tar -xvf charts/kratos-0.25.*.tgz -C charts && rm charts/kratos-0.25.*.tgz && rm charts/kratos/templates/configmap-config.yaml && cd ..
-	helm template -f ./chart/values.yaml incident-manager ./chart
+KUSTOMIZE_INSTALL_SCRIPT ?= "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"
+.PHONY: kustomize
+kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary. If wrong version is installed, it will be removed before downloading.
+$(KUSTOMIZE): $(LOCALBIN)
+	@if test -x $(LOCALBIN)/kustomize && ! $(LOCALBIN)/kustomize version | grep -q $(KUSTOMIZE_VERSION); then \
+		echo "$(LOCALBIN)/kustomize version is not expected $(KUSTOMIZE_VERSION). Removing it before installing."; \
+		rm -rf $(LOCALBIN)/kustomize; \
+	fi
+	test -s $(LOCALBIN)/kustomize || { curl -Ss $(KUSTOMIZE_INSTALL_SCRIPT) | bash -s -- $(subst v,,$(KUSTOMIZE_VERSION)) $(LOCALBIN); }
 
-.PHONY: chart
-chart:
-	helm dependency build ./chart
-	cd chart && tar -xvf charts/kratos-0.25.*.tgz -C charts && rm charts/kratos-0.25.*.tgz && rm charts/kratos/templates/configmap-config.yaml && cd ..
-	helm package ./chart
+.PHONY: controller-gen
+controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary. If wrong version is installed, it will be overwritten.
+$(CONTROLLER_GEN): $(LOCALBIN)
+	test -s $(LOCALBIN)/controller-gen && $(LOCALBIN)/controller-gen --version | grep -q $(CONTROLLER_TOOLS_VERSION) || \
+	GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_TOOLS_VERSION)
+
+.PHONY: envtest
+envtest: $(ENVTEST) ## Download envtest-setup locally if necessary.
+$(ENVTEST): $(LOCALBIN)
+	test -s $(LOCALBIN)/setup-envtest || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
