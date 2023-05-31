@@ -68,6 +68,7 @@ type shoutrrrClient struct {
 }
 
 func (t *shoutrrrClient) NotifyResponderAdded(ctx *api.Context, responder api.Responder) error {
+	var errCollection []error
 	for _, service := range t.services {
 		if service.config.Filter != "" {
 			if valid, err := evaluateFilterExpression(service.config.Filter, responder); err != nil {
@@ -90,15 +91,18 @@ func (t *shoutrrrClient) NotifyResponderAdded(ctx *api.Context, responder api.Re
 			params = (*types.Params)(&service.config.Properties)
 		}
 
-		errors := service.sender.Send(buff.String(), params)
-		for _, err := range errors {
+		sendErrors := service.sender.Send(buff.String(), params)
+		for _, err := range sendErrors {
 			if err != nil {
 				logger.Errorf("error sending message to service=%q: %v", service.name, err)
 			}
 		}
 	}
 
-	// TODO: Form error
+	if len(errCollection) > 0 {
+		return fmt.Errorf("multiple errors encountered: %v", errCollection)
+	}
+
 	return nil
 }
 

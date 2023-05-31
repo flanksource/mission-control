@@ -247,7 +247,7 @@ func reconcileCommentEvent(tx *gorm.DB, event api.Event) error {
             SELECT incident_id FROM comments WHERE id = ?
         )
     `
-	if err = tx.Raw(commentRespondersQuery, commentID).Preload("Incident").Preload("Team").Find(&responders).Error; err != nil {
+	if err = tx.Raw(commentRespondersQuery, commentID).Preload("Team").Find(&responders).Error; err != nil {
 		return err
 	}
 

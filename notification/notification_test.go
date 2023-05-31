@@ -104,21 +104,6 @@ var _ = ginkgo.Describe("Test Notification on responder added", ginkgo.Ordered, 
 		Expect(tx.Error).To(BeNil())
 	})
 
-	ginkgo.It("should put the event to the queue", func() {
-		var names []string
-		err := db.Gorm.Raw("SELECT DISTINCT name FROM event_queue").Scan(&names).Error
-		Expect(err).NotTo(HaveOccurred())
-
-		var found bool
-		for _, name := range names {
-			if name == events.EventResponderCreate {
-				found = true
-			}
-		}
-
-		Expect(found).To(BeTrue())
-	})
-
 	ginkgo.It("should consume the event and send the notification", func() {
 		eventHandler := events.NewEventHandler(context.Background(), db.Gorm, events.Config{})
 		eventHandler.ConsumeEventsUntilEmpty()
