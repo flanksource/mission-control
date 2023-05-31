@@ -49,14 +49,12 @@ var _ = ginkgo.Describe("Test Notification on responder added", ginkgo.Ordered, 
 	ginkgo.It("should create a team", func() {
 		teamSpec := api.TeamSpec{
 			Components: []api.ComponentSelector{{Name: "logistics"}},
-			ResponderClients: api.ResponderClients{
-				NotificationClients: []api.NotificationClientConfig{
-					{
-						URL: fmt.Sprintf("generic+%s", webhookEndpoint),
-						Properties: map[string]string{
-							"template":   "json",
-							"disabletls": "yes",
-						},
+			Notifications: []api.NotificationConfig{
+				{
+					URL: fmt.Sprintf("generic+%s", webhookEndpoint),
+					Properties: map[string]string{
+						"template":   "json",
+						"disabletls": "yes",
 					},
 				},
 			},

@@ -35,8 +35,9 @@ func (t Team) GetSpec() (TeamSpec, error) {
 }
 
 type TeamSpec struct {
-	Components       []ComponentSelector `json:"components,omitempty"`
-	ResponderClients ResponderClients    `json:"responder_clients"`
+	Components       []ComponentSelector  `json:"components,omitempty"`
+	ResponderClients ResponderClients     `json:"responder_clients"`
+	Notifications    []NotificationConfig `json:"notifications,omitempty"`
 }
 
 type Person struct {

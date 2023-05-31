@@ -48,14 +48,13 @@ type Slack struct {
 }
 
 type ResponderClients struct {
-	Jira                *JiraClient                `json:"jira,omitempty"`
-	AWS                 *AWSClient                 `json:"aws,omitempty"`
-	MSPlanner           *MSPlannerClient           `json:"ms_planner,omitempty"`
-	NotificationClients []NotificationClientConfig `json:"notifications,omitempty"`
+	Jira      *JiraClient      `json:"jira,omitempty"`
+	AWS       *AWSClient       `json:"aws,omitempty"`
+	MSPlanner *MSPlannerClient `json:"ms_planner,omitempty"`
 }
 
 func (r ResponderClients) IsEmpty() bool {
-	return r.Jira == nil && r.AWS == nil && r.MSPlanner == nil && len(r.NotificationClients) == 0
+	return r.Jira == nil && r.AWS == nil && r.MSPlanner == nil
 }
 
 type ServiceNow struct {
@@ -116,27 +115,6 @@ type MSPlannerClient struct {
 	GroupID             string       `json:"group_id"`
 	Username            types.EnvVar `yaml:"username" json:"username"`
 	Password            types.EnvVar `yaml:"password" json:"password"`
-}
-
-type NotificationClientConfig struct {
-	ResponderClientBase `json:",inline"`
-	Filter              string            `json:"filter,omitempty"`     // Filter is a CEL-expression used to decide whether this notification client should send the notification
-	URL                 string            `json:"url,omitempty"`        // URL in the form of Shoutrrr notification service URL schema
-	Connection          string            `json:"connection,omitempty"` // Connection is the name of the connection
-	Properties          map[string]string `json:"properties,omitempty"` // Configuration properties for Shoutrrr
-}
-
-func (t *NotificationClientConfig) HydrateConnection(ctx *Context) error {
-	connection, err := ctx.HydrateConnection(t.Connection)
-	if err != nil {
-		return err
-	} else if connection == nil {
-		return nil
-	}
-
-	t.URL = connection.URL
-
-	return nil
 }
 
 type Jira struct {

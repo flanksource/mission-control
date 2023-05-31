@@ -21,7 +21,7 @@ var (
 type shoutrrrService struct {
 	name   string // name of the sevice. example: Slack, Telegram, ...
 	sender *router.ServiceRouter
-	config api.NotificationClientConfig
+	config api.NotificationConfig
 }
 
 func NewClient(ctx *api.Context, team api.Team) (*ShoutrrrClient, error) {
@@ -30,7 +30,7 @@ func NewClient(ctx *api.Context, team api.Team) (*ShoutrrrClient, error) {
 		return nil, err
 	}
 
-	shoutrrrConfigs := teamSpec.ResponderClients.NotificationClients
+	shoutrrrConfigs := teamSpec.Notifications
 	services := make([]shoutrrrService, 0, len(shoutrrrConfigs))
 	for _, conf := range shoutrrrConfigs {
 		if err := conf.HydrateConnection(ctx); err != nil {

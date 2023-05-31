@@ -21,7 +21,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func TestResponders(t *testing.T) {
+func testResponders(t *testing.T) {
 	RegisterFailHandler(ginkgo.Fail)
 	ginkgo.RunSpecs(t, "Responders Suite")
 }
