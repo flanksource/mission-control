@@ -29,13 +29,19 @@ func NewClient(ctx *api.Context, team api.Team) (*ShoutrrrClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	shoutrrrConfig := teamSpec.ResponderClients.NotificationClients
 
-	services := make([]shoutrrrService, 0, len(shoutrrrConfig))
-	for _, conf := range shoutrrrConfig {
+	shoutrrrConfigs := teamSpec.ResponderClients.NotificationClients
+	services := make([]shoutrrrService, 0, len(shoutrrrConfigs))
+	for _, conf := range shoutrrrConfigs {
+		if err := conf.HydrateConnection(ctx); err != nil {
+			logger.Errorf("failed to hydrate connection: %v", err)
+			continue
+		}
+
 		sender, err := shoutrrr.CreateSender(conf.URL)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create a shoutrrr sender client: %w", err)
+			logger.Errorf("failed to create a shoutrrr sender client: %v", err)
+			continue
 		}
 
 		serviceName, _, err := sender.ExtractServiceName(conf.URL)

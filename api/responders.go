@@ -126,6 +126,19 @@ type NotificationClientConfig struct {
 	Properties          map[string]string `json:"properties,omitempty"` // Configuration properties for Shoutrrr
 }
 
+func (t *NotificationClientConfig) HydrateConnection(ctx *Context) error {
+	connection, err := ctx.HydrateConnection(t.Connection)
+	if err != nil {
+		return err
+	} else if connection == nil {
+		return nil
+	}
+
+	t.URL = connection.URL
+
+	return nil
+}
+
 type Jira struct {
 	Project     string `json:"project,omitempty"`
 	Summary     string `json:"summary"`
