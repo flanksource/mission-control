@@ -200,10 +200,10 @@ func reconcileResponderEvent(tx *gorm.DB, event api.Event) error {
 		return err
 	}
 
-	notifClient, err := notification.NewClient(ctx, teamSpec.Notifications)
+	shoutrrr, err := notification.NewShoutrrrClient(ctx, teamSpec.Notifications)
 	if err != nil {
-		logger.Errorf("failed to create notification client: %v", err)
-	} else if err := notifClient.NotifyResponderAdded(ctx, _responder); err != nil {
+		logger.Errorf("failed to create shoutrrr client: %v", err)
+	} else if err := shoutrrr.NotifyResponderAdded(ctx, _responder); err != nil {
 		logger.Errorf("failed to notify responder addition: %v", err)
 	}
 

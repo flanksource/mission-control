@@ -24,7 +24,7 @@ type shoutrrrService struct {
 	config api.NotificationConfig
 }
 
-func NewClient(ctx *api.Context, shoutrrrConfigs []api.NotificationConfig) (*ShoutrrrClient, error) {
+func NewShoutrrrClient(ctx *api.Context, shoutrrrConfigs []api.NotificationConfig) (INotifier, error) {
 	services := make([]shoutrrrService, 0, len(shoutrrrConfigs))
 	for _, conf := range shoutrrrConfigs {
 		if err := conf.HydrateConnection(ctx); err != nil {
@@ -50,21 +50,14 @@ func NewClient(ctx *api.Context, shoutrrrConfigs []api.NotificationConfig) (*Sho
 		})
 	}
 
-	return &ShoutrrrClient{
-		services: services,
-	}, nil
+	return &shoutrrrClient{services: services}, nil
 }
 
-type ShoutrrrClient struct {
+type shoutrrrClient struct {
 	services []shoutrrrService
 }
 
-func (t *ShoutrrrClient) NotifyResponderAddComment(ctx *api.Context, responder api.Responder, comment string) error {
-	message := fmt.Sprintf("New Comment on %q\n\n%s", responder.Incident.Title, comment)
-	return t.send(ctx, responder, message)
-}
-
-func (t *ShoutrrrClient) NotifyResponderAdded(ctx *api.Context, responder api.Responder) error {
+func (t *shoutrrrClient) NotifyResponderAdded(ctx *api.Context, responder api.Responder) error {
 	template := `Subscribed to new incident: %q
 
 Description: %s
@@ -80,7 +73,7 @@ Severity: %s`
 	return t.send(ctx, responder, message)
 }
 
-func (t *ShoutrrrClient) send(ctx *api.Context, responder api.Responder, message string) error {
+func (t *shoutrrrClient) send(ctx *api.Context, responder api.Responder, message string) error {
 	for _, service := range t.services {
 		if service.config.Filter != "" {
 			if valid, err := evaluateFilterExpression(service.config.Filter, responder); err != nil {
