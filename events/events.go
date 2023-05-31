@@ -189,7 +189,7 @@ func reconcileResponderEvent(tx *gorm.DB, event api.Event) error {
 	ctx := api.NewContext(tx)
 
 	var _responder api.Responder
-	err := tx.Where("id = ? AND external_id is NULL", responderID).Preload("Team").Find(&_responder).Error
+	err := tx.Where("id = ? AND external_id is NULL", responderID).Preload("Incident").Preload("Team").Find(&_responder).Error
 	if err != nil {
 		return err
 	}
@@ -234,7 +234,7 @@ func reconcileCommentEvent(tx *gorm.DB, event api.Event) error {
             SELECT incident_id FROM comments WHERE id = ?
         )
     `
-	if err = tx.Raw(commentRespondersQuery, commentID).Preload("Team").Find(&responders).Error; err != nil {
+	if err = tx.Raw(commentRespondersQuery, commentID).Preload("Incident").Preload("Team").Find(&responders).Error; err != nil {
 		return err
 	}
 

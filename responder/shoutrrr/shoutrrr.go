@@ -65,7 +65,18 @@ func (t *ShoutrrrClient) NotifyResponderAddComment(ctx *api.Context, responder a
 }
 
 func (t *ShoutrrrClient) NotifyResponder(ctx *api.Context, responder api.Responder) (string, error) {
-	message := fmt.Sprintf("Subscribed to new incident: %s\n\n%s", responder.Incident.Title, responder.Incident.Description)
+	template := `Subscribed to new incident: %q
+
+Description: %s
+Type: %s
+Severity: %s`
+	message := fmt.Sprintf(template,
+		responder.Incident.Title,
+		responder.Incident.Description,
+		responder.Incident.Type,
+		responder.Incident.Severity,
+	)
+
 	return t.send(ctx, responder, message)
 }
 
