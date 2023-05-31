@@ -27,7 +27,7 @@ type shoutrrrService struct {
 	template *template.Template
 }
 
-func NewShoutrrrClient(ctx *api.Context, shoutrrrConfigs []api.NotificationConfig) (INotifier, error) {
+func NewShoutrrrClient(ctx *api.Context, shoutrrrConfigs []api.NotificationConfig) (Notifier, error) {
 	services := make([]shoutrrrService, 0, len(shoutrrrConfigs))
 	for _, config := range shoutrrrConfigs {
 		if err := config.HydrateConnection(ctx); err != nil {

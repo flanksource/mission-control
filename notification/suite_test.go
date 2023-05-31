@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"net/http"
@@ -14,6 +13,7 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/testutils"
 	"github.com/jackc/pgx/v5/pgxpool"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -99,13 +99,15 @@ func setupWebhookServer() {
 }
 
 var _ = ginkgo.BeforeSuite(func() {
-	postgresServer = embeddedPG.NewDatabase(embeddedPG.DefaultConfig().Database("test").Port(9880).Logger(io.Discard))
+	port := 9880
+	config := testutils.GetPGConfig("test", port)
+	postgresServer = embeddedPG.NewDatabase(config)
 	if err := postgresServer.Start(); err != nil {
 		ginkgo.Fail(err.Error())
 	}
-	logger.Infof("Started postgres on port: %d", 9880)
+	logger.Infof("Started postgres on port: %d", port)
 
-	db.Gorm, db.Pool = setupDB("postgres://postgres:postgres@localhost:9880/test?sslmode=disable")
+	db.Gorm, db.Pool = setupDB(fmt.Sprintf("postgres://postgres:postgres@localhost:%d/test?sslmode=disable", port))
 
 	setupWebhookServer()
 })

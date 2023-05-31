@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"io"
 	"testing"
 
 	embeddedPG "github.com/fergusstrange/embedded-postgres"
@@ -49,7 +48,8 @@ func setup(connectionString string) (*gorm.DB, *pgxpool.Pool) {
 }
 
 var _ = ginkgo.BeforeSuite(func() {
-	postgresServer = embeddedPG.NewDatabase(embeddedPG.DefaultConfig().Database("test").Port(testutils.TestPostgresPort).Logger(io.Discard))
+	config := testutils.GetPGConfig("test", testutils.TestPostgresPort)
+	postgresServer = embeddedPG.NewDatabase(config)
 	if err := postgresServer.Start(); err != nil {
 		ginkgo.Fail(err.Error())
 	}
