@@ -1,4 +1,4 @@
-package shoutrrr
+package notification
 
 import (
 	"fmt"
@@ -24,13 +24,7 @@ type shoutrrrService struct {
 	config api.NotificationConfig
 }
 
-func NewClient(ctx *api.Context, team api.Team) (*ShoutrrrClient, error) {
-	teamSpec, err := team.GetSpec()
-	if err != nil {
-		return nil, err
-	}
-
-	shoutrrrConfigs := teamSpec.Notifications
+func NewClient(ctx *api.Context, shoutrrrConfigs []api.NotificationConfig) (*ShoutrrrClient, error) {
 	services := make([]shoutrrrService, 0, len(shoutrrrConfigs))
 	for _, conf := range shoutrrrConfigs {
 		if err := conf.HydrateConnection(ctx); err != nil {
@@ -65,12 +59,12 @@ type ShoutrrrClient struct {
 	services []shoutrrrService
 }
 
-func (t *ShoutrrrClient) NotifyResponderAddComment(ctx *api.Context, responder api.Responder, comment string) (string, error) {
+func (t *ShoutrrrClient) NotifyResponderAddComment(ctx *api.Context, responder api.Responder, comment string) error {
 	message := fmt.Sprintf("New Comment on %q\n\n%s", responder.Incident.Title, comment)
 	return t.send(ctx, responder, message)
 }
 
-func (t *ShoutrrrClient) NotifyResponder(ctx *api.Context, responder api.Responder) (string, error) {
+func (t *ShoutrrrClient) NotifyResponderAdded(ctx *api.Context, responder api.Responder) error {
 	template := `Subscribed to new incident: %q
 
 Description: %s
@@ -86,7 +80,7 @@ Severity: %s`
 	return t.send(ctx, responder, message)
 }
 
-func (t *ShoutrrrClient) send(ctx *api.Context, responder api.Responder, message string) (string, error) {
+func (t *ShoutrrrClient) send(ctx *api.Context, responder api.Responder, message string) error {
 	for _, service := range t.services {
 		if service.config.Filter != "" {
 			if valid, err := evaluateFilterExpression(service.config.Filter, responder); err != nil {
@@ -109,7 +103,8 @@ func (t *ShoutrrrClient) send(ctx *api.Context, responder api.Responder, message
 		}
 	}
 
-	return "", nil
+	// TODO: Form error
+	return nil
 }
 
 func evaluateFilterExpression(expression string, responder api.Responder) (bool, error) {

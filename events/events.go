@@ -12,6 +12,7 @@ import (
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/notification"
 	"github.com/flanksource/incident-commander/responder"
 )
 
@@ -194,6 +195,18 @@ func reconcileResponderEvent(tx *gorm.DB, event api.Event) error {
 		return err
 	}
 
+	teamSpec, err := _responder.Team.GetSpec()
+	if err != nil {
+		return err
+	}
+
+	notifClient, err := notification.NewClient(ctx, teamSpec.Notifications)
+	if err != nil {
+		logger.Errorf("failed to create notification client: %v", err)
+	} else if err := notifClient.NotifyResponderAdded(ctx, _responder); err != nil {
+		logger.Errorf("failed to notify responder addition: %v", err)
+	}
+
 	responder, err := responder.GetResponder(ctx, _responder.Team)
 	if err != nil {
 		return err
@@ -216,15 +229,15 @@ func reconcileCommentEvent(tx *gorm.DB, event api.Event) error {
 	commentBody := event.Properties["body"]
 	ctx := api.NewContext(tx)
 
-	var err error
 	var comment api.Comment
-	query := tx.Where("id = ? AND external_id IS NULL", commentID).First(&comment)
-	if query.Error != nil {
-		if errors.Is(query.Error, gorm.ErrRecordNotFound) {
+	err := tx.Where("id = ? AND external_id IS NULL", commentID).First(&comment).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			logger.Debugf("Skipping comment %s since it was added via responder", commentID)
 			return nil
 		}
-		return query.Error
+
+		return err
 	}
 
 	// Get all responders related to a comment

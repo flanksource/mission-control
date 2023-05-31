@@ -1,4 +1,4 @@
-package responder_test
+package notification_test
 
 import (
 	"context"

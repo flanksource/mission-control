@@ -1,4 +1,4 @@
-package responder_test
+package notification_test
 
 import (
 	"context"
@@ -21,9 +21,9 @@ import (
 	"gorm.io/gorm"
 )
 
-func testResponders(t *testing.T) {
+func TestNotifications(t *testing.T) {
 	RegisterFailHandler(ginkgo.Fail)
-	ginkgo.RunSpecs(t, "Responders Suite")
+	ginkgo.RunSpecs(t, "Notification Suite")
 }
 
 var (
