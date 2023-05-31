@@ -51,7 +51,8 @@ var _ = ginkgo.Describe("Test Notification on responder added", ginkgo.Ordered, 
 			Components: []api.ComponentSelector{{Name: "logistics"}},
 			Notifications: []api.NotificationConfig{
 				{
-					URL: fmt.Sprintf("generic+%s", webhookEndpoint),
+					URL:      fmt.Sprintf("generic+%s", webhookEndpoint),
+					Template: "New incident: {{.incident.title}}",
 					Properties: map[string]string{
 						"template":   "json",
 						"disabletls": "yes",
@@ -122,6 +123,7 @@ var _ = ginkgo.Describe("Test Notification on responder added", ginkgo.Ordered, 
 		eventHandler := events.NewEventHandler(context.Background(), db.Gorm, events.Config{})
 		eventHandler.ConsumeEventsUntilEmpty()
 
-		Expect(webhookCalled).To(BeTrue())
+		Expect(webhookPostdata).To(Not(BeNil()))
+		Expect(webhookPostdata["message"]).To(Equal(fmt.Sprintf("New incident: %s", incident.Title)))
 	})
 })

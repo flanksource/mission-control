@@ -1,8 +1,10 @@
 package notification
 
 import (
+	"bytes"
 	"fmt"
 	"strconv"
+	"text/template"
 	"time"
 
 	"github.com/containrrr/shoutrrr"
@@ -19,34 +21,42 @@ var (
 )
 
 type shoutrrrService struct {
-	name   string // name of the sevice. example: Slack, Telegram, ...
-	sender *router.ServiceRouter
-	config api.NotificationConfig
+	name     string // name of the sevice. example: Slack, Telegram, ...
+	sender   *router.ServiceRouter
+	config   api.NotificationConfig
+	template *template.Template
 }
 
 func NewShoutrrrClient(ctx *api.Context, shoutrrrConfigs []api.NotificationConfig) (INotifier, error) {
 	services := make([]shoutrrrService, 0, len(shoutrrrConfigs))
-	for _, conf := range shoutrrrConfigs {
-		if err := conf.HydrateConnection(ctx); err != nil {
+	for _, config := range shoutrrrConfigs {
+		if err := config.HydrateConnection(ctx); err != nil {
 			logger.Errorf("failed to hydrate connection: %v", err)
 			continue
 		}
 
-		sender, err := shoutrrr.CreateSender(conf.URL)
+		sender, err := shoutrrr.CreateSender(config.URL)
 		if err != nil {
 			logger.Errorf("failed to create a shoutrrr sender client: %v", err)
 			continue
 		}
 
-		serviceName, _, err := sender.ExtractServiceName(conf.URL)
+		notificationTemplate, err := template.New("notification-template").Parse(config.Template)
+		if err != nil {
+			logger.Errorf("error parsing template: %v", err)
+			continue
+		}
+
+		serviceName, _, err := sender.ExtractServiceName(config.URL)
 		if err != nil {
 			logger.Errorf("failed to extract service name: %w", err)
 		}
 
 		services = append(services, shoutrrrService{
-			sender: sender,
-			config: conf,
-			name:   serviceName,
+			sender:   sender,
+			config:   config,
+			template: notificationTemplate,
+			name:     serviceName,
 		})
 	}
 
@@ -58,29 +68,21 @@ type shoutrrrClient struct {
 }
 
 func (t *shoutrrrClient) NotifyResponderAdded(ctx *api.Context, responder api.Responder) error {
-	template := `Subscribed to new incident: %q
-
-Description: %s
-Type: %s
-Severity: %s`
-	message := fmt.Sprintf(template,
-		responder.Incident.Title,
-		responder.Incident.Description,
-		responder.Incident.Type,
-		responder.Incident.Severity,
-	)
-
-	return t.send(ctx, responder, message)
-}
-
-func (t *shoutrrrClient) send(ctx *api.Context, responder api.Responder, message string) error {
 	for _, service := range t.services {
 		if service.config.Filter != "" {
 			if valid, err := evaluateFilterExpression(service.config.Filter, responder); err != nil {
-				logger.Errorf("error evaluating filter expression: %v", err)
+				logger.Errorf("error evaluating filter expression for service=%q: %v", service.name, err)
 			} else if !valid {
 				continue
 			}
+		}
+
+		view := map[string]any{
+			"incident": responder.Incident.AsMap(),
+		}
+		var buff bytes.Buffer
+		if err := service.template.Execute(&buff, view); err != nil {
+			logger.Errorf("error executing template for service=%q: %v", service.name, err)
 		}
 
 		var params *types.Params
@@ -88,7 +90,7 @@ func (t *shoutrrrClient) send(ctx *api.Context, responder api.Responder, message
 			params = (*types.Params)(&service.config.Properties)
 		}
 
-		errors := service.sender.Send(message, params)
+		errors := service.sender.Send(buff.String(), params)
 		for _, err := range errors {
 			if err != nil {
 				logger.Errorf("error sending message to service=%q: %v", service.name, err)
