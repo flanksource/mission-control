@@ -12,7 +12,7 @@ require (
 	github.com/flanksource/canary-checker/sdk v0.0.0-20230331093950-cb1f0f05f3e5
 	github.com/flanksource/commons v1.10.0
 	github.com/flanksource/duty v1.0.98
-	github.com/flanksource/kopper v1.0.3
+	github.com/flanksource/kopper v1.0.4
 	github.com/google/cel-go v0.13.0
 	github.com/google/go-cmp v0.5.9
 	github.com/google/uuid v1.3.0
