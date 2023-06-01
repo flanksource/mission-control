@@ -52,10 +52,11 @@ var _ = ginkgo.Describe("Test Notification on responder added", ginkgo.Ordered, 
 			Notifications: []api.NotificationConfig{
 				{
 					URL:      fmt.Sprintf("generic+%s", webhookEndpoint),
-					Template: "New incident: {{.incident.title}}",
+					Template: "Severity: {{.incident.severity}}",
 					Properties: map[string]string{
 						"template":   "json",
 						"disabletls": "yes",
+						"title":      "New incident: {{.incident.title}}",
 					},
 				},
 			},
@@ -109,6 +110,7 @@ var _ = ginkgo.Describe("Test Notification on responder added", ginkgo.Ordered, 
 		eventHandler.ConsumeEventsUntilEmpty()
 
 		Expect(webhookPostdata).To(Not(BeNil()))
-		Expect(webhookPostdata["message"]).To(Equal(fmt.Sprintf("New incident: %s", incident.Title)))
+		Expect(webhookPostdata["message"]).To(Equal(fmt.Sprintf("Severity: %s", incident.Severity)))
+		Expect(webhookPostdata["title"]).To(Equal(fmt.Sprintf("New incident: %s", incident.Title)))
 	})
 })

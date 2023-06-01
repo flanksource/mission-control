@@ -11,6 +11,7 @@ import (
 	"github.com/containrrr/shoutrrr/pkg/router"
 	"github.com/containrrr/shoutrrr/pkg/types"
 	"github.com/flanksource/commons/logger"
+	cTemplate "github.com/flanksource/commons/template"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/google/cel-go/cel"
 	"github.com/patrickmn/go-cache"
@@ -84,6 +85,20 @@ func (t *shoutrrrClient) NotifyResponderAdded(ctx *api.Context, responder api.Re
 		var buff bytes.Buffer
 		if err := service.template.Execute(&buff, view); err != nil {
 			logger.Errorf("error executing template for service=%q: %v", service.name, err)
+			continue
+		}
+
+		templater := cTemplate.StructTemplater{
+			Values:         view,
+			ValueFunctions: true,
+			DelimSets: []cTemplate.Delims{
+				{Left: "{{", Right: "}}"},
+				{Left: "$(", Right: ")"},
+			},
+		}
+		if err := templater.Walk(&service.config); err != nil {
+			logger.Errorf("error templating properties: %v", err)
+			continue
 		}
 
 		var params *types.Params
