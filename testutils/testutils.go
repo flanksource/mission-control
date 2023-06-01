@@ -3,8 +3,10 @@ package testutils
 import (
 	"fmt"
 	"io"
+	"os"
 
 	embeddedPG "github.com/fergusstrange/embedded-postgres"
+	"github.com/flanksource/commons/logger"
 )
 
 func GetPGConfig(database string, port int) embeddedPG.Config {
@@ -16,9 +18,19 @@ func GetPGConfig(database string, port int) embeddedPG.Config {
 	// "unable to extract postgres archive: open /home/runner/.embedded-postgres-go/extracted/bin/initdb: text file busy."
 	//
 	// This is a way to have separate instances of the running postgres servers.
+
+	var runTimePath string
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		logger.Errorf("error getting user home dir: %v", err)
+		runTimePath = fmt.Sprintf("/tmp/.embedded-postgres-go/extracted-%d", port)
+	} else {
+		runTimePath = fmt.Sprintf("%s/.embedded-postgres-go/extracted-%d", homeDir, port)
+	}
+
 	return embeddedPG.DefaultConfig().
 		Database(database).
 		Port(uint32(port)).
-		RuntimePath(fmt.Sprintf("/tmp/.embedded-postgres-go/extracted-%d", port)).
+		RuntimePath(runTimePath).
 		Logger(io.Discard)
 }
