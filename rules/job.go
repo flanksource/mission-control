@@ -33,19 +33,28 @@ func getAllStatii() []string {
 func Run() error {
 	logger.Debugf("Checking rules every %v", Period)
 
-	if err := db.Gorm.
-		// .Order("priority ASC")
-		Find(&Rules).Error; err != nil {
-		return err
-	}
-
 	components, resp, err := topology.Service().TopologyQuery(context.Background(), &sdk.TopologyApiTopologyQueryOpts{
 		Flatten: optional.NewString("true"),
 		Status:  optional.NewString(strings.Join(getAllStatii(), ",")),
 	})
 	if err != nil {
-		s, _ := io.ReadAll(resp.Body)
-		logger.Errorf("Failed to query topology: %v", string(s))
+		if resp != nil {
+			s, _ := io.ReadAll(resp.Body)
+			logger.Errorf("Failed to query topology: %v", string(s))
+		}
+		return err
+	}
+
+	logger.Infof("Found %d components", len(components))
+	return CreateIncidents(components)
+}
+
+// CreateIncidents creates incidents based on the components
+// and incident rules
+func CreateIncidents(components []sdk.Component) error {
+	if err := db.Gorm.
+		// .Order("priority ASC")
+		Find(&Rules).Error; err != nil {
 		return err
 	}
 
@@ -63,7 +72,7 @@ outer:
 
 				incident := rule.Template
 				incident.IncidentRuleID = _rule.ID
-				incident.Status = "open"
+				incident.Status = api.IncidentStatusOpen
 				if incident.Type == "" {
 					incident.Type = api.IncidentTypeAvailability
 				}
@@ -99,9 +108,9 @@ outer:
 					continue outer
 				}
 			}
-
 		}
 	}
+
 	return nil
 }
 
