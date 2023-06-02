@@ -71,17 +71,18 @@ type shoutrrrClient struct {
 func (t *shoutrrrClient) NotifyResponderAdded(ctx *api.Context, responder api.Responder) error {
 	var errCollection []error
 	for _, service := range t.services {
+		view := map[string]any{
+			"incident": responder.Incident.AsMap(),
+		}
+
 		if service.config.Filter != "" {
-			if valid, err := evaluateFilterExpression(service.config.Filter, responder); err != nil {
+			if valid, err := evaluateFilterExpression(service.config.Filter, view); err != nil {
 				logger.Errorf("error evaluating filter expression for service=%q: %v", service.name, err)
 			} else if !valid {
 				continue
 			}
 		}
 
-		view := map[string]any{
-			"incident": responder.Incident.AsMap(),
-		}
 		var buff bytes.Buffer
 		if err := service.template.Execute(&buff, view); err != nil {
 			logger.Errorf("error executing template for service=%q: %v", service.name, err)
@@ -121,14 +122,10 @@ func (t *shoutrrrClient) NotifyResponderAdded(ctx *api.Context, responder api.Re
 	return nil
 }
 
-func evaluateFilterExpression(expression string, responder api.Responder) (bool, error) {
+func evaluateFilterExpression(expression string, env map[string]any) (bool, error) {
 	prg, err := getOrCompileCELProgram(expression)
 	if err != nil {
 		return false, err
-	}
-
-	env := map[string]any{
-		"incident": responder.Incident.AsMap(),
 	}
 
 	out, _, err := (*prg).Eval(env)
