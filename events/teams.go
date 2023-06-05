@@ -44,37 +44,38 @@ func handleTeamUpdate(tx *gorm.DB, event api.Event) error {
 		return err
 	}
 
+	if team.DeletedAt != nil {
+		return tx.Delete(&api.Notification{TeamID: teamID}).Error
+	}
+
 	spec, err := team.GetSpec()
 	if err != nil {
 		return err
 	}
 
+	var activeNotificationIDs []string
 	for _, n := range spec.Notifications {
-		// 1. Find an existing notification that's active of this team from the notifications table
 		spec, err := collections.StructToJSON(n)
 		if err != nil {
 			return fmt.Errorf("error converting scraper spec to JSON: %w", err)
 		}
 
-		var existing []api.Notification
-		if err := tx.Where("config = ? AND team_id = ? AND deleted_at IS NULL", spec, teamID).Find(&existing).Error; err != nil {
+		var existing []string
+		if err := tx.Select("id").Table("notifications").Where("config = ?", spec).Where("team_id = ?", teamID).Where("deleted_at IS NULL").Scan(&existing).Error; err != nil {
 			return err
-		}
-
-		// 2. If it finds the notification then skip
-		if len(existing) > 0 {
+		} else if len(existing) > 0 {
+			activeNotificationIDs = append(activeNotificationIDs, existing...)
 			continue
 		}
 
-		// 3. Else create it
 		var notification api.Notification
 		notification.FromConfig(teamID, n)
 		if err := tx.Create(&notification).Error; err != nil {
 			return err
 		}
+
+		activeNotificationIDs = append(activeNotificationIDs, notification.ID.String())
 	}
 
-	// TODO: All the notifications of this team that weren't updated just now should be deleted
-
-	return nil
+	return tx.Debug().Model(&api.Notification{}).Where("team_id = ?", teamID).Where("id NOT IN (?)", activeNotificationIDs).Update("deleted_at", gorm.Expr("now()")).Error
 }

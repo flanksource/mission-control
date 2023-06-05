@@ -12,7 +12,7 @@ import (
 
 func addNotificationEvent(ctx *api.Context, tx *gorm.DB, responder api.Responder) error {
 	var notifications []api.Notification
-	if err := tx.WithContext(ctx).Where("team_id = ?", responder.TeamID).Find(&notifications).Error; err != nil {
+	if err := tx.WithContext(ctx).Where("team_id = ? AND deleted_at IS NULL", responder.TeamID).Find(&notifications).Error; err != nil {
 		return err
 	}
 
@@ -24,7 +24,7 @@ func addNotificationEvent(ctx *api.Context, tx *gorm.DB, responder api.Responder
 		}
 
 		event := api.Event{
-			ID: uuid.New(),
+			ID:   uuid.New(),
 			Name: EventNotification,
 			Properties: map[string]string{
 				"notification_id": n.ID.String(),
@@ -55,6 +55,10 @@ func publishNotification(tx *gorm.DB, event api.Event) error {
 	var notificationDB api.Notification
 	if err := tx.Where("id = ?", notificationID).First(&notificationDB).Error; err != nil {
 		return err
+	}
+
+	if notificationDB.DeletedAt != nil {
+		return nil
 	}
 
 	shoutrrr, err := notification.NewShoutrrrClient(ctx, notificationDB)
