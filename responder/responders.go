@@ -7,6 +7,7 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/responder/jira"
 	"github.com/flanksource/incident-commander/responder/msplanner"
+	"github.com/flanksource/incident-commander/responder/shoutrrr"
 	"github.com/patrickmn/go-cache"
 )
 
@@ -23,6 +24,10 @@ type ResponderInterface interface {
 	AddComment(issueID, comment string) (string, error)
 	// SyncConfig gets the config for the responder for use in the UI
 	SyncConfig(ctx *api.Context, team api.Team) (configClass string, configName string, config string, err error)
+}
+
+type INotifierResponder interface {
+	IsNotifier() bool
 }
 
 func GetResponder(ctx *api.Context, team api.Team) (ResponderInterface, error) {
@@ -42,6 +47,11 @@ func GetResponder(ctx *api.Context, team api.Team) (ResponderInterface, error) {
 		}
 	} else if teamSpec.ResponderClients.MSPlanner != nil {
 		responder, err = msplanner.NewClient(ctx, team)
+		if err != nil {
+			return nil, err
+		}
+	} else if len(teamSpec.ResponderClients.NotificationClients) != 0 {
+		responder, err = shoutrrr.NewClient(ctx, team)
 		if err != nil {
 			return nil, err
 		}

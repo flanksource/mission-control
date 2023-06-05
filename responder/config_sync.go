@@ -57,6 +57,10 @@ func SyncConfig() {
 			continue
 		}
 
+		if _, ok := responder.(INotifierResponder); ok {
+			continue
+		}
+
 		if configClass, configName, config, err := responder.SyncConfig(ctx, team); err != nil {
 			logger.Errorf("Error syncing config: %v", err)
 			jobHistory.AddError(err.Error()).End()

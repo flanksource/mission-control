@@ -48,7 +48,6 @@ type JiraClient struct {
 var IssueTypeExcludeList = []string{"Sub-task"}
 
 func NewClient(ctx *api.Context, team api.Team) (*JiraClient, error) {
-
 	teamSpec, err := team.GetSpec()
 	if err != nil {
 		return nil, err

@@ -38,19 +38,24 @@ func SyncComments() {
 
 	jobHistory := models.NewJobHistory("ResponderCommentSync", "", "")
 	_ = db.PersistJobHistory(jobHistory.Start())
-	for _, responder := range responders {
-		if !responder.Team.HasResponder() {
-			logger.Debugf("Skipping responder %s since it does not have a responder", responder.Team.Name)
+	for _, _responder := range responders {
+		if !_responder.Team.HasResponder() {
+			logger.Debugf("Skipping responder %s since it does not have a responder", _responder.Team.Name)
 			continue
 		}
-		team, err := GetResponder(ctx, responder.Team)
+
+		responder, err := GetResponder(ctx, _responder.Team)
 		if err != nil {
 			logger.Errorf("Error getting responder: %v", err)
 			jobHistory.AddError(err.Error())
 			continue
 		}
 
-		comments, err := team.GetComments(responder.ExternalID)
+		if _, ok := responder.(INotifierResponder); ok {
+			continue
+		}
+
+		comments, err := responder.GetComments(_responder.ExternalID)
 		if err != nil {
 			logger.Errorf("Error fetching comments from responder: %v", err)
 			jobHistory.AddError(err.Error())
@@ -59,7 +64,7 @@ func SyncComments() {
 
 		// Query all external_ids from comments and comment_responders table
 		var dbExternalIDs []string
-		err = db.Gorm.Raw(dbSelectExternalIDQuery, sql.Named("responder_id", responder.ID)).Find(&dbExternalIDs).Error
+		err = db.Gorm.Raw(dbSelectExternalIDQuery, sql.Named("responder_id", _responder.ID)).Find(&dbExternalIDs).Error
 		if err != nil {
 			logger.Errorf("Error querying external_ids from database: %v", err)
 			jobHistory.AddError(err.Error())
@@ -69,14 +74,14 @@ func SyncComments() {
 		// IDs which are in Jira but not added to database must be added in the comments table
 		for _, responderComment := range comments {
 			if !collections.Contains(dbExternalIDs, responderComment.ExternalID) {
-				rootHypothesis, err := getRootHypothesisOfIncident(responder.IncidentID)
+				rootHypothesis, err := getRootHypothesisOfIncident(_responder.IncidentID)
 				if err != nil {
 					logger.Errorf("Error fetching hypothesis from database: %v", err)
 					continue
 				}
-				responderComment.IncidentID = responder.IncidentID
+				responderComment.IncidentID = _responder.IncidentID
 				responderComment.CreatedBy = *api.SystemUserID
-				responderComment.ResponderID = &responder.ID
+				responderComment.ResponderID = &_responder.ID
 				responderComment.HypothesisID = &rootHypothesis.ID
 
 				err = db.Gorm.Create(&responderComment).Error
