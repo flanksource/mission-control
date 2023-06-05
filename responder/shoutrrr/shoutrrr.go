@@ -7,6 +7,7 @@ import (
 
 	"github.com/containrrr/shoutrrr"
 	"github.com/containrrr/shoutrrr/pkg/router"
+	"github.com/containrrr/shoutrrr/pkg/types"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/google/cel-go/cel"
@@ -59,41 +60,35 @@ type ShoutrrrClient struct {
 }
 
 func (t *ShoutrrrClient) NotifyResponderAddComment(ctx *api.Context, responder api.Responder, comment string) (string, error) {
-	msg := fmt.Sprintf("New Comment on %q\n\n%s", responder.Incident.Title, comment)
-
-	for _, service := range t.services {
-		if service.config.Filter != "" {
-			if valid, err := evaluateFilterExpression(service.config.Filter, responder); err != nil {
-				logger.Errorf("failed to evaluate filter expression: %v", err)
-			} else if !valid {
-				continue
-			}
-		}
-
-		errors := service.sender.Send(msg, nil)
-		if errors != nil {
-			return "", fmt.Errorf("failed to send message to service=%q: %v", service.name, errors)
-		}
-	}
-
-	return "", nil
+	message := fmt.Sprintf("New Comment on %q\n\n%s", responder.Incident.Title, comment)
+	return t.send(ctx, responder, message)
 }
 
 func (t *ShoutrrrClient) NotifyResponder(ctx *api.Context, responder api.Responder) (string, error) {
-	msg := fmt.Sprintf("Subscribed to new incident: %s\n\n%s", responder.Incident.Title, responder.Incident.Description)
+	message := fmt.Sprintf("Subscribed to new incident: %s\n\n%s", responder.Incident.Title, responder.Incident.Description)
+	return t.send(ctx, responder, message)
+}
 
+func (t *ShoutrrrClient) send(ctx *api.Context, responder api.Responder, message string) (string, error) {
 	for _, service := range t.services {
 		if service.config.Filter != "" {
 			if valid, err := evaluateFilterExpression(service.config.Filter, responder); err != nil {
-				logger.Errorf("failed to evaluate filter expression: %v", err)
+				logger.Errorf("error evaluating filter expression: %v", err)
 			} else if !valid {
 				continue
 			}
 		}
 
-		errors := service.sender.Send(msg, nil)
-		if errors != nil {
-			return "", fmt.Errorf("failed to send messages: %v", errors)
+		var params *types.Params
+		if service.config.Properties != nil {
+			params = (*types.Params)(&service.config.Properties)
+		}
+
+		errors := service.sender.Send(message, params)
+		for _, err := range errors {
+			if err != nil {
+				logger.Errorf("error sending message to service=%q: %v", service.name, err)
+			}
 		}
 	}
 
