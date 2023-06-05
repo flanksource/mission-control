@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/flanksource/duty/models"
@@ -14,24 +15,25 @@ import (
 
 var _ = ginkgo.Describe("Test incident creation via incidence rule", ginkgo.Ordered, func() {
 	var (
-		john         *models.Person
 		incidentRule *api.IncidentRule
 		component    *models.Component
 	)
 
-	ginkgo.It("should create a person", func() {
-		john = &models.Person{
+	ginkgo.It("should create a system user", func() {
+		systemUser := &models.Person{
 			ID:   uuid.New(),
-			Name: "John Doe",
+			Name: "System",
 		}
-		tx := db.Gorm.Create(john)
+		tx := db.Gorm.Create(systemUser)
 		Expect(tx.Error).To(BeNil())
+
+		api.SystemUserID = &systemUser.ID
 	})
 
 	ginkgo.It("should create a new component", func() {
 		component = &models.Component{
 			ID:         uuid.New(),
-			Name:       "logistics",
+			Name:       "Component For Rule",
 			Type:       "Entity",
 			ExternalId: "dummy/logistics",
 		}
@@ -44,13 +46,8 @@ var _ = ginkgo.Describe("Test incident creation via incidence rule", ginkgo.Orde
 			ID:   uuid.New(),
 			Name: "My incident rule",
 			Spec: &api.IncidentRuleSpec{
-				Name: "what is this name",
-				Components: []api.ComponentSelector{
-					{
-						Name: "logistics",
-					},
-				},
-				Template: api.Incident{},
+				Name:       "what is this name",
+				Components: []api.ComponentSelector{{Name: component.Name}},
 				IncidentResponders: api.IncidentResponders{
 					Email: []api.Email{
 						{
@@ -61,7 +58,6 @@ var _ = ginkgo.Describe("Test incident creation via incidence rule", ginkgo.Orde
 					},
 				},
 			},
-			CreatedBy: john.ID,
 			CreatedAt: time.Now(),
 		}
 		tx := db.Gorm.Create(incidentRule)
@@ -79,7 +75,7 @@ var _ = ginkgo.Describe("Test incident creation via incidence rule", ginkgo.Orde
 		Expect(err).To(BeNil())
 
 		var incidence *models.Incident
-		err = db.Gorm.Where("name = ?", incidentRule.Name).First(&incidence).Error
+		err = db.Gorm.Where("title = ?", fmt.Sprintf("%s is %s", component.Name, component.Status)).First(&incidence).Error
 		Expect(err).To(BeNil())
 	})
 })

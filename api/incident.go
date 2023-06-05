@@ -69,23 +69,6 @@ func (i *Incident) BeforeCreate(tx *gorm.DB) (err error) {
 	return
 }
 
-func (hypothesis *Hypothesis) BeforeCreate(tx *gorm.DB) (err error) {
-	if hypothesis.CreatedBy == nil {
-		hypothesis.CreatedBy = SystemUserID
-	}
-	return
-}
-
-func (evidence *Evidence) BeforeCreate(tx *gorm.DB) (err error) {
-	if evidence.CreatedBy == uuid.Nil {
-		evidence.CreatedBy = *SystemUserID
-	}
-	if evidence.ID == uuid.Nil {
-		evidence.ID = uuid.New()
-	}
-	return
-}
-
 func (incident Incident) Clone() Incident {
 	clone := incident
 	return clone
@@ -139,6 +122,13 @@ func (Hypothesis) TableName() string {
 	return "hypotheses"
 }
 
+func (hypothesis *Hypothesis) BeforeCreate(tx *gorm.DB) (err error) {
+	if hypothesis.CreatedBy == nil {
+		hypothesis.CreatedBy = SystemUserID
+	}
+	return
+}
+
 type Filter struct {
 	Status []string `json:"status,omitempty"`
 	// Only match incidents with the given status, use * to match all
@@ -186,6 +176,14 @@ type IncidentRule struct {
 	CreatedAt time.Time         `json:"created_at,omitempty"`
 	UpdatedAt time.Time         `json:"updated_at,omitempty"`
 	DeletedAt *time.Time        `json:"deleted_at,omitempty"`
+}
+
+func (incidentRule *IncidentRule) BeforeCreate(tx *gorm.DB) (err error) {
+	if incidentRule.CreatedBy == uuid.Nil {
+		incidentRule.CreatedBy = *SystemUserID
+	}
+
+	return
 }
 
 type IncidentRuleSpec struct {

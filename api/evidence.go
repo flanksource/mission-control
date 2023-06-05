@@ -5,6 +5,7 @@ import (
 
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type Evidence struct {
@@ -28,6 +29,16 @@ type Evidence struct {
 	Properties       types.JSONMap `json:"properties"`
 	CreatedAt        time.Time     `json:"created_at"`
 	UpdatedAt        time.Time     `json:"updated_at"`
+}
+
+func (evidence *Evidence) BeforeCreate(tx *gorm.DB) (err error) {
+	if evidence.CreatedBy == uuid.Nil {
+		evidence.CreatedBy = *SystemUserID
+	}
+	if evidence.ID == uuid.Nil {
+		evidence.ID = uuid.New()
+	}
+	return
 }
 
 type EvidenceConfig struct {
