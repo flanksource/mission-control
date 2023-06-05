@@ -3,7 +3,6 @@ package main
 import (
 	"time"
 
-	sdk "github.com/flanksource/canary-checker/sdk"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
@@ -76,12 +75,7 @@ var _ = ginkgo.Describe("Test incident creation via incidence rule", ginkgo.Orde
 	})
 
 	ginkgo.It("should create an incidence", func() {
-		// FIXME: read components with canary-checker SDK
-		var components []sdk.Component
-		err := db.Gorm.Find(&components).Error
-		Expect(err).To(BeNil())
-
-		err = rules.CreateIncidents(components)
+		err := rules.Run()
 		Expect(err).To(BeNil())
 
 		var incidence *models.Incident

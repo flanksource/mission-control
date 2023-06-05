@@ -2,17 +2,14 @@ package rules
 
 import (
 	"context"
-	"io"
-	"strings"
 	"time"
 
-	"github.com/antihax/optional"
-	sdk "github.com/flanksource/canary-checker/sdk"
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty"
+	dutyModels "github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/db/models"
-	"github.com/flanksource/incident-commander/topology"
 )
 
 var Period = time.Second * 300
@@ -33,25 +30,21 @@ func getAllStatii() []string {
 func Run() error {
 	logger.Debugf("Checking rules every %v", Period)
 
-	components, resp, err := topology.Service().TopologyQuery(context.Background(), &sdk.TopologyApiTopologyQueryOpts{
-		Flatten: optional.NewString("true"),
-		Status:  optional.NewString(strings.Join(getAllStatii(), ",")),
+	response, err := duty.QueryTopology(context.Background(), db.Pool, duty.TopologyOptions{
+		Flatten: true,
+		Status:  getAllStatii(),
 	})
 	if err != nil {
-		if resp != nil {
-			s, _ := io.ReadAll(resp.Body)
-			logger.Errorf("Failed to query topology: %v", string(s))
-		}
 		return err
 	}
 
-	logger.Infof("Found %d components", len(components))
-	return CreateIncidents(components)
+	logger.Infof("Found %d components", len(response.Components))
+	return CreateIncidents(response.Components)
 }
 
 // CreateIncidents creates incidents based on the components
 // and incident rules
-func CreateIncidents(components []sdk.Component) error {
+func CreateIncidents(components dutyModels.Components) error {
 	if err := db.Gorm.
 		// .Order("priority ASC")
 		Find(&Rules).Error; err != nil {
@@ -67,7 +60,7 @@ outer:
 				continue
 			}
 
-			if matches(rule, component) {
+			if matches(rule, *component) {
 				logger.Infof("Rule %s matched component %s", rule, component)
 
 				incident := rule.Template
@@ -93,7 +86,7 @@ outer:
 
 				evidence := api.Evidence{
 					HypothesisID:     hypothesis.ID,
-					ComponentID:      component.GetUUID(),
+					ComponentID:      &component.ID,
 					DefinitionOfDone: true,
 					Type:             "topology",
 					Description:      component.Name + " is " + string(component.Status),
@@ -114,7 +107,7 @@ outer:
 	return nil
 }
 
-func matches(rule *api.IncidentRuleSpec, component sdk.Component) bool {
+func matches(rule *api.IncidentRuleSpec, component dutyModels.Component) bool {
 	if len(rule.Filter.Status) > 0 && !contains(rule.Filter.Status, string(component.Status)) {
 		return false
 	}
@@ -128,7 +121,7 @@ func matches(rule *api.IncidentRuleSpec, component sdk.Component) bool {
 	return false
 }
 
-func matchesSelector(selector api.ComponentSelector, component sdk.Component) bool {
+func matchesSelector(selector api.ComponentSelector, component dutyModels.Component) bool {
 	if selector.Name != "" && selector.Name != component.Name {
 		return false
 	}
@@ -137,7 +130,7 @@ func matchesSelector(selector api.ComponentSelector, component sdk.Component) bo
 		return false
 	}
 
-	if !selector.Types.Contains(component.Type_) {
+	if !selector.Types.Contains(component.Type) {
 		return false
 	}
 
