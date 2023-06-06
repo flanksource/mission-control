@@ -28,29 +28,30 @@ func getAllStatii() []string {
 }
 
 func Run() error {
-	logger.Debugf("Checking rules every %v", Period)
-
-	response, err := duty.QueryTopology(context.Background(), db.Pool, duty.TopologyOptions{
-		Flatten: true,
-		Status:  getAllStatii(),
-	})
-	if err != nil {
-		return err
-	}
-
-	logger.Infof("Found %d components", len(response.Components))
-	return CreateIncidents(response.Components)
-}
-
-// CreateIncidents creates incidents based on the components
-// and incident rules
-func CreateIncidents(components dutyModels.Components) error {
 	if err := db.Gorm.
 		// .Order("priority ASC")
 		Find(&Rules).Error; err != nil {
 		return err
 	}
 
+	statuses := getAllStatii()
+	response, err := duty.QueryTopology(context.Background(), db.Pool, duty.TopologyOptions{
+		Flatten: true,
+		Status:  statuses,
+	})
+	if err != nil {
+		return err
+	}
+
+	// TODO: Get all open incidents created by an incident rule
+
+	logger.Infof("Found %d components with statuses: %v", len(response.Components), statuses)
+	return createIncidents(response.Components)
+}
+
+// createIncidents creates incidents based on the components
+// and incident rules.
+func createIncidents(components dutyModels.Components) error {
 outer:
 	for _, component := range components {
 		for _, _rule := range Rules {
