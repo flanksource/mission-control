@@ -6,10 +6,12 @@ import (
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/responder"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
+// handleTeamDelete makes the necessary changes when a team is deleted.
 func handleTeamDelete(tx *gorm.DB, event api.Event) error {
 	var teamID uuid.UUID
 	if _teamID, ok := event.Properties["team_id"]; !ok {
@@ -19,13 +21,17 @@ func handleTeamDelete(tx *gorm.DB, event api.Event) error {
 		var err error
 		teamID, err = uuid.Parse(_teamID)
 		if err != nil {
-			return err
+			logger.Warnf("event has invalid team_id=%q. It's not a UUID", _teamID)
+			return nil
 		}
 	}
+
+	responder.PurgeCache(teamID.String())
 
 	return tx.Delete(&api.Notification{TeamID: teamID}).Error
 }
 
+// handleTeamUpdate makes the necessary changes when a team spec is updated.
 func handleTeamUpdate(tx *gorm.DB, event api.Event) error {
 	var teamID uuid.UUID
 	if _teamID, ok := event.Properties["team_id"]; !ok {
@@ -44,6 +50,8 @@ func handleTeamUpdate(tx *gorm.DB, event api.Event) error {
 		return err
 	}
 
+	responder.PurgeCache(teamID.String())
+
 	if team.DeletedAt != nil {
 		return tx.Delete(&api.Notification{TeamID: teamID}).Error
 	}
@@ -57,7 +65,7 @@ func handleTeamUpdate(tx *gorm.DB, event api.Event) error {
 	for _, n := range spec.Notifications {
 		spec, err := collections.StructToJSON(n)
 		if err != nil {
-			return fmt.Errorf("error converting scraper spec to JSON: %w", err)
+			return fmt.Errorf("error converting notification spec to JSON: %w", err)
 		}
 
 		var existing []string

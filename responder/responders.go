@@ -50,3 +50,7 @@ func GetResponder(ctx *api.Context, team api.Team) (ResponderInterface, error) {
 	respondersCache.Set(team.ID.String(), responder, cache.DefaultExpiration)
 	return responder, nil
 }
+
+func PurgeCache(teamID string) {
+	respondersCache.Delete(teamID)
+}
