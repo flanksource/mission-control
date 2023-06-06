@@ -2,6 +2,7 @@ package rules
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/flanksource/commons/logger"
@@ -42,16 +43,29 @@ func Run() error {
 	if err != nil {
 		return err
 	}
-
-	// TODO: Get all open incidents created by an incident rule
-
 	logger.Infof("Found %d components with statuses: %v", len(response.Components), statuses)
-	return createIncidents(response.Components)
+
+	var autoCreatedOpenIncidents []dutyModels.Incident
+	if err := db.Gorm.Find(&autoCreatedOpenIncidents, "incident_rule_id IS NOT NULL AND status = ?", api.IncidentStatusOpen).Error; err != nil {
+		return fmt.Errorf("error getting open incidents: %w", err)
+	}
+	logger.Infof("Found %d open incidents created by incident rules.", len(autoCreatedOpenIncidents))
+
+	return createIncidents(autoCreatedOpenIncidents, response.Components)
 }
 
 // createIncidents creates incidents based on the components
 // and incident rules.
-func createIncidents(components dutyModels.Components) error {
+func createIncidents(openIncidents []dutyModels.Incident, components dutyModels.Components) error {
+	openIncidentsMap := make(map[string]map[string]struct{})
+	for _, incident := range openIncidents {
+		if _, ok := openIncidentsMap[incident.IncidentRuleID.String()]; !ok {
+			openIncidentsMap[incident.IncidentRuleID.String()] = make(map[string]struct{})
+		}
+
+		openIncidentsMap[incident.IncidentRuleID.String()][incident.Title] = struct{}{}
+	}
+
 outer:
 	for _, component := range components {
 		for _, _rule := range Rules {
@@ -67,10 +81,17 @@ outer:
 				incident := rule.Template
 				incident.IncidentRuleID = _rule.ID
 				incident.Status = api.IncidentStatusOpen
+				incident.Severity = "Low" // TODO: make this configurable
 				if incident.Type == "" {
 					incident.Type = api.IncidentTypeAvailability
 				}
 				incident.Title = component.Name + " is " + string(component.Status)
+
+				if _, ok := openIncidentsMap[_rule.ID.String()][incident.Title]; ok {
+					logger.Infof("Incident %s already exists", incident.Title)
+					continue // this rule already created this incident
+				}
+
 				if err := db.Gorm.Create(&incident).Error; err != nil {
 					return err
 				}
@@ -145,18 +166,4 @@ func contains(list []string, item string) bool {
 		}
 	}
 	return false
-}
-
-type IncidentsByRules struct {
-	api.Incident
-	api.IncidentRuleSpec
-}
-
-func StartJob() error {
-	// for {
-	// 	time.Sleep(Period)
-
-	// 	db.Gorm.Model(&models.ConfigAnalysis)
-	// }
-	return nil
 }

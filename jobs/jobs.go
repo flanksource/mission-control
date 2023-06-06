@@ -17,8 +17,6 @@ const (
 	CleanupJobHistoryTableSchedule  = "@every 24h"
 )
 
-var IncidentRulesSchedule = fmt.Sprintf("@every %s", rules.Period.String())
-
 var FuncScheduler = cron.New()
 
 func ScheduleFunc(schedule string, fn func()) (any, error) {
@@ -56,7 +54,9 @@ func Start() {
 		logger.Errorf("Failed to schedule job for cleaning up job history table: %v", err)
 	}
 
-	if _, err := ScheduleFunc(IncidentRulesSchedule, func() {
+	incidentRulesSchedule := fmt.Sprintf("@every %s", rules.Period.String())
+	logger.Infof("IncidentRulesSchedule %s", incidentRulesSchedule)
+	if _, err := ScheduleFunc(incidentRulesSchedule, func() {
 		if err := rules.Run(); err != nil {
 			logger.Errorf("error running incident rules: %w", err)
 		}
