@@ -2,7 +2,6 @@ package notification
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -20,7 +19,6 @@ import (
 )
 
 var prgCache = cache.New(24*time.Hour, 1*time.Hour)
-var ErrFatal = errors.New("fatal error")
 
 func DetermineService(rawURL string) (string, error) {
 	serviceURL, err := url.Parse(rawURL)
@@ -52,7 +50,7 @@ func NewShoutrrrClient(ctx *api.Context, notification api.Notification) (Notifie
 
 	notificationTemplate, err := template.New("notification-template").Parse(config.Template)
 	if err != nil {
-		return nil, fmt.Errorf("error parsing template: %w", errors.Join(err, ErrFatal))
+		return nil, fmt.Errorf("error parsing template: %w", err)
 	}
 
 	client := shoutrrrClient{
