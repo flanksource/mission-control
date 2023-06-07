@@ -43,13 +43,13 @@ func Run() error {
 	if err != nil {
 		return err
 	}
-	logger.Infof("Found %d components with statuses: %v", len(response.Components), statuses)
+	logger.Debugf("Found %d components with statuses: %v", len(response.Components), statuses)
 
 	var autoCreatedOpenIncidents []dutyModels.Incident
-	if err := db.Gorm.Find(&autoCreatedOpenIncidents, "incident_rule_id IS NOT NULL AND status = ?", api.IncidentStatusOpen).Error; err != nil {
+	if err := db.Gorm.Find(&autoCreatedOpenIncidents, "incident_rule_id IS NOT NULL AND component_id IS NOT NULL AND status = ?", api.IncidentStatusOpen).Error; err != nil {
 		return fmt.Errorf("error getting open incidents: %w", err)
 	}
-	logger.Infof("Found %d open incidents created by incident rules.", len(autoCreatedOpenIncidents))
+	logger.Debugf("Found %d open incidents created by incident rules.", len(autoCreatedOpenIncidents))
 
 	return createIncidents(autoCreatedOpenIncidents, response.Components)
 }
@@ -63,7 +63,7 @@ func createIncidents(openIncidents []dutyModels.Incident, components dutyModels.
 			openIncidentsMap[incident.IncidentRuleID.String()] = make(map[string]struct{})
 		}
 
-		openIncidentsMap[incident.IncidentRuleID.String()][incident.Title] = struct{}{}
+		openIncidentsMap[incident.IncidentRuleID.String()][incident.ComponentID.String()] = struct{}{}
 	}
 
 outer:
@@ -86,9 +86,10 @@ outer:
 					incident.Type = api.IncidentTypeAvailability
 				}
 				incident.Title = component.Name + " is " + string(component.Status)
+				incident.ComponentID = &component.ID
 
-				if _, ok := openIncidentsMap[_rule.ID.String()][incident.Title]; ok {
-					logger.Infof("Incident %s already exists", incident.Title)
+				if _, ok := openIncidentsMap[_rule.ID.String()][component.ID.String()]; ok {
+					logger.Debugf("Incident %s already exists", incident.Title)
 					continue // this rule already created this incident
 				}
 

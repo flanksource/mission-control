@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"os"
 
 	"github.com/flanksource/commons/logger"
@@ -47,19 +48,20 @@ func Init(connection string) error {
 	var err error
 	Pool, err = duty.NewPgxPool(ConnectionString)
 	if err != nil {
-		return err
+		return fmt.Errorf("error creating pgx pool: %w", err)
 	}
 	conn, err := Pool.Acquire(context.Background())
 	if err != nil {
-		return err
+		return fmt.Errorf("error acquiring connection: %w", err)
 	}
 	defer conn.Release()
+
 	if err := conn.Ping(context.Background()); err != nil {
-		return err
+		return fmt.Errorf("error pinging database: %w", err)
 	}
 	Gorm, err = duty.NewGorm(ConnectionString, duty.DefaultGormConfig())
 	if err != nil {
-		return err
+		return fmt.Errorf("error creating gorm: %w", err)
 	}
 
 	opts := &migrate.MigrateOptions{}
@@ -67,7 +69,7 @@ func Init(connection string) error {
 		opts.IgnoreFiles = append(opts.IgnoreFiles, "012_changelog.sql")
 	}
 	if err = duty.Migrate(ConnectionString, opts); err != nil {
-		return err
+		return fmt.Errorf("error running migration: %w", err)
 	}
 
 	system := api.Person{}
