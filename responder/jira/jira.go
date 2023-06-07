@@ -11,7 +11,7 @@ import (
 	jira "github.com/andygrunwald/go-jira"
 )
 
-const ResponderType = "Jira"
+const ResponderType = "jira"
 
 type JiraIssue struct {
 	Project     string

@@ -17,7 +17,7 @@ import (
 	"github.com/flanksource/incident-commander/api"
 )
 
-const ResponderType = "MSPlanner"
+const ResponderType = "ms_planner"
 
 type MSPlannerTask struct {
 	Title       string
