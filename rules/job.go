@@ -2,7 +2,6 @@ package rules
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/flanksource/commons/logger"
@@ -29,6 +28,8 @@ func getAllStatii() []string {
 }
 
 func Run() error {
+	ctx := context.Background()
+
 	if err := db.Gorm.
 		// .Order("priority ASC")
 		Find(&Rules).Error; err != nil {
@@ -36,7 +37,7 @@ func Run() error {
 	}
 
 	statuses := getAllStatii()
-	response, err := duty.QueryTopology(context.Background(), db.Pool, duty.TopologyOptions{
+	response, err := duty.QueryTopology(ctx, db.Pool, duty.TopologyOptions{
 		Flatten: true,
 		Status:  statuses,
 	})
@@ -45,27 +46,17 @@ func Run() error {
 	}
 	logger.Debugf("Found %d components with statuses: %v", len(response.Components), statuses)
 
-	var autoCreatedOpenIncidents []dutyModels.Incident
-	if err := db.Gorm.Find(&autoCreatedOpenIncidents, "incident_rule_id IS NOT NULL AND component_id IS NOT NULL AND status = ?", api.IncidentStatusOpen).Error; err != nil {
-		return fmt.Errorf("error getting open incidents: %w", err)
+	autoCreatedOpenIncidents, err := getOpenIncidentsWithRules(ctx)
+	if err != nil {
+		return err
 	}
-	logger.Debugf("Found %d open incidents created by incident rules.", len(autoCreatedOpenIncidents))
 
 	return createIncidents(autoCreatedOpenIncidents, response.Components)
 }
 
 // createIncidents creates incidents based on the components
 // and incident rules.
-func createIncidents(openIncidents []dutyModels.Incident, components dutyModels.Components) error {
-	openIncidentsMap := make(map[string]map[string]struct{})
-	for _, incident := range openIncidents {
-		if _, ok := openIncidentsMap[incident.IncidentRuleID.String()]; !ok {
-			openIncidentsMap[incident.IncidentRuleID.String()] = make(map[string]struct{})
-		}
-
-		openIncidentsMap[incident.IncidentRuleID.String()][incident.ComponentID.String()] = struct{}{}
-	}
-
+func createIncidents(openIncidentsMap map[string]map[string]struct{}, components dutyModels.Components) error {
 outer:
 	for _, component := range components {
 		for _, _rule := range Rules {
@@ -86,7 +77,6 @@ outer:
 					incident.Type = api.IncidentTypeAvailability
 				}
 				incident.Title = component.Name + " is " + string(component.Status)
-				incident.ComponentID = &component.ID
 
 				if _, ok := openIncidentsMap[_rule.ID.String()][component.ID.String()]; ok {
 					logger.Debugf("Incident %s already exists", incident.Title)
@@ -167,4 +157,43 @@ func contains(list []string, item string) bool {
 		}
 	}
 	return false
+}
+
+// getOpenIncidentsWithRules generates a map linking incident rules, which led to the creation of open incidents, to their respective involved component ids.
+func getOpenIncidentsWithRules(ctx context.Context) (map[string]map[string]struct{}, error) {
+	query := `
+	SELECT
+		incidents.incident_rule_id,
+		evidences.component_id
+	FROM
+		incidents
+		LEFT JOIN hypotheses ON hypotheses.incident_id = incidents.id
+		LEFT JOIN evidences ON evidences.hypothesis_id = hypotheses.id
+	WHERE
+		incidents.incident_rule_id IS NOT NULL
+		AND evidences.component_id IS NOT NULL
+		AND incidents.status = ?`
+	rows, err := db.Gorm.WithContext(ctx).Raw(query, api.IncidentStatusOpen).Rows()
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	autoCreatedOpenIncidents := make(map[string]map[string]struct{})
+	for rows.Next() {
+		var (
+			ruleID      string
+			componentID string
+		)
+		if err := rows.Scan(&ruleID, &componentID); err != nil {
+			return nil, err
+		}
+
+		if _, ok := autoCreatedOpenIncidents[ruleID]; !ok {
+			autoCreatedOpenIncidents[ruleID] = make(map[string]struct{})
+		}
+		autoCreatedOpenIncidents[ruleID][componentID] = struct{}{}
+	}
+	logger.Debugf("Found %d open incidents created by incident rules.", len(autoCreatedOpenIncidents))
+	return autoCreatedOpenIncidents, nil
 }

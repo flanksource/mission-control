@@ -51,7 +51,6 @@ type Incident struct {
 	Closed         *time.Time     `json:"closed,omitempty"`
 	CreatedBy      *uuid.UUID     `json:"created_by,omitempty"`
 	IncidentRuleID *uuid.UUID     `json:"incident_rule_id,omitempty"`
-	ComponentID    *uuid.UUID     `json:"component_id,omitempty"`
 	CommanderID    *uuid.UUID     `json:"commander_id,omitempty"`
 	CommunicatorID *uuid.UUID     `json:"communicator_id,omitempty"`
 }
