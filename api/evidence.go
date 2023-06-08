@@ -9,7 +9,7 @@ import (
 )
 
 type Evidence struct {
-	ID               uuid.UUID     `json:"id"`
+	ID               uuid.UUID     `json:"id" gorm:"default:generate_ulid()"`
 	HypothesisID     uuid.UUID     `json:"hypothesis_id"`
 	ConfigID         *uuid.UUID    `json:"config_id"`
 	ConfigChangeID   *uuid.UUID    `json:"config_change_id"`
@@ -34,9 +34,6 @@ type Evidence struct {
 func (evidence *Evidence) BeforeCreate(tx *gorm.DB) (err error) {
 	if evidence.CreatedBy == uuid.Nil {
 		evidence.CreatedBy = *SystemUserID
-	}
-	if evidence.ID == uuid.Nil {
-		evidence.ID = uuid.New()
 	}
 	return
 }
