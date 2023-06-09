@@ -9,7 +9,7 @@ require (
 	github.com/casbin/gorm-adapter/v3 v3.15.1
 	github.com/fergusstrange/embedded-postgres v1.21.0
 	github.com/flanksource/commons v1.10.0
-	github.com/flanksource/duty v1.0.101
+	github.com/flanksource/duty v1.0.103
 	github.com/flanksource/kopper v1.0.4
 	github.com/google/cel-go v0.13.0
 	github.com/google/go-cmp v0.5.9
