@@ -5,11 +5,9 @@ go 1.20
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.2.2
 	github.com/andygrunwald/go-jira v1.16.0
-	github.com/antihax/optional v1.0.0
 	github.com/casbin/casbin/v2 v2.66.3
 	github.com/casbin/gorm-adapter/v3 v3.15.1
 	github.com/fergusstrange/embedded-postgres v1.21.0
-	github.com/flanksource/canary-checker/sdk v0.0.0-20230331093950-cb1f0f05f3e5
 	github.com/flanksource/commons v1.10.0
 	github.com/flanksource/duty v1.0.101
 	github.com/flanksource/kopper v1.0.4

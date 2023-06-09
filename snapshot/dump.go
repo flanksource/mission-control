@@ -6,13 +6,12 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/antihax/optional"
-	sdk "github.com/flanksource/canary-checker/sdk"
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty/models"
 
+	"github.com/flanksource/duty"
 	"github.com/flanksource/incident-commander/components"
 	"github.com/flanksource/incident-commander/db"
-	"github.com/flanksource/incident-commander/topology"
 	"github.com/flanksource/incident-commander/utils"
 )
 
@@ -53,16 +52,17 @@ func dumpComponents(ctx SnapshotContext, componentIDs []string) error {
 		return nil
 	}
 
-	var allComponents []sdk.Component
+	var allComponents models.Components
 	for _, componentID := range componentIDs {
-		components, _, err := topology.Service().TopologyQuery(context.Background(), &sdk.TopologyApiTopologyQueryOpts{
-			Id: optional.NewString(componentID),
+		response, err := duty.QueryTopology(context.Background(), db.Pool, duty.TopologyOptions{
+			ID: componentID,
 		})
 		if err != nil {
-			logger.Errorf("Error querying topology service: %v", err)
+			logger.Errorf("Error querying topology: %v", err)
 			return err
 		}
-		allComponents = append(allComponents, components...)
+
+		allComponents = append(allComponents, response.Components...)
 	}
 
 	jsonBlob, err := json.Marshal(allComponents)

@@ -90,7 +90,7 @@ func (t *eventHandler) listenToPostgresNotify(pgNotify chan bool) {
 				return fmt.Errorf("error listening to database notifications: %v", err)
 			}
 
-			logger.Debugf("Received database notification: %+v", notification)
+			logger.Tracef("Received database notification: %+v", notification)
 			pgNotify <- true
 		}
 	}

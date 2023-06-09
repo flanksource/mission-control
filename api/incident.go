@@ -1,13 +1,18 @@
 package api
 
 import (
+	"context"
+	"database/sql/driver"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
+	"gorm.io/gorm/schema"
 )
 
 type IncidentType string
@@ -60,23 +65,6 @@ func (i Incident) AsMap() map[string]any {
 func (i *Incident) BeforeCreate(tx *gorm.DB) (err error) {
 	if i.CreatedBy == nil {
 		i.CreatedBy = SystemUserID
-	}
-	return
-}
-
-func (hypothesis *Hypothesis) BeforeCreate(tx *gorm.DB) (err error) {
-	if hypothesis.CreatedBy == nil {
-		hypothesis.CreatedBy = SystemUserID
-	}
-	return
-}
-
-func (evidence *Evidence) BeforeCreate(tx *gorm.DB) (err error) {
-	if evidence.CreatedBy == uuid.Nil {
-		evidence.CreatedBy = *SystemUserID
-	}
-	if evidence.ID == uuid.Nil {
-		evidence.ID = uuid.New()
 	}
 	return
 }
@@ -134,6 +122,13 @@ func (Hypothesis) TableName() string {
 	return "hypotheses"
 }
 
+func (hypothesis *Hypothesis) BeforeCreate(tx *gorm.DB) (err error) {
+	if hypothesis.CreatedBy == nil {
+		hypothesis.CreatedBy = SystemUserID
+	}
+	return
+}
+
 type Filter struct {
 	Status []string `json:"status,omitempty"`
 	// Only match incidents with the given status, use * to match all
@@ -172,6 +167,25 @@ type HoursOfOperation struct {
 	Negate bool
 }
 
+type IncidentRule struct {
+	ID        uuid.UUID         `json:"id,omitempty" gorm:"default:generate_ulid()"`
+	Name      string            `json:"name,omitempty"`
+	Spec      *IncidentRuleSpec `json:"spec,omitempty"`
+	Source    string            `json:"source,omitempty"`
+	CreatedBy uuid.UUID         `json:"created_by,omitempty"`
+	CreatedAt time.Time         `json:"created_at,omitempty"`
+	UpdatedAt time.Time         `json:"updated_at,omitempty"`
+	DeletedAt *time.Time        `json:"deleted_at,omitempty"`
+}
+
+func (incidentRule *IncidentRule) BeforeCreate(tx *gorm.DB) (err error) {
+	if incidentRule.CreatedBy == uuid.Nil {
+		incidentRule.CreatedBy = *SystemUserID
+	}
+
+	return
+}
+
 type IncidentRuleSpec struct {
 	Name            string              `json:"name,omitempty"`
 	Components      []ComponentSelector `json:"components,omitempty"`
@@ -190,4 +204,24 @@ type IncidentRuleSpec struct {
 
 func (rule IncidentRuleSpec) String() string {
 	return fmt.Sprintf("name=%s components=%s filter=%s", rule.Name, rule.Components, rule.Filter)
+}
+
+func (rule IncidentRuleSpec) GormDataType() string {
+	return "incidentRuleSpec"
+}
+
+func (rule IncidentRuleSpec) Value() (driver.Value, error) {
+	return types.GenericStructValue(rule, true)
+}
+
+func (rule *IncidentRuleSpec) Scan(val any) error {
+	return types.GenericStructScan(&rule, val)
+}
+
+func (rule IncidentRuleSpec) GormDBDataType(db *gorm.DB, field *schema.Field) string {
+	return types.JSONGormDBDataType(db.Dialector.Name())
+}
+
+func (rule IncidentRuleSpec) GormValue(ctx context.Context, db *gorm.DB) clause.Expr {
+	return types.GormValue(rule)
 }

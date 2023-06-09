@@ -5,10 +5,11 @@ import (
 
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 type Evidence struct {
-	ID               uuid.UUID     `json:"id"`
+	ID               uuid.UUID     `json:"id" gorm:"default:generate_ulid()"`
 	HypothesisID     uuid.UUID     `json:"hypothesis_id"`
 	ConfigID         *uuid.UUID    `json:"config_id"`
 	ConfigChangeID   *uuid.UUID    `json:"config_change_id"`
@@ -28,6 +29,13 @@ type Evidence struct {
 	Properties       types.JSONMap `json:"properties"`
 	CreatedAt        time.Time     `json:"created_at"`
 	UpdatedAt        time.Time     `json:"updated_at"`
+}
+
+func (evidence *Evidence) BeforeCreate(tx *gorm.DB) (err error) {
+	if evidence.CreatedBy == uuid.Nil {
+		evidence.CreatedBy = *SystemUserID
+	}
+	return
 }
 
 type EvidenceConfig struct {
