@@ -11,7 +11,7 @@ require (
 	github.com/fergusstrange/embedded-postgres v1.21.0
 	github.com/flanksource/canary-checker/sdk v0.0.0-20230331093950-cb1f0f05f3e5
 	github.com/flanksource/commons v1.10.0
-	github.com/flanksource/duty v1.0.101
+	github.com/flanksource/duty v1.0.103
 	github.com/flanksource/kopper v1.0.4
 	github.com/google/cel-go v0.13.0
 	github.com/google/go-cmp v0.5.9
