@@ -12,12 +12,15 @@ import (
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
-	"github.com/flanksource/incident-commander/notification"
 	"github.com/flanksource/incident-commander/responder"
+	pkgResponder "github.com/flanksource/incident-commander/responder"
 )
 
 const (
+	EventTeamUpdate      = "team.update"
+	EventTeamDelete      = "team.delete"
 	EventResponderCreate = "responder.create"
+	EventNotification    = "notification.create"
 	EventCommentCreate   = "comment.create"
 	EventPushQueueCreate = "push_queue.create"
 )
@@ -140,6 +143,12 @@ func (t *eventHandler) consumeEvents() error {
 		err = reconcileResponderEvent(tx, event)
 	case EventCommentCreate:
 		err = reconcileCommentEvent(tx, event)
+	case EventNotification:
+		err = publishNotification(tx, event)
+	case EventTeamUpdate:
+		err = handleTeamUpdate(tx, event)
+	case EventTeamDelete:
+		err = handleTeamDelete(tx, event)
 	case EventPushQueueCreate:
 		if t.config.UpstreamConf.Valid() {
 			upstreamPushEventHandler := newPushToUpstreamEventHandler(t.config.UpstreamConf)
@@ -189,36 +198,28 @@ func reconcileResponderEvent(tx *gorm.DB, event api.Event) error {
 	responderID := event.Properties["id"]
 	ctx := api.NewContext(tx)
 
-	var _responder api.Responder
-	err := tx.Where("id = ? AND external_id is NULL", responderID).Preload("Incident").Preload("Team").Find(&_responder).Error
+	var responder api.Responder
+	err := tx.Where("id = ? AND external_id is NULL", responderID).Preload("Incident").Preload("Team").Find(&responder).Error
 	if err != nil {
 		return err
 	}
 
-	teamSpec, err := _responder.Team.GetSpec()
+	if err := addNotificationEvent(ctx, tx, responder); err != nil {
+		return err
+	}
+
+	responderClient, err := pkgResponder.GetResponder(ctx, responder.Team)
 	if err != nil {
 		return err
 	}
 
-	shoutrrr, err := notification.NewShoutrrrClient(ctx, teamSpec.Notifications)
-	if err != nil {
-		logger.Errorf("failed to create shoutrrr client: %v", err)
-	} else if err := shoutrrr.NotifyResponderAdded(ctx, _responder); err != nil {
-		logger.Errorf("failed to notify responder addition: %v", err)
-	}
-
-	responder, err := responder.GetResponder(ctx, _responder.Team)
-	if err != nil {
-		return err
-	}
-
-	externalID, err := responder.NotifyResponder(ctx, _responder)
+	externalID, err := responderClient.NotifyResponder(ctx, responder)
 	if err != nil {
 		return err
 	}
 	if externalID != "" {
 		// Update external id in responder table
-		return tx.Model(&api.Responder{}).Where("id = ?", _responder.ID).Update("external_id", externalID).Error
+		return tx.Model(&api.Responder{}).Where("id = ?", responder.ID).Update("external_id", externalID).Error
 	}
 
 	return nil

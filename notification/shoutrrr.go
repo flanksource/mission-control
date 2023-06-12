@@ -2,121 +2,131 @@ package notification
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
+	"net/url"
 	"strconv"
+	"strings"
 	"text/template"
 	"time"
 
 	"github.com/containrrr/shoutrrr"
 	"github.com/containrrr/shoutrrr/pkg/router"
 	"github.com/containrrr/shoutrrr/pkg/types"
-	"github.com/flanksource/commons/logger"
 	cTemplate "github.com/flanksource/commons/template"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/google/cel-go/cel"
 	"github.com/patrickmn/go-cache"
 )
 
-var (
-	prgCache = cache.New(24*time.Hour, 1*time.Hour)
-)
+var prgCache = cache.New(24*time.Hour, 1*time.Hour)
+var ErrFatal = errors.New("fatal error")
 
-type shoutrrrService struct {
-	name     string // name of the sevice. example: Slack, Telegram, ...
+func DetermineService(rawURL string) (string, error) {
+	serviceURL, err := url.Parse(rawURL)
+	if err != nil {
+		return "", err
+	}
+
+	scheme := serviceURL.Scheme
+	schemeParts := strings.Split(scheme, "+")
+
+	if len(schemeParts) > 1 {
+		scheme = schemeParts[0]
+	}
+
+	return scheme, nil
+}
+
+func NewShoutrrrClient(ctx *api.Context, notification api.Notification) (Notifier, error) {
+	config := notification.Config
+
+	if err := config.HydrateConnection(ctx); err != nil {
+		return nil, fmt.Errorf("failed to hydrate connection: %w", err)
+	}
+
+	sender, err := shoutrrr.CreateSender(config.URL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create a shoutrrr sender client: %w", err)
+	}
+
+	notificationTemplate, err := template.New("notification-template").Parse(config.Template)
+	if err != nil {
+		return nil, fmt.Errorf("error parsing template: %w", errors.Join(err, ErrFatal))
+	}
+
+	client := shoutrrrClient{
+		sender:   sender,
+		config:   config,
+		template: notificationTemplate,
+	}
+
+	return &client, nil
+}
+
+type shoutrrrClient struct {
 	sender   *router.ServiceRouter
 	config   api.NotificationConfig
 	template *template.Template
 }
 
-func NewShoutrrrClient(ctx *api.Context, shoutrrrConfigs []api.NotificationConfig) (Notifier, error) {
-	services := make([]shoutrrrService, 0, len(shoutrrrConfigs))
-	for _, config := range shoutrrrConfigs {
-		if err := config.HydrateConnection(ctx); err != nil {
-			logger.Errorf("failed to hydrate connection: %v", err)
-			continue
-		}
-
-		sender, err := shoutrrr.CreateSender(config.URL)
-		if err != nil {
-			logger.Errorf("failed to create a shoutrrr sender client: %v", err)
-			continue
-		}
-
-		notificationTemplate, err := template.New("notification-template").Parse(config.Template)
-		if err != nil {
-			logger.Errorf("error parsing template: %v", err)
-			continue
-		}
-
-		serviceName, _, err := sender.ExtractServiceName(config.URL)
-		if err != nil {
-			logger.Errorf("failed to extract service name: %w", err)
-		}
-
-		services = append(services, shoutrrrService{
-			sender:   sender,
-			config:   config,
-			template: notificationTemplate,
-			name:     serviceName,
-		})
+func IsValid(filter string, responder api.Responder) (bool, error) {
+	if filter == "" {
+		return true, nil
 	}
 
-	return &shoutrrrClient{services: services}, nil
-}
+	view := map[string]any{
+		"incident": responder.Incident.AsMap(),
+	}
 
-type shoutrrrClient struct {
-	services []shoutrrrService
+	isValid, err := evaluateFilterExpression(filter, view)
+	if err != nil {
+		return false, fmt.Errorf("error evaluating filter expression: %w", err)
+	}
+
+	return isValid, nil
 }
 
 func (t *shoutrrrClient) NotifyResponderAdded(ctx *api.Context, responder api.Responder) error {
-	var errCollection []error
-	for _, service := range t.services {
-		view := map[string]any{
-			"incident": responder.Incident.AsMap(),
-		}
+	view := map[string]any{
+		"incident": responder.Incident.AsMap(),
+	}
 
-		if service.config.Filter != "" {
-			if valid, err := evaluateFilterExpression(service.config.Filter, view); err != nil {
-				logger.Errorf("error evaluating filter expression for service=%q: %v", service.name, err)
-			} else if !valid {
-				continue
-			}
-		}
-
-		var buff bytes.Buffer
-		if err := service.template.Execute(&buff, view); err != nil {
-			logger.Errorf("error executing template for service=%q: %v", service.name, err)
-			continue
-		}
-
-		templater := cTemplate.StructTemplater{
-			Values:         view,
-			ValueFunctions: true,
-			DelimSets: []cTemplate.Delims{
-				{Left: "{{", Right: "}}"},
-				{Left: "$(", Right: ")"},
-			},
-		}
-		if err := templater.Walk(&service.config); err != nil {
-			logger.Errorf("error templating properties: %v", err)
-			continue
-		}
-
-		var params *types.Params
-		if service.config.Properties != nil {
-			params = (*types.Params)(&service.config.Properties)
-		}
-
-		sendErrors := service.sender.Send(buff.String(), params)
-		for _, err := range sendErrors {
-			if err != nil {
-				logger.Errorf("error sending message to service=%q: %v", service.name, err)
-			}
+	if t.config.Filter != "" {
+		if valid, err := evaluateFilterExpression(t.config.Filter, view); err != nil {
+			return fmt.Errorf("error evaluating filter expression: %w", err)
+		} else if !valid {
+			return nil
 		}
 	}
 
-	if len(errCollection) > 0 {
-		return fmt.Errorf("multiple errors encountered: %v", errCollection)
+	var buff bytes.Buffer
+	if err := t.template.Execute(&buff, view); err != nil {
+		return fmt.Errorf("error executing template: %w", err)
+	}
+
+	templater := cTemplate.StructTemplater{
+		Values:         view,
+		ValueFunctions: true,
+		DelimSets: []cTemplate.Delims{
+			{Left: "{{", Right: "}}"},
+			{Left: "$(", Right: ")"},
+		},
+	}
+	if err := templater.Walk(&t.config); err != nil {
+		return fmt.Errorf("error templating properties: %w", err)
+	}
+
+	var params *types.Params
+	if t.config.Properties != nil {
+		params = (*types.Params)(&t.config.Properties)
+	}
+
+	sendErrors := t.sender.Send(buff.String(), params)
+	for _, err := range sendErrors {
+		if err != nil {
+			return fmt.Errorf("error publishing notification: %w", err)
+		}
 	}
 
 	return nil
