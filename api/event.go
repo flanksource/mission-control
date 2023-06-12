@@ -6,10 +6,10 @@ import (
 )
 
 type Event struct {
-	ID         uuid.UUID
-	Name       string
-	Properties types.JSONStringMap `json:"properties" gorm:"type:jsonstringmap;<-:false"`
-	Error      string
+	ID         uuid.UUID           `json:"id"`
+	Name       string              `json:"name"`
+	Properties types.JSONStringMap `json:"properties"`
+	Error      string              `json:"error"`
 }
 
 // We are using the term `Event` as it represents an event in the

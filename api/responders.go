@@ -28,7 +28,7 @@ type Responder struct {
 	Team       Team                `json:"team,omitempty"`
 }
 
-type Notification struct {
+type NotificationSpec struct {
 	Icon  string `json:"icon,omitempty"`
 	Emoji string `json:"emoji,omitempty"`
 	Title string `json:"title,omitempty"`
@@ -36,15 +36,15 @@ type Notification struct {
 }
 
 type TeamsUser struct {
-	Notification `json:",inline"`
+	NotificationSpec `json:",inline"`
 }
 
 type TeamsChannel struct {
 }
 
 type Slack struct {
-	Notification `json:",inline"`
-	Channel      string `json:"channel"`
+	NotificationSpec `json:",inline"`
+	Channel          string `json:"channel"`
 }
 
 type ResponderClients struct {

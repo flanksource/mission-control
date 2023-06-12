@@ -43,14 +43,15 @@ func SyncComments() {
 			logger.Debugf("Skipping responder %s since it does not have a responder", responder.Team.Name)
 			continue
 		}
-		team, err := GetResponder(ctx, responder.Team)
+
+		responderClient, err := GetResponder(ctx, responder.Team)
 		if err != nil {
 			logger.Errorf("Error getting responder: %v", err)
 			jobHistory.AddError(err.Error())
 			continue
 		}
 
-		comments, err := team.GetComments(responder.ExternalID)
+		comments, err := responderClient.GetComments(responder.ExternalID)
 		if err != nil {
 			logger.Errorf("Error fetching comments from responder: %v", err)
 			jobHistory.AddError(err.Error())

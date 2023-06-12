@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"io"
+	"fmt"
 	"testing"
 
 	embeddedPG "github.com/fergusstrange/embedded-postgres"
@@ -25,7 +25,7 @@ var (
 	postgresServer *embeddedPG.EmbeddedPostgres
 )
 
-func setup(connectionString string) (*gorm.DB, *pgxpool.Pool) {
+func setupDB(connectionString string) (*gorm.DB, *pgxpool.Pool) {
 	pgxpool, err := duty.NewPgxPool(connectionString)
 	if err != nil {
 		ginkgo.Fail(err.Error())
@@ -49,13 +49,15 @@ func setup(connectionString string) (*gorm.DB, *pgxpool.Pool) {
 }
 
 var _ = ginkgo.BeforeSuite(func() {
-	postgresServer = embeddedPG.NewDatabase(embeddedPG.DefaultConfig().Database("test").Port(testutils.TestPostgresPort).Logger(io.Discard))
+	port := 9881
+	config := testutils.GetPGConfig("test", port)
+	postgresServer = embeddedPG.NewDatabase(config)
 	if err := postgresServer.Start(); err != nil {
 		ginkgo.Fail(err.Error())
 	}
-	logger.Infof("Started postgres on port: %d", testutils.TestPostgresPort)
+	logger.Infof("Started postgres on port: %d", port)
 
-	db.Gorm, db.Pool = setup(testutils.PGUrl)
+	db.Gorm, db.Pool = setupDB(fmt.Sprintf("postgres://postgres:postgres@localhost:%d/test?sslmode=disable", port))
 })
 
 var _ = ginkgo.AfterSuite(func() {

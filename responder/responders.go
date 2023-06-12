@@ -13,14 +13,12 @@ import (
 var respondersCache = cache.New(time.Hour*1, time.Hour*1)
 
 type ResponderInterface interface {
-	// NotifyResponderAddComment adds a comment to an existing issue
-	NotifyResponderAddComment(ctx *api.Context, responder api.Responder, comment string) (string, error)
 	// NotifyResponder creates a new issue and returns the issue ID
 	NotifyResponder(ctx *api.Context, responder api.Responder) (string, error)
+	// NotifyResponderAddComment adds a comment to an existing issue
+	NotifyResponderAddComment(ctx *api.Context, responder api.Responder, comment string) (string, error)
 	// GetComments returns the comments for an issue
 	GetComments(issueID string) ([]api.Comment, error)
-	// AddComment adds a comment to an issue
-	AddComment(issueID, comment string) (string, error)
 	// SyncConfig gets the config for the responder for use in the UI
 	SyncConfig(ctx *api.Context, team api.Team) (configClass string, configName string, config string, err error)
 }
@@ -51,4 +49,8 @@ func GetResponder(ctx *api.Context, team api.Team) (ResponderInterface, error) {
 
 	respondersCache.Set(team.ID.String(), responder, cache.DefaultExpiration)
 	return responder, nil
+}
+
+func PurgeCache(teamID string) {
+	respondersCache.Delete(teamID)
 }

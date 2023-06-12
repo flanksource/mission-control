@@ -13,10 +13,14 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/responder"
+	pkgResponder "github.com/flanksource/incident-commander/responder"
 )
 
 const (
+	EventTeamUpdate      = "team.update"
+	EventTeamDelete      = "team.delete"
 	EventResponderCreate = "responder.create"
+	EventNotification    = "notification.create"
 	EventCommentCreate   = "comment.create"
 	EventPushQueueCreate = "push_queue.create"
 )
@@ -139,6 +143,12 @@ func (t *eventHandler) consumeEvents() error {
 		err = reconcileResponderEvent(tx, event)
 	case EventCommentCreate:
 		err = reconcileCommentEvent(tx, event)
+	case EventNotification:
+		err = publishNotification(tx, event)
+	case EventTeamUpdate:
+		err = handleTeamUpdate(tx, event)
+	case EventTeamDelete:
+		err = handleTeamDelete(tx, event)
 	case EventPushQueueCreate:
 		if t.config.UpstreamConf.Valid() {
 			upstreamPushEventHandler := newPushToUpstreamEventHandler(t.config.UpstreamConf)
@@ -188,23 +198,28 @@ func reconcileResponderEvent(tx *gorm.DB, event api.Event) error {
 	responderID := event.Properties["id"]
 	ctx := api.NewContext(tx)
 
-	var _responder api.Responder
-	err := tx.Where("id = ? AND external_id is NULL", responderID).Preload("Team").Find(&_responder).Error
+	var responder api.Responder
+	err := tx.Where("id = ? AND external_id is NULL", responderID).Preload("Incident").Preload("Team").Find(&responder).Error
 	if err != nil {
 		return err
 	}
 
-	responder, err := responder.GetResponder(ctx, _responder.Team)
+	if err := addNotificationEvent(ctx, tx, responder); err != nil {
+		return err
+	}
+
+	responderClient, err := pkgResponder.GetResponder(ctx, responder.Team)
 	if err != nil {
 		return err
 	}
-	externalID, err := responder.NotifyResponder(ctx, _responder)
+
+	externalID, err := responderClient.NotifyResponder(ctx, responder)
 	if err != nil {
 		return err
 	}
 	if externalID != "" {
 		// Update external id in responder table
-		return tx.Model(&api.Responder{}).Where("id = ?", _responder.ID).Update("external_id", externalID).Error
+		return tx.Model(&api.Responder{}).Where("id = ?", responder.ID).Update("external_id", externalID).Error
 	}
 
 	return nil
@@ -215,15 +230,15 @@ func reconcileCommentEvent(tx *gorm.DB, event api.Event) error {
 	commentBody := event.Properties["body"]
 	ctx := api.NewContext(tx)
 
-	var err error
 	var comment api.Comment
-	query := tx.Where("id = ? AND external_id IS NULL", commentID).First(&comment)
-	if query.Error != nil {
-		if errors.Is(query.Error, gorm.ErrRecordNotFound) {
+	err := tx.Where("id = ? AND external_id IS NULL", commentID).First(&comment).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
 			logger.Debugf("Skipping comment %s since it was added via responder", commentID)
 			return nil
 		}
-		return query.Error
+
+		return err
 	}
 
 	// Get all responders related to a comment
@@ -242,12 +257,12 @@ func reconcileCommentEvent(tx *gorm.DB, event api.Event) error {
 		// Reset externalID to avoid inserting previous iteration's ID
 		externalID := ""
 
-		team, err := responder.GetResponder(ctx, _responder.Team)
+		responder, err := responder.GetResponder(ctx, _responder.Team)
 		if err != nil {
 			return err
 		}
-		externalID, err = team.NotifyResponderAddComment(ctx, _responder, commentBody)
 
+		externalID, err = responder.NotifyResponderAddComment(ctx, _responder, commentBody)
 		if err != nil {
 			// TODO: Associate error messages with responderType and handle specific responders when reprocessing
 			logger.Errorf("error adding comment to responder:%s %v", _responder.Properties["responderType"], err)

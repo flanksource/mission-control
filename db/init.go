@@ -16,16 +16,20 @@ import (
 	"gorm.io/gorm"
 )
 
-var ConnectionString string
-var Schema = "public"
-var LogLevel = "info"
-var HttpEndpoint = "http://localhost:8080/db"
+var (
+	ConnectionString string
+	skipMigrations   bool
+	Schema           = "public"
+	LogLevel         = "info"
+	HttpEndpoint     = "http://localhost:8080/db"
+)
 
 func Flags(flags *pflag.FlagSet) {
 	flags.StringVar(&ConnectionString, "db", "DB_URL", "Connection string for the postgres database")
 	flags.StringVar(&Schema, "db-schema", "public", "")
 	flags.StringVar(&LogLevel, "db-log-level", "info", "")
 	flags.StringVar(&PostgRESTJWTSecret, "postgrest-jwt-secret", "PGRST_JWT_SECRET", "JWT Secret Token for PostgREST")
+	flags.BoolVar(&skipMigrations, "skip-migrations", false, "Run database migrations")
 }
 
 var Pool *pgxpool.Pool
@@ -64,12 +68,14 @@ func Init(connection string) error {
 		return fmt.Errorf("error creating gorm: %w", err)
 	}
 
-	opts := &migrate.MigrateOptions{}
-	if !api.UpstreamConf.Valid() {
-		opts.IgnoreFiles = append(opts.IgnoreFiles, "012_changelog.sql")
-	}
-	if err = duty.Migrate(ConnectionString, opts); err != nil {
-		return fmt.Errorf("error running migration: %w", err)
+	if !skipMigrations {
+		opts := &migrate.MigrateOptions{}
+		if !api.UpstreamConf.Valid() {
+			opts.IgnoreFiles = append(opts.IgnoreFiles, "012_changelog.sql")
+		}
+		if err = duty.Migrate(ConnectionString, opts); err != nil {
+			return err
+		}
 	}
 
 	system := api.Person{}

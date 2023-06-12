@@ -1,7 +1,6 @@
 package rbac
 
 import (
-	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -10,6 +9,7 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/testutils"
 	"github.com/labstack/echo/v4"
 )
 
@@ -18,11 +18,8 @@ var postgresServer *embeddedPG.EmbeddedPostgres
 const pgUrl = "postgres://postgres:postgres@localhost:9876/test?sslmode=disable"
 
 func TestAuthorization(t *testing.T) {
-
-	postgresServer = embeddedPG.NewDatabase(embeddedPG.DefaultConfig().
-		Database("test").
-		Port(9876).
-		Logger(io.Discard))
+	config := testutils.GetPGConfig("test", 9876)
+	postgresServer = embeddedPG.NewDatabase(config)
 	if err := postgresServer.Start(); err != nil {
 		t.Fatalf("error starting postgres server: %v", err)
 	}

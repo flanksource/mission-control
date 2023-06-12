@@ -3,15 +3,17 @@ package api
 import (
 	"database/sql/driver"
 	"encoding/json"
+	"time"
 
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 )
 
 type Team struct {
-	ID   uuid.UUID     `json:"id" gorm:"default:generate_ulid()"`
-	Name string        `json:"name"`
-	Spec types.JSONMap `json:"properties" gorm:"type:jsonstringmap;<-:false"`
+	ID        uuid.UUID     `json:"id" gorm:"default:generate_ulid()"`
+	Name      string        `json:"name"`
+	Spec      types.JSONMap `json:"properties" gorm:"type:jsonstringmap;<-:false"`
+	DeletedAt *time.Time    `json:"deleted_at"`
 }
 
 func (t Team) HasResponder() bool {
@@ -35,8 +37,9 @@ func (t Team) GetSpec() (TeamSpec, error) {
 }
 
 type TeamSpec struct {
-	Components       []ComponentSelector `json:"components,omitempty"`
-	ResponderClients ResponderClients    `json:"responder_clients"`
+	Components       []ComponentSelector  `json:"components,omitempty"`
+	ResponderClients ResponderClients     `json:"responder_clients"`
+	Notifications    []NotificationConfig `json:"notifications,omitempty"`
 }
 
 type Person struct {
