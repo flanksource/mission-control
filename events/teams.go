@@ -85,5 +85,5 @@ func handleTeamUpdate(tx *gorm.DB, event api.Event) error {
 		activeNotificationIDs = append(activeNotificationIDs, notification.ID.String())
 	}
 
-	return tx.Debug().Model(&api.Notification{}).Where("team_id = ?", teamID).Where("id NOT IN (?)", activeNotificationIDs).Update("deleted_at", gorm.Expr("now()")).Error
+	return tx.Model(&api.Notification{}).Where("team_id = ?", teamID).Where("id NOT IN (?)", activeNotificationIDs).Update("deleted_at", gorm.Expr("now()")).Error
 }
