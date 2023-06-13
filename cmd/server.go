@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/labstack/echo-contrib/echoprometheus"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/spf13/cobra"
@@ -47,6 +48,8 @@ var Serve = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		e := echo.New()
 		e.HideBanner = true
+		e.Use(echoprometheus.NewMiddleware("mission_control"))
+		e.GET("/metrics", echoprometheus.NewHandler())
 
 		// PostgREST needs to know how it is exposed to create the correct links
 		db.HttpEndpoint = publicEndpoint + "/db"

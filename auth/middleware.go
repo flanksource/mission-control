@@ -45,7 +45,7 @@ func (k *KratosHandler) KratosMiddleware() (*kratosMiddleware, error) {
 	}, nil
 }
 
-var skipAuthPaths = []string{"/health"}
+var skipAuthPaths = []string{"/health", "/metrics"}
 
 func canSkipAuth(c echo.Context) bool {
 	return collections.Contains(skipAuthPaths, c.Path())
