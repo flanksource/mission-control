@@ -211,13 +211,13 @@ func (t IncidentTemplate) GenerateIncident() Incident {
 	}
 
 	// TODO: Ask Moshe if this is required
-	if val, err := uuid.Parse(t.CreatedBy); err != nil {
+	if val, err := uuid.Parse(t.CreatedBy); err == nil {
 		incident.CreatedBy = &val
 	}
-	if val, err := uuid.Parse(t.CommanderID); err != nil {
+	if val, err := uuid.Parse(t.CommanderID); err == nil {
 		incident.CommanderID = &val
 	}
-	if val, err := uuid.Parse(t.CommunicatorID); err != nil {
+	if val, err := uuid.Parse(t.CommunicatorID); err == nil {
 		incident.CommunicatorID = &val
 	}
 
