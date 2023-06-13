@@ -1051,8 +1051,8 @@ github.com/flanksource/duty v1.0.103/go.mod h1:RJ/kcZ7dbL8/52tem757szVIA3IomS8bO
 github.com/flanksource/gomplate/v3 v3.20.1/go.mod h1:LPpzujBIg9HBXRUngDKK/zNmEjHpEUieKa/2oRjkCzI=
 github.com/flanksource/gomplate/v3 v3.20.3 h1:mnNaO37uwvv8Kvi4Xswj1tHKP5UMre3FLNaKvAwqhSw=
 github.com/flanksource/gomplate/v3 v3.20.3/go.mod h1:l4iCvp30TdhZk89eRGuNkPwlRjJLXdUSblr+VyuZfAk=
-github.com/flanksource/kopper v1.0.4 h1:/bO81hxoq2hqe5PQ3M44XHDqh77wE2QL7FRKDHDRE/s=
-github.com/flanksource/kopper v1.0.4/go.mod h1:y2iByuf/f6Sh4n5edGiDbcBs6DYpFcVnE8lV6Ct6hM0=
+github.com/flanksource/kopper v1.0.5 h1:bGPukMuy0DYiwGAi1uxg5BAUAE9wbYf48dwSkKKahfc=
+github.com/flanksource/kopper v1.0.5/go.mod h1:BcKo74oYX4XwWHYs+gbSUElcwP6s+8M2QIc/dLsqWfI=
 github.com/flowstack/go-jsonschema v0.1.1/go.mod h1:yL7fNggx1o8rm9RlgXv7hTBWxdBM0rVwpMwimd3F3N0=
 github.com/flynn/go-shlex v0.0.0-20150515145356-3f9db97f8568/go.mod h1:xEzjJPgXI435gkrCt3MPfRiAkVrwSbHsst4LCFVfpJc=
 github.com/fogleman/gg v1.2.1-0.20190220221249-0403632d5b90/go.mod h1:R/bRT+9gY/C5z7JzPU0zXsXHKM4/ayA+zqcVNZzPa1k=
