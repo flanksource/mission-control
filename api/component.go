@@ -43,6 +43,7 @@ func (c Component) AsMap() map[string]any {
 	return m
 }
 
+// +kubebuilder:object:generate=true
 type ComponentSelector struct {
 	Name      string            `json:"name,omitempty"`
 	Namespace string            `json:"namespace,omitempty"`

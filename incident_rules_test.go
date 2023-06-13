@@ -80,7 +80,7 @@ var _ = ginkgo.Describe("Test incident creation via incidence rule", ginkgo.Orde
 					Status: []string{string(types.ComponentStatusUnhealthy), string(types.ComponentStatusError)},
 				},
 				Components: []api.ComponentSelector{{Namespace: namespace}},
-				Template: api.Incident{
+				Template: api.IncidentTemplate{
 					Description: incidentDescription,
 				},
 				IncidentResponders: api.IncidentResponders{
