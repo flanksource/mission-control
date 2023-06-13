@@ -1,6 +1,8 @@
 package db
 
 import (
+	"time"
+
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -35,10 +37,14 @@ func ReconcileIncidentStatus(incidentIDs []uuid.UUID) error {
 
 func PersistIncidentRuleFromCRD(obj *v1.IncidentRule) error {
 	dbObj := api.IncidentRule{
-		ID:     uuid.MustParse(string(obj.GetUID())),
-		Name:   obj.Name,
-		Spec:   &obj.Spec,
-		Source: models.SourceCRD,
+		ID:        uuid.MustParse(string(obj.GetUID())),
+		Name:      obj.Name,
+		Spec:      &obj.Spec,
+		Source:    models.SourceCRD,
+		CreatedBy: *api.SystemUserID,
+		// Gorm.Save does not use defaults when inserting
+		// and the timestamp used is zero time
+		CreatedAt: time.Now(),
 	}
 
 	return Gorm.Save(&dbObj).Error
