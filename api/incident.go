@@ -129,6 +129,7 @@ func (hypothesis *Hypothesis) BeforeCreate(tx *gorm.DB) (err error) {
 	return
 }
 
+// +kubebuilder:object:generate=true
 type Filter struct {
 	Status []string `json:"status,omitempty"`
 	// Only match incidents with the given status, use * to match all
@@ -156,15 +157,17 @@ func (f Filter) String() string {
 	return strings.TrimSpace(s)
 }
 
+// +kubebuilder:object:generate=true
 type AutoClose struct {
 	// How long after the health checks have been passing before, autoclosing the incident.
 	Timeout time.Duration `json:"timeout,omitempty"`
 }
 
+// +kubebuilder:object:generate=true
 type HoursOfOperation struct {
 	Start  string `json:"start"`
 	End    string `json:"end"`
-	Negate bool
+	Negate bool   `json:"negate"`
 }
 
 type IncidentRule struct {
@@ -186,10 +189,46 @@ func (incidentRule *IncidentRule) BeforeCreate(tx *gorm.DB) (err error) {
 	return
 }
 
+// +kubebuilder:object:generate=true
+type IncidentTemplate struct {
+	Title          string         `json:"title,omitempty"`
+	Description    string         `json:"description,omitempty"`
+	Type           IncidentType   `json:"type,omitempty"`
+	Status         IncidentStatus `json:"status,omitempty"`
+	Severity       string         `json:"severity,omitempty"`
+	CreatedBy      string         `json:"created_by,omitempty"`
+	CommanderID    string         `json:"commander_id,omitempty"`
+	CommunicatorID string         `json:"communicator_id,omitempty"`
+}
+
+func (t IncidentTemplate) GenerateIncident() Incident {
+	incident := Incident{
+		Title:       t.Title,
+		Description: t.Description,
+		Type:        t.Type,
+		Status:      t.Status,
+		Severity:    t.Severity,
+	}
+
+	// TODO: Ask Moshe if this is required
+	if val, err := uuid.Parse(t.CreatedBy); err != nil {
+		incident.CreatedBy = &val
+	}
+	if val, err := uuid.Parse(t.CommanderID); err != nil {
+		incident.CommanderID = &val
+	}
+	if val, err := uuid.Parse(t.CommunicatorID); err != nil {
+		incident.CommunicatorID = &val
+	}
+
+	return incident
+}
+
+// +kubebuilder:object:generate=true
 type IncidentRuleSpec struct {
 	Name            string              `json:"name,omitempty"`
 	Components      []ComponentSelector `json:"components,omitempty"`
-	Template        Incident            `json:"template,omitempty"`
+	Template        IncidentTemplate    `json:"template,omitempty"`
 	Filter          Filter              `json:"filter,omitempty"`
 	AutoAssignOwner bool                `json:"autoAssignOwner,omitempty"`
 	// order of processing rules
@@ -206,7 +245,7 @@ func (rule IncidentRuleSpec) String() string {
 	return fmt.Sprintf("name=%s components=%s filter=%s", rule.Name, rule.Components, rule.Filter)
 }
 
-func (rule IncidentRuleSpec) GormDataType() string {
+func (IncidentRuleSpec) GormDataType() string {
 	return "incidentRuleSpec"
 }
 

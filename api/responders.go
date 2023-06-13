@@ -5,6 +5,7 @@ import (
 	"github.com/google/uuid"
 )
 
+// +kubebuilder:object:generate=true
 type IncidentResponders struct {
 	Email       []Email         `json:"email,omitempty"`
 	Jira        []Jira          `json:"jira,omitempty"`
@@ -126,6 +127,7 @@ type Jira struct {
 	Description string `json:"description,omitempty"`
 }
 
+// +kubebuilder:object:generate=true
 type GithubIssue struct {
 	Repository string   `json:"repository,omitempty"`
 	Title      string   `json:"title,omitempty"`

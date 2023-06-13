@@ -7,8 +7,6 @@ import (
 
 // ConnectionSpec defines the desired state of Connection
 type ConnectionSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
 	URL         types.EnvVar        `json:"url,omitempty"`
 	Port        types.EnvVar        `json:"port,omitempty"`
 	Type        string              `json:"type,omitempty"`
@@ -22,7 +20,6 @@ type ConnectionSpec struct {
 // ConnectionStatus defines the observed state of Connection
 type ConnectionStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "make" to regenerate code after modifying this file
 }
 
 //+kubebuilder:object:root=true

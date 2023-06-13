@@ -69,7 +69,7 @@ outer:
 			if matches(rule, *component) {
 				logger.Infof("Rule %s matched component %s", rule, component)
 
-				incident := rule.Template
+				incident := rule.Template.GenerateIncident()
 				incident.IncidentRuleID = _rule.ID
 				incident.Status = api.IncidentStatusOpen
 				incident.Severity = "Low" // TODO: make this configurable

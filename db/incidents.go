@@ -1,6 +1,9 @@
 package db
 
 import (
+	"github.com/flanksource/duty/models"
+	"github.com/flanksource/incident-commander/api"
+	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/google/uuid"
 )
 
@@ -28,4 +31,21 @@ func ReconcileIncidentStatus(incidentIDs []uuid.UUID) error {
         FROM evidences_agg
         WHERE incidents.id = evidences_agg.id
     `, incidentIDs).Error
+}
+
+func PersistIncidentRuleFromCRD(obj *v1.IncidentRule) error {
+	dbObj := api.IncidentRule{
+		ID:     uuid.MustParse(string(obj.GetUID())),
+		Name:   obj.Name,
+		Spec:   &obj.Spec,
+		Source: models.SourceCRD,
+	}
+
+	return Gorm.Save(&dbObj).Error
+}
+
+func DeleteIncidentRule(id string) error {
+	return Gorm.Table("incident_rules").
+		Delete(&api.IncidentRule{}, "id = ?", id).
+		Error
 }

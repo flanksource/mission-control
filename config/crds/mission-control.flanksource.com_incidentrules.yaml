@@ -1,0 +1,284 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.11.1
+  creationTimestamp: null
+  name: incidentrules.mission-control.flanksource.com
+spec:
+  group: mission-control.flanksource.com
+  names:
+    kind: IncidentRule
+    listKind: IncidentRuleList
+    plural: incidentrules
+    singular: incidentrule
+  scope: Namespaced
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: IncidentRule is the Schema for the IncidentRule API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            properties:
+              autoAssignOwner:
+                type: boolean
+              autoClose:
+                properties:
+                  timeout:
+                    description: How long after the health checks have been passing
+                      before, autoclosing the incident.
+                    format: int64
+                    type: integer
+                type: object
+              autoResolve:
+                properties:
+                  timeout:
+                    description: How long after the health checks have been passing
+                      before, autoclosing the incident.
+                    format: int64
+                    type: integer
+                type: object
+              breakOnMatch:
+                description: stop processing other incident rules, when matched
+                type: boolean
+              components:
+                items:
+                  properties:
+                    labels:
+                      additionalProperties:
+                        type: string
+                      type: object
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+                    selector:
+                      type: string
+                    types:
+                      items:
+                        type: string
+                      type: array
+                  type: object
+                type: array
+              filter:
+                properties:
+                  age:
+                    description: How long the health check must be failing for, before
+                      opening an incident
+                    format: int64
+                    type: integer
+                  category:
+                    description: Only match incidents with the given category (cost,performance,security,availability),
+                      use * to match all
+                    items:
+                      type: string
+                    type: array
+                  severity:
+                    description: Only match incidents with the given status, use *
+                      to match all
+                    items:
+                      type: string
+                    type: array
+                  status:
+                    items:
+                      type: string
+                    type: array
+                type: object
+              hoursOfOperation:
+                items:
+                  properties:
+                    end:
+                      type: string
+                    negate:
+                      type: boolean
+                    start:
+                      type: string
+                  required:
+                  - end
+                  - negate
+                  - start
+                  type: object
+                type: array
+              name:
+                type: string
+              priority:
+                description: order of processing rules
+                type: integer
+              responders:
+                properties:
+                  ams:
+                    items:
+                      properties:
+                        account:
+                          type: string
+                        description:
+                          type: string
+                        priority:
+                          type: string
+                        region:
+                          type: string
+                      type: object
+                    type: array
+                  aws:
+                    items:
+                      properties:
+                        account:
+                          type: string
+                        description:
+                          type: string
+                        priority:
+                          type: string
+                        region:
+                          type: string
+                      type: object
+                    type: array
+                  email:
+                    items:
+                      properties:
+                        body:
+                          type: string
+                        subject:
+                          type: string
+                        to:
+                          type: string
+                      type: object
+                    type: array
+                  gcp:
+                    items:
+                      properties:
+                        account:
+                          type: string
+                        description:
+                          type: string
+                        priority:
+                          type: string
+                        region:
+                          type: string
+                      type: object
+                    type: array
+                  github:
+                    items:
+                      properties:
+                        body:
+                          type: string
+                        labels:
+                          items:
+                            type: string
+                          type: array
+                        repository:
+                          type: string
+                        title:
+                          type: string
+                      type: object
+                    type: array
+                  jira:
+                    items:
+                      properties:
+                        assignee:
+                          type: string
+                        description:
+                          type: string
+                        issueType:
+                          type: string
+                        priority:
+                          type: string
+                        project:
+                          type: string
+                        summary:
+                          type: string
+                      required:
+                      - summary
+                      type: object
+                    type: array
+                  servicenow:
+                    items:
+                      properties:
+                        assignee:
+                          type: string
+                        description:
+                          type: string
+                        issueType:
+                          type: string
+                        priority:
+                          type: string
+                        project:
+                          type: string
+                      type: object
+                    type: array
+                  slack:
+                    items:
+                      properties:
+                        channel:
+                          type: string
+                        emoji:
+                          type: string
+                        icon:
+                          type: string
+                        text:
+                          type: string
+                        title:
+                          type: string
+                      required:
+                      - channel
+                      type: object
+                    type: array
+                  teams:
+                    items:
+                      type: object
+                    type: array
+                  teamsUser:
+                    items:
+                      properties:
+                        emoji:
+                          type: string
+                        icon:
+                          type: string
+                        text:
+                          type: string
+                        title:
+                          type: string
+                      type: object
+                    type: array
+                type: object
+              template:
+                properties:
+                  commander_id:
+                    type: string
+                  communicator_id:
+                    type: string
+                  created_by:
+                    type: string
+                  description:
+                    type: string
+                  severity:
+                    type: string
+                  status:
+                    type: string
+                  title:
+                    type: string
+                  type:
+                    type: string
+                type: object
+            type: object
+          status:
+            description: IncidentRuleStatus defines the observed state of IncidentRule
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

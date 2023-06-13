@@ -146,6 +146,15 @@ var Serve = &cobra.Command{
 			logger.Fatalf("Unable to create controller for Connection: %v", err)
 		}
 
+		if err = kopper.SetupReconciler(
+			mgr,
+			db.PersistIncidentRuleFromCRD,
+			db.DeleteIncidentRule,
+			"incidentrule.mission-control.flanksource.com",
+		); err != nil {
+			logger.Fatalf("Unable to create controller for IncidentRule: %v", err)
+		}
+
 		go func() {
 			if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 				logger.Fatalf("error running manager: %v", err)
