@@ -2,7 +2,6 @@ package jobs
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
@@ -74,9 +73,7 @@ func Start() {
 	}
 
 	if api.UpstreamConf.Valid() {
-		time.Sleep(time.Second * 3)
-		upstream.ReconcileJob()
-		if _, err := ScheduleErrHandlingFunc(PushAgentReconcileSchedule, "upstream reoncile job", upstream.ReconcileJob); err != nil {
+		if _, err := ScheduleErrHandlingFunc(PushAgentReconcileSchedule, "upstream reoncile job", upstream.SyncWithUpstream); err != nil {
 			logger.Errorf("Failed to schedule push reconcile job: %v", err)
 		}
 	}

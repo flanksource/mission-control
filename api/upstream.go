@@ -6,7 +6,7 @@ import (
 	"github.com/google/uuid"
 )
 
-type IDsResponse struct {
+type PushedResourceIDs struct {
 	Canaries       []string             `json:"canaries,omitempty"`
 	Checks         []string             `json:"checks,omitempty"`
 	CheckStatuses  []models.CheckStatus `json:"check_statuses,omitempty"`
@@ -25,17 +25,17 @@ var UpstreamConf UpstreamConfig
 // PushData consists of data about changes to
 // components, configs, analysis.
 type PushData struct {
-	AgentName                    string                               `json:"cluster_name"`
-	Canaries                     []models.Canary                      `json:"canaries"`
-	Checks                       []models.Check                       `json:"checks"`
-	Components                   []models.Component                   `json:"components"`
-	ConfigAnalysis               []models.ConfigAnalysis              `json:"config_analysis"`
-	ConfigChanges                []models.ConfigChange                `json:"config_changes"`
-	ConfigItems                  []models.ConfigItem                  `json:"config_items"`
-	CheckStatuses                []models.CheckStatus                 `json:"check_statuses"`
-	ConfigRelationships          []models.ConfigRelationship          `json:"config_relationships"`
-	ComponentRelationships       []models.ComponentRelationship       `json:"component_relationships"`
-	ConfigComponentRelationships []models.ConfigComponentRelationship `json:"config_component_relationships"`
+	AgentName                    string                               `json:"cluster_name,omitempty"`
+	Canaries                     []models.Canary                      `json:"canaries,omitempty"`
+	Checks                       []models.Check                       `json:"checks,omitempty"`
+	Components                   []models.Component                   `json:"components,omitempty"`
+	ConfigAnalysis               []models.ConfigAnalysis              `json:"config_analysis,omitempty"`
+	ConfigChanges                []models.ConfigChange                `json:"config_changes,omitempty"`
+	ConfigItems                  []models.ConfigItem                  `json:"config_items,omitempty"`
+	CheckStatuses                []models.CheckStatus                 `json:"check_statuses,omitempty"`
+	ConfigRelationships          []models.ConfigRelationship          `json:"config_relationships,omitempty"`
+	ComponentRelationships       []models.ComponentRelationship       `json:"component_relationships,omitempty"`
+	ConfigComponentRelationships []models.ConfigComponentRelationship `json:"config_component_relationships,omitempty"`
 }
 
 // ReplaceTopologyID replaces the topology_id for all the components
@@ -43,6 +43,16 @@ type PushData struct {
 func (t *PushData) ReplaceTopologyID(id *uuid.UUID) {
 	for i := range t.Components {
 		t.Components[i].TopologyID = id
+	}
+}
+
+func (t *PushData) NullifyScraperID() {
+	for i := range t.ConfigItems {
+		t.ConfigItems[i].ScraperID = nil
+	}
+
+	for i := range t.ConfigAnalysis {
+		t.ConfigItems[i].ScraperID = nil
 	}
 }
 

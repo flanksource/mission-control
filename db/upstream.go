@@ -9,8 +9,34 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-func GetAllResourceIDsOfAgent(ctx context.Context, agentID string) (*api.IDsResponse, error) {
-	var response api.IDsResponse
+func GetAllMissingResourceIDs(ctx context.Context, req *api.PushedResourceIDs) (*api.PushData, error) {
+	var upstreamMsg api.PushData
+
+	if err := Gorm.Where("id NOT IN (?)", req.Components).Find(&upstreamMsg.Components).Error; err != nil {
+		return nil, fmt.Errorf("error fetching components: %w", err)
+	}
+
+	if err := Gorm.Where("id NOT IN (?)", req.ConfigItems).Find(&upstreamMsg.ConfigItems).Error; err != nil {
+		return nil, fmt.Errorf("error fetching config items: %w", err)
+	}
+
+	if err := Gorm.Where("id NOT IN (?)", req.Canaries).Find(&upstreamMsg.Canaries).Error; err != nil {
+		return nil, fmt.Errorf("error fetching canaries: %w", err)
+	}
+
+	if err := Gorm.Where("id NOT IN (?)", req.ConfigAnalysis).Find(&upstreamMsg.ConfigAnalysis).Error; err != nil {
+		return nil, fmt.Errorf("error fetching config analyses: %w", err)
+	}
+
+	if err := Gorm.Where("id NOT IN (?)", req.ConfigChanges).Find(&upstreamMsg.ConfigChanges).Error; err != nil {
+		return nil, fmt.Errorf("error fetching config changes: %w", err)
+	}
+
+	return &upstreamMsg, nil
+}
+
+func GetAllResourceIDsOfAgent(ctx context.Context, agentID string) (*api.PushedResourceIDs, error) {
+	var response api.PushedResourceIDs
 
 	var canaries []models.Canary
 	if err := Gorm.Select("id").Where("agent_id = ?", agentID).Find(&canaries).Pluck("id", &response.Canaries).Error; err != nil {

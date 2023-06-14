@@ -8,29 +8,34 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/db"
 )
 
-func ReconcileJob() error {
+// SyncWithUpstream sends all the missing resources to the upstream.
+func SyncWithUpstream() error {
 	ctx := context.Background()
-	resp, err := requestIDs(ctx, api.UpstreamConf)
+	resp, err := fetchUpstreamResourceIDs(ctx, api.UpstreamConf)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to fetch upstream resource ids: %w", err)
 	}
 
-	logger.Infof("%v", resp)
+	pushData, err := db.GetAllMissingResourceIDs(ctx, resp)
+	if err != nil {
+		return fmt.Errorf("failed to fetch missing resource ids: %w", err)
+	}
 
-	// TODO: Find all the missing ids and then push it
-	var msg api.PushData
-	if err := Push(ctx, api.UpstreamConf, &msg); err != nil {
-		return err
+	pushData.AgentName = api.UpstreamConf.AgentName
+	if err := Push(ctx, api.UpstreamConf, pushData); err != nil {
+		return fmt.Errorf("failed to push missing resource ids: %w", err)
 	}
 
 	return nil
 }
 
-func requestIDs(ctx context.Context, config api.UpstreamConfig) (*api.IDsResponse, error) {
+// fetchUpstreamResourceIDs requests all the existing resource ids from the upstream
+// that were sent by this agent.
+func fetchUpstreamResourceIDs(ctx context.Context, config api.UpstreamConfig) (*api.PushedResourceIDs, error) {
 	endpoint, err := url.JoinPath(config.Host, "upstream_check", config.AgentName)
 	if err != nil {
 		return nil, fmt.Errorf("error creating url endpoint for host %s: %w", config.Host, err)
@@ -54,7 +59,7 @@ func requestIDs(ctx context.Context, config api.UpstreamConfig) (*api.IDsRespons
 		return nil, fmt.Errorf("upstream server returned error status[%d]: %s", resp.StatusCode, string(respBody))
 	}
 
-	var response api.IDsResponse
+	var response api.PushedResourceIDs
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
 		return nil, err
 	}
