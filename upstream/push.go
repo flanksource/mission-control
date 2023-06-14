@@ -24,7 +24,7 @@ func Push(ctx context.Context, config api.UpstreamConfig, msg *api.PushData) err
 		return fmt.Errorf("error creating url endpoint for host %s: %w", config.Host, err)
 	}
 
-	req, err := http.NewRequest(http.MethodPost, endpoint, payloadBuf)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, payloadBuf)
 	if err != nil {
 		return fmt.Errorf("http.NewRequest: %w", err)
 	}

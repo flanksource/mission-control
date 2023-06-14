@@ -12,23 +12,23 @@ import (
 func GetAllMissingResourceIDs(ctx context.Context, req *api.PushedResourceIDs) (*api.PushData, error) {
 	var upstreamMsg api.PushData
 
-	if err := Gorm.Where("id NOT IN (?)", req.Components).Find(&upstreamMsg.Components).Error; err != nil {
+	if err := Gorm.WithContext(ctx).Where("id NOT IN (?)", req.Components).Find(&upstreamMsg.Components).Error; err != nil {
 		return nil, fmt.Errorf("error fetching components: %w", err)
 	}
 
-	if err := Gorm.Where("id NOT IN (?)", req.ConfigItems).Find(&upstreamMsg.ConfigItems).Error; err != nil {
+	if err := Gorm.WithContext(ctx).Where("id NOT IN (?)", req.ConfigItems).Find(&upstreamMsg.ConfigItems).Error; err != nil {
 		return nil, fmt.Errorf("error fetching config items: %w", err)
 	}
 
-	if err := Gorm.Where("id NOT IN (?)", req.Canaries).Find(&upstreamMsg.Canaries).Error; err != nil {
+	if err := Gorm.WithContext(ctx).Where("id NOT IN (?)", req.Canaries).Find(&upstreamMsg.Canaries).Error; err != nil {
 		return nil, fmt.Errorf("error fetching canaries: %w", err)
 	}
 
-	if err := Gorm.Where("id NOT IN (?)", req.ConfigAnalysis).Find(&upstreamMsg.ConfigAnalysis).Error; err != nil {
+	if err := Gorm.WithContext(ctx).Where("id NOT IN (?)", req.ConfigAnalysis).Find(&upstreamMsg.ConfigAnalysis).Error; err != nil {
 		return nil, fmt.Errorf("error fetching config analyses: %w", err)
 	}
 
-	if err := Gorm.Where("id NOT IN (?)", req.ConfigChanges).Find(&upstreamMsg.ConfigChanges).Error; err != nil {
+	if err := Gorm.WithContext(ctx).Where("id NOT IN (?)", req.ConfigChanges).Find(&upstreamMsg.ConfigChanges).Error; err != nil {
 		return nil, fmt.Errorf("error fetching config changes: %w", err)
 	}
 

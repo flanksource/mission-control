@@ -13,8 +13,7 @@ import (
 )
 
 // SyncWithUpstream sends all the missing resources to the upstream.
-func SyncWithUpstream() error {
-	ctx := context.Background()
+func SyncWithUpstream(ctx context.Context) error {
 	resp, err := fetchUpstreamResourceIDs(ctx, api.UpstreamConf)
 	if err != nil {
 		return fmt.Errorf("failed to fetch upstream resource ids: %w", err)
@@ -41,7 +40,7 @@ func fetchUpstreamResourceIDs(ctx context.Context, config api.UpstreamConfig) (*
 		return nil, fmt.Errorf("error creating url endpoint for host %s: %w", config.Host, err)
 	}
 
-	req, err := http.NewRequest(http.MethodGet, endpoint, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
 		return nil, fmt.Errorf("http.NewRequest: %w", err)
 	}

@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
@@ -10,17 +11,6 @@ import (
 	"github.com/flanksource/incident-commander/upstream"
 	"github.com/robfig/cron/v3"
 )
-
-type ErrHandlingFuncJob struct {
-	name string // name is just an additional context for this job used when logging.
-	fn   func() error
-}
-
-func (t ErrHandlingFuncJob) Run() {
-	if err := t.fn(); err != nil {
-		logger.Errorf("%s: %v", t.name, err)
-	}
-}
 
 const (
 	TeamComponentOwnershipSchedule  = "@every 15m"
@@ -35,10 +25,6 @@ var FuncScheduler = cron.New()
 
 func ScheduleFunc(schedule string, fn func()) (any, error) {
 	return FuncScheduler.AddFunc(schedule, fn)
-}
-
-func ScheduleErrHandlingFunc(schedule string, name string, fn func() error) (any, error) {
-	return FuncScheduler.AddJob(schedule, ErrHandlingFuncJob{name, fn})
 }
 
 func Start() {
@@ -73,7 +59,8 @@ func Start() {
 	}
 
 	if api.UpstreamConf.Valid() {
-		if _, err := ScheduleErrHandlingFunc(PushAgentReconcileSchedule, "upstream reoncile job", upstream.SyncWithUpstream); err != nil {
+		job := newFuncJob(upstream.SyncWithUpstream, withName("upstream reconcile job"), withRunNow(true), withTimeout(time.Minute*10))
+		if err := job.schedule(FuncScheduler, PushAgentReconcileSchedule); err != nil {
 			logger.Errorf("Failed to schedule push reconcile job: %v", err)
 		}
 	}
