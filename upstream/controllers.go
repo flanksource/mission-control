@@ -63,3 +63,23 @@ func PushUpstream(c echo.Context) error {
 
 	return nil
 }
+
+// Reconcile returns all the ids of items it has
+func Reconcile(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	agentName := c.Param("agent_name")
+	agent, err := db.FindAgent(ctx, agentName)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to get agent"})
+	} else if agent == nil {
+		return c.JSON(http.StatusNotFound, api.HTTPError{Message: fmt.Sprintf("agent(name=%s) not found", agentName)})
+	}
+
+	resp, err := db.GetAllResourceIDsOfAgent(ctx, agent.ID.String())
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to get resource ids"})
+	}
+
+	return c.JSON(http.StatusFound, resp)
+}

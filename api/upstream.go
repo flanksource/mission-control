@@ -6,6 +6,20 @@ import (
 	"github.com/google/uuid"
 )
 
+type IDsResponse struct {
+	Canaries       []string             `json:"canaries,omitempty"`
+	Checks         []string             `json:"checks,omitempty"`
+	CheckStatuses  []models.CheckStatus `json:"check_statuses,omitempty"`
+	Components     []string             `json:"components,omitempty"`
+	ConfigAnalysis []string             `json:"config_analysis,omitempty"`
+	ConfigChanges  []string             `json:"config_changes,omitempty"`
+	ConfigItems    []string             `json:"config_items,omitempty"`
+
+	ComponentRelationships       []models.ComponentRelationship       `json:"component_relationships,omitempty"`
+	ConfigComponentRelationships []models.ConfigComponentRelationship `json:"config_component_relationships,omitempty"`
+	ConfigRelationships          []models.ConfigRelationship          `json:"config_relationships,omitempty"`
+}
+
 var UpstreamConf UpstreamConfig
 
 // PushData consists of data about changes to

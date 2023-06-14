@@ -119,6 +119,7 @@ var Serve = &cobra.Command{
 			logger.Warnf("Please ensure that all the required flags for upstream is supplied.")
 		}
 		e.POST("/upstream_push", upstream.PushUpstream)
+		e.GET("/request-ids/:agent_name", upstream.Reconcile)
 
 		forward(e, "/config", configDb)
 		forward(e, "/canary", api.CanaryCheckerPath)
