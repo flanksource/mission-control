@@ -12,13 +12,7 @@ import (
 	"github.com/flanksource/incident-commander/api"
 )
 
-func ReconcileJob() {
-	if err := reconcileJob(); err != nil {
-		logger.Errorf("error reconciling job: %v", err)
-	}
-}
-
-func reconcileJob() error {
+func ReconcileJob() error {
 	ctx := context.Background()
 	resp, err := requestIDs(ctx, api.UpstreamConf)
 	if err != nil {
@@ -37,7 +31,7 @@ func reconcileJob() error {
 }
 
 func requestIDs(ctx context.Context, config api.UpstreamConfig) (*api.IDsResponse, error) {
-	endpoint, err := url.JoinPath(config.Host, "upstream_push")
+	endpoint, err := url.JoinPath(config.Host, "upstream_check", config.AgentName)
 	if err != nil {
 		return nil, fmt.Errorf("error creating url endpoint for host %s: %w", config.Host, err)
 	}

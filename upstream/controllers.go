@@ -64,8 +64,8 @@ func PushUpstream(c echo.Context) error {
 	return nil
 }
 
-// Reconcile returns all the ids of items it has
-func Reconcile(c echo.Context) error {
+// StatusReport returns all the ids of items it has received from the requested agent.
+func StatusReport(c echo.Context) error {
 	ctx := c.Request().Context()
 
 	agentName := c.Param("agent_name")
