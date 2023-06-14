@@ -134,7 +134,7 @@ var Serve = &cobra.Command{
 		go eventHandler.ListenForEvents()
 
 		mgr, err := kopper.Manager(&kopper.ManagerOptions{
-			MetricsBindAddress: ":8081",
+			MetricsBindAddress: fmt.Sprintf(":%d", kopperPort),
 			AddToSchemeFunc:    v1.AddToScheme,
 		})
 		if err != nil {

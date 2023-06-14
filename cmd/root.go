@@ -35,13 +35,14 @@ var Root = &cobra.Command{
 }
 
 var dev bool
-var httpPort, metricsPort, devGuiPort int
+var httpPort, metricsPort, devGuiPort, kopperPort int
 var publicEndpoint = "http://localhost:8080"
 var configDb, kratosAPI, kratosAdminAPI, externalPostgrestUri string
 var enableAuth, disablePostgrest bool
 
 func ServerFlags(flags *pflag.FlagSet) {
-	flags.IntVar(&httpPort, "httpPort", 8080, "Port to expose a health dashboard ")
+	flags.IntVar(&httpPort, "httpPort", 8080, "Port to expose a health dashboard")
+	flags.IntVar(&kopperPort, "kopperPort", 8081, "Port for kopper manager")
 	flags.StringVar(&api.Namespace, "namespace", os.Getenv("NAMESPACE"), "Namespace to use for config/secret lookups")
 	flags.IntVar(&devGuiPort, "devGuiPort", 3004, "Port used by a local npm server in development mode")
 	flags.IntVar(&metricsPort, "metricsPort", 8081, "Port to expose a health dashboard ")
