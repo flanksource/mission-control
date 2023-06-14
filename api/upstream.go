@@ -52,7 +52,7 @@ func (t *PushData) NullifyScraperID() {
 	}
 
 	for i := range t.ConfigAnalysis {
-		t.ConfigItems[i].ScraperID = nil
+		t.ConfigAnalysis[i].ScraperID = nil
 	}
 }
 
