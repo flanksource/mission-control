@@ -3,7 +3,6 @@ package db
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
@@ -14,8 +13,6 @@ import (
 // At this point we're sure that it's an agent so the agent_id is always going to be nil UUID.
 // Unless this is both an agent and an upstream ... ?
 func GetAllMissingResourceIDs(ctx context.Context, req *api.PushedResourceIDs) (*api.PushData, error) {
-	time.Sleep(time.Second * 3)
-
 	var upstreamMsg api.PushData
 
 	if err := Gorm.WithContext(ctx).Not(req.Components).Find(&upstreamMsg.Components).Error; err != nil {
@@ -42,11 +39,37 @@ func GetAllMissingResourceIDs(ctx context.Context, req *api.PushedResourceIDs) (
 		return nil, fmt.Errorf("error fetching config changes: %w", err)
 	}
 
-	// TODO:
-	// - check_statuses
-	// - config_component_relationships
-	// - component_relationships
-	// - config_relationships
+	checkStatusQuery := Gorm.WithContext(ctx)
+	for _, cs := range req.CheckStatuses {
+		checkStatusQuery = checkStatusQuery.Not("check_id = ? AND time = ?", cs.CheckID, cs.Time)
+	}
+	if err := checkStatusQuery.Find(&upstreamMsg.CheckStatuses).Error; err != nil {
+		return nil, fmt.Errorf("error fetching check statuses: %w", err)
+	}
+
+	ConfigComponentRelationshipQuery := Gorm.WithContext(ctx)
+	for _, cs := range req.ConfigComponentRelationships {
+		ConfigComponentRelationshipQuery = ConfigComponentRelationshipQuery.Not("component_id = ? AND config_id = ?", cs.ComponentID, cs.ConfigID)
+	}
+	if err := ConfigComponentRelationshipQuery.Find(&upstreamMsg.ConfigComponentRelationships).Error; err != nil {
+		return nil, fmt.Errorf("error fetching config component relationship: %w", err)
+	}
+
+	componentRelationshipQuery := Gorm.WithContext(ctx)
+	for _, cs := range req.ComponentRelationships {
+		componentRelationshipQuery = componentRelationshipQuery.Not("component_id = ? AND relationship_id = ? AND selector_id = ?", cs.ComponentID, cs.RelationshipID, cs.SelectorID)
+	}
+	if err := componentRelationshipQuery.Find(&upstreamMsg.ComponentRelationships).Error; err != nil {
+		return nil, fmt.Errorf("error fetching components relationships: %w", err)
+	}
+
+	configRelationshipQuery := Gorm.WithContext(ctx)
+	for _, cs := range req.ConfigRelationships {
+		configRelationshipQuery = configRelationshipQuery.Not("related_id = ? AND config_id = ? AND selector_id = ?", cs.RelatedID, cs.ConfigID, cs.SelectorID)
+	}
+	if err := configRelationshipQuery.Find(&upstreamMsg.ConfigRelationships).Error; err != nil {
+		return nil, fmt.Errorf("error fetching config relationships: %w", err)
+	}
 
 	return &upstreamMsg, nil
 }
