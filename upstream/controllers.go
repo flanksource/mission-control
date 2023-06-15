@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/google/uuid"
@@ -58,6 +59,7 @@ func PushUpstream(c echo.Context) error {
 	req.NullifyScraperID()
 	req.PopulateAgentID(agentID.(uuid.UUID))
 
+	logger.Debugf("Pushing %s", req.String())
 	if err := db.InsertUpstreamMsg(c.Request().Context(), &req); err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to upsert upstream message"})
 	}

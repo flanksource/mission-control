@@ -1,6 +1,8 @@
 package api
 
 import (
+	"fmt"
+
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
@@ -36,6 +38,22 @@ type PushData struct {
 	ConfigRelationships          []models.ConfigRelationship          `json:"config_relationships,omitempty"`
 	ComponentRelationships       []models.ComponentRelationship       `json:"component_relationships,omitempty"`
 	ConfigComponentRelationships []models.ConfigComponentRelationship `json:"config_component_relationships,omitempty"`
+}
+
+func (p *PushData) String() string {
+	result := ""
+	result += fmt.Sprintf("AgentName: %s\n", p.AgentName)
+	result += fmt.Sprintf("Canaries: %d\n", len(p.Canaries))
+	result += fmt.Sprintf("Checks: %d\n", len(p.Checks))
+	result += fmt.Sprintf("Components: %d\n", len(p.Components))
+	result += fmt.Sprintf("ConfigAnalysis: %d\n", len(p.ConfigAnalysis))
+	result += fmt.Sprintf("ConfigChanges: %d\n", len(p.ConfigChanges))
+	result += fmt.Sprintf("ConfigItems: %d\n", len(p.ConfigItems))
+	result += fmt.Sprintf("CheckStatuses: %d\n", len(p.CheckStatuses))
+	result += fmt.Sprintf("ConfigRelationships: %d\n", len(p.ConfigRelationships))
+	result += fmt.Sprintf("ComponentRelationships: %d\n", len(p.ComponentRelationships))
+	result += fmt.Sprintf("ConfigComponentRelationships: %d\n", len(p.ConfigComponentRelationships))
+	return result
 }
 
 // ReplaceTopologyID replaces the topology_id for all the components
