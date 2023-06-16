@@ -11,18 +11,11 @@ import (
 // PushedResourceIDs is a list of primary keys of resources that have been pushed to the
 // upstream
 type PushedResourceIDs struct {
-	Canaries       []string             `json:"canaries,omitempty"`
-	Checks         []string             `json:"checks,omitempty"`
-	CheckStatuses  []models.CheckStatus `json:"check_statuses,omitempty"`
-	Components     []string             `json:"components,omitempty"`
-	ConfigAnalysis []string             `json:"config_analysis,omitempty"`
-	ConfigChanges  []string             `json:"config_changes,omitempty"`
-	ConfigItems    []string             `json:"config_items,omitempty"`
-	ConfigScrapers []string             `json:"config_scrapers,omitempty"`
-
-	ComponentRelationships       []models.ComponentRelationship       `json:"component_relationships,omitempty"`
-	ConfigComponentRelationships []models.ConfigComponentRelationship `json:"config_component_relationships,omitempty"`
-	ConfigRelationships          []models.ConfigRelationship          `json:"config_relationships,omitempty"`
+	Canaries       []string `json:"canaries,omitempty"`
+	Checks         []string `json:"checks,omitempty"`
+	Components     []string `json:"components,omitempty"`
+	ConfigItems    []string `json:"config_items,omitempty"`
+	ConfigScrapers []string `json:"config_scrapers,omitempty"`
 }
 
 var UpstreamConf UpstreamConfig
