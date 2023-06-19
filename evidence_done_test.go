@@ -100,13 +100,28 @@ var _ = ginkgo.Describe("Test Incident Done Definition With Config Item", ginkgo
 			HypothesisID:     hypothesis.ID,
 			ComponentID:      &component.ID,
 			CreatedBy:        john.ID,
-			Description:      "Logisctics DB attached component",
+			Description:      "Logistics DB attached component",
 			Type:             "component",
 			Script:           "config.threshold >= 80",
 			ConfigID:         &configItem.ID,
 			DefinitionOfDone: true,
 		}
 		tx := db.Gorm.Create(evidence)
+		Expect(tx.Error).To(BeNil())
+
+		// Another evidence done definition but empty script. This should be ignored.
+		evidenceWithEmptyScript := &models.Evidence{
+			ID:               uuid.New(),
+			HypothesisID:     hypothesis.ID,
+			ComponentID:      &component.ID,
+			CreatedBy:        john.ID,
+			Description:      "Something went wrong",
+			Type:             "component",
+			Script:           "",
+			ConfigID:         &configItem.ID,
+			DefinitionOfDone: true,
+		}
+		tx = db.Gorm.Create(evidenceWithEmptyScript)
 		Expect(tx.Error).To(BeNil())
 	})
 

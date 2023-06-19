@@ -18,7 +18,7 @@ func ReconcileIncidentStatus(incidentIDs []uuid.UUID) error {
             INNER JOIN incidents ON incidents.id = hypotheses.incident_id
             WHERE
                 incidents.status != 'closed' AND
-                evidences.definition_of_done = true AND
+                evidences.definition_of_done = true AND evidences.script IS NOT NULL AND evidences.script != '' AND
                 incidents.id IN (?)
             GROUP BY incidents.id
         )

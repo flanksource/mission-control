@@ -34,6 +34,7 @@ func GetEvidenceScripts() []EvidenceScriptInput {
 		Preload("Hypothesis.Incident").
 		Where("evidences.hypothesis_id IN (?)", hypothesesSubQuery).
 		Where("evidences.script IS NOT NULL").
+		Where("evidences.script != ''").
 		Find(&evidences).Error
 
 	if err != nil {
