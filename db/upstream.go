@@ -4,14 +4,12 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	"gorm.io/gorm/clause"
 )
 
-// TODO: Is it ncessesary to check for agent_id IS NULL here?
-// At this point we're sure that it's an agent so the agent_id is always going to be nil UUID.
-// Unless this is both an agent and an upstream ... ?
 func GetAllMissingResourceIDs(ctx context.Context, req *api.PushedResourceIDs) (*api.PushData, error) {
 	var upstreamMsg api.PushData
 
@@ -76,9 +74,10 @@ func InsertUpstreamMsg(ctx context.Context, req *api.PushData) error {
 		}
 	}
 
-	if len(req.Components) > 0 {
-		if err := Gorm.Clauses(clause.OnConflict{UpdateAll: true}).Create(req.Components).Error; err != nil {
-			return fmt.Errorf("error upserting components: %w", err)
+	// components are inserted one by one, instead of in a batch, because of the foreign key constraint with itself.
+	for _, c := range req.Components {
+		if err := Gorm.Clauses(clause.OnConflict{UpdateAll: true}).Create(&c).Error; err != nil {
+			logger.Errorf("error upserting component (id=%s): %w", c.ID, err)
 		}
 	}
 
@@ -95,9 +94,10 @@ func InsertUpstreamMsg(ctx context.Context, req *api.PushData) error {
 		}
 	}
 
-	if len(req.ConfigItems) > 0 {
-		if err := Gorm.Clauses(clause.OnConflict{UpdateAll: true}).Create(req.ConfigItems).Error; err != nil {
-			return fmt.Errorf("error upserting config_items: %w", err)
+	// config items are inserted one by one, instead of in a batch, because of the foreign key constraint with itself.
+	for _, ci := range req.ConfigItems {
+		if err := Gorm.Clauses(clause.OnConflict{UpdateAll: true}).Create(&ci).Error; err != nil {
+			logger.Errorf("error upserting config item (id=%s): %w", ci.ID, err)
 		}
 	}
 
