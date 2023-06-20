@@ -42,6 +42,11 @@ func (t *pushToUpstreamEventHandler) Run(ctx context.Context, tx *gorm.DB, event
 				return fmt.Errorf("error fetching checks: %w", err)
 			}
 
+		case "config_scrapers":
+			if err := tx.Where("id IN ?", itemIDs).Find(&upstreamMsg.ConfigAnalysis).Error; err != nil {
+				return fmt.Errorf("error fetching config_scrapers: %w", err)
+			}
+
 		case "config_analysis":
 			if err := tx.Where("id IN ?", itemIDs).Find(&upstreamMsg.ConfigAnalysis).Error; err != nil {
 				return fmt.Errorf("error fetching config_analysis: %w", err)

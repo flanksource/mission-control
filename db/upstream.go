@@ -19,6 +19,10 @@ func GetAllMissingResourceIDs(ctx context.Context, req *api.PushedResourceIDs) (
 		return nil, fmt.Errorf("error fetching components: %w", err)
 	}
 
+	if err := Gorm.WithContext(ctx).Not(req.ConfigScrapers).Find(&upstreamMsg.ConfigScrapers).Error; err != nil {
+		return nil, fmt.Errorf("error fetching config scrapers: %w", err)
+	}
+
 	if err := Gorm.WithContext(ctx).Not(req.ConfigItems).Find(&upstreamMsg.ConfigItems).Error; err != nil {
 		return nil, fmt.Errorf("error fetching config items: %w", err)
 	}
@@ -92,6 +96,11 @@ func GetAllResourceIDsOfAgent(ctx context.Context, agentID string) (*api.PushedR
 		return nil, err
 	}
 
+	var configScrapers []models.ConfigScraper
+	if err := Gorm.Select("id").Where("agent_id = ?", agentID).Find(&configScrapers).Pluck("id", &response.ConfigScrapers).Error; err != nil {
+		return nil, err
+	}
+
 	var configItems []models.ConfigItem
 	if err := Gorm.Select("id").Where("agent_id = ?", agentID).Find(&configItems).Pluck("id", &response.ConfigItems).Error; err != nil {
 		return nil, err
@@ -143,6 +152,12 @@ func InsertUpstreamMsg(ctx context.Context, req *api.PushData) error {
 		cols := []clause.Column{{Name: "component_id"}, {Name: "relationship_id"}, {Name: "selector_id"}}
 		if err := Gorm.Clauses(clause.OnConflict{UpdateAll: true, Columns: cols}).CreateInBatches(req.ComponentRelationships, 500).Error; err != nil {
 			return fmt.Errorf("error upserting component_relationships: %w", err)
+		}
+	}
+
+	if len(req.ConfigScrapers) > 0 {
+		if err := Gorm.Clauses(clause.OnConflict{UpdateAll: true}).CreateInBatches(req.ConfigScrapers, 500).Error; err != nil {
+			return fmt.Errorf("error upserting config scrapers: %w", err)
 		}
 	}
 

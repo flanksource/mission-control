@@ -56,7 +56,6 @@ func PushUpstream(c echo.Context) error {
 		topologyIDCache.Set(req.AgentName, headlessTopologyID, cache.DefaultExpiration)
 	}
 	req.ReplaceTopologyID(headlessTopologyID.(*uuid.UUID))
-	req.NullifyScraperID()
 	req.PopulateAgentID(agentID.(uuid.UUID))
 
 	logger.Debugf("Pushing %s", req.String())

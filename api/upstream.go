@@ -8,6 +8,8 @@ import (
 	"github.com/google/uuid"
 )
 
+// PushedResourceIDs is a list of primary keys of resources that have been pushed to the
+// upstream
 type PushedResourceIDs struct {
 	Canaries       []string             `json:"canaries,omitempty"`
 	Checks         []string             `json:"checks,omitempty"`
@@ -16,6 +18,7 @@ type PushedResourceIDs struct {
 	ConfigAnalysis []string             `json:"config_analysis,omitempty"`
 	ConfigChanges  []string             `json:"config_changes,omitempty"`
 	ConfigItems    []string             `json:"config_items,omitempty"`
+	ConfigScrapers []string             `json:"config_scrapers,omitempty"`
 
 	ComponentRelationships       []models.ComponentRelationship       `json:"component_relationships,omitempty"`
 	ConfigComponentRelationships []models.ConfigComponentRelationship `json:"config_component_relationships,omitempty"`
@@ -31,6 +34,7 @@ type PushData struct {
 	Canaries                     []models.Canary                      `json:"canaries,omitempty"`
 	Checks                       []models.Check                       `json:"checks,omitempty"`
 	Components                   []models.Component                   `json:"components,omitempty"`
+	ConfigScrapers               []models.ConfigScraper               `json:"config_scrapers,omitempty"`
 	ConfigAnalysis               []models.ConfigAnalysis              `json:"config_analysis,omitempty"`
 	ConfigChanges                []models.ConfigChange                `json:"config_changes,omitempty"`
 	ConfigItems                  []models.ConfigItem                  `json:"config_items,omitempty"`
@@ -47,6 +51,7 @@ func (p *PushData) String() string {
 	result += fmt.Sprintf("Checks: %d\n", len(p.Checks))
 	result += fmt.Sprintf("Components: %d\n", len(p.Components))
 	result += fmt.Sprintf("ConfigAnalysis: %d\n", len(p.ConfigAnalysis))
+	result += fmt.Sprintf("ConfigScrapers: %d\n", len(p.ConfigScrapers))
 	result += fmt.Sprintf("ConfigChanges: %d\n", len(p.ConfigChanges))
 	result += fmt.Sprintf("ConfigItems: %d\n", len(p.ConfigItems))
 	result += fmt.Sprintf("CheckStatuses: %d\n", len(p.CheckStatuses))
@@ -64,16 +69,6 @@ func (t *PushData) ReplaceTopologyID(id *uuid.UUID) {
 	}
 }
 
-func (t *PushData) NullifyScraperID() {
-	for i := range t.ConfigItems {
-		t.ConfigItems[i].ScraperID = nil
-	}
-
-	for i := range t.ConfigAnalysis {
-		t.ConfigAnalysis[i].ScraperID = nil
-	}
-}
-
 // PopulateAgentID sets agent_id on all the data
 func (t *PushData) PopulateAgentID(id uuid.UUID) {
 	for i := range t.Canaries {
@@ -87,6 +82,9 @@ func (t *PushData) PopulateAgentID(id uuid.UUID) {
 	}
 	for i := range t.ConfigItems {
 		t.ConfigItems[i].AgentID = id
+	}
+	for i := range t.ConfigScrapers {
+		t.ConfigScrapers[i].AgentID = id
 	}
 }
 
