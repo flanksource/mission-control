@@ -8,19 +8,20 @@ import (
 	"github.com/flanksource/incident-commander/db"
 )
 
-func upsertConfig(configClass, externalID, name, config string) error {
+// A shared config class for all responder configs.
+const configClass = "Responder"
 
-	dbInsertConfigQuery := `INSERT INTO config_items (config_class, name, external_id, config) VALUES (?, ?, ARRAY[?], ?)`
-	dbUpdateConfigQuery := `UPDATE config_items SET config = ? WHERE external_id = ARRAY[?] AND config_class = ?`
-
-	tx := db.Gorm.Exec(dbUpdateConfigQuery, config, externalID, configClass)
+func upsertConfig(configType, externalID, name, config string) error {
+	dbUpdateConfigQuery := `UPDATE config_items SET config = ? WHERE external_id = ARRAY[?] AND type = ? AND config_class = ?`
+	tx := db.Gorm.Exec(dbUpdateConfigQuery, config, externalID, configType, configClass)
 	if tx.Error != nil {
-		logger.Errorf("Error updating config in database: %v", tx.Error)
+		logger.Errorf("Error updating config into database: %v", tx.Error)
 		return tx.Error
 	}
 
 	if tx.RowsAffected == 0 {
-		if err := db.Gorm.Exec(dbInsertConfigQuery, configClass, name, externalID, config).Error; err != nil {
+		dbInsertConfigQuery := `INSERT INTO config_items (config_class, type, name, external_id, config) VALUES (?, ?, ?, ARRAY[?], ?)`
+		if err := db.Gorm.Exec(dbInsertConfigQuery, configClass, configType, name, externalID, config).Error; err != nil {
 			logger.Errorf("Error inserting config into database: %v", err)
 			return tx.Error
 		}
@@ -57,12 +58,12 @@ func SyncConfig() {
 			continue
 		}
 
-		if configClass, configName, config, err := responder.SyncConfig(ctx, team); err != nil {
+		if configType, configName, config, err := responder.SyncConfig(ctx, team); err != nil {
 			logger.Errorf("Error syncing config: %v", err)
 			jobHistory.AddError(err.Error()).End()
 			continue
 		} else {
-			if err := upsertConfig(configClass, team.ID.String(), configName, config); err != nil {
+			if err := upsertConfig(configType, team.ID.String(), configName, config); err != nil {
 				logger.Errorf("Error upserting config: %v", err)
 				jobHistory.AddError(err.Error()).End()
 				continue

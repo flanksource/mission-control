@@ -20,7 +20,7 @@ type ResponderInterface interface {
 	// GetComments returns the comments for an issue
 	GetComments(issueID string) ([]api.Comment, error)
 	// SyncConfig gets the config for the responder for use in the UI
-	SyncConfig(ctx *api.Context, team api.Team) (configClass string, configName string, config string, err error)
+	SyncConfig(ctx *api.Context, team api.Team) (configType string, configName string, config string, err error)
 }
 
 func GetResponder(ctx *api.Context, team api.Team) (ResponderInterface, error) {
