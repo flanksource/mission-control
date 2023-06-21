@@ -1,28 +1,21 @@
 package events
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
-	"net/url"
 
-	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/upstream"
 	"gorm.io/gorm"
 )
 
 type pushToUpstreamEventHandler struct {
-	conf       api.UpstreamConfig
-	httpClient *http.Client
+	conf api.UpstreamConfig
 }
 
 func newPushToUpstreamEventHandler(conf api.UpstreamConfig) *pushToUpstreamEventHandler {
 	return &pushToUpstreamEventHandler{
-		conf:       conf,
-		httpClient: &http.Client{},
+		conf: conf,
 	}
 }
 
@@ -47,6 +40,11 @@ func (t *pushToUpstreamEventHandler) Run(ctx context.Context, tx *gorm.DB, event
 		case "checks":
 			if err := tx.Where("id IN ?", itemIDs).Find(&upstreamMsg.Checks).Error; err != nil {
 				return fmt.Errorf("error fetching checks: %w", err)
+			}
+
+		case "config_scrapers":
+			if err := tx.Where("id IN ?", itemIDs).Find(&upstreamMsg.ConfigAnalysis).Error; err != nil {
+				return fmt.Errorf("error fetching config_scrapers: %w", err)
 			}
 
 		case "config_analysis":
@@ -87,39 +85,8 @@ func (t *pushToUpstreamEventHandler) Run(ctx context.Context, tx *gorm.DB, event
 	}
 
 	upstreamMsg.ApplyLabels(t.conf.LabelsMap())
-	if err := t.push(ctx, upstreamMsg); err != nil {
+	if err := upstream.Push(ctx, t.conf, upstreamMsg); err != nil {
 		return fmt.Errorf("failed to push to upstream: %w", err)
-	}
-
-	return nil
-}
-
-func (t *pushToUpstreamEventHandler) push(ctx context.Context, msg *api.PushData) error {
-	payloadBuf := new(bytes.Buffer)
-	if err := json.NewEncoder(payloadBuf).Encode(msg); err != nil {
-		return fmt.Errorf("error encoding msg: %w", err)
-	}
-
-	endpoint, err := url.JoinPath(t.conf.Host, "upstream_push")
-	if err != nil {
-		return fmt.Errorf("error creating url endpoint for host %s: %w", t.conf.Host, err)
-	}
-
-	req, err := http.NewRequest(http.MethodPost, endpoint, payloadBuf)
-	if err != nil {
-		return fmt.Errorf("http.NewRequest: %w", err)
-	}
-
-	req.SetBasicAuth(t.conf.Username, t.conf.Password)
-	resp, err := t.httpClient.Do(req)
-	if err != nil {
-		return fmt.Errorf("error making request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if !collections.Contains([]int{http.StatusOK, http.StatusCreated}, resp.StatusCode) {
-		respBody, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("upstream server returned error status[%d]: %s", resp.StatusCode, string(respBody))
 	}
 
 	return nil

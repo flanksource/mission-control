@@ -1,4 +1,4 @@
-package upstream
+package events
 
 import (
 	"context"
@@ -18,8 +18,6 @@ import (
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
-	"github.com/flanksource/incident-commander/events"
-	pkgEvents "github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/testutils"
 )
 
@@ -34,10 +32,10 @@ var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
 
 	ginkgo.It("should track insertion on the event_queue table", func() {
 		var events []api.Event
-		err := testutils.TestDB.Where("name = ?", pkgEvents.EventPushQueueCreate).Find(&events).Error
+		err := testutils.TestDB.Where("name = ?", EventPushQueueCreate).Find(&events).Error
 		Expect(err).NotTo(HaveOccurred())
 
-		groupedEvents := pkgEvents.GroupChangelogsByTables(events)
+		groupedEvents := GroupChangelogsByTables(events)
 		for table, itemIDs := range groupedEvents {
 			switch table {
 			case "canaries":
@@ -80,7 +78,7 @@ var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
 				// Do nothing (need to populate the config_relationships table)
 
 			default:
-				ginkgo.Fail(fmt.Sprintf("Unexpected table %q on the event queue for %q", table, pkgEvents.EventPushQueueCreate))
+				ginkgo.Fail(fmt.Sprintf("Unexpected table %q on the event queue for %q", table, EventPushQueueCreate))
 			}
 		}
 
@@ -114,13 +112,13 @@ var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		var events []api.Event
-		err = testutils.TestDB.Where("name = ? AND created_at >= ?", pkgEvents.EventPushQueueCreate, start).Find(&events).Error
+		err = testutils.TestDB.Where("name = ? AND created_at >= ?", EventPushQueueCreate, start).Find(&events).Error
 		Expect(err).NotTo(HaveOccurred())
 
 		// Only 1 event should get created since we are modifying the same resource
 		Expect(len(events)).To(Equal(1))
 
-		groupedEvents := pkgEvents.GroupChangelogsByTables(events)
+		groupedEvents := GroupChangelogsByTables(events)
 		Expect(groupedEvents["components"]).To(Equal([][]string{{modifiedNewDummy.ID.String()}}))
 	})
 
@@ -129,7 +127,7 @@ var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
 		db.Gorm = testutils.TestUpstreamDB
 		db.Pool = testutils.TestUpstreamDBPGPool
 
-		eventHandlerConfig := events.Config{
+		eventHandlerConfig := Config{
 			UpstreamConf: api.UpstreamConfig{
 				AgentName: "test-agent",
 				Host:      fmt.Sprintf("http://localhost:%d", testutils.TestUpstreamServerPort),
@@ -139,7 +137,7 @@ var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
 			},
 		}
 
-		eventHandler := events.NewEventHandler(context.Background(), testutils.TestDB, eventHandlerConfig)
+		eventHandler := NewEventHandler(context.Background(), testutils.TestDB, eventHandlerConfig)
 		eventHandler.ConsumeEventsUntilEmpty()
 	})
 

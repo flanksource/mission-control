@@ -1,27 +1,57 @@
 package api
 
 import (
+	"fmt"
+
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
 )
+
+// PushedResourceIDs is a list of primary keys of resources that have been pushed to the
+// upstream
+type PushedResourceIDs struct {
+	Canaries       []string `json:"canaries,omitempty"`
+	Checks         []string `json:"checks,omitempty"`
+	Components     []string `json:"components,omitempty"`
+	ConfigItems    []string `json:"config_items,omitempty"`
+	ConfigScrapers []string `json:"config_scrapers,omitempty"`
+}
 
 var UpstreamConf UpstreamConfig
 
 // PushData consists of data about changes to
 // components, configs, analysis.
 type PushData struct {
-	AgentName                    string                               `json:"cluster_name"`
-	Canaries                     []models.Canary                      `json:"canaries"`
-	Checks                       []models.Check                       `json:"checks"`
-	Components                   []models.Component                   `json:"components"`
-	ConfigAnalysis               []models.ConfigAnalysis              `json:"config_analysis"`
-	ConfigChanges                []models.ConfigChange                `json:"config_changes"`
-	ConfigItems                  []models.ConfigItem                  `json:"config_items"`
-	CheckStatuses                []models.CheckStatus                 `json:"check_statuses"`
-	ConfigRelationships          []models.ConfigRelationship          `json:"config_relationships"`
-	ComponentRelationships       []models.ComponentRelationship       `json:"component_relationships"`
-	ConfigComponentRelationships []models.ConfigComponentRelationship `json:"config_component_relationships"`
+	AgentName                    string                               `json:"cluster_name,omitempty"`
+	Canaries                     []models.Canary                      `json:"canaries,omitempty"`
+	Checks                       []models.Check                       `json:"checks,omitempty"`
+	Components                   []models.Component                   `json:"components,omitempty"`
+	ConfigScrapers               []models.ConfigScraper               `json:"config_scrapers,omitempty"`
+	ConfigAnalysis               []models.ConfigAnalysis              `json:"config_analysis,omitempty"`
+	ConfigChanges                []models.ConfigChange                `json:"config_changes,omitempty"`
+	ConfigItems                  []models.ConfigItem                  `json:"config_items,omitempty"`
+	CheckStatuses                []models.CheckStatus                 `json:"check_statuses,omitempty"`
+	ConfigRelationships          []models.ConfigRelationship          `json:"config_relationships,omitempty"`
+	ComponentRelationships       []models.ComponentRelationship       `json:"component_relationships,omitempty"`
+	ConfigComponentRelationships []models.ConfigComponentRelationship `json:"config_component_relationships,omitempty"`
+}
+
+func (p *PushData) String() string {
+	result := ""
+	result += fmt.Sprintf("AgentName: %s\n", p.AgentName)
+	result += fmt.Sprintf("Canaries: %d\n", len(p.Canaries))
+	result += fmt.Sprintf("Checks: %d\n", len(p.Checks))
+	result += fmt.Sprintf("Components: %d\n", len(p.Components))
+	result += fmt.Sprintf("ConfigAnalysis: %d\n", len(p.ConfigAnalysis))
+	result += fmt.Sprintf("ConfigScrapers: %d\n", len(p.ConfigScrapers))
+	result += fmt.Sprintf("ConfigChanges: %d\n", len(p.ConfigChanges))
+	result += fmt.Sprintf("ConfigItems: %d\n", len(p.ConfigItems))
+	result += fmt.Sprintf("CheckStatuses: %d\n", len(p.CheckStatuses))
+	result += fmt.Sprintf("ConfigRelationships: %d\n", len(p.ConfigRelationships))
+	result += fmt.Sprintf("ComponentRelationships: %d\n", len(p.ComponentRelationships))
+	result += fmt.Sprintf("ConfigComponentRelationships: %d\n", len(p.ConfigComponentRelationships))
+	return result
 }
 
 // ReplaceTopologyID replaces the topology_id for all the components
@@ -45,6 +75,9 @@ func (t *PushData) PopulateAgentID(id uuid.UUID) {
 	}
 	for i := range t.ConfigItems {
 		t.ConfigItems[i].AgentID = id
+	}
+	for i := range t.ConfigScrapers {
+		t.ConfigScrapers[i].AgentID = id
 	}
 }
 

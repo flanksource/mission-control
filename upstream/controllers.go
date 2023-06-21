@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/google/uuid"
@@ -57,9 +58,30 @@ func PushUpstream(c echo.Context) error {
 	req.ReplaceTopologyID(headlessTopologyID.(*uuid.UUID))
 	req.PopulateAgentID(agentID.(uuid.UUID))
 
+	logger.Debugf("Pushing %s", req.String())
 	if err := db.InsertUpstreamMsg(c.Request().Context(), &req); err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to upsert upstream message"})
 	}
 
 	return nil
+}
+
+// StatusReport returns all the ids of items it has received from the requested agent.
+func StatusReport(c echo.Context) error {
+	ctx := c.Request().Context()
+
+	agentName := c.Param("agent_name")
+	agent, err := db.FindAgent(ctx, agentName)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to get agent"})
+	} else if agent == nil {
+		return c.JSON(http.StatusNotFound, api.HTTPError{Message: fmt.Sprintf("agent(name=%s) not found", agentName)})
+	}
+
+	resp, err := db.GetAllResourceIDsOfAgent(ctx, agent.ID.String())
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to get resource ids"})
+	}
+
+	return c.JSON(http.StatusFound, resp)
 }

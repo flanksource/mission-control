@@ -119,6 +119,7 @@ var Serve = &cobra.Command{
 			logger.Warnf("Please ensure that all the required flags for upstream is supplied.")
 		}
 		e.POST("/upstream_push", upstream.PushUpstream)
+		e.GET("/upstream_check/:agent_name", upstream.StatusReport)
 
 		forward(e, "/config", configDb)
 		forward(e, "/canary", api.CanaryCheckerPath)
@@ -133,7 +134,7 @@ var Serve = &cobra.Command{
 		go eventHandler.ListenForEvents()
 
 		mgr, err := kopper.Manager(&kopper.ManagerOptions{
-			MetricsBindAddress: ":8081",
+			MetricsBindAddress: fmt.Sprintf(":%d", kopperPort),
 			AddToSchemeFunc:    v1.AddToScheme,
 		})
 		if err != nil {

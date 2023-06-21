@@ -1,4 +1,4 @@
-package upstream
+package events
 
 import (
 	"context"
@@ -11,6 +11,7 @@ import (
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/fixtures/dummy"
 	"github.com/flanksource/incident-commander/testutils"
+	"github.com/flanksource/incident-commander/upstream"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 	ginkgo "github.com/onsi/ginkgo/v2"
@@ -75,7 +76,7 @@ var _ = ginkgo.BeforeSuite(func() {
 	testutils.TestUpstreamDBPGPool = upgxpool
 
 	testEchoServer = echo.New()
-	testEchoServer.POST("/upstream_push", PushUpstream)
+	testEchoServer.POST("/upstream_push", upstream.PushUpstream)
 	listenAddr := fmt.Sprintf(":%d", testutils.TestUpstreamServerPort)
 
 	go func() {
