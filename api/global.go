@@ -50,6 +50,10 @@ func NewContext(db *gorm.DB, echoCtx EchoContext) *Context {
 }
 
 func (c *Context) DB() *gorm.DB {
+	if c.db == nil {
+		return nil
+	}
+
 	return c.db.WithContext(c.Context)
 }
 
@@ -62,11 +66,11 @@ func (c *Context) HydrateConnection(connectionName string) (*models.Connection, 
 		return nil, nil
 	}
 
-	if c.db == nil {
+	if c.DB() == nil {
 		return nil, errors.New("DB has not been initialized")
 	}
 
-	connection, err := duty.HydratedConnectionByURL(c, c.db, c.Kubernetes, c.Namespace, connectionName)
+	connection, err := duty.HydratedConnectionByURL(c, c.DB(), c.Kubernetes, c.Namespace, connectionName)
 	if err != nil {
 		return nil, err
 	}
