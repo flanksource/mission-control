@@ -7,10 +7,6 @@ import (
 )
 
 func PersistJobHistory(ctx *api.Context, h *models.JobHistory) error {
-	if ctx.DB() == nil {
-		return nil
-	}
-
 	// Delete jobs which did not process anything
 	if h.ID != uuid.Nil && (h.SuccessCount+h.ErrorCount) == 0 {
 		return ctx.DB().Table("job_history").Delete(h).Error

@@ -78,9 +78,7 @@ func createHTTPServer(gormDB *gorm.DB) *echo.Echo {
 
 	if !disablePostgrest {
 		forward(e, "/db", "http://localhost:3000", rbac.Authorization(rbac.ObjectDatabase, "any"))
-	}
-
-	if externalPostgrestUri != "" {
+	} else if externalPostgrestUri != "" {
 		forward(e, "/db", externalPostgrestUri, rbac.Authorization(rbac.ObjectDatabase, "any"))
 	}
 
