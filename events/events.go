@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/flanksource/commons/logger"
@@ -12,8 +13,6 @@ import (
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
-	"github.com/flanksource/incident-commander/responder"
-	pkgResponder "github.com/flanksource/incident-commander/responder"
 )
 
 const (
@@ -32,6 +31,12 @@ const (
 
 	dbReconnectMaxDuration         = time.Minute * 5
 	dbReconnectBackoffBaseDuration = time.Second
+
+	MinWorkers uint = 1
+)
+
+var (
+	NumWorkers uint = 3
 )
 
 type Config struct {
@@ -121,21 +126,30 @@ func (t *eventHandler) consumeEvents() error {
 	}
 
 	const selectEventsQuery = `
-		SELECT * FROM event_queue
-		WHERE 
-			attempts = 0
-			OR (attempts <= @maxAttempts AND (now() - last_attempt) > '1 hour'::interval)
-		FOR UPDATE SKIP LOCKED
-		LIMIT 1
+        DELETE FROM event_queue
+        WHERE id = (
+            SELECT id FROM event_queue
+            WHERE 
+                attempts <= @maxAttempts
+            ORDER BY priority ASC, created_at ASC
+            FOR UPDATE SKIP LOCKED
+            LIMIT 1
+        )
+        RETURNING *
 	`
 
 	var event api.Event
 	err := tx.Raw(selectEventsQuery, map[string]any{"maxAttempts": eventMaxAttempts}).First(&event).Error
 	if err != nil {
-		// Commit the transaction in case of no records found to prevent
+		// Rollback the transaction in case of no records found to prevent
 		// creating dangling connections and to release the locks
-		tx.Commit()
+		tx.Rollback()
 		return err
+	}
+
+	var upstreamPushEventHandler *pushToUpstreamEventHandler
+	if t.config.UpstreamConf.Valid() {
+		upstreamPushEventHandler = newPushToUpstreamEventHandler(t.config.UpstreamConf)
 	}
 
 	switch event.Name {
@@ -150,134 +164,56 @@ func (t *eventHandler) consumeEvents() error {
 	case EventTeamDelete:
 		err = handleTeamDelete(tx, event)
 	case EventPushQueueCreate:
-		if t.config.UpstreamConf.Valid() {
-			upstreamPushEventHandler := newPushToUpstreamEventHandler(t.config.UpstreamConf)
+		if upstreamPushEventHandler != nil {
 			err = upstreamPushEventHandler.Run(t.ctx, tx, []api.Event{event})
 		}
 	default:
-		logger.Errorf("unrecognized event name: %s", event.Name)
-		return tx.Commit().Error
+		logger.Errorf("Unrecognized event name: %s", event.Name)
+		return tx.Rollback().Error
 	}
 
 	if err != nil {
 		logger.Errorf("failed to handle event [%s]: %v", event.Name, err)
 
-		errorMsg := err.Error()
-		setErr := tx.Exec("UPDATE event_queue SET error = ?, attempts = attempts + 1, last_attempt = NOW() WHERE id = ?", errorMsg, event.ID).Error
-		if setErr != nil {
-			logger.Errorf("error updating table:event_queue with id:%s and error:%s. %v", event.ID, errorMsg, setErr)
+		event.Attempts += 1
+		event.Error = err.Error()
+		last_attempt := time.Now()
+		event.LastAttempt = &last_attempt
+		if insertErr := tx.Create(&event).Error; insertErr != nil {
+			logger.Errorf("Error inserting into table:event_queue with id:%s and error:%v. %v", event.ID, err, insertErr)
+			return tx.Rollback().Error
 		}
-
 		return tx.Commit().Error
 	}
 
-	err = tx.Delete(&event).Error
-	if err != nil {
-		logger.Errorf("error deleting event from event_queue table with id:%s", event.ID.String())
-		return tx.Rollback().Error
-	}
 	return tx.Commit().Error
 }
 
 // ConsumeEventsUntilEmpty consumes events forever until the event queue is empty.
 func (t *eventHandler) ConsumeEventsUntilEmpty() {
-	for {
-		err := t.consumeEvents()
-		if err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return
-			} else {
-				logger.Errorf("error processing event, waiting 60s to try again %v", err)
-				time.Sleep(waitDurationOnFailure)
-			}
-		}
-	}
-}
-
-func reconcileResponderEvent(tx *gorm.DB, event api.Event) error {
-	responderID := event.Properties["id"]
-	ctx := api.NewContext(tx)
-
-	var responder api.Responder
-	err := tx.Where("id = ? AND external_id is NULL", responderID).Preload("Incident").Preload("Team").Find(&responder).Error
-	if err != nil {
-		return err
-	}
-
-	if err := addNotificationEvent(ctx, tx, responder); err != nil {
-		return err
-	}
-
-	responderClient, err := pkgResponder.GetResponder(ctx, responder.Team)
-	if err != nil {
-		return err
-	}
-
-	externalID, err := responderClient.NotifyResponder(ctx, responder)
-	if err != nil {
-		return err
-	}
-	if externalID != "" {
-		// Update external id in responder table
-		return tx.Model(&api.Responder{}).Where("id = ?", responder.ID).Update("external_id", externalID).Error
-	}
-
-	return nil
-}
-
-func reconcileCommentEvent(tx *gorm.DB, event api.Event) error {
-	commentID := event.Properties["id"]
-	commentBody := event.Properties["body"]
-	ctx := api.NewContext(tx)
-
-	var comment api.Comment
-	err := tx.Where("id = ? AND external_id IS NULL", commentID).First(&comment).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			logger.Debugf("Skipping comment %s since it was added via responder", commentID)
-			return nil
-		}
-
-		return err
-	}
-
-	// Get all responders related to a comment
-	var responders []api.Responder
-	commentRespondersQuery := `
-        SELECT * FROM responders WHERE incident_id IN (
-            SELECT incident_id FROM comments WHERE id = ?
-        )
-    `
-	if err = tx.Raw(commentRespondersQuery, commentID).Preload("Team").Find(&responders).Error; err != nil {
-		return err
-	}
-
-	// For each responder add the comment
-	for _, _responder := range responders {
-		// Reset externalID to avoid inserting previous iteration's ID
-		externalID := ""
-
-		responder, err := responder.GetResponder(ctx, _responder.Team)
-		if err != nil {
-			return err
-		}
-
-		externalID, err = responder.NotifyResponderAddComment(ctx, _responder, commentBody)
-		if err != nil {
-			// TODO: Associate error messages with responderType and handle specific responders when reprocessing
-			logger.Errorf("error adding comment to responder:%s %v", _responder.Properties["responderType"], err)
-			continue
-		}
-
-		// Insert into comment_responders table
-		if externalID != "" {
-			err = tx.Exec("INSERT INTO comment_responders (comment_id, responder_id, external_id) VALUES (?, ?, ?)",
-				commentID, _responder.ID, externalID).Error
+	consumerFunc := func(wg *sync.WaitGroup) {
+		for {
+			err := t.consumeEvents()
 			if err != nil {
-				logger.Errorf("error updating comment_responders table: %v", err)
+				if errors.Is(err, gorm.ErrRecordNotFound) {
+					wg.Done()
+					return
+				} else {
+					logger.Errorf("error processing event, waiting 60s to try again %v", err)
+					time.Sleep(waitDurationOnFailure)
+				}
 			}
 		}
 	}
 
-	return nil
+	if NumWorkers < MinWorkers {
+		NumWorkers = MinWorkers
+	}
+
+	var wg sync.WaitGroup
+	for i := uint(0); i < NumWorkers; i++ {
+		wg.Add(1)
+		go consumerFunc(&wg)
+	}
+	wg.Wait()
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/k8s"
 	"github.com/flanksource/incident-commander/mail"
 	"github.com/flanksource/incident-commander/rules"
@@ -58,6 +59,7 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.BoolVar(&disablePostgrest, "disable-postgrest", false, "Disable postgrest")
 	flags.StringVar(&mail.FromAddress, "email-from-address", "no-reply@flanksource.com", "Email address of the sender")
 	flags.StringVar(&db.PostgresDBAnonRole, "postgrest-anon-role", "postgrest_anon", "Postgres anonymous role")
+	flags.UintVar(&events.NumWorkers, "num-workers", events.MinWorkers, "Number of workers for event processing")
 
 	// Flags for upstream push
 	flags.StringVar(&api.UpstreamConf.Host, "upstream-host", "", "central incident commander instance to push configs to")
