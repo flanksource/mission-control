@@ -2,6 +2,7 @@ package events
 
 import (
 	"errors"
+
 	"gorm.io/gorm"
 
 	"github.com/flanksource/commons/logger"
@@ -12,7 +13,7 @@ import (
 
 func reconcileResponderEvent(tx *gorm.DB, event api.Event) error {
 	responderID := event.Properties["id"]
-	ctx := api.NewContext(tx)
+	ctx := api.NewContext(tx, nil)
 
 	var responder api.Responder
 	err := tx.Where("id = ? AND external_id is NULL", responderID).Preload("Incident").Preload("Team").Find(&responder).Error
@@ -44,7 +45,7 @@ func reconcileResponderEvent(tx *gorm.DB, event api.Event) error {
 func reconcileCommentEvent(tx *gorm.DB, event api.Event) error {
 	commentID := event.Properties["id"]
 	commentBody := event.Properties["body"]
-	ctx := api.NewContext(tx)
+	ctx := api.NewContext(tx, nil)
 
 	var comment api.Comment
 	err := tx.Where("id = ? AND external_id IS NULL", commentID).First(&comment).Error
