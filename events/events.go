@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/flanksource/commons/logger"
@@ -186,11 +187,12 @@ func (t *eventHandler) consumeEvents() error {
 
 // ConsumeEventsUntilEmpty consumes events forever until the event queue is empty.
 func (t *eventHandler) ConsumeEventsUntilEmpty() {
-	consumerFunc := func() {
+	consumerFunc := func(wg *sync.WaitGroup) {
 		for {
 			err := t.consumeEvents()
 			if err != nil {
 				if errors.Is(err, gorm.ErrRecordNotFound) {
+					wg.Done()
 					return
 				} else {
 					logger.Errorf("error processing event, waiting 60s to try again %v", err)
@@ -199,7 +201,10 @@ func (t *eventHandler) ConsumeEventsUntilEmpty() {
 			}
 		}
 	}
+	var wg sync.WaitGroup
 	for range [eventWorkers]int{} {
-		go consumerFunc()
+		wg.Add(1)
+		go consumerFunc(&wg)
 	}
+	wg.Wait()
 }
