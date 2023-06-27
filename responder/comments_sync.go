@@ -23,6 +23,7 @@ func getRootHypothesisOfIncident(incidentID uuid.UUID) (api.Hypothesis, error) {
 func SyncComments() {
 	logger.Debugf("Syncing comments")
 	ctx := api.NewContext(db.Gorm, nil)
+
 	var responders []api.Responder
 	err := db.Gorm.Where("external_id IS NOT NULL").Preload("Team").Find(&responders).Error
 	if err != nil {
@@ -37,7 +38,7 @@ func SyncComments() {
     `
 
 	jobHistory := models.NewJobHistory("ResponderCommentSync", "", "")
-	_ = db.PersistJobHistory(jobHistory.Start())
+	_ = db.PersistJobHistory(ctx, jobHistory.Start())
 	for _, responder := range responders {
 		if !responder.Team.HasResponder() {
 			logger.Debugf("Skipping responder %s since it does not have a responder", responder.Team.Name)
@@ -89,5 +90,5 @@ func SyncComments() {
 		}
 	}
 	jobHistory.IncrSuccess()
-	_ = db.PersistJobHistory(jobHistory.End())
+	_ = db.PersistJobHistory(ctx, jobHistory.End())
 }

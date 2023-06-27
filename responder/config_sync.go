@@ -33,6 +33,7 @@ func upsertConfig(configType, externalID, name, config string) error {
 func SyncConfig() {
 	logger.Debugf("Syncing responder config")
 	ctx := api.NewContext(db.Gorm, nil)
+
 	var teams []api.Team
 	if err := db.Gorm.Find(&teams).Error; err != nil {
 		logger.Errorf("Error querying teams from database: %v", err)
@@ -45,10 +46,10 @@ func SyncConfig() {
 			continue
 		}
 		jobHistory := models.NewJobHistory("TeamResponderConfigSync", "team", team.ID.String())
-		_ = db.PersistJobHistory(jobHistory.Start())
+		_ = db.PersistJobHistory(ctx, jobHistory.Start())
 
 		defer func() {
-			_ = db.PersistJobHistory(jobHistory.End())
+			_ = db.PersistJobHistory(ctx, jobHistory.End())
 		}()
 
 		responder, err := GetResponder(ctx, team)

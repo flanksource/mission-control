@@ -5,9 +5,9 @@ import (
 	"github.com/flanksource/incident-commander/utils"
 )
 
-func UpdateUserProperties(userID string, newProps api.PersonProperties) error {
+func UpdateUserProperties(ctx *api.Context, userID string, newProps api.PersonProperties) error {
 	var current api.Person
-	if err := Gorm.Table("people").Where("id = ?", userID).First(&current).Error; err != nil {
+	if err := ctx.DB().Table("people").Where("id = ?", userID).First(&current).Error; err != nil {
 		return err
 	}
 
@@ -16,9 +16,9 @@ func UpdateUserProperties(userID string, newProps api.PersonProperties) error {
 		return err
 	}
 
-	return Gorm.Table("people").Where("id = ?", userID).Update("properties", props).Error
+	return ctx.DB().Table("people").Where("id = ?", userID).Update("properties", props).Error
 }
 
-func UpdateIdentityState(id, state string) error {
-	return Gorm.Table("identities").Where("id = ?", id).Update("state", state).Error
+func UpdateIdentityState(ctx *api.Context, id, state string) error {
+	return ctx.DB().Table("identities").Where("id = ?", id).Update("state", state).Error
 }
