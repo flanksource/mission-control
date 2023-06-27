@@ -32,7 +32,11 @@ const (
 	dbReconnectMaxDuration         = time.Minute * 5
 	dbReconnectBackoffBaseDuration = time.Second
 
-	eventWorkers = 3
+	MinWorkers uint = 1
+)
+
+var (
+	NumWorkers uint = 3
 )
 
 type Config struct {
@@ -201,8 +205,13 @@ func (t *eventHandler) ConsumeEventsUntilEmpty() {
 			}
 		}
 	}
+
+	if NumWorkers < MinWorkers {
+		NumWorkers = MinWorkers
+	}
+
 	var wg sync.WaitGroup
-	for range [eventWorkers]int{} {
+	for i := uint(0); i < NumWorkers; i++ {
 		wg.Add(1)
 		go consumerFunc(&wg)
 	}
