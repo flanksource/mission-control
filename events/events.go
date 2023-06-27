@@ -131,7 +131,7 @@ func (t *eventHandler) consumeEvents() error {
             SELECT id FROM event_queue
             WHERE 
                 attempts <= @maxAttempts
-            ORDER BY priority ASC, created_at ASC
+            ORDER BY priority DESC, created_at ASC
             FOR UPDATE SKIP LOCKED
             LIMIT 1
         )
