@@ -22,7 +22,7 @@ func (t funcJob) Run() {
 	ctx := api.NewContext(db.Gorm, nil)
 	if t.timeout > 0 {
 		var cancel func()
-		ctx.Context, cancel = context.WithTimeout(ctx, t.timeout)
+		ctx.Context, cancel = context.WithTimeout(ctx.Context, t.timeout)
 		defer cancel()
 	}
 
