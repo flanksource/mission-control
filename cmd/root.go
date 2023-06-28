@@ -36,14 +36,13 @@ var Root = &cobra.Command{
 }
 
 var dev bool
-var httpPort, metricsPort, devGuiPort, kopperPort int
+var httpPort, metricsPort, devGuiPort int
 var publicEndpoint = "http://localhost:8080"
 var configDb, kratosAPI, kratosAdminAPI, externalPostgrestUri string
 var enableAuth, disablePostgrest bool
 
 func ServerFlags(flags *pflag.FlagSet) {
 	flags.IntVar(&httpPort, "httpPort", 8080, "Port to expose a health dashboard")
-	flags.IntVar(&kopperPort, "kopperPort", 8081, "Port for kopper manager")
 	flags.StringVar(&api.Namespace, "namespace", os.Getenv("NAMESPACE"), "Namespace to use for config/secret lookups")
 	flags.IntVar(&devGuiPort, "devGuiPort", 3004, "Port used by a local npm server in development mode")
 	flags.IntVar(&metricsPort, "metricsPort", 8081, "Port to expose a health dashboard ")
@@ -59,7 +58,7 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.BoolVar(&disablePostgrest, "disable-postgrest", false, "Disable postgrest")
 	flags.StringVar(&mail.FromAddress, "email-from-address", "no-reply@flanksource.com", "Email address of the sender")
 	flags.StringVar(&db.PostgresDBAnonRole, "postgrest-anon-role", "postgrest_anon", "Postgres anonymous role")
-	flags.UintVar(&events.NumWorkers, "num-workers", events.MinWorkers, "Number of workers for event processing")
+	flags.UintVar(&events.NumWorkers, "num-workers", events.NumWorkers, "Number of workers for event processing")
 
 	// Flags for upstream push
 	flags.StringVar(&api.UpstreamConf.Host, "upstream-host", "", "central incident commander instance to push configs to")
