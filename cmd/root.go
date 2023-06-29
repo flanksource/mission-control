@@ -38,8 +38,8 @@ var Root = &cobra.Command{
 var dev bool
 var httpPort, metricsPort, devGuiPort int
 var publicEndpoint = "http://localhost:8080"
-var configDb, kratosAPI, kratosAdminAPI, externalPostgrestUri string
-var enableAuth, disablePostgrest bool
+var configDb, kratosAPI, kratosAdminAPI, postgrestURI string
+var enableAuth bool
 
 func ServerFlags(flags *pflag.FlagSet) {
 	flags.IntVar(&httpPort, "httpPort", 8080, "Port to expose a health dashboard")
@@ -52,10 +52,9 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&configDb, "config-db", "http://config-db:8080", "Config DB URL")
 	flags.StringVar(&kratosAPI, "kratos-api", "http://kratos-public:80", "Kratos API service")
 	flags.StringVar(&kratosAdminAPI, "kratos-admin", "http://kratos-admin:80", "Kratos Admin API service")
-	flags.StringVar(&externalPostgrestUri, "external-postgrest-uri", "", "URI for the postgrest instance to use")
+	flags.StringVar(&postgrestURI, "postgrest-uri", "", "URL for the postgrest instance to use. If localhost is supplied, a postgrest instance will be started")
 	flags.BoolVar(&enableAuth, "enable-auth", false, "Enable authentication via Kratos")
 	flags.DurationVar(&rules.Period, "rules-period", 5*time.Minute, "Period to run the rules")
-	flags.BoolVar(&disablePostgrest, "disable-postgrest", false, "Disable postgrest")
 	flags.StringVar(&mail.FromAddress, "email-from-address", "no-reply@flanksource.com", "Email address of the sender")
 	flags.StringVar(&db.PostgresDBAnonRole, "postgrest-anon-role", "postgrest_anon", "Postgres anonymous role")
 	flags.UintVar(&events.NumWorkers, "num-workers", events.NumWorkers, "Number of workers for event processing")

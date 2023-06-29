@@ -76,10 +76,8 @@ func createHTTPServer(gormDB *gorm.DB) *echo.Echo {
 		}
 	}
 
-	if !disablePostgrest {
-		forward(e, "/db", "http://localhost:3000", rbac.Authorization(rbac.ObjectDatabase, "any"))
-	} else if externalPostgrestUri != "" {
-		forward(e, "/db", externalPostgrestUri, rbac.Authorization(rbac.ObjectDatabase, "any"))
+	if postgrestURI != "" {
+		forward(e, "/db", postgrestURI, rbac.Authorization(rbac.ObjectDatabase, "any"))
 	}
 
 	e.Use(middleware.Logger())
@@ -168,8 +166,17 @@ var Serve = &cobra.Command{
 		if !enableAuth {
 			db.PostgresDBAnonRole = "postgrest_api"
 		}
-		if !disablePostgrest {
-			go db.StartPostgrest()
+
+		if postgrestURI != "" {
+			parsedURL, err := url.Parse(postgrestURI)
+			if err != nil {
+				logger.Fatalf("Failed to parse postgRest URL: %v", err)
+			}
+
+			host := strings.ToLower(parsedURL.Hostname())
+			if host == "localhost" {
+				go db.StartPostgrest(parsedURL.Port())
+			}
 		}
 
 		go jobs.Start()

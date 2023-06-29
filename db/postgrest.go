@@ -10,11 +10,12 @@ var PostgRESTJWTSecret string
 var PostgresDBAnonRole string
 
 func GoOffline() error {
-	return getBinary()("--help")
+	return getBinary("")("--help")
 }
 
-func getBinary() deps.BinaryFunc {
+func getBinary(port string) deps.BinaryFunc {
 	return deps.BinaryWithEnv("postgREST", PostgRESTVersion, ".bin", map[string]string{
+		"PGRST_SERVER_PORT":              port,
 		"PGRST_DB_URI":                   ConnectionString,
 		"PGRST_DB_SCHEMA":                Schema,
 		"PGRST_DB_ANON_ROLE":             PostgresDBAnonRole,
@@ -23,8 +24,10 @@ func getBinary() deps.BinaryFunc {
 		"PGRST_JWT_SECRET":               PostgRESTJWTSecret,
 	})
 }
-func StartPostgrest() {
-	if err := getBinary()(""); err != nil {
+
+func StartPostgrest(port string) {
+	logger.Infof("Starting postgrest server on port %s", port)
+	if err := getBinary(port)(""); err != nil {
 		logger.Errorf("Failed to start postgREST: %v", err)
 	}
 }
