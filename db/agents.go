@@ -1,17 +1,17 @@
 package db
 
 import (
-	"context"
 	"errors"
 	"fmt"
 
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/incident-commander/api"
 	"gorm.io/gorm"
 )
 
-func FindAgent(ctx context.Context, name string) (*models.Agent, error) {
+func FindAgent(ctx *api.Context, name string) (*models.Agent, error) {
 	var agent models.Agent
-	err := Gorm.WithContext(ctx).Where("name = ?", name).First(&agent).Error
+	err := ctx.DB().Where("name = ?", name).First(&agent).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
@@ -23,23 +23,23 @@ func FindAgent(ctx context.Context, name string) (*models.Agent, error) {
 	return &agent, nil
 }
 
-func getAgent(name string) (*models.Agent, error) {
+func getAgent(ctx *api.Context, name string) (*models.Agent, error) {
 	t := models.Agent{Name: name}
-	tx := Gorm.Where(t).First(&t)
+	tx := ctx.DB().Where(t).First(&t)
 	return &t, tx.Error
 }
 
-func createAgent(name string) (*models.Agent, error) {
+func createAgent(ctx *api.Context, name string) (*models.Agent, error) {
 	a := models.Agent{Name: name}
-	tx := Gorm.Create(&a)
+	tx := ctx.DB().Create(&a)
 	return &a, tx.Error
 }
 
-func GetOrCreateAgent(name string) (*models.Agent, error) {
-	a, err := getAgent(name)
+func GetOrCreateAgent(ctx *api.Context, name string) (*models.Agent, error) {
+	a, err := getAgent(ctx, name)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			newAgent, err := createAgent(name)
+			newAgent, err := createAgent(ctx, name)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create agent: %w", err)
 			}

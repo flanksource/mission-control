@@ -21,6 +21,8 @@ var (
 )
 
 func PushUpstream(c echo.Context) error {
+	ctx := c.(*api.Context)
+
 	var req api.PushData
 	err := json.NewDecoder(c.Request().Body).Decode(&req)
 	if err != nil {
@@ -34,7 +36,7 @@ func PushUpstream(c echo.Context) error {
 
 	agentID, ok := agentIDCache.Get(req.AgentName)
 	if !ok {
-		agent, err := db.GetOrCreateAgent(req.AgentName)
+		agent, err := db.GetOrCreateAgent(ctx, req.AgentName)
 		if err != nil {
 			return c.JSON(http.StatusBadRequest, api.HTTPError{
 				Error:   err.Error(),
@@ -47,7 +49,7 @@ func PushUpstream(c echo.Context) error {
 
 	headlessTopologyID, ok := topologyIDCache.Get(req.AgentName)
 	if !ok {
-		headlessTopology, err := db.GetOrCreateHeadlessTopology(c.Request().Context(), req.AgentName)
+		headlessTopology, err := db.GetOrCreateHeadlessTopology(ctx, req.AgentName)
 		if err != nil {
 			return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error(), Message: fmt.Sprintf("failed to get headless topology for cluster: %s", req.AgentName)})
 		}
@@ -59,7 +61,7 @@ func PushUpstream(c echo.Context) error {
 	req.PopulateAgentID(agentID.(uuid.UUID))
 
 	logger.Debugf("Pushing %s", req.String())
-	if err := db.InsertUpstreamMsg(c.Request().Context(), &req); err != nil {
+	if err := db.InsertUpstreamMsg(ctx, &req); err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to upsert upstream message"})
 	}
 
@@ -68,7 +70,7 @@ func PushUpstream(c echo.Context) error {
 
 // StatusReport returns all the ids of items it has received from the requested agent.
 func StatusReport(c echo.Context) error {
-	ctx := c.Request().Context()
+	ctx := c.(*api.Context)
 
 	agentName := c.Param("agent_name")
 	agent, err := db.FindAgent(ctx, agentName)

@@ -10,6 +10,7 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
+	"github.com/labstack/echo/v4"
 	"gorm.io/gorm"
 	"k8s.io/client-go/kubernetes"
 )
@@ -20,24 +21,40 @@ var ApmHubPath string
 var Kubernetes kubernetes.Interface
 var Namespace string
 
+// type alias because the name "Context" collides with gocontext
+// and embedding both wouldn't have been possible.
+type EchoContext = echo.Context
+
 type Context struct {
+	EchoContext
 	gocontext.Context
-	DB         *gorm.DB
+	db         *gorm.DB
 	Kubernetes kubernetes.Interface
 	Namespace  string
 }
 
-func (c *Context) GetEnvVarValue(input types.EnvVar) (string, error) {
-	return duty.GetEnvValueFromCache(c.Kubernetes, input, c.Namespace)
+func NewContext(db *gorm.DB, echoCtx EchoContext) *Context {
+	c := &Context{
+		Context:     gocontext.Background(),
+		EchoContext: echoCtx,
+		db:          db,
+		Kubernetes:  Kubernetes,
+		Namespace:   Namespace,
+	}
+
+	if echoCtx != nil {
+		c.Context = c.Request().Context()
+	}
+
+	return c
 }
 
-func NewContext(db *gorm.DB) *Context {
-	return &Context{
-		Context:    gocontext.Background(),
-		DB:         db,
-		Kubernetes: Kubernetes,
-		Namespace:  Namespace,
-	}
+func (c *Context) DB() *gorm.DB {
+	return c.db.WithContext(c.Context)
+}
+
+func (c *Context) GetEnvVarValue(input types.EnvVar) (string, error) {
+	return duty.GetEnvValueFromCache(c.Kubernetes, input, c.Namespace)
 }
 
 func (c *Context) HydrateConnection(connectionName string) (*models.Connection, error) {
@@ -45,11 +62,11 @@ func (c *Context) HydrateConnection(connectionName string) (*models.Connection, 
 		return nil, nil
 	}
 
-	if c.DB == nil {
+	if c.db == nil {
 		return nil, errors.New("DB has not been initialized")
 	}
 
-	connection, err := duty.HydratedConnectionByURL(c, c.DB, c.Kubernetes, c.Namespace, connectionName)
+	connection, err := duty.HydratedConnectionByURL(c, c.db, c.Kubernetes, c.Namespace, connectionName)
 	if err != nil {
 		return nil, err
 	}

@@ -1,12 +1,17 @@
 package testutils
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
 
 	embeddedPG "github.com/fergusstrange/embedded-postgres"
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty"
+	"github.com/jackc/pgx/v5/pgxpool"
+	ginkgo "github.com/onsi/ginkgo/v2"
+	"gorm.io/gorm"
 )
 
 func GetPGConfig(database string, port int) embeddedPG.Config {
@@ -33,4 +38,30 @@ func GetPGConfig(database string, port int) embeddedPG.Config {
 		Port(uint32(port)).
 		RuntimePath(runTimePath).
 		Logger(io.Discard)
+}
+
+func SetupDBConnection(dbName string, port int) (*gorm.DB, *pgxpool.Pool) {
+	connectionString := fmt.Sprintf("postgres://postgres:postgres@localhost:%d/%s?sslmode=disable", port, dbName)
+
+	pgxpool, err := duty.NewPgxPool(connectionString)
+	if err != nil {
+		ginkgo.Fail(err.Error())
+	}
+
+	conn, err := pgxpool.Acquire(context.Background())
+	if err != nil {
+		ginkgo.Fail(err.Error())
+	}
+	defer conn.Release()
+
+	gormDB, err := duty.NewGorm(connectionString, duty.DefaultGormConfig())
+	if err != nil {
+		ginkgo.Fail(err.Error())
+	}
+
+	if err = duty.Migrate(connectionString, nil); err != nil {
+		ginkgo.Fail(err.Error())
+	}
+
+	return gormDB, pgxpool
 }

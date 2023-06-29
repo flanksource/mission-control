@@ -1,11 +1,11 @@
 package db
 
 import (
-	"context"
 	"errors"
 	"fmt"
 
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/incident-commander/api"
 	"gorm.io/gorm"
 )
 
@@ -13,19 +13,19 @@ import (
 // downstream instances.
 const headlessTopologyNamespace = "push"
 
-func getHeadlessTopology(ctx context.Context, name string) (*models.Topology, error) {
+func getHeadlessTopology(ctx *api.Context, name string) (*models.Topology, error) {
 	t := models.Topology{Name: name, Namespace: headlessTopologyNamespace}
-	tx := Gorm.WithContext(ctx).Where(t).First(&t)
+	tx := ctx.DB().Where(t).First(&t)
 	return &t, tx.Error
 }
 
-func createHeadlessTopology(ctx context.Context, name string) (*models.Topology, error) {
+func createHeadlessTopology(ctx *api.Context, name string) (*models.Topology, error) {
 	t := models.Topology{Name: name, Namespace: headlessTopologyNamespace}
-	tx := Gorm.WithContext(ctx).Create(&t)
+	tx := ctx.DB().Create(&t)
 	return &t, tx.Error
 }
 
-func GetOrCreateHeadlessTopology(ctx context.Context, name string) (*models.Topology, error) {
+func GetOrCreateHeadlessTopology(ctx *api.Context, name string) (*models.Topology, error) {
 	t, err := getHeadlessTopology(ctx, name)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {

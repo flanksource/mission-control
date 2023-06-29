@@ -13,7 +13,7 @@ import (
 )
 
 // SyncWithUpstream sends all the missing resources to the upstream.
-func SyncWithUpstream(ctx context.Context) error {
+func SyncWithUpstream(ctx *api.Context) error {
 	resp, err := fetchUpstreamResourceIDs(ctx, api.UpstreamConf)
 	if err != nil {
 		return fmt.Errorf("failed to fetch upstream resource ids: %w", err)

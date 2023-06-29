@@ -11,6 +11,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/spf13/cobra"
+	"gorm.io/gorm"
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/schema/openapi"
@@ -42,128 +43,145 @@ var cacheSuffixes = []string{
 	".png",
 }
 
+func createHTTPServer(gormDB *gorm.DB) *echo.Echo {
+	e := echo.New()
+	e.HideBanner = true
+
+	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			cc := api.NewContext(gormDB, c)
+			return next(cc)
+		}
+	})
+
+	e.Use(echoprometheus.NewMiddleware("mission_control"))
+	e.GET("/metrics", echoprometheus.NewHandler())
+
+	kratosHandler := auth.NewKratosHandler(kratosAPI, kratosAdminAPI, db.PostgRESTJWTSecret)
+	if enableAuth {
+		adminUserID, err := kratosHandler.CreateAdminUser(context.Background())
+		if err != nil {
+			logger.Fatalf("Failed to created admin user: %v", err)
+		}
+
+		middleware, err := kratosHandler.KratosMiddleware()
+		if err != nil {
+			logger.Fatalf("Failed to initialize kratos middleware: %v", err)
+		}
+		e.Use(middleware.Session)
+
+		// Initiate RBAC
+		if err := rbac.Init(adminUserID); err != nil {
+			logger.Fatalf("Failed to initialize rbac: %v", err)
+		}
+	}
+
+	if !disablePostgrest {
+		forward(e, "/db", "http://localhost:3000", rbac.Authorization(rbac.ObjectDatabase, "any"))
+	}
+
+	if externalPostgrestUri != "" {
+		forward(e, "/db", externalPostgrestUri, rbac.Authorization(rbac.ObjectDatabase, "any"))
+	}
+
+	e.Use(middleware.Logger())
+	e.Use(ServerCache)
+
+	e.GET("/health", func(c echo.Context) error {
+		if err := db.Pool.Ping(context.Background()); err != nil {
+			return c.JSON(http.StatusInternalServerError, api.HTTPError{
+				Error:   err.Error(),
+				Message: "Failed to ping database",
+			})
+		}
+		return c.JSON(http.StatusOK, api.HTTPSuccess{Message: "ok"})
+	})
+
+	e.POST("/auth/invite_user", kratosHandler.InviteUser, rbac.Authorization(rbac.ObjectAuth, rbac.ActionWrite))
+
+	e.GET("/snapshot/topology/:id", snapshot.Topology)
+	e.GET("/snapshot/incident/:id", snapshot.Incident)
+	e.GET("/snapshot/config/:id", snapshot.Config)
+
+	e.POST("/auth/:id/update_state", auth.UpdateAccountState)
+	e.POST("/auth/:id/properties", auth.UpdateAccountProperties)
+
+	e.POST("/rbac/:id/update_role", rbac.UpdateRoleForUser, rbac.Authorization(rbac.ObjectRBAC, rbac.ActionWrite))
+
+	// Serve openapi schemas
+	schemaServer, err := utils.HTTPFileserver(openapi.Schemas)
+	if err != nil {
+		logger.Fatalf("Error creating schema fileserver: %v", err)
+	}
+	e.GET("/schemas/*", echo.WrapHandler(http.StripPrefix("/schemas/", schemaServer)))
+
+	if api.UpstreamConf.IsPartiallyFilled() {
+		logger.Warnf("Please ensure that all the required flags for upstream is supplied.")
+	}
+	e.POST("/upstream_push", upstream.PushUpstream)
+	e.GET("/upstream_check/:agent_name", upstream.StatusReport)
+
+	forward(e, "/config", configDb)
+	forward(e, "/canary", api.CanaryCheckerPath)
+	forward(e, "/kratos", kratosAPI)
+	forward(e, "/apm", api.ApmHubPath) // Deprecated
+
+	e.POST("/logs", logs.LogsHandler)
+	return e
+}
+
+func launchKopper() {
+	mgr, err := kopper.Manager(&kopper.ManagerOptions{
+		AddToSchemeFunc: v1.AddToScheme,
+	})
+	if err != nil {
+		logger.Fatalf("error creating manager: %v", err)
+	}
+
+	if err = kopper.SetupReconciler(
+		mgr,
+		db.PersistConnectionFromCRD,
+		db.DeleteConnection,
+		"connection.mission-control.flanksource.com",
+	); err != nil {
+		logger.Fatalf("Unable to create controller for Connection: %v", err)
+	}
+
+	if err = kopper.SetupReconciler(
+		mgr,
+		db.PersistIncidentRuleFromCRD,
+		db.DeleteIncidentRule,
+		"incidentrule.mission-control.flanksource.com",
+	); err != nil {
+		logger.Fatalf("Unable to create controller for IncidentRule: %v", err)
+	}
+
+	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+		logger.Fatalf("error running manager: %v", err)
+	}
+}
+
 var Serve = &cobra.Command{
 	Use:    "serve",
 	PreRun: PreRun,
 	Run: func(cmd *cobra.Command, args []string) {
-		e := echo.New()
-		e.HideBanner = true
-		e.Use(echoprometheus.NewMiddleware("mission_control"))
-		e.GET("/metrics", echoprometheus.NewHandler())
-
 		// PostgREST needs to know how it is exposed to create the correct links
 		db.HttpEndpoint = publicEndpoint + "/db"
-
-		kratosHandler := auth.NewKratosHandler(kratosAPI, kratosAdminAPI, db.PostgRESTJWTSecret)
-		if enableAuth {
-			adminUserID, err := kratosHandler.CreateAdminUser(context.Background())
-			if err != nil {
-				logger.Fatalf("Failed to created admin user: %v", err)
-			}
-
-			middleware, err := kratosHandler.KratosMiddleware()
-			if err != nil {
-				logger.Fatalf("Failed to initialize kratos middleware: %v", err)
-			}
-			e.Use(middleware.Session)
-
-			// Initiate RBAC
-			if err := rbac.Init(adminUserID); err != nil {
-				logger.Fatalf("Failed to initialize rbac: %v", err)
-			}
-		}
-
 		if !enableAuth {
 			db.PostgresDBAnonRole = "postgrest_api"
 		}
 		if !disablePostgrest {
 			go db.StartPostgrest()
-			forward(e, "/db", "http://localhost:3000", rbac.Authorization(rbac.ObjectDatabase, "any"))
 		}
-
-		if externalPostgrestUri != "" {
-			forward(e, "/db", externalPostgrestUri, rbac.Authorization(rbac.ObjectDatabase, "any"))
-		}
-		e.Use(middleware.Logger())
-		e.Use(ServerCache)
-
-		e.GET("/health", func(c echo.Context) error {
-			if err := db.Pool.Ping(context.Background()); err != nil {
-				return c.JSON(http.StatusInternalServerError, api.HTTPError{
-					Error:   err.Error(),
-					Message: "Failed to ping database",
-				})
-			}
-			return c.JSON(http.StatusOK, api.HTTPSuccess{Message: "ok"})
-		})
-
-		e.POST("/auth/invite_user", kratosHandler.InviteUser, rbac.Authorization(rbac.ObjectAuth, rbac.ActionWrite))
-
-		e.GET("/snapshot/topology/:id", snapshot.Topology)
-		e.GET("/snapshot/incident/:id", snapshot.Incident)
-		e.GET("/snapshot/config/:id", snapshot.Config)
-
-		e.POST("/auth/:id/update_state", auth.UpdateAccountState)
-		e.POST("/auth/:id/properties", auth.UpdateAccountProperties)
-
-		e.POST("/rbac/:id/update_role", rbac.UpdateRoleForUser, rbac.Authorization(rbac.ObjectRBAC, rbac.ActionWrite))
-
-		// Serve openapi schemas
-		schemaServer, err := utils.HTTPFileserver(openapi.Schemas)
-		if err != nil {
-			logger.Fatalf("Error creating schema fileserver: %v", err)
-		}
-		e.GET("/schemas/*", echo.WrapHandler(http.StripPrefix("/schemas/", schemaServer)))
-
-		if api.UpstreamConf.IsPartiallyFilled() {
-			logger.Warnf("Please ensure that all the required flags for upstream is supplied.")
-		}
-		e.POST("/upstream_push", upstream.PushUpstream)
-		e.GET("/upstream_check/:agent_name", upstream.StatusReport)
-
-		forward(e, "/config", configDb)
-		forward(e, "/canary", api.CanaryCheckerPath)
-		forward(e, "/kratos", kratosAPI)
-		forward(e, "/apm", api.ApmHubPath) // Deprecated
-
-		e.POST("/logs", logs.LogsHandler)
 
 		go jobs.Start()
 
 		eventHandler := events.NewEventHandler(context.Background(), db.Gorm, events.Config{UpstreamConf: api.UpstreamConf})
 		go eventHandler.ListenForEvents()
 
-		mgr, err := kopper.Manager(&kopper.ManagerOptions{
-			AddToSchemeFunc: v1.AddToScheme,
-		})
-		if err != nil {
-			logger.Fatalf("error creating manager: %v", err)
-		}
+		go launchKopper()
 
-		if err = kopper.SetupReconciler(
-			mgr,
-			db.PersistConnectionFromCRD,
-			db.DeleteConnection,
-			"connection.mission-control.flanksource.com",
-		); err != nil {
-			logger.Fatalf("Unable to create controller for Connection: %v", err)
-		}
-
-		if err = kopper.SetupReconciler(
-			mgr,
-			db.PersistIncidentRuleFromCRD,
-			db.DeleteIncidentRule,
-			"incidentrule.mission-control.flanksource.com",
-		); err != nil {
-			logger.Fatalf("Unable to create controller for IncidentRule: %v", err)
-		}
-
-		go func() {
-			if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-				logger.Fatalf("error running manager: %v", err)
-			}
-		}()
-
+		e := createHTTPServer(db.Gorm)
 		listenAddr := fmt.Sprintf(":%d", httpPort)
 		logger.Infof("Listening on %s", listenAddr)
 		if err := e.Start(listenAddr); err != nil {

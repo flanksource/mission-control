@@ -32,7 +32,7 @@ func upsertConfig(configType, externalID, name, config string) error {
 
 func SyncConfig() {
 	logger.Debugf("Syncing responder config")
-	ctx := api.NewContext(db.Gorm)
+	ctx := api.NewContext(db.Gorm, nil)
 	var teams []api.Team
 	if err := db.Gorm.Find(&teams).Error; err != nil {
 		logger.Errorf("Error querying teams from database: %v", err)
