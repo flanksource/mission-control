@@ -17,7 +17,9 @@ import (
 func SyncWithUpstream(ctx *api.Context) error {
 	jobHistory := models.NewJobHistory("SyncWithUpstream", "", "")
 	_ = db.PersistJobHistory(jobHistory.Start())
-	defer db.PersistJobHistory(jobHistory.End())
+	defer func() {
+		_ = db.PersistJobHistory(jobHistory.End())
+	}()
 
 	resp, err := fetchUpstreamResourceIDs(ctx, api.UpstreamConf)
 	if err != nil {
