@@ -8,27 +8,36 @@ import (
 	"net/http"
 	"net/url"
 
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 )
 
 // SyncWithUpstream sends all the missing resources to the upstream.
 func SyncWithUpstream(ctx *api.Context) error {
+	jobHistory := models.NewJobHistory("SyncWithUpstream", "", "")
+	_ = db.PersistJobHistory(jobHistory.Start())
+	defer db.PersistJobHistory(jobHistory.End())
+
 	resp, err := fetchUpstreamResourceIDs(ctx, api.UpstreamConf)
 	if err != nil {
+		jobHistory.AddError(err.Error())
 		return fmt.Errorf("failed to fetch upstream resource ids: %w", err)
 	}
 
 	pushData, err := db.GetAllMissingResourceIDs(ctx, resp)
 	if err != nil {
+		jobHistory.AddError(err.Error())
 		return fmt.Errorf("failed to fetch missing resource ids: %w", err)
 	}
 
 	pushData.AgentName = api.UpstreamConf.AgentName
 	if err := Push(ctx, api.UpstreamConf, pushData); err != nil {
+		jobHistory.AddError(err.Error())
 		return fmt.Errorf("failed to push missing resource ids: %w", err)
 	}
 
+	jobHistory.IncrSuccess()
 	return nil
 }
 
