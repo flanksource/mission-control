@@ -32,7 +32,7 @@ const (
 	dbReconnectMaxDuration         = time.Minute * 5
 	dbReconnectBackoffBaseDuration = time.Second
 
-	MinWorkers uint = 1
+	minWorkers uint = 1
 )
 
 var (
@@ -206,8 +206,8 @@ func (t *eventHandler) ConsumeEventsUntilEmpty() {
 		}
 	}
 
-	if NumWorkers < MinWorkers {
-		NumWorkers = MinWorkers
+	if NumWorkers < minWorkers {
+		NumWorkers = minWorkers
 	}
 
 	var wg sync.WaitGroup

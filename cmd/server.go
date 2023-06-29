@@ -134,8 +134,7 @@ var Serve = &cobra.Command{
 		go eventHandler.ListenForEvents()
 
 		mgr, err := kopper.Manager(&kopper.ManagerOptions{
-			MetricsBindAddress: fmt.Sprintf(":%d", kopperPort),
-			AddToSchemeFunc:    v1.AddToScheme,
+			AddToSchemeFunc: v1.AddToScheme,
 		})
 		if err != nil {
 			logger.Fatalf("error creating manager: %v", err)
