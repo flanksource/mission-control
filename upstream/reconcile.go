@@ -23,7 +23,7 @@ var tablesToReconcile = []string{
 	"checks",
 }
 
-const pageSize = 5
+const pageSize = 500
 
 func syncTableWithUpstream(ctx *api.Context, table string) error {
 	logger.Debugf("Syncing %s with upstream", table)
@@ -32,21 +32,21 @@ func syncTableWithUpstream(ctx *api.Context, table string) error {
 	for {
 		paginateRequest := api.PushPaginateRequest{From: next, Table: table, Size: pageSize}
 
+		current, err := db.GetIDsHash(ctx, table, next, pageSize)
+		if err != nil {
+			return fmt.Errorf("failed to fetch local id hash: %w", err)
+		}
+		next = current.Next
+
+		if current.Total == 0 {
+			break
+		}
+
 		upstreamStatus, err := fetchUpstreamStatus(ctx, api.UpstreamConf, paginateRequest)
 		if err != nil {
 			return fmt.Errorf("failed to fetch upstream status: %w", err)
 		}
 
-		if upstreamStatus.Total == 0 {
-			break
-		}
-
-		current, err := db.GetIDsHash(ctx, table, next, pageSize)
-		if err != nil {
-			return fmt.Errorf("failed to fetch local id hash: %w", err)
-		}
-
-		next = upstreamStatus.Next
 		if upstreamStatus.Hash == current.Hash {
 			continue
 		}
@@ -64,10 +64,6 @@ func syncTableWithUpstream(ctx *api.Context, table string) error {
 		pushData.AgentName = api.UpstreamConf.AgentName
 		if err := Push(ctx, api.UpstreamConf, pushData); err != nil {
 			return fmt.Errorf("failed to push missing resource ids: %w", err)
-		}
-
-		if upstreamStatus.Total < pageSize {
-			break
 		}
 	}
 
