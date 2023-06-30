@@ -6,21 +6,23 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/db"
 	"github.com/robfig/cron/v3"
 )
 
 type funcJob struct {
-	name    string                      // name is just an additional context for the job.
-	timeout time.Duration               // optional timeout for the job
-	fn      func(context.Context) error // the actual job
-	runNow  bool                        // whether to run the job now
+	name    string                   // name is just an additional context for the job.
+	timeout time.Duration            // optional timeout for the job
+	fn      func(*api.Context) error // the actual job
+	runNow  bool                     // whether to run the job now
 }
 
 func (t funcJob) Run() {
-	ctx := context.Background()
+	ctx := api.NewContext(db.Gorm, nil)
 	if t.timeout > 0 {
 		var cancel func()
-		ctx, cancel = context.WithTimeout(ctx, t.timeout)
+		ctx.Context, cancel = context.WithTimeout(ctx.Context, t.timeout)
 		defer cancel()
 	}
 
@@ -43,7 +45,7 @@ func (t funcJob) schedule(cronRunner *cron.Cron, schedule string) error {
 	return nil
 }
 
-func newFuncJob(fn func(context.Context) error, opts ...func(*funcJob)) *funcJob {
+func newFuncJob(fn func(*api.Context) error, opts ...func(*funcJob)) *funcJob {
 	job := &funcJob{
 		fn: fn,
 	}

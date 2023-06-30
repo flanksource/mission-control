@@ -17,8 +17,6 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/db"
-	"github.com/flanksource/incident-commander/testutils"
 )
 
 var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
@@ -32,7 +30,7 @@ var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
 
 	ginkgo.It("should track insertion on the event_queue table", func() {
 		var events []api.Event
-		err := testutils.TestDB.Where("name = ?", EventPushQueueCreate).Find(&events).Error
+		err := agentDB.Where("name = ?", EventPushQueueCreate).Find(&events).Error
 		Expect(err).NotTo(HaveOccurred())
 
 		groupedEvents := GroupChangelogsByTables(events)
@@ -100,19 +98,19 @@ var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
 		modifiedNewDummy := dummy.Logistics
 		modifiedNewDummy.ID = uuid.New()
 
-		err := testutils.TestDB.Create(&modifiedNewDummy).Error
+		err := agentDB.Create(&modifiedNewDummy).Error
 		Expect(err).NotTo(HaveOccurred())
 
 		modifiedNewDummy.Status = types.ComponentStatusUnhealthy
-		err = testutils.TestDB.Save(&modifiedNewDummy).Error
+		err = agentDB.Save(&modifiedNewDummy).Error
 		Expect(err).NotTo(HaveOccurred())
 
 		modifiedNewDummy.Status = types.ComponentStatusUnhealthy
-		err = testutils.TestDB.Delete(&modifiedNewDummy).Error
+		err = agentDB.Delete(&modifiedNewDummy).Error
 		Expect(err).NotTo(HaveOccurred())
 
 		var events []api.Event
-		err = testutils.TestDB.Where("name = ? AND created_at >= ?", EventPushQueueCreate, start).Find(&events).Error
+		err = agentDB.Where("name = ? AND created_at >= ?", EventPushQueueCreate, start).Find(&events).Error
 		Expect(err).NotTo(HaveOccurred())
 
 		// Only 1 event should get created since we are modifying the same resource
@@ -123,21 +121,17 @@ var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
 	})
 
 	ginkgo.It("should transfer all events to upstream server", func() {
-		// Overwrite the global db that'll be used by the upstream server.
-		db.Gorm = testutils.TestUpstreamDB
-		db.Pool = testutils.TestUpstreamDBPGPool
-
 		eventHandlerConfig := Config{
 			UpstreamConf: api.UpstreamConfig{
 				AgentName: "test-agent",
-				Host:      fmt.Sprintf("http://localhost:%d", testutils.TestUpstreamServerPort),
+				Host:      fmt.Sprintf("http://localhost:%d", upstreamEchoServerport),
 				Username:  "admin@local",
 				Password:  "admin",
 				Labels:    []string{"test"},
 			},
 		}
 
-		eventHandler := NewEventHandler(context.Background(), testutils.TestDB, eventHandlerConfig)
+		eventHandler := NewEventHandler(context.Background(), agentDB, eventHandlerConfig)
 		eventHandler.ConsumeEventsUntilEmpty()
 	})
 
@@ -150,51 +144,51 @@ var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
 		// unexported fields must be explicitly ignored.
 		ignoreUnexportedOpt := cmpopts.IgnoreUnexported(models.Component{}, types.Summary{})
 
-		compareEntities(testutils.TestUpstreamDB, testutils.TestDB, &[]models.Component{}, ignoreFieldsOpt, ignoreUnexportedOpt)
+		compareEntities(upstreamDB, agentDB, &[]models.Component{}, ignoreFieldsOpt, ignoreUnexportedOpt)
 	})
 
 	ginkgo.It("should have transferred all the checks", func() {
-		compareEntities(testutils.TestUpstreamDB, testutils.TestUpstreamDB, &[]models.Check{})
+		compareEntities(upstreamDB, agentDB, &[]models.Check{})
 	})
 
 	ginkgo.It("should have transferred all the check statuses", func() {
-		compareEntities(testutils.TestUpstreamDB, testutils.TestUpstreamDB, &[]models.CheckStatus{})
+		compareEntities(upstreamDB, agentDB, &[]models.CheckStatus{})
 	})
 
 	ginkgo.It("should have transferred all the canaries", func() {
-		compareEntities(testutils.TestUpstreamDB, testutils.TestUpstreamDB, &[]models.Canary{})
+		compareEntities(upstreamDB, agentDB, &[]models.Canary{})
 	})
 
 	ginkgo.It("should have transferred all the configs", func() {
-		compareEntities(testutils.TestUpstreamDB, testutils.TestUpstreamDB, &[]models.ConfigItem{})
+		compareEntities(upstreamDB, agentDB, &[]models.ConfigItem{})
 	})
 
 	ginkgo.It("should have transferred all the config analyses", func() {
-		compareEntities(testutils.TestUpstreamDB, testutils.TestUpstreamDB, &[]models.ConfigAnalysis{})
+		compareEntities(upstreamDB, agentDB, &[]models.ConfigAnalysis{})
 	})
 
 	ginkgo.It("should have transferred all the config changes", func() {
-		compareEntities(testutils.TestUpstreamDB, testutils.TestUpstreamDB, &[]models.ConfigChange{})
+		compareEntities(upstreamDB, agentDB, &[]models.ConfigChange{})
 	})
 
 	ginkgo.It("should have transferred all the config relationships", func() {
-		compareEntities(testutils.TestUpstreamDB, testutils.TestUpstreamDB, &[]models.ComponentRelationship{})
+		compareEntities(upstreamDB, agentDB, &[]models.ComponentRelationship{})
 	})
 
 	ginkgo.It("should have transferred all the config component relationships", func() {
-		compareEntities(testutils.TestUpstreamDB, testutils.TestUpstreamDB, &[]models.ConfigComponentRelationship{})
+		compareEntities(upstreamDB, agentDB, &[]models.ConfigComponentRelationship{})
 	})
 
 	ginkgo.It("should have populated the agents table", func() {
 		var count int
-		err := testutils.TestUpstreamDB.Select("COUNT(*)").Table("agents").Scan(&count).Error
+		err := upstreamDB.Select("COUNT(*)").Table("agents").Scan(&count).Error
 		Expect(err).ToNot(HaveOccurred())
 		Expect(count).ToNot(BeZero())
 	})
 
 	ginkgo.It("should have populated the agent_id field", func() {
 		var count int
-		err := testutils.TestUpstreamDB.Select("COUNT(*)").Table("checks").Where("agent_id IS NOT NULL").Scan(&count).Error
+		err := upstreamDB.Select("COUNT(*)").Table("checks").Where("agent_id IS NOT NULL").Scan(&count).Error
 		Expect(err).ToNot(HaveOccurred())
 		Expect(count).ToNot(BeZero())
 	})

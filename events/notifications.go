@@ -44,7 +44,7 @@ func publishNotification(tx *gorm.DB, event api.Event) error {
 	responderID := event.Properties["id"]
 	notificationID := event.Properties["notification_id"]
 
-	ctx := api.NewContext(tx)
+	ctx := api.NewContext(tx, nil)
 
 	var _responder api.Responder
 	err := tx.Where("id = ? AND external_id is NULL", responderID).Preload("Incident").Preload("Team").Find(&_responder).Error

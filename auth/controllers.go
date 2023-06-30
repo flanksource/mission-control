@@ -62,6 +62,8 @@ func (k *KratosHandler) InviteUser(c echo.Context) error {
 }
 
 func UpdateAccountState(c echo.Context) error {
+	ctx := c.(*api.Context)
+
 	var reqData struct {
 		ID    string `json:"id"`
 		State string `json:"state"`
@@ -80,7 +82,7 @@ func UpdateAccountState(c echo.Context) error {
 		})
 	}
 
-	if err := db.UpdateIdentityState(reqData.ID, reqData.State); err != nil {
+	if err := db.UpdateIdentityState(ctx, reqData.ID, reqData.State); err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{
 			Error:   err.Error(),
 			Message: "Error updating database",
@@ -91,6 +93,8 @@ func UpdateAccountState(c echo.Context) error {
 }
 
 func UpdateAccountProperties(c echo.Context) error {
+	ctx := c.(*api.Context)
+
 	var props api.PersonProperties
 	if err := c.Bind(&props); err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{
@@ -99,7 +103,7 @@ func UpdateAccountProperties(c echo.Context) error {
 		})
 	}
 
-	err := db.UpdateUserProperties(c.Param("id"), props)
+	err := db.UpdateUserProperties(ctx, c.Param("id"), props)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{
 			Error:   err.Error(),
