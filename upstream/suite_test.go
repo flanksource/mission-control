@@ -8,6 +8,7 @@ import (
 
 	embeddedPG "github.com/fergusstrange/embedded-postgres"
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/testutils"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -30,6 +31,7 @@ var (
 	upstreamEchoServerport = 11006
 	upstreamEchoServer     *echo.Echo
 
+	agentName     = "test-agent"
 	agentDB       *gorm.DB
 	agentDBPGPool *pgxpool.Pool
 	agentDBName   = "agent"
@@ -53,6 +55,7 @@ var _ = ginkgo.BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 
 	upstreamDB, upstreamPool = testutils.SetupDBConnection(upstreamDBName, pgServerPort)
+	Expect(upstreamDB.Create(&models.Agent{Name: agentName}).Error).To(BeNil())
 
 	setupUpstreamHTTPServer()
 })
@@ -83,6 +86,14 @@ func setupUpstreamHTTPServer() {
 	upstreamGroup.GET("/pull/:agent_name", Pull)
 	upstreamGroup.GET("/status/:agent_name", Status)
 	listenAddr := fmt.Sprintf(":%d", upstreamEchoServerport)
+
+	api.UpstreamConf = api.UpstreamConfig{
+		AgentName: agentName,
+		Host:      fmt.Sprintf("http://localhost:%d", upstreamEchoServerport),
+		Username:  "admin@local",
+		Password:  "admin",
+		Labels:    []string{"test"},
+	}
 
 	go func() {
 		defer ginkgo.GinkgoRecover() // Required by ginkgo, if an assertion is made in a goroutine.

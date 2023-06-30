@@ -1,12 +1,17 @@
 package upstream
 
 import (
+	"fmt"
+	"time"
+
 	"github.com/flanksource/duty/fixtures/dummy"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/db"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/google/uuid"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"gorm.io/gorm"
@@ -17,27 +22,68 @@ var _ = ginkgo.Describe("Push Mode reconcilation", ginkgo.Ordered, func() {
 		err := dummy.PopulateDBWithDummyModels(agentDB)
 		Expect(err).To(BeNil())
 
-		// TODO:
-		// - Populate dummy config scraper (maybe add this in duty)
-		// - Create a dummy component and config item that are linked to each other so the reconcilation fails
-		// - Also test the hash is serving the purpose
+		// duty's dummy fixture doesn't have a dummy config scraper (maybe add this in duty)
+		dummyConfigScraper := models.ConfigScraper{
+			ID:        uuid.New(),
+			Name:      "Azure scraper",
+			CreatedAt: time.Now(),
+			Source:    "ConfigFile",
+			Spec:      "{}",
+		}
+		Expect(agentDB.Create(&dummyConfigScraper).Error).To(BeNil(), "save config scraper")
 
 		// Agent must have all of dummy records
-		compareItemCounts[models.Component](agentDB, len(dummy.AllDummyComponents))
-		compareItemCounts[models.ConfigItem](agentDB, len(dummy.AllDummyConfigs))
-		compareItemCounts[models.Canary](agentDB, len(dummy.AllDummyCanaries))
-		compareItemCounts[models.Check](agentDB, len(dummy.AllDummyChecks))
+		compareItemsCount[models.Component](agentDB, len(dummy.AllDummyComponents))
+		compareItemsCount[models.ConfigItem](agentDB, len(dummy.AllDummyConfigs))
+		compareItemsCount[models.ConfigScraper](agentDB, 1)
+		compareItemsCount[models.Canary](agentDB, len(dummy.AllDummyCanaries))
+		compareItemsCount[models.Check](agentDB, len(dummy.AllDummyChecks))
 
 		// Upstream must have no records
-		compareItemCounts[models.Component](upstreamDB, 0)
-		compareItemCounts[models.ConfigItem](upstreamDB, 0)
-		compareItemCounts[models.Canary](upstreamDB, 0)
-		compareItemCounts[models.Check](upstreamDB, 0)
+		compareItemsCount[models.Component](upstreamDB, 0)
+		compareItemsCount[models.ConfigItem](upstreamDB, 0)
+		compareItemsCount[models.ConfigScraper](upstreamDB, 0)
+		compareItemsCount[models.Canary](upstreamDB, 0)
+		compareItemsCount[models.Check](upstreamDB, 0)
+	})
+
+	ginkgo.It("should return diffierent hash for agent and upstream", func() {
+		ctx := api.NewContext(agentDB, nil)
+		upstreamCtx := api.NewContext(upstreamDB, nil)
+
+		for _, table := range api.TablesToReconcile {
+			agentStatus, err := db.GetIDsHash(ctx, table, uuid.Nil, PageSize)
+			Expect(err).To(BeNil())
+
+			upstreamStatus, err := db.GetIDsHash(upstreamCtx, table, uuid.Nil, PageSize)
+			Expect(err).To(BeNil())
+
+			Expect(agentStatus).ToNot(Equal(upstreamStatus), fmt.Sprintf("table [%s] hash to not match", table))
+		}
 	})
 
 	ginkgo.It("should run reconcilation", func() {
 		ctx := api.NewContext(agentDB, nil)
-		SyncWithUpstream(ctx)
+
+		for _, table := range api.TablesToReconcile {
+			err := syncTableWithUpstream(ctx, table)
+			Expect(err).To(BeNil(), fmt.Sprintf("table %s should push to upstream", table))
+		}
+	})
+
+	ginkgo.It("should match the hash", func() {
+		ctx := api.NewContext(agentDB, nil)
+		upstreamCtx := api.NewContext(upstreamDB, nil)
+
+		for _, table := range api.TablesToReconcile {
+			agentStatus, err := db.GetIDsHash(ctx, table, uuid.Nil, PageSize)
+			Expect(err).To(BeNil())
+
+			upstreamStatus, err := db.GetIDsHash(upstreamCtx, table, uuid.Nil, PageSize)
+			Expect(err).To(BeNil())
+
+			Expect(agentStatus).To(Equal(upstreamStatus), fmt.Sprintf("table [%s] hash to match", table))
+		}
 	})
 
 	ginkgo.It("should have transferred all the components", func() {
@@ -85,9 +131,9 @@ func compareEntities(upstreamDB, downstreamDB *gorm.DB, entityType interface{}, 
 	Expect(diff).To(BeEmpty())
 }
 
-// compareItemCounts compares whether the given model "T" has `totalExpected` number of records
+// compareItemsCount compares whether the given model "T" has `totalExpected` number of records
 // in the database
-func compareItemCounts[T any](gormDB *gorm.DB, totalExpected int) {
+func compareItemsCount[T any](gormDB *gorm.DB, totalExpected int) {
 	var result []T
 	err := gormDB.Find(&result).Error
 	Expect(err).To(BeNil())

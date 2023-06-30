@@ -31,7 +31,7 @@ func PushUpstream(c echo.Context) error {
 
 	req.AgentName = strings.TrimSpace(req.AgentName)
 	if req.AgentName == "" {
-		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: "cluster_name name is required", Message: "cluster name is required"})
+		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: "agent name is required", Message: "agent name is required"})
 	}
 
 	agentID, ok := agentIDCache.Get(req.AgentName)
@@ -51,7 +51,7 @@ func PushUpstream(c echo.Context) error {
 	if !ok {
 		headlessTopology, err := db.GetOrCreateHeadlessTopology(ctx, req.AgentName)
 		if err != nil {
-			return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error(), Message: fmt.Sprintf("failed to get headless topology for cluster: %s", req.AgentName)})
+			return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error(), Message: fmt.Sprintf("failed to get headless topology for agent: %s", req.AgentName)})
 		}
 
 		headlessTopologyID = &headlessTopology.ID
