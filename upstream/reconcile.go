@@ -15,10 +15,10 @@ import (
 
 // SyncWithUpstream sends all the missing resources to the upstream.
 func SyncWithUpstream(ctx *api.Context) error {
-	jobHistory := models.NewJobHistory("SyncWithUpstream", "", "")
-	_ = db.PersistJobHistory(jobHistory.Start())
+	jobHistory := models.NewJobHistory("SyncWithUpstream", api.UpstreamConf.Host, "")
+	_ = db.PersistJobHistory(ctx, jobHistory.Start())
 	defer func() {
-		_ = db.PersistJobHistory(jobHistory.End())
+		_ = db.PersistJobHistory(ctx, jobHistory.End())
 	}()
 
 	resp, err := fetchUpstreamResourceIDs(ctx, api.UpstreamConf)
