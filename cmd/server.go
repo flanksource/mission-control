@@ -170,7 +170,7 @@ var Serve = &cobra.Command{
 		if postgrestURI != "" {
 			parsedURL, err := url.Parse(postgrestURI)
 			if err != nil {
-				logger.Fatalf("Failed to parse postgRest URL: %v", err)
+				logger.Fatalf("Failed to parse PostgREST URL: %v", err)
 			}
 
 			host := strings.ToLower(parsedURL.Hostname())
