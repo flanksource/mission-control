@@ -44,27 +44,27 @@ func GetMissingResourceIDs(ctx *api.Context, ids []string, paginateReq api.Pagin
 
 	switch paginateReq.Table {
 	case "canaries":
-		if err := ctx.DB().Not(ids).Find(&pushData.Canaries).Error; err != nil {
+		if err := ctx.DB().Not(ids).Where("id > ?", paginateReq.From).Limit(paginateReq.Size).Order("id").Find(&pushData.Canaries).Error; err != nil {
 			return nil, fmt.Errorf("error fetching canaries: %w", err)
 		}
 
 	case "checks":
-		if err := ctx.DB().Not(ids).Find(&pushData.Checks).Error; err != nil {
+		if err := ctx.DB().Not(ids).Where("id > ?", paginateReq.From).Limit(paginateReq.Size).Order("id").Find(&pushData.Checks).Error; err != nil {
 			return nil, fmt.Errorf("error fetching checks: %w", err)
 		}
 
 	case "components":
-		if err := ctx.DB().Not(ids).Find(&pushData.Components).Error; err != nil {
+		if err := ctx.DB().Not(ids).Where("id > ?", paginateReq.From).Limit(paginateReq.Size).Order("id").Find(&pushData.Components).Error; err != nil {
 			return nil, fmt.Errorf("error fetching components: %w", err)
 		}
 
 	case "config_scrapers":
-		if err := ctx.DB().Not(ids).Find(&pushData.ConfigScrapers).Error; err != nil {
+		if err := ctx.DB().Not(ids).Where("id > ?", paginateReq.From).Limit(paginateReq.Size).Order("id").Find(&pushData.ConfigScrapers).Error; err != nil {
 			return nil, fmt.Errorf("error fetching config scrapers: %w", err)
 		}
 
 	case "config_items":
-		if err := ctx.DB().Not(ids).Find(&pushData.ConfigItems).Error; err != nil {
+		if err := ctx.DB().Not(ids).Where("id > ?", paginateReq.From).Limit(paginateReq.Size).Order("id").Find(&pushData.ConfigItems).Error; err != nil {
 			return nil, fmt.Errorf("error fetching config items: %w", err)
 		}
 	}

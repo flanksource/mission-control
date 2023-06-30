@@ -18,6 +18,8 @@ import (
 )
 
 var _ = ginkgo.Describe("Push Mode reconcilation", ginkgo.Ordered, func() {
+	const randomConfigItemCount = 2000 // keep it below 5k (must be set w.r.t the page size)
+
 	ginkgo.It("should populate the agent database with the 5 tables that are reconciled", func() {
 		err := dummy.PopulateDBWithDummyModels(agentDB)
 		Expect(err).To(BeNil())
@@ -47,7 +49,7 @@ var _ = ginkgo.Describe("Push Mode reconcilation", ginkgo.Ordered, func() {
 		compareItemsCount[models.Check](upstreamDB, 0)
 	})
 
-	ginkgo.It("should return diffierent hash for agent and upstream", func() {
+	ginkgo.It("should return different hash for agent and upstream", func() {
 		ctx := api.NewContext(agentDB, nil)
 		upstreamCtx := api.NewContext(upstreamDB, nil)
 
@@ -62,12 +64,12 @@ var _ = ginkgo.Describe("Push Mode reconcilation", ginkgo.Ordered, func() {
 		}
 	})
 
-	ginkgo.It("should run reconcilation", func() {
+	ginkgo.It("should reconcile all the tables", func() {
 		ctx := api.NewContext(agentDB, nil)
 
 		for _, table := range api.TablesToReconcile {
 			err := syncTableWithUpstream(ctx, table)
-			Expect(err).To(BeNil(), fmt.Sprintf("table %s should push to upstream", table))
+			Expect(err).To(BeNil(), fmt.Sprintf("should push table '%s' to upstream", table))
 		}
 	})
 
@@ -112,6 +114,29 @@ var _ = ginkgo.Describe("Push Mode reconcilation", ginkgo.Ordered, func() {
 
 	ginkgo.It("should have transferred all the config scrapers", func() {
 		compareEntities(upstreamDB, agentDB, &[]models.ConfigScraper{})
+	})
+
+	ginkgo.It(fmt.Sprintf("should generated %d dummy config items and save on agent", randomConfigItemCount), func() {
+		dummyConfigItems := make([]models.ConfigItem, randomConfigItemCount)
+		for i := 0; i < randomConfigItemCount; i++ {
+			dummyConfigItems[i] = models.ConfigItem{
+				ID:          uuid.New(),
+				ConfigClass: models.ConfigClassCluster,
+			}
+		}
+
+		Expect(agentDB.CreateInBatches(&dummyConfigItems, 2000).Error).To(BeNil())
+	})
+
+	ginkgo.It("should reconcile config items", func() {
+		ctx := api.NewContext(agentDB, nil)
+
+		err := syncTableWithUpstream(ctx, "config_items")
+		Expect(err).To(BeNil(), "should push table 'config_items' upstream")
+	})
+
+	ginkgo.It("should have transferred all the new config items", func() {
+		compareEntities(upstreamDB, agentDB, &[]models.ConfigItem{})
 	})
 })
 
