@@ -1,7 +1,6 @@
 package db
 
 import (
-	"context"
 	"errors"
 	"fmt"
 
@@ -36,7 +35,7 @@ func GetIDsHash(ctx *api.Context, table string, from uuid.UUID, size int) (*api.
 			id_list`, table)
 
 	var resp api.PaginateResponse
-	err := Gorm.WithContext(ctx).Raw(query, from, size).Scan(&resp).Error
+	err := ctx.DB().Raw(query, from, size).Scan(&resp).Error
 	return &resp, err
 }
 
@@ -45,27 +44,27 @@ func GetMissingResourceIDs(ctx *api.Context, ids []string, paginateReq api.Pagin
 
 	switch paginateReq.Table {
 	case "canaries":
-		if err := Gorm.WithContext(ctx).Not(ids).Find(&pushData.Canaries).Error; err != nil {
+		if err := ctx.DB().Not(ids).Find(&pushData.Canaries).Error; err != nil {
 			return nil, fmt.Errorf("error fetching canaries: %w", err)
 		}
 
 	case "checks":
-		if err := Gorm.WithContext(ctx).Not(ids).Find(&pushData.Checks).Error; err != nil {
+		if err := ctx.DB().Not(ids).Find(&pushData.Checks).Error; err != nil {
 			return nil, fmt.Errorf("error fetching checks: %w", err)
 		}
 
 	case "components":
-		if err := Gorm.WithContext(ctx).Not(ids).Find(&pushData.Components).Error; err != nil {
+		if err := ctx.DB().Not(ids).Find(&pushData.Components).Error; err != nil {
 			return nil, fmt.Errorf("error fetching components: %w", err)
 		}
 
 	case "config_scrapers":
-		if err := Gorm.WithContext(ctx).Not(ids).Find(&pushData.ConfigScrapers).Error; err != nil {
+		if err := ctx.DB().Not(ids).Find(&pushData.ConfigScrapers).Error; err != nil {
 			return nil, fmt.Errorf("error fetching config scrapers: %w", err)
 		}
 
 	case "config_items":
-		if err := Gorm.WithContext(ctx).Not(ids).Find(&pushData.ConfigItems).Error; err != nil {
+		if err := ctx.DB().Not(ids).Find(&pushData.ConfigItems).Error; err != nil {
 			return nil, fmt.Errorf("error fetching config items: %w", err)
 		}
 	}
@@ -73,14 +72,14 @@ func GetMissingResourceIDs(ctx *api.Context, ids []string, paginateReq api.Pagin
 	return &pushData, nil
 }
 
-func GetAllResourceIDsOfAgent(ctx context.Context, agentID string, req api.PaginateRequest) ([]string, error) {
+func GetAllResourceIDsOfAgent(ctx *api.Context, agentID string, req api.PaginateRequest) ([]string, error) {
 	if !collections.Contains(api.TablesToReconcile, req.Table) {
 		return nil, errTableReconcileNotAllowed
 	}
 
 	var response []string
 	query := fmt.Sprintf("SELECT id FROM %s WHERE agent_id = ? AND id > ? ORDER BY id LIMIT ?", req.Table)
-	err := Gorm.WithContext(ctx).Raw(query, agentID, req.From, req.Size).Scan(&response).Error
+	err := ctx.DB().Raw(query, agentID, req.From, req.Size).Scan(&response).Error
 	return response, err
 }
 
