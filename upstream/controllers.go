@@ -80,7 +80,7 @@ func Pull(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, api.HTTPError{Message: fmt.Sprintf("agent(name=%s) not found", agentName)})
 	}
 
-	var req api.PushPaginateRequest
+	var req api.PaginateRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error()})
 	}
@@ -96,7 +96,7 @@ func Pull(c echo.Context) error {
 func Status(c echo.Context) error {
 	ctx := c.(*api.Context)
 
-	var req api.PushPaginateRequest
+	var req api.PaginateRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error()})
 	}

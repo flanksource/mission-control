@@ -15,14 +15,6 @@ import (
 	"github.com/google/uuid"
 )
 
-var tablesToReconcile = []string{
-	"components",
-	"config_scrapers",
-	"config_items",
-	"canaries",
-	"checks",
-}
-
 const pageSize = 500
 
 func syncTableWithUpstream(ctx *api.Context, table string) error {
@@ -30,7 +22,7 @@ func syncTableWithUpstream(ctx *api.Context, table string) error {
 
 	var next uuid.UUID
 	for {
-		paginateRequest := api.PushPaginateRequest{From: next, Table: table, Size: pageSize}
+		paginateRequest := api.PaginateRequest{From: next, Table: table, Size: pageSize}
 
 		current, err := db.GetIDsHash(ctx, table, next, pageSize)
 		if err != nil {
@@ -56,7 +48,7 @@ func syncTableWithUpstream(ctx *api.Context, table string) error {
 			return fmt.Errorf("failed to fetch upstream resource ids: %w", err)
 		}
 
-		pushData, err := db.GetAllMissingResourceIDs(ctx, resp, paginateRequest)
+		pushData, err := db.GetMissingResourceIDs(ctx, resp, paginateRequest)
 		if err != nil {
 			return fmt.Errorf("failed to fetch missing resource ids: %w", err)
 		}
@@ -78,7 +70,7 @@ func SyncWithUpstream(ctx *api.Context) error {
 		_ = db.PersistJobHistory(ctx, jobHistory.End())
 	}()
 
-	for _, table := range tablesToReconcile {
+	for _, table := range api.TablesToReconcile {
 		if err := syncTableWithUpstream(ctx, table); err != nil {
 			jobHistory.AddError(err.Error())
 			logger.Errorf("failed to sync table %s: %w", table, err)
@@ -92,7 +84,7 @@ func SyncWithUpstream(ctx *api.Context) error {
 
 // fetchUpstreamResourceIDs requests all the existing resource ids from the upstream
 // that were sent by this agent.
-func fetchUpstreamResourceIDs(ctx *api.Context, config api.UpstreamConfig, request api.PushPaginateRequest) ([]string, error) {
+func fetchUpstreamResourceIDs(ctx *api.Context, config api.UpstreamConfig, request api.PaginateRequest) ([]string, error) {
 	endpoint, err := url.JoinPath(config.Host, "upstream", "pull", config.AgentName)
 	if err != nil {
 		return nil, fmt.Errorf("error creating url endpoint for host %s: %w", config.Host, err)
@@ -130,7 +122,7 @@ func fetchUpstreamResourceIDs(ctx *api.Context, config api.UpstreamConfig, reque
 	return response, nil
 }
 
-func fetchUpstreamStatus(ctx context.Context, config api.UpstreamConfig, request api.PushPaginateRequest) (*api.PushResponse, error) {
+func fetchUpstreamStatus(ctx context.Context, config api.UpstreamConfig, request api.PaginateRequest) (*api.PaginateResponse, error) {
 	endpoint, err := url.JoinPath(config.Host, "upstream", "status", config.AgentName)
 	if err != nil {
 		return nil, fmt.Errorf("error creating url endpoint for host %s: %w", config.Host, err)
@@ -160,7 +152,7 @@ func fetchUpstreamStatus(ctx context.Context, config api.UpstreamConfig, request
 		return nil, fmt.Errorf("upstream server returned error status[%d]: %s", resp.StatusCode, string(respBody))
 	}
 
-	var response api.PushResponse
+	var response api.PaginateResponse
 	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
 		return nil, err
 	}

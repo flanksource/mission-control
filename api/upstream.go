@@ -8,26 +8,24 @@ import (
 	"github.com/google/uuid"
 )
 
-type PushPaginateRequest struct {
-	Table string    `query:"table" validate:"required,contains=canaries,checks,components,config_scrapers,config_items"`
-	From  uuid.UUID `query:"from" validate:"required"`
-	Size  int       `query:"size" validate:"required,gt=0"`
+var TablesToReconcile = []string{
+	"components",
+	"config_scrapers",
+	"config_items",
+	"canaries",
+	"checks",
 }
 
-type PushResponse struct {
+type PaginateRequest struct {
+	Table string    `query:"table"`
+	From  uuid.UUID `query:"from"`
+	Size  int       `query:"size"`
+}
+
+type PaginateResponse struct {
 	Hash  string    `gorm:"column:sha256sum"`
 	Next  uuid.UUID `gorm:"column:last_id"`
 	Total int       `gorm:"column:total"`
-}
-
-// PushedResourceIDs is a list of primary keys of resources that have been pushed to the
-// upstream
-type PushedResourceIDs struct {
-	Canaries       []string `json:"canaries,omitempty"`
-	Checks         []string `json:"checks,omitempty"`
-	Components     []string `json:"components,omitempty"`
-	ConfigItems    []string `json:"config_items,omitempty"`
-	ConfigScrapers []string `json:"config_scrapers,omitempty"`
 }
 
 var UpstreamConf UpstreamConfig

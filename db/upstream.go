@@ -1,15 +1,24 @@
 package db
 
 import (
+	"context"
+	"errors"
 	"fmt"
 
+	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/google/uuid"
 	"gorm.io/gorm/clause"
 )
 
-func GetIDsHash(ctx *api.Context, table string, from uuid.UUID, size int) (*api.PushResponse, error) {
+var errTableReconcileNotAllowed = errors.New("table is not allowed to be reconciled")
+
+func GetIDsHash(ctx *api.Context, table string, from uuid.UUID, size int) (*api.PaginateResponse, error) {
+	if !collections.Contains(api.TablesToReconcile, table) {
+		return nil, errTableReconcileNotAllowed
+	}
+
 	query := fmt.Sprintf(`
 		WITH id_list AS (
 			SELECT
@@ -26,47 +35,50 @@ func GetIDsHash(ctx *api.Context, table string, from uuid.UUID, size int) (*api.
 		FROM
 			id_list`, table)
 
-	var resp api.PushResponse
+	var resp api.PaginateResponse
 	err := Gorm.WithContext(ctx).Raw(query, from, size).Scan(&resp).Error
 	return &resp, err
 }
 
-func GetAllMissingResourceIDs(ctx *api.Context, ids []string, paginateReq api.PushPaginateRequest) (*api.PushData, error) {
-	var upstreamMsg api.PushData
+func GetMissingResourceIDs(ctx *api.Context, ids []string, paginateReq api.PaginateRequest) (*api.PushData, error) {
+	var pushData api.PushData
 
 	switch paginateReq.Table {
 	case "canaries":
-		if err := Gorm.WithContext(ctx).Not(ids).Find(&upstreamMsg.Canaries).Error; err != nil {
+		if err := Gorm.WithContext(ctx).Not(ids).Find(&pushData.Canaries).Error; err != nil {
 			return nil, fmt.Errorf("error fetching canaries: %w", err)
 		}
 
 	case "checks":
-		if err := Gorm.WithContext(ctx).Not(ids).Find(&upstreamMsg.Checks).Error; err != nil {
+		if err := Gorm.WithContext(ctx).Not(ids).Find(&pushData.Checks).Error; err != nil {
 			return nil, fmt.Errorf("error fetching checks: %w", err)
 		}
 
 	case "components":
-		if err := Gorm.WithContext(ctx).Not(ids).Find(&upstreamMsg.Components).Error; err != nil {
+		if err := Gorm.WithContext(ctx).Not(ids).Find(&pushData.Components).Error; err != nil {
 			return nil, fmt.Errorf("error fetching components: %w", err)
 		}
 
 	case "config_scrapers":
-		if err := Gorm.WithContext(ctx).Not(ids).Find(&upstreamMsg.ConfigScrapers).Error; err != nil {
+		if err := Gorm.WithContext(ctx).Not(ids).Find(&pushData.ConfigScrapers).Error; err != nil {
 			return nil, fmt.Errorf("error fetching config scrapers: %w", err)
 		}
 
 	case "config_items":
-		if err := Gorm.WithContext(ctx).Not(ids).Find(&upstreamMsg.ConfigItems).Error; err != nil {
+		if err := Gorm.WithContext(ctx).Not(ids).Find(&pushData.ConfigItems).Error; err != nil {
 			return nil, fmt.Errorf("error fetching config items: %w", err)
 		}
 	}
 
-	return &upstreamMsg, nil
+	return &pushData, nil
 }
 
-func GetAllResourceIDsOfAgent(ctx *api.Context, agentID string, req api.PushPaginateRequest) ([]string, error) {
-	var response []string
+func GetAllResourceIDsOfAgent(ctx context.Context, agentID string, req api.PaginateRequest) ([]string, error) {
+	if !collections.Contains(api.TablesToReconcile, req.Table) {
+		return nil, errTableReconcileNotAllowed
+	}
 
+	var response []string
 	query := fmt.Sprintf("SELECT id FROM %s WHERE agent_id = ? AND id > ? ORDER BY id LIMIT ?", req.Table)
 	err := Gorm.WithContext(ctx).Raw(query, agentID, req.From, req.Size).Scan(&response).Error
 	return response, err
