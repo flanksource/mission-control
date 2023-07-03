@@ -68,8 +68,8 @@ func PushUpstream(c echo.Context) error {
 	return nil
 }
 
-// StatusReport returns all the ids of items it has received from the requested agent.
-func StatusReport(c echo.Context) error {
+// Pull returns all the ids of items it has received from the requested agent.
+func Pull(c echo.Context) error {
 	ctx := c.(*api.Context)
 
 	agentName := c.Param("agent_name")
@@ -80,10 +80,39 @@ func StatusReport(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, api.HTTPError{Message: fmt.Sprintf("agent(name=%s) not found", agentName)})
 	}
 
-	resp, err := db.GetAllResourceIDsOfAgent(ctx, agent.ID.String())
+	var req api.PushPaginateRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error()})
+	}
+	resp, err := db.GetAllResourceIDsOfAgent(ctx, agent.ID.String(), req)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to get resource ids"})
 	}
 
 	return c.JSON(http.StatusFound, resp)
+}
+
+// Status returns the summary of all ids the upstream has received.
+func Status(c echo.Context) error {
+	ctx := c.(*api.Context)
+
+	var req api.PushPaginateRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error()})
+	}
+
+	var agentName = c.Param("agent_name")
+	agent, err := db.FindAgent(ctx, agentName)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to get agent"})
+	} else if agent == nil {
+		return c.JSON(http.StatusNotFound, api.HTTPError{Message: fmt.Sprintf("agent(name=%s) not found", agentName)})
+	}
+
+	response, err := db.GetIDsHash(ctx, req.Table, req.From, req.Size)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to push status response"})
+	}
+
+	return c.JSON(http.StatusOK, response)
 }

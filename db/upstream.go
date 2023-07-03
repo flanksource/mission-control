@@ -4,66 +4,72 @@ import (
 	"fmt"
 
 	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/google/uuid"
 	"gorm.io/gorm/clause"
 )
 
-func GetAllMissingResourceIDs(ctx *api.Context, req *api.PushedResourceIDs) (*api.PushData, error) {
+func GetIDsHash(ctx *api.Context, table string, from uuid.UUID, size int) (*api.PushResponse, error) {
+	query := fmt.Sprintf(`
+		WITH id_list AS (
+			SELECT
+				id::TEXT
+			FROM %s
+			WHERE id > ?
+			ORDER BY id
+			LIMIT ?
+		)
+		SELECT
+			encode(digest(string_agg(id::TEXT, ''), 'sha256'), 'hex') as sha256sum,
+			MAX(id) as last_id,
+			COUNT(*) as total
+		FROM
+			id_list`, table)
+
+	var resp api.PushResponse
+	err := Gorm.WithContext(ctx).Raw(query, from, size).Scan(&resp).Error
+	return &resp, err
+}
+
+func GetAllMissingResourceIDs(ctx *api.Context, ids []string, paginateReq api.PushPaginateRequest) (*api.PushData, error) {
 	var upstreamMsg api.PushData
 
-	if err := ctx.DB().Not(req.Components).Find(&upstreamMsg.Components).Error; err != nil {
-		return nil, fmt.Errorf("error fetching components: %w", err)
-	}
+	switch paginateReq.Table {
+	case "canaries":
+		if err := Gorm.WithContext(ctx).Not(ids).Find(&upstreamMsg.Canaries).Error; err != nil {
+			return nil, fmt.Errorf("error fetching canaries: %w", err)
+		}
 
-	if err := ctx.DB().Not(req.ConfigScrapers).Find(&upstreamMsg.ConfigScrapers).Error; err != nil {
-		return nil, fmt.Errorf("error fetching config scrapers: %w", err)
-	}
+	case "checks":
+		if err := Gorm.WithContext(ctx).Not(ids).Find(&upstreamMsg.Checks).Error; err != nil {
+			return nil, fmt.Errorf("error fetching checks: %w", err)
+		}
 
-	if err := ctx.DB().Not(req.ConfigItems).Find(&upstreamMsg.ConfigItems).Error; err != nil {
-		return nil, fmt.Errorf("error fetching config items: %w", err)
-	}
+	case "components":
+		if err := Gorm.WithContext(ctx).Not(ids).Find(&upstreamMsg.Components).Error; err != nil {
+			return nil, fmt.Errorf("error fetching components: %w", err)
+		}
 
-	if err := ctx.DB().Not(req.Canaries).Find(&upstreamMsg.Canaries).Error; err != nil {
-		return nil, fmt.Errorf("error fetching canaries: %w", err)
-	}
+	case "config_scrapers":
+		if err := Gorm.WithContext(ctx).Not(ids).Find(&upstreamMsg.ConfigScrapers).Error; err != nil {
+			return nil, fmt.Errorf("error fetching config scrapers: %w", err)
+		}
 
-	if err := ctx.DB().Not(req.Checks).Find(&upstreamMsg.Checks).Error; err != nil {
-		return nil, fmt.Errorf("error fetching checks: %w", err)
+	case "config_items":
+		if err := Gorm.WithContext(ctx).Not(ids).Find(&upstreamMsg.ConfigItems).Error; err != nil {
+			return nil, fmt.Errorf("error fetching config items: %w", err)
+		}
 	}
 
 	return &upstreamMsg, nil
 }
 
-func GetAllResourceIDsOfAgent(ctx *api.Context, agentID string) (*api.PushedResourceIDs, error) {
-	var response api.PushedResourceIDs
+func GetAllResourceIDsOfAgent(ctx *api.Context, agentID string, req api.PushPaginateRequest) ([]string, error) {
+	var response []string
 
-	var canaries []models.Canary
-	if err := ctx.DB().Select("id").Where("agent_id = ?", agentID).Find(&canaries).Pluck("id", &response.Canaries).Error; err != nil {
-		return nil, err
-	}
-
-	var checks []models.Check
-	if err := ctx.DB().Select("id").Where("agent_id = ?", agentID).Find(&checks).Pluck("id", &response.Checks).Error; err != nil {
-		return nil, err
-	}
-
-	var components []models.Component
-	if err := ctx.DB().Select("id").Where("agent_id = ?", agentID).Find(&components).Pluck("id", &response.Components).Error; err != nil {
-		return nil, err
-	}
-
-	var configScrapers []models.ConfigScraper
-	if err := ctx.DB().Select("id").Where("agent_id = ?", agentID).Find(&configScrapers).Pluck("id", &response.ConfigScrapers).Error; err != nil {
-		return nil, err
-	}
-
-	var configItems []models.ConfigItem
-	if err := ctx.DB().Select("id").Where("agent_id = ?", agentID).Find(&configItems).Pluck("id", &response.ConfigItems).Error; err != nil {
-		return nil, err
-	}
-
-	return &response, nil
+	query := fmt.Sprintf("SELECT id FROM %s WHERE agent_id = ? AND id > ? ORDER BY id LIMIT ?", req.Table)
+	err := Gorm.WithContext(ctx).Raw(query, agentID, req.From, req.Size).Scan(&response).Error
+	return response, err
 }
 
 func InsertUpstreamMsg(ctx *api.Context, req *api.PushData) error {

@@ -66,7 +66,7 @@ var _ = ginkgo.BeforeSuite(func() {
 			return next(cc)
 		}
 	})
-	upstreamEchoServer.POST("/upstream_push", upstream.PushUpstream)
+	upstreamEchoServer.POST("/upstream/push", upstream.PushUpstream)
 	listenAddr := fmt.Sprintf(":%d", upstreamEchoServerport)
 
 	go func() {

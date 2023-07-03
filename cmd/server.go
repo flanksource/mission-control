@@ -19,7 +19,6 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
-	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/jobs"
 	"github.com/flanksource/incident-commander/logs"
 	"github.com/flanksource/incident-commander/rbac"
@@ -114,8 +113,10 @@ func createHTTPServer(gormDB *gorm.DB) *echo.Echo {
 	if api.UpstreamConf.IsPartiallyFilled() {
 		logger.Warnf("Please ensure that all the required flags for upstream is supplied.")
 	}
-	e.POST("/upstream_push", upstream.PushUpstream)
-	e.GET("/upstream_check/:agent_name", upstream.StatusReport)
+	upstreamGroup := e.Group("/upstream")
+	upstreamGroup.POST("/push", upstream.PushUpstream)
+	upstreamGroup.GET("/pull/:agent_name", upstream.Pull)
+	upstreamGroup.GET("/status/:agent_name", upstream.Status)
 
 	forward(e, "/config", configDb)
 	forward(e, "/canary", api.CanaryCheckerPath)
@@ -181,8 +182,8 @@ var Serve = &cobra.Command{
 
 		go jobs.Start()
 
-		eventHandler := events.NewEventHandler(context.Background(), db.Gorm, events.Config{UpstreamConf: api.UpstreamConf})
-		go eventHandler.ListenForEvents()
+		// eventHandler := events.NewEventHandler(context.Background(), db.Gorm, events.Config{UpstreamConf: api.UpstreamConf})
+		// go eventHandler.ListenForEvents()
 
 		go launchKopper()
 

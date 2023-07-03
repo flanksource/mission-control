@@ -19,7 +19,7 @@ func Push(ctx context.Context, config api.UpstreamConfig, msg *api.PushData) err
 		return fmt.Errorf("error encoding msg: %w", err)
 	}
 
-	endpoint, err := url.JoinPath(config.Host, "upstream_push")
+	endpoint, err := url.JoinPath(config.Host, "upstream", "push")
 	if err != nil {
 		return fmt.Errorf("error creating url endpoint for host %s: %w", config.Host, err)
 	}

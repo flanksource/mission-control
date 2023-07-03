@@ -8,6 +8,18 @@ import (
 	"github.com/google/uuid"
 )
 
+type PushPaginateRequest struct {
+	Table string    `query:"table" validate:"required,contains=canaries,checks,components,config_scrapers,config_items"`
+	From  uuid.UUID `query:"from" validate:"required"`
+	Size  int       `query:"size" validate:"required,gt=0"`
+}
+
+type PushResponse struct {
+	Hash  string    `gorm:"column:sha256sum"`
+	Next  uuid.UUID `gorm:"column:last_id"`
+	Total int       `gorm:"column:total"`
+}
+
 // PushedResourceIDs is a list of primary keys of resources that have been pushed to the
 // upstream
 type PushedResourceIDs struct {
