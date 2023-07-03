@@ -11,6 +11,7 @@ import (
 	"github.com/flanksource/incident-commander/k8s"
 	"github.com/flanksource/incident-commander/mail"
 	"github.com/flanksource/incident-commander/rules"
+	"github.com/flanksource/incident-commander/upstream"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"k8s.io/client-go/kubernetes/fake"
@@ -66,6 +67,7 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&api.UpstreamConf.Password, "upstream-password", "", "upstream password")
 	flags.StringVar(&api.UpstreamConf.AgentName, "upstream-name", "", "name of the cluster")
 	flags.StringSliceVar(&api.UpstreamConf.Labels, "upstream-labels", nil, `labels in the format: "key1=value1,key2=value2"`)
+	flags.IntVar(&upstream.PageSize, "upstream-page-size", 500, "upstream reconcilation page size")
 }
 
 func init() {

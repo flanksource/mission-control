@@ -15,16 +15,18 @@ import (
 	"github.com/google/uuid"
 )
 
-const pageSize = 500
+// PageSize is the max number of resources the agent fetches
+// from the upstream in one request.
+var PageSize int = 500
 
 func syncTableWithUpstream(ctx *api.Context, table string) error {
-	logger.Debugf("Syncing %s with upstream", table)
+	logger.Infof("Syncing table %q with upstream", table)
 
 	var next uuid.UUID
 	for {
-		paginateRequest := api.PaginateRequest{From: next, Table: table, Size: pageSize}
+		paginateRequest := api.PaginateRequest{From: next, Table: table, Size: PageSize}
 
-		current, err := db.GetIDsHash(ctx, table, next, pageSize)
+		current, err := db.GetIDsHash(ctx, table, next, PageSize)
 		if err != nil {
 			return fmt.Errorf("failed to fetch local id hash: %w", err)
 		}
@@ -62,13 +64,15 @@ func syncTableWithUpstream(ctx *api.Context, table string) error {
 	return nil
 }
 
-// SyncWithUpstream sends all the missing resources to the upstream.
+// SyncWithUpstream coordinates with upstream and pushes any resource
+// that are missing on the upstream.
 func SyncWithUpstream(ctx *api.Context) error {
 	jobHistory := models.NewJobHistory("SyncWithUpstream", api.UpstreamConf.Host, "")
 	_ = db.PersistJobHistory(ctx, jobHistory.Start())
 	defer func() {
 		_ = db.PersistJobHistory(ctx, jobHistory.End())
 	}()
+	logger.Infof("Syncing with upstream (pageSize=%d)", PageSize)
 
 	for _, table := range api.TablesToReconcile {
 		if err := syncTableWithUpstream(ctx, table); err != nil {
@@ -90,18 +94,11 @@ func fetchUpstreamResourceIDs(ctx *api.Context, config api.UpstreamConfig, reque
 		return nil, fmt.Errorf("error creating url endpoint for host %s: %w", config.Host, err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	req, err := createPaginateRequest(ctx, endpoint, config, request)
 	if err != nil {
 		return nil, fmt.Errorf("http.NewRequest: %w", err)
 	}
 
-	query := req.URL.Query()
-	query.Add("table", request.Table)
-	query.Add("from", request.From.String())
-	query.Add("size", fmt.Sprintf("%d", request.Size))
-	req.URL.RawQuery = query.Encode()
-
-	req.SetBasicAuth(config.Username, config.Password)
 	httpClient := http.Client{}
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -128,18 +125,11 @@ func fetchUpstreamStatus(ctx context.Context, config api.UpstreamConfig, request
 		return nil, fmt.Errorf("error creating url endpoint for host %s: %w", config.Host, err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
+	req, err := createPaginateRequest(ctx, endpoint, config, request)
 	if err != nil {
 		return nil, fmt.Errorf("http.NewRequest: %w", err)
 	}
 
-	query := req.URL.Query()
-	query.Add("table", request.Table)
-	query.Add("from", request.From.String())
-	query.Add("size", fmt.Sprintf("%d", request.Size))
-	req.URL.RawQuery = query.Encode()
-
-	req.SetBasicAuth(config.Username, config.Password)
 	httpClient := http.Client{}
 	resp, err := httpClient.Do(req)
 	if err != nil {
@@ -158,4 +148,20 @@ func fetchUpstreamStatus(ctx context.Context, config api.UpstreamConfig, request
 	}
 
 	return &response, nil
+}
+
+func createPaginateRequest(ctx context.Context, url string, config api.UpstreamConfig, request api.PaginateRequest) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	if err != nil {
+		return nil, fmt.Errorf("http.NewRequest: %w", err)
+	}
+
+	query := req.URL.Query()
+	query.Add("table", request.Table)
+	query.Add("from", request.From.String())
+	query.Add("size", fmt.Sprintf("%d", request.Size))
+	req.URL.RawQuery = query.Encode()
+
+	req.SetBasicAuth(config.Username, config.Password)
+	return req, nil
 }

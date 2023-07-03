@@ -19,6 +19,7 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/jobs"
 	"github.com/flanksource/incident-commander/logs"
 	"github.com/flanksource/incident-commander/rbac"
@@ -182,8 +183,8 @@ var Serve = &cobra.Command{
 
 		go jobs.Start()
 
-		// eventHandler := events.NewEventHandler(context.Background(), db.Gorm, events.Config{UpstreamConf: api.UpstreamConf})
-		// go eventHandler.ListenForEvents()
+		eventHandler := events.NewEventHandler(context.Background(), db.Gorm, events.Config{UpstreamConf: api.UpstreamConf})
+		go eventHandler.ListenForEvents()
 
 		go launchKopper()
 
