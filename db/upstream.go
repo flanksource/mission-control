@@ -1,69 +1,86 @@
 package db
 
 import (
+	"errors"
 	"fmt"
 
+	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/google/uuid"
 	"gorm.io/gorm/clause"
 )
 
-func GetAllMissingResourceIDs(ctx *api.Context, req *api.PushedResourceIDs) (*api.PushData, error) {
-	var upstreamMsg api.PushData
+var errTableReconcileNotAllowed = errors.New("table is not allowed to be reconciled")
 
-	if err := ctx.DB().Not(req.Components).Find(&upstreamMsg.Components).Error; err != nil {
-		return nil, fmt.Errorf("error fetching components: %w", err)
+func GetIDsHash(ctx *api.Context, table string, from uuid.UUID, size int) (*api.PaginateResponse, error) {
+	if !collections.Contains(api.TablesToReconcile, table) {
+		return nil, errTableReconcileNotAllowed
 	}
 
-	if err := ctx.DB().Not(req.ConfigScrapers).Find(&upstreamMsg.ConfigScrapers).Error; err != nil {
-		return nil, fmt.Errorf("error fetching config scrapers: %w", err)
-	}
+	query := fmt.Sprintf(`
+		WITH id_list AS (
+			SELECT
+				id::TEXT
+			FROM %s
+			WHERE id > ?
+			ORDER BY id
+			LIMIT ?
+		)
+		SELECT
+			encode(digest(string_agg(id::TEXT, ''), 'sha256'), 'hex') as sha256sum,
+			MAX(id) as last_id,
+			COUNT(*) as total
+		FROM
+			id_list`, table)
 
-	if err := ctx.DB().Not(req.ConfigItems).Find(&upstreamMsg.ConfigItems).Error; err != nil {
-		return nil, fmt.Errorf("error fetching config items: %w", err)
-	}
-
-	if err := ctx.DB().Not(req.Canaries).Find(&upstreamMsg.Canaries).Error; err != nil {
-		return nil, fmt.Errorf("error fetching canaries: %w", err)
-	}
-
-	if err := ctx.DB().Not(req.Checks).Find(&upstreamMsg.Checks).Error; err != nil {
-		return nil, fmt.Errorf("error fetching checks: %w", err)
-	}
-
-	return &upstreamMsg, nil
+	var resp api.PaginateResponse
+	err := ctx.DB().Raw(query, from, size).Scan(&resp).Error
+	return &resp, err
 }
 
-func GetAllResourceIDsOfAgent(ctx *api.Context, agentID string) (*api.PushedResourceIDs, error) {
-	var response api.PushedResourceIDs
+func GetMissingResourceIDs(ctx *api.Context, ids []string, paginateReq api.PaginateRequest) (*api.PushData, error) {
+	var pushData api.PushData
 
-	var canaries []models.Canary
-	if err := ctx.DB().Select("id").Where("agent_id = ?", agentID).Find(&canaries).Pluck("id", &response.Canaries).Error; err != nil {
-		return nil, err
+	switch paginateReq.Table {
+	case "canaries":
+		if err := ctx.DB().Not(ids).Where("id > ?", paginateReq.From).Limit(paginateReq.Size).Order("id").Find(&pushData.Canaries).Error; err != nil {
+			return nil, fmt.Errorf("error fetching canaries: %w", err)
+		}
+
+	case "checks":
+		if err := ctx.DB().Not(ids).Where("id > ?", paginateReq.From).Limit(paginateReq.Size).Order("id").Find(&pushData.Checks).Error; err != nil {
+			return nil, fmt.Errorf("error fetching checks: %w", err)
+		}
+
+	case "components":
+		if err := ctx.DB().Not(ids).Where("id > ?", paginateReq.From).Limit(paginateReq.Size).Order("id").Find(&pushData.Components).Error; err != nil {
+			return nil, fmt.Errorf("error fetching components: %w", err)
+		}
+
+	case "config_scrapers":
+		if err := ctx.DB().Not(ids).Where("id > ?", paginateReq.From).Limit(paginateReq.Size).Order("id").Find(&pushData.ConfigScrapers).Error; err != nil {
+			return nil, fmt.Errorf("error fetching config scrapers: %w", err)
+		}
+
+	case "config_items":
+		if err := ctx.DB().Not(ids).Where("id > ?", paginateReq.From).Limit(paginateReq.Size).Order("id").Find(&pushData.ConfigItems).Error; err != nil {
+			return nil, fmt.Errorf("error fetching config items: %w", err)
+		}
 	}
 
-	var checks []models.Check
-	if err := ctx.DB().Select("id").Where("agent_id = ?", agentID).Find(&checks).Pluck("id", &response.Checks).Error; err != nil {
-		return nil, err
+	return &pushData, nil
+}
+
+func GetAllResourceIDsOfAgent(ctx *api.Context, agentID string, req api.PaginateRequest) ([]string, error) {
+	if !collections.Contains(api.TablesToReconcile, req.Table) {
+		return nil, errTableReconcileNotAllowed
 	}
 
-	var components []models.Component
-	if err := ctx.DB().Select("id").Where("agent_id = ?", agentID).Find(&components).Pluck("id", &response.Components).Error; err != nil {
-		return nil, err
-	}
-
-	var configScrapers []models.ConfigScraper
-	if err := ctx.DB().Select("id").Where("agent_id = ?", agentID).Find(&configScrapers).Pluck("id", &response.ConfigScrapers).Error; err != nil {
-		return nil, err
-	}
-
-	var configItems []models.ConfigItem
-	if err := ctx.DB().Select("id").Where("agent_id = ?", agentID).Find(&configItems).Pluck("id", &response.ConfigItems).Error; err != nil {
-		return nil, err
-	}
-
-	return &response, nil
+	var response []string
+	query := fmt.Sprintf("SELECT id FROM %s WHERE agent_id = ? AND id > ? ORDER BY id LIMIT ?", req.Table)
+	err := ctx.DB().Raw(query, agentID, req.From, req.Size).Scan(&response).Error
+	return response, err
 }
 
 func InsertUpstreamMsg(ctx *api.Context, req *api.PushData) error {

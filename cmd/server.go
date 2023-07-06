@@ -114,8 +114,10 @@ func createHTTPServer(gormDB *gorm.DB) *echo.Echo {
 	if api.UpstreamConf.IsPartiallyFilled() {
 		logger.Warnf("Please ensure that all the required flags for upstream is supplied.")
 	}
-	e.POST("/upstream_push", upstream.PushUpstream)
-	e.GET("/upstream_check/:agent_name", upstream.StatusReport)
+	upstreamGroup := e.Group("/upstream")
+	upstreamGroup.POST("/push", upstream.PushUpstream)
+	upstreamGroup.GET("/pull/:agent_name", upstream.Pull)
+	upstreamGroup.GET("/status/:agent_name", upstream.Status)
 
 	forward(e, "/config", configDb)
 	forward(e, "/canary", api.CanaryCheckerPath)
