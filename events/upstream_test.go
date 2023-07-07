@@ -1,7 +1,6 @@
 package events
 
 import (
-	"context"
 	"fmt"
 	"time"
 
@@ -131,7 +130,7 @@ var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
 			},
 		}
 
-		eventHandler := NewEventHandler(context.Background(), agentDB, eventHandlerConfig)
+		eventHandler := NewEventHandler(agentDB, eventHandlerConfig)
 		eventHandler.ConsumeEventsUntilEmpty()
 	})
 

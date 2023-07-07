@@ -1,7 +1,6 @@
 package notification_test
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 
@@ -106,7 +105,7 @@ var _ = ginkgo.Describe("Test Notification on responder added", ginkgo.Ordered, 
 	})
 
 	ginkgo.It("should consume the event and send the notification", func() {
-		eventHandler := events.NewEventHandler(context.Background(), db.Gorm, events.Config{})
+		eventHandler := events.NewEventHandler(db.Gorm, events.Config{})
 		eventHandler.ConsumeEventsUntilEmpty()
 
 		Expect(webhookPostdata).To(Not(BeNil()))

@@ -16,12 +16,29 @@ import (
 )
 
 const (
-	EventTeamUpdate      = "team.update"
-	EventTeamDelete      = "team.delete"
-	EventResponderCreate = "responder.create"
-	EventNotification    = "notification.create"
-	EventCommentCreate   = "comment.create"
+	EventTeamUpdate = "team.update"
+	EventTeamDelete = "team.delete"
+
+	EventCheckPassed = "check.passed"
+	EventCheckFailed = "check.failed"
+
+	EventIncidentCreated             = "incident.created"
+	EventIncidentResponderAdded      = "incident.responder.added"
+	EventIncidentResponderRemoved    = "incident.responder.removed"
+	EventIncidentCommentAdded        = "incident.comment.added"
+	EventIncidentDODAdded            = "incident.dod.added"
+	EventIncidentDODPassed           = "incident.dod.passed"
+	EventIncidentDODRegressed        = "incident.dod.regressed"
+	EventIncidentStatusOpen          = "incident.status.open"
+	EventIncidentStatusClosed        = "incident.status.closed"
+	EventIncidentStatusMitigated     = "incident.status.mitigated"
+	EventIncidentStatusResolved      = "incident.status.resolved"
+	EventIncidentStatusInvestigating = "incident.status.investigating"
+	EventIncidentStatusCancelled     = "incident.status.cancelled"
+
 	EventPushQueueCreate = "push_queue.create"
+
+	EventNotification = "notification.create"
 )
 
 const (
@@ -44,14 +61,12 @@ type Config struct {
 }
 
 type eventHandler struct {
-	ctx    context.Context
 	gormDB *gorm.DB
 	config Config
 }
 
-func NewEventHandler(ctx context.Context, gormDB *gorm.DB, config Config) *eventHandler {
+func NewEventHandler(gormDB *gorm.DB, config Config) *eventHandler {
 	return &eventHandler{
-		ctx:    ctx,
 		gormDB: gormDB,
 		config: config,
 	}
@@ -107,7 +122,7 @@ func (t *eventHandler) listenToPostgresNotify(pgNotify chan bool) {
 	// retry on failure.
 	for {
 		backoff := retry.WithMaxDuration(dbReconnectMaxDuration, retry.NewExponential(dbReconnectBackoffBaseDuration))
-		err := retry.Do(t.ctx, backoff, func(ctx context.Context) error {
+		err := retry.Do(context.TODO(), backoff, func(ctx context.Context) error {
 			if err := listen(ctx, pgNotify); err != nil {
 				return retry.RetryableError(err)
 			}
@@ -120,10 +135,12 @@ func (t *eventHandler) listenToPostgresNotify(pgNotify chan bool) {
 }
 
 func (t *eventHandler) consumeEvents() error {
-	tx := t.gormDB.WithContext(t.ctx).Begin()
+	tx := t.gormDB.Begin()
 	if tx.Error != nil {
 		return fmt.Errorf("error initiating db tx: %w", tx.Error)
 	}
+
+	ctx := api.NewContext(tx, nil)
 
 	const selectEventsQuery = `
         DELETE FROM event_queue
@@ -153,23 +170,28 @@ func (t *eventHandler) consumeEvents() error {
 	}
 
 	switch event.Name {
-	case EventResponderCreate:
+	case EventIncidentResponderAdded:
 		err = reconcileResponderEvent(tx, event)
-	case EventCommentCreate:
+	case EventIncidentCommentAdded:
 		err = reconcileCommentEvent(tx, event)
+	case EventIncidentCreated,
+		EventIncidentResponderRemoved,
+		EventIncidentDODAdded, EventIncidentDODPassed, EventIncidentDODRegressed,
+		EventIncidentStatusOpen, EventIncidentStatusClosed, EventIncidentStatusMitigated, EventIncidentStatusResolved, EventIncidentStatusInvestigating, EventIncidentStatusCancelled:
+		err = addNotificationEvent(ctx, event)
 	case EventNotification:
-		err = publishNotification(tx, event)
+		err = publishNotification(ctx, event)
 	case EventTeamUpdate:
 		err = handleTeamUpdate(tx, event)
 	case EventTeamDelete:
 		err = handleTeamDelete(tx, event)
 	case EventPushQueueCreate:
 		if upstreamPushEventHandler != nil {
-			err = upstreamPushEventHandler.Run(t.ctx, tx, []api.Event{event})
+			err = upstreamPushEventHandler.Run(ctx, tx, []api.Event{event})
 		}
 	default:
 		logger.Errorf("Unrecognized event name: %s", event.Name)
-		return tx.Rollback().Error
+		return tx.Commit().Error
 	}
 
 	if err != nil {

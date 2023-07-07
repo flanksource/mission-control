@@ -68,16 +68,12 @@ type shoutrrrClient struct {
 	template *template.Template
 }
 
-func IsValid(filter string, responder api.Responder) (bool, error) {
+func IsValid(filter string, celEnv map[string]any) (bool, error) {
 	if filter == "" {
 		return true, nil
 	}
 
-	view := map[string]any{
-		"incident": responder.Incident.AsMap(),
-	}
-
-	isValid, err := evaluateFilterExpression(filter, view)
+	isValid, err := evaluateFilterExpression(filter, celEnv)
 	if err != nil {
 		return false, fmt.Errorf("error evaluating filter expression: %w", err)
 	}

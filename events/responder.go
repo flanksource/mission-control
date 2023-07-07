@@ -21,10 +21,6 @@ func reconcileResponderEvent(tx *gorm.DB, event api.Event) error {
 		return err
 	}
 
-	if err := addNotificationEvent(ctx, tx, responder); err != nil {
-		return err
-	}
-
 	responderClient, err := pkgResponder.GetResponder(ctx, responder.Team)
 	if err != nil {
 		return err
@@ -44,7 +40,6 @@ func reconcileResponderEvent(tx *gorm.DB, event api.Event) error {
 
 func reconcileCommentEvent(tx *gorm.DB, event api.Event) error {
 	commentID := event.Properties["id"]
-	commentBody := event.Properties["body"]
 	ctx := api.NewContext(tx, nil)
 
 	var comment api.Comment
@@ -79,7 +74,7 @@ func reconcileCommentEvent(tx *gorm.DB, event api.Event) error {
 			return err
 		}
 
-		externalID, err = responder.NotifyResponderAddComment(ctx, _responder, commentBody)
+		externalID, err = responder.NotifyResponderAddComment(ctx, _responder, comment.Comment)
 		if err != nil {
 			// TODO: Associate error messages with responderType and handle specific responders when reprocessing
 			logger.Errorf("error adding comment to responder:%s %v", _responder.Properties["responderType"], err)
