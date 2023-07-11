@@ -3,9 +3,7 @@ package notification
 import (
 	"bytes"
 	"fmt"
-	"net/url"
 	"strconv"
-	"strings"
 	"text/template"
 	"time"
 
@@ -20,23 +18,36 @@ import (
 
 var prgCache = cache.New(24*time.Hour, 1*time.Hour)
 
-func DetermineService(rawURL string) (string, error) {
-	serviceURL, err := url.Parse(rawURL)
+func Publish(ctx *api.Context, connectionName, url, message string, properties map[string]string) error {
+	if connectionName != "" {
+		connection, err := ctx.HydrateConnection(connectionName)
+		if err != nil {
+			return err
+		}
+		url = connection.URL
+	}
+
+	sender, err := shoutrrr.CreateSender(url)
 	if err != nil {
-		return "", err
+		return fmt.Errorf("failed to create a shoutrrr sender client: %w", err)
 	}
 
-	scheme := serviceURL.Scheme
-	schemeParts := strings.Split(scheme, "+")
-
-	if len(schemeParts) > 1 {
-		scheme = schemeParts[0]
+	var params *types.Params
+	if properties != nil {
+		params = (*types.Params)(&properties)
 	}
 
-	return scheme, nil
+	sendErrors := sender.Send(message, params)
+	for _, err := range sendErrors {
+		if err != nil {
+			return fmt.Errorf("error publishing notification: %w", err)
+		}
+	}
+
+	return nil
 }
 
-func NewShoutrrrClient(ctx *api.Context, notification api.Notification) (Notifier, error) {
+func NewShoutrrrClient(ctx *api.Context, notification api.Notification) (*shoutrrrClient, error) {
 	config := notification.Config
 
 	if err := config.HydrateConnection(ctx); err != nil {
@@ -81,11 +92,7 @@ func IsValid(filter string, celEnv map[string]any) (bool, error) {
 	return isValid, nil
 }
 
-func (t *shoutrrrClient) NotifyResponderAdded(ctx *api.Context, responder api.Responder) error {
-	view := map[string]any{
-		"incident": responder.Incident.AsMap(),
-	}
-
+func (t *shoutrrrClient) Notify(ctx *api.Context, view map[string]any) error {
 	if t.config.Filter != "" {
 		if valid, err := evaluateFilterExpression(t.config.Filter, view); err != nil {
 			return fmt.Errorf("error evaluating filter expression: %w", err)

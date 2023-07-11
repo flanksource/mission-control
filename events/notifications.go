@@ -2,16 +2,27 @@ package events
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 
+	"github.com/flanksource/commons/collections"
+	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/commons/template"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/notification"
 	"github.com/google/uuid"
 )
 
+// NotificationTemplate holds in data for notification
+// that'll be used by struct templater.
+type NotificationTemplate struct {
+	Message    string            `template:"true"`
+	Properties map[string]string `template:"true"`
+}
+
 func addNotificationEvent(ctx *api.Context, event api.Event) error {
-	// NOTE: might need to cache all the notifications instead of making this request on every event.
+	// TODO: need to cache all the notifications instead of making this request on every event.
 	// Then, on notification update event, we update/clear the cache.
 	var notifications []models.Notification
 	if err := ctx.DB().Debug().Where("deleted_at IS NULL").Where("? = ANY(events)", event.Name).Find(&notifications).Error; err != nil {
@@ -28,8 +39,25 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 	}
 
 	for _, n := range notifications {
-		if !n.HasRecipients() {
+		if !n.HasRecipients() || n.Template == "" {
 			continue
+		}
+
+		data := &NotificationTemplate{
+			Message:    n.Template,
+			Properties: n.Properties,
+		}
+
+		templater := template.StructTemplater{
+			Values:         celEnv,
+			ValueFunctions: true,
+			DelimSets: []template.Delims{
+				{Left: "{{", Right: "}}"},
+				{Left: "$(", Right: ")"},
+			},
+		}
+		if err := templater.Walk(data); err != nil {
+			return fmt.Errorf("error templating notification: %w", err)
 		}
 
 		if valid, err := notification.IsValid(n.Filter, celEnv); err != nil {
@@ -38,24 +66,41 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 			continue
 		}
 
-		// properties := NotificationEventProperties{
-		// 	NotificationID: n.ID.String(),
-		// }
-		// properties.FromEvent(event)
-		// propertiesMap, err := properties.AsMap()
-		// if err != nil {
-		// 	return err
-		// }
+		if n.PersonID != nil {
+			var email string
+			if err := ctx.DB().Model(&models.Person{}).Select("email").Where("id = ?", n.PersonID).Find(&email).Error; err != nil {
+				logger.Errorf("failed to get email of person(id=%s); %v", n.PersonID, err)
+			} else {
+				// TODO: Put this somewhere else
+				var (
+					username string
+					password string
+					host     = "smt.yandex.com"
+					port     = 465
+				)
 
-		event.Properties["event_name"] = event.Name
+				event := api.Event{
+					ID:   uuid.New(),
+					Name: EventNotification,
+					Properties: map[string]string{
+						"internal.message": data.Message,
+						"internal.url":     fmt.Sprintf("smtp://%s:%s@%s:%d/?auth=Plain&FromAddress=%s&ToAddresses=%s", url.QueryEscape(username), url.QueryEscape(password), host, port, url.QueryEscape(username), url.QueryEscape(email)),
+					},
+				}
 
-		event := api.Event{
-			ID:         uuid.New(),
-			Name:       EventNotification,
-			Properties: event.Properties,
+				event.Properties = collections.MergeMap(event.Properties, data.Properties)
+				if err := ctx.DB().Create(event).Error; err != nil {
+					logger.Errorf("failed to create notification event for person(id=%s): %v", n.PersonID, err)
+				}
+			}
 		}
-		if err := ctx.DB().Create(event).Error; err != nil {
-			return fmt.Errorf("error saving event: %w", err)
+
+		if n.TeamID != nil {
+			// Get all the team's custom notifications and publish one event per for each of them
+		}
+
+		if n.CustomServices != nil {
+			// TODO: Publish an event per service
 		}
 	}
 
@@ -63,41 +108,17 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 }
 
 func publishNotification(ctx *api.Context, event api.Event) error {
-	var notificationDB models.Notification
-	if err := ctx.DB().Where("id = ?", event.Properties["notification_id"]).First(&notificationDB).Error; err != nil {
-		return err
-	}
+	var (
+		connection = event.Properties["internal.connection"]
+		url        = event.Properties["internal.url"]
+		message    = event.Properties["internal.message"]
+	)
 
-	if notificationDB.DeletedAt != nil {
-		return nil
-	}
+	delete(event.Properties, "internal.url")
+	delete(event.Properties, "internal.message")
+	delete(event.Properties, "internal.connection")
 
-	// TODO: Templatize
-	// celEnv, err := getCelEnvForEvents(ctx, event.Properties["event_name"], event.Properties)
-	// if err != nil {
-	// 	return err
-	// }
-
-	if notificationDB.PersonID != nil {
-		// Send the notification to the email of this person
-	}
-
-	if notificationDB.TeamID != nil {
-		// Send the notification to all the receivers of this team
-	}
-
-	if len(notificationDB.Receivers) > 0 {
-		// Send the notification to all the shoutrrr receivers
-	}
-
-	// shoutrrr, err := notification.NewShoutrrrClient(ctx, notificationDB)
-	// if err != nil {
-	// 	logger.Errorf("failed to create shoutrrr client: %v", err)
-	// } else if err := shoutrrr.NotifyResponderAdded(ctx, _responder); err != nil {
-	// 	logger.Errorf("failed to notify responder addition: %v", err)
-	// }
-
-	return nil
+	return notification.Publish(ctx, connection, url, message, event.Properties)
 }
 
 // getEnvForEvent gets the environment variables for the given event
