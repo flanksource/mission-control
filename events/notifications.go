@@ -11,6 +11,7 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/notification"
+	"github.com/flanksource/incident-commander/utils"
 	"github.com/google/uuid"
 )
 
@@ -60,7 +61,7 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 			return fmt.Errorf("error templating notification: %w", err)
 		}
 
-		if valid, err := notification.IsValid(n.Filter, celEnv); err != nil {
+		if valid, err := utils.EvalExpression(n.Filter, celEnv); err != nil {
 			return err
 		} else if !valid {
 			continue
@@ -72,6 +73,7 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 				logger.Errorf("failed to get email of person(id=%s); %v", n.PersonID, err)
 			} else {
 				// TODO: Put this somewhere else
+				// (might need to add new field to notifications table that stores the connection name for the sender email SMTP server)
 				var (
 					username string
 					password string
