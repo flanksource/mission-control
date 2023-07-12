@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/flanksource/commons/collections"
-	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/template"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
@@ -85,7 +84,7 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 		if n.PersonID != nil {
 			var email string
 			if err := ctx.DB().Model(&models.Person{}).Select("email").Where("id = ?", n.PersonID).Find(&email).Error; err != nil {
-				logger.Errorf("failed to get email of person(id=%s); %v", n.PersonID, err)
+				return fmt.Errorf("failed to get email of person(id=%s); %v", n.PersonID, err)
 			} else {
 				newEvent := api.Event{
 					ID:   uuid.New(),
@@ -105,7 +104,7 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 
 				newEvent.Properties = collections.MergeMap(newEvent.Properties, data.Properties)
 				if err := ctx.DB().Create(newEvent).Error; err != nil {
-					logger.Errorf("failed to create notification event for person(id=%s): %v", n.PersonID, err)
+					return fmt.Errorf("failed to create notification event for person(id=%s): %v", n.PersonID, err)
 				}
 			}
 		}
@@ -113,7 +112,7 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 		if n.TeamID != nil {
 			var team models.Team
 			if err := ctx.DB().Model(&models.Team{}).Select("spec").Where("id = ?", n.TeamID).Find(&team).Error; err != nil {
-				logger.Errorf("failed to get team spec(id=%s); %v", n.TeamID, err)
+				return fmt.Errorf("failed to get team spec(id=%s); %v", n.TeamID, err)
 			} else {
 				b, err := json.Marshal(team.Spec)
 				if err != nil {
@@ -148,7 +147,7 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 
 					newEvent.Properties = collections.MergeMap(newEvent.Properties, cn.Properties)
 					if err := ctx.DB().Create(newEvent).Error; err != nil {
-						logger.Errorf("failed to create notification event for team(id=%s): %v", n.TeamID, err)
+						return fmt.Errorf("failed to create notification event for team(id=%s): %v", n.TeamID, err)
 					}
 				}
 			}
@@ -162,7 +161,7 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 
 			var customNotifications []api.NotificationConfig
 			if err := json.Unmarshal(b, &customNotifications); err != nil {
-				logger.Infof("%v", err)
+				return err
 			}
 
 			for _, cn := range customNotifications {
@@ -188,7 +187,7 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 
 				newEvent.Properties = collections.MergeMap(newEvent.Properties, cn.Properties)
 				if err := ctx.DB().Create(newEvent).Error; err != nil {
-					logger.Errorf("failed to create notification event for person(id=%s): %v", n.PersonID, err)
+					return fmt.Errorf("failed to create notification event for custom service (id=%s): %v", n.PersonID, err)
 				}
 			}
 		}
