@@ -5,6 +5,7 @@ import (
 
 	"github.com/containrrr/shoutrrr"
 	"github.com/containrrr/shoutrrr/pkg/types"
+	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/incident-commander/api"
 )
 
@@ -14,7 +15,9 @@ func Publish(ctx *api.Context, connectionName, url, message string, properties m
 		if err != nil {
 			return err
 		}
+
 		url = connection.URL
+		properties = collections.MergeMap(connection.Properties, properties)
 	}
 
 	sender, err := shoutrrr.CreateSender(url)

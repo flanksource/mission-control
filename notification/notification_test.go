@@ -50,8 +50,7 @@ var _ = ginkgo.Describe("Test Notification on responder added", ginkgo.Ordered, 
 			Components: []api.ComponentSelector{{Name: "logistics"}},
 			Notifications: []api.NotificationConfig{
 				{
-					URL:      fmt.Sprintf("generic+%s", webhookEndpoint),
-					Template: "Severity: {{.incident.severity}}",
+					URL: fmt.Sprintf("generic+%s", webhookEndpoint),
 					Properties: map[string]string{
 						"template":   "json",
 						"disabletls": "yes",

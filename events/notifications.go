@@ -1,6 +1,7 @@
 package events
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"strings"
@@ -26,7 +27,7 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 	// TODO: need to cache all the notifications instead of making this request on every event.
 	// Then, on notification update event, we update/clear the cache.
 	var notifications []models.Notification
-	if err := ctx.DB().Debug().Where("deleted_at IS NULL").Where("? = ANY(events)", event.Name).Find(&notifications).Error; err != nil {
+	if err := ctx.DB().Where("deleted_at IS NULL").Where("? = ANY(events)", event.Name).Find(&notifications).Error; err != nil {
 		return err
 	}
 
@@ -39,25 +40,26 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 		return err
 	}
 
+	templater := template.StructTemplater{
+		Values:         celEnv,
+		ValueFunctions: true,
+		DelimSets: []template.Delims{
+			{Left: "{{", Right: "}}"},
+			{Left: "$(", Right: ")"},
+		},
+	}
+
 	for _, n := range notifications {
 		if !n.HasRecipients() || n.Template == "" {
 			continue
 		}
 
-		data := &NotificationTemplate{
+		data := NotificationTemplate{
 			Message:    n.Template,
 			Properties: n.Properties,
 		}
 
-		templater := template.StructTemplater{
-			Values:         celEnv,
-			ValueFunctions: true,
-			DelimSets: []template.Delims{
-				{Left: "{{", Right: "}}"},
-				{Left: "$(", Right: ")"},
-			},
-		}
-		if err := templater.Walk(data); err != nil {
+		if err := templater.Walk(&data); err != nil {
 			return fmt.Errorf("error templating notification: %w", err)
 		}
 
@@ -81,7 +83,7 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 					port     = 465
 				)
 
-				event := api.Event{
+				newEvent := api.Event{
 					ID:   uuid.New(),
 					Name: EventNotification,
 					Properties: map[string]string{
@@ -90,19 +92,96 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 					},
 				}
 
-				event.Properties = collections.MergeMap(event.Properties, data.Properties)
-				if err := ctx.DB().Create(event).Error; err != nil {
+				newEvent.Properties = collections.MergeMap(event.Properties, data.Properties)
+				if err := ctx.DB().Create(newEvent).Error; err != nil {
 					logger.Errorf("failed to create notification event for person(id=%s): %v", n.PersonID, err)
 				}
 			}
 		}
 
 		if n.TeamID != nil {
-			// Get all the team's custom notifications and publish one event per for each of them
+			var team models.Team
+			if err := ctx.DB().Model(&models.Team{}).Select("spec").Where("id = ?", n.TeamID).Find(&team).Error; err != nil {
+				logger.Errorf("failed to get team spec(id=%s); %v", n.TeamID, err)
+			} else {
+				b, err := json.Marshal(team.Spec)
+				if err != nil {
+					return err
+				}
+
+				var teamSpec api.TeamSpec
+				if err := json.Unmarshal(b, &teamSpec); err != nil {
+					return err
+				}
+
+				for _, cn := range teamSpec.Notifications {
+					if err := templater.Walk(&cn); err != nil {
+						return fmt.Errorf("error templating notification: %w", err)
+					}
+
+					if valid, err := utils.EvalExpression(cn.Filter, celEnv); err != nil {
+						return err
+					} else if !valid {
+						continue
+					}
+
+					newEvent := api.Event{
+						ID:   uuid.New(),
+						Name: EventNotification,
+						Properties: map[string]string{
+							"internal.message":    data.Message,
+							"internal.connection": cn.Connection,
+							"internal.url":        cn.URL,
+						},
+					}
+
+					newEvent.Properties = collections.MergeMap(newEvent.Properties, data.Properties)
+					newEvent.Properties = collections.MergeMap(newEvent.Properties, cn.Properties)
+					if err := ctx.DB().Create(newEvent).Error; err != nil {
+						logger.Errorf("failed to create notification event for team(id=%s): %v", n.TeamID, err)
+					}
+				}
+			}
 		}
 
 		if n.CustomServices != nil {
-			// TODO: Publish an event per service
+			b, err := json.Marshal(n.CustomServices)
+			if err != nil {
+				return err
+			}
+
+			var customNotifications []api.NotificationConfig
+			if err := json.Unmarshal(b, &customNotifications); err != nil {
+				logger.Infof("%v", err)
+			}
+
+			for _, cn := range customNotifications {
+				if err := templater.Walk(&cn); err != nil {
+					return fmt.Errorf("error templating notification: %w", err)
+				}
+
+				if valid, err := utils.EvalExpression(cn.Filter, celEnv); err != nil {
+					return err
+				} else if !valid {
+					continue
+				}
+
+				newEvent := api.Event{
+					ID:   uuid.New(),
+					Name: EventNotification,
+					Properties: map[string]string{
+						"internal.message":    data.Message,
+						"internal.connection": cn.Connection,
+						"internal.url":        cn.URL,
+					},
+				}
+
+				newEvent.Properties = collections.MergeMap(newEvent.Properties, data.Properties)
+				newEvent.Properties = collections.MergeMap(newEvent.Properties, cn.Properties)
+				if err := ctx.DB().Create(newEvent).Error; err != nil {
+					logger.Errorf("failed to create notification event for person(id=%s): %v", n.PersonID, err)
+				}
+			}
 		}
 	}
 
