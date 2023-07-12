@@ -19,6 +19,9 @@ const (
 	EventTeamUpdate = "team.update"
 	EventTeamDelete = "team.delete"
 
+	EventNotificationUpdate = "notification.update"
+	EventNotificationDelete = "notification.delete"
+
 	EventCheckPassed = "check.passed"
 	EventCheckFailed = "check.failed"
 
@@ -38,7 +41,7 @@ const (
 
 	EventPushQueueCreate = "push_queue.create"
 
-	EventNotification = "notification.create"
+	EventNotificationPublish = "notification.create"
 )
 
 const (
@@ -179,12 +182,14 @@ func (t *eventHandler) consumeEvents() error {
 		EventIncidentDODAdded, EventIncidentDODPassed, EventIncidentDODRegressed,
 		EventIncidentStatusOpen, EventIncidentStatusClosed, EventIncidentStatusMitigated, EventIncidentStatusResolved, EventIncidentStatusInvestigating, EventIncidentStatusCancelled:
 		err = addNotificationEvent(ctx, event)
-	case EventNotification:
+	case EventNotificationPublish:
 		err = publishNotification(ctx, event)
 	case EventTeamUpdate:
 		err = handleTeamUpdate(tx, event)
 	case EventTeamDelete:
 		err = handleTeamDelete(tx, event)
+	case EventNotificationDelete, EventNotificationUpdate:
+		err = handleNotificationUpdates(ctx, event)
 	case EventPushQueueCreate:
 		if upstreamPushEventHandler != nil {
 			err = upstreamPushEventHandler.Run(ctx, tx, []api.Event{event})

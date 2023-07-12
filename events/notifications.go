@@ -24,10 +24,8 @@ type NotificationTemplate struct {
 }
 
 func addNotificationEvent(ctx *api.Context, event api.Event) error {
-	// TODO: need to cache all the notifications instead of making this request on every event.
-	// Then, on notification update event, we update/clear the cache.
-	var notifications []models.Notification
-	if err := ctx.DB().Where("deleted_at IS NULL").Where("? = ANY(events)", event.Name).Find(&notifications).Error; err != nil {
+	notifications, err := notification.GetNotifications(ctx, event.Name)
+	if err != nil {
 		return err
 	}
 
@@ -85,7 +83,7 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 
 				newEvent := api.Event{
 					ID:   uuid.New(),
-					Name: EventNotification,
+					Name: EventNotificationPublish,
 					Properties: map[string]string{
 						"internal.message": data.Message,
 						"internal.url":     fmt.Sprintf("smtp://%s:%s@%s:%d/?auth=Plain&FromAddress=%s&ToAddresses=%s", url.QueryEscape(username), url.QueryEscape(password), host, port, url.QueryEscape(username), url.QueryEscape(email)),
@@ -127,7 +125,7 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 
 					newEvent := api.Event{
 						ID:   uuid.New(),
-						Name: EventNotification,
+						Name: EventNotificationPublish,
 						Properties: map[string]string{
 							"internal.message":    data.Message,
 							"internal.connection": cn.Connection,
@@ -168,7 +166,7 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 
 				newEvent := api.Event{
 					ID:   uuid.New(),
-					Name: EventNotification,
+					Name: EventNotificationPublish,
 					Properties: map[string]string{
 						"internal.message":    data.Message,
 						"internal.connection": cn.Connection,
@@ -229,4 +227,12 @@ func getEnvForEvent(ctx *api.Context, eventName string, properties map[string]st
 	}
 
 	return env, nil
+}
+
+func handleNotificationUpdates(ctx *api.Context, event api.Event) error {
+	if id, ok := event.Properties["id"]; ok {
+		notification.PurgeCache(id)
+	}
+
+	return nil
 }
