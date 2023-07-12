@@ -12,16 +12,16 @@ import (
 	dbModels "github.com/flanksource/incident-commander/db/models"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
-var _ = ginkgo.Describe("Test Notification on responder added", ginkgo.Ordered, func() {
+var _ = ginkgo.Describe("Test Notification on incident creation", ginkgo.Ordered, func() {
 	var (
 		john      *models.Person
 		incident  *models.Incident
 		component *models.Component
-		responder *models.Responder
 		team      *dbModels.Team
 	)
 
@@ -77,6 +77,18 @@ var _ = ginkgo.Describe("Test Notification on responder added", ginkgo.Ordered, 
 		Expect(tx.Error).To(BeNil())
 	})
 
+	ginkgo.It("should create a new notification", func() {
+		notif := models.Notification{
+			ID:       uuid.New(),
+			Events:   pq.StringArray([]string{"incident.created"}),
+			Template: "Severity: {{.incident.severity}}",
+			TeamID:   &team.ID,
+		}
+
+		err := db.Gorm.Create(&notif).Error
+		Expect(err).To(BeNil())
+	})
+
 	ginkgo.It("should create an incident", func() {
 		incident = &models.Incident{
 			ID:          uuid.New(),
@@ -88,18 +100,6 @@ var _ = ginkgo.Describe("Test Notification on responder added", ginkgo.Ordered, 
 			CommanderID: &john.ID,
 		}
 		tx := db.Gorm.Create(incident)
-		Expect(tx.Error).To(BeNil())
-	})
-
-	ginkgo.It("should create a new responder on the incident", func() {
-		responder = &models.Responder{
-			ID:         uuid.New(),
-			IncidentID: incident.ID,
-			Type:       "team",
-			CreatedBy:  john.ID,
-			TeamID:     &team.ID,
-		}
-		tx := db.Gorm.Create(responder)
 		Expect(tx.Error).To(BeNil())
 	})
 
