@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/flanksource/commons/collections"
@@ -15,6 +16,20 @@ import (
 	"github.com/flanksource/incident-commander/utils"
 	"github.com/google/uuid"
 )
+
+func publishNotification(ctx *api.Context, event api.Event) error {
+	var (
+		connection = event.Properties["internal.connection"]
+		url        = event.Properties["internal.url"]
+		message    = event.Properties["internal.message"]
+	)
+
+	delete(event.Properties, "internal.url")
+	delete(event.Properties, "internal.message")
+	delete(event.Properties, "internal.connection")
+
+	return notification.Publish(ctx, connection, url, message, event.Properties)
+}
 
 // NotificationTemplate holds in data for notification
 // that'll be used by struct templater.
@@ -72,25 +87,23 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 			if err := ctx.DB().Model(&models.Person{}).Select("email").Where("id = ?", n.PersonID).Find(&email).Error; err != nil {
 				logger.Errorf("failed to get email of person(id=%s); %v", n.PersonID, err)
 			} else {
-				// TODO: Put this somewhere else
-				// (might need to add new field to notifications table that stores the connection name for the sender email SMTP server)
-				var (
-					username string
-					password string
-					host     = "smt.yandex.com"
-					port     = 465
-				)
-
 				newEvent := api.Event{
 					ID:   uuid.New(),
 					Name: EventNotificationPublish,
 					Properties: map[string]string{
 						"internal.message": data.Message,
-						"internal.url":     fmt.Sprintf("smtp://%s:%s@%s:%d/?auth=Plain&FromAddress=%s&ToAddresses=%s", url.QueryEscape(username), url.QueryEscape(password), host, port, url.QueryEscape(username), url.QueryEscape(email)),
+						"internal.url": fmt.Sprintf("smtp://%s:%s@%s:%s/?auth=Plain&FromAddress=%s&ToAddresses=%s",
+							url.QueryEscape(os.Getenv("SMTP_USER")),
+							url.QueryEscape(os.Getenv("SMTP_PASSWORD")),
+							os.Getenv("SMTP_HOST"),
+							os.Getenv("SMTP_PORT"),
+							url.QueryEscape(os.Getenv("SMTP_USER")),
+							url.QueryEscape(email),
+						),
 					},
 				}
 
-				newEvent.Properties = collections.MergeMap(event.Properties, data.Properties)
+				newEvent.Properties = collections.MergeMap(newEvent.Properties, data.Properties)
 				if err := ctx.DB().Create(newEvent).Error; err != nil {
 					logger.Errorf("failed to create notification event for person(id=%s): %v", n.PersonID, err)
 				}
@@ -133,7 +146,6 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 						},
 					}
 
-					newEvent.Properties = collections.MergeMap(newEvent.Properties, data.Properties)
 					newEvent.Properties = collections.MergeMap(newEvent.Properties, cn.Properties)
 					if err := ctx.DB().Create(newEvent).Error; err != nil {
 						logger.Errorf("failed to create notification event for team(id=%s): %v", n.TeamID, err)
@@ -174,7 +186,6 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 					},
 				}
 
-				newEvent.Properties = collections.MergeMap(newEvent.Properties, data.Properties)
 				newEvent.Properties = collections.MergeMap(newEvent.Properties, cn.Properties)
 				if err := ctx.DB().Create(newEvent).Error; err != nil {
 					logger.Errorf("failed to create notification event for person(id=%s): %v", n.PersonID, err)
@@ -186,26 +197,27 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 	return nil
 }
 
-func publishNotification(ctx *api.Context, event api.Event) error {
-	var (
-		connection = event.Properties["internal.connection"]
-		url        = event.Properties["internal.url"]
-		message    = event.Properties["internal.message"]
-	)
-
-	delete(event.Properties, "internal.url")
-	delete(event.Properties, "internal.message")
-	delete(event.Properties, "internal.connection")
-
-	return notification.Publish(ctx, connection, url, message, event.Properties)
-}
-
 // getEnvForEvent gets the environment variables for the given event
 // that'll be passed to the cel expression or to the template renderer as a view.
 func getEnvForEvent(ctx *api.Context, eventName string, properties map[string]string) (map[string]any, error) {
 	env := make(map[string]any)
 
-	if strings.HasPrefix(eventName, "incident.") {
+	if strings.HasPrefix(eventName, "check.") {
+		var check models.Check
+		if err := ctx.DB().Where("id = ?", properties["id"]).Find(&check).Error; err != nil {
+			return nil, err
+		}
+
+		var canary models.Canary
+		if err := ctx.DB().Where("id = ?", check.CanaryID).Find(&canary).Error; err != nil {
+			return nil, err
+		}
+
+		env["canary"] = canary.AsMap()
+		env["check"] = check.AsMap()
+	}
+
+	if eventName == "incident.created" || strings.HasPrefix(eventName, "incident.status.") {
 		var incident models.Incident
 		if err := ctx.DB().Where("id = ?", properties["id"]).Find(&incident).Error; err != nil {
 			return nil, err
@@ -215,15 +227,56 @@ func getEnvForEvent(ctx *api.Context, eventName string, properties map[string]st
 	}
 
 	if strings.HasPrefix(eventName, "incident.responder.") {
+		var responder models.Responder
+		if err := ctx.DB().Where("id = ?", properties["id"]).Find(&responder).Error; err != nil {
+			return nil, err
+		}
 
+		var incident models.Incident
+		if err := ctx.DB().Where("id = ?", responder.IncidentID).Find(&incident).Error; err != nil {
+			return nil, err
+		}
+
+		env["incident"] = incident.AsMap()
+		env["responder"] = responder.AsMap()
 	}
 
 	if strings.HasPrefix(eventName, "incident.comment.") {
+		var comment models.Comment
+		if err := ctx.DB().Where("id = ?", properties["id"]).Find(&comment).Error; err != nil {
+			return nil, err
+		}
 
+		var incident models.Incident
+		if err := ctx.DB().Where("id = ?", comment.IncidentID).Find(&incident).Error; err != nil {
+			return nil, err
+		}
+
+		// TODO: extract out mentioned users' emails from the comment body
+
+		env["incident"] = incident.AsMap()
+		env["comment"] = comment.AsMap()
 	}
 
 	if strings.HasPrefix(eventName, "incident.dod.") {
+		var evidence models.Evidence
+		if err := ctx.DB().Where("id = ?", properties["id"]).Find(&evidence).Error; err != nil {
+			return nil, err
+		}
 
+		var hypotheses models.Hypothesis
+		if err := ctx.DB().Where("id = ?", evidence.HypothesisID).Find(&evidence).Find(&hypotheses).Error; err != nil {
+			return nil, err
+		}
+
+		var incident models.Incident
+		if err := ctx.DB().Where("id = ?", hypotheses.IncidentID).Find(&incident).Error; err != nil {
+			return nil, err
+		}
+
+		env["evidence"] = evidence.AsMap()
+		env["hypotheses"] = hypotheses.AsMap()
+		env["incident"] = incident.AsMap()
 	}
 
 	return env, nil

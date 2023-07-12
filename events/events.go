@@ -174,13 +174,14 @@ func (t *eventHandler) consumeEvents() error {
 
 	switch event.Name {
 	case EventIncidentResponderAdded:
-		err = reconcileResponderEvent(tx, event)
+		err = reconcileResponderEvent(ctx, event)
 	case EventIncidentCommentAdded:
-		err = reconcileCommentEvent(tx, event)
+		err = reconcileCommentEvent(ctx, event)
 	case EventIncidentCreated,
 		EventIncidentResponderRemoved,
 		EventIncidentDODAdded, EventIncidentDODPassed, EventIncidentDODRegressed,
-		EventIncidentStatusOpen, EventIncidentStatusClosed, EventIncidentStatusMitigated, EventIncidentStatusResolved, EventIncidentStatusInvestigating, EventIncidentStatusCancelled:
+		EventIncidentStatusOpen, EventIncidentStatusClosed, EventIncidentStatusMitigated, EventIncidentStatusResolved, EventIncidentStatusInvestigating, EventIncidentStatusCancelled,
+		EventCheckFailed, EventCheckPassed:
 		err = addNotificationEvent(ctx, event)
 	case EventNotificationPublish:
 		err = publishNotification(ctx, event)

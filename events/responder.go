@@ -11,12 +11,11 @@ import (
 	pkgResponder "github.com/flanksource/incident-commander/responder"
 )
 
-func reconcileResponderEvent(tx *gorm.DB, event api.Event) error {
+func reconcileResponderEvent(ctx *api.Context, event api.Event) error {
 	responderID := event.Properties["id"]
-	ctx := api.NewContext(tx, nil)
 
 	var responder api.Responder
-	err := tx.Where("id = ? AND external_id is NULL", responderID).Preload("Incident").Preload("Team").Find(&responder).Error
+	err := ctx.DB().Where("id = ? AND external_id is NULL", responderID).Preload("Incident").Preload("Team").Find(&responder).Error
 	if err != nil {
 		return err
 	}
@@ -32,18 +31,21 @@ func reconcileResponderEvent(tx *gorm.DB, event api.Event) error {
 	}
 	if externalID != "" {
 		// Update external id in responder table
-		return tx.Model(&api.Responder{}).Where("id = ?", responder.ID).Update("external_id", externalID).Error
+		return ctx.DB().Model(&api.Responder{}).Where("id = ?", responder.ID).Update("external_id", externalID).Error
+	}
+
+	if err := addNotificationEvent(ctx, event); err != nil {
+		logger.Errorf("failed to add notification publish event for responder: %v", err)
 	}
 
 	return nil
 }
 
-func reconcileCommentEvent(tx *gorm.DB, event api.Event) error {
+func reconcileCommentEvent(ctx *api.Context, event api.Event) error {
 	commentID := event.Properties["id"]
-	ctx := api.NewContext(tx, nil)
 
 	var comment api.Comment
-	err := tx.Where("id = ? AND external_id IS NULL", commentID).First(&comment).Error
+	err := ctx.DB().Where("id = ? AND external_id IS NULL", commentID).First(&comment).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			logger.Debugf("Skipping comment %s since it was added via responder", commentID)
@@ -60,7 +62,7 @@ func reconcileCommentEvent(tx *gorm.DB, event api.Event) error {
             SELECT incident_id FROM comments WHERE id = ?
         )
     `
-	if err = tx.Raw(commentRespondersQuery, commentID).Preload("Team").Find(&responders).Error; err != nil {
+	if err = ctx.DB().Raw(commentRespondersQuery, commentID).Preload("Team").Find(&responders).Error; err != nil {
 		return err
 	}
 
@@ -83,12 +85,16 @@ func reconcileCommentEvent(tx *gorm.DB, event api.Event) error {
 
 		// Insert into comment_responders table
 		if externalID != "" {
-			err = tx.Exec("INSERT INTO comment_responders (comment_id, responder_id, external_id) VALUES (?, ?, ?)",
+			err = ctx.DB().Exec("INSERT INTO comment_responders (comment_id, responder_id, external_id) VALUES (?, ?, ?)",
 				commentID, _responder.ID, externalID).Error
 			if err != nil {
 				logger.Errorf("error updating comment_responders table: %v", err)
 			}
 		}
+	}
+
+	if err := addNotificationEvent(ctx, event); err != nil {
+		logger.Errorf("failed to add notification publish event for comment: %v", err)
 	}
 
 	return nil
