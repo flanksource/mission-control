@@ -1,6 +1,7 @@
 package notification
 
 import (
+	"encoding/json"
 	"time"
 
 	"github.com/flanksource/duty/models"
@@ -34,16 +35,38 @@ func GetNotifications(ctx *api.Context, eventName string) ([]models.Notification
 	return notifications, nil
 }
 
-func GetNotification(ctx *api.Context, id string) (*models.Notification, error) {
+// A wrapper around notification that also contains the custom notifications.
+type NotificationWithSpec struct {
+	models.Notification
+	CustomNotifications []api.NotificationConfig
+}
+
+func GetNotification(ctx *api.Context, id string) (*NotificationWithSpec, error) {
 	if val, found := notificationByIDCache.Get(id); found {
-		return val.(*models.Notification), nil
+		return val.(*NotificationWithSpec), nil
 	}
 
 	var n models.Notification
 	if err := ctx.DB().Where("id = ?", id).Find(&n).Error; err != nil {
 		return nil, err
 	}
-	notificationByIDCache.Set(id, &n, cache.DefaultExpiration)
 
-	return &n, nil
+	b, err := json.Marshal(n.CustomServices)
+	if err != nil {
+		return nil, err
+	}
+
+	var customNotifications []api.NotificationConfig
+	if err := json.Unmarshal(b, &customNotifications); err != nil {
+		return nil, err
+	}
+
+	data := NotificationWithSpec{
+		Notification:        n,
+		CustomNotifications: customNotifications,
+	}
+
+	notificationByIDCache.Set(id, &data, cache.DefaultExpiration)
+
+	return &data, nil
 }

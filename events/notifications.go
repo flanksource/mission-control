@@ -11,6 +11,7 @@ import (
 	"github.com/flanksource/incident-commander/mail"
 	"github.com/flanksource/incident-commander/notification"
 	pkgNotification "github.com/flanksource/incident-commander/notification"
+	"github.com/flanksource/incident-commander/teams"
 	"github.com/flanksource/incident-commander/utils"
 	"github.com/google/uuid"
 )
@@ -87,19 +88,9 @@ func publishNotification(ctx *api.Context, event api.Event) error {
 	}
 
 	if props.TeamID != "" {
-		var team models.Team
-		if err := ctx.DB().Where("id = ?", props.TeamID).Find(&team).Error; err != nil {
-			return fmt.Errorf("failed to get team(id=%s); %v", props.TeamID, err)
-		}
-
-		b, err := json.Marshal(team.Spec)
+		teamSpec, err := teams.GetTeamSpec(ctx, props.TeamID)
 		if err != nil {
-			return err
-		}
-
-		var teamSpec api.TeamSpec
-		if err := json.Unmarshal(b, &teamSpec); err != nil {
-			return err
+			return fmt.Errorf("failed to get team(id=%s); %v", props.TeamID, err)
 		}
 
 		for _, cn := range teamSpec.Notifications {
@@ -115,17 +106,7 @@ func publishNotification(ctx *api.Context, event api.Event) error {
 		}
 	}
 
-	b, err := json.Marshal(notification.CustomServices)
-	if err != nil {
-		return err
-	}
-
-	var customNotifications []api.NotificationConfig
-	if err := json.Unmarshal(b, &customNotifications); err != nil {
-		return err
-	}
-
-	for _, cn := range customNotifications {
+	for _, cn := range notification.CustomNotifications {
 		if cn.Name != props.NotificationName {
 			continue
 		}

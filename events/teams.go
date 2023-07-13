@@ -4,6 +4,7 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/responder"
+	"github.com/flanksource/incident-commander/teams"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -24,6 +25,7 @@ func handleTeamDelete(tx *gorm.DB, event api.Event) error {
 	}
 
 	responder.PurgeCache(teamID.String())
+	teams.PurgeCache(teamID.String())
 	return nil
 }
 
@@ -42,5 +44,6 @@ func handleTeamUpdate(tx *gorm.DB, event api.Event) error {
 	}
 
 	responder.PurgeCache(teamID.String())
+	teams.PurgeCache(teamID.String())
 	return nil
 }
