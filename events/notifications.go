@@ -3,31 +3,25 @@ package events
 import (
 	"encoding/json"
 	"fmt"
-	"net/url"
-	"os"
 	"strings"
 
-	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/template"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/mail"
 	"github.com/flanksource/incident-commander/notification"
+	pkgNotification "github.com/flanksource/incident-commander/notification"
 	"github.com/flanksource/incident-commander/utils"
 	"github.com/google/uuid"
 )
 
-func publishNotification(ctx *api.Context, event api.Event) error {
-	var (
-		connection = event.Properties["internal.connection"]
-		url        = event.Properties["internal.url"]
-		message    = event.Properties["internal.message"]
-	)
-
-	delete(event.Properties, "internal.url")
-	delete(event.Properties, "internal.message")
-	delete(event.Properties, "internal.connection")
-
-	return notification.Publish(ctx, connection, url, message, event.Properties)
+type NotificationEventProperties struct {
+	ID               string `json:"id"`                          // Resource id. depends what it is based on the original event.
+	EventName        string `json:"event_name"`                  // The name of the original event this notification is for.
+	PersonID         string `json:"person_id,omitempty"`         // The person recipient.
+	TeamID           string `json:"team_id,omitempty"`           // The team recipient.
+	NotificationName string `json:"notification_name,omitempty"` // Name of the notification of a team or a custom service of the notification.
+	NotificationID   string `json:"notification_id,omitempty"`   // ID of the notification.
 }
 
 // NotificationTemplate holds in data for notification
@@ -37,6 +31,118 @@ type NotificationTemplate struct {
 	Properties map[string]string `template:"true"`
 }
 
+func (t *NotificationEventProperties) AsMap() map[string]string {
+	m := make(map[string]string)
+	b, _ := json.Marshal(&t)
+	_ = json.Unmarshal(b, &m)
+	return m
+}
+
+func (t *NotificationEventProperties) FromMap(m map[string]string) {
+	b, _ := json.Marshal(m)
+	_ = json.Unmarshal(b, &t)
+}
+
+func publishNotification(ctx *api.Context, event api.Event) error {
+	var props NotificationEventProperties
+	props.FromMap(event.Properties)
+
+	celEnv, err := getEnvForEvent(ctx, props.EventName, event.Properties)
+	if err != nil {
+		return err
+	}
+
+	templater := template.StructTemplater{
+		Values:         celEnv,
+		ValueFunctions: true,
+		DelimSets: []template.Delims{
+			{Left: "{{", Right: "}}"},
+			{Left: "$(", Right: ")"},
+		},
+	}
+
+	notification, err := pkgNotification.GetNotification(ctx, props.NotificationID)
+	if err != nil {
+		return err
+	}
+
+	data := NotificationTemplate{
+		Message:    notification.Template,
+		Properties: notification.Properties,
+	}
+
+	if err := templater.Walk(&data); err != nil {
+		return fmt.Errorf("error templating notification: %w", err)
+	}
+
+	if props.PersonID != "" {
+		var emailAddress string
+		if err := ctx.DB().Model(&models.Person{}).Select("email").Where("id = ?", props.PersonID).Find(&emailAddress).Error; err != nil {
+			return fmt.Errorf("failed to get email of person(id=%s); %v", props.PersonID, err)
+		}
+
+		var subject string = "Testing" // TODO: Make this customizable for the user or generate it based on the event?
+		email := mail.New(emailAddress, subject, data.Message, "text/html")
+		return email.Send()
+	}
+
+	if props.TeamID != "" {
+		var team models.Team
+		if err := ctx.DB().Where("id = ?", props.TeamID).Find(&team).Error; err != nil {
+			return fmt.Errorf("failed to get team(id=%s); %v", props.TeamID, err)
+		}
+
+		b, err := json.Marshal(team.Spec)
+		if err != nil {
+			return err
+		}
+
+		var teamSpec api.TeamSpec
+		if err := json.Unmarshal(b, &teamSpec); err != nil {
+			return err
+		}
+
+		for _, cn := range teamSpec.Notifications {
+			if cn.Name != props.NotificationName {
+				continue
+			}
+
+			if err := templater.Walk(&cn); err != nil {
+				return fmt.Errorf("error templating notification: %w", err)
+			}
+
+			return pkgNotification.Publish(ctx, cn.Connection, cn.URL, data.Message, cn.Properties)
+		}
+	}
+
+	b, err := json.Marshal(notification.CustomServices)
+	if err != nil {
+		return err
+	}
+
+	var customNotifications []api.NotificationConfig
+	if err := json.Unmarshal(b, &customNotifications); err != nil {
+		return err
+	}
+
+	for _, cn := range customNotifications {
+		if cn.Name != props.NotificationName {
+			continue
+		}
+
+		if err := templater.Walk(&cn); err != nil {
+			return fmt.Errorf("error templating notification: %w", err)
+		}
+
+		return pkgNotification.Publish(ctx, cn.Connection, cn.URL, data.Message, cn.Properties)
+	}
+
+	return nil
+}
+
+// addNotificationEvent responds to a event that can possible generate a notification.
+// If a notification is found for the given event and passes all the filters, then
+// a new notification event is created.
 func addNotificationEvent(ctx *api.Context, event api.Event) error {
 	notifications, err := notification.GetNotifications(ctx, event.Name)
 	if err != nil {
@@ -52,27 +158,9 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 		return err
 	}
 
-	templater := template.StructTemplater{
-		Values:         celEnv,
-		ValueFunctions: true,
-		DelimSets: []template.Delims{
-			{Left: "{{", Right: "}}"},
-			{Left: "$(", Right: ")"},
-		},
-	}
-
 	for _, n := range notifications {
 		if !n.HasRecipients() || n.Template == "" {
 			continue
-		}
-
-		data := NotificationTemplate{
-			Message:    n.Template,
-			Properties: n.Properties,
-		}
-
-		if err := templater.Walk(&data); err != nil {
-			return fmt.Errorf("error templating notification: %w", err)
 		}
 
 		if valid, err := utils.EvalExpression(n.Filter, celEnv); err != nil {
@@ -82,73 +170,63 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 		}
 
 		if n.PersonID != nil {
-			var email string
-			if err := ctx.DB().Model(&models.Person{}).Select("email").Where("id = ?", n.PersonID).Find(&email).Error; err != nil {
-				return fmt.Errorf("failed to get email of person(id=%s); %v", n.PersonID, err)
-			} else {
-				newEvent := api.Event{
-					ID:   uuid.New(),
-					Name: EventNotificationPublish,
-					Properties: map[string]string{
-						"internal.message": data.Message,
-						"internal.url": fmt.Sprintf("smtp://%s:%s@%s:%s/?auth=Plain&FromAddress=%s&ToAddresses=%s",
-							url.QueryEscape(os.Getenv("SMTP_USER")),
-							url.QueryEscape(os.Getenv("SMTP_PASSWORD")),
-							os.Getenv("SMTP_HOST"),
-							os.Getenv("SMTP_PORT"),
-							url.QueryEscape(os.Getenv("SMTP_USER")),
-							url.QueryEscape(email),
-						),
-					},
-				}
+			prop := NotificationEventProperties{
+				EventName:      event.Name,
+				NotificationID: n.ID.String(),
+				ID:             event.Properties["id"],
+				PersonID:       n.PersonID.String(),
+			}
 
-				newEvent.Properties = collections.MergeMap(newEvent.Properties, data.Properties)
-				if err := ctx.DB().Create(newEvent).Error; err != nil {
-					return fmt.Errorf("failed to create notification event for person(id=%s): %v", n.PersonID, err)
-				}
+			newEvent := api.Event{
+				ID:         uuid.New(),
+				Name:       EventNotificationPublish,
+				Properties: prop.AsMap(),
+			}
+			if err := ctx.DB().Create(newEvent).Error; err != nil {
+				return fmt.Errorf("failed to create notification event for person(id=%s): %v", n.PersonID, err)
 			}
 		}
 
 		if n.TeamID != nil {
+			// TODO: cache team spec
 			var team models.Team
 			if err := ctx.DB().Model(&models.Team{}).Select("spec").Where("id = ?", n.TeamID).Find(&team).Error; err != nil {
 				return fmt.Errorf("failed to get team spec(id=%s); %v", n.TeamID, err)
-			} else {
-				b, err := json.Marshal(team.Spec)
-				if err != nil {
+			}
+
+			b, err := json.Marshal(team.Spec)
+			if err != nil {
+				return err
+			}
+
+			var teamSpec api.TeamSpec
+			if err := json.Unmarshal(b, &teamSpec); err != nil {
+				return err
+			}
+
+			for _, cn := range teamSpec.Notifications {
+				if valid, err := utils.EvalExpression(cn.Filter, celEnv); err != nil {
 					return err
+				} else if !valid {
+					continue
 				}
 
-				var teamSpec api.TeamSpec
-				if err := json.Unmarshal(b, &teamSpec); err != nil {
-					return err
+				prop := NotificationEventProperties{
+					EventName:        event.Name,
+					NotificationID:   n.ID.String(),
+					ID:               event.Properties["id"],
+					TeamID:           n.TeamID.String(),
+					NotificationName: cn.Name,
 				}
 
-				for _, cn := range teamSpec.Notifications {
-					if err := templater.Walk(&cn); err != nil {
-						return fmt.Errorf("error templating notification: %w", err)
-					}
+				newEvent := api.Event{
+					ID:         uuid.New(),
+					Name:       EventNotificationPublish,
+					Properties: prop.AsMap(),
+				}
 
-					if valid, err := utils.EvalExpression(cn.Filter, celEnv); err != nil {
-						return err
-					} else if !valid {
-						continue
-					}
-
-					newEvent := api.Event{
-						ID:   uuid.New(),
-						Name: EventNotificationPublish,
-						Properties: map[string]string{
-							"internal.message":    data.Message,
-							"internal.connection": cn.Connection,
-							"internal.url":        cn.URL,
-						},
-					}
-
-					newEvent.Properties = collections.MergeMap(newEvent.Properties, cn.Properties)
-					if err := ctx.DB().Create(newEvent).Error; err != nil {
-						return fmt.Errorf("failed to create notification event for team(id=%s): %v", n.TeamID, err)
-					}
+				if err := ctx.DB().Create(newEvent).Error; err != nil {
+					return fmt.Errorf("failed to create notification event for team(id=%s): %v", n.TeamID, err)
 				}
 			}
 		}
@@ -165,27 +243,25 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 			}
 
 			for _, cn := range customNotifications {
-				if err := templater.Walk(&cn); err != nil {
-					return fmt.Errorf("error templating notification: %w", err)
-				}
-
 				if valid, err := utils.EvalExpression(cn.Filter, celEnv); err != nil {
 					return err
 				} else if !valid {
 					continue
 				}
 
-				newEvent := api.Event{
-					ID:   uuid.New(),
-					Name: EventNotificationPublish,
-					Properties: map[string]string{
-						"internal.message":    data.Message,
-						"internal.connection": cn.Connection,
-						"internal.url":        cn.URL,
-					},
+				prop := NotificationEventProperties{
+					EventName:        event.Name,
+					NotificationID:   n.ID.String(),
+					ID:               event.Properties["id"],
+					NotificationName: cn.Name,
 				}
 
-				newEvent.Properties = collections.MergeMap(newEvent.Properties, cn.Properties)
+				newEvent := api.Event{
+					ID:         uuid.New(),
+					Name:       EventNotificationPublish,
+					Properties: prop.AsMap(),
+				}
+
 				if err := ctx.DB().Create(newEvent).Error; err != nil {
 					return fmt.Errorf("failed to create notification event for custom service (id=%s): %v", n.PersonID, err)
 				}
