@@ -18,6 +18,7 @@ require (
 	github.com/jackc/pgx/v5 v5.3.1
 	github.com/labstack/echo-contrib v0.15.0
 	github.com/labstack/echo/v4 v4.10.2
+	github.com/lib/pq v1.10.9
 	github.com/microsoft/kiota-authentication-azure-go v0.6.0
 	github.com/microsoftgraph/msgraph-sdk-go v0.60.0
 	github.com/mitchellh/mapstructure v1.5.0
@@ -102,7 +103,6 @@ require (
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/klauspost/compress v1.16.5 // indirect
 	github.com/liamylian/jsontime/v2 v2.0.0 // indirect
-	github.com/lib/pq v1.10.9 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/matryer/is v1.4.1 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
@@ -260,4 +260,4 @@ require (
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
 
-replace "github.com/flanksource/duty" => "../duty"
+replace github.com/flanksource/duty => ../duty
