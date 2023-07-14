@@ -144,9 +144,11 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 			continue
 		}
 
-		if valid, err := utils.EvalExpression(n.Filter, celEnv); err != nil {
-			return err
-		} else if !valid {
+		if valid, err := utils.EvalExpression(n.Filter, celEnv); err != nil || !valid {
+			// We consider an error in filter evaluation is a failed filter check.
+			// Mostly, the filter check returns an error if the variable isn't defined.
+			// Example: If the filter makes use of `check` variable but the event is for
+			// incident creation, then the expression evaluation returns an error.
 			continue
 		}
 
@@ -169,26 +171,13 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 		}
 
 		if n.TeamID != nil {
-			// TODO: cache team spec
-			var team models.Team
-			if err := ctx.DB().Model(&models.Team{}).Select("spec").Where("id = ?", n.TeamID).Find(&team).Error; err != nil {
-				return fmt.Errorf("failed to get team spec(id=%s); %v", n.TeamID, err)
-			}
-
-			b, err := json.Marshal(team.Spec)
+			teamSpec, err := teams.GetTeamSpec(ctx, n.TeamID.String())
 			if err != nil {
-				return err
-			}
-
-			var teamSpec api.TeamSpec
-			if err := json.Unmarshal(b, &teamSpec); err != nil {
-				return err
+				return fmt.Errorf("failed to get team(id=%s); %v", n.TeamID, err)
 			}
 
 			for _, cn := range teamSpec.Notifications {
-				if valid, err := utils.EvalExpression(cn.Filter, celEnv); err != nil {
-					return err
-				} else if !valid {
+				if valid, err := utils.EvalExpression(cn.Filter, celEnv); err != nil || !valid {
 					continue
 				}
 
@@ -224,9 +213,7 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 			}
 
 			for _, cn := range customNotifications {
-				if valid, err := utils.EvalExpression(cn.Filter, celEnv); err != nil {
-					return err
-				} else if !valid {
+				if valid, err := utils.EvalExpression(cn.Filter, celEnv); err != nil || !valid {
 					continue
 				}
 
