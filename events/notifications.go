@@ -3,12 +3,13 @@ package events
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
+	"os"
 	"strings"
 
 	"github.com/flanksource/commons/template"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/mail"
 	"github.com/flanksource/incident-commander/notification"
 	pkgNotification "github.com/flanksource/incident-commander/notification"
 	"github.com/flanksource/incident-commander/teams"
@@ -82,9 +83,15 @@ func publishNotification(ctx *api.Context, event api.Event) error {
 			return fmt.Errorf("failed to get email of person(id=%s); %v", props.PersonID, err)
 		}
 
-		var subject string = "Testing" // TODO: Make this customizable for the user or generate it based on the event?
-		email := mail.New(emailAddress, subject, data.Message, "text/html")
-		return email.Send()
+		url := fmt.Sprintf("smtp://%s:%s@%s:%s/?auth=Plain&FromAddress=%s&ToAddresses=%s",
+			url.QueryEscape(os.Getenv("SMTP_USER")),
+			url.QueryEscape(os.Getenv("SMTP_PASSWORD")),
+			os.Getenv("SMTP_HOST"),
+			os.Getenv("SMTP_PORT"),
+			url.QueryEscape(os.Getenv("SMTP_USER")),
+			url.QueryEscape(emailAddress),
+		)
+		return pkgNotification.Publish(ctx, "", url, data.Message, data.Properties)
 	}
 
 	if props.TeamID != "" {
@@ -102,7 +109,7 @@ func publishNotification(ctx *api.Context, event api.Event) error {
 				return fmt.Errorf("error templating notification: %w", err)
 			}
 
-			return pkgNotification.Publish(ctx, cn.Connection, cn.URL, data.Message, cn.Properties)
+			return pkgNotification.Publish(ctx, cn.Connection, cn.URL, data.Message, data.Properties, cn.Properties)
 		}
 	}
 
@@ -115,7 +122,7 @@ func publishNotification(ctx *api.Context, event api.Event) error {
 			return fmt.Errorf("error templating notification: %w", err)
 		}
 
-		return pkgNotification.Publish(ctx, cn.Connection, cn.URL, data.Message, cn.Properties)
+		return pkgNotification.Publish(ctx, cn.Connection, cn.URL, data.Message, data.Properties, cn.Properties)
 	}
 
 	return nil
