@@ -11,7 +11,7 @@ WORKDIR /app
 RUN go version
 RUN make build
 
-FROM ubuntu:bionic
+FROM ubuntu:jammy
 WORKDIR /app
 
 # install CA certificates
