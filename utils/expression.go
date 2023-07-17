@@ -27,7 +27,7 @@ func EvalExpression(expression string, celEnv map[string]any) (bool, error) {
 }
 
 func evaluateFilterExpression(expression string, env map[string]any) (bool, error) {
-	prg, err := getOrCompileCELProgram(expression, MapKeys(env))
+	prg, err := GetOrCompileCELProgram(expression, MapKeys(env))
 	if err != nil {
 		return false, err
 	}
@@ -40,8 +40,8 @@ func evaluateFilterExpression(expression string, env map[string]any) (bool, erro
 	return strconv.ParseBool(fmt.Sprint(out))
 }
 
-// getOrCompileCELProgram returns a cached or compiled cel.Program for the given cel expression.
-func getOrCompileCELProgram(expression string, fields []string) (*cel.Program, error) {
+// GetOrCompileCELProgram returns a cached or compiled cel.Program for the given cel expression.
+func GetOrCompileCELProgram(expression string, fields []string) (*cel.Program, error) {
 	if prg, exists := prgCache.Get(expression); exists {
 		return prg.(*cel.Program), nil
 	}

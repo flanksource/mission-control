@@ -41,7 +41,7 @@ const (
 
 	EventPushQueueCreate = "push_queue.create"
 
-	EventNotificationPublish = "notification.create"
+	EventNotificationSend = "notification.send"
 )
 
 const (
@@ -183,8 +183,8 @@ func (t *eventHandler) consumeEvents() error {
 		EventIncidentStatusOpen, EventIncidentStatusClosed, EventIncidentStatusMitigated, EventIncidentStatusResolved, EventIncidentStatusInvestigating, EventIncidentStatusCancelled,
 		EventCheckFailed, EventCheckPassed:
 		err = addNotificationEvent(ctx, event)
-	case EventNotificationPublish:
-		err = publishNotification(ctx, event)
+	case EventNotificationSend:
+		err = sendNotification(ctx, event)
 	case EventTeamUpdate:
 		err = handleTeamUpdate(tx, event)
 	case EventTeamDelete:

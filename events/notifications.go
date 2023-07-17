@@ -10,7 +10,6 @@ import (
 	"github.com/flanksource/commons/template"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/notification"
 	pkgNotification "github.com/flanksource/incident-commander/notification"
 	"github.com/flanksource/incident-commander/teams"
 	"github.com/flanksource/incident-commander/utils"
@@ -45,7 +44,7 @@ func (t *NotificationEventProperties) FromMap(m map[string]string) {
 	_ = json.Unmarshal(b, &t)
 }
 
-func publishNotification(ctx *api.Context, event api.Event) error {
+func sendNotification(ctx *api.Context, event api.Event) error {
 	var props NotificationEventProperties
 	props.FromMap(event.Properties)
 
@@ -91,7 +90,7 @@ func publishNotification(ctx *api.Context, event api.Event) error {
 			url.QueryEscape(os.Getenv("SMTP_USER")),
 			url.QueryEscape(emailAddress),
 		)
-		return pkgNotification.Publish(ctx, "", url, data.Message, data.Properties)
+		return pkgNotification.Send(ctx, "", url, data.Message, data.Properties)
 	}
 
 	if props.TeamID != "" {
@@ -109,7 +108,7 @@ func publishNotification(ctx *api.Context, event api.Event) error {
 				return fmt.Errorf("error templating notification: %w", err)
 			}
 
-			return pkgNotification.Publish(ctx, cn.Connection, cn.URL, data.Message, data.Properties, cn.Properties)
+			return pkgNotification.Send(ctx, cn.Connection, cn.URL, data.Message, data.Properties, cn.Properties)
 		}
 	}
 
@@ -122,7 +121,7 @@ func publishNotification(ctx *api.Context, event api.Event) error {
 			return fmt.Errorf("error templating notification: %w", err)
 		}
 
-		return pkgNotification.Publish(ctx, cn.Connection, cn.URL, data.Message, data.Properties, cn.Properties)
+		return pkgNotification.Send(ctx, cn.Connection, cn.URL, data.Message, data.Properties, cn.Properties)
 	}
 
 	return nil
@@ -132,12 +131,12 @@ func publishNotification(ctx *api.Context, event api.Event) error {
 // If a notification is found for the given event and passes all the filters, then
 // a new notification event is created.
 func addNotificationEvent(ctx *api.Context, event api.Event) error {
-	notifications, err := notification.GetNotifications(ctx, event.Name)
+	notificationIDs, err := pkgNotification.GetNotificationIDs(ctx, event.Name)
 	if err != nil {
 		return err
 	}
 
-	if len(notifications) == 0 {
+	if len(notificationIDs) == 0 {
 		return nil
 	}
 
@@ -146,7 +145,12 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 		return err
 	}
 
-	for _, n := range notifications {
+	for _, id := range notificationIDs {
+		n, err := pkgNotification.GetNotification(ctx, id)
+		if err != nil {
+			return err
+		}
+
 		if !n.HasRecipients() || n.Template == "" {
 			continue
 		}
@@ -169,7 +173,7 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 
 			newEvent := api.Event{
 				ID:         uuid.New(),
-				Name:       EventNotificationPublish,
+				Name:       EventNotificationSend,
 				Properties: prop.AsMap(),
 			}
 			if err := ctx.DB().Create(newEvent).Error; err != nil {
@@ -198,7 +202,7 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 
 				newEvent := api.Event{
 					ID:         uuid.New(),
-					Name:       EventNotificationPublish,
+					Name:       EventNotificationSend,
 					Properties: prop.AsMap(),
 				}
 
@@ -208,38 +212,26 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 			}
 		}
 
-		if n.CustomServices != nil {
-			b, err := json.Marshal(n.CustomServices)
-			if err != nil {
-				return err
+		for _, cn := range n.CustomNotifications {
+			if valid, err := utils.EvalExpression(cn.Filter, celEnv); err != nil || !valid {
+				continue
 			}
 
-			var customNotifications []api.NotificationConfig
-			if err := json.Unmarshal(b, &customNotifications); err != nil {
-				return err
+			prop := NotificationEventProperties{
+				EventName:        event.Name,
+				NotificationID:   n.ID.String(),
+				ID:               event.Properties["id"],
+				NotificationName: cn.Name,
 			}
 
-			for _, cn := range customNotifications {
-				if valid, err := utils.EvalExpression(cn.Filter, celEnv); err != nil || !valid {
-					continue
-				}
+			newEvent := api.Event{
+				ID:         uuid.New(),
+				Name:       EventNotificationSend,
+				Properties: prop.AsMap(),
+			}
 
-				prop := NotificationEventProperties{
-					EventName:        event.Name,
-					NotificationID:   n.ID.String(),
-					ID:               event.Properties["id"],
-					NotificationName: cn.Name,
-				}
-
-				newEvent := api.Event{
-					ID:         uuid.New(),
-					Name:       EventNotificationPublish,
-					Properties: prop.AsMap(),
-				}
-
-				if err := ctx.DB().Create(newEvent).Error; err != nil {
-					return fmt.Errorf("failed to create notification event for custom service (id=%s): %v", n.PersonID, err)
-				}
+			if err := ctx.DB().Create(newEvent).Error; err != nil {
+				return fmt.Errorf("failed to create notification event for custom service (id=%s): %v", n.PersonID, err)
 			}
 		}
 	}
@@ -334,7 +326,7 @@ func getEnvForEvent(ctx *api.Context, eventName string, properties map[string]st
 
 func handleNotificationUpdates(ctx *api.Context, event api.Event) error {
 	if id, ok := event.Properties["id"]; ok {
-		notification.PurgeCache(id)
+		pkgNotification.PurgeCache(id)
 	}
 
 	return nil

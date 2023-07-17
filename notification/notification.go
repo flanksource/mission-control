@@ -10,10 +10,10 @@ import (
 )
 
 var (
-	notificationByIDCache = cache.New(time.Hour*1, time.Hour*1)
+	notificationByIDCache = cache.New(time.Hour*12, time.Hour*1)
 
 	// a separate cache because we purge the caches in two different ways.
-	notificationByEventCache = cache.New(time.Hour*1, time.Hour*1)
+	notificationByEventCache = cache.New(time.Hour*12, time.Hour*1)
 )
 
 func PurgeCache(notificationID string) {
@@ -21,18 +21,18 @@ func PurgeCache(notificationID string) {
 	notificationByIDCache.Delete(notificationID)
 }
 
-func GetNotifications(ctx *api.Context, eventName string) ([]models.Notification, error) {
+func GetNotificationIDs(ctx *api.Context, eventName string) ([]string, error) {
 	if val, found := notificationByEventCache.Get(eventName); found {
-		return val.([]models.Notification), nil
+		return val.([]string), nil
 	}
 
-	var notifications []models.Notification
-	if err := ctx.DB().Where("deleted_at IS NULL").Where("? = ANY(events)", eventName).Find(&notifications).Error; err != nil {
+	var ids []string
+	if err := ctx.DB().Model(&models.Notification{}).Where("deleted_at IS NULL").Where("? = ANY(events)", eventName).Pluck("id", &ids).Error; err != nil {
 		return nil, err
 	}
-	notificationByEventCache.Set(eventName, notifications, cache.DefaultExpiration)
+	notificationByEventCache.Set(eventName, ids, cache.DefaultExpiration)
 
-	return notifications, nil
+	return ids, nil
 }
 
 // A wrapper around notification that also contains the custom notifications.

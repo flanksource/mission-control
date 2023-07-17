@@ -10,7 +10,7 @@ import (
 	"github.com/flanksource/incident-commander/api"
 )
 
-func Publish(ctx *api.Context, connectionName, shoutrrrURL, message string, properties ...map[string]string) error {
+func Send(ctx *api.Context, connectionName, shoutrrrURL, message string, properties ...map[string]string) error {
 	if connectionName != "" {
 		connection, err := ctx.HydrateConnection(connectionName)
 		if err != nil {
