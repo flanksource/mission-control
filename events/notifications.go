@@ -12,7 +12,6 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	pkgNotification "github.com/flanksource/incident-commander/notification"
 	"github.com/flanksource/incident-commander/teams"
-	"github.com/flanksource/incident-commander/utils"
 	"github.com/google/uuid"
 )
 
@@ -155,7 +154,13 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 			continue
 		}
 
-		if valid, err := utils.EvalExpression(n.Filter, celEnv); err != nil || !valid {
+		expressionRunner := pkgNotification.ExpressionRunner{
+			ResourceID:   id,
+			ResourceType: "notification",
+			CelEnv:       celEnv,
+		}
+
+		if valid, err := expressionRunner.Eval(ctx, n.Filter); err != nil || !valid {
 			// We consider an error in filter evaluation is a failed filter check.
 			// Mostly, the filter check returns an error if the variable isn't defined.
 			// Example: If the filter makes use of `check` variable but the event is for
@@ -187,8 +192,14 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 				return fmt.Errorf("failed to get team(id=%s); %v", n.TeamID, err)
 			}
 
+			expressionRunner := pkgNotification.ExpressionRunner{
+				ResourceID:   n.TeamID.String(),
+				ResourceType: "teams",
+				CelEnv:       celEnv,
+			}
+
 			for _, cn := range teamSpec.Notifications {
-				if valid, err := utils.EvalExpression(cn.Filter, celEnv); err != nil || !valid {
+				if valid, err := expressionRunner.Eval(ctx, cn.Filter); err != nil || !valid {
 					continue
 				}
 
@@ -213,7 +224,7 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 		}
 
 		for _, cn := range n.CustomNotifications {
-			if valid, err := utils.EvalExpression(cn.Filter, celEnv); err != nil || !valid {
+			if valid, err := expressionRunner.Eval(ctx, cn.Filter); err != nil || !valid {
 				continue
 			}
 
