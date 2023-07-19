@@ -183,7 +183,7 @@ var Serve = &cobra.Command{
 
 		go jobs.Start()
 
-		eventHandler := events.NewEventHandler(context.Background(), db.Gorm, events.Config{UpstreamConf: api.UpstreamConf})
+		eventHandler := events.NewEventHandler(db.Gorm, events.Config{UpstreamConf: api.UpstreamConf})
 		go eventHandler.ListenForEvents()
 
 		go launchKopper()

@@ -30,11 +30,12 @@ var (
 type IncidentStatus string
 
 var (
-	IncidentStatusOpen      IncidentStatus = "open"
-	IncidentStatusClosed    IncidentStatus = "closed"
-	IncidentStatusMitigated IncidentStatus = "mitigated"
-	IncidentStatusResolved  IncidentStatus = "resolved"
-	IncidentStatusCancelled IncidentStatus = "cancelled"
+	IncidentStatusOpen          IncidentStatus = "open"
+	IncidentStatusClosed        IncidentStatus = "closed"
+	IncidentStatusMitigated     IncidentStatus = "mitigated"
+	IncidentStatusResolved      IncidentStatus = "resolved"
+	IncidentStatusInvestigating IncidentStatus = "investigating"
+	IncidentStatusCancelled     IncidentStatus = "cancelled"
 )
 
 type Incident struct {

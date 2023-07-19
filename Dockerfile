@@ -1,4 +1,4 @@
-FROM golang:1.19 as builder
+FROM golang:1.20.6 as builder
 WORKDIR /app
 
 ARG VERSION
@@ -11,7 +11,7 @@ WORKDIR /app
 RUN go version
 RUN make build
 
-FROM ubuntu:bionic
+FROM ubuntu:jammy
 WORKDIR /app
 
 # install CA certificates

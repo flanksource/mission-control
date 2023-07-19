@@ -38,3 +38,11 @@ func Coalesce[T comparable](arr ...T) T {
 	}
 	return zeroVal
 }
+
+func MapKeys(m map[string]any) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
+}
