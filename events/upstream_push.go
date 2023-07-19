@@ -27,6 +27,11 @@ func (t *pushToUpstreamEventHandler) Run(ctx context.Context, tx *gorm.DB, event
 
 	for tablename, itemIDs := range GroupChangelogsByTables(events) {
 		switch tablename {
+		case "topologies":
+			if err := tx.Where("id IN ?", itemIDs).Find(&upstreamMsg.Topologies).Error; err != nil {
+				return fmt.Errorf("error fetching topologies: %w", err)
+			}
+
 		case "components":
 			if err := tx.Where("id IN ?", itemIDs).Find(&upstreamMsg.Components).Error; err != nil {
 				return fmt.Errorf("error fetching components: %w", err)

@@ -39,6 +39,10 @@ var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
 				Expect(len(itemIDs)).To(Equal(len(dummy.AllDummyCanaries)))
 				Expect(itemIDs).To(Equal(getPrimaryKeys(table, dummy.AllDummyCanaries)), "Mismatch primary keys for canaries")
 
+			case "topologies":
+				Expect(len(itemIDs)).To(Equal(len(dummy.AllDummyTopologies)))
+				Expect(itemIDs).To(Equal(getPrimaryKeys(table, dummy.AllDummyTopologies)), "Mismatch primary keys for topologies")
+
 			case "checks":
 				Expect(len(itemIDs)).To(Equal(len(dummy.AllDummyChecks)))
 				Expect(itemIDs).To(Equal(getPrimaryKeys(table, dummy.AllDummyChecks)), "Mismatch primary keys for checks")
@@ -81,6 +85,7 @@ var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
 
 		Expect(len(events)).To(Equal(
 			len(dummy.AllDummyCanaries) +
+				len(dummy.AllDummyTopologies) +
 				len(dummy.AllDummyChecks) +
 				len(dummy.AllDummyComponents) +
 				len(dummy.AllDummyConfigs) +
@@ -198,6 +203,12 @@ func getPrimaryKeys(table string, rows any) [][]string {
 	var primaryKeys [][]string
 
 	switch table {
+	case "topologies":
+		topologies := rows.([]models.Topology)
+		for _, t := range topologies {
+			primaryKeys = append(primaryKeys, []string{t.ID.String()})
+		}
+
 	case "canaries":
 		canaries := rows.([]models.Canary)
 		for _, c := range canaries {
