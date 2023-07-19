@@ -43,6 +43,11 @@ func GetMissingResourceIDs(ctx *api.Context, ids []string, paginateReq api.Pagin
 	var pushData api.PushData
 
 	switch paginateReq.Table {
+	case "topologies":
+		if err := ctx.DB().Not(ids).Where("id > ?", paginateReq.From).Limit(paginateReq.Size).Order("id").Find(&pushData.Topologies).Error; err != nil {
+			return nil, fmt.Errorf("error fetching topologies: %w", err)
+		}
+
 	case "canaries":
 		if err := ctx.DB().Not(ids).Where("id > ?", paginateReq.From).Limit(paginateReq.Size).Order("id").Find(&pushData.Canaries).Error; err != nil {
 			return nil, fmt.Errorf("error fetching canaries: %w", err)
@@ -84,6 +89,12 @@ func GetAllResourceIDsOfAgent(ctx *api.Context, agentID string, req api.Paginate
 }
 
 func InsertUpstreamMsg(ctx *api.Context, req *api.PushData) error {
+	if len(req.Topologies) > 0 {
+		if err := ctx.DB().Clauses(clause.OnConflict{UpdateAll: true}).Create(req.Topologies).Error; err != nil {
+			return fmt.Errorf("error upserting topologies: %w", err)
+		}
+	}
+
 	if len(req.Canaries) > 0 {
 		if err := ctx.DB().Clauses(clause.OnConflict{UpdateAll: true}).Create(req.Canaries).Error; err != nil {
 			return fmt.Errorf("error upserting canaries: %w", err)

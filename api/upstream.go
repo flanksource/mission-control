@@ -14,6 +14,7 @@ var TablesToReconcile = []string{
 	"config_items",
 	"canaries",
 	"checks",
+	"topologies",
 }
 
 type PaginateRequest struct {
@@ -45,11 +46,13 @@ type PushData struct {
 	ConfigRelationships          []models.ConfigRelationship          `json:"config_relationships,omitempty"`
 	ComponentRelationships       []models.ComponentRelationship       `json:"component_relationships,omitempty"`
 	ConfigComponentRelationships []models.ConfigComponentRelationship `json:"config_component_relationships,omitempty"`
+	Topologies                   []models.Topology                    `json:"topologies,omitempty"`
 }
 
 func (p *PushData) String() string {
 	result := ""
 	result += fmt.Sprintf("AgentName: %s\n", p.AgentName)
+	result += fmt.Sprintf("Topologies: %d\n", len(p.Topologies))
 	result += fmt.Sprintf("Canaries: %d\n", len(p.Canaries))
 	result += fmt.Sprintf("Checks: %d\n", len(p.Checks))
 	result += fmt.Sprintf("Components: %d\n", len(p.Components))
@@ -89,6 +92,9 @@ func (t *PushData) PopulateAgentID(id uuid.UUID) {
 	for i := range t.ConfigScrapers {
 		t.ConfigScrapers[i].AgentID = id
 	}
+	for i := range t.Topologies {
+		t.Topologies[i].AgentID = id
+	}
 }
 
 // ApplyLabels injects additional labels to the suitable fields
@@ -103,6 +109,10 @@ func (t *PushData) ApplyLabels(labels map[string]string) {
 
 	for i := range t.Canaries {
 		t.Canaries[i].Labels = collections.MergeMap(t.Canaries[i].Labels, labels)
+	}
+
+	for i := range t.Topologies {
+		t.Topologies[i].Labels = collections.MergeMap(t.Topologies[i].Labels, labels)
 	}
 }
 

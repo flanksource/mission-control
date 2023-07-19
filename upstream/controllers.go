@@ -16,8 +16,7 @@ import (
 )
 
 var (
-	topologyIDCache = cache.New(3*24*time.Hour, 12*time.Hour)
-	agentIDCache    = cache.New(3*24*time.Hour, 12*time.Hour)
+	agentIDCache = cache.New(3*24*time.Hour, 12*time.Hour)
 )
 
 func PushUpstream(c echo.Context) error {
@@ -47,17 +46,6 @@ func PushUpstream(c echo.Context) error {
 		agentIDCache.Set(req.AgentName, agentID, cache.DefaultExpiration)
 	}
 
-	headlessTopologyID, ok := topologyIDCache.Get(req.AgentName)
-	if !ok {
-		headlessTopology, err := db.GetOrCreateHeadlessTopology(ctx, req.AgentName)
-		if err != nil {
-			return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error(), Message: fmt.Sprintf("failed to get headless topology for agent: %s", req.AgentName)})
-		}
-
-		headlessTopologyID = &headlessTopology.ID
-		topologyIDCache.Set(req.AgentName, headlessTopologyID, cache.DefaultExpiration)
-	}
-	req.ReplaceTopologyID(headlessTopologyID.(*uuid.UUID))
 	req.PopulateAgentID(agentID.(uuid.UUID))
 
 	logger.Debugf("Pushing %s", req.String())
