@@ -6,23 +6,13 @@ COPY go.mod /app/go.mod
 COPY go.sum /app/go.sum
 RUN go mod download
 COPY ./ ./
-
-WORKDIR /app
-RUN go version
 RUN make build
 
 FROM ubuntu:jammy
 WORKDIR /app
 
-# install CA certificates
-RUN apt-get update && \
-  apt-get install -y ca-certificates && \
-  rm -Rf /var/lib/apt/lists/*  && \
-  rm -Rf /usr/share/doc && rm -Rf /usr/share/man  && \
-  apt-get clean
-
 COPY --from=builder /app/.bin/incident-commander /app
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 
 RUN /app/incident-commander go-offline
-
 ENTRYPOINT ["/app/incident-commander"]

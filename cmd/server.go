@@ -192,7 +192,7 @@ var Serve = &cobra.Command{
 		listenAddr := fmt.Sprintf(":%d", httpPort)
 		logger.Infof("Listening on %s", listenAddr)
 		if err := e.Start(listenAddr); err != nil {
-			e.Logger.Fatal(err)
+			logger.Fatalf("Failed to start server: %v", err)
 		}
 	},
 }
