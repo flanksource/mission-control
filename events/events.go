@@ -17,8 +17,9 @@ import (
 )
 
 const (
-	EventTeamUpdate = "team.update"
-	EventTeamDelete = "team.delete"
+	EventTeamUpdate       = "team.update"
+	EventTeamDelete       = "team.delete"
+	EventNotificationSend = "notification.send"
 
 	EventNotificationUpdate = "notification.update"
 	EventNotificationDelete = "notification.delete"
@@ -41,8 +42,6 @@ const (
 	EventIncidentStatusCancelled     = "incident.status.cancelled"
 
 	EventPushQueueCreate = "push_queue.create"
-
-	EventNotificationSend = "notification.send"
 )
 
 const (
@@ -187,9 +186,9 @@ func (t *eventHandler) consumeEvents() error {
 	case EventNotificationSend:
 		err = sendNotification(ctx, event)
 	case EventTeamUpdate:
-		err = handleTeamUpdate(tx, event)
+		err = handleTeamUpdate(ctx, event)
 	case EventTeamDelete:
-		err = handleTeamDelete(tx, event)
+		err = handleTeamDelete(ctx, event)
 	case EventNotificationDelete, EventNotificationUpdate:
 		err = handleNotificationUpdates(ctx, event)
 	case EventPushQueueCreate:

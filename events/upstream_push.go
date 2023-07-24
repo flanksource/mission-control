@@ -4,10 +4,41 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/db"
 	"gorm.io/gorm"
 )
+
+var upstreamPushEventHandler *pushToUpstreamEventHandler
+
+var UpstreamPushConsumer = EventConsumer{
+	WatchEvents: ConsumerResponder,
+	HandleFunc:  handleUpstreamPushEvents,
+	BatchSize:   50,
+	Consumers:   5,
+	DB:          db.Gorm,
+}
+
+func handleUpstreamPushEvents(ctx *api.Context, config Config, event api.Event) error {
+	if upstreamPushEventHandler == nil {
+		if config.UpstreamConf.Valid() {
+			upstreamPushEventHandler = newPushToUpstreamEventHandler(config.UpstreamConf)
+		} else {
+			logger.Fatalf("Got push events but not configured")
+		}
+	}
+
+	switch event.Name {
+	case EventIncidentResponderAdded:
+		return reconcileResponderEvent(ctx, event)
+	case EventIncidentCommentAdded:
+		return reconcileCommentEvent(ctx, event)
+	default:
+		return fmt.Errorf("Unrecognized event name: %s", event.Name)
+	}
+}
 
 type pushToUpstreamEventHandler struct {
 	conf upstream.UpstreamConfig

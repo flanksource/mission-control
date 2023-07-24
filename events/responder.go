@@ -2,14 +2,35 @@ package events
 
 import (
 	"errors"
+	"fmt"
 
 	"gorm.io/gorm"
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/responder"
 	pkgResponder "github.com/flanksource/incident-commander/responder"
 )
+
+var ResponderConsumer = EventConsumer{
+	WatchEvents: ConsumerResponder,
+	HandleFunc:  handleResponderEvents,
+	BatchSize:   1,
+	Consumers:   1,
+	DB:          db.Gorm,
+}
+
+func handleResponderEvents(ctx *api.Context, config Config, event api.Event) error {
+	switch event.Name {
+	case EventIncidentResponderAdded:
+		return reconcileResponderEvent(ctx, event)
+	case EventIncidentCommentAdded:
+		return reconcileCommentEvent(ctx, event)
+	default:
+		return fmt.Errorf("Unrecognized event name: %s", event.Name)
+	}
+}
 
 func reconcileResponderEvent(ctx *api.Context, event api.Event) error {
 	responderID := event.Properties["id"]

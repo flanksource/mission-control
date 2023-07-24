@@ -10,10 +10,37 @@ import (
 	"github.com/flanksource/commons/template"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/db"
 	pkgNotification "github.com/flanksource/incident-commander/notification"
 	"github.com/flanksource/incident-commander/teams"
 	"github.com/google/uuid"
 )
+
+var NotificationConsumer = EventConsumer{
+	WatchEvents: append(append(ConsumerNotification, ConsumerIncidentNotification...), ConsumerCheckStatus...),
+	HandleFunc:  handleNotificationEvents,
+	BatchSize:   1,
+	Consumers:   1,
+	DB:          db.Gorm,
+}
+
+func handleNotificationEvents(ctx *api.Context, config Config, event api.Event) error {
+	switch event.Name {
+	case EventNotificationDelete, EventNotificationUpdate:
+		return handleNotificationUpdates(ctx, event)
+	case EventNotificationSend:
+		return sendNotification(ctx, event)
+	case EventIncidentCreated, EventIncidentResponderRemoved,
+		EventIncidentDODAdded, EventIncidentDODPassed,
+		EventIncidentDODRegressed, EventIncidentStatusOpen,
+		EventIncidentStatusClosed, EventIncidentStatusMitigated,
+		EventIncidentStatusResolved, EventIncidentStatusInvestigating, EventIncidentStatusCancelled,
+		EventCheckFailed, EventCheckPassed:
+		return addNotificationEvent(ctx, event)
+	default:
+		return fmt.Errorf("Unrecognized event name: %s", event.Name)
+	}
+}
 
 type NotificationEventProperties struct {
 	ID               string `json:"id"`                          // Resource id. depends what it is based on the original event.
@@ -81,7 +108,7 @@ func sendNotification(ctx *api.Context, event api.Event) error {
 			return fmt.Errorf("failed to get email of person(id=%s); %v", props.PersonID, err)
 		}
 
-		url := fmt.Sprintf("smtp://%s:%s@%s:%s/?auth=Plain&FromAddress=%s&ToAddresses=%s",
+		smtpURL := fmt.Sprintf("smtp://%s:%s@%s:%s/?auth=Plain&FromAddress=%s&ToAddresses=%s",
 			url.QueryEscape(os.Getenv("SMTP_USER")),
 			url.QueryEscape(os.Getenv("SMTP_PASSWORD")),
 			os.Getenv("SMTP_HOST"),
@@ -89,7 +116,7 @@ func sendNotification(ctx *api.Context, event api.Event) error {
 			url.QueryEscape(os.Getenv("SMTP_USER")),
 			url.QueryEscape(emailAddress),
 		)
-		return pkgNotification.Send(ctx, "", url, data.Message, data.Properties)
+		return pkgNotification.Send(ctx, "", smtpURL, data.Message, data.Properties)
 	}
 
 	if props.TeamID != "" {
