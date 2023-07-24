@@ -34,7 +34,7 @@ var UpstreamConf UpstreamConfig
 // PushData consists of data about changes to
 // components, configs, analysis.
 type PushData struct {
-	AgentName                    string                               `json:"cluster_name,omitempty"`
+	AgentName                    string                               `json:"agent_name,omitempty"`
 	Canaries                     []models.Canary                      `json:"canaries,omitempty"`
 	Checks                       []models.Check                       `json:"checks,omitempty"`
 	Components                   []models.Component                   `json:"components,omitempty"`
