@@ -4,11 +4,11 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/fixtures/dummy"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/db"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
@@ -54,10 +54,10 @@ var _ = ginkgo.Describe("Push Mode reconcilation", ginkgo.Ordered, func() {
 		upstreamCtx := api.NewContext(upstreamDB, nil)
 
 		for _, table := range api.TablesToReconcile {
-			agentStatus, err := db.GetIDsHash(ctx, table, uuid.Nil, PageSize)
+			agentStatus, err := duty.GetIDsHash(ctx, table, uuid.Nil, 500)
 			Expect(err).To(BeNil())
 
-			upstreamStatus, err := db.GetIDsHash(upstreamCtx, table, uuid.Nil, PageSize)
+			upstreamStatus, err := duty.GetIDsHash(upstreamCtx, table, uuid.Nil, 500)
 			Expect(err).To(BeNil())
 
 			Expect(agentStatus).ToNot(Equal(upstreamStatus), fmt.Sprintf("table [%s] hash to not match", table))
@@ -67,8 +67,9 @@ var _ = ginkgo.Describe("Push Mode reconcilation", ginkgo.Ordered, func() {
 	ginkgo.It("should reconcile all the tables", func() {
 		ctx := api.NewContext(agentDB, nil)
 
+		syncer := duty.NewUpstreamSyncer(duty.UpstreamConfig(api.UpstreamConf))
 		for _, table := range api.TablesToReconcile {
-			err := syncTableWithUpstream(ctx, table)
+			err := syncer.SyncTableWithUpstream(ctx, table)
 			Expect(err).To(BeNil(), fmt.Sprintf("should push table '%s' to upstream", table))
 		}
 	})
@@ -78,10 +79,10 @@ var _ = ginkgo.Describe("Push Mode reconcilation", ginkgo.Ordered, func() {
 		upstreamCtx := api.NewContext(upstreamDB, nil)
 
 		for _, table := range api.TablesToReconcile {
-			agentStatus, err := db.GetIDsHash(ctx, table, uuid.Nil, PageSize)
+			agentStatus, err := duty.GetIDsHash(ctx, table, uuid.Nil, 500)
 			Expect(err).To(BeNil())
 
-			upstreamStatus, err := db.GetIDsHash(upstreamCtx, table, uuid.Nil, PageSize)
+			upstreamStatus, err := duty.GetIDsHash(upstreamCtx, table, uuid.Nil, 500)
 			Expect(err).To(BeNil())
 
 			Expect(agentStatus).To(Equal(upstreamStatus), fmt.Sprintf("table [%s] hash to match", table))
@@ -131,7 +132,8 @@ var _ = ginkgo.Describe("Push Mode reconcilation", ginkgo.Ordered, func() {
 	ginkgo.It("should reconcile config items", func() {
 		ctx := api.NewContext(agentDB, nil)
 
-		err := syncTableWithUpstream(ctx, "config_items")
+		syncer := duty.NewUpstreamSyncer(duty.UpstreamConfig(api.UpstreamConf))
+		err := syncer.SyncTableWithUpstream(ctx, "config_items")
 		Expect(err).To(BeNil(), "should push table 'config_items' upstream")
 	})
 

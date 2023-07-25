@@ -7,7 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/google/uuid"
@@ -72,6 +74,11 @@ func Pull(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error()})
 	}
+
+	if !collections.Contains(api.TablesToReconcile, req.Table) {
+		return c.JSON(http.StatusForbidden, api.HTTPError{Error: "table is not allowed to be reconciled"})
+	}
+
 	resp, err := db.GetAllResourceIDsOfAgent(ctx, agent.ID.String(), req)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to get resource ids"})
@@ -97,7 +104,11 @@ func Status(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, api.HTTPError{Message: fmt.Sprintf("agent(name=%s) not found", agentName)})
 	}
 
-	response, err := db.GetIDsHash(ctx, req.Table, req.From, req.Size)
+	if !collections.Contains(api.TablesToReconcile, req.Table) {
+		return c.JSON(http.StatusForbidden, api.HTTPError{Error: "table is not allowed to be reconciled"})
+	}
+
+	response, err := duty.GetIDsHash(ctx, req.Table, req.From, req.Size)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to push status response"})
 	}
