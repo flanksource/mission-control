@@ -130,15 +130,14 @@ func (e *EventConsumer) listenToPostgresNotify(pgNotify chan bool) {
 		if err != nil {
 			return fmt.Errorf("error listening to database notifications: %v", err)
 		}
-		logger.Infof("listening to database notifications")
+		logger.Debugf("listening to database notifications")
 
 		for {
-			notification, err := conn.Conn().WaitForNotification(ctx)
+			_, err := conn.Conn().WaitForNotification(ctx)
 			if err != nil {
 				return fmt.Errorf("error listening to database notifications: %v", err)
 			}
 
-			logger.Tracef("Received database notification: %+v", notification)
 			pgNotify <- true
 		}
 	}
@@ -180,20 +179,5 @@ func (e *EventConsumer) Listen() {
 		case <-time.After(pgNotifyTimeout):
 			e.ConsumeEventsUntilEmpty()
 		}
-	}
-}
-
-func StartConsumers(gormDB *gorm.DB, config Config) {
-	allConsumers := []EventConsumer{
-		NewTeamConsumer(gormDB),
-		NewNotificationConsumer(gormDB),
-		NewResponderConsumer(gormDB),
-	}
-	if config.UpstreamPush.Valid() {
-		allConsumers = append(allConsumers, NewUpstreamPushConsumer(gormDB, config))
-	}
-
-	for _, c := range allConsumers {
-		go c.Listen()
 	}
 }

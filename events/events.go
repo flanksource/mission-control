@@ -9,6 +9,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/flanksource/incident-commander/api"
+	"gorm.io/gorm"
 )
 
 const (
@@ -50,4 +51,19 @@ const (
 
 type Config struct {
 	UpstreamConf upstream.UpstreamConfig
+}
+
+func StartConsumers(gormDB *gorm.DB, config Config) {
+	allConsumers := []EventConsumer{
+		NewTeamConsumer(gormDB),
+		NewNotificationConsumer(gormDB),
+		NewResponderConsumer(gormDB),
+	}
+	if config.UpstreamPush.Valid() {
+		allConsumers = append(allConsumers, NewUpstreamPushConsumer(gormDB, config))
+	}
+
+	for _, c := range allConsumers {
+		go c.Listen()
+	}
 }
