@@ -4,18 +4,19 @@ import (
 	"fmt"
 
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
 	"gorm.io/gorm/clause"
 )
 
-func GetAllResourceIDsOfAgent(ctx *api.Context, agentID string, req api.PaginateRequest) ([]string, error) {
+func GetAllResourceIDsOfAgent(ctx *api.Context, agentID string, req upstream.PaginateRequest) ([]string, error) {
 	var response []string
 	query := fmt.Sprintf("SELECT id FROM %s WHERE agent_id = ? AND id > ? ORDER BY id LIMIT ?", req.Table)
 	err := ctx.DB().Raw(query, agentID, req.From, req.Size).Scan(&response).Error
 	return response, err
 }
 
-func InsertUpstreamMsg(ctx *api.Context, req *api.PushData) error {
+func InsertUpstreamMsg(ctx *api.Context, req *upstream.PushData) error {
 	if len(req.Topologies) > 0 {
 		if err := ctx.DB().Clauses(clause.OnConflict{UpdateAll: true}).Create(req.Topologies).Error; err != nil {
 			return fmt.Errorf("error upserting topologies: %w", err)

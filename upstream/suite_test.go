@@ -9,6 +9,7 @@ import (
 	embeddedPG "github.com/fergusstrange/embedded-postgres"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/testutils"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -87,7 +88,7 @@ func setupUpstreamHTTPServer() {
 	upstreamGroup.GET("/status/:agent_name", Status)
 	listenAddr := fmt.Sprintf(":%d", upstreamEchoServerport)
 
-	api.UpstreamConf = api.UpstreamConfig{
+	api.UpstreamConf = upstream.UpstreamConfig{
 		AgentName: agentName,
 		Host:      fmt.Sprintf("http://localhost:%d", upstreamEchoServerport),
 		Username:  "admin@local",

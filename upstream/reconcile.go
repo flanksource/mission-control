@@ -2,8 +2,8 @@ package upstream
 
 import (
 	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 )
@@ -17,7 +17,7 @@ func SyncWithUpstream(ctx *api.Context) error {
 		_ = db.PersistJobHistory(ctx, jobHistory.End())
 	}()
 
-	syncer := duty.NewUpstreamSyncer(duty.UpstreamConfig(api.UpstreamConf))
+	syncer := upstream.NewUpstreamSyncer(api.UpstreamConf)
 	for _, table := range api.TablesToReconcile {
 		if err := syncer.SyncTableWithUpstream(ctx, table); err != nil {
 			jobHistory.AddError(err.Error())

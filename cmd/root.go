@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/duty"
+	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/events"
@@ -67,7 +67,7 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&api.UpstreamConf.Password, "upstream-password", "", "upstream password")
 	flags.StringVar(&api.UpstreamConf.AgentName, "upstream-name", "", "name of the cluster")
 	flags.StringSliceVar(&api.UpstreamConf.Labels, "upstream-labels", nil, `labels in the format: "key1=value1,key2=value2"`)
-	flags.IntVar(&duty.ReconcilePageSize, "upstream-page-size", 500, "upstream reconcilation page size")
+	flags.IntVar(&upstream.ReconcilePageSize, "upstream-page-size", 500, "upstream reconcilation page size")
 }
 
 func init() {

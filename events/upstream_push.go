@@ -4,16 +4,16 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/upstream"
 	"gorm.io/gorm"
 )
 
 type pushToUpstreamEventHandler struct {
-	conf api.UpstreamConfig
+	conf upstream.UpstreamConfig
 }
 
-func newPushToUpstreamEventHandler(conf api.UpstreamConfig) *pushToUpstreamEventHandler {
+func newPushToUpstreamEventHandler(conf upstream.UpstreamConfig) *pushToUpstreamEventHandler {
 	return &pushToUpstreamEventHandler{
 		conf: conf,
 	}
@@ -21,7 +21,7 @@ func newPushToUpstreamEventHandler(conf api.UpstreamConfig) *pushToUpstreamEvent
 
 // Run pushes data from decentralized instances to central incident commander
 func (t *pushToUpstreamEventHandler) Run(ctx context.Context, tx *gorm.DB, events []api.Event) error {
-	upstreamMsg := &api.PushData{
+	upstreamMsg := &upstream.PushData{
 		AgentName: t.conf.AgentName,
 	}
 

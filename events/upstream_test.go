@@ -8,6 +8,7 @@ import (
 	"github.com/flanksource/duty/fixtures/dummy"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
+	"github.com/flanksource/duty/upstream"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
@@ -126,7 +127,7 @@ var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
 
 	ginkgo.It("should transfer all events to upstream server", func() {
 		eventHandlerConfig := Config{
-			UpstreamConf: api.UpstreamConfig{
+			UpstreamConf: upstream.UpstreamConfig{
 				AgentName: "test-agent",
 				Host:      fmt.Sprintf("http://localhost:%d", upstreamEchoServerport),
 				Username:  "admin@local",
