@@ -5,18 +5,20 @@ import (
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/responder"
 	"github.com/flanksource/incident-commander/teams"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
-var TeamConsumer = EventConsumer{
-	WatchEvents:      ConsumerTeam,
-	ProcessBatchFunc: processTeamEvents,
-	BatchSize:        1,
-	Consumers:        1,
-	DB:               db.Gorm,
+func NewTeamConsumer(db *gorm.DB) EventConsumer {
+	return EventConsumer{
+		WatchEvents:      ConsumerTeam,
+		ProcessBatchFunc: processTeamEvents,
+		BatchSize:        1,
+		Consumers:        1,
+		DB:               db,
+	}
 }
 
 func processTeamEvents(ctx *api.Context, events []api.Event) []*api.Event {

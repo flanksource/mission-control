@@ -1042,8 +1042,8 @@ github.com/fatih/structs v1.1.0/go.mod h1:9NiDSp5zOcgEDl+j00MP/WkGVPOlPRLejGD8Ga
 github.com/felixge/httpsnoop v1.0.1/go.mod h1:m8KPJKqk1gH5J9DgRY2ASl2lWCfGKXixSwevea8zH2U=
 github.com/felixge/httpsnoop v1.0.2/go.mod h1:m8KPJKqk1gH5J9DgRY2ASl2lWCfGKXixSwevea8zH2U=
 github.com/felixge/httpsnoop v1.0.3/go.mod h1:m8KPJKqk1gH5J9DgRY2ASl2lWCfGKXixSwevea8zH2U=
-github.com/fergusstrange/embedded-postgres v1.21.0 h1:Sups0nR31+OB4iOZ0ZU4IwUDsB+dVGmcqj4S2ko0qTI=
-github.com/fergusstrange/embedded-postgres v1.21.0/go.mod h1:wL562t1V+iuFwq0UcgMi2e9rp8CROY9wxWZEfP8Y874=
+github.com/fergusstrange/embedded-postgres v1.23.0 h1:ZYRD89nammxQDWDi6taJE2CYjDuAoVc1TpEqRIYQryc=
+github.com/fergusstrange/embedded-postgres v1.23.0/go.mod h1:wL562t1V+iuFwq0UcgMi2e9rp8CROY9wxWZEfP8Y874=
 github.com/flanksource/commons v1.10.0 h1:Mc+fzxq1rOJ08lapF0cc0bo9ZKNDxA7/81q2D/5jt0Q=
 github.com/flanksource/commons v1.10.0/go.mod h1:HpVjPtNe7v0UPk97kO/uUhOrYQ8yFD/mGglrTCkc9Ag=
 github.com/flanksource/duty v1.0.139 h1:k0fx/uNC8GV4dvOmTrFGudXcjDx/y6udz3VDcQID+/I=

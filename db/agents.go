@@ -24,8 +24,8 @@ func FindAgent(ctx *api.Context, name string) (*models.Agent, error) {
 }
 
 func getAgent(ctx *api.Context, name string) (*models.Agent, error) {
-	t := models.Agent{Name: name}
-	tx := ctx.DB().Where(t).First(&t)
+	var t models.Agent
+	tx := ctx.DB().Where("name = ?", name).First(&t)
 	return &t, tx.Error
 }
 

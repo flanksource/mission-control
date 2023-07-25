@@ -104,7 +104,7 @@ var _ = ginkgo.Describe("Test Notification on incident creation", ginkgo.Ordered
 	})
 
 	ginkgo.It("should consume the event and send the notification", func() {
-		eventHandler := events.NewEventHandler(db.Gorm, events.Config{})
+		eventHandler := events.NewNotificationConsumer(db.Gorm)
 		eventHandler.ConsumeEventsUntilEmpty()
 
 		Expect(webhookPostdata).To(Not(BeNil()))

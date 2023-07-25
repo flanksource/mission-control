@@ -10,18 +10,20 @@ import (
 	"github.com/flanksource/commons/template"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/db"
 	pkgNotification "github.com/flanksource/incident-commander/notification"
 	"github.com/flanksource/incident-commander/teams"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
-var NotificationConsumer = EventConsumer{
-	WatchEvents:      append(append(ConsumerNotification, ConsumerIncidentNotification...), ConsumerCheckStatus...),
-	ProcessBatchFunc: processNotificationEvents,
-	BatchSize:        1,
-	Consumers:        1,
-	DB:               db.Gorm,
+func NewNotificationConsumer(db *gorm.DB) EventConsumer {
+	return EventConsumer{
+		WatchEvents:      append(append(ConsumerNotification, ConsumerIncidentNotification...), ConsumerCheckStatus...),
+		ProcessBatchFunc: processNotificationEvents,
+		BatchSize:        1,
+		Consumers:        1,
+		DB:               db,
+	}
 }
 
 func processNotificationEvents(ctx *api.Context, events []api.Event) []*api.Event {

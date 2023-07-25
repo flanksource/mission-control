@@ -8,17 +8,18 @@ import (
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/responder"
 	pkgResponder "github.com/flanksource/incident-commander/responder"
 )
 
-var ResponderConsumer = EventConsumer{
-	WatchEvents:      ConsumerResponder,
-	ProcessBatchFunc: processResponderEvents,
-	BatchSize:        1,
-	Consumers:        1,
-	DB:               db.Gorm,
+func NewResponderConsumer(db *gorm.DB) EventConsumer {
+	return EventConsumer{
+		WatchEvents:      ConsumerResponder,
+		ProcessBatchFunc: processResponderEvents,
+		BatchSize:        1,
+		Consumers:        1,
+		DB:               db,
+	}
 }
 
 func processResponderEvents(ctx *api.Context, events []api.Event) []*api.Event {

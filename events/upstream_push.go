@@ -6,17 +6,23 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/db"
+	"gorm.io/gorm"
 )
 
 var upstreamPushEventHandler *pushToUpstreamEventHandler
 
-var UpstreamPushConsumer = EventConsumer{
-	WatchEvents:      ConsumerResponder,
-	ProcessBatchFunc: handleUpstreamPushEvents,
-	BatchSize:        50,
-	Consumers:        5,
-	DB:               db.Gorm,
+func NewUpstreamPushConsumer(db *gorm.DB, config Config) EventConsumer {
+	if config.UpstreamConf.Valid() {
+		upstreamPushEventHandler = newPushToUpstreamEventHandler(config.UpstreamConf)
+	}
+
+	return EventConsumer{
+		WatchEvents:      ConsumerPushQueue,
+		ProcessBatchFunc: handleUpstreamPushEvents,
+		BatchSize:        50,
+		Consumers:        5,
+		DB:               db,
+	}
 }
 
 func handleUpstreamPushEvents(ctx *api.Context, events []api.Event) []*api.Event {
@@ -28,13 +34,14 @@ func handleUpstreamPushEvents(ctx *api.Context, events []api.Event) []*api.Event
 	var eventsToProcess []api.Event
 	for _, e := range events {
 		if e.Name != EventPushQueueCreate {
+			e.Error = fmt.Errorf("Unrecognized event name: %s", e.Name).Error()
 			failedEvents = append(failedEvents, &e)
 		} else {
 			eventsToProcess = append(eventsToProcess, e)
 		}
 	}
 
-	failedEvents = append(failedEvents, upstreamPushEventHandler.Run(ctx, events)...)
+	failedEvents = append(failedEvents, upstreamPushEventHandler.Run(ctx, eventsToProcess)...)
 	return failedEvents
 }
 
@@ -48,7 +55,7 @@ func newPushToUpstreamEventHandler(conf upstream.UpstreamConfig) *pushToUpstream
 	}
 }
 
-func somethingFailedEvents(events []api.Event, err error) []*api.Event {
+func addErrorToFailedEvents(events []api.Event, err error) []*api.Event {
 	var failedEvents []*api.Event
 	for _, e := range events {
 		e.Error = err.Error()
@@ -71,73 +78,73 @@ func (t *pushToUpstreamEventHandler) Run(ctx *api.Context, events []api.Event) [
 		case "topologies":
 			if err := gormDB.Where("id IN ?", cl.itemIDs).Find(&upstreamMsg.Topologies).Error; err != nil {
 				errMsg := fmt.Errorf("error fetching topologies: %w", err)
-				failedEvents = append(failedEvents, somethingFailedEvents(cl.events, errMsg)...)
+				failedEvents = append(failedEvents, addErrorToFailedEvents(cl.events, errMsg)...)
 			}
 
 		case "components":
 			if err := gormDB.Where("id IN ?", cl.itemIDs).Find(&upstreamMsg.Components).Error; err != nil {
 				errMsg := fmt.Errorf("error fetching components: %w", err)
-				failedEvents = append(failedEvents, somethingFailedEvents(cl.events, errMsg)...)
+				failedEvents = append(failedEvents, addErrorToFailedEvents(cl.events, errMsg)...)
 			}
 
 		case "canaries":
 			if err := gormDB.Where("id IN ?", cl.itemIDs).Find(&upstreamMsg.Canaries).Error; err != nil {
 				errMsg := fmt.Errorf("error fetching canaries: %w", err)
-				failedEvents = append(failedEvents, somethingFailedEvents(cl.events, errMsg)...)
+				failedEvents = append(failedEvents, addErrorToFailedEvents(cl.events, errMsg)...)
 			}
 
 		case "checks":
 			if err := gormDB.Where("id IN ?", cl.itemIDs).Find(&upstreamMsg.Checks).Error; err != nil {
 				errMsg := fmt.Errorf("error fetching checks: %w", err)
-				failedEvents = append(failedEvents, somethingFailedEvents(cl.events, errMsg)...)
+				failedEvents = append(failedEvents, addErrorToFailedEvents(cl.events, errMsg)...)
 			}
 
 		case "config_scrapers":
 			if err := gormDB.Where("id IN ?", cl.itemIDs).Find(&upstreamMsg.ConfigAnalysis).Error; err != nil {
 				errMsg := fmt.Errorf("error fetching config_scrapers: %w", err)
-				failedEvents = append(failedEvents, somethingFailedEvents(cl.events, errMsg)...)
+				failedEvents = append(failedEvents, addErrorToFailedEvents(cl.events, errMsg)...)
 			}
 
 		case "config_analysis":
 			if err := gormDB.Where("id IN ?", cl.itemIDs).Find(&upstreamMsg.ConfigAnalysis).Error; err != nil {
 				errMsg := fmt.Errorf("error fetching config_analysis: %w", err)
-				failedEvents = append(failedEvents, somethingFailedEvents(cl.events, errMsg)...)
+				failedEvents = append(failedEvents, addErrorToFailedEvents(cl.events, errMsg)...)
 			}
 
 		case "config_changes":
 			if err := gormDB.Where("id IN ?", cl.itemIDs).Find(&upstreamMsg.ConfigChanges).Error; err != nil {
 				errMsg := fmt.Errorf("error fetching config_changes: %w", err)
-				failedEvents = append(failedEvents, somethingFailedEvents(cl.events, errMsg)...)
+				failedEvents = append(failedEvents, addErrorToFailedEvents(cl.events, errMsg)...)
 			}
 
 		case "config_items":
 			if err := gormDB.Where("id IN ?", cl.itemIDs).Find(&upstreamMsg.ConfigItems).Error; err != nil {
 				errMsg := fmt.Errorf("error fetching config_items: %w", err)
-				failedEvents = append(failedEvents, somethingFailedEvents(cl.events, errMsg)...)
+				failedEvents = append(failedEvents, addErrorToFailedEvents(cl.events, errMsg)...)
 			}
 
 		case "check_statuses":
 			if err := gormDB.Where(`(check_id, "time") IN ?`, cl.itemIDs).Find(&upstreamMsg.CheckStatuses).Error; err != nil {
 				errMsg := fmt.Errorf("error fetching check_statuses: %w", err)
-				failedEvents = append(failedEvents, somethingFailedEvents(cl.events, errMsg)...)
+				failedEvents = append(failedEvents, addErrorToFailedEvents(cl.events, errMsg)...)
 			}
 
 		case "config_component_relationships":
 			if err := gormDB.Where("(component_id, config_id) IN ?", cl.itemIDs).Find(&upstreamMsg.ConfigComponentRelationships).Error; err != nil {
 				errMsg := fmt.Errorf("error fetching config_component_relationships: %w", err)
-				failedEvents = append(failedEvents, somethingFailedEvents(cl.events, errMsg)...)
+				failedEvents = append(failedEvents, addErrorToFailedEvents(cl.events, errMsg)...)
 			}
 
 		case "component_relationships":
 			if err := gormDB.Where("(component_id, relationship_id, selector_id) IN ?", cl.itemIDs).Find(&upstreamMsg.ComponentRelationships).Error; err != nil {
 				errMsg := fmt.Errorf("error fetching component_relationships: %w", err)
-				failedEvents = append(failedEvents, somethingFailedEvents(cl.events, errMsg)...)
+				failedEvents = append(failedEvents, addErrorToFailedEvents(cl.events, errMsg)...)
 			}
 
 		case "config_relationships":
 			if err := gormDB.Where("(related_id, config_id, selector_id) IN ?", cl.itemIDs).Find(&upstreamMsg.ConfigRelationships).Error; err != nil {
 				errMsg := fmt.Errorf("error fetching config_relationships: %w", err)
-				failedEvents = append(failedEvents, somethingFailedEvents(cl.events, errMsg)...)
+				failedEvents = append(failedEvents, addErrorToFailedEvents(cl.events, errMsg)...)
 			}
 		}
 	}
@@ -145,7 +152,7 @@ func (t *pushToUpstreamEventHandler) Run(ctx *api.Context, events []api.Event) [
 	upstreamMsg.ApplyLabels(t.conf.LabelsMap())
 	if err := upstream.Push(ctx, t.conf, upstreamMsg); err != nil {
 		errMsg := fmt.Errorf("failed to push to upstream: %w", err)
-		failedEvents = append(failedEvents, somethingFailedEvents(events, errMsg)...)
+		failedEvents = append(failedEvents, addErrorToFailedEvents(events, errMsg)...)
 	}
 
 	return failedEvents

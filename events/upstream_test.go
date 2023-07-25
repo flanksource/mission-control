@@ -137,8 +137,8 @@ var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
 			},
 		}
 
-		eventHandler := NewEventHandler(agentDB, eventHandlerConfig)
-		eventHandler.ConsumeEventsUntilEmpty()
+		c := NewUpstreamPushConsumer(agentDB, eventHandlerConfig)
+		c.ConsumeEventsUntilEmpty()
 	})
 
 	ginkgo.It("should have transferred all the components", func() {

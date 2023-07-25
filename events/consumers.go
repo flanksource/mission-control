@@ -3,7 +3,6 @@ package events
 import (
 	"errors"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -26,13 +25,6 @@ var (
 		EventIncidentStatusInvestigating, EventIncidentStatusCancelled,
 	}
 	ConsumerPushQueue = []string{EventPushQueueCreate}
-
-	AllConsumers = []EventConsumer{
-		NotificationConsumer,
-		TeamConsumer,
-		ResponderConsumer,
-		UpstreamPushConsumer,
-	}
 )
 
 type EventConsumer struct {
@@ -67,11 +59,11 @@ func (t *EventConsumer) consumeEvents() error {
 
 	const selectEventsQuery = `
         DELETE FROM event_queue
-        WHERE id = (
+        WHERE id IN (
             SELECT id FROM event_queue
             WHERE 
                 attempts <= @maxAttempts AND
-                name IN (@events)
+                name IN @events
             ORDER BY priority DESC, created_at ASC
             FOR UPDATE SKIP LOCKED
             LIMIT @batchSize
@@ -82,7 +74,7 @@ func (t *EventConsumer) consumeEvents() error {
 	var events []api.Event
 	vals := map[string]any{
 		"maxAttempts": eventMaxAttempts,
-		"events":      strings.Join(t.WatchEvents, ","),
+		"events":      t.WatchEvents,
 		"batchSize":   t.BatchSize,
 	}
 	err := tx.Raw(selectEventsQuery, vals).Scan(&events).Error
@@ -93,12 +85,16 @@ func (t *EventConsumer) consumeEvents() error {
 		return err
 	}
 
-	var failedEvents []*api.Event
-	failedEvents = t.ProcessBatchFunc(ctx, events)
+	if len(events) == 0 {
+		return gorm.ErrRecordNotFound
+	}
+
+	failedEvents := t.ProcessBatchFunc(ctx, events)
 	for _, e := range failedEvents {
 		e.Attempts += 1
 		last_attempt := time.Now()
 		e.LastAttempt = &last_attempt
+		logger.Errorf("Failed to process event[%s]: %s", e.ID, e.Error)
 	}
 
 	if err := tx.Create(failedEvents).Error; err != nil {
@@ -142,17 +138,21 @@ func (e *EventConsumer) Listen() {
 	// Consume pending events
 	e.ConsumeEventsUntilEmpty()
 
-	for range time.Tick(time.Second * 30) {
+	ticker := time.NewTicker(time.Second * 30)
+	defer ticker.Stop()
+	for range ticker.C {
 		e.ConsumeEventsUntilEmpty()
 	}
 }
 
-func StartConsumers(config Config) {
-	if config.UpstreamConf.Valid() {
-		upstreamPushEventHandler = newPushToUpstreamEventHandler(config.UpstreamConf)
+func StartConsumers(db *gorm.DB, config Config) {
+	allConsumers := []EventConsumer{
+		NewTeamConsumer(db),
+		NewNotificationConsumer(db),
+		NewResponderConsumer(db),
+		NewUpstreamPushConsumer(db, config),
 	}
-
-	for _, c := range AllConsumers {
+	for _, c := range allConsumers {
 		go c.Listen()
 	}
 }
