@@ -14,7 +14,10 @@ import (
 
 func NewResponderConsumer(db *gorm.DB) EventConsumer {
 	return EventConsumer{
-		WatchEvents:      ConsumerResponder,
+		WatchEvents: []string{
+			EventIncidentResponderAdded,
+			EventIncidentCommentAdded,
+		},
 		ProcessBatchFunc: processResponderEvents,
 		BatchSize:        1,
 		Consumers:        1,

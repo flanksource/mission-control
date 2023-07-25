@@ -12,12 +12,12 @@ import (
 var upstreamPushEventHandler *pushToUpstreamEventHandler
 
 func NewUpstreamPushConsumer(db *gorm.DB, config Config) EventConsumer {
-	if config.UpstreamConf.Valid() {
-		upstreamPushEventHandler = newPushToUpstreamEventHandler(config.UpstreamConf)
+	if config.UpstreamPush.Valid() {
+		upstreamPushEventHandler = newPushToUpstreamEventHandler(config.UpstreamPush)
 	}
 
 	return EventConsumer{
-		WatchEvents:      ConsumerPushQueue,
+		WatchEvents:      []string{EventPushQueueCreate},
 		ProcessBatchFunc: handleUpstreamPushEvents,
 		BatchSize:        50,
 		Consumers:        5,

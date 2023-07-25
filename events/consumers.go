@@ -1,30 +1,17 @@
 package events
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"github.com/sethvargo/go-retry"
 	"sync"
 	"time"
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/db"
 	"gorm.io/gorm"
-)
-
-var (
-	ConsumerTeam         = []string{EventTeamUpdate, EventTeamDelete}
-	ConsumerNotification = []string{EventNotificationSend, EventNotificationUpdate, EventNotificationDelete}
-	ConsumerCheckStatus  = []string{EventCheckPassed, EventCheckFailed}
-	ConsumerResponder    = []string{EventIncidentResponderAdded, EventIncidentCommentAdded}
-
-	ConsumerIncidentNotification = []string{
-		EventIncidentCreated, EventIncidentResponderAdded, EventIncidentResponderRemoved,
-		EventIncidentDODAdded, EventIncidentDODPassed,
-		EventIncidentDODRegressed, EventIncidentStatusOpen, EventIncidentStatusClosed,
-		EventIncidentStatusMitigated, EventIncidentStatusResolved,
-		EventIncidentStatusInvestigating, EventIncidentStatusCancelled,
-	}
-	ConsumerPushQueue = []string{EventPushQueueCreate}
 )
 
 type EventConsumer struct {
@@ -44,7 +31,7 @@ func (e EventConsumer) Validate() error {
 		return fmt.Errorf("Consumers:%d <= 0", e.BatchSize)
 	}
 	if len(e.WatchEvents) == 0 {
-		return fmt.Errorf("Event to watch:%d <= 0", len(e.WatchEvents))
+		return fmt.Errorf("No events registered to watch:%d <= 0", len(e.WatchEvents))
 	}
 	return nil
 }
@@ -129,7 +116,51 @@ func (t *EventConsumer) ConsumeEventsUntilEmpty() {
 	wg.Wait()
 }
 
+// listenToPostgresNotify listens to postgres notifications
+// and will retry on failure for dbReconnectMaxAttempt times
+func (e *EventConsumer) listenToPostgresNotify(pgNotify chan bool) {
+	var listen = func(ctx context.Context, pgNotify chan bool) error {
+		conn, err := db.Pool.Acquire(ctx)
+		if err != nil {
+			return fmt.Errorf("error acquiring database connection: %v", err)
+		}
+		defer conn.Release()
+
+		_, err = conn.Exec(ctx, "LISTEN event_queue_updates")
+		if err != nil {
+			return fmt.Errorf("error listening to database notifications: %v", err)
+		}
+		logger.Infof("listening to database notifications")
+
+		for {
+			notification, err := conn.Conn().WaitForNotification(ctx)
+			if err != nil {
+				return fmt.Errorf("error listening to database notifications: %v", err)
+			}
+
+			logger.Tracef("Received database notification: %+v", notification)
+			pgNotify <- true
+		}
+	}
+
+	// retry on failure.
+	for {
+		backoff := retry.WithMaxDuration(dbReconnectMaxDuration, retry.NewExponential(dbReconnectBackoffBaseDuration))
+		err := retry.Do(context.TODO(), backoff, func(ctx context.Context) error {
+			if err := listen(ctx, pgNotify); err != nil {
+				return retry.RetryableError(err)
+			}
+
+			return nil
+		})
+
+		logger.Errorf("failed to connect to database: %v", err)
+	}
+}
+
 func (e *EventConsumer) Listen() {
+	logger.Infof("Started listening for database notify events")
+
 	if err := e.Validate(); err != nil {
 		logger.Fatalf("Error starting event consumer: %v", err)
 		return
@@ -138,19 +169,26 @@ func (e *EventConsumer) Listen() {
 	// Consume pending events
 	e.ConsumeEventsUntilEmpty()
 
-	ticker := time.NewTicker(time.Second * 30)
-	defer ticker.Stop()
-	for range ticker.C {
-		e.ConsumeEventsUntilEmpty()
+	pgNotify := make(chan bool)
+	go e.listenToPostgresNotify(pgNotify)
+
+	for {
+		select {
+		case <-pgNotify:
+			e.ConsumeEventsUntilEmpty()
+
+		case <-time.After(pgNotifyTimeout):
+			e.ConsumeEventsUntilEmpty()
+		}
 	}
 }
 
-func StartConsumers(db *gorm.DB, config Config) {
+func StartConsumers(gormDB *gorm.DB, config Config) {
 	allConsumers := []EventConsumer{
-		NewTeamConsumer(db),
-		NewNotificationConsumer(db),
-		NewResponderConsumer(db),
-		NewUpstreamPushConsumer(db, config),
+		NewTeamConsumer(gormDB),
+		NewNotificationConsumer(gormDB),
+		NewResponderConsumer(gormDB),
+		NewUpstreamPushConsumer(gormDB, config),
 	}
 	for _, c := range allConsumers {
 		go c.Listen()

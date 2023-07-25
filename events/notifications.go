@@ -18,7 +18,15 @@ import (
 
 func NewNotificationConsumer(db *gorm.DB) EventConsumer {
 	return EventConsumer{
-		WatchEvents:      append(append(ConsumerNotification, ConsumerIncidentNotification...), ConsumerCheckStatus...),
+		WatchEvents: []string{
+			EventNotificationSend, EventNotificationUpdate, EventNotificationDelete,
+			EventIncidentCreated,
+			EventIncidentResponderRemoved,
+			EventIncidentDODAdded, EventIncidentDODPassed, EventIncidentDODRegressed,
+			EventIncidentStatusOpen, EventIncidentStatusClosed, EventIncidentStatusMitigated,
+			EventIncidentStatusResolved, EventIncidentStatusInvestigating, EventIncidentStatusCancelled,
+			EventCheckPassed, EventCheckFailed,
+		},
 		ProcessBatchFunc: processNotificationEvents,
 		BatchSize:        1,
 		Consumers:        1,

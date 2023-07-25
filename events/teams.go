@@ -13,7 +13,10 @@ import (
 
 func NewTeamConsumer(db *gorm.DB) EventConsumer {
 	return EventConsumer{
-		WatchEvents:      ConsumerTeam,
+		WatchEvents: []string{
+			EventTeamUpdate,
+			EventTeamDelete,
+		},
 		ProcessBatchFunc: processTeamEvents,
 		BatchSize:        1,
 		Consumers:        1,
