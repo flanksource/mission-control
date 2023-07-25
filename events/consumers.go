@@ -188,8 +188,11 @@ func StartConsumers(gormDB *gorm.DB, config Config) {
 		NewTeamConsumer(gormDB),
 		NewNotificationConsumer(gormDB),
 		NewResponderConsumer(gormDB),
-		NewUpstreamPushConsumer(gormDB, config),
 	}
+	if config.UpstreamPush.Valid() {
+		allConsumers = append(allConsumers, NewUpstreamPushConsumer(gormDB, config))
+	}
+
 	for _, c := range allConsumers {
 		go c.Listen()
 	}
