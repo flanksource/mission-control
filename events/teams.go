@@ -12,14 +12,25 @@ import (
 )
 
 var TeamConsumer = EventConsumer{
-	WatchEvents: ConsumerTeam,
-	HandleFunc:  handleTeamEvents,
-	BatchSize:   1,
-	Consumers:   1,
-	DB:          db.Gorm,
+	WatchEvents:      ConsumerTeam,
+	ProcessBatchFunc: processTeamEvents,
+	BatchSize:        1,
+	Consumers:        1,
+	DB:               db.Gorm,
 }
 
-func handleTeamEvents(ctx *api.Context, config Config, event api.Event) error {
+func processTeamEvents(ctx *api.Context, events []api.Event) []*api.Event {
+	var failedEvents []*api.Event
+	for _, e := range events {
+		if err := handleTeamEvent(ctx, e); err != nil {
+			e.Error = err.Error()
+			failedEvents = append(failedEvents, &e)
+		}
+	}
+	return failedEvents
+}
+
+func handleTeamEvent(ctx *api.Context, event api.Event) error {
 	switch event.Name {
 	case EventTeamUpdate:
 		return handleTeamUpdate(ctx, event)

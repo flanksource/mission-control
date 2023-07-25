@@ -37,11 +37,11 @@ var (
 
 type EventConsumer struct {
 	WatchEvents []string
-	HandleFunc  func(*api.Context, Config, api.Event) error
-	BatchSize   int
-	Consumers   int
-	DB          *gorm.DB
-	Config      Config
+	// We process mutliple events and return the failed events
+	ProcessBatchFunc func(*api.Context, []api.Event) []*api.Event
+	BatchSize        int
+	Consumers        int
+	DB               *gorm.DB
 }
 
 func (e EventConsumer) Validate() error {
@@ -94,17 +94,11 @@ func (t *EventConsumer) consumeEvents() error {
 	}
 
 	var failedEvents []*api.Event
-	for _, event := range events {
-		err = t.HandleFunc(ctx, t.Config, event)
-		if err != nil {
-			logger.Errorf("failed to handle event [%s]: %v", event.Name, err)
-
-			event.Attempts += 1
-			event.Error = err.Error()
-			last_attempt := time.Now()
-			event.LastAttempt = &last_attempt
-			failedEvents = append(failedEvents, &event)
-		}
+	failedEvents = t.ProcessBatchFunc(ctx, events)
+	for _, e := range failedEvents {
+		e.Attempts += 1
+		last_attempt := time.Now()
+		e.LastAttempt = &last_attempt
 	}
 
 	if err := tx.Create(failedEvents).Error; err != nil {
@@ -153,13 +147,12 @@ func (e *EventConsumer) Listen() {
 	}
 }
 
-func (e *EventConsumer) SetConfig(config Config) {
-	e.Config = config
-}
-
 func StartConsumers(config Config) {
+	if config.UpstreamConf.Valid() {
+		upstreamPushEventHandler = newPushToUpstreamEventHandler(config.UpstreamConf)
+	}
+
 	for _, c := range AllConsumers {
-		c.SetConfig(config)
 		go c.Listen()
 	}
 }

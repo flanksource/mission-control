@@ -17,14 +17,25 @@ import (
 )
 
 var NotificationConsumer = EventConsumer{
-	WatchEvents: append(append(ConsumerNotification, ConsumerIncidentNotification...), ConsumerCheckStatus...),
-	HandleFunc:  handleNotificationEvents,
-	BatchSize:   1,
-	Consumers:   1,
-	DB:          db.Gorm,
+	WatchEvents:      append(append(ConsumerNotification, ConsumerIncidentNotification...), ConsumerCheckStatus...),
+	ProcessBatchFunc: processNotificationEvents,
+	BatchSize:        1,
+	Consumers:        1,
+	DB:               db.Gorm,
 }
 
-func handleNotificationEvents(ctx *api.Context, config Config, event api.Event) error {
+func processNotificationEvents(ctx *api.Context, events []api.Event) []*api.Event {
+	var failedEvents []*api.Event
+	for _, e := range events {
+		if err := handleNotificationEvent(ctx, e); err != nil {
+			e.Error = err.Error()
+			failedEvents = append(failedEvents, &e)
+		}
+	}
+	return failedEvents
+}
+
+func handleNotificationEvent(ctx *api.Context, event api.Event) error {
 	switch event.Name {
 	case EventNotificationDelete, EventNotificationUpdate:
 		return handleNotificationUpdates(ctx, event)

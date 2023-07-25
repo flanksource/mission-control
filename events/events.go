@@ -193,7 +193,7 @@ func (t *eventHandler) consumeEvents() error {
 		err = handleNotificationUpdates(ctx, event)
 	case EventPushQueueCreate:
 		if upstreamPushEventHandler != nil {
-			err = upstreamPushEventHandler.Run(ctx, tx, []api.Event{event})
+			_ = upstreamPushEventHandler.Run(ctx, []api.Event{event})
 		}
 	default:
 		logger.Errorf("Unrecognized event name: %s", event.Name)

@@ -14,14 +14,25 @@ import (
 )
 
 var ResponderConsumer = EventConsumer{
-	WatchEvents: ConsumerResponder,
-	HandleFunc:  handleResponderEvents,
-	BatchSize:   1,
-	Consumers:   1,
-	DB:          db.Gorm,
+	WatchEvents:      ConsumerResponder,
+	ProcessBatchFunc: processResponderEvents,
+	BatchSize:        1,
+	Consumers:        1,
+	DB:               db.Gorm,
 }
 
-func handleResponderEvents(ctx *api.Context, config Config, event api.Event) error {
+func processResponderEvents(ctx *api.Context, events []api.Event) []*api.Event {
+	var failedEvents []*api.Event
+	for _, e := range events {
+		if err := handleResponderEvent(ctx, e); err != nil {
+			e.Error = err.Error()
+			failedEvents = append(failedEvents, &e)
+		}
+	}
+	return failedEvents
+}
+
+func handleResponderEvent(ctx *api.Context, event api.Event) error {
 	switch event.Name {
 	case EventIncidentResponderAdded:
 		return reconcileResponderEvent(ctx, event)
