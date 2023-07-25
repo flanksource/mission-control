@@ -8,6 +8,8 @@ import (
 	"github.com/flanksource/incident-commander/db"
 )
 
+var ReconcilePageSize int
+
 // SyncWithUpstream coordinates with upstream and pushes any resource
 // that are missing on the upstream.
 func SyncWithUpstream(ctx *api.Context) error {
@@ -17,7 +19,7 @@ func SyncWithUpstream(ctx *api.Context) error {
 		_ = db.PersistJobHistory(ctx, jobHistory.End())
 	}()
 
-	syncer := upstream.NewUpstreamSyncer(api.UpstreamConf)
+	syncer := upstream.NewUpstreamSyncer(api.UpstreamConf, ReconcilePageSize)
 	for _, table := range api.TablesToReconcile {
 		if err := syncer.SyncTableWithUpstream(ctx, table); err != nil {
 			jobHistory.AddError(err.Error())

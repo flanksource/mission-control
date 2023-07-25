@@ -67,7 +67,7 @@ var _ = ginkgo.Describe("Push Mode reconcilation", ginkgo.Ordered, func() {
 	ginkgo.It("should reconcile all the tables", func() {
 		ctx := api.NewContext(agentDB, nil)
 
-		syncer := upstream.NewUpstreamSyncer(api.UpstreamConf)
+		syncer := upstream.NewUpstreamSyncer(api.UpstreamConf, 500)
 		for _, table := range api.TablesToReconcile {
 			err := syncer.SyncTableWithUpstream(ctx, table)
 			Expect(err).To(BeNil(), fmt.Sprintf("should push table '%s' to upstream", table))
@@ -132,7 +132,7 @@ var _ = ginkgo.Describe("Push Mode reconcilation", ginkgo.Ordered, func() {
 	ginkgo.It("should reconcile config items", func() {
 		ctx := api.NewContext(agentDB, nil)
 
-		syncer := upstream.NewUpstreamSyncer(api.UpstreamConf)
+		syncer := upstream.NewUpstreamSyncer(api.UpstreamConf, 500)
 		err := syncer.SyncTableWithUpstream(ctx, "config_items")
 		Expect(err).To(BeNil(), "should push table 'config_items' upstream")
 	})
