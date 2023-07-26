@@ -19,9 +19,9 @@ func SyncWithUpstream(ctx *api.Context) error {
 		_ = db.PersistJobHistory(ctx, jobHistory.End())
 	}()
 
-	syncer := upstream.NewUpstreamSyncer(api.UpstreamConf, ReconcilePageSize)
+	reconciler := upstream.NewUpstreamReconciler(api.UpstreamConf, ReconcilePageSize)
 	for _, table := range api.TablesToReconcile {
-		if err := syncer.SyncTableWithUpstream(ctx, table); err != nil {
+		if err := reconciler.Sync(ctx, table); err != nil {
 			jobHistory.AddError(err.Error())
 			logger.Errorf("failed to sync table %s: %w", table, err)
 		} else {

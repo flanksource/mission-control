@@ -51,7 +51,7 @@ func PushUpstream(c echo.Context) error {
 
 	req.PopulateAgentID(agentID.(uuid.UUID))
 
-	logger.Debugf("Pushing %s", req.String())
+	logger.Tracef("Inserting push data %s", req.String())
 	if err := db.InsertUpstreamMsg(ctx, &req); err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to upsert upstream message"})
 	}
@@ -80,7 +80,7 @@ func Pull(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, api.HTTPError{Message: fmt.Sprintf("agent(name=%s) not found", agentName)})
 	}
 
-	resp, err := db.GetAllResourceIDsOfAgent(ctx, agent.ID.String(), req)
+	resp, err := db.GetAllResourceIDsOfAgent(ctx, req, agent.ID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to get resource ids"})
 	}
@@ -109,7 +109,7 @@ func Status(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, api.HTTPError{Message: fmt.Sprintf("agent(name=%s) not found", agentName)})
 	}
 
-	response, err := upstream.GetPrimaryKeysHash(ctx, req.Table, req.From, req.Size)
+	response, err := upstream.GetPrimaryKeysHash(ctx, req, agent.ID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to push status response"})
 	}

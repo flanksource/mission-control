@@ -2,17 +2,39 @@ package db
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/google/uuid"
 	"gorm.io/gorm/clause"
 )
 
-func GetAllResourceIDsOfAgent(ctx *api.Context, agentID string, req upstream.PaginateRequest) ([]string, error) {
+func GetAllResourceIDsOfAgent(ctx *api.Context, req upstream.PaginateRequest, agentID uuid.UUID) ([]string, error) {
 	var response []string
-	query := fmt.Sprintf("SELECT id FROM %s WHERE agent_id = ? AND id > ? ORDER BY id LIMIT ?", req.Table)
-	err := ctx.DB().Raw(query, agentID, req.From, req.Size).Scan(&response).Error
+	var err error
+
+	switch req.Table {
+	case "check_statuses":
+		query := `
+		SELECT (check_id::TEXT || ',' || time::TEXT) 
+		FROM check_statuses 
+		LEFT JOIN checks ON checks.id = check_statuses.check_id 
+		WHERE checks.agent_id = ? AND (check_statuses.check_id::TEXT, check_statuses.time::TEXT) > (?, ?)
+		ORDER BY check_statuses.check_id, check_statuses.time
+		LIMIT ?`
+		parts := strings.Split(req.From, ",")
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("%s is not a valid next cursor. It must consist of check_id and time separated by a comma", req.From)
+		}
+
+		err = ctx.DB().Raw(query, agentID, parts[0], parts[1], req.Size).Scan(&response).Error
+	default:
+		query := fmt.Sprintf("SELECT id FROM %s WHERE agent_id = ? AND id::TEXT > ? ORDER BY id LIMIT ?", req.Table)
+		err = ctx.DB().Raw(query, agentID, req.From, req.Size).Scan(&response).Error
+	}
+
 	return response, err
 }
 
