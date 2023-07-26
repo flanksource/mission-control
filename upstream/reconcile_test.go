@@ -20,7 +20,7 @@ import (
 var _ = ginkgo.Describe("Push Mode reconcilation", ginkgo.Ordered, func() {
 	const randomConfigItemCount = 2000 // keep it below 5k (must be set w.r.t the page size)
 
-	ginkgo.It("should populate the agent database with the 5 tables that are reconciled", func() {
+	ginkgo.It("should populate the agent database with the 6 tables that are reconciled", func() {
 		err := dummy.PopulateDBWithDummyModels(agentDB)
 		Expect(err).To(BeNil())
 
@@ -40,6 +40,7 @@ var _ = ginkgo.Describe("Push Mode reconcilation", ginkgo.Ordered, func() {
 		compareItemsCount[models.ConfigScraper](agentDB, 1)
 		compareItemsCount[models.Canary](agentDB, len(dummy.AllDummyCanaries))
 		compareItemsCount[models.Check](agentDB, len(dummy.AllDummyChecks))
+		compareItemsCount[models.CheckStatus](agentDB, len(dummy.AllDummyCheckStatuses))
 
 		// Upstream must have no records
 		compareItemsCount[models.Component](upstreamDB, 0)
@@ -47,6 +48,7 @@ var _ = ginkgo.Describe("Push Mode reconcilation", ginkgo.Ordered, func() {
 		compareItemsCount[models.ConfigScraper](upstreamDB, 0)
 		compareItemsCount[models.Canary](upstreamDB, 0)
 		compareItemsCount[models.Check](upstreamDB, 0)
+		compareItemsCount[models.CheckStatus](upstreamDB, 0)
 	})
 
 	ginkgo.It("should return different hash for agent and upstream", func() {
@@ -54,10 +56,15 @@ var _ = ginkgo.Describe("Push Mode reconcilation", ginkgo.Ordered, func() {
 		upstreamCtx := api.NewContext(upstreamDB, nil)
 
 		for _, table := range api.TablesToReconcile {
-			agentStatus, err := upstream.GetPrimaryKeysHash(ctx, upstream.PaginateRequest{From: "", Table: table, Size: 500}, uuid.Nil)
+			paginateRequest := upstream.PaginateRequest{From: "", Table: table, Size: 500}
+			if table == "check_statuses" {
+				paginateRequest.From = ","
+			}
+
+			agentStatus, err := upstream.GetPrimaryKeysHash(ctx, paginateRequest, uuid.Nil)
 			Expect(err).To(BeNil())
 
-			upstreamStatus, err := upstream.GetPrimaryKeysHash(upstreamCtx, upstream.PaginateRequest{From: "", Table: table, Size: 500}, uuid.Nil)
+			upstreamStatus, err := upstream.GetPrimaryKeysHash(upstreamCtx, paginateRequest, uuid.Nil)
 			Expect(err).To(BeNil())
 
 			Expect(agentStatus).ToNot(Equal(upstreamStatus), fmt.Sprintf("table [%s] hash to not match", table))
@@ -79,10 +86,15 @@ var _ = ginkgo.Describe("Push Mode reconcilation", ginkgo.Ordered, func() {
 		upstreamCtx := api.NewContext(upstreamDB, nil)
 
 		for _, table := range api.TablesToReconcile {
-			agentStatus, err := upstream.GetPrimaryKeysHash(ctx, upstream.PaginateRequest{From: "", Table: table, Size: 500}, uuid.Nil)
+			paginateRequest := upstream.PaginateRequest{From: "", Table: table, Size: 500}
+			if table == "check_statuses" {
+				paginateRequest.From = ","
+			}
+
+			agentStatus, err := upstream.GetPrimaryKeysHash(ctx, paginateRequest, uuid.Nil)
 			Expect(err).To(BeNil())
 
-			upstreamStatus, err := upstream.GetPrimaryKeysHash(upstreamCtx, upstream.PaginateRequest{From: "", Table: table, Size: 500}, uuid.Nil)
+			upstreamStatus, err := upstream.GetPrimaryKeysHash(upstreamCtx, paginateRequest, agentID)
 			Expect(err).To(BeNil())
 
 			Expect(agentStatus).To(Equal(upstreamStatus), fmt.Sprintf("table [%s] hash to match", table))
@@ -103,6 +115,10 @@ var _ = ginkgo.Describe("Push Mode reconcilation", ginkgo.Ordered, func() {
 
 	ginkgo.It("should have transferred all the checks", func() {
 		compareEntities(upstreamDB, agentDB, &[]models.Check{})
+	})
+
+	ginkgo.It("should have transferred all the check statuses", func() {
+		compareEntities(upstreamDB, agentDB, &[]models.CheckStatus{})
 	})
 
 	ginkgo.It("should have transferred all the canaries", func() {
