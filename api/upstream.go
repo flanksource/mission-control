@@ -10,6 +10,7 @@ var TablesToReconcile = []string{
 	"config_items",
 	"canaries",
 	"checks",
+	"check_statuses",
 	"topologies",
 }
 

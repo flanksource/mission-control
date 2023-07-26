@@ -54,10 +54,10 @@ var _ = ginkgo.Describe("Push Mode reconcilation", ginkgo.Ordered, func() {
 		upstreamCtx := api.NewContext(upstreamDB, nil)
 
 		for _, table := range api.TablesToReconcile {
-			agentStatus, err := upstream.GetIDsHash(ctx, table, uuid.Nil, 500)
+			agentStatus, err := upstream.GetPrimaryKeysHash(ctx, table, "", 500)
 			Expect(err).To(BeNil())
 
-			upstreamStatus, err := upstream.GetIDsHash(upstreamCtx, table, uuid.Nil, 500)
+			upstreamStatus, err := upstream.GetPrimaryKeysHash(upstreamCtx, table, "", 500)
 			Expect(err).To(BeNil())
 
 			Expect(agentStatus).ToNot(Equal(upstreamStatus), fmt.Sprintf("table [%s] hash to not match", table))
@@ -79,10 +79,10 @@ var _ = ginkgo.Describe("Push Mode reconcilation", ginkgo.Ordered, func() {
 		upstreamCtx := api.NewContext(upstreamDB, nil)
 
 		for _, table := range api.TablesToReconcile {
-			agentStatus, err := upstream.GetIDsHash(ctx, table, uuid.Nil, 500)
+			agentStatus, err := upstream.GetPrimaryKeysHash(ctx, table, "", 500)
 			Expect(err).To(BeNil())
 
-			upstreamStatus, err := upstream.GetIDsHash(upstreamCtx, table, uuid.Nil, 500)
+			upstreamStatus, err := upstream.GetPrimaryKeysHash(upstreamCtx, table, "", 500)
 			Expect(err).To(BeNil())
 
 			Expect(agentStatus).To(Equal(upstreamStatus), fmt.Sprintf("table [%s] hash to match", table))

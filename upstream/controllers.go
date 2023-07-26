@@ -21,6 +21,7 @@ var (
 	agentIDCache = cache.New(3*24*time.Hour, 12*time.Hour)
 )
 
+// PushUpstream saves the push data from agents.
 func PushUpstream(c echo.Context) error {
 	ctx := c.(*api.Context)
 
@@ -62,21 +63,21 @@ func PushUpstream(c echo.Context) error {
 func Pull(c echo.Context) error {
 	ctx := c.(*api.Context)
 
-	agentName := c.Param("agent_name")
-	agent, err := db.FindAgent(ctx, agentName)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to get agent"})
-	} else if agent == nil {
-		return c.JSON(http.StatusNotFound, api.HTTPError{Message: fmt.Sprintf("agent(name=%s) not found", agentName)})
-	}
-
 	var req upstream.PaginateRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error()})
 	}
 
 	if !collections.Contains(api.TablesToReconcile, req.Table) {
-		return c.JSON(http.StatusForbidden, api.HTTPError{Error: "table is not allowed to be reconciled"})
+		return c.JSON(http.StatusForbidden, api.HTTPError{Error: fmt.Sprintf("table=%s is not allowed", req.Table)})
+	}
+
+	agentName := c.Param("agent_name")
+	agent, err := db.FindAgent(ctx, agentName)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to get agent"})
+	} else if agent == nil {
+		return c.JSON(http.StatusNotFound, api.HTTPError{Message: fmt.Sprintf("agent(name=%s) not found", agentName)})
 	}
 
 	resp, err := db.GetAllResourceIDsOfAgent(ctx, agent.ID.String(), req)
@@ -96,6 +97,10 @@ func Status(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error()})
 	}
 
+	if !collections.Contains(api.TablesToReconcile, req.Table) {
+		return c.JSON(http.StatusForbidden, api.HTTPError{Error: fmt.Sprintf("table=%s is not allowed", req.Table)})
+	}
+
 	var agentName = c.Param("agent_name")
 	agent, err := db.FindAgent(ctx, agentName)
 	if err != nil {
@@ -104,11 +109,7 @@ func Status(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, api.HTTPError{Message: fmt.Sprintf("agent(name=%s) not found", agentName)})
 	}
 
-	if !collections.Contains(api.TablesToReconcile, req.Table) {
-		return c.JSON(http.StatusForbidden, api.HTTPError{Error: "table is not allowed to be reconciled"})
-	}
-
-	response, err := upstream.GetIDsHash(ctx, req.Table, req.From, req.Size)
+	response, err := upstream.GetPrimaryKeysHash(ctx, req.Table, req.From, req.Size)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to push status response"})
 	}
