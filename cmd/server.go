@@ -7,17 +7,20 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty/schema/openapi"
+	"github.com/flanksource/kopper"
 	"github.com/labstack/echo-contrib/echoprometheus"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/spf13/cobra"
 	"gorm.io/gorm"
+	ctrl "sigs.k8s.io/controller-runtime"
 
-	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/duty/schema/openapi"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/auth"
+	"github.com/flanksource/incident-commander/canary"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/jobs"
@@ -26,8 +29,6 @@ import (
 	"github.com/flanksource/incident-commander/snapshot"
 	"github.com/flanksource/incident-commander/upstream"
 	"github.com/flanksource/incident-commander/utils"
-	"github.com/flanksource/kopper"
-	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 const (
@@ -117,6 +118,7 @@ func createHTTPServer(gormDB *gorm.DB) *echo.Echo {
 	upstreamGroup := e.Group("/upstream")
 	upstreamGroup.POST("/push", upstream.PushUpstream)
 	upstreamGroup.GET("/pull/:agent_name", upstream.Pull)
+	upstreamGroup.GET("/canary/pull/:agent_name", canary.Pull)
 	upstreamGroup.GET("/status/:agent_name", upstream.Status)
 
 	forward(e, "/config", configDb)
