@@ -10,7 +10,7 @@ require (
 	github.com/containrrr/shoutrrr v0.7.1
 	github.com/fergusstrange/embedded-postgres v1.21.0
 	github.com/flanksource/commons v1.10.0
-	github.com/flanksource/duty v1.0.135
+	github.com/flanksource/duty v1.0.139
 	github.com/flanksource/kopper v1.0.6
 	github.com/google/cel-go v0.13.0
 	github.com/google/go-cmp v0.5.9
@@ -259,5 +259,3 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
-
-replace "github.com/flanksource/duty" => ../duty
