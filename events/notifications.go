@@ -34,6 +34,16 @@ func NewNotificationConsumer(db *gorm.DB) EventConsumer {
 	}
 }
 
+func NewNotificationSendConsumer(db *gorm.DB) EventConsumer {
+	return EventConsumer{
+		WatchEvents:      []string{EventNotificationSend},
+		ProcessBatchFunc: processNotificationEvents,
+		BatchSize:        1,
+		Consumers:        5,
+		DB:               db,
+	}
+}
+
 func processNotificationEvents(ctx *api.Context, events []api.Event) []*api.Event {
 	var failedEvents []*api.Event
 	for _, e := range events {

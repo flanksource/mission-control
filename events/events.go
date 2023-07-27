@@ -57,6 +57,7 @@ func StartConsumers(gormDB *gorm.DB, config Config) {
 	allConsumers := []EventConsumer{
 		NewTeamConsumer(gormDB),
 		NewNotificationConsumer(gormDB),
+		NewNotificationSendConsumer(gormDB),
 		NewResponderConsumer(gormDB),
 	}
 	if config.UpstreamPush.Valid() {
