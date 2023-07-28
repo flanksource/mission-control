@@ -7,7 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/google/uuid"
@@ -19,10 +21,11 @@ var (
 	agentIDCache = cache.New(3*24*time.Hour, 12*time.Hour)
 )
 
+// PushUpstream saves the push data from agents.
 func PushUpstream(c echo.Context) error {
 	ctx := c.(*api.Context)
 
-	var req api.PushData
+	var req upstream.PushData
 	err := json.NewDecoder(c.Request().Body).Decode(&req)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error(), Message: "invalid json request"})
@@ -48,7 +51,7 @@ func PushUpstream(c echo.Context) error {
 
 	req.PopulateAgentID(agentID.(uuid.UUID))
 
-	logger.Debugf("Pushing %s", req.String())
+	logger.Tracef("Inserting push data %s", req.String())
 	if err := db.InsertUpstreamMsg(ctx, &req); err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to upsert upstream message"})
 	}
@@ -60,6 +63,15 @@ func PushUpstream(c echo.Context) error {
 func Pull(c echo.Context) error {
 	ctx := c.(*api.Context)
 
+	var req upstream.PaginateRequest
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error()})
+	}
+
+	if !collections.Contains(api.TablesToReconcile, req.Table) {
+		return c.JSON(http.StatusForbidden, api.HTTPError{Error: fmt.Sprintf("table=%s is not allowed", req.Table)})
+	}
+
 	agentName := c.Param("agent_name")
 	agent, err := db.FindAgent(ctx, agentName)
 	if err != nil {
@@ -68,11 +80,7 @@ func Pull(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, api.HTTPError{Message: fmt.Sprintf("agent(name=%s) not found", agentName)})
 	}
 
-	var req api.PaginateRequest
-	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error()})
-	}
-	resp, err := db.GetAllResourceIDsOfAgent(ctx, agent.ID.String(), req)
+	resp, err := db.GetAllResourceIDsOfAgent(ctx, req, agent.ID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to get resource ids"})
 	}
@@ -84,9 +92,13 @@ func Pull(c echo.Context) error {
 func Status(c echo.Context) error {
 	ctx := c.(*api.Context)
 
-	var req api.PaginateRequest
+	var req upstream.PaginateRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error()})
+	}
+
+	if !collections.Contains(api.TablesToReconcile, req.Table) {
+		return c.JSON(http.StatusForbidden, api.HTTPError{Error: fmt.Sprintf("table=%s is not allowed", req.Table)})
 	}
 
 	var agentName = c.Param("agent_name")
@@ -97,7 +109,7 @@ func Status(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, api.HTTPError{Message: fmt.Sprintf("agent(name=%s) not found", agentName)})
 	}
 
-	response, err := db.GetIDsHash(ctx, req.Table, req.From, req.Size)
+	response, err := upstream.GetPrimaryKeysHash(ctx, req, agent.ID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to push status response"})
 	}

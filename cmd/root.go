@@ -67,7 +67,7 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&api.UpstreamConf.Password, "upstream-password", "", "upstream password")
 	flags.StringVar(&api.UpstreamConf.AgentName, "upstream-name", "", "name of the cluster")
 	flags.StringSliceVar(&api.UpstreamConf.Labels, "upstream-labels", nil, `labels in the format: "key1=value1,key2=value2"`)
-	flags.IntVar(&upstream.PageSize, "upstream-page-size", 500, "upstream reconcilation page size")
+	flags.IntVar(&upstream.ReconcilePageSize, "upstream-page-size", 500, "upstream reconcilation page size")
 }
 
 func init() {

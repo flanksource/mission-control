@@ -9,8 +9,10 @@ import (
 	embeddedPG "github.com/fergusstrange/embedded-postgres"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/testutils"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 	ginkgo "github.com/onsi/ginkgo/v2"
@@ -31,6 +33,7 @@ var (
 	upstreamEchoServerport = 11006
 	upstreamEchoServer     *echo.Echo
 
+	agentID       = uuid.New()
 	agentName     = "test-agent"
 	agentDB       *gorm.DB
 	agentDBPGPool *pgxpool.Pool
@@ -55,7 +58,7 @@ var _ = ginkgo.BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 
 	upstreamDB, upstreamPool = testutils.SetupDBConnection(upstreamDBName, pgServerPort)
-	Expect(upstreamDB.Create(&models.Agent{Name: agentName}).Error).To(BeNil())
+	Expect(upstreamDB.Create(&models.Agent{ID: agentID, Name: agentName}).Error).To(BeNil())
 
 	setupUpstreamHTTPServer()
 })
@@ -87,7 +90,7 @@ func setupUpstreamHTTPServer() {
 	upstreamGroup.GET("/status/:agent_name", Status)
 	listenAddr := fmt.Sprintf(":%d", upstreamEchoServerport)
 
-	api.UpstreamConf = api.UpstreamConfig{
+	api.UpstreamConf = upstream.UpstreamConfig{
 		AgentName: agentName,
 		Host:      fmt.Sprintf("http://localhost:%d", upstreamEchoServerport),
 		Username:  "admin@local",

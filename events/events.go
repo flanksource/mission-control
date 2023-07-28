@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty/upstream"
 	"github.com/sethvargo/go-retry"
 	"gorm.io/gorm"
 
@@ -60,7 +61,7 @@ var (
 )
 
 type Config struct {
-	UpstreamConf api.UpstreamConfig
+	UpstreamConf upstream.UpstreamConfig
 }
 
 type eventHandler struct {

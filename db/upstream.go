@@ -1,94 +1,44 @@
 package db
 
 import (
-	"errors"
 	"fmt"
+	"strings"
 
-	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/google/uuid"
 	"gorm.io/gorm/clause"
 )
 
-var errTableReconcileNotAllowed = errors.New("table is not allowed to be reconciled")
-
-func GetIDsHash(ctx *api.Context, table string, from uuid.UUID, size int) (*api.PaginateResponse, error) {
-	if !collections.Contains(api.TablesToReconcile, table) {
-		return nil, errTableReconcileNotAllowed
-	}
-
-	query := fmt.Sprintf(`
-		WITH id_list AS (
-			SELECT
-				id::TEXT
-			FROM %s
-			WHERE id > ?
-			ORDER BY id
-			LIMIT ?
-		)
-		SELECT
-			encode(digest(string_agg(id::TEXT, ''), 'sha256'), 'hex') as sha256sum,
-			MAX(id) as last_id,
-			COUNT(*) as total
-		FROM
-			id_list`, table)
-
-	var resp api.PaginateResponse
-	err := ctx.DB().Raw(query, from, size).Scan(&resp).Error
-	return &resp, err
-}
-
-func GetMissingResourceIDs(ctx *api.Context, ids []string, paginateReq api.PaginateRequest) (*api.PushData, error) {
-	var pushData api.PushData
-
-	switch paginateReq.Table {
-	case "topologies":
-		if err := ctx.DB().Not(ids).Where("id > ?", paginateReq.From).Limit(paginateReq.Size).Order("id").Find(&pushData.Topologies).Error; err != nil {
-			return nil, fmt.Errorf("error fetching topologies: %w", err)
-		}
-
-	case "canaries":
-		if err := ctx.DB().Not(ids).Where("id > ?", paginateReq.From).Limit(paginateReq.Size).Order("id").Find(&pushData.Canaries).Error; err != nil {
-			return nil, fmt.Errorf("error fetching canaries: %w", err)
-		}
-
-	case "checks":
-		if err := ctx.DB().Not(ids).Where("id > ?", paginateReq.From).Limit(paginateReq.Size).Order("id").Find(&pushData.Checks).Error; err != nil {
-			return nil, fmt.Errorf("error fetching checks: %w", err)
-		}
-
-	case "components":
-		if err := ctx.DB().Not(ids).Where("id > ?", paginateReq.From).Limit(paginateReq.Size).Order("id").Find(&pushData.Components).Error; err != nil {
-			return nil, fmt.Errorf("error fetching components: %w", err)
-		}
-
-	case "config_scrapers":
-		if err := ctx.DB().Not(ids).Where("id > ?", paginateReq.From).Limit(paginateReq.Size).Order("id").Find(&pushData.ConfigScrapers).Error; err != nil {
-			return nil, fmt.Errorf("error fetching config scrapers: %w", err)
-		}
-
-	case "config_items":
-		if err := ctx.DB().Not(ids).Where("id > ?", paginateReq.From).Limit(paginateReq.Size).Order("id").Find(&pushData.ConfigItems).Error; err != nil {
-			return nil, fmt.Errorf("error fetching config items: %w", err)
-		}
-	}
-
-	return &pushData, nil
-}
-
-func GetAllResourceIDsOfAgent(ctx *api.Context, agentID string, req api.PaginateRequest) ([]string, error) {
-	if !collections.Contains(api.TablesToReconcile, req.Table) {
-		return nil, errTableReconcileNotAllowed
-	}
-
+func GetAllResourceIDsOfAgent(ctx *api.Context, req upstream.PaginateRequest, agentID uuid.UUID) ([]string, error) {
 	var response []string
-	query := fmt.Sprintf("SELECT id FROM %s WHERE agent_id = ? AND id > ? ORDER BY id LIMIT ?", req.Table)
-	err := ctx.DB().Raw(query, agentID, req.From, req.Size).Scan(&response).Error
+	var err error
+
+	switch req.Table {
+	case "check_statuses":
+		query := `
+		SELECT (check_id::TEXT || ',' || time::TEXT) 
+		FROM check_statuses 
+		LEFT JOIN checks ON checks.id = check_statuses.check_id 
+		WHERE checks.agent_id = ? AND (check_statuses.check_id::TEXT, check_statuses.time::TEXT) > (?, ?)
+		ORDER BY check_statuses.check_id, check_statuses.time
+		LIMIT ?`
+		parts := strings.Split(req.From, ",")
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("%s is not a valid next cursor. It must consist of check_id and time separated by a comma", req.From)
+		}
+
+		err = ctx.DB().Raw(query, agentID, parts[0], parts[1], req.Size).Scan(&response).Error
+	default:
+		query := fmt.Sprintf("SELECT id FROM %s WHERE agent_id = ? AND id::TEXT > ? ORDER BY id LIMIT ?", req.Table)
+		err = ctx.DB().Raw(query, agentID, req.From, req.Size).Scan(&response).Error
+	}
+
 	return response, err
 }
 
-func InsertUpstreamMsg(ctx *api.Context, req *api.PushData) error {
+func InsertUpstreamMsg(ctx *api.Context, req *upstream.PushData) error {
 	if len(req.Topologies) > 0 {
 		if err := ctx.DB().Clauses(clause.OnConflict{UpdateAll: true}).Create(req.Topologies).Error; err != nil {
 			return fmt.Errorf("error upserting topologies: %w", err)
