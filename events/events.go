@@ -5,11 +5,9 @@ import (
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/upstream"
-	"github.com/sethvargo/go-retry"
 	"gorm.io/gorm"
 
-	"github.com/flanksource/incident-commander/api"
-	"gorm.io/gorm"
+	"github.com/flanksource/commons/collections/set"
 )
 
 const (
@@ -50,7 +48,7 @@ const (
 )
 
 type Config struct {
-	UpstreamConf upstream.UpstreamConfig
+	UpstreamPush upstream.UpstreamConfig
 }
 
 func StartConsumers(gormDB *gorm.DB, config Config) {
@@ -64,7 +62,14 @@ func StartConsumers(gormDB *gorm.DB, config Config) {
 		allConsumers = append(allConsumers, NewUpstreamPushConsumer(gormDB, config))
 	}
 
+	uniqWatchEvents := set.New[string]()
 	for _, c := range allConsumers {
+		for _, we := range c.WatchEvents {
+			if uniqWatchEvents.Contains(we) {
+				logger.Fatalf("Error starting consumers: event[%s] has multiple consumers", we)
+			}
+		}
+		uniqWatchEvents.Add(c.WatchEvents...)
 		go c.Listen()
 	}
 }

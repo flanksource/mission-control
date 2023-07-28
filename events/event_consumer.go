@@ -84,9 +84,11 @@ func (t *EventConsumer) consumeEvents() error {
 		logger.Errorf("Failed to process event[%s]: %s", e.ID, e.Error)
 	}
 
-	if err := tx.Create(failedEvents).Error; err != nil {
-		// TODO: More robust way to handle failed event insertion failures
-		logger.Errorf("Error inserting into table:event_queue with error:%v. %v", err)
+	if len(failedEvents) > 0 {
+		if err := tx.Create(failedEvents).Error; err != nil {
+			// TODO: More robust way to handle failed event insertion failures
+			logger.Errorf("Error inserting into table:event_queue with error:%v. %v", err)
+		}
 	}
 	return tx.Commit().Error
 }

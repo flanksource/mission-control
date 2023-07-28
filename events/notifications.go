@@ -19,7 +19,7 @@ import (
 func NewNotificationConsumer(db *gorm.DB) EventConsumer {
 	return EventConsumer{
 		WatchEvents: []string{
-			EventNotificationSend, EventNotificationUpdate, EventNotificationDelete,
+			EventNotificationUpdate, EventNotificationDelete,
 			EventIncidentCreated,
 			EventIncidentResponderRemoved,
 			EventIncidentDODAdded, EventIncidentDODPassed, EventIncidentDODRegressed,

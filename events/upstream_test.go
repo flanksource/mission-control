@@ -128,7 +128,7 @@ var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
 
 	ginkgo.It("should transfer all events to upstream server", func() {
 		eventHandlerConfig := Config{
-			UpstreamConf: upstream.UpstreamConfig{
+			UpstreamPush: upstream.UpstreamConfig{
 				AgentName: "test-agent",
 				Host:      fmt.Sprintf("http://localhost:%d", upstreamEchoServerport),
 				Username:  "admin@local",
