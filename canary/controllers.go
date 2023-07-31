@@ -3,6 +3,7 @@ package canary
 import (
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
@@ -22,7 +23,15 @@ func Pull(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, api.HTTPError{Message: fmt.Sprintf("agent(name=%s) not found", agentName)})
 	}
 
-	canaries, err := db.GetCanariesOfAgent(c.Request().Context(), agent.ID)
+	var since time.Time
+	if sinceRaw := c.QueryParam("since"); sinceRaw != "" {
+		since, err = time.Parse(time.RFC3339, sinceRaw)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error(), Message: "'since' param needs to be a valid RFC3339 timestamp"})
+		}
+	}
+
+	canaries, err := db.GetCanariesOfAgent(c.Request().Context(), agent.ID, since)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{
 			Error:   err.Error(),
