@@ -130,7 +130,7 @@ func (c MSPlannerClient) AddComment(taskID, comment string) (string, error) {
 	// so we just return a constant string for now
 	commentID := "posted"
 
-	task, err := c.client.Planner().TasksById(taskID).Get(context.Background(), nil)
+	task, err := c.client.Planner().Tasks().ByPlannerTaskId(taskID).Get(context.Background(), nil)
 	if err != nil {
 		return commentID, openDataError(err)
 	}
@@ -147,7 +147,7 @@ func (c MSPlannerClient) AddComment(taskID, comment string) (string, error) {
 		replyBody := groups.NewItemConversationsItemThreadsItemPostsItemReplyPostRequestBody()
 		replyBody.SetPost(post)
 
-		err = c.client.GroupsById(c.groupID).ThreadsById(*task.GetConversationThreadId()).Reply().Post(context.Background(), replyBody, nil)
+		err = c.client.Groups().ByGroupId(c.groupID).Threads().ByConversationThreadId(*task.GetConversationThreadId()).Reply().Post(context.Background(), replyBody, nil)
 		return commentID, openDataError(err)
 	}
 
@@ -157,7 +157,7 @@ func (c MSPlannerClient) AddComment(taskID, comment string) (string, error) {
 	convBody.SetTopic(&topic)
 	convBody.SetPosts([]models.Postable{post})
 
-	result, err := c.client.GroupsById(c.groupID).Threads().Post(context.Background(), convBody, nil)
+	result, err := c.client.Groups().ByGroupId(c.groupID).Threads().Post(context.Background(), convBody, nil)
 	if err != nil {
 		return commentID, openDataError(err)
 	}
@@ -170,12 +170,12 @@ func (c MSPlannerClient) AddComment(taskID, comment string) (string, error) {
 
 	requestBody := models.NewPlannerTask()
 	requestBody.SetConversationThreadId(result.GetId())
-	_, err = c.client.Planner().TasksById(taskID).Patch(context.Background(), requestBody, &patchConfig)
+	_, err = c.client.Planner().Tasks().ByPlannerTaskId(taskID).Patch(context.Background(), requestBody, &patchConfig)
 	return commentID, openDataError(err)
 }
 
 func (c MSPlannerClient) GetComments(taskID string) ([]api.Comment, error) {
-	task, err := c.client.Planner().TasksById(taskID).Get(context.Background(), nil)
+	task, err := c.client.Planner().Tasks().ByPlannerTaskId(taskID).Get(context.Background(), nil)
 	if err != nil {
 		return nil, openDataError(err)
 	}
@@ -185,7 +185,7 @@ func (c MSPlannerClient) GetComments(taskID string) ([]api.Comment, error) {
 		return comments, nil
 	}
 
-	conversations, err := c.client.GroupsById(c.groupID).ThreadsById(*task.GetConversationThreadId()).Posts().Get(context.Background(), nil)
+	conversations, err := c.client.Groups().ByGroupId(c.groupID).Threads().ByConversationThreadId(*task.GetConversationThreadId()).Posts().Get(context.Background(), nil)
 	if err != nil {
 		return nil, openDataError(err)
 	}
@@ -208,14 +208,14 @@ func (c MSPlannerClient) GetConfig() (MSPlannerConfig, error) {
 	}
 
 	config := make(map[string]PlanConfig)
-	result, err := c.client.GroupsById(c.groupID).Planner().Plans().Get(context.Background(), nil)
+	result, err := c.client.Groups().ByGroupId(c.groupID).Planner().Plans().Get(context.Background(), nil)
 	if err != nil {
 		return MSPlannerConfig{}, openDataError(err)
 	}
 
 	for _, plan := range result.GetValue() {
 		var buckets []PlanBucket
-		planBuckets, err := c.client.Planner().PlansById(*plan.GetId()).Buckets().Get(context.Background(), nil)
+		planBuckets, err := c.client.Planner().Plans().ByPlannerPlanId(*plan.GetId()).Buckets().Get(context.Background(), nil)
 		if err != nil {
 			return MSPlannerConfig{}, openDataError(err)
 		}
@@ -259,7 +259,7 @@ func openDataError(err error) error {
 	switch typed := err.(type) {
 	case *odataerrors.ODataError:
 		errorStr += fmt.Sprintf("error: %s.", typed.Error())
-		if terr := typed.GetError(); terr != nil {
+		if terr := typed.GetErrorEscaped(); terr != nil {
 			errorStr += fmt.Sprintf("code: %s.", *terr.GetCode())
 			errorStr += fmt.Sprintf("msg: %s.", *terr.GetMessage())
 		}
