@@ -66,13 +66,16 @@ func (t *EventConsumer) consumeEvents() error {
 	}
 	err := tx.Raw(selectEventsQuery, vals).Scan(&events).Error
 	if err != nil {
-		// Rollback the transaction in case of no records found to prevent
+		// Rollback the transaction in case of errors to prevent
 		// creating dangling connections and to release the locks
 		tx.Rollback()
 		return err
 	}
 
 	if len(events) == 0 {
+		// Commit the transaction in case of no records found to prevent
+		// creating dangling connections and to release the locks
+		tx.Commit()
 		return gorm.ErrRecordNotFound
 	}
 
