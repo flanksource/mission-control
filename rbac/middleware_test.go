@@ -7,9 +7,9 @@ import (
 
 	embeddedPG "github.com/fergusstrange/embedded-postgres"
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty/testutils"
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
-	"github.com/flanksource/incident-commander/testutils"
 	"github.com/labstack/echo/v4"
 )
 
@@ -18,7 +18,7 @@ var postgresServer *embeddedPG.EmbeddedPostgres
 const pgUrl = "postgres://postgres:postgres@localhost:9876/test?sslmode=disable"
 
 func TestAuthorization(t *testing.T) {
-	config := testutils.GetPGConfig("test", 9876)
+	config, _ := testutils.GetEmbeddedPGConfig("test", 9876)
 	postgresServer = embeddedPG.NewDatabase(config)
 	if err := postgresServer.Start(); err != nil {
 		t.Fatalf("error starting postgres server: %v", err)
