@@ -4,13 +4,16 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	embeddedPG "github.com/fergusstrange/embedded-postgres"
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/fixtures/dummy"
+	"github.com/flanksource/duty/testutils"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/testutils"
+
 	"github.com/flanksource/incident-commander/upstream"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
@@ -42,22 +45,28 @@ var (
 )
 
 var _ = ginkgo.BeforeSuite(func() {
-	config := testutils.GetPGConfig(agentDBName, pgServerPort)
+	config, connection := testutils.GetEmbeddedPGConfig(agentDBName, pgServerPort)
 	postgresServer = embeddedPG.NewDatabase(config)
 	if err := postgresServer.Start(); err != nil {
 		ginkgo.Fail(err.Error())
 	}
 	logger.Infof("Started postgres on port: %d", pgServerPort)
 
-	agentDB, agentDBPGPool = testutils.SetupDBConnection(agentDBName, pgServerPort)
+	var err error
+	if agentDB, agentDBPGPool, err = duty.SetupDB(connection, nil); err != nil {
+		ginkgo.Fail(err.Error())
+	}
 	if err := dummy.PopulateDBWithDummyModels(agentDB); err != nil {
 		ginkgo.Fail(err.Error())
 	}
 
-	_, err := agentDBPGPool.Exec(context.TODO(), fmt.Sprintf("CREATE DATABASE %s", upstreamDBName))
+	_, err = agentDBPGPool.Exec(context.TODO(), fmt.Sprintf("CREATE DATABASE %s", upstreamDBName))
 	Expect(err).NotTo(HaveOccurred())
 
-	upstreamDB, upstreamDBPGPool = testutils.SetupDBConnection(upstreamDBName, pgServerPort)
+	upstreamDBConnection := strings.ReplaceAll(connection, agentDBName, upstreamDBName)
+	if upstreamDB, upstreamDBPGPool, err = duty.SetupDB(upstreamDBConnection, nil); err != nil {
+		ginkgo.Fail(err.Error())
+	}
 
 	upstreamEchoServer = echo.New()
 	upstreamEchoServer.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
