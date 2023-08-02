@@ -251,8 +251,8 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 			}
 
 			expressionRunner := pkgNotification.ExpressionRunner{
-				ResourceID:   n.TeamID.String(),
-				ResourceType: "teams",
+				ResourceID:   id,
+				ResourceType: "notification",
 				CelEnv:       celEnv,
 			}
 

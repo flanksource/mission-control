@@ -63,13 +63,13 @@ func StartConsumers(gormDB *gorm.DB, config Config) {
 	}
 
 	uniqWatchEvents := set.New[string]()
-	for _, c := range allConsumers {
+	for i, c := range allConsumers {
 		for _, we := range c.WatchEvents {
 			if uniqWatchEvents.Contains(we) {
 				logger.Fatalf("Error starting consumers: event[%s] has multiple consumers", we)
 			}
 		}
 		uniqWatchEvents.Add(c.WatchEvents...)
-		go c.Listen()
+		go allConsumers[i].Listen()
 	}
 }
