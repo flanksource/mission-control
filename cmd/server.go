@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/schema/openapi"
 	"github.com/flanksource/kopper"
@@ -58,22 +59,46 @@ func createHTTPServer(gormDB *gorm.DB) *echo.Echo {
 	e.Use(echoprometheus.NewMiddleware("mission_control"))
 	e.GET("/metrics", echoprometheus.NewHandler())
 
-	kratosHandler := auth.NewKratosHandler(kratosAPI, kratosAdminAPI, db.PostgRESTJWTSecret)
-	if enableAuth {
-		adminUserID, err := kratosHandler.CreateAdminUser(context.Background())
-		if err != nil {
-			logger.Fatalf("Failed to created admin user: %v", err)
+	if authMode != "" {
+		if !collections.Contains([]string{"kratos", "clerk"}, authMode) {
+			logger.Fatalf("Invalid auth provider: %s", authMode)
 		}
 
-		middleware, err := kratosHandler.KratosMiddleware()
-		if err != nil {
-			logger.Fatalf("Failed to initialize kratos middleware: %v", err)
-		}
-		e.Use(middleware.Session)
+		var (
+			adminUserID string
+			err         error
+		)
+		if authMode == "kratos" {
+			kratosHandler := auth.NewKratosHandler(kratosAPI, kratosAdminAPI, db.PostgRESTJWTSecret)
+			adminUserID, err = kratosHandler.CreateAdminUser(context.Background())
+			if err != nil {
+				logger.Fatalf("Failed to created admin user: %v", err)
+			}
 
+			middleware, err := kratosHandler.KratosMiddleware()
+			if err != nil {
+				logger.Fatalf("Failed to initialize kratos middleware: %v", err)
+			}
+			e.Use(middleware.Session)
+			e.POST("/auth/invite_user", kratosHandler.InviteUser, rbac.Authorization(rbac.ObjectAuth, rbac.ActionWrite))
+		}
+
+		if authMode == "clerk" {
+			clerkHandler, err := auth.NewClerkHandler(clerkSecret, db.PostgRESTJWTSecret)
+			if err != nil {
+				logger.Fatalf("Failed to initialize clerk client: %v", err)
+			}
+			e.Use(clerkHandler.Session)
+		}
+
+		if adminUserID == "" {
+			logger.Fatalf("Admin user cannot be empty")
+		}
 		// Initiate RBAC
-		if err := rbac.Init(adminUserID); err != nil {
-			logger.Fatalf("Failed to initialize rbac: %v", err)
+		if adminUserID != "" {
+			if err := rbac.Init(adminUserID); err != nil {
+				logger.Fatalf("Failed to initialize rbac: %v", err)
+			}
 		}
 	}
 
@@ -93,8 +118,6 @@ func createHTTPServer(gormDB *gorm.DB) *echo.Echo {
 		}
 		return c.JSON(http.StatusOK, api.HTTPSuccess{Message: "ok"})
 	})
-
-	e.POST("/auth/invite_user", kratosHandler.InviteUser, rbac.Authorization(rbac.ObjectAuth, rbac.ActionWrite))
 
 	e.GET("/snapshot/topology/:id", snapshot.Topology)
 	e.GET("/snapshot/incident/:id", snapshot.Incident)
@@ -167,7 +190,7 @@ var Serve = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		// PostgREST needs to know how it is exposed to create the correct links
 		db.HttpEndpoint = publicEndpoint + "/db"
-		if !enableAuth {
+		if authMode != "" {
 			db.PostgresDBAnonRole = "postgrest_api"
 		}
 

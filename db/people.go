@@ -22,3 +22,8 @@ func UpdateUserProperties(ctx *api.Context, userID string, newProps api.PersonPr
 func UpdateIdentityState(ctx *api.Context, id, state string) error {
 	return ctx.DB().Table("identities").Where("id = ?", id).Update("state", state).Error
 }
+
+func CreateUser(ctx *api.Context, user api.Person) (api.Person, error) {
+	err := ctx.DB().Table("people").Create(&user).Error
+	return user, err
+}
