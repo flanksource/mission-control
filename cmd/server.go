@@ -7,7 +7,6 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/schema/openapi"
 	"github.com/flanksource/kopper"
@@ -60,15 +59,13 @@ func createHTTPServer(gormDB *gorm.DB) *echo.Echo {
 	e.GET("/metrics", echoprometheus.NewHandler())
 
 	if authMode != "" {
-		if !collections.Contains([]string{"kratos", "clerk"}, authMode) {
-			logger.Fatalf("Invalid auth provider: %s", authMode)
-		}
-
 		var (
 			adminUserID string
 			err         error
 		)
-		if authMode == "kratos" {
+
+		switch authMode {
+		case "kratos":
 			kratosHandler := auth.NewKratosHandler(kratosAPI, kratosAdminAPI, db.PostgRESTJWTSecret)
 			adminUserID, err = kratosHandler.CreateAdminUser(context.Background())
 			if err != nil {
@@ -81,24 +78,21 @@ func createHTTPServer(gormDB *gorm.DB) *echo.Echo {
 			}
 			e.Use(middleware.Session)
 			e.POST("/auth/invite_user", kratosHandler.InviteUser, rbac.Authorization(rbac.ObjectAuth, rbac.ActionWrite))
-		}
 
-		if authMode == "clerk" {
+		case "clerk":
 			clerkHandler, err := auth.NewClerkHandler(clerkSecret, db.PostgRESTJWTSecret)
 			if err != nil {
 				logger.Fatalf("Failed to initialize clerk client: %v", err)
 			}
 			e.Use(clerkHandler.Session)
+
+		default:
+			logger.Fatalf("Invalid auth provider: %s", authMode)
 		}
 
-		if adminUserID == "" {
-			logger.Fatalf("Admin user cannot be empty")
-		}
 		// Initiate RBAC
-		if adminUserID != "" {
-			if err := rbac.Init(adminUserID); err != nil {
-				logger.Fatalf("Failed to initialize rbac: %v", err)
-			}
+		if err := rbac.Init(adminUserID); err != nil {
+			logger.Fatalf("Failed to initialize rbac: %v", err)
 		}
 	}
 

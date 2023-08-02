@@ -77,11 +77,10 @@ func Init(adminUserID string) error {
 		return fmt.Errorf("error creating rbac enforcer: %v", err)
 	}
 
-	if adminUserID == "" {
-		return fmt.Errorf("admin user cannot be empty")
-	}
-	if _, err := Enforcer.AddRoleForUser(adminUserID, RoleAdmin); err != nil {
-		return fmt.Errorf("error adding role for admin user: %v", err)
+	if adminUserID != "" {
+		if _, err := Enforcer.AddRoleForUser(adminUserID, RoleAdmin); err != nil {
+			return fmt.Errorf("error adding role for admin user: %v", err)
+		}
 	}
 
 	// Hierarchial policies
