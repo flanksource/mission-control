@@ -4,9 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/sethvargo/go-retry"
 	"sync"
 	"time"
+
+	"github.com/sethvargo/go-retry"
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
@@ -163,7 +164,7 @@ func (e *EventConsumer) listenToPostgresNotify(pgNotify chan bool) {
 }
 
 func (e *EventConsumer) Listen() {
-	logger.Infof("Started listening for database notify events")
+	logger.Infof("Started listening for database notify events: %v", e.WatchEvents)
 
 	if err := e.Validate(); err != nil {
 		logger.Fatalf("Error starting event consumer: %v", err)
