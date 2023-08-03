@@ -28,15 +28,6 @@ func NewClerkHandler(secretKey, dbJwtSecret string) (*ClerkHandler, error) {
 		return nil, err
 	}
 
-	// TODO: Remove this block, debug use case only
-	users, err := client.Users().ListAll(clerk.ListAllUsersParams{})
-	if err != nil {
-		logger.Errorf("ERR GETTING USERS %v", err)
-	}
-	for _, u := range users {
-		logger.Infof(u.ID)
-	}
-	/////
 	return &ClerkHandler{
 		client:      client,
 		dbJwtSecret: dbJwtSecret,
@@ -74,7 +65,7 @@ func (h ClerkHandler) Session(next echo.HandlerFunc) echo.HandlerFunc {
 				return c.String(http.StatusUnauthorized, "Unauthorized")
 			}
 			// Clear user from cache so that new metadata is used
-			h.userCache.Delete(sessionToken)
+			h.userCache.Delete(sessID)
 		}
 
 		token, err := h.getDBToken(sessID, *user.ExternalID)
@@ -111,14 +102,14 @@ func (h *ClerkHandler) getDBToken(sessionID, userID string) (string, error) {
 }
 
 func (h *ClerkHandler) getUser(sessionToken string) (*clerk.User, string, error) {
-	cacheKey := sessionToken
-	if user, exists := h.userCache.Get(cacheKey); exists {
-		return user.(*clerk.User), "", nil
-	}
-
 	sessClaims, err := h.client.VerifyToken(sessionToken)
 	if err != nil {
 		return nil, "", err
+	}
+
+	cacheKey := sessClaims.SessionID
+	if user, exists := h.userCache.Get(cacheKey); exists {
+		return user.(*clerk.User), "", nil
 	}
 
 	user, err := h.client.Users().Read(sessClaims.Claims.Subject)
@@ -157,7 +148,7 @@ func (h *ClerkHandler) createDBUser(ctx *api.Context, user *clerk.User) (*clerk.
 		Email: email,
 	}
 
-	dbUser, err := db.CreateUser(ctx, person)
+	dbUser, err := db.GetOrCreateUser(ctx, person)
 	if err != nil {
 		return nil, err
 	}
