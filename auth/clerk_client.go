@@ -15,6 +15,10 @@ import (
 	"github.com/patrickmn/go-cache"
 )
 
+const (
+	clerkSessionCookie = "_session"
+)
+
 type ClerkHandler struct {
 	client      clerk.Client
 	dbJwtSecret string
@@ -45,6 +49,15 @@ func (h ClerkHandler) Session(next echo.HandlerFunc) echo.HandlerFunc {
 		// Extract session token from Authorization header
 		sessionToken := c.Request().Header.Get(echo.HeaderAuthorization)
 		sessionToken = strings.TrimPrefix(sessionToken, "Bearer ")
+		if sessionToken == "" {
+			// Check for `_session` cookie
+			sessionTokenCookie, err := c.Request().Cookie(clerkSessionCookie)
+			if err != nil {
+				// Cookie not found
+				return c.String(http.StatusUnauthorized, "Unauthorized")
+			}
+			sessionToken = sessionTokenCookie.Value
+		}
 
 		user, sessID, err := h.getUser(sessionToken)
 		if err != nil {
