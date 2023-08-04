@@ -46,12 +46,7 @@ func (h ClerkHandler) Session(next echo.HandlerFunc) echo.HandlerFunc {
 		sessionToken := c.Request().Header.Get(echo.HeaderAuthorization)
 		sessionToken = strings.TrimPrefix(sessionToken, "Bearer ")
 
-		var (
-			user   *clerk.User
-			err    error
-			sessID string
-		)
-		user, sessID, err = h.getUser(sessionToken)
+		user, sessID, err := h.getUser(sessionToken)
 		if err != nil {
 			logger.Errorf("Error fetching user from clerk: %v", err)
 			return c.String(http.StatusUnauthorized, "Unauthorized")
@@ -71,6 +66,7 @@ func (h ClerkHandler) Session(next echo.HandlerFunc) echo.HandlerFunc {
 		token, err := h.getDBToken(sessID, *user.ExternalID)
 		if err != nil {
 			logger.Errorf("Error generating JWT Token: %v", err)
+			return c.String(http.StatusUnauthorized, "Unauthorized")
 		}
 
 		c.Request().Header.Add(echo.HeaderAuthorization, fmt.Sprintf("Bearer %s", token))
@@ -109,7 +105,7 @@ func (h *ClerkHandler) getUser(sessionToken string) (*clerk.User, string, error)
 
 	cacheKey := sessClaims.SessionID
 	if user, exists := h.userCache.Get(cacheKey); exists {
-		return user.(*clerk.User), "", nil
+		return user.(*clerk.User), sessClaims.SessionID, nil
 	}
 
 	user, err := h.client.Users().Read(sessClaims.Claims.Subject)
