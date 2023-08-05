@@ -44,12 +44,12 @@ func NewNotificationSendConsumer(db *gorm.DB) EventConsumer {
 	}
 }
 
-func processNotificationEvents(ctx *api.Context, events []api.Event) []*api.Event {
-	var failedEvents []*api.Event
+func processNotificationEvents(ctx *api.Context, events []api.Event) []api.Event {
+	var failedEvents []api.Event
 	for _, e := range events {
 		if err := handleNotificationEvent(ctx, e); err != nil {
 			e.Error = err.Error()
-			failedEvents = append(failedEvents, &e)
+			failedEvents = append(failedEvents, e)
 		}
 	}
 	return failedEvents

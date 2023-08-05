@@ -25,17 +25,17 @@ func NewUpstreamPushConsumer(db *gorm.DB, config Config) EventConsumer {
 	}
 }
 
-func handleUpstreamPushEvents(ctx *api.Context, events []api.Event) []*api.Event {
+func handleUpstreamPushEvents(ctx *api.Context, events []api.Event) []api.Event {
 	if upstreamPushEventHandler == nil {
 		logger.Fatalf("Got push events but host is not configured")
 	}
 
-	var failedEvents []*api.Event
+	var failedEvents []api.Event
 	var eventsToProcess []api.Event
 	for _, e := range events {
 		if e.Name != EventPushQueueCreate {
 			e.Error = fmt.Errorf("Unrecognized event name: %s", e.Name).Error()
-			failedEvents = append(failedEvents, &e)
+			failedEvents = append(failedEvents, e)
 		} else {
 			eventsToProcess = append(eventsToProcess, e)
 		}
@@ -55,24 +55,24 @@ func newPushToUpstreamEventHandler(conf upstream.UpstreamConfig) *pushToUpstream
 	}
 }
 
-func addErrorToFailedEvents(events []api.Event, err error) []*api.Event {
-	var failedEvents []*api.Event
+func addErrorToFailedEvents(events []api.Event, err error) []api.Event {
+	var failedEvents []api.Event
 	for _, e := range events {
 		e.Error = err.Error()
-		failedEvents = append(failedEvents, &e)
+		failedEvents = append(failedEvents, e)
 	}
 	return failedEvents
 }
 
 // Run pushes data from decentralized instances to central incident commander
-func (t *pushToUpstreamEventHandler) Run(ctx *api.Context, events []api.Event) []*api.Event {
+func (t *pushToUpstreamEventHandler) Run(ctx *api.Context, events []api.Event) []api.Event {
 	upstreamMsg := &upstream.PushData{
 		AgentName: t.conf.AgentName,
 	}
 
 	gormDB := ctx.DB()
 
-	var failedEvents []*api.Event
+	var failedEvents []api.Event
 	for _, cl := range GroupChangelogsByTables(events) {
 		switch cl.tableName {
 		case "topologies":
