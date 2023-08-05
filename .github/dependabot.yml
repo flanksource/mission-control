@@ -6,3 +6,18 @@ updates:
       interval: "daily"
     allow:
       - dependency-name: "github.com/flanksource/*"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: daily
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: daily
+
+  - package-ecosystem: gomod
+    directory: /hack/generate-schemas
+    schedule:
+      interval: daily
