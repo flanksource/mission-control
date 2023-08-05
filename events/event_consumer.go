@@ -18,7 +18,7 @@ import (
 type EventConsumer struct {
 	WatchEvents []string
 	// We process mutliple events and return the failed events
-	ProcessBatchFunc func(*api.Context, []api.Event) []*api.Event
+	ProcessBatchFunc func(*api.Context, []api.Event) []api.Event
 	BatchSize        int
 	Consumers        int
 	DB               *gorm.DB

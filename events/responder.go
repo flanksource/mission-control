@@ -25,12 +25,12 @@ func NewResponderConsumer(db *gorm.DB) EventConsumer {
 	}
 }
 
-func processResponderEvents(ctx *api.Context, events []api.Event) []*api.Event {
-	var failedEvents []*api.Event
+func processResponderEvents(ctx *api.Context, events []api.Event) []api.Event {
+	var failedEvents []api.Event
 	for _, e := range events {
 		if err := handleResponderEvent(ctx, e); err != nil {
 			e.Error = err.Error()
-			failedEvents = append(failedEvents, &e)
+			failedEvents = append(failedEvents, e)
 		}
 	}
 	return failedEvents
