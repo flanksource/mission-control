@@ -81,7 +81,8 @@ func (t *EventConsumer) consumeEvents() error {
 	}
 
 	failedEvents := t.ProcessBatchFunc(ctx, events)
-	for _, e := range failedEvents {
+	for i := range failedEvents {
+		e := &failedEvents[i]
 		e.Attempts += 1
 		last_attempt := time.Now()
 		e.LastAttempt = &last_attempt
