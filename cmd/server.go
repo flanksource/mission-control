@@ -17,6 +17,7 @@ import (
 	"gorm.io/gorm"
 	ctrl "sigs.k8s.io/controller-runtime"
 
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/auth"
@@ -34,6 +35,7 @@ import (
 const (
 	HeaderCacheControl = "Cache-Control"
 	CacheControlValue  = "public, max-age=2592000, immutable"
+	propertiesFile     = "mission-control.properties"
 )
 
 var cacheSuffixes = []string{
@@ -85,6 +87,13 @@ func createHTTPServer(gormDB *gorm.DB) *echo.Echo {
 				logger.Fatalf("Failed to initialize clerk client: %v", err)
 			}
 			e.Use(clerkHandler.Session)
+
+			// We also need to disable "settings.users" feature in database
+			// to hide the menu from UI
+			props := []models.AppProperty{{Name: "settings.user.disabled", Value: "true"}}
+			if err := models.SetProperties(db.Gorm, props); err != nil {
+				logger.Fatalf("Error setting property in database: %v", err)
+			}
 
 		default:
 			logger.Fatalf("Invalid auth provider: %s", authMode)
@@ -186,6 +195,10 @@ var Serve = &cobra.Command{
 		db.HttpEndpoint = publicEndpoint + "/db"
 		if authMode != "" {
 			db.PostgresDBAnonRole = "postgrest_api"
+		}
+
+		if err := models.SetPropertiesInDBFromFile(db.Gorm, propertiesFile); err != nil {
+			logger.Fatalf("Error setting properties in database: %v", err)
 		}
 
 		if postgrestURI != "" {
