@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/flanksource/incident-commander/api"
@@ -20,31 +21,31 @@ func GenerateAgent(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error()})
 	}
 
-	req := db.CreateUserRequest{
-		Username:   generateRandomString(10),
-		Password:   generateRandomString(32),
-		Properties: body.Properties,
-	}
+	var (
+		username = fmt.Sprintf("agent-%s", generateRandomString(8))
+		password = generateRandomString(32)
+	)
 
-	id, err := db.CreatePerson(ctx, req)
+	// TODO: Only if unauthenticated, we need to create a user
+	id, err := db.CreatePerson(ctx, username, password)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "error generating agent"})
 	}
 
-	if ok, err := rbac.Enforcer.AddRoleForUser(id, "agent"); !ok {
+	if ok, err := rbac.Enforcer.AddRoleForUser(id.String(), "agent"); !ok {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "error generating agent"})
 	} else if err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "error generating agent"})
 	}
 
-	if _, err := db.GetOrCreateAgent(ctx, body.Name); err != nil {
+	if err := db.CreateAgent(ctx, body.Name, &id, body.Properties); err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "error generating agent"})
 	}
 
 	return c.JSON(http.StatusCreated, api.GeneratedAgent{
-		ID:       id,
-		Username: req.Username,
-		Password: req.Password,
+		ID:       id.String(),
+		Username: username,
+		Password: password,
 	})
 }
 

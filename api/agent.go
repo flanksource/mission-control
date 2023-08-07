@@ -1,10 +1,8 @@
 package api
 
-import "github.com/flanksource/duty/models"
-
 type GenerateAgentRequest struct {
 	Name       string
-	Properties models.PersonProperties
+	Properties map[string]string
 }
 
 type GeneratedAgent struct {

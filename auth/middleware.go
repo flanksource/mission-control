@@ -10,11 +10,14 @@ import (
 
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/utils"
 	"github.com/golang-jwt/jwt/v4"
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	client "github.com/ory/client-go"
 	"github.com/patrickmn/go-cache"
+	"gorm.io/gorm"
 )
 
 const (
@@ -28,6 +31,7 @@ type kratosMiddleware struct {
 	tokenCache         *cache.Cache
 	authSessionCache   *cache.Cache
 	basicAuthSeparator string
+	db                 *gorm.DB
 }
 
 func (k *KratosHandler) KratosMiddleware() (*kratosMiddleware, error) {
@@ -76,6 +80,19 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 	}
 }
 
+func (k *kratosMiddleware) validateAccessToken(ctx context.Context, password string) (*models.AccessToken, error) {
+	var acessToken models.AccessToken
+	if err := k.db.Raw("SELECT * FROM access_tokens WHERE value = ? AND expires_at > NOW()", password).First(&acessToken).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+
+		return nil, err
+	}
+
+	return &acessToken, nil
+}
+
 func (k *kratosMiddleware) validateSession(r *http.Request) (*client.Session, error) {
 	// Skip all kratos calls
 	if strings.HasPrefix(r.URL.Path, "/kratos") {
@@ -84,6 +101,25 @@ func (k *kratosMiddleware) validateSession(r *http.Request) (*client.Session, er
 	}
 
 	if username, password, ok := r.BasicAuth(); ok {
+		if strings.HasPrefix(username, "agent-") {
+			accessToken, err := k.validateAccessToken(r.Context(), password)
+			if err != nil {
+				return nil, fmt.Errorf("failed to validate agent: %w", err)
+			} else if accessToken == nil {
+				return &client.Session{Active: utils.Ptr(false)}, nil
+			}
+
+			s := &client.Session{
+				Id:     uuid.NewString(),
+				Active: utils.Ptr(true),
+				Identity: client.Identity{
+					Id: accessToken.PersonID.String(),
+				},
+			}
+
+			return s, nil
+		}
+
 		sess, err := k.kratosLoginWithCache(r.Context(), username, password)
 		if err != nil {
 			return nil, fmt.Errorf("failed to login: %w", err)
