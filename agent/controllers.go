@@ -21,7 +21,7 @@ func GenerateAgent(c echo.Context) error {
 	agent, err := generateAgent(ctx, body)
 	if err != nil {
 		logger.Errorf("failed to generate a new agent: %v", err)
-		c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "error generating agent"})
+		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "error generating agent"})
 	}
 
 	return c.JSON(http.StatusCreated, agent)

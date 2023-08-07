@@ -1,6 +1,7 @@
 package db
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/flanksource/duty/models"
@@ -55,10 +56,10 @@ func CreatePerson(ctx *api.Context, username, hashedPassword string) (*models.Pe
 	}
 
 	accessToken := models.AccessToken{
-		Name:      "default",
+		Name:      fmt.Sprintf("agent-%d", time.Now().Unix()),
 		Value:     hashedPassword,
 		PersonID:  person.ID,
-		ExpiresAt: time.Now().Add(time.Hour * 24 * 90), // long-lived token
+		ExpiresAt: time.Now().Add(time.Hour * 24 * 365), // long-lived token
 	}
 	if err := tx.Create(&accessToken).Error; err != nil {
 		return nil, err
