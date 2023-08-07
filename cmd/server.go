@@ -18,6 +18,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/incident-commander/agent"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/auth"
@@ -146,6 +147,8 @@ func createHTTPServer(gormDB *gorm.DB) *echo.Echo {
 	upstreamGroup.GET("/pull/:agent_name", upstream.Pull)
 	upstreamGroup.GET("/canary/pull/:agent_name", canary.Pull)
 	upstreamGroup.GET("/status/:agent_name", upstream.Status)
+
+	e.POST("/agent/generate", agent.GenerateAgent)
 
 	forward(e, "/config", configDb)
 	forward(e, "/canary", api.CanaryCheckerPath)
