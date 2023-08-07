@@ -1,4 +1,4 @@
-FROM golang:1.20 as builder
+FROM golang:1.20@sha256:bc5f0b5e43282627279fe5262ae275fecb3d2eae3b33977a7fd200c7a760d6f1 as builder
 WORKDIR /app
 
 ARG VERSION
@@ -8,7 +8,7 @@ RUN go mod download
 COPY ./ ./
 RUN make build
 
-FROM ubuntu:jammy
+FROM ubuntu:jammy@sha256:0bced47fffa3361afa981854fcabcd4577cd43cebbb808cea2b1f33a3dd7f508
 WORKDIR /app
 
 COPY --from=builder /app/.bin/incident-commander /app
