@@ -22,7 +22,6 @@ import (
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/canary"
 	"github.com/flanksource/incident-commander/db"
-	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/jobs"
 	"github.com/flanksource/incident-commander/logs"
 	"github.com/flanksource/incident-commander/rbac"
@@ -185,11 +184,11 @@ var Serve = &cobra.Command{
 
 		go jobs.Start()
 
-		events.StartConsumers(db.Gorm, events.Config{
-			UpstreamPush: api.UpstreamConf,
-		})
+		//events.StartConsumers(db.Gorm, events.Config{
+		//UpstreamPush: api.UpstreamConf,
+		//})
 
-		go launchKopper()
+		//go launchKopper()
 
 		e := createHTTPServer(db.Gorm)
 		listenAddr := fmt.Sprintf(":%d", httpPort)

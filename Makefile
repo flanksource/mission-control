@@ -9,7 +9,7 @@ else
 endif
 
 # Image URL to use all building/pushing image targets
-IMG ?= docker.io/flanksource/$(NAME):${VERSION_TAG}
+IMG ?= docker.io/yashmehrotra/incident-commander:f2
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
