@@ -55,9 +55,10 @@ func CreatePerson(ctx *api.Context, username, hashedPassword string) (*models.Pe
 	}
 
 	accessToken := models.AccessToken{
+		Name:      "default",
 		Value:     hashedPassword,
 		PersonID:  person.ID,
-		ExpiresAt: time.Now().Add(time.Hour), // TODO: decide on this one
+		ExpiresAt: time.Now().Add(time.Hour * 24 * 90), // long-lived token
 	}
 	if err := tx.Create(&accessToken).Error; err != nil {
 		return nil, err
