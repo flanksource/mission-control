@@ -2,11 +2,9 @@ package agent
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 
 	"github.com/flanksource/commons/logger"
-	crand "github.com/flanksource/commons/rand"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/labstack/echo/v4"
 )
@@ -27,18 +25,4 @@ func GenerateAgent(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusCreated, agent)
-}
-
-func genUsernamePassword() (username, password string, err error) {
-	username, err = crand.GenerateRandHex(8)
-	if err != nil {
-		return "", "", err
-	}
-
-	password, err = crand.GenerateRandHex(32)
-	if err != nil {
-		return "", "", err
-	}
-
-	return fmt.Sprintf("agent-%s", username), password, nil
 }
