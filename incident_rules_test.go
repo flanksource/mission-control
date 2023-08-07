@@ -27,11 +27,10 @@ var _ = ginkgo.Describe("Test incident creation via incidence rule", ginkgo.Orde
 	)
 
 	ginkgo.It("should create a system user", func() {
-		systemUser := &models.Person{
-			ID:   uuid.New(),
+		systemUser := models.Person{
 			Name: "System",
 		}
-		tx := db.Gorm.Create(systemUser)
+		tx := db.Gorm.Find(&systemUser)
 		Expect(tx.Error).To(BeNil())
 
 		api.SystemUserID = &systemUser.ID
