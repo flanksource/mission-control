@@ -2,9 +2,11 @@ package auth
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -17,7 +19,7 @@ import (
 	"github.com/labstack/echo/v4"
 	client "github.com/ory/client-go"
 	"github.com/patrickmn/go-cache"
-	"golang.org/x/crypto/bcrypt"
+	"golang.org/x/crypto/argon2"
 	"gorm.io/gorm"
 )
 
@@ -43,6 +45,7 @@ func (k *KratosHandler) KratosMiddleware() (*kratosMiddleware, error) {
 
 	return &kratosMiddleware{
 		client:             k.client,
+		db:                 k.db,
 		jwtSecret:          k.jwtSecret,
 		tokenCache:         cache.New(3*24*time.Hour, 12*time.Hour),
 		authSessionCache:   cache.New(30*time.Minute, time.Hour),
@@ -81,28 +84,45 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 	}
 }
 
-func (k *kratosMiddleware) validateAccessToken(ctx context.Context, username, password string) (*models.AccessToken, error) {
-	query := `
-SELECT
-  access_tokens.*
-FROM
-  access_tokens
-  LEFT JOIN people ON access_tokens.person_id = people.id
-WHERE
-  people.name = ?
-  AND access_tokens.expires_at > NOW()`
+var errInvalidTokenFormat = errors.New("invalid token format")
 
+func (k *kratosMiddleware) getAccessToken(ctx context.Context, token string) (*models.AccessToken, error) {
+	fields := strings.Split(token, ".")
+	if len(fields) != 5 {
+		return nil, errInvalidTokenFormat
+	}
+
+	var (
+		password = fields[0]
+		salt     = fields[1]
+	)
+
+	timeCost, err := strconv.Atoi(fields[2])
+	if err != nil {
+		return nil, errInvalidTokenFormat
+	}
+
+	memoryCost, err := strconv.Atoi(fields[3])
+	if err != nil {
+		return nil, errInvalidTokenFormat
+	}
+
+	parallelism, err := strconv.Atoi(fields[4])
+	if err != nil {
+		return nil, errInvalidTokenFormat
+	}
+
+	hash := argon2.IDKey([]byte(password), []byte(salt), uint32(timeCost), uint32(memoryCost), uint8(parallelism), 32)
+	encodedHash := base64.RawStdEncoding.EncodeToString(hash)
+
+	query := `SELECT access_tokens.* FROM access_tokens WHERE value = ?`
 	var acessToken models.AccessToken
-	if err := k.db.Raw(query, username).First(&acessToken).Error; err != nil {
+	if err := k.db.Raw(query, encodedHash).First(&acessToken).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
 		}
 
 		return nil, err
-	}
-
-	if err := bcrypt.CompareHashAndPassword([]byte(acessToken.Value), []byte(password)); err != nil {
-		return nil, nil
 	}
 
 	return &acessToken, nil
@@ -116,11 +136,15 @@ func (k *kratosMiddleware) validateSession(r *http.Request) (*client.Session, er
 	}
 
 	if username, password, ok := r.BasicAuth(); ok {
-		if strings.HasPrefix(username, "agent-") {
-			accessToken, err := k.validateAccessToken(r.Context(), username, password)
+		if username == "TOKEN" {
+			accessToken, err := k.getAccessToken(r.Context(), password)
 			if err != nil {
 				return nil, fmt.Errorf("failed to validate agent: %w", err)
 			} else if accessToken == nil {
+				return &client.Session{Active: utils.Ptr(false)}, nil
+			}
+
+			if accessToken.ExpiresAt.Before(time.Now()) {
 				return &client.Session{Active: utils.Ptr(false)}, nil
 			}
 

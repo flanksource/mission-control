@@ -6,16 +6,19 @@ import (
 
 	"github.com/flanksource/incident-commander/db"
 	client "github.com/ory/client-go"
+	"gorm.io/gorm"
 )
 
 type KratosHandler struct {
 	client      *client.APIClient
 	adminClient *client.APIClient
 	jwtSecret   string
+	db          *gorm.DB
 }
 
-func NewKratosHandler(kratosAPI, kratosAdminAPI, jwtSecret string) *KratosHandler {
+func NewKratosHandler(db *gorm.DB, kratosAPI, kratosAdminAPI, jwtSecret string) *KratosHandler {
 	return &KratosHandler{
+		db:          db,
 		client:      newAPIClient(kratosAPI),
 		adminClient: newAdminAPIClient(kratosAdminAPI),
 		jwtSecret:   jwtSecret,

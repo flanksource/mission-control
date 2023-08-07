@@ -1,6 +1,8 @@
 package db
 
 import (
+	crand "crypto/rand"
+	"encoding/base64"
 	"fmt"
 	"time"
 
@@ -8,6 +10,7 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/utils"
 	"github.com/google/uuid"
+	"golang.org/x/crypto/argon2"
 	"gorm.io/gorm/clause"
 )
 
@@ -46,24 +49,45 @@ type CreateUserRequest struct {
 	Properties models.PersonProperties
 }
 
-func CreatePerson(ctx *api.Context, username, hashedPassword string) (*models.Person, error) {
-	tx := ctx.DB().Begin()
-	defer tx.Rollback()
-
-	person := models.Person{Name: username, Type: "agent"}
-	if err := tx.Clauses(clause.Returning{}).Create(&person).Error; err != nil {
+func CreatePerson(ctx *api.Context, name, personType string) (*models.Person, error) {
+	person := models.Person{Name: name, Type: personType}
+	if err := ctx.DB().Clauses(clause.Returning{}).Create(&person).Error; err != nil {
 		return nil, err
 	}
 
-	accessToken := models.AccessToken{
+	return &person, nil
+}
+
+const (
+	// The draft RFC(https://tools.ietf.org/html/draft-irtf-cfrg-argon2-03#section-9.3) recommends
+	// the following time and memory cost as sensible defaults.
+	timeCost    = 1
+	memoryCost  = 64 * 1024
+	parallelism = 4
+	keyLength   = 32
+	saltLength  = 16
+)
+
+func CreateAccessToken(ctx *api.Context, personID uuid.UUID, name, password string, expiry time.Duration) (string, error) {
+	saltRaw := make([]byte, saltLength)
+	if _, err := crand.Read(saltRaw); err != nil {
+		return "", err
+	}
+	salt := base64.RawStdEncoding.EncodeToString(saltRaw)
+
+	hash := argon2.IDKey([]byte(password), []byte(salt), timeCost, memoryCost, parallelism, keyLength)
+	encodedHash := base64.RawStdEncoding.EncodeToString(hash)
+
+	accessToken := &models.AccessToken{
 		Name:      fmt.Sprintf("agent-%d", time.Now().Unix()),
-		Value:     hashedPassword,
-		PersonID:  person.ID,
-		ExpiresAt: time.Now().Add(time.Hour * 24 * 365), // long-lived token
+		Value:     encodedHash,
+		PersonID:  personID,
+		ExpiresAt: time.Now().Add(expiry), // long-lived token
 	}
-	if err := tx.Create(&accessToken).Error; err != nil {
-		return nil, err
+	if err := ctx.DB().Create(&accessToken).Error; err != nil {
+		return "", err
 	}
 
-	return &person, tx.Commit().Error
+	formattedHash := fmt.Sprintf("%s.%s.%d.%d.%d", password, salt, timeCost, memoryCost, parallelism)
+	return formattedHash, nil
 }

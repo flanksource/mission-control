@@ -69,7 +69,7 @@ func createHTTPServer(gormDB *gorm.DB) *echo.Echo {
 
 		switch authMode {
 		case "kratos":
-			kratosHandler := auth.NewKratosHandler(kratosAPI, kratosAdminAPI, db.PostgRESTJWTSecret)
+			kratosHandler := auth.NewKratosHandler(gormDB, kratosAPI, kratosAdminAPI, db.PostgRESTJWTSecret)
 			adminUserID, err = kratosHandler.CreateAdminUser(context.Background())
 			if err != nil {
 				logger.Fatalf("Failed to created admin user: %v", err)

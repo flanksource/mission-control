@@ -2,12 +2,12 @@ package agent
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/flanksource/commons/rand"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/rbac"
-	"golang.org/x/crypto/bcrypt"
 )
 
 // generateAgent creates a new person and a new agent and associates them.
@@ -17,14 +17,14 @@ func generateAgent(ctx *api.Context, body api.GenerateAgentRequest) (*api.Genera
 		return nil, fmt.Errorf("failed to generate username and password: %w", err)
 	}
 
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return nil, fmt.Errorf("failed to hash password: %w", err)
-	}
-
-	person, err := db.CreatePerson(ctx, username, string(hashedPassword))
+	person, err := db.CreatePerson(ctx, username, "agent")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create a new person: %w", err)
+	}
+
+	token, err := db.CreateAccessToken(ctx, person.ID, "default", password, time.Hour*24*365)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create a new access token: %w", err)
 	}
 
 	if _, err := rbac.Enforcer.AddRoleForUser(person.ID.String(), "agent"); err != nil {
@@ -38,10 +38,11 @@ func generateAgent(ctx *api.Context, body api.GenerateAgentRequest) (*api.Genera
 	return &api.GeneratedAgent{
 		ID:          person.ID.String(),
 		Username:    username,
-		AccessToken: password,
+		AccessToken: token,
 	}, nil
 }
 
+// genUsernamePassword generates a random pair of username and password
 func genUsernamePassword() (username, password string, err error) {
 	username, err = rand.GenerateRandHex(8)
 	if err != nil {
