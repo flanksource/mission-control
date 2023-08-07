@@ -67,6 +67,7 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 		token, err := k.getDBToken(session.Id, session.Identity.GetId())
 		if err != nil {
 			logger.Errorf("Error generating JWT Token: %v", err)
+			return c.String(http.StatusUnauthorized, "Unauthorized")
 		}
 		c.Request().Header.Add("Authorization", fmt.Sprintf("Bearer %s", token))
 		c.Request().Header.Add(UserIDHeaderKey, session.Identity.GetId())

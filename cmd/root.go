@@ -38,8 +38,8 @@ var Root = &cobra.Command{
 var dev bool
 var httpPort, metricsPort, devGuiPort int
 var publicEndpoint = "http://localhost:8080"
-var configDb, kratosAPI, kratosAdminAPI, postgrestURI string
-var enableAuth, disablePostgrest bool
+var configDb, authMode, kratosAPI, kratosAdminAPI, postgrestURI, clerkSecret string
+var disablePostgrest bool
 
 func ServerFlags(flags *pflag.FlagSet) {
 	flags.IntVar(&httpPort, "httpPort", 8080, "Port to expose a health dashboard")
@@ -52,8 +52,9 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&configDb, "config-db", "http://config-db:8080", "Config DB URL")
 	flags.StringVar(&kratosAPI, "kratos-api", "http://kratos-public:80", "Kratos API service")
 	flags.StringVar(&kratosAdminAPI, "kratos-admin", "http://kratos-admin:80", "Kratos Admin API service")
+	flags.StringVar(&clerkSecret, "clerk-secret", "", "Clerk Secret Key")
 	flags.StringVar(&postgrestURI, "postgrest-uri", "http://localhost:3000", "URL for the PostgREST instance to use. If localhost is supplied, a PostgREST instance will be started")
-	flags.BoolVar(&enableAuth, "enable-auth", false, "Enable authentication via Kratos")
+	flags.StringVar(&authMode, "auth", "", "Enable authentication via Kratos or Clerk. Valid values are [kratos, clerk]")
 	flags.DurationVar(&rules.Period, "rules-period", 5*time.Minute, "Period to run the rules")
 	flags.BoolVar(&disablePostgrest, "disable-postgrest", false, "Disable PostgREST. Deprecated (Use --postgrest-uri '' to disable PostgREST)")
 	flags.StringVar(&mail.FromAddress, "email-from-address", "no-reply@flanksource.com", "Email address of the sender")
