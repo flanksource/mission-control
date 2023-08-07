@@ -1,18 +1,17 @@
 package agent
 
 import (
-	"crypto/rand"
-	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"net/http"
 
+	"github.com/flanksource/commons/logger"
+	crand "github.com/flanksource/commons/rand"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/db"
-	"github.com/flanksource/incident-commander/rbac"
 	"github.com/labstack/echo/v4"
 )
 
+// GenerateAgent creates a new person and a new agent and associates them.
 func GenerateAgent(c echo.Context) error {
 	ctx := c.(*api.Context)
 
@@ -21,54 +20,25 @@ func GenerateAgent(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error()})
 	}
 
-	var (
-		username = fmt.Sprintf("agent-%s", generateRandomString(8))
-		password = generateRandomString(32)
-	)
-
-	// TODO: Only if unauthenticated, we need to create a user
-	id, err := db.CreatePerson(ctx, username, password)
+	agent, err := generateAgent(ctx, body)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "error generating agent"})
+		logger.Errorf("failed to generate a new agent: %v", err)
+		c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "error generating agent"})
 	}
 
-	if ok, err := rbac.Enforcer.AddRoleForUser(id.String(), "agent"); !ok {
-		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "error generating agent"})
-	} else if err != nil {
-		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "error generating agent"})
-	}
-
-	if err := db.CreateAgent(ctx, body.Name, &id, body.Properties); err != nil {
-		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "error generating agent"})
-	}
-
-	return c.JSON(http.StatusCreated, api.GeneratedAgent{
-		ID:       id.String(),
-		Username: username,
-		Password: password,
-	})
+	return c.JSON(http.StatusCreated, agent)
 }
 
-// generateRandomString generates a random alphanumeric string of the given length.
-func generateRandomString(length int) string {
-	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	result := make([]byte, length)
-	for i := range result {
-		val, err := generateRandomInt(len(letters))
-		if err != nil {
-			panic(err) // Handle error in a way that suits your needs
-		}
-		result[i] = letters[val]
-	}
-	return string(result)
-}
-
-// generateRandomInt generates a random integer up to max.
-func generateRandomInt(max int) (int, error) {
-	var n uint32
-	err := binary.Read(rand.Reader, binary.LittleEndian, &n)
+func genUsernamePassword() (username, password string, err error) {
+	username, err = crand.GenerateRandHex(8)
 	if err != nil {
-		return 0, err
+		return "", "", err
 	}
-	return int(n) % max, nil
+
+	password, err = crand.GenerateRandHex(32)
+	if err != nil {
+		return "", "", err
+	}
+
+	return fmt.Sprintf("agent-%s", username), password, nil
 }

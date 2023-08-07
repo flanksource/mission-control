@@ -6,7 +6,7 @@ type GenerateAgentRequest struct {
 }
 
 type GeneratedAgent struct {
-	ID       string `json:"id"`
-	Username string `json:"username"`
-	Password string `json:"password"`
+	ID          string `json:"id"`
+	Username    string `json:"username"`
+	AccessToken string `json:"access_token"`
 }

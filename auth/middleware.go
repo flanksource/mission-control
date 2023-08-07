@@ -17,6 +17,7 @@ import (
 	"github.com/labstack/echo/v4"
 	client "github.com/ory/client-go"
 	"github.com/patrickmn/go-cache"
+	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
 
@@ -80,14 +81,28 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 	}
 }
 
-func (k *kratosMiddleware) validateAccessToken(ctx context.Context, password string) (*models.AccessToken, error) {
+func (k *kratosMiddleware) validateAccessToken(ctx context.Context, username, password string) (*models.AccessToken, error) {
+	query := `
+SELECT
+  access_tokens.*
+FROM
+  access_tokens
+  LEFT JOIN people ON access_tokens.person_id = people.id
+WHERE
+  people.name = ?
+  AND access_tokens.expires_at > NOW()`
+
 	var acessToken models.AccessToken
-	if err := k.db.Raw("SELECT * FROM access_tokens WHERE value = ? AND expires_at > NOW()", password).First(&acessToken).Error; err != nil {
+	if err := k.db.Raw(query, username).First(&acessToken).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
 		}
 
 		return nil, err
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(acessToken.Value), []byte(password)); err != nil {
+		return nil, nil
 	}
 
 	return &acessToken, nil
@@ -102,7 +117,7 @@ func (k *kratosMiddleware) validateSession(r *http.Request) (*client.Session, er
 
 	if username, password, ok := r.BasicAuth(); ok {
 		if strings.HasPrefix(username, "agent-") {
-			accessToken, err := k.validateAccessToken(r.Context(), password)
+			accessToken, err := k.validateAccessToken(r.Context(), username, password)
 			if err != nil {
 				return nil, fmt.Errorf("failed to validate agent: %w", err)
 			} else if accessToken == nil {

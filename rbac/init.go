@@ -100,6 +100,7 @@ func Init(adminUserID string) error {
 		{RoleAdmin, ObjectDatabase, ActionWrite},
 		{RoleAdmin, ObjectRBAC, ActionWrite},
 		{RoleAdmin, ObjectAuth, ActionWrite},
+		{RoleAdmin, ObjectAgentPush, ActionWrite},
 		{RoleAdmin, ObjectDatabaseIdentity, ActionRead},
 		{RoleAdmin, ObjectDatabaseConnection, ActionRead},
 		{RoleAdmin, ObjectDatabaseConnection, ActionCreate},
