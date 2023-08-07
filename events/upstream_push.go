@@ -100,7 +100,7 @@ func (t *pushToUpstreamEventHandler) Run(ctx *api.Context, events []api.Event) [
 			}
 
 		case "config_scrapers":
-			if err := gormDB.Where("id IN ?", cl.itemIDs).Find(&upstreamMsg.ConfigAnalysis).Error; err != nil {
+			if err := gormDB.Where("id IN ?", cl.itemIDs).Find(&upstreamMsg.ConfigScrapers).Error; err != nil {
 				errMsg := fmt.Errorf("error fetching config_scrapers: %w", err)
 				failedEvents = append(failedEvents, addErrorToFailedEvents(cl.events, errMsg)...)
 			}
@@ -150,12 +150,25 @@ func (t *pushToUpstreamEventHandler) Run(ctx *api.Context, events []api.Event) [
 	}
 
 	upstreamMsg.ApplyLabels(t.conf.LabelsMap())
-	if err := upstream.Push(ctx, t.conf, upstreamMsg); err != nil {
-		errMsg := fmt.Errorf("failed to push to upstream: %w", err)
-		failedEvents = append(failedEvents, addErrorToFailedEvents(events, errMsg)...)
+	err := upstream.Push(ctx, t.conf, upstreamMsg)
+	if err == nil {
+		return failedEvents
 	}
 
-	return failedEvents
+	if len(events) == 1 {
+		errMsg := fmt.Errorf("failed to push to upstream: %w", err)
+		failedEvents = append(failedEvents, addErrorToFailedEvents(events, errMsg)...)
+		return failedEvents
+	} else {
+		// Error encountered while pushing could be an SQL or Application error
+		// Since we do not know which event in the bulk is failing
+		// Process each event individually since upsteam.Push is idempotent
+		var failedIndividualEvents []api.Event
+		for _, e := range events {
+			failedIndividualEvents = append(failedIndividualEvents, t.Run(ctx, []api.Event{e})...)
+		}
+		return failedIndividualEvents
+	}
 }
 
 type GroupedPushEvents struct {
