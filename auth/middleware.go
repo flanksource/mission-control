@@ -143,7 +143,7 @@ func (k *kratosMiddleware) getAccessToken(ctx context.Context, token string) (*m
 		return nil, err
 	}
 
-	k.accessTokenCache.Set(token, &acessToken, acessToken.ExpiresAt.Sub(time.Now()))
+	k.accessTokenCache.Set(token, &acessToken, time.Until(acessToken.ExpiresAt))
 
 	return &acessToken, nil
 }
