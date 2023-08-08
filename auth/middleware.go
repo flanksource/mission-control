@@ -30,10 +30,16 @@ const (
 	UserIDHeaderKey      = "X-User-ID"
 )
 
+var (
+	errInvalidTokenFormat = errors.New("invalid access token format")
+	errTokenExpired       = errors.New("access token has expired")
+)
+
 type kratosMiddleware struct {
 	client             *client.APIClient
 	jwtSecret          string
 	tokenCache         *cache.Cache
+	accessTokenCache   *cache.Cache
 	authSessionCache   *cache.Cache
 	basicAuthSeparator string
 	db                 *gorm.DB
@@ -50,6 +56,7 @@ func (k *KratosHandler) KratosMiddleware() (*kratosMiddleware, error) {
 		db:                 k.db,
 		jwtSecret:          k.jwtSecret,
 		tokenCache:         cache.New(3*24*time.Hour, 12*time.Hour),
+		accessTokenCache:   cache.New(3*24*time.Hour, 24*time.Hour),
 		authSessionCache:   cache.New(30*time.Minute, time.Hour),
 		basicAuthSeparator: randString,
 	}, nil
@@ -68,8 +75,15 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 		}
 		session, err := k.validateSession(c.Request())
 		if err != nil {
+			if errors.Is(err, errInvalidTokenFormat) {
+				return c.String(http.StatusBadRequest, "invalid access token")
+			} else if errors.Is(err, errTokenExpired) {
+				return c.String(http.StatusUnauthorized, "access token has expired")
+			}
+
 			return c.String(http.StatusUnauthorized, "Unauthorized")
 		}
+
 		if !*session.Active {
 			return c.String(http.StatusUnauthorized, "Unauthorized")
 		}
@@ -86,9 +100,11 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 	}
 }
 
-var errInvalidTokenFormat = errors.New("invalid token format")
-
 func (k *kratosMiddleware) getAccessToken(ctx context.Context, token string) (*models.AccessToken, error) {
+	if token, ok := k.accessTokenCache.Get(token); ok {
+		return token.(*models.AccessToken), nil
+	}
+
 	fields := strings.Split(token, ".")
 	if len(fields) != 5 {
 		return nil, errInvalidTokenFormat
@@ -114,7 +130,7 @@ func (k *kratosMiddleware) getAccessToken(ctx context.Context, token string) (*m
 		return nil, errInvalidTokenFormat
 	}
 
-	hash := argon2.IDKey([]byte(password), []byte(salt), uint32(timeCost), uint32(memoryCost), uint8(parallelism), 32)
+	hash := argon2.IDKey([]byte(password), []byte(salt), uint32(timeCost), uint32(memoryCost), uint8(parallelism), 20)
 	encodedHash := base64.URLEncoding.EncodeToString(hash)
 
 	query := `SELECT access_tokens.* FROM access_tokens WHERE value = ?`
@@ -126,6 +142,8 @@ func (k *kratosMiddleware) getAccessToken(ctx context.Context, token string) (*m
 
 		return nil, err
 	}
+
+	k.accessTokenCache.Set(token, &acessToken, acessToken.ExpiresAt.Sub(time.Now()))
 
 	return &acessToken, nil
 }
@@ -141,18 +159,19 @@ func (k *kratosMiddleware) validateSession(r *http.Request) (*client.Session, er
 		if username == "TOKEN" {
 			accessToken, err := k.getAccessToken(r.Context(), password)
 			if err != nil {
-				return nil, fmt.Errorf("failed to validate agent: %w", err)
+				return nil, err
 			} else if accessToken == nil {
 				return &client.Session{Active: utils.Ptr(false)}, nil
 			}
 
 			if accessToken.ExpiresAt.Before(time.Now()) {
-				return &client.Session{Active: utils.Ptr(false)}, nil
+				return nil, errTokenExpired
 			}
 
 			s := &client.Session{
-				Id:     uuid.NewString(),
-				Active: utils.Ptr(true),
+				Id:        uuid.NewString(),
+				Active:    utils.Ptr(true),
+				ExpiresAt: &accessToken.ExpiresAt,
 				Identity: client.Identity{
 					Id: accessToken.PersonID.String(),
 				},
