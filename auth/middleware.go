@@ -11,7 +11,9 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/collections"
+	"github.com/flanksource/commons/hash"
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/commons/rand"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/utils"
 	"github.com/golang-jwt/jwt/v4"
@@ -38,7 +40,7 @@ type kratosMiddleware struct {
 }
 
 func (k *KratosHandler) KratosMiddleware() (*kratosMiddleware, error) {
-	randString, err := utils.GenerateRandString(30)
+	randString, err := rand.GenerateRandString(30)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate random string: %w", err)
 	}
@@ -97,17 +99,17 @@ func (k *kratosMiddleware) getAccessToken(ctx context.Context, token string) (*m
 		salt     = fields[1]
 	)
 
-	timeCost, err := strconv.Atoi(fields[2])
+	timeCost, err := strconv.ParseUint(fields[2], 10, 32)
 	if err != nil {
 		return nil, errInvalidTokenFormat
 	}
 
-	memoryCost, err := strconv.Atoi(fields[3])
+	memoryCost, err := strconv.ParseUint(fields[3], 10, 32)
 	if err != nil {
 		return nil, errInvalidTokenFormat
 	}
 
-	parallelism, err := strconv.Atoi(fields[4])
+	parallelism, err := strconv.ParseUint(fields[4], 10, 8)
 	if err != nil {
 		return nil, errInvalidTokenFormat
 	}
@@ -262,5 +264,5 @@ func (k *kratosMiddleware) getDBToken(sessionID, userID string) (string, error) 
 }
 
 func basicAuthCacheKey(username, separator, password string) string {
-	return utils.Sha256Hex(fmt.Sprintf("%s:%s:%s", username, separator, password))
+	return hash.Sha256Hex(fmt.Sprintf("%s:%s:%s", username, separator, password))
 }

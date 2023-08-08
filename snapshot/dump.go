@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/flanksource/commons/hash"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/models"
 
 	"github.com/flanksource/duty"
 	"github.com/flanksource/incident-commander/components"
 	"github.com/flanksource/incident-commander/db"
-	"github.com/flanksource/incident-commander/utils"
 )
 
 func getColumnNames(table string) (string, error) {
@@ -162,7 +162,7 @@ func dumpLogs(ctx SnapshotContext, componentIDs []string) error {
 			return fmt.Errorf("invalid logFormat: %s", ctx.LogFormat)
 		}
 
-		logFilename := fmt.Sprintf("logs-%s-%s-%s.%s", logResult.Type, logResult.Name, utils.GetHash(componentID), ctx.LogFormat)
+		logFilename := fmt.Sprintf("logs-%s-%s-%s.%s", logResult.Type, logResult.Name, hash.Sha256Hex(componentID), ctx.LogFormat)
 		err = writeToLogFile(ctx.Directory, logFilename, logDump)
 		if err != nil {
 			return err
