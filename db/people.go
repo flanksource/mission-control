@@ -49,8 +49,8 @@ type CreateUserRequest struct {
 	Properties models.PersonProperties
 }
 
-func CreatePerson(ctx *api.Context, name, personType string) (*models.Person, error) {
-	person := models.Person{Name: name, Type: personType}
+func CreatePerson(ctx *api.Context, name, email, personType string) (*models.Person, error) {
+	person := models.Person{Name: name, Email: email, Type: personType}
 	if err := ctx.DB().Clauses(clause.Returning{}).Create(&person).Error; err != nil {
 		return nil, err
 	}

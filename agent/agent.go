@@ -17,7 +17,7 @@ func generateAgent(ctx *api.Context, body api.GenerateAgentRequest) (*api.Genera
 		return nil, fmt.Errorf("failed to generate username and password: %w", err)
 	}
 
-	person, err := db.CreatePerson(ctx, username, "agent")
+	person, err := db.CreatePerson(ctx, username, fmt.Sprintf("%s@local", username), "agent")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create a new person: %w", err)
 	}
