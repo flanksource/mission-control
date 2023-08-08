@@ -64,8 +64,8 @@ const (
 	timeCost    = 1
 	memoryCost  = 64 * 1024
 	parallelism = 4
-	keyLength   = 32
-	saltLength  = 16
+	keyLength   = 20
+	saltLength  = 12
 )
 
 func CreateAccessToken(ctx *api.Context, personID uuid.UUID, name, password string, expiry time.Duration) (string, error) {
@@ -73,10 +73,10 @@ func CreateAccessToken(ctx *api.Context, personID uuid.UUID, name, password stri
 	if _, err := crand.Read(saltRaw); err != nil {
 		return "", err
 	}
-	salt := base64.RawStdEncoding.EncodeToString(saltRaw)
+	salt := base64.URLEncoding.EncodeToString(saltRaw)
 
 	hash := argon2.IDKey([]byte(password), []byte(salt), timeCost, memoryCost, parallelism, keyLength)
-	encodedHash := base64.RawStdEncoding.EncodeToString(hash)
+	encodedHash := base64.URLEncoding.EncodeToString(hash)
 
 	accessToken := &models.AccessToken{
 		Name:      fmt.Sprintf("agent-%d", time.Now().Unix()),

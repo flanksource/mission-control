@@ -115,7 +115,7 @@ func (k *kratosMiddleware) getAccessToken(ctx context.Context, token string) (*m
 	}
 
 	hash := argon2.IDKey([]byte(password), []byte(salt), uint32(timeCost), uint32(memoryCost), uint8(parallelism), 32)
-	encodedHash := base64.RawStdEncoding.EncodeToString(hash)
+	encodedHash := base64.URLEncoding.EncodeToString(hash)
 
 	query := `SELECT access_tokens.* FROM access_tokens WHERE value = ?`
 	var acessToken models.AccessToken
