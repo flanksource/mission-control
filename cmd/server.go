@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/flanksource/commons/logger"
+	cutils "github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty/schema/openapi"
 	"github.com/flanksource/kopper"
 	"github.com/labstack/echo-contrib/echoprometheus"
@@ -243,7 +244,7 @@ func ModifyKratosRequestHeaders(next echo.HandlerFunc) echo.HandlerFunc {
 		if strings.HasPrefix(c.Request().URL.Path, "/kratos") {
 			// Kratos requires the header X-Forwarded-Proto but Nginx sets it as "https,http"
 			// This leads to URL malformation further upstream
-			val := utils.Coalesce(
+			val := cutils.Coalesce(
 				c.Request().Header.Get("X-Forwarded-Scheme"),
 				c.Request().Header.Get("X-Scheme"),
 				"https",

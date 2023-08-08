@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/utils"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/argon2"
 	"gorm.io/gorm/clause"
@@ -20,7 +20,7 @@ func UpdateUserProperties(ctx *api.Context, userID string, newProps api.PersonPr
 		return err
 	}
 
-	props, err := utils.MergeStructs(current.Properties, newProps)
+	props, err := collections.MergeStructs(current.Properties, newProps)
 	if err != nil {
 		return err
 	}
