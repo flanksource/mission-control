@@ -10,7 +10,7 @@ require (
 	github.com/clerkinc/clerk-sdk-go v1.47.0
 	github.com/containrrr/shoutrrr v0.7.1
 	github.com/fergusstrange/embedded-postgres v1.23.0
-	github.com/flanksource/commons v1.10.2
+	github.com/flanksource/commons v1.11.0
 	github.com/flanksource/duty v1.0.150
 	github.com/flanksource/kopper v1.0.6
 	github.com/google/cel-go v0.17.1
