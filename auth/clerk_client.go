@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	clerkSessionCookie = "_session"
+	clerkSessionCookie = "__session"
 )
 
 type ClerkHandler struct {
