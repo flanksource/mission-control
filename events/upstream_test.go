@@ -312,26 +312,26 @@ func compareEntities[T any](table string, upstreamDB *gorm.DB, agent agentWrappe
 
 	switch table {
 	case "check_statuses":
-		err = upstreamDB.Joins("LEFT JOIN checks ON checks.id = check_statuses.check_id").Where("checks.agent_id = ?", agent.id).Find(&upstream).Error
+		err = upstreamDB.Debug().Joins("LEFT JOIN checks ON checks.id = check_statuses.check_id").Where("checks.agent_id = ?", agent.id).Order("check_id, time").Find(&upstream).Error
 
 	case "config_analysis":
-		err = upstreamDB.Joins("LEFT JOIN config_items ON config_items.id = config_analysis.config_id").Where("config_items.agent_id = ?", agent.id).Find(&upstream).Error
+		err = upstreamDB.Joins("LEFT JOIN config_items ON config_items.id = config_analysis.config_id").Where("config_items.agent_id = ?", agent.id).Order("created_at").Find(&upstream).Error
 
 	case "config_changes":
-		err = upstreamDB.Joins("LEFT JOIN config_items ON config_items.id = config_changes.config_id").Where("config_items.agent_id = ?", agent.id).Find(&upstream).Error
+		err = upstreamDB.Joins("LEFT JOIN config_items ON config_items.id = config_changes.config_id").Where("config_items.agent_id = ?", agent.id).Order("created_at").Find(&upstream).Error
 
 	case "component_relationships":
 		err = upstreamDB.Joins("LEFT JOIN components c1 ON component_relationships.component_id = c1.id").
 			Joins("LEFT JOIN components c2 ON component_relationships.relationship_id = c2.id").
-			Where("c1.agent_id = ? OR c2.agent_id = ?", agent.id, agent.id).Find(&upstream).Error
+			Where("c1.agent_id = ? OR c2.agent_id = ?", agent.id, agent.id).Order("created_at").Find(&upstream).Error
 
 	case "config_component_relationships":
 		err = upstreamDB.Joins("LEFT JOIN components ON config_component_relationships.component_id = components.id").
 			Joins("LEFT JOIN config_items ON config_items.id = config_component_relationships.config_id").
-			Where("components.agent_id = ? OR config_items.agent_id = ?", agent.id, agent.id).Find(&upstream).Error
+			Where("components.agent_id = ? OR config_items.agent_id = ?", agent.id, agent.id).Order("created_at").Find(&upstream).Error
 
 	default:
-		err = upstreamDB.Where("agent_id = ?", agent.id).Find(&upstream).Error
+		err = upstreamDB.Where("agent_id = ?", agent.id).Order("created_at").Find(&upstream).Error
 	}
 	Expect(err).NotTo(HaveOccurred())
 

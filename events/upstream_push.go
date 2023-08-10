@@ -20,7 +20,7 @@ func NewUpstreamPushConsumer(db *gorm.DB, config Config) EventConsumer {
 		WatchEvents:      []string{EventPushQueueCreate},
 		ProcessBatchFunc: handleUpstreamPushEvents,
 		BatchSize:        50,
-		Consumers:        5,
+		Consumers:        1,
 		DB:               db,
 	}
 }
