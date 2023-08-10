@@ -34,7 +34,7 @@ func handleUpstreamPushEvents(ctx *api.Context, events []api.Event) []api.Event 
 	var eventsToProcess []api.Event
 	for _, e := range events {
 		if e.Name != EventPushQueueCreate {
-			e.Error = fmt.Errorf("Unrecognized event name: %s", e.Name).Error()
+			e.Error = fmt.Errorf("unrecognized event name: %s", e.Name).Error()
 			failedEvents = append(failedEvents, e)
 		} else {
 			eventsToProcess = append(eventsToProcess, e)
