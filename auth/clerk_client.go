@@ -82,8 +82,8 @@ func (h ClerkHandler) Session(next echo.HandlerFunc) echo.HandlerFunc {
 			return c.String(http.StatusUnauthorized, "Unauthorized")
 		}
 
-		c.Request().Header.Add(echo.HeaderAuthorization, fmt.Sprintf("Bearer %s", token))
-		c.Request().Header.Add(UserIDHeaderKey, *user.ExternalID)
+		c.Request().Header.Set(echo.HeaderAuthorization, fmt.Sprintf("Bearer %s", token))
+		c.Request().Header.Set(UserIDHeaderKey, *user.ExternalID)
 		return next(c)
 	}
 }
