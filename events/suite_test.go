@@ -63,6 +63,7 @@ var (
 
 	agentBob   = agentWrapper{name: "bob", id: uuid.New(), dataset: dummy.GenerateDummyData(true)}
 	agentJames = agentWrapper{name: "james", id: uuid.New(), dataset: dummy.GenerateDummyData(true)}
+	agentRoss  = agentWrapper{name: "ross", id: uuid.New(), dataset: dummy.GenerateDummyData(true)}
 
 	upstreamDB       *gorm.DB
 	upstreamDBPGPool *pgxpool.Pool
@@ -82,8 +83,11 @@ var _ = ginkgo.BeforeSuite(func() {
 	// Setup another agent
 	_, err := agentBob.pool.Exec(context.TODO(), fmt.Sprintf("CREATE DATABASE %s", agentJames.name))
 	Expect(err).NotTo(HaveOccurred())
-
 	agentJames.setup(strings.ReplaceAll(connection, agentBob.name, agentJames.name))
+
+	_, err = agentBob.pool.Exec(context.TODO(), fmt.Sprintf("CREATE DATABASE %s", agentRoss.name))
+	Expect(err).NotTo(HaveOccurred())
+	agentRoss.setup(strings.ReplaceAll(connection, agentBob.name, agentRoss.name))
 
 	// Setup upstream db
 	_, err = agentBob.pool.Exec(context.TODO(), fmt.Sprintf("CREATE DATABASE %s", upstreamDBName))
@@ -95,6 +99,7 @@ var _ = ginkgo.BeforeSuite(func() {
 
 	Expect(upstreamDB.Create(&models.Agent{ID: agentBob.id, Name: agentBob.name}).Error).To(BeNil())
 	Expect(upstreamDB.Create(&models.Agent{ID: agentJames.id, Name: agentJames.name}).Error).To(BeNil())
+	Expect(upstreamDB.Create(&models.Agent{ID: agentRoss.id, Name: agentRoss.name}).Error).To(BeNil())
 
 	upstreamEchoServer = echo.New()
 	upstreamEchoServer.Use(func(next echo.HandlerFunc) echo.HandlerFunc {

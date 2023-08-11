@@ -103,6 +103,10 @@ var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
 		err = agentJames.db.Where("name = ?", EventPushQueueCreate).Find(&events).Error
 		Expect(err).NotTo(HaveOccurred())
 		veryPushQueue(events, agentJames.dataset)
+
+		err = agentRoss.db.Where("name = ?", EventPushQueueCreate).Find(&events).Error
+		Expect(err).NotTo(HaveOccurred())
+		veryPushQueue(events, agentRoss.dataset)
 	})
 
 	ginkgo.It("should track updates & deletes on the event_queue table", func() {
@@ -151,6 +155,11 @@ var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
 		eventHandlerConfig.UpstreamPush.AgentName = agentJames.name
 		c = NewUpstreamPushConsumer(agentJames.db, eventHandlerConfig)
 		c.ConsumeEventsUntilEmpty()
+
+		// Agent Ross should also push everything in it's queue to the upstream
+		eventHandlerConfig.UpstreamPush.AgentName = agentRoss.name
+		c = NewUpstreamPushConsumer(agentRoss.db, eventHandlerConfig)
+		c.ConsumeEventsUntilEmpty()
 	})
 
 	ginkgo.It("should have transferred all the components", func() {
@@ -167,41 +176,50 @@ var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
 
 	ginkgo.It("should have transferred all the checks", func() {
 		compareEntities[models.Check]("", upstreamDB, agentBob, cmpopts.IgnoreFields(models.Check{}, "AgentID"))
+		compareEntities[models.Check]("", upstreamDB, agentJames, cmpopts.IgnoreFields(models.Check{}, "AgentID"))
+		compareEntities[models.Check]("", upstreamDB, agentRoss, cmpopts.IgnoreFields(models.Check{}, "AgentID"))
 	})
 
 	ginkgo.It("should have transferred all the check statuses", func() {
 		compareEntities[models.CheckStatus]("check_statuses", upstreamDB, agentBob)
+		compareEntities[models.CheckStatus]("check_statuses", upstreamDB, agentJames)
+		compareEntities[models.CheckStatus]("check_statuses", upstreamDB, agentRoss)
 	})
 
 	ginkgo.It("should have transferred all the canaries", func() {
 		compareEntities[models.Canary]("", upstreamDB, agentBob, cmpopts.IgnoreFields(models.Canary{}, "AgentID"))
+		compareEntities[models.Canary]("", upstreamDB, agentJames, cmpopts.IgnoreFields(models.Canary{}, "AgentID"))
+		compareEntities[models.Canary]("", upstreamDB, agentRoss, cmpopts.IgnoreFields(models.Canary{}, "AgentID"))
 	})
 
 	ginkgo.It("should have transferred all the configs", func() {
 		compareEntities[models.ConfigItem]("", upstreamDB, agentBob, cmpopts.IgnoreFields(models.ConfigItem{}, "AgentID"))
+		compareEntities[models.ConfigItem]("", upstreamDB, agentJames, cmpopts.IgnoreFields(models.ConfigItem{}, "AgentID"))
+		compareEntities[models.ConfigItem]("", upstreamDB, agentRoss, cmpopts.IgnoreFields(models.ConfigItem{}, "AgentID"))
 	})
 
 	ginkgo.It("should have transferred all the config analyses", func() {
 		compareEntities[models.ConfigAnalysis]("config_analysis", upstreamDB, agentBob, cmpopts.IgnoreFields(models.ConfigAnalysis{}, "FirstObserved"))
+		compareEntities[models.ConfigAnalysis]("config_analysis", upstreamDB, agentJames, cmpopts.IgnoreFields(models.ConfigAnalysis{}, "FirstObserved"))
+		compareEntities[models.ConfigAnalysis]("config_analysis", upstreamDB, agentRoss, cmpopts.IgnoreFields(models.ConfigAnalysis{}, "FirstObserved"))
 	})
 
 	ginkgo.It("should have transferred all the config changes", func() {
 		compareEntities[models.ConfigChange]("config_changes", upstreamDB, agentBob)
+		compareEntities[models.ConfigChange]("config_changes", upstreamDB, agentJames)
+		compareEntities[models.ConfigChange]("config_changes", upstreamDB, agentRoss)
 	})
 
 	ginkgo.It("should have transferred all the config relationships", func() {
 		compareEntities[models.ComponentRelationship]("component_relationships", upstreamDB, agentBob)
+		compareEntities[models.ComponentRelationship]("component_relationships", upstreamDB, agentJames)
+		compareEntities[models.ComponentRelationship]("component_relationships", upstreamDB, agentRoss)
 	})
 
 	ginkgo.It("should have transferred all the config component relationships", func() {
 		compareEntities[models.ConfigComponentRelationship]("config_component_relationships", upstreamDB, agentBob)
-	})
-
-	ginkgo.It("should have populated the agents table", func() {
-		var count int
-		err := upstreamDB.Select("COUNT(*)").Table("agents").Scan(&count).Error
-		Expect(err).ToNot(HaveOccurred())
-		Expect(count).ToNot(BeZero())
+		compareEntities[models.ConfigComponentRelationship]("config_component_relationships", upstreamDB, agentJames)
+		compareEntities[models.ConfigComponentRelationship]("config_component_relationships", upstreamDB, agentRoss)
 	})
 
 	ginkgo.It("should have populated the agent_id field", func() {
