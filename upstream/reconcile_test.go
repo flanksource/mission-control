@@ -19,7 +19,7 @@ import (
 
 var _ = ginkgo.Describe("Push Mode reconcilation", ginkgo.Ordered, func() {
 	const randomConfigItemCount = 2000 // keep it below 5k (must be set w.r.t the page size)
-	dummyDataset := dummy.GenerateDummyData(false)
+	dummyDataset := dummy.GetStaticDummyData()
 
 	ginkgo.It("should populate the agent database with the 6 tables that are reconciled", func() {
 		err := dummyDataset.Populate(agentDB)

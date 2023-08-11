@@ -61,9 +61,9 @@ var (
 	upstreamEchoServerport = 11005
 	upstreamEchoServer     *echo.Echo
 
-	agentBob   = agentWrapper{name: "bob", id: uuid.New(), dataset: dummy.GenerateDummyData(true)}
-	agentJames = agentWrapper{name: "james", id: uuid.New(), dataset: dummy.GenerateDummyData(true)}
-	agentRoss  = agentWrapper{name: "ross", id: uuid.New(), dataset: dummy.GenerateDummyData(true)}
+	agentBob   = agentWrapper{name: "bob", id: uuid.New(), dataset: dummy.GenerateDynamicDummyData()}
+	agentJames = agentWrapper{name: "james", id: uuid.New(), dataset: dummy.GenerateDynamicDummyData()}
+	agentRoss  = agentWrapper{name: "ross", id: uuid.New(), dataset: dummy.GenerateDynamicDummyData()}
 
 	upstreamDB       *gorm.DB
 	upstreamDBPGPool *pgxpool.Pool

@@ -40,6 +40,10 @@ func veryPushQueue(events []api.Event, dataset dummy.DummyData) {
 			Expect(len(g.itemIDs)).To(Equal(len(dataset.Components)))
 			Expect(g.itemIDs).To(Equal(getPrimaryKeys(table, dataset.Components)), "Mismatch primary keys for components")
 
+		case "config_scrapers":
+			Expect(len(g.itemIDs)).To(Equal(len(dataset.ConfigScrapers)))
+			Expect(g.itemIDs).To(Equal(getPrimaryKeys(table, dataset.ConfigScrapers)), "Mismatch primary keys for config_scrapers")
+
 		case "config_items":
 			Expect(len(g.itemIDs)).To(Equal(len(dataset.Configs)))
 			Expect(g.itemIDs).To(Equal(getPrimaryKeys(table, dataset.Configs)), "Mismatch primary keys for config_items")
@@ -77,6 +81,7 @@ func veryPushQueue(events []api.Event, dataset dummy.DummyData) {
 			len(dataset.Topologies) +
 			len(dataset.Checks) +
 			len(dataset.Components) +
+			len(dataset.ConfigScrapers) +
 			len(dataset.Configs) +
 			len(dataset.ConfigChanges) +
 			len(dataset.ConfigAnalyses) +
@@ -259,6 +264,12 @@ func getPrimaryKeys(table string, rows any) [][]string {
 			primaryKeys = append(primaryKeys, []string{c.ID.String()})
 		}
 
+	case "config_scrapers":
+		configScrapers := rows.([]models.ConfigScraper)
+		for _, c := range configScrapers {
+			primaryKeys = append(primaryKeys, []string{c.ID.String()})
+		}
+
 	case "config_items":
 		configs := rows.([]models.ConfigItem)
 		for _, c := range configs {
@@ -327,37 +338,47 @@ func replaceTimezone(t time.Time, newLocation *time.Location) time.Time {
 func compareEntities[T any](table string, upstreamDB *gorm.DB, agent agentWrapper, ignoreOpts ...cmp.Option) {
 	var upstream, downstream []T
 	var err error
+	var agentErr error
 
+	// We're conditionally fetching the records from upstream and agent db
+	// because we need to ensure
+	// - that upstream only fetches the items for the given agent
+	// - and the order of the items when fetching from upstream and agent db is identitcal for the comparison to work
 	switch table {
 	case "check_statuses":
 		err = upstreamDB.Debug().Joins("LEFT JOIN checks ON checks.id = check_statuses.check_id").Where("checks.agent_id = ?", agent.id).Order("check_id, time").Find(&upstream).Error
+		agentErr = agent.db.Order("check_id, time").Find(&downstream).Error
 
 	case "config_analysis":
-		err = upstreamDB.Joins("LEFT JOIN config_items ON config_items.id = config_analysis.config_id").Where("config_items.agent_id = ?", agent.id).Order("created_at").Find(&upstream).Error
+		err = upstreamDB.Joins("LEFT JOIN config_items ON config_items.id = config_analysis.config_id").Where("config_items.agent_id = ?", agent.id).Order("id").Find(&upstream).Error
+		agentErr = agent.db.Order("id").Find(&downstream).Error
 
 	case "config_changes":
 		err = upstreamDB.Joins("LEFT JOIN config_items ON config_items.id = config_changes.config_id").Where("config_items.agent_id = ?", agent.id).Order("created_at").Find(&upstream).Error
+		agentErr = agent.db.Order("created_at").Find(&downstream).Error
 
 	case "component_relationships":
 		err = upstreamDB.Joins("LEFT JOIN components c1 ON component_relationships.component_id = c1.id").
 			Joins("LEFT JOIN components c2 ON component_relationships.relationship_id = c2.id").
 			Where("c1.agent_id = ? OR c2.agent_id = ?", agent.id, agent.id).Order("created_at").Find(&upstream).Error
+		agentErr = agent.db.Order("created_at").Find(&downstream).Error
 
 	case "config_component_relationships":
 		err = upstreamDB.Joins("LEFT JOIN components ON config_component_relationships.component_id = components.id").
 			Joins("LEFT JOIN config_items ON config_items.id = config_component_relationships.config_id").
 			Where("components.agent_id = ? OR config_items.agent_id = ?", agent.id, agent.id).Order("created_at").Find(&upstream).Error
+		agentErr = agent.db.Order("created_at").Find(&downstream).Error
 
 	default:
-		err = upstreamDB.Where("agent_id = ?", agent.id).Order("created_at").Find(&upstream).Error
+		err = upstreamDB.Where("agent_id = ?", agent.id).Order("id").Find(&upstream).Error
+		agentErr = agent.db.Order("id").Find(&downstream).Error
 	}
-	Expect(err).NotTo(HaveOccurred())
 
-	err = agent.db.Find(&downstream).Error
 	Expect(err).NotTo(HaveOccurred())
+	Expect(agentErr).NotTo(HaveOccurred())
 
-	Expect(len(upstream)).To(Equal(len(downstream)), fmt.Sprintf("expected %s to sync to upstream ", agent.name))
+	Expect(len(upstream)).To(Equal(len(downstream)), fmt.Sprintf("expected %s to sync all items to upstream ", agent.name))
 
 	diff := cmp.Diff(upstream, downstream, ignoreOpts...)
-	Expect(diff).To(BeEmpty(), fmt.Sprintf("expected %s to sync to upstream ", agent.name))
+	Expect(diff).To(BeEmpty(), fmt.Sprintf("expected %s to sync correct items to upstream ", agent.name))
 }
