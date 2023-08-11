@@ -30,10 +30,11 @@ func TestPushMode(t *testing.T) {
 }
 
 type agentWrapper struct {
-	id   uuid.UUID // agent's id in the upstream db
-	name string
-	db   *gorm.DB
-	pool *pgxpool.Pool
+	id      uuid.UUID // agent's id in the upstream db
+	name    string
+	db      *gorm.DB
+	pool    *pgxpool.Pool
+	dataset dummy.DummyData
 }
 
 func (t *agentWrapper) setup(connection string) {
@@ -43,7 +44,7 @@ func (t *agentWrapper) setup(connection string) {
 		ginkgo.Fail(err.Error())
 	}
 
-	if err := dummy.PopulateDBWithDummyModels(t.db); err != nil {
+	if err := t.dataset.Populate(t.db); err != nil {
 		ginkgo.Fail(err.Error())
 	}
 }
@@ -60,8 +61,8 @@ var (
 	upstreamEchoServerport = 11005
 	upstreamEchoServer     *echo.Echo
 
-	agentBob   = agentWrapper{name: "bob", id: uuid.New()}
-	agentJames = agentWrapper{name: "james", id: uuid.New()}
+	agentBob   = agentWrapper{name: "bob", id: uuid.New(), dataset: dummy.GenerateDummyData(true)}
+	agentJames = agentWrapper{name: "james", id: uuid.New(), dataset: dummy.GenerateDummyData(true)}
 
 	upstreamDB       *gorm.DB
 	upstreamDBPGPool *pgxpool.Pool

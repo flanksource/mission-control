@@ -19,9 +19,10 @@ import (
 
 var _ = ginkgo.Describe("Push Mode reconcilation", ginkgo.Ordered, func() {
 	const randomConfigItemCount = 2000 // keep it below 5k (must be set w.r.t the page size)
+	dummyDataset := dummy.GenerateDummyData(false)
 
 	ginkgo.It("should populate the agent database with the 6 tables that are reconciled", func() {
-		err := dummy.PopulateDBWithDummyModels(agentDB)
+		err := dummyDataset.Populate(agentDB)
 		Expect(err).To(BeNil())
 
 		// duty's dummy fixture doesn't have a dummy config scraper (maybe add this in duty)
@@ -35,20 +36,20 @@ var _ = ginkgo.Describe("Push Mode reconcilation", ginkgo.Ordered, func() {
 		Expect(agentDB.Create(&dummyConfigScraper).Error).To(BeNil(), "save config scraper")
 
 		// Agent must have all of dummy records
-		compareItemsCount[models.Component](agentDB, len(dummy.AllDummyComponents))
-		compareItemsCount[models.ConfigItem](agentDB, len(dummy.AllDummyConfigs))
-		compareItemsCount[models.ConfigScraper](agentDB, 1)
-		compareItemsCount[models.Canary](agentDB, len(dummy.AllDummyCanaries))
-		compareItemsCount[models.Check](agentDB, len(dummy.AllDummyChecks))
-		compareItemsCount[models.CheckStatus](agentDB, len(dummy.AllDummyCheckStatuses))
+		compareItemsCount[models.Component](agentDB, len(dummyDataset.Components), "agent-Component")
+		compareItemsCount[models.ConfigItem](agentDB, len(dummyDataset.Configs), "agent-ConfigItem")
+		compareItemsCount[models.ConfigScraper](agentDB, 1, "agent-ConfigScraper")
+		compareItemsCount[models.Canary](agentDB, len(dummyDataset.Canaries), "agent-Canary")
+		compareItemsCount[models.Check](agentDB, len(dummyDataset.Checks), "agent-Check")
+		compareItemsCount[models.CheckStatus](agentDB, len(dummyDataset.CheckStatuses), "agent-CheckStatus")
 
 		// Upstream must have no records
-		compareItemsCount[models.Component](upstreamDB, 0)
-		compareItemsCount[models.ConfigItem](upstreamDB, 0)
-		compareItemsCount[models.ConfigScraper](upstreamDB, 0)
-		compareItemsCount[models.Canary](upstreamDB, 0)
-		compareItemsCount[models.Check](upstreamDB, 0)
-		compareItemsCount[models.CheckStatus](upstreamDB, 0)
+		compareItemsCount[models.Component](upstreamDB, 0, "upstream-Component")
+		compareItemsCount[models.ConfigItem](upstreamDB, 0, "upstream-ConfigItem")
+		compareItemsCount[models.ConfigScraper](upstreamDB, 0, "upstream-ConfigScraper")
+		compareItemsCount[models.Canary](upstreamDB, 0, "upstream-Canary")
+		compareItemsCount[models.Check](upstreamDB, 0, "upstream-Check")
+		compareItemsCount[models.CheckStatus](upstreamDB, 0, "upstream-CheckStatus")
 	})
 
 	ginkgo.It("should return different hash for agent and upstream", func() {
@@ -176,9 +177,9 @@ func compareEntities(upstreamDB, downstreamDB *gorm.DB, entityType interface{}, 
 
 // compareItemsCount compares whether the given model "T" has `totalExpected` number of records
 // in the database
-func compareItemsCount[T any](gormDB *gorm.DB, totalExpected int) {
+func compareItemsCount[T any](gormDB *gorm.DB, totalExpected int, description ...any) {
 	var result []T
 	err := gormDB.Find(&result).Error
-	Expect(err).To(BeNil())
+	Expect(err).To(BeNil(), description...)
 	Expect(totalExpected).To(Equal(len(result)))
 }

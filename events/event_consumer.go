@@ -29,10 +29,10 @@ func (e EventConsumer) Validate() error {
 		return fmt.Errorf("BatchSize:%d <= 0", e.BatchSize)
 	}
 	if e.Consumers <= 0 {
-		return fmt.Errorf("Consumers:%d <= 0", e.BatchSize)
+		return fmt.Errorf("consumers:%d <= 0", e.BatchSize)
 	}
 	if len(e.WatchEvents) == 0 {
-		return fmt.Errorf("No events registered to watch:%d <= 0", len(e.WatchEvents))
+		return fmt.Errorf("no events registered to watch:%d <= 0", len(e.WatchEvents))
 	}
 	return nil
 }
