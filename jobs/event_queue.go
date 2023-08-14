@@ -9,7 +9,7 @@ import (
 	"github.com/flanksource/incident-commander/db"
 )
 
-// CleanupEventQueue deletes state records in the `event_queue` table
+// CleanupEventQueue deletes stale records in the `event_queue` table
 func CleanupEventQueue() {
 	ctx := api.NewContext(db.Gorm, nil)
 
@@ -38,8 +38,18 @@ func CleanupEventQueue() {
 			jobHistory.AddError(result.Error.Error())
 		} else {
 			logger.Debugf("Cleaned up %d push_queue events for table=%s", result.RowsAffected, table)
-			jobHistory.SuccessCount = int(result.RowsAffected)
+			jobHistory.SuccessCount += int(result.RowsAffected)
 		}
+	}
+
+	defaultAge := time.Hour * 24 * 30
+	result := db.Gorm.Debug().Exec("DELETE FROM event_queue WHERE name != 'push_queue.create' AND NOW() - created_at > ?", defaultAge)
+	if result.Error != nil {
+		logger.Errorf("Error cleaning up events (!push_queue.create): %v", result.Error)
+		jobHistory.AddError(result.Error.Error())
+	} else {
+		logger.Debugf("Cleaned up %d events(!push_queue.create)", result.RowsAffected)
+		jobHistory.SuccessCount += int(result.RowsAffected)
 	}
 
 	if err := db.PersistJobHistory(ctx, jobHistory.End()); err != nil {
