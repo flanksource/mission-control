@@ -51,7 +51,8 @@ func (t *EventConsumer) consumeEvents() error {
             SELECT id FROM event_queue
             WHERE 
                 attempts <= @maxAttempts AND
-                name IN @events
+                name IN @events AND
+								(last_attempt IS NULL OR last_attempt <= NOW() - INTERVAL '1 SECOND' * @baseDelay * POWER(attempts, @exponential))
             ORDER BY priority DESC, created_at ASC
             FOR UPDATE SKIP LOCKED
             LIMIT @batchSize
@@ -64,6 +65,8 @@ func (t *EventConsumer) consumeEvents() error {
 		"maxAttempts": eventMaxAttempts,
 		"events":      t.WatchEvents,
 		"batchSize":   t.BatchSize,
+		"baseDelay":   60, // in seconds
+		"exponential": 5,  // along with baseDelay = 60, the retries are 1, 6, 31, 156 (in minutes)
 	}
 	err := tx.Raw(selectEventsQuery, vals).Scan(&events).Error
 	if err != nil {
