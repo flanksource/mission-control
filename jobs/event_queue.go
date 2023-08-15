@@ -36,8 +36,8 @@ func CleanupEventQueue() {
 		if result.Error != nil {
 			logger.Errorf("Error cleaning up push_queue events for table=%s: %v", table, result.Error)
 			jobHistory.AddError(result.Error.Error())
-		} else {
-			logger.Debugf("Cleaned up %d push_queue events for table=%s", result.RowsAffected, table)
+		} else if result.RowsAffected > 0 {
+			logger.Warnf("Deleted %d push_queue events for table=%s", result.RowsAffected, table)
 			jobHistory.SuccessCount += int(result.RowsAffected)
 		}
 	}
@@ -47,8 +47,8 @@ func CleanupEventQueue() {
 	if result.Error != nil {
 		logger.Errorf("Error cleaning up events (!push_queue.create): %v", result.Error)
 		jobHistory.AddError(result.Error.Error())
-	} else {
-		logger.Debugf("Cleaned up %d events(!push_queue.create)", result.RowsAffected)
+	} else if result.RowsAffected > 0 {
+		logger.Warnf("Deleted %d events(!push_queue.create)", result.RowsAffected)
 		jobHistory.SuccessCount += int(result.RowsAffected)
 	}
 
