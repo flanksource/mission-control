@@ -26,6 +26,7 @@ import (
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/jobs"
 	"github.com/flanksource/incident-commander/logs"
+	"github.com/flanksource/incident-commander/playbook"
 	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/snapshot"
 	"github.com/flanksource/incident-commander/upstream"
@@ -146,6 +147,9 @@ func createHTTPServer(gormDB *gorm.DB) *echo.Echo {
 	upstreamGroup.GET("/pull/:agent_name", upstream.Pull)
 	upstreamGroup.GET("/canary/pull/:agent_name", canary.Pull)
 	upstreamGroup.GET("/status/:agent_name", upstream.Status)
+
+	playbookGroup := e.Group("/playbook")
+	playbookGroup.POST("/run", playbook.Run)
 
 	forward(e, "/config", configDb)
 	forward(e, "/canary", api.CanaryCheckerPath)
