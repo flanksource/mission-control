@@ -76,5 +76,6 @@ type AWSConnection struct {
 }
 
 type PlaybookAction struct {
-	Exec ExecAction `json:"exec,omitempty" yaml:"exec,omitempty"`
+	TimeoutMinutes string     `yaml:"timeout-minutes,omitempty" json:"timeout-minutes,omitempty"`
+	Exec           ExecAction `json:"exec,omitempty" yaml:"exec,omitempty"`
 }

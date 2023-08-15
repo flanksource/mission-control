@@ -149,7 +149,8 @@ func createHTTPServer(gormDB *gorm.DB) *echo.Echo {
 	upstreamGroup.GET("/status/:agent_name", upstream.Status)
 
 	playbookGroup := e.Group("/playbook")
-	playbookGroup.POST("/run", playbook.Run)
+	playbookGroup.POST("/run", playbook.HandlePlaybookRun)
+	playbookGroup.GET("/run/:id", playbook.HandlePlaybookRunStatus)
 
 	forward(e, "/config", configDb)
 	forward(e, "/canary", api.CanaryCheckerPath)

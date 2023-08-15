@@ -1,1 +1,0 @@
-{"error":"either config_id or component_id is required","message":"invalid request"}
