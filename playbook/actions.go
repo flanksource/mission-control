@@ -120,7 +120,7 @@ func runCmd(cmd *osExec.Cmd) (*ExecDetails, error) {
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("failed to run command: %w", err)
+		return nil, fmt.Errorf("%s: %w", strings.TrimSpace(stderr.String()), err)
 	}
 
 	details := ExecDetails{

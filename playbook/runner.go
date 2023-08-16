@@ -44,15 +44,11 @@ func ExecuteRun(ctx *api.Context, run models.PlaybookRun) {
 		"end_time": "NOW()",
 	}
 
-	if result, err := executeRun(ctx, run); err != nil {
+	if err := executeRun(ctx, run); err != nil {
 		logger.Errorf("failed to execute playbook run: %v", err)
 		columnUpdates["status"] = models.PlaybookRunStatusFailed
-		columnUpdates["error"] = err.Error()
 	} else {
 		columnUpdates["status"] = models.PlaybookRunStatusCompleted
-
-		resultJson, _ := json.Marshal(result)
-		columnUpdates["result"] = resultJson
 	}
 
 	columnUpdates["duration"] = time.Since(start).Milliseconds()
@@ -61,31 +57,70 @@ func ExecuteRun(ctx *api.Context, run models.PlaybookRun) {
 	}
 }
 
-func executeRun(ctx *api.Context, run models.PlaybookRun) ([]map[string]any, error) {
+func executeRun(ctx *api.Context, run models.PlaybookRun) error {
 	var playbookModel models.Playbook
 	if err := ctx.DB().Where("id = ?", run.PlaybookID).First(&playbookModel).Error; err != nil {
-		return nil, err
+		return err
 	}
 
 	playbook, err := v1.PlaybookFromModel(playbookModel)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	result := make([]map[string]any, 0, len(playbook.Spec.Actions))
 	for _, action := range playbook.Spec.Actions {
-		if action.Exec != nil {
-			e := ExecAction{}
-			res, err := e.Run(ctx, *action.Exec)
-			if err != nil {
-				return nil, err
-			}
+		logger.Infof("Executing playbook run: %s", run.ID)
 
-			result = append(result, map[string]any{
-				"exec": res.Stdout,
-			})
+		runAction := models.PlaybookRunAction{
+			PlaybookRunID: run.ID,
+			Name:          action.Name,
+			Status:        models.PlaybookRunStatusRunning,
+		}
+
+		if err := ctx.DB().Create(&runAction).Error; err != nil {
+			logger.Errorf("failed to create playbook run action: %v", err)
+			return err
+		}
+
+		start := time.Now()
+		columnUpdates := map[string]any{
+			"end_time": "NOW()",
+		}
+
+		result, err := executeAction(ctx, run, action)
+		if err != nil {
+			logger.Errorf("failed to execute action: %v", err)
+			columnUpdates["status"] = models.PlaybookRunStatusFailed
+			columnUpdates["error"] = err.Error()
+		} else {
+			columnUpdates["status"] = models.PlaybookRunStatusCompleted
+			columnUpdates["result"] = result
+		}
+
+		columnUpdates["duration"] = time.Since(start).Milliseconds()
+		if err := ctx.DB().Model(&models.PlaybookRunAction{}).Where("id = ?", runAction.ID).UpdateColumns(&columnUpdates).Error; err != nil {
+			logger.Errorf("failed to update playbook run action status: %v", err)
+		}
+
+		// Even if a single action fails, we stop the execution and mark the Run as failed
+		if err != nil {
+			return fmt.Errorf("action %s failed: %w", action.Name, err)
 		}
 	}
 
-	return result, nil
+	return nil
+}
+
+func executeAction(ctx *api.Context, run models.PlaybookRun, action v1.PlaybookAction) ([]byte, error) {
+	if action.Exec != nil {
+		e := ExecAction{}
+		res, err := e.Run(ctx, *action.Exec)
+		if err != nil {
+			return nil, err
+		}
+
+		return json.Marshal(res.Stdout)
+	}
+
+	return nil, nil
 }
