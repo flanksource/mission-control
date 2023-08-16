@@ -3,7 +3,6 @@ package playbook
 import (
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/models"
@@ -11,6 +10,7 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/playbook/actions"
 )
 
 // ActionParam defines the config and component passed to a playbook run action.
@@ -53,7 +53,6 @@ func ExecuteRun(ctx *api.Context, run models.PlaybookRun) {
 		return
 	}
 
-	start := time.Now()
 	columnUpdates := map[string]any{
 		"end_time": "NOW()",
 	}
@@ -65,7 +64,6 @@ func ExecuteRun(ctx *api.Context, run models.PlaybookRun) {
 		columnUpdates["status"] = models.PlaybookRunStatusCompleted
 	}
 
-	columnUpdates["duration"] = time.Since(start).Milliseconds()
 	if err := ctx.DB().Model(&models.PlaybookRun{}).Where("id = ?", run.ID).UpdateColumns(&columnUpdates).Error; err != nil {
 		logger.Errorf("failed to update playbook run status: %v", err)
 	}
@@ -107,7 +105,6 @@ func executeRun(ctx *api.Context, run models.PlaybookRun) error {
 			return err
 		}
 
-		start := time.Now()
 		columnUpdates := map[string]any{
 			"end_time": "NOW()",
 		}
@@ -122,7 +119,6 @@ func executeRun(ctx *api.Context, run models.PlaybookRun) error {
 			columnUpdates["result"] = result
 		}
 
-		columnUpdates["duration"] = time.Since(start).Milliseconds()
 		if err := ctx.DB().Model(&models.PlaybookRunAction{}).Where("id = ?", runAction.ID).UpdateColumns(&columnUpdates).Error; err != nil {
 			logger.Errorf("failed to update playbook run action status: %v", err)
 		}
@@ -144,7 +140,7 @@ func executeAction(ctx *api.Context, run models.PlaybookRun, action v1.PlaybookA
 		}
 		action.Exec.Script = script
 
-		e := ExecAction{}
+		e := actions.ExecAction{}
 		res, err := e.Run(ctx, *action.Exec)
 		if err != nil {
 			return nil, err
