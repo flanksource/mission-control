@@ -35,9 +35,9 @@ func FindPlaybookRun(ctx *api.Context, id string) (*models.PlaybookRun, error) {
 	return &p, nil
 }
 
-func GetScheduledPlaybookRuns(ctx *api.Context) ([]models.PlaybookRun, error) {
+func GetScheduledPlaybookRuns(ctx *api.Context, exceptions ...uuid.UUID) ([]models.PlaybookRun, error) {
 	var runs []models.PlaybookRun
-	if err := ctx.DB().Where("start_time <= NOW()").Where("status = ?", models.PlaybookRunStatusScheduled).Find(&runs).Error; err != nil {
+	if err := ctx.DB().Not(exceptions).Where("status = ?", models.PlaybookRunStatusScheduled).Find(&runs).Error; err != nil {
 		return nil, err
 	}
 

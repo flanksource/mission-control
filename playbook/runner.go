@@ -9,7 +9,6 @@ import (
 	"github.com/flanksource/gomplate/v3"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
-	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/playbook/actions"
 )
 
@@ -24,25 +23,6 @@ func (t *ActionParam) AsMap() map[string]any {
 		"config":    t.Config,
 		"component": t.Component,
 	}
-}
-
-func ProcessRunQueue(ctx *api.Context) error {
-	runs, err := db.GetScheduledPlaybookRuns(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to get playbook runs: %w", err)
-	}
-
-	if len(runs) == 0 {
-		return nil
-	}
-
-	logger.Infof("Starting to execute %d playbook runs", len(runs))
-
-	for _, r := range runs {
-		go ExecuteRun(ctx, r)
-	}
-
-	return nil
 }
 
 func ExecuteRun(ctx *api.Context, run models.PlaybookRun) {
@@ -92,7 +72,7 @@ func executeRun(ctx *api.Context, run models.PlaybookRun) error {
 	}
 
 	for _, action := range playbook.Spec.Actions {
-		logger.Infof("Executing playbook run: %s", run.ID)
+		logger.WithValues("runID", run.ID).Infof("Executing action: %s", action.Name)
 
 		runAction := models.PlaybookRunAction{
 			PlaybookRunID: run.ID,

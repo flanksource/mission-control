@@ -1,17 +1,15 @@
 package events
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"sync"
 	"time"
 
-	"github.com/sethvargo/go-retry"
-
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/utils"
 	"gorm.io/gorm"
 )
 
@@ -123,47 +121,6 @@ func (t *EventConsumer) ConsumeEventsUntilEmpty() {
 	wg.Wait()
 }
 
-// listenToPostgresNotify listens to postgres notifications
-// and will retry on failure for dbReconnectMaxAttempt times
-func (e *EventConsumer) listenToPostgresNotify(pgNotify chan bool) {
-	var listen = func(ctx context.Context, pgNotify chan bool) error {
-		conn, err := db.Pool.Acquire(ctx)
-		if err != nil {
-			return fmt.Errorf("error acquiring database connection: %v", err)
-		}
-		defer conn.Release()
-
-		_, err = conn.Exec(ctx, "LISTEN event_queue_updates")
-		if err != nil {
-			return fmt.Errorf("error listening to database notifications: %v", err)
-		}
-		logger.Debugf("listening to database notifications")
-
-		for {
-			_, err := conn.Conn().WaitForNotification(ctx)
-			if err != nil {
-				return fmt.Errorf("error listening to database notifications: %v", err)
-			}
-
-			pgNotify <- true
-		}
-	}
-
-	// retry on failure.
-	for {
-		backoff := retry.WithMaxDuration(dbReconnectMaxDuration, retry.NewExponential(dbReconnectBackoffBaseDuration))
-		err := retry.Do(context.TODO(), backoff, func(ctx context.Context) error {
-			if err := listen(ctx, pgNotify); err != nil {
-				return retry.RetryableError(err)
-			}
-
-			return nil
-		})
-
-		logger.Errorf("failed to connect to database: %v", err)
-	}
-}
-
 func (e *EventConsumer) Listen() {
 	logger.Infof("Started listening for database notify events: %v", e.WatchEvents)
 
@@ -175,8 +132,8 @@ func (e *EventConsumer) Listen() {
 	// Consume pending events
 	e.ConsumeEventsUntilEmpty()
 
-	pgNotify := make(chan bool)
-	go e.listenToPostgresNotify(pgNotify)
+	pgNotify := make(chan struct{})
+	go utils.ListenToPostgresNotify(db.Pool, "event_queue_updates", dbReconnectMaxDuration, dbReconnectBackoffBaseDuration, pgNotify)
 
 	for {
 		select {

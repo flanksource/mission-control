@@ -224,6 +224,9 @@ var Serve = &cobra.Command{
 			UpstreamPush: api.UpstreamConf,
 		})
 
+		playbookRunConsumer := playbook.NewQueueConsumer(db.Gorm, db.Pool)
+		go playbookRunConsumer.Listen()
+
 		go launchKopper()
 
 		e := createHTTPServer(db.Gorm)

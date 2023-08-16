@@ -6,7 +6,6 @@ import (
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/playbook"
 	"github.com/flanksource/incident-commander/responder"
 	"github.com/flanksource/incident-commander/rules"
 	"github.com/flanksource/incident-commander/upstream"
@@ -20,7 +19,6 @@ const (
 	ResponderConfigSyncSchedule     = "@every 1h"
 	CleanupJobHistoryTableSchedule  = "@every 24h"
 	PushAgentReconcileSchedule      = "@every 30m"
-	ProcessPlaybookRunQueueSchedule = "@every 5s"
 )
 
 var FuncScheduler = cron.New()
@@ -65,11 +63,6 @@ func Start() {
 		if err := job.schedule(FuncScheduler, PushAgentReconcileSchedule); err != nil {
 			logger.Errorf("Failed to schedule push reconcile job: %v", err)
 		}
-	}
-
-	job := newFuncJob(playbook.ProcessRunQueue, withName("process playbook-run queue"), withRunNow(true))
-	if err := job.schedule(FuncScheduler, ProcessPlaybookRunQueueSchedule); err != nil {
-		logger.Errorf("Failed to schedule 'playbookRun queue processor' job: %v", err)
 	}
 
 	incidentRulesSchedule := fmt.Sprintf("@every %s", rules.Period.String())
