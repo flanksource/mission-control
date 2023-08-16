@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/google/uuid"
@@ -12,8 +13,8 @@ import (
 )
 
 type RunResponse struct {
-	RunID     string `json:"run_id"`
-	CreatedAt string `json:"created_at"`
+	RunID    string `json:"run_id"`
+	StartsAt string `json:"starts_at"`
 }
 
 type RunParams struct {
@@ -59,18 +60,27 @@ func HandlePlaybookRun(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, api.HTTPError{Error: "not found", Message: fmt.Sprintf("playbook(id=%s) not found", req.ID)})
 	}
 
-	// TODO: Run the playbook
-	// Return the playbook run ID and exit without waiting for the run to finish.
-	// The user will query the status of the playbook run via another endpoint using
-	// the playbook run ID.
-	run, err := Run(ctx, *playbook, req)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to register playbook run"})
+	run := models.PlaybookRun{
+		PlaybookID: playbook.ID,
+		Status:     models.PlaybookRunStatusScheduled,
+		// CreatedBy:  ctx.User().ID, // TODO: Add user id to the context
+	}
+
+	if req.ComponentID != uuid.Nil {
+		run.ComponentID = &req.ComponentID
+	}
+
+	if req.ConfigID != uuid.Nil {
+		run.ConfigID = &req.ConfigID
+	}
+
+	if err := ctx.DB().Create(&run).Error; err != nil {
+		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to create playbook run"})
 	}
 
 	return c.JSON(http.StatusCreated, RunResponse{
-		RunID:     run.ID.String(),
-		CreatedAt: run.CreatedAt.Format(time.RFC3339),
+		RunID:    run.ID.String(),
+		StartsAt: run.StartDate.Format(time.RFC3339),
 	})
 }
 
