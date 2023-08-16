@@ -312,6 +312,8 @@ spec:
                       - name
                       - script
                       type: object
+                    timeout-minutes:
+                      type: string
                   type: object
                 type: array
               components:

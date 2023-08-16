@@ -1,14 +1,14 @@
 package playbook
 
 import (
-	"errors"
+	"encoding/json"
 	"fmt"
-	"math/rand"
 	"time"
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
+	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
 )
 
@@ -44,32 +44,48 @@ func ExecuteRun(ctx *api.Context, run models.PlaybookRun) {
 		"end_time": "NOW()",
 	}
 
-	if err := executeRun(ctx, run); err != nil {
+	if result, err := executeRun(ctx, run); err != nil {
 		logger.Errorf("failed to execute playbook run: %v", err)
 		columnUpdates["status"] = models.PlaybookRunStatusFailed
-		columnUpdates["result"] = err.Error()
+		columnUpdates["error"] = err.Error()
 	} else {
 		columnUpdates["status"] = models.PlaybookRunStatusCompleted
+
+		resultJson, _ := json.Marshal(result)
+		columnUpdates["result"] = resultJson
 	}
 
 	columnUpdates["duration"] = time.Since(start).Milliseconds()
-	if err := ctx.DB().Debug().Model(&models.PlaybookRun{}).Where("id = ?", run.ID).UpdateColumns(&columnUpdates).Error; err != nil {
+	if err := ctx.DB().Model(&models.PlaybookRun{}).Where("id = ?", run.ID).UpdateColumns(&columnUpdates).Error; err != nil {
 		logger.Errorf("failed to update playbook run status: %v", err)
 	}
 }
 
-func executeRun(ctx *api.Context, run models.PlaybookRun) error {
-	var playbook models.Playbook
-	if err := ctx.DB().Where("id = ?", run.PlaybookID).First(&playbook).Error; err != nil {
-		return err
+func executeRun(ctx *api.Context, run models.PlaybookRun) ([]map[string]any, error) {
+	var playbookModel models.Playbook
+	if err := ctx.DB().Where("id = ?", run.PlaybookID).First(&playbookModel).Error; err != nil {
+		return nil, err
 	}
 
-	// The actual job here
-	time.Sleep(time.Second * time.Duration(rand.Intn(4)))
-
-	if rand.Intn(4) != 0 { // 75% chance of failing
-		return nil
+	playbook, err := v1.PlaybookFromModel(playbookModel)
+	if err != nil {
+		return nil, err
 	}
 
-	return errors.New("dummy error")
+	result := make([]map[string]any, 0, len(playbook.Spec.Actions))
+	for _, action := range playbook.Spec.Actions {
+		if action.Exec != nil {
+			e := ExecAction{}
+			res, err := e.Run(ctx, *action.Exec)
+			if err != nil {
+				return nil, err
+			}
+
+			result = append(result, map[string]any{
+				"exec": res.Stdout,
+			})
+		}
+	}
+
+	return result, nil
 }

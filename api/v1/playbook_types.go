@@ -1,6 +1,12 @@
 package v1
 
-import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+import (
+	"encoding/json"
+
+	"github.com/flanksource/duty/models"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+)
 
 type Permission struct {
 	Role string `json:"role,omitempty" yaml:"role,omitempty"`
@@ -45,4 +51,22 @@ type Playbook struct {
 
 	Spec   PlaybookSpec   `json:"spec,omitempty"`
 	Status PlaybookStatus `json:"status,omitempty"`
+}
+
+func PlaybookFromModel(p models.Playbook) (Playbook, error) {
+	var spec PlaybookSpec
+	if err := json.Unmarshal(p.Spec, &spec); err != nil {
+		return Playbook{}, nil
+	}
+
+	out := Playbook{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:              p.Name,
+			UID:               types.UID(p.ID.String()),
+			CreationTimestamp: metav1.Time{Time: p.CreatedAt},
+		},
+		Spec: spec,
+	}
+
+	return out, nil
 }

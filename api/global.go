@@ -61,6 +61,10 @@ func (c *Context) GetEnvVarValue(input types.EnvVar) (string, error) {
 	return duty.GetEnvValueFromCache(c.Kubernetes, input, c.Namespace)
 }
 
+func (ctx *Context) GetEnvValueFromCache(env types.EnvVar) (string, error) {
+	return duty.GetEnvValueFromCache(ctx.Kubernetes, env, ctx.Namespace)
+}
+
 func (c *Context) HydrateConnection(connectionName string) (*models.Connection, error) {
 	if connectionName == "" || !strings.HasPrefix(connectionName, "connection://") {
 		return nil, nil
