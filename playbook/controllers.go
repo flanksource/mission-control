@@ -1,12 +1,15 @@
 package playbook
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/api"
+	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -24,7 +27,7 @@ type RunParams struct {
 	Params      map[string]string `json:"params"`
 }
 
-func (r *RunParams) Valid() error {
+func (r *RunParams) valid() error {
 	if r.ID == uuid.Nil {
 		return fmt.Errorf("playbook id is required")
 	}
@@ -40,6 +43,28 @@ func (r *RunParams) Valid() error {
 	return nil
 }
 
+func (r *RunParams) validateParams(params []v1.PlaybookParameter) error {
+	if len(params) != len(r.Params) {
+		return fmt.Errorf("invalid number of parameters. expected %d, got %d", len(params), len(r.Params))
+	}
+
+	for k := range r.Params {
+		var ok bool
+		for _, p := range params {
+			if k == p.Name {
+				ok = true
+				break
+			}
+		}
+
+		if !ok {
+			return fmt.Errorf("unknown parameter %s", k)
+		}
+	}
+
+	return nil
+}
+
 // HandlePlaybookRun handles playbook run requests.
 func HandlePlaybookRun(c echo.Context) error {
 	ctx := c.(*api.Context)
@@ -49,7 +74,7 @@ func HandlePlaybookRun(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error(), Message: "invalid request"})
 	}
 
-	if err := req.Valid(); err != nil {
+	if err := req.valid(); err != nil {
 		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error(), Message: "invalid request"})
 	}
 
@@ -60,10 +85,20 @@ func HandlePlaybookRun(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, api.HTTPError{Error: "not found", Message: fmt.Sprintf("playbook(id=%s) not found", req.ID)})
 	}
 
+	var spec v1.PlaybookSpec
+	if err := json.Unmarshal(playbook.Spec, &spec); err != nil {
+		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to unmarshal playbook spec"})
+	}
+
+	if err := req.validateParams(spec.Parameters); err != nil {
+		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error(), Message: "invalid parameters"})
+	}
+
 	run := models.PlaybookRun{
 		PlaybookID: playbook.ID,
 		Status:     models.PlaybookRunStatusScheduled,
-		// CreatedBy:  ctx.User().ID, // TODO: Add user id to the context
+		Parameters: types.JSONStringMap(req.Params),
+		// CreatedBy:  ctx.User().ID, // TODO: Add user id to the context from a middleware
 	}
 
 	if req.ComponentID != uuid.Nil {
@@ -80,7 +115,7 @@ func HandlePlaybookRun(c echo.Context) error {
 
 	return c.JSON(http.StatusCreated, RunResponse{
 		RunID:    run.ID.String(),
-		StartsAt: run.StartDate.Format(time.RFC3339),
+		StartsAt: run.StartTime.Format(time.RFC3339),
 	})
 }
 
