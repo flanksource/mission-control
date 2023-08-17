@@ -153,3 +153,11 @@ func HandlePlaybookRunStatus(c echo.Context) error {
 func HandlePlaybookList(c echo.Context) error {
 	return nil
 }
+
+func RegisterRoutes(e *echo.Echo, prefix string) *echo.Group {
+	playbookGroup := e.Group(fmt.Sprintf("/%s", prefix))
+	playbookGroup.POST("/run", HandlePlaybookRun)
+	playbookGroup.GET("/run/:id", HandlePlaybookRunStatus)
+	playbookGroup.GET("/list", HandlePlaybookRunStatus)
+	return playbookGroup
+}
