@@ -70,3 +70,7 @@ func PlaybookFromModel(p models.Playbook) (Playbook, error) {
 
 	return out, nil
 }
+
+func init() {
+	SchemeBuilder.Register(&Playbook{})
+}

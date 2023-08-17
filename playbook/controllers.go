@@ -132,3 +132,10 @@ func HandlePlaybookRunStatus(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, run)
 }
+
+// Takes config id or component id as a query param
+// and returns all the available playbook that supports
+// the given component or config.
+func HandlePlaybookList(c echo.Context) error {
+	return nil
+}

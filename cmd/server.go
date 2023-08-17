@@ -151,6 +151,7 @@ func createHTTPServer(gormDB *gorm.DB) *echo.Echo {
 	playbookGroup := e.Group("/playbook")
 	playbookGroup.POST("/run", playbook.HandlePlaybookRun)
 	playbookGroup.GET("/run/:id", playbook.HandlePlaybookRunStatus)
+	playbookGroup.GET("/list", playbook.HandlePlaybookRunStatus)
 
 	forward(e, "/config", configDb)
 	forward(e, "/canary", api.CanaryCheckerPath)
@@ -185,6 +186,15 @@ func launchKopper() {
 		"incidentrule.mission-control.flanksource.com",
 	); err != nil {
 		logger.Fatalf("Unable to create controller for IncidentRule: %v", err)
+	}
+
+	if err = kopper.SetupReconciler(
+		mgr,
+		db.PersistPlaybookFromCRD,
+		db.DeletePlaybook,
+		"playbook.mission-control.flanksource.com",
+	); err != nil {
+		logger.Fatalf("Unable to create controller for Playbook: %v", err)
 	}
 
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
