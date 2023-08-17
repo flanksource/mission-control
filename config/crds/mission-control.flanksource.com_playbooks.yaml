@@ -309,11 +309,14 @@ spec:
                             or left as is
                           type: string
                       required:
-                      - name
                       - script
                       type: object
+                    name:
+                      type: string
                     timeout-minutes:
                       type: string
+                  required:
+                  - name
                   type: object
                 type: array
               components:

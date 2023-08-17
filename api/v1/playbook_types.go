@@ -71,6 +71,15 @@ func PlaybookFromModel(p models.Playbook) (Playbook, error) {
 	return out, nil
 }
 
+// +kubebuilder:object:root=true
+
+// PlaybookList contains a list of Playbook
+type PlaybookList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []Playbook `json:"items"`
+}
+
 func init() {
-	SchemeBuilder.Register(&Playbook{})
+	SchemeBuilder.Register(&Playbook{}, &PlaybookList{})
 }

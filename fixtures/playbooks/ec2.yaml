@@ -1,0 +1,17 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: ec2-restart
+spec:
+  description: Unconventional EC2 restart
+  configs: # playbooks can run on configs
+    - type: EC2 Instance
+      tags: # can filter non-prod vs prod instances
+        a: b
+  actions: # 1 or more actions
+    - name: 'Stop EC2 instance'
+      exec:
+        script: aws ec2 stop-instance --instance-id {{.config.instanceId}}
+    - name: 'Start again'
+      exec:
+        script: aws ec2 start-instance --instance-id {{.config.instanceId}}

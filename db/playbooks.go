@@ -64,5 +64,5 @@ func PersistPlaybookFromCRD(obj *v1.Playbook) error {
 }
 
 func DeletePlaybook(id string) error {
-	return Gorm.Delete(&models.Playbook{}, id).Error
+	return Gorm.Delete(&models.Playbook{}, "id = ?", id).Error
 }

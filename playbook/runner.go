@@ -16,12 +16,14 @@ import (
 type ActionParam struct {
 	Config    *models.ConfigItem `json:"config,omitempty"`
 	Component *models.Component  `json:"component,omitempty"`
+	Params    map[string]string  `json:"params,omitempty"`
 }
 
 func (t *ActionParam) AsMap() map[string]any {
 	return map[string]any{
 		"config":    t.Config,
 		"component": t.Component,
+		"params":    t.Params,
 	}
 }
 
@@ -60,7 +62,9 @@ func executeRun(ctx *api.Context, run models.PlaybookRun) error {
 		return err
 	}
 
-	var actionParam ActionParam
+	actionParam := ActionParam{
+		Params: run.Parameters,
+	}
 	if run.ComponentID != nil {
 		if err := ctx.DB().Where("id = ?", run.ComponentID).First(&actionParam.Component).Error; err != nil {
 			return err

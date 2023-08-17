@@ -1,9 +1,0 @@
-apiVersion: mission-control.flanksource.com/v1
-kind: Playbook
-metadata:
-  name: list temp
-spec:
-  actions:
-    - exec:
-        name: "lister"
-        script: ls /tmp
