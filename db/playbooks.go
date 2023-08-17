@@ -3,6 +3,7 @@ package db
 import (
 	"encoding/json"
 	"errors"
+	"time"
 
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
@@ -37,9 +38,11 @@ func FindPlaybookRun(ctx *api.Context, id string) (*models.PlaybookRun, error) {
 	return &p, nil
 }
 
-func GetScheduledPlaybookRuns(ctx *api.Context, exceptions ...uuid.UUID) ([]models.PlaybookRun, error) {
+// GetScheduledPlaybookRuns returns all the scheduled playbook runs that should be started
+// before X duration from now.
+func GetScheduledPlaybookRuns(ctx *api.Context, startingBefore time.Duration, exceptions ...uuid.UUID) ([]models.PlaybookRun, error) {
 	var runs []models.PlaybookRun
-	if err := ctx.DB().Not(exceptions).Where("status = ?", models.PlaybookRunStatusScheduled).Find(&runs).Error; err != nil {
+	if err := ctx.DB().Debug().Not(exceptions).Where("start_time <= NOW() + ?", startingBefore).Where("status = ?", models.PlaybookRunStatusScheduled).Order("start_time").Find(&runs).Error; err != nil {
 		return nil, err
 	}
 

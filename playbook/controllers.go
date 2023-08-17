@@ -43,9 +43,23 @@ func (r *RunParams) valid() error {
 	return nil
 }
 
+func paramStr(params []v1.PlaybookParameter) string {
+	if len(params) == 0 {
+		return " no params expected."
+	}
+
+	out := " supported params: "
+	for _, p := range params {
+		out += fmt.Sprintf("(%s=%s), ", p.Name, p.Label)
+	}
+
+	out = out[:len(out)-1]
+	return out
+}
+
 func (r *RunParams) validateParams(params []v1.PlaybookParameter) error {
 	if len(params) != len(r.Params) {
-		return fmt.Errorf("invalid number of parameters. expected %d, got %d", len(params), len(r.Params))
+		return fmt.Errorf("invalid number of parameters. expected %d, got %d.%s", len(params), len(r.Params), paramStr(params))
 	}
 
 	for k := range r.Params {
@@ -58,7 +72,7 @@ func (r *RunParams) validateParams(params []v1.PlaybookParameter) error {
 		}
 
 		if !ok {
-			return fmt.Errorf("unknown parameter %s", k)
+			return fmt.Errorf("unknown parameter %s.%s", k, paramStr(params))
 		}
 	}
 

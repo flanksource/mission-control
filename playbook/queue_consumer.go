@@ -59,7 +59,7 @@ func (t *queueConsumer) Listen() error {
 }
 
 func (t *queueConsumer) consumeAll(ctx *api.Context) error {
-	runs, err := db.GetScheduledPlaybookRuns(ctx, t.getRunIDsInRegistry()...)
+	runs, err := db.GetScheduledPlaybookRuns(ctx, time.Minute*10, t.getRunIDsInRegistry()...)
 	if err != nil {
 		return fmt.Errorf("failed to get playbook runs: %w", err)
 	}
