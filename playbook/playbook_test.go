@@ -13,6 +13,7 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/google/uuid"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -25,9 +26,15 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 		},
 		Actions: []v1.PlaybookAction{
 			{
-				Name: "write config name to a file",
+				Name: "write config id to a file",
 				Exec: &v1.ExecAction{
-					Script: "printf {{.config.config_class}} > {{.params.path}}",
+					Script: "printf {{.config.id}} > {{.params.path}}",
+				},
+			},
+			{
+				Name: "append config class to the same file ",
+				Exec: &v1.ExecAction{
+					Script: "printf {{.config.config_class}} >> {{.params.path}}",
 				},
 			},
 		},
@@ -104,8 +111,19 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 		err := consumer.consumeAll(ctx)
 		Expect(err).NotTo(HaveOccurred())
 
-		// Wait for the action to complete
-		time.Sleep(time.Second * 5)
+		// Wait until all the runs are processed
+		var attempts int
+		for {
+			time.Sleep(time.Second) // need to wait initially before trying.
+			if _, ok := consumer.registry.Load(uuid.MustParse(runResp.RunID)); !ok {
+				break
+			}
+
+			attempts += 1
+			if attempts > 5 {
+				ginkgo.Fail("Timed out waiting for run to complete")
+			}
+		}
 
 		var updatedRun models.PlaybookRun
 		err = testDB.Where("id = ? ", runResp.RunID).First(&updatedRun).Error
@@ -113,9 +131,15 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 
 		Expect(updatedRun.Status).To(Equal(models.PlaybookRunStatusCompleted))
 
+		var runActions []models.PlaybookRunAction
+		err = testDB.Where("playbook_run_id = ?", updatedRun.ID).Find(&runActions).Error
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(len(runActions)).To(Equal(2))
+
 		f, err := os.ReadFile(tempPath)
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(string(f)).To(Equal(dummy.EKSCluster.ConfigClass))
+		Expect(string(f)).To(Equal(fmt.Sprintf("%s%s", dummy.EKSCluster.ID, dummy.EKSCluster.ConfigClass)))
 	})
 })

@@ -25,9 +25,8 @@ func TestPlaybook(t *testing.T) {
 }
 
 var (
-	// postgres server shared by both agent and upstream
 	postgresServer *embeddedPG.EmbeddedPostgres
-	pgServerPort   = 9884
+	pgServerPort   = 9885
 
 	// tempPath is used to store the result of the action for this test.
 	tempPath string
