@@ -43,10 +43,11 @@ const (
 	ActionCreate = "create"
 
 	// Objects
-	ObjectRBAC      = "rbac"
-	ObjectAuth      = "auth"
-	ObjectAgentPush = "agent-push"
-	ObjectDatabase  = "database"
+	ObjectRBAC        = "rbac"
+	ObjectAuth        = "auth"
+	ObjectAgentPush   = "agent-push"
+	ObjectAgentCreate = "agent-create"
+	ObjectDatabase    = "database"
 
 	ObjectDatabaseResponder      = "database.responder"
 	ObjectDatabaseIncident       = "database.incident"
@@ -101,6 +102,7 @@ func Init(adminUserID string) error {
 		{RoleAdmin, ObjectRBAC, ActionWrite},
 		{RoleAdmin, ObjectAuth, ActionWrite},
 		{RoleAdmin, ObjectAgentPush, ActionWrite},
+		{RoleAdmin, ObjectAgentCreate, ActionWrite},
 		{RoleAdmin, ObjectDatabaseIdentity, ActionRead},
 		{RoleAdmin, ObjectDatabaseConnection, ActionRead},
 		{RoleAdmin, ObjectDatabaseConnection, ActionCreate},
