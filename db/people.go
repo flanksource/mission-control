@@ -24,6 +24,12 @@ func UpdateIdentityState(ctx *api.Context, id, state string) error {
 	return ctx.DB().Table("identities").Where("id = ?", id).Update("state", state).Error
 }
 
+func GetUserByID(ctx *api.Context, id string) (api.Person, error) {
+	var user api.Person
+	err := ctx.DB().Table("people").Where("id = ?", id).First(&user).Error
+	return user, err
+}
+
 func GetOrCreateUser(ctx *api.Context, user api.Person) (api.Person, error) {
 	if err := ctx.DB().Table("people").Where("email = ?", user.Email).Find(&user).Error; err != nil {
 		return api.Person{}, err

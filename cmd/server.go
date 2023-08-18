@@ -128,6 +128,7 @@ func createHTTPServer(gormDB *gorm.DB) *echo.Echo {
 
 	e.POST("/auth/:id/update_state", auth.UpdateAccountState)
 	e.POST("/auth/:id/properties", auth.UpdateAccountProperties)
+	e.GET("/auth/whoami", auth.WhoAmI)
 
 	e.POST("/rbac/:id/update_role", rbac.UpdateRoleForUser, rbac.Authorization(rbac.ObjectRBAC, rbac.ActionWrite))
 

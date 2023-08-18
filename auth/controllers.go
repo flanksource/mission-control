@@ -113,3 +113,19 @@ func UpdateAccountProperties(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, api.HTTPSuccess{Message: "success"})
 }
+
+func WhoAmI(c echo.Context) error {
+	ctx := c.(*api.Context)
+	userID := c.Request().Header.Get(UserIDHeaderKey)
+	user, err := db.GetUserByID(ctx, userID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, api.HTTPError{
+			Error:   err.Error(),
+			Message: "Error fetching user",
+		})
+	}
+	return c.JSON(http.StatusOK, api.HTTPSuccess{
+		Message: "success",
+		Payload: user,
+	})
+}
