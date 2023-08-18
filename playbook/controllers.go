@@ -112,7 +112,7 @@ func HandlePlaybookRun(c echo.Context) error {
 		PlaybookID: playbook.ID,
 		Status:     models.PlaybookRunStatusScheduled,
 		Parameters: types.JSONStringMap(req.Params),
-		// CreatedBy:  ctx.User().ID, // TODO: Add user id to the context from a middleware
+		CreatedBy:  ctx.UserID(),
 	}
 
 	if req.ComponentID != uuid.Nil {

@@ -15,6 +15,10 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
+type ContextKey string
+
+const UserIDContextKey ContextKey = "User-ID"
+
 var SystemUserID *uuid.UUID
 var CanaryCheckerPath string
 var ApmHubPath string
@@ -55,6 +59,16 @@ func (c *Context) DB() *gorm.DB {
 	}
 
 	return c.db.WithContext(c.Context)
+}
+
+func (c *Context) UserID() *uuid.UUID {
+	id := c.Context.Value(UserIDContextKey).(string)
+	u, err := uuid.Parse(id)
+	if err != nil {
+		return nil
+	}
+
+	return &u
 }
 
 func (c *Context) GetEnvVarValue(input types.EnvVar) (string, error) {

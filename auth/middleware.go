@@ -10,6 +10,7 @@ import (
 
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/utils"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/labstack/echo/v4"
@@ -72,7 +73,10 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 		c.Request().Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
 		c.Request().Header.Set(UserIDHeaderKey, session.Identity.GetId())
 
-		return next(c)
+		ctx := c.(*api.Context)
+		ctx.Context = context.WithValue(ctx.Context, api.UserIDContextKey, session.Identity.GetId())
+
+		return next(ctx)
 	}
 }
 
