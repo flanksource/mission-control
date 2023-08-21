@@ -38,13 +38,14 @@ func GetUserByID(ctx *api.Context, id string) (api.Person, error) {
 	return user, err
 }
 
-func GetOrCreateUser(ctx *api.Context, user api.Person) (api.Person, error) {
-	if err := ctx.DB().Table("people").Where("email = ?", user.Email).Find(&user).Error; err != nil {
-		return api.Person{}, err
-	}
-	if user.ID != uuid.Nil {
-		return user, nil
-	}
+func GetUserByExternalID(ctx *api.Context, id string) (api.Person, error) {
+	var user api.Person
+	err := ctx.DB().Table("people").Where("external_id = ?", id).First(&user).Error
+	return user, err
+}
+
+// CreateUser creates a new user and returns a copy
+func CreateUser(ctx *api.Context, user api.Person) (api.Person, error) {
 	err := ctx.DB().Table("people").Create(&user).Error
 	return user, err
 }
