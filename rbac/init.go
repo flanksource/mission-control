@@ -34,6 +34,7 @@ const (
 	RoleViewer    = "viewer"
 	RoleCommander = "commander"
 	RoleResponder = "responder"
+	RoleAgent     = "agent"
 
 	// Actions
 	ActionRead   = "read"
@@ -42,9 +43,11 @@ const (
 	ActionCreate = "create"
 
 	// Objects
-	ObjectRBAC     = "rbac"
-	ObjectAuth     = "auth"
-	ObjectDatabase = "database"
+	ObjectRBAC        = "rbac"
+	ObjectAuth        = "auth"
+	ObjectAgentPush   = "agent-push"
+	ObjectAgentCreate = "agent-create"
+	ObjectDatabase    = "database"
 
 	ObjectDatabaseResponder      = "database.responder"
 	ObjectDatabaseIncident       = "database.incident"
@@ -98,6 +101,8 @@ func Init(adminUserID string) error {
 		{RoleAdmin, ObjectDatabase, ActionWrite},
 		{RoleAdmin, ObjectRBAC, ActionWrite},
 		{RoleAdmin, ObjectAuth, ActionWrite},
+		{RoleAdmin, ObjectAgentPush, ActionWrite},
+		{RoleAdmin, ObjectAgentCreate, ActionWrite},
 		{RoleAdmin, ObjectDatabaseIdentity, ActionRead},
 		{RoleAdmin, ObjectDatabaseConnection, ActionRead},
 		{RoleAdmin, ObjectDatabaseConnection, ActionCreate},
@@ -123,6 +128,8 @@ func Init(adminUserID string) error {
 		{RoleResponder, ObjectDatabaseIncident, ActionUpdate},
 
 		{RoleViewer, ObjectDatabase, ActionRead},
+
+		{RoleAgent, ObjectAgentPush, ActionWrite},
 	}
 
 	// Adding policies in a loop is important

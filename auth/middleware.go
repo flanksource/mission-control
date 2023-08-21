@@ -2,19 +2,27 @@ package auth
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/flanksource/commons/collections"
+	"github.com/flanksource/commons/hash"
 	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/incident-commander/utils"
+	"github.com/flanksource/commons/rand"
+	"github.com/flanksource/commons/utils"
+	"github.com/flanksource/duty/models"
 	"github.com/golang-jwt/jwt/v4"
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	client "github.com/ory/client-go"
 	"github.com/patrickmn/go-cache"
+	"golang.org/x/crypto/argon2"
+	"gorm.io/gorm"
 )
 
 const (
@@ -22,24 +30,33 @@ const (
 	UserIDHeaderKey      = "X-User-ID"
 )
 
+var (
+	errInvalidTokenFormat = errors.New("invalid access token format")
+	errTokenExpired       = errors.New("access token has expired")
+)
+
 type kratosMiddleware struct {
 	client             *client.APIClient
 	jwtSecret          string
 	tokenCache         *cache.Cache
+	accessTokenCache   *cache.Cache
 	authSessionCache   *cache.Cache
 	basicAuthSeparator string
+	db                 *gorm.DB
 }
 
 func (k *KratosHandler) KratosMiddleware() (*kratosMiddleware, error) {
-	randString, err := utils.GenerateRandString(30)
+	randString, err := rand.GenerateRandString(30)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate random string: %w", err)
 	}
 
 	return &kratosMiddleware{
 		client:             k.client,
+		db:                 k.db,
 		jwtSecret:          k.jwtSecret,
 		tokenCache:         cache.New(3*24*time.Hour, 12*time.Hour),
+		accessTokenCache:   cache.New(3*24*time.Hour, 24*time.Hour),
 		authSessionCache:   cache.New(30*time.Minute, time.Hour),
 		basicAuthSeparator: randString,
 	}, nil
@@ -58,8 +75,15 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 		}
 		session, err := k.validateSession(c.Request())
 		if err != nil {
+			if errors.Is(err, errInvalidTokenFormat) {
+				return c.String(http.StatusBadRequest, "invalid access token")
+			} else if errors.Is(err, errTokenExpired) {
+				return c.String(http.StatusUnauthorized, "access token has expired")
+			}
+
 			return c.String(http.StatusUnauthorized, "Unauthorized")
 		}
+
 		if !*session.Active {
 			return c.String(http.StatusUnauthorized, "Unauthorized")
 		}
@@ -76,6 +100,54 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 	}
 }
 
+func (k *kratosMiddleware) getAccessToken(ctx context.Context, token string) (*models.AccessToken, error) {
+	if token, ok := k.accessTokenCache.Get(token); ok {
+		return token.(*models.AccessToken), nil
+	}
+
+	fields := strings.Split(token, ".")
+	if len(fields) != 5 {
+		return nil, errInvalidTokenFormat
+	}
+
+	var (
+		password = fields[0]
+		salt     = fields[1]
+	)
+
+	timeCost, err := strconv.ParseUint(fields[2], 10, 32)
+	if err != nil {
+		return nil, errInvalidTokenFormat
+	}
+
+	memoryCost, err := strconv.ParseUint(fields[3], 10, 32)
+	if err != nil {
+		return nil, errInvalidTokenFormat
+	}
+
+	parallelism, err := strconv.ParseUint(fields[4], 10, 8)
+	if err != nil {
+		return nil, errInvalidTokenFormat
+	}
+
+	hash := argon2.IDKey([]byte(password), []byte(salt), uint32(timeCost), uint32(memoryCost), uint8(parallelism), 20)
+	encodedHash := base64.URLEncoding.EncodeToString(hash)
+
+	query := `SELECT access_tokens.* FROM access_tokens WHERE value = ?`
+	var acessToken models.AccessToken
+	if err := k.db.Raw(query, encodedHash).First(&acessToken).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+
+		return nil, err
+	}
+
+	k.accessTokenCache.Set(token, &acessToken, time.Until(acessToken.ExpiresAt))
+
+	return &acessToken, nil
+}
+
 func (k *kratosMiddleware) validateSession(r *http.Request) (*client.Session, error) {
 	// Skip all kratos calls
 	if strings.HasPrefix(r.URL.Path, "/kratos") {
@@ -84,6 +156,30 @@ func (k *kratosMiddleware) validateSession(r *http.Request) (*client.Session, er
 	}
 
 	if username, password, ok := r.BasicAuth(); ok {
+		if username == "TOKEN" {
+			accessToken, err := k.getAccessToken(r.Context(), password)
+			if err != nil {
+				return nil, err
+			} else if accessToken == nil {
+				return &client.Session{Active: utils.Ptr(false)}, nil
+			}
+
+			if accessToken.ExpiresAt.Before(time.Now()) {
+				return nil, errTokenExpired
+			}
+
+			s := &client.Session{
+				Id:        uuid.NewString(),
+				Active:    utils.Ptr(true),
+				ExpiresAt: &accessToken.ExpiresAt,
+				Identity: client.Identity{
+					Id: accessToken.PersonID.String(),
+				},
+			}
+
+			return s, nil
+		}
+
 		sess, err := k.kratosLoginWithCache(r.Context(), username, password)
 		if err != nil {
 			return nil, fmt.Errorf("failed to login: %w", err)
@@ -187,5 +283,5 @@ func (k *kratosMiddleware) getDBToken(sessionID, userID string) (string, error) 
 }
 
 func basicAuthCacheKey(username, separator, password string) string {
-	return utils.Sha256Hex(fmt.Sprintf("%s:%s:%s", username, separator, password))
+	return hash.Sha256Hex(fmt.Sprintf("%s:%s:%s", username, separator, password))
 }
