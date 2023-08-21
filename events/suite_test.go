@@ -11,8 +11,10 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/fixtures/dummy"
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/testutils"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/google/uuid"
 
 	"github.com/flanksource/incident-commander/upstream"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -27,6 +29,30 @@ func TestPushMode(t *testing.T) {
 	ginkgo.RunSpecs(t, "Push Mode Suite")
 }
 
+type agentWrapper struct {
+	id      uuid.UUID // agent's id in the upstream db
+	name    string
+	db      *gorm.DB
+	pool    *pgxpool.Pool
+	dataset dummy.DummyData
+}
+
+func (t *agentWrapper) setup(connection string) {
+	var err error
+
+	if t.db, t.pool, err = duty.SetupDB(connection, nil); err != nil {
+		ginkgo.Fail(err.Error())
+	}
+
+	if err := t.dataset.Populate(t.db); err != nil {
+		ginkgo.Fail(err.Error())
+	}
+}
+
+func (t *agentWrapper) stop() {
+	t.pool.Close()
+}
+
 var (
 	// postgres server shared by both agent and upstream
 	postgresServer *embeddedPG.EmbeddedPostgres
@@ -35,9 +61,9 @@ var (
 	upstreamEchoServerport = 11005
 	upstreamEchoServer     *echo.Echo
 
-	agentDB       *gorm.DB
-	agentDBPGPool *pgxpool.Pool
-	agentDBName   = "agent"
+	agentBob   = agentWrapper{name: "bob", id: uuid.New(), dataset: dummy.GenerateDynamicDummyData()}
+	agentJames = agentWrapper{name: "james", id: uuid.New(), dataset: dummy.GenerateDynamicDummyData()}
+	agentRoss  = agentWrapper{name: "ross", id: uuid.New(), dataset: dummy.GenerateDynamicDummyData()}
 
 	upstreamDB       *gorm.DB
 	upstreamDBPGPool *pgxpool.Pool
@@ -45,28 +71,35 @@ var (
 )
 
 var _ = ginkgo.BeforeSuite(func() {
-	config, connection := testutils.GetEmbeddedPGConfig(agentDBName, pgServerPort)
+	config, connection := testutils.GetEmbeddedPGConfig(agentBob.name, pgServerPort)
 	postgresServer = embeddedPG.NewDatabase(config)
 	if err := postgresServer.Start(); err != nil {
 		ginkgo.Fail(err.Error())
 	}
 	logger.Infof("Started postgres on port: %d", pgServerPort)
 
-	var err error
-	if agentDB, agentDBPGPool, err = duty.SetupDB(connection, nil); err != nil {
-		ginkgo.Fail(err.Error())
-	}
-	if err := dummy.PopulateDBWithDummyModels(agentDB); err != nil {
-		ginkgo.Fail(err.Error())
-	}
+	agentBob.setup(connection)
 
-	_, err = agentDBPGPool.Exec(context.TODO(), fmt.Sprintf("CREATE DATABASE %s", upstreamDBName))
+	// Setup another agent
+	_, err := agentBob.pool.Exec(context.TODO(), fmt.Sprintf("CREATE DATABASE %s", agentJames.name))
 	Expect(err).NotTo(HaveOccurred())
+	agentJames.setup(strings.ReplaceAll(connection, agentBob.name, agentJames.name))
 
-	upstreamDBConnection := strings.ReplaceAll(connection, agentDBName, upstreamDBName)
+	_, err = agentBob.pool.Exec(context.TODO(), fmt.Sprintf("CREATE DATABASE %s", agentRoss.name))
+	Expect(err).NotTo(HaveOccurred())
+	agentRoss.setup(strings.ReplaceAll(connection, agentBob.name, agentRoss.name))
+
+	// Setup upstream db
+	_, err = agentBob.pool.Exec(context.TODO(), fmt.Sprintf("CREATE DATABASE %s", upstreamDBName))
+	Expect(err).NotTo(HaveOccurred())
+	upstreamDBConnection := strings.ReplaceAll(connection, agentBob.name, upstreamDBName)
 	if upstreamDB, upstreamDBPGPool, err = duty.SetupDB(upstreamDBConnection, nil); err != nil {
 		ginkgo.Fail(err.Error())
 	}
+
+	Expect(upstreamDB.Create(&models.Agent{ID: agentBob.id, Name: agentBob.name}).Error).To(BeNil())
+	Expect(upstreamDB.Create(&models.Agent{ID: agentJames.id, Name: agentJames.name}).Error).To(BeNil())
+	Expect(upstreamDB.Create(&models.Agent{ID: agentRoss.id, Name: agentRoss.name}).Error).To(BeNil())
 
 	upstreamEchoServer = echo.New()
 	upstreamEchoServer.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
@@ -91,6 +124,9 @@ var _ = ginkgo.BeforeSuite(func() {
 })
 
 var _ = ginkgo.AfterSuite(func() {
+	agentBob.stop()
+	agentJames.stop()
+
 	logger.Infof("Stopping upstream echo server")
 	if err := upstreamEchoServer.Shutdown(context.Background()); err != nil {
 		ginkgo.Fail(err.Error())
