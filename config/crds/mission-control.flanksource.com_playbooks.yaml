@@ -319,6 +319,22 @@ spec:
                   - name
                   type: object
                 type: array
+              approval:
+                properties:
+                  approvers:
+                    properties:
+                      people:
+                        items:
+                          type: string
+                        type: array
+                      teams:
+                        items:
+                          type: string
+                        type: array
+                    type: object
+                  type:
+                    type: string
+                type: object
               components:
                 items:
                   description: PlaybookResourceFilter defines a filter that decides

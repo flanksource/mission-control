@@ -1,6 +1,7 @@
 package playbook
 
 import (
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -8,6 +9,7 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
+	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/utils"
 	"github.com/google/uuid"
@@ -39,8 +41,14 @@ func NewQueueConsumer(db *gorm.DB, pool *pgxpool.Pool) *queueConsumer {
 }
 
 func (t *queueConsumer) Listen() error {
-	pgNotify := make(chan struct{})
+	pgNotify := make(chan string)
 	go utils.ListenToPostgresNotify(db.Pool, "playbook_run_updates", t.dbReconnectMaxDuration, t.dbReconnectBackoffBaseDuration, pgNotify)
+
+	pgNotifyPlaybookSpecApprovalUpdated := make(chan string)
+	go utils.ListenToPostgresNotify(db.Pool, "playbook_spec_approval_updated", t.dbReconnectMaxDuration, t.dbReconnectBackoffBaseDuration, pgNotifyPlaybookSpecApprovalUpdated)
+
+	pgNotifyPlaybookApprovalsInserted := make(chan string)
+	go utils.ListenToPostgresNotify(db.Pool, "playbook_approval_inserted", t.dbReconnectMaxDuration, t.dbReconnectBackoffBaseDuration, pgNotifyPlaybookApprovalsInserted)
 
 	ctx := api.NewContext(t.db, nil)
 	for {
@@ -50,12 +58,67 @@ func (t *queueConsumer) Listen() error {
 				logger.Errorf("%v", err)
 			}
 
+		case id := <-pgNotifyPlaybookSpecApprovalUpdated:
+			if err := t.onPlaybookSpecApprovalUpdated(ctx, id); err != nil {
+				logger.Errorf("%v", err)
+			}
+
+		case id := <-pgNotifyPlaybookApprovalsInserted:
+			if err := t.onPlaybookRunNewApproval(ctx, id); err != nil {
+				logger.Errorf("%v", err)
+			}
+
 		case <-time.After(t.tickInterval):
 			if err := t.consumeAll(ctx); err != nil {
 				logger.Errorf("%v", err)
 			}
 		}
 	}
+}
+
+func (t *queueConsumer) onPlaybookSpecApprovalUpdated(ctx *api.Context, playbookID string) error {
+	var playbook models.Playbook
+	if err := ctx.DB().Where("id = ?", playbookID).First(&playbook).Error; err != nil {
+		return err
+	}
+
+	var spec v1.PlaybookSpec
+	if err := json.Unmarshal(playbook.Spec, &spec); err != nil {
+		return err
+	}
+
+	if spec.Approval == nil {
+		return nil
+	}
+
+	return db.UpdateApprovedPlaybookRuns(ctx, playbookID, spec.Approval.Approvers.IDs())
+}
+
+func (t *queueConsumer) onPlaybookRunNewApproval(ctx *api.Context, runID string) error {
+	var run models.PlaybookRun
+	if err := ctx.DB().Where("id = ?", runID).First(&run).Error; err != nil {
+		return err
+	}
+
+	if run.Status != models.PlaybookRunStatusPending {
+		return nil
+	}
+
+	var playbook models.Playbook
+	if err := ctx.DB().Where("id = ?", run.PlaybookID).First(&playbook).Error; err != nil {
+		return err
+	}
+
+	var spec v1.PlaybookSpec
+	if err := json.Unmarshal(playbook.Spec, &spec); err != nil {
+		return err
+	}
+
+	if spec.Approval == nil {
+		return nil
+	}
+
+	return db.UpdateApprovedPlaybookRuns(ctx, playbook.ID.String(), spec.Approval.Approvers.IDs())
 }
 
 func (t *queueConsumer) consumeAll(ctx *api.Context) error {

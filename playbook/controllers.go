@@ -110,9 +110,13 @@ func HandlePlaybookRun(c echo.Context) error {
 
 	run := models.PlaybookRun{
 		PlaybookID: playbook.ID,
-		Status:     models.PlaybookRunStatusScheduled,
+		Status:     models.PlaybookRunStatusPending,
 		Parameters: types.JSONStringMap(req.Params),
 		CreatedBy:  ctx.UserID(),
+	}
+
+	if spec.Approval.Approvers.Empty() {
+		run.Status = models.PlaybookRunStatusScheduled
 	}
 
 	if req.ComponentID != uuid.Nil {

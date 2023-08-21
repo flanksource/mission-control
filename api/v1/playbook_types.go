@@ -27,6 +27,34 @@ type PlaybookParameter struct {
 	Label string `json:"label,omitempty" yaml:"label,omitempty"`
 }
 
+type PlaybookApprovers struct {
+	People []string `json:"people,omitempty" yaml:"people,omitempty"`
+	Teams  []string `json:"teams,omitempty" yaml:"teams,omitempty"`
+}
+
+func (t *PlaybookApprovers) Empty() bool {
+	return len(t.People) == 0 && len(t.Teams) == 0
+}
+
+func (t *PlaybookApprovers) IDs() []string {
+	return append(t.People, t.Teams...)
+}
+
+type PlaybookApprovalType string
+
+const (
+	// PlaybookApprovalTypeAny means just a single approval can suffice.
+	PlaybookApprovalTypeAny PlaybookApprovalType = "any"
+
+	// PlaybookApprovalTypeAll means all approvals are required
+	PlaybookApprovalTypeAll PlaybookApprovalType = "all"
+)
+
+type PlaybookApproval struct {
+	Type      PlaybookApprovalType `json:"type,omitempty" yaml:"type,omitempty"`
+	Approvers PlaybookApprovers    `json:"approvers,omitempty" yaml:"approvers,omitempty"`
+}
+
 type PlaybookSpec struct {
 	Description string                   `json:"description,omitempty" yaml:"description,omitempty"`
 	Permissions []Permission             `json:"permissions,omitempty" yaml:"permissions,omitempty"`
@@ -34,6 +62,7 @@ type PlaybookSpec struct {
 	Components  []PlaybookResourceFilter `json:"components,omitempty" yaml:"components,omitempty"`
 	Parameters  []PlaybookParameter      `json:"parameters,omitempty" yaml:"parameters,omitempty"`
 	Actions     []PlaybookAction         `json:"actions" yaml:"actions"`
+	Approval    *PlaybookApproval        `json:"approval,omitempty" yaml:"approval,omitempty"`
 }
 
 // PlaybookStatus defines the observed state of Playbook

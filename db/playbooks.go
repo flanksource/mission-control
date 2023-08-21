@@ -10,6 +10,7 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"gorm.io/gorm"
 )
 
@@ -88,4 +89,19 @@ func PersistPlaybookFromCRD(obj *v1.Playbook) error {
 
 func DeletePlaybook(id string) error {
 	return Gorm.Delete(&models.Playbook{}, "id = ?", id).Error
+}
+
+func UpdateApprovedPlaybookRuns(ctx *api.Context, playbookID string, approverIDs []string) error {
+	query := `
+	WITH run_approvals AS	(
+		SELECT run_id, ARRAY_AGG(COALESCE(person_id, team_id)) AS ids
+		FROM playbook_approvals
+		GROUP BY run_id
+	)
+	UPDATE playbook_runs SET status = ? WHERE
+	status = ?
+	AND playbook_id = ?
+	AND id IN (SELECT run_id FROM run_approvals WHERE ids @> ?)`
+
+	return ctx.DB().Debug().Exec(query, models.PlaybookRunStatusScheduled, models.PlaybookRunStatusPending, playbookID, pq.Array(approverIDs)).Error
 }
