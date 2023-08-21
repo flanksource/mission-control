@@ -12,8 +12,8 @@ import (
 
 // listenToPostgresNotify listens to postgres notifications
 // and will retry on failure for dbReconnectMaxAttempt times
-func ListenToPostgresNotify(pool *pgxpool.Pool, channel string, dbReconnectMaxDuration, dbReconnectBackoffBaseDuration time.Duration, pgNotify chan struct{}) {
-	var listen = func(ctx context.Context, pgNotify chan<- struct{}) error {
+func ListenToPostgresNotify(pool *pgxpool.Pool, channel string, dbReconnectMaxDuration, dbReconnectBackoffBaseDuration time.Duration, pgNotify chan<- string) {
+	var listen = func(ctx context.Context, pgNotify chan<- string) error {
 		conn, err := pool.Acquire(ctx)
 		if err != nil {
 			return fmt.Errorf("error acquiring database connection: %v", err)
@@ -27,12 +27,12 @@ func ListenToPostgresNotify(pool *pgxpool.Pool, channel string, dbReconnectMaxDu
 		logger.Debugf("listening to database notifications")
 
 		for {
-			_, err := conn.Conn().WaitForNotification(ctx)
+			n, err := conn.Conn().WaitForNotification(ctx)
 			if err != nil {
 				return fmt.Errorf("error listening to database notifications: %v", err)
 			}
 
-			pgNotify <- struct{}{}
+			pgNotify <- n.Payload
 		}
 	}
 

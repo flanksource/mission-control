@@ -132,7 +132,7 @@ func (e *EventConsumer) Listen() {
 	// Consume pending events
 	e.ConsumeEventsUntilEmpty()
 
-	pgNotify := make(chan struct{})
+	pgNotify := make(chan string)
 	go utils.ListenToPostgresNotify(db.Pool, "event_queue_updates", dbReconnectMaxDuration, dbReconnectBackoffBaseDuration, pgNotify)
 
 	for {
