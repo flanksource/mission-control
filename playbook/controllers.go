@@ -151,13 +151,40 @@ func HandlePlaybookRunStatus(c echo.Context) error {
 // and returns all the available playbook that supports
 // the given component or config.
 func HandlePlaybookList(c echo.Context) error {
-	return nil
+	ctx := c.(*api.Context)
+
+	var (
+		configID    = c.QueryParam("config_id")
+		componentID = c.QueryParam("component_id")
+	)
+
+	if configID == "" && componentID == "" {
+		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: "either config_id or component_id is required", Message: "invalid request"})
+	} else if configID != "" && componentID != "" {
+		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: "only of either config_id or component_id is required", Message: "invalid request"})
+	}
+
+	var playbooks []models.Playbook
+	var err error
+	if configID != "" {
+		playbooks, err = ListPlaybooksOfConfig(ctx, configID)
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to list playbooks"})
+		}
+	} else if componentID != "" {
+		playbooks, err = ListPlaybooksOfComponent(ctx, componentID)
+		if err != nil {
+			return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to list playbooks"})
+		}
+	}
+
+	return c.JSON(http.StatusOK, playbooks)
 }
 
 func RegisterRoutes(e *echo.Echo, prefix string) *echo.Group {
 	playbookGroup := e.Group(fmt.Sprintf("/%s", prefix))
 	playbookGroup.POST("/run", HandlePlaybookRun)
 	playbookGroup.GET("/run/:id", HandlePlaybookRunStatus)
-	playbookGroup.GET("/list", HandlePlaybookRunStatus)
+	playbookGroup.GET("/list", HandlePlaybookList)
 	return playbookGroup
 }

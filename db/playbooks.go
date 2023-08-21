@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/google/uuid"
@@ -36,6 +37,25 @@ func FindPlaybookRun(ctx *api.Context, id string) (*models.PlaybookRun, error) {
 	}
 
 	return &p, nil
+}
+
+// FindPlaybooksByTypeAndTags returns all the playbooks that match the given type and tags.
+func FindPlaybooksByTypeAndTags(ctx *api.Context, configType string, tags map[string]string) ([]models.Playbook, error) {
+	joinQuery := `JOIN LATERAL jsonb_array_elements(playbooks."spec"->'configs') AS configs(config) ON 1=1`
+	if tags != nil {
+		joinQuery += " AND (?::jsonb) @> (configs.config->'tags')"
+	}
+	if configType != "" {
+		joinQuery += " AND configs.config->>'type' = ?"
+	}
+
+	query := ctx.DB().
+		Select("DISTINCT playbooks.*").
+		Joins(joinQuery, types.JSONStringMap(tags), configType)
+
+	var playbooks []models.Playbook
+	err := query.Find(&playbooks).Error
+	return playbooks, err
 }
 
 // GetScheduledPlaybookRuns returns all the scheduled playbook runs that should be started
