@@ -6,6 +6,9 @@ spec:
   description: Scale deployment
   configs:
     - type: Kubernetes::Deployment
+      tags:
+        namespace: default
+        cluster: local-kind-cluster
   parameters:
     - name: replicas
       label: The new desired number of replicas.
