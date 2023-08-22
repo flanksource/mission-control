@@ -49,8 +49,9 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		playbook = models.Playbook{
-			Name: "config name saver",
-			Spec: spec,
+			Name:   "config name saver",
+			Spec:   spec,
+			Source: models.SourceConfigFile,
 		}
 
 		err = testDB.Create(&playbook).Error
@@ -58,7 +59,8 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 	})
 
 	ginkgo.It("should store dummy data", func() {
-		err := dummy.PopulateDBWithDummyModels(testDB)
+		dataset := dummy.GetStaticDummyData()
+		err := dataset.Populate(testDB)
 		Expect(err).NotTo(HaveOccurred())
 	})
 

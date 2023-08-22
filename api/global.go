@@ -62,7 +62,11 @@ func (c *Context) DB() *gorm.DB {
 }
 
 func (c *Context) UserID() *uuid.UUID {
-	id := c.Context.Value(UserIDContextKey).(string)
+	id, ok := c.Context.Value(UserIDContextKey).(string)
+	if !ok {
+		return nil
+	}
+
 	u, err := uuid.Parse(id)
 	if err != nil {
 		return nil
