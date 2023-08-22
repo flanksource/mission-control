@@ -4,6 +4,7 @@ go 1.20
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.3.0
+	github.com/MicahParks/keyfunc v1.9.0
 	github.com/andygrunwald/go-jira v1.16.0
 	github.com/casbin/casbin/v2 v2.73.0
 	github.com/casbin/gorm-adapter/v3 v3.18.0

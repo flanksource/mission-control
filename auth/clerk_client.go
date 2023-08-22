@@ -10,6 +10,7 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/labstack/echo/v4"
 	"github.com/patrickmn/go-cache"
 	"gorm.io/gorm"
@@ -22,22 +23,29 @@ const (
 type ClerkHandler struct {
 	client      clerk.Client
 	dbJwtSecret string
+	jwksURL     string
+	orgID       string
 	tokenCache  *cache.Cache
 	userCache   *cache.Cache
 }
 
-func NewClerkHandler(secretKey, dbJwtSecret string) (*ClerkHandler, error) {
-	client, err := clerk.NewClient(secretKey)
-	if err != nil {
-		return nil, err
-	}
-
+func NewClerkHandler(jwksURL, orgID, dbJwtSecret string) (*ClerkHandler, error) {
 	return &ClerkHandler{
-		client:      client,
+		jwksURL:     jwksURL,
+		orgID:       orgID,
 		dbJwtSecret: dbJwtSecret,
 		tokenCache:  cache.New(3*24*time.Hour, 12*time.Hour),
 		userCache:   cache.New(3*24*time.Hour, 12*time.Hour),
 	}, nil
+}
+
+func (h ClerkHandler) parseJWTToken(token string) (jwt.MapClaims, error) {
+	claims := jwt.MapClaims{}
+	jt, err := jwt.ParseWithClaims(token, claims, getJWTKeyFunc(h.jwksURL))
+	if !jt.Valid {
+		return claims, fmt.Errorf("jwt token not valid")
+	}
+	return claims, err
 }
 
 func (h ClerkHandler) Session(next echo.HandlerFunc) echo.HandlerFunc {
@@ -103,12 +111,22 @@ func (h *ClerkHandler) getUser(ctx *api.Context, sessionToken string) (*api.Pers
 		return user.(*api.Person), sessClaims.SessionID, nil
 	}
 
-	clerkUser, err := h.client.Users().Read(sessClaims.Claims.Subject)
+	claims, err := h.parseJWTToken(sessionToken)
 	if err != nil {
 		return nil, "", err
 	}
 
-	dbUser, err := h.createDBUserIfNotExists(ctx, clerkUser)
+	if fmt.Sprint(claims["org_id"]) != h.orgID {
+		return nil, "", fmt.Errorf("organization id does not match")
+	}
+
+	user := api.Person{
+		Name:       fmt.Sprint(claims["name"]),
+		Email:      fmt.Sprint(claims["email"]),
+		Avatar:     fmt.Sprint(claims["image_url"]),
+		ExternalID: fmt.Sprint(claims["user_id"]),
+	}
+	dbUser, err := h.createDBUserIfNotExists(ctx, user)
 	if err != nil {
 		return nil, "", err
 	}
@@ -116,8 +134,9 @@ func (h *ClerkHandler) getUser(ctx *api.Context, sessionToken string) (*api.Pers
 	return &dbUser, sessClaims.SessionID, nil
 }
 
-func (h *ClerkHandler) createDBUserIfNotExists(ctx *api.Context, user *clerk.User) (api.Person, error) {
-	existingUser, err := db.GetUserByExternalID(ctx, user.ID)
+func (h *ClerkHandler) createDBUserIfNotExists(ctx *api.Context, user api.Person) (api.Person, error) {
+	// externalID, name, email, avatar
+	existingUser, err := db.GetUserByExternalID(ctx, user.ExternalID)
 	if err == nil {
 		// User with the given clerk ID exists
 		return existingUser, nil
@@ -128,30 +147,5 @@ func (h *ClerkHandler) createDBUserIfNotExists(ctx *api.Context, user *clerk.Use
 		return api.Person{}, err
 	}
 
-	if user.PrimaryEmailAddressID == nil {
-		return api.Person{}, fmt.Errorf("clerk.user[%s] has no primary email", user.ID)
-	}
-
-	var email string
-	for _, addr := range user.EmailAddresses {
-		if addr.ID == *user.PrimaryEmailAddressID {
-			email = addr.EmailAddress
-			break
-		}
-	}
-
-	var name []string
-	if user.FirstName != nil {
-		name = append(name, *user.FirstName)
-	}
-	if user.LastName != nil {
-		name = append(name, *user.LastName)
-	}
-
-	newUser := api.Person{
-		Name:       strings.Join(name, " "),
-		Email:      email,
-		ExternalID: user.ID,
-	}
-	return db.CreateUser(ctx, newUser)
+	return db.CreateUser(ctx, user)
 }
