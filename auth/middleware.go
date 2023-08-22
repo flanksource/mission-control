@@ -16,7 +16,6 @@ import (
 	"github.com/flanksource/commons/rand"
 	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty/models"
-	"github.com/golang-jwt/jwt/v4"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	client "github.com/ory/client-go"
@@ -260,21 +259,13 @@ func (k *kratosMiddleware) kratosLogin(ctx context.Context, username, password s
 	return &login.Session, nil
 }
 
-func (k *kratosMiddleware) generateDBToken(id string) (string, error) {
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"role": DefaultPostgrestRole,
-		"id":   id,
-	})
-	return token.SignedString([]byte(k.jwtSecret))
-}
-
 func (k *kratosMiddleware) getDBToken(sessionID, userID string) (string, error) {
 	cacheKey := sessionID + userID
 	if token, exists := k.tokenCache.Get(cacheKey); exists {
 		return token.(string), nil
 	}
 	// Adding Authorization Token for PostgREST
-	token, err := k.generateDBToken(userID)
+	token, err := generateDBToken(k.jwtSecret, userID)
 	if err != nil {
 		return "", err
 	}

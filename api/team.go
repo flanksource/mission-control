@@ -48,6 +48,7 @@ type Person struct {
 	Email      string           `json:"email,omitempty"`
 	Avatar     string           `json:"avatar,omitempty"`
 	Properties PersonProperties `json:"properties,omitempty"`
+	ExternalID string           `json:"external_id,omitempty"`
 }
 
 func (person Person) TableName() string {
