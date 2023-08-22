@@ -42,13 +42,13 @@ func NewQueueConsumer(db *gorm.DB, pool *pgxpool.Pool) *queueConsumer {
 
 func (t *queueConsumer) Listen() error {
 	pgNotify := make(chan string)
-	go utils.ListenToPostgresNotify(db.Pool, "playbook_run_updates", t.dbReconnectMaxDuration, t.dbReconnectBackoffBaseDuration, pgNotify)
+	go utils.ListenToPostgresNotify(t.pool, "playbook_run_updates", t.dbReconnectMaxDuration, t.dbReconnectBackoffBaseDuration, pgNotify)
 
 	pgNotifyPlaybookSpecApprovalUpdated := make(chan string)
-	go utils.ListenToPostgresNotify(db.Pool, "playbook_spec_approval_updated", t.dbReconnectMaxDuration, t.dbReconnectBackoffBaseDuration, pgNotifyPlaybookSpecApprovalUpdated)
+	go utils.ListenToPostgresNotify(t.pool, "playbook_spec_approval_updated", t.dbReconnectMaxDuration, t.dbReconnectBackoffBaseDuration, pgNotifyPlaybookSpecApprovalUpdated)
 
 	pgNotifyPlaybookApprovalsInserted := make(chan string)
-	go utils.ListenToPostgresNotify(db.Pool, "playbook_approval_inserted", t.dbReconnectMaxDuration, t.dbReconnectBackoffBaseDuration, pgNotifyPlaybookApprovalsInserted)
+	go utils.ListenToPostgresNotify(t.pool, "playbook_approval_inserted", t.dbReconnectMaxDuration, t.dbReconnectBackoffBaseDuration, pgNotifyPlaybookApprovalsInserted)
 
 	ctx := api.NewContext(t.db, nil)
 	for {

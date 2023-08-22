@@ -9,6 +9,7 @@ import (
 	embeddedPG "github.com/fergusstrange/embedded-postgres"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty"
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/testutils"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -75,6 +76,8 @@ func setupUpstreamHTTPServer() {
 		}
 	})
 
+	echoServer.Use(mockAuthMiddleware)
+
 	RegisterRoutes(echoServer, "playbook")
 
 	listenAddr := fmt.Sprintf(":%d", echoServerPort)
@@ -89,4 +92,26 @@ func setupUpstreamHTTPServer() {
 			}
 		}
 	}()
+}
+
+// mockAuthMiddleware doesn't actually authenticate since we never store auth data.
+// It simply ensures that the requested user exists in the DB and then attaches the
+// users's ID to the context.
+func mockAuthMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		name, _, ok := c.Request().BasicAuth()
+		if !ok {
+			return c.String(http.StatusUnauthorized, "Unauthorized")
+		}
+
+		var person models.Person
+		if err := testDB.Where("name = ?", name).First(&person).Error; err != nil {
+			return c.String(http.StatusUnauthorized, "Unauthorized")
+		}
+
+		ctx := c.(*api.Context)
+		ctx.Context = context.WithValue(ctx.Context, api.UserIDContextKey, person.ID.String())
+
+		return next(c)
+	}
 }
