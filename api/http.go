@@ -32,6 +32,7 @@ var codes = map[string]int{
 	ECONFLICT:       http.StatusConflict,
 	EINVALID:        http.StatusBadRequest,
 	ENOTFOUND:       http.StatusNotFound,
+	EFORBIDDEN:      http.StatusForbidden,
 	ENOTIMPLEMENTED: http.StatusNotImplemented,
 	EUNAUTHORIZED:   http.StatusUnauthorized,
 	EINTERNAL:       http.StatusInternalServerError,
@@ -42,5 +43,6 @@ func ErrorStatusCode(code string) int {
 	if v, ok := codes[code]; ok {
 		return v
 	}
+
 	return http.StatusInternalServerError
 }

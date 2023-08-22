@@ -28,14 +28,14 @@ func FindPlaybook(ctx *api.Context, id uuid.UUID) (*models.Playbook, error) {
 	return &p, nil
 }
 
-func FindPlaybookRun(ctx *api.Context, id string) (*models.PlaybookRun, error) {
+func GetPlaybookRun(ctx *api.Context, id string) (*models.PlaybookRun, error) {
 	var p models.PlaybookRun
 	if err := ctx.DB().Where("id = ?", id).First(&p).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil
+			return nil, api.Errorf(api.ENOTFOUND, "playbook run(id=%s) not found", id)
 		}
 
-		return nil, err
+		return nil, api.Errorf(api.EINTERNAL, "something went wrong").WithDebugInfo("db.GetPlaybookRun(id=%s): %v", id, err)
 	}
 
 	return &p, nil
@@ -118,12 +118,6 @@ func UpdatePlaybookRunStatusIfApproved(ctx *api.Context, playbookID string, appr
 	return ctx.DB().Exec(query, models.PlaybookRunStatusScheduled, models.PlaybookRunStatusPending, playbookID, pq.Array(approval.Approvers.IDs())).Error
 }
 
-func ApprovePlaybookRun(ctx *api.Context, runID uuid.UUID, personID, teamID *uuid.UUID) error {
-	playbookApproval := models.PlaybookApproval{
-		RunID:    runID,
-		PersonID: personID,
-		TeamID:   teamID,
-	}
-
-	return ctx.DB().Create(&playbookApproval).Error
+func SavePlaybookRunApproval(ctx *api.Context, approval models.PlaybookApproval) error {
+	return ctx.DB().Create(&approval).Error
 }

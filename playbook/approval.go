@@ -2,6 +2,7 @@ package playbook
 
 import (
 	"github.com/flanksource/commons/collections"
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
@@ -25,18 +26,35 @@ func ApproveRun(ctx *api.Context, approverID, playbookID, runID uuid.UUID) error
 		return api.Errorf(api.EINVALID, "this playbook does not require approval")
 	}
 
-	if !collections.Contains(playbookV1.Spec.Approval.Approvers.IDs(), approverID.String()) {
-		return api.Errorf(api.EFORBIDDEN, "you are not allowed to approve this playbook")
+	approval := models.PlaybookApproval{
+		RunID: runID,
 	}
 
-	run, err := db.FindPlaybookRun(ctx, runID.String())
-	if err != nil {
-		return api.Errorf(api.EINTERNAL, "something went wrong while finding playbook run(id=%s)", runID).WithDebugInfo("db.FindPlaybookRun(id=%s): %v", runID, err)
-	} else if run == nil {
-		return api.Errorf(api.ENOTFOUND, "playbook run(id=%s) not found", runID)
+	if collections.Contains(playbookV1.Spec.Approval.Approvers.People, approverID.String()) {
+		approval.PersonID = &approverID
+	} else {
+		teamIDs, err := db.GetTeamIDsForUser(ctx, approverID.String())
+		if err != nil {
+			return api.Errorf(api.EINTERNAL, "something went wrong").WithDebugInfo("db.GetTeamIDsForUser(id=%s): %v", approverID, err)
+		}
+
+		for _, teamID := range teamIDs {
+			if collections.Contains(playbookV1.Spec.Approval.Approvers.Teams, teamID.String()) {
+				approval.TeamID = &teamID
+				break
+			}
+		}
+
+		if approval.TeamID == nil {
+			return api.Errorf(api.EFORBIDDEN, "you are not allowed to approve this playbook run")
+		}
 	}
 
-	if err := db.ApprovePlaybookRun(ctx, runID, &approverID, nil); err != nil {
+	if _, err := db.GetPlaybookRun(ctx, runID.String()); err != nil {
+		return err
+	}
+
+	if err := db.SavePlaybookRunApproval(ctx, approval); err != nil {
 		return api.Errorf(api.EINTERNAL, "something went wrong while approving").WithDebugInfo("db.ApprovePlaybookRun(runID=%s, approverID=%s): %v", runID, approverID, err)
 	}
 

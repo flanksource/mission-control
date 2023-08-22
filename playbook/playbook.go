@@ -1,8 +1,6 @@
 package playbook
 
 import (
-	"fmt"
-
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
@@ -14,7 +12,7 @@ func ListPlaybooksOfConfig(ctx *api.Context, id string) ([]models.Playbook, erro
 	if err := ctx.DB().Where("id = ?", id).Find(&config).Error; err != nil {
 		return nil, err
 	} else if config.ID == uuid.Nil {
-		return nil, fmt.Errorf("config(id=%s) not found", id)
+		return nil, api.Errorf(api.ENOTFOUND, "config(id=%s) not found", id)
 	}
 
 	return db.FindPlaybooksByTypeAndTags(ctx, *config.Type, *config.Tags)
@@ -25,7 +23,7 @@ func ListPlaybooksOfComponent(ctx *api.Context, id string) ([]models.Playbook, e
 	if err := ctx.DB().Where("id = ?", id).Find(&component).Error; err != nil {
 		return nil, err
 	} else if component.ID == uuid.Nil {
-		return nil, fmt.Errorf("component(id=%s) not found", id)
+		return nil, api.Errorf(api.ENOTFOUND, "component(id=%s) not found", id)
 	}
 
 	return db.FindPlaybooksByTypeAndTags(ctx, component.Type, component.Labels)

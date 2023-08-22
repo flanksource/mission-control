@@ -137,15 +137,13 @@ func HandlePlaybookRun(c echo.Context) error {
 	})
 }
 
-func HandlePlaybookRunStatus(c echo.Context) error {
+func HandleGetPlaybookRun(c echo.Context) error {
 	ctx := c.(*api.Context)
 	id := c.Param("id")
 
-	run, err := db.FindPlaybookRun(ctx, id)
+	run, err := db.GetPlaybookRun(ctx, id)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to get playbook run"})
-	} else if run == nil {
-		return c.JSON(http.StatusNotFound, api.HTTPError{Error: "not found", Message: fmt.Sprintf("playbook run(id=%s) not found", id)})
+		return api.WriteError(c, err)
 	}
 
 	return c.JSON(http.StatusOK, run)
@@ -173,12 +171,12 @@ func HandlePlaybookList(c echo.Context) error {
 	if configID != "" {
 		playbooks, err = ListPlaybooksOfConfig(ctx, configID)
 		if err != nil {
-			return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to list playbooks"})
+			return api.WriteError(c, err)
 		}
 	} else if componentID != "" {
 		playbooks, err = ListPlaybooksOfComponent(ctx, componentID)
 		if err != nil {
-			return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to list playbooks"})
+			return api.WriteError(c, err)
 		}
 	}
 
@@ -221,7 +219,7 @@ func RegisterRoutes(e *echo.Echo, prefix string) *echo.Group {
 
 	runGroup := playbookGroup.Group("/run")
 	runGroup.POST("", HandlePlaybookRun)
-	runGroup.GET(":id", HandlePlaybookRunStatus)
+	runGroup.GET("/:id", HandleGetPlaybookRun)
 	runGroup.POST("/approve/:playbook_id/:run_id", HandlePlaybookRunApproval)
 
 	return playbookGroup
