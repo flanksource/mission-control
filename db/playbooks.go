@@ -3,6 +3,7 @@ package db
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/flanksource/duty/models"
@@ -91,19 +92,30 @@ func DeletePlaybook(id string) error {
 	return Gorm.Delete(&models.Playbook{}, "id = ?", id).Error
 }
 
-func UpdateApprovedPlaybookRuns(ctx *api.Context, playbookID string, approverIDs []string) error {
-	query := `
+// UpdatePlaybookRunStatusIfApproved updates the status of the playbook run to "pending"
+// if all the approvers have approved it.
+func UpdatePlaybookRunStatusIfApproved(ctx *api.Context, playbookID string, approval v1.PlaybookApproval) error {
+	if approval.Approvers.Empty() {
+		return nil
+	}
+
+	subQuery := `SELECT run_id FROM run_approvals WHERE approvers @> ?`
+	if approval.Type == v1.PlaybookApprovalTypeAny {
+		subQuery = `SELECT run_id FROM run_approvals WHERE approvers && ?`
+	}
+
+	query := fmt.Sprintf(`
 	WITH run_approvals AS	(
-		SELECT run_id, ARRAY_AGG(COALESCE(person_id, team_id)) AS ids
+		SELECT run_id, ARRAY_AGG(COALESCE(person_id, team_id)) AS approvers
 		FROM playbook_approvals
 		GROUP BY run_id
 	)
 	UPDATE playbook_runs SET status = ? WHERE
 	status = ?
 	AND playbook_id = ?
-	AND id IN (SELECT run_id FROM run_approvals WHERE ids @> ?)`
+	AND id IN (%s)`, subQuery)
 
-	return ctx.DB().Debug().Exec(query, models.PlaybookRunStatusScheduled, models.PlaybookRunStatusPending, playbookID, pq.Array(approverIDs)).Error
+	return ctx.DB().Exec(query, models.PlaybookRunStatusScheduled, models.PlaybookRunStatusPending, playbookID, pq.Array(approval.Approvers.IDs())).Error
 }
 
 func ApprovePlaybookRun(ctx *api.Context, runID uuid.UUID, personID, teamID *uuid.UUID) error {

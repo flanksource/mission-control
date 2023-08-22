@@ -13,12 +13,13 @@ spec:
     - name: replicas
       label: The new desired number of replicas.
   approval:
-    type: any
+    type: all
     approvers:
       people:
         - 2611d086-926b-4d49-b616-845e61fd6fb2
-      teams:
-        - 018770c4-4b73-5d44-8bb5-0e849d62e461
+        - d87243c9-3183-4ab9-9df9-c77c8278df11 
+      # teams:
+        # - 018770c4-4b73-5d44-8bb5-0e849d62e461
   actions:
     - name: 'scale deployment'
       exec:

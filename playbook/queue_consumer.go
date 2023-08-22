@@ -91,7 +91,7 @@ func (t *queueConsumer) onPlaybookSpecApprovalUpdated(ctx *api.Context, playbook
 		return nil
 	}
 
-	return db.UpdateApprovedPlaybookRuns(ctx, playbookID, spec.Approval.Approvers.IDs())
+	return db.UpdatePlaybookRunStatusIfApproved(ctx, playbookID, *spec.Approval)
 }
 
 func (t *queueConsumer) onPlaybookRunNewApproval(ctx *api.Context, runID string) error {
@@ -118,7 +118,7 @@ func (t *queueConsumer) onPlaybookRunNewApproval(ctx *api.Context, runID string)
 		return nil
 	}
 
-	return db.UpdateApprovedPlaybookRuns(ctx, playbook.ID.String(), spec.Approval.Approvers.IDs())
+	return db.UpdatePlaybookRunStatusIfApproved(ctx, playbook.ID.String(), *spec.Approval)
 }
 
 func (t *queueConsumer) consumeAll(ctx *api.Context) error {

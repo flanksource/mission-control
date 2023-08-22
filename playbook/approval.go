@@ -29,6 +29,13 @@ func ApproveRun(ctx *api.Context, approverID, playbookID, runID uuid.UUID) error
 		return api.Errorf(api.EFORBIDDEN, "you are not allowed to approve this playbook")
 	}
 
+	run, err := db.FindPlaybookRun(ctx, runID.String())
+	if err != nil {
+		return api.Errorf(api.EINTERNAL, "something went wrong while finding playbook run(id=%s)", runID).WithDebugInfo("db.FindPlaybookRun(id=%s): %v", runID, err)
+	} else if run == nil {
+		return api.Errorf(api.ENOTFOUND, "playbook run(id=%s) not found", runID)
+	}
+
 	if err := db.ApprovePlaybookRun(ctx, runID, &approverID, nil); err != nil {
 		return api.Errorf(api.EINTERNAL, "something went wrong while approving").WithDebugInfo("db.ApprovePlaybookRun(runID=%s, approverID=%s): %v", runID, approverID, err)
 	}

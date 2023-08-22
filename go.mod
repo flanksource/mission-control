@@ -12,6 +12,7 @@ require (
 	github.com/fergusstrange/embedded-postgres v1.23.0
 	github.com/flanksource/commons v1.11.0
 	github.com/flanksource/duty v1.0.157
+	github.com/flanksource/gomplate/v3 v3.20.9
 	github.com/flanksource/kopper v1.0.6
 	github.com/google/cel-go v0.17.2
 	github.com/google/go-cmp v0.5.9
@@ -52,7 +53,6 @@ require (
 	github.com/evanphx/json-patch v5.6.0+incompatible // indirect
 	github.com/evanphx/json-patch/v5 v5.6.0 // indirect
 	github.com/fatih/color v1.15.0 // indirect
-	github.com/flanksource/gomplate/v3 v3.20.9 // indirect
 	github.com/flanksource/is-healthy v0.0.0-20230713150444-ad2a5ef4bb37 // indirect
 	github.com/flanksource/mapstructure v1.6.0 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
@@ -223,5 +223,4 @@ require (
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
 
-
-replace "github.com/flanksource/duty" => ../duty
+replace github.com/flanksource/duty => ../duty
