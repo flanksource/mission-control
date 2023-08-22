@@ -3,6 +3,8 @@ package auth
 import (
 	"fmt"
 	"net/http"
+	"net/url"
+	"os"
 	"strings"
 
 	"github.com/flanksource/incident-commander/api"
@@ -124,8 +126,18 @@ func WhoAmI(c echo.Context) error {
 			Message: "Error fetching user",
 		})
 	}
+
+	hostname, _ := os.Hostname()
+	var dbName string
+	if dbURL, err := url.Parse(db.ConnectionString); err == nil {
+		dbName = strings.TrimPrefix(dbURL.Path, "/")
+	}
 	return c.JSON(http.StatusOK, api.HTTPSuccess{
 		Message: "success",
-		Payload: user,
+		Payload: map[string]any{
+			"user":     user,
+			"hostname": hostname,
+			"database": dbName,
+		},
 	})
 }
