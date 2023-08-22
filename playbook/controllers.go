@@ -115,7 +115,7 @@ func HandlePlaybookRun(c echo.Context) error {
 		CreatedBy:  ctx.UserID(),
 	}
 
-	if spec.Approval.Approvers.Empty() {
+	if spec.Approval == nil || spec.Approval.Approvers.Empty() {
 		run.Status = models.PlaybookRunStatusScheduled
 	}
 
@@ -185,10 +185,44 @@ func HandlePlaybookList(c echo.Context) error {
 	return c.JSON(http.StatusOK, playbooks)
 }
 
+func HandlePlaybookRunApproval(c echo.Context) error {
+	ctx := c.(*api.Context)
+
+	var (
+		userID     = ctx.UserID()
+		playbookID = c.Param("playbook_id")
+		runID      = c.Param("run_id")
+	)
+
+	if userID == nil {
+		return c.JSON(http.StatusUnauthorized, api.HTTPError{Error: "user id is required"})
+	}
+
+	playbookUUID, err := uuid.Parse(playbookID)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error(), Message: "invalid playbook id"})
+	}
+
+	runUUID, err := uuid.Parse(runID)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error(), Message: "invalid run id"})
+	}
+
+	if err := ApproveRun(ctx, *userID, playbookUUID, runUUID); err != nil {
+		return api.WriteError(c, err)
+	}
+
+	return c.JSON(http.StatusOK, api.HTTPSuccess{Message: "playbook run approved"})
+}
+
 func RegisterRoutes(e *echo.Echo, prefix string) *echo.Group {
 	playbookGroup := e.Group(fmt.Sprintf("/%s", prefix))
-	playbookGroup.POST("/run", HandlePlaybookRun)
-	playbookGroup.GET("/run/:id", HandlePlaybookRunStatus)
 	playbookGroup.GET("/list", HandlePlaybookList)
+
+	runGroup := playbookGroup.Group("/run")
+	runGroup.POST("", HandlePlaybookRun)
+	runGroup.GET(":id", HandlePlaybookRunStatus)
+	runGroup.POST("/approve/:playbook_id/:run_id", HandlePlaybookRunApproval)
+
 	return playbookGroup
 }

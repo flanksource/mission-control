@@ -105,3 +105,13 @@ func UpdateApprovedPlaybookRuns(ctx *api.Context, playbookID string, approverIDs
 
 	return ctx.DB().Debug().Exec(query, models.PlaybookRunStatusScheduled, models.PlaybookRunStatusPending, playbookID, pq.Array(approverIDs)).Error
 }
+
+func ApprovePlaybookRun(ctx *api.Context, runID uuid.UUID, personID, teamID *uuid.UUID) error {
+	playbookApproval := models.PlaybookApproval{
+		RunID:    runID,
+		PersonID: personID,
+		TeamID:   teamID,
+	}
+
+	return ctx.DB().Create(&playbookApproval).Error
+}
