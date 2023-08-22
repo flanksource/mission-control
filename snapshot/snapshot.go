@@ -1,11 +1,11 @@
 package snapshot
 
 import (
+	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/files"
 	"github.com/flanksource/commons/logger"
 
 	"github.com/flanksource/incident-commander/db"
-	"github.com/flanksource/incident-commander/utils"
 )
 
 type resource struct {
@@ -21,9 +21,9 @@ func (src *resource) merge(dst resource) {
 }
 
 func (r *resource) dedup() {
-	r.componentIDs = utils.Dedup(r.componentIDs)
-	r.configIDs = utils.Dedup(r.configIDs)
-	r.incidentIDs = utils.Dedup(r.incidentIDs)
+	r.componentIDs = collections.Dedup(r.componentIDs)
+	r.configIDs = collections.Dedup(r.configIDs)
+	r.incidentIDs = collections.Dedup(r.incidentIDs)
 }
 
 func (r *resource) dump(ctx SnapshotContext) error {

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/flanksource/commons/logger"
+	cutils "github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty/schema/openapi"
 	"github.com/flanksource/kopper"
 	"github.com/labstack/echo-contrib/echoprometheus"
@@ -18,6 +19,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/incident-commander/agent"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/auth"
@@ -69,7 +71,7 @@ func createHTTPServer(gormDB *gorm.DB) *echo.Echo {
 
 		switch authMode {
 		case "kratos":
-			kratosHandler := auth.NewKratosHandler(kratosAPI, kratosAdminAPI, db.PostgRESTJWTSecret)
+			kratosHandler := auth.NewKratosHandler(gormDB, kratosAPI, kratosAdminAPI, db.PostgRESTJWTSecret)
 			adminUserID, err = kratosHandler.CreateAdminUser(context.Background())
 			if err != nil {
 				logger.Fatalf("Failed to created admin user: %v", err)
@@ -129,6 +131,7 @@ func createHTTPServer(gormDB *gorm.DB) *echo.Echo {
 
 	e.POST("/auth/:id/update_state", auth.UpdateAccountState)
 	e.POST("/auth/:id/properties", auth.UpdateAccountProperties)
+	e.GET("/auth/whoami", auth.WhoAmI)
 
 	e.POST("/rbac/:id/update_role", rbac.UpdateRoleForUser, rbac.Authorization(rbac.ObjectRBAC, rbac.ActionWrite))
 
@@ -142,13 +145,14 @@ func createHTTPServer(gormDB *gorm.DB) *echo.Echo {
 	if api.UpstreamConf.IsPartiallyFilled() {
 		logger.Warnf("Please ensure that all the required flags for upstream is supplied.")
 	}
-	upstreamGroup := e.Group("/upstream")
+	upstreamGroup := e.Group("/upstream", rbac.Authorization(rbac.ObjectAgentPush, rbac.ActionWrite))
 	upstreamGroup.POST("/push", upstream.PushUpstream)
 	upstreamGroup.GET("/pull/:agent_name", upstream.Pull)
 	upstreamGroup.GET("/canary/pull/:agent_name", canary.Pull)
 	upstreamGroup.GET("/status/:agent_name", upstream.Status)
 
 	playbook.RegisterRoutes(e, "playbook")
+	e.POST("/agent/generate", agent.GenerateAgent, rbac.Authorization(rbac.ObjectAgentCreate, rbac.ActionWrite))
 
 	forward(e, "/config", configDb)
 	forward(e, "/canary", api.CanaryCheckerPath)
@@ -255,7 +259,7 @@ func ModifyKratosRequestHeaders(next echo.HandlerFunc) echo.HandlerFunc {
 		if strings.HasPrefix(c.Request().URL.Path, "/kratos") {
 			// Kratos requires the header X-Forwarded-Proto but Nginx sets it as "https,http"
 			// This leads to URL malformation further upstream
-			val := utils.Coalesce(
+			val := cutils.Coalesce(
 				c.Request().Header.Get("X-Forwarded-Scheme"),
 				c.Request().Header.Get("X-Scheme"),
 				"https",

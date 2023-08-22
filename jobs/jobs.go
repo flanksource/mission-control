@@ -18,6 +18,7 @@ const (
 	ResponderCommentsSyncSchedule   = "@every 1h"
 	ResponderConfigSyncSchedule     = "@every 1h"
 	CleanupJobHistoryTableSchedule  = "@every 24h"
+	CleanupEventQueueTableSchedule  = "@every 24h"
 	PushAgentReconcileSchedule      = "@every 30m"
 )
 
@@ -56,6 +57,10 @@ func Start() {
 
 	if _, err := ScheduleFunc(CleanupJobHistoryTableSchedule, CleanupJobHistoryTable); err != nil {
 		logger.Errorf("Failed to schedule job for cleaning up job history table: %v", err)
+	}
+
+	if _, err := ScheduleFunc(CleanupEventQueueTableSchedule, CleanupEventQueue); err != nil {
+		logger.Errorf("Failed to schedule job for cleaning up event queue table: %v", err)
 	}
 
 	if api.UpstreamConf.Valid() {

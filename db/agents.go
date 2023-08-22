@@ -4,8 +4,10 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -49,4 +51,16 @@ func GetOrCreateAgent(ctx *api.Context, name string) (*models.Agent, error) {
 	}
 
 	return a, nil
+}
+
+func CreateAgent(ctx *api.Context, name string, personID *uuid.UUID, properties map[string]string) error {
+	properties = collections.MergeMap(properties, map[string]string{"type": "agent"})
+
+	a := models.Agent{
+		Name:       name,
+		PersonID:   personID,
+		Properties: properties,
+	}
+
+	return ctx.DB().Create(&a).Error
 }

@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/flanksource/commons/hash"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/db/models"
-	"github.com/flanksource/incident-commander/utils"
 	"github.com/google/uuid"
 	"github.com/patrickmn/go-cache"
 )
@@ -17,7 +17,8 @@ var teamSpecCache = cache.New(time.Hour*1, time.Hour*1)
 func GetTeamComponentsFromSelectors(teamID uuid.UUID, componentSelectors []api.ComponentSelector) []api.TeamComponent {
 	var selectedComponents = make(map[string][]uuid.UUID)
 	for _, compSelector := range componentSelectors {
-		selectedComponents[utils.GetHash(compSelector)] = db.GetComponentsWithSelector(compSelector)
+		h, _ := hash.JSONMD5Hash(compSelector)
+		selectedComponents[h] = db.GetComponentsWithSelector(compSelector)
 	}
 
 	var teamComps []api.TeamComponent
