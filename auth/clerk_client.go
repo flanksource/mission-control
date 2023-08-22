@@ -11,9 +11,9 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
-	"github.com/golang-jwt/jwt/v4"
 	"github.com/labstack/echo/v4"
 	"github.com/patrickmn/go-cache"
+	"gorm.io/gorm"
 )
 
 const (
@@ -51,7 +51,7 @@ func (h ClerkHandler) Session(next echo.HandlerFunc) echo.HandlerFunc {
 		sessionToken := c.Request().Header.Get(echo.HeaderAuthorization)
 		sessionToken = strings.TrimPrefix(sessionToken, "Bearer ")
 		if sessionToken == "" {
-			// Check for `_session` cookie
+			// Check for `__session` cookie
 			sessionTokenCookie, err := c.Request().Cookie(clerkSessionCookie)
 			if err != nil {
 				// Cookie not found
@@ -60,43 +60,25 @@ func (h ClerkHandler) Session(next echo.HandlerFunc) echo.HandlerFunc {
 			sessionToken = sessionTokenCookie.Value
 		}
 
-		user, sessID, err := h.getUser(sessionToken)
+		ctx := c.(*api.Context)
+		user, sessID, err := h.getUser(ctx, sessionToken)
 		if err != nil {
 			logger.Errorf("Error fetching user from clerk: %v", err)
 			return c.String(http.StatusUnauthorized, "Unauthorized")
 		}
 
-		ctx := c.(*api.Context)
-		if user.ExternalID == nil {
-			user, err = h.createDBUser(ctx, user)
-			if err != nil {
-				logger.Errorf("Error creating user in database from clerk: %v", err)
-				return c.String(http.StatusUnauthorized, "Unauthorized")
-			}
-			// Clear user from cache so that new metadata is used
-			h.userCache.Delete(sessID)
-		}
-
-		token, err := h.getDBToken(sessID, *user.ExternalID)
+		token, err := h.getDBToken(sessID, user.ID.String())
 		if err != nil {
 			logger.Errorf("Error generating JWT Token: %v", err)
 			return c.String(http.StatusUnauthorized, "Unauthorized")
 		}
 
 		c.Request().Header.Set(echo.HeaderAuthorization, fmt.Sprintf("Bearer %s", token))
-		c.Request().Header.Set(UserIDHeaderKey, *user.ExternalID)
+		c.Request().Header.Set(UserIDHeaderKey, user.ID.String())
 
-		ctx.Context = context.WithValue(ctx.Context, api.UserIDContextKey, *user.ExternalID)
+		ctx.Context = context.WithValue(ctx.Context, api.UserIDContextKey, user.ID.String())
 		return next(ctx)
 	}
-}
-
-func (h *ClerkHandler) generateDBToken(id string) (string, error) {
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"role": DefaultPostgrestRole,
-		"id":   id,
-	})
-	return token.SignedString([]byte(h.dbJwtSecret))
 }
 
 func (h *ClerkHandler) getDBToken(sessionID, userID string) (string, error) {
@@ -105,7 +87,7 @@ func (h *ClerkHandler) getDBToken(sessionID, userID string) (string, error) {
 		return token.(string), nil
 	}
 	// Adding Authorization Token for PostgREST
-	token, err := h.generateDBToken(userID)
+	token, err := generateDBToken(h.dbJwtSecret, userID)
 	if err != nil {
 		return "", err
 	}
@@ -113,7 +95,7 @@ func (h *ClerkHandler) getDBToken(sessionID, userID string) (string, error) {
 	return token, nil
 }
 
-func (h *ClerkHandler) getUser(sessionToken string) (*clerk.User, string, error) {
+func (h *ClerkHandler) getUser(ctx *api.Context, sessionToken string) (*api.Person, string, error) {
 	sessClaims, err := h.client.VerifyToken(sessionToken)
 	if err != nil {
 		return nil, "", err
@@ -121,23 +103,36 @@ func (h *ClerkHandler) getUser(sessionToken string) (*clerk.User, string, error)
 
 	cacheKey := sessClaims.SessionID
 	if user, exists := h.userCache.Get(cacheKey); exists {
-		return user.(*clerk.User), sessClaims.SessionID, nil
+		return user.(*api.Person), sessClaims.SessionID, nil
 	}
 
-	user, err := h.client.Users().Read(sessClaims.Claims.Subject)
+	clerkUser, err := h.client.Users().Read(sessClaims.Claims.Subject)
 	if err != nil {
 		return nil, "", err
 	}
-	h.userCache.SetDefault(cacheKey, user)
-	return user, sessClaims.SessionID, nil
+
+	dbUser, err := h.createDBUserIfNotExists(ctx, clerkUser)
+	if err != nil {
+		return nil, "", err
+	}
+	h.userCache.SetDefault(cacheKey, &dbUser)
+	return &dbUser, sessClaims.SessionID, nil
 }
 
-func (h *ClerkHandler) createDBUser(ctx *api.Context, user *clerk.User) (*clerk.User, error) {
-	if user.ExternalID != nil {
-		return user, nil
+func (h *ClerkHandler) createDBUserIfNotExists(ctx *api.Context, user *clerk.User) (api.Person, error) {
+	existingUser, err := db.GetUserByExternalID(ctx, user.ID)
+	if err == nil {
+		// User with the given clerk ID exists
+		return existingUser, nil
 	}
+
+	if err != gorm.ErrRecordNotFound {
+		// Return if any other error, we only want to create the user
+		return api.Person{}, err
+	}
+
 	if user.PrimaryEmailAddressID == nil {
-		return nil, fmt.Errorf("clerk.user[%s] has no primary email", user.ID)
+		return api.Person{}, fmt.Errorf("clerk.user[%s] has no primary email", user.ID)
 	}
 
 	var email string
@@ -155,19 +150,11 @@ func (h *ClerkHandler) createDBUser(ctx *api.Context, user *clerk.User) (*clerk.
 	if user.LastName != nil {
 		name = append(name, *user.LastName)
 	}
-	person := api.Person{
-		Name:  strings.Join(name, " "),
-		Email: email,
-	}
 
-	dbUser, err := db.GetOrCreateUser(ctx, person)
-	if err != nil {
-		return nil, err
+	newUser := api.Person{
+		Name:       strings.Join(name, " "),
+		Email:      email,
+		ExternalID: user.ID,
 	}
-
-	id := dbUser.ID.String()
-	userUpdateParams := clerk.UpdateUser{
-		ExternalID: &id,
-	}
-	return h.client.Users().Update(user.ID, &userUpdateParams)
+	return db.CreateUser(ctx, newUser)
 }
