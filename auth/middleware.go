@@ -16,6 +16,7 @@ import (
 	"github.com/flanksource/commons/rand"
 	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/incident-commander/api"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	client "github.com/ory/client-go"
@@ -26,7 +27,6 @@ import (
 
 const (
 	DefaultPostgrestRole = "postgrest_api"
-	UserIDHeaderKey      = "X-User-ID"
 )
 
 var (
@@ -93,7 +93,7 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 			return c.String(http.StatusUnauthorized, "Unauthorized")
 		}
 		c.Request().Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
-		c.Request().Header.Set(UserIDHeaderKey, session.Identity.GetId())
+		c.Request().Header.Set(api.UserIDHeaderKey, session.Identity.GetId())
 
 		return next(c)
 	}

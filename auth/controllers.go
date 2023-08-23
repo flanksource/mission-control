@@ -118,7 +118,7 @@ func UpdateAccountProperties(c echo.Context) error {
 
 func WhoAmI(c echo.Context) error {
 	ctx := c.(*api.Context)
-	userID := c.Request().Header.Get(UserIDHeaderKey)
+	userID := c.Request().Header.Get(api.UserIDHeaderKey)
 	user, err := db.GetUserByID(ctx, userID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{

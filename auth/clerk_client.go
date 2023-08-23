@@ -9,6 +9,7 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/rbac"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/labstack/echo/v4"
 	"github.com/patrickmn/go-cache"
@@ -83,7 +84,7 @@ func (h ClerkHandler) Session(next echo.HandlerFunc) echo.HandlerFunc {
 		}
 
 		c.Request().Header.Set(echo.HeaderAuthorization, fmt.Sprintf("Bearer %s", token))
-		c.Request().Header.Set(UserIDHeaderKey, user.ID.String())
+		c.Request().Header.Set(api.UserIDHeaderKey, user.ID.String())
 		return next(c)
 	}
 }
@@ -109,7 +110,7 @@ func (h *ClerkHandler) getUser(ctx *api.Context, sessionToken string) (*api.Pers
 		Avatar:     fmt.Sprint(claims["image_url"]),
 		ExternalID: fmt.Sprint(claims["user_id"]),
 	}
-	dbUser, err := h.createDBUserIfNotExists(ctx, user)
+	dbUser, err := h.createDBUserIfNotExists(ctx, user, fmt.Sprint(claims["role"]))
 	if err != nil {
 		return nil, "", err
 	}
@@ -117,7 +118,7 @@ func (h *ClerkHandler) getUser(ctx *api.Context, sessionToken string) (*api.Pers
 	return &dbUser, sessionID, nil
 }
 
-func (h *ClerkHandler) createDBUserIfNotExists(ctx *api.Context, user api.Person) (api.Person, error) {
+func (h *ClerkHandler) createDBUserIfNotExists(ctx *api.Context, user api.Person, role string) (api.Person, error) {
 	existingUser, err := db.GetUserByExternalID(ctx, user.ExternalID)
 	if err == nil {
 		// User with the given external ID exists
@@ -129,5 +130,19 @@ func (h *ClerkHandler) createDBUserIfNotExists(ctx *api.Context, user api.Person
 		return api.Person{}, err
 	}
 
-	return db.CreateUser(ctx, user)
+	dbUser, err := db.CreateUser(ctx, user)
+	if err != nil {
+		return api.Person{}, err
+	}
+
+	roleToAdd := rbac.RoleEditor
+	if role == "admin" {
+		roleToAdd = rbac.RoleAdmin
+	}
+
+	if _, err := rbac.Enforcer.AddRoleForUser(dbUser.ID.String(), roleToAdd); err != nil {
+		return api.Person{}, err
+	}
+
+	return dbUser, nil
 }

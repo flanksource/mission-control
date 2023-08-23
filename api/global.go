@@ -15,6 +15,10 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
+const (
+	UserIDHeaderKey = "X-User-ID"
+)
+
 var SystemUserID *uuid.UUID
 var CanaryCheckerPath string
 var ApmHubPath string
