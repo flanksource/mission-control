@@ -167,7 +167,6 @@ func (t *AWSConnection) Populate(ctx connectionContext, k8s kubernetes.Interface
 }
 
 type PlaybookAction struct {
-	Name           string      `yaml:"name" json:"name"`
-	TimeoutMinutes string      `yaml:"timeout-minutes,omitempty" json:"timeout-minutes,omitempty"`
-	Exec           *ExecAction `json:"exec,omitempty" yaml:"exec,omitempty"`
+	Name string      `yaml:"name" json:"name"`
+	Exec *ExecAction `json:"exec,omitempty" yaml:"exec,omitempty"`
 }

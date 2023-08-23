@@ -23,8 +23,8 @@ type PlaybookResourceFilter struct {
 
 // PlaybookParameter defines a parameter that a playbook needs to run.
 type PlaybookParameter struct {
-	Name  string `json:"name,omitempty" yaml:"name,omitempty"`
-	Label string `json:"label,omitempty" yaml:"label,omitempty"`
+	Name  string `json:"name" yaml:"name"`
+	Label string `json:"label" yaml:"label"`
 }
 
 type PlaybookApprovers struct {

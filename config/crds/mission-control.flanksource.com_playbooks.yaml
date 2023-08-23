@@ -313,8 +313,6 @@ spec:
                       type: object
                     name:
                       type: string
-                    timeout-minutes:
-                      type: string
                   required:
                   - name
                   type: object
@@ -374,6 +372,9 @@ spec:
                       type: string
                     name:
                       type: string
+                  required:
+                  - label
+                  - name
                   type: object
                 type: array
               permissions:
