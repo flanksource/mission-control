@@ -6,7 +6,7 @@ import (
 
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/incident-commander/auth"
+	"github.com/flanksource/incident-commander/api"
 	"github.com/labstack/echo/v4"
 )
 
@@ -24,7 +24,7 @@ func Authorization(object, action string) func(echo.HandlerFunc) echo.HandlerFun
 				return next(c)
 			}
 
-			userID := c.Request().Header.Get(auth.UserIDHeaderKey)
+			userID := c.Request().Header.Get(api.UserIDHeaderKey)
 			if userID == "" {
 				return c.String(http.StatusUnauthorized, errNoUserID)
 			}

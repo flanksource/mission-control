@@ -8,7 +8,7 @@ import (
 	embeddedPG "github.com/fergusstrange/embedded-postgres"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/testutils"
-	"github.com/flanksource/incident-commander/auth"
+	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/labstack/echo/v4"
 )
@@ -90,7 +90,7 @@ func TestAuthorization(t *testing.T) {
 
 	for _, tc := range tests {
 		req := httptest.NewRequest(tc.method, tc.path, nil)
-		req.Header.Set(auth.UserIDHeaderKey, tc.user)
+		req.Header.Set(api.UserIDHeaderKey, tc.user)
 		rec := httptest.NewRecorder()
 
 		// Call endpoint

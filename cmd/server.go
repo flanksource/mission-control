@@ -84,7 +84,7 @@ func createHTTPServer(gormDB *gorm.DB) *echo.Echo {
 			e.POST("/auth/invite_user", kratosHandler.InviteUser, rbac.Authorization(rbac.ObjectAuth, rbac.ActionWrite))
 
 		case "clerk":
-			clerkHandler, err := auth.NewClerkHandler(clerkSecret, db.PostgRESTJWTSecret)
+			clerkHandler, err := auth.NewClerkHandler(clerkJWKSURL, clerkOrgID, db.PostgRESTJWTSecret)
 			if err != nil {
 				logger.Fatalf("Failed to initialize clerk client: %v", err)
 			}

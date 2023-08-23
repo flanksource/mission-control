@@ -38,7 +38,8 @@ var Root = &cobra.Command{
 var dev bool
 var httpPort, metricsPort, devGuiPort int
 var publicEndpoint = "http://localhost:8080"
-var configDb, authMode, kratosAPI, kratosAdminAPI, postgrestURI, clerkSecret string
+var configDb, authMode, kratosAPI, kratosAdminAPI, postgrestURI string
+var clerkJWKSURL, clerkOrgID string
 var disablePostgrest bool
 
 func ServerFlags(flags *pflag.FlagSet) {
@@ -52,7 +53,8 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&configDb, "config-db", "http://config-db:8080", "Config DB URL")
 	flags.StringVar(&kratosAPI, "kratos-api", "http://kratos-public:80", "Kratos API service")
 	flags.StringVar(&kratosAdminAPI, "kratos-admin", "http://kratos-admin:80", "Kratos Admin API service")
-	flags.StringVar(&clerkSecret, "clerk-secret", "", "Clerk Secret Key")
+	flags.StringVar(&clerkJWKSURL, "clerk-jwks-url", "", "Clerk JWKS URL")
+	flags.StringVar(&clerkOrgID, "clerk-org-id", "", "Clerk Organization ID")
 	flags.StringVar(&postgrestURI, "postgrest-uri", "http://localhost:3000", "URL for the PostgREST instance to use. If localhost is supplied, a PostgREST instance will be started")
 	flags.StringVar(&authMode, "auth", "", "Enable authentication via Kratos or Clerk. Valid values are [kratos, clerk]")
 	flags.DurationVar(&rules.Period, "rules-period", 5*time.Minute, "Period to run the rules")

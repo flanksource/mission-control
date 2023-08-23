@@ -16,6 +16,7 @@ import (
 	"github.com/flanksource/commons/rand"
 	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/incident-commander/api"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	client "github.com/ory/client-go"
@@ -26,7 +27,6 @@ import (
 
 const (
 	DefaultPostgrestRole = "postgrest_api"
-	UserIDHeaderKey      = "X-User-ID"
 )
 
 var (
@@ -87,13 +87,13 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 			return c.String(http.StatusUnauthorized, "Unauthorized")
 		}
 
-		token, err := k.getDBToken(session.Id, session.Identity.GetId())
+		token, err := getDBToken(k.tokenCache, k.jwtSecret, session.Id, session.Identity.GetId())
 		if err != nil {
 			logger.Errorf("Error generating JWT Token: %v", err)
 			return c.String(http.StatusUnauthorized, "Unauthorized")
 		}
 		c.Request().Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
-		c.Request().Header.Set(UserIDHeaderKey, session.Identity.GetId())
+		c.Request().Header.Set(api.UserIDHeaderKey, session.Identity.GetId())
 
 		return next(c)
 	}
@@ -257,20 +257,6 @@ func (k *kratosMiddleware) kratosLogin(ctx context.Context, username, password s
 	}
 
 	return &login.Session, nil
-}
-
-func (k *kratosMiddleware) getDBToken(sessionID, userID string) (string, error) {
-	cacheKey := sessionID + userID
-	if token, exists := k.tokenCache.Get(cacheKey); exists {
-		return token.(string), nil
-	}
-	// Adding Authorization Token for PostgREST
-	token, err := generateDBToken(k.jwtSecret, userID)
-	if err != nil {
-		return "", err
-	}
-	k.tokenCache.SetDefault(cacheKey, token)
-	return token, nil
 }
 
 func basicAuthCacheKey(username, separator, password string) string {
