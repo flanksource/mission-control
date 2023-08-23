@@ -6,6 +6,7 @@ import (
 	"github.com/MicahParks/keyfunc"
 	"github.com/flanksource/commons/logger"
 	"github.com/golang-jwt/jwt/v4"
+	"github.com/patrickmn/go-cache"
 )
 
 func generateDBToken(secret, id string) (string, error) {
@@ -14,6 +15,20 @@ func generateDBToken(secret, id string) (string, error) {
 		"id":   id,
 	})
 	return token.SignedString([]byte(secret))
+}
+
+func getDBToken(c *cache.Cache, dbJWTSecret, sessID, userID string) (string, error) {
+	key := sessID + userID
+	if token, exists := c.Get(key); exists {
+		return token.(string), nil
+	}
+	// Adding Authorization Token for PostgREST
+	token, err := generateDBToken(dbJWTSecret, userID)
+	if err != nil {
+		return "", err
+	}
+	c.SetDefault(key, token)
+	return token, nil
 }
 
 func getJWTKeyFunc(jwksURL string) jwt.Keyfunc {

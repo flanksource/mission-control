@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/clerkinc/clerk-sdk-go/clerk"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
@@ -21,7 +20,6 @@ const (
 )
 
 type ClerkHandler struct {
-	client      clerk.Client
 	dbJwtSecret string
 	jwksURL     string
 	orgID       string
@@ -56,7 +54,7 @@ func (h ClerkHandler) Session(next echo.HandlerFunc) echo.HandlerFunc {
 
 		// Extract session token from Authorization header
 		sessionToken := c.Request().Header.Get(echo.HeaderAuthorization)
-		sessionToken = strings.TrimPrefix(sessionToken, "Bearer ")
+		sessionToken = strings.TrimSpace(strings.TrimPrefix(sessionToken, "Bearer "))
 		if sessionToken == "" {
 			// Check for `__session` cookie
 			sessionTokenCookie, err := c.Request().Cookie(clerkSessionCookie)
@@ -67,6 +65,10 @@ func (h ClerkHandler) Session(next echo.HandlerFunc) echo.HandlerFunc {
 			sessionToken = sessionTokenCookie.Value
 		}
 
+		if sessionToken == "" {
+			return c.String(http.StatusUnauthorized, "Unauthorized")
+		}
+
 		ctx := c.(*api.Context)
 		user, sessID, err := h.getUser(ctx, sessionToken)
 		if err != nil {
@@ -74,7 +76,7 @@ func (h ClerkHandler) Session(next echo.HandlerFunc) echo.HandlerFunc {
 			return c.String(http.StatusUnauthorized, "Unauthorized")
 		}
 
-		token, err := h.getDBToken(sessID, user.ID.String())
+		token, err := getDBToken(h.tokenCache, h.dbJwtSecret, sessID, user.ID.String())
 		if err != nil {
 			logger.Errorf("Error generating JWT Token: %v", err)
 			return c.String(http.StatusUnauthorized, "Unauthorized")
@@ -86,34 +88,15 @@ func (h ClerkHandler) Session(next echo.HandlerFunc) echo.HandlerFunc {
 	}
 }
 
-func (h *ClerkHandler) getDBToken(sessionID, userID string) (string, error) {
-	cacheKey := sessionID + userID
-	if token, exists := h.tokenCache.Get(cacheKey); exists {
-		return token.(string), nil
-	}
-	// Adding Authorization Token for PostgREST
-	token, err := generateDBToken(h.dbJwtSecret, userID)
-	if err != nil {
-		return "", err
-	}
-	h.tokenCache.SetDefault(cacheKey, token)
-	return token, nil
-}
-
 func (h *ClerkHandler) getUser(ctx *api.Context, sessionToken string) (*api.Person, string, error) {
-	sessClaims, err := h.client.VerifyToken(sessionToken)
-	if err != nil {
-		return nil, "", err
-	}
-
-	cacheKey := sessClaims.SessionID
-	if user, exists := h.userCache.Get(cacheKey); exists {
-		return user.(*api.Person), sessClaims.SessionID, nil
-	}
-
 	claims, err := h.parseJWTToken(sessionToken)
 	if err != nil {
 		return nil, "", err
+	}
+	sessionID := fmt.Sprint(claims["sid"])
+
+	if user, exists := h.userCache.Get(sessionID); exists {
+		return user.(*api.Person), sessionID, nil
 	}
 
 	if fmt.Sprint(claims["org_id"]) != h.orgID {
@@ -130,15 +113,14 @@ func (h *ClerkHandler) getUser(ctx *api.Context, sessionToken string) (*api.Pers
 	if err != nil {
 		return nil, "", err
 	}
-	h.userCache.SetDefault(cacheKey, &dbUser)
-	return &dbUser, sessClaims.SessionID, nil
+	h.userCache.SetDefault(sessionID, &dbUser)
+	return &dbUser, sessionID, nil
 }
 
 func (h *ClerkHandler) createDBUserIfNotExists(ctx *api.Context, user api.Person) (api.Person, error) {
-	// externalID, name, email, avatar
 	existingUser, err := db.GetUserByExternalID(ctx, user.ExternalID)
 	if err == nil {
-		// User with the given clerk ID exists
+		// User with the given external ID exists
 		return existingUser, nil
 	}
 
