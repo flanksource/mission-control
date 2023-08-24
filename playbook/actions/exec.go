@@ -20,9 +20,9 @@ type ExecAction struct {
 }
 
 type ExecDetails struct {
-	Stdout   string `json:"stdout"`
-	Stderr   string `json:"stderr"`
-	ExitCode int    `json:"exitCode"`
+	Stdout   string `json:"stdout,omitempty"`
+	Stderr   string `json:"stderr,omitempty"`
+	ExitCode int    `json:"exitCode,omitempty"`
 }
 
 func (c *ExecAction) Run(ctx *api.Context, exec v1.ExecAction) (*ExecDetails, error) {

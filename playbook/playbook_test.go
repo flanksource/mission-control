@@ -31,10 +31,7 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 
 	ginkgo.It("start the queue consumer in background", func() {
 		consumer = NewQueueConsumer(testDB, testDBPool)
-		go func() {
-			err := consumer.Listen()
-			Expect(err).NotTo(HaveOccurred())
-		}()
+		go consumer.Listen()
 	})
 
 	ginkgo.It("should create a new playbook", func() {
@@ -183,7 +180,7 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 
 			attempts += 1
 			if attempts > 20 { // wait for 2 seconds
-				ginkgo.Fail("Timed out waiting for run to complete")
+				ginkgo.Fail(fmt.Sprintf("Timed out waiting for run to complete. Run status: %s", updatedRun.Status))
 			}
 		}
 

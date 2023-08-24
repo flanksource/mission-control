@@ -130,7 +130,7 @@ func executeAction(ctx *api.Context, run models.PlaybookRun, action v1.PlaybookA
 			return nil, err
 		}
 
-		return json.Marshal(res.Stdout)
+		return json.Marshal(res)
 	}
 
 	return nil, nil

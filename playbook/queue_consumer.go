@@ -40,7 +40,7 @@ func NewQueueConsumer(db *gorm.DB, pool *pgxpool.Pool) *queueConsumer {
 	}
 }
 
-func (t *queueConsumer) Listen() error {
+func (t *queueConsumer) Listen() {
 	pgNotify := make(chan string)
 	go utils.ListenToPostgresNotify(t.pool, "playbook_run_updates", t.dbReconnectMaxDuration, t.dbReconnectBackoffBaseDuration, pgNotify)
 
@@ -59,7 +59,7 @@ func (t *queueConsumer) Listen() error {
 			}
 
 		case id := <-pgNotifyPlaybookSpecApprovalUpdated:
-			if err := t.onPlaybookSpecApprovalUpdated(ctx, id); err != nil {
+			if err := t.onApprovalUpdated(ctx, id); err != nil {
 				logger.Errorf("%v", err)
 			}
 
@@ -76,7 +76,8 @@ func (t *queueConsumer) Listen() error {
 	}
 }
 
-func (t *queueConsumer) onPlaybookSpecApprovalUpdated(ctx *api.Context, playbookID string) error {
+// onApprovalUpdated is called when the playbook spec approval is updated
+func (t *queueConsumer) onApprovalUpdated(ctx *api.Context, playbookID string) error {
 	var playbook models.Playbook
 	if err := ctx.DB().Where("id = ?", playbookID).First(&playbook).Error; err != nil {
 		return err
