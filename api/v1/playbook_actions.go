@@ -10,37 +10,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-type Labels map[string]string
-
-type Description struct {
-	// Description for the check
-	Description string `yaml:"description,omitempty" json:"description,omitempty" template:"true"`
-	// Name of the check
-	Name string `yaml:"name,omitempty" json:"name,omitempty" template:"true"`
-	// Icon for overwriting default icon on the dashboard
-	Icon string `yaml:"icon,omitempty" json:"icon,omitempty" template:"true"`
-	// Labels for the check
-	Labels Labels `yaml:"labels,omitempty" json:"labels,omitempty"`
-	// Transformed checks have a delete strategy on deletion they can either be marked healthy, unhealthy or left as is
-	TransformDeleteStrategy string `yaml:"transformDeleteStrategy,omitempty" json:"transformDeleteStrategy,omitempty"`
-}
-
-type Template struct {
-	Template   string `yaml:"template,omitempty" json:"template,omitempty"`
-	JSONPath   string `yaml:"jsonPath,omitempty" json:"jsonPath,omitempty"`
-	Expression string `yaml:"expr,omitempty" json:"expr,omitempty"`
-	Javascript string `yaml:"javascript,omitempty" json:"javascript,omitempty"`
-}
-
-type Templatable struct {
-	Test      Template `yaml:"test,omitempty" json:"test,omitempty"`
-	Display   Template `yaml:"display,omitempty" json:"display,omitempty"`
-	Transform Template `yaml:"transform,omitempty" json:"transform,omitempty"`
-}
-
 type ExecAction struct {
-	Description `yaml:",inline" json:",inline"`
-	Templatable `yaml:",inline" json:",inline"`
 	// Script can be a inline script or a path to a script that needs to be executed
 	// On windows executed via powershell and in darwin and linux executed using bash
 	Script      string          `yaml:"script" json:"script"`
