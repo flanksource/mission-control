@@ -11,10 +11,10 @@ require (
 	github.com/containrrr/shoutrrr v0.7.1
 	github.com/fergusstrange/embedded-postgres v1.23.0
 	github.com/flanksource/commons v1.11.0
-	github.com/flanksource/duty v1.0.157
-	github.com/flanksource/gomplate/v3 v3.20.9
+	github.com/flanksource/duty v1.0.159
+	github.com/flanksource/gomplate/v3 v3.20.11
 	github.com/flanksource/kopper v1.0.6
-	github.com/google/cel-go v0.17.2
+	github.com/google/cel-go v0.17.6
 	github.com/google/go-cmp v0.5.9
 	github.com/google/uuid v1.3.1
 	github.com/jackc/pgx/v5 v5.4.3
@@ -110,8 +110,8 @@ require (
 	golang.org/x/term v0.11.0 // indirect
 	golang.org/x/tools v0.12.1-0.20230815132531-74c255bcf846 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.3.0 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20230815205213-6bfd019c3878 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20230815205213-6bfd019c3878 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20230822172742-b8732ec3820d // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20230822172742-b8732ec3820d // indirect
 	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
 	gopkg.in/flanksource/yaml.v3 v3.2.3 // indirect
 	gopkg.in/sourcemap.v1 v1.0.5 // indirect
@@ -141,8 +141,8 @@ require (
 	github.com/AzureAD/microsoft-authentication-library-for-go v1.0.0 // indirect
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/TomOnTime/utfutil v0.0.0-20230223141146-125e65197b36
-	github.com/antonmedv/expr v1.14.2 // indirect
-	github.com/aws/aws-sdk-go v1.44.327 // indirect
+	github.com/antonmedv/expr v1.14.3 // indirect
+	github.com/aws/aws-sdk-go v1.44.330 // indirect
 	github.com/bgentry/go-netrc v0.0.0-20140422174119-9fd32a8b3d3d // indirect
 	github.com/cjlapao/common-go v0.0.39 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -212,7 +212,7 @@ require (
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
 	google.golang.org/api v0.138.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
-	google.golang.org/genproto v0.0.0-20230815205213-6bfd019c3878 // indirect
+	google.golang.org/genproto v0.0.0-20230822172742-b8732ec3820d // indirect
 	google.golang.org/grpc v1.57.0 // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
@@ -221,5 +221,3 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.3.0 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
-
-replace github.com/flanksource/duty => ../duty
