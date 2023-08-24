@@ -11,9 +11,11 @@ import (
 
 	"github.com/flanksource/duty/fixtures/dummy"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"gorm.io/gorm/clause"
 )
 
 var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
@@ -39,6 +41,12 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 			Description: "write config name to file",
 			Parameters: []v1.PlaybookParameter{
 				{Name: "path", Label: "path of the file"},
+			},
+			Configs: []v1.PlaybookResourceFilter{
+				{Type: *dummy.EKSCluster.Type, Tags: map[string]string{"environment": "production"}},
+			},
+			Components: []v1.PlaybookResourceFilter{
+				{Type: dummy.Logistics.Type, Tags: map[string]string{"telemetry": "enabled"}},
 			},
 			Approval: &v1.PlaybookApproval{
 				Type: v1.PlaybookApprovalTypeAny, // We have two approvers (John Doe & John Wick) and just a single approval is sufficient
@@ -74,8 +82,32 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 			Source: models.SourceConfigFile,
 		}
 
-		err = testDB.Create(&playbook).Error
+		err = testDB.Clauses(clause.Returning{}).Create(&playbook).Error
 		Expect(err).NotTo(HaveOccurred())
+	})
+
+	ginkgo.It("Should fetch the suitable playbook for configs", func() {
+		ctx := api.NewContext(testDB, nil)
+		playbooks, err := ListPlaybooksForConfig(ctx, dummy.EKSCluster.ID.String())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(playbooks)).To(Equal(1))
+		Expect(playbooks).To(Equal([]models.Playbook{playbook}))
+
+		playbooks, err = ListPlaybooksForConfig(ctx, dummy.KubernetesCluster.ID.String())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(playbooks)).To(Equal(0))
+	})
+
+	ginkgo.It("Should fetch the suitable playbook for components", func() {
+		ctx := api.NewContext(testDB, nil)
+		playbooks, err := ListPlaybooksForComponent(ctx, dummy.Logistics.ID.String())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(playbooks)).To(Equal(1))
+		Expect(playbooks).To(Equal([]models.Playbook{playbook}))
+
+		playbooks, err = ListPlaybooksForComponent(ctx, dummy.LogisticsUI.ID.String())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(playbooks)).To(Equal(0))
 	})
 
 	ginkgo.It("should store playbook run via API", func() {

@@ -17,10 +17,9 @@ import (
 
 type ContextKey string
 
-const (
-	UserIDContextKey ContextKey = "User-ID"
-	UserIDHeaderKey             = "X-User-ID"
-)
+const UserIDContextKey ContextKey = "User-ID"
+
+const UserIDHeaderKey = "X-User-ID"
 
 var SystemUserID *uuid.UUID
 var CanaryCheckerPath string

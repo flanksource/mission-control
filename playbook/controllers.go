@@ -169,12 +169,12 @@ func HandlePlaybookList(c echo.Context) error {
 	var playbooks []models.Playbook
 	var err error
 	if configID != "" {
-		playbooks, err = ListPlaybooksOfConfig(ctx, configID)
+		playbooks, err = ListPlaybooksForConfig(ctx, configID)
 		if err != nil {
 			return api.WriteError(c, err)
 		}
 	} else if componentID != "" {
-		playbooks, err = ListPlaybooksOfComponent(ctx, componentID)
+		playbooks, err = ListPlaybooksForComponent(ctx, componentID)
 		if err != nil {
 			return api.WriteError(c, err)
 		}

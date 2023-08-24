@@ -7,7 +7,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func ListPlaybooksOfConfig(ctx *api.Context, id string) ([]models.Playbook, error) {
+func ListPlaybooksForConfig(ctx *api.Context, id string) ([]models.Playbook, error) {
 	var config models.ConfigItem
 	if err := ctx.DB().Where("id = ?", id).Find(&config).Error; err != nil {
 		return nil, err
@@ -15,10 +15,10 @@ func ListPlaybooksOfConfig(ctx *api.Context, id string) ([]models.Playbook, erro
 		return nil, api.Errorf(api.ENOTFOUND, "config(id=%s) not found", id)
 	}
 
-	return db.FindPlaybooksByTypeAndTags(ctx, *config.Type, *config.Tags)
+	return db.FindPlaybooksForConfig(ctx, *config.Type, *config.Tags)
 }
 
-func ListPlaybooksOfComponent(ctx *api.Context, id string) ([]models.Playbook, error) {
+func ListPlaybooksForComponent(ctx *api.Context, id string) ([]models.Playbook, error) {
 	var component models.Component
 	if err := ctx.DB().Where("id = ?", id).Find(&component).Error; err != nil {
 		return nil, err
@@ -26,5 +26,5 @@ func ListPlaybooksOfComponent(ctx *api.Context, id string) ([]models.Playbook, e
 		return nil, api.Errorf(api.ENOTFOUND, "component(id=%s) not found", id)
 	}
 
-	return db.FindPlaybooksByTypeAndTags(ctx, component.Type, component.Labels)
+	return db.FindPlaybooksForComponent(ctx, component.Type, component.Labels)
 }
