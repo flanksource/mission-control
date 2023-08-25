@@ -270,10 +270,12 @@ spec:
                   approvers:
                     properties:
                       people:
+                        description: Emails of the approvers
                         items:
                           type: string
                         type: array
                       teams:
+                        description: Names of the teams
                         items:
                           type: string
                         type: array

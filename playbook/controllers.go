@@ -112,7 +112,7 @@ func HandlePlaybookRun(c echo.Context) error {
 		PlaybookID: playbook.ID,
 		Status:     models.PlaybookRunStatusPending,
 		Parameters: types.JSONStringMap(req.Params),
-		CreatedBy:  ctx.UserID(),
+		CreatedBy:  &ctx.User().ID,
 	}
 
 	if spec.Approval == nil || spec.Approval.Approvers.Empty() {
@@ -187,14 +187,9 @@ func HandlePlaybookRunApproval(c echo.Context) error {
 	ctx := c.(*api.Context)
 
 	var (
-		userID     = ctx.UserID()
 		playbookID = c.Param("playbook_id")
 		runID      = c.Param("run_id")
 	)
-
-	if userID == nil {
-		return c.JSON(http.StatusUnauthorized, api.HTTPError{Error: "user id is required"})
-	}
 
 	playbookUUID, err := uuid.Parse(playbookID)
 	if err != nil {
@@ -206,7 +201,7 @@ func HandlePlaybookRunApproval(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error(), Message: "invalid run id"})
 	}
 
-	if err := ApproveRun(ctx, *userID, playbookUUID, runUUID); err != nil {
+	if err := ApproveRun(ctx, playbookUUID, runUUID); err != nil {
 		return api.WriteError(c, err)
 	}
 

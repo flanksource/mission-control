@@ -9,7 +9,12 @@ import (
 	"github.com/google/uuid"
 )
 
-func ApproveRun(ctx *api.Context, approverID, playbookID, runID uuid.UUID) error {
+func ApproveRun(ctx *api.Context, playbookID, runID uuid.UUID) error {
+	approver := ctx.User()
+	if approver == nil {
+		return api.Errorf(api.EFORBIDDEN, "you are not allowed to approve this playbook run")
+	}
+
 	playbook, err := db.FindPlaybook(ctx, playbookID)
 	if err != nil {
 		return api.Errorf(api.EINTERNAL, "something went wrong while finding playbook(id=%s)", playbookID).WithDebugInfo("db.FindPlaybook(id=%s): %v", playbookID, err)
@@ -30,12 +35,12 @@ func ApproveRun(ctx *api.Context, approverID, playbookID, runID uuid.UUID) error
 		RunID: runID,
 	}
 
-	if collections.Contains(playbookV1.Spec.Approval.Approvers.People, approverID.String()) {
-		approval.PersonID = &approverID
+	if collections.Contains(playbookV1.Spec.Approval.Approvers.People, approver.Email) {
+		approval.PersonID = &approver.ID
 	} else {
-		teamIDs, err := db.GetTeamIDsForUser(ctx, approverID.String())
+		teamIDs, err := db.GetTeamIDsForUser(ctx, approver.ID.String())
 		if err != nil {
-			return api.Errorf(api.EINTERNAL, "something went wrong").WithDebugInfo("db.GetTeamIDsForUser(id=%s): %v", approverID, err)
+			return api.Errorf(api.EINTERNAL, "something went wrong").WithDebugInfo("db.GetTeamIDsForUser(id=%s): %v", approver.ID, err)
 		}
 
 		for _, teamID := range teamIDs {
@@ -55,7 +60,7 @@ func ApproveRun(ctx *api.Context, approverID, playbookID, runID uuid.UUID) error
 	}
 
 	if err := db.SavePlaybookRunApproval(ctx, approval); err != nil {
-		return api.Errorf(api.EINTERNAL, "something went wrong while approving").WithDebugInfo("db.ApprovePlaybookRun(runID=%s, approverID=%s): %v", runID, approverID, err)
+		return api.Errorf(api.EINTERNAL, "something went wrong while approving").WithDebugInfo("db.ApprovePlaybookRun(runID=%s, approverID=%s): %v", runID, approver.ID, err)
 	}
 
 	return nil

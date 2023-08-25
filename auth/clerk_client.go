@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -87,7 +86,7 @@ func (h ClerkHandler) Session(next echo.HandlerFunc) echo.HandlerFunc {
 		c.Request().Header.Set(echo.HeaderAuthorization, fmt.Sprintf("Bearer %s", token))
 		c.Request().Header.Set(api.UserIDHeaderKey, user.ID.String())
 
-		ctx.Context = context.WithValue(ctx.Context, api.UserIDContextKey, user.ID.String())
+		ctx.WithUser(&api.ContextUser{ID: user.ID, Email: user.Email})
 		return next(ctx)
 	}
 }

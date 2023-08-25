@@ -10,7 +10,6 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/google/uuid"
-	"github.com/lib/pq"
 	"gorm.io/gorm"
 )
 
@@ -117,9 +116,9 @@ func UpdatePlaybookRunStatusIfApproved(ctx *api.Context, playbookID string, appr
 		return nil
 	}
 
-	subQuery := `SELECT run_id FROM run_approvals WHERE approvers @> ?`
+	operator := `@>`
 	if approval.Type == v1.PlaybookApprovalTypeAny {
-		subQuery = `SELECT run_id FROM run_approvals WHERE approvers && ?`
+		operator = `&&`
 	}
 
 	query := fmt.Sprintf(`
@@ -127,13 +126,20 @@ func UpdatePlaybookRunStatusIfApproved(ctx *api.Context, playbookID string, appr
 		SELECT run_id, ARRAY_AGG(COALESCE(person_id, team_id)) AS approvers
 		FROM playbook_approvals
 		GROUP BY run_id
+	),
+	allowed_approvers AS (
+		SELECT id FROM teams WHERE name IN ?
+		UNION
+		SELECT id FROM people WHERE email IN ?
 	)
 	UPDATE playbook_runs SET status = ? WHERE
 	status = ?
 	AND playbook_id = ?
-	AND id IN (%s)`, subQuery)
+	AND id IN (
+		SELECT run_id FROM run_approvals WHERE approvers %s (SELECT array_agg(id) FROM allowed_approvers)
+	)`, operator)
 
-	return ctx.DB().Exec(query, models.PlaybookRunStatusScheduled, models.PlaybookRunStatusPending, playbookID, pq.Array(approval.Approvers.IDs())).Error
+	return ctx.DB().Debug().Exec(query, approval.Approvers.Teams, approval.Approvers.People, models.PlaybookRunStatusScheduled, models.PlaybookRunStatusPending, playbookID).Error
 }
 
 func SavePlaybookRunApproval(ctx *api.Context, approval models.PlaybookApproval) error {

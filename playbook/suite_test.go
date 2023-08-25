@@ -110,7 +110,7 @@ func mockAuthMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 		}
 
 		ctx := c.(*api.Context)
-		ctx.Context = context.WithValue(ctx.Context, api.UserIDContextKey, person.ID.String())
+		ctx.WithUser(&api.ContextUser{ID: person.ID, Email: person.Email})
 
 		return next(c)
 	}

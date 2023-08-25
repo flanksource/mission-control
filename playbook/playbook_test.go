@@ -52,8 +52,8 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 				Type: v1.PlaybookApprovalTypeAny, // We have two approvers (John Doe & John Wick) and just a single approval is sufficient
 				Approvers: v1.PlaybookApprovers{
 					People: []string{
-						dummy.JohnDoe.ID.String(),
-						dummy.JohnWick.ID.String(),
+						dummy.JohnDoe.Email,
+						dummy.JohnWick.Email,
 					},
 				},
 			},

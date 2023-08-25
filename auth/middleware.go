@@ -96,7 +96,7 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 		c.Request().Header.Set(api.UserIDHeaderKey, session.Identity.GetId())
 
 		ctx := c.(*api.Context)
-		ctx.Context = context.WithValue(ctx.Context, api.UserIDContextKey, session.Identity.GetId())
+		ctx.WithUser(&api.ContextUser{ID: uuid.MustParse(session.Identity.GetId()), Email: session.Identity.GetId()})
 
 		return next(ctx)
 	}

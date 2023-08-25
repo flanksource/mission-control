@@ -15,9 +15,9 @@ spec:
     type: any
     approvers:
       people:
-        - d87243c9-3183-4ab9-9df9-c77c8278df11
+        - admin@local
       teams:
-        - 018770c4-4b73-5d44-8bb5-0e849d62e461
+        - DevOps
   actions:
     - name: 'scale deployment'
       exec:

@@ -28,16 +28,15 @@ type PlaybookParameter struct {
 }
 
 type PlaybookApprovers struct {
+	// Emails of the approvers
 	People []string `json:"people,omitempty" yaml:"people,omitempty"`
-	Teams  []string `json:"teams,omitempty" yaml:"teams,omitempty"`
+
+	// Names of the teams
+	Teams []string `json:"teams,omitempty" yaml:"teams,omitempty"`
 }
 
 func (t *PlaybookApprovers) Empty() bool {
 	return len(t.People) == 0 && len(t.Teams) == 0
-}
-
-func (t *PlaybookApprovers) IDs() []string {
-	return append(t.People, t.Teams...)
 }
 
 type PlaybookApprovalType string

@@ -15,9 +15,21 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-type ContextKey string
+// contextKey represents an internal key for adding context fields.
+type contextKey int
 
-const UserIDContextKey ContextKey = "User-ID"
+// List of context keys.
+// These are used to store request-scoped information.
+const (
+	// stores current logged in user
+	userContextKey contextKey = iota
+)
+
+// ContextUser carries basic information of the current logged in user
+type ContextUser struct {
+	ID    uuid.UUID
+	Email string
+}
 
 const UserIDHeaderKey = "X-User-ID"
 
@@ -63,18 +75,17 @@ func (c *Context) DB() *gorm.DB {
 	return c.db.WithContext(c.Context)
 }
 
-func (c *Context) UserID() *uuid.UUID {
-	id, ok := c.Context.Value(UserIDContextKey).(string)
+func (c *Context) WithUser(user *ContextUser) {
+	c.Context = gocontext.WithValue(c.Context, userContextKey, user)
+}
+
+func (c *Context) User() *ContextUser {
+	user, ok := c.Context.Value(userContextKey).(*ContextUser)
 	if !ok {
 		return nil
 	}
 
-	u, err := uuid.Parse(id)
-	if err != nil {
-		return nil
-	}
-
-	return &u
+	return user
 }
 
 func (c *Context) GetEnvVarValue(input types.EnvVar) (string, error) {
