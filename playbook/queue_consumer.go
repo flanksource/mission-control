@@ -123,7 +123,7 @@ func (t *queueConsumer) onPlaybookRunNewApproval(ctx *api.Context, runID string)
 }
 
 func (t *queueConsumer) consumeAll(ctx *api.Context) error {
-	runs, err := db.GetScheduledPlaybookRuns(ctx, time.Minute*10, t.getRunIDsInRegistry()...)
+	runs, err := db.GetScheduledPlaybookRuns(ctx, 1, t.getRunIDsInRegistry()...)
 	if err != nil {
 		return fmt.Errorf("failed to get playbook runs: %w", err)
 	}
@@ -135,10 +135,6 @@ func (t *queueConsumer) consumeAll(ctx *api.Context) error {
 	for _, r := range runs {
 		go func(run models.PlaybookRun) {
 			if _, loaded := t.registry.LoadOrStore(run.ID, nil); !loaded {
-				if !run.StartTime.After(time.Now()) {
-					time.Sleep(time.Until(run.StartTime))
-				}
-
 				ExecuteRun(ctx, run)
 			}
 
