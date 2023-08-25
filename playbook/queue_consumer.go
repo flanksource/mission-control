@@ -122,6 +122,7 @@ func (t *queueConsumer) onPlaybookRunNewApproval(ctx *api.Context, runID string)
 	return db.UpdatePlaybookRunStatusIfApproved(ctx, playbook.ID.String(), *spec.Approval)
 }
 
+// TODO: Limit to X workers (5 workers, 1 batch size)
 func (t *queueConsumer) consumeAll(ctx *api.Context) error {
 	runs, err := db.GetScheduledPlaybookRuns(ctx, 1, t.getRunIDsInRegistry()...)
 	if err != nil {

@@ -12,7 +12,7 @@ import (
 func ApproveRun(ctx *api.Context, playbookID, runID uuid.UUID) error {
 	approver := ctx.User()
 	if approver == nil {
-		return api.Errorf(api.EFORBIDDEN, "you are not allowed to approve this playbook run")
+		return api.Errorf(api.EUNAUTHORIZED, "user not found.")
 	}
 
 	playbook, err := db.FindPlaybook(ctx, playbookID)
@@ -38,14 +38,14 @@ func ApproveRun(ctx *api.Context, playbookID, runID uuid.UUID) error {
 	if collections.Contains(playbookV1.Spec.Approval.Approvers.People, approver.Email) {
 		approval.PersonID = &approver.ID
 	} else {
-		teamIDs, err := db.GetTeamIDsForUser(ctx, approver.ID.String())
+		teams, err := db.GetTeamsForUser(ctx, approver.ID.String())
 		if err != nil {
 			return api.Errorf(api.EINTERNAL, "something went wrong").WithDebugInfo("db.GetTeamIDsForUser(id=%s): %v", approver.ID, err)
 		}
 
-		for _, teamID := range teamIDs {
-			if collections.Contains(playbookV1.Spec.Approval.Approvers.Teams, teamID.String()) {
-				approval.TeamID = &teamID
+		for _, team := range teams {
+			if collections.Contains(playbookV1.Spec.Approval.Approvers.Teams, team.Name) {
+				approval.TeamID = &team.ID
 				break
 			}
 		}
