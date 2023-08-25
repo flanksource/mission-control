@@ -6,10 +6,7 @@ spec:
   description: Delete Kubernetes ConfigMap
   configs:
     - type: Kubernetes::ConfigMap
-      tags:
-        namespace: default
-        cluster: local-kind-cluster
   actions:
     - name: 'Delete ConfigMap'
       exec:
-        script: kubectl delete configmap {{.config.name}}
+        script: kubectl delete configmap {{.config.name}} --namespace={{.config.namespace}}
