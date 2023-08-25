@@ -95,7 +95,16 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 		c.Request().Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
 		c.Request().Header.Set(api.UserIDHeaderKey, session.Identity.GetId())
 
-		return next(c)
+		ctx := c.(*api.Context)
+		var email string
+		if traits, ok := session.Identity.GetTraits().(map[string]any); ok {
+			if e, ok := traits["email"].(string); ok {
+				email = e
+			}
+		}
+		ctx.WithUser(&api.ContextUser{ID: uuid.MustParse(session.Identity.GetId()), Email: email})
+
+		return next(ctx)
 	}
 }
 

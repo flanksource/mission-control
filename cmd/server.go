@@ -28,6 +28,7 @@ import (
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/jobs"
 	"github.com/flanksource/incident-commander/logs"
+	"github.com/flanksource/incident-commander/playbook"
 	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/snapshot"
 	"github.com/flanksource/incident-commander/upstream"
@@ -150,6 +151,7 @@ func createHTTPServer(gormDB *gorm.DB) *echo.Echo {
 	upstreamGroup.GET("/canary/pull/:agent_name", canary.Pull)
 	upstreamGroup.GET("/status/:agent_name", upstream.Status)
 
+	playbook.RegisterRoutes(e, "playbook")
 	e.POST("/agent/generate", agent.GenerateAgent, rbac.Authorization(rbac.ObjectAgentCreate, rbac.ActionWrite))
 
 	forward(e, "/config", configDb)
@@ -185,6 +187,15 @@ func launchKopper() {
 		"incidentrule.mission-control.flanksource.com",
 	); err != nil {
 		logger.Fatalf("Unable to create controller for IncidentRule: %v", err)
+	}
+
+	if err = kopper.SetupReconciler(
+		mgr,
+		db.PersistPlaybookFromCRD,
+		db.DeletePlaybook,
+		"playbook.mission-control.flanksource.com",
+	); err != nil {
+		logger.Fatalf("Unable to create controller for Playbook: %v", err)
 	}
 
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
@@ -223,6 +234,9 @@ var Serve = &cobra.Command{
 		events.StartConsumers(db.Gorm, events.Config{
 			UpstreamPush: api.UpstreamConf,
 		})
+
+		playbookRunConsumer := playbook.NewQueueConsumer(db.Gorm, db.Pool)
+		go playbookRunConsumer.Listen()
 
 		go launchKopper()
 

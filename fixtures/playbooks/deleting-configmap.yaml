@@ -1,0 +1,12 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: delete-kubernetes-configmap
+spec:
+  description: Delete Kubernetes ConfigMap
+  configs:
+    - type: Kubernetes::ConfigMap
+  actions:
+    - name: 'Delete ConfigMap'
+      exec:
+        script: kubectl delete configmap {{.config.name}} --namespace={{.config.tags.namespace}}

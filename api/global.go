@@ -15,9 +15,23 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
+// contextKey represents an internal key for adding context fields.
+type contextKey int
+
+// List of context keys.
+// These are used to store request-scoped information.
 const (
-	UserIDHeaderKey = "X-User-ID"
+	// stores current logged in user
+	userContextKey contextKey = iota
 )
+
+// ContextUser carries basic information of the current logged in user
+type ContextUser struct {
+	ID    uuid.UUID
+	Email string
+}
+
+const UserIDHeaderKey = "X-User-ID"
 
 var SystemUserID *uuid.UUID
 var CanaryCheckerPath string
@@ -61,8 +75,25 @@ func (c *Context) DB() *gorm.DB {
 	return c.db.WithContext(c.Context)
 }
 
+func (c *Context) WithUser(user *ContextUser) {
+	c.Context = gocontext.WithValue(c.Context, userContextKey, user)
+}
+
+func (c *Context) User() *ContextUser {
+	user, ok := c.Context.Value(userContextKey).(*ContextUser)
+	if !ok {
+		return nil
+	}
+
+	return user
+}
+
 func (c *Context) GetEnvVarValue(input types.EnvVar) (string, error) {
 	return duty.GetEnvValueFromCache(c.Kubernetes, input, c.Namespace)
+}
+
+func (ctx *Context) GetEnvValueFromCache(env types.EnvVar) (string, error) {
+	return duty.GetEnvValueFromCache(ctx.Kubernetes, env, ctx.Namespace)
 }
 
 func (c *Context) HydrateConnection(connectionName string) (*models.Connection, error) {

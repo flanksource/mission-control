@@ -38,6 +38,12 @@ func GetUserByID(ctx *api.Context, id string) (api.Person, error) {
 	return user, err
 }
 
+func GetTeamsForUser(ctx *api.Context, id string) ([]models.Team, error) {
+	var teams []models.Team
+	err := ctx.DB().Raw("SELECT teams.* FROM teams LEFT JOIN team_members ON teams.id = team_members.team_id WHERE team_members.person_id = ?", id).Scan(&teams).Error
+	return teams, err
+}
+
 func GetUserByExternalID(ctx *api.Context, id string) (api.Person, error) {
 	var user api.Person
 	err := ctx.DB().Table("people").Where("external_id = ?", id).First(&user).Error

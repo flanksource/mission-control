@@ -85,7 +85,9 @@ func (h ClerkHandler) Session(next echo.HandlerFunc) echo.HandlerFunc {
 
 		c.Request().Header.Set(echo.HeaderAuthorization, fmt.Sprintf("Bearer %s", token))
 		c.Request().Header.Set(api.UserIDHeaderKey, user.ID.String())
-		return next(c)
+
+		ctx.WithUser(&api.ContextUser{ID: user.ID, Email: user.Email})
+		return next(ctx)
 	}
 }
 

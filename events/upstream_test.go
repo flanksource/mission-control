@@ -348,7 +348,7 @@ func compareEntities[T any](table string, upstreamDB *gorm.DB, agent agentWrappe
 	// - and the order of the items when fetching from upstream and agent db is identitcal for the comparison to work
 	switch table {
 	case "check_statuses":
-		err = upstreamDB.Debug().Joins("LEFT JOIN checks ON checks.id = check_statuses.check_id").Where("checks.agent_id = ?", agent.id).Order("check_id, time").Find(&upstream).Error
+		err = upstreamDB.Joins("LEFT JOIN checks ON checks.id = check_statuses.check_id").Where("checks.agent_id = ?", agent.id).Order("check_id, time").Find(&upstream).Error
 		agentErr = agent.db.Order("check_id, time").Find(&downstream).Error
 
 	case "config_analysis":

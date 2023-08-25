@@ -1,0 +1,351 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.11.1
+  creationTimestamp: null
+  name: playbooks.mission-control.flanksource.com
+spec:
+  group: mission-control.flanksource.com
+  names:
+    kind: Playbook
+    listKind: PlaybookList
+    plural: playbooks
+    singular: playbook
+  scope: Namespaced
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: Playbook is the schema for the Playbooks API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            properties:
+              actions:
+                items:
+                  properties:
+                    exec:
+                      properties:
+                        connections:
+                          properties:
+                            aws:
+                              properties:
+                                accessKey:
+                                  properties:
+                                    name:
+                                      type: string
+                                    value:
+                                      type: string
+                                    valueFrom:
+                                      properties:
+                                        configMapKeyRef:
+                                          properties:
+                                            key:
+                                              type: string
+                                            name:
+                                              type: string
+                                          required:
+                                          - key
+                                          type: object
+                                        secretKeyRef:
+                                          properties:
+                                            key:
+                                              type: string
+                                            name:
+                                              type: string
+                                          required:
+                                          - key
+                                          type: object
+                                      type: object
+                                  type: object
+                                connection:
+                                  description: ConnectionName of the connection. It'll
+                                    be used to populate the endpoint, accessKey and
+                                    secretKey.
+                                  type: string
+                                endpoint:
+                                  type: string
+                                objectPath:
+                                  description: glob path to restrict matches to a
+                                    subset
+                                  type: string
+                                region:
+                                  type: string
+                                secretKey:
+                                  properties:
+                                    name:
+                                      type: string
+                                    value:
+                                      type: string
+                                    valueFrom:
+                                      properties:
+                                        configMapKeyRef:
+                                          properties:
+                                            key:
+                                              type: string
+                                            name:
+                                              type: string
+                                          required:
+                                          - key
+                                          type: object
+                                        secretKeyRef:
+                                          properties:
+                                            key:
+                                              type: string
+                                            name:
+                                              type: string
+                                          required:
+                                          - key
+                                          type: object
+                                      type: object
+                                  type: object
+                                sessionToken:
+                                  properties:
+                                    name:
+                                      type: string
+                                    value:
+                                      type: string
+                                    valueFrom:
+                                      properties:
+                                        configMapKeyRef:
+                                          properties:
+                                            key:
+                                              type: string
+                                            name:
+                                              type: string
+                                          required:
+                                          - key
+                                          type: object
+                                        secretKeyRef:
+                                          properties:
+                                            key:
+                                              type: string
+                                            name:
+                                              type: string
+                                          required:
+                                          - key
+                                          type: object
+                                      type: object
+                                  type: object
+                                skipTLSVerify:
+                                  description: Skip TLS verify when connecting to
+                                    aws
+                                  type: boolean
+                                usePathStyle:
+                                  description: 'Use path style path: http://s3.amazonaws.com/BUCKET/KEY
+                                    instead of http://BUCKET.s3.amazonaws.com/KEY'
+                                  type: boolean
+                              type: object
+                            azure:
+                              properties:
+                                clientID:
+                                  properties:
+                                    name:
+                                      type: string
+                                    value:
+                                      type: string
+                                    valueFrom:
+                                      properties:
+                                        configMapKeyRef:
+                                          properties:
+                                            key:
+                                              type: string
+                                            name:
+                                              type: string
+                                          required:
+                                          - key
+                                          type: object
+                                        secretKeyRef:
+                                          properties:
+                                            key:
+                                              type: string
+                                            name:
+                                              type: string
+                                          required:
+                                          - key
+                                          type: object
+                                      type: object
+                                  type: object
+                                clientSecret:
+                                  properties:
+                                    name:
+                                      type: string
+                                    value:
+                                      type: string
+                                    valueFrom:
+                                      properties:
+                                        configMapKeyRef:
+                                          properties:
+                                            key:
+                                              type: string
+                                            name:
+                                              type: string
+                                          required:
+                                          - key
+                                          type: object
+                                        secretKeyRef:
+                                          properties:
+                                            key:
+                                              type: string
+                                            name:
+                                              type: string
+                                          required:
+                                          - key
+                                          type: object
+                                      type: object
+                                  type: object
+                                connection:
+                                  type: string
+                                tenantID:
+                                  type: string
+                              type: object
+                            gcp:
+                              properties:
+                                connection:
+                                  description: ConnectionName of the connection. It'll
+                                    be used to populate the endpoint and credentials.
+                                  type: string
+                                credentials:
+                                  properties:
+                                    name:
+                                      type: string
+                                    value:
+                                      type: string
+                                    valueFrom:
+                                      properties:
+                                        configMapKeyRef:
+                                          properties:
+                                            key:
+                                              type: string
+                                            name:
+                                              type: string
+                                          required:
+                                          - key
+                                          type: object
+                                        secretKeyRef:
+                                          properties:
+                                            key:
+                                              type: string
+                                            name:
+                                              type: string
+                                          required:
+                                          - key
+                                          type: object
+                                      type: object
+                                  type: object
+                                endpoint:
+                                  type: string
+                              type: object
+                          type: object
+                        script:
+                          description: Script can be a inline script or a path to
+                            a script that needs to be executed On windows executed
+                            via powershell and in darwin and linux executed using
+                            bash
+                          type: string
+                      required:
+                      - script
+                      type: object
+                    name:
+                      type: string
+                  required:
+                  - name
+                  type: object
+                type: array
+              approval:
+                properties:
+                  approvers:
+                    properties:
+                      people:
+                        description: Emails of the approvers
+                        items:
+                          type: string
+                        type: array
+                      teams:
+                        description: Names of the teams
+                        items:
+                          type: string
+                        type: array
+                    type: object
+                  type:
+                    type: string
+                type: object
+              components:
+                items:
+                  description: PlaybookResourceFilter defines a filter that decides
+                    whether a resource (config or a component) is permitted be run
+                    on the Playbook.
+                  properties:
+                    tags:
+                      additionalProperties:
+                        type: string
+                      type: object
+                    type:
+                      type: string
+                  type: object
+                type: array
+              configs:
+                items:
+                  description: PlaybookResourceFilter defines a filter that decides
+                    whether a resource (config or a component) is permitted be run
+                    on the Playbook.
+                  properties:
+                    tags:
+                      additionalProperties:
+                        type: string
+                      type: object
+                    type:
+                      type: string
+                  type: object
+                type: array
+              description:
+                type: string
+              parameters:
+                items:
+                  description: PlaybookParameter defines a parameter that a playbook
+                    needs to run.
+                  properties:
+                    label:
+                      type: string
+                    name:
+                      type: string
+                  required:
+                  - label
+                  - name
+                  type: object
+                type: array
+              permissions:
+                items:
+                  properties:
+                    ref:
+                      type: string
+                    role:
+                      type: string
+                    team:
+                      type: string
+                  type: object
+                type: array
+            required:
+            - actions
+            type: object
+          status:
+            description: PlaybookStatus defines the observed state of Playbook
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
