@@ -11,7 +11,7 @@ require (
 	github.com/containrrr/shoutrrr v0.7.1
 	github.com/fergusstrange/embedded-postgres v1.23.0
 	github.com/flanksource/commons v1.11.0
-	github.com/flanksource/duty v1.0.159
+	github.com/flanksource/duty v1.0.161
 	github.com/flanksource/gomplate/v3 v3.20.11
 	github.com/flanksource/kopper v1.0.6
 	github.com/google/cel-go v0.17.6
@@ -38,7 +38,7 @@ require (
 )
 
 require (
-	ariga.io/atlas v0.13.1 // indirect
+	ariga.io/atlas v0.13.2 // indirect
 	cloud.google.com/go/compute v1.23.0 // indirect
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
 	cloud.google.com/go/iam v1.1.2 // indirect
@@ -101,7 +101,7 @@ require (
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/xi2/xz v0.0.0-20171230120015-48954b6210f8 // indirect
 	github.com/yuin/gopher-lua v1.1.0 // indirect
-	github.com/zclconf/go-cty v1.13.2 // indirect
+	github.com/zclconf/go-cty v1.13.3 // indirect
 	go.opentelemetry.io/otel v1.16.0 // indirect
 	go.opentelemetry.io/otel/metric v1.16.0 // indirect
 	go.opentelemetry.io/otel/trace v1.16.0 // indirect
@@ -142,7 +142,7 @@ require (
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/TomOnTime/utfutil v0.0.0-20230223141146-125e65197b36
 	github.com/antonmedv/expr v1.14.3 // indirect
-	github.com/aws/aws-sdk-go v1.44.330 // indirect
+	github.com/aws/aws-sdk-go v1.44.331 // indirect
 	github.com/bgentry/go-netrc v0.0.0-20140422174119-9fd32a8b3d3d // indirect
 	github.com/cjlapao/common-go v0.0.39 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -221,5 +221,3 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.3.0 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
-
-replace github.com/flanksource/duty => ../duty
