@@ -6,26 +6,10 @@ import (
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/gomplate/v3"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/playbook/actions"
 )
-
-// ActionParam defines the config and component passed to a playbook run action.
-type ActionParam struct {
-	Config    *models.ConfigItem `json:"config,omitempty"`
-	Component *models.Component  `json:"component,omitempty"`
-	Params    map[string]string  `json:"params,omitempty"`
-}
-
-func (t *ActionParam) AsMap() map[string]any {
-	return map[string]any{
-		"config":    t.Config,
-		"component": t.Component,
-		"params":    t.Params,
-	}
-}
 
 func ExecuteRun(ctx *api.Context, run models.PlaybookRun) {
 	logger.Infof("Executing playbook run: %s", run.ID)
@@ -62,15 +46,15 @@ func executeRun(ctx *api.Context, run models.PlaybookRun) error {
 		return err
 	}
 
-	actionParam := ActionParam{
+	templateEnv := actions.TemplateEnv{
 		Params: run.Parameters,
 	}
 	if run.ComponentID != nil {
-		if err := ctx.DB().Where("id = ?", run.ComponentID).First(&actionParam.Component).Error; err != nil {
+		if err := ctx.DB().Where("id = ?", run.ComponentID).First(&templateEnv.Component).Error; err != nil {
 			return err
 		}
 	} else if run.ConfigID != nil {
-		if err := ctx.DB().Where("id = ?", run.ConfigID).First(&actionParam.Config).Error; err != nil {
+		if err := ctx.DB().Where("id = ?", run.ConfigID).First(&templateEnv.Config).Error; err != nil {
 			return err
 		}
 	}
@@ -93,7 +77,7 @@ func executeRun(ctx *api.Context, run models.PlaybookRun) error {
 			"end_time": "NOW()",
 		}
 
-		result, err := executeAction(ctx, run, action, actionParam)
+		result, err := executeAction(ctx, run, action, templateEnv)
 		if err != nil {
 			logger.Errorf("failed to execute action: %v", err)
 			columnUpdates["status"] = models.PlaybookRunStatusFailed
@@ -116,16 +100,10 @@ func executeRun(ctx *api.Context, run models.PlaybookRun) error {
 	return nil
 }
 
-func executeAction(ctx *api.Context, run models.PlaybookRun, action v1.PlaybookAction, actionParam ActionParam) ([]byte, error) {
+func executeAction(ctx *api.Context, run models.PlaybookRun, action v1.PlaybookAction, env actions.TemplateEnv) ([]byte, error) {
 	if action.Exec != nil {
-		script, err := gomplate.RunTemplate(actionParam.AsMap(), gomplate.Template{Template: action.Exec.Script})
-		if err != nil {
-			return nil, err
-		}
-		action.Exec.Script = script
-
 		e := actions.ExecAction{}
-		res, err := e.Run(ctx, *action.Exec)
+		res, err := e.Run(ctx, *action.Exec, env)
 		if err != nil {
 			return nil, err
 		}

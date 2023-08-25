@@ -9,4 +9,4 @@ spec:
   actions:
     - name: 'Delete ConfigMap'
       exec:
-        script: kubectl delete configmap {{.config.name}} --namespace={{.config.namespace}}
+        script: kubectl delete configmap {{.config.name}} {{if .config.namespace}}--namespace={{.config.namespace}}{{end}}

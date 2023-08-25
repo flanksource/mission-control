@@ -21,4 +21,4 @@ spec:
   actions:
     - name: 'scale deployment'
       exec:
-        script: kubectl scale --replicas={{.params.replicas}} --namespace={{.config.namespace}} deployment {{.config.name}}
+        script: kubectl scale --replicas={{.params.replicas}} {{if .config.namespace}}--namespace={{.config.namespace}}{{end}} deployment {{.config.name}}

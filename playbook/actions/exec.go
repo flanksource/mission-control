@@ -12,6 +12,7 @@ import (
 	textTemplate "text/template"
 
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/gomplate/v3"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 )
@@ -25,7 +26,13 @@ type ExecDetails struct {
 	ExitCode int    `json:"exitCode,omitempty"`
 }
 
-func (c *ExecAction) Run(ctx *api.Context, exec v1.ExecAction) (*ExecDetails, error) {
+func (c *ExecAction) Run(ctx *api.Context, exec v1.ExecAction, env TemplateEnv) (*ExecDetails, error) {
+	script, err := gomplate.RunTemplate(env.AsMap(), gomplate.Template{Template: exec.Script})
+	if err != nil {
+		return nil, err
+	}
+	exec.Script = script
+
 	switch runtime.GOOS {
 	case "windows":
 		return execPowershell(exec, ctx)
