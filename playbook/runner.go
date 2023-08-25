@@ -12,8 +12,6 @@ import (
 )
 
 func ExecuteRun(ctx *api.Context, run models.PlaybookRun) {
-	logger.Infof("Executing playbook run: %s", run.ID)
-
 	if err := ctx.DB().Model(&models.PlaybookRun{}).Where("id = ?", run.ID).UpdateColumn("status", models.PlaybookRunStatusRunning).Error; err != nil {
 		logger.Errorf("failed to update playbook run status: %v", err)
 		return
@@ -45,6 +43,12 @@ func executeRun(ctx *api.Context, run models.PlaybookRun) error {
 	if err != nil {
 		return err
 	}
+
+	logger.WithValues("playbook", playbook.Name).
+		WithValues("parameters", run.Parameters).
+		WithValues("config", run.ConfigID).
+		WithValues("component", run.ComponentID).
+		Infof("Executing playbook run: %s", run.ID)
 
 	templateEnv := actions.TemplateEnv{
 		Params: run.Parameters,
