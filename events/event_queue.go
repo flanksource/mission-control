@@ -2,6 +2,7 @@ package events
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/flanksource/commons/collections/set"
@@ -16,6 +17,8 @@ const (
 	// eventMaxAttempts is the maximum number of attempts to process an event in `event_queue`
 	eventMaxAttempts = 3
 
+	// eventQueueUpdateChannel is the channel on which new events on the `event_queue` table
+	// are notified.
 	eventQueueUpdateChannel = "event_queue_updates"
 )
 
@@ -27,10 +30,11 @@ type (
 	SyncEventHandler func(*api.Context, api.Event) error
 )
 
-// List of all async events in the `event_queue` table
+// List of all async events in the `event_queue` table.
 const (
-	EventTeamUpdate       = "team.update"
-	EventTeamDelete       = "team.delete"
+	EventTeamUpdate = "team.update"
+	EventTeamDelete = "team.delete"
+
 	EventNotificationSend = "notification.send"
 
 	EventNotificationUpdate = "notification.update"
@@ -53,7 +57,9 @@ const (
 	EventPushQueueCreate = "push_queue.create"
 )
 
-// List of all sync event types in the `event_queue` table
+// List of all sync event types in the `event_queue` table.
+//
+// Sync comments are suffixed with ".sync".
 const (
 	EventCheckPassedSync = "check.passed.sync"
 	EventCheckFailedSync = "check.failed.sync"
@@ -211,15 +217,18 @@ func newEventQueueSyncConsumerFunc(watchEvents []string, syncConsumers ...SyncEv
 		}
 		defer tx.Rollback()
 
-		ctx = ctx.WithDB(tx)
-
-		events, err := fetchEvents(ctx, watchEvents, batchSize)
+		events, err := fetchEvents(ctx.WithDB(tx), watchEvents, batchSize)
 		if err != nil {
 			return fmt.Errorf("error fetching events: %w", err)
 		}
 
+		if len(events) == 0 {
+			return api.Errorf(api.ENOTFOUND, "No events found")
+		}
+
 		failedEvents := make([]api.Event, 0, len(events))
 		for i := range events {
+			events[i].Name = strings.TrimSuffix(events[i].Name, ".sync")
 			if err := processSyncConsumers(ctx, events[i], syncConsumers); err != nil {
 				logger.Errorf("Failed to process event[%s]: %s", events[i].ID, err.Error())
 				failedEvents = append(failedEvents, events[i])
@@ -228,7 +237,6 @@ func newEventQueueSyncConsumerFunc(watchEvents []string, syncConsumers ...SyncEv
 
 		if len(failedEvents) > 0 {
 			if err := tx.Create(failedEvents).Error; err != nil {
-				// TODO: More robust way to handle failed event insertion failures
 				logger.Errorf("Error inserting into table:event_queue with error:%v. %v", err)
 			}
 		}
@@ -237,12 +245,22 @@ func newEventQueueSyncConsumerFunc(watchEvents []string, syncConsumers ...SyncEv
 	}
 }
 
+// processSyncConsumers runs all the sync consumers for the given event.
+//
+// All of the consumers are expected to succeed.
+// Returns error even if a single consumer fails and any changes are rolled back.
 func processSyncConsumers(ctx *api.Context, event api.Event, syncConsumers []SyncEventHandler) error {
+	tx := ctx.DB().Begin()
+	if tx.Error != nil {
+		return fmt.Errorf("error initiating db tx: %w", tx.Error)
+	}
+	defer tx.Rollback()
+
 	for _, syncConsumer := range syncConsumers {
 		if err := syncConsumer(ctx, event); err != nil {
 			return fmt.Errorf("error processing sync consumer: %w", err)
 		}
 	}
 
-	return nil
+	return tx.Commit().Error
 }
