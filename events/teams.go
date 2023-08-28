@@ -13,7 +13,7 @@ import (
 )
 
 func NewTeamConsumer(db *gorm.DB, pool *pgxpool.Pool) *EventConsumer {
-	return NewEventConsumer(db, pool, "event_queue_updates", newEventQueueConsumerFunc(consumerWatchEvents["team"], processTeamEvents))
+	return NewEventConsumer(db, pool, eventQueueUpdateChannel, newEventQueueAsyncConsumerFunc(asyncConsumerWatchEvents["team"], processTeamEvents))
 }
 
 func processTeamEvents(ctx *api.Context, events []api.Event) []api.Event {

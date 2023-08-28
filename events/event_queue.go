@@ -8,22 +8,26 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"gorm.io/gorm"
 )
 
-// eventMaxAttempts is the maximum number of attempts to process an event in `event_queue`
-const eventMaxAttempts = 3
+const (
+	// eventMaxAttempts is the maximum number of attempts to process an event in `event_queue`
+	eventMaxAttempts = 3
 
-type (
-	// ProcessBatchFunc processes multiple events and returns the failed ones
-	ProcessBatchFunc func(*api.Context, []api.Event) []api.Event
-
-	SyncConsumer func(*api.Context, api.Event) error
+	eventQueueUpdateChannel = "event_queue_updates"
 )
 
-// List of all event types in the `event_queue` table
+type (
+	// AsyncEventHandler processes multiple events and returns the failed ones
+	AsyncEventHandler func(*api.Context, []api.Event) []api.Event
+
+	// SyncEventHandler processes a single event and ONLY makes db changes.
+	SyncEventHandler func(*api.Context, api.Event) error
+)
+
+// List of all async events in the `event_queue` table
 const (
 	EventTeamUpdate       = "team.update"
 	EventTeamDelete       = "team.delete"
@@ -31,9 +35,6 @@ const (
 
 	EventNotificationUpdate = "notification.update"
 	EventNotificationDelete = "notification.delete"
-
-	EventCheckPassed = "check.passed"
-	EventCheckFailed = "check.failed"
 
 	EventIncidentCreated             = "incident.created"
 	EventIncidentResponderAdded      = "incident.responder.added"
@@ -52,18 +53,26 @@ const (
 	EventPushQueueCreate = "push_queue.create"
 )
 
+// List of all sync event types in the `event_queue` table
+const (
+	EventCheckPassedSync = "check.passed.sync"
+	EventCheckFailedSync = "check.failed.sync"
+
+	EventIncidentResponderAddedSync = "incident.responder.added.sync"
+	EventIncidentCommentAddedSync   = "incident.comment.added.sync"
+)
+
 type Config struct {
 	UpstreamPush upstream.UpstreamConfig
 }
 
-// consumerWatchEvents keeps a registry of all the event_queue consumer and the events they watch.
+// asyncConsumerWatchEvents keeps a registry of all the event_queue consumer and the events they watch.
 // This helps in ensuring that a single event is not being consumed by multiple consumers.
-var consumerWatchEvents = map[string][]string{
+var asyncConsumerWatchEvents = map[string][]string{
 	"team":              {EventTeamUpdate, EventTeamDelete},
 	"notification_send": {EventNotificationSend},
 	"responder":         {EventIncidentResponderAdded, EventIncidentCommentAdded},
 	"push_queue":        {EventPushQueueCreate},
-	"check":             {EventCheckPassed, EventCheckFailed},
 	"notification": {
 		EventNotificationUpdate, EventNotificationDelete,
 		EventIncidentCreated,
@@ -74,9 +83,24 @@ var consumerWatchEvents = map[string][]string{
 	},
 }
 
+var syncConsumerWatchEvents = map[string][]string{
+	"check":     {EventCheckPassedSync, EventCheckFailedSync},
+	"responder": {EventIncidentResponderAddedSync, EventIncidentCommentAddedSync},
+}
+
 func StartConsumers(gormDB *gorm.DB, pgpool *pgxpool.Pool, config Config) {
 	uniqWatchEvents := set.New[string]()
-	for _, v := range consumerWatchEvents {
+	for _, v := range asyncConsumerWatchEvents {
+		for _, e := range v {
+			if uniqWatchEvents.Contains(e) {
+				logger.Fatalf("Error starting consumers: event[%s] has multiple consumers", e)
+			}
+
+			uniqWatchEvents.Add(e)
+		}
+	}
+
+	for _, v := range syncConsumerWatchEvents {
 		for _, e := range v {
 			if uniqWatchEvents.Contains(e) {
 				logger.Fatalf("Error starting consumers: event[%s] has multiple consumers", e)
@@ -88,10 +112,13 @@ func StartConsumers(gormDB *gorm.DB, pgpool *pgxpool.Pool, config Config) {
 
 	allConsumers := []*EventConsumer{
 		NewTeamConsumer(gormDB, pgpool),
-		NewCheckConsumer(gormDB, pgpool),
-		NewNotificationConsumer(gormDB, pgpool),
 		NewNotificationSendConsumer(gormDB, pgpool),
 		NewResponderConsumer(gormDB, pgpool),
+		NewNotificationConsumer(gormDB, pgpool),
+
+		// Sync consumers
+		NewCheckSyncConsumer(gormDB, pgpool),
+		NewResponderSyncConsumer(gormDB, pgpool),
 	}
 	if config.UpstreamPush.Valid() {
 		allConsumers = append(allConsumers, NewUpstreamPushConsumer(gormDB, pgpool, config))
@@ -102,19 +129,9 @@ func StartConsumers(gormDB *gorm.DB, pgpool *pgxpool.Pool, config Config) {
 	}
 }
 
-// newEventQueueConsumerFunc returns a new event consumer for the `event_queue` table
-// based on the given watch events and process batch function.
-func newEventQueueConsumerFunc(watchEvents []string, processBatchFunc ProcessBatchFunc, syncConsumers ...SyncConsumer) EventConsumerFunc {
-	return func(ctx *api.Context, batchSize int) error {
-		tx := ctx.DB().Begin()
-		if tx.Error != nil {
-			return fmt.Errorf("error initiating db tx: %w", tx.Error)
-		}
-		defer tx.Rollback()
-
-		ctx = ctx.WithDB(tx)
-
-		const selectEventsQuery = `
+// fetchEvents fetches given watch events from the `event_queue` table.
+func fetchEvents(ctx *api.Context, watchEvents []string, batchSize int) ([]api.Event, error) {
+	const selectEventsQuery = `
 			DELETE FROM event_queue
 			WHERE id IN (
 				SELECT id FROM event_queue
@@ -129,17 +146,36 @@ func newEventQueueConsumerFunc(watchEvents []string, processBatchFunc ProcessBat
 			RETURNING *
 		`
 
-		var events []api.Event
-		vals := map[string]any{
-			"maxAttempts": eventMaxAttempts,
-			"events":      watchEvents,
-			"batchSize":   batchSize,
-			"baseDelay":   60, // in seconds
-			"exponential": 5,  // along with baseDelay = 60, the retries are 1, 6, 31, 156 (in minutes)
+	var events []api.Event
+	vals := map[string]any{
+		"maxAttempts": eventMaxAttempts,
+		"events":      watchEvents,
+		"batchSize":   batchSize,
+		"baseDelay":   60, // in seconds
+		"exponential": 5,  // along with baseDelay = 60, the retries are 1, 6, 31, 156 (in minutes)
+	}
+	err := ctx.DB().Raw(selectEventsQuery, vals).Scan(&events).Error
+	if err != nil {
+		return nil, fmt.Errorf("error selecting events: %w", err)
+	}
+
+	return events, nil
+}
+
+// newEventQueueAsyncConsumerFunc returns a new event consumer for the `watchEvents` events in the `event_queue` table.
+func newEventQueueAsyncConsumerFunc(watchEvents []string, processBatchFunc AsyncEventHandler) EventConsumerFunc {
+	return func(ctx *api.Context, batchSize int) error {
+		tx := ctx.DB().Begin()
+		if tx.Error != nil {
+			return fmt.Errorf("error initiating db tx: %w", tx.Error)
 		}
-		err := tx.Raw(selectEventsQuery, vals).Scan(&events).Error
+		defer tx.Rollback()
+
+		ctx = ctx.WithDB(tx)
+
+		events, err := fetchEvents(ctx, watchEvents, batchSize)
 		if err != nil {
-			return fmt.Errorf("error selecting events: %w", err)
+			return fmt.Errorf("error fetching events: %w", err)
 		}
 
 		if len(events) == 0 {
@@ -162,26 +198,51 @@ func newEventQueueConsumerFunc(watchEvents []string, processBatchFunc ProcessBat
 			}
 		}
 
-		// Process sync consumers
-		if len(syncConsumers) != 0 {
-			failedEventsIDs := set.New[uuid.UUID]()
-			for _, fe := range failedEvents {
-				failedEventsIDs.Add(fe.ID)
+		return tx.Commit().Error
+	}
+}
+
+// newEventQueueConsumerFunc returns a new sync event consumer for the `watchEvents` events in the `event_queue` table.
+func newEventQueueSyncConsumerFunc(watchEvents []string, syncConsumers ...SyncEventHandler) EventConsumerFunc {
+	return func(ctx *api.Context, batchSize int) error {
+		tx := ctx.DB().Begin()
+		if tx.Error != nil {
+			return fmt.Errorf("error initiating db tx: %w", tx.Error)
+		}
+		defer tx.Rollback()
+
+		ctx = ctx.WithDB(tx)
+
+		events, err := fetchEvents(ctx, watchEvents, batchSize)
+		if err != nil {
+			return fmt.Errorf("error fetching events: %w", err)
+		}
+
+		failedEvents := make([]api.Event, 0, len(events))
+		for i := range events {
+			if err := processSyncConsumers(ctx, events[i], syncConsumers); err != nil {
+				logger.Errorf("Failed to process event[%s]: %s", events[i].ID, err.Error())
+				failedEvents = append(failedEvents, events[i])
 			}
+		}
 
-			for i := range events {
-				if failedEventsIDs.Contains(events[i].ID) {
-					continue
-				}
-
-				for _, syncConsumer := range syncConsumers {
-					if err := syncConsumer(ctx, events[i]); err != nil {
-						return fmt.Errorf("error processing sync consumer: %w", err)
-					}
-				}
+		if len(failedEvents) > 0 {
+			if err := tx.Create(failedEvents).Error; err != nil {
+				// TODO: More robust way to handle failed event insertion failures
+				logger.Errorf("Error inserting into table:event_queue with error:%v. %v", err)
 			}
 		}
 
 		return tx.Commit().Error
 	}
+}
+
+func processSyncConsumers(ctx *api.Context, event api.Event, syncConsumers []SyncEventHandler) error {
+	for _, syncConsumer := range syncConsumers {
+		if err := syncConsumer(ctx, event); err != nil {
+			return fmt.Errorf("error processing sync consumer: %w", err)
+		}
+	}
+
+	return nil
 }

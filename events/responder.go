@@ -13,7 +13,11 @@ import (
 )
 
 func NewResponderConsumer(db *gorm.DB, pool *pgxpool.Pool) *EventConsumer {
-	return NewEventConsumer(db, pool, "event_queue_updates", newEventQueueConsumerFunc(consumerWatchEvents["responder"], processResponderEvents, addNotificationEvent))
+	return NewEventConsumer(db, pool, eventQueueUpdateChannel, newEventQueueAsyncConsumerFunc(asyncConsumerWatchEvents["responder"], processResponderEvents))
+}
+
+func NewResponderSyncConsumer(db *gorm.DB, pool *pgxpool.Pool) *EventConsumer {
+	return NewEventConsumer(db, pool, eventQueueUpdateChannel, newEventQueueSyncConsumerFunc(syncConsumerWatchEvents["responder"], addNotificationEvent))
 }
 
 func processResponderEvents(ctx *api.Context, events []api.Event) []api.Event {

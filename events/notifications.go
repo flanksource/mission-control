@@ -18,11 +18,11 @@ import (
 )
 
 func NewNotificationConsumer(db *gorm.DB, pool *pgxpool.Pool) *EventConsumer {
-	return NewEventConsumer(db, pool, "event_queue_updates", newEventQueueConsumerFunc(consumerWatchEvents["notification"], processNotificationEvents))
+	return NewEventConsumer(db, pool, eventQueueUpdateChannel, newEventQueueAsyncConsumerFunc(asyncConsumerWatchEvents["notification"], processNotificationEvents))
 }
 
 func NewNotificationSendConsumer(db *gorm.DB, pool *pgxpool.Pool) *EventConsumer {
-	return NewEventConsumer(db, pool, "event_queue_updates", newEventQueueConsumerFunc(consumerWatchEvents["notification_send"], processNotificationEvents)).
+	return NewEventConsumer(db, pool, eventQueueUpdateChannel, newEventQueueAsyncConsumerFunc(asyncConsumerWatchEvents["notification_send"], processNotificationEvents)).
 		WithNumConsumers(5)
 }
 

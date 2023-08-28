@@ -17,7 +17,7 @@ func NewUpstreamPushConsumer(db *gorm.DB, pool *pgxpool.Pool, config Config) *Ev
 		upstreamPushEventHandler = newPushToUpstreamEventHandler(config.UpstreamPush)
 	}
 
-	return NewEventConsumer(db, pool, "event_queue_updates", newEventQueueConsumerFunc(consumerWatchEvents["push_queue"], handleUpstreamPushEvents)).
+	return NewEventConsumer(db, pool, eventQueueUpdateChannel, newEventQueueAsyncConsumerFunc(asyncConsumerWatchEvents["push_queue"], handleUpstreamPushEvents)).
 		WithBatchSize(50).
 		WithNumConsumers(5)
 }
