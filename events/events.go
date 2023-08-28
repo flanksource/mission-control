@@ -3,11 +3,9 @@ package events
 import (
 	"time"
 
-	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/upstream"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"gorm.io/gorm"
-
-	"github.com/flanksource/commons/collections/set"
 )
 
 const (
@@ -40,7 +38,7 @@ const (
 
 const (
 	eventMaxAttempts      = 3
-	waitDurationOnFailure = time.Minute
+	waitDurationOnFailure = time.Second * 5
 	pgNotifyTimeout       = time.Minute
 
 	dbReconnectMaxDuration         = time.Minute * 5
@@ -51,25 +49,18 @@ type Config struct {
 	UpstreamPush upstream.UpstreamConfig
 }
 
-func StartConsumers(gormDB *gorm.DB, config Config) {
-	allConsumers := []EventConsumer{
-		NewTeamConsumer(gormDB),
-		NewNotificationConsumer(gormDB),
-		NewNotificationSendConsumer(gormDB),
-		NewResponderConsumer(gormDB),
+func StartConsumers(gormDB *gorm.DB, pgpool *pgxpool.Pool, config Config) {
+	allConsumers := []*EventConsumer{
+		NewTeamConsumer(gormDB, pgpool),
+		NewNotificationConsumer(gormDB, pgpool),
+		NewNotificationSendConsumer(gormDB, pgpool),
+		NewResponderConsumer(gormDB, pgpool),
 	}
 	if config.UpstreamPush.Valid() {
-		allConsumers = append(allConsumers, NewUpstreamPushConsumer(gormDB, config))
+		allConsumers = append(allConsumers, NewUpstreamPushConsumer(gormDB, pgpool, config))
 	}
 
-	uniqWatchEvents := set.New[string]()
-	for i, c := range allConsumers {
-		for _, we := range c.WatchEvents {
-			if uniqWatchEvents.Contains(we) {
-				logger.Fatalf("Error starting consumers: event[%s] has multiple consumers", we)
-			}
-		}
-		uniqWatchEvents.Add(c.WatchEvents...)
+	for i := range allConsumers {
 		go allConsumers[i].Listen()
 	}
 }

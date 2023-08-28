@@ -106,17 +106,6 @@ func FindPlaybooksForComponent(ctx *api.Context, configType string, tags map[str
 	return playbooks, err
 }
 
-// GetScheduledPlaybookRuns returns all the scheduled playbook runs that are scheduled to run now
-// or before now.
-func GetScheduledPlaybookRuns(ctx *api.Context, limit int, exceptions ...uuid.UUID) ([]models.PlaybookRun, error) {
-	var runs []models.PlaybookRun
-	if err := ctx.DB().Not(exceptions).Where("start_time <= NOW()").Where("status = ?", models.PlaybookRunStatusScheduled).Limit(limit).Order("start_time").Find(&runs).Error; err != nil {
-		return nil, err
-	}
-
-	return runs, nil
-}
-
 func PersistPlaybookFromCRD(obj *v1.Playbook) error {
 	specJSON, err := json.Marshal(obj.Spec)
 	if err != nil {

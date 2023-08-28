@@ -13,35 +13,27 @@ import (
 	pkgNotification "github.com/flanksource/incident-commander/notification"
 	"github.com/flanksource/incident-commander/teams"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"gorm.io/gorm"
 )
 
-func NewNotificationConsumer(db *gorm.DB) EventConsumer {
-	return EventConsumer{
-		WatchEvents: []string{
-			EventNotificationUpdate, EventNotificationDelete,
-			EventIncidentCreated,
-			EventIncidentResponderRemoved,
-			EventIncidentDODAdded, EventIncidentDODPassed, EventIncidentDODRegressed,
-			EventIncidentStatusOpen, EventIncidentStatusClosed, EventIncidentStatusMitigated,
-			EventIncidentStatusResolved, EventIncidentStatusInvestigating, EventIncidentStatusCancelled,
-			EventCheckPassed, EventCheckFailed,
-		},
-		ProcessBatchFunc: processNotificationEvents,
-		BatchSize:        1,
-		Consumers:        1,
-		DB:               db,
+func NewNotificationConsumer(db *gorm.DB, pool *pgxpool.Pool) *EventConsumer {
+	WatchEvents := []string{
+		EventNotificationUpdate, EventNotificationDelete,
+		EventIncidentCreated,
+		EventIncidentResponderRemoved,
+		EventIncidentDODAdded, EventIncidentDODPassed, EventIncidentDODRegressed,
+		EventIncidentStatusOpen, EventIncidentStatusClosed, EventIncidentStatusMitigated,
+		EventIncidentStatusResolved, EventIncidentStatusInvestigating, EventIncidentStatusCancelled,
+		EventCheckPassed, EventCheckFailed,
 	}
+
+	return NewEventConsumer(db, pool, "event_queue_updates", newEventQueueConsumerFunc(WatchEvents, processNotificationEvents))
 }
 
-func NewNotificationSendConsumer(db *gorm.DB) EventConsumer {
-	return EventConsumer{
-		WatchEvents:      []string{EventNotificationSend},
-		ProcessBatchFunc: processNotificationEvents,
-		BatchSize:        1,
-		Consumers:        5,
-		DB:               db,
-	}
+func NewNotificationSendConsumer(db *gorm.DB, pool *pgxpool.Pool) *EventConsumer {
+	WatchEvents := []string{EventNotificationSend}
+	return NewEventConsumer(db, pool, "event_queue_updates", newEventQueueConsumerFunc(WatchEvents, processNotificationEvents)).WithNumConsumers(5)
 }
 
 func processNotificationEvents(ctx *api.Context, events []api.Event) []api.Event {
@@ -69,7 +61,7 @@ func handleNotificationEvent(ctx *api.Context, event api.Event) error {
 		EventCheckFailed, EventCheckPassed:
 		return addNotificationEvent(ctx, event)
 	default:
-		return fmt.Errorf("Unrecognized event name: %s", event.Name)
+		return fmt.Errorf("unrecognized event name: %s", event.Name)
 	}
 }
 

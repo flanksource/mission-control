@@ -8,21 +8,17 @@ import (
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/responder"
 	pkgResponder "github.com/flanksource/incident-commander/responder"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func NewResponderConsumer(db *gorm.DB) EventConsumer {
-	return EventConsumer{
-		WatchEvents: []string{
-			EventIncidentResponderAdded,
-			EventIncidentCommentAdded,
-		},
-		ProcessBatchFunc: processResponderEvents,
-		BatchSize:        1,
-		Consumers:        1,
-		DB:               db,
+func NewResponderConsumer(db *gorm.DB, pool *pgxpool.Pool) *EventConsumer {
+	WatchEvents := []string{
+		EventIncidentResponderAdded,
+		EventIncidentCommentAdded,
 	}
+
+	return NewEventConsumer(db, pool, "event_queue_updates", newEventQueueConsumerFunc(WatchEvents, processResponderEvents))
 }
 
 func processResponderEvents(ctx *api.Context, events []api.Event) []api.Event {
@@ -43,7 +39,7 @@ func handleResponderEvent(ctx *api.Context, event api.Event) error {
 	case EventIncidentCommentAdded:
 		return reconcileCommentEvent(ctx, event)
 	default:
-		return fmt.Errorf("Unrecognized event name: %s", event.Name)
+		return fmt.Errorf("unrecognized event name: %s", event.Name)
 	}
 }
 
@@ -107,7 +103,7 @@ func reconcileCommentEvent(ctx *api.Context, event api.Event) error {
 		// Reset externalID to avoid inserting previous iteration's ID
 		externalID := ""
 
-		responder, err := responder.GetResponder(ctx, _responder.Team)
+		responder, err := pkgResponder.GetResponder(ctx, _responder.Team)
 		if err != nil {
 			return err
 		}

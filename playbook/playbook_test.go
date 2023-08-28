@@ -22,7 +22,6 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 	var (
 		playbook models.Playbook
 		runResp  RunResponse
-		consumer *queueConsumer
 	)
 
 	ginkgo.It("should store dummy data", func() {
@@ -32,8 +31,10 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 	})
 
 	ginkgo.It("start the queue consumer in background", func() {
-		consumer = NewQueueConsumer(testDB, testDBPool)
+		consumer := NewEventQueueConsumer(testDB, testDBPool)
 		go consumer.Listen()
+
+		go ListenPlaybookPGNotify(testDB, testDBPool)
 	})
 
 	ginkgo.It("should create a new playbook", func() {
@@ -211,7 +212,7 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 			}
 
 			attempts += 1
-			if attempts > 20 { // wait for 2 seconds
+			if attempts > 50 { // wait for 5 seconds
 				ginkgo.Fail(fmt.Sprintf("Timed out waiting for run to complete. Run status: %s", updatedRun.Status))
 			}
 		}

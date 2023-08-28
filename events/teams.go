@@ -8,20 +8,17 @@ import (
 	"github.com/flanksource/incident-commander/responder"
 	"github.com/flanksource/incident-commander/teams"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"gorm.io/gorm"
 )
 
-func NewTeamConsumer(db *gorm.DB) EventConsumer {
-	return EventConsumer{
-		WatchEvents: []string{
-			EventTeamUpdate,
-			EventTeamDelete,
-		},
-		ProcessBatchFunc: processTeamEvents,
-		BatchSize:        1,
-		Consumers:        1,
-		DB:               db,
+func NewTeamConsumer(db *gorm.DB, pool *pgxpool.Pool) *EventConsumer {
+	WatchEvents := []string{
+		EventTeamUpdate,
+		EventTeamDelete,
 	}
+
+	return NewEventConsumer(db, pool, "event_queue_updates", newEventQueueConsumerFunc(WatchEvents, processTeamEvents))
 }
 
 func processTeamEvents(ctx *api.Context, events []api.Event) []api.Event {
@@ -42,7 +39,7 @@ func handleTeamEvent(ctx *api.Context, event api.Event) error {
 	case EventTeamDelete:
 		return handleTeamDelete(ctx, event)
 	default:
-		return fmt.Errorf("Unrecognized event name: %s", event.Name)
+		return fmt.Errorf("unrecognized event name: %s", event.Name)
 	}
 }
 
