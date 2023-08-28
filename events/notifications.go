@@ -18,22 +18,12 @@ import (
 )
 
 func NewNotificationConsumer(db *gorm.DB, pool *pgxpool.Pool) *EventConsumer {
-	WatchEvents := []string{
-		EventNotificationUpdate, EventNotificationDelete,
-		EventIncidentCreated,
-		EventIncidentResponderRemoved,
-		EventIncidentDODAdded, EventIncidentDODPassed, EventIncidentDODRegressed,
-		EventIncidentStatusOpen, EventIncidentStatusClosed, EventIncidentStatusMitigated,
-		EventIncidentStatusResolved, EventIncidentStatusInvestigating, EventIncidentStatusCancelled,
-		EventCheckPassed, EventCheckFailed,
-	}
-
-	return NewEventConsumer(db, pool, "event_queue_updates", newEventQueueConsumerFunc(WatchEvents, processNotificationEvents))
+	return NewEventConsumer(db, pool, "event_queue_updates", newEventQueueConsumerFunc(consumerWatchEvents["notification"], processNotificationEvents))
 }
 
 func NewNotificationSendConsumer(db *gorm.DB, pool *pgxpool.Pool) *EventConsumer {
-	WatchEvents := []string{EventNotificationSend}
-	return NewEventConsumer(db, pool, "event_queue_updates", newEventQueueConsumerFunc(WatchEvents, processNotificationEvents)).WithNumConsumers(5)
+	return NewEventConsumer(db, pool, "event_queue_updates", newEventQueueConsumerFunc(consumerWatchEvents["notification_send"], processNotificationEvents)).
+		WithNumConsumers(5)
 }
 
 func processNotificationEvents(ctx *api.Context, events []api.Event) []api.Event {

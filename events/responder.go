@@ -13,12 +13,7 @@ import (
 )
 
 func NewResponderConsumer(db *gorm.DB, pool *pgxpool.Pool) *EventConsumer {
-	WatchEvents := []string{
-		EventIncidentResponderAdded,
-		EventIncidentCommentAdded,
-	}
-
-	return NewEventConsumer(db, pool, "event_queue_updates", newEventQueueConsumerFunc(WatchEvents, processResponderEvents))
+	return NewEventConsumer(db, pool, "event_queue_updates", newEventQueueConsumerFunc(consumerWatchEvents["responder"], processResponderEvents))
 }
 
 func processResponderEvents(ctx *api.Context, events []api.Event) []api.Event {

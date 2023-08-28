@@ -13,12 +13,7 @@ import (
 )
 
 func NewTeamConsumer(db *gorm.DB, pool *pgxpool.Pool) *EventConsumer {
-	WatchEvents := []string{
-		EventTeamUpdate,
-		EventTeamDelete,
-	}
-
-	return NewEventConsumer(db, pool, "event_queue_updates", newEventQueueConsumerFunc(WatchEvents, processTeamEvents))
+	return NewEventConsumer(db, pool, "event_queue_updates", newEventQueueConsumerFunc(consumerWatchEvents["team"], processTeamEvents))
 }
 
 func processTeamEvents(ctx *api.Context, events []api.Event) []api.Event {

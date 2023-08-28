@@ -17,9 +17,9 @@ func NewUpstreamPushConsumer(db *gorm.DB, pool *pgxpool.Pool, config Config) *Ev
 		upstreamPushEventHandler = newPushToUpstreamEventHandler(config.UpstreamPush)
 	}
 
-	WatchEvents := []string{EventPushQueueCreate}
-
-	return NewEventConsumer(db, pool, "event_queue_updates", newEventQueueConsumerFunc(WatchEvents, handleUpstreamPushEvents)).WithBatchSize(50).WithNumConsumers(5)
+	return NewEventConsumer(db, pool, "event_queue_updates", newEventQueueConsumerFunc(consumerWatchEvents["push_queue"], handleUpstreamPushEvents)).
+		WithBatchSize(50).
+		WithNumConsumers(5)
 }
 
 func handleUpstreamPushEvents(ctx *api.Context, events []api.Event) []api.Event {

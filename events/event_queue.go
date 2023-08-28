@@ -4,8 +4,12 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flanksource/commons/collections/set"
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"gorm.io/gorm"
 )
 
 // eventMaxAttempts is the maximum number of attempts to process an event in `event_queue`
@@ -13,6 +17,94 @@ const eventMaxAttempts = 3
 
 // ProcessBatchFunc processes multiple events and returns the failed ones
 type ProcessBatchFunc func(*api.Context, []api.Event) []api.Event
+
+// List of all event types in the `event_queue` table
+const (
+	EventTeamUpdate       = "team.update"
+	EventTeamDelete       = "team.delete"
+	EventNotificationSend = "notification.send"
+
+	EventNotificationUpdate = "notification.update"
+	EventNotificationDelete = "notification.delete"
+
+	EventCheckPassed = "check.passed"
+	EventCheckFailed = "check.failed"
+
+	EventIncidentCreated             = "incident.created"
+	EventIncidentResponderAdded      = "incident.responder.added"
+	EventIncidentResponderRemoved    = "incident.responder.removed"
+	EventIncidentCommentAdded        = "incident.comment.added"
+	EventIncidentDODAdded            = "incident.dod.added"
+	EventIncidentDODPassed           = "incident.dod.passed"
+	EventIncidentDODRegressed        = "incident.dod.regressed"
+	EventIncidentStatusOpen          = "incident.status.open"
+	EventIncidentStatusClosed        = "incident.status.closed"
+	EventIncidentStatusMitigated     = "incident.status.mitigated"
+	EventIncidentStatusResolved      = "incident.status.resolved"
+	EventIncidentStatusInvestigating = "incident.status.investigating"
+	EventIncidentStatusCancelled     = "incident.status.cancelled"
+
+	EventPushQueueCreate = "push_queue.create"
+)
+
+type Config struct {
+	UpstreamPush upstream.UpstreamConfig
+}
+
+// consumerWatchEvents keeps a registry of all the event_queue consumer and the events they watch.
+// This helps in ensuring that a single event is not being consumed by multiple consumers.
+var consumerWatchEvents = map[string][]string{
+	"team": {
+		EventTeamUpdate,
+		EventTeamDelete,
+	},
+	"notification": {
+		EventNotificationUpdate, EventNotificationDelete,
+		EventIncidentCreated,
+		EventIncidentResponderRemoved,
+		EventIncidentDODAdded, EventIncidentDODPassed, EventIncidentDODRegressed,
+		EventIncidentStatusOpen, EventIncidentStatusClosed, EventIncidentStatusMitigated,
+		EventIncidentStatusResolved, EventIncidentStatusInvestigating, EventIncidentStatusCancelled,
+		EventCheckPassed, EventCheckFailed,
+	},
+	"notification_send": {
+		EventNotificationSend,
+	},
+	"responder": {
+		EventIncidentResponderAdded,
+		EventIncidentCommentAdded,
+	},
+	"push_queue": {
+		EventPushQueueCreate,
+	},
+}
+
+func StartConsumers(gormDB *gorm.DB, pgpool *pgxpool.Pool, config Config) {
+	uniqWatchEvents := set.New[string]()
+	for _, v := range consumerWatchEvents {
+		for _, e := range v {
+			if uniqWatchEvents.Contains(e) {
+				logger.Fatalf("Error starting consumers: event[%s] has multiple consumers", e)
+			}
+
+			uniqWatchEvents.Add(e)
+		}
+	}
+
+	allConsumers := []*EventConsumer{
+		NewTeamConsumer(gormDB, pgpool),
+		NewNotificationConsumer(gormDB, pgpool),
+		NewNotificationSendConsumer(gormDB, pgpool),
+		NewResponderConsumer(gormDB, pgpool),
+	}
+	if config.UpstreamPush.Valid() {
+		allConsumers = append(allConsumers, NewUpstreamPushConsumer(gormDB, pgpool, config))
+	}
+
+	for i := range allConsumers {
+		go allConsumers[i].Listen()
+	}
+}
 
 // newEventQueueConsumerFunc returns a new event consumer for the `event_queue` table
 // based on the given watch events and process batch function.
