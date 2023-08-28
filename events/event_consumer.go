@@ -12,6 +12,18 @@ import (
 	"gorm.io/gorm"
 )
 
+const (
+	// waitDurationOnFailure is the duration to wait before attempting to consume events again
+	// after an unexpected failure.
+	waitDurationOnFailure = time.Second * 5
+
+	// pgNotifyTimeout is the timeout to consume events in case no Consume notification is received.
+	pgNotifyTimeout = time.Minute
+
+	dbReconnectMaxDuration         = time.Minute * 5
+	dbReconnectBackoffBaseDuration = time.Second
+)
+
 type EventConsumerFunc func(ctx *api.Context, batchSize int) error
 
 type EventConsumer struct {
@@ -34,6 +46,8 @@ type EventConsumer struct {
 
 func NewEventConsumer(DB *gorm.DB, PGPool *pgxpool.Pool, PgNotifyChannel string, ConsumerFunc EventConsumerFunc) *EventConsumer {
 	return &EventConsumer{
+		batchSize:       1,
+		numConsumers:    1,
 		db:              DB,
 		pgPool:          PGPool,
 		pgNotifyChannel: PgNotifyChannel,

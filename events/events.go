@@ -1,8 +1,6 @@
 package events
 
 import (
-	"time"
-
 	"github.com/flanksource/duty/upstream"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"gorm.io/gorm"
@@ -34,15 +32,6 @@ const (
 	EventIncidentStatusCancelled     = "incident.status.cancelled"
 
 	EventPushQueueCreate = "push_queue.create"
-)
-
-const (
-	eventMaxAttempts      = 3
-	waitDurationOnFailure = time.Second * 5
-	pgNotifyTimeout       = time.Minute
-
-	dbReconnectMaxDuration         = time.Minute * 5
-	dbReconnectBackoffBaseDuration = time.Second
 )
 
 type Config struct {

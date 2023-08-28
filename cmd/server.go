@@ -238,6 +238,8 @@ var Serve = &cobra.Command{
 		playbookRunConsumer := playbook.NewEventQueueConsumer(db.Gorm, db.Pool)
 		go playbookRunConsumer.Listen()
 
+		go playbook.ListenPlaybookPGNotify(db.Gorm, db.Pool)
+
 		go launchKopper()
 
 		e := createHTTPServer(db.Gorm)

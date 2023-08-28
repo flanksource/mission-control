@@ -212,7 +212,7 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 			}
 
 			attempts += 1
-			if attempts > 50 { // wait for 5 seconds
+			if attempts > 20 { // wait for 2 seconds
 				ginkgo.Fail(fmt.Sprintf("Timed out waiting for run to complete. Run status: %s", updatedRun.Status))
 			}
 		}

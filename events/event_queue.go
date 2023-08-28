@@ -8,6 +8,9 @@ import (
 	"github.com/flanksource/incident-commander/api"
 )
 
+// eventMaxAttempts is the maximum number of attempts to process an event in `event_queue`
+const eventMaxAttempts = 3
+
 // ProcessBatchFunc processes multiple events and returns the failed ones
 type ProcessBatchFunc func(*api.Context, []api.Event) []api.Event
 

@@ -21,6 +21,8 @@ func EventConsumer(ctx *api.Context, batchSize int) error {
 	}
 	defer tx.Rollback()
 
+	ctx = api.NewContext(tx, nil)
+
 	query := `
 		SELECT *
 		FROM playbook_runs
@@ -32,7 +34,7 @@ func EventConsumer(ctx *api.Context, batchSize int) error {
 	`
 
 	var runs []models.PlaybookRun
-	if err := tx.Debug().Raw(query, models.PlaybookRunStatusScheduled, batchSize).Find(&runs).Error; err != nil {
+	if err := tx.Raw(query, models.PlaybookRunStatusScheduled, batchSize).Find(&runs).Error; err != nil {
 		return err
 	}
 
@@ -41,7 +43,7 @@ func EventConsumer(ctx *api.Context, batchSize int) error {
 	}
 
 	for i := range runs {
-		ExecuteRun(api.NewContext(tx, nil), runs[i])
+		ExecuteRun(ctx, runs[i])
 	}
 
 	return tx.Commit().Error
