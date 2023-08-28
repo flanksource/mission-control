@@ -47,8 +47,7 @@ func handleNotificationEvent(ctx *api.Context, event api.Event) error {
 		EventIncidentDODAdded, EventIncidentDODPassed,
 		EventIncidentDODRegressed, EventIncidentStatusOpen,
 		EventIncidentStatusClosed, EventIncidentStatusMitigated,
-		EventIncidentStatusResolved, EventIncidentStatusInvestigating, EventIncidentStatusCancelled,
-		EventCheckFailed, EventCheckPassed:
+		EventIncidentStatusResolved, EventIncidentStatusInvestigating, EventIncidentStatusCancelled:
 		return addNotificationEvent(ctx, event)
 	default:
 		return fmt.Errorf("unrecognized event name: %s", event.Name)

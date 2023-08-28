@@ -13,7 +13,7 @@ import (
 )
 
 func NewResponderConsumer(db *gorm.DB, pool *pgxpool.Pool) *EventConsumer {
-	return NewEventConsumer(db, pool, "event_queue_updates", newEventQueueConsumerFunc(consumerWatchEvents["responder"], processResponderEvents))
+	return NewEventConsumer(db, pool, "event_queue_updates", newEventQueueConsumerFunc(consumerWatchEvents["responder"], processResponderEvents, addNotificationEvent))
 }
 
 func processResponderEvents(ctx *api.Context, events []api.Event) []api.Event {
@@ -59,10 +59,6 @@ func reconcileResponderEvent(ctx *api.Context, event api.Event) error {
 	if externalID != "" {
 		// Update external id in responder table
 		return ctx.DB().Model(&api.Responder{}).Where("id = ?", responder.ID).Update("external_id", externalID).Error
-	}
-
-	if err := addNotificationEvent(ctx, event); err != nil {
-		logger.Errorf("failed to add notification publish event for responder: %v", err)
 	}
 
 	return nil
@@ -118,10 +114,6 @@ func reconcileCommentEvent(ctx *api.Context, event api.Event) error {
 				logger.Errorf("error updating comment_responders table: %v", err)
 			}
 		}
-	}
-
-	if err := addNotificationEvent(ctx, event); err != nil {
-		logger.Errorf("failed to add notification publish event for comment: %v", err)
 	}
 
 	return nil

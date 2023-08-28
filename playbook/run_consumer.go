@@ -23,7 +23,7 @@ func EventConsumer(ctx *api.Context, batchSize int) error {
 	}
 	defer tx.Rollback()
 
-	ctx = api.NewContext(tx, nil)
+	ctx = ctx.WithDB(tx)
 
 	query := `
 		SELECT *

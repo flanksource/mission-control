@@ -67,6 +67,11 @@ func NewContext(db *gorm.DB, echoCtx EchoContext) *Context {
 	return c
 }
 
+func (c Context) WithDB(db *gorm.DB) *Context {
+	c.db = db
+	return &c
+}
+
 func (c *Context) DB() *gorm.DB {
 	if c.db == nil {
 		return nil

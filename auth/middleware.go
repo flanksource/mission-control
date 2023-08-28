@@ -102,7 +102,10 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 				email = e
 			}
 		}
-		ctx.WithUser(&api.ContextUser{ID: uuid.MustParse(session.Identity.GetId()), Email: email})
+
+		if uid, err := uuid.Parse(session.Identity.GetId()); nil == err {
+			ctx.WithUser(&api.ContextUser{ID: uid, Email: email})
+		}
 
 		return next(ctx)
 	}
