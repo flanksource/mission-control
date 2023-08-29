@@ -235,8 +235,7 @@ var Serve = &cobra.Command{
 			UpstreamPush: api.UpstreamConf,
 		})
 
-		playbookRunConsumer := playbook.NewEventQueueConsumer(db.Gorm, db.Pool)
-		go playbookRunConsumer.Listen()
+		go playbook.StartPlaybookRunConsumer(db.Gorm, db.Pool)
 
 		go playbook.ListenPlaybookPGNotify(db.Gorm, db.Pool)
 

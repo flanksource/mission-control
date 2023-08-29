@@ -10,8 +10,10 @@ import (
 	"gorm.io/gorm"
 )
 
-func NewEventQueueConsumer(db *gorm.DB, pool *pgxpool.Pool) *events.EventConsumer {
-	return events.NewEventConsumer(db, pool, "playbook_run_updates", EventConsumer).WithNumConsumers(5)
+func StartPlaybookRunConsumer(db *gorm.DB, pool *pgxpool.Pool) {
+	events.NewEventConsumer(db, pool, "playbook_run_updates", EventConsumer).
+		WithNumConsumers(5).
+		Listen()
 }
 
 func EventConsumer(ctx *api.Context, batchSize int) error {
