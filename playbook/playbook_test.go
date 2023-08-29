@@ -31,8 +31,7 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 	})
 
 	ginkgo.It("start the queue consumer in background", func() {
-		consumer := StartPlaybookRunConsumer(testDB, testDBPool)
-		go consumer.Listen()
+		go StartPlaybookRunConsumer(testDB, testDBPool)
 
 		go ListenPlaybookPGNotify(testDB, testDBPool)
 	})
