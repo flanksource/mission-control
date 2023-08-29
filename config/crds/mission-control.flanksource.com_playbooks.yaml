@@ -35,6 +35,7 @@ spec:
           spec:
             properties:
               actions:
+                description: List of actions that need to be executed by this playbook.
                 items:
                   properties:
                     exec:
@@ -266,6 +267,8 @@ spec:
                   type: object
                 type: array
               approval:
+                description: Approval defines the individuals and teams authorized
+                  to approve runs of this playbook.
                 properties:
                   approvers:
                     properties:
@@ -284,6 +287,7 @@ spec:
                     type: string
                 type: object
               components:
+                description: Filter that defines what components can run on this playbook.
                 items:
                   description: PlaybookResourceFilter defines a filter that decides
                     whether a resource (config or a component) is permitted be run
@@ -298,6 +302,8 @@ spec:
                   type: object
                 type: array
               configs:
+                description: Filter that defines what config items can run on this
+                  playbook.
                 items:
                   description: PlaybookResourceFilter defines a filter that decides
                     whether a resource (config or a component) is permitted be run
@@ -312,8 +318,56 @@ spec:
                   type: object
                 type: array
               description:
+                description: Short description of the playbook.
                 type: string
+              "on":
+                description: '`On` defines events that will automatically trigger
+                  the playbook. If multiple events are defined, only one of those
+                  events needs to occur to trigger the playbook. If multiple triggering
+                  events occur at the same time, multiple playbook runs will be triggered.'
+                properties:
+                  canary:
+                    items:
+                      properties:
+                        event:
+                          description: Event to listen for.
+                          type: string
+                        filter:
+                          description: CEL expression for additional event filtering.
+                          type: string
+                        labels:
+                          additionalProperties:
+                            type: string
+                          description: Labels specifies the key-value pairs that the
+                            associated event's resource must match.
+                          type: object
+                      required:
+                      - event
+                      type: object
+                    type: array
+                  component:
+                    items:
+                      properties:
+                        event:
+                          description: Event to listen for.
+                          type: string
+                        filter:
+                          description: CEL expression for additional event filtering.
+                          type: string
+                        labels:
+                          additionalProperties:
+                            type: string
+                          description: Labels specifies the key-value pairs that the
+                            associated event's resource must match.
+                          type: object
+                      required:
+                      - event
+                      type: object
+                    type: array
+                type: object
               parameters:
+                description: Define and document what parameters are required to run
+                  this playbook.
                 items:
                   description: PlaybookParameter defines a parameter that a playbook
                     needs to run.
@@ -328,6 +382,7 @@ spec:
                   type: object
                 type: array
               permissions:
+                description: Permissions ...
                 items:
                   properties:
                     ref:
