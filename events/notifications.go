@@ -17,11 +17,16 @@ import (
 	"gorm.io/gorm"
 )
 
-func NewNotificationConsumer(db *gorm.DB, pool *pgxpool.Pool) *EventConsumer {
-	return NewEventConsumer(db, pool, eventQueueUpdateChannel, newEventQueueAsyncConsumerFunc(asyncConsumerWatchEvents["notification"], processNotificationEvents))
+func NewNotificationConsumerSync(db *gorm.DB, pool *pgxpool.Pool) *EventConsumer {
+	return NewEventConsumer(db, pool, eventQueueUpdateChannel, newEventQueueSyncConsumerFunc(syncConsumerWatchEvents["notification_add"], addNotificationEvent)).
+		WithNumConsumers(3)
 }
 
-func NewNotificationSendConsumer(db *gorm.DB, pool *pgxpool.Pool) *EventConsumer {
+func NewNotificationUpdatesConsumerSync(db *gorm.DB, pool *pgxpool.Pool) *EventConsumer {
+	return NewEventConsumer(db, pool, eventQueueUpdateChannel, newEventQueueSyncConsumerFunc(syncConsumerWatchEvents["notification_update"], handleNotificationUpdates))
+}
+
+func NewNotificationSendConsumerAsync(db *gorm.DB, pool *pgxpool.Pool) *EventConsumer {
 	return NewEventConsumer(db, pool, eventQueueUpdateChannel, newEventQueueAsyncConsumerFunc(asyncConsumerWatchEvents["notification_send"], processNotificationEvents)).
 		WithNumConsumers(5)
 }
@@ -29,29 +34,12 @@ func NewNotificationSendConsumer(db *gorm.DB, pool *pgxpool.Pool) *EventConsumer
 func processNotificationEvents(ctx *api.Context, events []api.Event) []api.Event {
 	var failedEvents []api.Event
 	for _, e := range events {
-		if err := handleNotificationEvent(ctx, e); err != nil {
+		if err := sendNotification(ctx, e); err != nil {
 			e.Error = err.Error()
 			failedEvents = append(failedEvents, e)
 		}
 	}
 	return failedEvents
-}
-
-func handleNotificationEvent(ctx *api.Context, event api.Event) error {
-	switch event.Name {
-	case EventNotificationDelete, EventNotificationUpdate:
-		return handleNotificationUpdates(ctx, event)
-	case EventNotificationSend:
-		return sendNotification(ctx, event)
-	case EventIncidentCreated, EventIncidentResponderRemoved,
-		EventIncidentDODAdded, EventIncidentDODPassed,
-		EventIncidentDODRegressed, EventIncidentStatusOpen,
-		EventIncidentStatusClosed, EventIncidentStatusMitigated,
-		EventIncidentStatusResolved, EventIncidentStatusInvestigating, EventIncidentStatusCancelled:
-		return addNotificationEvent(ctx, event)
-	default:
-		return fmt.Errorf("unrecognized event name: %s", event.Name)
-	}
 }
 
 type NotificationEventProperties struct {

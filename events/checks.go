@@ -5,7 +5,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func NewCheckSyncConsumer(db *gorm.DB, pgPool *pgxpool.Pool) *EventConsumer {
+func NewCheckConsumerSync(db *gorm.DB, pgPool *pgxpool.Pool) *EventConsumer {
 	return NewEventConsumer(db, pgPool, eventQueueUpdateChannel,
-		newEventQueueSyncConsumerFunc(syncConsumerWatchEvents["check"], addNotificationEvent))
+		newEventQueueSyncConsumerFunc(syncConsumerWatchEvents["check"], addNotificationEvent, SavePlaybookRun))
 }

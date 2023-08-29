@@ -12,7 +12,7 @@ import (
 
 var upstreamPushEventHandler *pushToUpstreamEventHandler
 
-func NewUpstreamPushConsumer(db *gorm.DB, pool *pgxpool.Pool, config Config) *EventConsumer {
+func NewUpstreamPushConsumerAsync(db *gorm.DB, pool *pgxpool.Pool, config Config) *EventConsumer {
 	if config.UpstreamPush.Valid() {
 		upstreamPushEventHandler = newPushToUpstreamEventHandler(config.UpstreamPush)
 	}

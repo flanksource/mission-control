@@ -12,19 +12,8 @@ import (
 	"gorm.io/gorm"
 )
 
-func NewTeamConsumer(db *gorm.DB, pool *pgxpool.Pool) *EventConsumer {
-	return NewEventConsumer(db, pool, eventQueueUpdateChannel, newEventQueueAsyncConsumerFunc(asyncConsumerWatchEvents["team"], processTeamEvents))
-}
-
-func processTeamEvents(ctx *api.Context, events []api.Event) []api.Event {
-	var failedEvents []api.Event
-	for _, e := range events {
-		if err := handleTeamEvent(ctx, e); err != nil {
-			e.Error = err.Error()
-			failedEvents = append(failedEvents, e)
-		}
-	}
-	return failedEvents
+func NewTeamConsumerSync(db *gorm.DB, pool *pgxpool.Pool) *EventConsumer {
+	return NewEventConsumer(db, pool, eventQueueUpdateChannel, newEventQueueSyncConsumerFunc(syncConsumerWatchEvents["team"], handleTeamEvent))
 }
 
 func handleTeamEvent(ctx *api.Context, event api.Event) error {
