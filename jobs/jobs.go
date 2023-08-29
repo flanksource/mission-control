@@ -36,7 +36,7 @@ func Start() {
 	responder.SyncConfig()
 	CleanupJobHistoryTable()
 	if err := rules.Run(); err != nil {
-		logger.Errorf("error running incident rules: %w", err)
+		logger.Errorf("error running incident rules: %v", err)
 	}
 
 	if _, err := ScheduleFunc(TeamComponentOwnershipSchedule, TeamComponentOwnershipRun); err != nil {
@@ -74,7 +74,7 @@ func Start() {
 	logger.Infof("IncidentRulesSchedule %s", incidentRulesSchedule)
 	if _, err := ScheduleFunc(incidentRulesSchedule, func() {
 		if err := rules.Run(); err != nil {
-			logger.Errorf("error running incident rules: %w", err)
+			logger.Errorf("error running incident rules: %v", err)
 		}
 	}); err != nil {
 		logger.Errorf("Failed to schedule job for incident rules: %v", err)

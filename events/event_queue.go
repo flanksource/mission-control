@@ -2,7 +2,6 @@ package events
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/flanksource/commons/collections/set"
@@ -207,7 +206,7 @@ func fetchEvents(ctx *api.Context, watchEvents []string, batchSize int) ([]api.E
 }
 
 // newEventQueueAsyncConsumerFunc returns a new event consumer for the `watchEvents` events in the `event_queue` table.
-func newEventQueueAsyncConsumerFunc(watchEvents []string, processBatchFunc AsyncEventHandler) EventConsumerFunc {
+func newEventQueueAsyncConsumerFunc(watchEvents []string, handleEventsAsync AsyncEventHandler) EventConsumerFunc {
 	return func(ctx *api.Context, batchSize int) error {
 		tx := ctx.DB().Begin()
 		if tx.Error != nil {
@@ -226,21 +225,8 @@ func newEventQueueAsyncConsumerFunc(watchEvents []string, processBatchFunc Async
 			return api.Errorf(api.ENOTFOUND, "No events found")
 		}
 
-		failedEvents := processBatchFunc(ctx, events)
-		for i := range failedEvents {
-			e := &failedEvents[i]
-			e.Attempts += 1
-			last_attempt := time.Now()
-			e.LastAttempt = &last_attempt
-			logger.Errorf("Failed to process event[%s]: %s", e.ID, e.Error)
-		}
-
-		if len(failedEvents) > 0 {
-			if err := tx.Create(failedEvents).Error; err != nil {
-				// TODO: More robust way to handle failed event insertion failures
-				logger.Errorf("Error inserting into table:event_queue with error:%v. %v", err)
-			}
-		}
+		failedEvents := handleEventsAsync(ctx, events)
+		saveFailedEvents(tx, failedEvents)
 
 		return tx.Commit().Error
 	}
@@ -264,23 +250,27 @@ func newEventQueueSyncConsumerFunc(watchEvents []string, syncConsumers ...SyncEv
 			return api.Errorf(api.ENOTFOUND, "No events found")
 		}
 
-		failedEvents := make([]api.Event, 0, len(events))
-		for i := range events {
-			events[i].Name = strings.TrimSuffix(events[i].Name, ".sync")
-			if err := processSyncConsumers(ctx, events[i], syncConsumers); err != nil {
-				logger.Errorf("Failed to process event[%s]: %s", events[i].ID, err.Error())
-				failedEvents = append(failedEvents, events[i])
-			}
-		}
-
-		if len(failedEvents) > 0 {
-			if err := tx.Create(failedEvents).Error; err != nil {
-				logger.Errorf("Error inserting into table:event_queue with error:%v. %v", err)
-			}
-		}
+		failedEvents := handleEventsSync(ctx, events, syncConsumers)
+		saveFailedEvents(tx, failedEvents)
 
 		return tx.Commit().Error
 	}
+}
+
+// handleEventsSync runs all the sync consumers for the given events.
+//
+// Each event is handled in isolation (in a separate transaction).
+func handleEventsSync(ctx *api.Context, events []api.Event, syncConsumers []SyncEventHandler) []api.Event {
+	failedEvents := make([]api.Event, 0, len(events))
+	for i := range events {
+		if err := processSyncConsumers(ctx, events[i], syncConsumers); err != nil {
+			logger.Errorf("Failed to process event[%s]: %s", events[i].ID, err.Error())
+			events[i].Error = err.Error()
+			failedEvents = append(failedEvents, events[i])
+		}
+	}
+
+	return failedEvents
 }
 
 // processSyncConsumers runs all the sync consumers for the given event.
@@ -301,4 +291,23 @@ func processSyncConsumers(ctx *api.Context, event api.Event, syncConsumers []Syn
 	}
 
 	return tx.Commit().Error
+}
+
+// saveFailedEvents saves failed events back to the `event_queue` table.
+func saveFailedEvents(tx *gorm.DB, failedEvents []api.Event) {
+	lastAttempt := time.Now()
+
+	for i := range failedEvents {
+		e := &failedEvents[i]
+		e.Attempts += 1
+		e.LastAttempt = &lastAttempt
+		logger.Errorf("Failed to process event[%s]: %s", e.ID, e.Error)
+	}
+
+	if len(failedEvents) > 0 {
+		if err := tx.Create(failedEvents).Error; err != nil {
+			// TODO: More robust way to handle failed event insertion failures
+			logger.Errorf("Error inserting into table:event_queue with error:%v. %v", err)
+		}
+	}
 }

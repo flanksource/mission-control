@@ -12,7 +12,6 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	pkgNotification "github.com/flanksource/incident-commander/notification"
 	"github.com/flanksource/incident-commander/teams"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"gorm.io/gorm"
 )
@@ -203,8 +202,7 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 				PersonID:       n.PersonID.String(),
 			}
 
-			newEvent := api.Event{
-				ID:         uuid.New(),
+			newEvent := &api.Event{
 				Name:       EventNotificationSend,
 				Properties: prop.AsMap(),
 			}
@@ -238,7 +236,7 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 					NotificationName: cn.Name,
 				}
 
-				newEvent := api.Event{
+				newEvent := &api.Event{
 					Name:       EventNotificationSend,
 					Properties: prop.AsMap(),
 				}
@@ -261,8 +259,7 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 				NotificationName: cn.Name,
 			}
 
-			newEvent := api.Event{
-				ID:         uuid.New(),
+			newEvent := &api.Event{
 				Name:       EventNotificationSend,
 				Properties: prop.AsMap(),
 			}
