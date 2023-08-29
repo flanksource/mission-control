@@ -8,7 +8,7 @@ import (
 )
 
 type Event struct {
-	ID          uuid.UUID           `json:"id"`
+	ID          uuid.UUID           `gorm:"default:generate_ulid()"`
 	Name        string              `json:"name"`
 	Properties  types.JSONStringMap `json:"properties"`
 	Error       string              `json:"error"`

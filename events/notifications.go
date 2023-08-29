@@ -239,7 +239,6 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 				}
 
 				newEvent := api.Event{
-					ID:         uuid.New(),
 					Name:       EventNotificationSend,
 					Properties: prop.AsMap(),
 				}
