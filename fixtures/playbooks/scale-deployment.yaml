@@ -3,6 +3,18 @@ kind: Playbook
 metadata:
   name: scale-deployment
 spec:
+  'on':
+    canary:
+      - event: passed
+        filter: check.type == 'exec' && summary.failed > 3
+        labels:
+          environment: staging
+      - event: failed
+        filter: check.type == 'http'
+    component:
+      - event: healthy
+        labels:
+          'hosted-on': 'bitbucket.org'
   description: Scale deployment
   configs:
     - type: Kubernetes::Deployment

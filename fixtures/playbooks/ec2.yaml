@@ -3,6 +3,10 @@ kind: Playbook
 metadata:
   name: ec2-restart
 spec:
+  'on':
+    canary:
+      - event: failed
+        filter: check.type == 'http'
   description: Unconventional EC2 restart
   configs:
     - type: EC2 Instance
