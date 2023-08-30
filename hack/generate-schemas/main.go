@@ -6,12 +6,14 @@ import (
 
 	"github.com/alecthomas/jsonschema"
 	"github.com/flanksource/commons/logger"
-	v1 "github.com/flanksource/kopper/api/v1"
+	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/spf13/cobra"
 )
 
 var schemas = map[string]any{
-	"connection": &v1.Connection{},
+	"connection":     &v1.Connection{},
+	"playbook":       &v1.Playbook{},
+	"incident-rules": &v1.IncidentRule{},
 }
 
 var generateSchema = &cobra.Command{
