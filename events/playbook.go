@@ -31,6 +31,10 @@ func SavePlaybookRun(ctx *api.Context, event api.Event) error {
 		return fmt.Errorf("error fetching playbooks: %w", err)
 	}
 
+	if len(playbooks) == 0 {
+		return nil
+	}
+
 	var eventResource EventResource
 	switch event.Name {
 	case EventCheckFailed, EventCheckPassed:
@@ -55,7 +59,6 @@ func SavePlaybookRun(ctx *api.Context, event api.Event) error {
 		run := models.PlaybookRun{
 			PlaybookID: p.ID,
 			Status:     models.PlaybookRunStatusPending,
-			// Parameters: types.JSONStringMap(req.Params), // TODO: How to decide on the requirement parameters.
 		}
 
 		if playbook.Spec.Approval == nil || playbook.Spec.Approval.Approvers.Empty() {
@@ -104,35 +107,37 @@ func logToJobHistory(ctx *api.Context, playbookID, err string) {
 // for the given labels and cel env.
 func matchResource(labels map[string]string, celEnv map[string]any, matchFilters []v1.PlaybookEventDetail) (bool, error) {
 	for _, mf := range matchFilters {
+		var (
+			filterPassed     = true
+			allLabelsMatched = true
+		)
+
 		if mf.Filter != "" {
+			filterPassed = false
 			res, err := gomplate.RunTemplate(celEnv, gomplate.Template{Expression: mf.Filter})
 			if err != nil {
 				return false, err
 			}
 
-			if ok, _ := strconv.ParseBool(res); ok {
-				return true, nil
+			filterPassed, _ = strconv.ParseBool(res)
+		}
+
+		for k, v := range mf.Labels {
+			qVal, ok := labels[k]
+			if !ok {
+				allLabelsMatched = false
+				break
+			}
+
+			configuredLabels := strings.Split(v, ",")
+			if !collections.MatchItems(qVal, configuredLabels...) {
+				allLabelsMatched = false
+				break
 			}
 		}
 
-		if len(mf.Labels) != 0 {
-			var allLabelsMatched = true
-
-			for k, v := range mf.Labels {
-				qVal, ok := labels[k]
-				if !ok {
-					break
-				}
-
-				configuredLabels := strings.Split(v, ",")
-				if !collections.MatchItems(qVal, configuredLabels...) {
-					break
-				}
-			}
-
-			if allLabelsMatched {
-				return true, nil
-			}
+		if filterPassed && allLabelsMatched {
+			return true, nil
 		}
 	}
 
@@ -148,9 +153,9 @@ type PlaybookSpecEvent struct {
 var eventToSpecEvent = map[string]PlaybookSpecEvent{
 	EventCheckPassed:              {"canary", "passed"},
 	EventCheckFailed:              {"canary", "failed"},
-	EventComponentStatusHealthy:   {"canary", "healthy"},
-	EventComponentStatusUnhealthy: {"canary", "unhealthy"},
-	EventComponentStatusInfo:      {"canary", "info"},
-	EventComponentStatusWarning:   {"canary", "warning"},
-	EventComponentStatusError:     {"canary", "error"},
+	EventComponentStatusHealthy:   {"component", "healthy"},
+	EventComponentStatusUnhealthy: {"component", "unhealthy"},
+	EventComponentStatusInfo:      {"component", "info"},
+	EventComponentStatusWarning:   {"component", "warning"},
+	EventComponentStatusError:     {"component", "error"},
 }

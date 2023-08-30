@@ -1,7 +1,7 @@
 apiVersion: mission-control.flanksource.com/v1
 kind: Playbook
 metadata:
-  name: scale-deployment
+  name: stop-expensive-ec2-instance
 spec:
   'on':
     component:

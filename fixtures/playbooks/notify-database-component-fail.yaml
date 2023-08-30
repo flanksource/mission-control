@@ -1,0 +1,16 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: notify-unhealthy-database-component
+spec:
+  description: Sends desktop notification when any database component becomes unhealthy
+  'on':
+    component:
+      - event: unhealthy
+        filter: component.type == 'database'
+        labels:
+          industry: e-commerce
+  actions:
+    - name: 'Send desktop notification'
+      exec:
+        script: notify-send --urgency=critical 'Component {{.component.name}} has become unhealthy!!'
