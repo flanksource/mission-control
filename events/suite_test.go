@@ -24,9 +24,9 @@ import (
 	"gorm.io/gorm"
 )
 
-func TestPushMode(t *testing.T) {
+func TestEvents(t *testing.T) {
 	RegisterFailHandler(ginkgo.Fail)
-	ginkgo.RunSpecs(t, "Push Mode Suite")
+	ginkgo.RunSpecs(t, "Events test suite")
 }
 
 type agentWrapper struct {
@@ -65,6 +65,9 @@ var (
 	agentJames = agentWrapper{name: "james", id: uuid.New(), dataset: dummy.GenerateDynamicDummyData()}
 	agentRoss  = agentWrapper{name: "ross", id: uuid.New(), dataset: dummy.GenerateDynamicDummyData()}
 
+	playbookDB     *gorm.DB
+	playbookDBPool *pgxpool.Pool
+
 	upstreamDB       *gorm.DB
 	upstreamDBPGPool *pgxpool.Pool
 	upstreamDBName   = "upstream"
@@ -100,6 +103,14 @@ var _ = ginkgo.BeforeSuite(func() {
 	Expect(upstreamDB.Create(&models.Agent{ID: agentBob.id, Name: agentBob.name}).Error).To(BeNil())
 	Expect(upstreamDB.Create(&models.Agent{ID: agentJames.id, Name: agentJames.name}).Error).To(BeNil())
 	Expect(upstreamDB.Create(&models.Agent{ID: agentRoss.id, Name: agentRoss.name}).Error).To(BeNil())
+
+	// Setup database for playbook
+	_, err = agentBob.pool.Exec(context.TODO(), "CREATE DATABASE playbook")
+	Expect(err).NotTo(HaveOccurred())
+	playbookDBConnection := strings.ReplaceAll(connection, agentBob.name, "playbook")
+	if playbookDB, playbookDBPool, err = duty.SetupDB(playbookDBConnection, nil); err != nil {
+		ginkgo.Fail(err.Error())
+	}
 
 	upstreamEchoServer = echo.New()
 	upstreamEchoServer.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
