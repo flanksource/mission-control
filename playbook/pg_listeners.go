@@ -26,6 +26,9 @@ func ListenPlaybookPGNotify(db *gorm.DB, pool *pgxpool.Pool) {
 	pgNotifyPlaybookApprovalsInserted := make(chan string)
 	go utils.ListenToPostgresNotify(pool, "playbook_approval_inserted", dbReconnectMaxDuration, dbReconnectBackoffBaseDuration, pgNotifyPlaybookApprovalsInserted)
 
+	pgNotifyPlaybookSpecUpdated := make(chan string)
+	go utils.ListenToPostgresNotify(pool, "playbook_spec_updated", dbReconnectMaxDuration, dbReconnectBackoffBaseDuration, pgNotifyPlaybookSpecUpdated)
+
 	ctx := api.NewContext(db, nil)
 	for {
 		select {
@@ -38,6 +41,9 @@ func ListenPlaybookPGNotify(db *gorm.DB, pool *pgxpool.Pool) {
 			if err := onPlaybookRunNewApproval(ctx, id); err != nil {
 				logger.Errorf("%v", err)
 			}
+
+		case <-pgNotifyPlaybookSpecUpdated:
+			clearEventPlaybookCache()
 		}
 	}
 }
