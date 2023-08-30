@@ -10,23 +10,24 @@ import (
 	"github.com/flanksource/commons/template"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/events/eventconsumer"
 	pkgNotification "github.com/flanksource/incident-commander/notification"
 	"github.com/flanksource/incident-commander/teams"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"gorm.io/gorm"
 )
 
-func NewNotificationConsumerSync(db *gorm.DB, pool *pgxpool.Pool) *EventConsumer {
-	return NewEventConsumer(db, pool, eventQueueUpdateChannel, newEventQueueSyncConsumerFunc(syncConsumerWatchEvents["notification_add"], addNotificationEvent)).
+func NewNotificationConsumerSync(db *gorm.DB, pool *pgxpool.Pool) *eventconsumer.EventConsumer {
+	return eventconsumer.New(db, pool, eventQueueUpdateChannel, newEventQueueSyncConsumerFunc(syncConsumerWatchEvents["notification_add"], addNotificationEvent)).
 		WithNumConsumers(3)
 }
 
-func NewNotificationUpdatesConsumerSync(db *gorm.DB, pool *pgxpool.Pool) *EventConsumer {
-	return NewEventConsumer(db, pool, eventQueueUpdateChannel, newEventQueueSyncConsumerFunc(syncConsumerWatchEvents["notification_update"], handleNotificationUpdates))
+func NewNotificationUpdatesConsumerSync(db *gorm.DB, pool *pgxpool.Pool) *eventconsumer.EventConsumer {
+	return eventconsumer.New(db, pool, eventQueueUpdateChannel, newEventQueueSyncConsumerFunc(syncConsumerWatchEvents["notification_update"], handleNotificationUpdates))
 }
 
-func NewNotificationSendConsumerAsync(db *gorm.DB, pool *pgxpool.Pool) *EventConsumer {
-	return NewEventConsumer(db, pool, eventQueueUpdateChannel, newEventQueueAsyncConsumerFunc(asyncConsumerWatchEvents["notification_send"], processNotificationEvents)).
+func NewNotificationSendConsumerAsync(db *gorm.DB, pool *pgxpool.Pool) *eventconsumer.EventConsumer {
+	return eventconsumer.New(db, pool, eventQueueUpdateChannel, newEventQueueAsyncConsumerFunc(asyncConsumerWatchEvents["notification_send"], processNotificationEvents)).
 		WithNumConsumers(5)
 }
 

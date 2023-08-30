@@ -8,24 +8,25 @@ import (
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/events/eventconsumer"
 	pkgResponder "github.com/flanksource/incident-commander/responder"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func NewResponderConsumerAsync(db *gorm.DB, pool *pgxpool.Pool) *EventConsumer {
-	return NewEventConsumer(db, pool, eventQueueUpdateChannel,
+func NewResponderConsumerAsync(db *gorm.DB, pool *pgxpool.Pool) *eventconsumer.EventConsumer {
+	return eventconsumer.New(db, pool, eventQueueUpdateChannel,
 		newEventQueueAsyncConsumerFunc(asyncConsumerWatchEvents["incident.responder"], processResponderEvents),
 	)
 }
 
-func NewResponderConsumerSync(db *gorm.DB, pool *pgxpool.Pool) *EventConsumer {
-	return NewEventConsumer(db, pool, eventQueueUpdateChannel,
+func NewResponderConsumerSync(db *gorm.DB, pool *pgxpool.Pool) *eventconsumer.EventConsumer {
+	return eventconsumer.New(db, pool, eventQueueUpdateChannel,
 		newEventQueueSyncConsumerFunc(syncConsumerWatchEvents["incident.responder"], addNotificationEvent, generateResponderAddedAsyncEvent),
 	)
 }
 
-func NewCommentConsumerSync(db *gorm.DB, pool *pgxpool.Pool) *EventConsumer {
-	return NewEventConsumer(db, pool, eventQueueUpdateChannel,
+func NewCommentConsumerSync(db *gorm.DB, pool *pgxpool.Pool) *eventconsumer.EventConsumer {
+	return eventconsumer.New(db, pool, eventQueueUpdateChannel,
 		newEventQueueSyncConsumerFunc(syncConsumerWatchEvents["incident.comment"], addNotificationEvent, generateCommentAddedAsyncEvent),
 	)
 }

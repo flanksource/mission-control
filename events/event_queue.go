@@ -8,6 +8,7 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/events/eventconsumer"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"gorm.io/gorm"
 )
@@ -150,7 +151,7 @@ func StartConsumers(gormDB *gorm.DB, pgpool *pgxpool.Pool, config Config) {
 		}
 	}
 
-	allConsumers := []*EventConsumer{
+	allConsumers := []*eventconsumer.EventConsumer{
 		NewTeamConsumerSync(gormDB, pgpool),
 		NewCheckConsumerSync(gormDB, pgpool),
 		NewComponentConsumerSync(gormDB, pgpool),
@@ -206,7 +207,7 @@ func fetchEvents(ctx *api.Context, watchEvents []string, batchSize int) ([]api.E
 }
 
 // newEventQueueAsyncConsumerFunc returns a new event consumer for the `watchEvents` events in the `event_queue` table.
-func newEventQueueAsyncConsumerFunc(watchEvents []string, handleEventsAsync AsyncEventHandler) EventConsumerFunc {
+func newEventQueueAsyncConsumerFunc(watchEvents []string, handleEventsAsync AsyncEventHandler) eventconsumer.EventConsumerFunc {
 	return func(ctx *api.Context, batchSize int) error {
 		tx := ctx.DB().Begin()
 		if tx.Error != nil {
@@ -233,7 +234,7 @@ func newEventQueueAsyncConsumerFunc(watchEvents []string, handleEventsAsync Asyn
 }
 
 // newEventQueueConsumerFunc returns a new sync event consumer for the `watchEvents` events in the `event_queue` table.
-func newEventQueueSyncConsumerFunc(watchEvents []string, syncConsumers ...SyncEventHandler) EventConsumerFunc {
+func newEventQueueSyncConsumerFunc(watchEvents []string, syncConsumers ...SyncEventHandler) eventconsumer.EventConsumerFunc {
 	return func(ctx *api.Context, batchSize int) error {
 		tx := ctx.DB().Begin()
 		if tx.Error != nil {

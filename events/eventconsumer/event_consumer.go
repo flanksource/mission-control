@@ -1,4 +1,4 @@
-package events
+package eventconsumer
 
 import (
 	"fmt"
@@ -44,7 +44,8 @@ type EventConsumer struct {
 	consumerFunc EventConsumerFunc
 }
 
-func NewEventConsumer(DB *gorm.DB, PGPool *pgxpool.Pool, PgNotifyChannel string, ConsumerFunc EventConsumerFunc) *EventConsumer {
+// New returns a new EventConsumer
+func New(DB *gorm.DB, PGPool *pgxpool.Pool, PgNotifyChannel string, ConsumerFunc EventConsumerFunc) *EventConsumer {
 	return &EventConsumer{
 		batchSize:       1,
 		numConsumers:    1,
