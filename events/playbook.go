@@ -15,7 +15,7 @@ import (
 	"github.com/flanksource/incident-commander/playbook"
 )
 
-type FilterEnv struct {
+type EventResource struct {
 	Component *models.Component `json:"component,omitempty"`
 	Check     *models.Check     `json:"check,omitempty"`
 }
@@ -31,7 +31,7 @@ func SavePlaybookRun(ctx *api.Context, event api.Event) error {
 		return fmt.Errorf("error fetching playbooks: %w", err)
 	}
 
-	var eventResource FilterEnv
+	var eventResource EventResource
 	switch event.Name {
 	case EventCheckFailed, EventCheckPassed:
 		if err := ctx.DB().Model(&models.Check{}).Where("id = ?", event.Properties["id"]).First(&eventResource.Check).Error; err != nil {
@@ -56,7 +56,6 @@ func SavePlaybookRun(ctx *api.Context, event api.Event) error {
 			PlaybookID: p.ID,
 			Status:     models.PlaybookRunStatusPending,
 			// Parameters: types.JSONStringMap(req.Params), // TODO: How to decide on the requirement parameters.
-			CreatedBy: &ctx.User().ID,
 		}
 
 		if playbook.Spec.Approval == nil || playbook.Spec.Approval.Approvers.Empty() {

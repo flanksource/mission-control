@@ -109,11 +109,11 @@ type PlaybookStatus struct {
 
 // Playbook is the schema for the Playbooks API
 type Playbook struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
+	metav1.TypeMeta   `json:",inline" yaml:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty" yaml:"metadata,omitempty"`
 
-	Spec   PlaybookSpec   `json:"spec,omitempty"`
-	Status PlaybookStatus `json:"status,omitempty"`
+	Spec   PlaybookSpec   `json:"spec,omitempty" yaml:"spec,omitempty"`
+	Status PlaybookStatus `json:"status,omitempty" yaml:"status,omitempty"`
 }
 
 func PlaybookFromModel(p models.Playbook) (Playbook, error) {
