@@ -8,6 +8,7 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/events/eventconsumer"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"gorm.io/gorm"
 )
@@ -91,7 +92,7 @@ func StartConsumers(gormDB *gorm.DB, pgpool *pgxpool.Pool, config Config) {
 		}
 	}
 
-	allConsumers := []*EventConsumer{
+	allConsumers := []*eventconsumer.EventConsumer{
 		NewTeamConsumer(gormDB, pgpool),
 		NewNotificationConsumer(gormDB, pgpool),
 		NewNotificationSendConsumer(gormDB, pgpool),
@@ -108,7 +109,7 @@ func StartConsumers(gormDB *gorm.DB, pgpool *pgxpool.Pool, config Config) {
 
 // newEventQueueConsumerFunc returns a new event consumer for the `event_queue` table
 // based on the given watch events and process batch function.
-func newEventQueueConsumerFunc(watchEvents []string, processBatchFunc ProcessBatchFunc) EventConsumerFunc {
+func newEventQueueConsumerFunc(watchEvents []string, processBatchFunc ProcessBatchFunc) eventconsumer.EventConsumerFunc {
 	return func(ctx *api.Context, batchSize int) error {
 		tx := ctx.DB().Begin()
 		if tx.Error != nil {

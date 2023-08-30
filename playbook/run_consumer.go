@@ -5,13 +5,13 @@ import (
 
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/events"
+	"github.com/flanksource/incident-commander/events/eventconsumer"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"gorm.io/gorm"
 )
 
 func StartPlaybookRunConsumer(db *gorm.DB, pool *pgxpool.Pool) {
-	events.NewEventConsumer(db, pool, "playbook_run_updates", EventConsumer).
+	eventconsumer.New(db, pool, "playbook_run_updates", EventConsumer).
 		WithNumConsumers(5).
 		Listen()
 }

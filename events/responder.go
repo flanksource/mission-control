@@ -8,12 +8,13 @@ import (
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/events/eventconsumer"
 	pkgResponder "github.com/flanksource/incident-commander/responder"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func NewResponderConsumer(db *gorm.DB, pool *pgxpool.Pool) *EventConsumer {
-	return NewEventConsumer(db, pool, "event_queue_updates", newEventQueueConsumerFunc(consumerWatchEvents["responder"], processResponderEvents))
+func NewResponderConsumer(db *gorm.DB, pool *pgxpool.Pool) *eventconsumer.EventConsumer {
+	return eventconsumer.New(db, pool, "event_queue_updates", newEventQueueConsumerFunc(consumerWatchEvents["responder"], processResponderEvents))
 }
 
 func processResponderEvents(ctx *api.Context, events []api.Event) []api.Event {

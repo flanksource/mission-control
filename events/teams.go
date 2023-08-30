@@ -5,6 +5,7 @@ import (
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/events/eventconsumer"
 	"github.com/flanksource/incident-commander/responder"
 	"github.com/flanksource/incident-commander/teams"
 	"github.com/google/uuid"
@@ -12,8 +13,8 @@ import (
 	"gorm.io/gorm"
 )
 
-func NewTeamConsumer(db *gorm.DB, pool *pgxpool.Pool) *EventConsumer {
-	return NewEventConsumer(db, pool, "event_queue_updates", newEventQueueConsumerFunc(consumerWatchEvents["team"], processTeamEvents))
+func NewTeamConsumer(db *gorm.DB, pool *pgxpool.Pool) *eventconsumer.EventConsumer {
+	return eventconsumer.New(db, pool, "event_queue_updates", newEventQueueConsumerFunc(consumerWatchEvents["team"], processTeamEvents))
 }
 
 func processTeamEvents(ctx *api.Context, events []api.Event) []api.Event {
