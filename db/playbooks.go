@@ -13,6 +13,16 @@ import (
 	"gorm.io/gorm"
 )
 
+func FindPlaybooksForEvent(ctx *api.Context, eventClass, event string) ([]models.Playbook, error) {
+	var playbooks []models.Playbook
+	query := fmt.Sprintf(`SELECT * FROM playbooks WHERE spec->'on'->'%s' @> '[{"event": "%s"}]'`, eventClass, event)
+	if err := ctx.DB().Raw(query).Scan(&playbooks).Error; err != nil {
+		return nil, err
+	}
+
+	return playbooks, nil
+}
+
 func FindPlaybook(ctx *api.Context, id uuid.UUID) (*models.Playbook, error) {
 	var p models.Playbook
 	if err := ctx.DB().Where("id = ?", id).First(&p).Error; err != nil {
