@@ -1,12 +1,14 @@
 package events
 
-import (
-	"github.com/flanksource/incident-commander/events/eventconsumer"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"gorm.io/gorm"
-)
-
-func NewComponentConsumerSync(db *gorm.DB, pgPool *pgxpool.Pool) *eventconsumer.EventConsumer {
-	return eventconsumer.New(db, pgPool, eventQueueUpdateChannel,
-		newEventQueueSyncConsumerFunc(syncConsumerWatchEvents["component"], addNotificationEvent, SavePlaybookRun))
+func NewComponentConsumerSync() SyncEventConsumer {
+	return SyncEventConsumer{
+		watchEvents: []string{
+			EventComponentStatusError,
+			EventComponentStatusHealthy,
+			EventComponentStatusInfo,
+			EventComponentStatusUnhealthy,
+			EventComponentStatusWarning,
+		},
+		consumers: []SyncEventHandlerFunc{addNotificationEvent, SavePlaybookRun},
+	}
 }

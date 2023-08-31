@@ -5,16 +5,18 @@ import (
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/events/eventconsumer"
 	"github.com/flanksource/incident-commander/responder"
 	"github.com/flanksource/incident-commander/teams"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"gorm.io/gorm"
 )
 
-func NewTeamConsumerSync(db *gorm.DB, pool *pgxpool.Pool) *eventconsumer.EventConsumer {
-	return eventconsumer.New(db, pool, eventQueueUpdateChannel, newEventQueueSyncConsumerFunc(syncConsumerWatchEvents["team"], handleTeamEvent))
+func NewTeamConsumerSync() SyncEventConsumer {
+	consumer := SyncEventConsumer{
+		watchEvents: []string{EventTeamUpdate, EventTeamDelete},
+		consumers:   []SyncEventHandlerFunc{handleTeamEvent},
+	}
+
+	return consumer
 }
 
 func handleTeamEvent(ctx *api.Context, event api.Event) error {

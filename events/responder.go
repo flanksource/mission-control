@@ -8,27 +8,29 @@ import (
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/events/eventconsumer"
 	pkgResponder "github.com/flanksource/incident-commander/responder"
-	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func NewResponderConsumerAsync(db *gorm.DB, pool *pgxpool.Pool) *eventconsumer.EventConsumer {
-	return eventconsumer.New(db, pool, eventQueueUpdateChannel,
-		newEventQueueAsyncConsumerFunc(asyncConsumerWatchEvents["incident.responder"], processResponderEvents),
-	)
+func NewResponderConsumerSync() SyncEventConsumer {
+	return SyncEventConsumer{
+		watchEvents: []string{EventIncidentResponderAdded},
+		consumers:   []SyncEventHandlerFunc{addNotificationEvent, generateResponderAddedAsyncEvent},
+	}
 }
 
-func NewResponderConsumerSync(db *gorm.DB, pool *pgxpool.Pool) *eventconsumer.EventConsumer {
-	return eventconsumer.New(db, pool, eventQueueUpdateChannel,
-		newEventQueueSyncConsumerFunc(syncConsumerWatchEvents["incident.responder"], addNotificationEvent, generateResponderAddedAsyncEvent),
-	)
+func NewCommentConsumerSync() SyncEventConsumer {
+	return SyncEventConsumer{
+		watchEvents: []string{EventIncidentCommentAdded},
+		consumers:   []SyncEventHandlerFunc{addNotificationEvent, generateCommentAddedAsyncEvent},
+	}
 }
 
-func NewCommentConsumerSync(db *gorm.DB, pool *pgxpool.Pool) *eventconsumer.EventConsumer {
-	return eventconsumer.New(db, pool, eventQueueUpdateChannel,
-		newEventQueueSyncConsumerFunc(syncConsumerWatchEvents["incident.comment"], addNotificationEvent, generateCommentAddedAsyncEvent),
-	)
+func NewResponderConsumerAsync() AsyncEventConsumer {
+	return AsyncEventConsumer{
+		watchEvents: []string{EventJiraResponderAdded, EventMSPlannerResponderAdded, EventMSPlannerCommentAdded, EventJiraCommentAdded},
+		consumer:    processResponderEvents,
+		batchSize:   1,
+	}
 }
 
 // generateResponderAddedAsyncEvent generates async events for each of the configured responder clients

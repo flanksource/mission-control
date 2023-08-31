@@ -24,14 +24,11 @@ const (
 	dbReconnectBackoffBaseDuration = time.Second
 )
 
-type EventConsumerFunc func(ctx *api.Context, batchSize int) error
+type EventConsumerFunc func(ctx *api.Context) error
 
 type EventConsumer struct {
 	db     *gorm.DB
 	pgPool *pgxpool.Pool
-
-	// Number of events to process at a time by a single consumer
-	batchSize int
 
 	// Number of concurrent consumers
 	numConsumers int
@@ -47,7 +44,6 @@ type EventConsumer struct {
 // New returns a new EventConsumer
 func New(DB *gorm.DB, PGPool *pgxpool.Pool, PgNotifyChannel string, ConsumerFunc EventConsumerFunc) *EventConsumer {
 	return &EventConsumer{
-		batchSize:       1,
 		numConsumers:    1,
 		db:              DB,
 		pgPool:          PGPool,
@@ -56,22 +52,14 @@ func New(DB *gorm.DB, PGPool *pgxpool.Pool, PgNotifyChannel string, ConsumerFunc
 	}
 }
 
-func (e *EventConsumer) WithBatchSize(batchSize int) *EventConsumer {
-	e.batchSize = batchSize
-	return e
-}
-
 func (e *EventConsumer) WithNumConsumers(numConsumers int) *EventConsumer {
 	e.numConsumers = numConsumers
 	return e
 }
 
 func (e EventConsumer) Validate() error {
-	if e.batchSize <= 0 {
-		return fmt.Errorf("BatchSize:%d <= 0", e.batchSize)
-	}
 	if e.numConsumers <= 0 {
-		return fmt.Errorf("consumers:%d <= 0", e.batchSize)
+		return fmt.Errorf("consumers:%d <= 0", e.numConsumers)
 	}
 	if e.pgNotifyChannel == "" {
 		return fmt.Errorf("pgNotifyChannel is empty")
@@ -92,7 +80,7 @@ func (e EventConsumer) Validate() error {
 func (t *EventConsumer) ConsumeEventsUntilEmpty(ctx *api.Context) {
 	consumerFunc := func(wg *sync.WaitGroup) {
 		for {
-			err := t.consumerFunc(ctx, t.batchSize)
+			err := t.consumerFunc(ctx)
 			if err != nil {
 				if api.ErrorCode(err) == api.ENOTFOUND {
 					wg.Done()

@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/flanksource/commons/collections/set"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
@@ -23,11 +22,11 @@ const (
 )
 
 type (
-	// AsyncEventHandler processes multiple events and returns the failed ones
-	AsyncEventHandler func(*api.Context, []api.Event) []api.Event
+	// AsyncEventHandlerFunc processes multiple events and returns the failed ones
+	AsyncEventHandlerFunc func(*api.Context, []api.Event) []api.Event
 
-	// SyncEventHandler processes a single event and ONLY makes db changes.
-	SyncEventHandler func(*api.Context, api.Event) error
+	// SyncEventHandlerFunc processes a single event and ONLY makes db changes.
+	SyncEventHandlerFunc func(*api.Context, api.Event) error
 )
 
 // List of all sync events in the `event_queue` table.
@@ -88,88 +87,48 @@ type Config struct {
 	UpstreamPush upstream.UpstreamConfig
 }
 
-// syncConsumerWatchEvents keeps a registry of all the event_queue consumer and the events they watch.
-// This helps in ensuring that a single event is not being consumed by multiple consumers.
-var syncConsumerWatchEvents = map[string][]string{
-	"team":  {EventTeamUpdate, EventTeamDelete},
-	"check": {EventCheckPassed, EventCheckFailed},
-	"component": {
-		EventComponentStatusError,
-		EventComponentStatusHealthy,
-		EventComponentStatusInfo,
-		EventComponentStatusUnhealthy,
-		EventComponentStatusWarning,
-	},
-	"incident.responder": {EventIncidentResponderAdded},
-	"incident.comment":   {EventIncidentCommentAdded},
-	"notification_update": {
-		EventNotificationUpdate, EventNotificationDelete,
-	},
-	"notification_add": {
-		EventIncidentCreated,
-		EventIncidentDODAdded,
-		EventIncidentDODPassed,
-		EventIncidentDODRegressed,
-		EventIncidentResponderRemoved,
-		EventIncidentStatusCancelled,
-		EventIncidentStatusClosed,
-		EventIncidentStatusInvestigating,
-		EventIncidentStatusMitigated,
-		EventIncidentStatusOpen,
-		EventIncidentStatusResolved,
-	},
-}
-
-var asyncConsumerWatchEvents = map[string][]string{
-	"push_queue":        {EventPushQueueCreate},
-	"notification_send": {EventNotificationSend},
-	"incident.responder": {
-		EventJiraResponderAdded, EventMSPlannerResponderAdded,
-		EventMSPlannerCommentAdded, EventJiraCommentAdded,
-	},
-}
-
 func StartConsumers(gormDB *gorm.DB, pgpool *pgxpool.Pool, config Config) {
-	uniqWatchEvents := set.New[string]()
-	for _, v := range syncConsumerWatchEvents {
-		for _, e := range v {
-			if uniqWatchEvents.Contains(e) {
-				logger.Fatalf("Error starting consumers: event[%s] has multiple consumers", e)
-			}
-
-			uniqWatchEvents.Add(e)
-		}
+	uniqEvents := make(map[string]struct{})
+	allSyncHandlers := []SyncEventConsumer{
+		NewTeamConsumerSync(),
+		NewCheckConsumerSync(),
+		NewComponentConsumerSync(),
+		NewResponderConsumerSync(),
+		NewCommentConsumerSync(),
+		NewNotificationSaveConsumerSync(),
+		NewNotificationUpdatesConsumerSync(),
 	}
 
-	for _, v := range asyncConsumerWatchEvents {
-		for _, e := range v {
-			if uniqWatchEvents.Contains(e) {
-				logger.Fatalf("Error starting consumers: event[%s] has multiple consumers", e)
+	for i := range allSyncHandlers {
+		for _, event := range allSyncHandlers[i].watchEvents {
+			if _, ok := uniqEvents[event]; ok {
+				logger.Fatalf("Watch event %s is duplicated", event)
 			}
 
-			uniqWatchEvents.Add(e)
+			uniqEvents[event] = struct{}{}
 		}
+
+		go allSyncHandlers[i].EventConsumer(gormDB, pgpool).Listen()
 	}
 
-	allConsumers := []*eventconsumer.EventConsumer{
-		NewTeamConsumerSync(gormDB, pgpool),
-		NewCheckConsumerSync(gormDB, pgpool),
-		NewComponentConsumerSync(gormDB, pgpool),
-		NewResponderConsumerSync(gormDB, pgpool),
-		NewCommentConsumerSync(gormDB, pgpool),
-		NewNotificationConsumerSync(gormDB, pgpool),
-		NewNotificationUpdatesConsumerSync(gormDB, pgpool),
-
-		// Async consumers
-		NewNotificationSendConsumerAsync(gormDB, pgpool),
-		NewResponderConsumerAsync(gormDB, pgpool),
+	asyncConsumers := []AsyncEventConsumer{
+		NewNotificationSendConsumerAsync(),
+		NewResponderConsumerAsync(),
 	}
 	if config.UpstreamPush.Valid() {
-		allConsumers = append(allConsumers, NewUpstreamPushConsumerAsync(gormDB, pgpool, config))
+		asyncConsumers = append(asyncConsumers, NewUpstreamPushConsumerAsync(config))
 	}
 
-	for i := range allConsumers {
-		go allConsumers[i].Listen()
+	for i := range asyncConsumers {
+		for _, event := range asyncConsumers[i].watchEvents {
+			if _, ok := uniqEvents[event]; ok {
+				logger.Fatalf("Watch event %s is duplicated", event)
+			}
+
+			uniqEvents[event] = struct{}{}
+		}
+
+		go asyncConsumers[i].EventConsumer(gormDB, pgpool).Listen()
 	}
 }
 
@@ -206,87 +165,41 @@ func fetchEvents(ctx *api.Context, watchEvents []string, batchSize int) ([]api.E
 	return events, nil
 }
 
-// newEventQueueAsyncConsumerFunc returns a new event consumer for the `watchEvents` events in the `event_queue` table.
-func newEventQueueAsyncConsumerFunc(watchEvents []string, handleEventsAsync AsyncEventHandler) eventconsumer.EventConsumerFunc {
-	return func(ctx *api.Context, batchSize int) error {
-		tx := ctx.DB().Begin()
-		if tx.Error != nil {
-			return fmt.Errorf("error initiating db tx: %w", tx.Error)
-		}
-		defer tx.Rollback()
-
-		ctx = ctx.WithDB(tx)
-
-		events, err := fetchEvents(ctx, watchEvents, batchSize)
-		if err != nil {
-			return fmt.Errorf("error fetching events: %w", err)
-		}
-
-		if len(events) == 0 {
-			return api.Errorf(api.ENOTFOUND, "No events found")
-		}
-
-		failedEvents := handleEventsAsync(ctx, events)
-		saveFailedEvents(tx, failedEvents)
-
-		return tx.Commit().Error
-	}
+type SyncEventConsumer struct {
+	watchEvents  []string
+	consumers    []SyncEventHandlerFunc
+	numConsumers int
 }
 
-// newEventQueueConsumerFunc returns a new sync event consumer for the `watchEvents` events in the `event_queue` table.
-func newEventQueueSyncConsumerFunc(watchEvents []string, syncConsumers ...SyncEventHandler) eventconsumer.EventConsumerFunc {
-	return func(ctx *api.Context, batchSize int) error {
-		tx := ctx.DB().Begin()
-		if tx.Error != nil {
-			return fmt.Errorf("error initiating db tx: %w", tx.Error)
-		}
-		defer tx.Rollback()
-
-		events, err := fetchEvents(ctx.WithDB(tx), watchEvents, batchSize)
-		if err != nil {
-			return fmt.Errorf("error fetching events: %w", err)
-		}
-
-		if len(events) == 0 {
-			return api.Errorf(api.ENOTFOUND, "No events found")
-		}
-
-		failedEvents := handleEventsSync(ctx, events, syncConsumers)
-		saveFailedEvents(tx, failedEvents)
-
-		return tx.Commit().Error
-	}
-}
-
-// handleEventsSync runs all the sync consumers for the given events.
-//
-// Each event is handled in isolation (in a separate transaction).
-func handleEventsSync(ctx *api.Context, events []api.Event, syncConsumers []SyncEventHandler) []api.Event {
-	failedEvents := make([]api.Event, 0, len(events))
-	for i := range events {
-		if err := processSyncConsumers(ctx, events[i], syncConsumers); err != nil {
-			logger.Errorf("Failed to process event[%s]: %s", events[i].ID, err.Error())
-			events[i].Error = err.Error()
-			failedEvents = append(failedEvents, events[i])
-		}
+func (t SyncEventConsumer) EventConsumer(db *gorm.DB, pool *pgxpool.Pool) *eventconsumer.EventConsumer {
+	consumer := eventconsumer.New(db, pool, eventQueueUpdateChannel, t.Handle)
+	if t.numConsumers > 0 {
+		consumer = consumer.WithNumConsumers(t.numConsumers)
 	}
 
-	return failedEvents
+	return consumer
 }
 
-// processSyncConsumers runs all the sync consumers for the given event.
-//
-// All of the consumers are expected to succeed.
-// Returns error even if a single consumer fails and any changes are rolled back.
-func processSyncConsumers(ctx *api.Context, event api.Event, syncConsumers []SyncEventHandler) error {
+func (t *SyncEventConsumer) Handle(ctx *api.Context) error {
 	tx := ctx.DB().Begin()
 	if tx.Error != nil {
 		return fmt.Errorf("error initiating db tx: %w", tx.Error)
 	}
 	defer tx.Rollback()
 
-	for _, syncConsumer := range syncConsumers {
-		if err := syncConsumer(ctx, event); err != nil {
+	ctx = ctx.WithDB(tx)
+
+	events, err := fetchEvents(ctx, t.watchEvents, 1)
+	if err != nil {
+		return fmt.Errorf("error fetching events: %w", err)
+	}
+
+	if len(events) == 0 {
+		return api.Errorf(api.ENOTFOUND, "No events found")
+	}
+
+	for _, syncConsumer := range t.consumers {
+		if err := syncConsumer(ctx, events[0]); err != nil {
 			return fmt.Errorf("error processing sync consumer: %w", err)
 		}
 	}
@@ -294,8 +207,32 @@ func processSyncConsumers(ctx *api.Context, event api.Event, syncConsumers []Syn
 	return tx.Commit().Error
 }
 
-// saveFailedEvents saves failed events back to the `event_queue` table.
-func saveFailedEvents(tx *gorm.DB, failedEvents []api.Event) {
+type AsyncEventConsumer struct {
+	watchEvents  []string
+	batchSize    int
+	consumer     AsyncEventHandlerFunc
+	numConsumers int
+}
+
+func (t *AsyncEventConsumer) Handle(ctx *api.Context) error {
+	tx := ctx.DB().Begin()
+	if tx.Error != nil {
+		return fmt.Errorf("error initiating db tx: %w", tx.Error)
+	}
+	defer tx.Rollback()
+
+	ctx = ctx.WithDB(tx)
+
+	events, err := fetchEvents(ctx, t.watchEvents, t.batchSize)
+	if err != nil {
+		return fmt.Errorf("error fetching events: %w", err)
+	}
+
+	if len(events) == 0 {
+		return api.Errorf(api.ENOTFOUND, "No events found")
+	}
+
+	failedEvents := t.consumer(ctx, events)
 	lastAttempt := time.Now()
 
 	for i := range failedEvents {
@@ -311,4 +248,15 @@ func saveFailedEvents(tx *gorm.DB, failedEvents []api.Event) {
 			logger.Errorf("Error inserting into table:event_queue with error:%v. %v", err)
 		}
 	}
+
+	return tx.Commit().Error
+}
+
+func (t AsyncEventConsumer) EventConsumer(db *gorm.DB, pool *pgxpool.Pool) *eventconsumer.EventConsumer {
+	consumer := eventconsumer.New(db, pool, eventQueueUpdateChannel, t.Handle)
+	if t.numConsumers > 0 {
+		consumer = consumer.WithNumConsumers(t.numConsumers)
+	}
+
+	return consumer
 }

@@ -6,21 +6,21 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/events/eventconsumer"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"gorm.io/gorm"
 )
 
 var upstreamPushEventHandler *pushToUpstreamEventHandler
 
-func NewUpstreamPushConsumerAsync(db *gorm.DB, pool *pgxpool.Pool, config Config) *eventconsumer.EventConsumer {
+func NewUpstreamPushConsumerAsync(config Config) AsyncEventConsumer {
 	if config.UpstreamPush.Valid() {
 		upstreamPushEventHandler = newPushToUpstreamEventHandler(config.UpstreamPush)
 	}
 
-	return eventconsumer.New(db, pool, eventQueueUpdateChannel, newEventQueueAsyncConsumerFunc(asyncConsumerWatchEvents["push_queue"], handleUpstreamPushEvents)).
-		WithBatchSize(50).
-		WithNumConsumers(5)
+	return AsyncEventConsumer{
+		watchEvents:  []string{EventPushQueueCreate},
+		consumer:     handleUpstreamPushEvents,
+		batchSize:    50,
+		numConsumers: 5,
+	}
 }
 
 func handleUpstreamPushEvents(ctx *api.Context, events []api.Event) []api.Event {
