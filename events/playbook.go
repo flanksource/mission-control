@@ -84,9 +84,7 @@ func SavePlaybookRun(ctx *api.Context, event api.Event) error {
 
 		switch specEvent.Class {
 		case "canary":
-			// TODO: add check to the playbook run
-			// run.CheckID = &eventResource.Check.ID
-
+			run.CheckID = &eventResource.Check.ID
 			if ok, err := matchResource(eventResource.Check.Labels, eventResource.AsMap(), playbook.Spec.On.Canary); err != nil {
 				logToJobHistory(ctx, p.ID.String(), err.Error())
 				continue

@@ -533,6 +533,13 @@ func (in *PlaybookSpec) DeepCopyInto(out *PlaybookSpec) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
+	if in.Checks != nil {
+		in, out := &in.Checks, &out.Checks
+		*out = make([]PlaybookResourceFilter, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
 	if in.Components != nil {
 		in, out := &in.Components, &out.Components
 		*out = make([]PlaybookResourceFilter, len(*in))

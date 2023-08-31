@@ -286,8 +286,23 @@ spec:
                   type:
                     type: string
                 type: object
+              checks:
+                description: Checks filters what checks can run on this playbook.
+                items:
+                  description: PlaybookResourceFilter defines a filter that decides
+                    whether a resource (config or a component) is permitted be run
+                    on the Playbook.
+                  properties:
+                    tags:
+                      additionalProperties:
+                        type: string
+                      type: object
+                    type:
+                      type: string
+                  type: object
+                type: array
               components:
-                description: Filter that defines what components can run on this playbook.
+                description: Components what components can run on this playbook.
                 items:
                   description: PlaybookResourceFilter defines a filter that decides
                     whether a resource (config or a component) is permitted be run
@@ -302,8 +317,7 @@ spec:
                   type: object
                 type: array
               configs:
-                description: Filter that defines what config items can run on this
-                  playbook.
+                description: Configs filters what config items can run on this playbook.
                 items:
                   description: PlaybookResourceFilter defines a filter that decides
                     whether a resource (config or a component) is permitted be run

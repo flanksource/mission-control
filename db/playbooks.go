@@ -78,19 +78,45 @@ func GetPlaybookRun(ctx *api.Context, id string) (*models.PlaybookRun, error) {
 	return &p, nil
 }
 
+// FindPlaybooksForCheck returns all the playbooks that match the given check type and tags.
+func FindPlaybooksForCheck(ctx *api.Context, configType string, tags map[string]string) ([]models.Playbook, error) {
+	joinQuery := `JOIN LATERAL jsonb_array_elements(playbooks."spec"->'checks') AS checks(ch) ON 1=1`
+	var joinArgs []any
+	if len(tags) != 0 {
+		joinQuery += " AND (?::jsonb) @> (checks.ch->'tags')"
+		joinArgs = append(joinArgs, types.JSONStringMap(tags))
+	}
+	if configType != "" {
+		joinQuery += " AND checks.ch->>'type' = ?"
+		joinArgs = append(joinArgs, configType)
+	}
+
+	query := ctx.DB().Debug().
+		Select("DISTINCT playbooks.*").
+		Joins(joinQuery, joinArgs...)
+
+	var playbooks []models.Playbook
+	err := query.Find(&playbooks).Error
+	return playbooks, err
+}
+
 // FindPlaybooksForConfig returns all the playbooks that match the given config type and tags.
 func FindPlaybooksForConfig(ctx *api.Context, configType string, tags map[string]string) ([]models.Playbook, error) {
 	joinQuery := `JOIN LATERAL jsonb_array_elements(playbooks."spec"->'configs') AS configs(config) ON 1=1`
-	if tags != nil {
+	var joinArgs []any
+
+	if len(tags) != 0 {
 		joinQuery += " AND (?::jsonb) @> (configs.config->'tags')"
+		joinArgs = append(joinArgs, types.JSONStringMap(tags))
 	}
 	if configType != "" {
 		joinQuery += " AND configs.config->>'type' = ?"
+		joinArgs = append(joinArgs, configType)
 	}
 
 	query := ctx.DB().
 		Select("DISTINCT playbooks.*").
-		Joins(joinQuery, types.JSONStringMap(tags), configType)
+		Joins(joinQuery, joinArgs...)
 
 	var playbooks []models.Playbook
 	err := query.Find(&playbooks).Error
@@ -100,16 +126,20 @@ func FindPlaybooksForConfig(ctx *api.Context, configType string, tags map[string
 // FindPlaybooksForComponent returns all the playbooks that match the given component type and tags.
 func FindPlaybooksForComponent(ctx *api.Context, configType string, tags map[string]string) ([]models.Playbook, error) {
 	joinQuery := `JOIN LATERAL jsonb_array_elements(playbooks."spec"->'components') AS components(component) ON 1=1`
-	if tags != nil {
+	var joinArgs []any
+
+	if len(tags) != 0 {
 		joinQuery += " AND (?::jsonb) @> (components.component->'tags')"
+		joinArgs = append(joinArgs, types.JSONStringMap(tags))
 	}
 	if configType != "" {
 		joinQuery += " AND components.component->>'type' = ?"
+		joinArgs = append(joinArgs, configType)
 	}
 
 	query := ctx.DB().
 		Select("DISTINCT playbooks.*").
-		Joins(joinQuery, types.JSONStringMap(tags), configType)
+		Joins(joinQuery, joinArgs...)
 
 	var playbooks []models.Playbook
 	err := query.Find(&playbooks).Error

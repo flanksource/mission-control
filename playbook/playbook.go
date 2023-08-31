@@ -28,3 +28,14 @@ func ListPlaybooksForComponent(ctx *api.Context, id string) ([]models.Playbook, 
 
 	return db.FindPlaybooksForComponent(ctx, component.Type, component.Labels)
 }
+
+func ListPlaybooksForCheck(ctx *api.Context, id string) ([]models.Playbook, error) {
+	var check models.Check
+	if err := ctx.DB().Where("id = ?", id).Find(&check).Error; err != nil {
+		return nil, err
+	} else if check.ID == uuid.Nil {
+		return nil, api.Errorf(api.ENOTFOUND, "check(id=%s) not found", id)
+	}
+
+	return db.FindPlaybooksForCheck(ctx, check.Type, check.Labels)
+}
