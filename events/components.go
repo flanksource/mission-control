@@ -9,6 +9,6 @@ func NewComponentConsumerSync() SyncEventConsumer {
 			EventComponentStatusUnhealthy,
 			EventComponentStatusWarning,
 		},
-		consumers: []SyncEventHandlerFunc{addNotificationEvent, SavePlaybookRun},
+		consumers: []SyncEventHandlerFunc{addNotificationEvent, schedulePlaybookRun},
 	}
 }

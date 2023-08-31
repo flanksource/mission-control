@@ -23,7 +23,7 @@ func NewPlaybookApprovalConsumerSync() SyncEventConsumer {
 	}
 }
 
-func SavePlaybookRun(ctx *api.Context, event api.Event) error {
+func schedulePlaybookRun(ctx *api.Context, event api.Event) error {
 	// TODO:
 	// See if any playbook is listening on this event.
 	// Match the filters
