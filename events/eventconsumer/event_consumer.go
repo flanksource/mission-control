@@ -17,8 +17,7 @@ const (
 	// after an unexpected failure.
 	waitDurationOnFailure = time.Second * 5
 
-	// pgNotifyTimeout is the timeout to consume events in case no Consume notification is received.
-	pgNotifyTimeout = time.Minute
+	defaultPgNotifyTimeout = time.Minute
 
 	dbReconnectMaxDuration         = time.Minute * 5
 	dbReconnectBackoffBaseDuration = time.Second
@@ -32,6 +31,9 @@ type EventConsumer struct {
 
 	// Number of concurrent consumers
 	numConsumers int
+
+	// pgNotifyTimeout is the timeout to consume events in case no Consume notification is received.
+	pgNotifyTimeout time.Duration
 
 	// pgNotifyChannel is the channel to listen to for any new updates on the event queue
 	pgNotifyChannel string
@@ -49,11 +51,17 @@ func New(DB *gorm.DB, PGPool *pgxpool.Pool, PgNotifyChannel string, ConsumerFunc
 		pgPool:          PGPool,
 		pgNotifyChannel: PgNotifyChannel,
 		consumerFunc:    ConsumerFunc,
+		pgNotifyTimeout: defaultPgNotifyTimeout,
 	}
 }
 
 func (e *EventConsumer) WithNumConsumers(numConsumers int) *EventConsumer {
 	e.numConsumers = numConsumers
+	return e
+}
+
+func (e *EventConsumer) WithNotifyTimeout(timeout time.Duration) *EventConsumer {
+	e.pgNotifyTimeout = timeout
 	return e
 }
 
@@ -120,7 +128,7 @@ func (e *EventConsumer) Listen() {
 		case <-pgNotify:
 			e.ConsumeEventsUntilEmpty(ctx)
 
-		case <-time.After(pgNotifyTimeout):
+		case <-time.After(e.pgNotifyTimeout):
 			e.ConsumeEventsUntilEmpty(ctx)
 		}
 	}
