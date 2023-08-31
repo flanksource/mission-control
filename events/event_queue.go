@@ -48,6 +48,10 @@ const (
 	EventNotificationUpdate = "notification.update"
 	EventNotificationDelete = "notification.delete"
 
+	EventPlaybookSpecApprovalUpdated = "playbook.spec.approval.updated"
+
+	EventPlaybookApprovalInserted = "playbook.approval.inserted"
+
 	EventIncidentCommentAdded        = "incident.comment.added"
 	EventIncidentCreated             = "incident.created"
 	EventIncidentDODAdded            = "incident.dod.added"
@@ -97,6 +101,8 @@ func StartConsumers(gormDB *gorm.DB, pgpool *pgxpool.Pool, config Config) {
 		NewCommentConsumerSync(),
 		NewNotificationSaveConsumerSync(),
 		NewNotificationUpdatesConsumerSync(),
+		NewPlaybookApprovalConsumerSync(),
+		NewPlaybookApprovalSpecUpdatedConsumerSync(),
 	}
 
 	for i := range allSyncHandlers {

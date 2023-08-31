@@ -13,6 +13,7 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/events"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"gorm.io/gorm/clause"
@@ -33,7 +34,7 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 	ginkgo.It("start the queue consumer in background", func() {
 		go StartPlaybookRunConsumer(testDB, testDBPool)
 
-		go ListenPlaybookPGNotify(testDB, testDBPool)
+		go events.StartConsumers(testDB, testDBPool, events.Config{})
 	})
 
 	ginkgo.It("should create a new playbook", func() {
