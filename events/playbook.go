@@ -20,12 +20,14 @@ type EventResource struct {
 	Component    *models.Component    `json:"component,omitempty"`
 	Check        *models.Check        `json:"check,omitempty"`
 	CheckSummary *models.CheckSummary `json:"check_summary,omitempty"`
+	Canary       *models.Canary       `json:"canary,omitempty"`
 }
 
 func (t *EventResource) AsMap() map[string]any {
 	return map[string]any{
 		"component":     t.Component,
 		"check":         t.Check,
+		"canary":        t.Canary,
 		"check_summary": t.CheckSummary,
 	}
 }
@@ -49,7 +51,7 @@ func SavePlaybookRun(ctx *api.Context, event api.Event) error {
 	switch event.Name {
 	case EventCheckFailed, EventCheckPassed:
 		checkID := event.Properties["id"]
-		if err := ctx.DB().Model(&models.Check{}).Where("id = ?", checkID).First(&eventResource.Check).Error; err != nil {
+		if err := ctx.DB().Where("id = ?", checkID).First(&eventResource.Check).Error; err != nil {
 			return api.Errorf(api.ENOTFOUND, "check(id=%s) not found", checkID)
 		}
 
@@ -57,6 +59,10 @@ func SavePlaybookRun(ctx *api.Context, event api.Event) error {
 			return err
 		} else if summary != nil {
 			eventResource.CheckSummary = summary
+		}
+
+		if err := ctx.DB().Where("id = ?", eventResource.Check.CanaryID).First(&eventResource.Canary).Error; err != nil {
+			return api.Errorf(api.ENOTFOUND, "canary(id=%s) not found", eventResource.Check.CanaryID)
 		}
 
 	case EventComponentStatusHealthy, EventComponentStatusUnhealthy, EventComponentStatusInfo, EventComponentStatusWarning, EventComponentStatusError:

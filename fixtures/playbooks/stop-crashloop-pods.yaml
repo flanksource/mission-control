@@ -6,11 +6,10 @@ spec:
   'on':
     canary:
       - event: failed
-        filter: check.name == '??'
         labels:
-          type: ec2
+          alertname: KubePodCrashLoopingcontainer
   description: Stop Pods that's on CrashLoop
   actions:
     - name: 'Stop pod'
       exec:
-        script: kubectl delete pod {{check.name}}
+        script: kubectl delete pod {{index .check.labels "pod"}}
