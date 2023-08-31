@@ -7,6 +7,7 @@ import (
 
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/gomplate/v3"
 	"github.com/flanksource/incident-commander/api"
@@ -16,8 +17,17 @@ import (
 )
 
 type EventResource struct {
-	Component *models.Component `json:"component,omitempty"`
-	Check     *models.Check     `json:"check,omitempty"`
+	Component    *models.Component    `json:"component,omitempty"`
+	Check        *models.Check        `json:"check,omitempty"`
+	CheckSummary *models.CheckSummary `json:"check_summary,omitempty"`
+}
+
+func (t *EventResource) AsMap() map[string]any {
+	return map[string]any{
+		"component":     t.Component,
+		"check":         t.Check,
+		"check_summary": t.CheckSummary,
+	}
 }
 
 func SavePlaybookRun(ctx *api.Context, event api.Event) error {
@@ -38,8 +48,15 @@ func SavePlaybookRun(ctx *api.Context, event api.Event) error {
 	var eventResource EventResource
 	switch event.Name {
 	case EventCheckFailed, EventCheckPassed:
-		if err := ctx.DB().Model(&models.Check{}).Where("id = ?", event.Properties["id"]).First(&eventResource.Check).Error; err != nil {
-			return api.Errorf(api.ENOTFOUND, "check(id=%s) not found", event.Properties["id"])
+		checkID := event.Properties["id"]
+		if err := ctx.DB().Model(&models.Check{}).Where("id = ?", checkID).First(&eventResource.Check).Error; err != nil {
+			return api.Errorf(api.ENOTFOUND, "check(id=%s) not found", checkID)
+		}
+
+		if summary, err := duty.CheckSummary(ctx, checkID); err != nil {
+			return err
+		} else if summary != nil {
+			eventResource.CheckSummary = summary
 		}
 
 	case EventComponentStatusHealthy, EventComponentStatusUnhealthy, EventComponentStatusInfo, EventComponentStatusWarning, EventComponentStatusError:
@@ -67,8 +84,10 @@ func SavePlaybookRun(ctx *api.Context, event api.Event) error {
 
 		switch specEvent.Class {
 		case "canary":
-			// What should be the component or config id?
-			if ok, err := matchResource(eventResource.Check.Labels, map[string]any{"check": eventResource.Check}, playbook.Spec.On.Canary); err != nil {
+			// TODO: add check to the playbook run
+			// run.CheckID = &eventResource.Check.ID
+
+			if ok, err := matchResource(eventResource.Check.Labels, eventResource.AsMap(), playbook.Spec.On.Canary); err != nil {
 				logToJobHistory(ctx, p.ID.String(), err.Error())
 				continue
 			} else if ok {
@@ -79,7 +98,7 @@ func SavePlaybookRun(ctx *api.Context, event api.Event) error {
 
 		case "component":
 			run.ComponentID = &eventResource.Component.ID
-			if ok, err := matchResource(eventResource.Component.Labels, map[string]any{"component": eventResource.Component}, playbook.Spec.On.Component); err != nil {
+			if ok, err := matchResource(eventResource.Component.Labels, eventResource.AsMap(), playbook.Spec.On.Component); err != nil {
 				logToJobHistory(ctx, p.ID.String(), err.Error())
 				continue
 			} else if ok {
