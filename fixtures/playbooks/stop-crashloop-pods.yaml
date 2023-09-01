@@ -8,7 +8,7 @@ spec:
       - event: failed
         labels:
           alertname: KubePodCrashLoopingcontainer
-  description: Stop Pods that's on CrashLoop
+  description: Stop Pods that are on CrashLoop
   actions:
     - name: 'Stop pod'
       exec:

@@ -2,6 +2,7 @@ package events
 
 import (
 	"encoding/json"
+	"testing"
 
 	"github.com/flanksource/duty/fixtures/dummy"
 	"github.com/flanksource/duty/models"
@@ -94,3 +95,214 @@ var _ = ginkgo.Describe("Should save playbook run on the correct event", ginkgo.
 		Expect(playbook.Status).To(Equal(models.PlaybookRunStatusScheduled))
 	})
 })
+
+func Test_matchResource(t *testing.T) {
+	type args struct {
+		labels        map[string]string
+		eventResource EventResource
+		matchFilters  []v1.PlaybookEventDetail
+	}
+	tests := []struct {
+		name    string
+		args    args
+		want    bool
+		wantErr bool
+	}{
+		{
+			name: "With Filter | Without Labels | Match",
+			args: args{
+				labels: map[string]string{
+					"telemetry": "enabled",
+				},
+				eventResource: EventResource{
+					Component: &models.Component{
+						Type: "Entity",
+					},
+				},
+				matchFilters: []v1.PlaybookEventDetail{{Filter: "component.type == 'Entity'"}},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "With Filter | Without Labels | No match",
+			args: args{
+				eventResource: EventResource{
+					Component: &models.Component{
+						Type: "Database",
+					},
+				},
+				matchFilters: []v1.PlaybookEventDetail{{Filter: "component.type == 'Entity'"}},
+			},
+			want:    false,
+			wantErr: false,
+		},
+		{
+			name: "Without Filter | With Labels | Match",
+			args: args{
+				labels: map[string]string{
+					"telemetry": "enabled",
+				},
+				eventResource: EventResource{},
+				matchFilters: []v1.PlaybookEventDetail{
+					{
+						Labels: map[string]string{
+							"telemetry": "enabled",
+						},
+					},
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "Without Filter | With Labels | No match",
+			args: args{
+				labels: map[string]string{
+					"telemetry": "enabled",
+				},
+				eventResource: EventResource{},
+				matchFilters: []v1.PlaybookEventDetail{
+					{
+						Labels: map[string]string{
+							"telemetry": "enabled",
+							"env":       "production",
+						},
+					},
+				},
+			},
+			want:    false,
+			wantErr: false,
+		},
+		{
+			name: "With Filter | With Labels | match",
+			args: args{
+				labels: map[string]string{
+					"telemetry": "enabled",
+				},
+				eventResource: EventResource{
+					Check: &models.Check{
+						Type: "http",
+					},
+				},
+				matchFilters: []v1.PlaybookEventDetail{
+					{
+						Labels: map[string]string{
+							"telemetry": "enabled",
+						},
+						Filter: "check.type == 'http'",
+					},
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "With Filter | With Labels | no match",
+			args: args{
+				labels: map[string]string{
+					"telemetry": "enabled",
+				},
+				eventResource: EventResource{
+					Check: &models.Check{
+						Type: "http",
+					},
+				},
+				matchFilters: []v1.PlaybookEventDetail{
+					{
+						Labels: map[string]string{
+							"telemetry": "enabled",
+						},
+						Filter: "check.type == 'exec'",
+					},
+				},
+			},
+			want:    false,
+			wantErr: false,
+		},
+		{
+			name: "With Filter | With Labels | one of the filters match",
+			args: args{
+				labels: map[string]string{
+					"telemetry": "enabled",
+				},
+				eventResource: EventResource{
+					Check: &models.Check{
+						Type: "http",
+					},
+					CheckSummary: &models.CheckSummary{
+						Uptime: types.Uptime{
+							Failed: 12,
+						},
+					},
+				},
+				matchFilters: []v1.PlaybookEventDetail{
+					{
+						Labels: map[string]string{
+							"telemetry": "enabled",
+							"env":       "production",
+						},
+					},
+					{Filter: "check.type == 'http' && check_summary.uptime.failed > 15"},
+					{Filter: "check.type == 'http' && check_summary.uptime.failed > 10"},
+				},
+			},
+			want:    true,
+			wantErr: false,
+		},
+		{
+			name: "Invalid filter expression",
+			args: args{
+				eventResource: EventResource{
+					Check: &models.Check{
+						Type: "http",
+					},
+					CheckSummary: &models.CheckSummary{
+						Uptime: types.Uptime{
+							Failed: 12,
+						},
+					},
+				},
+				matchFilters: []v1.PlaybookEventDetail{
+					{Filter: "summary.uptime.failed > 15"},
+				},
+			},
+			want:    false,
+			wantErr: true,
+		},
+		{
+			name: "Expression not returning boolean",
+			args: args{
+				eventResource: EventResource{
+					Check: &models.Check{
+						Type: "http",
+					},
+					CheckSummary: &models.CheckSummary{
+						Uptime: types.Uptime{
+							Failed: 12,
+						},
+					},
+				},
+				matchFilters: []v1.PlaybookEventDetail{
+					{Filter: "check.type"},
+				},
+			},
+			want:    false,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := matchResource(tt.args.labels, tt.args.eventResource.AsMap(), tt.args.matchFilters)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("matchResource() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			if got != tt.want {
+				t.Errorf("matchResource() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

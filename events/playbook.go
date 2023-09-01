@@ -144,39 +144,34 @@ func logToJobHistory(ctx *api.Context, playbookID, err string) {
 // matchResource returns true if any one of the matchFilter is true
 // for the given labels and cel env.
 func matchResource(labels map[string]string, celEnv map[string]any, matchFilters []v1.PlaybookEventDetail) (bool, error) {
+outer:
 	for _, mf := range matchFilters {
-		var (
-			filterPassed     = true
-			allLabelsMatched = true
-		)
-
 		if mf.Filter != "" {
-			filterPassed = false
 			res, err := gomplate.RunTemplate(celEnv, gomplate.Template{Expression: mf.Filter})
 			if err != nil {
 				return false, err
 			}
 
-			filterPassed, _ = strconv.ParseBool(res)
+			if ok, err := strconv.ParseBool(res); err != nil {
+				return false, api.Errorf(api.EINVALID, "expression (%s) didn't evaluate to a boolean value. got %s", mf.Filter, res)
+			} else if !ok {
+				continue outer
+			}
 		}
 
 		for k, v := range mf.Labels {
 			qVal, ok := labels[k]
 			if !ok {
-				allLabelsMatched = false
-				break
+				continue outer
 			}
 
 			configuredLabels := strings.Split(v, ",")
 			if !collections.MatchItems(qVal, configuredLabels...) {
-				allLabelsMatched = false
-				break
+				continue outer
 			}
 		}
 
-		if filterPassed && allLabelsMatched {
-			return true, nil
-		}
+		return true, nil
 	}
 
 	return false, nil
