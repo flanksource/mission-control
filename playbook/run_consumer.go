@@ -16,14 +16,14 @@ func StartPlaybookRunConsumer(db *gorm.DB, pool *pgxpool.Pool) {
 		Listen()
 }
 
-func EventConsumer(ctx *api.Context, batchSize int) error {
+func EventConsumer(ctx *api.Context) error {
 	tx := ctx.DB().Begin()
 	if tx.Error != nil {
 		return fmt.Errorf("error initiating db tx: %w", tx.Error)
 	}
 	defer tx.Rollback()
 
-	ctx = api.NewContext(tx, nil)
+	ctx = ctx.WithDB(tx)
 
 	query := `
 		SELECT *
@@ -31,12 +31,11 @@ func EventConsumer(ctx *api.Context, batchSize int) error {
 		WHERE status = ?
 			AND start_time <= NOW()
 		ORDER BY start_time
-		LIMIT ?
 		FOR UPDATE SKIP LOCKED
 	`
 
 	var runs []models.PlaybookRun
-	if err := tx.Raw(query, models.PlaybookRunStatusScheduled, batchSize).Find(&runs).Error; err != nil {
+	if err := tx.Raw(query, models.PlaybookRunStatusScheduled).Find(&runs).Error; err != nil {
 		return err
 	}
 

@@ -10,50 +10,59 @@ import (
 	"github.com/flanksource/commons/template"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/events/eventconsumer"
 	pkgNotification "github.com/flanksource/incident-commander/notification"
 	"github.com/flanksource/incident-commander/teams"
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"gorm.io/gorm"
 )
 
-func NewNotificationConsumer(db *gorm.DB, pool *pgxpool.Pool) *eventconsumer.EventConsumer {
-	return eventconsumer.New(db, pool, "event_queue_updates", newEventQueueConsumerFunc(consumerWatchEvents["notification"], processNotificationEvents))
+func NewNotificationUpdatesConsumerSync() SyncEventConsumer {
+	return SyncEventConsumer{
+		watchEvents: []string{EventNotificationUpdate, EventNotificationDelete},
+		consumers: []SyncEventHandlerFunc{
+			handleNotificationUpdates,
+		},
+	}
 }
 
-func NewNotificationSendConsumer(db *gorm.DB, pool *pgxpool.Pool) *eventconsumer.EventConsumer {
-	return eventconsumer.New(db, pool, "event_queue_updates", newEventQueueConsumerFunc(consumerWatchEvents["notification_send"], processNotificationEvents)).
-		WithNumConsumers(5)
+func NewNotificationSaveConsumerSync() SyncEventConsumer {
+	return SyncEventConsumer{
+		watchEvents: []string{
+			EventIncidentCreated,
+			EventIncidentDODAdded,
+			EventIncidentDODPassed,
+			EventIncidentDODRegressed,
+			EventIncidentResponderRemoved,
+			EventIncidentStatusCancelled,
+			EventIncidentStatusClosed,
+			EventIncidentStatusInvestigating,
+			EventIncidentStatusMitigated,
+			EventIncidentStatusOpen,
+			EventIncidentStatusResolved,
+		},
+		numConsumers: 3,
+		consumers: []SyncEventHandlerFunc{
+			addNotificationEvent,
+		},
+	}
+}
+
+func NewNotificationSendConsumerAsync() AsyncEventConsumer {
+	return AsyncEventConsumer{
+		watchEvents:  []string{EventNotificationSend},
+		consumer:     processNotificationEvents,
+		batchSize:    1,
+		numConsumers: 5,
+	}
 }
 
 func processNotificationEvents(ctx *api.Context, events []api.Event) []api.Event {
 	var failedEvents []api.Event
 	for _, e := range events {
-		if err := handleNotificationEvent(ctx, e); err != nil {
+		if err := sendNotification(ctx, e); err != nil {
 			e.Error = err.Error()
 			failedEvents = append(failedEvents, e)
 		}
 	}
 	return failedEvents
-}
-
-func handleNotificationEvent(ctx *api.Context, event api.Event) error {
-	switch event.Name {
-	case EventNotificationDelete, EventNotificationUpdate:
-		return handleNotificationUpdates(ctx, event)
-	case EventNotificationSend:
-		return sendNotification(ctx, event)
-	case EventIncidentCreated, EventIncidentResponderRemoved,
-		EventIncidentDODAdded, EventIncidentDODPassed,
-		EventIncidentDODRegressed, EventIncidentStatusOpen,
-		EventIncidentStatusClosed, EventIncidentStatusMitigated,
-		EventIncidentStatusResolved, EventIncidentStatusInvestigating, EventIncidentStatusCancelled,
-		EventCheckFailed, EventCheckPassed:
-		return addNotificationEvent(ctx, event)
-	default:
-		return fmt.Errorf("unrecognized event name: %s", event.Name)
-	}
 }
 
 type NotificationEventProperties struct {
@@ -217,8 +226,7 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 				PersonID:       n.PersonID.String(),
 			}
 
-			newEvent := api.Event{
-				ID:         uuid.New(),
+			newEvent := &api.Event{
 				Name:       EventNotificationSend,
 				Properties: prop.AsMap(),
 			}
@@ -252,8 +260,7 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 					NotificationName: cn.Name,
 				}
 
-				newEvent := api.Event{
-					ID:         uuid.New(),
+				newEvent := &api.Event{
 					Name:       EventNotificationSend,
 					Properties: prop.AsMap(),
 				}
@@ -276,8 +283,7 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 				NotificationName: cn.Name,
 			}
 
-			newEvent := api.Event{
-				ID:         uuid.New(),
+			newEvent := &api.Event{
 				Name:       EventNotificationSend,
 				Properties: prop.AsMap(),
 			}
