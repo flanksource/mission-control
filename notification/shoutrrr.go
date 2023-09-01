@@ -9,12 +9,14 @@ import (
 	"github.com/containrrr/shoutrrr"
 	"github.com/containrrr/shoutrrr/pkg/types"
 	"github.com/flanksource/commons/collections"
+	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/mail"
 )
 
 // defaultSMTPPrefix indicates that the shoutrrr URL for smtp should use
 // the system's SMTP credentials.
-const defaultSMTPPrefix = "smtp://auto:auto@auto/"
+const defaultSMTPPrefix = "smtp://system/"
 
 // setSystemSMTPCredential modifies the shoutrrrURL to use the system's SMTP credentials.
 func setSystemSMTPCredential(shoutrrrURL string) (string, error) {
@@ -32,7 +34,7 @@ func setSystemSMTPCredential(shoutrrrURL string) (string, error) {
 	}
 
 	query := parsedURL.Query()
-	query.Set("FromAddress", os.Getenv("SMTP_USER"))
+	query.Set("FromAddress", utils.Coalesce(mail.FromAddress, os.Getenv("SMTP_FROM"), os.Getenv("SMTP_USER")))
 	parsedURL.RawQuery = query.Encode()
 
 	shoutrrrURL = parsedURL.String()
