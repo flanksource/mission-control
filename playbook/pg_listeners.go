@@ -17,10 +17,7 @@ func ListenPlaybookPGNotify(db *gorm.DB, pool *pgxpool.Pool) {
 	pgNotifyPlaybookSpecUpdated := make(chan string)
 	go utils.ListenToPostgresNotify(pool, "playbook_spec_updated", dbReconnectMaxDuration, dbReconnectBackoffBaseDuration, pgNotifyPlaybookSpecUpdated)
 
-	for {
-		select {
-		case <-pgNotifyPlaybookSpecUpdated:
-			clearEventPlaybookCache()
-		}
+	for range pgNotifyPlaybookSpecUpdated {
+		clearEventPlaybookCache()
 	}
 }
