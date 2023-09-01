@@ -10,7 +10,7 @@ require (
 )
 
 require (
-	ariga.io/atlas v0.13.2 // indirect
+	ariga.io/atlas v0.13.3 // indirect
 	cloud.google.com/go v0.110.7 // indirect
 	cloud.google.com/go/compute v1.23.0 // indirect
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
@@ -20,15 +20,15 @@ require (
 	github.com/Masterminds/semver/v3 v3.2.1 // indirect
 	github.com/agext/levenshtein v1.2.3 // indirect
 	github.com/antlr/antlr4/runtime/Go/antlr/v4 v4.0.0-20230305170008-8188dc5388df // indirect
-	github.com/antonmedv/expr v1.14.3 // indirect
-	github.com/apparentlymart/go-textseg/v13 v13.0.0 // indirect
-	github.com/aws/aws-sdk-go v1.44.331 // indirect
+	github.com/antonmedv/expr v1.15.0 // indirect
+	github.com/apparentlymart/go-textseg/v15 v15.0.0 // indirect
+	github.com/aws/aws-sdk-go v1.45.0 // indirect
 	github.com/bgentry/go-netrc v0.0.0-20140422174119-9fd32a8b3d3d // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
-	github.com/flanksource/duty v1.0.161 // indirect
-	github.com/flanksource/gomplate/v3 v3.20.11 // indirect
+	github.com/flanksource/duty v1.0.166 // indirect
+	github.com/flanksource/gomplate/v3 v3.20.12 // indirect
 	github.com/flanksource/is-healthy v0.0.0-20230713150444-ad2a5ef4bb37 // indirect
 	github.com/flanksource/mapstructure v1.6.0 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
@@ -57,7 +57,7 @@ require (
 	github.com/hashicorp/go-getter v1.7.2 // indirect
 	github.com/hashicorp/go-safetemp v1.0.0 // indirect
 	github.com/hashicorp/go-version v1.6.0 // indirect
-	github.com/hashicorp/hcl/v2 v2.17.0 // indirect
+	github.com/hashicorp/hcl/v2 v2.18.0 // indirect
 	github.com/iancoleman/orderedmap v0.0.0-20190318233801-ac98e3ecb4b0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/itchyny/gojq v0.12.13 // indirect
@@ -103,7 +103,7 @@ require (
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
 	github.com/yuin/gopher-lua v1.1.0 // indirect
-	github.com/zclconf/go-cty v1.13.3 // indirect
+	github.com/zclconf/go-cty v1.14.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.25.0 // indirect

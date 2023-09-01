@@ -10,25 +10,48 @@ import (
 	"github.com/flanksource/commons/template"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/events/eventconsumer"
 	pkgNotification "github.com/flanksource/incident-commander/notification"
 	"github.com/flanksource/incident-commander/teams"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"gorm.io/gorm"
 )
 
-func NewNotificationConsumerSync(db *gorm.DB, pool *pgxpool.Pool) *eventconsumer.EventConsumer {
-	return eventconsumer.New(db, pool, eventQueueUpdateChannel, newEventQueueSyncConsumerFunc(syncConsumerWatchEvents["notification_add"], addNotificationEvent)).
-		WithNumConsumers(3)
+func NewNotificationUpdatesConsumerSync() SyncEventConsumer {
+	return SyncEventConsumer{
+		watchEvents: []string{EventNotificationUpdate, EventNotificationDelete},
+		consumers: []SyncEventHandlerFunc{
+			handleNotificationUpdates,
+		},
+	}
 }
 
-func NewNotificationUpdatesConsumerSync(db *gorm.DB, pool *pgxpool.Pool) *eventconsumer.EventConsumer {
-	return eventconsumer.New(db, pool, eventQueueUpdateChannel, newEventQueueSyncConsumerFunc(syncConsumerWatchEvents["notification_update"], handleNotificationUpdates))
+func NewNotificationSaveConsumerSync() SyncEventConsumer {
+	return SyncEventConsumer{
+		watchEvents: []string{
+			EventIncidentCreated,
+			EventIncidentDODAdded,
+			EventIncidentDODPassed,
+			EventIncidentDODRegressed,
+			EventIncidentResponderRemoved,
+			EventIncidentStatusCancelled,
+			EventIncidentStatusClosed,
+			EventIncidentStatusInvestigating,
+			EventIncidentStatusMitigated,
+			EventIncidentStatusOpen,
+			EventIncidentStatusResolved,
+		},
+		numConsumers: 3,
+		consumers: []SyncEventHandlerFunc{
+			addNotificationEvent,
+		},
+	}
 }
 
-func NewNotificationSendConsumerAsync(db *gorm.DB, pool *pgxpool.Pool) *eventconsumer.EventConsumer {
-	return eventconsumer.New(db, pool, eventQueueUpdateChannel, newEventQueueAsyncConsumerFunc(asyncConsumerWatchEvents["notification_send"], processNotificationEvents)).
-		WithNumConsumers(5)
+func NewNotificationSendConsumerAsync() AsyncEventConsumer {
+	return AsyncEventConsumer{
+		watchEvents:  []string{EventNotificationSend},
+		consumer:     processNotificationEvents,
+		batchSize:    1,
+		numConsumers: 5,
+	}
 }
 
 func processNotificationEvents(ctx *api.Context, events []api.Event) []api.Event {

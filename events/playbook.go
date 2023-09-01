@@ -1,6 +1,7 @@
 package events
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -15,6 +16,20 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/playbook"
 )
+
+func NewPlaybookApprovalSpecUpdatedConsumerSync() SyncEventConsumer {
+	return SyncEventConsumer{
+		watchEvents: []string{EventPlaybookSpecApprovalUpdated},
+		consumers:   []SyncEventHandlerFunc{onApprovalUpdated},
+	}
+}
+
+func NewPlaybookApprovalConsumerSync() SyncEventConsumer {
+	return SyncEventConsumer{
+		watchEvents: []string{EventPlaybookApprovalInserted},
+		consumers:   []SyncEventHandlerFunc{onPlaybookRunNewApproval},
+	}
+}
 
 type EventResource struct {
 	Component    *models.Component    `json:"component,omitempty"`
@@ -32,7 +47,7 @@ func (t *EventResource) AsMap() map[string]any {
 	}
 }
 
-func SavePlaybookRun(ctx *api.Context, event api.Event) error {
+func schedulePlaybookRun(ctx *api.Context, event api.Event) error {
 	specEvent, ok := eventToSpecEvent[event.Name]
 	if !ok {
 		return nil
@@ -181,4 +196,53 @@ var eventToSpecEvent = map[string]PlaybookSpecEvent{
 	EventComponentStatusInfo:      {"component", "info"},
 	EventComponentStatusWarning:   {"component", "warning"},
 	EventComponentStatusError:     {"component", "error"},
+}
+
+func onApprovalUpdated(ctx *api.Context, event api.Event) error {
+	playbookID := event.Properties["id"]
+
+	var playbook models.Playbook
+	if err := ctx.DB().Where("id = ?", playbookID).First(&playbook).Error; err != nil {
+		return err
+	}
+
+	var spec v1.PlaybookSpec
+	if err := json.Unmarshal(playbook.Spec, &spec); err != nil {
+		return err
+	}
+
+	if spec.Approval == nil {
+		return nil
+	}
+
+	return db.UpdatePlaybookRunStatusIfApproved(ctx, playbookID, *spec.Approval)
+}
+
+func onPlaybookRunNewApproval(ctx *api.Context, event api.Event) error {
+	runID := event.Properties["run_id"]
+
+	var run models.PlaybookRun
+	if err := ctx.DB().Where("id = ?", runID).First(&run).Error; err != nil {
+		return err
+	}
+
+	if run.Status != models.PlaybookRunStatusPending {
+		return nil
+	}
+
+	var playbook models.Playbook
+	if err := ctx.DB().Where("id = ?", run.PlaybookID).First(&playbook).Error; err != nil {
+		return err
+	}
+
+	var spec v1.PlaybookSpec
+	if err := json.Unmarshal(playbook.Spec, &spec); err != nil {
+		return err
+	}
+
+	if spec.Approval == nil {
+		return nil
+	}
+
+	return db.UpdatePlaybookRunStatusIfApproved(ctx, playbook.ID.String(), *spec.Approval)
 }

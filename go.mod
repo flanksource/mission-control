@@ -11,8 +11,8 @@ require (
 	github.com/containrrr/shoutrrr v0.7.1
 	github.com/fergusstrange/embedded-postgres v1.23.0
 	github.com/flanksource/commons v1.11.0
-	github.com/flanksource/duty v1.0.161
-	github.com/flanksource/gomplate/v3 v3.20.11
+	github.com/flanksource/duty v1.0.166
+	github.com/flanksource/gomplate/v3 v3.20.12
 	github.com/flanksource/kopper v1.0.6
 	github.com/google/cel-go v0.17.6
 	github.com/google/go-cmp v0.5.9
@@ -38,7 +38,7 @@ require (
 )
 
 require (
-	ariga.io/atlas v0.13.2 // indirect
+	ariga.io/atlas v0.13.3 // indirect
 	cloud.google.com/go/compute v1.23.0 // indirect
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
 	cloud.google.com/go/iam v1.1.2 // indirect
@@ -46,7 +46,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.2.1 // indirect
 	github.com/agext/levenshtein v1.2.3 // indirect
 	github.com/antlr/antlr4/runtime/Go/antlr/v4 v4.0.0-20230305170008-8188dc5388df // indirect
-	github.com/apparentlymart/go-textseg/v13 v13.0.0 // indirect
+	github.com/apparentlymart/go-textseg/v15 v15.0.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
@@ -74,7 +74,7 @@ require (
 	github.com/googleapis/enterprise-certificate-proxy v0.2.5 // indirect
 	github.com/gosimple/unidecode v1.0.1 // indirect
 	github.com/hairyhenderson/yaml v0.0.0-20220618171115-2d35fca545ce // indirect
-	github.com/hashicorp/hcl/v2 v2.17.0 // indirect
+	github.com/hashicorp/hcl/v2 v2.18.0 // indirect
 	github.com/itchyny/gojq v0.12.13 // indirect
 	github.com/itchyny/timefmt-go v0.1.5 // indirect
 	github.com/jackc/puddle/v2 v2.2.1 // indirect
@@ -101,7 +101,7 @@ require (
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/xi2/xz v0.0.0-20171230120015-48954b6210f8 // indirect
 	github.com/yuin/gopher-lua v1.1.0 // indirect
-	github.com/zclconf/go-cty v1.13.3 // indirect
+	github.com/zclconf/go-cty v1.14.0 // indirect
 	go.opentelemetry.io/otel v1.16.0 // indirect
 	go.opentelemetry.io/otel/metric v1.16.0 // indirect
 	go.opentelemetry.io/otel/trace v1.16.0 // indirect
@@ -141,8 +141,8 @@ require (
 	github.com/AzureAD/microsoft-authentication-library-for-go v1.0.0 // indirect
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/TomOnTime/utfutil v0.0.0-20230223141146-125e65197b36
-	github.com/antonmedv/expr v1.14.3 // indirect
-	github.com/aws/aws-sdk-go v1.44.331 // indirect
+	github.com/antonmedv/expr v1.15.0 // indirect
+	github.com/aws/aws-sdk-go v1.45.0 // indirect
 	github.com/bgentry/go-netrc v0.0.0-20140422174119-9fd32a8b3d3d // indirect
 	github.com/cjlapao/common-go v0.0.39 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -222,4 +222,3 @@ require (
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
 
-replace github.com/flanksource/duty => ../duty

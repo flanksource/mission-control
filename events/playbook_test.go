@@ -67,7 +67,7 @@ var _ = ginkgo.Describe("Should save playbook run on the correct event", ginkgo.
 	})
 
 	ginkgo.It("Expect the event consumer to NOT save a playbook run", func() {
-		componentEventConsumer := NewComponentConsumerSync(playbookDB, playbookDBPool)
+		componentEventConsumer := NewComponentConsumerSync().EventConsumer(playbookDB, playbookDBPool)
 		componentEventConsumer.ConsumeEventsUntilEmpty(api.NewContext(playbookDB, nil))
 
 		var playbooks []models.PlaybookRun
@@ -84,7 +84,7 @@ var _ = ginkgo.Describe("Should save playbook run on the correct event", ginkgo.
 	})
 
 	ginkgo.It("Expect the event consumer to save the playbook run", func() {
-		componentEventConsumer := NewComponentConsumerSync(playbookDB, playbookDBPool)
+		componentEventConsumer := NewComponentConsumerSync().EventConsumer(playbookDB, playbookDBPool)
 		componentEventConsumer.ConsumeEventsUntilEmpty(api.NewContext(playbookDB, nil))
 
 		var playbook models.PlaybookRun

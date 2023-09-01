@@ -13,6 +13,8 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/events"
+	"github.com/flanksource/incident-commander/events/eventconsumer"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"gorm.io/gorm/clause"
@@ -33,9 +35,12 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 	})
 
 	ginkgo.It("start the queue consumer in background", func() {
-		go StartPlaybookRunConsumer(testDB, testDBPool)
+		go eventconsumer.New(testDB, testDBPool, "playbook_run_updates", EventConsumer).
+			WithNumConsumers(5).
+			WithNotifyTimeout(time.Second * 2).
+			Listen()
 
-		go ListenPlaybookPGNotify(testDB, testDBPool)
+		go events.StartConsumers(testDB, testDBPool, events.Config{})
 	})
 
 	ginkgo.It("should create a new playbook", func() {
@@ -278,7 +283,7 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 			}
 
 			attempts += 1
-			if attempts > 20 { // wait for 2 seconds
+			if attempts > 50 { // wait for 5 seconds
 				ginkgo.Fail(fmt.Sprintf("Timed out waiting for run to complete. Run status: %s", updatedRun.Status))
 			}
 		}

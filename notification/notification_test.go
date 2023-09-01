@@ -104,14 +104,14 @@ var _ = ginkgo.Describe("Test Notification on incident creation", ginkgo.Ordered
 	})
 
 	ginkgo.It("should consume the event and send the notification", func() {
-		notifHandler := events.NewNotificationConsumerSync(db.Gorm, db.Pool)
-		sendHandler := events.NewNotificationSendConsumerAsync(db.Gorm, db.Pool)
+		notificationHandler := events.NewNotificationSaveConsumerSync().EventConsumer(db.Gorm, db.Pool)
+		sendHandler := events.NewNotificationSendConsumerAsync().EventConsumer(db.Gorm, db.Pool)
 
 		ctx := api.NewContext(db.Gorm, nil)
 
 		// Order of consumption is important as incident.create event
 		// produces a notification.send event
-		notifHandler.ConsumeEventsUntilEmpty(ctx)
+		notificationHandler.ConsumeEventsUntilEmpty(ctx)
 		sendHandler.ConsumeEventsUntilEmpty(ctx)
 
 		Expect(webhookPostdata).To(Not(BeNil()))
