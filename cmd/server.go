@@ -231,12 +231,11 @@ var Serve = &cobra.Command{
 
 		go jobs.Start()
 
-		events.StartConsumers(db.Gorm, events.Config{
+		events.StartConsumers(db.Gorm, db.Pool, events.Config{
 			UpstreamPush: api.UpstreamConf,
 		})
 
-		playbookRunConsumer := playbook.NewQueueConsumer(db.Gorm, db.Pool)
-		go playbookRunConsumer.Listen()
+		go playbook.StartPlaybookRunConsumer(db.Gorm, db.Pool)
 
 		go launchKopper()
 

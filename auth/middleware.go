@@ -61,7 +61,7 @@ func (k *KratosHandler) KratosMiddleware() (*kratosMiddleware, error) {
 	}, nil
 }
 
-var skipAuthPaths = []string{"/health", "/metrics"}
+var skipAuthPaths = []string{"/health", "/metrics", "/kratos/*"}
 
 func canSkipAuth(c echo.Context) bool {
 	return collections.Contains(skipAuthPaths, c.Path())
@@ -102,7 +102,12 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 				email = e
 			}
 		}
-		ctx.WithUser(&api.ContextUser{ID: uuid.MustParse(session.Identity.GetId()), Email: email})
+
+		if uid, err := uuid.Parse(session.Identity.GetId()); err != nil {
+			return c.String(http.StatusUnauthorized, "Unauthorized")
+		} else {
+			ctx.WithUser(&api.ContextUser{ID: uid, Email: email})
+		}
 
 		return next(ctx)
 	}

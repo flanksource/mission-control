@@ -153,18 +153,18 @@ var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
 			},
 		}
 
-		c := NewUpstreamPushConsumer(agentBob.db, eventHandlerConfig)
-		c.ConsumeEventsUntilEmpty()
+		c := NewUpstreamPushConsumerAsync(eventHandlerConfig).EventConsumer(agentBob.db, agentBob.pool)
+		c.ConsumeEventsUntilEmpty(api.NewContext(agentBob.db, nil))
 
 		// Agent James should also push everything in it's queue to the upstream
 		eventHandlerConfig.UpstreamPush.AgentName = agentJames.name
-		c = NewUpstreamPushConsumer(agentJames.db, eventHandlerConfig)
-		c.ConsumeEventsUntilEmpty()
+		c = NewUpstreamPushConsumerAsync(eventHandlerConfig).EventConsumer(agentJames.db, agentJames.pool)
+		c.ConsumeEventsUntilEmpty(api.NewContext(agentJames.db, nil))
 
 		// Agent Ross should also push everything in it's queue to the upstream
 		eventHandlerConfig.UpstreamPush.AgentName = agentRoss.name
-		c = NewUpstreamPushConsumer(agentRoss.db, eventHandlerConfig)
-		c.ConsumeEventsUntilEmpty()
+		c = NewUpstreamPushConsumerAsync(eventHandlerConfig).EventConsumer(agentRoss.db, agentRoss.pool)
+		c.ConsumeEventsUntilEmpty(api.NewContext(agentRoss.db, nil))
 	})
 
 	ginkgo.It("should have transferred all the components", func() {

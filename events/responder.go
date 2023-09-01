@@ -8,21 +8,108 @@ import (
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/responder"
 	pkgResponder "github.com/flanksource/incident-commander/responder"
 )
 
-func NewResponderConsumer(db *gorm.DB) EventConsumer {
-	return EventConsumer{
-		WatchEvents: []string{
-			EventIncidentResponderAdded,
-			EventIncidentCommentAdded,
-		},
-		ProcessBatchFunc: processResponderEvents,
-		BatchSize:        1,
-		Consumers:        1,
-		DB:               db,
+func NewResponderConsumerSync() SyncEventConsumer {
+	return SyncEventConsumer{
+		watchEvents: []string{EventIncidentResponderAdded},
+		consumers:   []SyncEventHandlerFunc{addNotificationEvent, generateResponderAddedAsyncEvent},
 	}
+}
+
+func NewCommentConsumerSync() SyncEventConsumer {
+	return SyncEventConsumer{
+		watchEvents: []string{EventIncidentCommentAdded},
+		consumers:   []SyncEventHandlerFunc{addNotificationEvent, generateCommentAddedAsyncEvent},
+	}
+}
+
+func NewResponderConsumerAsync() AsyncEventConsumer {
+	return AsyncEventConsumer{
+		watchEvents: []string{EventJiraResponderAdded, EventMSPlannerResponderAdded, EventMSPlannerCommentAdded, EventJiraCommentAdded},
+		consumer:    processResponderEvents,
+		batchSize:   1,
+	}
+}
+
+// generateResponderAddedAsyncEvent generates async events for each of the configured responder clients
+// in the associated team.
+func generateResponderAddedAsyncEvent(ctx *api.Context, event api.Event) error {
+	responderID := event.Properties["id"]
+
+	var responder api.Responder
+	err := ctx.DB().Where("id = ? AND external_id is NULL", responderID).Preload("Incident").Preload("Team").Find(&responder).Error
+	if err != nil {
+		return err
+	}
+
+	spec, err := responder.Team.GetSpec()
+	if err != nil {
+		return err
+	}
+
+	if spec.ResponderClients.Jira != nil {
+		if err := ctx.DB().Create(&api.Event{Name: EventJiraResponderAdded, Properties: map[string]string{"id": responderID}}).Error; err != nil {
+			return err
+		}
+	}
+
+	if spec.ResponderClients.MSPlanner != nil {
+		if err := ctx.DB().Create(&api.Event{Name: EventMSPlannerResponderAdded, Properties: map[string]string{"id": responderID}}).Error; err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// generateCommentAddedAsyncEvent generates comment.add async events for each of the configured responder clients.
+func generateCommentAddedAsyncEvent(ctx *api.Context, event api.Event) error {
+	commentID := event.Properties["id"]
+
+	var comment api.Comment
+	err := ctx.DB().Where("id = ? AND external_id IS NULL", commentID).First(&comment).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			logger.Debugf("Skipping comment %s since it was added via responder", commentID)
+			return nil
+		}
+
+		return err
+	}
+
+	// Get all responders related to a comment
+	var responders []api.Responder
+	commentRespondersQuery := `
+		SELECT * FROM responders WHERE incident_id IN (
+			SELECT incident_id FROM comments WHERE id = ?
+		)
+	`
+	if err = ctx.DB().Raw(commentRespondersQuery, commentID).Preload("Team").Find(&responders).Error; err != nil {
+		return err
+	}
+
+	for _, responder := range responders {
+		switch responder.Type {
+		case "jira":
+			if err := ctx.DB().Create(&api.Event{Name: EventJiraCommentAdded, Properties: map[string]string{
+				"responder_id": responder.ID.String(),
+				"id":           commentID,
+			}}).Error; err != nil {
+				return err
+			}
+		case "ms_planner":
+			if err := ctx.DB().Create(&api.Event{Name: EventMSPlannerCommentAdded, Properties: map[string]string{
+				"responder_id": responder.ID.String(),
+				"id":           commentID,
+			}}).Error; err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 func processResponderEvents(ctx *api.Context, events []api.Event) []api.Event {
@@ -38,15 +125,16 @@ func processResponderEvents(ctx *api.Context, events []api.Event) []api.Event {
 
 func handleResponderEvent(ctx *api.Context, event api.Event) error {
 	switch event.Name {
-	case EventIncidentResponderAdded:
+	case EventJiraResponderAdded, EventMSPlannerResponderAdded:
 		return reconcileResponderEvent(ctx, event)
-	case EventIncidentCommentAdded:
+	case EventJiraCommentAdded, EventMSPlannerCommentAdded:
 		return reconcileCommentEvent(ctx, event)
 	default:
-		return fmt.Errorf("Unrecognized event name: %s", event.Name)
+		return fmt.Errorf("unrecognized event name: %s", event.Name)
 	}
 }
 
+// TODO: Modify this such that it only notifies the responder mentioned in the event.
 func reconcileResponderEvent(ctx *api.Context, event api.Event) error {
 	responderID := event.Properties["id"]
 
@@ -70,13 +158,10 @@ func reconcileResponderEvent(ctx *api.Context, event api.Event) error {
 		return ctx.DB().Model(&api.Responder{}).Where("id = ?", responder.ID).Update("external_id", externalID).Error
 	}
 
-	if err := addNotificationEvent(ctx, event); err != nil {
-		logger.Errorf("failed to add notification publish event for responder: %v", err)
-	}
-
 	return nil
 }
 
+// TODO: Modify this such that it only adds the comment to the particular responder mentioned in the event.
 func reconcileCommentEvent(ctx *api.Context, event api.Event) error {
 	commentID := event.Properties["id"]
 
@@ -107,7 +192,7 @@ func reconcileCommentEvent(ctx *api.Context, event api.Event) error {
 		// Reset externalID to avoid inserting previous iteration's ID
 		externalID := ""
 
-		responder, err := responder.GetResponder(ctx, _responder.Team)
+		responder, err := pkgResponder.GetResponder(ctx, _responder.Team)
 		if err != nil {
 			return err
 		}
@@ -127,10 +212,6 @@ func reconcileCommentEvent(ctx *api.Context, event api.Event) error {
 				logger.Errorf("error updating comment_responders table: %v", err)
 			}
 		}
-	}
-
-	if err := addNotificationEvent(ctx, event); err != nil {
-		logger.Errorf("failed to add notification publish event for comment: %v", err)
 	}
 
 	return nil

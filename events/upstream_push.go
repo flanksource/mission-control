@@ -6,22 +6,20 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
-	"gorm.io/gorm"
 )
 
 var upstreamPushEventHandler *pushToUpstreamEventHandler
 
-func NewUpstreamPushConsumer(db *gorm.DB, config Config) EventConsumer {
+func NewUpstreamPushConsumerAsync(config Config) AsyncEventConsumer {
 	if config.UpstreamPush.Valid() {
 		upstreamPushEventHandler = newPushToUpstreamEventHandler(config.UpstreamPush)
 	}
 
-	return EventConsumer{
-		WatchEvents:      []string{EventPushQueueCreate},
-		ProcessBatchFunc: handleUpstreamPushEvents,
-		BatchSize:        50,
-		Consumers:        5,
-		DB:               db,
+	return AsyncEventConsumer{
+		watchEvents:  []string{EventPushQueueCreate},
+		consumer:     handleUpstreamPushEvents,
+		batchSize:    50,
+		numConsumers: 5,
 	}
 }
 

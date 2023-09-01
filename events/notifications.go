@@ -12,65 +12,57 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	pkgNotification "github.com/flanksource/incident-commander/notification"
 	"github.com/flanksource/incident-commander/teams"
-	"github.com/google/uuid"
-	"gorm.io/gorm"
 )
 
-func NewNotificationConsumer(db *gorm.DB) EventConsumer {
-	return EventConsumer{
-		WatchEvents: []string{
-			EventNotificationUpdate, EventNotificationDelete,
-			EventIncidentCreated,
-			EventIncidentResponderRemoved,
-			EventIncidentDODAdded, EventIncidentDODPassed, EventIncidentDODRegressed,
-			EventIncidentStatusOpen, EventIncidentStatusClosed, EventIncidentStatusMitigated,
-			EventIncidentStatusResolved, EventIncidentStatusInvestigating, EventIncidentStatusCancelled,
-			EventCheckPassed, EventCheckFailed,
+func NewNotificationUpdatesConsumerSync() SyncEventConsumer {
+	return SyncEventConsumer{
+		watchEvents: []string{EventNotificationUpdate, EventNotificationDelete},
+		consumers: []SyncEventHandlerFunc{
+			handleNotificationUpdates,
 		},
-		ProcessBatchFunc: processNotificationEvents,
-		BatchSize:        1,
-		Consumers:        1,
-		DB:               db,
 	}
 }
 
-func NewNotificationSendConsumer(db *gorm.DB) EventConsumer {
-	return EventConsumer{
-		WatchEvents:      []string{EventNotificationSend},
-		ProcessBatchFunc: processNotificationEvents,
-		BatchSize:        1,
-		Consumers:        5,
-		DB:               db,
+func NewNotificationSaveConsumerSync() SyncEventConsumer {
+	return SyncEventConsumer{
+		watchEvents: []string{
+			EventIncidentCreated,
+			EventIncidentDODAdded,
+			EventIncidentDODPassed,
+			EventIncidentDODRegressed,
+			EventIncidentResponderRemoved,
+			EventIncidentStatusCancelled,
+			EventIncidentStatusClosed,
+			EventIncidentStatusInvestigating,
+			EventIncidentStatusMitigated,
+			EventIncidentStatusOpen,
+			EventIncidentStatusResolved,
+		},
+		numConsumers: 3,
+		consumers: []SyncEventHandlerFunc{
+			addNotificationEvent,
+		},
+	}
+}
+
+func NewNotificationSendConsumerAsync() AsyncEventConsumer {
+	return AsyncEventConsumer{
+		watchEvents:  []string{EventNotificationSend},
+		consumer:     processNotificationEvents,
+		batchSize:    1,
+		numConsumers: 5,
 	}
 }
 
 func processNotificationEvents(ctx *api.Context, events []api.Event) []api.Event {
 	var failedEvents []api.Event
 	for _, e := range events {
-		if err := handleNotificationEvent(ctx, e); err != nil {
+		if err := sendNotification(ctx, e); err != nil {
 			e.Error = err.Error()
 			failedEvents = append(failedEvents, e)
 		}
 	}
 	return failedEvents
-}
-
-func handleNotificationEvent(ctx *api.Context, event api.Event) error {
-	switch event.Name {
-	case EventNotificationDelete, EventNotificationUpdate:
-		return handleNotificationUpdates(ctx, event)
-	case EventNotificationSend:
-		return sendNotification(ctx, event)
-	case EventIncidentCreated, EventIncidentResponderRemoved,
-		EventIncidentDODAdded, EventIncidentDODPassed,
-		EventIncidentDODRegressed, EventIncidentStatusOpen,
-		EventIncidentStatusClosed, EventIncidentStatusMitigated,
-		EventIncidentStatusResolved, EventIncidentStatusInvestigating, EventIncidentStatusCancelled,
-		EventCheckFailed, EventCheckPassed:
-		return addNotificationEvent(ctx, event)
-	default:
-		return fmt.Errorf("Unrecognized event name: %s", event.Name)
-	}
 }
 
 type NotificationEventProperties struct {
@@ -234,8 +226,7 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 				PersonID:       n.PersonID.String(),
 			}
 
-			newEvent := api.Event{
-				ID:         uuid.New(),
+			newEvent := &api.Event{
 				Name:       EventNotificationSend,
 				Properties: prop.AsMap(),
 			}
@@ -269,8 +260,7 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 					NotificationName: cn.Name,
 				}
 
-				newEvent := api.Event{
-					ID:         uuid.New(),
+				newEvent := &api.Event{
 					Name:       EventNotificationSend,
 					Properties: prop.AsMap(),
 				}
@@ -293,8 +283,7 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 				NotificationName: cn.Name,
 			}
 
-			newEvent := api.Event{
-				ID:         uuid.New(),
+			newEvent := &api.Event{
 				Name:       EventNotificationSend,
 				Properties: prop.AsMap(),
 			}
