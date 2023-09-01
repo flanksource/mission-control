@@ -64,24 +64,6 @@ func processNotificationEvents(ctx *api.Context, events []api.Event) []api.Event
 	return failedEvents
 }
 
-func handleNotificationEvent(ctx *api.Context, event api.Event) error {
-	switch event.Name {
-	case EventNotificationDelete, EventNotificationUpdate:
-		return handleNotificationUpdates(ctx, event)
-	case EventNotificationSend:
-		return sendNotification(ctx, event)
-	case EventIncidentCreated, EventIncidentResponderRemoved,
-		EventIncidentDODAdded, EventIncidentDODPassed,
-		EventIncidentDODRegressed, EventIncidentStatusOpen,
-		EventIncidentStatusClosed, EventIncidentStatusMitigated,
-		EventIncidentStatusResolved, EventIncidentStatusInvestigating, EventIncidentStatusCancelled,
-		EventCheckFailed, EventCheckPassed:
-		return addNotificationEvent(ctx, event)
-	default:
-		return fmt.Errorf("unrecognized event name: %s", event.Name)
-	}
-}
-
 type NotificationEventProperties struct {
 	ID               string `json:"id"`                          // Resource id. depends what it is based on the original event.
 	EventName        string `json:"event_name"`                  // The name of the original event this notification is for.
