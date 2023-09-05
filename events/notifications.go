@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"os"
 	"strings"
 
 	"github.com/flanksource/commons/template"
@@ -131,15 +130,8 @@ func sendNotification(ctx *api.Context, event api.Event) error {
 			return fmt.Errorf("failed to get email of person(id=%s); %v", props.PersonID, err)
 		}
 
-		smtpURL := fmt.Sprintf("smtp://%s:%s@%s:%s/?auth=Plain&FromAddress=%s&ToAddresses=%s",
-			url.QueryEscape(os.Getenv("SMTP_USER")),
-			url.QueryEscape(os.Getenv("SMTP_PASSWORD")),
-			os.Getenv("SMTP_HOST"),
-			os.Getenv("SMTP_PORT"),
-			url.QueryEscape(os.Getenv("SMTP_USER")),
-			url.QueryEscape(emailAddress),
-		)
-		return pkgNotification.Send(ctx, "", smtpURL, data.Message, data.Properties)
+		smtpURL := fmt.Sprintf("%s?ToAddresses=%s", pkgNotification.SystemSMTP, url.QueryEscape(emailAddress))
+		return pkgNotification.Send(ctx, "", smtpURL, notification.Title, data.Message, data.Properties)
 	}
 
 	if props.TeamID != "" {
@@ -157,7 +149,7 @@ func sendNotification(ctx *api.Context, event api.Event) error {
 				return fmt.Errorf("error templating notification: %w", err)
 			}
 
-			return pkgNotification.Send(ctx, cn.Connection, cn.URL, data.Message, data.Properties, cn.Properties)
+			return pkgNotification.Send(ctx, cn.Connection, cn.URL, notification.Title, data.Message, data.Properties, cn.Properties)
 		}
 	}
 
@@ -170,7 +162,7 @@ func sendNotification(ctx *api.Context, event api.Event) error {
 			return fmt.Errorf("error templating notification: %w", err)
 		}
 
-		return pkgNotification.Send(ctx, cn.Connection, cn.URL, data.Message, data.Properties, cn.Properties)
+		return pkgNotification.Send(ctx, cn.Connection, cn.URL, notification.Title, data.Message, data.Properties, cn.Properties)
 	}
 
 	return nil
