@@ -41,7 +41,7 @@ func setSystemSMTPCredential(shoutrrrURL string) (string, error) {
 	return shoutrrrURL, nil
 }
 
-func Send(ctx *api.Context, connectionName, shoutrrrURL, message string, properties ...map[string]string) error {
+func Send(ctx *api.Context, connectionName, shoutrrrURL, title, message string, properties ...map[string]string) error {
 	if connectionName != "" {
 		connection, err := ctx.HydrateConnection(connectionName)
 		if err != nil {
@@ -76,6 +76,8 @@ func Send(ctx *api.Context, connectionName, shoutrrrURL, message string, propert
 		allProps = collections.MergeMap(allProps, prop)
 	}
 
+	injectTitle(service, title, allProps)
+
 	var params *types.Params
 	if properties != nil {
 		params = (*types.Params)(&allProps)
@@ -89,6 +91,30 @@ func Send(ctx *api.Context, connectionName, shoutrrrURL, message string, propert
 	}
 
 	return nil
+}
+
+// injectTitle adds the given title to the shoutrrr properties if it's not already set.
+func injectTitle(service, title string, properties map[string]string) map[string]string {
+	if title == "" {
+		return properties
+	}
+
+	switch strings.ToLower(service) {
+	case "smtp":
+		if properties["subject"] == "" {
+			properties["subject"] = title
+		}
+
+	case "googlechat", "rocketchat":
+		// Do nothing
+
+	default:
+		if properties["title"] == "" {
+			properties["title"] = title
+		}
+	}
+
+	return properties
 }
 
 func getPropsForService(service string, property map[string]string) map[string]string {
