@@ -131,7 +131,7 @@ func sendNotification(ctx *api.Context, event api.Event) error {
 		}
 
 		smtpURL := fmt.Sprintf("%s?ToAddresses=%s", pkgNotification.SystemSMTP, url.QueryEscape(emailAddress))
-		return pkgNotification.Send(ctx, "", smtpURL, data.Message, data.Properties)
+		return pkgNotification.Send(ctx, "", smtpURL, notification.Title, data.Message, data.Properties)
 	}
 
 	if props.TeamID != "" {
@@ -149,7 +149,7 @@ func sendNotification(ctx *api.Context, event api.Event) error {
 				return fmt.Errorf("error templating notification: %w", err)
 			}
 
-			return pkgNotification.Send(ctx, cn.Connection, cn.URL, data.Message, data.Properties, cn.Properties)
+			return pkgNotification.Send(ctx, cn.Connection, cn.URL, notification.Title, data.Message, data.Properties, cn.Properties)
 		}
 	}
 
@@ -162,7 +162,7 @@ func sendNotification(ctx *api.Context, event api.Event) error {
 			return fmt.Errorf("error templating notification: %w", err)
 		}
 
-		return pkgNotification.Send(ctx, cn.Connection, cn.URL, data.Message, data.Properties, cn.Properties)
+		return pkgNotification.Send(ctx, cn.Connection, cn.URL, notification.Title, data.Message, data.Properties, cn.Properties)
 	}
 
 	return nil

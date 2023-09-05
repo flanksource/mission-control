@@ -123,7 +123,7 @@ require (
 	k8s.io/apiextensions-apiserver v0.27.4 // indirect
 	k8s.io/component-base v0.27.4 // indirect
 	k8s.io/klog/v2 v2.100.1 // indirect
-	k8s.io/kube-openapi v0.0.0-20230816210353-14e408962443 // indirect
+	k8s.io/kube-openapi v0.0.0-20230831192431-0d7b43eda7ba // indirect
 	k8s.io/utils v0.0.0-20230726121419-3b25d923346b // indirect
 	layeh.com/gopher-json v0.0.0-20201124131017-552bb3c4c3bf // indirect
 	modernc.org/libc v1.24.1 // indirect
@@ -142,7 +142,7 @@ require (
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/TomOnTime/utfutil v0.0.0-20230223141146-125e65197b36
 	github.com/antonmedv/expr v1.15.0 // indirect
-	github.com/aws/aws-sdk-go v1.45.0 // indirect
+	github.com/aws/aws-sdk-go v1.45.1 // indirect
 	github.com/bgentry/go-netrc v0.0.0-20140422174119-9fd32a8b3d3d // indirect
 	github.com/cjlapao/common-go v0.0.39 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
