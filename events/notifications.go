@@ -101,43 +101,43 @@ func defaultTitleAndBody(event string) (title string, body string) {
 	switch event {
 	case EventCheckPassed:
 		title = "Check {{.check.name}} has passed"
-		body = "Check {{.check.name}} has passed"
+		body = "Check {{.check.name}} has passed.\n\nReference: {{.permalink}}"
 
 	case EventCheckFailed:
 		title = "Check {{.check.name}} has failed"
-		body = "Check {{.check.name}} has failed"
+		body = "Check {{.check.name}} has failed.\n\nReference: {{.permalink}}"
 
 	case EventComponentStatusHealthy, EventComponentStatusUnhealthy, EventComponentStatusInfo, EventComponentStatusWarning, EventComponentStatusError:
 		title = "Component {{.component.name}} status updated to {{.component.status}}"
-		body = "Component {{.component.name}} status updated to {{.component.status}}"
+		body = "Component {{.component.name}} status updated to {{.component.status}}\n\nReference: {{.permalink}}"
 
 	case EventIncidentCommentAdded:
 		title = "New comment on {{.incident.title}}"
-		body = "{{.comment}}"
+		body = "{{.comment}}\n\nReference: {{.permalink}}"
 
 	case EventIncidentCreated:
 		title = "{{.incident.title}} created"
-		body = "{{.incident.title}} created"
+		body = "{{.incident.title}} created\n\nReference: {{.permalink}}"
 
 	case EventIncidentDODAdded:
 		title = "Definition of Done added | {{.incident.title}}"
-		body = "Evidence: {{.evidence.description}}"
+		body = "Evidence: {{.evidence.description}}\n\nReference: {{.permalink}}"
 
 	case EventIncidentDODPassed, EventIncidentDODRegressed:
 		title = "Definition of Done {{if .evidence.done}}passed{{else}}regressed{{end}} | {{.incident.title}}"
-		body = "Evidence: {{.evidence.description}}\nHypothesis: {{.hypothesis.title}}"
+		body = "Evidence: {{.evidence.description}}\nHypothesis: {{.hypothesis.title}}\n\nReference: {{.permalink}}"
 
 	case EventIncidentResponderAdded:
 		title = "New responder added to {{.incident.title}}"
-		body = "Responder {{.reponder.name}}"
+		body = "Responder {{.reponder.name}}\n\nReference: {{.permalink}}"
 
 	case EventIncidentResponderRemoved:
 		title = "Responder removed from {{.incident.title}}"
-		body = "Responder {{.reponder.name}}"
+		body = "Responder {{.reponder.name}}\n\nReference: {{.permalink}}"
 
 	case EventIncidentStatusCancelled, EventIncidentStatusClosed, EventIncidentStatusInvestigating, EventIncidentStatusMitigated, EventIncidentStatusOpen, EventIncidentStatusResolved:
 		title = "{{.incident.title}} status updated"
-		body = "New Status: {{.incident.status}}"
+		body = "New Status: {{.incident.status}}\n\nReference: {{.permalink}}"
 
 	case EventTeamUpdate, EventTeamDelete, EventNotificationUpdate, EventNotificationDelete, EventPlaybookSpecApprovalUpdated, EventPlaybookApprovalInserted:
 		// Not applicable
@@ -364,6 +364,7 @@ func getEnvForEvent(ctx *api.Context, eventName string, properties map[string]st
 
 		env["canary"] = canary.AsMap()
 		env["check"] = check.AsMap()
+		env["permalink"] = fmt.Sprintf("%s/health?layout=table&checkId=%s&timeRange=1h", api.PublicWebURL, check.ID)
 	}
 
 	if eventName == "incident.created" || strings.HasPrefix(eventName, "incident.status.") {
@@ -373,6 +374,7 @@ func getEnvForEvent(ctx *api.Context, eventName string, properties map[string]st
 		}
 
 		env["incident"] = incident.AsMap()
+		env["permalink"] = fmt.Sprintf("%s/incidents/%s", api.PublicWebURL, incident.ID)
 	}
 
 	if strings.HasPrefix(eventName, "incident.responder.") {
@@ -388,6 +390,7 @@ func getEnvForEvent(ctx *api.Context, eventName string, properties map[string]st
 
 		env["incident"] = incident.AsMap()
 		env["responder"] = responder.AsMap()
+		env["permalink"] = fmt.Sprintf("%s/incidents/%s", api.PublicWebURL, incident.ID)
 	}
 
 	if strings.HasPrefix(eventName, "incident.comment.") {
@@ -405,6 +408,7 @@ func getEnvForEvent(ctx *api.Context, eventName string, properties map[string]st
 
 		env["incident"] = incident.AsMap()
 		env["comment"] = comment.AsMap()
+		env["permalink"] = fmt.Sprintf("%s/incidents/%s", api.PublicWebURL, incident.ID)
 	}
 
 	if strings.HasPrefix(eventName, "incident.dod.") {
@@ -426,6 +430,7 @@ func getEnvForEvent(ctx *api.Context, eventName string, properties map[string]st
 		env["evidence"] = evidence.AsMap()
 		env["hypotheses"] = hypotheses.AsMap()
 		env["incident"] = incident.AsMap()
+		env["permalink"] = fmt.Sprintf("%s/incidents/%s", api.PublicWebURL, incident.ID)
 	}
 
 	return env, nil

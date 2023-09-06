@@ -33,11 +33,16 @@ type ContextUser struct {
 
 const UserIDHeaderKey = "X-User-ID"
 
-var SystemUserID *uuid.UUID
-var CanaryCheckerPath string
-var ApmHubPath string
-var Kubernetes kubernetes.Interface
-var Namespace string
+var (
+	SystemUserID      *uuid.UUID
+	CanaryCheckerPath string
+	ApmHubPath        string
+	Kubernetes        kubernetes.Interface
+	Namespace         string
+
+	// Full URL of the mission control web UI.
+	PublicWebURL string
+)
 
 // type alias because the name "Context" collides with gocontext
 // and embedding both wouldn't have been possible.
