@@ -85,6 +85,13 @@ func createHTTPServer(gormDB *gorm.DB) *echo.Echo {
 			e.POST("/auth/invite_user", kratosHandler.InviteUser, rbac.Authorization(rbac.ObjectAuth, rbac.ActionWrite))
 
 		case "clerk":
+			if clerkJWKSURL == "" {
+				logger.Fatalf("Failed to start server: clerk-jwks-url is required")
+			}
+			if clerkOrgID == "" {
+				logger.Fatalf("Failed to start server: clerk-org-id is required")
+			}
+
 			clerkHandler, err := auth.NewClerkHandler(clerkJWKSURL, clerkOrgID, db.PostgRESTJWTSecret)
 			if err != nil {
 				logger.Fatalf("Failed to initialize clerk client: %v", err)
