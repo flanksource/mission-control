@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/flanksource/commons/template"
+	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	pkgNotification "github.com/flanksource/incident-commander/notification"
@@ -47,13 +48,13 @@ func NewNotificationSaveConsumerSync() SyncEventConsumer {
 func NewNotificationSendConsumerAsync() AsyncEventConsumer {
 	return AsyncEventConsumer{
 		watchEvents:  []string{EventNotificationSend},
-		consumer:     processNotificationEvents,
+		consumer:     sendNotifications,
 		batchSize:    1,
 		numConsumers: 5,
 	}
 }
 
-func processNotificationEvents(ctx *api.Context, events []api.Event) []api.Event {
+func sendNotifications(ctx *api.Context, events []api.Event) []api.Event {
 	var failedEvents []api.Event
 	for _, e := range events {
 		if err := sendNotification(ctx, e); err != nil {
@@ -61,6 +62,7 @@ func processNotificationEvents(ctx *api.Context, events []api.Event) []api.Event
 			failedEvents = append(failedEvents, e)
 		}
 	}
+
 	return failedEvents
 }
 
@@ -76,6 +78,7 @@ type NotificationEventProperties struct {
 // NotificationTemplate holds in data for notification
 // that'll be used by struct templater.
 type NotificationTemplate struct {
+	Title      string            `template:"true"`
 	Message    string            `template:"true"`
 	Properties map[string]string `template:"true"`
 }
@@ -90,6 +93,57 @@ func (t *NotificationEventProperties) AsMap() map[string]string {
 func (t *NotificationEventProperties) FromMap(m map[string]string) {
 	b, _ := json.Marshal(m)
 	_ = json.Unmarshal(b, &t)
+}
+
+// defaultTitleAndBody returns the default title and body for notification
+// based on the given event.
+func defaultTitleAndBody(event string) (title string, body string) {
+	switch event {
+	case EventCheckPassed:
+		title = "Check {{.check.name}} has passed"
+		body = "Check {{.check.name}} has passed"
+
+	case EventCheckFailed:
+		title = "Check {{.check.name}} has failed"
+		body = "Check {{.check.name}} has failed"
+
+	case EventComponentStatusHealthy, EventComponentStatusUnhealthy, EventComponentStatusInfo, EventComponentStatusWarning, EventComponentStatusError:
+		title = "Component {{.component.name}} status updated to {{.component.status}}"
+		body = "Component {{.component.name}} status updated to {{.component.status}}"
+
+	case EventIncidentCommentAdded:
+		title = "New comment on {{.incident.title}}"
+		body = "{{.comment}}"
+
+	case EventIncidentCreated:
+		title = "{{.incident.title}} created"
+		body = "{{.incident.title}} created"
+
+	case EventIncidentDODAdded:
+		title = "Definition of Done added | {{.incident.title}}"
+		body = "Evidence: {{.evidence.description}}"
+
+	case EventIncidentDODPassed, EventIncidentDODRegressed:
+		title = "Definition of Done {{if .evidence.done}}passed{{else}}regressed{{end}} | {{.incident.title}}"
+		body = "Evidence: {{.evidence.description}}\nHypothesis: {{.hypothesis.title}}"
+
+	case EventIncidentResponderAdded:
+		title = "New responder added to {{.incident.title}}"
+		body = "Responder {{.reponder.name}}"
+
+	case EventIncidentResponderRemoved:
+		title = "Responder removed from {{.incident.title}}"
+		body = "Responder {{.reponder.name}}"
+
+	case EventIncidentStatusCancelled, EventIncidentStatusClosed, EventIncidentStatusInvestigating, EventIncidentStatusMitigated, EventIncidentStatusOpen, EventIncidentStatusResolved:
+		title = "{{.incident.title}} status updated"
+		body = "New Status: {{.incident.status}}"
+
+	case EventTeamUpdate, EventTeamDelete, EventNotificationUpdate, EventNotificationDelete, EventPlaybookSpecApprovalUpdated, EventPlaybookApprovalInserted:
+		// Not applicable
+	}
+
+	return title, body
 }
 
 func sendNotification(ctx *api.Context, event api.Event) error {
@@ -115,8 +169,11 @@ func sendNotification(ctx *api.Context, event api.Event) error {
 		return err
 	}
 
+	defaultTitle, defaultBody := defaultTitleAndBody(props.EventName)
+
 	data := NotificationTemplate{
-		Message:    notification.Template,
+		Title:      utils.Coalesce(notification.Title, defaultTitle),
+		Message:    utils.Coalesce(notification.Template, defaultBody),
 		Properties: notification.Properties,
 	}
 
@@ -131,7 +188,7 @@ func sendNotification(ctx *api.Context, event api.Event) error {
 		}
 
 		smtpURL := fmt.Sprintf("%s?ToAddresses=%s", pkgNotification.SystemSMTP, url.QueryEscape(emailAddress))
-		return pkgNotification.Send(ctx, "", smtpURL, notification.Title, data.Message, data.Properties)
+		return pkgNotification.Send(ctx, "", smtpURL, data.Title, data.Message, data.Properties)
 	}
 
 	if props.TeamID != "" {
@@ -149,7 +206,7 @@ func sendNotification(ctx *api.Context, event api.Event) error {
 				return fmt.Errorf("error templating notification: %w", err)
 			}
 
-			return pkgNotification.Send(ctx, cn.Connection, cn.URL, notification.Title, data.Message, data.Properties, cn.Properties)
+			return pkgNotification.Send(ctx, cn.Connection, cn.URL, data.Title, data.Message, data.Properties, cn.Properties)
 		}
 	}
 
@@ -162,7 +219,7 @@ func sendNotification(ctx *api.Context, event api.Event) error {
 			return fmt.Errorf("error templating notification: %w", err)
 		}
 
-		return pkgNotification.Send(ctx, cn.Connection, cn.URL, notification.Title, data.Message, data.Properties, cn.Properties)
+		return pkgNotification.Send(ctx, cn.Connection, cn.URL, data.Title, data.Message, data.Properties, cn.Properties)
 	}
 
 	return nil
@@ -192,7 +249,7 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 			return err
 		}
 
-		if !n.HasRecipients() || n.Template == "" {
+		if !n.HasRecipients() {
 			continue
 		}
 
