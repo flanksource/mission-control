@@ -112,28 +112,28 @@ func defaultTitleAndBody(event string) (title string, body string) {
 		body = "Component {{.component.name}} status updated to {{.component.status}}\n\nReference: {{.permalink}}"
 
 	case EventIncidentCommentAdded:
-		title = "New comment on {{.incident.title}}"
-		body = "{{.comment}}\n\nReference: {{.permalink}}"
+		title = "{{.author.name}} left a comment on {{.incident.incident_id}}: {{.incident.title}}"
+		body = "{{.comment.comment}}\n\nReference: {{.permalink}}"
 
 	case EventIncidentCreated:
-		title = "{{.incident.title}} created"
-		body = "{{.incident.title}} created\n\nReference: {{.permalink}}"
+		title = "{{.incident.incident_id}}: {{.incident.title}} ({{.incident.severity}}) created"
+		body = "Type: {{.incident.type}}\n\nReference: {{.permalink}}"
 
 	case EventIncidentDODAdded:
-		title = "Definition of Done added | {{.incident.title}}"
+		title = "Definition of Done added | {{.incident.incident_id}}: {{.incident.title}}"
 		body = "Evidence: {{.evidence.description}}\n\nReference: {{.permalink}}"
 
 	case EventIncidentDODPassed, EventIncidentDODRegressed:
-		title = "Definition of Done {{if .evidence.done}}passed{{else}}regressed{{end}} | {{.incident.title}}"
+		title = "Definition of Done {{if .evidence.done}}passed{{else}}regressed{{end}} | {{.incident.incident_id}}: {{.incident.title}}"
 		body = "Evidence: {{.evidence.description}}\nHypothesis: {{.hypothesis.title}}\n\nReference: {{.permalink}}"
 
 	case EventIncidentResponderAdded:
-		title = "New responder added to {{.incident.title}}"
-		body = "Responder {{.reponder.name}}\n\nReference: {{.permalink}}"
+		title = "New responder added to {{.incident.incident_id}}: {{.incident.title}}"
+		body = "Responder {{.responder.name}}\n\nReference: {{.permalink}}"
 
 	case EventIncidentResponderRemoved:
-		title = "Responder removed from {{.incident.title}}"
-		body = "Responder {{.reponder.name}}\n\nReference: {{.permalink}}"
+		title = "Responder removed from {{.incident.incident_id}}: {{.incident.title}}"
+		body = "Responder {{.responder.name}}\n\nReference: {{.permalink}}"
 
 	case EventIncidentStatusCancelled, EventIncidentStatusClosed, EventIncidentStatusInvestigating, EventIncidentStatusMitigated, EventIncidentStatusOpen, EventIncidentStatusResolved:
 		title = "{{.incident.title}} status updated"
@@ -404,10 +404,20 @@ func getEnvForEvent(ctx *api.Context, eventName string, properties map[string]st
 			return nil, err
 		}
 
+		var author models.Person
+		if err := ctx.DB().Where("id = ?", comment.CreatedBy).Find(&author).Error; err != nil {
+			return nil, err
+		}
+
 		// TODO: extract out mentioned users' emails from the comment body
 
 		env["incident"] = incident.AsMap()
 		env["comment"] = comment.AsMap()
+		env["author"] = map[string]string{
+			"id":    author.ID.String(),
+			"name":  author.Name,
+			"email": author.Email,
+		}
 		env["permalink"] = fmt.Sprintf("%s/incidents/%s", api.PublicWebURL, incident.ID)
 	}
 
