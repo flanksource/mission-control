@@ -22,7 +22,7 @@ type IncidentResponders struct {
 type Responder struct {
 	ID         uuid.UUID     `json:"id,omitempty"`
 	Type       string        `json:"type"`
-	Properties types.JSONMap `json:"properties" gorm:"type:jsonstringmap;<-:false"`
+	Properties types.JSONMap `json:"properties" gorm:"<-:false"`
 	ExternalID string        `json:"external_id,omitempty"`
 	IncidentID uuid.UUID     `json:"incident_id,omitempty"`
 	Incident   Incident      `json:"incident,omitempty"`

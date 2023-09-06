@@ -5,15 +5,17 @@ go 1.20
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.3.0
 	github.com/MicahParks/keyfunc v1.9.0
+	github.com/adityathebe/go-strip-markdown/v2 v2.0.1
 	github.com/andygrunwald/go-jira v1.16.0
 	github.com/casbin/casbin/v2 v2.73.0
 	github.com/casbin/gorm-adapter/v3 v3.18.0
-	github.com/containrrr/shoutrrr v0.7.1
+	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.23.0
 	github.com/flanksource/commons v1.11.0
 	github.com/flanksource/duty v1.0.170
 	github.com/flanksource/gomplate/v3 v3.20.12
 	github.com/flanksource/kopper v1.0.6
+	github.com/gomarkdown/markdown v0.0.0-20230716120725-531d2d74bc12
 	github.com/google/cel-go v0.17.6
 	github.com/google/go-cmp v0.5.9
 	github.com/google/uuid v1.3.1
@@ -206,7 +208,7 @@ require (
 	golang.org/x/crypto v0.12.0
 	golang.org/x/net v0.14.0 // indirect
 	golang.org/x/oauth2 v0.11.0 // indirect
-	golang.org/x/sys v0.11.0 // indirect
+	golang.org/x/sys v0.12.0 // indirect
 	golang.org/x/text v0.12.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
