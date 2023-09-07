@@ -37,7 +37,6 @@ var Root = &cobra.Command{
 
 var dev bool
 var httpPort, metricsPort, devGuiPort int
-var publicEndpoint = "http://localhost:8080"
 var configDb, authMode, kratosAPI, kratosAdminAPI, postgrestURI string
 var clerkJWKSURL, clerkOrgID string
 var disablePostgrest bool
@@ -48,8 +47,7 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.IntVar(&devGuiPort, "devGuiPort", 3004, "Port used by a local npm server in development mode")
 	flags.IntVar(&metricsPort, "metricsPort", 8081, "Port to expose a health dashboard ")
 	flags.BoolVar(&dev, "dev", false, "Run in development mode")
-	flags.StringVar(&publicEndpoint, "public-endpoint", "http://localhost:8080", "Public endpoint that this instance is exposed under")
-	flags.StringVar(&api.PublicWebURL, "public-web-url", "http://localhost:3000", "Public URL of the web application")
+	flags.StringVar(&api.PublicWebURL, "public-endpoint", "http://localhost:3000", "Public endpoint this instance is exposed under")
 	flags.StringVar(&api.ApmHubPath, "apm-hub", "http://apm-hub:8080", "APM Hub URL")
 	flags.StringVar(&configDb, "config-db", "http://config-db:8080", "Config DB URL")
 	flags.StringVar(&kratosAPI, "kratos-api", "http://kratos-public:80", "Kratos API service")

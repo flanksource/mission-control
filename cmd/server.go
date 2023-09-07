@@ -215,7 +215,7 @@ var Serve = &cobra.Command{
 	PreRun: PreRun,
 	Run: func(cmd *cobra.Command, args []string) {
 		// PostgREST needs to know how it is exposed to create the correct links
-		db.HttpEndpoint = publicEndpoint + "/db"
+		db.HttpEndpoint = api.PublicWebURL + "/db"
 		if authMode != "" {
 			db.PostgresDBAnonRole = "postgrest_api"
 		}
