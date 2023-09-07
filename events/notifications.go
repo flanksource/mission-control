@@ -98,7 +98,7 @@ func (t *NotificationEventProperties) FromMap(m map[string]string) {
 
 // labelsTemplate is a helper func to generate the template for displaying labels
 func labelsTemplate(field string) string {
-	return fmt.Sprintf("{{if %s}}### Labels: \n{{range $k, $v := %s}}**{{$k}}**: {{$v}}<br />{{end}}{{end}}", field, field)
+	return fmt.Sprintf("{{if %s}}### Labels: \n{{range $k, $v := %s}}**{{$k}}**: {{$v}} \n{{end}}{{end}}", field, field)
 }
 
 // defaultTitleAndBody returns the default title and body for notification
@@ -107,11 +107,11 @@ func defaultTitleAndBody(event string) (title string, body string) {
 	switch event {
 	case EventCheckPassed:
 		title = "Check {{.check.name}} has passed"
-		body = fmt.Sprintf("%s\n[Reference]({{.permalink}})", labelsTemplate(".check.labels"))
+		body = fmt.Sprintf("%s\nCanary: {{.canary.name}} \nAgent: {{.agent.name}}\n\n[Reference]({{.permalink}})", labelsTemplate(".check.labels"))
 
 	case EventCheckFailed:
 		title = "Check {{.check.name}} has failed"
-		body = fmt.Sprintf("%s\n[Reference]({{.permalink}})", labelsTemplate(".check.labels"))
+		body = fmt.Sprintf("%s\nCanary: {{.canary.name}} \nAgent: {{.agent.name}}\n\n[Reference]({{.permalink}})", labelsTemplate(".check.labels"))
 
 	case EventComponentStatusHealthy, EventComponentStatusUnhealthy, EventComponentStatusInfo, EventComponentStatusWarning, EventComponentStatusError:
 		title = "Component {{.component.name}} status updated to {{.component.status}}"
@@ -119,7 +119,7 @@ func defaultTitleAndBody(event string) (title string, body string) {
 
 	case EventIncidentCommentAdded:
 		title = "{{.author.name}} left a comment on {{.incident.incident_id}}: {{.incident.title}}"
-		body = fmt.Sprintf("%s\n[Reference]({{.permalink}})", labelsTemplate(".component.labels"))
+		body = "{{.comment.comment}}\n\n[Reference]({{.permalink}})"
 
 	case EventIncidentCreated:
 		title = "{{.incident.incident_id}}: {{.incident.title}} ({{.incident.severity}}) created"
@@ -378,8 +378,14 @@ func getEnvForEvent(ctx *api.Context, eventName string, properties map[string]st
 			check.Latency = summary.Latency
 		}
 
+		var agent models.Agent
+		if err := ctx.DB().Where("id = ?", check.AgentID).First(&agent).Error; err != nil {
+			return nil, err
+		}
+
 		env["canary"] = canary.AsMap()
 		env["check"] = check.AsMap()
+		env["agent"] = agent.AsMap()
 		env["permalink"] = fmt.Sprintf("%s/health?layout=table&checkId=%s&timeRange=1h", api.PublicWebURL, check.ID)
 	}
 
