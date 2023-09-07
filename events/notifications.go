@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
+	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/template"
 	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty"
@@ -68,12 +70,13 @@ func sendNotifications(ctx *api.Context, events []api.Event) []api.Event {
 }
 
 type NotificationEventProperties struct {
-	ID               string `json:"id"`                          // Resource id. depends what it is based on the original event.
-	EventName        string `json:"event_name"`                  // The name of the original event this notification is for.
-	PersonID         string `json:"person_id,omitempty"`         // The person recipient.
-	TeamID           string `json:"team_id,omitempty"`           // The team recipient.
-	NotificationName string `json:"notification_name,omitempty"` // Name of the notification of a team or a custom service of the notification.
-	NotificationID   string `json:"notification_id,omitempty"`   // ID of the notification.
+	ID               string    `json:"id"`                          // Resource id. depends what it is based on the original event.
+	EventName        string    `json:"event_name"`                  // The name of the original event this notification is for.
+	PersonID         string    `json:"person_id,omitempty"`         // The person recipient.
+	TeamID           string    `json:"team_id,omitempty"`           // The team recipient.
+	NotificationName string    `json:"notification_name,omitempty"` // Name of the notification of a team or a custom service of the notification.
+	NotificationID   string    `json:"notification_id,omitempty"`   // ID of the notification.
+	EventCreatedAt   time.Time `json:"event_created_at"`            // Timestamp at which the original event was created
 }
 
 // NotificationTemplate holds in data for notification
@@ -107,11 +110,11 @@ func defaultTitleAndBody(event string) (title string, body string) {
 	switch event {
 	case EventCheckPassed:
 		title = "Check {{.check.name}} has passed"
-		body = fmt.Sprintf("%s\nCanary: {{.canary.name}} \nAgent: {{.agent.name}}\n\n[Reference]({{.permalink}})", labelsTemplate(".check.labels"))
+		body = fmt.Sprintf("Canary: {{.canary.name}} \nAgent: {{.agent.name}} {{if .check_status.message}}\nMessage: {{.check_status.message}} {{end}}\n%s \n\n[Reference]({{.permalink}})", labelsTemplate(".check.labels"))
 
 	case EventCheckFailed:
 		title = "Check {{.check.name}} has failed"
-		body = fmt.Sprintf("%s\nCanary: {{.canary.name}} \nAgent: {{.agent.name}}\n\n[Reference]({{.permalink}})", labelsTemplate(".check.labels"))
+		body = fmt.Sprintf("Canary: {{.canary.name}} \nAgent: {{.agent.name}} \nError: {{.check_status.error}} \n%s \n\n[Reference]({{.permalink}})", labelsTemplate(".check.labels"))
 
 	case EventComponentStatusHealthy, EventComponentStatusUnhealthy, EventComponentStatusInfo, EventComponentStatusWarning, EventComponentStatusError:
 		title = "Component {{.component.name}} status updated to {{.component.status}}"
@@ -156,7 +159,8 @@ func sendNotification(ctx *api.Context, event api.Event) error {
 	var props NotificationEventProperties
 	props.FromMap(event.Properties)
 
-	celEnv, err := getEnvForEvent(ctx, props.EventName, event.Properties)
+	originalEvent := api.Event{Name: props.EventName, CreatedAt: props.EventCreatedAt}
+	celEnv, err := getEnvForEvent(ctx, originalEvent, event.Properties)
 	if err != nil {
 		return err
 	}
@@ -244,7 +248,7 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 		return nil
 	}
 
-	celEnv, err := getEnvForEvent(ctx, event.Name, event.Properties)
+	celEnv, err := getEnvForEvent(ctx, event, event.Properties)
 	if err != nil {
 		return err
 	}
@@ -279,6 +283,7 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 				NotificationID: n.ID.String(),
 				ID:             event.Properties["id"],
 				PersonID:       n.PersonID.String(),
+				EventCreatedAt: event.CreatedAt,
 			}
 
 			newEvent := &api.Event{
@@ -354,25 +359,25 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 
 // getEnvForEvent gets the environment variables for the given event
 // that'll be passed to the cel expression or to the template renderer as a view.
-func getEnvForEvent(ctx *api.Context, eventName string, properties map[string]string) (map[string]any, error) {
+func getEnvForEvent(ctx *api.Context, event api.Event, properties map[string]string) (map[string]any, error) {
 	env := make(map[string]any)
 
-	if strings.HasPrefix(eventName, "check.") {
+	if strings.HasPrefix(event.Name, "check.") {
 		checkID := properties["id"]
 
 		var check models.Check
 		if err := ctx.DB().Where("id = ?", properties["id"]).Find(&check).Error; err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to get check: %w", err)
 		}
 
 		var canary models.Canary
 		if err := ctx.DB().Where("id = ?", check.CanaryID).Find(&canary).Error; err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to get canary: %w", err)
 		}
 
 		summary, err := duty.CheckSummary(ctx, checkID)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to get check summary: %w", err)
 		} else if summary != nil {
 			check.Uptime = summary.Uptime
 			check.Latency = summary.Latency
@@ -380,16 +385,25 @@ func getEnvForEvent(ctx *api.Context, eventName string, properties map[string]st
 
 		var agent models.Agent
 		if err := ctx.DB().Where("id = ?", check.AgentID).First(&agent).Error; err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to get check agent: %w", err)
 		}
 
+		// We fetch the latest check_status at the time of event creation
+		var checkStatus models.CheckStatus
+		if err := ctx.DB().Where("check_id = ?", checkID).Where("status = ?", check.Status == models.CheckStatusHealthy).Where("created_at >= ?", event.CreatedAt).Order("created_at").First(&checkStatus).Error; err != nil {
+			return nil, fmt.Errorf("failed to get check status: %w", err)
+		}
+
+		logger.Infof("check status: %v", checkStatus)
+
+		env["check_status"] = checkStatus.AsMap()
 		env["canary"] = canary.AsMap()
 		env["check"] = check.AsMap()
 		env["agent"] = agent.AsMap()
 		env["permalink"] = fmt.Sprintf("%s/health?layout=table&checkId=%s&timeRange=1h", api.PublicWebURL, check.ID)
 	}
 
-	if eventName == "incident.created" || strings.HasPrefix(eventName, "incident.status.") {
+	if event.Name == "incident.created" || strings.HasPrefix(event.Name, "incident.status.") {
 		var incident models.Incident
 		if err := ctx.DB().Where("id = ?", properties["id"]).Find(&incident).Error; err != nil {
 			return nil, err
@@ -399,7 +413,7 @@ func getEnvForEvent(ctx *api.Context, eventName string, properties map[string]st
 		env["permalink"] = fmt.Sprintf("%s/incidents/%s", api.PublicWebURL, incident.ID)
 	}
 
-	if strings.HasPrefix(eventName, "incident.responder.") {
+	if strings.HasPrefix(event.Name, "incident.responder.") {
 		var responder models.Responder
 		if err := ctx.DB().Where("id = ?", properties["id"]).Find(&responder).Error; err != nil {
 			return nil, err
@@ -415,7 +429,7 @@ func getEnvForEvent(ctx *api.Context, eventName string, properties map[string]st
 		env["permalink"] = fmt.Sprintf("%s/incidents/%s", api.PublicWebURL, incident.ID)
 	}
 
-	if strings.HasPrefix(eventName, "incident.comment.") {
+	if strings.HasPrefix(event.Name, "incident.comment.") {
 		var comment models.Comment
 		if err := ctx.DB().Where("id = ?", properties["id"]).Find(&comment).Error; err != nil {
 			return nil, err
@@ -443,7 +457,7 @@ func getEnvForEvent(ctx *api.Context, eventName string, properties map[string]st
 		env["permalink"] = fmt.Sprintf("%s/incidents/%s", api.PublicWebURL, incident.ID)
 	}
 
-	if strings.HasPrefix(eventName, "incident.dod.") {
+	if strings.HasPrefix(event.Name, "incident.dod.") {
 		var evidence models.Evidence
 		if err := ctx.DB().Where("id = ?", properties["id"]).Find(&evidence).Error; err != nil {
 			return nil, err

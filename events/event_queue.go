@@ -210,6 +210,8 @@ func (t *SyncEventConsumer) Handle(ctx *api.Context) error {
 		}
 	}
 
+	// FIXME: When this fails we only roll it back and the attempt is never increased.
+	// Also, error is never saved.
 	return tx.Commit().Error
 }
 
