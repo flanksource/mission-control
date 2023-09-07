@@ -98,7 +98,7 @@ func (t *NotificationEventProperties) FromMap(m map[string]string) {
 
 // labelsTemplate is a helper func to generate the template for displaying labels
 func labelsTemplate(field string) string {
-	return fmt.Sprintf("{{if %s}}**Labels**:\n{{range $k, $v := %s}}`{{$k}}={{$v}}`\n{{end}}{{end}}", field, field)
+	return fmt.Sprintf("{{if %s}}### Labels: \n{{range $k, $v := %s}}**{{$k}}**: {{$v}}<br />{{end}}{{end}}", field, field)
 }
 
 // defaultTitleAndBody returns the default title and body for notification
@@ -107,19 +107,19 @@ func defaultTitleAndBody(event string) (title string, body string) {
 	switch event {
 	case EventCheckPassed:
 		title = "Check {{.check.name}} has passed"
-		body = fmt.Sprintf("%s[Reference]({{.permalink}})", labelsTemplate(".check.labels"))
+		body = fmt.Sprintf("%s\n[Reference]({{.permalink}})", labelsTemplate(".check.labels"))
 
 	case EventCheckFailed:
 		title = "Check {{.check.name}} has failed"
-		body = fmt.Sprintf("%s[Reference]({{.permalink}})", labelsTemplate(".check.labels"))
+		body = fmt.Sprintf("%s\n[Reference]({{.permalink}})", labelsTemplate(".check.labels"))
 
 	case EventComponentStatusHealthy, EventComponentStatusUnhealthy, EventComponentStatusInfo, EventComponentStatusWarning, EventComponentStatusError:
 		title = "Component {{.component.name}} status updated to {{.component.status}}"
-		body = fmt.Sprintf("%s[Reference]({{.permalink}})", labelsTemplate(".component.labels"))
+		body = fmt.Sprintf("%s\n[Reference]({{.permalink}})", labelsTemplate(".component.labels"))
 
 	case EventIncidentCommentAdded:
 		title = "{{.author.name}} left a comment on {{.incident.incident_id}}: {{.incident.title}}"
-		body = fmt.Sprintf("%s[Reference]({{.permalink}})", labelsTemplate(".component.labels"))
+		body = fmt.Sprintf("%s\n[Reference]({{.permalink}})", labelsTemplate(".component.labels"))
 
 	case EventIncidentCreated:
 		title = "{{.incident.incident_id}}: {{.incident.title}} ({{.incident.severity}}) created"

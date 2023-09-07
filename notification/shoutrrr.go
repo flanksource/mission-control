@@ -75,6 +75,7 @@ func Send(ctx *api.Context, connectionName, shoutrrrURL, title, message string, 
 	switch service {
 	case "smtp":
 		message = icUtils.MarkdownToHTML(message)
+		properties = append(properties, map[string]string{"UseHTML": "true"}) // enforce HTML for smtp
 
 	// When Shoutrr supports markdown for services, we can skip this transformation for them
 	// case "teams", "slack":
