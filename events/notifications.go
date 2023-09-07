@@ -8,6 +8,7 @@ import (
 
 	"github.com/flanksource/commons/template"
 	"github.com/flanksource/commons/utils"
+	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	pkgNotification "github.com/flanksource/incident-commander/notification"
@@ -352,6 +353,8 @@ func getEnvForEvent(ctx *api.Context, eventName string, properties map[string]st
 	env := make(map[string]any)
 
 	if strings.HasPrefix(eventName, "check.") {
+		checkID := properties["id"]
+
 		var check models.Check
 		if err := ctx.DB().Where("id = ?", properties["id"]).Find(&check).Error; err != nil {
 			return nil, err
@@ -360,6 +363,14 @@ func getEnvForEvent(ctx *api.Context, eventName string, properties map[string]st
 		var canary models.Canary
 		if err := ctx.DB().Where("id = ?", check.CanaryID).Find(&canary).Error; err != nil {
 			return nil, err
+		}
+
+		summary, err := duty.CheckSummary(ctx, checkID)
+		if err != nil {
+			return nil, err
+		} else if summary != nil {
+			check.Uptime = summary.Uptime
+			check.Latency = summary.Latency
 		}
 
 		env["canary"] = canary.AsMap()
