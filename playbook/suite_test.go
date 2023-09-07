@@ -1,4 +1,4 @@
-package playbook
+package playbook_test
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/testutils"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/playbook"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 	ginkgo "github.com/onsi/ginkgo/v2"
@@ -78,7 +79,7 @@ func setupUpstreamHTTPServer() {
 
 	echoServer.Use(mockAuthMiddleware)
 
-	RegisterRoutes(echoServer, "playbook")
+	playbook.RegisterRoutes(echoServer, "playbook")
 
 	listenAddr := fmt.Sprintf(":%d", echoServerPort)
 

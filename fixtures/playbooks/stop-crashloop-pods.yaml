@@ -1,0 +1,15 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: stop-crashloop-pod
+spec:
+  'on':
+    canary:
+      - event: failed
+        labels:
+          alertname: KubePodCrashLoopingcontainer
+  description: Stop Pods that are on CrashLoop
+  actions:
+    - name: 'Stop pod'
+      exec:
+        script: kubectl delete pod {{index .check.labels "pod"}}

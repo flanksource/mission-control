@@ -1,0 +1,16 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: stop-expensive-ec2-instance
+spec:
+  'on':
+    component:
+      - event: error
+        filter: component.cost_per_minute > 0.50
+        labels:
+          type: ec2
+  description: Stop expensive EC2 components
+  actions:
+    - name: 'scale deployment'
+      exec:
+        script: aws ec2 stop-instances --instance-ids={{.component.name}}

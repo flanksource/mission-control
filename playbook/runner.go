@@ -61,6 +61,10 @@ func executeRun(ctx *api.Context, run models.PlaybookRun) error {
 		if err := ctx.DB().Where("id = ?", run.ConfigID).First(&templateEnv.Config).Error; err != nil {
 			return err
 		}
+	} else if run.CheckID != nil {
+		if err := ctx.DB().Where("id = ?", run.CheckID).First(&templateEnv.Check).Error; err != nil {
+			return err
+		}
 	}
 
 	for _, action := range playbook.Spec.Actions {

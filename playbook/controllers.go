@@ -23,6 +23,7 @@ type RunResponse struct {
 type RunParams struct {
 	ID          uuid.UUID         `json:"id"`
 	ConfigID    uuid.UUID         `json:"config_id"`
+	CheckID     uuid.UUID         `json:"check_id"`
 	ComponentID uuid.UUID         `json:"component_id"`
 	Params      map[string]string `json:"params"`
 }
@@ -32,12 +33,19 @@ func (r *RunParams) valid() error {
 		return fmt.Errorf("playbook id is required")
 	}
 
-	if r.ConfigID == uuid.Nil && r.ComponentID == uuid.Nil {
-		return fmt.Errorf("either config_id or component_id is required")
+	var providedCount int
+	if r.ConfigID != uuid.Nil {
+		providedCount++
+	}
+	if r.ComponentID != uuid.Nil {
+		providedCount++
+	}
+	if r.CheckID != uuid.Nil {
+		providedCount++
 	}
 
-	if r.ConfigID != uuid.Nil && r.ComponentID != uuid.Nil {
-		return fmt.Errorf("either config_id or component_id is required")
+	if providedCount != 1 {
+		return fmt.Errorf("provide exactly one of config_id, component_id, or check_id")
 	}
 
 	return nil
@@ -127,6 +135,10 @@ func HandlePlaybookRun(c echo.Context) error {
 		run.ConfigID = &req.ConfigID
 	}
 
+	if req.CheckID != uuid.Nil {
+		run.CheckID = &req.CheckID
+	}
+
 	if err := ctx.DB().Create(&run).Error; err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to create playbook run"})
 	}
@@ -157,13 +169,12 @@ func HandlePlaybookList(c echo.Context) error {
 
 	var (
 		configID    = c.QueryParam("config_id")
+		checkID     = c.QueryParam("check_id")
 		componentID = c.QueryParam("component_id")
 	)
 
-	if configID == "" && componentID == "" {
-		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: "either config_id or component_id is required", Message: "invalid request"})
-	} else if configID != "" && componentID != "" {
-		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: "only of either config_id or component_id is required", Message: "invalid request"})
+	if configID == "" && componentID == "" && checkID == "" {
+		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: "provide exactly one of: config_id, check_id or component_id", Message: "invalid request"})
 	}
 
 	var playbooks []models.Playbook
@@ -175,6 +186,11 @@ func HandlePlaybookList(c echo.Context) error {
 		}
 	} else if componentID != "" {
 		playbooks, err = ListPlaybooksForComponent(ctx, componentID)
+		if err != nil {
+			return api.WriteError(c, err)
+		}
+	} else if checkID != "" {
+		playbooks, err = ListPlaybooksForCheck(ctx, checkID)
 		if err != nil {
 			return api.WriteError(c, err)
 		}

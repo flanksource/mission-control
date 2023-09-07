@@ -54,14 +54,52 @@ type PlaybookApproval struct {
 	Approvers PlaybookApprovers    `json:"approvers,omitempty" yaml:"approvers,omitempty"`
 }
 
+type PlaybookEventDetail struct {
+	// Labels specifies the key-value pairs that the associated event's resource must match.
+	Labels map[string]string `json:"labels,omitempty" yaml:"labels,omitempty"`
+
+	// CEL expression for additional event filtering.
+	Filter string `json:"filter,omitempty" yaml:"filter,omitempty"`
+
+	// Event to listen for.
+	Event string `json:"event" yaml:"event"`
+}
+
+// PlaybookEvent defines the list of supported events to trigger a playbook.
+type PlaybookEvent struct {
+	Canary    []PlaybookEventDetail `json:"canary,omitempty" yaml:"canary,omitempty"`
+	Component []PlaybookEventDetail `json:"component,omitempty" yaml:"component,omitempty"`
+}
+
 type PlaybookSpec struct {
-	Description string                   `json:"description,omitempty" yaml:"description,omitempty"`
-	Permissions []Permission             `json:"permissions,omitempty" yaml:"permissions,omitempty"`
-	Configs     []PlaybookResourceFilter `json:"configs,omitempty" yaml:"configs,omitempty"`
-	Components  []PlaybookResourceFilter `json:"components,omitempty" yaml:"components,omitempty"`
-	Parameters  []PlaybookParameter      `json:"parameters,omitempty" yaml:"parameters,omitempty"`
-	Actions     []PlaybookAction         `json:"actions" yaml:"actions"`
-	Approval    *PlaybookApproval        `json:"approval,omitempty" yaml:"approval,omitempty"`
+	// Short description of the playbook.
+	Description string `json:"description,omitempty" yaml:"description,omitempty"`
+
+	// `On` defines events that will automatically trigger the playbook.
+	// If multiple events are defined, only one of those events needs to occur to trigger the playbook.
+	// If multiple triggering events occur at the same time, multiple playbook runs will be triggered.
+	On PlaybookEvent `json:"on,omitempty" yaml:"on,omitempty"`
+
+	// Permissions ...
+	Permissions []Permission `json:"permissions,omitempty" yaml:"permissions,omitempty"`
+
+	// Configs filters what config items can run on this playbook.
+	Configs []PlaybookResourceFilter `json:"configs,omitempty" yaml:"configs,omitempty"`
+
+	// Checks filters what checks can run on this playbook.
+	Checks []PlaybookResourceFilter `json:"checks,omitempty" yaml:"checks,omitempty"`
+
+	// Components what components can run on this playbook.
+	Components []PlaybookResourceFilter `json:"components,omitempty" yaml:"components,omitempty"`
+
+	// Define and document what parameters are required to run this playbook.
+	Parameters []PlaybookParameter `json:"parameters,omitempty" yaml:"parameters,omitempty"`
+
+	// List of actions that need to be executed by this playbook.
+	Actions []PlaybookAction `json:"actions" yaml:"actions"`
+
+	// Approval defines the individuals and teams authorized to approve runs of this playbook.
+	Approval *PlaybookApproval `json:"approval,omitempty" yaml:"approval,omitempty"`
 }
 
 // PlaybookStatus defines the observed state of Playbook
@@ -74,11 +112,11 @@ type PlaybookStatus struct {
 
 // Playbook is the schema for the Playbooks API
 type Playbook struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
+	metav1.TypeMeta   `json:",inline" yaml:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty" yaml:"metadata,omitempty"`
 
-	Spec   PlaybookSpec   `json:"spec,omitempty"`
-	Status PlaybookStatus `json:"status,omitempty"`
+	Spec   PlaybookSpec   `json:"spec,omitempty" yaml:"spec,omitempty"`
+	Status PlaybookStatus `json:"status,omitempty" yaml:"status,omitempty"`
 }
 
 func PlaybookFromModel(p models.Playbook) (Playbook, error) {

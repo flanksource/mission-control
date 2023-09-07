@@ -1,4 +1,4 @@
-package playbook
+package playbook_test
 
 import (
 	"bytes"
@@ -15,6 +15,7 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/events/eventconsumer"
+	"github.com/flanksource/incident-commander/playbook"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"gorm.io/gorm/clause"
@@ -22,8 +23,10 @@ import (
 
 var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 	var (
-		playbook models.Playbook
-		runResp  RunResponse
+		configPlaybook    models.Playbook
+		checkPlaybook     models.Playbook
+		componentPlaybook models.Playbook
+		runResp           playbook.RunResponse
 	)
 
 	ginkgo.It("should store dummy data", func() {
@@ -33,7 +36,7 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 	})
 
 	ginkgo.It("start the queue consumer in background", func() {
-		go eventconsumer.New(testDB, testDBPool, "playbook_run_updates", EventConsumer).
+		go eventconsumer.New(testDB, testDBPool, "playbook_run_updates", playbook.EventConsumer).
 			WithNumConsumers(5).
 			WithNotifyTimeout(time.Second * 2).
 			Listen()
@@ -49,9 +52,6 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 			},
 			Configs: []v1.PlaybookResourceFilter{
 				{Type: *dummy.EKSCluster.Type, Tags: map[string]string{"environment": "production"}},
-			},
-			Components: []v1.PlaybookResourceFilter{
-				{Type: dummy.Logistics.Type, Tags: map[string]string{"telemetry": "enabled"}},
 			},
 			Approval: &v1.PlaybookApproval{
 				Type: v1.PlaybookApprovalTypeAny, // We have two approvers (John Doe & John Wick) and just a single approval is sufficient
@@ -81,43 +81,111 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 		spec, err := json.Marshal(playbookSpec)
 		Expect(err).NotTo(HaveOccurred())
 
-		playbook = models.Playbook{
+		configPlaybook = models.Playbook{
 			Name:   "config name saver",
 			Spec:   spec,
 			Source: models.SourceConfigFile,
 		}
 
-		err = testDB.Clauses(clause.Returning{}).Create(&playbook).Error
+		err = testDB.Clauses(clause.Returning{}).Create(&configPlaybook).Error
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	ginkgo.It("Should fetch the suitable playbook for configs", func() {
+	ginkgo.It("should save other playbooks to test listing of playbooks for checks & components", func() {
+		checkPlaybookSpec := v1.PlaybookSpec{
+			Description: "write check name to file",
+			Checks: []v1.PlaybookResourceFilter{
+				{Type: dummy.LogisticsAPIHealthHTTPCheck.Type},
+			},
+			Actions: []v1.PlaybookAction{
+				{
+					Name: "write check name to a file",
+					Exec: &v1.ExecAction{
+						Script: "printf {{.check.id}} > /tmp/{{.check.id}}.txt",
+					},
+				},
+			},
+		}
+
+		spec, err := json.Marshal(checkPlaybookSpec)
+		Expect(err).NotTo(HaveOccurred())
+
+		checkPlaybook = models.Playbook{
+			Name:   "check name saver",
+			Spec:   spec,
+			Source: models.SourceConfigFile,
+		}
+
+		err = testDB.Clauses(clause.Returning{}).Create(&checkPlaybook).Error
+		Expect(err).NotTo(HaveOccurred())
+
+		componentPlaybookSpec := v1.PlaybookSpec{
+			Description: "write component name to file",
+			Components: []v1.PlaybookResourceFilter{
+				{Type: dummy.Logistics.Type, Tags: map[string]string{"telemetry": "enabled"}},
+			},
+			Actions: []v1.PlaybookAction{
+				{
+					Name: "write component name to a file",
+					Exec: &v1.ExecAction{
+						Script: "printf {{.component.name}} > /tmp/{{.component.name}}.txt",
+					},
+				},
+			},
+		}
+
+		spec, err = json.Marshal(componentPlaybookSpec)
+		Expect(err).NotTo(HaveOccurred())
+
+		componentPlaybook = models.Playbook{
+			Name:   "component name saver",
+			Spec:   spec,
+			Source: models.SourceConfigFile,
+		}
+
+		err = testDB.Clauses(clause.Returning{}).Create(&componentPlaybook).Error
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	ginkgo.It("Should fetch the suitable playbook for checks", func() {
 		ctx := api.NewContext(testDB, nil)
-		playbooks, err := ListPlaybooksForConfig(ctx, dummy.EKSCluster.ID.String())
+		playbooks, err := playbook.ListPlaybooksForCheck(ctx, dummy.LogisticsAPIHealthHTTPCheck.ID.String())
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(playbooks)).To(Equal(1))
-		Expect(playbooks).To(Equal([]models.Playbook{playbook}))
+		Expect(playbooks).To(Equal([]models.Playbook{checkPlaybook}))
 
-		playbooks, err = ListPlaybooksForConfig(ctx, dummy.KubernetesCluster.ID.String())
+		playbooks, err = playbook.ListPlaybooksForCheck(ctx, dummy.LogisticsDBCheck.ID.String())
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(playbooks)).To(Equal(0))
 	})
 
 	ginkgo.It("Should fetch the suitable playbook for components", func() {
 		ctx := api.NewContext(testDB, nil)
-		playbooks, err := ListPlaybooksForComponent(ctx, dummy.Logistics.ID.String())
+		playbooks, err := playbook.ListPlaybooksForComponent(ctx, dummy.Logistics.ID.String())
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(playbooks)).To(Equal(1))
-		Expect(playbooks).To(Equal([]models.Playbook{playbook}))
+		Expect(playbooks).To(Equal([]models.Playbook{componentPlaybook}))
 
-		playbooks, err = ListPlaybooksForComponent(ctx, dummy.LogisticsUI.ID.String())
+		playbooks, err = playbook.ListPlaybooksForComponent(ctx, dummy.LogisticsUI.ID.String())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(playbooks)).To(Equal(0))
+	})
+
+	ginkgo.It("Should fetch the suitable playbook for configs", func() {
+		ctx := api.NewContext(testDB, nil)
+		playbooks, err := playbook.ListPlaybooksForConfig(ctx, dummy.EKSCluster.ID.String())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(len(playbooks)).To(Equal(1))
+		Expect(playbooks).To(Equal([]models.Playbook{configPlaybook}))
+
+		playbooks, err = playbook.ListPlaybooksForConfig(ctx, dummy.KubernetesCluster.ID.String())
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(playbooks)).To(Equal(0))
 	})
 
 	ginkgo.It("should store playbook run via API", func() {
-		run := RunParams{
-			ID:       playbook.ID,
+		run := playbook.RunParams{
+			ID:       configPlaybook.ID,
 			ConfigID: dummy.EKSCluster.ID,
 			Params: map[string]string{
 				"path": tempPath,
@@ -154,13 +222,13 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 		err = testDB.Where("id = ? ", runResp.RunID).First(&savedRun).Error
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(savedRun.PlaybookID).To(Equal(playbook.ID), "run should have been created for the correct playbook")
+		Expect(savedRun.PlaybookID).To(Equal(configPlaybook.ID), "run should have been created for the correct playbook")
 		Expect(savedRun.Status).To(Equal(models.PlaybookRunStatusPending), "run should be in pending status because it has approvers")
 		Expect(*savedRun.CreatedBy).To(Equal(dummy.JohnDoe.ID), "run should have been created by the authenticated person")
 	})
 
 	ginkgo.It("should approve the playbook run via API", func() {
-		req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://localhost:%d/playbook/run/approve/%s/%s", echoServerPort, playbook.ID.String(), runResp.RunID), nil)
+		req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://localhost:%d/playbook/run/approve/%s/%s", echoServerPort, configPlaybook.ID.String(), runResp.RunID), nil)
 		Expect(err).NotTo(HaveOccurred())
 
 		req.Header.Set("Content-Type", "application/json; charset=UTF-8")

@@ -15,11 +15,11 @@ type IncidentRuleStatus struct {
 
 // IncidentRule is the Schema for the IncidentRule API
 type IncidentRule struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
+	metav1.TypeMeta   `json:",inline" yaml:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty" yaml:"metadata,omitempty"`
 
-	Spec   api.IncidentRuleSpec `json:"spec,omitempty"`
-	Status IncidentRuleStatus   `json:"status,omitempty"`
+	Spec   api.IncidentRuleSpec `json:"spec,omitempty" yaml:"spec,omitempty"`
+	Status IncidentRuleStatus   `json:"status,omitempty" yaml:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true
