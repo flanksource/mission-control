@@ -1,13 +1,16 @@
 package responder
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/responder/jira"
 	"github.com/flanksource/incident-commander/responder/msplanner"
 	"github.com/patrickmn/go-cache"
+	"gorm.io/gorm"
 )
 
 var respondersCache = cache.New(time.Hour*1, time.Hour*1)
@@ -49,6 +52,26 @@ func GetResponder(ctx *api.Context, team api.Team) (ResponderInterface, error) {
 
 	respondersCache.Set(team.ID.String(), responder, cache.DefaultExpiration)
 	return responder, nil
+}
+
+func FindResponderByID(ctx *api.Context, id string) (*models.Responder, error) {
+	if value, ok := respondersCache.Get(id); ok {
+		if cache, ok := value.(*models.Responder); ok {
+			return cache, nil
+		}
+	}
+
+	var responder models.Responder
+	if err := ctx.DB().Where("id = ?", id).Find(&responder).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+
+		return nil, err
+	}
+
+	respondersCache.SetDefault(id, &responder)
+	return &responder, nil
 }
 
 func PurgeCache(teamID string) {

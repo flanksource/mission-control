@@ -13,6 +13,7 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	pkgNotification "github.com/flanksource/incident-commander/notification"
+	pkgResponder "github.com/flanksource/incident-commander/responder"
 	"github.com/flanksource/incident-commander/teams"
 )
 
@@ -407,9 +408,13 @@ func getEnvForEvent(ctx *api.Context, event api.Event, properties map[string]str
 	}
 
 	if event.Name == "incident.created" || strings.HasPrefix(event.Name, "incident.status.") {
-		var incident models.Incident
-		if err := ctx.DB().Where("id = ?", properties["id"]).Find(&incident).Error; err != nil {
-			return nil, err
+		incidentID := properties["id"]
+
+		incident, err := duty.FindCachedIncident(ctx, incidentID)
+		if err != nil {
+			return nil, fmt.Errorf("error finding incident(id=%s): %v", incidentID, err)
+		} else if incident == nil {
+			return nil, fmt.Errorf("incident(id=%s) not found", incidentID)
 		}
 
 		env["incident"] = incident.AsMap()
@@ -417,14 +422,19 @@ func getEnvForEvent(ctx *api.Context, event api.Event, properties map[string]str
 	}
 
 	if strings.HasPrefix(event.Name, "incident.responder.") {
-		var responder models.Responder
-		if err := ctx.DB().Where("id = ?", properties["id"]).Find(&responder).Error; err != nil {
-			return nil, err
+		responderID := properties["id"]
+		responder, err := pkgResponder.FindResponderByID(ctx, responderID)
+		if err != nil {
+			return nil, fmt.Errorf("error finding responder(id=%s): %v", responderID, err)
+		} else if responder == nil {
+			return nil, fmt.Errorf("responder(id=%s) not found", responderID)
 		}
 
-		var incident models.Incident
-		if err := ctx.DB().Where("id = ?", responder.IncidentID).Find(&incident).Error; err != nil {
-			return nil, err
+		incident, err := duty.FindCachedIncident(ctx, responder.IncidentID.String())
+		if err != nil {
+			return nil, fmt.Errorf("error finding incident(id=%s): %v", responder.IncidentID, err)
+		} else if incident == nil {
+			return nil, fmt.Errorf("incident(id=%s) not found", responder.IncidentID)
 		}
 
 		env["incident"] = incident.AsMap()
@@ -435,17 +445,21 @@ func getEnvForEvent(ctx *api.Context, event api.Event, properties map[string]str
 	if strings.HasPrefix(event.Name, "incident.comment.") {
 		var comment models.Comment
 		if err := ctx.DB().Where("id = ?", properties["id"]).Find(&comment).Error; err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error getting comment (id=%s)", properties["id"])
 		}
 
-		var incident models.Incident
-		if err := ctx.DB().Where("id = ?", comment.IncidentID).Find(&incident).Error; err != nil {
-			return nil, err
+		incident, err := duty.FindCachedIncident(ctx, comment.IncidentID.String())
+		if err != nil {
+			return nil, fmt.Errorf("error finding incident(id=%s): %v", comment.IncidentID, err)
+		} else if incident == nil {
+			return nil, fmt.Errorf("incident(id=%s) not found", comment.IncidentID)
 		}
 
-		var author models.Person
-		if err := ctx.DB().Where("id = ?", comment.CreatedBy).Find(&author).Error; err != nil {
-			return nil, err
+		author, err := duty.FindCachedPerson(ctx, comment.CreatedBy.String())
+		if err != nil {
+			return nil, fmt.Errorf("error getting comment author (id=%s)", comment.CreatedBy)
+		} else if author == nil {
+			return nil, fmt.Errorf("comment author(id=%s) not found", comment.CreatedBy)
 		}
 
 		// TODO: extract out mentioned users' emails from the comment body
