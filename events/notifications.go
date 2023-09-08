@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/template"
 	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty"
@@ -365,14 +364,25 @@ func getEnvForEvent(ctx *api.Context, event api.Event, properties map[string]str
 	if strings.HasPrefix(event.Name, "check.") {
 		checkID := properties["id"]
 
-		var check models.Check
-		if err := ctx.DB().Where("id = ?", properties["id"]).Find(&check).Error; err != nil {
-			return nil, fmt.Errorf("failed to get check: %w", err)
+		check, err := duty.FindCachedCheck(ctx, checkID)
+		if err != nil {
+			return nil, fmt.Errorf("error finding check: %v", err)
+		} else if check == nil {
+			return nil, fmt.Errorf("check(id=%s) not found", checkID)
 		}
 
-		var canary models.Canary
-		if err := ctx.DB().Where("id = ?", check.CanaryID).Find(&canary).Error; err != nil {
-			return nil, fmt.Errorf("failed to get canary: %w", err)
+		canary, err := duty.FindCachedCanary(ctx, check.CanaryID.String())
+		if err != nil {
+			return nil, fmt.Errorf("error finding canary: %v", err)
+		} else if canary == nil {
+			return nil, fmt.Errorf("canary(id=%s) not found", check.CanaryID)
+		}
+
+		agent, err := duty.FindCachedAgent(ctx, check.AgentID.String())
+		if err != nil {
+			return nil, fmt.Errorf("error finding agent: %v", err)
+		} else if agent == nil {
+			return nil, fmt.Errorf("agent(id=%s) not found", check.AgentID)
 		}
 
 		summary, err := duty.CheckSummary(ctx, checkID)
@@ -383,22 +393,15 @@ func getEnvForEvent(ctx *api.Context, event api.Event, properties map[string]str
 			check.Latency = summary.Latency
 		}
 
-		var agent models.Agent
-		if err := ctx.DB().Where("id = ?", check.AgentID).First(&agent).Error; err != nil {
-			return nil, fmt.Errorf("failed to get check agent: %w", err)
-		}
-
 		// We fetch the latest check_status at the time of event creation
 		var checkStatus models.CheckStatus
 		if err := ctx.DB().Where("check_id = ?", checkID).Where("status = ?", check.Status == models.CheckStatusHealthy).Where("created_at >= ?", event.CreatedAt).Order("created_at").First(&checkStatus).Error; err != nil {
 			return nil, fmt.Errorf("failed to get check status: %w", err)
 		}
 
-		logger.Infof("check status: %v", checkStatus)
-
 		env["check_status"] = checkStatus.AsMap()
-		env["canary"] = canary.AsMap()
-		env["check"] = check.AsMap()
+		env["canary"] = canary.AsMap("spec")
+		env["check"] = check.AsMap("spec")
 		env["agent"] = agent.AsMap()
 		env["permalink"] = fmt.Sprintf("%s/health?layout=table&checkId=%s&timeRange=1h", api.PublicWebURL, check.ID)
 	}
@@ -449,11 +452,7 @@ func getEnvForEvent(ctx *api.Context, event api.Event, properties map[string]str
 
 		env["incident"] = incident.AsMap()
 		env["comment"] = comment.AsMap()
-		env["author"] = map[string]string{
-			"id":    author.ID.String(),
-			"name":  author.Name,
-			"email": author.Email,
-		}
+		env["author"] = author.AsMap()
 		env["permalink"] = fmt.Sprintf("%s/incidents/%s", api.PublicWebURL, incident.ID)
 	}
 
