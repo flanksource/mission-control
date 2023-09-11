@@ -27,7 +27,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
-	github.com/flanksource/duty v1.0.172 // indirect
+	github.com/flanksource/duty v1.0.174 // indirect
 	github.com/flanksource/gomplate/v3 v3.20.12 // indirect
 	github.com/flanksource/is-healthy v0.0.0-20230713150444-ad2a5ef4bb37 // indirect
 	github.com/flanksource/mapstructure v1.6.0 // indirect
