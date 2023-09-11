@@ -704,8 +704,8 @@ github.com/fatih/color v1.7.0/go.mod h1:Zm6kSWBoL9eyXnKyktHP6abPY2pDugNf5Kwzbycv
 github.com/fergusstrange/embedded-postgres v1.23.0 h1:ZYRD89nammxQDWDi6taJE2CYjDuAoVc1TpEqRIYQryc=
 github.com/flanksource/commons v1.11.0 h1:ThP3hnX4Xh4thxVl2GjQ92WvQ93jq5VqzJh46jbW23A=
 github.com/flanksource/commons v1.11.0/go.mod h1:zYEhi6E2+diQ+loVcROUHo/Bgv+Tn61W2NYmrb5MgVI=
-github.com/flanksource/duty v1.0.172 h1:MXu6B0A8uSoriQGQsvk88AUYtPrCsUZ5TytMbD3VWwk=
-github.com/flanksource/duty v1.0.172/go.mod h1:C3eT1PfdqTdefpGRDfUzLDVjSKuYjqZbgbIqX757FbA=
+github.com/flanksource/duty v1.0.174 h1:NKmlATdkyg/38NL9LDqAv0+yEG5gtMUFleSRk0VMnC4=
+github.com/flanksource/duty v1.0.174/go.mod h1:C3eT1PfdqTdefpGRDfUzLDVjSKuYjqZbgbIqX757FbA=
 github.com/flanksource/gomplate/v3 v3.20.4/go.mod h1:27BNWhzzSjDed1z8YShO6W+z6G9oZXuxfNFGd/iGSdc=
 github.com/flanksource/gomplate/v3 v3.20.12 h1:SLo8eLaYkUTizHIuntZ4LxxLzbRfV0NvC6DTpu9fj94=
 github.com/flanksource/gomplate/v3 v3.20.12/go.mod h1:1N1aptaAo0XUaGsyU5CWiwn9GMRpbIKX1AdsypfmZYo=
