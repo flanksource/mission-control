@@ -110,11 +110,21 @@ func defaultTitleAndBody(event string) (title string, body string) {
 	switch event {
 	case EventCheckPassed:
 		title = "Check {{.check.name}} has passed"
-		body = fmt.Sprintf("Canary: {{.canary.name}} \nAgent: {{.agent.name}} {{if .check_status.message}}\nMessage: {{.check_status.message}} {{end}}\n%s \n\n[Reference]({{.permalink}})", labelsTemplate(".check.labels"))
+		body = fmt.Sprintf(`Canary: {{.canary.name}}
+{{if .agent}}Agent: {{.agent.name}}{{end}}
+{{if .status.message}}Message: {{.status.message}} {{end}}
+%s
+
+[Reference]({{.permalink}})`, labelsTemplate(".check.labels"))
 
 	case EventCheckFailed:
 		title = "Check {{.check.name}} has failed"
-		body = fmt.Sprintf("Canary: {{.canary.name}} \nAgent: {{.agent.name}} \nError: {{.check_status.error}} \n%s \n\n[Reference]({{.permalink}})", labelsTemplate(".check.labels"))
+		body = fmt.Sprintf(`Canary: {{.canary.name}}
+{{if .agent}}Agent: {{.agent.name}}{{end}}
+Error: {{.status.error}}
+%s
+
+[Reference]({{.permalink}})`, labelsTemplate(".check.labels"))
 
 	case EventComponentStatusHealthy, EventComponentStatusUnhealthy, EventComponentStatusInfo, EventComponentStatusWarning, EventComponentStatusError:
 		title = "Component {{.component.name}} status updated to {{.component.status}}"
@@ -134,7 +144,10 @@ func defaultTitleAndBody(event string) (title string, body string) {
 
 	case EventIncidentDODPassed, EventIncidentDODRegressed:
 		title = "Definition of Done {{if .evidence.done}}passed{{else}}regressed{{end}} | {{.incident.incident_id}}: {{.incident.title}}"
-		body = "Evidence: {{.evidence.description}}\nHypothesis: {{.hypothesis.title}}\n\n[Reference]({{.permalink}})"
+		body = `Evidence: {{.evidence.description}}
+Hypothesis: {{.hypothesis.title}}
+
+[Reference]({{.permalink}})`
 
 	case EventIncidentResponderAdded:
 		title = "New responder added to {{.incident.incident_id}}: {{.incident.title}}"
@@ -382,8 +395,8 @@ func getEnvForEvent(ctx *api.Context, event api.Event, properties map[string]str
 		agent, err := duty.FindCachedAgent(ctx, check.AgentID.String())
 		if err != nil {
 			return nil, fmt.Errorf("error finding agent: %v", err)
-		} else if agent == nil {
-			return nil, fmt.Errorf("agent(id=%s) not found", check.AgentID)
+		} else if agent != nil {
+			env["agent"] = agent.AsMap()
 		}
 
 		summary, err := duty.CheckSummary(ctx, checkID)
@@ -396,14 +409,13 @@ func getEnvForEvent(ctx *api.Context, event api.Event, properties map[string]str
 
 		// We fetch the latest check_status at the time of event creation
 		var checkStatus models.CheckStatus
-		if err := ctx.DB().Where("check_id = ?", checkID).Where("status = ?", check.Status == models.CheckStatusHealthy).Where("created_at >= ?", event.CreatedAt).Order("created_at").First(&checkStatus).Error; err != nil {
+		if err := ctx.DB().Where("check_id = ?", checkID).Where("created_at >= ?", event.CreatedAt).Order("created_at").First(&checkStatus).Error; err != nil {
 			return nil, fmt.Errorf("failed to get check status: %w", err)
 		}
 
-		env["check_status"] = checkStatus.AsMap()
+		env["status"] = checkStatus.AsMap()
 		env["canary"] = canary.AsMap("spec")
 		env["check"] = check.AsMap("spec")
-		env["agent"] = agent.AsMap()
 		env["permalink"] = fmt.Sprintf("%s/health?layout=table&checkId=%s&timeRange=1h", api.PublicWebURL, check.ID)
 	}
 
@@ -481,9 +493,11 @@ func getEnvForEvent(ctx *api.Context, event api.Event, properties map[string]str
 			return nil, err
 		}
 
-		var incident models.Incident
-		if err := ctx.DB().Where("id = ?", hypotheses.IncidentID).Find(&incident).Error; err != nil {
-			return nil, err
+		incident, err := duty.FindCachedIncident(ctx, hypotheses.IncidentID.String())
+		if err != nil {
+			return nil, fmt.Errorf("error finding incident(id=%s): %v", hypotheses.IncidentID, err)
+		} else if incident == nil {
+			return nil, fmt.Errorf("incident(id=%s) not found", hypotheses.IncidentID)
 		}
 
 		env["evidence"] = evidence.AsMap()

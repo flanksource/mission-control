@@ -77,9 +77,8 @@ func Send(ctx *api.Context, connectionName, shoutrrrURL, title, message string, 
 		message = icUtils.MarkdownToHTML(message)
 		properties = append(properties, map[string]string{"UseHTML": "true"}) // enforce HTML for smtp
 
-	// When Shoutrr supports markdown for services, we can skip this transformation for them
-	// case "teams", "slack":
-	// Do nothing
+	case "telegram":
+		properties = append(properties, map[string]string{"ParseMode": "MarkdownV2"})
 
 	default:
 		message = stripmd.StripOptions(message, stripmd.Options{KeepURL: true})
@@ -101,7 +100,7 @@ func Send(ctx *api.Context, connectionName, shoutrrrURL, title, message string, 
 	sendErrors := sender.Send(message, params)
 	for _, err := range sendErrors {
 		if err != nil {
-			return fmt.Errorf("error publishing notification: %w", err)
+			return fmt.Errorf("error publishing notification (service=%s): %w", service, err)
 		}
 	}
 
