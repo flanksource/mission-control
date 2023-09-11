@@ -12,7 +12,7 @@ require (
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.23.0
 	github.com/flanksource/commons v1.11.0
-	github.com/flanksource/duty v1.0.171
+	github.com/flanksource/duty v1.0.172
 	github.com/flanksource/gomplate/v3 v3.20.12
 	github.com/flanksource/kopper v1.0.6
 	github.com/gomarkdown/markdown v0.0.0-20230716120725-531d2d74bc12
@@ -137,14 +137,14 @@ require (
 
 require (
 	cloud.google.com/go v0.110.7 // indirect
-	cloud.google.com/go/storage v1.32.0 // indirect
+	cloud.google.com/go/storage v1.33.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.7.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.3.0 // indirect
 	github.com/AzureAD/microsoft-authentication-library-for-go v1.0.0 // indirect
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/TomOnTime/utfutil v0.0.0-20230223141146-125e65197b36
 	github.com/antonmedv/expr v1.15.1 // indirect
-	github.com/aws/aws-sdk-go v1.45.4 // indirect
+	github.com/aws/aws-sdk-go v1.45.6 // indirect
 	github.com/bgentry/go-netrc v0.0.0-20140422174119-9fd32a8b3d3d // indirect
 	github.com/cjlapao/common-go v0.0.39 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -212,7 +212,7 @@ require (
 	golang.org/x/text v0.13.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	golang.org/x/xerrors v0.0.0-20220907171357-04be3eba64a2 // indirect
-	google.golang.org/api v0.138.0 // indirect
+	google.golang.org/api v0.139.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/genproto v0.0.0-20230822172742-b8732ec3820d // indirect
 	google.golang.org/grpc v1.58.0 // indirect
@@ -223,5 +223,3 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.3.0 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
-
-replace "github.com/flanksource/duty" => ../duty
