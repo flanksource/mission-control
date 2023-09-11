@@ -8,6 +8,9 @@ import (
 
 	"github.com/TomOnTime/utfutil"
 	"github.com/flanksource/commons/logger"
+	"github.com/gomarkdown/markdown"
+	"github.com/gomarkdown/markdown/html"
+	"github.com/gomarkdown/markdown/parser"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
 )
@@ -51,4 +54,15 @@ func GetUnstructuredObjects(data []byte) ([]unstructured.Unstructured, error) {
 	}
 
 	return items, nil
+}
+
+func MarkdownToHTML(md string) string {
+	extensions := parser.CommonExtensions | parser.AutoHeadingIDs | parser.NoEmptyLineBeforeBlock
+	p := parser.NewWithExtensions(extensions)
+	doc := p.Parse([]byte(md))
+
+	htmlFlags := html.CommonFlags | html.HrefTargetBlank
+	opts := html.RendererOptions{Flags: htmlFlags}
+	renderer := html.NewRenderer(opts)
+	return string(markdown.Render(doc, renderer))
 }

@@ -20,14 +20,14 @@ type IncidentResponders struct {
 }
 
 type Responder struct {
-	ID         uuid.UUID           `json:"id,omitempty"`
-	Type       string              `json:"type"`
-	Properties types.JSONStringMap `json:"properties" gorm:"type:jsonstringmap;<-:false"`
-	ExternalID string              `json:"external_id,omitempty"`
-	IncidentID uuid.UUID           `json:"incident_id,omitempty"`
-	Incident   Incident            `json:"incident,omitempty"`
-	TeamID     uuid.UUID           `json:"team_id,omitempty"`
-	Team       Team                `json:"team,omitempty"`
+	ID         uuid.UUID     `json:"id,omitempty"`
+	Type       string        `json:"type"`
+	Properties types.JSONMap `json:"properties" gorm:"<-:false"`
+	ExternalID string        `json:"external_id,omitempty"`
+	IncidentID uuid.UUID     `json:"incident_id,omitempty"`
+	Incident   Incident      `json:"incident,omitempty"`
+	TeamID     uuid.UUID     `json:"team_id,omitempty"`
+	Team       Team          `json:"team,omitempty"`
 }
 
 type NotificationSpec struct {

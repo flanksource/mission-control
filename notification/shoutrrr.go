@@ -6,12 +6,14 @@ import (
 	"os"
 	"strings"
 
+	stripmd "github.com/adityathebe/go-strip-markdown/v2"
 	"github.com/containrrr/shoutrrr"
 	"github.com/containrrr/shoutrrr/pkg/types"
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/mail"
+	icUtils "github.com/flanksource/incident-commander/utils"
 )
 
 // SystemSMTP indicates that the shoutrrr URL for smtp should use
@@ -70,13 +72,25 @@ func Send(ctx *api.Context, connectionName, shoutrrrURL, title, message string, 
 		return fmt.Errorf("failed to extract service name: %w", err)
 	}
 
+	switch service {
+	case "smtp":
+		message = icUtils.MarkdownToHTML(message)
+		properties = append(properties, map[string]string{"UseHTML": "true"}) // enforce HTML for smtp
+
+	case "telegram":
+		properties = append(properties, map[string]string{"ParseMode": "MarkdownV2"})
+
+	default:
+		message = stripmd.StripOptions(message, stripmd.Options{KeepURL: true})
+	}
+
 	var allProps map[string]string
 	for _, prop := range properties {
 		prop = getPropsForService(service, prop)
 		allProps = collections.MergeMap(allProps, prop)
 	}
 
-	injectTitle(service, title, allProps)
+	injectTitleIntoProperties(service, title, allProps)
 
 	var params *types.Params
 	if properties != nil {
@@ -86,15 +100,15 @@ func Send(ctx *api.Context, connectionName, shoutrrrURL, title, message string, 
 	sendErrors := sender.Send(message, params)
 	for _, err := range sendErrors {
 		if err != nil {
-			return fmt.Errorf("error publishing notification: %w", err)
+			return fmt.Errorf("error publishing notification (service=%s): %w", service, err)
 		}
 	}
 
 	return nil
 }
 
-// injectTitle adds the given title to the shoutrrr properties if it's not already set.
-func injectTitle(service, title string, properties map[string]string) map[string]string {
+// injectTitleIntoProperties adds the given title to the shoutrrr properties if it's not already set.
+func injectTitleIntoProperties(service, title string, properties map[string]string) map[string]string {
 	if title == "" {
 		return properties
 	}

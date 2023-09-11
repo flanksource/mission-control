@@ -5,11 +5,15 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/flanksource/commons/template"
+	"github.com/flanksource/commons/utils"
+	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	pkgNotification "github.com/flanksource/incident-commander/notification"
+	pkgResponder "github.com/flanksource/incident-commander/responder"
 	"github.com/flanksource/incident-commander/teams"
 )
 
@@ -47,13 +51,13 @@ func NewNotificationSaveConsumerSync() SyncEventConsumer {
 func NewNotificationSendConsumerAsync() AsyncEventConsumer {
 	return AsyncEventConsumer{
 		watchEvents:  []string{EventNotificationSend},
-		consumer:     processNotificationEvents,
+		consumer:     sendNotifications,
 		batchSize:    1,
 		numConsumers: 5,
 	}
 }
 
-func processNotificationEvents(ctx *api.Context, events []api.Event) []api.Event {
+func sendNotifications(ctx *api.Context, events []api.Event) []api.Event {
 	var failedEvents []api.Event
 	for _, e := range events {
 		if err := sendNotification(ctx, e); err != nil {
@@ -61,21 +65,24 @@ func processNotificationEvents(ctx *api.Context, events []api.Event) []api.Event
 			failedEvents = append(failedEvents, e)
 		}
 	}
+
 	return failedEvents
 }
 
 type NotificationEventProperties struct {
-	ID               string `json:"id"`                          // Resource id. depends what it is based on the original event.
-	EventName        string `json:"event_name"`                  // The name of the original event this notification is for.
-	PersonID         string `json:"person_id,omitempty"`         // The person recipient.
-	TeamID           string `json:"team_id,omitempty"`           // The team recipient.
-	NotificationName string `json:"notification_name,omitempty"` // Name of the notification of a team or a custom service of the notification.
-	NotificationID   string `json:"notification_id,omitempty"`   // ID of the notification.
+	ID               string    `json:"id"`                          // Resource id. depends what it is based on the original event.
+	EventName        string    `json:"event_name"`                  // The name of the original event this notification is for.
+	PersonID         string    `json:"person_id,omitempty"`         // The person recipient.
+	TeamID           string    `json:"team_id,omitempty"`           // The team recipient.
+	NotificationName string    `json:"notification_name,omitempty"` // Name of the notification of a team or a custom service of the notification.
+	NotificationID   string    `json:"notification_id,omitempty"`   // ID of the notification.
+	EventCreatedAt   time.Time `json:"event_created_at"`            // Timestamp at which the original event was created
 }
 
 // NotificationTemplate holds in data for notification
 // that'll be used by struct templater.
 type NotificationTemplate struct {
+	Title      string            `template:"true"`
 	Message    string            `template:"true"`
 	Properties map[string]string `template:"true"`
 }
@@ -92,11 +99,81 @@ func (t *NotificationEventProperties) FromMap(m map[string]string) {
 	_ = json.Unmarshal(b, &t)
 }
 
+// labelsTemplate is a helper func to generate the template for displaying labels
+func labelsTemplate(field string) string {
+	return fmt.Sprintf("{{if %s}}### Labels: \n{{range $k, $v := %s}}**{{$k}}**: {{$v}} \n{{end}}{{end}}", field, field)
+}
+
+// defaultTitleAndBody returns the default title and body for notification
+// based on the given event.
+func defaultTitleAndBody(event string) (title string, body string) {
+	switch event {
+	case EventCheckPassed:
+		title = "Check {{.check.name}} has passed"
+		body = fmt.Sprintf(`Canary: {{.canary.name}}
+{{if .agent}}Agent: {{.agent.name}}{{end}}
+{{if .status.message}}Message: {{.status.message}} {{end}}
+%s
+
+[Reference]({{.permalink}})`, labelsTemplate(".check.labels"))
+
+	case EventCheckFailed:
+		title = "Check {{.check.name}} has failed"
+		body = fmt.Sprintf(`Canary: {{.canary.name}}
+{{if .agent}}Agent: {{.agent.name}}{{end}}
+Error: {{.status.error}}
+%s
+
+[Reference]({{.permalink}})`, labelsTemplate(".check.labels"))
+
+	case EventComponentStatusHealthy, EventComponentStatusUnhealthy, EventComponentStatusInfo, EventComponentStatusWarning, EventComponentStatusError:
+		title = "Component {{.component.name}} status updated to {{.component.status}}"
+		body = fmt.Sprintf("%s\n[Reference]({{.permalink}})", labelsTemplate(".component.labels"))
+
+	case EventIncidentCommentAdded:
+		title = "{{.author.name}} left a comment on {{.incident.incident_id}}: {{.incident.title}}"
+		body = "{{.comment.comment}}\n\n[Reference]({{.permalink}})"
+
+	case EventIncidentCreated:
+		title = "{{.incident.incident_id}}: {{.incident.title}} ({{.incident.severity}}) created"
+		body = "Type: {{.incident.type}}\n\n[Reference]({{.permalink}})"
+
+	case EventIncidentDODAdded:
+		title = "Definition of Done added | {{.incident.incident_id}}: {{.incident.title}}"
+		body = "Evidence: {{.evidence.description}}\n\n[Reference]({{.permalink}})"
+
+	case EventIncidentDODPassed, EventIncidentDODRegressed:
+		title = "Definition of Done {{if .evidence.done}}passed{{else}}regressed{{end}} | {{.incident.incident_id}}: {{.incident.title}}"
+		body = `Evidence: {{.evidence.description}}
+Hypothesis: {{.hypothesis.title}}
+
+[Reference]({{.permalink}})`
+
+	case EventIncidentResponderAdded:
+		title = "New responder added to {{.incident.incident_id}}: {{.incident.title}}"
+		body = "Responder {{.responder.name}}\n\n[Reference]({{.permalink}})"
+
+	case EventIncidentResponderRemoved:
+		title = "Responder removed from {{.incident.incident_id}}: {{.incident.title}}"
+		body = "Responder {{.responder.name}}\n\n[Reference]({{.permalink}})"
+
+	case EventIncidentStatusCancelled, EventIncidentStatusClosed, EventIncidentStatusInvestigating, EventIncidentStatusMitigated, EventIncidentStatusOpen, EventIncidentStatusResolved:
+		title = "{{.incident.title}} status updated"
+		body = "New Status: {{.incident.status}}\n\n[Reference]({{.permalink}})"
+
+	case EventTeamUpdate, EventTeamDelete, EventNotificationUpdate, EventNotificationDelete, EventPlaybookSpecApprovalUpdated, EventPlaybookApprovalInserted:
+		// Not applicable
+	}
+
+	return title, body
+}
+
 func sendNotification(ctx *api.Context, event api.Event) error {
 	var props NotificationEventProperties
 	props.FromMap(event.Properties)
 
-	celEnv, err := getEnvForEvent(ctx, props.EventName, event.Properties)
+	originalEvent := api.Event{Name: props.EventName, CreatedAt: props.EventCreatedAt}
+	celEnv, err := getEnvForEvent(ctx, originalEvent, event.Properties)
 	if err != nil {
 		return err
 	}
@@ -115,8 +192,11 @@ func sendNotification(ctx *api.Context, event api.Event) error {
 		return err
 	}
 
+	defaultTitle, defaultBody := defaultTitleAndBody(props.EventName)
+
 	data := NotificationTemplate{
-		Message:    notification.Template,
+		Title:      utils.Coalesce(notification.Title, defaultTitle),
+		Message:    utils.Coalesce(notification.Template, defaultBody),
 		Properties: notification.Properties,
 	}
 
@@ -131,7 +211,7 @@ func sendNotification(ctx *api.Context, event api.Event) error {
 		}
 
 		smtpURL := fmt.Sprintf("%s?ToAddresses=%s", pkgNotification.SystemSMTP, url.QueryEscape(emailAddress))
-		return pkgNotification.Send(ctx, "", smtpURL, notification.Title, data.Message, data.Properties)
+		return pkgNotification.Send(ctx, "", smtpURL, data.Title, data.Message, data.Properties)
 	}
 
 	if props.TeamID != "" {
@@ -149,7 +229,7 @@ func sendNotification(ctx *api.Context, event api.Event) error {
 				return fmt.Errorf("error templating notification: %w", err)
 			}
 
-			return pkgNotification.Send(ctx, cn.Connection, cn.URL, notification.Title, data.Message, data.Properties, cn.Properties)
+			return pkgNotification.Send(ctx, cn.Connection, cn.URL, data.Title, data.Message, data.Properties, cn.Properties)
 		}
 	}
 
@@ -162,7 +242,7 @@ func sendNotification(ctx *api.Context, event api.Event) error {
 			return fmt.Errorf("error templating notification: %w", err)
 		}
 
-		return pkgNotification.Send(ctx, cn.Connection, cn.URL, notification.Title, data.Message, data.Properties, cn.Properties)
+		return pkgNotification.Send(ctx, cn.Connection, cn.URL, data.Title, data.Message, data.Properties, cn.Properties)
 	}
 
 	return nil
@@ -181,7 +261,7 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 		return nil
 	}
 
-	celEnv, err := getEnvForEvent(ctx, event.Name, event.Properties)
+	celEnv, err := getEnvForEvent(ctx, event, event.Properties)
 	if err != nil {
 		return err
 	}
@@ -192,7 +272,7 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 			return err
 		}
 
-		if !n.HasRecipients() || n.Template == "" {
+		if !n.HasRecipients() {
 			continue
 		}
 
@@ -216,6 +296,7 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 				NotificationID: n.ID.String(),
 				ID:             event.Properties["id"],
 				PersonID:       n.PersonID.String(),
+				EventCreatedAt: event.CreatedAt,
 			}
 
 			newEvent := &api.Event{
@@ -291,66 +372,117 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 
 // getEnvForEvent gets the environment variables for the given event
 // that'll be passed to the cel expression or to the template renderer as a view.
-func getEnvForEvent(ctx *api.Context, eventName string, properties map[string]string) (map[string]any, error) {
+func getEnvForEvent(ctx *api.Context, event api.Event, properties map[string]string) (map[string]any, error) {
 	env := make(map[string]any)
 
-	if strings.HasPrefix(eventName, "check.") {
-		var check models.Check
-		if err := ctx.DB().Where("id = ?", properties["id"]).Find(&check).Error; err != nil {
-			return nil, err
+	if strings.HasPrefix(event.Name, "check.") {
+		checkID := properties["id"]
+
+		check, err := duty.FindCachedCheck(ctx, checkID)
+		if err != nil {
+			return nil, fmt.Errorf("error finding check: %v", err)
+		} else if check == nil {
+			return nil, fmt.Errorf("check(id=%s) not found", checkID)
 		}
 
-		var canary models.Canary
-		if err := ctx.DB().Where("id = ?", check.CanaryID).Find(&canary).Error; err != nil {
-			return nil, err
+		canary, err := duty.FindCachedCanary(ctx, check.CanaryID.String())
+		if err != nil {
+			return nil, fmt.Errorf("error finding canary: %v", err)
+		} else if canary == nil {
+			return nil, fmt.Errorf("canary(id=%s) not found", check.CanaryID)
 		}
 
-		env["canary"] = canary.AsMap()
-		env["check"] = check.AsMap()
+		agent, err := duty.FindCachedAgent(ctx, check.AgentID.String())
+		if err != nil {
+			return nil, fmt.Errorf("error finding agent: %v", err)
+		} else if agent != nil {
+			env["agent"] = agent.AsMap()
+		}
+
+		summary, err := duty.CheckSummary(ctx, checkID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get check summary: %w", err)
+		} else if summary != nil {
+			check.Uptime = summary.Uptime
+			check.Latency = summary.Latency
+		}
+
+		// We fetch the latest check_status at the time of event creation
+		var checkStatus models.CheckStatus
+		if err := ctx.DB().Where("check_id = ?", checkID).Where("created_at >= ?", event.CreatedAt).Order("created_at").First(&checkStatus).Error; err != nil {
+			return nil, fmt.Errorf("failed to get check status: %w", err)
+		}
+
+		env["status"] = checkStatus.AsMap()
+		env["canary"] = canary.AsMap("spec")
+		env["check"] = check.AsMap("spec")
+		env["permalink"] = fmt.Sprintf("%s/health?layout=table&checkId=%s&timeRange=1h", api.PublicWebURL, check.ID)
 	}
 
-	if eventName == "incident.created" || strings.HasPrefix(eventName, "incident.status.") {
-		var incident models.Incident
-		if err := ctx.DB().Where("id = ?", properties["id"]).Find(&incident).Error; err != nil {
-			return nil, err
+	if event.Name == "incident.created" || strings.HasPrefix(event.Name, "incident.status.") {
+		incidentID := properties["id"]
+
+		incident, err := duty.FindCachedIncident(ctx, incidentID)
+		if err != nil {
+			return nil, fmt.Errorf("error finding incident(id=%s): %v", incidentID, err)
+		} else if incident == nil {
+			return nil, fmt.Errorf("incident(id=%s) not found", incidentID)
 		}
 
 		env["incident"] = incident.AsMap()
+		env["permalink"] = fmt.Sprintf("%s/incidents/%s", api.PublicWebURL, incident.ID)
 	}
 
-	if strings.HasPrefix(eventName, "incident.responder.") {
-		var responder models.Responder
-		if err := ctx.DB().Where("id = ?", properties["id"]).Find(&responder).Error; err != nil {
-			return nil, err
+	if strings.HasPrefix(event.Name, "incident.responder.") {
+		responderID := properties["id"]
+		responder, err := pkgResponder.FindResponderByID(ctx, responderID)
+		if err != nil {
+			return nil, fmt.Errorf("error finding responder(id=%s): %v", responderID, err)
+		} else if responder == nil {
+			return nil, fmt.Errorf("responder(id=%s) not found", responderID)
 		}
 
-		var incident models.Incident
-		if err := ctx.DB().Where("id = ?", responder.IncidentID).Find(&incident).Error; err != nil {
-			return nil, err
+		incident, err := duty.FindCachedIncident(ctx, responder.IncidentID.String())
+		if err != nil {
+			return nil, fmt.Errorf("error finding incident(id=%s): %v", responder.IncidentID, err)
+		} else if incident == nil {
+			return nil, fmt.Errorf("incident(id=%s) not found", responder.IncidentID)
 		}
 
 		env["incident"] = incident.AsMap()
 		env["responder"] = responder.AsMap()
+		env["permalink"] = fmt.Sprintf("%s/incidents/%s", api.PublicWebURL, incident.ID)
 	}
 
-	if strings.HasPrefix(eventName, "incident.comment.") {
+	if strings.HasPrefix(event.Name, "incident.comment.") {
 		var comment models.Comment
 		if err := ctx.DB().Where("id = ?", properties["id"]).Find(&comment).Error; err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error getting comment (id=%s)", properties["id"])
 		}
 
-		var incident models.Incident
-		if err := ctx.DB().Where("id = ?", comment.IncidentID).Find(&incident).Error; err != nil {
-			return nil, err
+		incident, err := duty.FindCachedIncident(ctx, comment.IncidentID.String())
+		if err != nil {
+			return nil, fmt.Errorf("error finding incident(id=%s): %v", comment.IncidentID, err)
+		} else if incident == nil {
+			return nil, fmt.Errorf("incident(id=%s) not found", comment.IncidentID)
+		}
+
+		author, err := duty.FindCachedPerson(ctx, comment.CreatedBy.String())
+		if err != nil {
+			return nil, fmt.Errorf("error getting comment author (id=%s)", comment.CreatedBy)
+		} else if author == nil {
+			return nil, fmt.Errorf("comment author(id=%s) not found", comment.CreatedBy)
 		}
 
 		// TODO: extract out mentioned users' emails from the comment body
 
 		env["incident"] = incident.AsMap()
 		env["comment"] = comment.AsMap()
+		env["author"] = author.AsMap()
+		env["permalink"] = fmt.Sprintf("%s/incidents/%s", api.PublicWebURL, incident.ID)
 	}
 
-	if strings.HasPrefix(eventName, "incident.dod.") {
+	if strings.HasPrefix(event.Name, "incident.dod.") {
 		var evidence models.Evidence
 		if err := ctx.DB().Where("id = ?", properties["id"]).Find(&evidence).Error; err != nil {
 			return nil, err
@@ -361,14 +493,17 @@ func getEnvForEvent(ctx *api.Context, eventName string, properties map[string]st
 			return nil, err
 		}
 
-		var incident models.Incident
-		if err := ctx.DB().Where("id = ?", hypotheses.IncidentID).Find(&incident).Error; err != nil {
-			return nil, err
+		incident, err := duty.FindCachedIncident(ctx, hypotheses.IncidentID.String())
+		if err != nil {
+			return nil, fmt.Errorf("error finding incident(id=%s): %v", hypotheses.IncidentID, err)
+		} else if incident == nil {
+			return nil, fmt.Errorf("incident(id=%s) not found", hypotheses.IncidentID)
 		}
 
 		env["evidence"] = evidence.AsMap()
 		env["hypotheses"] = hypotheses.AsMap()
 		env["incident"] = incident.AsMap()
+		env["permalink"] = fmt.Sprintf("%s/incidents/%s", api.PublicWebURL, incident.ID)
 	}
 
 	return env, nil

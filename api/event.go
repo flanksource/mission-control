@@ -10,6 +10,7 @@ import (
 type Event struct {
 	ID          uuid.UUID           `gorm:"default:generate_ulid()"`
 	Name        string              `json:"name"`
+	CreatedAt   time.Time           `json:"created_at"`
 	Properties  types.JSONStringMap `json:"properties"`
 	Error       string              `json:"error"`
 	Attempts    int                 `json:"attempts"`
