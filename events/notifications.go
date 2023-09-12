@@ -506,6 +506,27 @@ func getEnvForEvent(ctx *api.Context, event api.Event, properties map[string]str
 		env["permalink"] = fmt.Sprintf("%s/incidents/%s", api.PublicWebURL, incident.ID)
 	}
 
+	if strings.HasPrefix(event.Name, "component.status.") {
+		componentID := properties["id"]
+
+		component, err := duty.FindCachedComponent(ctx, componentID)
+		if err != nil {
+			return nil, fmt.Errorf("error finding component(id=%s): %v", componentID, err)
+		} else if component == nil {
+			return nil, fmt.Errorf("component(id=%s) not found", componentID)
+		}
+
+		agent, err := duty.FindCachedAgent(ctx, component.AgentID.String())
+		if err != nil {
+			return nil, fmt.Errorf("error finding agent: %v", err)
+		} else if agent != nil {
+			env["agent"] = agent.AsMap()
+		}
+
+		env["component"] = component.AsMap("checks", "incidents", "analysis", "components", "order", "relationship_id", "children", "parents")
+		env["permalink"] = fmt.Sprintf("%s/topology/%s", api.PublicWebURL, componentID)
+	}
+
 	return env, nil
 }
 
