@@ -210,7 +210,7 @@ func sendNotification(ctx *api.Context, event api.Event) error {
 			return fmt.Errorf("failed to get email of person(id=%s); %v", props.PersonID, err)
 		}
 
-		smtpURL := fmt.Sprintf("%s?ToAddresses=%s", pkgNotification.SystemSMTP, url.QueryEscape(emailAddress))
+		smtpURL := fmt.Sprintf("%s?ToAddresses=%s", api.SystemSMTP, url.QueryEscape(emailAddress))
 		return pkgNotification.Send(ctx, "", smtpURL, data.Title, data.Message, data.Properties)
 	}
 

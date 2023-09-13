@@ -1,9 +1,31 @@
 package v1
 
 import (
-	"github.com/flanksource/incident-commander/api"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+type NotificationRecipientSpec struct {
+	// ID or email of the person
+	Person string `json:"person,omitempty" yaml:"person,omitempty"`
+
+	// name or ID of the recipient team
+	Team string `json:"team,omitempty" yaml:"team,omitempty"`
+
+	// Email of the recipient
+	Email string `json:"email,omitempty" yaml:"email,omitempty"`
+
+	// Specify connection string for an external service.
+	// Should be in the format of connection://<type>/name
+	// or the id of the connection.
+	Connection string `json:"connection,omitempty" yaml:"connection,omitempty"`
+
+	// Specify shoutrrr URL
+	URL string `json:"url,omitempty" yaml:"url,omitempty"`
+}
+
+func (t *NotificationRecipientSpec) Empty() bool {
+	return t.Person == "" && t.Team == "" && t.Email == "" && t.Connection == "" && t.URL == ""
+}
 
 // +kubebuilder:object:generate=true
 type NotificationSpec struct {
@@ -19,17 +41,11 @@ type NotificationSpec struct {
 	// Cel-expression used to decide whether this notification client should send the notification
 	Filter string `json:"filter,omitempty" yaml:"filter,omitempty"`
 
-	// email or ID of the recipient person
-	Person string `json:"person,omitempty" yaml:"person,omitempty"`
-
-	// name or ID of the recipient team
-	Team string `json:"team,omitempty" yaml:"team,omitempty"`
-
-	// Custom services to send this notification to
-	CustomServices []api.NotificationConfig `json:"custom_services,omitempty" yaml:"custom_services,omitempty"`
-
 	// Properties for Shoutrrr
 	Properties map[string]string `json:"properties,omitempty" yaml:"properties,omitempty"`
+
+	// Specify the recipient
+	To NotificationRecipientSpec `json:"to" yaml:"to"`
 }
 
 // NotificationStatus defines the observed state of Notification

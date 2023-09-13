@@ -14,6 +14,5 @@ spec:
     {{end}}
 
     [Reference]({{.permalink}})
-  custom_services:
-    - name: component-notifications
-      connection: connection://Slack/incident-notifications
+  to:
+    connection: connection://Slack/incident-notifications

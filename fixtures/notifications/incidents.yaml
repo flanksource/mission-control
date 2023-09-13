@@ -18,4 +18,5 @@ spec:
     Has communicator: {{if .incident.communicator_id}}Yes{{else}}No{{end}}
 
     [Reference]({{.permalink}})
-  person: aditya@flanksource.com
+  to:
+    person: aditya@flanksource.com

@@ -6,4 +6,5 @@ spec:
   events:
     - check.passed
   filter: check.type == 'http'
-  team: backend
+  to:
+    team: backend

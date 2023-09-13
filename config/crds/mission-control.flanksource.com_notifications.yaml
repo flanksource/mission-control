@@ -34,26 +34,6 @@ spec:
             type: object
           spec:
             properties:
-              custom_services:
-                description: Custom services to send this notification to
-                items:
-                  properties:
-                    connection:
-                      type: string
-                    filter:
-                      type: string
-                    name:
-                      type: string
-                    properties:
-                      additionalProperties:
-                        type: string
-                      type: object
-                    url:
-                      type: string
-                  required:
-                  - name
-                  type: object
-                type: array
               events:
                 description: List of events that can trigger this notification
                 items:
@@ -63,25 +43,41 @@ spec:
                 description: Cel-expression used to decide whether this notification
                   client should send the notification
                 type: string
-              person:
-                description: email or ID of the recipient person
-                type: string
               properties:
                 additionalProperties:
                   type: string
                 description: Properties for Shoutrrr
                 type: object
-              team:
-                description: name or ID of the recipient team
-                type: string
               template:
                 description: Template is the notification body in markdown
                 type: string
               title:
                 description: The title for the notification
                 type: string
+              to:
+                description: Specify the recipient
+                properties:
+                  connection:
+                    description: Specify connection string for an external service.
+                      Should be in the format of connection://<type>/name or the id
+                      of the connection.
+                    type: string
+                  email:
+                    description: Email of the recipient
+                    type: string
+                  person:
+                    description: ID or email of the person
+                    type: string
+                  team:
+                    description: name or ID of the recipient team
+                    type: string
+                  url:
+                    description: Specify shoutrrr URL
+                    type: string
+                type: object
             required:
             - events
+            - to
             type: object
           status:
             description: NotificationStatus defines the observed state of Notification

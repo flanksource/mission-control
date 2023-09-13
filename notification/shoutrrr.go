@@ -16,10 +16,6 @@ import (
 	icUtils "github.com/flanksource/incident-commander/utils"
 )
 
-// SystemSMTP indicates that the shoutrrr URL for smtp should use
-// the system's SMTP credentials.
-const SystemSMTP = "smtp://system/"
-
 // setSystemSMTPCredential modifies the shoutrrrURL to use the system's SMTP credentials.
 func setSystemSMTPCredential(shoutrrrURL string) (string, error) {
 	prefix := fmt.Sprintf("smtp://%s:%s@%s:%s/",
@@ -28,7 +24,7 @@ func setSystemSMTPCredential(shoutrrrURL string) (string, error) {
 		os.Getenv("SMTP_HOST"),
 		os.Getenv("SMTP_PORT"),
 	)
-	shoutrrrURL = strings.ReplaceAll(shoutrrrURL, SystemSMTP, prefix)
+	shoutrrrURL = strings.ReplaceAll(shoutrrrURL, api.SystemSMTP, prefix)
 
 	parsedURL, err := url.Parse(shoutrrrURL)
 	if err != nil {
@@ -54,7 +50,7 @@ func Send(ctx *api.Context, connectionName, shoutrrrURL, title, message string, 
 		properties = append([]map[string]string{connection.Properties}, properties...)
 	}
 
-	if strings.HasPrefix(shoutrrrURL, SystemSMTP) {
+	if strings.HasPrefix(shoutrrrURL, api.SystemSMTP) {
 		var err error
 		shoutrrrURL, err = setSystemSMTPCredential(shoutrrrURL)
 		if err != nil {
