@@ -2,7 +2,6 @@ package api
 
 import (
 	gocontext "context"
-	"strings"
 
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/models"
@@ -109,11 +108,6 @@ func (ctx *Context) GetEnvValueFromCache(env types.EnvVar) (string, error) {
 func (c *Context) HydrateConnection(connectionIdentifier string) (*models.Connection, error) {
 	if connectionIdentifier == "" {
 		return nil, nil
-	}
-
-	// If a connection name is provided then it has to be in one of the correct forms.
-	if _, err := uuid.Parse(connectionIdentifier); err != nil && !strings.HasPrefix(connectionIdentifier, "connection://") {
-		return nil, Errorf(EINVALID, "invalid connection name: %s", connectionIdentifier)
 	}
 
 	if c.DB() == nil {
