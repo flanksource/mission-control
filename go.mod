@@ -11,8 +11,8 @@ require (
 	github.com/casbin/gorm-adapter/v3 v3.18.0
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.23.0
-	github.com/flanksource/commons v1.11.0
-	github.com/flanksource/duty v1.0.175
+	github.com/flanksource/commons v1.12.0
+	github.com/flanksource/duty v1.0.177
 	github.com/flanksource/gomplate/v3 v3.20.12
 	github.com/flanksource/kopper v1.0.6
 	github.com/gomarkdown/markdown v0.0.0-20230716120725-531d2d74bc12
@@ -143,8 +143,8 @@ require (
 	github.com/AzureAD/microsoft-authentication-library-for-go v1.0.0 // indirect
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/TomOnTime/utfutil v0.0.0-20230223141146-125e65197b36
-	github.com/antonmedv/expr v1.15.1 // indirect
-	github.com/aws/aws-sdk-go v1.45.7 // indirect
+	github.com/antonmedv/expr v1.15.2 // indirect
+	github.com/aws/aws-sdk-go v1.45.8 // indirect
 	github.com/bgentry/go-netrc v0.0.0-20140422174119-9fd32a8b3d3d // indirect
 	github.com/cjlapao/common-go v0.0.39 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect

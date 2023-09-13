@@ -2,9 +2,6 @@ package api
 
 import (
 	gocontext "context"
-	"errors"
-	"fmt"
-	"strings"
 
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/models"
@@ -106,16 +103,18 @@ func (ctx *Context) GetEnvValueFromCache(env types.EnvVar) (string, error) {
 	return duty.GetEnvValueFromCache(ctx.Kubernetes, env, ctx.Namespace)
 }
 
-func (c *Context) HydrateConnection(connectionName string) (*models.Connection, error) {
-	if connectionName == "" || !strings.HasPrefix(connectionName, "connection://") {
+// HydrateConnection finds the connection by the given identifier & hydrates it.
+// connectionIdentifier can either be the connection id or the full connection name.
+func (c *Context) HydrateConnection(connectionIdentifier string) (*models.Connection, error) {
+	if connectionIdentifier == "" {
 		return nil, nil
 	}
 
 	if c.DB() == nil {
-		return nil, errors.New("DB has not been initialized")
+		return nil, Errorf(EINTERNAL, "DB has not been initialized")
 	}
 
-	connection, err := duty.HydratedConnectionByURL(c, c.DB(), c.Kubernetes, c.Namespace, connectionName)
+	connection, err := duty.HydratedConnectionByURL(c, c.DB(), c.Kubernetes, c.Namespace, connectionIdentifier)
 	if err != nil {
 		return nil, err
 	}
@@ -123,7 +122,7 @@ func (c *Context) HydrateConnection(connectionName string) (*models.Connection, 
 	// Connection name was explicitly provided but was not found.
 	// That's an error.
 	if connection == nil {
-		return nil, fmt.Errorf("connection %q not found", connectionName)
+		return nil, Errorf(ENOTFOUND, "connection %q not found", connectionIdentifier)
 	}
 
 	return connection, nil
