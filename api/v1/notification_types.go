@@ -21,8 +21,12 @@ type NotificationRecipientSpec struct {
 
 	// Specify shoutrrr URL
 	URL string `json:"url,omitempty" yaml:"url,omitempty"`
+
+	// Properties for Shoutrrr
+	Properties map[string]string `json:"properties,omitempty" yaml:"properties,omitempty"`
 }
 
+// Empty returns true if none of the receivers are set
 func (t *NotificationRecipientSpec) Empty() bool {
 	return t.Person == "" && t.Team == "" && t.Email == "" && t.Connection == "" && t.URL == ""
 }
@@ -40,9 +44,6 @@ type NotificationSpec struct {
 
 	// Cel-expression used to decide whether this notification client should send the notification
 	Filter string `json:"filter,omitempty" yaml:"filter,omitempty"`
-
-	// Properties for Shoutrrr
-	Properties map[string]string `json:"properties,omitempty" yaml:"properties,omitempty"`
 
 	// Specify the recipient
 	To NotificationRecipientSpec `json:"to" yaml:"to"`

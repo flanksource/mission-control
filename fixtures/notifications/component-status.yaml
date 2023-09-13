@@ -16,3 +16,6 @@ spec:
     [Reference]({{.permalink}})
   to:
     connection: connection://Slack/incident-notifications
+    properties:
+      color: |-
+        {{if eq .component.status "error"}}bad{{else}}#FFA700{{end}}

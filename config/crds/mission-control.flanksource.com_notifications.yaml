@@ -43,11 +43,6 @@ spec:
                 description: Cel-expression used to decide whether this notification
                   client should send the notification
                 type: string
-              properties:
-                additionalProperties:
-                  type: string
-                description: Properties for Shoutrrr
-                type: object
               template:
                 description: Template is the notification body in markdown
                 type: string
@@ -68,6 +63,11 @@ spec:
                   person:
                     description: ID or email of the person
                     type: string
+                  properties:
+                    additionalProperties:
+                      type: string
+                    description: Properties for Shoutrrr
+                    type: object
                   team:
                     description: name or ID of the recipient team
                     type: string

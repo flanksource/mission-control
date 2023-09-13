@@ -26,7 +26,7 @@ func PersistNotificationFromCRD(obj *v1.Notification) error {
 		Title:      obj.Spec.Title,
 		Template:   obj.Spec.Template,
 		Filter:     obj.Spec.Filter,
-		Properties: obj.Spec.Properties,
+		Properties: obj.Spec.To.Properties,
 	}
 
 	switch {
