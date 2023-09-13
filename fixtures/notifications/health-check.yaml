@@ -1,0 +1,9 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Notification
+metadata:
+  name: http-check-passed
+spec:
+  events:
+    - check.passed
+  filter: check.type == 'http'
+  team: backend

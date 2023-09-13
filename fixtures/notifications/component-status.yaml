@@ -1,0 +1,19 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Notification
+metadata:
+  name: component-error-or-warning
+spec:
+  events:
+    - component.status.error
+    - component.status.warning
+  title: |
+    {{.component.name}} status updated to {{.component.status}}
+  template: |
+    {{range $k, $v := .component.labels}}
+      **{{$k}}**: {{$v}}
+    {{end}}
+
+    [Reference]({{.permalink}})
+  custom_services:
+    - name: component-notifications
+      connection: connection://Slack/incident-notifications

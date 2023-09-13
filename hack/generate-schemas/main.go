@@ -12,6 +12,7 @@ import (
 
 var schemas = map[string]any{
 	"connection":     &v1.Connection{},
+	"notification":   &v1.Notification{},
 	"playbook":       &v1.Playbook{},
 	"incident-rules": &v1.IncidentRule{},
 }
