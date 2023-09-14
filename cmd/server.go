@@ -205,6 +205,15 @@ func launchKopper() {
 		logger.Fatalf("Unable to create controller for Playbook: %v", err)
 	}
 
+	if err = kopper.SetupReconciler(
+		mgr,
+		db.PersistNotificationFromCRD,
+		db.DeleteNotification,
+		"notification.mission-control.flanksource.com",
+	); err != nil {
+		logger.Fatalf("Unable to create controller for Notification: %v", err)
+	}
+
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		logger.Fatalf("error running manager: %v", err)
 	}

@@ -1,0 +1,89 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.11.1
+  creationTimestamp: null
+  name: notifications.mission-control.flanksource.com
+spec:
+  group: mission-control.flanksource.com
+  names:
+    kind: Notification
+    listKind: NotificationList
+    plural: notifications
+    singular: notification
+  scope: Namespaced
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: Notification is the Schema for the Notification API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            properties:
+              events:
+                description: List of events that can trigger this notification
+                items:
+                  type: string
+                type: array
+              filter:
+                description: Cel-expression used to decide whether this notification
+                  client should send the notification
+                type: string
+              template:
+                description: Template is the notification body in markdown
+                type: string
+              title:
+                description: The title for the notification
+                type: string
+              to:
+                description: Specify the recipient
+                properties:
+                  connection:
+                    description: Specify connection string for an external service.
+                      Should be in the format of connection://<type>/name or the id
+                      of the connection.
+                    type: string
+                  email:
+                    description: Email of the recipient
+                    type: string
+                  person:
+                    description: ID or email of the person
+                    type: string
+                  properties:
+                    additionalProperties:
+                      type: string
+                    description: Properties for Shoutrrr
+                    type: object
+                  team:
+                    description: name or ID of the recipient team
+                    type: string
+                  url:
+                    description: Specify shoutrrr URL
+                    type: string
+                type: object
+            required:
+            - events
+            - to
+            type: object
+          status:
+            description: NotificationStatus defines the observed state of Notification
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

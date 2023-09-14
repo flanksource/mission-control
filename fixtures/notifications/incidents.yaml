@@ -1,0 +1,22 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Notification
+metadata:
+  name: incident-status-updates
+spec:
+  events:
+    - incident.status.cancelled
+    - incident.status.closed
+    - incident.status.investigating
+    - incident.status.mitigated
+    - incident.status.open
+    - incident.status.resolved
+  filter: incident.severity == 'High' || incident.severity == 'Critical'
+  title: |
+    Incident "{{incident.title}}" status was updated to {{incident.status}}
+  template: |
+    Description: {{.incident.description}}
+    Has communicator: {{if .incident.communicator_id}}Yes{{else}}No{{end}}
+
+    [Reference]({{.permalink}})
+  to:
+    person: aditya@flanksource.com
