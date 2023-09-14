@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -11,6 +12,8 @@ import (
 )
 
 func PersistNotificationFromCRD(obj *v1.Notification) error {
+	ctx := api.NewContext(Gorm, nil)
+
 	uid, err := uuid.Parse(string(obj.GetUID()))
 	if err != nil {
 		return err
@@ -31,26 +34,24 @@ func PersistNotificationFromCRD(obj *v1.Notification) error {
 
 	switch {
 	case obj.Spec.To.Person != "":
-		if uid, err := uuid.Parse(obj.Spec.To.Person); err == nil {
-			dbObj.PersonID = &uid
-		} else {
-			var person models.Person
-			if err := Gorm.Where("email = ?", obj.Spec.To.Person).First(&person).Error; err != nil {
-				return err
-			}
-			dbObj.PersonID = &person.ID
+		person, err := duty.FindPerson(ctx, obj.Spec.To.Person)
+		if err != nil {
+			return err
+		} else if person == nil {
+			return fmt.Errorf("person (%s) not found", obj.Spec.To.Person)
 		}
 
+		dbObj.PersonID = &person.ID
+
 	case obj.Spec.To.Team != "":
-		if uid, err := uuid.Parse(obj.Spec.To.Team); err == nil {
-			dbObj.TeamID = &uid
-		} else {
-			var person models.Team
-			if err := Gorm.Where("name = ?", obj.Spec.To.Team).First(&person).Error; err != nil {
-				return err
-			}
-			dbObj.TeamID = &person.ID
+		team, err := duty.FindTeam(ctx, obj.Spec.To.Team)
+		if err != nil {
+			return err
+		} else if team == nil {
+			return fmt.Errorf("team (%s) not found", obj.Spec.To.Team)
 		}
+
+		dbObj.TeamID = &team.ID
 
 	default:
 		customService := api.NotificationConfig{

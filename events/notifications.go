@@ -467,7 +467,7 @@ func getEnvForEvent(ctx *api.Context, event api.Event, properties map[string]str
 			return nil, fmt.Errorf("incident(id=%s) not found", comment.IncidentID)
 		}
 
-		author, err := duty.FindCachedPerson(ctx, comment.CreatedBy.String())
+		author, err := duty.FindPerson(ctx, comment.CreatedBy.String())
 		if err != nil {
 			return nil, fmt.Errorf("error getting comment author (id=%s)", comment.CreatedBy)
 		} else if author == nil {
