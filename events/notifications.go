@@ -8,13 +8,14 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/template"
-	"github.com/flanksource/commons/utils"
+	cUtils "github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	pkgNotification "github.com/flanksource/incident-commander/notification"
 	pkgResponder "github.com/flanksource/incident-commander/responder"
 	"github.com/flanksource/incident-commander/teams"
+	"github.com/flanksource/incident-commander/utils"
 )
 
 func NewNotificationUpdatesConsumerSync() SyncEventConsumer {
@@ -60,10 +61,19 @@ func NewNotificationSendConsumerAsync() AsyncEventConsumer {
 func sendNotifications(ctx *api.Context, events []api.Event) []api.Event {
 	var failedEvents []api.Event
 	for _, e := range events {
-		if err := sendNotification(ctx, e); err != nil {
+		var props NotificationEventProperties
+		props.FromMap(e.Properties)
+
+		notificationContext := pkgNotification.NewContext(ctx, props.NotificationID)
+		utils.LogIfError(notificationContext.StartLog(), "error persisting start of notification send history")
+
+		if err := sendNotification(notificationContext, e); err != nil {
 			e.Error = err.Error()
 			failedEvents = append(failedEvents, e)
+			notificationContext.SetError(err.Error())
 		}
+
+		utils.LogIfError(notificationContext.EndLog(), "error persisting start of notification send history")
 	}
 
 	return failedEvents
@@ -168,12 +178,12 @@ Hypothesis: {{.hypothesis.title}}
 	return title, body
 }
 
-func sendNotification(ctx *api.Context, event api.Event) error {
+func sendNotification(ctx *pkgNotification.Context, event api.Event) error {
 	var props NotificationEventProperties
 	props.FromMap(event.Properties)
 
 	originalEvent := api.Event{Name: props.EventName, CreatedAt: props.EventCreatedAt}
-	celEnv, err := getEnvForEvent(ctx, originalEvent, event.Properties)
+	celEnv, err := getEnvForEvent(ctx.Context, originalEvent, event.Properties)
 	if err != nil {
 		return err
 	}
@@ -187,7 +197,7 @@ func sendNotification(ctx *api.Context, event api.Event) error {
 		},
 	}
 
-	notification, err := pkgNotification.GetNotification(ctx, props.NotificationID)
+	notification, err := pkgNotification.GetNotification(ctx.Context, props.NotificationID)
 	if err != nil {
 		return err
 	}
@@ -195,8 +205,8 @@ func sendNotification(ctx *api.Context, event api.Event) error {
 	defaultTitle, defaultBody := defaultTitleAndBody(props.EventName)
 
 	data := NotificationTemplate{
-		Title:      utils.Coalesce(notification.Title, defaultTitle),
-		Message:    utils.Coalesce(notification.Template, defaultBody),
+		Title:      cUtils.Coalesce(notification.Title, defaultTitle),
+		Message:    cUtils.Coalesce(notification.Template, defaultBody),
 		Properties: notification.Properties,
 	}
 
@@ -215,7 +225,7 @@ func sendNotification(ctx *api.Context, event api.Event) error {
 	}
 
 	if props.TeamID != "" {
-		teamSpec, err := teams.GetTeamSpec(ctx, props.TeamID)
+		teamSpec, err := teams.GetTeamSpec(ctx.Context, props.TeamID)
 		if err != nil {
 			return fmt.Errorf("failed to get team(id=%s); %v", props.TeamID, err)
 		}

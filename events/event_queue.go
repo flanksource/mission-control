@@ -253,7 +253,7 @@ func (t *AsyncEventConsumer) Handle(ctx *api.Context) error {
 	if len(failedEvents) > 0 {
 		if err := tx.Create(failedEvents).Error; err != nil {
 			// TODO: More robust way to handle failed event insertion failures
-			logger.Errorf("Error inserting into table:event_queue with error:%v. %v", err)
+			logger.Errorf("Error inserting into table:event_queue with error: %v", err)
 		}
 	}
 
