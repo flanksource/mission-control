@@ -13,6 +13,11 @@ type Mail struct {
 	message *gomail.Message
 }
 
+func (t *Mail) SetFrom(from string) *Mail {
+	t.message.SetHeader("From", from)
+	return t
+}
+
 func New(to, subject, body, contentType string) *Mail {
 	m := gomail.NewMessage()
 	m.SetHeader("From", FromAddress)

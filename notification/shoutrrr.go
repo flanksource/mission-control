@@ -91,6 +91,25 @@ func Send(ctx *api.Context, connectionName, shoutrrrURL, title, message string, 
 	var params *types.Params
 	if properties != nil {
 		params = (*types.Params)(&allProps)
+	} else {
+		params = &types.Params{}
+	}
+
+	// NOTE: Until shoutrrr fixes the "UseHTML" props, we'll use the mailer package
+	if service == "smtp" {
+		parsedURL, err := url.Parse(shoutrrrURL)
+		if err != nil {
+			return fmt.Errorf("failed to parse shoutrrr URL: %w", err)
+		}
+
+		query := parsedURL.Query()
+		var (
+			to   = utils.Coalesce(query.Get("ToAddresses"), (*params)["ToAddresses"])
+			from = utils.Coalesce(query.Get("FromAddress"), (*params)["FromAddress"])
+		)
+
+		m := mail.New(to, title, message, `text/html; charset="UTF-8"`).SetFrom(from)
+		return m.Send()
 	}
 
 	sendErrors := sender.Send(message, params)
