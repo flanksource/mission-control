@@ -2,7 +2,6 @@ package eventconsumer
 
 import (
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/flanksource/commons/logger"
@@ -73,29 +72,19 @@ func (e EventConsumer) Validate() error {
 	return nil
 }
 
-// ConsumeEventsUntilEmpty consumes events forever until the event queue is empty.
+// ConsumeEventsUntilEmpty consumes events in a loop until the event queue is empty.
 func (t *EventConsumer) ConsumeEventsUntilEmpty(ctx *api.Context) {
-	consumerFunc := func(wg *sync.WaitGroup) {
-		for {
-			err := t.consumerFunc(ctx)
-			if err != nil {
-				if api.ErrorCode(err) == api.ENOTFOUND {
-					wg.Done()
-					return
-				}
-
-				logger.Errorf("error processing event, waiting %s to try again: %v", waitDurationOnFailure, err)
-				time.Sleep(waitDurationOnFailure)
+	for {
+		err := t.consumerFunc(ctx)
+		if err != nil {
+			if api.ErrorCode(err) == api.ENOTFOUND {
+				return
 			}
+
+			logger.Errorf("error processing event, waiting %s to try again: %v", waitDurationOnFailure, err)
+			time.Sleep(waitDurationOnFailure)
 		}
 	}
-
-	var wg sync.WaitGroup
-	for i := 0; i < t.numConsumers; i++ {
-		wg.Add(1)
-		go consumerFunc(&wg)
-	}
-	wg.Wait()
 }
 
 func (e *EventConsumer) Listen(pgNotify <-chan string) {
@@ -109,13 +98,17 @@ func (e *EventConsumer) Listen(pgNotify <-chan string) {
 	// Consume pending events
 	e.ConsumeEventsUntilEmpty(ctx)
 
-	for {
-		select {
-		case <-pgNotify:
-			e.ConsumeEventsUntilEmpty(ctx)
+	for i := 0; i < e.numConsumers; i++ {
+		go func() {
+			for {
+				select {
+				case <-pgNotify:
+					e.ConsumeEventsUntilEmpty(ctx)
 
-		case <-time.After(e.pgNotifyTimeout):
-			e.ConsumeEventsUntilEmpty(ctx)
-		}
+				case <-time.After(e.pgNotifyTimeout):
+					e.ConsumeEventsUntilEmpty(ctx)
+				}
+			}
+		}()
 	}
 }

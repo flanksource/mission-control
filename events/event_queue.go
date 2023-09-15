@@ -141,7 +141,7 @@ func StartConsumers(gormDB *gorm.DB, pgpool *pgxpool.Pool, config Config) {
 			uniqEvents[event] = struct{}{}
 		}
 
-		pgNotifyChannel := notifyRouter.RegisterRoutes(allSyncHandlers[i].watchEvents)
+		pgNotifyChannel := notifyRouter.RegisterRoutes(asyncConsumers[i].watchEvents)
 		go asyncConsumers[i].EventConsumer(gormDB, pgpool).Listen(pgNotifyChannel)
 	}
 }
