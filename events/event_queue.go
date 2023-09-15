@@ -93,6 +93,11 @@ type Config struct {
 }
 
 func StartConsumers(gormDB *gorm.DB, pgpool *pgxpool.Pool, config Config) {
+	// We listen to all PG Notifications on one channel and distribute it to other consumers
+	// based on the events.
+	notifyRouter := newPgNotifyRouter(pgpool)
+	go notifyRouter.Run(eventQueueUpdateChannel)
+
 	uniqEvents := make(map[string]struct{})
 	allSyncHandlers := []SyncEventConsumer{
 		NewTeamConsumerSync(),
@@ -115,7 +120,8 @@ func StartConsumers(gormDB *gorm.DB, pgpool *pgxpool.Pool, config Config) {
 			uniqEvents[event] = struct{}{}
 		}
 
-		go allSyncHandlers[i].EventConsumer(gormDB, pgpool).Listen()
+		pgNotifyChannel := notifyRouter.RegisterRoutes(allSyncHandlers[i].watchEvents)
+		go allSyncHandlers[i].EventConsumer(gormDB, pgpool).Listen(pgNotifyChannel)
 	}
 
 	asyncConsumers := []AsyncEventConsumer{
@@ -135,7 +141,8 @@ func StartConsumers(gormDB *gorm.DB, pgpool *pgxpool.Pool, config Config) {
 			uniqEvents[event] = struct{}{}
 		}
 
-		go asyncConsumers[i].EventConsumer(gormDB, pgpool).Listen()
+		pgNotifyChannel := notifyRouter.RegisterRoutes(allSyncHandlers[i].watchEvents)
+		go asyncConsumers[i].EventConsumer(gormDB, pgpool).Listen(pgNotifyChannel)
 	}
 }
 
@@ -179,7 +186,7 @@ type SyncEventConsumer struct {
 }
 
 func (t SyncEventConsumer) EventConsumer(db *gorm.DB, pool *pgxpool.Pool) *eventconsumer.EventConsumer {
-	consumer := eventconsumer.New(db, pool, eventQueueUpdateChannel, t.Handle)
+	consumer := eventconsumer.New(db, pool, t.Handle)
 	if t.numConsumers > 0 {
 		consumer = consumer.WithNumConsumers(t.numConsumers)
 	}
@@ -262,7 +269,7 @@ func (t *AsyncEventConsumer) Handle(ctx *api.Context) error {
 }
 
 func (t AsyncEventConsumer) EventConsumer(db *gorm.DB, pool *pgxpool.Pool) *eventconsumer.EventConsumer {
-	consumer := eventconsumer.New(db, pool, eventQueueUpdateChannel, t.Handle)
+	consumer := eventconsumer.New(db, pool, t.Handle)
 	if t.numConsumers > 0 {
 		consumer = consumer.WithNumConsumers(t.numConsumers)
 	}

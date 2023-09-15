@@ -24,7 +24,7 @@ func ListenToPostgresNotify(pool *pgxpool.Pool, channel string, dbReconnectMaxDu
 		if err != nil {
 			return fmt.Errorf("error listening to database notifications: %v", err)
 		}
-		logger.Debugf("listening to database notifications")
+		logger.Debugf("listening to database notifications: %s", channel)
 
 		for {
 			n, err := conn.Conn().WaitForNotification(ctx)

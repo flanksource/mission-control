@@ -16,6 +16,7 @@ import (
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/events/eventconsumer"
 	"github.com/flanksource/incident-commander/playbook"
+	"github.com/flanksource/incident-commander/utils"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"gorm.io/gorm/clause"
@@ -36,10 +37,13 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 	})
 
 	ginkgo.It("start the queue consumer in background", func() {
-		go eventconsumer.New(testDB, testDBPool, "playbook_run_updates", playbook.EventConsumer).
+		pgNotifyChannel := make(chan string)
+		go utils.ListenToPostgresNotify(testDBPool, "playbook_run_updates", time.Minute*5, time.Second, pgNotifyChannel)
+
+		go eventconsumer.New(testDB, testDBPool, playbook.EventConsumer).
 			WithNumConsumers(5).
 			WithNotifyTimeout(time.Second * 2).
-			Listen()
+			Listen(pgNotifyChannel)
 
 		go events.StartConsumers(testDB, testDBPool, events.Config{})
 	})

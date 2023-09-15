@@ -7,7 +7,6 @@ import (
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/utils"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"gorm.io/gorm"
 )
@@ -18,9 +17,6 @@ const (
 	waitDurationOnFailure = time.Second * 5
 
 	defaultPgNotifyTimeout = time.Minute
-
-	dbReconnectMaxDuration         = time.Minute * 5
-	dbReconnectBackoffBaseDuration = time.Second
 )
 
 type EventConsumerFunc func(ctx *api.Context) error
@@ -35,21 +31,17 @@ type EventConsumer struct {
 	// pgNotifyTimeout is the timeout to consume events in case no Consume notification is received.
 	pgNotifyTimeout time.Duration
 
-	// pgNotifyChannel is the channel to listen to for any new updates on the event queue
-	pgNotifyChannel string
-
 	// consumerFunc is responsible in fetching the events for the given batch size and events.
 	// It should return a NotFound error if it cannot find any event to consume.
 	consumerFunc EventConsumerFunc
 }
 
 // New returns a new EventConsumer
-func New(DB *gorm.DB, PGPool *pgxpool.Pool, PgNotifyChannel string, ConsumerFunc EventConsumerFunc) *EventConsumer {
+func New(DB *gorm.DB, PGPool *pgxpool.Pool, ConsumerFunc EventConsumerFunc) *EventConsumer {
 	return &EventConsumer{
 		numConsumers:    1,
 		db:              DB,
 		pgPool:          PGPool,
-		pgNotifyChannel: PgNotifyChannel,
 		consumerFunc:    ConsumerFunc,
 		pgNotifyTimeout: defaultPgNotifyTimeout,
 	}
@@ -68,9 +60,6 @@ func (e *EventConsumer) WithNotifyTimeout(timeout time.Duration) *EventConsumer 
 func (e EventConsumer) Validate() error {
 	if e.numConsumers <= 0 {
 		return fmt.Errorf("consumers:%d <= 0", e.numConsumers)
-	}
-	if e.pgNotifyChannel == "" {
-		return fmt.Errorf("pgNotifyChannel is empty")
 	}
 	if e.consumerFunc == nil {
 		return fmt.Errorf("consumerFunc is empty")
@@ -109,7 +98,7 @@ func (t *EventConsumer) ConsumeEventsUntilEmpty(ctx *api.Context) {
 	wg.Wait()
 }
 
-func (e *EventConsumer) Listen() {
+func (e *EventConsumer) Listen(pgNotify <-chan string) {
 	if err := e.Validate(); err != nil {
 		logger.Fatalf("error starting event consumer: %v", err)
 		return
@@ -119,9 +108,6 @@ func (e *EventConsumer) Listen() {
 
 	// Consume pending events
 	e.ConsumeEventsUntilEmpty(ctx)
-
-	pgNotify := make(chan string)
-	go utils.ListenToPostgresNotify(e.pgPool, e.pgNotifyChannel, dbReconnectMaxDuration, dbReconnectBackoffBaseDuration, pgNotify)
 
 	for {
 		select {
