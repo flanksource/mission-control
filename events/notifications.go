@@ -391,7 +391,7 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 			}
 
 			if err := ctx.DB().Create(newEvent).Error; err != nil {
-				return fmt.Errorf("failed to create notification event for custom service (id=%s): %v", n.PersonID, err)
+				return fmt.Errorf("failed to create notification event for custom service (name:%s): %v", cn.Name, err)
 			}
 		}
 	}
