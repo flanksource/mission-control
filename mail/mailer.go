@@ -1,13 +1,17 @@
 package mail
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 
 	"gopkg.in/gomail.v2"
 )
 
-var FromAddress string
+var (
+	FromAddress string
+	FromName    string
+)
 
 type Mail struct {
 	message *gomail.Message
@@ -16,15 +20,15 @@ type Mail struct {
 
 func New(to, subject, body, contentType string) *Mail {
 	m := gomail.NewMessage()
-	m.SetHeader("From", FromAddress)
+	m.SetHeader("From", fmt.Sprintf("%s <%s>", FromName, FromAddress))
 	m.SetHeader("To", to)
 	m.SetHeader("Subject", subject)
 	m.SetBody(contentType, body)
 	return &Mail{message: m}
 }
 
-func (t *Mail) SetFrom(from string) *Mail {
-	t.message.SetHeader("From", from)
+func (t *Mail) SetFrom(name, email string) *Mail {
+	t.message.SetHeader("From", fmt.Sprintf("%s <%s>", name, email))
 	return t
 }
 
