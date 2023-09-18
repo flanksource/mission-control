@@ -18,7 +18,7 @@ const (
 	defaultPgNotifyTimeout = time.Minute
 )
 
-type EventConsumerFunc func(ctx *api.Context) error
+type EventConsumerFunc func(ctx *api.Context) (count int, err error)
 
 type EventConsumer struct {
 	db     *gorm.DB
@@ -30,8 +30,8 @@ type EventConsumer struct {
 	// pgNotifyTimeout is the timeout to consume events in case no Consume notification is received.
 	pgNotifyTimeout time.Duration
 
-	// consumerFunc is responsible in fetching the events for the given batch size and events.
-	// It should return a NotFound error if it cannot find any event to consume.
+	// consumerFunc is responsible in fetching & consuming the events for the given batch size and events.
+	// It returns the number of events it fetched.
 	consumerFunc EventConsumerFunc
 }
 
@@ -75,14 +75,12 @@ func (e EventConsumer) Validate() error {
 // ConsumeEventsUntilEmpty consumes events in a loop until the event queue is empty.
 func (t *EventConsumer) ConsumeEventsUntilEmpty(ctx *api.Context) {
 	for {
-		err := t.consumerFunc(ctx)
+		count, err := t.consumerFunc(ctx)
 		if err != nil {
-			if api.ErrorCode(err) == api.ENOTFOUND {
-				return
-			}
-
 			logger.Errorf("error processing event, waiting %s to try again: %v", waitDurationOnFailure, err)
 			time.Sleep(waitDurationOnFailure)
+		} else if count == 0 {
+			return
 		}
 	}
 }

@@ -26,10 +26,10 @@ func StartPlaybookRunConsumer(db *gorm.DB, pool *pgxpool.Pool) {
 		Listen(pgNotifyChannel)
 }
 
-func EventConsumer(ctx *api.Context) error {
+func EventConsumer(ctx *api.Context) (int, error) {
 	tx := ctx.DB().Begin()
 	if tx.Error != nil {
-		return fmt.Errorf("error initiating db tx: %w", tx.Error)
+		return 0, fmt.Errorf("error initiating db tx: %w", tx.Error)
 	}
 	defer tx.Rollback()
 
@@ -46,16 +46,12 @@ func EventConsumer(ctx *api.Context) error {
 
 	var runs []models.PlaybookRun
 	if err := tx.Raw(query, models.PlaybookRunStatusScheduled).Find(&runs).Error; err != nil {
-		return err
-	}
-
-	if len(runs) == 0 {
-		return api.Errorf(api.ENOTFOUND, "No events found")
+		return 0, err
 	}
 
 	for i := range runs {
 		ExecuteRun(ctx, runs[i])
 	}
 
-	return tx.Commit().Error
+	return len(runs), tx.Commit().Error
 }

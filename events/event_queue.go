@@ -194,10 +194,10 @@ func (t SyncEventConsumer) EventConsumer(db *gorm.DB, pool *pgxpool.Pool) *event
 	return consumer
 }
 
-func (t *SyncEventConsumer) Handle(ctx *api.Context) error {
+func (t *SyncEventConsumer) Handle(ctx *api.Context) (int, error) {
 	tx := ctx.DB().Begin()
 	if tx.Error != nil {
-		return fmt.Errorf("error initiating db tx: %w", tx.Error)
+		return 0, fmt.Errorf("error initiating db tx: %w", tx.Error)
 	}
 	defer tx.Rollback()
 
@@ -205,22 +205,22 @@ func (t *SyncEventConsumer) Handle(ctx *api.Context) error {
 
 	events, err := fetchEvents(ctx, t.watchEvents, 1)
 	if err != nil {
-		return fmt.Errorf("error fetching events: %w", err)
+		return 0, fmt.Errorf("error fetching events: %w", err)
 	}
 
 	if len(events) == 0 {
-		return api.Errorf(api.ENOTFOUND, "No events found")
+		return 0, nil
 	}
 
 	for _, syncConsumer := range t.consumers {
 		if err := syncConsumer(ctx, events[0]); err != nil {
-			return fmt.Errorf("error processing sync consumer: %w", err)
+			return 0, fmt.Errorf("error processing sync consumer: %w", err)
 		}
 	}
 
 	// FIXME: When this fails we only roll it back and the attempt is never increased.
 	// Also, error is never saved.
-	return tx.Commit().Error
+	return len(events), tx.Commit().Error
 }
 
 type AsyncEventConsumer struct {
@@ -230,10 +230,10 @@ type AsyncEventConsumer struct {
 	numConsumers int
 }
 
-func (t *AsyncEventConsumer) Handle(ctx *api.Context) error {
+func (t *AsyncEventConsumer) Handle(ctx *api.Context) (int, error) {
 	tx := ctx.DB().Begin()
 	if tx.Error != nil {
-		return fmt.Errorf("error initiating db tx: %w", tx.Error)
+		return 0, fmt.Errorf("error initiating db tx: %w", tx.Error)
 	}
 	defer tx.Rollback()
 
@@ -241,11 +241,7 @@ func (t *AsyncEventConsumer) Handle(ctx *api.Context) error {
 
 	events, err := fetchEvents(ctx, t.watchEvents, t.batchSize)
 	if err != nil {
-		return fmt.Errorf("error fetching events: %w", err)
-	}
-
-	if len(events) == 0 {
-		return api.Errorf(api.ENOTFOUND, "No events found")
+		return 0, fmt.Errorf("error fetching events: %w", err)
 	}
 
 	failedEvents := t.consumer(ctx, events)
@@ -265,7 +261,7 @@ func (t *AsyncEventConsumer) Handle(ctx *api.Context) error {
 		}
 	}
 
-	return tx.Commit().Error
+	return len(events), tx.Commit().Error
 }
 
 func (t AsyncEventConsumer) EventConsumer(db *gorm.DB, pool *pgxpool.Pool) *eventconsumer.EventConsumer {
