@@ -3,7 +3,6 @@ package notification
 import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/db"
 	"github.com/google/uuid"
 )
 
@@ -22,26 +21,26 @@ func NewContext(ctx *api.Context, notificationID uuid.UUID) *Context {
 }
 
 func (t *Context) StartLog() error {
-	return db.PersistNotificationSendHistory(t.Context, t.log)
+	return t.DB().Save(t.log).Error
 }
 
 func (t *Context) EndLog() error {
-	return db.PersistNotificationSendHistory(t.Context, t.log.End())
+	return t.DB().Save(t.log.End()).Error
 }
 
-func (t *Context) LogMessage(message string) {
+func (t *Context) WithMessage(message string) {
 	t.log.Body = message
 }
 
-func (t *Context) LogError(err string) {
+func (t *Context) WithError(err string) {
 	t.log.Error = &err
 }
 
-func (t *Context) LogSourceEvent(event string, resourceID uuid.UUID) {
+func (t *Context) WithSource(event string, resourceID uuid.UUID) {
 	t.log.SourceEvent = event
 	t.log.ResourceID = resourceID
 }
 
-func (t *Context) LogPersonID(id *uuid.UUID) {
+func (t *Context) WithPersonID(id *uuid.UUID) {
 	t.log.PersonID = id
 }

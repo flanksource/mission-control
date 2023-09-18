@@ -12,10 +12,10 @@ import (
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/logs"
 	pkgNotification "github.com/flanksource/incident-commander/notification"
 	pkgResponder "github.com/flanksource/incident-commander/responder"
 	"github.com/flanksource/incident-commander/teams"
-	"github.com/flanksource/incident-commander/utils"
 	"github.com/google/uuid"
 )
 
@@ -66,16 +66,16 @@ func sendNotifications(ctx *api.Context, events []api.Event) []api.Event {
 		props.FromMap(e.Properties)
 
 		notificationContext := pkgNotification.NewContext(ctx, props.NotificationID)
-		notificationContext.LogSourceEvent(props.EventName, props.ID)
-		utils.LogIfError(notificationContext.StartLog(), "error persisting start of notification send history")
+		notificationContext.WithSource(props.EventName, props.ID)
+		logs.IfError(notificationContext.StartLog(), "error persisting start of notification send history")
 
 		if err := sendNotification(notificationContext, e); err != nil {
 			e.Error = err.Error()
 			failedEvents = append(failedEvents, e)
-			notificationContext.LogError(err.Error())
+			notificationContext.WithError(err.Error())
 		}
 
-		utils.LogIfError(notificationContext.EndLog(), "error persisting start of notification send history")
+		logs.IfError(notificationContext.EndLog(), "error persisting end of notification send history")
 	}
 
 	return failedEvents
@@ -218,7 +218,7 @@ func sendNotification(ctx *pkgNotification.Context, event api.Event) error {
 	}
 
 	if props.PersonID != nil {
-		ctx.LogPersonID(props.PersonID)
+		ctx.WithPersonID(props.PersonID)
 		var emailAddress string
 		if err := ctx.DB().Model(&models.Person{}).Select("email").Where("id = ?", props.PersonID).Find(&emailAddress).Error; err != nil {
 			return fmt.Errorf("failed to get email of person(id=%s); %v", props.PersonID, err)

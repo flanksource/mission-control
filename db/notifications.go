@@ -80,7 +80,3 @@ func PersistNotificationFromCRD(obj *v1.Notification) error {
 func DeleteNotification(id string) error {
 	return Gorm.Delete(&models.Notification{}, "id = ?", id).Error
 }
-
-func PersistNotificationSendHistory(ctx *api.Context, h *models.NotificationSendHistory) error {
-	return ctx.DB().Save(h).Error
-}
