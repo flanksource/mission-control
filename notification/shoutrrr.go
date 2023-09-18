@@ -81,7 +81,7 @@ func Send(ctx *Context, connectionName, shoutrrrURL, title, message string, prop
 		message = stripmd.StripOptions(message, stripmd.Options{KeepURL: true})
 	}
 
-	ctx.SetMessage(message)
+	ctx.LogMessage(message)
 
 	var allProps map[string]string
 	for _, prop := range properties {

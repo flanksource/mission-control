@@ -4,18 +4,19 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/google/uuid"
 )
 
 type Context struct {
 	*api.Context
-	NotificationID string
+	notificationID uuid.UUID
 	log            *models.NotificationSendHistory
 }
 
-func NewContext(ctx *api.Context, notificationID string) *Context {
+func NewContext(ctx *api.Context, notificationID uuid.UUID) *Context {
 	return &Context{
 		Context:        ctx,
-		NotificationID: notificationID,
+		notificationID: notificationID,
 		log:            models.NewNotificationSendHistory(notificationID),
 	}
 }
@@ -28,10 +29,19 @@ func (t *Context) EndLog() error {
 	return db.PersistNotificationSendHistory(t.Context, t.log.End())
 }
 
-func (t *Context) SetMessage(message string) {
+func (t *Context) LogMessage(message string) {
 	t.log.Body = message
 }
 
-func (t *Context) SetError(err string) {
+func (t *Context) LogError(err string) {
 	t.log.Error = &err
+}
+
+func (t *Context) LogSourceEvent(event string, resourceID uuid.UUID) {
+	t.log.SourceEvent = event
+	t.log.ResourceID = resourceID
+}
+
+func (t *Context) LogPersonID(id *uuid.UUID) {
+	t.log.PersonID = id
 }

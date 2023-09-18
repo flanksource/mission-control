@@ -16,6 +16,7 @@ import (
 	pkgResponder "github.com/flanksource/incident-commander/responder"
 	"github.com/flanksource/incident-commander/teams"
 	"github.com/flanksource/incident-commander/utils"
+	"github.com/google/uuid"
 )
 
 func NewNotificationUpdatesConsumerSync() SyncEventConsumer {
@@ -61,16 +62,17 @@ func NewNotificationSendConsumerAsync() AsyncEventConsumer {
 func sendNotifications(ctx *api.Context, events []api.Event) []api.Event {
 	var failedEvents []api.Event
 	for _, e := range events {
-		var props NotificationEventProperties
+		var props NotificationEventPayload
 		props.FromMap(e.Properties)
 
 		notificationContext := pkgNotification.NewContext(ctx, props.NotificationID)
+		notificationContext.LogSourceEvent(props.EventName, props.ID)
 		utils.LogIfError(notificationContext.StartLog(), "error persisting start of notification send history")
 
 		if err := sendNotification(notificationContext, e); err != nil {
 			e.Error = err.Error()
 			failedEvents = append(failedEvents, e)
-			notificationContext.SetError(err.Error())
+			notificationContext.LogError(err.Error())
 		}
 
 		utils.LogIfError(notificationContext.EndLog(), "error persisting start of notification send history")
@@ -79,14 +81,15 @@ func sendNotifications(ctx *api.Context, events []api.Event) []api.Event {
 	return failedEvents
 }
 
-type NotificationEventProperties struct {
-	ID               string    `json:"id"`                          // Resource id. depends what it is based on the original event.
-	EventName        string    `json:"event_name"`                  // The name of the original event this notification is for.
-	PersonID         string    `json:"person_id,omitempty"`         // The person recipient.
-	TeamID           string    `json:"team_id,omitempty"`           // The team recipient.
-	NotificationName string    `json:"notification_name,omitempty"` // Name of the notification of a team or a custom service of the notification.
-	NotificationID   string    `json:"notification_id,omitempty"`   // ID of the notification.
-	EventCreatedAt   time.Time `json:"event_created_at"`            // Timestamp at which the original event was created
+// NotificationEventPayload holds data to create a notification
+type NotificationEventPayload struct {
+	ID               uuid.UUID  `json:"id"`                          // Resource id. depends what it is based on the original event.
+	EventName        string     `json:"event_name"`                  // The name of the original event this notification is for.
+	PersonID         *uuid.UUID `json:"person_id,omitempty"`         // The person recipient.
+	TeamID           string     `json:"team_id,omitempty"`           // The team recipient.
+	NotificationName string     `json:"notification_name,omitempty"` // Name of the notification of a team or a custom service of the notification.
+	NotificationID   uuid.UUID  `json:"notification_id,omitempty"`   // ID of the notification.
+	EventCreatedAt   time.Time  `json:"event_created_at"`            // Timestamp at which the original event was created
 }
 
 // NotificationTemplate holds in data for notification
@@ -97,14 +100,14 @@ type NotificationTemplate struct {
 	Properties map[string]string `template:"true"`
 }
 
-func (t *NotificationEventProperties) AsMap() map[string]string {
+func (t *NotificationEventPayload) AsMap() map[string]string {
 	m := make(map[string]string)
 	b, _ := json.Marshal(&t)
 	_ = json.Unmarshal(b, &m)
 	return m
 }
 
-func (t *NotificationEventProperties) FromMap(m map[string]string) {
+func (t *NotificationEventPayload) FromMap(m map[string]string) {
 	b, _ := json.Marshal(m)
 	_ = json.Unmarshal(b, &t)
 }
@@ -179,7 +182,7 @@ Hypothesis: {{.hypothesis.title}}
 }
 
 func sendNotification(ctx *pkgNotification.Context, event api.Event) error {
-	var props NotificationEventProperties
+	var props NotificationEventPayload
 	props.FromMap(event.Properties)
 
 	originalEvent := api.Event{Name: props.EventName, CreatedAt: props.EventCreatedAt}
@@ -197,7 +200,7 @@ func sendNotification(ctx *pkgNotification.Context, event api.Event) error {
 		},
 	}
 
-	notification, err := pkgNotification.GetNotification(ctx.Context, props.NotificationID)
+	notification, err := pkgNotification.GetNotification(ctx.Context, props.NotificationID.String())
 	if err != nil {
 		return err
 	}
@@ -214,7 +217,8 @@ func sendNotification(ctx *pkgNotification.Context, event api.Event) error {
 		return fmt.Errorf("error templating notification: %w", err)
 	}
 
-	if props.PersonID != "" {
+	if props.PersonID != nil {
+		ctx.LogPersonID(props.PersonID)
 		var emailAddress string
 		if err := ctx.DB().Model(&models.Person{}).Select("email").Where("id = ?", props.PersonID).Find(&emailAddress).Error; err != nil {
 			return fmt.Errorf("failed to get email of person(id=%s); %v", props.PersonID, err)
@@ -301,11 +305,16 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 		}
 
 		if n.PersonID != nil {
-			prop := NotificationEventProperties{
+			resourceID, err := uuid.Parse(event.Properties["id"])
+			if err != nil {
+				return fmt.Errorf("failed to parse resource id: %v", err)
+			}
+
+			prop := NotificationEventPayload{
 				EventName:      event.Name,
-				NotificationID: n.ID.String(),
-				ID:             event.Properties["id"],
-				PersonID:       n.PersonID.String(),
+				NotificationID: n.ID,
+				ID:             resourceID,
+				PersonID:       n.PersonID,
 				EventCreatedAt: event.CreatedAt,
 			}
 
@@ -335,10 +344,15 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 					continue
 				}
 
-				prop := NotificationEventProperties{
+				resourceID, err := uuid.Parse(event.Properties["id"])
+				if err != nil {
+					return fmt.Errorf("failed to parse resource id: %v", err)
+				}
+
+				prop := NotificationEventPayload{
 					EventName:        event.Name,
-					NotificationID:   n.ID.String(),
-					ID:               event.Properties["id"],
+					NotificationID:   n.ID,
+					ID:               resourceID,
 					TeamID:           n.TeamID.String(),
 					NotificationName: cn.Name,
 				}
@@ -359,10 +373,15 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 				continue
 			}
 
-			prop := NotificationEventProperties{
+			resourceID, err := uuid.Parse(event.Properties["id"])
+			if err != nil {
+				return fmt.Errorf("failed to parse resource id: %v", err)
+			}
+
+			prop := NotificationEventPayload{
 				EventName:        event.Name,
-				NotificationID:   n.ID.String(),
-				ID:               event.Properties["id"],
+				NotificationID:   n.ID,
+				ID:               resourceID,
 				NotificationName: cn.Name,
 			}
 
