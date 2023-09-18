@@ -40,11 +40,11 @@ func (t *pgNotifyRouter) Run(channel string) {
 	eventQueueNotifyChannel := make(chan string)
 	go utils.ListenToPostgresNotify(t.pgpool, channel, dbReconnectMaxDuration, dbReconnectBackoffBaseDuration, eventQueueNotifyChannel)
 
-	logger.Infof("running pg notify router")
+	logger.Debugf("running pg notify router")
 	for payload := range eventQueueNotifyChannel {
 		if ch, ok := t.registry[payload]; ok {
 			ch <- payload
-		} else if payload != "push_queue.create" { // Ignore push queue events cuz that'll pollute the logs
+		} else if payload != EventPushQueueCreate { // Ignore push queue events cuz that'll pollute the logs
 			logger.Warnf("notify router:: received notification for an unregistered event: %s", payload)
 		}
 	}
