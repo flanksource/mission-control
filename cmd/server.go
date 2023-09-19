@@ -14,6 +14,8 @@ import (
 	"github.com/labstack/echo-contrib/echoprometheus"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	prom "github.com/prometheus/client_golang/prometheus"
+
 	"github.com/spf13/cobra"
 	ctrl "sigs.k8s.io/controller-runtime"
 
@@ -59,8 +61,13 @@ func createHTTPServer(ctx api.Context) *echo.Echo {
 		}
 	})
 
-	e.Use(echoprometheus.NewMiddleware("mission_control"))
-	e.GET("/metrics", echoprometheus.NewHandler())
+	e.Use(echoprometheus.NewMiddlewareWithConfig(echoprometheus.MiddlewareConfig{
+		Registerer: prom.DefaultRegisterer,
+	}))
+
+	e.GET("/metrics", echoprometheus.NewHandlerWithConfig(echoprometheus.HandlerConfig{
+		Gatherer: prom.DefaultGatherer,
+	}))
 
 	if authMode != "" {
 		var (

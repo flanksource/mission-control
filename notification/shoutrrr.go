@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	stripmd "github.com/adityathebe/go-strip-markdown/v2"
 	"github.com/containrrr/shoutrrr"
@@ -42,6 +43,8 @@ func setSystemSMTPCredential(shoutrrrURL string) (string, error) {
 }
 
 func Send(ctx *Context, connectionName, shoutrrrURL, title, message string, properties ...map[string]string) error {
+	start := time.Now()
+
 	if connectionName != "" {
 		connection, err := ctx.HydrateConnection(connectionName)
 		if err != nil {
@@ -125,6 +128,9 @@ func Send(ctx *Context, connectionName, shoutrrrURL, title, message string, prop
 			return fmt.Errorf("error publishing notification (service=%s): %w", service, err)
 		}
 	}
+
+	notificationSentCounter.WithLabelValues(service).Inc()
+	notificationSendDuration.WithLabelValues(service).Observe(time.Since(start).Seconds())
 
 	return nil
 }
