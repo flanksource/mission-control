@@ -7,7 +7,6 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/responder"
 	"github.com/flanksource/incident-commander/rules"
 	"github.com/flanksource/incident-commander/upstream"
@@ -31,7 +30,7 @@ func ScheduleFunc(schedule string, fn func()) (any, error) {
 	return FuncScheduler.AddFunc(schedule, fn)
 }
 
-func Start() {
+func Start(context duty.DBContext) {
 	// Running first at startup and then with the schedule
 	TeamComponentOwnershipRun()
 	EvaluateEvidenceScripts()
@@ -67,7 +66,7 @@ func Start() {
 	}
 
 	if _, err := ScheduleFunc(CleanupNotificationSendHistorySchedule, func() {
-		if count, err := duty.DeleteNotificationSendHistory(api.NewContext(db.Gorm, nil), 30); err != nil {
+		if count, err := duty.DeleteNotificationSendHistory(context, 30); err != nil {
 			logger.Errorf("Failed to delete notification send history: %v", err)
 		} else if count > 0 {
 			logger.Infof("Deleted %d notification send history", count)
