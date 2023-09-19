@@ -50,13 +50,13 @@ func generateResponderAddedAsyncEvent(ctx *api.Context, event api.Event) error {
 	}
 
 	if spec.ResponderClients.Jira != nil {
-		if err := ctx.DB().Create(&api.Event{Name: EventJiraResponderAdded, Properties: map[string]string{"id": responderID}}).Error; err != nil {
+		if err := ctx.DB().Clauses(eventQueueOnConflictClause).Create(&api.Event{Name: EventJiraResponderAdded, Properties: map[string]string{"id": responderID}}).Error; err != nil {
 			return err
 		}
 	}
 
 	if spec.ResponderClients.MSPlanner != nil {
-		if err := ctx.DB().Create(&api.Event{Name: EventMSPlannerResponderAdded, Properties: map[string]string{"id": responderID}}).Error; err != nil {
+		if err := ctx.DB().Clauses(eventQueueOnConflictClause).Create(&api.Event{Name: EventMSPlannerResponderAdded, Properties: map[string]string{"id": responderID}}).Error; err != nil {
 			return err
 		}
 	}
@@ -93,14 +93,14 @@ func generateCommentAddedAsyncEvent(ctx *api.Context, event api.Event) error {
 	for _, responder := range responders {
 		switch responder.Type {
 		case "jira":
-			if err := ctx.DB().Create(&api.Event{Name: EventJiraCommentAdded, Properties: map[string]string{
+			if err := ctx.DB().Clauses(eventQueueOnConflictClause).Create(&api.Event{Name: EventJiraCommentAdded, Properties: map[string]string{
 				"responder_id": responder.ID.String(),
 				"id":           commentID,
 			}}).Error; err != nil {
 				return err
 			}
 		case "ms_planner":
-			if err := ctx.DB().Create(&api.Event{Name: EventMSPlannerCommentAdded, Properties: map[string]string{
+			if err := ctx.DB().Clauses(eventQueueOnConflictClause).Create(&api.Event{Name: EventMSPlannerCommentAdded, Properties: map[string]string{
 				"responder_id": responder.ID.String(),
 				"id":           commentID,
 			}}).Error; err != nil {

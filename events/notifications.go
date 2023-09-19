@@ -322,7 +322,7 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 				Name:       EventNotificationSend,
 				Properties: prop.AsMap(),
 			}
-			if err := ctx.DB().Create(newEvent).Error; err != nil {
+			if err := ctx.DB().Clauses(eventQueueOnConflictClause).Create(newEvent).Error; err != nil {
 				return fmt.Errorf("failed to create notification event for person(id=%s): %v", n.PersonID, err)
 			}
 		}
@@ -362,7 +362,7 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 					Properties: prop.AsMap(),
 				}
 
-				if err := ctx.DB().Create(newEvent).Error; err != nil {
+				if err := ctx.DB().Clauses(eventQueueOnConflictClause).Create(newEvent).Error; err != nil {
 					return fmt.Errorf("failed to create notification event for team(id=%s): %v", n.TeamID, err)
 				}
 			}
@@ -390,7 +390,7 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 				Properties: prop.AsMap(),
 			}
 
-			if err := ctx.DB().Create(newEvent).Error; err != nil {
+			if err := ctx.DB().Clauses(eventQueueOnConflictClause).Create(newEvent).Error; err != nil {
 				return fmt.Errorf("failed to create notification event for custom service (name:%s): %v", cn.Name, err)
 			}
 		}
