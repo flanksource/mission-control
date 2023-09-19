@@ -245,7 +245,7 @@ var Serve = &cobra.Command{
 			}
 		}
 
-		go jobs.Start()
+		go jobs.Start(api.NewContext(db.Gorm, nil))
 
 		events.StartConsumers(db.Gorm, db.Pool, events.Config{
 			UpstreamPush: api.UpstreamConf,

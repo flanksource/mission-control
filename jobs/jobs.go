@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/responder"
 	"github.com/flanksource/incident-commander/rules"
@@ -13,13 +14,14 @@ import (
 )
 
 const (
-	TeamComponentOwnershipSchedule  = "@every 15m"
-	EvaluateEvidenceScriptsSchedule = "@every 5m"
-	ResponderCommentsSyncSchedule   = "@every 1h"
-	ResponderConfigSyncSchedule     = "@every 1h"
-	CleanupJobHistoryTableSchedule  = "@every 24h"
-	CleanupEventQueueTableSchedule  = "@every 24h"
-	PushAgentReconcileSchedule      = "@every 30m"
+	TeamComponentOwnershipSchedule         = "@every 15m"
+	EvaluateEvidenceScriptsSchedule        = "@every 5m"
+	ResponderCommentsSyncSchedule          = "@every 1h"
+	ResponderConfigSyncSchedule            = "@every 1h"
+	CleanupJobHistoryTableSchedule         = "@every 24h"
+	CleanupEventQueueTableSchedule         = "@every 24h"
+	CleanupNotificationSendHistorySchedule = "@every 24h"
+	PushAgentReconcileSchedule             = "@every 30m"
 )
 
 var FuncScheduler = cron.New()
@@ -28,7 +30,7 @@ func ScheduleFunc(schedule string, fn func()) (any, error) {
 	return FuncScheduler.AddFunc(schedule, fn)
 }
 
-func Start() {
+func Start(context duty.DBContext) {
 	// Running first at startup and then with the schedule
 	TeamComponentOwnershipRun()
 	EvaluateEvidenceScripts()
@@ -61,6 +63,16 @@ func Start() {
 
 	if _, err := ScheduleFunc(CleanupEventQueueTableSchedule, CleanupEventQueue); err != nil {
 		logger.Errorf("Failed to schedule job for cleaning up event queue table: %v", err)
+	}
+
+	if _, err := ScheduleFunc(CleanupNotificationSendHistorySchedule, func() {
+		if count, err := duty.DeleteNotificationSendHistory(context, 30); err != nil {
+			logger.Errorf("Failed to delete notification send history: %v", err)
+		} else if count > 0 {
+			logger.Infof("Deleted %d notification send history", count)
+		}
+	}); err != nil {
+		logger.Errorf("Failed to schedule job for cleaning up notification send history table: %v", err)
 	}
 
 	if api.UpstreamConf.Valid() {

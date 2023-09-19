@@ -40,7 +40,7 @@ func setSystemSMTPCredential(shoutrrrURL string) (string, error) {
 	return shoutrrrURL, nil
 }
 
-func Send(ctx *api.Context, connectionName, shoutrrrURL, title, message string, properties ...map[string]string) error {
+func Send(ctx *Context, connectionName, shoutrrrURL, title, message string, properties ...map[string]string) error {
 	if connectionName != "" {
 		connection, err := ctx.HydrateConnection(connectionName)
 		if err != nil {
@@ -80,6 +80,8 @@ func Send(ctx *api.Context, connectionName, shoutrrrURL, title, message string, 
 	default:
 		message = stripmd.StripOptions(message, stripmd.Options{KeepURL: true})
 	}
+
+	ctx.WithMessage(message)
 
 	var allProps map[string]string
 	for _, prop := range properties {
