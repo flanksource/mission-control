@@ -10,6 +10,7 @@ import (
 	"github.com/flanksource/incident-commander/events/eventconsumer"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 const (
@@ -267,4 +268,15 @@ func (t AsyncEventConsumer) EventConsumer(db *gorm.DB, pool *pgxpool.Pool) *even
 	}
 
 	return consumer
+}
+
+// on conflict clause when inserting new events to the `event_queue` table
+var eventQueueOnConflictClause = clause.OnConflict{
+	Columns: []clause.Column{{Name: "name"}, {Name: "properties"}},
+	DoUpdates: clause.Assignments(map[string]any{
+		"attempts":     0,
+		"last_attempt": nil,
+		"created_at":   gorm.Expr("NOW()"),
+		"error":        clause.Column{Table: "excluded", Name: "error"},
+	}),
 }
