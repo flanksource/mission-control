@@ -45,10 +45,24 @@ func setSystemSMTPCredential(shoutrrrURL string) (string, error) {
 func Send(ctx *Context, connectionName, shoutrrrURL, title, message string, properties ...map[string]string) error {
 	start := time.Now()
 
+	service, err := send(ctx, connectionName, shoutrrrURL, title, message, properties...)
+	if err != nil {
+		notificationSendFailureCounter.WithLabelValues(service, string(ctx.recipientType), ctx.notificationID.String()).Inc()
+		return err
+	}
+
+	notificationSentCounter.WithLabelValues(service, string(ctx.recipientType), ctx.notificationID.String()).Inc()
+	notificationSendDuration.WithLabelValues(service, string(ctx.recipientType), ctx.notificationID.String()).Observe(time.Since(start).Seconds())
+
+	return nil
+}
+
+// send sends a notification and returns the service it sent the notification to
+func send(ctx *Context, connectionName, shoutrrrURL, title, message string, properties ...map[string]string) (string, error) {
 	if connectionName != "" {
 		connection, err := ctx.HydrateConnection(connectionName)
 		if err != nil {
-			return err
+			return "", err
 		}
 
 		shoutrrrURL = connection.URL
@@ -59,18 +73,18 @@ func Send(ctx *Context, connectionName, shoutrrrURL, title, message string, prop
 		var err error
 		shoutrrrURL, err = setSystemSMTPCredential(shoutrrrURL)
 		if err != nil {
-			return err
+			return "", err
 		}
 	}
 
 	sender, err := shoutrrr.CreateSender(shoutrrrURL)
 	if err != nil {
-		return fmt.Errorf("failed to create a shoutrrr sender client: %w", err)
+		return "", fmt.Errorf("failed to create a shoutrrr sender client: %w", err)
 	}
 
 	service, _, err := sender.ExtractServiceName(shoutrrrURL)
 	if err != nil {
-		return fmt.Errorf("failed to extract service name: %w", err)
+		return "", fmt.Errorf("failed to extract service name: %w", err)
 	}
 
 	switch service {
@@ -104,7 +118,7 @@ func Send(ctx *Context, connectionName, shoutrrrURL, title, message string, prop
 	if service == "smtp" {
 		parsedURL, err := url.Parse(shoutrrrURL)
 		if err != nil {
-			return fmt.Errorf("failed to parse shoutrrr URL: %w", err)
+			return "", fmt.Errorf("failed to parse shoutrrr URL: %w", err)
 		}
 
 		query := parsedURL.Query()
@@ -119,20 +133,17 @@ func Send(ctx *Context, connectionName, shoutrrrURL, title, message string, prop
 		m := mail.New(to, title, message, `text/html; charset="UTF-8"`).
 			SetFrom(fromName, from).
 			SetCredentials(parsedURL.Hostname(), port, parsedURL.User.Username(), password)
-		return m.Send()
+		return service, m.Send()
 	}
 
 	sendErrors := sender.Send(message, params)
 	for _, err := range sendErrors {
 		if err != nil {
-			return fmt.Errorf("error publishing notification (service=%s): %w", service, err)
+			return "", fmt.Errorf("error publishing notification (service=%s): %w", service, err)
 		}
 	}
 
-	notificationSentCounter.WithLabelValues(service).Inc()
-	notificationSendDuration.WithLabelValues(service).Observe(time.Since(start).Seconds())
-
-	return nil
+	return service, nil
 }
 
 // injectTitleIntoProperties adds the given title to the shoutrrr properties if it's not already set.
