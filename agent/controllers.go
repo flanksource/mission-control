@@ -11,7 +11,7 @@ import (
 
 // GenerateAgent creates a new person and a new agent and associates them.
 func GenerateAgent(c echo.Context) error {
-	ctx := c.(*api.Context)
+	ctx := c.(api.Context)
 
 	var body api.GenerateAgentRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&body); err != nil {

@@ -26,7 +26,7 @@ type ExecDetails struct {
 	ExitCode int    `json:"exitCode,omitempty"`
 }
 
-func (c *ExecAction) Run(ctx *api.Context, exec v1.ExecAction, env TemplateEnv) (*ExecDetails, error) {
+func (c *ExecAction) Run(ctx api.Context, exec v1.ExecAction, env TemplateEnv) (*ExecDetails, error) {
 	script, err := gomplate.RunTemplate(env.AsMap(), gomplate.Template{Template: exec.Script})
 	if err != nil {
 		return nil, err
@@ -41,7 +41,7 @@ func (c *ExecAction) Run(ctx *api.Context, exec v1.ExecAction, env TemplateEnv) 
 	}
 }
 
-func execPowershell(check v1.ExecAction, ctx *api.Context) (*ExecDetails, error) {
+func execPowershell(check v1.ExecAction, ctx api.Context) (*ExecDetails, error) {
 	ps, err := osExec.LookPath("powershell.exe")
 	if err != nil {
 		return nil, err
@@ -51,9 +51,9 @@ func execPowershell(check v1.ExecAction, ctx *api.Context) (*ExecDetails, error)
 	return runCmd(cmd)
 }
 
-func setupConnection(ctx *api.Context, check v1.ExecAction, cmd *osExec.Cmd) error {
+func setupConnection(ctx api.Context, check v1.ExecAction, cmd *osExec.Cmd) error {
 	if check.Connections.AWS != nil {
-		if err := check.Connections.AWS.Populate(ctx, ctx.Kubernetes, ctx.Namespace); err != nil {
+		if err := check.Connections.AWS.Populate(ctx, ctx.Kubernetes(), ctx.Namespace()); err != nil {
 			return fmt.Errorf("failed to hydrate aws connection: %w", err)
 		}
 
@@ -108,7 +108,7 @@ func setupConnection(ctx *api.Context, check v1.ExecAction, cmd *osExec.Cmd) err
 	return nil
 }
 
-func execBash(check v1.ExecAction, ctx *api.Context) (*ExecDetails, error) {
+func execBash(check v1.ExecAction, ctx api.Context) (*ExecDetails, error) {
 	if len(check.Script) == 0 {
 		return nil, fmt.Errorf("no script provided")
 	}

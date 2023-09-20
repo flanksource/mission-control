@@ -30,7 +30,7 @@ func ScheduleFunc(schedule string, fn func()) (any, error) {
 	return FuncScheduler.AddFunc(schedule, fn)
 }
 
-func Start(context duty.DBContext) {
+func Start(ctx api.Context) {
 	// Running first at startup and then with the schedule
 	TeamComponentOwnershipRun()
 	EvaluateEvidenceScripts()
@@ -66,7 +66,7 @@ func Start(context duty.DBContext) {
 	}
 
 	if _, err := ScheduleFunc(CleanupNotificationSendHistorySchedule, func() {
-		if count, err := duty.DeleteNotificationSendHistory(context, 30); err != nil {
+		if count, err := duty.DeleteNotificationSendHistory(ctx, 30); err != nil {
 			logger.Errorf("Failed to delete notification send history: %v", err)
 		} else if count > 0 {
 			logger.Infof("Deleted %d notification send history", count)

@@ -115,7 +115,7 @@ var _ = ginkgo.BeforeSuite(func() {
 	upstreamEchoServer = echo.New()
 	upstreamEchoServer.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			cc := api.NewContext(upstreamDB, c)
+			cc := api.NewContext(upstreamDB, upstreamDBPGPool).WithEchoContext(c)
 			return next(cc)
 		}
 	})

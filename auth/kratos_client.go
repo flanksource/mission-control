@@ -4,21 +4,18 @@ import (
 	"context"
 	"os"
 
-	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/api"
 	client "github.com/ory/client-go"
-	"gorm.io/gorm"
 )
 
 type KratosHandler struct {
 	client      *client.APIClient
 	adminClient *client.APIClient
 	jwtSecret   string
-	db          *gorm.DB
 }
 
-func NewKratosHandler(db *gorm.DB, kratosAPI, kratosAdminAPI, jwtSecret string) *KratosHandler {
+func NewKratosHandler(kratosAPI, kratosAdminAPI, jwtSecret string) *KratosHandler {
 	return &KratosHandler{
-		db:          db,
 		client:      newAPIClient(kratosAPI),
 		adminClient: newAdminAPIClient(kratosAdminAPI),
 		jwtSecret:   jwtSecret,
@@ -104,9 +101,9 @@ func (k *KratosHandler) createAdminIdentity(ctx context.Context) (string, error)
 	return createdIdentity.Id, nil
 }
 
-func (k *KratosHandler) CreateAdminUser(ctx context.Context) (string, error) {
+func (k *KratosHandler) CreateAdminUser(ctx api.Context) (string, error) {
 	var id string
-	tx := db.Gorm.Raw(`SELECT id FROM identities WHERE traits->>'email' = ?`, AdminEmail).Scan(&id)
+	tx := ctx.DB().Raw(`SELECT id FROM identities WHERE traits->>'email' = ?`, AdminEmail).Scan(&id)
 	if tx.Error != nil {
 		return "", tx.Error
 	}

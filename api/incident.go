@@ -1,7 +1,7 @@
 package api
 
 import (
-	"context"
+	gocontext "context"
 	"database/sql/driver"
 	"encoding/json"
 	"fmt"
@@ -262,6 +262,6 @@ func (rule IncidentRuleSpec) GormDBDataType(db *gorm.DB, field *schema.Field) st
 	return types.JSONGormDBDataType(db.Dialector.Name())
 }
 
-func (rule IncidentRuleSpec) GormValue(ctx context.Context, db *gorm.DB) clause.Expr {
+func (rule IncidentRuleSpec) GormValue(ctx gocontext.Context, db *gorm.DB) clause.Expr {
 	return types.GormValue(rule)
 }

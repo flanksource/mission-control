@@ -9,7 +9,6 @@ import (
 	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/events/eventconsumer"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -25,10 +24,10 @@ const (
 
 type (
 	// AsyncEventHandlerFunc processes multiple events and returns the failed ones
-	AsyncEventHandlerFunc func(*api.Context, []api.Event) []api.Event
+	AsyncEventHandlerFunc func(api.Context, []api.Event) []api.Event
 
 	// SyncEventHandlerFunc processes a single event and ONLY makes db changes.
-	SyncEventHandlerFunc func(*api.Context, api.Event) error
+	SyncEventHandlerFunc func(api.Context, api.Event) error
 )
 
 // List of all sync events in the `event_queue` table.
@@ -93,11 +92,11 @@ type Config struct {
 	UpstreamPush upstream.UpstreamConfig
 }
 
-func StartConsumers(gormDB *gorm.DB, pgpool *pgxpool.Pool, config Config) {
+func StartConsumers(ctx api.Context, config Config) {
 	// We listen to all PG Notifications on one channel and distribute it to other consumers
 	// based on the events.
-	notifyRouter := newPgNotifyRouter(pgpool)
-	go notifyRouter.Run(eventQueueUpdateChannel)
+	notifyRouter := newPgNotifyRouter()
+	go notifyRouter.Run(ctx, eventQueueUpdateChannel)
 
 	uniqEvents := make(map[string]struct{})
 	allSyncHandlers := []SyncEventConsumer{
@@ -122,7 +121,7 @@ func StartConsumers(gormDB *gorm.DB, pgpool *pgxpool.Pool, config Config) {
 		}
 
 		pgNotifyChannel := notifyRouter.RegisterRoutes(allSyncHandlers[i].watchEvents)
-		go allSyncHandlers[i].EventConsumer(gormDB, pgpool).Listen(pgNotifyChannel)
+		go allSyncHandlers[i].EventConsumer().Listen(ctx, pgNotifyChannel)
 	}
 
 	asyncConsumers := []AsyncEventConsumer{
@@ -143,12 +142,12 @@ func StartConsumers(gormDB *gorm.DB, pgpool *pgxpool.Pool, config Config) {
 		}
 
 		pgNotifyChannel := notifyRouter.RegisterRoutes(asyncConsumers[i].watchEvents)
-		go asyncConsumers[i].EventConsumer(gormDB, pgpool).Listen(pgNotifyChannel)
+		go asyncConsumers[i].EventConsumer().Listen(ctx, pgNotifyChannel)
 	}
 }
 
 // fetchEvents fetches given watch events from the `event_queue` table.
-func fetchEvents(ctx *api.Context, watchEvents []string, batchSize int) ([]api.Event, error) {
+func fetchEvents(ctx api.Context, watchEvents []string, batchSize int) ([]api.Event, error) {
 	const selectEventsQuery = `
 			DELETE FROM event_queue
 			WHERE id IN (
@@ -186,8 +185,8 @@ type SyncEventConsumer struct {
 	numConsumers int
 }
 
-func (t SyncEventConsumer) EventConsumer(db *gorm.DB, pool *pgxpool.Pool) *eventconsumer.EventConsumer {
-	consumer := eventconsumer.New(db, pool, t.Handle)
+func (t SyncEventConsumer) EventConsumer() *eventconsumer.EventConsumer {
+	consumer := eventconsumer.New(t.Handle)
 	if t.numConsumers > 0 {
 		consumer = consumer.WithNumConsumers(t.numConsumers)
 	}
@@ -195,7 +194,7 @@ func (t SyncEventConsumer) EventConsumer(db *gorm.DB, pool *pgxpool.Pool) *event
 	return consumer
 }
 
-func (t *SyncEventConsumer) Handle(ctx *api.Context) (int, error) {
+func (t *SyncEventConsumer) Handle(ctx api.Context) (int, error) {
 	event, err := t.consumeOne(ctx)
 	if err != nil {
 		if event != nil {
@@ -218,7 +217,7 @@ func (t *SyncEventConsumer) Handle(ctx *api.Context) (int, error) {
 }
 
 // consumeOne fetches a single event and passes it to all the consumers in one single transaction.
-func (t *SyncEventConsumer) consumeOne(ctx *api.Context) (*api.Event, error) {
+func (t *SyncEventConsumer) consumeOne(ctx api.Context) (*api.Event, error) {
 	tx := ctx.DB().Begin()
 	if tx.Error != nil {
 		return nil, fmt.Errorf("error initiating db tx: %w", tx.Error)
@@ -255,7 +254,7 @@ type AsyncEventConsumer struct {
 	numConsumers int
 }
 
-func (t *AsyncEventConsumer) Handle(ctx *api.Context) (int, error) {
+func (t *AsyncEventConsumer) Handle(ctx api.Context) (int, error) {
 	tx := ctx.DB().Begin()
 	if tx.Error != nil {
 		return 0, fmt.Errorf("error initiating db tx: %w", tx.Error)
@@ -288,8 +287,8 @@ func (t *AsyncEventConsumer) Handle(ctx *api.Context) (int, error) {
 	return len(events), tx.Commit().Error
 }
 
-func (t AsyncEventConsumer) EventConsumer(db *gorm.DB, pool *pgxpool.Pool) *eventconsumer.EventConsumer {
-	consumer := eventconsumer.New(db, pool, t.Handle)
+func (t AsyncEventConsumer) EventConsumer() *eventconsumer.EventConsumer {
+	consumer := eventconsumer.New(t.Handle)
 	if t.numConsumers > 0 {
 		consumer = consumer.WithNumConsumers(t.numConsumers)
 	}

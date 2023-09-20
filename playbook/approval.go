@@ -9,7 +9,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func ApproveRun(ctx *api.Context, playbookID, runID uuid.UUID) error {
+func ApproveRun(ctx api.Context, playbookID, runID uuid.UUID) error {
 	approver := ctx.User()
 	if approver == nil {
 		return api.Errorf(api.EUNAUTHORIZED, "user not found.")

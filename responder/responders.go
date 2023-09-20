@@ -17,16 +17,16 @@ var respondersCache = cache.New(time.Hour*1, time.Hour*1)
 
 type ResponderInterface interface {
 	// NotifyResponder creates a new issue and returns the issue ID
-	NotifyResponder(ctx *api.Context, responder api.Responder) (string, error)
+	NotifyResponder(ctx api.Context, responder api.Responder) (string, error)
 	// NotifyResponderAddComment adds a comment to an existing issue
-	NotifyResponderAddComment(ctx *api.Context, responder api.Responder, comment string) (string, error)
+	NotifyResponderAddComment(ctx api.Context, responder api.Responder, comment string) (string, error)
 	// GetComments returns the comments for an issue
 	GetComments(issueID string) ([]api.Comment, error)
 	// SyncConfig gets the config for the responder for use in the UI
-	SyncConfig(ctx *api.Context, team api.Team) (configType string, configName string, config string, err error)
+	SyncConfig(ctx api.Context, team api.Team) (configType string, configName string, config string, err error)
 }
 
-func GetResponder(ctx *api.Context, team api.Team) (ResponderInterface, error) {
+func GetResponder(ctx api.Context, team api.Team) (ResponderInterface, error) {
 	if r, found := respondersCache.Get(team.ID.String()); found {
 		return r.(ResponderInterface), nil
 	}
@@ -54,7 +54,7 @@ func GetResponder(ctx *api.Context, team api.Team) (ResponderInterface, error) {
 	return responder, nil
 }
 
-func FindResponderByID(ctx *api.Context, id string) (*models.Responder, error) {
+func FindResponderByID(ctx api.Context, id string) (*models.Responder, error) {
 	if value, ok := respondersCache.Get(id); ok {
 		if cache, ok := value.(*models.Responder); ok {
 			return cache, nil

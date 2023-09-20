@@ -70,7 +70,7 @@ func (h ClerkHandler) Session(next echo.HandlerFunc) echo.HandlerFunc {
 			return c.String(http.StatusUnauthorized, "Unauthorized")
 		}
 
-		ctx := c.(*api.Context)
+		ctx := c.(api.Context)
 		user, sessID, err := h.getUser(ctx, sessionToken)
 		if err != nil {
 			logger.Errorf("Error fetching user from clerk: %v", err)
@@ -86,12 +86,12 @@ func (h ClerkHandler) Session(next echo.HandlerFunc) echo.HandlerFunc {
 		c.Request().Header.Set(echo.HeaderAuthorization, fmt.Sprintf("Bearer %s", token))
 		c.Request().Header.Set(api.UserIDHeaderKey, user.ID.String())
 
-		ctx.WithUser(&api.ContextUser{ID: user.ID, Email: user.Email})
+		ctx = ctx.WithUser(&api.ContextUser{ID: user.ID, Email: user.Email})
 		return next(ctx)
 	}
 }
 
-func (h *ClerkHandler) getUser(ctx *api.Context, sessionToken string) (*api.Person, string, error) {
+func (h *ClerkHandler) getUser(ctx api.Context, sessionToken string) (*api.Person, string, error) {
 	claims, err := h.parseJWTToken(sessionToken)
 	if err != nil {
 		return nil, "", err
@@ -120,7 +120,7 @@ func (h *ClerkHandler) getUser(ctx *api.Context, sessionToken string) (*api.Pers
 	return &dbUser, sessionID, nil
 }
 
-func (h *ClerkHandler) createDBUserIfNotExists(ctx *api.Context, user api.Person, role string) (api.Person, error) {
+func (h *ClerkHandler) createDBUserIfNotExists(ctx api.Context, user api.Person, role string) (api.Person, error) {
 	existingUser, err := db.GetUserByExternalID(ctx, user.ExternalID)
 	if err == nil {
 		// User with the given external ID exists

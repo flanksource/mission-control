@@ -6,7 +6,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func PersistJobHistory(ctx *api.Context, h *models.JobHistory) error {
+func PersistJobHistory(ctx api.Context, h *models.JobHistory) error {
 	// Delete jobs which did not process anything
 	if h.ID != uuid.Nil && (h.SuccessCount+h.ErrorCount) == 0 {
 		return ctx.DB().Table("job_history").Delete(h).Error
@@ -15,7 +15,7 @@ func PersistJobHistory(ctx *api.Context, h *models.JobHistory) error {
 	return ctx.DB().Table("job_history").Save(h).Error
 }
 
-func DeleteOldJobHistoryRows(ctx *api.Context, keepLatest int) error {
+func DeleteOldJobHistoryRows(ctx api.Context, keepLatest int) error {
 	return ctx.DB().Exec(`
     WITH ordered_history AS (
         SELECT

@@ -19,7 +19,7 @@ func NewTeamConsumerSync() SyncEventConsumer {
 	return consumer
 }
 
-func handleTeamEvent(ctx *api.Context, event api.Event) error {
+func handleTeamEvent(ctx api.Context, event api.Event) error {
 	switch event.Name {
 	case EventTeamUpdate:
 		return handleTeamUpdate(ctx, event)
@@ -31,7 +31,7 @@ func handleTeamEvent(ctx *api.Context, event api.Event) error {
 }
 
 // handleTeamDelete makes the necessary changes when a team is deleted.
-func handleTeamDelete(ctx *api.Context, event api.Event) error {
+func handleTeamDelete(ctx api.Context, event api.Event) error {
 	var teamID uuid.UUID
 	if _teamID, ok := event.Properties["team_id"]; !ok {
 		logger.Warnf("event has invalid property. missing 'team_id'")
@@ -51,7 +51,7 @@ func handleTeamDelete(ctx *api.Context, event api.Event) error {
 }
 
 // handleTeamUpdate makes the necessary changes when a team spec is updated.
-func handleTeamUpdate(ctx *api.Context, event api.Event) error {
+func handleTeamUpdate(ctx api.Context, event api.Event) error {
 	var teamID uuid.UUID
 	if _teamID, ok := event.Properties["team_id"]; !ok {
 		logger.Warnf("event has invalid property. missing 'team_id'")

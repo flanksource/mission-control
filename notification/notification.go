@@ -21,7 +21,7 @@ func PurgeCache(notificationID string) {
 	notificationByIDCache.Delete(notificationID)
 }
 
-func GetNotificationIDs(ctx *api.Context, eventName string) ([]string, error) {
+func GetNotificationIDs(ctx api.Context, eventName string) ([]string, error) {
 	if val, found := notificationByEventCache.Get(eventName); found {
 		return val.([]string), nil
 	}
@@ -41,7 +41,7 @@ type NotificationWithSpec struct {
 	CustomNotifications []api.NotificationConfig
 }
 
-func GetNotification(ctx *api.Context, id string) (*NotificationWithSpec, error) {
+func GetNotification(ctx api.Context, id string) (*NotificationWithSpec, error) {
 	if val, found := notificationByIDCache.Get(id); found {
 		return val.(*NotificationWithSpec), nil
 	}

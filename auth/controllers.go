@@ -64,7 +64,7 @@ func (k *KratosHandler) InviteUser(c echo.Context) error {
 }
 
 func UpdateAccountState(c echo.Context) error {
-	ctx := c.(*api.Context)
+	ctx := c.(api.Context)
 
 	var reqData struct {
 		ID    string `json:"id"`
@@ -95,7 +95,7 @@ func UpdateAccountState(c echo.Context) error {
 }
 
 func UpdateAccountProperties(c echo.Context) error {
-	ctx := c.(*api.Context)
+	ctx := c.(api.Context)
 
 	var props api.PersonProperties
 	if err := c.Bind(&props); err != nil {
@@ -117,7 +117,7 @@ func UpdateAccountProperties(c echo.Context) error {
 }
 
 func WhoAmI(c echo.Context) error {
-	ctx := c.(*api.Context)
+	ctx := c.(api.Context)
 	userID := c.Request().Header.Get(api.UserIDHeaderKey)
 	user, err := db.GetUserByID(ctx, userID)
 	if err != nil {

@@ -30,7 +30,7 @@ type ExpressionRunner struct {
 	CelEnv       map[string]any
 }
 
-func (t ExpressionRunner) logToJobHistory(ctx *api.Context, name, errMsg string) {
+func (t ExpressionRunner) logToJobHistory(ctx api.Context, name, errMsg string) {
 	jobHistory := models.NewJobHistory(name, t.ResourceType, t.ResourceID)
 	jobHistory.Start()
 	jobHistory.AddError(errMsg)
@@ -41,7 +41,7 @@ func (t ExpressionRunner) logToJobHistory(ctx *api.Context, name, errMsg string)
 
 // Eval evaluates the given expression into a boolean.
 // The expression should return a boolean value that's supported by strconv.ParseBool.
-func (t ExpressionRunner) Eval(ctx *api.Context, expression string) (bool, error) {
+func (t ExpressionRunner) Eval(ctx api.Context, expression string) (bool, error) {
 	if expression == "" {
 		return true, nil
 	}
@@ -61,7 +61,7 @@ func (t ExpressionRunner) Eval(ctx *api.Context, expression string) (bool, error
 }
 
 // GetOrCompileCELProgram returns a cached or compiled cel.Program for the given cel expression.
-func (t ExpressionRunner) GetOrCompileCELProgram(ctx *api.Context, expression string) (*cel.Program, error) {
+func (t ExpressionRunner) GetOrCompileCELProgram(ctx api.Context, expression string) (*cel.Program, error) {
 	if prg, exists := prgCache.Get(expression); exists {
 		val := prg.(*programCache)
 		if val.err != nil {

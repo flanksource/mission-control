@@ -7,12 +7,12 @@ import (
 )
 
 type Context struct {
-	*api.Context
+	api.Context
 	notificationID uuid.UUID
 	log            *models.NotificationSendHistory
 }
 
-func NewContext(ctx *api.Context, notificationID uuid.UUID) *Context {
+func NewContext(ctx api.Context, notificationID uuid.UUID) *Context {
 	return &Context{
 		Context:        ctx,
 		notificationID: notificationID,

@@ -1,7 +1,7 @@
 package v1
 
 import (
-	"context"
+	gocontext "context"
 	"fmt"
 
 	"github.com/flanksource/duty"
@@ -24,7 +24,7 @@ type ExecConnections struct {
 }
 
 type connectionContext interface {
-	context.Context
+	gocontext.Context
 	HydrateConnection(connectionName string) (*models.Connection, error)
 	GetEnvValueFromCache(env types.EnvVar) (string, error)
 }

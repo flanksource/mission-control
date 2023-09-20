@@ -72,7 +72,7 @@ func setupUpstreamHTTPServer() {
 	echoServer = echo.New()
 	echoServer.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			cc := api.NewContext(testDB, c)
+			cc := api.NewContext(testDB, testDBPool).WithEchoContext(c)
 			return next(cc)
 		}
 	})
@@ -110,9 +110,9 @@ func mockAuthMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 			return c.String(http.StatusUnauthorized, "Unauthorized")
 		}
 
-		ctx := c.(*api.Context)
-		ctx.WithUser(&api.ContextUser{ID: person.ID, Email: person.Email})
+		ctx := c.(api.Context)
+		ctx = ctx.WithUser(&api.ContextUser{ID: person.ID, Email: person.Email})
 
-		return next(c)
+		return next(ctx)
 	}
 }

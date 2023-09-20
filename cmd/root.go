@@ -20,6 +20,9 @@ func PreRun(cmd *cobra.Command, args []string) {
 	if err := db.Init(db.ConnectionString); err != nil {
 		logger.Fatalf("Failed to initialize the db: %v", err)
 	}
+
+	api.DefaultContext = api.NewContext(db.Gorm, db.Pool)
+
 	var err error
 	api.Kubernetes, err = k8s.NewClient()
 	if err != nil {

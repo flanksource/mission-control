@@ -1,21 +1,13 @@
 package playbook
 
 import (
-	"time"
-
-	"github.com/flanksource/incident-commander/utils"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"gorm.io/gorm"
+	"github.com/flanksource/duty/duty/pg"
+	"github.com/flanksource/incident-commander/api"
 )
 
-func ListenPlaybookPGNotify(db *gorm.DB, pool *pgxpool.Pool) {
-	var (
-		dbReconnectMaxDuration         = time.Minute
-		dbReconnectBackoffBaseDuration = time.Second
-	)
-
+func ListenPlaybookPGNotify(ctx api.Context) {
 	pgNotifyPlaybookSpecUpdated := make(chan string)
-	go utils.ListenToPostgresNotify(pool, "playbook_spec_updated", dbReconnectMaxDuration, dbReconnectBackoffBaseDuration, pgNotifyPlaybookSpecUpdated)
+	go pg.Listen(ctx, "playbook_spec_updated", pgNotifyPlaybookSpecUpdated)
 
 	for range pgNotifyPlaybookSpecUpdated {
 		clearEventPlaybookCache()

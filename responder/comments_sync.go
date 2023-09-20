@@ -22,7 +22,7 @@ func getRootHypothesisOfIncident(incidentID uuid.UUID) (api.Hypothesis, error) {
 
 func SyncComments() {
 	logger.Debugf("Syncing comments")
-	ctx := api.NewContext(db.Gorm, nil)
+	ctx := api.DefaultContext
 
 	var responders []api.Responder
 	err := db.Gorm.Where("external_id IS NOT NULL").Preload("Team").Find(&responders).Error

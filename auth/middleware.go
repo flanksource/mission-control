@@ -52,7 +52,6 @@ func (k *KratosHandler) KratosMiddleware() (*kratosMiddleware, error) {
 
 	return &kratosMiddleware{
 		client:             k.client,
-		db:                 k.db,
 		jwtSecret:          k.jwtSecret,
 		tokenCache:         cache.New(3*24*time.Hour, 12*time.Hour),
 		accessTokenCache:   cache.New(3*24*time.Hour, 24*time.Hour),
@@ -95,7 +94,7 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 		c.Request().Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
 		c.Request().Header.Set(api.UserIDHeaderKey, session.Identity.GetId())
 
-		ctx := c.(*api.Context)
+		ctx := c.(api.Context)
 		var email string
 		if traits, ok := session.Identity.GetTraits().(map[string]any); ok {
 			if e, ok := traits["email"].(string); ok {
@@ -106,7 +105,7 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 		if uid, err := uuid.Parse(session.Identity.GetId()); err != nil {
 			return c.String(http.StatusUnauthorized, "Unauthorized")
 		} else {
-			ctx.WithUser(&api.ContextUser{ID: uid, Email: email})
+			ctx = ctx.WithUser(&api.ContextUser{ID: uid, Email: email})
 		}
 
 		return next(ctx)

@@ -7,7 +7,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func ListPlaybooksForConfig(ctx *api.Context, id string) ([]models.Playbook, error) {
+func ListPlaybooksForConfig(ctx api.Context, id string) ([]models.Playbook, error) {
 	var config models.ConfigItem
 	if err := ctx.DB().Where("id = ?", id).Find(&config).Error; err != nil {
 		return nil, err
@@ -18,7 +18,7 @@ func ListPlaybooksForConfig(ctx *api.Context, id string) ([]models.Playbook, err
 	return db.FindPlaybooksForConfig(ctx, *config.Type, *config.Tags)
 }
 
-func ListPlaybooksForComponent(ctx *api.Context, id string) ([]models.Playbook, error) {
+func ListPlaybooksForComponent(ctx api.Context, id string) ([]models.Playbook, error) {
 	var component models.Component
 	if err := ctx.DB().Where("id = ?", id).Find(&component).Error; err != nil {
 		return nil, err
@@ -29,7 +29,7 @@ func ListPlaybooksForComponent(ctx *api.Context, id string) ([]models.Playbook, 
 	return db.FindPlaybooksForComponent(ctx, component.Type, component.Labels)
 }
 
-func ListPlaybooksForCheck(ctx *api.Context, id string) ([]models.Playbook, error) {
+func ListPlaybooksForCheck(ctx api.Context, id string) ([]models.Playbook, error) {
 	var check models.Check
 	if err := ctx.DB().Where("id = ?", id).Find(&check).Error; err != nil {
 		return nil, err
