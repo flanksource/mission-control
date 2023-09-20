@@ -33,7 +33,8 @@ func setSystemSMTPCredential(shoutrrrURL string) (string, error) {
 	}
 
 	query := parsedURL.Query()
-	query.Set("FromAddress", utils.Coalesce(mail.FromAddress, os.Getenv("SMTP_FROM"), os.Getenv("SMTP_USER")))
+	query.Set("FromAddress", mail.FromAddress)
+	query.Set("FromName", mail.FromName)
 	parsedURL.RawQuery = query.Encode()
 
 	shoutrrrURL = parsedURL.String()
@@ -107,12 +108,13 @@ func Send(ctx *Context, connectionName, shoutrrrURL, title, message string, prop
 		var (
 			to          = utils.Coalesce(query.Get("ToAddresses"), (*params)["ToAddresses"])
 			from        = utils.Coalesce(query.Get("FromAddress"), (*params)["FromAddress"])
+			fromName    = utils.Coalesce(query.Get("FromName"), (*params)["FromName"])
 			password, _ = parsedURL.User.Password()
 			port, _     = strconv.Atoi(parsedURL.Port())
 		)
 
 		m := mail.New(to, title, message, `text/html; charset="UTF-8"`).
-			SetFrom(from).
+			SetFrom(fromName, from).
 			SetCredentials(parsedURL.Hostname(), port, parsedURL.User.Username(), password)
 		return m.Send()
 	}
