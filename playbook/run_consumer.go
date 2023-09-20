@@ -2,24 +2,34 @@ package playbook
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/events/eventconsumer"
+	"github.com/flanksource/incident-commander/utils"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"gorm.io/gorm"
 )
 
 func StartPlaybookRunConsumer(db *gorm.DB, pool *pgxpool.Pool) {
-	eventconsumer.New(db, pool, "playbook_run_updates", EventConsumer).
+	const (
+		dbReconnectMaxDuration         = time.Minute * 5
+		dbReconnectBackoffBaseDuration = time.Second
+	)
+
+	pgNotifyChannel := make(chan string)
+	go utils.ListenToPostgresNotify(pool, "playbook_run_updates", dbReconnectMaxDuration, dbReconnectBackoffBaseDuration, pgNotifyChannel)
+
+	eventconsumer.New(db, pool, EventConsumer).
 		WithNumConsumers(5).
-		Listen()
+		Listen(pgNotifyChannel)
 }
 
-func EventConsumer(ctx *api.Context) error {
+func EventConsumer(ctx *api.Context) (int, error) {
 	tx := ctx.DB().Begin()
 	if tx.Error != nil {
-		return fmt.Errorf("error initiating db tx: %w", tx.Error)
+		return 0, fmt.Errorf("error initiating db tx: %w", tx.Error)
 	}
 	defer tx.Rollback()
 
@@ -36,16 +46,12 @@ func EventConsumer(ctx *api.Context) error {
 
 	var runs []models.PlaybookRun
 	if err := tx.Raw(query, models.PlaybookRunStatusScheduled).Find(&runs).Error; err != nil {
-		return err
-	}
-
-	if len(runs) == 0 {
-		return api.Errorf(api.ENOTFOUND, "No events found")
+		return 0, err
 	}
 
 	for i := range runs {
 		ExecuteRun(ctx, runs[i])
 	}
 
-	return tx.Commit().Error
+	return len(runs), tx.Commit().Error
 }
