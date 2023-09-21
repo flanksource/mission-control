@@ -5,10 +5,10 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/logs"
 	"github.com/google/cel-go/cel"
 	"github.com/patrickmn/go-cache"
 )
@@ -30,38 +30,49 @@ type ExpressionRunner struct {
 	CelEnv       map[string]any
 }
 
-func (t ExpressionRunner) logToJobHistory(ctx api.Context, name, errMsg string) {
-	jobHistory := models.NewJobHistory(name, t.ResourceType, t.ResourceID)
-	jobHistory.Start()
-	jobHistory.AddError(errMsg)
-	if err := db.PersistJobHistory(ctx, jobHistory.End()); err != nil {
-		logger.Errorf("error persisting job history: %v", err)
-	}
-}
-
 // Eval evaluates the given expression into a boolean.
 // The expression should return a boolean value that's supported by strconv.ParseBool.
 func (t ExpressionRunner) Eval(ctx api.Context, expression string) (bool, error) {
+	jobHistory := models.NewJobHistory("NotificationFilterEval", t.ResourceType, t.ResourceID).Start()
+	defer func() {
+		logs.IfError(db.PersistJobHistory(ctx, jobHistory.End()), "error persisting notification filter evaluation job history")
+	}()
+
+	result, err := t.eval(ctx, expression)
+	if err != nil {
+		jobHistory.AddError(err.Error())
+		return false, err
+	}
+
+	jobHistory.IncrSuccess()
+	return result, nil
+}
+
+func (t ExpressionRunner) eval(ctx api.Context, expression string) (bool, error) {
 	if expression == "" {
 		return true, nil
 	}
 
-	prg, err := t.GetOrCompileCELProgram(ctx, expression)
+	prg, err := t.getOrCompileCELProgram(ctx, expression)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("failed to compile program: %w", err)
 	}
 
 	out, _, err := (*prg).Eval(t.CelEnv)
 	if err != nil {
-		t.logToJobHistory(ctx, "NotificationFilterEval", fmt.Sprintf("%s: %s", expression, err.Error()))
-		return false, err
+		return false, fmt.Errorf("failed to evaluate program: %w", err)
 	}
 
-	return strconv.ParseBool(fmt.Sprint(out))
+	result, err := strconv.ParseBool(fmt.Sprint(out))
+	if err != nil {
+		return false, fmt.Errorf("program result is not of a supported boolean type: %w", err)
+	}
+
+	return result, nil
 }
 
-// GetOrCompileCELProgram returns a cached or compiled cel.Program for the given cel expression.
-func (t ExpressionRunner) GetOrCompileCELProgram(ctx api.Context, expression string) (*cel.Program, error) {
+// getOrCompileCELProgram returns a cached or compiled cel.Program for the given cel expression.
+func (t ExpressionRunner) getOrCompileCELProgram(ctx api.Context, expression string) (*cel.Program, error) {
 	if prg, exists := prgCache.Get(expression); exists {
 		val := prg.(*programCache)
 		if val.err != nil {
@@ -71,36 +82,35 @@ func (t ExpressionRunner) GetOrCompileCELProgram(ctx api.Context, expression str
 		return val.program, nil
 	}
 
-	var cachedData programCache
-	defer func() {
-		prgCache.SetDefault(expression, &cachedData)
-		if cachedData.err != nil {
-			t.logToJobHistory(ctx, "NotificationFilterCompile", fmt.Sprintf("%s: %s", expression, cachedData.err.Error()))
-		}
-	}()
+	prg, err := compileCELProgram(ctx, expression)
+	if err != nil {
+		prgCache.SetDefault(expression, &programCache{err: err})
+		return nil, err
+	}
 
+	prgCache.SetDefault(expression, &programCache{program: prg})
+	return prg, nil
+}
+
+func compileCELProgram(ctx api.Context, expression string) (*cel.Program, error) {
 	celOpts := make([]cel.EnvOption, len(allEnvVars))
 	for i := range allEnvVars {
 		celOpts[i] = cel.Variable(allEnvVars[i], cel.AnyType)
 	}
 	env, err := cel.NewEnv(celOpts...)
 	if err != nil {
-		cachedData.err = err
-		return nil, err
+		return nil, fmt.Errorf("failed to create cel environment: %w", err)
 	}
 
 	ast, iss := env.Compile(expression)
 	if iss.Err() != nil {
-		cachedData.err = iss.Err()
-		return nil, iss.Err()
+		return nil, fmt.Errorf("failed to compile expression: %w", iss.Err())
 	}
 
 	prg, err := env.Program(ast)
 	if err != nil {
-		cachedData.err = err
-		return nil, err
+		return nil, fmt.Errorf("failed to create program: %w", err)
 	}
 
-	cachedData.program = &prg
 	return &prg, nil
 }
