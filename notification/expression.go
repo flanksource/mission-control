@@ -16,6 +16,9 @@ import (
 var (
 	prgCache = cache.New(1*time.Hour, 1*time.Hour)
 
+	// Stores the whether the previous expression successed or failed
+	expressionResultCache = cache.New(1*time.Hour, 1*time.Hour)
+
 	allEnvVars = []string{"check", "canary", "incident", "team", "responder", "comment", "evidence", "hypothesis"}
 )
 
@@ -35,7 +38,19 @@ type ExpressionRunner struct {
 func (t ExpressionRunner) Eval(ctx api.Context, expression string) (bool, error) {
 	jobHistory := models.NewJobHistory("NotificationFilterEval", t.ResourceType, t.ResourceID).Start()
 	defer func() {
+		passingCurrently := jobHistory.ErrorCount == 0
+
+		if value, found := expressionResultCache.Get(t.ResourceID); found {
+			if passingPreviously, ok := value.(bool); ok {
+				if passingPreviously == passingCurrently {
+					// to avoid excessive db calls, we only save the job history if the expression evaluation changes
+					return
+				}
+			}
+		}
+
 		logs.IfError(db.PersistJobHistory(ctx, jobHistory.End()), "error persisting notification filter evaluation job history")
+		expressionResultCache.SetDefault(t.ResourceID, passingCurrently)
 	}()
 
 	result, err := t.eval(ctx, expression)
