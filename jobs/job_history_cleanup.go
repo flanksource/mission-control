@@ -7,7 +7,7 @@ import (
 )
 
 func CleanupJobHistoryTable() {
-	if err := db.DeleteOldJobHistoryRows(api.DefaultContext, 5); err != nil {
+	if err := db.DeleteOldJobHistoryRows(api.DefaultContext, 3, 10); err != nil {
 		logger.Errorf("Error deleting old job history rows: %v", err)
 	}
 }

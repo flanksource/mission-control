@@ -23,7 +23,7 @@ func SyncWithUpstream(ctx api.Context) error {
 	for _, table := range api.TablesToReconcile {
 		if err := reconciler.Sync(ctx, table); err != nil {
 			jobHistory.AddError(err.Error())
-			logger.Errorf("failed to sync table %s: %w", table, err)
+			logger.Errorf("failed to sync table %s: %v", table, err)
 		} else {
 			jobHistory.IncrSuccess()
 		}
