@@ -2,31 +2,23 @@ package playbook
 
 import (
 	"fmt"
-	"time"
 
+	"github.com/flanksource/duty/duty/pg"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/events/eventconsumer"
-	"github.com/flanksource/incident-commander/utils"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"gorm.io/gorm"
 )
 
-func StartPlaybookRunConsumer(db *gorm.DB, pool *pgxpool.Pool) {
-	const (
-		dbReconnectMaxDuration         = time.Minute * 5
-		dbReconnectBackoffBaseDuration = time.Second
-	)
-
+func StartPlaybookRunConsumer(ctx api.Context) {
 	pgNotifyChannel := make(chan string)
-	go utils.ListenToPostgresNotify(pool, "playbook_run_updates", dbReconnectMaxDuration, dbReconnectBackoffBaseDuration, pgNotifyChannel)
+	go pg.Listen(ctx, "playbook_run_updates", pgNotifyChannel)
 
-	eventconsumer.New(db, pool, EventConsumer).
+	eventconsumer.New(EventConsumer).
 		WithNumConsumers(5).
-		Listen(pgNotifyChannel)
+		Listen(ctx, pgNotifyChannel)
 }
 
-func EventConsumer(ctx *api.Context) (int, error) {
+func EventConsumer(ctx api.Context) (int, error) {
 	tx := ctx.DB().Begin()
 	if tx.Error != nil {
 		return 0, fmt.Errorf("error initiating db tx: %w", tx.Error)

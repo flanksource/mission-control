@@ -11,7 +11,7 @@ import (
 )
 
 // generateAgent creates a new person and a new agent and associates them.
-func generateAgent(ctx *api.Context, body api.GenerateAgentRequest) (*api.GeneratedAgent, error) {
+func generateAgent(ctx api.Context, body api.GenerateAgentRequest) (*api.GeneratedAgent, error) {
 	username, password, err := genUsernamePassword()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate username and password: %w", err)

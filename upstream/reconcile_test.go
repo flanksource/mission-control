@@ -53,8 +53,8 @@ var _ = ginkgo.Describe("Push Mode reconcilation", ginkgo.Ordered, func() {
 	})
 
 	ginkgo.It("should return different hash for agent and upstream", func() {
-		ctx := api.NewContext(agentDB, nil)
-		upstreamCtx := api.NewContext(upstreamDB, nil)
+		ctx := api.NewContext(agentDB, agentDBPGPool)
+		upstreamCtx := api.NewContext(upstreamDB, upstreamPool)
 
 		for _, table := range api.TablesToReconcile {
 			paginateRequest := upstream.PaginateRequest{From: "", Table: table, Size: 500}
@@ -73,7 +73,7 @@ var _ = ginkgo.Describe("Push Mode reconcilation", ginkgo.Ordered, func() {
 	})
 
 	ginkgo.It("should reconcile all the tables", func() {
-		ctx := api.NewContext(agentDB, nil)
+		ctx := api.NewContext(agentDB, agentDBPGPool)
 
 		reconciler := upstream.NewUpstreamReconciler(api.UpstreamConf, 500)
 		for _, table := range api.TablesToReconcile {
@@ -83,8 +83,8 @@ var _ = ginkgo.Describe("Push Mode reconcilation", ginkgo.Ordered, func() {
 	})
 
 	ginkgo.It("should match the hash", func() {
-		ctx := api.NewContext(agentDB, nil)
-		upstreamCtx := api.NewContext(upstreamDB, nil)
+		ctx := api.NewContext(agentDB, agentDBPGPool)
+		upstreamCtx := api.NewContext(upstreamDB, upstreamPool)
 
 		for _, table := range api.TablesToReconcile {
 			paginateRequest := upstream.PaginateRequest{From: "", Table: table, Size: 500}
@@ -147,7 +147,7 @@ var _ = ginkgo.Describe("Push Mode reconcilation", ginkgo.Ordered, func() {
 	})
 
 	ginkgo.It("should reconcile config items", func() {
-		ctx := api.NewContext(agentDB, nil)
+		ctx := api.NewContext(agentDB, agentDBPGPool)
 
 		reconciler := upstream.NewUpstreamReconciler(api.UpstreamConf, 500)
 		err := reconciler.Sync(ctx, "config_items")

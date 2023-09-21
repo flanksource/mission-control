@@ -11,7 +11,7 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-func GetAllResourceIDsOfAgent(ctx *api.Context, req upstream.PaginateRequest, agentID uuid.UUID) ([]string, error) {
+func GetAllResourceIDsOfAgent(ctx api.Context, req upstream.PaginateRequest, agentID uuid.UUID) ([]string, error) {
 	var response []string
 	var err error
 
@@ -38,7 +38,7 @@ func GetAllResourceIDsOfAgent(ctx *api.Context, req upstream.PaginateRequest, ag
 	return response, err
 }
 
-func InsertUpstreamMsg(ctx *api.Context, req *upstream.PushData) error {
+func InsertUpstreamMsg(ctx api.Context, req *upstream.PushData) error {
 	if len(req.Topologies) > 0 {
 		if err := ctx.DB().Clauses(clause.OnConflict{UpdateAll: true}).Create(req.Topologies).Error; err != nil {
 			return fmt.Errorf("error upserting topologies: %w", err)

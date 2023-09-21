@@ -1,23 +1,19 @@
 package events
 
 import (
-	"time"
-
 	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/incident-commander/utils"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/flanksource/duty/duty/pg"
+	"github.com/flanksource/incident-commander/api"
 )
 
 // pgNotifyRouter distributes the pgNotify event to multiple channels
 // based on the payload.
 type pgNotifyRouter struct {
-	pgpool   *pgxpool.Pool
 	registry map[string]chan string
 }
 
-func newPgNotifyRouter(pgpool *pgxpool.Pool) *pgNotifyRouter {
+func newPgNotifyRouter() *pgNotifyRouter {
 	return &pgNotifyRouter{
-		pgpool:   pgpool,
 		registry: make(map[string]chan string),
 	}
 }
@@ -31,14 +27,9 @@ func (t *pgNotifyRouter) RegisterRoutes(routes []string) <-chan string {
 	return pgNotifyChannel
 }
 
-func (t *pgNotifyRouter) Run(channel string) {
-	const (
-		dbReconnectMaxDuration         = time.Minute * 5
-		dbReconnectBackoffBaseDuration = time.Second
-	)
-
+func (t *pgNotifyRouter) Run(ctx api.Context, channel string) {
 	eventQueueNotifyChannel := make(chan string)
-	go utils.ListenToPostgresNotify(t.pgpool, channel, dbReconnectMaxDuration, dbReconnectBackoffBaseDuration, eventQueueNotifyChannel)
+	go pg.Listen(ctx, channel, eventQueueNotifyChannel)
 
 	logger.Debugf("running pg notify router")
 	for payload := range eventQueueNotifyChannel {

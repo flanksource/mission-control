@@ -11,7 +11,7 @@ import (
 
 // CleanupEventQueue deletes stale records in the `event_queue` table
 func CleanupEventQueue() {
-	ctx := api.NewContext(db.Gorm, nil)
+	ctx := api.DefaultContext
 
 	jobHistory := models.NewJobHistory("CleanupEventQueue", "", "")
 	_ = db.PersistJobHistory(ctx, jobHistory.Start())
@@ -32,7 +32,7 @@ func CleanupEventQueue() {
 	}
 
 	for table, age := range pushQueueSchedule {
-		result := db.Gorm.Exec("DELETE FROM event_queue WHERE name = 'push_queue.create' AND properties->>'table' = ? AND NOW() - created_at > ?", table, age)
+		result := ctx.DB().Exec("DELETE FROM event_queue WHERE name = 'push_queue.create' AND properties->>'table' = ? AND NOW() - created_at > ?", table, age)
 		if result.Error != nil {
 			logger.Errorf("Error cleaning up push_queue events for table=%s: %v", table, result.Error)
 			jobHistory.AddError(result.Error.Error())
@@ -43,7 +43,7 @@ func CleanupEventQueue() {
 	}
 
 	defaultAge := time.Hour * 24 * 30
-	result := db.Gorm.Exec("DELETE FROM event_queue WHERE name != 'push_queue.create' AND NOW() - created_at > ?", defaultAge)
+	result := ctx.DB().Exec("DELETE FROM event_queue WHERE name != 'push_queue.create' AND NOW() - created_at > ?", defaultAge)
 	if result.Error != nil {
 		logger.Errorf("Error cleaning up events (!push_queue.create): %v", result.Error)
 		jobHistory.AddError(result.Error.Error())

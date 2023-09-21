@@ -15,7 +15,6 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/spf13/cobra"
-	"gorm.io/gorm"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	"github.com/flanksource/duty/models"
@@ -49,13 +48,13 @@ var cacheSuffixes = []string{
 	".png",
 }
 
-func createHTTPServer(gormDB *gorm.DB) *echo.Echo {
+func createHTTPServer(ctx api.Context) *echo.Echo {
 	e := echo.New()
 	e.HideBanner = true
 
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			cc := api.NewContext(gormDB, c)
+			cc := ctx.WithEchoContext(c)
 			return next(cc)
 		}
 	})
@@ -71,8 +70,8 @@ func createHTTPServer(gormDB *gorm.DB) *echo.Echo {
 
 		switch authMode {
 		case "kratos":
-			kratosHandler := auth.NewKratosHandler(gormDB, kratosAPI, kratosAdminAPI, db.PostgRESTJWTSecret)
-			adminUserID, err = kratosHandler.CreateAdminUser(context.Background())
+			kratosHandler := auth.NewKratosHandler(kratosAPI, kratosAdminAPI, db.PostgRESTJWTSecret)
+			adminUserID, err = kratosHandler.CreateAdminUser(ctx)
 			if err != nil {
 				logger.Fatalf("Failed to created admin user: %v", err)
 			}
@@ -245,19 +244,19 @@ var Serve = &cobra.Command{
 			}
 		}
 
-		go jobs.Start(api.NewContext(db.Gorm, nil))
+		go jobs.Start(api.DefaultContext)
 
-		events.StartConsumers(db.Gorm, db.Pool, events.Config{
+		events.StartConsumers(api.DefaultContext, events.Config{
 			UpstreamPush: api.UpstreamConf,
 		})
 
-		go playbook.StartPlaybookRunConsumer(db.Gorm, db.Pool)
+		go playbook.StartPlaybookRunConsumer(api.DefaultContext)
 
-		go playbook.ListenPlaybookPGNotify(db.Gorm, db.Pool)
+		go playbook.ListenPlaybookPGNotify(api.DefaultContext)
 
 		go launchKopper()
 
-		e := createHTTPServer(db.Gorm)
+		e := createHTTPServer(api.DefaultContext)
 		listenAddr := fmt.Sprintf(":%d", httpPort)
 		logger.Infof("Listening on %s", listenAddr)
 		if err := e.Start(listenAddr); err != nil {

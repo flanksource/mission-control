@@ -36,7 +36,7 @@ func GetTeamComponentsFromSelectors(teamID uuid.UUID, componentSelectors []api.C
 	return teamComps
 }
 
-func GetTeamSpec(ctx *api.Context, id string) (*api.TeamSpec, error) {
+func GetTeamSpec(ctx api.Context, id string) (*api.TeamSpec, error) {
 	if val, found := teamSpecCache.Get(id); found {
 		return val.(*api.TeamSpec), nil
 	}

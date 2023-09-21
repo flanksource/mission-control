@@ -6,8 +6,6 @@ import (
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"gorm.io/gorm"
 )
 
 const (
@@ -18,12 +16,9 @@ const (
 	defaultPgNotifyTimeout = time.Minute
 )
 
-type EventConsumerFunc func(ctx *api.Context) (count int, err error)
+type EventConsumerFunc func(ctx api.Context) (count int, err error)
 
 type EventConsumer struct {
-	db     *gorm.DB
-	pgPool *pgxpool.Pool
-
 	// Number of concurrent consumers
 	numConsumers int
 
@@ -36,11 +31,9 @@ type EventConsumer struct {
 }
 
 // New returns a new EventConsumer
-func New(DB *gorm.DB, PGPool *pgxpool.Pool, ConsumerFunc EventConsumerFunc) *EventConsumer {
+func New(ConsumerFunc EventConsumerFunc) *EventConsumer {
 	return &EventConsumer{
 		numConsumers:    1,
-		db:              DB,
-		pgPool:          PGPool,
 		consumerFunc:    ConsumerFunc,
 		pgNotifyTimeout: defaultPgNotifyTimeout,
 	}
@@ -63,17 +56,11 @@ func (e EventConsumer) Validate() error {
 	if e.consumerFunc == nil {
 		return fmt.Errorf("consumerFunc is empty")
 	}
-	if e.db == nil {
-		return fmt.Errorf("DB is nil")
-	}
-	if e.pgPool == nil {
-		return fmt.Errorf("PGPool is nil")
-	}
 	return nil
 }
 
 // ConsumeEventsUntilEmpty consumes events in a loop until the event queue is empty.
-func (t *EventConsumer) ConsumeEventsUntilEmpty(ctx *api.Context) {
+func (t *EventConsumer) ConsumeEventsUntilEmpty(ctx api.Context) {
 	for {
 		count, err := t.consumerFunc(ctx)
 		if err != nil {
@@ -85,13 +72,11 @@ func (t *EventConsumer) ConsumeEventsUntilEmpty(ctx *api.Context) {
 	}
 }
 
-func (e *EventConsumer) Listen(pgNotify <-chan string) {
+func (e *EventConsumer) Listen(ctx api.Context, pgNotify <-chan string) {
 	if err := e.Validate(); err != nil {
 		logger.Fatalf("error starting event consumer: %v", err)
 		return
 	}
-
-	ctx := api.NewContext(e.db, nil)
 
 	// Consume pending events
 	e.ConsumeEventsUntilEmpty(ctx)

@@ -9,6 +9,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/flanksource/duty/duty/pg"
 	"github.com/flanksource/duty/fixtures/dummy"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
@@ -16,7 +17,6 @@ import (
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/events/eventconsumer"
 	"github.com/flanksource/incident-commander/playbook"
-	"github.com/flanksource/incident-commander/utils"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"gorm.io/gorm/clause"
@@ -38,14 +38,17 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 
 	ginkgo.It("start the queue consumer in background", func() {
 		pgNotifyChannel := make(chan string)
-		go utils.ListenToPostgresNotify(testDBPool, "playbook_run_updates", time.Minute*5, time.Second, pgNotifyChannel)
 
-		go eventconsumer.New(testDB, testDBPool, playbook.EventConsumer).
+		ctx := api.NewContext(testDB, testDBPool)
+
+		go pg.Listen(ctx, "playbook_run_updates", pgNotifyChannel)
+
+		go eventconsumer.New(playbook.EventConsumer).
 			WithNumConsumers(5).
-			WithNotifyTimeout(time.Second * 2).
-			Listen(pgNotifyChannel)
+			WithNotifyTimeout(time.Second*2).
+			Listen(ctx, pgNotifyChannel)
 
-		go events.StartConsumers(testDB, testDBPool, events.Config{})
+		go events.StartConsumers(ctx, events.Config{})
 	})
 
 	ginkgo.It("should create a new playbook", func() {
@@ -152,7 +155,7 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 	})
 
 	ginkgo.It("Should fetch the suitable playbook for checks", func() {
-		ctx := api.NewContext(testDB, nil)
+		ctx := api.NewContext(testDB, testDBPool)
 		playbooks, err := playbook.ListPlaybooksForCheck(ctx, dummy.LogisticsAPIHealthHTTPCheck.ID.String())
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(playbooks)).To(Equal(1))
@@ -164,7 +167,7 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 	})
 
 	ginkgo.It("Should fetch the suitable playbook for components", func() {
-		ctx := api.NewContext(testDB, nil)
+		ctx := api.NewContext(testDB, testDBPool)
 		playbooks, err := playbook.ListPlaybooksForComponent(ctx, dummy.Logistics.ID.String())
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(playbooks)).To(Equal(1))
@@ -176,7 +179,7 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 	})
 
 	ginkgo.It("Should fetch the suitable playbook for configs", func() {
-		ctx := api.NewContext(testDB, nil)
+		ctx := api.NewContext(testDB, testDBPool)
 		playbooks, err := playbook.ListPlaybooksForConfig(ctx, dummy.EKSCluster.ID.String())
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(playbooks)).To(Equal(1))

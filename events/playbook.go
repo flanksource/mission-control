@@ -47,7 +47,7 @@ func (t *EventResource) AsMap() map[string]any {
 	}
 }
 
-func schedulePlaybookRun(ctx *api.Context, event api.Event) error {
+func schedulePlaybookRun(ctx api.Context, event api.Event) error {
 	specEvent, ok := eventToSpecEvent[event.Name]
 	if !ok {
 		return nil
@@ -132,7 +132,7 @@ func schedulePlaybookRun(ctx *api.Context, event api.Event) error {
 }
 
 // logToJobHistory logs any failures in saving a playbook run to the job history.
-func logToJobHistory(ctx *api.Context, playbookID, err string) {
+func logToJobHistory(ctx api.Context, playbookID, err string) {
 	jobHistory := models.NewJobHistory("SavePlaybookRun", "playbook", playbookID)
 	jobHistory.Start()
 	jobHistory.AddError(err)
@@ -193,7 +193,7 @@ var eventToSpecEvent = map[string]PlaybookSpecEvent{
 	EventComponentStatusError:     {"component", "error"},
 }
 
-func onApprovalUpdated(ctx *api.Context, event api.Event) error {
+func onApprovalUpdated(ctx api.Context, event api.Event) error {
 	playbookID := event.Properties["id"]
 
 	var playbook models.Playbook
@@ -213,7 +213,7 @@ func onApprovalUpdated(ctx *api.Context, event api.Event) error {
 	return db.UpdatePlaybookRunStatusIfApproved(ctx, playbookID, *spec.Approval)
 }
 
-func onPlaybookRunNewApproval(ctx *api.Context, event api.Event) error {
+func onPlaybookRunNewApproval(ctx api.Context, event api.Event) error {
 	runID := event.Properties["run_id"]
 
 	var run models.PlaybookRun

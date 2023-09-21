@@ -1,7 +1,7 @@
 package api
 
 import (
-	"context"
+	gocontext "context"
 	"database/sql/driver"
 
 	"github.com/flanksource/duty/types"
@@ -39,11 +39,11 @@ func (t NotificationConfig) GormDBDataType(db *gorm.DB, field *schema.Field) str
 	return types.JSONGormDBDataType(db.Dialector.Name())
 }
 
-func (t NotificationConfig) GormValue(ctx context.Context, db *gorm.DB) clause.Expr {
+func (t NotificationConfig) GormValue(ctx gocontext.Context, db *gorm.DB) clause.Expr {
 	return types.GormValue(t)
 }
 
-func (t *NotificationConfig) HydrateConnection(ctx *Context) error {
+func (t *NotificationConfig) HydrateConnection(ctx Context) error {
 	connection, err := ctx.HydrateConnection(t.Connection)
 	if err != nil {
 		return err

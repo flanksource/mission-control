@@ -57,7 +57,7 @@ var taskPriorities = map[string]int32{
 	"low":       9,
 }
 
-func NewClient(ctx *api.Context, team api.Team) (*MSPlannerClient, error) {
+func NewClient(ctx api.Context, team api.Team) (*MSPlannerClient, error) {
 
 	teamSpec, err := team.GetSpec()
 	if err != nil {

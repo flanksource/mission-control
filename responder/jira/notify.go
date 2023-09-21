@@ -8,7 +8,7 @@ import (
 	"github.com/mitchellh/mapstructure"
 )
 
-func (jc *JiraClient) NotifyResponder(ctx *api.Context, responder api.Responder) (string, error) {
+func (jc *JiraClient) NotifyResponder(ctx api.Context, responder api.Responder) (string, error) {
 	if responder.Properties["responderType"] != ResponderType {
 		return "", fmt.Errorf("invalid responderType: %s", responder.Properties["responderType"])
 	}
@@ -27,7 +27,7 @@ func (jc *JiraClient) NotifyResponder(ctx *api.Context, responder api.Responder)
 	return issue.Key, nil
 }
 
-func (jc *JiraClient) NotifyResponderAddComment(ctx *api.Context, responder api.Responder, comment string) (string, error) {
+func (jc *JiraClient) NotifyResponderAddComment(ctx api.Context, responder api.Responder, comment string) (string, error) {
 	if responder.Properties["responderType"] != ResponderType {
 		return "", fmt.Errorf("invalid responderType: %s", responder.Properties["responderType"])
 	}

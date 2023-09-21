@@ -12,7 +12,7 @@ import (
 
 // Pull returns all canaries for the requested agent
 func Pull(c echo.Context) error {
-	ctx := c.(*api.Context)
+	ctx := c.(api.Context)
 
 	agentName := c.Param("agent_name")
 
@@ -31,7 +31,7 @@ func Pull(c echo.Context) error {
 		}
 	}
 
-	canaries, err := db.GetCanariesOfAgent(c.Request().Context(), agent.ID, since)
+	canaries, err := db.GetCanariesOfAgent(ctx, agent.ID, since)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{
 			Error:   err.Error(),

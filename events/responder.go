@@ -35,7 +35,7 @@ func NewResponderConsumerAsync() AsyncEventConsumer {
 
 // generateResponderAddedAsyncEvent generates async events for each of the configured responder clients
 // in the associated team.
-func generateResponderAddedAsyncEvent(ctx *api.Context, event api.Event) error {
+func generateResponderAddedAsyncEvent(ctx api.Context, event api.Event) error {
 	responderID := event.Properties["id"]
 
 	var responder api.Responder
@@ -65,7 +65,7 @@ func generateResponderAddedAsyncEvent(ctx *api.Context, event api.Event) error {
 }
 
 // generateCommentAddedAsyncEvent generates comment.add async events for each of the configured responder clients.
-func generateCommentAddedAsyncEvent(ctx *api.Context, event api.Event) error {
+func generateCommentAddedAsyncEvent(ctx api.Context, event api.Event) error {
 	commentID := event.Properties["id"]
 
 	var comment api.Comment
@@ -112,7 +112,7 @@ func generateCommentAddedAsyncEvent(ctx *api.Context, event api.Event) error {
 	return nil
 }
 
-func processResponderEvents(ctx *api.Context, events []api.Event) []api.Event {
+func processResponderEvents(ctx api.Context, events []api.Event) []api.Event {
 	var failedEvents []api.Event
 	for _, e := range events {
 		if err := handleResponderEvent(ctx, e); err != nil {
@@ -123,7 +123,7 @@ func processResponderEvents(ctx *api.Context, events []api.Event) []api.Event {
 	return failedEvents
 }
 
-func handleResponderEvent(ctx *api.Context, event api.Event) error {
+func handleResponderEvent(ctx api.Context, event api.Event) error {
 	switch event.Name {
 	case EventJiraResponderAdded, EventMSPlannerResponderAdded:
 		return reconcileResponderEvent(ctx, event)
@@ -135,7 +135,7 @@ func handleResponderEvent(ctx *api.Context, event api.Event) error {
 }
 
 // TODO: Modify this such that it only notifies the responder mentioned in the event.
-func reconcileResponderEvent(ctx *api.Context, event api.Event) error {
+func reconcileResponderEvent(ctx api.Context, event api.Event) error {
 	responderID := event.Properties["id"]
 
 	var responder api.Responder
@@ -162,7 +162,7 @@ func reconcileResponderEvent(ctx *api.Context, event api.Event) error {
 }
 
 // TODO: Modify this such that it only adds the comment to the particular responder mentioned in the event.
-func reconcileCommentEvent(ctx *api.Context, event api.Event) error {
+func reconcileCommentEvent(ctx api.Context, event api.Event) error {
 	commentID := event.Properties["id"]
 
 	var comment api.Comment

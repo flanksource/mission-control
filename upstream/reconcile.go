@@ -12,7 +12,7 @@ var ReconcilePageSize int
 
 // SyncWithUpstream coordinates with upstream and pushes any resource
 // that are missing on the upstream.
-func SyncWithUpstream(ctx *api.Context) error {
+func SyncWithUpstream(ctx api.Context) error {
 	jobHistory := models.NewJobHistory("SyncWithUpstream", api.UpstreamConf.Host, "")
 	_ = db.PersistJobHistory(ctx, jobHistory.Start())
 	defer func() {

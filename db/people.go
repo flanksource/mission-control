@@ -14,7 +14,7 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-func UpdateUserProperties(ctx *api.Context, userID string, newProps api.PersonProperties) error {
+func UpdateUserProperties(ctx api.Context, userID string, newProps api.PersonProperties) error {
 	var current api.Person
 	if err := ctx.DB().Table("people").Where("id = ?", userID).First(&current).Error; err != nil {
 		return err
@@ -28,30 +28,30 @@ func UpdateUserProperties(ctx *api.Context, userID string, newProps api.PersonPr
 	return ctx.DB().Table("people").Where("id = ?", userID).Update("properties", props).Error
 }
 
-func UpdateIdentityState(ctx *api.Context, id, state string) error {
+func UpdateIdentityState(ctx api.Context, id, state string) error {
 	return ctx.DB().Table("identities").Where("id = ?", id).Update("state", state).Error
 }
 
-func GetUserByID(ctx *api.Context, id string) (api.Person, error) {
+func GetUserByID(ctx api.Context, id string) (api.Person, error) {
 	var user api.Person
 	err := ctx.DB().Table("people").Where("id = ?", id).First(&user).Error
 	return user, err
 }
 
-func GetTeamsForUser(ctx *api.Context, id string) ([]models.Team, error) {
+func GetTeamsForUser(ctx api.Context, id string) ([]models.Team, error) {
 	var teams []models.Team
 	err := ctx.DB().Raw("SELECT teams.* FROM teams LEFT JOIN team_members ON teams.id = team_members.team_id WHERE team_members.person_id = ?", id).Scan(&teams).Error
 	return teams, err
 }
 
-func GetUserByExternalID(ctx *api.Context, id string) (api.Person, error) {
+func GetUserByExternalID(ctx api.Context, id string) (api.Person, error) {
 	var user api.Person
 	err := ctx.DB().Table("people").Where("external_id = ?", id).First(&user).Error
 	return user, err
 }
 
 // CreateUser creates a new user and returns a copy
-func CreateUser(ctx *api.Context, user api.Person) (api.Person, error) {
+func CreateUser(ctx api.Context, user api.Person) (api.Person, error) {
 	err := ctx.DB().Table("people").Create(&user).Error
 	return user, err
 }
@@ -62,7 +62,7 @@ type CreateUserRequest struct {
 	Properties models.PersonProperties
 }
 
-func CreatePerson(ctx *api.Context, name, email, personType string) (*models.Person, error) {
+func CreatePerson(ctx api.Context, name, email, personType string) (*models.Person, error) {
 	person := models.Person{Name: name, Email: email, Type: personType}
 	if err := ctx.DB().Clauses(clause.Returning{}).Create(&person).Error; err != nil {
 		return nil, err
@@ -81,7 +81,7 @@ const (
 	saltLength  = 12
 )
 
-func CreateAccessToken(ctx *api.Context, personID uuid.UUID, name, password string, expiry time.Duration) (string, error) {
+func CreateAccessToken(ctx api.Context, personID uuid.UUID, name, password string, expiry time.Duration) (string, error) {
 	saltRaw := make([]byte, saltLength)
 	if _, err := crand.Read(saltRaw); err != nil {
 		return "", err

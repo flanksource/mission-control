@@ -23,7 +23,7 @@ func NewUpstreamPushConsumerAsync(config Config) AsyncEventConsumer {
 	}
 }
 
-func handleUpstreamPushEvents(ctx *api.Context, events []api.Event) []api.Event {
+func handleUpstreamPushEvents(ctx api.Context, events []api.Event) []api.Event {
 	if upstreamPushEventHandler == nil {
 		logger.Fatalf("Got push events but host is not configured")
 	}
@@ -63,7 +63,7 @@ func addErrorToFailedEvents(events []api.Event, err error) []api.Event {
 }
 
 // Run pushes data from decentralized instances to central incident commander
-func (t *pushToUpstreamEventHandler) Run(ctx *api.Context, events []api.Event) []api.Event {
+func (t *pushToUpstreamEventHandler) Run(ctx api.Context, events []api.Event) []api.Event {
 	upstreamMsg := &upstream.PushData{
 		AgentName: t.conf.AgentName,
 	}

@@ -59,7 +59,7 @@ func NewNotificationSendConsumerAsync() AsyncEventConsumer {
 	}
 }
 
-func sendNotifications(ctx *api.Context, events []api.Event) []api.Event {
+func sendNotifications(ctx api.Context, events []api.Event) []api.Event {
 	var failedEvents []api.Event
 	for _, e := range events {
 		var props NotificationEventPayload
@@ -265,7 +265,7 @@ func sendNotification(ctx *pkgNotification.Context, event api.Event) error {
 // addNotificationEvent responds to a event that can possible generate a notification.
 // If a notification is found for the given event and passes all the filters, then
 // a new notification event is created.
-func addNotificationEvent(ctx *api.Context, event api.Event) error {
+func addNotificationEvent(ctx api.Context, event api.Event) error {
 	notificationIDs, err := pkgNotification.GetNotificationIDs(ctx, event.Name)
 	if err != nil {
 		return err
@@ -401,7 +401,7 @@ func addNotificationEvent(ctx *api.Context, event api.Event) error {
 
 // getEnvForEvent gets the environment variables for the given event
 // that'll be passed to the cel expression or to the template renderer as a view.
-func getEnvForEvent(ctx *api.Context, event api.Event, properties map[string]string) (map[string]any, error) {
+func getEnvForEvent(ctx api.Context, event api.Event, properties map[string]string) (map[string]any, error) {
 	env := make(map[string]any)
 
 	if strings.HasPrefix(event.Name, "check.") {
@@ -559,7 +559,7 @@ func getEnvForEvent(ctx *api.Context, event api.Event, properties map[string]str
 	return env, nil
 }
 
-func handleNotificationUpdates(ctx *api.Context, event api.Event) error {
+func handleNotificationUpdates(ctx api.Context, event api.Event) error {
 	if id, ok := event.Properties["id"]; ok {
 		pkgNotification.PurgeCache(id)
 	}

@@ -23,7 +23,7 @@ var (
 
 // PushUpstream saves the push data from agents.
 func PushUpstream(c echo.Context) error {
-	ctx := c.(*api.Context)
+	ctx := c.(api.Context)
 
 	var req upstream.PushData
 	err := json.NewDecoder(c.Request().Body).Decode(&req)
@@ -61,7 +61,7 @@ func PushUpstream(c echo.Context) error {
 
 // Pull returns all the ids of items it has received from the requested agent.
 func Pull(c echo.Context) error {
-	ctx := c.(*api.Context)
+	ctx := c.(api.Context)
 
 	var req upstream.PaginateRequest
 	if err := c.Bind(&req); err != nil {
@@ -90,7 +90,7 @@ func Pull(c echo.Context) error {
 
 // Status returns the summary of all ids the upstream has received.
 func Status(c echo.Context) error {
-	ctx := c.(*api.Context)
+	ctx := c.(api.Context)
 
 	var req upstream.PaginateRequest
 	if err := c.Bind(&req); err != nil {

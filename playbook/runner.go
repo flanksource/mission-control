@@ -11,7 +11,7 @@ import (
 	"github.com/flanksource/incident-commander/playbook/actions"
 )
 
-func ExecuteRun(ctx *api.Context, run models.PlaybookRun) {
+func ExecuteRun(ctx api.Context, run models.PlaybookRun) {
 	if err := ctx.DB().Model(&models.PlaybookRun{}).Where("id = ?", run.ID).UpdateColumn("status", models.PlaybookRunStatusRunning).Error; err != nil {
 		logger.Errorf("failed to update playbook run status: %v", err)
 		return
@@ -33,7 +33,7 @@ func ExecuteRun(ctx *api.Context, run models.PlaybookRun) {
 	}
 }
 
-func executeRun(ctx *api.Context, run models.PlaybookRun) error {
+func executeRun(ctx api.Context, run models.PlaybookRun) error {
 	var playbookModel models.Playbook
 	if err := ctx.DB().Where("id = ?", run.PlaybookID).First(&playbookModel).Error; err != nil {
 		return err
@@ -108,7 +108,7 @@ func executeRun(ctx *api.Context, run models.PlaybookRun) error {
 	return nil
 }
 
-func executeAction(ctx *api.Context, run models.PlaybookRun, action v1.PlaybookAction, env actions.TemplateEnv) ([]byte, error) {
+func executeAction(ctx api.Context, run models.PlaybookRun, action v1.PlaybookAction, env actions.TemplateEnv) ([]byte, error) {
 	if action.Exec != nil {
 		e := actions.ExecAction{}
 		res, err := e.Run(ctx, *action.Exec, env)
