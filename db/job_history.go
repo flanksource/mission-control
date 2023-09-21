@@ -1,6 +1,7 @@
 package db
 
 import (
+	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/google/uuid"
@@ -15,16 +16,27 @@ func PersistJobHistory(ctx api.Context, h *models.JobHistory) error {
 	return ctx.DB().Table("job_history").Save(h).Error
 }
 
-func DeleteOldJobHistoryRows(ctx api.Context, keepLatest int) error {
-	return ctx.DB().Exec(`
+func DeleteOldJobHistoryRows(ctx api.Context, keepLatestSuccess, keepLatestFailed int) error {
+	query := `
     WITH ordered_history AS (
-        SELECT
-            id, resource_type, resource_id, name, created_at,
-            ROW_NUMBER() OVER (PARTITION by resource_id, resource_type, name ORDER BY created_at DESC)
-        FROM job_history
+      SELECT
+        id, 
+        status,
+        ROW_NUMBER() OVER (PARTITION by resource_id, name, status ORDER BY created_at DESC)
+      FROM job_history
     )
     DELETE FROM job_history WHERE id IN (
-        SELECT id FROM ordered_history WHERE row_number > ?
-    )
-    `, keepLatest).Error
+      SELECT id FROM ordered_history WHERE 
+        (row_number > ? AND status IN (?, ?))
+        OR (row_number > ? AND status IN (?, ?))
+    )`
+
+	res := ctx.DB().Exec(query,
+		keepLatestSuccess, models.StatusSuccess, models.StatusFinished,
+		keepLatestFailed, models.StatusFailed, models.StatusWarning)
+	if res.RowsAffected > 0 {
+		logger.Infof("deleted %d job history rows", res.RowsAffected)
+	}
+
+	return res.Error
 }
