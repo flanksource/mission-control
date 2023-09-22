@@ -218,7 +218,7 @@ func sendNotification(ctx *pkgNotification.Context, event api.Event) error {
 	}
 
 	if props.PersonID != nil {
-		ctx.WithPersonID(props.PersonID)
+		ctx.WithPersonID(props.PersonID).WithRecipientType(pkgNotification.RecipientTypePerson)
 		var emailAddress string
 		if err := ctx.DB().Model(&models.Person{}).Select("email").Where("id = ?", props.PersonID).Find(&emailAddress).Error; err != nil {
 			return fmt.Errorf("failed to get email of person(id=%s); %v", props.PersonID, err)
@@ -229,6 +229,7 @@ func sendNotification(ctx *pkgNotification.Context, event api.Event) error {
 	}
 
 	if props.TeamID != "" {
+		ctx.WithRecipientType(pkgNotification.RecipientTypeTeam)
 		teamSpec, err := teams.GetTeamSpec(ctx.Context, props.TeamID)
 		if err != nil {
 			return fmt.Errorf("failed to get team(id=%s); %v", props.TeamID, err)
@@ -248,6 +249,7 @@ func sendNotification(ctx *pkgNotification.Context, event api.Event) error {
 	}
 
 	for _, cn := range notification.CustomNotifications {
+		ctx.WithRecipientType(pkgNotification.RecipientTypeCustom)
 		if cn.Name != props.NotificationName {
 			continue
 		}
