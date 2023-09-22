@@ -21,7 +21,8 @@ const (
 	CleanupJobHistoryTableSchedule         = "@every 24h"
 	CleanupEventQueueTableSchedule         = "@every 24h"
 	CleanupNotificationSendHistorySchedule = "@every 24h"
-	PushAgentReconcileSchedule             = "@every 30m"
+	PushAgentReconcileSchedule             = "@every 8h"
+	PushCheckStatusesSchedule              = "@every 30s"
 )
 
 var FuncScheduler = cron.New()
@@ -79,6 +80,11 @@ func Start(ctx api.Context) {
 		job := newFuncJob(upstream.SyncWithUpstream, withName("upstream reconcile job"), withRunNow(true), withTimeout(time.Minute*10))
 		if err := job.schedule(FuncScheduler, PushAgentReconcileSchedule); err != nil {
 			logger.Errorf("Failed to schedule push reconcile job: %v", err)
+		}
+
+		checkStatusesSyncJob := newFuncJob(upstream.SyncCheckStatusesWithUpstream, withName("check_statuses sync job"), withTimeout(time.Minute))
+		if err := checkStatusesSyncJob.schedule(FuncScheduler, PushCheckStatusesSchedule); err != nil {
+			logger.Errorf("Failed to schedule check status sync job: %v", err)
 		}
 	}
 
