@@ -12,21 +12,13 @@ import (
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/logs"
 	pkgNotification "github.com/flanksource/incident-commander/notification"
 	pkgResponder "github.com/flanksource/incident-commander/responder"
 	"github.com/flanksource/incident-commander/teams"
 	"github.com/google/uuid"
 )
-
-func NewNotificationUpdatesConsumerSync() SyncEventConsumer {
-	return SyncEventConsumer{
-		watchEvents: []string{EventNotificationUpdate, EventNotificationDelete},
-		consumers: []SyncEventHandlerFunc{
-			handleNotificationUpdates,
-		},
-	}
-}
 
 func NewNotificationSaveConsumerSync() SyncEventConsumer {
 	return SyncEventConsumer{
@@ -174,7 +166,7 @@ Hypothesis: {{.hypothesis.title}}
 		title = "{{.incident.title}} status updated"
 		body = "New Status: {{.incident.status}}\n\n[Reference]({{.permalink}})"
 
-	case EventTeamUpdate, EventTeamDelete, EventNotificationUpdate, EventNotificationDelete, EventPlaybookSpecApprovalUpdated, EventPlaybookApprovalInserted:
+	case EventPlaybookSpecApprovalUpdated, EventPlaybookApprovalInserted:
 		// Not applicable
 	}
 
@@ -288,7 +280,7 @@ func addNotificationEvent(ctx api.Context, event api.Event) error {
 			return err
 		}
 
-		if !n.HasRecipients() {
+		if !n.HasRecipients() || n.Error != nil {
 			continue
 		}
 
@@ -298,11 +290,9 @@ func addNotificationEvent(ctx api.Context, event api.Event) error {
 			CelEnv:       celEnv,
 		}
 
-		if valid, err := expressionRunner.Eval(ctx, n.Filter); err != nil || !valid {
-			// We consider an error in filter evaluation is a failed filter check.
-			// Mostly, the filter check returns an error if the variable isn't defined.
-			// Example: If the filter makes use of `check` variable but the event is for
-			// incident creation, then the expression evaluation returns an error.
+		if valid, err := expressionRunner.Eval(ctx, n.Filter); err != nil {
+			logs.IfError(db.UpdateNotificationError(id, err.Error()), "failed to update notification")
+		} else if !valid {
 			continue
 		}
 
@@ -342,7 +332,9 @@ func addNotificationEvent(ctx api.Context, event api.Event) error {
 			}
 
 			for _, cn := range teamSpec.Notifications {
-				if valid, err := expressionRunner.Eval(ctx, cn.Filter); err != nil || !valid {
+				if valid, err := expressionRunner.Eval(ctx, cn.Filter); err != nil {
+					logs.IfError(db.UpdateNotificationError(id, err.Error()), "failed to update notification")
+				} else if !valid {
 					continue
 				}
 
@@ -371,7 +363,9 @@ func addNotificationEvent(ctx api.Context, event api.Event) error {
 		}
 
 		for _, cn := range n.CustomNotifications {
-			if valid, err := expressionRunner.Eval(ctx, cn.Filter); err != nil || !valid {
+			if valid, err := expressionRunner.Eval(ctx, cn.Filter); err != nil {
+				logs.IfError(db.UpdateNotificationError(id, err.Error()), "failed to update notification")
+			} else if !valid {
 				continue
 			}
 

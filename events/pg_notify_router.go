@@ -1,6 +1,8 @@
 package events
 
 import (
+	"strings"
+
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/duty/pg"
 	"github.com/flanksource/incident-commander/api"
@@ -12,14 +14,14 @@ type pgNotifyRouter struct {
 	registry map[string]chan string
 }
 
-func newPgNotifyRouter() *pgNotifyRouter {
+func NewPgNotifyRouter() *pgNotifyRouter {
 	return &pgNotifyRouter{
 		registry: make(map[string]chan string),
 	}
 }
 
 // RegisterRoutes creates a single channel for the given routes and returns it.
-func (t *pgNotifyRouter) RegisterRoutes(routes []string) <-chan string {
+func (t *pgNotifyRouter) RegisterRoutes(routes ...string) <-chan string {
 	pgNotifyChannel := make(chan string)
 	for _, we := range routes {
 		t.registry[we] = pgNotifyChannel
@@ -33,10 +35,21 @@ func (t *pgNotifyRouter) Run(ctx api.Context, channel string) {
 
 	logger.Debugf("running pg notify router")
 	for payload := range eventQueueNotifyChannel {
-		if ch, ok := t.registry[payload]; ok {
-			ch <- payload
-		} else if payload != EventPushQueueCreate { // Ignore push queue events cuz that'll pollute the logs
-			logger.Warnf("notify router:: received notification for an unregistered event: %s", payload)
+		if payload == EventPushQueueCreate {
+			// Ignore push queue events cuz that'll pollute the logs
+			continue
+		}
+
+		// The original payload is expected to be in the form of
+		// <route> <...optional payload>
+		fields := strings.Fields(payload)
+		route := fields[0]
+		derivedPayload := strings.Join(fields[1:], " ")
+
+		if ch, ok := t.registry[route]; ok {
+			ch <- derivedPayload
+		} else {
+			logger.Warnf("notify router:: received notification for an unregistered event: %s", route)
 		}
 	}
 }
