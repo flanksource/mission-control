@@ -554,11 +554,3 @@ func getEnvForEvent(ctx api.Context, event api.Event, properties map[string]stri
 
 	return env, nil
 }
-
-func handleNotificationUpdates(ctx api.Context, event api.Event) error {
-	if id, ok := event.Properties["id"]; ok {
-		pkgNotification.PurgeCache(id)
-	}
-
-	return nil
-}

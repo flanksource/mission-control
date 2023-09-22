@@ -35,7 +35,7 @@ func (t *pgNotifyRouter) Run(ctx api.Context, channel string) {
 
 	logger.Debugf("running pg notify router")
 	for payload := range eventQueueNotifyChannel {
-		if payload == EventPushQueueCreate {
+		if payload == "" || payload == EventPushQueueCreate {
 			// Ignore push queue events cuz that'll pollute the logs
 			continue
 		}
