@@ -46,10 +46,20 @@ func SyncCheckStatusesWithUpstream(ctx api.Context) error {
 		_ = db.PersistJobHistory(ctx, jobHistory.End())
 	}()
 
-	reconciler := upstream.NewUpstreamReconciler(api.UpstreamConf, ReconcilePageSize)
-	if err := reconciler.SyncAfter(ctx, "check_statuses", time.Hour*30); err != nil {
+	var checkStatuses []models.CheckStatus
+	if err := ctx.DB().Where("NOW() - created_at <= INTERVAL '30 SECONDS'").Find(&checkStatuses).Error; err != nil {
 		jobHistory.AddError(err.Error())
-		return fmt.Errorf("failed to sync check_statuses table: %w", err)
+		return fmt.Errorf("failed to get check statuses: %w", err)
+	}
+
+	if len(checkStatuses) == 0 {
+		return nil
+	}
+
+	logger.Tracef("Pushing %d check statuses to upstream", len(checkStatuses))
+	if err := upstream.Push(ctx, api.UpstreamConf, &upstream.PushData{AgentName: api.UpstreamConf.AgentName, CheckStatuses: checkStatuses}); err != nil {
+		jobHistory.AddError(err.Error())
+		return fmt.Errorf("failed to push check_statuses to upstream: %w", err)
 	}
 
 	jobHistory.IncrSuccess()
