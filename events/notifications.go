@@ -17,8 +17,12 @@ import (
 	pkgNotification "github.com/flanksource/incident-commander/notification"
 	pkgResponder "github.com/flanksource/incident-commander/responder"
 	"github.com/flanksource/incident-commander/teams"
+	"github.com/flanksource/incident-commander/utils/expression"
 	"github.com/google/uuid"
 )
+
+// List of all possible variables for any expression related to notifications
+var allEnvVars = []string{"check", "canary", "incident", "team", "responder", "comment", "evidence", "hypothesis"}
 
 func NewNotificationSaveConsumerSync() SyncEventConsumer {
 	return SyncEventConsumer{
@@ -284,13 +288,7 @@ func addNotificationEvent(ctx api.Context, event api.Event) error {
 			continue
 		}
 
-		expressionRunner := pkgNotification.ExpressionRunner{
-			ResourceID:   id,
-			ResourceType: "notification",
-			CelEnv:       celEnv,
-		}
-
-		if valid, err := expressionRunner.Eval(ctx, n.Filter); err != nil {
+		if valid, err := expression.Eval(n.Filter, celEnv, allEnvVars); err != nil {
 			logs.IfError(db.UpdateNotificationError(id, err.Error()), "failed to update notification")
 		} else if !valid {
 			continue
@@ -325,14 +323,8 @@ func addNotificationEvent(ctx api.Context, event api.Event) error {
 				return fmt.Errorf("failed to get team(id=%s); %v", n.TeamID, err)
 			}
 
-			expressionRunner := pkgNotification.ExpressionRunner{
-				ResourceID:   id,
-				ResourceType: "notification",
-				CelEnv:       celEnv,
-			}
-
 			for _, cn := range teamSpec.Notifications {
-				if valid, err := expressionRunner.Eval(ctx, cn.Filter); err != nil {
+				if valid, err := expression.Eval(cn.Filter, celEnv, allEnvVars); err != nil {
 					logs.IfError(db.UpdateNotificationError(id, err.Error()), "failed to update notification")
 				} else if !valid {
 					continue
@@ -363,7 +355,7 @@ func addNotificationEvent(ctx api.Context, event api.Event) error {
 		}
 
 		for _, cn := range n.CustomNotifications {
-			if valid, err := expressionRunner.Eval(ctx, cn.Filter); err != nil {
+			if valid, err := expression.Eval(cn.Filter, celEnv, allEnvVars); err != nil {
 				logs.IfError(db.UpdateNotificationError(id, err.Error()), "failed to update notification")
 			} else if !valid {
 				continue

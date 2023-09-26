@@ -1,45 +1,34 @@
-package notification
+package expression
 
 import (
 	"fmt"
 	"strconv"
 	"time"
 
-	"github.com/flanksource/incident-commander/api"
 	"github.com/google/cel-go/cel"
 	"github.com/patrickmn/go-cache"
 )
 
-var (
-	prgCache = cache.New(1*time.Hour, 1*time.Hour)
-
-	allEnvVars = []string{"check", "canary", "incident", "team", "responder", "comment", "evidence", "hypothesis"}
-)
+var prgCache = cache.New(1*time.Hour, 1*time.Hour)
 
 type programCache struct {
 	program *cel.Program
 	err     error
 }
 
-type ExpressionRunner struct {
-	ResourceID   string
-	ResourceType string
-	CelEnv       map[string]any
-}
-
-// Eval evaluates the given expression into a boolean.
+// Eval evaluates the given expression.
 // The expression should return a boolean value that's supported by strconv.ParseBool.
-func (t ExpressionRunner) Eval(ctx api.Context, expression string) (bool, error) {
+func Eval(expression string, celEnv map[string]any, allEnvVars []string) (bool, error) {
 	if expression == "" {
 		return true, nil
 	}
 
-	prg, err := t.getOrCompileCELProgram(ctx, expression)
+	prg, err := getOrCompileCELProgram(expression, allEnvVars)
 	if err != nil {
 		return false, fmt.Errorf("failed to compile program: %w", err)
 	}
 
-	out, _, err := (*prg).Eval(t.CelEnv)
+	out, _, err := (*prg).Eval(celEnv)
 	if err != nil {
 		return false, fmt.Errorf("failed to evaluate program: %w", err)
 	}
@@ -53,7 +42,7 @@ func (t ExpressionRunner) Eval(ctx api.Context, expression string) (bool, error)
 }
 
 // getOrCompileCELProgram returns a cached or compiled cel.Program for the given cel expression.
-func (t ExpressionRunner) getOrCompileCELProgram(ctx api.Context, expression string) (*cel.Program, error) {
+func getOrCompileCELProgram(expression string, allEnvVars []string) (*cel.Program, error) {
 	if prg, exists := prgCache.Get(expression); exists {
 		val := prg.(*programCache)
 		if val.err != nil {
@@ -63,7 +52,7 @@ func (t ExpressionRunner) getOrCompileCELProgram(ctx api.Context, expression str
 		return val.program, nil
 	}
 
-	prg, err := compileCELProgram(ctx, expression)
+	prg, err := compileCELProgram(expression, allEnvVars)
 	if err != nil {
 		prgCache.SetDefault(expression, &programCache{err: err})
 		return nil, err
@@ -73,7 +62,7 @@ func (t ExpressionRunner) getOrCompileCELProgram(ctx api.Context, expression str
 	return prg, nil
 }
 
-func compileCELProgram(ctx api.Context, expression string) (*cel.Program, error) {
+func compileCELProgram(expression string, allEnvVars []string) (*cel.Program, error) {
 	celOpts := make([]cel.EnvOption, len(allEnvVars))
 	for i := range allEnvVars {
 		celOpts[i] = cel.Variable(allEnvVars[i], cel.AnyType)
