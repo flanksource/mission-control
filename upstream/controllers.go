@@ -116,3 +116,91 @@ func Status(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, response)
 }
+
+// PullCanaries returns all canaries for the  agent
+func PullCanaries(c echo.Context) error {
+	ctx := c.(api.Context)
+
+	agentName := c.Param("agent_name")
+
+	agent, err := db.FindAgent(ctx, agentName)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to get agent"})
+	} else if agent == nil {
+		return c.JSON(http.StatusNotFound, api.HTTPError{Message: fmt.Sprintf("agent(name=%s) not found", agentName)})
+	}
+
+	var since time.Time
+	if sinceRaw := c.QueryParam("since"); sinceRaw != "" {
+		since, err = time.Parse(time.RFC3339, sinceRaw)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error(), Message: "'since' param needs to be a valid RFC3339 timestamp"})
+		}
+	}
+
+	canaries, err := db.GetCanariesOfAgent(ctx, agent.ID, since)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, api.HTTPError{
+			Error:   err.Error(),
+			Message: fmt.Sprintf("Error fetching canaries for agent(name=%s)", agentName),
+		})
+	}
+
+	return c.JSON(http.StatusOK, canaries)
+}
+
+// PullScrapeConfigs returns all scrape configs for the agent.
+func PullScrapeConfigs(c echo.Context) error {
+	ctx := c.(api.Context)
+
+	agentName := c.Param("agent_name")
+
+	agent, err := db.FindAgent(ctx, agentName)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to get agent"})
+	} else if agent == nil {
+		return c.JSON(http.StatusNotFound, api.HTTPError{Message: fmt.Sprintf("agent(name=%s) not found", agentName)})
+	}
+
+	var since uuid.UUID
+	if sinceRaw := c.QueryParam("since"); sinceRaw != "" {
+		since, err = uuid.Parse(sinceRaw)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error(), Message: "'since' param needs to be a valid UUID"})
+		}
+	}
+
+	scrapeConfigs, err := db.GetScrapeConfigsOfAgent(ctx, agent.ID, since)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, api.HTTPError{
+			Error:   err.Error(),
+			Message: fmt.Sprintf("error fetching scrape configs for agent(name=%s)", agentName),
+		})
+	}
+
+	return c.JSON(http.StatusOK, scrapeConfigs)
+}
+
+// LastPushedConfigResults responds with the latest ids for all the config results pushed by the given agent.
+func LastPushedConfigResults(c echo.Context) error {
+	ctx := c.(api.Context)
+
+	agentName := c.Param("agent_name")
+
+	agent, err := db.FindAgent(ctx, agentName)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to get agent"})
+	} else if agent == nil {
+		return c.JSON(http.StatusNotFound, api.HTTPError{Message: fmt.Sprintf("agent(name=%s) not found", agentName)})
+	}
+
+	result, err := db.GetLastPushedConfigResults(ctx, agent.ID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, api.HTTPError{
+			Error:   err.Error(),
+			Message: fmt.Sprintf("error fetching last pushed config results for agent(name=%s)", agentName),
+		})
+	}
+
+	return c.JSON(http.StatusOK, result)
+}

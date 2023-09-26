@@ -5,6 +5,7 @@ import (
 
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/upstream"
+	"github.com/google/uuid"
 )
 
 var TablesToReconcile = []string{
@@ -22,4 +23,10 @@ var UpstreamConf upstream.UpstreamConfig
 type CanaryPullResponse struct {
 	Before   time.Time       `json:"before"`
 	Canaries []models.Canary `json:"canaries,omitempty"`
+}
+
+type LastPushedConfigResult struct {
+	ConfigID   uuid.UUID
+	AnalysisID uuid.UUID
+	ChangeID   uuid.UUID
 }

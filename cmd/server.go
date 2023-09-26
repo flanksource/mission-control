@@ -24,7 +24,6 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/auth"
-	"github.com/flanksource/incident-commander/canary"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/jobs"
@@ -161,8 +160,10 @@ func createHTTPServer(ctx api.Context) *echo.Echo {
 	upstreamGroup := e.Group("/upstream", rbac.Authorization(rbac.ObjectAgentPush, rbac.ActionWrite))
 	upstreamGroup.POST("/push", upstream.PushUpstream)
 	upstreamGroup.GET("/pull/:agent_name", upstream.Pull)
-	upstreamGroup.GET("/canary/pull/:agent_name", canary.Pull)
 	upstreamGroup.GET("/status/:agent_name", upstream.Status)
+	upstreamGroup.GET("/canary/pull/:agent_name", upstream.PullCanaries)
+	upstreamGroup.GET("/scrapeconfig/pull/:agent_name", upstream.PullScrapeConfigs)
+	upstreamGroup.GET("/scrapeconfig/status/:agent_name", upstream.LastPushedConfigResults)
 
 	playbook.RegisterRoutes(e, "playbook")
 	e.POST("/agent/generate", agent.GenerateAgent, rbac.Authorization(rbac.ObjectAgentCreate, rbac.ActionWrite))
