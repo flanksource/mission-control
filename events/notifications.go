@@ -264,7 +264,7 @@ func sendNotification(ctx *pkgNotification.Context, event api.Event) error {
 // If a notification is found for the given event and passes all the filters, then
 // a new notification event is created.
 func addNotificationEvent(ctx api.Context, event api.Event) error {
-	notificationIDs, err := pkgNotification.GetNotificationIDs(ctx, event.Name)
+	notificationIDs, err := pkgNotification.GetNotificationIDsForEvent(ctx, event.Name)
 	if err != nil {
 		return err
 	}
@@ -284,7 +284,12 @@ func addNotificationEvent(ctx api.Context, event api.Event) error {
 			return err
 		}
 
-		if !n.HasRecipients() || n.Error != nil {
+		if !n.HasRecipients() {
+			continue
+		}
+
+		if n.Error != nil {
+			// A notification that currently has errors is skipped.
 			continue
 		}
 

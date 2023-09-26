@@ -21,7 +21,9 @@ func PurgeCache(notificationID string) {
 	notificationByIDCache.Delete(notificationID)
 }
 
-func GetNotificationIDs(ctx api.Context, eventName string) ([]string, error) {
+// GetNotificationIDsForEvent returns ids of all the notifications
+// that are watching the given event.
+func GetNotificationIDsForEvent(ctx api.Context, eventName string) ([]string, error) {
 	if val, found := notificationByEventCache.Get(eventName); found {
 		return val.([]string), nil
 	}
