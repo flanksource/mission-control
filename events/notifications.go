@@ -11,9 +11,7 @@ import (
 	"github.com/flanksource/incident-commander/logs"
 	"github.com/flanksource/incident-commander/notification"
 	pkgResponder "github.com/flanksource/incident-commander/responder"
-	"github.com/flanksource/incident-commander/teams"
 	"github.com/flanksource/incident-commander/utils/expression"
-	"github.com/google/uuid"
 )
 
 // List of all possible variables for any expression related to notifications
@@ -89,84 +87,19 @@ func addNotificationEvent(ctx api.Context, event api.Event) error {
 			continue
 		}
 
-		resourceID, err := uuid.Parse(event.Properties["id"])
+		payloads, err := notification.CreateNotificationSendPayloads(ctx, event, n, celEnv)
 		if err != nil {
-			return fmt.Errorf("failed to parse resource id: %v", err)
+			return err
 		}
 
-		if n.PersonID != nil {
-			payload := notification.NotificationEventPayload{
-				EventName:      event.Name,
-				NotificationID: n.ID,
-				ID:             resourceID,
-				PersonID:       n.PersonID,
-				EventCreatedAt: event.CreatedAt,
-			}
-
-			newEvent := &api.Event{
-				Name:       EventNotificationSend,
-				Properties: payload.AsMap(),
-			}
-			if err := ctx.DB().Clauses(eventQueueOnConflictClause).Create(newEvent).Error; err != nil {
-				return fmt.Errorf("failed to create notification event for person(id=%s): %v", n.PersonID, err)
-			}
-		}
-
-		if n.TeamID != nil {
-			teamSpec, err := teams.GetTeamSpec(ctx, n.TeamID.String())
-			if err != nil {
-				return fmt.Errorf("failed to get team(id=%s); %v", n.TeamID, err)
-			}
-
-			for _, cn := range teamSpec.Notifications {
-				if valid, err := expression.Eval(cn.Filter, celEnv, allEnvVars); err != nil {
-					logs.IfError(db.UpdateNotificationError(id, err.Error()), "failed to update notification")
-				} else if !valid {
-					continue
-				}
-
-				payload := notification.NotificationEventPayload{
-					EventName:        event.Name,
-					NotificationID:   n.ID,
-					ID:               resourceID,
-					TeamID:           n.TeamID.String(),
-					NotificationName: cn.Name,
-					EventCreatedAt:   event.CreatedAt,
-				}
-
-				newEvent := &api.Event{
-					Name:       EventNotificationSend,
-					Properties: payload.AsMap(),
-				}
-
-				if err := ctx.DB().Clauses(eventQueueOnConflictClause).Create(newEvent).Error; err != nil {
-					return fmt.Errorf("failed to create notification event for team(id=%s): %v", n.TeamID, err)
-				}
-			}
-		}
-
-		for _, cn := range n.CustomNotifications {
-			if valid, err := expression.Eval(cn.Filter, celEnv, allEnvVars); err != nil {
-				logs.IfError(db.UpdateNotificationError(id, err.Error()), "failed to update notification")
-			} else if !valid {
-				continue
-			}
-
-			payload := notification.NotificationEventPayload{
-				EventName:        event.Name,
-				NotificationID:   n.ID,
-				ID:               resourceID,
-				NotificationName: cn.Name,
-				EventCreatedAt:   event.CreatedAt,
-			}
-
-			newEvent := &api.Event{
+		for _, payload := range payloads {
+			newEvent := api.Event{
 				Name:       EventNotificationSend,
 				Properties: payload.AsMap(),
 			}
 
-			if err := ctx.DB().Clauses(eventQueueOnConflictClause).Create(newEvent).Error; err != nil {
-				return fmt.Errorf("failed to create notification event for custom service (name:%s): %v", cn.Name, err)
+			if err := ctx.DB().Clauses(eventQueueOnConflictClause).Create(&newEvent).Error; err != nil {
+				return fmt.Errorf("failed to saved `notification.send` event for payload (%v): %w", payload.AsMap(), err)
 			}
 		}
 	}
@@ -184,6 +117,7 @@ func sendNotifications(ctx api.Context, events []api.Event) []api.Event {
 
 		notificationContext := notification.NewContext(ctx, payload.NotificationID)
 		notificationContext.WithSource(payload.EventName, payload.ID)
+
 		logs.IfError(notificationContext.StartLog(), "error persisting start of notification send history")
 
 		originalEvent := api.Event{Name: payload.EventName, CreatedAt: payload.EventCreatedAt}
@@ -192,10 +126,7 @@ func sendNotifications(ctx api.Context, events []api.Event) []api.Event {
 			e.Error = err.Error()
 			failedEvents = append(failedEvents, e)
 			notificationContext.WithError(err.Error())
-			logs.IfError(notificationContext.EndLog(), "error persisting end of notification send history")
-		}
-
-		if err := notification.SendNotification(notificationContext, payload, celEnv); err != nil {
+		} else if err := notification.SendNotification(notificationContext, payload, celEnv); err != nil {
 			e.Error = err.Error()
 			failedEvents = append(failedEvents, e)
 			notificationContext.WithError(err.Error())

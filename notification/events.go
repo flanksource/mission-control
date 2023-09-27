@@ -12,7 +12,10 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/logs"
 	"github.com/flanksource/incident-commander/teams"
+	"github.com/flanksource/incident-commander/utils/expression"
 )
 
 // List of all events that can create notifications ...
@@ -40,6 +43,9 @@ const (
 	EventIncidentStatusOpen          = "incident.status.open"
 	EventIncidentStatusResolved      = "incident.status.resolved"
 )
+
+// List of all possible variables for any expression related to notifications
+var allEnvVars = []string{"check", "canary", "incident", "team", "responder", "comment", "evidence", "hypothesis"}
 
 // NotificationTemplate holds in data for notification
 // that'll be used by struct templater.
@@ -211,4 +217,71 @@ Hypothesis: {{.hypothesis.title}}
 	}
 
 	return title, body
+}
+
+func CreateNotificationSendPayloads(ctx api.Context, event api.Event, n *NotificationWithSpec, celEnv map[string]any) ([]NotificationEventPayload, error) {
+	var payloads []NotificationEventPayload
+
+	resourceID, err := uuid.Parse(event.Properties["id"])
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse resource id: %v", err)
+	}
+
+	if n.PersonID != nil {
+		payload := NotificationEventPayload{
+			EventName:      event.Name,
+			NotificationID: n.ID,
+			ID:             resourceID,
+			PersonID:       n.PersonID,
+			EventCreatedAt: event.CreatedAt,
+		}
+
+		payloads = append(payloads, payload)
+	}
+
+	if n.TeamID != nil {
+		teamSpec, err := teams.GetTeamSpec(ctx, n.TeamID.String())
+		if err != nil {
+			return nil, fmt.Errorf("failed to get team (id=%s); %v", n.TeamID, err)
+		}
+
+		for _, cn := range teamSpec.Notifications {
+			if valid, err := expression.Eval(cn.Filter, celEnv, allEnvVars); err != nil {
+				logs.IfError(db.UpdateNotificationError(n.ID.String(), err.Error()), "failed to update notification")
+			} else if !valid {
+				continue
+			}
+
+			payload := NotificationEventPayload{
+				EventName:        event.Name,
+				NotificationID:   n.ID,
+				ID:               resourceID,
+				TeamID:           n.TeamID.String(),
+				NotificationName: cn.Name,
+				EventCreatedAt:   event.CreatedAt,
+			}
+
+			payloads = append(payloads, payload)
+		}
+	}
+
+	for _, cn := range n.CustomNotifications {
+		if valid, err := expression.Eval(cn.Filter, celEnv, allEnvVars); err != nil {
+			logs.IfError(db.UpdateNotificationError(n.ID.String(), err.Error()), "failed to update notification")
+		} else if !valid {
+			continue
+		}
+
+		payload := NotificationEventPayload{
+			EventName:        event.Name,
+			NotificationID:   n.ID,
+			ID:               resourceID,
+			NotificationName: cn.Name,
+			EventCreatedAt:   event.CreatedAt,
+		}
+
+		payloads = append(payloads, payload)
+	}
+
+	return payloads, nil
 }
