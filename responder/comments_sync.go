@@ -24,7 +24,7 @@ func SyncComments(ctx api.Context) error {
 	logger.Debugf("Syncing comments")
 
 	var responders []api.Responder
-	err := db.Gorm.Where("external_id IS NOT NULL").Preload("Team").Find(&responders).Error
+	err := ctx.DB().Where("external_id IS NOT NULL").Preload("Team").Find(&responders).Error
 	if err != nil {
 		logger.Errorf("Error fetching responders from database: %v", err)
 		return err

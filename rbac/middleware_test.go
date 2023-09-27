@@ -68,24 +68,24 @@ func TestAuthorization(t *testing.T) {
 		expectedCode int
 		expectedBody string
 	}{
-		{path: "/db/identities", method: http.MethodGet, user: "", expectedCode: http.StatusUnauthorized, expectedBody: errNoUserID, object: ObjectDatabase, action: "any"},
+		{path: "/db/identities", method: http.MethodGet, user: "", expectedCode: http.StatusUnauthorized, expectedBody: errNoUserID.Error(), object: ObjectDatabase, action: "any"},
 		{path: "/db/identities", method: http.MethodGet, user: "admin", expectedCode: http.StatusOK, expectedBody: successBody, object: ObjectDatabase, action: "any"},
 		{path: "/db/checks", method: http.MethodGet, user: "viewer", expectedCode: http.StatusOK, expectedBody: successBody, object: ObjectDatabase, action: "any"},
-		{path: "/db/canaries", method: http.MethodGet, user: "viewer", expectedCode: http.StatusForbidden, expectedBody: errAccessDenied, object: ObjectDatabase, action: "any"},
-		{path: "/db/canaries", method: http.MethodGet, user: "responder", expectedCode: http.StatusForbidden, expectedBody: errAccessDenied, object: ObjectDatabase, action: "any"},
+		{path: "/db/canaries", method: http.MethodGet, user: "viewer", expectedCode: http.StatusForbidden, expectedBody: errAccessDenied.Error(), object: ObjectDatabase, action: "any"},
+		{path: "/db/canaries", method: http.MethodGet, user: "responder", expectedCode: http.StatusForbidden, expectedBody: errAccessDenied.Error(), object: ObjectDatabase, action: "any"},
 		{path: "/db/canaries?id=eq.5", method: http.MethodGet, user: "editor", expectedCode: http.StatusOK, expectedBody: successBody, object: ObjectDatabase, action: "any"},
-		{path: "/db/comments", method: http.MethodPost, user: "viewer", expectedCode: http.StatusForbidden, expectedBody: errAccessDenied, object: ObjectDatabase, action: "any"},
+		{path: "/db/comments", method: http.MethodPost, user: "viewer", expectedCode: http.StatusForbidden, expectedBody: errAccessDenied.Error(), object: ObjectDatabase, action: "any"},
 		{path: "/db/comments", method: http.MethodPost, user: "responder", expectedCode: http.StatusOK, expectedBody: successBody, object: ObjectDatabase, action: "any"},
 		{path: "/db/incidents", method: http.MethodPatch, user: "responder", expectedCode: http.StatusOK, expectedBody: successBody, object: ObjectDatabase, action: "any"},
-		{path: "/db/incidents", method: http.MethodPost, user: "responder", expectedCode: http.StatusForbidden, expectedBody: errAccessDenied, object: ObjectDatabase, action: "any"},
+		{path: "/db/incidents", method: http.MethodPost, user: "responder", expectedCode: http.StatusForbidden, expectedBody: errAccessDenied.Error(), object: ObjectDatabase, action: "any"},
 		{path: "/db/incidents", method: http.MethodPost, user: "commander", expectedCode: http.StatusOK, expectedBody: successBody, object: ObjectDatabase, action: "any"},
-		{path: "/auth/invite_user", method: http.MethodPost, user: "commander", expectedCode: http.StatusForbidden, expectedBody: errAccessDenied, object: ObjectAuth, action: ActionWrite},
+		{path: "/auth/invite_user", method: http.MethodPost, user: "commander", expectedCode: http.StatusForbidden, expectedBody: errAccessDenied.Error(), object: ObjectAuth, action: ActionWrite},
 		{path: "/auth/invite_user", method: http.MethodPost, user: "admin", expectedCode: http.StatusOK, expectedBody: successBody, object: ObjectAuth, action: ActionWrite},
 		{path: "/bad/config", method: http.MethodPost, user: "admin", expectedCode: http.StatusOK, expectedBody: successBody, object: "", action: "random"},
-		{path: "/bad/config", method: http.MethodPost, user: "editor", expectedCode: http.StatusForbidden, expectedBody: errMisconfiguredRBAC, object: "", action: "any"},
-		{path: "/bad/config", method: http.MethodPost, user: "editor", expectedCode: http.StatusForbidden, expectedBody: errMisconfiguredRBAC, object: "any", action: ""},
-		{path: "/bad/config", method: http.MethodPost, user: "editor", expectedCode: http.StatusForbidden, expectedBody: errAccessDenied, object: "unknown", action: "unknown"},
-		{path: "/no/user", method: http.MethodPost, user: "", expectedCode: http.StatusUnauthorized, expectedBody: errNoUserID, object: ObjectDatabase, action: "any"},
+		{path: "/bad/config", method: http.MethodPost, user: "editor", expectedCode: http.StatusForbidden, expectedBody: errMisconfiguredRBAC.Error(), object: "", action: "any"},
+		{path: "/bad/config", method: http.MethodPost, user: "editor", expectedCode: http.StatusForbidden, expectedBody: errMisconfiguredRBAC.Error(), object: "any", action: ""},
+		{path: "/bad/config", method: http.MethodPost, user: "editor", expectedCode: http.StatusForbidden, expectedBody: errAccessDenied.Error(), object: "unknown", action: "unknown"},
+		{path: "/no/user", method: http.MethodPost, user: "", expectedCode: http.StatusUnauthorized, expectedBody: errNoUserID.Error(), object: ObjectDatabase, action: "any"},
 	}
 
 	for _, tc := range tests {

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/jobs"
 	"github.com/google/uuid"
@@ -133,10 +134,11 @@ var _ = ginkgo.Describe("Test Incident Done Definition With Config Item", ginkgo
 	})
 
 	ginkgo.It("should NOT mark the incident as resolved", func() {
-		jobs.EvaluateEvidenceScripts()
+		err := jobs.EvaluateEvidenceScripts(api.DefaultContext.WithDB(db.Gorm))
+		Expect(err).To(BeNil())
 
 		var fetchedIncident models.Incident
-		err := db.Gorm.Where("id = ?", incident.ID).First(&fetchedIncident).Error
+		err = db.Gorm.Where("id = ?", incident.ID).First(&fetchedIncident).Error
 		Expect(err).To(BeNil())
 
 		Expect(fetchedIncident.Status).To(Equal(models.IncidentStatusOpen))
@@ -150,10 +152,11 @@ var _ = ginkgo.Describe("Test Incident Done Definition With Config Item", ginkgo
 	})
 
 	ginkgo.It("should mark the incident as resolved", func() {
-		jobs.EvaluateEvidenceScripts()
+		err := jobs.EvaluateEvidenceScripts(api.DefaultContext.WithDB(db.Gorm))
+		Expect(err).To(BeNil())
 
 		var fetchedIncident models.Incident
-		err := db.Gorm.Where("id = ?", incident.ID).First(&fetchedIncident).Error
+		err = db.Gorm.Where("id = ?", incident.ID).First(&fetchedIncident).Error
 		Expect(err).To(BeNil())
 
 		Expect(fetchedIncident.Status).To(Equal(models.IncidentStatusResolved))
@@ -265,10 +268,11 @@ var _ = ginkgo.Describe("Test Incident Done Definition With Config Item", ginkgo
 	})
 
 	ginkgo.It("should NOT mark the incident as resolved", func() {
-		jobs.EvaluateEvidenceScripts()
+		err := jobs.EvaluateEvidenceScripts(api.DefaultContext.WithDB(db.Gorm))
+		Expect(err).To(BeNil())
 
 		var fetchedIncident models.Incident
-		err := db.Gorm.Where("id = ?", incident.ID).First(&fetchedIncident).Error
+		err = db.Gorm.Where("id = ?", incident.ID).First(&fetchedIncident).Error
 		Expect(err).To(BeNil())
 
 		Expect(fetchedIncident.Status).To(Equal(models.IncidentStatusOpen))
@@ -281,10 +285,11 @@ var _ = ginkgo.Describe("Test Incident Done Definition With Config Item", ginkgo
 	})
 
 	ginkgo.It("should mark the incident as resolved", func() {
-		jobs.EvaluateEvidenceScripts()
+		err := jobs.EvaluateEvidenceScripts(api.DefaultContext.WithDB(db.Gorm))
+		Expect(err).To(BeNil())
 
 		var fetchedIncident models.Incident
-		err := db.Gorm.Where("id = ?", incident.ID).First(&fetchedIncident).Error
+		err = db.Gorm.Where("id = ?", incident.ID).First(&fetchedIncident).Error
 		Expect(err).To(BeNil())
 
 		Expect(fetchedIncident.Status).To(Equal(models.IncidentStatusResolved))
@@ -398,10 +403,11 @@ var _ = ginkgo.Describe("Test Incident Done Definition With Health Check", ginkg
 	})
 
 	ginkgo.It("should NOT mark the incident as resolved", func() {
-		jobs.EvaluateEvidenceScripts()
+		err := jobs.EvaluateEvidenceScripts(api.DefaultContext.WithDB(db.Gorm))
+		Expect(err).To(BeNil())
 
 		var fetchedIncident models.Incident
-		err := db.Gorm.Where("id = ?", incident.ID).First(&fetchedIncident).Error
+		err = db.Gorm.Where("id = ?", incident.ID).First(&fetchedIncident).Error
 		Expect(err).To(BeNil())
 
 		Expect(fetchedIncident.Status).To(Equal(models.IncidentStatusOpen))
@@ -415,10 +421,11 @@ var _ = ginkgo.Describe("Test Incident Done Definition With Health Check", ginkg
 	})
 
 	ginkgo.It("should mark the incident as resolved", func() {
-		jobs.EvaluateEvidenceScripts()
+		err := jobs.EvaluateEvidenceScripts(api.DefaultContext.WithDB(db.Gorm))
+		Expect(err).To(BeNil())
 
 		var fetchedIncident models.Incident
-		err := db.Gorm.Where("id = ?", incident.ID).First(&fetchedIncident).Error
+		err = db.Gorm.Where("id = ?", incident.ID).First(&fetchedIncident).Error
 		Expect(err).To(BeNil())
 
 		Expect(fetchedIncident.Status).To(Equal(models.IncidentStatusResolved))
