@@ -28,9 +28,12 @@ import (
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/jobs"
 	"github.com/flanksource/incident-commander/logs"
+	"github.com/flanksource/incident-commander/notification"
 	"github.com/flanksource/incident-commander/playbook"
 	"github.com/flanksource/incident-commander/rbac"
+	"github.com/flanksource/incident-commander/responder"
 	"github.com/flanksource/incident-commander/snapshot"
+	"github.com/flanksource/incident-commander/teams"
 	"github.com/flanksource/incident-commander/upstream"
 	"github.com/flanksource/incident-commander/utils"
 )
@@ -258,6 +261,8 @@ var Serve = &cobra.Command{
 			UpstreamPush: api.UpstreamConf,
 		})
 
+		go tableUpdatesHandler(api.DefaultContext)
+
 		go playbook.StartPlaybookRunConsumer(api.DefaultContext)
 
 		go playbook.ListenPlaybookPGNotify(api.DefaultContext)
@@ -333,5 +338,25 @@ func ServerCache(next echo.HandlerFunc) echo.HandlerFunc {
 			c.Response().Header().Set(HeaderCacheControl, CacheControlValue)
 		}
 		return next(c)
+	}
+}
+
+// tableUpdatesHandler handles all "table_activity" pg notifications.
+func tableUpdatesHandler(ctx api.Context) {
+	notifyRouter := events.NewPgNotifyRouter()
+	go notifyRouter.Run(ctx, "table_activity")
+
+	notificationUpdateCh := notifyRouter.RegisterRoutes("notifications")
+	teamsUpdateChan := notifyRouter.RegisterRoutes("teams")
+
+	for {
+		select {
+		case id := <-notificationUpdateCh:
+			notification.PurgeCache(id)
+
+		case id := <-teamsUpdateChan:
+			responder.PurgeCache(id)
+			teams.PurgeCache(id)
+		}
 	}
 }
