@@ -1,6 +1,7 @@
 package rbac
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
@@ -10,10 +11,10 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-const (
-	errNoUserID          = "Unauthorized. User not found for RBAC"
-	errMisconfiguredRBAC = "Unauthorized. RBAC policy not configured correctly"
-	errAccessDenied      = "Unauthorized. Access Denied"
+var (
+	errNoUserID          = errors.New("Unauthorized. User not found for RBAC")
+	errAccessDenied      = errors.New("Unauthorized. Access Denied")
+	errMisconfiguredRBAC = errors.New("Unauthorized. RBAC policy not configured correctly")
 )
 
 func Authorization(object, action string) func(echo.HandlerFunc) echo.HandlerFunc {
@@ -26,7 +27,7 @@ func Authorization(object, action string) func(echo.HandlerFunc) echo.HandlerFun
 
 			userID := c.Request().Header.Get(api.UserIDHeaderKey)
 			if userID == "" {
-				return c.String(http.StatusUnauthorized, errNoUserID)
+				return c.String(http.StatusUnauthorized, errNoUserID.Error())
 			}
 
 			// Everyone with an account is a viewer
@@ -57,11 +58,11 @@ func Authorization(object, action string) func(echo.HandlerFunc) echo.HandlerFun
 			}
 
 			if object == "" || action == "" {
-				return c.String(http.StatusForbidden, errMisconfiguredRBAC)
+				return c.String(http.StatusForbidden, errMisconfiguredRBAC.Error())
 			}
 
 			if !Check(userID, object, action) {
-				return c.String(http.StatusForbidden, errAccessDenied)
+				return c.String(http.StatusForbidden, errAccessDenied.Error())
 			}
 
 			return next(c)

@@ -27,9 +27,7 @@ func getAllStatii() []string {
 	return statii
 }
 
-func Run() error {
-	ctx := context.Background()
-
+func Run(ctx api.Context) error {
 	if err := db.Gorm.
 		// .Order("priority ASC")
 		Find(&Rules).Error; err != nil {

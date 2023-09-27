@@ -21,11 +21,11 @@ type EvidenceScriptInput struct {
 	Hypothesis     Hypothesis
 }
 
-func GetEvidenceScripts() []EvidenceScriptInput {
+func GetEvidenceScripts(ctx api.Context) []EvidenceScriptInput {
 	var evidences []EvidenceScriptInput
-	incidentsSubQuery := Gorm.Table("incidents").Select("id").Where("closed IS NULL")
-	hypothesesSubQuery := Gorm.Table("hypotheses").Select("id").Where("incident_id IN (?)", incidentsSubQuery)
-	err := Gorm.Table("evidences").
+	incidentsSubQuery := ctx.DB().Table("incidents").Select("id").Where("closed IS NULL")
+	hypothesesSubQuery := ctx.DB().Table("hypotheses").Select("id").Where("incident_id IN (?)", incidentsSubQuery)
+	err := ctx.DB().Table("evidences").
 		Joins("ConfigItem").
 		Joins("ConfigAnalysis").
 		Joins("Check").
@@ -45,8 +45,8 @@ func GetEvidenceScripts() []EvidenceScriptInput {
 	return evidences
 }
 
-func UpdateEvidenceScriptResult(id uuid.UUID, done bool, result string) error {
-	return Gorm.Table("evidences").Where("id = ?", id).
+func UpdateEvidenceScriptResult(ctx api.Context, id uuid.UUID, done bool, result string) error {
+	return ctx.DB().Table("evidences").Where("id = ?", id).
 		Updates(map[string]any{"done": done, "script_result": result}).
 		Error
 }

@@ -15,6 +15,9 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	prom "github.com/prometheus/client_golang/prometheus"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/spf13/cobra"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -32,6 +35,7 @@ import (
 	"github.com/flanksource/incident-commander/playbook"
 	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/snapshot"
+	"github.com/flanksource/incident-commander/telemetry"
 	"github.com/flanksource/incident-commander/upstream"
 	"github.com/flanksource/incident-commander/utils"
 )
@@ -51,8 +55,14 @@ var cacheSuffixes = []string{
 }
 
 func createHTTPServer(ctx api.Context) *echo.Echo {
+	if otelcollectorURL != "" {
+		telemetry.InitTracer("mission-control", otelcollectorURL, true)
+	}
+
 	e := echo.New()
 	e.HideBanner = true
+
+	e.Use(otelecho.Middleware("mission-control"))
 
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
@@ -127,6 +137,19 @@ func createHTTPServer(ctx api.Context) *echo.Echo {
 
 	e.Use(middleware.Logger())
 	e.Use(ServerCache)
+
+	// Set UserID in trace headers
+	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			if userID := c.Request().Header.Get(api.UserIDHeaderKey); userID != "" {
+				span := trace.SpanFromContext(c.Request().Context())
+				span.SetAttributes(
+					attribute.String("user-id", userID),
+				)
+			}
+			return next(c)
+		}
+	})
 
 	e.GET("/health", func(c echo.Context) error {
 		if err := db.Pool.Ping(context.Background()); err != nil {
@@ -313,6 +336,10 @@ func proxyMiddleware(e *echo.Echo, prefix, targetURL string) echo.MiddlewareFunc
 
 func init() {
 	ServerFlags(Serve.Flags())
+
+	//cleanup := telemetry.InitTracer("mc", "http://localhost:4318/api/traces", true)
+	//defer cleanup(context.Background())
+
 }
 
 // suffixesInItem checks if any of the suffixes are in the item.

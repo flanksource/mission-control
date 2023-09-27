@@ -43,6 +43,7 @@ var httpPort, metricsPort, devGuiPort int
 var configDb, authMode, kratosAPI, kratosAdminAPI, postgrestURI string
 var clerkJWKSURL, clerkOrgID string
 var disablePostgrest bool
+var otelcollectorURL string
 
 func ServerFlags(flags *pflag.FlagSet) {
 	flags.IntVar(&httpPort, "httpPort", 8080, "Port to expose a health dashboard")
@@ -64,6 +65,7 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&mail.FromAddress, "email-from-address", "no-reply@flanksource.com", "Email address of the sender")
 	flags.StringVar(&mail.FromName, "email-from-name", "Mission Control", "Email name of the sender")
 	flags.StringVar(&db.PostgresDBAnonRole, "postgrest-anon-role", "postgrest_anon", "PostgREST anonymous role")
+	flags.StringVar(&otelcollectorURL, "otel-collector-url", "", "OpenTelemetry gRPC Collector URL in host:port format")
 
 	// Flags for upstream push
 	flags.StringVar(&api.UpstreamConf.Host, "upstream-host", "", "central incident commander instance to push configs to")

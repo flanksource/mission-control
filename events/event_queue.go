@@ -2,6 +2,7 @@ package events
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/flanksource/commons/logger"
@@ -9,6 +10,7 @@ import (
 	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/events/eventconsumer"
+	"go.opentelemetry.io/otel"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -195,6 +197,11 @@ func (t SyncEventConsumer) EventConsumer() *eventconsumer.EventConsumer {
 }
 
 func (t *SyncEventConsumer) Handle(ctx api.Context) (int, error) {
+	tracer := otel.GetTracerProvider().Tracer("event-tracer")
+	traceCtx, span := tracer.Start(ctx, "event-queue-"+strings.Join(t.watchEvents, "/"))
+	ctx = ctx.WithContext(traceCtx)
+	defer span.End()
+
 	event, err := t.consumeOne(ctx)
 	if err != nil {
 		if event != nil {
@@ -255,6 +262,11 @@ type AsyncEventConsumer struct {
 }
 
 func (t *AsyncEventConsumer) Handle(ctx api.Context) (int, error) {
+	tracer := otel.GetTracerProvider().Tracer("event-tracer")
+	traceCtx, span := tracer.Start(ctx, "event-queue-"+strings.Join(t.watchEvents, "/"))
+	ctx = ctx.WithContext(traceCtx)
+	defer span.End()
+
 	tx := ctx.DB().Begin()
 	if tx.Error != nil {
 		return 0, fmt.Errorf("error initiating db tx: %w", tx.Error)

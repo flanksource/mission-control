@@ -1,5 +1,5 @@
 kind: IncidentRule
-apiVersion: commander.flanksource.com/v1
+apiVersion: mission-control.flanksource.com/v1
 metadata:
   name: default
   labels:

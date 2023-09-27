@@ -3,74 +3,87 @@ package jobs
 import (
 	"context"
 	"fmt"
+	"reflect"
+	"runtime"
+	"strings"
 	"time"
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/robfig/cron/v3"
+	"go.opentelemetry.io/otel"
 )
 
 type funcJob struct {
-	name    string                  // name is just an additional context for the job.
-	timeout time.Duration           // optional timeout for the job
-	fn      func(api.Context) error // the actual job
-	runNow  bool                    // whether to run the job now
+	name     string                  // name is just an additional context for the job.
+	schedule string                  // job schedule
+	timeout  time.Duration           // optional timeout for the job
+	fn       func(api.Context) error // the actual job
+	runNow   bool                    // whether to run the job now
 }
 
 func (t funcJob) Run() {
 	ctx := api.DefaultContext
+	tracer := otel.GetTracerProvider().Tracer("job-tracer")
+	traceCtx, span := tracer.Start(ctx, "job-"+t.name)
+	ctx = ctx.WithContext(traceCtx)
+	defer span.End()
+
 	if t.timeout > 0 {
-		newCtx, cancel := context.WithTimeout(ctx, t.timeout)
+		timeoutCtx, cancel := context.WithTimeout(ctx, t.timeout)
 		defer cancel()
 
-		ctx = ctx.WithContext(newCtx)
+		ctx = ctx.WithContext(timeoutCtx)
 	}
 
 	if err := t.fn(ctx); err != nil {
 		logger.Errorf("%s: %v", t.name, err)
+		span.RecordError(err)
 	}
 }
 
-func (t funcJob) schedule(cronRunner *cron.Cron, schedule string) error {
-	_, err := cronRunner.AddJob(schedule, t)
+func getFunctionName(temp interface{}) string {
+	fullName := runtime.FuncForPC(reflect.ValueOf(temp).Pointer()).Name()
+	funcPath := strings.Split(fullName, "/")
+	fnName := funcPath[len(funcPath)-1]
+	return fnName
+}
+
+func (t funcJob) addToScheduler(cronRunner *cron.Cron) error {
+	_, err := cronRunner.AddJob(t.schedule, t)
+	if t.name == "" {
+		t.name = getFunctionName(t.fn)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to schedule job: %s", t.name)
 	}
 
 	if t.runNow {
-		logger.Infof("Running job now:: %s", t.name)
+		logger.Infof("Running job now: %s", t.name)
 		t.Run()
 	}
 
 	return nil
 }
 
-func newFuncJob(fn func(api.Context) error, opts ...func(*funcJob)) *funcJob {
-	job := &funcJob{
-		fn: fn,
-	}
-
-	for i := range opts {
-		opts[i](job)
-	}
-
-	return job
-}
-
-func withName(name string) func(*funcJob) {
-	return func(j *funcJob) {
-		j.name = name
+func newFuncJob(fn func(api.Context) error, schedule string) *funcJob {
+	return &funcJob{
+		fn:       fn,
+		schedule: schedule,
 	}
 }
 
-func withTimeout(timeout time.Duration) func(*funcJob) {
-	return func(j *funcJob) {
-		j.timeout = timeout
-	}
+func (f *funcJob) setTimeout(timeout time.Duration) *funcJob {
+	f.timeout = timeout
+	return f
 }
 
-func withRunNow(runNow bool) func(*funcJob) {
-	return func(j *funcJob) {
-		j.runNow = runNow
-	}
+func (f *funcJob) setName(n string) *funcJob {
+	f.name = n
+	return f
+}
+
+func (f *funcJob) runOnStart() *funcJob {
+	f.runNow = true
+	return f
 }
