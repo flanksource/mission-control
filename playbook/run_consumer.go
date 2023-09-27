@@ -7,6 +7,7 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/events/eventconsumer"
+	"go.opentelemetry.io/otel"
 )
 
 func StartPlaybookRunConsumer(ctx api.Context) {
@@ -19,6 +20,11 @@ func StartPlaybookRunConsumer(ctx api.Context) {
 }
 
 func EventConsumer(ctx api.Context) (int, error) {
+	tracer := otel.GetTracerProvider().Tracer("event-tracer")
+	traceCtx, span := tracer.Start(ctx, "playbook-runs-consumer")
+	ctx = ctx.WithContext(traceCtx)
+	defer span.End()
+
 	tx := ctx.DB().Begin()
 	if tx.Error != nil {
 		return 0, fmt.Errorf("error initiating db tx: %w", tx.Error)

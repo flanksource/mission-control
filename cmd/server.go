@@ -35,7 +35,6 @@ import (
 	"github.com/flanksource/incident-commander/playbook"
 	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/snapshot"
-	"github.com/flanksource/incident-commander/telemetry"
 	"github.com/flanksource/incident-commander/upstream"
 	"github.com/flanksource/incident-commander/utils"
 )
@@ -55,10 +54,6 @@ var cacheSuffixes = []string{
 }
 
 func createHTTPServer(ctx api.Context) *echo.Echo {
-	if otelcollectorURL != "" {
-		telemetry.InitTracer("mission-control", otelcollectorURL, true)
-	}
-
 	e := echo.New()
 	e.HideBanner = true
 
@@ -336,10 +331,6 @@ func proxyMiddleware(e *echo.Echo, prefix, targetURL string) echo.MiddlewareFunc
 
 func init() {
 	ServerFlags(Serve.Flags())
-
-	//cleanup := telemetry.InitTracer("mc", "http://localhost:4318/api/traces", true)
-	//defer cleanup(context.Background())
-
 }
 
 // suffixesInItem checks if any of the suffixes are in the item.

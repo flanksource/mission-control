@@ -34,7 +34,7 @@ func SyncConfig(ctx api.Context) error {
 	logger.Debugf("Syncing responder config")
 
 	var teams []api.Team
-	if err := db.Gorm.Find(&teams).Error; err != nil {
+	if err := ctx.DB().Find(&teams).Error; err != nil {
 		logger.Errorf("Error querying teams from database: %v", err)
 		return err
 	}

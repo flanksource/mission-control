@@ -50,11 +50,11 @@ func getFunctionName(temp interface{}) string {
 }
 
 func (t funcJob) addToScheduler(cronRunner *cron.Cron) error {
-	_, err := cronRunner.AddJob(t.schedule, t)
 	if t.name == "" {
 		t.name = getFunctionName(t.fn)
 	}
-	if err != nil {
+
+	if _, err := cronRunner.AddJob(t.schedule, t); err != nil {
 		return fmt.Errorf("failed to schedule job: %s", t.name)
 	}
 

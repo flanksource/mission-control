@@ -109,7 +109,7 @@ var _ = ginkgo.Describe("Test incident creation via incidence rule", ginkgo.Orde
 	})
 
 	ginkgo.It("should create incidents", func() {
-		err := rules.Run()
+		err := rules.Run(api.DefaultContext)
 		Expect(err).To(BeNil())
 
 		var incidences []models.Incident

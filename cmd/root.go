@@ -10,6 +10,7 @@ import (
 	"github.com/flanksource/incident-commander/k8s"
 	"github.com/flanksource/incident-commander/mail"
 	"github.com/flanksource/incident-commander/rules"
+	"github.com/flanksource/incident-commander/telemetry"
 	"github.com/flanksource/incident-commander/upstream"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -28,6 +29,10 @@ func PreRun(cmd *cobra.Command, args []string) {
 	if err != nil {
 		logger.Infof("Kubernetes client not available: %v", err)
 		api.Kubernetes = fake.NewSimpleClientset()
+	}
+
+	if otelcollectorURL != "" {
+		telemetry.InitTracer("mission-control", otelcollectorURL, true)
 	}
 }
 
