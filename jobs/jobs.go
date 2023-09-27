@@ -9,7 +9,6 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/responder"
 	"github.com/flanksource/incident-commander/rules"
-	"github.com/flanksource/incident-commander/upstream"
 	"github.com/robfig/cron/v3"
 )
 
@@ -77,12 +76,12 @@ func Start(ctx api.Context) {
 	}
 
 	if api.UpstreamConf.Valid() {
-		job := newFuncJob(upstream.SyncWithUpstream, withName("upstream reconcile job"), withRunNow(true), withTimeout(time.Minute*10))
+		job := newFuncJob(SyncWithUpstream, withName("upstream reconcile job"), withRunNow(true), withTimeout(time.Minute*30))
 		if err := job.schedule(FuncScheduler, PushAgentReconcileSchedule); err != nil {
 			logger.Errorf("Failed to schedule push reconcile job: %v", err)
 		}
 
-		checkStatusesSyncJob := newFuncJob(upstream.SyncCheckStatusesWithUpstream, withName("check_statuses sync job"), withTimeout(time.Minute))
+		checkStatusesSyncJob := newFuncJob(SyncCheckStatusesWithUpstream, withName("check_statuses sync job"), withTimeout(time.Minute))
 		if err := checkStatusesSyncJob.schedule(FuncScheduler, PushCheckStatusesSchedule); err != nil {
 			logger.Errorf("Failed to schedule check status sync job: %v", err)
 		}

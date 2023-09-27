@@ -1,4 +1,4 @@
-package upstream
+package jobs
 
 import (
 	"fmt"
@@ -11,23 +11,27 @@ import (
 	"github.com/flanksource/incident-commander/db"
 )
 
-var ReconcilePageSize int
+var (
+	ReconcilePageSize int
+
+	// Only sync data created/updated in the last ReconcileMaxAge duration
+	ReconcileMaxAge time.Duration
+)
 
 // SyncWithUpstream coordinates with upstream and pushes any resource
 // that are missing on the upstream.
 func SyncWithUpstream(ctx api.Context) error {
+	logger.Debugf("running upstream reconcile job")
+
 	jobHistory := models.NewJobHistory("SyncWithUpstream", api.UpstreamConf.Host, "")
 	_ = db.PersistJobHistory(ctx, jobHistory.Start())
 	defer func() {
 		_ = db.PersistJobHistory(ctx, jobHistory.End())
 	}()
 
-	// Only sync data created in the last 2 days
-	const pastDuration = time.Hour * 48
-
 	reconciler := upstream.NewUpstreamReconciler(api.UpstreamConf, ReconcilePageSize)
 	for _, table := range api.TablesToReconcile {
-		if err := reconciler.SyncAfter(ctx, table, pastDuration); err != nil {
+		if err := reconciler.SyncAfter(ctx, table, ReconcileMaxAge); err != nil {
 			jobHistory.AddError(err.Error())
 			logger.Errorf("failed to sync table %s: %v", table, err)
 		} else {

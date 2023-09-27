@@ -9,13 +9,12 @@ import (
 )
 
 var TablesToReconcile = []string{
+	"topologies",
 	"components",
 	"config_scrapers",
 	"config_items",
 	"canaries",
 	"checks",
-	"check_statuses",
-	"topologies",
 }
 
 var UpstreamConf upstream.UpstreamConfig
