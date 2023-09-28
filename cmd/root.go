@@ -2,6 +2,8 @@ package cmd
 
 import (
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/flanksource/commons/logger"
@@ -65,14 +67,32 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&mail.FromName, "email-from-name", "Mission Control", "Email name of the sender")
 	flags.StringVar(&db.PostgresDBAnonRole, "postgrest-anon-role", "postgrest_anon", "PostgREST anonymous role")
 
+	var upstreamPageSizeDefault = 500
+	if val, exists := os.LookupEnv("UPSTREAM_PAGE_SIZE"); exists {
+		if parsed, err := strconv.Atoi(val); err != nil {
+			logger.Fatalf("invalid value=%sfor UPSTREAM_PAGE_SIZE: %v", val, err)
+		} else {
+			upstreamPageSizeDefault = parsed
+		}
+	}
+
+	var upstreamMaxAgeDefault = time.Hour * 48
+	if val, exists := os.LookupEnv("UPSTREAM_MAX_AGE"); exists {
+		if parsed, err := time.ParseDuration(val); err != nil {
+			logger.Fatalf("invalid value=%s for UPSTREAM_MAX_AGE: %v", val, err)
+		} else {
+			upstreamMaxAgeDefault = parsed
+		}
+	}
+
 	// Flags for upstream push
-	flags.StringVar(&api.UpstreamConf.Host, "upstream-host", "", "central incident commander instance to push configs to")
-	flags.StringVar(&api.UpstreamConf.Username, "upstream-user", "", "upstream username")
-	flags.StringVar(&api.UpstreamConf.Password, "upstream-password", "", "upstream password")
-	flags.StringVar(&api.UpstreamConf.AgentName, "upstream-name", "", "name of the cluster")
-	flags.StringSliceVar(&api.UpstreamConf.Labels, "upstream-labels", nil, `labels in the format: "key1=value1,key2=value2"`)
-	flags.IntVar(&jobs.ReconcilePageSize, "upstream-page-size", 500, "upstream reconciliation page size")
-	flags.DurationVar(&jobs.ReconcileMaxAge, "upstream-max-age", time.Hour*48, "upstream reconciliation max age")
+	flags.StringVar(&api.UpstreamConf.Host, "upstream-host", os.Getenv("UPSTREAM_HOST"), "central incident commander instance to push configs to")
+	flags.StringVar(&api.UpstreamConf.Username, "upstream-user", os.Getenv("UPSTREAM_USER"), "upstream username")
+	flags.StringVar(&api.UpstreamConf.Password, "upstream-password", os.Getenv("UPSTREAM_PASSWORD"), "upstream password")
+	flags.StringVar(&api.UpstreamConf.AgentName, "upstream-name", os.Getenv("UPSTREAM_NAME"), "name of the cluster")
+	flags.StringSliceVar(&api.UpstreamConf.Labels, "upstream-labels", strings.Split(os.Getenv("UPSTREAM_LABELS"), ","), `labels in the format: "key1=value1,key2=value2"`)
+	flags.IntVar(&jobs.ReconcilePageSize, "upstream-page-size", upstreamPageSizeDefault, "upstream reconciliation page size")
+	flags.DurationVar(&jobs.ReconcileMaxAge, "upstream-max-age", upstreamMaxAgeDefault, "upstream reconciliation max age")
 }
 
 func init() {
