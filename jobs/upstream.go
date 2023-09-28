@@ -50,8 +50,7 @@ type checkstatusSyncJob struct {
 }
 
 func (t *checkstatusSyncJob) Run() {
-	ctx, cancel := api.DefaultContext.WithTimeout(time.Minute)
-	defer cancel()
+	ctx := api.DefaultContext
 
 	jobHistory := models.NewJobHistory("SyncCheckStatusesWithUpstream", api.UpstreamConf.Host, "")
 	_ = db.PersistJobHistory(ctx, jobHistory.Start())
@@ -97,12 +96,22 @@ func (t *checkstatusSyncJob) run(ctx api.Context) error {
 		return nil
 	}
 
-	logger.Tracef("Pushing %d check statuses to upstream", len(checkStatuses))
-	if err := upstream.Push(ctx, api.UpstreamConf, &upstream.PushData{AgentName: api.UpstreamConf.AgentName, CheckStatuses: checkStatuses}); err != nil {
-		return fmt.Errorf("failed to push check statuses to upstream: %w", err)
-	}
+	for i := 0; i < len(checkStatuses); i += ReconcilePageSize {
+		end := i + ReconcilePageSize
+		if end > len(checkStatuses) {
+			end = len(checkStatuses)
+		}
+		batch := checkStatuses[i:end]
 
-	t.lastCreated = checkStatuses[len(checkStatuses)-1].CreatedAt
+		logger.WithValues("batch", fmt.Sprintf("%d/%d", i/ReconcilePageSize, len(checkStatuses)/ReconcilePageSize)).
+			Tracef("Pushing %d check statuses to upstream", len(batch))
+
+		if err := upstream.Push(ctx, api.UpstreamConf, &upstream.PushData{AgentName: api.UpstreamConf.AgentName, CheckStatuses: batch}); err != nil {
+			return fmt.Errorf("failed to push check statuses to upstream: %w", err)
+		}
+
+		t.lastCreated = batch[len(batch)-1].CreatedAt
+	}
 
 	return nil
 }
