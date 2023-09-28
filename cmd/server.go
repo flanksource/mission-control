@@ -53,11 +53,22 @@ var cacheSuffixes = []string{
 	".png",
 }
 
+// tracingURLSkipper ignores metrics route on some middleware
+func tracingURLSkipper(c echo.Context) bool {
+	pathsToSkip := []string{"/health", "/metrics"}
+	for _, p := range pathsToSkip {
+		if strings.HasPrefix(c.Path(), p) {
+			return true
+		}
+	}
+	return false
+}
+
 func createHTTPServer(ctx api.Context) *echo.Echo {
 	e := echo.New()
 	e.HideBanner = true
 
-	e.Use(otelecho.Middleware("mission-control"))
+	e.Use(otelecho.Middleware("mission-control", otelecho.WithSkipper(tracingURLSkipper)))
 
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
@@ -137,8 +148,7 @@ func createHTTPServer(ctx api.Context) *echo.Echo {
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			if userID := c.Request().Header.Get(api.UserIDHeaderKey); userID != "" {
-				span := trace.SpanFromContext(c.Request().Context())
-				span.SetAttributes(
+				trace.SpanFromContext(c.Request().Context()).SetAttributes(
 					attribute.String("user-id", userID),
 				)
 			}

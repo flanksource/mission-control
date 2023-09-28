@@ -11,7 +11,7 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/robfig/cron/v3"
-	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 )
 
 type funcJob struct {
@@ -24,9 +24,9 @@ type funcJob struct {
 
 func (t funcJob) Run() {
 	ctx := api.DefaultContext
-	tracer := otel.GetTracerProvider().Tracer("job-tracer")
-	traceCtx, span := tracer.Start(ctx, "job-"+t.name)
-	ctx = ctx.WithContext(traceCtx)
+
+	var span trace.Span
+	ctx, span = ctx.StartTrace("job-tracer", "job-"+t.name, 100)
 	defer span.End()
 
 	if t.timeout > 0 {

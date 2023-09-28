@@ -2,13 +2,18 @@ package api
 
 import (
 	gocontext "context"
+	"math/rand"
 
+	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
+	"go.opentelemetry.io/otel"
+
+	"go.opentelemetry.io/otel/trace"
 	"gorm.io/gorm"
 	"k8s.io/client-go/kubernetes"
 )
@@ -38,6 +43,8 @@ type Context interface {
 
 	WithUser(user *ContextUser) Context
 	User() *ContextUser
+
+	StartTrace(tracerName string, spanName string, samplingPerc int) (Context, trace.Span)
 
 	GetEnvVarValue(input types.EnvVar) (string, error)
 	GetEnvValueFromCache(env types.EnvVar) (string, error)
@@ -88,6 +95,33 @@ func (c context) WithEchoContext(ctx EchoContext) Context {
 func (c context) WithContext(ctx gocontext.Context) Context {
 	c.Context = ctx
 	return &c
+}
+
+func shouldSample(perc int) bool {
+	if perc >= 100 {
+		return true
+	}
+	if perc <= 0 {
+		return false
+	}
+
+	randomNum := rand.Intn(100)
+	if perc < randomNum {
+		return false
+	}
+
+	// Percentage should be >= the random number
+	return true
+}
+
+func (c context) StartTrace(tracerName, spanName string, samplingPerc int) (Context, trace.Span) {
+	tracer := otel.GetTracerProvider().Tracer(tracerName)
+	if !shouldSample(samplingPerc) {
+		tracer = trace.NewNoopTracerProvider().Tracer("")
+	}
+	traceCtx, span := tracer.Start(c.Context, spanName)
+	c.Context = traceCtx
+	return &c, span
 }
 
 func (c context) WithDB(db *gorm.DB) Context {
