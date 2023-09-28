@@ -112,7 +112,7 @@ func InsertUpstreamMsg(ctx api.Context, req *upstream.PushData) error {
 
 	if len(req.CheckStatuses) > 0 {
 		cols := []clause.Column{{Name: "check_id"}, {Name: "time"}}
-		if err := ctx.DB().Clauses(clause.OnConflict{UpdateAll: true, Columns: cols}).Create(req.CheckStatuses).Error; err != nil {
+		if err := ctx.DB().Clauses(clause.OnConflict{UpdateAll: true, Columns: cols}).CreateInBatches(req.CheckStatuses, 1000).Error; err != nil {
 			return fmt.Errorf("error upserting check_statuses: %w", err)
 		}
 	}

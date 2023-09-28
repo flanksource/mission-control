@@ -72,7 +72,7 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&api.UpstreamConf.AgentName, "upstream-name", "", "name of the cluster")
 	flags.StringSliceVar(&api.UpstreamConf.Labels, "upstream-labels", nil, `labels in the format: "key1=value1,key2=value2"`)
 	flags.IntVar(&jobs.ReconcilePageSize, "upstream-page-size", 500, "upstream reconciliation page size")
-	flags.DurationVar(&jobs.ReconcileMaxAge, "upstream-reconcile-max-age", time.Hour*48, "upstream reconciliation max age")
+	flags.DurationVar(&jobs.ReconcileMaxAge, "upstream-max-age", time.Hour*48, "upstream reconciliation max age")
 }
 
 func init() {

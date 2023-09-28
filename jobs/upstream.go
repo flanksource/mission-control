@@ -9,6 +9,7 @@ import (
 	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/google/uuid"
 )
 
 var (
@@ -42,18 +43,54 @@ func SyncWithUpstream(ctx api.Context) error {
 	return nil
 }
 
-// SyncCheckStatusesWithUpstream pushes new check statuses to upstream.
-func SyncCheckStatusesWithUpstream(ctx api.Context) error {
+// checkstatusSyncJob pushes new check statuses to upstream.
+type checkstatusSyncJob struct {
+	// created timestamp of the last check status that was pushed to upstream.
+	lastCreated time.Time
+}
+
+func (t *checkstatusSyncJob) Run() {
+	ctx, cancel := api.DefaultContext.WithTimeout(time.Minute)
+	defer cancel()
+
 	jobHistory := models.NewJobHistory("SyncCheckStatusesWithUpstream", api.UpstreamConf.Host, "")
 	_ = db.PersistJobHistory(ctx, jobHistory.Start())
 	defer func() {
 		_ = db.PersistJobHistory(ctx, jobHistory.End())
 	}()
 
-	var checkStatuses []models.CheckStatus
-	if err := ctx.DB().Where("NOW() - created_at <= INTERVAL '30 SECONDS'").Find(&checkStatuses).Error; err != nil {
+	if err := t.run(ctx); err != nil {
+		logger.Errorf("failed to run checkstatus sync job: %v", err)
 		jobHistory.AddError(err.Error())
-		return fmt.Errorf("failed to get check statuses: %w", err)
+		return
+	}
+
+	jobHistory.IncrSuccess()
+}
+
+// SyncCheckStatusesWithUpstream pushes new check statuses to upstream.
+func (t *checkstatusSyncJob) run(ctx api.Context) error {
+	logger.Tracef("running checkstatus sync job since %s", t.lastCreated.Format(time.RFC3339))
+
+	var checkStatuses []models.CheckStatus
+	if t.lastCreated.IsZero() {
+		if err := ctx.DB().Select("check_statuses.*").
+			Joins("Left JOIN checks ON checks.id = check_statuses.check_id").
+			Where("checks.agent_id = ?", uuid.Nil).
+			Where("NOW() - check_statuses.created_at <= ?", ReconcileMaxAge).
+			Order("check_statuses.created_at").
+			Find(&checkStatuses).Error; err != nil {
+			return fmt.Errorf("failed to fetch checkstatuses: %w", err)
+		}
+	} else {
+		if err := ctx.DB().Select("check_statuses.*").
+			Joins("Left JOIN checks ON checks.id = check_statuses.check_id").
+			Where("checks.agent_id = ?", uuid.Nil).
+			Where("check_statuses.created_at > ?", t.lastCreated).
+			Order("check_statuses.created_at").
+			Find(&checkStatuses).Error; err != nil {
+			return fmt.Errorf("failed to fetch checkstatuses: %w", err)
+		}
 	}
 
 	if len(checkStatuses) == 0 {
@@ -62,10 +99,10 @@ func SyncCheckStatusesWithUpstream(ctx api.Context) error {
 
 	logger.Tracef("Pushing %d check statuses to upstream", len(checkStatuses))
 	if err := upstream.Push(ctx, api.UpstreamConf, &upstream.PushData{AgentName: api.UpstreamConf.AgentName, CheckStatuses: checkStatuses}); err != nil {
-		jobHistory.AddError(err.Error())
-		return fmt.Errorf("failed to push check_statuses to upstream: %w", err)
+		return fmt.Errorf("failed to push check statuses to upstream: %w", err)
 	}
 
-	jobHistory.IncrSuccess()
+	t.lastCreated = checkStatuses[len(checkStatuses)-1].CreatedAt
+
 	return nil
 }
