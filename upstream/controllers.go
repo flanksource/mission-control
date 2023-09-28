@@ -180,27 +180,3 @@ func PullScrapeConfigs(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, scrapeConfigs)
 }
-
-// LastPushedConfigResults responds with the latest ids for all the config results pushed by the given agent.
-func LastPushedConfigResults(c echo.Context) error {
-	ctx := c.(api.Context)
-
-	agentName := c.Param("agent_name")
-
-	agent, err := db.FindAgent(ctx, agentName)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to get agent"})
-	} else if agent == nil {
-		return c.JSON(http.StatusNotFound, api.HTTPError{Message: fmt.Sprintf("agent(name=%s) not found", agentName)})
-	}
-
-	result, err := db.GetLastPushedConfigResults(ctx, agent.ID)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, api.HTTPError{
-			Error:   err.Error(),
-			Message: fmt.Sprintf("error fetching last pushed config results for agent(name=%s)", agentName),
-		})
-	}
-
-	return c.JSON(http.StatusOK, result)
-}

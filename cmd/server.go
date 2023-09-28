@@ -166,7 +166,6 @@ func createHTTPServer(ctx api.Context) *echo.Echo {
 	upstreamGroup.GET("/status/:agent_name", upstream.Status)
 	upstreamGroup.GET("/canary/pull/:agent_name", upstream.PullCanaries)
 	upstreamGroup.GET("/scrapeconfig/pull/:agent_name", upstream.PullScrapeConfigs)
-	upstreamGroup.GET("/scrapeconfig/status/:agent_name", upstream.LastPushedConfigResults)
 
 	playbook.RegisterRoutes(e, "playbook")
 	e.POST("/agent/generate", agent.GenerateAgent, rbac.Authorization(rbac.ObjectAgentCreate, rbac.ActionWrite))
