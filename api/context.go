@@ -4,7 +4,6 @@ import (
 	gocontext "context"
 	"math/rand"
 
-	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
@@ -104,14 +103,8 @@ func shouldSample(perc int) bool {
 	if perc <= 0 {
 		return false
 	}
-
 	randomNum := rand.Intn(100)
-	if perc < randomNum {
-		return false
-	}
-
-	// Percentage should be >= the random number
-	return true
+	return perc >= randomNum
 }
 
 func (c context) StartTrace(tracerName, spanName string, samplingPerc int) (Context, trace.Span) {
