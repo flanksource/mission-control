@@ -3,8 +3,8 @@ package playbook
 import (
 	"fmt"
 
-	"github.com/flanksource/duty/duty/pg"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/utils/pg"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/events/eventconsumer"
 )

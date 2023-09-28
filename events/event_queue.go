@@ -7,6 +7,7 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty/upstream"
+	"github.com/flanksource/duty/utils/pg"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/events/eventconsumer"
 	"gorm.io/gorm"
@@ -89,7 +90,7 @@ type Config struct {
 func StartConsumers(ctx api.Context, config Config) {
 	// We listen to all PG Notifications on one channel and distribute it to other consumers
 	// based on the events.
-	notifyRouter := NewPgNotifyRouter()
+	notifyRouter := pg.NewNotifyRouter().Skip(EventPushQueueCreate)
 	go notifyRouter.Run(ctx, eventQueueUpdateChannel)
 
 	uniqEvents := make(map[string]struct{})

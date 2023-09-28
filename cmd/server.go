@@ -10,6 +10,7 @@ import (
 	"github.com/flanksource/commons/logger"
 	cutils "github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty/schema/openapi"
+	"github.com/flanksource/duty/utils/pg"
 	"github.com/flanksource/kopper"
 	"github.com/labstack/echo-contrib/echoprometheus"
 	"github.com/labstack/echo/v4"
@@ -342,7 +343,7 @@ func ServerCache(next echo.HandlerFunc) echo.HandlerFunc {
 
 // tableUpdatesHandler handles all "table_activity" pg notifications.
 func tableUpdatesHandler(ctx api.Context) {
-	notifyRouter := events.NewPgNotifyRouter()
+	notifyRouter := pg.NewNotifyRouter()
 	go notifyRouter.Run(ctx, "table_activity")
 
 	notificationUpdateCh := notifyRouter.RegisterRoutes("notifications")
