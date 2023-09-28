@@ -162,11 +162,11 @@ func PullScrapeConfigs(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, api.HTTPError{Message: fmt.Sprintf("agent(name=%s) not found", agentName)})
 	}
 
-	var since uuid.UUID
+	var since time.Time
 	if sinceRaw := c.QueryParam("since"); sinceRaw != "" {
-		since, err = uuid.Parse(sinceRaw)
+		since, err = time.Parse(time.RFC3339, sinceRaw)
 		if err != nil {
-			return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error(), Message: "'since' param needs to be a valid UUID"})
+			return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error(), Message: "'since' param needs to be a valid RFC3339 timestamp"})
 		}
 	}
 
