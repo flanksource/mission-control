@@ -16,8 +16,6 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 	prom "github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 
 	"github.com/spf13/cobra"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -143,18 +141,6 @@ func createHTTPServer(ctx api.Context) *echo.Echo {
 
 	e.Use(middleware.Logger())
 	e.Use(ServerCache)
-
-	// Set UserID in trace headers
-	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
-			if userID := c.Request().Header.Get(api.UserIDHeaderKey); userID != "" {
-				trace.SpanFromContext(c.Request().Context()).SetAttributes(
-					attribute.String("user-id", userID),
-				)
-			}
-			return next(c)
-		}
-	})
 
 	e.GET("/health", func(c echo.Context) error {
 		if err := db.Pool.Ping(context.Background()); err != nil {

@@ -199,10 +199,10 @@ func (t SyncEventConsumer) EventConsumer() *eventconsumer.EventConsumer {
 
 func (t *SyncEventConsumer) Handle(ctx api.Context) (int, error) {
 	var span trace.Span
-	ctx, span = ctx.StartTrace("event-tracer", "event-queue", 1)
+	ctx, span = ctx.StartTrace("event-tracer", "event-queue")
 	defer span.End()
 
-	span.SetAttributes(
+	ctx.SetSpanAttributes(
 		attribute.String("events-watched", strings.Join(t.watchEvents, "/")),
 	)
 
@@ -219,9 +219,7 @@ func (t *SyncEventConsumer) Handle(ctx api.Context) (int, error) {
 
 		err = fmt.Errorf("error processing sync consumer: %w", err)
 		span.RecordError(err)
-		span.SetAttributes(
-			attribute.Int("event-attempts", event.Attempts),
-		)
+		ctx.SetSpanAttributes(attribute.Int("event-attempts", event.Attempts))
 	}
 
 	if event == nil {
@@ -253,9 +251,7 @@ func (t *SyncEventConsumer) consumeOne(ctx api.Context) (*api.Event, error) {
 	// sync consumers always fetch a single event at a time
 	event := events[0]
 
-	trace.SpanFromContext(ctx).SetAttributes(
-		attribute.String("event-type", event.Name),
-	)
+	ctx.SetSpanAttributes(attribute.String("event-type", event.Name))
 
 	for _, syncConsumer := range t.consumers {
 		if err := syncConsumer(ctx, event); err != nil {
@@ -275,10 +271,10 @@ type AsyncEventConsumer struct {
 
 func (t *AsyncEventConsumer) Handle(ctx api.Context) (int, error) {
 	var span trace.Span
-	ctx, span = ctx.StartTrace("event-tracer", "event-queue", 1)
+	ctx, span = ctx.StartTrace("event-tracer", "event-queue")
 	defer span.End()
 
-	span.SetAttributes(
+	ctx.SetSpanAttributes(
 		attribute.String("events-watched", strings.Join(t.watchEvents, "/")),
 	)
 

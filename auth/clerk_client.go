@@ -14,7 +14,6 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/patrickmn/go-cache"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 	"gorm.io/gorm"
 )
 
@@ -88,7 +87,7 @@ func (h ClerkHandler) Session(next echo.HandlerFunc) echo.HandlerFunc {
 		c.Request().Header.Set(echo.HeaderAuthorization, fmt.Sprintf("Bearer %s", token))
 		c.Request().Header.Set(api.UserIDHeaderKey, user.ID.String())
 
-		trace.SpanFromContext(c.Request().Context()).SetAttributes(
+		ctx.SetSpanAttributes(
 			attribute.String("clerk-user-id", user.ExternalID),
 			attribute.String("clerk-org-id", h.orgID),
 		)

@@ -26,7 +26,7 @@ func (t funcJob) Run() {
 	ctx := api.DefaultContext
 
 	var span trace.Span
-	ctx, span = ctx.StartTrace("job-tracer", "job-"+t.name, 100)
+	ctx, span = ctx.StartTrace("job-tracer", "job-"+t.name)
 	defer span.End()
 
 	if t.timeout > 0 {
