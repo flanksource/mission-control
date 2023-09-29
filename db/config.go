@@ -34,7 +34,6 @@ func LookupRelatedConfigIDs(configID string, maxDepth int) ([]string, error) {
 }
 
 func GetScrapeConfigsOfAgent(ctx api.Context, agentID uuid.UUID, since time.Time) ([]models.ConfigScraper, error) {
-	// TODO: Fix this. This is unreliable because it's only accurate upto seconds.
 	var response []models.ConfigScraper
 	err := ctx.DB().Where("agent_id = ?", agentID).Where("updated_at > ?", since).Order("updated_at").Find(&response).Error
 	return response, err
