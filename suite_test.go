@@ -7,6 +7,7 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/testutils"
+	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -34,6 +35,8 @@ var _ = ginkgo.BeforeSuite(func() {
 	if db.Gorm, db.Pool, err = duty.SetupDB(connection, nil); err != nil {
 		ginkgo.Fail(err.Error())
 	}
+
+	api.DefaultContext = api.NewContext(db.Gorm, db.Pool)
 })
 
 var _ = ginkgo.AfterSuite(func() {

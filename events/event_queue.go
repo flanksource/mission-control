@@ -2,6 +2,7 @@ package events
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/flanksource/commons/logger"
@@ -9,6 +10,8 @@ import (
 	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/events/eventconsumer"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -187,6 +190,14 @@ func (t SyncEventConsumer) EventConsumer() *eventconsumer.EventConsumer {
 }
 
 func (t *SyncEventConsumer) Handle(ctx api.Context) (int, error) {
+	var span trace.Span
+	ctx, span = ctx.StartTrace("event-tracer", "event-queue")
+	defer span.End()
+
+	ctx.SetSpanAttributes(
+		attribute.String("events-watched", strings.Join(t.watchEvents, "/")),
+	)
+
 	event, err := t.consumeOne(ctx)
 	if err != nil {
 		if event != nil {
@@ -199,13 +210,15 @@ func (t *SyncEventConsumer) Handle(ctx api.Context) (int, error) {
 		}
 
 		err = fmt.Errorf("error processing sync consumer: %w", err)
+		span.RecordError(err)
+		ctx.SetSpanAttributes(attribute.Int("event-attempts", event.Attempts))
 	}
 
 	if event == nil {
-		return 0, err
+		return 0, nil
 	}
 
-	return 1, err
+	return 1, nil
 }
 
 // consumeOne fetches a single event and passes it to all the consumers in one single transaction.
@@ -230,6 +243,8 @@ func (t *SyncEventConsumer) consumeOne(ctx api.Context) (*api.Event, error) {
 	// sync consumers always fetch a single event at a time
 	event := events[0]
 
+	ctx.SetSpanAttributes(attribute.String("event-type", event.Name))
+
 	for _, syncConsumer := range t.consumers {
 		if err := syncConsumer(ctx, event); err != nil {
 			return &event, err
@@ -247,6 +262,14 @@ type AsyncEventConsumer struct {
 }
 
 func (t *AsyncEventConsumer) Handle(ctx api.Context) (int, error) {
+	var span trace.Span
+	ctx, span = ctx.StartTrace("event-tracer", "event-queue")
+	defer span.End()
+
+	ctx.SetSpanAttributes(
+		attribute.String("events-watched", strings.Join(t.watchEvents, "/")),
+	)
+
 	tx := ctx.DB().Begin()
 	if tx.Error != nil {
 		return 0, fmt.Errorf("error initiating db tx: %w", tx.Error)
@@ -266,7 +289,9 @@ func (t *AsyncEventConsumer) Handle(ctx api.Context) (int, error) {
 		e := &failedEvents[i]
 		e.Attempts += 1
 		e.LastAttempt = utils.Ptr(time.Now())
-		logger.Errorf("error processing async event (id=%s, name=%s): %s", e.ID, e.Name, e.Error)
+		err := fmt.Errorf("error processing async event (id=%s, name=%s): %s", e.ID, e.Name, e.Error)
+		logger.Errorf(err.Error())
+		span.RecordError(err)
 	}
 
 	if len(failedEvents) > 0 {

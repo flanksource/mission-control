@@ -15,6 +15,7 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	prom "github.com/prometheus/client_golang/prometheus"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 
 	"github.com/spf13/cobra"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -52,9 +53,22 @@ var cacheSuffixes = []string{
 	".png",
 }
 
+// tracingURLSkipper ignores metrics route on some middleware
+func tracingURLSkipper(c echo.Context) bool {
+	pathsToSkip := []string{"/health", "/metrics"}
+	for _, p := range pathsToSkip {
+		if strings.HasPrefix(c.Path(), p) {
+			return true
+		}
+	}
+	return false
+}
+
 func createHTTPServer(ctx api.Context) *echo.Echo {
 	e := echo.New()
 	e.HideBanner = true
+
+	e.Use(otelecho.Middleware("mission-control", otelecho.WithSkipper(tracingURLSkipper)))
 
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {

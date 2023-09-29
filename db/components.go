@@ -7,10 +7,10 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-func GetTeamsWithComponentSelector() map[uuid.UUID][]api.ComponentSelector {
+func GetTeamsWithComponentSelector(ctx api.Context) map[uuid.UUID][]api.ComponentSelector {
 	var teams []api.Team
 	var teamComponentMap = make(map[uuid.UUID][]api.ComponentSelector)
-	err := Gorm.Table("teams").Where("spec::jsonb ? 'components';").Find(&teams).Error
+	err := ctx.DB().Table("teams").Where("spec::jsonb ? 'components';").Find(&teams).Error
 	if err != nil {
 		logger.Errorf("error fetching the teams with components: %v", err)
 		return teamComponentMap
@@ -27,9 +27,9 @@ func GetTeamsWithComponentSelector() map[uuid.UUID][]api.ComponentSelector {
 	return teamComponentMap
 }
 
-func GetComponentsWithSelector(selector api.ComponentSelector) []uuid.UUID {
+func GetComponentsWithSelector(ctx api.Context, selector api.ComponentSelector) []uuid.UUID {
 	var compIds []uuid.UUID
-	query := Gorm.Table("components").Where("deleted_at is null").Select("id")
+	query := ctx.DB().Table("components").Where("deleted_at is null").Select("id")
 	if selector.Name != "" {
 		query = query.Where("name = ?", selector.Name)
 	}
@@ -46,12 +46,12 @@ func GetComponentsWithSelector(selector api.ComponentSelector) []uuid.UUID {
 	return compIds
 }
 
-func PersistTeamComponents(teamComps []api.TeamComponent) error {
+func PersistTeamComponents(ctx api.Context, teamComps []api.TeamComponent) error {
 	if len(teamComps) == 0 {
 		return nil
 	}
 
-	return Gorm.Clauses(clause.OnConflict{
+	return ctx.DB().Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "team_id"}, {Name: "component_id"}, {Name: "selector_id"}},
 		UpdateAll: true,
 	}).Create(teamComps).Error
