@@ -1,37 +1,19 @@
 package events
 
 import (
-	"fmt"
-	"strings"
-	"time"
-
 	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/events/eventconsumer"
+	"github.com/flanksource/postq"
 	"github.com/flanksource/postq/pg"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
 const (
-	// eventMaxAttempts is the maximum number of attempts to process an event in `event_queue`
-	eventMaxAttempts = 3
-
 	// eventQueueUpdateChannel is the channel on which new events on the `event_queue` table
 	// are notified.
 	eventQueueUpdateChannel = "event_queue_updates"
-)
-
-type (
-	// AsyncEventHandlerFunc processes multiple events and returns the failed ones
-	AsyncEventHandlerFunc func(api.Context, []api.Event) []api.Event
-
-	// SyncEventHandlerFunc processes a single event and ONLY makes db changes.
-	SyncEventHandlerFunc func(api.Context, api.Event) error
 )
 
 // List of all sync events in the `event_queue` table.
@@ -86,18 +68,14 @@ const (
 	EventMSPlannerCommentAdded   = "incident.comment.msplanner.added"
 )
 
-type Config struct {
-	UpstreamPush upstream.UpstreamConfig
-}
-
-func StartConsumers(ctx api.Context, config Config) {
+func StartConsumers(ctx api.Context, upstreamConfig upstream.UpstreamConfig) {
 	// We listen to all PG Notifications on one channel and distribute it to other consumers
 	// based on the events.
-	notifyRouter := pg.NewNotifyRouter().Skip(EventPushQueueCreate)
+	notifyRouter := pg.NewNotifyRouter()
 	go notifyRouter.Run(ctx, eventQueueUpdateChannel)
 
 	uniqEvents := make(map[string]struct{})
-	allSyncHandlers := []SyncEventConsumer{
+	allSyncHandlers := []postq.SyncEventConsumer{
 		NewCheckConsumerSync(),
 		NewComponentConsumerSync(),
 		NewResponderConsumerSync(),
@@ -108,7 +86,7 @@ func StartConsumers(ctx api.Context, config Config) {
 	}
 
 	for i := range allSyncHandlers {
-		for _, event := range allSyncHandlers[i].watchEvents {
+		for _, event := range allSyncHandlers[i].WatchEvents {
 			if _, ok := uniqEvents[event]; ok {
 				logger.Fatalf("Watch event %s is duplicated", event)
 			}
@@ -116,20 +94,24 @@ func StartConsumers(ctx api.Context, config Config) {
 			uniqEvents[event] = struct{}{}
 		}
 
-		pgNotifyChannel := notifyRouter.RegisterRoutes(allSyncHandlers[i].watchEvents...)
-		go allSyncHandlers[i].EventConsumer().Listen(ctx, pgNotifyChannel)
+		pgNotifyChannel := notifyRouter.RegisterRoutes(allSyncHandlers[i].WatchEvents...)
+		if ec, err := allSyncHandlers[i].EventConsumer(); err != nil {
+			logger.Fatalf("failed to create event consumer: %s", err)
+		} else {
+			go ec.Listen(ctx, pgNotifyChannel)
+		}
 	}
 
-	asyncConsumers := []AsyncEventConsumer{
+	asyncConsumers := []postq.AsyncEventConsumer{
 		NewNotificationSendConsumerAsync(),
 		NewResponderConsumerAsync(),
 	}
-	if config.UpstreamPush.Valid() {
-		asyncConsumers = append(asyncConsumers, NewUpstreamPushConsumerAsync(config))
+	if upstreamConfig.Valid() {
+		asyncConsumers = append(asyncConsumers, upstream.NewPushQueueConsumer(upstreamConfig))
 	}
 
 	for i := range asyncConsumers {
-		for _, event := range asyncConsumers[i].watchEvents {
+		for _, event := range asyncConsumers[i].WatchEvents {
 			if _, ok := uniqEvents[event]; ok {
 				logger.Fatalf("Watch event %s is duplicated", event)
 			}
@@ -137,181 +119,13 @@ func StartConsumers(ctx api.Context, config Config) {
 			uniqEvents[event] = struct{}{}
 		}
 
-		pgNotifyChannel := notifyRouter.RegisterRoutes(asyncConsumers[i].watchEvents...)
-		go asyncConsumers[i].EventConsumer().Listen(ctx, pgNotifyChannel)
-	}
-}
-
-// fetchEvents fetches given watch events from the `event_queue` table.
-func fetchEvents(ctx api.Context, watchEvents []string, batchSize int) ([]api.Event, error) {
-	const selectEventsQuery = `
-			DELETE FROM event_queue
-			WHERE id IN (
-				SELECT id FROM event_queue
-				WHERE 
-					attempts <= @maxAttempts AND
-					name IN @events AND
-					(last_attempt IS NULL OR last_attempt <= NOW() - INTERVAL '1 SECOND' * @baseDelay * POWER(attempts, @exponential))
-				ORDER BY priority DESC, created_at ASC
-				FOR UPDATE SKIP LOCKED
-				LIMIT @batchSize
-			)
-			RETURNING *
-		`
-
-	var events []api.Event
-	vals := map[string]any{
-		"maxAttempts": eventMaxAttempts,
-		"events":      watchEvents,
-		"batchSize":   batchSize,
-		"baseDelay":   60, // in seconds
-		"exponential": 5,  // along with baseDelay = 60, the retries are 1, 6, 31, 156 (in minutes)
-	}
-	err := ctx.DB().Raw(selectEventsQuery, vals).Scan(&events).Error
-	if err != nil {
-		return nil, fmt.Errorf("error selecting events: %w", err)
-	}
-
-	return events, nil
-}
-
-type SyncEventConsumer struct {
-	watchEvents  []string
-	consumers    []SyncEventHandlerFunc
-	numConsumers int
-}
-
-func (t SyncEventConsumer) EventConsumer() *eventconsumer.EventConsumer {
-	consumer := eventconsumer.New(t.Handle)
-	if t.numConsumers > 0 {
-		consumer = consumer.WithNumConsumers(t.numConsumers)
-	}
-
-	return consumer
-}
-
-func (t *SyncEventConsumer) Handle(ctx api.Context) (int, error) {
-	var span trace.Span
-	ctx, span = ctx.StartTrace("event-tracer", "event-queue")
-	defer span.End()
-
-	ctx.SetSpanAttributes(
-		attribute.String("events-watched", strings.Join(t.watchEvents, "/")),
-	)
-
-	event, err := t.consumeOne(ctx)
-	if err != nil {
-		if event != nil {
-			event.Attempts++
-			event.Error = err.Error()
-			event.LastAttempt = utils.Ptr(time.Now())
-			if err := ctx.DB().Save(event).Error; err != nil {
-				logger.Errorf("error saving updates of a failed event: %v", err)
-			}
-		}
-
-		err = fmt.Errorf("error processing sync consumer: %w", err)
-		span.RecordError(err)
-		ctx.SetSpanAttributes(attribute.Int("event-attempts", event.Attempts))
-	}
-
-	if event == nil {
-		return 0, nil
-	}
-
-	return 1, nil
-}
-
-// consumeOne fetches a single event and passes it to all the consumers in one single transaction.
-func (t *SyncEventConsumer) consumeOne(ctx api.Context) (*api.Event, error) {
-	tx := ctx.DB().Begin()
-	if tx.Error != nil {
-		return nil, fmt.Errorf("error initiating db tx: %w", tx.Error)
-	}
-	defer tx.Rollback()
-
-	ctx = ctx.WithDB(tx)
-
-	events, err := fetchEvents(ctx, t.watchEvents, 1)
-	if err != nil {
-		return nil, fmt.Errorf("error fetching events: %w", err)
-	}
-
-	if len(events) == 0 {
-		return nil, nil
-	}
-
-	// sync consumers always fetch a single event at a time
-	event := events[0]
-
-	ctx.SetSpanAttributes(attribute.String("event-type", event.Name))
-
-	for _, syncConsumer := range t.consumers {
-		if err := syncConsumer(ctx, event); err != nil {
-			return &event, err
+		pgNotifyChannel := notifyRouter.RegisterRoutes(asyncConsumers[i].WatchEvents...)
+		if ec, err := asyncConsumers[i].EventConsumer(); err != nil {
+			logger.Fatalf("failed to create event consumer: %s", err)
+		} else {
+			go ec.Listen(ctx, pgNotifyChannel)
 		}
 	}
-
-	return &event, tx.Commit().Error
-}
-
-type AsyncEventConsumer struct {
-	watchEvents  []string
-	batchSize    int
-	consumer     AsyncEventHandlerFunc
-	numConsumers int
-}
-
-func (t *AsyncEventConsumer) Handle(ctx api.Context) (int, error) {
-	var span trace.Span
-	ctx, span = ctx.StartTrace("event-tracer", "event-queue")
-	defer span.End()
-
-	ctx.SetSpanAttributes(
-		attribute.String("events-watched", strings.Join(t.watchEvents, "/")),
-	)
-
-	tx := ctx.DB().Begin()
-	if tx.Error != nil {
-		return 0, fmt.Errorf("error initiating db tx: %w", tx.Error)
-	}
-	defer tx.Rollback()
-
-	ctx = ctx.WithDB(tx)
-
-	events, err := fetchEvents(ctx, t.watchEvents, t.batchSize)
-	if err != nil {
-		return 0, fmt.Errorf("error fetching events: %w", err)
-	}
-
-	failedEvents := t.consumer(ctx, events)
-
-	for i := range failedEvents {
-		e := &failedEvents[i]
-		e.Attempts += 1
-		e.LastAttempt = utils.Ptr(time.Now())
-		err := fmt.Errorf("error processing async event (id=%s, name=%s): %s", e.ID, e.Name, e.Error)
-		logger.Errorf(err.Error())
-		span.RecordError(err)
-	}
-
-	if len(failedEvents) > 0 {
-		if err := tx.Create(failedEvents).Error; err != nil {
-			// TODO: More robust way to handle failed event insertion failures
-			logger.Errorf("Error inserting into table:event_queue with error: %v", err)
-		}
-	}
-
-	return len(events), tx.Commit().Error
-}
-
-func (t AsyncEventConsumer) EventConsumer() *eventconsumer.EventConsumer {
-	consumer := eventconsumer.New(t.Handle)
-	if t.numConsumers > 0 {
-		consumer = consumer.WithNumConsumers(t.numConsumers)
-	}
-
-	return consumer
 }
 
 // on conflict clause when inserting new events to the `event_queue` table

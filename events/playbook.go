@@ -15,19 +15,20 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/playbook"
+	"github.com/flanksource/postq"
 )
 
-func NewPlaybookApprovalSpecUpdatedConsumerSync() SyncEventConsumer {
-	return SyncEventConsumer{
-		watchEvents: []string{EventPlaybookSpecApprovalUpdated},
-		consumers:   []SyncEventHandlerFunc{onApprovalUpdated},
+func NewPlaybookApprovalSpecUpdatedConsumerSync() postq.SyncEventConsumer {
+	return postq.SyncEventConsumer{
+		WatchEvents: []string{EventPlaybookSpecApprovalUpdated},
+		Consumers:   []postq.SyncEventHandlerFunc{SyncAdapter(onApprovalUpdated)},
 	}
 }
 
-func NewPlaybookApprovalConsumerSync() SyncEventConsumer {
-	return SyncEventConsumer{
-		watchEvents: []string{EventPlaybookApprovalInserted},
-		consumers:   []SyncEventHandlerFunc{onPlaybookRunNewApproval},
+func NewPlaybookApprovalConsumerSync() postq.SyncEventConsumer {
+	return postq.SyncEventConsumer{
+		WatchEvents: []string{EventPlaybookApprovalInserted},
+		Consumers:   []postq.SyncEventHandlerFunc{SyncAdapter(onPlaybookRunNewApproval)},
 	}
 }
 
@@ -47,7 +48,7 @@ func (t *EventResource) AsMap() map[string]any {
 	}
 }
 
-func schedulePlaybookRun(ctx api.Context, event api.Event) error {
+func schedulePlaybookRun(ctx api.Context, event postq.Event) error {
 	specEvent, ok := eventToSpecEvent[event.Name]
 	if !ok {
 		return nil
@@ -193,7 +194,7 @@ var eventToSpecEvent = map[string]PlaybookSpecEvent{
 	EventComponentStatusError:     {"component", "error"},
 }
 
-func onApprovalUpdated(ctx api.Context, event api.Event) error {
+func onApprovalUpdated(ctx api.Context, event postq.Event) error {
 	playbookID := event.Properties["id"]
 
 	var playbook models.Playbook
@@ -213,7 +214,7 @@ func onApprovalUpdated(ctx api.Context, event api.Event) error {
 	return db.UpdatePlaybookRunStatusIfApproved(ctx, playbookID, *spec.Approval)
 }
 
-func onPlaybookRunNewApproval(ctx api.Context, event api.Event) error {
+func onPlaybookRunNewApproval(ctx api.Context, event postq.Event) error {
 	runID := event.Properties["run_id"]
 
 	var run models.PlaybookRun

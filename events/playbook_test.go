@@ -68,11 +68,12 @@ var _ = ginkgo.Describe("Should save playbook run on the correct event", ginkgo.
 	})
 
 	ginkgo.It("Expect the event consumer to NOT save a playbook run", func() {
-		componentEventConsumer := NewComponentConsumerSync().EventConsumer()
-		componentEventConsumer.ConsumeEventsUntilEmpty(api.NewContext(playbookDB, playbookDBPool))
+		componentEventConsumer, err := NewComponentConsumerSync().EventConsumer()
+		Expect(err).NotTo(HaveOccurred())
+		componentEventConsumer.ConsumeUntilEmpty(api.NewContext(playbookDB, playbookDBPool))
 
 		var playbooks []models.PlaybookRun
-		err := playbookDB.Find(&playbooks).Error
+		err = playbookDB.Find(&playbooks).Error
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(playbooks)).To(Equal(0))
 	})
@@ -85,11 +86,12 @@ var _ = ginkgo.Describe("Should save playbook run on the correct event", ginkgo.
 	})
 
 	ginkgo.It("Expect the event consumer to save the playbook run", func() {
-		componentEventConsumer := NewComponentConsumerSync().EventConsumer()
-		componentEventConsumer.ConsumeEventsUntilEmpty(api.NewContext(playbookDB, playbookDBPool))
+		componentEventConsumer, err := NewComponentConsumerSync().EventConsumer()
+		Expect(err).NotTo(HaveOccurred())
+		componentEventConsumer.ConsumeUntilEmpty(api.NewContext(playbookDB, playbookDBPool))
 
 		var playbook models.PlaybookRun
-		err := playbookDB.Where("component_id", dummy.Logistics.ID).First(&playbook).Error
+		err = playbookDB.Where("component_id", dummy.Logistics.ID).First(&playbook).Error
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(playbook.Status).To(Equal(models.PlaybookRunStatusScheduled))

@@ -12,14 +12,15 @@ import (
 	"github.com/flanksource/incident-commander/notification"
 	pkgResponder "github.com/flanksource/incident-commander/responder"
 	"github.com/flanksource/incident-commander/utils/expression"
+	"github.com/flanksource/postq"
 )
 
 // List of all possible variables for any expression related to notifications
 var allEnvVars = []string{"check", "canary", "incident", "team", "responder", "comment", "evidence", "hypothesis"}
 
-func NewNotificationSaveConsumerSync() SyncEventConsumer {
-	return SyncEventConsumer{
-		watchEvents: []string{
+func NewNotificationSaveConsumerSync() postq.SyncEventConsumer {
+	return postq.SyncEventConsumer{
+		WatchEvents: []string{
 			EventIncidentCreated,
 			EventIncidentDODAdded,
 			EventIncidentDODPassed,
@@ -32,26 +33,30 @@ func NewNotificationSaveConsumerSync() SyncEventConsumer {
 			EventIncidentStatusOpen,
 			EventIncidentStatusResolved,
 		},
-		numConsumers: 3,
-		consumers: []SyncEventHandlerFunc{
-			addNotificationEvent,
+		ConsumerOption: &postq.ConsumerOption{
+			NumConsumers: 3,
+		},
+		Consumers: []postq.SyncEventHandlerFunc{
+			SyncAdapter(addNotificationEvent),
 		},
 	}
 }
 
-func NewNotificationSendConsumerAsync() AsyncEventConsumer {
-	return AsyncEventConsumer{
-		watchEvents:  []string{EventNotificationSend},
-		consumer:     sendNotifications,
-		batchSize:    1,
-		numConsumers: 5,
+func NewNotificationSendConsumerAsync() postq.AsyncEventConsumer {
+	return postq.AsyncEventConsumer{
+		WatchEvents: []string{EventNotificationSend},
+		Consumer:    AsyncAdapter(sendNotifications),
+		BatchSize:   1,
+		ConsumerOption: &postq.ConsumerOption{
+			NumConsumers: 5,
+		},
 	}
 }
 
 // addNotificationEvent responds to a event that can possibly generate a notification.
 // If a notification is found for the given event and passes all the filters, then
 // a new `notification.send` event is created.
-func addNotificationEvent(ctx api.Context, event api.Event) error {
+func addNotificationEvent(ctx api.Context, event postq.Event) error {
 	notificationIDs, err := notification.GetNotificationIDsForEvent(ctx, event.Name)
 	if err != nil {
 		return err
@@ -109,8 +114,8 @@ func addNotificationEvent(ctx api.Context, event api.Event) error {
 
 // sendNotifications sends a notification for each of the given events - one at a time.
 // It returns any events that failed to send.
-func sendNotifications(ctx api.Context, events []api.Event) []api.Event {
-	var failedEvents []api.Event
+func sendNotifications(ctx api.Context, events postq.Events) postq.Events {
+	var failedEvents []postq.Event
 	for _, e := range events {
 		var payload notification.NotificationEventPayload
 		payload.FromMap(e.Properties)
@@ -120,14 +125,14 @@ func sendNotifications(ctx api.Context, events []api.Event) []api.Event {
 
 		logs.IfError(notificationContext.StartLog(), "error persisting start of notification send history")
 
-		originalEvent := api.Event{Name: payload.EventName, CreatedAt: payload.EventCreatedAt}
+		originalEvent := postq.Event{Name: payload.EventName, CreatedAt: payload.EventCreatedAt}
 		celEnv, err := getEnvForEvent(ctx, originalEvent, e.Properties)
 		if err != nil {
-			e.Error = err.Error()
+			e.SetError(err.Error())
 			failedEvents = append(failedEvents, e)
 			notificationContext.WithError(err.Error())
 		} else if err := notification.SendNotification(notificationContext, payload, celEnv); err != nil {
-			e.Error = err.Error()
+			e.SetError(err.Error())
 			failedEvents = append(failedEvents, e)
 			notificationContext.WithError(err.Error())
 		}
@@ -140,7 +145,7 @@ func sendNotifications(ctx api.Context, events []api.Event) []api.Event {
 
 // getEnvForEvent gets the environment variables for the given event
 // that'll be passed to the cel expression or to the template renderer as a view.
-func getEnvForEvent(ctx api.Context, event api.Event, properties map[string]string) (map[string]any, error) {
+func getEnvForEvent(ctx api.Context, event postq.Event, properties map[string]string) (map[string]any, error) {
 	env := make(map[string]any)
 
 	if strings.HasPrefix(event.Name, "check.") {

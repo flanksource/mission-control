@@ -9,33 +9,34 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/api"
 	pkgResponder "github.com/flanksource/incident-commander/responder"
+	"github.com/flanksource/postq"
 )
 
-func NewResponderConsumerSync() SyncEventConsumer {
-	return SyncEventConsumer{
-		watchEvents: []string{EventIncidentResponderAdded},
-		consumers:   []SyncEventHandlerFunc{addNotificationEvent, generateResponderAddedAsyncEvent},
+func NewResponderConsumerSync() postq.SyncEventConsumer {
+	return postq.SyncEventConsumer{
+		WatchEvents: []string{EventIncidentResponderAdded},
+		Consumers:   []postq.SyncEventHandlerFunc{SyncAdapter(addNotificationEvent), SyncAdapter(generateResponderAddedAsyncEvent)},
 	}
 }
 
-func NewCommentConsumerSync() SyncEventConsumer {
-	return SyncEventConsumer{
-		watchEvents: []string{EventIncidentCommentAdded},
-		consumers:   []SyncEventHandlerFunc{addNotificationEvent, generateCommentAddedAsyncEvent},
+func NewCommentConsumerSync() postq.SyncEventConsumer {
+	return postq.SyncEventConsumer{
+		WatchEvents: []string{EventIncidentCommentAdded},
+		Consumers:   []postq.SyncEventHandlerFunc{SyncAdapter(addNotificationEvent), SyncAdapter(generateCommentAddedAsyncEvent)},
 	}
 }
 
-func NewResponderConsumerAsync() AsyncEventConsumer {
-	return AsyncEventConsumer{
-		watchEvents: []string{EventJiraResponderAdded, EventMSPlannerResponderAdded, EventMSPlannerCommentAdded, EventJiraCommentAdded},
-		consumer:    processResponderEvents,
-		batchSize:   1,
+func NewResponderConsumerAsync() postq.AsyncEventConsumer {
+	return postq.AsyncEventConsumer{
+		WatchEvents: []string{EventJiraResponderAdded, EventMSPlannerResponderAdded, EventMSPlannerCommentAdded, EventJiraCommentAdded},
+		Consumer:    AsyncAdapter(processResponderEvents),
+		BatchSize:   1,
 	}
 }
 
 // generateResponderAddedAsyncEvent generates async events for each of the configured responder clients
 // in the associated team.
-func generateResponderAddedAsyncEvent(ctx api.Context, event api.Event) error {
+func generateResponderAddedAsyncEvent(ctx api.Context, event postq.Event) error {
 	responderID := event.Properties["id"]
 
 	var responder api.Responder
@@ -65,7 +66,7 @@ func generateResponderAddedAsyncEvent(ctx api.Context, event api.Event) error {
 }
 
 // generateCommentAddedAsyncEvent generates comment.add async events for each of the configured responder clients.
-func generateCommentAddedAsyncEvent(ctx api.Context, event api.Event) error {
+func generateCommentAddedAsyncEvent(ctx api.Context, event postq.Event) error {
 	commentID := event.Properties["id"]
 
 	var comment api.Comment
@@ -112,18 +113,19 @@ func generateCommentAddedAsyncEvent(ctx api.Context, event api.Event) error {
 	return nil
 }
 
-func processResponderEvents(ctx api.Context, events []api.Event) []api.Event {
-	var failedEvents []api.Event
+func processResponderEvents(ctx api.Context, events postq.Events) postq.Events {
+	var failedEvents []postq.Event
 	for _, e := range events {
 		if err := handleResponderEvent(ctx, e); err != nil {
-			e.Error = err.Error()
+			e.SetError(err.Error())
 			failedEvents = append(failedEvents, e)
 		}
 	}
+
 	return failedEvents
 }
 
-func handleResponderEvent(ctx api.Context, event api.Event) error {
+func handleResponderEvent(ctx api.Context, event postq.Event) error {
 	switch event.Name {
 	case EventJiraResponderAdded, EventMSPlannerResponderAdded:
 		return reconcileResponderEvent(ctx, event)
@@ -135,7 +137,7 @@ func handleResponderEvent(ctx api.Context, event api.Event) error {
 }
 
 // TODO: Modify this such that it only notifies the responder mentioned in the event.
-func reconcileResponderEvent(ctx api.Context, event api.Event) error {
+func reconcileResponderEvent(ctx api.Context, event postq.Event) error {
 	responderID := event.Properties["id"]
 
 	var responder api.Responder
@@ -162,7 +164,7 @@ func reconcileResponderEvent(ctx api.Context, event api.Event) error {
 }
 
 // TODO: Modify this such that it only adds the comment to the particular responder mentioned in the event.
-func reconcileCommentEvent(ctx api.Context, event api.Event) error {
+func reconcileCommentEvent(ctx api.Context, event postq.Event) error {
 	commentID := event.Properties["id"]
 
 	var comment api.Comment

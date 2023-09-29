@@ -1,14 +1,16 @@
 package events
 
-func NewComponentConsumerSync() SyncEventConsumer {
-	return SyncEventConsumer{
-		watchEvents: []string{
+import "github.com/flanksource/postq"
+
+func NewComponentConsumerSync() postq.SyncEventConsumer {
+	return postq.SyncEventConsumer{
+		WatchEvents: []string{
 			EventComponentStatusError,
 			EventComponentStatusHealthy,
 			EventComponentStatusInfo,
 			EventComponentStatusUnhealthy,
 			EventComponentStatusWarning,
 		},
-		consumers: []SyncEventHandlerFunc{addNotificationEvent, schedulePlaybookRun},
+		Consumers: []postq.SyncEventHandlerFunc{SyncAdapter(addNotificationEvent), SyncAdapter(schedulePlaybookRun)},
 	}
 }

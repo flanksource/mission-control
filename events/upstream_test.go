@@ -9,6 +9,7 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/duty/upstream"
+	"github.com/flanksource/postq"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/uuid"
@@ -19,54 +20,54 @@ import (
 	"github.com/flanksource/incident-commander/api"
 )
 
-func veryPushQueue(events []api.Event, dataset dummy.DummyData) {
-	groupedEvents := GroupChangelogsByTables(events)
+func veryPushQueue(events postq.Events, dataset dummy.DummyData) {
+	groupedEvents := upstream.GroupChangelogsByTables(events)
 	for _, g := range groupedEvents {
-		table := g.tableName
+		table := g.TableName
 		switch table {
 		case "canaries":
-			Expect(len(g.itemIDs)).To(Equal(len(dataset.Canaries)))
-			Expect(g.itemIDs).To(Equal(getPrimaryKeys(table, dataset.Canaries)), "Mismatch primary keys for canaries")
+			Expect(len(g.ItemIDs)).To(Equal(len(dataset.Canaries)))
+			Expect(g.ItemIDs).To(Equal(getPrimaryKeys(table, dataset.Canaries)), "Mismatch primary keys for canaries")
 
 		case "topologies":
-			Expect(len(g.itemIDs)).To(Equal(len(dataset.Topologies)))
-			Expect(g.itemIDs).To(Equal(getPrimaryKeys(table, dataset.Topologies)), "Mismatch primary keys for topologies")
+			Expect(len(g.ItemIDs)).To(Equal(len(dataset.Topologies)))
+			Expect(g.ItemIDs).To(Equal(getPrimaryKeys(table, dataset.Topologies)), "Mismatch primary keys for topologies")
 
 		case "checks":
-			Expect(len(g.itemIDs)).To(Equal(len(dataset.Checks)))
-			Expect(g.itemIDs).To(Equal(getPrimaryKeys(table, dataset.Checks)), "Mismatch primary keys for checks")
+			Expect(len(g.ItemIDs)).To(Equal(len(dataset.Checks)))
+			Expect(g.ItemIDs).To(Equal(getPrimaryKeys(table, dataset.Checks)), "Mismatch primary keys for checks")
 
 		case "components":
-			Expect(len(g.itemIDs)).To(Equal(len(dataset.Components)))
-			Expect(g.itemIDs).To(Equal(getPrimaryKeys(table, dataset.Components)), "Mismatch primary keys for components")
+			Expect(len(g.ItemIDs)).To(Equal(len(dataset.Components)))
+			Expect(g.ItemIDs).To(Equal(getPrimaryKeys(table, dataset.Components)), "Mismatch primary keys for components")
 
 		case "config_scrapers":
-			Expect(len(g.itemIDs)).To(Equal(len(dataset.ConfigScrapers)))
-			Expect(g.itemIDs).To(Equal(getPrimaryKeys(table, dataset.ConfigScrapers)), "Mismatch primary keys for config_scrapers")
+			Expect(len(g.ItemIDs)).To(Equal(len(dataset.ConfigScrapers)))
+			Expect(g.ItemIDs).To(Equal(getPrimaryKeys(table, dataset.ConfigScrapers)), "Mismatch primary keys for config_scrapers")
 
 		case "config_items":
-			Expect(len(g.itemIDs)).To(Equal(len(dataset.Configs)))
-			Expect(g.itemIDs).To(Equal(getPrimaryKeys(table, dataset.Configs)), "Mismatch primary keys for config_items")
+			Expect(len(g.ItemIDs)).To(Equal(len(dataset.Configs)))
+			Expect(g.ItemIDs).To(Equal(getPrimaryKeys(table, dataset.Configs)), "Mismatch primary keys for config_items")
 
 		case "config_analysis":
-			Expect(len(g.itemIDs)).To(Equal(len(dataset.ConfigAnalyses)))
-			Expect(g.itemIDs).To(Equal(getPrimaryKeys(table, dataset.ConfigAnalyses)), "Mismatch primary keys for config_analysis")
+			Expect(len(g.ItemIDs)).To(Equal(len(dataset.ConfigAnalyses)))
+			Expect(g.ItemIDs).To(Equal(getPrimaryKeys(table, dataset.ConfigAnalyses)), "Mismatch primary keys for config_analysis")
 
 		case "check_statuses":
-			Expect(len(g.itemIDs)).To(Equal(len(dataset.CheckStatuses)))
-			Expect(g.itemIDs).To(Equal(getPrimaryKeys(table, dataset.CheckStatuses)), "Mismatch composite primary keys for check_statuses")
+			Expect(len(g.ItemIDs)).To(Equal(len(dataset.CheckStatuses)))
+			Expect(g.ItemIDs).To(Equal(getPrimaryKeys(table, dataset.CheckStatuses)), "Mismatch composite primary keys for check_statuses")
 
 		case "component_relationships":
-			Expect(len(g.itemIDs)).To(Equal(len(dataset.ComponentRelationships)))
-			Expect(g.itemIDs).To(Equal(getPrimaryKeys(table, dataset.ComponentRelationships)), "Mismatch composite primary keys for component_relationships")
+			Expect(len(g.ItemIDs)).To(Equal(len(dataset.ComponentRelationships)))
+			Expect(g.ItemIDs).To(Equal(getPrimaryKeys(table, dataset.ComponentRelationships)), "Mismatch composite primary keys for component_relationships")
 
 		case "config_component_relationships":
-			Expect(len(g.itemIDs)).To(Equal(len(dataset.ConfigComponentRelationships)))
-			Expect(g.itemIDs).To(Equal(getPrimaryKeys(table, dataset.ConfigComponentRelationships)), "Mismatch composite primary keys for config_component_relationships")
+			Expect(len(g.ItemIDs)).To(Equal(len(dataset.ConfigComponentRelationships)))
+			Expect(g.ItemIDs).To(Equal(getPrimaryKeys(table, dataset.ConfigComponentRelationships)), "Mismatch composite primary keys for config_component_relationships")
 
 		case "config_changes":
-			Expect(len(g.itemIDs)).To(Equal(len(dataset.ConfigChanges)))
-			Expect(g.itemIDs).To(Equal(getPrimaryKeys(table, dataset.ConfigChanges)), "Mismatch composite primary keys for config_changes")
+			Expect(len(g.ItemIDs)).To(Equal(len(dataset.ConfigChanges)))
+			Expect(g.ItemIDs).To(Equal(getPrimaryKeys(table, dataset.ConfigChanges)), "Mismatch composite primary keys for config_changes")
 
 		case "config_relationships":
 			// Do nothing (need to populate the config_relationships table)
@@ -100,7 +101,7 @@ var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
 	// 5. Now, verify those records are available on the upstream's database.
 
 	ginkgo.It("should track insertion on the event_queue table", func() {
-		var events []api.Event
+		var events []postq.Event
 		err := agentBob.db.Where("name = ?", EventPushQueueCreate).Find(&events).Error
 		Expect(err).NotTo(HaveOccurred())
 		veryPushQueue(events, agentBob.dataset)
@@ -131,40 +132,41 @@ var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
 		err = agentBob.db.Delete(&modifiedNewDummy).Error
 		Expect(err).NotTo(HaveOccurred())
 
-		var events []api.Event
+		var events []postq.Event
 		err = agentBob.db.Where("name = ? AND created_at >= ?", EventPushQueueCreate, start).Find(&events).Error
 		Expect(err).NotTo(HaveOccurred())
 
 		// Only 1 event should get created since we are modifying the same resource
 		Expect(len(events)).To(Equal(1))
 
-		groupedEvents := GroupChangelogsByTables(events)
-		Expect(groupedEvents[0].itemIDs).To(Equal([][]string{{modifiedNewDummy.ID.String()}}))
+		groupedEvents := upstream.GroupChangelogsByTables(events)
+		Expect(groupedEvents[0].ItemIDs).To(Equal([][]string{{modifiedNewDummy.ID.String()}}))
 	})
 
 	ginkgo.It("should transfer all events to upstream server", func() {
-		eventHandlerConfig := Config{
-			UpstreamPush: upstream.UpstreamConfig{
-				AgentName: agentBob.name,
-				Host:      fmt.Sprintf("http://localhost:%d", upstreamEchoServerport),
-				Username:  "admin@local",
-				Password:  "admin",
-				Labels:    []string{"test"},
-			},
+		upstreamConfig := upstream.UpstreamConfig{
+			AgentName: agentBob.name,
+			Host:      fmt.Sprintf("http://localhost:%d", upstreamEchoServerport),
+			Username:  "admin@local",
+			Password:  "admin",
+			Labels:    []string{"test"},
 		}
 
-		c := NewUpstreamPushConsumerAsync(eventHandlerConfig).EventConsumer()
-		c.ConsumeEventsUntilEmpty(api.NewContext(agentBob.db, agentBob.pool))
+		c, err := upstream.NewPushQueueConsumer(upstreamConfig).EventConsumer()
+		Expect(err).To(Not(HaveOccurred()))
+		c.ConsumeUntilEmpty(api.NewContext(agentBob.db, agentBob.pool))
 
 		// Agent James should also push everything in it's queue to the upstream
-		eventHandlerConfig.UpstreamPush.AgentName = agentJames.name
-		c = NewUpstreamPushConsumerAsync(eventHandlerConfig).EventConsumer()
-		c.ConsumeEventsUntilEmpty(api.NewContext(agentJames.db, agentJames.pool))
+		upstreamConfig.AgentName = agentJames.name
+		c, err = upstream.NewPushQueueConsumer(upstreamConfig).EventConsumer()
+		Expect(err).To(Not(HaveOccurred()))
+		c.ConsumeUntilEmpty(api.NewContext(agentJames.db, agentJames.pool))
 
 		// Agent Ross should also push everything in it's queue to the upstream
-		eventHandlerConfig.UpstreamPush.AgentName = agentRoss.name
-		c = NewUpstreamPushConsumerAsync(eventHandlerConfig).EventConsumer()
-		c.ConsumeEventsUntilEmpty(api.NewContext(agentRoss.db, agentRoss.pool))
+		upstreamConfig.AgentName = agentRoss.name
+		c, err = upstream.NewPushQueueConsumer(upstreamConfig).EventConsumer()
+		Expect(err).To(Not(HaveOccurred()))
+		c.ConsumeUntilEmpty(api.NewContext(agentRoss.db, agentRoss.pool))
 	})
 
 	ginkgo.It("should have transferred all the components", func() {

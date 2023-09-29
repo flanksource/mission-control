@@ -271,9 +271,7 @@ var Serve = &cobra.Command{
 
 		go jobs.Start(api.DefaultContext)
 
-		events.StartConsumers(api.DefaultContext, events.Config{
-			UpstreamPush: api.UpstreamConf,
-		})
+		events.StartConsumers(api.DefaultContext, api.UpstreamConf)
 
 		go tableUpdatesHandler(api.DefaultContext)
 

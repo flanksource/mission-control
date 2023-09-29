@@ -11,11 +11,12 @@ import (
 
 	"github.com/flanksource/duty/fixtures/dummy"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/events"
-	"github.com/flanksource/incident-commander/events/eventconsumer"
 	"github.com/flanksource/incident-commander/playbook"
+	"github.com/flanksource/postq"
 	"github.com/flanksource/postq/pg"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -43,12 +44,15 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 
 		go pg.Listen(ctx, "playbook_run_updates", pgNotifyChannel)
 
-		go eventconsumer.New(playbook.EventConsumer).
-			WithNumConsumers(5).
-			WithNotifyTimeout(time.Second*2).
-			Listen(ctx, pgNotifyChannel)
+		ec, err := postq.NewPGConsumer(playbook.EventConsumer, &postq.ConsumerOption{
+			NumConsumers: 5,
+			Timeout:      time.Second * 2,
+		})
+		Expect(err).NotTo(HaveOccurred())
 
-		go events.StartConsumers(ctx, events.Config{})
+		go ec.Listen(ctx, pgNotifyChannel)
+
+		go events.StartConsumers(ctx, upstream.UpstreamConfig{})
 	})
 
 	ginkgo.It("should create a new playbook", func() {
