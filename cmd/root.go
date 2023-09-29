@@ -13,6 +13,7 @@ import (
 	"github.com/flanksource/incident-commander/k8s"
 	"github.com/flanksource/incident-commander/mail"
 	"github.com/flanksource/incident-commander/rules"
+	"github.com/flanksource/incident-commander/telemetry"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"k8s.io/client-go/kubernetes/fake"
@@ -31,6 +32,10 @@ func PreRun(cmd *cobra.Command, args []string) {
 		logger.Infof("Kubernetes client not available: %v", err)
 		api.Kubernetes = fake.NewSimpleClientset()
 	}
+
+	if otelcollectorURL != "" {
+		telemetry.InitTracer("mission-control", otelcollectorURL, true)
+	}
 }
 
 var Root = &cobra.Command{
@@ -45,6 +50,7 @@ var httpPort, metricsPort, devGuiPort int
 var configDb, authMode, kratosAPI, kratosAdminAPI, postgrestURI string
 var clerkJWKSURL, clerkOrgID string
 var disablePostgrest bool
+var otelcollectorURL string
 
 func ServerFlags(flags *pflag.FlagSet) {
 	flags.IntVar(&httpPort, "httpPort", 8080, "Port to expose a health dashboard")
@@ -66,6 +72,7 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&mail.FromAddress, "email-from-address", "no-reply@flanksource.com", "Email address of the sender")
 	flags.StringVar(&mail.FromName, "email-from-name", "Mission Control", "Email name of the sender")
 	flags.StringVar(&db.PostgresDBAnonRole, "postgrest-anon-role", "postgrest_anon", "PostgREST anonymous role")
+	flags.StringVar(&otelcollectorURL, "otel-collector-url", "", "OpenTelemetry gRPC Collector URL in host:port format")
 
 	var upstreamPageSizeDefault = 500
 	if val, exists := os.LookupEnv("UPSTREAM_PAGE_SIZE"); exists {

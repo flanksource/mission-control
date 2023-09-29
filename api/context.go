@@ -10,6 +10,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
+	"go.opentelemetry.io/otel"
+
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 	"gorm.io/gorm"
 	"k8s.io/client-go/kubernetes"
 )
@@ -40,6 +44,9 @@ type Context interface {
 
 	WithUser(user *ContextUser) Context
 	User() *ContextUser
+
+	StartTrace(tracerName string, spanName string) (Context, trace.Span)
+	SetSpanAttributes(attrs ...attribute.KeyValue)
 
 	GetEnvVarValue(input types.EnvVar) (string, error)
 	GetEnvValueFromCache(env types.EnvVar) (string, error)
@@ -98,6 +105,17 @@ func (c context) WithTimeout(timeout time.Duration) (Context, func()) {
 	return &c, cancel
 }
 
+func (c context) StartTrace(tracerName, spanName string) (Context, trace.Span) {
+	tracer := otel.GetTracerProvider().Tracer(tracerName)
+	traceCtx, span := tracer.Start(c.Context, spanName)
+	c.Context = traceCtx
+	return &c, span
+}
+
+func (c *context) SetSpanAttributes(attrs ...attribute.KeyValue) {
+	trace.SpanFromContext(c).SetAttributes(attrs...)
+}
+
 func (c context) WithDB(db *gorm.DB) Context {
 	c.db = db
 	return &c
@@ -121,6 +139,7 @@ func (c *context) Pool() *pgxpool.Pool {
 
 func (c context) WithUser(user *ContextUser) Context {
 	c.user = user
+	c.SetSpanAttributes(attribute.String("user-id", user.ID.String()))
 	return &c
 }
 

@@ -30,14 +30,13 @@ func upsertConfig(configType, externalID, name, config string) error {
 	return nil
 }
 
-func SyncConfig() {
+func SyncConfig(ctx api.Context) error {
 	logger.Debugf("Syncing responder config")
-	ctx := api.DefaultContext
 
 	var teams []api.Team
-	if err := db.Gorm.Find(&teams).Error; err != nil {
+	if err := ctx.DB().Find(&teams).Error; err != nil {
 		logger.Errorf("Error querying teams from database: %v", err)
-		return
+		return err
 	}
 
 	for _, team := range teams {
@@ -73,4 +72,5 @@ func SyncConfig() {
 
 		}
 	}
+	return nil
 }

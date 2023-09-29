@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/duty"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/responder"
 	"github.com/flanksource/incident-commander/rules"
@@ -26,58 +25,46 @@ const (
 
 var FuncScheduler = cron.New()
 
-func ScheduleFunc(schedule string, fn func()) (any, error) {
-	return FuncScheduler.AddFunc(schedule, fn)
-}
-
 func Start(ctx api.Context) {
-	// Running first at startup and then with the schedule
-	TeamComponentOwnershipRun()
-	EvaluateEvidenceScripts()
-	responder.SyncComments()
-	responder.SyncConfig()
-	CleanupJobHistoryTable()
-	if err := rules.Run(); err != nil {
-		logger.Errorf("error running incident rules: %v", err)
-	}
-
-	if _, err := ScheduleFunc(TeamComponentOwnershipSchedule, TeamComponentOwnershipRun); err != nil {
+	if err := newFuncJob(TeamComponentOwnershipRun, TeamComponentOwnershipSchedule).
+		runOnStart().addToScheduler(FuncScheduler); err != nil {
 		logger.Errorf("Failed to schedule sync jobs for team component: %v", err)
 	}
 
-	if _, err := ScheduleFunc(EvaluateEvidenceScriptsSchedule, EvaluateEvidenceScripts); err != nil {
+	if err := newFuncJob(EvaluateEvidenceScripts, EvaluateEvidenceScriptsSchedule).
+		runOnStart().addToScheduler(FuncScheduler); err != nil {
 		logger.Errorf("Failed to schedule job for evidence script evaluation: %v", err)
 	}
 
-	if _, err := ScheduleFunc(ResponderCommentsSyncSchedule, responder.SyncComments); err != nil {
+	if err := newFuncJob(responder.SyncComments, ResponderCommentsSyncSchedule).
+		runOnStart().addToScheduler(FuncScheduler); err != nil {
 		logger.Errorf("Failed to schedule job for syncing responder comments: %v", err)
 	}
 
-	if _, err := ScheduleFunc(ResponderConfigSyncSchedule, responder.SyncConfig); err != nil {
+	if err := newFuncJob(responder.SyncConfig, ResponderConfigSyncSchedule).
+		runOnStart().addToScheduler(FuncScheduler); err != nil {
 		logger.Errorf("Failed to schedule job for syncing responder config: %v", err)
 	}
 
-	if _, err := ScheduleFunc(CleanupJobHistoryTableSchedule, CleanupJobHistoryTable); err != nil {
+	if err := newFuncJob(CleanupJobHistoryTable, CleanupJobHistoryTableSchedule).
+		runOnStart().addToScheduler(FuncScheduler); err != nil {
 		logger.Errorf("Failed to schedule job for cleaning up job history table: %v", err)
 	}
 
-	if _, err := ScheduleFunc(CleanupEventQueueTableSchedule, CleanupEventQueue); err != nil {
+	if err := newFuncJob(CleanupEventQueue, CleanupEventQueueTableSchedule).
+		addToScheduler(FuncScheduler); err != nil {
 		logger.Errorf("Failed to schedule job for cleaning up event queue table: %v", err)
 	}
 
-	if _, err := ScheduleFunc(CleanupNotificationSendHistorySchedule, func() {
-		if count, err := duty.DeleteNotificationSendHistory(ctx, 30); err != nil {
-			logger.Errorf("Failed to delete notification send history: %v", err)
-		} else if count > 0 {
-			logger.Infof("Deleted %d notification send history", count)
-		}
-	}); err != nil {
+	if err := newFuncJob(CleanupNotificationSendHistory, CleanupNotificationSendHistorySchedule).
+		addToScheduler(FuncScheduler); err != nil {
 		logger.Errorf("Failed to schedule job for cleaning up notification send history table: %v", err)
 	}
 
 	if api.UpstreamConf.Valid() {
-		job := newFuncJob(SyncWithUpstream, withName("upstream reconcile job"), withRunNow(true), withTimeout(time.Minute*30))
-		if err := job.schedule(FuncScheduler, PushAgentReconcileSchedule); err != nil {
+		if err := newFuncJob(SyncWithUpstream, PushAgentReconcileSchedule).
+			setName("UpstreamReconcile").runOnStart().setTimeout(time.Minute * 10).
+			addToScheduler(FuncScheduler); err != nil {
 			logger.Errorf("Failed to schedule push reconcile job: %v", err)
 		}
 
@@ -90,12 +77,8 @@ func Start(ctx api.Context) {
 	}
 
 	incidentRulesSchedule := fmt.Sprintf("@every %s", rules.Period.String())
-	logger.Infof("IncidentRulesSchedule %s", incidentRulesSchedule)
-	if _, err := ScheduleFunc(incidentRulesSchedule, func() {
-		if err := rules.Run(); err != nil {
-			logger.Errorf("error running incident rules: %v", err)
-		}
-	}); err != nil {
+	if err := newFuncJob(rules.Run, incidentRulesSchedule).
+		setName("IncidentRules").runOnStart().addToScheduler(FuncScheduler); err != nil {
 		logger.Errorf("Failed to schedule job for incident rules: %v", err)
 	}
 

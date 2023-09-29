@@ -14,11 +14,11 @@ import (
 
 var teamSpecCache = cache.New(time.Hour*1, time.Hour*1)
 
-func GetTeamComponentsFromSelectors(teamID uuid.UUID, componentSelectors []api.ComponentSelector) []api.TeamComponent {
+func GetTeamComponentsFromSelectors(ctx api.Context, teamID uuid.UUID, componentSelectors []api.ComponentSelector) []api.TeamComponent {
 	var selectedComponents = make(map[string][]uuid.UUID)
 	for _, compSelector := range componentSelectors {
 		h, _ := hash.JSONMD5Hash(compSelector)
-		selectedComponents[h] = db.GetComponentsWithSelector(compSelector)
+		selectedComponents[h] = db.GetComponentsWithSelector(ctx, compSelector)
 	}
 
 	var teamComps []api.TeamComponent

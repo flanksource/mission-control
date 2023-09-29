@@ -11,12 +11,12 @@ import (
 
 	"github.com/flanksource/duty/fixtures/dummy"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/utils/pg"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/events/eventconsumer"
 	"github.com/flanksource/incident-commander/playbook"
+	"github.com/flanksource/postq/pg"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"gorm.io/gorm/clause"

@@ -9,8 +9,8 @@ import (
 	"github.com/google/uuid"
 )
 
-func ReconcileIncidentStatus(incidentIDs []uuid.UUID) error {
-	return Gorm.Exec(`
+func ReconcileIncidentStatus(ctx api.Context, incidentIDs []uuid.UUID) error {
+	return ctx.DB().Exec(`
         WITH evidences_agg as (
             SELECT BOOL_AND(evidences.done) as done, incidents.status, incidents.id
             FROM evidences

@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/patrickmn/go-cache"
 
+	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 )
 
@@ -20,16 +21,16 @@ func init() {
 	prgCache = cache.New(24*time.Hour, 1*time.Hour)
 }
 
-func EvaluateEvidenceScripts() {
+func EvaluateEvidenceScripts(ctx api.Context) error {
 	// Fetch all evidences of open incidents which have a script
-	evidences := db.GetEvidenceScripts()
+	evidences := db.GetEvidenceScripts(ctx)
 
 	var incidentIDs []uuid.UUID
 	for _, evidence := range evidences {
 		output, err := evaluate(evidence)
 		if err != nil {
 			logger.Errorf("Error running evidence script: %v", err)
-			if err = db.UpdateEvidenceScriptResult(evidence.ID, false, err.Error()); err != nil {
+			if err = db.UpdateEvidenceScriptResult(ctx, evidence.ID, false, err.Error()); err != nil {
 				logger.Errorf("Error persisting evidence script result: %v", err)
 			}
 			continue
@@ -40,16 +41,18 @@ func EvaluateEvidenceScripts() {
 		if err != nil {
 			result = "Script should evaluate to a boolean value"
 		}
-		if err = db.UpdateEvidenceScriptResult(evidence.ID, done, result); err != nil {
+		if err = db.UpdateEvidenceScriptResult(ctx, evidence.ID, done, result); err != nil {
 			logger.Errorf("Error persisting evidence script result: %v", err)
 		}
 		incidentIDs = append(incidentIDs, evidence.Hypothesis.IncidentID)
 	}
 
-	err := db.ReconcileIncidentStatus(incidentIDs)
+	err := db.ReconcileIncidentStatus(ctx, incidentIDs)
 	if err != nil {
 		logger.Errorf("Error updating incident status: %v", err)
 	}
+
+	return nil
 }
 
 func evaluate(evidence db.EvidenceScriptInput) (string, error) {

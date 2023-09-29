@@ -14,6 +14,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/spf13/pflag"
 	"gorm.io/gorm"
+	"gorm.io/plugin/opentelemetry/tracing"
 )
 
 var (
@@ -66,6 +67,10 @@ func Init(connection string) error {
 	Gorm, err = duty.NewGorm(ConnectionString, duty.DefaultGormConfig())
 	if err != nil {
 		return fmt.Errorf("error creating gorm: %w", err)
+	}
+
+	if err := Gorm.Use(tracing.NewPlugin()); err != nil {
+		return fmt.Errorf("error setting up tracing: %w", err)
 	}
 
 	if !skipMigrations {

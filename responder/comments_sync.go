@@ -20,15 +20,14 @@ func getRootHypothesisOfIncident(incidentID uuid.UUID) (api.Hypothesis, error) {
 	return hypothesis, nil
 }
 
-func SyncComments() {
+func SyncComments(ctx api.Context) error {
 	logger.Debugf("Syncing comments")
-	ctx := api.DefaultContext
 
 	var responders []api.Responder
-	err := db.Gorm.Where("external_id IS NOT NULL").Preload("Team").Find(&responders).Error
+	err := ctx.DB().Where("external_id IS NOT NULL").Preload("Team").Find(&responders).Error
 	if err != nil {
 		logger.Errorf("Error fetching responders from database: %v", err)
-		return
+		return err
 	}
 
 	dbSelectExternalIDQuery := `
@@ -91,4 +90,5 @@ func SyncComments() {
 	}
 	jobHistory.IncrSuccess()
 	_ = db.PersistJobHistory(ctx, jobHistory.End())
+	return nil
 }

@@ -10,9 +10,7 @@ import (
 )
 
 // CleanupEventQueue deletes stale records in the `event_queue` table
-func CleanupEventQueue() {
-	ctx := api.DefaultContext
-
+func CleanupEventQueue(ctx api.Context) error {
 	jobHistory := models.NewJobHistory("CleanupEventQueue", "", "")
 	_ = db.PersistJobHistory(ctx, jobHistory.Start())
 
@@ -55,4 +53,6 @@ func CleanupEventQueue() {
 	if err := db.PersistJobHistory(ctx, jobHistory.End()); err != nil {
 		logger.Errorf("error persisting job history: %v", err)
 	}
+
+	return nil
 }
