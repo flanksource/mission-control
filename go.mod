@@ -12,10 +12,10 @@ require (
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.23.0
 	github.com/flanksource/commons v1.12.0
-	github.com/flanksource/duty v1.0.185
-	github.com/flanksource/gomplate/v3 v3.20.12
+	github.com/flanksource/duty v1.0.188
+	github.com/flanksource/gomplate/v3 v3.20.13
 	github.com/flanksource/kopper v1.0.6
-	github.com/flanksource/postq v1.0.0 // dummy version
+	github.com/flanksource/postq v0.1.0
 	github.com/gomarkdown/markdown v0.0.0-20230716120725-531d2d74bc12
 	github.com/google/cel-go v0.18.1
 	github.com/google/go-cmp v0.5.9
@@ -51,7 +51,7 @@ require (
 )
 
 require (
-	ariga.io/atlas v0.14.1 // indirect
+	ariga.io/atlas v0.14.2 // indirect
 	cloud.google.com/go/compute v1.23.0 // indirect
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
 	cloud.google.com/go/iam v1.1.2 // indirect
@@ -137,7 +137,7 @@ require (
 	k8s.io/apiextensions-apiserver v0.27.4 // indirect
 	k8s.io/component-base v0.27.4 // indirect
 	k8s.io/klog/v2 v2.100.1 // indirect
-	k8s.io/kube-openapi v0.0.0-20230918164632-68afd615200d // indirect
+	k8s.io/kube-openapi v0.0.0-20230928205116-a78145627833 // indirect
 	k8s.io/utils v0.0.0-20230726121419-3b25d923346b // indirect
 	layeh.com/gopher-json v0.0.0-20201124131017-552bb3c4c3bf // indirect
 	modernc.org/libc v1.24.1 // indirect
@@ -156,7 +156,7 @@ require (
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/TomOnTime/utfutil v0.0.0-20230223141146-125e65197b36
 	github.com/antonmedv/expr v1.15.3 // indirect
-	github.com/aws/aws-sdk-go v1.45.16 // indirect
+	github.com/aws/aws-sdk-go v1.45.19 // indirect
 	github.com/bgentry/go-netrc v0.0.0-20140422174119-9fd32a8b3d3d // indirect
 	github.com/cjlapao/common-go v0.0.39 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -235,7 +235,3 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.3.0 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
-
-replace github.com/flanksource/duty => ../duty
-
-replace github.com/flanksource/postq => ../postq
