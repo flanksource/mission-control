@@ -9,6 +9,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/fixtures/dummy"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/upstream"
@@ -47,6 +48,10 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 		ec, err := postq.NewPGConsumer(playbook.EventConsumer, &postq.ConsumerOption{
 			NumConsumers: 5,
 			Timeout:      time.Second * 2,
+			ErrorHandler: func(err error) bool {
+				logger.Errorf("Error in queue consumer: %s", err)
+				return true
+			},
 		})
 		Expect(err).NotTo(HaveOccurred())
 

@@ -103,7 +103,7 @@ func (t *checkstatusSyncJob) run(ctx api.Context) error {
 		}
 		batch := checkStatuses[i:end]
 
-		logger.WithValues("batch", fmt.Sprintf("%d/%d", i/ReconcilePageSize, len(checkStatuses)/ReconcilePageSize)).
+		logger.WithValues("batch", fmt.Sprintf("%d/%d", (i/ReconcilePageSize)+1, (len(checkStatuses)/ReconcilePageSize)+1)).
 			Tracef("Pushing %d check statuses to upstream", len(batch))
 
 		if err := upstream.Push(ctx, api.UpstreamConf, &upstream.PushData{AgentName: api.UpstreamConf.AgentName, CheckStatuses: batch}); err != nil {

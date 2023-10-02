@@ -22,6 +22,9 @@ func NewPlaybookApprovalSpecUpdatedConsumerSync() postq.SyncEventConsumer {
 	return postq.SyncEventConsumer{
 		WatchEvents: []string{EventPlaybookSpecApprovalUpdated},
 		Consumers:   []postq.SyncEventHandlerFunc{SyncAdapter(onApprovalUpdated)},
+		ConsumerOption: &postq.ConsumerOption{
+			ErrorHandler: defaultLoggerErrorHandler,
+		},
 	}
 }
 
@@ -29,6 +32,9 @@ func NewPlaybookApprovalConsumerSync() postq.SyncEventConsumer {
 	return postq.SyncEventConsumer{
 		WatchEvents: []string{EventPlaybookApprovalInserted},
 		Consumers:   []postq.SyncEventHandlerFunc{SyncAdapter(onPlaybookRunNewApproval)},
+		ConsumerOption: &postq.ConsumerOption{
+			ErrorHandler: defaultLoggerErrorHandler,
+		},
 	}
 }
 

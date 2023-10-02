@@ -1,6 +1,8 @@
 package events
 
-import "github.com/flanksource/postq"
+import (
+	"github.com/flanksource/postq"
+)
 
 func NewComponentConsumerSync() postq.SyncEventConsumer {
 	return postq.SyncEventConsumer{
@@ -12,5 +14,8 @@ func NewComponentConsumerSync() postq.SyncEventConsumer {
 			EventComponentStatusWarning,
 		},
 		Consumers: []postq.SyncEventHandlerFunc{SyncAdapter(addNotificationEvent), SyncAdapter(schedulePlaybookRun)},
+		ConsumerOption: &postq.ConsumerOption{
+			ErrorHandler: defaultLoggerErrorHandler,
+		},
 	}
 }

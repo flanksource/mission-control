@@ -35,6 +35,7 @@ func NewNotificationSaveConsumerSync() postq.SyncEventConsumer {
 		},
 		ConsumerOption: &postq.ConsumerOption{
 			NumConsumers: 3,
+			ErrorHandler: defaultLoggerErrorHandler,
 		},
 		Consumers: []postq.SyncEventHandlerFunc{
 			SyncAdapter(addNotificationEvent),
@@ -49,6 +50,7 @@ func NewNotificationSendConsumerAsync() postq.AsyncEventConsumer {
 		BatchSize:   1,
 		ConsumerOption: &postq.ConsumerOption{
 			NumConsumers: 5,
+			ErrorHandler: defaultLoggerErrorHandler,
 		},
 	}
 }

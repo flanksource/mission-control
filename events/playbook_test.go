@@ -61,7 +61,7 @@ var _ = ginkgo.Describe("Should save playbook run on the correct event", ginkgo.
 	})
 
 	ginkgo.It("update status to something else other than unhealthy", func() {
-		tx := playbookDB.Debug().Model(&models.Component{}).Where("id = ?", dummy.Logistics.ID).UpdateColumn("status", types.ComponentStatusWarning)
+		tx := playbookDB.Model(&models.Component{}).Where("id = ?", dummy.Logistics.ID).UpdateColumn("status", types.ComponentStatusWarning)
 		Expect(tx.RowsAffected).To(Equal(int64(1)))
 
 		Expect(tx.Error).NotTo(HaveOccurred())

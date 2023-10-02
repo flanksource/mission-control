@@ -275,7 +275,9 @@ var Serve = &cobra.Command{
 
 		go tableUpdatesHandler(api.DefaultContext)
 
-		go playbook.StartPlaybookRunConsumer(api.DefaultContext)
+		go func() {
+			logs.IfError(playbook.StartPlaybookRunConsumer(api.DefaultContext), "error starting playbook run consumer")
+		}()
 
 		go playbook.ListenPlaybookPGNotify(api.DefaultContext)
 

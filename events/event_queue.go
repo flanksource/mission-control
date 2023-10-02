@@ -1,6 +1,8 @@
 package events
 
 import (
+	"time"
+
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
@@ -137,4 +139,10 @@ var eventQueueOnConflictClause = clause.OnConflict{
 		"created_at":   gorm.Expr("NOW()"),
 		"error":        clause.Column{Table: "excluded", Name: "error"},
 	}),
+}
+
+func defaultLoggerErrorHandler(err error) bool {
+	logger.Errorf("error consuming: %v", err)
+	time.Sleep(time.Second * 5)
+	return true
 }

@@ -86,7 +86,6 @@ func veryPushQueue(events postq.Events, dataset dummy.DummyData) {
 			len(dataset.Configs) +
 			len(dataset.ConfigChanges) +
 			len(dataset.ConfigAnalyses) +
-			len(dataset.CheckStatuses) +
 			len(dataset.ComponentRelationships) +
 			len(dataset.ConfigComponentRelationships)))
 }
@@ -101,18 +100,18 @@ var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
 	// 5. Now, verify those records are available on the upstream's database.
 
 	ginkgo.It("should track insertion on the event_queue table", func() {
-		var events []postq.Event
+		var events api.Events
 		err := agentBob.db.Where("name = ?", EventPushQueueCreate).Find(&events).Error
 		Expect(err).NotTo(HaveOccurred())
-		veryPushQueue(events, agentBob.dataset)
+		veryPushQueue(events.ToPostQEvents(), agentBob.dataset)
 
 		err = agentJames.db.Where("name = ?", EventPushQueueCreate).Find(&events).Error
 		Expect(err).NotTo(HaveOccurred())
-		veryPushQueue(events, agentJames.dataset)
+		veryPushQueue(events.ToPostQEvents(), agentJames.dataset)
 
 		err = agentRoss.db.Where("name = ?", EventPushQueueCreate).Find(&events).Error
 		Expect(err).NotTo(HaveOccurred())
-		veryPushQueue(events, agentRoss.dataset)
+		veryPushQueue(events.ToPostQEvents(), agentRoss.dataset)
 	})
 
 	ginkgo.It("should track updates & deletes on the event_queue table", func() {
@@ -132,14 +131,14 @@ var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
 		err = agentBob.db.Delete(&modifiedNewDummy).Error
 		Expect(err).NotTo(HaveOccurred())
 
-		var events []postq.Event
+		var events api.Events
 		err = agentBob.db.Where("name = ? AND created_at >= ?", EventPushQueueCreate, start).Find(&events).Error
 		Expect(err).NotTo(HaveOccurred())
 
 		// Only 1 event should get created since we are modifying the same resource
 		Expect(len(events)).To(Equal(1))
 
-		groupedEvents := upstream.GroupChangelogsByTables(events)
+		groupedEvents := upstream.GroupChangelogsByTables(events.ToPostQEvents())
 		Expect(groupedEvents[0].ItemIDs).To(Equal([][]string{{modifiedNewDummy.ID.String()}}))
 	})
 
