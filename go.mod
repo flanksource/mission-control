@@ -12,7 +12,7 @@ require (
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.23.0
 	github.com/flanksource/commons v1.12.0
-	github.com/flanksource/duty v1.0.188
+	github.com/flanksource/duty v1.0.190
 	github.com/flanksource/gomplate/v3 v3.20.13
 	github.com/flanksource/kopper v1.0.6
 	github.com/flanksource/postq v0.1.1
@@ -235,5 +235,3 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.3.0 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
-
-replace github.com/flanksource/duty => ../duty
