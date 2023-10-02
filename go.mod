@@ -13,7 +13,7 @@ require (
 	github.com/fergusstrange/embedded-postgres v1.23.0
 	github.com/flanksource/commons v1.12.0
 	github.com/flanksource/duty v1.0.185
-	github.com/flanksource/gomplate/v3 v3.20.12
+	github.com/flanksource/gomplate/v3 v3.20.13
 	github.com/flanksource/kopper v1.0.6
 	github.com/gomarkdown/markdown v0.0.0-20230716120725-531d2d74bc12
 	github.com/google/cel-go v0.18.1
@@ -32,8 +32,15 @@ require (
 	github.com/prometheus/client_golang v1.16.0
 	github.com/spf13/cobra v1.7.0
 	github.com/spf13/pflag v1.0.5
+	go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho v0.44.0
+	go.opentelemetry.io/otel v1.18.0
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.18.0
+	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.18.0
+	go.opentelemetry.io/otel/sdk v1.18.0
+	go.opentelemetry.io/otel/trace v1.18.0
 	gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df
 	gorm.io/gorm v1.25.4
+	gorm.io/plugin/opentelemetry v0.1.4
 	k8s.io/apimachinery v0.28.0
 	k8s.io/client-go v0.28.0
 	sigs.k8s.io/controller-runtime v0.15.0
@@ -106,13 +113,7 @@ require (
 	github.com/xi2/xz v0.0.0-20171230120015-48954b6210f8 // indirect
 	github.com/yuin/gopher-lua v1.1.0 // indirect
 	github.com/zclconf/go-cty v1.14.0 // indirect
-	go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho v0.44.0 // indirect
-	go.opentelemetry.io/otel v1.18.0 // indirect
-	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.18.0 // indirect
-	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.18.0 // indirect
 	go.opentelemetry.io/otel/metric v1.18.0 // indirect
-	go.opentelemetry.io/otel/sdk v1.18.0 // indirect
-	go.opentelemetry.io/otel/trace v1.18.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.0.0 // indirect
 	golang.org/x/exp v0.0.0-20230905200255-921286631fa9 // indirect
 	golang.org/x/sync v0.3.0 // indirect
@@ -128,7 +129,6 @@ require (
 	gorm.io/driver/postgres v1.5.2 // indirect
 	gorm.io/driver/sqlserver v1.5.1 // indirect
 	gorm.io/plugin/dbresolver v1.4.2 // indirect
-	gorm.io/plugin/opentelemetry v0.1.4 // indirect
 	k8s.io/api v0.28.0 // indirect
 	k8s.io/apiextensions-apiserver v0.27.4 // indirect
 	k8s.io/component-base v0.27.4 // indirect
@@ -223,7 +223,7 @@ require (
 	google.golang.org/api v0.143.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
 	google.golang.org/genproto v0.0.0-20230920204549-e6e6cdab5c13 // indirect
-	google.golang.org/grpc v1.58.2 // indirect
+	google.golang.org/grpc v1.58.2
 	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
