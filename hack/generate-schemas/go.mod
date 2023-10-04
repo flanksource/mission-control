@@ -31,7 +31,7 @@ require (
 	github.com/flanksource/gomplate/v3 v3.20.13 // indirect
 	github.com/flanksource/is-healthy v0.0.0-20230713150444-ad2a5ef4bb37 // indirect
 	github.com/flanksource/mapstructure v1.6.0 // indirect
-	github.com/flanksource/postq v0.1.1 // indirect
+	github.com/flanksource/postq v0.1.2 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/go-logr/logr v1.2.4 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
