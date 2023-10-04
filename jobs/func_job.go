@@ -37,8 +37,7 @@ func (t funcJob) Run() {
 	}
 
 	if err := t.fn(ctx); err != nil {
-		logger.Errorf("%s: %v", t.name, err)
-		span.RecordError(err)
+		ctx.Errorf("%s: %v", t.name, err)
 	}
 }
 
