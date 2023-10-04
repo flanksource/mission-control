@@ -27,19 +27,19 @@ func WriteError(c echo.Context, err error) error {
 	return c.JSON(ErrorStatusCode(code), &HTTPError{Error: message})
 }
 
-// lookup of application error codes to HTTP status codes.
-var codes = map[string]int{
-	ECONFLICT:       http.StatusConflict,
-	EINVALID:        http.StatusBadRequest,
-	ENOTFOUND:       http.StatusNotFound,
-	EFORBIDDEN:      http.StatusForbidden,
-	ENOTIMPLEMENTED: http.StatusNotImplemented,
-	EUNAUTHORIZED:   http.StatusUnauthorized,
-	EINTERNAL:       http.StatusInternalServerError,
-}
-
 // ErrorStatusCode returns the associated HTTP status code for an application error code.
 func ErrorStatusCode(code string) int {
+	// lookup of application error codes to HTTP status codes.
+	var codes = map[string]int{
+		ECONFLICT:       http.StatusConflict,
+		EINVALID:        http.StatusBadRequest,
+		ENOTFOUND:       http.StatusNotFound,
+		EFORBIDDEN:      http.StatusForbidden,
+		ENOTIMPLEMENTED: http.StatusNotImplemented,
+		EUNAUTHORIZED:   http.StatusUnauthorized,
+		EINTERNAL:       http.StatusInternalServerError,
+	}
+
 	if v, ok := codes[code]; ok {
 		return v
 	}
