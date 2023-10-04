@@ -11,6 +11,7 @@ import (
 	cutils "github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty/schema/openapi"
 	"github.com/flanksource/kopper"
+	"github.com/flanksource/postq/pg"
 	"github.com/labstack/echo-contrib/echoprometheus"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -180,7 +181,6 @@ func createHTTPServer(ctx api.Context) *echo.Echo {
 	upstreamGroup.GET("/status/:agent_name", upstream.Status)
 	upstreamGroup.GET("/canary/pull/:agent_name", upstream.PullCanaries)
 	upstreamGroup.GET("/scrapeconfig/pull/:agent_name", upstream.PullScrapeConfigs)
-	upstreamGroup.GET("/scrapeconfig/status/:agent_name", upstream.LastPushedConfigResults)
 
 	playbook.RegisterRoutes(e, "playbook")
 	e.POST("/agent/generate", agent.GenerateAgent, rbac.Authorization(rbac.ObjectAgentCreate, rbac.ActionWrite))
@@ -271,13 +271,13 @@ var Serve = &cobra.Command{
 
 		go jobs.Start(api.DefaultContext)
 
-		events.StartConsumers(api.DefaultContext, events.Config{
-			UpstreamPush: api.UpstreamConf,
-		})
+		events.StartConsumers(api.DefaultContext, api.UpstreamConf)
 
 		go tableUpdatesHandler(api.DefaultContext)
 
-		go playbook.StartPlaybookRunConsumer(api.DefaultContext)
+		go func() {
+			logs.IfError(playbook.StartPlaybookRunConsumer(api.DefaultContext), "error starting playbook run consumer")
+		}()
 
 		go playbook.ListenPlaybookPGNotify(api.DefaultContext)
 
@@ -357,7 +357,7 @@ func ServerCache(next echo.HandlerFunc) echo.HandlerFunc {
 
 // tableUpdatesHandler handles all "table_activity" pg notifications.
 func tableUpdatesHandler(ctx api.Context) {
-	notifyRouter := events.NewPgNotifyRouter()
+	notifyRouter := pg.NewNotifyRouter()
 	go notifyRouter.Run(ctx, "table_activity")
 
 	notificationUpdateCh := notifyRouter.RegisterRoutes("notifications")

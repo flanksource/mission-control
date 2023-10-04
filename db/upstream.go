@@ -54,7 +54,7 @@ func InsertUpstreamMsg(ctx api.Context, req *upstream.PushData) error {
 	// components are inserted one by one, instead of in a batch, because of the foreign key constraint with itself.
 	for _, c := range req.Components {
 		if err := ctx.DB().Clauses(clause.OnConflict{UpdateAll: true}).Create(&c).Error; err != nil {
-			logger.Errorf("error upserting component (id=%s): %w", c.ID, err)
+			logger.Errorf("error upserting component (id=%s): %v", c.ID, err)
 		}
 	}
 
@@ -74,7 +74,7 @@ func InsertUpstreamMsg(ctx api.Context, req *upstream.PushData) error {
 	// config items are inserted one by one, instead of in a batch, because of the foreign key constraint with itself.
 	for _, ci := range req.ConfigItems {
 		if err := ctx.DB().Clauses(clause.OnConflict{UpdateAll: true}).Create(&ci).Error; err != nil {
-			logger.Errorf("error upserting config item (id=%s): %w", ci.ID, err)
+			logger.Errorf("error upserting config item (id=%s): %v", ci.ID, err)
 		}
 	}
 
@@ -112,7 +112,7 @@ func InsertUpstreamMsg(ctx api.Context, req *upstream.PushData) error {
 
 	if len(req.CheckStatuses) > 0 {
 		cols := []clause.Column{{Name: "check_id"}, {Name: "time"}}
-		if err := ctx.DB().Clauses(clause.OnConflict{UpdateAll: true, Columns: cols}).Create(req.CheckStatuses).Error; err != nil {
+		if err := ctx.DB().Clauses(clause.OnConflict{UpdateAll: true, Columns: cols}).CreateInBatches(req.CheckStatuses, 1000).Error; err != nil {
 			return fmt.Errorf("error upserting check_statuses: %w", err)
 		}
 	}

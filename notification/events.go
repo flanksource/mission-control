@@ -9,6 +9,7 @@ import (
 	"github.com/flanksource/commons/template"
 	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/postq"
 	"github.com/google/uuid"
 
 	"github.com/flanksource/incident-commander/api"
@@ -219,7 +220,7 @@ Hypothesis: {{.hypothesis.title}}
 	return title, body
 }
 
-func CreateNotificationSendPayloads(ctx api.Context, event api.Event, n *NotificationWithSpec, celEnv map[string]any) ([]NotificationEventPayload, error) {
+func CreateNotificationSendPayloads(ctx api.Context, event postq.Event, n *NotificationWithSpec, celEnv map[string]any) ([]NotificationEventPayload, error) {
 	var payloads []NotificationEventPayload
 
 	resourceID, err := uuid.Parse(event.Properties["id"])

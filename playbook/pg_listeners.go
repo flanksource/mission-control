@@ -1,8 +1,8 @@
 package playbook
 
 import (
-	"github.com/flanksource/duty/duty/pg"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/postq/pg"
 )
 
 func ListenPlaybookPGNotify(ctx api.Context) {

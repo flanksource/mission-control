@@ -3,6 +3,7 @@ package api
 import (
 	gocontext "context"
 	"fmt"
+	"time"
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty"
@@ -41,6 +42,8 @@ type Context interface {
 	WithDB(db *gorm.DB) Context
 	WithEchoContext(ctx EchoContext) Context
 	WithContext(ctx gocontext.Context) Context
+	WithTimeout(timeout time.Duration) (Context, func())
+
 	WithUser(user *ContextUser) Context
 
 	User() *ContextUser
@@ -98,6 +101,12 @@ func (c context) WithEchoContext(ctx EchoContext) Context {
 func (c context) WithContext(ctx gocontext.Context) Context {
 	c.Context = ctx
 	return &c
+}
+
+func (c context) WithTimeout(timeout time.Duration) (Context, func()) {
+	ctx, cancel := gocontext.WithTimeout(c.Context, timeout)
+	c.Context = ctx
+	return &c, cancel
 }
 
 func (c context) StartTrace(tracerName, spanName string) (Context, trace.Span) {

@@ -91,7 +91,7 @@ func FindPlaybooksForCheck(ctx api.Context, configType string, tags map[string]s
 		joinArgs = append(joinArgs, configType)
 	}
 
-	query := ctx.DB().Debug().
+	query := ctx.DB().
 		Select("DISTINCT playbooks.*").
 		Joins(joinQuery, joinArgs...)
 

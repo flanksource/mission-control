@@ -8,7 +8,6 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/responder"
 	"github.com/flanksource/incident-commander/rules"
-	"github.com/flanksource/incident-commander/upstream"
 	"github.com/robfig/cron/v3"
 )
 
@@ -20,7 +19,8 @@ const (
 	CleanupJobHistoryTableSchedule         = "@every 24h"
 	CleanupEventQueueTableSchedule         = "@every 24h"
 	CleanupNotificationSendHistorySchedule = "@every 24h"
-	PushAgentReconcileSchedule             = "@every 30m"
+	PushAgentReconcileSchedule             = "@every 8h"
+	PushCheckStatusesSchedule              = "@every 30s"
 )
 
 var FuncScheduler = cron.New()
@@ -62,10 +62,17 @@ func Start(ctx api.Context) {
 	}
 
 	if api.UpstreamConf.Valid() {
-		if err := newFuncJob(upstream.SyncWithUpstream, PushAgentReconcileSchedule).
+		if err := newFuncJob(SyncWithUpstream, PushAgentReconcileSchedule).
 			setName("UpstreamReconcile").runOnStart().setTimeout(time.Minute * 10).
 			addToScheduler(FuncScheduler); err != nil {
 			logger.Errorf("Failed to schedule push reconcile job: %v", err)
+		}
+
+		checkstatusJob := &checkstatusSyncJob{}
+		checkstatusJob.Run()
+
+		if _, err := FuncScheduler.AddJob(PushCheckStatusesSchedule, checkstatusJob); err != nil {
+			logger.Errorf("Failed to schedule check status sync job: %v", err)
 		}
 	}
 
