@@ -7,7 +7,7 @@ import (
 func NewCheckConsumerSync() postq.SyncEventConsumer {
 	return postq.SyncEventConsumer{
 		WatchEvents: []string{EventCheckPassed, EventCheckFailed},
-		Consumers:   []postq.SyncEventHandlerFunc{SyncAdapter(addNotificationEvent), SyncAdapter(schedulePlaybookRun)},
+		Consumers:   postq.SyncHandlers(addNotificationEvent, schedulePlaybookRun),
 		ConsumerOption: &postq.ConsumerOption{
 			ErrorHandler: defaultLoggerErrorHandler,
 		},

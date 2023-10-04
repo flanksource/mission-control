@@ -13,7 +13,7 @@ func NewComponentConsumerSync() postq.SyncEventConsumer {
 			EventComponentStatusUnhealthy,
 			EventComponentStatusWarning,
 		},
-		Consumers: []postq.SyncEventHandlerFunc{SyncAdapter(addNotificationEvent), SyncAdapter(schedulePlaybookRun)},
+		Consumers: postq.SyncHandlers(addNotificationEvent, schedulePlaybookRun),
 		ConsumerOption: &postq.ConsumerOption{
 			ErrorHandler: defaultLoggerErrorHandler,
 		},

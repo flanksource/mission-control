@@ -15,7 +15,7 @@ import (
 func NewResponderConsumerSync() postq.SyncEventConsumer {
 	return postq.SyncEventConsumer{
 		WatchEvents: []string{EventIncidentResponderAdded},
-		Consumers:   []postq.SyncEventHandlerFunc{SyncAdapter(addNotificationEvent), SyncAdapter(generateResponderAddedAsyncEvent)},
+		Consumers:   postq.SyncHandlers(addNotificationEvent, generateResponderAddedAsyncEvent),
 		ConsumerOption: &postq.ConsumerOption{
 			ErrorHandler: defaultLoggerErrorHandler,
 		},
@@ -25,7 +25,7 @@ func NewResponderConsumerSync() postq.SyncEventConsumer {
 func NewCommentConsumerSync() postq.SyncEventConsumer {
 	return postq.SyncEventConsumer{
 		WatchEvents: []string{EventIncidentCommentAdded},
-		Consumers:   []postq.SyncEventHandlerFunc{SyncAdapter(addNotificationEvent), SyncAdapter(generateCommentAddedAsyncEvent)},
+		Consumers:   postq.SyncHandlers(addNotificationEvent, generateCommentAddedAsyncEvent),
 		ConsumerOption: &postq.ConsumerOption{
 			ErrorHandler: defaultLoggerErrorHandler,
 		},
@@ -35,7 +35,7 @@ func NewCommentConsumerSync() postq.SyncEventConsumer {
 func NewResponderConsumerAsync() postq.AsyncEventConsumer {
 	return postq.AsyncEventConsumer{
 		WatchEvents: []string{EventJiraResponderAdded, EventMSPlannerResponderAdded, EventMSPlannerCommentAdded, EventJiraCommentAdded},
-		Consumer:    AsyncAdapter(processResponderEvents),
+		Consumer:    postq.AsyncHandler(processResponderEvents),
 		BatchSize:   1,
 	}
 }
