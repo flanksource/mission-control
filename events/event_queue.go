@@ -209,8 +209,7 @@ func (t *SyncEventConsumer) Handle(ctx api.Context) (int, error) {
 			}
 		}
 
-		err = fmt.Errorf("error processing sync consumer: %w", err)
-		span.RecordError(err)
+		ctx.Errorf("error processing sync consumer: %w", err)
 		ctx.SetSpanAttributes(attribute.Int("event-attempts", event.Attempts))
 	}
 
@@ -289,9 +288,7 @@ func (t *AsyncEventConsumer) Handle(ctx api.Context) (int, error) {
 		e := &failedEvents[i]
 		e.Attempts += 1
 		e.LastAttempt = utils.Ptr(time.Now())
-		err := fmt.Errorf("error processing async event (id=%s, name=%s): %s", e.ID, e.Name, e.Error)
-		logger.Errorf(err.Error())
-		span.RecordError(err)
+		ctx.Errorf("error processing async event (id=%s, name=%s): %s", e.ID, e.Name, e.Error)
 	}
 
 	if len(failedEvents) > 0 {

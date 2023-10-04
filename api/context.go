@@ -2,7 +2,9 @@ package api
 
 import (
 	gocontext "context"
+	"fmt"
 
+	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
@@ -10,8 +12,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 	"go.opentelemetry.io/otel"
-
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/trace"
 	"gorm.io/gorm"
 	"k8s.io/client-go/kubernetes"
@@ -39,9 +41,10 @@ type Context interface {
 	WithDB(db *gorm.DB) Context
 	WithEchoContext(ctx EchoContext) Context
 	WithContext(ctx gocontext.Context) Context
-
 	WithUser(user *ContextUser) Context
+
 	User() *ContextUser
+	Errorf(format string, args ...any)
 
 	StartTrace(tracerName string, spanName string) (Context, trace.Span)
 	SetSpanAttributes(attrs ...attribute.KeyValue)
@@ -119,6 +122,14 @@ func (c *context) DB() *gorm.DB {
 	}
 
 	return c.db.WithContext(c.Context)
+}
+
+func (c *context) Errorf(format string, args ...any) {
+	err := fmt.Errorf(format, args...)
+	logger.Errorf(err.Error())
+	span := trace.SpanFromContext(c)
+	span.RecordError(err)
+	span.SetStatus(codes.Error, err.Error())
 }
 
 func (c *context) Pool() *pgxpool.Pool {
