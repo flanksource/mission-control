@@ -93,7 +93,7 @@ func ServerFlags(flags *pflag.FlagSet) {
 	}
 
 	// Flags for upstream push
-	flags.StringVar(&api.UpstreamConf.Host, "upstream-host", os.Getenv("UPSTREAM_HOST"), "central incident commander instance to push configs to")
+	flags.StringVar(&api.UpstreamConf.Host, "upstream-host", os.Getenv("UPSTREAM_HOST"), "URL for Mission Control central instance")
 	flags.StringVar(&api.UpstreamConf.Username, "upstream-user", os.Getenv("UPSTREAM_USER"), "upstream username")
 	flags.StringVar(&api.UpstreamConf.Password, "upstream-password", os.Getenv("UPSTREAM_PASSWORD"), "upstream password")
 	flags.StringVar(&api.UpstreamConf.AgentName, "upstream-name", os.Getenv("UPSTREAM_NAME"), "name of the cluster")
