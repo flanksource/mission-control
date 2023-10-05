@@ -72,6 +72,7 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&mail.FromAddress, "email-from-address", "no-reply@flanksource.com", "Email address of the sender")
 	flags.StringVar(&mail.FromName, "email-from-name", "Mission Control", "Email name of the sender")
 	flags.StringVar(&db.PostgresDBAnonRole, "postgrest-anon-role", "postgrest_anon", "PostgREST anonymous role")
+	flags.StringVar(&db.PostgrestMaxRows, "postgrest-max-rows", "2000", "A hard limit to the number of rows PostgREST will fetch")
 	flags.StringVar(&otelcollectorURL, "otel-collector-url", "", "OpenTelemetry gRPC Collector URL in host:port format")
 
 	var upstreamPageSizeDefault = 500

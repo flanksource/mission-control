@@ -5,14 +5,14 @@ import (
 	"github.com/flanksource/commons/logger"
 )
 
-var PostgRESTVersion = "v10.0.0"
-var PostgRESTJWTSecret string
-var PostgresDBAnonRole string
+var (
+	PostgRESTVersion   = "v10.0.0"
+	PostgRESTJWTSecret string
+	PostgresDBAnonRole string
 
-const (
 	// A hard limit to the number of rows PostgREST will fetch from a view, table, or stored procedure.
 	// Limits payload size for accidental or malicious requests.
-	postgrestMaxRows = "2000"
+	PostgrestMaxRows = "2000"
 )
 
 func GoOffline() error {
@@ -27,7 +27,7 @@ func getBinary(port string) deps.BinaryFunc {
 		"PGRST_DB_ANON_ROLE":             PostgresDBAnonRole,
 		"PGRST_OPENAPI_SERVER_PROXY_URI": HttpEndpoint,
 		"PGRST_LOG_LEVEL":                LogLevel,
-		"PGRST_DB_MAX_ROWS":              postgrestMaxRows,
+		"PGRST_DB_MAX_ROWS":              PostgrestMaxRows,
 		"PGRST_JWT_SECRET":               PostgRESTJWTSecret,
 	})
 }
