@@ -13,7 +13,7 @@ require (
 	github.com/fergusstrange/embedded-postgres v1.23.0
 	github.com/flanksource/commons v1.12.0
 	github.com/flanksource/duty v1.0.191
-	github.com/flanksource/gomplate/v3 v3.20.13
+	github.com/flanksource/gomplate/v3 v3.20.15
 	github.com/flanksource/kopper v1.0.6
 	github.com/flanksource/postq v0.1.2
 	github.com/gomarkdown/markdown v0.0.0-20230716120725-531d2d74bc12
@@ -35,7 +35,7 @@ require (
 	github.com/spf13/pflag v1.0.5
 	gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df
 	gorm.io/gorm v1.25.4
-	k8s.io/apimachinery v0.28.0
+	k8s.io/apimachinery v0.28.2
 	k8s.io/client-go v0.28.0
 	sigs.k8s.io/controller-runtime v0.15.0
 )
@@ -67,7 +67,7 @@ require (
 	github.com/evanphx/json-patch v5.6.0+incompatible // indirect
 	github.com/evanphx/json-patch/v5 v5.6.0 // indirect
 	github.com/fatih/color v1.15.0 // indirect
-	github.com/flanksource/is-healthy v0.0.0-20230713150444-ad2a5ef4bb37 // indirect
+	github.com/flanksource/is-healthy v0.0.0-20231003215854-76c51e3a3ff7 // indirect
 	github.com/flanksource/mapstructure v1.6.0 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/glebarez/go-sqlite v1.21.2 // indirect
@@ -119,13 +119,13 @@ require (
 	github.com/zclconf/go-cty v1.14.0 // indirect
 	go.opentelemetry.io/otel/metric v1.18.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.0.0 // indirect
-	golang.org/x/exp v0.0.0-20230905200255-921286631fa9 // indirect
+	golang.org/x/exp v0.0.0-20231005195138-3e424a577f31 // indirect
 	golang.org/x/sync v0.3.0 // indirect
 	golang.org/x/term v0.12.0 // indirect
 	golang.org/x/tools v0.13.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.3.0 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20230920204549-e6e6cdab5c13 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20230920204549-e6e6cdab5c13 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20231002182017-d307bd883b97 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20231002182017-d307bd883b97 // indirect
 	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
 	gopkg.in/flanksource/yaml.v3 v3.2.3 // indirect
 	gopkg.in/sourcemap.v1 v1.0.5 // indirect
@@ -133,7 +133,7 @@ require (
 	gorm.io/driver/postgres v1.5.2 // indirect
 	gorm.io/driver/sqlserver v1.5.1 // indirect
 	gorm.io/plugin/dbresolver v1.4.2 // indirect
-	k8s.io/api v0.28.0 // indirect
+	k8s.io/api v0.28.2 // indirect
 	k8s.io/apiextensions-apiserver v0.27.4 // indirect
 	k8s.io/component-base v0.27.4 // indirect
 	k8s.io/klog/v2 v2.100.1 // indirect
