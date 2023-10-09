@@ -10,7 +10,10 @@ import (
 	"github.com/flanksource/incident-commander/responder"
 	"github.com/flanksource/incident-commander/rules"
 	"github.com/robfig/cron/v3"
+	"go.opentelemetry.io/otel"
 )
+
+var tracer = otel.GetTracerProvider().Tracer("jobs")
 
 const (
 	TeamComponentOwnershipSchedule         = "@every 15m"

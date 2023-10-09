@@ -30,9 +30,8 @@ func SyncWithUpstream(ctx api.Context) error {
 		_ = db.PersistJobHistory(ctx, jobHistory.End())
 	}()
 
-	reconciler := upstream.NewUpstreamReconciler(api.UpstreamConf, ReconcilePageSize)
 	for _, table := range api.TablesToReconcile {
-		if err := reconciler.SyncAfter(ctx, table, ReconcileMaxAge); err != nil {
+		if err := reconcileTable(ctx, table); err != nil {
 			jobHistory.AddError(err.Error())
 			logger.Errorf("failed to sync table %s: %v", table, err)
 		} else {
@@ -41,6 +40,16 @@ func SyncWithUpstream(ctx api.Context) error {
 	}
 
 	return nil
+}
+
+func reconcileTable(ctx api.Context, table string) error {
+	newCtx, span := tracer.Start(ctx, fmt.Sprintf("reconcile-%s", table))
+	defer span.End()
+
+	ctx = ctx.WithContext(newCtx)
+	reconciler := upstream.NewUpstreamReconciler(api.UpstreamConf, ReconcilePageSize)
+
+	return reconciler.SyncAfter(ctx, table, ReconcileMaxAge)
 }
 
 // checkstatusSyncJob pushes new check statuses to upstream.
