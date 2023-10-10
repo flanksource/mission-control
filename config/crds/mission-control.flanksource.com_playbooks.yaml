@@ -260,6 +260,128 @@ spec:
                       required:
                       - script
                       type: object
+                    http:
+                      properties:
+                        body:
+                          description: Request Body Contents
+                          type: string
+                        connection:
+                          description: Connection name e.g. connection://http/google
+                          type: string
+                        headers:
+                          description: Header fields to be used in the query
+                          items:
+                            properties:
+                              name:
+                                type: string
+                              value:
+                                type: string
+                              valueFrom:
+                                properties:
+                                  configMapKeyRef:
+                                    properties:
+                                      key:
+                                        type: string
+                                      name:
+                                        type: string
+                                    required:
+                                    - key
+                                    type: object
+                                  secretKeyRef:
+                                    properties:
+                                      key:
+                                        type: string
+                                      name:
+                                        type: string
+                                    required:
+                                    - key
+                                    type: object
+                                type: object
+                            type: object
+                          type: array
+                        maxSSLExpiry:
+                          description: Maximum number of days until the SSL Certificate
+                            expires.
+                          type: integer
+                        method:
+                          description: Method to use - defaults to GET
+                          type: string
+                        ntlm:
+                          description: NTLM when set to true will do authentication
+                            using NTLM v1 protocol
+                          type: boolean
+                        ntlmv2:
+                          description: NTLM when set to true will do authentication
+                            using NTLM v2 protocol
+                          type: boolean
+                        password:
+                          properties:
+                            name:
+                              type: string
+                            value:
+                              type: string
+                            valueFrom:
+                              properties:
+                                configMapKeyRef:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      type: string
+                                  required:
+                                  - key
+                                  type: object
+                                secretKeyRef:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      type: string
+                                  required:
+                                  - key
+                                  type: object
+                              type: object
+                          type: object
+                        templateBody:
+                          description: TemplateBody controls whether the body of the
+                            request needs to be templated
+                          type: boolean
+                        thresholdMillis:
+                          description: Maximum duration in milliseconds for the HTTP
+                            request. It will fail the check if it takes longer.
+                          type: integer
+                        url:
+                          description: Connection url, interpolated with username,password
+                          type: string
+                        username:
+                          properties:
+                            name:
+                              type: string
+                            value:
+                              type: string
+                            valueFrom:
+                              properties:
+                                configMapKeyRef:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      type: string
+                                  required:
+                                  - key
+                                  type: object
+                                secretKeyRef:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      type: string
+                                  required:
+                                  - key
+                                  type: object
+                              type: object
+                          type: object
+                      type: object
                     name:
                       type: string
                   required:

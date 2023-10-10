@@ -110,8 +110,18 @@ func executeRun(ctx api.Context, run models.PlaybookRun) error {
 
 func executeAction(ctx api.Context, run models.PlaybookRun, action v1.PlaybookAction, env actions.TemplateEnv) ([]byte, error) {
 	if action.Exec != nil {
-		e := actions.ExecAction{}
+		var e actions.ExecAction
 		res, err := e.Run(ctx, *action.Exec, env)
+		if err != nil {
+			return nil, err
+		}
+
+		return json.Marshal(res)
+	}
+
+	if action.HTTP != nil {
+		var e actions.HTTP
+		res, err := e.Run(ctx, *action.HTTP, env)
 		if err != nil {
 			return nil, err
 		}

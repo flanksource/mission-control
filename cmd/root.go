@@ -24,14 +24,14 @@ func PreRun(cmd *cobra.Command, args []string) {
 		logger.Fatalf("Failed to initialize the db: %v", err)
 	}
 
-	api.DefaultContext = api.NewContext(db.Gorm, db.Pool)
-
 	var err error
 	api.Kubernetes, err = k8s.NewClient()
 	if err != nil {
 		logger.Infof("Kubernetes client not available: %v", err)
 		api.Kubernetes = fake.NewSimpleClientset()
 	}
+
+	api.DefaultContext = api.NewContext(db.Gorm, db.Pool)
 
 	if otelcollectorURL != "" {
 		telemetry.InitTracer("mission-control", otelcollectorURL, true)

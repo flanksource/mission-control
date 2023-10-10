@@ -1,0 +1,27 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: log-component-status
+spec:
+  description: Post component name and status to webhook
+  components:
+    - type: KubernetesCluster
+  actions:
+    - name: Post a message to webhook
+      http:
+        url: https://webhook.site/9f1392a6-718a-4ef5-a8e2-bfb55b08afca
+        thresholdMillis: 5000
+        method: POST
+        body: |
+          {
+            "component": {
+              "name": "{{.component.name}}",
+              "status": "{{.component.status}}"
+            }
+          }
+        templateBody: true
+        headers:
+          - name: X-Postgres-User
+            value: admin@local
+          - name: X-Flanksource-Token
+            value: secret123

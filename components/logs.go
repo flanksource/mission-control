@@ -1,10 +1,10 @@
 package components
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/url"
-	"strings"
 
 	"github.com/flanksource/commons/http"
 
@@ -47,8 +47,7 @@ func GetLogsByComponent(componentID, start, end string) (api.ComponentLogs, erro
 		return api.ComponentLogs{}, err
 	}
 
-	client := http.NewClient(&http.Config{})
-	resp, err := client.Post(endpoint, "application/json", io.NopCloser(strings.NewReader(string(payloadBytes))))
+	resp, err := http.NewClient().R(context.Background()).Header("Content-Type", "application/json").Post(endpoint, payloadBytes)
 	if err != nil {
 		return api.ComponentLogs{}, err
 	}
