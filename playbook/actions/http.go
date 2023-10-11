@@ -83,10 +83,6 @@ func (c *HTTP) makeRequest(ctx api.Context, action v1.HTTPAction, connection *mo
 	client.NTLM(action.NTLM)
 	client.NTLMV2(action.NTLMv2)
 
-	if action.ThresholdMillis > 0 {
-		client.Timeout(time.Duration(action.ThresholdMillis) * time.Millisecond)
-	}
-
 	if connection.Username != "" || connection.Password != "" {
 		client.Auth(connection.Username, connection.Password)
 	}
@@ -107,7 +103,9 @@ func (c *HTTP) makeRequest(ctx api.Context, action v1.HTTPAction, connection *mo
 	}
 
 	if action.Body != "" {
-		req.Body(action.Body)
+		if err := req.Body(action.Body); err != nil {
+			return nil, fmt.Errorf("failed to parse body: %w", err)
+		}
 	}
 
 	response, err := req.Do(action.Method, connection.URL)

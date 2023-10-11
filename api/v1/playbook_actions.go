@@ -31,8 +31,6 @@ type SQLAction struct {
 	Connection string `yaml:"connection,omitempty" json:"connection,omitempty"`
 	// URL is the database connection url
 	URL string `yaml:"url,omitempty" json:"url,omitempty"`
-	// Database is the name of the database
-	Database string `yaml:"database" json:"database"`
 	// Query is the sql query to run
 	Query string `yaml:"query" json:"query" template:"true"`
 	// Driver is the name of the underlying database to connect to.
@@ -55,10 +53,6 @@ type Authentication struct {
 
 type HTTPAction struct {
 	HTTPConnection `yaml:",inline" json:",inline"`
-	// Maximum duration in milliseconds for the HTTP request. It will fail the check if it takes longer.
-	ThresholdMillis int `yaml:"thresholdMillis,omitempty" json:"thresholdMillis,omitempty"`
-	// Maximum number of days until the SSL Certificate expires.
-	MaxSSLExpiry int `yaml:"maxSSLExpiry,omitempty" json:"maxSSLExpiry,omitempty"`
 	// Method to use - defaults to GET
 	Method string `yaml:"method,omitempty" json:"method,omitempty"`
 	// NTLM when set to true will do authentication using NTLM v1 protocol

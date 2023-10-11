@@ -15,7 +15,7 @@ spec:
               command: ['/bin/sh']
               args:
                 - -c
-                - 'apt-get update -y && apt-get install -y iputils-ping && ping -c 2 adityathebe.com'
+                - 'apt-get update -y && apt-get install -y iputils-ping && ping -c 2 postgres.default.svc.cluster.local'
               resources:
                 limits:
                   memory: 128Mi
