@@ -117,11 +117,3 @@ func (c *HTTP) makeRequest(ctx api.Context, action v1.HTTPAction, connection *mo
 
 	return response, nil
 }
-
-func truncate(text string, max int) string {
-	length := len(text)
-	if length <= max {
-		return text
-	}
-	return text[0:max]
-}
