@@ -129,5 +129,15 @@ func executeAction(ctx api.Context, run models.PlaybookRun, action v1.PlaybookAc
 		return json.Marshal(res)
 	}
 
+	if action.SQL != nil {
+		var e actions.SQL
+		res, err := e.Run(ctx, *action.SQL, env)
+		if err != nil {
+			return nil, err
+		}
+
+		return json.Marshal(res)
+	}
+
 	return nil, nil
 }

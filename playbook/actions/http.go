@@ -13,14 +13,14 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 )
 
-type HTTP struct {
-}
-
 type HTTPResult struct {
 	Code    string
 	Headers netHTTP.Header
 	Body    string
 	SslAge  *time.Duration
+}
+
+type HTTP struct {
 }
 
 func (c *HTTP) Run(ctx api.Context, action v1.HTTPAction, env TemplateEnv) (*HTTPResult, error) {

@@ -384,6 +384,22 @@ spec:
                       type: object
                     name:
                       type: string
+                    sql:
+                      properties:
+                        connection:
+                          type: string
+                        database:
+                          type: string
+                        driver:
+                          type: string
+                        query:
+                          type: string
+                      required:
+                      - connection
+                      - database
+                      - driver
+                      - query
+                      type: object
                   required:
                   - name
                   type: object

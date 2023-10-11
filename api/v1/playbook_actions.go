@@ -10,6 +10,20 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
+type SQLAction struct {
+	// Connection identifier e.g. connection://Postgres/flanksource
+	Connection string `yaml:"connection,omitempty" json:"connection,omitempty"`
+	// URL is the database connection url
+	URL string `yaml:"url,omitempty" json:"url,omitempty"`
+	// Database is the name of the database
+	Database string `yaml:"database" json:"database"`
+	// Query is the sql query to run
+	Query string `yaml:"query" json:"query" template:"true"`
+	// Driver is the name of the underlying database to connect to.
+	// Example: postgres, mysql, ...
+	Driver string `yaml:"driver" json:"driver"`
+}
+
 type HTTPConnection struct {
 	// Connection name e.g. connection://http/google
 	Connection string `yaml:"connection,omitempty" json:"connection,omitempty"`
@@ -173,4 +187,5 @@ type PlaybookAction struct {
 	Name string      `yaml:"name" json:"name"`
 	Exec *ExecAction `json:"exec,omitempty" yaml:"exec,omitempty"`
 	HTTP *HTTPAction `json:"http,omitempty" yaml:"http,omitempty"`
+	SQL  *SQLAction  `json:"sql,omitempty" yaml:"sql,omitempty"`
 }
