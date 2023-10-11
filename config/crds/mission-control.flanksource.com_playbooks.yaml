@@ -384,18 +384,42 @@ spec:
                       type: object
                     name:
                       type: string
+                    pod:
+                      properties:
+                        name:
+                          description: Name is name of the pod that'll be created
+                          type: string
+                        spec:
+                          description: Spec is the container spec
+                          type: object
+                          x-kubernetes-preserve-unknown-fields: true
+                        timeout:
+                          description: Timeout in minutes to wait for specified container
+                            to finish its job. Defaults to 5 minutes
+                          type: integer
+                      required:
+                      - name
+                      - spec
+                      type: object
                     sql:
                       properties:
                         connection:
+                          description: Connection identifier e.g. connection://Postgres/flanksource
                           type: string
                         database:
+                          description: Database is the name of the database
                           type: string
                         driver:
+                          description: 'Driver is the name of the underlying database
+                            to connect to. Example: postgres, mysql, ...'
                           type: string
                         query:
+                          description: Query is the sql query to run
+                          type: string
+                        url:
+                          description: URL is the database connection url
                           type: string
                       required:
-                      - connection
                       - database
                       - driver
                       - query

@@ -2,6 +2,7 @@ package v1
 
 import (
 	gocontext "context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/flanksource/duty"
@@ -9,6 +10,21 @@ import (
 	"github.com/flanksource/duty/types"
 	"k8s.io/client-go/kubernetes"
 )
+
+type PodAction struct {
+	// Name is name of the pod that'll be created
+	Name string `yaml:"name" json:"name"`
+	// MaxLength is the maximum length of the logs to show
+	//  Default: 3000 characters
+	MaxLength int `yaml:"maxLength,omitempty" json:"maxLength,omitempty"`
+	// Timeout in minutes to wait for specified container to finish its job. Defaults to 5 minutes
+	Timeout int `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+	// +kubebuilder:validation:Schemaless
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Type=object
+	// Spec is the container spec
+	Spec json.RawMessage `yaml:"spec" json:"spec"`
+}
 
 type SQLAction struct {
 	// Connection identifier e.g. connection://Postgres/flanksource
@@ -188,4 +204,5 @@ type PlaybookAction struct {
 	Exec *ExecAction `json:"exec,omitempty" yaml:"exec,omitempty"`
 	HTTP *HTTPAction `json:"http,omitempty" yaml:"http,omitempty"`
 	SQL  *SQLAction  `json:"sql,omitempty" yaml:"sql,omitempty"`
+	Pod  *PodAction  `json:"pod,omitempty" yaml:"pod,omitempty"`
 }

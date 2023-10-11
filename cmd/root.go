@@ -31,6 +31,11 @@ func PreRun(cmd *cobra.Command, args []string) {
 		api.Kubernetes = fake.NewSimpleClientset()
 	}
 
+	api.KommonsClient, _, err = k8s.NewKommonsClient()
+	if err != nil {
+		logger.Warnf("Failed to get kubernetes client: %v", err)
+	}
+
 	api.DefaultContext = api.NewContext(db.Gorm, db.Pool)
 
 	if otelcollectorURL != "" {
