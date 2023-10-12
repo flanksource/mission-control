@@ -12,8 +12,7 @@ require (
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.24.0
 	github.com/flanksource/commons v1.14.1
-	github.com/flanksource/duty v1.0.191
-	github.com/flanksource/gomplate/v3 v3.20.14
+	github.com/flanksource/gomplate/v3 v3.20.16
 	github.com/flanksource/kopper v1.0.6
 	github.com/flanksource/postq v0.1.2
 	github.com/gomarkdown/markdown v0.0.0-20230922112808-5421fefb8386
@@ -34,13 +33,14 @@ require (
 	github.com/spf13/cobra v1.7.0
 	github.com/spf13/pflag v1.0.5
 	gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df
-	gorm.io/gorm v1.25.4
-	k8s.io/apimachinery v0.28.0
-	k8s.io/client-go v0.28.0
+	gorm.io/gorm v1.25.5
+	k8s.io/apimachinery v0.28.2
+	k8s.io/client-go v0.28.2
 	sigs.k8s.io/controller-runtime v0.15.0
 )
 
 require (
+	github.com/flanksource/duty v1.0.194
 	go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho v0.44.0
 	go.opentelemetry.io/otel v1.19.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.18.0
@@ -48,7 +48,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.19.0
 	go.opentelemetry.io/otel/trace v1.19.0
 	gorm.io/plugin/opentelemetry v0.1.4
-	k8s.io/api v0.28.0
+	k8s.io/api v0.28.2
 )
 
 require (
@@ -91,7 +91,7 @@ require (
 	github.com/gosimple/unidecode v1.0.1 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.16.0 // indirect
 	github.com/hairyhenderson/yaml v0.0.0-20220618171115-2d35fca545ce // indirect
-	github.com/hashicorp/hcl/v2 v2.18.0 // indirect
+	github.com/hashicorp/hcl/v2 v2.18.1 // indirect
 	github.com/itchyny/gojq v0.12.13 // indirect
 	github.com/itchyny/timefmt-go v0.1.5 // indirect
 	github.com/jackc/puddle/v2 v2.2.1 // indirect
@@ -121,7 +121,7 @@ require (
 	github.com/vadimi/go-ntlm v1.2.1 // indirect
 	github.com/xi2/xz v0.0.0-20171230120015-48954b6210f8 // indirect
 	github.com/yuin/gopher-lua v1.1.0 // indirect
-	github.com/zclconf/go-cty v1.14.0 // indirect
+	github.com/zclconf/go-cty v1.14.1 // indirect
 	go.opentelemetry.io/otel/metric v1.19.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.0.0 // indirect
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d // indirect
@@ -135,7 +135,7 @@ require (
 	gopkg.in/flanksource/yaml.v3 v3.2.3 // indirect
 	gopkg.in/sourcemap.v1 v1.0.5 // indirect
 	gorm.io/driver/mysql v1.5.1 // indirect
-	gorm.io/driver/postgres v1.5.2 // indirect
+	gorm.io/driver/postgres v1.5.3 // indirect
 	gorm.io/driver/sqlserver v1.5.1 // indirect
 	gorm.io/plugin/dbresolver v1.4.2 // indirect
 	k8s.io/apiextensions-apiserver v0.28.0 // indirect
