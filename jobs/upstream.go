@@ -43,7 +43,7 @@ func SyncWithUpstream(ctx api.Context) error {
 }
 
 func reconcileTable(ctx api.Context, table string) error {
-	newCtx, span := tracer.Start(ctx, fmt.Sprintf("reconcile-%s", table))
+	newCtx, span := ctx.StartTrace("job-tracer", fmt.Sprintf("reconcile-%s", table))
 	defer span.End()
 
 	ctx = ctx.WithContext(newCtx)
@@ -52,15 +52,8 @@ func reconcileTable(ctx api.Context, table string) error {
 	return reconciler.SyncAfter(ctx, table, ReconcileMaxAge)
 }
 
-// checkstatusSyncJob pushes new check statuses to upstream.
-type checkstatusSyncJob struct {
-	upstreamClient *upstream.UpstreamClient
-	// created timestamp of the last check status that was pushed to upstream.
-	lastCreated time.Time
-}
-
-func (t *checkstatusSyncJob) Run() {
-	ctx := api.DefaultContext
+func SyncCheckStatuses(ctx api.Context) error {
+	logger.Debugf("running check statuses sync job")
 
 	jobHistory := models.NewJobHistory("SyncCheckStatusesWithUpstream", api.UpstreamConf.Host, "")
 	_ = db.PersistJobHistory(ctx, jobHistory.Start())
@@ -68,43 +61,34 @@ func (t *checkstatusSyncJob) Run() {
 		_ = db.PersistJobHistory(ctx, jobHistory.End())
 	}()
 
-	if err := t.run(ctx); err != nil {
+	if err := syncCheckStatuses(ctx); err != nil {
 		logger.Errorf("failed to run checkstatus sync job: %v", err)
 		jobHistory.AddError(err.Error())
-		return
+		return err
 	}
 
 	jobHistory.IncrSuccess()
+	return nil
 }
 
 // SyncCheckStatusesWithUpstream pushes new check statuses to upstream.
-func (t *checkstatusSyncJob) run(ctx api.Context) error {
-	logger.Tracef("running checkstatus sync job since %s", t.lastCreated.Format(time.RFC3339))
-
+func syncCheckStatuses(ctx api.Context) error {
 	var checkStatuses []models.CheckStatus
-	if t.lastCreated.IsZero() {
-		if err := ctx.DB().Select("check_statuses.*").
-			Joins("Left JOIN checks ON checks.id = check_statuses.check_id").
-			Where("checks.agent_id = ?", uuid.Nil).
-			Where("NOW() - check_statuses.created_at <= ?", ReconcileMaxAge).
-			Order("check_statuses.created_at").
-			Find(&checkStatuses).Error; err != nil {
-			return fmt.Errorf("failed to fetch checkstatuses: %w", err)
-		}
-	} else {
-		if err := ctx.DB().Select("check_statuses.*").
-			Joins("Left JOIN checks ON checks.id = check_statuses.check_id").
-			Where("checks.agent_id = ?", uuid.Nil).
-			Where("check_statuses.created_at > ?", t.lastCreated).
-			Order("check_statuses.created_at").
-			Find(&checkStatuses).Error; err != nil {
-			return fmt.Errorf("failed to fetch checkstatuses: %w", err)
-		}
+	if err := ctx.DB().Select("check_statuses.*").
+		Joins("Left JOIN checks ON checks.id = check_statuses.check_id").
+		Where("checks.agent_id = ?", uuid.Nil).
+		Where("check_statuses.is_pushed IS FALSE").
+		Find(&checkStatuses).Error; err != nil {
+		return fmt.Errorf("failed to fetch checkstatuses: %w", err)
 	}
 
 	if len(checkStatuses) == 0 {
 		return nil
 	}
+
+	logger.Debugf("Pushing %d check statuses to upstream in batches", len(checkStatuses))
+
+	client := upstream.NewUpstreamClient(api.UpstreamConf)
 
 	for i := 0; i < len(checkStatuses); i += ReconcilePageSize {
 		end := i + ReconcilePageSize
@@ -116,11 +100,17 @@ func (t *checkstatusSyncJob) run(ctx api.Context) error {
 		logger.WithValues("batch", fmt.Sprintf("%d/%d", (i/ReconcilePageSize)+1, (len(checkStatuses)/ReconcilePageSize)+1)).
 			Tracef("Pushing %d check statuses to upstream", len(batch))
 
-		if err := t.upstreamClient.Push(ctx, &upstream.PushData{AgentName: api.UpstreamConf.AgentName, CheckStatuses: batch}); err != nil {
+		if err := client.Push(ctx, &upstream.PushData{AgentName: api.UpstreamConf.AgentName, CheckStatuses: batch}); err != nil {
 			return fmt.Errorf("failed to push check statuses to upstream: %w", err)
 		}
 
-		t.lastCreated = batch[len(batch)-1].CreatedAt
+		for i := range batch {
+			batch[i].IsPushed = true
+		}
+
+		if err := ctx.DB().Save(&batch).Error; err != nil {
+			return fmt.Errorf("failed to save check statuses: %w", err)
+		}
 	}
 
 	return nil

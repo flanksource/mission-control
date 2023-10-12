@@ -5,15 +5,11 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/responder"
 	"github.com/flanksource/incident-commander/rules"
 	"github.com/robfig/cron/v3"
-	"go.opentelemetry.io/otel"
 )
-
-var tracer = otel.GetTracerProvider().Tracer("jobs")
 
 const (
 	TeamComponentOwnershipSchedule         = "@every 15m"
@@ -72,12 +68,10 @@ func Start(ctx api.Context) {
 			logger.Errorf("Failed to schedule push reconcile job: %v", err)
 		}
 
-		// TODO: This check status job needs to be moved to use a job runner struct like newFuncJob which works with struct
-		checkstatusJob := &checkstatusSyncJob{upstreamClient: upstream.NewUpstreamClient(api.UpstreamConf)}
-		checkstatusJob.Run()
-
-		if _, err := FuncScheduler.AddJob(PushCheckStatusesSchedule, checkstatusJob); err != nil {
-			logger.Errorf("Failed to schedule check status sync job: %v", err)
+		if err := newFuncJob(SyncCheckStatuses, PushCheckStatusesSchedule).
+			setName("SyncCheckStatuses").runOnStart().
+			addToScheduler(FuncScheduler); err != nil {
+			logger.Errorf("Failed to schedule check statusese sync job: %v", err)
 		}
 	}
 
