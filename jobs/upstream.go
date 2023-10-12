@@ -96,6 +96,8 @@ func (t *checkstatusSyncJob) run(ctx api.Context) error {
 		return nil
 	}
 
+	upstreamClient := upstream.NewUpstreamClient(api.UpstreamConf)
+
 	for i := 0; i < len(checkStatuses); i += ReconcilePageSize {
 		end := i + ReconcilePageSize
 		if end > len(checkStatuses) {
@@ -106,7 +108,7 @@ func (t *checkstatusSyncJob) run(ctx api.Context) error {
 		logger.WithValues("batch", fmt.Sprintf("%d/%d", (i/ReconcilePageSize)+1, (len(checkStatuses)/ReconcilePageSize)+1)).
 			Tracef("Pushing %d check statuses to upstream", len(batch))
 
-		if err := upstream.Push(ctx, api.UpstreamConf, &upstream.PushData{AgentName: api.UpstreamConf.AgentName, CheckStatuses: batch}); err != nil {
+		if err := upstreamClient.Push(ctx, &upstream.PushData{AgentName: api.UpstreamConf.AgentName, CheckStatuses: batch}); err != nil {
 			return fmt.Errorf("failed to push check statuses to upstream: %w", err)
 		}
 

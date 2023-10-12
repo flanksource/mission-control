@@ -4,6 +4,7 @@ import (
 	gocontext "context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/models"
@@ -194,9 +195,35 @@ func (t *AWSConnection) Populate(ctx connectionContext, k8s kubernetes.Interface
 }
 
 type PlaybookAction struct {
-	Name string      `yaml:"name" json:"name"`
-	Exec *ExecAction `json:"exec,omitempty" yaml:"exec,omitempty"`
-	HTTP *HTTPAction `json:"http,omitempty" yaml:"http,omitempty"`
-	SQL  *SQLAction  `json:"sql,omitempty" yaml:"sql,omitempty"`
-	Pod  *PodAction  `json:"pod,omitempty" yaml:"pod,omitempty"`
+	// delay is the parsed Delay
+	delay *time.Duration `json:"-" yaml:"-"`
+
+	// Name of the action
+	Name string `yaml:"name" json:"name"`
+
+	// Delay is the duration to delay the execution of this action.
+	// The least supported value as of now is 1m.
+	Delay string      `yaml:"delay,omitempty" json:"delay,omitempty"`
+	Exec  *ExecAction `json:"exec,omitempty" yaml:"exec,omitempty"`
+	HTTP  *HTTPAction `json:"http,omitempty" yaml:"http,omitempty"`
+	SQL   *SQLAction  `json:"sql,omitempty" yaml:"sql,omitempty"`
+	Pod   *PodAction  `json:"pod,omitempty" yaml:"pod,omitempty"`
+}
+
+func (p *PlaybookAction) DelayDuration() (time.Duration, error) {
+	if p.delay != nil {
+		return *p.delay, nil
+	}
+
+	if p.Delay == "" {
+		return 0, nil
+	}
+
+	d, err := time.ParseDuration(p.Delay)
+	if err != nil {
+		return 0, err
+	}
+
+	p.delay = &d
+	return d, nil
 }
