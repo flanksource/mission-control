@@ -68,11 +68,10 @@ func Start(ctx api.Context) {
 			logger.Errorf("Failed to schedule push reconcile job: %v", err)
 		}
 
-		checkstatusJob := &checkstatusSyncJob{}
-		checkstatusJob.Run()
-
-		if _, err := FuncScheduler.AddJob(PushCheckStatusesSchedule, checkstatusJob); err != nil {
-			logger.Errorf("Failed to schedule check status sync job: %v", err)
+		if err := newFuncJob(SyncCheckStatuses, PushCheckStatusesSchedule).
+			setName("SyncCheckStatuses").runOnStart().
+			addToScheduler(FuncScheduler); err != nil {
+			logger.Errorf("Failed to schedule check statusese sync job: %v", err)
 		}
 	}
 
