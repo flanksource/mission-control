@@ -1,67 +1,65 @@
 package k8s
 
 import (
-	"context"
-	"os"
-	"path/filepath"
+	"bytes"
+	"fmt"
+	"io"
+	"time"
 
-	"github.com/flanksource/commons/files"
-	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/kommons"
-	"github.com/pkg/errors"
-	"gopkg.in/yaml.v2"
+	"github.com/flanksource/incident-commander/api"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/fake"
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/clientcmd"
-	"k8s.io/client-go/util/homedir"
 )
 
-func NewKommonsClient() (*kommons.Client, kubernetes.Interface, error) {
-	kubeConfig := GetKubeconfig()
-	config, err := clientcmd.BuildConfigFromFlags("", kubeConfig)
-	if err != nil {
-		return nil, fake.NewSimpleClientset(), errors.Wrap(err, "Failed to generate rest config")
-	}
-	Client := kommons.NewClient(config, logger.StandardLogger())
-	if Client == nil {
-		return nil, fake.NewSimpleClientset(), errors.New("could not create kommons client")
-	}
+// WaitForPod waits for a pod to be in the specified phase, or returns an
+// error if the timeout is exceeded
+func WaitForPod(ctx api.Context, name string, timeout time.Duration, phases ...v1.PodPhase) error {
+	pods := ctx.Kubernetes().CoreV1().Pods(ctx.Namespace())
+	start := time.Now()
+	for {
+		pod, err := pods.Get(ctx, name, metav1.GetOptions{})
+		if start.Add(timeout).Before(time.Now()) {
+			return fmt.Errorf("timeout exceeded waiting for %s is %s, error: %v", name, pod.Status.Phase, err)
+		}
 
-	k8s, err := Client.GetClientset()
-	if err == nil {
-		return Client, k8s, nil
-	}
-	return nil, fake.NewSimpleClientset(), errors.Wrap(err, "failed to create k8s client")
-}
+		if pod == nil || pod.Status.Phase == v1.PodPending {
+			time.Sleep(5 * time.Second)
+			continue
+		}
+		if pod.Status.Phase == v1.PodFailed {
+			return nil
+		}
 
-func GetClusterName(config *rest.Config) string {
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return ""
-	}
-	kubeadmConfig, err := clientset.CoreV1().ConfigMaps("kube-system").Get(context.TODO(), "kubeadm-config", metav1.GetOptions{})
-	if err != nil {
-		return ""
-	}
-	clusterConfiguration := make(map[string]interface{})
-
-	if err := yaml.Unmarshal([]byte(kubeadmConfig.Data["ClusterConfiguration"]), &clusterConfiguration); err != nil {
-		return ""
-	}
-	return clusterConfiguration["clusterName"].(string)
-}
-
-func GetKubeconfig() string {
-	var kubeConfig string
-	if os.Getenv("KUBECONFIG") != "" {
-		kubeConfig = os.Getenv("KUBECONFIG")
-	} else if home := homedir.HomeDir(); home != "" {
-		kubeConfig = filepath.Join(home, ".kube", "config")
-		if !files.Exists(kubeConfig) {
-			kubeConfig = ""
+		for _, phase := range phases {
+			if pod.Status.Phase == phase {
+				return nil
+			}
 		}
 	}
-	return kubeConfig
+}
+
+func GetPodLogs(ctx api.Context, podName, container string) (string, error) {
+	podLogOptions := v1.PodLogOptions{}
+	if container != "" {
+		podLogOptions.Container = container
+	}
+
+	req := ctx.Kubernetes().CoreV1().Pods(ctx.Namespace()).GetLogs(podName, &podLogOptions)
+	podLogs, err := req.Stream(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer podLogs.Close()
+
+	buf := new(bytes.Buffer)
+	_, err = io.Copy(buf, podLogs)
+	if err != nil {
+		return "", err
+	}
+
+	return buf.String(), nil
+}
+
+func DeletePod(ctx api.Context, name string) error {
+	return ctx.Kubernetes().CoreV1().Pods(ctx.Namespace()).Delete(ctx, name, metav1.DeleteOptions{})
 }

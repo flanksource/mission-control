@@ -4,7 +4,6 @@ import (
 	"fmt"
 	netHTTP "net/http"
 	"net/url"
-	"time"
 
 	"github.com/flanksource/commons/http"
 	"github.com/flanksource/duty/models"
@@ -17,25 +16,16 @@ type HTTPResult struct {
 	Code    string
 	Headers netHTTP.Header
 	Body    string
-	SslAge  *time.Duration
 }
 
 type HTTP struct {
 }
 
 func (c *HTTP) Run(ctx api.Context, action v1.HTTPAction, env TemplateEnv) (*HTTPResult, error) {
-	if action.URL == "" {
-		return nil, fmt.Errorf("must specify URL")
-	}
-
 	connection, err := ctx.HydrateConnection(action.HTTPConnection.Connection)
 	if err != nil {
-		return nil, fmt.Errorf("must specify URL")
+		return nil, fmt.Errorf("failed to hydrate connection: %w", err)
 	} else if connection != nil {
-		if connection.URL == "" {
-			return nil, fmt.Errorf("no url or connection specified")
-		}
-
 		if ntlm, ok := connection.Properties["ntlm"]; ok {
 			action.NTLM = ntlm == "true"
 		} else if ntlm, ok := connection.Properties["ntlmv2"]; ok {
@@ -43,12 +33,16 @@ func (c *HTTP) Run(ctx api.Context, action v1.HTTPAction, env TemplateEnv) (*HTT
 		}
 
 		if _, err := url.Parse(connection.URL); err != nil {
-			return nil, fmt.Errorf("failed to parse url: %w", err)
+			return nil, fmt.Errorf("failed to parse url(%q): %w", connection.URL, err)
 		}
 	} else if connection == nil {
 		connection = &models.Connection{
 			URL: action.URL,
 		}
+	}
+
+	if connection.URL == "" {
+		return nil, fmt.Errorf("must specify a URL")
 	}
 
 	if action.TemplateBody {
@@ -62,15 +56,18 @@ func (c *HTTP) Run(ctx api.Context, action v1.HTTPAction, env TemplateEnv) (*HTT
 
 	resp, err := c.makeRequest(ctx, action, connection)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse url: %w", err)
+		return nil, fmt.Errorf("failed to make HTTP request: %w", err)
 	}
 
-	body, _ := resp.AsString()
+	body, err := resp.AsString()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get response body: %w", err)
+	}
+
 	result := &HTTPResult{
 		Code:    resp.Status,
 		Headers: resp.Header,
 		Body:    body,
-		SslAge:  resp.GetSSLAge(),
 	}
 
 	return result, nil
@@ -110,7 +107,7 @@ func (c *HTTP) makeRequest(ctx api.Context, action v1.HTTPAction, connection *mo
 
 	response, err := req.Do(action.Method, connection.URL)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to make HTTP request: %w", err)
 	}
 
 	return response, nil

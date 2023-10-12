@@ -9,7 +9,6 @@ import (
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
-	"github.com/flanksource/kommons"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
@@ -39,7 +38,6 @@ type Context interface {
 
 	Namespace() string
 	Kubernetes() kubernetes.Interface
-	Kommons() *kommons.Client
 
 	WithDB(db *gorm.DB) Context
 	WithEchoContext(ctx EchoContext) Context
@@ -70,7 +68,6 @@ type context struct {
 	db   *gorm.DB
 	pool *pgxpool.Pool
 
-	kommons    *kommons.Client
 	kubernetes kubernetes.Interface
 	namespace  string
 }
@@ -81,15 +78,10 @@ func NewContext(db *gorm.DB, pool *pgxpool.Pool) Context {
 		db:         db,
 		pool:       pool,
 		kubernetes: Kubernetes,
-		kommons:    KommonsClient,
 		namespace:  Namespace,
 	}
 
 	return c
-}
-
-func (c *context) Kommons() *kommons.Client {
-	return c.kommons
 }
 
 func (c *context) Kubernetes() kubernetes.Interface {

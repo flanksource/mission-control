@@ -299,10 +299,6 @@ spec:
                                 type: object
                             type: object
                           type: array
-                        maxSSLExpiry:
-                          description: Maximum number of days until the SSL Certificate
-                            expires.
-                          type: integer
                         method:
                           description: Method to use - defaults to GET
                           type: string
@@ -346,10 +342,6 @@ spec:
                           description: TemplateBody controls whether the body of the
                             request needs to be templated
                           type: boolean
-                        thresholdMillis:
-                          description: Maximum duration in milliseconds for the HTTP
-                            request. It will fail the check if it takes longer.
-                          type: integer
                         url:
                           description: Connection url, interpolated with username,password
                           type: string
@@ -386,6 +378,10 @@ spec:
                       type: string
                     pod:
                       properties:
+                        maxLength:
+                          description: 'MaxLength is the maximum length of the logs
+                            to show Default: 3000 characters'
+                          type: integer
                         name:
                           description: Name is name of the pod that'll be created
                           type: string
@@ -406,9 +402,6 @@ spec:
                         connection:
                           description: Connection identifier e.g. connection://Postgres/flanksource
                           type: string
-                        database:
-                          description: Database is the name of the database
-                          type: string
                         driver:
                           description: 'Driver is the name of the underlying database
                             to connect to. Example: postgres, mysql, ...'
@@ -420,7 +413,6 @@ spec:
                           description: URL is the database connection url
                           type: string
                       required:
-                      - database
                       - driver
                       - query
                       type: object

@@ -140,7 +140,9 @@ func executeAction(ctx api.Context, run models.PlaybookRun, action v1.PlaybookAc
 	}
 
 	if action.Pod != nil {
-		var e actions.Pod
+		e := actions.Pod{
+			PlaybookRun: run,
+		}
 		res, err := e.Run(ctx, *action.Pod, env)
 		if err != nil {
 			return nil, err

@@ -3,26 +3,22 @@ package actions
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty/models"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/util/rand"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/k8s"
 )
 
 const (
-	defaultMaxLength        = 3000
-	defaultContainerTimeout = 5 * time.Minute
+	defaultContainerTimeout = 30 * time.Minute
 
-	sidecarContainerName     = "container-waiter"
-	containerImage           = "ubuntu:jammy"
-	playbookActionSelector   = "playbooks.mission-control.flanksource.com/actions"
-	playbookActionLabelValue = "playbooks-pod-action"
+	playbookPodActionLabelPrefix = "playbooks.mission-control.flanksource.com"
 )
 
 type PodResult struct {
@@ -30,6 +26,7 @@ type PodResult struct {
 }
 
 type Pod struct {
+	PlaybookRun models.PlaybookRun
 }
 
 func (c *Pod) Run(ctx api.Context, action v1.PodAction, env TemplateEnv) (*PodResult, error) {
@@ -38,26 +35,18 @@ func (c *Pod) Run(ctx api.Context, action v1.PodAction, env TemplateEnv) (*PodRe
 		timeout = defaultContainerTimeout
 	}
 
-	if action.MaxLength <= 0 {
-		action.MaxLength = defaultMaxLength
-	}
-
-	pod, err := newPod(ctx, action)
+	pod, err := newPod(ctx, action, c.PlaybookRun)
 	if err != nil {
-		return nil, err
-	}
-
-	if err := cleanupExistingPods(ctx, fmt.Sprintf("%s=%s", playbookActionLabelValue, pod.Labels[playbookActionLabelValue])); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error creating pod struct: %w", err)
 	}
 
 	if _, err := ctx.Kubernetes().CoreV1().Pods(ctx.Namespace()).Create(ctx, pod, metav1.CreateOptions{}); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error creating pod: %w", err)
 	}
 	defer deletePod(ctx, pod)
 
-	if err := ctx.Kommons().WaitForPod(ctx.Namespace(), pod.Name, timeout, corev1.PodRunning, corev1.PodSucceeded, corev1.PodFailed); err != nil {
-		return nil, err
+	if err := k8s.WaitForPod(ctx, pod.Name, timeout, corev1.PodRunning, corev1.PodSucceeded, corev1.PodFailed); err != nil {
+		return nil, fmt.Errorf("error waiting for pod to complete: %w", err)
 	}
 
 	return &PodResult{
@@ -65,52 +54,39 @@ func (c *Pod) Run(ctx api.Context, action v1.PodAction, env TemplateEnv) (*PodRe
 	}, nil
 }
 
-func newPod(ctx api.Context, action v1.PodAction) (*corev1.Pod, error) {
+func newPod(ctx api.Context, action v1.PodAction, playbookRun models.PlaybookRun) (*corev1.Pod, error) {
 	pod := &corev1.Pod{}
+	pod.Name = fmt.Sprintf("%s-%s", action.Name, playbookRun.ID.String())
+	pod.Namespace = ctx.Namespace()
 	pod.APIVersion = corev1.SchemeGroupVersion.Version
 	pod.Labels = map[string]string{
-		playbookActionSelector: getPlaybookActionLabel(playbookActionLabelValue, action.Name, ctx.Namespace()),
+		newPodLabel("pod-action"):    "true",
+		newPodLabel("action"):        fmt.Sprintf("pod-action-%s-%s", action.Name, ctx.Namespace()),
+		newPodLabel("playbookRunID"): playbookRun.ID.String(),
+		newPodLabel("playbookID"):    playbookRun.PlaybookID.String(),
 	}
-	pod.Namespace = ctx.Namespace()
-	pod.Name = action.Name + "-" + strings.ToLower(rand.String(5))
 	if err := json.Unmarshal(action.Spec, &pod.Spec); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error unmarshalling pod spec: %w", err)
 	}
 	pod.Spec.RestartPolicy = corev1.RestartPolicyNever
 	return pod, nil
 }
 
 func deletePod(ctx api.Context, pod *corev1.Pod) {
-	if err := ctx.Kommons().DeleteByKind("Pod", pod.Namespace, pod.Name); err != nil {
+	if err := k8s.DeletePod(ctx, pod.Name); err != nil {
 		logger.Warnf("failed to delete pod %s/%s: %v", pod.Namespace, pod.Name, err)
 	}
 }
 
 func getLogs(ctx api.Context, pod *corev1.Pod, maxLength int) string {
-	message, _ := ctx.Kommons().GetPodLogs(pod.Namespace, pod.Name, pod.Spec.Containers[0].Name)
-	if len(message) > maxLength {
+	message, _ := k8s.GetPodLogs(ctx, pod.Name, pod.Spec.Containers[0].Name)
+	if maxLength > 0 {
 		message = message[len(message)-maxLength:]
 	}
 
 	return message
 }
 
-func getPlaybookActionLabel(label, name, namespace string) string {
-	return fmt.Sprintf("%v-%v-%v", label, name, namespace)
-}
-
-func cleanupExistingPods(ctx api.Context, selector string) error {
-	pods := ctx.Kubernetes().CoreV1().Pods(ctx.Namespace())
-	existingPods, err := pods.List(ctx, metav1.ListOptions{
-		LabelSelector: selector,
-	})
-	if err != nil {
-		return err
-	}
-
-	for _, junitPod := range existingPods.Items {
-		deletePod(ctx, &junitPod)
-	}
-
-	return nil
+func newPodLabel(key string) string {
+	return fmt.Sprintf("%s/%s", playbookPodActionLabelPrefix, key)
 }
