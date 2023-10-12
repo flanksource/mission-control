@@ -32,7 +32,7 @@ func PushUpstream(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error(), Message: "invalid json request"})
 	}
 
-	ctx.SetSpanAttributes(attribute.Int("msg-count", req.Count()))
+	ctx.SetSpanAttributes(attribute.Int("upstream.push.msg-count", req.Count()))
 
 	req.AgentName = strings.TrimSpace(req.AgentName)
 	if req.AgentName == "" {
@@ -72,7 +72,7 @@ func Pull(c echo.Context) error {
 	}
 
 	reqJSON, _ := json.Marshal(req)
-	ctx.SetSpanAttributes(attribute.String("paginate-request", string(reqJSON)))
+	ctx.SetSpanAttributes(attribute.String("upstream.pull.paginate-request", string(reqJSON)))
 
 	if !collections.Contains(api.TablesToReconcile, req.Table) {
 		return c.JSON(http.StatusForbidden, api.HTTPError{Error: fmt.Sprintf("table=%s is not allowed", req.Table)})
@@ -104,7 +104,7 @@ func Status(c echo.Context) error {
 	}
 
 	reqJSON, _ := json.Marshal(req)
-	ctx.SetSpanAttributes(attribute.String("paginate-request", string(reqJSON)))
+	ctx.SetSpanAttributes(attribute.String("upstream.status.paginate-request", string(reqJSON)))
 
 	if !collections.Contains(api.TablesToReconcile, req.Table) {
 		return c.JSON(http.StatusForbidden, api.HTTPError{Error: fmt.Sprintf("table=%s is not allowed", req.Table)})
@@ -146,7 +146,7 @@ func PullCanaries(c echo.Context) error {
 			return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error(), Message: "'since' param needs to be a valid RFC3339 timestamp"})
 		}
 
-		ctx.SetSpanAttributes(attribute.String("since", sinceRaw))
+		ctx.SetSpanAttributes(attribute.String("upstream.pull.canaries.since", sinceRaw))
 	}
 
 	canaries, err := db.GetCanariesOfAgent(ctx, agent.ID, since)
@@ -180,7 +180,7 @@ func PullScrapeConfigs(c echo.Context) error {
 			return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error(), Message: "'since' param needs to be a valid RFC3339Nano timestamp"})
 		}
 
-		ctx.SetSpanAttributes(attribute.String("since", sinceRaw))
+		ctx.SetSpanAttributes(attribute.String("upstream.pull.configs.since", sinceRaw))
 	}
 
 	scrapeConfigs, err := db.GetScrapeConfigsOfAgent(ctx, agent.ID, since)
