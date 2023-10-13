@@ -7,6 +7,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
+	"go.opentelemetry.io/otel/propagation"
 	"google.golang.org/grpc/credentials"
 
 	"github.com/flanksource/commons/logger"
@@ -50,5 +51,9 @@ func InitTracer(serviceName, collectorURL string, insecure bool) func(context.Co
 			sdktrace.WithResource(resources),
 		),
 	)
+
+	// Register the TraceContext propagator globally.
+	otel.SetTextMapPropagator(propagation.TraceContext{})
+
 	return exporter.Shutdown
 }
