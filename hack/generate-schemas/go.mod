@@ -27,8 +27,13 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
+<<<<<<< HEAD
 	github.com/flanksource/duty v1.0.192 // indirect
 	github.com/flanksource/gomplate/v3 v3.20.16 // indirect
+=======
+	github.com/flanksource/duty v1.0.193 // indirect
+	github.com/flanksource/gomplate/v3 v3.20.14 // indirect
+>>>>>>> 8b0c7da (chore: bump duty & commons)
 	github.com/flanksource/is-healthy v0.0.0-20231003215854-76c51e3a3ff7 // indirect
 	github.com/flanksource/mapstructure v1.6.0 // indirect
 	github.com/flanksource/postq v0.1.2 // indirect
