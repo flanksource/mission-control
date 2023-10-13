@@ -45,6 +45,7 @@ func SyncWithUpstream(ctx api.Context) error {
 
 // checkstatusSyncJob pushes new check statuses to upstream.
 type checkstatusSyncJob struct {
+	upstreamClient *upstream.UpstreamClient
 	// created timestamp of the last check status that was pushed to upstream.
 	lastCreated time.Time
 }
@@ -106,7 +107,7 @@ func (t *checkstatusSyncJob) run(ctx api.Context) error {
 		logger.WithValues("batch", fmt.Sprintf("%d/%d", (i/ReconcilePageSize)+1, (len(checkStatuses)/ReconcilePageSize)+1)).
 			Tracef("Pushing %d check statuses to upstream", len(batch))
 
-		if err := upstream.Push(ctx, api.UpstreamConf, &upstream.PushData{AgentName: api.UpstreamConf.AgentName, CheckStatuses: batch}); err != nil {
+		if err := t.upstreamClient.Push(ctx, &upstream.PushData{AgentName: api.UpstreamConf.AgentName, CheckStatuses: batch}); err != nil {
 			return fmt.Errorf("failed to push check statuses to upstream: %w", err)
 		}
 

@@ -35,7 +35,7 @@ func PreRun(cmd *cobra.Command, args []string) {
 	api.DefaultContext = api.NewContext(db.Gorm, db.Pool)
 
 	if otelcollectorURL != "" {
-		telemetry.InitTracer("mission-control", otelcollectorURL, true)
+		telemetry.InitTracer(otelServiceName, otelcollectorURL, true)
 	}
 }
 
@@ -51,7 +51,12 @@ var httpPort, metricsPort, devGuiPort int
 var configDb, authMode, kratosAPI, kratosAdminAPI, postgrestURI string
 var clerkJWKSURL, clerkOrgID string
 var disablePostgrest bool
-var otelcollectorURL string
+
+// Telemetry flag vars
+var (
+	otelcollectorURL string
+	otelServiceName  string
+)
 
 func ServerFlags(flags *pflag.FlagSet) {
 	flags.IntVar(&httpPort, "httpPort", 8080, "Port to expose a health dashboard")
@@ -75,6 +80,7 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&db.PostgresDBAnonRole, "postgrest-anon-role", "postgrest_anon", "PostgREST anonymous role")
 	flags.StringVar(&db.PostgrestMaxRows, "postgrest-max-rows", "2000", "A hard limit to the number of rows PostgREST will fetch")
 	flags.StringVar(&otelcollectorURL, "otel-collector-url", "", "OpenTelemetry gRPC Collector URL in host:port format")
+	flags.StringVar(&otelServiceName, "otel-service-name", "mission-control", "OpenTelemetry service name for the resource")
 
 	var upstreamPageSizeDefault = 500
 	if val, exists := os.LookupEnv("UPSTREAM_PAGE_SIZE"); exists {
