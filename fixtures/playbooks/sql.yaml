@@ -1,0 +1,28 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: count-event-queue
+spec:
+  'on':
+    component:
+      - event: error
+        filter: component.cost_per_minute > 0.50
+        labels:
+          type: database
+  description: Count the number of events in event queue
+  components:
+    - type: Database
+  actions:
+    - name: Get the total event count
+      sql:
+        connection: connection://Postgres/incident-commander
+        database: incident_commander
+        driver: postgres
+        query: SELECT COUNT(*) FROM event_queue
+    # - name: Notify event count
+    #   http:
+    #     url: https://incidents.flanksource.com
+    #     body: |
+    #       {
+    #         "count": {{.result}}
+    #       }

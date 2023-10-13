@@ -101,7 +101,7 @@ func executeRun(ctx api.Context, run models.PlaybookRun) error {
 
 		// Even if a single action fails, we stop the execution and mark the Run as failed
 		if err != nil {
-			return fmt.Errorf("action %s failed: %w", action.Name, err)
+			return fmt.Errorf("action %q failed: %w", action.Name, err)
 		}
 	}
 
@@ -110,8 +110,40 @@ func executeRun(ctx api.Context, run models.PlaybookRun) error {
 
 func executeAction(ctx api.Context, run models.PlaybookRun, action v1.PlaybookAction, env actions.TemplateEnv) ([]byte, error) {
 	if action.Exec != nil {
-		e := actions.ExecAction{}
+		var e actions.ExecAction
 		res, err := e.Run(ctx, *action.Exec, env)
+		if err != nil {
+			return nil, err
+		}
+
+		return json.Marshal(res)
+	}
+
+	if action.HTTP != nil {
+		var e actions.HTTP
+		res, err := e.Run(ctx, *action.HTTP, env)
+		if err != nil {
+			return nil, err
+		}
+
+		return json.Marshal(res)
+	}
+
+	if action.SQL != nil {
+		var e actions.SQL
+		res, err := e.Run(ctx, *action.SQL, env)
+		if err != nil {
+			return nil, err
+		}
+
+		return json.Marshal(res)
+	}
+
+	if action.Pod != nil {
+		e := actions.Pod{
+			PlaybookRun: run,
+		}
+		res, err := e.Run(ctx, *action.Pod, env)
 		if err != nil {
 			return nil, err
 		}

@@ -260,8 +260,162 @@ spec:
                       required:
                       - script
                       type: object
+                    http:
+                      properties:
+                        body:
+                          description: Request Body Contents
+                          type: string
+                        connection:
+                          description: Connection name e.g. connection://http/google
+                          type: string
+                        headers:
+                          description: Header fields to be used in the query
+                          items:
+                            properties:
+                              name:
+                                type: string
+                              value:
+                                type: string
+                              valueFrom:
+                                properties:
+                                  configMapKeyRef:
+                                    properties:
+                                      key:
+                                        type: string
+                                      name:
+                                        type: string
+                                    required:
+                                    - key
+                                    type: object
+                                  secretKeyRef:
+                                    properties:
+                                      key:
+                                        type: string
+                                      name:
+                                        type: string
+                                    required:
+                                    - key
+                                    type: object
+                                type: object
+                            type: object
+                          type: array
+                        method:
+                          description: Method to use - defaults to GET
+                          type: string
+                        ntlm:
+                          description: NTLM when set to true will do authentication
+                            using NTLM v1 protocol
+                          type: boolean
+                        ntlmv2:
+                          description: NTLM when set to true will do authentication
+                            using NTLM v2 protocol
+                          type: boolean
+                        password:
+                          properties:
+                            name:
+                              type: string
+                            value:
+                              type: string
+                            valueFrom:
+                              properties:
+                                configMapKeyRef:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      type: string
+                                  required:
+                                  - key
+                                  type: object
+                                secretKeyRef:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      type: string
+                                  required:
+                                  - key
+                                  type: object
+                              type: object
+                          type: object
+                        templateBody:
+                          description: TemplateBody controls whether the body of the
+                            request needs to be templated
+                          type: boolean
+                        url:
+                          description: Connection url, interpolated with username,password
+                          type: string
+                        username:
+                          properties:
+                            name:
+                              type: string
+                            value:
+                              type: string
+                            valueFrom:
+                              properties:
+                                configMapKeyRef:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      type: string
+                                  required:
+                                  - key
+                                  type: object
+                                secretKeyRef:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      type: string
+                                  required:
+                                  - key
+                                  type: object
+                              type: object
+                          type: object
+                      type: object
                     name:
                       type: string
+                    pod:
+                      properties:
+                        maxLength:
+                          description: 'MaxLength is the maximum length of the logs
+                            to show Default: 3000 characters'
+                          type: integer
+                        name:
+                          description: Name is name of the pod that'll be created
+                          type: string
+                        spec:
+                          description: Spec is the container spec
+                          type: object
+                          x-kubernetes-preserve-unknown-fields: true
+                        timeout:
+                          description: Timeout in minutes to wait for specified container
+                            to finish its job. Defaults to 5 minutes
+                          type: integer
+                      required:
+                      - name
+                      - spec
+                      type: object
+                    sql:
+                      properties:
+                        connection:
+                          description: Connection identifier e.g. connection://Postgres/flanksource
+                          type: string
+                        driver:
+                          description: 'Driver is the name of the underlying database
+                            to connect to. Example: postgres, mysql, ...'
+                          type: string
+                        query:
+                          description: Query is the sql query to run
+                          type: string
+                        url:
+                          description: URL is the database connection url
+                          type: string
+                      required:
+                      - driver
+                      - query
+                      type: object
                   required:
                   - name
                   type: object

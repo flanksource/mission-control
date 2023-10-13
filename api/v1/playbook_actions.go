@@ -2,6 +2,7 @@ package v1
 
 import (
 	gocontext "context"
+	"encoding/json"
 	"fmt"
 
 	"github.com/flanksource/duty"
@@ -9,6 +10,62 @@ import (
 	"github.com/flanksource/duty/types"
 	"k8s.io/client-go/kubernetes"
 )
+
+type PodAction struct {
+	// Name is name of the pod that'll be created
+	Name string `yaml:"name" json:"name"`
+	// MaxLength is the maximum length of the logs to show
+	//  Default: 3000 characters
+	MaxLength int `yaml:"maxLength,omitempty" json:"maxLength,omitempty"`
+	// Timeout in minutes to wait for specified container to finish its job. Defaults to 5 minutes
+	Timeout int `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+	// +kubebuilder:validation:Schemaless
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Type=object
+	// Spec is the container spec
+	Spec json.RawMessage `yaml:"spec" json:"spec"`
+}
+
+type SQLAction struct {
+	// Connection identifier e.g. connection://Postgres/flanksource
+	Connection string `yaml:"connection,omitempty" json:"connection,omitempty"`
+	// URL is the database connection url
+	URL string `yaml:"url,omitempty" json:"url,omitempty"`
+	// Query is the sql query to run
+	Query string `yaml:"query" json:"query" template:"true"`
+	// Driver is the name of the underlying database to connect to.
+	// Example: postgres, mysql, ...
+	Driver string `yaml:"driver" json:"driver"`
+}
+
+type HTTPConnection struct {
+	// Connection name e.g. connection://http/google
+	Connection string `yaml:"connection,omitempty" json:"connection,omitempty"`
+	// Connection url, interpolated with username,password
+	URL            string `yaml:"url,omitempty" json:"url,omitempty" template:"true"`
+	Authentication `yaml:",inline" json:",inline"`
+}
+
+type Authentication struct {
+	Username types.EnvVar `yaml:"username,omitempty" json:"username,omitempty"`
+	Password types.EnvVar `yaml:"password,omitempty" json:"password,omitempty"`
+}
+
+type HTTPAction struct {
+	HTTPConnection `yaml:",inline" json:",inline"`
+	// Method to use - defaults to GET
+	Method string `yaml:"method,omitempty" json:"method,omitempty"`
+	// NTLM when set to true will do authentication using NTLM v1 protocol
+	NTLM bool `yaml:"ntlm,omitempty" json:"ntlm,omitempty"`
+	// NTLM when set to true will do authentication using NTLM v2 protocol
+	NTLMv2 bool `yaml:"ntlmv2,omitempty" json:"ntlmv2,omitempty"`
+	// Header fields to be used in the query
+	Headers []types.EnvVar `yaml:"headers,omitempty" json:"headers,omitempty"`
+	// Request Body Contents
+	Body string `yaml:"body,omitempty" json:"body,omitempty" template:"true"`
+	// TemplateBody controls whether the body of the request needs to be templated
+	TemplateBody bool `yaml:"templateBody,omitempty" json:"templateBody,omitempty"`
+}
 
 type ExecAction struct {
 	// Script can be a inline script or a path to a script that needs to be executed
@@ -139,4 +196,7 @@ func (t *AWSConnection) Populate(ctx connectionContext, k8s kubernetes.Interface
 type PlaybookAction struct {
 	Name string      `yaml:"name" json:"name"`
 	Exec *ExecAction `json:"exec,omitempty" yaml:"exec,omitempty"`
+	HTTP *HTTPAction `json:"http,omitempty" yaml:"http,omitempty"`
+	SQL  *SQLAction  `json:"sql,omitempty" yaml:"sql,omitempty"`
+	Pod  *PodAction  `json:"pod,omitempty" yaml:"pod,omitempty"`
 }

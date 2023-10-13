@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/jobs"
@@ -24,14 +25,14 @@ func PreRun(cmd *cobra.Command, args []string) {
 		logger.Fatalf("Failed to initialize the db: %v", err)
 	}
 
-	api.DefaultContext = api.NewContext(db.Gorm, db.Pool)
-
 	var err error
 	api.Kubernetes, err = k8s.NewClient()
 	if err != nil {
 		logger.Infof("Kubernetes client not available: %v", err)
 		api.Kubernetes = fake.NewSimpleClientset()
 	}
+
+	api.DefaultContext = api.NewContext(db.Gorm, db.Pool)
 
 	if otelcollectorURL != "" {
 		telemetry.InitTracer("mission-control", otelcollectorURL, true)
@@ -54,7 +55,7 @@ var otelcollectorURL string
 
 func ServerFlags(flags *pflag.FlagSet) {
 	flags.IntVar(&httpPort, "httpPort", 8080, "Port to expose a health dashboard")
-	flags.StringVar(&api.Namespace, "namespace", os.Getenv("NAMESPACE"), "Namespace to use for config/secret lookups")
+	flags.StringVar(&api.Namespace, "namespace", utils.Coalesce(os.Getenv("NAMESPACE"), "default"), "Namespace to use for config/secret lookups")
 	flags.IntVar(&devGuiPort, "devGuiPort", 3004, "Port used by a local npm server in development mode")
 	flags.IntVar(&metricsPort, "metricsPort", 8081, "Port to expose a health dashboard ")
 	flags.BoolVar(&dev, "dev", false, "Run in development mode")
