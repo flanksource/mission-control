@@ -49,8 +49,8 @@ func EventConsumer(c postq.Context) (int, error) {
 		SELECT *
 		FROM playbook_runs
 		WHERE status IN (?, ?)
-			AND start_time <= NOW()
-		ORDER BY start_time
+			AND scheduled_time <= NOW()
+		ORDER BY scheduled_time
 		FOR UPDATE SKIP LOCKED
 	`
 

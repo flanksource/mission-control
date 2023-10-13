@@ -32,24 +32,32 @@ func ExecuteRun(ctx api.Context, run models.PlaybookRun) {
 		runOptions.StartFrom = &sleepingAction
 	}
 
-	if err := ctx.DB().Model(&models.PlaybookRun{}).Where("id = ?", run.ID).UpdateColumn("status", models.PlaybookRunStatusRunning).Error; err != nil {
-		logger.Errorf("failed to update playbook run status: %v", err)
-		return
+	{
+		columnUpdates := map[string]any{
+			"status": models.PlaybookRunStatusRunning,
+		}
+
+		if run.StartTime.IsZero() {
+			columnUpdates["start_time"] = "NOW()"
+		}
+
+		if err := ctx.DB().Model(&models.PlaybookRun{}).Where("id = ?", run.ID).UpdateColumns(columnUpdates).Error; err != nil {
+			logger.Errorf("failed to update playbook run status: %v", err)
+			return
+		}
 	}
 
-	columnUpdates := map[string]any{
-		"end_time": "NOW()",
-	}
-
+	var columnUpdates = map[string]any{}
 	if runResponse, err := executeRun(ctx, run, runOptions); err != nil {
 		logger.Errorf("failed to execute playbook run: %v", err)
 		columnUpdates["status"] = models.PlaybookRunStatusFailed
+		columnUpdates["end_time"] = "NOW()"
 	} else if runResponse.Sleep > 0 {
-		columnUpdates["start_time"] = gorm.Expr(fmt.Sprintf("NOW() + INTERVAL '%d SECONDS'", int(runResponse.Sleep.Seconds())))
+		columnUpdates["scheduled_time"] = gorm.Expr(fmt.Sprintf("NOW() + INTERVAL '%d SECONDS'", int(runResponse.Sleep.Seconds())))
 		columnUpdates["status"] = models.PlaybookRunStatusSleeping
-		delete(columnUpdates, "end_time")
 	} else {
 		columnUpdates["status"] = models.PlaybookRunStatusCompleted
+		columnUpdates["end_time"] = "NOW()"
 	}
 
 	if err := ctx.DB().Model(&models.PlaybookRun{}).Where("id = ?", run.ID).UpdateColumns(&columnUpdates).Error; err != nil {
@@ -131,7 +139,7 @@ func executeRun(ctx api.Context, run models.PlaybookRun, opt runExecOptions) (*r
 			runAction = *opt.StartFrom
 			if err := ctx.DB().Model(&models.PlaybookRunAction{}).Where("id = ?", runAction.ID).UpdateColumns(map[string]any{
 				"status":     models.PlaybookRunStatusRunning,
-				"start_time": gorm.Expr("NOW()"),
+				"start_time": "NOW()",
 			}).Error; err != nil {
 				logger.Errorf("failed to update playbook run action status: %v", err)
 			}
@@ -140,10 +148,6 @@ func executeRun(ctx api.Context, run models.PlaybookRun, opt runExecOptions) (*r
 				logger.Errorf("failed to create playbook run action: %v", err)
 				return nil, err
 			}
-		}
-
-		columnUpdates := map[string]any{
-			"end_time": "NOW()",
 		}
 
 		if duration, err := action.DelayDuration(); err != nil {
@@ -165,6 +169,9 @@ func executeRun(ctx api.Context, run models.PlaybookRun, opt runExecOptions) (*r
 			continueFromAction = ""
 		}
 
+		columnUpdates := map[string]any{
+			"end_time": "NOW()",
+		}
 		result, err := executeAction(ctx, run, action, templateEnv)
 		if err != nil {
 			logger.Errorf("failed to execute action: %v", err)
