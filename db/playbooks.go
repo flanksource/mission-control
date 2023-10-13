@@ -79,20 +79,20 @@ func GetPlaybookRun(ctx api.Context, id string) (*models.PlaybookRun, error) {
 }
 
 // FindPlaybooksForCheck returns all the playbooks that match the given check type and tags.
-func FindPlaybooksForCheck(ctx api.Context, configType string, tags map[string]string) ([]models.Playbook, error) {
+func FindPlaybooksForCheck(ctx api.Context, checkType string, tags map[string]string) ([]models.Playbook, error) {
 	joinQuery := `JOIN LATERAL jsonb_array_elements(playbooks."spec"->'checks') AS checks(ch) ON 1=1`
 	var joinArgs []any
 	if len(tags) != 0 {
-		joinQuery += " AND (?::jsonb) @> (checks.ch->'tags')"
+		joinQuery += " AND (?::jsonb) @> COALESCE(checks.ch->'tags', '{}'::jsonb)"
 		joinArgs = append(joinArgs, types.JSONStringMap(tags))
 	}
-	if configType != "" {
+	if checkType != "" {
 		joinQuery += " AND checks.ch->>'type' = ?"
-		joinArgs = append(joinArgs, configType)
+		joinArgs = append(joinArgs, checkType)
 	}
 
 	query := ctx.DB().
-		Select("DISTINCT playbooks.*").
+		Select("DISTINCT ON (playbooks.id) playbooks.id, playbooks.name").
 		Joins(joinQuery, joinArgs...)
 
 	var playbooks []models.Playbook
@@ -106,7 +106,7 @@ func FindPlaybooksForConfig(ctx api.Context, configType string, tags map[string]
 	var joinArgs []any
 
 	if len(tags) != 0 {
-		joinQuery += " AND (?::jsonb) @> (configs.config->'tags')"
+		joinQuery += " AND (?::jsonb) @> COALESCE(configs.config->'tags', '{}'::jsonb)"
 		joinArgs = append(joinArgs, types.JSONStringMap(tags))
 	}
 	if configType != "" {
@@ -115,7 +115,7 @@ func FindPlaybooksForConfig(ctx api.Context, configType string, tags map[string]
 	}
 
 	query := ctx.DB().
-		Select("DISTINCT playbooks.*").
+		Select("DISTINCT ON (playbooks.id) playbooks.id, playbooks.name").
 		Joins(joinQuery, joinArgs...)
 
 	var playbooks []models.Playbook
@@ -129,7 +129,7 @@ func FindPlaybooksForComponent(ctx api.Context, configType string, tags map[stri
 	var joinArgs []any
 
 	if len(tags) != 0 {
-		joinQuery += " AND (?::jsonb) @> (components.component->'tags')"
+		joinQuery += " AND (?::jsonb) @> COALESCE(components.component->'tags', '{}'::jsonb)"
 		joinArgs = append(joinArgs, types.JSONStringMap(tags))
 	}
 	if configType != "" {
@@ -138,7 +138,7 @@ func FindPlaybooksForComponent(ctx api.Context, configType string, tags map[stri
 	}
 
 	query := ctx.DB().
-		Select("DISTINCT playbooks.*").
+		Select("DISTINCT ON (playbooks.id) playbooks.id, playbooks.name").
 		Joins(joinQuery, joinArgs...)
 
 	var playbooks []models.Playbook

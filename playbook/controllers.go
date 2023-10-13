@@ -196,7 +196,15 @@ func HandlePlaybookList(c echo.Context) error {
 		}
 	}
 
-	return c.JSON(http.StatusOK, playbooks)
+	var response []api.PlaybookListItem
+	for _, playbook := range playbooks {
+		response = append(response, api.PlaybookListItem{
+			ID:   playbook.ID,
+			Name: playbook.Name,
+		})
+	}
+
+	return c.JSON(http.StatusOK, response)
 }
 
 func HandlePlaybookRunApproval(c echo.Context) error {
