@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/patrickmn/go-cache"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 var (
@@ -30,6 +31,8 @@ func PushUpstream(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error(), Message: "invalid json request"})
 	}
+
+	ctx.SetSpanAttributes(attribute.Int("upstream.push.msg-count", req.Count()))
 
 	req.AgentName = strings.TrimSpace(req.AgentName)
 	if req.AgentName == "" {
@@ -68,6 +71,9 @@ func Pull(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error()})
 	}
 
+	reqJSON, _ := json.Marshal(req)
+	ctx.SetSpanAttributes(attribute.String("upstream.pull.paginate-request", string(reqJSON)))
+
 	if !collections.Contains(api.TablesToReconcile, req.Table) {
 		return c.JSON(http.StatusForbidden, api.HTTPError{Error: fmt.Sprintf("table=%s is not allowed", req.Table)})
 	}
@@ -85,7 +91,7 @@ func Pull(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to get resource ids"})
 	}
 
-	return c.JSON(http.StatusFound, resp)
+	return c.JSON(http.StatusOK, resp)
 }
 
 // Status returns the summary of all ids the upstream has received.
@@ -96,6 +102,9 @@ func Status(c echo.Context) error {
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error()})
 	}
+
+	reqJSON, _ := json.Marshal(req)
+	ctx.SetSpanAttributes(attribute.String("upstream.status.paginate-request", string(reqJSON)))
 
 	if !collections.Contains(api.TablesToReconcile, req.Table) {
 		return c.JSON(http.StatusForbidden, api.HTTPError{Error: fmt.Sprintf("table=%s is not allowed", req.Table)})
@@ -136,6 +145,8 @@ func PullCanaries(c echo.Context) error {
 		if err != nil {
 			return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error(), Message: "'since' param needs to be a valid RFC3339 timestamp"})
 		}
+
+		ctx.SetSpanAttributes(attribute.String("upstream.pull.canaries.since", sinceRaw))
 	}
 
 	canaries, err := db.GetCanariesOfAgent(ctx, agent.ID, since)
@@ -168,6 +179,8 @@ func PullScrapeConfigs(c echo.Context) error {
 		if err != nil {
 			return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error(), Message: "'since' param needs to be a valid RFC3339Nano timestamp"})
 		}
+
+		ctx.SetSpanAttributes(attribute.String("upstream.pull.configs.since", sinceRaw))
 	}
 
 	scrapeConfigs, err := db.GetScrapeConfigsOfAgent(ctx, agent.ID, since)
