@@ -38,6 +38,10 @@ spec:
                 description: List of actions that need to be executed by this playbook.
                 items:
                   properties:
+                    delay:
+                      description: Delay is the duration to delay the execution of
+                        this action. The least supported value as of now is 1m.
+                      type: string
                     exec:
                       properties:
                         connections:
@@ -375,6 +379,7 @@ spec:
                           type: object
                       type: object
                     name:
+                      description: Name of the action
                       type: string
                     pod:
                       properties:

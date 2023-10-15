@@ -1,0 +1,14 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: delayed-exec
+spec:
+  description: Creates a new file and then deletes it after a minute
+  actions:
+    - name: Create a temp file
+      exec:
+        script: echo -n 'disposable secret' > /tmp/secret-to-dispose
+    - name: Delete the file
+      delay: 1m
+      exec:
+        script: rm /tmp/secret-to-dispose

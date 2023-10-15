@@ -48,14 +48,14 @@ func EventConsumer(c postq.Context) (int, error) {
 	query := `
 		SELECT *
 		FROM playbook_runs
-		WHERE status = ?
-			AND start_time <= NOW()
-		ORDER BY start_time
+		WHERE status IN (?, ?)
+			AND scheduled_time <= NOW()
+		ORDER BY scheduled_time
 		FOR UPDATE SKIP LOCKED
 	`
 
 	var runs []models.PlaybookRun
-	if err := tx.Raw(query, models.PlaybookRunStatusScheduled).Find(&runs).Error; err != nil {
+	if err := tx.Raw(query, models.PlaybookRunStatusScheduled, models.PlaybookRunStatusSleeping).Find(&runs).Error; err != nil {
 		return 0, err
 	}
 

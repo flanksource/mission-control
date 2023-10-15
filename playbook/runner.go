@@ -3,29 +3,61 @@ package playbook
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/playbook/actions"
+	"gorm.io/gorm"
 )
 
+var traceName = "playbook-run"
+
 func ExecuteRun(ctx api.Context, run models.PlaybookRun) {
-	if err := ctx.DB().Model(&models.PlaybookRun{}).Where("id = ?", run.ID).UpdateColumn("status", models.PlaybookRunStatusRunning).Error; err != nil {
-		logger.Errorf("failed to update playbook run status: %v", err)
-		return
+	ctx, span := ctx.StartTrace(traceName, "ExecuteRun")
+	defer span.End()
+
+	var runOptions runExecOptions
+	if run.Status == models.PlaybookRunStatusSleeping {
+		// We fetch the action that's currently sleeping for this playbook run,
+		// and begin the execution from there.
+		var sleepingAction models.PlaybookRunAction
+		if err := ctx.DB().Where("playbook_run_id = ?", run.ID).Where("status = ?", models.PlaybookRunStatusSleeping).Find(&sleepingAction).Error; err != nil {
+			logger.Errorf("failed to fetch actions: %v", err)
+			return
+		}
+
+		runOptions.StartFrom = &sleepingAction
 	}
 
-	columnUpdates := map[string]any{
-		"end_time": "NOW()",
+	{
+		columnUpdates := map[string]any{
+			"status": models.PlaybookRunStatusRunning,
+		}
+
+		if run.StartTime.IsZero() {
+			columnUpdates["start_time"] = "NOW()"
+		}
+
+		if err := ctx.DB().Model(&models.PlaybookRun{}).Where("id = ?", run.ID).UpdateColumns(columnUpdates).Error; err != nil {
+			logger.Errorf("failed to update playbook run status: %v", err)
+			return
+		}
 	}
 
-	if err := executeRun(ctx, run); err != nil {
+	var columnUpdates = map[string]any{}
+	if runResponse, err := executeRun(ctx, run, runOptions); err != nil {
 		logger.Errorf("failed to execute playbook run: %v", err)
 		columnUpdates["status"] = models.PlaybookRunStatusFailed
+		columnUpdates["end_time"] = "NOW()"
+	} else if runResponse.Sleep > 0 {
+		columnUpdates["scheduled_time"] = gorm.Expr(fmt.Sprintf("NOW() + INTERVAL '%d SECONDS'", int(runResponse.Sleep.Seconds())))
+		columnUpdates["status"] = models.PlaybookRunStatusSleeping
 	} else {
 		columnUpdates["status"] = models.PlaybookRunStatusCompleted
+		columnUpdates["end_time"] = "NOW()"
 	}
 
 	if err := ctx.DB().Model(&models.PlaybookRun{}).Where("id = ?", run.ID).UpdateColumns(&columnUpdates).Error; err != nil {
@@ -33,15 +65,48 @@ func ExecuteRun(ctx api.Context, run models.PlaybookRun) {
 	}
 }
 
-func executeRun(ctx api.Context, run models.PlaybookRun) error {
+type runExecOptions struct {
+	StartFrom *models.PlaybookRunAction
+}
+
+type runExecResponse struct {
+	// Sleep, when set, indicates that the run execution should pause and continue
+	// after the specified duration.
+	Sleep time.Duration
+}
+
+func prepareTemplateEnv(ctx api.Context, run models.PlaybookRun) (actions.TemplateEnv, error) {
+	templateEnv := actions.TemplateEnv{
+		Params: run.Parameters,
+	}
+
+	if run.ComponentID != nil {
+		if err := ctx.DB().Where("id = ?", run.ComponentID).First(&templateEnv.Component).Error; err != nil {
+			return templateEnv, err
+		}
+	} else if run.ConfigID != nil {
+		if err := ctx.DB().Where("id = ?", run.ConfigID).First(&templateEnv.Config).Error; err != nil {
+			return templateEnv, err
+		}
+	} else if run.CheckID != nil {
+		if err := ctx.DB().Where("id = ?", run.CheckID).First(&templateEnv.Check).Error; err != nil {
+			return templateEnv, err
+		}
+	}
+
+	return templateEnv, nil
+}
+
+// executeRun executes all the actions in the given playbook one at a time in order.
+func executeRun(ctx api.Context, run models.PlaybookRun, opt runExecOptions) (*runExecResponse, error) {
 	var playbookModel models.Playbook
 	if err := ctx.DB().Where("id = ?", run.PlaybookID).First(&playbookModel).Error; err != nil {
-		return err
+		return nil, err
 	}
 
 	playbook, err := v1.PlaybookFromModel(playbookModel)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	logger.WithValues("playbook", playbook.Name).
@@ -50,41 +115,63 @@ func executeRun(ctx api.Context, run models.PlaybookRun) error {
 		WithValues("component", run.ComponentID).
 		Infof("Executing playbook run: %s", run.ID)
 
-	templateEnv := actions.TemplateEnv{
-		Params: run.Parameters,
+	templateEnv, err := prepareTemplateEnv(ctx, run)
+	if err != nil {
+		return nil, err
 	}
-	if run.ComponentID != nil {
-		if err := ctx.DB().Where("id = ?", run.ComponentID).First(&templateEnv.Component).Error; err != nil {
-			return err
-		}
-	} else if run.ConfigID != nil {
-		if err := ctx.DB().Where("id = ?", run.ConfigID).First(&templateEnv.Config).Error; err != nil {
-			return err
-		}
-	} else if run.CheckID != nil {
-		if err := ctx.DB().Where("id = ?", run.CheckID).First(&templateEnv.Check).Error; err != nil {
-			return err
-		}
+
+	var continueFromAction string
+	if opt.StartFrom != nil {
+		continueFromAction = opt.StartFrom.Name
 	}
 
 	for _, action := range playbook.Spec.Actions {
-		logger.WithValues("runID", run.ID).Infof("Executing action: %s", action.Name)
+		if continueFromAction != "" && action.Name != continueFromAction {
+			continue
+		}
 
 		runAction := models.PlaybookRunAction{
 			PlaybookRunID: run.ID,
 			Name:          action.Name,
 			Status:        models.PlaybookRunStatusRunning,
 		}
+		if opt.StartFrom != nil {
+			runAction = *opt.StartFrom
+			if err := ctx.DB().Model(&models.PlaybookRunAction{}).Where("id = ?", runAction.ID).UpdateColumns(map[string]any{
+				"status":     models.PlaybookRunStatusRunning,
+				"start_time": "NOW()",
+			}).Error; err != nil {
+				logger.Errorf("failed to update playbook run action status: %v", err)
+			}
+		} else {
+			if err := ctx.DB().Save(&runAction).Error; err != nil {
+				logger.Errorf("failed to create playbook run action: %v", err)
+				return nil, err
+			}
+		}
 
-		if err := ctx.DB().Create(&runAction).Error; err != nil {
-			logger.Errorf("failed to create playbook run action: %v", err)
-			return err
+		if duration, err := action.DelayDuration(); err != nil {
+			return nil, err
+		} else if duration > 0 && action.Name != continueFromAction {
+			logger.Debugf("Pausing run execution. Sleeping for %v", duration)
+
+			if err := ctx.DB().Model(&models.PlaybookRunAction{}).Where("id = ?", runAction.ID).UpdateColumns(map[string]any{
+				"status":     models.PlaybookRunStatusSleeping,
+				"start_time": gorm.Expr("NULL"),
+			}).Error; err != nil {
+				logger.Errorf("failed to update playbook run action status: %v", err)
+			}
+
+			return &runExecResponse{
+				Sleep: duration,
+			}, nil
+		} else if action.Name == continueFromAction {
+			continueFromAction = ""
 		}
 
 		columnUpdates := map[string]any{
 			"end_time": "NOW()",
 		}
-
 		result, err := executeAction(ctx, run, action, templateEnv)
 		if err != nil {
 			logger.Errorf("failed to execute action: %v", err)
@@ -101,14 +188,19 @@ func executeRun(ctx api.Context, run models.PlaybookRun) error {
 
 		// Even if a single action fails, we stop the execution and mark the Run as failed
 		if err != nil {
-			return fmt.Errorf("action %q failed: %w", action.Name, err)
+			return nil, fmt.Errorf("action %q failed: %w", action.Name, err)
 		}
 	}
 
-	return nil
+	return &runExecResponse{}, nil
 }
 
 func executeAction(ctx api.Context, run models.PlaybookRun, action v1.PlaybookAction, env actions.TemplateEnv) ([]byte, error) {
+	ctx, span := ctx.StartTrace(traceName, "executeAction")
+	defer span.End()
+
+	logger.WithValues("runID", run.ID).Infof("Executing action: %s", action.Name)
+
 	if action.Exec != nil {
 		var e actions.ExecAction
 		res, err := e.Run(ctx, *action.Exec, env)
