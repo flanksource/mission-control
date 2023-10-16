@@ -168,7 +168,7 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 		playbooks, err := playbook.ListPlaybooksForCheck(ctx, dummy.LogisticsAPIHealthHTTPCheck.ID.String())
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(playbooks)).To(Equal(1))
-		Expect(playbooks).To(Equal([]models.Playbook{checkPlaybook}))
+		Expect(playbooks[0].ID).To(Equal(checkPlaybook.ID))
 
 		playbooks, err = playbook.ListPlaybooksForCheck(ctx, dummy.LogisticsDBCheck.ID.String())
 		Expect(err).NotTo(HaveOccurred())
@@ -180,7 +180,7 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 		playbooks, err := playbook.ListPlaybooksForComponent(ctx, dummy.Logistics.ID.String())
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(playbooks)).To(Equal(1))
-		Expect(playbooks).To(Equal([]models.Playbook{componentPlaybook}))
+		Expect(playbooks[0].ID).To(Equal(componentPlaybook.ID))
 
 		playbooks, err = playbook.ListPlaybooksForComponent(ctx, dummy.LogisticsUI.ID.String())
 		Expect(err).NotTo(HaveOccurred())
@@ -192,7 +192,7 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 		playbooks, err := playbook.ListPlaybooksForConfig(ctx, dummy.EKSCluster.ID.String())
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(playbooks)).To(Equal(1))
-		Expect(playbooks).To(Equal([]models.Playbook{configPlaybook}))
+		Expect(playbooks[0].ID).To(Equal(configPlaybook.ID))
 
 		playbooks, err = playbook.ListPlaybooksForConfig(ctx, dummy.KubernetesCluster.ID.String())
 		Expect(err).NotTo(HaveOccurred())

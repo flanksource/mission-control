@@ -177,7 +177,7 @@ func HandlePlaybookList(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: "provide exactly one of: config_id, check_id or component_id", Message: "invalid request"})
 	}
 
-	var playbooks []models.Playbook
+	var playbooks []api.PlaybookListItem
 	var err error
 	if configID != "" {
 		playbooks, err = ListPlaybooksForConfig(ctx, configID)

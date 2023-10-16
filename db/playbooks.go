@@ -79,34 +79,34 @@ func GetPlaybookRun(ctx api.Context, id string) (*models.PlaybookRun, error) {
 }
 
 // FindPlaybooksForCheck returns all the playbooks that match the given check type and tags.
-func FindPlaybooksForCheck(ctx api.Context, configType string, tags map[string]string) ([]models.Playbook, error) {
+func FindPlaybooksForCheck(ctx api.Context, checkType string, tags map[string]string) ([]api.PlaybookListItem, error) {
 	joinQuery := `JOIN LATERAL jsonb_array_elements(playbooks."spec"->'checks') AS checks(ch) ON 1=1`
 	var joinArgs []any
 	if len(tags) != 0 {
-		joinQuery += " AND (?::jsonb) @> (checks.ch->'tags')"
+		joinQuery += " AND (?::jsonb) @> COALESCE(checks.ch->'tags', '{}'::jsonb)"
 		joinArgs = append(joinArgs, types.JSONStringMap(tags))
 	}
-	if configType != "" {
+	if checkType != "" {
 		joinQuery += " AND checks.ch->>'type' = ?"
-		joinArgs = append(joinArgs, configType)
+		joinArgs = append(joinArgs, checkType)
 	}
 
 	query := ctx.DB().
-		Select("DISTINCT playbooks.*").
+		Select("DISTINCT ON (playbooks.id) playbooks.id, playbooks.name, playbooks.spec->'parameters' as parameters").
 		Joins(joinQuery, joinArgs...)
 
-	var playbooks []models.Playbook
-	err := query.Find(&playbooks).Error
+	var playbooks []api.PlaybookListItem
+	err := query.Model(&models.Playbook{}).Find(&playbooks).Error
 	return playbooks, err
 }
 
 // FindPlaybooksForConfig returns all the playbooks that match the given config type and tags.
-func FindPlaybooksForConfig(ctx api.Context, configType string, tags map[string]string) ([]models.Playbook, error) {
+func FindPlaybooksForConfig(ctx api.Context, configType string, tags map[string]string) ([]api.PlaybookListItem, error) {
 	joinQuery := `JOIN LATERAL jsonb_array_elements(playbooks."spec"->'configs') AS configs(config) ON 1=1`
 	var joinArgs []any
 
 	if len(tags) != 0 {
-		joinQuery += " AND (?::jsonb) @> (configs.config->'tags')"
+		joinQuery += " AND (?::jsonb) @> COALESCE(configs.config->'tags', '{}'::jsonb)"
 		joinArgs = append(joinArgs, types.JSONStringMap(tags))
 	}
 	if configType != "" {
@@ -115,21 +115,21 @@ func FindPlaybooksForConfig(ctx api.Context, configType string, tags map[string]
 	}
 
 	query := ctx.DB().
-		Select("DISTINCT playbooks.*").
+		Select("DISTINCT ON (playbooks.id) playbooks.id, playbooks.name, playbooks.spec->'parameters' as parameters").
 		Joins(joinQuery, joinArgs...)
 
-	var playbooks []models.Playbook
-	err := query.Find(&playbooks).Error
+	var playbooks []api.PlaybookListItem
+	err := query.Model(&models.Playbook{}).Find(&playbooks).Error
 	return playbooks, err
 }
 
 // FindPlaybooksForComponent returns all the playbooks that match the given component type and tags.
-func FindPlaybooksForComponent(ctx api.Context, configType string, tags map[string]string) ([]models.Playbook, error) {
+func FindPlaybooksForComponent(ctx api.Context, configType string, tags map[string]string) ([]api.PlaybookListItem, error) {
 	joinQuery := `JOIN LATERAL jsonb_array_elements(playbooks."spec"->'components') AS components(component) ON 1=1`
 	var joinArgs []any
 
 	if len(tags) != 0 {
-		joinQuery += " AND (?::jsonb) @> (components.component->'tags')"
+		joinQuery += " AND (?::jsonb) @> COALESCE(components.component->'tags', '{}'::jsonb)"
 		joinArgs = append(joinArgs, types.JSONStringMap(tags))
 	}
 	if configType != "" {
@@ -138,11 +138,11 @@ func FindPlaybooksForComponent(ctx api.Context, configType string, tags map[stri
 	}
 
 	query := ctx.DB().
-		Select("DISTINCT playbooks.*").
+		Select("DISTINCT ON (playbooks.id) playbooks.id, playbooks.name, playbooks.spec->'parameters' as parameters").
 		Joins(joinQuery, joinArgs...)
 
-	var playbooks []models.Playbook
-	err := query.Find(&playbooks).Error
+	var playbooks []api.PlaybookListItem
+	err := query.Model(&models.Playbook{}).Find(&playbooks).Error
 	return playbooks, err
 }
 
