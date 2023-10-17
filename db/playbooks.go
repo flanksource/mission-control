@@ -170,7 +170,7 @@ func DeletePlaybook(id string) error {
 
 // UpdatePlaybookRunStatusIfApproved updates the status of the playbook run to "pending"
 // if all the approvers have approved it.
-func UpdatePlaybookRunStatusIfApproved(ctx api.Context, playbookID string, approval v1.PlaybookApproval) error {
+func UpdatePlaybookRunStatusIfApproved(ctx context.Context, playbookID string, approval v1.PlaybookApproval) error {
 	if approval.Approvers.Empty() {
 		return nil
 	}

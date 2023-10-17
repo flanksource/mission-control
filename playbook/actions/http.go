@@ -6,9 +6,9 @@ import (
 	"net/url"
 
 	"github.com/flanksource/commons/http"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/gomplate/v3"
-	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 )
 
@@ -21,8 +21,8 @@ type HTTPResult struct {
 type HTTP struct {
 }
 
-func (c *HTTP) Run(ctx api.Context, action v1.HTTPAction, env TemplateEnv) (*HTTPResult, error) {
-	connection, err := ctx.HydrateConnection(action.HTTPConnection.Connection)
+func (c *HTTP) Run(ctx context.Context, action v1.HTTPAction, env TemplateEnv) (*HTTPResult, error) {
+	connection, err := ctx.HydratedConnectionByURL(ctx.GetNamespace(), action.HTTPConnection.Connection)
 	if err != nil {
 		return nil, fmt.Errorf("failed to hydrate connection: %w", err)
 	} else if connection != nil {
@@ -74,7 +74,7 @@ func (c *HTTP) Run(ctx api.Context, action v1.HTTPAction, env TemplateEnv) (*HTT
 }
 
 // makeRequest creates a new HTTP request and makes the HTTP call.
-func (c *HTTP) makeRequest(ctx api.Context, action v1.HTTPAction, connection *models.Connection) (*http.Response, error) {
+func (c *HTTP) makeRequest(ctx context.Context, action v1.HTTPAction, connection *models.Connection) (*http.Response, error) {
 	client := http.NewClient()
 
 	client.NTLM(action.NTLM)
@@ -87,7 +87,7 @@ func (c *HTTP) makeRequest(ctx api.Context, action v1.HTTPAction, connection *mo
 	req := http.NewClient().R(ctx)
 
 	for _, header := range action.Headers {
-		value, err := ctx.GetEnvValueFromCache(header)
+		value, err := ctx.GetEnvValueFromCache(header, ctx.GetNamespace())
 		if err != nil {
 			return nil, fmt.Errorf("failed getting header (%v): %w", header, err)
 		}

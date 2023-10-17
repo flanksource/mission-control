@@ -73,6 +73,7 @@ func createHTTPServer(ctx api.Context) *echo.Echo {
 
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
+			c.SetRequest(c.Request().WithContext(api.ContextWrapFunc(c.Request().Context())))
 			cc := ctx.WithEchoContext(c)
 			return next(cc)
 		}
@@ -271,15 +272,15 @@ var Serve = &cobra.Command{
 
 		go jobs.Start(api.ContextWrapFunc(gocontext.Background()))
 
-		events.StartConsumers(api.DefaultContext, api.UpstreamConf)
+		events.StartConsumers(api.ContextWrapFunc(gocontext.Background()), api.UpstreamConf)
 
 		go tableUpdatesHandler(api.DefaultContext)
 
 		go func() {
-			logs.IfError(playbook.StartPlaybookRunConsumer(api.DefaultContext), "error starting playbook run consumer")
+			logs.IfError(playbook.StartPlaybookRunConsumer(api.ContextWrapFunc(gocontext.Background())), "error starting playbook run consumer")
 		}()
 
-		go playbook.ListenPlaybookPGNotify(api.DefaultContext)
+		go playbook.ListenPlaybookPGNotify(api.ContextWrapFunc(gocontext.Background()))
 
 		go launchKopper()
 

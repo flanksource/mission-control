@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/collections"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/google/uuid"
@@ -44,14 +45,14 @@ func GetTeamsForUser(ctx api.Context, id string) ([]models.Team, error) {
 	return teams, err
 }
 
-func GetUserByExternalID(ctx api.Context, id string) (api.Person, error) {
-	var user api.Person
+func GetUserByExternalID(ctx context.Context, id string) (models.Person, error) {
+	var user models.Person
 	err := ctx.DB().Table("people").Where("external_id = ?", id).First(&user).Error
 	return user, err
 }
 
 // CreateUser creates a new user and returns a copy
-func CreateUser(ctx api.Context, user api.Person) (api.Person, error) {
+func CreateUser(ctx context.Context, user models.Person) (models.Person, error) {
 	err := ctx.DB().Table("people").Create(&user).Error
 	return user, err
 }

@@ -201,7 +201,7 @@ var eventToSpecEvent = map[string]PlaybookSpecEvent{
 	EventComponentStatusError:     {"component", "error"},
 }
 
-func onApprovalUpdated(ctx api.Context, event postq.Event) error {
+func onApprovalUpdated(ctx context.Context, event postq.Event) error {
 	playbookID := event.Properties["id"]
 
 	var playbook models.Playbook
@@ -221,7 +221,7 @@ func onApprovalUpdated(ctx api.Context, event postq.Event) error {
 	return db.UpdatePlaybookRunStatusIfApproved(ctx, playbookID, *spec.Approval)
 }
 
-func onPlaybookRunNewApproval(ctx api.Context, event postq.Event) error {
+func onPlaybookRunNewApproval(ctx context.Context, event postq.Event) error {
 	runID := event.Properties["run_id"]
 
 	var run models.PlaybookRun

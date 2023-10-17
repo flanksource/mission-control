@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	github.com/alecthomas/jsonschema v0.0.0-20220216202328-9eeeec9d044b
-	github.com/flanksource/commons v1.14.1
+	github.com/flanksource/commons v1.15.0
 	github.com/flanksource/incident-commander v0.0.347
 	github.com/spf13/cobra v1.7.0
 )

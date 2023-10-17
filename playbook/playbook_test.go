@@ -2,6 +2,7 @@ package playbook_test
 
 import (
 	"bytes"
+	gocontext "context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/fixtures/dummy"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/upstream"
@@ -41,7 +43,7 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 	ginkgo.It("start the queue consumer in background", func() {
 		pgNotifyChannel := make(chan string)
 
-		ctx := api.NewContext(testDB, testDBPool)
+		ctx := context.NewContext(gocontext.Background()).WithDB(testDB, testDBPool)
 
 		go pg.Listen(ctx, "playbook_run_updates", pgNotifyChannel)
 

@@ -4,8 +4,8 @@ import (
 	"database/sql"
 	"fmt"
 
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/gomplate/v3"
-	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 )
 
@@ -18,7 +18,7 @@ type SQL struct{}
 
 // Run - Check every entry from config according to Checker interface
 // Returns check result and metrics
-func (c *SQL) Run(ctx api.Context, action v1.SQLAction, env TemplateEnv) (*SQLResult, error) {
+func (c *SQL) Run(ctx context.Context, action v1.SQLAction, env TemplateEnv) (*SQLResult, error) {
 	templated, err := gomplate.RunTemplate(env.AsMap(), gomplate.Template{Template: action.Query})
 	if err != nil {
 		return nil, err
@@ -26,7 +26,7 @@ func (c *SQL) Run(ctx api.Context, action v1.SQLAction, env TemplateEnv) (*SQLRe
 	action.Query = templated
 
 	if action.Connection != "" {
-		connection, err := ctx.HydrateConnection(action.Connection)
+		connection, err := ctx.HydratedConnectionByURL(ctx.GetNamespace(), action.Connection)
 		if err != nil {
 			return nil, fmt.Errorf("error getting connection: %w", err)
 		}
