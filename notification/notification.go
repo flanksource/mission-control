@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/patrickmn/go-cache"
@@ -23,7 +24,7 @@ func PurgeCache(notificationID string) {
 
 // GetNotificationIDsForEvent returns ids of all the notifications
 // that are watching the given event.
-func GetNotificationIDsForEvent(ctx api.Context, eventName string) ([]string, error) {
+func GetNotificationIDsForEvent(ctx context.Context, eventName string) ([]string, error) {
 	if val, found := notificationByEventCache.Get(eventName); found {
 		return val.([]string), nil
 	}
@@ -43,7 +44,7 @@ type NotificationWithSpec struct {
 	CustomNotifications []api.NotificationConfig
 }
 
-func GetNotification(ctx api.Context, id string) (*NotificationWithSpec, error) {
+func GetNotification(ctx context.Context, id string) (*NotificationWithSpec, error) {
 	if val, found := notificationByIDCache.Get(id); found {
 		return val.(*NotificationWithSpec), nil
 	}

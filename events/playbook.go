@@ -9,6 +9,7 @@ import (
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/gomplate/v3"
 	"github.com/flanksource/incident-commander/api"
@@ -54,7 +55,7 @@ func (t *EventResource) AsMap() map[string]any {
 	}
 }
 
-func schedulePlaybookRun(ctx api.Context, event postq.Event) error {
+func schedulePlaybookRun(ctx context.Context, event postq.Event) error {
 	specEvent, ok := eventToSpecEvent[event.Name]
 	if !ok {
 		return nil
@@ -139,7 +140,7 @@ func schedulePlaybookRun(ctx api.Context, event postq.Event) error {
 }
 
 // logToJobHistory logs any failures in saving a playbook run to the job history.
-func logToJobHistory(ctx api.Context, playbookID, err string) {
+func logToJobHistory(ctx context.Context, playbookID, err string) {
 	jobHistory := models.NewJobHistory("SavePlaybookRun", "playbook", playbookID)
 	jobHistory.Start()
 	jobHistory.AddError(err)

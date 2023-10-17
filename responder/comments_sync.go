@@ -5,6 +5,7 @@ import (
 
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty/job"
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
 
@@ -20,7 +21,7 @@ func getRootHypothesisOfIncident(incidentID uuid.UUID) (api.Hypothesis, error) {
 	return hypothesis, nil
 }
 
-func SyncComments(ctx api.Context) error {
+func SyncComments(ctx job.JobRuntime) error {
 	logger.Debugf("Syncing comments")
 
 	var responders []api.Responder
@@ -37,14 +38,14 @@ func SyncComments(ctx api.Context) error {
     `
 
 	jobHistory := models.NewJobHistory("ResponderCommentSync", "", "")
-	_ = db.PersistJobHistory(ctx, jobHistory.Start())
+	_ = db.PersistJobHistory(ctx.Context, jobHistory.Start())
 	for _, responder := range responders {
 		if !responder.Team.HasResponder() {
 			logger.Debugf("Skipping responder %s since it does not have a responder", responder.Team.Name)
 			continue
 		}
 
-		responderClient, err := GetResponder(ctx, responder.Team)
+		responderClient, err := GetResponder(ctx.Context, responder.Team)
 		if err != nil {
 			logger.Errorf("Error getting responder: %v", err)
 			jobHistory.AddError(err.Error())
@@ -89,6 +90,6 @@ func SyncComments(ctx api.Context) error {
 		}
 	}
 	jobHistory.IncrSuccess()
-	_ = db.PersistJobHistory(ctx, jobHistory.End())
+	_ = db.PersistJobHistory(ctx.Context, jobHistory.End())
 	return nil
 }

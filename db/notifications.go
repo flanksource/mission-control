@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/flanksource/duty"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -83,4 +84,12 @@ func DeleteNotification(id string) error {
 
 func UpdateNotificationError(id string, err string) error {
 	return Gorm.Model(&models.Notification{}).Where("id = ?", id).Update("error", err).Error
+}
+
+func DeleteNotificationSendHistory(ctx context.Context, days int) (int64, error) {
+	tx := ctx.DB().
+		Model(&models.NotificationSendHistory{}).
+		Where(fmt.Sprintf("created_at < NOW() - INTERVAL '%d DAYS'", days)).
+		Delete(&models.NotificationSendHistory{})
+	return tx.RowsAffected, tx.Error
 }

@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"context"
+	gocontext "context"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -146,7 +146,7 @@ func createHTTPServer(ctx api.Context) *echo.Echo {
 	e.Use(ServerCache)
 
 	e.GET("/health", func(c echo.Context) error {
-		if err := db.Pool.Ping(context.Background()); err != nil {
+		if err := db.Pool.Ping(gocontext.Background()); err != nil {
 			return c.JSON(http.StatusInternalServerError, api.HTTPError{
 				Error:   err.Error(),
 				Message: "Failed to ping database",
@@ -269,7 +269,7 @@ var Serve = &cobra.Command{
 			}
 		}
 
-		go jobs.Start(api.DefaultContext)
+		go jobs.Start(api.ContextWrapFunc(gocontext.Background()))
 
 		events.StartConsumers(api.DefaultContext, api.UpstreamConf)
 

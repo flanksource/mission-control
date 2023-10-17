@@ -3,13 +3,14 @@ package db
 import (
 	"time"
 
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/google/uuid"
 )
 
-func ReconcileIncidentStatus(ctx api.Context, incidentIDs []uuid.UUID) error {
+func ReconcileIncidentStatus(ctx context.Context, incidentIDs []uuid.UUID) error {
 	return ctx.DB().Exec(`
         WITH evidences_agg as (
             SELECT BOOL_AND(evidences.done) as done, incidents.status, incidents.id

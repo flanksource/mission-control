@@ -9,6 +9,7 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/contextwrapper"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/jobs"
 	"github.com/flanksource/incident-commander/k8s"
@@ -17,6 +18,7 @@ import (
 	"github.com/flanksource/incident-commander/telemetry"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"go.opentelemetry.io/otel"
 	"k8s.io/client-go/kubernetes/fake"
 )
 
@@ -37,6 +39,8 @@ func PreRun(cmd *cobra.Command, args []string) {
 	if otelcollectorURL != "" {
 		telemetry.InitTracer(otelServiceName, otelcollectorURL, true)
 	}
+
+	api.ContextWrapFunc = contextwrapper.ContextWrapper(db.Gorm, db.Pool, api.Kubernetes, otel.GetTracerProvider().Tracer("global"))
 }
 
 var Root = &cobra.Command{

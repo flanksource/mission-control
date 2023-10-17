@@ -1,7 +1,7 @@
 package jobs
 
 import (
-	"context"
+	gocontext "context"
 	"fmt"
 	"reflect"
 	"runtime"
@@ -30,9 +30,8 @@ func (t funcJob) Run() {
 	defer span.End()
 
 	if t.timeout > 0 {
-		timeoutCtx, cancel := context.WithTimeout(ctx, t.timeout)
+		timeoutCtx, cancel := gocontext.WithTimeout(ctx, t.timeout)
 		defer cancel()
-
 		ctx = ctx.WithContext(timeoutCtx)
 	}
 

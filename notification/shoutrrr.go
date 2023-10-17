@@ -60,7 +60,7 @@ func Send(ctx *Context, connectionName, shoutrrrURL, title, message string, prop
 // send sends a notification and returns the service it sent the notification to
 func send(ctx *Context, connectionName, shoutrrrURL, title, message string, properties ...map[string]string) (string, error) {
 	if connectionName != "" {
-		connection, err := ctx.HydrateConnection(connectionName)
+		connection, err := ctx.HydratedConnectionByURL(api.Namespace, connectionName)
 		if err != nil {
 			return "", err
 		}

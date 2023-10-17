@@ -3,11 +3,12 @@ package db
 import (
 	"time"
 
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/google/uuid"
 )
 
-func GetCanariesOfAgent(ctx api.Context, agentID uuid.UUID, since time.Time) (*api.CanaryPullResponse, error) {
+func GetCanariesOfAgent(ctx context.Context, agentID uuid.UUID, since time.Time) (*api.CanaryPullResponse, error) {
 	var now time.Time
 	if err := ctx.DB().Raw("SELECT NOW()").Scan(&now).Error; err != nil {
 		return nil, err

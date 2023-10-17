@@ -5,6 +5,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty/context"
 )
 
 type Hypothesis struct {
@@ -21,7 +22,7 @@ type EvidenceScriptInput struct {
 	Hypothesis     Hypothesis
 }
 
-func GetEvidenceScripts(ctx api.Context) []EvidenceScriptInput {
+func GetEvidenceScripts(ctx context.Context) []EvidenceScriptInput {
 	var evidences []EvidenceScriptInput
 	incidentsSubQuery := ctx.DB().Table("incidents").Select("id").Where("closed IS NULL")
 	hypothesesSubQuery := ctx.DB().Table("hypotheses").Select("id").Where("incident_id IN (?)", incidentsSubQuery)
@@ -45,7 +46,7 @@ func GetEvidenceScripts(ctx api.Context) []EvidenceScriptInput {
 	return evidences
 }
 
-func UpdateEvidenceScriptResult(ctx api.Context, id uuid.UUID, done bool, result string) error {
+func UpdateEvidenceScriptResult(ctx context.Context, id uuid.UUID, done bool, result string) error {
 	return ctx.DB().Table("evidences").Where("id = ?", id).
 		Updates(map[string]any{"done": done, "script_result": result}).
 		Error

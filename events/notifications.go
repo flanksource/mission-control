@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/flanksource/duty"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
@@ -56,7 +57,7 @@ func NewNotificationSendConsumerAsync() postq.AsyncEventConsumer {
 // addNotificationEvent responds to a event that can possibly generate a notification.
 // If a notification is found for the given event and passes all the filters, then
 // a new `notification.send` event is created.
-func addNotificationEvent(ctx api.Context, event postq.Event) error {
+func addNotificationEvent(ctx context.Context, event postq.Event) error {
 	notificationIDs, err := notification.GetNotificationIDsForEvent(ctx, event.Name)
 	if err != nil {
 		return err
@@ -114,7 +115,7 @@ func addNotificationEvent(ctx api.Context, event postq.Event) error {
 
 // sendNotifications sends a notification for each of the given events - one at a time.
 // It returns any events that failed to send.
-func sendNotifications(ctx api.Context, events postq.Events) postq.Events {
+func sendNotifications(ctx context.Context, events postq.Events) postq.Events {
 	var failedEvents []postq.Event
 	for _, e := range events {
 		var payload notification.NotificationEventPayload
@@ -145,7 +146,7 @@ func sendNotifications(ctx api.Context, events postq.Events) postq.Events {
 
 // getEnvForEvent gets the environment variables for the given event
 // that'll be passed to the cel expression or to the template renderer as a view.
-func getEnvForEvent(ctx api.Context, event postq.Event, properties map[string]string) (map[string]any, error) {
+func getEnvForEvent(ctx context.Context, event postq.Event, properties map[string]string) (map[string]any, error) {
 	env := make(map[string]any)
 
 	if strings.HasPrefix(event.Name, "check.") {
