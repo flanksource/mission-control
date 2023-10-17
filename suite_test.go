@@ -8,9 +8,11 @@ import (
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/testutils"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/contextwrapper"
 	"github.com/flanksource/incident-commander/db"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.opentelemetry.io/otel"
 )
 
 func TestMissionControl(t *testing.T) {
@@ -37,6 +39,7 @@ var _ = ginkgo.BeforeSuite(func() {
 	}
 
 	api.DefaultContext = api.NewContext(db.Gorm, db.Pool)
+	api.ContextWrapFunc = contextwrapper.ContextWrapper(db.Gorm, db.Pool, api.Kubernetes, otel.GetTracerProvider().Tracer("test"))
 })
 
 var _ = ginkgo.AfterSuite(func() {

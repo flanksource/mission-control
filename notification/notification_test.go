@@ -1,10 +1,12 @@
 package notification_test
 
 import (
+	gocontext "context"
 	"encoding/json"
 	"fmt"
 
 	"github.com/flanksource/commons/collections"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/api"
@@ -110,7 +112,7 @@ var _ = ginkgo.Describe("Test Notification on incident creation", ginkgo.Ordered
 		sendHandler, err := events.NewNotificationSendConsumerAsync().EventConsumer()
 		Expect(err).NotTo(HaveOccurred())
 
-		ctx := api.NewContext(db.Gorm, db.Pool)
+		ctx := context.NewContext(gocontext.Background()).WithDB(db.Gorm, db.Pool)
 
 		// Order of consumption is important as incident.create event
 		// produces a notification.send event

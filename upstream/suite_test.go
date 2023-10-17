@@ -14,11 +14,13 @@ import (
 	"github.com/flanksource/duty/testutils"
 	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/contextwrapper"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"go.opentelemetry.io/otel"
 	"gorm.io/gorm"
 )
 
@@ -92,6 +94,7 @@ func setupUpstreamHTTPServer() {
 		}
 	})
 
+	api.ContextWrapFunc = contextwrapper.ContextWrapper(upstreamDB, upstreamPool, api.Kubernetes, otel.GetTracerProvider().Tracer("test"))
 	upstreamGroup := upstreamEchoServer.Group("/upstream")
 	upstreamGroup.POST("/push", PushUpstream)
 	upstreamGroup.GET("/pull/:agent_name", Pull)

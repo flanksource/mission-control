@@ -1,13 +1,14 @@
 package events
 
 import (
+	gocontext "context"
 	"encoding/json"
 	"testing"
 
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/fixtures/dummy"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
-	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -70,7 +71,7 @@ var _ = ginkgo.Describe("Should save playbook run on the correct event", ginkgo.
 	ginkgo.It("Expect the event consumer to NOT save a playbook run", func() {
 		componentEventConsumer, err := NewComponentConsumerSync().EventConsumer()
 		Expect(err).NotTo(HaveOccurred())
-		componentEventConsumer.ConsumeUntilEmpty(api.NewContext(playbookDB, playbookDBPool))
+		componentEventConsumer.ConsumeUntilEmpty(context.NewContext(gocontext.Background()).WithDB(playbookDB, playbookDBPool))
 
 		var playbooks []models.PlaybookRun
 		err = playbookDB.Find(&playbooks).Error
@@ -88,7 +89,7 @@ var _ = ginkgo.Describe("Should save playbook run on the correct event", ginkgo.
 	ginkgo.It("Expect the event consumer to save the playbook run", func() {
 		componentEventConsumer, err := NewComponentConsumerSync().EventConsumer()
 		Expect(err).NotTo(HaveOccurred())
-		componentEventConsumer.ConsumeUntilEmpty(api.NewContext(playbookDB, playbookDBPool))
+		componentEventConsumer.ConsumeUntilEmpty(context.NewContext(gocontext.Background()).WithDB(playbookDB, playbookDBPool))
 
 		var playbook models.PlaybookRun
 		err = playbookDB.Where("component_id", dummy.Logistics.ID).First(&playbook).Error
