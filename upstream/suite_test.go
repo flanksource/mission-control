@@ -1,7 +1,7 @@
 package upstream
 
 import (
-	"context"
+	gocontext "context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -10,11 +10,11 @@ import (
 	embeddedPG "github.com/fergusstrange/embedded-postgres"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/testutils"
 	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/contextwrapper"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
@@ -61,7 +61,7 @@ var _ = ginkgo.BeforeSuite(func() {
 		ginkgo.Fail(err.Error())
 	}
 
-	_, err = agentDBPGPool.Exec(context.TODO(), fmt.Sprintf("CREATE DATABASE %s", upstreamDBName))
+	_, err = agentDBPGPool.Exec(gocontext.TODO(), fmt.Sprintf("CREATE DATABASE %s", upstreamDBName))
 	Expect(err).NotTo(HaveOccurred())
 
 	upstreamDBConnection := strings.ReplaceAll(connection, agentDBName, upstreamDBName)
@@ -75,7 +75,7 @@ var _ = ginkgo.BeforeSuite(func() {
 
 var _ = ginkgo.AfterSuite(func() {
 	logger.Infof("Stopping upstream echo server")
-	if err := upstreamEchoServer.Shutdown(context.Background()); err != nil {
+	if err := upstreamEchoServer.Shutdown(gocontext.Background()); err != nil {
 		ginkgo.Fail(err.Error())
 	}
 
@@ -94,7 +94,7 @@ func setupUpstreamHTTPServer() {
 		}
 	})
 
-	api.ContextWrapFunc = contextwrapper.ContextWrapper(upstreamDB, upstreamPool, api.Kubernetes, otel.GetTracerProvider().Tracer("test"))
+	api.ContextWrapFunc = context.WrapContext(upstreamDB, upstreamPool, api.Kubernetes, otel.GetTracerProvider().Tracer("test"))
 	upstreamGroup := upstreamEchoServer.Group("/upstream")
 	upstreamGroup.POST("/push", PushUpstream)
 	upstreamGroup.GET("/pull/:agent_name", Pull)
