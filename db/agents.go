@@ -26,19 +26,19 @@ func FindAgent(ctx context.Context, name string) (*models.Agent, error) {
 	return &agent, nil
 }
 
-func getAgent(ctx api.Context, name string) (*models.Agent, error) {
+func getAgent(ctx context.Context, name string) (*models.Agent, error) {
 	var t models.Agent
 	tx := ctx.DB().Where("name = ?", name).First(&t)
 	return &t, tx.Error
 }
 
-func createAgent(ctx api.Context, name string) (*models.Agent, error) {
+func createAgent(ctx context.Context, name string) (*models.Agent, error) {
 	a := models.Agent{Name: name}
 	tx := ctx.DB().Create(&a)
 	return &a, tx.Error
 }
 
-func GetOrCreateAgent(ctx api.Context, name string) (*models.Agent, error) {
+func GetOrCreateAgent(ctx context.Context, name string) (*models.Agent, error) {
 	a, err := getAgent(ctx, name)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {

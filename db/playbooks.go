@@ -24,7 +24,7 @@ func FindPlaybooksForEvent(ctx context.Context, eventClass, event string) ([]mod
 	return playbooks, nil
 }
 
-func FindPlaybook(ctx api.Context, id uuid.UUID) (*models.Playbook, error) {
+func FindPlaybook(ctx context.Context, id uuid.UUID) (*models.Playbook, error) {
 	var p models.Playbook
 	if err := ctx.DB().Where("id = ?", id).First(&p).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -38,7 +38,7 @@ func FindPlaybook(ctx api.Context, id uuid.UUID) (*models.Playbook, error) {
 }
 
 // CanApprove returns true if the given person can approve runs of the given playbook.
-func CanApprove(ctx api.Context, personID, playbookID string) (bool, error) {
+func CanApprove(ctx context.Context, personID, playbookID string) (bool, error) {
 	query := `
 	WITH playbook_approvers AS (
 		SELECT id,
@@ -66,7 +66,7 @@ func CanApprove(ctx api.Context, personID, playbookID string) (bool, error) {
 	return count > 0, nil
 }
 
-func GetPlaybookRun(ctx api.Context, id string) (*models.PlaybookRun, error) {
+func GetPlaybookRun(ctx context.Context, id string) (*models.PlaybookRun, error) {
 	var p models.PlaybookRun
 	if err := ctx.DB().Where("id = ?", id).First(&p).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -80,7 +80,7 @@ func GetPlaybookRun(ctx api.Context, id string) (*models.PlaybookRun, error) {
 }
 
 // FindPlaybooksForCheck returns all the playbooks that match the given check type and tags.
-func FindPlaybooksForCheck(ctx api.Context, checkType string, tags map[string]string) ([]api.PlaybookListItem, error) {
+func FindPlaybooksForCheck(ctx context.Context, checkType string, tags map[string]string) ([]api.PlaybookListItem, error) {
 	joinQuery := `JOIN LATERAL jsonb_array_elements(playbooks."spec"->'checks') AS checks(ch) ON 1=1`
 	var joinArgs []any
 	if len(tags) != 0 {
@@ -102,7 +102,7 @@ func FindPlaybooksForCheck(ctx api.Context, checkType string, tags map[string]st
 }
 
 // FindPlaybooksForConfig returns all the playbooks that match the given config type and tags.
-func FindPlaybooksForConfig(ctx api.Context, configType string, tags map[string]string) ([]api.PlaybookListItem, error) {
+func FindPlaybooksForConfig(ctx context.Context, configType string, tags map[string]string) ([]api.PlaybookListItem, error) {
 	joinQuery := `JOIN LATERAL jsonb_array_elements(playbooks."spec"->'configs') AS configs(config) ON 1=1`
 	var joinArgs []any
 
@@ -125,7 +125,7 @@ func FindPlaybooksForConfig(ctx api.Context, configType string, tags map[string]
 }
 
 // FindPlaybooksForComponent returns all the playbooks that match the given component type and tags.
-func FindPlaybooksForComponent(ctx api.Context, configType string, tags map[string]string) ([]api.PlaybookListItem, error) {
+func FindPlaybooksForComponent(ctx context.Context, configType string, tags map[string]string) ([]api.PlaybookListItem, error) {
 	joinQuery := `JOIN LATERAL jsonb_array_elements(playbooks."spec"->'components') AS components(component) ON 1=1`
 	var joinArgs []any
 
@@ -201,6 +201,6 @@ func UpdatePlaybookRunStatusIfApproved(ctx context.Context, playbookID string, a
 	return ctx.DB().Exec(query, approval.Approvers.Teams, approval.Approvers.People, models.PlaybookRunStatusScheduled, models.PlaybookRunStatusPending, playbookID).Error
 }
 
-func SavePlaybookRunApproval(ctx api.Context, approval models.PlaybookApproval) error {
+func SavePlaybookRunApproval(ctx context.Context, approval models.PlaybookApproval) error {
 	return ctx.DB().Create(&approval).Error
 }

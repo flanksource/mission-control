@@ -1,10 +1,12 @@
 package events
 
 import (
+	gocontext "context"
 	"fmt"
 	"time"
 
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/fixtures/dummy"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
@@ -153,19 +155,19 @@ var _ = ginkgo.Describe("Push Mode", ginkgo.Ordered, func() {
 
 		c, err := upstream.NewPushQueueConsumer(upstreamConfig).EventConsumer()
 		Expect(err).To(Not(HaveOccurred()))
-		c.ConsumeUntilEmpty(api.NewContext(agentBob.db, agentBob.pool))
+		c.ConsumeUntilEmpty(context.NewContext(gocontext.Background()).WithDB(agentBob.db, agentBob.pool))
 
 		// Agent James should also push everything in it's queue to the upstream
 		upstreamConfig.AgentName = agentJames.name
 		c, err = upstream.NewPushQueueConsumer(upstreamConfig).EventConsumer()
 		Expect(err).To(Not(HaveOccurred()))
-		c.ConsumeUntilEmpty(api.NewContext(agentJames.db, agentJames.pool))
+		c.ConsumeUntilEmpty(context.NewContext(gocontext.Background()).WithDB(agentJames.db, agentJames.pool))
 
 		// Agent Ross should also push everything in it's queue to the upstream
 		upstreamConfig.AgentName = agentRoss.name
 		c, err = upstream.NewPushQueueConsumer(upstreamConfig).EventConsumer()
 		Expect(err).To(Not(HaveOccurred()))
-		c.ConsumeUntilEmpty(api.NewContext(agentRoss.db, agentRoss.pool))
+		c.ConsumeUntilEmpty(context.NewContext(gocontext.Background()).WithDB(agentRoss.db, agentRoss.pool))
 	})
 
 	ginkgo.It("should have transferred all the components", func() {

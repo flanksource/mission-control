@@ -1,7 +1,7 @@
 package events
 
 import (
-	"context"
+	gocontext "context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -10,6 +10,7 @@ import (
 	embeddedPG "github.com/fergusstrange/embedded-postgres"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/fixtures/dummy"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/testutils"
@@ -84,16 +85,16 @@ var _ = ginkgo.BeforeSuite(func() {
 	agentBob.setup(connection)
 
 	// Setup another agent
-	_, err := agentBob.pool.Exec(context.TODO(), fmt.Sprintf("CREATE DATABASE %s", agentJames.name))
+	_, err := agentBob.pool.Exec(gocontext.TODO(), fmt.Sprintf("CREATE DATABASE %s", agentJames.name))
 	Expect(err).NotTo(HaveOccurred())
 	agentJames.setup(strings.ReplaceAll(connection, agentBob.name, agentJames.name))
 
-	_, err = agentBob.pool.Exec(context.TODO(), fmt.Sprintf("CREATE DATABASE %s", agentRoss.name))
+	_, err = agentBob.pool.Exec(gocontext.TODO(), fmt.Sprintf("CREATE DATABASE %s", agentRoss.name))
 	Expect(err).NotTo(HaveOccurred())
 	agentRoss.setup(strings.ReplaceAll(connection, agentBob.name, agentRoss.name))
 
 	// Setup upstream db
-	_, err = agentBob.pool.Exec(context.TODO(), fmt.Sprintf("CREATE DATABASE %s", upstreamDBName))
+	_, err = agentBob.pool.Exec(gocontext.TODO(), fmt.Sprintf("CREATE DATABASE %s", upstreamDBName))
 	Expect(err).NotTo(HaveOccurred())
 	upstreamDBConnection := strings.ReplaceAll(connection, agentBob.name, upstreamDBName)
 	if upstreamDB, upstreamDBPGPool, err = duty.SetupDB(upstreamDBConnection, nil); err != nil {
@@ -105,7 +106,7 @@ var _ = ginkgo.BeforeSuite(func() {
 	Expect(upstreamDB.Create(&models.Agent{ID: agentRoss.id, Name: agentRoss.name}).Error).To(BeNil())
 
 	// Setup database for playbook
-	_, err = agentBob.pool.Exec(context.TODO(), "CREATE DATABASE playbook")
+	_, err = agentBob.pool.Exec(gocontext.TODO(), "CREATE DATABASE playbook")
 	Expect(err).NotTo(HaveOccurred())
 	playbookDBConnection := strings.ReplaceAll(connection, agentBob.name, "playbook")
 	if playbookDB, playbookDBPool, err = duty.SetupDB(playbookDBConnection, nil); err != nil {
@@ -115,6 +116,7 @@ var _ = ginkgo.BeforeSuite(func() {
 	upstreamEchoServer = echo.New()
 	upstreamEchoServer.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
+			c.SetRequest(c.Request().WithContext(context.NewContext(c.Request().Context()).WithDB(upstreamDB, upstreamDBPGPool)))
 			cc := api.NewContext(upstreamDB, upstreamDBPGPool).WithEchoContext(c)
 			return next(cc)
 		}
@@ -139,7 +141,7 @@ var _ = ginkgo.AfterSuite(func() {
 	agentJames.stop()
 
 	logger.Infof("Stopping upstream echo server")
-	if err := upstreamEchoServer.Shutdown(context.Background()); err != nil {
+	if err := upstreamEchoServer.Shutdown(gocontext.Background()); err != nil {
 		ginkgo.Fail(err.Error())
 	}
 

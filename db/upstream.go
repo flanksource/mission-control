@@ -7,7 +7,6 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/upstream"
-	"github.com/flanksource/incident-commander/api"
 	"github.com/google/uuid"
 	"gorm.io/gorm/clause"
 )
@@ -39,7 +38,7 @@ func GetAllResourceIDsOfAgent(ctx context.Context, req upstream.PaginateRequest,
 	return response, err
 }
 
-func InsertUpstreamMsg(ctx api.Context, req *upstream.PushData) error {
+func InsertUpstreamMsg(ctx context.Context, req *upstream.PushData) error {
 	if len(req.Topologies) > 0 {
 		if err := ctx.DB().Clauses(clause.OnConflict{UpdateAll: true}).Create(req.Topologies).Error; err != nil {
 			return fmt.Errorf("error upserting topologies: %w", err)

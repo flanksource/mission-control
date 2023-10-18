@@ -1,13 +1,14 @@
 package playbook
 
 import (
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/google/uuid"
 )
 
-func ListPlaybooksForConfig(ctx api.Context, id string) ([]api.PlaybookListItem, error) {
+func ListPlaybooksForConfig(ctx context.Context, id string) ([]api.PlaybookListItem, error) {
 	var config models.ConfigItem
 	if err := ctx.DB().Where("id = ?", id).Find(&config).Error; err != nil {
 		return nil, err
@@ -18,7 +19,7 @@ func ListPlaybooksForConfig(ctx api.Context, id string) ([]api.PlaybookListItem,
 	return db.FindPlaybooksForConfig(ctx, *config.Type, *config.Tags)
 }
 
-func ListPlaybooksForComponent(ctx api.Context, id string) ([]api.PlaybookListItem, error) {
+func ListPlaybooksForComponent(ctx context.Context, id string) ([]api.PlaybookListItem, error) {
 	var component models.Component
 	if err := ctx.DB().Where("id = ?", id).Find(&component).Error; err != nil {
 		return nil, err
@@ -29,7 +30,7 @@ func ListPlaybooksForComponent(ctx api.Context, id string) ([]api.PlaybookListIt
 	return db.FindPlaybooksForComponent(ctx, component.Type, component.Labels)
 }
 
-func ListPlaybooksForCheck(ctx api.Context, id string) ([]api.PlaybookListItem, error) {
+func ListPlaybooksForCheck(ctx context.Context, id string) ([]api.PlaybookListItem, error) {
 	var check models.Check
 	if err := ctx.DB().Where("id = ?", id).Find(&check).Error; err != nil {
 		return nil, err
