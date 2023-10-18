@@ -24,7 +24,7 @@ func FindPlaybooksForEvent(ctx context.Context, eventClass, event string) ([]mod
 	return playbooks, nil
 }
 
-func FindPlaybook(ctx api.Context, id uuid.UUID) (*models.Playbook, error) {
+func FindPlaybook(ctx context.Context, id uuid.UUID) (*models.Playbook, error) {
 	var p models.Playbook
 	if err := ctx.DB().Where("id = ?", id).First(&p).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -66,7 +66,7 @@ func CanApprove(ctx api.Context, personID, playbookID string) (bool, error) {
 	return count > 0, nil
 }
 
-func GetPlaybookRun(ctx api.Context, id string) (*models.PlaybookRun, error) {
+func GetPlaybookRun(ctx context.Context, id string) (*models.PlaybookRun, error) {
 	var p models.PlaybookRun
 	if err := ctx.DB().Where("id = ?", id).First(&p).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -201,6 +201,6 @@ func UpdatePlaybookRunStatusIfApproved(ctx context.Context, playbookID string, a
 	return ctx.DB().Exec(query, approval.Approvers.Teams, approval.Approvers.People, models.PlaybookRunStatusScheduled, models.PlaybookRunStatusPending, playbookID).Error
 }
 
-func SavePlaybookRunApproval(ctx api.Context, approval models.PlaybookApproval) error {
+func SavePlaybookRunApproval(ctx context.Context, approval models.PlaybookApproval) error {
 	return ctx.DB().Create(&approval).Error
 }
