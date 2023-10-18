@@ -20,7 +20,6 @@ import (
 	"github.com/labstack/echo/v4"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.opentelemetry.io/otel"
 	"gorm.io/gorm"
 )
 
@@ -95,7 +94,7 @@ func setupUpstreamHTTPServer() {
 		}
 	})
 
-	api.ContextWrapFunc = context.WrapContext(upstreamDB, upstreamPool, api.Kubernetes, otel.GetTracerProvider().Tracer("test"))
+	api.DefaultContext = context.NewContext(gocontext.Background()).WithDB(upstreamDB, upstreamPool)
 	upstreamGroup := upstreamEchoServer.Group("/upstream")
 	upstreamGroup.POST("/push", PushUpstream)
 	upstreamGroup.GET("/pull/:agent_name", Pull)

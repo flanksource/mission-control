@@ -9,6 +9,7 @@ import (
 
 	"github.com/flanksource/commons/logger"
 	cutils "github.com/flanksource/commons/utils"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/schema/openapi"
 	"github.com/flanksource/kopper"
 	"github.com/flanksource/postq/pg"
@@ -73,7 +74,7 @@ func createHTTPServer(ctx api.Context) *echo.Echo {
 
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			c.SetRequest(c.Request().WithContext(api.ContextWrapFunc(c.Request().Context())))
+			c.SetRequest(c.Request().WithContext(api.DefaultContext.Wrap(c.Request().Context())))
 			cc := ctx.WithEchoContext(c)
 			return next(cc)
 		}
@@ -270,21 +271,21 @@ var Serve = &cobra.Command{
 			}
 		}
 
-		go jobs.Start(api.ContextWrapFunc(gocontext.Background()))
+		go jobs.Start(api.DefaultContext)
 
-		events.StartConsumers(api.ContextWrapFunc(gocontext.Background()), api.UpstreamConf)
+		events.StartConsumers(api.DefaultContext, api.UpstreamConf)
 
 		go tableUpdatesHandler(api.DefaultContext)
 
 		go func() {
-			logs.IfError(playbook.StartPlaybookRunConsumer(api.ContextWrapFunc(gocontext.Background())), "error starting playbook run consumer")
+			logs.IfError(playbook.StartPlaybookRunConsumer(api.DefaultContext), "error starting playbook run consumer")
 		}()
 
-		go playbook.ListenPlaybookPGNotify(api.ContextWrapFunc(gocontext.Background()))
+		go playbook.ListenPlaybookPGNotify(api.DefaultContext)
 
 		go launchKopper()
 
-		e := createHTTPServer(api.DefaultContext)
+		e := createHTTPServer(api.DefaultAPIContext)
 		listenAddr := fmt.Sprintf(":%d", httpPort)
 		logger.Infof("Listening on %s", listenAddr)
 		if err := e.Start(listenAddr); err != nil {
@@ -357,7 +358,7 @@ func ServerCache(next echo.HandlerFunc) echo.HandlerFunc {
 }
 
 // tableUpdatesHandler handles all "table_activity" pg notifications.
-func tableUpdatesHandler(ctx api.Context) {
+func tableUpdatesHandler(ctx context.Context) {
 	notifyRouter := pg.NewNotifyRouter()
 	go notifyRouter.Run(ctx, "table_activity")
 

@@ -13,7 +13,7 @@ import (
 )
 
 func PersistNotificationFromCRD(obj *v1.Notification) error {
-	ctx := api.DefaultContext
+	ctx := api.DefaultAPIContext
 
 	uid, err := uuid.Parse(string(obj.GetUID()))
 	if err != nil {

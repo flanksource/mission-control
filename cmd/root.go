@@ -1,11 +1,13 @@
 package cmd
 
 import (
+	gocontext "context"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
+	commonsCtx "github.com/flanksource/commons/context"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty/context"
@@ -34,13 +36,16 @@ func PreRun(cmd *cobra.Command, args []string) {
 		api.Kubernetes = fake.NewSimpleClientset()
 	}
 
-	api.DefaultContext = api.NewContext(db.Gorm, db.Pool)
+	api.DefaultAPIContext = api.NewContext(db.Gorm, db.Pool)
 
 	if otelcollectorURL != "" {
 		telemetry.InitTracer(otelServiceName, otelcollectorURL, true)
 	}
 
-	api.ContextWrapFunc = context.WrapContext(db.Gorm, db.Pool, api.Kubernetes, otel.GetTracerProvider().Tracer("global"))
+	api.DefaultContext = context.NewContext(gocontext.Background(), commonsCtx.WithTracer(otel.GetTracerProvider().Tracer("global"))).
+		WithDB(db.Gorm, db.Pool).
+		WithKubernetes(api.Kubernetes).
+		WithNamespace(api.Namespace)
 }
 
 var Root = &cobra.Command{

@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"context"
-
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/job"
 	"github.com/flanksource/incident-commander/api"
@@ -18,9 +16,8 @@ var incidentRules = &cobra.Command{
 	Use:    "rules",
 	PreRun: PreRun,
 	Run: func(cmd *cobra.Command, args []string) {
-		ctx := api.ContextWrapFunc(context.Background())
 		jr := job.JobRuntime{
-			Context: ctx,
+			Context: api.DefaultContext,
 		}
 		if err := rules.Run(jr); err != nil {
 			logger.Fatalf("Failed to run rules: %v", err)

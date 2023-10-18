@@ -21,9 +21,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-var DefaultContext Context
-
-var ContextWrapFunc func(ctx gocontext.Context) context.Context
+var DefaultAPIContext Context
+var DefaultContext context.Context
 
 // ContextUser carries basic information of the current logged in user
 type ContextUser struct {

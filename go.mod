@@ -11,8 +11,8 @@ require (
 	github.com/casbin/gorm-adapter/v3 v3.18.0
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.24.0
-	github.com/flanksource/commons v1.15.0
-	github.com/flanksource/duty v1.0.196
+	github.com/flanksource/commons v1.15.1
+	github.com/flanksource/duty v1.0.197
 	github.com/flanksource/gomplate/v3 v3.20.16
 	github.com/flanksource/kopper v1.0.6
 	github.com/flanksource/postq v0.1.2
@@ -238,9 +238,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.3.0 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
-)
-
-replace (
-	github.com/flanksource/commons => ../commons
-	github.com/flanksource/duty => ../duty
 )

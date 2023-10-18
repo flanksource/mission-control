@@ -1,6 +1,7 @@
 package main
 
 import (
+	gocontext "context"
 	"testing"
 
 	embeddedPG "github.com/fergusstrange/embedded-postgres"
@@ -12,7 +13,6 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"go.opentelemetry.io/otel"
 )
 
 func TestMissionControl(t *testing.T) {
@@ -38,8 +38,8 @@ var _ = ginkgo.BeforeSuite(func() {
 		ginkgo.Fail(err.Error())
 	}
 
-	api.DefaultContext = api.NewContext(db.Gorm, db.Pool)
-	api.ContextWrapFunc = context.WrapContext(db.Gorm, db.Pool, api.Kubernetes, otel.GetTracerProvider().Tracer("test"))
+	api.DefaultAPIContext = api.NewContext(db.Gorm, db.Pool)
+	api.DefaultContext = context.NewContext(gocontext.Background()).WithDB(db.Gorm, db.Pool)
 })
 
 var _ = ginkgo.AfterSuite(func() {

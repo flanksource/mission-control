@@ -13,8 +13,6 @@ import (
 	"gorm.io/gorm"
 )
 
-var traceName = "playbook-run"
-
 func ExecuteRun(ctx context.Context, run models.PlaybookRun) {
 	ctx, span := ctx.StartSpan("ExecuteRun")
 	defer span.End()

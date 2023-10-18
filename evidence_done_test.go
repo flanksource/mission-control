@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"encoding/json"
 	"time"
 
@@ -136,7 +135,7 @@ var _ = ginkgo.Describe("Test Incident Done Definition With Config Item", ginkgo
 	})
 
 	ginkgo.It("should NOT mark the incident as resolved", func() {
-		err := jobs.EvaluateEvidenceScripts(job.JobRuntime{Context: api.ContextWrapFunc(context.Background())})
+		err := jobs.EvaluateEvidenceScripts(job.JobRuntime{Context: api.DefaultContext})
 		Expect(err).To(BeNil())
 
 		var fetchedIncident models.Incident
@@ -154,7 +153,7 @@ var _ = ginkgo.Describe("Test Incident Done Definition With Config Item", ginkgo
 	})
 
 	ginkgo.It("should mark the incident as resolved", func() {
-		err := jobs.EvaluateEvidenceScripts(job.JobRuntime{Context: api.ContextWrapFunc(context.Background())})
+		err := jobs.EvaluateEvidenceScripts(job.JobRuntime{Context: api.DefaultContext})
 		Expect(err).To(BeNil())
 
 		var fetchedIncident models.Incident
@@ -270,7 +269,7 @@ var _ = ginkgo.Describe("Test Incident Done Definition With Config Item", ginkgo
 	})
 
 	ginkgo.It("should NOT mark the incident as resolved", func() {
-		err := jobs.EvaluateEvidenceScripts(job.JobRuntime{Context: api.ContextWrapFunc(context.Background())})
+		err := jobs.EvaluateEvidenceScripts(job.JobRuntime{Context: api.DefaultContext})
 		Expect(err).To(BeNil())
 
 		var fetchedIncident models.Incident
@@ -287,7 +286,7 @@ var _ = ginkgo.Describe("Test Incident Done Definition With Config Item", ginkgo
 	})
 
 	ginkgo.It("should mark the incident as resolved", func() {
-		err := jobs.EvaluateEvidenceScripts(job.JobRuntime{Context: api.ContextWrapFunc(context.Background())})
+		err := jobs.EvaluateEvidenceScripts(job.JobRuntime{Context: api.DefaultContext})
 		Expect(err).To(BeNil())
 
 		var fetchedIncident models.Incident
@@ -405,7 +404,7 @@ var _ = ginkgo.Describe("Test Incident Done Definition With Health Check", ginkg
 	})
 
 	ginkgo.It("should NOT mark the incident as resolved", func() {
-		err := jobs.EvaluateEvidenceScripts(job.JobRuntime{Context: api.ContextWrapFunc(context.Background())})
+		err := jobs.EvaluateEvidenceScripts(job.JobRuntime{Context: api.DefaultContext})
 		Expect(err).To(BeNil())
 
 		var fetchedIncident models.Incident
@@ -423,7 +422,7 @@ var _ = ginkgo.Describe("Test Incident Done Definition With Health Check", ginkg
 	})
 
 	ginkgo.It("should mark the incident as resolved", func() {
-		err := jobs.EvaluateEvidenceScripts(job.JobRuntime{Context: api.ContextWrapFunc(context.Background())})
+		err := jobs.EvaluateEvidenceScripts(job.JobRuntime{Context: api.DefaultContext})
 		Expect(err).To(BeNil())
 
 		var fetchedIncident models.Incident
