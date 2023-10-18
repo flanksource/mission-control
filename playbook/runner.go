@@ -6,17 +6,15 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/playbook/actions"
 	"gorm.io/gorm"
 )
 
-var traceName = "playbook-run"
-
-func ExecuteRun(ctx api.Context, run models.PlaybookRun) {
-	ctx, span := ctx.StartTrace(traceName, "ExecuteRun")
+func ExecuteRun(ctx context.Context, run models.PlaybookRun) {
+	ctx, span := ctx.StartSpan("ExecuteRun")
 	defer span.End()
 
 	var runOptions runExecOptions
@@ -75,7 +73,7 @@ type runExecResponse struct {
 	Sleep time.Duration
 }
 
-func prepareTemplateEnv(ctx api.Context, run models.PlaybookRun) (actions.TemplateEnv, error) {
+func prepareTemplateEnv(ctx context.Context, run models.PlaybookRun) (actions.TemplateEnv, error) {
 	templateEnv := actions.TemplateEnv{
 		Params: run.Parameters,
 	}
@@ -98,7 +96,7 @@ func prepareTemplateEnv(ctx api.Context, run models.PlaybookRun) (actions.Templa
 }
 
 // executeRun executes all the actions in the given playbook one at a time in order.
-func executeRun(ctx api.Context, run models.PlaybookRun, opt runExecOptions) (*runExecResponse, error) {
+func executeRun(ctx context.Context, run models.PlaybookRun, opt runExecOptions) (*runExecResponse, error) {
 	var playbookModel models.Playbook
 	if err := ctx.DB().Where("id = ?", run.PlaybookID).First(&playbookModel).Error; err != nil {
 		return nil, err
@@ -195,8 +193,8 @@ func executeRun(ctx api.Context, run models.PlaybookRun, opt runExecOptions) (*r
 	return &runExecResponse{}, nil
 }
 
-func executeAction(ctx api.Context, run models.PlaybookRun, action v1.PlaybookAction, env actions.TemplateEnv) ([]byte, error) {
-	ctx, span := ctx.StartTrace(traceName, "executeAction")
+func executeAction(ctx context.Context, run models.PlaybookRun, action v1.PlaybookAction, env actions.TemplateEnv) ([]byte, error) {
+	ctx, span := ctx.StartSpan("executeAction")
 	defer span.End()
 
 	logger.WithValues("runID", run.ID).Infof("Executing action: %s", action.Name)

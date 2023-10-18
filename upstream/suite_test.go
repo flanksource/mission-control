@@ -1,7 +1,7 @@
 package upstream
 
 import (
-	"context"
+	gocontext "context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -10,6 +10,7 @@ import (
 	embeddedPG "github.com/fergusstrange/embedded-postgres"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/testutils"
 	"github.com/flanksource/duty/upstream"
@@ -59,7 +60,7 @@ var _ = ginkgo.BeforeSuite(func() {
 		ginkgo.Fail(err.Error())
 	}
 
-	_, err = agentDBPGPool.Exec(context.TODO(), fmt.Sprintf("CREATE DATABASE %s", upstreamDBName))
+	_, err = agentDBPGPool.Exec(gocontext.TODO(), fmt.Sprintf("CREATE DATABASE %s", upstreamDBName))
 	Expect(err).NotTo(HaveOccurred())
 
 	upstreamDBConnection := strings.ReplaceAll(connection, agentDBName, upstreamDBName)
@@ -73,7 +74,7 @@ var _ = ginkgo.BeforeSuite(func() {
 
 var _ = ginkgo.AfterSuite(func() {
 	logger.Infof("Stopping upstream echo server")
-	if err := upstreamEchoServer.Shutdown(context.Background()); err != nil {
+	if err := upstreamEchoServer.Shutdown(gocontext.Background()); err != nil {
 		ginkgo.Fail(err.Error())
 	}
 
@@ -87,11 +88,13 @@ func setupUpstreamHTTPServer() {
 	upstreamEchoServer = echo.New()
 	upstreamEchoServer.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
+			c.SetRequest(c.Request().WithContext(context.NewContext(c.Request().Context()).WithDB(upstreamDB, upstreamPool)))
 			cc := api.NewContext(upstreamDB, upstreamPool).WithEchoContext(c)
 			return next(cc)
 		}
 	})
 
+	api.DefaultContext = context.NewContext(gocontext.Background()).WithDB(upstreamDB, upstreamPool)
 	upstreamGroup := upstreamEchoServer.Group("/upstream")
 	upstreamGroup.POST("/push", PushUpstream)
 	upstreamGroup.GET("/pull/:agent_name", Pull)

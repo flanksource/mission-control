@@ -2,12 +2,13 @@ package db
 
 import (
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/google/uuid"
 	"gorm.io/gorm/clause"
 )
 
-func GetTeamsWithComponentSelector(ctx api.Context) map[uuid.UUID][]api.ComponentSelector {
+func GetTeamsWithComponentSelector(ctx context.Context) map[uuid.UUID][]api.ComponentSelector {
 	var teams []api.Team
 	var teamComponentMap = make(map[uuid.UUID][]api.ComponentSelector)
 	err := ctx.DB().Table("teams").Where("spec::jsonb ? 'components';").Find(&teams).Error
@@ -27,7 +28,7 @@ func GetTeamsWithComponentSelector(ctx api.Context) map[uuid.UUID][]api.Componen
 	return teamComponentMap
 }
 
-func GetComponentsWithSelector(ctx api.Context, selector api.ComponentSelector) []uuid.UUID {
+func GetComponentsWithSelector(ctx context.Context, selector api.ComponentSelector) []uuid.UUID {
 	var compIds []uuid.UUID
 	query := ctx.DB().Table("components").Where("deleted_at is null").Select("id")
 	if selector.Name != "" {
@@ -46,7 +47,7 @@ func GetComponentsWithSelector(ctx api.Context, selector api.ComponentSelector) 
 	return compIds
 }
 
-func PersistTeamComponents(ctx api.Context, teamComps []api.TeamComponent) error {
+func PersistTeamComponents(ctx context.Context, teamComps []api.TeamComponent) error {
 	if len(teamComps) == 0 {
 		return nil
 	}

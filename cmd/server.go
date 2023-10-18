@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"context"
+	gocontext "context"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -9,6 +9,7 @@ import (
 
 	"github.com/flanksource/commons/logger"
 	cutils "github.com/flanksource/commons/utils"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/schema/openapi"
 	"github.com/flanksource/kopper"
 	"github.com/flanksource/postq/pg"
@@ -73,6 +74,7 @@ func createHTTPServer(ctx api.Context) *echo.Echo {
 
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
+			c.SetRequest(c.Request().WithContext(api.DefaultContext.Wrap(c.Request().Context())))
 			cc := ctx.WithEchoContext(c)
 			return next(cc)
 		}
@@ -146,7 +148,7 @@ func createHTTPServer(ctx api.Context) *echo.Echo {
 	e.Use(ServerCache)
 
 	e.GET("/health", func(c echo.Context) error {
-		if err := db.Pool.Ping(context.Background()); err != nil {
+		if err := db.Pool.Ping(gocontext.Background()); err != nil {
 			return c.JSON(http.StatusInternalServerError, api.HTTPError{
 				Error:   err.Error(),
 				Message: "Failed to ping database",
@@ -283,7 +285,7 @@ var Serve = &cobra.Command{
 
 		go launchKopper()
 
-		e := createHTTPServer(api.DefaultContext)
+		e := createHTTPServer(api.DefaultAPIContext)
 		listenAddr := fmt.Sprintf(":%d", httpPort)
 		logger.Infof("Listening on %s", listenAddr)
 		if err := e.Start(listenAddr); err != nil {
@@ -356,7 +358,7 @@ func ServerCache(next echo.HandlerFunc) echo.HandlerFunc {
 }
 
 // tableUpdatesHandler handles all "table_activity" pg notifications.
-func tableUpdatesHandler(ctx api.Context) {
+func tableUpdatesHandler(ctx context.Context) {
 	notifyRouter := pg.NewNotifyRouter()
 	go notifyRouter.Run(ctx, "table_activity")
 

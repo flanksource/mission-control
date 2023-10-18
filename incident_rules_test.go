@@ -1,9 +1,12 @@
 package main
 
 import (
+	gocontext "context"
 	"fmt"
 	"time"
 
+	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/job"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/api"
@@ -109,7 +112,10 @@ var _ = ginkgo.Describe("Test incident creation via incidence rule", ginkgo.Orde
 	})
 
 	ginkgo.It("should create incidents", func() {
-		err := rules.Run(api.DefaultContext)
+		ctx := context.NewContext(gocontext.Background()).WithDB(db.Gorm, db.Pool)
+		jobCtx := job.JobRuntime{Context: ctx}
+
+		err := rules.Run(jobCtx)
 		Expect(err).To(BeNil())
 
 		var incidences []models.Incident

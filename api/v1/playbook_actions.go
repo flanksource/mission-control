@@ -9,6 +9,7 @@ import (
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
+	"github.com/flanksource/incident-commander/api"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -83,8 +84,8 @@ type ExecConnections struct {
 
 type connectionContext interface {
 	gocontext.Context
-	HydrateConnection(connectionName string) (*models.Connection, error)
-	GetEnvValueFromCache(env types.EnvVar) (string, error)
+	HydratedConnectionByURL(namespace, connectionName string) (*models.Connection, error)
+	GetEnvValueFromCache(env types.EnvVar, namespace string) (string, error)
 }
 
 type GCPConnection struct {
@@ -97,7 +98,7 @@ type GCPConnection struct {
 // HydrateConnection attempts to find the connection by name
 // and populate the endpoint and credentials.
 func (g *GCPConnection) HydrateConnection(ctx connectionContext) error {
-	connection, err := ctx.HydrateConnection(g.ConnectionName)
+	connection, err := ctx.HydratedConnectionByURL(api.Namespace, g.ConnectionName)
 	if err != nil {
 		return err
 	}
@@ -120,7 +121,7 @@ type AzureConnection struct {
 // HydrateConnection attempts to find the connection by name
 // and populate the endpoint and credentials.
 func (g *AzureConnection) HydrateConnection(ctx connectionContext) error {
-	connection, err := ctx.HydrateConnection(g.ConnectionName)
+	connection, err := ctx.HydratedConnectionByURL(api.Namespace, g.ConnectionName)
 	if err != nil {
 		return err
 	}
@@ -154,7 +155,7 @@ type AWSConnection struct {
 // If a connection name is specified, it'll be used to populate the endpoint, accessKey and secretKey.
 func (t *AWSConnection) Populate(ctx connectionContext, k8s kubernetes.Interface, namespace string) error {
 	if t.ConnectionName != "" {
-		connection, err := ctx.HydrateConnection(t.ConnectionName)
+		connection, err := ctx.HydratedConnectionByURL(namespace, t.ConnectionName)
 		if err != nil {
 			return fmt.Errorf("could not parse EC2 access key: %v", err)
 		}

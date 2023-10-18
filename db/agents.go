@@ -5,13 +5,14 @@ import (
 	"fmt"
 
 	"github.com/flanksource/commons/collections"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
-func FindAgent(ctx api.Context, name string) (*models.Agent, error) {
+func FindAgent(ctx context.Context, name string) (*models.Agent, error) {
 	var agent models.Agent
 	err := ctx.DB().Where("name = ?", name).First(&agent).Error
 	if err != nil {

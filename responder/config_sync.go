@@ -2,6 +2,7 @@ package responder
 
 import (
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty/job"
 	"github.com/flanksource/duty/models"
 
 	"github.com/flanksource/incident-commander/api"
@@ -30,7 +31,7 @@ func upsertConfig(configType, externalID, name, config string) error {
 	return nil
 }
 
-func SyncConfig(ctx api.Context) error {
+func SyncConfig(ctx job.JobRuntime) error {
 	logger.Debugf("Syncing responder config")
 
 	var teams []api.Team
@@ -45,20 +46,20 @@ func SyncConfig(ctx api.Context) error {
 			continue
 		}
 		jobHistory := models.NewJobHistory("TeamResponderConfigSync", "team", team.ID.String())
-		_ = db.PersistJobHistory(ctx, jobHistory.Start())
+		_ = db.PersistJobHistory(ctx.Context, jobHistory.Start())
 
 		defer func() {
-			_ = db.PersistJobHistory(ctx, jobHistory.End())
+			_ = db.PersistJobHistory(ctx.Context, jobHistory.End())
 		}()
 
-		responder, err := GetResponder(ctx, team)
+		responder, err := GetResponder(ctx.Context, team)
 		if err != nil {
 			logger.Errorf("Error getting responder: %v", err)
 			jobHistory.AddError(err.Error()).End()
 			continue
 		}
 
-		if configType, configName, config, err := responder.SyncConfig(ctx, team); err != nil {
+		if configType, configName, config, err := responder.SyncConfig(ctx.Context, team); err != nil {
 			logger.Errorf("Error syncing config: %v", err)
 			jobHistory.AddError(err.Error()).End()
 			continue
@@ -69,7 +70,6 @@ func SyncConfig(ctx api.Context) error {
 				continue
 			}
 			jobHistory.IncrSuccess()
-
 		}
 	}
 	return nil

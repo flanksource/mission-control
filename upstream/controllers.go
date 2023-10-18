@@ -9,6 +9,7 @@ import (
 
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
@@ -64,15 +65,14 @@ func PushUpstream(c echo.Context) error {
 
 // Pull returns all the ids of items it has received from the requested agent.
 func Pull(c echo.Context) error {
-	ctx := c.(api.Context)
-
+	ctx := c.Request().Context().(context.Context)
 	var req upstream.PaginateRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error()})
 	}
 
 	reqJSON, _ := json.Marshal(req)
-	ctx.SetSpanAttributes(attribute.String("upstream.pull.paginate-request", string(reqJSON)))
+	ctx.GetSpan().SetAttributes(attribute.String("upstream.pull.paginate-request", string(reqJSON)))
 
 	if !collections.Contains(api.TablesToReconcile, req.Table) {
 		return c.JSON(http.StatusForbidden, api.HTTPError{Error: fmt.Sprintf("table=%s is not allowed", req.Table)})
@@ -96,15 +96,14 @@ func Pull(c echo.Context) error {
 
 // Status returns the summary of all ids the upstream has received.
 func Status(c echo.Context) error {
-	ctx := c.(api.Context)
-
+	ctx := c.Request().Context().(context.Context)
 	var req upstream.PaginateRequest
 	if err := c.Bind(&req); err != nil {
 		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error()})
 	}
 
 	reqJSON, _ := json.Marshal(req)
-	ctx.SetSpanAttributes(attribute.String("upstream.status.paginate-request", string(reqJSON)))
+	ctx.GetSpan().SetAttributes(attribute.String("upstream.status.paginate-request", string(reqJSON)))
 
 	if !collections.Contains(api.TablesToReconcile, req.Table) {
 		return c.JSON(http.StatusForbidden, api.HTTPError{Error: fmt.Sprintf("table=%s is not allowed", req.Table)})
@@ -128,10 +127,9 @@ func Status(c echo.Context) error {
 
 // PullCanaries returns all canaries for the  agent
 func PullCanaries(c echo.Context) error {
-	ctx := c.(api.Context)
+	ctx := c.Request().Context().(context.Context)
 
 	agentName := c.Param("agent_name")
-
 	agent, err := db.FindAgent(ctx, agentName)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to get agent"})
@@ -146,7 +144,7 @@ func PullCanaries(c echo.Context) error {
 			return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error(), Message: "'since' param needs to be a valid RFC3339 timestamp"})
 		}
 
-		ctx.SetSpanAttributes(attribute.String("upstream.pull.canaries.since", sinceRaw))
+		ctx.GetSpan().SetAttributes(attribute.String("upstream.pull.canaries.since", sinceRaw))
 	}
 
 	canaries, err := db.GetCanariesOfAgent(ctx, agent.ID, since)
@@ -162,8 +160,7 @@ func PullCanaries(c echo.Context) error {
 
 // PullScrapeConfigs returns all scrape configs for the agent.
 func PullScrapeConfigs(c echo.Context) error {
-	ctx := c.(api.Context)
-
+	ctx := c.Request().Context().(context.Context)
 	agentName := c.Param("agent_name")
 
 	agent, err := db.FindAgent(ctx, agentName)
@@ -180,7 +177,7 @@ func PullScrapeConfigs(c echo.Context) error {
 			return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error(), Message: "'since' param needs to be a valid RFC3339Nano timestamp"})
 		}
 
-		ctx.SetSpanAttributes(attribute.String("upstream.pull.configs.since", sinceRaw))
+		ctx.GetSpan().SetAttributes(attribute.String("upstream.pull.configs.since", sinceRaw))
 	}
 
 	scrapeConfigs, err := db.GetScrapeConfigsOfAgent(ctx, agent.ID, since)

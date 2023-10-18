@@ -4,8 +4,8 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/upstream"
-	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/postq"
 	"github.com/flanksource/postq/pg"
 	"gorm.io/gorm"
@@ -70,7 +70,7 @@ const (
 	EventMSPlannerCommentAdded   = "incident.comment.msplanner.added"
 )
 
-func StartConsumers(ctx api.Context, upstreamConfig upstream.UpstreamConfig) {
+func StartConsumers(ctx context.Context, upstreamConfig upstream.UpstreamConfig) {
 	// We listen to all PG Notifications on one channel and distribute it to other consumers
 	// based on the events.
 	notifyRouter := pg.NewNotifyRouter()

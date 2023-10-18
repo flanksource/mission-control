@@ -1,11 +1,11 @@
 package playbook
 
 import (
-	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/postq/pg"
 )
 
-func ListenPlaybookPGNotify(ctx api.Context) {
+func ListenPlaybookPGNotify(ctx context.Context) {
 	pgNotifyPlaybookSpecUpdated := make(chan string)
 	go pg.Listen(ctx, "playbook_spec_updated", pgNotifyPlaybookSpecUpdated)
 

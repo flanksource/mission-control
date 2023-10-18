@@ -6,6 +6,7 @@ import (
 
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/incident-commander/api"
 
 	jira "github.com/andygrunwald/go-jira"
@@ -47,16 +48,16 @@ type JiraClient struct {
 // type Sub-task so we do not set it in config
 var IssueTypeExcludeList = []string{"Sub-task"}
 
-func NewClient(ctx api.Context, team api.Team) (*JiraClient, error) {
+func NewClient(ctx context.Context, team api.Team) (*JiraClient, error) {
 	teamSpec, err := team.GetSpec()
 	if err != nil {
 		return nil, err
 	}
-	username, err := ctx.GetEnvVarValue(teamSpec.ResponderClients.Jira.Username)
+	username, err := ctx.GetEnvValueFromCache(teamSpec.ResponderClients.Jira.Username, api.Namespace)
 	if err != nil {
 		return nil, err
 	}
-	password, err := ctx.GetEnvVarValue(teamSpec.ResponderClients.Jira.Password)
+	password, err := ctx.GetEnvValueFromCache(teamSpec.ResponderClients.Jira.Password, api.Namespace)
 	if err != nil {
 		return nil, err
 	}

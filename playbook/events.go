@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/patrickmn/go-cache"
 )
@@ -16,7 +16,7 @@ func eventPlaybookCacheKey(eventClass, event string) string {
 	return fmt.Sprintf("%s::%s", eventClass, event)
 }
 
-func FindPlaybooksForEvent(ctx api.Context, eventClass, event string) ([]models.Playbook, error) {
+func FindPlaybooksForEvent(ctx context.Context, eventClass, event string) ([]models.Playbook, error) {
 	if playbooks, found := eventPlaybooksCache.Get(eventPlaybookCacheKey(eventClass, event)); found {
 		return playbooks.([]models.Playbook), nil
 	}

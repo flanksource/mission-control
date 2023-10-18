@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/rbac"
@@ -71,7 +73,7 @@ func (h ClerkHandler) Session(next echo.HandlerFunc) echo.HandlerFunc {
 			return c.String(http.StatusUnauthorized, "Unauthorized")
 		}
 
-		ctx := c.(api.Context)
+		ctx := c.Request().Context().(context.Context)
 		user, sessID, err := h.getUser(ctx, sessionToken)
 		if err != nil {
 			logger.Errorf("Error fetching user from clerk: %v", err)
@@ -87,17 +89,18 @@ func (h ClerkHandler) Session(next echo.HandlerFunc) echo.HandlerFunc {
 		c.Request().Header.Set(echo.HeaderAuthorization, fmt.Sprintf("Bearer %s", token))
 		c.Request().Header.Set(api.UserIDHeaderKey, user.ID.String())
 
-		ctx.SetSpanAttributes(
+		ctx.GetSpan().SetAttributes(
 			attribute.String("clerk-user-id", user.ExternalID),
 			attribute.String("clerk-org-id", h.orgID),
 		)
 
-		ctx = ctx.WithUser(&api.ContextUser{ID: user.ID, Email: user.Email})
-		return next(ctx)
+		ctx = ctx.WithUser(user)
+		c.SetRequest(c.Request().WithContext(ctx))
+		return next(c)
 	}
 }
 
-func (h *ClerkHandler) getUser(ctx api.Context, sessionToken string) (*api.Person, string, error) {
+func (h *ClerkHandler) getUser(ctx context.Context, sessionToken string) (*models.Person, string, error) {
 	claims, err := h.parseJWTToken(sessionToken)
 	if err != nil {
 		return nil, "", err
@@ -105,14 +108,14 @@ func (h *ClerkHandler) getUser(ctx api.Context, sessionToken string) (*api.Perso
 	sessionID := fmt.Sprint(claims["sid"])
 
 	if user, exists := h.userCache.Get(sessionID); exists {
-		return user.(*api.Person), sessionID, nil
+		return user.(*models.Person), sessionID, nil
 	}
 
 	if fmt.Sprint(claims["org_id"]) != h.orgID {
 		return nil, "", fmt.Errorf("organization id does not match")
 	}
 
-	user := api.Person{
+	user := models.Person{
 		Name:       fmt.Sprint(claims["name"]),
 		Email:      fmt.Sprint(claims["email"]),
 		Avatar:     fmt.Sprint(claims["image_url"]),
@@ -126,7 +129,7 @@ func (h *ClerkHandler) getUser(ctx api.Context, sessionToken string) (*api.Perso
 	return &dbUser, sessionID, nil
 }
 
-func (h *ClerkHandler) createDBUserIfNotExists(ctx api.Context, user api.Person, role string) (api.Person, error) {
+func (h *ClerkHandler) createDBUserIfNotExists(ctx context.Context, user models.Person, role string) (models.Person, error) {
 	existingUser, err := db.GetUserByExternalID(ctx, user.ExternalID)
 	if err == nil {
 		// User with the given external ID exists
@@ -135,12 +138,12 @@ func (h *ClerkHandler) createDBUserIfNotExists(ctx api.Context, user api.Person,
 
 	if err != gorm.ErrRecordNotFound {
 		// Return if any other error, we only want to create the user
-		return api.Person{}, err
+		return models.Person{}, err
 	}
 
 	dbUser, err := db.CreateUser(ctx, user)
 	if err != nil {
-		return api.Person{}, err
+		return models.Person{}, err
 	}
 
 	roleToAdd := rbac.RoleEditor
@@ -149,7 +152,7 @@ func (h *ClerkHandler) createDBUserIfNotExists(ctx api.Context, user api.Person,
 	}
 
 	if _, err := rbac.Enforcer.AddRoleForUser(dbUser.ID.String(), roleToAdd); err != nil {
-		return api.Person{}, err
+		return models.Person{}, err
 	}
 
 	return dbUser, nil

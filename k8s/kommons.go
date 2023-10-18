@@ -6,15 +6,15 @@ import (
 	"io"
 	"time"
 
-	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/duty/context"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // WaitForPod waits for a pod to be in the specified phase, or returns an
 // error if the timeout is exceeded
-func WaitForPod(ctx api.Context, name string, timeout time.Duration, phases ...v1.PodPhase) error {
-	pods := ctx.Kubernetes().CoreV1().Pods(ctx.Namespace())
+func WaitForPod(ctx context.Context, name string, timeout time.Duration, phases ...v1.PodPhase) error {
+	pods := ctx.Kubernetes().CoreV1().Pods(ctx.GetNamespace())
 	start := time.Now()
 	for {
 		pod, err := pods.Get(ctx, name, metav1.GetOptions{})
@@ -38,13 +38,13 @@ func WaitForPod(ctx api.Context, name string, timeout time.Duration, phases ...v
 	}
 }
 
-func GetPodLogs(ctx api.Context, podName, container string) (string, error) {
+func GetPodLogs(ctx context.Context, podName, container string) (string, error) {
 	podLogOptions := v1.PodLogOptions{}
 	if container != "" {
 		podLogOptions.Container = container
 	}
 
-	req := ctx.Kubernetes().CoreV1().Pods(ctx.Namespace()).GetLogs(podName, &podLogOptions)
+	req := ctx.Kubernetes().CoreV1().Pods(ctx.GetNamespace()).GetLogs(podName, &podLogOptions)
 	podLogs, err := req.Stream(ctx)
 	if err != nil {
 		return "", err
@@ -60,6 +60,6 @@ func GetPodLogs(ctx api.Context, podName, container string) (string, error) {
 	return buf.String(), nil
 }
 
-func DeletePod(ctx api.Context, name string) error {
-	return ctx.Kubernetes().CoreV1().Pods(ctx.Namespace()).Delete(ctx, name, metav1.DeleteOptions{})
+func DeletePod(ctx context.Context, name string) error {
+	return ctx.Kubernetes().CoreV1().Pods(ctx.GetNamespace()).Delete(ctx, name, metav1.DeleteOptions{})
 }

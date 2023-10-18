@@ -4,14 +4,14 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/postq"
 	"github.com/flanksource/postq/pg"
-	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/trace"
 )
 
-func StartPlaybookRunConsumer(ctx api.Context) error {
+func StartPlaybookRunConsumer(ctx context.Context) error {
 	ec, err := postq.NewPGConsumer(EventConsumer, &postq.ConsumerOption{
 		NumConsumers: 5,
 	})
@@ -27,14 +27,13 @@ func StartPlaybookRunConsumer(ctx api.Context) error {
 }
 
 func EventConsumer(c postq.Context) (int, error) {
-	ctx, ok := c.(api.Context)
+	ctx, ok := c.(context.Context)
 	if !ok {
 		return 0, errors.New("invalid context")
 	}
 
-	tracer := otel.GetTracerProvider().Tracer("event-tracer")
-	traceCtx, span := tracer.Start(ctx, "playbook-runs-consumer")
-	ctx = ctx.WithContext(traceCtx)
+	var span trace.Span
+	ctx, span = ctx.StartSpan("playbook-runs-consumer")
 	defer span.End()
 
 	tx := ctx.DB().Begin()
@@ -43,7 +42,7 @@ func EventConsumer(c postq.Context) (int, error) {
 	}
 	defer tx.Rollback()
 
-	ctx = ctx.WithDB(tx)
+	ctx = ctx.WithDB(tx, ctx.Pool())
 
 	query := `
 		SELECT *

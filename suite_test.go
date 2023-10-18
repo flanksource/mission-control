@@ -1,11 +1,13 @@
 package main
 
 import (
+	gocontext "context"
 	"testing"
 
 	embeddedPG "github.com/fergusstrange/embedded-postgres"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/testutils"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
@@ -36,7 +38,8 @@ var _ = ginkgo.BeforeSuite(func() {
 		ginkgo.Fail(err.Error())
 	}
 
-	api.DefaultContext = api.NewContext(db.Gorm, db.Pool)
+	api.DefaultAPIContext = api.NewContext(db.Gorm, db.Pool)
+	api.DefaultContext = context.NewContext(gocontext.Background()).WithDB(db.Gorm, db.Pool)
 })
 
 var _ = ginkgo.AfterSuite(func() {

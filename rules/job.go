@@ -1,11 +1,12 @@
 package rules
 
 import (
-	"context"
+	gocontext "context"
 	"time"
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty"
+	"github.com/flanksource/duty/job"
 	dutyModels "github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
@@ -27,7 +28,7 @@ func getAllStatii() []string {
 	return statii
 }
 
-func Run(ctx api.Context) error {
+func Run(ctx job.JobRuntime) error {
 	if err := ctx.DB().
 		// .Order("priority ASC")
 		Find(&Rules).Error; err != nil {
@@ -158,7 +159,7 @@ func contains(list []string, item string) bool {
 }
 
 // getOpenIncidentsWithRules generates a map linking incident rules, which led to the creation of open incidents, to their respective involved component ids.
-func getOpenIncidentsWithRules(ctx context.Context) (map[string]map[string]struct{}, error) {
+func getOpenIncidentsWithRules(ctx gocontext.Context) (map[string]map[string]struct{}, error) {
 	query := `
 	SELECT
 		incidents.incident_rule_id,

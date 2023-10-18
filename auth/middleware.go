@@ -1,7 +1,7 @@
 package auth
 
 import (
-	"context"
+	gocontext "context"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -15,6 +15,7 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/rand"
 	"github.com/flanksource/commons/utils"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/google/uuid"
@@ -94,7 +95,7 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 		c.Request().Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
 		c.Request().Header.Set(api.UserIDHeaderKey, session.Identity.GetId())
 
-		ctx := c.(api.Context)
+		ctx := c.Request().Context().(context.Context)
 		var email string
 		if traits, ok := session.Identity.GetTraits().(map[string]any); ok {
 			if e, ok := traits["email"].(string); ok {
@@ -105,14 +106,15 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 		if uid, err := uuid.Parse(session.Identity.GetId()); err != nil {
 			return c.String(http.StatusUnauthorized, "Unauthorized")
 		} else {
-			ctx = ctx.WithUser(&api.ContextUser{ID: uid, Email: email})
+			ctx = ctx.WithUser(&models.Person{ID: uid, Email: email})
+			c.SetRequest(c.Request().WithContext(ctx))
 		}
 
-		return next(ctx)
+		return next(c)
 	}
 }
 
-func (k *kratosMiddleware) getAccessToken(ctx context.Context, token string) (*models.AccessToken, error) {
+func (k *kratosMiddleware) getAccessToken(ctx gocontext.Context, token string) (*models.AccessToken, error) {
 	if token, ok := k.accessTokenCache.Get(token); ok {
 		return token.(*models.AccessToken), nil
 	}
@@ -224,7 +226,7 @@ type sessionCache struct {
 }
 
 // kratosLoginWithCache is a wrapper around kratosLogin and adds a cache layer
-func (k *kratosMiddleware) kratosLoginWithCache(ctx context.Context, username, password string) (*client.Session, error) {
+func (k *kratosMiddleware) kratosLoginWithCache(ctx gocontext.Context, username, password string) (*client.Session, error) {
 	cacheKey := basicAuthCacheKey(username, k.basicAuthSeparator, password)
 
 	if val, found := k.authSessionCache.Get(cacheKey); found {
@@ -257,7 +259,7 @@ func (k *kratosMiddleware) kratosLoginWithCache(ctx context.Context, username, p
 }
 
 // kratosLogin performs login with password
-func (k *kratosMiddleware) kratosLogin(ctx context.Context, username, password string) (*client.Session, error) {
+func (k *kratosMiddleware) kratosLogin(ctx gocontext.Context, username, password string) (*client.Session, error) {
 	loginFlow, _, err := k.client.FrontendApi.CreateNativeLoginFlow(ctx).Execute()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create native login flow: %w", err)

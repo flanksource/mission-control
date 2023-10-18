@@ -4,15 +4,15 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty/job"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 )
 
 // CleanupEventQueue deletes stale records in the `event_queue` table
-func CleanupEventQueue(ctx api.Context) error {
+func CleanupEventQueue(ctx job.JobRuntime) error {
 	jobHistory := models.NewJobHistory("CleanupEventQueue", "", "")
-	_ = db.PersistJobHistory(ctx, jobHistory.Start())
+	_ = db.PersistJobHistory(ctx.Context, jobHistory.Start())
 
 	pushQueueSchedule := map[string]time.Duration{
 		"topologies":                     time.Hour * 24 * 7,
@@ -50,7 +50,7 @@ func CleanupEventQueue(ctx api.Context) error {
 		jobHistory.SuccessCount += int(result.RowsAffected)
 	}
 
-	if err := db.PersistJobHistory(ctx, jobHistory.End()); err != nil {
+	if err := db.PersistJobHistory(ctx.Context, jobHistory.End()); err != nil {
 		logger.Errorf("error persisting job history: %v", err)
 	}
 

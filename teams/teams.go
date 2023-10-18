@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/hash"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/db/models"
@@ -14,7 +15,7 @@ import (
 
 var teamSpecCache = cache.New(time.Hour*1, time.Hour*1)
 
-func GetTeamComponentsFromSelectors(ctx api.Context, teamID uuid.UUID, componentSelectors []api.ComponentSelector) []api.TeamComponent {
+func GetTeamComponentsFromSelectors(ctx context.Context, teamID uuid.UUID, componentSelectors []api.ComponentSelector) []api.TeamComponent {
 	var selectedComponents = make(map[string][]uuid.UUID)
 	for _, compSelector := range componentSelectors {
 		h, _ := hash.JSONMD5Hash(compSelector)
@@ -36,7 +37,7 @@ func GetTeamComponentsFromSelectors(ctx api.Context, teamID uuid.UUID, component
 	return teamComps
 }
 
-func GetTeamSpec(ctx api.Context, id string) (*api.TeamSpec, error) {
+func GetTeamSpec(ctx context.Context, id string) (*api.TeamSpec, error) {
 	if val, found := teamSpecCache.Get(id); found {
 		return val.(*api.TeamSpec), nil
 	}

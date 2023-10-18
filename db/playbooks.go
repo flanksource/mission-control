@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/api"
@@ -13,7 +14,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func FindPlaybooksForEvent(ctx api.Context, eventClass, event string) ([]models.Playbook, error) {
+func FindPlaybooksForEvent(ctx context.Context, eventClass, event string) ([]models.Playbook, error) {
 	var playbooks []models.Playbook
 	query := fmt.Sprintf(`SELECT * FROM playbooks WHERE spec->'on'->'%s' @> '[{"event": "%s"}]'`, eventClass, event)
 	if err := ctx.DB().Raw(query).Scan(&playbooks).Error; err != nil {
@@ -169,7 +170,7 @@ func DeletePlaybook(id string) error {
 
 // UpdatePlaybookRunStatusIfApproved updates the status of the playbook run to "pending"
 // if all the approvers have approved it.
-func UpdatePlaybookRunStatusIfApproved(ctx api.Context, playbookID string, approval v1.PlaybookApproval) error {
+func UpdatePlaybookRunStatusIfApproved(ctx context.Context, playbookID string, approval v1.PlaybookApproval) error {
 	if approval.Approvers.Empty() {
 		return nil
 	}

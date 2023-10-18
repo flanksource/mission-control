@@ -5,13 +5,14 @@ import (
 	"strings"
 
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/google/uuid"
 	"gorm.io/gorm/clause"
 )
 
-func GetAllResourceIDsOfAgent(ctx api.Context, req upstream.PaginateRequest, agentID uuid.UUID) ([]string, error) {
+func GetAllResourceIDsOfAgent(ctx context.Context, req upstream.PaginateRequest, agentID uuid.UUID) ([]string, error) {
 	var response []string
 	var err error
 

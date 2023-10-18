@@ -1,8 +1,8 @@
 package notification
 
 import (
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/incident-commander/api"
 	"github.com/google/uuid"
 )
 
@@ -15,13 +15,13 @@ const (
 )
 
 type Context struct {
-	api.Context
+	context.Context
 	notificationID uuid.UUID
 	recipientType  RecipientType
 	log            *models.NotificationSendHistory
 }
 
-func NewContext(ctx api.Context, notificationID uuid.UUID) *Context {
+func NewContext(ctx context.Context, notificationID uuid.UUID) *Context {
 	return &Context{
 		Context:        ctx,
 		notificationID: notificationID,

@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	github.com/alecthomas/jsonschema v0.0.0-20220216202328-9eeeec9d044b
-	github.com/flanksource/commons v1.14.1
+	github.com/flanksource/commons v1.15.1
 	github.com/flanksource/incident-commander v0.0.347
 	github.com/spf13/cobra v1.7.0
 )
@@ -27,7 +27,7 @@ require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
-	github.com/flanksource/duty v1.0.196 // indirect
+	github.com/flanksource/duty v1.0.197 // indirect
 	github.com/flanksource/gomplate/v3 v3.20.16 // indirect
 	github.com/flanksource/is-healthy v0.0.0-20231003215854-76c51e3a3ff7 // indirect
 	github.com/flanksource/mapstructure v1.6.0 // indirect
