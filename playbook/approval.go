@@ -2,6 +2,7 @@ package playbook
 
 import (
 	"github.com/flanksource/commons/collections"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -9,7 +10,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func ApproveRun(ctx api.Context, playbookID, runID uuid.UUID) error {
+func ApproveRun(ctx context.Context, playbookID, runID uuid.UUID) error {
 	approver := ctx.User()
 	if approver == nil {
 		return api.Errorf(api.EUNAUTHORIZED, "user not found.")

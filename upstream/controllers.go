@@ -25,7 +25,7 @@ var (
 
 // PushUpstream saves the push data from agents.
 func PushUpstream(c echo.Context) error {
-	ctx := c.(api.Context)
+	ctx := c.Request().Context().(context.Context)
 
 	var req upstream.PushData
 	err := json.NewDecoder(c.Request().Body).Decode(&req)
@@ -33,7 +33,7 @@ func PushUpstream(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error(), Message: "invalid json request"})
 	}
 
-	ctx.SetSpanAttributes(attribute.Int("upstream.push.msg-count", req.Count()))
+	ctx.GetSpan().SetAttributes(attribute.Int("upstream.push.msg-count", req.Count()))
 
 	req.AgentName = strings.TrimSpace(req.AgentName)
 	if req.AgentName == "" {

@@ -15,7 +15,6 @@ import (
 	"github.com/flanksource/duty/fixtures/dummy"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/upstream"
-	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/playbook"
@@ -166,7 +165,7 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 	})
 
 	ginkgo.It("Should fetch the suitable playbook for checks", func() {
-		ctx := api.NewContext(testDB, testDBPool)
+		ctx := context.NewContext(gocontext.Background()).WithDB(testDB, testDBPool)
 		playbooks, err := playbook.ListPlaybooksForCheck(ctx, dummy.LogisticsAPIHealthHTTPCheck.ID.String())
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(playbooks)).To(Equal(1))
@@ -178,7 +177,7 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 	})
 
 	ginkgo.It("Should fetch the suitable playbook for components", func() {
-		ctx := api.NewContext(testDB, testDBPool)
+		ctx := context.NewContext(gocontext.Background()).WithDB(testDB, testDBPool)
 		playbooks, err := playbook.ListPlaybooksForComponent(ctx, dummy.Logistics.ID.String())
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(playbooks)).To(Equal(1))
@@ -190,7 +189,7 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 	})
 
 	ginkgo.It("Should fetch the suitable playbook for configs", func() {
-		ctx := api.NewContext(testDB, testDBPool)
+		ctx := context.NewContext(gocontext.Background()).WithDB(testDB, testDBPool)
 		playbooks, err := playbook.ListPlaybooksForConfig(ctx, dummy.EKSCluster.ID.String())
 		Expect(err).NotTo(HaveOccurred())
 		Expect(len(playbooks)).To(Equal(1))

@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/api"
@@ -89,7 +90,7 @@ func (r *RunParams) validateParams(params []v1.PlaybookParameter) error {
 
 // HandlePlaybookRun handles playbook run requests.
 func HandlePlaybookRun(c echo.Context) error {
-	ctx := c.(api.Context)
+	ctx := c.Request().Context().(context.Context)
 
 	var req RunParams
 	if err := c.Bind(&req); err != nil {
@@ -150,7 +151,7 @@ func HandlePlaybookRun(c echo.Context) error {
 }
 
 func HandleGetPlaybookRun(c echo.Context) error {
-	ctx := c.(api.Context)
+	ctx := c.Request().Context().(context.Context)
 	id := c.Param("id")
 
 	run, err := db.GetPlaybookRun(ctx, id)
@@ -165,7 +166,7 @@ func HandleGetPlaybookRun(c echo.Context) error {
 // and returns all the available playbook that supports
 // the given component or config.
 func HandlePlaybookList(c echo.Context) error {
-	ctx := c.(api.Context)
+	ctx := c.Request().Context().(context.Context)
 
 	var (
 		configID    = c.QueryParam("config_id")
@@ -200,7 +201,7 @@ func HandlePlaybookList(c echo.Context) error {
 }
 
 func HandlePlaybookRunApproval(c echo.Context) error {
-	ctx := c.(api.Context)
+	ctx := c.Request().Context().(context.Context)
 
 	var (
 		playbookID = c.Param("playbook_id")

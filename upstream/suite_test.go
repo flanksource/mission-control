@@ -89,8 +89,7 @@ func setupUpstreamHTTPServer() {
 	upstreamEchoServer.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			c.SetRequest(c.Request().WithContext(context.NewContext(c.Request().Context()).WithDB(upstreamDB, upstreamPool)))
-			cc := api.NewContext(upstreamDB, upstreamPool).WithEchoContext(c)
-			return next(cc)
+			return next(c)
 		}
 	})
 

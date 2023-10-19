@@ -1,7 +1,7 @@
 package playbook_test
 
 import (
-	"context"
+	gocontext "context"
 	"fmt"
 	"net/http"
 	"testing"
@@ -9,6 +9,7 @@ import (
 	embeddedPG "github.com/fergusstrange/embedded-postgres"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/testutils"
 	"github.com/flanksource/incident-commander/api"
@@ -58,7 +59,7 @@ var _ = ginkgo.BeforeSuite(func() {
 
 var _ = ginkgo.AfterSuite(func() {
 	logger.Infof("Stopping upstream echo server")
-	if err := echoServer.Shutdown(context.Background()); err != nil {
+	if err := echoServer.Shutdown(gocontext.Background()); err != nil {
 		ginkgo.Fail(err.Error())
 	}
 
@@ -72,6 +73,7 @@ func setupUpstreamHTTPServer() {
 	echoServer = echo.New()
 	echoServer.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
+			c.SetRequest(c.Request().WithContext(context.NewContext(c.Request().Context()).WithDB(testDB, testDBPool)))
 			cc := api.NewContext(testDB, testDBPool).WithEchoContext(c)
 			return next(cc)
 		}
@@ -110,9 +112,10 @@ func mockAuthMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 			return c.String(http.StatusUnauthorized, "Unauthorized")
 		}
 
-		ctx := c.(api.Context)
-		ctx = ctx.WithUser(&api.ContextUser{ID: person.ID, Email: person.Email})
+		ctx := c.Request().Context().(context.Context)
+		ctx = ctx.WithUser(&models.Person{ID: person.ID, Email: person.Email})
+		c.SetRequest(c.Request().WithContext(ctx))
 
-		return next(ctx)
+		return next(c)
 	}
 }
