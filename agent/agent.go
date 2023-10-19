@@ -5,13 +5,14 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/rand"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/rbac"
 )
 
 // generateAgent creates a new person and a new agent and associates them.
-func generateAgent(ctx api.Context, body api.GenerateAgentRequest) (*api.GeneratedAgent, error) {
+func generateAgent(ctx context.Context, body api.GenerateAgentRequest) (*api.GeneratedAgent, error) {
 	username, password, err := genUsernamePassword()
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate username and password: %w", err)

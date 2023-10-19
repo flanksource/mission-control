@@ -12,7 +12,6 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/testutils"
-	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/playbook"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
@@ -74,8 +73,7 @@ func setupUpstreamHTTPServer() {
 	echoServer.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			c.SetRequest(c.Request().WithContext(context.NewContext(c.Request().Context()).WithDB(testDB, testDBPool)))
-			cc := api.NewContext(testDB, testDBPool).WithEchoContext(c)
-			return next(cc)
+			return next(c)
 		}
 	})
 

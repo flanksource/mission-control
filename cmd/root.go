@@ -36,8 +36,6 @@ func PreRun(cmd *cobra.Command, args []string) {
 		api.Kubernetes = fake.NewSimpleClientset()
 	}
 
-	api.DefaultAPIContext = api.NewContext(db.Gorm, db.Pool)
-
 	if otelcollectorURL != "" {
 		telemetry.InitTracer(otelServiceName, otelcollectorURL, true)
 	}

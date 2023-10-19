@@ -63,7 +63,7 @@ type CreateUserRequest struct {
 	Properties models.PersonProperties
 }
 
-func CreatePerson(ctx api.Context, name, email, personType string) (*models.Person, error) {
+func CreatePerson(ctx context.Context, name, email, personType string) (*models.Person, error) {
 	person := models.Person{Name: name, Email: email, Type: personType}
 	if err := ctx.DB().Clauses(clause.Returning{}).Create(&person).Error; err != nil {
 		return nil, err
@@ -82,7 +82,7 @@ const (
 	saltLength  = 12
 )
 
-func CreateAccessToken(ctx api.Context, personID uuid.UUID, name, password string, expiry time.Duration) (string, error) {
+func CreateAccessToken(ctx context.Context, personID uuid.UUID, name, password string, expiry time.Duration) (string, error) {
 	saltRaw := make([]byte, saltLength)
 	if _, err := crand.Read(saltRaw); err != nil {
 		return "", err

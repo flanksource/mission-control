@@ -14,7 +14,6 @@ import (
 	"github.com/flanksource/duty/fixtures/dummy"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/upstream"
-	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/playbook"
@@ -211,8 +210,9 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 			},
 		}
 
+		ctx := context.NewContext(gocontext.Background()).WithDB(testDB, testDBPool)
 		httpClient := http.NewClient().Auth(dummy.JohnDoe.Name, "admin").BaseURL(fmt.Sprintf("http://localhost:%d/playbook", echoServerPort))
-		resp, err := httpClient.R(api.NewContext(testDB, testDBPool)).Header("Content-Type", "application/json").Post("/run", run)
+		resp, err := httpClient.R(ctx).Header("Content-Type", "application/json").Post("/run", run)
 		Expect(err).NotTo(HaveOccurred())
 
 		Expect(resp.StatusCode).To(Equal(netHTTP.StatusCreated))
