@@ -140,7 +140,7 @@ func HandlePlaybookRun(c echo.Context) error {
 		run.CheckID = &req.CheckID
 	}
 
-	if err := ctx.DB().Create(&run).Error; err != nil {
+	if err := savePlaybookRun(ctx, playbook, &run); err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to create playbook run"})
 	}
 

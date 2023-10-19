@@ -1,6 +1,7 @@
 package playbook
 
 import (
+	gocontext "context"
 	"encoding/json"
 	"fmt"
 	"time"
@@ -199,6 +200,12 @@ func executeAction(ctx context.Context, run models.PlaybookRun, action v1.Playbo
 
 	logger.WithValues("runID", run.ID).Infof("Executing action: %s", action.Name)
 
+	if timeout, _ := action.TimeoutDuration(); timeout > 0 {
+		var cancel gocontext.CancelFunc
+		ctx, cancel = ctx.WithTimeout(timeout)
+		defer cancel()
+	}
+
 	if action.Exec != nil {
 		var e actions.ExecAction
 		res, err := e.Run(ctx, *action.Exec, env)
@@ -233,7 +240,9 @@ func executeAction(ctx context.Context, run models.PlaybookRun, action v1.Playbo
 		e := actions.Pod{
 			PlaybookRun: run,
 		}
-		res, err := e.Run(ctx, *action.Pod, env)
+
+		timeout, _ := action.TimeoutDuration()
+		res, err := e.Run(ctx, *action.Pod, env, timeout)
 		if err != nil {
 			return nil, err
 		}

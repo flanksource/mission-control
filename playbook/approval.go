@@ -11,17 +11,18 @@ import (
 )
 
 func ApproveRun(ctx context.Context, playbookID, runID uuid.UUID) error {
-	approver := ctx.User()
-	if approver == nil {
-		return api.Errorf(api.EUNAUTHORIZED, "user not found.")
-	}
-
 	playbook, err := db.FindPlaybook(ctx, playbookID)
 	if err != nil {
 		return api.Errorf(api.EINTERNAL, "something went wrong while finding playbook(id=%s)", playbookID).WithDebugInfo("db.FindPlaybook(id=%s): %v", playbookID, err)
 	} else if playbook == nil {
 		return api.Errorf(api.ENOTFOUND, "playbook(id=%s) not found", playbookID)
 	}
+
+	return approveRun(ctx, playbook, runID)
+}
+
+func approveRun(ctx context.Context, playbook *models.Playbook, runID uuid.UUID) error {
+	approver := ctx.User()
 
 	playbookV1, err := v1.PlaybookFromModel(*playbook)
 	if err != nil {
@@ -54,10 +55,6 @@ func ApproveRun(ctx context.Context, playbookID, runID uuid.UUID) error {
 		if approval.TeamID == nil {
 			return api.Errorf(api.EFORBIDDEN, "you are not allowed to approve this playbook run")
 		}
-	}
-
-	if _, err := db.GetPlaybookRun(ctx, runID.String()); err != nil {
-		return err
 	}
 
 	if err := db.SavePlaybookRunApproval(ctx, approval); err != nil {

@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/mail"
@@ -64,7 +65,7 @@ func (k *KratosHandler) InviteUser(c echo.Context) error {
 }
 
 func UpdateAccountState(c echo.Context) error {
-	ctx := c.(api.Context)
+	ctx := c.Request().Context().(context.Context)
 
 	var reqData struct {
 		ID    string `json:"id"`
@@ -95,7 +96,7 @@ func UpdateAccountState(c echo.Context) error {
 }
 
 func UpdateAccountProperties(c echo.Context) error {
-	ctx := c.(api.Context)
+	ctx := c.Request().Context().(context.Context)
 
 	var props api.PersonProperties
 	if err := c.Bind(&props); err != nil {
@@ -117,7 +118,7 @@ func UpdateAccountProperties(c echo.Context) error {
 }
 
 func WhoAmI(c echo.Context) error {
-	ctx := c.(api.Context)
+	ctx := c.Request().Context().(context.Context)
 	userID := c.Request().Header.Get(api.UserIDHeaderKey)
 	user, err := db.GetUserByID(ctx, userID)
 	if err != nil {

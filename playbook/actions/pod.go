@@ -29,8 +29,7 @@ type Pod struct {
 	PlaybookRun models.PlaybookRun
 }
 
-func (c *Pod) Run(ctx context.Context, action v1.PodAction, env TemplateEnv) (*PodResult, error) {
-	timeout := time.Duration(action.Timeout) * time.Minute
+func (c *Pod) Run(ctx context.Context, action v1.PodAction, env TemplateEnv, timeout time.Duration) (*PodResult, error) {
 	if timeout == 0 {
 		timeout = defaultContainerTimeout
 	}

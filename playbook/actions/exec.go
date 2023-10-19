@@ -35,19 +35,19 @@ func (c *ExecAction) Run(ctx context.Context, exec v1.ExecAction, env TemplateEn
 
 	switch runtime.GOOS {
 	case "windows":
-		return execPowershell(exec, ctx)
+		return execPowershell(ctx, exec)
 	default:
-		return execBash(exec, ctx)
+		return execBash(ctx, exec)
 	}
 }
 
-func execPowershell(check v1.ExecAction, ctx context.Context) (*ExecDetails, error) {
+func execPowershell(ctx context.Context, check v1.ExecAction) (*ExecDetails, error) {
 	ps, err := osExec.LookPath("powershell.exe")
 	if err != nil {
 		return nil, err
 	}
 	args := []string{check.Script}
-	cmd := osExec.Command(ps, args...)
+	cmd := osExec.CommandContext(ctx, ps, args...)
 	return runCmd(cmd)
 }
 
@@ -108,12 +108,12 @@ func setupConnection(ctx context.Context, check v1.ExecAction, cmd *osExec.Cmd) 
 	return nil
 }
 
-func execBash(check v1.ExecAction, ctx context.Context) (*ExecDetails, error) {
+func execBash(ctx context.Context, check v1.ExecAction) (*ExecDetails, error) {
 	if len(check.Script) == 0 {
 		return nil, fmt.Errorf("no script provided")
 	}
 
-	cmd := osExec.Command("bash", "-c", check.Script)
+	cmd := osExec.CommandContext(ctx, "bash", "-c", check.Script)
 	if err := setupConnection(ctx, check, cmd); err != nil {
 		return nil, fmt.Errorf("failed to setup connection: %w", err)
 	}

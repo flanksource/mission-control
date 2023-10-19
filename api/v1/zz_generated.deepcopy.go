@@ -519,6 +519,11 @@ func (in *PlaybookAction) DeepCopyInto(out *PlaybookAction) {
 		*out = new(timex.Duration)
 		**out = **in
 	}
+	if in.timeout != nil {
+		in, out := &in.timeout, &out.timeout
+		*out = new(timex.Duration)
+		**out = **in
+	}
 	if in.Exec != nil {
 		in, out := &in.Exec, &out.Exec
 		*out = new(ExecAction)
