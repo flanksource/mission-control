@@ -42,9 +42,10 @@ type Context interface {
 	Kubernetes() kubernetes.Interface
 
 	WithDB(db *gorm.DB) Context
+	WithPool(pool *pgxpool.Pool) Context
 	WithEchoContext(ctx EchoContext) Context
 	WithContext(ctx gocontext.Context) Context
-	WithTimeout(timeout time.Duration) (Context, func())
+	WithTimeout(timeout time.Duration) (Context, gocontext.CancelFunc)
 
 	WithUser(user *ContextUser) Context
 
@@ -105,7 +106,7 @@ func (c apicontext) WithContext(ctx gocontext.Context) Context {
 	return &c
 }
 
-func (c apicontext) WithTimeout(timeout time.Duration) (Context, func()) {
+func (c apicontext) WithTimeout(timeout time.Duration) (Context, gocontext.CancelFunc) {
 	ctx, cancel := gocontext.WithTimeout(c.Context, timeout)
 	c.Context = ctx
 	return &c, cancel
@@ -124,6 +125,11 @@ func (c *apicontext) SetSpanAttributes(attrs ...attribute.KeyValue) {
 
 func (c apicontext) WithDB(db *gorm.DB) Context {
 	c.db = db
+	return &c
+}
+
+func (c apicontext) WithPool(pool *pgxpool.Pool) Context {
+	c.pool = pool
 	return &c
 }
 

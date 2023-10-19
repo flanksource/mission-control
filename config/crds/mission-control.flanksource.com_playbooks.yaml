@@ -394,10 +394,6 @@ spec:
                           description: Spec is the container spec
                           type: object
                           x-kubernetes-preserve-unknown-fields: true
-                        timeout:
-                          description: Timeout in minutes to wait for specified container
-                            to finish its job. Defaults to 5 minutes
-                          type: integer
                       required:
                       - name
                       - spec
@@ -421,6 +417,10 @@ spec:
                       - driver
                       - query
                       type: object
+                    timeout:
+                      description: Timeout is the maximum duration to let an action
+                        run before it's cancelled.
+                      type: string
                   required:
                   - name
                   type: object

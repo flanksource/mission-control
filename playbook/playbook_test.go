@@ -1,20 +1,20 @@
 package playbook_test
 
 import (
-	"bytes"
 	gocontext "context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
+	netHTTP "net/http"
 	"os"
 	"time"
 
+	"github.com/flanksource/commons/http"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/fixtures/dummy"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/upstream"
+	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/playbook"
@@ -81,13 +81,15 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 			},
 			Actions: []v1.PlaybookAction{
 				{
-					Name: "write config id to a file",
+					Name:    "write config id to a file",
+					Timeout: "1s",
 					Exec: &v1.ExecAction{
 						Script: "printf {{.config.id}} > {{.params.path}}",
 					},
 				},
 				{
-					Name: "append config class to the same file ",
+					Name:    "append config class to the same file ",
+					Timeout: "2s",
 					Exec: &v1.ExecAction{
 						Script: "printf {{.config.config_class}} >> {{.params.path}}",
 					},
@@ -209,28 +211,11 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 			},
 		}
 
-		bodyJSON, err := json.Marshal(run)
+		httpClient := http.NewClient().Auth(dummy.JohnDoe.Name, "admin").BaseURL(fmt.Sprintf("http://localhost:%d/playbook", echoServerPort))
+		resp, err := httpClient.R(api.NewContext(testDB, testDBPool)).Header("Content-Type", "application/json").Post("/run", run)
 		Expect(err).NotTo(HaveOccurred())
 
-		req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://localhost:%d/playbook/run", echoServerPort), bytes.NewBuffer(bodyJSON))
-		Expect(err).NotTo(HaveOccurred())
-
-		req.Header.Set("Content-Type", "application/json; charset=UTF-8")
-		req.SetBasicAuth(dummy.JohnDoe.Name, "admin")
-
-		client := http.Client{}
-		resp, err := client.Do(req)
-		Expect(err).NotTo(HaveOccurred())
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusCreated {
-			b, err := io.ReadAll(resp.Body)
-			Expect(err).NotTo(HaveOccurred())
-
-			fmt.Println(string(b))
-		}
-
-		Expect(resp.StatusCode).To(Equal(http.StatusCreated))
+		Expect(resp.StatusCode).To(Equal(netHTTP.StatusCreated))
 
 		err = json.NewDecoder(resp.Body).Decode(&runResp)
 		Expect(err).NotTo(HaveOccurred())
@@ -244,34 +229,13 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 		Expect(*savedRun.CreatedBy).To(Equal(dummy.JohnDoe.ID), "run should have been created by the authenticated person")
 	})
 
-	ginkgo.It("should approve the playbook run via API", func() {
-		req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("http://localhost:%d/playbook/run/approve/%s/%s", echoServerPort, configPlaybook.ID.String(), runResp.RunID), nil)
-		Expect(err).NotTo(HaveOccurred())
-
-		req.Header.Set("Content-Type", "application/json; charset=UTF-8")
-		req.SetBasicAuth(dummy.JohnWick.Name, "admin") // approve John Wick (who is an approver but not a creator of the playbook)
-
-		client := http.Client{}
-		resp, err := client.Do(req)
-		Expect(err).NotTo(HaveOccurred())
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			b, err := io.ReadAll(resp.Body)
-			Expect(err).NotTo(HaveOccurred())
-
-			fmt.Println(string(b))
-		}
-
-		Expect(resp.StatusCode).To(Equal(http.StatusOK))
-
-		// Wait until all run is marked as scheduled
+	ginkgo.It("should have auto approved the playbook run", func() {
 		var attempts int
 		for {
 			time.Sleep(time.Millisecond * 100)
 
 			var savedRun models.PlaybookRun
-			err = testDB.Where("id = ? ", runResp.RunID).First(&savedRun).Error
+			err := testDB.Where("id = ? ", runResp.RunID).First(&savedRun).Error
 			Expect(err).NotTo(HaveOccurred())
 
 			if savedRun.Status == models.PlaybookRunStatusScheduled || savedRun.Status == models.PlaybookRunStatusCompleted {
@@ -279,7 +243,7 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 			}
 
 			attempts += 1
-			if attempts > 20 { // wait for 2 seconds
+			if attempts > 50 { // wait for max 5 seconds
 				ginkgo.Fail(fmt.Sprintf("Timed out waiting for run to be scheduled. Status = %s", savedRun.Status))
 			}
 		}

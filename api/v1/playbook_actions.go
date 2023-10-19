@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flanksource/commons/duration"
+	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
@@ -19,8 +21,6 @@ type PodAction struct {
 	// MaxLength is the maximum length of the logs to show
 	//  Default: 3000 characters
 	MaxLength int `yaml:"maxLength,omitempty" json:"maxLength,omitempty"`
-	// Timeout in minutes to wait for specified container to finish its job. Defaults to 5 minutes
-	Timeout int `yaml:"timeout,omitempty" json:"timeout,omitempty"`
 	// +kubebuilder:validation:Schemaless
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +kubebuilder:validation:Type=object
@@ -199,16 +199,23 @@ type PlaybookAction struct {
 	// delay is the parsed Delay
 	delay *time.Duration `json:"-" yaml:"-"`
 
+	// timeout is the parsed Timeout
+	timeout *time.Duration `json:"-" yaml:"-"`
+
 	// Name of the action
 	Name string `yaml:"name" json:"name"`
 
 	// Delay is the duration to delay the execution of this action.
 	// The least supported value as of now is 1m.
-	Delay string      `yaml:"delay,omitempty" json:"delay,omitempty"`
-	Exec  *ExecAction `json:"exec,omitempty" yaml:"exec,omitempty"`
-	HTTP  *HTTPAction `json:"http,omitempty" yaml:"http,omitempty"`
-	SQL   *SQLAction  `json:"sql,omitempty" yaml:"sql,omitempty"`
-	Pod   *PodAction  `json:"pod,omitempty" yaml:"pod,omitempty"`
+	Delay string `yaml:"delay,omitempty" json:"delay,omitempty"`
+
+	// Timeout is the maximum duration to let an action run before it's cancelled.
+	Timeout string `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+
+	Exec *ExecAction `json:"exec,omitempty" yaml:"exec,omitempty"`
+	HTTP *HTTPAction `json:"http,omitempty" yaml:"http,omitempty"`
+	SQL  *SQLAction  `json:"sql,omitempty" yaml:"sql,omitempty"`
+	Pod  *PodAction  `json:"pod,omitempty" yaml:"pod,omitempty"`
 }
 
 func (p *PlaybookAction) DelayDuration() (time.Duration, error) {
@@ -220,11 +227,29 @@ func (p *PlaybookAction) DelayDuration() (time.Duration, error) {
 		return 0, nil
 	}
 
-	d, err := time.ParseDuration(p.Delay)
+	d, err := duration.ParseDuration(p.Delay)
 	if err != nil {
 		return 0, err
 	}
 
-	p.delay = &d
-	return d, nil
+	p.delay = utils.Ptr(time.Duration(d))
+	return time.Duration(d), nil
+}
+
+func (p *PlaybookAction) TimeoutDuration() (time.Duration, error) {
+	if p.timeout != nil {
+		return *p.timeout, nil
+	}
+
+	if p.Timeout == "" {
+		return 0, nil
+	}
+
+	d, err := duration.ParseDuration(p.Timeout)
+	if err != nil {
+		return 0, err
+	}
+
+	p.timeout = utils.Ptr(time.Duration(d))
+	return time.Duration(d), nil
 }

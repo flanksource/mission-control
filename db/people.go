@@ -15,7 +15,7 @@ import (
 	"gorm.io/gorm/clause"
 )
 
-func UpdateUserProperties(ctx api.Context, userID string, newProps api.PersonProperties) error {
+func UpdateUserProperties(ctx context.Context, userID string, newProps api.PersonProperties) error {
 	var current api.Person
 	if err := ctx.DB().Table("people").Where("id = ?", userID).First(&current).Error; err != nil {
 		return err
@@ -29,11 +29,11 @@ func UpdateUserProperties(ctx api.Context, userID string, newProps api.PersonPro
 	return ctx.DB().Table("people").Where("id = ?", userID).Update("properties", props).Error
 }
 
-func UpdateIdentityState(ctx api.Context, id, state string) error {
+func UpdateIdentityState(ctx context.Context, id, state string) error {
 	return ctx.DB().Table("identities").Where("id = ?", id).Update("state", state).Error
 }
 
-func GetUserByID(ctx api.Context, id string) (api.Person, error) {
+func GetUserByID(ctx context.Context, id string) (api.Person, error) {
 	var user api.Person
 	err := ctx.DB().Table("people").Where("id = ?", id).First(&user).Error
 	return user, err
