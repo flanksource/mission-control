@@ -1,10 +1,10 @@
 package auth
 
 import (
-	"context"
+	gocontext "context"
 	"os"
 
-	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/duty/context"
 	client "github.com/ory/client-go"
 )
 
@@ -42,7 +42,7 @@ const (
 	DefaultAdminPassword = "admin"
 )
 
-func (k *KratosHandler) createUser(ctx context.Context, firstName, lastName, email string) (*client.Identity, error) {
+func (k *KratosHandler) createUser(ctx gocontext.Context, firstName, lastName, email string) (*client.Identity, error) {
 	adminCreateIdentityBody := *client.NewCreateIdentityBody(
 		"default",
 		map[string]any{
@@ -58,7 +58,7 @@ func (k *KratosHandler) createUser(ctx context.Context, firstName, lastName, ema
 	return createdIdentity, err
 }
 
-func (k *KratosHandler) createRecoveryLink(ctx context.Context, id string) (string, error) {
+func (k *KratosHandler) createRecoveryLink(ctx gocontext.Context, id string) (string, error) {
 	adminCreateSelfServiceRecoveryLinkBody := client.NewCreateRecoveryLinkForIdentityBody(id)
 	resp, _, err := k.adminClient.IdentityApi.CreateRecoveryLinkForIdentity(ctx).CreateRecoveryLinkForIdentityBody(*adminCreateSelfServiceRecoveryLinkBody).Execute()
 	if err != nil {
@@ -67,7 +67,7 @@ func (k *KratosHandler) createRecoveryLink(ctx context.Context, id string) (stri
 	return resp.GetRecoveryLink(), nil
 }
 
-func (k *KratosHandler) createAdminIdentity(ctx context.Context) (string, error) {
+func (k *KratosHandler) createAdminIdentity(ctx gocontext.Context) (string, error) {
 	adminPassword := os.Getenv("ADMIN_PASSWORD")
 	if adminPassword == "" {
 		adminPassword = DefaultAdminPassword
@@ -101,7 +101,7 @@ func (k *KratosHandler) createAdminIdentity(ctx context.Context) (string, error)
 	return createdIdentity.Id, nil
 }
 
-func (k *KratosHandler) CreateAdminUser(ctx api.Context) (string, error) {
+func (k *KratosHandler) CreateAdminUser(ctx context.Context) (string, error) {
 	var id string
 	tx := ctx.DB().Raw(`SELECT id FROM identities WHERE traits->>'email' = ?`, AdminEmail).Scan(&id)
 	if tx.Error != nil {

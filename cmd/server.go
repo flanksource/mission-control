@@ -66,7 +66,7 @@ func tracingURLSkipper(c echo.Context) bool {
 	return false
 }
 
-func createHTTPServer(ctx api.Context) *echo.Echo {
+func createHTTPServer(ctx context.Context) *echo.Echo {
 	e := echo.New()
 	e.HideBanner = true
 
@@ -75,8 +75,7 @@ func createHTTPServer(ctx api.Context) *echo.Echo {
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			c.SetRequest(c.Request().WithContext(api.DefaultContext.Wrap(c.Request().Context())))
-			cc := ctx.WithEchoContext(c)
-			return next(cc)
+			return next(c)
 		}
 	})
 
@@ -285,7 +284,7 @@ var Serve = &cobra.Command{
 
 		go launchKopper()
 
-		e := createHTTPServer(api.DefaultAPIContext)
+		e := createHTTPServer(api.DefaultContext)
 		listenAddr := fmt.Sprintf(":%d", httpPort)
 		logger.Infof("Listening on %s", listenAddr)
 		if err := e.Start(listenAddr); err != nil {

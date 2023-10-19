@@ -4,6 +4,7 @@ import (
 	gocontext "context"
 	"database/sql/driver"
 
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/types"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -43,8 +44,8 @@ func (t NotificationConfig) GormValue(ctx gocontext.Context, db *gorm.DB) clause
 	return types.GormValue(t)
 }
 
-func (t *NotificationConfig) HydrateConnection(ctx Context) error {
-	connection, err := ctx.HydrateConnection(t.Connection)
+func (t *NotificationConfig) HydrateConnection(ctx context.Context) error {
+	connection, err := ctx.HydratedConnectionByURL(ctx.GetNamespace(), t.Connection)
 	if err != nil {
 		return err
 	} else if connection == nil {

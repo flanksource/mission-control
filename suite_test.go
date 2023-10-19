@@ -38,7 +38,6 @@ var _ = ginkgo.BeforeSuite(func() {
 		ginkgo.Fail(err.Error())
 	}
 
-	api.DefaultAPIContext = api.NewContext(db.Gorm, db.Pool)
 	api.DefaultContext = context.NewContext(gocontext.Background()).WithDB(db.Gorm, db.Pool)
 })
 

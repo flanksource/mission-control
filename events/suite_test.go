@@ -14,7 +14,6 @@ import (
 	"github.com/flanksource/duty/fixtures/dummy"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/testutils"
-	"github.com/flanksource/incident-commander/api"
 	"github.com/google/uuid"
 
 	"github.com/flanksource/incident-commander/upstream"
@@ -117,8 +116,7 @@ var _ = ginkgo.BeforeSuite(func() {
 	upstreamEchoServer.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			c.SetRequest(c.Request().WithContext(context.NewContext(c.Request().Context()).WithDB(upstreamDB, upstreamDBPGPool)))
-			cc := api.NewContext(upstreamDB, upstreamDBPGPool).WithEchoContext(c)
-			return next(cc)
+			return next(c)
 		}
 	})
 	upstreamEchoServer.POST("/upstream/push", upstream.PushUpstream)
