@@ -44,6 +44,9 @@ func NewClerkHandler(jwksURL, orgID, dbJwtSecret string) (*ClerkHandler, error) 
 func (h ClerkHandler) parseJWTToken(token string) (jwt.MapClaims, error) {
 	claims := jwt.MapClaims{}
 	jt, err := jwt.ParseWithClaims(token, claims, getJWTKeyFunc(h.jwksURL))
+	if err != nil {
+		return claims, err
+	}
 	if !jt.Valid {
 		return claims, fmt.Errorf("jwt token not valid")
 	}
@@ -121,15 +124,22 @@ func (h *ClerkHandler) getUser(ctx context.Context, sessionToken string) (*model
 		Avatar:     fmt.Sprint(claims["image_url"]),
 		ExternalID: fmt.Sprint(claims["user_id"]),
 	}
-	dbUser, err := h.createDBUserIfNotExists(ctx, user, fmt.Sprint(claims["role"]))
+	dbUser, err := h.createDBUserIfNotExists(ctx, user)
 	if err != nil {
 		return nil, "", err
 	}
+
+	// If session expires, and clerk role is different from our rbac
+	// we update the rbac
+	if err := h.updateRole(dbUser.ID.String(), fmt.Sprint(claims["role"])); err != nil {
+		return nil, "", err
+	}
+
 	h.userCache.SetDefault(sessionID, &dbUser)
 	return &dbUser, sessionID, nil
 }
 
-func (h *ClerkHandler) createDBUserIfNotExists(ctx context.Context, user models.Person, role string) (models.Person, error) {
+func (h *ClerkHandler) createDBUserIfNotExists(ctx context.Context, user models.Person) (models.Person, error) {
 	existingUser, err := db.GetUserByExternalID(ctx, user.ExternalID)
 	if err == nil {
 		// User with the given external ID exists
@@ -146,14 +156,22 @@ func (h *ClerkHandler) createDBUserIfNotExists(ctx context.Context, user models.
 		return models.Person{}, err
 	}
 
-	roleToAdd := rbac.RoleEditor
-	if role == "admin" {
-		roleToAdd = rbac.RoleAdmin
-	}
-
-	if _, err := rbac.Enforcer.AddRoleForUser(dbUser.ID.String(), roleToAdd); err != nil {
-		return models.Person{}, err
-	}
-
 	return dbUser, nil
+}
+
+func (ClerkHandler) updateRole(userID, clerkRole string) error {
+	if clerkRole == "admin" {
+		if _, err := rbac.Enforcer.AddRoleForUser(userID, rbac.RoleAdmin); err != nil {
+			return err
+		}
+	} else {
+		// Remove admin in rbac if exists
+		if _, err := rbac.Enforcer.DeleteRoleForUser(userID, rbac.RoleAdmin); err != nil {
+			return err
+		}
+		if _, err := rbac.Enforcer.AddRoleForUser(userID, rbac.RoleEditor); err != nil {
+			return err
+		}
+	}
+	return nil
 }
