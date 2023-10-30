@@ -30,7 +30,7 @@ func savePlaybookRun(ctx context.Context, playbook *models.Playbook, run *models
 		case api.EFORBIDDEN, api.EINVALID:
 			// ignore these errors
 		default:
-			return fmt.Errorf("error while attempting to auto approve run: %v", err)
+			return fmt.Errorf("error while attempting to auto approve run: %w", err)
 		}
 	}
 

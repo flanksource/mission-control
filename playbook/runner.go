@@ -37,7 +37,7 @@ func ExecuteRun(ctx context.Context, run models.PlaybookRun) {
 		}
 
 		if run.StartTime.IsZero() {
-			columnUpdates["start_time"] = "NOW()"
+			columnUpdates["start_time"] = gorm.Expr("CLOCK_TIMESTAMP()")
 		}
 
 		if err := ctx.DB().Model(&models.PlaybookRun{}).Where("id = ?", run.ID).UpdateColumns(columnUpdates).Error; err != nil {
@@ -50,13 +50,13 @@ func ExecuteRun(ctx context.Context, run models.PlaybookRun) {
 	if runResponse, err := executeRun(ctx, run, runOptions); err != nil {
 		logger.Errorf("failed to execute playbook run: %v", err)
 		columnUpdates["status"] = models.PlaybookRunStatusFailed
-		columnUpdates["end_time"] = "NOW()"
+		columnUpdates["end_time"] = gorm.Expr("CLOCK_TIMESTAMP()")
 	} else if runResponse.Sleep > 0 {
-		columnUpdates["scheduled_time"] = gorm.Expr(fmt.Sprintf("NOW() + INTERVAL '%d SECONDS'", int(runResponse.Sleep.Seconds())))
+		columnUpdates["scheduled_time"] = gorm.Expr(fmt.Sprintf("CLOCK_TIMESTAMP() + INTERVAL '%d SECONDS'", int(runResponse.Sleep.Seconds())))
 		columnUpdates["status"] = models.PlaybookRunStatusSleeping
 	} else {
 		columnUpdates["status"] = models.PlaybookRunStatusCompleted
-		columnUpdates["end_time"] = "NOW()"
+		columnUpdates["end_time"] = gorm.Expr("CLOCK_TIMESTAMP()")
 	}
 
 	if err := ctx.DB().Model(&models.PlaybookRun{}).Where("id = ?", run.ID).UpdateColumns(&columnUpdates).Error; err != nil {
@@ -138,7 +138,7 @@ func executeRun(ctx context.Context, run models.PlaybookRun, opt runExecOptions)
 			runAction = *opt.StartFrom
 			if err := ctx.DB().Model(&models.PlaybookRunAction{}).Where("id = ?", runAction.ID).UpdateColumns(map[string]any{
 				"status":     models.PlaybookRunStatusRunning,
-				"start_time": "NOW()",
+				"start_time": gorm.Expr("CLOCK_TIMESTAMP()"),
 			}).Error; err != nil {
 				logger.Errorf("failed to update playbook run action status: %v", err)
 			}
@@ -169,7 +169,7 @@ func executeRun(ctx context.Context, run models.PlaybookRun, opt runExecOptions)
 		}
 
 		columnUpdates := map[string]any{
-			"end_time": "NOW()",
+			"end_time": gorm.Expr("CLOCK_TIMESTAMP()"),
 		}
 		result, err := executeAction(ctx, run, action, templateEnv)
 		if err != nil {
