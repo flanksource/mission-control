@@ -1,0 +1,40 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: upgrade-eks-cluster
+spec:
+  actions:
+    - exec:
+        script: sleep 10
+      name: Check for Incompatible Objects
+    - exec:
+        script: sleep 15
+      name: Remove cluster from global LB
+    - exec:
+        script: |
+          echo Updating to v1.27.7-eks-a59e1f0
+          sleep 10
+          echo Update completed
+      name: Update EKS Version
+    - exec:
+        script: |
+          echo Draining ip-10-0-4-23.eu-west-1.compute.internal
+          echo Terminating ip-10-0-4-23.eu-west-1.compute.internal
+          sleep 10
+          echo Draining ip-10-0-4-27.eu-west-1.compute.internal
+          echo Terminating ip-10-0-4-27.eu-west-1.compute.internal
+          sleep 10
+          echo Draining ip-10-0-4-33.eu-west-1.compute.internal
+          echo Terminating ip-10-0-4-33.eu-west-1.compute.internal
+      name: Roll all Nodes
+  approval:
+    approvers:
+      people:
+        - admin@local
+    type: any
+  configs:
+    - type: AWS::EKS::Cluster
+  description: Upgrade EKS Cluster
+  parameters:
+    - label: The new EKS version
+      name: version

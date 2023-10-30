@@ -51,6 +51,7 @@ func EventConsumer(c postq.Context) (int, error) {
 			AND scheduled_time <= NOW()
 		ORDER BY scheduled_time
 		FOR UPDATE SKIP LOCKED
+		LIMIT 5
 	`
 
 	var runs []models.PlaybookRun
