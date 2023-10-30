@@ -30,6 +30,9 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 		checkPlaybook     models.Playbook
 		componentPlaybook models.Playbook
 		runResp           playbook.RunResponse
+
+		pgNotifyChannel chan string
+		ec              *postq.PGConsumer
 	)
 
 	ginkgo.It("should store dummy data", func() {
@@ -39,13 +42,12 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 	})
 
 	ginkgo.It("start the queue consumer in background", func() {
-		pgNotifyChannel := make(chan string)
+		pgNotifyChannel = make(chan string)
 
 		ctx := context.NewContext(gocontext.Background()).WithDB(testDB, testDBPool)
 
-		go pg.Listen(ctx, "playbook_run_updates", pgNotifyChannel)
-
-		ec, err := postq.NewPGConsumer(playbook.EventConsumer, &postq.ConsumerOption{
+		var err error
+		ec, err = postq.NewPGConsumer(playbook.EventConsumer, &postq.ConsumerOption{
 			NumConsumers: 5,
 			Timeout:      time.Second * 2,
 			ErrorHandler: func(err error) bool {
@@ -54,8 +56,6 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 			},
 		})
 		Expect(err).NotTo(HaveOccurred())
-
-		go ec.Listen(ctx, pgNotifyChannel)
 
 		go events.StartConsumers(ctx, upstream.UpstreamConfig{})
 	})
@@ -109,7 +109,7 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	ginkgo.It("should save other playbooks to test listing of playbooks for checks & components", func() {
+	ginkgo.It("should save other playbooks so we can test listing of playbooks for checks, canaries & components", func() {
 		checkPlaybookSpec := v1.PlaybookSpec{
 			Description: "write check name to file",
 			Checks: []v1.PlaybookResourceFilter{
@@ -202,6 +202,11 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 	})
 
 	ginkgo.It("should store playbook run via API", func() {
+		ctx := context.NewContext(gocontext.Background()).WithDB(testDB, testDBPool)
+
+		go pg.Listen(ctx, "playbook_run_updates", pgNotifyChannel)
+		go ec.Listen(ctx, pgNotifyChannel)
+
 		run := playbook.RunParams{
 			ID:       configPlaybook.ID,
 			ConfigID: dummy.EKSCluster.ID,
@@ -210,7 +215,6 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 			},
 		}
 
-		ctx := context.NewContext(gocontext.Background()).WithDB(testDB, testDBPool)
 		httpClient := http.NewClient().Auth(dummy.JohnDoe.Name, "admin").BaseURL(fmt.Sprintf("http://localhost:%d/playbook", echoServerPort))
 		resp, err := httpClient.R(ctx).Header("Content-Type", "application/json").Post("/run", run)
 		Expect(err).NotTo(HaveOccurred())
@@ -229,7 +233,7 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 		Expect(*savedRun.CreatedBy).To(Equal(dummy.JohnDoe.ID), "run should have been created by the authenticated person")
 	})
 
-	ginkgo.It("should have auto approved the playbook run", func() {
+	ginkgo.It("should have auto approved & scheduled the playbook run", func() {
 		var attempts int
 		for {
 			time.Sleep(time.Millisecond * 100)
