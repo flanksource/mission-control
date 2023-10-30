@@ -13,8 +13,7 @@ require (
 	github.com/fergusstrange/embedded-postgres v1.24.0
 	github.com/flanksource/commons v1.15.1
 	github.com/flanksource/duty v1.0.204
-	github.com/flanksource/gomplate/v3 v3.20.16
-	github.com/flanksource/kopper v1.0.6
+	github.com/flanksource/gomplate/v3 v3.20.20
 	github.com/flanksource/postq v0.1.2
 	github.com/gomarkdown/markdown v0.0.0-20230922112808-5421fefb8386
 	github.com/google/cel-go v0.18.1
@@ -41,6 +40,7 @@ require (
 )
 
 require (
+	github.com/flanksource/kopper v1.0.6
 	go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho v0.44.0
 	go.opentelemetry.io/otel v1.19.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.18.0
