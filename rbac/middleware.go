@@ -7,14 +7,15 @@ import (
 
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/labstack/echo/v4"
 )
 
 var (
-	errNoUserID          = errors.New("Unauthorized. User not found for RBAC")
-	errAccessDenied      = errors.New("Unauthorized. Access Denied")
-	errMisconfiguredRBAC = errors.New("Unauthorized. RBAC policy not configured correctly")
+	errNoUserID          = errors.New("unauthorized. User not found for RBAC")
+	errAccessDenied      = errors.New("unauthorized. Access Denied")
+	errMisconfiguredRBAC = errors.New("unauthorized. RBAC policy not configured correctly")
 )
 
 func Authorization(object, action string) func(echo.HandlerFunc) echo.HandlerFunc {
@@ -59,6 +60,11 @@ func Authorization(object, action string) func(echo.HandlerFunc) echo.HandlerFun
 
 			if object == "" || action == "" {
 				return c.String(http.StatusForbidden, errMisconfiguredRBAC.Error())
+			}
+
+			ctx := c.Request().Context().(context.Context)
+			if role, ok := ctx.Value("identity.role").(string); ok && role != "" {
+				userID = role
 			}
 
 			if !Check(userID, object, action) {

@@ -3,6 +3,7 @@ package auth
 import (
 	gocontext "context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -17,6 +18,7 @@ import (
 	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/gomplate/v3"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -29,6 +31,8 @@ import (
 const (
 	DefaultPostgrestRole = "postgrest_api"
 )
+
+var IdentityRoleMapper string
 
 var (
 	errInvalidTokenFormat = errors.New("invalid access token format")
@@ -100,6 +104,29 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 		if traits, ok := session.Identity.GetTraits().(map[string]any); ok {
 			if e, ok := traits["email"].(string); ok {
 				email = e
+			}
+		}
+
+		if IdentityRoleMapper != "" {
+			env := map[string]any{
+				"identity": session.Identity,
+			}
+
+			// TODO: Add cache support to gomplate expression
+			if res, err := gomplate.RunTemplate(env, gomplate.Template{Expression: IdentityRoleMapper}); err != nil {
+				return err
+			} else if res != "" {
+				var result map[string]string
+				if err := json.Unmarshal([]byte(res), &result); err != nil {
+					return err
+				}
+
+				if res, ok := result["role"]; ok {
+					ctx.Context = ctx.WithValue("identity.role", res)
+				}
+
+				// TODO: Need to add the user to a team
+				// Can't really tell if the user has just logged in
 			}
 		}
 
