@@ -7,7 +7,6 @@ import (
 
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/duty/context"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/labstack/echo/v4"
 )
@@ -60,11 +59,6 @@ func Authorization(object, action string) func(echo.HandlerFunc) echo.HandlerFun
 
 			if object == "" || action == "" {
 				return c.String(http.StatusForbidden, errMisconfiguredRBAC.Error())
-			}
-
-			ctx := c.Request().Context().(context.Context)
-			if role, ok := ctx.Value("identity.role").(string); ok && role != "" {
-				userID = role
 			}
 
 			if !Check(userID, object, action) {

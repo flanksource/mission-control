@@ -22,6 +22,7 @@ import (
 	"github.com/flanksource/gomplate/v3"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/rbac"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	client "github.com/ory/client-go"
@@ -127,25 +128,28 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 		}
 
 		if IdentityRoleMapper != "" {
-			env := map[string]any{
-				"identity": session.Identity,
-			}
+			if _, ok := identityMapperLoginCache.Get(session.GetId()); !ok {
+				env := map[string]any{
+					"identity": session.Identity,
+				}
 
-			// TODO: Add cache support to gomplate expression
-			if res, err := gomplate.RunTemplate(env, gomplate.Template{Expression: IdentityRoleMapper}); err != nil {
-				return err
-			} else if res != "" {
-				var result IdentityMapperExprResult
-				if err := json.Unmarshal([]byte(res), &result); err != nil {
+				// TODO: Add cache support to gomplate expression
+				if res, err := gomplate.RunTemplate(env, gomplate.Template{Expression: IdentityRoleMapper}); err != nil {
+					logger.Errorf("error running IdentityRoleMapper template: %v", err)
 					return err
-				}
+				} else if res != "" {
+					var result IdentityMapperExprResult
+					if err := json.Unmarshal([]byte(res), &result); err != nil {
+						return err
+					}
 
-				if result.Role != "" {
-					ctx.Context = ctx.WithValue("identity.role", res)
-				}
+					if result.Role != "" {
+						if _, err := rbac.Enforcer.AddRolesForUser(uid.String(), []string{result.Role}); err != nil {
+							logger.Errorf("error adding role:%s to user %s: %v", result.Role, uid, err)
+						}
+					}
 
-				if len(result.Teams) != 0 {
-					if _, ok := identityMapperLoginCache.Get(session.GetId()); !ok {
+					if len(result.Teams) != 0 {
 						for _, teamName := range result.Teams {
 							team, err := duty.FindTeam(ctx, teamName)
 							if err != nil {
@@ -154,12 +158,12 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 								logger.Errorf("error adding person to team: %v", err)
 							}
 						}
+					}
 
-						if session.ExpiresAt != nil {
-							identityMapperLoginCache.Set(session.GetId(), nil, time.Until(*session.ExpiresAt))
-						} else {
-							identityMapperLoginCache.SetDefault(session.GetId(), nil)
-						}
+					if session.ExpiresAt != nil {
+						identityMapperLoginCache.Set(session.GetId(), nil, time.Until(*session.ExpiresAt))
+					} else {
+						identityMapperLoginCache.SetDefault(session.GetId(), nil)
 					}
 				}
 			}
