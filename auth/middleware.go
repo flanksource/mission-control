@@ -3,6 +3,7 @@ package auth
 import (
 	gocontext "context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -15,9 +16,13 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/rand"
 	"github.com/flanksource/commons/utils"
+	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/gomplate/v3"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/rbac"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	client "github.com/ory/client-go"
@@ -29,6 +34,19 @@ import (
 const (
 	DefaultPostgrestRole = "postgrest_api"
 )
+
+var (
+	IdentityRoleMapper string
+
+	// identityMapperLoginCache is used to keep track of whether a new login session
+	// has been checked for mapping to a team or not.
+	identityMapperLoginCache = cache.New(1*time.Hour, 1*time.Hour)
+)
+
+type IdentityMapperExprResult struct {
+	Teams []string `json:"teams"`
+	Role  string   `json:"role"`
+}
 
 var (
 	errInvalidTokenFormat = errors.New("invalid access token format")
@@ -72,6 +90,7 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 		if canSkipAuth(c) {
 			return next(c)
 		}
+
 		session, err := k.validateSession(c.Request())
 		if err != nil {
 			if errors.Is(err, errInvalidTokenFormat) {
@@ -103,12 +122,55 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 			}
 		}
 
-		if uid, err := uuid.Parse(session.Identity.GetId()); err != nil {
+		uid, err := uuid.Parse(session.Identity.GetId())
+		if err != nil {
 			return c.String(http.StatusUnauthorized, "Unauthorized")
-		} else {
-			ctx = ctx.WithUser(&models.Person{ID: uid, Email: email})
-			c.SetRequest(c.Request().WithContext(ctx))
 		}
+
+		if IdentityRoleMapper != "" {
+			if _, ok := identityMapperLoginCache.Get(session.GetId()); !ok {
+				env := map[string]any{
+					"identity": session.Identity,
+				}
+
+				// TODO: Add cache support to gomplate expression
+				if res, err := gomplate.RunTemplate(env, gomplate.Template{Expression: IdentityRoleMapper}); err != nil {
+					logger.Errorf("error running IdentityRoleMapper template: %v", err)
+					return err
+				} else if res != "" {
+					var result IdentityMapperExprResult
+					if err := json.Unmarshal([]byte(res), &result); err != nil {
+						return err
+					}
+
+					if result.Role != "" {
+						if _, err := rbac.Enforcer.AddRolesForUser(uid.String(), []string{result.Role}); err != nil {
+							logger.Errorf("error adding role:%s to user %s: %v", result.Role, uid, err)
+						}
+					}
+
+					if len(result.Teams) != 0 {
+						for _, teamName := range result.Teams {
+							team, err := duty.FindTeam(ctx, teamName)
+							if err != nil {
+								logger.Errorf("error finding team(name: %s) %v", team, err)
+							} else if err := db.AddPersonToTeam(ctx, uid, team.ID); err != nil {
+								logger.Errorf("error adding person to team: %v", err)
+							}
+						}
+					}
+
+					if session.ExpiresAt != nil {
+						identityMapperLoginCache.Set(session.GetId(), nil, time.Until(*session.ExpiresAt))
+					} else {
+						identityMapperLoginCache.SetDefault(session.GetId(), nil)
+					}
+				}
+			}
+		}
+
+		ctx = ctx.WithUser(&models.Person{ID: uid, Email: email})
+		c.SetRequest(c.Request().WithContext(ctx))
 
 		return next(c)
 	}

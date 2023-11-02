@@ -1,12 +1,14 @@
 package rbac
 
 import (
+	gocontext "context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	embeddedPG "github.com/fergusstrange/embedded-postgres"
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/testutils"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
@@ -35,6 +37,8 @@ func TestAuthorization(t *testing.T) {
 	if err := db.Init(pgUrl); err != nil {
 		t.Fatalf("error connecting to db: %v", err)
 	}
+
+	api.DefaultContext = context.NewContext(gocontext.Background()).WithDB(db.Gorm, db.Pool)
 
 	e := echo.New()
 	successBody := "OK"
@@ -94,6 +98,7 @@ func TestAuthorization(t *testing.T) {
 		rec := httptest.NewRecorder()
 
 		// Call endpoint
+		req = req.WithContext(api.DefaultContext)
 		_ = Authorization(tc.object, tc.action)(handler)(e.NewContext(req, rec))
 
 		if rec.Code != tc.expectedCode {

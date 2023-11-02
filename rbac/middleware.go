@@ -12,9 +12,9 @@ import (
 )
 
 var (
-	errNoUserID          = errors.New("Unauthorized. User not found for RBAC")
-	errAccessDenied      = errors.New("Unauthorized. Access Denied")
-	errMisconfiguredRBAC = errors.New("Unauthorized. RBAC policy not configured correctly")
+	errNoUserID          = errors.New("unauthorized. User not found for RBAC")
+	errAccessDenied      = errors.New("unauthorized. Access Denied")
+	errMisconfiguredRBAC = errors.New("unauthorized. RBAC policy not configured correctly")
 )
 
 func Authorization(object, action string) func(echo.HandlerFunc) echo.HandlerFunc {

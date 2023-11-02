@@ -10,6 +10,7 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
+	dbModels "github.com/flanksource/incident-commander/db/models"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/argon2"
 	"gorm.io/gorm/clause"
@@ -104,4 +105,11 @@ func CreateAccessToken(ctx context.Context, personID uuid.UUID, name, password s
 
 	formattedHash := fmt.Sprintf("%s.%s.%d.%d.%d", password, salt, timeCost, memoryCost, parallelism)
 	return formattedHash, nil
+}
+
+func AddPersonToTeam(ctx context.Context, personID uuid.UUID, teamID uuid.UUID) error {
+	return ctx.DB().
+		Clauses(clause.OnConflict{DoNothing: true}).
+		Create(&dbModels.TeamMember{PersonID: personID, TeamID: teamID}).
+		Error
 }

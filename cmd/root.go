@@ -12,6 +12,7 @@ import (
 	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/jobs"
 	"github.com/flanksource/incident-commander/k8s"
@@ -44,6 +45,17 @@ func PreRun(cmd *cobra.Command, args []string) {
 		WithDB(db.Gorm, db.Pool).
 		WithKubernetes(api.Kubernetes).
 		WithNamespace(api.Namespace)
+
+	if strings.HasPrefix(auth.IdentityRoleMapper, "file://") {
+		path := strings.TrimPrefix(auth.IdentityRoleMapper, "file://")
+		content, err := os.ReadFile(path)
+		if err != nil {
+			logger.Fatalf("failed to read identity role mapper script file(%s): %v", path, err)
+		}
+
+		auth.IdentityRoleMapper = string(content)
+		logger.Debugf("successfully loaded identity-role-mapper from file: %s", auth.IdentityRoleMapper)
+	}
 }
 
 var Root = &cobra.Command{
@@ -86,6 +98,7 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&mail.FromName, "email-from-name", "Mission Control", "Email name of the sender")
 	flags.StringVar(&db.PostgresDBAnonRole, "postgrest-anon-role", "postgrest_anon", "PostgREST anonymous role")
 	flags.StringVar(&db.PostgrestMaxRows, "postgrest-max-rows", "2000", "A hard limit to the number of rows PostgREST will fetch")
+	flags.StringVar(&auth.IdentityRoleMapper, "identity-role-mapper", "", "CEL-Go expression to map identity to a role & a team (return: {role: string, teams: []string}). Supports file path (prefixed with 'file://').")
 	flags.StringVar(&otelcollectorURL, "otel-collector-url", "", "OpenTelemetry gRPC Collector URL in host:port format")
 	flags.StringVar(&otelServiceName, "otel-service-name", "mission-control", "OpenTelemetry service name for the resource")
 
