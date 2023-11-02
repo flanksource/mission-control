@@ -42,6 +42,11 @@ var (
 	identityMapperLoginCache = cache.New(1*time.Hour, 1*time.Hour)
 )
 
+type IdentityMapperExprResult struct {
+	Teams []string `json:"teams"`
+	Role  string   `json:"role"`
+}
+
 var (
 	errInvalidTokenFormat = errors.New("invalid access token format")
 	errTokenExpired       = errors.New("access token has expired")
@@ -130,22 +135,24 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 			if res, err := gomplate.RunTemplate(env, gomplate.Template{Expression: IdentityRoleMapper}); err != nil {
 				return err
 			} else if res != "" {
-				var result map[string]string
+				var result IdentityMapperExprResult
 				if err := json.Unmarshal([]byte(res), &result); err != nil {
 					return err
 				}
 
-				if res, ok := result["role"]; ok {
+				if result.Role != "" {
 					ctx.Context = ctx.WithValue("identity.role", res)
 				}
 
-				if team, ok := result["team"]; ok {
+				if len(result.Teams) != 0 {
 					if _, ok := identityMapperLoginCache.Get(session.GetId()); !ok {
-						team, err := duty.FindTeam(ctx, team)
-						if err != nil {
-							logger.Errorf("error finding team(name: %s) %v", team, err)
-						} else if err := db.AddPersonToTeam(ctx, uid, team.ID); err != nil {
-							logger.Errorf("error adding person to team: %v", err)
+						for _, teamName := range result.Teams {
+							team, err := duty.FindTeam(ctx, teamName)
+							if err != nil {
+								logger.Errorf("error finding team(name: %s) %v", team, err)
+							} else if err := db.AddPersonToTeam(ctx, uid, team.ID); err != nil {
+								logger.Errorf("error adding person to team: %v", err)
+							}
 						}
 
 						if session.ExpiresAt != nil {
