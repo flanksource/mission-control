@@ -18,3 +18,8 @@ type Team struct {
 	UpdatedAt time.Time  `gorm:"type:timestamp with time zone;default:now();not null"`
 	DeletedAt *time.Time `gorm:"type:timestamp with time zone"`
 }
+
+type TeamMember struct {
+	TeamID   uuid.UUID `gorm:"not null"`
+	PersonID uuid.UUID `gorm:"not null"`
+}
