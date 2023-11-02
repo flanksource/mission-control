@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/fixtures/dummy"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/types"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	ginkgo "github.com/onsi/ginkgo/v2"
