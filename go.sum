@@ -750,13 +750,11 @@ github.com/fergusstrange/embedded-postgres v1.24.0 h1:WqXbmYrBeT5JfNWQ8Qa+yHa5YJ
 github.com/fergusstrange/embedded-postgres v1.24.0/go.mod h1:wL562t1V+iuFwq0UcgMi2e9rp8CROY9wxWZEfP8Y874=
 github.com/flanksource/commons v1.17.1 h1:jd114sxRwe2VWcbG/PVVEAWsEkialL6eltbqFGANyuI=
 github.com/flanksource/commons v1.17.1/go.mod h1:RDdQI0/QYC4GzicbDaXIvBPjWuQWKLzX8/rFBbFjG5U=
-github.com/flanksource/duty v1.0.206 h1:iiRbwzyYc3FS7mKFyY7p5+GsIa5N1T414VtuxDKfUMQ=
-github.com/flanksource/duty v1.0.206/go.mod h1:sEV2PDgPxRvRySzwbPdu0eslixLT0YoeRcv/FuRGvSw=
 github.com/flanksource/duty v1.0.210 h1:oi8VzA2uG6P7KQFZHUWpX5WD681P42eYPC4C4F+JLg0=
 github.com/flanksource/duty v1.0.210/go.mod h1:tr6nnn/4wtJ3bfFT1BrhN9AK1Zm7klKFjnlZuJMJNj8=
 github.com/flanksource/gomplate/v3 v3.20.4/go.mod h1:27BNWhzzSjDed1z8YShO6W+z6G9oZXuxfNFGd/iGSdc=
-github.com/flanksource/gomplate/v3 v3.20.16 h1:Bfn+nbD0iK0iGQcu6alV8Nr7O5+KpeDo8OD9WOu831Q=
-github.com/flanksource/gomplate/v3 v3.20.16/go.mod h1:2GgHZ2vWmtDspJMBfUIryOuzJSwc8jU7Kw9fDLr0TMA=
+github.com/flanksource/gomplate/v3 v3.20.24 h1:Hp77K3FSoOX5HtrO+rMi52nH0s3d/Sj5UV5+RxApLos=
+github.com/flanksource/gomplate/v3 v3.20.24/go.mod h1:GKmptFMdr2LbOuqwQZrmo9a/UygyZ0pbXffks8MuYhE=
 github.com/flanksource/is-healthy v0.0.0-20230705092916-3b4cf510c5fc/go.mod h1:4pQhmF+TnVqJroQKY8wSnSp+T18oLson6YQ2M0qPHfQ=
 github.com/flanksource/is-healthy v0.0.0-20231003215854-76c51e3a3ff7 h1:s6jf6P1pRfdvksVFjIXFRfnimvEYUR0/Mmla1EIjiRM=
 github.com/flanksource/is-healthy v0.0.0-20231003215854-76c51e3a3ff7/go.mod h1:BH5gh9JyEAuuWVP6Q5y9h43VozS0RfKyjNpM9L4v4hw=
@@ -764,8 +762,6 @@ github.com/flanksource/kommons v0.31.4 h1:zksAgYjZuwPgS8XTejDIWEYB0nPSU1i3Jxcavm
 github.com/flanksource/kommons v0.31.4/go.mod h1:70BPMzjTvejsqRyVyAm/ZCeZ176toCvauaZjU03svnE=
 github.com/flanksource/kopper v1.0.6 h1:ITg2Tq7DDWHhPiJl46pbNd2F9N6fWwJrUN682k7+W+k=
 github.com/flanksource/kopper v1.0.6/go.mod h1:BcKo74oYX4XwWHYs+gbSUElcwP6s+8M2QIc/dLsqWfI=
-github.com/flanksource/mapstructure v1.6.0 h1:+1kJ+QsO1SxjAgktfLlpZXetsVSJ0uCLhGKrA4BtwTE=
-github.com/flanksource/mapstructure v1.6.0/go.mod h1:dttg5+FFE2sp4D/CrcPCVqufNDrBggDaM+08nk5S8Ps=
 github.com/flanksource/postq v0.1.2 h1:chihoY3Gb//jwNgWoekkkSij3N0rl7pwbE5+ePR6mMs=
 github.com/flanksource/postq v0.1.2/go.mod h1:nE3mLh0vpF43TT+0HszC0QmORB37xSWPVHmhOY6PqBk=
 github.com/fogleman/gg v1.2.1-0.20190220221249-0403632d5b90/go.mod h1:R/bRT+9gY/C5z7JzPU0zXsXHKM4/ayA+zqcVNZzPa1k=
@@ -1011,7 +1007,6 @@ github.com/hashicorp/hcl/v2 v2.18.1 h1:6nxnOJFku1EuSawSD81fuviYUV8DxFr3fp2dUi3ZY
 github.com/hashicorp/hcl/v2 v2.18.1/go.mod h1:ThLC89FV4p9MPW804KVbe/cEXoQ8NZEh+JtMeeGErHE=
 github.com/henvic/httpretty v0.1.2 h1:EQo556sO0xeXAjP10eB+BZARMuvkdGqtfeS4Ntjvkiw=
 github.com/henvic/httpretty v0.1.2/go.mod h1:ViEsly7wgdugYtymX54pYp6Vv2wqZmNHayJ6q8tlKCc=
-github.com/hexops/gotextdiff v1.0.3 h1:gitA9+qJrrTCsiCl7+kh75nPqQt1cx4ZkudSTLoUqJM=
 github.com/hpcloud/tail v1.0.0/go.mod h1:ab1qPbhIpdTxEkNHXyeSf5vhxWSCs/tWer42PpOxQnU=
 github.com/iancoleman/strcase v0.2.0/go.mod h1:iwCmte+B7n89clKwxIoIXy/HfoL7AsD47ZCWhYzw7ho=
 github.com/ianlancetaylor/demangle v0.0.0-20181102032728-5e5cf60278f6/go.mod h1:aSSvb/t6k1mPoxDqO4vJh6VOCGPwU4O0C2/Eqndh1Sc=
@@ -1164,6 +1159,8 @@ github.com/mxk/go-flowrate v0.0.0-20140419014527-cca7078d478f/go.mod h1:ZdcZmHo+
 github.com/niemeyer/pretty v0.0.0-20200227124842-a10e7caefd8e/go.mod h1:zD1mROLANZcx1PVRCS0qkT7pwLkGfwJo4zjcN/Tysno=
 github.com/nxadm/tail v1.4.4/go.mod h1:kenIhsEOeOJmVchQTgglprH7qJGnHDVpk1VPCcaMI8A=
 github.com/nxadm/tail v1.4.8/go.mod h1:+ncqLTQzXmGhMZNUePPaPqPvBxHAIsmXswZKocGu+AU=
+github.com/ohler55/ojg v1.20.2 h1:ragZXnawcsq/knqIHaflvIX/8RzzAKMZSluAZAz+RFs=
+github.com/ohler55/ojg v1.20.2/go.mod h1:uHcD1ErbErC27Zhb5Df2jUjbseLLcmOCo6oxSr3jZxo=
 github.com/onsi/ginkgo v0.0.0-20170829012221-11459a886d9c/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=
 github.com/onsi/ginkgo v1.6.0/go.mod h1:lLunBs/Ym6LB5Z9jYTR76FiuTmxDTDusOGeTQH+WWjE=
 github.com/onsi/ginkgo v1.12.1/go.mod h1:zj2OWP4+oCPe1qIXoGWkgMRwljMUYCdkwsT2108oapk=
