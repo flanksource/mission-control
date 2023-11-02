@@ -7,8 +7,8 @@ import (
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/fixtures/dummy"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/postq"
