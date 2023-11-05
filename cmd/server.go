@@ -143,7 +143,10 @@ func createHTTPServer(ctx context.Context) *echo.Echo {
 		forward(e, "/db", postgrestURI, rbac.Authorization(rbac.ObjectDatabase, "any"))
 	}
 
-	e.Use(middleware.Logger())
+	echoLogConfig := middleware.DefaultLoggerConfig
+	echoLogConfig.Skipper = tracingURLSkipper
+
+	e.Use(middleware.LoggerWithConfig(echoLogConfig))
 	e.Use(ServerCache)
 
 	e.GET("/health", func(c echo.Context) error {
@@ -187,6 +190,7 @@ func createHTTPServer(ctx context.Context) *echo.Echo {
 	e.POST("/agent/generate", agent.GenerateAgent, rbac.Authorization(rbac.ObjectAgentCreate, rbac.ActionWrite))
 
 	forward(e, "/config", configDb)
+	forward(e, "/canary/webhook", api.CanaryCheckerPath+"/webhook")
 	forward(e, "/canary", api.CanaryCheckerPath)
 	forward(e, "/kratos", kratosAPI)
 	forward(e, "/apm", api.ApmHubPath) // Deprecated
