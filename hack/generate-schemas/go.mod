@@ -30,11 +30,10 @@ require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
 	github.com/evanphx/json-patch v5.7.0+incompatible // indirect
-	github.com/flanksource/duty v1.0.210 // indirect
-	github.com/flanksource/gomplate/v3 v3.20.16 // indirect
+	github.com/flanksource/duty v1.0.212 // indirect
+	github.com/flanksource/gomplate/v3 v3.20.24 // indirect
 	github.com/flanksource/is-healthy v0.0.0-20231003215854-76c51e3a3ff7 // indirect
 	github.com/flanksource/kommons v0.31.4 // indirect
-	github.com/flanksource/mapstructure v1.6.0 // indirect
 	github.com/flanksource/postq v0.1.2 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/go-errors/errors v1.4.2 // indirect
@@ -103,6 +102,7 @@ require (
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/monochromegane/go-gitignore v0.0.0-20200626010858-205db1a8cc00 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/ohler55/ojg v1.20.2 // indirect
 	github.com/patrickmn/go-cache v2.1.0+incompatible // indirect
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
 	github.com/pkg/errors v0.9.1 // indirect
