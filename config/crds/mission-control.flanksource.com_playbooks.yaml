@@ -493,6 +493,8 @@ spec:
               description:
                 description: Short description of the playbook.
                 type: string
+              icon:
+                type: string
               "on":
                 description: '`On` defines events that will automatically trigger
                   the playbook. If multiple events are defined, only one of those
@@ -545,9 +547,21 @@ spec:
                   description: PlaybookParameter defines a parameter that a playbook
                     needs to run.
                   properties:
+                    description:
+                      type: string
+                    icon:
+                      type: string
                     label:
                       type: string
                     name:
+                      type: string
+                    properties:
+                      additionalProperties:
+                        type: string
+                      type: object
+                    required:
+                      type: boolean
+                    type:
                       type: string
                   required:
                   - label
