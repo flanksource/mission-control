@@ -23,8 +23,13 @@ type PlaybookResourceFilter struct {
 
 // PlaybookParameter defines a parameter that a playbook needs to run.
 type PlaybookParameter struct {
-	Name  string `json:"name" yaml:"name"`
-	Label string `json:"label" yaml:"label"`
+	Name        string            `json:"name" yaml:"name"`
+	Label       string            `json:"label" yaml:"label"`
+	Required    bool              `json:"required,omitempty" yaml:"required,omitempty"`
+	Icon        string            `json:"icon,omitempty" yaml:"icon,omitempty"`
+	Description string            `json:"description,omitempty" yaml:"description,omitempty"`
+	Type        string            `json:"type,omitempty" yaml:"type,omitempty"`
+	Properties  map[string]string `json:"properties,omitempty" yaml:"properties,omitempty"`
 }
 
 type PlaybookApprovers struct {
@@ -75,6 +80,8 @@ type PlaybookSpec struct {
 	// Short description of the playbook.
 	Description string `json:"description,omitempty" yaml:"description,omitempty"`
 
+	Icon string `json:"icon,omitempty" yaml:"icon,omitempty"`
+
 	// `On` defines events that will automatically trigger the playbook.
 	// If multiple events are defined, only one of those events needs to occur to trigger the playbook.
 	// If multiple triggering events occur at the same time, multiple playbook runs will be triggered.
@@ -104,7 +111,6 @@ type PlaybookSpec struct {
 
 // PlaybookStatus defines the observed state of Playbook
 type PlaybookStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 }
 
 // +kubebuilder:object:root=true
