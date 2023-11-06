@@ -10,6 +10,7 @@ import (
 	commonsCtx "github.com/flanksource/commons/context"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/utils"
+	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/auth"
@@ -132,6 +133,8 @@ func ServerFlags(flags *pflag.FlagSet) {
 
 func init() {
 	logger.BindFlags(Root.PersistentFlags())
+	duty.BindFlags(Root.PersistentFlags())
+
 	db.Flags(Root.PersistentFlags())
 	Root.PersistentFlags().StringVar(&api.CanaryCheckerPath, "canary-checker", "http://canary-checker:8080", "Canary Checker URL")
 	Root.AddCommand(Serve, Run, Sync, GoOffline)
