@@ -83,14 +83,14 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 					Name:    "write config id to a file",
 					Timeout: "1s",
 					Exec: &v1.ExecAction{
-						Script: "printf {{.config.id}} > {{.params.path}}",
+						Script: "echo id={{.config.id}}  path={{.params.path}} && printf {{.config.id}} > {{.params.path}}",
 					},
 				},
 				{
 					Name:    "append config class to the same file ",
 					Timeout: "2s",
 					Exec: &v1.ExecAction{
-						Script: "printf {{.config.config_class}} >> {{.params.path}}",
+						Script: "echo class={{.config.config_class}} path={{.params.path}} && printf {{.config.config_class}} >> {{.params.path}}",
 					},
 				},
 			},
@@ -146,7 +146,7 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 				{
 					Name: "write component name to a file",
 					Exec: &v1.ExecAction{
-						Script: "printf {{.component.name}} > /tmp/{{.component.name}}.txt",
+						Script: "echo name={{.component.name}}  && printf {{.component.name}} > /tmp/{{.component.name}}.txt",
 					},
 				},
 			},
@@ -278,7 +278,9 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 		err := testDB.Where("playbook_run_id = ?", updatedRun.ID).Find(&runActions).Error
 		Expect(err).NotTo(HaveOccurred())
 
+		d, _ := json.Marshal(runActions)
 		Expect(len(runActions)).To(Equal(2))
+		fmt.Println(string(d))
 
 		f, err := os.ReadFile(tempPath)
 		Expect(err).NotTo(HaveOccurred())
