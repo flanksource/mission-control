@@ -12,8 +12,8 @@ require (
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.24.0
 	github.com/flanksource/commons v1.17.1
-	github.com/flanksource/duty v1.0.210
-	github.com/flanksource/gomplate/v3 v3.20.16
+	github.com/flanksource/duty v1.0.212
+	github.com/flanksource/gomplate/v3 v3.20.24
 	github.com/flanksource/kopper v1.0.6
 	github.com/flanksource/postq v0.1.2
 	github.com/gomarkdown/markdown v0.0.0-20230922112808-5421fefb8386
@@ -71,7 +71,6 @@ require (
 	github.com/fatih/color v1.15.0 // indirect
 	github.com/flanksource/is-healthy v0.0.0-20231003215854-76c51e3a3ff7 // indirect
 	github.com/flanksource/kommons v0.31.4 // indirect
-	github.com/flanksource/mapstructure v1.6.0 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/glebarez/go-sqlite v1.21.2 // indirect
 	github.com/glebarez/sqlite v1.9.0 // indirect
@@ -113,6 +112,7 @@ require (
 	github.com/moby/spdystream v0.2.0 // indirect
 	github.com/monochromegane/go-gitignore v0.0.0-20200626010858-205db1a8cc00 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/ohler55/ojg v1.20.2 // indirect
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
 	github.com/prometheus/client_model v0.5.0 // indirect
 	github.com/prometheus/common v0.44.0 // indirect

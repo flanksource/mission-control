@@ -47,10 +47,10 @@ func CanApprove(ctx context.Context, personID, playbookID string) (bool, error) 
 		FROM playbooks
 		WHERE id = ?
 	)
-	SELECT COUNT(*) FROM playbook_approvers WHERE 
+	SELECT COUNT(*) FROM playbook_approvers WHERE
 	CAST(playbook_approvers.teams AS text[]) && ( -- check if the person belongs to a team that can approve
-		SELECT array_agg(teams.name) FROM teams LEFT JOIN team_members 
-		ON teams.id = team_members.team_id 
+		SELECT array_agg(teams.name) FROM teams LEFT JOIN team_members
+		ON teams.id = team_members.team_id
 		WHERE person_id = ?
 	)
 	OR
@@ -87,7 +87,7 @@ func FindPlaybooksForCheck(ctx context.Context, checkType string, tags map[strin
 		joinQuery += " AND (?::jsonb) @> COALESCE(checks.ch->'tags', '{}'::jsonb)"
 		joinArgs = append(joinArgs, types.JSONStringMap(tags))
 	}
-	if checkType != "" {
+	if checkType != "" && checkType != "*" {
 		joinQuery += " AND checks.ch->>'type' = ?"
 		joinArgs = append(joinArgs, checkType)
 	}
@@ -110,7 +110,8 @@ func FindPlaybooksForConfig(ctx context.Context, configType string, tags map[str
 		joinQuery += " AND (?::jsonb) @> COALESCE(configs.config->'tags', '{}'::jsonb)"
 		joinArgs = append(joinArgs, types.JSONStringMap(tags))
 	}
-	if configType != "" {
+
+	if configType != "" && configType != "*" {
 		joinQuery += " AND configs.config->>'type' = ?"
 		joinArgs = append(joinArgs, configType)
 	}
@@ -125,7 +126,7 @@ func FindPlaybooksForConfig(ctx context.Context, configType string, tags map[str
 }
 
 // FindPlaybooksForComponent returns all the playbooks that match the given component type and tags.
-func FindPlaybooksForComponent(ctx context.Context, configType string, tags map[string]string) ([]api.PlaybookListItem, error) {
+func FindPlaybooksForComponent(ctx context.Context, componentType string, tags map[string]string) ([]api.PlaybookListItem, error) {
 	joinQuery := `JOIN LATERAL jsonb_array_elements(playbooks."spec"->'components') AS components(component) ON 1=1`
 	var joinArgs []any
 
@@ -133,9 +134,9 @@ func FindPlaybooksForComponent(ctx context.Context, configType string, tags map[
 		joinQuery += " AND (?::jsonb) @> COALESCE(components.component->'tags', '{}'::jsonb)"
 		joinArgs = append(joinArgs, types.JSONStringMap(tags))
 	}
-	if configType != "" {
+	if componentType != "" && componentType != "*" {
 		joinQuery += " AND components.component->>'type' = ?"
-		joinArgs = append(joinArgs, configType)
+		joinArgs = append(joinArgs, componentType)
 	}
 
 	query := ctx.DB().

@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/incident-commander/api/v1"
+	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/google/uuid"
 )
 
@@ -12,6 +12,7 @@ func PersistConnectionFromCRD(obj *v1.Connection) error {
 	dbObj := models.Connection{
 		ID:          uuid.MustParse(string(obj.GetUID())),
 		Name:        obj.Name,
+		Namespace:   obj.Namespace,
 		Type:        obj.Spec.Type,
 		URL:         obj.Spec.URL.String(),
 		Username:    obj.Spec.Username.String(),
