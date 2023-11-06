@@ -22,7 +22,7 @@ type HTTP struct {
 }
 
 func (c *HTTP) Run(ctx context.Context, action v1.HTTPAction, env TemplateEnv) (*HTTPResult, error) {
-	connection, err := ctx.HydratedConnectionByURL(ctx.GetNamespace(), action.HTTPConnection.Connection)
+	connection, err := ctx.HydrateConnectionByURL(action.HTTPConnection.Connection)
 	if err != nil {
 		return nil, fmt.Errorf("failed to hydrate connection: %w", err)
 	} else if connection != nil {

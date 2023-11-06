@@ -26,7 +26,7 @@ func (c *SQL) Run(ctx context.Context, action v1.SQLAction, env TemplateEnv) (*S
 	action.Query = templated
 
 	if action.Connection != "" {
-		connection, err := ctx.HydratedConnectionByURL(ctx.GetNamespace(), action.Connection)
+		connection, err := ctx.HydrateConnectionByURL(action.Connection)
 		if err != nil {
 			return nil, fmt.Errorf("error getting connection: %w", err)
 		}

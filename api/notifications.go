@@ -45,7 +45,7 @@ func (t NotificationConfig) GormValue(ctx gocontext.Context, db *gorm.DB) clause
 }
 
 func (t *NotificationConfig) HydrateConnection(ctx context.Context) error {
-	connection, err := ctx.HydratedConnectionByURL(ctx.GetNamespace(), t.Connection)
+	connection, err := ctx.HydrateConnectionByURL(t.Connection)
 	if err != nil {
 		return err
 	} else if connection == nil {
