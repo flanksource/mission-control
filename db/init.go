@@ -28,7 +28,7 @@ var (
 func Flags(flags *pflag.FlagSet) {
 	flags.StringVar(&ConnectionString, "db", "DB_URL", "Connection string for the postgres database")
 	flags.StringVar(&Schema, "db-schema", "public", "Postgres schema")
-	flags.StringVar(&postgrestLogLevel, "pgrst-db-log-level", "info", "PostgREST log level")
+	flags.StringVar(&postgrestLogLevel, "postgrest-log-level", "info", "PostgREST log level")
 	flags.StringVar(&PostgRESTJWTSecret, "postgrest-jwt-secret", "PGRST_JWT_SECRET", "JWT Secret Token for PostgREST")
 	flags.BoolVar(&skipMigrations, "skip-migrations", false, "Run database migrations")
 }
