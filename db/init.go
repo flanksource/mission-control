@@ -18,17 +18,17 @@ import (
 )
 
 var (
-	ConnectionString string
-	skipMigrations   bool
-	Schema           = "public"
-	LogLevel         = "info"
-	HttpEndpoint     = "http://localhost:8080/db"
+	ConnectionString  string
+	skipMigrations    bool
+	Schema            = "public"
+	postgrestLogLevel = "info"
+	HttpEndpoint      = "http://localhost:8080/db"
 )
 
 func Flags(flags *pflag.FlagSet) {
 	flags.StringVar(&ConnectionString, "db", "DB_URL", "Connection string for the postgres database")
-	flags.StringVar(&Schema, "db-schema", "public", "")
-	flags.StringVar(&LogLevel, "db-log-level", "info", "")
+	flags.StringVar(&Schema, "db-schema", "public", "Postgres schema")
+	flags.StringVar(&postgrestLogLevel, "postgrest-log-level", "info", "PostgREST log level")
 	flags.StringVar(&PostgRESTJWTSecret, "postgrest-jwt-secret", "PGRST_JWT_SECRET", "JWT Secret Token for PostgREST")
 	flags.BoolVar(&skipMigrations, "skip-migrations", false, "Run database migrations")
 }
@@ -47,7 +47,7 @@ func readFromEnv(v string) string {
 func Init(connection string) error {
 	ConnectionString = readFromEnv(connection)
 	Schema = readFromEnv(Schema)
-	LogLevel = readFromEnv(LogLevel)
+	postgrestLogLevel = readFromEnv(postgrestLogLevel)
 	PostgRESTJWTSecret = readFromEnv(PostgRESTJWTSecret)
 
 	var err error

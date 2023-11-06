@@ -26,7 +26,7 @@ func getBinary(port string) deps.BinaryFunc {
 		"PGRST_DB_SCHEMA":                Schema,
 		"PGRST_DB_ANON_ROLE":             PostgresDBAnonRole,
 		"PGRST_OPENAPI_SERVER_PROXY_URI": HttpEndpoint,
-		"PGRST_LOG_LEVEL":                LogLevel,
+		"PGRST_LOG_LEVEL":                postgrestLogLevel,
 		"PGRST_DB_MAX_ROWS":              PostgrestMaxRows,
 		"PGRST_JWT_SECRET":               PostgRESTJWTSecret,
 	})
