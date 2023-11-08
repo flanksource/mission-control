@@ -101,7 +101,7 @@ func createHTTPServer(ctx context.Context) *echo.Echo {
 				logger.Fatalf("Failed to created admin user: %v", err)
 			}
 
-			middleware, err := kratosHandler.KratosMiddleware()
+			middleware, err := kratosHandler.KratosMiddleware(ctx)
 			if err != nil {
 				logger.Fatalf("Failed to initialize kratos middleware: %v", err)
 			}

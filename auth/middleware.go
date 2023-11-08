@@ -63,13 +63,14 @@ type kratosMiddleware struct {
 	db                 *gorm.DB
 }
 
-func (k *KratosHandler) KratosMiddleware() (*kratosMiddleware, error) {
+func (k *KratosHandler) KratosMiddleware(ctx context.Context) (*kratosMiddleware, error) {
 	randString, err := rand.GenerateRandString(30)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate random string: %w", err)
 	}
 
 	return &kratosMiddleware{
+		db:                 ctx.DB(),
 		client:             k.client,
 		jwtSecret:          k.jwtSecret,
 		tokenCache:         cache.New(3*24*time.Hour, 12*time.Hour),
