@@ -107,7 +107,8 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 			return c.String(http.StatusUnauthorized, "Unauthorized")
 		}
 
-		token, err := getDBToken(k.tokenCache, k.jwtSecret, session.Id, session.Identity.GetId())
+		ctx := c.Request().Context().(context.Context)
+		token, err := getDBToken(ctx, k.tokenCache, k.jwtSecret, session.Id, session.Identity.GetId())
 		if err != nil {
 			logger.Errorf("Error generating JWT Token: %v", err)
 			return c.String(http.StatusUnauthorized, "Unauthorized")
@@ -115,7 +116,6 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 		c.Request().Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
 		c.Request().Header.Set(api.UserIDHeaderKey, session.Identity.GetId())
 
-		ctx := c.Request().Context().(context.Context)
 		var email string
 		if traits, ok := session.Identity.GetTraits().(map[string]any); ok {
 			if e, ok := traits["email"].(string); ok {
@@ -129,44 +129,8 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 		}
 
 		if IdentityRoleMapper != "" {
-			if _, ok := identityMapperLoginCache.Get(session.GetId()); !ok {
-				env := map[string]any{
-					"identity": session.Identity,
-				}
-
-				// TODO: Add cache support to gomplate expression
-				if res, err := gomplate.RunTemplate(env, gomplate.Template{Expression: IdentityRoleMapper}); err != nil {
-					logger.Errorf("error running IdentityRoleMapper template: %v", err)
-					return err
-				} else if res != "" {
-					var result IdentityMapperExprResult
-					if err := json.Unmarshal([]byte(res), &result); err != nil {
-						return err
-					}
-
-					if result.Role != "" {
-						if _, err := rbac.Enforcer.AddRolesForUser(uid.String(), []string{result.Role}); err != nil {
-							logger.Errorf("error adding role:%s to user %s: %v", result.Role, uid, err)
-						}
-					}
-
-					if len(result.Teams) != 0 {
-						for _, teamName := range result.Teams {
-							team, err := duty.FindTeam(ctx, teamName)
-							if err != nil {
-								logger.Errorf("error finding team(name: %s) %v", team, err)
-							} else if err := db.AddPersonToTeam(ctx, uid, team.ID); err != nil {
-								logger.Errorf("error adding person to team: %v", err)
-							}
-						}
-					}
-
-					if session.ExpiresAt != nil {
-						identityMapperLoginCache.Set(session.GetId(), nil, time.Until(*session.ExpiresAt))
-					} else {
-						identityMapperLoginCache.SetDefault(session.GetId(), nil)
-					}
-				}
+			if err := mapIDsToRoles(ctx, session, uid); err != nil {
+				logger.Errorf("error mapping ids to roles: %v", err)
 			}
 		}
 
@@ -175,6 +139,56 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 
 		return next(c)
 	}
+}
+
+func mapIDsToRoles(ctx context.Context, session *client.Session, uid uuid.UUID) error {
+	if _, exists := identityMapperLoginCache.Get(session.GetId()); exists {
+		return nil
+	}
+
+	env := map[string]any{
+		"identity": session.Identity,
+	}
+
+	// TODO: Add cache support to gomplate expression
+	res, err := gomplate.RunTemplate(env, gomplate.Template{Expression: IdentityRoleMapper})
+	if err != nil {
+		return fmt.Errorf("error running IdentityRoleMapper template: %v", err)
+	}
+
+	if res == "" {
+		return nil
+	}
+
+	var result IdentityMapperExprResult
+	if err := json.Unmarshal([]byte(res), &result); err != nil {
+		return err
+	}
+
+	if result.Role != "" {
+		if _, err := rbac.Enforcer.AddRoleForUser(uid.String(), result.Role); err != nil {
+			return fmt.Errorf("error adding role:%s to user %s: %v", result.Role, uid, err)
+		}
+	}
+
+	for _, teamName := range result.Teams {
+		team, err := duty.FindTeam(ctx, teamName)
+		if err != nil {
+			logger.Errorf("error finding team(name: %s) %v", team, err)
+			continue
+		}
+
+		if err := db.AddPersonToTeam(ctx, uid, team.ID); err != nil {
+			logger.Errorf("error adding person to team: %v", err)
+		}
+	}
+
+	if session.ExpiresAt != nil {
+		identityMapperLoginCache.Set(session.GetId(), nil, time.Until(*session.ExpiresAt))
+	} else {
+		identityMapperLoginCache.SetDefault(session.GetId(), nil)
+	}
+	return nil
 }
 
 func (k *kratosMiddleware) getAccessToken(ctx gocontext.Context, token string) (*models.AccessToken, error) {

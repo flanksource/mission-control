@@ -5,6 +5,8 @@ import (
 
 	"github.com/MicahParks/keyfunc"
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty/context"
+	"github.com/flanksource/incident-commander/db"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/patrickmn/go-cache"
 )
@@ -17,7 +19,7 @@ func generateDBToken(secret, id string) (string, error) {
 	return token.SignedString([]byte(secret))
 }
 
-func getDBToken(c *cache.Cache, dbJWTSecret, sessID, userID string) (string, error) {
+func getDBToken(ctx context.Context, c *cache.Cache, dbJWTSecret, sessID, userID string) (string, error) {
 	key := sessID + userID
 	if token, exists := c.Get(key); exists {
 		return token.(string), nil
@@ -27,6 +29,11 @@ func getDBToken(c *cache.Cache, dbJWTSecret, sessID, userID string) (string, err
 	if err != nil {
 		return "", err
 	}
+
+	if err := db.UpdateLastLogin(ctx, userID); err != nil {
+		logger.Errorf("Error updating last login for user[%s]: %v", userID, err)
+	}
+
 	c.SetDefault(key, token)
 	return token, nil
 }

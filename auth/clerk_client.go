@@ -83,7 +83,7 @@ func (h ClerkHandler) Session(next echo.HandlerFunc) echo.HandlerFunc {
 			return c.String(http.StatusUnauthorized, "Unauthorized")
 		}
 
-		token, err := getDBToken(h.tokenCache, h.dbJwtSecret, sessID, user.ID.String())
+		token, err := getDBToken(ctx, h.tokenCache, h.dbJwtSecret, sessID, user.ID.String())
 		if err != nil {
 			logger.Errorf("Error generating JWT Token: %v", err)
 			return c.String(http.StatusUnauthorized, "Unauthorized")
