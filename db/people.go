@@ -113,3 +113,7 @@ func AddPersonToTeam(ctx context.Context, personID uuid.UUID, teamID uuid.UUID) 
 		Create(&dbModels.TeamMember{PersonID: personID, TeamID: teamID}).
 		Error
 }
+
+func UpdateLastLogin(ctx context.Context, id string) error {
+	return ctx.DB().Table("people").Where("id = ?", id).UpdateColumn("last_login", "NOW()").Error
+}
