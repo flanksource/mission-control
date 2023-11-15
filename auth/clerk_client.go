@@ -169,7 +169,7 @@ func (ClerkHandler) updateRole(userID, clerkRole string) error {
 		if _, err := rbac.Enforcer.DeleteRoleForUser(userID, rbac.RoleAdmin); err != nil {
 			return err
 		}
-		if _, err := rbac.Enforcer.AddRoleForUser(userID, rbac.RoleEditor); err != nil {
+		if _, err := rbac.Enforcer.AddRoleForUser(userID, rbac.RoleViewer); err != nil {
 			return err
 		}
 	}
