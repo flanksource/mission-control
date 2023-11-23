@@ -14,6 +14,48 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
+type GitOpsActionRepo struct {
+	// URL of the git repository
+	URL string `yaml:"url" json:"url"`
+	// Branch to clone. Defaults to master.
+	Base string `yaml:"base,omitempty" json:"base,omitempty"`
+	// Branch is the new branch to create. Defaults to Base.
+	Branch string `yaml:"branch,omitempty" json:"branch,omitempty"`
+	// Connection name to use the credentials for the git repo
+	Connection string `yaml:"connection,omitempty" json:"connection,omitempty"`
+}
+
+type GitOpsActionCommit struct {
+	AuthorName  string `yaml:"author" json:"author"`
+	AuthorEmail string `yaml:"email" json:"email"`
+	Message     string `yaml:"message" json:"message"`
+}
+
+type GitOpsActionPR struct {
+	// Title of the Pull request
+	Title string `yaml:"title" json:"title"`
+	// Tags to add to the PR
+	Tags []string `yaml:"tags,omitempty" json:"tags,omitempty"`
+}
+
+type GitOpsActionPatch struct {
+	Path string `yaml:"path" json:"path"`
+	YQ   string `yaml:"yq,omitempty" json:"yq,omitempty"`
+	JQ   string `yaml:"jq,omitempty" json:"jq,omitempty"`
+}
+
+type GitOpsAction struct {
+	Repo   GitOpsActionRepo   `yaml:"repo" json:"repo"`
+	Commit GitOpsActionCommit `yaml:"commit" json:"commit"`
+	// PullRequest specifies the details for the PR to be created.
+	// Only if connection type is github or azuredevops then a new PR is created.
+	PullRequest *GitOpsActionPR     `yaml:"pr,omitempty" json:"pr,omitempty"`
+	Patches     []GitOpsActionPatch `yaml:"patches,omitempty" json:"patches,omitempty"`
+	// Files to create/delete.
+	// Use the special "$delete" directive to delete an existing file.
+	Files []map[string]string `yaml:"files,omitempty" json:"files,omitempty"`
+}
+
 type PodAction struct {
 	// Name is name of the pod that'll be created
 	Name string `yaml:"name" json:"name"`
@@ -211,10 +253,11 @@ type PlaybookAction struct {
 	// Timeout is the maximum duration to let an action run before it's cancelled.
 	Timeout string `yaml:"timeout,omitempty" json:"timeout,omitempty"`
 
-	Exec *ExecAction `json:"exec,omitempty" yaml:"exec,omitempty"`
-	HTTP *HTTPAction `json:"http,omitempty" yaml:"http,omitempty"`
-	SQL  *SQLAction  `json:"sql,omitempty" yaml:"sql,omitempty"`
-	Pod  *PodAction  `json:"pod,omitempty" yaml:"pod,omitempty"`
+	Exec   *ExecAction   `json:"exec,omitempty" yaml:"exec,omitempty"`
+	GitOps *GitOpsAction `json:"gitops,omitempty" yaml:"gitops,omitempty"`
+	HTTP   *HTTPAction   `json:"http,omitempty" yaml:"http,omitempty"`
+	SQL    *SQLAction    `json:"sql,omitempty" yaml:"sql,omitempty"`
+	Pod    *PodAction    `json:"pod,omitempty" yaml:"pod,omitempty"`
 }
 
 func (p *PlaybookAction) DelayDuration() (time.Duration, error) {

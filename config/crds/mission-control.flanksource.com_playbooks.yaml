@@ -264,6 +264,81 @@ spec:
                       required:
                       - script
                       type: object
+                    gitops:
+                      properties:
+                        commit:
+                          properties:
+                            author:
+                              type: string
+                            email:
+                              type: string
+                            message:
+                              type: string
+                          required:
+                          - author
+                          - email
+                          - message
+                          type: object
+                        files:
+                          description: Files to create/delete. Use the special "$delete"
+                            directive to delete an existing file.
+                          items:
+                            additionalProperties:
+                              type: string
+                            type: object
+                          type: array
+                        patches:
+                          items:
+                            properties:
+                              jq:
+                                type: string
+                              path:
+                                type: string
+                              yq:
+                                type: string
+                            required:
+                            - path
+                            type: object
+                          type: array
+                        pr:
+                          description: PullRequest specifies the details for the PR
+                            to be created. Only if connection type is github or azuredevops
+                            then a new PR is created.
+                          properties:
+                            tags:
+                              description: Tags to add to the PR
+                              items:
+                                type: string
+                              type: array
+                            title:
+                              description: Title of the Pull request
+                              type: string
+                          required:
+                          - title
+                          type: object
+                        repo:
+                          properties:
+                            base:
+                              description: Branch to clone. Defaults to master.
+                              type: string
+                            branch:
+                              description: Branch is the new branch to create. Defaults
+                                to Base.
+                              type: string
+                            connection:
+                              description: Connection name to use the credentials
+                                for the git repo
+                              type: string
+                            url:
+                              description: URL of the git repository
+                              type: string
+                          required:
+                          - url
+                          type: object
+                      required:
+                      - commit
+                      - repo
+                      type: object
                     http:
                       properties:
                         body:
