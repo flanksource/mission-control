@@ -1,7 +1,7 @@
 apiVersion: mission-control.flanksource.com/v1
 kind: Playbook
 metadata:
-  name: update-adityathebe/flanksource-test
+  name: update-flanksource-test
 spec:
   parameters:
     - name: namespace
@@ -17,7 +17,7 @@ spec:
           url: https://github.com/adityathebe/flanksource-test
           connection: connection://github/adityathebe
           base: master
-          branch: playbooks-{{.params.namespace}}
+          branch: playbooks-branch-{{.params.namespace}}
         commit:
           email: thebeaditya@gmail.com
           author: Aditya Thebe
@@ -32,8 +32,10 @@ spec:
           - path: fixtures/minimal/dns_pass.yaml
             yq: '.metadata.namespace = "{{.params.namespace}}"'
         files:
-          - fixtures/aws/aws_config_pass.yaml: $delete
-          - "{{.params.namespace}}-ns.yaml": |
+          - path: fixtures/topology/single-check.yaml
+            content: $delete
+          - path: '{{.params.namespace}}-ns.yaml'
+            content: |
               apiVersion: v1
               kind: Namespace
               metadata:

@@ -17,10 +17,10 @@ import (
 type GitOpsActionRepo struct {
 	// URL of the git repository
 	URL string `yaml:"url" json:"url"`
-	// Branch to clone. Defaults to master.
-	Base string `yaml:"base,omitempty" json:"base,omitempty"`
+	// Branch to clone. Defaults to "main".
+	Base string `yaml:"base,omitempty" json:"base,omitempty" template:"true"`
 	// Branch is the new branch to create. Defaults to Base.
-	Branch string `yaml:"branch,omitempty" json:"branch,omitempty"`
+	Branch string `yaml:"branch,omitempty" json:"branch,omitempty" template:"true"`
 	// Connection name to use the credentials for the git repo
 	Connection string `yaml:"connection,omitempty" json:"connection,omitempty"`
 }
@@ -28,32 +28,37 @@ type GitOpsActionRepo struct {
 type GitOpsActionCommit struct {
 	AuthorName  string `yaml:"author" json:"author"`
 	AuthorEmail string `yaml:"email" json:"email"`
-	Message     string `yaml:"message" json:"message"`
+	Message     string `yaml:"message" json:"message" template:"true"`
 }
 
 type GitOpsActionPR struct {
 	// Title of the Pull request
-	Title string `yaml:"title" json:"title"`
+	Title string `yaml:"title" json:"title" template:"true"`
 	// Tags to add to the PR
-	Tags []string `yaml:"tags,omitempty" json:"tags,omitempty"`
+	Tags []string `yaml:"tags,omitempty" json:"tags,omitempty" template:"true"`
 }
 
 type GitOpsActionPatch struct {
-	Path string `yaml:"path" json:"path"`
-	YQ   string `yaml:"yq,omitempty" json:"yq,omitempty"`
-	JQ   string `yaml:"jq,omitempty" json:"jq,omitempty"`
+	Path string `yaml:"path" json:"path" template:"true"`
+	YQ   string `yaml:"yq,omitempty" json:"yq,omitempty" template:"true"`
+	JQ   string `yaml:"jq,omitempty" json:"jq,omitempty" template:"true"`
+}
+
+type GitOpsActionFile struct {
+	Path    string `yaml:"path" json:"path" template:"true"`
+	Content string `yaml:"content" json:"content" template:"true"`
 }
 
 type GitOpsAction struct {
-	Repo   GitOpsActionRepo   `yaml:"repo" json:"repo"`
-	Commit GitOpsActionCommit `yaml:"commit" json:"commit"`
+	Repo   GitOpsActionRepo   `yaml:"repo" json:"repo" template:"true"`
+	Commit GitOpsActionCommit `yaml:"commit" json:"commit" template:"true"`
 	// PullRequest specifies the details for the PR to be created.
 	// Only if connection type is github or azuredevops then a new PR is created.
-	PullRequest *GitOpsActionPR     `yaml:"pr,omitempty" json:"pr,omitempty"`
-	Patches     []GitOpsActionPatch `yaml:"patches,omitempty" json:"patches,omitempty"`
+	PullRequest *GitOpsActionPR     `yaml:"pr,omitempty" json:"pr,omitempty" template:"true"`
+	Patches     []GitOpsActionPatch `yaml:"patches,omitempty" json:"patches,omitempty" template:"true"`
 	// Files to create/delete.
 	// Use the special "$delete" directive to delete an existing file.
-	Files []map[string]string `yaml:"files,omitempty" json:"files,omitempty"`
+	Files []GitOpsActionFile `yaml:"files,omitempty" json:"files,omitempty" template:"true"`
 }
 
 type PodAction struct {

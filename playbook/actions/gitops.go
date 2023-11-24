@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"github.com/flanksource/commons/files"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -32,8 +33,7 @@ func (t *GitOps) Run(ctx context.Context, action v1.GitOpsAction, env TemplateEn
 	var response GitOpsActionResult
 
 	if len(action.Patches) == 0 && len(action.Files) == 0 {
-		logger.Warnf("no patches or files specified on gitops action")
-		return nil, nil
+		return nil, fmt.Errorf("no patches or files specified on gitops action")
 	}
 
 	t.env = env
@@ -73,19 +73,25 @@ func (t *GitOps) Run(ctx context.Context, action v1.GitOpsAction, env TemplateEn
 
 // generateSpec generates the spec for the git client from the action
 func (t *GitOps) generateSpec(ctx context.Context, action v1.GitOpsAction) error {
-	var err error
-
 	if action.Repo.Base == "" {
-		action.Repo.Base = "master"
+		action.Repo.Base = "main"
 	}
 
 	if action.Repo.Branch == "" {
 		action.Repo.Branch = action.Repo.Base
-	} else {
-		action.Repo.Branch, err = gomplate.RunTemplate(t.env.AsMap(), gomplate.Template{Template: action.Repo.Branch})
-		if err != nil {
-			return err
-		}
+	}
+
+	templater := gomplate.StructTemplater{
+		RequiredTag: "template",
+		DelimSets: []gomplate.Delims{
+			{Left: "{{", Right: "}}"},
+			{Left: "$(", Right: ")"},
+		},
+		ValueFunctions: true,
+		Values:         t.env.AsMap(),
+	}
+	if err := templater.Walk(&action); err != nil {
+		return fmt.Errorf("failed to walk template: %w", err)
 	}
 
 	t.spec = &connectors.GitopsAPISpec{
@@ -95,13 +101,6 @@ func (t *GitOps) generateSpec(ctx context.Context, action v1.GitOpsAction) error
 		CommitMsg:  action.Commit.Message,
 		User:       action.Commit.AuthorName,
 		Email:      action.Commit.AuthorEmail,
-	}
-
-	if t.spec.CommitMsg != "" {
-		t.spec.CommitMsg, err = gomplate.RunTemplate(t.env.AsMap(), gomplate.Template{Template: t.spec.CommitMsg})
-		if err != nil {
-			return err
-		}
 	}
 
 	if action.Repo.Connection != "" {
@@ -127,7 +126,6 @@ func (t *GitOps) generateSpec(ctx context.Context, action v1.GitOpsAction) error
 	}
 
 	if action.PullRequest == nil {
-		logger.Warnf("no pull request spec was provided on gitops action. So no PR will be created")
 		t.shouldCreatePR = false
 	}
 
@@ -142,11 +140,6 @@ func (t *GitOps) generateSpec(ctx context.Context, action v1.GitOpsAction) error
 			Branch: action.Repo.Branch,
 			Title:  action.PullRequest.Title,
 			Tags:   action.PullRequest.Tags,
-		}
-
-		t.spec.PullRequest.Title, err = gomplate.RunTemplate(t.env.AsMap(), gomplate.Template{Template: action.PullRequest.Title})
-		if err != nil {
-			return err
 		}
 	}
 
@@ -164,64 +157,67 @@ func (t *GitOps) cloneRepo(ctx context.Context, action v1.GitOpsAction) (connect
 
 func (t *GitOps) applyPatches(ctx context.Context, action v1.GitOpsAction) error {
 	for _, patch := range action.Patches {
-		path, err := gomplate.RunTemplate(t.env.AsMap(), gomplate.Template{Template: patch.Path})
+		fullpath := filepath.Join(t.workTree.Filesystem.Root(), patch.Path)
+		paths, err := files.UnfoldGlobs(fullpath)
 		if err != nil {
 			return err
 		}
 
-		fullpath := filepath.Join(t.workTree.Filesystem.Root(), patch.Path)
-		if patch.YQ != "" {
-			script, err := gomplate.RunTemplate(t.env.AsMap(), gomplate.Template{Template: patch.YQ})
+		for _, path := range paths {
+			relativePath, err := filepath.Rel(t.workTree.Filesystem.Root(), path)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to get relative path: %w", err)
 			}
-			patch.YQ = script
+			logger.Debugf("Patching %s", relativePath)
 
-			cmd := exec.Command("yq", "eval", "-i", patch.YQ, fullpath)
-			if _, err := runCmd(cmd); err != nil {
-				return err
+			if patch.YQ != "" {
+				cmd := exec.Command("yq", "eval", "-i", patch.YQ, path)
+				if _, err := runCmd(cmd); err != nil {
+					return err
+				}
+
+				if _, err := t.workTree.Add(relativePath); err != nil {
+					return err
+				}
 			}
 
-			if _, err := t.workTree.Add(path); err != nil {
-				return err
-			}
+			// TODO:
+			// if patch.JQ != "" {
+			// }
 		}
-
-		// TODO:
-		// if patch.JQ != "" {
-		// }
 	}
 
 	return nil
 }
 
 func (t *GitOps) modifyFiles(ctx context.Context, action v1.GitOpsAction) error {
-	var err error
+	for _, f := range action.Files {
+		fullpath := filepath.Join(t.workTree.Filesystem.Root(), f.Path)
+		paths, err := files.UnfoldGlobs(fullpath)
+		if err != nil {
+			return err
+		}
 
-	for _, files := range action.Files {
-		for path, content := range files {
-			path, err = gomplate.RunTemplate(t.env.AsMap(), gomplate.Template{Template: path})
+		for _, path := range paths {
+			relativePath, err := filepath.Rel(t.workTree.Filesystem.Root(), path)
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to get relative path: %w", err)
 			}
 
-			switch content {
+			switch f.Content {
 			case "$delete":
-				if _, err := t.workTree.Remove(path); err != nil {
+				logger.Debugf("Deleting file %s", relativePath)
+				if _, err := t.workTree.Remove(relativePath); err != nil {
 					return err
 				}
 
 			default:
-				templated, err := gomplate.RunTemplate(t.env.AsMap(), gomplate.Template{Template: content})
-				if err != nil {
+				logger.Debugf("Creating file %s", relativePath)
+				if err := os.WriteFile(path, []byte(f.Content), os.ModePerm); err != nil {
 					return err
 				}
 
-				if err := os.WriteFile(filepath.Join(t.workTree.Filesystem.Root(), path), []byte(templated), os.ModePerm); err != nil {
-					return err
-				}
-
-				if _, err := t.workTree.Add(path); err != nil {
+				if _, err := t.workTree.Add(relativePath); err != nil {
 					return err
 				}
 			}

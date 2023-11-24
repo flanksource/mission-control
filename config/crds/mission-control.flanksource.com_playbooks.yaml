@@ -283,8 +283,14 @@ spec:
                           description: Files to create/delete. Use the special "$delete"
                             directive to delete an existing file.
                           items:
-                            additionalProperties:
-                              type: string
+                            properties:
+                              content:
+                                type: string
+                              path:
+                                type: string
+                            required:
+                            - content
+                            - path
                             type: object
                           type: array
                         patches:
@@ -319,7 +325,7 @@ spec:
                         repo:
                           properties:
                             base:
-                              description: Branch to clone. Defaults to master.
+                              description: Branch to clone. Defaults to "main".
                               type: string
                             branch:
                               description: Branch is the new branch to create. Defaults
