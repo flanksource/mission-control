@@ -20,12 +20,15 @@ type GitopsAPISpec struct {
 	// Branch to checkout after clone
 	Branch string `json:"branch,omitempty"`
 
-	User      string `json:"user,omitempty"`
-	Email     string `json:"email,omitempty"`
-	CommitMsg string `json:"commit_msg,omitempty"`
+	CommitAuthor      string `json:"user,omitempty"`
+	CommitAuthorEmail string `json:"email,omitempty"`
+	CommitMsg         string `json:"commit_msg,omitempty"`
 
 	// Open a new Pull request from the branch back to the base
 	PullRequest *PullRequestTemplate `json:"pull_request,omitempty"`
+
+	User     string `json:"auth_user,omitempty"`
+	Password string `json:"password,omitempty"`
 
 	// For Github repositories it must contain GITHUB_TOKEN
 	GITHUB_TOKEN string `json:"github_token,omitempty"`
@@ -55,26 +58,26 @@ type Connector interface {
 	ClosePullRequest(ctx context.Context, id int) error
 }
 
-func NewConnector(git_config *GitopsAPISpec) (Connector, error) {
-	if strings.HasPrefix(git_config.Repository, "https://github.com/") {
-		path := git_config.Repository[19:]
+func NewConnector(gitConfig *GitopsAPISpec) (Connector, error) {
+	if strings.HasPrefix(gitConfig.Repository, "https://github.com/") {
+		path := gitConfig.Repository[19:]
 		parts := strings.Split(path, "/")
 		if len(parts) != 2 {
-			return nil, errors.Errorf("invalid repository url: %s", git_config.Repository)
+			return nil, errors.Errorf("invalid repository url: %s", gitConfig.Repository)
 		}
 		owner := parts[0]
 		repoName := parts[1]
 		repoName = strings.TrimSuffix(repoName, ".git")
-		githubToken := git_config.GITHUB_TOKEN
+		githubToken := gitConfig.GITHUB_TOKEN
 		return NewGithub(owner, repoName, githubToken)
-	} else if strings.HasPrefix(git_config.Repository, "ssh://") {
-		sshURL := git_config.Repository[6:]
+	} else if strings.HasPrefix(gitConfig.Repository, "ssh://") {
+		sshURL := gitConfig.Repository[6:]
 		user := strings.Split(sshURL, "@")[0]
 
-		privateKey := git_config.SSH_PRIVATE_KEY
-		password := git_config.SSH_PRIVATE_KEY_PASSORD
+		privateKey := gitConfig.SSH_PRIVATE_KEY
+		password := gitConfig.SSH_PRIVATE_KEY_PASSORD
 		return NewGitSSH(sshURL, user, []byte(privateKey), password)
+	} else {
+		return NewGitPassword(gitConfig.Repository, gitConfig.User, gitConfig.Password)
 	}
-
-	return nil, errors.New("no connector settings found")
 }

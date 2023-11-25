@@ -114,11 +114,14 @@ func (g *Github) Clone(ctx context.Context, branch, local string) (billy.Filesys
 		return nil, nil, err
 	}
 	if branch != local {
-		// nolint: errcheck
-		work.Checkout(&git.CheckoutOptions{
+		err := work.Checkout(&git.CheckoutOptions{
 			Branch: plumbing.NewBranchReferenceName(local),
 			Create: true,
 		})
+		if err != nil {
+			return nil, nil, err
+		}
 	}
+
 	return osfs.New(dir), work, nil
 }

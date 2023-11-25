@@ -26,7 +26,7 @@ func Clone(ctx context.Context, spec *GitopsAPISpec) (connectors.Connector, *git
 }
 
 func CommitAndPush(ctx context.Context, connector connectors.Connector, work *gitv5.Worktree, spec *GitopsAPISpec) error {
-	_, err := createCommit(work, spec.CommitMsg, spec.User, spec.Email)
+	_, err := createCommit(work, spec.CommitMsg, spec.CommitAuthor, spec.CommitAuthorEmail)
 	if err != nil {
 		return err
 	}

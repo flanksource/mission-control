@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/flanksource/commons/files"
 	"github.com/flanksource/commons/logger"
@@ -22,11 +23,13 @@ type GitOps struct {
 	spec     *connectors.GitopsAPISpec
 	env      TemplateEnv
 
+	logs           []string
 	shouldCreatePR bool
 }
 
 type GitOpsActionResult struct {
-	CreatedPR int `json:"createdPR,omitempty"`
+	CreatedPR int    `json:"createdPR,omitempty"`
+	Logs      string `json:"logs,omitempty"`
 }
 
 func (t *GitOps) Run(ctx context.Context, action v1.GitOpsAction, env TemplateEnv) (*GitOpsActionResult, error) {
@@ -67,6 +70,7 @@ func (t *GitOps) Run(ctx context.Context, action v1.GitOpsAction, env TemplateEn
 		}
 		response.CreatedPR = prNumber
 	}
+	response.Logs = strings.Join(t.logs, "\n")
 
 	return &response, nil
 }
@@ -95,12 +99,12 @@ func (t *GitOps) generateSpec(ctx context.Context, action v1.GitOpsAction) error
 	}
 
 	t.spec = &connectors.GitopsAPISpec{
-		Repository: action.Repo.URL,
-		Base:       action.Repo.Base,
-		Branch:     action.Repo.Branch,
-		CommitMsg:  action.Commit.Message,
-		User:       action.Commit.AuthorName,
-		Email:      action.Commit.AuthorEmail,
+		Repository:        action.Repo.URL,
+		Base:              action.Repo.Base,
+		Branch:            action.Repo.Branch,
+		CommitMsg:         action.Commit.Message,
+		CommitAuthor:      action.Commit.AuthorName,
+		CommitAuthorEmail: action.Commit.AuthorEmail,
 	}
 
 	if action.Repo.Connection != "" {
@@ -115,10 +119,19 @@ func (t *GitOps) generateSpec(ctx context.Context, action v1.GitOpsAction) error
 			t.shouldCreatePR = true
 
 		case models.ConnectionTypeAzureDevops:
-			// TODO: Azure devops connection doesn't have git credentials ...?
+			t.spec.User = conn.Username
+			t.spec.Password = conn.Password
+			t.shouldCreatePR = true
+
+		case models.ConnectionTypeHTTP:
+			t.spec.User = conn.Username
+			t.spec.Password = conn.Password
 
 		case models.ConnectionTypeGit:
-			// TODO: need to finalize this once git connection is implemented
+			t.spec.User = conn.Username
+			t.spec.Password = conn.Password
+			t.spec.SSH_PRIVATE_KEY = conn.Certificate
+			t.spec.SSH_PRIVATE_KEY_PASSORD = conn.Password
 
 		default:
 			return fmt.Errorf("unsupported connection type: %s", conn.Type)
@@ -168,12 +181,14 @@ func (t *GitOps) applyPatches(ctx context.Context, action v1.GitOpsAction) error
 			if err != nil {
 				return fmt.Errorf("failed to get relative path: %w", err)
 			}
-			logger.Debugf("Patching %s", relativePath)
+			t.logs = append(t.logs, fmt.Sprintf("Patching %s", relativePath))
 
 			if patch.YQ != "" {
 				cmd := exec.Command("yq", "eval", "-i", patch.YQ, path)
-				if _, err := runCmd(cmd); err != nil {
+				if res, err := runCmd(cmd); err != nil {
 					return err
+				} else {
+					t.logs = append(t.logs, res.Stdout)
 				}
 
 				if _, err := t.workTree.Add(relativePath); err != nil {
@@ -206,13 +221,13 @@ func (t *GitOps) modifyFiles(ctx context.Context, action v1.GitOpsAction) error 
 
 			switch f.Content {
 			case "$delete":
-				logger.Debugf("Deleting file %s", relativePath)
+				t.logs = append(t.logs, fmt.Sprintf("Deleting file %s", relativePath))
 				if _, err := t.workTree.Remove(relativePath); err != nil {
 					return err
 				}
 
 			default:
-				logger.Debugf("Creating file %s", relativePath)
+				t.logs = append(t.logs, fmt.Sprintf("Creating file %s", relativePath))
 				if err := os.WriteFile(path, []byte(f.Content), os.ModePerm); err != nil {
 					return err
 				}
