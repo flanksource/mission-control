@@ -65,7 +65,7 @@ func (g *Git) Clone(ctx context.Context, branch, local string) (billy.Filesystem
 		return nil, nil, err
 	}
 
-	if branch != local {
+	if branch != local && local != "" {
 		err := work.Checkout(&git.CheckoutOptions{
 			Branch: plumbing.NewBranchReferenceName(local),
 			Create: true,

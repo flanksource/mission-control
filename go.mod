@@ -41,6 +41,7 @@ require (
 )
 
 require (
+	github.com/fluxcd/pkg/gittestserver v0.8.6
 	github.com/go-git/go-billy/v5 v5.5.0
 	github.com/go-git/go-git/v5 v5.10.0
 	github.com/jenkins-x/go-scm v1.14.17
@@ -83,6 +84,7 @@ require (
 	github.com/fatih/color v1.15.0 // indirect
 	github.com/flanksource/is-healthy v0.0.0-20231003215854-76c51e3a3ff7 // indirect
 	github.com/flanksource/kommons v0.31.4 // indirect
+	github.com/fluxcd/gitkit v0.6.0 // indirect
 	github.com/fsnotify/fsnotify v1.6.0 // indirect
 	github.com/glebarez/go-sqlite v1.21.2 // indirect
 	github.com/glebarez/sqlite v1.9.0 // indirect
@@ -96,6 +98,7 @@ require (
 	github.com/go-sql-driver/mysql v1.7.1 // indirect
 	github.com/go-task/slim-sprig v0.0.0-20230315185526-52ccab3ef572 // indirect
 	github.com/gobwas/glob v0.2.3 // indirect
+	github.com/gofrs/uuid v4.2.0+incompatible // indirect
 	github.com/golang-jwt/jwt/v5 v5.0.0 // indirect
 	github.com/golang-sql/civil v0.0.0-20220223132316-b832511892a9 // indirect
 	github.com/golang-sql/sqlexp v0.1.0 // indirect
