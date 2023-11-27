@@ -1,0 +1,42 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: update-flanksource-test
+spec:
+  parameters:
+    - name: namespace
+      label: The namespace
+  configs:
+    - type: EC2 Instance
+      tags:
+        telemetry: enabled
+  actions:
+    - name: Modify repo
+      gitops:
+        repo:
+          url: https://github.com/adityathebe/flanksource-test
+          connection: connection://github/adityathebe
+          base: master
+          branch: playbooks-branch-{{.params.namespace}}
+        commit:
+          email: thebeaditya@gmail.com
+          author: Aditya Thebe
+          message: |
+            Testing commit message from playbooks {{.params.namespace}}
+        pr:
+          title: New PR for namespace {{.params.namespace}}
+          tags:
+            - abc
+            - efg
+        patches:
+          - path: fixtures/minimal/dns_pass.yaml
+            yq: '.metadata.namespace = "{{.params.namespace}}"'
+        files:
+          - path: fixtures/topology/single-check.yaml
+            content: $delete
+          - path: '{{.params.namespace}}-ns.yaml'
+            content: |
+              apiVersion: v1
+              kind: Namespace
+              metadata:
+                name:  {{.params.namespace}}

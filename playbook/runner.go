@@ -250,5 +250,15 @@ func executeAction(ctx context.Context, run models.PlaybookRun, action v1.Playbo
 		return json.Marshal(res)
 	}
 
+	if action.GitOps != nil {
+		var e actions.GitOps
+		res, err := e.Run(ctx, *action.GitOps, env)
+		if err != nil {
+			return nil, err
+		}
+
+		return json.Marshal(res)
+	}
+
 	return nil, nil
 }
