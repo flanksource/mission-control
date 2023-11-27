@@ -26,7 +26,7 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 	)
 
 	ginkgo.It("should create a new git repository", func() {
-		err := InitRepo(gitServer, "testdata/dummy-repo", "main", "dummy-repo")
+		err := gitServer.InitRepo("testdata/dummy-repo", "main", "dummy-repo")
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -71,6 +71,8 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 		res, err := runner.Run(ctx, spec, env)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(res.CreatedPR).To(Equal(0))
+
+		logger.Infof("Runner response: %#v", res)
 	})
 
 	ginkgo.It("should verify that the remote server has the proper changes", func() {
@@ -79,9 +81,11 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 
 		// should do a fresh clone
 		{
+			logger.Infof("Fresh cloning")
 			_, workTree, err = git.Clone(gocontext.TODO(), &connectors.GitopsAPISpec{
 				Repository: gitServer.HTTPAddress() + "/dummy-repo",
 				Base:       fmt.Sprintf("playbook-%s", env.Params["namespace"]),
+				Branch:     fmt.Sprintf("playbook-%s", env.Params["namespace"]),
 			})
 			Expect(err).NotTo(HaveOccurred(), "could not clone from remote")
 			logger.Infof("Cloned fresh repo to %s", workTree.Filesystem.Root())
@@ -89,7 +93,7 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 			entries, err := os.ReadDir(workTree.Filesystem.Root())
 			Expect(err).NotTo(HaveOccurred())
 			for _, e := range entries {
-				logger.Infof("Entry: %s", e)
+				logger.Infof("Entry: %s", e.Name())
 			}
 		}
 

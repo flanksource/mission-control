@@ -59,8 +59,10 @@ func (t *GitOps) Run(ctx context.Context, action v1.GitOpsAction, env TemplateEn
 		return nil, fmt.Errorf("failed to modify files: %w", err)
 	}
 
-	if err := git.CommitAndPush(ctx, connector, workTree, t.spec); err != nil {
+	if hash, err := git.CommitAndPush(ctx, connector, workTree, t.spec); err != nil {
 		return nil, fmt.Errorf("failed to commit and push: %w", err)
+	} else {
+		t.logs = append(t.logs, fmt.Sprintf("Committed(%s) and pushed changes", hash))
 	}
 
 	if t.shouldCreatePR {

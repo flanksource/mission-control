@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/pkg/clients/git/connectors"
 	gitv5 "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing/object"
@@ -17,21 +18,22 @@ func Clone(ctx context.Context, spec *GitopsAPISpec) (connectors.Connector, *git
 		return nil, nil, err
 	}
 
-	_, work, err := connector.Clone(ctx, spec.Base, spec.Branch)
+	fs, work, err := connector.Clone(ctx, spec.Base, spec.Branch)
 	if err != nil {
 		return nil, nil, err
 	}
+	logger.Infof("Successfully cloned %s to %s", spec.Base, fs.Root())
 
 	return connector, work, nil
 }
 
-func CommitAndPush(ctx context.Context, connector connectors.Connector, work *gitv5.Worktree, spec *GitopsAPISpec) error {
-	_, err := createCommit(work, spec.CommitMsg, spec.CommitAuthor, spec.CommitAuthorEmail)
+func CommitAndPush(ctx context.Context, connector connectors.Connector, work *gitv5.Worktree, spec *GitopsAPISpec) (string, error) {
+	hash, err := createCommit(work, spec.CommitMsg, spec.CommitAuthor, spec.CommitAuthorEmail)
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	return connector.Push(ctx, spec.Branch)
+	return hash, connector.Push(ctx, spec.Branch)
 }
 
 func OpenPR(ctx context.Context, connector connectors.Connector, spec *GitopsAPISpec) (int, error) {

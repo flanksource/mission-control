@@ -3,6 +3,7 @@ package connectors
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/go-git/go-billy/v5"
@@ -37,20 +38,17 @@ func (g *Git) Push(ctx context.Context, branch string) error {
 		return errors.New("Need to clone first, before pushing ")
 	}
 
-	if err := g.repo.Push(&git.PushOptions{
+	return g.repo.Push(&git.PushOptions{
 		Auth:     g.auth,
-		Progress: os.Stdout,
-	}); err != nil {
-		return err
-	}
-	return nil
+		Progress: io.Discard,
+	})
 }
 
 func (g *Git) Clone(ctx context.Context, branch, local string) (billy.Filesystem, *git.Worktree, error) {
 	dir, _ := os.MkdirTemp("", "git-*")
 	repo, err := git.PlainCloneContext(ctx, dir, false, &git.CloneOptions{
 		URL:           g.url,
-		Progress:      os.Stdout,
+		Progress:      io.Discard,
 		Auth:          g.auth,
 		ReferenceName: plumbing.NewBranchReferenceName(branch),
 		Depth:         1,
