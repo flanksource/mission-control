@@ -26,7 +26,7 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 	)
 
 	ginkgo.It("should create a new git repository", func() {
-		err := gitServer.InitRepo("testdata/dummy-repo", "main", "dummy-repo")
+		err := InitRepo(gitServer, "testdata/dummy-repo", "main", "dummy-repo")
 		Expect(err).NotTo(HaveOccurred())
 	})
 
@@ -84,23 +84,13 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 				Base:       fmt.Sprintf("playbook-%s", env.Params["namespace"]),
 			})
 			Expect(err).NotTo(HaveOccurred(), "could not clone from remote")
+			logger.Infof("Cloned fresh repo to %s", workTree.Filesystem.Root())
 
 			entries, err := os.ReadDir(workTree.Filesystem.Root())
 			Expect(err).NotTo(HaveOccurred())
 			for _, e := range entries {
 				logger.Infof("Entry: %s", e)
 			}
-		}
-
-		// ensure the new file was created
-		{
-			txtFile, err := workTree.Filesystem.Open(fmt.Sprintf("%s.txt", env.Params["namespace"]))
-			Expect(err).NotTo(HaveOccurred())
-
-			txtContent, err := io.ReadAll(txtFile)
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(string(txtContent)).To(Equal(spec.Files[0].Content))
 		}
 
 		// ensure the the patch was applied
@@ -118,7 +108,18 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 			metadata, ok := yamlContent["metadata"].(map[string]any)
 			Expect(ok).To(BeTrue())
 
-			Expect(metadata["namespace"].(string)).To(Equal(env.Params["namespace"]))
+			Expect(metadata["namespace"].(string)).To(Equal(env.Params["namespace"]), "should have applied the patch")
+		}
+
+		// ensure the new file was created
+		{
+			txtFile, err := workTree.Filesystem.Open(fmt.Sprintf("%s.txt", env.Params["namespace"]))
+			Expect(err).NotTo(HaveOccurred())
+
+			txtContent, err := io.ReadAll(txtFile)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(string(txtContent)).To(Equal(spec.Files[0].Content), "should have created the new file")
 		}
 	})
 })
