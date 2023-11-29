@@ -113,6 +113,8 @@ func (t *GitOps) generateSpec(ctx context.Context, action v1.GitOpsAction) error
 		conn, err := ctx.HydrateConnectionByURL(action.Repo.Connection)
 		if err != nil {
 			return err
+		} else if conn == nil {
+			return fmt.Errorf("connection %s not found", action.Repo.Connection)
 		}
 
 		switch conn.Type {

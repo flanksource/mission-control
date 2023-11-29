@@ -24,14 +24,14 @@ require (
 	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect
 	github.com/antonmedv/expr v1.15.5 // indirect
 	github.com/apparentlymart/go-textseg/v15 v15.0.0 // indirect
-	github.com/aws/aws-sdk-go v1.48.4 // indirect
+	github.com/aws/aws-sdk-go v1.48.7 // indirect
 	github.com/bgentry/go-netrc v0.0.0-20140422174119-9fd32a8b3d3d // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
 	github.com/evanphx/json-patch v5.7.0+incompatible // indirect
-	github.com/flanksource/duty v1.0.226 // indirect
-	github.com/flanksource/gomplate/v3 v3.20.25 // indirect
+	github.com/flanksource/duty v1.0.230 // indirect
+	github.com/flanksource/gomplate/v3 v3.20.26 // indirect
 	github.com/flanksource/is-healthy v0.0.0-20231003215854-76c51e3a3ff7 // indirect
 	github.com/flanksource/kommons v0.31.4 // indirect
 	github.com/flanksource/postq v0.1.2 // indirect
@@ -130,24 +130,24 @@ require (
 	go.opentelemetry.io/otel v1.19.0 // indirect
 	go.opentelemetry.io/otel/metric v1.19.0 // indirect
 	go.opentelemetry.io/otel/trace v1.19.0 // indirect
-	go.starlark.net v0.0.0-20231101134539-556fd59b42f6 // indirect
+	go.starlark.net v0.0.0-20231121155337-90ade8b19d09 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.26.0 // indirect
-	golang.org/x/crypto v0.15.0 // indirect
-	golang.org/x/exp v0.0.0-20231110203233-9a3e6036ecaa // indirect
-	golang.org/x/net v0.18.0 // indirect
-	golang.org/x/oauth2 v0.14.0 // indirect
+	golang.org/x/crypto v0.16.0 // indirect
+	golang.org/x/exp v0.0.0-20231127185646-65229373498e // indirect
+	golang.org/x/net v0.19.0 // indirect
+	golang.org/x/oauth2 v0.15.0 // indirect
 	golang.org/x/sync v0.5.0 // indirect
-	golang.org/x/sys v0.14.0 // indirect
-	golang.org/x/term v0.14.0 // indirect
+	golang.org/x/sys v0.15.0 // indirect
+	golang.org/x/term v0.15.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
-	golang.org/x/time v0.4.0 // indirect
+	golang.org/x/time v0.5.0 // indirect
 	golang.org/x/xerrors v0.0.0-20231012003039-104605ab7028 // indirect
-	google.golang.org/api v0.151.0 // indirect
+	google.golang.org/api v0.152.0 // indirect
 	google.golang.org/appengine v1.6.8 // indirect
-	google.golang.org/genproto v0.0.0-20231120223509-83a465c0220f // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20231120223509-83a465c0220f // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20231120223509-83a465c0220f // indirect
+	google.golang.org/genproto v0.0.0-20231127180814-3a041ad873d4 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20231127180814-3a041ad873d4 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20231127180814-3a041ad873d4 // indirect
 	google.golang.org/grpc v1.59.0 // indirect
 	google.golang.org/protobuf v1.31.0 // indirect
 	gopkg.in/evanphx/json-patch.v5 v5.7.0 // indirect
@@ -164,8 +164,8 @@ require (
 	k8s.io/cli-runtime v0.28.2 // indirect
 	k8s.io/client-go v0.28.2 // indirect
 	k8s.io/klog/v2 v2.110.1 // indirect
-	k8s.io/kube-openapi v0.0.0-20231010175941-2dd684a91f00 // indirect
-	k8s.io/utils v0.0.0-20231121161247-cf03d44ff3cf // indirect
+	k8s.io/kube-openapi v0.0.0-20231113174909-778a5567bc1e // indirect
+	k8s.io/utils v0.0.0-20231127182322-b307cd553661 // indirect
 	layeh.com/gopher-json v0.0.0-20201124131017-552bb3c4c3bf // indirect
 	sigs.k8s.io/controller-runtime v0.15.0 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
