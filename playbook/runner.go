@@ -260,5 +260,15 @@ func executeAction(ctx context.Context, run models.PlaybookRun, action v1.Playbo
 		return json.Marshal(res)
 	}
 
+	if action.Notification != nil {
+		var e actions.Notification
+		err := e.Run(ctx, *action.Notification, env)
+		if err != nil {
+			return nil, err
+		}
+
+		return []byte("{}"), nil
+	}
+
 	return nil, nil
 }
