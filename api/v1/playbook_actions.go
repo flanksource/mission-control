@@ -14,6 +14,19 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
+type NotificationAction struct {
+	// URL for the shoutrrr connection string
+	URL string `yaml:"url,omitempty" json:"url,omitempty"`
+	// Connection to use to send the notification
+	Connection string `yaml:"connection,omitempty" json:"connection,omitempty"`
+	// Title of the notification
+	Title string `yaml:"title" json:"title" template:"true"`
+	// Message is the body of the notification
+	Message string `yaml:"message" json:"message" template:"true"`
+	// Properties for shoutrrr
+	Properties map[string]string `yaml:"properties,omitempty" json:"properties,omitempty"`
+}
+
 type GitOpsActionRepo struct {
 	// URL of the git repository
 	URL string `yaml:"url" json:"url"`
@@ -258,11 +271,12 @@ type PlaybookAction struct {
 	// Timeout is the maximum duration to let an action run before it's cancelled.
 	Timeout string `yaml:"timeout,omitempty" json:"timeout,omitempty"`
 
-	Exec   *ExecAction   `json:"exec,omitempty" yaml:"exec,omitempty"`
-	GitOps *GitOpsAction `json:"gitops,omitempty" yaml:"gitops,omitempty"`
-	HTTP   *HTTPAction   `json:"http,omitempty" yaml:"http,omitempty"`
-	SQL    *SQLAction    `json:"sql,omitempty" yaml:"sql,omitempty"`
-	Pod    *PodAction    `json:"pod,omitempty" yaml:"pod,omitempty"`
+	Exec         *ExecAction         `json:"exec,omitempty" yaml:"exec,omitempty"`
+	GitOps       *GitOpsAction       `json:"gitops,omitempty" yaml:"gitops,omitempty"`
+	HTTP         *HTTPAction         `json:"http,omitempty" yaml:"http,omitempty"`
+	SQL          *SQLAction          `json:"sql,omitempty" yaml:"sql,omitempty"`
+	Pod          *PodAction          `json:"pod,omitempty" yaml:"pod,omitempty"`
+	Notification *NotificationAction `json:"notification,omitempty" yaml:"notification,omitempty"`
 }
 
 func (p *PlaybookAction) DelayDuration() (time.Duration, error) {

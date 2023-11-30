@@ -462,6 +462,29 @@ spec:
                     name:
                       description: Name of the action
                       type: string
+                    notification:
+                      properties:
+                        connection:
+                          description: Connection to use to send the notification
+                          type: string
+                        message:
+                          description: Message is the body of the notification
+                          type: string
+                        properties:
+                          additionalProperties:
+                            type: string
+                          description: Properties for shoutrrr
+                          type: object
+                        title:
+                          description: Title of the notification
+                          type: string
+                        url:
+                          description: URL for the shoutrrr connection string
+                          type: string
+                      required:
+                      - message
+                      - title
+                      type: object
                     pod:
                       properties:
                         maxLength:
