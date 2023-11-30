@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
@@ -81,17 +80,17 @@ func DownloadArtifact(c echo.Context) error {
 	}
 
 	// TODO: Pool connection to the underlying filesystem
-	fs, err := connection.GetFSForConnection(*conn)
+	fs, err := GetFSForConnection(&ctx, *conn)
 	if err != nil {
 		return api.WriteError(c, err)
 	}
 	defer fs.Close()
 
-	file, err := fs.Read(ctx, artifact.FileID)
+	file, err := fs.Read(ctx, artifact.Path)
 	if err != nil {
 		return api.WriteError(c, err)
 	}
 	defer file.Close()
 
-	return c.Stream(http.StatusOK, "text/html; charset=utf-8", file) // TODO: Assuming artifact is always going to be just plain texts
+	return c.Stream(http.StatusOK, artifact.ContentType, file)
 }
