@@ -6,6 +6,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/flanksource/artifacts"
+	fileUtils "github.com/flanksource/commons/files"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -14,7 +16,6 @@ import (
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/k8s"
-	"github.com/flanksource/incident-commander/utils"
 )
 
 const (
@@ -26,7 +27,7 @@ const (
 type PodResult struct {
 	Logs string
 
-	Artifacts []ArtifactResult `json:"-" yaml:"-"`
+	Artifacts []artifacts.Artifact `json:"-" yaml:"-"`
 }
 
 type Pod struct {
@@ -57,7 +58,11 @@ func (c *Pod) Run(ctx context.Context, action v1.PodAction, env TemplateEnv, tim
 	}
 
 	for _, artifactConfig := range action.Artifacts {
-		paths := utils.UnfoldGlobs(artifactConfig.Path)
+		paths, err := fileUtils.UnfoldGlobs(artifactConfig.Path)
+		if err != nil {
+			return nil, err
+		}
+
 		for _, path := range paths {
 			file, err := os.Open(path)
 			if err != nil {
@@ -65,7 +70,7 @@ func (c *Pod) Run(ctx context.Context, action v1.PodAction, env TemplateEnv, tim
 				continue
 			}
 
-			output.Artifacts = append(output.Artifacts, ArtifactResult{
+			output.Artifacts = append(output.Artifacts, artifacts.Artifact{
 				Path:    path,
 				Content: file,
 			})

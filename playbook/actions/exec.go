@@ -12,11 +12,13 @@ import (
 	"strings"
 	textTemplate "text/template"
 
+	"github.com/flanksource/artifacts"
+	fileUtils "github.com/flanksource/commons/files"
 	"github.com/flanksource/commons/logger"
+
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/gomplate/v3"
 	v1 "github.com/flanksource/incident-commander/api/v1"
-	"github.com/flanksource/incident-commander/utils"
 )
 
 type ExecAction struct {
@@ -27,7 +29,7 @@ type ExecDetails struct {
 	Stderr   string `json:"stderr,omitempty"`
 	ExitCode int    `json:"exitCode,omitempty"`
 
-	Artifacts []ArtifactResult `json:"-" yaml:"-"`
+	Artifacts []artifacts.Artifact `json:"-" yaml:"-"`
 }
 
 func (c *ExecAction) Run(ctx context.Context, exec v1.ExecAction, env TemplateEnv) (*ExecDetails, error) {
@@ -52,7 +54,7 @@ func execPowershell(ctx context.Context, check v1.ExecAction) (*ExecDetails, err
 	}
 	args := []string{check.Script}
 	cmd := osExec.CommandContext(ctx, ps, args...)
-	return runCmd(cmd, check)
+	return runCmd(cmd, check.Artifacts)
 }
 
 func setupConnection(ctx context.Context, check v1.ExecAction, cmd *osExec.Cmd) error {
@@ -122,10 +124,10 @@ func execBash(ctx context.Context, check v1.ExecAction) (*ExecDetails, error) {
 		return nil, fmt.Errorf("failed to setup connection: %w", err)
 	}
 
-	return runCmd(cmd, check)
+	return runCmd(cmd, check.Artifacts)
 }
 
-func runCmd(cmd *osExec.Cmd, check v1.ExecAction) (*ExecDetails, error) {
+func runCmd(cmd *osExec.Cmd, artifactConfigs []v1.Artifact) (*ExecDetails, error) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -140,24 +142,28 @@ func runCmd(cmd *osExec.Cmd, check v1.ExecAction) (*ExecDetails, error) {
 		ExitCode: cmd.ProcessState.ExitCode(),
 	}
 
-	for _, artifactConfig := range check.Artifacts {
+	for _, artifactConfig := range artifactConfigs {
 		switch artifactConfig.Path {
 		case "/dev/stdout":
-			details.Artifacts = append(details.Artifacts, ArtifactResult{
+			details.Artifacts = append(details.Artifacts, artifacts.Artifact{
 				Content: io.NopCloser(strings.NewReader(details.Stdout)),
 				Path:    "stdout",
 			})
 
 		case "/dev/stderr":
-			details.Artifacts = append(details.Artifacts, ArtifactResult{
+			details.Artifacts = append(details.Artifacts, artifacts.Artifact{
 				Content: io.NopCloser(strings.NewReader(details.Stderr)),
 				Path:    "stderr",
 			})
 
 		default:
-			paths := utils.UnfoldGlobs(artifactConfig.Path)
+			paths, err := fileUtils.UnfoldGlobs(artifactConfig.Path)
+			if err != nil {
+				return nil, err
+			}
+
 			for _, path := range paths {
-				artifact := ArtifactResult{}
+				artifact := artifacts.Artifact{}
 
 				file, err := os.Open(path)
 				if err != nil {

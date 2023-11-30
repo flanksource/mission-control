@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flanksource/artifacts"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
@@ -80,7 +81,7 @@ func DownloadArtifact(c echo.Context) error {
 	}
 
 	// TODO: Pool connection to the underlying filesystem
-	fs, err := GetFSForConnection(ctx, *conn)
+	fs, err := artifacts.GetFSForConnection(ctx, *conn)
 	if err != nil {
 		return api.WriteError(c, err)
 	}

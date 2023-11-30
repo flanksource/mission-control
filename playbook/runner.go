@@ -214,7 +214,7 @@ func executeAction(ctx context.Context, run models.PlaybookRun, action v1.Playbo
 		}
 
 		if err := saveArtifacts(ctx, run.ID, res.Artifacts); err != nil {
-			logger.Errorf("error saving artifacts: %v", err)
+			return nil, fmt.Errorf("error saving artifacts: %v", err)
 		}
 
 		return json.Marshal(res)
