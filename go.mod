@@ -46,6 +46,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/credentials v1.16.4
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.42.0
 	github.com/fluxcd/pkg/gittestserver v0.8.6
+	github.com/gabriel-vasile/mimetype v1.4.3
 	github.com/go-git/go-billy/v5 v5.5.0
 	github.com/go-git/go-git/v5 v5.10.0
 	github.com/henvic/httpretty v0.1.3
@@ -307,5 +308,3 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.4.1 // indirect
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
-
-replace github.com/flanksource/duty => ../duty

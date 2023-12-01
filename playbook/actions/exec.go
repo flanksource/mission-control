@@ -3,6 +3,7 @@ package actions
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"math/rand"
 	"os"
 	osExec "os/exec"
@@ -15,6 +16,7 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/gomplate/v3"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/utils"
 )
 
 type ExecAction struct {
@@ -24,6 +26,8 @@ type ExecDetails struct {
 	Stdout   string `json:"stdout,omitempty"`
 	Stderr   string `json:"stderr,omitempty"`
 	ExitCode int    `json:"exitCode,omitempty"`
+
+	Artifacts []ArtifactResult `json:"-" yaml:"-"`
 }
 
 func (c *ExecAction) Run(ctx context.Context, exec v1.ExecAction, env TemplateEnv) (*ExecDetails, error) {
@@ -48,7 +52,7 @@ func execPowershell(ctx context.Context, check v1.ExecAction) (*ExecDetails, err
 	}
 	args := []string{check.Script}
 	cmd := osExec.CommandContext(ctx, ps, args...)
-	return runCmd(cmd)
+	return runCmd(cmd, check)
 }
 
 func setupConnection(ctx context.Context, check v1.ExecAction, cmd *osExec.Cmd) error {
@@ -118,10 +122,10 @@ func execBash(ctx context.Context, check v1.ExecAction) (*ExecDetails, error) {
 		return nil, fmt.Errorf("failed to setup connection: %w", err)
 	}
 
-	return runCmd(cmd)
+	return runCmd(cmd, check)
 }
 
-func runCmd(cmd *osExec.Cmd) (*ExecDetails, error) {
+func runCmd(cmd *osExec.Cmd, check v1.ExecAction) (*ExecDetails, error) {
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 	cmd.Stdout = &stdout
@@ -134,6 +138,38 @@ func runCmd(cmd *osExec.Cmd) (*ExecDetails, error) {
 		Stdout:   strings.TrimSpace(stdout.String()),
 		Stderr:   strings.TrimSpace(stderr.String()),
 		ExitCode: cmd.ProcessState.ExitCode(),
+	}
+
+	for _, artifactConfig := range check.Artifacts {
+		switch artifactConfig.Path {
+		case "/dev/stdout":
+			details.Artifacts = append(details.Artifacts, ArtifactResult{
+				Content: io.NopCloser(strings.NewReader(details.Stdout)),
+				Path:    "stdout",
+			})
+
+		case "/dev/stderr":
+			details.Artifacts = append(details.Artifacts, ArtifactResult{
+				Content: io.NopCloser(strings.NewReader(details.Stderr)),
+				Path:    "stderr",
+			})
+
+		default:
+			paths := utils.UnfoldGlobs(artifactConfig.Path)
+			for _, path := range paths {
+				artifact := ArtifactResult{}
+
+				file, err := os.Open(path)
+				if err != nil {
+					logger.Errorf("error opening file. path=%s; %w", path, err)
+					continue
+				}
+
+				artifact.Content = file
+				artifact.Path = path
+				details.Artifacts = append(details.Artifacts, artifact)
+			}
+		}
 	}
 	if details.ExitCode != 0 {
 		return nil, fmt.Errorf("non-zero exit-code: %d. (stdout=%s) (stderr=%s)", details.ExitCode, details.Stdout, details.Stderr)

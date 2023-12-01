@@ -102,6 +102,7 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&auth.IdentityRoleMapper, "identity-role-mapper", "", "CEL-Go expression to map identity to a role & a team (return: {role: string, teams: []string}). Supports file path (prefixed with 'file://').")
 	flags.StringVar(&otelcollectorURL, "otel-collector-url", "", "OpenTelemetry gRPC Collector URL in host:port format")
 	flags.StringVar(&otelServiceName, "otel-service-name", "mission-control", "OpenTelemetry service name for the resource")
+	flags.StringVar(&api.DefaultArtifactConnection, "artifact-connection", "", "Specify the default connection to use for artifacts")
 
 	var upstreamPageSizeDefault = 500
 	if val, exists := os.LookupEnv("UPSTREAM_PAGE_SIZE"); exists {

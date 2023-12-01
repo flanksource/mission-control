@@ -3,6 +3,7 @@ package actions
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/flanksource/commons/logger"
@@ -13,6 +14,7 @@ import (
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/k8s"
+	"github.com/flanksource/incident-commander/utils"
 )
 
 const (
@@ -23,6 +25,8 @@ const (
 
 type PodResult struct {
 	Logs string
+
+	Artifacts []ArtifactResult `json:"-" yaml:"-"`
 }
 
 type Pod struct {
@@ -48,9 +52,27 @@ func (c *Pod) Run(ctx context.Context, action v1.PodAction, env TemplateEnv, tim
 		return nil, fmt.Errorf("error waiting for pod to complete: %w", err)
 	}
 
-	return &PodResult{
+	output := &PodResult{
 		Logs: getLogs(ctx, pod, action.MaxLength),
-	}, nil
+	}
+
+	for _, artifactConfig := range action.Artifacts {
+		paths := utils.UnfoldGlobs(artifactConfig.Path)
+		for _, path := range paths {
+			file, err := os.Open(path)
+			if err != nil {
+				logger.Errorf("error opening file. path=%s; %w", path, err)
+				continue
+			}
+
+			output.Artifacts = append(output.Artifacts, ArtifactResult{
+				Path:    path,
+				Content: file,
+			})
+		}
+	}
+
+	return output, nil
 }
 
 func newPod(ctx context.Context, action v1.PodAction, playbookRun models.PlaybookRun) (*corev1.Pod, error) {

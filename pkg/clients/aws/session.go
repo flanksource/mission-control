@@ -21,7 +21,7 @@ func GetS3BucketName(bucket string) string {
 	return strings.TrimPrefix(bucket, "s3://")
 }
 
-func NewSession(ctx *context.Context, conn connection.AWSConnection) (*aws.Config, error) {
+func NewSession(ctx context.Context, conn connection.AWSConnection) (*aws.Config, error) {
 	var tr http.RoundTripper
 	tr = &http.Transport{
 		TLSClientConfig: &tls.Config{InsecureSkipVerify: conn.SkipTLSVerify},

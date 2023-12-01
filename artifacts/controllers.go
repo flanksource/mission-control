@@ -80,7 +80,7 @@ func DownloadArtifact(c echo.Context) error {
 	}
 
 	// TODO: Pool connection to the underlying filesystem
-	fs, err := GetFSForConnection(&ctx, *conn)
+	fs, err := GetFSForConnection(ctx, *conn)
 	if err != nil {
 		return api.WriteError(c, err)
 	}

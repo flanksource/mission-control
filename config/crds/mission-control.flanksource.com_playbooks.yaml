@@ -44,6 +44,16 @@ spec:
                       type: string
                     exec:
                       properties:
+                        artifacts:
+                          description: Artifacts to save
+                          items:
+                            properties:
+                              path:
+                                type: string
+                            required:
+                            - path
+                            type: object
+                          type: array
                         connections:
                           properties:
                             aws:
@@ -487,6 +497,16 @@ spec:
                       type: object
                     pod:
                       properties:
+                        artifacts:
+                          description: Artifacts to save
+                          items:
+                            properties:
+                              path:
+                                type: string
+                            required:
+                            - path
+                            type: object
+                          type: array
                         maxLength:
                           description: 'MaxLength is the maximum length of the logs
                             to show Default: 3000 characters'
