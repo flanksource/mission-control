@@ -16,4 +16,7 @@ var (
 
 	// Full URL of the mission control web UI.
 	PublicWebURL string
+
+	// DefaultArtifactConnection is the connection that's used to save all playbook artifacts.
+	DefaultArtifactConnection string
 )

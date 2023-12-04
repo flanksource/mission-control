@@ -6,7 +6,7 @@ import "github.com/flanksource/duty/models"
 type TemplateEnv struct {
 	Config    *models.ConfigItem `json:"config,omitempty"`
 	Component *models.Component  `json:"component,omitempty"`
-	Check     *models.Component  `json:"check,omitempty"`
+	Check     *models.Check      `json:"check,omitempty"`
 	Params    map[string]string  `json:"params,omitempty"`
 }
 

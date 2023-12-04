@@ -74,7 +74,8 @@ func ErrorDebugInfo(err error) string {
 	} else if errors.As(err, &e) {
 		return e.DebugInfo
 	}
-	return ""
+
+	return err.Error()
 }
 
 // Errorf is a helper function to return an Error with a given code and formatted message.

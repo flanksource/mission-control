@@ -85,6 +85,8 @@ type PodAction struct {
 	// +kubebuilder:validation:Type=object
 	// Spec is the container spec
 	Spec json.RawMessage `yaml:"spec" json:"spec"`
+	// Artifacts to save
+	Artifacts []Artifact `yaml:"artifacts,omitempty" json:"artifacts,omitempty"`
 }
 
 type SQLAction struct {
@@ -128,11 +130,17 @@ type HTTPAction struct {
 	TemplateBody bool `yaml:"templateBody,omitempty" json:"templateBody,omitempty"`
 }
 
+type Artifact struct {
+	Path string `json:"path" yaml:"path"`
+}
+
 type ExecAction struct {
 	// Script can be a inline script or a path to a script that needs to be executed
 	// On windows executed via powershell and in darwin and linux executed using bash
 	Script      string          `yaml:"script" json:"script"`
 	Connections ExecConnections `yaml:"connections,omitempty" json:"connections,omitempty"`
+	// Artifacts to save
+	Artifacts []Artifact `yaml:"artifacts,omitempty" json:"artifacts,omitempty"`
 }
 
 type ExecConnections struct {

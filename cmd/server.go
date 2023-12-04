@@ -26,6 +26,7 @@ import (
 	"github.com/flanksource/incident-commander/agent"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/artifacts"
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/events"
@@ -186,7 +187,10 @@ func createHTTPServer(ctx context.Context) *echo.Echo {
 	upstreamGroup.GET("/canary/pull/:agent_name", upstream.PullCanaries)
 	upstreamGroup.GET("/scrapeconfig/pull/:agent_name", upstream.PullScrapeConfigs)
 
+	artifacts.RegisterRoutes(e, "artifacts")
+
 	playbook.RegisterRoutes(e, "playbook")
+
 	e.POST("/agent/generate", agent.GenerateAgent, rbac.Authorization(rbac.ObjectAgentCreate, rbac.ActionWrite))
 
 	forward(e, "/config", configDb)

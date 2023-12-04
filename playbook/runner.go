@@ -81,15 +81,15 @@ func prepareTemplateEnv(ctx context.Context, run models.PlaybookRun) (actions.Te
 
 	if run.ComponentID != nil {
 		if err := ctx.DB().Where("id = ?", run.ComponentID).First(&templateEnv.Component).Error; err != nil {
-			return templateEnv, err
+			return templateEnv, fmt.Errorf("failed to fetch component: %w", err)
 		}
 	} else if run.ConfigID != nil {
 		if err := ctx.DB().Where("id = ?", run.ConfigID).First(&templateEnv.Config).Error; err != nil {
-			return templateEnv, err
+			return templateEnv, fmt.Errorf("failed to fetch config: %w", err)
 		}
 	} else if run.CheckID != nil {
 		if err := ctx.DB().Where("id = ?", run.CheckID).First(&templateEnv.Check).Error; err != nil {
-			return templateEnv, err
+			return templateEnv, fmt.Errorf("failed to fetch check: %w", err)
 		}
 	}
 
@@ -116,7 +116,7 @@ func executeRun(ctx context.Context, run models.PlaybookRun, opt runExecOptions)
 
 	templateEnv, err := prepareTemplateEnv(ctx, run)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to prepare template env: %w", err)
 	}
 
 	var continueFromAction string
@@ -211,6 +211,10 @@ func executeAction(ctx context.Context, run models.PlaybookRun, action v1.Playbo
 		res, err := e.Run(ctx, *action.Exec, env)
 		if err != nil {
 			return nil, err
+		}
+
+		if err := saveArtifacts(ctx, run.ID, res.Artifacts); err != nil {
+			return nil, fmt.Errorf("error saving artifacts: %v", err)
 		}
 
 		return json.Marshal(res)

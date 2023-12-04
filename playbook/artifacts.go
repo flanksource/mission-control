@@ -1,0 +1,53 @@
+package playbook
+
+import (
+	"fmt"
+	"path/filepath"
+
+	"github.com/flanksource/artifacts"
+	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/commons/utils"
+	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/models"
+	"github.com/google/uuid"
+
+	"github.com/flanksource/incident-commander/api"
+)
+
+func saveArtifacts(ctx context.Context, playbookRunID uuid.UUID, generatedArtifacts []artifacts.Artifact) error {
+	if len(generatedArtifacts) == 0 {
+		return nil
+	}
+
+	if api.DefaultArtifactConnection == "" {
+		logger.Warnf("no artifact connection configured")
+		return nil
+	}
+
+	connection, err := ctx.HydrateConnectionByURL(api.DefaultArtifactConnection)
+	if err != nil {
+		return fmt.Errorf("error getting connection(%s): %w", api.DefaultArtifactConnection, err)
+	} else if connection == nil {
+		return fmt.Errorf("connection(%s) was not found", api.DefaultArtifactConnection)
+	}
+
+	fs, err := artifacts.GetFSForConnection(ctx, *connection)
+	if err != nil {
+		return fmt.Errorf("error getting filesystem for connection: %w", err)
+	}
+	defer fs.Close()
+
+	for _, a := range generatedArtifacts {
+		a.Path = filepath.Join("playbooks", playbookRunID.String(), a.Path)
+		artifact := models.Artifact{
+			PlaybookRunID: utils.Ptr(playbookRunID),
+			ConnectionID:  connection.ID,
+		}
+
+		if err := artifacts.SaveArtifact(ctx, fs, &artifact, a); err != nil {
+			return fmt.Errorf("error saving artifact to db: %w", err)
+		}
+	}
+
+	return nil
+}
