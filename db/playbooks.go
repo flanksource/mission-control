@@ -151,8 +151,15 @@ func FindPlaybooksForComponent(ctx context.Context, componentType string, tags m
 
 func FindPlaybookByWebhookPath(ctx context.Context, path string) (*models.Playbook, error) {
 	var p models.Playbook
-	err := ctx.DB().Debug().Where("spec->'on'->'webhook'->>'path' = ?", path).First(&p).Error
-	return &p, err
+	if err := ctx.DB().Debug().Where("spec->'on'->'webhook'->>'path' = ?", path).First(&p).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+
+		return nil, err
+	}
+
+	return &p, nil
 }
 
 func PersistPlaybookFromCRD(obj *v1.Playbook) error {
@@ -169,11 +176,11 @@ func PersistPlaybookFromCRD(obj *v1.Playbook) error {
 		playbook, err := FindPlaybookByWebhookPath(ctx, obj.Spec.On.Webhook.Path)
 		if err != nil {
 			return err
-		}
-
-		// TODO: We can move this unique constraint handling to DB once we upgrade to Postgres 15+
-		if playbook.ID.String() != string(obj.GetUID()) {
-			return api.Errorf(api.ECONFLICT, "Playbook with webhook path %s already exists", obj.Spec.On.Webhook.Path)
+		} else if playbook != nil {
+			// TODO: We can move this unique constraint handling to DB once we upgrade to Postgres 15+
+			if playbook.ID.String() != string(obj.GetUID()) {
+				return api.Errorf(api.ECONFLICT, "Playbook with webhook path %s already exists", obj.Spec.On.Webhook.Path)
+			}
 		}
 	}
 

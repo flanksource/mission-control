@@ -216,9 +216,13 @@ func HandleWebhook(c echo.Context) error {
 		return api.WriteError(c, err)
 	}
 
-	runRequest := RunParams{
-		ID: playbook.ID,
+	var runRequest RunParams
+	if c.Request().Header.Get("Content-Type") == "application/json" {
+		if err := c.Bind(&runRequest); err != nil {
+			return api.WriteError(c, err)
+		}
 	}
+	runRequest.ID = playbook.ID
 
 	if _, err = validateAndSavePlaybook(ctx, playbook, runRequest); err != nil {
 		logger.Errorf("failed to save playbook run: %v", err)
