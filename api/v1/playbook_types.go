@@ -76,8 +76,29 @@ type PlaybookEventWebhookAuthBasic struct {
 	Password dutyTypes.EnvVar `json:"password" yaml:"password"`
 }
 
+type PlaybookEventWebhookAuthGithub struct {
+	// Token is the secret token for the webhook.
+	//  Doc: https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries
+	Token dutyTypes.EnvVar `json:"token" yaml:"token"`
+}
+
+type PlaybookEventWebhookAuthSVIX struct {
+	// Secret is the webhook signing secret
+	Secret dutyTypes.EnvVar `json:"secret" yaml:"secret"`
+	// TimestampTolerance specifies the tolerance for the timestamp verification.
+	// Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h", "d", "w", "y".
+	TimestampTolerance string `json:"verifyTimestamp,omitempty" yaml:"verifyTimestamp,omitempty"`
+}
+
+type PlaybookEventWebhookAuthJWT struct {
+	JWKSURI string `json:"jwksUri" yaml:"jwksUri"`
+}
+
 type PlaybookEventWebhookAuth struct {
-	Basic *PlaybookEventWebhookAuthBasic `json:"basic,omitempty" yaml:"basic,omitempty"`
+	Basic  *PlaybookEventWebhookAuthBasic  `json:"basic,omitempty" yaml:"basic,omitempty"`
+	Github *PlaybookEventWebhookAuthGithub `json:"github,omitempty" yaml:"github,omitempty"`
+	SVIX   *PlaybookEventWebhookAuthSVIX   `json:"svix,omitempty" yaml:"svix,omitempty"`
+	JWT    *PlaybookEventWebhookAuthJWT    `json:"jwt,omitempty" yaml:"jwt,omitempty"`
 }
 
 type PlaybookEventWebhook struct {
@@ -103,7 +124,7 @@ type PlaybookSpec struct {
 	// `On` defines events that will automatically trigger the playbook.
 	// If multiple events are defined, only one of those events needs to occur to trigger the playbook.
 	// If multiple triggering events occur at the same time, multiple playbook runs will be triggered.
-	On PlaybookEvent `json:"on,omitempty" yaml:"on,omitempty"`
+	On *PlaybookEvent `json:"on,omitempty" yaml:"on,omitempty"`
 
 	// Permissions ...
 	Permissions []Permission `json:"permissions,omitempty" yaml:"permissions,omitempty"`

@@ -41,10 +41,12 @@ require (
 )
 
 require (
+	github.com/MicahParks/keyfunc/v2 v2.1.0
 	github.com/flanksource/artifacts v1.0.0
 	github.com/fluxcd/pkg/gittestserver v0.8.6
 	github.com/go-git/go-billy/v5 v5.5.0
 	github.com/go-git/go-git/v5 v5.10.0
+	github.com/golang-jwt/jwt/v5 v5.0.0
 	github.com/jenkins-x/go-scm v1.14.17
 	go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho v0.44.0
 	go.opentelemetry.io/otel v1.19.0
@@ -121,7 +123,6 @@ require (
 	github.com/go-task/slim-sprig v0.0.0-20230315185526-52ccab3ef572 // indirect
 	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/gofrs/uuid v4.2.0+incompatible // indirect
-	github.com/golang-jwt/jwt/v5 v5.0.0 // indirect
 	github.com/golang-sql/civil v0.0.0-20220223132316-b832511892a9 // indirect
 	github.com/golang-sql/sqlexp v0.1.0 // indirect
 	github.com/google/btree v1.1.2 // indirect

@@ -1,12 +1,16 @@
 package playbook
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/commons/utils"
+
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
@@ -193,30 +197,31 @@ func HandlePlaybookRunApproval(c echo.Context) error {
 }
 
 func HandleWebhook(c echo.Context) error {
-	ctx := c.Request().Context().(context.Context)
-
-	var req RunParams
-	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error(), Message: "invalid request"})
-	}
-
-	if err := req.valid(); err != nil {
-		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error(), Message: "invalid request"})
-	}
-
-	// TODO: Implement authentication
+	ctx := c.Request().Context().(context.Context).WithUser(&models.Person{ID: utils.Deref(api.SystemUserID)})
 
 	var path = c.Param("webhook_path")
-	playbooks, err := db.FindPlaybooksByWebhookPath(ctx, path)
+	playbook, err := db.FindPlaybookByWebhookPath(ctx, path)
 	if err != nil {
+		return api.WriteError(c, err)
+	} else if playbook == nil {
+		return c.JSON(http.StatusNotFound, api.HTTPError{Error: "not found", Message: fmt.Sprintf("playbook(webhook_path=%s) not found", path)})
+	}
+
+	var spec v1.PlaybookSpec
+	if err := json.Unmarshal(playbook.Spec, &spec); err != nil {
+		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "playbook has an invalid spec"})
+	}
+
+	if err := authenticateWebhook(ctx, c.Request(), spec.On.Webhook.Authentication); err != nil {
 		return api.WriteError(c, err)
 	}
 
-	for _, playbook := range playbooks {
-		_, err := validateAndSavePlaybook(ctx, &playbook, req)
-		if err != nil {
-			logger.Errorf("failed to save playbook run: %v", err)
-		}
+	runRequest := RunParams{
+		ID: playbook.ID,
+	}
+
+	if _, err = validateAndSavePlaybook(ctx, playbook, runRequest); err != nil {
+		logger.Errorf("failed to save playbook run: %v", err)
 	}
 
 	return c.JSON(http.StatusOK, api.HTTPSuccess{Message: "ok"})

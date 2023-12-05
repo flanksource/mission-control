@@ -862,6 +862,88 @@ spec:
                             - password
                             - username
                             type: object
+                          github:
+                            properties:
+                              token:
+                                description: 'Token is the secret token for the webhook.
+                                  Doc: https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries'
+                                properties:
+                                  name:
+                                    type: string
+                                  value:
+                                    type: string
+                                  valueFrom:
+                                    properties:
+                                      configMapKeyRef:
+                                        properties:
+                                          key:
+                                            type: string
+                                          name:
+                                            type: string
+                                        required:
+                                        - key
+                                        type: object
+                                      secretKeyRef:
+                                        properties:
+                                          key:
+                                            type: string
+                                          name:
+                                            type: string
+                                        required:
+                                        - key
+                                        type: object
+                                    type: object
+                                type: object
+                            required:
+                            - token
+                            type: object
+                          jwt:
+                            properties:
+                              jwksUri:
+                                type: string
+                            required:
+                            - jwksUri
+                            type: object
+                          svix:
+                            properties:
+                              secret:
+                                description: Secret is the webhook signing secret
+                                properties:
+                                  name:
+                                    type: string
+                                  value:
+                                    type: string
+                                  valueFrom:
+                                    properties:
+                                      configMapKeyRef:
+                                        properties:
+                                          key:
+                                            type: string
+                                          name:
+                                            type: string
+                                        required:
+                                        - key
+                                        type: object
+                                      secretKeyRef:
+                                        properties:
+                                          key:
+                                            type: string
+                                          name:
+                                            type: string
+                                        required:
+                                        - key
+                                        type: object
+                                    type: object
+                                type: object
+                              verifyTimestamp:
+                                description: TimestampTolerance specifies the tolerance
+                                  for the timestamp verification. Valid time units
+                                  are "ns", "us" (or "µs"), "ms", "s", "m", "h", "d",
+                                  "w", "y".
+                                type: string
+                            required:
+                            - secret
+                            type: object
                         type: object
                       path:
                         type: string
