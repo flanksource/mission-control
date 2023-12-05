@@ -11,7 +11,7 @@ require (
 	github.com/casbin/gorm-adapter/v3 v3.18.0
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.24.0
-	github.com/flanksource/commons v1.18.1
+	github.com/flanksource/commons v1.19.0
 	github.com/flanksource/duty v1.0.230
 	github.com/flanksource/gomplate/v3 v3.20.26
 	github.com/flanksource/kopper v1.0.6
@@ -230,7 +230,7 @@ require (
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/TomOnTime/utfutil v0.0.0-20230223141146-125e65197b36
 	github.com/antonmedv/expr v1.15.5 // indirect
-	github.com/aws/aws-sdk-go v1.48.9 // indirect
+	github.com/aws/aws-sdk-go v1.48.10 // indirect
 	github.com/bgentry/go-netrc v0.0.0-20140422174119-9fd32a8b3d3d // indirect
 	github.com/cjlapao/common-go v0.0.39 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -249,7 +249,7 @@ require (
 	github.com/gosimple/slug v1.13.1 // indirect
 	github.com/hairyhenderson/toml v0.4.2-0.20210923231440-40456b8e66cf // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
-	github.com/hashicorp/go-getter v1.7.3 // indirect
+	github.com/hashicorp/go-getter v1.7.3
 	github.com/hashicorp/go-safetemp v1.0.0 // indirect
 	github.com/hashicorp/go-version v1.6.0 // indirect
 	github.com/imdario/mergo v0.3.16 // indirect

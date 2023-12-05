@@ -1,0 +1,21 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: read-git-repository
+spec:
+  description: Clones the git repository and reads the first line of the file
+  configs:
+    - type: AWS::EKS::Cluster
+  actions:
+    - name: Clone and read go.sum
+      exec:
+        script: head -n 1 $READ_FILE
+        env:
+          - name: READ_FILE
+            value: go.sum
+        checkout:
+          url: https://github.com/flanksource/artifacts
+          connection: connection://github/aditya-all-access
+
+      
+  

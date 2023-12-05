@@ -64,9 +64,7 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 
 		var runner GitOps
 		ctx := context.Context{
-			Context: commons.Context{
-				Context: gocontext.Background(),
-			},
+			Context: commons.NewContext(gocontext.TODO()),
 		}
 		res, err := runner.Run(ctx, spec, env)
 		Expect(err).ToNot(HaveOccurred())

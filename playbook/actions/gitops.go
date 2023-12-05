@@ -189,8 +189,10 @@ func (t *GitOps) applyPatches(ctx context.Context, action v1.GitOpsAction) error
 
 			if patch.YQ != "" {
 				cmd := exec.Command("yq", "eval", "-i", patch.YQ, path)
-				if res, err := runCmd(cmd, nil); err != nil {
+				if res, err := runCmd(ctx, cmd); err != nil {
 					return err
+				} else if res.Error != nil {
+					return res.Error
 				} else {
 					t.logs = append(t.logs, res.Stdout)
 				}
