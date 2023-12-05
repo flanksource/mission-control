@@ -11,20 +11,29 @@ import (
 	"runtime"
 	"strings"
 	textTemplate "text/template"
+	"time"
 
 	"github.com/flanksource/artifacts"
 	fileUtils "github.com/flanksource/commons/files"
 	"github.com/flanksource/commons/logger"
 
+	"github.com/flanksource/commons/hash"
+	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/gomplate/v3"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/hashicorp/go-getter"
 )
+
+var checkoutLocks = utils.NamedLock{}
 
 type ExecAction struct {
 }
 
 type ExecDetails struct {
+	Error error `json:"-"`
+
 	Stdout   string `json:"stdout,omitempty"`
 	Stderr   string `json:"stderr,omitempty"`
 	ExitCode int    `json:"exitCode,omitempty"`
@@ -39,22 +48,34 @@ func (c *ExecAction) Run(ctx context.Context, exec v1.ExecAction, env TemplateEn
 	}
 	exec.Script = script
 
+	execEnvParam, err := c.prepareEnvironment(ctx, exec)
+	if err != nil {
+		return nil, err
+	}
+
 	switch runtime.GOOS {
 	case "windows":
-		return execPowershell(ctx, exec)
+		return execPowershell(ctx, exec, execEnvParam)
 	default:
-		return execBash(ctx, exec)
+		return execBash(ctx, exec, execEnvParam)
 	}
 }
 
-func execPowershell(ctx context.Context, check v1.ExecAction) (*ExecDetails, error) {
+func execPowershell(ctx context.Context, check v1.ExecAction, envParams *execEnv) (*ExecDetails, error) {
 	ps, err := osExec.LookPath("powershell.exe")
 	if err != nil {
 		return nil, err
 	}
 	args := []string{check.Script}
 	cmd := osExec.CommandContext(ctx, ps, args...)
-	return runCmd(cmd, check.Artifacts)
+	if len(envParams.envs) != 0 {
+		cmd.Env = append(os.Environ(), envParams.envs...)
+	}
+	if envParams.mountPoint != "" {
+		cmd.Dir = envParams.mountPoint
+	}
+
+	return runCmd(ctx, cmd, check.Artifacts...)
 }
 
 func setupConnection(ctx context.Context, check v1.ExecAction, cmd *osExec.Cmd) error {
@@ -114,45 +135,57 @@ func setupConnection(ctx context.Context, check v1.ExecAction, cmd *osExec.Cmd) 
 	return nil
 }
 
-func execBash(ctx context.Context, check v1.ExecAction) (*ExecDetails, error) {
+func execBash(ctx context.Context, check v1.ExecAction, execEnvParam *execEnv) (*ExecDetails, error) {
 	if len(check.Script) == 0 {
 		return nil, fmt.Errorf("no script provided")
 	}
 
 	cmd := osExec.CommandContext(ctx, "bash", "-c", check.Script)
+	if len(execEnvParam.envs) != 0 {
+		cmd.Env = append(os.Environ(), execEnvParam.envs...)
+	}
+	if execEnvParam.mountPoint != "" {
+		cmd.Dir = execEnvParam.mountPoint
+	}
+
 	if err := setupConnection(ctx, check, cmd); err != nil {
 		return nil, fmt.Errorf("failed to setup connection: %w", err)
 	}
 
-	return runCmd(cmd, check.Artifacts)
+	return runCmd(ctx, cmd, check.Artifacts...)
 }
 
-func runCmd(cmd *osExec.Cmd, artifactConfigs []v1.Artifact) (*ExecDetails, error) {
-	var stdout bytes.Buffer
-	var stderr bytes.Buffer
+func runCmd(ctx context.Context, cmd *osExec.Cmd, artifactConfigs ...v1.Artifact) (*ExecDetails, error) {
+	var (
+		result ExecDetails
+		stdout bytes.Buffer
+		stderr bytes.Buffer
+	)
+
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("%s: %w", strings.TrimSpace(stderr.String()), err)
+
+	if ctx.IsTrace() {
+		cmd.Stderr = io.MultiWriter(&stderr, os.Stderr)
+		cmd.Stdout = io.MultiWriter(&stdout, os.Stdout)
 	}
 
-	details := ExecDetails{
-		Stdout:   strings.TrimSpace(stdout.String()),
-		Stderr:   strings.TrimSpace(stderr.String()),
-		ExitCode: cmd.ProcessState.ExitCode(),
-	}
+	result.Error = cmd.Run()
+	result.ExitCode = cmd.ProcessState.ExitCode()
+	result.Stderr = strings.TrimSpace(stderr.String())
+	result.Stdout = strings.TrimSpace(stdout.String())
 
 	for _, artifactConfig := range artifactConfigs {
 		switch artifactConfig.Path {
 		case "/dev/stdout":
-			details.Artifacts = append(details.Artifacts, artifacts.Artifact{
-				Content: io.NopCloser(strings.NewReader(details.Stdout)),
+			result.Artifacts = append(result.Artifacts, artifacts.Artifact{
+				Content: io.NopCloser(strings.NewReader(result.Stdout)),
 				Path:    "stdout",
 			})
 
 		case "/dev/stderr":
-			details.Artifacts = append(details.Artifacts, artifacts.Artifact{
-				Content: io.NopCloser(strings.NewReader(details.Stderr)),
+			result.Artifacts = append(result.Artifacts, artifacts.Artifact{
+				Content: io.NopCloser(strings.NewReader(result.Stderr)),
 				Path:    "stderr",
 			})
 
@@ -173,15 +206,15 @@ func runCmd(cmd *osExec.Cmd, artifactConfigs []v1.Artifact) (*ExecDetails, error
 
 				artifact.Content = file
 				artifact.Path = path
-				details.Artifacts = append(details.Artifacts, artifact)
+				result.Artifacts = append(result.Artifacts, artifact)
 			}
 		}
 	}
-	if details.ExitCode != 0 {
-		return nil, fmt.Errorf("non-zero exit-code: %d. (stdout=%s) (stderr=%s)", details.ExitCode, details.Stdout, details.Stderr)
+	if result.ExitCode != 0 {
+		return nil, fmt.Errorf("non-zero exit-code: %d. (stdout=%s) (stderr=%s)", result.ExitCode, result.Stdout, result.Stderr)
 	}
 
-	return &details, nil
+	return &result, nil
 }
 
 func saveConfig(configTemplate *textTemplate.Template, view any) (string, error) {
@@ -219,4 +252,109 @@ aws_secret_access_key = {{.SecretKey.ValueStatic}}
 `))
 
 	gcloudConfigTemplate = textTemplate.Must(textTemplate.New("").Parse(`{{.Credentials}}`))
+}
+
+type execEnv struct {
+	envs       []string
+	mountPoint string
+}
+
+func (c *ExecAction) prepareEnvironment(ctx context.Context, check v1.ExecAction) (*execEnv, error) {
+	var result execEnv
+
+	for _, env := range check.EnvVars {
+		val, err := ctx.GetEnvValueFromCache(env)
+		if err != nil {
+			return nil, fmt.Errorf("error fetching env value (name=%s): %w", env.Name, err)
+		}
+
+		result.envs = append(result.envs, fmt.Sprintf("%s=%s", env.Name, val))
+	}
+
+	if check.Checkout != nil {
+		var err error
+		var connection *models.Connection
+		if connection, err = ctx.HydrateConnectionByURL(check.Checkout.Connection); err != nil {
+			return nil, fmt.Errorf("error hydrating connection: %w", err)
+		} else if connection == nil {
+			connection = &models.Connection{Type: models.ConnectionTypeGit}
+		}
+
+		if connection, err = connection.Merge(ctx, check.Checkout); err != nil {
+			return nil, err
+		}
+		var goGetterURL string
+		if goGetterURL, err = connection.AsGoGetterURL(); err != nil {
+			return nil, err
+		}
+		if goGetterURL == "" {
+			return nil, fmt.Errorf("missing URL %v", *connection)
+		}
+
+		result.mountPoint = utils.Deref(check.Checkout.Destination)
+		if result.mountPoint == "" {
+			result.mountPoint = filepath.Join(os.TempDir(), "exec-checkout", hash.Sha256Hex(goGetterURL))
+		}
+		// We allow multiple checks to use the same checkout location, for disk space and performance reasons
+		// however git does not allow multiple operations to be performed, so we need to lock it
+		lock := checkoutLocks.TryLock(result.mountPoint, 5*time.Minute)
+		if lock == nil {
+			return nil, fmt.Errorf("failed to acquire checkout lock for %s", result.mountPoint)
+		}
+		defer lock.Release()
+
+		if err := checkout(ctx, goGetterURL, result.mountPoint); err != nil {
+			return nil, fmt.Errorf("error checking out: %w", err)
+		}
+	}
+
+	return &result, nil
+}
+
+// Getter gets a directory or file using the Hashicorp go-getter library
+// See https://github.com/hashicorp/go-getter
+func checkout(ctx context.Context, url, dst string) error {
+	pwd, _ := os.Getwd()
+
+	stashed := false
+	if fileUtils.Exists(dst + "/.git") {
+		if r, err := run(ctx, dst, "git", "status", "-s"); err != nil {
+			return err
+		} else if r.Stdout != "" {
+			if r2, err := run(ctx, dst, "git", "stash"); err != nil {
+				return err
+			} else if r2.Error != nil {
+				return r2.Error
+			}
+
+			stashed = true
+		}
+	}
+
+	client := &getter.Client{
+		Ctx:     ctx,
+		Src:     url,
+		Dst:     dst,
+		Pwd:     pwd,
+		Mode:    getter.ClientModeDir,
+		Options: []getter.ClientOption{},
+	}
+	if err := client.Get(); err != nil {
+		return err
+	}
+	if stashed {
+		if r, err := run(ctx, dst, "git", "stash", "pop"); err != nil {
+			return fmt.Errorf("failed to pop: %v", err)
+		} else if r.Error != nil {
+			return fmt.Errorf("failed to pop: %v", r.Error)
+		}
+	}
+
+	return nil
+}
+
+func run(ctx context.Context, cwd string, name string, args ...string) (*ExecDetails, error) {
+	cmd := osExec.CommandContext(ctx, name, args...)
+	cmd.Dir = cwd
+	return runCmd(ctx, cmd)
 }

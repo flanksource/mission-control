@@ -134,6 +134,33 @@ type Artifact struct {
 	Path string `json:"path" yaml:"path"`
 }
 
+type GitCheckout struct {
+	URL         string        `yaml:"url,omitempty" json:"url,omitempty"`
+	Connection  string        `yaml:"connection,omitempty" json:"connection,omitempty"`
+	Username    *types.EnvVar `yaml:"username,omitempty" json:"username,omitempty"`
+	Password    *types.EnvVar `yaml:"password,omitempty" json:"password,omitempty"`
+	Certificate *types.EnvVar `yaml:"certificate,omitempty" json:"certificate,omitempty"`
+	// Destination is the full path to where the contents of the URL should be downloaded to.
+	// If left empty, the sha256 hash of the URL will be used as the dir name.
+	Destination *string `yaml:"destination,omitempty" json:"destination,omitempty"`
+}
+
+func (git GitCheckout) GetURL() types.EnvVar {
+	return types.EnvVar{ValueStatic: git.URL}
+}
+
+func (git GitCheckout) GetUsername() types.EnvVar {
+	return utils.Deref(git.Username)
+}
+
+func (git GitCheckout) GetPassword() types.EnvVar {
+	return utils.Deref(git.Password)
+}
+
+func (git GitCheckout) GetCertificate() types.EnvVar {
+	return utils.Deref(git.Certificate)
+}
+
 type ExecAction struct {
 	// Script can be a inline script or a path to a script that needs to be executed
 	// On windows executed via powershell and in darwin and linux executed using bash
@@ -141,6 +168,10 @@ type ExecAction struct {
 	Connections ExecConnections `yaml:"connections,omitempty" json:"connections,omitempty"`
 	// Artifacts to save
 	Artifacts []Artifact `yaml:"artifacts,omitempty" json:"artifacts,omitempty"`
+	// EnvVars are the environment variables that are accessible to exec processes
+	EnvVars []types.EnvVar `yaml:"env,omitempty" json:"env,omitempty"`
+	// Checkout details the git repository that should be mounted to the process
+	Checkout *GitCheckout `yaml:"checkout,omitempty" json:"checkout,omitempty"`
 }
 
 type ExecConnections struct {
