@@ -12,7 +12,7 @@ require (
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.24.0
 	github.com/flanksource/commons v1.19.0
-	github.com/flanksource/duty v1.0.230
+	github.com/flanksource/duty v1.0.231
 	github.com/flanksource/gomplate/v3 v3.20.26
 	github.com/flanksource/kopper v1.0.6
 	github.com/flanksource/postq v0.1.2
@@ -208,7 +208,7 @@ require (
 	k8s.io/cli-runtime v0.28.2 // indirect
 	k8s.io/component-base v0.28.2 // indirect
 	k8s.io/klog/v2 v2.110.1 // indirect
-	k8s.io/kube-openapi v0.0.0-20231113174909-778a5567bc1e // indirect
+	k8s.io/kube-openapi v0.0.0-20231129212854-f0671cc7e66a // indirect
 	k8s.io/utils v0.0.0-20231127182322-b307cd553661 // indirect
 	layeh.com/gopher-json v0.0.0-20201124131017-552bb3c4c3bf // indirect
 	modernc.org/libc v1.24.1 // indirect

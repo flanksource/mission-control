@@ -148,6 +148,12 @@ func FindPlaybooksForComponent(ctx context.Context, componentType string, tags m
 	return playbooks, err
 }
 
+func FindPlaybooksByWebhookPath(ctx context.Context, path string) ([]models.Playbook, error) {
+	var p []models.Playbook
+	err := ctx.DB().Debug().Where("spec->'on'->'webhook'->>'path' = ?", path).Find(&p).Error
+	return p, err
+}
+
 func PersistPlaybookFromCRD(obj *v1.Playbook) error {
 	specJSON, err := json.Marshal(obj.Spec)
 	if err != nil {

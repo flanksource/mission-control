@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"github.com/flanksource/duty/models"
+	dutyTypes "github.com/flanksource/duty/types"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -70,10 +71,27 @@ type PlaybookEventDetail struct {
 	Event string `json:"event" yaml:"event"`
 }
 
+type PlaybookEventWebhookAuthBasic struct {
+	Username dutyTypes.EnvVar `json:"username" yaml:"username"`
+	Password dutyTypes.EnvVar `json:"password" yaml:"password"`
+}
+
+type PlaybookEventWebhookAuth struct {
+	Basic *PlaybookEventWebhookAuthBasic `json:"basic,omitempty" yaml:"basic,omitempty"`
+}
+
+type PlaybookEventWebhook struct {
+	Path           string                    `json:"path" yaml:"path"`
+	Authentication *PlaybookEventWebhookAuth `json:"authentication,omitempty" yaml:"authentication,omitempty"`
+}
+
 // PlaybookEvent defines the list of supported events to trigger a playbook.
 type PlaybookEvent struct {
 	Canary    []PlaybookEventDetail `json:"canary,omitempty" yaml:"canary,omitempty"`
 	Component []PlaybookEventDetail `json:"component,omitempty" yaml:"component,omitempty"`
+
+	// Webhook creates a new endpoint that triggers this playbook
+	Webhook *PlaybookEventWebhook `json:"webhook,omitempty" yaml:"webhook,omitempty"`
 }
 
 type PlaybookSpec struct {

@@ -30,7 +30,7 @@ require (
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
 	github.com/evanphx/json-patch v5.7.0+incompatible // indirect
-	github.com/flanksource/duty v1.0.230 // indirect
+	github.com/flanksource/duty v1.0.231 // indirect
 	github.com/flanksource/gomplate/v3 v3.20.26 // indirect
 	github.com/flanksource/is-healthy v0.0.0-20231003215854-76c51e3a3ff7 // indirect
 	github.com/flanksource/kommons v0.31.4 // indirect
@@ -163,7 +163,7 @@ require (
 	k8s.io/cli-runtime v0.28.2 // indirect
 	k8s.io/client-go v0.28.2 // indirect
 	k8s.io/klog/v2 v2.110.1 // indirect
-	k8s.io/kube-openapi v0.0.0-20231113174909-778a5567bc1e // indirect
+	k8s.io/kube-openapi v0.0.0-20231129212854-f0671cc7e66a // indirect
 	k8s.io/utils v0.0.0-20231127182322-b307cd553661 // indirect
 	layeh.com/gopher-json v0.0.0-20201124131017-552bb3c4c3bf // indirect
 	sigs.k8s.io/controller-runtime v0.15.0 // indirect
