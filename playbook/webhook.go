@@ -18,6 +18,7 @@ import (
 
 	"github.com/MicahParks/keyfunc/v2"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/patrickmn/go-cache"
 
 	durationutils "github.com/flanksource/commons/duration"
 	"github.com/flanksource/commons/logger"
@@ -27,6 +28,8 @@ import (
 )
 
 const svixWebhookSecretPrefix = "whsec_"
+
+var jwksCache = cache.New(10*time.Minute, time.Hour)
 
 func authenticateWebhook(ctx context.Context, r *http.Request, auth *v1.PlaybookEventWebhookAuth) error {
 	if auth.Basic != nil {
@@ -204,23 +207,31 @@ func (t *svix) Sign(msgId string, timestamp time.Time, payload []byte) (string, 
 }
 
 func validateJWT(ctx gocontext.Context, jwksURL, jwtB64 string) error {
-	options := keyfunc.Options{
-		Ctx: ctx,
-		RefreshErrorHandler: func(err error) {
-			logger.Errorf("there was an error with the jwt.Keyfunc: %w", err)
-		},
-		JWKUseWhitelist:   []keyfunc.JWKUse{},
-		RefreshInterval:   time.Hour,
-		RefreshRateLimit:  time.Minute * 5,
-		RefreshTimeout:    time.Second * 10,
-		RefreshUnknownKID: true,
-	}
+	var jwks *keyfunc.JWKS
+	if val, ok := jwksCache.Get(jwksURL); ok {
+		jwks = val.(*keyfunc.JWKS)
+	} else {
+		options := keyfunc.Options{
+			Ctx: ctx,
+			RefreshErrorHandler: func(err error) {
+				logger.Errorf("there was an error with the jwt.Keyfunc: %w", err)
+			},
+			JWKUseWhitelist:   []keyfunc.JWKUse{},
+			RefreshInterval:   time.Hour,
+			RefreshRateLimit:  time.Minute * 5,
+			RefreshTimeout:    time.Second * 10,
+			RefreshUnknownKID: true,
+		}
 
-	jwks, err := keyfunc.Get(jwksURL, options)
-	if err != nil {
-		return fmt.Errorf("failed to create JWKS from resource at the given URL: %w", err)
+		var err error
+		jwks, err = keyfunc.Get(jwksURL, options)
+		if err != nil {
+			return fmt.Errorf("failed to create JWKS from resource at the given URL: %w", err)
+		}
+		defer jwks.EndBackground()
+
+		jwksCache.SetDefault(jwksURL, jwks)
 	}
-	defer jwks.EndBackground()
 
 	token, err := jwt.Parse(jwtB64, jwks.Keyfunc)
 	if err != nil {
