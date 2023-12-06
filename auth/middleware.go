@@ -80,7 +80,12 @@ func (k *KratosHandler) KratosMiddleware(ctx context.Context) (*kratosMiddleware
 	}, nil
 }
 
-var skipAuthPaths = []string{"/health", "/metrics", "/kratos/*"}
+var skipAuthPaths = []string{
+	"/health",
+	"/metrics",
+	"/kratos/*",
+	"/playbook/webhook/:webhook_path", // Playbook webhooks handle the authentication themselves
+}
 
 func canSkipAuth(c echo.Context) bool {
 	return collections.Contains(skipAuthPaths, c.Path())

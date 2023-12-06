@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"github.com/flanksource/duty/models"
+	dutyTypes "github.com/flanksource/duty/types"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -70,10 +71,48 @@ type PlaybookEventDetail struct {
 	Event string `json:"event" yaml:"event"`
 }
 
+type PlaybookEventWebhookAuthBasic struct {
+	Username dutyTypes.EnvVar `json:"username" yaml:"username"`
+	Password dutyTypes.EnvVar `json:"password" yaml:"password"`
+}
+
+type PlaybookEventWebhookAuthGithub struct {
+	// Token is the secret token for the webhook.
+	//  Doc: https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries
+	Token dutyTypes.EnvVar `json:"token" yaml:"token"`
+}
+
+type PlaybookEventWebhookAuthSVIX struct {
+	// Secret is the webhook signing secret
+	Secret dutyTypes.EnvVar `json:"secret" yaml:"secret"`
+	// TimestampTolerance specifies the tolerance for the timestamp verification.
+	// Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h", "d", "w", "y".
+	TimestampTolerance string `json:"verifyTimestamp,omitempty" yaml:"verifyTimestamp,omitempty"`
+}
+
+type PlaybookEventWebhookAuthJWT struct {
+	JWKSURI string `json:"jwksUri" yaml:"jwksUri"`
+}
+
+type PlaybookEventWebhookAuth struct {
+	Basic  *PlaybookEventWebhookAuthBasic  `json:"basic,omitempty" yaml:"basic,omitempty"`
+	Github *PlaybookEventWebhookAuthGithub `json:"github,omitempty" yaml:"github,omitempty"`
+	SVIX   *PlaybookEventWebhookAuthSVIX   `json:"svix,omitempty" yaml:"svix,omitempty"`
+	JWT    *PlaybookEventWebhookAuthJWT    `json:"jwt,omitempty" yaml:"jwt,omitempty"`
+}
+
+type PlaybookEventWebhook struct {
+	Path           string                    `json:"path" yaml:"path"`
+	Authentication *PlaybookEventWebhookAuth `json:"authentication,omitempty" yaml:"authentication,omitempty"`
+}
+
 // PlaybookEvent defines the list of supported events to trigger a playbook.
 type PlaybookEvent struct {
 	Canary    []PlaybookEventDetail `json:"canary,omitempty" yaml:"canary,omitempty"`
 	Component []PlaybookEventDetail `json:"component,omitempty" yaml:"component,omitempty"`
+
+	// Webhook creates a new endpoint that triggers this playbook
+	Webhook *PlaybookEventWebhook `json:"webhook,omitempty" yaml:"webhook,omitempty"`
 }
 
 type PlaybookSpec struct {
@@ -85,7 +124,7 @@ type PlaybookSpec struct {
 	// `On` defines events that will automatically trigger the playbook.
 	// If multiple events are defined, only one of those events needs to occur to trigger the playbook.
 	// If multiple triggering events occur at the same time, multiple playbook runs will be triggered.
-	On PlaybookEvent `json:"on,omitempty" yaml:"on,omitempty"`
+	On *PlaybookEvent `json:"on,omitempty" yaml:"on,omitempty"`
 
 	// Permissions ...
 	Permissions []Permission `json:"permissions,omitempty" yaml:"permissions,omitempty"`

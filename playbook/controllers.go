@@ -6,9 +6,11 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/commons/utils"
+
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
@@ -108,40 +110,9 @@ func HandlePlaybookRun(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, api.HTTPError{Error: "not found", Message: fmt.Sprintf("playbook(id=%s) not found", req.ID)})
 	}
 
-	var spec v1.PlaybookSpec
-	if err := json.Unmarshal(playbook.Spec, &spec); err != nil {
-		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to unmarshal playbook spec"})
-	}
-
-	if err := req.validateParams(spec.Parameters); err != nil {
-		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error(), Message: "invalid parameters"})
-	}
-
-	run := models.PlaybookRun{
-		PlaybookID: playbook.ID,
-		Status:     models.PlaybookRunStatusPending,
-		Parameters: types.JSONStringMap(req.Params),
-		CreatedBy:  &ctx.User().ID,
-	}
-
-	if spec.Approval == nil || spec.Approval.Approvers.Empty() {
-		run.Status = models.PlaybookRunStatusScheduled
-	}
-
-	if req.ComponentID != uuid.Nil {
-		run.ComponentID = &req.ComponentID
-	}
-
-	if req.ConfigID != uuid.Nil {
-		run.ConfigID = &req.ConfigID
-	}
-
-	if req.CheckID != uuid.Nil {
-		run.CheckID = &req.CheckID
-	}
-
-	if err := savePlaybookRun(ctx, playbook, &run); err != nil {
-		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to create playbook run"})
+	run, err := validateAndSavePlaybook(ctx, playbook, req)
+	if err != nil {
+		return api.WriteError(c, err)
 	}
 
 	return c.JSON(http.StatusCreated, RunResponse{
@@ -225,9 +196,45 @@ func HandlePlaybookRunApproval(c echo.Context) error {
 	return c.JSON(http.StatusOK, api.HTTPSuccess{Message: "playbook run approved"})
 }
 
+func HandleWebhook(c echo.Context) error {
+	ctx := c.Request().Context().(context.Context).WithUser(&models.Person{ID: utils.Deref(api.SystemUserID)})
+
+	var path = c.Param("webhook_path")
+	playbook, err := db.FindPlaybookByWebhookPath(ctx, path)
+	if err != nil {
+		return api.WriteError(c, err)
+	} else if playbook == nil {
+		return c.JSON(http.StatusNotFound, api.HTTPError{Error: "not found", Message: fmt.Sprintf("playbook(webhook_path=%s) not found", path)})
+	}
+
+	var spec v1.PlaybookSpec
+	if err := json.Unmarshal(playbook.Spec, &spec); err != nil {
+		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "playbook has an invalid spec"})
+	}
+
+	if err := authenticateWebhook(ctx, c.Request(), spec.On.Webhook.Authentication); err != nil {
+		return api.WriteError(c, err)
+	}
+
+	var runRequest RunParams
+	if c.Request().Header.Get("Content-Type") == "application/json" {
+		if err := c.Bind(&runRequest); err != nil {
+			return api.WriteError(c, err)
+		}
+	}
+	runRequest.ID = playbook.ID
+
+	if _, err = validateAndSavePlaybook(ctx, playbook, runRequest); err != nil {
+		logger.Errorf("failed to save playbook run: %v", err)
+	}
+
+	return c.JSON(http.StatusOK, api.HTTPSuccess{Message: "ok"})
+}
+
 func RegisterRoutes(e *echo.Echo, prefix string) *echo.Group {
 	playbookGroup := e.Group(fmt.Sprintf("/%s", prefix))
 	playbookGroup.GET("/list", HandlePlaybookList)
+	playbookGroup.POST("/webhook/:webhook_path", HandleWebhook)
 
 	runGroup := playbookGroup.Group("/run")
 	runGroup.POST("", HandlePlaybookRun)

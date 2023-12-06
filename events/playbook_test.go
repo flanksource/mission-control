@@ -27,7 +27,7 @@ var _ = ginkgo.Describe("Should save playbook run on the correct event", ginkgo.
 	ginkgo.It("should create a new playbook", func() {
 		playbookSpec := v1.PlaybookSpec{
 			Description: "write unhealthy component's name to a file",
-			On: v1.PlaybookEvent{
+			On: &v1.PlaybookEvent{
 				Component: []v1.PlaybookEventDetail{
 					{
 						Filter: "component.type == 'Entity'",
