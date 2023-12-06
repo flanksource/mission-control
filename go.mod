@@ -12,7 +12,7 @@ require (
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.24.0
 	github.com/flanksource/commons v1.19.0
-	github.com/flanksource/duty v1.0.231
+	github.com/flanksource/duty v1.0.232
 	github.com/flanksource/gomplate/v3 v3.20.26
 	github.com/flanksource/kopper v1.0.6
 	github.com/flanksource/postq v0.1.2
@@ -60,6 +60,7 @@ require (
 
 require (
 	ariga.io/atlas v0.15.0 // indirect
+	cloud.google.com/go/cloudsqlconn v1.5.1 // indirect
 	cloud.google.com/go/compute v1.23.3 // indirect
 	cloud.google.com/go/compute/metadata v0.2.3 // indirect
 	cloud.google.com/go/iam v1.1.5 // indirect
