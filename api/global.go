@@ -20,3 +20,7 @@ var (
 	// DefaultArtifactConnection is the connection that's used to save all playbook artifacts.
 	DefaultArtifactConnection string
 )
+
+const (
+	PropertyIncidentsDisabled = "incidents.disable"
+)
