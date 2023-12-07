@@ -33,21 +33,6 @@ func Start(ctx context.Context) {
 		logger.Errorf("Failed to schedule sync jobs for team component: %v", err)
 	}
 
-	if err := job.NewJob(ctx, "Evaluate Evidence Scripts", EvaluateEvidenceScriptsSchedule, EvaluateEvidenceScripts).
-		RunOnStart().AddToScheduler(FuncScheduler); err != nil {
-		logger.Errorf("Failed to schedule job for evidence script evaluation: %v", err)
-	}
-
-	if err := job.NewJob(ctx, "Sync Responder Comments", ResponderCommentsSyncSchedule, responder.SyncComments).
-		RunOnStart().AddToScheduler(FuncScheduler); err != nil {
-		logger.Errorf("Failed to schedule job for syncing responder comments: %v", err)
-	}
-
-	if err := job.NewJob(ctx, "Sync Responder Config", ResponderConfigSyncSchedule, responder.SyncConfig).
-		RunOnStart().AddToScheduler(FuncScheduler); err != nil {
-		logger.Errorf("Failed to schedule job for syncing responder config: %v", err)
-	}
-
 	if err := job.NewJob(ctx, "Cleanup JobHistory Table", CleanupJobHistoryTableSchedule, CleanupJobHistoryTable).
 		RunOnStart().AddToScheduler(FuncScheduler); err != nil {
 		logger.Errorf("Failed to schedule job for cleaning up job history table: %v", err)
@@ -77,11 +62,41 @@ func Start(ctx context.Context) {
 		}
 	}
 
+	startIncidentsJobs(ctx)
+
+	FuncScheduler.Start()
+}
+
+func startIncidentsJobs(ctx context.Context) {
+	var incidentDisabled bool
+	if err := ctx.DB().Raw("SELECT true FROM properties WHERE name = ? AND value = 'true' AND deleted_at IS NULL", api.PropertyIncidentsDisabled).Scan(&incidentDisabled).Error; err != nil {
+		logger.Errorf("Failed to fetch incidents disabled flag: %v", err)
+		return
+	}
+
+	if incidentDisabled {
+		logger.Debugf("Skipping incidents jobs")
+		return
+	}
+
+	if err := job.NewJob(ctx, "Evaluate Evidence Scripts", EvaluateEvidenceScriptsSchedule, EvaluateEvidenceScripts).
+		RunOnStart().AddToScheduler(FuncScheduler); err != nil {
+		logger.Errorf("Failed to schedule job for evidence script evaluation: %v", err)
+	}
+
+	if err := job.NewJob(ctx, "Sync Responder Comments", ResponderCommentsSyncSchedule, responder.SyncComments).
+		RunOnStart().AddToScheduler(FuncScheduler); err != nil {
+		logger.Errorf("Failed to schedule job for syncing responder comments: %v", err)
+	}
+
+	if err := job.NewJob(ctx, "Sync Responder Config", ResponderConfigSyncSchedule, responder.SyncConfig).
+		RunOnStart().AddToScheduler(FuncScheduler); err != nil {
+		logger.Errorf("Failed to schedule job for syncing responder config: %v", err)
+	}
+
 	incidentRulesSchedule := fmt.Sprintf("@every %s", rules.Period.String())
 	if err := job.NewJob(ctx, "Incident Rules", incidentRulesSchedule, rules.Run).
 		RunOnStart().AddToScheduler(FuncScheduler); err != nil {
 		logger.Errorf("Failed to schedule job for incident rules: %v", err)
 	}
-
-	FuncScheduler.Start()
 }
