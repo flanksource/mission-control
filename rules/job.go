@@ -1,11 +1,11 @@
 package rules
 
 import (
-	gocontext "context"
 	"time"
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/job"
 	dutyModels "github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
@@ -45,7 +45,7 @@ func Run(ctx job.JobRuntime) error {
 	}
 	logger.Debugf("Found %d components with statuses: %v", len(response.Components), statuses)
 
-	autoCreatedOpenIncidents, err := getOpenIncidentsWithRules(ctx)
+	autoCreatedOpenIncidents, err := getOpenIncidentsWithRules(ctx.Context)
 	if err != nil {
 		return err
 	}
@@ -159,7 +159,7 @@ func contains(list []string, item string) bool {
 }
 
 // getOpenIncidentsWithRules generates a map linking incident rules, which led to the creation of open incidents, to their respective involved component ids.
-func getOpenIncidentsWithRules(ctx gocontext.Context) (map[string]map[string]struct{}, error) {
+func getOpenIncidentsWithRules(ctx context.Context) (map[string]map[string]struct{}, error) {
 	query := `
 	SELECT
 		incidents.incident_rule_id,
@@ -172,7 +172,7 @@ func getOpenIncidentsWithRules(ctx gocontext.Context) (map[string]map[string]str
 		incidents.incident_rule_id IS NOT NULL
 		AND evidences.component_id IS NOT NULL
 		AND incidents.status = ?`
-	rows, err := db.Gorm.WithContext(ctx).Raw(query, api.IncidentStatusOpen).Rows()
+	rows, err := ctx.DB().Raw(query, api.IncidentStatusOpen).Rows()
 	if err != nil {
 		return nil, err
 	}

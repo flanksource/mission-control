@@ -155,6 +155,8 @@ cloud.google.com/go/cloudbuild v1.9.0/go.mod h1:qK1d7s4QlO0VwfYn5YuClDGg2hfmLZEb
 cloud.google.com/go/clouddms v1.3.0/go.mod h1:oK6XsCDdW4Ib3jCCBugx+gVjevp2TMXFtgxvPSee3OM=
 cloud.google.com/go/clouddms v1.4.0/go.mod h1:Eh7sUGCC+aKry14O1NRljhjyrr0NFC0G2cjwX0cByRk=
 cloud.google.com/go/clouddms v1.5.0/go.mod h1:QSxQnhikCLUw13iAbffF2CZxAER3xDGNHjsTAkQJcQA=
+cloud.google.com/go/cloudsqlconn v1.5.1 h1:rMtPv66pkuk2K1ciCicjZY8Ma1DSyOYSoqwPUw/Timo=
+cloud.google.com/go/cloudsqlconn v1.5.1/go.mod h1:DPWjhwD5Fhv43M0RP/+7J37xo4PByfNWCzMlKa9OBwE=
 cloud.google.com/go/cloudtasks v1.5.0/go.mod h1:fD92REy1x5woxkKEkLdvavGnPJGEn8Uic9nWuLzqCpY=
 cloud.google.com/go/cloudtasks v1.6.0/go.mod h1:C6Io+sxuke9/KNRkbQpihnW93SWDU3uXt92nu85HkYI=
 cloud.google.com/go/cloudtasks v1.7.0/go.mod h1:ImsfdYWwlWNJbdgPIIGJWC+gemEGTBK/SunNQQNCAb4=
@@ -815,6 +817,8 @@ github.com/flanksource/commons v1.19.0 h1:wvebMLVHnSMzmyw0QAmIJhl+YaQzsBSY6BQKgI
 github.com/flanksource/commons v1.19.0/go.mod h1:k+3B7McXUOS+TirYFR9h0pPk6mHNG3dqVUEY9gKI3/U=
 github.com/flanksource/duty v1.0.231 h1:x87hUTebhHF0Zh2koiy36hzaPW6jfiBPmYkmFRPOu74=
 github.com/flanksource/duty v1.0.231/go.mod h1:fTHCJAD3U2wwL9DoXci5L7g0KQcUJIe2/2l4J0ggrLA=
+github.com/flanksource/duty v1.0.237 h1:0ZcH/AAojn9Eupc360fnl5CRJTxD0l5/WtUNYWJaP80=
+github.com/flanksource/duty v1.0.237/go.mod h1:6JdeVPo9aKq/nowsP60CTHQxe+oUPu6maMbusIApB8o=
 github.com/flanksource/gomplate/v3 v3.20.4/go.mod h1:27BNWhzzSjDed1z8YShO6W+z6G9oZXuxfNFGd/iGSdc=
 github.com/flanksource/gomplate/v3 v3.20.26 h1:85lUzlKgZjb1uIkzoa4zN03OcdOnFPG+oWxshZTYqz4=
 github.com/flanksource/gomplate/v3 v3.20.26/go.mod h1:GKmptFMdr2LbOuqwQZrmo9a/UygyZ0pbXffks8MuYhE=
