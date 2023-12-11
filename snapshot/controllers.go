@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/collections"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/labstack/echo/v4"
 )
@@ -18,6 +19,7 @@ const (
 )
 
 type SnapshotContext struct {
+	Context   context.Context
 	Directory string
 	LogStart  string
 	LogEnd    string
@@ -25,6 +27,7 @@ type SnapshotContext struct {
 }
 
 func NewSnapshotContext(c echo.Context) SnapshotContext {
+	ctx := c.Request().Context().(context.Context)
 	directory := fmt.Sprintf("snapshot-%s", time.Now().Format(time.RFC3339))
 	logStart := c.QueryParam("start")
 	logEnd := c.QueryParam("end")
@@ -37,6 +40,7 @@ func NewSnapshotContext(c echo.Context) SnapshotContext {
 		logStart = "15m"
 	}
 	return SnapshotContext{
+		Context:   ctx,
 		Directory: directory,
 		LogStart:  logStart,
 		LogEnd:    logEnd,

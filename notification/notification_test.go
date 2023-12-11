@@ -32,7 +32,7 @@ var _ = ginkgo.Describe("Test Notification on incident creation", ginkgo.Ordered
 			ID:   uuid.New(),
 			Name: "James Bond",
 		}
-		tx := db.Gorm.Create(john)
+		tx := api.DefaultContext.DB().Create(john)
 		Expect(tx.Error).To(BeNil())
 	})
 
@@ -43,7 +43,7 @@ var _ = ginkgo.Describe("Test Notification on incident creation", ginkgo.Ordered
 			Type:       "Entity",
 			ExternalId: "dummy/logistics",
 		}
-		tx := db.Gorm.Create(component)
+		tx := api.DefaultContext.DB().Create(component)
 		Expect(tx.Error).To(BeNil())
 	})
 
@@ -75,7 +75,7 @@ var _ = ginkgo.Describe("Test Notification on incident creation", ginkgo.Ordered
 			CreatedBy: john.ID,
 			Spec:      spec,
 		}
-		tx := db.Gorm.Create(team)
+		tx := api.DefaultContext.DB().Create(team)
 		Expect(tx.Error).To(BeNil())
 	})
 
@@ -87,7 +87,7 @@ var _ = ginkgo.Describe("Test Notification on incident creation", ginkgo.Ordered
 			TeamID:   &team.ID,
 		}
 
-		err := db.Gorm.Create(&notif).Error
+		err := api.DefaultContext.DB().Create(&notif).Error
 		Expect(err).To(BeNil())
 	})
 
@@ -101,7 +101,7 @@ var _ = ginkgo.Describe("Test Notification on incident creation", ginkgo.Ordered
 			Severity:    "Blocker",
 			CommanderID: &john.ID,
 		}
-		tx := db.Gorm.Create(incident)
+		tx := api.DefaultContext.DB().Create(incident)
 		Expect(tx.Error).To(BeNil())
 	})
 
@@ -112,7 +112,7 @@ var _ = ginkgo.Describe("Test Notification on incident creation", ginkgo.Ordered
 		sendHandler, err := events.NewNotificationSendConsumerAsync().EventConsumer()
 		Expect(err).NotTo(HaveOccurred())
 
-		ctx := context.NewContext(gocontext.Background()).WithDB(db.Gorm, db.Pool)
+		ctx := context.NewContext(gocontext.Background()).WithDB(api.DefaultContext.DB(), db.Pool)
 
 		// Order of consumption is important as incident.create event
 		// produces a notification.send event

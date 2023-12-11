@@ -1,25 +1,25 @@
 package components
 
 import (
-	"context"
+	gocontext "context"
 	"encoding/json"
 	"io"
 	"net/url"
 
 	"github.com/flanksource/commons/http"
+	"github.com/flanksource/duty/context"
 
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/db"
 )
 
-func GetLogsByComponent(componentID, start, end string) (api.ComponentLogs, error) {
+func GetLogsByComponent(ctx context.Context, componentID, start, end string) (api.ComponentLogs, error) {
 	var logs api.LogsResponse
 	var row struct {
 		Name       string
 		ExternalID string
 		Type       string
 	}
-	err := db.Gorm.Table("components").Select("name", "external_id", "type").Where("id = ?", componentID).Find(&row).Error
+	err := ctx.DB().Table("components").Select("name", "external_id", "type").Where("id = ?", componentID).Find(&row).Error
 	if err != nil {
 		return api.ComponentLogs{}, err
 	}
@@ -47,7 +47,7 @@ func GetLogsByComponent(componentID, start, end string) (api.ComponentLogs, erro
 		return api.ComponentLogs{}, err
 	}
 
-	resp, err := http.NewClient().R(context.Background()).Header("Content-Type", "application/json").Post(endpoint, payloadBytes)
+	resp, err := http.NewClient().R(gocontext.Background()).Header("Content-Type", "application/json").Post(endpoint, payloadBytes)
 	if err != nil {
 		return api.ComponentLogs{}, err
 	}
