@@ -9,7 +9,6 @@ import (
 	"github.com/flanksource/duty/job"
 	dutyModels "github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/db/models"
 )
 
@@ -36,7 +35,7 @@ func Run(ctx job.JobRuntime) error {
 	}
 
 	statuses := getAllStatii()
-	response, err := duty.QueryTopology(ctx, db.Pool, duty.TopologyOptions{
+	response, err := duty.QueryTopology(ctx, ctx.Pool(), duty.TopologyOptions{
 		Flatten: true,
 		Status:  statuses,
 	})
@@ -50,12 +49,12 @@ func Run(ctx job.JobRuntime) error {
 		return err
 	}
 
-	return createIncidents(autoCreatedOpenIncidents, response.Components)
+	return createIncidents(ctx.Context, autoCreatedOpenIncidents, response.Components)
 }
 
 // createIncidents creates incidents based on the components
 // and incident rules.
-func createIncidents(openIncidentsMap map[string]map[string]struct{}, components dutyModels.Components) error {
+func createIncidents(ctx context.Context, openIncidentsMap map[string]map[string]struct{}, components dutyModels.Components) error {
 outer:
 	for _, component := range components {
 		for _, _rule := range Rules {
@@ -82,7 +81,7 @@ outer:
 					continue // this rule already created this incident
 				}
 
-				if err := db.Gorm.Create(&incident).Error; err != nil {
+				if err := ctx.DB().Create(&incident).Error; err != nil {
 					return err
 				}
 
@@ -92,7 +91,7 @@ outer:
 					Type:       "factor",
 				}
 
-				if err := db.Gorm.Create(&hypothesis).Error; err != nil {
+				if err := ctx.DB().Create(&hypothesis).Error; err != nil {
 					return err
 				}
 
@@ -104,7 +103,7 @@ outer:
 					Description:      component.Name + " is " + string(component.Status),
 				}
 
-				if err := db.Gorm.Create(&evidence).Error; err != nil {
+				if err := ctx.DB().Create(&evidence).Error; err != nil {
 					return err
 				}
 
