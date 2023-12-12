@@ -60,15 +60,15 @@ type PlaybookApproval struct {
 	Approvers PlaybookApprovers    `json:"approvers,omitempty" yaml:"approvers,omitempty"`
 }
 
-type PlaybookEventDetail struct {
+type PlaybookTriggerEvent struct {
+	// Event to listen for.
+	Event string `json:"event" yaml:"event"`
+
 	// Labels specifies the key-value pairs that the associated event's resource must match.
 	Labels map[string]string `json:"labels,omitempty" yaml:"labels,omitempty"`
 
 	// CEL expression for additional event filtering.
 	Filter string `json:"filter,omitempty" yaml:"filter,omitempty"`
-
-	// Event to listen for.
-	Event string `json:"event" yaml:"event"`
 }
 
 type PlaybookEventWebhookAuthBasic struct {
@@ -101,18 +101,22 @@ type PlaybookEventWebhookAuth struct {
 	JWT    *PlaybookEventWebhookAuthJWT    `json:"jwt,omitempty" yaml:"jwt,omitempty"`
 }
 
-type PlaybookEventWebhook struct {
+type PlaybookTriggerWebhook struct {
 	Path           string                    `json:"path" yaml:"path"`
 	Authentication *PlaybookEventWebhookAuth `json:"authentication,omitempty" yaml:"authentication,omitempty"`
 }
 
-// PlaybookEvent defines the list of supported events to trigger a playbook.
-type PlaybookEvent struct {
-	Canary    []PlaybookEventDetail `json:"canary,omitempty" yaml:"canary,omitempty"`
-	Component []PlaybookEventDetail `json:"component,omitempty" yaml:"component,omitempty"`
+type PlaybookTriggerEvents struct {
+	Canary    []PlaybookTriggerEvent `json:"canary,omitempty" yaml:"canary,omitempty"`
+	Component []PlaybookTriggerEvent `json:"component,omitempty" yaml:"component,omitempty"`
+}
+
+// PlaybookTrigger defines the list of supported events & to trigger a playbook.
+type PlaybookTrigger struct {
+	PlaybookTriggerEvents `json:",inline" yaml:",inline"`
 
 	// Webhook creates a new endpoint that triggers this playbook
-	Webhook *PlaybookEventWebhook `json:"webhook,omitempty" yaml:"webhook,omitempty"`
+	Webhook *PlaybookTriggerWebhook `json:"webhook,omitempty" yaml:"webhook,omitempty"`
 }
 
 type PlaybookSpec struct {
@@ -121,10 +125,10 @@ type PlaybookSpec struct {
 
 	Icon string `json:"icon,omitempty" yaml:"icon,omitempty"`
 
-	// `On` defines events that will automatically trigger the playbook.
+	// `On` defines triggers that will automatically trigger the playbook.
 	// If multiple events are defined, only one of those events needs to occur to trigger the playbook.
 	// If multiple triggering events occur at the same time, multiple playbook runs will be triggered.
-	On *PlaybookEvent `json:"on,omitempty" yaml:"on,omitempty"`
+	On *PlaybookTrigger `json:"on,omitempty" yaml:"on,omitempty"`
 
 	// Permissions ...
 	Permissions []Permission `json:"permissions,omitempty" yaml:"permissions,omitempty"`

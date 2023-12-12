@@ -151,7 +151,7 @@ func logToJobHistory(ctx context.Context, playbookID, err string) {
 
 // matchResource returns true if any one of the matchFilter is true
 // for the given labels and cel env.
-func matchResource(labels map[string]string, celEnv map[string]any, matchFilters []v1.PlaybookEventDetail) (bool, error) {
+func matchResource(labels map[string]string, celEnv map[string]any, matchFilters []v1.PlaybookTriggerEvent) (bool, error) {
 outer:
 	for _, mf := range matchFilters {
 		if mf.Filter != "" {
