@@ -61,6 +61,10 @@ spec:
                         required:
                         - key
                         type: object
+                      serviceAccount:
+                        description: ServiceAccount specifies the service account
+                          whose token should be fetched
+                        type: string
                     type: object
                 type: object
               insecure_tls:
@@ -91,6 +95,10 @@ spec:
                         required:
                         - key
                         type: object
+                      serviceAccount:
+                        description: ServiceAccount specifies the service account
+                          whose token should be fetched
+                        type: string
                     type: object
                 type: object
               port:
@@ -119,6 +127,10 @@ spec:
                         required:
                         - key
                         type: object
+                      serviceAccount:
+                        description: ServiceAccount specifies the service account
+                          whose token should be fetched
+                        type: string
                     type: object
                 type: object
               properties:
@@ -155,6 +167,10 @@ spec:
                         required:
                         - key
                         type: object
+                      serviceAccount:
+                        description: ServiceAccount specifies the service account
+                          whose token should be fetched
+                        type: string
                     type: object
                 type: object
               username:
@@ -183,6 +199,10 @@ spec:
                         required:
                         - key
                         type: object
+                      serviceAccount:
+                        description: ServiceAccount specifies the service account
+                          whose token should be fetched
+                        type: string
                     type: object
                 type: object
             type: object

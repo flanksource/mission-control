@@ -229,13 +229,13 @@ func (t *GitOps) modifyFiles(ctx context.Context, action v1.GitOpsAction) error 
 			case "$delete":
 				t.logs = append(t.logs, fmt.Sprintf("Deleting file %s", relativePath))
 				if _, err := t.workTree.Remove(relativePath); err != nil {
-					return err
+					return fmt.Errorf("failed to delete file(%s): %w", relativePath, err)
 				}
 
 			default:
 				t.logs = append(t.logs, fmt.Sprintf("Creating file %s", relativePath))
 				if err := os.WriteFile(path, []byte(f.Content), os.ModePerm); err != nil {
-					return err
+					return fmt.Errorf("failed to create file(%s): %w", relativePath, err)
 				}
 
 				if _, err := t.workTree.Add(relativePath); err != nil {

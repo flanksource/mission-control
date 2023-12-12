@@ -162,7 +162,7 @@ func (git GitCheckout) GetCertificate() types.EnvVar {
 }
 
 type ExecAction struct {
-	// Script can be a inline script or a path to a script that needs to be executed
+	// Script can be an inline script or a path to a script that needs to be executed
 	// On windows executed via powershell and in darwin and linux executed using bash
 	Script      string          `yaml:"script" json:"script"`
 	Connections ExecConnections `yaml:"connections,omitempty" json:"connections,omitempty"`

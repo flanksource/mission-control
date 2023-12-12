@@ -27,13 +27,15 @@ var _ = ginkgo.Describe("Should save playbook run on the correct event", ginkgo.
 	ginkgo.It("should create a new playbook", func() {
 		playbookSpec := v1.PlaybookSpec{
 			Description: "write unhealthy component's name to a file",
-			On: &v1.PlaybookEvent{
-				Component: []v1.PlaybookEventDetail{
-					{
-						Filter: "component.type == 'Entity'",
-						Event:  "unhealthy",
-						Labels: map[string]string{
-							"telemetry": "enabled",
+			On: &v1.PlaybookTrigger{
+				PlaybookTriggerEvents: v1.PlaybookTriggerEvents{
+					Component: []v1.PlaybookTriggerEvent{
+						{
+							Filter: "component.type == 'Entity'",
+							Event:  "unhealthy",
+							Labels: map[string]string{
+								"telemetry": "enabled",
+							},
 						},
 					},
 				},
@@ -103,7 +105,7 @@ func Test_matchResource(t *testing.T) {
 	type args struct {
 		labels        map[string]string
 		eventResource EventResource
-		matchFilters  []v1.PlaybookEventDetail
+		matchFilters  []v1.PlaybookTriggerEvent
 	}
 	tests := []struct {
 		name    string
@@ -122,7 +124,7 @@ func Test_matchResource(t *testing.T) {
 						Type: "Entity",
 					},
 				},
-				matchFilters: []v1.PlaybookEventDetail{{Filter: "component.type == 'Entity'"}},
+				matchFilters: []v1.PlaybookTriggerEvent{{Filter: "component.type == 'Entity'"}},
 			},
 			want:    true,
 			wantErr: false,
@@ -135,7 +137,7 @@ func Test_matchResource(t *testing.T) {
 						Type: "Database",
 					},
 				},
-				matchFilters: []v1.PlaybookEventDetail{{Filter: "component.type == 'Entity'"}},
+				matchFilters: []v1.PlaybookTriggerEvent{{Filter: "component.type == 'Entity'"}},
 			},
 			want:    false,
 			wantErr: false,
@@ -147,7 +149,7 @@ func Test_matchResource(t *testing.T) {
 					"telemetry": "enabled",
 				},
 				eventResource: EventResource{},
-				matchFilters: []v1.PlaybookEventDetail{
+				matchFilters: []v1.PlaybookTriggerEvent{
 					{
 						Labels: map[string]string{
 							"telemetry": "enabled",
@@ -165,7 +167,7 @@ func Test_matchResource(t *testing.T) {
 					"telemetry": "enabled",
 				},
 				eventResource: EventResource{},
-				matchFilters: []v1.PlaybookEventDetail{
+				matchFilters: []v1.PlaybookTriggerEvent{
 					{
 						Labels: map[string]string{
 							"telemetry": "enabled",
@@ -188,7 +190,7 @@ func Test_matchResource(t *testing.T) {
 						Type: "http",
 					},
 				},
-				matchFilters: []v1.PlaybookEventDetail{
+				matchFilters: []v1.PlaybookTriggerEvent{
 					{
 						Labels: map[string]string{
 							"telemetry": "enabled",
@@ -211,7 +213,7 @@ func Test_matchResource(t *testing.T) {
 						Type: "http",
 					},
 				},
-				matchFilters: []v1.PlaybookEventDetail{
+				matchFilters: []v1.PlaybookTriggerEvent{
 					{
 						Labels: map[string]string{
 							"telemetry": "enabled",
@@ -239,7 +241,7 @@ func Test_matchResource(t *testing.T) {
 						},
 					},
 				},
-				matchFilters: []v1.PlaybookEventDetail{
+				matchFilters: []v1.PlaybookTriggerEvent{
 					{
 						Labels: map[string]string{
 							"telemetry": "enabled",
@@ -266,7 +268,7 @@ func Test_matchResource(t *testing.T) {
 						},
 					},
 				},
-				matchFilters: []v1.PlaybookEventDetail{
+				matchFilters: []v1.PlaybookTriggerEvent{
 					{Filter: "summary.uptime.failed > 15"},
 				},
 			},
@@ -286,7 +288,7 @@ func Test_matchResource(t *testing.T) {
 						},
 					},
 				},
-				matchFilters: []v1.PlaybookEventDetail{
+				matchFilters: []v1.PlaybookTriggerEvent{
 					{Filter: "check.type"},
 				},
 			},
