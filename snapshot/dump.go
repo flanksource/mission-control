@@ -136,7 +136,7 @@ func dumpConfigs(ctx SnapshotContext, configIDs []string) error {
 
 func dumpLogs(ctx SnapshotContext, componentIDs []string) error {
 	for _, componentID := range componentIDs {
-		logResult, err := components.GetLogsByComponent(componentID, ctx.LogStart, ctx.LogEnd)
+		logResult, err := components.GetLogsByComponent(ctx.Context, componentID, ctx.LogStart, ctx.LogEnd)
 		if err != nil {
 			return err
 		}

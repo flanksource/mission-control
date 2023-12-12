@@ -5,6 +5,7 @@ import (
 
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/job"
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
@@ -13,9 +14,9 @@ import (
 	"github.com/flanksource/incident-commander/db"
 )
 
-func getRootHypothesisOfIncident(incidentID uuid.UUID) (api.Hypothesis, error) {
+func getRootHypothesisOfIncident(ctx context.Context, incidentID uuid.UUID) (api.Hypothesis, error) {
 	var hypothesis api.Hypothesis
-	if err := db.Gorm.Where("incident_id = ? AND type = ?", incidentID, "root").First(&hypothesis).Error; err != nil {
+	if err := ctx.DB().Where("incident_id = ? AND type = ?", incidentID, "root").First(&hypothesis).Error; err != nil {
 		return hypothesis, err
 	}
 	return hypothesis, nil
@@ -61,7 +62,7 @@ func SyncComments(ctx job.JobRuntime) error {
 
 		// Query all external_ids from comments and comment_responders table
 		var dbExternalIDs []string
-		err = db.Gorm.Raw(dbSelectExternalIDQuery, sql.Named("responder_id", responder.ID)).Find(&dbExternalIDs).Error
+		err = ctx.Context.DB().Raw(dbSelectExternalIDQuery, sql.Named("responder_id", responder.ID)).Find(&dbExternalIDs).Error
 		if err != nil {
 			logger.Errorf("Error querying external_ids from database: %v", err)
 			jobHistory.AddError(err.Error())
@@ -71,7 +72,7 @@ func SyncComments(ctx job.JobRuntime) error {
 		// IDs which are in Jira but not added to database must be added in the comments table
 		for _, responderComment := range comments {
 			if !collections.Contains(dbExternalIDs, responderComment.ExternalID) {
-				rootHypothesis, err := getRootHypothesisOfIncident(responder.IncidentID)
+				rootHypothesis, err := getRootHypothesisOfIncident(ctx.Context, responder.IncidentID)
 				if err != nil {
 					logger.Errorf("Error fetching hypothesis from database: %v", err)
 					continue
@@ -81,7 +82,7 @@ func SyncComments(ctx job.JobRuntime) error {
 				responderComment.ResponderID = &responder.ID
 				responderComment.HypothesisID = &rootHypothesis.ID
 
-				err = db.Gorm.Create(&responderComment).Error
+				err = ctx.Context.DB().Create(&responderComment).Error
 				if err != nil {
 					logger.Errorf("Error inserting comment in database: %v", err)
 					continue

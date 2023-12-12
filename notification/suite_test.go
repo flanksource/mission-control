@@ -1,6 +1,7 @@
 package notification_test
 
 import (
+	gocontext "context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -11,7 +12,9 @@ import (
 	embeddedPG "github.com/fergusstrange/embedded-postgres"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/testutils"
+	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -86,6 +89,7 @@ var _ = ginkgo.BeforeSuite(func() {
 		ginkgo.Fail(err.Error())
 	}
 
+	api.DefaultContext = context.NewContext(gocontext.Background()).WithDB(db.Gorm, db.Pool)
 	setupWebhookServer()
 })
 
