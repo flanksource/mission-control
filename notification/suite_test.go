@@ -15,7 +15,6 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/testutils"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/db"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -85,11 +84,12 @@ var _ = ginkgo.BeforeSuite(func() {
 	}
 	logger.Infof("Started postgres on port: %d", port)
 
-	if db.Gorm, db.Pool, err = duty.SetupDB(connection, nil); err != nil {
+	dbGorm, dbPool, err := duty.SetupDB(connection, nil)
+	if err != nil {
 		ginkgo.Fail(err.Error())
 	}
 
-	api.DefaultContext = context.NewContext(gocontext.Background()).WithDB(db.Gorm, db.Pool)
+	api.DefaultContext = context.NewContext(gocontext.Background()).WithDB(dbGorm, dbPool)
 	setupWebhookServer()
 })
 

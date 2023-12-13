@@ -9,14 +9,15 @@ import (
 
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/template"
-	"github.com/flanksource/duty"
+	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/db"
 	"github.com/labstack/echo/v4"
 )
 
 func LogsHandler(c echo.Context) error {
+	ctx := c.Request().Context().(context.Context)
 	var reqData struct {
 		ID     string            `json:"id"`
 		Name   string            `json:"name"`
@@ -36,7 +37,7 @@ func LogsHandler(c echo.Context) error {
 		})
 	}
 
-	component, err := duty.GetComponent(c.Request().Context(), db.Gorm, reqData.ID)
+	component, err := query.GetComponent(ctx, reqData.ID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{
 			Error:   err.Error(),

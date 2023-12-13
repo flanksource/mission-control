@@ -10,7 +10,6 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/db"
 	dbModels "github.com/flanksource/incident-commander/db/models"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/google/uuid"
@@ -112,7 +111,7 @@ var _ = ginkgo.Describe("Test Notification on incident creation", ginkgo.Ordered
 		sendHandler, err := events.NewNotificationSendConsumerAsync().EventConsumer()
 		Expect(err).NotTo(HaveOccurred())
 
-		ctx := context.NewContext(gocontext.Background()).WithDB(api.DefaultContext.DB(), db.Pool)
+		ctx := context.NewContext(gocontext.Background()).WithDB(api.DefaultContext.DB(), api.DefaultContext.Pool())
 
 		// Order of consumption is important as incident.create event
 		// produces a notification.send event
