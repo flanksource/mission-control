@@ -171,7 +171,7 @@ func Test_authenticateWebhook(t *testing.T) {
 				},
 				auth: &v1.PlaybookEventWebhookAuth{
 					JWT: &v1.PlaybookEventWebhookAuthJWT{
-						JWKSURI: "https://raw.githubusercontent.com/MicahParks/keyfunc/master/example_jwks.json",
+						JWKSURI: "https://raw.githubusercontent.com/MicahParks/keyfunc/ab22bfcd9495ed15e4b341c8490a296231ee1be1/example_jwks.json",
 					},
 				},
 			},
