@@ -23,6 +23,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"k8s.io/client-go/kubernetes/fake"
 )
 
@@ -39,7 +40,10 @@ func PreRun(cmd *cobra.Command, args []string) {
 	}
 
 	if otelcollectorURL != "" {
-		telemetry.InitTracer(otelServiceName, otelcollectorURL, true)
+		resourceAttrs := []attribute.KeyValue{
+			attribute.String("org.id", clerkOrgID),
+		}
+		telemetry.InitTracer(otelServiceName, otelcollectorURL, true, resourceAttrs)
 	}
 
 	api.DefaultContext = context.NewContext(gocontext.Background(), commonsCtx.WithTracer(otel.GetTracerProvider().Tracer("global"))).
