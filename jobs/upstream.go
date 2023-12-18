@@ -45,7 +45,6 @@ func SyncWithUpstream(ctx job.JobRuntime) error {
 }
 
 func reconcileTable(ctx context.Context, table string) error {
-	//newCtx, span := ctx.StartTrace("job-tracer", fmt.Sprintf("reconcile-%s", table))
 	var span trace.Span
 	ctx, span = ctx.StartSpan(fmt.Sprintf("reconcile-%s", table))
 	defer span.End()
