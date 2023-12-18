@@ -1,0 +1,19 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: archive-pod-logs
+spec:
+  description: Grab the latest 100 lines of etcd logs
+  components:
+    - type: KubernetesPod
+      tags:
+        component: etcd
+  actions:
+    - name: 'etcd logs'
+      exec:
+        script: |
+          mkdir -p /tmp/kubectl-logs
+          kubectl logs --tail=100 -n kube-system etcd-kind-control-plane > /tmp/kubectl-logs/etcd-kind-control-plane
+          cat /tmp/kubectl-logs/etcd-kind-control-plane # cat so we see them in the playbooks action logs
+        artifacts:
+          - path: /tmp/kubectl-logs/*
