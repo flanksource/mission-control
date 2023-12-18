@@ -113,7 +113,9 @@ func Status(c echo.Context) error {
 	agent, err := db.FindAgent(ctx, agentName)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "failed to get agent"})
-	} else if agent == nil {
+	}
+
+	if agent == nil {
 		return c.JSON(http.StatusNotFound, api.HTTPError{Message: fmt.Sprintf("agent(name=%s) not found", agentName)})
 	}
 
