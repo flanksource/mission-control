@@ -105,8 +105,7 @@ func InsertUpstreamMsg(ctx context.Context, req *upstream.PushData) error {
 	}
 
 	if len(req.Checks) > 0 {
-		cols := []clause.Column{{Name: "canary_id"}, {Name: "type"}, {Name: "name"}, {Name: "agent_id"}}
-		if err := ctx.DB().Clauses(clause.OnConflict{UpdateAll: true, Columns: cols}).Create(req.Checks).Error; err != nil {
+		if err := ctx.DB().Clauses(clause.OnConflict{UpdateAll: true}).Create(req.Checks).Error; err != nil {
 			return fmt.Errorf("error upserting checks: %w", err)
 		}
 	}
