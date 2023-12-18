@@ -15,7 +15,7 @@ import (
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
-func InitTracer(serviceName, collectorURL string, insecure bool) func(context.Context) error {
+func InitTracer(serviceName, collectorURL string, insecure bool, resourceAttrs []attribute.KeyValue) func(context.Context) error {
 	var secureOption otlptracegrpc.Option
 	if !insecure {
 		secureOption = otlptracegrpc.WithTLSCredentials(credentials.NewClientTLSFromCert(nil, ""))
@@ -34,10 +34,11 @@ func InitTracer(serviceName, collectorURL string, insecure bool) func(context.Co
 	if err != nil {
 		logger.Fatalf("Failed to create exporter: %v", err)
 	}
+
 	resources, err := resource.New(
 		context.Background(),
 		resource.WithAttributes(
-			attribute.String("service.name", serviceName),
+			append(resourceAttrs, attribute.String("service.name", serviceName))...,
 		),
 	)
 	if err != nil {
