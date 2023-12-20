@@ -12,7 +12,7 @@ require (
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.24.0
 	github.com/flanksource/commons v1.19.2
-	github.com/flanksource/duty v1.0.241
+	github.com/flanksource/duty v1.0.242
 	github.com/flanksource/gomplate/v3 v3.20.29
 	github.com/flanksource/kopper v1.0.6
 	github.com/flanksource/postq v0.1.2
@@ -42,7 +42,7 @@ require (
 
 require (
 	github.com/MicahParks/keyfunc/v2 v2.1.0
-	github.com/flanksource/artifacts v1.0.0
+	github.com/flanksource/artifacts v1.0.1
 	github.com/fluxcd/pkg/gittestserver v0.8.6
 	github.com/go-git/go-billy/v5 v5.5.0
 	github.com/go-git/go-git/v5 v5.10.0
