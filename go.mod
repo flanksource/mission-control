@@ -12,7 +12,7 @@ require (
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.24.0
 	github.com/flanksource/commons v1.19.2
-	github.com/flanksource/duty v1.0.241
+	github.com/flanksource/duty v1.0.247
 	github.com/flanksource/gomplate/v3 v3.20.29
 	github.com/flanksource/kopper v1.0.6
 	github.com/flanksource/postq v0.1.2
@@ -42,7 +42,7 @@ require (
 
 require (
 	github.com/MicahParks/keyfunc/v2 v2.1.0
-	github.com/flanksource/artifacts v1.0.0
+	github.com/flanksource/artifacts v1.0.3
 	github.com/fluxcd/pkg/gittestserver v0.8.6
 	github.com/go-git/go-billy/v5 v5.5.0
 	github.com/go-git/go-git/v5 v5.10.0
@@ -168,6 +168,7 @@ require (
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/robertkrimen/otto v0.2.1 // indirect
 	github.com/rogpeppe/go-internal v1.11.0 // indirect
+	github.com/samber/lo v1.39.0 // indirect
 	github.com/sergi/go-diff v1.3.1 // indirect
 	github.com/sethvargo/go-retry v0.2.4 // indirect
 	github.com/shurcooL/githubv4 v0.0.0-20190718010115-4ba037080260 // indirect

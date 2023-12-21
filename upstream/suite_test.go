@@ -12,6 +12,7 @@ import (
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/testutils"
 	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
@@ -45,6 +46,7 @@ var (
 	upstreamDBName = "upstream"
 	upstreamDB     *gorm.DB
 	upstreamPool   *pgxpool.Pool
+	dummyDataset   dummy.DummyData
 )
 
 var _ = ginkgo.BeforeSuite(func() {
@@ -59,6 +61,7 @@ var _ = ginkgo.BeforeSuite(func() {
 	if agentDB, agentDBPGPool, err = duty.SetupDB(connection, nil); err != nil {
 		ginkgo.Fail(err.Error())
 	}
+	dummyDataset = dummy.GetStaticDummyData(agentDB)
 
 	_, err = agentDBPGPool.Exec(gocontext.TODO(), fmt.Sprintf("CREATE DATABASE %s", upstreamDBName))
 	Expect(err).NotTo(HaveOccurred())

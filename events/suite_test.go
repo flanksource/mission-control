@@ -30,11 +30,12 @@ func TestEvents(t *testing.T) {
 }
 
 type agentWrapper struct {
-	id      uuid.UUID // agent's id in the upstream db
-	name    string
-	db      *gorm.DB
-	pool    *pgxpool.Pool
-	dataset dummy.DummyData
+	id          uuid.UUID // agent's id in the upstream db
+	name        string
+	db          *gorm.DB
+	pool        *pgxpool.Pool
+	datasetFunc func(*gorm.DB) dummy.DummyData
+	dataset     dummy.DummyData
 }
 
 func (t *agentWrapper) setup(connection string) {
@@ -44,6 +45,7 @@ func (t *agentWrapper) setup(connection string) {
 		ginkgo.Fail(err.Error())
 	}
 
+	t.dataset = t.datasetFunc(t.db)
 	if err := t.dataset.Populate(t.db); err != nil {
 		ginkgo.Fail(err.Error())
 	}
@@ -61,9 +63,9 @@ var (
 	upstreamEchoServerport = 11005
 	upstreamEchoServer     *echo.Echo
 
-	agentBob   = agentWrapper{name: "bob", id: uuid.New(), dataset: dummy.GenerateDynamicDummyData()}
-	agentJames = agentWrapper{name: "james", id: uuid.New(), dataset: dummy.GenerateDynamicDummyData()}
-	agentRoss  = agentWrapper{name: "ross", id: uuid.New(), dataset: dummy.GenerateDynamicDummyData()}
+	agentBob   = agentWrapper{name: "bob", id: uuid.New(), datasetFunc: dummy.GenerateDynamicDummyData}
+	agentJames = agentWrapper{name: "james", id: uuid.New(), datasetFunc: dummy.GenerateDynamicDummyData}
+	agentRoss  = agentWrapper{name: "ross", id: uuid.New(), datasetFunc: dummy.GenerateDynamicDummyData}
 
 	playbookDB     *gorm.DB
 	playbookDBPool *pgxpool.Pool

@@ -19,7 +19,7 @@ var _ = ginkgo.Describe("Should save playbook run on the correct event", ginkgo.
 	var playbook models.Playbook
 
 	ginkgo.It("should store dummy data", func() {
-		dataset := dummy.GetStaticDummyData()
+		dataset := dummy.GetStaticDummyData(playbookDB)
 		err := dataset.Populate(playbookDB)
 		Expect(err).NotTo(HaveOccurred())
 	})

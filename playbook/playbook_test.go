@@ -36,7 +36,7 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 	)
 
 	ginkgo.It("should store dummy data", func() {
-		dataset := dummy.GetStaticDummyData()
+		dataset := dummy.GetStaticDummyData(testDB)
 		err := dataset.Populate(testDB)
 		Expect(err).NotTo(HaveOccurred())
 	})
