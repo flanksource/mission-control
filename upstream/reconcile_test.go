@@ -7,7 +7,6 @@ import (
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
@@ -21,7 +20,6 @@ import (
 
 var _ = ginkgo.Describe("Push Mode reconcilation", ginkgo.Ordered, func() {
 	const randomConfigItemCount = 2000 // keep it below 5k (must be set w.r.t the page size)
-	dummyDataset := dummy.GetStaticDummyData()
 
 	ginkgo.It("should populate the agent database with the 6 tables that are reconciled", func() {
 		err := dummyDataset.Populate(agentDB)

@@ -63,12 +63,13 @@ func SyncCheckStatuses(ctx job.JobRuntime) error {
 		_ = db.PersistJobHistory(ctx.Context, jobHistory.End())
 	}()
 
-	if err := upstream.SyncCheckStatuses(ctx.Context, api.UpstreamConf, ReconcilePageSize); err != nil {
+	err, count := upstream.SyncCheckStatuses(ctx.Context, api.UpstreamConf, ReconcilePageSize)
+	if err != nil {
 		logger.Errorf("failed to run checkstatus sync job: %v", err)
 		jobHistory.AddError(err.Error())
 		return err
 	}
 
-	jobHistory.IncrSuccess()
+	jobHistory.SuccessCount += count
 	return nil
 }
