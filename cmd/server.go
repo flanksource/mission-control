@@ -290,7 +290,9 @@ var Serve = &cobra.Command{
 
 		go playbook.ListenPlaybookPGNotify(api.DefaultContext)
 
-		go launchKopper()
+		if !disableKubernetes {
+			go launchKopper()
+		}
 
 		e := createHTTPServer(api.DefaultContext)
 		listenAddr := fmt.Sprintf(":%d", httpPort)
