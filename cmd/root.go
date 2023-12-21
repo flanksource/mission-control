@@ -70,11 +70,16 @@ var Root = &cobra.Command{
 	},
 }
 
-var dev bool
-var httpPort, metricsPort, devGuiPort int
-var configDb, authMode, kratosAPI, kratosAdminAPI, postgrestURI string
-var clerkJWKSURL, clerkOrgID string
-var disablePostgrest bool
+var (
+	dev                                                         bool
+	httpPort, metricsPort, devGuiPort                           int
+	configDb, authMode, kratosAPI, kratosAdminAPI, postgrestURI string
+	clerkJWKSURL, clerkOrgID                                    string
+	disablePostgrest                                            bool
+
+	// disableKubernetes is used to run mission-control on a non-operator mode.
+	disableKubernetes bool
+)
 
 // Telemetry flag vars
 var (
@@ -99,6 +104,7 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&authMode, "auth", "", "Enable authentication via Kratos or Clerk. Valid values are [kratos, clerk]")
 	flags.DurationVar(&rules.Period, "rules-period", 5*time.Minute, "Period to run the rules")
 	flags.BoolVar(&disablePostgrest, "disable-postgrest", false, "Disable PostgREST. Deprecated (Use --postgrest-uri '' to disable PostgREST)")
+	flags.BoolVar(&disableKubernetes, "disable-kubernetes", false, "Disable Kubernetes (non-operator mode)")
 	flags.StringVar(&mail.FromAddress, "email-from-address", "no-reply@flanksource.com", "Email address of the sender")
 	flags.StringVar(&mail.FromName, "email-from-name", "Mission Control", "Email name of the sender")
 	flags.StringVar(&db.PostgresDBAnonRole, "postgrest-anon-role", "postgrest_anon", "PostgREST anonymous role")
