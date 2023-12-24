@@ -203,7 +203,7 @@ func createHTTPServer(ctx context.Context) *echo.Echo {
 	return e
 }
 
-func launchKopper() {
+func launchKopper(ctx context.Context) {
 	mgr, err := kopper.Manager(&kopper.ManagerOptions{
 		AddToSchemeFunc: v1.AddToScheme,
 	})
@@ -212,6 +212,7 @@ func launchKopper() {
 	}
 
 	if err = kopper.SetupReconciler(
+		ctx,
 		mgr,
 		db.PersistConnectionFromCRD,
 		db.DeleteConnection,
@@ -221,6 +222,7 @@ func launchKopper() {
 	}
 
 	if err = kopper.SetupReconciler(
+		ctx,
 		mgr,
 		db.PersistIncidentRuleFromCRD,
 		db.DeleteIncidentRule,
@@ -230,6 +232,7 @@ func launchKopper() {
 	}
 
 	if err = kopper.SetupReconciler(
+		ctx,
 		mgr,
 		db.PersistPlaybookFromCRD,
 		db.DeletePlaybook,
@@ -239,6 +242,7 @@ func launchKopper() {
 	}
 
 	if err = kopper.SetupReconciler(
+		ctx,
 		mgr,
 		db.PersistNotificationFromCRD,
 		db.DeleteNotification,
@@ -246,7 +250,6 @@ func launchKopper() {
 	); err != nil {
 		logger.Fatalf("Unable to create controller for Notification: %v", err)
 	}
-
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		logger.Fatalf("error running manager: %v", err)
 	}
@@ -291,7 +294,7 @@ var Serve = &cobra.Command{
 		go playbook.ListenPlaybookPGNotify(api.DefaultContext)
 
 		if !disableKubernetes {
-			go launchKopper()
+			go launchKopper(api.DefaultContext)
 		}
 
 		e := createHTTPServer(api.DefaultContext)
