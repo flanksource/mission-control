@@ -97,8 +97,10 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 			return next(c)
 		}
 
+		ctx := c.Request().Context().(context.Context)
 		session, err := k.validateSession(c.Request())
 		if err != nil {
+			ctx.GetSpan().RecordError(err)
 			if errors.Is(err, errInvalidTokenFormat) {
 				return c.String(http.StatusBadRequest, "invalid access token")
 			} else if errors.Is(err, errTokenExpired) {
@@ -112,7 +114,6 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 			return c.String(http.StatusUnauthorized, "Unauthorized")
 		}
 
-		ctx := c.Request().Context().(context.Context)
 		token, err := getDBToken(ctx, k.tokenCache, k.jwtSecret, session.Id, session.Identity.GetId())
 		if err != nil {
 			logger.Errorf("Error generating JWT Token: %v", err)
@@ -130,11 +131,13 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 
 		uid, err := uuid.Parse(session.Identity.GetId())
 		if err != nil {
+			ctx.GetSpan().RecordError(err)
 			return c.String(http.StatusUnauthorized, "Unauthorized")
 		}
 
 		if IdentityRoleMapper != "" {
 			if err := mapIDsToRoles(ctx, session, uid); err != nil {
+				ctx.GetSpan().RecordError(err)
 				logger.Errorf("error mapping ids to roles: %v", err)
 			}
 		}
