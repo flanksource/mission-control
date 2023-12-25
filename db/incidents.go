@@ -36,7 +36,7 @@ func ReconcileIncidentStatus(ctx context.Context, incidentIDs []uuid.UUID) error
     `, incidentIDs).Error
 }
 
-func PersistIncidentRuleFromCRD(obj *v1.IncidentRule) error {
+func PersistIncidentRuleFromCRD(ctx context.Context, obj *v1.IncidentRule) error {
 	dbObj := api.IncidentRule{
 		ID:        uuid.MustParse(string(obj.GetUID())),
 		Name:      obj.Name,
@@ -48,11 +48,11 @@ func PersistIncidentRuleFromCRD(obj *v1.IncidentRule) error {
 		CreatedAt: time.Now(),
 	}
 
-	return Gorm.Save(&dbObj).Error
+	return ctx.DB().Save(&dbObj).Error
 }
 
-func DeleteIncidentRule(id string) error {
-	return Gorm.Table("incident_rules").
+func DeleteIncidentRule(ctx context.Context, id string) error {
+	return ctx.DB().Table("incident_rules").
 		Delete(&api.IncidentRule{}, "id = ?", id).
 		Error
 }

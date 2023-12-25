@@ -12,8 +12,7 @@ import (
 	"github.com/google/uuid"
 )
 
-func PersistNotificationFromCRD(obj *v1.Notification) error {
-	ctx := api.DefaultContext
+func PersistNotificationFromCRD(ctx context.Context, obj *v1.Notification) error {
 	uid, err := uuid.Parse(string(obj.GetUID()))
 	if err != nil {
 		return err
@@ -74,11 +73,11 @@ func PersistNotificationFromCRD(obj *v1.Notification) error {
 		dbObj.CustomServices = customServices
 	}
 
-	return Gorm.Save(&dbObj).Error
+	return ctx.DB().Save(&dbObj).Error
 }
 
-func DeleteNotification(id string) error {
-	return Gorm.Delete(&models.Notification{}, "id = ?", id).Error
+func DeleteNotification(ctx context.Context, id string) error {
+	return ctx.DB().Delete(&models.Notification{}, "id = ?", id).Error
 }
 
 func UpdateNotificationError(id string, err string) error {

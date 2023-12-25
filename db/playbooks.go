@@ -1,7 +1,6 @@
 package db
 
 import (
-	gocontext "context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -162,17 +161,16 @@ func FindPlaybookByWebhookPath(ctx context.Context, path string) (*models.Playbo
 	return &p, nil
 }
 
-func PersistPlaybookFromCRD(obj *v1.Playbook) error {
+func PersistPlaybookFromCRD(ctx context.Context, obj *v1.Playbook) error {
 	specJSON, err := json.Marshal(obj.Spec)
 	if err != nil {
 		return err
 	}
 
-	tx := Gorm.Begin()
+	tx := ctx.DB().Begin()
 	defer tx.Rollback()
 
 	if obj.Spec.On != nil && obj.Spec.On.Webhook != nil && obj.Spec.On.Webhook.Path != "" {
-		ctx := context.NewContext(gocontext.TODO()).WithDB(tx, nil)
 		playbook, err := FindPlaybookByWebhookPath(ctx, obj.Spec.On.Webhook.Path)
 		if err != nil {
 			return err
@@ -199,8 +197,8 @@ func PersistPlaybookFromCRD(obj *v1.Playbook) error {
 	return tx.Commit().Error
 }
 
-func DeletePlaybook(id string) error {
-	return Gorm.Delete(&models.Playbook{}, "id = ?", id).Error
+func DeletePlaybook(ctx context.Context, id string) error {
+	return ctx.DB().Delete(&models.Playbook{}, "id = ?", id).Error
 }
 
 // UpdatePlaybookRunStatusIfApproved updates the status of the playbook run to "pending"
