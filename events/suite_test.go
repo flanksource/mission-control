@@ -13,7 +13,7 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
-	"github.com/flanksource/duty/testutils"
+	"github.com/flanksource/duty/tests/setup"
 	"github.com/google/uuid"
 
 	"github.com/flanksource/incident-commander/upstream"
@@ -76,7 +76,7 @@ var (
 )
 
 var _ = ginkgo.BeforeSuite(func() {
-	config, connection := testutils.GetEmbeddedPGConfig(agentBob.name, pgServerPort)
+	config, connection := setup.GetEmbeddedPGConfig(agentBob.name, pgServerPort)
 	postgresServer = embeddedPG.NewDatabase(config)
 	if err := postgresServer.Start(); err != nil {
 		ginkgo.Fail(err.Error())
