@@ -32,6 +32,10 @@ func PreRun(cmd *cobra.Command, args []string) {
 		logger.Fatalf("Failed to initialize the db: %v", err)
 	}
 
+	if api.UpstreamConf.IsPartiallyFilled() {
+		logger.Warnf("Please ensure that all the required flags for upstream is supplied.")
+	}
+
 	var err error
 	api.Kubernetes, err = k8s.NewClient()
 	if err != nil {
@@ -40,8 +44,9 @@ func PreRun(cmd *cobra.Command, args []string) {
 	}
 
 	if otelcollectorURL != "" {
-		resourceAttrs := []attribute.KeyValue{
-			attribute.String("org.id", clerkOrgID),
+		resourceAttrs := []attribute.KeyValue{}
+		if auth.AuthMode == auth.Clerk && auth.ClerkOrgID != "" {
+			resourceAttrs = append(resourceAttrs, attribute.String("org.id", auth.ClerkOrgID))
 		}
 		telemetry.InitTracer(otelServiceName, otelcollectorURL, true, resourceAttrs)
 	}
@@ -71,18 +76,15 @@ var Root = &cobra.Command{
 }
 
 var (
-	dev                                                         bool
-	httpPort, metricsPort, devGuiPort                           int
-	configDb, authMode, kratosAPI, kratosAdminAPI, postgrestURI string
-	clerkJWKSURL, clerkOrgID                                    string
-	disablePostgrest                                            bool
+	dev                               bool
+	httpPort, metricsPort, devGuiPort int
+	configDb, postgrestURI            string
+	disablePostgrest                  bool
 
 	// disableKubernetes is used to run mission-control on a non-operator mode.
 	disableKubernetes bool
-)
 
-// Telemetry flag vars
-var (
+	// Telemetry flag vars
 	otelcollectorURL string
 	otelServiceName  string
 )
@@ -96,12 +98,12 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&api.PublicWebURL, "public-endpoint", "http://localhost:3000", "Public endpoint this instance is exposed under")
 	flags.StringVar(&api.ApmHubPath, "apm-hub", "http://apm-hub:8080", "APM Hub URL")
 	flags.StringVar(&configDb, "config-db", "http://config-db:8080", "Config DB URL")
-	flags.StringVar(&kratosAPI, "kratos-api", "http://kratos-public:80", "Kratos API service")
-	flags.StringVar(&kratosAdminAPI, "kratos-admin", "http://kratos-admin:80", "Kratos Admin API service")
-	flags.StringVar(&clerkJWKSURL, "clerk-jwks-url", "", "Clerk JWKS URL")
-	flags.StringVar(&clerkOrgID, "clerk-org-id", "", "Clerk Organization ID")
+	flags.StringVar(&auth.KratosAPI, "kratos-api", "http://kratos-public:80", "Kratos API service")
+	flags.StringVar(&auth.KratosAdminAPI, "kratos-admin", "http://kratos-admin:80", "Kratos Admin API service")
+	flags.StringVar(&auth.ClerkJWKSURL, "clerk-jwks-url", "", "Clerk JWKS URL")
+	flags.StringVar(&auth.ClerkOrgID, "clerk-org-id", "", "Clerk Organization ID")
 	flags.StringVar(&postgrestURI, "postgrest-uri", "http://localhost:3000", "URL for the PostgREST instance to use. If localhost is supplied, a PostgREST instance will be started")
-	flags.StringVar(&authMode, "auth", "", "Enable authentication via Kratos or Clerk. Valid values are [kratos, clerk]")
+	flags.StringVar(&auth.AuthMode, "auth", "", "Enable authentication via Kratos or Clerk. Valid values are [kratos, clerk]")
 	flags.DurationVar(&rules.Period, "rules-period", 5*time.Minute, "Period to run the rules")
 	flags.BoolVar(&disablePostgrest, "disable-postgrest", false, "Disable PostgREST. Deprecated (Use --postgrest-uri '' to disable PostgREST)")
 	flags.BoolVar(&disableKubernetes, "disable-kubernetes", false, "Disable Kubernetes (non-operator mode)")

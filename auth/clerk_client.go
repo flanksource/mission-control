@@ -23,6 +23,11 @@ const (
 	clerkSessionCookie = "__session"
 )
 
+var (
+	ClerkJWKSURL string
+	ClerkOrgID   string
+)
+
 type ClerkHandler struct {
 	dbJwtSecret string
 	jwksURL     string
