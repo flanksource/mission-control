@@ -4,13 +4,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/job"
-	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/db"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -23,58 +20,54 @@ var (
 
 // SyncWithUpstream coordinates with upstream and pushes any resource
 // that are missing on the upstream.
-func SyncWithUpstream(ctx job.JobRuntime) error {
-	logger.Debugf("running upstream reconcile job")
-
-	jobHistory := models.NewJobHistory("SyncWithUpstream", api.UpstreamConf.Host, "")
-	_ = db.PersistJobHistory(ctx.Context, jobHistory.Start())
-	defer func() {
-		_ = db.PersistJobHistory(ctx.Context, jobHistory.End())
-	}()
-
-	for _, table := range api.TablesToReconcile {
-		if err := reconcileTable(ctx.Context, table); err != nil {
-			jobHistory.AddError(err.Error())
-			logger.Errorf("failed to sync table %s: %v", table, err)
-		} else {
-			jobHistory.IncrSuccess()
+var SyncWithUpstream = &job.Job{
+	Name:       "SyncWithUpstream",
+	Schedule:   "@every 8h",
+	Retention:  job.Retention3Day,
+	JobHistory: true,
+	Fn: func(ctx job.JobRuntime) error {
+		ctx.History.ResourceType = "upstream"
+		ctx.History.ResourceID = api.UpstreamConf.Host
+		for _, table := range api.TablesToReconcile {
+			if count, err := reconcileTable(ctx.Context, table); err != nil {
+				ctx.History.AddError(err.Error())
+			} else {
+				ctx.History.SuccessCount += count
+			}
 		}
-	}
-
-	return nil
+		return nil
+	},
 }
 
-func reconcileTable(ctx context.Context, table string) error {
+func reconcileTable(ctx context.Context, table string) (int, error) {
 	var span trace.Span
 	ctx, span = ctx.StartSpan(fmt.Sprintf("reconcile-%s", table))
 	defer span.End()
-
 	reconciler := upstream.NewUpstreamReconciler(api.UpstreamConf, ReconcilePageSize)
 
 	count, err := reconciler.SyncAfter(ctx, table, ReconcileMaxAge)
 	if err != nil {
-		return err
+		return count, err
 	}
-	ctx.Tracef("upstream reconcile synced %s:%d resources", table, count)
-	return nil
+	ctx.Tracef("upstream reconcile synced %d resources for %s", count, table)
+	return count, err
 }
 
-func SyncCheckStatuses(ctx job.JobRuntime) error {
-	logger.Debugf("running check statuses sync job")
+var UpstreamJobs = []*job.Job{SyncWithUpstream, SyncCheckStatuses}
 
-	jobHistory := models.NewJobHistory("SyncCheckStatusesWithUpstream", api.UpstreamConf.Host, "")
-	_ = db.PersistJobHistory(ctx.Context, jobHistory.Start())
-	defer func() {
-		_ = db.PersistJobHistory(ctx.Context, jobHistory.End())
-	}()
-
-	err, count := upstream.SyncCheckStatuses(ctx.Context, api.UpstreamConf, ReconcilePageSize)
-	if err != nil {
-		logger.Errorf("failed to run checkstatus sync job: %v", err)
-		jobHistory.AddError(err.Error())
-		return err
-	}
-
-	jobHistory.SuccessCount += count
-	return nil
+var SyncCheckStatuses = &job.Job{
+	JobHistory: true,
+	Singleton:  true,
+	Retention:  job.RetentionHour,
+	Name:       "SyncCheckStatuses",
+	Schedule:   "@every 30s",
+	Fn: func(ctx job.JobRuntime) error {
+		ctx.History.ResourceType = "upstream"
+		ctx.History.ResourceID = api.UpstreamConf.Host
+		var err error
+		if err, ctx.History.SuccessCount = upstream.SyncCheckStatuses(ctx.Context, api.UpstreamConf, ReconcilePageSize); err != nil {
+			ctx.History.AddError(err.Error())
+		}
+		return nil
+	},
 }
