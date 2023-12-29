@@ -51,7 +51,12 @@ func reconcileTable(ctx context.Context, table string) error {
 
 	reconciler := upstream.NewUpstreamReconciler(api.UpstreamConf, ReconcilePageSize)
 
-	return reconciler.SyncAfter(ctx, table, ReconcileMaxAge)
+	count, err := reconciler.SyncAfter(ctx, table, ReconcileMaxAge)
+	if err != nil {
+		return err
+	}
+	ctx.Tracef("upstream reconcile synced %s:%d resources", table, count)
+	return nil
 }
 
 func SyncCheckStatuses(ctx job.JobRuntime) error {
