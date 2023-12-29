@@ -12,7 +12,7 @@ require (
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.25.0
 	github.com/flanksource/commons v1.19.3
-	github.com/flanksource/duty v1.0.263
+	github.com/flanksource/duty v1.0.264
 	github.com/flanksource/gomplate/v3 v3.20.29
 	github.com/flanksource/kopper v1.0.7
 	github.com/flanksource/postq v0.1.2
