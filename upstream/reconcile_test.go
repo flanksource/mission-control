@@ -36,6 +36,7 @@ var _ = ginkgo.Describe("Push Mode reconcilation", ginkgo.Ordered, func() {
 		Expect(agentDB.Create(&dummyConfigScraper).Error).To(BeNil(), "save config scraper")
 
 		// Agent must have all of dummy records
+		compareItemsCount[models.Topology](agentDB, len(dummyDataset.Topologies), "agent-Topology")
 		compareItemsCount[models.Component](agentDB, len(dummyDataset.Components), "agent-Component")
 		compareItemsCount[models.ConfigItem](agentDB, len(dummyDataset.Configs), "agent-ConfigItem")
 		compareItemsCount[models.ConfigScraper](agentDB, 1, "agent-ConfigScraper")
@@ -44,6 +45,7 @@ var _ = ginkgo.Describe("Push Mode reconcilation", ginkgo.Ordered, func() {
 		compareItemsCount[models.CheckStatus](agentDB, len(dummyDataset.CheckStatuses), "agent-CheckStatus")
 
 		// Upstream must have no records
+		compareItemsCount[models.Topology](upstreamDB, 0, "upstream-Topology")
 		compareItemsCount[models.Component](upstreamDB, 0, "upstream-Component")
 		compareItemsCount[models.ConfigItem](upstreamDB, 0, "upstream-ConfigItem")
 		compareItemsCount[models.ConfigScraper](upstreamDB, 0, "upstream-ConfigScraper")
