@@ -8,7 +8,7 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/testutils"
+	"github.com/flanksource/duty/tests/setup"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	ginkgo "github.com/onsi/ginkgo/v2"
@@ -27,7 +27,7 @@ var (
 var _ = ginkgo.BeforeSuite(func() {
 	var err error
 	port := 9881
-	config, connection := testutils.GetEmbeddedPGConfig("test", port)
+	config, connection := setup.GetEmbeddedPGConfig("test", port)
 	postgresServer = embeddedPG.NewDatabase(config)
 	if err := postgresServer.Start(); err != nil {
 		ginkgo.Fail(err.Error())
