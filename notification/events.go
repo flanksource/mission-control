@@ -1,289 +1,277 @@
 package notification
 
 import (
-	"encoding/json"
 	"fmt"
-	"net/url"
-	"time"
+	"strings"
 
-	"github.com/flanksource/commons/template"
-	"github.com/flanksource/commons/utils"
+	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/postq"
-	"github.com/google/uuid"
-
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/events"
+	"github.com/flanksource/incident-commander/incidents/responder"
 	"github.com/flanksource/incident-commander/logs"
-	"github.com/flanksource/incident-commander/teams"
 	"github.com/flanksource/incident-commander/utils/expression"
+	"github.com/flanksource/postq"
 )
 
-// List of all events that can create notifications ...
-const (
-	EventCheckPassed = "check.passed"
-	EventCheckFailed = "check.failed"
-
-	EventComponentStatusHealthy   = "component.status.healthy"
-	EventComponentStatusUnhealthy = "component.status.unhealthy"
-	EventComponentStatusInfo      = "component.status.info"
-	EventComponentStatusWarning   = "component.status.warning"
-	EventComponentStatusError     = "component.status.error"
-
-	EventIncidentCommentAdded        = "incident.comment.added"
-	EventIncidentCreated             = "incident.created"
-	EventIncidentDODAdded            = "incident.dod.added"
-	EventIncidentDODPassed           = "incident.dod.passed"
-	EventIncidentDODRegressed        = "incident.dod.regressed"
-	EventIncidentResponderAdded      = "incident.responder.added"
-	EventIncidentResponderRemoved    = "incident.responder.removed"
-	EventIncidentStatusCancelled     = "incident.status.cancelled"
-	EventIncidentStatusClosed        = "incident.status.closed"
-	EventIncidentStatusInvestigating = "incident.status.investigating"
-	EventIncidentStatusMitigated     = "incident.status.mitigated"
-	EventIncidentStatusOpen          = "incident.status.open"
-	EventIncidentStatusResolved      = "incident.status.resolved"
-)
-
-// List of all possible variables for any expression related to notifications
-var allEnvVars = []string{"check", "canary", "incident", "team", "responder", "comment", "evidence", "hypothesis"}
-
-// NotificationTemplate holds in data for notification
-// that'll be used by struct templater.
-type NotificationTemplate struct {
-	Title      string            `template:"true"`
-	Message    string            `template:"true"`
-	Properties map[string]string `template:"true"`
+func init() {
+	events.Register(RegisterEvents)
 }
 
-// NotificationEventPayload holds data to create a notification.
-type NotificationEventPayload struct {
-	ID               uuid.UUID  `json:"id"`                          // Resource id. depends what it is based on the original event.
-	EventName        string     `json:"event_name"`                  // The name of the original event this notification is for.
-	PersonID         *uuid.UUID `json:"person_id,omitempty"`         // The person recipient.
-	TeamID           string     `json:"team_id,omitempty"`           // The team recipient.
-	NotificationName string     `json:"notification_name,omitempty"` // Name of the notification of a team or a custom service of the notification.
-	NotificationID   uuid.UUID  `json:"notification_id,omitempty"`   // ID of the notification.
-	EventCreatedAt   time.Time  `json:"event_created_at"`            // Timestamp at which the original event was created
+func RegisterEvents(ctx context.Context) {
+	events.RegisterSyncHandler(addNotificationEvent, append(api.EventStatusGroup, api.EventIncidentGroup...)...)
+	events.RegisterAsyncHandler(sendNotifications, 1, 5, api.EventNotificationSend)
+
 }
 
-func (t *NotificationEventPayload) AsMap() map[string]string {
-	m := make(map[string]string)
-	b, _ := json.Marshal(&t)
-	_ = json.Unmarshal(b, &m)
-	return m
-}
-
-func (t *NotificationEventPayload) FromMap(m map[string]string) {
-	b, _ := json.Marshal(m)
-	_ = json.Unmarshal(b, &t)
-}
-
-// SendNotification generates the notification from the given event and sends it.
-func SendNotification(ctx *Context, payload NotificationEventPayload, celEnv map[string]any) error {
-	templater := template.StructTemplater{
-		Values:         celEnv,
-		ValueFunctions: true,
-		DelimSets: []template.Delims{
-			{Left: "{{", Right: "}}"},
-			{Left: "$(", Right: ")"},
-		},
-	}
-
-	notification, err := GetNotification(ctx.Context, payload.NotificationID.String())
+// addNotificationEvent responds to a event that can possibly generate a notification.
+// If a notification is found for the given event and passes all the filters, then
+// a new `notification.send` event is created.
+func addNotificationEvent(ctx context.Context, event postq.Event) error {
+	notificationIDs, err := GetNotificationIDsForEvent(ctx, event.Name)
 	if err != nil {
 		return err
 	}
 
-	defaultTitle, defaultBody := defaultTitleAndBody(payload.EventName)
-
-	data := NotificationTemplate{
-		Title:      utils.Coalesce(notification.Title, defaultTitle),
-		Message:    utils.Coalesce(notification.Template, defaultBody),
-		Properties: notification.Properties,
+	if len(notificationIDs) == 0 {
+		return nil
 	}
 
-	if err := templater.Walk(&data); err != nil {
-		return fmt.Errorf("error templating notification: %w", err)
+	celEnv, err := getEnvForEvent(ctx, event, event.Properties)
+	if err != nil {
+		return err
 	}
 
-	if payload.PersonID != nil {
-		ctx.WithPersonID(payload.PersonID).WithRecipientType(RecipientTypePerson)
-		var emailAddress string
-		if err := ctx.DB().Model(&models.Person{}).Select("email").Where("id = ?", payload.PersonID).Find(&emailAddress).Error; err != nil {
-			return fmt.Errorf("failed to get email of person(id=%s); %v", payload.PersonID, err)
-		}
-
-		smtpURL := fmt.Sprintf("%s?ToAddresses=%s", api.SystemSMTP, url.QueryEscape(emailAddress))
-		return Send(ctx, "", smtpURL, data.Title, data.Message, data.Properties)
-	}
-
-	if payload.TeamID != "" {
-		ctx.WithRecipientType(RecipientTypeTeam)
-		teamSpec, err := teams.GetTeamSpec(ctx.Context, payload.TeamID)
+	for _, id := range notificationIDs {
+		n, err := GetNotification(ctx, id)
 		if err != nil {
-			return fmt.Errorf("failed to get team(id=%s); %v", payload.TeamID, err)
+			return err
 		}
 
-		for _, cn := range teamSpec.Notifications {
-			if cn.Name != payload.NotificationName {
-				continue
-			}
-
-			if err := templater.Walk(&cn); err != nil {
-				return fmt.Errorf("error templating notification: %w", err)
-			}
-
-			return Send(ctx, cn.Connection, cn.URL, data.Title, data.Message, data.Properties, cn.Properties)
-		}
-	}
-
-	for _, cn := range notification.CustomNotifications {
-		ctx.WithRecipientType(RecipientTypeCustom)
-		if cn.Name != payload.NotificationName {
+		if !n.HasRecipients() {
 			continue
 		}
 
-		if err := templater.Walk(&cn); err != nil {
-			return fmt.Errorf("error templating notification: %w", err)
+		if n.Error != nil {
+			// A notification that currently has errors is skipped.
+			continue
 		}
 
-		return Send(ctx, cn.Connection, cn.URL, data.Title, data.Message, data.Properties, cn.Properties)
+		if valid, err := expression.Eval(n.Filter, celEnv, allEnvVars); err != nil {
+			logs.IfError(db.UpdateNotificationError(id, err.Error()), "failed to update notification")
+		} else if !valid {
+			continue
+		}
+
+		payloads, err := CreateNotificationSendPayloads(ctx, event, n, celEnv)
+		if err != nil {
+			return err
+		}
+
+		for _, payload := range payloads {
+			newEvent := api.Event{
+				Name:       api.EventNotificationSend,
+				Properties: payload.AsMap(),
+			}
+
+			if err := ctx.DB().Clauses(events.EventQueueOnConflictClause).Create(&newEvent).Error; err != nil {
+				return fmt.Errorf("failed to saved `notification.send` event for payload (%v): %w", payload.AsMap(), err)
+			}
+		}
 	}
 
 	return nil
 }
 
-// labelsTemplate is a helper func to generate the template for displaying labels
-func labelsTemplate(field string) string {
-	return fmt.Sprintf("{{if %s}}### Labels: \n{{range $k, $v := %s}}**{{$k}}**: {{$v}} \n{{end}}{{end}}", field, field)
-}
+// sendNotifications sends a notification for each of the given events - one at a time.
+// It returns any events that failed to send.
+func sendNotifications(ctx context.Context, events postq.Events) postq.Events {
+	var failedEvents []postq.Event
+	for _, e := range events {
+		var payload NotificationEventPayload
+		payload.FromMap(e.Properties)
 
-// defaultTitleAndBody returns the default title and body for notification
-// based on the given event.
-func defaultTitleAndBody(event string) (title string, body string) {
-	switch event {
-	case EventCheckPassed:
-		title = "Check {{.check.name}} has passed"
-		body = fmt.Sprintf(`Canary: {{.canary.name}}
-{{if .agent}}Agent: {{.agent.name}}{{end}}
-{{if .status.message}}Message: {{.status.message}} {{end}}
-%s
+		notificationContext := NewContext(ctx, payload.NotificationID)
+		notificationContext.WithSource(payload.EventName, payload.ID)
 
-[Reference]({{.permalink}})`, labelsTemplate(".check.labels"))
+		logs.IfError(notificationContext.StartLog(), "error persisting start of notification send history")
 
-	case EventCheckFailed:
-		title = "Check {{.check.name}} has failed"
-		body = fmt.Sprintf(`Canary: {{.canary.name}}
-{{if .agent}}Agent: {{.agent.name}}{{end}}
-Error: {{.status.error}}
-%s
-
-[Reference]({{.permalink}})`, labelsTemplate(".check.labels"))
-
-	case EventComponentStatusHealthy, EventComponentStatusUnhealthy, EventComponentStatusInfo, EventComponentStatusWarning, EventComponentStatusError:
-		title = "Component {{.component.name}} status updated to {{.component.status}}"
-		body = fmt.Sprintf("%s\n[Reference]({{.permalink}})", labelsTemplate(".component.labels"))
-
-	case EventIncidentCommentAdded:
-		title = "{{.author.name}} left a comment on {{.incident.incident_id}}: {{.incident.title}}"
-		body = "{{.comment.comment}}\n\n[Reference]({{.permalink}})"
-
-	case EventIncidentCreated:
-		title = "{{.incident.incident_id}}: {{.incident.title}} ({{.incident.severity}}) created"
-		body = "Type: {{.incident.type}}\n\n[Reference]({{.permalink}})"
-
-	case EventIncidentDODAdded:
-		title = "Definition of Done added | {{.incident.incident_id}}: {{.incident.title}}"
-		body = "Evidence: {{.evidence.description}}\n\n[Reference]({{.permalink}})"
-
-	case EventIncidentDODPassed, EventIncidentDODRegressed:
-		title = "Definition of Done {{if .evidence.done}}passed{{else}}regressed{{end}} | {{.incident.incident_id}}: {{.incident.title}}"
-		body = `Evidence: {{.evidence.description}}
-Hypothesis: {{.hypothesis.title}}
-
-[Reference]({{.permalink}})`
-
-	case EventIncidentResponderAdded:
-		title = "New responder added to {{.incident.incident_id}}: {{.incident.title}}"
-		body = "Responder {{.responder.name}}\n\n[Reference]({{.permalink}})"
-
-	case EventIncidentResponderRemoved:
-		title = "Responder removed from {{.incident.incident_id}}: {{.incident.title}}"
-		body = "Responder {{.responder.name}}\n\n[Reference]({{.permalink}})"
-
-	case EventIncidentStatusCancelled, EventIncidentStatusClosed, EventIncidentStatusInvestigating, EventIncidentStatusMitigated, EventIncidentStatusOpen, EventIncidentStatusResolved:
-		title = "{{.incident.title}} status updated"
-		body = "New Status: {{.incident.status}}\n\n[Reference]({{.permalink}})"
-	}
-
-	return title, body
-}
-
-func CreateNotificationSendPayloads(ctx context.Context, event postq.Event, n *NotificationWithSpec, celEnv map[string]any) ([]NotificationEventPayload, error) {
-	var payloads []NotificationEventPayload
-
-	resourceID, err := uuid.Parse(event.Properties["id"])
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse resource id: %v", err)
-	}
-
-	if n.PersonID != nil {
-		payload := NotificationEventPayload{
-			EventName:      event.Name,
-			NotificationID: n.ID,
-			ID:             resourceID,
-			PersonID:       n.PersonID,
-			EventCreatedAt: event.CreatedAt,
-		}
-
-		payloads = append(payloads, payload)
-	}
-
-	if n.TeamID != nil {
-		teamSpec, err := teams.GetTeamSpec(ctx, n.TeamID.String())
+		originalEvent := postq.Event{Name: payload.EventName, CreatedAt: payload.EventCreatedAt}
+		celEnv, err := getEnvForEvent(ctx, originalEvent, e.Properties)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get team (id=%s); %v", n.TeamID, err)
+			e.SetError(err.Error())
+			failedEvents = append(failedEvents, e)
+			notificationContext.WithError(err.Error())
+		} else if err := SendNotification(notificationContext, payload, celEnv); err != nil {
+			e.SetError(err.Error())
+			failedEvents = append(failedEvents, e)
+			notificationContext.WithError(err.Error())
 		}
 
-		for _, cn := range teamSpec.Notifications {
-			if valid, err := expression.Eval(cn.Filter, celEnv, allEnvVars); err != nil {
-				logs.IfError(db.UpdateNotificationError(n.ID.String(), err.Error()), "failed to update notification")
-			} else if !valid {
-				continue
-			}
-
-			payload := NotificationEventPayload{
-				EventName:        event.Name,
-				NotificationID:   n.ID,
-				ID:               resourceID,
-				TeamID:           n.TeamID.String(),
-				NotificationName: cn.Name,
-				EventCreatedAt:   event.CreatedAt,
-			}
-
-			payloads = append(payloads, payload)
-		}
+		logs.IfError(notificationContext.EndLog(), "error persisting end of notification send history")
 	}
 
-	for _, cn := range n.CustomNotifications {
-		if valid, err := expression.Eval(cn.Filter, celEnv, allEnvVars); err != nil {
-			logs.IfError(db.UpdateNotificationError(n.ID.String(), err.Error()), "failed to update notification")
-		} else if !valid {
-			continue
+	return failedEvents
+}
+
+// getEnvForEvent gets the environment variables for the given event
+// that'll be passed to the cel expression or to the template renderer as a view.
+func getEnvForEvent(ctx context.Context, event postq.Event, properties map[string]string) (map[string]any, error) {
+	env := make(map[string]any)
+
+	if strings.HasPrefix(event.Name, "check.") {
+		checkID := properties["id"]
+
+		check, err := duty.FindCachedCheck(ctx, checkID)
+		if err != nil {
+			return nil, fmt.Errorf("error finding check: %v", err)
+		} else if check == nil {
+			return nil, fmt.Errorf("check(id=%s) not found", checkID)
 		}
 
-		payload := NotificationEventPayload{
-			EventName:        event.Name,
-			NotificationID:   n.ID,
-			ID:               resourceID,
-			NotificationName: cn.Name,
-			EventCreatedAt:   event.CreatedAt,
+		canary, err := duty.FindCachedCanary(ctx, check.CanaryID.String())
+		if err != nil {
+			return nil, fmt.Errorf("error finding canary: %v", err)
+		} else if canary == nil {
+			return nil, fmt.Errorf("canary(id=%s) not found", check.CanaryID)
 		}
 
-		payloads = append(payloads, payload)
+		agent, err := duty.FindCachedAgent(ctx, check.AgentID.String())
+		if err != nil {
+			return nil, fmt.Errorf("error finding agent: %v", err)
+		} else if agent != nil {
+			env["agent"] = agent.AsMap()
+		}
+
+		summary, err := duty.CheckSummary(ctx, checkID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get check summary: %w", err)
+		} else if summary != nil {
+			check.Uptime = summary.Uptime
+			check.Latency = summary.Latency
+		}
+
+		// We fetch the latest check_status at the time of event creation
+		var checkStatus models.CheckStatus
+		if err := ctx.DB().Where("check_id = ?", checkID).Where("created_at >= ?", event.CreatedAt).Order("created_at").First(&checkStatus).Error; err != nil {
+			return nil, fmt.Errorf("failed to get check status: %w", err)
+		}
+
+		env["status"] = checkStatus.AsMap()
+		env["canary"] = canary.AsMap("spec")
+		env["check"] = check.AsMap("spec")
+		env["permalink"] = fmt.Sprintf("%s/health?layout=table&checkId=%s&timeRange=1h", api.PublicWebURL, check.ID)
 	}
 
-	return payloads, nil
+	if event.Name == "incident.created" || strings.HasPrefix(event.Name, "incident.status.") {
+		incidentID := properties["id"]
+
+		incident, err := duty.FindCachedIncident(ctx, incidentID)
+		if err != nil {
+			return nil, fmt.Errorf("error finding incident(id=%s): %v", incidentID, err)
+		} else if incident == nil {
+			return nil, fmt.Errorf("incident(id=%s) not found", incidentID)
+		}
+
+		env["incident"] = incident.AsMap()
+		env["permalink"] = fmt.Sprintf("%s/incidents/%s", api.PublicWebURL, incident.ID)
+	}
+
+	if strings.HasPrefix(event.Name, "incident.responder.") {
+		responderID := properties["id"]
+		responder, err := responder.FindResponderByID(ctx, responderID)
+		if err != nil {
+			return nil, fmt.Errorf("error finding responder(id=%s): %v", responderID, err)
+		} else if responder == nil {
+			return nil, fmt.Errorf("responder(id=%s) not found", responderID)
+		}
+
+		incident, err := duty.FindCachedIncident(ctx, responder.IncidentID.String())
+		if err != nil {
+			return nil, fmt.Errorf("error finding incident(id=%s): %v", responder.IncidentID, err)
+		} else if incident == nil {
+			return nil, fmt.Errorf("incident(id=%s) not found", responder.IncidentID)
+		}
+
+		env["incident"] = incident.AsMap()
+		env["responder"] = responder.AsMap()
+		env["permalink"] = fmt.Sprintf("%s/incidents/%s", api.PublicWebURL, incident.ID)
+	}
+
+	if strings.HasPrefix(event.Name, "incident.comment.") {
+		var comment models.Comment
+		if err := ctx.DB().Where("id = ?", properties["id"]).Find(&comment).Error; err != nil {
+			return nil, fmt.Errorf("error getting comment (id=%s)", properties["id"])
+		}
+
+		incident, err := duty.FindCachedIncident(ctx, comment.IncidentID.String())
+		if err != nil {
+			return nil, fmt.Errorf("error finding incident(id=%s): %v", comment.IncidentID, err)
+		} else if incident == nil {
+			return nil, fmt.Errorf("incident(id=%s) not found", comment.IncidentID)
+		}
+
+		author, err := duty.FindPerson(ctx, comment.CreatedBy.String())
+		if err != nil {
+			return nil, fmt.Errorf("error getting comment author (id=%s)", comment.CreatedBy)
+		} else if author == nil {
+			return nil, fmt.Errorf("comment author(id=%s) not found", comment.CreatedBy)
+		}
+
+		// TODO: extract out mentioned users' emails from the comment body
+
+		env["incident"] = incident.AsMap()
+		env["comment"] = comment.AsMap()
+		env["author"] = author.AsMap()
+		env["permalink"] = fmt.Sprintf("%s/incidents/%s", api.PublicWebURL, incident.ID)
+	}
+
+	if strings.HasPrefix(event.Name, "incident.dod.") {
+		var evidence models.Evidence
+		if err := ctx.DB().Where("id = ?", properties["id"]).Find(&evidence).Error; err != nil {
+			return nil, err
+		}
+
+		var hypotheses models.Hypothesis
+		if err := ctx.DB().Where("id = ?", evidence.HypothesisID).Find(&evidence).Find(&hypotheses).Error; err != nil {
+			return nil, err
+		}
+
+		incident, err := duty.FindCachedIncident(ctx, hypotheses.IncidentID.String())
+		if err != nil {
+			return nil, fmt.Errorf("error finding incident(id=%s): %v", hypotheses.IncidentID, err)
+		} else if incident == nil {
+			return nil, fmt.Errorf("incident(id=%s) not found", hypotheses.IncidentID)
+		}
+
+		env["evidence"] = evidence.AsMap()
+		env["hypotheses"] = hypotheses.AsMap()
+		env["incident"] = incident.AsMap()
+		env["permalink"] = fmt.Sprintf("%s/incidents/%s", api.PublicWebURL, incident.ID)
+	}
+
+	if strings.HasPrefix(event.Name, "component.status.") {
+		componentID := properties["id"]
+
+		component, err := duty.FindCachedComponent(ctx, componentID)
+		if err != nil {
+			return nil, fmt.Errorf("error finding component(id=%s): %v", componentID, err)
+		} else if component == nil {
+			return nil, fmt.Errorf("component(id=%s) not found", componentID)
+		}
+
+		agent, err := duty.FindCachedAgent(ctx, component.AgentID.String())
+		if err != nil {
+			return nil, fmt.Errorf("error finding agent: %v", err)
+		} else if agent != nil {
+			env["agent"] = agent.AsMap()
+		}
+
+		env["component"] = component.AsMap("checks", "incidents", "analysis", "components", "order", "relationship_id", "children", "parents")
+		env["permalink"] = fmt.Sprintf("%s/topology/%s", api.PublicWebURL, componentID)
+	}
+
+	return env, nil
 }
