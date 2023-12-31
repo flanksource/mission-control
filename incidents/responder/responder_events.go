@@ -1,4 +1,4 @@
-package events
+package responder
 
 import (
 	"errors"
@@ -9,36 +9,19 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/incident-commander/api"
-	pkgResponder "github.com/flanksource/incident-commander/responder"
+	"github.com/flanksource/incident-commander/events"
+
 	"github.com/flanksource/postq"
 )
 
-func NewResponderConsumerSync() postq.SyncEventConsumer {
-	return postq.SyncEventConsumer{
-		WatchEvents: []string{EventIncidentResponderAdded},
-		Consumers:   postq.SyncHandlers(addNotificationEvent, generateResponderAddedAsyncEvent),
-		ConsumerOption: &postq.ConsumerOption{
-			ErrorHandler: defaultLoggerErrorHandler,
-		},
-	}
+func init() {
+	events.Register(RegisterEvents)
 }
 
-func NewCommentConsumerSync() postq.SyncEventConsumer {
-	return postq.SyncEventConsumer{
-		WatchEvents: []string{EventIncidentCommentAdded},
-		Consumers:   postq.SyncHandlers(addNotificationEvent, generateCommentAddedAsyncEvent),
-		ConsumerOption: &postq.ConsumerOption{
-			ErrorHandler: defaultLoggerErrorHandler,
-		},
-	}
-}
-
-func NewResponderConsumerAsync() postq.AsyncEventConsumer {
-	return postq.AsyncEventConsumer{
-		WatchEvents: []string{EventJiraResponderAdded, EventMSPlannerResponderAdded, EventMSPlannerCommentAdded, EventJiraCommentAdded},
-		Consumer:    postq.AsyncHandler(processResponderEvents),
-		BatchSize:   1,
-	}
+func RegisterEvents(ctx context.Context) {
+	events.RegisterSyncHandler(generateResponderAddedAsyncEvent, api.EventIncidentResponderAdded)
+	events.RegisterSyncHandler(generateCommentAddedAsyncEvent, api.EventIncidentCommentAdded)
+	events.RegisterAsyncHandler(processResponderEvents, 1, 5, api.EventJiraResponderAdded, api.EventMSPlannerResponderAdded, api.EventMSPlannerCommentAdded, api.EventJiraCommentAdded)
 }
 
 // generateResponderAddedAsyncEvent generates async events for each of the configured responder clients
@@ -58,13 +41,13 @@ func generateResponderAddedAsyncEvent(ctx context.Context, event postq.Event) er
 	}
 
 	if spec.ResponderClients.Jira != nil {
-		if err := ctx.DB().Clauses(eventQueueOnConflictClause).Create(&api.Event{Name: EventJiraResponderAdded, Properties: map[string]string{"id": responderID}}).Error; err != nil {
+		if err := ctx.DB().Clauses(events.EventQueueOnConflictClause).Create(&api.Event{Name: api.EventJiraResponderAdded, Properties: map[string]string{"id": responderID}}).Error; err != nil {
 			return err
 		}
 	}
 
 	if spec.ResponderClients.MSPlanner != nil {
-		if err := ctx.DB().Clauses(eventQueueOnConflictClause).Create(&api.Event{Name: EventMSPlannerResponderAdded, Properties: map[string]string{"id": responderID}}).Error; err != nil {
+		if err := ctx.DB().Clauses(events.EventQueueOnConflictClause).Create(&api.Event{Name: api.EventMSPlannerResponderAdded, Properties: map[string]string{"id": responderID}}).Error; err != nil {
 			return err
 		}
 	}
@@ -101,14 +84,14 @@ func generateCommentAddedAsyncEvent(ctx context.Context, event postq.Event) erro
 	for _, responder := range responders {
 		switch responder.Type {
 		case "jira":
-			if err := ctx.DB().Clauses(eventQueueOnConflictClause).Create(&api.Event{Name: EventJiraCommentAdded, Properties: map[string]string{
+			if err := ctx.DB().Clauses(events.EventQueueOnConflictClause).Create(&api.Event{Name: api.EventJiraCommentAdded, Properties: map[string]string{
 				"responder_id": responder.ID.String(),
 				"id":           commentID,
 			}}).Error; err != nil {
 				return err
 			}
 		case "ms_planner":
-			if err := ctx.DB().Clauses(eventQueueOnConflictClause).Create(&api.Event{Name: EventMSPlannerCommentAdded, Properties: map[string]string{
+			if err := ctx.DB().Clauses(events.EventQueueOnConflictClause).Create(&api.Event{Name: api.EventMSPlannerCommentAdded, Properties: map[string]string{
 				"responder_id": responder.ID.String(),
 				"id":           commentID,
 			}}).Error; err != nil {
@@ -134,9 +117,9 @@ func processResponderEvents(ctx context.Context, events postq.Events) postq.Even
 
 func handleResponderEvent(ctx context.Context, event postq.Event) error {
 	switch event.Name {
-	case EventJiraResponderAdded, EventMSPlannerResponderAdded:
+	case api.EventJiraResponderAdded, api.EventMSPlannerResponderAdded:
 		return reconcileResponderEvent(ctx, event)
-	case EventJiraCommentAdded, EventMSPlannerCommentAdded:
+	case api.EventJiraCommentAdded, api.EventMSPlannerCommentAdded:
 		return reconcileCommentEvent(ctx, event)
 	default:
 		return fmt.Errorf("unrecognized event name: %s", event.Name)
@@ -153,7 +136,7 @@ func reconcileResponderEvent(ctx context.Context, event postq.Event) error {
 		return err
 	}
 
-	responderClient, err := pkgResponder.GetResponder(ctx, responder.Team)
+	responderClient, err := GetResponder(ctx, responder.Team)
 	if err != nil {
 		return err
 	}
@@ -201,7 +184,7 @@ func reconcileCommentEvent(ctx context.Context, event postq.Event) error {
 		// Reset externalID to avoid inserting previous iteration's ID
 		externalID := ""
 
-		responder, err := pkgResponder.GetResponder(ctx, _responder.Team)
+		responder, err := GetResponder(ctx, _responder.Team)
 		if err != nil {
 			return err
 		}

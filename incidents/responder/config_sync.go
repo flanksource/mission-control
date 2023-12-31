@@ -30,34 +30,41 @@ func upsertConfig(ctx context.Context, configType, externalID, name, config stri
 	return nil
 }
 
-func SyncConfig(ctx job.JobRuntime) error {
-	var teams []api.Team
-	if err := ctx.DB().Find(&teams).Error; err != nil {
-		return err
-	}
-
-	for _, team := range teams {
-		if !team.HasResponder() {
-			logger.Debugf("Skipping team %s since it does not have a responder", team.Name)
-			continue
+var SyncConfig = &job.Job{
+	Name:       "SyncConfig",
+	Schedule:   "@every 1h",
+	JobHistory: true,
+	Singleton:  true,
+	Retention:  job.RetentionDay,
+	Fn: func(ctx job.JobRuntime) error {
+		var teams []api.Team
+		if err := ctx.DB().Find(&teams).Error; err != nil {
+			return err
 		}
 
-		responder, err := GetResponder(ctx.Context, team)
-		if err != nil {
-			ctx.History.AddError(err.Error())
-			continue
-		}
+		for _, team := range teams {
+			if !team.HasResponder() {
+				logger.Debugf("Skipping team %s since it does not have a responder", team.Name)
+				continue
+			}
 
-		if configType, configName, config, err := responder.SyncConfig(ctx.Context, team); err != nil {
-			ctx.History.AddError(err.Error())
-			continue
-		} else {
-			if err := upsertConfig(ctx.Context, configType, team.ID.String(), configName, config); err != nil {
+			responder, err := GetResponder(ctx.Context, team)
+			if err != nil {
 				ctx.History.AddError(err.Error())
 				continue
 			}
-			ctx.History.IncrSuccess()
+
+			if configType, configName, config, err := responder.SyncConfig(ctx.Context, team); err != nil {
+				ctx.History.AddError(err.Error())
+				continue
+			} else {
+				if err := upsertConfig(ctx.Context, configType, team.ID.String(), configName, config); err != nil {
+					ctx.History.AddError(err.Error())
+					continue
+				}
+				ctx.History.IncrSuccess()
+			}
 		}
-	}
-	return nil
+		return nil
+	},
 }
