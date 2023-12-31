@@ -18,7 +18,6 @@ import (
 	"github.com/flanksource/incident-commander/jobs"
 	"github.com/flanksource/incident-commander/k8s"
 	"github.com/flanksource/incident-commander/mail"
-	"github.com/flanksource/incident-commander/rules"
 	"github.com/flanksource/incident-commander/telemetry"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -104,7 +103,6 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&auth.ClerkOrgID, "clerk-org-id", "", "Clerk Organization ID")
 	flags.StringVar(&postgrestURI, "postgrest-uri", "http://localhost:3000", "URL for the PostgREST instance to use. If localhost is supplied, a PostgREST instance will be started")
 	flags.StringVar(&auth.AuthMode, "auth", "", "Enable authentication via Kratos or Clerk. Valid values are [kratos, clerk]")
-	flags.DurationVar(&rules.Period, "rules-period", 5*time.Minute, "Period to run the rules")
 	flags.BoolVar(&disablePostgrest, "disable-postgrest", false, "Disable PostgREST. Deprecated (Use --postgrest-uri '' to disable PostgREST)")
 	flags.BoolVar(&disableKubernetes, "disable-kubernetes", false, "Disable Kubernetes (non-operator mode)")
 	flags.StringVar(&mail.FromAddress, "email-from-address", "no-reply@flanksource.com", "Email address of the sender")
@@ -150,5 +148,5 @@ func init() {
 
 	db.Flags(Root.PersistentFlags())
 	Root.PersistentFlags().StringVar(&api.CanaryCheckerPath, "canary-checker", "http://canary-checker:8080", "Canary Checker URL")
-	Root.AddCommand(Serve, Run, Sync, GoOffline)
+	Root.AddCommand(Serve, Sync, GoOffline)
 }

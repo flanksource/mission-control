@@ -1,13 +1,11 @@
-package main
+package incidents
 
 import (
 	"encoding/json"
 	"time"
 
-	"github.com/flanksource/duty/job"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/jobs"
+	"github.com/flanksource/duty/tests/setup"
 	"github.com/google/uuid"
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -24,7 +22,7 @@ func (t dummyConfig) String() *string {
 	return &response
 }
 
-var _ = ginkgo.Describe("Test Incident Done Definition With Config Item", ginkgo.Ordered, func() {
+var _ = ginkgo.Describe("Incident Definition of Done", ginkgo.Ordered, func() {
 	var (
 		john       *models.Person
 		incident   *models.Incident
@@ -38,34 +36,29 @@ var _ = ginkgo.Describe("Test Incident Done Definition With Config Item", ginkgo
 		}
 	)
 
-	ginkgo.It("should create a person", func() {
+	ginkgo.It("should setup", func() {
 		john = &models.Person{
 			ID:   uuid.New(),
 			Name: "John Doe",
 		}
-		tx := api.DefaultContext.DB().Create(john)
-		Expect(tx.Error).To(BeNil())
-	})
+		Expect(DefaultContext.DB().Create(john).Error).To(BeNil())
 
-	ginkgo.It("should create a new component", func() {
 		component = &models.Component{
 			ID:         uuid.New(),
 			Name:       "logistics",
 			Type:       "Entity",
 			ExternalId: "dummy/logistics",
 		}
-		tx := api.DefaultContext.DB().Create(component)
-		Expect(tx.Error).To(BeNil())
-	})
+		Expect(DefaultContext.DB().Create(component).Error).To(BeNil())
 
-	ginkgo.It("should create a config", func() {
 		configItem = &models.ConfigItem{
 			ID:          uuid.New(),
 			ConfigClass: "MyConfigClass",
 			Config:      config.String(),
 		}
-		tx := api.DefaultContext.DB().Create(configItem)
-		Expect(tx.Error).To(BeNil())
+		Expect(DefaultContext.DB().Create(configItem).Error).To(BeNil())
+		EvaluateEvidence.Context = DefaultContext
+
 	})
 
 	ginkgo.It("should create an incident", func() {
@@ -78,8 +71,7 @@ var _ = ginkgo.Describe("Test Incident Done Definition With Config Item", ginkgo
 			Severity:    "Blocker",
 			CommanderID: &john.ID,
 		}
-		tx := api.DefaultContext.DB().Create(incident)
-		Expect(tx.Error).To(BeNil())
+		Expect(DefaultContext.DB().Create(incident).Error).To(BeNil())
 	})
 
 	ginkgo.It("should create a new hypothesis", func() {
@@ -91,7 +83,7 @@ var _ = ginkgo.Describe("Test Incident Done Definition With Config Item", ginkgo
 			Type:       "solution",
 			Status:     "possible",
 		}
-		tx := api.DefaultContext.DB().Create(hypothesis)
+		tx := DefaultContext.DB().Create(hypothesis)
 		Expect(tx.Error).To(BeNil())
 	})
 
@@ -107,7 +99,7 @@ var _ = ginkgo.Describe("Test Incident Done Definition With Config Item", ginkgo
 			ConfigID:         &configItem.ID,
 			DefinitionOfDone: true,
 		}
-		tx := api.DefaultContext.DB().Create(evidence)
+		tx := DefaultContext.DB().Create(evidence)
 		Expect(tx.Error).To(BeNil())
 
 		// Another evidence done definition but empty script. This should be ignored.
@@ -122,23 +114,23 @@ var _ = ginkgo.Describe("Test Incident Done Definition With Config Item", ginkgo
 			ConfigID:         &configItem.ID,
 			DefinitionOfDone: true,
 		}
-		tx = api.DefaultContext.DB().Create(evidenceWithEmptyScript)
+		tx = DefaultContext.DB().Create(evidenceWithEmptyScript)
 		Expect(tx.Error).To(BeNil())
 	})
 
 	ginkgo.It("modify the config but do not satisfy the done definition", func() {
 		config.Threshold = 75
 		configItem.Config = config.String()
-		tx := api.DefaultContext.DB().Save(configItem)
+		tx := DefaultContext.DB().Save(configItem)
 		Expect(tx.Error).To(BeNil())
 	})
 
 	ginkgo.It("should NOT mark the incident as resolved", func() {
-		err := jobs.EvaluateEvidenceScripts(job.JobRuntime{Context: api.DefaultContext})
-		Expect(err).To(BeNil())
+		EvaluateEvidence.Run()
+		setup.ExpectJobToPass(EvaluateEvidence)
 
 		var fetchedIncident models.Incident
-		err = api.DefaultContext.DB().Where("id = ?", incident.ID).First(&fetchedIncident).Error
+		err := DefaultContext.DB().Where("id = ?", incident.ID).First(&fetchedIncident).Error
 		Expect(err).To(BeNil())
 
 		Expect(fetchedIncident.Status).To(Equal(models.IncidentStatusOpen))
@@ -147,23 +139,23 @@ var _ = ginkgo.Describe("Test Incident Done Definition With Config Item", ginkgo
 	ginkgo.It("modify the config", func() {
 		config.Threshold = 85
 		configItem.Config = config.String()
-		tx := api.DefaultContext.DB().Save(configItem)
+		tx := DefaultContext.DB().Save(configItem)
 		Expect(tx.Error).To(BeNil())
 	})
 
 	ginkgo.It("should mark the incident as resolved", func() {
-		err := jobs.EvaluateEvidenceScripts(job.JobRuntime{Context: api.DefaultContext})
-		Expect(err).To(BeNil())
+		EvaluateEvidence.Run()
+		setup.ExpectJobToPass(EvaluateEvidence)
 
 		var fetchedIncident models.Incident
-		err = api.DefaultContext.DB().Where("id = ?", incident.ID).First(&fetchedIncident).Error
+		err := DefaultContext.DB().Where("id = ?", incident.ID).First(&fetchedIncident).Error
 		Expect(err).To(BeNil())
 
 		Expect(fetchedIncident.Status).To(Equal(models.IncidentStatusResolved))
 	})
 })
 
-var _ = ginkgo.Describe("Test Incident Done Definition With Config Item", ginkgo.Ordered, func() {
+var _ = ginkgo.Describe("Incident Definition of Done Config Item", ginkgo.Ordered, func() {
 	var (
 		john           *models.Person
 		incident       *models.Incident
@@ -179,11 +171,12 @@ var _ = ginkgo.Describe("Test Incident Done Definition With Config Item", ginkgo
 	)
 
 	ginkgo.It("should create a person", func() {
+		EvaluateEvidence.Context = DefaultContext
 		john = &models.Person{
 			ID:   uuid.New(),
 			Name: "James Bond",
 		}
-		tx := api.DefaultContext.DB().Create(john)
+		tx := DefaultContext.DB().Create(john)
 		Expect(tx.Error).To(BeNil())
 	})
 
@@ -194,7 +187,7 @@ var _ = ginkgo.Describe("Test Incident Done Definition With Config Item", ginkgo
 			Type:       "Entity",
 			ExternalId: "dummy/logistics",
 		}
-		tx := api.DefaultContext.DB().Create(component)
+		tx := DefaultContext.DB().Create(component)
 		Expect(tx.Error).To(BeNil())
 	})
 
@@ -204,7 +197,7 @@ var _ = ginkgo.Describe("Test Incident Done Definition With Config Item", ginkgo
 			ConfigClass: "MyConfigClass",
 			Config:      config.String(),
 		}
-		tx := api.DefaultContext.DB().Create(configItem)
+		tx := DefaultContext.DB().Create(configItem)
 		Expect(tx.Error).To(BeNil())
 	})
 
@@ -216,7 +209,7 @@ var _ = ginkgo.Describe("Test Incident Done Definition With Config Item", ginkgo
 			AnalysisType: "cost",
 			Severity:     "high",
 		}
-		tx := api.DefaultContext.DB().Create(configAnalysis)
+		tx := DefaultContext.DB().Create(configAnalysis)
 		Expect(tx.Error).To(BeNil())
 	})
 
@@ -230,7 +223,7 @@ var _ = ginkgo.Describe("Test Incident Done Definition With Config Item", ginkgo
 			Severity:    "Blocker",
 			CommanderID: &john.ID,
 		}
-		tx := api.DefaultContext.DB().Create(incident)
+		tx := DefaultContext.DB().Create(incident)
 		Expect(tx.Error).To(BeNil())
 	})
 
@@ -243,7 +236,7 @@ var _ = ginkgo.Describe("Test Incident Done Definition With Config Item", ginkgo
 			Type:       "solution",
 			Status:     "possible",
 		}
-		tx := api.DefaultContext.DB().Create(hypothesis)
+		tx := DefaultContext.DB().Create(hypothesis)
 		Expect(tx.Error).To(BeNil())
 	})
 
@@ -257,22 +250,22 @@ var _ = ginkgo.Describe("Test Incident Done Definition With Config Item", ginkgo
 			ConfigAnalysisID: &configAnalysis.ID,
 			DefinitionOfDone: true,
 		}
-		tx := api.DefaultContext.DB().Create(evidence)
+		tx := DefaultContext.DB().Create(evidence)
 		Expect(tx.Error).To(BeNil())
 	})
 
 	ginkgo.It("modify the config analysis but do not satisfy the done definition", func() {
 		configAnalysis.Status = "open"
-		tx := api.DefaultContext.DB().Save(configAnalysis)
+		tx := DefaultContext.DB().Save(configAnalysis)
 		Expect(tx.Error).To(BeNil())
 	})
 
 	ginkgo.It("should NOT mark the incident as resolved", func() {
-		err := jobs.EvaluateEvidenceScripts(job.JobRuntime{Context: api.DefaultContext})
-		Expect(err).To(BeNil())
+		EvaluateEvidence.Run()
+		setup.ExpectJobToPass(EvaluateEvidence)
 
 		var fetchedIncident models.Incident
-		err = api.DefaultContext.DB().Where("id = ?", incident.ID).First(&fetchedIncident).Error
+		err := DefaultContext.DB().Where("id = ?", incident.ID).First(&fetchedIncident).Error
 		Expect(err).To(BeNil())
 
 		Expect(fetchedIncident.Status).To(Equal(models.IncidentStatusOpen))
@@ -280,16 +273,16 @@ var _ = ginkgo.Describe("Test Incident Done Definition With Config Item", ginkgo
 
 	ginkgo.It("modify the config analysis", func() {
 		configAnalysis.Status = "resolved"
-		tx := api.DefaultContext.DB().Save(configAnalysis)
+		tx := DefaultContext.DB().Save(configAnalysis)
 		Expect(tx.Error).To(BeNil())
 	})
 
 	ginkgo.It("should mark the incident as resolved", func() {
-		err := jobs.EvaluateEvidenceScripts(job.JobRuntime{Context: api.DefaultContext})
-		Expect(err).To(BeNil())
+		EvaluateEvidence.Run()
+		setup.ExpectJobToPass(EvaluateEvidence)
 
 		var fetchedIncident models.Incident
-		err = api.DefaultContext.DB().Where("id = ?", incident.ID).First(&fetchedIncident).Error
+		err := DefaultContext.DB().Where("id = ?", incident.ID).First(&fetchedIncident).Error
 		Expect(err).To(BeNil())
 
 		Expect(fetchedIncident.Status).To(Equal(models.IncidentStatusResolved))
@@ -312,7 +305,7 @@ var _ = ginkgo.Describe("Test Incident Done Definition With Health Check", ginkg
 			ID:   uuid.New(),
 			Name: "John Wick",
 		}
-		tx := api.DefaultContext.DB().Create(john)
+		tx := DefaultContext.DB().Create(john)
 		Expect(tx.Error).To(BeNil())
 	})
 
@@ -323,7 +316,7 @@ var _ = ginkgo.Describe("Test Incident Done Definition With Health Check", ginkg
 			Type:       "Entity",
 			ExternalId: "dummy/logistics",
 		}
-		tx := api.DefaultContext.DB().Create(component)
+		tx := DefaultContext.DB().Create(component)
 		Expect(tx.Error).To(BeNil())
 	})
 
@@ -335,7 +328,7 @@ var _ = ginkgo.Describe("Test Incident Done Definition With Health Check", ginkg
 			Spec:      []byte("{}"),
 			CreatedAt: time.Now(),
 		}
-		tx := api.DefaultContext.DB().Create(canary)
+		tx := DefaultContext.DB().Create(canary)
 		Expect(tx.Error).To(BeNil())
 	})
 
@@ -347,7 +340,7 @@ var _ = ginkgo.Describe("Test Incident Done Definition With Health Check", ginkg
 			Type:     "http",
 			Status:   "unhealthy",
 		}
-		tx := api.DefaultContext.DB().Create(check)
+		tx := DefaultContext.DB().Create(check)
 		Expect(tx.Error).To(BeNil())
 	})
 
@@ -361,7 +354,7 @@ var _ = ginkgo.Describe("Test Incident Done Definition With Health Check", ginkg
 			Severity:    "Blocker",
 			CommanderID: &john.ID,
 		}
-		tx := api.DefaultContext.DB().Create(incident)
+		tx := DefaultContext.DB().Create(incident)
 		Expect(tx.Error).To(BeNil())
 	})
 
@@ -374,7 +367,7 @@ var _ = ginkgo.Describe("Test Incident Done Definition With Health Check", ginkg
 			Type:       "solution",
 			Status:     "possible",
 		}
-		tx := api.DefaultContext.DB().Create(hypothesis)
+		tx := DefaultContext.DB().Create(hypothesis)
 		Expect(tx.Error).To(BeNil())
 	})
 
@@ -390,7 +383,7 @@ var _ = ginkgo.Describe("Test Incident Done Definition With Health Check", ginkg
 			CheckID:          &check.ID,
 			DefinitionOfDone: true,
 		}
-		tx := api.DefaultContext.DB().Create(evidence)
+		tx := DefaultContext.DB().Create(evidence)
 		Expect(tx.Error).To(BeNil())
 	})
 
@@ -398,16 +391,17 @@ var _ = ginkgo.Describe("Test Incident Done Definition With Health Check", ginkg
 		check.Status = "healthy"
 		past := time.Now().Add(-time.Second * 15)
 		check.LastTransitionTime = &past
-		tx := api.DefaultContext.DB().Save(check)
+		tx := DefaultContext.DB().Save(check)
 		Expect(tx.Error).To(BeNil())
 	})
 
 	ginkgo.It("should NOT mark the incident as resolved", func() {
-		err := jobs.EvaluateEvidenceScripts(job.JobRuntime{Context: api.DefaultContext})
-		Expect(err).To(BeNil())
+		EvaluateEvidence.Context = DefaultContext
+		EvaluateEvidence.Run()
+		setup.ExpectJobToPass(EvaluateEvidence)
 
 		var fetchedIncident models.Incident
-		err = api.DefaultContext.DB().Where("id = ?", incident.ID).First(&fetchedIncident).Error
+		err := DefaultContext.DB().Where("id = ?", incident.ID).First(&fetchedIncident).Error
 		Expect(err).To(BeNil())
 
 		Expect(fetchedIncident.Status).To(Equal(models.IncidentStatusOpen))
@@ -416,16 +410,17 @@ var _ = ginkgo.Describe("Test Incident Done Definition With Health Check", ginkg
 	ginkgo.It("pretend the site has been up for 31 seconds", func() {
 		past := time.Now().Add(-time.Second * 31)
 		check.LastTransitionTime = &past
-		tx := api.DefaultContext.DB().Save(check)
+		tx := DefaultContext.DB().Save(check)
 		Expect(tx.Error).To(BeNil())
 	})
 
 	ginkgo.It("should mark the incident as resolved", func() {
-		err := jobs.EvaluateEvidenceScripts(job.JobRuntime{Context: api.DefaultContext})
-		Expect(err).To(BeNil())
+		EvaluateEvidence.Context = DefaultContext
+		EvaluateEvidence.Run()
+		setup.ExpectJobToPass(EvaluateEvidence)
 
 		var fetchedIncident models.Incident
-		err = api.DefaultContext.DB().Where("id = ?", incident.ID).First(&fetchedIncident).Error
+		err := DefaultContext.DB().Where("id = ?", incident.ID).First(&fetchedIncident).Error
 		Expect(err).To(BeNil())
 
 		Expect(fetchedIncident.Status).To(Equal(models.IncidentStatusResolved))

@@ -1,4 +1,4 @@
-package jobs
+package incidents
 
 import (
 	"strconv"
