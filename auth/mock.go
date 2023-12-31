@@ -20,7 +20,7 @@ func MockMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 		ctx := c.Request().Context().(context.Context)
 
 		var person models.Person
-		if err := ctx.DB().Where("name = ?", name).First(&person).Error; err != nil {
+		if err := ctx.DB().Where("name = ? or email = ?", name, name).First(&person).Error; err != nil {
 			return c.String(http.StatusUnauthorized, "Unauthorized")
 		}
 

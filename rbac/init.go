@@ -8,7 +8,7 @@ import (
 	"github.com/casbin/casbin/v2/model"
 	gormadapter "github.com/casbin/gorm-adapter/v3"
 	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/incident-commander/db"
+	"gorm.io/gorm"
 )
 
 const (
@@ -63,14 +63,14 @@ const (
 
 var Enforcer *casbin.Enforcer
 
-func Init(adminUserID string) error {
+func Init(db *gorm.DB, adminUserID string) error {
 	model, err := model.NewModelFromString(modelDefinition)
 	if err != nil {
 		return fmt.Errorf("error creating rbac model: %v", err)
 	}
 
-	gormadapter.TurnOffAutoMigrate(db.Gorm)
-	adapter, err := gormadapter.NewAdapterByDB(db.Gorm)
+	gormadapter.TurnOffAutoMigrate(db)
+	adapter, err := gormadapter.NewAdapterByDB(db)
 	if err != nil {
 		return fmt.Errorf("error creating rbac adapter: %v", err)
 	}
