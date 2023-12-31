@@ -22,13 +22,17 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/events"
+	"github.com/flanksource/incident-commander/incidents/responder"
 	"github.com/flanksource/incident-commander/jobs"
-	"github.com/flanksource/incident-commander/logs"
 	"github.com/flanksource/incident-commander/notification"
-	"github.com/flanksource/incident-commander/playbook"
 	"github.com/flanksource/incident-commander/rbac"
-	"github.com/flanksource/incident-commander/responder"
 	"github.com/flanksource/incident-commander/teams"
+
+	// register event handlers
+	_ "github.com/flanksource/incident-commander/incidents/responder"
+	_ "github.com/flanksource/incident-commander/notification"
+	_ "github.com/flanksource/incident-commander/playbook"
+	_ "github.com/flanksource/incident-commander/upstream"
 )
 
 const (
@@ -112,15 +116,9 @@ var Serve = &cobra.Command{
 
 		go jobs.Start(api.DefaultContext)
 
-		events.StartConsumers(api.DefaultContext, api.UpstreamConf)
+		events.StartConsumers(api.DefaultContext)
 
 		go tableUpdatesHandler(api.DefaultContext)
-
-		go func() {
-			logs.IfError(playbook.StartPlaybookRunConsumer(api.DefaultContext), "error starting playbook run consumer")
-		}()
-
-		go playbook.ListenPlaybookPGNotify(api.DefaultContext)
 
 		if !disableKubernetes {
 			go launchKopper(api.DefaultContext)

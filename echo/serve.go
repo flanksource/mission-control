@@ -82,7 +82,7 @@ func New(ctx context.Context) *echov4.Echo {
 
 	artifacts.RegisterRoutes(e, "artifacts")
 
-	playbook.RegisterRoutes(e, "playbook")
+	playbook.RegisterRoutes(e)
 
 	e.POST("/agent/generate", agent.GenerateAgent, rbac.Authorization(rbac.ObjectAgentCreate, rbac.ActionWrite))
 	e.POST("/logs", logs.LogsHandler)
