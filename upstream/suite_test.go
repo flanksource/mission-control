@@ -1,124 +1,146 @@
 package upstream
 
 import (
-	gocontext "context"
 	"fmt"
-	"net/http"
-	"strings"
 	"testing"
 
-	embeddedPG "github.com/fergusstrange/embedded-postgres"
-	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/tests/setup"
 	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/auth"
+	"github.com/flanksource/postq"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/labstack/echo/v4"
+	echov4 "github.com/labstack/echo/v4"
+
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"gorm.io/gorm"
 )
+
+var (
+	DefaultContext context.Context
+
+	shutdown func()
+)
+
+const batchSize = 5
 
 func TestUpstream(t *testing.T) {
 	RegisterFailHandler(ginkgo.Fail)
 	ginkgo.RunSpecs(t, "Upstream")
 }
 
-var (
-	// postgres server shared by both agent and upstream
-	postgresServer *embeddedPG.EmbeddedPostgres
-	pgServerPort   = 9884
-
-	upstreamEchoServerport = 11006
-	upstreamEchoServer     *echo.Echo
-
-	agentID       = uuid.New()
-	agentName     = "test-agent"
-	agentDB       *gorm.DB
-	agentDBPGPool *pgxpool.Pool
-	agentDBName   = "agent"
-
-	upstreamDBName = "upstream"
-	upstreamDB     *gorm.DB
-	upstreamPool   *pgxpool.Pool
-	dummyDataset   dummy.DummyData
-)
-
 var _ = ginkgo.BeforeSuite(func() {
-	var err error
-	config, connection := setup.GetEmbeddedPGConfig(agentDBName, pgServerPort)
-	postgresServer = embeddedPG.NewDatabase(config)
-	if err = postgresServer.Start(); err != nil {
-		ginkgo.Fail(err.Error())
-	}
-	logger.Infof("Started postgres on port: %d", pgServerPort)
-
-	if agentDB, agentDBPGPool, err = duty.SetupDB(connection, nil); err != nil {
-		ginkgo.Fail(err.Error())
-	}
-	dummyDataset = dummy.GetStaticDummyData(agentDB)
-
-	_, err = agentDBPGPool.Exec(gocontext.TODO(), fmt.Sprintf("CREATE DATABASE %s", upstreamDBName))
-	Expect(err).NotTo(HaveOccurred())
-
-	upstreamDBConnection := strings.ReplaceAll(connection, agentDBName, upstreamDBName)
-	if upstreamDB, upstreamPool, err = duty.SetupDB(upstreamDBConnection, nil); err != nil {
-		ginkgo.Fail(err.Error())
-	}
-	Expect(upstreamDB.Create(&models.Agent{ID: agentID, Name: agentName}).Error).To(BeNil())
-
-	setupUpstreamHTTPServer()
+	DefaultContext = setup.BeforeSuiteFn()
+	// DefaultContext = DefaultContext.WithDBLogLevel("trace").WithTrace()
 })
 
 var _ = ginkgo.AfterSuite(func() {
-	logger.Infof("Stopping upstream echo server")
-	if err := upstreamEchoServer.Shutdown(gocontext.Background()); err != nil {
-		ginkgo.Fail(err.Error())
+	if shutdown != nil {
+		shutdown()
 	}
 
-	logger.Infof("Stopping postgres")
-	if err := postgresServer.Stop(); err != nil {
-		ginkgo.Fail(err.Error())
-	}
+	setup.AfterSuiteFn()
 })
 
-func setupUpstreamHTTPServer() {
-	upstreamEchoServer = echo.New()
-	upstreamEchoServer.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
-			c.SetRequest(c.Request().WithContext(context.NewContext(c.Request().Context()).WithDB(upstreamDB, upstreamPool)))
+type agentWrapper struct {
+	id   uuid.UUID // agent's id in the upstream db
+	name string
+	context.Context
+	datasetFunc func(*gorm.DB) dummy.DummyData
+	dataset     dummy.DummyData
+	port        int
+}
+
+func (t *agentWrapper) setup(context context.Context) {
+	if context, drop, err := setup.NewDB(context, t.name); err != nil {
+		ginkgo.Fail(err.Error())
+	} else {
+		t.Context = *context
+		shutdown = wrap(shutdown, drop)
+	}
+
+	if t.datasetFunc != nil {
+		t.dataset = t.datasetFunc(t.DB())
+		if err := t.dataset.Populate(t.WithDBLogLevel("info").DB()); err != nil {
+			ginkgo.Fail(err.Error())
+		}
+	}
+
+	// t.Context = t.WithDBLogLevel("trace").WithTrace()
+}
+
+func (t *agentWrapper) StartServer() {
+	e := echov4.New()
+
+	e.Use(func(next echov4.HandlerFunc) echov4.HandlerFunc {
+		return func(c echov4.Context) error {
+			c.SetRequest(c.Request().WithContext(t.Context.Wrap(c.Request().Context())))
 			return next(c)
 		}
 	})
+	e.Use(auth.MockMiddleware)
+	RegisterRoutes(e)
+	port, stop := setup.RunEcho(e)
+	t.port = port
 
-	api.DefaultContext = context.NewContext(gocontext.Background()).WithDB(upstreamDB, upstreamPool)
-	upstreamGroup := upstreamEchoServer.Group("/upstream")
-	upstreamGroup.POST("/push", PushUpstream)
-	upstreamGroup.GET("/pull/:agent_name", Pull)
-	upstreamGroup.GET("/status/:agent_name", Status)
-	listenAddr := fmt.Sprintf(":%d", upstreamEchoServerport)
+	shutdown = wrap(shutdown, stop)
+}
 
-	api.UpstreamConf = upstream.UpstreamConfig{
-		AgentName: agentName,
-		Host:      fmt.Sprintf("http://localhost:%d", upstreamEchoServerport),
-		Username:  "admin@local",
+func (t *agentWrapper) GetReconciler(other *agentWrapper) *upstream.UpstreamReconciler {
+	upstreamConfig := upstream.UpstreamConfig{
+		AgentName: t.name,
+		Host:      fmt.Sprintf("http://localhost:%d", other.port),
+		Username:  "System",
+		Password:  "admin",
+		Labels:    []string{"test"},
+	}
+	return upstream.NewUpstreamReconciler(upstreamConfig, batchSize)
+}
+
+func (t *agentWrapper) Reconcile(other *agentWrapper, table string) (int, error) {
+	return t.GetReconciler(other).Sync(t.Context, table)
+}
+
+func (t *agentWrapper) PushTo(other agentWrapper) {
+	upstreamConfig := upstream.UpstreamConfig{
+		AgentName: t.name,
+		Host:      fmt.Sprintf("http://localhost:%d", other.port),
+		Username:  "System",
 		Password:  "admin",
 		Labels:    []string{"test"},
 	}
 
-	go func() {
-		defer ginkgo.GinkgoRecover() // Required by ginkgo, if an assertion is made in a goroutine.
-		if err := upstreamEchoServer.Start(listenAddr); err != nil {
-			if err == http.ErrServerClosed {
-				logger.Infof("Server closed")
-			} else {
-				ginkgo.Fail(fmt.Sprintf("Failed to start test server: %v", err))
-			}
-		}
-	}()
+	fn := upstream.NewPushUpstreamConsumer(upstreamConfig)
+	consumer, err := postq.AsyncEventConsumer{
+		WatchEvents: []string{api.EventPushQueueCreate},
+		BatchSize:   50,
+		Consumer: func(ctx postq.Context, e postq.Events) postq.Events {
+			t.Context.Debugf("processing [%s] %d events", api.EventPushQueueCreate, len(e))
+			e = fn(t.Context, e)
+			t.Context.Debugf("processed [%s] %d events", api.EventPushQueueCreate, len(e))
+			return e
+		},
+		ConsumerOption: &postq.ConsumerOption{
+			ErrorHandler: func(e error) bool {
+				defer ginkgo.GinkgoRecover()
+				Expect(e).To(BeNil())
+				return true
+			},
+		}}.EventConsumer()
+	Expect(err).To(BeNil())
+	consumer.ConsumeUntilEmpty(t.Context)
+
+}
+
+func wrap(fn1, fn2 func()) func() {
+	if fn1 == nil {
+		return fn2
+	}
+	return func() {
+		fn1()
+		fn2()
+	}
 }

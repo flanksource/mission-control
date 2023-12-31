@@ -78,12 +78,7 @@ func New(ctx context.Context) *echov4.Echo {
 	}
 	e.GET("/schemas/*", echov4.WrapHandler(http.StripPrefix("/schemas/", schemaServer)))
 
-	upstreamGroup := e.Group("/upstream", rbac.Authorization(rbac.ObjectAgentPush, rbac.ActionWrite))
-	upstreamGroup.POST("/push", upstream.PushUpstream)
-	upstreamGroup.GET("/pull/:agent_name", upstream.Pull)
-	upstreamGroup.GET("/status/:agent_name", upstream.Status)
-	upstreamGroup.GET("/canary/pull/:agent_name", upstream.PullCanaries)
-	upstreamGroup.GET("/scrapeconfig/pull/:agent_name", upstream.PullScrapeConfigs)
+	upstream.RegisterRoutes(e)
 
 	artifacts.RegisterRoutes(e, "artifacts")
 
