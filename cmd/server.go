@@ -1,12 +1,15 @@
 package cmd
 
 import (
+	gocontext "context"
 	"fmt"
 	"net/url"
 	"strings"
 
+	commonsCtx "github.com/flanksource/commons/context"
 	"github.com/flanksource/commons/logger"
 	"github.com/labstack/echo-contrib/echoprometheus"
+	"go.opentelemetry.io/otel"
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/kopper"
@@ -98,7 +101,11 @@ var Serve = &cobra.Command{
 		// PostgREST needs to know how it is exposed to create the correct links
 		db.HttpEndpoint = api.PublicWebURL + "/db"
 
-		if err := context.LoadPropertiesFromFile(api.DefaultContext, propertiesFile); err != nil {
+		ctx := context.NewContext(gocontext.Background(), commonsCtx.WithTracer(otel.GetTracerProvider().Tracer("mission-control"))).
+			WithDB(db.Gorm, db.Pool).
+			WithKubernetes(api.Kubernetes).
+			WithNamespace(api.Namespace)
+		if err := context.LoadPropertiesFromFile(ctx, propertiesFile); err != nil {
 			logger.Fatalf("Error setting properties in database: %v", err)
 		}
 
@@ -114,24 +121,24 @@ var Serve = &cobra.Command{
 			}
 		}
 
-		go jobs.Start(api.DefaultContext)
+		go jobs.Start(ctx)
 
-		events.StartConsumers(api.DefaultContext)
+		events.StartConsumers(ctx)
 
-		go tableUpdatesHandler(api.DefaultContext)
+		go tableUpdatesHandler(ctx)
 
 		if !disableKubernetes {
-			go launchKopper(api.DefaultContext)
+			go launchKopper(ctx)
 		}
 
-		e := echo.New(api.DefaultContext)
+		e := echo.New(ctx)
 
 		if postgrestURI != "" {
 			echo.Forward(e, "/db", postgrestURI, rbac.Authorization(rbac.ObjectDatabase, "any"))
 		}
 		if auth.AuthMode != "" {
 			db.PostgresDBAnonRole = "postgrest_api"
-			auth.Middleware(api.DefaultContext, e)
+			auth.Middleware(ctx, e)
 		}
 
 		echo.Forward(e, "/config", configDb)

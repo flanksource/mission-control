@@ -1,17 +1,14 @@
 package cmd
 
 import (
-	gocontext "context"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
-	commonsCtx "github.com/flanksource/commons/context"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty"
-	"github.com/flanksource/duty/context"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
@@ -21,7 +18,6 @@ import (
 	"github.com/flanksource/incident-commander/telemetry"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"k8s.io/client-go/kubernetes/fake"
 )
@@ -49,11 +45,6 @@ func PreRun(cmd *cobra.Command, args []string) {
 		}
 		telemetry.InitTracer(otelServiceName, otelcollectorURL, true, resourceAttrs)
 	}
-
-	api.DefaultContext = context.NewContext(gocontext.Background(), commonsCtx.WithTracer(otel.GetTracerProvider().Tracer("global"))).
-		WithDB(db.Gorm, db.Pool).
-		WithKubernetes(api.Kubernetes).
-		WithNamespace(api.Namespace)
 
 	if strings.HasPrefix(auth.IdentityRoleMapper, "file://") {
 		path := strings.TrimPrefix(auth.IdentityRoleMapper, "file://")

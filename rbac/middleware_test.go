@@ -24,7 +24,7 @@ func TestAuthorization(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
-	DefaultContext = setup.BeforeSuiteFn().WithDBLogLevel("trace").WithTrace()
+	DefaultContext = setup.BeforeSuiteFn()
 
 })
 var _ = AfterSuite(setup.AfterSuiteFn)
@@ -93,7 +93,7 @@ var _ = Describe("Authorization", func() {
 			rec := httptest.NewRecorder()
 
 			// Call endpoint
-			req = req.WithContext(api.DefaultContext)
+			req = req.WithContext(DefaultContext)
 			_ = Authorization(tc.object, tc.action)(handler)(e.NewContext(req, rec))
 			Expect(rec.Code).To(Equal(tc.expectedCode))
 			Expect(tc.expectedBody).To(Equal(rec.Body.String()))

@@ -11,7 +11,6 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/schema/openapi"
 	"github.com/flanksource/incident-commander/agent"
-	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/artifacts"
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/logs"
@@ -46,7 +45,7 @@ func New(ctx context.Context) *echov4.Echo {
 
 	e.Use(func(next echov4.HandlerFunc) echov4.HandlerFunc {
 		return func(c echov4.Context) error {
-			c.SetRequest(c.Request().WithContext(api.DefaultContext.Wrap(c.Request().Context())))
+			c.SetRequest(c.Request().WithContext(ctx.Wrap(c.Request().Context())))
 			return next(c)
 		}
 	})
