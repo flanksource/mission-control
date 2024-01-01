@@ -1,4 +1,4 @@
-package jobs
+package incidents
 
 import (
 	"fmt"
@@ -21,38 +21,45 @@ func init() {
 	prgCache = cache.New(24*time.Hour, 1*time.Hour)
 }
 
-func EvaluateEvidenceScripts(ctx job.JobRuntime) error {
-	// Fetch all evidences of open incidents which have a script
-	evidences := db.GetEvidenceScripts(ctx.Context)
+var EvaluateEvidence = &job.Job{
+	Name:       "Evaluate Evidence",
+	Schedule:   "@every 5m",
+	Retention:  job.RetentionHour,
+	JobHistory: true,
+	Singleton:  true,
+	Fn: func(ctx job.JobRuntime) error {
+		// Fetch all evidences of open incidents which have a script
+		evidences := db.GetEvidenceScripts(ctx.Context)
 
-	var incidentIDs []uuid.UUID
-	for _, evidence := range evidences {
-		output, err := evaluate(evidence)
-		if err != nil {
-			logger.Errorf("Error running evidence script: %v", err)
-			if err = db.UpdateEvidenceScriptResult(ctx.Context, evidence.ID, false, err.Error()); err != nil {
+		var incidentIDs []uuid.UUID
+		for _, evidence := range evidences {
+			output, err := evaluate(evidence)
+			if err != nil {
+				logger.Errorf("Error running evidence script: %v", err)
+				if err = db.UpdateEvidenceScriptResult(ctx.Context, evidence.ID, false, err.Error()); err != nil {
+					logger.Errorf("Error persisting evidence script result: %v", err)
+				}
+				continue
+			}
+
+			var result string
+			done, err := strconv.ParseBool(output)
+			if err != nil {
+				result = "Script should evaluate to a boolean value"
+			}
+			if err = db.UpdateEvidenceScriptResult(ctx.Context, evidence.ID, done, result); err != nil {
 				logger.Errorf("Error persisting evidence script result: %v", err)
 			}
-			continue
+			incidentIDs = append(incidentIDs, evidence.Hypothesis.IncidentID)
 		}
 
-		var result string
-		done, err := strconv.ParseBool(output)
+		err := db.ReconcileIncidentStatus(ctx.Context, incidentIDs)
 		if err != nil {
-			result = "Script should evaluate to a boolean value"
+			logger.Errorf("Error updating incident status: %v", err)
 		}
-		if err = db.UpdateEvidenceScriptResult(ctx.Context, evidence.ID, done, result); err != nil {
-			logger.Errorf("Error persisting evidence script result: %v", err)
-		}
-		incidentIDs = append(incidentIDs, evidence.Hypothesis.IncidentID)
-	}
 
-	err := db.ReconcileIncidentStatus(ctx.Context, incidentIDs)
-	if err != nil {
-		logger.Errorf("Error updating incident status: %v", err)
-	}
-
-	return nil
+		return nil
+	},
 }
 
 func evaluate(evidence db.EvidenceScriptInput) (string, error) {

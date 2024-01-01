@@ -1,11 +1,13 @@
 package notification
 
 import (
+	"fmt"
 	"reflect"
-	"testing"
+
+	"github.com/onsi/ginkgo/v2"
 )
 
-func Test_getPropsForService(t *testing.T) {
+var _ = ginkgo.Describe("Notification properties", func() {
 	type args struct {
 		service  string
 		property map[string]string
@@ -48,10 +50,10 @@ func Test_getPropsForService(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		ginkgo.It(tt.name, func() {
 			if got := getPropsForService(tt.args.service, tt.args.property); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("getPropsForService() = %v, want %v", got, tt.want)
+				ginkgo.Fail(fmt.Sprintf("getPropsForService() = %v, want %v", tt.args, tt.want))
 			}
 		})
 	}
-}
+})

@@ -1,8 +1,6 @@
-package rules
+package incidents
 
 import (
-	"time"
-
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
@@ -11,8 +9,6 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db/models"
 )
-
-var Period = time.Second * 300
 
 var Rules []models.IncidentRule
 
@@ -27,29 +23,36 @@ func getAllStatii() []string {
 	return statii
 }
 
-func Run(ctx job.JobRuntime) error {
-	if err := ctx.DB().
-		// .Order("priority ASC")
-		Find(&Rules).Error; err != nil {
-		return err
-	}
+var IncidentRules = &job.Job{
+	Name:       "IncidentRules",
+	Schedule:   "@every 5m",
+	Retention:  job.RetentionHour,
+	Singleton:  true,
+	JobHistory: true,
+	Fn: func(ctx job.JobRuntime) error {
+		if err := ctx.DB().
+			// .Order("priority ASC")
+			Find(&Rules).Error; err != nil {
+			return err
+		}
 
-	statuses := getAllStatii()
-	response, err := duty.QueryTopology(ctx, ctx.Pool(), duty.TopologyOptions{
-		Flatten: true,
-		Status:  statuses,
-	})
-	if err != nil {
-		return err
-	}
-	logger.Debugf("Found %d components with statuses: %v", len(response.Components), statuses)
+		statuses := getAllStatii()
+		response, err := duty.QueryTopology(ctx, ctx.Pool(), duty.TopologyOptions{
+			Flatten: true,
+			Status:  statuses,
+		})
+		if err != nil {
+			return err
+		}
+		logger.Debugf("Found %d components with statuses: %v", len(response.Components), statuses)
 
-	autoCreatedOpenIncidents, err := getOpenIncidentsWithRules(ctx.Context)
-	if err != nil {
-		return err
-	}
+		autoCreatedOpenIncidents, err := getOpenIncidentsWithRules(ctx.Context)
+		if err != nil {
+			return err
+		}
 
-	return createIncidents(ctx.Context, autoCreatedOpenIncidents, response.Components)
+		return createIncidents(ctx.Context, autoCreatedOpenIncidents, response.Components)
+	},
 }
 
 // createIncidents creates incidents based on the components

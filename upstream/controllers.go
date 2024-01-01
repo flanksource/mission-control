@@ -13,6 +13,7 @@ import (
 	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/rbac"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/patrickmn/go-cache"
@@ -22,6 +23,15 @@ import (
 var (
 	agentIDCache = cache.New(3*24*time.Hour, 12*time.Hour)
 )
+
+func RegisterRoutes(e *echo.Echo) {
+	upstreamGroup := e.Group("/upstream", rbac.Authorization(rbac.ObjectAgentPush, rbac.ActionWrite))
+	upstreamGroup.POST("/push", PushUpstream)
+	upstreamGroup.GET("/pull/:agent_name", Pull)
+	upstreamGroup.GET("/status/:agent_name", Status)
+	upstreamGroup.GET("/canary/pull/:agent_name", PullCanaries)
+	upstreamGroup.GET("/scrapeconfig/pull/:agent_name", PullScrapeConfigs)
+}
 
 // PushUpstream saves the push data from agents.
 func PushUpstream(c echo.Context) error {

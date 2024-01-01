@@ -5,14 +5,10 @@ import (
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/job"
-	"github.com/flanksource/duty/models"
-	"github.com/flanksource/incident-commander/db"
 )
 
 // CleanupEventQueue deletes stale records in the `event_queue` table
 func CleanupEventQueue(ctx job.JobRuntime) error {
-	jobHistory := models.NewJobHistory("CleanupEventQueue", "", "")
-	_ = db.PersistJobHistory(ctx.Context, jobHistory.Start())
 
 	pushQueueSchedule := map[string]time.Duration{
 		"topologies":                     time.Hour * 24 * 7,
@@ -32,26 +28,19 @@ func CleanupEventQueue(ctx job.JobRuntime) error {
 	for table, age := range pushQueueSchedule {
 		result := ctx.DB().Exec("DELETE FROM event_queue WHERE name = 'push_queue.create' AND properties->>'table' = ? AND NOW() - created_at > ?", table, age)
 		if result.Error != nil {
-			logger.Errorf("Error cleaning up push_queue events for table=%s: %v", table, result.Error)
-			jobHistory.AddError(result.Error.Error())
+			ctx.History.AddError(result.Error.Error())
 		} else if result.RowsAffected > 0 {
 			logger.Warnf("Deleted %d push_queue events for table=%s", result.RowsAffected, table)
-			jobHistory.SuccessCount += int(result.RowsAffected)
+			ctx.History.ErrorCount += int(result.RowsAffected)
 		}
 	}
 
 	defaultAge := time.Hour * 24 * 30
 	result := ctx.DB().Exec("DELETE FROM event_queue WHERE name != 'push_queue.create' AND NOW() - created_at > ?", defaultAge)
 	if result.Error != nil {
-		logger.Errorf("Error cleaning up events (!push_queue.create): %v", result.Error)
-		jobHistory.AddError(result.Error.Error())
+		ctx.History.AddError(result.Error.Error())
 	} else if result.RowsAffected > 0 {
-		logger.Warnf("Deleted %d events(!push_queue.create)", result.RowsAffected)
-		jobHistory.SuccessCount += int(result.RowsAffected)
-	}
-
-	if err := db.PersistJobHistory(ctx.Context, jobHistory.End()); err != nil {
-		logger.Errorf("error persisting job history: %v", err)
+		ctx.History.ErrorCount += int(result.RowsAffected)
 	}
 
 	return nil

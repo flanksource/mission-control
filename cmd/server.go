@@ -3,205 +3,44 @@ package cmd
 import (
 	gocontext "context"
 	"fmt"
-	"net/http"
 	"net/url"
 	"strings"
 
+	commonsCtx "github.com/flanksource/commons/context"
 	"github.com/flanksource/commons/logger"
-	cutils "github.com/flanksource/commons/utils"
+	"github.com/labstack/echo-contrib/echoprometheus"
+	"go.opentelemetry.io/otel"
+
 	"github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/schema/openapi"
 	"github.com/flanksource/kopper"
 	"github.com/flanksource/postq/pg"
-	"github.com/labstack/echo-contrib/echoprometheus"
-	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
 	prom "github.com/prometheus/client_golang/prometheus"
-	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 
 	"github.com/spf13/cobra"
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	"github.com/flanksource/duty/models"
-	"github.com/flanksource/incident-commander/agent"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
-	"github.com/flanksource/incident-commander/artifacts"
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/events"
+	"github.com/flanksource/incident-commander/incidents/responder"
 	"github.com/flanksource/incident-commander/jobs"
-	"github.com/flanksource/incident-commander/logs"
 	"github.com/flanksource/incident-commander/notification"
-	"github.com/flanksource/incident-commander/playbook"
 	"github.com/flanksource/incident-commander/rbac"
-	"github.com/flanksource/incident-commander/responder"
-	"github.com/flanksource/incident-commander/snapshot"
 	"github.com/flanksource/incident-commander/teams"
-	"github.com/flanksource/incident-commander/upstream"
-	"github.com/flanksource/incident-commander/utils"
+
+	// register event handlers
+	_ "github.com/flanksource/incident-commander/incidents/responder"
+	_ "github.com/flanksource/incident-commander/notification"
+	_ "github.com/flanksource/incident-commander/playbook"
+	_ "github.com/flanksource/incident-commander/upstream"
 )
 
 const (
-	HeaderCacheControl = "Cache-Control"
-	CacheControlValue  = "public, max-age=2592000, immutable"
-	propertiesFile     = "mission-control.properties"
+	propertiesFile = "mission-control.properties"
 )
-
-var cacheSuffixes = []string{
-	".ico",
-	".svg",
-	".css",
-	".js",
-	".png",
-}
-
-// tracingURLSkipper ignores metrics route on some middleware
-func tracingURLSkipper(c echo.Context) bool {
-	pathsToSkip := []string{"/health", "/metrics"}
-	for _, p := range pathsToSkip {
-		if strings.HasPrefix(c.Path(), p) {
-			return true
-		}
-	}
-	return false
-}
-
-func createHTTPServer(ctx context.Context) *echo.Echo {
-	e := echo.New()
-	e.HideBanner = true
-
-	e.Use(otelecho.Middleware("mission-control", otelecho.WithSkipper(tracingURLSkipper)))
-
-	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
-			c.SetRequest(c.Request().WithContext(api.DefaultContext.Wrap(c.Request().Context())))
-			return next(c)
-		}
-	})
-
-	e.Use(echoprometheus.NewMiddlewareWithConfig(echoprometheus.MiddlewareConfig{
-		Registerer: prom.DefaultRegisterer,
-	}))
-
-	e.GET("/metrics", echoprometheus.NewHandlerWithConfig(echoprometheus.HandlerConfig{
-		Gatherer: prom.DefaultGatherer,
-	}))
-
-	if authMode != "" {
-		var (
-			adminUserID string
-			err         error
-		)
-
-		switch authMode {
-		case "kratos":
-			kratosHandler := auth.NewKratosHandler(kratosAPI, kratosAdminAPI, db.PostgRESTJWTSecret)
-			adminUserID, err = kratosHandler.CreateAdminUser(ctx)
-			if err != nil {
-				logger.Fatalf("Failed to created admin user: %v", err)
-			}
-
-			middleware, err := kratosHandler.KratosMiddleware(ctx)
-			if err != nil {
-				logger.Fatalf("Failed to initialize kratos middleware: %v", err)
-			}
-			e.Use(middleware.Session)
-			e.POST("/auth/invite_user", kratosHandler.InviteUser, rbac.Authorization(rbac.ObjectAuth, rbac.ActionWrite))
-
-		case "clerk":
-			if clerkJWKSURL == "" {
-				logger.Fatalf("Failed to start server: clerk-jwks-url is required")
-			}
-			if clerkOrgID == "" {
-				logger.Fatalf("Failed to start server: clerk-org-id is required")
-			}
-
-			clerkHandler, err := auth.NewClerkHandler(clerkJWKSURL, clerkOrgID, db.PostgRESTJWTSecret)
-			if err != nil {
-				logger.Fatalf("Failed to initialize clerk client: %v", err)
-			}
-			e.Use(clerkHandler.Session)
-
-			// We also need to disable "settings.users" feature in database
-			// to hide the menu from UI
-			props := []models.AppProperty{{Name: "settings.user.disabled", Value: "true"}}
-			if err := models.SetProperties(db.Gorm, props); err != nil {
-				logger.Fatalf("Error setting property in database: %v", err)
-			}
-
-		default:
-			logger.Fatalf("Invalid auth provider: %s", authMode)
-		}
-
-		// Initiate RBAC
-		if err := rbac.Init(adminUserID); err != nil {
-			logger.Fatalf("Failed to initialize rbac: %v", err)
-		}
-	}
-
-	if postgrestURI != "" {
-		forward(e, "/db", postgrestURI, rbac.Authorization(rbac.ObjectDatabase, "any"))
-	}
-
-	echoLogConfig := middleware.DefaultLoggerConfig
-	echoLogConfig.Skipper = tracingURLSkipper
-
-	e.Use(middleware.LoggerWithConfig(echoLogConfig))
-	e.Use(ServerCache)
-
-	e.GET("/health", func(c echo.Context) error {
-		if err := db.Pool.Ping(gocontext.Background()); err != nil {
-			return c.JSON(http.StatusInternalServerError, api.HTTPError{
-				Error:   err.Error(),
-				Message: "Failed to ping database",
-			})
-		}
-		return c.JSON(http.StatusOK, api.HTTPSuccess{Message: "ok"})
-	})
-
-	e.GET("/snapshot/topology/:id", snapshot.Topology)
-	e.GET("/snapshot/incident/:id", snapshot.Incident)
-	e.GET("/snapshot/config/:id", snapshot.Config)
-
-	e.POST("/auth/:id/update_state", auth.UpdateAccountState)
-	e.POST("/auth/:id/properties", auth.UpdateAccountProperties)
-	e.GET("/auth/whoami", auth.WhoAmI)
-
-	e.POST("/rbac/:id/update_role", rbac.UpdateRoleForUser, rbac.Authorization(rbac.ObjectRBAC, rbac.ActionWrite))
-
-	// Serve openapi schemas
-	schemaServer, err := utils.HTTPFileserver(openapi.Schemas)
-	if err != nil {
-		logger.Fatalf("Error creating schema fileserver: %v", err)
-	}
-	e.GET("/schemas/*", echo.WrapHandler(http.StripPrefix("/schemas/", schemaServer)))
-
-	if api.UpstreamConf.IsPartiallyFilled() {
-		logger.Warnf("Please ensure that all the required flags for upstream is supplied.")
-	}
-	upstreamGroup := e.Group("/upstream", rbac.Authorization(rbac.ObjectAgentPush, rbac.ActionWrite))
-	upstreamGroup.POST("/push", upstream.PushUpstream)
-	upstreamGroup.GET("/pull/:agent_name", upstream.Pull)
-	upstreamGroup.GET("/status/:agent_name", upstream.Status)
-	upstreamGroup.GET("/canary/pull/:agent_name", upstream.PullCanaries)
-	upstreamGroup.GET("/scrapeconfig/pull/:agent_name", upstream.PullScrapeConfigs)
-
-	artifacts.RegisterRoutes(e, "artifacts")
-
-	playbook.RegisterRoutes(e, "playbook")
-
-	e.POST("/agent/generate", agent.GenerateAgent, rbac.Authorization(rbac.ObjectAgentCreate, rbac.ActionWrite))
-
-	forward(e, "/config", configDb)
-	forward(e, "/canary/webhook", api.CanaryCheckerPath+"/webhook")
-	forward(e, "/canary", api.CanaryCheckerPath)
-	forward(e, "/kratos", kratosAPI)
-	forward(e, "/apm", api.ApmHubPath) // Deprecated
-
-	e.POST("/logs", logs.LogsHandler)
-	return e
-}
 
 func launchKopper(ctx context.Context) {
 	mgr, err := kopper.Manager(&kopper.ManagerOptions{
@@ -261,11 +100,12 @@ var Serve = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		// PostgREST needs to know how it is exposed to create the correct links
 		db.HttpEndpoint = api.PublicWebURL + "/db"
-		if authMode != "" {
-			db.PostgresDBAnonRole = "postgrest_api"
-		}
 
-		if err := models.SetPropertiesInDBFromFile(db.Gorm, propertiesFile); err != nil {
+		ctx := context.NewContext(gocontext.Background(), commonsCtx.WithTracer(otel.GetTracerProvider().Tracer("mission-control"))).
+			WithDB(db.Gorm, db.Pool).
+			WithKubernetes(api.Kubernetes).
+			WithNamespace(api.Namespace)
+		if err := context.LoadPropertiesFromFile(ctx, propertiesFile); err != nil {
 			logger.Fatalf("Error setting properties in database: %v", err)
 		}
 
@@ -281,23 +121,42 @@ var Serve = &cobra.Command{
 			}
 		}
 
-		go jobs.Start(api.DefaultContext)
+		go jobs.Start(ctx)
 
-		events.StartConsumers(api.DefaultContext, api.UpstreamConf)
+		events.StartConsumers(ctx)
 
-		go tableUpdatesHandler(api.DefaultContext)
-
-		go func() {
-			logs.IfError(playbook.StartPlaybookRunConsumer(api.DefaultContext), "error starting playbook run consumer")
-		}()
-
-		go playbook.ListenPlaybookPGNotify(api.DefaultContext)
+		go tableUpdatesHandler(ctx)
 
 		if !disableKubernetes {
-			go launchKopper(api.DefaultContext)
+			go launchKopper(ctx)
 		}
 
-		e := createHTTPServer(api.DefaultContext)
+		e := echo.New(ctx)
+
+		if postgrestURI != "" {
+			echo.Forward(e, "/db", postgrestURI, rbac.Authorization(rbac.ObjectDatabase, "any"))
+		}
+		if auth.AuthMode != "" {
+			db.PostgresDBAnonRole = "postgrest_api"
+			if err := auth.Middleware(ctx, e); err != nil {
+				logger.Fatalf(err.Error())
+			}
+		}
+
+		echo.Forward(e, "/config", configDb)
+		echo.Forward(e, "/canary/webhook", api.CanaryCheckerPath+"/webhook")
+		echo.Forward(e, "/canary", api.CanaryCheckerPath)
+		echo.Forward(e, "/kratos", auth.KratosAPI)
+		echo.Forward(e, "/apm", api.ApmHubPath) // Deprecated
+
+		e.Use(echoprometheus.NewMiddlewareWithConfig(echoprometheus.MiddlewareConfig{
+			Registerer: prom.DefaultRegisterer,
+		}))
+
+		e.GET("/metrics", echoprometheus.NewHandlerWithConfig(echoprometheus.HandlerConfig{
+			Gatherer: prom.DefaultGatherer,
+		}))
+
 		listenAddr := fmt.Sprintf(":%d", httpPort)
 		logger.Infof("Listening on %s", listenAddr)
 		if err := e.Start(listenAddr); err != nil {
@@ -306,67 +165,8 @@ var Serve = &cobra.Command{
 	},
 }
 
-func forward(e *echo.Echo, prefix string, target string, middlewares ...echo.MiddlewareFunc) {
-	middlewares = append(middlewares, ModifyKratosRequestHeaders, proxyMiddleware(e, prefix, target))
-	e.Group(prefix).Use(middlewares...)
-}
-
-func ModifyKratosRequestHeaders(next echo.HandlerFunc) echo.HandlerFunc {
-	return func(c echo.Context) error {
-		if strings.HasPrefix(c.Request().URL.Path, "/kratos") {
-			// Kratos requires the header X-Forwarded-Proto but Nginx sets it as "https,http"
-			// This leads to URL malformation further upstream
-			val := cutils.Coalesce(
-				c.Request().Header.Get("X-Forwarded-Scheme"),
-				c.Request().Header.Get("X-Scheme"),
-				"https",
-			)
-			c.Request().Header.Set(echo.HeaderXForwardedProto, val)
-
-			// Need to remove the Authorization header set by our auth middleware for kratos
-			// since it uses that header to extract token while performing certain actions
-			c.Request().Header.Del(echo.HeaderAuthorization)
-		}
-		return next(c)
-	}
-}
-
-func proxyMiddleware(e *echo.Echo, prefix, targetURL string) echo.MiddlewareFunc {
-	_url, err := url.Parse(targetURL)
-	if err != nil {
-		e.Logger.Fatal(err)
-	}
-
-	return middleware.ProxyWithConfig(middleware.ProxyConfig{
-		Rewrite: map[string]string{
-			fmt.Sprintf("^%s/*", prefix): "/$1",
-		},
-		Balancer: middleware.NewRoundRobinBalancer([]*middleware.ProxyTarget{{URL: _url}}),
-	})
-}
-
 func init() {
 	ServerFlags(Serve.Flags())
-}
-
-// suffixesInItem checks if any of the suffixes are in the item.
-func suffixesInItem(item string, suffixes []string) bool {
-	for _, suffix := range suffixes {
-		if strings.HasSuffix(item, suffix) {
-			return true
-		}
-	}
-	return false
-}
-
-// ServerCache middleware adds a `Cache Control` header to the response.
-func ServerCache(next echo.HandlerFunc) echo.HandlerFunc {
-	return func(c echo.Context) error {
-		if suffixesInItem(c.Request().RequestURI, cacheSuffixes) {
-			c.Response().Header().Set(HeaderCacheControl, CacheControlValue)
-		}
-		return next(c)
-	}
 }
 
 // tableUpdatesHandler handles all "table_activity" pg notifications.

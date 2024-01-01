@@ -8,4 +8,6 @@ test.test
 build/
 scripts/
 Chart.lock
-charts/
+charts/.devenv*
+devenv.local.nix
+ginkgo.report

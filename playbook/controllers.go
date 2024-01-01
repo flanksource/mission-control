@@ -231,7 +231,8 @@ func HandleWebhook(c echo.Context) error {
 	return c.JSON(http.StatusOK, api.HTTPSuccess{Message: "ok"})
 }
 
-func RegisterRoutes(e *echo.Echo, prefix string) *echo.Group {
+func RegisterRoutes(e *echo.Echo) *echo.Group {
+	prefix := "playbook"
 	playbookGroup := e.Group(fmt.Sprintf("/%s", prefix))
 	playbookGroup.GET("/list", HandlePlaybookList)
 	playbookGroup.POST("/webhook/:webhook_path", HandleWebhook)

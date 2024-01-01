@@ -8,8 +8,8 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/responder/jira"
-	"github.com/flanksource/incident-commander/responder/msplanner"
+	"github.com/flanksource/incident-commander/incidents/responder/jira"
+	"github.com/flanksource/incident-commander/incidents/responder/msplanner"
 	"github.com/patrickmn/go-cache"
 	"gorm.io/gorm"
 )

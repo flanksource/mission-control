@@ -1,15 +1,16 @@
-package jobs
+package incidents
 
 import (
 	"strconv"
-	"testing"
 	"time"
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
-func Test_duration_func(t *testing.T) {
+var _ = ginkgo.Describe("Incident Evidence Script", func() {
 	testData := []struct {
 		name               string
 		script             string
@@ -64,13 +65,9 @@ func Test_duration_func(t *testing.T) {
 		}
 
 		out, err := evaluate(evidence)
-		if err != nil {
-			t.Fatalf("[%s] unexpected error: %v", td.name, err)
-		}
+		Expect(err).To(BeNil())
 
 		output, _ := strconv.ParseBool(out)
-		if output != td.output {
-			t.Fatalf("[%s] expected %v, got %v", td.name, td.output, out)
-		}
+		Expect(output).To(Equal(td.output))
 	}
-}
+})

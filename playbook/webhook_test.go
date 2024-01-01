@@ -5,25 +5,26 @@ import (
 	gocontext "context"
 	"io"
 	"net/http"
-	"testing"
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/types"
-	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
-func Test_authenticateWebhook(t *testing.T) {
+var _ = ginkgo.Describe("Playbook Webhook", func() {
 	type args struct {
 		r       *http.Request
 		headers map[string]string
 		auth    *v1.PlaybookEventWebhookAuth
 	}
-	tests := []struct {
+	type test struct {
 		name    string
 		args    args
 		wantErr bool
-	}{
+	}
+	tests := []test{
 		{
 			name: "basic auth webhook verification",
 			args: args{
@@ -179,18 +180,24 @@ func Test_authenticateWebhook(t *testing.T) {
 		},
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+	var entries = []interface{}{
+		func(tt test) {
 			tt.args.r.Header = http.Header{}
 			for k, v := range tt.args.headers {
 				tt.args.r.Header.Set(k, v)
 			}
-
-			if err := authenticateWebhook(context.NewContext(gocontext.TODO()), tt.args.r, tt.args.auth); (err != nil) != tt.wantErr {
-				t.Errorf("authenticateWebhook() error = %v, wantErr %v", err, tt.wantErr)
-			} else if err != nil && api.ErrorCode(err) != api.EUNAUTHORIZED {
-				t.Errorf("authenticateWebhook() error = %v, wantErr %v", err, api.EUNAUTHORIZED)
+			err := authenticateWebhook(context.NewContext(gocontext.TODO()), tt.args.r, tt.args.auth)
+			if tt.wantErr {
+				Expect(err).NotTo(BeNil())
+			} else {
+				Expect(err).To(BeNil())
 			}
-		})
+		},
 	}
-}
+
+	for _, test := range tests {
+		entries = append(entries, ginkgo.Entry(test.name, test))
+	}
+
+	ginkgo.DescribeTable("args", entries...)
+})

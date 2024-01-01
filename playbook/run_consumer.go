@@ -21,7 +21,6 @@ func StartPlaybookRunConsumer(ctx context.Context) error {
 
 	pgNotifyChannel := make(chan string)
 	go pg.Listen(ctx, "playbook_run_updates", pgNotifyChannel)
-
 	go ec.Listen(ctx, pgNotifyChannel)
 	return nil
 }
@@ -51,7 +50,7 @@ func EventConsumer(c postq.Context) (int, error) {
 			AND scheduled_time <= NOW()
 		ORDER BY scheduled_time
 		FOR UPDATE SKIP LOCKED
-		LIMIT 5
+		LIMIT 1
 	`
 
 	var runs []models.PlaybookRun

@@ -1,12 +1,10 @@
-package notification_test
+package notification
 
 import (
-	gocontext "context"
 	"encoding/json"
 	"fmt"
 
 	"github.com/flanksource/commons/collections"
-	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/api"
@@ -18,7 +16,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = ginkgo.Describe("Test Notification on incident creation", ginkgo.Ordered, func() {
+var _ = ginkgo.Describe("Notification on incident creation", ginkgo.Ordered, func() {
 	var (
 		john      *models.Person
 		incident  *models.Incident
@@ -31,7 +29,7 @@ var _ = ginkgo.Describe("Test Notification on incident creation", ginkgo.Ordered
 			ID:   uuid.New(),
 			Name: "James Bond",
 		}
-		tx := api.DefaultContext.DB().Create(john)
+		tx := DefaultContext.DB().Create(john)
 		Expect(tx.Error).To(BeNil())
 	})
 
@@ -42,7 +40,7 @@ var _ = ginkgo.Describe("Test Notification on incident creation", ginkgo.Ordered
 			Type:       "Entity",
 			ExternalId: "dummy/logistics",
 		}
-		tx := api.DefaultContext.DB().Create(component)
+		tx := DefaultContext.DB().Create(component)
 		Expect(tx.Error).To(BeNil())
 	})
 
@@ -74,7 +72,7 @@ var _ = ginkgo.Describe("Test Notification on incident creation", ginkgo.Ordered
 			CreatedBy: john.ID,
 			Spec:      spec,
 		}
-		tx := api.DefaultContext.DB().Create(team)
+		tx := DefaultContext.DB().Create(team)
 		Expect(tx.Error).To(BeNil())
 	})
 
@@ -86,7 +84,7 @@ var _ = ginkgo.Describe("Test Notification on incident creation", ginkgo.Ordered
 			TeamID:   &team.ID,
 		}
 
-		err := api.DefaultContext.DB().Create(&notif).Error
+		err := DefaultContext.DB().Create(&notif).Error
 		Expect(err).To(BeNil())
 	})
 
@@ -100,23 +98,17 @@ var _ = ginkgo.Describe("Test Notification on incident creation", ginkgo.Ordered
 			Severity:    "Blocker",
 			CommanderID: &john.ID,
 		}
-		tx := api.DefaultContext.DB().Create(incident)
+		tx := DefaultContext.DB().Create(incident)
 		Expect(tx.Error).To(BeNil())
 	})
 
 	ginkgo.It("should consume the event and send the notification", func() {
-		notificationHandler, err := events.NewNotificationSaveConsumerSync().EventConsumer()
-		Expect(err).NotTo(HaveOccurred())
 
-		sendHandler, err := events.NewNotificationSendConsumerAsync().EventConsumer()
-		Expect(err).NotTo(HaveOccurred())
+		events.ConsumeAll(DefaultContext)
 
-		ctx := context.NewContext(gocontext.Background()).WithDB(api.DefaultContext.DB(), api.DefaultContext.Pool())
-
-		// Order of consumption is important as incident.create event
-		// produces a notification.send event
-		notificationHandler.ConsumeUntilEmpty(ctx)
-		sendHandler.ConsumeUntilEmpty(ctx)
+		Eventually(func() int {
+			return len(webhookPostdata)
+		}, "5s", "200ms").Should(BeNumerically(">=", 1))
 
 		Expect(webhookPostdata).To(Not(BeNil()))
 		Expect(webhookPostdata["message"]).To(Equal(fmt.Sprintf("Severity: %s", incident.Severity)))

@@ -1,23 +1,19 @@
-package main
+package incidents
 
 import (
-	gocontext "context"
 	"fmt"
 	"time"
 
-	"github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/job"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/tests/setup"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/db"
-	"github.com/flanksource/incident-commander/rules"
 	"github.com/google/uuid"
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
-var _ = ginkgo.Describe("Test incident creation via incidence rule", ginkgo.Ordered, func() {
+var _ = ginkgo.Describe("Incident Rule", ginkgo.Ordered, func() {
 	var (
 		incidentRule     *api.IncidentRule
 		component        *models.Component
@@ -33,7 +29,7 @@ var _ = ginkgo.Describe("Test incident creation via incidence rule", ginkgo.Orde
 		systemUser := models.Person{
 			Name: "System",
 		}
-		tx := api.DefaultContext.DB().Find(&systemUser)
+		tx := DefaultContext.DB().Find(&systemUser)
 		Expect(tx.Error).To(BeNil())
 
 		api.SystemUserID = &systemUser.ID
@@ -47,7 +43,7 @@ var _ = ginkgo.Describe("Test incident creation via incidence rule", ginkgo.Orde
 			ExternalId: "dummy/component_that_will_fail",
 			Namespace:  namespace,
 		}
-		tx := api.DefaultContext.DB().Create(component)
+		tx := DefaultContext.DB().Create(component)
 		Expect(tx.Error).To(BeNil())
 
 		anotherComponent = &models.Component{
@@ -57,7 +53,7 @@ var _ = ginkgo.Describe("Test incident creation via incidence rule", ginkgo.Orde
 			ExternalId: "dummy/another_component_that_will_fail",
 			Namespace:  namespace,
 		}
-		tx = api.DefaultContext.DB().Create(anotherComponent)
+		tx = DefaultContext.DB().Create(anotherComponent)
 		Expect(tx.Error).To(BeNil())
 
 		componentHealthy := &models.Component{
@@ -68,7 +64,7 @@ var _ = ginkgo.Describe("Test incident creation via incidence rule", ginkgo.Orde
 			Status:     types.ComponentStatusHealthy,
 			Namespace:  namespace,
 		}
-		tx = api.DefaultContext.DB().Create(componentHealthy)
+		tx = DefaultContext.DB().Create(componentHealthy)
 		Expect(tx.Error).To(BeNil())
 	})
 
@@ -97,38 +93,37 @@ var _ = ginkgo.Describe("Test incident creation via incidence rule", ginkgo.Orde
 			},
 			CreatedAt: time.Now(),
 		}
-		tx := api.DefaultContext.DB().Create(incidentRule)
+		tx := DefaultContext.DB().Create(incidentRule)
 		Expect(tx.Error).To(BeNil())
 	})
 
 	ginkgo.It("should mark the components as bad", func() {
 		component.Status = types.ComponentStatusUnhealthy
-		tx := api.DefaultContext.DB().Save(component)
+		tx := DefaultContext.DB().Save(component)
 		Expect(tx.Error).To(BeNil())
 
 		anotherComponent.Status = types.ComponentStatusError
-		tx = api.DefaultContext.DB().Save(anotherComponent)
+		tx = DefaultContext.DB().Save(anotherComponent)
 		Expect(tx.Error).To(BeNil())
 	})
 
 	ginkgo.It("should create incidents", func() {
-		ctx := context.NewContext(gocontext.Background()).WithDB(api.DefaultContext.DB(), db.Pool)
-		jobCtx := job.JobRuntime{Context: ctx}
+		IncidentRules.Context = DefaultContext
 
-		err := rules.Run(jobCtx)
-		Expect(err).To(BeNil())
+		IncidentRules.Run()
+		setup.ExpectJobToPass(IncidentRules)
 
 		var incidences []models.Incident
-		err = api.DefaultContext.DB().Where(&models.Incident{Description: incidentDescription}).Find(&incidences).Error
+		err := DefaultContext.DB().Where(&models.Incident{Description: incidentDescription}).Find(&incidences).Error
 		Expect(err).To(BeNil())
 		Expect(len(incidences)).To(Equal(2)) // There are 3 components but only 2 pass the filter.
 
 		var incident *models.Incident
-		err = api.DefaultContext.DB().Where("title = ?", fmt.Sprintf("%s is %s", component.Name, component.Status)).First(&incident).Error
+		err = DefaultContext.DB().Where("title = ?", fmt.Sprintf("%s is %s", component.Name, component.Status)).First(&incident).Error
 		Expect(err).To(BeNil())
 
 		var anotherIncident *models.Incident
-		err = api.DefaultContext.DB().Where("title = ?", fmt.Sprintf("%s is %s", anotherComponent.Name, anotherComponent.Status)).First(&anotherIncident).Error
+		err = DefaultContext.DB().Where("title = ?", fmt.Sprintf("%s is %s", anotherComponent.Name, anotherComponent.Status)).First(&anotherIncident).Error
 		Expect(err).To(BeNil())
 	})
 })
