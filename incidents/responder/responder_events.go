@@ -19,6 +19,9 @@ func init() {
 }
 
 func RegisterEvents(ctx context.Context) {
+	if ctx.Properties()[api.PropertyIncidentsDisabled] == "true" {
+		return
+	}
 	events.RegisterSyncHandler(generateResponderAddedAsyncEvent, api.EventIncidentResponderAdded)
 	events.RegisterSyncHandler(generateCommentAddedAsyncEvent, api.EventIncidentCommentAdded)
 	events.RegisterAsyncHandler(processResponderEvents, 1, 5, api.EventJiraResponderAdded, api.EventMSPlannerResponderAdded, api.EventMSPlannerCommentAdded, api.EventJiraCommentAdded)
