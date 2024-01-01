@@ -11,6 +11,8 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/tests/setup"
+	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/events"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -25,10 +27,14 @@ var (
 )
 
 var _ = ginkgo.BeforeSuite(func() {
-	DefaultContext = setup.BeforeSuiteFn().WithDBLogLevel("trace").WithTrace()
+	DefaultContext = setup.BeforeSuiteFn(setup.WithoutDummyData)
+	_ = context.UpdateProperty(DefaultContext, api.PropertyIncidentsDisabled, "true")
+	_ = context.UpdateProperty(DefaultContext, "notification.send.trace", "true")
+	go events.StartConsumers(DefaultContext)
 	setupWebhookServer()
 })
 var _ = ginkgo.AfterSuite(func() {
+	// setup.DumpEventQueue(DefaultContext)
 	setup.AfterSuiteFn()
 	if err := webhookServer.Close(); err != nil {
 		logger.Errorf("Fail to close webhook server: %v", err)

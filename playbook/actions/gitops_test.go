@@ -19,7 +19,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
+var _ = ginkgo.Describe("Playbook Action Gitops", ginkgo.Ordered, func() {
 	var (
 		spec v1.GitOpsAction
 		env  TemplateEnv

@@ -1,23 +1,16 @@
-package playbook_test
+package playbook
 
 import (
-	gocontext "context"
 	"fmt"
-	"net/http"
 	"testing"
 
-	embeddedPG "github.com/fergusstrange/embedded-postgres"
-	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/tests/setup"
-	"github.com/flanksource/incident-commander/playbook"
-	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/auth"
 	"github.com/labstack/echo/v4"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"gorm.io/gorm"
 )
 
 func TestPlaybook(t *testing.T) {
@@ -27,93 +20,34 @@ func TestPlaybook(t *testing.T) {
 }
 
 var (
-	postgresServer *embeddedPG.EmbeddedPostgres
-	pgServerPort   = 9885
-
 	// tempPath is used to store the result of the action for this test.
 	tempPath string
 
-	echoServerPort = 11007
-	echoServer     *echo.Echo
+	echoServerPort int
 
-	testDB     *gorm.DB
-	testDBPool *pgxpool.Pool
+	shutdownEcho func()
+
+	DefaultContext context.Context
 )
 
 var _ = ginkgo.BeforeSuite(func() {
-	config, connection := setup.GetEmbeddedPGConfig("test", pgServerPort)
-	postgresServer = embeddedPG.NewDatabase(config)
-	if err := postgresServer.Start(); err != nil {
-		ginkgo.Fail(err.Error())
-	}
-	logger.Infof("Started postgres on port: %d", pgServerPort)
-
-	var err error
-	if testDB, testDBPool, err = duty.SetupDB(connection, nil); err != nil {
-		ginkgo.Fail(err.Error())
-	}
-
-	setupUpstreamHTTPServer()
-})
-
-var _ = ginkgo.AfterSuite(func() {
-	logger.Infof("Stopping upstream echo server")
-	if err := echoServer.Shutdown(gocontext.Background()); err != nil {
-		ginkgo.Fail(err.Error())
-	}
-
-	logger.Infof("Stopping postgres")
-	if err := postgresServer.Stop(); err != nil {
-		ginkgo.Fail(err.Error())
-	}
-})
-
-func setupUpstreamHTTPServer() {
-	echoServer = echo.New()
-	echoServer.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
+	DefaultContext = setup.BeforeSuiteFn()
+	_ = context.UpdateProperty(DefaultContext, api.PropertyIncidentsDisabled, "true")
+	e := echo.New()
+	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			c.SetRequest(c.Request().WithContext(context.NewContext(c.Request().Context()).WithDB(testDB, testDBPool)))
+			c.SetRequest(c.Request().WithContext(DefaultContext.Wrap(c.Request().Context())))
 			return next(c)
 		}
 	})
+	e.Use(auth.MockMiddleware)
+	RegisterRoutes(e)
+	echoServerPort, shutdownEcho = setup.RunEcho(e)
+})
 
-	echoServer.Use(mockAuthMiddleware)
+var _ = ginkgo.AfterSuite(func() {
+	shutdownEcho()
+	// setup.DumpEventQueue(DefaultContext)
+	setup.AfterSuiteFn()
 
-	playbook.RegisterRoutes(echoServer, "playbook")
-
-	listenAddr := fmt.Sprintf(":%d", echoServerPort)
-
-	go func() {
-		defer ginkgo.GinkgoRecover() // Required by ginkgo, if an assertion is made in a goroutine.
-		if err := echoServer.Start(listenAddr); err != nil {
-			if err == http.ErrServerClosed {
-				logger.Infof("Server closed")
-			} else {
-				ginkgo.Fail(fmt.Sprintf("Failed to start test server: %v", err))
-			}
-		}
-	}()
-}
-
-// mockAuthMiddleware doesn't actually authenticate since we never store auth data.
-// It simply ensures that the requested user exists in the DB and then attaches the
-// users's ID to the context.
-func mockAuthMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
-	return func(c echo.Context) error {
-		name, _, ok := c.Request().BasicAuth()
-		if !ok {
-			return c.String(http.StatusUnauthorized, "Unauthorized")
-		}
-
-		var person models.Person
-		if err := testDB.Where("name = ?", name).First(&person).Error; err != nil {
-			return c.String(http.StatusUnauthorized, "Unauthorized")
-		}
-
-		ctx := c.Request().Context().(context.Context)
-		ctx = ctx.WithUser(&models.Person{ID: person.ID, Email: person.Email})
-		c.SetRequest(c.Request().WithContext(ctx))
-
-		return next(c)
-	}
-}
+})

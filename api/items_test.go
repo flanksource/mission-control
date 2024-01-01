@@ -1,6 +1,9 @@
 package api
 
-import "testing"
+import (
+	"github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+)
 
 var fixtures = []struct {
 	Items   []string
@@ -16,11 +19,9 @@ var fixtures = []struct {
 	{[]string{"b", "c"}, "", false},
 }
 
-func TestItems(t *testing.T) {
+var _ = ginkgo.Describe("Items", func() {
 	for _, f := range fixtures {
 		items := Items(f.Items)
-		if items.Contains(f.Item) != f.Matches {
-			t.Errorf("Expected %s to match %s", f.Item, f.Items)
-		}
+		Expect(items.Contains(f.Item)).To(Equal(f.Matches))
 	}
-}
+})

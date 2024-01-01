@@ -126,7 +126,7 @@ var _ = ginkgo.Describe("Upstream Reconcile", ginkgo.Ordered, func() {
 		compareEntities(reconcileUpstream.DB(), reconcileAgent.DB(), &[]models.ConfigScraper{})
 	})
 
-	ginkgo.FIt(fmt.Sprintf("should generated %d dummy config items and save on agent", batchSize), func() {
+	ginkgo.It(fmt.Sprintf("should generated %d dummy config items and save on agent", batchSize), func() {
 		var dummyConfigItems []models.ConfigItem
 		for i := 0; i < batchSize*4+batchSize/2; i++ {
 			dummyConfigItems = append(dummyConfigItems, models.ConfigItem{
@@ -138,7 +138,7 @@ var _ = ginkgo.Describe("Upstream Reconcile", ginkgo.Ordered, func() {
 		Expect(reconcileAgent.DB().CreateInBatches(&dummyConfigItems, 500).Error).To(BeNil())
 	})
 
-	ginkgo.FIt("should reconcile config items", func() {
+	ginkgo.It("should reconcile config items", func() {
 		count, err := reconcileAgent.Reconcile(&reconcileUpstream, "config_items")
 		Expect(err).To(BeNil(), "should push table 'config_items' upstream")
 		Expect(count).To(BeNumerically(">", 1))

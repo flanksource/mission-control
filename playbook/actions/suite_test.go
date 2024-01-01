@@ -16,7 +16,7 @@ var (
 
 func TestPlaybookActions(t *testing.T) {
 	RegisterFailHandler(ginkgo.Fail)
-	ginkgo.RunSpecs(t, "Playbook action suite")
+	ginkgo.RunSpecs(t, "Playbook Action")
 }
 
 var _ = ginkgo.BeforeSuite(func() {
