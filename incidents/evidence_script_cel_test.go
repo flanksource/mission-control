@@ -10,7 +10,7 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-var _ = ginkgo.Describe("Evidence Script", func() {
+var _ = ginkgo.Describe("Incident Evidence Script", func() {
 	testData := []struct {
 		name               string
 		script             string

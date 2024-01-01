@@ -19,7 +19,7 @@ var (
 )
 
 var _ = ginkgo.BeforeSuite(func() {
-	DefaultContext = setup.BeforeSuiteFn().WithDBLogLevel("trace").WithTrace()
+	DefaultContext = setup.BeforeSuiteFn()
 
 })
 var _ = ginkgo.AfterSuite(setup.AfterSuiteFn)
