@@ -25,7 +25,7 @@ var (
 	shutdown func()
 )
 
-const batchSize = 5
+const batchSize = 500
 
 func TestUpstream(t *testing.T) {
 	RegisterFailHandler(ginkgo.Fail)
@@ -34,7 +34,6 @@ func TestUpstream(t *testing.T) {
 
 var _ = ginkgo.BeforeSuite(func() {
 	DefaultContext = setup.BeforeSuiteFn()
-	// DefaultContext = DefaultContext.WithDBLogLevel("trace").WithTrace()
 })
 
 var _ = ginkgo.AfterSuite(func() {
@@ -69,7 +68,6 @@ func (t *agentWrapper) setup(context context.Context) {
 		}
 	}
 
-	// t.Context = t.WithDBLogLevel("trace").WithTrace()
 }
 
 func (t *agentWrapper) StartServer() {
@@ -124,7 +122,7 @@ func (t *agentWrapper) PushTo(other agentWrapper) {
 			return e
 		},
 		ConsumerOption: &postq.ConsumerOption{
-			ErrorHandler: func(e error) bool {
+			ErrorHandler: func(ctx postq.Context, e error) bool {
 				defer ginkgo.GinkgoRecover()
 				Expect(e).To(BeNil())
 				return true

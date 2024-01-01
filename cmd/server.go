@@ -138,7 +138,9 @@ var Serve = &cobra.Command{
 		}
 		if auth.AuthMode != "" {
 			db.PostgresDBAnonRole = "postgrest_api"
-			auth.Middleware(ctx, e)
+			if err := auth.Middleware(ctx, e); err != nil {
+				logger.Fatalf(err.Error())
+			}
 		}
 
 		echo.Forward(e, "/config", configDb)

@@ -8,10 +8,10 @@ import (
 
 type SyncedMap[K comparable, V any] struct {
 	mu sync.RWMutex
-	m  map[K]V
+	m  map[K][]V
 }
 
-func (m *SyncedMap[K, V]) Get(key K) V {
+func (m *SyncedMap[K, V]) Get(key K) []V {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	return m.m[key]
@@ -23,13 +23,7 @@ func (m *SyncedMap[K, V]) Keys() []K {
 	return lo.Keys(m.m)
 }
 
-func (m *SyncedMap[K, V]) Values() []V {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-	return lo.Values(m.m)
-}
-
-func (m *SyncedMap[K, V]) Each(fn func(K, V)) {
+func (m *SyncedMap[K, V]) Each(fn func(K, []V)) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 	for k, v := range m.m {
@@ -37,8 +31,14 @@ func (m *SyncedMap[K, V]) Each(fn func(K, V)) {
 	}
 }
 
-func (m *SyncedMap[K, V]) Set(key K, value V) {
+func (m *SyncedMap[K, V]) Append(key K, value V) {
 	m.mu.Lock()
-	m.m[key] = value
+	if m.m == nil {
+		m.m = make(map[K][]V)
+	}
+	if m.m[key] == nil {
+		m.m[key] = []V{}
+	}
+	m.m[key] = append(m.m[key], value)
 	m.mu.Unlock()
 }

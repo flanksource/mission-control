@@ -9,6 +9,7 @@ import (
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/api"
 	dbModels "github.com/flanksource/incident-commander/db/models"
+	"github.com/flanksource/incident-commander/events"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 	ginkgo "github.com/onsi/ginkgo/v2"
@@ -102,18 +103,12 @@ var _ = ginkgo.Describe("Notification on incident creation", ginkgo.Ordered, fun
 	})
 
 	ginkgo.It("should consume the event and send the notification", func() {
-		// notificationHandler, err := events.NewNotificationSaveConsumerSync().EventConsumer()
-		// Expect(err).NotTo(HaveOccurred())
 
-		// sendHandler, err := events.NewNotificationSendConsumerAsync().EventConsumer()
-		// Expect(err).NotTo(HaveOccurred())
+		events.ConsumeAll(DefaultContext)
 
-		// ctx := context.NewContext(gocontext.Background()).WithDB(DefaultContext.DB(), DefaultContext.Pool())
-
-		// Order of consumption is important as incident.create event
-		// produces a notification.send event
-		// notificationHandler.ConsumeUntilEmpty(ctx)
-		// sendHandler.ConsumeUntilEmpty(ctx)
+		Eventually(func() int {
+			return len(webhookPostdata)
+		}, "5s", "200ms").Should(BeNumerically(">=", 1))
 
 		Expect(webhookPostdata).To(Not(BeNil()))
 		Expect(webhookPostdata["message"]).To(Equal(fmt.Sprintf("Severity: %s", incident.Severity)))

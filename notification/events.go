@@ -93,6 +93,8 @@ func sendNotifications(ctx context.Context, events postq.Events) postq.Events {
 		var payload NotificationEventPayload
 		payload.FromMap(e.Properties)
 
+		ctx.Debugf("[notification.send] %s  ", payload.EventName)
+
 		notificationContext := NewContext(ctx, payload.NotificationID)
 		notificationContext.WithSource(payload.EventName, payload.ID)
 
