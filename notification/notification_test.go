@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/flanksource/commons/collections"
-	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/api"
@@ -104,11 +103,8 @@ var _ = ginkgo.Describe("Notification on incident creation", ginkgo.Ordered, fun
 	})
 
 	ginkgo.It("should consume the event and send the notification", func() {
-		logger.Infof("before consume")
 		events.ConsumeAll(DefaultContext)
-		logger.Infof("after consume")
 		Eventually(func() int {
-			logger.Infof("checking")
 			return len(webhookPostdata)
 		}, "10s", "200ms").Should(BeNumerically(">=", 1))
 
