@@ -42,6 +42,7 @@ func Start(ctx context.Context) {
 	if api.UpstreamConf.Valid() {
 		for _, job := range []*job.Job{SyncCheckStatuses, SyncWithUpstream} {
 			j := job
+			j.Context = ctx
 			if err := j.AddToScheduler(FuncScheduler); err != nil {
 				logger.Errorf("Failed to schedule %s: %v", j, err)
 			}

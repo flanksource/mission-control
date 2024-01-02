@@ -44,6 +44,7 @@ func RegisterSyncHandler(fn Handler, events ...string) {
 }
 
 func ConsumeAll(ctx context.Context) {
+	ctx.Debugf("consuming all events")
 	for _, consumer := range consumers {
 		consumer.ConsumeUntilEmpty(ctx)
 	}
@@ -63,7 +64,6 @@ func StartConsumers(ctx context.Context) {
 	properties := ctx.Properties()
 
 	SyncHandlers.Each(func(event string, handlers []func(ctx context.Context, e postq.Event) error) {
-
 		logger.Tracef("Registering %d sync event handlers for %s", len(handlers), event)
 		consumer := postq.SyncEventConsumer{
 			WatchEvents: []string{event},
@@ -82,7 +82,7 @@ func StartConsumers(ctx context.Context) {
 
 	pgasyncNotifyChannel := notifyRouter.RegisterRoutes(AsyncHandlers.Keys()...)
 	AsyncHandlers.Each(func(event string, handlers []func(ctx context.Context, e postq.Events) postq.Events) {
-		logger.Tracef("Registering %dasync event handlers for %v", len(handlers), event)
+		logger.Tracef("Registering %d async event handlers for %v", len(handlers), event)
 		for _, handler := range handlers {
 			h := handler
 			batchSize := 5

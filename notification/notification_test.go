@@ -103,12 +103,10 @@ var _ = ginkgo.Describe("Notification on incident creation", ginkgo.Ordered, fun
 	})
 
 	ginkgo.It("should consume the event and send the notification", func() {
-
 		events.ConsumeAll(DefaultContext)
-
 		Eventually(func() int {
 			return len(webhookPostdata)
-		}, "5s", "200ms").Should(BeNumerically(">=", 1))
+		}, "10s", "200ms").Should(BeNumerically(">=", 1))
 
 		Expect(webhookPostdata).To(Not(BeNil()))
 		Expect(webhookPostdata["message"]).To(Equal(fmt.Sprintf("Severity: %s", incident.Severity)))

@@ -30,7 +30,7 @@ var _ = ginkgo.BeforeSuite(func() {
 	DefaultContext = setup.BeforeSuiteFn(setup.WithoutDummyData)
 	_ = context.UpdateProperty(DefaultContext, api.PropertyIncidentsDisabled, "true")
 	_ = context.UpdateProperty(DefaultContext, "notification.send.trace", "true")
-	go events.StartConsumers(DefaultContext)
+	events.StartConsumers(DefaultContext)
 	setupWebhookServer()
 })
 var _ = ginkgo.AfterSuite(func() {
@@ -61,6 +61,7 @@ func setupWebhookServer() {
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/webhook", func(w http.ResponseWriter, r *http.Request) {
+		logger.Infof("Received webhook")
 		defer r.Body.Close()
 
 		if err := json.NewDecoder(r.Body).Decode(&webhookPostdata); err != nil {
