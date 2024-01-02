@@ -8,13 +8,10 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/http"
-	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/events"
-	"github.com/flanksource/postq"
-	"github.com/flanksource/postq/pg"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"gorm.io/gorm/clause"
@@ -26,26 +23,10 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 		checkPlaybook     models.Playbook
 		componentPlaybook models.Playbook
 		runResp           RunResponse
-
-		pgNotifyChannel chan string
-		ec              *postq.PGConsumer
 	)
 
 	ginkgo.BeforeAll(func() {
-		pgNotifyChannel = make(chan string)
-
-		var err error
-		ec, err = postq.NewPGConsumer(EventConsumer, &postq.ConsumerOption{
-			NumConsumers: 5,
-			Timeout:      time.Second * 2,
-			ErrorHandler: func(ctx postq.Context, err error) bool {
-				logger.Errorf("Error in queue consumer: %s", err)
-				return true
-			},
-		})
-		Expect(err).NotTo(HaveOccurred())
-
-		go events.StartConsumers(DefaultContext)
+		events.StartConsumers(DefaultContext)
 
 		playbookSpec := v1.PlaybookSpec{
 			Description: "write config name to file",
@@ -183,9 +164,6 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 	})
 
 	ginkgo.It("should store playbook run via API", func() {
-		go pg.Listen(DefaultContext, "playbook_run_updates", pgNotifyChannel)
-		go ec.Listen(DefaultContext, pgNotifyChannel)
-
 		run := RunParams{
 			ID:       configPlaybook.ID,
 			ConfigID: dummy.EKSCluster.ID,
