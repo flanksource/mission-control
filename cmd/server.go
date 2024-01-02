@@ -4,6 +4,7 @@ import (
 	gocontext "context"
 	"fmt"
 	"net/url"
+	"os"
 	"strings"
 
 	commonsCtx "github.com/flanksource/commons/context"
@@ -105,8 +106,11 @@ var Serve = &cobra.Command{
 			WithDB(db.Gorm, db.Pool).
 			WithKubernetes(api.Kubernetes).
 			WithNamespace(api.Namespace)
-		if err := context.LoadPropertiesFromFile(ctx, propertiesFile); err != nil {
-			logger.Fatalf("Error setting properties in database: %v", err)
+
+		if _, err := os.Stat(propertiesFile); err == nil {
+			if err := context.LoadPropertiesFromFile(ctx, propertiesFile); err != nil {
+				logger.Fatalf("Error setting properties in database: %v", err)
+			}
 		}
 
 		if postgrestURI != "" {
