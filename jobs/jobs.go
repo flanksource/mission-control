@@ -1,6 +1,8 @@
 package jobs
 
 import (
+	"time"
+
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/job"
@@ -11,6 +13,7 @@ import (
 
 const (
 	TeamComponentOwnershipSchedule         = "@every 15m"
+	CleanupSoftDeletedComponentsSchedule   = "@every 24h"
 	CleanupJobHistoryTableSchedule         = "@every 24h"
 	CleanupEventQueueTableSchedule         = "@every 24h"
 	CleanupNotificationSendHistorySchedule = "@every 24h"
@@ -18,10 +21,27 @@ const (
 
 var FuncScheduler = cron.New()
 
+var cleanupSoftDeletedComponents = job.Job{
+	Name:      "CleanupSoftDeletedComponents",
+	Singleton: true,
+	Schedule:  CleanupSoftDeletedComponentsSchedule,
+	Fn: func(ctx job.JobRuntime) error {
+		ctx.History.ResourceType = job.ResourceTypeComponent
+		count, err := job.CleanupSoftDeletedComponents(ctx.Context, time.Hour*24*7)
+		ctx.History.SuccessCount = count
+		return err
+	},
+}
+
 func Start(ctx context.Context) {
 	if err := job.NewJob(ctx, "Team Component Ownership", "@every 15m", TeamComponentOwnershipRun).
 		RunOnStart().AddToScheduler(FuncScheduler); err != nil {
 		logger.Errorf("Failed to schedule sync jobs for team component: %v", err)
+	}
+
+	cleanupSoftDeletedComponents.Context = ctx
+	if err := cleanupSoftDeletedComponents.AddToScheduler(FuncScheduler); err != nil {
+		logger.Errorf("Failed to schedule job for cleaning up soft deleted components: %v", err)
 	}
 
 	if err := job.NewJob(ctx, "Cleanup JobHistory Table", CleanupJobHistoryTableSchedule, CleanupJobHistoryTable).
