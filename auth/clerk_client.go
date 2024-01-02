@@ -95,6 +95,10 @@ func (h ClerkHandler) Session(next echo.HandlerFunc) echo.HandlerFunc {
 			}
 
 			user, sessID, err = h.getUserFromAccessToken(ctx, accessToken)
+			if err != nil {
+				logger.Errorf("Error fetching user from access token: %v", err)
+				return c.String(http.StatusUnauthorized, "Unauthorized")
+			}
 
 		} else {
 			// Extract session token from Authorization header
@@ -119,7 +123,6 @@ func (h ClerkHandler) Session(next echo.HandlerFunc) echo.HandlerFunc {
 				logger.Errorf("Error fetching user from clerk: %v", err)
 				return c.String(http.StatusUnauthorized, "Unauthorized")
 			}
-
 		}
 
 		// This is a catch-all if user is unset

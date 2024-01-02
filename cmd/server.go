@@ -137,8 +137,6 @@ var Serve = &cobra.Command{
 
 		e := echo.New(ctx)
 
-		ctx.Debugf("Hello")
-
 		if postgrestURI != "" {
 			echo.Forward(e, "/db", postgrestURI, rbac.Authorization(rbac.ObjectDatabase, "any"))
 		}
