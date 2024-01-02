@@ -34,8 +34,8 @@ func UpdateIdentityState(ctx context.Context, id, state string) error {
 	return ctx.DB().Table("identities").Where("id = ?", id).Update("state", state).Error
 }
 
-func GetUserByID(ctx context.Context, id string) (api.Person, error) {
-	var user api.Person
+func GetUserByID(ctx context.Context, id string) (models.Person, error) {
+	var user models.Person
 	err := ctx.DB().Table("people").Where("id = ?", id).First(&user).Error
 	return user, err
 }
