@@ -2,11 +2,9 @@ package auth
 
 import (
 	gocontext "context"
-	"encoding/base64"
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -20,7 +18,6 @@ import (
 	client "github.com/ory/client-go"
 	"github.com/patrickmn/go-cache"
 	"github.com/samber/lo"
-	"golang.org/x/crypto/argon2"
 	"gorm.io/gorm"
 )
 
@@ -77,55 +74,7 @@ func (k *kratosMiddleware) kratosLogin(ctx gocontext.Context, username, password
 	return &login.Session, nil
 }
 
-func (k *kratosMiddleware) getAccessToken(ctx gocontext.Context, token string) (*models.AccessToken, error) {
-	if token, ok := k.accessTokenCache.Get(token); ok {
-		return token.(*models.AccessToken), nil
-	}
-
-	fields := strings.Split(token, ".")
-	if len(fields) != 5 {
-		return nil, errInvalidTokenFormat
-	}
-
-	var (
-		password = fields[0]
-		salt     = fields[1]
-	)
-
-	timeCost, err := strconv.ParseUint(fields[2], 10, 32)
-	if err != nil {
-		return nil, errInvalidTokenFormat
-	}
-
-	memoryCost, err := strconv.ParseUint(fields[3], 10, 32)
-	if err != nil {
-		return nil, errInvalidTokenFormat
-	}
-
-	parallelism, err := strconv.ParseUint(fields[4], 10, 8)
-	if err != nil {
-		return nil, errInvalidTokenFormat
-	}
-
-	hash := argon2.IDKey([]byte(password), []byte(salt), uint32(timeCost), uint32(memoryCost), uint8(parallelism), 20)
-	encodedHash := base64.URLEncoding.EncodeToString(hash)
-
-	query := `SELECT access_tokens.* FROM access_tokens WHERE value = ?`
-	var acessToken models.AccessToken
-	if err := k.db.Raw(query, encodedHash).First(&acessToken).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil
-		}
-
-		return nil, err
-	}
-
-	k.accessTokenCache.Set(token, &acessToken, time.Until(acessToken.ExpiresAt))
-
-	return &acessToken, nil
-}
-
-func (k *kratosMiddleware) validateSession(r *http.Request) (*client.Session, error) {
+func (k *kratosMiddleware) validateSession(ctx context.Context, r *http.Request) (*client.Session, error) {
 	// Skip all kratos calls
 	if strings.HasPrefix(r.URL.Path, "/kratos") {
 		activeSession := true
@@ -133,16 +82,12 @@ func (k *kratosMiddleware) validateSession(r *http.Request) (*client.Session, er
 	}
 
 	if username, password, ok := r.BasicAuth(); ok {
-		if username == "TOKEN" {
-			accessToken, err := k.getAccessToken(r.Context(), password)
+		if strings.ToLower(username) == "token" {
+			accessToken, err := getAccessToken(ctx, k.accessTokenCache, password)
 			if err != nil {
 				return nil, err
 			} else if accessToken == nil {
 				return &client.Session{Active: lo.ToPtr(false)}, nil
-			}
-
-			if accessToken.ExpiresAt.Before(time.Now()) {
-				return nil, errTokenExpired
 			}
 
 			s := &client.Session{
@@ -189,7 +134,7 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 		}
 
 		ctx := c.Request().Context().(context.Context)
-		session, err := k.validateSession(c.Request())
+		session, err := k.validateSession(ctx, c.Request())
 		if err != nil {
 			ctx.GetSpan().RecordError(err)
 			if errors.Is(err, errInvalidTokenFormat) {

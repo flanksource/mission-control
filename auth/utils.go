@@ -1,14 +1,21 @@
 package auth
 
 import (
+	"encoding/base64"
+	"errors"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/MicahParks/keyfunc"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/patrickmn/go-cache"
+	"golang.org/x/crypto/argon2"
+	"gorm.io/gorm"
 )
 
 func generateDBToken(secret, id string) (string, error) {
@@ -59,4 +66,56 @@ func getJWTKeyFunc(jwksURL string) jwt.Keyfunc {
 		// TODO Handle
 	}
 	return jwks.Keyfunc
+}
+
+func getAccessToken(ctx context.Context, tokenCache *cache.Cache, token string) (*models.AccessToken, error) {
+	if token, ok := tokenCache.Get(token); ok {
+		return token.(*models.AccessToken), nil
+	}
+
+	fields := strings.Split(token, ".")
+	if len(fields) != 5 {
+		return nil, errInvalidTokenFormat
+	}
+
+	var (
+		password = fields[0]
+		salt     = fields[1]
+	)
+
+	timeCost, err := strconv.ParseUint(fields[2], 10, 32)
+	if err != nil {
+		return nil, errInvalidTokenFormat
+	}
+
+	memoryCost, err := strconv.ParseUint(fields[3], 10, 32)
+	if err != nil {
+		return nil, errInvalidTokenFormat
+	}
+
+	parallelism, err := strconv.ParseUint(fields[4], 10, 8)
+	if err != nil {
+		return nil, errInvalidTokenFormat
+	}
+
+	hash := argon2.IDKey([]byte(password), []byte(salt), uint32(timeCost), uint32(memoryCost), uint8(parallelism), 20)
+	encodedHash := base64.URLEncoding.EncodeToString(hash)
+
+	query := `SELECT access_tokens.* FROM access_tokens WHERE value = ?`
+	var acessToken models.AccessToken
+	if err := ctx.DB().Raw(query, encodedHash).First(&acessToken).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+
+		return nil, err
+	}
+
+	if acessToken.ExpiresAt.Before(time.Now()) {
+		return nil, errTokenExpired
+	}
+
+	tokenCache.Set(token, &acessToken, time.Until(acessToken.ExpiresAt))
+
+	return &acessToken, nil
 }
