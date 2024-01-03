@@ -63,6 +63,8 @@ func send(ctx *Context, connectionName, shoutrrrURL, title, message string, prop
 		connection, err := ctx.HydrateConnectionByURL(connectionName)
 		if err != nil {
 			return "", err
+		} else if connection == nil {
+			return "", fmt.Errorf("connection (%s) not found", connectionName)
 		}
 
 		shoutrrrURL = connection.URL
