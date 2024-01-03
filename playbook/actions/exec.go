@@ -140,7 +140,7 @@ func execBash(ctx context.Context, check v1.ExecAction, execEnvParam *execEnv) (
 		return nil, fmt.Errorf("no script provided")
 	}
 
-	cmd := osExec.CommandContext(ctx, "bash", "-c", check.Script)
+	cmd := osExec.CommandContext(ctx, "bash", "-e", "-c", check.Script)
 	if len(execEnvParam.envs) != 0 {
 		cmd.Env = append(os.Environ(), execEnvParam.envs...)
 	}
