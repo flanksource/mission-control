@@ -1,9 +1,10 @@
-package notification
+package notification_test
 
 import (
 	"fmt"
 	"reflect"
 
+	"github.com/flanksource/incident-commander/notification"
 	"github.com/onsi/ginkgo/v2"
 )
 
@@ -51,8 +52,8 @@ var _ = ginkgo.Describe("Notification properties", func() {
 
 	for _, tt := range tests {
 		ginkgo.It(tt.name, func() {
-			if got := getPropsForService(tt.args.service, tt.args.property); !reflect.DeepEqual(got, tt.want) {
-				ginkgo.Fail(fmt.Sprintf("getPropsForService() = %v, want %v", tt.args, tt.want))
+			if got := notification.GetPropsForService(tt.args.service, tt.args.property); !reflect.DeepEqual(got, tt.want) {
+				ginkgo.Fail(fmt.Sprintf("GetPropsForService() = %v, want %v", tt.args, tt.want))
 			}
 		})
 	}

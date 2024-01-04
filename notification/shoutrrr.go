@@ -105,7 +105,7 @@ func send(ctx *Context, connectionName, shoutrrrURL, title, message string, prop
 
 	var allProps map[string]string
 	for _, prop := range properties {
-		prop = getPropsForService(service, prop)
+		prop = GetPropsForService(service, prop)
 		allProps = collections.MergeMap(allProps, prop)
 	}
 
@@ -172,7 +172,7 @@ func injectTitleIntoProperties(service, title string, properties map[string]stri
 	return properties
 }
 
-func getPropsForService(service string, property map[string]string) map[string]string {
+func GetPropsForService(service string, property map[string]string) map[string]string {
 	if service == "smtp" {
 		service = "email"
 	}

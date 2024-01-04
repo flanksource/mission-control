@@ -59,8 +59,6 @@ func StartConsumers(ctx context.Context) {
 	notifyRouter := pg.NewNotifyRouter()
 	go notifyRouter.Run(ctx, eventQueueUpdateChannel)
 
-	pgsyncNotifyChannel := notifyRouter.RegisterRoutes(SyncHandlers.Keys()...)
-
 	properties := ctx.Properties()
 
 	SyncHandlers.Each(func(event string, handlers []func(ctx context.Context, e postq.Event) error) {
@@ -75,12 +73,12 @@ func StartConsumers(ctx context.Context) {
 		if ec, err := consumer.EventConsumer(); err != nil {
 			logger.Fatalf("failed to create event consumer: %s", err)
 		} else {
+			pgsyncNotifyChannel := notifyRouter.RegisterRoutes(event)
 			consumers = append(consumers, ec)
 			go ec.Listen(ctx, pgsyncNotifyChannel)
 		}
 	})
 
-	pgasyncNotifyChannel := notifyRouter.RegisterRoutes(AsyncHandlers.Keys()...)
 	AsyncHandlers.Each(func(event string, handlers []func(ctx context.Context, e postq.Events) postq.Events) {
 		logger.Tracef("Registering %d async event handlers for %v", len(handlers), event)
 		for _, handler := range handlers {
@@ -114,6 +112,7 @@ func StartConsumers(ctx context.Context) {
 			if ec, err := consumer.EventConsumer(); err != nil {
 				logger.Fatalf("failed to create event consumer: %s", err)
 			} else {
+				pgasyncNotifyChannel := notifyRouter.RegisterRoutes(event)
 				consumers = append(consumers, ec)
 				go ec.Listen(ctx, pgasyncNotifyChannel)
 			}

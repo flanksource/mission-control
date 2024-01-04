@@ -1,4 +1,4 @@
-package notification
+package notification_test
 
 import (
 	"encoding/json"
