@@ -1,4 +1,4 @@
-package notification
+package notification_test
 
 import (
 	"encoding/json"
@@ -14,6 +14,12 @@ import (
 	"github.com/lib/pq"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	// register event handlers
+	_ "github.com/flanksource/incident-commander/incidents/responder"
+	_ "github.com/flanksource/incident-commander/notification"
+	_ "github.com/flanksource/incident-commander/playbook"
+	_ "github.com/flanksource/incident-commander/upstream"
 )
 
 var _ = ginkgo.Describe("Notification on incident creation", ginkgo.Ordered, func() {
@@ -103,7 +109,8 @@ var _ = ginkgo.Describe("Notification on incident creation", ginkgo.Ordered, fun
 	})
 
 	ginkgo.It("should consume the event and send the notification", func() {
-		events.ConsumeAll(DefaultContext)
+		events.StartConsumers(DefaultContext)
+
 		Eventually(func() int {
 			return len(webhookPostdata)
 		}, "10s", "200ms").Should(BeNumerically(">=", 1))
