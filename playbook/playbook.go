@@ -4,13 +4,15 @@ import (
 	"encoding/json"
 	"fmt"
 
+	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
+	"github.com/google/uuid"
+
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
-	"github.com/google/uuid"
 )
 
 // validateAndSavePlaybook creates and saves a run from a run request after validating the run parameters.
@@ -21,7 +23,7 @@ func validateAndSavePlaybook(ctx context.Context, playbook *models.Playbook, req
 	}
 
 	if err := req.validateParams(spec.Parameters); err != nil {
-		return nil, api.Errorf(api.EINVALID, "invalid parameters: %v", err)
+		return nil, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid parameters: %v", err)
 	}
 
 	run := models.PlaybookRun{
@@ -72,8 +74,8 @@ func savePlaybookRun(ctx context.Context, playbook *models.Playbook, run *models
 
 	// Attempt to auto approve run
 	if err := approveRun(ctx, playbook, run.ID); err != nil {
-		switch api.ErrorCode(err) {
-		case api.EFORBIDDEN, api.EINVALID:
+		switch dutyAPI.ErrorCode(err) {
+		case dutyAPI.EFORBIDDEN, dutyAPI.EINVALID:
 			// ignore these errors
 		default:
 			return fmt.Errorf("error while attempting to auto approve run: %w", err)
@@ -88,7 +90,7 @@ func ListPlaybooksForConfig(ctx context.Context, id string) ([]api.PlaybookListI
 	if err := ctx.DB().Where("id = ?", id).Find(&config).Error; err != nil {
 		return nil, err
 	} else if config.ID == uuid.Nil {
-		return nil, api.Errorf(api.ENOTFOUND, "config(id=%s) not found", id)
+		return nil, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "config(id=%s) not found", id)
 	}
 
 	return db.FindPlaybooksForConfig(ctx, *config.Type, *config.Tags)
@@ -99,7 +101,7 @@ func ListPlaybooksForComponent(ctx context.Context, id string) ([]api.PlaybookLi
 	if err := ctx.DB().Where("id = ?", id).Find(&component).Error; err != nil {
 		return nil, err
 	} else if component.ID == uuid.Nil {
-		return nil, api.Errorf(api.ENOTFOUND, "component(id=%s) not found", id)
+		return nil, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "component(id=%s) not found", id)
 	}
 
 	return db.FindPlaybooksForComponent(ctx, component.Type, component.Labels)
@@ -110,7 +112,7 @@ func ListPlaybooksForCheck(ctx context.Context, id string) ([]api.PlaybookListIt
 	if err := ctx.DB().Where("id = ?", id).Find(&check).Error; err != nil {
 		return nil, err
 	} else if check.ID == uuid.Nil {
-		return nil, api.Errorf(api.ENOTFOUND, "check(id=%s) not found", id)
+		return nil, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "check(id=%s) not found", id)
 	}
 
 	return db.FindPlaybooksForCheck(ctx, check.Type, check.Labels)

@@ -17,13 +17,13 @@ import (
 	"time"
 
 	"github.com/MicahParks/keyfunc/v2"
+	durationutils "github.com/flanksource/commons/duration"
+	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty/api"
+	"github.com/flanksource/duty/context"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/patrickmn/go-cache"
 
-	durationutils "github.com/flanksource/commons/duration"
-	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/duty/context"
-	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 )
 
