@@ -8,6 +8,7 @@ import (
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/utils"
+	"github.com/flanksource/gomplate/v3"
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -68,9 +69,56 @@ func paramStr(params []v1.PlaybookParameter) string {
 	return out
 }
 
+func (r *RunParams) setDefaults(ctx context.Context, spec v1.PlaybookSpec, run models.PlaybookRun) error {
+	if len(spec.Parameters) == len(r.Params) {
+		return nil
+	}
+
+	env, err := prepareTemplateEnv(ctx, run)
+	if err != nil {
+		return fmt.Errorf("failed to prepare template env: %w", err)
+	}
+
+	defaultParams := []v1.PlaybookParameter{}
+	for _, p := range spec.Parameters {
+		if _, ok := r.Params[p.Name]; !ok {
+			defaultParams = append(defaultParams, p)
+		}
+	}
+
+	templater := gomplate.StructTemplater{
+		RequiredTag: "template",
+		DelimSets: []gomplate.Delims{
+			{Left: "{{", Right: "}}"},
+			{Left: "$(", Right: ")"},
+		},
+		ValueFunctions: true,
+		Values:         env.AsMap(),
+	}
+	if err := templater.Walk(&defaultParams); err != nil {
+		return fmt.Errorf("failed to walk template: %w", err)
+	}
+
+	if r.Params == nil {
+		r.Params = make(map[string]string)
+	}
+	for i := range defaultParams {
+		r.Params[defaultParams[i].Name] = defaultParams[i].Default
+	}
+	return nil
+}
+
 func (r *RunParams) validateParams(params []v1.PlaybookParameter) error {
-	if len(params) != len(r.Params) {
-		return fmt.Errorf("invalid number of parameters. expected %d, got %d.%s", len(params), len(r.Params), paramStr(params))
+	// mandatory params are those that do not have default values
+	var mandatoryParams int
+	for _, p := range params {
+		if p.Default == "" {
+			mandatoryParams++
+		}
+	}
+
+	if len(r.Params) < mandatoryParams {
+		return fmt.Errorf("insufficent parameters. expected %d (at least: %d), got %d. %s", len(params), mandatoryParams, len(r.Params), paramStr(params))
 	}
 
 	for k := range r.Params {
@@ -83,7 +131,7 @@ func (r *RunParams) validateParams(params []v1.PlaybookParameter) error {
 		}
 
 		if !ok {
-			return fmt.Errorf("unknown parameter %s.%s", k, paramStr(params))
+			return fmt.Errorf("unknown parameter %s. %s", k, paramStr(params))
 		}
 	}
 
