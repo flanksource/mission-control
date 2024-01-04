@@ -114,14 +114,6 @@ var _ = ginkgo.Describe("Upstream Push", ginkgo.Ordered, func() {
 			compareAgentEntities[models.ConfigItem]("", pushUpstream.DB(), pushAgent, cmpopts.IgnoreFields(models.ConfigItem{}, "AgentID"))
 		})
 
-		ginkgo.It("should have transferred all the config analyses", func() {
-			compareAgentEntities[models.ConfigAnalysis]("config_analysis", pushUpstream.DB(), pushAgent, cmpopts.IgnoreFields(models.ConfigAnalysis{}, "FirstObserved"))
-		})
-
-		ginkgo.It("should have transferred all the config changes", func() {
-			compareAgentEntities[models.ConfigChange]("config_changes", pushUpstream.DB(), pushAgent)
-		})
-
 		ginkgo.It("should have transferred all the config relationships", func() {
 			compareAgentEntities[models.ComponentRelationship]("component_relationships", pushUpstream.DB(), pushAgent)
 		})
@@ -255,14 +247,6 @@ func compareAgentEntities[T any](table string, upstreamDB *gorm.DB, agent agentW
 		err = upstreamDB.Joins("LEFT JOIN checks ON checks.id = check_statuses.check_id").Where("checks.agent_id = ?", agent.id).Order("check_id, time").Find(&upstream).Error
 		agentErr = agent.DB().Order("check_id, time").Find(&downstream).Error
 
-	case "config_analysis":
-		err = upstreamDB.Joins("LEFT JOIN config_items ON config_items.id = config_analysis.config_id").Where("config_items.agent_id = ?", agent.id).Order("id").Find(&upstream).Error
-		agentErr = agent.DB().Order("id").Find(&downstream).Error
-
-	case "config_changes":
-		err = upstreamDB.Joins("LEFT JOIN config_items ON config_items.id = config_changes.config_id").Where("config_items.agent_id = ?", agent.id).Order("created_at").Find(&upstream).Error
-		agentErr = agent.DB().Order("created_at").Find(&downstream).Error
-
 	case "component_relationships":
 		err = upstreamDB.Joins("LEFT JOIN components c1 ON component_relationships.component_id = c1.id").
 			Joins("LEFT JOIN components c2 ON component_relationships.relationship_id = c2.id").
@@ -318,10 +302,6 @@ func verifyPushQueue(events postq.Events, dataset dummy.DummyData) {
 			Expect(len(g.ItemIDs)).To(Equal(len(dataset.Configs)))
 			Expect(g.ItemIDs).To(Equal(getPrimaryKeys(table, dataset.Configs)), "Mismatch primary keys for config_items")
 
-		case "config_analysis":
-			Expect(len(g.ItemIDs)).To(Equal(len(dataset.ConfigAnalyses)))
-			Expect(g.ItemIDs).To(Equal(getPrimaryKeys(table, dataset.ConfigAnalyses)), "Mismatch primary keys for config_analysis")
-
 		case "check_statuses":
 			Expect(len(g.ItemIDs)).To(Equal(len(dataset.CheckStatuses)))
 			Expect(g.ItemIDs).To(Equal(getPrimaryKeys(table, dataset.CheckStatuses)), "Mismatch composite primary keys for check_statuses")
@@ -333,10 +313,6 @@ func verifyPushQueue(events postq.Events, dataset dummy.DummyData) {
 		case "config_component_relationships":
 			Expect(len(g.ItemIDs)).To(Equal(len(dataset.ConfigComponentRelationships)))
 			Expect(g.ItemIDs).To(Equal(getPrimaryKeys(table, dataset.ConfigComponentRelationships)), "Mismatch composite primary keys for config_component_relationships")
-
-		case "config_changes":
-			Expect(len(g.ItemIDs)).To(Equal(len(dataset.ConfigChanges)))
-			Expect(g.ItemIDs).To(Equal(getPrimaryKeys(table, dataset.ConfigChanges)), "Mismatch composite primary keys for config_changes")
 
 		case "config_relationships":
 			// Do nothing (need to populate the config_relationships table)
@@ -353,8 +329,6 @@ func verifyPushQueue(events postq.Events, dataset dummy.DummyData) {
 			len(dataset.Components) +
 			len(dataset.ConfigScrapers) +
 			len(dataset.Configs) +
-			len(dataset.ConfigChanges) +
-			len(dataset.ConfigAnalyses) +
 			len(dataset.ComponentRelationships) +
 			len(dataset.ConfigComponentRelationships)))
 }
