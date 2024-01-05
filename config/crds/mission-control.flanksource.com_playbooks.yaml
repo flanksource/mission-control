@@ -1232,6 +1232,10 @@ spec:
                   description: PlaybookParameter defines a parameter that a playbook
                     needs to run.
                   properties:
+                    default:
+                      description: Specify the default value of the parameter. It
+                        is templatable.
+                      type: string
                     description:
                       type: string
                     icon:

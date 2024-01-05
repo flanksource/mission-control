@@ -24,7 +24,9 @@ type PlaybookResourceFilter struct {
 
 // PlaybookParameter defines a parameter that a playbook needs to run.
 type PlaybookParameter struct {
-	Name        string            `json:"name" yaml:"name"`
+	Name string `json:"name" yaml:"name"`
+	// Specify the default value of the parameter. It is templatable.
+	Default     string            `json:"default,omitempty" yaml:"default,omitempty" template:"true"`
 	Label       string            `json:"label" yaml:"label"`
 	Required    bool              `json:"required,omitempty" yaml:"required,omitempty"`
 	Icon        string            `json:"icon,omitempty" yaml:"icon,omitempty"`
