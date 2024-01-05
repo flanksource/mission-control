@@ -1,0 +1,16 @@
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: notify-send
+spec:
+  parameters:
+    - name: message
+      label: The message for notification
+      default: '{{.config.name}}'
+  configs:
+    - type: Kubernetes::Pod
+  actions:
+    - name: Modify repo
+      exec:
+        script: notify-send {{.params.message}}

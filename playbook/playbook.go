@@ -29,7 +29,6 @@ func validateAndSavePlaybook(ctx context.Context, playbook *models.Playbook, req
 	run := models.PlaybookRun{
 		PlaybookID: playbook.ID,
 		Status:     models.PlaybookRunStatusPending,
-		Parameters: types.JSONStringMap(req.Params),
 	}
 	if ctx.User() != nil {
 		run.CreatedBy = &ctx.User().ID
@@ -50,6 +49,11 @@ func validateAndSavePlaybook(ctx context.Context, playbook *models.Playbook, req
 	if req.CheckID != uuid.Nil {
 		run.CheckID = &req.CheckID
 	}
+
+	if err := req.setDefaults(ctx, spec, run); err != nil {
+		return nil, fmt.Errorf("failed to set defaults: %v", err)
+	}
+	run.Parameters = types.JSONStringMap(req.Params)
 
 	if err := savePlaybookRun(ctx, playbook, &run); err != nil {
 		return nil, fmt.Errorf("failed to create playbook run: %v", err)
