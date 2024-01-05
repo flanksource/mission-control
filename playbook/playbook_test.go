@@ -32,6 +32,7 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 			Description: "write config name to file",
 			Parameters: []v1.PlaybookParameter{
 				{Name: "path", Label: "path of the file"},
+				{Name: "footer", Label: "append this text to the file", Default: "{{.config.config_class}}"},
 			},
 			Configs: []v1.PlaybookResourceFilter{
 				{Type: *dummy.EKSCluster.Type, Tags: map[string]string{"environment": "production"}},
@@ -50,14 +51,14 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 					Name:    "write config id to a file",
 					Timeout: "1s",
 					Exec: &v1.ExecAction{
-						Script: "echo id={{.config.id}}  path={{.params.path}} && printf {{.config.id}} > {{.params.path}}",
+						Script: "echo id={{.config.id}} > {{.params.path}}",
 					},
 				},
 				{
-					Name:    "append config class to the same file ",
+					Name:    "append footer to the same file ",
 					Timeout: "2s",
 					Exec: &v1.ExecAction{
-						Script: "echo class={{.config.config_class}} path={{.params.path}} && printf {{.config.config_class}} >> {{.params.path}}",
+						Script: "printf '{{.params.footer}}' >> {{.params.path}}",
 					},
 				},
 			},
@@ -169,6 +170,7 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 			ConfigID: dummy.EKSCluster.ID,
 			Params: map[string]string{
 				"path": tempPath,
+				// "footer": "" // exclude this so we use the default value
 			},
 		}
 
@@ -225,9 +227,11 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 				ginkgo.Fail(fmt.Sprintf("Timed out waiting for run to complete. Run status: %s", updatedRun.Status))
 			}
 		}
+	})
 
+	ginkgo.It("should ensure that the action worked correctly", func() {
 		var runActions []models.PlaybookRunAction
-		err := DefaultContext.DB().Where("playbook_run_id = ?", updatedRun.ID).Find(&runActions).Error
+		err := DefaultContext.DB().Where("playbook_run_id = ?", runResp.RunID).Find(&runActions).Error
 		Expect(err).NotTo(HaveOccurred())
 
 		d, _ := json.Marshal(runActions)
@@ -237,6 +241,6 @@ var _ = ginkgo.Describe("Playbook runner", ginkgo.Ordered, func() {
 		f, err := os.ReadFile(tempPath)
 		Expect(err).NotTo(HaveOccurred())
 
-		Expect(string(f)).To(Equal(fmt.Sprintf("%s%s", dummy.EKSCluster.ID, dummy.EKSCluster.ConfigClass)))
+		Expect(string(f)).To(Equal(fmt.Sprintf("id=%s\n%s", dummy.EKSCluster.ID, dummy.EKSCluster.ConfigClass)))
 	})
 })
