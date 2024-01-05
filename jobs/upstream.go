@@ -65,7 +65,7 @@ var SyncCheckStatuses = &job.Job{
 		ctx.History.ResourceType = "upstream"
 		ctx.History.ResourceID = api.UpstreamConf.Host
 		var err error
-		if err, ctx.History.SuccessCount = upstream.SyncCheckStatuses(ctx.Context, api.UpstreamConf, ReconcilePageSize); err != nil {
+		if ctx.History.SuccessCount, err = upstream.SyncCheckStatuses(ctx.Context, api.UpstreamConf, ReconcilePageSize); err != nil {
 			ctx.History.AddError(err.Error())
 		}
 		return nil

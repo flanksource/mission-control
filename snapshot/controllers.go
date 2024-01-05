@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/collections"
+	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
-	"github.com/flanksource/incident-commander/api"
 	"github.com/labstack/echo/v4"
 )
 

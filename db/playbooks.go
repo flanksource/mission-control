@@ -5,13 +5,15 @@ import (
 	"errors"
 	"fmt"
 
+	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
-	"github.com/flanksource/incident-commander/api"
-	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+
+	"github.com/flanksource/incident-commander/api"
+	v1 "github.com/flanksource/incident-commander/api/v1"
 )
 
 func FindPlaybooksForEvent(ctx context.Context, eventClass, event string) ([]models.Playbook, error) {
@@ -70,10 +72,10 @@ func GetPlaybookRun(ctx context.Context, id string) (*models.PlaybookRun, error)
 	var p models.PlaybookRun
 	if err := ctx.DB().Where("id = ?", id).First(&p).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, api.Errorf(api.ENOTFOUND, "playbook run(id=%s) not found", id)
+			return nil, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "playbook run(id=%s) not found", id)
 		}
 
-		return nil, api.Errorf(api.EINTERNAL, "something went wrong").WithDebugInfo("db.GetPlaybookRun(id=%s): %v", id, err)
+		return nil, dutyAPI.Errorf(dutyAPI.EINTERNAL, "something went wrong").WithDebugInfo("db.GetPlaybookRun(id=%s): %v", id, err)
 	}
 
 	return &p, nil
@@ -177,7 +179,7 @@ func PersistPlaybookFromCRD(ctx context.Context, obj *v1.Playbook) error {
 		} else if playbook != nil {
 			// TODO: We can move this unique constraint handling to DB once we upgrade to Postgres 15+
 			if playbook.ID.String() != string(obj.GetUID()) {
-				return api.Errorf(api.ECONFLICT, "Playbook with webhook path %s already exists", obj.Spec.On.Webhook.Path)
+				return dutyAPI.Errorf(dutyAPI.ECONFLICT, "Playbook with webhook path %s already exists", obj.Spec.On.Webhook.Path)
 			}
 		}
 	}

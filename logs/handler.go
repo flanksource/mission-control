@@ -9,11 +9,13 @@ import (
 
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/template"
+	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
-	"github.com/flanksource/incident-commander/api"
 	"github.com/labstack/echo/v4"
+
+	"github.com/flanksource/incident-commander/api"
 )
 
 func LogsHandler(c echo.Context) error {
@@ -24,14 +26,14 @@ func LogsHandler(c echo.Context) error {
 		Labels map[string]string `json:"labels"`
 	}
 	if err := c.Bind(&reqData); err != nil {
-		return c.JSON(http.StatusBadRequest, api.HTTPError{
+		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{
 			Error:   err.Error(),
 			Message: "Invalid request body",
 		})
 	}
 
 	if reqData.ID == "" {
-		return c.JSON(http.StatusBadRequest, api.HTTPError{
+		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{
 			Error:   "ID field is required",
 			Message: "Component ID is required",
 		})
@@ -39,7 +41,7 @@ func LogsHandler(c echo.Context) error {
 
 	component, err := query.GetComponent(ctx, reqData.ID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, api.HTTPError{
+		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
 			Error:   err.Error(),
 			Message: fmt.Sprintf("Failed to get component[id=%s]", reqData.ID),
 		})
@@ -47,7 +49,7 @@ func LogsHandler(c echo.Context) error {
 
 	logSelector := getLogSelectorByName(component.LogSelectors, reqData.Name)
 	if logSelector == nil {
-		return c.JSON(http.StatusBadRequest, api.HTTPError{
+		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{
 			Error:   "Log selector was not found",
 			Message: fmt.Sprintf("Log selector with the name '%s' was not found. Available names: [%s]", reqData.Name, strings.Join(getSelectorNames(component.LogSelectors), ", ")),
 		})
@@ -62,7 +64,7 @@ func LogsHandler(c echo.Context) error {
 		},
 	}
 	if err := templater.Walk(logSelector); err != nil {
-		return c.JSON(http.StatusInternalServerError, api.HTTPError{
+		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
 			Error:   err.Error(),
 			Message: "failed to parse log selector templates.",
 		})
@@ -76,14 +78,14 @@ func LogsHandler(c echo.Context) error {
 	}
 	resp, err := makePostRequest(fmt.Sprintf("%s/%s", api.ApmHubPath, "search"), apmHubPayload)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, api.HTTPError{
+		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
 			Error:   err.Error(),
 			Message: "Failed to query apm-hub.",
 		})
 	}
 
 	if err := c.Stream(resp.StatusCode, resp.Header.Get("Content-Type"), resp.Body); err != nil {
-		return c.JSON(http.StatusInternalServerError, api.HTTPError{
+		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
 			Error:   err.Error(),
 			Message: "Failed to stream response.",
 		})

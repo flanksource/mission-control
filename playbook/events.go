@@ -8,21 +8,21 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/models"
-	"github.com/flanksource/incident-commander/db"
-	"github.com/flanksource/incident-commander/events"
-	"github.com/flanksource/incident-commander/logs"
-	"github.com/patrickmn/go-cache"
-
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty"
-
+	dutyAPI "github.com/flanksource/duty/api"
+	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/gomplate/v3"
+	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/events"
+	"github.com/flanksource/incident-commander/logs"
+	"github.com/flanksource/postq"
+	"github.com/patrickmn/go-cache"
+
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
-	"github.com/flanksource/postq"
 )
 
 type PlaybookSpecEvent struct {
@@ -100,7 +100,7 @@ func SchedulePlaybookRun(ctx context.Context, event postq.Event) error {
 	case api.EventCheckFailed, api.EventCheckPassed:
 		checkID := event.Properties["id"]
 		if err := ctx.DB().Where("id = ?", checkID).First(&eventResource.Check).Error; err != nil {
-			return api.Errorf(api.ENOTFOUND, "check(id=%s) not found", checkID)
+			return dutyAPI.Errorf(dutyAPI.ENOTFOUND, "check(id=%s) not found", checkID)
 		}
 
 		if summary, err := duty.CheckSummary(ctx, checkID); err != nil {
@@ -110,12 +110,12 @@ func SchedulePlaybookRun(ctx context.Context, event postq.Event) error {
 		}
 
 		if err := ctx.DB().Where("id = ?", eventResource.Check.CanaryID).First(&eventResource.Canary).Error; err != nil {
-			return api.Errorf(api.ENOTFOUND, "canary(id=%s) not found", eventResource.Check.CanaryID)
+			return dutyAPI.Errorf(dutyAPI.ENOTFOUND, "canary(id=%s) not found", eventResource.Check.CanaryID)
 		}
 
 	case api.EventComponentStatusHealthy, api.EventComponentStatusUnhealthy, api.EventComponentStatusInfo, api.EventComponentStatusWarning, api.EventComponentStatusError:
 		if err := ctx.DB().Model(&models.Component{}).Where("id = ?", event.Properties["id"]).First(&eventResource.Component).Error; err != nil {
-			return api.Errorf(api.ENOTFOUND, "component(id=%s) not found", event.Properties["id"])
+			return dutyAPI.Errorf(dutyAPI.ENOTFOUND, "component(id=%s) not found", event.Properties["id"])
 		}
 	}
 
@@ -186,7 +186,7 @@ outer:
 			}
 
 			if ok, err := strconv.ParseBool(res); err != nil {
-				return false, api.Errorf(api.EINVALID, "expression (%s) didn't evaluate to a boolean value. got %s", mf.Filter, res)
+				return false, dutyAPI.Errorf(dutyAPI.EINVALID, "expression (%s) didn't evaluate to a boolean value. got %s", mf.Filter, res)
 			} else if !ok {
 				continue outer
 			}

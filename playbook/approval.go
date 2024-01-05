@@ -2,12 +2,13 @@ package playbook
 
 import (
 	"github.com/flanksource/commons/collections"
+	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/incident-commander/api"
+	"github.com/google/uuid"
+
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
-	"github.com/google/uuid"
 )
 
 func ApproveRun(ctx context.Context, playbookID, runID uuid.UUID) error {

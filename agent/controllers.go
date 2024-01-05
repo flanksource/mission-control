@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/flanksource/commons/logger"
+	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/labstack/echo/v4"
@@ -16,13 +17,13 @@ func GenerateAgent(c echo.Context) error {
 
 	var body api.GenerateAgentRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&body); err != nil {
-		return c.JSON(http.StatusBadRequest, api.HTTPError{Error: err.Error()})
+		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{Error: err.Error()})
 	}
 
 	agent, err := generateAgent(ctx, body)
 	if err != nil {
 		logger.Errorf("failed to generate a new agent: %v", err)
-		return c.JSON(http.StatusInternalServerError, api.HTTPError{Error: err.Error(), Message: "error generating agent"})
+		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Error: err.Error(), Message: "error generating agent"})
 	}
 
 	return c.JSON(http.StatusCreated, agent)

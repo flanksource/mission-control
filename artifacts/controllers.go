@@ -7,13 +7,14 @@ import (
 	"time"
 
 	"github.com/flanksource/artifacts"
+	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
-	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/db"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+
+	"github.com/flanksource/incident-commander/db"
 )
 
 func RegisterRoutes(e *echo.Echo, prefix string) *echo.Group {
