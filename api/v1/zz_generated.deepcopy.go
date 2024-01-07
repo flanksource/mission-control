@@ -1116,6 +1116,13 @@ func (in *PlaybookTriggerEvents) DeepCopyInto(out *PlaybookTriggerEvents) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
+	if in.Config != nil {
+		in, out := &in.Config, &out.Config
+		*out = make([]PlaybookTriggerEvent, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
 	if in.Component != nil {
 		in, out := &in.Component, &out.Component
 		*out = make([]PlaybookTriggerEvent, len(*in))

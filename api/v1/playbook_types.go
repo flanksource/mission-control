@@ -110,6 +110,7 @@ type PlaybookTriggerWebhook struct {
 
 type PlaybookTriggerEvents struct {
 	Canary    []PlaybookTriggerEvent `json:"canary,omitempty" yaml:"canary,omitempty"`
+	Config    []PlaybookTriggerEvent `json:"config,omitempty" yaml:"config,omitempty"`
 	Component []PlaybookTriggerEvent `json:"component,omitempty" yaml:"component,omitempty"`
 }
 

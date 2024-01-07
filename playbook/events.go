@@ -32,8 +32,13 @@ type PlaybookSpecEvent struct {
 
 // map api.from `event_queue` to playbook spec api.
 var eventToSpecEvent = map[string]PlaybookSpecEvent{
-	api.EventCheckPassed:              {"canary", "passed"},
-	api.EventCheckFailed:              {"canary", "failed"},
+	api.EventCheckPassed: {"canary", "passed"},
+	api.EventCheckFailed: {"canary", "failed"},
+
+	api.EventConfigCreated: {"config", "created"},
+	api.EventConfigUpdated: {"config", "updated"},
+	api.EventConfigDeleted: {"config", "deleted"},
+
 	api.EventComponentStatusHealthy:   {"component", "healthy"},
 	api.EventComponentStatusUnhealthy: {"component", "unhealthy"},
 	api.EventComponentStatusInfo:      {"component", "info"},
@@ -66,6 +71,7 @@ func RegisterEvents(ctx context.Context) {
 
 type EventResource struct {
 	Component    *models.Component    `json:"component,omitempty"`
+	Config       *models.ConfigItem   `json:"config,omitempty"`
 	Check        *models.Check        `json:"check,omitempty"`
 	CheckSummary *models.CheckSummary `json:"check_summary,omitempty"`
 	Canary       *models.Canary       `json:"canary,omitempty"`
@@ -117,6 +123,11 @@ func SchedulePlaybookRun(ctx context.Context, event postq.Event) error {
 		if err := ctx.DB().Model(&models.Component{}).Where("id = ?", event.Properties["id"]).First(&eventResource.Component).Error; err != nil {
 			return dutyAPI.Errorf(dutyAPI.ENOTFOUND, "component(id=%s) not found", event.Properties["id"])
 		}
+
+	case api.EventConfigCreated, api.EventConfigUpdated, api.EventConfigDeleted:
+		if err := ctx.DB().Model(&models.ConfigItem{}).Where("id = ?", event.Properties["id"]).First(&eventResource.Config).Error; err != nil {
+			return dutyAPI.Errorf(dutyAPI.ENOTFOUND, "config(id=%s) not found", event.Properties["id"])
+		}
 	}
 
 	for _, p := range playbooks {
@@ -150,6 +161,16 @@ func SchedulePlaybookRun(ctx context.Context, event postq.Event) error {
 		case "component":
 			run.ComponentID = &eventResource.Component.ID
 			if ok, err := matchResource(eventResource.Component.Labels, eventResource.AsMap(), playbook.Spec.On.Component); err != nil {
+				logToJobHistory(ctx, p.ID.String(), err.Error())
+				continue
+			} else if ok {
+				if err := ctx.DB().Create(&run).Error; err != nil {
+					return err
+				}
+			}
+		case "config":
+			run.ConfigID = &eventResource.Config.ID
+			if ok, err := matchResource(nil, eventResource.AsMap(), playbook.Spec.On.Config); err != nil {
 				logToJobHistory(ctx, p.ID.String(), err.Error())
 				continue
 			} else if ok {

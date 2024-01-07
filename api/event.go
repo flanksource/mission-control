@@ -15,6 +15,10 @@ const (
 	EventCheckPassed = "check.passed"
 	EventCheckFailed = "check.failed"
 
+	EventConfigCreated = "config.created"
+	EventConfigUpdated = "config.updated"
+	EventConfigDeleted = "config.deleted"
+
 	EventComponentStatusHealthy   = "component.status.healthy"
 	EventComponentStatusUnhealthy = "component.status.unhealthy"
 	EventComponentStatusInfo      = "component.status.info"
@@ -64,6 +68,9 @@ var (
 	EventStatusGroup = []string{
 		EventCheckFailed,
 		EventCheckPassed,
+		EventConfigCreated,
+		EventConfigUpdated,
+		EventConfigDeleted,
 		EventComponentStatusError,
 		EventComponentStatusHealthy,
 		EventComponentStatusInfo,
