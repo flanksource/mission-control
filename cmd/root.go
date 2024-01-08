@@ -123,9 +123,14 @@ func ServerFlags(flags *pflag.FlagSet) {
 		}
 	}
 
+	var upstreamUserDefault = "token"
+	if val, exists := os.LookupEnv("UPSTREAM_USER"); exists {
+		upstreamUserDefault = val
+	}
+
 	// Flags for upstream push
 	flags.StringVar(&api.UpstreamConf.Host, "upstream-host", os.Getenv("UPSTREAM_HOST"), "URL for Mission Control central instance")
-	flags.StringVar(&api.UpstreamConf.Username, "upstream-user", os.Getenv("UPSTREAM_USER"), "upstream username")
+	flags.StringVar(&api.UpstreamConf.Username, "upstream-user", upstreamUserDefault, "upstream username")
 	flags.StringVar(&api.UpstreamConf.Password, "upstream-password", os.Getenv("UPSTREAM_PASSWORD"), "upstream password")
 	flags.StringVar(&api.UpstreamConf.AgentName, "upstream-name", os.Getenv("UPSTREAM_NAME"), "name of the cluster")
 	flags.StringSliceVar(&api.UpstreamConf.Labels, "upstream-labels", strings.Split(os.Getenv("UPSTREAM_LABELS"), ","), `labels in the format: "key1=value1,key2=value2"`)
