@@ -1004,6 +1004,25 @@ spec:
                       - event
                       type: object
                     type: array
+                  config:
+                    items:
+                      properties:
+                        event:
+                          description: Event to listen for.
+                          type: string
+                        filter:
+                          description: CEL expression for additional event filtering.
+                          type: string
+                        labels:
+                          additionalProperties:
+                            type: string
+                          description: Labels specifies the key-value pairs that the
+                            associated event's resource must match.
+                          type: object
+                      required:
+                      - event
+                      type: object
+                    type: array
                   webhook:
                     description: Webhook creates a new endpoint that triggers this
                       playbook
