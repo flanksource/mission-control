@@ -9,9 +9,9 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/utils"
 	dutyAPI "github.com/flanksource/duty/api"
-	"github.com/flanksource/gomplate/v3"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/gomplate/v3"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
@@ -159,7 +159,7 @@ func HandlePlaybookRun(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, dutyAPI.HTTPError{Error: "not found", Message: fmt.Sprintf("playbook(id=%s) not found", req.ID)})
 	}
 
-	run, err := validateAndSavePlaybook(ctx, playbook, req)
+	run, err := validateAndSavePlaybookRun(ctx, playbook, req)
 	if err != nil {
 		return dutyAPI.WriteError(c, err)
 	}
@@ -273,7 +273,7 @@ func HandleWebhook(c echo.Context) error {
 	}
 	runRequest.ID = playbook.ID
 
-	if _, err = validateAndSavePlaybook(ctx, playbook, runRequest); err != nil {
+	if _, err = validateAndSavePlaybookRun(ctx, playbook, runRequest); err != nil {
 		logger.Errorf("failed to save playbook run: %v", err)
 	}
 
