@@ -8,11 +8,11 @@ import (
 	"strings"
 
 	"github.com/flanksource/commons/collections"
-	"github.com/flanksource/commons/template"
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
+	"github.com/flanksource/gomplate/v3"
 	"github.com/labstack/echo/v4"
 
 	"github.com/flanksource/incident-commander/api"
@@ -55,10 +55,10 @@ func LogsHandler(c echo.Context) error {
 		})
 	}
 
-	templater := template.StructTemplater{
+	templater := gomplate.StructTemplater{
 		Values:         component.GetAsEnvironment(),
 		ValueFunctions: true,
-		DelimSets: []template.Delims{
+		DelimSets: []gomplate.Delims{
 			{Left: "{{", Right: "}}"},
 			{Left: "$(", Right: ")"},
 		},

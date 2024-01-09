@@ -6,10 +6,10 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/flanksource/commons/template"
 	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/gomplate/v3"
 	"github.com/flanksource/postq"
 	"github.com/google/uuid"
 
@@ -57,10 +57,10 @@ func (t *NotificationEventPayload) FromMap(m map[string]string) {
 
 // SendNotification generates the notification from the given event and sends it.
 func SendNotification(ctx *Context, payload NotificationEventPayload, celEnv map[string]any) error {
-	templater := template.StructTemplater{
+	templater := gomplate.StructTemplater{
 		Values:         celEnv,
 		ValueFunctions: true,
-		DelimSets: []template.Delims{
+		DelimSets: []gomplate.Delims{
 			{Left: "{{", Right: "}}"},
 			{Left: "$(", Right: ")"},
 		},
