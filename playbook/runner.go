@@ -149,7 +149,7 @@ func executeRun(ctx context.Context, run models.PlaybookRun, opt runExecOptions)
 			}
 		}
 
-		if duration, err := action.DelayDuration(); err != nil {
+		if duration, err := action.DelayDuration(templateEnv.AsMap()); err != nil {
 			return nil, err
 		} else if duration > 0 && action.Name != continueFromAction {
 			logger.Debugf("Pausing run execution. Sleeping for %v", duration)
