@@ -39,8 +39,10 @@ spec:
                 items:
                   properties:
                     delay:
-                      description: Delay is the duration to delay the execution of
-                        this action. The least supported value as of now is 1m.
+                      description: Delay is a CEL expression that returns the duration
+                        to delay the execution of this action. Valid time units are
+                        "s", "m", "h", "d", "w", "y". It's only sensitive to the minute.
+                        i.e. if you delay by 20s it can take upto a minute to execute.
                       type: string
                     exec:
                       properties:

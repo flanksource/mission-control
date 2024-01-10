@@ -11,6 +11,7 @@ import (
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
+	"github.com/flanksource/gomplate/v3"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -303,8 +304,9 @@ type PlaybookAction struct {
 	// Name of the action
 	Name string `yaml:"name" json:"name"`
 
-	// Delay is the duration to delay the execution of this action.
-	// The least supported value as of now is 1m.
+	// Delay is a CEL expression that returns the duration to delay the execution of this action.
+	// Valid time units are "s", "m", "h", "d", "w", "y".
+	// It's only sensitive to the minute. i.e. if you delay by 20s it can take upto a minute to execute.
 	Delay string `yaml:"delay,omitempty" json:"delay,omitempty"`
 
 	// Timeout is the maximum duration to let an action run before it's cancelled.
@@ -318,7 +320,7 @@ type PlaybookAction struct {
 	Notification *NotificationAction `json:"notification,omitempty" yaml:"notification,omitempty"`
 }
 
-func (p *PlaybookAction) DelayDuration() (time.Duration, error) {
+func (p *PlaybookAction) DelayDuration(templateEnv map[string]any) (time.Duration, error) {
 	if p.delay != nil {
 		return *p.delay, nil
 	}
@@ -327,7 +329,12 @@ func (p *PlaybookAction) DelayDuration() (time.Duration, error) {
 		return 0, nil
 	}
 
-	d, err := duration.ParseDuration(p.Delay)
+	exprResult, err := gomplate.RunTemplate(templateEnv, gomplate.Template{Expression: p.Delay})
+	if err != nil {
+		return 0, fmt.Errorf("error running action delay expression(%s): %w", p.Delay, err)
+	}
+
+	d, err := duration.ParseDuration(exprResult)
 	if err != nil {
 		return 0, err
 	}
