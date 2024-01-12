@@ -13,7 +13,7 @@ require (
 	github.com/fergusstrange/embedded-postgres v1.25.0 // indirect
 	github.com/flanksource/commons v1.20.0
 	github.com/flanksource/duty v1.0.280
-	github.com/flanksource/gomplate/v3 v3.20.29
+	github.com/flanksource/gomplate/v3 v3.22.0
 	github.com/flanksource/kopper v1.0.7
 	github.com/flanksource/postq v0.1.3
 	github.com/gomarkdown/markdown v0.0.0-20230922112808-5421fefb8386
@@ -143,7 +143,7 @@ require (
 	github.com/hashicorp/hcl/v2 v2.19.1 // indirect
 	github.com/henvic/httpretty v0.1.3 // indirect
 	github.com/hirochachacha/go-smb2 v1.1.0 // indirect
-	github.com/itchyny/gojq v0.12.13 // indirect
+	github.com/itchyny/gojq v0.12.14 // indirect
 	github.com/itchyny/timefmt-go v0.1.5 // indirect
 	github.com/jackc/puddle/v2 v2.2.1 // indirect
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
