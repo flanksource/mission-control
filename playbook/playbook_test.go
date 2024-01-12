@@ -254,7 +254,7 @@ var _ = ginkgo.Describe("Playbook", ginkgo.Ordered, func() {
 		})
 	})
 
-	var _ = ginkgo.Describe("Test Playbook action filters", ginkgo.Ordered, ginkgo.Focus, func() {
+	var _ = ginkgo.Describe("Test Playbook action filters", ginkgo.Ordered, func() {
 		var (
 			spec     v1.PlaybookSpec
 			playbook models.Playbook
