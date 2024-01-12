@@ -1,0 +1,27 @@
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: notify-send-with-filter
+spec:
+  parameters:
+    - name: message
+      label: The message for notification
+      default: '{{.config.name}}'
+  configs:
+    - type: Kubernetes::Pod
+  actions:
+    - name: Send notification
+      exec:
+        script: notify-send "{{.config.name}} was created"
+    - name: Bad script
+      exec:
+        script: deltaforce
+    - name: Send all success notification
+      if: success() # this filter practically skips this action as the second action above always fails
+      exec:
+        script: notify-send "Everything went successfully"
+    - name: Send notification regardless
+      if: always()
+      exec:
+        script: notify-send "a Pod config was created"

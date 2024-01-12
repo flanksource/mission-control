@@ -243,3 +243,13 @@ func UpdatePlaybookRunStatusIfApproved(ctx context.Context, playbookID string, a
 func SavePlaybookRunApproval(ctx context.Context, approval models.PlaybookApproval) error {
 	return ctx.DB().Create(&approval).Error
 }
+
+func GetPlaybookActionsForStatus(ctx context.Context, runID uuid.UUID, statuses ...models.PlaybookActionStatus) (int64, error) {
+	if len(statuses) == 0 {
+		return 0, nil
+	}
+
+	var count int64
+	err := ctx.DB().Model(&models.PlaybookRunAction{}).Where("playbook_run_id = ? AND status IN (?)", runID, statuses).Count(&count).Error
+	return count, err
+}

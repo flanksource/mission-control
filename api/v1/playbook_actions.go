@@ -312,6 +312,19 @@ type PlaybookAction struct {
 	// Timeout is the maximum duration to let an action run before it's cancelled.
 	Timeout string `yaml:"timeout,omitempty" json:"timeout,omitempty"`
 
+	// Filter is a cel-expression that decides if this action should run or not.
+	// The expressions should either return a boolean value ('true' indicating run the action & vice versa)
+	// or any of these special functions.
+	// Examples:
+	// 	- filter: config.deleted_at ? true: false
+	// 	- filter: always()
+	// always(): run no matter what; even if the playbook is cancelled/fails
+	// failure(): run if any of the previous actions failed
+	// success(): run only if all previous actions succeeded (default)
+	// timeout(): run only if any of the previous actions timed out
+	// skip(): skip running this action
+	Filter string `yaml:"if,omitempty" json:"if,omitempty"`
+
 	Exec         *ExecAction         `json:"exec,omitempty" yaml:"exec,omitempty"`
 	GitOps       *GitOpsAction       `json:"gitops,omitempty" yaml:"gitops,omitempty"`
 	HTTP         *HTTPAction         `json:"http,omitempty" yaml:"http,omitempty"`

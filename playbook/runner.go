@@ -4,12 +4,15 @@ import (
 	gocontext "context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/gomplate/v3"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/playbook/actions"
 	"gorm.io/gorm"
 )
@@ -68,7 +71,7 @@ type runExecOptions struct {
 	StartFrom *models.PlaybookRunAction
 }
 
-type runExecResponse struct {
+type runExecutionResult struct {
 	// Sleep, when set, indicates that the run execution should pause and continue
 	// after the specified duration.
 	Sleep time.Duration
@@ -97,7 +100,7 @@ func prepareTemplateEnv(ctx context.Context, run models.PlaybookRun) (actions.Te
 }
 
 // executeRun executes all the actions in the given playbook one at a time in order.
-func executeRun(ctx context.Context, run models.PlaybookRun, opt runExecOptions) (*runExecResponse, error) {
+func executeRun(ctx context.Context, run models.PlaybookRun, opt runExecOptions) (*runExecutionResult, error) {
 	var playbookModel models.Playbook
 	if err := ctx.DB().Where("id = ?", run.PlaybookID).First(&playbookModel).Error; err != nil {
 		return nil, err
@@ -132,12 +135,12 @@ func executeRun(ctx context.Context, run models.PlaybookRun, opt runExecOptions)
 		runAction := models.PlaybookRunAction{
 			PlaybookRunID: run.ID,
 			Name:          action.Name,
-			Status:        models.PlaybookRunStatusRunning,
+			Status:        models.PlaybookActionStatusRunning,
 		}
 		if opt.StartFrom != nil {
 			runAction = *opt.StartFrom
 			if err := ctx.DB().Model(&models.PlaybookRunAction{}).Where("id = ?", runAction.ID).UpdateColumns(map[string]any{
-				"status":     models.PlaybookRunStatusRunning,
+				"status":     models.PlaybookActionStatusRunning,
 				"start_time": gorm.Expr("CLOCK_TIMESTAMP()"),
 			}).Error; err != nil {
 				logger.Errorf("failed to update playbook run action status: %v", err)
@@ -155,13 +158,13 @@ func executeRun(ctx context.Context, run models.PlaybookRun, opt runExecOptions)
 			logger.Debugf("Pausing run execution. Sleeping for %v", duration)
 
 			if err := ctx.DB().Model(&models.PlaybookRunAction{}).Where("id = ?", runAction.ID).UpdateColumns(map[string]any{
-				"status":     models.PlaybookRunStatusSleeping,
+				"status":     models.PlaybookActionStatusSleeping,
 				"start_time": gorm.Expr("NULL"),
 			}).Error; err != nil {
 				logger.Errorf("failed to update playbook run action status: %v", err)
 			}
 
-			return &runExecResponse{
+			return &runExecutionResult{
 				Sleep: duration,
 			}, nil
 		} else if action.Name == continueFromAction {
@@ -171,30 +174,37 @@ func executeRun(ctx context.Context, run models.PlaybookRun, opt runExecOptions)
 		columnUpdates := map[string]any{
 			"end_time": gorm.Expr("CLOCK_TIMESTAMP()"),
 		}
+
 		result, err := executeAction(ctx, run, action, templateEnv)
 		if err != nil {
 			logger.Errorf("failed to execute action: %v", err)
-			columnUpdates["status"] = models.PlaybookRunStatusFailed
+			columnUpdates["status"] = models.PlaybookActionStatusFailed
 			columnUpdates["error"] = err.Error()
+		} else if result.skipped {
+			columnUpdates["status"] = models.PlaybookActionStatusSkipped
 		} else {
-			columnUpdates["status"] = models.PlaybookRunStatusCompleted
+			columnUpdates["status"] = models.PlaybookActionStatusCompleted
 			columnUpdates["result"] = result
 		}
 
 		if err := ctx.DB().Model(&models.PlaybookRunAction{}).Where("id = ?", runAction.ID).UpdateColumns(&columnUpdates).Error; err != nil {
 			logger.Errorf("failed to update playbook run action status: %v", err)
 		}
-
-		// Even if a single action fails, we stop the execution and mark the Run as failed
-		if err != nil {
-			return nil, fmt.Errorf("action %q failed: %w", action.Name, err)
-		}
 	}
 
-	return &runExecResponse{}, nil
+	return &runExecutionResult{}, nil
 }
 
-func executeAction(ctx context.Context, run models.PlaybookRun, action v1.PlaybookAction, env actions.TemplateEnv) ([]byte, error) {
+// executeActionResult is the result of executing an action
+type executeActionResult struct {
+	// result of the action as JSON
+	data []byte
+
+	// skipped is true if the action was skipped by the action filter
+	skipped bool
+}
+
+func executeAction(ctx context.Context, run models.PlaybookRun, action v1.PlaybookAction, env actions.TemplateEnv) (*executeActionResult, error) {
 	ctx, span := ctx.StartSpan("executeAction")
 	defer span.End()
 
@@ -204,6 +214,44 @@ func executeAction(ctx context.Context, run models.PlaybookRun, action v1.Playbo
 		var cancel gocontext.CancelFunc
 		ctx, cancel = ctx.WithTimeout(timeout)
 		defer cancel()
+	}
+
+	if action.Filter != "" {
+		if res, err := gomplate.RunTemplate(env.AsMap(), gomplate.Template{Expression: action.Filter, Functions: actionCelFunctions}); err != nil {
+			return nil, fmt.Errorf("failed to parse action filter (%s): %w", action.Filter, err)
+		} else {
+			switch res {
+			case actionFilterAlways:
+				// Do nothing, just run the action
+
+			case actionFilterSkip:
+				return &executeActionResult{skipped: true}, nil
+
+			case actionFilterFailure:
+				if count, err := db.GetPlaybookActionsForStatus(ctx, run.ID, models.PlaybookActionStatusFailed); err != nil {
+					return nil, fmt.Errorf("failed to get playbook actions for status(%s): %w", models.PlaybookActionStatusFailed, err)
+				} else if count == 0 {
+					return &executeActionResult{skipped: true}, nil
+				}
+
+			case actionFilterSuccess:
+				if count, err := db.GetPlaybookActionsForStatus(ctx, run.ID, models.PlaybookActionStatusFailed); err != nil {
+					return nil, fmt.Errorf("failed to get playbook actions for status(%s): %w", models.PlaybookActionStatusFailed, err)
+				} else if count > 0 {
+					return &executeActionResult{skipped: true}, nil
+				}
+
+			case actionFilterTimeout:
+				// TODO: We don't properly store timed out action status.
+
+			default:
+				if proceed, err := strconv.ParseBool(res); err != nil {
+					return nil, fmt.Errorf("action filter(%s) didn't evaluate to a boolean value (%s) neither returned any special command", action.Filter, res)
+				} else if !proceed {
+					return &executeActionResult{skipped: true}, nil
+				}
+			}
+		}
 	}
 
 	if action.Exec != nil {
@@ -217,7 +265,12 @@ func executeAction(ctx context.Context, run models.PlaybookRun, action v1.Playbo
 			return nil, fmt.Errorf("error saving artifacts: %v", err)
 		}
 
-		return json.Marshal(res)
+		jsonData, err := json.Marshal(res)
+		if err != nil {
+			return nil, err
+		}
+
+		return &executeActionResult{data: jsonData}, nil
 	}
 
 	if action.HTTP != nil {
@@ -227,7 +280,12 @@ func executeAction(ctx context.Context, run models.PlaybookRun, action v1.Playbo
 			return nil, err
 		}
 
-		return json.Marshal(res)
+		jsonData, err := json.Marshal(res)
+		if err != nil {
+			return nil, err
+		}
+
+		return &executeActionResult{data: jsonData}, nil
 	}
 
 	if action.SQL != nil {
@@ -237,7 +295,12 @@ func executeAction(ctx context.Context, run models.PlaybookRun, action v1.Playbo
 			return nil, err
 		}
 
-		return json.Marshal(res)
+		jsonData, err := json.Marshal(res)
+		if err != nil {
+			return nil, err
+		}
+
+		return &executeActionResult{data: jsonData}, nil
 	}
 
 	if action.Pod != nil {
@@ -251,7 +314,12 @@ func executeAction(ctx context.Context, run models.PlaybookRun, action v1.Playbo
 			return nil, err
 		}
 
-		return json.Marshal(res)
+		jsonData, err := json.Marshal(res)
+		if err != nil {
+			return nil, err
+		}
+
+		return &executeActionResult{data: jsonData}, nil
 	}
 
 	if action.GitOps != nil {
@@ -261,7 +329,12 @@ func executeAction(ctx context.Context, run models.PlaybookRun, action v1.Playbo
 			return nil, err
 		}
 
-		return json.Marshal(res)
+		jsonData, err := json.Marshal(res)
+		if err != nil {
+			return nil, err
+		}
+
+		return &executeActionResult{data: jsonData}, nil
 	}
 
 	if action.Notification != nil {
@@ -271,7 +344,7 @@ func executeAction(ctx context.Context, run models.PlaybookRun, action v1.Playbo
 			return nil, err
 		}
 
-		return []byte("{}"), nil
+		return &executeActionResult{data: []byte("{}")}, nil
 	}
 
 	return nil, nil
