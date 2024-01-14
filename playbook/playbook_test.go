@@ -24,9 +24,6 @@ import (
 )
 
 var _ = ginkgo.Describe("Playbook", ginkgo.Ordered, func() {
-	ginkgo.BeforeAll(func() {
-		go events.StartConsumers(DefaultContext)
-	})
 
 	var _ = ginkgo.Describe("Test Listing | Run API | Approvals", ginkgo.Ordered, func() {
 		var (

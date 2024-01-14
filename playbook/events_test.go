@@ -22,9 +22,6 @@ import (
 )
 
 var _ = ginkgo.Describe("Playbook Events", ginkgo.Ordered, func() {
-	ginkgo.BeforeAll(func() {
-		go events.StartConsumers(DefaultContext)
-	})
 
 	var _ = ginkgo.Describe("Config Events", ginkgo.Ordered, func() {
 		var playbook models.Playbook
