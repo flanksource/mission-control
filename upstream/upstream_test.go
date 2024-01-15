@@ -40,8 +40,8 @@ var _ = ginkgo.Describe("Upstream Push", ginkgo.Ordered, func() {
 		pushUpstream.StartServer()
 
 		Expect(pushUpstream.DB().Create(&models.Agent{ID: pushAgent.id, Name: pushAgent.name}).Error).To(BeNil())
-
 	})
+
 	ginkgo.It("should track insertion on the event_queue table", func() {
 		var events api.Events
 		err := pushAgent.DB().Where("name = ?", api.EventPushQueueCreate).Find(&events).Error
@@ -82,7 +82,6 @@ var _ = ginkgo.Describe("Upstream Push", ginkgo.Ordered, func() {
 	})
 
 	ginkgo.Describe("consumer", func() {
-
 		ginkgo.It("should have transferred all the components", func() {
 			var fieldsToIgnore []string
 			fieldsToIgnore = append(fieldsToIgnore, "TopologyID")                                                    // Upstream creates its own dummy topology
@@ -97,7 +96,6 @@ var _ = ginkgo.Describe("Upstream Push", ginkgo.Ordered, func() {
 
 		ginkgo.It("should have transferred all the checks", func() {
 			compareAgentEntities[models.Check]("", pushUpstream.DB(), pushAgent, cmpopts.IgnoreFields(models.Check{}, "AgentID"))
-
 		})
 
 		ginkgo.It("should have transferred all the check statuses", func() {
@@ -128,9 +126,30 @@ var _ = ginkgo.Describe("Upstream Push", ginkgo.Ordered, func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(count).ToNot(BeZero())
 		})
-
 	})
 
+	ginkgo.Describe("should sync hard deletes", func() {
+		ginkgo.It("Verify that the config we're deleting on the agent exists on the upstream", func() {
+			var count int
+			err := pushUpstream.DB().Select("COUNT(*)").Where("id = ?", pushAgent.dataset.Configs[0].ID).Model(&models.ConfigItem{}).Scan(&count).Error
+			Expect(err).ToNot(HaveOccurred())
+			Expect(count).ToNot(BeZero())
+		})
+
+		ginkgo.It("delete a config item from the agent", func() {
+			err := pushAgent.DB().Delete(&pushAgent.dataset.Configs[0]).Error
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		ginkgo.It("should have deleted that from the upstream as well", func() {
+			pushAgent.runDeleteConsumer(pushUpstream)
+
+			var count int
+			err := pushUpstream.DB().Select("COUNT(*)").Where("id = ?", pushAgent.dataset.Configs[0].ID).Model(&models.ConfigItem{}).Scan(&count).Error
+			Expect(err).ToNot(HaveOccurred())
+			Expect(count).To(BeZero())
+		})
+	})
 })
 
 // getPrimaryKeys extracts and returns the list of primary keys for the given table from the provided rows.

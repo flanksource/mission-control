@@ -24,6 +24,7 @@ var (
 func RegisterRoutes(e *echo.Echo) {
 	upstreamGroup := e.Group("/upstream", rbac.Authorization(rbac.ObjectAgentPush, rbac.ActionWrite))
 	upstreamGroup.POST("/push", upstream.PushHandler(agentIDCache))
+	upstreamGroup.DELETE("/push", upstream.DeleteHandler(agentIDCache))
 	upstreamGroup.GET("/pull/:agent_name", upstream.PullHandler(api.TablesToReconcile))
 	upstreamGroup.GET("/status/:agent_name", upstream.StatusHandler(api.TablesToReconcile))
 	upstreamGroup.GET("/canary/pull/:agent_name", PullCanaries)
