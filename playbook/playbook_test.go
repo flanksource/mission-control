@@ -19,7 +19,6 @@ import (
 )
 
 var _ = ginkgo.Describe("Playbook", ginkgo.Ordered, func() {
-
 	var _ = ginkgo.Describe("Test Listing | Run API | Approvals", ginkgo.Ordered, func() {
 		var (
 			configPlaybook    models.Playbook

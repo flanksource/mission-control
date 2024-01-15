@@ -323,14 +323,14 @@ type PlaybookAction struct {
 	// success(): run only if all previous actions succeeded (default)
 	// timeout(): run only if any of the previous actions timed out
 	// skip(): skip running this action
-	Filter string `yaml:"if,omitempty" json:"if,omitempty"`
+	Filter string `yaml:"if,omitempty" json:"if,omitempty" template:"true"`
 
 	Exec         *ExecAction         `json:"exec,omitempty" yaml:"exec,omitempty" template:"true"`
-	GitOps       *GitOpsAction       `json:"gitops,omitempty" yaml:"gitops,omitempty"`
-	HTTP         *HTTPAction         `json:"http,omitempty" yaml:"http,omitempty"`
-	SQL          *SQLAction          `json:"sql,omitempty" yaml:"sql,omitempty"`
-	Pod          *PodAction          `json:"pod,omitempty" yaml:"pod,omitempty"`
-	Notification *NotificationAction `json:"notification,omitempty" yaml:"notification,omitempty"`
+	GitOps       *GitOpsAction       `json:"gitops,omitempty" yaml:"gitops,omitempty" template:"true"`
+	HTTP         *HTTPAction         `json:"http,omitempty" yaml:"http,omitempty" template:"true"`
+	SQL          *SQLAction          `json:"sql,omitempty" yaml:"sql,omitempty" template:"true"`
+	Pod          *PodAction          `json:"pod,omitempty" yaml:"pod,omitempty" template:"true"`
+	Notification *NotificationAction `json:"notification,omitempty" yaml:"notification,omitempty" template:"true"`
 }
 
 func (p *PlaybookAction) DelayDuration(templateEnv map[string]any) (time.Duration, error) {

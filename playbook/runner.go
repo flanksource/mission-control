@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -235,14 +236,14 @@ func executeAction(ctx context.Context, run models.PlaybookRun, action v1.Playbo
 			{Left: "{{", Right: "}}"},
 			{Left: "$(", Right: ")"},
 		},
-		Funcs: funcs,
+		Funcs: collections.MergeMap(funcs, actionCelFunctions),
 	}
 	if err := templater.Walk(&action); err != nil {
 		return nil, err
 	}
 
 	if action.Filter != "" {
-		if res, err := gomplate.RunTemplate(env.AsMap(), gomplate.Template{Expression: action.Filter, Functions: actionCelFunctions}); err != nil {
+		if res, err := gomplate.RunTemplate(env.AsMap(), gomplate.Template{Expression: action.Filter, Functions: collections.MergeMap(funcs, actionCelFunctions)}); err != nil {
 			return nil, fmt.Errorf("failed to parse action filter (%s): %w", action.Filter, err)
 		} else {
 			switch res {

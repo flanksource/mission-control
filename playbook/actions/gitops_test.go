@@ -8,6 +8,7 @@ import (
 
 	commons "github.com/flanksource/commons/context"
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/gomplate/v3"
 	gitv5 "github.com/go-git/go-git/v5"
 	"k8s.io/apimachinery/pkg/util/yaml"
 
@@ -61,6 +62,18 @@ var _ = ginkgo.Describe("Playbook Action Gitops", ginkgo.Ordered, func() {
 				"namespace": "logging",
 			},
 		}
+
+		templater := gomplate.StructTemplater{
+			Values:         env.AsMap(),
+			ValueFunctions: true,
+			RequiredTag:    "template",
+			DelimSets: []gomplate.Delims{
+				{Left: "{{", Right: "}}"},
+				{Left: "$(", Right: ")"},
+			},
+		}
+		err := templater.Walk(&spec)
+		Expect(err).ToNot(HaveOccurred())
 
 		var runner GitOps
 		ctx := context.Context{

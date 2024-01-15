@@ -8,7 +8,6 @@ import (
 	"github.com/flanksource/commons/http"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/gomplate/v3"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 )
 
@@ -43,15 +42,6 @@ func (c *HTTP) Run(ctx context.Context, action v1.HTTPAction, env TemplateEnv) (
 
 	if connection.URL == "" {
 		return nil, fmt.Errorf("must specify a URL")
-	}
-
-	if action.TemplateBody {
-		templated, err := gomplate.RunTemplate(env.AsMap(), gomplate.Template{Template: action.Body})
-		if err != nil {
-			return nil, err
-		}
-
-		action.Body = templated
 	}
 
 	resp, err := c.makeRequest(ctx, action, connection)
