@@ -3,16 +3,22 @@ package playbook
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
+	"github.com/patrickmn/go-cache"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
+)
+
+var (
+	lastResultCache = cache.New(time.Minute*20, time.Minute*20)
 )
 
 // validateAndSavePlaybookRun creates and saves a run from a run request after validating the run parameters.
@@ -120,4 +126,24 @@ func ListPlaybooksForCheck(ctx context.Context, id string) ([]api.PlaybookListIt
 	}
 
 	return db.FindPlaybooksForCheck(ctx, check.Type, check.Labels)
+}
+
+func LastResult(ctx context.Context, runID string, actionName string) (map[string]any, error) {
+	if val, ok := lastResultCache.Get(runID + actionName); ok {
+		return val.(map[string]any), nil
+	}
+
+	var result models.PlaybookRunAction
+	query := ctx.DB().Debug().Select("id, name, result").Where("playbook_run_id = ?", runID)
+	if actionName != "" {
+		query = query.Where("name = ? ", actionName).Where("status != ?", models.PlaybookActionStatusRunning)
+	} else {
+		query = query.Order("start_time desc")
+	}
+	if err := query.First(&result).Error; err != nil {
+		return nil, err
+	}
+
+	lastResultCache.SetDefault(runID+actionName, result)
+	return result.Result, nil
 }

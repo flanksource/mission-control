@@ -184,7 +184,7 @@ func executeRun(ctx context.Context, run models.PlaybookRun, opt runExecOptions)
 			columnUpdates["status"] = models.PlaybookActionStatusSkipped
 		} else {
 			columnUpdates["status"] = models.PlaybookActionStatusCompleted
-			columnUpdates["result"] = result
+			columnUpdates["result"] = result.data
 		}
 
 		if err := ctx.DB().Model(&models.PlaybookRunAction{}).Where("id = ?", runAction.ID).UpdateColumns(&columnUpdates).Error; err != nil {
@@ -214,6 +214,31 @@ func executeAction(ctx context.Context, run models.PlaybookRun, action v1.Playbo
 		var cancel gocontext.CancelFunc
 		ctx, cancel = ctx.WithTimeout(timeout)
 		defer cancel()
+	}
+
+	funcs := map[string]func() any{
+		"last_result": func() any {
+			r, err := LastResult(ctx, run.ID.String(), "")
+			if err != nil {
+				return ""
+			}
+
+			return r
+		},
+	}
+
+	templater := gomplate.StructTemplater{
+		Values:         env.AsMap(),
+		ValueFunctions: true,
+		RequiredTag:    "template",
+		DelimSets: []gomplate.Delims{
+			{Left: "{{", Right: "}}"},
+			{Left: "$(", Right: ")"},
+		},
+		Funcs: funcs,
+	}
+	if err := templater.Walk(&action); err != nil {
+		return nil, err
 	}
 
 	if action.Filter != "" {

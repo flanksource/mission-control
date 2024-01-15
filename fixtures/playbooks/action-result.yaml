@@ -1,0 +1,15 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: use-previous-action-result
+spec:
+  description: Creates a file with the content of the config
+  configs:
+    - type: Kubernetes::Pod
+  actions:
+    - name: Create the config file
+      exec:
+        script: echo 'aditya-thebe'
+    - name: Delete the file
+      exec:
+        script: echo wow {{index last_result "stdout"}}

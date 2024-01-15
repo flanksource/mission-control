@@ -165,7 +165,7 @@ func (git GitCheckout) GetCertificate() types.EnvVar {
 type ExecAction struct {
 	// Script can be an inline script or a path to a script that needs to be executed
 	// On windows executed via powershell and in darwin and linux executed using bash
-	Script      string          `yaml:"script" json:"script"`
+	Script      string          `yaml:"script" json:"script" template:"true"`
 	Connections ExecConnections `yaml:"connections,omitempty" json:"connections,omitempty"`
 	// Artifacts to save
 	Artifacts []Artifact `yaml:"artifacts,omitempty" json:"artifacts,omitempty"`
@@ -325,7 +325,7 @@ type PlaybookAction struct {
 	// skip(): skip running this action
 	Filter string `yaml:"if,omitempty" json:"if,omitempty"`
 
-	Exec         *ExecAction         `json:"exec,omitempty" yaml:"exec,omitempty"`
+	Exec         *ExecAction         `json:"exec,omitempty" yaml:"exec,omitempty" template:"true"`
 	GitOps       *GitOpsAction       `json:"gitops,omitempty" yaml:"gitops,omitempty"`
 	HTTP         *HTTPAction         `json:"http,omitempty" yaml:"http,omitempty"`
 	SQL          *SQLAction          `json:"sql,omitempty" yaml:"sql,omitempty"`

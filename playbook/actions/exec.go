@@ -21,7 +21,6 @@ import (
 	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/gomplate/v3"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/hashicorp/go-getter"
 )
@@ -42,12 +41,6 @@ type ExecDetails struct {
 }
 
 func (c *ExecAction) Run(ctx context.Context, exec v1.ExecAction, env TemplateEnv) (*ExecDetails, error) {
-	script, err := gomplate.RunTemplate(env.AsMap(), gomplate.Template{Template: exec.Script})
-	if err != nil {
-		return nil, err
-	}
-	exec.Script = script
-
 	execEnvParam, err := c.prepareEnvironment(ctx, exec)
 	if err != nil {
 		return nil, err
