@@ -12,6 +12,11 @@ import (
 	"github.com/labstack/echo/v4"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	// register event handlers
+	_ "github.com/flanksource/incident-commander/incidents/responder"
+	_ "github.com/flanksource/incident-commander/notification"
+	_ "github.com/flanksource/incident-commander/upstream"
 )
 
 func TestPlaybook(t *testing.T) {

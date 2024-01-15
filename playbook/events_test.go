@@ -14,11 +14,6 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/samber/lo"
 	"gorm.io/gorm/clause"
-
-	// register event handlers
-	_ "github.com/flanksource/incident-commander/incidents/responder"
-	_ "github.com/flanksource/incident-commander/notification"
-	_ "github.com/flanksource/incident-commander/upstream"
 )
 
 var _ = ginkgo.Describe("Playbook Events", ginkgo.Ordered, func() {
@@ -109,6 +104,7 @@ var _ = ginkgo.Describe("Playbook Events", ginkgo.Ordered, func() {
 		})
 
 		ginkgo.It("Expect the event consumer to save the playbook run", func() {
+			events.ConsumeAll(DefaultContext)
 			Eventually(func() models.PlaybookRunStatus {
 				var run models.PlaybookRun
 				DefaultContext.DB().Where("config_id = ? and playbook_id = ?", newConfigItems[1], playbook.ID).First(&run)
