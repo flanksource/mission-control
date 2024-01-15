@@ -8,9 +8,15 @@ import (
 	"github.com/flanksource/duty/tests/setup"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/auth"
+	"github.com/flanksource/incident-commander/events"
 	"github.com/labstack/echo/v4"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	// register event handlers
+	_ "github.com/flanksource/incident-commander/incidents/responder"
+	_ "github.com/flanksource/incident-commander/notification"
+	_ "github.com/flanksource/incident-commander/upstream"
 )
 
 func TestPlaybook(t *testing.T) {
@@ -33,6 +39,7 @@ var (
 var _ = ginkgo.BeforeSuite(func() {
 	DefaultContext = setup.BeforeSuiteFn()
 	_ = context.UpdateProperty(DefaultContext, api.PropertyIncidentsDisabled, "true")
+	events.StartConsumers(DefaultContext)
 	e := echo.New()
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {

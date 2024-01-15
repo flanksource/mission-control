@@ -16,17 +16,9 @@ import (
 	. "github.com/onsi/gomega"
 	"gorm.io/gorm/clause"
 	"k8s.io/apimachinery/pkg/util/yaml"
-
-	// register event handlers
-	_ "github.com/flanksource/incident-commander/incidents/responder"
-	_ "github.com/flanksource/incident-commander/notification"
-	_ "github.com/flanksource/incident-commander/upstream"
 )
 
 var _ = ginkgo.Describe("Playbook", ginkgo.Ordered, func() {
-	ginkgo.BeforeAll(func() {
-		go events.StartConsumers(DefaultContext)
-	})
 
 	var _ = ginkgo.Describe("Test Listing | Run API | Approvals", ginkgo.Ordered, func() {
 		var (
