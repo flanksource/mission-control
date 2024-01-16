@@ -129,14 +129,14 @@ func executeRun(ctx context.Context, run models.PlaybookRun, opt runExecOptions)
 		continueFromAction = opt.StartFrom.Name
 	}
 
-	for _, action := range playbook.Spec.Actions {
-		if continueFromAction != "" && action.Name != continueFromAction {
+	for _, actionSpec := range playbook.Spec.Actions {
+		if continueFromAction != "" && actionSpec.Name != continueFromAction {
 			continue
 		}
 
 		runAction := models.PlaybookRunAction{
 			PlaybookRunID: run.ID,
-			Name:          action.Name,
+			Name:          actionSpec.Name,
 			Status:        models.PlaybookActionStatusRunning,
 		}
 		if opt.StartFrom != nil {
@@ -153,9 +153,9 @@ func executeRun(ctx context.Context, run models.PlaybookRun, opt runExecOptions)
 			}
 		}
 
-		if duration, err := action.DelayDuration(templateEnv.AsMap()); err != nil {
+		if duration, err := actionSpec.DelayDuration(templateEnv.AsMap()); err != nil {
 			return nil, err
-		} else if duration > 0 && action.Name != continueFromAction {
+		} else if duration > 0 && actionSpec.Name != continueFromAction {
 			logger.Debugf("Pausing run execution. Sleeping for %v", duration)
 
 			if err := ctx.DB().Model(&models.PlaybookRunAction{}).Where("id = ?", runAction.ID).UpdateColumns(map[string]any{
@@ -168,7 +168,7 @@ func executeRun(ctx context.Context, run models.PlaybookRun, opt runExecOptions)
 			return &runExecutionResult{
 				Sleep: duration,
 			}, nil
-		} else if action.Name == continueFromAction {
+		} else if actionSpec.Name == continueFromAction {
 			continueFromAction = ""
 		}
 
@@ -176,7 +176,7 @@ func executeRun(ctx context.Context, run models.PlaybookRun, opt runExecOptions)
 			"end_time": gorm.Expr("CLOCK_TIMESTAMP()"),
 		}
 
-		result, err := executeAction(ctx, run, action, templateEnv)
+		result, err := executeAction(ctx, run, runAction, actionSpec, templateEnv)
 		if err != nil {
 			logger.Errorf("failed to execute action: %v", err)
 			columnUpdates["status"] = models.PlaybookActionStatusFailed
@@ -205,13 +205,13 @@ type executeActionResult struct {
 	skipped bool
 }
 
-func executeAction(ctx context.Context, run models.PlaybookRun, action v1.PlaybookAction, env actions.TemplateEnv) (*executeActionResult, error) {
+func executeAction(ctx context.Context, run models.PlaybookRun, runAction models.PlaybookRunAction, actionSpec v1.PlaybookAction, env actions.TemplateEnv) (*executeActionResult, error) {
 	ctx, span := ctx.StartSpan("executeAction")
 	defer span.End()
 
-	logger.WithValues("runID", run.ID).Infof("Executing action: %s", action.Name)
+	logger.WithValues("runID", run.ID).Infof("Executing action: %s", actionSpec.Name)
 
-	if timeout, _ := action.TimeoutDuration(); timeout > 0 {
+	if timeout, _ := actionSpec.TimeoutDuration(); timeout > 0 {
 		var cancel gocontext.CancelFunc
 		ctx, cancel = ctx.WithTimeout(timeout)
 		defer cancel()
@@ -219,9 +219,9 @@ func executeAction(ctx context.Context, run models.PlaybookRun, action v1.Playbo
 
 	funcs := map[string]func() any{
 		"last_result": func() any {
-			r, err := LastResult(ctx, run.ID.String(), "")
+			r, err := LastResult(ctx, run.ID.String(), runAction.ID.String())
 			if err != nil {
-				logger.Errorf("failed to get last result: %w", err)
+				logger.Errorf("failed to get last result: %v", err)
 				return ""
 			}
 
@@ -229,9 +229,9 @@ func executeAction(ctx context.Context, run models.PlaybookRun, action v1.Playbo
 		},
 	}
 
-	if action.Filter != "" {
-		if res, err := gomplate.RunTemplate(env.AsMap(), gomplate.Template{Expression: action.Filter, Functions: collections.MergeMap(funcs, actionCelFunctions)}); err != nil {
-			return nil, fmt.Errorf("failed to parse action filter (%s): %w", action.Filter, err)
+	if actionSpec.Filter != "" {
+		if res, err := gomplate.RunTemplate(env.AsMap(), gomplate.Template{Expression: actionSpec.Filter, Functions: collections.MergeMap(funcs, actionCelFunctions)}); err != nil {
+			return nil, fmt.Errorf("failed to parse action filter (%s): %w", actionSpec.Filter, err)
 		} else {
 			switch res {
 			case actionFilterAlways:
@@ -259,7 +259,7 @@ func executeAction(ctx context.Context, run models.PlaybookRun, action v1.Playbo
 
 			default:
 				if proceed, err := strconv.ParseBool(res); err != nil {
-					return nil, fmt.Errorf("action filter(%s) didn't evaluate to a boolean value (%s) neither returned any special command", action.Filter, res)
+					return nil, fmt.Errorf("action filter(%s) didn't evaluate to a boolean value (%s) neither returned any special command", actionSpec.Filter, res)
 				} else if !proceed {
 					return &executeActionResult{skipped: true}, nil
 				}
@@ -277,13 +277,13 @@ func executeAction(ctx context.Context, run models.PlaybookRun, action v1.Playbo
 		},
 		Funcs: collections.MergeMap(funcs, actionCelFunctions),
 	}
-	if err := templater.Walk(&action); err != nil {
+	if err := templater.Walk(&actionSpec); err != nil {
 		return nil, err
 	}
 
-	if action.Exec != nil {
+	if actionSpec.Exec != nil {
 		var e actions.ExecAction
-		res, err := e.Run(ctx, *action.Exec, env)
+		res, err := e.Run(ctx, *actionSpec.Exec, env)
 		if err != nil {
 			return nil, err
 		}
@@ -300,9 +300,9 @@ func executeAction(ctx context.Context, run models.PlaybookRun, action v1.Playbo
 		return &executeActionResult{data: jsonData}, nil
 	}
 
-	if action.HTTP != nil {
+	if actionSpec.HTTP != nil {
 		var e actions.HTTP
-		res, err := e.Run(ctx, *action.HTTP, env)
+		res, err := e.Run(ctx, *actionSpec.HTTP, env)
 		if err != nil {
 			return nil, err
 		}
@@ -315,9 +315,9 @@ func executeAction(ctx context.Context, run models.PlaybookRun, action v1.Playbo
 		return &executeActionResult{data: jsonData}, nil
 	}
 
-	if action.SQL != nil {
+	if actionSpec.SQL != nil {
 		var e actions.SQL
-		res, err := e.Run(ctx, *action.SQL, env)
+		res, err := e.Run(ctx, *actionSpec.SQL, env)
 		if err != nil {
 			return nil, err
 		}
@@ -330,13 +330,13 @@ func executeAction(ctx context.Context, run models.PlaybookRun, action v1.Playbo
 		return &executeActionResult{data: jsonData}, nil
 	}
 
-	if action.Pod != nil {
+	if actionSpec.Pod != nil {
 		e := actions.Pod{
 			PlaybookRun: run,
 		}
 
-		timeout, _ := action.TimeoutDuration()
-		res, err := e.Run(ctx, *action.Pod, env, timeout)
+		timeout, _ := actionSpec.TimeoutDuration()
+		res, err := e.Run(ctx, *actionSpec.Pod, env, timeout)
 		if err != nil {
 			return nil, err
 		}
@@ -349,9 +349,9 @@ func executeAction(ctx context.Context, run models.PlaybookRun, action v1.Playbo
 		return &executeActionResult{data: jsonData}, nil
 	}
 
-	if action.GitOps != nil {
+	if actionSpec.GitOps != nil {
 		var e actions.GitOps
-		res, err := e.Run(ctx, *action.GitOps, env)
+		res, err := e.Run(ctx, *actionSpec.GitOps, env)
 		if err != nil {
 			return nil, err
 		}
@@ -364,9 +364,9 @@ func executeAction(ctx context.Context, run models.PlaybookRun, action v1.Playbo
 		return &executeActionResult{data: jsonData}, nil
 	}
 
-	if action.Notification != nil {
+	if actionSpec.Notification != nil {
 		var e actions.Notification
-		err := e.Run(ctx, *action.Notification, env)
+		err := e.Run(ctx, *actionSpec.Notification, env)
 		if err != nil {
 			return nil, err
 		}

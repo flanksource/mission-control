@@ -17,7 +17,6 @@ import (
 )
 
 var _ = ginkgo.Describe("Playbook Events", ginkgo.Ordered, func() {
-
 	var _ = ginkgo.Describe("Config Events", ginkgo.Ordered, func() {
 		var playbook models.Playbook
 		var newConfigItems []string

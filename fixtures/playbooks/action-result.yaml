@@ -13,7 +13,7 @@ spec:
         driver: postgres
         connection: connection://postgres/local
     - name: Send notification
-      if: 'success()'
+      if: 'last_result().count > 0'
       notification:
         title: 'Changes summary for {{.config.name}}'
         connection: connection://slack/flanksource
