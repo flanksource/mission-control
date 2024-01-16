@@ -125,7 +125,7 @@ func ListPlaybooksForCheck(ctx context.Context, id string) ([]api.PlaybookListIt
 // NOTE: might need to cache this. Maybe need to provide the action id to use as the cache key.
 func LastResult(ctx context.Context, runID string, actionName string) (map[string]any, error) {
 	var action models.PlaybookRunAction
-	query := ctx.DB().Debug().Select("id, name, result").Where("playbook_run_id = ?", runID)
+	query := ctx.DB().Select("id, name, result").Where("playbook_run_id = ?", runID).Where("result IS NOT NULL")
 	if actionName != "" {
 		query = query.Where("name = ? ", actionName).Where("status != ?", models.PlaybookActionStatusRunning)
 	} else {

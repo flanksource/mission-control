@@ -109,7 +109,7 @@ var _ = ginkgo.Describe("Notification on incident creation", ginkgo.Ordered, fun
 	})
 
 	ginkgo.It("should consume the event and send the notification", func() {
-		events.StartConsumers(DefaultContext)
+		events.ConsumeAll(DefaultContext)
 
 		Eventually(func() int {
 			return len(webhookPostdata)

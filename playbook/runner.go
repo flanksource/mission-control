@@ -115,6 +115,7 @@ func executeRun(ctx context.Context, run models.PlaybookRun, opt runExecOptions)
 	logger.WithValues("playbook", playbook.Name).
 		WithValues("parameters", run.Parameters).
 		WithValues("config", run.ConfigID).
+		WithValues("check", run.CheckID).
 		WithValues("component", run.ComponentID).
 		Infof("Executing playbook run: %s", run.ID)
 
@@ -144,12 +145,11 @@ func executeRun(ctx context.Context, run models.PlaybookRun, opt runExecOptions)
 				"status":     models.PlaybookActionStatusRunning,
 				"start_time": gorm.Expr("CLOCK_TIMESTAMP()"),
 			}).Error; err != nil {
-				logger.Errorf("failed to update playbook run action status: %v", err)
+				return nil, fmt.Errorf("failed to update playbook run action status to %s: %w", models.PlaybookActionStatusRunning, err)
 			}
 		} else {
 			if err := ctx.DB().Save(&runAction).Error; err != nil {
-				logger.Errorf("failed to create playbook run action: %v", err)
-				return nil, err
+				return nil, fmt.Errorf("failed to create playbook run action: %w", err)
 			}
 		}
 
@@ -162,7 +162,7 @@ func executeRun(ctx context.Context, run models.PlaybookRun, opt runExecOptions)
 				"status":     models.PlaybookActionStatusSleeping,
 				"start_time": gorm.Expr("NULL"),
 			}).Error; err != nil {
-				logger.Errorf("failed to update playbook run action status: %v", err)
+				return nil, fmt.Errorf("failed to update playbook run action status to %s: %w", models.PlaybookActionStatusSleeping, err)
 			}
 
 			return &runExecutionResult{
@@ -189,7 +189,7 @@ func executeRun(ctx context.Context, run models.PlaybookRun, opt runExecOptions)
 		}
 
 		if err := ctx.DB().Model(&models.PlaybookRunAction{}).Where("id = ?", runAction.ID).UpdateColumns(&columnUpdates).Error; err != nil {
-			logger.Errorf("failed to update playbook run action status: %v", err)
+			return nil, fmt.Errorf("failed to update playbook action result: %w", err)
 		}
 	}
 
@@ -221,25 +221,12 @@ func executeAction(ctx context.Context, run models.PlaybookRun, action v1.Playbo
 		"last_result": func() any {
 			r, err := LastResult(ctx, run.ID.String(), "")
 			if err != nil {
+				logger.Errorf("failed to get last result: %w", err)
 				return ""
 			}
 
 			return r
 		},
-	}
-
-	templater := gomplate.StructTemplater{
-		Values:         env.AsMap(),
-		ValueFunctions: true,
-		RequiredTag:    "template",
-		DelimSets: []gomplate.Delims{
-			{Left: "{{", Right: "}}"},
-			{Left: "$(", Right: ")"},
-		},
-		Funcs: collections.MergeMap(funcs, actionCelFunctions),
-	}
-	if err := templater.Walk(&action); err != nil {
-		return nil, err
 	}
 
 	if action.Filter != "" {
@@ -278,6 +265,20 @@ func executeAction(ctx context.Context, run models.PlaybookRun, action v1.Playbo
 				}
 			}
 		}
+	}
+
+	templater := gomplate.StructTemplater{
+		Values:         env.AsMap(),
+		ValueFunctions: true,
+		RequiredTag:    "template",
+		DelimSets: []gomplate.Delims{
+			{Left: "{{", Right: "}}"},
+			{Left: "$(", Right: ")"},
+		},
+		Funcs: collections.MergeMap(funcs, actionCelFunctions),
+	}
+	if err := templater.Walk(&action); err != nil {
+		return nil, err
 	}
 
 	if action.Exec != nil {

@@ -1,0 +1,24 @@
+---
+parameters:
+  - name: path
+    label: Path to save the result
+actions:
+  - name: make dummy API call
+    exec:
+      script: |
+        echo '{
+          "result": "success",
+          "count": 20
+        }'
+  - name: Notify if the count is low
+    if: 'last_result().stdout.JSON().count < 5'
+    notification:
+      title: 'Count is low'
+      message: Count is {{index last_result "stdout"}}
+      connection: connection://slack/flanksource
+  - name: Save the count
+    if: 'success()'
+    exec:
+      script: |
+        {{$stdout:=index last_result "stdout"}}
+        echo -n '{{index ($stdout | json) "count"}}' > {{.params.path}}
