@@ -217,20 +217,13 @@ func executeAction(ctx context.Context, run models.PlaybookRun, runAction models
 		defer cancel()
 	}
 
-	funcs := map[string]func() any{
-		"last_result": func() any {
-			r, err := LastResult(ctx, run.ID.String(), runAction.ID.String())
-			if err != nil {
-				logger.Errorf("failed to get last result: %v", err)
-				return ""
-			}
-
-			return r
-		},
-	}
-
 	if actionSpec.Filter != "" {
-		if res, err := gomplate.RunTemplate(env.AsMap(), gomplate.Template{Expression: actionSpec.Filter, Functions: collections.MergeMap(funcs, actionCelFunctions)}); err != nil {
+		gomplateTemplate := gomplate.Template{
+			Expression: actionSpec.Filter,
+			CelEnvs:    getActionCelEnvs(ctx, run.ID.String(), runAction.ID.String()),
+			Functions:  actionFilterFuncs,
+		}
+		if res, err := gomplate.RunTemplate(env.AsMap(), gomplateTemplate); err != nil {
 			return nil, fmt.Errorf("failed to parse action filter (%s): %w", actionSpec.Filter, err)
 		} else {
 			switch res {
@@ -267,6 +260,27 @@ func executeAction(ctx context.Context, run models.PlaybookRun, runAction models
 		}
 	}
 
+	templateFuncs := map[string]any{
+		"getLastAction": func() any {
+			r, err := GetLastAction(ctx, run.ID.String(), runAction.ID.String())
+			if err != nil {
+				logger.Errorf("failed to get last action for run(%s): %v", run.ID, err)
+				return ""
+			}
+
+			return r
+		},
+		"getAction": func(actionName string) any {
+			r, err := GetActionByName(ctx, run.ID.String(), actionName)
+			if err != nil {
+				logger.Errorf("failed to get action(%s) for run(%s): %v", actionName, run.ID, err)
+				return ""
+			}
+
+			return r
+		},
+	}
+
 	templater := gomplate.StructTemplater{
 		Values:         env.AsMap(),
 		ValueFunctions: true,
@@ -275,7 +289,7 @@ func executeAction(ctx context.Context, run models.PlaybookRun, runAction models
 			{Left: "{{", Right: "}}"},
 			{Left: "$(", Right: ")"},
 		},
-		Funcs: collections.MergeMap(funcs, actionCelFunctions),
+		Funcs: collections.MergeMap(templateFuncs, actionFilterFuncs),
 	}
 	if err := templater.Walk(&actionSpec); err != nil {
 		return nil, err

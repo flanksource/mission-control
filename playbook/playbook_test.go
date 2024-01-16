@@ -401,24 +401,28 @@ var _ = ginkgo.Describe("Playbook", ginkgo.Ordered, func() {
 
 			Expect(len(actions)).To(Equal(len(spec.Actions)), "All the actions must have run event if some failed")
 
+			expectedStatus := map[string]models.PlaybookActionStatus{
+				"make dummy API call":        models.PlaybookActionStatusCompleted,
+				"Notify if the count is low": models.PlaybookActionStatusSkipped,
+				"Log if count is high":       models.PlaybookActionStatusCompleted,
+				"Save the count":             models.PlaybookActionStatusCompleted,
+			}
+
 			for _, action := range actions {
-				switch action.Name {
-				case "make dummy API call":
-					Expect(action.Status).To(Equal(models.PlaybookActionStatusCompleted), "make dummy API call")
-
-				case "Notify if the count is low":
-					Expect(action.Status).To(Equal(models.PlaybookActionStatusSkipped), "Notify if the count is low")
-
-				case "Save the count":
-					Expect(action.Status).To(Equal(models.PlaybookActionStatusCompleted), "Save the count")
+				expected, exists := expectedStatus[action.Name]
+				if !exists {
+					ginkgo.Fail("Unexpected action: " + action.Name)
+					continue
 				}
+
+				Expect(action.Status).To(Equal(expected), action.Name)
 			}
 		})
 
 		ginkgo.It("should have populated the files correctly", func() {
 			data, err := os.ReadFile(dataFile)
 			Expect(err).NotTo(HaveOccurred())
-			Expect(string(data)).To(Equal("20"))
+			Expect(string(data)).To(Equal("HIGH\n20"))
 		})
 	})
 })
