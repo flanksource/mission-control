@@ -36,8 +36,8 @@ var actionFilterFuncs = map[string]any{
 
 func getActionCelEnvs(ctx context.Context, runID, callerActionID string) []cel.EnvOption {
 	return []cel.EnvOption{
-		cel.Function("playbooks.getLastAction",
-			cel.Overload("playbooks.getLastAction",
+		cel.Function("getLastAction",
+			cel.Overload("getLastAction",
 				[]*cel.Type{},
 				cel.MapType(cel.StringType, cel.DynType),
 				cel.FunctionBinding(func(value ...ref.Val) ref.Val {
@@ -50,8 +50,8 @@ func getActionCelEnvs(ctx context.Context, runID, callerActionID string) []cel.E
 				}),
 			),
 		),
-		cel.Function("playbooks.getAction",
-			cel.Overload("playbooks.getAction",
+		cel.Function("getAction",
+			cel.Overload("getAction",
 				[]*cel.Type{cel.StringType},
 				cel.MapType(cel.StringType, cel.DynType),
 				cel.UnaryBinding(func(value ref.Val) ref.Val {

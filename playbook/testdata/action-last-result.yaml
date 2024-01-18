@@ -11,13 +11,13 @@ actions:
           "count": 20
         }'
   - name: Notify if the count is low
-    if: 'playbooks.getLastAction().result.stdout.JSON().count < 5'
+    if: 'getLastAction().result.stdout.JSON().count < 5'
     notification:
       title: 'Count is low'
       message: Count is {{index last_result "stdout"}}
       connection: connection://slack/flanksource
   - name: Log if count is high
-    if: 'playbooks.getAction("make dummy API call").result.stdout.JSON().count > 15'
+    if: 'getAction("make dummy API call").result.stdout.JSON().count > 15'
     exec:
       script: echo 'HIGH' > {{.params.path}}
   - name: Save the count
