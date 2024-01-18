@@ -159,7 +159,7 @@ func HandlePlaybookRun(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, dutyAPI.HTTPError{Error: "not found", Message: fmt.Sprintf("playbook(id=%s) not found", req.ID)})
 	}
 
-	run, err := validateAndSavePlaybookRun(ctx, playbook, req)
+	run, err := ValidateAndSavePlaybookRun(ctx, playbook, req)
 	if err != nil {
 		return dutyAPI.WriteError(c, err)
 	}
@@ -261,7 +261,7 @@ func HandleWebhook(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Error: err.Error(), Message: "playbook has an invalid spec"})
 	}
 
-	if err := authenticateWebhook(ctx, c.Request(), spec.On.Webhook.Authentication); err != nil {
+	if err := AuthenticateWebhook(ctx, c.Request(), spec.On.Webhook.Authentication); err != nil {
 		return dutyAPI.WriteError(c, err)
 	}
 
@@ -273,28 +273,11 @@ func HandleWebhook(c echo.Context) error {
 	}
 	runRequest.ID = playbook.ID
 
-	if _, err = validateAndSavePlaybookRun(ctx, playbook, runRequest); err != nil {
+	if _, err = ValidateAndSavePlaybookRun(ctx, playbook, runRequest); err != nil {
 		logger.Errorf("failed to save playbook run: %v", err)
 	}
 
 	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{Message: "ok"})
-}
-
-// HandleActionRequest returns a playbook action for the agent to run.
-func HandleActionRequest(c echo.Context) error {
-	ctx := c.Request().Context().(context.Context)
-
-	agent := ctx.Agent()
-	if agent == nil {
-		return c.JSON(http.StatusNotFound, dutyAPI.HTTPError{Error: "not found", Message: "agent not found"})
-	}
-
-	response, err := GetActionForAgent(ctx, agent)
-	if err != nil {
-		return dutyAPI.WriteError(c, err)
-	}
-
-	return c.JSON(http.StatusOK, response)
 }
 
 func RegisterRoutes(e *echo.Echo) *echo.Group {
@@ -302,9 +285,6 @@ func RegisterRoutes(e *echo.Echo) *echo.Group {
 	playbookGroup := e.Group(fmt.Sprintf("/%s", prefix))
 	playbookGroup.GET("/list", HandlePlaybookList)
 	playbookGroup.POST("/webhook/:webhook_path", HandleWebhook)
-
-	agentGroup := playbookGroup.Group("/agent")
-	agentGroup.GET("/action", HandleActionRequest)
 
 	runGroup := playbookGroup.Group("/run")
 	runGroup.POST("", HandlePlaybookRun)

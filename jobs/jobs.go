@@ -40,7 +40,7 @@ func Start(ctx context.Context) {
 	}
 
 	if api.UpstreamConf.Valid() {
-		for _, job := range []*job.Job{SyncCheckStatuses, SyncWithUpstream} {
+		for _, job := range UpstreamJobs {
 			j := job
 			j.Context = ctx
 			if err := j.AddToScheduler(FuncScheduler); err != nil {

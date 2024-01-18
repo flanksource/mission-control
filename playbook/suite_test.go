@@ -1,4 +1,4 @@
-package playbook
+package playbook_test
 
 import (
 	"fmt"
@@ -9,6 +9,7 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/events"
+	"github.com/flanksource/incident-commander/playbook"
 	"github.com/labstack/echo/v4"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -48,7 +49,7 @@ var _ = ginkgo.BeforeSuite(func() {
 		}
 	})
 	e.Use(auth.MockMiddleware)
-	RegisterRoutes(e)
+	playbook.RegisterRoutes(e)
 	echoServerPort, shutdownEcho = setup.RunEcho(e)
 })
 

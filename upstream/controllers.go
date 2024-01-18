@@ -14,6 +14,7 @@ import (
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/playbook"
 	"github.com/flanksource/incident-commander/rbac"
 )
 
@@ -29,6 +30,25 @@ func RegisterRoutes(e *echo.Echo) {
 	upstreamGroup.GET("/status/:agent_name", upstream.StatusHandler(api.TablesToReconcile))
 	upstreamGroup.GET("/canary/pull/:agent_name", PullCanaries)
 	upstreamGroup.GET("/scrapeconfig/pull/:agent_name", PullScrapeConfigs)
+
+	upstreamGroup.GET("/playbook-action", handlePlaybookActionRequest)
+}
+
+// handlePlaybookActionRequest returns a playbook action for the agent to run.
+func handlePlaybookActionRequest(c echo.Context) error {
+	ctx := c.Request().Context().(context.Context)
+
+	agent := ctx.Agent()
+	if agent == nil {
+		return c.JSON(http.StatusNotFound, dutyAPI.HTTPError{Error: "not found", Message: "agent not found"})
+	}
+
+	response, err := playbook.GetActionForAgent(ctx, agent)
+	if err != nil {
+		return dutyAPI.WriteError(c, err)
+	}
+
+	return c.JSON(http.StatusOK, response)
 }
 
 // PullCanaries returns all canaries for the  agent

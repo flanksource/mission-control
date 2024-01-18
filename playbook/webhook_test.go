@@ -1,4 +1,4 @@
-package playbook
+package playbook_test
 
 import (
 	"bytes"
@@ -9,6 +9,7 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/types"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/playbook"
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -186,7 +187,7 @@ var _ = ginkgo.Describe("Playbook Webhook", func() {
 			for k, v := range tt.args.headers {
 				tt.args.r.Header.Set(k, v)
 			}
-			err := authenticateWebhook(context.NewContext(gocontext.TODO()), tt.args.r, tt.args.auth)
+			err := playbook.AuthenticateWebhook(context.NewContext(gocontext.TODO()), tt.args.r, tt.args.auth)
 			if tt.wantErr {
 				Expect(err).NotTo(BeNil())
 			} else {

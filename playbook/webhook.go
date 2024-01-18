@@ -31,7 +31,7 @@ const svixWebhookSecretPrefix = "whsec_"
 
 var jwksCache = cache.New(10*time.Minute, time.Hour)
 
-func authenticateWebhook(ctx context.Context, r *http.Request, auth *v1.PlaybookEventWebhookAuth) error {
+func AuthenticateWebhook(ctx context.Context, r *http.Request, auth *v1.PlaybookEventWebhookAuth) error {
 	if auth.Basic != nil {
 		username, password, ok := r.BasicAuth()
 		if !ok {
