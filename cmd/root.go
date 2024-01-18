@@ -61,7 +61,7 @@ func PreRun(cmd *cobra.Command, args []string) {
 var Root = &cobra.Command{
 	Use: "incident-commander",
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		logger.UseZap(cmd.Flags())
+		logger.UseZap()
 	},
 }
 
