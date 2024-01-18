@@ -122,7 +122,6 @@ func mapIDsToRoles(ctx context.Context, session *client.Session, uid uuid.UUID) 
 		"identity": session.Identity,
 	}
 
-	// TODO: Add cache support to gomplate expression
 	res, err := gomplate.RunTemplate(env, gomplate.Template{Expression: IdentityRoleMapper})
 	if err != nil {
 		return fmt.Errorf("error running IdentityRoleMapper template: %v", err)

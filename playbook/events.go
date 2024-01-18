@@ -67,7 +67,6 @@ func RegisterEvents(ctx context.Context) {
 	}()
 
 	go ListenPlaybookPGNotify(ctx)
-
 }
 
 type EventResource struct {

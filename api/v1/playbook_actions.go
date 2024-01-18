@@ -165,7 +165,7 @@ func (git GitCheckout) GetCertificate() types.EnvVar {
 type ExecAction struct {
 	// Script can be an inline script or a path to a script that needs to be executed
 	// On windows executed via powershell and in darwin and linux executed using bash
-	Script      string          `yaml:"script" json:"script"`
+	Script      string          `yaml:"script" json:"script" template:"true"`
 	Connections ExecConnections `yaml:"connections,omitempty" json:"connections,omitempty"`
 	// Artifacts to save
 	Artifacts []Artifact `yaml:"artifacts,omitempty" json:"artifacts,omitempty"`
@@ -325,12 +325,12 @@ type PlaybookAction struct {
 	// skip(): skip running this action
 	Filter string `yaml:"if,omitempty" json:"if,omitempty"`
 
-	Exec         *ExecAction         `json:"exec,omitempty" yaml:"exec,omitempty"`
-	GitOps       *GitOpsAction       `json:"gitops,omitempty" yaml:"gitops,omitempty"`
-	HTTP         *HTTPAction         `json:"http,omitempty" yaml:"http,omitempty"`
-	SQL          *SQLAction          `json:"sql,omitempty" yaml:"sql,omitempty"`
-	Pod          *PodAction          `json:"pod,omitempty" yaml:"pod,omitempty"`
-	Notification *NotificationAction `json:"notification,omitempty" yaml:"notification,omitempty"`
+	Exec         *ExecAction         `json:"exec,omitempty" yaml:"exec,omitempty" template:"true"`
+	GitOps       *GitOpsAction       `json:"gitops,omitempty" yaml:"gitops,omitempty" template:"true"`
+	HTTP         *HTTPAction         `json:"http,omitempty" yaml:"http,omitempty" template:"true"`
+	SQL          *SQLAction          `json:"sql,omitempty" yaml:"sql,omitempty" template:"true"`
+	Pod          *PodAction          `json:"pod,omitempty" yaml:"pod,omitempty" template:"true"`
+	Notification *NotificationAction `json:"notification,omitempty" yaml:"notification,omitempty" template:"true"`
 }
 
 func (p *PlaybookAction) DelayDuration(templateEnv map[string]any) (time.Duration, error) {

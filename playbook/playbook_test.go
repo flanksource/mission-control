@@ -19,7 +19,6 @@ import (
 )
 
 var _ = ginkgo.Describe("Playbook", ginkgo.Ordered, func() {
-
 	var _ = ginkgo.Describe("Test Listing | Run API | Approvals", ginkgo.Ordered, func() {
 		var (
 			configPlaybook    models.Playbook
@@ -342,6 +341,88 @@ var _ = ginkgo.Describe("Playbook", ginkgo.Ordered, func() {
 			logs, err := os.ReadFile(logFile)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(logs)).To(Equal("File creation succeeded\nCommand failed\n==end==\n"))
+		})
+	})
+
+	var _ = ginkgo.Describe("Test Accessing previous results in actions", ginkgo.Ordered, func() {
+		var (
+			spec     v1.PlaybookSpec
+			playbook models.Playbook
+			run      *models.PlaybookRun
+			err      error
+			dataFile = "/tmp/access-previous-result.txt"
+		)
+
+		ginkgo.BeforeAll(func() {
+			specContent, err := os.ReadFile("testdata/action-last-result.yaml")
+			Expect(err).NotTo(HaveOccurred())
+
+			err = yaml.Unmarshal(specContent, &spec)
+			Expect(err).NotTo(HaveOccurred())
+
+			specJSON, err := json.Marshal(spec)
+			Expect(err).NotTo(HaveOccurred())
+
+			playbook = models.Playbook{
+				Name:   "access-previous-result",
+				Spec:   specJSON,
+				Source: models.SourceConfigFile,
+			}
+
+			err = DefaultContext.DB().Clauses(clause.Returning{}).Create(&playbook).Error
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		ginkgo.It("should store playbook run via API", func() {
+			run, err = validateAndSavePlaybookRun(DefaultContext, &playbook, RunParams{
+				ConfigID: dummy.EKSCluster.ID,
+				Params: map[string]string{
+					"path": dataFile,
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			Eventually(func() models.PlaybookRunStatus {
+				var savedRun *models.PlaybookRun
+				err := DefaultContext.DB().Select("status").Where("id = ? ", run.ID).First(&savedRun).Error
+				Expect(err).To(BeNil())
+
+				if savedRun != nil {
+					return savedRun.Status
+				}
+				return models.PlaybookRunStatusPending
+			}, "45s").Should(Equal(models.PlaybookRunStatusCompleted))
+		})
+
+		ginkgo.It("should have correctly ran some and skipped some of the actions", func() {
+			var actions []models.PlaybookRunAction
+			err := DefaultContext.DB().Where("playbook_run_id = ?", run.ID).Find(&actions).Error
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(len(actions)).To(Equal(len(spec.Actions)), "All the actions must have run event if some failed")
+
+			expectedStatus := map[string]models.PlaybookActionStatus{
+				"make dummy API call":        models.PlaybookActionStatusCompleted,
+				"Notify if the count is low": models.PlaybookActionStatusSkipped,
+				"Log if count is high":       models.PlaybookActionStatusCompleted,
+				"Save the count":             models.PlaybookActionStatusCompleted,
+			}
+
+			for _, action := range actions {
+				expected, exists := expectedStatus[action.Name]
+				if !exists {
+					ginkgo.Fail("Unexpected action: " + action.Name)
+					continue
+				}
+
+				Expect(action.Status).To(Equal(expected), action.Name)
+			}
+		})
+
+		ginkgo.It("should have populated the files correctly", func() {
+			data, err := os.ReadFile(dataFile)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(data)).To(Equal("HIGH\n20"))
 		})
 	})
 })

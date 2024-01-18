@@ -1,0 +1,22 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: use-previous-action-result
+spec:
+  description: Creates a file with the content of the config
+  configs:
+    - type: Kubernetes::Pod
+  actions:
+    - name: Fetch all changes
+      sql:
+        query: SELECT id FROM config_changes WHERE config_id = '{{.config.id}}'
+        driver: postgres
+        connection: connection://postgres/local
+    - name: Send notification
+      if: 'last_result().count > 0'
+      notification:
+        title: 'Changes summary for {{.config.name}}'
+        connection: connection://slack/flanksource
+        message: |
+          {{$rows:=index last_result "count"}}
+          Found {{$rows}} changes

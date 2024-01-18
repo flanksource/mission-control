@@ -11,7 +11,6 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/gomplate/v3"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/pkg/clients/git"
 	"github.com/flanksource/incident-commander/pkg/clients/git/connectors"
@@ -85,19 +84,6 @@ func (t *GitOps) generateSpec(ctx context.Context, action v1.GitOpsAction) error
 
 	if action.Repo.Branch == "" {
 		action.Repo.Branch = action.Repo.Base
-	}
-
-	templater := gomplate.StructTemplater{
-		RequiredTag: "template",
-		DelimSets: []gomplate.Delims{
-			{Left: "{{", Right: "}}"},
-			{Left: "$(", Right: ")"},
-		},
-		ValueFunctions: true,
-		Values:         t.env.AsMap(),
-	}
-	if err := templater.Walk(&action); err != nil {
-		return fmt.Errorf("failed to walk template: %w", err)
 	}
 
 	t.spec = &connectors.GitopsAPISpec{
