@@ -12,6 +12,8 @@ import (
 )
 
 func StartPlaybookRunConsumer(ctx context.Context) error {
+	return nil // TODO: remove this. This disables the host from running playbook actions.
+
 	ec, err := postq.NewPGConsumer(EventConsumer, &postq.ConsumerOption{
 		NumConsumers: 5,
 	})

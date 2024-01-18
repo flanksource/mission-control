@@ -877,6 +877,13 @@ spec:
                       - name
                       - spec
                       type: object
+                    runsOn:
+                      description: RunsOn specifies the agents that can run this action.
+                        When left empty, the action will run on the main instance
+                        itself.
+                      items:
+                        type: string
+                      type: array
                     sql:
                       properties:
                         connection:
@@ -1301,6 +1308,12 @@ spec:
                     team:
                       type: string
                   type: object
+                type: array
+              runsOn:
+                description: RunsOn specifies the agents that can run this playbook.
+                  When left empty, the playbook will run on the main instance itself.
+                items:
+                  type: string
                 type: array
             required:
             - actions

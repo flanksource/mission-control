@@ -3,6 +3,7 @@ package playbook
 import (
 	gocontext "context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -15,8 +16,117 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/playbook/actions"
+	"github.com/google/uuid"
+	"github.com/samber/lo"
 	"gorm.io/gorm"
 )
+
+type ActionForAgent struct {
+	Playbook *models.Playbook
+	Action   *models.PlaybookRunAction
+}
+
+func getNextActionToRun(ctx context.Context, playbook models.Playbook, runID uuid.UUID) (*v1.PlaybookAction, error) {
+	var playbookSpec v1.PlaybookSpec
+	if err := json.Unmarshal(playbook.Spec, &playbookSpec); err != nil {
+		return nil, err
+	}
+
+	var lastRanAction string
+	if err := ctx.DB().Select("name").Model(&models.PlaybookRunAction{}).Where("playbook_run_id = ?", runID).Where("status IN ?", models.PlaybookActionFinalStates).Order("end_time DESC").First(&lastRanAction).Error; err != nil {
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}
+	}
+
+	var actionToRun v1.PlaybookAction
+	for i, action := range playbookSpec.Actions {
+		if lastRanAction == "" { // Nothing has run yet
+			actionToRun = playbookSpec.Actions[i]
+			break
+		}
+
+		if action.Name != lastRanAction {
+			continue
+		}
+
+		if i == len(playbookSpec.Actions)-1 {
+			break // All the actions have run
+		}
+
+		actionToRun = playbookSpec.Actions[i+1]
+		break
+	}
+
+	return &actionToRun, nil
+}
+
+func GetActionForAgent(ctx context.Context, agent *models.Agent) (*ActionForAgent, error) {
+	tx := ctx.DB().Begin()
+	if tx.Error != nil {
+		return nil, fmt.Errorf("error initiating db tx: %w", tx.Error)
+	}
+	defer tx.Rollback()
+
+	ctx = ctx.WithDB(tx, ctx.Pool())
+
+	query := `
+		SELECT playbook_runs.*
+		FROM playbook_runs
+		INNER JOIN playbooks ON playbooks.id = playbook_runs.playbook_id
+		WHERE status IN (?, ?)
+			AND scheduled_time <= NOW()
+			AND playbooks.spec->'runsOn' @> ?
+		ORDER BY scheduled_time
+		FOR UPDATE SKIP LOCKED
+		LIMIT 1
+	`
+
+	var runs []models.PlaybookRun
+	if err := ctx.DB().Raw(query, models.PlaybookRunStatusScheduled, models.PlaybookRunStatusSleeping, fmt.Sprintf(`["%s"]`, agent.Name)).Find(&runs).Error; err != nil {
+		return nil, err
+	}
+
+	if len(runs) == 0 {
+		return &ActionForAgent{}, nil
+	}
+	run := runs[0]
+
+	var playbook models.Playbook
+	if err := ctx.DB().Where("id = ?", run.PlaybookID).First(&playbook).Error; err != nil {
+		return nil, err
+	}
+
+	if err := ctx.DB().Model(&models.PlaybookRun{}).Where("id = ?", run.ID).UpdateColumns(map[string]any{"status": models.PlaybookRunStatusRunning}).Error; err != nil {
+		return nil, fmt.Errorf("failed to update playbook run status: %w", err)
+	}
+
+	actionToRun, err := getNextActionToRun(ctx, playbook, run.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get next action to run: %w", err)
+	}
+
+	if actionToRun == nil {
+		return &ActionForAgent{}, nil
+	}
+
+	runAction := models.PlaybookRunAction{
+		PlaybookRunID: run.ID,
+		Name:          actionToRun.Name,
+		Status:        models.PlaybookActionStatusRunning,
+		AgentID:       lo.ToPtr(agent.ID),
+	}
+	if err := ctx.DB().Create(&runAction).Error; err != nil {
+		return nil, fmt.Errorf("failed to create a new playbook run: %w", err)
+	}
+
+	output := ActionForAgent{
+		Playbook: &playbook,
+		Action:   &runAction,
+	}
+
+	return &output, tx.Commit().Error
+}
 
 func ExecuteRun(ctx context.Context, run models.PlaybookRun) {
 	ctx, span := ctx.StartSpan("ExecuteRun")

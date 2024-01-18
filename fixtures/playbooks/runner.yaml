@@ -1,0 +1,50 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: agent-runner
+spec:
+  runsOn:
+    - mikel
+    - arsene
+    - host
+  description: Creates a file with the content of the config
+  configs:
+    - type: Kubernetes::Pod
+  actions:
+    - name: Create the config file
+      runsOn:
+        - mikel
+      exec:
+        script: echo -n '{{.config.config}}' > /tmp/{{.config.id}}
+    - name: Delete the file
+      delay: 'config.name.startsWith("actual") ? "1m" : "0s"'
+      runsOn:
+        - arsene
+        - host
+      exec:
+        script: rm /tmp/{{.config.id}}
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: another-agent-runner
+spec:
+  runsOn:
+    - arsene
+    - host
+  description: Creates a file with the content of the config
+  configs:
+    - type: Kubernetes::Pod
+  actions:
+    - name: Create the config file
+      runsOn:
+        - arsene
+      exec:
+        script: echo -n '{{.config.config}}' > /tmp/{{.config.id}}
+    - name: Delete the file
+      delay: 'config.name.startsWith("actual") ? "1m" : "0s"'
+      runsOn:
+        - arsene
+        - host
+      exec:
+        script: rm /tmp/{{.config.id}}

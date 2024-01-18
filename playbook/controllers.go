@@ -280,11 +280,31 @@ func HandleWebhook(c echo.Context) error {
 	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{Message: "ok"})
 }
 
+// HandleActionRequest returns a playbook action for the agent to run.
+func HandleActionRequest(c echo.Context) error {
+	ctx := c.Request().Context().(context.Context)
+
+	agent := ctx.Agent()
+	if agent == nil {
+		return c.JSON(http.StatusNotFound, dutyAPI.HTTPError{Error: "not found", Message: "agent not found"})
+	}
+
+	response, err := GetActionForAgent(ctx, agent)
+	if err != nil {
+		return dutyAPI.WriteError(c, err)
+	}
+
+	return c.JSON(http.StatusOK, response)
+}
+
 func RegisterRoutes(e *echo.Echo) *echo.Group {
 	prefix := "playbook"
 	playbookGroup := e.Group(fmt.Sprintf("/%s", prefix))
 	playbookGroup.GET("/list", HandlePlaybookList)
 	playbookGroup.POST("/webhook/:webhook_path", HandleWebhook)
+
+	agentGroup := playbookGroup.Group("/agent")
+	agentGroup.GET("/action", HandleActionRequest)
 
 	runGroup := playbookGroup.Group("/run")
 	runGroup.POST("", HandlePlaybookRun)

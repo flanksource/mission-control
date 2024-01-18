@@ -188,3 +188,5 @@ require (
 )
 
 replace github.com/flanksource/incident-commander => ../../
+
+replace github.com/flanksource/duty => ../../../duty

@@ -325,6 +325,10 @@ type PlaybookAction struct {
 	// skip(): skip running this action
 	Filter string `yaml:"if,omitempty" json:"if,omitempty"`
 
+	// RunsOn specifies the agents that can run this action.
+	// When left empty, the action will run on the main instance itself.
+	RunsOn []string `json:"runsOn,omitempty" yaml:"runsOn,omitempty"`
+
 	Exec         *ExecAction         `json:"exec,omitempty" yaml:"exec,omitempty" template:"true"`
 	GitOps       *GitOpsAction       `json:"gitops,omitempty" yaml:"gitops,omitempty" template:"true"`
 	HTTP         *HTTPAction         `json:"http,omitempty" yaml:"http,omitempty" template:"true"`

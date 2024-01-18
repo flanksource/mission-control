@@ -133,6 +133,10 @@ type PlaybookSpec struct {
 	// If multiple triggering events occur at the same time, multiple playbook runs will be triggered.
 	On *PlaybookTrigger `json:"on,omitempty" yaml:"on,omitempty"`
 
+	// RunsOn specifies the agents that can run this playbook.
+	// When left empty, the playbook will run on the main instance itself.
+	RunsOn []string `json:"runsOn,omitempty" yaml:"runsOn,omitempty"`
+
 	// Permissions ...
 	Permissions []Permission `json:"permissions,omitempty" yaml:"permissions,omitempty"`
 
