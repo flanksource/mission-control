@@ -11,6 +11,7 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"gorm.io/gorm"
 
@@ -36,6 +37,61 @@ var PullPlaybookActions = &job.Job{
 
 		return nil
 	},
+}
+
+// PullPlaybookActions pushes actions, that have been fully run, to the upstream
+var PushPlaybookActions = &job.Job{
+	Name:       "PushPlaybookActions",
+	Schedule:   "@every 15s",
+	JobHistory: true,
+	RunNow:     true,
+	Singleton:  false,
+	Fn: func(ctx job.JobRuntime) error {
+		ctx.History.ResourceType = job.ResourceTypePlaybook
+		ctx.History.ResourceID = api.UpstreamConf.Host
+		if count, err := pushPlaybookActions(ctx.Context, 200); err != nil {
+			return err
+		} else {
+			ctx.History.SuccessCount += count
+		}
+
+		return nil
+	},
+}
+
+// syncPlaybookActions pushes unpushed playbook actions to the upstream
+func pushPlaybookActions(ctx context.Context, batchSize int) (int, error) {
+	client := upstream.NewUpstreamClient(api.UpstreamConf)
+	count := 0
+	for {
+		var actions []models.PlaybookRunAction
+		if err := ctx.DB().Select("id, status, result, error, end_time").
+			Where("is_pushed IS FALSE").
+			Where("status IN ?", models.PlaybookActionFinalStates).
+			Limit(batchSize).
+			Find(&actions).Error; err != nil {
+			return 0, fmt.Errorf("failed to fetch playbook_run_actions: %w", err)
+		}
+
+		if len(actions) == 0 {
+			return count, nil
+		}
+
+		ctx.Tracef("pushing %d playbook actions to upstream", len(actions))
+		if err := client.Push(ctx, &upstream.PushData{PlaybookActions: actions, AgentName: api.UpstreamConf.AgentName}); err != nil {
+			return 0, fmt.Errorf("failed to push playbook actions to upstream: %w", err)
+		}
+
+		ids := make([]uuid.UUID, len(actions))
+		for i := range actions {
+			ids[i] = actions[i].ID
+		}
+		if err := ctx.DB().Model(&models.PlaybookRunAction{}).Where("id IN ?", ids).Update("is_pushed", true).Error; err != nil {
+			return 0, fmt.Errorf("failed to update is_pushed on playbook actions: %w", err)
+		}
+
+		count += len(actions)
+	}
 }
 
 func pullPlaybookAction(ctx context.Context) (bool, error) {
