@@ -166,7 +166,7 @@ func HandlePlaybookRun(c echo.Context) error {
 
 	return c.JSON(http.StatusCreated, RunResponse{
 		RunID:    run.ID.String(),
-		StartsAt: run.StartTime.Format(time.RFC3339),
+		StartsAt: run.ScheduledTime.Format(time.RFC3339),
 	})
 }
 

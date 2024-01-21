@@ -63,7 +63,7 @@ func RegisterEvents(ctx context.Context) {
 	events.RegisterSyncHandler(onPlaybookRunNewApproval, api.EventPlaybookApprovalInserted)
 
 	go func() {
-		logs.IfError(StartPlaybookRunConsumer(ctx), "error starting playbook run consumer")
+		logs.IfError(StartPlaybookConsumers(ctx), "error starting playbook run consumer")
 	}()
 
 	go ListenPlaybookPGNotify(ctx)

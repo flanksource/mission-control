@@ -21,27 +21,28 @@ import (
 	"gorm.io/gorm"
 )
 
+// hostRunner is the name of the host runner
+const hostRunner = "local"
+
 func getNextActionToRun(ctx context.Context, playbook models.Playbook, runID uuid.UUID) (*v1.PlaybookAction, error) {
 	var playbookSpec v1.PlaybookSpec
 	if err := json.Unmarshal(playbook.Spec, &playbookSpec); err != nil {
 		return nil, err
 	}
 
-	var lastRanAction string
-	if err := ctx.DB().Model(&models.PlaybookRunAction{}).Where("playbook_run_id = ?", runID).Where("status IN ?", models.PlaybookActionFinalStates).Order("end_time DESC").First(&lastRanAction).Error; err != nil {
+	var lastRanAction models.PlaybookRunAction
+	if err := ctx.DB().Model(&models.PlaybookRunAction{}).Where("playbook_run_id = ?", runID).Where("status IN ?", models.PlaybookActionFinalStates).Order("start_time DESC").First(&lastRanAction).Error; err != nil {
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, err
 		}
 	}
 
-	var actionToRun v1.PlaybookAction
 	for i, action := range playbookSpec.Actions {
-		if lastRanAction == "" { // Nothing has run yet
-			actionToRun = playbookSpec.Actions[i]
-			break
+		if lastRanAction.Name == "" { // Nothing has run yet
+			return &playbookSpec.Actions[i], nil
 		}
 
-		if action.Name != lastRanAction {
+		if action.Name != lastRanAction.Name {
 			continue
 		}
 
@@ -49,11 +50,10 @@ func getNextActionToRun(ctx context.Context, playbook models.Playbook, runID uui
 			break // All the actions have run
 		}
 
-		actionToRun = playbookSpec.Actions[i+1]
-		break
+		return &playbookSpec.Actions[i+1], nil
 	}
 
-	return &actionToRun, nil
+	return nil, nil
 }
 
 type ActionForAgent struct {
@@ -141,8 +141,54 @@ func GetActionForAgent(ctx context.Context, agent *models.Agent) (*ActionForAgen
 	return &output, tx.Commit().Error
 }
 
-func ExecuteRun(ctx context.Context, run models.PlaybookRun) {
-	ctx, span := ctx.StartSpan("ExecuteRun")
+// HandleRun finds the next action that this host should run.
+// In case it doesn't find any, it marks the run as waiting.
+func HandleRun(ctx context.Context, run models.PlaybookRun) error {
+	ctx, span := ctx.StartSpan("HandleRun")
+	defer span.End()
+
+	var playbook models.Playbook
+	if err := ctx.DB().First(&playbook, run.PlaybookID).Error; err != nil {
+		return fmt.Errorf("failed to fetch playbook: %w", err)
+	}
+
+	action, err := getNextActionToRun(ctx, playbook, run.ID)
+	if err != nil {
+		return fmt.Errorf("failed to get next action to run: %w", err)
+	} else if action == nil {
+		// All the actions have run
+		updateColumns := map[string]any{
+			"status":   models.PlaybookRunStatusCompleted,
+			"end_time": gorm.Expr("CLOCK_TIMESTAMP()"),
+		}
+		return ctx.DB().Model(&models.PlaybookRun{}).Where("id = ?", run.ID).UpdateColumns(updateColumns).Error
+	}
+
+	runUpdates := map[string]any{
+		"start_time": gorm.Expr("CASE WHEN start_time IS NULL THEN CLOCK_TIMESTAMP() ELSE start_time END"),
+	}
+	if len(action.RunsOn) == 0 || lo.Contains(action.RunsOn, hostRunner) {
+		runAction := models.PlaybookRunAction{
+			PlaybookRunID: run.ID,
+			Name:          action.Name,
+			Status:        models.PlaybookActionStatusScheduled,
+		}
+		if err := ctx.DB().Save(&runAction).Error; err != nil {
+			return fmt.Errorf("failed to save run action: %w", err)
+		}
+
+		runUpdates["status"] = models.PlaybookRunStatusRunning
+	} else {
+		// The host cannot run the next action.
+		// Mark the run as waiting and let another runner pick up the action.
+		runUpdates["status"] = models.PlaybookRunStatusWaiting
+	}
+
+	return ctx.DB().Model(&models.PlaybookRun{}).Where("id = ?", run.ID).UpdateColumns(runUpdates).Error
+}
+
+func ExecuteRunOld(ctx context.Context, run models.PlaybookRun) {
+	ctx, span := ctx.StartSpan("ExecuteRunOld")
 	defer span.End()
 
 	var runOptions runExecOptions
@@ -163,7 +209,7 @@ func ExecuteRun(ctx context.Context, run models.PlaybookRun) {
 			"status": models.PlaybookRunStatusRunning,
 		}
 
-		if run.StartTime.IsZero() {
+		if run.StartTime == nil || run.StartTime.IsZero() {
 			columnUpdates["start_time"] = gorm.Expr("CLOCK_TIMESTAMP()")
 		}
 
@@ -518,5 +564,5 @@ func ExecuteAction(ctx context.Context, run models.PlaybookRun, runAction models
 		return &ExecuteActionResult{Data: []byte("{}")}, nil
 	}
 
-	return nil, nil
+	return &ExecuteActionResult{}, nil
 }
