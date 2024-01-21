@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"time"
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
@@ -96,23 +95,19 @@ func ActionConsumer(c postq.Context) (int, error) {
 			return 0, fmt.Errorf("failed to unmarshal playbook spec: %w", err)
 		}
 
+		var run models.PlaybookRun
+		if err := ctx.DB().Where("id = ?", actions[i].PlaybookRunID).First(&run).Error; err != nil {
+			return 0, fmt.Errorf("failed to get the playbook run for the given action(%s): %w", actions[i].ID, err)
+		}
+
 		for _, action := range playbookSpec.Actions {
 			if action.Name == actions[i].Name {
-				logger.Infof("Found the action(%s). executing it ...", action.Name)
-				time.Sleep(time.Second * 8)
+				if err := executeAction(ctx, run, actions[i], action); err != nil {
+					return 0, err
+				}
+
+				break
 			}
-		}
-
-		if res := ctx.DB().Model(&models.PlaybookRunAction{}).Where("id = ?", actions[i].ID).Update("status", models.PlaybookActionStatusCompleted); res.Error != nil {
-			return 0, res.Error
-		} else if res.RowsAffected == 0 {
-			return 0, fmt.Errorf("failed to mark the action (%s) as completed", actions[i].ID)
-		}
-
-		if res := ctx.DB().Model(&models.PlaybookRun{}).Where("id = ?", actions[i].PlaybookRunID).Update("status", models.PlaybookRunStatusScheduled); res.Error != nil {
-			return 0, res.Error
-		} else if res.RowsAffected == 0 {
-			return 0, fmt.Errorf("failed to re-schedule the run(%s) status", actions[i].PlaybookRunID)
 		}
 	}
 
