@@ -10,7 +10,7 @@ import (
 	fileUtils "github.com/flanksource/commons/files"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/models"
+	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -31,7 +31,8 @@ type PodResult struct {
 }
 
 type Pod struct {
-	PlaybookRun models.PlaybookRun
+	PlaybookRunID uuid.UUID
+	PlaybookID    uuid.UUID
 }
 
 func (c *Pod) Run(ctx context.Context, action v1.PodAction, env TemplateEnv, timeout time.Duration) (*PodResult, error) {
@@ -39,7 +40,7 @@ func (c *Pod) Run(ctx context.Context, action v1.PodAction, env TemplateEnv, tim
 		timeout = defaultContainerTimeout
 	}
 
-	pod, err := newPod(ctx, action, c.PlaybookRun)
+	pod, err := newPod(ctx, action, c.PlaybookID, c.PlaybookRunID)
 	if err != nil {
 		return nil, fmt.Errorf("error creating pod struct: %w", err)
 	}
@@ -80,16 +81,16 @@ func (c *Pod) Run(ctx context.Context, action v1.PodAction, env TemplateEnv, tim
 	return output, nil
 }
 
-func newPod(ctx context.Context, action v1.PodAction, playbookRun models.PlaybookRun) (*corev1.Pod, error) {
+func newPod(ctx context.Context, action v1.PodAction, playbookID, runID uuid.UUID) (*corev1.Pod, error) {
 	pod := &corev1.Pod{}
-	pod.Name = fmt.Sprintf("%s-%s", action.Name, playbookRun.ID.String())
+	pod.Name = fmt.Sprintf("%s-%s", action.Name, runID.String())
 	pod.Namespace = ctx.GetNamespace()
 	pod.APIVersion = corev1.SchemeGroupVersion.Version
 	pod.Labels = map[string]string{
 		newPodLabel("pod-action"):    "true",
 		newPodLabel("action"):        fmt.Sprintf("pod-action-%s-%s", action.Name, ctx.GetNamespace()),
-		newPodLabel("playbookRunID"): playbookRun.ID.String(),
-		newPodLabel("playbookID"):    playbookRun.PlaybookID.String(),
+		newPodLabel("playbookRunID"): runID.String(),
+		newPodLabel("playbookID"):    playbookID.String(),
 	}
 	if err := json.Unmarshal(action.Spec, &pod.Spec); err != nil {
 		return nil, fmt.Errorf("error unmarshalling pod spec: %w", err)

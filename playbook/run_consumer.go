@@ -5,12 +5,13 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/playbook/actions"
 	"github.com/flanksource/postq"
 	"github.com/flanksource/postq/pg"
+	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -51,7 +52,7 @@ func ActionConsumer(c postq.Context) (int, error) {
 		return 0, errors.New("invalid context")
 	}
 
-	logger.Infof("consuming playbook action ...")
+	ctx.Debugf("consuming playbook action ...")
 
 	var span trace.Span
 	ctx, span = ctx.StartSpan("playbook-action-consumer")
@@ -75,19 +76,44 @@ func ActionConsumer(c postq.Context) (int, error) {
 		LIMIT 1
 	`
 
-	var actions []models.PlaybookRunAction
-	if err := tx.Raw(query, models.PlaybookActionStatusScheduled, models.PlaybookActionStatusSleeping).Find(&actions).Error; err != nil {
+	var foundActions []models.PlaybookRunAction
+	if err := tx.Raw(query, models.PlaybookActionStatusScheduled, models.PlaybookActionStatusSleeping).Find(&foundActions).Error; err != nil {
 		return 0, err
 	}
 
-	for i := range actions {
+	for i := range foundActions {
+		// Agent doesn't have a run associated with the action.
+		// So we skip templating, as the upstream does that before sending the action.
+		if foundActions[i].PlaybookRunID == uuid.Nil {
+			var actionTemplate models.PlaybookActionAgentData
+			if err := ctx.DB().Where("action_id = ?", foundActions[i].ID).First(&actionTemplate).Error; err != nil {
+				return 0, err
+			}
+
+			var templateEnv actions.TemplateEnv
+			if err := json.Unmarshal(actionTemplate.Env, &templateEnv); err != nil {
+				return 0, err
+			}
+
+			var actionSpec v1.PlaybookAction
+			if err := json.Unmarshal(actionTemplate.Spec, &actionSpec); err != nil {
+				return 0, err
+			}
+
+			if err := executeAndSaveAction(ctx, actionTemplate.PlaybookID, actionTemplate.RunID, foundActions[i], actionSpec, templateEnv); err != nil {
+				return 0, err
+			}
+
+			continue
+		}
+
 		var playbook models.Playbook
 		if err := ctx.DB().Table("playbook_runs").
 			Select("playbooks.*").
 			Joins("LEFT JOIN playbooks ON playbooks.id = playbook_runs.playbook_id").
-			Where("playbook_runs.id = ?", actions[i].PlaybookRunID).
+			Where("playbook_runs.id = ?", foundActions[i].PlaybookRunID).
 			First(&playbook).Error; err != nil {
-			return 0, fmt.Errorf("failed to get the playbook for the given action(%s): %w", actions[i].ID, err)
+			return 0, fmt.Errorf("failed to get the playbook for the given action(%s): %w", foundActions[i].ID, err)
 		}
 
 		var playbookSpec v1.PlaybookSpec
@@ -96,13 +122,13 @@ func ActionConsumer(c postq.Context) (int, error) {
 		}
 
 		var run models.PlaybookRun
-		if err := ctx.DB().Where("id = ?", actions[i].PlaybookRunID).First(&run).Error; err != nil {
-			return 0, fmt.Errorf("failed to get the playbook run for the given action(%s): %w", actions[i].ID, err)
+		if err := ctx.DB().Where("id = ?", foundActions[i].PlaybookRunID).First(&run).Error; err != nil {
+			return 0, fmt.Errorf("failed to get the playbook run for the given action(%s): %w", foundActions[i].ID, err)
 		}
 
 		for _, action := range playbookSpec.Actions {
-			if action.Name == actions[i].Name {
-				if err := executeAction(ctx, run, actions[i], action); err != nil {
+			if action.Name == foundActions[i].Name {
+				if err := templateAndExecuteAction(ctx, run, foundActions[i], action); err != nil {
 					return 0, err
 				}
 
@@ -111,7 +137,7 @@ func ActionConsumer(c postq.Context) (int, error) {
 		}
 	}
 
-	return len(actions), tx.Commit().Error
+	return len(foundActions), tx.Commit().Error
 }
 
 // RunConsumer picks up scheduled runs and schedules the

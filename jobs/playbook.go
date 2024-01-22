@@ -1,10 +1,10 @@
 package jobs
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 
-	"github.com/flanksource/commons/logger"
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/job"
@@ -12,8 +12,6 @@ import (
 	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/google/uuid"
-	"github.com/samber/lo"
-	"gorm.io/gorm"
 
 	"github.com/flanksource/incident-commander/playbook"
 )
@@ -94,6 +92,8 @@ func pushPlaybookActions(ctx context.Context, batchSize int) (int, error) {
 	}
 }
 
+// pullPlaybookAction pulls any runnable Playbook Action from the upstream
+// and simply saves it.
 func pullPlaybookAction(ctx context.Context) (bool, error) {
 	client := upstream.NewUpstreamClient(api.UpstreamConf)
 
@@ -118,27 +118,29 @@ func pullPlaybookAction(ctx context.Context) (bool, error) {
 		return false, nil
 	}
 
+	// Don't save playbook_run_id to avoid foreign key constraint
 	if err := ctx.DB().Omit("playbook_run_id").Save(response.Action).Error; err != nil {
 		return false, fmt.Errorf("failed to save playbook action: %w", err)
 	}
 
-	columnUpdates := map[string]any{
-		"end_time": gorm.Expr("CLOCK_TIMESTAMP()"),
+	agentData := models.PlaybookActionAgentData{
+		ActionID:   response.Action.ID,
+		PlaybookID: response.Run.PlaybookID,
+		RunID:      response.Run.ID,
 	}
 
-	result, err := playbook.ExecuteAction(ctx, lo.FromPtr(response.Run), lo.FromPtr(response.Action), lo.FromPtr(response.ActionSpec), lo.FromPtr(response.TemplateEnv))
+	agentData.Env, err = json.Marshal(response.TemplateEnv)
 	if err != nil {
-		logger.Errorf("failed to execute action: %v", err)
-		columnUpdates["status"] = models.PlaybookActionStatusFailed
-		columnUpdates["error"] = err.Error()
-	} else if result.Skipped {
-		columnUpdates["status"] = models.PlaybookActionStatusSkipped
-	} else {
-		columnUpdates["status"] = models.PlaybookActionStatusCompleted
-		columnUpdates["result"] = result.Data
+		return false, fmt.Errorf("failed to marshal template env: %w", err)
 	}
-	if err := ctx.DB().Model(&models.PlaybookRunAction{}).Where("id = ?", response.Action.ID).UpdateColumns(&columnUpdates).Error; err != nil {
-		return false, fmt.Errorf("failed to update playbook action result: %w", err)
+
+	agentData.Spec, err = json.Marshal(response.ActionSpec)
+	if err != nil {
+		return false, fmt.Errorf("failed to marshal action spec: %w", err)
+	}
+
+	if err := ctx.DB().Create(&agentData).Error; err != nil {
+		return false, fmt.Errorf("failed to save playbook action template: %w", err)
 	}
 
 	return true, nil
