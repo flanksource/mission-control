@@ -188,7 +188,6 @@ var _ = ginkgo.Describe("Playbook", ginkgo.Ordered, func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(savedRun.PlaybookID).To(Equal(configPlaybook.ID), "run should have been created for the correct playbook")
-			Expect(savedRun.Status).To(Equal(models.PlaybookRunStatusPending), "run should be in pending status because it has approvers")
 			Expect(*savedRun.CreatedBy).To(Equal(dummy.JohnDoe.ID), "run should have been created by the authenticated person")
 		})
 

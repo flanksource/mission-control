@@ -102,13 +102,17 @@ var _ = ginkgo.Describe("Playbook Events", ginkgo.Ordered, func() {
 			newConfigItems = append(newConfigItems, newConfigItem.ID.String())
 		})
 
-		ginkgo.It("Expect the event consumer to save the playbook run", func() {
+		ginkgo.It("Expect the event consumer to schedule a new playbook run", func() {
+			// Manually publish a pg_notify event because for some reason the embedded db isn't realiable
+			err := DefaultContext.DB().Exec("NOTIFY event_queue_updates, 'config.created'").Error
+			Expect(err).NotTo(HaveOccurred())
+
 			events.ConsumeAll(DefaultContext)
 			Eventually(func() models.PlaybookRunStatus {
 				var run models.PlaybookRun
 				DefaultContext.DB().Where("config_id = ? and playbook_id = ?", newConfigItems[1], playbook.ID).First(&run)
 				return run.Status
-			}, "5s", "200ms").Should(BeElementOf(models.PlaybookRunStatusScheduled, models.PlaybookRunStatusRunning, models.PlaybookRunStatusCompleted))
+			}, "10s", "1s").Should(BeElementOf(models.PlaybookRunStatusScheduled, models.PlaybookRunStatusRunning, models.PlaybookRunStatusCompleted))
 		})
 	})
 

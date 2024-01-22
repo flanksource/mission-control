@@ -136,16 +136,18 @@ func ActionConsumer(c postq.Context) (int, error) {
 		for _, action := range playbookSpec.Actions {
 			if action.Name == foundActions[i].Name {
 				if err := templateAndExecuteAction(ctx, run, foundActions[i], action); err != nil {
-					columnUpdates := map[string]any{
-						"status":   models.PlaybookActionStatusFailed,
-						"error":    err.Error(),
-						"end_time": gorm.Expr("CLOCK_TIMESTAMP()"),
+					actionUpdates := map[string]any{
+						"start_time": gorm.Expr("CASE WHEN start_time IS NULL THEN CLOCK_TIMESTAMP() ELSE start_time END"),
+						"status":     models.PlaybookActionStatusFailed,
+						"error":      err.Error(),
+						"end_time":   gorm.Expr("CLOCK_TIMESTAMP()"),
 					}
 
-					if err := ctx.DB().Model(&models.PlaybookRunAction{}).Where("id = ?", foundActions[i].ID).UpdateColumns(columnUpdates).Error; err != nil {
+					if err := ctx.DB().Model(&models.PlaybookRunAction{}).Where("id = ?", foundActions[i].ID).UpdateColumns(actionUpdates).Error; err != nil {
 						logger.Errorf("error updating playbook action status as failed: %v", err)
 					}
 
+					// Need to reschedule the run, so it continues with remaining actions
 					if err := ctx.DB().Model(&models.PlaybookRun{}).Where("id = ?", run.ID).UpdateColumn("status", models.PlaybookRunStatusScheduled).Error; err != nil {
 						logger.Errorf("error updating playbook action status as failed: %v", err)
 					}

@@ -38,7 +38,10 @@ var (
 var _ = ginkgo.BeforeSuite(func() {
 	DefaultContext = setup.BeforeSuiteFn()
 	_ = context.UpdateProperty(DefaultContext, api.PropertyIncidentsDisabled, "true")
+
 	events.StartConsumers(DefaultContext)
+	StartPlaybookConsumers(DefaultContext)
+
 	e := echo.New()
 	e.Use(func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
@@ -55,5 +58,4 @@ var _ = ginkgo.AfterSuite(func() {
 	shutdownEcho()
 	// setup.DumpEventQueue(DefaultContext)
 	setup.AfterSuiteFn()
-
 })
