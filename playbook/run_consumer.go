@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -13,6 +14,7 @@ import (
 	"github.com/flanksource/postq/pg"
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace"
+	"gorm.io/gorm"
 )
 
 // Pg Notify channels for run and action updates
@@ -84,22 +86,28 @@ func ActionConsumer(c postq.Context) (int, error) {
 		// Agent doesn't have a run associated with the action.
 		// So we skip templating, as the upstream does that before sending the action.
 		if foundActions[i].PlaybookRunID == uuid.Nil {
-			var actionTemplate models.PlaybookActionAgentData
-			if err := ctx.DB().Where("action_id = ?", foundActions[i].ID).First(&actionTemplate).Error; err != nil {
-				return 0, err
-			}
-
-			var templateEnv actions.TemplateEnv
-			if err := json.Unmarshal(actionTemplate.Env, &templateEnv); err != nil {
+			var actionData models.PlaybookActionAgentData
+			if err := ctx.DB().Where("action_id = ?", foundActions[i].ID).First(&actionData).Error; err != nil {
 				return 0, err
 			}
 
 			var actionSpec v1.PlaybookAction
-			if err := json.Unmarshal(actionTemplate.Spec, &actionSpec); err != nil {
+			if err := json.Unmarshal(actionData.Spec, &actionSpec); err != nil {
 				return 0, err
 			}
 
-			if err := executeAndSaveAction(ctx, actionTemplate.PlaybookID, actionTemplate.RunID, foundActions[i], actionSpec, templateEnv); err != nil {
+			var templateEnv actions.TemplateEnv
+			if err := json.Unmarshal(actionData.Env, &templateEnv); err != nil {
+				return 0, err
+			}
+
+			if actionSpec.TemplatesOn == runnerAgent {
+				if err := templateAction(ctx, models.PlaybookRun{ID: actionData.RunID, PlaybookID: actionData.PlaybookID}, foundActions[i], &actionSpec, templateEnv); err != nil {
+					return 0, fmt.Errorf("failed to template action: %w", err)
+				}
+			}
+
+			if err := executeAndSaveAction(ctx, actionData.PlaybookID, actionData.RunID, foundActions[i], actionSpec); err != nil {
 				return 0, err
 			}
 
@@ -128,7 +136,19 @@ func ActionConsumer(c postq.Context) (int, error) {
 		for _, action := range playbookSpec.Actions {
 			if action.Name == foundActions[i].Name {
 				if err := templateAndExecuteAction(ctx, run, foundActions[i], action); err != nil {
-					return 0, err
+					columnUpdates := map[string]any{
+						"status":   models.PlaybookActionStatusFailed,
+						"error":    err.Error(),
+						"end_time": gorm.Expr("CLOCK_TIMESTAMP()"),
+					}
+
+					if err := ctx.DB().Model(&models.PlaybookRunAction{}).Where("id = ?", foundActions[i].ID).UpdateColumns(columnUpdates).Error; err != nil {
+						logger.Errorf("error updating playbook action status as failed: %v", err)
+					}
+
+					if err := ctx.DB().Model(&models.PlaybookRun{}).Where("id = ?", run.ID).UpdateColumn("status", models.PlaybookRunStatusScheduled).Error; err != nil {
+						logger.Errorf("error updating playbook action status as failed: %v", err)
+					}
 				}
 
 				break
@@ -172,7 +192,7 @@ func RunConsumer(c postq.Context) (int, error) {
 	`
 
 	var runs []models.PlaybookRun
-	if err := tx.Raw(query, models.PlaybookRunStatusScheduled, fmt.Sprintf(`["%s"]`, hostRunner)).Find(&runs).Error; err != nil {
+	if err := tx.Raw(query, models.PlaybookRunStatusScheduled, fmt.Sprintf(`["%s"]`, runnerMain)).Find(&runs).Error; err != nil {
 		return 0, err
 	}
 

@@ -11,7 +11,6 @@ import (
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
-	"github.com/flanksource/gomplate/v3"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -329,6 +328,13 @@ type PlaybookAction struct {
 	// When left empty, the action will run on the main instance itself.
 	RunsOn []string `json:"runsOn,omitempty" yaml:"runsOn,omitempty"`
 
+	// TemplatesOn specifies where the templating happens.
+	// Available options:
+	//  - host
+	//  - agent
+	// When left empty, the templating is done on the main instance(host) itself.
+	TemplatesOn string `json:"templatesOn,omitempty" yaml:"templatesOn,omitempty"`
+
 	Exec         *ExecAction         `json:"exec,omitempty" yaml:"exec,omitempty" template:"true"`
 	GitOps       *GitOpsAction       `json:"gitops,omitempty" yaml:"gitops,omitempty" template:"true"`
 	HTTP         *HTTPAction         `json:"http,omitempty" yaml:"http,omitempty" template:"true"`
@@ -337,7 +343,7 @@ type PlaybookAction struct {
 	Notification *NotificationAction `json:"notification,omitempty" yaml:"notification,omitempty" template:"true"`
 }
 
-func (p *PlaybookAction) DelayDuration(templateEnv map[string]any) (time.Duration, error) {
+func (p *PlaybookAction) DelayDuration() (time.Duration, error) {
 	if p.delay != nil {
 		return *p.delay, nil
 	}
@@ -346,12 +352,7 @@ func (p *PlaybookAction) DelayDuration(templateEnv map[string]any) (time.Duratio
 		return 0, nil
 	}
 
-	exprResult, err := gomplate.RunTemplate(templateEnv, gomplate.Template{Expression: p.Delay})
-	if err != nil {
-		return 0, fmt.Errorf("error running action delay expression(%s): %w", p.Delay, err)
-	}
-
-	d, err := duration.ParseDuration(exprResult)
+	d, err := duration.ParseDuration(p.Delay)
 	if err != nil {
 		return 0, err
 	}

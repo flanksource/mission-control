@@ -40,7 +40,7 @@ type ExecDetails struct {
 	Artifacts []artifacts.Artifact `json:"-" yaml:"-"`
 }
 
-func (c *ExecAction) Run(ctx context.Context, exec v1.ExecAction, env TemplateEnv) (*ExecDetails, error) {
+func (c *ExecAction) Run(ctx context.Context, exec v1.ExecAction) (*ExecDetails, error) {
 	execEnvParam, err := c.prepareEnvironment(ctx, exec)
 	if err != nil {
 		return nil, err

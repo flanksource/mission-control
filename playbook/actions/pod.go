@@ -35,7 +35,7 @@ type Pod struct {
 	PlaybookID    uuid.UUID
 }
 
-func (c *Pod) Run(ctx context.Context, action v1.PodAction, env TemplateEnv, timeout time.Duration) (*PodResult, error) {
+func (c *Pod) Run(ctx context.Context, action v1.PodAction, timeout time.Duration) (*PodResult, error) {
 	if timeout == 0 {
 		timeout = defaultContainerTimeout
 	}

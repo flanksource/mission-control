@@ -12,7 +12,7 @@ import (
 type Notification struct {
 }
 
-func (t *Notification) Run(ctx context.Context, action v1.NotificationAction, env TemplateEnv) error {
+func (t *Notification) Run(ctx context.Context, action v1.NotificationAction) error {
 	notifContext := notification.NewContext(ctx, uuid.Nil)
 	return notification.Send(notifContext, action.Connection, action.URL, action.Title, action.Message, action.Properties)
 }

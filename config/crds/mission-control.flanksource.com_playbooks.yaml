@@ -903,6 +903,11 @@ spec:
                       - driver
                       - query
                       type: object
+                    templatesOn:
+                      description: 'TemplatesOn specifies where the templating happens.
+                        Available options: - host - agent When left empty, the templating
+                        is done on the main instance(host) itself.'
+                      type: string
                     timeout:
                       description: Timeout is the maximum duration to let an action
                         run before it's cancelled.
@@ -1315,6 +1320,11 @@ spec:
                 items:
                   type: string
                 type: array
+              templatesOn:
+                description: 'TemplatesOn specifies where the templating happens.
+                  Available options: - host - agent When left empty, the templating
+                  is done on the main instance(host) itself.'
+                type: string
             required:
             - actions
             type: object

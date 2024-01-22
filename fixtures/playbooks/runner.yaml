@@ -1,50 +1,38 @@
 apiVersion: mission-control.flanksource.com/v1
 kind: Playbook
 metadata:
-  name: agent-runner
+  name: delete-namespace
 spec:
   runsOn:
-    - mikel
-    - arsene
-    - host
-  description: Creates a file with the content of the config
+    - local # Central instance
+    - aws # agent 1
+    - azure # agent 2
+  description: Deletes namespace from all the agents and the host
   configs:
-    - type: Kubernetes::Pod
+    - type: Kubernetes::Namespace
   actions:
-    - name: Create the config file
-      runsOn:
-        - mikel
+    - name: Delete the namespace on the host
       exec:
-        script: echo -n '{{.config.config}}' > /tmp/{{.config.id}}
-    - name: Delete the file
-      delay: 'config.name.startsWith("actual") ? "1m" : "0s"'
+        script: kubectl delete namespace {{.config.name}}
+    - name: Delete the namespace on the agent aws
       runsOn:
-        - arsene
-        - host
+        - 'aws'
       exec:
-        script: rm /tmp/{{.config.id}}
----
-apiVersion: mission-control.flanksource.com/v1
-kind: Playbook
-metadata:
-  name: another-agent-runner
-spec:
-  runsOn:
-    - arsene
-    - host
-  description: Creates a file with the content of the config
-  configs:
-    - type: Kubernetes::Pod
-  actions:
-    - name: Create the config file
+        script: kubectl delete namespace {{.config.name}}
+    - name: Delete the namespace on the Azure
       runsOn:
-        - arsene
+        - 'azure'
       exec:
-        script: echo -n '{{.config.config}}' > /tmp/{{.config.id}}
-    - name: Delete the file
-      delay: 'config.name.startsWith("actual") ? "1m" : "0s"'
-      runsOn:
-        - arsene
-        - host
-      exec:
-        script: rm /tmp/{{.config.id}}
+        script: kubectl delete namespace {{.config.name}}
+    - name: Send notification
+      if: 'success()'
+      notification:
+        connection: connection://slack/flanksource
+        title: Namespace {{.config.name}} deleted successfully
+        message: Namespace {{.config.name}} deleted successfully
+    - name: Notify failure
+      if: 'failure()'
+      notification:
+        connection: connection://slack/flanksource
+        title: Namespace {{.config.name}} deletion failed
+        message: Namespace {{.config.name}} deletion failed

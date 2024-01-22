@@ -118,8 +118,16 @@ func pullPlaybookAction(ctx context.Context) (bool, error) {
 		return false, nil
 	}
 
+	tx := ctx.DB().Begin()
+	if tx.Error != nil {
+		return false, tx.Error
+	}
+	defer tx.Rollback()
+
+	ctx = ctx.WithDB(tx, ctx.Pool())
+
 	// Don't save playbook_run_id to avoid foreign key constraint
-	if err := ctx.DB().Omit("playbook_run_id").Save(response.Action).Error; err != nil {
+	if err := ctx.DB().Omit("playbook_run_id").Save(&response.Action).Error; err != nil {
 		return false, fmt.Errorf("failed to save playbook action: %w", err)
 	}
 
@@ -129,19 +137,19 @@ func pullPlaybookAction(ctx context.Context) (bool, error) {
 		RunID:      response.Run.ID,
 	}
 
-	actionData.Env, err = json.Marshal(response.TemplateEnv)
-	if err != nil {
-		return false, fmt.Errorf("failed to marshal template env: %w", err)
-	}
-
 	actionData.Spec, err = json.Marshal(response.ActionSpec)
 	if err != nil {
 		return false, fmt.Errorf("failed to marshal action spec: %w", err)
+	}
+
+	actionData.Env, err = json.Marshal(response.TemplateEnv)
+	if err != nil {
+		return false, fmt.Errorf("failed to marshal action template env: %w", err)
 	}
 
 	if err := ctx.DB().Create(&actionData).Error; err != nil {
 		return false, fmt.Errorf("failed to save playbook action data for the agent: %w", err)
 	}
 
-	return true, nil
+	return true, tx.Commit().Error
 }

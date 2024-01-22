@@ -79,7 +79,7 @@ var _ = ginkgo.Describe("Playbook Action Gitops", ginkgo.Ordered, func() {
 		ctx := context.Context{
 			Context: commons.NewContext(gocontext.TODO()),
 		}
-		res, err := runner.Run(ctx, spec, env)
+		res, err := runner.Run(ctx, spec)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(res.CreatedPR).To(Equal(0))
 

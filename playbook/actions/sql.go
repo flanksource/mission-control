@@ -17,7 +17,7 @@ type SQL struct{}
 
 // Run - Check every entry from config according to Checker interface
 // Returns check result and metrics
-func (c *SQL) Run(ctx context.Context, action v1.SQLAction, env TemplateEnv) (*SQLResult, error) {
+func (c *SQL) Run(ctx context.Context, action v1.SQLAction) (*SQLResult, error) {
 	if action.Connection != "" {
 		connection, err := ctx.HydrateConnectionByURL(action.Connection)
 		if err != nil {
