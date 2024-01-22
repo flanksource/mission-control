@@ -1,4 +1,4 @@
-package playbook_test
+package playbook
 
 import (
 	"encoding/json"
@@ -9,7 +9,6 @@ import (
 	"github.com/flanksource/duty/types"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/events"
-	"github.com/flanksource/incident-commander/playbook"
 	"github.com/google/uuid"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -194,7 +193,7 @@ var _ = ginkgo.Describe("Match Resource", func() {
 	ginkgo.It("should match resources", func() {
 		type args struct {
 			labels        map[string]string
-			eventResource playbook.EventResource
+			eventResource EventResource
 			matchFilters  []v1.PlaybookTriggerEvent
 		}
 		tests := []struct {
@@ -209,7 +208,7 @@ var _ = ginkgo.Describe("Match Resource", func() {
 					labels: map[string]string{
 						"telemetry": "enabled",
 					},
-					eventResource: playbook.EventResource{
+					eventResource: EventResource{
 						Component: &models.Component{
 							Type: "Entity",
 						},
@@ -222,7 +221,7 @@ var _ = ginkgo.Describe("Match Resource", func() {
 			{
 				name: "With Filter | Without Labels | No match",
 				args: args{
-					eventResource: playbook.EventResource{
+					eventResource: EventResource{
 						Component: &models.Component{
 							Type: "Database",
 						},
@@ -238,7 +237,7 @@ var _ = ginkgo.Describe("Match Resource", func() {
 					labels: map[string]string{
 						"telemetry": "enabled",
 					},
-					eventResource: playbook.EventResource{},
+					eventResource: EventResource{},
 					matchFilters: []v1.PlaybookTriggerEvent{
 						{
 							Labels: map[string]string{
@@ -256,7 +255,7 @@ var _ = ginkgo.Describe("Match Resource", func() {
 					labels: map[string]string{
 						"telemetry": "enabled",
 					},
-					eventResource: playbook.EventResource{},
+					eventResource: EventResource{},
 					matchFilters: []v1.PlaybookTriggerEvent{
 						{
 							Labels: map[string]string{
@@ -275,7 +274,7 @@ var _ = ginkgo.Describe("Match Resource", func() {
 					labels: map[string]string{
 						"telemetry": "enabled",
 					},
-					eventResource: playbook.EventResource{
+					eventResource: EventResource{
 						Check: &models.Check{
 							Type: "http",
 						},
@@ -298,7 +297,7 @@ var _ = ginkgo.Describe("Match Resource", func() {
 					labels: map[string]string{
 						"telemetry": "enabled",
 					},
-					eventResource: playbook.EventResource{
+					eventResource: EventResource{
 						Check: &models.Check{
 							Type: "http",
 						},
@@ -321,7 +320,7 @@ var _ = ginkgo.Describe("Match Resource", func() {
 					labels: map[string]string{
 						"telemetry": "enabled",
 					},
-					eventResource: playbook.EventResource{
+					eventResource: EventResource{
 						Check: &models.Check{
 							Type: "http",
 						},
@@ -348,7 +347,7 @@ var _ = ginkgo.Describe("Match Resource", func() {
 			{
 				name: "Invalid filter expression",
 				args: args{
-					eventResource: playbook.EventResource{
+					eventResource: EventResource{
 						Check: &models.Check{
 							Type: "http",
 						},
@@ -368,7 +367,7 @@ var _ = ginkgo.Describe("Match Resource", func() {
 			{
 				name: "Expression not returning boolean",
 				args: args{
-					eventResource: playbook.EventResource{
+					eventResource: EventResource{
 						Check: &models.Check{
 							Type: "http",
 						},
@@ -389,7 +388,7 @@ var _ = ginkgo.Describe("Match Resource", func() {
 
 		for _, tt := range tests {
 			ginkgo.By(tt.name, func() {
-				got, err := playbook.MatchResource(tt.args.labels, tt.args.eventResource.AsMap(), tt.args.matchFilters)
+				got, err := matchResource(tt.args.labels, tt.args.eventResource.AsMap(), tt.args.matchFilters)
 				Expect(err == nil).To(Equal(!tt.wantErr))
 				Expect(got).To(Equal(tt.want))
 			})

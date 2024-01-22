@@ -57,7 +57,7 @@ var PushPlaybookActions = &job.Job{
 	},
 }
 
-// syncPlaybookActions pushes unpushed playbook actions to the upstream
+// pushPlaybookActions pushes unpushed playbook actions to the upstream
 func pushPlaybookActions(ctx context.Context, batchSize int) (int, error) {
 	client := upstream.NewUpstreamClient(api.UpstreamConf)
 	count := 0
@@ -114,7 +114,7 @@ func pullPlaybookAction(ctx context.Context) (bool, error) {
 		return false, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid response: %v", err)
 	}
 
-	if response.Action == nil {
+	if response.Action.ID == uuid.Nil {
 		return false, nil
 	}
 
@@ -123,24 +123,24 @@ func pullPlaybookAction(ctx context.Context) (bool, error) {
 		return false, fmt.Errorf("failed to save playbook action: %w", err)
 	}
 
-	agentData := models.PlaybookActionAgentData{
+	actionData := models.PlaybookActionAgentData{
 		ActionID:   response.Action.ID,
 		PlaybookID: response.Run.PlaybookID,
 		RunID:      response.Run.ID,
 	}
 
-	agentData.Env, err = json.Marshal(response.TemplateEnv)
+	actionData.Env, err = json.Marshal(response.TemplateEnv)
 	if err != nil {
 		return false, fmt.Errorf("failed to marshal template env: %w", err)
 	}
 
-	agentData.Spec, err = json.Marshal(response.ActionSpec)
+	actionData.Spec, err = json.Marshal(response.ActionSpec)
 	if err != nil {
 		return false, fmt.Errorf("failed to marshal action spec: %w", err)
 	}
 
-	if err := ctx.DB().Create(&agentData).Error; err != nil {
-		return false, fmt.Errorf("failed to save playbook action template: %w", err)
+	if err := ctx.DB().Create(&actionData).Error; err != nil {
+		return false, fmt.Errorf("failed to save playbook action data for the agent: %w", err)
 	}
 
 	return true, nil

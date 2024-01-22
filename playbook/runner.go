@@ -56,11 +56,13 @@ func getNextActionToRun(ctx context.Context, playbook models.Playbook, runID uui
 	return nil, nil
 }
 
+// ActionForAgent holds in all the necessary information
+// required by an agent to run an action.
 type ActionForAgent struct {
-	Run         *models.PlaybookRun       `json:"run,omitempty"`
-	ActionSpec  *v1.PlaybookAction        `json:"action_spec,omitempty"`
-	Action      *models.PlaybookRunAction `json:"action,omitempty"`
-	TemplateEnv map[string]any            `json:"template_env"`
+	Run         models.PlaybookRun       `json:"run"`
+	ActionSpec  v1.PlaybookAction        `json:"action_spec"`
+	Action      models.PlaybookRunAction `json:"action"`
+	TemplateEnv map[string]any           `json:"template_env"`
 }
 
 func GetActionForAgent(ctx context.Context, agent *models.Agent) (*ActionForAgent, error) {
@@ -132,9 +134,9 @@ func GetActionForAgent(ctx context.Context, agent *models.Agent) (*ActionForAgen
 	}
 
 	output := ActionForAgent{
-		Action:      &newAction,
-		Run:         &run,
-		ActionSpec:  actionToRun,
+		Action:      newAction,
+		Run:         run,
+		ActionSpec:  *actionToRun,
 		TemplateEnv: templateEnv.AsMap(),
 	}
 
@@ -232,14 +234,14 @@ func executeAndSaveAction(ctx context.Context, playbookID, runID uuid.UUID, acti
 		logger.Errorf("failed to execute action: %v", err)
 		columnUpdates["status"] = models.PlaybookActionStatusFailed
 		columnUpdates["error"] = err.Error()
-	} else if result.Skipped {
+	} else if result.skipped {
 		columnUpdates["status"] = models.PlaybookActionStatusSkipped
-	} else if result.Sleep > 0 {
+	} else if result.sleep > 0 {
 		columnUpdates["status"] = models.PlaybookActionStatusSleeping
-		columnUpdates["scheduled_time"] = gorm.Expr(fmt.Sprintf("CLOCK_TIMESTAMP() + INTERVAL '%d SECONDS'", int(result.Sleep.Seconds())))
+		columnUpdates["scheduled_time"] = gorm.Expr(fmt.Sprintf("CLOCK_TIMESTAMP() + INTERVAL '%d SECONDS'", int(result.sleep.Seconds())))
 	} else {
 		columnUpdates["status"] = models.PlaybookActionStatusCompleted
-		columnUpdates["result"] = result.Data
+		columnUpdates["result"] = result.data
 	}
 
 	if err := ctx.DB().Model(&models.PlaybookRunAction{}).Where("id = ?", actionToRun.ID).UpdateColumns(columnUpdates).Error; err != nil {
@@ -261,7 +263,7 @@ func executeAndSaveAction(ctx context.Context, playbookID, runID uuid.UUID, acti
 	return nil
 }
 
-// templateAndExecuteAction executes the given playbook action.
+// templateAndExecuteAction executes the given playbook action after templating it.
 func templateAndExecuteAction(ctx context.Context, run models.PlaybookRun, actionToRun models.PlaybookRunAction, actionSpec v1.PlaybookAction) error {
 	logger.WithValues("run.id", run.ID).WithValues("parameters", run.Parameters).
 		WithValues("config", run.ConfigID).WithValues("check", run.CheckID).WithValues("component", run.ComponentID).
@@ -279,15 +281,16 @@ func templateAndExecuteAction(ctx context.Context, run models.PlaybookRun, actio
 	return executeAndSaveAction(ctx, run.PlaybookID, run.ID, actionToRun, actionSpec, templateEnv)
 }
 
-// ExecuteActionResult is the result of executing an action
-type ExecuteActionResult struct {
+// executeActionResult is the result of executing an action
+type executeActionResult struct {
 	// result of the action as JSON
-	Data []byte
+	data []byte
 
-	// Skipped is true if the action was Skipped by the action filter
-	Skipped bool
+	// skipped is true if the action was skipped by the action filter
+	skipped bool
 
-	Sleep time.Duration
+	// sleep is the duration to sleep before executing this action
+	sleep time.Duration
 }
 
 func templateAction(ctx context.Context, run models.PlaybookRun, runAction models.PlaybookRunAction, actionSpec *v1.PlaybookAction, env actions.TemplateEnv) error {
@@ -373,7 +376,9 @@ func filterAction(ctx context.Context, runID uuid.UUID, filter string) (bool, er
 	return false, nil
 }
 
-func executeAction(ctx context.Context, playbookID, runID uuid.UUID, runAction models.PlaybookRunAction, actionSpec v1.PlaybookAction, env actions.TemplateEnv) (*ExecuteActionResult, error) {
+// executeAction runs the executes the given palybook action.
+// It should received an already templated action spec.
+func executeAction(ctx context.Context, playbookID, runID uuid.UUID, runAction models.PlaybookRunAction, actionSpec v1.PlaybookAction, env actions.TemplateEnv) (*executeActionResult, error) {
 	ctx, span := ctx.StartSpan("executeAction")
 	defer span.End()
 
@@ -389,7 +394,7 @@ func executeAction(ctx context.Context, playbookID, runID uuid.UUID, runAction m
 		if duration, err := actionSpec.DelayDuration(env.AsMap()); err != nil {
 			return nil, err
 		} else if duration > 0 {
-			return &ExecuteActionResult{Sleep: duration}, nil
+			return &executeActionResult{sleep: duration}, nil
 		}
 	}
 
@@ -397,7 +402,7 @@ func executeAction(ctx context.Context, playbookID, runID uuid.UUID, runAction m
 		if skip, err := filterAction(ctx, runID, actionSpec.Filter); err != nil {
 			return nil, err
 		} else if skip {
-			return &ExecuteActionResult{Skipped: true}, nil
+			return &executeActionResult{skipped: true}, nil
 		}
 	}
 
@@ -417,7 +422,7 @@ func executeAction(ctx context.Context, playbookID, runID uuid.UUID, runAction m
 			return nil, err
 		}
 
-		return &ExecuteActionResult{Data: jsonData}, nil
+		return &executeActionResult{data: jsonData}, nil
 	}
 
 	if actionSpec.HTTP != nil {
@@ -432,7 +437,7 @@ func executeAction(ctx context.Context, playbookID, runID uuid.UUID, runAction m
 			return nil, err
 		}
 
-		return &ExecuteActionResult{Data: jsonData}, nil
+		return &executeActionResult{data: jsonData}, nil
 	}
 
 	if actionSpec.SQL != nil {
@@ -447,7 +452,7 @@ func executeAction(ctx context.Context, playbookID, runID uuid.UUID, runAction m
 			return nil, err
 		}
 
-		return &ExecuteActionResult{Data: jsonData}, nil
+		return &executeActionResult{data: jsonData}, nil
 	}
 
 	if actionSpec.Pod != nil {
@@ -467,7 +472,7 @@ func executeAction(ctx context.Context, playbookID, runID uuid.UUID, runAction m
 			return nil, err
 		}
 
-		return &ExecuteActionResult{Data: jsonData}, nil
+		return &executeActionResult{data: jsonData}, nil
 	}
 
 	if actionSpec.GitOps != nil {
@@ -482,7 +487,7 @@ func executeAction(ctx context.Context, playbookID, runID uuid.UUID, runAction m
 			return nil, err
 		}
 
-		return &ExecuteActionResult{Data: jsonData}, nil
+		return &executeActionResult{data: jsonData}, nil
 	}
 
 	if actionSpec.Notification != nil {
@@ -492,8 +497,8 @@ func executeAction(ctx context.Context, playbookID, runID uuid.UUID, runAction m
 			return nil, err
 		}
 
-		return &ExecuteActionResult{Data: []byte("{}")}, nil
+		return &executeActionResult{data: []byte("{}")}, nil
 	}
 
-	return &ExecuteActionResult{}, nil
+	return &executeActionResult{}, nil
 }

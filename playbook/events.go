@@ -151,7 +151,7 @@ func SchedulePlaybookRun(ctx context.Context, event postq.Event) error {
 		switch specEvent.Class {
 		case "canary":
 			run.CheckID = &eventResource.Check.ID
-			if ok, err := MatchResource(eventResource.Check.Labels, eventResource.AsMap(), playbook.Spec.On.Canary); err != nil {
+			if ok, err := matchResource(eventResource.Check.Labels, eventResource.AsMap(), playbook.Spec.On.Canary); err != nil {
 				logToJobHistory(ctx, p.ID.String(), err.Error())
 				continue
 			} else if ok {
@@ -161,7 +161,7 @@ func SchedulePlaybookRun(ctx context.Context, event postq.Event) error {
 			}
 		case "component":
 			run.ComponentID = &eventResource.Component.ID
-			if ok, err := MatchResource(eventResource.Component.Labels, eventResource.AsMap(), playbook.Spec.On.Component); err != nil {
+			if ok, err := matchResource(eventResource.Component.Labels, eventResource.AsMap(), playbook.Spec.On.Component); err != nil {
 				logToJobHistory(ctx, p.ID.String(), err.Error())
 				continue
 			} else if ok {
@@ -171,7 +171,7 @@ func SchedulePlaybookRun(ctx context.Context, event postq.Event) error {
 			}
 		case "config":
 			run.ConfigID = &eventResource.Config.ID
-			if ok, err := MatchResource(lo.FromPtr(eventResource.Config.Tags), eventResource.AsMap(), playbook.Spec.On.Config); err != nil {
+			if ok, err := matchResource(lo.FromPtr(eventResource.Config.Tags), eventResource.AsMap(), playbook.Spec.On.Config); err != nil {
 				logToJobHistory(ctx, p.ID.String(), err.Error())
 				continue
 			} else if ok {
@@ -196,9 +196,9 @@ func logToJobHistory(ctx context.Context, playbookID, err string) {
 	}
 }
 
-// MatchResource returns true if any one of the matchFilter is true
+// matchResource returns true if any one of the matchFilter is true
 // for the given labels and cel env.
-func MatchResource(labels map[string]string, celEnv map[string]any, matchFilters []v1.PlaybookTriggerEvent) (bool, error) {
+func matchResource(labels map[string]string, celEnv map[string]any, matchFilters []v1.PlaybookTriggerEvent) (bool, error) {
 outer:
 	for _, mf := range matchFilters {
 		if mf.Filter != "" {

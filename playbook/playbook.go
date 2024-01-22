@@ -21,8 +21,8 @@ var (
 	lastResultCache = cache.New(time.Minute*15, time.Minute*30)
 )
 
-// ValidateAndSavePlaybookRun creates and saves a run from a run request after validating the run parameters.
-func ValidateAndSavePlaybookRun(ctx context.Context, playbook *models.Playbook, req RunParams) (*models.PlaybookRun, error) {
+// validateAndSavePlaybookRun creates and saves a run from a run request after validating the run parameters.
+func validateAndSavePlaybookRun(ctx context.Context, playbook *models.Playbook, req RunParams) (*models.PlaybookRun, error) {
 	var spec v1.PlaybookSpec
 	if err := json.Unmarshal(playbook.Spec, &spec); err != nil {
 		return nil, err

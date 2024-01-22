@@ -90,7 +90,6 @@ func (k *kratosMiddleware) validateSession(ctx context.Context, r *http.Request)
 				return &client.Session{Active: lo.ToPtr(false)}, nil
 			}
 
-			// TODO: Cache this
 			var agent models.Agent
 			if err := ctx.DB().Where("person_id = ?", accessToken.PersonID.String()).Find(&agent).Error; err != nil {
 				return nil, err

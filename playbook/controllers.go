@@ -159,7 +159,7 @@ func HandlePlaybookRun(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, dutyAPI.HTTPError{Error: "not found", Message: fmt.Sprintf("playbook(id=%s) not found", req.ID)})
 	}
 
-	run, err := ValidateAndSavePlaybookRun(ctx, playbook, req)
+	run, err := validateAndSavePlaybookRun(ctx, playbook, req)
 	if err != nil {
 		return dutyAPI.WriteError(c, err)
 	}
@@ -261,7 +261,7 @@ func HandleWebhook(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Error: err.Error(), Message: "playbook has an invalid spec"})
 	}
 
-	if err := AuthenticateWebhook(ctx, c.Request(), spec.On.Webhook.Authentication); err != nil {
+	if err := authenticateWebhook(ctx, c.Request(), spec.On.Webhook.Authentication); err != nil {
 		return dutyAPI.WriteError(c, err)
 	}
 
@@ -273,7 +273,7 @@ func HandleWebhook(c echo.Context) error {
 	}
 	runRequest.ID = playbook.ID
 
-	if _, err = ValidateAndSavePlaybookRun(ctx, playbook, runRequest); err != nil {
+	if _, err = validateAndSavePlaybookRun(ctx, playbook, runRequest); err != nil {
 		logger.Errorf("failed to save playbook run: %v", err)
 	}
 

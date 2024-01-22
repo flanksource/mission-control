@@ -44,8 +44,7 @@ func StartPlaybookConsumers(ctx context.Context) error {
 	return nil
 }
 
-// RunConsumer picks up scheduled runs and schedules the
-// execution of the next action on that run.
+// ActionConsumer picks up scheduled actions runs them.
 func ActionConsumer(c postq.Context) (int, error) {
 	ctx, ok := c.(context.Context)
 	if !ok {
