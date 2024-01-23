@@ -8,8 +8,11 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/http"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
+	"github.com/flanksource/duty/tests/setup"
+	"github.com/flanksource/duty/upstream"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/events"
 	ginkgo "github.com/onsi/ginkgo/v2"
@@ -422,6 +425,157 @@ var _ = ginkgo.Describe("Playbook", ginkgo.Ordered, func() {
 			data, err := os.ReadFile(dataFile)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(data)).To(Equal("HIGH\n20"))
+		})
+	})
+
+	var _ = ginkgo.Describe("Test Playbook runners", ginkgo.Ordered, func() {
+		var (
+			spec     v1.PlaybookSpec
+			playbook models.Playbook
+			run      *models.PlaybookRun
+			err      error
+
+			actionOnAgent  models.PlaybookRunAction
+			upstreamConfig upstream.UpstreamConfig
+			agentName      = "aws-agent"
+			awsAgent       models.Agent
+
+			agentContext *context.Context
+			agentDBDrop  func()
+		)
+
+		ginkgo.BeforeAll(func() {
+			specContent, err := os.ReadFile("testdata/agent-runner.yaml")
+			Expect(err).NotTo(HaveOccurred())
+
+			err = yaml.Unmarshal(specContent, &spec)
+			Expect(err).NotTo(HaveOccurred())
+
+			specJSON, err := json.Marshal(spec)
+			Expect(err).NotTo(HaveOccurred())
+
+			playbook = models.Playbook{
+				Name:   "agent-runners",
+				Spec:   specJSON,
+				Source: models.SourceConfigFile,
+			}
+
+			err = DefaultContext.DB().Clauses(clause.Returning{}).Create(&playbook).Error
+			Expect(err).NotTo(HaveOccurred())
+
+			// Setup agent
+			agentContext, agentDBDrop, err = setup.NewDB(DefaultContext, "aws")
+			Expect(err).NotTo(HaveOccurred())
+
+			upstreamConfig = upstream.UpstreamConfig{
+				AgentName: "aws",
+				Host:      fmt.Sprintf("http://localhost:%d", echoServerPort),
+				Username:  agentName,
+				Password:  "dummy",
+			}
+
+			// save the agent to the db
+			agentPerson := models.Person{Name: agentName}
+			err = DefaultContext.DB().Create(&agentPerson).Error
+			Expect(err).NotTo(HaveOccurred())
+
+			awsAgent = models.Agent{Name: "aws", PersonID: &agentPerson.ID}
+			err = DefaultContext.DB().Create(&awsAgent).Error
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		ginkgo.AfterAll(func() {
+			if agentDBDrop != nil {
+				agentDBDrop()
+			}
+		})
+
+		ginkgo.It("should execute the playbook", func() {
+			run, err = validateAndSavePlaybookRun(DefaultContext, &playbook, RunParams{
+				ConfigID: dummy.KubernetesNodeA.ID,
+			})
+			Expect(err).NotTo(HaveOccurred())
+
+			Eventually(func() models.PlaybookRunStatus {
+				var savedRun *models.PlaybookRun
+				err := DefaultContext.DB().Select("status").Where("id = ? ", run.ID).First(&savedRun).Error
+				Expect(err).To(BeNil())
+
+				if savedRun != nil {
+					return savedRun.Status
+				}
+				return models.PlaybookRunStatusPending
+			}, "10s").Should(Equal(models.PlaybookRunStatusWaiting))
+		})
+
+		ginkgo.It("should pull the action from the upstream", func() {
+			pulled, err := PullPlaybookAction(*agentContext, upstreamConfig)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pulled).To(BeTrue())
+
+			err = agentContext.DB().Where("name = ? ", spec.Actions[1].Name).First(&actionOnAgent).Error
+			Expect(err).To(BeNil())
+
+			Expect(actionOnAgent.Status).To(Equal(models.PlaybookActionStatusScheduled))
+		})
+
+		ginkgo.It("the upstream should also have the same action assigned to our agent", func() {
+			var actionOnUpstream models.PlaybookRunAction
+			err := agentContext.DB().Where("name = ? ", spec.Actions[1].Name).First(&actionOnUpstream).Error
+			Expect(err).To(BeNil())
+
+			Expect(actionOnAgent.ID.String()).To(Equal(actionOnUpstream.ID.String()))
+			Expect(actionOnUpstream.Status).To(Equal(models.PlaybookActionStatusScheduled))
+			Expect(actionOnUpstream.AgentID).To(Not(BeNil()))
+			Expect(actionOnUpstream.AgentID.String()).To(Equal(awsAgent.ID.String()))
+		})
+
+		ginkgo.It("should run the pulled action on the agent", func() {
+			err := StartPlaybookConsumers(*agentContext)
+			Expect(err).NotTo(HaveOccurred())
+
+			Eventually(func() models.PlaybookActionStatus {
+				// Manually publish a pg_notify event because for some reason the embedded db isn't realiable
+				err := agentContext.DB().Exec("NOTIFY playbook_action_updates").Error
+				Expect(err).NotTo(HaveOccurred())
+
+				var action models.PlaybookRunAction
+				err = agentContext.DB().Select("status").Where("id = ? ", actionOnAgent.ID).First(&action).Error
+				Expect(err).To(BeNil())
+
+				return action.Status
+			}, "10s", "1s").Should(Equal(models.PlaybookActionStatusCompleted))
+		})
+
+		ginkgo.It("should push the action result to the upstream", func() {
+			pushed, err := PushPlaybookActions(*agentContext, upstreamConfig, 10)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(pushed).To(Equal(1))
+		})
+
+		ginkgo.It("should ensure that the playbook ran to completion", func() {
+			Eventually(func() models.PlaybookRunStatus {
+				var savedRun *models.PlaybookRun
+				err := DefaultContext.DB().Select("status").Where("id = ? ", run.ID).First(&savedRun).Error
+				Expect(err).To(BeNil())
+
+				if savedRun != nil {
+					return savedRun.Status
+				}
+				return models.PlaybookRunStatusPending
+			}, "10s").Should(Equal(models.PlaybookRunStatusCompleted))
+		})
+
+		ginkgo.It("should ensure that the playbook ran correctly", func() {
+			var actions []models.PlaybookRunAction
+			err = DefaultContext.DB().Where("playbook_run_id = ? ", run.ID).Find(&actions).Error
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(len(actions)).To(Equal(2))
+			for i := range actions {
+				Expect(actions[i].Status).To(Equal(models.PlaybookActionStatusCompleted))
+				Expect(actions[i].Result["stdout"]).To(Equal(dummy.KubernetesNodeA.ConfigClass))
+			}
 		})
 	})
 })
