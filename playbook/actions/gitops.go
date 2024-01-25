@@ -18,10 +18,8 @@ import (
 )
 
 type GitOps struct {
-	workTree *gitv5.Worktree
-	spec     *connectors.GitopsAPISpec
-	env      TemplateEnv
-
+	workTree       *gitv5.Worktree
+	spec           *connectors.GitopsAPISpec
 	logs           []string
 	shouldCreatePR bool
 }
@@ -31,14 +29,12 @@ type GitOpsActionResult struct {
 	Logs      string `json:"logs,omitempty"`
 }
 
-func (t *GitOps) Run(ctx context.Context, action v1.GitOpsAction, env TemplateEnv) (*GitOpsActionResult, error) {
+func (t *GitOps) Run(ctx context.Context, action v1.GitOpsAction) (*GitOpsActionResult, error) {
 	var response GitOpsActionResult
 
 	if len(action.Patches) == 0 && len(action.Files) == 0 {
 		return nil, fmt.Errorf("no patches or files specified on gitops action")
 	}
-
-	t.env = env
 
 	if err := t.generateSpec(ctx, action); err != nil {
 		return nil, err

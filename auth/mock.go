@@ -1,11 +1,13 @@
 package auth
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/labstack/echo/v4"
+	"gorm.io/gorm"
 )
 
 // mockAuthMiddleware doesn't actually authenticate since we never store auth data.
@@ -25,6 +27,14 @@ func MockMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 		}
 
 		ctx = ctx.WithUser(&models.Person{ID: person.ID, Email: person.Email})
+
+		var agent models.Agent
+		if err := ctx.DB().Where("person_id = ?", person.ID.String()).First(&agent).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+			return err
+		} else {
+			ctx = ctx.WithAgent(agent)
+		}
+
 		c.SetRequest(c.Request().WithContext(ctx))
 		return next(c)
 	}

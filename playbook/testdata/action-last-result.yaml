@@ -14,7 +14,7 @@ actions:
     if: 'getLastAction().result.stdout.JSON().count < 5'
     notification:
       title: 'Count is low'
-      message: Count is {{index last_result "stdout"}}
+      message: Count is low
       connection: connection://slack/flanksource
   - name: Log if count is high
     if: 'getAction("make dummy API call").result.stdout.JSON().count > 15'

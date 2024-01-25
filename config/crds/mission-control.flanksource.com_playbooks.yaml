@@ -877,6 +877,13 @@ spec:
                       - name
                       - spec
                       type: object
+                    runsOn:
+                      description: RunsOn specifies the agents that can run this action.
+                        When left empty, the action will run on the main instance
+                        itself.
+                      items:
+                        type: string
+                      type: array
                     sql:
                       properties:
                         connection:
@@ -896,6 +903,11 @@ spec:
                       - driver
                       - query
                       type: object
+                    templatesOn:
+                      description: 'TemplatesOn specifies where the templating happens.
+                        Available options: - host - agent When left empty, the templating
+                        is done on the main instance(host) itself.'
+                      type: string
                     timeout:
                       description: Timeout is the maximum duration to let an action
                         run before it's cancelled.
@@ -1302,6 +1314,17 @@ spec:
                       type: string
                   type: object
                 type: array
+              runsOn:
+                description: RunsOn specifies the agents that can run this playbook.
+                  When left empty, the playbook will run on the main instance itself.
+                items:
+                  type: string
+                type: array
+              templatesOn:
+                description: 'TemplatesOn specifies where the templating happens.
+                  Available options: - host - agent When left empty, the templating
+                  is done on the main instance(host) itself.'
+                type: string
             required:
             - actions
             type: object

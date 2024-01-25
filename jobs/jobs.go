@@ -18,6 +18,13 @@ const (
 
 var FuncScheduler = cron.New()
 
+var agentJobs = []*job.Job{
+	SyncWithUpstream,
+	SyncCheckStatuses,
+	PushPlaybookActions,
+	PullPlaybookActions,
+}
+
 func Start(ctx context.Context) {
 	if err := job.NewJob(ctx, "Team Component Ownership", "@every 15m", TeamComponentOwnershipRun).
 		RunOnStart().AddToScheduler(FuncScheduler); err != nil {
@@ -40,7 +47,7 @@ func Start(ctx context.Context) {
 	}
 
 	if api.UpstreamConf.Valid() {
-		for _, job := range []*job.Job{SyncCheckStatuses, SyncWithUpstream} {
+		for _, job := range agentJobs {
 			j := job
 			j.Context = ctx
 			if err := j.AddToScheduler(FuncScheduler); err != nil {

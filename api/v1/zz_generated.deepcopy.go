@@ -725,6 +725,11 @@ func (in *PlaybookAction) DeepCopyInto(out *PlaybookAction) {
 		*out = new(timex.Duration)
 		**out = **in
 	}
+	if in.RunsOn != nil {
+		in, out := &in.RunsOn, &out.RunsOn
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	if in.Exec != nil {
 		in, out := &in.Exec, &out.Exec
 		*out = new(ExecAction)
@@ -990,6 +995,11 @@ func (in *PlaybookSpec) DeepCopyInto(out *PlaybookSpec) {
 		in, out := &in.On, &out.On
 		*out = new(PlaybookTrigger)
 		(*in).DeepCopyInto(*out)
+	}
+	if in.RunsOn != nil {
+		in, out := &in.RunsOn, &out.RunsOn
+		*out = make([]string, len(*in))
+		copy(*out, *in)
 	}
 	if in.Permissions != nil {
 		in, out := &in.Permissions, &out.Permissions

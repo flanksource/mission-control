@@ -53,8 +53,6 @@ func reconcileTable(ctx context.Context, table string) (int, error) {
 	return count, err
 }
 
-var UpstreamJobs = []*job.Job{SyncWithUpstream, SyncCheckStatuses}
-
 var SyncCheckStatuses = &job.Job{
 	JobHistory: true,
 	Singleton:  true,

@@ -1,0 +1,19 @@
+---
+runsOn:
+  - local # Central instance
+  - aws # agent 1
+description: Write a file to the node
+configs:
+  - type: Kubernetes::Node
+actions:
+  - name: Echo class on the host
+    exec:
+      script: |
+        echo "{{.config.config_class}}"
+  - name: Echo class on agent aws
+    runsOn:
+      - 'aws'
+    templatesOn: agent
+    exec:
+      script: |
+        echo "{{.config.config_class}}"

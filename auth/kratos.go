@@ -90,12 +90,20 @@ func (k *kratosMiddleware) validateSession(ctx context.Context, r *http.Request)
 				return &client.Session{Active: lo.ToPtr(false)}, nil
 			}
 
+			var agent models.Agent
+			if err := ctx.DB().Where("person_id = ?", accessToken.PersonID.String()).Find(&agent).Error; err != nil {
+				return nil, err
+			}
+
 			s := &client.Session{
 				Id:        uuid.NewString(),
 				Active:    lo.ToPtr(true),
 				ExpiresAt: &accessToken.ExpiresAt,
 				Identity: client.Identity{
 					Id: accessToken.PersonID.String(),
+					Traits: map[string]any{
+						"agent": agent,
+					},
 				},
 			}
 
@@ -162,6 +170,10 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 		if traits, ok := session.Identity.GetTraits().(map[string]any); ok {
 			if e, ok := traits["email"].(string); ok {
 				email = e
+			}
+
+			if agent, ok := traits["agent"].(models.Agent); ok {
+				ctx = ctx.WithAgent(agent)
 			}
 		}
 
