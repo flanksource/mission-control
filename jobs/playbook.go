@@ -2,6 +2,7 @@ package jobs
 
 import (
 	"github.com/flanksource/duty/job"
+	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
 
 	"github.com/flanksource/incident-commander/playbook"
@@ -28,7 +29,7 @@ var PullPlaybookActions = &job.Job{
 	},
 }
 
-// PullPlaybookActions pushes actions, that have been fully run, to the upstream
+// PushPlaybookActions pushes actions that have been fully run to the upstream
 var PushPlaybookActions = &job.Job{
 	Name:       "PushPlaybookActions",
 	Schedule:   "@every 10s",
@@ -44,6 +45,25 @@ var PushPlaybookActions = &job.Job{
 			ctx.History.SuccessCount += count
 		}
 
+		return nil
+	},
+}
+
+// PushArtifacts pushes artifacts to the upstream
+var PushArtifacts = &job.Job{
+	Name:       "PushArtifacts",
+	Schedule:   "@every 10s",
+	JobHistory: true,
+	RunNow:     true,
+	Singleton:  true,
+	Fn: func(ctx job.JobRuntime) error {
+		ctx.History.ResourceType = job.ResourceTypePlaybook
+		ctx.History.ResourceID = api.UpstreamConf.Host
+		count, err := upstream.SyncArtifacts(ctx.Context, api.UpstreamConf, 200)
+		if err != nil {
+			return err
+		}
+		ctx.History.SuccessCount += count
 		return nil
 	},
 }
