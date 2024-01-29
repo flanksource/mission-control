@@ -32,7 +32,7 @@ func RegisterRoutes(e *echo.Echo) {
 	upstreamGroup.GET("/canary/pull/:agent_name", PullCanaries)
 	upstreamGroup.GET("/scrapeconfig/pull/:agent_name", PullScrapeConfigs)
 
-	upstreamGroup.POST("/artifacts/:type/:id", artifactsPushHandler)
+	upstreamGroup.POST("/artifacts/:id", artifactsPushHandler)
 
 	upstreamGroup.GET("/playbook-action", handlePlaybookActionRequest)
 }

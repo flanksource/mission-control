@@ -83,9 +83,16 @@ func ActionConsumer(c postq.Context) (int, error) {
 	}
 
 	for i := range foundActions {
+		isAssignedToAgent := foundActions[i].AgentID != nil && *foundActions[i].AgentID != uuid.Nil
+		if isAssignedToAgent && foundActions[i].PlaybookRunID != uuid.Nil {
+			// This action was assigned to an agent.
+			// foundActions[i].PlaybookRunID != uuid.Nil tells us that this is running on upstream server.
+			continue
+		}
+
 		// Agent doesn't have a run associated with the action.
 		// So we skip templating, as the upstream does that before sending the action.
-		if foundActions[i].PlaybookRunID == uuid.Nil {
+		if isAssignedToAgent {
 			var actionData models.PlaybookActionAgentData
 			if err := ctx.DB().Where("action_id = ?", foundActions[i].ID).First(&actionData).Error; err != nil {
 				return 0, err

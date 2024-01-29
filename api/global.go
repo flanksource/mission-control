@@ -19,8 +19,6 @@ var (
 
 	// DefaultArtifactConnection is the connection that's used to save all playbook artifacts.
 	DefaultArtifactConnection string
-
-	ArtifactsTempDir = "/tmp/artifacts-cache/"
 )
 
 const (

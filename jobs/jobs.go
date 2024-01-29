@@ -22,6 +22,7 @@ var agentJobs = []*job.Job{
 	SyncWithUpstream,
 	SyncCheckStatuses,
 	SyncArtifactRecords,
+	SyncArtifactData,
 	PushPlaybookActions,
 	PullPlaybookActions,
 }

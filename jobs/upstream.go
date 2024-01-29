@@ -90,11 +90,15 @@ var SyncArtifactRecords = &job.Job{
 	},
 }
 
+// agentArtifactPath is the local path to the agent artifact store.
+var agentArtifactPath string
+
 // SyncArtifactRecords pushes any unpushed artifact records to the upstream.
 // The actual artifacts aren't pushed by this job.
 var SyncArtifactData = &job.Job{
 	JobHistory: true,
-	Singleton:  true,
+	Singleton:  false, // this job is safe to run concurrently
+	RunNow:     true,
 	Retention:  job.RetentionHour,
 	Name:       "SyncArtifactData",
 	Schedule:   "@every 30s",
@@ -102,7 +106,21 @@ var SyncArtifactData = &job.Job{
 		ctx.History.ResourceType = job.ResourceTypeUpstream
 		ctx.History.ResourceID = api.UpstreamConf.Host
 
-		var agentArtifactPath string // TODO:
+		if agentArtifactPath == "" {
+			artifactConnection, err := ctx.HydrateConnectionByURL(api.DefaultArtifactConnection)
+			if err != nil {
+				return err
+			} else if artifactConnection == nil {
+				return fmt.Errorf("artifact connection (%s) not found", api.DefaultArtifactConnection)
+			}
+
+			if val, ok := artifactConnection.Properties["path"]; !ok {
+				return fmt.Errorf("artifact connection is invalid. path not set")
+			} else {
+				agentArtifactPath = val
+			}
+		}
+
 		var err error
 		ctx.History.SuccessCount, err = upstream.SyncArtifactItems(ctx.Context, api.UpstreamConf, agentArtifactPath, ReconcilePageSize)
 		if err != nil {
