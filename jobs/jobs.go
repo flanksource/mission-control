@@ -21,6 +21,7 @@ var FuncScheduler = cron.New()
 var agentJobs = []*job.Job{
 	SyncWithUpstream,
 	SyncCheckStatuses,
+	SyncArtifactRecords,
 	PushPlaybookActions,
 	PullPlaybookActions,
 }

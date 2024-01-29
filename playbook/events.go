@@ -187,7 +187,7 @@ func SchedulePlaybookRun(ctx context.Context, event postq.Event) error {
 
 // logToJobHistory logs any failures in saving a playbook run to the job history.
 func logToJobHistory(ctx context.Context, playbookID, err string) {
-	jobHistory := models.NewJobHistory("SavePlaybookRun", "playbook", playbookID)
+	jobHistory := models.NewJobHistory(ctx.Logger, "SavePlaybookRun", "playbook", playbookID)
 	jobHistory.Start()
 	jobHistory.AddError(err)
 
