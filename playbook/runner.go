@@ -446,7 +446,7 @@ func executeAction(ctx context.Context, playbookID, runID uuid.UUID, runAction m
 			return nil, err
 		}
 
-		if err := saveArtifacts(ctx, runID, res.Artifacts); err != nil {
+		if err := saveArtifacts(ctx, runAction.ID, res.Artifacts); err != nil {
 			return nil, fmt.Errorf("error saving artifacts: %v", err)
 		}
 
