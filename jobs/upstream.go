@@ -26,7 +26,7 @@ var SyncWithUpstream = &job.Job{
 	Retention:  job.Retention3Day,
 	JobHistory: true,
 	Fn: func(ctx job.JobRuntime) error {
-		ctx.History.ResourceType = "upstream"
+		ctx.History.ResourceType = job.ResourceTypeUpstream
 		ctx.History.ResourceID = api.UpstreamConf.Host
 		for _, table := range api.TablesToReconcile {
 			if count, err := reconcileTable(ctx.Context, table); err != nil {
@@ -60,12 +60,32 @@ var SyncCheckStatuses = &job.Job{
 	Name:       "SyncCheckStatuses",
 	Schedule:   "@every 30s",
 	Fn: func(ctx job.JobRuntime) error {
-		ctx.History.ResourceType = "upstream"
+		ctx.History.ResourceType = job.ResourceTypeUpstream
 		ctx.History.ResourceID = api.UpstreamConf.Host
 		var err error
 		if ctx.History.SuccessCount, err = upstream.SyncCheckStatuses(ctx.Context, api.UpstreamConf, ReconcilePageSize); err != nil {
 			ctx.History.AddError(err.Error())
 		}
 		return nil
+	},
+}
+
+// SyncArtifactRecords pushes any unpushed artifact records to the upstream.
+// The actual artifacts aren't pushed by this job.
+var SyncArtifactRecords = &job.Job{
+	JobHistory: true,
+	Singleton:  true,
+	Retention:  job.RetentionHour,
+	Name:       "SyncArtifactRecords",
+	Schedule:   "@every 30s",
+	Fn: func(ctx job.JobRuntime) error {
+		ctx.History.ResourceType = job.ResourceTypeUpstream
+		ctx.History.ResourceID = api.UpstreamConf.Host
+		var err error
+		ctx.History.SuccessCount, err = upstream.SyncArtifacts(ctx.Context, api.UpstreamConf, ReconcilePageSize)
+		if err != nil {
+			ctx.History.AddError(err.Error())
+		}
+		return err
 	},
 }
