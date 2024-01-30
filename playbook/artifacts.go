@@ -14,7 +14,7 @@ import (
 	"github.com/flanksource/incident-commander/api"
 )
 
-func saveArtifacts(ctx context.Context, playbookRunID uuid.UUID, generatedArtifacts []artifacts.Artifact) error {
+func saveArtifacts(ctx context.Context, playbookRunActionID uuid.UUID, generatedArtifacts []artifacts.Artifact) error {
 	if len(generatedArtifacts) == 0 {
 		return nil
 	}
@@ -38,10 +38,10 @@ func saveArtifacts(ctx context.Context, playbookRunID uuid.UUID, generatedArtifa
 	defer fs.Close()
 
 	for _, a := range generatedArtifacts {
-		a.Path = filepath.Join("playbooks", playbookRunID.String(), a.Path)
+		a.Path = filepath.Join("playbooks", playbookRunActionID.String(), a.Path)
 		artifact := models.Artifact{
-			PlaybookRunID: utils.Ptr(playbookRunID),
-			ConnectionID:  connection.ID,
+			PlaybookRunActionID: utils.Ptr(playbookRunActionID),
+			ConnectionID:        connection.ID,
 		}
 
 		if err := artifacts.SaveArtifact(ctx, fs, &artifact, a); err != nil {
