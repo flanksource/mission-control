@@ -1,11 +1,20 @@
 package db
 
 import (
+	"time"
+
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/google/uuid"
+	"github.com/patrickmn/go-cache"
 	"gorm.io/gorm/clause"
+)
+
+var (
+	componentSelectorCache = cache.New(cache.NoExpiration, cache.NoExpiration)
+
+	componentSelectorMutableCache = cache.New(time.Minute*5, time.Minute*5)
 )
 
 func GetTeamsWithComponentSelector(ctx context.Context) map[uuid.UUID][]api.ComponentSelector {
@@ -28,7 +37,16 @@ func GetTeamsWithComponentSelector(ctx context.Context) map[uuid.UUID][]api.Comp
 	return teamComponentMap
 }
 
-func GetComponentsWithSelector(ctx context.Context, selector api.ComponentSelector) []uuid.UUID {
+func GetComponentsWithSelector(ctx context.Context, selector api.ComponentSelector) ([]uuid.UUID, error) {
+	var cacheToUse = componentSelectorMutableCache
+	if len(selector.Labels) == 0 && len(selector.Types) == 0 {
+		cacheToUse = componentSelectorCache
+	}
+
+	if val, ok := cacheToUse.Get(selector.Hash()); ok {
+		return val.([]uuid.UUID), nil
+	}
+
 	var compIds []uuid.UUID
 	query := ctx.DB().Table("components").Where("deleted_at is null").Select("id")
 	if selector.Name != "" {
@@ -43,8 +61,14 @@ func GetComponentsWithSelector(ctx context.Context, selector api.ComponentSelect
 	if selector.Labels != nil {
 		query = query.Where("labels @> ?", selector.Labels)
 	}
-	query.Find(&compIds)
-	return compIds
+
+	if err := query.Find(&compIds).Error; err != nil {
+		return nil, err
+	}
+
+	cacheToUse.SetDefault(selector.Hash(), compIds)
+
+	return compIds, nil
 }
 
 func PersistTeamComponents(ctx context.Context, teamComps []api.TeamComponent) error {

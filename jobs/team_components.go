@@ -11,11 +11,15 @@ func TeamComponentOwnershipRun(ctx job.JobRuntime) error {
 	logger.Debugf("Sync team components")
 	teamComponentMap := db.GetTeamsWithComponentSelector(ctx.Context)
 	for teamID, compSelectors := range teamComponentMap {
-		teamComponents := teams.GetTeamComponentsFromSelectors(ctx.Context, teamID, compSelectors)
-		err := db.PersistTeamComponents(ctx.Context, teamComponents)
+		teamComponents, err := teams.GetTeamComponentsFromSelectors(ctx.Context, teamID, compSelectors)
 		if err != nil {
-			logger.Errorf("Error persisting team components: %v", err)
+			return err
+		}
+
+		if err := db.PersistTeamComponents(ctx.Context, teamComponents); err != nil {
+			return err
 		}
 	}
+
 	return nil
 }

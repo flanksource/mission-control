@@ -3,11 +3,14 @@ package api
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
+	"github.com/flanksource/commons/hash"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
+	"github.com/samber/lo"
 )
 
 type Component struct {
@@ -71,4 +74,26 @@ func (c ComponentSelector) String() string {
 	}
 	return strings.TrimSpace(s)
 
+}
+
+func (c ComponentSelector) Hash() string {
+	items := []string{
+		c.Name,
+		c.Namespace,
+		c.Selector,
+	}
+
+	labelkeys := lo.Keys(c.Labels)
+	sort.Slice(labelkeys, func(i, j int) bool { return labelkeys[i] < labelkeys[j] })
+	sort.Slice(c.Types, func(i, j int) bool { return c.Types[i] < c.Types[j] })
+
+	for _, k := range labelkeys {
+		items = append(items, fmt.Sprintf("%s=%s", k, c.Labels[k]))
+	}
+
+	for _, t := range c.Types {
+		items = append(items, t)
+	}
+
+	return hash.Sha256Hex(strings.Join(items, "|"))
 }
