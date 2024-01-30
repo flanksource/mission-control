@@ -99,7 +99,7 @@ var SyncArtifactData = &job.Job{
 	JobHistory: true,
 	Singleton:  false, // this job is safe to run concurrently
 	RunNow:     true,
-	Retention:  job.RetentionHour,
+	Retention:  job.Retention{Success: 1, Failed: 3, Age: 15 * time.Minute, Interval: 2 * time.Minute},
 	Name:       "SyncArtifactData",
 	Schedule:   "@every 30s",
 	Fn: func(ctx job.JobRuntime) error {
@@ -121,8 +121,12 @@ var SyncArtifactData = &job.Job{
 			}
 		}
 
+		// We're using a custom batch size here because this job locks that many records while it's pushing it to the upstream.
+		// It's run frequently and can run concurrently, so a small batch size is fine.
+		batchSize := 10
+
 		var err error
-		ctx.History.SuccessCount, err = upstream.SyncArtifactItems(ctx.Context, api.UpstreamConf, agentArtifactPath, ReconcilePageSize)
+		ctx.History.SuccessCount, err = upstream.SyncArtifactItems(ctx.Context, api.UpstreamConf, agentArtifactPath, batchSize)
 		if err != nil {
 			ctx.History.AddError(err.Error())
 		}

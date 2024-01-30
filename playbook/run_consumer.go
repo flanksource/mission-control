@@ -192,16 +192,14 @@ func RunConsumer(c postq.Context) (int, error) {
 		SELECT playbook_runs.*
 		FROM playbook_runs
 		INNER JOIN playbooks ON playbooks.id = playbook_runs.playbook_id
-		WHERE status = ?
-			AND scheduled_time <= NOW()
-			AND (playbooks.spec->'runsOn' @> ? OR playbooks.spec->'runsOn' IS NULL)
+		WHERE status = ? AND scheduled_time <= NOW()
 		ORDER BY scheduled_time
 		FOR UPDATE SKIP LOCKED
 		LIMIT 1
 	`
 
 	var runs []models.PlaybookRun
-	if err := tx.Raw(query, models.PlaybookRunStatusScheduled, fmt.Sprintf(`["%s"]`, runnerMain)).Find(&runs).Error; err != nil {
+	if err := tx.Raw(query, models.PlaybookRunStatusScheduled).Find(&runs).Error; err != nil {
 		return 0, err
 	}
 
