@@ -89,3 +89,25 @@ var SyncArtifactRecords = &job.Job{
 		return err
 	},
 }
+
+// SyncArtifactRecords pushes any unpushed artifact records to the upstream.
+// The actual artifacts aren't pushed by this job.
+var SyncArtifactData = &job.Job{
+	JobHistory: true,
+	Singleton:  true,
+	Retention:  job.RetentionHour,
+	Name:       "SyncArtifactData",
+	Schedule:   "@every 30s",
+	Fn: func(ctx job.JobRuntime) error {
+		ctx.History.ResourceType = job.ResourceTypeUpstream
+		ctx.History.ResourceID = api.UpstreamConf.Host
+
+		var agentArtifactPath string // TODO:
+		var err error
+		ctx.History.SuccessCount, err = upstream.SyncArtifactItems(ctx.Context, api.UpstreamConf, agentArtifactPath, ReconcilePageSize)
+		if err != nil {
+			ctx.History.AddError(err.Error())
+		}
+		return err
+	},
+}

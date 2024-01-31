@@ -13,6 +13,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/flanksource/incident-commander/api"
+	icArtifacts "github.com/flanksource/incident-commander/artifacts"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/playbook"
 	"github.com/flanksource/incident-commander/rbac"
@@ -30,6 +31,8 @@ func RegisterRoutes(e *echo.Echo) {
 	upstreamGroup.GET("/status/:agent_name", upstream.StatusHandler(api.TablesToReconcile))
 	upstreamGroup.GET("/canary/pull/:agent_name", PullCanaries)
 	upstreamGroup.GET("/scrapeconfig/pull/:agent_name", PullScrapeConfigs)
+
+	upstreamGroup.POST("/artifacts/:type/:id", artifactsPushHandler)
 
 	upstreamGroup.GET("/playbook-action", handlePlaybookActionRequest)
 }
@@ -115,4 +118,15 @@ func PullScrapeConfigs(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, scrapeConfigs)
+}
+
+func artifactsPushHandler(c echo.Context) error {
+	ctx := c.Request().Context().(context.Context)
+	artifactID := c.Param("id")
+
+	if err := icArtifacts.UploadArtifact(ctx, artifactID, c.Request().Body); err != nil {
+		return dutyAPI.WriteError(c, err)
+	}
+
+	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{Message: "ok"})
 }

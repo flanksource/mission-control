@@ -219,7 +219,6 @@ require (
 	gorm.io/driver/postgres v1.5.4 // indirect
 	gorm.io/driver/sqlserver v1.5.1 // indirect
 	gorm.io/plugin/dbresolver v1.4.2 // indirect
-	gorm.io/plugin/opentelemetry v0.1.4 // indirect
 	k8s.io/apiextensions-apiserver v0.28.3 // indirect
 	k8s.io/cli-runtime v0.28.2 // indirect
 	k8s.io/component-base v0.28.3 // indirect
@@ -325,7 +324,7 @@ require (
 
 // replace github.com/flanksource/commons => ../commons
 
-// replace github.com/flanksource/duty => ../duty
+replace github.com/flanksource/duty => ../duty
 
 // replace github.com/flanksource/postq => ../postq
 
