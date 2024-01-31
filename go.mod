@@ -12,7 +12,7 @@ require (
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.25.0 // indirect
 	github.com/flanksource/commons v1.21.2
-	github.com/flanksource/duty v1.0.313
+	github.com/flanksource/duty v1.0.316
 	github.com/flanksource/gomplate/v3 v3.24.0
 	github.com/flanksource/kopper v1.0.7
 	github.com/flanksource/postq v0.1.3
@@ -219,7 +219,6 @@ require (
 	gorm.io/driver/postgres v1.5.4 // indirect
 	gorm.io/driver/sqlserver v1.5.1 // indirect
 	gorm.io/plugin/dbresolver v1.4.2 // indirect
-	gorm.io/plugin/opentelemetry v0.1.4 // indirect
 	k8s.io/apiextensions-apiserver v0.28.3 // indirect
 	k8s.io/cli-runtime v0.28.2 // indirect
 	k8s.io/component-base v0.28.3 // indirect
