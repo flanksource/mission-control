@@ -4,10 +4,13 @@ import (
 	"fmt"
 	"time"
 
+	pkgArtifacts "github.com/flanksource/artifacts"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/job"
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/artifacts"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -90,8 +93,8 @@ var SyncArtifactRecords = &job.Job{
 	},
 }
 
-// agentArtifactPath is the local path to the agent artifact store.
-var agentArtifactPath string
+// agentArtifactConnection is the cached agent artifact store connection
+var agentArtifactConnection *models.Connection
 
 // SyncArtifactRecords pushes any unpushed artifact records to the upstream.
 // The actual artifacts aren't pushed by this job.
@@ -106,7 +109,7 @@ var SyncArtifactData = &job.Job{
 		ctx.History.ResourceType = job.ResourceTypeUpstream
 		ctx.History.ResourceID = api.UpstreamConf.Host
 
-		if agentArtifactPath == "" {
+		if agentArtifactConnection == nil {
 			artifactConnection, err := ctx.HydrateConnectionByURL(api.DefaultArtifactConnection)
 			if err != nil {
 				return err
@@ -114,22 +117,25 @@ var SyncArtifactData = &job.Job{
 				return fmt.Errorf("artifact connection (%s) not found", api.DefaultArtifactConnection)
 			}
 
-			if val, ok := artifactConnection.Properties["path"]; !ok {
-				return fmt.Errorf("artifact connection is invalid. path not set")
-			} else {
-				agentArtifactPath = val
-			}
+			agentArtifactConnection = artifactConnection
+		}
+
+		agentArtifactStore, err := pkgArtifacts.GetFSForConnection(ctx.Context, *agentArtifactConnection)
+		if err != nil {
+			return fmt.Errorf("failed to get artifact filesystem from connection: %w", err)
+		} else if agentArtifactStore == nil {
+			return fmt.Errorf("a filesystem for the connection (%s) of type (%s) was not found", api.DefaultArtifactConnection, agentArtifactConnection.Type)
 		}
 
 		// We're using a custom batch size here because this job locks that many records while it's pushing it to the upstream.
 		// It's run frequently and can run concurrently, so a small batch size is fine.
 		batchSize := 10
 
-		var err error
-		ctx.History.SuccessCount, err = upstream.SyncArtifactItems(ctx.Context, api.UpstreamConf, agentArtifactPath, batchSize)
+		ctx.History.SuccessCount, err = artifacts.SyncArtifactItems(ctx.Context, api.UpstreamConf, agentArtifactStore, batchSize)
 		if err != nil {
 			ctx.History.AddError(err.Error())
 		}
+
 		return err
 	},
 }
