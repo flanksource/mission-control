@@ -6,6 +6,7 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/job"
 	dutyModels "github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db/models"
 )
@@ -135,7 +136,7 @@ func matches(rule *api.IncidentRuleSpec, component dutyModels.Component) bool {
 	return false
 }
 
-func matchesSelector(selector api.ComponentSelector, component dutyModels.Component) bool {
+func matchesSelector(selector types.ResourceSelector, component dutyModels.Component) bool {
 	if selector.Name != "" && selector.Name != component.Name {
 		return false
 	}

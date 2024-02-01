@@ -3,14 +3,15 @@ package db
 import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/google/uuid"
 	"gorm.io/gorm/clause"
 )
 
-func GetTeamsWithComponentSelector(ctx context.Context) map[uuid.UUID][]api.ComponentSelector {
+func GetTeamsWithComponentSelector(ctx context.Context) map[uuid.UUID][]types.ResourceSelector {
 	var teams []api.Team
-	var teamComponentMap = make(map[uuid.UUID][]api.ComponentSelector)
+	var teamComponentMap = make(map[uuid.UUID][]types.ResourceSelector)
 	err := ctx.DB().Table("teams").Where("spec::jsonb ? 'components';").Find(&teams).Error
 	if err != nil {
 		logger.Errorf("error fetching the teams with components: %v", err)
@@ -26,25 +27,6 @@ func GetTeamsWithComponentSelector(ctx context.Context) map[uuid.UUID][]api.Comp
 		teamComponentMap[team.ID] = teamSpec.Components
 	}
 	return teamComponentMap
-}
-
-func GetComponentsWithSelector(ctx context.Context, selector api.ComponentSelector) []uuid.UUID {
-	var compIds []uuid.UUID
-	query := ctx.DB().Table("components").Where("deleted_at is null").Select("id")
-	if selector.Name != "" {
-		query = query.Where("name = ?", selector.Name)
-	}
-	if selector.Namespace != "" {
-		query = query.Where("namespace = ?", selector.Namespace)
-	}
-
-	query = selector.Types.Where(query, "type")
-
-	if selector.Labels != nil {
-		query = query.Where("labels @> ?", selector.Labels)
-	}
-	query.Find(&compIds)
-	return compIds
 }
 
 func PersistTeamComponents(ctx context.Context, teamComps []api.TeamComponent) error {
