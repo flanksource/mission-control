@@ -77,7 +77,7 @@ var _ = ginkgo.Describe("Incident Rule", ginkgo.Ordered, func() {
 				Filter: api.Filter{
 					Status: []string{string(types.ComponentStatusUnhealthy), string(types.ComponentStatusError)},
 				},
-				Components: []api.ComponentSelector{{Namespace: namespace}},
+				Components: []types.ResourceSelector{{Namespace: namespace}},
 				Template: api.IncidentTemplate{
 					Description: incidentDescription,
 				},

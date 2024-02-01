@@ -2,15 +2,10 @@ package api
 
 import (
 	"encoding/json"
-	"fmt"
-	"sort"
-	"strings"
 	"time"
 
-	"github.com/flanksource/commons/hash"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
-	"github.com/samber/lo"
 )
 
 type Component struct {
@@ -44,56 +39,4 @@ func (c Component) AsMap() map[string]any {
 	b, _ := json.Marshal(&c)
 	_ = json.Unmarshal(b, &m)
 	return m
-}
-
-// +kubebuilder:object:generate=true
-type ComponentSelector struct {
-	Name      string            `json:"name,omitempty"`
-	Namespace string            `json:"namespace,omitempty"`
-	Selector  string            `json:"selector,omitempty"`
-	Labels    map[string]string `json:"labels,omitempty"`
-	Types     Items             `json:"types,omitempty"`
-}
-
-func (c ComponentSelector) String() string {
-	s := ""
-	if c.Name != "" {
-		s += " name=" + c.Name
-	}
-	if c.Namespace != "" {
-		s += " namespace=" + c.Namespace
-	}
-	if c.Selector != "" {
-		s += " " + c.Selector
-	}
-	if c.Labels != nil {
-		s += fmt.Sprintf(" labels=%s", c.Labels)
-	}
-	if len(c.Types) > 0 {
-		s += " types=" + c.Types.String()
-	}
-	return strings.TrimSpace(s)
-
-}
-
-func (c ComponentSelector) Hash() string {
-	items := []string{
-		c.Name,
-		c.Namespace,
-		c.Selector,
-	}
-
-	labelkeys := lo.Keys(c.Labels)
-	sort.Slice(labelkeys, func(i, j int) bool { return labelkeys[i] < labelkeys[j] })
-	sort.Slice(c.Types, func(i, j int) bool { return c.Types[i] < c.Types[j] })
-
-	for _, k := range labelkeys {
-		items = append(items, fmt.Sprintf("%s=%s", k, c.Labels[k]))
-	}
-
-	for _, t := range c.Types {
-		items = append(items, t)
-	}
-
-	return hash.Sha256Hex(strings.Join(items, "|"))
 }

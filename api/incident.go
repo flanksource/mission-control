@@ -227,11 +227,11 @@ func (t IncidentTemplate) GenerateIncident() Incident {
 
 // +kubebuilder:object:generate=true
 type IncidentRuleSpec struct {
-	Name            string              `json:"name,omitempty"`
-	Components      []ComponentSelector `json:"components,omitempty"`
-	Template        IncidentTemplate    `json:"template,omitempty"`
-	Filter          Filter              `json:"filter,omitempty"`
-	AutoAssignOwner bool                `json:"autoAssignOwner,omitempty"`
+	Name            string                   `json:"name,omitempty"`
+	Components      []types.ResourceSelector `json:"components,omitempty"`
+	Template        IncidentTemplate         `json:"template,omitempty"`
+	Filter          Filter                   `json:"filter,omitempty"`
+	AutoAssignOwner bool                     `json:"autoAssignOwner,omitempty"`
 	// order of processing rules
 	Priority int `json:"priority,omitempty"`
 	// stop processing other incident rules, when matched

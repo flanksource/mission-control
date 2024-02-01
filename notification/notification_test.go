@@ -52,7 +52,7 @@ var _ = ginkgo.Describe("Notification on incident creation", ginkgo.Ordered, fun
 
 	ginkgo.It("should create a team", func() {
 		teamSpec := api.TeamSpec{
-			Components: []api.ComponentSelector{{Name: "logistics"}},
+			Components: []types.ResourceSelector{{Name: "logistics"}},
 			Notifications: []api.NotificationConfig{
 				{
 					URL: fmt.Sprintf("generic+%s", webhookEndpoint),
