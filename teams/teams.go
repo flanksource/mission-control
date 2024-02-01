@@ -7,13 +7,11 @@ import (
 	"github.com/flanksource/commons/hash"
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
-	dutyModels "github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db/models"
 	"github.com/google/uuid"
 	"github.com/patrickmn/go-cache"
-	"github.com/samber/lo"
 )
 
 var teamSpecCache = cache.New(time.Hour*1, time.Hour*1)
@@ -22,12 +20,12 @@ func GetTeamComponentsFromSelectors(ctx context.Context, teamID uuid.UUID, compo
 	var selectedComponents = make(map[string][]uuid.UUID)
 	for _, compSelector := range componentSelectors {
 		h, _ := hash.JSONMD5Hash(compSelector)
-		foundIDs, err := duty.FindComponents(ctx, []types.ResourceSelector{compSelector}, duty.PickColumns("id"))
+		foundIDs, err := duty.FindComponentIDs(ctx, compSelector)
 		if err != nil {
 			return nil, err
 		}
 
-		selectedComponents[h] = lo.Map(foundIDs, func(c dutyModels.Component, _ int) uuid.UUID { return c.ID })
+		selectedComponents[h] = foundIDs
 	}
 
 	var teamComps []api.TeamComponent
