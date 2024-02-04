@@ -4,10 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	pkgArtifacts "github.com/flanksource/artifacts"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/job"
-	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/artifacts"
@@ -93,45 +91,25 @@ var SyncArtifactRecords = &job.Job{
 	},
 }
 
-// agentArtifactConnection is the cached agent artifact store connection
-var agentArtifactConnection *models.Connection
-
 // SyncArtifactRecords pushes any unpushed artifact records to the upstream.
 // The actual artifacts aren't pushed by this job.
 var SyncArtifactData = &job.Job{
 	JobHistory: true,
 	Singleton:  false, // this job is safe to run concurrently
 	RunNow:     true,
-	Retention:  job.Retention{Success: 1, Failed: 3, Age: 15 * time.Minute, Interval: 2 * time.Minute},
+	Retention:  job.RetentionHour,
 	Name:       "SyncArtifactData",
 	Schedule:   "@every 30s",
 	Fn: func(ctx job.JobRuntime) error {
 		ctx.History.ResourceType = job.ResourceTypeUpstream
 		ctx.History.ResourceID = api.UpstreamConf.Host
 
-		if agentArtifactConnection == nil {
-			artifactConnection, err := ctx.HydrateConnectionByURL(api.DefaultArtifactConnection)
-			if err != nil {
-				return err
-			} else if artifactConnection == nil {
-				return fmt.Errorf("artifact connection (%s) not found", api.DefaultArtifactConnection)
-			}
-
-			agentArtifactConnection = artifactConnection
-		}
-
-		agentArtifactStore, err := pkgArtifacts.GetFSForConnection(ctx.Context, *agentArtifactConnection)
-		if err != nil {
-			return fmt.Errorf("failed to get artifact filesystem from connection: %w", err)
-		} else if agentArtifactStore == nil {
-			return fmt.Errorf("a filesystem for the connection (%s) of type (%s) was not found", api.DefaultArtifactConnection, agentArtifactConnection.Type)
-		}
-
 		// We're using a custom batch size here because this job locks that many records while it's pushing it to the upstream.
 		// It's run frequently and can run concurrently, so a small batch size is fine.
 		batchSize := 10
 
-		ctx.History.SuccessCount, err = artifacts.SyncArtifactItems(ctx.Context, api.UpstreamConf, agentArtifactStore, batchSize)
+		var err error
+		ctx.History.SuccessCount, err = artifacts.SyncArtifactItems(ctx.Context, api.UpstreamConf, batchSize)
 		if err != nil {
 			ctx.History.AddError(err.Error())
 		}
