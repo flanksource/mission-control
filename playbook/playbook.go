@@ -59,7 +59,11 @@ func validateAndSavePlaybookRun(ctx context.Context, playbook *models.Playbook, 
 	if err := req.setDefaults(ctx, spec, run); err != nil {
 		return nil, fmt.Errorf("failed to set defaults: %v", err)
 	}
-	run.Parameters = types.JSONStringMap(req.Params)
+	run.Parameters = types.JSONStringMap{}
+
+	for k, v := range req.Params {
+		run.Parameters[k] = fmt.Sprintf("%v", v)
+	}
 
 	if err := savePlaybookRun(ctx, playbook, &run); err != nil {
 		return nil, fmt.Errorf("failed to create playbook run: %v", err)
