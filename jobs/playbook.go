@@ -11,7 +11,8 @@ import (
 // from the upstream
 var PullPlaybookActions = &job.Job{
 	Name:       "PullPlaybookActions",
-	Schedule:   "@every 10s",
+	Schedule:   "@every 60s",
+	Retention:  job.RetentionFailed,
 	JobHistory: true,
 	RunNow:     true,
 	Singleton:  false,
@@ -31,7 +32,8 @@ var PullPlaybookActions = &job.Job{
 // PullPlaybookActions pushes actions, that have been fully run, to the upstream
 var PushPlaybookActions = &job.Job{
 	Name:       "PushPlaybookActions",
-	Schedule:   "@every 10s",
+	Schedule:   "@every 60s",
+	Retention:  job.RetentionFailed,
 	JobHistory: true,
 	RunNow:     true,
 	Singleton:  false,

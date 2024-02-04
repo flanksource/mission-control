@@ -46,9 +46,16 @@ docker-push-%:
 docker-push:
 	docker push ${IMG}
 
+
+.PHONY: tidy
+tidy:
+	go mod tidy
+	git add go.mod go.sum
+	cd hack/generate-schemas && go mod tidy && 	git add go.mod go.sum
+
 .PHONY: compress
 compress: .bin/upx
-	upx -5 ./.bin/$(NAME)_linux_amd64 ./.bin/$(NAME)_linux_arm64 ./.bin/$(NAME)_darwin_amd64 ./.bin/$(NAME)_darwin_arm64 ./.bin/$(NAME).exe
+	upx -5 ./.bin/$(NAME)_linux_amd64 ./.bin/$(NAME)_linux_arm64
 
 .PHONY: linux
 linux:

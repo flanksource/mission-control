@@ -171,7 +171,7 @@ var _ = ginkgo.Describe("Playbook", ginkgo.Ordered, func() {
 			run := RunParams{
 				ID:       configPlaybook.ID,
 				ConfigID: dummy.EKSCluster.ID,
-				Params: map[string]string{
+				Params: map[string]any{
 					"path": tempPath,
 					// "footer": "" // exclude this so we use the default value
 				},
@@ -280,7 +280,7 @@ var _ = ginkgo.Describe("Playbook", ginkgo.Ordered, func() {
 		ginkgo.It("should execute the playbook", func() {
 			run, err = validateAndSavePlaybookRun(DefaultContext, &playbook, RunParams{
 				ConfigID: dummy.EKSCluster.ID,
-				Params: map[string]string{
+				Params: map[string]any{
 					"path":     dataFile,
 					"log_path": logFile,
 				},
@@ -378,7 +378,7 @@ var _ = ginkgo.Describe("Playbook", ginkgo.Ordered, func() {
 		ginkgo.It("should store playbook run via API", func() {
 			run, err = validateAndSavePlaybookRun(DefaultContext, &playbook, RunParams{
 				ConfigID: dummy.EKSCluster.ID,
-				Params: map[string]string{
+				Params: map[string]any{
 					"path": dataFile,
 				},
 			})
