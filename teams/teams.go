@@ -5,8 +5,8 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/hash"
-	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db/models"
@@ -20,7 +20,7 @@ func GetTeamComponentsFromSelectors(ctx context.Context, teamID uuid.UUID, compo
 	var selectedComponents = make(map[string][]uuid.UUID)
 	for _, compSelector := range componentSelectors {
 		h, _ := hash.JSONMD5Hash(compSelector)
-		foundIDs, err := duty.FindComponentIDs(ctx, compSelector)
+		foundIDs, err := query.FindComponentIDs(ctx, compSelector)
 		if err != nil {
 			return nil, err
 		}

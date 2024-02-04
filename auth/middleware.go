@@ -9,8 +9,8 @@ import (
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/hash"
 	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/query"
 	"github.com/flanksource/gomplate/v3"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/rbac"
@@ -143,7 +143,7 @@ func mapIDsToRoles(ctx context.Context, session *client.Session, uid uuid.UUID) 
 	}
 
 	for _, teamName := range result.Teams {
-		team, err := duty.FindTeam(ctx, teamName)
+		team, err := query.FindTeam(ctx, teamName)
 		if err != nil {
 			logger.Errorf("error finding team(name: %s) %v", team, err)
 			continue
