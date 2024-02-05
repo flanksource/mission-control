@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/query"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/google/uuid"
@@ -33,7 +33,7 @@ func PersistNotificationFromCRD(ctx context.Context, obj *v1.Notification) error
 
 	switch {
 	case obj.Spec.To.Person != "":
-		person, err := duty.FindPerson(ctx, obj.Spec.To.Person)
+		person, err := query.FindPerson(ctx, obj.Spec.To.Person)
 		if err != nil {
 			return err
 		} else if person == nil {
@@ -43,7 +43,7 @@ func PersistNotificationFromCRD(ctx context.Context, obj *v1.Notification) error
 		dbObj.PersonID = &person.ID
 
 	case obj.Spec.To.Team != "":
-		team, err := duty.FindTeam(ctx, obj.Spec.To.Team)
+		team, err := query.FindTeam(ctx, obj.Spec.To.Team)
 		if err != nil {
 			return err
 		} else if team == nil {

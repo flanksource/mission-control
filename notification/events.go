@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/query"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/events"
@@ -126,28 +126,28 @@ func getEnvForEvent(ctx context.Context, event postq.Event, properties map[strin
 	if strings.HasPrefix(event.Name, "check.") {
 		checkID := properties["id"]
 
-		check, err := duty.FindCachedCheck(ctx, checkID)
+		check, err := query.FindCachedCheck(ctx, checkID)
 		if err != nil {
 			return nil, fmt.Errorf("error finding check: %v", err)
 		} else if check == nil {
 			return nil, fmt.Errorf("check(id=%s) not found", checkID)
 		}
 
-		canary, err := duty.FindCachedCanary(ctx, check.CanaryID.String())
+		canary, err := query.FindCachedCanary(ctx, check.CanaryID.String())
 		if err != nil {
 			return nil, fmt.Errorf("error finding canary: %v", err)
 		} else if canary == nil {
 			return nil, fmt.Errorf("canary(id=%s) not found", check.CanaryID)
 		}
 
-		agent, err := duty.FindCachedAgent(ctx, check.AgentID.String())
+		agent, err := query.FindCachedAgent(ctx, check.AgentID.String())
 		if err != nil {
 			return nil, fmt.Errorf("error finding agent: %v", err)
 		} else if agent != nil {
 			env["agent"] = agent.AsMap()
 		}
 
-		summary, err := duty.CheckSummary(ctx, checkID)
+		summary, err := query.CheckSummaryByID(ctx, checkID)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get check summary: %w", err)
 		} else if summary != nil {
@@ -170,7 +170,7 @@ func getEnvForEvent(ctx context.Context, event postq.Event, properties map[strin
 	if event.Name == "incident.created" || strings.HasPrefix(event.Name, "incident.status.") {
 		incidentID := properties["id"]
 
-		incident, err := duty.FindCachedIncident(ctx, incidentID)
+		incident, err := query.GetCachedIncident(ctx, incidentID)
 		if err != nil {
 			return nil, fmt.Errorf("error finding incident(id=%s): %v", incidentID, err)
 		} else if incident == nil {
@@ -190,7 +190,7 @@ func getEnvForEvent(ctx context.Context, event postq.Event, properties map[strin
 			return nil, fmt.Errorf("responder(id=%s) not found", responderID)
 		}
 
-		incident, err := duty.FindCachedIncident(ctx, responder.IncidentID.String())
+		incident, err := query.GetCachedIncident(ctx, responder.IncidentID.String())
 		if err != nil {
 			return nil, fmt.Errorf("error finding incident(id=%s): %v", responder.IncidentID, err)
 		} else if incident == nil {
@@ -208,14 +208,14 @@ func getEnvForEvent(ctx context.Context, event postq.Event, properties map[strin
 			return nil, fmt.Errorf("error getting comment (id=%s)", properties["id"])
 		}
 
-		incident, err := duty.FindCachedIncident(ctx, comment.IncidentID.String())
+		incident, err := query.GetCachedIncident(ctx, comment.IncidentID.String())
 		if err != nil {
 			return nil, fmt.Errorf("error finding incident(id=%s): %v", comment.IncidentID, err)
 		} else if incident == nil {
 			return nil, fmt.Errorf("incident(id=%s) not found", comment.IncidentID)
 		}
 
-		author, err := duty.FindPerson(ctx, comment.CreatedBy.String())
+		author, err := query.FindPerson(ctx, comment.CreatedBy.String())
 		if err != nil {
 			return nil, fmt.Errorf("error getting comment author (id=%s)", comment.CreatedBy)
 		} else if author == nil {
@@ -241,7 +241,7 @@ func getEnvForEvent(ctx context.Context, event postq.Event, properties map[strin
 			return nil, err
 		}
 
-		incident, err := duty.FindCachedIncident(ctx, hypotheses.IncidentID.String())
+		incident, err := query.GetCachedIncident(ctx, hypotheses.IncidentID.String())
 		if err != nil {
 			return nil, fmt.Errorf("error finding incident(id=%s): %v", hypotheses.IncidentID, err)
 		} else if incident == nil {
@@ -257,14 +257,14 @@ func getEnvForEvent(ctx context.Context, event postq.Event, properties map[strin
 	if strings.HasPrefix(event.Name, "component.status.") {
 		componentID := properties["id"]
 
-		component, err := duty.FindCachedComponent(ctx, componentID)
+		component, err := query.GetCachedComponent(ctx, componentID)
 		if err != nil {
 			return nil, fmt.Errorf("error finding component(id=%s): %v", componentID, err)
 		} else if component == nil {
 			return nil, fmt.Errorf("component(id=%s) not found", componentID)
 		}
 
-		agent, err := duty.FindCachedAgent(ctx, component.AgentID.String())
+		agent, err := query.FindCachedAgent(ctx, component.AgentID.String())
 		if err != nil {
 			return nil, fmt.Errorf("error finding agent: %v", err)
 		} else if agent != nil {
