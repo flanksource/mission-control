@@ -18,7 +18,20 @@ spec:
       default: production
     - name: logLevel
       label: Log level
+      type: list
+      properties:
+        options:
+          - label: info
+            value: info
+          - label: warning
+            value: warning
+          - label: error
+            value: error
       default: warning
+    - name: tags
+      label: Should tag or not
+      type: checkbox
+      default: 'false'
   actions:
     - name: Invoke github workflow
       github:
@@ -35,5 +48,6 @@ spec:
             input: |
               {
                 "environment": "{{.params.environment}}",
-                "logLevel": "{{.params.logLevel}}"
+                "logLevel": "{{.params.logLevel}}",
+                "tags": "{{.params.tags}}"
               }

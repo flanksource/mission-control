@@ -1368,16 +1368,28 @@ spec:
                     icon:
                       type: string
                     label:
+                      description: Label shown on the UI
                       type: string
                     name:
+                      description: Name is the key for this parameter. It's used to
+                        address the parameter on templates.
                       type: string
                     properties:
-                      additionalProperties:
-                        type: string
                       type: object
+                      x-kubernetes-preserve-unknown-fields: true
                     required:
                       type: boolean
                     type:
+                      enum:
+                      - check
+                      - checkbox
+                      - code
+                      - component
+                      - config
+                      - list
+                      - people
+                      - team
+                      - text
                       type: string
                   required:
                   - label
