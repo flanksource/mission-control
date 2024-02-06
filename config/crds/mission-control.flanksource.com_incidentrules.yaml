@@ -63,6 +63,11 @@ spec:
                         Additionally, the special "self" value can be used to select
                         resources without an agent.
                       type: string
+                    cache:
+                      description: Cache directives 'no-cache' (should not fetch from
+                        cache but can be cached) 'no-store' (should not cache) 'max-age=X'
+                        (cache for X duration)
+                      type: string
                     fieldSelector:
                       type: string
                     id:

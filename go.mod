@@ -12,7 +12,7 @@ require (
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.25.0 // indirect
 	github.com/flanksource/commons v1.22.0
-	github.com/flanksource/duty v1.0.326
+	github.com/flanksource/duty v1.0.331
 	github.com/flanksource/gomplate/v3 v3.24.0
 	github.com/flanksource/kopper v1.0.7
 	github.com/flanksource/postq v0.1.3
@@ -328,7 +328,7 @@ require (
 
 // replace github.com/flanksource/commons => ../commons
 
-// replace github.com/flanksource/duty => ../duty
+// replace github.com/flanksource/duty => ../du31
 
 // replace github.com/flanksource/postq => ../postq
 

@@ -1,0 +1,39 @@
+---
+# Example workflow here: https://docs.github.com/en/actions/using-workflows/events-that-trigger-workflows#providing-inputs
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: invoke-release-action
+  namespace: default
+spec:
+  parameters:
+    - name: repo
+      label: The repository name
+      default: duty
+    - name: branch
+      label: Branch to run the workflow on
+      default: main
+    - name: environment
+      label: Environment to run the release on
+      default: production
+    - name: logLevel
+      label: Log level
+      default: warning
+  actions:
+    - name: Invoke github workflow
+      github:
+        username: flanksource
+        repo: '{{.params.repo}}'
+        token:
+          valueFrom:
+            secretKeyRef:
+              name: github
+              key: token
+        workflows:
+          - id: release.yaml
+            ref: '{{.params.branch}}'
+            input: |
+              {
+                "environment": "{{.params.environment}}",
+                "logLevel": "{{.params.logLevel}}"
+              }

@@ -74,6 +74,30 @@ type GitOpsAction struct {
 	Files []GitOpsActionFile `yaml:"files,omitempty" json:"files,omitempty" template:"true"`
 }
 
+type GithubWorkflow struct {
+	// Id is the workflow id or the workflow file name (eg: main.yaml)
+	ID string `yaml:"id" json:"id"`
+
+	// Ref is the git reference for the workflow.
+	// The reference can be a branch or tag name.
+	// 	Defaults to "main".
+	Ref string `yaml:"ref,omitempty" json:"ref,omitempty" template:"true"`
+
+	// Input is the optional input keys and values, in JSON format, configured in the workflow file.
+	Input string `yaml:"input,omitempty" json:"input,omitempty" template:"true"`
+}
+
+type GithubAction struct {
+	// Repo is the name of the repository without the .git extension
+	Repo string `yaml:"repo" json:"repo" template:"true"`
+	// Username is the account owner of the repository. The name is not case sensitive
+	Username string `yaml:"username" json:"username" template:"true"`
+	// Token is the personal access token
+	Token types.EnvVar `yaml:"token" json:"token"`
+	// Workflows is the list of github workflows to invoke
+	Workflows []GithubWorkflow `yaml:"workflows,omitempty" json:"workflows,omitempty" template:"true"`
+}
+
 type PodAction struct {
 	// Name is name of the pod that'll be created
 	Name string `yaml:"name" json:"name"`
@@ -337,6 +361,7 @@ type PlaybookAction struct {
 
 	Exec         *ExecAction         `json:"exec,omitempty" yaml:"exec,omitempty" template:"true"`
 	GitOps       *GitOpsAction       `json:"gitops,omitempty" yaml:"gitops,omitempty" template:"true"`
+	Github       *GithubAction       `json:"github,omitempty" yaml:"github,omitempty" template:"true"`
 	HTTP         *HTTPAction         `json:"http,omitempty" yaml:"http,omitempty" template:"true"`
 	SQL          *SQLAction          `json:"sql,omitempty" yaml:"sql,omitempty" template:"true"`
 	Pod          *PodAction          `json:"pod,omitempty" yaml:"pod,omitempty" template:"true"`

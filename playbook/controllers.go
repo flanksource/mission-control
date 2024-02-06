@@ -49,8 +49,8 @@ func (r *RunParams) valid() error {
 		providedCount++
 	}
 
-	if providedCount != 1 {
-		return fmt.Errorf("provide exactly one of config_id, component_id, or check_id")
+	if providedCount > 1 {
+		return fmt.Errorf("provide none or exactly one of config_id, component_id, or check_id")
 	}
 
 	return nil
