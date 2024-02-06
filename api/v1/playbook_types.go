@@ -22,17 +22,36 @@ type PlaybookResourceFilter struct {
 	Tags map[string]string `json:"tags,omitempty" yaml:"tags,omitempty"`
 }
 
+const (
+	PlaybookParameterTypeCheck     = "check"
+	PlaybookParameterTypeCheckbox  = "checkbox"
+	PlaybookParameterTypeCode      = "code"
+	PlaybookParameterTypeComponent = "component"
+	PlaybookParameterTypeConfig    = "config"
+	PlaybookParameterTypeList      = "list"
+	PlaybookParameterTypePeople    = "people"
+	PlaybookParameterTypeTeam      = "team"
+	PlaybookParameterTypeText      = "text"
+)
+
 // PlaybookParameter defines a parameter that a playbook needs to run.
 type PlaybookParameter struct {
+	// Name is the key for this parameter.
+	// It's used to address the parameter on templates.
 	Name string `json:"name" yaml:"name"`
 	// Specify the default value of the parameter. It is templatable.
-	Default     string            `json:"default,omitempty" yaml:"default,omitempty" template:"true"`
-	Label       string            `json:"label" yaml:"label"`
-	Required    bool              `json:"required,omitempty" yaml:"required,omitempty"`
-	Icon        string            `json:"icon,omitempty" yaml:"icon,omitempty"`
-	Description string            `json:"description,omitempty" yaml:"description,omitempty"`
-	Type        string            `json:"type,omitempty" yaml:"type,omitempty"`
-	Properties  map[string]string `json:"properties,omitempty" yaml:"properties,omitempty"`
+	Default string `json:"default,omitempty" yaml:"default,omitempty" template:"true"`
+	// Label shown on the UI
+	Label       string `json:"label" yaml:"label"`
+	Required    bool   `json:"required,omitempty" yaml:"required,omitempty"`
+	Icon        string `json:"icon,omitempty" yaml:"icon,omitempty"`
+	Description string `json:"description,omitempty" yaml:"description,omitempty"`
+	// +kubebuilder:validation:Enum=check;checkbox;code;component;config;list;people;team;text
+	Type string `json:"type,omitempty" yaml:"type,omitempty"`
+	// +kubebuilder:validation:Schemaless
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Type=object
+	Properties json.RawMessage `json:"properties,omitempty" yaml:"properties,omitempty"`
 }
 
 type PlaybookApprovers struct {
