@@ -439,6 +439,21 @@ func executeAction(ctx context.Context, playbookID, runID uuid.UUID, runAction m
 		}
 	}
 
+	if actionSpec.Github != nil {
+		var e actions.Github
+		res, err := e.Run(ctx, *actionSpec.Github)
+		if err != nil {
+			return nil, err
+		}
+
+		jsonData, err := json.Marshal(res)
+		if err != nil {
+			return nil, err
+		}
+
+		return &executeActionResult{data: jsonData}, nil
+	}
+
 	if actionSpec.Exec != nil {
 		var e actions.ExecAction
 		res, err := e.Run(ctx, *actionSpec.Exec)

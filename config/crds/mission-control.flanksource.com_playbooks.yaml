@@ -572,6 +572,88 @@ spec:
                       required:
                       - script
                       type: object
+                    github:
+                      properties:
+                        repo:
+                          description: Repo is the name of the repository without
+                            the .git extension
+                          type: string
+                        token:
+                          description: Token is the personal access token
+                          properties:
+                            name:
+                              type: string
+                            value:
+                              type: string
+                            valueFrom:
+                              properties:
+                                configMapKeyRef:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      type: string
+                                  required:
+                                  - key
+                                  type: object
+                                helmRef:
+                                  properties:
+                                    key:
+                                      description: Key is a JSONPath expression used
+                                        to fetch the key from the merged JSON.
+                                      type: string
+                                    name:
+                                      type: string
+                                  required:
+                                  - key
+                                  type: object
+                                secretKeyRef:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      type: string
+                                  required:
+                                  - key
+                                  type: object
+                                serviceAccount:
+                                  description: ServiceAccount specifies the service
+                                    account whose token should be fetched
+                                  type: string
+                              type: object
+                          type: object
+                        username:
+                          description: Username is the account owner of the repository.
+                            The name is not case sensitive
+                          type: string
+                        workflows:
+                          description: Workflows is the list of github workflows to
+                            invoke
+                          items:
+                            properties:
+                              id:
+                                description: 'Id is the workflow id or the workflow
+                                  file name (eg: main.yaml)'
+                                type: string
+                              input:
+                                description: Input is the optional input keys and
+                                  values, in JSON format, configured in the workflow
+                                  file.
+                                type: string
+                              ref:
+                                description: Ref is the git reference for the workflow.
+                                  The reference can be a branch or tag name. Defaults
+                                  to "main".
+                                type: string
+                            required:
+                            - id
+                            type: object
+                          type: array
+                      required:
+                      - repo
+                      - token
+                      - username
+                      type: object
                     gitops:
                       properties:
                         commit:
