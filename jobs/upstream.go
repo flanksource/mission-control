@@ -26,6 +26,7 @@ var SyncWithUpstream = &job.Job{
 	Schedule:   "@every 8h",
 	Retention:  job.Retention3Day,
 	JobHistory: true,
+	RunNow:     true,
 	Fn: func(ctx job.JobRuntime) error {
 		ctx.History.ResourceType = job.ResourceTypeUpstream
 		ctx.History.ResourceID = api.UpstreamConf.Host
