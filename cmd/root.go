@@ -132,7 +132,7 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&api.UpstreamConf.Host, "upstream-host", os.Getenv("UPSTREAM_HOST"), "URL for Mission Control central instance")
 	flags.StringVar(&api.UpstreamConf.Username, "upstream-user", upstreamUserDefault, "upstream username")
 	flags.StringVar(&api.UpstreamConf.Password, "upstream-password", os.Getenv("UPSTREAM_PASSWORD"), "upstream password")
-	flags.StringVar(&api.UpstreamConf.AgentName, "upstream-name", os.Getenv("UPSTREAM_NAME"), "name of the cluster")
+	flags.StringVar(&api.UpstreamConf.AgentName, "upstream-agent-name", os.Getenv("AGENT_NAME"), "name of the cluster")
 	flags.StringSliceVar(&api.UpstreamConf.Labels, "upstream-labels", strings.Split(os.Getenv("UPSTREAM_LABELS"), ","), `labels in the format: "key1=value1,key2=value2"`)
 	flags.IntVar(&jobs.ReconcilePageSize, "upstream-page-size", upstreamPageSizeDefault, "upstream reconciliation page size")
 	flags.DurationVar(&jobs.ReconcileMaxAge, "upstream-max-age", upstreamMaxAgeDefault, "upstream reconciliation max age")
