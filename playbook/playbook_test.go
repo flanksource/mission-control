@@ -296,7 +296,7 @@ var _ = ginkgo.Describe("Playbook", ginkgo.Ordered, func() {
 					return savedRun.Status
 				}
 				return models.PlaybookRunStatusPending
-			}, "15s").Should(Equal(models.PlaybookRunStatusCompleted))
+			}, "15s").Should(Equal(models.PlaybookRunStatusFailed))
 		})
 
 		ginkgo.It("should have correctly ran some and skipped some of the actions", func() {

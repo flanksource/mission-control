@@ -166,3 +166,14 @@ func GetActionByName(ctx context.Context, runID, actionName string) (map[string]
 	lastResultCache.SetDefault("action-by-name"+runID+actionName, output)
 	return output, nil
 }
+
+// evaluateRunStatus determines the best fitting run status based on the status of the actions.
+func evaluateRunStatus(statuses []models.PlaybookActionStatus) models.PlaybookRunStatus {
+	for _, status := range statuses {
+		if status == models.PlaybookActionStatusFailed {
+			return models.PlaybookRunStatusFailed
+		}
+	}
+
+	return models.PlaybookRunStatusCompleted
+}

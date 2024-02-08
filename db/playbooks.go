@@ -253,3 +253,9 @@ func GetPlaybookActionsForStatus(ctx context.Context, runID uuid.UUID, statuses 
 	err := ctx.DB().Model(&models.PlaybookRunAction{}).Where("playbook_run_id = ? AND status IN (?)", runID, statuses).Count(&count).Error
 	return count, err
 }
+
+func GetActionStatuses(ctx context.Context, runID uuid.UUID) ([]models.PlaybookActionStatus, error) {
+	var statuses []models.PlaybookActionStatus
+	err := ctx.DB().Select("status").Model(&models.PlaybookRunAction{}).Where("playbook_run_id = ?", runID).Find(&statuses).Error
+	return statuses, err
+}
