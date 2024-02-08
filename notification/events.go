@@ -62,6 +62,7 @@ func addNotificationEvent(ctx context.Context, event postq.Event) error {
 
 		if valid, err := expression.Eval(n.Filter, celEnv, allEnvVars); err != nil {
 			logs.IfError(db.UpdateNotificationError(id, err.Error()), "failed to update notification")
+			continue
 		} else if !valid {
 			continue
 		}
@@ -161,7 +162,7 @@ func getEnvForEvent(ctx context.Context, event postq.Event, properties map[strin
 		// We fetch the latest check_status at the time of event creation
 		var checkStatus models.CheckStatus
 		if err := ctx.DB().Where("check_id = ?", checkID).Where("created_at >= ?", event.CreatedAt).Order("created_at").First(&checkStatus).Error; err != nil {
-			return nil, fmt.Errorf("failed to get check status: %w", err)
+			return nil, fmt.Errorf("failed to get check status for check(%s): %w", checkID, err)
 		}
 
 		env["status"] = checkStatus.AsMap()
