@@ -18,7 +18,7 @@ func PushPlaybookActions(ctx context.Context, upstreamConfig upstream.UpstreamCo
 	count := 0
 	for {
 		var actions []models.PlaybookRunAction
-		if err := ctx.DB().Select("id, status, result, error, end_time").
+		if err := ctx.DB().Select("id, status, result, error, start_time, end_time").
 			Where("is_pushed IS FALSE").
 			Where("status IN ?", models.PlaybookActionFinalStates).
 			Limit(batchSize).
