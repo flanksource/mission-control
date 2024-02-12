@@ -177,10 +177,16 @@ func HandleRun(ctx context.Context, run models.PlaybookRun) error {
 		return fmt.Errorf("failed to get next action to run: %w", err)
 	} else if action == nil {
 		// All the actions have run
-		updateColumns := map[string]any{
-			"status":   models.PlaybookRunStatusCompleted,
-			"end_time": gorm.Expr("CLOCK_TIMESTAMP()"),
+		actionStatuses, err := db.GetActionStatuses(ctx, run.ID)
+		if err != nil {
+			return fmt.Errorf("failed to get action statuses for run(%s): %w", run.ID, err)
 		}
+
+		updateColumns := map[string]any{
+			"end_time": gorm.Expr("CLOCK_TIMESTAMP()"),
+			"status":   evaluateRunStatus(actionStatuses),
+		}
+
 		return ctx.DB().Model(&models.PlaybookRun{}).Where("id = ?", run.ID).UpdateColumns(updateColumns).Error
 	}
 
