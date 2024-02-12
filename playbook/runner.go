@@ -187,21 +187,45 @@ func HandleRun(ctx context.Context, run models.PlaybookRun) error {
 	runUpdates := map[string]any{
 		"start_time": gorm.Expr("CASE WHEN start_time IS NULL THEN CLOCK_TIMESTAMP() ELSE start_time END"),
 	}
-	if len(action.RunsOn) == 0 || lo.Contains(action.RunsOn, runnerMain) {
-		runAction := models.PlaybookRunAction{
-			PlaybookRunID: run.ID,
-			Name:          action.Name,
-			Status:        models.PlaybookActionStatusScheduled,
-		}
-		if err := ctx.DB().Save(&runAction).Error; err != nil {
-			return fmt.Errorf("failed to save run action: %w", err)
+
+	// The delays on the action should be applied here & action consumers do not run the delay.
+	var delay time.Duration
+	if action.Delay != "" && run.Status != models.PlaybookRunStatusSleeping {
+		templateEnv, err := prepareTemplateEnv(ctx, run)
+		if err != nil {
+			return fmt.Errorf("failed to prepare template env for run(%s): %w", run.ID, err)
 		}
 
-		runUpdates["status"] = models.PlaybookRunStatusRunning
+		gomplateTemplate := gomplate.Template{Expression: action.Delay}
+		if action.Delay, err = gomplate.RunTemplate(templateEnv.AsMap(), gomplateTemplate); err != nil {
+			return fmt.Errorf("failed to parse action delay (%s): %w", action.Delay, err)
+		} else if delay, err = action.DelayDuration(); err != nil {
+			return fmt.Errorf("failed to parse action delay as a duration (%s): %w", action.Delay, err)
+		}
+	}
+
+	if delay > 0 {
+		// The host shouldn't create the action if there's a delay.
+		// Rather, defer the scheduling of the run & then the action will be created when the delay is over.
+		runUpdates["scheduled_time"] = gorm.Expr(fmt.Sprintf("CLOCK_TIMESTAMP() + INTERVAL '%d SECONDS'", int(delay.Seconds())))
+		runUpdates["status"] = models.PlaybookRunStatusSleeping
 	} else {
-		// The host cannot run the next action.
-		// Mark the run as waiting and let another runner pick up the action.
-		runUpdates["status"] = models.PlaybookRunStatusWaiting
+		canRunOnHost := len(action.RunsOn) == 0 || lo.Contains(action.RunsOn, runnerMain)
+		if !canRunOnHost {
+			// Simply, ark the run as waiting and let another runner pick up the action.
+			runUpdates["status"] = models.PlaybookRunStatusWaiting
+		} else {
+			runAction := models.PlaybookRunAction{
+				PlaybookRunID: run.ID,
+				Name:          action.Name,
+				Status:        models.PlaybookActionStatusScheduled,
+			}
+			if err := ctx.DB().Save(&runAction).Error; err != nil {
+				return fmt.Errorf("failed to save run action: %w", err)
+			}
+
+			runUpdates["status"] = models.PlaybookRunStatusRunning
+		}
 	}
 
 	return ctx.DB().Model(&models.PlaybookRun{}).Where("id = ?", run.ID).UpdateColumns(runUpdates).Error
@@ -247,9 +271,6 @@ func executeAndSaveAction(ctx context.Context, playbookID, runID uuid.UUID, acti
 		columnUpdates["error"] = err.Error()
 	} else if result.skipped {
 		columnUpdates["status"] = models.PlaybookActionStatusSkipped
-	} else if result.sleep > 0 {
-		columnUpdates["status"] = models.PlaybookActionStatusSleeping
-		columnUpdates["scheduled_time"] = gorm.Expr(fmt.Sprintf("CLOCK_TIMESTAMP() + INTERVAL '%d SECONDS'", int(result.sleep.Seconds())))
 	} else {
 		columnUpdates["status"] = models.PlaybookActionStatusCompleted
 		columnUpdates["result"] = result.data
@@ -307,9 +328,6 @@ type executeActionResult struct {
 
 	// skipped is true if the action was skipped by the action filter
 	skipped bool
-
-	// sleep is the duration to sleep before executing this action
-	sleep time.Duration
 }
 
 // templateAction templatizes all the cel-expressions in the action
@@ -323,14 +341,6 @@ func templateActionExpressions(ctx context.Context, run models.PlaybookRun, runA
 		var err error
 		if actionSpec.Filter, err = gomplate.RunTemplate(env.AsMap(), gomplateTemplate); err != nil {
 			return fmt.Errorf("failed to parse action filter (%s): %w", actionSpec.Filter, err)
-		}
-	}
-
-	if actionSpec.Delay != "" {
-		gomplateTemplate := gomplate.Template{Expression: actionSpec.Delay}
-		var err error
-		if actionSpec.Delay, err = gomplate.RunTemplate(env.AsMap(), gomplateTemplate); err != nil {
-			return fmt.Errorf("failed to parse action delay (%s): %w", actionSpec.Delay, err)
 		}
 	}
 
@@ -421,14 +431,6 @@ func executeAction(ctx context.Context, playbookID, runID uuid.UUID, runAction m
 		var cancel gocontext.CancelFunc
 		ctx, cancel = ctx.WithTimeout(timeout)
 		defer cancel()
-	}
-
-	if runAction.Status != models.PlaybookActionStatusSleeping {
-		if duration, err := actionSpec.DelayDuration(); err != nil {
-			return nil, err
-		} else if duration > 0 {
-			return &executeActionResult{sleep: duration}, nil
-		}
 	}
 
 	if actionSpec.Filter != "" {

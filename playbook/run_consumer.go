@@ -70,7 +70,7 @@ func ActionConsumer(c postq.Context) (int, error) {
 	query := `
 		SELECT playbook_run_actions.*
 		FROM playbook_run_actions
-		WHERE status IN (?, ?)
+		WHERE status = ?
 			AND scheduled_time <= NOW()
 		ORDER BY scheduled_time
 		FOR UPDATE SKIP LOCKED
@@ -78,7 +78,7 @@ func ActionConsumer(c postq.Context) (int, error) {
 	`
 
 	var foundActions []models.PlaybookRunAction
-	if err := tx.Raw(query, models.PlaybookActionStatusScheduled, models.PlaybookActionStatusSleeping).Find(&foundActions).Error; err != nil {
+	if err := tx.Raw(query, models.PlaybookActionStatusScheduled).Find(&foundActions).Error; err != nil {
 		return 0, err
 	}
 
@@ -90,8 +90,6 @@ func ActionConsumer(c postq.Context) (int, error) {
 			continue
 		}
 
-		// Agent doesn't have a run associated with the action.
-		// So we skip templating, as the upstream does that before sending the action.
 		if isAssignedToAgent {
 			var actionData models.PlaybookActionAgentData
 			if err := ctx.DB().Where("action_id = ?", foundActions[i].ID).First(&actionData).Error; err != nil {
@@ -192,14 +190,14 @@ func RunConsumer(c postq.Context) (int, error) {
 		SELECT playbook_runs.*
 		FROM playbook_runs
 		INNER JOIN playbooks ON playbooks.id = playbook_runs.playbook_id
-		WHERE status = ? AND scheduled_time <= NOW()
+		WHERE status IN (?, ?) AND scheduled_time <= NOW()
 		ORDER BY scheduled_time
 		FOR UPDATE SKIP LOCKED
 		LIMIT 1
 	`
 
 	var runs []models.PlaybookRun
-	if err := tx.Raw(query, models.PlaybookRunStatusScheduled).Find(&runs).Error; err != nil {
+	if err := tx.Raw(query, models.PlaybookRunStatusScheduled, models.PlaybookRunStatusSleeping).Find(&runs).Error; err != nil {
 		return 0, err
 	}
 
