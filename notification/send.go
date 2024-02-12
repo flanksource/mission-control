@@ -22,7 +22,7 @@ import (
 )
 
 // List of all possible variables for any expression related to notifications
-var allEnvVars = []string{"check", "canary", "incident", "team", "responder", "comment", "evidence", "hypothesis"}
+var allEnvVars = []string{"check", "canary", "component", "incident", "team", "responder", "comment", "evidence", "hypothesis"}
 
 // NotificationTemplate holds in data for notification
 // that'll be used by struct templater.
