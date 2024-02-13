@@ -98,6 +98,54 @@ type GithubAction struct {
 	Workflows []GithubWorkflow `yaml:"workflows,omitempty" json:"workflows,omitempty" template:"true"`
 }
 
+type AzureDevopsPipeline struct {
+	// ID is the pipeline ID
+	ID string `json:"id" template:"true"`
+	// Version is the pipeline version
+	Version string `json:"version,omitempty" template:"true"`
+	// ApiVersion is the version of the API to use. Defaults to "7.1-preview.1"
+	ApiVersion string `json:"apiVersion,omitempty" template:"true"`
+}
+
+// Ref: https://learn.microsoft.com/en-us/rest/api/azure/devops/pipelines/runs/run-pipeline?view=azure-devops-rest-7.1#request-body
+type AzureDevopsPipelineParameters struct {
+	// +kubebuilder:validation:Schemaless
+	// +kubebuilder:validation:Type=object
+	// The resources the run requires.
+	Resources json.RawMessage `json:"resources,omitempty" template:"true"`
+
+	// +kubebuilder:validation:Schemaless
+	// +kubebuilder:validation:Type=object
+	TemplateParameters json.RawMessage `json:"templateParameters,omitempty" template:"true"`
+
+	// +kubebuilder:validation:Schemaless
+	// +kubebuilder:validation:Type=object
+	Variables json.RawMessage `json:"variables,omitempty" template:"true"`
+
+	StagesToSkip []string `json:"stagesToSkip,omitempty" template:"true"`
+
+	// If true, don't actually create a new run.
+	// Instead, return the final YAML document after parsing templates.
+	PreviewRun bool `json:"previewRun,omitempty" template:"true"`
+
+	// If you use the preview run option, you may optionally supply different YAML.
+	// This allows you to preview the final YAML document without committing a changed file.
+	YamlOverride string `json:"yamlOverride,omitempty" template:"true"`
+}
+
+type AzureDevopsPipelineAction struct {
+	// Org is the name of the Azure DevOps organization
+	Org string `json:"org" template:"true"`
+	// Project ID or project name
+	Project string `json:"project" template:"true"`
+	// Token is the personal access token
+	Token types.EnvVar `yaml:"token" json:"token"`
+	// Pipeline is the azure pipeline to invoke
+	Pipeline AzureDevopsPipeline `json:"pipeline" template:"true"`
+	// Parameteres are the settings that influence the pipeline run
+	Parameters AzureDevopsPipelineParameters `json:"parameters,omitempty" template:"true"`
+}
+
 type PodAction struct {
 	// Name is name of the pod that'll be created
 	Name string `yaml:"name" json:"name"`
@@ -359,13 +407,14 @@ type PlaybookAction struct {
 	// When left empty, the templating is done on the main instance(host) itself.
 	TemplatesOn string `json:"templatesOn,omitempty" yaml:"templatesOn,omitempty"`
 
-	Exec         *ExecAction         `json:"exec,omitempty" yaml:"exec,omitempty" template:"true"`
-	GitOps       *GitOpsAction       `json:"gitops,omitempty" yaml:"gitops,omitempty" template:"true"`
-	Github       *GithubAction       `json:"github,omitempty" yaml:"github,omitempty" template:"true"`
-	HTTP         *HTTPAction         `json:"http,omitempty" yaml:"http,omitempty" template:"true"`
-	SQL          *SQLAction          `json:"sql,omitempty" yaml:"sql,omitempty" template:"true"`
-	Pod          *PodAction          `json:"pod,omitempty" yaml:"pod,omitempty" template:"true"`
-	Notification *NotificationAction `json:"notification,omitempty" yaml:"notification,omitempty" template:"true"`
+	Exec                *ExecAction                `json:"exec,omitempty" yaml:"exec,omitempty" template:"true"`
+	GitOps              *GitOpsAction              `json:"gitops,omitempty" yaml:"gitops,omitempty" template:"true"`
+	Github              *GithubAction              `json:"github,omitempty" yaml:"github,omitempty" template:"true"`
+	AzureDevopsPipeline *AzureDevopsPipelineAction `json:"azureDevopsPipeline,omitempty" yaml:"azureDevops,omitempty" template:"true"`
+	HTTP                *HTTPAction                `json:"http,omitempty" yaml:"http,omitempty" template:"true"`
+	SQL                 *SQLAction                 `json:"sql,omitempty" yaml:"sql,omitempty" template:"true"`
+	Pod                 *PodAction                 `json:"pod,omitempty" yaml:"pod,omitempty" template:"true"`
+	Notification        *NotificationAction        `json:"notification,omitempty" yaml:"notification,omitempty" template:"true"`
 }
 
 func (p *PlaybookAction) DelayDuration() (time.Duration, error) {
