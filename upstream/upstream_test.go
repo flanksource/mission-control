@@ -230,6 +230,12 @@ func getPrimaryKeys(table string, rows any) [][]string {
 			primaryKeys = append(primaryKeys, []string{c.CheckID.String(), t.Format("2006-01-02T15:04:05-07:00")})
 		}
 
+	case "config_relationships":
+		configRelationships := rows.([]models.ConfigRelationship)
+		for _, c := range configRelationships {
+			primaryKeys = append(primaryKeys, []string{c.RelatedID, c.ConfigID, c.SelectorID})
+		}
+
 	case "component_relationships":
 		componentRelationships := rows.([]models.ComponentRelationship)
 		for _, c := range componentRelationships {
@@ -343,7 +349,8 @@ func verifyPushQueue(events postq.Events, dataset dummy.DummyData) {
 			Expect(g.ItemIDs).To(Equal(getPrimaryKeys(table, dataset.ConfigComponentRelationships)), "Mismatch composite primary keys for config_component_relationships")
 
 		case "config_relationships":
-			// Do nothing (need to populate the config_relationships table)
+			Expect(len(g.ItemIDs)).To(Equal(len(dataset.ConfigRelationships)))
+			Expect(g.ItemIDs).To(Equal(getPrimaryKeys(table, dataset.ConfigRelationships)), "Mismatch composite primary keys for config_relationships")
 
 		default:
 			ginkgo.Fail(fmt.Sprintf("Unexpected table %q on the event queue for %q", table, api.EventPushQueueCreate))
@@ -358,5 +365,6 @@ func verifyPushQueue(events postq.Events, dataset dummy.DummyData) {
 			len(dataset.ConfigScrapers) +
 			len(dataset.Configs) +
 			len(dataset.ComponentRelationships) +
+			len(dataset.ConfigRelationships) +
 			len(dataset.ConfigComponentRelationships)))
 }
