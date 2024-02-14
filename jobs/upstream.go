@@ -118,3 +118,18 @@ var SyncArtifactData = &job.Job{
 		return err
 	},
 }
+
+// PingUpstream sends periodic heartbeat to the upstream
+var PingUpstream = &job.Job{
+	Name:       "PingUpstream",
+	Schedule:   "@every 1m",
+	Retention:  job.RetentionFailed,
+	JobHistory: true,
+	RunNow:     true,
+	Fn: func(ctx job.JobRuntime) error {
+		ctx.History.ResourceType = job.ResourceTypeUpstream
+		ctx.History.ResourceID = api.UpstreamConf.Host
+		client := upstream.NewUpstreamClient(api.UpstreamConf)
+		return client.Ping(ctx.Context, api.UpstreamConf.AgentName)
+	},
+}
