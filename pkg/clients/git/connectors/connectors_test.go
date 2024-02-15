@@ -29,3 +29,28 @@ func TestParseAzureDevopsRepo(t *testing.T) {
 		}
 	}
 }
+
+func TestParseGitlabRepo(t *testing.T) {
+	tests := []struct {
+		repoURL       string
+		host          string
+		custom        bool
+		expectedOwner string
+		expectedRepo  string
+		expectedOk    bool
+	}{
+		{"https://gitlab.com/foo/bar.git", "gitlab.com", false, "foo", "bar", true},
+		{"https://gitlab.com/my-group/my-project", "gitlab.com", false, "my-group", "my-project", true},
+		{"https://gitlab.flanksource.com/acme/project.git", "gitlab.com", true, "acme", "project", true},
+		{"https://github.com/flanksource/duty.git", "github.com", false, "flanksource", "duty", true},
+		{"https://github.com/adityathebe/homelab", "github.com", false, "adityathebe", "homelab", true},
+	}
+
+	for _, tc := range tests {
+		owner, repo, ok := parseGenericRepoURL(tc.repoURL, tc.host, tc.custom)
+		if owner != tc.expectedOwner || repo != tc.expectedRepo || ok != tc.expectedOk {
+			t.Errorf("parseGitlabRepo(%q, %t) = %q, %q, %t; want %q, %q, %t",
+				tc.repoURL, tc.custom, owner, repo, ok, tc.expectedOwner, tc.expectedRepo, tc.expectedOk)
+		}
+	}
+}

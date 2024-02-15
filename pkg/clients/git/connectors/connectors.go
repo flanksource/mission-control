@@ -3,17 +3,25 @@ package connectors
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"regexp"
 	"strings"
 
 	"github.com/go-git/go-billy/v5"
 	git "github.com/go-git/go-git/v5"
 	"github.com/jenkins-x/go-scm/scm"
-	"github.com/pkg/errors"
+)
+
+const (
+	ServiceGithub = "github"
+	ServiceGitlab = "gitlab"
 )
 
 // GitopsAPISpec defines the desired state of GitopsAPI
 type GitopsAPISpec struct {
+	// Service where the repository is hosted
+	Service string
+
 	// The repository URL, can be a HTTP or SSH address.
 	Repository string `json:"repository,omitempty"`
 
@@ -63,29 +71,11 @@ type Connector interface {
 }
 
 func NewConnector(gitConfig *GitopsAPISpec) (Connector, error) {
-	if strings.HasPrefix(gitConfig.Repository, "https://github.com/") {
-		path := gitConfig.Repository[19:]
-		parts := strings.Split(path, "/")
-		if len(parts) != 2 {
-			return nil, errors.Errorf("invalid GitHub repository url: %s. expected: https://github.com/<owner>/<repo>", gitConfig.Repository)
-		}
-		owner := parts[0]
-		repoName := parts[1]
-		repoName = strings.TrimSuffix(repoName, ".git")
-		return NewAccessTokenClient("github", owner, repoName, gitConfig.AccessToken)
-	} else if strings.HasPrefix(gitConfig.Repository, "https://gitlab.com") {
-		path := gitConfig.Repository[19:]
-		parts := strings.Split(path, "/")
-		if len(parts) != 2 {
-			return nil, errors.Errorf("invalid GitLab repository url: %s. expected: https://gitlab.com/<owner>/<repo>", gitConfig.Repository)
-		}
-		owner := parts[0]
-		repoName := parts[1]
-		repoName = strings.TrimSuffix(repoName, ".git")
-		return NewAccessTokenClient("gitlab", owner, repoName, gitConfig.AccessToken)
+	if owner, repo, ok := parseGenericRepoURL(gitConfig.Repository, "github.com", false); ok {
+		return NewAccessTokenClient(ServiceGithub, owner, repo, gitConfig.AccessToken)
+	} else if owner, repo, ok := parseGenericRepoURL(gitConfig.Repository, "gitlab.com", gitConfig.Service == ServiceGitlab); ok {
+		return NewAccessTokenClient(ServiceGitlab, owner, repo, gitConfig.AccessToken)
 	} else if azureOrg, azureProject, azureRepo, ok := parseAzureDevopsRepo(gitConfig.Repository); ok {
-		// Note: go-git client doesn't support azure devops repository as of now
-		// GH Issue: https://github.com/go-git/go-git/issues/64
 		return NewAccessTokenClient("azure", fmt.Sprintf("%s/%s", azureOrg, azureProject), azureRepo, gitConfig.AccessToken)
 	} else if strings.HasPrefix(gitConfig.Repository, "ssh://") {
 		sshURL := gitConfig.Repository[6:]
@@ -108,4 +98,26 @@ func parseAzureDevopsRepo(url string) (org, project, repo string, ok bool) {
 	}
 
 	return matches[1], matches[2], matches[3], true
+}
+
+// parseGenericRepoURL parses a URL into owner and repo.
+//   - custom: true if the repo has custom domain
+func parseGenericRepoURL(repoURL, host string, custom bool) (owner string, repo string, ok bool) {
+	parsed, err := url.Parse(repoURL)
+	if err != nil {
+		return "", "", false
+	}
+
+	if !custom && parsed.Hostname() != host {
+		return "", "", false
+	}
+
+	path := strings.TrimSuffix(parsed.Path, ".git")
+	path = strings.TrimPrefix(path, "/")
+	paths := strings.Split(path, "/")
+	if len(paths) != 2 {
+		return "", "", false
+	}
+
+	return paths[0], paths[1], true
 }
