@@ -47,11 +47,6 @@ spec:
                           description: Parameteres are the settings that influence
                             the pipeline run
                           properties:
-                            previewRun:
-                              description: If true, don't actually create a new run.
-                                Instead, return the final YAML document after parsing
-                                templates.
-                              type: boolean
                             resources:
                               description: The resources the run requires.
                               type: object
@@ -63,20 +58,10 @@ spec:
                               type: object
                             variables:
                               type: object
-                            yamlOverride:
-                              description: If you use the preview run option, you
-                                may optionally supply different YAML. This allows
-                                you to preview the final YAML document without committing
-                                a changed file.
-                              type: string
                           type: object
                         pipeline:
                           description: Pipeline is the azure pipeline to invoke
                           properties:
-                            apiVersion:
-                              description: ApiVersion is the version of the API to
-                                use. Defaults to "7.1-preview.1"
-                              type: string
                             id:
                               description: ID is the pipeline ID
                               type: string

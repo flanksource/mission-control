@@ -18,12 +18,9 @@ func (t *AzureDevopsPipeline) Run(ctx context.Context, spec v1.AzureDevopsPipeli
 	}
 
 	pipeline := spec.Pipeline
-	if pipeline.ApiVersion == "" {
-		pipeline.ApiVersion = "7.1-preview.1"
-	}
 
 	request := http.NewClient().BaseURL("https://dev.azure.com").Auth("", token).
-		R(ctx).QueryParam("api-version", pipeline.ApiVersion).Header("Content-Type", "application/json")
+		R(ctx).QueryParam("api-version", "7.1-preview.1").Header("Content-Type", "application/json")
 	if pipeline.Version != "" {
 		request = request.QueryParam("api-version", pipeline.Version)
 	}
