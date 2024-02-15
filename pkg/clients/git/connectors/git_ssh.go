@@ -25,8 +25,8 @@ type Git struct {
 	auth transport.AuthMethod
 }
 
-func (g *Git) OpenPullRequest(ctx context.Context, spec PullRequestTemplate) (int, error) {
-	return 0, fmt.Errorf("open pull request  not implemented for git ssh")
+func (g *Git) OpenPullRequest(ctx context.Context, spec PullRequestTemplate) (*PullRequest, error) {
+	return nil, fmt.Errorf("open pull request  not implemented for git ssh")
 }
 
 func (g *Git) ClosePullRequest(ctx context.Context, id int) error {

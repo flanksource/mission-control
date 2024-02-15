@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -20,13 +21,22 @@ import (
 type GitOps struct {
 	workTree       *gitv5.Worktree
 	spec           *connectors.GitopsAPISpec
-	logs           []string
+	logLines       []string
 	shouldCreatePR bool
 }
 
 type GitOpsActionResult struct {
-	CreatedPR int    `json:"createdPR,omitempty"`
+	CreatedPR string `json:"createdPR,omitempty"`
 	Logs      string `json:"logs,omitempty"`
+}
+
+func (t *GitOps) log(msg string, args ...any) {
+	t.logLines = append(t.logLines, fmt.Sprintf(msg, args...))
+}
+
+func (t *GitOps) logJSON(msg any) {
+	b, _ := json.MarshalIndent(msg, "", "  ")
+	t.logLines = append(t.logLines, string(b))
 }
 
 func (t *GitOps) Run(ctx context.Context, action v1.GitOpsAction) (*GitOpsActionResult, error) {
@@ -57,17 +67,19 @@ func (t *GitOps) Run(ctx context.Context, action v1.GitOpsAction) (*GitOpsAction
 	if hash, err := git.CommitAndPush(ctx, connector, workTree, t.spec); err != nil {
 		return nil, fmt.Errorf("failed to commit and push: %w", err)
 	} else {
-		t.logs = append(t.logs, fmt.Sprintf("Committed(%s) and pushed changes", hash))
+		t.log("committed(%s) and pushed changes", hash)
 	}
 
 	if t.shouldCreatePR {
-		prNumber, err := t.createPR(ctx, connector, workTree)
+		pr, err := t.createPR(ctx, connector, workTree)
 		if err != nil {
 			return nil, err
 		}
-		response.CreatedPR = prNumber
+		response.CreatedPR = pr.Link
+		t.log("successfully created pull request")
+		t.logJSON(pr)
 	}
-	response.Logs = strings.Join(t.logs, "\n")
+	response.Logs = strings.Join(t.logLines, "\n")
 
 	return &response, nil
 }
@@ -100,13 +112,8 @@ func (t *GitOps) generateSpec(ctx context.Context, action v1.GitOpsAction) error
 		}
 
 		switch conn.Type {
-		case models.ConnectionTypeGithub:
-			t.spec.GITHUB_TOKEN = conn.Password
-			t.shouldCreatePR = true
-
-		case models.ConnectionTypeAzureDevops:
-			t.spec.User = conn.Username
-			t.spec.Password = conn.Password
+		case models.ConnectionTypeGithub, models.ConnectionTypeGitlab, models.ConnectionTypeAzureDevops:
+			t.spec.AccessToken = conn.Password
 			t.shouldCreatePR = true
 
 		case models.ConnectionTypeHTTP:
@@ -116,8 +123,8 @@ func (t *GitOps) generateSpec(ctx context.Context, action v1.GitOpsAction) error
 		case models.ConnectionTypeGit:
 			t.spec.User = conn.Username
 			t.spec.Password = conn.Password
-			t.spec.SSH_PRIVATE_KEY = conn.Certificate
-			t.spec.SSH_PRIVATE_KEY_PASSORD = conn.Password
+			t.spec.SSHPrivateKey = conn.Certificate
+			t.spec.SSHPrivateKeyPassword = conn.Password
 
 		default:
 			return fmt.Errorf("unsupported connection type: %s", conn.Type)
@@ -167,7 +174,7 @@ func (t *GitOps) applyPatches(ctx context.Context, action v1.GitOpsAction) error
 			if err != nil {
 				return fmt.Errorf("failed to get relative path: %w", err)
 			}
-			t.logs = append(t.logs, fmt.Sprintf("Patching %s", relativePath))
+			t.log("Patching %s", relativePath)
 
 			if patch.YQ != "" {
 				cmd := exec.Command("yq", "eval", "-i", patch.YQ, path)
@@ -176,7 +183,7 @@ func (t *GitOps) applyPatches(ctx context.Context, action v1.GitOpsAction) error
 				} else if res.Error != nil {
 					return res.Error
 				} else {
-					t.logs = append(t.logs, res.Stdout)
+					t.log(res.Stdout)
 				}
 
 				if _, err := t.workTree.Add(relativePath); err != nil {
@@ -209,13 +216,13 @@ func (t *GitOps) modifyFiles(ctx context.Context, action v1.GitOpsAction) error 
 
 			switch f.Content {
 			case "$delete":
-				t.logs = append(t.logs, fmt.Sprintf("Deleting file %s", relativePath))
+				t.log("Deleting file %s", relativePath)
 				if _, err := t.workTree.Remove(relativePath); err != nil {
 					return fmt.Errorf("failed to delete file(%s): %w", relativePath, err)
 				}
 
 			default:
-				t.logs = append(t.logs, fmt.Sprintf("Creating file %s", relativePath))
+				t.log("Creating file %s", relativePath)
 				if err := os.WriteFile(path, []byte(f.Content), os.ModePerm); err != nil {
 					return fmt.Errorf("failed to create file(%s): %w", relativePath, err)
 				}
@@ -230,6 +237,6 @@ func (t *GitOps) modifyFiles(ctx context.Context, action v1.GitOpsAction) error 
 	return nil
 }
 
-func (t *GitOps) createPR(ctx context.Context, connector connectors.Connector, work *gitv5.Worktree) (int, error) {
+func (t *GitOps) createPR(ctx context.Context, connector connectors.Connector, work *gitv5.Worktree) (*connectors.PullRequest, error) {
 	return git.OpenPR(ctx, connector, t.spec)
 }

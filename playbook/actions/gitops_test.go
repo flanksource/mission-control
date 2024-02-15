@@ -81,7 +81,7 @@ var _ = ginkgo.Describe("Playbook Action Gitops", ginkgo.Ordered, func() {
 		}
 		res, err := runner.Run(ctx, spec)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(res.CreatedPR).To(Equal(0))
+		Expect(res.CreatedPR).To(BeEmpty())
 
 		logger.Infof("Runner response: %#v", res)
 	})
