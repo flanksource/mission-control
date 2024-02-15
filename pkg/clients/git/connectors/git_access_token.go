@@ -10,6 +10,7 @@ import (
 	"github.com/go-git/go-billy/v5/osfs"
 	git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/protocol/packp/capability"
 	"github.com/go-git/go-git/v5/plumbing/transport"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
 	"github.com/jenkins-x/go-scm/scm"
@@ -103,8 +104,13 @@ func (g *GitAccessTokenClient) ClosePullRequest(ctx context.Context, id int) err
 func (g *GitAccessTokenClient) Clone(ctx context.Context, branch, local string) (billy.Filesystem, *git.Worktree, error) {
 	dir, _ := os.MkdirTemp("", fmt.Sprintf("%s-*", g.service))
 	url := fmt.Sprintf("https://%s.com/%s/%s.git", g.service, g.owner, g.repoName)
+	transport.UnsupportedCapabilities = nil // reset the global list of unsupported capabilities
+
 	if g.service == "azure" {
 		url = fmt.Sprintf("https://dev.azure.com/%s/_git/%s", g.owner, g.repoName)
+		transport.UnsupportedCapabilities = []capability.Capability{
+			capability.ThinPack,
+		}
 	}
 
 	repo, err := git.PlainCloneContext(ctx, dir, false, &git.CloneOptions{
