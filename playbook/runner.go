@@ -447,6 +447,21 @@ func executeAction(ctx context.Context, playbookID, runID uuid.UUID, runAction m
 		}
 	}
 
+	if actionSpec.AzureDevopsPipeline != nil {
+		var e actions.AzureDevopsPipeline
+		res, err := e.Run(ctx, *actionSpec.AzureDevopsPipeline)
+		if err != nil {
+			return nil, err
+		}
+
+		jsonData, err := json.Marshal(res)
+		if err != nil {
+			return nil, err
+		}
+
+		return &executeActionResult{data: jsonData}, nil
+	}
+
 	if actionSpec.Github != nil {
 		var e actions.Github
 		res, err := e.Run(ctx, *actionSpec.Github)

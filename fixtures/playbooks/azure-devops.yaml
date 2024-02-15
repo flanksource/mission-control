@@ -1,0 +1,25 @@
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: invoke-azure-devops-pipelines
+  namespace: default
+spec:
+  parameters:
+    - name: project
+      label: Project name
+      default: Demo1
+    - name: pipeline
+      label: Pipeline ID
+  actions:
+    - name: Invoke pipeline
+      azureDevopsPipeline:
+        org: flanksource
+        project: '{{.params.project}}'
+        token:
+          valueFrom:
+            secretKeyRef:
+              name: azure-devops
+              key: token
+        pipeline:
+          id: '{{.params.pipeline}}'

@@ -38,6 +38,92 @@ spec:
                 description: List of actions that need to be executed by this playbook.
                 items:
                   properties:
+                    azureDevopsPipeline:
+                      properties:
+                        org:
+                          description: Org is the name of the Azure DevOps organization
+                          type: string
+                        parameters:
+                          description: Parameteres are the settings that influence
+                            the pipeline run
+                          properties:
+                            resources:
+                              description: The resources the run requires.
+                              type: object
+                            stagesToSkip:
+                              items:
+                                type: string
+                              type: array
+                            templateParameters:
+                              type: object
+                            variables:
+                              type: object
+                          type: object
+                        pipeline:
+                          description: Pipeline is the azure pipeline to invoke
+                          properties:
+                            id:
+                              description: ID is the pipeline ID
+                              type: string
+                            version:
+                              description: Version is the pipeline version
+                              type: string
+                          required:
+                          - id
+                          type: object
+                        project:
+                          description: Project ID or project name
+                          type: string
+                        token:
+                          description: Token is the personal access token
+                          properties:
+                            name:
+                              type: string
+                            value:
+                              type: string
+                            valueFrom:
+                              properties:
+                                configMapKeyRef:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      type: string
+                                  required:
+                                  - key
+                                  type: object
+                                helmRef:
+                                  properties:
+                                    key:
+                                      description: Key is a JSONPath expression used
+                                        to fetch the key from the merged JSON.
+                                      type: string
+                                    name:
+                                      type: string
+                                  required:
+                                  - key
+                                  type: object
+                                secretKeyRef:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      type: string
+                                  required:
+                                  - key
+                                  type: object
+                                serviceAccount:
+                                  description: ServiceAccount specifies the service
+                                    account whose token should be fetched
+                                  type: string
+                              type: object
+                          type: object
+                      required:
+                      - org
+                      - pipeline
+                      - project
+                      - token
+                      type: object
                     delay:
                       description: Delay is a CEL expression that returns the duration
                         to delay the execution of this action. Valid time units are
