@@ -2,15 +2,26 @@ package connectors
 
 import (
 	"context"
+	"fmt"
+	"net/url"
+	"regexp"
 	"strings"
 
 	"github.com/go-git/go-billy/v5"
 	git "github.com/go-git/go-git/v5"
-	"github.com/pkg/errors"
+	"github.com/jenkins-x/go-scm/scm"
+)
+
+const (
+	ServiceGithub = "github"
+	ServiceGitlab = "gitlab"
 )
 
 // GitopsAPISpec defines the desired state of GitopsAPI
 type GitopsAPISpec struct {
+	// Service where the repository is hosted
+	Service string
+
 	// The repository URL, can be a HTTP or SSH address.
 	Repository string `json:"repository,omitempty"`
 
@@ -30,13 +41,14 @@ type GitopsAPISpec struct {
 	User     string `json:"auth_user,omitempty"`
 	Password string `json:"password,omitempty"`
 
-	// For Github repositories it must contain GITHUB_TOKEN
-	GITHUB_TOKEN string `json:"github_token,omitempty"`
+	AccessToken string `json:"access_token,omitempty"`
 
 	// For SSH repositories the secret must contain SSH_PRIVATE_KEY, SSH_PRIVATE_KEY_PASSORD
-	SSH_PRIVATE_KEY         string `json:"ssh_private_key,omitempty"`
-	SSH_PRIVATE_KEY_PASSORD string `json:"ssh_private_key_password,omitempty"`
+	SSHPrivateKey         string `json:"ssh_private_key,omitempty"`
+	SSHPrivateKeyPassword string `json:"ssh_private_key_password,omitempty"`
 }
+
+type PullRequest scm.PullRequest
 
 type PullRequestTemplate struct {
 	Body      string   `json:"body,omitempty"`
@@ -54,30 +66,58 @@ type PullRequestTemplate struct {
 type Connector interface {
 	Clone(ctx context.Context, branch, local string) (billy.Filesystem, *git.Worktree, error)
 	Push(ctx context.Context, branch string) error
-	OpenPullRequest(ctx context.Context, spec PullRequestTemplate) (int, error)
+	OpenPullRequest(ctx context.Context, spec PullRequestTemplate) (*PullRequest, error)
 	ClosePullRequest(ctx context.Context, id int) error
 }
 
 func NewConnector(gitConfig *GitopsAPISpec) (Connector, error) {
-	if strings.HasPrefix(gitConfig.Repository, "https://github.com/") {
-		path := gitConfig.Repository[19:]
-		parts := strings.Split(path, "/")
-		if len(parts) != 2 {
-			return nil, errors.Errorf("invalid repository url: %s", gitConfig.Repository)
-		}
-		owner := parts[0]
-		repoName := parts[1]
-		repoName = strings.TrimSuffix(repoName, ".git")
-		githubToken := gitConfig.GITHUB_TOKEN
-		return NewGithub(owner, repoName, githubToken)
+	if owner, repo, ok := parseGenericRepoURL(gitConfig.Repository, "github.com", false); ok {
+		return NewAccessTokenClient(ServiceGithub, owner, repo, gitConfig.AccessToken)
+	} else if owner, repo, ok := parseGenericRepoURL(gitConfig.Repository, "gitlab.com", gitConfig.Service == ServiceGitlab); ok {
+		return NewAccessTokenClient(ServiceGitlab, owner, repo, gitConfig.AccessToken)
+	} else if azureOrg, azureProject, azureRepo, ok := parseAzureDevopsRepo(gitConfig.Repository); ok {
+		return NewAccessTokenClient("azure", fmt.Sprintf("%s/%s", azureOrg, azureProject), azureRepo, gitConfig.AccessToken)
 	} else if strings.HasPrefix(gitConfig.Repository, "ssh://") {
 		sshURL := gitConfig.Repository[6:]
 		user := strings.Split(sshURL, "@")[0]
 
-		privateKey := gitConfig.SSH_PRIVATE_KEY
-		password := gitConfig.SSH_PRIVATE_KEY_PASSORD
+		privateKey := gitConfig.SSHPrivateKey
+		password := gitConfig.SSHPrivateKeyPassword
 		return NewGitSSH(sshURL, user, []byte(privateKey), password)
 	} else {
 		return NewGitPassword(gitConfig.Repository, gitConfig.User, gitConfig.Password)
 	}
+}
+
+var azureDevopsRepoURLRegexp = regexp.MustCompile(`^https:\/\/[a-zA-Z0-9_-]+@dev\.azure\.com\/([a-zA-Z0-9_-]+)\/([a-zA-Z0-9_-]+)\/_git\/([a-zA-Z0-9_-]+)`)
+
+func parseAzureDevopsRepo(url string) (org, project, repo string, ok bool) {
+	matches := azureDevopsRepoURLRegexp.FindStringSubmatch(url)
+	if len(matches) != 4 {
+		return "", "", "", false
+	}
+
+	return matches[1], matches[2], matches[3], true
+}
+
+// parseGenericRepoURL parses a URL into owner and repo.
+//   - custom: true if the repo has custom domain
+func parseGenericRepoURL(repoURL, host string, custom bool) (owner string, repo string, ok bool) {
+	parsed, err := url.Parse(repoURL)
+	if err != nil {
+		return "", "", false
+	}
+
+	if !custom && parsed.Hostname() != host {
+		return "", "", false
+	}
+
+	path := strings.TrimSuffix(parsed.Path, ".git")
+	path = strings.TrimPrefix(path, "/")
+	paths := strings.Split(path, "/")
+	if len(paths) != 2 {
+		return "", "", false
+	}
+
+	return paths[0], paths[1], true
 }

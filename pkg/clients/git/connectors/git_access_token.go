@@ -10,6 +10,7 @@ import (
 	"github.com/go-git/go-billy/v5/osfs"
 	git "github.com/go-git/go-git/v5"
 	"github.com/go-git/go-git/v5/plumbing"
+	"github.com/go-git/go-git/v5/plumbing/protocol/packp/capability"
 	"github.com/go-git/go-git/v5/plumbing/transport"
 	"github.com/go-git/go-git/v5/plumbing/transport/http"
 	"github.com/jenkins-x/go-scm/scm"
@@ -17,7 +18,10 @@ import (
 	"github.com/pkg/errors"
 )
 
-type Github struct {
+type GitAccessTokenClient struct {
+	// service is the name of the git service
+	service string
+
 	scm        *scm.Client
 	repo       *git.Repository
 	auth       transport.AuthMethod
@@ -26,23 +30,26 @@ type Github struct {
 	repository string
 }
 
-func NewGithub(owner, repoName, githubToken string) (Connector, error) {
-	scmClient, err := factory.NewClient("github", "", githubToken)
+// NewAccessTokenClient is a generic git client that can communicate with
+// git services supporting access tokens. eg Github, GitLab & Azure Devops (WIP)
+func NewAccessTokenClient(service, owner, repoName, accessToken string) (Connector, error) {
+	scmClient, err := factory.NewClient(service, "", accessToken)
 	if err != nil {
-		return nil, errors.Wrap(err, "failed to create github client")
+		return nil, fmt.Errorf("failed to create git client with access token: %v", err)
 	}
 
-	github := &Github{
+	client := &GitAccessTokenClient{
+		service:    service,
 		scm:        scmClient,
 		owner:      owner,
 		repoName:   repoName,
 		repository: owner + "/" + repoName,
-		auth:       &http.BasicAuth{Password: githubToken, Username: githubToken},
+		auth:       &http.BasicAuth{Password: accessToken, Username: accessToken},
 	}
-	return github, nil
+	return client, nil
 }
 
-func (g *Github) Push(ctx context.Context, branch string) error {
+func (g *GitAccessTokenClient) Push(ctx context.Context, branch string) error {
 	if g.repo == nil {
 		return errors.New("Need to clone first, before pushing ")
 	}
@@ -56,7 +63,7 @@ func (g *Github) Push(ctx context.Context, branch string) error {
 	return nil
 }
 
-func (g *Github) OpenPullRequest(ctx context.Context, spec PullRequestTemplate) (int, error) {
+func (g *GitAccessTokenClient) OpenPullRequest(ctx context.Context, spec PullRequestTemplate) (*PullRequest, error) {
 	if spec.Title == "" {
 		spec.Title = spec.Branch
 	}
@@ -68,25 +75,25 @@ func (g *Github) OpenPullRequest(ctx context.Context, spec PullRequestTemplate) 
 	})
 
 	if err != nil {
-		return 0, errors.Wrapf(err, "failed to create pr repo=%s title=%s, head=%s base=%s", g.repository, spec.Title, spec.Branch, spec.Base)
+		return nil, errors.Wrapf(err, "failed to create pr repo=%s title=%s, head=%s base=%s", g.repository, spec.Title, spec.Branch, spec.Base)
 	}
 
 	if len(spec.Reviewers) > 0 {
 		if _, err := g.scm.PullRequests.RequestReview(ctx, g.repository, pr.Number, spec.Reviewers); err != nil {
-			return 0, err
+			return nil, err
 		}
 	}
 
 	if len(spec.Assignees) > 0 {
 		if _, err := g.scm.PullRequests.AssignIssue(ctx, g.repository, pr.Number, spec.Assignees); err != nil {
-			return 0, err
+			return nil, err
 		}
 	}
 
-	return pr.Number, nil
+	return (*PullRequest)(pr), nil
 }
 
-func (g *Github) ClosePullRequest(ctx context.Context, id int) error {
+func (g *GitAccessTokenClient) ClosePullRequest(ctx context.Context, id int) error {
 	if _, err := g.scm.PullRequests.Close(ctx, g.repository, id); err != nil {
 		return errors.Wrap(err, "failed to close github pull request")
 	}
@@ -94,9 +101,18 @@ func (g *Github) ClosePullRequest(ctx context.Context, id int) error {
 	return nil
 }
 
-func (g *Github) Clone(ctx context.Context, branch, local string) (billy.Filesystem, *git.Worktree, error) {
-	dir, _ := os.MkdirTemp("", "github-*")
-	url := fmt.Sprintf("https://github.com/%s/%s.git", g.owner, g.repoName)
+func (g *GitAccessTokenClient) Clone(ctx context.Context, branch, local string) (billy.Filesystem, *git.Worktree, error) {
+	dir, _ := os.MkdirTemp("", fmt.Sprintf("%s-*", g.service))
+	url := fmt.Sprintf("https://%s.com/%s/%s.git", g.service, g.owner, g.repoName)
+	transport.UnsupportedCapabilities = nil // reset the global list of unsupported capabilities
+
+	if g.service == "azure" {
+		url = fmt.Sprintf("https://dev.azure.com/%s/_git/%s", g.owner, g.repoName)
+		transport.UnsupportedCapabilities = []capability.Capability{
+			capability.ThinPack,
+		}
+	}
+
 	repo, err := git.PlainCloneContext(ctx, dir, false, &git.CloneOptions{
 		ReferenceName: plumbing.NewBranchReferenceName(branch),
 		URL:           url,

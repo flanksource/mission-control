@@ -36,6 +36,10 @@ type GitOpsActionRepo struct {
 	Branch string `yaml:"branch,omitempty" json:"branch,omitempty" template:"true"`
 	// Connection name to use the credentials for the git repo
 	Connection string `yaml:"connection,omitempty" json:"connection,omitempty"`
+	// Type specifies the service the repository is hosted on (eg: github, gitlab, etc)
+	// It is deduced from the repo URL however for private repository you can
+	// explicitly specify the type manually.
+	Type string `yaml:"type,omitempty" json:"type,omitempty" template:"true"`
 }
 
 type GitOpsActionCommit struct {

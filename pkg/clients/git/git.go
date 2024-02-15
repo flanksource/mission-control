@@ -2,6 +2,7 @@ package git
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/flanksource/commons/logger"
@@ -20,9 +21,9 @@ func Clone(ctx context.Context, spec *GitopsAPISpec) (connectors.Connector, *git
 
 	fs, work, err := connector.Clone(ctx, spec.Base, spec.Branch)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to clone repo %s: %w", spec.Repository, err)
 	}
-	logger.Infof("Successfully cloned %s to %s", spec.Base, fs.Root())
+	logger.Tracef("successfully cloned remote:%s to local:%s", spec.Base, fs.Root())
 
 	return connector, work, nil
 }
@@ -36,10 +37,10 @@ func CommitAndPush(ctx context.Context, connector connectors.Connector, work *gi
 	return hash, connector.Push(ctx, spec.Branch)
 }
 
-func OpenPR(ctx context.Context, connector connectors.Connector, spec *GitopsAPISpec) (int, error) {
+func OpenPR(ctx context.Context, connector connectors.Connector, spec *GitopsAPISpec) (*connectors.PullRequest, error) {
 	pr, err := connector.OpenPullRequest(ctx, *spec.PullRequest)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
 	return pr, nil
