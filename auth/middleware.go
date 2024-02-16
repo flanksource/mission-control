@@ -122,7 +122,7 @@ func mapIDsToRoles(ctx context.Context, session *client.Session, uid uuid.UUID) 
 		"identity": session.Identity,
 	}
 
-	res, err := gomplate.RunTemplate(env, gomplate.Template{Expression: IdentityRoleMapper})
+	res, err := ctx.RunTemplate(gomplate.Template{Expression: IdentityRoleMapper}, env)
 	if err != nil {
 		return fmt.Errorf("error running IdentityRoleMapper template: %v", err)
 	}

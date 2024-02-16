@@ -203,7 +203,7 @@ func HandleRun(ctx context.Context, run models.PlaybookRun) error {
 		}
 
 		gomplateTemplate := gomplate.Template{Expression: action.Delay}
-		if action.Delay, err = gomplate.RunTemplate(templateEnv.AsMap(), gomplateTemplate); err != nil {
+		if action.Delay, err = ctx.RunTemplate(gomplateTemplate, templateEnv.AsMap()); err != nil {
 			return fmt.Errorf("failed to parse action delay (%s): %w", action.Delay, err)
 		} else if delay, err = action.DelayDuration(); err != nil {
 			return fmt.Errorf("failed to parse action delay as a duration (%s): %w", action.Delay, err)
@@ -345,7 +345,7 @@ func templateActionExpressions(ctx context.Context, run models.PlaybookRun, runA
 			Functions:  actionFilterFuncs,
 		}
 		var err error
-		if actionSpec.Filter, err = gomplate.RunTemplate(env.AsMap(), gomplateTemplate); err != nil {
+		if actionSpec.Filter, err = ctx.RunTemplate(gomplateTemplate, env.AsMap()); err != nil {
 			return fmt.Errorf("failed to parse action filter (%s): %w", actionSpec.Filter, err)
 		}
 	}
