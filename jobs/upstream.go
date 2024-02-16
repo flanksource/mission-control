@@ -55,23 +55,6 @@ func reconcileTable(ctx context.Context, table string) (int, error) {
 	return count, err
 }
 
-var SyncCheckStatuses = &job.Job{
-	JobHistory: true,
-	Singleton:  true,
-	Retention:  job.RetentionHour,
-	Name:       "SyncCheckStatuses",
-	Schedule:   "@every 30s",
-	Fn: func(ctx job.JobRuntime) error {
-		ctx.History.ResourceType = job.ResourceTypeUpstream
-		ctx.History.ResourceID = api.UpstreamConf.Host
-		var err error
-		if ctx.History.SuccessCount, err = upstream.SyncCheckStatuses(ctx.Context, api.UpstreamConf, ReconcilePageSize); err != nil {
-			ctx.History.AddError(err.Error())
-		}
-		return nil
-	},
-}
-
 // SyncArtifactRecords pushes any unpushed artifact records to the upstream.
 // The actual artifacts aren't pushed by this job.
 var SyncArtifactRecords = &job.Job{
