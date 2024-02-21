@@ -243,7 +243,7 @@ type IncidentRuleSpec struct {
 }
 
 func (rule IncidentRuleSpec) String() string {
-	return fmt.Sprintf("name=%s components=%s filter=%s", rule.Name, rule.Components, rule.Filter)
+	return fmt.Sprintf("name=%s components=%v filter=%s", rule.Name, rule.Components, rule.Filter)
 }
 
 func (IncidentRuleSpec) GormDataType() string {
