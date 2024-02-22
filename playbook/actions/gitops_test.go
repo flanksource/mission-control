@@ -8,7 +8,6 @@ import (
 
 	commons "github.com/flanksource/commons/context"
 	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/gomplate/v3"
 	gitv5 "github.com/go-git/go-git/v5"
 	"k8s.io/apimachinery/pkg/util/yaml"
 
