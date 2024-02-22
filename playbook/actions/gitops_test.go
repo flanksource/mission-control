@@ -57,28 +57,21 @@ var _ = ginkgo.Describe("Playbook Action Gitops", ginkgo.Ordered, func() {
 			},
 		}
 
+		ctx := context.Context{
+			Context: commons.NewContext(gocontext.TODO()),
+		}
+
 		env = TemplateEnv{
 			Params: map[string]string{
 				"namespace": "logging",
 			},
 		}
 
-		templater := gomplate.StructTemplater{
-			Values:         env.AsMap(),
-			ValueFunctions: true,
-			RequiredTag:    "template",
-			DelimSets: []gomplate.Delims{
-				{Left: "{{", Right: "}}"},
-				{Left: "$(", Right: ")"},
-			},
-		}
+		templater := ctx.NewStructTemplater(env.AsMap(), "template", nil)
 		err := templater.Walk(&spec)
 		Expect(err).ToNot(HaveOccurred())
 
 		var runner GitOps
-		ctx := context.Context{
-			Context: commons.NewContext(gocontext.TODO()),
-		}
 		res, err := runner.Run(ctx, spec)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(res.CreatedPR).To(BeEmpty())

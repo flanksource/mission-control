@@ -376,16 +376,7 @@ func templateAction(ctx context.Context, run models.PlaybookRun, runAction model
 		},
 	}
 
-	templater := gomplate.StructTemplater{
-		Values:         env.AsMap(),
-		ValueFunctions: true,
-		RequiredTag:    "template",
-		DelimSets: []gomplate.Delims{
-			{Left: "{{", Right: "}}"},
-			{Left: "$(", Right: ")"},
-		},
-		Funcs: collections.MergeMap(templateFuncs, actionFilterFuncs),
-	}
+	templater := ctx.NewStructTemplater(env.AsMap(), "template", collections.MergeMap(templateFuncs, actionFilterFuncs))
 	return templater.Walk(&actionSpec)
 }
 
