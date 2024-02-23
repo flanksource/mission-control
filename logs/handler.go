@@ -12,7 +12,6 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
-	"github.com/flanksource/gomplate/v3"
 	"github.com/labstack/echo/v4"
 
 	"github.com/flanksource/incident-commander/api"
@@ -55,14 +54,7 @@ func LogsHandler(c echo.Context) error {
 		})
 	}
 
-	templater := gomplate.StructTemplater{
-		Values:         component.GetAsEnvironment(),
-		ValueFunctions: true,
-		DelimSets: []gomplate.Delims{
-			{Left: "{{", Right: "}}"},
-			{Left: "$(", Right: ")"},
-		},
-	}
+	templater := ctx.NewStructTemplater(component.GetAsEnvironment(), "", nil)
 	if err := templater.Walk(logSelector); err != nil {
 		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
 			Error:   err.Error(),

@@ -11,7 +11,6 @@ import (
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/gomplate/v3"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
@@ -87,15 +86,7 @@ func (r *RunParams) setDefaults(ctx context.Context, spec v1.PlaybookSpec, run m
 		}
 	}
 
-	templater := gomplate.StructTemplater{
-		RequiredTag: "template",
-		DelimSets: []gomplate.Delims{
-			{Left: "{{", Right: "}}"},
-			{Left: "$(", Right: ")"},
-		},
-		ValueFunctions: true,
-		Values:         env.AsMap(),
-	}
+	templater := ctx.NewStructTemplater(env.AsMap(), "template", nil)
 	if err := templater.Walk(&defaultParams); err != nil {
 		return fmt.Errorf("failed to walk template: %w", err)
 	}
