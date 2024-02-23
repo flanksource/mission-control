@@ -13,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/samber/lo"
 	"gorm.io/gorm"
 )
 
@@ -21,13 +22,23 @@ var _ = ginkgo.Describe("Upstream Reconcile", ginkgo.Ordered, func() {
 	var reconcileUpstream = agentWrapper{name: "reconcile_upstream", id: uuid.New()}
 
 	ginkgo.BeforeAll(func() {
+		api.TablesToReconcile = append(api.TablesToReconcile,
+			[]string{"config_scrapers", "config_items", "canaries", "checks"}..., // only for unit test
+		)
+
 		reconcileAgent.setup(DefaultContext)
 		reconcileUpstream.setup(DefaultContext)
 		reconcileUpstream.StartServer()
 
 		Expect(reconcileUpstream.DB().Create(&models.Agent{ID: reconcileAgent.id, Name: reconcileAgent.name}).Error).To(BeNil())
-
 	})
+
+	ginkgo.AfterAll(func() {
+		api.TablesToReconcile = lo.Filter(api.TablesToReconcile, func(table string, _ int) bool {
+			return !lo.Contains([]string{"config_scrapers", "config_items", "canaries", "checks"}, table)
+		})
+	})
+
 	ginkgo.It("should populate the agent database with the 6 tables that are reconciled", func() {
 		dummyDataset := reconcileAgent.dataset
 
