@@ -30,6 +30,12 @@ const (
 )
 
 func getNextActionToRun(ctx context.Context, playbook models.Playbook, runID uuid.UUID) (*v1.PlaybookAction, error) {
+	if validationErr, err := v1.ValidatePlaybookSpec(playbook.Spec); err != nil {
+		return nil, err
+	} else if validationErr != nil {
+		return nil, validationErr
+	}
+
 	var playbookSpec v1.PlaybookSpec
 	if err := json.Unmarshal(playbook.Spec, &playbookSpec); err != nil {
 		return nil, err

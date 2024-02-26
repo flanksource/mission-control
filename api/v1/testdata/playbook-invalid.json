@@ -1,0 +1,9 @@
+{
+  "actions": [
+    {
+      "exec": {
+        "command": "ls"
+      }
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "description": "Listing files",
+  "actions": [
+    {
+      "name": "List files",
+      "exec": {
+        "script": "ls"
+      }
+    }
+  ]
+}
