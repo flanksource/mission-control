@@ -29,13 +29,13 @@ type NotificationAction struct {
 
 type GitOpsActionRepo struct {
 	// URL of the git repository
-	URL string `yaml:"url" json:"url"`
+	URL string `yaml:"url" json:"url" template:"true"`
 	// Branch to clone. Defaults to "main".
 	Base string `yaml:"base,omitempty" json:"base,omitempty" template:"true"`
 	// Branch is the new branch to create. Defaults to Base.
 	Branch string `yaml:"branch,omitempty" json:"branch,omitempty" template:"true"`
 	// Connection name to use the credentials for the git repo
-	Connection string `yaml:"connection,omitempty" json:"connection,omitempty"`
+	Connection string `yaml:"connection,omitempty" json:"connection,omitempty" template:"true"`
 	// Type specifies the service the repository is hosted on (eg: github, gitlab, etc)
 	// It is deduced from the repo URL however for private repository you can
 	// explicitly specify the type manually.
