@@ -4,6 +4,7 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/job"
+	"github.com/flanksource/duty/query"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/incidents"
 	"github.com/robfig/cron/v3"
@@ -46,6 +47,11 @@ func Start(ctx context.Context) {
 	if err := job.NewJob(ctx, "Cleanup NotificationSend History", CleanupNotificationSendHistorySchedule, CleanupNotificationSendHistory).
 		AddToScheduler(FuncScheduler); err != nil {
 		logger.Errorf("Failed to schedule job for cleaning up notification send history table: %v", err)
+	}
+
+	query.SyncConfigCacheJob.Context = ctx
+	if err := query.SyncConfigCacheJob.RunOnStart().AddToScheduler(FuncScheduler); err != nil {
+		logger.Errorf("Failed to schedule job for syncing config cache: %v", err)
 	}
 
 	if api.UpstreamConf.Valid() {
