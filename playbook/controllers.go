@@ -161,6 +161,55 @@ func HandlePlaybookRun(c echo.Context) error {
 	})
 }
 
+func HandleGetPlaybookParams(c echo.Context) error {
+	ctx := c.Request().Context().(context.Context)
+
+	var req RunParams
+	if err := c.Bind(&req); err != nil {
+		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{Error: err.Error(), Message: "invalid request"})
+	}
+	if err := req.valid(); err != nil {
+		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{Error: err.Error(), Message: "invalid request"})
+	}
+
+	playbook, err := db.FindPlaybook(ctx, req.ID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Error: err.Error(), Message: "failed to get playbook"})
+	} else if playbook == nil {
+		return c.JSON(http.StatusNotFound, dutyAPI.HTTPError{Error: "not found", Message: fmt.Sprintf("playbook(id=%s) not found", req.ID)})
+	}
+
+	dummyRun := models.PlaybookRun{PlaybookID: playbook.ID}
+	if req.ComponentID != uuid.Nil {
+		dummyRun.ComponentID = &req.ComponentID
+	}
+	if req.ConfigID != uuid.Nil {
+		dummyRun.ConfigID = &req.ConfigID
+	}
+	if req.CheckID != uuid.Nil {
+		dummyRun.CheckID = &req.CheckID
+	}
+
+	env, err := prepareTemplateEnv(ctx, dummyRun)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Error: err.Error(), Message: "unable to prepare template env"})
+	}
+
+	var spec v1.PlaybookSpec
+	if err := json.Unmarshal(playbook.Spec, &spec); err != nil {
+		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Error: err.Error(), Message: "failed to unmarshal playbook spec"})
+	}
+
+	templater := ctx.NewStructTemplater(env.AsMap(), "template", nil)
+	if err := templater.Walk(&spec.Parameters); err != nil {
+		return fmt.Errorf("failed to walk template: %w", err)
+	}
+
+	return c.JSON(http.StatusOK, map[string]any{
+		"params": spec.Parameters,
+	})
+}
+
 func HandleGetPlaybookRun(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
 	id := c.Param("id")
@@ -280,6 +329,7 @@ func RegisterRoutes(e *echo.Echo) *echo.Group {
 	runGroup := playbookGroup.Group("/run")
 	runGroup.POST("", HandlePlaybookRun)
 	runGroup.GET("/:id", HandleGetPlaybookRun)
+	runGroup.GET("/:id/params", HandleGetPlaybookParams)
 	runGroup.POST("/approve/:playbook_id/:run_id", HandlePlaybookRunApproval)
 
 	return playbookGroup
