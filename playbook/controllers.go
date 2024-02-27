@@ -325,11 +325,11 @@ func RegisterRoutes(e *echo.Echo) *echo.Group {
 	playbookGroup := e.Group(fmt.Sprintf("/%s", prefix))
 	playbookGroup.GET("/list", HandlePlaybookList)
 	playbookGroup.POST("/webhook/:webhook_path", HandleWebhook)
+	playbookGroup.POST("/:id/params", HandleGetPlaybookParams)
 
 	runGroup := playbookGroup.Group("/run")
 	runGroup.POST("", HandlePlaybookRun)
 	runGroup.GET("/:id", HandleGetPlaybookRun)
-	runGroup.GET("/:id/params", HandleGetPlaybookParams)
 	runGroup.POST("/approve/:playbook_id/:run_id", HandlePlaybookRunApproval)
 
 	return playbookGroup
