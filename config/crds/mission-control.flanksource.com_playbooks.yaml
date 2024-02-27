@@ -811,6 +811,12 @@ spec:
                               description: Connection name to use the credentials
                                 for the git repo
                               type: string
+                            type:
+                              description: 'Type specifies the service the repository
+                                is hosted on (eg: github, gitlab, etc) It is deduced
+                                from the repo URL however for private repository you
+                                can explicitly specify the type manually.'
+                              type: string
                             url:
                               description: URL of the git repository
                               type: string

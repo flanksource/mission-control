@@ -12,6 +12,7 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/schema/openapi"
 	"github.com/flanksource/gomplate/v3"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
@@ -30,6 +31,12 @@ const (
 )
 
 func getNextActionToRun(ctx context.Context, playbook models.Playbook, runID uuid.UUID) (*v1.PlaybookAction, error) {
+	if validationErr, err := openapi.ValidatePlaybookSpec(playbook.Spec); err != nil {
+		return nil, err
+	} else if validationErr != nil {
+		return nil, validationErr
+	}
+
 	var playbookSpec v1.PlaybookSpec
 	if err := json.Unmarshal(playbook.Spec, &playbookSpec); err != nil {
 		return nil, err
