@@ -2,17 +2,12 @@ package v1
 
 import (
 	"encoding/json"
-	"fmt"
 
 	"github.com/flanksource/duty/models"
 	dutyTypes "github.com/flanksource/duty/types"
-	"github.com/flanksource/incident-commander/config/schemas"
-	"github.com/xeipuuv/gojsonschema"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
-
-var playbookSchemaLoader = gojsonschema.NewBytesLoader(schemas.PlaybookSpecSchemaLoader)
 
 type Permission struct {
 	Role string `json:"role,omitempty" yaml:"role,omitempty"`
@@ -188,20 +183,6 @@ type PlaybookSpec struct {
 
 	// Approval defines the individuals and teams authorized to approve runs of this playbook.
 	Approval *PlaybookApproval `json:"approval,omitempty" yaml:"approval,omitempty"`
-}
-
-func ValidatePlaybookSpec(schema []byte) (error, error) {
-	documentLoader := gojsonschema.NewBytesLoader(schema)
-	result, err := gojsonschema.Validate(playbookSchemaLoader, documentLoader)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(result.Errors()) != 0 {
-		return fmt.Errorf("spec is invalid: %v", result.Errors()), nil
-	}
-
-	return nil, nil
 }
 
 // PlaybookStatus defines the observed state of Playbook
