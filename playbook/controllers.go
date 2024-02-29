@@ -196,13 +196,8 @@ func HandleGetPlaybookParams(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Error: err.Error(), Message: "failed to unmarshal playbook spec"})
 	}
 
-	allowed, err := checkPlaybookFilter(ctx, spec, env)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Error: err.Error(), Message: "failed to check for playbook filters"})
-	}
-
-	if !allowed {
-		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{Error: err.Error(), Message: "filters did not pass"})
+	if err := checkPlaybookFilter(ctx, spec, env); err != nil {
+		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Error: err.Error(), Message: "playbook filters did not pass"})
 	}
 
 	templater := ctx.NewStructTemplater(env.AsMap(), "template", nil)

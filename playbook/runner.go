@@ -168,20 +168,20 @@ func GetActionForAgent(ctx context.Context, agent *models.Agent) (*ActionForAgen
 	return &output, tx.Commit().Error
 }
 
-func checkPlaybookFilter(ctx context.Context, playbookSpec v1.PlaybookSpec, templateEnv actions.TemplateEnv) (bool, error) {
+func checkPlaybookFilter(ctx context.Context, playbookSpec v1.PlaybookSpec, templateEnv actions.TemplateEnv) error {
 	for _, f := range playbookSpec.Filters {
 		val, err := ctx.RunTemplate(gomplate.Template{Expression: f}, templateEnv.AsMap())
 		if err != nil {
-			ctx.Errorf("error running playbook filter expression[%s]: %v", f, err)
-			return false, nil
+			return fmt.Errorf("error running playbook filter expression[%s]: %w", f, err)
+
 		}
 
 		// The expression must return a boolean
 		if val != "true" {
-			return false, nil
+			return fmt.Errorf("CEL expr[%s] returned val %s", f, val)
 		}
 	}
-	return true, nil
+	return nil
 }
 
 // HandleRun finds the next action that this host should run.
