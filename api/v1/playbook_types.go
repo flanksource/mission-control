@@ -182,7 +182,7 @@ type PlaybookSpec struct {
 	Actions []PlaybookAction `json:"actions" yaml:"actions"`
 
 	// CEL Expressions that check if a playbook should be executed
-	Filters []string `json:"filters" yaml:"filters"`
+	Filters []string `json:"filters,omitempty" yaml:"filters,omitempty"`
 
 	// Approval defines the individuals and teams authorized to approve runs of this playbook.
 	Approval *PlaybookApproval `json:"approval,omitempty" yaml:"approval,omitempty"`

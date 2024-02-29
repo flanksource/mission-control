@@ -1531,7 +1531,6 @@ spec:
                 type: string
             required:
             - actions
-            - filters
             type: object
           status:
             description: PlaybookStatus defines the observed state of Playbook
