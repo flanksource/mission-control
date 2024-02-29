@@ -178,7 +178,7 @@ func checkPlaybookFilter(ctx context.Context, playbookSpec v1.PlaybookSpec, temp
 
 		// The expression must return a boolean
 		if val != "true" {
-			return fmt.Errorf("CEL expr[%s] returned val %s", f, val)
+			return fmt.Errorf("%s", val)
 		}
 	}
 	return nil
