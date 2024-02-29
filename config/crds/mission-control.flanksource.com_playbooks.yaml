@@ -3,8 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.11.1
-  creationTimestamp: null
+    controller-gen.kubebuilder.io/version: v0.14.0
   name: playbooks.mission-control.flanksource.com
 spec:
   group: mission-control.flanksource.com
@@ -21,14 +20,19 @@ spec:
         description: Playbook is the schema for the Playbooks API
         properties:
           apiVersion:
-            description: 'APIVersion defines the versioned schema of this representation
-              of an object. Servers should convert recognized schemas to the latest
-              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
             type: string
           kind:
-            description: 'Kind is a string value representing the REST resource this
-              object represents. Servers may infer this from the endpoint the client
-              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
             type: string
           metadata:
             type: object
@@ -125,10 +129,10 @@ spec:
                       - token
                       type: object
                     delay:
-                      description: Delay is a CEL expression that returns the duration
-                        to delay the execution of this action. Valid time units are
-                        "s", "m", "h", "d", "w", "y". It's only sensitive to the minute.
-                        i.e. if you delay by 20s it can take upto a minute to execute.
+                      description: |-
+                        Delay is a CEL expression that returns the duration to delay the execution of this action.
+                        Valid time units are "s", "m", "h", "d", "w", "y".
+                        It's only sensitive to the minute. i.e. if you delay by 20s it can take upto a minute to execute.
                       type: string
                     exec:
                       properties:
@@ -193,10 +197,9 @@ spec:
                             connection:
                               type: string
                             destination:
-                              description: Destination is the full path to where the
-                                contents of the URL should be downloaded to. If left
-                                empty, the sha256 hash of the URL will be used as
-                                the dir name.
+                              description: |-
+                                Destination is the full path to where the contents of the URL should be downloaded to.
+                                If left empty, the sha256 hash of the URL will be used as the dir name.
                               type: string
                             password:
                               properties:
@@ -650,10 +653,9 @@ spec:
                             type: object
                           type: array
                         script:
-                          description: Script can be an inline script or a path to
-                            a script that needs to be executed On windows executed
-                            via powershell and in darwin and linux executed using
-                            bash
+                          description: |-
+                            Script can be an inline script or a path to a script that needs to be executed
+                            On windows executed via powershell and in darwin and linux executed using bash
                           type: string
                       required:
                       - script
@@ -727,9 +729,9 @@ spec:
                                   file.
                                 type: string
                               ref:
-                                description: Ref is the git reference for the workflow.
-                                  The reference can be a branch or tag name. Defaults
-                                  to "main".
+                                description: "Ref is the git reference for the workflow.\nThe
+                                  reference can be a branch or tag name.\n\tDefaults
+                                  to \"main\"."
                                 type: string
                             required:
                             - id
@@ -756,8 +758,9 @@ spec:
                           - message
                           type: object
                         files:
-                          description: Files to create/delete. Use the special "$delete"
-                            directive to delete an existing file.
+                          description: |-
+                            Files to create/delete.
+                            Use the special "$delete" directive to delete an existing file.
                           items:
                             properties:
                               content:
@@ -783,9 +786,9 @@ spec:
                             type: object
                           type: array
                         pr:
-                          description: PullRequest specifies the details for the PR
-                            to be created. Only if connection type is github or azuredevops
-                            then a new PR is created.
+                          description: |-
+                            PullRequest specifies the details for the PR to be created.
+                            Only if connection type is github or azuredevops then a new PR is created.
                           properties:
                             tags:
                               description: Tags to add to the PR
@@ -812,10 +815,10 @@ spec:
                                 for the git repo
                               type: string
                             type:
-                              description: 'Type specifies the service the repository
-                                is hosted on (eg: github, gitlab, etc) It is deduced
-                                from the repo URL however for private repository you
-                                can explicitly specify the type manually.'
+                              description: |-
+                                Type specifies the service the repository is hosted on (eg: github, gitlab, etc)
+                                It is deduced from the repo URL however for private repository you can
+                                explicitly specify the type manually.
                               type: string
                             url:
                               description: URL of the git repository
@@ -987,16 +990,16 @@ spec:
                           type: object
                       type: object
                     if:
-                      description: 'Filter is a cel-expression that decides if this
-                        action should run or not. The expressions should either return
-                        a boolean value (''true'' indicating run the action & vice
-                        versa) or any of these special functions. Examples: - filter:
-                        config.deleted_at ? true: false - filter: always() always():
-                        run no matter what; even if the playbook is cancelled/fails
-                        failure(): run if any of the previous actions failed success():
-                        run only if all previous actions succeeded (default) timeout():
-                        run only if any of the previous actions timed out skip():
-                        skip running this action'
+                      description: "Filter is a cel-expression that decides if this
+                        action should run or not.\nThe expressions should either return
+                        a boolean value ('true' indicating run the action & vice versa)\nor
+                        any of these special functions.\nExamples:\n\t- filter: config.deleted_at
+                        ? true: false\n\t- filter: always()\nalways(): run no matter
+                        what; even if the playbook is cancelled/fails\nfailure():
+                        run if any of the previous actions failed\nsuccess(): run
+                        only if all previous actions succeeded (default)\ntimeout():
+                        run only if any of the previous actions timed out\nskip():
+                        skip running this action"
                       type: string
                     name:
                       description: Name of the action
@@ -1037,8 +1040,9 @@ spec:
                             type: object
                           type: array
                         maxLength:
-                          description: 'MaxLength is the maximum length of the logs
-                            to show Default: 3000 characters'
+                          description: |-
+                            MaxLength is the maximum length of the logs to show
+                             Default: 3000 characters
                           type: integer
                         name:
                           description: Name is name of the pod that'll be created
@@ -1052,9 +1056,9 @@ spec:
                       - spec
                       type: object
                     runsOn:
-                      description: RunsOn specifies the agents that can run this action.
-                        When left empty, the action will run on the main instance
-                        itself.
+                      description: |-
+                        RunsOn specifies the agents that can run this action.
+                        When left empty, the action will run on the main instance itself.
                       items:
                         type: string
                       type: array
@@ -1064,8 +1068,9 @@ spec:
                           description: Connection identifier e.g. connection://Postgres/flanksource
                           type: string
                         driver:
-                          description: 'Driver is the name of the underlying database
-                            to connect to. Example: postgres, mysql, ...'
+                          description: |-
+                            Driver is the name of the underlying database to connect to.
+                            Example: postgres, mysql, ...
                           type: string
                         query:
                           description: Query is the sql query to run
@@ -1078,9 +1083,12 @@ spec:
                       - query
                       type: object
                     templatesOn:
-                      description: 'TemplatesOn specifies where the templating happens.
-                        Available options: - host - agent When left empty, the templating
-                        is done on the main instance(host) itself.'
+                      description: |-
+                        TemplatesOn specifies where the templating happens.
+                        Available options:
+                         - host
+                         - agent
+                        When left empty, the templating is done on the main instance(host) itself.
                       type: string
                     timeout:
                       description: Timeout is the maximum duration to let an action
@@ -1113,9 +1121,9 @@ spec:
               checks:
                 description: Checks filters what checks can run on this playbook.
                 items:
-                  description: PlaybookResourceFilter defines a filter that decides
-                    whether a resource (config or a component) is permitted be run
-                    on the Playbook.
+                  description: |-
+                    PlaybookResourceFilter defines a filter that decides whether a resource (config or a component)
+                    is permitted be run on the Playbook.
                   properties:
                     tags:
                       additionalProperties:
@@ -1128,9 +1136,9 @@ spec:
               components:
                 description: Components what components can run on this playbook.
                 items:
-                  description: PlaybookResourceFilter defines a filter that decides
-                    whether a resource (config or a component) is permitted be run
-                    on the Playbook.
+                  description: |-
+                    PlaybookResourceFilter defines a filter that decides whether a resource (config or a component)
+                    is permitted be run on the Playbook.
                   properties:
                     tags:
                       additionalProperties:
@@ -1143,9 +1151,9 @@ spec:
               configs:
                 description: Configs filters what config items can run on this playbook.
                 items:
-                  description: PlaybookResourceFilter defines a filter that decides
-                    whether a resource (config or a component) is permitted be run
-                    on the Playbook.
+                  description: |-
+                    PlaybookResourceFilter defines a filter that decides whether a resource (config or a component)
+                    is permitted be run on the Playbook.
                   properties:
                     tags:
                       additionalProperties:
@@ -1158,13 +1166,18 @@ spec:
               description:
                 description: Short description of the playbook.
                 type: string
+              filters:
+                description: CEL Expressions that check if a playbook should be executed
+                items:
+                  type: string
+                type: array
               icon:
                 type: string
               "on":
-                description: '`On` defines triggers that will automatically trigger
-                  the playbook. If multiple events are defined, only one of those
-                  events needs to occur to trigger the playbook. If multiple triggering
-                  events occur at the same time, multiple playbook runs will be triggered.'
+                description: |-
+                  `On` defines triggers that will automatically trigger the playbook.
+                  If multiple events are defined, only one of those events needs to occur to trigger the playbook.
+                  If multiple triggering events occur at the same time, multiple playbook runs will be triggered.
                 properties:
                   canary:
                     items:
@@ -1326,8 +1339,9 @@ spec:
                           github:
                             properties:
                               token:
-                                description: 'Token is the secret token for the webhook.
-                                  Doc: https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries'
+                                description: |-
+                                  Token is the secret token for the webhook.
+                                   Doc: https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries
                                 properties:
                                   name:
                                     type: string
@@ -1429,10 +1443,9 @@ spec:
                                     type: object
                                 type: object
                               verifyTimestamp:
-                                description: TimestampTolerance specifies the tolerance
-                                  for the timestamp verification. Valid time units
-                                  are "ns", "us" (or "µs"), "ms", "s", "m", "h", "d",
-                                  "w", "y".
+                                description: |-
+                                  TimestampTolerance specifies the tolerance for the timestamp verification.
+                                  Valid time units are "ns", "us" (or "µs"), "ms", "s", "m", "h", "d", "w", "y".
                                 type: string
                             required:
                             - secret
@@ -1463,8 +1476,9 @@ spec:
                       description: Label shown on the UI
                       type: string
                     name:
-                      description: Name is the key for this parameter. It's used to
-                        address the parameter on templates.
+                      description: |-
+                        Name is the key for this parameter.
+                        It's used to address the parameter on templates.
                       type: string
                     properties:
                       type: object
@@ -1501,18 +1515,23 @@ spec:
                   type: object
                 type: array
               runsOn:
-                description: RunsOn specifies the agents that can run this playbook.
+                description: |-
+                  RunsOn specifies the agents that can run this playbook.
                   When left empty, the playbook will run on the main instance itself.
                 items:
                   type: string
                 type: array
               templatesOn:
-                description: 'TemplatesOn specifies where the templating happens.
-                  Available options: - host - agent When left empty, the templating
-                  is done on the main instance(host) itself.'
+                description: |-
+                  TemplatesOn specifies where the templating happens.
+                  Available options:
+                   - host
+                   - agent
+                  When left empty, the templating is done on the main instance(host) itself.
                 type: string
             required:
             - actions
+            - filters
             type: object
           status:
             description: PlaybookStatus defines the observed state of Playbook
