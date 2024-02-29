@@ -30,13 +30,15 @@ var SyncWithUpstream = &job.Job{
 	Fn: func(ctx job.JobRuntime) error {
 		ctx.History.ResourceType = job.ResourceTypeUpstream
 		ctx.History.ResourceID = api.UpstreamConf.Host
-		for _, table := range api.TablesToReconcile {
+		tablesToReconcile := []string{"topologies", "components"}
+		for _, table := range tablesToReconcile {
 			if count, err := reconcileTable(ctx.Context, table); err != nil {
 				ctx.History.AddError(err.Error())
 			} else {
 				ctx.History.SuccessCount += count
 			}
 		}
+
 		return nil
 	},
 }

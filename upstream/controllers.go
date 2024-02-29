@@ -28,8 +28,8 @@ func RegisterRoutes(e *echo.Echo) {
 	upstreamGroup.GET("/ping", upstream.PingHandler(agentIDCache))
 	upstreamGroup.POST("/push", upstream.PushHandler(agentIDCache))
 	upstreamGroup.DELETE("/push", upstream.DeleteHandler(agentIDCache))
-	upstreamGroup.GET("/pull/:agent_name", upstream.PullHandler(api.TablesToReconcile))
-	upstreamGroup.GET("/status/:agent_name", upstream.StatusHandler(api.TablesToReconcile))
+	upstreamGroup.GET("/pull/:agent_name", upstream.PullHandler(api.AllowedReconciliationTables))
+	upstreamGroup.GET("/status/:agent_name", upstream.StatusHandler(api.AllowedReconciliationTables))
 	upstreamGroup.GET("/canary/pull/:agent_name", PullCanaries)
 	upstreamGroup.GET("/scrapeconfig/pull/:agent_name", PullScrapeConfigs)
 
