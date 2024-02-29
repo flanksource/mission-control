@@ -7,9 +7,15 @@ import (
 	"github.com/flanksource/duty/upstream"
 )
 
-var TablesToReconcile = []string{
+// List of tables that a mission-control UPSTREAM should allow reconciliation
+// from other agents.
+var AllowedReconciliationTables = []string{
 	"topologies",
 	"components",
+	"config_scrapers",
+	"config_items",
+	"canaries",
+	"checks",
 }
 
 var UpstreamConf upstream.UpstreamConfig
