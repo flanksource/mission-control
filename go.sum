@@ -840,8 +840,8 @@ github.com/flanksource/is-healthy v0.0.0-20231003215854-76c51e3a3ff7 h1:s6jf6P1p
 github.com/flanksource/is-healthy v0.0.0-20231003215854-76c51e3a3ff7/go.mod h1:BH5gh9JyEAuuWVP6Q5y9h43VozS0RfKyjNpM9L4v4hw=
 github.com/flanksource/kommons v0.31.4 h1:zksAgYjZuwPgS8XTejDIWEYB0nPSU1i3Jxcavm/vovI=
 github.com/flanksource/kommons v0.31.4/go.mod h1:70BPMzjTvejsqRyVyAm/ZCeZ176toCvauaZjU03svnE=
-github.com/flanksource/kopper v1.0.7 h1:NewLALx0CHUrSMobC9y7tM4NMxJ7ilRPkd1h//PGY/A=
-github.com/flanksource/kopper v1.0.7/go.mod h1:VA8QbY7Q9159VsxXntbvvmYZSQYlLfbIS9Aqjpvl180=
+github.com/flanksource/kopper v1.0.8 h1:rHSQzzd2OXzopFE1yzC8LKyhgsykgpgDkLxwSUX98X4=
+github.com/flanksource/kopper v1.0.8/go.mod h1:6JMCgy+a/mzoAbhN5wo3cbCXb8BdHBFabLgjsIVS6nA=
 github.com/flanksource/kubectl-neat v1.0.2 h1:hDcc6B060I3Rxp5YyJl4nvb7Cxd4dfmCo2dmdRwHDB4=
 github.com/flanksource/kubectl-neat v1.0.2/go.mod h1:Un/Voyh3cmiZNKQrW/TkAl28nAA7vwnwDGVjRErKjOw=
 github.com/flanksource/postq v0.1.4 h1:mfghH84Cwbi0sZKY1lgmujzYHnbf50UyobrVd3YCiDY=
