@@ -56,13 +56,27 @@ func validateAndSavePlaybookRun(ctx context.Context, playbook *models.Playbook, 
 		run.CheckID = &req.CheckID
 	}
 
-	if err := req.setDefaults(ctx, spec, run); err != nil {
+	templateEnv, err := prepareTemplateEnv(ctx, run)
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare template env: %w", err)
+	}
+
+	if err := req.setDefaults(ctx, spec, templateEnv); err != nil {
 		return nil, fmt.Errorf("failed to set defaults: %v", err)
 	}
 	run.Parameters = types.JSONStringMap{}
 
 	for k, v := range req.Params {
 		run.Parameters[k] = fmt.Sprintf("%v", v)
+	}
+
+	// Check playbook filters
+	allowed, err := checkPlaybookFilter(ctx, spec, templateEnv)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check for playbook[%s] filters: %w", playbook.ID, err)
+	}
+	if !allowed {
+		return nil, fmt.Errorf("filters did not pass for playbook[%s]", playbook.ID)
 	}
 
 	if err := savePlaybookRun(ctx, playbook, &run); err != nil {

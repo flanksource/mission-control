@@ -168,21 +168,11 @@ func GetActionForAgent(ctx context.Context, agent *models.Agent) (*ActionForAgen
 	return &output, tx.Commit().Error
 }
 
-func checkPlaybookFilter(ctx context.Context, playbook models.Playbook, run models.PlaybookRun) (bool, error) {
-	// Check playbook filter
-	templateEnv, err := prepareTemplateEnv(ctx, run)
-	if err != nil {
-		return false, fmt.Errorf("failed to prepare template env: %w", err)
-	}
-
-	var playbookSpec v1.PlaybookSpec
-	if err := json.Unmarshal(playbook.Spec, &playbookSpec); err != nil {
-		return false, err
-	}
+func checkPlaybookFilter(ctx context.Context, playbookSpec v1.PlaybookSpec, templateEnv actions.TemplateEnv) (bool, error) {
 	for _, f := range playbookSpec.Filters {
 		val, err := ctx.RunTemplate(gomplate.Template{Expression: f}, templateEnv.AsMap())
 		if err != nil {
-			ctx.Errorf("error running playbook[%s] filter expression[%s]: %v", playbook.ID, f, err)
+			ctx.Errorf("error running playbook filter expression[%s]: %v", f, err)
 			return false, nil
 		}
 
@@ -203,15 +193,6 @@ func HandleRun(ctx context.Context, run models.PlaybookRun) error {
 	var playbook models.Playbook
 	if err := ctx.DB().First(&playbook, run.PlaybookID).Error; err != nil {
 		return fmt.Errorf("failed to fetch playbook: %w", err)
-	}
-
-	filterPassed, err := checkPlaybookFilter(ctx, playbook, run)
-	if err != nil {
-		return fmt.Errorf("error running playbook filter check: %w", err)
-	}
-	if !filterPassed {
-		// TODO: Create Playbook Status in duty
-		return ctx.DB().Model(&models.PlaybookRun{}).Where("id = ?", run.ID).UpdateColumn("status", "filter failed").Error
 	}
 
 	action, err := getNextActionToRun(ctx, playbook, run.ID)
