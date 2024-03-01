@@ -331,7 +331,9 @@ require (
 
 // replace github.com/flanksource/commons => ../commons
 
-replace github.com/flanksource/duty => ../duty
+replace github.com/flanksource/duty => github.com/flanksource/duty v1.0.357-0.20240301102852-c42d8302bb6a
+
+// replace github.com/flanksource/duty => ../duty
 
 // replace github.com/flanksource/postq => ../postq
 
