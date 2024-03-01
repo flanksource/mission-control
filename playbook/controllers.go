@@ -197,7 +197,7 @@ func HandleGetPlaybookParams(c echo.Context) error {
 	}
 
 	if err := checkPlaybookFilter(ctx, spec, env); err != nil {
-		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Error: err.Error(), Message: "playbook filters did not pass"})
+		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Error: "Playbook validation failed", Message: err.Error()})
 	}
 
 	templater := ctx.NewStructTemplater(env.AsMap(), "template", nil)

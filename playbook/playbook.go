@@ -72,7 +72,7 @@ func validateAndSavePlaybookRun(ctx context.Context, playbook *models.Playbook, 
 
 	// Check playbook filters
 	if err := checkPlaybookFilter(ctx, spec, templateEnv); err != nil {
-		return nil, fmt.Errorf("filters did not pass for playbook[%s]: %w", playbook.ID, err)
+		return nil, err
 	}
 
 	if err := savePlaybookRun(ctx, playbook, &run); err != nil {
