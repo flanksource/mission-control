@@ -168,6 +168,22 @@ func GetActionForAgent(ctx context.Context, agent *models.Agent) (*ActionForAgen
 	return &output, tx.Commit().Error
 }
 
+func checkPlaybookFilter(ctx context.Context, playbookSpec v1.PlaybookSpec, templateEnv actions.TemplateEnv) error {
+	for _, f := range playbookSpec.Filters {
+		val, err := ctx.RunTemplate(gomplate.Template{Expression: f}, templateEnv.AsMap())
+		if err != nil {
+			return fmt.Errorf("Invalid playbook filter [%s]: %s", f, err)
+
+		}
+
+		// The expression must return a boolean
+		if val != "true" {
+			return fmt.Errorf("%s", val)
+		}
+	}
+	return nil
+}
+
 // HandleRun finds the next action that this host should run.
 // In case it doesn't find any, it marks the run as waiting.
 func HandleRun(ctx context.Context, run models.PlaybookRun) error {

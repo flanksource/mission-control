@@ -17,6 +17,7 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/playbook/actions"
 )
 
 type RunResponse struct {
@@ -69,14 +70,9 @@ func paramStr(params []v1.PlaybookParameter) string {
 	return out
 }
 
-func (r *RunParams) setDefaults(ctx context.Context, spec v1.PlaybookSpec, run models.PlaybookRun) error {
+func (r *RunParams) setDefaults(ctx context.Context, spec v1.PlaybookSpec, templateEnv actions.TemplateEnv) error {
 	if len(spec.Parameters) == len(r.Params) {
 		return nil
-	}
-
-	env, err := prepareTemplateEnv(ctx, run)
-	if err != nil {
-		return fmt.Errorf("failed to prepare template env: %w", err)
 	}
 
 	defaultParams := []v1.PlaybookParameter{}
@@ -86,7 +82,7 @@ func (r *RunParams) setDefaults(ctx context.Context, spec v1.PlaybookSpec, run m
 		}
 	}
 
-	templater := ctx.NewStructTemplater(env.AsMap(), "template", nil)
+	templater := ctx.NewStructTemplater(templateEnv.AsMap(), "template", nil)
 	if err := templater.Walk(&defaultParams); err != nil {
 		return fmt.Errorf("failed to walk template: %w", err)
 	}
@@ -198,6 +194,10 @@ func HandleGetPlaybookParams(c echo.Context) error {
 	var spec v1.PlaybookSpec
 	if err := json.Unmarshal(playbook.Spec, &spec); err != nil {
 		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Error: err.Error(), Message: "failed to unmarshal playbook spec"})
+	}
+
+	if err := checkPlaybookFilter(ctx, spec, env); err != nil {
+		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Error: "Playbook validation failed", Message: err.Error()})
 	}
 
 	templater := ctx.NewStructTemplater(env.AsMap(), "template", nil)
