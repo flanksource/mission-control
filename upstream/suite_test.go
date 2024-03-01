@@ -8,7 +8,6 @@ import (
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/tests/setup"
 	"github.com/flanksource/duty/upstream"
-	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/postq"
 	"github.com/google/uuid"
@@ -113,12 +112,12 @@ func (t *agentWrapper) PushTo(other agentWrapper) {
 
 	fn := upstream.NewPushUpstreamConsumer(upstreamConfig)
 	consumer, err := postq.AsyncEventConsumer{
-		WatchEvents: []string{api.EventPushQueueCreate},
+		WatchEvents: []string{upstream.EventPushQueueCreate},
 		BatchSize:   50,
 		Consumer: func(ctx postq.Context, e postq.Events) postq.Events {
-			t.Context.Debugf("processing [%s] %d events", api.EventPushQueueCreate, len(e))
+			t.Context.Debugf("processing [%s] %d events", upstream.EventPushQueueCreate, len(e))
 			e = fn(t.Context, e)
-			t.Context.Debugf("processed [%s] %d events", api.EventPushQueueCreate, len(e))
+			t.Context.Debugf("processed [%s] %d events", upstream.EventPushQueueCreate, len(e))
 			return e
 		},
 		ConsumerOption: &postq.ConsumerOption{

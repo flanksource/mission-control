@@ -44,7 +44,7 @@ var _ = ginkgo.Describe("Upstream Push", ginkgo.Ordered, ginkgo.Pending, func() 
 
 	ginkgo.It("should track insertion on the event_queue table", func() {
 		var events api.Events
-		err := pushAgent.DB().Where("name = ?", api.EventPushQueueCreate).Find(&events).Error
+		err := pushAgent.DB().Where("name = ?", upstream.EventPushQueueCreate).Find(&events).Error
 		Expect(err).NotTo(HaveOccurred())
 		verifyPushQueue(events.ToPostQEvents(), pushAgent.dataset)
 	})
@@ -67,7 +67,7 @@ var _ = ginkgo.Describe("Upstream Push", ginkgo.Ordered, ginkgo.Pending, func() 
 		Expect(err).NotTo(HaveOccurred())
 
 		var events api.Events
-		err = pushAgent.DB().Where("name = ? AND created_at >= ?", api.EventPushQueueCreate, start).Find(&events).Error
+		err = pushAgent.DB().Where("name = ? AND created_at >= ?", upstream.EventPushQueueCreate, start).Find(&events).Error
 		Expect(err).NotTo(HaveOccurred())
 
 		// Only 1 event should get created since we are modifying the same resource
@@ -353,7 +353,7 @@ func verifyPushQueue(events postq.Events, dataset dummy.DummyData) {
 			Expect(g.ItemIDs).To(Equal(getPrimaryKeys(table, dataset.ConfigRelationships)), "Mismatch composite primary keys for config_relationships")
 
 		default:
-			ginkgo.Fail(fmt.Sprintf("Unexpected table %q on the event queue for %q", table, api.EventPushQueueCreate))
+			ginkgo.Fail(fmt.Sprintf("Unexpected table %q on the event queue for %q", table, upstream.EventPushQueueCreate))
 		}
 	}
 
