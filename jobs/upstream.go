@@ -115,6 +115,6 @@ var PingUpstream = &job.Job{
 		ctx.History.ResourceType = job.ResourceTypeUpstream
 		ctx.History.ResourceID = api.UpstreamConf.Host
 		client := upstream.NewUpstreamClient(api.UpstreamConf)
-		return client.Ping(ctx.Context, api.UpstreamConf.AgentName)
+		return client.Ping(ctx.Context)
 	},
 }

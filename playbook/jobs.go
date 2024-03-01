@@ -31,7 +31,7 @@ func PushPlaybookActions(ctx context.Context, upstreamConfig upstream.UpstreamCo
 		}
 
 		ctx.Tracef("pushing %d playbook actions to upstream", len(actions))
-		if err := client.Push(ctx, &upstream.PushData{PlaybookActions: actions, AgentName: upstreamConfig.AgentName}); err != nil {
+		if err := client.Push(ctx, &upstream.PushData{PlaybookActions: actions}); err != nil {
 			return 0, fmt.Errorf("failed to push playbook actions to upstream: %w", err)
 		}
 
@@ -52,7 +52,7 @@ func PushPlaybookActions(ctx context.Context, upstreamConfig upstream.UpstreamCo
 func PullPlaybookAction(ctx context.Context, upstreamConfig upstream.UpstreamConfig) (bool, error) {
 	client := upstream.NewUpstreamClient(upstreamConfig)
 
-	req := client.R(ctx)
+	req := client.R(ctx).QueryParam(upstream.AgentNameQueryParam, upstreamConfig.AgentName)
 	resp, err := req.Get("playbook-action")
 	if err != nil {
 		return false, fmt.Errorf("error pushing to upstream: %w", err)

@@ -20,18 +20,19 @@ import (
 )
 
 var (
-	agentIDCache = cache.New(3*24*time.Hour, 12*time.Hour)
+	agentCache = cache.New(3*24*time.Hour, 12*time.Hour)
 )
 
 func RegisterRoutes(e *echo.Echo) {
-	upstreamGroup := e.Group("/upstream", rbac.Authorization(rbac.ObjectAgentPush, rbac.ActionWrite))
-	upstreamGroup.GET("/ping", upstream.PingHandler(agentIDCache))
-	upstreamGroup.POST("/push", upstream.PushHandler(agentIDCache))
-	upstreamGroup.DELETE("/push", upstream.DeleteHandler(agentIDCache))
-	upstreamGroup.GET("/pull/:agent_name", upstream.PullHandler(api.AllowedReconciliationTables))
-	upstreamGroup.GET("/status/:agent_name", upstream.StatusHandler(api.AllowedReconciliationTables))
-	upstreamGroup.GET("/canary/pull/:agent_name", PullCanaries)
-	upstreamGroup.GET("/scrapeconfig/pull/:agent_name", PullScrapeConfigs)
+	upstreamGroup := e.Group("/upstream", rbac.Authorization(rbac.ObjectAgentPush, rbac.ActionWrite), upstream.AgentAuthMiddleware(agentCache))
+	upstreamGroup.GET("/ping", upstream.PingHandler)
+	upstreamGroup.POST("/push", upstream.PushHandler)
+	upstreamGroup.DELETE("/push", upstream.DeleteHandler)
+
+	upstreamGroup.GET("/pull", upstream.PullHandler(api.AllowedReconciliationTables))
+	upstreamGroup.GET("/status", upstream.StatusHandler(api.AllowedReconciliationTables))
+	upstreamGroup.GET("/canary/pull", PullCanaries)
+	upstreamGroup.GET("/scrapeconfig/pull", PullScrapeConfigs)
 
 	upstreamGroup.POST("/artifacts/:id", artifactsPushHandler)
 
@@ -59,15 +60,10 @@ func handlePlaybookActionRequest(c echo.Context) error {
 func PullCanaries(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
 
-	agentName := c.Param("agent_name")
-	agent, err := db.FindAgent(ctx, agentName)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Error: err.Error(), Message: "failed to get agent"})
-	} else if agent == nil {
-		return c.JSON(http.StatusNotFound, dutyAPI.HTTPError{Message: fmt.Sprintf("agent(name=%s) not found", agentName)})
-	}
+	agent := ctx.Agent()
 
 	var since time.Time
+	var err error
 	if sinceRaw := c.QueryParam("since"); sinceRaw != "" {
 		since, err = time.Parse(time.RFC3339, sinceRaw)
 		if err != nil {
@@ -81,7 +77,7 @@ func PullCanaries(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
 			Error:   err.Error(),
-			Message: fmt.Sprintf("Error fetching canaries for agent(name=%s)", agentName),
+			Message: fmt.Sprintf("Error fetching canaries for agent(name=%s)", agent.Name),
 		})
 	}
 
@@ -91,15 +87,9 @@ func PullCanaries(c echo.Context) error {
 // PullScrapeConfigs returns all scrape configs for the agent.
 func PullScrapeConfigs(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
-	agentName := c.Param("agent_name")
+	agent := ctx.Agent()
 
-	agent, err := db.FindAgent(ctx, agentName)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Error: err.Error(), Message: "failed to get agent"})
-	} else if agent == nil {
-		return c.JSON(http.StatusNotFound, dutyAPI.HTTPError{Message: fmt.Sprintf("agent(name=%s) not found", agentName)})
-	}
-
+	var err error
 	var since time.Time
 	if sinceRaw := c.QueryParam("since"); sinceRaw != "" {
 		since, err = time.Parse(time.RFC3339Nano, sinceRaw)
@@ -114,7 +104,7 @@ func PullScrapeConfigs(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
 			Error:   err.Error(),
-			Message: fmt.Sprintf("error fetching scrape configs for agent(name=%s)", agentName),
+			Message: fmt.Sprintf("error fetching scrape configs for agent(name=%s)", agent.Name),
 		})
 	}
 
