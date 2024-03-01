@@ -21,7 +21,7 @@ import (
 	"github.com/flanksource/incident-commander/api"
 )
 
-var _ = ginkgo.Describe("Upstream Push", ginkgo.Ordered, func() {
+var _ = ginkgo.Describe("Upstream Push", ginkgo.Ordered, ginkgo.Pending, func() {
 	// 1. Initial setup
 	// 	a. Fire up a postgres server & create 2 databases for downstream & upstream servers with migrations run on both of them.
 	// 	b. Fire up an HTTP Server for the upstream

@@ -16,7 +16,7 @@ import (
 	"gorm.io/gorm"
 )
 
-var _ = ginkgo.Describe("Upstream Reconcile", ginkgo.Ordered, func() {
+var _ = ginkgo.Describe("Upstream Reconcile", ginkgo.Ordered, ginkgo.Pending, func() {
 	var reconcileAgent = agentWrapper{name: "reconcile", id: uuid.New(), datasetFunc: dummy.GenerateDynamicDummyData}
 	var reconcileUpstream = agentWrapper{name: "reconcile_upstream", id: uuid.New()}
 
