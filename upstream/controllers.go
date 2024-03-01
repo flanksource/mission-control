@@ -41,10 +41,6 @@ func handlePlaybookActionRequest(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
 
 	agent := ctx.Agent()
-	if agent == nil {
-		return c.JSON(http.StatusNotFound, dutyAPI.HTTPError{Error: "not found", Message: "agent not found"})
-	}
-
 	response, err := playbook.GetActionForAgent(ctx, agent)
 	if err != nil {
 		return dutyAPI.WriteError(c, err)
@@ -64,7 +60,7 @@ func PullCanaries(c echo.Context) error {
 	if sinceRaw := c.QueryParam("since"); sinceRaw != "" {
 		since, err = time.Parse(time.RFC3339, sinceRaw)
 		if err != nil {
-			return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{Error: err.Error(), Message: "'since' param needs to be a valid RFC3339 timestamp"})
+			return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{Error: fmt.Sprintf("'since' param needs to be a valid RFC3339 timestamp: %v", err)})
 		}
 
 		ctx.GetSpan().SetAttributes(attribute.String("upstream.pull.canaries.since", sinceRaw))
@@ -73,8 +69,7 @@ func PullCanaries(c echo.Context) error {
 	canaries, err := db.GetCanariesOfAgent(ctx, agent.ID, since)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
-			Error:   err.Error(),
-			Message: fmt.Sprintf("Error fetching canaries for agent(name=%s)", agent.Name),
+			Error: fmt.Sprintf("error fetching canaries for agent(name=%s)", agent.Name),
 		})
 	}
 
@@ -91,7 +86,7 @@ func PullScrapeConfigs(c echo.Context) error {
 	if sinceRaw := c.QueryParam("since"); sinceRaw != "" {
 		since, err = time.Parse(time.RFC3339Nano, sinceRaw)
 		if err != nil {
-			return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{Error: err.Error(), Message: "'since' param needs to be a valid RFC3339Nano timestamp"})
+			return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{Error: fmt.Sprintf("'since' param needs to be a valid RFC3339Nano timestamp: %v", err)})
 		}
 
 		ctx.GetSpan().SetAttributes(attribute.String("upstream.pull.configs.since", sinceRaw))
@@ -100,8 +95,7 @@ func PullScrapeConfigs(c echo.Context) error {
 	scrapeConfigs, err := db.GetScrapeConfigsOfAgent(ctx, agent.ID, since)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
-			Error:   err.Error(),
-			Message: fmt.Sprintf("error fetching scrape configs for agent(name=%s)", agent.Name),
+			Error: fmt.Sprintf("error fetching scrape configs for agent(name=%s)", agent.Name),
 		})
 	}
 

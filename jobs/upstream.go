@@ -17,11 +17,10 @@ var (
 	ReconcileMaxAge time.Duration
 )
 
-// ReconcileTopologies coordinates with upstream and pushes any resource
-// that are missing on the upstream.
+// ReconcileTopologies pushes unpushed (or updated) topologies and components to the upstream
 var ReconcileTopologies = &job.Job{
 	Name:       "ReconcileTopologies",
-	Schedule:   "@every 8h",
+	Schedule:   "@every 30m",
 	Retention:  job.Retention3Day,
 	JobHistory: true,
 	RunNow:     true,
