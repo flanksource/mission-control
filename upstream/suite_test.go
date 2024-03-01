@@ -24,8 +24,6 @@ var (
 	shutdown func()
 )
 
-const batchSize = 500
-
 func TestUpstream(t *testing.T) {
 	RegisterFailHandler(ginkgo.Fail)
 	ginkgo.RunSpecs(t, "Upstream")
