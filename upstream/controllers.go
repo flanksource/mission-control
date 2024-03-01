@@ -12,7 +12,6 @@ import (
 	"github.com/patrickmn/go-cache"
 	"go.opentelemetry.io/otel/attribute"
 
-	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/artifacts"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/playbook"
@@ -29,8 +28,6 @@ func RegisterRoutes(e *echo.Echo) {
 	upstreamGroup.POST("/push", upstream.PushHandler)
 	upstreamGroup.DELETE("/push", upstream.DeleteHandler)
 
-	upstreamGroup.GET("/pull", upstream.PullHandler(api.AllowedReconciliationTables))
-	upstreamGroup.GET("/status", upstream.StatusHandler(api.AllowedReconciliationTables))
 	upstreamGroup.GET("/canary/pull", PullCanaries)
 	upstreamGroup.GET("/scrapeconfig/pull", PullScrapeConfigs)
 

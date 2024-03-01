@@ -21,7 +21,7 @@ var FuncScheduler = cron.New()
 
 var agentJobs = []*job.Job{
 	PingUpstream,
-	SyncWithUpstream,
+	ReconcileTopologies,
 	SyncArtifactRecords,
 	SyncArtifactData,
 	PushPlaybookActions,

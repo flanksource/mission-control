@@ -1,15 +1,13 @@
 package jobs
 
 import (
-	"fmt"
 	"time"
 
-	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/job"
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/artifacts"
-	"go.opentelemetry.io/otel/trace"
 )
 
 var (
@@ -19,10 +17,10 @@ var (
 	ReconcileMaxAge time.Duration
 )
 
-// SyncWithUpstream coordinates with upstream and pushes any resource
+// ReconcileTopologies coordinates with upstream and pushes any resource
 // that are missing on the upstream.
-var SyncWithUpstream = &job.Job{
-	Name:       "SyncWithUpstream",
+var ReconcileTopologies = &job.Job{
+	Name:       "ReconcileTopologies",
 	Schedule:   "@every 8h",
 	Retention:  job.Retention3Day,
 	JobHistory: true,
@@ -30,31 +28,20 @@ var SyncWithUpstream = &job.Job{
 	Fn: func(ctx job.JobRuntime) error {
 		ctx.History.ResourceType = job.ResourceTypeUpstream
 		ctx.History.ResourceID = api.UpstreamConf.Host
-		tablesToReconcile := []string{"topologies", "components"}
-		for _, table := range tablesToReconcile {
-			if count, err := reconcileTable(ctx.Context, table); err != nil {
-				ctx.History.AddError(err.Error())
-			} else {
-				ctx.History.SuccessCount += count
-			}
+		if count, err := upstream.ReconcileTable[models.Topology](ctx.Context, api.UpstreamConf, ReconcilePageSize); err != nil {
+			ctx.History.AddError(err.Error())
+		} else {
+			ctx.History.SuccessCount += count
+		}
+
+		if count, err := upstream.ReconcileTable[models.Component](ctx.Context, api.UpstreamConf, ReconcilePageSize); err != nil {
+			ctx.History.AddError(err.Error())
+		} else {
+			ctx.History.SuccessCount += count
 		}
 
 		return nil
 	},
-}
-
-func reconcileTable(ctx context.Context, table string) (int, error) {
-	var span trace.Span
-	ctx, span = ctx.StartSpan(fmt.Sprintf("reconcile-%s", table))
-	defer span.End()
-	reconciler := upstream.NewUpstreamReconciler(api.UpstreamConf, ReconcilePageSize)
-
-	count, err := reconciler.SyncAfter(ctx, table, ReconcileMaxAge)
-	if err != nil {
-		return count, err
-	}
-	ctx.Tracef("upstream reconcile synced %d resources for %s", count, table)
-	return count, err
 }
 
 // SyncArtifactRecords pushes any unpushed artifact records to the upstream.
@@ -69,7 +56,7 @@ var SyncArtifactRecords = &job.Job{
 		ctx.History.ResourceType = job.ResourceTypeUpstream
 		ctx.History.ResourceID = api.UpstreamConf.Host
 		var err error
-		ctx.History.SuccessCount, err = upstream.SyncArtifacts(ctx.Context, api.UpstreamConf, ReconcilePageSize)
+		ctx.History.SuccessCount, err = upstream.ReconcileTable[models.Artifact](ctx.Context, api.UpstreamConf, ReconcilePageSize)
 		if err != nil {
 			ctx.History.AddError(err.Error())
 		}

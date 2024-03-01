@@ -86,21 +86,6 @@ func (t *agentWrapper) StartServer() {
 	shutdown = wrap(shutdown, stop)
 }
 
-func (t *agentWrapper) GetReconciler(other *agentWrapper) *upstream.UpstreamReconciler {
-	upstreamConfig := upstream.UpstreamConfig{
-		AgentName: t.name,
-		Host:      fmt.Sprintf("http://localhost:%d", other.port),
-		Username:  "System",
-		Password:  "admin",
-		Labels:    []string{"test"},
-	}
-	return upstream.NewUpstreamReconciler(upstreamConfig, batchSize)
-}
-
-func (t *agentWrapper) Reconcile(other *agentWrapper, table string) (int, error) {
-	return t.GetReconciler(other).Sync(t.Context, table)
-}
-
 func (t *agentWrapper) PushTo(other agentWrapper) {
 	upstreamConfig := upstream.UpstreamConfig{
 		AgentName: t.name,
