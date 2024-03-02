@@ -49,20 +49,22 @@ func getNextActionToRun(ctx context.Context, playbook models.Playbook, runID uui
 		}
 	}
 
+	if lastRanAction.Name == "" { // Nothing has run yet
+		return &playbookSpec.Actions[0], nil
+	}
+
 	for i, action := range playbookSpec.Actions {
-		if lastRanAction.Name == "" { // Nothing has run yet
-			return &playbookSpec.Actions[i], nil
-		}
-
-		if action.Name != lastRanAction.Name {
-			continue
-		}
-
 		if i == len(playbookSpec.Actions)-1 {
 			break // All the actions have run
 		}
 
-		return &playbookSpec.Actions[i+1], nil
+		if action.Name == lastRanAction.Name {
+			if lastRanAction.Status == models.PlaybookActionStatusFailed && action.Filter != actionFilterAlways {
+				// If last action failed do not run more steps unless filter has always()
+				return nil, nil
+			}
+			return &playbookSpec.Actions[i+1], nil
+		}
 	}
 
 	return nil, nil
