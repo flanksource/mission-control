@@ -59,15 +59,25 @@ func getNextActionToRun(ctx context.Context, playbook models.Playbook, runID uui
 		}
 
 		if action.Name == lastRanAction.Name {
-			if lastRanAction.Status == models.PlaybookActionStatusFailed && action.Filter != actionFilterAlways {
-				// If last action failed do not run more steps unless filter has always()
-				return nil, nil
+			// If last action failed do not run more steps unless it has a filter
+			if lastRanAction.Status == models.PlaybookActionStatusFailed {
+				alwaysAction := findNextActionWithFilter(playbookSpec.Actions[i+1:])
+				return alwaysAction, nil
 			}
 			return &playbookSpec.Actions[i+1], nil
 		}
 	}
 
 	return nil, nil
+}
+
+func findNextActionWithFilter(actions []v1.PlaybookAction) *v1.PlaybookAction {
+	for _, action := range actions {
+		if action.Filter != "" {
+			return &action
+		}
+	}
+	return nil
 }
 
 // ActionForAgent holds in all the necessary information
