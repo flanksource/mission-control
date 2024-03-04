@@ -15,6 +15,7 @@ var ReconcileAll = &job.Job{
 	Name:       "ReconcileAll",
 	Schedule:   "@every 1m",
 	Retention:  job.Retention3Day,
+	Singleton:  true,
 	JobHistory: true,
 	RunNow:     true,
 	Fn: func(ctx job.JobRuntime) error {
