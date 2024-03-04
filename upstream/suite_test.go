@@ -64,7 +64,19 @@ func (t *agentWrapper) setup(context context.Context) {
 			ginkgo.Fail(err.Error())
 		}
 	}
+}
 
+func (t *agentWrapper) Reconcile(upstreamPort int) error {
+	upstreamConfig := upstream.UpstreamConfig{
+		AgentName: t.name,
+		Host:      fmt.Sprintf("http://localhost:%d", upstreamPort),
+		Username:  "System",
+		Password:  "admin",
+		Labels:    []string{"test"},
+	}
+
+	_, err := upstream.ReconcileAll(t.Context, upstreamConfig, 100)
+	return err
 }
 
 func (t *agentWrapper) StartServer() {
@@ -82,36 +94,6 @@ func (t *agentWrapper) StartServer() {
 	t.port = port
 
 	shutdown = wrap(shutdown, stop)
-}
-
-func (t *agentWrapper) PushTo(other agentWrapper) {
-	upstreamConfig := upstream.UpstreamConfig{
-		AgentName: t.name,
-		Host:      fmt.Sprintf("http://localhost:%d", other.port),
-		Username:  "System",
-		Password:  "admin",
-		Labels:    []string{"test"},
-	}
-
-	fn := upstream.NewPushUpstreamConsumer(upstreamConfig)
-	consumer, err := postq.AsyncEventConsumer{
-		WatchEvents: []string{upstream.EventPushQueueCreate},
-		BatchSize:   50,
-		Consumer: func(ctx postq.Context, e postq.Events) postq.Events {
-			t.Context.Debugf("processing [%s] %d events", upstream.EventPushQueueCreate, len(e))
-			e = fn(t.Context, e)
-			t.Context.Debugf("processed [%s] %d events", upstream.EventPushQueueCreate, len(e))
-			return e
-		},
-		ConsumerOption: &postq.ConsumerOption{
-			ErrorHandler: func(ctx postq.Context, e error) bool {
-				defer ginkgo.GinkgoRecover()
-				Expect(e).To(BeNil())
-				return true
-			},
-		}}.EventConsumer()
-	Expect(err).To(BeNil())
-	consumer.ConsumeUntilEmpty(t.Context)
 }
 
 func (t *agentWrapper) runDeleteConsumer(other agentWrapper) {

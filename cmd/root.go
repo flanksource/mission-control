@@ -4,7 +4,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/utils"
@@ -114,15 +113,6 @@ func ServerFlags(flags *pflag.FlagSet) {
 		}
 	}
 
-	var upstreamMaxAgeDefault = time.Hour * 48
-	if val, exists := os.LookupEnv("UPSTREAM_MAX_AGE"); exists {
-		if parsed, err := time.ParseDuration(val); err != nil {
-			logger.Fatalf("invalid value=%s for UPSTREAM_MAX_AGE: %v", val, err)
-		} else {
-			upstreamMaxAgeDefault = parsed
-		}
-	}
-
 	var upstreamUserDefault = "token"
 	if val, exists := os.LookupEnv("UPSTREAM_USER"); exists {
 		upstreamUserDefault = val
@@ -135,7 +125,6 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&api.UpstreamConf.AgentName, "upstream-agent-name", os.Getenv("AGENT_NAME"), "name of the cluster")
 	flags.StringSliceVar(&api.UpstreamConf.Labels, "upstream-labels", strings.Split(os.Getenv("UPSTREAM_LABELS"), ","), `labels in the format: "key1=value1,key2=value2"`)
 	flags.IntVar(&jobs.ReconcilePageSize, "upstream-page-size", upstreamPageSizeDefault, "upstream reconciliation page size")
-	flags.DurationVar(&jobs.ReconcileMaxAge, "upstream-max-age", upstreamMaxAgeDefault, "upstream reconciliation max age")
 }
 
 func init() {

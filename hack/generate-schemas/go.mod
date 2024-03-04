@@ -39,11 +39,11 @@ require (
 	github.com/evanphx/json-patch v5.7.0+incompatible // indirect
 	github.com/exaring/otelpgx v0.5.2 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
-	github.com/flanksource/duty v1.0.356 // indirect
-	github.com/flanksource/gomplate/v3 v3.24.0 // indirect
+	github.com/flanksource/duty v1.0.362 // indirect
+	github.com/flanksource/gomplate/v3 v3.24.1 // indirect
 	github.com/flanksource/is-healthy v0.0.0-20231003215854-76c51e3a3ff7 // indirect
 	github.com/flanksource/kommons v0.31.4 // indirect
-	github.com/flanksource/kubectl-neat v1.0.2 // indirect
+	github.com/flanksource/kubectl-neat v1.0.3 // indirect
 	github.com/flanksource/postq v0.1.4 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/go-errors/errors v1.5.1 // indirect
