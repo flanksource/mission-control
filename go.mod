@@ -12,8 +12,8 @@ require (
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.25.0 // indirect
 	github.com/flanksource/commons v1.22.0
-	github.com/flanksource/duty v1.0.363
-	github.com/flanksource/gomplate/v3 v3.24.1
+	github.com/flanksource/duty v1.0.364
+	github.com/flanksource/gomplate/v3 v3.24.2
 	github.com/flanksource/kopper v1.0.7
 	github.com/flanksource/postq v0.1.4
 	github.com/gomarkdown/markdown v0.0.0-20230922112808-5421fefb8386
@@ -112,7 +112,7 @@ require (
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/flanksource/is-healthy v0.0.0-20231003215854-76c51e3a3ff7 // indirect
 	github.com/flanksource/kommons v0.31.4 // indirect
-	github.com/flanksource/kubectl-neat v1.0.3 // indirect
+	github.com/flanksource/kubectl-neat v1.0.4 // indirect
 	github.com/fluxcd/gitkit v0.6.0 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.3 // indirect
