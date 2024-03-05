@@ -59,8 +59,8 @@ var _ = ginkgo.BeforeSuite(func() {
 	e.Use(auth.MockMiddleware)
 	RegisterRoutes(e)
 
-	upstreamGroup := e.Group("/upstream")
-	upstreamGroup.POST("/push", upstream.PushHandler(cache.New(24*time.Hour, 12*time.Hour)))
+	upstreamGroup := e.Group("/upstream", upstream.AgentAuthMiddleware(cache.New(24*time.Hour, 12*time.Hour)))
+	upstreamGroup.POST("/push", upstream.PushHandler)
 	upstreamGroup.GET("/playbook-action", func(c echo.Context) error {
 		ctx := c.Request().Context().(context.Context)
 
