@@ -1,4 +1,4 @@
-# Incident Commander
+# Mission control
 
 Incident Commander is a mission control center for enterprises, managed service providers and SaaS providers, it provides:
 
