@@ -842,8 +842,8 @@ github.com/flanksource/kommons v0.31.4 h1:zksAgYjZuwPgS8XTejDIWEYB0nPSU1i3Jxcavm
 github.com/flanksource/kommons v0.31.4/go.mod h1:70BPMzjTvejsqRyVyAm/ZCeZ176toCvauaZjU03svnE=
 github.com/flanksource/kopper v1.0.7 h1:NewLALx0CHUrSMobC9y7tM4NMxJ7ilRPkd1h//PGY/A=
 github.com/flanksource/kopper v1.0.7/go.mod h1:VA8QbY7Q9159VsxXntbvvmYZSQYlLfbIS9Aqjpvl180=
-github.com/flanksource/kubectl-neat v1.0.2 h1:hDcc6B060I3Rxp5YyJl4nvb7Cxd4dfmCo2dmdRwHDB4=
-github.com/flanksource/kubectl-neat v1.0.2/go.mod h1:Un/Voyh3cmiZNKQrW/TkAl28nAA7vwnwDGVjRErKjOw=
+github.com/flanksource/kubectl-neat v1.0.3 h1:EzpcWzEp+X+e4Jeqc6k5J9exYh4FwSHub7Y1l1N+Jtw=
+github.com/flanksource/kubectl-neat v1.0.3/go.mod h1:Un/Voyh3cmiZNKQrW/TkAl28nAA7vwnwDGVjRErKjOw=
 github.com/flanksource/postq v0.1.4 h1:mfghH84Cwbi0sZKY1lgmujzYHnbf50UyobrVd3YCiDY=
 github.com/flanksource/postq v0.1.4/go.mod h1:AAuaPRhpqxvyF7JPs8X1NMsJVenh80ldpJPDVgWvFf8=
 github.com/fluxcd/gitkit v0.6.0 h1:iNg5LTx6ePo+Pl0ZwqHTAkhbUHxGVSY3YCxCdw7VIFg=
