@@ -17,6 +17,15 @@ import (
 	"gorm.io/gorm"
 )
 
+type playbookRunError struct {
+	RunID uuid.UUID
+	Err   error
+}
+
+func (t *playbookRunError) Error() string {
+	return fmt.Sprintf("error running playbook (id=%s): %v", t.RunID, t.Err)
+}
+
 // Pg Notify channels for run and action updates
 const (
 	pgNotifyPlaybookRunUpdates    = "playbook_run_updates"
@@ -25,12 +34,49 @@ const (
 
 // StartPlaybookConsumers starts the run and action consumers
 func StartPlaybookConsumers(ctx context.Context) error {
-	runEventConsumer, err := postq.NewPGConsumer(RunConsumer, &postq.ConsumerOption{NumConsumers: 5})
+	runEventConsumer, err := postq.NewPGConsumer(RunConsumer, &postq.ConsumerOption{
+		NumConsumers: 5,
+		ErrorHandler: func(_ctx postq.Context, err error) bool {
+			ctx, ok := _ctx.(context.Context)
+			if !ok {
+				_ctx.Debugf("unexpected error in playbook run consumer: context isn't duty's context %v", err)
+				return false
+			}
+
+			ctx.Errorf("%v", err)
+
+			var runErr *playbookRunError
+			if errors.As(err, &runErr) {
+				updateColumns := map[string]any{
+					"end_time": gorm.Expr("CLOCK_TIMESTAMP()"),
+					"status":   models.PlaybookRunStatusFailed,
+					// "error": err.Error(), //TODO
+				}
+				if err := ctx.DB().Model(&models.PlaybookRun{}).Where("id = ?", runErr.RunID).UpdateColumns(updateColumns).Error; err != nil {
+					ctx.Errorf("error updating run status to 'failed': %v", err)
+				}
+			}
+
+			return false // We do not retry playbook runs
+		},
+	})
 	if err != nil {
 		return err
 	}
 
-	actionEventConsumer, err := postq.NewPGConsumer(ActionConsumer, &postq.ConsumerOption{NumConsumers: 50})
+	actionEventConsumer, err := postq.NewPGConsumer(ActionConsumer, &postq.ConsumerOption{
+		NumConsumers: 50,
+		ErrorHandler: func(_ctx postq.Context, e error) bool {
+			ctx, ok := _ctx.(context.Context)
+			if !ok {
+				_ctx.Debugf("unexpcted error in playbook action consumer: context isn't duty's context %v", err)
+				return false
+			}
+
+			ctx.Errorf("run consumer error: %v", e)
+			return false // We do not retry playbook actions
+		},
+	})
 	if err != nil {
 		return err
 	}
@@ -184,8 +230,6 @@ func RunConsumer(c postq.Context) (int, error) {
 	}
 	defer tx.Rollback()
 
-	ctx = ctx.WithDB(tx, ctx.Pool())
-
 	query := `
 		SELECT playbook_runs.*
 		FROM playbook_runs
@@ -196,16 +240,29 @@ func RunConsumer(c postq.Context) (int, error) {
 		LIMIT 1
 	`
 
-	var runs []models.PlaybookRun
-	if err := tx.Raw(query, models.PlaybookRunStatusScheduled, models.PlaybookRunStatusSleeping).Find(&runs).Error; err != nil {
+	var run models.PlaybookRun
+	if err := tx.Raw(query, models.PlaybookRunStatusScheduled, models.PlaybookRunStatusSleeping).First(&run).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return 0, nil
+		}
+
 		return 0, err
 	}
 
-	for i := range runs {
-		if err := HandleRun(ctx, runs[i]); err != nil {
-			return 0, fmt.Errorf("failed to schedule the next action for run %d: %w", runs[i].ID, err)
+	ctx = ctx.WithDB(tx, ctx.Pool())
+	if err := HandleRun(ctx, run); err != nil {
+		return 0, &playbookRunError{
+			RunID: run.ID,
+			Err:   err,
 		}
 	}
 
-	return len(runs), tx.Commit().Error
+	if err := tx.Commit().Error; err != nil {
+		return 0, &playbookRunError{
+			RunID: run.ID,
+			Err:   err,
+		}
+	}
+
+	return 1, nil
 }

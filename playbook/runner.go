@@ -204,7 +204,7 @@ func HandleRun(ctx context.Context, run models.PlaybookRun) error {
 
 	var playbook models.Playbook
 	if err := ctx.DB().First(&playbook, run.PlaybookID).Error; err != nil {
-		return fmt.Errorf("failed to fetch playbook: %w", err)
+		return fmt.Errorf("failed to fetch playbook(%s): %w", run.PlaybookID, err)
 	}
 
 	action, err := getNextActionToRun(ctx, playbook, run.ID)
