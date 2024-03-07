@@ -42,6 +42,8 @@ require (
 
 require (
 	github.com/MicahParks/keyfunc/v2 v2.1.0
+	github.com/eko/gocache/lib/v4 v4.1.5
+	github.com/eko/gocache/store/go_cache/v4 v4.2.1
 	github.com/flanksource/artifacts v1.0.3
 	github.com/fluxcd/pkg/gittestserver v0.8.6
 	github.com/go-git/go-billy/v5 v5.5.0
@@ -102,8 +104,6 @@ require (
 	github.com/cloudflare/circl v1.3.7 // indirect
 	github.com/cyphar/filepath-securejoin v0.2.4 // indirect
 	github.com/distribution/reference v0.5.0 // indirect
-	github.com/eko/gocache/lib/v4 v4.1.5 // indirect
-	github.com/eko/gocache/store/go_cache/v4 v4.2.1 // indirect
 	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
 	github.com/evanphx/json-patch v5.7.0+incompatible // indirect

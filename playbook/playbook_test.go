@@ -554,6 +554,10 @@ var _ = ginkgo.Describe("Playbook", ginkgo.Ordered, func() {
 			Expect(pushed).To(Equal(1))
 		})
 
+		// This test can fail if we update the openAPI schema but the change
+		// is not pushed to duty yet
+		// Since duty syncs schema changes from this repo, this becomes a deadlock situation
+		// Workaround for now is to update openapi schemas in duty manually and then bump duty
 		ginkgo.It("should ensure that the playbook ran to completion", func() {
 			Eventually(func() models.PlaybookRunStatus {
 				var savedRun *models.PlaybookRun
