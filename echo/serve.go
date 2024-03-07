@@ -10,9 +10,11 @@ import (
 	cutils "github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/schema/openapi"
+
 	"github.com/flanksource/incident-commander/agent"
 	"github.com/flanksource/incident-commander/artifacts"
 	"github.com/flanksource/incident-commander/auth"
+	"github.com/flanksource/incident-commander/catalog"
 	"github.com/flanksource/incident-commander/logs"
 	"github.com/flanksource/incident-commander/playbook"
 	"github.com/flanksource/incident-commander/rbac"
@@ -78,6 +80,7 @@ func New(ctx context.Context) *echov4.Echo {
 	e.GET("/schemas/*", echov4.WrapHandler(http.StripPrefix("/schemas/", schemaServer)))
 
 	upstream.RegisterRoutes(e)
+	catalog.RegisterRoutes(e)
 
 	artifacts.RegisterRoutes(e, "artifacts")
 
