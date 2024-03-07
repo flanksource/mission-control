@@ -1119,7 +1119,7 @@ func (in *PlaybookSpec) DeepCopyInto(out *PlaybookSpec) {
 	}
 	if in.Configs != nil {
 		in, out := &in.Configs, &out.Configs
-		*out = make([]PlaybookResourceFilter, len(*in))
+		*out = make(types.ResourceSelectors, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
