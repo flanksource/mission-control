@@ -12,6 +12,7 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/tests/setup"
+	"github.com/flanksource/duty/types"
 	"github.com/flanksource/duty/upstream"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/events"
@@ -37,8 +38,8 @@ var _ = ginkgo.Describe("Playbook", ginkgo.Ordered, func() {
 					{Name: "path", Label: "path of the file"},
 					{Name: "footer", Label: "append this text to the file", Default: "{{.config.config_class}}"},
 				},
-				Configs: []v1.PlaybookResourceFilter{
-					{Type: *dummy.EKSCluster.Type, Tags: map[string]string{"environment": "production"}},
+				Configs: types.ResourceSelectors{
+					{Types: []string{*dummy.EKSCluster.Type}, LabelSelector: "environment=production"},
 				},
 				Approval: &v1.PlaybookApproval{
 					Type: v1.PlaybookApprovalTypeAny, // We have two approvers (John Doe & John Wick) and just a single approval is sufficient

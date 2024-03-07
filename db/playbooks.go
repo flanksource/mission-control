@@ -119,14 +119,14 @@ func FindPlaybooksForConfig(ctx context.Context, configID string) ([]api.Playboo
 	}
 
 	var playbooks []models.Playbook
-	if err := ctx.DB().Model(&models.Playbook{}).Where("spec->>'configs' IS NOT NULL").Where(query.LocalFilter).Find(&playbooks).Error; err != nil {
+	if err := ctx.DB().Model(&models.Playbook{}).Where("spec->>'configs' IS NOT NULL").Where("deleted_at IS NULL").Find(&playbooks).Error; err != nil {
 		return nil, fmt.Errorf("error finding playbooks with configs: %w", err)
 	}
 
 	configIDPlaybooks := make(map[string][]string)
 	for _, pb := range playbooks {
 		var spec v1.PlaybookSpec
-		if err := json.Unmarshal(pb.Spec, spec); err != nil {
+		if err := json.Unmarshal(pb.Spec, &spec); err != nil {
 			return nil, fmt.Errorf("error unmarshaling playbook spec: %w", err)
 		}
 
@@ -151,7 +151,7 @@ func FindPlaybooksForConfig(ctx context.Context, configID string) ([]api.Playboo
 	}
 
 	if err := configPlaybookCache.Set(ctx, configID, playbookListItems); err != nil {
-		return nil, fmt.Errorf("error caching playbooks for config: %w")
+		return nil, fmt.Errorf("error caching playbooks for config: %w", err)
 	}
 
 	return playbookListItems, err
