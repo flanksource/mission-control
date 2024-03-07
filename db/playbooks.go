@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/flanksource/commons/logger"
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -115,33 +114,27 @@ var configPlaybookCache = cache.New[[]api.PlaybookListItem](gocache_store.NewGoC
 
 // FindPlaybooksForConfig returns all the playbooks that match the given config's resource selectors
 func FindPlaybooksForConfig(ctx context.Context, configID string) ([]api.PlaybookListItem, error) {
-	logger.Infof("YASH 1")
 	if val, err := configPlaybookCache.Get(ctx, configID); err == nil {
 		return val, nil
 	}
 
 	var playbooks []models.Playbook
-	logger.Infof("YASH 2")
 	if err := ctx.DB().Model(&models.Playbook{}).Where("spec->>'configs' IS NOT NULL").Where("deleted_at IS NULL").Find(&playbooks).Error; err != nil {
 		return nil, fmt.Errorf("error finding playbooks with configs: %w", err)
 	}
 
 	configIDPlaybooks := make(map[string][]string)
-	logger.Infof("YASH 3")
 	for _, pb := range playbooks {
 		var spec v1.PlaybookSpec
-		logger.Infof("YASH 3.5 SPEC %s", pb.Spec.String())
 		if err := json.Unmarshal(pb.Spec, &spec); err != nil {
 			return nil, fmt.Errorf("error unmarshaling playbook spec: %w", err)
 		}
 
-		logger.Infof("YASH 4 SPEC CONFIGS %s", spec.Configs)
 		configIDs, err := query.FindConfigIDsByResourceSelector(ctx, spec.Configs...)
 		if err != nil {
 			return nil, fmt.Errorf("error finding config ids by resource selector: %w", err)
 		}
 
-		logger.Infof("YASH 5 SPEC config_ids %v", configIDs)
 		for _, cid := range configIDs {
 			configIDPlaybooks[cid.String()] = append(configIDPlaybooks[cid.String()], pb.ID.String())
 		}
