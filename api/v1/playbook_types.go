@@ -167,7 +167,7 @@ type PlaybookSpec struct {
 	Permissions []Permission `json:"permissions,omitempty" yaml:"permissions,omitempty"`
 
 	// Configs filters what config items can run on this playbook.
-	Configs []PlaybookResourceFilter `json:"configs,omitempty" yaml:"configs,omitempty"`
+	Configs dutyTypes.ResourceSelectors `json:"configs,omitempty" yaml:"configs,omitempty"`
 
 	// Checks filters what checks can run on this playbook.
 	Checks []PlaybookResourceFilter `json:"checks,omitempty" yaml:"checks,omitempty"`

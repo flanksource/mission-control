@@ -4,13 +4,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+
+	"github.com/eko/gocache/lib/v4/cache"
+	gocache_store "github.com/eko/gocache/store/go_cache/v4"
+	gocache "github.com/patrickmn/go-cache"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -103,28 +109,52 @@ func FindPlaybooksForCheck(ctx context.Context, checkType string, tags map[strin
 	return playbooks, err
 }
 
-// FindPlaybooksForConfig returns all the playbooks that match the given config type and tags.
-func FindPlaybooksForConfig(ctx context.Context, configType string, tags map[string]string) ([]api.PlaybookListItem, error) {
-	joinQuery := `JOIN LATERAL jsonb_array_elements(playbooks."spec"->'configs') AS configs(config) ON 1=1`
-	var joinArgs []any
+// <id> -> models.Component
+var configPlaybookCache = cache.New[[]api.PlaybookListItem](gocache_store.NewGoCache(gocache.New(30*time.Minute, 30*time.Minute)))
 
-	if len(tags) != 0 {
-		joinQuery += " AND (?::jsonb) @> COALESCE(configs.config->'tags', '{}'::jsonb)"
-		joinArgs = append(joinArgs, types.JSONStringMap(tags))
+// FindPlaybooksForConfig returns all the playbooks that match the given config's resource selectors
+func FindPlaybooksForConfig(ctx context.Context, configID string) ([]api.PlaybookListItem, error) {
+	if val, err := configPlaybookCache.Get(ctx, configID); err == nil {
+		return val, nil
 	}
 
-	if configType != "" && configType != "*" {
-		joinQuery += " AND configs.config->>'type' = ?"
-		joinArgs = append(joinArgs, configType)
+	var playbooks []models.Playbook
+	if err := ctx.DB().Model(&models.Playbook{}).Where("spec->>'configs' IS NOT NULL").Where(query.LocalFilter).Find(&playbooks).Error; err != nil {
+		return nil, fmt.Errorf("error finding playbooks with configs: %w", err)
 	}
 
-	query := ctx.DB().
-		Select("DISTINCT ON (playbooks.id) playbooks.id, playbooks.name, playbooks.spec->'parameters' as parameters").
-		Joins(joinQuery, joinArgs...)
+	configIDPlaybooks := make(map[string][]string)
+	for _, pb := range playbooks {
+		var spec v1.PlaybookSpec
+		if err := json.Unmarshal(pb.Spec, spec); err != nil {
+			return nil, fmt.Errorf("error unmarshaling playbook spec: %w", err)
+		}
 
-	var playbooks []api.PlaybookListItem
-	err := query.Model(&models.Playbook{}).Find(&playbooks).Error
-	return playbooks, err
+		configIDs, err := query.FindConfigIDsByResourceSelector(ctx, spec.Configs...)
+		if err != nil {
+			return nil, fmt.Errorf("error finding config ids by resource selector: %w", err)
+		}
+
+		for _, cid := range configIDs {
+			configIDPlaybooks[cid.String()] = append(configIDPlaybooks[cid.String()], pb.ID.String())
+		}
+	}
+
+	var playbookListItems []api.PlaybookListItem
+	err := ctx.DB().
+		Model(&models.Playbook{}).
+		Select("id", "name", "playbooks.spec->'parameters' as parameters").
+		Where("id in ?", configIDPlaybooks[configID]).
+		Find(&playbookListItems).Error
+	if err != nil {
+		return nil, fmt.Errorf("error querying playbooks: %w", err)
+	}
+
+	if err := configPlaybookCache.Set(ctx, configID, playbookListItems); err != nil {
+		return nil, fmt.Errorf("error caching playbooks for config: %w")
+	}
+
+	return playbookListItems, err
 }
 
 // FindPlaybooksForComponent returns all the playbooks that match the given component type and tags.

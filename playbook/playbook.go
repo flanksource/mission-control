@@ -117,7 +117,7 @@ func ListPlaybooksForConfig(ctx context.Context, id string) ([]api.PlaybookListI
 		return nil, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "config(id=%s) not found", id)
 	}
 
-	return db.FindPlaybooksForConfig(ctx, *config.Type, *config.Tags)
+	return db.FindPlaybooksForConfig(ctx, id)
 }
 
 func ListPlaybooksForComponent(ctx context.Context, id string) ([]api.PlaybookListItem, error) {
