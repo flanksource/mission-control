@@ -12,7 +12,7 @@ require (
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.25.0 // indirect
 	github.com/flanksource/commons v1.22.1
-	github.com/flanksource/duty v1.0.375
+	github.com/flanksource/duty v1.0.376
 	github.com/flanksource/gomplate/v3 v3.24.2
 	github.com/flanksource/kopper v1.0.7
 	github.com/flanksource/postq v0.1.4
@@ -49,6 +49,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.0.0
 	github.com/jenkins-x/go-scm v1.14.17
 	github.com/samber/lo v1.39.0
+	github.com/timberio/go-datemath v0.1.0
 	go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho v0.44.0
 	go.opentelemetry.io/otel v1.22.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.22.0
@@ -191,7 +192,6 @@ require (
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tidwall/sjson v1.0.4 // indirect
-	github.com/timberio/go-datemath v0.1.0 // indirect
 	github.com/vadimi/go-http-ntlm v1.0.3 // indirect
 	github.com/vadimi/go-http-ntlm/v2 v2.4.1 // indirect
 	github.com/vadimi/go-ntlm v1.2.1 // indirect

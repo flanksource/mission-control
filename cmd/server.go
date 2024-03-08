@@ -138,8 +138,12 @@ var Serve = &cobra.Command{
 		e := echo.New(ctx)
 
 		if postgrestURI != "" {
-			echo.Forward(e, "/db", postgrestURI, rbac.Authorization(rbac.ObjectDatabase, "any"))
+			echo.Forward(e, "/db", postgrestURI,
+				rbac.Authorization(rbac.ObjectDatabase, "any"),
+				db.SearchQueryTransformMiddlware(),
+			)
 		}
+
 		if auth.AuthMode != "" {
 			db.PostgresDBAnonRole = "postgrest_api"
 			if err := auth.Middleware(ctx, e); err != nil {
