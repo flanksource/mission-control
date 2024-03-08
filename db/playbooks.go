@@ -4,19 +4,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"time"
 
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
-
-	"github.com/eko/gocache/lib/v4/cache"
-	gocache_store "github.com/eko/gocache/store/go_cache/v4"
-	gocache "github.com/patrickmn/go-cache"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -109,52 +103,45 @@ func FindPlaybooksForCheck(ctx context.Context, checkType string, tags map[strin
 	return playbooks, err
 }
 
-// <id> -> models.Component
-var configPlaybookCache = cache.New[[]api.PlaybookListItem](gocache_store.NewGoCache(gocache.New(30*time.Minute, 30*time.Minute)))
-
 // FindPlaybooksForConfig returns all the playbooks that match the given config's resource selectors
-func FindPlaybooksForConfig(ctx context.Context, configID string) ([]api.PlaybookListItem, error) {
-	if val, err := configPlaybookCache.Get(ctx, configID); err == nil {
-		return val, nil
-	}
-
+func FindPlaybooksForConfig(ctx context.Context, config models.ConfigItem) ([]api.PlaybookListItem, error) {
 	var playbooks []models.Playbook
 	if err := ctx.DB().Model(&models.Playbook{}).Where("spec->>'configs' IS NOT NULL").Where("deleted_at IS NULL").Find(&playbooks).Error; err != nil {
 		return nil, fmt.Errorf("error finding playbooks with configs: %w", err)
 	}
 
-	configIDPlaybooks := make(map[string][]string)
+	// To return empty list instead of null
+	playbookListItems := make([]api.PlaybookListItem, 0)
+
 	for _, pb := range playbooks {
 		var spec v1.PlaybookSpec
 		if err := json.Unmarshal(pb.Spec, &spec); err != nil {
 			return nil, fmt.Errorf("error unmarshaling playbook spec: %w", err)
 		}
 
-		configIDs, err := query.FindConfigIDsByResourceSelector(ctx, spec.Configs...)
+		matches := true
+		for _, rs := range spec.Configs {
+			if !rs.Matches(config) {
+				matches = false
+			}
+		}
+
+		if !matches {
+			continue
+		}
+
+		params, err := json.Marshal(spec.Parameters)
 		if err != nil {
-			return nil, fmt.Errorf("error finding config ids by resource selector: %w", err)
+			return nil, fmt.Errorf("error marshaling params[%v] to json: %w", spec.Parameters, err)
 		}
-
-		for _, cid := range configIDs {
-			configIDPlaybooks[cid.String()] = append(configIDPlaybooks[cid.String()], pb.ID.String())
-		}
+		playbookListItems = append(playbookListItems, api.PlaybookListItem{
+			ID:         pb.ID,
+			Name:       pb.Name,
+			Parameters: params,
+		})
 	}
 
-	var playbookListItems []api.PlaybookListItem
-	err := ctx.DB().
-		Model(&models.Playbook{}).
-		Select("id", "name", "playbooks.spec->'parameters' as parameters").
-		Where("id in ?", configIDPlaybooks[configID]).
-		Find(&playbookListItems).Error
-	if err != nil {
-		return nil, fmt.Errorf("error querying playbooks: %w", err)
-	}
-
-	if err := configPlaybookCache.Set(ctx, configID, playbookListItems); err != nil {
-		return nil, fmt.Errorf("error caching playbooks for config: %w", err)
-	}
-
-	return playbookListItems, err
+	return playbookListItems, nil
 }
 
 // FindPlaybooksForComponent returns all the playbooks that match the given component type and tags.
