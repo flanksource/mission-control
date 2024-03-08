@@ -2,6 +2,7 @@ package db
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 	"time"
 
@@ -39,6 +40,8 @@ var dateFields = map[string]struct{}{
 	"updated_at":           {},
 }
 
+// parseTimestampField returns the postgREST operator (eq, gt, lt)
+// and the parsed datemath.
 func parseTimestampField(key, val string) (string, time.Time, error) {
 	_, ok := dateFields[key]
 	if !ok {
@@ -68,40 +71,9 @@ func parseTimestampField(key, val string) (string, time.Time, error) {
 func SearchQueryTransformMiddleware() func(echo.HandlerFunc) echo.HandlerFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			queryParam := c.QueryParams()
-
-			for k, values := range queryParam {
-				if !strings.HasSuffix(k, ".filter") || len(values) == 0 {
-					continue
-				}
-
-				queryParam.Del(k)
-
-				key := strings.TrimSuffix(k, ".filter")
-				val := values[0] // Use the first one. We don't use multiple values.
-
-				if operator, timestamp, err := parseTimestampField(key, val); err != nil {
-					return fmt.Errorf("invalid datemath expression (%q) for field (%s): %w", val, key, err)
-				} else if !timestamp.IsZero() {
-					queryParam.Add(key, fmt.Sprintf("%s.%s", operator, timestamp.Format(time.RFC3339)))
-				} else {
-					in, notIN, prefixes, suffixes := query.ParseFilteringQuery(val)
-					if len(in) > 0 {
-						queryParam.Add(key, fmt.Sprintf("in.(%s)", postgrestValues(in)))
-					}
-
-					if len(notIN) > 0 {
-						queryParam.Add(key, fmt.Sprintf("not.in.(%s)", postgrestValues(notIN)))
-					}
-
-					for _, p := range prefixes {
-						queryParam.Add(key, fmt.Sprintf("like.%s*", p))
-					}
-
-					for _, p := range suffixes {
-						queryParam.Add(key, fmt.Sprintf("like.*%s", p))
-					}
-				}
+			queryParam, err := transformQuery(c.QueryParams())
+			if err != nil {
+				return err
 			}
 
 			c.Request().URL.RawQuery = queryParam.Encode()
@@ -109,9 +81,49 @@ func SearchQueryTransformMiddleware() func(echo.HandlerFunc) echo.HandlerFunc {
 			// NOTE: Had to modify this explicitly otherwise
 			// postgREST will receive the original URL.
 			c.Request().RequestURI = c.Request().URL.String()
+
 			return next(c)
 		}
 	}
+}
+
+// transformQuery transforms any search query to native postgREST query
+func transformQuery(queryParam url.Values) (url.Values, error) {
+	for k, values := range queryParam {
+		if !strings.HasSuffix(k, ".filter") || len(values) == 0 {
+			continue
+		}
+
+		queryParam.Del(k)
+
+		key := strings.TrimSuffix(k, ".filter")
+		val := values[0] // Use the first one. We don't use multiple values.
+
+		if operator, timestamp, err := parseTimestampField(key, val); err != nil {
+			return nil, fmt.Errorf("invalid datemath expression (%q) for field (%s): %w", val, key, err)
+		} else if !timestamp.IsZero() {
+			queryParam.Add(key, fmt.Sprintf("%s.%s", operator, timestamp.Format(time.RFC3339)))
+		} else {
+			in, notIN, prefixes, suffixes := query.ParseFilteringQuery(val)
+			if len(in) > 0 {
+				queryParam.Add(key, fmt.Sprintf("in.(%s)", postgrestValues(in)))
+			}
+
+			if len(notIN) > 0 {
+				queryParam.Add(key, fmt.Sprintf("not.in.(%s)", postgrestValues(notIN)))
+			}
+
+			for _, p := range prefixes {
+				queryParam.Add(key, fmt.Sprintf("like.%s*", p))
+			}
+
+			for _, p := range suffixes {
+				queryParam.Add(key, fmt.Sprintf("like.*%s", p))
+			}
+		}
+	}
+
+	return queryParam, nil
 }
 
 // postgrestValues returns ["a", "b", "c"] as `"a","b","c"`
