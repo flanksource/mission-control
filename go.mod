@@ -11,8 +11,8 @@ require (
 	github.com/casbin/gorm-adapter/v3 v3.18.0
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.25.0 // indirect
-	github.com/flanksource/commons v1.22.0
-	github.com/flanksource/duty v1.0.365
+	github.com/flanksource/commons v1.22.1
+	github.com/flanksource/duty v1.0.375
 	github.com/flanksource/gomplate/v3 v3.24.2
 	github.com/flanksource/kopper v1.0.7
 	github.com/flanksource/postq v0.1.4
@@ -191,6 +191,7 @@ require (
 	github.com/tidwall/match v1.1.1 // indirect
 	github.com/tidwall/pretty v1.2.1 // indirect
 	github.com/tidwall/sjson v1.0.4 // indirect
+	github.com/timberio/go-datemath v0.1.0 // indirect
 	github.com/vadimi/go-http-ntlm v1.0.3 // indirect
 	github.com/vadimi/go-http-ntlm/v2 v2.4.1 // indirect
 	github.com/vadimi/go-ntlm v1.2.1 // indirect
