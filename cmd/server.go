@@ -140,7 +140,7 @@ var Serve = &cobra.Command{
 		if postgrestURI != "" {
 			echo.Forward(e, "/db", postgrestURI,
 				rbac.Authorization(rbac.ObjectDatabase, "any"),
-				db.SearchQueryTransformMiddlware(),
+				db.SearchQueryTransformMiddleware(),
 			)
 		}
 

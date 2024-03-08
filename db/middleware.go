@@ -3,6 +3,7 @@ package db
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/flanksource/duty/query"
 	"github.com/labstack/echo/v4"
@@ -10,19 +11,61 @@ import (
 	"github.com/timberio/go-datemath"
 )
 
-var dateFields = []string{"created_at", "deleted_at", "updated_at", "last_scraped_time", "time"}
-
-func isDateField(key string) bool {
-	for _, df := range dateFields {
-		if strings.HasPrefix(key, fmt.Sprintf("%s.", df)) {
-			return true
-		}
-	}
-
-	return false
+var dateFields = map[string]struct{}{
+	"acknowledged":         {},
+	"check_time":           {},
+	"closed":               {},
+	"created_at":           {},
+	"deleted_at":           {},
+	"end_time":             {},
+	"expires_at":           {},
+	"first_observed":       {},
+	"last_attempt":         {},
+	"last_login":           {},
+	"last_observed":        {},
+	"last_received":        {},
+	"last_runtime":         {},
+	"last_scraped_time":    {},
+	"last_seen":            {},
+	"last_transition_time": {},
+	"next_runtime":         {},
+	"resolved":             {},
+	"scheduled_time":       {},
+	"silenced_at":          {},
+	"start_time":           {},
+	"time":                 {},
+	"time_end":             {},
+	"time_start":           {},
+	"updated_at":           {},
 }
 
-func SearchQueryTransformMiddlware() func(echo.HandlerFunc) echo.HandlerFunc {
+func parseTimestampField(key, val string) (string, time.Time, error) {
+	_, ok := dateFields[key]
+	if !ok {
+		return "", time.Time{}, nil
+	}
+
+	operator := "lt" // default if no operator is supplied
+	if strings.HasPrefix(val, "=") {
+		operator = "eq"
+		val = strings.TrimPrefix(val, "=")
+	} else if strings.HasPrefix(val, ">") {
+		operator = "gt"
+		val = strings.TrimPrefix(val, ">")
+	} else if strings.HasPrefix(val, "<") {
+		operator = "lt"
+		val = strings.TrimPrefix(val, "<")
+	}
+
+	expr, err := datemath.Parse(val)
+	if err != nil {
+		return "", time.Time{}, err
+	}
+
+	return operator, expr.Time(), nil
+}
+
+func SearchQueryTransformMiddleware() func(echo.HandlerFunc) echo.HandlerFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			queryParam := c.QueryParams()
@@ -37,13 +80,10 @@ func SearchQueryTransformMiddlware() func(echo.HandlerFunc) echo.HandlerFunc {
 				key := strings.TrimSuffix(k, ".filter")
 				val := values[0] // Use the first one. We don't use multiple values.
 
-				if isDateField(key) {
-					expr, err := datemath.Parse(val)
-					if err != nil {
-						return fmt.Errorf("invalid datemath expression (%q) for field %q: %w", val, key, err)
-					}
-
-					c.Set(key, expr.Time())
+				if operator, timestamp, err := parseTimestampField(key, val); err != nil {
+					return fmt.Errorf("invalid datemath expression (%q) for field (%s): %w", val, key, err)
+				} else if !timestamp.IsZero() {
+					queryParam.Add(key, fmt.Sprintf("%s.%s", operator, timestamp.Format(time.RFC3339)))
 				} else {
 					in, notIN, prefixes, suffixes := query.ParseFilteringQuery(val)
 					if len(in) > 0 {
