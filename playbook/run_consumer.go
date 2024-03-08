@@ -68,7 +68,7 @@ func StartPlaybookConsumers(ctx context.Context) error {
 
 	actionEventConsumer, err := postq.NewPGConsumer(ActionConsumer, &postq.ConsumerOption{
 		NumConsumers: 50,
-		ErrorHandler: func(_ctx postq.Context, e error) bool {
+		ErrorHandler: func(_ctx postq.Context, err error) bool {
 			ctx, ok := _ctx.(context.Context)
 			if !ok {
 				_ctx.Debugf("unexpected error in playbook action consumer: context isn't duty's context")

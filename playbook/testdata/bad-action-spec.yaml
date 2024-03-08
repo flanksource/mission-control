@@ -1,0 +1,6 @@
+---
+actions:
+  - name: Create the file
+    exec:
+      script: echo -n '{{bad-template}}' > {{.params.path}}
+ 
