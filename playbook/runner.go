@@ -184,7 +184,7 @@ func checkPlaybookFilter(ctx context.Context, playbookSpec v1.PlaybookSpec, temp
 	for _, f := range playbookSpec.Filters {
 		val, err := ctx.RunTemplate(gomplate.Template{Expression: f}, templateEnv.AsMap())
 		if err != nil {
-			return fmt.Errorf("Invalid playbook filter [%s]: %s", f, err)
+			return fmt.Errorf("invalid playbook filter [%s]: %s", f, err)
 
 		}
 
