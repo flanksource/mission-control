@@ -103,28 +103,45 @@ func FindPlaybooksForCheck(ctx context.Context, checkType string, tags map[strin
 	return playbooks, err
 }
 
-// FindPlaybooksForConfig returns all the playbooks that match the given config type and tags.
-func FindPlaybooksForConfig(ctx context.Context, configType string, tags map[string]string) ([]api.PlaybookListItem, error) {
-	joinQuery := `JOIN LATERAL jsonb_array_elements(playbooks."spec"->'configs') AS configs(config) ON 1=1`
-	var joinArgs []any
-
-	if len(tags) != 0 {
-		joinQuery += " AND (?::jsonb) @> COALESCE(configs.config->'tags', '{}'::jsonb)"
-		joinArgs = append(joinArgs, types.JSONStringMap(tags))
+// FindPlaybooksForConfig returns all the playbooks that match the given config's resource selectors
+func FindPlaybooksForConfig(ctx context.Context, config models.ConfigItem) ([]api.PlaybookListItem, error) {
+	var playbooks []models.Playbook
+	if err := ctx.DB().Model(&models.Playbook{}).Where("spec->>'configs' IS NOT NULL").Where("deleted_at IS NULL").Find(&playbooks).Error; err != nil {
+		return nil, fmt.Errorf("error finding playbooks with configs: %w", err)
 	}
 
-	if configType != "" && configType != "*" {
-		joinQuery += " AND configs.config->>'type' = ?"
-		joinArgs = append(joinArgs, configType)
+	// To return empty list instead of null
+	playbookListItems := make([]api.PlaybookListItem, 0)
+
+	for _, pb := range playbooks {
+		var spec v1.PlaybookSpec
+		if err := json.Unmarshal(pb.Spec, &spec); err != nil {
+			return nil, fmt.Errorf("error unmarshaling playbook spec: %w", err)
+		}
+
+		matches := true
+		for _, rs := range spec.Configs {
+			if !rs.Matches(config) {
+				matches = false
+			}
+		}
+
+		if !matches {
+			continue
+		}
+
+		params, err := json.Marshal(spec.Parameters)
+		if err != nil {
+			return nil, fmt.Errorf("error marshaling params[%v] to json: %w", spec.Parameters, err)
+		}
+		playbookListItems = append(playbookListItems, api.PlaybookListItem{
+			ID:         pb.ID,
+			Name:       pb.Name,
+			Parameters: params,
+		})
 	}
 
-	query := ctx.DB().
-		Select("DISTINCT ON (playbooks.id) playbooks.id, playbooks.name, playbooks.spec->'parameters' as parameters").
-		Joins(joinQuery, joinArgs...)
-
-	var playbooks []api.PlaybookListItem
-	err := query.Model(&models.Playbook{}).Find(&playbooks).Error
-	return playbooks, err
+	return playbookListItems, nil
 }
 
 // FindPlaybooksForComponent returns all the playbooks that match the given component type and tags.
