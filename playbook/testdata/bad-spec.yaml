@@ -1,0 +1,7 @@
+---
+actions:
+  - name: Create the file
+    delay: 'bad delay expression'
+    exec:
+      script: echo -n '{{.config.config_class}}' > {{.params.path}}
+ 

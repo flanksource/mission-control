@@ -17,6 +17,16 @@ import (
 	"gorm.io/gorm"
 )
 
+type playbookRunError struct {
+	RunID    uuid.UUID
+	ActionID uuid.UUID
+	Err      error
+}
+
+func (t *playbookRunError) Error() string {
+	return fmt.Sprintf("error running playbook (id=%s): %v", t.RunID, t.Err)
+}
+
 // Pg Notify channels for run and action updates
 const (
 	pgNotifyPlaybookRunUpdates    = "playbook_run_updates"
@@ -25,12 +35,71 @@ const (
 
 // StartPlaybookConsumers starts the run and action consumers
 func StartPlaybookConsumers(ctx context.Context) error {
-	runEventConsumer, err := postq.NewPGConsumer(RunConsumer, &postq.ConsumerOption{NumConsumers: 5})
+	runEventConsumer, err := postq.NewPGConsumer(RunConsumer, &postq.ConsumerOption{
+		NumConsumers: 5,
+		ErrorHandler: func(_ctx postq.Context, err error) bool {
+			ctx, ok := _ctx.(context.Context)
+			if !ok {
+				_ctx.Debugf("unexpected error in playbook run consumer: context isn't duty's context")
+				_ctx.Debugf("error running playbook: %v", err)
+				return false
+			}
+
+			ctx.Errorf("%v", err)
+
+			var runErr *playbookRunError
+			if errors.As(err, &runErr) {
+				updateColumns := map[string]any{
+					"end_time": gorm.Expr("CLOCK_TIMESTAMP()"),
+					"status":   models.PlaybookRunStatusFailed,
+					"error":    err.Error(),
+				}
+				if err := ctx.DB().Model(&models.PlaybookRun{}).Where("id = ?", runErr.RunID).UpdateColumns(updateColumns).Error; err != nil {
+					ctx.Errorf("error updating run status to 'failed': %v", err)
+				}
+			}
+
+			return false // We do not retry playbook runs
+		},
+	})
 	if err != nil {
 		return err
 	}
 
-	actionEventConsumer, err := postq.NewPGConsumer(ActionConsumer, &postq.ConsumerOption{NumConsumers: 50})
+	actionEventConsumer, err := postq.NewPGConsumer(ActionConsumer, &postq.ConsumerOption{
+		NumConsumers: 50,
+		ErrorHandler: func(_ctx postq.Context, err error) bool {
+			ctx, ok := _ctx.(context.Context)
+			if !ok {
+				_ctx.Debugf("unexpected error in playbook action consumer: context isn't duty's context")
+				_ctx.Debugf("error running playbook action: %v", err)
+				return false
+			}
+
+			ctx.Errorf("%v", err)
+
+			var runErr *playbookRunError
+			if errors.As(err, &runErr) {
+				actionUpdates := map[string]any{
+					"start_time": gorm.Expr("CASE WHEN start_time IS NULL THEN CLOCK_TIMESTAMP() ELSE start_time END"),
+					"status":     models.PlaybookActionStatusFailed,
+					"error":      err.Error(),
+					"end_time":   gorm.Expr("CLOCK_TIMESTAMP()"),
+				}
+
+				if err := ctx.DB().Model(&models.PlaybookRunAction{}).Where("id = ?", runErr.ActionID).UpdateColumns(actionUpdates).Error; err != nil {
+					logger.Errorf("error updating playbook action status as failed: %v", err)
+				}
+
+				// Need to reschedule the run, so it continues with remaining actions
+				if err := ctx.DB().Model(&models.PlaybookRun{}).Where("id = ?", runErr.RunID).UpdateColumn("status", models.PlaybookRunStatusScheduled).Error; err != nil {
+					logger.Errorf("error updating playbook action status as failed: %v", err)
+				}
+			}
+
+			return false // We do not retry playbook actions
+		},
+	})
 	if err != nil {
 		return err
 	}
@@ -82,6 +151,10 @@ func ActionConsumer(c postq.Context) (int, error) {
 		return 0, err
 	}
 
+	if len(foundActions) == 0 {
+		return 0, nil
+	}
+
 	for i := range foundActions {
 		isAssignedToAgent := foundActions[i].AgentID != nil && *foundActions[i].AgentID != uuid.Nil
 		if isAssignedToAgent && foundActions[i].PlaybookRunID != uuid.Nil {
@@ -90,30 +163,32 @@ func ActionConsumer(c postq.Context) (int, error) {
 			continue
 		}
 
+		runID := foundActions[i].PlaybookRunID
+
 		if isAssignedToAgent {
 			var actionData models.PlaybookActionAgentData
 			if err := ctx.DB().Where("action_id = ?", foundActions[i].ID).First(&actionData).Error; err != nil {
-				return 0, err
+				return 0, &playbookRunError{RunID: runID, ActionID: foundActions[i].ID, Err: err}
 			}
 
 			var actionSpec v1.PlaybookAction
 			if err := json.Unmarshal(actionData.Spec, &actionSpec); err != nil {
-				return 0, err
+				return 0, &playbookRunError{RunID: runID, ActionID: foundActions[i].ID, Err: err}
 			}
 
 			var templateEnv actions.TemplateEnv
 			if err := json.Unmarshal(actionData.Env, &templateEnv); err != nil {
-				return 0, err
+				return 0, &playbookRunError{RunID: runID, ActionID: foundActions[i].ID, Err: err}
 			}
 
 			if actionSpec.TemplatesOn == runnerAgent {
 				if err := templateAction(ctx, models.PlaybookRun{ID: actionData.RunID, PlaybookID: actionData.PlaybookID}, foundActions[i], &actionSpec, templateEnv); err != nil {
-					return 0, fmt.Errorf("failed to template action: %w", err)
+					return 0, &playbookRunError{RunID: runID, ActionID: foundActions[i].ID, Err: err}
 				}
 			}
 
 			if err := executeAndSaveAction(ctx, actionData.PlaybookID, actionData.RunID, foundActions[i], actionSpec); err != nil {
-				return 0, err
+				return 0, &playbookRunError{RunID: runID, ActionID: foundActions[i].ID, Err: err}
 			}
 
 			continue
@@ -123,38 +198,28 @@ func ActionConsumer(c postq.Context) (int, error) {
 		if err := ctx.DB().Table("playbook_runs").
 			Select("playbooks.*").
 			Joins("LEFT JOIN playbooks ON playbooks.id = playbook_runs.playbook_id").
-			Where("playbook_runs.id = ?", foundActions[i].PlaybookRunID).
+			Where("playbook_runs.id = ?", runID).
 			First(&playbook).Error; err != nil {
-			return 0, fmt.Errorf("failed to get the playbook for the given action(%s): %w", foundActions[i].ID, err)
+			return 0, &playbookRunError{RunID: runID, ActionID: foundActions[i].ID, Err: fmt.Errorf("failed to get the playbook for the given action(%s): %w", foundActions[i].ID, err)}
 		}
 
 		var playbookSpec v1.PlaybookSpec
 		if err := json.Unmarshal(playbook.Spec, &playbookSpec); err != nil {
-			return 0, fmt.Errorf("failed to unmarshal playbook spec: %w", err)
+			return 0, &playbookRunError{RunID: runID, ActionID: foundActions[i].ID, Err: fmt.Errorf("failed to unmarshal playbook spec: %w", err)}
 		}
 
 		var run models.PlaybookRun
-		if err := ctx.DB().Where("id = ?", foundActions[i].PlaybookRunID).First(&run).Error; err != nil {
-			return 0, fmt.Errorf("failed to get the playbook run for the given action(%s): %w", foundActions[i].ID, err)
+		if err := ctx.DB().Where("id = ?", runID).First(&run).Error; err != nil {
+			return 0, &playbookRunError{RunID: runID, ActionID: foundActions[i].ID, Err: fmt.Errorf("failed to get the playbook run for the given action(%s): %w", foundActions[i].ID, err)}
 		}
 
 		for _, action := range playbookSpec.Actions {
 			if action.Name == foundActions[i].Name {
 				if err := templateAndExecuteAction(ctx, run, foundActions[i], action); err != nil {
-					actionUpdates := map[string]any{
-						"start_time": gorm.Expr("CASE WHEN start_time IS NULL THEN CLOCK_TIMESTAMP() ELSE start_time END"),
-						"status":     models.PlaybookActionStatusFailed,
-						"error":      err.Error(),
-						"end_time":   gorm.Expr("CLOCK_TIMESTAMP()"),
-					}
-
-					if err := ctx.DB().Model(&models.PlaybookRunAction{}).Where("id = ?", foundActions[i].ID).UpdateColumns(actionUpdates).Error; err != nil {
-						logger.Errorf("error updating playbook action status as failed: %v", err)
-					}
-
-					// Need to reschedule the run, so it continues with remaining actions
-					if err := ctx.DB().Model(&models.PlaybookRun{}).Where("id = ?", run.ID).UpdateColumn("status", models.PlaybookRunStatusScheduled).Error; err != nil {
-						logger.Errorf("error updating playbook action status as failed: %v", err)
+					return 0, &playbookRunError{
+						RunID:    run.ID,
+						ActionID: foundActions[i].ID,
+						Err:      err,
 					}
 				}
 
@@ -163,7 +228,11 @@ func ActionConsumer(c postq.Context) (int, error) {
 		}
 	}
 
-	return len(foundActions), tx.Commit().Error
+	if err := tx.Commit().Error; err != nil {
+		return 0, &playbookRunError{RunID: foundActions[0].PlaybookRunID, ActionID: foundActions[0].ID, Err: err}
+	}
+
+	return 1, nil
 }
 
 // RunConsumer picks up scheduled runs and schedules the
@@ -184,8 +253,6 @@ func RunConsumer(c postq.Context) (int, error) {
 	}
 	defer tx.Rollback()
 
-	ctx = ctx.WithDB(tx, ctx.Pool())
-
 	query := `
 		SELECT playbook_runs.*
 		FROM playbook_runs
@@ -196,16 +263,29 @@ func RunConsumer(c postq.Context) (int, error) {
 		LIMIT 1
 	`
 
-	var runs []models.PlaybookRun
-	if err := tx.Raw(query, models.PlaybookRunStatusScheduled, models.PlaybookRunStatusSleeping).Find(&runs).Error; err != nil {
+	var run models.PlaybookRun
+	if err := tx.Raw(query, models.PlaybookRunStatusScheduled, models.PlaybookRunStatusSleeping).First(&run).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return 0, nil
+		}
+
 		return 0, err
 	}
 
-	for i := range runs {
-		if err := HandleRun(ctx, runs[i]); err != nil {
-			return 0, fmt.Errorf("failed to schedule the next action for run %d: %w", runs[i].ID, err)
+	ctx = ctx.WithDB(tx, ctx.Pool())
+	if err := HandleRun(ctx, run); err != nil {
+		return 0, &playbookRunError{
+			RunID: run.ID,
+			Err:   err,
 		}
 	}
 
-	return len(runs), tx.Commit().Error
+	if err := tx.Commit().Error; err != nil {
+		return 0, &playbookRunError{
+			RunID: run.ID,
+			Err:   err,
+		}
+	}
+
+	return 1, nil
 }
