@@ -8,12 +8,14 @@ type TemplateEnv struct {
 	Component *models.Component  `json:"component,omitempty"`
 	Check     *models.Check      `json:"check,omitempty"`
 	Params    map[string]string  `json:"params,omitempty"`
+	Env       map[string]string  `json:"env,omitempty"`
 }
 
 func (t *TemplateEnv) AsMap() map[string]any {
 	m := map[string]any{
 		"config":    nil,
 		"component": nil,
+		"env":       t.Env,
 		"params":    t.Params,
 		"check":     nil,
 	}

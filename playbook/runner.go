@@ -13,6 +13,7 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/schema/openapi"
+	"github.com/flanksource/duty/types"
 	"github.com/flanksource/gomplate/v3"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
@@ -341,7 +342,7 @@ func executeAndSaveAction(ctx context.Context, playbookID, runID uuid.UUID, acti
 }
 
 // templateAndExecuteAction executes the given playbook action after templating it.
-func templateAndExecuteAction(ctx context.Context, run models.PlaybookRun, actionToRun models.PlaybookRunAction, actionSpec v1.PlaybookAction) error {
+func templateAndExecuteAction(ctx context.Context, envs []types.EnvVar, run models.PlaybookRun, actionToRun models.PlaybookRunAction, actionSpec v1.PlaybookAction) error {
 	logger.WithValues("run.id", run.ID).WithValues("parameters", run.Parameters).
 		WithValues("config", run.ConfigID).WithValues("check", run.CheckID).WithValues("component", run.ComponentID).
 		Infof("Executing playbook action: %s", actionToRun.ID)
@@ -349,6 +350,21 @@ func templateAndExecuteAction(ctx context.Context, run models.PlaybookRun, actio
 	templateEnv, err := prepareTemplateEnv(ctx, run)
 	if err != nil {
 		return fmt.Errorf("failed to prepare template env: %w", err)
+	}
+
+	templater := ctx.NewStructTemplater(templateEnv.AsMap(), "", nil)
+	if err := templater.Walk(&envs); err != nil {
+		return fmt.Errorf("failed to walk envs: %w", err)
+	}
+
+	templateEnv.Env = make(map[string]string, len(envs))
+	for _, e := range envs {
+		val, err := ctx.GetEnvValueFromCache(e)
+		if err != nil {
+			return fmt.Errorf("failed to get env (%s): %w", e.Name, err)
+		} else {
+			templateEnv.Env[e.Name] = val
+		}
 	}
 
 	if err := templateActionExpressions(ctx, run, actionToRun, &actionSpec, templateEnv); err != nil {
