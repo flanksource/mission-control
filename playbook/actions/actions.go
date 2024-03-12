@@ -25,7 +25,8 @@ func (t *TemplateEnv) AsMap() map[string]any {
 		m["component"] = t.Component.AsMap()
 	}
 	if t.Config != nil {
-		m["config"] = t.Config.AsMap()
+		configEnv, _ := t.Config.TemplateEnv()
+		m["config"] = configEnv
 	}
 
 	return m
