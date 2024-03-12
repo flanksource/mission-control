@@ -2,6 +2,7 @@ package connectors
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -49,6 +50,20 @@ type GitopsAPISpec struct {
 }
 
 type PullRequest scm.PullRequest
+
+func (t *PullRequest) AsMap() (map[string]any, error) {
+	m := make(map[string]any)
+	b, err := json.Marshal(&t)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := json.Unmarshal(b, &m); err != nil {
+		return nil, err
+	}
+
+	return m, nil
+}
 
 type PullRequestTemplate struct {
 	Body      string   `json:"body,omitempty"`

@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/flanksource/commons/files"
 	"github.com/flanksource/commons/logger"
@@ -32,11 +33,13 @@ type Link struct {
 }
 
 type GitOpsActionResult struct {
-	Links  []Link `json:"links,omitempty"`
-	Stdout string `json:"stdout,omitempty"`
+	Links []Link         `json:"links,omitempty"`
+	Logs  string         `json:"logs,omitempty"`
+	PR    map[string]any `json:"pr,omitempty"`
 }
 
 func (t *GitOps) log(msg string, args ...any) {
+	msg = fmt.Sprintf("%s %s", time.Now().Format(time.RFC3339), msg)
 	t.logLines = append(t.logLines, fmt.Sprintf(msg, args...))
 }
 
@@ -72,9 +75,17 @@ func (t *GitOps) Run(ctx context.Context, action v1.GitOpsAction) (*GitOpsAction
 	}
 
 	if t.shouldCreatePR {
-		pr, err := t.createPR(ctx, connector, workTree)
+		t.log("creating pull request: %s\nbranch: %s\nauthor: %s", t.spec.Repository, t.spec.Branch, t.spec.CommitAuthor)
+
+		pr, err := t.createPR(ctx, connector)
 		if err != nil {
 			return nil, err
+		}
+
+		if _pr, err := pr.AsMap(); err != nil {
+			return nil, err
+		} else {
+			response.PR = _pr
 		}
 
 		response.Links = append(response.Links, Link{
@@ -83,9 +94,10 @@ func (t *GitOps) Run(ctx context.Context, action v1.GitOpsAction) (*GitOpsAction
 			Name: pr.Title,
 			URL:  pr.Link,
 		})
-		t.log("successfully created pull request: %s", pr.Link)
+		t.log("created pull request: %s", pr.Link)
 	}
-	response.Stdout = strings.Join(t.logLines, "\n")
+
+	response.Logs = strings.Join(t.logLines, "\n")
 
 	return &response, nil
 }
@@ -188,7 +200,7 @@ func (t *GitOps) applyPatches(ctx context.Context, action v1.GitOpsAction) error
 					return err
 				} else if res.Error != nil {
 					return res.Error
-				} else {
+				} else if res.Stdout != "" {
 					t.log(res.Stdout)
 				}
 
@@ -243,6 +255,6 @@ func (t *GitOps) modifyFiles(ctx context.Context, action v1.GitOpsAction) error 
 	return nil
 }
 
-func (t *GitOps) createPR(ctx context.Context, connector connectors.Connector, work *gitv5.Worktree) (*connectors.PullRequest, error) {
+func (t *GitOps) createPR(ctx context.Context, connector connectors.Connector) (*connectors.PullRequest, error) {
 	return git.OpenPR(ctx, connector, t.spec)
 }
