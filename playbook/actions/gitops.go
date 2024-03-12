@@ -1,7 +1,6 @@
 package actions
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -25,18 +24,20 @@ type GitOps struct {
 	shouldCreatePR bool
 }
 
+type Link struct {
+	ID   int    `json:"id,omitempty"`
+	Name string `json:"name,omitempty"`
+	URL  string `json:"url,omitempty"`
+	Icon string `json:"icon,omitempty"`
+}
+
 type GitOpsActionResult struct {
-	CreatedPR string `json:"createdPR,omitempty"`
-	Logs      string `json:"logs,omitempty"`
+	Links  []Link `json:"links,omitempty"`
+	Stdout string `json:"stdout,omitempty"`
 }
 
 func (t *GitOps) log(msg string, args ...any) {
 	t.logLines = append(t.logLines, fmt.Sprintf(msg, args...))
-}
-
-func (t *GitOps) logJSON(msg any) {
-	b, _ := json.MarshalIndent(msg, "", "  ")
-	t.logLines = append(t.logLines, string(b))
 }
 
 func (t *GitOps) Run(ctx context.Context, action v1.GitOpsAction) (*GitOpsActionResult, error) {
@@ -75,11 +76,16 @@ func (t *GitOps) Run(ctx context.Context, action v1.GitOpsAction) (*GitOpsAction
 		if err != nil {
 			return nil, err
 		}
-		response.CreatedPR = pr.Link
-		t.log("successfully created pull request")
-		t.logJSON(pr)
+
+		response.Links = append(response.Links, Link{
+			ID:   pr.Number,
+			Icon: "pr",
+			Name: pr.Title,
+			URL:  pr.Link,
+		})
+		t.log("successfully created pull request: %s", pr.Link)
 	}
-	response.Logs = strings.Join(t.logLines, "\n")
+	response.Stdout = strings.Join(t.logLines, "\n")
 
 	return &response, nil
 }

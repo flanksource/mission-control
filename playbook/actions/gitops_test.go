@@ -73,7 +73,7 @@ var _ = ginkgo.Describe("Playbook Action Gitops", ginkgo.Ordered, func() {
 		var runner GitOps
 		res, err := runner.Run(ctx, spec)
 		Expect(err).ToNot(HaveOccurred())
-		Expect(res.CreatedPR).To(BeEmpty())
+		Expect(len(res.Links)).To(BeZero())
 
 		logger.Infof("Runner response: %#v", res)
 	})
