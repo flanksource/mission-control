@@ -12,6 +12,7 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/schema/openapi"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/gomplate/v3"
@@ -276,6 +277,16 @@ func HandleRun(ctx context.Context, run models.PlaybookRun) error {
 func prepareTemplateEnv(ctx context.Context, run models.PlaybookRun) (actions.TemplateEnv, error) {
 	templateEnv := actions.TemplateEnv{
 		Params: run.Parameters,
+	}
+
+	if run.CreatedBy != nil {
+		if creator, err := query.FindPerson(ctx, run.CreatedBy.String()); err != nil {
+			return templateEnv, fmt.Errorf("failed to fetch the playbook run creator: %w", err)
+		} else if creator == nil {
+			return templateEnv, fmt.Errorf("playbook run creator (id:%s) was not found", run.CreatedBy.String())
+		} else {
+			templateEnv.User = creator
+		}
 	}
 
 	if run.ComponentID != nil {

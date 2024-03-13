@@ -9,15 +9,19 @@ type TemplateEnv struct {
 	Check     *models.Check      `json:"check,omitempty"`
 	Params    map[string]string  `json:"params,omitempty"`
 	Env       map[string]string  `json:"env,omitempty"`
+
+	// User is the user who triggered the playbook run
+	User *models.Person `json:"user,omitempty"`
 }
 
 func (t *TemplateEnv) AsMap() map[string]any {
 	m := map[string]any{
-		"config":    nil,
+		"check":     nil,
 		"component": nil,
+		"config":    nil,
 		"env":       t.Env,
 		"params":    t.Params,
-		"check":     nil,
+		"user":      t.User.AsMap(),
 	}
 
 	if t.Check != nil {
