@@ -6,10 +6,6 @@ spec:
   parameters:
     - name: namespace
       label: The namespace
-  configs:
-    - type: EC2 Instance
-      tags:
-        telemetry: enabled
   actions:
     - name: Modify repo
       gitops:
@@ -19,8 +15,8 @@ spec:
           base: master
           branch: playbooks-branch-{{.params.namespace}}
         commit:
-          email: thebeaditya@gmail.com
-          author: Aditya Thebe
+          email: {{.user.email}}
+          author: {{.user.name}}
           message: |
             Testing commit message from playbooks {{.params.namespace}}
         pr:
