@@ -19,11 +19,14 @@ func (t *TemplateEnv) AsMap() map[string]any {
 		"check":     nil,
 		"component": nil,
 		"config":    nil,
+		"user":      nil,
 		"env":       t.Env,
 		"params":    t.Params,
-		"user":      t.User.AsMap(),
 	}
 
+	if t.User != nil {
+		m["user"] = t.User.AsMap()
+	}
 	if t.Check != nil {
 		m["check"] = t.Check.AsMap()
 	}
