@@ -156,6 +156,11 @@ type PlaybookSpec struct {
 	// When left empty, the playbook will run on the main instance itself.
 	RunsOn []string `json:"runsOn,omitempty" yaml:"runsOn,omitempty"`
 
+	// Env is a list of env vars that are templatable and accessible in templates.
+	// Env vars are similar to playbook parameters except they do not get
+	// persisted and are meant to be used for confidential information.
+	Env []dutyTypes.EnvVar `json:"env,omitempty" yaml:"env,omitempty"`
+
 	// TemplatesOn specifies where the templating happens.
 	// Available options:
 	//  - host
