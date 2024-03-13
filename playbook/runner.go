@@ -361,7 +361,7 @@ func templateAndExecuteAction(ctx context.Context, envs []types.EnvVar, run mode
 	for _, e := range envs {
 		val, err := ctx.GetEnvValueFromCache(e)
 		if err != nil {
-			return fmt.Errorf("failed to get env (%s): %w", e.Name, err)
+			return fmt.Errorf("failed to get env value (%s): %w", e.Name, err)
 		} else {
 			templateEnv.Env[e.Name] = val
 		}
