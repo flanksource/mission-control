@@ -116,13 +116,19 @@ func FindPlaybooksForConfig(ctx context.Context, config models.ConfigItem) ([]ap
 	for _, pb := range playbooks {
 		var spec v1.PlaybookSpec
 		if err := json.Unmarshal(pb.Spec, &spec); err != nil {
-			return nil, fmt.Errorf("error unmarshaling playbook spec: %w", err)
+			ctx.Tracef("error unmarshaling playbook[%s] spec: %v", pb.ID, err)
+			continue
+		}
+
+		if len(spec.Configs) == 0 {
+			continue
 		}
 
 		matches := true
 		for _, rs := range spec.Configs {
 			if !rs.Matches(config) {
 				matches = false
+				break
 			}
 		}
 
