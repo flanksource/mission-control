@@ -10,6 +10,7 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
+	"github.com/samber/lo"
 	"gorm.io/gorm"
 
 	"github.com/flanksource/incident-commander/api"
@@ -207,9 +208,10 @@ func PersistPlaybookFromCRD(ctx context.Context, obj *v1.Playbook) error {
 		}
 	}
 
+	name, _ := lo.Coalesce(obj.Spec.Title, obj.Name)
 	dbObj := models.Playbook{
 		ID:        uuid.MustParse(string(obj.GetUID())),
-		Name:      obj.Name,
+		Name:      name,
 		Spec:      specJSON,
 		Source:    models.SourceCRD,
 		CreatedBy: api.SystemUserID,
