@@ -215,6 +215,7 @@ func PersistPlaybookFromCRD(ctx context.Context, obj *v1.Playbook) error {
 		Spec:      specJSON,
 		Source:    models.SourceCRD,
 		CreatedBy: api.SystemUserID,
+		Category:  obj.Spec.Category,
 	}
 
 	if err := tx.Save(&dbObj).Error; err != nil {

@@ -1118,6 +1118,8 @@ spec:
                   type:
                     type: string
                 type: object
+              category:
+                type: string
               checks:
                 description: Checks filters what checks can run on this playbook.
                 items:

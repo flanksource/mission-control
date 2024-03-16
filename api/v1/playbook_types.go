@@ -147,6 +147,8 @@ type PlaybookSpec struct {
 	// Short description of the playbook.
 	Description string `json:"description,omitempty" yaml:"description,omitempty"`
 
+	Category string `json:"category,omitempty" yaml:"category,omitempty"`
+
 	Icon string `json:"icon,omitempty" yaml:"icon,omitempty"`
 
 	// `On` defines triggers that will automatically trigger the playbook.
