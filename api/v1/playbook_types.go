@@ -142,8 +142,12 @@ type PlaybookTrigger struct {
 }
 
 type PlaybookSpec struct {
+	Title string `json:"title,omitempty" yaml:"title,omitempty"`
+
 	// Short description of the playbook.
 	Description string `json:"description,omitempty" yaml:"description,omitempty"`
+
+	Category string `json:"category,omitempty" yaml:"category,omitempty"`
 
 	Icon string `json:"icon,omitempty" yaml:"icon,omitempty"`
 

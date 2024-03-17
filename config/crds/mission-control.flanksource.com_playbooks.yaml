@@ -1118,6 +1118,8 @@ spec:
                   type:
                     type: string
                 type: object
+              category:
+                type: string
               checks:
                 description: Checks filters what checks can run on this playbook.
                 items:
@@ -1598,6 +1600,8 @@ spec:
                    - host
                    - agent
                   When left empty, the templating is done on the main instance(host) itself.
+                type: string
+              title:
                 type: string
             required:
             - actions

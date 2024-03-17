@@ -127,8 +127,8 @@ func transformQuery(queryParam url.Values) (url.Values, error) {
 }
 
 // postgrestValues returns ["a", "b", "c"] as `"a","b","c"`
-func postgrestValues(val []string) string {
-	return strings.Join(lo.Map(val, func(s string, i int) string {
+func postgrestValues(val []any) string {
+	return strings.Join(lo.Map(val, func(s any, i int) string {
 		return fmt.Sprintf(`"%s"`, s)
 	}), ",")
 }
