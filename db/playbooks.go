@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/flanksource/duty"
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -226,7 +227,7 @@ func PersistPlaybookFromCRD(ctx context.Context, obj *v1.Playbook) error {
 }
 
 func DeletePlaybook(ctx context.Context, id string) error {
-	return ctx.DB().Delete(&models.Playbook{}, "id = ?", id).Error
+	return ctx.DB().Model(&models.Playbook{}).Where("id = ?", id).Update("deleted_at", duty.Now()).Error
 }
 
 // UpdatePlaybookRunStatusIfApproved updates the status of the playbook run to "pending"
