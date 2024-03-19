@@ -9,7 +9,6 @@ import (
 	"github.com/flanksource/commons/logger"
 	cutils "github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty/api"
-	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/schema/openapi"
 
@@ -169,14 +168,40 @@ func ModifyKratosRequestHeaders(next echov4.HandlerFunc) echov4.HandlerFunc {
 func Properties(c echov4.Context) error {
 	ctx := c.Request().Context().(context.Context)
 
-	props, err := db.GetProperties(ctx)
+	dbProperties, err := db.GetProperties(ctx)
 	if err != nil {
 		return api.WriteError(c, err)
 	}
 
-	var output = collections.MergeMap(context.Local, map[string]string{})
-	for _, p := range props {
-		output[p.Name] = p.Value
+	var seen = make(map[string]struct{})
+
+	var output = make([]map[string]string, 0)
+	for _, p := range dbProperties {
+		if _, ok := seen[p.Name]; ok {
+			continue
+		}
+
+		output = append(output, map[string]string{
+			"name":        p.Name,
+			"value":       p.Value,
+			"source":      "db",
+			"type":        "",
+			"description": "",
+		})
+	}
+
+	for k, v := range context.Local {
+		if _, ok := seen[k]; ok {
+			continue
+		}
+
+		output = append(output, map[string]string{
+			"name":        k,
+			"value":       v,
+			"source":      "local",
+			"type":        "",
+			"description": "",
+		})
 	}
 
 	return c.JSON(http.StatusOK, output)
