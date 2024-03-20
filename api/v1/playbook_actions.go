@@ -197,7 +197,7 @@ type HTTPAction struct {
 }
 
 type Artifact struct {
-	Path string `json:"path" yaml:"path"`
+	Path string `json:"path" yaml:"path" template:"true"`
 }
 
 type GitCheckout struct {
@@ -233,7 +233,7 @@ type ExecAction struct {
 	Script      string          `yaml:"script" json:"script" template:"true"`
 	Connections ExecConnections `yaml:"connections,omitempty" json:"connections,omitempty"`
 	// Artifacts to save
-	Artifacts []Artifact `yaml:"artifacts,omitempty" json:"artifacts,omitempty"`
+	Artifacts []Artifact `yaml:"artifacts,omitempty" json:"artifacts,omitempty" template:"true"`
 	// EnvVars are the environment variables that are accessible to exec processes
 	EnvVars []types.EnvVar `yaml:"env,omitempty" json:"env,omitempty"`
 	// Checkout details the git repository that should be mounted to the process

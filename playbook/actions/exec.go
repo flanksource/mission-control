@@ -189,17 +189,21 @@ func runCmd(ctx context.Context, cmd *osExec.Cmd, artifactConfigs ...v1.Artifact
 			}
 
 			for _, path := range paths {
-				artifact := artifacts.Artifact{}
-
 				file, err := os.Open(path)
 				if err != nil {
-					logger.Errorf("error opening file. path=%s; %w", path, err)
-					continue
+					return nil, fmt.Errorf("error opening artifact file. path=%s; %w", path, err)
 				}
 
-				artifact.Content = file
-				artifact.Path = path
-				result.Artifacts = append(result.Artifacts, artifact)
+				if stat, err := file.Stat(); err != nil {
+					return nil, fmt.Errorf("error getting artifact file stat. path=%s; %w", path, err)
+				} else if stat.IsDir() {
+					return nil, fmt.Errorf("artifact path (%s) is a directory. expected file", path)
+				}
+
+				result.Artifacts = append(result.Artifacts, artifacts.Artifact{
+					Content: file,
+					Path:    path,
+				})
 			}
 		}
 	}
