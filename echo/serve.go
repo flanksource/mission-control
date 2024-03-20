@@ -8,6 +8,7 @@ import (
 
 	"github.com/flanksource/commons/logger"
 	cutils "github.com/flanksource/commons/utils"
+	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/schema/openapi"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/flanksource/incident-commander/artifacts"
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/catalog"
+	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/logs"
 	"github.com/flanksource/incident-commander/playbook"
 	"github.com/flanksource/incident-commander/rbac"
@@ -57,6 +59,8 @@ func New(ctx context.Context) *echov4.Echo {
 
 	e.Use(middleware.LoggerWithConfig(echoLogConfig))
 	e.Use(ServerCache)
+
+	e.GET("/properties", Properties)
 
 	e.GET("/health", func(c echov4.Context) error {
 		return c.String(http.StatusOK, "OK")
@@ -159,4 +163,46 @@ func ModifyKratosRequestHeaders(next echov4.HandlerFunc) echov4.HandlerFunc {
 		}
 		return next(c)
 	}
+}
+
+func Properties(c echov4.Context) error {
+	ctx := c.Request().Context().(context.Context)
+
+	dbProperties, err := db.GetProperties(ctx)
+	if err != nil {
+		return api.WriteError(c, err)
+	}
+
+	var seen = make(map[string]struct{})
+
+	var output = make([]map[string]string, 0)
+	for _, p := range dbProperties {
+		if _, ok := seen[p.Name]; ok {
+			continue
+		}
+
+		output = append(output, map[string]string{
+			"name":        p.Name,
+			"value":       p.Value,
+			"source":      "db",
+			"type":        "",
+			"description": "",
+		})
+	}
+
+	for k, v := range context.Local {
+		if _, ok := seen[k]; ok {
+			continue
+		}
+
+		output = append(output, map[string]string{
+			"name":        k,
+			"value":       v,
+			"source":      "local",
+			"type":        "",
+			"description": "",
+		})
+	}
+
+	return c.JSON(http.StatusOK, output)
 }
