@@ -88,6 +88,7 @@ var _ = ginkgo.Describe("Notification on incident creation", ginkgo.Ordered, fun
 			Events:   pq.StringArray([]string{"incident.created"}),
 			Template: "Severity: {{.incident.severity}}",
 			TeamID:   &team.ID,
+			Source:   models.SourceCRD,
 		}
 
 		err := DefaultContext.DB().Create(&notif).Error
