@@ -29,6 +29,7 @@ func PersistNotificationFromCRD(ctx context.Context, obj *v1.Notification) error
 		Template:   obj.Spec.Template,
 		Filter:     obj.Spec.Filter,
 		Properties: obj.Spec.To.Properties,
+		Source:     models.SourceCRD,
 	}
 
 	switch {
