@@ -106,7 +106,10 @@ func StartConsumers(ctx context.Context) {
 					return h(c, e)
 				},
 				ConsumerOption: &postq.ConsumerOption{
-					ErrorHandler: defaultLoggerErrorHandler,
+					ErrorHandler: func(ctx postq.Context, err error) bool {
+						logger.Errorf("error consuming event(%s): %v", event, err)
+						return false // don't retry here. Event queue has its own retry mechanism.
+					},
 				},
 			}
 			if ec, err := consumer.EventConsumer(); err != nil {
