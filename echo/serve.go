@@ -1,6 +1,7 @@
 package echo
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -10,6 +11,7 @@ import (
 	cutils "github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/schema/openapi"
 
 	"github.com/flanksource/incident-commander/agent"
@@ -61,6 +63,7 @@ func New(ctx context.Context) *echov4.Echo {
 	e.Use(ServerCache)
 
 	e.GET("/properties", Properties)
+	e.POST("/resources/search", SearchResources)
 
 	e.GET("/health", func(c echov4.Context) error {
 		return c.String(http.StatusOK, "OK")
@@ -163,6 +166,22 @@ func ModifyKratosRequestHeaders(next echov4.HandlerFunc) echov4.HandlerFunc {
 		}
 		return next(c)
 	}
+}
+
+func SearchResources(c echov4.Context) error {
+	ctx := c.Request().Context().(context.Context)
+
+	var request query.SearchResourcesRequest
+	if err := json.NewDecoder(c.Request().Body).Decode(&request); err != nil {
+		return api.WriteError(c, api.Errorf(api.EINVALID, err.Error()))
+	}
+
+	response, err := query.SearchResources(ctx, request)
+	if err != nil {
+		return api.WriteError(c, err)
+	}
+
+	return c.JSON(http.StatusOK, response)
 }
 
 func Properties(c echov4.Context) error {
