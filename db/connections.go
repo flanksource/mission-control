@@ -21,6 +21,7 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 		Certificate: obj.Spec.Certificate.String(),
 		Properties:  obj.Spec.Properties,
 		InsecureTLS: obj.Spec.InsecureTLS,
+		Source:      models.SourceCRD,
 		// Gorm.Save does not use defaults when inserting
 		// and the timestamp used is zero time
 		CreatedAt: time.Now(),
