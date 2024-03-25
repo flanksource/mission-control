@@ -33,7 +33,8 @@ spec:
         - admin@local
     type: any
   configs:
-    - type: AWS::EKS::Cluster
+    - types:
+        - AWS::EKS::Cluster
   description: Upgrade EKS Cluster
   parameters:
     - label: The new EKS version

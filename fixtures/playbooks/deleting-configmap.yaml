@@ -5,7 +5,8 @@ metadata:
 spec:
   description: Delete Kubernetes ConfigMap
   configs:
-    - type: Kubernetes::ConfigMap
+    - types:
+        - Kubernetes::ConfigMap
   actions:
     - name: 'Delete ConfigMap'
       exec:

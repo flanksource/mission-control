@@ -5,7 +5,8 @@ metadata:
 spec:
   description: Post component name and status to webhook
   components:
-    - type: KubernetesCluster
+    - types: 
+      - KubernetesCluster
   actions:
     - name: Post a message to webhook
       http:

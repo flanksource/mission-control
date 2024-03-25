@@ -9,7 +9,8 @@ spec:
     - azure # agent 2
   description: Deletes namespace from all the agents and the host
   configs:
-    - type: Kubernetes::Namespace
+    - types: 
+      - Kubernetes::Namespace
   actions:
     - name: Delete the namespace on the host
       exec:

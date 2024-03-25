@@ -8,8 +8,6 @@ spec:
     - name: message
       label: The message for notification
       default: '{{.config.name}}'
-  configs:
-    - type: Kubernetes::Pod
   actions:
     - name: Modify repo
       exec:

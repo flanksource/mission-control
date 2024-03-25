@@ -5,9 +5,9 @@ metadata:
 spec:
   description: Scale deployment
   configs:
-    - type: Kubernetes::Deployment
-      tags:
-        environment: staging
+    - types: 
+        - Kubernetes::Deployment
+      labelSelector: "environment=staging"
   parameters:
     - name: replicas
       label: The new desired number of replicas.

@@ -5,7 +5,8 @@ metadata:
 spec:
   description: Creates a file with the content of the config
   configs:
-    - type: Kubernetes::Pod
+    - types:
+        - Kubernetes::Pod
   actions:
     - name: Fetch all changes
       sql:

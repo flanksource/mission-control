@@ -11,7 +11,8 @@ spec:
           type: database
   description: Count the number of events in event queue
   components:
-    - type: Database
+    - types:
+        - Database
   actions:
     - name: Get the total event count
       sql:
