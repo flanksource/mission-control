@@ -128,7 +128,7 @@ func ListPlaybooksForComponent(ctx context.Context, id string) ([]api.PlaybookLi
 		return nil, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "component(id=%s) not found", id)
 	}
 
-	return db.FindPlaybooksForComponent(ctx, component.Type, component.Labels)
+	return db.FindPlaybooksForComponent(ctx, component)
 }
 
 func ListPlaybooksForCheck(ctx context.Context, id string) ([]api.PlaybookListItem, error) {
@@ -139,7 +139,7 @@ func ListPlaybooksForCheck(ctx context.Context, id string) ([]api.PlaybookListIt
 		return nil, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "check(id=%s) not found", id)
 	}
 
-	return db.FindPlaybooksForCheck(ctx, check.Type, check.Labels)
+	return db.FindPlaybooksForCheck(ctx, check)
 }
 
 func GetLastAction(ctx context.Context, runID, callerActionID string) (map[string]any, error) {

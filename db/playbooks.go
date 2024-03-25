@@ -83,33 +83,10 @@ func GetPlaybookRun(ctx context.Context, id string) (*models.PlaybookRun, error)
 	return &p, nil
 }
 
-// FindPlaybooksForCheck returns all the playbooks that match the given check type and tags.
-func FindPlaybooksForCheck(ctx context.Context, checkType string, tags map[string]string) ([]api.PlaybookListItem, error) {
-	joinQuery := `JOIN LATERAL jsonb_array_elements(playbooks."spec"->'checks') AS checks(ch) ON 1=1`
-	var joinArgs []any
-	if len(tags) != 0 {
-		joinQuery += " AND (?::jsonb) @> COALESCE(checks.ch->'tags', '{}'::jsonb)"
-		joinArgs = append(joinArgs, types.JSONStringMap(tags))
-	}
-	if checkType != "" && checkType != "*" {
-		joinQuery += " AND checks.ch->>'type' = ?"
-		joinArgs = append(joinArgs, checkType)
-	}
-
-	query := ctx.DB().
-		Select("DISTINCT ON (playbooks.id) playbooks.id, playbooks.name, playbooks.spec->'parameters' as parameters").
-		Joins(joinQuery, joinArgs...)
-
-	var playbooks []api.PlaybookListItem
-	err := query.Model(&models.Playbook{}).Find(&playbooks).Error
-	return playbooks, err
-}
-
-// FindPlaybooksForConfig returns all the playbooks that match the given config's resource selectors
-func FindPlaybooksForConfig(ctx context.Context, config models.ConfigItem) ([]api.PlaybookListItem, error) {
+func findPlaybooksForResourceSelector(ctx context.Context, selectable types.ResourceSelectable, selectorField string) ([]api.PlaybookListItem, error) {
 	var playbooks []models.Playbook
-	if err := ctx.DB().Model(&models.Playbook{}).Where("spec->>'configs' IS NOT NULL").Where("deleted_at IS NULL").Find(&playbooks).Error; err != nil {
-		return nil, fmt.Errorf("error finding playbooks with configs: %w", err)
+	if err := ctx.DB().Model(&models.Playbook{}).Where(fmt.Sprintf("spec->>'%s' IS NOT NULL", selectorField)).Where("deleted_at IS NULL").Find(&playbooks).Error; err != nil {
+		return nil, fmt.Errorf("error finding playbooks with %s: %w", selectorField, err)
 	}
 
 	// To return empty list instead of null
@@ -122,13 +99,23 @@ func FindPlaybooksForConfig(ctx context.Context, config models.ConfigItem) ([]ap
 			continue
 		}
 
-		if len(spec.Configs) == 0 {
+		var resourceSelectors []types.ResourceSelector
+		switch selectorField {
+		case "checks":
+			resourceSelectors = spec.Checks
+		case "configs":
+			resourceSelectors = spec.Configs
+		case "components":
+			resourceSelectors = spec.Components
+		}
+
+		if len(resourceSelectors) == 0 {
 			continue
 		}
 
 		matches := true
-		for _, rs := range spec.Configs {
-			if !rs.Matches(config) {
+		for _, rs := range resourceSelectors {
+			if !rs.Matches(selectable) {
 				matches = false
 				break
 			}
@@ -152,27 +139,19 @@ func FindPlaybooksForConfig(ctx context.Context, config models.ConfigItem) ([]ap
 	return playbookListItems, nil
 }
 
+// FindPlaybooksForCheck returns all the playbooks that match the given check type and tags.
+func FindPlaybooksForCheck(ctx context.Context, check models.Check) ([]api.PlaybookListItem, error) {
+	return findPlaybooksForResourceSelector(ctx, check, "checks")
+}
+
+// FindPlaybooksForConfig returns all the playbooks that match the given config's resource selectors
+func FindPlaybooksForConfig(ctx context.Context, config models.ConfigItem) ([]api.PlaybookListItem, error) {
+	return findPlaybooksForResourceSelector(ctx, config, "configs")
+}
+
 // FindPlaybooksForComponent returns all the playbooks that match the given component type and tags.
-func FindPlaybooksForComponent(ctx context.Context, componentType string, tags map[string]string) ([]api.PlaybookListItem, error) {
-	joinQuery := `JOIN LATERAL jsonb_array_elements(playbooks."spec"->'components') AS components(component) ON 1=1`
-	var joinArgs []any
-
-	if len(tags) != 0 {
-		joinQuery += " AND (?::jsonb) @> COALESCE(components.component->'tags', '{}'::jsonb)"
-		joinArgs = append(joinArgs, types.JSONStringMap(tags))
-	}
-	if componentType != "" && componentType != "*" {
-		joinQuery += " AND components.component->>'type' = ?"
-		joinArgs = append(joinArgs, componentType)
-	}
-
-	query := ctx.DB().
-		Select("DISTINCT ON (playbooks.id) playbooks.id, playbooks.name, playbooks.spec->'parameters' as parameters").
-		Joins(joinQuery, joinArgs...)
-
-	var playbooks []api.PlaybookListItem
-	err := query.Model(&models.Playbook{}).Find(&playbooks).Error
-	return playbooks, err
+func FindPlaybooksForComponent(ctx context.Context, component models.Component) ([]api.PlaybookListItem, error) {
+	return findPlaybooksForResourceSelector(ctx, component, "components")
 }
 
 func FindPlaybookByWebhookPath(ctx context.Context, path string) (*models.Playbook, error) {
