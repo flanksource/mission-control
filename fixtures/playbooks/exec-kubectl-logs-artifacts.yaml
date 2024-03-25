@@ -5,9 +5,9 @@ metadata:
 spec:
   description: Grab the latest 100 lines of etcd logs
   components:
-    - type: KubernetesPod
-      tags:
-        component: etcd
+    - types: 
+        - KubernetesPod
+      labelSelector: "component=etcd"
   actions:
     - name: 'etcd logs'
       exec:

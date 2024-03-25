@@ -9,7 +9,8 @@ spec:
       label: The message for notification
       default: '{{.config.name}}'
   configs:
-    - type: Kubernetes::Pod
+    - types: 
+        - Kubernetes::Pod
   actions:
     - name: Send notification
       exec:

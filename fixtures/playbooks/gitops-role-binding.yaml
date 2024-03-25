@@ -9,7 +9,8 @@ spec:
     - name: namespace
       label: Namespace
   components:
-    - type: KubernetesCluster
+    - types:
+      - KubernetesCluster
   actions:
     - name: Create new service account with cluster role bindings
       gitops:

@@ -1,3 +1,4 @@
+---
 apiVersion: mission-control.flanksource.com/v1
 kind: Playbook
 metadata:
@@ -15,8 +16,8 @@ spec:
           base: master
           branch: playbooks-branch-{{.params.namespace}}
         commit:
-          email: {{.user.email}}
-          author: {{.user.name}}
+          email: '{{.user.email}}'
+          author: '{{.user.name}}'
           message: |
             Testing commit message from playbooks {{.params.namespace}}
         pr:

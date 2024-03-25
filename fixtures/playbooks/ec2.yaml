@@ -5,9 +5,9 @@ metadata:
 spec:
   description: Unconventional EC2 restart
   configs:
-    - type: EC2 Instance
-      tags:
-        telemetry: enabled
+    - types:
+        - EC2 Instance
+      labelSelector: "telemetry=enabled"
   actions:
     - name: 'Stop EC2 instance'
       exec:

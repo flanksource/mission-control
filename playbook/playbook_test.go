@@ -82,8 +82,8 @@ var _ = ginkgo.Describe("Playbook", ginkgo.Ordered, func() {
 
 			checkPlaybookSpec := v1.PlaybookSpec{
 				Description: "write check name to file",
-				Checks: []v1.PlaybookResourceFilter{
-					{Type: dummy.LogisticsAPIHealthHTTPCheck.Type},
+				Checks: []types.ResourceSelector{
+					{Types: types.Items{dummy.LogisticsAPIHealthHTTPCheck.Type}},
 				},
 				Actions: []v1.PlaybookAction{
 					{
@@ -109,8 +109,8 @@ var _ = ginkgo.Describe("Playbook", ginkgo.Ordered, func() {
 
 			componentPlaybookSpec := v1.PlaybookSpec{
 				Description: "write component name to file",
-				Components: []v1.PlaybookResourceFilter{
-					{Type: dummy.Logistics.Type, Tags: map[string]string{"telemetry": "enabled"}},
+				Components: []types.ResourceSelector{
+					{Types: []string{dummy.Logistics.Type}, LabelSelector: "telemetry=enabled"},
 				},
 				Actions: []v1.PlaybookAction{
 					{

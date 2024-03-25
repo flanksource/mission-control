@@ -5,7 +5,8 @@ metadata:
 spec:
   description: Clones the git repository and reads the first line of the file
   configs:
-    - type: AWS::EKS::Cluster
+    - types:
+        - AWS::EKS::Cluster
   actions:
     - name: Clone and read go.sum
       exec:

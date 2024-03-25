@@ -5,7 +5,8 @@ metadata:
 spec:
   description: Create a file specified by the webhook
   components:
-    - type: KubernetesCluster
+    - types:
+        - KubernetesCluster
   'on':
     webhook:
       path: my-webhook

@@ -15,13 +15,6 @@ type Permission struct {
 	Ref  string `json:"ref,omitempty" yaml:"ref,omitempty"`
 }
 
-// PlaybookResourceFilter defines a filter that decides whether a resource (config or a component)
-// is permitted be run on the Playbook.
-type PlaybookResourceFilter struct {
-	Type string            `json:"type,omitempty" yaml:"type,omitempty"`
-	Tags map[string]string `json:"tags,omitempty" yaml:"tags,omitempty"`
-}
-
 const (
 	PlaybookParameterTypeCheck     = "check"
 	PlaybookParameterTypeCheckbox  = "checkbox"
@@ -179,10 +172,10 @@ type PlaybookSpec struct {
 	Configs dutyTypes.ResourceSelectors `json:"configs,omitempty" yaml:"configs,omitempty"`
 
 	// Checks filters what checks can run on this playbook.
-	Checks []PlaybookResourceFilter `json:"checks,omitempty" yaml:"checks,omitempty"`
+	Checks dutyTypes.ResourceSelectors `json:"checks,omitempty" yaml:"checks,omitempty"`
 
 	// Components what components can run on this playbook.
-	Components []PlaybookResourceFilter `json:"components,omitempty" yaml:"components,omitempty"`
+	Components dutyTypes.ResourceSelectors `json:"components,omitempty" yaml:"components,omitempty"`
 
 	// Define and document what parameters are required to run this playbook.
 	Parameters []PlaybookParameter `json:"parameters,omitempty" yaml:"parameters,omitempty"`

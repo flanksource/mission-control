@@ -1123,31 +1123,73 @@ spec:
               checks:
                 description: Checks filters what checks can run on this playbook.
                 items:
-                  description: |-
-                    PlaybookResourceFilter defines a filter that decides whether a resource (config or a component)
-                    is permitted be run on the Playbook.
                   properties:
-                    tags:
-                      additionalProperties:
-                        type: string
-                      type: object
-                    type:
+                    agent:
+                      description: |-
+                        Agent can be the agent id or the name of the agent.
+                         Additionally, the special "self" value can be used to select resources without an agent.
                       type: string
+                    cache:
+                      description: |-
+                        Cache directives
+                         'no-cache' (should not fetch from cache but can be cached)
+                         'no-store' (should not cache)
+                         'max-age=X' (cache for X duration)
+                      type: string
+                    fieldSelector:
+                      type: string
+                    id:
+                      type: string
+                    labelSelector:
+                      type: string
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+                    statuses:
+                      items:
+                        type: string
+                      type: array
+                    types:
+                      items:
+                        type: string
+                      type: array
                   type: object
                 type: array
               components:
                 description: Components what components can run on this playbook.
                 items:
-                  description: |-
-                    PlaybookResourceFilter defines a filter that decides whether a resource (config or a component)
-                    is permitted be run on the Playbook.
                   properties:
-                    tags:
-                      additionalProperties:
-                        type: string
-                      type: object
-                    type:
+                    agent:
+                      description: |-
+                        Agent can be the agent id or the name of the agent.
+                         Additionally, the special "self" value can be used to select resources without an agent.
                       type: string
+                    cache:
+                      description: |-
+                        Cache directives
+                         'no-cache' (should not fetch from cache but can be cached)
+                         'no-store' (should not cache)
+                         'max-age=X' (cache for X duration)
+                      type: string
+                    fieldSelector:
+                      type: string
+                    id:
+                      type: string
+                    labelSelector:
+                      type: string
+                    name:
+                      type: string
+                    namespace:
+                      type: string
+                    statuses:
+                      items:
+                        type: string
+                      type: array
+                    types:
+                      items:
+                        type: string
+                      type: array
                   type: object
                 type: array
               configs:
