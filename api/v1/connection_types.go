@@ -5,16 +5,232 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+type ConnectionTelegram struct {
+	Token types.EnvVar `json:"token"`
+
+	// Chat ID or Channel name (using @channel-name)
+	Chats types.EnvVar `json:"chats"`
+}
+
+type ConnectionSlack struct {
+	Token types.EnvVar `json:"token"`
+
+	// Channel to send messages to in Cxxxxxxxxxx format
+	Channel string `json:"channel"`
+
+	BotName string `json:"botname"`
+}
+
+type ConnectionNtfy struct {
+	Topic string `json:"topic"`
+
+	Host     string       `json:"host"`
+	Username types.EnvVar `json:"username"`
+	Password types.EnvVar `json:"password"`
+}
+
+type ConnectionDiscord struct {
+	Token     string `json:"token"`
+	WebhookID string `json:"webhookID"`
+}
+
+type ConnectionEmail struct {
+	Host     string       `json:"host"`
+	Username types.EnvVar `json:"username"`
+	Password types.EnvVar `json:"password"`
+
+	// Default: false
+	InsecureTLS bool `json:"insecureTLS,omitempty"`
+
+	// Encryption Method
+	// 	Defulat: auto
+	// 	Possible values: None, ExplicitTLS, ImplicitTLS, Auto
+	Encryption string `json:"encryption,omitempty"`
+
+	// SMTP server port
+	// 	Default: 587
+	Port int `json:"port,omitempty"`
+
+	// Email address that the mail are sent from
+	FromAddress string `json:"fromAddress"`
+
+	// List of recipient e-mails
+	ToAddresses []string `json:"toAddresses"`
+
+	// The subject of the sent mail
+	Subject string `json:"subject"`
+
+	// Auth - SMTP authentication method
+	// Possible values: None, Plain, CRAMMD5, Unknown, OAuth2
+	Auth string `json:"auth"`
+}
+
+type ConnectionPushbullet struct {
+	Token types.EnvVar `json:"token"`
+
+	Targets []string `json:"targets"`
+}
+
+type ConnectionPushover struct {
+	Token types.EnvVar `json:"token"`
+	// User key
+	User string `json:"user"`
+}
+
+type ConnectionPostgres struct {
+	Host     types.EnvVar `json:"host"`
+	Username types.EnvVar `json:"username"`
+	Password types.EnvVar `json:"password"`
+}
+
+type ConnectionMySQL struct {
+	Host     types.EnvVar `json:"host"`
+	Username types.EnvVar `json:"username"`
+	Password types.EnvVar `json:"password"`
+}
+
+type ConnectionMSSQL struct {
+	Host     types.EnvVar `json:"host"`
+	Username types.EnvVar `json:"username"`
+	Password types.EnvVar `json:"password"`
+}
+
+type ConnectionMongo struct {
+	Host        types.EnvVar `json:"host"`
+	Username    types.EnvVar `json:"username"`
+	Password    types.EnvVar `json:"password"`
+	InsecureTLS bool         `json:"insecureTLS,omitempty"`
+}
+
+type ConnectionAWSS3 struct {
+	ConnectionAWS `json:",inline"`
+	Bucket        string `json:"bucket"`
+}
+
+type ConnectionAWS struct {
+	Region      string       `json:"region"`
+	Profile     string       `json:"profile"`
+	InsecureTLS bool         `json:"insecureTLS,omitempty"`
+	AccessKey   types.EnvVar `json:"accessKey"`
+	SecretKey   types.EnvVar `json:"secretKey"`
+}
+
+type ConnectionAzure struct {
+	ClientID     types.EnvVar `json:"clientID"`
+	ClientSecret types.EnvVar `json:"clientSecret"`
+	TenantID     types.EnvVar `json:"tenantID"`
+}
+
+type ConnectionAzureDevops struct {
+	Organization        string       `json:"organization"`
+	PersonalAccessToken types.EnvVar `json:"personalAccessToken"`
+}
+
+type ConnectionGCP struct {
+	Endpoint    types.EnvVar `json:"endpoint"`
+	Certificate types.EnvVar `json:"certificate"`
+}
+
+type ConnectionFolder struct {
+	Path string `json:"path"`
+}
+
+type ConnectionKubernetes struct {
+	Certificate types.EnvVar `json:"certificate"`
+}
+
+type ConnectionGitHub struct {
+	PersonalAccessToken types.EnvVar `json:"personalAccessToken"`
+}
+
+type ConnectionGit struct {
+	URL         string        `json:"string"`
+	Ref         string        `json:"ref"`
+	Certificate *types.EnvVar `json:"certificate"`
+	Username    *types.EnvVar `json:"username"`
+	Password    *types.EnvVar `json:"password"`
+	SSH         *types.EnvVar `json:"ssh"`
+}
+
+type ConnectionHTTP struct {
+	URL         string        `json:"url"`
+	InsecureTLS bool          `json:"insecureTLS,omitempty"`
+	Username    *types.EnvVar `json:"username,omitempty"`
+	Password    *types.EnvVar `json:"password,omitempty"`
+}
+
+type ConnectionSFTP struct {
+	Host     types.EnvVar `json:"host"`
+	Username types.EnvVar `json:"username"`
+	Password types.EnvVar `json:"password"`
+
+	// SMTP server port
+	// 	Default: 22
+	Port int `json:"port,omitempty"`
+
+	Path string `json:"path"`
+}
+
+type ConnectionSMB struct {
+	Server   types.EnvVar `json:"server"`
+	Username types.EnvVar `json:"username"`
+	Password types.EnvVar `json:"password"`
+
+	// SMB server port
+	// 	Default: 445
+	Port types.EnvVar `json:"port,omitempty"`
+
+	Share string `json:"share"`
+}
+
 // ConnectionSpec defines the desired state of Connection
 type ConnectionSpec struct {
-	URL         types.EnvVar        `json:"url,omitempty"`
-	Port        types.EnvVar        `json:"port,omitempty"`
-	Type        string              `json:"type,omitempty"`
-	Username    types.EnvVar        `json:"username,omitempty"`
-	Password    types.EnvVar        `json:"password,omitempty"`
-	Certificate types.EnvVar        `json:"certificate,omitempty"`
-	Properties  types.JSONStringMap `json:"properties,omitempty"`
-	InsecureTLS bool                `json:"insecure_tls,omitempty"`
+	Properties types.JSONStringMap `json:"properties,omitempty"`
+
+	AWS         *ConnectionAWS         `json:"aws,omitempty"`
+	S3          *ConnectionAWSS3       `json:"s3,omitempty"`
+	Azure       *ConnectionAzure       `json:"azure,omitempty"`
+	AzureDevops *ConnectionAzureDevops `json:"azureDevops,omitempty"`
+	GCP         *ConnectionGCP         `json:"gcp,omitempty"`
+
+	Folder     *ConnectionFolder     `json:"folder,omitempty"`
+	Git        *ConnectionGit        `json:"git,omitempty"`
+	GitHub     *ConnectionGitHub     `json:"github,omitempty"`
+	HTTP       *ConnectionHTTP       `json:"http,omitempty"`
+	Kubernetes *ConnectionKubernetes `json:"kubernetes,omitempty"`
+	MSSQL      *ConnectionMSSQL      `json:"mssql,omitempty"`
+	Mongo      *ConnectionMongo      `json:"mongo,omitempty"`
+	MySQL      *ConnectionMySQL      `json:"mysql,omitempty"`
+	Postgres   *ConnectionPostgres   `json:"postgres,omitempty"`
+	SFTP       *ConnectionSFTP       `json:"sftp,omitempty"`
+	SMB        *ConnectionSMB        `json:"smb,omitempty"`
+
+	//////////////////////////////
+	// Notification Connections //
+	//////////////////////////////
+
+	Discord    *ConnectionDiscord    `json:"discord,omitempty"`
+	Email      *ConnectionEmail      `json:"email,omitempty"`
+	Ntfy       *ConnectionNtfy       `json:"ntfy,omitempty"`
+	Pushbullet *ConnectionPushbullet `json:"pushbullet,omitempty"`
+	Pushover   *ConnectionPushover   `json:"pushover,omitempty"`
+	Slack      *ConnectionSlack      `json:"slack,omitempty"`
+	Telegram   *ConnectionTelegram   `json:"telegram,omitempty"`
+
+	// DEPRECATED
+	URL types.EnvVar `json:"url,omitempty"`
+	// DEPRECATED
+	Port types.EnvVar `json:"port,omitempty"`
+	// DEPRECATED
+	Type string `json:"type,omitempty"`
+	// DEPRECATED
+	Username types.EnvVar `json:"username,omitempty"`
+	// DEPRECATED
+	Password types.EnvVar `json:"password,omitempty"`
+	// DEPRECATED
+	Certificate types.EnvVar `json:"certificate,omitempty"`
+	// DEPRECATED
+	InsecureTLS bool `json:"insecure_tls,omitempty"`
 }
 
 // ConnectionStatus defines the observed state of Connection
