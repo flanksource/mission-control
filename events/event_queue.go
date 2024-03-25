@@ -13,6 +13,12 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+type asyncHandlerData struct {
+	fn           func(ctx context.Context, e postq.Events) postq.Events
+	batchSize    int
+	numConsumers int
+}
+
 const (
 	// eventQueueUpdateChannel is the channel on which new events on the `event_queue` table
 	// are notified.
@@ -22,7 +28,7 @@ const (
 type Handler func(ctx context.Context, e postq.Event) error
 
 var SyncHandlers = utils.SyncedMap[string, func(ctx context.Context, e postq.Event) error]{}
-var AsyncHandlers = utils.SyncedMap[string, func(ctx context.Context, e postq.Events) postq.Events]{}
+var AsyncHandlers = utils.SyncedMap[string, asyncHandlerData]{}
 
 var consumers []*postq.PGConsumer
 var registers []func(ctx context.Context)
@@ -33,7 +39,11 @@ func Register(fn func(ctx context.Context)) {
 
 func RegisterAsyncHandler(fn func(ctx context.Context, e postq.Events) postq.Events, batchSize int, consumers int, events ...string) {
 	for _, event := range events {
-		AsyncHandlers.Append(event, fn)
+		AsyncHandlers.Append(event, asyncHandlerData{
+			fn:           fn,
+			batchSize:    batchSize,
+			numConsumers: consumers,
+		})
 	}
 }
 
@@ -65,7 +75,7 @@ func StartConsumers(ctx context.Context) {
 		logger.Tracef("Registering %d sync event handlers for %s", len(handlers), event)
 		consumer := postq.SyncEventConsumer{
 			WatchEvents: []string{event},
-			Consumers:   postq.SyncHandlers[context.Context](handlers...),
+			Consumers:   postq.SyncHandlers(handlers...),
 			ConsumerOption: &postq.ConsumerOption{
 				ErrorHandler: defaultLoggerErrorHandler,
 			},
@@ -79,11 +89,11 @@ func StartConsumers(ctx context.Context) {
 		}
 	})
 
-	AsyncHandlers.Each(func(event string, handlers []func(ctx context.Context, e postq.Events) postq.Events) {
+	AsyncHandlers.Each(func(event string, handlers []asyncHandlerData) {
 		logger.Tracef("Registering %d async event handlers for %v", len(handlers), event)
 		for _, handler := range handlers {
-			h := handler
-			batchSize := 5
+			h := handler.fn
+			batchSize := handler.batchSize
 			var err error
 			if size := properties[event+".batchSize"]; size != "" {
 				batchSize, err = strconv.Atoi(size)
@@ -106,6 +116,7 @@ func StartConsumers(ctx context.Context) {
 					return h(c, e)
 				},
 				ConsumerOption: &postq.ConsumerOption{
+					NumConsumers: handler.numConsumers,
 					ErrorHandler: func(ctx postq.Context, err error) bool {
 						logger.Errorf("error consuming event(%s): %v", event, err)
 						return false // don't retry here. Event queue has its own retry mechanism.
