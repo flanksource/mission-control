@@ -122,7 +122,28 @@ func Test(ctx context.Context, c *models.Connection) error {
 		return nil
 
 	case models.ConnectionTypeSlack:
-		return nil
+		response, err := http.NewClient().R(ctx).
+			Header("Authorization", fmt.Sprintf("Bearer %s", c.Password)).
+			Header("Content-Type", "application/json; charset=utf-8").
+			Post("https://slack.com/api/auth.test", map[string]string{"token": c.Password})
+		if err != nil {
+			return err
+		}
+
+		if !response.IsOK(200) {
+			body, _ := response.AsString()
+			return api.Errorf(api.EINVALID, "server returned status (code %d) (msg: %s)", response.StatusCode, body)
+		}
+
+		responseMsg, err := response.AsJSON()
+		if err != nil {
+			return err
+		}
+
+		if responseMsg["ok"] != true {
+			body, _ := response.AsString()
+			return api.Errorf(api.EINVALID, "server returned msg: %s", body)
+		}
 
 	case models.ConnectionTypeSlackWebhook:
 		return nil
@@ -144,7 +165,7 @@ func Test(ctx context.Context, c *models.Connection) error {
 
 		if !response.IsOK(200) {
 			body, _ := response.AsString()
-			return api.Errorf(api.EINVALID, fmt.Errorf("server returned status (code %d) (msg: %s)", response.StatusCode, body))
+			return api.Errorf(api.EINVALID, "server returned status (code %d) (msg: %s)", response.StatusCode, body)
 		}
 
 	case models.ConnectionTypeWebhook:

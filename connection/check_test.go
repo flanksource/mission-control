@@ -13,7 +13,7 @@ import (
 // TODO: Remove this test
 func TestConnection(t *testing.T) {
 	m := models.Connection{
-		Type:     models.ConnectionTypeTelegram,
+		Type:     models.ConnectionTypeSlack,
 		Password: "whatever",
 	}
 
