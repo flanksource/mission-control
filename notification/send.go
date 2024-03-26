@@ -37,7 +37,7 @@ type NotificationEventPayload struct {
 	EventName        string     `json:"event_name"`                  // The name of the original event this notification is for.
 	PersonID         *uuid.UUID `json:"person_id,omitempty"`         // The person recipient.
 	TeamID           string     `json:"team_id,omitempty"`           // The team recipient.
-	NotificationName string     `json:"notification_name,omitempty"` // Name of the notification of a team or a custom service of the notification.
+	NotificationName string     `json:"notification_name,omitempty"` // Name of the notification of a team
 	NotificationID   uuid.UUID  `json:"notification_id,omitempty"`   // ID of the notification.
 	EventCreatedAt   time.Time  `json:"event_created_at"`            // Timestamp at which the original event was created
 }
@@ -108,9 +108,6 @@ func SendNotification(ctx *Context, payload NotificationEventPayload, celEnv map
 
 	for _, cn := range notification.CustomNotifications {
 		ctx.WithRecipientType(RecipientTypeCustom)
-		if cn.Name != payload.NotificationName {
-			continue
-		}
 
 		if err := templater.Walk(&cn); err != nil {
 			return fmt.Errorf("error templating notification: %w", err)
@@ -242,11 +239,10 @@ func CreateNotificationSendPayloads(ctx context.Context, event postq.Event, n *N
 		}
 
 		payload := NotificationEventPayload{
-			EventName:        event.Name,
-			NotificationID:   n.ID,
-			ID:               resourceID,
-			NotificationName: cn.Name,
-			EventCreatedAt:   event.CreatedAt,
+			EventName:      event.Name,
+			NotificationID: n.ID,
+			ID:             resourceID,
+			EventCreatedAt: event.CreatedAt,
 		}
 
 		payloads = append(payloads, payload)
