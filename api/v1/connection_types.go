@@ -34,10 +34,10 @@ type ConnectionDiscord struct {
 	WebhookID string `json:"webhookID"`
 }
 
-type ConnectionEmail struct {
+type ConnectionSMTP struct {
 	Host     string       `json:"host"`
-	Username types.EnvVar `json:"username"`
-	Password types.EnvVar `json:"password"`
+	Username types.EnvVar `json:"username,omitempty"`
+	Password types.EnvVar `json:"password,omitempty"`
 
 	// Default: false
 	InsecureTLS bool `json:"insecureTLS,omitempty"`
@@ -55,14 +55,14 @@ type ConnectionEmail struct {
 	FromAddress string `json:"fromAddress"`
 
 	// List of recipient e-mails
-	ToAddresses []string `json:"toAddresses"`
+	ToAddresses []string `json:"toAddresses,omitempty"`
 
 	// The subject of the sent mail
-	Subject string `json:"subject"`
+	Subject string `json:"subject,omitempty"`
 
 	// Auth - SMTP authentication method
 	// Possible values: None, Plain, CRAMMD5, Unknown, OAuth2
-	Auth string `json:"auth"`
+	Auth string `json:"auth,omitempty"`
 }
 
 type ConnectionPushbullet struct {
@@ -78,27 +78,51 @@ type ConnectionPushover struct {
 }
 
 type ConnectionPostgres struct {
-	Host     types.EnvVar `json:"host"`
-	Username types.EnvVar `json:"username"`
-	Password types.EnvVar `json:"password"`
+	// URL is the connection url.
+	URL types.EnvVar `json:"url,omitempty"`
+
+	// <host:port>
+	Host        types.EnvVar `json:"host,omitempty"`
+	Username    types.EnvVar `json:"username,omitempty"`
+	Password    types.EnvVar `json:"password,omitempty"`
+	Database    types.EnvVar `json:"database,omitempty"`
+	InsecureTLS bool         `json:"insecureTLS,omitempty"`
 }
 
 type ConnectionMySQL struct {
-	Host     types.EnvVar `json:"host"`
-	Username types.EnvVar `json:"username"`
-	Password types.EnvVar `json:"password"`
+	// URL is the connection url.
+	URL types.EnvVar `json:"url,omitempty"`
+
+	// <host:port>
+	Host        types.EnvVar `json:"host,omitempty"`
+	Username    types.EnvVar `json:"username,omitempty"`
+	Password    types.EnvVar `json:"password,omitempty"`
+	Database    types.EnvVar `json:"database,omitempty"`
+	InsecureTLS bool         `json:"insecureTLS,omitempty"`
 }
 
 type ConnectionMSSQL struct {
-	Host     types.EnvVar `json:"host"`
-	Username types.EnvVar `json:"username"`
-	Password types.EnvVar `json:"password"`
+	// URL is the connection url.
+	URL types.EnvVar `json:"url,omitempty"`
+
+	// <host:port>
+	Host        types.EnvVar `json:"host,omitempty"`
+	Username    types.EnvVar `json:"username,omitempty"`
+	Password    types.EnvVar `json:"password,omitempty"`
+	Database    types.EnvVar `json:"database,omitempty"`
+	InsecureTLS bool         `json:"insecureTLS,omitempty"`
 }
 
 type ConnectionMongo struct {
-	Host        types.EnvVar `json:"host"`
-	Username    types.EnvVar `json:"username"`
-	Password    types.EnvVar `json:"password"`
+	// URL is the connection url.
+	URL types.EnvVar `json:"url,omitempty"`
+
+	// <host:port>
+	Host        types.EnvVar `json:"host,omitempty"`
+	Username    types.EnvVar `json:"username,omitempty"`
+	Password    types.EnvVar `json:"password,omitempty"`
+	Database    types.EnvVar `json:"database,omitempty"`
+	ReplicaSet  string       `json:"replicaSet,omitempty"`
 	InsecureTLS bool         `json:"insecureTLS,omitempty"`
 }
 
@@ -108,16 +132,16 @@ type ConnectionAWSS3 struct {
 }
 
 type ConnectionAWS struct {
-	Region      string       `json:"region"`
-	Profile     string       `json:"profile"`
+	Region      string       `json:"region,omitempty"`
+	Profile     string       `json:"profile,omitempty"`
 	InsecureTLS bool         `json:"insecureTLS,omitempty"`
-	AccessKey   types.EnvVar `json:"accessKey"`
-	SecretKey   types.EnvVar `json:"secretKey"`
+	AccessKey   types.EnvVar `json:"accessKey,omitempty"`
+	SecretKey   types.EnvVar `json:"secretKey,omitempty"`
 }
 
 type ConnectionAzure struct {
 	ClientID     types.EnvVar `json:"clientID"`
-	ClientSecret types.EnvVar `json:"clientSecret"`
+	ClientSecret types.EnvVar `json:"clientSecret,omitempty"`
 	TenantID     types.EnvVar `json:"tenantID"`
 }
 
@@ -127,8 +151,8 @@ type ConnectionAzureDevops struct {
 }
 
 type ConnectionGCP struct {
-	Endpoint    types.EnvVar `json:"endpoint"`
-	Certificate types.EnvVar `json:"certificate"`
+	Endpoint    types.EnvVar `json:"endpoint,omitempty"`
+	Certificate types.EnvVar `json:"certificate,omitempty"`
 }
 
 type ConnectionFolder struct {
@@ -210,10 +234,10 @@ type ConnectionSpec struct {
 	//////////////////////////////
 
 	Discord    *ConnectionDiscord    `json:"discord,omitempty"`
-	Email      *ConnectionEmail      `json:"email,omitempty"`
 	Ntfy       *ConnectionNtfy       `json:"ntfy,omitempty"`
 	Pushbullet *ConnectionPushbullet `json:"pushbullet,omitempty"`
 	Pushover   *ConnectionPushover   `json:"pushover,omitempty"`
+	SMTP       *ConnectionSMTP       `json:"smtp,omitempty"`
 	Slack      *ConnectionSlack      `json:"slack,omitempty"`
 	Telegram   *ConnectionTelegram   `json:"telegram,omitempty"`
 

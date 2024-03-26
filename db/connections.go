@@ -2,6 +2,7 @@ package db
 
 import (
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -112,32 +113,90 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 		dbObj.Certificate = obj.Spec.Kubernetes.Certificate.String()
 	}
 
-	if obj.Spec.MSSQL != nil {
-		dbObj.Type = models.ConnectionTypeSQLServer
-		dbObj.URL = obj.Spec.MSSQL.Host.String()
-		dbObj.Username = obj.Spec.MSSQL.Username.String()
-		dbObj.Password = obj.Spec.MSSQL.Password.String()
-	}
-
 	if obj.Spec.Mongo != nil {
 		dbObj.Type = models.ConnectionTypeMongo
-		dbObj.URL = obj.Spec.Mongo.Host.String()
-		dbObj.Username = obj.Spec.Mongo.Username.String()
-		dbObj.Password = obj.Spec.Mongo.Password.String()
+
+		if obj.Spec.Mongo.URL.String() != "" {
+			dbObj.URL = obj.Spec.Mongo.URL.String()
+		} else {
+			dbObj.URL = "mongodb://$(username):$(password)@$(properties.host)/?$(properties.database)"
+			queryParams := url.Values{}
+			if obj.Spec.Mongo.ReplicaSet != "" {
+				queryParams.Set("replicaSet", obj.Spec.Mongo.ReplicaSet)
+			}
+			if obj.Spec.Mongo.InsecureTLS {
+				queryParams.Set("tls", "true")
+			}
+			if len(queryParams) > 0 {
+				dbObj.URL += queryParams.Encode()
+			}
+
+			dbObj.Username = obj.Spec.Mongo.Username.String()
+			dbObj.Password = obj.Spec.Mongo.Password.String()
+			dbObj.Properties = map[string]string{
+				"host":         obj.Spec.Mongo.Host.String(),
+				"database":     obj.Spec.Mongo.Database.String(),
+				"replica_set":  obj.Spec.Mongo.ReplicaSet,
+				"insecure_tls": strconv.FormatBool(obj.Spec.Mongo.InsecureTLS),
+			}
+		}
+	}
+
+	if obj.Spec.MSSQL != nil {
+		dbObj.Type = models.ConnectionTypeSQLServer
+
+		if obj.Spec.MSSQL.URL.String() != "" {
+			dbObj.URL = obj.Spec.MSSQL.URL.String()
+		} else {
+			dbObj.URL = "Server=$(properties.host);Database=$(properties.database);User Id=$(username);Password=$(password);Encrypt=$(properties.insecure_tls)"
+			dbObj.Username = obj.Spec.MSSQL.Username.String()
+			dbObj.Password = obj.Spec.MSSQL.Password.String()
+			dbObj.Properties = map[string]string{
+				"host":         obj.Spec.MSSQL.Host.String(),
+				"database":     obj.Spec.MSSQL.Database.String(),
+				"insecure_tls": strconv.FormatBool(obj.Spec.MSSQL.InsecureTLS),
+			}
+		}
 	}
 
 	if obj.Spec.MySQL != nil {
 		dbObj.Type = models.ConnectionTypeMySQL
-		dbObj.URL = obj.Spec.MySQL.Host.String()
-		dbObj.Username = obj.Spec.MySQL.Username.String()
-		dbObj.Password = obj.Spec.MySQL.Password.String()
+		if obj.Spec.MySQL.URL.String() != "" {
+			dbObj.URL = obj.Spec.MySQL.URL.String()
+		} else {
+			dbObj.URL = "mysql://$(username):$(password)@$(properties.host)/$(properties.database)"
+			if obj.Spec.MySQL.InsecureTLS {
+				dbObj.URL += "sslMode=disabled"
+			}
+
+			dbObj.Username = obj.Spec.MySQL.Username.String()
+			dbObj.Password = obj.Spec.MySQL.Password.String()
+			dbObj.Properties = map[string]string{
+				"host":         obj.Spec.MySQL.Host.String(),
+				"database":     obj.Spec.MySQL.Database.String(),
+				"insecure_tls": strconv.FormatBool(obj.Spec.MySQL.InsecureTLS),
+			}
+		}
 	}
 
 	if obj.Spec.Postgres != nil {
 		dbObj.Type = models.ConnectionTypePostgres
-		dbObj.URL = obj.Spec.Postgres.Host.String()
-		dbObj.Username = obj.Spec.Postgres.Username.String()
-		dbObj.Password = obj.Spec.Postgres.Password.String()
+		if obj.Spec.Postgres.URL.String() != "" {
+			dbObj.URL = obj.Spec.Postgres.URL.String()
+		} else {
+			dbObj.URL = "postgres://$(username):$(password)@$(properties.host)/$(properties.database)"
+			if obj.Spec.Postgres.InsecureTLS {
+				dbObj.URL += "?sslmode=disable"
+			}
+
+			dbObj.Username = obj.Spec.Postgres.Username.String()
+			dbObj.Password = obj.Spec.Postgres.Password.String()
+			dbObj.Properties = map[string]string{
+				"host":         obj.Spec.Postgres.Host.String(),
+				"database":     obj.Spec.Postgres.Database.String(),
+				"insecure_tls": strconv.FormatBool(obj.Spec.Postgres.InsecureTLS),
+			}
+		}
 	}
 
 	if obj.Spec.SFTP != nil {
@@ -168,24 +227,24 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 		dbObj.Password = obj.Spec.Discord.Token
 	}
 
-	if obj.Spec.Email != nil {
+	if obj.Spec.SMTP != nil {
 		dbObj.URL = fmt.Sprintf("smtp://$(username):$(password)@$%s:%d/?UseStartTLS=%s&Encryption=%s&Auth=%s",
-			obj.Spec.Email.Host,
-			obj.Spec.Email.Port,
-			strconv.FormatBool(obj.Spec.Email.InsecureTLS),
-			obj.Spec.Email.Encryption,
-			obj.Spec.Email.Auth,
+			obj.Spec.SMTP.Host,
+			obj.Spec.SMTP.Port,
+			strconv.FormatBool(obj.Spec.SMTP.InsecureTLS),
+			obj.Spec.SMTP.Encryption,
+			obj.Spec.SMTP.Auth,
 		)
 		dbObj.Type = models.ConnectionTypeEmail
-		dbObj.URL = obj.Spec.Email.Host
-		dbObj.Username = obj.Spec.Email.Username.String()
-		dbObj.Password = obj.Spec.Email.Password.String()
+		dbObj.URL = obj.Spec.SMTP.Host
+		dbObj.Username = obj.Spec.SMTP.Username.String()
+		dbObj.Password = obj.Spec.SMTP.Password.String()
 		dbObj.Properties = map[string]string{
-			"port":        strconv.Itoa(obj.Spec.Email.Port),
-			"subject":     obj.Spec.Email.Subject,
-			"auth":        obj.Spec.Email.Auth,
-			"fromAddress": obj.Spec.Email.FromAddress,
-			"toAddress":   strings.Join(obj.Spec.Email.ToAddresses, ", "),
+			"port":        strconv.Itoa(obj.Spec.SMTP.Port),
+			"subject":     obj.Spec.SMTP.Subject,
+			"auth":        obj.Spec.SMTP.Auth,
+			"fromAddress": obj.Spec.SMTP.FromAddress,
+			"toAddress":   strings.Join(obj.Spec.SMTP.ToAddresses, ", "),
 		}
 	}
 
