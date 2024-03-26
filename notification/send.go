@@ -106,6 +106,11 @@ func SendNotification(ctx *Context, payload NotificationEventPayload, celEnv map
 		}
 	}
 
+	// CustomNotifications, even though it's a slice,
+	// contains only a single notification.
+	// It's a slice for backward compatibility reasons.
+	// nolint: staticcheck
+	// (SA4004: the surrounding loop is unconditionally terminated)
 	for _, cn := range notification.CustomNotifications {
 		ctx.WithRecipientType(RecipientTypeCustom)
 
