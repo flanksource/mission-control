@@ -1,6 +1,7 @@
 package connection
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/labstack/echo/v4"
+	"gorm.io/gorm"
 
 	"github.com/flanksource/incident-commander/api"
 )
@@ -19,8 +21,12 @@ func TestConnection(c echo.Context) error {
 	var id = c.Param("id")
 
 	var connection models.Connection
-	if err := ctx.DB().Where("id = ?", id).Find(&connection).Error; err != nil {
-		dutyAPI.WriteError(c, err)
+	if err := ctx.DB().Where("id = ?", id).First(&connection).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "connection was not found"))
+		}
+
+		return dutyAPI.WriteError(c, err)
 	}
 
 	if err := Test(ctx, &connection); err != nil {

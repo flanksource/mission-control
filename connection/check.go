@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/flanksource/commons/http"
+	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -95,7 +96,21 @@ func Test(ctx context.Context, c *models.Connection) error {
 		return nil
 
 	case models.ConnectionTypePostgres:
-		return nil
+		pool, err := duty.NewPgxPool(c.URL)
+		if err != nil {
+			return api.Errorf(api.EINVALID, "error creating pgx pool: %v", err)
+		}
+		defer pool.Close()
+
+		conn, err := pool.Acquire(ctx)
+		if err != nil {
+			return api.Errorf(api.EINVALID, "error acquiring connection: %v", err)
+		}
+		defer conn.Release()
+
+		if err := conn.Ping(ctx); err != nil {
+			return api.Errorf(api.EINVALID, "error pinging database: %v", err)
+		}
 
 	case models.ConnectionTypePrometheus:
 		return nil
@@ -129,6 +144,7 @@ func Test(ctx context.Context, c *models.Connection) error {
 		if err != nil {
 			return err
 		}
+		defer response.Body.Close()
 
 		if !response.IsOK(200) {
 			body, _ := response.AsString()
@@ -162,6 +178,7 @@ func Test(ctx context.Context, c *models.Connection) error {
 		if err != nil {
 			return err
 		}
+		defer response.Body.Close()
 
 		if !response.IsOK(200) {
 			body, _ := response.AsString()
