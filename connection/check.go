@@ -87,10 +87,10 @@ func Test(ctx context.Context, c *models.Connection) error {
 		}
 
 	case models.ConnectionTypeDiscord:
-		return fmt.Errorf("not implemented")
+		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
 
 	case models.ConnectionTypeDynatrace:
-		return fmt.Errorf("not implemented")
+		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
 
 	case models.ConnectionTypeElasticSearch:
 		client := http.NewClient().BaseURL(c.URL)
@@ -156,7 +156,7 @@ func Test(ctx context.Context, c *models.Connection) error {
 		}
 
 	case models.ConnectionTypeGenericWebhook:
-		return fmt.Errorf("not implemented")
+		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
 
 	case models.ConnectionTypeGit:
 		_, _, err := git.Clone(ctx, &git.GitopsAPISpec{
@@ -199,7 +199,7 @@ func Test(ctx context.Context, c *models.Connection) error {
 		}
 
 	case models.ConnectionTypeGoogleChat:
-		return fmt.Errorf("not implemented")
+		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
 
 	case models.ConnectionTypeHTTP:
 		client := http.NewClient()
@@ -222,10 +222,10 @@ func Test(ctx context.Context, c *models.Connection) error {
 		}
 
 	case models.ConnectionTypeIFTTT:
-		return fmt.Errorf("not implemented")
+		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
 
 	case models.ConnectionTypeJMeter:
-		return fmt.Errorf("not implemented")
+		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
 
 	case models.ConnectionTypeKubernetes:
 		client, err := k8s.NewClientWithConfig(c.Certificate)
@@ -238,16 +238,16 @@ func Test(ctx context.Context, c *models.Connection) error {
 		}
 
 	case models.ConnectionTypeLDAP:
-		return fmt.Errorf("not implemented")
+		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
 
 	case models.ConnectionTypeMatrix:
-		return fmt.Errorf("not implemented")
+		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
 
 	case models.ConnectionTypeMattermost:
-		return fmt.Errorf("not implemented")
+		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
 
 	case models.ConnectionTypeMongo:
-		return fmt.Errorf("not implemented")
+		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
 
 	case models.ConnectionTypeMySQL:
 		conn, err := sql.Open("mysql", c.URL)
@@ -261,10 +261,10 @@ func Test(ctx context.Context, c *models.Connection) error {
 		}
 
 	case models.ConnectionTypeNtfy:
-		return fmt.Errorf("not implemented")
+		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
 
 	case models.ConnectionTypeOpsGenie:
-		return fmt.Errorf("not implemented")
+		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
 
 	case models.ConnectionTypePostgres:
 		pool, err := duty.NewPgxPool(c.URL)
@@ -300,10 +300,10 @@ func Test(ctx context.Context, c *models.Connection) error {
 		}
 
 	case models.ConnectionTypePushbullet:
-		return fmt.Errorf("not implemented")
+		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
 
 	case models.ConnectionTypePushover:
-		return fmt.Errorf("not implemented")
+		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
 
 	case models.ConnectionTypeRedis:
 		rdb := redis.NewClient(&redis.Options{
@@ -316,10 +316,10 @@ func Test(ctx context.Context, c *models.Connection) error {
 		}
 
 	case models.ConnectionTypeRestic:
-		return fmt.Errorf("not implemented")
+		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
 
 	case models.ConnectionTypeRocketchat:
-		return fmt.Errorf("not implemented")
+		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
 
 	case models.ConnectionTypeS3:
 		cc := connection.AWSConnection{
@@ -342,7 +342,7 @@ func Test(ctx context.Context, c *models.Connection) error {
 		}
 
 	case models.ConnectionTypeSFTP:
-		return fmt.Errorf("not implemented")
+		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
 
 	case models.ConnectionTypeSlack:
 		response, err := http.NewClient().R(ctx).
@@ -370,10 +370,10 @@ func Test(ctx context.Context, c *models.Connection) error {
 		}
 
 	case models.ConnectionTypeSlackWebhook:
-		return fmt.Errorf("not implemented")
+		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
 
 	case models.ConnectionTypeSMB:
-		return fmt.Errorf("not implemented")
+		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
 
 	case models.ConnectionTypeSQLServer:
 		conn, err := sql.Open("sqlserver", c.URL)
@@ -387,7 +387,7 @@ func Test(ctx context.Context, c *models.Connection) error {
 		}
 
 	case models.ConnectionTypeTeams:
-		return fmt.Errorf("not implemented")
+		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
 
 	case models.ConnectionTypeTelegram:
 		response, err := http.NewClient().R(ctx).Get(fmt.Sprintf("https://api.telegram.org/bot%s/getMe", c.Password))
@@ -402,13 +402,13 @@ func Test(ctx context.Context, c *models.Connection) error {
 		}
 
 	case models.ConnectionTypeWebhook:
-		return fmt.Errorf("not implemented")
+		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
 
 	case models.ConnectionTypeWindows:
-		return fmt.Errorf("not implemented")
+		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
 
 	case models.ConnectionTypeZulipChat:
-		return fmt.Errorf("not implemented")
+		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
 	}
 
 	return nil
