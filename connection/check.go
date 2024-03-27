@@ -3,11 +3,17 @@ package connection
 import (
 	"fmt"
 
+	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/flanksource/commons/http"
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/api"
+	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/samber/lo"
+
+	"github.com/flanksource/incident-commander/pkg/clients/aws"
 )
 
 func Test(ctx context.Context, c *models.Connection) error {
@@ -18,82 +24,97 @@ func Test(ctx context.Context, c *models.Connection) error {
 
 	switch c.Type {
 	case models.ConnectionTypeAWS:
-		return nil
+		cc := connection.AWSConnection{
+			ConnectionName: c.ID.String(),
+		}
+		if err := cc.Populate(ctx); err != nil {
+			return api.Errorf(api.EINVALID, err.Error())
+		}
+
+		sess, err := aws.GetAWSConfig(&ctx, cc)
+		if err != nil {
+			return api.Errorf(api.EINVALID, err.Error())
+		}
+
+		svc := sts.NewFromConfig(sess)
+		if _, err := svc.GetCallerIdentity(ctx, nil); err != nil {
+			return api.Errorf(api.EINVALID, err.Error())
+		}
 
 	case models.ConnectionTypeAzure:
-		return nil
+		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeAzureDevops:
-		return nil
+		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeDiscord:
-		return nil
+		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeDynatrace:
-		return nil
+		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeElasticSearch:
-		return nil
+		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeEmail:
-		return nil
+		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeFolder:
-		return nil
+		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeGCP:
-		return nil
+		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeGCS:
-		return nil
+		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeGenericWebhook:
-		return nil
+		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeGit:
-		return nil
+		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeGithub:
-		return nil
+		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeGitlab:
-		return nil
+		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeGoogleChat:
-		return nil
+		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeHTTP:
-		return nil
+		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeIFTTT:
-		return nil
+		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeJMeter:
-		return nil
+		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeKubernetes:
-		return nil
+		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeLDAP:
-		return nil
+		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeMatrix:
-		return nil
+		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeMattermost:
-		return nil
+		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeMongo:
-		return nil
+		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeMySQL:
-		return nil
+		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeNtfy:
-		return nil
+		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeOpsGenie:
-		return nil
+		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypePostgres:
 		pool, err := duty.NewPgxPool(c.URL)
@@ -113,28 +134,45 @@ func Test(ctx context.Context, c *models.Connection) error {
 		}
 
 	case models.ConnectionTypePrometheus:
-		return nil
+		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypePushbullet:
-		return nil
+		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypePushover:
-		return nil
+		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeRedis:
-		return nil
+		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeRestic:
-		return nil
+		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeRocketchat:
-		return nil
+		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeS3:
-		return nil
+		cc := connection.AWSConnection{
+			ConnectionName: c.ID.String(),
+		}
+		if err := cc.Populate(ctx); err != nil {
+			return err
+		}
+
+		awsSession, err := aws.GetAWSConfig(&ctx, cc)
+		if err != nil {
+			return err
+		}
+
+		client := s3.NewFromConfig(awsSession, func(o *s3.Options) {
+			o.UsePathStyle = c.Properties["use_path_style"] == "true"
+		})
+		if _, err := client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: lo.ToPtr(c.Properties["bucket"])}); err != nil {
+			return err
+		}
 
 	case models.ConnectionTypeSFTP:
-		return nil
+		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeSlack:
 		response, err := http.NewClient().R(ctx).
@@ -162,16 +200,16 @@ func Test(ctx context.Context, c *models.Connection) error {
 		}
 
 	case models.ConnectionTypeSlackWebhook:
-		return nil
+		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeSMB:
-		return nil
+		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeSQLServer:
-		return nil
+		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeTeams:
-		return nil
+		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeTelegram:
 		response, err := http.NewClient().R(ctx).Get(fmt.Sprintf("https://api.telegram.org/bot%s/getMe", c.Password))
@@ -186,14 +224,13 @@ func Test(ctx context.Context, c *models.Connection) error {
 		}
 
 	case models.ConnectionTypeWebhook:
-		return nil
+		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeWindows:
-		return nil
+		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeZulipChat:
-		return nil
-
+		return fmt.Errorf("not implemented")
 	}
 
 	return nil
