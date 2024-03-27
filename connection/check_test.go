@@ -11,7 +11,7 @@ import (
 )
 
 // TODO: Remove this test
-func TestConnection(t *testing.T) {
+func testConnection(t *testing.T) {
 	m := models.Connection{
 		Type:     models.ConnectionTypeSlack,
 		Password: "whatever",

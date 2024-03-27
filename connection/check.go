@@ -1,6 +1,7 @@
 package connection
 
 import (
+	"database/sql"
 	"fmt"
 	"os"
 
@@ -8,12 +9,15 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
+	_ "github.com/denisenkom/go-mssqldb"
 	"github.com/flanksource/commons/http"
+	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/samber/lo"
 
 	"github.com/flanksource/incident-commander/pkg/clients/aws"
@@ -116,13 +120,42 @@ func Test(ctx context.Context, c *models.Connection) error {
 		}
 
 	case models.ConnectionTypeGitlab:
-		return fmt.Errorf("not implemented")
+		response, err := http.NewClient().Header("Authorization", "Bearer "+c.Password).
+			R(ctx).Get("https://gitlab.com/api/v4/user")
+		if err != nil {
+			return err
+		}
+
+		body, _ := response.AsString()
+		logger.Infof("response: %v", body)
+
+		if !response.IsOK(200) {
+			body, _ := response.AsString()
+			return api.Errorf(api.EINVALID, "server returned (status code: %d) (msg: %s)", response.StatusCode, body)
+		}
 
 	case models.ConnectionTypeGoogleChat:
 		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeHTTP:
-		return fmt.Errorf("not implemented")
+		client := http.NewClient()
+		if c.Username != "" || c.Password != "" {
+			client = client.Auth(c.Username, c.Password)
+		}
+
+		if c.Properties["insecure_tls"] == "true" {
+			client = client.InsecureSkipVerify(true)
+		}
+
+		response, err := client.R(ctx).Get(c.URL)
+		if err != nil {
+			return err
+		}
+
+		if !response.IsOK() {
+			body, _ := response.AsString()
+			return api.Errorf(api.EINVALID, body)
+		}
 
 	case models.ConnectionTypeIFTTT:
 		return fmt.Errorf("not implemented")
@@ -146,7 +179,15 @@ func Test(ctx context.Context, c *models.Connection) error {
 		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeMySQL:
-		return fmt.Errorf("not implemented")
+		conn, err := sql.Open("mysql", c.URL)
+		if err != nil {
+			return api.Errorf(api.EINVALID, "error creating connection: %v", err)
+		}
+		defer conn.Close()
+
+		if err := conn.Ping(); err != nil {
+			return api.Errorf(api.EINVALID, "error pinging database: %v", err)
+		}
 
 	case models.ConnectionTypeNtfy:
 		return fmt.Errorf("not implemented")
@@ -244,7 +285,15 @@ func Test(ctx context.Context, c *models.Connection) error {
 		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeSQLServer:
-		return fmt.Errorf("not implemented")
+		conn, err := sql.Open("sqlserver", c.URL)
+		if err != nil {
+			return api.Errorf(api.EINVALID, "error creating connection: %v", err)
+		}
+		defer conn.Close()
+
+		if err := conn.Ping(); err != nil {
+			return api.Errorf(api.EINVALID, "error pinging database: %v", err)
+		}
 
 	case models.ConnectionTypeTeams:
 		return fmt.Errorf("not implemented")
