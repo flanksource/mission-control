@@ -8,6 +8,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
 
 func NewClient() (kubernetes.Interface, error) {
@@ -33,4 +34,27 @@ func NewClient() (kubernetes.Interface, error) {
 		return nil, err
 	}
 	return kubernetes.NewForConfig(restConfig)
+}
+
+func NewClientWithConfig(kubeConfig string) (kubernetes.Interface, error) {
+	getter := func() (*clientcmdapi.Config, error) {
+		clientCfg, err := clientcmd.NewClientConfigFromBytes([]byte(kubeConfig))
+		if err != nil {
+			return nil, err
+		}
+
+		apiCfg, err := clientCfg.RawConfig()
+		if err != nil {
+			return nil, err
+		}
+
+		return &apiCfg, nil
+	}
+
+	config, err := clientcmd.BuildConfigFromKubeconfigGetter("", getter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate rest config: %w", err)
+	}
+
+	return kubernetes.NewForConfig(config)
 }
