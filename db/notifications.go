@@ -54,9 +54,7 @@ func PersistNotificationFromCRD(ctx context.Context, obj *v1.Notification) error
 		dbObj.TeamID = &team.ID
 
 	default:
-		customService := api.NotificationConfig{
-			Name: obj.Name, // Name is mandatory. We derive it from the spec.
-		}
+		var customService api.NotificationConfig
 
 		if len(obj.Spec.To.Email) != 0 {
 			customService.URL = fmt.Sprintf("smtp://system/?To=%s", obj.Spec.To.Email)

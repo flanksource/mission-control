@@ -15,9 +15,8 @@ import (
 // the system's SMTP credentials.
 const SystemSMTP = "smtp://system/"
 
-// +kubebuilder:object:generate=true
 type NotificationConfig struct {
-	Name       string            `json:"name"`                                 // A unique name to identify this notification configuration.
+	Name       string            `json:"name,omitempty"`                       // A unique name to identify this notification configuration.
 	Filter     string            `json:"filter,omitempty"`                     // Filter is a CEL-expression used to decide whether this notification client should send the notification
 	URL        string            `json:"url,omitempty"`                        // URL in the form of Shoutrrr notification service URL schema
 	Connection string            `json:"connection,omitempty"`                 // Connection is the name of the connection
