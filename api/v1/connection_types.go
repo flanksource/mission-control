@@ -106,11 +106,11 @@ type ConnectionMSSQL struct {
 	URL types.EnvVar `json:"url,omitempty"`
 
 	// <host:port>
-	Host        types.EnvVar `json:"host,omitempty"`
-	Username    types.EnvVar `json:"username,omitempty"`
-	Password    types.EnvVar `json:"password,omitempty"`
-	Database    types.EnvVar `json:"database,omitempty"`
-	InsecureTLS bool         `json:"insecureTLS,omitempty"`
+	Host                   types.EnvVar `json:"host,omitempty"`
+	Username               types.EnvVar `json:"username,omitempty"`
+	Password               types.EnvVar `json:"password,omitempty"`
+	Database               types.EnvVar `json:"database,omitempty"`
+	TrustServerCertificate bool         `json:"trustServerCertificate,omitempty"`
 }
 
 type ConnectionMongo struct {
