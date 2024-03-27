@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/flanksource/commons/http"
@@ -43,10 +45,34 @@ func Test(ctx context.Context, c *models.Connection) error {
 		}
 
 	case models.ConnectionTypeAzure:
-		return fmt.Errorf("not implemented")
+		cred, err := azidentity.NewClientSecretCredential(c.Properties["tenant"], c.Username, c.Password, nil)
+		if err != nil {
+			return api.Errorf(api.EINVALID, err.Error())
+		}
+
+		tokenPolicy := policy.TokenRequestOptions{
+			Scopes:   []string{"https://graph.microsoft.com/.default"},
+			TenantID: c.Properties["tenant"],
+		}
+		if _, err := cred.GetToken(ctx, tokenPolicy); err != nil {
+			return api.Errorf(api.EINVALID, err.Error())
+		}
 
 	case models.ConnectionTypeAzureDevops:
-		return fmt.Errorf("not implemented")
+		client := http.NewClient().
+			BaseURL("https://app.vssps.visualstudio.com/_apis/profile/profiles").
+			Header("Accept", "application/json").
+			Auth(c.Username, c.Password)
+
+		response, err := client.R(ctx).Get("me?api-version=7.2-preview.3")
+		if err != nil {
+			return api.Errorf(api.EINVALID, err.Error())
+		}
+
+		if response.IsOK(200) {
+			body, _ := response.AsString()
+			return api.Errorf(api.EINVALID, "server returned status (code %d) (msg: %s)", response.StatusCode, body)
+		}
 
 	case models.ConnectionTypeDiscord:
 		return fmt.Errorf("not implemented")
