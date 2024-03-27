@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 
+	gcs "cloud.google.com/go/storage"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
@@ -21,6 +22,8 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	redis "github.com/redis/go-redis/v9"
 	"github.com/samber/lo"
+	"google.golang.org/api/cloudresourcemanager/v1"
+	"google.golang.org/api/option"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/flanksource/incident-commander/k8s"
@@ -90,7 +93,20 @@ func Test(ctx context.Context, c *models.Connection) error {
 		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeElasticSearch:
-		return fmt.Errorf("not implemented")
+		client := http.NewClient().BaseURL(c.URL)
+		if c.Username != "" || c.Password != "" {
+			client = client.Auth(c.Username, c.Password)
+		}
+
+		response, err := client.R(ctx).Get("_cluster/health")
+		if err != nil {
+			return err
+		}
+
+		if !response.IsOK(200) {
+			body, _ := response.AsString()
+			return api.Errorf(api.EINVALID, body)
+		}
 
 	case models.ConnectionTypeEmail:
 		parsed, err := url.Parse(c.URL)
@@ -114,10 +130,30 @@ func Test(ctx context.Context, c *models.Connection) error {
 		}
 
 	case models.ConnectionTypeGCP:
-		return fmt.Errorf("not implemented")
+		opts := []option.ClientOption{option.WithCredentialsJSON([]byte(c.Certificate))}
+		if endpoint, ok := c.Properties["endpoint"]; ok && endpoint != "" {
+			opts = append(opts, option.WithEndpoint(endpoint))
+		}
+
+		client, err := cloudresourcemanager.NewService(ctx, opts...)
+		if err != nil {
+			return api.Errorf(api.EINVALID, "error creating service from credentials: %v", err)
+		}
+
+		if _, err := client.Projects.List().Do(); err != nil {
+			return api.Errorf(api.EINVALID, "error listing projects: %v", err)
+		}
 
 	case models.ConnectionTypeGCS:
-		return fmt.Errorf("not implemented")
+		session, err := gcs.NewClient(ctx.Context, option.WithEndpoint(c.Properties["endpoint"]), option.WithCredentialsJSON([]byte(c.Certificate)))
+		if err != nil {
+			return err
+		}
+		defer session.Close()
+
+		if _, err := session.Bucket(c.Properties["bucket"]).Attrs(ctx); err != nil {
+			return api.Errorf(api.EINVALID, err.Error())
+		}
 
 	case models.ConnectionTypeGenericWebhook:
 		return fmt.Errorf("not implemented")
