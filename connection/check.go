@@ -9,7 +9,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
-	_ "github.com/denisenkom/go-mssqldb"
 	"github.com/flanksource/commons/http"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty"
@@ -18,8 +17,11 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	_ "github.com/go-sql-driver/mysql"
+	redis "github.com/redis/go-redis/v9"
 	"github.com/samber/lo"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	"github.com/flanksource/incident-commander/k8s"
 	"github.com/flanksource/incident-commander/pkg/clients/aws"
 )
 
@@ -164,7 +166,14 @@ func Test(ctx context.Context, c *models.Connection) error {
 		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeKubernetes:
-		return fmt.Errorf("not implemented")
+		client, err := k8s.NewClientWithConfig(c.Certificate)
+		if err != nil {
+			return err
+		}
+
+		if _, err := client.CoreV1().Pods("default").List(ctx, metav1.ListOptions{}); err != nil {
+			return api.Errorf(api.EINVALID, "error listing pods in default namespace: %v", err)
+		}
 
 	case models.ConnectionTypeLDAP:
 		return fmt.Errorf("not implemented")
@@ -213,7 +222,20 @@ func Test(ctx context.Context, c *models.Connection) error {
 		}
 
 	case models.ConnectionTypePrometheus:
-		return fmt.Errorf("not implemented")
+		client := http.NewClient().BaseURL(c.URL)
+		if c.Username != "" || c.Password != "" {
+			client = client.Auth(c.Username, c.Password)
+		}
+
+		response, err := client.R(ctx).Get("api/v1/status/config")
+		if err != nil {
+			return err
+		}
+
+		if !response.IsOK() {
+			body, _ := response.AsString()
+			return api.Errorf(api.EINVALID, body)
+		}
 
 	case models.ConnectionTypePushbullet:
 		return fmt.Errorf("not implemented")
@@ -222,7 +244,14 @@ func Test(ctx context.Context, c *models.Connection) error {
 		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeRedis:
-		return fmt.Errorf("not implemented")
+		rdb := redis.NewClient(&redis.Options{
+			Addr:     c.URL,
+			Username: c.Username,
+			Password: c.Password,
+		})
+		if err := rdb.Ping(ctx).Err(); err != nil {
+			return api.Errorf(api.EINVALID, err.Error())
+		}
 
 	case models.ConnectionTypeRestic:
 		return fmt.Errorf("not implemented")
