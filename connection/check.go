@@ -2,6 +2,7 @@ package connection
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
@@ -60,7 +61,9 @@ func Test(ctx context.Context, c *models.Connection) error {
 		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeFolder:
-		return fmt.Errorf("not implemented")
+		if _, err := os.Stat(c.Properties["path"]); err != nil {
+			return api.Errorf(api.EINVALID, err.Error())
+		}
 
 	case models.ConnectionTypeGCP:
 		return fmt.Errorf("not implemented")
@@ -75,7 +78,16 @@ func Test(ctx context.Context, c *models.Connection) error {
 		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeGithub:
-		return fmt.Errorf("not implemented")
+		response, err := http.NewClient().Header("Authorization", "Bearer "+c.Password).
+			R(ctx).Get("https://api.github.com/user")
+		if err != nil {
+			return err
+		}
+
+		if !response.IsOK(200) {
+			body, _ := response.AsString()
+			return api.Errorf(api.EINVALID, body)
+		}
 
 	case models.ConnectionTypeGitlab:
 		return fmt.Errorf("not implemented")
