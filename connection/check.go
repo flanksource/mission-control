@@ -3,12 +3,14 @@ package connection
 import (
 	"database/sql"
 	"fmt"
+	"net/url"
 	"os"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
+	"github.com/containrrr/shoutrrr"
 	"github.com/flanksource/commons/http"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty"
@@ -23,6 +25,7 @@ import (
 
 	"github.com/flanksource/incident-commander/k8s"
 	"github.com/flanksource/incident-commander/pkg/clients/aws"
+	"github.com/flanksource/incident-commander/pkg/clients/git"
 )
 
 func Test(ctx context.Context, c *models.Connection) error {
@@ -90,7 +93,20 @@ func Test(ctx context.Context, c *models.Connection) error {
 		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeEmail:
-		return fmt.Errorf("not implemented")
+		parsed, err := url.Parse(c.URL)
+		if err != nil {
+			return api.Errorf(api.EINVALID, "bad shoutrrr connection url: %v", err)
+		}
+
+		queryParams := parsed.Query()
+		queryParams.Set("FromAddress", c.Properties["from"])
+		queryParams.Set("Subject", "Test Connection Email")
+		queryParams.Set("ToAddresses", c.Properties["from"]) // Send a message to the sender itself
+		parsed.RawQuery = queryParams.Encode()
+
+		if err := shoutrrr.Send(parsed.String(), "Test Connection Email"); err != nil {
+			return api.Errorf(api.EINVALID, err.Error())
+		}
 
 	case models.ConnectionTypeFolder:
 		if _, err := os.Stat(c.Properties["path"]); err != nil {
@@ -107,7 +123,17 @@ func Test(ctx context.Context, c *models.Connection) error {
 		return fmt.Errorf("not implemented")
 
 	case models.ConnectionTypeGit:
-		return fmt.Errorf("not implemented")
+		_, _, err := git.Clone(ctx, &git.GitopsAPISpec{
+			Repository:    c.URL,
+			Branch:        c.Properties["ref"],
+			Base:          c.Properties["ref"],
+			User:          c.Username,
+			Password:      c.Password,
+			SSHPrivateKey: c.Certificate,
+		})
+		if err != nil {
+			return api.Errorf(api.EINVALID, err.Error())
+		}
 
 	case models.ConnectionTypeGithub:
 		response, err := http.NewClient().Header("Authorization", "Bearer "+c.Password).
