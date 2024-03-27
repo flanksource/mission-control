@@ -560,49 +560,6 @@ spec:
                     type: object
                   ref:
                     type: string
-                  ssh:
-                    properties:
-                      name:
-                        type: string
-                      value:
-                        type: string
-                      valueFrom:
-                        properties:
-                          configMapKeyRef:
-                            properties:
-                              key:
-                                type: string
-                              name:
-                                type: string
-                            required:
-                            - key
-                            type: object
-                          helmRef:
-                            properties:
-                              key:
-                                description: Key is a JSONPath expression used to
-                                  fetch the key from the merged JSON.
-                                type: string
-                              name:
-                                type: string
-                            required:
-                            - key
-                            type: object
-                          secretKeyRef:
-                            properties:
-                              key:
-                                type: string
-                              name:
-                                type: string
-                            required:
-                            - key
-                            type: object
-                          serviceAccount:
-                            description: ServiceAccount specifies the service account
-                              whose token should be fetched
-                            type: string
-                        type: object
-                    type: object
                   string:
                     type: string
                   username:
@@ -649,12 +606,8 @@ spec:
                         type: object
                     type: object
                 required:
-                - certificate
-                - password
                 - ref
-                - ssh
                 - string
-                - username
                 type: object
               github:
                 properties:

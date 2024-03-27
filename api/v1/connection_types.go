@@ -170,10 +170,9 @@ type ConnectionGitHub struct {
 type ConnectionGit struct {
 	URL         string        `json:"string"`
 	Ref         string        `json:"ref"`
-	Certificate *types.EnvVar `json:"certificate"`
-	Username    *types.EnvVar `json:"username"`
-	Password    *types.EnvVar `json:"password"`
-	SSH         *types.EnvVar `json:"ssh"`
+	Certificate *types.EnvVar `json:"certificate,omitempty"`
+	Username    *types.EnvVar `json:"username,omitempty"`
+	Password    *types.EnvVar `json:"password,omitempty"`
 }
 
 type ConnectionHTTP struct {
