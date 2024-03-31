@@ -3,22 +3,17 @@ kind: Playbook
 metadata:
   name: scale-deployment
 spec:
-  description: Scale deployment
+  description: Scale Deployment
   configs:
-    - types: 
+    - types:
         - Kubernetes::Deployment
-      labelSelector: "environment=staging"
   parameters:
     - name: replicas
       label: The new desired number of replicas.
-  approval:
-    type: any
-    approvers:
-      people:
-        - admin@local
-      teams:
-        - DevOps
   actions:
-    - name: 'scale deployment'
+    - name: kubectl scale
       exec:
-        script: kubectl scale --replicas={{.params.replicas}} --namespace={{.config.tags.namespace}} deployment {{.config.name}}
+        script: |
+          kubectl scale --replicas={{.params.replicas}} \
+            --namespace={{.config.tags.namespace}} \
+            deployment {{.config.name}}

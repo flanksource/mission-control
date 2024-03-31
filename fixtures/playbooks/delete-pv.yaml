@@ -1,0 +1,18 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: delete-pv
+spec:
+  description: Delete Persistent Volume
+  configs:
+    - types:
+        - Kubernetes::PersistentVolume
+  approval:
+    type: any
+    approvers:
+      teams:
+        - DevOps
+  actions:
+    - name: kubectl delete pv
+      exec:
+        script: kubectl delete persistentvolume {{.config.name}}
