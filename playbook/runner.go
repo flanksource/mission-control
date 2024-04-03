@@ -276,7 +276,8 @@ func HandleRun(ctx context.Context, run models.PlaybookRun) error {
 
 func prepareTemplateEnv(ctx context.Context, run models.PlaybookRun) (actions.TemplateEnv, error) {
 	templateEnv := actions.TemplateEnv{
-		Params: run.Parameters,
+		Params:     run.Parameters,
+		PlaybookID: run.PlaybookID.String(),
 	}
 
 	if run.CreatedBy != nil {
