@@ -215,7 +215,7 @@ func ActionConsumer(c postq.Context) (int, error) {
 
 		for _, action := range playbookSpec.Actions {
 			if action.Name == foundActions[i].Name {
-				if err := templateAndExecuteAction(ctx, playbookSpec.Env, run, foundActions[i], action); err != nil {
+				if err := templateAndExecuteAction(ctx, playbookSpec.Env, playbook, run, foundActions[i], action); err != nil {
 					return 0, &playbookRunError{
 						RunID:    run.ID,
 						ActionID: foundActions[i].ID,

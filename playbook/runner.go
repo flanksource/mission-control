@@ -150,7 +150,7 @@ func GetActionForAgent(ctx context.Context, agent *models.Agent) (*ActionForAgen
 		return nil, fmt.Errorf("failed to create a new playbook run: %w", err)
 	}
 
-	templateEnv, err := prepareTemplateEnv(ctx, run)
+	templateEnv, err := prepareTemplateEnv(ctx, playbook, run)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare template env: %w", err)
 	}
@@ -234,7 +234,7 @@ func HandleRun(ctx context.Context, run models.PlaybookRun) error {
 	// The delays on the action should be applied here & action consumers do not run the delay.
 	var delay time.Duration
 	if action.Delay != "" && run.Status != models.PlaybookRunStatusSleeping {
-		templateEnv, err := prepareTemplateEnv(ctx, run)
+		templateEnv, err := prepareTemplateEnv(ctx, playbook, run)
 		if err != nil {
 			return fmt.Errorf("failed to prepare template env for run(%s): %w", run.ID, err)
 		}
@@ -274,10 +274,11 @@ func HandleRun(ctx context.Context, run models.PlaybookRun) error {
 	return ctx.DB().Model(&models.PlaybookRun{}).Where("id = ?", run.ID).UpdateColumns(runUpdates).Error
 }
 
-func prepareTemplateEnv(ctx context.Context, run models.PlaybookRun) (actions.TemplateEnv, error) {
+func prepareTemplateEnv(ctx context.Context, playbook models.Playbook, run models.PlaybookRun) (actions.TemplateEnv, error) {
 	templateEnv := actions.TemplateEnv{
-		Params:     run.Parameters,
-		PlaybookID: run.PlaybookID.String(),
+		Params:   run.Parameters,
+		Run:      run,
+		Playbook: playbook,
 	}
 
 	if run.CreatedBy != nil {
@@ -354,12 +355,12 @@ func executeAndSaveAction(ctx context.Context, playbookID, runID uuid.UUID, acti
 }
 
 // templateAndExecuteAction executes the given playbook action after templating it.
-func templateAndExecuteAction(ctx context.Context, envs []types.EnvVar, run models.PlaybookRun, actionToRun models.PlaybookRunAction, actionSpec v1.PlaybookAction) error {
+func templateAndExecuteAction(ctx context.Context, envs []types.EnvVar, playbook models.Playbook, run models.PlaybookRun, actionToRun models.PlaybookRunAction, actionSpec v1.PlaybookAction) error {
 	logger.WithValues("run.id", run.ID).WithValues("parameters", run.Parameters).
 		WithValues("config", run.ConfigID).WithValues("check", run.CheckID).WithValues("component", run.ComponentID).
 		Infof("Executing playbook action: %s", actionToRun.ID)
 
-	templateEnv, err := prepareTemplateEnv(ctx, run)
+	templateEnv, err := prepareTemplateEnv(ctx, playbook, run)
 	if err != nil {
 		return fmt.Errorf("failed to prepare template env: %w", err)
 	}
