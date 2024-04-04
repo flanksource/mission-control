@@ -7,6 +7,8 @@ type TemplateEnv struct {
 	Config    *models.ConfigItem `json:"config,omitempty"`
 	Component *models.Component  `json:"component,omitempty"`
 	Check     *models.Check      `json:"check,omitempty"`
+	Playbook  models.Playbook    `json:"playbook"`
+	Run       models.PlaybookRun `json:"run"`
 	Params    map[string]string  `json:"params,omitempty"`
 	Env       map[string]string  `json:"env,omitempty"`
 
@@ -22,6 +24,8 @@ func (t *TemplateEnv) AsMap() map[string]any {
 		"user":      nil,
 		"env":       t.Env,
 		"params":    t.Params,
+		"playbook":  t.Playbook.AsMap(),
+		"run":       t.Run.AsMap(),
 	}
 
 	if t.User != nil {

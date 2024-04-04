@@ -186,7 +186,7 @@ func HandleGetPlaybookParams(c echo.Context) error {
 		dummyRun.CheckID = &req.CheckID
 	}
 
-	env, err := prepareTemplateEnv(ctx, dummyRun)
+	env, err := prepareTemplateEnv(ctx, *playbook, dummyRun)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Error: err.Error(), Message: "unable to prepare template env"})
 	}

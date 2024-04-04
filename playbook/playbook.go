@@ -56,7 +56,7 @@ func validateAndSavePlaybookRun(ctx context.Context, playbook *models.Playbook, 
 		run.CheckID = &req.CheckID
 	}
 
-	templateEnv, err := prepareTemplateEnv(ctx, run)
+	templateEnv, err := prepareTemplateEnv(ctx, *playbook, run)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare template env: %w", err)
 	}
