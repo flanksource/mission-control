@@ -8,8 +8,23 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
+	"github.com/samber/lo"
 	"gorm.io/gorm"
 )
+
+// CheckAgentsExist returns all the non existing agents from the given names.
+func CheckAgentsExist(ctx context.Context, names ...string) ([]string, error) {
+	var found []string
+	err := ctx.DB().Model(&models.Agent{}).Select("name").
+		Where("name IN ?", names).
+		Find(&found).Error
+	if err != nil {
+		return nil, err
+	}
+
+	diff, _ := lo.Difference(names, found)
+	return diff, nil
+}
 
 func FindAgent(ctx context.Context, name string) (*models.Agent, error) {
 	var agent models.Agent

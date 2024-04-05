@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/flanksource/commons/collections"
@@ -255,7 +256,14 @@ func HandleRun(ctx context.Context, run models.PlaybookRun) error {
 	} else {
 		canRunOnHost := len(action.RunsOn) == 0 || lo.Contains(action.RunsOn, runnerMain)
 		if !canRunOnHost {
-			// Simply, ark the run as waiting and let another runner pick up the action.
+			// Ensure that all the runners exist
+			if nonExisting, err := db.CheckAgentsExist(ctx, action.RunsOn...); err != nil {
+				return fmt.Errorf("failed to fetch agents: %w", err)
+			} else if len(nonExisting) > 0 {
+				return fmt.Errorf("action assigned to non existing agent(s): %s", strings.Join(nonExisting, ", "))
+			}
+
+			// Simply, mark the run as waiting and let another runner pick up the action.
 			runUpdates["status"] = models.PlaybookRunStatusWaiting
 		} else {
 			runAction := models.PlaybookRunAction{
