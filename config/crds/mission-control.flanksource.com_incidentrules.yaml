@@ -88,6 +88,8 @@ spec:
                       items:
                         type: string
                       type: array
+                    tagSelector:
+                      type: string
                     types:
                       items:
                         type: string
