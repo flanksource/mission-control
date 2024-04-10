@@ -20,7 +20,6 @@ import (
 	"github.com/flanksource/incident-commander/logs"
 	"github.com/flanksource/postq"
 	"github.com/patrickmn/go-cache"
-	"github.com/samber/lo"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -171,7 +170,7 @@ func SchedulePlaybookRun(ctx context.Context, event postq.Event) error {
 			}
 		case "config":
 			run.ConfigID = &eventResource.Config.ID
-			if ok, err := matchResource(lo.FromPtr(eventResource.Config.Tags), eventResource.AsMap(), playbook.Spec.On.Config); err != nil {
+			if ok, err := matchResource(eventResource.Config.Tags, eventResource.AsMap(), playbook.Spec.On.Config); err != nil {
 				logToJobHistory(ctx, p.ID.String(), err.Error())
 				continue
 			} else if ok {
