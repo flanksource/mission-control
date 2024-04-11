@@ -14,7 +14,7 @@ var (
 var ReconcileAll = &job.Job{
 	Name:       "ReconcileAll",
 	Schedule:   "@every 1m",
-	Retention:  job.Retention3Day,
+	Retention:  job.RetentionBalanced,
 	Singleton:  true,
 	JobHistory: true,
 	RunNow:     true,
@@ -37,7 +37,7 @@ var SyncArtifactData = &job.Job{
 	JobHistory: true,
 	Singleton:  false, // this job is safe to run concurrently
 	RunNow:     true,
-	Retention:  job.RetentionHour,
+	Retention:  job.RetentionFew,
 	Name:       "SyncArtifactData",
 	Schedule:   "@every 30s",
 	Fn: func(ctx job.JobRuntime) error {

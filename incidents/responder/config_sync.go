@@ -35,7 +35,7 @@ var SyncConfig = &job.Job{
 	Schedule:   "@every 1h",
 	JobHistory: true,
 	Singleton:  true,
-	Retention:  job.RetentionDay,
+	Retention:  job.RetentionBalanced,
 	Fn: func(ctx job.JobRuntime) error {
 		var teams []api.Team
 		if err := ctx.DB().Find(&teams).Error; err != nil {

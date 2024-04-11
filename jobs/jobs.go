@@ -1,6 +1,8 @@
 package jobs
 
 import (
+	"time"
+
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/job"
@@ -61,6 +63,11 @@ func Start(ctx context.Context) {
 				logger.Errorf("Failed to schedule %s: %v", j, err)
 			}
 		}
+	}
+
+	staleHistoryMaxAge := ctx.Properties().Duration("job.history.maxAge", time.Hour*24*30)
+	if err := job.CleanupStaleHistoryJob(ctx, staleHistoryMaxAge, "", "").RunOnStart().AddToScheduler(FuncScheduler); err != nil {
+		logger.Errorf("Failed to schedule job for cleaning up stale job histor: %v", err)
 	}
 
 	startIncidentsJobs(ctx)
