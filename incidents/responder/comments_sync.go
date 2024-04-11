@@ -23,7 +23,7 @@ func getRootHypothesisOfIncident(ctx context.Context, incidentID uuid.UUID) (api
 var SyncComments = &job.Job{
 	Name:       "SyncComments",
 	Schedule:   "@every 5m",
-	Retention:  job.RetentionHour,
+	Retention:  job.RetentionFew,
 	Singleton:  true,
 	JobHistory: true,
 	Fn: func(ctx job.JobRuntime) error {

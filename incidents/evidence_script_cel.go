@@ -24,7 +24,7 @@ func init() {
 var EvaluateEvidence = &job.Job{
 	Name:       "Evaluate Evidence",
 	Schedule:   "@every 5m",
-	Retention:  job.RetentionHour,
+	Retention:  job.RetentionFew,
 	JobHistory: true,
 	Singleton:  true,
 	Fn: func(ctx job.JobRuntime) error {
