@@ -154,7 +154,7 @@ func getEnvForEvent(ctx context.Context, event postq.Event, properties map[strin
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to get check summary: %w", err)
-		} else if len(summary) >= 0 {
+		} else if len(summary) > 0 {
 			check.Uptime = summary[0].Uptime
 			check.Latency = summary[0].Latency
 		}
