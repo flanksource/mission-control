@@ -1,6 +1,6 @@
 module github.com/flanksource/incident-commander
 
-go 1.20
+go 1.22.2
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.3.0
@@ -12,7 +12,7 @@ require (
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.25.0 // indirect
 	github.com/flanksource/commons v1.22.1
-	github.com/flanksource/duty v1.0.416
+	github.com/flanksource/duty v1.0.419
 	github.com/flanksource/gomplate/v3 v3.24.2
 	github.com/flanksource/kopper v1.0.7
 	github.com/flanksource/postq v0.1.5
