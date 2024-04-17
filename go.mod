@@ -13,7 +13,7 @@ require (
 	github.com/fergusstrange/embedded-postgres v1.25.0 // indirect
 	github.com/flanksource/commons v1.22.1
 	github.com/flanksource/duty v1.0.419
-	github.com/flanksource/gomplate/v3 v3.24.2
+	github.com/flanksource/gomplate/v3 v3.24.3
 	github.com/flanksource/kopper v1.0.7
 	github.com/flanksource/postq v0.1.5
 	github.com/gomarkdown/markdown v0.0.0-20230922112808-5421fefb8386
