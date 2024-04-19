@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/flanksource/commons/collections"
+	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
@@ -78,4 +79,23 @@ func CreateAgent(ctx context.Context, name string, personID *uuid.UUID, properti
 	}
 
 	return ctx.DB().Create(&a).Error
+}
+
+func cleanupAgentResources(ctx context.Context, agentID string) error {
+	tablesWithAgentID := []string{
+		"topologies",
+		"components",
+		"canaries",
+		"checks",
+		"config_scrapers",
+		"config_items",
+		"logging_backends",
+	}
+	for _, table := range tablesWithAgentID {
+		if err := ctx.DB().Table(table).Where("agent_id = ?", agentID).Update("deleted_at", duty.Now()).Error; err != nil {
+			// TODO: Should we just log error or send error back to user ?
+			ctx.Errorf("error deleting agent[%s] resources from table[%s]: %v", agentID, table, err)
+		}
+	}
+	return nil
 }

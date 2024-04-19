@@ -6,7 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flanksource/duty/api"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/query"
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/samber/lo"
 	"github.com/timberio/go-datemath"
@@ -82,6 +85,36 @@ func SearchQueryTransformMiddleware() func(echo.HandlerFunc) echo.HandlerFunc {
 			// postgREST will receive the original URL.
 			c.Request().RequestURI = c.Request().URL.String()
 
+			return next(c)
+		}
+	}
+}
+
+func CleanupAgentResources() func(echo.HandlerFunc) echo.HandlerFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			ctx := c.Request().Context().(context.Context)
+
+			// path: /api/db/agents?id=eq.018ef600-0cb0-9a27-d293-8399b9705fbd
+			agentID := strings.Replace(c.QueryParam("id"), "eq.", "", 1)
+
+			var reqBody struct {
+				Cleanup bool `json:"cleanup"`
+			}
+			if err := c.Bind(&reqBody); err != nil {
+				return api.WriteError(c, api.Errorf(api.EINVALID, "invalid request: %v", err))
+			}
+
+			if !reqBody.Cleanup {
+				return next(c)
+			}
+
+			if _, err := uuid.Parse(agentID); err != nil {
+				return api.WriteError(c, api.Errorf(api.EINVALID, "unable to parse agent_id (%s) as uuid: %v", agentID, err))
+			}
+			if err := cleanupAgentResources(ctx, agentID); err != nil {
+				return api.WriteError(c, api.Errorf(api.EINVALID, "error marking agent resources as deleted: %v", agentID, err))
+			}
 			return next(c)
 		}
 	}
