@@ -12,6 +12,7 @@ import (
 func RegisterRoutes(e *echo.Echo) {
 	apiGroup := e.Group("/catalog")
 	apiGroup.GET("/changes", SearchCatalogChanges)
+	apiGroup.POST("/summary", SearchConfigSummary)
 }
 
 func SearchCatalogChanges(c echo.Context) error {
@@ -23,6 +24,21 @@ func SearchCatalogChanges(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
 
 	response, err := query.FindCatalogChanges(ctx, req)
+	if err != nil {
+		return api.WriteError(c, err)
+	}
+
+	return c.JSON(http.StatusOK, response)
+}
+
+func SearchConfigSummary(c echo.Context) error {
+	var req query.ConfigSummaryRequest
+	if err := c.Bind(&req); err != nil {
+		return api.WriteError(c, api.Errorf(api.EINVALID, "invalid request: %v", err))
+	}
+
+	ctx := c.Request().Context().(context.Context)
+	response, err := query.ConfigSummary(ctx, req)
 	if err != nil {
 		return api.WriteError(c, err)
 	}
