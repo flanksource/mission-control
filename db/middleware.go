@@ -2,6 +2,7 @@ package db
 
 import (
 	"fmt"
+	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -93,27 +94,34 @@ func SearchQueryTransformMiddleware() func(echo.HandlerFunc) echo.HandlerFunc {
 func CleanupAgentResources() func(echo.HandlerFunc) echo.HandlerFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			ctx := c.Request().Context().(context.Context)
+
+			if !strings.Contains(c.Request().URL.Path, "db/agents") ||
+				c.Request().Method != http.MethodPatch {
+				return next(c)
+			}
 
 			// path: /api/db/agents?id=eq.018ef600-0cb0-9a27-d293-8399b9705fbd
 			agentID := strings.Replace(c.QueryParam("id"), "eq.", "", 1)
 
 			var reqBody struct {
-				Cleanup bool `json:"cleanup"`
+				Cleanup   bool   `json:"cleanup"`
+				DeletedAt string `json:"deleted_at"`
 			}
 			if err := c.Bind(&reqBody); err != nil {
 				return api.WriteError(c, api.Errorf(api.EINVALID, "invalid request: %v", err))
 			}
 
-			if !reqBody.Cleanup {
+			if !reqBody.Cleanup || reqBody.DeletedAt != "" {
 				return next(c)
 			}
 
 			if _, err := uuid.Parse(agentID); err != nil {
 				return api.WriteError(c, api.Errorf(api.EINVALID, "unable to parse agent_id (%s) as uuid: %v", agentID, err))
 			}
+
+			ctx := c.Request().Context().(context.Context)
 			if err := cleanupAgentResources(ctx, agentID); err != nil {
-				return api.WriteError(c, api.Errorf(api.EINVALID, "error marking agent resources as deleted: %v", agentID, err))
+				return api.WriteError(c, api.Errorf(api.EINVALID, "error marking agent resources as deleted: %v", err))
 			}
 			return next(c)
 		}
