@@ -26,8 +26,8 @@ func PreRun(cmd *cobra.Command, args []string) {
 		logger.Fatalf("Failed to initialize the db: %v", err)
 	}
 
-	if api.UpstreamConf.IsPartiallyFilled() {
-		logger.Warnf("Please ensure that all the required flags for upstream is supplied.")
+	if isPartial, err := api.UpstreamConf.IsPartiallyFilled(); isPartial && err != nil {
+		logger.Warnf("Please ensure that all the required flags for upstream is supplied: %v", err)
 	}
 
 	var err error
