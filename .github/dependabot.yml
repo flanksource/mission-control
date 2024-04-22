@@ -4,5 +4,13 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
-    allow:
-      - dependency-name: "github.com/flanksource/*"
+
+  - package-ecosystem: "gomod"
+    directory: "/hack/generate-schemas"
+    schedule:
+      interval: "daily"
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
