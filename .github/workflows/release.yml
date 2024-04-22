@@ -91,7 +91,7 @@ jobs:
         run: |
           cp config/crds/* incident-commander-chart/chart/crds/
       - name: Push changes to chart repo
-        uses: stefanzweifel/git-auto-commit-action@3ea6ae190baf489ba007f7c92608f33ce20ef04a # v4.16.0
+        uses: stefanzweifel/git-auto-commit-action@8621497c8c39c72f3e2a999a26b4ca1b5058a842 # v5.0.1
         with:
           commit_message: "chore: update incident-commander image version to ${{ env.RELEASE_VERSION }}"
           repository: ./incident-commander-chart
