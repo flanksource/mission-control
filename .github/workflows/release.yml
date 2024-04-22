@@ -80,11 +80,11 @@ jobs:
           token: ${{ secrets.FLANKBOT }}
           path: ./incident-commander-chart
       - name: Update image tags in chart
-        uses: mikefarah/yq@9b4082919bf50bb6be38742adf46f888e9f5683a # master
+        uses: mikefarah/yq@17481714639613e92c3aaf594a92e5bbdddd66ab # master
         with:
           cmd: yq -i e '.image.tag = "v${{ env.RELEASE_VERSION }}"' incident-commander-chart/chart/values.yaml
       - name: Update image tags in agent chart
-        uses: mikefarah/yq@9b4082919bf50bb6be38742adf46f888e9f5683a # master
+        uses: mikefarah/yq@17481714639613e92c3aaf594a92e5bbdddd66ab # master
         with:
           cmd: yq -i e '.image.tag = "v${{ env.RELEASE_VERSION }}"' incident-commander-chart/agent-chart/values.yaml
       - name: Update CRDs
