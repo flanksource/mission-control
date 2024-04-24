@@ -206,9 +206,21 @@ func Properties(c echov4.Context) error {
 		return api.WriteError(c, err)
 	}
 
-	var seen = make(map[string]struct{})
+	var seen = make(map[string]bool)
 
 	var output = make([]map[string]string, 0)
+
+	for k, v := range context.Local {
+		output = append(output, map[string]string{
+			"name":        k,
+			"value":       v,
+			"source":      "local",
+			"type":        "",
+			"description": "",
+		})
+		seen[k] = true
+	}
+
 	for _, p := range dbProperties {
 		if _, ok := seen[p.Name]; ok {
 			continue
@@ -218,20 +230,6 @@ func Properties(c echov4.Context) error {
 			"name":        p.Name,
 			"value":       p.Value,
 			"source":      "db",
-			"type":        "",
-			"description": "",
-		})
-	}
-
-	for k, v := range context.Local {
-		if _, ok := seen[k]; ok {
-			continue
-		}
-
-		output = append(output, map[string]string{
-			"name":        k,
-			"value":       v,
-			"source":      "local",
 			"type":        "",
 			"description": "",
 		})
