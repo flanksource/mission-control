@@ -1,8 +1,6 @@
 package jobs
 
 import (
-	"time"
-
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/job"
@@ -35,11 +33,6 @@ func Start(ctx context.Context) {
 		logger.Errorf("Failed to schedule sync jobs for team component: %v", err)
 	}
 
-	if err := job.NewJob(ctx, "Cleanup JobHistory Table", CleanupJobHistoryTableSchedule, CleanupJobHistoryTable).
-		RunOnStart().AddToScheduler(FuncScheduler); err != nil {
-		logger.Errorf("Failed to schedule job for cleaning up job history table: %v", err)
-	}
-
 	if err := job.NewJob(ctx, "Cleanup Event Queue", CleanupEventQueueTableSchedule, CleanupEventQueue).
 		AddToScheduler(FuncScheduler); err != nil {
 		logger.Errorf("Failed to schedule job for cleaning up event queue table: %v", err)
@@ -65,8 +58,8 @@ func Start(ctx context.Context) {
 		}
 	}
 
-	staleHistoryMaxAge := ctx.Properties().Duration("job.history.maxAge", time.Hour*24*30)
-	if err := job.CleanupStaleHistoryJob(ctx, staleHistoryMaxAge, "", "").RunOnStart().AddToScheduler(FuncScheduler); err != nil {
+	cleanupStaleJobHistory.Context = ctx
+	if err := cleanupStaleJobHistory.AddToScheduler(FuncScheduler); err != nil {
 		logger.Errorf("Failed to schedule job for cleaning up stale job histor: %v", err)
 	}
 
