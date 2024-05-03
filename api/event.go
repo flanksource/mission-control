@@ -19,11 +19,10 @@ const (
 	EventConfigUpdated = "config.updated"
 	EventConfigDeleted = "config.deleted"
 
-	EventComponentStatusHealthy   = "component.status.healthy"
-	EventComponentStatusUnhealthy = "component.status.unhealthy"
-	EventComponentStatusInfo      = "component.status.info"
-	EventComponentStatusWarning   = "component.status.warning"
-	EventComponentStatusError     = "component.status.error"
+	EventComponentHealthy   = "component.healthy"
+	EventComponentUnhealthy = "component.unhealthy"
+	EventComponentWarning   = "component.warning"
+	EventComponentUnknown   = "component.unknown"
 
 	EventPlaybookSpecApprovalUpdated = "playbook.spec.approval.updated"
 
@@ -69,11 +68,10 @@ var (
 		EventConfigCreated,
 		EventConfigUpdated,
 		EventConfigDeleted,
-		EventComponentStatusError,
-		EventComponentStatusHealthy,
-		EventComponentStatusInfo,
-		EventComponentStatusUnhealthy,
-		EventComponentStatusWarning,
+		EventComponentHealthy,
+		EventComponentUnhealthy,
+		EventComponentWarning,
+		EventComponentUnknown,
 	}
 	EventIncidentGroup = []string{
 		EventIncidentCreated,

@@ -152,7 +152,7 @@ Error: {{.status.error}}
 
 [Reference]({{.permalink}})`, labelsTemplate(".check.labels"))
 
-	case api.EventComponentStatusHealthy, api.EventComponentStatusUnhealthy, api.EventComponentStatusInfo, api.EventComponentStatusWarning, api.EventComponentStatusError:
+	case api.EventComponentHealthy, api.EventComponentUnhealthy, api.EventComponentWarning, api.EventComponentUnknown:
 		title = "Component {{.component.name}} status updated to {{.component.status}}"
 		body = fmt.Sprintf("%s\n[Reference]({{.permalink}})", labelsTemplate(".component.labels"))
 

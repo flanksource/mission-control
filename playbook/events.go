@@ -39,11 +39,10 @@ var eventToSpecEvent = map[string]PlaybookSpecEvent{
 	api.EventConfigUpdated: {"config", "updated"},
 	api.EventConfigDeleted: {"config", "deleted"},
 
-	api.EventComponentStatusHealthy:   {"component", "healthy"},
-	api.EventComponentStatusUnhealthy: {"component", "unhealthy"},
-	api.EventComponentStatusInfo:      {"component", "info"},
-	api.EventComponentStatusWarning:   {"component", "warning"},
-	api.EventComponentStatusError:     {"component", "error"},
+	api.EventComponentHealthy:   {"component", "healthy"},
+	api.EventComponentUnhealthy: {"component", "unhealthy"},
+	api.EventComponentWarning:   {"component", "warning"},
+	api.EventComponentUnknown:   {"component", "unknown"},
 }
 
 var eventPlaybooksCache = cache.New(time.Hour*1, time.Hour*1)
@@ -119,7 +118,7 @@ func SchedulePlaybookRun(ctx context.Context, event postq.Event) error {
 			return dutyAPI.Errorf(dutyAPI.ENOTFOUND, "canary(id=%s) not found", eventResource.Check.CanaryID)
 		}
 
-	case api.EventComponentStatusHealthy, api.EventComponentStatusUnhealthy, api.EventComponentStatusInfo, api.EventComponentStatusWarning, api.EventComponentStatusError:
+	case api.EventComponentHealthy, api.EventComponentUnhealthy, api.EventComponentWarning, api.EventComponentUnknown:
 		if err := ctx.DB().Model(&models.Component{}).Where("id = ?", event.Properties["id"]).First(&eventResource.Component).Error; err != nil {
 			return dutyAPI.Errorf(dutyAPI.ENOTFOUND, "component(id=%s) not found", event.Properties["id"])
 		}
