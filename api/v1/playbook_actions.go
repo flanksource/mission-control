@@ -43,8 +43,8 @@ type GitOpsActionRepo struct {
 }
 
 type GitOpsActionCommit struct {
-	AuthorName  string `yaml:"author" json:"author"`
-	AuthorEmail string `yaml:"email" json:"email"`
+	AuthorName  string `yaml:"author" json:"author" template:"true"`
+	AuthorEmail string `yaml:"email" json:"email" template:"true"`
 	Message     string `yaml:"message" json:"message" template:"true"`
 }
 
