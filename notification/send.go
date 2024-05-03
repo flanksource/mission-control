@@ -40,6 +40,7 @@ type NotificationEventPayload struct {
 	NotificationName string     `json:"notification_name,omitempty"` // Name of the notification of a team
 	NotificationID   uuid.UUID  `json:"notification_id,omitempty"`   // ID of the notification.
 	EventCreatedAt   time.Time  `json:"event_created_at"`            // Timestamp at which the original event was created
+	Properties       []byte     `json:"properties,omitempty"`        // json encoded properties of the original event
 }
 
 func (t *NotificationEventPayload) AsMap() map[string]string {
@@ -198,6 +199,14 @@ func CreateNotificationSendPayloads(ctx context.Context, event postq.Event, n *N
 		return nil, fmt.Errorf("failed to parse resource id: %v", err)
 	}
 
+	var eventProperties []byte
+	if len(event.Properties) > 0 {
+		eventProperties, err = json.Marshal(event.Properties)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal event properties: %v", err)
+		}
+	}
+
 	if n.PersonID != nil {
 		payload := NotificationEventPayload{
 			EventName:      event.Name,
@@ -205,6 +214,7 @@ func CreateNotificationSendPayloads(ctx context.Context, event postq.Event, n *N
 			ID:             resourceID,
 			PersonID:       n.PersonID,
 			EventCreatedAt: event.CreatedAt,
+			Properties:     eventProperties,
 		}
 
 		payloads = append(payloads, payload)
@@ -230,6 +240,7 @@ func CreateNotificationSendPayloads(ctx context.Context, event postq.Event, n *N
 				TeamID:           n.TeamID.String(),
 				NotificationName: cn.Name,
 				EventCreatedAt:   event.CreatedAt,
+				Properties:       eventProperties,
 			}
 
 			payloads = append(payloads, payload)
@@ -248,6 +259,7 @@ func CreateNotificationSendPayloads(ctx context.Context, event postq.Event, n *N
 			NotificationID: n.ID,
 			ID:             resourceID,
 			EventCreatedAt: event.CreatedAt,
+			Properties:     eventProperties,
 		}
 
 		payloads = append(payloads, payload)

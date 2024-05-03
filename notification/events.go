@@ -1,6 +1,7 @@
 package notification
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -103,6 +104,15 @@ func sendNotifications(ctx context.Context, events postq.Events) postq.Events {
 		logs.IfError(notificationContext.StartLog(), "error persisting start of notification send history")
 
 		originalEvent := postq.Event{Name: payload.EventName, CreatedAt: payload.EventCreatedAt}
+		if len(payload.Properties) > 0 {
+			if err := json.Unmarshal(payload.Properties, &originalEvent.Properties); err != nil {
+				e.SetError(err.Error())
+				failedEvents = append(failedEvents, e)
+				notificationContext.WithError(err.Error())
+				continue
+			}
+		}
+
 		celEnv, err := getEnvForEvent(ctx, originalEvent, e.Properties)
 		if err != nil {
 			e.SetError(err.Error())
@@ -127,6 +137,7 @@ func getEnvForEvent(ctx context.Context, event postq.Event, properties map[strin
 
 	if strings.HasPrefix(event.Name, "check.") {
 		checkID := properties["id"]
+		lastRuntime := event.Properties["last_runtime"]
 
 		check, err := query.FindCachedCheck(ctx, checkID)
 		if err != nil {
@@ -159,10 +170,9 @@ func getEnvForEvent(ctx context.Context, event postq.Event, properties map[strin
 			check.Latency = summary[0].Latency
 		}
 
-		// We fetch the latest check_status at the time of event creation
 		var checkStatus models.CheckStatus
-		if err := ctx.DB().Where("check_id = ?", checkID).Where("created_at >= ?", event.CreatedAt).Order("created_at").First(&checkStatus).Error; err != nil {
-			return nil, fmt.Errorf("failed to get check status for check(%s): %w", checkID, err)
+		if err := ctx.DB().Where("check_id = ?", checkID).Where("time = ?", lastRuntime).First(&checkStatus).Error; err != nil {
+			return nil, fmt.Errorf("failed to get check status for check(%s/%s): %w", checkID, lastRuntime, err)
 		}
 
 		env["status"] = checkStatus.AsMap()
