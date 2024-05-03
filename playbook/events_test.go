@@ -159,8 +159,8 @@ var _ = ginkgo.Describe("Playbook Events", ginkgo.Ordered, func() {
 			Expect(err).NotTo(HaveOccurred())
 		})
 
-		ginkgo.It("update status to something else other than unhealthy", func() {
-			tx := DefaultContext.DB().Model(&models.Component{}).Where("id = ?", dummy.Logistics.ID).UpdateColumn("status", types.ComponentStatusWarning)
+		ginkgo.It("update health to something else other than unhealthy", func() {
+			tx := DefaultContext.DB().Model(&models.Component{}).Where("id = ?", dummy.Logistics.ID).UpdateColumn("health", models.HealthHealthy)
 			Expect(tx.RowsAffected).To(Equal(int64(1)))
 
 			Expect(tx.Error).NotTo(HaveOccurred())
@@ -176,7 +176,7 @@ var _ = ginkgo.Describe("Playbook Events", ginkgo.Ordered, func() {
 		})
 
 		ginkgo.It("make one of the matching components unhealthy", func() {
-			tx := DefaultContext.DB().Debug().Model(&models.Component{}).Where("id = ?", dummy.Logistics.ID).UpdateColumn("status", types.ComponentStatusUnhealthy)
+			tx := DefaultContext.DB().Debug().Model(&models.Component{}).Where("id = ?", dummy.Logistics.ID).UpdateColumn("health", types.ComponentStatusUnhealthy)
 			Expect(tx.RowsAffected).To(Equal(int64(1)))
 
 			Expect(tx.Error).NotTo(HaveOccurred())
