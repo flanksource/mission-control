@@ -35,9 +35,13 @@ var eventToSpecEvent = map[string]PlaybookSpecEvent{
 	api.EventCheckPassed: {"canary", "passed"},
 	api.EventCheckFailed: {"canary", "failed"},
 
-	api.EventConfigCreated: {"config", "created"},
-	api.EventConfigUpdated: {"config", "updated"},
-	api.EventConfigDeleted: {"config", "deleted"},
+	api.EventConfigCreated:   {"config", "created"},
+	api.EventConfigUpdated:   {"config", "updated"},
+	api.EventConfigDeleted:   {"config", "deleted"},
+	api.EventConfigHealthy:   {"config", "healthy"},
+	api.EventConfigUnhealthy: {"config", "unhealthy"},
+	api.EventConfigWarning:   {"config", "warning"},
+	api.EventConfigUnknown:   {"config", "unknown"},
 
 	api.EventComponentHealthy:   {"component", "healthy"},
 	api.EventComponentUnhealthy: {"component", "unhealthy"},
@@ -121,6 +125,11 @@ func SchedulePlaybookRun(ctx context.Context, event postq.Event) error {
 	case api.EventComponentHealthy, api.EventComponentUnhealthy, api.EventComponentWarning, api.EventComponentUnknown:
 		if err := ctx.DB().Model(&models.Component{}).Where("id = ?", event.Properties["id"]).First(&eventResource.Component).Error; err != nil {
 			return dutyAPI.Errorf(dutyAPI.ENOTFOUND, "component(id=%s) not found", event.Properties["id"])
+		}
+
+	case api.EventConfigHealthy, api.EventConfigUnhealthy, api.EventConfigWarning, api.EventConfigUnknown:
+		if err := ctx.DB().Model(&models.ConfigItem{}).Where("id = ?", event.Properties["id"]).First(&eventResource.Config).Error; err != nil {
+			return dutyAPI.Errorf(dutyAPI.ENOTFOUND, "config(id=%s) not found", event.Properties["id"])
 		}
 
 	case api.EventConfigCreated, api.EventConfigUpdated, api.EventConfigDeleted:
