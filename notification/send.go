@@ -152,8 +152,12 @@ Error: {{.status.error}}
 
 [Reference]({{.permalink}})`, labelsTemplate(".check.labels"))
 
+	case api.EventConfigHealthy, api.EventConfigUnhealthy, api.EventConfigWarning, api.EventConfigUnknown:
+		title = "Config {{.config.name}} health updated to {{.config.health}}"
+		body = fmt.Sprintf("%s\n[Reference]({{.permalink}})", labelsTemplate(".config.labels"))
+
 	case api.EventComponentHealthy, api.EventComponentUnhealthy, api.EventComponentWarning, api.EventComponentUnknown:
-		title = "Component {{.component.name}} status updated to {{.component.status}}"
+		title = "Component {{.component.name}} health updated to {{.component.health}}"
 		body = fmt.Sprintf("%s\n[Reference]({{.permalink}})", labelsTemplate(".component.labels"))
 
 	case api.EventIncidentCommentAdded:

@@ -15,9 +15,13 @@ const (
 	EventCheckPassed = "check.passed"
 	EventCheckFailed = "check.failed"
 
-	EventConfigCreated = "config.created"
-	EventConfigUpdated = "config.updated"
-	EventConfigDeleted = "config.deleted"
+	EventConfigCreated   = "config.created"
+	EventConfigUpdated   = "config.updated"
+	EventConfigDeleted   = "config.deleted"
+	EventConfigHealthy   = "config.healthy"
+	EventConfigUnhealthy = "config.unhealthy"
+	EventConfigWarning   = "config.warning"
+	EventConfigUnknown   = "config.unknown"
 
 	EventComponentHealthy   = "component.healthy"
 	EventComponentUnhealthy = "component.unhealthy"
@@ -68,6 +72,10 @@ var (
 		EventConfigCreated,
 		EventConfigUpdated,
 		EventConfigDeleted,
+		EventConfigHealthy,
+		EventConfigUnhealthy,
+		EventConfigWarning,
+		EventConfigUnknown,
 		EventComponentHealthy,
 		EventComponentUnhealthy,
 		EventComponentWarning,

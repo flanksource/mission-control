@@ -289,5 +289,26 @@ func getEnvForEvent(ctx context.Context, event postq.Event, properties map[strin
 		env["permalink"] = fmt.Sprintf("%s/topology/%s", api.PublicWebURL, componentID)
 	}
 
+	if strings.HasPrefix(event.Name, "config.") {
+		configID := properties["id"]
+
+		config, err := query.GetCachedConfig(ctx, configID)
+		if err != nil {
+			return nil, fmt.Errorf("error finding config(id=%s): %v", configID, err)
+		} else if config == nil {
+			return nil, fmt.Errorf("config(id=%s) not found", configID)
+		}
+
+		agent, err := query.FindCachedAgent(ctx, config.AgentID.String())
+		if err != nil {
+			return nil, fmt.Errorf("error finding agent: %v", err)
+		} else if agent != nil {
+			env["agent"] = agent.AsMap()
+		}
+
+		env["config"] = config.AsMap("last_scraped_time", "path", "parent_id")
+		env["permalink"] = fmt.Sprintf("%s/catalog/%s", api.PublicWebURL, configID)
+	}
+
 	return env, nil
 }
