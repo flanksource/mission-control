@@ -5,12 +5,11 @@ import (
 	"time"
 
 	"github.com/flanksource/duty/job"
-	"github.com/flanksource/duty/models"
 )
 
 var cleanupStaleJobHistory = &job.Job{
 	Name:       "CleanupStaleJobHistory",
-	Schedule:   "@every 4h",
+	Schedule:   "@every 24h",
 	Singleton:  true,
 	JobHistory: true,
 	Retention:  job.RetentionFew,
@@ -22,8 +21,8 @@ var cleanupStaleJobHistory = &job.Job{
 			return fmt.Errorf("error cleaning stale job histories: %w", err)
 		}
 
-		staleRunningHistoryMaxAge := ctx.Properties().Duration("job.history.running.maxAge", time.Hour*4)
-		runningStale, err := job.CleanupStaleHistory(ctx.Context, staleRunningHistoryMaxAge, "", "", models.StatusRunning)
+		runningStaleHistoryMaxAge := ctx.Properties().Duration("job.history.running.maxAge", time.Hour*4)
+		runningStale, err := job.CleanupStaleRunningHistory(ctx.Context, runningStaleHistoryMaxAge)
 		if err != nil {
 			return fmt.Errorf("error cleaning stale RUNNING job histories: %w", err)
 		}
