@@ -10,7 +10,8 @@ const eventQueueStaleAge = time.Hour * 24 * 30
 
 // CleanupEventQueue deletes stale records in the `event_queue` table
 func CleanupEventQueue(ctx job.JobRuntime) error {
-	result := ctx.DB().Exec("DELETE FROM event_queue WHERE NOW() - created_at > ?", eventQueueStaleAge)
+	age := ctx.Properties().Duration("event_queue.maxAge", eventQueueStaleAge)
+	result := ctx.DB().Exec("DELETE FROM event_queue WHERE NOW() - created_at > ?", age)
 	if result.Error != nil {
 		return result.Error
 	}
