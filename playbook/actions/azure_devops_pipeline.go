@@ -12,7 +12,7 @@ type AzureDevopsPipeline struct {
 }
 
 func (t *AzureDevopsPipeline) Run(ctx context.Context, spec v1.AzureDevopsPipelineAction) (map[string]any, error) {
-	token, err := ctx.GetEnvValueFromCache(spec.Token)
+	token, err := ctx.GetEnvValueFromCache(spec.Token, ctx.GetNamespace())
 	if err != nil {
 		return nil, fmt.Errorf("could not get azure devops token from env: %v", err)
 	}

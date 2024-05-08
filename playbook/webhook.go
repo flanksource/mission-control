@@ -38,12 +38,12 @@ func authenticateWebhook(ctx context.Context, r *http.Request, auth *v1.Playbook
 			return api.Errorf(api.EFORBIDDEN, "username and password required")
 		}
 
-		expectedUsername, err := ctx.GetEnvValueFromCache(auth.Basic.Username)
+		expectedUsername, err := ctx.GetEnvValueFromCache(auth.Basic.Username, ctx.GetNamespace())
 		if err != nil {
 			return err
 		}
 
-		expectedPassword, err := ctx.GetEnvValueFromCache(auth.Basic.Password)
+		expectedPassword, err := ctx.GetEnvValueFromCache(auth.Basic.Password, ctx.GetNamespace())
 		if err != nil {
 			return err
 		}
@@ -57,7 +57,7 @@ func authenticateWebhook(ctx context.Context, r *http.Request, auth *v1.Playbook
 	if auth.Github != nil {
 		sig := strings.TrimPrefix(r.Header.Get("X-Hub-Signature-256"), "sha256=")
 
-		token, err := ctx.GetEnvValueFromCache(auth.Github.Token)
+		token, err := ctx.GetEnvValueFromCache(auth.Github.Token, ctx.GetNamespace())
 		if err != nil {
 			return err
 		}
@@ -86,7 +86,7 @@ func authenticateWebhook(ctx context.Context, r *http.Request, auth *v1.Playbook
 	}
 
 	if auth.SVIX != nil {
-		signingKey, err := ctx.GetEnvValueFromCache(auth.SVIX.Secret)
+		signingKey, err := ctx.GetEnvValueFromCache(auth.SVIX.Secret, ctx.GetNamespace())
 		if err != nil {
 			return err
 		}

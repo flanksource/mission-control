@@ -380,7 +380,7 @@ func templateAndExecuteAction(ctx context.Context, envs []types.EnvVar, playbook
 
 	templateEnv.Env = make(map[string]string, len(envs))
 	for _, e := range envs {
-		val, err := ctx.GetEnvValueFromCache(e)
+		val, err := ctx.GetEnvValueFromCache(e, ctx.GetNamespace())
 		if err != nil {
 			return fmt.Errorf("failed to get env value (%s): %w", e.Name, err)
 		} else {
