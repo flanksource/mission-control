@@ -51,7 +51,7 @@ require (
 	github.com/flanksource/artifacts v1.0.6
 	github.com/fluxcd/pkg/gittestserver v0.8.6
 	github.com/go-git/go-billy/v5 v5.5.0
-	github.com/go-git/go-git/v5 v5.11.0
+	github.com/go-git/go-git/v5 v5.12.0
 	github.com/go-sql-driver/mysql v1.7.1
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/henvic/httpretty v0.1.3
@@ -79,7 +79,7 @@ require (
 	github.com/AlekSi/pointer v1.2.0 // indirect
 	github.com/Masterminds/semver/v3 v3.2.1 // indirect
 	github.com/Microsoft/go-winio v0.6.1 // indirect
-	github.com/ProtonMail/go-crypto v0.0.0-20230828082145-3c4c8a2d2371 // indirect
+	github.com/ProtonMail/go-crypto v1.0.0 // indirect
 	github.com/RaveNoX/go-jsonmerge v1.0.0 // indirect
 	github.com/WinterYukky/gorm-extra-clause-plugin v0.2.0 // indirect
 	github.com/agext/levenshtein v1.2.3 // indirect
@@ -185,12 +185,12 @@ require (
 	github.com/robertkrimen/otto v0.3.0 // indirect
 	github.com/rodaine/table v1.1.0 // indirect
 	github.com/rogpeppe/go-internal v1.12.0 // indirect
-	github.com/sergi/go-diff v1.3.1 // indirect
+	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 // indirect
 	github.com/sethvargo/go-retry v0.2.4 // indirect
 	github.com/shurcooL/githubv4 v0.0.0-20190718010115-4ba037080260 // indirect
 	github.com/shurcooL/graphql v0.0.0-20181231061246-d48a9a75455f // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
-	github.com/skeema/knownhosts v1.2.1 // indirect
+	github.com/skeema/knownhosts v1.2.2 // indirect
 	github.com/stoewer/go-strcase v1.3.0 // indirect
 	github.com/tidwall/gjson v1.17.0 // indirect
 	github.com/tidwall/match v1.1.1 // indirect
