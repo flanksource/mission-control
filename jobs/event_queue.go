@@ -40,7 +40,7 @@ func CleanupEventQueue(ctx job.JobRuntime) error {
 	if result.Error != nil {
 		ctx.History.AddError(result.Error.Error())
 	} else if result.RowsAffected > 0 {
-		ctx.History.ErrorCount += int(result.RowsAffected)
+		ctx.History.SuccessCount += int(result.RowsAffected)
 	}
 
 	return nil
