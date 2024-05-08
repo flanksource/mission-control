@@ -260,7 +260,7 @@ func (c *ExecAction) prepareEnvironment(ctx context.Context, check v1.ExecAction
 	var result execEnv
 
 	for _, env := range check.EnvVars {
-		val, err := ctx.GetEnvValueFromCache(env)
+		val, err := ctx.GetEnvValueFromCache(env, ctx.GetNamespace())
 		if err != nil {
 			return nil, fmt.Errorf("error fetching env value (name=%s): %w", env.Name, err)
 		}

@@ -29,7 +29,7 @@ func (t *githubWorkflowDispatchRequest) SetInput(input string) error {
 }
 
 func (t *Github) Run(ctx context.Context, spec v1.GithubAction) (*GithubResponse, error) {
-	token, err := ctx.GetEnvValueFromCache(spec.Token)
+	token, err := ctx.GetEnvValueFromCache(spec.Token, ctx.GetNamespace())
 	if err != nil {
 		return nil, fmt.Errorf("could not get github token from env: %v", err)
 	}

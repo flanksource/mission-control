@@ -249,7 +249,7 @@ type ExecConnections struct {
 type connectionContext interface {
 	gocontext.Context
 	HydrateConnectionByURL(connectionName string) (*models.Connection, error)
-	GetEnvValueFromCache(env types.EnvVar, namespace ...string) (string, error)
+	GetEnvValueFromCache(env types.EnvVar, namespace string) (string, error)
 }
 
 type GCPConnection struct {
