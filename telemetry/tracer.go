@@ -2,6 +2,8 @@ package telemetry
 
 import (
 	"context"
+	"os"
+	"strings"
 
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
@@ -10,6 +12,7 @@ import (
 	"go.opentelemetry.io/otel/propagation"
 	"google.golang.org/grpc/credentials"
 
+	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
 	"go.opentelemetry.io/otel/sdk/resource"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
@@ -32,17 +35,22 @@ func InitTracer(serviceName, collectorURL string, insecure bool, resourceAttrs [
 	)
 
 	if err != nil {
-		logger.Fatalf("Failed to create exporter: %v", err)
+		logger.Errorf("failed to create opentelemetry exporter: %v", err)
+		return func(_ context.Context) error { return nil }
 	}
 
-	resources, err := resource.New(
-		context.Background(),
-		resource.WithAttributes(
-			append(resourceAttrs, attribute.String("service.name", serviceName))...,
-		),
-	)
+	resourceAttrs = append(resourceAttrs, attribute.String("service.name", serviceName))
+	if val, ok := os.LookupEnv("OTEL_LABELS"); ok {
+		kv := collections.KeyValueSliceToMap(strings.Split(val, ","))
+		for k, v := range kv {
+			resourceAttrs = append(resourceAttrs, attribute.String(k, v))
+		}
+	}
+
+	resources, err := resource.New(context.Background(), resource.WithAttributes(resourceAttrs...))
 	if err != nil {
-		logger.Fatalf("Could not set resources: %v", err)
+		logger.Errorf("could not set opentelemetry resources: %v", err)
+		return func(_ context.Context) error { return nil }
 	}
 
 	otel.SetTracerProvider(
