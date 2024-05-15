@@ -1,8 +1,10 @@
 package db
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -89,4 +91,21 @@ func DeleteNotificationSendHistory(ctx context.Context, days int) (int64, error)
 		Where(fmt.Sprintf("created_at < NOW() - INTERVAL '%d DAYS'", days)).
 		Delete(&models.NotificationSendHistory{})
 	return tx.RowsAffected, tx.Error
+}
+
+func NotificationSendSummary(ctx context.Context, id string, window time.Duration) (time.Time, int, error) {
+	query := `
+	SELECT
+		min(created_at) AS earliest,
+		count(*) AS count
+	FROM
+		notification_send_history
+	WHERE
+		notification_id = ?
+		AND NOW() - created_at < ?`
+
+	var earliest sql.NullTime
+	var count int
+	err := ctx.DB().Raw(query, id, window).Row().Scan(&earliest, &count)
+	return earliest.Time, count, err
 }
