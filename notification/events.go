@@ -4,7 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
+	"time"
 
+	sw "github.com/RussellLuo/slidingwindow"
+	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
@@ -19,6 +23,15 @@ import (
 	"github.com/samber/lo"
 )
 
+var (
+	// rateLimiters per notification
+	rateLimiters     = map[string]*sw.Limiter{}
+	rateLimitersLock = sync.Mutex{}
+
+	RateLimitWindow           = time.Hour * 4
+	MaxNotificationsPerWindow = 50
+)
+
 func init() {
 	events.Register(RegisterEvents)
 }
@@ -26,6 +39,38 @@ func init() {
 func RegisterEvents(ctx context.Context) {
 	events.RegisterSyncHandler(addNotificationEvent, append(api.EventStatusGroup, api.EventIncidentGroup...)...)
 	events.RegisterAsyncHandler(sendNotifications, 1, 5, api.EventNotificationSend)
+}
+
+func getOrCreateRateLimiter(ctx context.Context, notificationID string) (*sw.Limiter, error) {
+	rateLimitersLock.Lock()
+	defer rateLimitersLock.Unlock()
+
+	rl, ok := rateLimiters[notificationID]
+	if ok {
+		return rl, nil
+	}
+
+	window := ctx.Properties().Duration("notifications.max.window", RateLimitWindow)
+	max := ctx.Properties().Int("notifications.max.count", MaxNotificationsPerWindow)
+
+	// find the number of notifications sent for this notification in the last window period
+	earliest, count, err := db.NotificationSendSummary(ctx, notificationID, window)
+	if err != nil {
+		return nil, err
+	}
+
+	rateLimiter, _ := sw.NewLimiter(window, int64(max), func() (sw.Window, sw.StopFunc) {
+		win, stopper := NewLocalWindow()
+		if count > 0 {
+			// On init, sync the rate limiter with the notification send history.
+			win.SetStart(earliest)
+			win.AddCount(int64(count))
+		}
+		return win, stopper
+	})
+
+	rateLimiters[notificationID] = rateLimiter
+	return rateLimiter, nil
 }
 
 // addNotificationEvent responds to a event that can possibly generate a notification.
@@ -50,6 +95,17 @@ func addNotificationEvent(ctx context.Context, event postq.Event) error {
 		n, err := GetNotification(ctx, id)
 		if err != nil {
 			return err
+		}
+
+		rateLimiter, err := getOrCreateRateLimiter(ctx, id)
+		if err != nil {
+			return fmt.Errorf("failed to create rate limiter: %w", err)
+		}
+
+		if !rateLimiter.Allow() {
+			// rate limited notifications are simply dropped.
+			logger.Warnf("notification(%s) rate limited for event=%s", id, event.Name)
+			continue
 		}
 
 		if !n.HasRecipients() {
