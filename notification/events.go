@@ -104,7 +104,7 @@ func addNotificationEvent(ctx context.Context, event postq.Event) error {
 
 		if !rateLimiter.Allow() {
 			// rate limited notifications are simply dropped.
-			logger.Debugf("notification(%s) rate limited for event=%s", id, event.Name)
+			logger.Warnf("notification(%s) rate limited for event=%s", id, event.Name)
 			continue
 		}
 
