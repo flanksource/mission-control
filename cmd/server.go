@@ -31,10 +31,10 @@ import (
 	"github.com/flanksource/incident-commander/notification"
 	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/teams"
-	"github.com/flanksource/incident-commander/upstream"
 
 	// register event handlers
 	_ "github.com/flanksource/incident-commander/playbook"
+	_ "github.com/flanksource/incident-commander/upstream"
 )
 
 const (
@@ -124,10 +124,6 @@ var Serve = &cobra.Command{
 		}
 
 		go jobs.Start(ctx)
-
-		if api.UpstreamConf.Valid() {
-			upstream.RegisterEvents(ctx)
-		}
 
 		events.StartConsumers(ctx)
 
