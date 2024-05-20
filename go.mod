@@ -27,7 +27,7 @@ require (
 	github.com/microsoft/kiota-authentication-azure-go v1.0.0
 	github.com/microsoftgraph/msgraph-sdk-go v1.13.0
 	github.com/mitchellh/mapstructure v1.5.0
-	github.com/onsi/ginkgo/v2 v2.17.2
+	github.com/onsi/ginkgo/v2 v2.17.3
 	github.com/onsi/gomega v1.33.0
 	github.com/ory/client-go v1.1.41
 	github.com/prometheus/client_golang v1.19.0
