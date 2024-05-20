@@ -33,8 +33,6 @@ import (
 	"github.com/flanksource/incident-commander/teams"
 
 	// register event handlers
-	_ "github.com/flanksource/incident-commander/incidents/responder"
-	_ "github.com/flanksource/incident-commander/notification"
 	_ "github.com/flanksource/incident-commander/playbook"
 	_ "github.com/flanksource/incident-commander/upstream"
 )
