@@ -9,13 +9,11 @@ import (
 
 	commonsCtx "github.com/flanksource/commons/context"
 	"github.com/flanksource/commons/logger"
-	"github.com/labstack/echo-contrib/echoprometheus"
 	"go.opentelemetry.io/otel"
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/kopper"
 	"github.com/flanksource/postq/pg"
-	prom "github.com/prometheus/client_golang/prometheus"
 
 	"github.com/spf13/cobra"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -154,14 +152,6 @@ var Serve = &cobra.Command{
 		echo.Forward(e, "/canary", api.CanaryCheckerPath)
 		echo.Forward(e, "/kratos", auth.KratosAPI)
 		echo.Forward(e, "/apm", api.ApmHubPath) // Deprecated
-
-		e.Use(echoprometheus.NewMiddlewareWithConfig(echoprometheus.MiddlewareConfig{
-			Registerer: prom.DefaultRegisterer,
-		}))
-
-		e.GET("/metrics", echoprometheus.NewHandlerWithConfig(echoprometheus.HandlerConfig{
-			Gatherer: prom.DefaultGatherer,
-		}))
 
 		listenAddr := fmt.Sprintf(":%d", httpPort)
 		logger.Infof("Listening on %s", listenAddr)

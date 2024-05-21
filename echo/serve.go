@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/flanksource/commons/logger"
@@ -26,8 +27,10 @@ import (
 	"github.com/flanksource/incident-commander/snapshot"
 	"github.com/flanksource/incident-commander/upstream"
 	"github.com/flanksource/incident-commander/utils"
+	"github.com/labstack/echo-contrib/echoprometheus"
 	echov4 "github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	prom "github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 )
 
@@ -36,19 +39,21 @@ const (
 	CacheControlValue  = "public, max-age=2592000, immutable"
 )
 
-var cacheSuffixes = []string{
-	".ico",
-	".svg",
-	".css",
-	".js",
-	".png",
-}
+var (
+	cacheSuffixes = []string{
+		".ico",
+		".svg",
+		".css",
+		".js",
+		".png",
+	}
+)
 
 func New(ctx context.Context) *echov4.Echo {
 	e := echov4.New()
 	e.HideBanner = true
 
-	e.Use(otelecho.Middleware("mission-control", otelecho.WithSkipper(tracingURLSkipper)))
+	e.Use(otelecho.Middleware("mission-control", otelecho.WithSkipper(telemetryURLSkipper)))
 
 	e.Use(func(next echov4.HandlerFunc) echov4.HandlerFunc {
 		return func(c echov4.Context) error {
@@ -57,8 +62,17 @@ func New(ctx context.Context) *echov4.Echo {
 		}
 	})
 
+	e.Use(echoprometheus.NewMiddlewareWithConfig(echoprometheus.MiddlewareConfig{
+		Registerer: prom.DefaultRegisterer,
+		Skipper:    telemetryURLSkipper,
+	}))
+
+	e.GET("/metrics", echoprometheus.NewHandlerWithConfig(echoprometheus.HandlerConfig{
+		Gatherer: prom.DefaultGatherer,
+	}))
+
 	echoLogConfig := middleware.DefaultLoggerConfig
-	echoLogConfig.Skipper = tracingURLSkipper
+	echoLogConfig.Skipper = telemetryURLSkipper
 
 	e.Use(middleware.LoggerWithConfig(echoLogConfig))
 	e.Use(ServerCache)
@@ -138,15 +152,10 @@ func ServerCache(next echov4.HandlerFunc) echov4.HandlerFunc {
 	}
 }
 
-// tracingURLSkipper ignores metrics route on some middleware
-func tracingURLSkipper(c echov4.Context) bool {
+// telemetryURLSkipper ignores metrics route on some middleware
+func telemetryURLSkipper(c echov4.Context) bool {
 	pathsToSkip := []string{"/health", "/metrics"}
-	for _, p := range pathsToSkip {
-		if strings.HasPrefix(c.Path(), p) {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(pathsToSkip, c.Path())
 }
 
 func ModifyKratosRequestHeaders(next echov4.HandlerFunc) echov4.HandlerFunc {
