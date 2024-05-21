@@ -12,6 +12,7 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
+	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/events"
@@ -231,6 +232,10 @@ func getEnvForEvent(ctx context.Context, event postq.Event, properties map[strin
 			return nil, fmt.Errorf("failed to get check status for check(%s/%s): %w", checkID, lastRuntime, err)
 		}
 
+		// The check that we supply on the template needs to have the status set
+		// to the status corresponding to the time of event.
+		check.Status = models.CheckHealthStatus(lo.Ternary(checkStatus.Status, models.CheckStatusHealthy, models.CheckStatusUnhealthy))
+
 		env["status"] = checkStatus.AsMap()
 		env["canary"] = canary.AsMap("spec")
 		env["check"] = check.AsMap("spec")
@@ -341,6 +346,9 @@ func getEnvForEvent(ctx context.Context, event postq.Event, properties map[strin
 			env["agent"] = agent.AsMap()
 		}
 
+		statusInEvent := strings.TrimPrefix(event.Name, "component.status.")
+		component.Status = types.ComponentStatus(statusInEvent)
+
 		env["component"] = component.AsMap("checks", "incidents", "analysis", "components", "order", "relationship_id", "children", "parents")
 		env["permalink"] = fmt.Sprintf("%s/topology/%s", api.PublicWebURL, componentID)
 	}
@@ -361,6 +369,9 @@ func getEnvForEvent(ctx context.Context, event postq.Event, properties map[strin
 		} else if agent != nil {
 			env["agent"] = agent.AsMap()
 		}
+
+		statusInEvent := strings.TrimPrefix(event.Name, "config.")
+		config.Status = &statusInEvent
 
 		env["config"] = config.AsMap("last_scraped_time", "path", "parent_id")
 		env["permalink"] = fmt.Sprintf("%s/catalog/%s", api.PublicWebURL, configID)
