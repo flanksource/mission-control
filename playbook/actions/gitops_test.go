@@ -61,7 +61,7 @@ var _ = ginkgo.Describe("Playbook Action Gitops", ginkgo.Ordered, func() {
 		}
 
 		env = TemplateEnv{
-			Params: map[string]string{
+			Params: map[string]any{
 				"namespace": "logging",
 			},
 		}

@@ -9,7 +9,7 @@ type TemplateEnv struct {
 	Check     *models.Check      `json:"check,omitempty"`
 	Playbook  models.Playbook    `json:"playbook"`
 	Run       models.PlaybookRun `json:"run"`
-	Params    map[string]string  `json:"params,omitempty"`
+	Params    map[string]any     `json:"params,omitempty"`
 	Env       map[string]string  `json:"env,omitempty"`
 
 	// User is the user who triggered the playbook run

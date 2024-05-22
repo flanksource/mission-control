@@ -284,9 +284,47 @@ func HandleRun(ctx context.Context, run models.PlaybookRun) error {
 
 func prepareTemplateEnv(ctx context.Context, playbook models.Playbook, run models.PlaybookRun) (actions.TemplateEnv, error) {
 	templateEnv := actions.TemplateEnv{
-		Params:   run.Parameters,
+		Params:   make(map[string]any, len(run.Parameters)),
 		Run:      run,
 		Playbook: playbook,
+	}
+
+	var spec v1.PlaybookSpec
+	if err := json.Unmarshal(playbook.Spec, &spec); err != nil {
+		return templateEnv, fmt.Errorf("failed to unmarshal playbook spec: %w", err)
+	}
+
+	for _, p := range spec.Parameters {
+		val := run.Parameters[p.Name]
+
+		switch p.Type {
+		case v1.PlaybookParameterTypeCheck:
+			var check models.Check
+			if err := ctx.DB().Where("id = ?", val).First(&check).Error; err != nil {
+				return templateEnv, fmt.Errorf("failed to fetch check for parameter: %w", err)
+			} else if check.ID != uuid.Nil {
+				templateEnv.Params[p.Name] = check
+			}
+
+		case v1.PlaybookParameterTypeConfig:
+			var config models.ConfigItem
+			if err := ctx.DB().Where("id = ?", val).First(&config).Error; err != nil {
+				return templateEnv, fmt.Errorf("failed to fetch config for parameter: %w", err)
+			} else if config.ID != uuid.Nil {
+				templateEnv.Params[p.Name] = config
+			}
+
+		case v1.PlaybookParameterTypeComponent:
+			var component models.Component
+			if err := ctx.DB().Where("id = ?", val).First(&component).Error; err != nil {
+				return templateEnv, fmt.Errorf("failed to fetch component for parameter: %w", err)
+			} else if component.ID != uuid.Nil {
+				templateEnv.Params[p.Name] = component
+			}
+
+		default:
+			templateEnv.Params[p.Name] = val
+		}
 	}
 
 	if run.CreatedBy != nil {
