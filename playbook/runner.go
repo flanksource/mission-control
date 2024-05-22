@@ -299,17 +299,30 @@ func prepareTemplateEnv(ctx context.Context, playbook models.Playbook, run model
 		}
 	}
 
+	var resourceAgentID uuid.UUID
 	if run.ComponentID != nil {
 		if err := ctx.DB().Where("id = ?", run.ComponentID).First(&templateEnv.Component).Error; err != nil {
 			return templateEnv, fmt.Errorf("failed to fetch component: %w", err)
 		}
+		resourceAgentID = templateEnv.Component.AgentID
 	} else if run.ConfigID != nil {
 		if err := ctx.DB().Where("id = ?", run.ConfigID).First(&templateEnv.Config).Error; err != nil {
 			return templateEnv, fmt.Errorf("failed to fetch config: %w", err)
 		}
+		resourceAgentID = templateEnv.Config.AgentID
 	} else if run.CheckID != nil {
 		if err := ctx.DB().Where("id = ?", run.CheckID).First(&templateEnv.Check).Error; err != nil {
 			return templateEnv, fmt.Errorf("failed to fetch check: %w", err)
+		}
+		resourceAgentID = templateEnv.Check.AgentID
+	}
+
+	if resourceAgentID != uuid.Nil {
+		agent, err := query.FindCachedAgent(ctx, resourceAgentID.String())
+		if err != nil {
+			return templateEnv, fmt.Errorf("error finding agent: %w", err)
+		} else if agent != nil {
+			templateEnv.Agent = agent
 		}
 	}
 
