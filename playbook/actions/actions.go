@@ -14,6 +14,9 @@ type TemplateEnv struct {
 
 	// User is the user who triggered the playbook run
 	User *models.Person `json:"user,omitempty"`
+
+	// Agent belonging to the resource
+	Agent *models.Agent `json:"agent,omitempty"`
 }
 
 func (t *TemplateEnv) AsMap() map[string]any {
@@ -28,6 +31,9 @@ func (t *TemplateEnv) AsMap() map[string]any {
 		"run":       t.Run.AsMap(),
 	}
 
+	if t.Agent != nil {
+		m["agent"] = t.Agent.AsMap()
+	}
 	if t.User != nil {
 		m["user"] = t.User.AsMap()
 	}
