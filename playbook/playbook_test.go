@@ -5,6 +5,7 @@ import (
 	"fmt"
 	netHTTP "net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/flanksource/commons/http"
@@ -22,7 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/yaml"
 )
 
-var _ = ginkgo.Describe("Playbook", ginkgo.Ordered, func() {
+var _ = ginkgo.Describe("Playbook", func() {
 	var _ = ginkgo.Describe("Test Listing | Run API | Approvals", ginkgo.Ordered, func() {
 		var (
 			configPlaybook    models.Playbook
@@ -245,6 +246,107 @@ var _ = ginkgo.Describe("Playbook", ginkgo.Ordered, func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			Expect(string(f)).To(Equal(fmt.Sprintf("id=%s\n%s", dummy.EKSCluster.ID, dummy.EKSCluster.ConfigClass)))
+		})
+	})
+
+	var _ = ginkgo.Describe("Test playbook parameters", ginkgo.Ordered, func() {
+		var (
+			testPlaybook models.Playbook
+			runResp      RunResponse
+			tempDir      string
+			tempFile     string
+		)
+
+		ginkgo.BeforeAll(func() {
+			var err error
+			tempDir, err = os.MkdirTemp("", "playbook-*")
+			Expect(err).NotTo(HaveOccurred())
+			tempFile = filepath.Join(tempDir, "test.txt")
+
+			playbookSpec := v1.PlaybookSpec{
+				Description: "echo config name",
+				Parameters: []v1.PlaybookParameter{
+					{Name: "path", Label: "The path"},
+					{Name: "my_config", Label: "The config", Type: v1.PlaybookParameterTypeConfig},
+					{Name: "my_component", Label: "The component", Type: v1.PlaybookParameterTypeComponent},
+				},
+				Actions: []v1.PlaybookAction{
+					{
+						Name: "write config name to the file",
+						Exec: &v1.ExecAction{
+							Script: "echo {{.params.my_config.config_class}} > {{.params.path}}",
+						},
+					},
+					{
+						Name: "append component name to the same file ",
+						Exec: &v1.ExecAction{
+							Script: "echo {{.params.my_component.name}} >> {{.params.path}}",
+						},
+					},
+				},
+			}
+
+			spec, err := json.Marshal(playbookSpec)
+			Expect(err).NotTo(HaveOccurred())
+
+			testPlaybook = models.Playbook{
+				Name:   "param-test-playbook",
+				Spec:   spec,
+				Source: models.SourceConfigFile,
+			}
+
+			err = DefaultContext.DB().Clauses(clause.Returning{}).Create(&testPlaybook).Error
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		ginkgo.AfterAll(func() {
+			_ = os.RemoveAll(tempDir)
+		})
+
+		ginkgo.It("should store playbook run via API", func() {
+			run := RunParams{
+				ID: testPlaybook.ID,
+				Params: map[string]string{
+					"path":         tempFile,
+					"my_config":    dummy.EKSCluster.ID.String(),
+					"my_component": dummy.Logistics.ID.String(),
+				},
+			}
+
+			httpClient := http.NewClient().Auth(dummy.JohnDoe.Name, "admin").BaseURL(fmt.Sprintf("http://localhost:%d/playbook", echoServerPort))
+			resp, err := httpClient.R(DefaultContext).Header("Content-Type", "application/json").Post("/run", run)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(resp.StatusCode).To(Equal(netHTTP.StatusCreated))
+
+			err = json.NewDecoder(resp.Body).Decode(&runResp)
+			Expect(err).NotTo(HaveOccurred())
+
+			var savedRun models.PlaybookRun
+			err = DefaultContext.DB().Where("id = ? ", runResp.RunID).First(&savedRun).Error
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(savedRun.PlaybookID).To(Equal(testPlaybook.ID), "run should have been created for the correct playbook")
+			Expect(*savedRun.CreatedBy).To(Equal(dummy.JohnDoe.ID), "run should have been created by the authenticated person")
+		})
+
+		ginkgo.It("should have correctly used config & component fields from parameters", func() {
+			events.ConsumeAll(DefaultContext)
+
+			Eventually(func() models.PlaybookRunStatus {
+				var savedRun *models.PlaybookRun
+				if err := DefaultContext.DB().Select("status").Where("id = ? ", runResp.RunID).First(&savedRun).Error; err != nil {
+					Expect(err).To(BeNil())
+				}
+				if savedRun != nil {
+					return savedRun.Status
+				}
+				return models.PlaybookRunStatusPending
+			}, "15s").Should(Equal(models.PlaybookRunStatusCompleted))
+
+			f, err := os.ReadFile(tempFile)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(f)).To(Equal(fmt.Sprintf("%s\n%s\n", dummy.EKSCluster.ConfigClass, dummy.Logistics.Name)))
 		})
 	})
 

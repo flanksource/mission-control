@@ -303,7 +303,7 @@ func prepareTemplateEnv(ctx context.Context, playbook models.Playbook, run model
 			if err := ctx.DB().Where("id = ?", val).First(&check).Error; err != nil {
 				return templateEnv, fmt.Errorf("failed to fetch check for parameter: %w", err)
 			} else if check.ID != uuid.Nil {
-				templateEnv.Params[p.Name] = check
+				templateEnv.Params[p.Name] = check.AsMap()
 			}
 
 		case v1.PlaybookParameterTypeConfig:
@@ -311,7 +311,7 @@ func prepareTemplateEnv(ctx context.Context, playbook models.Playbook, run model
 			if err := ctx.DB().Where("id = ?", val).First(&config).Error; err != nil {
 				return templateEnv, fmt.Errorf("failed to fetch config for parameter: %w", err)
 			} else if config.ID != uuid.Nil {
-				templateEnv.Params[p.Name] = config
+				templateEnv.Params[p.Name] = config.AsMap()
 			}
 
 		case v1.PlaybookParameterTypeComponent:
@@ -319,7 +319,7 @@ func prepareTemplateEnv(ctx context.Context, playbook models.Playbook, run model
 			if err := ctx.DB().Where("id = ?", val).First(&component).Error; err != nil {
 				return templateEnv, fmt.Errorf("failed to fetch component for parameter: %w", err)
 			} else if component.ID != uuid.Nil {
-				templateEnv.Params[p.Name] = component
+				templateEnv.Params[p.Name] = component.AsMap()
 			}
 
 		default:
