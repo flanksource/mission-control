@@ -35,6 +35,7 @@ func validateAndSavePlaybookRun(ctx context.Context, playbook *models.Playbook, 
 	run := models.PlaybookRun{
 		PlaybookID: playbook.ID,
 		Status:     models.PlaybookRunStatusPending,
+		Parameters: req.Params,
 	}
 	if ctx.User() != nil {
 		run.CreatedBy = &ctx.User().ID

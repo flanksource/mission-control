@@ -26,11 +26,11 @@ type RunResponse struct {
 }
 
 type RunParams struct {
-	ID          uuid.UUID      `json:"id"`
-	ConfigID    uuid.UUID      `json:"config_id"`
-	CheckID     uuid.UUID      `json:"check_id"`
-	ComponentID uuid.UUID      `json:"component_id"`
-	Params      map[string]any `json:"params"`
+	ID          uuid.UUID         `json:"id"`
+	ConfigID    uuid.UUID         `json:"config_id"`
+	CheckID     uuid.UUID         `json:"check_id"`
+	ComponentID uuid.UUID         `json:"component_id"`
+	Params      map[string]string `json:"params"`
 }
 
 func (r *RunParams) valid() error {
@@ -88,7 +88,7 @@ func (r *RunParams) setDefaults(ctx context.Context, spec v1.PlaybookSpec, templ
 	}
 
 	if r.Params == nil {
-		r.Params = make(map[string]any)
+		r.Params = make(map[string]string)
 	}
 	for i := range defaultParams {
 		r.Params[defaultParams[i].Name] = defaultParams[i].Default
