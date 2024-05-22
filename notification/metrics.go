@@ -3,10 +3,19 @@ package notification
 import "github.com/prometheus/client_golang/prometheus"
 
 func init() {
-	prometheus.MustRegister(notificationSentCounter, notificationSendFailureCounter, notificationSendDuration)
+	prometheus.MustRegister(notificationSentCounter, notificationSendFailureCounter, notificationSendDuration, rateLimitedCounter)
 }
 
 var (
+	rateLimitedCounter = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name:      "rate_limited",
+			Subsystem: "notification",
+			Help:      "Total number of notifications rate limited",
+		},
+		[]string{"id"},
+	)
+
 	notificationSentCounter = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name:      "sent_total",
