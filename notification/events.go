@@ -98,17 +98,6 @@ func addNotificationEvent(ctx context.Context, event postq.Event) error {
 			return err
 		}
 
-		rateLimiter, err := getOrCreateRateLimiter(ctx, id)
-		if err != nil {
-			return fmt.Errorf("failed to create rate limiter: %w", err)
-		}
-
-		if !rateLimiter.Allow() {
-			// rate limited notifications are simply dropped.
-			logger.Warnf("notification(%s) rate limited for event=%s", id, event.Name)
-			continue
-		}
-
 		if !n.HasRecipients() {
 			continue
 		}
@@ -130,7 +119,18 @@ func addNotificationEvent(ctx context.Context, event postq.Event) error {
 			return err
 		}
 
+		rateLimiter, err := getOrCreateRateLimiter(ctx, id)
+		if err != nil {
+			return fmt.Errorf("failed to create rate limiter: %w", err)
+		}
+
 		for _, payload := range payloads {
+			if !rateLimiter.Allow() {
+				// rate limited notifications are simply dropped.
+				logger.Warnf("notification(%s) rate limited for event=%s", id, event.Name)
+				continue
+			}
+
 			newEvent := api.Event{
 				Name:       api.EventNotificationSend,
 				Properties: payload.AsMap(),
