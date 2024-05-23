@@ -295,7 +295,11 @@ func prepareTemplateEnv(ctx context.Context, playbook models.Playbook, run model
 	}
 
 	for _, p := range spec.Parameters {
-		val := run.Parameters[p.Name]
+		val, ok := run.Parameters[p.Name]
+		if !ok {
+			// The parameter was not sent in the run.
+			continue
+		}
 
 		switch p.Type {
 		case v1.PlaybookParameterTypeCheck:
