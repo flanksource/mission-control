@@ -329,7 +329,7 @@ func getEnvForEvent(ctx context.Context, event postq.Event, properties map[strin
 		env["permalink"] = fmt.Sprintf("%s/incidents/%s", api.PublicWebURL, incident.ID)
 	}
 
-	if strings.HasPrefix(event.Name, "component.status.") {
+	if strings.HasPrefix(event.Name, "component.") {
 		componentID := properties["id"]
 
 		component, err := query.GetCachedComponent(ctx, componentID)
@@ -346,8 +346,10 @@ func getEnvForEvent(ctx context.Context, event postq.Event, properties map[strin
 			env["agent"] = agent.AsMap()
 		}
 
-		statusInEvent := strings.TrimPrefix(event.Name, "component.status.")
-		component.Status = types.ComponentStatus(statusInEvent)
+		// Use the health, description & status from the time of event
+		component.Health = lo.ToPtr(models.Health(strings.TrimPrefix(event.Name, "component.")))
+		component.Description = event.Properties["description"]
+		component.Status = types.ComponentStatus(event.Properties["status"])
 
 		env["component"] = component.AsMap("checks", "incidents", "analysis", "components", "order", "relationship_id", "children", "parents")
 		env["permalink"] = fmt.Sprintf("%s/topology/%s", api.PublicWebURL, componentID)
@@ -370,8 +372,10 @@ func getEnvForEvent(ctx context.Context, event postq.Event, properties map[strin
 			env["agent"] = agent.AsMap()
 		}
 
-		statusInEvent := strings.TrimPrefix(event.Name, "config.")
-		config.Status = &statusInEvent
+		// Use the health, description & status from the time of event
+		config.Health = lo.ToPtr(models.Health(strings.TrimPrefix(event.Name, "config.")))
+		config.Description = lo.ToPtr(event.Properties["description"])
+		config.Status = lo.ToPtr(event.Properties["status"])
 
 		env["config"] = config.AsMap("last_scraped_time", "path", "parent_id")
 		env["permalink"] = fmt.Sprintf("%s/catalog/%s", api.PublicWebURL, configID)
