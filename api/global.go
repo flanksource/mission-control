@@ -8,6 +8,8 @@ import (
 const UserIDHeaderKey = "X-User-ID"
 
 var (
+	BuildVersion string
+
 	SystemUserID      *uuid.UUID
 	CanaryCheckerPath string
 	ApmHubPath        string

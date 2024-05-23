@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/flanksource/commons/http"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty"
@@ -28,6 +29,10 @@ func PreRun(cmd *cobra.Command, args []string) {
 
 	if isPartial, err := api.UpstreamConf.IsPartiallyFilled(); isPartial && err != nil {
 		logger.Warnf("Please ensure that all the required flags for upstream is supplied: %v", err)
+	} else if !isPartial {
+		api.UpstreamConf.Options = append(api.UpstreamConf.Options, func(c *http.Client) {
+			c.UserAgent(api.BuildVersion)
+		})
 	}
 
 	var err error

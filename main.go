@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/cmd"
 	"github.com/spf13/cobra"
 )
@@ -18,6 +19,8 @@ func main() {
 	if len(commit) > 8 {
 		version = fmt.Sprintf("%v, commit %v, built at %v", version, commit[0:8], date)
 	}
+
+	api.BuildVersion = version
 
 	cmd.Root.AddCommand(&cobra.Command{
 		Use:   "version",
