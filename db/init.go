@@ -1,9 +1,7 @@
 package db
 
 import (
-	"context"
 	"database/sql"
-	"fmt"
 	"os"
 
 	"github.com/flanksource/commons/logger"
@@ -49,41 +47,28 @@ func Init(connection string) error {
 	postgrestLogLevel = readFromEnv(postgrestLogLevel)
 	PostgRESTJWTSecret = readFromEnv(PostgRESTJWTSecret)
 
-	var err error
-	Pool, err = duty.NewPgxPool(ConnectionString)
-	if err != nil {
-		return fmt.Errorf("error creating pgx pool: %w", err)
+	opts := &migrate.MigrateOptions{
+		Skip: skipMigrations,
 	}
-	conn, err := Pool.Acquire(context.Background())
-	if err != nil {
-		return fmt.Errorf("error acquiring connection: %w", err)
-	}
-	defer conn.Release()
-
-	if err := conn.Ping(context.Background()); err != nil {
-		return fmt.Errorf("error pinging database: %w", err)
-	}
-	Gorm, err = duty.NewGorm(ConnectionString, duty.DefaultGormConfig())
-	if err != nil {
-		return fmt.Errorf("error creating gorm: %w", err)
+	if !api.UpstreamConf.Valid() {
+		opts.IgnoreFiles = append(opts.IgnoreFiles, "012_changelog.sql")
 	}
 
-	if !skipMigrations {
-		opts := &migrate.MigrateOptions{}
-		if !api.UpstreamConf.Valid() {
-			opts.IgnoreFiles = append(opts.IgnoreFiles, "012_changelog.sql")
-		}
-		if err = duty.Migrate(ConnectionString, opts); err != nil {
-			return err
-		}
+	ctx, err := duty.InitDB(ConnectionString, opts)
+	if err != nil {
+		return err
 	}
+
+	Pool = ctx.Pool()
+	Gorm = ctx.DB()
 
 	system := api.Person{}
-	if err = Gorm.Find(&system, "name = ?", "System").Error; err != nil {
+	if err := ctx.DB().Find(&system, "name = ?", "System").Error; err != nil {
 		return err
 	}
 	api.SystemUserID = &system.ID
 	logger.Infof("System user ID: %s", system.ID.String())
+
 	return nil
 }
 
