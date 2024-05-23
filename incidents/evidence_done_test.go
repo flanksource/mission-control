@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/samber/lo"
 )
 
 type dummyConfig struct {
@@ -54,6 +55,7 @@ var _ = ginkgo.Describe("Incident Definition of Done", ginkgo.Ordered, func() {
 		configItem = &models.ConfigItem{
 			ID:          uuid.New(),
 			ConfigClass: "MyConfigClass",
+			Type:        lo.ToPtr("ConfigClass"),
 			Config:      config.String(),
 		}
 		Expect(DefaultContext.DB().Create(configItem).Error).To(BeNil())
@@ -195,6 +197,7 @@ var _ = ginkgo.Describe("Incident Definition of Done Config Item", ginkgo.Ordere
 		configItem = &models.ConfigItem{
 			ID:          uuid.New(),
 			ConfigClass: "MyConfigClass",
+			Type:        lo.ToPtr("ConfigClass"),
 			Config:      config.String(),
 		}
 		tx := DefaultContext.DB().Create(configItem)

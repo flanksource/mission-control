@@ -40,7 +40,7 @@ require (
 	github.com/evanphx/json-patch v5.7.0+incompatible // indirect
 	github.com/exaring/otelpgx v0.5.2 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
-	github.com/flanksource/duty v1.0.470 // indirect
+	github.com/flanksource/duty v1.0.478 // indirect
 	github.com/flanksource/gomplate/v3 v3.24.7 // indirect
 	github.com/flanksource/is-healthy v1.0.4 // indirect
 	github.com/flanksource/kommons v0.31.4 // indirect
