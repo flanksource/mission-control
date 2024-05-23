@@ -63,8 +63,9 @@ func New(ctx context.Context) *echov4.Echo {
 	})
 
 	e.Use(echoprometheus.NewMiddlewareWithConfig(echoprometheus.MiddlewareConfig{
-		Registerer: prom.DefaultRegisterer,
-		Skipper:    telemetryURLSkipper,
+		Registerer:                prom.DefaultRegisterer,
+		Skipper:                   telemetryURLSkipper,
+		DoNotUseRequestPathFor404: true,
 	}))
 
 	e.GET("/metrics", echoprometheus.NewHandlerWithConfig(echoprometheus.HandlerConfig{
