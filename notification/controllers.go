@@ -29,12 +29,27 @@ func TestNotification(c echo.Context) error {
 
 	e := postq.Event{
 		Name:       reqData.EventName,
-		Properties: map[string]string{"id": reqData.ID.String()},
+		Properties: map[string]string{"id": reqData.ID.String(), "event_name": reqData.EventName},
 		CreatedAt:  time.Now(),
 	}
 
 	if err := addNotificationEvent(ctx, e); err != nil {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINTERNAL, "unable to create notification event: %v", err))
+	}
+
+	var payload NotificationEventPayload
+	payload.FromMap(e.Properties)
+
+	ctx.Debugf("[notification.send] %s  ", payload.EventName)
+
+	notificationContext := NewContext(ctx, payload.NotificationID)
+	notificationContext.WithSource(payload.EventName, payload.ID)
+
+	originalEvent := postq.Event{Name: payload.EventName, CreatedAt: payload.EventCreatedAt}
+	celEnv, err := getEnvForEvent(ctx, originalEvent, e.Properties)
+	if err != nil {
+	}
+	if err := SendNotification(notificationContext, payload, celEnv); err != nil {
 	}
 
 	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{Message: "success"})
