@@ -11,6 +11,7 @@ import (
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/samber/lo"
@@ -26,12 +27,26 @@ type RunResponse struct {
 	StartsAt string `json:"starts_at"`
 }
 
+type WebhookRequest struct {
+	Data types.JSONMap `json:"data"`
+	URL  string        `json:"url"`
+}
+
+func newWebhookRequest(c echo.Context) (WebhookRequest, error) {
+	whr := WebhookRequest{
+		URL: c.Request().URL.String(),
+	}
+	err := c.Bind(&whr.Data)
+	return whr, err
+}
+
 type RunParams struct {
 	ID          uuid.UUID         `json:"id"`
 	ConfigID    uuid.UUID         `json:"config_id"`
 	CheckID     uuid.UUID         `json:"check_id"`
 	ComponentID uuid.UUID         `json:"component_id"`
 	Params      map[string]string `json:"params"`
+	Request     WebhookRequest    `json:"request"`
 }
 
 func (r *RunParams) valid() error {
@@ -311,9 +326,11 @@ func HandleWebhook(c echo.Context) error {
 
 	var runRequest RunParams
 	if c.Request().Header.Get("Content-Type") == "application/json" {
-		if err := c.Bind(&runRequest); err != nil {
-			return dutyAPI.WriteError(c, err)
+		whr, err := newWebhookRequest(c)
+		if err != nil {
+			return dutyAPI.WriteError(c, fmt.Errorf("error parsing webhook request data: %w", err))
 		}
+		runRequest.Request = whr
 	}
 	runRequest.ID = playbook.ID
 
