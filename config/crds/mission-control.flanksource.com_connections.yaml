@@ -657,6 +657,54 @@ spec:
                 required:
                 - personalAccessToken
                 type: object
+              gitlab:
+                properties:
+                  personalAccessToken:
+                    properties:
+                      name:
+                        type: string
+                      value:
+                        type: string
+                      valueFrom:
+                        properties:
+                          configMapKeyRef:
+                            properties:
+                              key:
+                                type: string
+                              name:
+                                type: string
+                            required:
+                            - key
+                            type: object
+                          helmRef:
+                            properties:
+                              key:
+                                description: Key is a JSONPath expression used to
+                                  fetch the key from the merged JSON.
+                                type: string
+                              name:
+                                type: string
+                            required:
+                            - key
+                            type: object
+                          secretKeyRef:
+                            properties:
+                              key:
+                                type: string
+                              name:
+                                type: string
+                            required:
+                            - key
+                            type: object
+                          serviceAccount:
+                            description: ServiceAccount specifies the service account
+                              whose token should be fetched
+                            type: string
+                        type: object
+                    type: object
+                required:
+                - personalAccessToken
+                type: object
               http:
                 properties:
                   insecureTLS:

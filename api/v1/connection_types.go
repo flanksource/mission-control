@@ -167,6 +167,10 @@ type ConnectionGitHub struct {
 	PersonalAccessToken types.EnvVar `json:"personalAccessToken"`
 }
 
+type ConnectionGitLab struct {
+	PersonalAccessToken types.EnvVar `json:"personalAccessToken"`
+}
+
 type ConnectionGit struct {
 	URL         string        `json:"string"`
 	Ref         string        `json:"ref"`
@@ -219,6 +223,7 @@ type ConnectionSpec struct {
 	Folder     *ConnectionFolder     `json:"folder,omitempty"`
 	Git        *ConnectionGit        `json:"git,omitempty"`
 	GitHub     *ConnectionGitHub     `json:"github,omitempty"`
+	GitLab     *ConnectionGitLab     `json:"gitlab,omitempty"`
 	HTTP       *ConnectionHTTP       `json:"http,omitempty"`
 	Kubernetes *ConnectionKubernetes `json:"kubernetes,omitempty"`
 	MSSQL      *ConnectionMSSQL      `json:"mssql,omitempty"`
