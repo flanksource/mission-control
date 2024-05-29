@@ -3,6 +3,7 @@ package playbook
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 
@@ -26,17 +27,41 @@ type RunResponse struct {
 	StartsAt string `json:"starts_at"`
 }
 
-type WebhookRequest struct {
-	Data types.JSONMap `json:"data"`
-	URL  string        `json:"url"`
+type webhookRequest struct {
+	URL     string            `json:"url"`
+	Headers map[string]string `json:"headers"`
+	Params  map[string]string `json:"params"`
+	Content string            `json:"content"`
+	JSON    types.JSONMap     `json:"json"`
 }
 
-func newWebhookRequest(c echo.Context) (WebhookRequest, error) {
-	whr := WebhookRequest{
-		URL: c.Request().URL.String(),
+func newWebhookRequest(c echo.Context) (webhookRequest, error) {
+	headers := make(map[string]string)
+	for k := range c.Request().Header {
+		headers[k] = c.Request().Header.Get(k)
 	}
-	err := c.Bind(&whr.Data)
-	return whr, err
+	params := make(map[string]string)
+	for k := range c.QueryParams() {
+		params[k] = c.QueryParam(k)
+	}
+	content, err := io.ReadAll(c.Request().Body)
+	if err != nil {
+		return webhookRequest{}, err
+	}
+
+	whr := webhookRequest{
+		URL:     c.Request().URL.String(),
+		Headers: headers,
+		Params:  params,
+		Content: string(content),
+	}
+
+	if c.Request().Header.Get("Content-Type") == "application/json" {
+		if err := json.Unmarshal(content, &whr.JSON); err != nil {
+			return webhookRequest{}, err
+		}
+	}
+	return whr, nil
 }
 
 type RunParams struct {
@@ -45,7 +70,7 @@ type RunParams struct {
 	CheckID     uuid.UUID         `json:"check_id"`
 	ComponentID uuid.UUID         `json:"component_id"`
 	Params      map[string]string `json:"params"`
-	Request     WebhookRequest    `json:"request"`
+	Request     webhookRequest    `json:"request"`
 }
 
 func (r *RunParams) valid() error {
@@ -321,13 +346,12 @@ func HandleWebhook(c echo.Context) error {
 	}
 
 	var runRequest RunParams
-	if c.Request().Header.Get("Content-Type") == "application/json" {
-		whr, err := newWebhookRequest(c)
-		if err != nil {
-			return dutyAPI.WriteError(c, fmt.Errorf("error parsing webhook request data: %w", err))
-		}
-		runRequest.Request = whr
+	whr, err := newWebhookRequest(c)
+	if err != nil {
+		return dutyAPI.WriteError(c, fmt.Errorf("error parsing webhook request data: %w", err))
 	}
+
+	runRequest.Request = whr
 	runRequest.ID = playbook.ID
 
 	if _, err = validateAndSavePlaybookRun(ctx, playbook, runRequest); err != nil {
