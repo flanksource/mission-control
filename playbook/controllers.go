@@ -13,6 +13,7 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+	"github.com/samber/lo"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -175,7 +176,10 @@ func HandleGetPlaybookParams(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, dutyAPI.HTTPError{Error: "not found", Message: fmt.Sprintf("playbook(id=%s) not found", req.ID)})
 	}
 
-	dummyRun := models.PlaybookRun{PlaybookID: playbook.ID}
+	dummyRun := models.PlaybookRun{
+		PlaybookID: playbook.ID,
+		CreatedBy:  lo.ToPtr(ctx.User().ID),
+	}
 	if req.ComponentID != uuid.Nil {
 		dummyRun.ComponentID = &req.ComponentID
 	}
