@@ -3,7 +3,6 @@ package playbook
 import (
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"time"
 
@@ -11,7 +10,6 @@ import (
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/samber/lo"
@@ -27,50 +25,13 @@ type RunResponse struct {
 	StartsAt string `json:"starts_at"`
 }
 
-type webhookRequest struct {
-	URL     string            `json:"url"`
-	Headers map[string]string `json:"headers"`
-	Params  map[string]string `json:"params"`
-	Content string            `json:"content"`
-	JSON    types.JSONMap     `json:"json"`
-}
-
-func newWebhookRequest(c echo.Context) (webhookRequest, error) {
-	headers := make(map[string]string)
-	for k := range c.Request().Header {
-		headers[k] = c.Request().Header.Get(k)
-	}
-	params := make(map[string]string)
-	for k := range c.QueryParams() {
-		params[k] = c.QueryParam(k)
-	}
-	content, err := io.ReadAll(c.Request().Body)
-	if err != nil {
-		return webhookRequest{}, err
-	}
-
-	whr := webhookRequest{
-		URL:     c.Request().URL.String(),
-		Headers: headers,
-		Params:  params,
-		Content: string(content),
-	}
-
-	if c.Request().Header.Get("Content-Type") == "application/json" {
-		if err := json.Unmarshal(content, &whr.JSON); err != nil {
-			return webhookRequest{}, err
-		}
-	}
-	return whr, nil
-}
-
 type RunParams struct {
-	ID          uuid.UUID         `json:"id"`
-	ConfigID    uuid.UUID         `json:"config_id"`
-	CheckID     uuid.UUID         `json:"check_id"`
-	ComponentID uuid.UUID         `json:"component_id"`
-	Params      map[string]string `json:"params"`
-	Request     webhookRequest    `json:"request"`
+	ID          uuid.UUID               `json:"id"`
+	ConfigID    uuid.UUID               `json:"config_id"`
+	CheckID     uuid.UUID               `json:"check_id"`
+	ComponentID uuid.UUID               `json:"component_id"`
+	Params      map[string]string       `json:"params"`
+	Request     *actions.WebhookRequest `json:"request"`
 }
 
 func (r *RunParams) valid() error {
@@ -349,13 +310,13 @@ func HandleWebhook(c echo.Context) error {
 	}
 
 	var runRequest RunParams
-	whr, err := newWebhookRequest(c)
+	whr, err := actions.NewWebhookRequest(c)
 	if err != nil {
 		return dutyAPI.WriteError(c, fmt.Errorf("error parsing webhook request data: %w", err))
 	}
 
-	runRequest.Request = whr
 	runRequest.ID = playbook.ID
+	runRequest.Request = whr
 
 	if _, err = validateAndSavePlaybookRun(ctx, playbook, runRequest); err != nil {
 		return dutyAPI.WriteError(c, fmt.Errorf("failed to save playbook run: %w", err))
