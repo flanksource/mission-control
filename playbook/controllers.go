@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/utils"
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
@@ -359,7 +358,7 @@ func HandleWebhook(c echo.Context) error {
 	runRequest.ID = playbook.ID
 
 	if _, err = validateAndSavePlaybookRun(ctx, playbook, runRequest); err != nil {
-		logger.Errorf("failed to save playbook run: %v", err)
+		return dutyAPI.WriteError(c, fmt.Errorf("failed to save playbook run: %w", err))
 	}
 
 	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{Message: "ok"})
