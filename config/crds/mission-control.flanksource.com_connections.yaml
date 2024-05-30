@@ -316,6 +316,8 @@ spec:
                             type: string
                         type: object
                     type: object
+                  string:
+                    type: string
                 required:
                 - organization
                 - personalAccessToken
@@ -702,6 +704,8 @@ spec:
                             type: string
                         type: object
                     type: object
+                  string:
+                    type: string
                 required:
                 - personalAccessToken
                 type: object

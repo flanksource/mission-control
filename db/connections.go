@@ -70,6 +70,7 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 	}
 
 	if obj.Spec.AzureDevops != nil {
+		dbObj.URL = obj.Spec.AzureDevops.URL
 		dbObj.Type = models.ConnectionTypeAzureDevops
 		dbObj.Username = obj.Spec.AzureDevops.Organization
 		dbObj.Password = obj.Spec.AzureDevops.PersonalAccessToken.String()
@@ -99,6 +100,7 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 	}
 
 	if obj.Spec.GitLab != nil {
+		dbObj.URL = obj.Spec.GitLab.URL
 		dbObj.Type = models.ConnectionTypeGitlab
 		dbObj.Password = obj.Spec.GitLab.PersonalAccessToken.String()
 	}

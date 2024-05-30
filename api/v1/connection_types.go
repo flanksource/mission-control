@@ -146,6 +146,7 @@ type ConnectionAzure struct {
 }
 
 type ConnectionAzureDevops struct {
+	URL                 string       `json:"string,omitempty"`
 	Organization        string       `json:"organization"`
 	PersonalAccessToken types.EnvVar `json:"personalAccessToken"`
 }
@@ -168,6 +169,7 @@ type ConnectionGitHub struct {
 }
 
 type ConnectionGitLab struct {
+	URL                 string       `json:"string,omitempty"`
 	PersonalAccessToken types.EnvVar `json:"personalAccessToken"`
 }
 
