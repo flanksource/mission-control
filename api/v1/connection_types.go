@@ -165,6 +165,7 @@ type ConnectionKubernetes struct {
 }
 
 type ConnectionGitHub struct {
+	URL                 string       `json:"url,omitempty"`
 	PersonalAccessToken types.EnvVar `json:"personalAccessToken"`
 }
 

@@ -95,6 +95,7 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 	}
 
 	if obj.Spec.GitHub != nil {
+		dbObj.URL = obj.Spec.GitHub.URL
 		dbObj.Type = models.ConnectionTypeGithub
 		dbObj.Password = obj.Spec.GitHub.PersonalAccessToken.String()
 	}

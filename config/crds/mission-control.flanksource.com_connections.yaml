@@ -656,6 +656,8 @@ spec:
                             type: string
                         type: object
                     type: object
+                  url:
+                    type: string
                 required:
                 - personalAccessToken
                 type: object
