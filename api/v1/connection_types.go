@@ -146,6 +146,7 @@ type ConnectionAzure struct {
 }
 
 type ConnectionAzureDevops struct {
+	URL                 string       `json:"string,omitempty"`
 	Organization        string       `json:"organization"`
 	PersonalAccessToken types.EnvVar `json:"personalAccessToken"`
 }
@@ -164,6 +165,12 @@ type ConnectionKubernetes struct {
 }
 
 type ConnectionGitHub struct {
+	URL                 string       `json:"url,omitempty"`
+	PersonalAccessToken types.EnvVar `json:"personalAccessToken"`
+}
+
+type ConnectionGitLab struct {
+	URL                 string       `json:"string,omitempty"`
 	PersonalAccessToken types.EnvVar `json:"personalAccessToken"`
 }
 
@@ -219,6 +226,7 @@ type ConnectionSpec struct {
 	Folder     *ConnectionFolder     `json:"folder,omitempty"`
 	Git        *ConnectionGit        `json:"git,omitempty"`
 	GitHub     *ConnectionGitHub     `json:"github,omitempty"`
+	GitLab     *ConnectionGitLab     `json:"gitlab,omitempty"`
 	HTTP       *ConnectionHTTP       `json:"http,omitempty"`
 	Kubernetes *ConnectionKubernetes `json:"kubernetes,omitempty"`
 	MSSQL      *ConnectionMSSQL      `json:"mssql,omitempty"`
