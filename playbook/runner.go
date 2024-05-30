@@ -287,6 +287,7 @@ func prepareTemplateEnv(ctx context.Context, playbook models.Playbook, run model
 		Params:   make(map[string]any, len(run.Parameters)),
 		Run:      run,
 		Playbook: playbook,
+		Request:  run.Request,
 	}
 
 	var spec v1.PlaybookSpec

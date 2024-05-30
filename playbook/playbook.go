@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flanksource/commons/collections"
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -37,6 +38,7 @@ func validateAndSavePlaybookRun(ctx context.Context, playbook *models.Playbook, 
 		Status:     models.PlaybookRunStatusPending,
 		Parameters: req.Params,
 	}
+
 	if ctx.User() != nil {
 		run.CreatedBy = &ctx.User().ID
 	}
@@ -55,6 +57,18 @@ func validateAndSavePlaybookRun(ctx context.Context, playbook *models.Playbook, 
 
 	if req.CheckID != uuid.Nil {
 		run.CheckID = &req.CheckID
+	}
+
+	if req.Request != nil {
+		whr, err := collections.StructToJSON(req.Request)
+		if err != nil {
+			return nil, fmt.Errorf("error marshalling webhook request to json: %w", err)
+		}
+		var whrMap map[string]any
+		if err := json.Unmarshal([]byte(whr), &whrMap); err != nil {
+			return nil, fmt.Errorf("error unmarshalling webhook request from json: %w", err)
+		}
+		run.Request = whrMap
 	}
 
 	templateEnv, err := prepareTemplateEnv(ctx, *playbook, run)
