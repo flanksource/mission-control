@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
@@ -72,38 +74,25 @@ func getGitOpsTemplateVars(ctx context.Context, run models.PlaybookRun, actions 
 	var gitOpsEnv GitOpsEnv
 
 	gitRepos := query.TraverseConfig(ctx, run.ConfigID.String(), "Kubernetes::Kustomization/Kubernetes::GitRepository", string(models.RelatedConfigTypeIncoming))
-	if len(gitRepos) > 0 {
+	if len(gitRepos) > 0 && gitRepos[0].Config != nil {
 		var config map[string]any
 		if err := json.Unmarshal([]byte(*gitRepos[0].Config), &config); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 		}
 
-		if spec, ok := config["spec"].(map[string]any); ok {
-			gitOpsEnv.Git.URL = spec["url"].(string)
-
-			if ref, ok := spec["ref"].(map[string]any); ok {
-				gitOpsEnv.Git.Branch = ref["branch"].(string)
-			}
-		}
-
-		if metadata, ok := config["metadata"].(map[string]any); ok {
-			if annotations, ok := metadata["annotations"].(map[string]string); ok {
-				gitOpsEnv.Git.File = annotations["config.kubernetes.io/origin"]
-			}
-		}
+		gitOpsEnv.Git.URL, _, _ = unstructured.NestedString(config, "spec", "url")
+		gitOpsEnv.Git.Branch, _, _ = unstructured.NestedString(config, "spec", "ref", "branch")
+		gitOpsEnv.Git.File, _, _ = unstructured.NestedString(config, "metadata", "annotations", "config.kubernetes.io/origin")
 	}
 
 	kustomization := query.TraverseConfig(ctx, run.ConfigID.String(), "Kubernetes::Kustomization", string(models.RelatedConfigTypeIncoming))
-	if len(kustomization) > 0 {
+	if len(kustomization) > 0 && kustomization[0].Config != nil {
 		var config map[string]any
 		if err := json.Unmarshal([]byte(*kustomization[0].Config), &config); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 		}
-		gitOpsEnv.Kustomize.Path = config["spec"].(map[string]any)["path"].(string)
 
-		if spec, ok := config["spec"].(map[string]any); ok {
-			gitOpsEnv.Kustomize.Path = spec["path"].(string)
-		}
+		gitOpsEnv.Kustomize.Path, _, _ = unstructured.NestedString(config, "spec", "path")
 	}
 
 	return &gitOpsEnv, nil
