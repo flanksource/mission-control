@@ -55,7 +55,7 @@ type TemplateEnv struct {
 	Run       models.PlaybookRun `json:"run"`
 	Params    map[string]any     `json:"params,omitempty"`
 	Request   types.JSONMap      `json:"request"`
-	Env       map[string]string  `json:"env,omitempty"`
+	Env       map[string]any     `json:"env,omitempty"`
 
 	// User is the user who triggered the playbook run
 	User *models.Person `json:"user,omitempty"`
