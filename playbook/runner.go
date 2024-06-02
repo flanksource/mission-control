@@ -288,6 +288,7 @@ func prepareTemplateEnv(ctx context.Context, playbook models.Playbook, run model
 		Run:      run,
 		Playbook: playbook,
 		Request:  run.Request,
+		Env:      make(map[string]any),
 	}
 
 	var spec v1.PlaybookSpec
@@ -369,6 +370,19 @@ func prepareTemplateEnv(ctx context.Context, playbook models.Playbook, run model
 		}
 	}
 
+	// isParamRenderCall is true when we are crafting the template env
+	// just to render the parameters.
+	// i.e. for a dummy run.
+	isParamRenderCall := run.ID == uuid.Nil
+
+	if !isParamRenderCall {
+		if gitOpsEnvVar, err := getGitOpsTemplateVars(ctx, run, spec.Actions); err != nil {
+			return templateEnv, fmt.Errorf("failed to get gitops vars: %w", err)
+		} else if gitOpsEnvVar != nil {
+			templateEnv.Env = collections.MergeMap(templateEnv.Env, gitOpsEnvVar.AsMap())
+		}
+	}
+
 	return templateEnv, nil
 }
 
@@ -434,7 +448,6 @@ func templateAndExecuteAction(ctx context.Context, envs []types.EnvVar, playbook
 		return fmt.Errorf("failed to walk envs: %w", err)
 	}
 
-	templateEnv.Env = make(map[string]string, len(envs))
 	for _, e := range envs {
 		val, err := ctx.GetEnvValueFromCache(e, ctx.GetNamespace())
 		if err != nil {
