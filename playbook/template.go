@@ -3,6 +3,7 @@ package playbook
 import (
 	"encoding/json"
 	"fmt"
+	"gopkg.in/yaml.v3"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 
@@ -82,7 +83,15 @@ func getGitOpsTemplateVars(ctx context.Context, run models.PlaybookRun, actions 
 
 		gitOpsEnv.Git.URL, _, _ = unstructured.NestedString(config, "spec", "url")
 		gitOpsEnv.Git.Branch, _, _ = unstructured.NestedString(config, "spec", "ref", "branch")
-		gitOpsEnv.Git.File, _, _ = unstructured.NestedString(config, "metadata", "annotations", "config.kubernetes.io/origin")
+		_origin, _, _ := unstructured.NestedString(config, "metadata", "annotations", "config.kubernetes.io/origin")
+		if _origin != "" {
+			var origin map[string]any
+			if err := yaml.Unmarshal([]byte(_origin), &origin); err != nil {
+				ctx.Tracef("failed to unmarshal origin: %v", err)
+			} else if path, ok := origin["path"]; ok {
+				gitOpsEnv.Git.File = path.(string)
+			}
+		}
 	}
 
 	kustomization := query.TraverseConfig(ctx, run.ConfigID.String(), "Kubernetes::Kustomization", string(models.RelatedConfigTypeIncoming))
