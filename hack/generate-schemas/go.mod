@@ -3,8 +3,8 @@ module github.com/flanksource/kopper/hack/generate-schemas
 go 1.22.3
 
 require (
-	github.com/alecthomas/jsonschema v0.0.0-20220216202328-9eeeec9d044b
 	github.com/flanksource/commons v1.22.1
+	github.com/flanksource/duty v1.0.486
 	github.com/flanksource/incident-commander v0.0.0-00010101000000-000000000000
 	github.com/spf13/cobra v1.8.0
 )
@@ -28,8 +28,10 @@ require (
 	github.com/apparentlymart/go-textseg/v15 v15.0.0 // indirect
 	github.com/asecurityteam/rolling v2.0.4+incompatible // indirect
 	github.com/aws/aws-sdk-go v1.49.16 // indirect
+	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bgentry/go-netrc v0.0.0-20140422174119-9fd32a8b3d3d // indirect
+	github.com/buger/jsonparser v1.1.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.2.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
@@ -40,7 +42,6 @@ require (
 	github.com/evanphx/json-patch v5.7.0+incompatible // indirect
 	github.com/exaring/otelpgx v0.5.2 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
-	github.com/flanksource/duty v1.0.486 // indirect
 	github.com/flanksource/gomplate/v3 v3.24.7 // indirect
 	github.com/flanksource/is-healthy v1.0.4 // indirect
 	github.com/flanksource/kommons v0.31.4 // indirect
@@ -81,9 +82,9 @@ require (
 	github.com/hashicorp/go-version v1.6.0 // indirect
 	github.com/hashicorp/hcl/v2 v2.19.1 // indirect
 	github.com/henvic/httpretty v0.1.3 // indirect
-	github.com/iancoleman/orderedmap v0.0.0-20190318233801-ac98e3ecb4b0 // indirect
 	github.com/imdario/mergo v0.3.16 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/invopop/jsonschema v0.12.0 // indirect
 	github.com/itchyny/gojq v0.12.14 // indirect
 	github.com/itchyny/timefmt-go v0.1.5 // indirect
 	github.com/jackc/pgerrcode v0.0.0-20220416144525-469b46aa5efa // indirect
@@ -146,6 +147,10 @@ require (
 	github.com/vadimi/go-ntlm v1.2.1 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
+	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
+	github.com/xeipuuv/gojsonpointer v0.0.0-20180127040702-4e3ac2762d5f // indirect
+	github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415 // indirect
+	github.com/xeipuuv/gojsonschema v1.2.0 // indirect
 	github.com/xlab/treeprint v1.2.0 // indirect
 	github.com/yuin/gopher-lua v1.1.1 // indirect
 	github.com/zclconf/go-cty v1.14.1 // indirect
