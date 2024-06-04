@@ -301,6 +301,7 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 		dbObj.Password = obj.Spec.Telegram.Token.String()
 	}
 
+	obj.Status.Ref = fmt.Sprintf("connection://%s/%s", obj.Namespace, obj.Name)
 	return ctx.DB().Save(&dbObj).Error
 }
 

@@ -2830,6 +2830,12 @@ spec:
             type: object
           status:
             description: ConnectionStatus defines the observed state of Connection
+            properties:
+              ref:
+                description: Ref is the connection string
+                type: string
+            required:
+            - ref
             type: object
         type: object
     served: true
