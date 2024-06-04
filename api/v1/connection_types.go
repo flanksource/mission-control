@@ -266,7 +266,8 @@ type ConnectionSpec struct {
 
 // ConnectionStatus defines the observed state of Connection
 type ConnectionStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
+	// Ref is the connection string
+	Ref string `json:"ref"`
 }
 
 //+kubebuilder:object:root=true
