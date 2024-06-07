@@ -33,6 +33,8 @@ func validateAndSavePlaybookRun(ctx context.Context, playbook *models.Playbook, 
 		return nil, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid parameters: %v", err)
 	}
 
+	ctx = ctx.WithNamespace(playbook.Namespace)
+
 	run := models.PlaybookRun{
 		PlaybookID: playbook.ID,
 		Status:     models.PlaybookRunStatusPending,

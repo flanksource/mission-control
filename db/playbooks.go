@@ -192,6 +192,7 @@ func PersistPlaybookFromCRD(ctx context.Context, obj *v1.Playbook) error {
 	dbObj := models.Playbook{
 		ID:        uuid.MustParse(string(obj.GetUID())),
 		Name:      name,
+		Namespace: obj.Namespace,
 		Spec:      specJSON,
 		Source:    models.SourceCRD,
 		CreatedBy: api.SystemUserID,

@@ -176,6 +176,8 @@ func HandleGetPlaybookParams(c echo.Context) error {
 		return c.JSON(http.StatusNotFound, dutyAPI.HTTPError{Error: "not found", Message: fmt.Sprintf("playbook(id=%s) not found", req.ID)})
 	}
 
+	ctx = ctx.WithNamespace(playbook.Namespace)
+
 	dummyRun := models.PlaybookRun{
 		PlaybookID: playbook.ID,
 		CreatedBy:  lo.ToPtr(ctx.User().ID),
