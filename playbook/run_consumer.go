@@ -203,6 +203,8 @@ func ActionConsumer(c postq.Context) (int, error) {
 			return 0, &playbookRunError{RunID: runID, ActionID: foundActions[i].ID, Err: fmt.Errorf("failed to get the playbook for the given action(%s): %w", foundActions[i].ID, err)}
 		}
 
+		ctx = ctx.WithNamespace(playbook.Namespace)
+
 		var playbookSpec v1.PlaybookSpec
 		if err := json.Unmarshal(playbook.Spec, &playbookSpec); err != nil {
 			return 0, &playbookRunError{RunID: runID, ActionID: foundActions[i].ID, Err: fmt.Errorf("failed to unmarshal playbook spec: %w", err)}

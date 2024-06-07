@@ -127,6 +127,7 @@ func GetActionForAgent(ctx context.Context, agent *models.Agent) (*ActionForAgen
 	if err := ctx.DB().Where("id = ?", run.PlaybookID).First(&playbook).Error; err != nil {
 		return nil, err
 	}
+	ctx = ctx.WithNamespace(playbook.Namespace)
 
 	if err := ctx.DB().Model(&models.PlaybookRun{}).Where("id = ?", run.ID).UpdateColumns(map[string]any{"status": models.PlaybookRunStatusRunning}).Error; err != nil {
 		return nil, fmt.Errorf("failed to update playbook run status: %w", err)
@@ -209,6 +210,8 @@ func HandleRun(ctx context.Context, run models.PlaybookRun) error {
 	if err := ctx.DB().First(&playbook, run.PlaybookID).Error; err != nil {
 		return fmt.Errorf("failed to fetch playbook(%s): %w", run.PlaybookID, err)
 	}
+
+	ctx = ctx.WithNamespace(playbook.Namespace)
 
 	action, err := getNextActionToRun(ctx, playbook, run.ID)
 	if err != nil {
