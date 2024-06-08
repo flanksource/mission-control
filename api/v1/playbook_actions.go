@@ -181,7 +181,7 @@ type Authentication struct {
 }
 
 type HTTPAction struct {
-	HTTPConnection `yaml:",inline" json:",inline"`
+	HTTPConnection `yaml:",inline" json:",inline" template:"true"`
 	// Method to use - defaults to GET
 	Method string `yaml:"method,omitempty" json:"method,omitempty"`
 	// NTLM when set to true will do authentication using NTLM v1 protocol
