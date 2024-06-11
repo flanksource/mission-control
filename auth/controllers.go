@@ -27,7 +27,7 @@ func (k *KratosHandler) InviteUser(c echo.Context) error {
 	var reqData InviteUserRequest
 	if err := c.Bind(&reqData); err != nil {
 		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{
-			Error:   err.Error(),
+			Err:     err.Error(),
 			Message: "Invalid request body",
 		})
 	}
@@ -37,27 +37,27 @@ func (k *KratosHandler) InviteUser(c echo.Context) error {
 		// User already exists
 		if strings.Contains(err.Error(), http.StatusText(http.StatusConflict)) {
 			return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
-				Error:   "User already exists",
+				Err:     "User already exists",
 				Message: "Error creating user",
 			})
 		}
 
 		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
-			Error:   err.Error(),
+			Err:     err.Error(),
 			Message: "Error creating user",
 		})
 	}
 
 	link, err := k.createRecoveryLink(c.Request().Context(), identity.Id)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Error: err.Error(), Message: "error creating recovery link"})
+		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Err: err.Error(), Message: "error creating recovery link"})
 	}
 
 	body := fmt.Sprintf(inviteUserTemplate, reqData.FirstName, link)
 	inviteMail := mail.New(reqData.Email, "User Invite", body, "text/html")
 	if err = inviteMail.Send(); err != nil {
 		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
-			Error:   err.Error(),
+			Err:     err.Error(),
 			Message: "Error sending email",
 		})
 	}
@@ -75,21 +75,21 @@ func UpdateAccountState(c echo.Context) error {
 	}
 	if err := c.Bind(&reqData); err != nil {
 		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
-			Error:   err.Error(),
+			Err:     err.Error(),
 			Message: "Invalid request body",
 		})
 	}
 
 	if !oryclient.IdentityState(reqData.State).IsValid() {
 		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
-			Error:   fmt.Sprintf("Invalid state: %s", reqData.State),
+			Err:     fmt.Sprintf("Invalid state: %s", reqData.State),
 			Message: fmt.Sprintf("Invalid state. Allowed values are %s", oryclient.AllowedIdentityStateEnumValues),
 		})
 	}
 
 	if err := db.UpdateIdentityState(ctx, reqData.ID, reqData.State); err != nil {
 		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
-			Error:   err.Error(),
+			Err:     err.Error(),
 			Message: "Error updating database",
 		})
 	}
@@ -103,7 +103,7 @@ func UpdateAccountProperties(c echo.Context) error {
 	var props api.PersonProperties
 	if err := c.Bind(&props); err != nil {
 		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
-			Error:   err.Error(),
+			Err:     err.Error(),
 			Message: "Invalid request body",
 		})
 	}
@@ -111,7 +111,7 @@ func UpdateAccountProperties(c echo.Context) error {
 	err := db.UpdateUserProperties(ctx, c.Param("id"), props)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
-			Error:   err.Error(),
+			Err:     err.Error(),
 			Message: "Error updating database",
 		})
 	}
@@ -125,7 +125,7 @@ func WhoAmI(c echo.Context) error {
 	user, err := db.GetUserByID(ctx, userID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
-			Error:   err.Error(),
+			Err:     err.Error(),
 			Message: "Error fetching user",
 		})
 	}

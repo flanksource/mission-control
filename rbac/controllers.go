@@ -14,14 +14,14 @@ func UpdateRoleForUser(c echo.Context) error {
 	}{}
 	if err := c.Bind(&reqData); err != nil {
 		return c.JSON(http.StatusBadRequest, api.HTTPError{
-			Error:   err.Error(),
+			Err:     err.Error(),
 			Message: "Invalid request body",
 		})
 	}
 
 	if _, err := Enforcer.AddRolesForUser(userID, reqData.Roles); err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{
-			Error:   err.Error(),
+			Err:     err.Error(),
 			Message: "Error updating roles",
 		})
 	}
@@ -36,7 +36,7 @@ func GetRolesForUser(c echo.Context) error {
 	roles, err := Enforcer.GetRolesForUser(userID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{
-			Error:   err.Error(),
+			Err:     err.Error(),
 			Message: "Error getting roles",
 		})
 

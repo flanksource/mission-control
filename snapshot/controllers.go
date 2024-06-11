@@ -54,14 +54,14 @@ func Topology(c echo.Context) error {
 	ctx := NewSnapshotContext(c)
 	if err := os.MkdirAll(ctx.Directory, os.ModePerm); err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{
-			Error:   err.Error(),
+			Err:     err.Error(),
 			Message: "Error creating directory",
 		})
 	}
 
 	if err := topologySnapshot(ctx, id, related); err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{
-			Error:   err.Error(),
+			Err:     err.Error(),
 			Message: "Error snapshotting topology",
 		})
 	}
@@ -77,14 +77,14 @@ func Incident(c echo.Context) error {
 	ctx := NewSnapshotContext(c)
 	if err := os.MkdirAll(ctx.Directory, os.ModePerm); err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{
-			Error:   err.Error(),
+			Err:     err.Error(),
 			Message: "Error creating directory",
 		})
 	}
 
 	if err := incidentSnapshot(ctx, id); err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{
-			Error:   err.Error(),
+			Err:     err.Error(),
 			Message: "Error snapshotting incident",
 		})
 	}
@@ -100,14 +100,14 @@ func Config(c echo.Context) error {
 	ctx := NewSnapshotContext(c)
 	if err := os.MkdirAll(ctx.Directory, os.ModePerm); err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{
-			Error:   err.Error(),
+			Err:     err.Error(),
 			Message: "Error creating directory",
 		})
 	}
 
 	if err := configSnapshot(ctx, id, related); err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{
-			Error:   err.Error(),
+			Err:     err.Error(),
 			Message: "Error snapshotting config",
 		})
 	}
