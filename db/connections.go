@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -282,6 +283,16 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 		dbObj.Type = models.ConnectionTypePushover
 		dbObj.Username = obj.Spec.Pushover.User
 		dbObj.Password = obj.Spec.Pushover.Token.String()
+	}
+
+	if obj.Spec.Prometheus != nil {
+		dbObj.Type = models.ConnectionTypePrometheus
+		dbObj.Username = obj.Spec.Prometheus.Auth.Username.String()
+		dbObj.Password = obj.Spec.Prometheus.Auth.Password.String()
+		dbObj.Properties = collections.MergeMap(
+			obj.Spec.Prometheus.Auth.OAuth.AsProperties(),
+			map[string]string{"bearer": obj.Spec.Prometheus.Auth.Bearer.String()},
+		)
 	}
 
 	if obj.Spec.Slack != nil {

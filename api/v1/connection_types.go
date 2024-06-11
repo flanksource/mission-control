@@ -89,6 +89,14 @@ type ConnectionPostgres struct {
 	InsecureTLS bool         `json:"insecureTLS,omitempty"`
 }
 
+type ConnectionPrometheus struct {
+	// URL is the connection url.
+	URL types.EnvVar `json:"url,omitempty"`
+
+	Auth        types.Authentication `json:",inline"`
+	InsecureTLS bool                 `json:"insecureTLS,omitempty"`
+}
+
 type ConnectionMySQL struct {
 	// URL is the connection url.
 	URL types.EnvVar `json:"url,omitempty"`
@@ -233,6 +241,7 @@ type ConnectionSpec struct {
 	Mongo      *ConnectionMongo      `json:"mongo,omitempty"`
 	MySQL      *ConnectionMySQL      `json:"mysql,omitempty"`
 	Postgres   *ConnectionPostgres   `json:"postgres,omitempty"`
+	Prometheus *ConnectionPrometheus `json:"prometheus,omitempty"`
 	SFTP       *ConnectionSFTP       `json:"sftp,omitempty"`
 	SMB        *ConnectionSMB        `json:"smb,omitempty"`
 

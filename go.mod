@@ -12,7 +12,7 @@ require (
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.25.0 // indirect
 	github.com/flanksource/commons v1.22.1
-	github.com/flanksource/duty v1.0.494
+	github.com/flanksource/duty v1.0.495
 	github.com/flanksource/gomplate/v3 v3.24.7
 	github.com/flanksource/kopper v1.0.9
 	github.com/flanksource/postq v0.1.5
@@ -48,7 +48,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/credentials v1.16.14
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.48.0
 	github.com/aws/aws-sdk-go-v2/service/sts v1.26.7
-	github.com/flanksource/artifacts v1.0.6
+	github.com/flanksource/artifacts v1.0.7
 	github.com/fluxcd/pkg/gittestserver v0.8.6
 	github.com/go-git/go-billy/v5 v5.5.0
 	github.com/go-git/go-git/v5 v5.12.0
