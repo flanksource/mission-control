@@ -26,14 +26,14 @@ func LogsHandler(c echo.Context) error {
 	}
 	if err := c.Bind(&reqData); err != nil {
 		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{
-			Error:   err.Error(),
+			Err:     err.Error(),
 			Message: "Invalid request body",
 		})
 	}
 
 	if reqData.ID == "" {
 		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{
-			Error:   "ID field is required",
+			Err:     "ID field is required",
 			Message: "Component ID is required",
 		})
 	}
@@ -41,7 +41,7 @@ func LogsHandler(c echo.Context) error {
 	component, err := query.GetComponent(ctx, reqData.ID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
-			Error:   err.Error(),
+			Err:     err.Error(),
 			Message: fmt.Sprintf("Failed to get component[id=%s]", reqData.ID),
 		})
 	}
@@ -49,7 +49,7 @@ func LogsHandler(c echo.Context) error {
 	logSelector := getLogSelectorByName(component.LogSelectors, reqData.Name)
 	if logSelector == nil {
 		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{
-			Error:   "Log selector was not found",
+			Err:     "Log selector was not found",
 			Message: fmt.Sprintf("Log selector with the name '%s' was not found. Available names: [%s]", reqData.Name, strings.Join(getSelectorNames(component.LogSelectors), ", ")),
 		})
 	}
@@ -57,7 +57,7 @@ func LogsHandler(c echo.Context) error {
 	templater := ctx.NewStructTemplater(component.GetAsEnvironment(), "", nil)
 	if err := templater.Walk(logSelector); err != nil {
 		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
-			Error:   err.Error(),
+			Err:     err.Error(),
 			Message: "failed to parse log selector templates.",
 		})
 	}
@@ -71,14 +71,14 @@ func LogsHandler(c echo.Context) error {
 	resp, err := makePostRequest(fmt.Sprintf("%s/%s", api.ApmHubPath, "search"), apmHubPayload)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
-			Error:   err.Error(),
+			Err:     err.Error(),
 			Message: "Failed to query apm-hub.",
 		})
 	}
 
 	if err := c.Stream(resp.StatusCode, resp.Header.Get("Content-Type"), resp.Body); err != nil {
 		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
-			Error:   err.Error(),
+			Err:     err.Error(),
 			Message: "Failed to stream response.",
 		})
 	}

@@ -66,7 +66,7 @@ var _ = ginkgo.BeforeSuite(func() {
 
 		agent := ctx.Agent()
 		if agent == nil {
-			return c.JSON(http.StatusNotFound, dutyAPI.HTTPError{Error: "not found", Message: "agent not found"})
+			return c.JSON(http.StatusNotFound, dutyAPI.HTTPError{Err: "not found", Message: "agent not found"})
 		}
 
 		response, err := GetActionForAgent(ctx, agent)

@@ -133,18 +133,18 @@ func HandlePlaybookRun(c echo.Context) error {
 
 	var req RunParams
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{Error: err.Error(), Message: "invalid request"})
+		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{Err: err.Error(), Message: "invalid request"})
 	}
 
 	if err := req.valid(); err != nil {
-		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{Error: err.Error(), Message: "invalid request"})
+		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{Err: err.Error(), Message: "invalid request"})
 	}
 
 	playbook, err := db.FindPlaybook(ctx, req.ID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Error: err.Error(), Message: "failed to get playbook"})
+		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Err: err.Error(), Message: "failed to get playbook"})
 	} else if playbook == nil {
-		return c.JSON(http.StatusNotFound, dutyAPI.HTTPError{Error: "not found", Message: fmt.Sprintf("playbook(id=%s) not found", req.ID)})
+		return c.JSON(http.StatusNotFound, dutyAPI.HTTPError{Err: "not found", Message: fmt.Sprintf("playbook(id=%s) not found", req.ID)})
 	}
 
 	run, err := validateAndSavePlaybookRun(ctx, playbook, req)
@@ -163,17 +163,17 @@ func HandleGetPlaybookParams(c echo.Context) error {
 
 	var req RunParams
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{Error: err.Error(), Message: "invalid request"})
+		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{Err: err.Error(), Message: "invalid request"})
 	}
 	if err := req.valid(); err != nil {
-		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{Error: err.Error(), Message: "invalid request"})
+		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{Err: err.Error(), Message: "invalid request"})
 	}
 
 	playbook, err := db.FindPlaybook(ctx, req.ID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Error: err.Error(), Message: "failed to get playbook"})
+		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Err: err.Error(), Message: "failed to get playbook"})
 	} else if playbook == nil {
-		return c.JSON(http.StatusNotFound, dutyAPI.HTTPError{Error: "not found", Message: fmt.Sprintf("playbook(id=%s) not found", req.ID)})
+		return c.JSON(http.StatusNotFound, dutyAPI.HTTPError{Err: "not found", Message: fmt.Sprintf("playbook(id=%s) not found", req.ID)})
 	}
 
 	ctx = ctx.WithNamespace(playbook.Namespace)
@@ -194,16 +194,16 @@ func HandleGetPlaybookParams(c echo.Context) error {
 
 	env, err := prepareTemplateEnv(ctx, *playbook, dummyRun)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Error: err.Error(), Message: "unable to prepare template env"})
+		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Err: err.Error(), Message: "unable to prepare template env"})
 	}
 
 	var spec v1.PlaybookSpec
 	if err := json.Unmarshal(playbook.Spec, &spec); err != nil {
-		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Error: err.Error(), Message: "failed to unmarshal playbook spec"})
+		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Err: err.Error(), Message: "failed to unmarshal playbook spec"})
 	}
 
 	if err := checkPlaybookFilter(ctx, spec, env); err != nil {
-		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Error: "Playbook validation failed", Message: err.Error()})
+		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Err: "Playbook validation failed", Message: err.Error()})
 	}
 
 	templater := ctx.NewStructTemplater(env.AsMap(), "template", nil)
@@ -241,7 +241,7 @@ func HandlePlaybookList(c echo.Context) error {
 	)
 
 	if configID == "" && componentID == "" && checkID == "" {
-		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{Error: "provide exactly one of: config_id, check_id or component_id", Message: "invalid request"})
+		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{Err: "provide exactly one of: config_id, check_id or component_id", Message: "invalid request"})
 	}
 
 	var playbooks []api.PlaybookListItem
@@ -276,12 +276,12 @@ func HandlePlaybookRunApproval(c echo.Context) error {
 
 	playbookUUID, err := uuid.Parse(playbookID)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{Error: err.Error(), Message: "invalid playbook id"})
+		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{Err: err.Error(), Message: "invalid playbook id"})
 	}
 
 	runUUID, err := uuid.Parse(runID)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{Error: err.Error(), Message: "invalid run id"})
+		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{Err: err.Error(), Message: "invalid run id"})
 	}
 
 	if err := ApproveRun(ctx, playbookUUID, runUUID); err != nil {
@@ -299,12 +299,12 @@ func HandleWebhook(c echo.Context) error {
 	if err != nil {
 		return dutyAPI.WriteError(c, err)
 	} else if playbook == nil {
-		return c.JSON(http.StatusNotFound, dutyAPI.HTTPError{Error: "not found", Message: fmt.Sprintf("playbook(webhook_path=%s) not found", path)})
+		return c.JSON(http.StatusNotFound, dutyAPI.HTTPError{Err: "not found", Message: fmt.Sprintf("playbook(webhook_path=%s) not found", path)})
 	}
 
 	var spec v1.PlaybookSpec
 	if err := json.Unmarshal(playbook.Spec, &spec); err != nil {
-		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Error: err.Error(), Message: "playbook has an invalid spec"})
+		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Err: err.Error(), Message: "playbook has an invalid spec"})
 	}
 
 	if err := authenticateWebhook(ctx, c.Request(), spec.On.Webhook.Authentication); err != nil {
