@@ -1,1 +1,962 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://github.com/flanksource/incident-commander/api/v1/playbook-spec","$ref":"#/$defs/PlaybookSpec","$defs":{"AWSConnection":{"properties":{"connection":{"type":"string"},"accessKey":{"$ref":"#/$defs/EnvVar"},"secretKey":{"$ref":"#/$defs/EnvVar"},"sessionToken":{"$ref":"#/$defs/EnvVar"},"region":{"type":"string"},"endpoint":{"type":"string"},"skipTLSVerify":{"type":"boolean"},"objectPath":{"type":"string"},"usePathStyle":{"type":"boolean"}},"additionalProperties":false,"type":"object"},"Artifact":{"properties":{"path":{"type":"string"}},"additionalProperties":false,"type":"object","required":["path"]},"AzureConnection":{"properties":{"connection":{"type":"string"},"clientID":{"$ref":"#/$defs/EnvVar"},"clientSecret":{"$ref":"#/$defs/EnvVar"},"tenantID":{"type":"string"}},"additionalProperties":false,"type":"object"},"AzureDevopsPipeline":{"properties":{"id":{"type":"string"},"version":{"type":"string"}},"additionalProperties":false,"type":"object","required":["id"]},"AzureDevopsPipelineAction":{"properties":{"org":{"type":"string"},"project":{"type":"string"},"token":{"$ref":"#/$defs/EnvVar"},"pipeline":{"$ref":"#/$defs/AzureDevopsPipeline"},"parameters":{"$ref":"#/$defs/AzureDevopsPipelineParameters"}},"additionalProperties":false,"type":"object","required":["org","project","token","pipeline"]},"AzureDevopsPipelineParameters":{"properties":{"resources":true,"templateParameters":true,"variables":true,"stagesToSkip":{"items":{"type":"string"},"type":"array"}},"additionalProperties":false,"type":"object"},"ConfigMapKeySelector":{"properties":{"name":{"type":"string"},"key":{"type":"string"}},"additionalProperties":false,"type":"object","required":["key"]},"EnvVar":{"properties":{"name":{"type":"string"},"value":{"type":"string"},"valueFrom":{"$ref":"#/$defs/EnvVarSource"}},"additionalProperties":false,"type":"object"},"EnvVarSource":{"properties":{"serviceAccount":{"type":"string"},"helmRef":{"$ref":"#/$defs/HelmRefKeySelector"},"configMapKeyRef":{"$ref":"#/$defs/ConfigMapKeySelector"},"secretKeyRef":{"$ref":"#/$defs/SecretKeySelector"}},"additionalProperties":false,"type":"object"},"ExecAction":{"properties":{"script":{"type":"string"},"connections":{"$ref":"#/$defs/ExecConnections"},"artifacts":{"items":{"$ref":"#/$defs/Artifact"},"type":"array"},"env":{"items":{"$ref":"#/$defs/EnvVar"},"type":"array"},"checkout":{"$ref":"#/$defs/GitCheckout"}},"additionalProperties":false,"type":"object","required":["script"]},"ExecConnections":{"properties":{"aws":{"$ref":"#/$defs/AWSConnection"},"gcp":{"$ref":"#/$defs/GCPConnection"},"azure":{"$ref":"#/$defs/AzureConnection"}},"additionalProperties":false,"type":"object"},"GCPConnection":{"properties":{"connection":{"type":"string"},"endpoint":{"type":"string"},"credentials":{"$ref":"#/$defs/EnvVar"}},"additionalProperties":false,"type":"object"},"GitCheckout":{"properties":{"url":{"type":"string"},"connection":{"type":"string"},"username":{"$ref":"#/$defs/EnvVar"},"password":{"$ref":"#/$defs/EnvVar"},"certificate":{"$ref":"#/$defs/EnvVar"},"destination":{"type":"string"}},"additionalProperties":false,"type":"object"},"GitOpsAction":{"properties":{"repo":{"$ref":"#/$defs/GitOpsActionRepo"},"commit":{"$ref":"#/$defs/GitOpsActionCommit"},"pr":{"$ref":"#/$defs/GitOpsActionPR"},"patches":{"items":{"$ref":"#/$defs/GitOpsActionPatch"},"type":"array"},"files":{"items":{"$ref":"#/$defs/GitOpsActionFile"},"type":"array"}},"additionalProperties":false,"type":"object","required":["repo","commit"]},"GitOpsActionCommit":{"properties":{"author":{"type":"string"},"email":{"type":"string"},"message":{"type":"string"}},"additionalProperties":false,"type":"object","required":["author","email","message"]},"GitOpsActionFile":{"properties":{"path":{"type":"string"},"content":{"type":"string"}},"additionalProperties":false,"type":"object","required":["path","content"]},"GitOpsActionPR":{"properties":{"title":{"type":"string"},"tags":{"items":{"type":"string"},"type":"array"}},"additionalProperties":false,"type":"object","required":["title"]},"GitOpsActionPatch":{"properties":{"path":{"type":"string"},"yq":{"type":"string"},"jq":{"type":"string"}},"additionalProperties":false,"type":"object","required":["path"]},"GitOpsActionRepo":{"properties":{"url":{"type":"string"},"base":{"type":"string"},"branch":{"type":"string"},"connection":{"type":"string"},"type":{"type":"string"}},"additionalProperties":false,"type":"object","required":["url"]},"GithubAction":{"properties":{"repo":{"type":"string"},"username":{"type":"string"},"token":{"$ref":"#/$defs/EnvVar"},"workflows":{"items":{"$ref":"#/$defs/GithubWorkflow"},"type":"array"}},"additionalProperties":false,"type":"object","required":["repo","username","token"]},"GithubWorkflow":{"properties":{"id":{"type":"string"},"ref":{"type":"string"},"input":{"type":"string"}},"additionalProperties":false,"type":"object","required":["id"]},"HTTPAction":{"properties":{"connection":{"type":"string"},"url":{"type":"string"},"username":{"$ref":"#/$defs/EnvVar"},"password":{"$ref":"#/$defs/EnvVar"},"method":{"type":"string"},"ntlm":{"type":"boolean"},"ntlmv2":{"type":"boolean"},"headers":{"items":{"$ref":"#/$defs/EnvVar"},"type":"array"},"body":{"type":"string"},"templateBody":{"type":"boolean"}},"additionalProperties":false,"type":"object"},"HelmRefKeySelector":{"properties":{"name":{"type":"string"},"key":{"type":"string"}},"additionalProperties":false,"type":"object","required":["key"]},"Items":{"items":{"type":"string"},"type":"array"},"NotificationAction":{"properties":{"url":{"type":"string"},"connection":{"type":"string"},"title":{"type":"string"},"message":{"type":"string"},"properties":{"additionalProperties":{"type":"string"},"type":"object"}},"additionalProperties":false,"type":"object","required":["title","message"]},"Permission":{"properties":{"role":{"type":"string"},"team":{"type":"string"},"ref":{"type":"string"}},"additionalProperties":false,"type":"object"},"PlaybookAction":{"properties":{"name":{"type":"string"},"delay":{"type":"string"},"timeout":{"type":"string"},"if":{"type":"string"},"runsOn":{"items":{"type":"string"},"type":"array"},"templatesOn":{"type":"string"},"exec":{"$ref":"#/$defs/ExecAction"},"gitops":{"$ref":"#/$defs/GitOpsAction"},"github":{"$ref":"#/$defs/GithubAction"},"azureDevopsPipeline":{"$ref":"#/$defs/AzureDevopsPipelineAction"},"http":{"$ref":"#/$defs/HTTPAction"},"sql":{"$ref":"#/$defs/SQLAction"},"pod":{"$ref":"#/$defs/PodAction"},"notification":{"$ref":"#/$defs/NotificationAction"}},"additionalProperties":false,"type":"object","required":["name"]},"PlaybookApproval":{"properties":{"type":{"type":"string"},"approvers":{"$ref":"#/$defs/PlaybookApprovers"}},"additionalProperties":false,"type":"object"},"PlaybookApprovers":{"properties":{"people":{"items":{"type":"string"},"type":"array"},"teams":{"items":{"type":"string"},"type":"array"}},"additionalProperties":false,"type":"object"},"PlaybookEventWebhookAuth":{"properties":{"basic":{"$ref":"#/$defs/PlaybookEventWebhookAuthBasic"},"github":{"$ref":"#/$defs/PlaybookEventWebhookAuthGithub"},"svix":{"$ref":"#/$defs/PlaybookEventWebhookAuthSVIX"},"jwt":{"$ref":"#/$defs/PlaybookEventWebhookAuthJWT"}},"additionalProperties":false,"type":"object"},"PlaybookEventWebhookAuthBasic":{"properties":{"username":{"$ref":"#/$defs/EnvVar"},"password":{"$ref":"#/$defs/EnvVar"}},"additionalProperties":false,"type":"object","required":["username","password"]},"PlaybookEventWebhookAuthGithub":{"properties":{"token":{"$ref":"#/$defs/EnvVar"}},"additionalProperties":false,"type":"object","required":["token"]},"PlaybookEventWebhookAuthJWT":{"properties":{"jwksUri":{"type":"string"}},"additionalProperties":false,"type":"object","required":["jwksUri"]},"PlaybookEventWebhookAuthSVIX":{"properties":{"secret":{"$ref":"#/$defs/EnvVar"},"verifyTimestamp":{"type":"string"}},"additionalProperties":false,"type":"object","required":["secret"]},"PlaybookParameter":{"properties":{"name":{"type":"string"},"default":{"type":"string"},"label":{"type":"string"},"required":{"type":"boolean"},"icon":{"type":"string"},"description":{"type":"string"},"type":{"type":"string"},"properties":true},"additionalProperties":false,"type":"object","required":["name","label"]},"PlaybookSpec":{"properties":{"title":{"type":"string"},"description":{"type":"string"},"category":{"type":"string"},"icon":{"type":"string"},"on":{"$ref":"#/$defs/PlaybookTrigger"},"runsOn":{"items":{"type":"string"},"type":"array"},"env":{"items":{"$ref":"#/$defs/EnvVar"},"type":"array"},"templatesOn":{"type":"string"},"permissions":{"items":{"$ref":"#/$defs/Permission"},"type":"array"},"configs":{"$ref":"#/$defs/ResourceSelectors"},"checks":{"$ref":"#/$defs/ResourceSelectors"},"components":{"$ref":"#/$defs/ResourceSelectors"},"parameters":{"items":{"$ref":"#/$defs/PlaybookParameter"},"type":"array"},"actions":{"items":{"$ref":"#/$defs/PlaybookAction"},"type":"array"},"filters":{"items":{"type":"string"},"type":"array"},"approval":{"$ref":"#/$defs/PlaybookApproval"}},"additionalProperties":false,"type":"object","required":["actions"]},"PlaybookTrigger":{"properties":{"canary":{"items":{"$ref":"#/$defs/PlaybookTriggerEvent"},"type":"array"},"config":{"items":{"$ref":"#/$defs/PlaybookTriggerEvent"},"type":"array"},"component":{"items":{"$ref":"#/$defs/PlaybookTriggerEvent"},"type":"array"},"webhook":{"$ref":"#/$defs/PlaybookTriggerWebhook"}},"additionalProperties":false,"type":"object"},"PlaybookTriggerEvent":{"properties":{"event":{"type":"string"},"labels":{"additionalProperties":{"type":"string"},"type":"object"},"filter":{"type":"string"}},"additionalProperties":false,"type":"object","required":["event"]},"PlaybookTriggerWebhook":{"properties":{"path":{"type":"string"},"authentication":{"$ref":"#/$defs/PlaybookEventWebhookAuth"}},"additionalProperties":false,"type":"object","required":["path"]},"PodAction":{"properties":{"name":{"type":"string"},"maxLength":{"type":"integer"},"spec":true,"artifacts":{"items":{"$ref":"#/$defs/Artifact"},"type":"array"}},"additionalProperties":false,"type":"object","required":["name","spec"]},"ResourceSelector":{"properties":{"agent":{"type":"string"},"cache":{"type":"string"},"id":{"type":"string"},"name":{"type":"string"},"namespace":{"type":"string"},"types":{"$ref":"#/$defs/Items"},"statuses":{"$ref":"#/$defs/Items"},"tagSelector":{"type":"string"},"labelSelector":{"type":"string"},"fieldSelector":{"type":"string"}},"additionalProperties":false,"type":"object"},"ResourceSelectors":{"items":{"$ref":"#/$defs/ResourceSelector"},"type":"array"},"SQLAction":{"properties":{"connection":{"type":"string"},"url":{"type":"string"},"query":{"type":"string"},"driver":{"type":"string"}},"additionalProperties":false,"type":"object","required":["query","driver"]},"SecretKeySelector":{"properties":{"name":{"type":"string"},"key":{"type":"string"}},"additionalProperties":false,"type":"object","required":["key"]}}}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/flanksource/incident-commander/api/v1/playbook-spec",
+  "$ref": "#/$defs/PlaybookSpec",
+  "$defs": {
+    "AWSConnection": {
+      "properties": {
+        "connection": {
+          "type": "string"
+        },
+        "accessKey": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "secretKey": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "sessionToken": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "region": {
+          "type": "string"
+        },
+        "endpoint": {
+          "type": "string"
+        },
+        "skipTLSVerify": {
+          "type": "boolean"
+        },
+        "objectPath": {
+          "type": "string"
+        },
+        "usePathStyle": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "Artifact": {
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "path"
+      ]
+    },
+    "AzureConnection": {
+      "properties": {
+        "connection": {
+          "type": "string"
+        },
+        "clientID": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "clientSecret": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "tenantID": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "AzureDevopsPipeline": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "id"
+      ]
+    },
+    "AzureDevopsPipelineAction": {
+      "properties": {
+        "org": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        },
+        "token": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "pipeline": {
+          "$ref": "#/$defs/AzureDevopsPipeline"
+        },
+        "parameters": {
+          "$ref": "#/$defs/AzureDevopsPipelineParameters"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "org",
+        "project",
+        "token",
+        "pipeline"
+      ]
+    },
+    "AzureDevopsPipelineParameters": {
+      "properties": {
+        "resources": true,
+        "templateParameters": true,
+        "variables": true,
+        "stagesToSkip": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ConfigMapKeySelector": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "key"
+      ]
+    },
+    "EnvVar": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        },
+        "valueFrom": {
+          "$ref": "#/$defs/EnvVarSource"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "EnvVarSource": {
+      "properties": {
+        "serviceAccount": {
+          "type": "string"
+        },
+        "helmRef": {
+          "$ref": "#/$defs/HelmRefKeySelector"
+        },
+        "configMapKeyRef": {
+          "$ref": "#/$defs/ConfigMapKeySelector"
+        },
+        "secretKeyRef": {
+          "$ref": "#/$defs/SecretKeySelector"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ExecAction": {
+      "properties": {
+        "script": {
+          "type": "string"
+        },
+        "connections": {
+          "$ref": "#/$defs/ExecConnections"
+        },
+        "artifacts": {
+          "items": {
+            "$ref": "#/$defs/Artifact"
+          },
+          "type": "array"
+        },
+        "env": {
+          "items": {
+            "$ref": "#/$defs/EnvVar"
+          },
+          "type": "array"
+        },
+        "checkout": {
+          "$ref": "#/$defs/GitCheckout"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "script"
+      ]
+    },
+    "ExecConnections": {
+      "properties": {
+        "aws": {
+          "$ref": "#/$defs/AWSConnection"
+        },
+        "gcp": {
+          "$ref": "#/$defs/GCPConnection"
+        },
+        "azure": {
+          "$ref": "#/$defs/AzureConnection"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "GCPConnection": {
+      "properties": {
+        "connection": {
+          "type": "string"
+        },
+        "endpoint": {
+          "type": "string"
+        },
+        "credentials": {
+          "$ref": "#/$defs/EnvVar"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "GitCheckout": {
+      "properties": {
+        "url": {
+          "type": "string"
+        },
+        "connection": {
+          "type": "string"
+        },
+        "username": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "password": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "certificate": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "destination": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "GitOpsAction": {
+      "properties": {
+        "repo": {
+          "$ref": "#/$defs/GitOpsActionRepo"
+        },
+        "commit": {
+          "$ref": "#/$defs/GitOpsActionCommit"
+        },
+        "pr": {
+          "$ref": "#/$defs/GitOpsActionPR"
+        },
+        "patches": {
+          "items": {
+            "$ref": "#/$defs/GitOpsActionPatch"
+          },
+          "type": "array"
+        },
+        "files": {
+          "items": {
+            "$ref": "#/$defs/GitOpsActionFile"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "repo",
+        "commit"
+      ]
+    },
+    "GitOpsActionCommit": {
+      "properties": {
+        "author": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "author",
+        "email",
+        "message"
+      ]
+    },
+    "GitOpsActionFile": {
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "content": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "path",
+        "content"
+      ]
+    },
+    "GitOpsActionPR": {
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "title"
+      ]
+    },
+    "GitOpsActionPatch": {
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "yq": {
+          "type": "string"
+        },
+        "jq": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "path"
+      ]
+    },
+    "GitOpsActionRepo": {
+      "properties": {
+        "url": {
+          "type": "string"
+        },
+        "base": {
+          "type": "string"
+        },
+        "branch": {
+          "type": "string"
+        },
+        "connection": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "url"
+      ]
+    },
+    "GithubAction": {
+      "properties": {
+        "repo": {
+          "type": "string"
+        },
+        "username": {
+          "type": "string"
+        },
+        "token": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "workflows": {
+          "items": {
+            "$ref": "#/$defs/GithubWorkflow"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "repo",
+        "username",
+        "token"
+      ]
+    },
+    "GithubWorkflow": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "ref": {
+          "type": "string"
+        },
+        "input": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "id"
+      ]
+    },
+    "HTTPAction": {
+      "properties": {
+        "connection": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "username": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "password": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "method": {
+          "type": "string"
+        },
+        "ntlm": {
+          "type": "boolean"
+        },
+        "ntlmv2": {
+          "type": "boolean"
+        },
+        "headers": {
+          "items": {
+            "$ref": "#/$defs/EnvVar"
+          },
+          "type": "array"
+        },
+        "body": {
+          "type": "string"
+        },
+        "templateBody": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "HelmRefKeySelector": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "key"
+      ]
+    },
+    "Items": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
+    },
+    "NotificationAction": {
+      "properties": {
+        "url": {
+          "type": "string"
+        },
+        "connection": {
+          "type": "string"
+        },
+        "title": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "properties": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "title",
+        "message"
+      ]
+    },
+    "Permission": {
+      "properties": {
+        "role": {
+          "type": "string"
+        },
+        "team": {
+          "type": "string"
+        },
+        "ref": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "PlaybookAction": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "delay": {
+          "type": "string"
+        },
+        "timeout": {
+          "type": "string"
+        },
+        "if": {
+          "type": "string"
+        },
+        "runsOn": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "templatesOn": {
+          "type": "string"
+        },
+        "exec": {
+          "$ref": "#/$defs/ExecAction"
+        },
+        "gitops": {
+          "$ref": "#/$defs/GitOpsAction"
+        },
+        "github": {
+          "$ref": "#/$defs/GithubAction"
+        },
+        "azureDevopsPipeline": {
+          "$ref": "#/$defs/AzureDevopsPipelineAction"
+        },
+        "http": {
+          "$ref": "#/$defs/HTTPAction"
+        },
+        "sql": {
+          "$ref": "#/$defs/SQLAction"
+        },
+        "pod": {
+          "$ref": "#/$defs/PodAction"
+        },
+        "notification": {
+          "$ref": "#/$defs/NotificationAction"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name"
+      ]
+    },
+    "PlaybookApproval": {
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "approvers": {
+          "$ref": "#/$defs/PlaybookApprovers"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "PlaybookApprovers": {
+      "properties": {
+        "people": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "teams": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "PlaybookEventWebhookAuth": {
+      "properties": {
+        "basic": {
+          "$ref": "#/$defs/PlaybookEventWebhookAuthBasic"
+        },
+        "github": {
+          "$ref": "#/$defs/PlaybookEventWebhookAuthGithub"
+        },
+        "svix": {
+          "$ref": "#/$defs/PlaybookEventWebhookAuthSVIX"
+        },
+        "jwt": {
+          "$ref": "#/$defs/PlaybookEventWebhookAuthJWT"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "PlaybookEventWebhookAuthBasic": {
+      "properties": {
+        "username": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "password": {
+          "$ref": "#/$defs/EnvVar"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "username",
+        "password"
+      ]
+    },
+    "PlaybookEventWebhookAuthGithub": {
+      "properties": {
+        "token": {
+          "$ref": "#/$defs/EnvVar"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "token"
+      ]
+    },
+    "PlaybookEventWebhookAuthJWT": {
+      "properties": {
+        "jwksUri": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "jwksUri"
+      ]
+    },
+    "PlaybookEventWebhookAuthSVIX": {
+      "properties": {
+        "secret": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "verifyTimestamp": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "secret"
+      ]
+    },
+    "PlaybookParameter": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "default": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "icon": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "properties": true
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "label"
+      ]
+    },
+    "PlaybookSpec": {
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "category": {
+          "type": "string"
+        },
+        "icon": {
+          "type": "string"
+        },
+        "on": {
+          "$ref": "#/$defs/PlaybookTrigger"
+        },
+        "runsOn": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "env": {
+          "items": {
+            "$ref": "#/$defs/EnvVar"
+          },
+          "type": "array"
+        },
+        "templatesOn": {
+          "type": "string"
+        },
+        "permissions": {
+          "items": {
+            "$ref": "#/$defs/Permission"
+          },
+          "type": "array"
+        },
+        "configs": {
+          "$ref": "#/$defs/ResourceSelectors"
+        },
+        "checks": {
+          "$ref": "#/$defs/ResourceSelectors"
+        },
+        "components": {
+          "$ref": "#/$defs/ResourceSelectors"
+        },
+        "parameters": {
+          "items": {
+            "$ref": "#/$defs/PlaybookParameter"
+          },
+          "type": "array"
+        },
+        "actions": {
+          "items": {
+            "$ref": "#/$defs/PlaybookAction"
+          },
+          "type": "array"
+        },
+        "filters": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "approval": {
+          "$ref": "#/$defs/PlaybookApproval"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "actions"
+      ]
+    },
+    "PlaybookTrigger": {
+      "properties": {
+        "canary": {
+          "items": {
+            "$ref": "#/$defs/PlaybookTriggerEvent"
+          },
+          "type": "array"
+        },
+        "config": {
+          "items": {
+            "$ref": "#/$defs/PlaybookTriggerEvent"
+          },
+          "type": "array"
+        },
+        "component": {
+          "items": {
+            "$ref": "#/$defs/PlaybookTriggerEvent"
+          },
+          "type": "array"
+        },
+        "webhook": {
+          "$ref": "#/$defs/PlaybookTriggerWebhook"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "PlaybookTriggerEvent": {
+      "properties": {
+        "event": {
+          "type": "string"
+        },
+        "labels": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "filter": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "event"
+      ]
+    },
+    "PlaybookTriggerWebhook": {
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "authentication": {
+          "$ref": "#/$defs/PlaybookEventWebhookAuth"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "path"
+      ]
+    },
+    "PodAction": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "maxLength": {
+          "type": "integer"
+        },
+        "spec": true,
+        "artifacts": {
+          "items": {
+            "$ref": "#/$defs/Artifact"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "spec"
+      ]
+    },
+    "ResourceSelector": {
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "cache": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string"
+        },
+        "types": {
+          "$ref": "#/$defs/Items"
+        },
+        "statuses": {
+          "$ref": "#/$defs/Items"
+        },
+        "tagSelector": {
+          "type": "string"
+        },
+        "labelSelector": {
+          "type": "string"
+        },
+        "fieldSelector": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ResourceSelectors": {
+      "items": {
+        "$ref": "#/$defs/ResourceSelector"
+      },
+      "type": "array"
+    },
+    "SQLAction": {
+      "properties": {
+        "connection": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "query": {
+          "type": "string"
+        },
+        "driver": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "query",
+        "driver"
+      ]
+    },
+    "SecretKeySelector": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "key"
+      ]
+    }
+  }
+}

@@ -1,1 +1,930 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","$id":"https://github.com/flanksource/incident-commander/api/v1/connection","$ref":"#/$defs/Connection","$defs":{"ConfigMapKeySelector":{"properties":{"name":{"type":"string"},"key":{"type":"string"}},"additionalProperties":false,"type":"object","required":["key"]},"Connection":{"properties":{"kind":{"type":"string"},"apiVersion":{"type":"string"},"metadata":{"$ref":"#/$defs/ObjectMeta"},"spec":{"$ref":"#/$defs/ConnectionSpec"},"status":{"$ref":"#/$defs/ConnectionStatus"}},"additionalProperties":false,"type":"object"},"ConnectionAWS":{"properties":{"region":{"type":"string"},"profile":{"type":"string"},"insecureTLS":{"type":"boolean"},"accessKey":{"$ref":"#/$defs/EnvVar"},"secretKey":{"$ref":"#/$defs/EnvVar"}},"additionalProperties":false,"type":"object"},"ConnectionAWSS3":{"properties":{"region":{"type":"string"},"profile":{"type":"string"},"insecureTLS":{"type":"boolean"},"accessKey":{"$ref":"#/$defs/EnvVar"},"secretKey":{"$ref":"#/$defs/EnvVar"},"bucket":{"type":"string"}},"additionalProperties":false,"type":"object","required":["bucket"]},"ConnectionAzure":{"properties":{"clientID":{"$ref":"#/$defs/EnvVar"},"clientSecret":{"$ref":"#/$defs/EnvVar"},"tenantID":{"$ref":"#/$defs/EnvVar"}},"additionalProperties":false,"type":"object","required":["clientID","tenantID"]},"ConnectionAzureDevops":{"properties":{"string":{"type":"string"},"organization":{"type":"string"},"personalAccessToken":{"$ref":"#/$defs/EnvVar"}},"additionalProperties":false,"type":"object","required":["organization","personalAccessToken"]},"ConnectionDiscord":{"properties":{"token":{"type":"string"},"webhookID":{"type":"string"}},"additionalProperties":false,"type":"object","required":["token","webhookID"]},"ConnectionFolder":{"properties":{"path":{"type":"string"}},"additionalProperties":false,"type":"object","required":["path"]},"ConnectionGCP":{"properties":{"endpoint":{"$ref":"#/$defs/EnvVar"},"certificate":{"$ref":"#/$defs/EnvVar"}},"additionalProperties":false,"type":"object"},"ConnectionGit":{"properties":{"string":{"type":"string"},"ref":{"type":"string"},"certificate":{"$ref":"#/$defs/EnvVar"},"username":{"$ref":"#/$defs/EnvVar"},"password":{"$ref":"#/$defs/EnvVar"}},"additionalProperties":false,"type":"object","required":["string","ref"]},"ConnectionGitHub":{"properties":{"url":{"type":"string"},"personalAccessToken":{"$ref":"#/$defs/EnvVar"}},"additionalProperties":false,"type":"object","required":["personalAccessToken"]},"ConnectionGitLab":{"properties":{"string":{"type":"string"},"personalAccessToken":{"$ref":"#/$defs/EnvVar"}},"additionalProperties":false,"type":"object","required":["personalAccessToken"]},"ConnectionHTTP":{"properties":{"url":{"type":"string"},"insecureTLS":{"type":"boolean"},"username":{"$ref":"#/$defs/EnvVar"},"password":{"$ref":"#/$defs/EnvVar"}},"additionalProperties":false,"type":"object","required":["url"]},"ConnectionKubernetes":{"properties":{"certificate":{"$ref":"#/$defs/EnvVar"}},"additionalProperties":false,"type":"object","required":["certificate"]},"ConnectionMSSQL":{"properties":{"url":{"$ref":"#/$defs/EnvVar"},"host":{"$ref":"#/$defs/EnvVar"},"username":{"$ref":"#/$defs/EnvVar"},"password":{"$ref":"#/$defs/EnvVar"},"database":{"$ref":"#/$defs/EnvVar"},"trustServerCertificate":{"type":"boolean"}},"additionalProperties":false,"type":"object"},"ConnectionMongo":{"properties":{"url":{"$ref":"#/$defs/EnvVar"},"host":{"$ref":"#/$defs/EnvVar"},"username":{"$ref":"#/$defs/EnvVar"},"password":{"$ref":"#/$defs/EnvVar"},"database":{"$ref":"#/$defs/EnvVar"},"replicaSet":{"type":"string"},"insecureTLS":{"type":"boolean"}},"additionalProperties":false,"type":"object"},"ConnectionMySQL":{"properties":{"url":{"$ref":"#/$defs/EnvVar"},"host":{"$ref":"#/$defs/EnvVar"},"username":{"$ref":"#/$defs/EnvVar"},"password":{"$ref":"#/$defs/EnvVar"},"database":{"$ref":"#/$defs/EnvVar"},"insecureTLS":{"type":"boolean"}},"additionalProperties":false,"type":"object"},"ConnectionNtfy":{"properties":{"topic":{"type":"string"},"host":{"type":"string"},"username":{"$ref":"#/$defs/EnvVar"},"password":{"$ref":"#/$defs/EnvVar"}},"additionalProperties":false,"type":"object","required":["topic","host","username","password"]},"ConnectionPostgres":{"properties":{"url":{"$ref":"#/$defs/EnvVar"},"host":{"$ref":"#/$defs/EnvVar"},"username":{"$ref":"#/$defs/EnvVar"},"password":{"$ref":"#/$defs/EnvVar"},"database":{"$ref":"#/$defs/EnvVar"},"insecureTLS":{"type":"boolean"}},"additionalProperties":false,"type":"object"},"ConnectionPushbullet":{"properties":{"token":{"$ref":"#/$defs/EnvVar"},"targets":{"items":{"type":"string"},"type":"array"}},"additionalProperties":false,"type":"object","required":["token","targets"]},"ConnectionPushover":{"properties":{"token":{"$ref":"#/$defs/EnvVar"},"user":{"type":"string"}},"additionalProperties":false,"type":"object","required":["token","user"]},"ConnectionSFTP":{"properties":{"host":{"$ref":"#/$defs/EnvVar"},"username":{"$ref":"#/$defs/EnvVar"},"password":{"$ref":"#/$defs/EnvVar"},"port":{"type":"integer"},"path":{"type":"string"}},"additionalProperties":false,"type":"object","required":["host","username","password","path"]},"ConnectionSMB":{"properties":{"server":{"$ref":"#/$defs/EnvVar"},"username":{"$ref":"#/$defs/EnvVar"},"password":{"$ref":"#/$defs/EnvVar"},"port":{"$ref":"#/$defs/EnvVar"},"share":{"type":"string"}},"additionalProperties":false,"type":"object","required":["server","username","password","share"]},"ConnectionSMTP":{"properties":{"host":{"type":"string"},"username":{"$ref":"#/$defs/EnvVar"},"password":{"$ref":"#/$defs/EnvVar"},"insecureTLS":{"type":"boolean"},"encryption":{"type":"string"},"port":{"type":"integer"},"fromAddress":{"type":"string"},"toAddresses":{"items":{"type":"string"},"type":"array"},"subject":{"type":"string"},"auth":{"type":"string"}},"additionalProperties":false,"type":"object","required":["host","fromAddress"]},"ConnectionSlack":{"properties":{"token":{"$ref":"#/$defs/EnvVar"},"channel":{"type":"string"},"botname":{"type":"string"}},"additionalProperties":false,"type":"object","required":["token","channel","botname"]},"ConnectionSpec":{"properties":{"properties":{"$ref":"#/$defs/JSONStringMap"},"aws":{"$ref":"#/$defs/ConnectionAWS"},"s3":{"$ref":"#/$defs/ConnectionAWSS3"},"azure":{"$ref":"#/$defs/ConnectionAzure"},"azureDevops":{"$ref":"#/$defs/ConnectionAzureDevops"},"gcp":{"$ref":"#/$defs/ConnectionGCP"},"folder":{"$ref":"#/$defs/ConnectionFolder"},"git":{"$ref":"#/$defs/ConnectionGit"},"github":{"$ref":"#/$defs/ConnectionGitHub"},"gitlab":{"$ref":"#/$defs/ConnectionGitLab"},"http":{"$ref":"#/$defs/ConnectionHTTP"},"kubernetes":{"$ref":"#/$defs/ConnectionKubernetes"},"mssql":{"$ref":"#/$defs/ConnectionMSSQL"},"mongo":{"$ref":"#/$defs/ConnectionMongo"},"mysql":{"$ref":"#/$defs/ConnectionMySQL"},"postgres":{"$ref":"#/$defs/ConnectionPostgres"},"sftp":{"$ref":"#/$defs/ConnectionSFTP"},"smb":{"$ref":"#/$defs/ConnectionSMB"},"discord":{"$ref":"#/$defs/ConnectionDiscord"},"ntfy":{"$ref":"#/$defs/ConnectionNtfy"},"pushbullet":{"$ref":"#/$defs/ConnectionPushbullet"},"pushover":{"$ref":"#/$defs/ConnectionPushover"},"smtp":{"$ref":"#/$defs/ConnectionSMTP"},"slack":{"$ref":"#/$defs/ConnectionSlack"},"telegram":{"$ref":"#/$defs/ConnectionTelegram"},"url":{"$ref":"#/$defs/EnvVar"},"port":{"$ref":"#/$defs/EnvVar"},"type":{"type":"string"},"username":{"$ref":"#/$defs/EnvVar"},"password":{"$ref":"#/$defs/EnvVar"},"certificate":{"$ref":"#/$defs/EnvVar"},"insecure_tls":{"type":"boolean"}},"additionalProperties":false,"type":"object"},"ConnectionStatus":{"properties":{"ref":{"type":"string"}},"additionalProperties":false,"type":"object","required":["ref"]},"ConnectionTelegram":{"properties":{"token":{"$ref":"#/$defs/EnvVar"},"chats":{"$ref":"#/$defs/EnvVar"}},"additionalProperties":false,"type":"object","required":["token","chats"]},"EnvVar":{"properties":{"name":{"type":"string"},"value":{"type":"string"},"valueFrom":{"$ref":"#/$defs/EnvVarSource"}},"additionalProperties":false,"type":"object"},"EnvVarSource":{"properties":{"serviceAccount":{"type":"string"},"helmRef":{"$ref":"#/$defs/HelmRefKeySelector"},"configMapKeyRef":{"$ref":"#/$defs/ConfigMapKeySelector"},"secretKeyRef":{"$ref":"#/$defs/SecretKeySelector"}},"additionalProperties":false,"type":"object"},"FieldsV1":{"properties":{},"additionalProperties":false,"type":"object"},"HelmRefKeySelector":{"properties":{"name":{"type":"string"},"key":{"type":"string"}},"additionalProperties":false,"type":"object","required":["key"]},"JSONStringMap":{"additionalProperties":{"type":"string"},"type":"object"},"ManagedFieldsEntry":{"properties":{"manager":{"type":"string"},"operation":{"type":"string"},"apiVersion":{"type":"string"},"time":{"$ref":"#/$defs/Time"},"fieldsType":{"type":"string"},"fieldsV1":{"$ref":"#/$defs/FieldsV1"},"subresource":{"type":"string"}},"additionalProperties":false,"type":"object"},"ObjectMeta":{"properties":{"name":{"type":"string"},"generateName":{"type":"string"},"namespace":{"type":"string"},"selfLink":{"type":"string"},"uid":{"type":"string"},"resourceVersion":{"type":"string"},"generation":{"type":"integer"},"creationTimestamp":{"$ref":"#/$defs/Time"},"deletionTimestamp":{"$ref":"#/$defs/Time"},"deletionGracePeriodSeconds":{"type":"integer"},"labels":{"additionalProperties":{"type":"string"},"type":"object"},"annotations":{"additionalProperties":{"type":"string"},"type":"object"},"ownerReferences":{"items":{"$ref":"#/$defs/OwnerReference"},"type":"array"},"finalizers":{"items":{"type":"string"},"type":"array"},"managedFields":{"items":{"$ref":"#/$defs/ManagedFieldsEntry"},"type":"array"}},"additionalProperties":false,"type":"object"},"OwnerReference":{"properties":{"apiVersion":{"type":"string"},"kind":{"type":"string"},"name":{"type":"string"},"uid":{"type":"string"},"controller":{"type":"boolean"},"blockOwnerDeletion":{"type":"boolean"}},"additionalProperties":false,"type":"object","required":["apiVersion","kind","name","uid"]},"SecretKeySelector":{"properties":{"name":{"type":"string"},"key":{"type":"string"}},"additionalProperties":false,"type":"object","required":["key"]},"Time":{"properties":{},"additionalProperties":false,"type":"object"}}}
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/flanksource/incident-commander/api/v1/connection",
+  "$ref": "#/$defs/Connection",
+  "$defs": {
+    "Authentication": {
+      "properties": {
+        "username": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "password": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "bearer": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "oauth": {
+          "$ref": "#/$defs/OAuth"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ConfigMapKeySelector": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "key"
+      ]
+    },
+    "Connection": {
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "apiVersion": {
+          "type": "string"
+        },
+        "metadata": {
+          "$ref": "#/$defs/ObjectMeta"
+        },
+        "spec": {
+          "$ref": "#/$defs/ConnectionSpec"
+        },
+        "status": {
+          "$ref": "#/$defs/ConnectionStatus"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ConnectionAWS": {
+      "properties": {
+        "region": {
+          "type": "string"
+        },
+        "profile": {
+          "type": "string"
+        },
+        "insecureTLS": {
+          "type": "boolean"
+        },
+        "accessKey": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "secretKey": {
+          "$ref": "#/$defs/EnvVar"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ConnectionAWSS3": {
+      "properties": {
+        "region": {
+          "type": "string"
+        },
+        "profile": {
+          "type": "string"
+        },
+        "insecureTLS": {
+          "type": "boolean"
+        },
+        "accessKey": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "secretKey": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "bucket": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "bucket"
+      ]
+    },
+    "ConnectionAzure": {
+      "properties": {
+        "clientID": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "clientSecret": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "tenantID": {
+          "$ref": "#/$defs/EnvVar"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "clientID",
+        "tenantID"
+      ]
+    },
+    "ConnectionAzureDevops": {
+      "properties": {
+        "string": {
+          "type": "string"
+        },
+        "organization": {
+          "type": "string"
+        },
+        "personalAccessToken": {
+          "$ref": "#/$defs/EnvVar"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "organization",
+        "personalAccessToken"
+      ]
+    },
+    "ConnectionDiscord": {
+      "properties": {
+        "token": {
+          "type": "string"
+        },
+        "webhookID": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "token",
+        "webhookID"
+      ]
+    },
+    "ConnectionFolder": {
+      "properties": {
+        "path": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "path"
+      ]
+    },
+    "ConnectionGCP": {
+      "properties": {
+        "endpoint": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "certificate": {
+          "$ref": "#/$defs/EnvVar"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ConnectionGit": {
+      "properties": {
+        "string": {
+          "type": "string"
+        },
+        "ref": {
+          "type": "string"
+        },
+        "certificate": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "username": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "password": {
+          "$ref": "#/$defs/EnvVar"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "string",
+        "ref"
+      ]
+    },
+    "ConnectionGitHub": {
+      "properties": {
+        "url": {
+          "type": "string"
+        },
+        "personalAccessToken": {
+          "$ref": "#/$defs/EnvVar"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "personalAccessToken"
+      ]
+    },
+    "ConnectionGitLab": {
+      "properties": {
+        "string": {
+          "type": "string"
+        },
+        "personalAccessToken": {
+          "$ref": "#/$defs/EnvVar"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "personalAccessToken"
+      ]
+    },
+    "ConnectionHTTP": {
+      "properties": {
+        "url": {
+          "type": "string"
+        },
+        "insecureTLS": {
+          "type": "boolean"
+        },
+        "username": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "password": {
+          "$ref": "#/$defs/EnvVar"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "url"
+      ]
+    },
+    "ConnectionKubernetes": {
+      "properties": {
+        "certificate": {
+          "$ref": "#/$defs/EnvVar"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "certificate"
+      ]
+    },
+    "ConnectionMSSQL": {
+      "properties": {
+        "url": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "host": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "username": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "password": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "database": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "trustServerCertificate": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ConnectionMongo": {
+      "properties": {
+        "url": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "host": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "username": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "password": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "database": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "replicaSet": {
+          "type": "string"
+        },
+        "insecureTLS": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ConnectionMySQL": {
+      "properties": {
+        "url": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "host": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "username": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "password": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "database": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "insecureTLS": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ConnectionNtfy": {
+      "properties": {
+        "topic": {
+          "type": "string"
+        },
+        "host": {
+          "type": "string"
+        },
+        "username": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "password": {
+          "$ref": "#/$defs/EnvVar"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "topic",
+        "host",
+        "username",
+        "password"
+      ]
+    },
+    "ConnectionPostgres": {
+      "properties": {
+        "url": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "host": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "username": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "password": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "database": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "insecureTLS": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ConnectionPrometheus": {
+      "properties": {
+        "url": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "Auth": {
+          "$ref": "#/$defs/Authentication"
+        },
+        "insecureTLS": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "Auth"
+      ]
+    },
+    "ConnectionPushbullet": {
+      "properties": {
+        "token": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "targets": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "token",
+        "targets"
+      ]
+    },
+    "ConnectionPushover": {
+      "properties": {
+        "token": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "user": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "token",
+        "user"
+      ]
+    },
+    "ConnectionSFTP": {
+      "properties": {
+        "host": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "username": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "password": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "port": {
+          "type": "integer"
+        },
+        "path": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "host",
+        "username",
+        "password",
+        "path"
+      ]
+    },
+    "ConnectionSMB": {
+      "properties": {
+        "server": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "username": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "password": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "port": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "share": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "server",
+        "username",
+        "password",
+        "share"
+      ]
+    },
+    "ConnectionSMTP": {
+      "properties": {
+        "host": {
+          "type": "string"
+        },
+        "username": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "password": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "insecureTLS": {
+          "type": "boolean"
+        },
+        "encryption": {
+          "type": "string"
+        },
+        "port": {
+          "type": "integer"
+        },
+        "fromAddress": {
+          "type": "string"
+        },
+        "toAddresses": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "subject": {
+          "type": "string"
+        },
+        "auth": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "host",
+        "fromAddress"
+      ]
+    },
+    "ConnectionSlack": {
+      "properties": {
+        "token": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "channel": {
+          "type": "string"
+        },
+        "botname": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "token",
+        "channel",
+        "botname"
+      ]
+    },
+    "ConnectionSpec": {
+      "properties": {
+        "properties": {
+          "$ref": "#/$defs/JSONStringMap"
+        },
+        "aws": {
+          "$ref": "#/$defs/ConnectionAWS"
+        },
+        "s3": {
+          "$ref": "#/$defs/ConnectionAWSS3"
+        },
+        "azure": {
+          "$ref": "#/$defs/ConnectionAzure"
+        },
+        "azureDevops": {
+          "$ref": "#/$defs/ConnectionAzureDevops"
+        },
+        "gcp": {
+          "$ref": "#/$defs/ConnectionGCP"
+        },
+        "folder": {
+          "$ref": "#/$defs/ConnectionFolder"
+        },
+        "git": {
+          "$ref": "#/$defs/ConnectionGit"
+        },
+        "github": {
+          "$ref": "#/$defs/ConnectionGitHub"
+        },
+        "gitlab": {
+          "$ref": "#/$defs/ConnectionGitLab"
+        },
+        "http": {
+          "$ref": "#/$defs/ConnectionHTTP"
+        },
+        "kubernetes": {
+          "$ref": "#/$defs/ConnectionKubernetes"
+        },
+        "mssql": {
+          "$ref": "#/$defs/ConnectionMSSQL"
+        },
+        "mongo": {
+          "$ref": "#/$defs/ConnectionMongo"
+        },
+        "mysql": {
+          "$ref": "#/$defs/ConnectionMySQL"
+        },
+        "postgres": {
+          "$ref": "#/$defs/ConnectionPostgres"
+        },
+        "prometheus": {
+          "$ref": "#/$defs/ConnectionPrometheus"
+        },
+        "sftp": {
+          "$ref": "#/$defs/ConnectionSFTP"
+        },
+        "smb": {
+          "$ref": "#/$defs/ConnectionSMB"
+        },
+        "discord": {
+          "$ref": "#/$defs/ConnectionDiscord"
+        },
+        "ntfy": {
+          "$ref": "#/$defs/ConnectionNtfy"
+        },
+        "pushbullet": {
+          "$ref": "#/$defs/ConnectionPushbullet"
+        },
+        "pushover": {
+          "$ref": "#/$defs/ConnectionPushover"
+        },
+        "smtp": {
+          "$ref": "#/$defs/ConnectionSMTP"
+        },
+        "slack": {
+          "$ref": "#/$defs/ConnectionSlack"
+        },
+        "telegram": {
+          "$ref": "#/$defs/ConnectionTelegram"
+        },
+        "url": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "port": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "type": {
+          "type": "string"
+        },
+        "username": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "password": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "certificate": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "insecure_tls": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ConnectionStatus": {
+      "properties": {
+        "ref": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "ref"
+      ]
+    },
+    "ConnectionTelegram": {
+      "properties": {
+        "token": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "chats": {
+          "$ref": "#/$defs/EnvVar"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "token",
+        "chats"
+      ]
+    },
+    "EnvVar": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        },
+        "valueFrom": {
+          "$ref": "#/$defs/EnvVarSource"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "EnvVarSource": {
+      "properties": {
+        "serviceAccount": {
+          "type": "string"
+        },
+        "helmRef": {
+          "$ref": "#/$defs/HelmRefKeySelector"
+        },
+        "configMapKeyRef": {
+          "$ref": "#/$defs/ConfigMapKeySelector"
+        },
+        "secretKeyRef": {
+          "$ref": "#/$defs/SecretKeySelector"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "FieldsV1": {
+      "properties": {},
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "HelmRefKeySelector": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "key"
+      ]
+    },
+    "JSONStringMap": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "type": "object"
+    },
+    "ManagedFieldsEntry": {
+      "properties": {
+        "manager": {
+          "type": "string"
+        },
+        "operation": {
+          "type": "string"
+        },
+        "apiVersion": {
+          "type": "string"
+        },
+        "time": {
+          "$ref": "#/$defs/Time"
+        },
+        "fieldsType": {
+          "type": "string"
+        },
+        "fieldsV1": {
+          "$ref": "#/$defs/FieldsV1"
+        },
+        "subresource": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "OAuth": {
+      "properties": {
+        "clientID": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "clientSecret": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "scope": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "tokenURL": {
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ObjectMeta": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "generateName": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string"
+        },
+        "selfLink": {
+          "type": "string"
+        },
+        "uid": {
+          "type": "string"
+        },
+        "resourceVersion": {
+          "type": "string"
+        },
+        "generation": {
+          "type": "integer"
+        },
+        "creationTimestamp": {
+          "$ref": "#/$defs/Time"
+        },
+        "deletionTimestamp": {
+          "$ref": "#/$defs/Time"
+        },
+        "deletionGracePeriodSeconds": {
+          "type": "integer"
+        },
+        "labels": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "annotations": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "ownerReferences": {
+          "items": {
+            "$ref": "#/$defs/OwnerReference"
+          },
+          "type": "array"
+        },
+        "finalizers": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "managedFields": {
+          "items": {
+            "$ref": "#/$defs/ManagedFieldsEntry"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "OwnerReference": {
+      "properties": {
+        "apiVersion": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "uid": {
+          "type": "string"
+        },
+        "controller": {
+          "type": "boolean"
+        },
+        "blockOwnerDeletion": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "apiVersion",
+        "kind",
+        "name",
+        "uid"
+      ]
+    },
+    "SecretKeySelector": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "key"
+      ]
+    },
+    "Time": {
+      "properties": {},
+      "additionalProperties": false,
+      "type": "object"
+    }
+  }
+}
