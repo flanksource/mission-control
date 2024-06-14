@@ -11,8 +11,11 @@ import (
 
 func RegisterRoutes(e *echo.Echo) {
 	apiGroup := e.Group("/catalog")
-	apiGroup.GET("/changes", SearchCatalogChanges)
 	apiGroup.POST("/summary", SearchConfigSummary)
+
+	// Deprecated. Use POST
+	apiGroup.GET("/changes", SearchCatalogChanges)
+	apiGroup.POST("/changes", SearchCatalogChanges)
 }
 
 func SearchCatalogChanges(c echo.Context) error {
