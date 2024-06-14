@@ -4,7 +4,7 @@ go 1.22.3
 
 require (
 	github.com/flanksource/commons v1.22.1
-	github.com/flanksource/duty v1.0.497
+	github.com/flanksource/duty v1.0.498
 	github.com/flanksource/incident-commander v0.0.0-00010101000000-000000000000
 	github.com/spf13/cobra v1.8.0
 )
@@ -132,6 +132,7 @@ require (
 	github.com/rogpeppe/go-internal v1.12.0 // indirect
 	github.com/samber/lo v1.39.0 // indirect
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 // indirect
+	github.com/sethvargo/go-retry v0.2.4 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/stoewer/go-strcase v1.3.0 // indirect
