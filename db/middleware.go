@@ -104,7 +104,7 @@ func transformQuery(queryParam url.Values) (url.Values, error) {
 		} else if !timestamp.IsZero() {
 			queryParam.Add(key, fmt.Sprintf("%s.%s", operator, timestamp.Format(time.RFC3339)))
 		} else {
-			in, notIN, prefixes, suffixes := query.ParseFilteringQuery(val)
+			in, notIN, prefixes, suffixes, _ := query.ParseFilteringQuery(val, false)
 			if len(in) > 0 {
 				queryParam.Add(key, fmt.Sprintf("in.(%s)", postgrestValues(in)))
 			}
