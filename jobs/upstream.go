@@ -21,10 +21,11 @@ var ReconcileAll = &job.Job{
 	Fn: func(ctx job.JobRuntime) error {
 		ctx.History.ResourceType = job.ResourceTypeUpstream
 		ctx.History.ResourceID = api.UpstreamConf.Host
-		if count, err := upstream.ReconcileAll(ctx.Context, api.UpstreamConf, ReconcilePageSize); err != nil {
+		if count, fkFailed, err := upstream.ReconcileAll(ctx.Context, api.UpstreamConf, ReconcilePageSize); err != nil {
 			ctx.History.AddError(err.Error())
 		} else {
 			ctx.History.SuccessCount += count
+			ctx.History.ErrorCount += fkFailed
 		}
 
 		return nil
