@@ -40,7 +40,7 @@ func FindAgent(ctx context.Context, name string) (*models.Agent, error) {
 	return &agent, nil
 }
 
-func getAgent(ctx context.Context, name string) (*models.Agent, error) {
+func GetAgent(ctx context.Context, name string) (*models.Agent, error) {
 	var t models.Agent
 	tx := ctx.DB().Where("name = ?", name).First(&t)
 	return &t, tx.Error
@@ -53,7 +53,7 @@ func createAgent(ctx context.Context, name string) (*models.Agent, error) {
 }
 
 func GetOrCreateAgent(ctx context.Context, name string) (*models.Agent, error) {
-	a, err := getAgent(ctx, name)
+	a, err := GetAgent(ctx, name)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			newAgent, err := createAgent(ctx, name)
