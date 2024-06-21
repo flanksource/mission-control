@@ -23,6 +23,7 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/logs"
 	"github.com/flanksource/incident-commander/playbook"
+	"github.com/flanksource/incident-commander/push"
 	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/snapshot"
 	"github.com/flanksource/incident-commander/upstream"
@@ -94,6 +95,8 @@ func New(ctx context.Context) *echov4.Echo {
 	e.GET("/auth/whoami", auth.WhoAmI)
 
 	e.POST("/rbac/:id/update_role", rbac.UpdateRoleForUser, rbac.Authorization(rbac.ObjectRBAC, rbac.ActionWrite))
+
+	e.POST("/push/topology", push.PushTopology)
 
 	// Serve openapi schemas
 	schemaServer, err := utils.HTTPFileserver(openapi.Schemas)

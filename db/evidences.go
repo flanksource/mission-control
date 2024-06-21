@@ -6,6 +6,7 @@ import (
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/models"
 )
 
 type Hypothesis struct {
@@ -18,7 +19,7 @@ type EvidenceScriptInput struct {
 	ConfigAnalysis api.ConfigAnalysis `json:"config_analysis,omitempty" gorm:"foreignKey:ConfigAnalysisID;references:ID"`
 	ConfigItem     api.ConfigItem     `json:"config,omitempty" gorm:"foreignKey:ConfigID;references:ID"`
 	Check          api.Check          `json:"check,omitempty" gorm:"foreignKey:CheckID;references:ID"`
-	Component      api.Component      `json:"component,omitempty"`
+	Component      models.Component   `json:"component,omitempty"`
 	Hypothesis     Hypothesis
 }
 
