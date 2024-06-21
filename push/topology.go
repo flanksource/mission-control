@@ -45,7 +45,7 @@ func PushTopology(c echo.Context) error {
 		Name:      data.Name,
 		Namespace: data.Namespace,
 		Labels:    data.Labels,
-		Source:    "UI",
+		Source:    "Push",
 	}
 
 	if err = topologyObj.Save(ctx.DB()); err != nil {
