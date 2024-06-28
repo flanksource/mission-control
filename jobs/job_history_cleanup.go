@@ -9,7 +9,7 @@ import (
 
 var cleanupStaleJobHistory = &job.Job{
 	Name:       "CleanupStaleJobHistory",
-	Schedule:   "@every 24h",
+	Schedule:   "15 1 * * *", // Everyday at 1:15 AM
 	Singleton:  true,
 	JobHistory: true,
 	Retention:  job.RetentionFew,
@@ -28,6 +28,25 @@ var cleanupStaleJobHistory = &job.Job{
 		}
 
 		ctx.History.SuccessCount = count + runningStale
+		return nil
+	},
+}
+
+var cleanupStaleAgentJobHistory = &job.Job{
+	Name:       "CleanupStaleAgentJobHistory",
+	Schedule:   "0 1 * * *", // Everyday at 1 AM
+	Singleton:  true,
+	JobHistory: true,
+	Retention:  job.RetentionFew,
+	RunNow:     true,
+	Fn: func(ctx job.JobRuntime) error {
+		itemsToRetain := ctx.Properties().Int("job.history.agentItemsToRetain", 3)
+		count, err := job.CleanupStaleAgentHistory(ctx.Context, itemsToRetain)
+		if err != nil {
+			return fmt.Errorf("error cleaning stale agent job histories: %w", err)
+		}
+
+		ctx.History.SuccessCount = count
 		return nil
 	},
 }
