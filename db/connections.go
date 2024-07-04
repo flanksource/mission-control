@@ -157,7 +157,7 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 		if obj.Spec.MSSQL.URL.String() != "" {
 			dbObj.URL = obj.Spec.MSSQL.URL.String()
 		} else {
-			dbObj.URL = `Server=$(properties.host);Database=$(properties.database);User Id=$(username);Password=$(password);TrustServerCertificate=$(properties.trust_server_certificate)`
+			dbObj.URL = "sqlserver://$(username):$(password)@$(properties.host)?database=$(properties.database)&TrustServerCertificate=$(properties.trust_server_certificate)"
 			dbObj.Username = obj.Spec.MSSQL.Username.String()
 			dbObj.Password = obj.Spec.MSSQL.Password.String()
 			dbObj.Properties = map[string]string{
