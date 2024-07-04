@@ -75,8 +75,8 @@ func (t *agentWrapper) Reconcile(upstreamPort int) error {
 		Labels:    []string{"test"},
 	}
 
-	_, _, err := upstream.ReconcileAll(t.Context, upstreamConfig, 100)
-	return err
+	summary := upstream.ReconcileAll(t.Context, upstreamConfig, 100)
+	return summary.Error()
 }
 
 func (t *agentWrapper) StartServer() {
