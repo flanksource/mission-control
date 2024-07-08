@@ -48,6 +48,8 @@ var (
 		".js",
 		".png",
 	}
+	AllowedCORS            []string
+	AllowedCORSCredentials []string
 )
 
 func New(ctx context.Context) *echov4.Echo {
@@ -81,6 +83,15 @@ func New(ctx context.Context) *echov4.Echo {
 
 	e.GET("/properties", Properties)
 	e.POST("/resources/search", SearchResources, rbac.Authorization(rbac.ObjectCatalog, rbac.ActionRead))
+
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowOrigins: AllowedCORS,
+	}))
+
+	e.OPTIONS("/", nil, middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowCredentials: true,
+		AllowOrigins:     AllowedCORSCredentials,
+	}))
 
 	e.GET("/health", func(c echov4.Context) error {
 		return c.String(http.StatusOK, "OK")
