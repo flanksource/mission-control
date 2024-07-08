@@ -121,7 +121,10 @@ func UpdateAccountProperties(c echo.Context) error {
 
 func WhoAmI(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
-	userID := c.Request().Header.Get(api.UserIDHeaderKey)
+	userID := GetUserID(c)
+	if userID == "" {
+		return c.JSON(http.StatusUnauthorized, dutyAPI.HTTPError{Message: "Invalid username or password"})
+	}
 	user, err := db.GetUserByID(ctx, userID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{

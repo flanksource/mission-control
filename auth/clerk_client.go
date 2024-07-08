@@ -10,7 +10,6 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/rbac"
 	"github.com/golang-jwt/jwt/v4"
@@ -140,7 +139,7 @@ func (h ClerkHandler) Session(next echo.HandlerFunc) echo.HandlerFunc {
 		}
 
 		c.Request().Header.Set(echo.HeaderAuthorization, fmt.Sprintf("Bearer %s", token))
-		c.Request().Header.Set(api.UserIDHeaderKey, user.ID.String())
+		SetUserID(c, user.ID.String())
 
 		ctx.GetSpan().SetAttributes(
 			attribute.String("clerk-user-id", user.ExternalID),

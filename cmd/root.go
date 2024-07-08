@@ -97,7 +97,7 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&auth.ClerkJWKSURL, "clerk-jwks-url", "", "Clerk JWKS URL")
 	flags.StringVar(&auth.ClerkOrgID, "clerk-org-id", "", "Clerk Organization ID")
 	flags.StringVar(&postgrestURI, "postgrest-uri", "http://localhost:3000", "URL for the PostgREST instance to use. If localhost is supplied, a PostgREST instance will be started")
-	flags.StringVar(&auth.AuthMode, "auth", "", "Enable authentication via Kratos or Clerk. Valid values are [kratos, clerk]")
+	flags.StringVar(&vars.AuthMode, "auth", "", "Enable authentication via Kratos or Clerk. Valid values are [kratos, clerk]")
 	flags.BoolVar(&disablePostgrest, "disable-postgrest", false, "Disable PostgREST. Deprecated (Use --postgrest-uri '' to disable PostgREST)")
 	flags.BoolVar(&disableKubernetes, "disable-kubernetes", false, "Disable Kubernetes (non-operator mode)")
 	flags.StringVar(&mail.FromAddress, "email-from-address", "no-reply@flanksource.com", "Email address of the sender")

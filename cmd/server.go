@@ -29,6 +29,7 @@ import (
 	"github.com/flanksource/incident-commander/notification"
 	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/teams"
+	"github.com/flanksource/incident-commander/vars"
 
 	// register event handlers
 	_ "github.com/flanksource/incident-commander/playbook"
@@ -135,12 +136,12 @@ var Serve = &cobra.Command{
 
 		if postgrestURI != "" {
 			echo.Forward(e, "/db", postgrestURI,
-				rbac.Authorization(rbac.ObjectDatabase, "any"),
+				rbac.DbMiddleware(),
 				db.SearchQueryTransformMiddleware(),
 			)
 		}
 
-		if auth.AuthMode != "" {
+		if vars.AuthMode != "" {
 			db.PostgresDBAnonRole = "postgrest_api"
 			if err := auth.Middleware(ctx, e); err != nil {
 				logger.Fatalf(err.Error())

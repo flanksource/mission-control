@@ -1,4 +1,4 @@
-package auth
+package echo
 
 import (
 	"net/http"
@@ -11,7 +11,7 @@ import (
 // mockAuthMiddleware doesn't actually authenticate since we never store auth data.
 // It simply ensures that the requested user exists in the DB and then attaches the
 // users's ID to the context.
-func MockMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
+func MockAuthMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		name, _, ok := c.Request().BasicAuth()
 		if !ok {

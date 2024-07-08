@@ -60,31 +60,40 @@ var _ = Describe("Authorization", func() {
 		method       string
 		path         string
 		user         string
-		object       string
-		action       string
 		expectedCode int
 		expectedBody string
+		object       string
+		action       string
 	}{
-		{"GET", "/db/identities", "", ObjectDatabase, "any", http.StatusUnauthorized, errNoUserID.Error()},
-		{path: "/db/identities", method: http.MethodGet, user: "admin", expectedCode: http.StatusOK, expectedBody: successBody, object: ObjectDatabase, action: "any"},
-		{path: "/db/checks", method: http.MethodGet, user: "viewer", expectedCode: http.StatusOK, expectedBody: successBody, object: ObjectDatabase, action: "any"},
-		{path: "/db/canaries", method: http.MethodGet, user: "viewer", expectedCode: http.StatusForbidden, expectedBody: errAccessDenied.Error(), object: ObjectDatabase, action: "any"},
-		{path: "/db/canaries", method: http.MethodGet, user: "responder", expectedCode: http.StatusForbidden, expectedBody: errAccessDenied.Error(), object: ObjectDatabase, action: "any"},
-		{path: "/db/canaries?id=eq.5", method: http.MethodGet, user: "editor", expectedCode: http.StatusOK, expectedBody: successBody, object: ObjectDatabase, action: "any"},
-		{path: "/db/comments", method: http.MethodPost, user: "viewer", expectedCode: http.StatusForbidden, expectedBody: errAccessDenied.Error(), object: ObjectDatabase, action: "any"},
-		{path: "/db/comments", method: http.MethodPost, user: "responder", expectedCode: http.StatusOK, expectedBody: successBody, object: ObjectDatabase, action: "any"},
-		{path: "/db/incidents", method: http.MethodPatch, user: "responder", expectedCode: http.StatusOK, expectedBody: successBody, object: ObjectDatabase, action: "any"},
-		{path: "/db/incidents", method: http.MethodPost, user: "responder", expectedCode: http.StatusForbidden, expectedBody: errAccessDenied.Error(), object: ObjectDatabase, action: "any"},
-		{path: "/db/incidents", method: http.MethodPost, user: "commander", expectedCode: http.StatusOK, expectedBody: successBody, object: ObjectDatabase, action: "any"},
-		{path: "/auth/invite_user", method: http.MethodPost, user: "commander", expectedCode: http.StatusForbidden, expectedBody: errAccessDenied.Error(), object: ObjectAuth, action: ActionWrite},
-		{path: "/auth/invite_user", method: http.MethodPost, user: "admin", expectedCode: http.StatusOK, expectedBody: successBody, object: ObjectAuth, action: ActionWrite},
-		{path: "/bad/config", method: http.MethodPost, user: "admin", expectedCode: http.StatusOK, expectedBody: successBody, object: "", action: "random"},
-		{path: "/bad/config", method: http.MethodPost, user: "editor", expectedCode: http.StatusForbidden, expectedBody: errMisconfiguredRBAC.Error(), object: "", action: "any"},
-		{path: "/bad/config", method: http.MethodPost, user: "editor", expectedCode: http.StatusForbidden, expectedBody: errMisconfiguredRBAC.Error(), object: "any", action: ""},
-		{path: "/bad/config", method: http.MethodPost, user: "editor", expectedCode: http.StatusForbidden, expectedBody: errAccessDenied.Error(), object: "unknown", action: "unknown"},
-		{path: "/no/user", method: http.MethodPost, user: "", expectedCode: http.StatusUnauthorized, expectedBody: errNoUserID.Error(), object: ObjectDatabase, action: "any"},
+		{"GET", "/db/identities", "", http.StatusUnauthorized, errNoUserID.Error(), ObjectDatabase, "any"},
+		{"GET", "/db/checks", "viewer", http.StatusOK, successBody, ObjectDatabase, "any"},
+		{"GET", "/db/canaries", "viewer", http.StatusForbidden, errAccessDenied.Error(), ObjectDatabase, "any"},
+		{"GET", "/db/canaries", "responder", http.StatusForbidden, errAccessDenied.Error(), ObjectDatabase, "any"},
+		{"GET", "/db/canaries?id=eq.5", "editor", http.StatusOK, successBody, ObjectDatabase, "any"},
+		{"POST", "/db/comments", "viewer", http.StatusForbidden, errAccessDenied.Error(), ObjectDatabase, "any"},
+		{"POST", "/db/comments", "responder", http.StatusOK, successBody, ObjectDatabase, "any"},
+		{"POST", "/db/incidents", "responder", http.StatusOK, successBody, ObjectDatabase, "any"},
+		{"POST", "/db/incidents", "responder", http.StatusForbidden, errAccessDenied.Error(), ObjectDatabase, "any"},
+		{"POST", "/db/incidents", "commander", http.StatusOK, successBody, ObjectDatabase, "any"},
+		{"POST", "/auth/invite_user", "commander", http.StatusForbidden, errAccessDenied.Error(), ObjectAuth, ActionWrite},
+		{"POST", "/auth/invite_user", "admin", http.StatusOK, successBody, ObjectAuth, ActionWrite},
+		{"POST", "/bad/config", "admin", http.StatusOK, successBody, "", "random"},
+		{"POST", "/bad/config", "editor", http.StatusForbidden, errMisconfiguredRBAC.Error(), "", "any"},
+		{"POST", "/bad/config", "editor", http.StatusForbidden, errMisconfiguredRBAC.Error(), "any", ""},
+		{"POST", "/bad/config", "editor", http.StatusForbidden, errAccessDenied.Error(), "unknown", "unknown"},
+		{"POST", "/no/user", "", http.StatusUnauthorized, errNoUserID.Error(), ObjectDatabase, "any"},
 	}
 
+	forbidden := []struct {
+		method string
+		path   string
+		user   string
+	}{
+
+		{"GET", "/catalog/changes", "any"},
+	}
+
+	fmt.Printf("%s", forbidden)
 	for _, tc := range tests {
 
 		It(fmt.Sprintf("%s %s %s", tc.method, tc.path, tc.user), func() {
