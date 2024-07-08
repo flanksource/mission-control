@@ -1,87 +1,90 @@
 package push
 
-import (
-	"fmt"
-	"io"
+//import (
+//"fmt"
+//"io"
+//"strings"
+////"time"
 
-	"github.com/flanksource/commons/http"
-	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/duty"
-	dbutils "github.com/flanksource/duty/db"
-	"github.com/flanksource/duty/job"
-	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/query"
-	"github.com/flanksource/incident-commander/api"
-	"github.com/labstack/echo/v4"
-)
+//"github.com/flanksource/commons/logger"
+//"github.com/flanksource/duty"
+//dbutils "github.com/flanksource/duty/db"
+//"github.com/flanksource/duty/job"
+//"github.com/flanksource/duty/models"
+//"github.com/flanksource/incident-commander/api"
+//)
 
-func pushTopologiesWithLocation(ctx job.JobRuntime) error {
-	var rows []struct {
-		ID  string
-		URL string
-	}
-	if err := ctx.DB().Model(&models.Topology{}).
-		Select("id", "spec->'pushLocation'->>'url' as url").Where(duty.LocalFilter).Where("spec ? 'pushLocation'").
-		Scan(&rows).Error; err != nil {
-		return fmt.Errorf("error querying topologies with location: %w", dbutils.ErrorDetails(err))
-	}
+//func pushTopologiesWithLocation(ctx job.JobRuntime) error {
+//var rows []struct {
+//ID  string
+//URL string
+//}
+//localFilter := strings.ReplaceAll(duty.LocalFilter, "deleted_at", "topologies.deleted_at")
+//localFilter = strings.ReplaceAll(localFilter, "agent_id", "topologies.agent_id")
+//if err := ctx.DB().Model(&models.Topology{}).
+//Select("topologies.id as topology_id", "spec->'pushLocation'->>'url' as url", "components.id as id").
+//Joins("LEFT JOIN components ON  components.topology_id = topologies.id").
+//Where(localFilter).
+//Where("spec ? 'pushLocation'").Where("components.parent_id IS NULL").
+//Scan(&rows).Error; err != nil {
+//return fmt.Errorf("error querying topologies with location: %w", dbutils.ErrorDetails(err))
+//}
 
-	var agentName string
-	if api.UpstreamConf.Valid() {
-		agentName = api.UpstreamConf.AgentName
-	}
+////time.Sleep(time.Minute * 5)
 
-	logger.Infof("GOT ROWS = %d", len(rows))
-	httpClient := http.NewClient()
-	for _, row := range rows {
-		opts := query.TopologyOptions{ID: row.ID}
-		tree, err := query.Topology(ctx.Context, opts)
-		if err != nil {
-			ctx.History.AddErrorf("error querying topology tree: %v", err)
-			continue
-		}
+//// SELECT component id from topology id
 
-		// TODO: Figure out auth
-		req := httpClient.R(ctx).
-			Header(echo.HeaderContentType, echo.MIMEApplicationJSON)
+//var agentName string
+//if api.UpstreamConf.Valid() {
+//agentName = api.UpstreamConf.AgentName
+//}
 
-		if agentName != "" {
-			req.QueryParam("agentName", agentName)
-		}
+//logger.Infof("GOT ROWS = %d", len(rows))
+//for _, row := range rows {
+//if err != nil {
+//ctx.History.AddErrorf("error querying topology tree: %v", err)
+//continue
+//}
 
-		logger.Infof("PUSH URL Is %v", row)
-		endpoint := fmt.Sprintf("%s/push/topology", row.URL)
-		resp, err := req.Post(endpoint, tree)
-		if err != nil {
-			ctx.History.AddErrorf("error pushing topology tree to location[%s]: %v", endpoint, err)
-			logger.Infof("YASH ERROR IS %v", err)
-			fmt.Printf("YASH ERROR IS %v", err)
-			continue
-		}
+//// TODO: Figure out auth
 
-		if !resp.IsOK() {
-			respBody, _ := io.ReadAll(resp.Body)
-			ctx.History.AddErrorf("non 2xx response for pushing topology tree to location[%s]: %s, %s", row.URL, resp.Status, string(respBody))
-			logger.Infof("YASH2 ERROR IS %v", resp.Body)
-			fmt.Printf("YASH2 ERROR IS %v", resp.Body)
-			continue
-		}
+//if agentName != "" {
+//req.QueryParam("agentName", agentName)
+//}
 
-		logger.Infof("YASH3 Resp is %v", resp.Status)
-		fmt.Printf("YASH3 Resp is %v", resp.Status)
-		ctx.History.IncrSuccess()
-	}
+//// TODO: Handle error with 0 components
+//logger.Infof("PUSH URL Is %v", row)
+//resp, err := req.
+//if err != nil {
+//ctx.History.AddErrorf("error pushing topology tree to location[%s]: %v", endpoint, err)
+//logger.Infof("YASH ERROR IS %v", err)
+//fmt.Printf("YASH ERROR IS %v", err)
+//continue
+//}
 
-	return nil
-}
+//if !resp.IsOK() {
+//respBody, _ := io.ReadAll(resp.Body)
+//ctx.History.AddErrorf("non 2xx response for pushing topology tree to location[%s]: %s, %s", row.URL, resp.Status, string(respBody))
+//logger.Infof("YASH2 ERROR IS %v", resp.Body)
+//fmt.Printf("YASH2 ERROR IS %v", resp.Body)
+//continue
+//}
 
-// PushTopologiesWithLocation periodically pulls playbook actions to run
-var PushTopologiesWithLocation = &job.Job{
-	Name:       "PushTopologiesWithLocation",
-	Schedule:   "@every 5m",
-	Retention:  job.RetentionFew,
-	JobHistory: true,
-	RunNow:     true,
-	Singleton:  true,
-	Fn:         pushTopologiesWithLocation,
-}
+//logger.Infof("YASH3 Resp is %v", resp.Status)
+//fmt.Printf("YASH3 Resp is %v", resp.Status)
+//ctx.History.IncrSuccess()
+//}
+
+//return nil
+//}
+
+//// PushTopologiesWithLocation periodically pulls playbook actions to run
+//var PushTopologiesWithLocation = &job.Job{
+//Name:       "PushTopologiesWithLocation",
+//Schedule:   "@every 5m",
+//Retention:  job.RetentionFew,
+//JobHistory: true,
+//RunNow:     true,
+//Singleton:  true,
+//Fn:         pushTopologiesWithLocation,
+//}
