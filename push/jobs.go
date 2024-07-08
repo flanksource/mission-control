@@ -5,6 +5,7 @@ import (
 	"io"
 
 	"github.com/flanksource/commons/http"
+	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty"
 	dbutils "github.com/flanksource/duty/db"
 	"github.com/flanksource/duty/job"
@@ -16,11 +17,11 @@ import (
 
 func pushTopologiesWithLocation(ctx job.JobRuntime) error {
 	var rows []struct {
-		ID           string
-		PushLocation string
+		ID  string
+		URL string
 	}
 	if err := ctx.DB().Model(&models.Topology{}).
-		Select("id", "spec->'pushLocation'").Where(duty.LocalFilter).Where("spec->>'pushLocation' != ''").
+		Select("id", "spec->'pushLocation'->>'url' as url").Where(duty.LocalFilter).Where("spec ? 'pushLocation'").
 		Scan(&rows).Error; err != nil {
 		return fmt.Errorf("error querying topologies with location: %w", dbutils.ErrorDetails(err))
 	}
@@ -30,6 +31,7 @@ func pushTopologiesWithLocation(ctx job.JobRuntime) error {
 		agentName = api.UpstreamConf.AgentName
 	}
 
+	logger.Infof("GOT ROWS = %d", len(rows))
 	httpClient := http.NewClient()
 	for _, row := range rows {
 		opts := query.TopologyOptions{ID: row.ID}
@@ -40,22 +42,33 @@ func pushTopologiesWithLocation(ctx job.JobRuntime) error {
 		}
 
 		// TODO: Figure out auth
-		resp, err := httpClient.R(ctx).
-			Header(echo.HeaderContentType, echo.MIMEApplicationJSON).
-			QueryParam("agentName", agentName).
-			Post(fmt.Sprintf("%s/push/topology", row.PushLocation), tree)
+		req := httpClient.R(ctx).
+			Header(echo.HeaderContentType, echo.MIMEApplicationJSON)
 
+		if agentName != "" {
+			req.QueryParam("agentName", agentName)
+		}
+
+		logger.Infof("PUSH URL Is %v", row)
+		endpoint := fmt.Sprintf("%s/push/topology", row.URL)
+		resp, err := req.Post(endpoint, tree)
 		if err != nil {
-			ctx.History.AddErrorf("error pushing topology tree to location[%s]: %v", row.PushLocation, err)
+			ctx.History.AddErrorf("error pushing topology tree to location[%s]: %v", endpoint, err)
+			logger.Infof("YASH ERROR IS %v", err)
+			fmt.Printf("YASH ERROR IS %v", err)
 			continue
 		}
 
 		if !resp.IsOK() {
 			respBody, _ := io.ReadAll(resp.Body)
-			ctx.History.AddErrorf("non 2xx response for pushing topology tree to location[%s]: %s, %s", row.PushLocation, resp.Status, string(respBody))
+			ctx.History.AddErrorf("non 2xx response for pushing topology tree to location[%s]: %s, %s", row.URL, resp.Status, string(respBody))
+			logger.Infof("YASH2 ERROR IS %v", resp.Body)
+			fmt.Printf("YASH2 ERROR IS %v", resp.Body)
 			continue
 		}
 
+		logger.Infof("YASH3 Resp is %v", resp.Status)
+		fmt.Printf("YASH3 Resp is %v", resp.Status)
 		ctx.History.IncrSuccess()
 	}
 

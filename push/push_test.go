@@ -6,6 +6,8 @@ package push
 // Manage auth
 
 import (
+	"fmt"
+
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
 	ginkgo "github.com/onsi/ginkgo/v2"
@@ -15,13 +17,25 @@ import (
 
 var _ = ginkgo.Describe("Push", ginkgo.Ordered, func() {
 
+	topologyNotToPush := models.Topology{
+		Name:   "box",
+		Source: models.SourceUI,
+		Spec: []byte(`{
+          "name": "box",
+          "components": [
+            {"name": "item1"},
+            {"name": "item2"}
+          ]
+        }`),
+	}
+
 	topologyDB := models.Topology{
 		Name:   "laptop",
 		Source: models.SourceCRD,
 		Spec: []byte(`{
           "name": "laptop",
           "pushLocation": {
-            "url": "localhost"
+            "url": "http://localhost"
           },
           "components": [
             {"name": "keyboard", "properties": [{"name": "color", "text": "black"}]},
@@ -65,6 +79,10 @@ var _ = ginkgo.Describe("Push", ginkgo.Ordered, func() {
 		Expect(err).ToNot(BeNil())
 		Expect(topologyDB.ID).ToNot(Equal(uuid.Nil))
 
+		err = DefaultContext.DB().Save(&topologyNotToPush)
+		Expect(err).ToNot(BeNil())
+		Expect(topologyDB.ID).ToNot(Equal(uuid.Nil))
+
 		// Populate component in db
 		err = DefaultContext.DB().Save(&componentLaptop)
 		Expect(err).ToNot(BeNil())
@@ -93,7 +111,14 @@ var _ = ginkgo.Describe("Push", ginkgo.Ordered, func() {
 		Expect(err).ToNot(BeNil())
 	})
 
-	ginkgo.It("should push all tables", func() {
+	ginkgo.It("should query all topologies to be pushed", func() {
+		PushTopologiesWithLocation.Context = DefaultContext
+		PushTopologiesWithLocation.Run()
+		var jh models.JobHistory
+		DefaultContext.DB().Where("name = ?", PushTopologiesWithLocation.Name).Order("created_at DESC").First(&jh)
+
+		fmt.Println(jh.Status)
+		fmt.Println(jh.Errors)
 		Expect("1").To(Equal("1"))
 	})
 
