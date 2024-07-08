@@ -2,6 +2,7 @@ package rbac
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/casbin/casbin/v2"
@@ -11,25 +12,111 @@ import (
 	"gorm.io/gorm"
 )
 
+func Read(objects ...string) ACL {
+	return ACL{
+		Actions: ActionRead,
+		Objects: strings.Join(objects, ","),
+	}
+}
+func Write(objects ...string) ACL {
+	return ACL{
+		Actions: ActionWrite,
+		Objects: strings.Join(objects, ","),
+	}
+}
+func Approve(objects ...string) ACL {
+	return ACL{
+		Actions: ActionApprove,
+		Objects: strings.Join(objects, ","),
+	}
+}
+
+func Create(objects ...string) ACL {
+	return ACL{
+		Actions: ActionCreate,
+		Objects: strings.Join(objects, ","),
+	}
+}
+func Delete(objects ...string) ACL {
+	return ACL{
+		Actions: ActionDelete,
+		Objects: strings.Join(objects, ","),
+	}
+}
+func CRUD(objects ...string) ACL {
+	return ACL{
+		Actions: ActionCRUD,
+		Objects: strings.Join(objects, ","),
+	}
+}
+func Run(objects ...string) ACL {
+	return ACL{
+		Actions: ActionRun,
+		Objects: strings.Join(objects, ","),
+	}
+}
+
+func All(objects ...string) ACL {
+	return ACL{
+		Actions: ActionAll,
+		Objects: strings.Join(objects, ","),
+	}
+}
+
+type ACL struct {
+	Objects   string `yaml:"objects" json:"objects"`
+	Actions   string `yaml:"actions" json:"actions"`
+	Principal string `yaml:"principal,omitempty" json:"principal,omitempty"`
+}
+
+func (acl ACL) GetPolicyDefinition() [][]string {
+	var definitions [][]string
+	for _, object := range strings.Split(acl.Objects, ",") {
+		for _, action := range strings.Split(acl.Actions, ",") {
+			if strings.HasPrefix(action, "!") {
+				definitions = append(definitions, []string{acl.Principal, object, action[1:], "deny"})
+			} else {
+				definitions = append(definitions, []string{acl.Principal, object, action, "allow"})
+			}
+		}
+	}
+	return definitions
+}
+
+type Policy struct {
+	Principal string   `yaml:"principal" json:"principal"`
+	ACLs      []ACL    `yaml:"acl" json:"acl"`
+	Inherit   []string `yaml:"inherit" json:"inherit"`
+}
+
+func (p Policy) GetPolicyDefintions() [][]string {
+	var definitions [][]string
+	for _, acl := range p.ACLs {
+		definitions = append(definitions, acl.GetPolicyDefinition()...)
+	}
+	return definitions
+}
+
 const (
 	modelDefinition = `
     [request_definition]
     r = sub, obj, act
 
     [policy_definition]
-    p = sub, obj, act
+    p = sub, obj, act, eft
 
     [role_definition]
     g = _, _
 
     [policy_effect]
-    e = some(where (p.eft == allow))
+		e = some(where (p.eft == allow)) && !some(where (p.eft == deny))
 
     [matchers]
-    m = g(r.sub, p.sub) && r.obj == p.obj && r.act == p.act`
+    m = g(r.sub, p.sub) && ( p.obj == '*' || r.obj == p.obj) && (p.act == '*' || r.act == p.act)`
 
 	// Roles
 	RoleAdmin     = "admin"
+	RoleEveryone  = "everyone"
 	RoleEditor    = "editor"
 	RoleViewer    = "viewer"
 	RoleCommander = "commander"
@@ -37,30 +124,40 @@ const (
 	RoleAgent     = "agent"
 
 	// Actions
-	ActionRead   = "read"
-	ActionWrite  = "write"
-	ActionUpdate = "update"
-	ActionCreate = "create"
+	ActionRead    = "read"
+	ActionWrite   = "write"
+	ActionCreate  = "create"
+	ActionDelete  = "delete"
+	ActionRun     = "run"
+	ActionApprove = "approve"
+	ActionAll     = "*"
+	ActionCRUD    = "create,read,update,delete"
 
 	// Objects
-	ObjectRBAC        = "rbac"
-	ObjectAuth        = "auth"
-	ObjectAgentPush   = "agent-push"
-	ObjectAgentCreate = "agent-create"
-	ObjectDatabase    = "database"
-
-	ObjectDatabaseResponder      = "database.responder"
-	ObjectDatabaseIncident       = "database.incident"
-	ObjectDatabaseEvidence       = "database.evidences"
-	ObjectDatabaseComment        = "database.comments"
-	ObjectDatabaseCanary         = "database.canaries"
-	ObjectDatabaseSystemTemplate = "database.system_templates"
-	ObjectDatabaseConfigScraper  = "database.config_scrapers"
-	ObjectDatabaseIdentity       = "database.identities"
-	ObjectDatabaseConnection     = "database.connections"
-	ObjectDatabaseKratosTable    = "database.kratos"
+	ObjectLogs             = "logs"
+	ObjectAgent            = "agent"
+	ObjectAgentPush        = "agent-push"
+	ObjectArtifact         = "artifact"
+	ObjectAuth             = "auth"
+	ObjectCanary           = "canaries"
+	ObjectCatalog          = "catalog"
+	ObjectConnection       = "connection"
+	ObjectDatabase         = "database"
+	ObjectDatabaseIdentity = "database.identities"
+	ObjectAuthConfidential = "database.kratos"
+	ObjectDatabasePublic   = "database.public"
+	ObjectDatabaseSettings = "database.config_scrapers"
+	ObjectDatabaseSystem   = "database.system"
+	ObjectIncident         = "incident"
+	ObjectMonitor          = "database.monitor"
+	ObjectPlaybooks        = "playbooks"
+	ObjectRBAC             = "rbac"
+	ObjectTopology         = "topology"
 )
 
+var (
+	AllActions = []string{ActionApprove, ActionCreate, ActionRead, ActionRun, ActionWrite, ActionDelete}
+)
 var Enforcer *casbin.Enforcer
 
 func Init(db *gorm.DB, adminUserID string) error {
@@ -86,57 +183,73 @@ func Init(db *gorm.DB, adminUserID string) error {
 		}
 	}
 
-	// Hierarchial policies
-	if _, err := Enforcer.AddGroupingPolicy(RoleEditor, RoleCommander); err != nil {
-		return fmt.Errorf("error adding group policy for role editor to commander: %v", err)
-	}
-	if _, err := Enforcer.AddGroupingPolicy(RoleCommander, RoleResponder); err != nil {
-		return fmt.Errorf("error adding group policy for role commander to responder: %v", err)
-	}
+	policies := []Policy{
+		{
+			Principal: RoleEveryone,
+			ACLs: []ACL{
+				{
+					Actions: "!read",
+					Objects: strings.Join([]string{ObjectAuthConfidential}, ","),
+				},
+			},
+		},
+		{
+			Principal: RoleAdmin,
+			ACLs:      []ACL{All("*")},
+		}, {
+			Principal: RoleViewer,
+			ACLs: []ACL{Read(
+				ObjectDatabasePublic,
+				ObjectCanary,
+				ObjectCatalog,
+				ObjectPlaybooks,
+				ObjectTopology)},
+		},
+		{
+			Inherit:   []string{RoleViewer},
+			Principal: RoleCommander,
+			ACLs: []ACL{
+				CRUD(ObjectIncident),
+			},
+		},
+		{
+			Inherit:   []string{RoleViewer},
+			Principal: RoleResponder,
+			ACLs: []ACL{
+				CRUD(ObjectIncident),
+			},
+		},
+		{
+			Inherit:   []string{RoleViewer},
+			Principal: RoleEditor,
+			ACLs: []ACL{
+				CRUD(ObjectCanary, ObjectCatalog, ObjectTopology, ObjectPlaybooks),
+				Run(ObjectPlaybooks),
+				Approve(ObjectPlaybooks),
+			},
+		},
 
-	policies := [][]string{
-		// If the user is admin, no check takes place
-		// we have these policies as placeholders
-		{RoleAdmin, ObjectDatabase, ActionRead},
-		{RoleAdmin, ObjectDatabase, ActionWrite},
-		{RoleAdmin, ObjectRBAC, ActionWrite},
-		{RoleAdmin, ObjectAuth, ActionWrite},
-		{RoleAdmin, ObjectAgentPush, ActionWrite},
-		{RoleAdmin, ObjectAgentCreate, ActionWrite},
-		{RoleAdmin, ObjectDatabaseIdentity, ActionRead},
-		{RoleAdmin, ObjectDatabaseConnection, ActionRead},
-		{RoleAdmin, ObjectDatabaseConnection, ActionCreate},
-		{RoleAdmin, ObjectDatabaseConnection, ActionUpdate},
-
-		{RoleEditor, ObjectDatabaseCanary, ActionCreate},
-		{RoleEditor, ObjectDatabaseCanary, ActionUpdate},
-		{RoleEditor, ObjectDatabaseCanary, ActionRead},
-		{RoleEditor, ObjectDatabaseSystemTemplate, ActionCreate},
-		{RoleEditor, ObjectDatabaseSystemTemplate, ActionUpdate},
-		{RoleEditor, ObjectDatabaseSystemTemplate, ActionRead},
-		{RoleEditor, ObjectDatabaseConfigScraper, ActionCreate},
-		{RoleEditor, ObjectDatabaseConfigScraper, ActionUpdate},
-		{RoleEditor, ObjectDatabaseConfigScraper, ActionRead},
-
-		{RoleCommander, ObjectDatabaseResponder, ActionCreate},
-		{RoleCommander, ObjectDatabaseIncident, ActionCreate},
-		{RoleCommander, ObjectDatabaseIncident, ActionUpdate},
-		{RoleCommander, ObjectDatabaseEvidence, ActionCreate},
-		{RoleCommander, ObjectDatabaseEvidence, ActionUpdate},
-
-		{RoleResponder, ObjectDatabaseComment, ActionCreate},
-		{RoleResponder, ObjectDatabaseIncident, ActionUpdate},
-
-		{RoleViewer, ObjectDatabase, ActionRead},
-
-		{RoleAgent, ObjectAgentPush, ActionWrite},
+		{
+			Principal: RoleAgent,
+			ACLs: []ACL{
+				Read(ObjectPlaybooks, ObjectDatabasePublic),
+				Write(ObjectAgentPush),
+			},
+		},
 	}
 
 	// Adding policies in a loop is important
 	// If we use Enforcer.AddPolicies(), new policies do not get saved
 	for _, p := range policies {
-		if _, err := Enforcer.AddPolicy(p); err != nil {
-			return fmt.Errorf("error adding rbac policy %s: %v", p, err)
+		for _, inherited := range p.Inherit {
+			if _, err := Enforcer.AddGroupingPolicy(inherited, p.Principal); err != nil {
+				return fmt.Errorf("error adding group policy for role editor to commander: %v", err)
+			}
+		}
+		for _, acl := range p.GetPolicyDefintions() {
+			if _, err := Enforcer.AddPolicy(acl); err != nil {
+				return fmt.Errorf("error adding rbac policy %s: %v", p, err)
+			}
 		}
 	}
 
@@ -152,6 +265,15 @@ func Init(db *gorm.DB, adminUserID string) error {
 }
 
 func Check(subject, object, action string) bool {
+	hasEveryone, err := Enforcer.HasRoleForUser(subject, RoleEveryone)
+
+	if err != nil {
+		logger.Errorf("RBAC Enforce failed: %v", err)
+		return false
+	}
+	if !hasEveryone {
+		Enforcer.AddRoleForUser(subject, RoleEveryone)
+	}
 	allowed, err := Enforcer.Enforce(subject, object, action)
 	if err != nil {
 		logger.Errorf("RBAC Enforce failed: %v", err)

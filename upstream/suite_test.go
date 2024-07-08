@@ -8,7 +8,7 @@ import (
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/tests/setup"
 	"github.com/flanksource/duty/upstream"
-	"github.com/flanksource/incident-commander/auth"
+	"github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/postq"
 	"github.com/google/uuid"
 	echov4 "github.com/labstack/echo/v4"
@@ -88,7 +88,7 @@ func (t *agentWrapper) StartServer() {
 			return next(c)
 		}
 	})
-	e.Use(auth.MockMiddleware)
+	e.Use(echo.MockAuthMiddleware)
 	RegisterRoutes(e)
 	port, stop := setup.RunEcho(e)
 	t.port = port

@@ -15,13 +15,13 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/rbac"
 )
 
 func RegisterRoutes(e *echo.Echo, prefix string) *echo.Group {
-	g := e.Group(fmt.Sprintf("/%s", prefix))
+	g := e.Group(fmt.Sprintf("/%s", prefix), rbac.Authorization(rbac.ObjectArtifact, rbac.ActionRead))
 	g.GET("/list/check/:id/:check_time", ListArtifacts)
 	g.GET("/list/playbook_run/:id", ListArtifacts)
-
 	g.GET("/download/:id", DownloadArtifact)
 
 	return g
