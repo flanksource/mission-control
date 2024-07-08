@@ -12,10 +12,12 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/jobs"
 	"github.com/flanksource/incident-commander/k8s"
 	"github.com/flanksource/incident-commander/mail"
 	"github.com/flanksource/incident-commander/telemetry"
+	"github.com/flanksource/incident-commander/vars"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"go.opentelemetry.io/otel/attribute"
@@ -44,7 +46,7 @@ func PreRun(cmd *cobra.Command, args []string) {
 
 	if otelcollectorURL != "" {
 		resourceAttrs := []attribute.KeyValue{}
-		if auth.AuthMode == auth.Clerk && auth.ClerkOrgID != "" {
+		if vars.AuthMode == auth.Clerk && auth.ClerkOrgID != "" {
 			resourceAttrs = append(resourceAttrs, attribute.String("org.id", auth.ClerkOrgID))
 		}
 		telemetry.InitTracer(otelServiceName, otelcollectorURL, true, resourceAttrs)
@@ -102,6 +104,8 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.BoolVar(&disableKubernetes, "disable-kubernetes", false, "Disable Kubernetes (non-operator mode)")
 	flags.StringVar(&mail.FromAddress, "email-from-address", "no-reply@flanksource.com", "Email address of the sender")
 	flags.StringVar(&mail.FromName, "email-from-name", "Mission Control", "Email name of the sender")
+	flags.StringSliceVar(&echo.AllowedCORS, "allowed-cors", []string{"*"}, "Allowed CORS origin headers")
+	flags.StringSliceVar(&echo.AllowedCORSCredentials, "allowed-cors-credentials", []string{"https://app.flanksource.com", "https://beta.flanksource.com"}, "Allowed CORS credential origins")
 	flags.StringVar(&db.PostgresDBAnonRole, "postgrest-anon-role", "postgrest_anon", "PostgREST anonymous role")
 	flags.StringVar(&db.PostgrestMaxRows, "postgrest-max-rows", "2000", "A hard limit to the number of rows PostgREST will fetch")
 	flags.StringVar(&auth.IdentityRoleMapper, "identity-role-mapper", "", "CEL-Go expression to map identity to a role & a team (return: {role: string, teams: []string}). Supports file path (prefixed with 'file://').")

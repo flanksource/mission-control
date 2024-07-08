@@ -11,7 +11,7 @@ import (
 	"github.com/flanksource/duty/tests/setup"
 	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/auth"
+	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/labstack/echo/v4"
 	ginkgo "github.com/onsi/ginkgo/v2"
@@ -56,7 +56,7 @@ var _ = ginkgo.BeforeSuite(func() {
 			return next(c)
 		}
 	})
-	e.Use(auth.MockMiddleware)
+	e.Use(echoSrv.MockAuthMiddleware)
 	RegisterRoutes(e)
 
 	upstreamGroup := e.Group("/upstream", upstream.AgentAuthMiddleware(cache.New(24*time.Hour, 12*time.Hour)))
