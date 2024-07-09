@@ -157,7 +157,7 @@ type PodAction struct {
 
 type SQLAction struct {
 	// Connection identifier e.g. connection://Postgres/flanksource
-	Connection string `yaml:"connection,omitempty" json:"connection,omitempty"`
+	Connection string `yaml:"connection,omitempty" json:"connection,omitempty" template:"true"`
 	// URL is the database connection url
 	URL string `yaml:"url,omitempty" json:"url,omitempty"`
 	// Query is the sql query to run
