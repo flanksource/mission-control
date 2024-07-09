@@ -7,7 +7,6 @@ import (
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/incidents"
-	"github.com/flanksource/incident-commander/push"
 	"github.com/robfig/cron/v3"
 )
 
@@ -70,11 +69,6 @@ func Start(ctx context.Context) {
 	}
 
 	startIncidentsJobs(ctx)
-
-	push.PushTopologiesWithLocation.Context = ctx
-	if err := push.PushTopologiesWithLocation.AddToScheduler(FuncScheduler); err != nil {
-		logger.Errorf("Failed to schedule job for pushing topologies with location: %v", err)
-	}
 
 	FuncScheduler.Start()
 }
