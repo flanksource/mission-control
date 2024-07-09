@@ -60,12 +60,12 @@ func Start(ctx context.Context) {
 
 	cleanupStaleJobHistory.Context = ctx
 	if err := cleanupStaleJobHistory.AddToScheduler(FuncScheduler); err != nil {
-		logger.Errorf("Failed to schedule job for cleaning up stale job histor: %v", err)
+		logger.Errorf("Failed to schedule job for cleaning up stale job history: %v", err)
 	}
 
 	cleanupStaleAgentJobHistory.Context = ctx
 	if err := cleanupStaleAgentJobHistory.AddToScheduler(FuncScheduler); err != nil {
-		logger.Errorf("Failed to schedule job for cleaning up stale agent job histor: %v", err)
+		logger.Errorf("Failed to schedule job for cleaning up stale agent job history: %v", err)
 	}
 
 	startIncidentsJobs(ctx)
