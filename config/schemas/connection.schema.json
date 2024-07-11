@@ -3,24 +3,6 @@
   "$id": "https://github.com/flanksource/incident-commander/api/v1/connection",
   "$ref": "#/$defs/Connection",
   "$defs": {
-    "Authentication": {
-      "properties": {
-        "username": {
-          "$ref": "#/$defs/EnvVar"
-        },
-        "password": {
-          "$ref": "#/$defs/EnvVar"
-        },
-        "bearer": {
-          "$ref": "#/$defs/EnvVar"
-        },
-        "oauth": {
-          "$ref": "#/$defs/OAuth"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "ConfigMapKeySelector": {
       "properties": {
         "name": {
@@ -394,24 +376,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "ConnectionPrometheus": {
-      "properties": {
-        "url": {
-          "$ref": "#/$defs/EnvVar"
-        },
-        "Auth": {
-          "$ref": "#/$defs/Authentication"
-        },
-        "insecureTLS": {
-          "type": "boolean"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object",
-      "required": [
-        "Auth"
-      ]
-    },
     "ConnectionPushbullet": {
       "properties": {
         "token": {
@@ -615,7 +579,7 @@
           "$ref": "#/$defs/ConnectionPostgres"
         },
         "prometheus": {
-          "$ref": "#/$defs/ConnectionPrometheus"
+          "$ref": "#/$defs/HTTPConnection"
         },
         "sftp": {
           "$ref": "#/$defs/ConnectionSFTP"
@@ -732,6 +696,33 @@
     },
     "FieldsV1": {
       "properties": {},
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "HTTPConnection": {
+      "properties": {
+        "connection": {
+          "type": "string"
+        },
+        "username": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "password": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "url": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "bearer": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "oauth": {
+          "$ref": "#/$defs/OAuth"
+        },
+        "tls": {
+          "$ref": "#/$defs/TLSConfig"
+        }
+      },
       "additionalProperties": false,
       "type": "object"
     },
@@ -920,6 +911,27 @@
       "required": [
         "key"
       ]
+    },
+    "TLSConfig": {
+      "properties": {
+        "insecureSkipVerify": {
+          "type": "boolean"
+        },
+        "handshakeTimeout": {
+          "type": "integer"
+        },
+        "ca": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "cert": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "key": {
+          "$ref": "#/$defs/EnvVar"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
     },
     "Time": {
       "properties": {},

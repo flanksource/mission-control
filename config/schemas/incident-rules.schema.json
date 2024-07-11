@@ -446,6 +446,9 @@
         "agent": {
           "type": "string"
         },
+        "scope": {
+          "type": "string"
+        },
         "cache": {
           "type": "string"
         },
