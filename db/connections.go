@@ -287,11 +287,12 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 
 	if obj.Spec.Prometheus != nil {
 		dbObj.Type = models.ConnectionTypePrometheus
-		dbObj.Username = obj.Spec.Prometheus.Auth.Username.String()
-		dbObj.Password = obj.Spec.Prometheus.Auth.Password.String()
+		dbObj.URL = obj.Spec.Prometheus.URL.String()
+		dbObj.Username = obj.Spec.Prometheus.Username.String()
+		dbObj.Password = obj.Spec.Prometheus.Password.String()
 		dbObj.Properties = collections.MergeMap(
-			obj.Spec.Prometheus.Auth.OAuth.AsProperties(),
-			map[string]string{"bearer": obj.Spec.Prometheus.Auth.Bearer.String()},
+			obj.Spec.Prometheus.OAuth.AsProperties(),
+			map[string]string{"bearer": obj.Spec.Prometheus.Bearer.String()},
 		)
 	}
 
