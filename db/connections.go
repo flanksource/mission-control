@@ -287,7 +287,7 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 
 	if obj.Spec.Prometheus != nil {
 		dbObj.Type = models.ConnectionTypePrometheus
-		dbObj.URL = obj.Spec.Prometheus.URL.String()
+		dbObj.URL = obj.Spec.Prometheus.URL
 		dbObj.Username = obj.Spec.Prometheus.Username.String()
 		dbObj.Password = obj.Spec.Prometheus.Password.String()
 		dbObj.Properties = collections.MergeMap(
