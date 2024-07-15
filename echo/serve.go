@@ -79,6 +79,8 @@ func New(ctx context.Context) *echov4.Echo {
 	e.Use(middleware.LoggerWithConfig(echoLogConfig))
 	e.Use(ServerCache)
 
+	e.GET("/kubeconfig", DownloadKubeConfig)
+
 	e.GET("/properties", Properties)
 	e.POST("/resources/search", SearchResources)
 

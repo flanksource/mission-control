@@ -11,7 +11,7 @@ import (
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
 
-func NewClient() (kubernetes.Interface, error) {
+func NewClient() (kubernetes.Interface, *rest.Config, error) {
 	kubeconfig := os.Getenv("KUBECONFIG")
 	if kubeconfig == "" {
 		kubeconfig = os.ExpandEnv("$HOME/.kube/config")
@@ -19,21 +19,23 @@ func NewClient() (kubernetes.Interface, error) {
 
 	if !files.Exists(kubeconfig) {
 		if config, err := rest.InClusterConfig(); err == nil {
-			return kubernetes.NewForConfig(config)
+			cs, err := kubernetes.NewForConfig(config)
+			return cs, config, err
 		} else {
-			return nil, fmt.Errorf("cannot find kubeconfig")
+			return nil, nil, fmt.Errorf("cannot find kubeconfig")
 		}
 	}
 
 	data, err := os.ReadFile(kubeconfig)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	restConfig, err := clientcmd.RESTConfigFromKubeConfig(data)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return kubernetes.NewForConfig(restConfig)
+	cs, err := kubernetes.NewForConfig(restConfig)
+	return cs, restConfig, err
 }
 
 func NewClientWithConfig(kubeConfig string) (kubernetes.Interface, error) {
