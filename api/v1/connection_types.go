@@ -184,7 +184,7 @@ type ConnectionGit struct {
 }
 
 type ConnectionHTTP struct {
-	URL         string        `json:"url"`
+	URL         types.EnvVar  `json:"url"`
 	InsecureTLS bool          `json:"insecureTLS,omitempty"`
 	Username    *types.EnvVar `json:"username,omitempty"`
 	Password    *types.EnvVar `json:"password,omitempty"`

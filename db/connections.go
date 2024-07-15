@@ -109,7 +109,7 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 
 	if obj.Spec.HTTP != nil {
 		dbObj.Type = models.ConnectionTypeHTTP
-		dbObj.URL = obj.Spec.HTTP.URL
+		dbObj.URL = obj.Spec.HTTP.URL.String()
 		dbObj.Username = obj.Spec.HTTP.Username.String()
 		dbObj.Password = obj.Spec.HTTP.Password.String()
 		dbObj.Properties = map[string]string{

@@ -223,7 +223,7 @@
     "ConnectionHTTP": {
       "properties": {
         "url": {
-          "type": "string"
+          "$ref": "#/$defs/EnvVar"
         },
         "insecureTLS": {
           "type": "boolean"
@@ -711,7 +711,7 @@
           "$ref": "#/$defs/EnvVar"
         },
         "url": {
-          "$ref": "#/$defs/EnvVar"
+          "type": "string"
         },
         "bearer": {
           "$ref": "#/$defs/EnvVar"
