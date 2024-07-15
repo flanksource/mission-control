@@ -161,6 +161,14 @@ type ConnectionFolder struct {
 	Path string `json:"path"`
 }
 
+type ConnectionPrometheus struct {
+	URL                  types.EnvVar `json:"url,omitempty"`
+	types.Authentication `json:",inline"`
+	Bearer               types.EnvVar         `json:"bearer,omitempty" yaml:"bearer,omitempty"`
+	OAuth                types.OAuth          `json:"oauth,omitempty" yaml:"oauth,omitempty"`
+	TLS                  connection.TLSConfig `json:"tls,omitempty" yaml:"tls,omitempty"`
+}
+
 type ConnectionKubernetes struct {
 	Certificate types.EnvVar `json:"certificate"`
 }
@@ -224,19 +232,19 @@ type ConnectionSpec struct {
 	AzureDevops *ConnectionAzureDevops `json:"azureDevops,omitempty"`
 	GCP         *ConnectionGCP         `json:"gcp,omitempty"`
 
-	Folder     *ConnectionFolder          `json:"folder,omitempty"`
-	Git        *ConnectionGit             `json:"git,omitempty"`
-	GitHub     *ConnectionGitHub          `json:"github,omitempty"`
-	GitLab     *ConnectionGitLab          `json:"gitlab,omitempty"`
-	HTTP       *ConnectionHTTP            `json:"http,omitempty"`
-	Kubernetes *ConnectionKubernetes      `json:"kubernetes,omitempty"`
-	MSSQL      *ConnectionMSSQL           `json:"mssql,omitempty"`
-	Mongo      *ConnectionMongo           `json:"mongo,omitempty"`
-	MySQL      *ConnectionMySQL           `json:"mysql,omitempty"`
-	Postgres   *ConnectionPostgres        `json:"postgres,omitempty"`
-	Prometheus *connection.HTTPConnection `json:"prometheus,omitempty"`
-	SFTP       *ConnectionSFTP            `json:"sftp,omitempty"`
-	SMB        *ConnectionSMB             `json:"smb,omitempty"`
+	Folder     *ConnectionFolder     `json:"folder,omitempty"`
+	Git        *ConnectionGit        `json:"git,omitempty"`
+	GitHub     *ConnectionGitHub     `json:"github,omitempty"`
+	GitLab     *ConnectionGitLab     `json:"gitlab,omitempty"`
+	HTTP       *ConnectionHTTP       `json:"http,omitempty"`
+	Kubernetes *ConnectionKubernetes `json:"kubernetes,omitempty"`
+	MSSQL      *ConnectionMSSQL      `json:"mssql,omitempty"`
+	Mongo      *ConnectionMongo      `json:"mongo,omitempty"`
+	MySQL      *ConnectionMySQL      `json:"mysql,omitempty"`
+	Postgres   *ConnectionPostgres   `json:"postgres,omitempty"`
+	Prometheus *ConnectionPrometheus `json:"prometheus,omitempty"`
+	SFTP       *ConnectionSFTP       `json:"sftp,omitempty"`
+	SMB        *ConnectionSMB        `json:"smb,omitempty"`
 
 	//////////////////////////////
 	// Notification Connections //
