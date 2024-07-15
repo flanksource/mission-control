@@ -376,6 +376,30 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "ConnectionPrometheus": {
+      "properties": {
+        "url": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "username": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "password": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "bearer": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "oauth": {
+          "$ref": "#/$defs/OAuth"
+        },
+        "tls": {
+          "$ref": "#/$defs/TLSConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "ConnectionPushbullet": {
       "properties": {
         "token": {
@@ -579,7 +603,7 @@
           "$ref": "#/$defs/ConnectionPostgres"
         },
         "prometheus": {
-          "$ref": "#/$defs/HTTPConnection"
+          "$ref": "#/$defs/ConnectionPrometheus"
         },
         "sftp": {
           "$ref": "#/$defs/ConnectionSFTP"
@@ -696,33 +720,6 @@
     },
     "FieldsV1": {
       "properties": {},
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "HTTPConnection": {
-      "properties": {
-        "connection": {
-          "type": "string"
-        },
-        "username": {
-          "$ref": "#/$defs/EnvVar"
-        },
-        "password": {
-          "$ref": "#/$defs/EnvVar"
-        },
-        "url": {
-          "$ref": "#/$defs/EnvVar"
-        },
-        "bearer": {
-          "$ref": "#/$defs/EnvVar"
-        },
-        "oauth": {
-          "$ref": "#/$defs/OAuth"
-        },
-        "tls": {
-          "$ref": "#/$defs/TLSConfig"
-        }
-      },
       "additionalProperties": false,
       "type": "object"
     },

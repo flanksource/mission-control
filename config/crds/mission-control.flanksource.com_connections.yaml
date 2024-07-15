@@ -1978,8 +1978,6 @@ spec:
                             type: string
                         type: object
                     type: object
-                  connection:
-                    type: string
                   oauth:
                     properties:
                       clientID:
