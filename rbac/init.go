@@ -43,11 +43,12 @@ const (
 	ActionCreate = "create"
 
 	// Objects
-	ObjectRBAC        = "rbac"
-	ObjectAuth        = "auth"
-	ObjectAgentPush   = "agent-push"
-	ObjectAgentCreate = "agent-create"
-	ObjectDatabase    = "database"
+	ObjectRBAC            = "rbac"
+	ObjectAuth            = "auth"
+	ObjectAgentPush       = "agent-push"
+	ObjectAgentCreate     = "agent-create"
+	ObjectDatabase        = "database"
+	ObjectKubernetesProxy = "kubernetes-proxy"
 
 	ObjectDatabaseResponder      = "database.responder"
 	ObjectDatabaseIncident       = "database.incident"
@@ -97,6 +98,9 @@ func Init(db *gorm.DB, adminUserID string) error {
 	policies := [][]string{
 		// If the user is admin, no check takes place
 		// we have these policies as placeholders
+		{RoleAdmin, ObjectKubernetesProxy, ActionRead},
+		{RoleAdmin, ObjectKubernetesProxy, ActionWrite},
+		{RoleAdmin, ObjectKubernetesProxy, ActionCreate},
 		{RoleAdmin, ObjectDatabase, ActionRead},
 		{RoleAdmin, ObjectDatabase, ActionWrite},
 		{RoleAdmin, ObjectRBAC, ActionWrite},
@@ -108,6 +112,9 @@ func Init(db *gorm.DB, adminUserID string) error {
 		{RoleAdmin, ObjectDatabaseConnection, ActionCreate},
 		{RoleAdmin, ObjectDatabaseConnection, ActionUpdate},
 
+		{RoleEditor, ObjectKubernetesProxy, ActionRead},
+		{RoleEditor, ObjectKubernetesProxy, ActionWrite},
+		{RoleEditor, ObjectKubernetesProxy, ActionCreate},
 		{RoleEditor, ObjectDatabaseCanary, ActionCreate},
 		{RoleEditor, ObjectDatabaseCanary, ActionUpdate},
 		{RoleEditor, ObjectDatabaseCanary, ActionRead},
