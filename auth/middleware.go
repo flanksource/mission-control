@@ -103,7 +103,7 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 	}
 
 	// Initiate RBAC
-	if err := rbac.Init(ctx.DB(), adminUserID); err != nil {
+	if err := rbac.Init(ctx, adminUserID); err != nil {
 		return fmt.Errorf("Failed to initialize rbac: %v", err)
 	}
 	return nil

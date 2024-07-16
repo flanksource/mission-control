@@ -49,7 +49,9 @@ func DbMiddleware() MiddlewareFunc {
 				return c.String(http.StatusForbidden, ErrMisconfiguredRBAC.Error())
 			}
 
-			if !CheckContext(c, object, action) {
+			ctx := c.Request().Context().(context.Context)
+
+			if !CheckContext(ctx, object, action) {
 				return c.String(http.StatusForbidden, ErrAccessDenied.Error())
 			}
 
