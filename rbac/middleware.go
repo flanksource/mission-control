@@ -5,15 +5,14 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/duty/context"
 	"github.com/labstack/echo/v4"
 )
 
 var (
-	errNoUserID          = errors.New("unauthorized. User not found for RBAC")
-	errAccessDenied      = errors.New("unauthorized. Access Denied")
-	errMisconfiguredRBAC = errors.New("unauthorized. RBAC policy not configured correctly")
+	ErrNoUserID          = errors.New("unauthorized. User not found for RBAC")
+	ErrAccessDenied      = errors.New("unauthorized. Access Denied")
+	ErrMisconfiguredRBAC = errors.New("unauthorized. RBAC policy not configured correctly")
 )
 
 type MiddlewareFunc = func(echo.HandlerFunc) echo.HandlerFunc
@@ -47,11 +46,11 @@ func DbMiddleware() MiddlewareFunc {
 			object := postgrestDatabaseObject(resource)
 
 			if object == "" || action == "" {
-				return c.String(http.StatusForbidden, errMisconfiguredRBAC.Error())
+				return c.String(http.StatusForbidden, ErrMisconfiguredRBAC.Error())
 			}
 
 			if !CheckContext(c, object, action) {
-				return c.String(http.StatusForbidden, errAccessDenied.Error())
+				return c.String(http.StatusForbidden, ErrAccessDenied.Error())
 			}
 
 			return next(c)
@@ -66,17 +65,18 @@ func Authorization(object, action string) MiddlewareFunc {
 			if Enforcer == nil {
 				return next(c)
 			}
-			// Everyone with an account is a viewer
-			if action == ActionRead && Check(RoleViewer, object, action) {
-				return next(c)
+			if action == "*" {
+				action = policyActionFromHTTPMethod(c.Request().Method)
 			}
+
+			ctx := c.Request().Context().(context.Context)
 
 			if object == "" || action == "" {
-				return c.String(http.StatusUnauthorized, errMisconfiguredRBAC.Error())
+				return c.String(http.StatusForbidden, ErrMisconfiguredRBAC.Error())
 			}
 
-			if !CheckContext(c, object, action) {
-				return c.String(http.StatusForbidden, errAccessDenied.Error())
+			if !CheckContext(ctx, object, action) {
+				return c.String(http.StatusForbidden, ErrAccessDenied.Error())
 			}
 
 			return next(c)
@@ -84,15 +84,18 @@ func Authorization(object, action string) MiddlewareFunc {
 	}
 }
 
-func CheckContext(c echo.Context, object, action string) bool {
-	userID := c.Request().Header.Get(api.UserIDHeaderKey)
-	if userID == "" {
+func CheckContext(ctx context.Context, object, action string) bool {
+
+	user := ctx.User()
+	if user == nil {
 		return false
 	}
 
-	allowed, err := Enforcer.Enforce(userID, object, action)
-	if err != nil {
-		logger.Errorf("RBAC Enforce failed: %v", err)
+	// Everyone with an account is a viewer
+	if action == ActionRead && Check(ctx, RoleViewer, object, action) {
+		return true
 	}
+
+	allowed := Check(ctx, user.Name, object, action)
 	return allowed
 }

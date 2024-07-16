@@ -8,8 +8,7 @@ import (
 	"github.com/casbin/casbin/v2"
 	"github.com/casbin/casbin/v2/model"
 	gormadapter "github.com/casbin/gorm-adapter/v3"
-	"github.com/flanksource/commons/logger"
-	"gorm.io/gorm"
+	"github.com/flanksource/duty/context"
 )
 
 func Read(objects ...string) ACL {
@@ -92,9 +91,23 @@ type Policy struct {
 func (p Policy) GetPolicyDefintions() [][]string {
 	var definitions [][]string
 	for _, acl := range p.ACLs {
+		if acl.Principal == "" {
+			acl.Principal = p.Principal
+		}
 		definitions = append(definitions, acl.GetPolicyDefinition()...)
 	}
 	return definitions
+}
+
+func (p Policy) String() string {
+	s := ""
+	for _, policy := range p.GetPolicyDefintions() {
+		if s != "" {
+			s += "\n"
+		}
+		s += strings.Join(policy, ", ")
+	}
+	return s
 }
 
 const (
@@ -158,10 +171,11 @@ const (
 var (
 	AllActions = []string{ActionApprove, ActionCreate, ActionRead, ActionRun, ActionWrite, ActionDelete}
 )
-var Enforcer *casbin.Enforcer
+var Enforcer *casbin.SyncedCachedEnforcer
 
-func Init(db *gorm.DB, adminUserID string) error {
+func Init(ctx context.Context, adminUserID string) error {
 	model, err := model.NewModelFromString(modelDefinition)
+	db := ctx.DB()
 	if err != nil {
 		return fmt.Errorf("error creating rbac model: %v", err)
 	}
@@ -172,9 +186,14 @@ func Init(db *gorm.DB, adminUserID string) error {
 		return fmt.Errorf("error creating rbac adapter: %v", err)
 	}
 
-	Enforcer, err = casbin.NewEnforcer(model, adapter)
+	Enforcer, err = casbin.NewSyncedCachedEnforcer(model, adapter)
+	Enforcer.SetExpireTime(ctx.Properties().Duration("casbin.cache.expiry", 1*time.Minute))
+	Enforcer.EnableCache(ctx.Properties().On("casbin.cache"))
 	if err != nil {
 		return fmt.Errorf("error creating rbac enforcer: %v", err)
+	}
+	if ctx.Properties().Int("casbin.log.level", 1) >= 2 {
+		Enforcer.EnableLog(true)
 	}
 
 	if adminUserID != "" {
@@ -188,12 +207,13 @@ func Init(db *gorm.DB, adminUserID string) error {
 			Principal: RoleEveryone,
 			ACLs: []ACL{
 				{
-					Actions: "!read",
+					Actions: "!*",
 					Objects: strings.Join([]string{ObjectAuthConfidential}, ","),
 				},
 			},
 		},
 		{
+			Inherit:   []string{RoleEveryone},
 			Principal: RoleAdmin,
 			ACLs:      []ACL{All("*")},
 		}, {
@@ -242,8 +262,8 @@ func Init(db *gorm.DB, adminUserID string) error {
 	// If we use Enforcer.AddPolicies(), new policies do not get saved
 	for _, p := range policies {
 		for _, inherited := range p.Inherit {
-			if _, err := Enforcer.AddGroupingPolicy(inherited, p.Principal); err != nil {
-				return fmt.Errorf("error adding group policy for role editor to commander: %v", err)
+			if _, err := Enforcer.AddGroupingPolicy(p.Principal, inherited); err != nil {
+				return fmt.Errorf("error adding group policy for %s -> %s: %v", p.Principal, inherited, err)
 			}
 		}
 		for _, acl := range p.GetPolicyDefintions() {
@@ -253,30 +273,50 @@ func Init(db *gorm.DB, adminUserID string) error {
 		}
 	}
 
-	// Update policies every 5 minutes
-	go func() {
-		time.Sleep(5 * time.Minute)
-		if err := Enforcer.LoadPolicy(); err != nil {
-			logger.Errorf("Error loading rbac policies: %v", err)
-		}
-	}()
+	Enforcer.StartAutoLoadPolicy(ctx.Properties().Duration("cache.reload.interval", 5*time.Minute))
 
 	return nil
 }
 
-func Check(subject, object, action string) bool {
+func PermsForUser(user string) string {
+	perms, _ := Enforcer.GetImplicitPermissionsForUser(user)
+	s := ""
+	for _, perm := range perms {
+		if s != "" {
+			s += "\n"
+		}
+		s += strings.Join(perm, ",")
+	}
+	return s
+}
+
+func Check(ctx context.Context, subject, object, action string) bool {
 	hasEveryone, err := Enforcer.HasRoleForUser(subject, RoleEveryone)
 
 	if err != nil {
-		logger.Errorf("RBAC Enforce failed: %v", err)
+		ctx.Errorf("RBAC Enforce failed: %v", err)
 		return false
 	}
 	if !hasEveryone {
 		Enforcer.AddRoleForUser(subject, RoleEveryone)
 	}
+
+	if ctx.Properties().On("casbin.explain") {
+		allowed, rules, err := Enforcer.EnforceEx(subject, object, action)
+		if err != nil {
+			ctx.Errorf("RBAC Enforce failed: %v", err)
+		}
+		ctx.Debugf("[%s] %s:%s -> %s (%s)", subject, object, action, allowed, strings.Join(rules, "\n\t"))
+		return allowed
+	}
+
 	allowed, err := Enforcer.Enforce(subject, object, action)
 	if err != nil {
-		logger.Errorf("RBAC Enforce failed: %v", err)
+		ctx.Errorf("RBAC Enforce failed: %v", err)
+		return false
+	}
+	if ctx.IsTrace() {
+		ctx.Tracef("%s %s:%s = %v", subject, object, action, allowed)
 	}
 	return allowed
 }

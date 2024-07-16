@@ -1,7 +1,6 @@
 package echo
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -10,12 +9,10 @@ import (
 
 	"github.com/flanksource/commons/logger"
 	cutils "github.com/flanksource/commons/utils"
-	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/schema/openapi"
-
 	"github.com/flanksource/incident-commander/agent"
+	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/artifacts"
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/catalog"
@@ -28,6 +25,7 @@ import (
 	"github.com/flanksource/incident-commander/snapshot"
 	"github.com/flanksource/incident-commander/upstream"
 	"github.com/flanksource/incident-commander/utils"
+	"github.com/flanksource/incident-commander/vars"
 	"github.com/labstack/echo-contrib/echoprometheus"
 	echov4 "github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -96,6 +94,28 @@ func New(ctx context.Context) *echov4.Echo {
 	e.GET("/health", func(c echov4.Context) error {
 		return c.String(http.StatusOK, "OK")
 	})
+
+	if api.PostgrestURI != "" {
+		Forward(e, "/db", api.PostgrestURI,
+			rbac.DbMiddleware(),
+			db.SearchQueryTransformMiddleware(),
+		)
+	}
+
+	if vars.AuthMode != "" {
+		db.PostgresDBAnonRole = "postgrest_api"
+		if err := auth.Middleware(ctx, e); err != nil {
+			logger.Fatalf(err.Error())
+		}
+	}
+
+	Forward(e, "/config", api.ConfigDB, rbac.Catalog("*"))
+	Forward(e, "/apm", api.ApmHubPath, rbac.Authorization(rbac.ObjectLogs, "*")) // Deprecated
+	// webhooks perform their own auth
+	Forward(e, "/canary/webhook", api.CanaryCheckerPath+"/webhook")
+	Forward(e, "/canary", api.CanaryCheckerPath, rbac.Canary("*"))
+	// kratos performs its own auth
+	Forward(e, "/kratos", auth.KratosAPI)
 
 	e.GET("/snapshot/topology/:id", snapshot.Topology, rbac.Topology(rbac.ActionWrite))
 	e.GET("/snapshot/incident/:id", snapshot.Incident, rbac.Topology(rbac.ActionWrite))
@@ -191,60 +211,4 @@ func ModifyKratosRequestHeaders(next echov4.HandlerFunc) echov4.HandlerFunc {
 		}
 		return next(c)
 	}
-}
-
-func SearchResources(c echov4.Context) error {
-	ctx := c.Request().Context().(context.Context)
-
-	var request query.SearchResourcesRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&request); err != nil {
-		return api.WriteError(c, api.Errorf(api.EINVALID, err.Error()))
-	}
-
-	response, err := query.SearchResources(ctx, request)
-	if err != nil {
-		return api.WriteError(c, err)
-	}
-
-	return c.JSON(http.StatusOK, response)
-}
-
-func Properties(c echov4.Context) error {
-	ctx := c.Request().Context().(context.Context)
-
-	dbProperties, err := db.GetProperties(ctx)
-	if err != nil {
-		return api.WriteError(c, err)
-	}
-
-	var seen = make(map[string]bool)
-
-	var output = make([]map[string]string, 0)
-
-	for k, v := range context.Local {
-		output = append(output, map[string]string{
-			"name":        k,
-			"value":       v,
-			"source":      "local",
-			"type":        "",
-			"description": "",
-		})
-		seen[k] = true
-	}
-
-	for _, p := range dbProperties {
-		if _, ok := seen[p.Name]; ok {
-			continue
-		}
-
-		output = append(output, map[string]string{
-			"name":        p.Name,
-			"value":       p.Value,
-			"source":      "db",
-			"type":        "",
-			"description": "",
-		})
-	}
-
-	return c.JSON(http.StatusOK, output)
 }
