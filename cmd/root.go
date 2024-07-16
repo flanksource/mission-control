@@ -36,7 +36,7 @@ func PreRun(cmd *cobra.Command, args []string) {
 	}
 
 	var err error
-	api.Kubernetes, api.KubernetesRestConfig, err = k8s.NewClient()
+	api.Kubernetes, err = k8s.NewClient()
 	if err != nil {
 		logger.Infof("Kubernetes client not available: %v", err)
 		api.Kubernetes = fake.NewSimpleClientset()

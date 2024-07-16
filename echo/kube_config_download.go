@@ -71,6 +71,10 @@ func KubeProxyTokenMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 		}
 
 		c.Request().Header.Set("Authorization", fmt.Sprintf("Bearer %s", saToken))
+
+		// TODO: based on the user, we need to find the appropriate user to impersonate.
+		user := "mission-control-reader"
+		c.Request().Header.Set("Impersonate-User", user)
 		return next(c)
 	}
 }
