@@ -3,7 +3,7 @@ module github.com/flanksource/incident-commander
 go 1.22.3
 
 require (
-	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.5.2
+	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.7.0
 	github.com/MicahParks/keyfunc v1.9.0
 	github.com/adityathebe/go-strip-markdown/v2 v2.0.1
 	github.com/andygrunwald/go-jira v1.16.0
@@ -255,7 +255,7 @@ require (
 	cloud.google.com/go v0.112.1 // indirect
 	cloud.google.com/go/storage v1.38.0
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.11.1
-	github.com/Azure/azure-sdk-for-go/sdk/internal v1.5.2 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/internal v1.8.0 // indirect
 	github.com/AzureAD/microsoft-authentication-library-for-go v1.2.2 // indirect
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/TomOnTime/utfutil v0.0.0-20230223141146-125e65197b36
