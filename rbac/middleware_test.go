@@ -1,6 +1,7 @@
 package rbac
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -27,10 +28,10 @@ var _ = BeforeSuite(func() {
 	DefaultContext = setup.BeforeSuiteFn()
 
 })
+
 var _ = AfterSuite(setup.AfterSuiteFn)
 
 var _ = Describe("Authorization", func() {
-
 	It("should setup", func() {
 		if err := Init(DefaultContext.DB(), "admin"); err != nil {
 			Fail(fmt.Sprintf("error instantiating rbac: %v", err))
@@ -68,20 +69,20 @@ var _ = Describe("Authorization", func() {
 		{"GET", "/db/identities", "", ObjectDatabase, "any", http.StatusUnauthorized, errNoUserID.Error()},
 		{path: "/db/identities", method: http.MethodGet, user: "admin", expectedCode: http.StatusOK, expectedBody: successBody, object: ObjectDatabase, action: "any"},
 		{path: "/db/checks", method: http.MethodGet, user: "viewer", expectedCode: http.StatusOK, expectedBody: successBody, object: ObjectDatabase, action: "any"},
-		{path: "/db/canaries", method: http.MethodGet, user: "viewer", expectedCode: http.StatusForbidden, expectedBody: errAccessDenied.Error(), object: ObjectDatabase, action: "any"},
-		{path: "/db/canaries", method: http.MethodGet, user: "responder", expectedCode: http.StatusForbidden, expectedBody: errAccessDenied.Error(), object: ObjectDatabase, action: "any"},
+		{path: "/db/canaries", method: http.MethodGet, user: "viewer", expectedCode: http.StatusForbidden, expectedBody: errAccessDenied, object: ObjectDatabase, action: "any"},
+		{path: "/db/canaries", method: http.MethodGet, user: "responder", expectedCode: http.StatusForbidden, expectedBody: errAccessDenied, object: ObjectDatabase, action: "any"},
 		{path: "/db/canaries?id=eq.5", method: http.MethodGet, user: "editor", expectedCode: http.StatusOK, expectedBody: successBody, object: ObjectDatabase, action: "any"},
-		{path: "/db/comments", method: http.MethodPost, user: "viewer", expectedCode: http.StatusForbidden, expectedBody: errAccessDenied.Error(), object: ObjectDatabase, action: "any"},
+		{path: "/db/comments", method: http.MethodPost, user: "viewer", expectedCode: http.StatusForbidden, expectedBody: errAccessDenied, object: ObjectDatabase, action: "any"},
 		{path: "/db/comments", method: http.MethodPost, user: "responder", expectedCode: http.StatusOK, expectedBody: successBody, object: ObjectDatabase, action: "any"},
 		{path: "/db/incidents", method: http.MethodPatch, user: "responder", expectedCode: http.StatusOK, expectedBody: successBody, object: ObjectDatabase, action: "any"},
-		{path: "/db/incidents", method: http.MethodPost, user: "responder", expectedCode: http.StatusForbidden, expectedBody: errAccessDenied.Error(), object: ObjectDatabase, action: "any"},
+		{path: "/db/incidents", method: http.MethodPost, user: "responder", expectedCode: http.StatusForbidden, expectedBody: errAccessDenied, object: ObjectDatabase, action: "any"},
 		{path: "/db/incidents", method: http.MethodPost, user: "commander", expectedCode: http.StatusOK, expectedBody: successBody, object: ObjectDatabase, action: "any"},
-		{path: "/auth/invite_user", method: http.MethodPost, user: "commander", expectedCode: http.StatusForbidden, expectedBody: errAccessDenied.Error(), object: ObjectAuth, action: ActionWrite},
+		{path: "/auth/invite_user", method: http.MethodPost, user: "commander", expectedCode: http.StatusForbidden, expectedBody: errAccessDenied, object: ObjectAuth, action: ActionWrite},
 		{path: "/auth/invite_user", method: http.MethodPost, user: "admin", expectedCode: http.StatusOK, expectedBody: successBody, object: ObjectAuth, action: ActionWrite},
 		{path: "/bad/config", method: http.MethodPost, user: "admin", expectedCode: http.StatusOK, expectedBody: successBody, object: "", action: "random"},
-		{path: "/bad/config", method: http.MethodPost, user: "editor", expectedCode: http.StatusForbidden, expectedBody: errMisconfiguredRBAC.Error(), object: "", action: "any"},
-		{path: "/bad/config", method: http.MethodPost, user: "editor", expectedCode: http.StatusForbidden, expectedBody: errMisconfiguredRBAC.Error(), object: "any", action: ""},
-		{path: "/bad/config", method: http.MethodPost, user: "editor", expectedCode: http.StatusForbidden, expectedBody: errAccessDenied.Error(), object: "unknown", action: "unknown"},
+		{path: "/bad/config", method: http.MethodPost, user: "editor", expectedCode: http.StatusForbidden, expectedBody: errMisconfiguredRBAC, object: "", action: "any"},
+		{path: "/bad/config", method: http.MethodPost, user: "editor", expectedCode: http.StatusForbidden, expectedBody: errMisconfiguredRBAC, object: "any", action: ""},
+		{path: "/bad/config", method: http.MethodPost, user: "editor", expectedCode: http.StatusForbidden, expectedBody: errAccessDenied, object: "unknown", action: "unknown"},
 		{path: "/no/user", method: http.MethodPost, user: "", expectedCode: http.StatusUnauthorized, expectedBody: errNoUserID.Error(), object: ObjectDatabase, action: "any"},
 	}
 
@@ -96,7 +97,13 @@ var _ = Describe("Authorization", func() {
 			req = req.WithContext(DefaultContext)
 			_ = Authorization(tc.object, tc.action)(handler)(e.NewContext(req, rec))
 			Expect(rec.Code).To(Equal(tc.expectedCode))
-			Expect(tc.expectedBody).To(Equal(rec.Body.String()))
+
+			if rec.Body.String() != tc.expectedBody {
+				var httpError map[string]string
+				err := json.Unmarshal(rec.Body.Bytes(), &httpError)
+				Expect(err).To(BeNil())
+				Expect(tc.expectedBody).To(Equal(httpError["error"]))
+			}
 		})
 	}
 })

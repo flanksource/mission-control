@@ -14,8 +14,8 @@ import (
 
 var (
 	errNoUserID          = errors.New("unauthorized. User not found for RBAC")
-	errAccessDenied      = errors.New("unauthorized. Access Denied")
-	errMisconfiguredRBAC = errors.New("unauthorized. RBAC policy not configured correctly")
+	errAccessDenied      = "unauthorized. Access Denied"
+	errMisconfiguredRBAC = "unauthorized. RBAC policy not configured correctly"
 )
 
 func Authorization(object, action string) func(echo.HandlerFunc) echo.HandlerFunc {
@@ -74,11 +74,11 @@ func Authorize(userID, object, action string) error {
 	}
 
 	if object == "" || action == "" {
-		return dutyAPI.Errorf(dutyAPI.EFORBIDDEN, errMisconfiguredRBAC.Error())
+		return dutyAPI.Errorf(dutyAPI.EFORBIDDEN, errMisconfiguredRBAC)
 	}
 
 	if !Check(userID, object, action) {
-		return dutyAPI.Errorf(dutyAPI.EFORBIDDEN, errAccessDenied.Error())
+		return dutyAPI.Errorf(dutyAPI.EFORBIDDEN, errAccessDenied)
 	}
 
 	return nil
