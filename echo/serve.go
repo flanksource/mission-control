@@ -80,7 +80,7 @@ func New(ctx context.Context) *echov4.Echo {
 	e.Use(ServerCache)
 
 	e.GET("/kubeconfig", DownloadKubeConfig, rbac.Authorization(rbac.ObjectKubernetesProxy, rbac.ActionCreate))
-	Forward(e, "/kube-proxy", "http://kubernetes.default.svc", rbac.Authorization(rbac.ObjectKubernetesProxy, rbac.ActionWrite), KubeProxyTokenMiddleware)
+	Forward(e, "/kube-proxy", "http://kubernetes.default.svc", KubeProxyTokenMiddleware)
 
 	e.GET("/properties", Properties)
 	e.POST("/resources/search", SearchResources)

@@ -2,13 +2,14 @@ package rbac
 
 import (
 	"errors"
-	"net/http"
 	"strings"
 
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/incident-commander/api"
+	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/labstack/echo/v4"
+
+	"github.com/flanksource/incident-commander/api"
 )
 
 var (
@@ -22,20 +23,6 @@ func Authorization(object, action string) func(echo.HandlerFunc) echo.HandlerFun
 		return func(c echo.Context) error {
 			// Skip auth if Enforcer is not initialized
 			if Enforcer == nil {
-				return next(c)
-			}
-
-			userID := c.Request().Header.Get(api.UserIDHeaderKey)
-			if userID == "" {
-				return c.String(http.StatusUnauthorized, errNoUserID.Error())
-			}
-
-			// Everyone with an account is a viewer
-			if action == ActionRead && Check(RoleViewer, object, action) {
-				return next(c)
-			}
-
-			if isAdmin, _ := Enforcer.HasRoleForUser(userID, RoleAdmin); isAdmin {
 				return next(c)
 			}
 
@@ -57,15 +44,42 @@ func Authorization(object, action string) func(echo.HandlerFunc) echo.HandlerFun
 				}
 			}
 
-			if object == "" || action == "" {
-				return c.String(http.StatusForbidden, errMisconfiguredRBAC.Error())
-			}
-
-			if !Check(userID, object, action) {
-				return c.String(http.StatusForbidden, errAccessDenied.Error())
+			userID := c.Request().Header.Get(api.UserIDHeaderKey)
+			if err := Authorize(userID, object, action); err != nil {
+				return dutyAPI.WriteError(c, err)
 			}
 
 			return next(c)
 		}
 	}
+}
+
+func Authorize(userID, object, action string) error {
+	// Skip auth if Enforcer is not initialized
+	if Enforcer == nil {
+		return nil
+	}
+
+	if userID == "" {
+		return dutyAPI.Errorf(dutyAPI.EUNAUTHORIZED, errNoUserID.Error())
+	}
+
+	// Everyone with an account is a viewer
+	if action == ActionRead && Check(RoleViewer, object, action) {
+		return nil
+	}
+
+	if isAdmin, _ := Enforcer.HasRoleForUser(userID, RoleAdmin); isAdmin {
+		return nil
+	}
+
+	if object == "" || action == "" {
+		return dutyAPI.Errorf(dutyAPI.EFORBIDDEN, errMisconfiguredRBAC.Error())
+	}
+
+	if !Check(userID, object, action) {
+		return dutyAPI.Errorf(dutyAPI.EFORBIDDEN, errAccessDenied.Error())
+	}
+
+	return nil
 }

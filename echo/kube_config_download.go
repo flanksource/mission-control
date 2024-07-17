@@ -8,9 +8,11 @@ import (
 	"net/url"
 	"os"
 
+	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/labstack/echo/v4"
 
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/rbac"
 )
 
 const kubeConfigTemplate = `apiVersion: v1
@@ -66,15 +68,23 @@ func KubeProxyTokenMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		path := "/var/run/secrets/kubernetes.io/serviceaccount/token"
 		saToken, err := os.ReadFile(path)
-		if err != nil {
+		if err != nil && false {
 			return fmt.Errorf("failed to read service account token: %w", err)
 		}
 
 		c.Request().Header.Set("Authorization", fmt.Sprintf("Bearer %s", saToken))
 
-		// TODO: based on the user, we need to find the appropriate user to impersonate.
-		user := "mission-control-reader"
-		c.Request().Header.Set("Impersonate-User", user)
+		var impersonateUser string
+		userID := c.Request().Header.Get(api.UserIDHeaderKey)
+		if err := rbac.Authorize(userID, rbac.ObjectKubernetesProxy, rbac.ActionWrite); err == nil {
+			impersonateUser = "mission-control-writer"
+		} else if err := rbac.Authorize(userID, rbac.ObjectKubernetesProxy, rbac.ActionRead); err == nil {
+			impersonateUser = "mission-control-reader"
+		} else {
+			return dutyAPI.WriteError(c, err)
+		}
+
+		c.Request().Header.Set("Impersonate-User", impersonateUser)
 		return next(c)
 	}
 }
