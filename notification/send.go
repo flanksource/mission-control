@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/flanksource/commons/utils"
@@ -21,7 +22,7 @@ import (
 )
 
 // List of all possible variables for any expression related to notifications
-var allEnvVars = []string{"check", "canary", "component", "incident", "team", "responder", "comment", "evidence", "hypothesis"}
+var allEnvVars = []string{"agent", "config", "check", "canary", "component", "incident", "team", "responder", "comment", "evidence", "hypothesis", "permalink"}
 
 // NotificationTemplate holds in data for notification
 // that'll be used by struct templater.
@@ -153,11 +154,15 @@ Error: {{.status.error}}
 [Reference]({{.permalink}})`, labelsTemplate(".check.labels"))
 
 	case api.EventConfigHealthy, api.EventConfigUnhealthy, api.EventConfigWarning, api.EventConfigUnknown:
-		title = "Config {{.config.name}} health updated to {{.config.health}}"
+		title = "{{.config.type}} {{.config.name}} is {{.config.health}}"
+		body = fmt.Sprintf("%s\n[Reference]({{.permalink}})", labelsTemplate(".config.labels"))
+
+	case api.EventConfigCreated, api.EventConfigUpdated, api.EventConfigDeleted:
+		title = fmt.Sprintf("{{.config.type}} {{.config.name}} was %s", strings.TrimPrefix(event, "config."))
 		body = fmt.Sprintf("%s\n[Reference]({{.permalink}})", labelsTemplate(".config.labels"))
 
 	case api.EventComponentHealthy, api.EventComponentUnhealthy, api.EventComponentWarning, api.EventComponentUnknown:
-		title = "Component {{.component.name}} health updated to {{.component.health}}"
+		title = "Component {{.component.name}} is {{.component.health}}"
 		body = fmt.Sprintf("%s\n[Reference]({{.permalink}})", labelsTemplate(".component.labels"))
 
 	case api.EventIncidentCommentAdded:
