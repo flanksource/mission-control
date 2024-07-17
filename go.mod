@@ -12,7 +12,7 @@ require (
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.25.0 // indirect
 	github.com/flanksource/commons v1.24.2
-	github.com/flanksource/duty v1.0.547
+	github.com/flanksource/duty v1.0.548
 	github.com/flanksource/gomplate/v3 v3.24.7
 	github.com/flanksource/kopper v1.0.9
 	github.com/flanksource/postq v0.1.5
@@ -178,6 +178,7 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/ohler55/ojg v1.20.3 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
+	github.com/orcaman/concurrent-map/v2 v2.0.1 // indirect
 	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
 	github.com/pjbgf/sha1cd v0.3.0 // indirect
 	github.com/pkg/sftp v1.13.6 // indirect
