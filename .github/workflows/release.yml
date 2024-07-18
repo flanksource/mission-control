@@ -21,10 +21,10 @@ jobs:
     steps:
       - uses: actions/checkout@ee0669bd1cc54295c223e0bb666b733df41de1c5 # v2.7.0
       - name: Install Go
-        uses: actions/setup-go@6edd4406fa81c3da01a34fa6f6343087c207a568 # v3.5.0
+        uses: buildjet/setup-go@v5
         with:
           go-version: v1.22.x
-      - uses: actions/cache@8492260343ad570701412c2f464a5877dc76bace # v2
+      - uses: buildjet/cache@v4
         with:
           path: |
             ~/go/pkg/mod
@@ -71,7 +71,7 @@ jobs:
           aws-access-key-id: ${{ secrets.ECR_AWS_ACCESS_KEY }}
           aws-secret-access-key: ${{ secrets.ECR_AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
-          
+
       - name: Login to Amazon ECR Public
         id: login-ecr-public
         uses: aws-actions/amazon-ecr-login@v2
@@ -85,7 +85,7 @@ jobs:
           REPOSITORY: incident-commander
           IMAGE_TAG: "v${{ env.RELEASE_VERSION }}"
         run: |
-          docker build -t $REGISTRY/$REGISTRY_ALIAS/$REPOSITORY:$IMAGE_TAG . 
+          docker build -t $REGISTRY/$REGISTRY_ALIAS/$REPOSITORY:$IMAGE_TAG .
           docker push $REGISTRY/$REGISTRY_ALIAS/$REPOSITORY:$IMAGE_TAG
 
   update-incident-commander-chart:
