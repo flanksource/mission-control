@@ -11,12 +11,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Install Go
-        uses: actions/setup-go@6edd4406fa81c3da01a34fa6f6343087c207a568 # v3.5.0
+        uses: buildjet/setup-go@v5
         with:
           go-version: 1.22.x
       - name: Checkout code
         uses: actions/checkout@ee0669bd1cc54295c223e0bb666b733df41de1c5 # v2.7.0
-      - uses: actions/cache@8492260343ad570701412c2f464a5877dc76bace # v2
+      - uses: buildjet/cache@v4
         with:
           path: |
             ~/go/pkg/mod
