@@ -95,7 +95,7 @@ func New(ctx context.Context) *echov4.Echo {
 	})
 
 	if api.PostgrestURI != "" {
-		Forward(e, "/db", api.PostgrestURI,
+		Forward(ctx, e, "/db", api.PostgrestURI,
 			rbac.DbMiddleware(),
 			db.SearchQueryTransformMiddleware(),
 		)
@@ -108,13 +108,13 @@ func New(ctx context.Context) *echov4.Echo {
 		}
 	}
 
-	Forward(e, "/config", api.ConfigDB, rbac.Catalog("*"))
-	Forward(e, "/apm", api.ApmHubPath, rbac.Authorization(rbac.ObjectLogs, "*")) // Deprecated
+	Forward(ctx, e, "/config", api.ConfigDB, rbac.Catalog("*"))
+	Forward(ctx, e, "/apm", api.ApmHubPath, rbac.Authorization(rbac.ObjectLogs, "*")) // Deprecated
 	// webhooks perform their own auth
-	Forward(e, "/canary/webhook", api.CanaryCheckerPath+"/webhook")
-	Forward(e, "/canary", api.CanaryCheckerPath, rbac.Canary("*"))
+	Forward(ctx, e, "/canary/webhook", api.CanaryCheckerPath+"/webhook")
+	Forward(ctx, e, "/canary", api.CanaryCheckerPath, rbac.Canary("*"))
 	// kratos performs its own auth
-	Forward(e, "/kratos", auth.KratosAPI)
+	Forward(ctx, e, "/kratos", auth.KratosAPI)
 
 	e.GET("/snapshot/topology/:id", snapshot.Topology, rbac.Topology(rbac.ActionWrite))
 	e.GET("/snapshot/incident/:id", snapshot.Incident, rbac.Topology(rbac.ActionWrite))
