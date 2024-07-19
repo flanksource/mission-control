@@ -86,7 +86,7 @@ func New(ctx context.Context) *echov4.Echo {
 		AllowOrigins: AllowedCORS,
 	}))
 
-	e.OPTIONS("/", nil, middleware.CORSWithConfig(middleware.CORSConfig{
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowCredentials: true,
 		AllowOrigins:     AllowedCORSCredentials,
 	}))
