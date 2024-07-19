@@ -2,51 +2,57 @@ package rbac
 
 import (
 	"errors"
+	"net/http"
 	"strings"
 
-	"github.com/flanksource/commons/collections"
-	"github.com/flanksource/commons/logger"
-	dutyAPI "github.com/flanksource/duty/api"
+	"github.com/flanksource/duty/context"
 	"github.com/labstack/echo/v4"
-
-	"github.com/flanksource/incident-commander/api"
 )
 
 var (
-	errNoUserID          = errors.New("unauthorized. User not found for RBAC")
-	errAccessDenied      = "unauthorized. Access Denied"
-	errMisconfiguredRBAC = "unauthorized. RBAC policy not configured correctly"
+	ErrNoUserID          = errors.New("unauthorized. User not found for RBAC")
+	ErrAccessDenied      = errors.New("unauthorized. Access Denied")
+	ErrMisconfiguredRBAC = errors.New("unauthorized. RBAC policy not configured correctly")
 )
 
-func Authorization(object, action string) func(echo.HandlerFunc) echo.HandlerFunc {
+type MiddlewareFunc = func(echo.HandlerFunc) echo.HandlerFunc
+
+func Playbook(action string) MiddlewareFunc {
+	return Authorization(ObjectPlaybooks, action)
+}
+
+func Catalog(action string) MiddlewareFunc {
+	return Authorization(ObjectCatalog, action)
+}
+
+func Topology(action string) MiddlewareFunc {
+	return Authorization(ObjectTopology, action)
+}
+
+func Canary(action string) MiddlewareFunc {
+	return Authorization(ObjectCanary, action)
+}
+
+func DbMiddleware() MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			// Skip auth if Enforcer is not initialized
-			if Enforcer == nil {
+			path := c.Request().URL.Path
+			if !strings.HasPrefix(path, "/db/") {
 				return next(c)
 			}
+			action := policyActionFromHTTPMethod(c.Request().Method)
+			resource := strings.ReplaceAll(path, "/db/", "")
 
-			// Database action is defined via HTTP Verb and Path
-			if path := c.Request().URL.Path; strings.HasPrefix(path, "/db/") {
-				action = policyActionFromHTTPMethod(c.Request().Method)
-				resource := strings.ReplaceAll(path, "/db/", "")
+			object := postgrestDatabaseObject(resource)
 
-				object = postgrestDatabaseObject(resource)
-
-				// Allow viewing of tables if access is not explicitly denied
-				if action == ActionRead && !collections.Contains(dbReadDenied, object) {
-					return next(c)
-				}
-
-				if object == "" || action == "" {
-					logger.Debugf("Skipping RBAC since no rules are defined on table: %s", resource)
-					return next(c)
-				}
+			if object == "" || action == "" {
+				return c.String(http.StatusForbidden, ErrMisconfiguredRBAC.Error())
 			}
 
-			userID := c.Request().Header.Get(api.UserIDHeaderKey)
-			if err := Authorize(userID, object, action); err != nil {
-				return dutyAPI.WriteError(c, err)
+			ctx := c.Request().Context().(context.Context)
+
+			if !CheckContext(ctx, object, action) {
+				return c.String(http.StatusForbidden, ErrAccessDenied.Error())
 			}
 
 			return next(c)
@@ -54,32 +60,44 @@ func Authorization(object, action string) func(echo.HandlerFunc) echo.HandlerFun
 	}
 }
 
-func Authorize(userID, object, action string) error {
-	// Skip auth if Enforcer is not initialized
-	if Enforcer == nil {
-		return nil
-	}
+func Authorization(object, action string) MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			// Skip auth if Enforcer is not initialized
+			if Enforcer == nil {
+				return next(c)
+			}
+			if action == "*" {
+				action = policyActionFromHTTPMethod(c.Request().Method)
+			}
 
-	if userID == "" {
-		return dutyAPI.Errorf(dutyAPI.EUNAUTHORIZED, errNoUserID.Error())
+			ctx := c.Request().Context().(context.Context)
+
+			if object == "" || action == "" {
+				return c.String(http.StatusForbidden, ErrMisconfiguredRBAC.Error())
+			}
+
+			if !CheckContext(ctx, object, action) {
+				return c.String(http.StatusForbidden, ErrAccessDenied.Error())
+			}
+
+			return next(c)
+		}
+	}
+}
+
+func CheckContext(ctx context.Context, object, action string) bool {
+
+	user := ctx.User()
+	if user == nil {
+		return false
 	}
 
 	// Everyone with an account is a viewer
-	if action == ActionRead && Check(RoleViewer, object, action) {
-		return nil
+	if action == ActionRead && Check(ctx, RoleViewer, object, action) {
+		return true
 	}
 
-	if isAdmin, _ := Enforcer.HasRoleForUser(userID, RoleAdmin); isAdmin {
-		return nil
-	}
-
-	if object == "" || action == "" {
-		return dutyAPI.Errorf(dutyAPI.EFORBIDDEN, errMisconfiguredRBAC)
-	}
-
-	if !Check(userID, object, action) {
-		return dutyAPI.Errorf(dutyAPI.EFORBIDDEN, errAccessDenied)
-	}
-
-	return nil
+	allowed := Check(ctx, user.Name, object, action)
+	return allowed
 }

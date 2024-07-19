@@ -13,6 +13,8 @@ var (
 	SystemUserID      *uuid.UUID
 	CanaryCheckerPath string
 	ApmHubPath        string
+	PostgrestURI      string
+	ConfigDB          string
 	Kubernetes        kubernetes.Interface
 	Namespace         string
 

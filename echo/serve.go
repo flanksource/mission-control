@@ -1,7 +1,6 @@
 package echo
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -11,12 +10,10 @@ import (
 	"github.com/flanksource/commons/http/middlewares"
 	"github.com/flanksource/commons/logger"
 	cutils "github.com/flanksource/commons/utils"
-	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/schema/openapi"
-
 	"github.com/flanksource/incident-commander/agent"
+	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/artifacts"
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/catalog"
@@ -29,6 +26,7 @@ import (
 	"github.com/flanksource/incident-commander/snapshot"
 	"github.com/flanksource/incident-commander/upstream"
 	"github.com/flanksource/incident-commander/utils"
+	"github.com/flanksource/incident-commander/vars"
 	"github.com/labstack/echo-contrib/echoprometheus"
 	echov4 "github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -85,7 +83,7 @@ func New(ctx context.Context) *echov4.Echo {
 	Forward(ctx, e, "/kubeproxy", "http://kubernetes.default.svc", KubeProxyTokenMiddleware)
 
 	e.GET("/properties", Properties)
-	e.POST("/resources/search", SearchResources)
+	e.POST("/resources/search", SearchResources, rbac.Authorization(rbac.ObjectCatalog, rbac.ActionRead))
 
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowCredentials: true,
@@ -96,9 +94,31 @@ func New(ctx context.Context) *echov4.Echo {
 		return c.String(http.StatusOK, "OK")
 	})
 
-	e.GET("/snapshot/topology/:id", snapshot.Topology)
-	e.GET("/snapshot/incident/:id", snapshot.Incident)
-	e.GET("/snapshot/config/:id", snapshot.Config)
+	if api.PostgrestURI != "" {
+		Forward(e, "/db", api.PostgrestURI,
+			rbac.DbMiddleware(),
+			db.SearchQueryTransformMiddleware(),
+		)
+	}
+
+	if vars.AuthMode != "" {
+		db.PostgresDBAnonRole = "postgrest_api"
+		if err := auth.Middleware(ctx, e); err != nil {
+			logger.Fatalf(err.Error())
+		}
+	}
+
+	Forward(e, "/config", api.ConfigDB, rbac.Catalog("*"))
+	Forward(e, "/apm", api.ApmHubPath, rbac.Authorization(rbac.ObjectLogs, "*")) // Deprecated
+	// webhooks perform their own auth
+	Forward(e, "/canary/webhook", api.CanaryCheckerPath+"/webhook")
+	Forward(e, "/canary", api.CanaryCheckerPath, rbac.Canary("*"))
+	// kratos performs its own auth
+	Forward(e, "/kratos", auth.KratosAPI)
+
+	e.GET("/snapshot/topology/:id", snapshot.Topology, rbac.Topology(rbac.ActionWrite))
+	e.GET("/snapshot/incident/:id", snapshot.Incident, rbac.Topology(rbac.ActionWrite))
+	e.GET("/snapshot/config/:id", snapshot.Config, rbac.Catalog(rbac.ActionWrite))
 
 	e.POST("/auth/:id/update_state", auth.UpdateAccountState)
 	e.POST("/auth/:id/properties", auth.UpdateAccountProperties)
@@ -106,7 +126,7 @@ func New(ctx context.Context) *echov4.Echo {
 
 	e.POST("/rbac/:id/update_role", rbac.UpdateRoleForUser, rbac.Authorization(rbac.ObjectRBAC, rbac.ActionWrite))
 
-	e.POST("/push/topology", push.PushTopology)
+	e.POST("/push/topology", push.PushTopology, rbac.Topology(rbac.ActionWrite))
 
 	// Serve openapi schemas
 	schemaServer, err := utils.HTTPFileserver(openapi.Schemas)
@@ -122,8 +142,8 @@ func New(ctx context.Context) *echov4.Echo {
 
 	playbook.RegisterRoutes(e)
 	connection.RegisterRoutes(e)
-	e.POST("/agent/generate", agent.GenerateAgent, rbac.Authorization(rbac.ObjectAgentCreate, rbac.ActionWrite))
-	e.POST("/logs", logs.LogsHandler)
+	e.POST("/agent/generate", agent.GenerateAgent, rbac.Authorization(rbac.ObjectAgent, rbac.ActionWrite))
+	e.POST("/logs", logs.LogsHandler, rbac.Authorization(rbac.ObjectLogs, rbac.ActionRead))
 	return e
 }
 
@@ -202,62 +222,4 @@ func ModifyKratosRequestHeaders(next echov4.HandlerFunc) echov4.HandlerFunc {
 		}
 		return next(c)
 	}
-}
-
-func SearchResources(c echov4.Context) error {
-	ctx := c.Request().Context().(context.Context)
-
-	var request query.SearchResourcesRequest
-	if err := json.NewDecoder(c.Request().Body).Decode(&request); err != nil {
-		return api.WriteError(c, api.Errorf(api.EINVALID, err.Error()))
-	}
-
-	response, err := query.SearchResources(ctx, request)
-	if err != nil {
-		return api.WriteError(c, err)
-	}
-
-	return c.JSON(http.StatusOK, response)
-}
-
-func Properties(c echov4.Context) error {
-	ctx := c.Request().Context().(context.Context)
-
-	dbProperties, err := db.GetProperties(ctx)
-	if err != nil {
-		return api.WriteError(c, err)
-	}
-
-	var seen = make(map[string]struct{})
-
-	var output = make([]map[string]string, 0)
-	for _, p := range dbProperties {
-		if _, ok := seen[p.Name]; ok {
-			continue
-		}
-
-		output = append(output, map[string]string{
-			"name":        p.Name,
-			"value":       p.Value,
-			"source":      "db",
-			"type":        "",
-			"description": "",
-		})
-	}
-
-	for k, v := range context.Local {
-		if _, ok := seen[k]; ok {
-			continue
-		}
-
-		output = append(output, map[string]string{
-			"name":        k,
-			"value":       v,
-			"source":      "local",
-			"type":        "",
-			"description": "",
-		})
-	}
-
-	return c.JSON(http.StatusOK, output)
 }
