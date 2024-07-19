@@ -125,86 +125,77 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 	if obj.Spec.Mongo != nil {
 		dbObj.Type = models.ConnectionTypeMongo
 
-		if obj.Spec.Mongo.URL.String() != "" {
-			dbObj.URL = obj.Spec.Mongo.URL.String()
-		} else {
+		if obj.Spec.Mongo.URL.String() == "" {
 			dbObj.URL = "mongodb://$(username):$(password)@$(properties.host)/?$(properties.database)"
-			queryParams := url.Values{}
-			if obj.Spec.Mongo.ReplicaSet != "" {
-				queryParams.Set("replicaSet", obj.Spec.Mongo.ReplicaSet)
-			}
-			if obj.Spec.Mongo.InsecureTLS {
-				queryParams.Set("tls", "true")
-			}
-			if len(queryParams) > 0 {
-				dbObj.URL += queryParams.Encode()
-			}
+		}
+		queryParams := url.Values{}
+		if obj.Spec.Mongo.ReplicaSet != "" {
+			queryParams.Set("replicaSet", obj.Spec.Mongo.ReplicaSet)
+		}
+		if obj.Spec.Mongo.InsecureTLS {
+			queryParams.Set("tls", "true")
+		}
+		if len(queryParams) > 0 {
+			dbObj.URL += queryParams.Encode()
+		}
 
-			dbObj.Username = obj.Spec.Mongo.Username.String()
-			dbObj.Password = obj.Spec.Mongo.Password.String()
-			dbObj.Properties = map[string]string{
-				"host":         obj.Spec.Mongo.Host.String(),
-				"database":     obj.Spec.Mongo.Database.String(),
-				"replica_set":  obj.Spec.Mongo.ReplicaSet,
-				"insecure_tls": strconv.FormatBool(obj.Spec.Mongo.InsecureTLS),
-			}
+		dbObj.Username = obj.Spec.Mongo.Username.String()
+		dbObj.Password = obj.Spec.Mongo.Password.String()
+		dbObj.Properties = map[string]string{
+			"host":         obj.Spec.Mongo.Host.String(),
+			"database":     obj.Spec.Mongo.Database.String(),
+			"replica_set":  obj.Spec.Mongo.ReplicaSet,
+			"insecure_tls": strconv.FormatBool(obj.Spec.Mongo.InsecureTLS),
 		}
 	}
 
 	if obj.Spec.MSSQL != nil {
 		dbObj.Type = models.ConnectionTypeSQLServer
-
-		if obj.Spec.MSSQL.URL.String() != "" {
-			dbObj.URL = obj.Spec.MSSQL.URL.String()
-		} else {
+		if obj.Spec.MSSQL.URL.String() == "" {
 			dbObj.URL = "sqlserver://$(username):$(password)@$(properties.host)?database=$(properties.database)&TrustServerCertificate=$(properties.trust_server_certificate)"
-			dbObj.Username = obj.Spec.MSSQL.Username.String()
-			dbObj.Password = obj.Spec.MSSQL.Password.String()
-			dbObj.Properties = map[string]string{
-				"host":                     obj.Spec.MSSQL.Host.String(),
-				"database":                 obj.Spec.MSSQL.Database.String(),
-				"trust_server_certificate": strconv.FormatBool(obj.Spec.MSSQL.TrustServerCertificate),
-			}
+		}
+		dbObj.Username = obj.Spec.MSSQL.Username.String()
+		dbObj.Password = obj.Spec.MSSQL.Password.String()
+		dbObj.Properties = map[string]string{
+			"host":                     obj.Spec.MSSQL.Host.String(),
+			"database":                 obj.Spec.MSSQL.Database.String(),
+			"trust_server_certificate": strconv.FormatBool(obj.Spec.MSSQL.TrustServerCertificate),
 		}
 	}
 
 	if obj.Spec.MySQL != nil {
 		dbObj.Type = models.ConnectionTypeMySQL
-		if obj.Spec.MySQL.URL.String() != "" {
-			dbObj.URL = obj.Spec.MySQL.URL.String()
-		} else {
+		if obj.Spec.MySQL.URL.String() == "" {
 			dbObj.URL = "mysql://$(username):$(password)@$(properties.host)/$(properties.database)"
-			if obj.Spec.MySQL.InsecureTLS {
-				dbObj.URL += "sslMode=disabled"
-			}
+		}
+		if obj.Spec.MySQL.InsecureTLS {
+			dbObj.URL += "sslMode=disabled"
+		}
 
-			dbObj.Username = obj.Spec.MySQL.Username.String()
-			dbObj.Password = obj.Spec.MySQL.Password.String()
-			dbObj.Properties = map[string]string{
-				"host":         obj.Spec.MySQL.Host.String(),
-				"database":     obj.Spec.MySQL.Database.String(),
-				"insecure_tls": strconv.FormatBool(obj.Spec.MySQL.InsecureTLS),
-			}
+		dbObj.Username = obj.Spec.MySQL.Username.String()
+		dbObj.Password = obj.Spec.MySQL.Password.String()
+		dbObj.Properties = map[string]string{
+			"host":         obj.Spec.MySQL.Host.String(),
+			"database":     obj.Spec.MySQL.Database.String(),
+			"insecure_tls": strconv.FormatBool(obj.Spec.MySQL.InsecureTLS),
 		}
 	}
 
 	if obj.Spec.Postgres != nil {
 		dbObj.Type = models.ConnectionTypePostgres
-		if obj.Spec.Postgres.URL.String() != "" {
-			dbObj.URL = obj.Spec.Postgres.URL.String()
-		} else {
+		if obj.Spec.Postgres.URL.String() == "" {
 			dbObj.URL = "postgres://$(username):$(password)@$(properties.host)/$(properties.database)"
-			if obj.Spec.Postgres.InsecureTLS {
-				dbObj.URL += "?sslmode=disable"
-			}
+		}
+		if obj.Spec.Postgres.InsecureTLS {
+			dbObj.URL += "?sslmode=disable"
+		}
 
-			dbObj.Username = obj.Spec.Postgres.Username.String()
-			dbObj.Password = obj.Spec.Postgres.Password.String()
-			dbObj.Properties = map[string]string{
-				"host":         obj.Spec.Postgres.Host.String(),
-				"database":     obj.Spec.Postgres.Database.String(),
-				"insecure_tls": strconv.FormatBool(obj.Spec.Postgres.InsecureTLS),
-			}
+		dbObj.Username = obj.Spec.Postgres.Username.String()
+		dbObj.Password = obj.Spec.Postgres.Password.String()
+		dbObj.Properties = map[string]string{
+			"host":         obj.Spec.Postgres.Host.String(),
+			"database":     obj.Spec.Postgres.Database.String(),
+			"insecure_tls": strconv.FormatBool(obj.Spec.Postgres.InsecureTLS),
 		}
 	}
 
