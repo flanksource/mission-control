@@ -49,6 +49,7 @@ var (
 		".js",
 		".png",
 	}
+	AllowedCORS []string
 )
 
 func New(ctx context.Context) *echov4.Echo {
@@ -85,6 +86,11 @@ func New(ctx context.Context) *echov4.Echo {
 
 	e.GET("/properties", Properties)
 	e.POST("/resources/search", SearchResources)
+
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowCredentials: true,
+		AllowOrigins:     AllowedCORS,
+	}))
 
 	e.GET("/health", func(c echov4.Context) error {
 		return c.String(http.StatusOK, "OK")
