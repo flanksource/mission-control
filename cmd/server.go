@@ -134,7 +134,7 @@ var Serve = &cobra.Command{
 		e := echo.New(ctx)
 
 		if postgrestURI != "" {
-			echo.Forward(e, "/db", postgrestURI,
+			echo.Forward(ctx, e, "/db", postgrestURI,
 				rbac.Authorization(rbac.ObjectDatabase, "any"),
 				db.SearchQueryTransformMiddleware(),
 			)
@@ -147,11 +147,11 @@ var Serve = &cobra.Command{
 			}
 		}
 
-		echo.Forward(e, "/config", configDb)
-		echo.Forward(e, "/canary/webhook", api.CanaryCheckerPath+"/webhook")
-		echo.Forward(e, "/canary", api.CanaryCheckerPath)
-		echo.Forward(e, "/kratos", auth.KratosAPI)
-		echo.Forward(e, "/apm", api.ApmHubPath) // Deprecated
+		echo.Forward(ctx, e, "/config", configDb)
+		echo.Forward(ctx, e, "/canary/webhook", api.CanaryCheckerPath+"/webhook")
+		echo.Forward(ctx, e, "/canary", api.CanaryCheckerPath)
+		echo.Forward(ctx, e, "/kratos", auth.KratosAPI)
+		echo.Forward(ctx, e, "/apm", api.ApmHubPath) // Deprecated
 
 		listenAddr := fmt.Sprintf(":%d", httpPort)
 		logger.Infof("Listening on %s", listenAddr)
