@@ -7,7 +7,7 @@ import (
 
 	"github.com/casbin/casbin/v2"
 	"github.com/casbin/casbin/v2/model"
-	gormadapter "github.com/casbin/gorm-adapter/v3"
+	fileadapter "github.com/casbin/casbin/v2/persist/file-adapter"
 	"github.com/flanksource/duty/context"
 )
 
@@ -171,28 +171,28 @@ const (
 var (
 	AllActions = []string{ActionApprove, ActionCreate, ActionRead, ActionRun, ActionWrite, ActionDelete}
 )
-var Enforcer *casbin.SyncedCachedEnforcer
+var Enforcer *casbin.CachedEnforcer
 
 func Init(ctx context.Context, adminUserID string) error {
 	model, err := model.NewModelFromString(modelDefinition)
-	db := ctx.DB()
 	if err != nil {
 		return fmt.Errorf("error creating rbac model: %v", err)
 	}
 
-	gormadapter.TurnOffAutoMigrate(db)
-	adapter, err := gormadapter.NewAdapterByDB(db)
-	if err != nil {
-		return fmt.Errorf("error creating rbac adapter: %v", err)
-	}
+	// db := ctx.DB()
+	// gormadapter.TurnOffAutoMigrate(db)
+	// adapter, err := gormadapter.NewAdapterByDB(db)
+	// if err != nil {
+	// 	return fmt.Errorf("error creating rbac adapter: %v", err)
+	// }
 
-	Enforcer, err = casbin.NewSyncedCachedEnforcer(model, adapter)
+	Enforcer, err = casbin.NewCachedEnforcer(model, fileadapter.NewAdapter("roles.csv"))
 	if err != nil {
 		return fmt.Errorf("error creating rbac enforcer: %v", err)
 	}
 
 	Enforcer.SetExpireTime(ctx.Properties().Duration("casbin.cache.expiry", 1*time.Minute))
-	Enforcer.EnableCache(ctx.Properties().On("casbin.cache"))
+	Enforcer.EnableCache(ctx.Properties().On(true, "casbin.cache"))
 	if ctx.Properties().Int("casbin.log.level", 1) >= 2 {
 		Enforcer.EnableLog(true)
 	}
@@ -274,7 +274,7 @@ func Init(ctx context.Context, adminUserID string) error {
 		}
 	}
 
-	Enforcer.StartAutoLoadPolicy(ctx.Properties().Duration("cache.reload.interval", 5*time.Minute))
+	// Enforcer.StartAutoLoadPolicy(ctx.Properties().Duration("cache.reload.interval", 5*time.Minute))
 
 	return nil
 }
@@ -304,7 +304,7 @@ func Check(ctx context.Context, subject, object, action string) bool {
 		}
 	}
 
-	if ctx.Properties().On("casbin.explain") {
+	if ctx.Properties().On(false, "casbin.explain") {
 		allowed, rules, err := Enforcer.EnforceEx(subject, object, action)
 		if err != nil {
 			ctx.Errorf("RBAC Enforce failed: %v", err)

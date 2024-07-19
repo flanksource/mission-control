@@ -9,6 +9,7 @@ import (
 	"os"
 
 	dutyAPI "github.com/flanksource/duty/api"
+	"github.com/flanksource/duty/context"
 	"github.com/labstack/echo/v4"
 
 	"github.com/flanksource/incident-commander/api"
@@ -72,18 +73,18 @@ func KubeProxyTokenMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 			return fmt.Errorf("failed to read service account token: %w", err)
 		}
 
-		c.Request().Header.Set("Authorization", fmt.Sprintf("Bearer %s", saToken))
+		ctx := c.Request().Context().(context.Context)
 
 		var impersonateUser string
-		userID := c.Request().Header.Get(api.UserIDHeaderKey)
-		if err := rbac.Authorize(userID, rbac.ObjectKubernetesProxy, rbac.ActionWrite); err == nil {
+		if rbac.CheckContext(ctx, rbac.ObjectKubernetesProxy, rbac.ActionWrite) {
 			impersonateUser = "mission-control-writer"
-		} else if err := rbac.Authorize(userID, rbac.ObjectKubernetesProxy, rbac.ActionRead); err == nil {
+		} else if rbac.CheckContext(ctx, rbac.ObjectKubernetesProxy, rbac.ActionRead) {
 			impersonateUser = "mission-control-reader"
 		} else {
 			return dutyAPI.WriteError(c, err)
 		}
 
+		c.Request().Header.Set("Authorization", fmt.Sprintf("Bearer %s", saToken))
 		c.Request().Header.Set("Impersonate-User", impersonateUser)
 		return next(c)
 	}
