@@ -12,7 +12,6 @@ import (
 	"github.com/flanksource/commons/rand"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/incident-commander/api"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	client "github.com/ory/client-go"
@@ -164,7 +163,7 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 			return c.String(http.StatusUnauthorized, "Unauthorized")
 		}
 		c.Request().Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
-		c.Request().Header.Set(api.UserIDHeaderKey, session.Identity.GetId())
+		SetUserID(c, session.Identity.GetId())
 
 		var email string
 		if traits, ok := session.Identity.GetTraits().(map[string]any); ok {

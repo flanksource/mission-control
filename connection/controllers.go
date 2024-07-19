@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/rbac"
 )
 
 func TestConnection(c echo.Context) error {
@@ -39,7 +40,7 @@ func TestConnection(c echo.Context) error {
 func RegisterRoutes(e *echo.Echo) *echo.Group {
 	prefix := "connection"
 	connectionGroup := e.Group(fmt.Sprintf("/%s", prefix))
-	connectionGroup.POST("/test/:id", TestConnection)
+	connectionGroup.POST("/test/:id", TestConnection, rbac.Authorization(rbac.ObjectConnection, rbac.ActionWrite))
 
 	return connectionGroup
 }

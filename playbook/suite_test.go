@@ -56,7 +56,7 @@ var _ = ginkgo.BeforeSuite(func() {
 			return next(c)
 		}
 	})
-	e.Use(auth.MockMiddleware)
+	e.Use(auth.MockAuthMiddleware)
 	RegisterRoutes(e)
 
 	upstreamGroup := e.Group("/upstream", upstream.AgentAuthMiddleware(cache.New(24*time.Hour, 12*time.Hour)))

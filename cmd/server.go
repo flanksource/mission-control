@@ -20,14 +20,12 @@ import (
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
-	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/incidents/responder"
 	"github.com/flanksource/incident-commander/jobs"
 	"github.com/flanksource/incident-commander/notification"
-	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/teams"
 
 	// register event handlers
@@ -47,9 +45,7 @@ func launchKopper(ctx context.Context) {
 		logger.Fatalf("error creating manager: %v", err)
 	}
 
-	if err = kopper.SetupReconciler(
-		ctx,
-		mgr,
+	if err = kopper.SetupReconciler(ctx, mgr,
 		db.PersistConnectionFromCRD,
 		db.DeleteConnection,
 		"connection.mission-control.flanksource.com",
@@ -57,9 +53,7 @@ func launchKopper(ctx context.Context) {
 		logger.Fatalf("Unable to create controller for Connection: %v", err)
 	}
 
-	if err = kopper.SetupReconciler(
-		ctx,
-		mgr,
+	if err = kopper.SetupReconciler(ctx, mgr,
 		db.PersistIncidentRuleFromCRD,
 		db.DeleteIncidentRule,
 		"incidentrule.mission-control.flanksource.com",
@@ -67,9 +61,7 @@ func launchKopper(ctx context.Context) {
 		logger.Fatalf("Unable to create controller for IncidentRule: %v", err)
 	}
 
-	if err = kopper.SetupReconciler(
-		ctx,
-		mgr,
+	if err = kopper.SetupReconciler(ctx, mgr,
 		db.PersistPlaybookFromCRD,
 		db.DeletePlaybook,
 		"playbook.mission-control.flanksource.com",
@@ -77,9 +69,7 @@ func launchKopper(ctx context.Context) {
 		logger.Fatalf("Unable to create controller for Playbook: %v", err)
 	}
 
-	if err = kopper.SetupReconciler(
-		ctx,
-		mgr,
+	if err = kopper.SetupReconciler(ctx, mgr,
 		db.PersistNotificationFromCRD,
 		db.DeleteNotification,
 		"notification.mission-control.flanksource.com",
@@ -109,8 +99,8 @@ var Serve = &cobra.Command{
 			}
 		}
 
-		if postgrestURI != "" {
-			parsedURL, err := url.Parse(postgrestURI)
+		if api.PostgrestURI != "" {
+			parsedURL, err := url.Parse(api.PostgrestURI)
 			if err != nil {
 				logger.Fatalf("Failed to parse PostgREST URL: %v", err)
 			}
@@ -132,26 +122,6 @@ var Serve = &cobra.Command{
 		}
 
 		e := echo.New(ctx)
-
-		if postgrestURI != "" {
-			echo.Forward(ctx, e, "/db", postgrestURI,
-				rbac.Authorization(rbac.ObjectDatabase, "any"),
-				db.SearchQueryTransformMiddleware(),
-			)
-		}
-
-		if auth.AuthMode != "" {
-			db.PostgresDBAnonRole = "postgrest_api"
-			if err := auth.Middleware(ctx, e); err != nil {
-				logger.Fatalf(err.Error())
-			}
-		}
-
-		echo.Forward(ctx, e, "/config", configDb)
-		echo.Forward(ctx, e, "/canary/webhook", api.CanaryCheckerPath+"/webhook")
-		echo.Forward(ctx, e, "/canary", api.CanaryCheckerPath)
-		echo.Forward(ctx, e, "/kratos", auth.KratosAPI)
-		echo.Forward(ctx, e, "/apm", api.ApmHubPath) // Deprecated
 
 		listenAddr := fmt.Sprintf(":%d", httpPort)
 		logger.Infof("Listening on %s", listenAddr)

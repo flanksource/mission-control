@@ -88,7 +88,7 @@ func (t *agentWrapper) StartServer() {
 			return next(c)
 		}
 	})
-	e.Use(auth.MockMiddleware)
+	e.Use(auth.MockAuthMiddleware)
 	RegisterRoutes(e)
 	port, stop := setup.RunEcho(e)
 	t.port = port

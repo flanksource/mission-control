@@ -18,6 +18,7 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/playbook/actions"
+	"github.com/flanksource/incident-commander/rbac"
 )
 
 type RunResponse struct {
@@ -330,14 +331,14 @@ func HandleWebhook(c echo.Context) error {
 func RegisterRoutes(e *echo.Echo) *echo.Group {
 	prefix := "playbook"
 	playbookGroup := e.Group(fmt.Sprintf("/%s", prefix))
-	playbookGroup.GET("/list", HandlePlaybookList)
-	playbookGroup.POST("/webhook/:webhook_path", HandleWebhook)
-	playbookGroup.POST("/:id/params", HandleGetPlaybookParams)
+	playbookGroup.GET("/list", HandlePlaybookList, rbac.Playbook(rbac.ActionRead))
+	playbookGroup.POST("/webhook/:webhook_path", HandleWebhook, rbac.Playbook(rbac.ActionRun))
+	playbookGroup.POST("/:id/params", HandleGetPlaybookParams, rbac.Playbook(rbac.ActionRun))
 
 	runGroup := playbookGroup.Group("/run")
-	runGroup.POST("", HandlePlaybookRun)
-	runGroup.GET("/:id", HandleGetPlaybookRun)
-	runGroup.POST("/approve/:playbook_id/:run_id", HandlePlaybookRunApproval)
+	runGroup.POST("", HandlePlaybookRun, rbac.Playbook(rbac.ActionRun))
+	runGroup.GET("/:id", HandleGetPlaybookRun, rbac.Playbook(rbac.ActionRead))
+	runGroup.POST("/approve/:playbook_id/:run_id", HandlePlaybookRunApproval, rbac.Playbook(rbac.ActionApprove))
 
 	return playbookGroup
 }
