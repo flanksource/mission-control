@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/flanksource/commons/http/middlewares"
 	"github.com/flanksource/commons/logger"
 	cutils "github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty/api"
@@ -79,6 +80,9 @@ func New(ctx context.Context) *echov4.Echo {
 	e.Use(middleware.LoggerWithConfig(echoLogConfig))
 	e.Use(ServerCache)
 
+	e.GET("/kubeconfig", DownloadKubeConfig, rbac.Authorization(rbac.ObjectKubernetesProxy, rbac.ActionCreate))
+	Forward(ctx, e, "/kubeproxy", "http://kubernetes.default.svc", KubeProxyTokenMiddleware)
+
 	e.GET("/properties", Properties)
 	e.POST("/resources/search", SearchResources)
 
@@ -127,23 +131,35 @@ func suffixesInItem(item string, suffixes []string) bool {
 	return false
 }
 
-func Forward(e *echov4.Echo, prefix string, target string, middlewares ...echov4.MiddlewareFunc) {
-	middlewares = append(middlewares, ModifyKratosRequestHeaders, proxyMiddleware(e, prefix, target))
+func Forward(ctx context.Context, e *echov4.Echo, prefix string, target string, middlewares ...echov4.MiddlewareFunc) {
+	middlewares = append(middlewares, ModifyKratosRequestHeaders, proxyMiddleware(ctx, e, prefix, target))
 	e.Group(prefix).Use(middlewares...)
 }
 
-func proxyMiddleware(e *echov4.Echo, prefix, targetURL string) echov4.MiddlewareFunc {
+func proxyMiddleware(ctx context.Context, e *echov4.Echo, prefix, targetURL string) echov4.MiddlewareFunc {
 	_url, err := url.Parse(targetURL)
 	if err != nil {
 		e.Logger.Fatal(err)
 	}
 
-	return middleware.ProxyWithConfig(middleware.ProxyConfig{
+	proxyConfig := middleware.ProxyConfig{
 		Rewrite: map[string]string{
 			fmt.Sprintf("^%s/*", prefix): "/$1",
 		},
 		Balancer: middleware.NewRoundRobinBalancer([]*middleware.ProxyTarget{{URL: _url}}),
-	})
+	}
+
+	if ctx.Properties().On(false, fmt.Sprintf("proxy.log[%s]", targetURL)) {
+		traceConfig := middlewares.TraceConfig{
+			MaxBodyLength:   1024,
+			Timing:          true,
+			ResponseHeaders: true,
+			Headers:         true,
+		}
+		proxyConfig.Transport = middlewares.NewLogger(traceConfig)(http.DefaultTransport)
+	}
+
+	return middleware.ProxyWithConfig(proxyConfig)
 }
 
 // ServerCache middleware adds a `Cache Control` header to the response.
