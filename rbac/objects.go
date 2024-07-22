@@ -2,8 +2,6 @@ package rbac
 
 import (
 	"net/http"
-
-	"github.com/flanksource/commons/logger"
 )
 
 var dbResourceObjMap = map[string]string{
@@ -173,8 +171,6 @@ func GetObjectByTable(resource string) string {
 	if v, exists := dbResourceObjMap[resource]; exists {
 		return v
 	}
-
-	logger.Errorf("Got unknown table for rbac: %s", resource)
 	return ""
 }
 

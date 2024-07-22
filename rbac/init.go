@@ -116,30 +116,31 @@ func AddRoleForUser(user string, role ...string) error {
 }
 
 func RolesForUser(user string) ([]string, error) {
-	return enforcer.GetImplicitRolesForUser(user)
-}
+	implicit, err := enforcer.GetImplicitRolesForUser(user)
+	if err != nil {
+		return nil, err
+	}
 
-type Permission struct {
-	Subject string `json:"subject,omitempty"`
-	Object  string `json:"object,omitempty"`
-	Action  string `json:"action,omitempty"`
-	Deny    bool   `json:"deny,omitempty"`
+	roles, err := enforcer.GetRolesForUser(user)
+	if err != nil {
+		return nil, err
+	}
+
+	return append(implicit, roles...), nil
 }
 
 func PermsForUser(user string) ([]Permission, error) {
-	perms, err := enforcer.GetImplicitPermissionsForUser(user)
+	implicit, err := enforcer.GetImplicitPermissionsForUser(user)
+	if err != nil {
+		return nil, err
+	}
+	perms, err := enforcer.GetPermissionsForUser(user)
 	if err != nil {
 		return nil, err
 	}
 	var s []Permission
-	for _, perm := range perms {
-
-		s = append(s, Permission{
-			Subject: perm[0],
-			Object:  perm[1],
-			Action:  perm[2],
-			Deny:    perm[3] == "deny",
-		})
+	for _, perm := range append(perms, implicit...) {
+		s = append(s, NewPermission(perm))
 	}
 	return s, nil
 }
@@ -172,7 +173,7 @@ func Check(ctx context.Context, subject, object, action string) bool {
 		return false
 	}
 	if ctx.IsTrace() {
-		ctx.Tracef("%s %s:%s = %v", subject, object, action, allowed)
+		ctx.Tracef("rbac: %s %s:%s = %v", subject, object, action, allowed)
 	}
 
 	return allowed

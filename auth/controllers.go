@@ -136,8 +136,14 @@ func WhoAmI(c echo.Context) error {
 		dbName = strings.TrimPrefix(dbURL.Path, "/")
 	}
 
-	roles, _ := rbac.RolesForUser(user.ID.URN())
-	permissions, _ := rbac.PermsForUser(user.ID.URN())
+	roles, err := rbac.RolesForUser(user.ID.URN())
+	if err != nil {
+		ctx.Warnf("Error getting roles: %v", err)
+	}
+	permissions, err := rbac.PermsForUser(user.ID.URN())
+	if err != nil {
+		ctx.Warnf("Error getting permissions: %v", err)
+	}
 
 	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{
 		Message: "success",

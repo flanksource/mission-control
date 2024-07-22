@@ -44,3 +44,7 @@ func GetRolesForUser(c echo.Context) error {
 		Payload: roles,
 	})
 }
+
+func Dump(c echo.Context) error {
+	return c.JSON(http.StatusOK, NewPermissions(enforcer.GetPolicy()))
+}
