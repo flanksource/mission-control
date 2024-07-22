@@ -15,6 +15,7 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/tests/setup"
 	"github.com/flanksource/incident-commander/auth"
+	"github.com/flanksource/incident-commander/db"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/vars"
@@ -123,6 +124,7 @@ var _ = Describe("Authorization", func() {
 		// "/auth/invite_user",
 		"/db/connections",
 		"/db/config_scrapers",
+		"GET /db/job_history_names",
 		"POST|PUT|DELETE /db/topology",
 		"POST|PUT|DELETE /db/playbooks",
 		"POST|PUT|DELETE /db/canaries",
@@ -133,7 +135,9 @@ var _ = Describe("Authorization", func() {
 		"GET /db/job_history",
 		"GET /db/job_history_latest_status",
 		"GET /db/integrations_with_status",
+		"GET /db/integrations_with_status",
 		"GET /db/integrations",
+		"GET /db/event_queue_summary",
 		"POST|PUT|DELETE /db/config_items",
 	}
 
@@ -151,6 +155,12 @@ var _ = Describe("Authorization", func() {
 		"GET /db/identities",
 		"GET /db/playbooks",
 		"GET /db/people",
+		"GET /db/agents",
+		"GET /db/playbook_names",
+
+		"GET /db/config_statuses",
+		"GET /db/rpc/related_configs_recursive",
+		"GET /db/config_analysis_items",
 		"GET /db/people_roles",
 		"GET /db/canaries",
 		"GET /db/checks",
@@ -209,5 +219,22 @@ var _ = Describe("Authorization", func() {
 			})
 		}
 	}
+
+	It("Should cover all db objects", func() {
+
+		info := &db.Info{}
+		if err := info.Get(DefaultContext.DB()); err != nil {
+			Expect(err).NotTo(HaveOccurred())
+		}
+		Expect(len(info.Functions)).To(BeNumerically(">", 0))
+
+		for _, table := range append(info.Views, info.Tables...) {
+			Expect(rbac.GetObjectByTable(table)).NotTo(BeEmpty(), table)
+		}
+		for _, table := range info.Functions {
+			Expect(rbac.GetObjectByTable("rpc/"+table)).NotTo(BeEmpty(), table)
+		}
+
+	})
 
 })
