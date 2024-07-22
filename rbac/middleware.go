@@ -64,7 +64,7 @@ func Authorization(object, action string) MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			// Skip auth if Enforcer is not initialized
-			if Enforcer == nil {
+			if enforcer == nil {
 				return next(c)
 			}
 			if action == "*" {

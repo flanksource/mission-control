@@ -60,8 +60,7 @@ var _ = BeforeSuite(func() {
 			Name:  user,
 			Email: user + "@test.com",
 		})
-		_, err := rbac.Enforcer.AddRoleForUser(user, role)
-		if err != nil {
+		if err := rbac.AddRoleForUser(user, role); err != nil {
 			Fail(fmt.Sprintf("error adding roles for users: %v", err))
 		}
 	}

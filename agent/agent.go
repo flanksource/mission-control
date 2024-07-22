@@ -28,7 +28,7 @@ func generateAgent(ctx context.Context, body api.GenerateAgentRequest) (*api.Gen
 		return nil, fmt.Errorf("failed to create a new access token: %w", err)
 	}
 
-	if _, err := rbac.Enforcer.AddRoleForUser(person.ID.String(), "agent"); err != nil {
+	if err := rbac.AddRoleForUser(person.ID.String(), "agent"); err != nil {
 		return nil, fmt.Errorf("failed to add 'agent' role to the new person: %w", err)
 	}
 
