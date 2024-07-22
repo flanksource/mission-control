@@ -12,7 +12,6 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/gomplate/v3"
-	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/vars"
@@ -161,15 +160,6 @@ func mapIDsToRoles(ctx context.Context, session *client.Session, uid uuid.UUID) 
 		identityMapperLoginCache.SetDefault(session.GetId(), nil)
 	}
 	return nil
-}
-
-func SetUserID(c echo.Context, id string) {
-	c.Request().Header.Set(api.UserIDHeaderKey, id)
-}
-
-func GetUserID(c echo.Context) string {
-	userID := c.Request().Header.Get(api.UserIDHeaderKey)
-	return userID
 }
 
 // sessionCache is used to cache the response of a login attempt.

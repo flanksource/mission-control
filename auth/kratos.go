@@ -157,29 +157,30 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 			return c.String(http.StatusUnauthorized, "Unauthorized")
 		}
 
+		uid, err := uuid.Parse(session.Identity.GetId())
+		if err != nil {
+			ctx.GetSpan().RecordError(err)
+			return c.String(http.StatusUnauthorized, "Unauthorized")
+		}
+
 		token, err := getDBToken(ctx, k.tokenCache, k.jwtSecret, session.Id, session.Identity.GetId())
 		if err != nil {
 			logger.Errorf("Error generating JWT Token: %v", err)
 			return c.String(http.StatusUnauthorized, "Unauthorized")
 		}
+		// Used by downstream services like Postgrest to verify the request
 		c.Request().Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
-		SetUserID(c, session.Identity.GetId())
 
-		var email string
+		person := models.Person{ID: uid}
+
 		if traits, ok := session.Identity.GetTraits().(map[string]any); ok {
 			if e, ok := traits["email"].(string); ok {
-				email = e
+				person.Email = e
 			}
 
 			if agent, ok := traits["agent"].(models.Agent); ok {
 				ctx = ctx.WithAgent(agent)
 			}
-		}
-
-		uid, err := uuid.Parse(session.Identity.GetId())
-		if err != nil {
-			ctx.GetSpan().RecordError(err)
-			return c.String(http.StatusUnauthorized, "Unauthorized")
 		}
 
 		if IdentityRoleMapper != "" {
@@ -189,7 +190,7 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 			}
 		}
 
-		ctx = ctx.WithUser(&models.Person{ID: uid, Email: email})
+		ctx = ctx.WithUser(&person)
 		c.SetRequest(c.Request().WithContext(ctx))
 
 		return next(c)

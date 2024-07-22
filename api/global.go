@@ -5,8 +5,6 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-const UserIDHeaderKey = "X-User-ID"
-
 var (
 	BuildVersion string
 

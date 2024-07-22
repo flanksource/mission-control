@@ -139,7 +139,6 @@ func (h ClerkHandler) Session(next echo.HandlerFunc) echo.HandlerFunc {
 		}
 
 		c.Request().Header.Set(echo.HeaderAuthorization, fmt.Sprintf("Bearer %s", token))
-		SetUserID(c, user.ID.String())
 
 		ctx.GetSpan().SetAttributes(
 			attribute.String("clerk-user-id", user.ExternalID),
