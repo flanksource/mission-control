@@ -19,7 +19,7 @@ func UpdateRoleForUser(c echo.Context) error {
 		})
 	}
 
-	if _, err := Enforcer.AddRolesForUser(userID, reqData.Roles); err != nil {
+	if err := AddRoleForUser(userID, reqData.Roles...); err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{
 			Err:     err.Error(),
 			Message: "Error updating roles",
@@ -33,13 +33,12 @@ func UpdateRoleForUser(c echo.Context) error {
 
 func GetRolesForUser(c echo.Context) error {
 	userID := c.Param("id")
-	roles, err := Enforcer.GetRolesForUser(userID)
+	roles, err := RolesForUser(userID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{
 			Err:     err.Error(),
 			Message: "Error getting roles",
 		})
-
 	}
 	return c.JSON(http.StatusOK, api.HTTPSuccess{
 		Payload: roles,

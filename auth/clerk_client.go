@@ -224,15 +224,15 @@ func (h *ClerkHandler) createDBUserIfNotExists(ctx context.Context, user models.
 
 func (ClerkHandler) updateRole(userID, clerkRole string) error {
 	if clerkRole == "admin" {
-		if _, err := rbac.Enforcer.AddRoleForUser(userID, rbac.RoleAdmin); err != nil {
+		if err := rbac.AddRoleForUser(userID, rbac.RoleAdmin); err != nil {
 			return err
 		}
 	} else {
 		// Remove admin in rbac if exists
-		if _, err := rbac.Enforcer.DeleteRoleForUser(userID, rbac.RoleAdmin); err != nil {
+		if err := rbac.DeleteRoleForUser(userID, rbac.RoleAdmin); err != nil {
 			return err
 		}
-		if _, err := rbac.Enforcer.AddRoleForUser(userID, rbac.RoleViewer); err != nil {
+		if err := rbac.AddRoleForUser(userID, rbac.RoleViewer); err != nil {
 			return err
 		}
 	}

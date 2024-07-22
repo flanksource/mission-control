@@ -137,7 +137,7 @@ func mapIDsToRoles(ctx context.Context, session *client.Session, uid uuid.UUID) 
 	}
 
 	if result.Role != "" {
-		if _, err := rbac.Enforcer.AddRoleForUser(uid.String(), result.Role); err != nil {
+		if err := rbac.AddRoleForUser(uid.String(), result.Role); err != nil {
 			return fmt.Errorf("error adding role:%s to user %s: %v", result.Role, uid, err)
 		}
 	}
