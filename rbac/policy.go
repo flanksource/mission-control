@@ -75,8 +75,8 @@ func (acl ACL) GetPolicyDefinition() [][]string {
 
 type Policy struct {
 	Principal string   `yaml:"principal" json:"principal"`
-	ACLs      []ACL    `yaml:"acl" json:"acl"`
-	Inherit   []string `yaml:"inherit" json:"inherit"`
+	ACLs      []ACL    `yaml:"acl,omitempty" json:"acl"`
+	Inherit   []string `yaml:"inherit,omitempty" json:"inherit"`
 }
 
 func (p Policy) GetPolicyDefintions() [][]string {
@@ -102,21 +102,6 @@ func (p Policy) String() string {
 }
 
 const (
-	modelDefinition = `
-    [request_definition]
-    r = sub, obj, act
-
-    [policy_definition]
-    p = sub, obj, act, eft
-
-    [role_definition]
-    g = _, _
-
-    [policy_effect]
-		e = some(where (p.eft == allow)) && !some(where (p.eft == deny))
-
-    [matchers]
-    m = g(r.sub, p.sub) && ( p.obj == '*' || r.obj == p.obj) && (p.act == '*' || r.act == p.act)`
 
 	// Roles
 	RoleAdmin     = "admin"

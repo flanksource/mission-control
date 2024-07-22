@@ -1,6 +1,7 @@
 package rbac
 
 import (
+	_ "embed"
 	"fmt"
 	"strings"
 	"time"
@@ -8,7 +9,6 @@ import (
 	"github.com/casbin/casbin/v2"
 	"github.com/casbin/casbin/v2/model"
 	gormadapter "github.com/casbin/gorm-adapter/v3"
-	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/incident-commander/db"
 	"gopkg.in/yaml.v3"
@@ -16,8 +16,14 @@ import (
 
 var enforcer *casbin.SyncedCachedEnforcer
 
+//go:embed policies.yaml
+var defaultPolicies string
+
+//go:embed model.ini
+var defaultModel string
+
 func Init(ctx context.Context, adminUserID string) error {
-	model, err := model.NewModelFromString(modelDefinition)
+	model, err := model.NewModelFromString(defaultModel)
 	if err != nil {
 		return fmt.Errorf("error creating rbac model: %v", err)
 	}
@@ -49,6 +55,9 @@ func Init(ctx context.Context, adminUserID string) error {
 	if err != nil {
 		return fmt.Errorf("error creating rbac enforcer: %v", err)
 	}
+	if err := enforcer.LoadPolicy(); err != nil {
+		ctx.Errorf("Failed to load existing policies: %v", err)
+	}
 
 	enforcer.SetExpireTime(ctx.Properties().Duration("casbin.cache.expiry", 1*time.Minute))
 	enforcer.EnableCache(ctx.Properties().On(true, "casbin.cache"))
@@ -62,63 +71,13 @@ func Init(ctx context.Context, adminUserID string) error {
 		}
 	}
 
-	policies := []Policy{
-		{
-			Principal: RoleEveryone,
-			ACLs: []ACL{
-				{
-					Actions: "!*",
-					Objects: strings.Join([]string{ObjectAuthConfidential}, ","),
-				},
-			},
-		},
-		{
-			Inherit:   []string{RoleEveryone},
-			Principal: RoleAdmin,
-			ACLs:      []ACL{All("*")},
-		}, {
-			Principal: RoleViewer,
-			ACLs: []ACL{Read(
-				ObjectDatabasePublic,
-				ObjectCanary,
-				ObjectCatalog,
-				ObjectPlaybooks,
-				ObjectTopology)},
-		},
-		{
-			Inherit:   []string{RoleViewer},
-			Principal: RoleCommander,
-			ACLs: []ACL{
-				CRUD(ObjectIncident),
-			},
-		},
-		{
-			Inherit:   []string{RoleViewer},
-			Principal: RoleResponder,
-			ACLs: []ACL{
-				CRUD(ObjectIncident),
-			},
-		},
-		{
-			Inherit:   []string{RoleViewer},
-			Principal: RoleEditor,
-			ACLs: []ACL{
-				CRUD(ObjectCanary, ObjectCatalog, ObjectTopology, ObjectPlaybooks, ObjectKubernetesProxy),
-				Run(ObjectPlaybooks),
-				Approve(ObjectPlaybooks),
-			},
-		},
+	var policies []Policy
 
-		{
-			Principal: RoleAgent,
-			ACLs: []ACL{
-				Read(ObjectPlaybooks, ObjectDatabasePublic),
-				Write(ObjectAgentPush),
-			},
-		},
+	if err := yaml.Unmarshal([]byte(defaultPolicies), &policies); err != nil {
+		return fmt.Errorf("unable to load default policies: %v", err)
 	}
-	data, _ := yaml.Marshal(policies)
-	logger.Errorf(string(data))
+
+	enforcer.EnableAutoSave(ctx.Properties().On(true, "casbin.auto.save"))
 
 	// Adding policies in a loop is important
 	// If we use Enforcer.AddPolicies(), new policies do not get saved
@@ -135,12 +94,16 @@ func Init(ctx context.Context, adminUserID string) error {
 		}
 	}
 
-	enforcer.EnableAutoSave(ctx.Properties().On(true, "casbin.auto.save"))
 	enforcer.StartAutoLoadPolicy(ctx.Properties().Duration("casbin.cache.reload.interval", 5*time.Minute))
 
 	return nil
 }
 
+func Stop() {
+	if enforcer != nil {
+		enforcer.StopAutoLoadPolicy()
+	}
+}
 func DeleteRoleForUser(user string, role string) error {
 	_, err := enforcer.DeleteRoleForUser(user, role)
 	return err
@@ -156,16 +119,29 @@ func RolesForUser(user string) ([]string, error) {
 	return enforcer.GetImplicitRolesForUser(user)
 }
 
-func PermsForUser(user string) string {
-	perms, _ := enforcer.GetImplicitPermissionsForUser(user)
-	s := ""
-	for _, perm := range perms {
-		if s != "" {
-			s += "\n"
-		}
-		s += strings.Join(perm, ",")
+type Permission struct {
+	Subject string `json:"subject,omitempty"`
+	Object  string `json:"object,omitempty"`
+	Action  string `json:"action,omitempty"`
+	Deny    bool   `json:"deny,omitempty"`
+}
+
+func PermsForUser(user string) ([]Permission, error) {
+	perms, err := enforcer.GetImplicitPermissionsForUser(user)
+	if err != nil {
+		return nil, err
 	}
-	return s
+	var s []Permission
+	for _, perm := range perms {
+
+		s = append(s, Permission{
+			Subject: perm[0],
+			Object:  perm[1],
+			Action:  perm[2],
+			Deny:    perm[3] == "deny",
+		})
+	}
+	return s, nil
 }
 
 func Check(ctx context.Context, subject, object, action string) bool {
