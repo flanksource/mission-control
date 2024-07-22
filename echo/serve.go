@@ -73,10 +73,12 @@ func New(ctx context.Context) *echov4.Echo {
 		Gatherer: prom.DefaultGatherer,
 	}))
 
-	echoLogConfig := middleware.DefaultLoggerConfig
-	echoLogConfig.Skipper = telemetryURLSkipper
+	if ctx.Properties().On(true, "access.log") {
+		echoLogConfig := middleware.DefaultLoggerConfig
+		echoLogConfig.Skipper = telemetryURLSkipper
 
-	e.Use(middleware.LoggerWithConfig(echoLogConfig))
+		e.Use(middleware.LoggerWithConfig(echoLogConfig))
+	}
 	e.Use(ServerCache)
 
 	e.GET("/kubeconfig", DownloadKubeConfig, rbac.Authorization(rbac.ObjectKubernetesProxy, rbac.ActionCreate))
@@ -125,6 +127,7 @@ func New(ctx context.Context) *echov4.Echo {
 	e.GET("/auth/whoami", auth.WhoAmI)
 
 	e.POST("/rbac/:id/update_role", rbac.UpdateRoleForUser, rbac.Authorization(rbac.ObjectRBAC, rbac.ActionWrite))
+	e.GET("/rbac/dump", rbac.Dump, rbac.Authorization(rbac.ObjectRBAC, rbac.ActionRead))
 
 	e.POST("/push/topology", push.PushTopology, rbac.Topology(rbac.ActionWrite))
 

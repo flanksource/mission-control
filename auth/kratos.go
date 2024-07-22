@@ -81,6 +81,7 @@ func (k *kratosMiddleware) validateSession(ctx context.Context, r *http.Request)
 	}
 
 	if username, password, ok := r.BasicAuth(); ok {
+		logger.V(4).Infof("Logging in with Basic %s %s%s%s", username, password[0:1], strings.Repeat("*", len(password)-2), password[len(password)-1:])
 		if strings.ToLower(username) == "token" {
 			accessToken, err := getAccessToken(ctx, k.accessTokenCache, password)
 			if err != nil {
@@ -102,6 +103,10 @@ func (k *kratosMiddleware) validateSession(ctx context.Context, r *http.Request)
 					Id: accessToken.PersonID.String(),
 					Traits: map[string]any{
 						"agent": agent,
+						"name": map[string]string{
+							"first": accessToken.Name,
+							"last":  "",
+						},
 					},
 				},
 			}
@@ -111,6 +116,7 @@ func (k *kratosMiddleware) validateSession(ctx context.Context, r *http.Request)
 
 		sess, err := k.kratosLoginWithCache(r.Context(), username, password)
 		if err != nil {
+			logger.V(4).Infof("Login failed: %v", err)
 			return nil, fmt.Errorf("failed to login: %w", err)
 		}
 
@@ -149,24 +155,23 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 			} else if errors.Is(err, errTokenExpired) {
 				return c.String(http.StatusUnauthorized, "access token has expired")
 			}
-
-			return c.String(http.StatusUnauthorized, "Unauthorized")
+			return c.String(http.StatusUnauthorized, "Authorization Error")
 		}
 
 		if !*session.Active {
-			return c.String(http.StatusUnauthorized, "Unauthorized")
+			return c.String(http.StatusUnauthorized, "Session Expired")
 		}
 
 		uid, err := uuid.Parse(session.Identity.GetId())
 		if err != nil {
 			ctx.GetSpan().RecordError(err)
-			return c.String(http.StatusUnauthorized, "Unauthorized")
+			return c.String(http.StatusUnauthorized, "Authorization Error")
 		}
 
 		token, err := getDBToken(ctx, k.tokenCache, k.jwtSecret, session.Id, session.Identity.GetId())
 		if err != nil {
 			logger.Errorf("Error generating JWT Token: %v", err)
-			return c.String(http.StatusUnauthorized, "Unauthorized")
+			return c.String(http.StatusUnauthorized, "Authorization Error")
 		}
 		// Used by downstream services like Postgrest to verify the request
 		c.Request().Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))

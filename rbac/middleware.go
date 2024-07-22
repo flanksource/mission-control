@@ -67,17 +67,25 @@ func Authorization(object, action string) MiddlewareFunc {
 			if enforcer == nil {
 				return next(c)
 			}
-			if action == "*" {
-				action = GetActionFromHttpMethod(c.Request().Method)
-			}
+
+			action = GetActionFromHttpMethod(c.Request().Method)
 
 			ctx := c.Request().Context().(context.Context)
+			u := ctx.User()
 
+			if u == nil {
+				return c.String(http.StatusUnauthorized, "Not logged in")
+			}
 			if object == "" || action == "" {
 				return c.String(http.StatusForbidden, ErrMisconfiguredRBAC.Error())
 			}
 
 			if !CheckContext(ctx, object, action) {
+
+				c.Response().Header().Add("X-Rbac-Subject", u.ID.String())
+				c.Response().Header().Add("X-Rbac-Object", object)
+				c.Response().Header().Add("X-Rbac-Action", action)
+
 				return c.String(http.StatusForbidden, ErrAccessDenied.Error())
 			}
 
@@ -98,6 +106,5 @@ func CheckContext(ctx context.Context, object, action string) bool {
 		return true
 	}
 
-	allowed := Check(ctx, user.Name, object, action)
-	return allowed
+	return Check(ctx, user.ID.String(), object, action)
 }
