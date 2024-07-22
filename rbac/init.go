@@ -7,7 +7,6 @@ import (
 
 	"github.com/casbin/casbin/v2"
 	"github.com/casbin/casbin/v2/model"
-	fileadapter "github.com/casbin/casbin/v2/persist/file-adapter"
 	"github.com/flanksource/duty/context"
 )
 
@@ -186,7 +185,7 @@ func Init(ctx context.Context, adminUserID string) error {
 	// 	return fmt.Errorf("error creating rbac adapter: %v", err)
 	// }
 
-	Enforcer, err = casbin.NewCachedEnforcer(model, fileadapter.NewAdapter("roles.csv"))
+	Enforcer, err = casbin.NewCachedEnforcer(model, NoopAdapter{})
 	if err != nil {
 		return fmt.Errorf("error creating rbac enforcer: %v", err)
 	}
