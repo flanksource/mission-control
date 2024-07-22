@@ -1,0 +1,42 @@
+- principal: everyone
+  acl:
+    - objects: database.kratos
+      actions: "!*"
+- principal: admin
+  acl:
+    - objects: "*"
+      actions: "*"
+  inherit:
+    - everyone
+- principal: viewer
+  acl:
+    - objects: database.public,canaries,catalog,playbooks,topology
+      actions: read
+- principal: commander
+  acl:
+    - objects: incident
+      actions: create,read,update,delete
+  inherit:
+    - viewer
+- principal: responder
+  acl:
+    - objects: incident
+      actions: create,read,update,delete
+  inherit:
+    - viewer
+- principal: editor
+  acl:
+    - objects: canaries,catalog,topology,playbooks,kubernetes-proxy
+      actions: create,read,update,delete
+    - objects: playbooks
+      actions: run
+    - objects: playbooks
+      actions: approve
+  inherit:
+    - viewer
+- principal: agent
+  acl:
+    - objects: playbooks,database.public
+      actions: read
+    - objects: agent-push
+      actions: write

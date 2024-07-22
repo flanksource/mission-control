@@ -178,6 +178,11 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 				person.Email = e
 			}
 
+			switch v := traits["name"].(type) {
+			case map[string]string:
+				person.Name = fmt.Sprintf("%s %s", v["first"], v["last"])
+			}
+
 			if agent, ok := traits["agent"].(models.Agent); ok {
 				ctx = ctx.WithAgent(agent)
 			}

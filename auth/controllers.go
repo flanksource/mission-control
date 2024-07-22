@@ -15,6 +15,7 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/mail"
+	"github.com/flanksource/incident-commander/rbac"
 )
 
 type InviteUserRequest struct {
@@ -134,12 +135,18 @@ func WhoAmI(c echo.Context) error {
 	if dbURL, err := url.Parse(db.ConnectionString); err == nil {
 		dbName = strings.TrimPrefix(dbURL.Path, "/")
 	}
+
+	roles, _ := rbac.RolesForUser(user.ID.URN())
+	permissions, _ := rbac.PermsForUser(user.ID.URN())
+
 	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{
 		Message: "success",
 		Payload: map[string]any{
-			"user":     user,
-			"hostname": hostname,
-			"database": dbName,
+			"user":        user,
+			"roles":       roles,
+			"permissions": permissions,
+			"hostname":    hostname,
+			"database":    dbName,
 		},
 	})
 }
