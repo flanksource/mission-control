@@ -43,7 +43,7 @@ func DownloadKubeConfig(c echo.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to parse public web url")
 	}
-	parsed.Path = "/kube-proxy"
+	parsed.Path = "/kubeproxy"
 
 	kcd := kubeConfigData{
 		Server:      parsed.String(),
