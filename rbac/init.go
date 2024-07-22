@@ -8,6 +8,7 @@ import (
 	"github.com/casbin/casbin/v2"
 	"github.com/casbin/casbin/v2/model"
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/incident-commander/db"
 )
 
 func Read(objects ...string) ACL {
@@ -176,6 +177,22 @@ func Init(ctx context.Context, adminUserID string) error {
 	model, err := model.NewModelFromString(modelDefinition)
 	if err != nil {
 		return fmt.Errorf("error creating rbac model: %v", err)
+	}
+
+	info := &db.Info{}
+	if err := info.Get(ctx.DB()); err != nil {
+		ctx.Warnf("Cannot get DB info: %v", err)
+	}
+
+	for _, table := range append(info.Views, info.Tables...) {
+		if GetObjectByTable(table) == "" {
+			ctx.Warnf("Unmapped database table: %s", table)
+		}
+	}
+	for _, table := range info.Functions {
+		if GetObjectByTable("rpc/"+table) == "" {
+			ctx.Warnf("Unmapped database function: %s", table)
+		}
 	}
 
 	// db := ctx.DB()

@@ -40,10 +40,10 @@ func DbMiddleware() MiddlewareFunc {
 			if !strings.HasPrefix(path, "/db/") {
 				return next(c)
 			}
-			action := policyActionFromHTTPMethod(c.Request().Method)
+			action := GetActionFromHttpMethod(c.Request().Method)
 			resource := strings.ReplaceAll(path, "/db/", "")
 
-			object := postgrestDatabaseObject(resource)
+			object := GetObjectByTable(resource)
 
 			if object == "" || action == "" {
 				return c.String(http.StatusForbidden, ErrMisconfiguredRBAC.Error())
@@ -68,7 +68,7 @@ func Authorization(object, action string) MiddlewareFunc {
 				return next(c)
 			}
 			if action == "*" {
-				action = policyActionFromHTTPMethod(c.Request().Method)
+				action = GetActionFromHttpMethod(c.Request().Method)
 			}
 
 			ctx := c.Request().Context().(context.Context)
