@@ -122,12 +122,6 @@ func ActionConsumer(c postq.Context) (int, error) {
 		return 0, errors.New("invalid context")
 	}
 
-	ctx.Debugf("consuming playbook action ...")
-
-	var span trace.Span
-	ctx, span = ctx.StartSpan("playbook-action-consumer")
-	defer span.End()
-
 	tx := ctx.DB().Begin()
 	if tx.Error != nil {
 		return 0, fmt.Errorf("error initiating db tx: %w", tx.Error)
@@ -154,6 +148,12 @@ func ActionConsumer(c postq.Context) (int, error) {
 	if len(foundActions) == 0 {
 		return 0, nil
 	}
+
+	ctx.Debugf("consuming %d playbook actions", len(foundActions))
+
+	var span trace.Span
+	ctx, span = ctx.StartSpan("playbook-action-consumer")
+	defer span.End()
 
 	for i := range foundActions {
 		isAssignedToAgent := foundActions[i].AgentID != nil && *foundActions[i].AgentID != uuid.Nil

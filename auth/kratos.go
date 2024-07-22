@@ -81,7 +81,7 @@ func (k *kratosMiddleware) validateSession(ctx context.Context, r *http.Request)
 	}
 
 	if username, password, ok := r.BasicAuth(); ok {
-		logger.V(4).Infof("Logging in with Basic %s %s%s%s", username, password[0:1], strings.Repeat("*", len(password)-2), password[len(password)-1:])
+		// logger.V(4).Infof("Logging in with Basic %s %s%s%s", username, password[0:1], strings.Repeat("*", len(password)-2), password[len(password)-1:])
 		if strings.ToLower(username) == "token" {
 			accessToken, err := getAccessToken(ctx, k.accessTokenCache, password)
 			if err != nil {
