@@ -157,7 +157,6 @@ var dbResourceObjMap = map[string]string{
 	"session_devices":                    ObjectAuthConfidential,
 	"sessions":                           ObjectAuthConfidential,
 	"severities":                         ObjectDatabasePublic,
-	"system_templates":                   ObjectTopology,
 	"team_components":                    ObjectDatabasePublic,
 	"team_members":                       ObjectDatabasePublic,
 	"teams_with_status":                  ObjectDatabasePublic,
