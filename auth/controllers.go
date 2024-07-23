@@ -136,11 +136,11 @@ func WhoAmI(c echo.Context) error {
 		dbName = strings.TrimPrefix(dbURL.Path, "/")
 	}
 
-	roles, err := rbac.RolesForUser(user.ID.URN())
+	roles, err := rbac.RolesForUser(user.ID.String())
 	if err != nil {
 		ctx.Warnf("Error getting roles: %v", err)
 	}
-	permissions, err := rbac.PermsForUser(user.ID.URN())
+	permissions, err := rbac.PermsForUser(user.ID.String())
 	if err != nil {
 		ctx.Warnf("Error getting permissions: %v", err)
 	}
