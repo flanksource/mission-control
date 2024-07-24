@@ -49,6 +49,7 @@ var skipAuthPaths = []string{
 	"/health",
 	"/metrics",
 	"/kratos/*",
+	"/canary/webhook/*",
 	"/playbook/webhook/:webhook_path", // Playbook webhooks handle the authentication themselves
 }
 
@@ -67,46 +68,46 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 		kratosHandler := NewKratosHandler(KratosAPI, KratosAdminAPI, db.PostgRESTJWTSecret)
 		adminUserID, err = kratosHandler.CreateAdminUser(ctx)
 		if err != nil {
-			return fmt.Errorf("Failed to created admin user: %v", err)
+			return fmt.Errorf("failed to created admin user: %v", err)
 		}
 
 		middleware, err := kratosHandler.KratosMiddleware(ctx)
 		if err != nil {
-			return fmt.Errorf("Failed to initialize kratos middleware: %v", err)
+			return fmt.Errorf("failed to initialize kratos middleware: %v", err)
 		}
 		e.Use(middleware.Session)
 		e.POST("/auth/invite_user", kratosHandler.InviteUser, rbac.Authorization(rbac.ObjectAuth, rbac.ActionWrite))
 
 	case Clerk:
 		if ClerkJWKSURL == "" {
-			return fmt.Errorf("Failed to start server: clerk-jwks-url is required")
+			return fmt.Errorf("failed to start server: clerk-jwks-url is required")
 		}
 		if ClerkOrgID == "" {
-			return fmt.Errorf("Failed to start server: clerk-org-id is required")
+			return fmt.Errorf("failed to start server: clerk-org-id is required")
 		}
 
 		clerkHandler, err := NewClerkHandler(ClerkJWKSURL, ClerkOrgID, db.PostgRESTJWTSecret)
 		if err != nil {
-			logger.Fatalf("Failed to initialize clerk client: %v", err)
+			logger.Fatalf("failed to initialize clerk client: %v", err)
 		}
 		e.Use(clerkHandler.Session)
 
 		// We also need to disable "settings.users" feature in database
 		// to hide the menu from UI
 		if err := context.UpdateProperty(ctx, "settings.user.disabled", "true"); err != nil {
-			return fmt.Errorf("Error setting property in database: %v", err)
+			return fmt.Errorf("error setting property in database: %v", err)
 		}
 
 	default:
-		return fmt.Errorf("Invalid auth provider: %s", vars.AuthMode)
+		return fmt.Errorf("invalid auth provider: %s", vars.AuthMode)
 	}
 
 	// Initiate RBAC
 	if err := rbac.Init(ctx, adminUserID); err != nil {
-		return fmt.Errorf("Failed to initialize rbac: %v", err)
+		return fmt.Errorf("failed to initialize rbac: %v", err)
 	}
-	return nil
 
+	return nil
 }
 
 func canSkipAuth(c echo.Context) bool {
