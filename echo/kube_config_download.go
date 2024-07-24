@@ -39,7 +39,7 @@ type kubeConfigData struct {
 }
 
 func DownloadKubeConfig(c echo.Context) error {
-	parsed, err := url.Parse(api.PublicWebURL)
+	parsed, err := url.Parse(api.PublicURL)
 	if err != nil {
 		return fmt.Errorf("failed to parse public web url")
 	}

@@ -240,7 +240,7 @@ func getEnvForEvent(ctx context.Context, event postq.Event, properties map[strin
 		env["status"] = checkStatus.AsMap()
 		env["canary"] = canary.AsMap("spec")
 		env["check"] = check.AsMap("spec")
-		env["permalink"] = fmt.Sprintf("%s/health?layout=table&checkId=%s&timeRange=1h", api.PublicWebURL, check.ID)
+		env["permalink"] = fmt.Sprintf("%s/health?layout=table&checkId=%s&timeRange=1h", api.FrontendURL, check.ID)
 	}
 
 	if event.Name == "incident.created" || strings.HasPrefix(event.Name, "incident.status.") {
@@ -254,7 +254,7 @@ func getEnvForEvent(ctx context.Context, event postq.Event, properties map[strin
 		}
 
 		env["incident"] = incident.AsMap()
-		env["permalink"] = fmt.Sprintf("%s/incidents/%s", api.PublicWebURL, incident.ID)
+		env["permalink"] = fmt.Sprintf("%s/incidents/%s", api.FrontendURL, incident.ID)
 	}
 
 	if strings.HasPrefix(event.Name, "incident.responder.") {
@@ -275,7 +275,7 @@ func getEnvForEvent(ctx context.Context, event postq.Event, properties map[strin
 
 		env["incident"] = incident.AsMap()
 		env["responder"] = responder.AsMap()
-		env["permalink"] = fmt.Sprintf("%s/incidents/%s", api.PublicWebURL, incident.ID)
+		env["permalink"] = fmt.Sprintf("%s/incidents/%s", api.FrontendURL, incident.ID)
 	}
 
 	if strings.HasPrefix(event.Name, "incident.comment.") {
@@ -303,7 +303,7 @@ func getEnvForEvent(ctx context.Context, event postq.Event, properties map[strin
 		env["incident"] = incident.AsMap()
 		env["comment"] = comment.AsMap()
 		env["author"] = author.AsMap()
-		env["permalink"] = fmt.Sprintf("%s/incidents/%s", api.PublicWebURL, incident.ID)
+		env["permalink"] = fmt.Sprintf("%s/incidents/%s", api.FrontendURL, incident.ID)
 	}
 
 	if strings.HasPrefix(event.Name, "incident.dod.") {
@@ -327,7 +327,7 @@ func getEnvForEvent(ctx context.Context, event postq.Event, properties map[strin
 		env["evidence"] = evidence.AsMap()
 		env["hypotheses"] = hypotheses.AsMap()
 		env["incident"] = incident.AsMap()
-		env["permalink"] = fmt.Sprintf("%s/incidents/%s", api.PublicWebURL, incident.ID)
+		env["permalink"] = fmt.Sprintf("%s/incidents/%s", api.FrontendURL, incident.ID)
 	}
 
 	if strings.HasPrefix(event.Name, "component.") {
@@ -353,7 +353,7 @@ func getEnvForEvent(ctx context.Context, event postq.Event, properties map[strin
 		component.Status = types.ComponentStatus(event.Properties["status"])
 
 		env["component"] = component.AsMap("checks", "incidents", "analysis", "components", "order", "relationship_id", "children", "parents")
-		env["permalink"] = fmt.Sprintf("%s/topology/%s", api.PublicWebURL, componentID)
+		env["permalink"] = fmt.Sprintf("%s/topology/%s", api.FrontendURL, componentID)
 	}
 
 	if strings.HasPrefix(event.Name, "config.") {
@@ -379,7 +379,7 @@ func getEnvForEvent(ctx context.Context, event postq.Event, properties map[strin
 		config.Status = lo.ToPtr(event.Properties["status"])
 
 		env["config"] = config.AsMap("last_scraped_time", "path", "parent_id")
-		env["permalink"] = fmt.Sprintf("%s/catalog/%s", api.PublicWebURL, configID)
+		env["permalink"] = fmt.Sprintf("%s/catalog/%s", api.FrontendURL, configID)
 	}
 
 	return env, nil
