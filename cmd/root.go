@@ -85,12 +85,13 @@ var (
 )
 
 func ServerFlags(flags *pflag.FlagSet) {
-	flags.IntVar(&httpPort, "httpPort", 8080, "Port to expose a health dashboard")
+	flags.IntVar(&httpPort, "httpPort", 8080, "Server port")
 	flags.StringVar(&api.Namespace, "namespace", utils.Coalesce(os.Getenv("NAMESPACE"), "default"), "Namespace to use for config/secret lookups")
 	flags.IntVar(&devGuiPort, "devGuiPort", 3004, "Port used by a local npm server in development mode")
 	flags.IntVar(&metricsPort, "metricsPort", 8081, "Port to expose a health dashboard ")
 	flags.BoolVar(&dev, "dev", false, "Run in development mode")
-	flags.StringVar(&api.PublicWebURL, "public-endpoint", "http://localhost:3000", "Public endpoint this instance is exposed under")
+	flags.StringVar(&api.FrontendURL, "frontend-url", "http://localhost:3000", "URL of the frontend")
+	flags.StringVar(&api.PublicURL, "public-endpoint", "http://localhost:8080", "Public endpoint this instance is exposed under")
 	flags.StringVar(&api.ApmHubPath, "apm-hub", "http://apm-hub:8080", "APM Hub URL")
 	flags.StringVar(&api.ConfigDB, "config-db", "http://config-db:8080", "Config DB URL")
 	flags.StringVar(&auth.KratosAPI, "kratos-api", "http://kratos-public:80", "Kratos API service")

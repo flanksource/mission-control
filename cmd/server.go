@@ -86,7 +86,7 @@ var Serve = &cobra.Command{
 	PreRun: PreRun,
 	Run: func(cmd *cobra.Command, args []string) {
 		// PostgREST needs to know how it is exposed to create the correct links
-		db.HttpEndpoint = api.PublicWebURL + "/db"
+		db.HttpEndpoint = api.PublicURL + "/db"
 
 		ctx := context.NewContext(gocontext.Background(), commonsCtx.WithTracer(otel.GetTracerProvider().Tracer("mission-control"))).
 			WithDB(db.Gorm, db.Pool).
