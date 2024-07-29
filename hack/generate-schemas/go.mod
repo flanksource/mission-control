@@ -42,7 +42,7 @@ require (
 	github.com/exaring/otelpgx v0.5.2 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/flanksource/gomplate/v3 v3.24.11 // indirect
-	github.com/flanksource/is-healthy v1.0.19 // indirect
+	github.com/flanksource/is-healthy v1.0.20 // indirect
 	github.com/flanksource/kommons v0.31.4 // indirect
 	github.com/flanksource/kubectl-neat v1.0.4 // indirect
 	github.com/flanksource/postq v1.0.0 // indirect
