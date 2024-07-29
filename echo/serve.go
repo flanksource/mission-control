@@ -1,6 +1,7 @@
 package echo
 
 import (
+	"crypto/tls"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -82,7 +83,7 @@ func New(ctx context.Context) *echov4.Echo {
 	e.Use(ServerCache)
 
 	e.GET("/kubeconfig", DownloadKubeConfig, rbac.Authorization(rbac.ObjectKubernetesProxy, rbac.ActionCreate))
-	Forward(ctx, e, "/kubeproxy", "http://kubernetes.default.svc", KubeProxyTokenMiddleware)
+	Forward(ctx, e, "/kubeproxy", "https://kubernetes.default.svc", KubeProxyTokenMiddleware)
 
 	e.GET("/properties", Properties)
 	e.POST("/resources/search", SearchResources, rbac.Authorization(rbac.ObjectCatalog, rbac.ActionRead))
@@ -178,14 +179,22 @@ func proxyMiddleware(ctx context.Context, e *echov4.Echo, prefix, targetURL stri
 		Balancer: middleware.NewRoundRobinBalancer([]*middleware.ProxyTarget{{URL: _url}}),
 	}
 
-	if ctx.Properties().On(false, fmt.Sprintf("proxy.log[%s]", targetURL)) {
-		traceConfig := middlewares.TraceConfig{
-			MaxBodyLength:   1024,
-			Timing:          true,
-			ResponseHeaders: true,
-			Headers:         true,
+	if prefix == "/kubeproxy" {
+		// Disable TLS verification for kubeproxy.
+		newTransport := http.DefaultTransport.(*http.Transport).Clone()
+		newTransport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+		proxyConfig.Transport = newTransport
+
+		if ctx.Properties().On(false, "log.kubeproxy") {
+			traceConfig := middlewares.TraceConfig{
+				MaxBodyLength:   1024,
+				Timing:          true,
+				ResponseHeaders: true,
+				Headers:         true,
+			}
+
+			proxyConfig.Transport = middlewares.NewLogger(traceConfig)(proxyConfig.Transport)
 		}
-		proxyConfig.Transport = middlewares.NewLogger(traceConfig)(http.DefaultTransport)
 	}
 
 	return middleware.ProxyWithConfig(proxyConfig)
