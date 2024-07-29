@@ -1637,6 +1637,8 @@ spec:
                       - people
                       - team
                       - text
+                      - bytes
+                      - millicores
                       type: string
                   required:
                   - label
