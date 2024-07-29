@@ -39,7 +39,7 @@ type PlaybookParameter struct {
 	Required    bool   `json:"required,omitempty" yaml:"required,omitempty"`
 	Icon        string `json:"icon,omitempty" yaml:"icon,omitempty"`
 	Description string `json:"description,omitempty" yaml:"description,omitempty"`
-	// +kubebuilder:validation:Enum=check;checkbox;code;component;config;list;people;team;text
+	// +kubebuilder:validation:Enum=check;checkbox;code;component;config;list;people;team;text;bytes;millicores
 	Type string `json:"type,omitempty" yaml:"type,omitempty"`
 	// +kubebuilder:validation:Schemaless
 	// +kubebuilder:pruning:PreserveUnknownFields
