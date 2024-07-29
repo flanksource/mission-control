@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
+	"strings"
 
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
@@ -29,7 +31,9 @@ contexts:
 current-context: {{.ContextName}}
 users:
 - name: default-user
-  token: "<placeholder>"
+  user: 
+    username: "<placeholder>"
+    password: "<placeholder>"
 `
 
 type kubeConfigData struct {
@@ -43,7 +47,7 @@ func DownloadKubeConfig(c echo.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to parse public web url")
 	}
-	parsed.Path = "/kubeproxy"
+	parsed.Path = path.Join(parsed.Path, "kubeproxy")
 
 	kcd := kubeConfigData{
 		Server:      parsed.String(),
@@ -81,11 +85,11 @@ func KubeProxyTokenMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 		} else if rbac.CheckContext(ctx, rbac.ObjectKubernetesProxy, rbac.ActionRead) {
 			impersonateUser = "mission-control-reader"
 		} else {
-			return dutyAPI.WriteError(c, err)
+			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "user cannot impersonate mission-control reader or writer"))
 		}
-
-		c.Request().Header.Set("Authorization", fmt.Sprintf("Bearer %s", saToken))
 		c.Request().Header.Set("Impersonate-User", impersonateUser)
+
+		c.Request().Header.Set(echo.HeaderAuthorization, fmt.Sprintf("Bearer %s", strings.TrimSpace(string(saToken))))
 		return next(c)
 	}
 }
