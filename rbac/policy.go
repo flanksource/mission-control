@@ -11,9 +11,9 @@ func Read(objects ...string) ACL {
 		Objects: strings.Join(objects, ","),
 	}
 }
-func Write(objects ...string) ACL {
+func Update(objects ...string) ACL {
 	return ACL{
-		Actions: ActionWrite,
+		Actions: ActionUpdate,
 		Objects: strings.Join(objects, ","),
 	}
 }
@@ -148,7 +148,7 @@ const (
 
 	// Actions
 	ActionRead            = "read"
-	ActionWrite           = "write"
+	ActionUpdate          = "update"
 	ActionCreate          = "create"
 	ActionDelete          = "delete"
 	ActionRun             = "run"
@@ -179,5 +179,5 @@ const (
 )
 
 var (
-	AllActions = []string{ActionApprove, ActionCreate, ActionRead, ActionRun, ActionWrite, ActionDelete}
+	AllActions = []string{ActionApprove, ActionCreate, ActionRead, ActionRun, ActionUpdate, ActionDelete}
 )

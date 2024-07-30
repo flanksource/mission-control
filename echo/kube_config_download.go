@@ -80,7 +80,7 @@ func KubeProxyTokenMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 		ctx := c.Request().Context().(context.Context)
 
 		var impersonateUser string
-		if rbac.CheckContext(ctx, rbac.ObjectKubernetesProxy, rbac.ActionWrite) {
+		if rbac.CheckContext(ctx, rbac.ObjectKubernetesProxy, rbac.ActionUpdate) {
 			impersonateUser = "mission-control-writer"
 		} else if rbac.CheckContext(ctx, rbac.ObjectKubernetesProxy, rbac.ActionRead) {
 			impersonateUser = "mission-control-reader"

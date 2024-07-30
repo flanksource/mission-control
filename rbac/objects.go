@@ -178,7 +178,7 @@ func GetActionFromHttpMethod(method string) string {
 	case http.MethodGet:
 		return ActionRead
 	case http.MethodPatch:
-		return ActionWrite
+		return ActionUpdate
 	case http.MethodPost:
 		return ActionCreate
 	case http.MethodDelete:

@@ -119,18 +119,18 @@ func New(ctx context.Context) *echov4.Echo {
 	// kratos performs its own auth
 	Forward(ctx, e, "/kratos", auth.KratosAPI)
 
-	e.GET("/snapshot/topology/:id", snapshot.Topology, rbac.Topology(rbac.ActionWrite))
-	e.GET("/snapshot/incident/:id", snapshot.Incident, rbac.Topology(rbac.ActionWrite))
-	e.GET("/snapshot/config/:id", snapshot.Config, rbac.Catalog(rbac.ActionWrite))
+	e.GET("/snapshot/topology/:id", snapshot.Topology, rbac.Topology(rbac.ActionRead))
+	e.GET("/snapshot/incident/:id", snapshot.Incident, rbac.Topology(rbac.ActionRead))
+	e.GET("/snapshot/config/:id", snapshot.Config, rbac.Catalog(rbac.ActionRead))
 
 	e.POST("/auth/:id/update_state", auth.UpdateAccountState)
 	e.POST("/auth/:id/properties", auth.UpdateAccountProperties)
 	e.GET("/auth/whoami", auth.WhoAmI)
 
-	e.POST("/rbac/:id/update_role", rbac.UpdateRoleForUser, rbac.Authorization(rbac.ObjectRBAC, rbac.ActionWrite))
+	e.POST("/rbac/:id/update_role", rbac.UpdateRoleForUser, rbac.Authorization(rbac.ObjectRBAC, rbac.ActionUpdate))
 	e.GET("/rbac/dump", rbac.Dump, rbac.Authorization(rbac.ObjectRBAC, rbac.ActionRead))
 
-	e.POST("/push/topology", push.PushTopology, rbac.Topology(rbac.ActionWrite))
+	e.POST("/push/topology", push.PushTopology, rbac.Topology(rbac.ActionUpdate))
 
 	// Serve openapi schemas
 	schemaServer, err := utils.HTTPFileserver(openapi.Schemas)
@@ -146,7 +146,7 @@ func New(ctx context.Context) *echov4.Echo {
 
 	playbook.RegisterRoutes(e)
 	connection.RegisterRoutes(e)
-	e.POST("/agent/generate", agent.GenerateAgent, rbac.Authorization(rbac.ObjectAgent, rbac.ActionWrite))
+	e.POST("/agent/generate", agent.GenerateAgent, rbac.Authorization(rbac.ObjectAgent, rbac.ActionUpdate))
 	e.POST("/logs", logs.LogsHandler, rbac.Authorization(rbac.ObjectLogs, rbac.ActionRead))
 	return e
 }

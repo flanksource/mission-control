@@ -23,7 +23,7 @@ var (
 )
 
 func RegisterRoutes(e *echo.Echo) {
-	upstreamGroup := e.Group("/upstream", rbac.Authorization(rbac.ObjectAgentPush, rbac.ActionWrite), upstream.AgentAuthMiddleware(agentCache))
+	upstreamGroup := e.Group("/upstream", rbac.Authorization(rbac.ObjectAgentPush, rbac.ActionUpdate), upstream.AgentAuthMiddleware(agentCache))
 	upstreamGroup.GET("/ping", upstream.PingHandler)
 	upstreamGroup.POST("/push", upstream.PushHandler)
 	upstreamGroup.DELETE("/push", upstream.DeleteHandler)
