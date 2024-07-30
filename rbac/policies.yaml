@@ -42,4 +42,4 @@
       actions: create,read,update
     # For topology push
     - objects: topology
-      actions: update 
+      actions: create,update 
