@@ -30,7 +30,7 @@ func validateAndSavePlaybookRun(ctx context.Context, playbook *models.Playbook, 
 	}
 
 	if err := req.validateParams(spec.Parameters); err != nil {
-		return nil, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid parameters: %v", err)
+		return nil, dutyAPI.Errorf(dutyAPI.EINVALID, err.Error())
 	}
 
 	ctx = ctx.WithNamespace(playbook.Namespace)

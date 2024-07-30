@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/flanksource/commons/utils"
@@ -58,20 +59,6 @@ func (r *RunParams) valid() error {
 	return nil
 }
 
-func paramStr(params []v1.PlaybookParameter) string {
-	if len(params) == 0 {
-		return " no params expected."
-	}
-
-	out := " supported params: "
-	for _, p := range params {
-		out += fmt.Sprintf("(%s=%s), ", p.Name, p.Label)
-	}
-
-	out = out[:len(out)-1]
-	return out
-}
-
 func (r *RunParams) setDefaults(ctx context.Context, spec v1.PlaybookSpec, templateEnv actions.TemplateEnv) error {
 	if len(spec.Parameters) == len(r.Params) {
 		return nil
@@ -93,36 +80,32 @@ func (r *RunParams) setDefaults(ctx context.Context, spec v1.PlaybookSpec, templ
 		r.Params = make(map[string]string)
 	}
 	for i := range defaultParams {
-		r.Params[defaultParams[i].Name] = defaultParams[i].Default
+		r.Params[defaultParams[i].Name] = string(defaultParams[i].Default)
 	}
 	return nil
 }
 
 func (r *RunParams) validateParams(params []v1.PlaybookParameter) error {
-	// mandatory params are those that do not have default values
-	var mandatoryParams int
+	var missingRequiredParams []string
 	for _, p := range params {
-		if p.Default == "" {
-			mandatoryParams++
-		}
-	}
-
-	if len(r.Params) < mandatoryParams {
-		return fmt.Errorf("insufficent parameters. expected %d (at least: %d), got %d. %s", len(params), mandatoryParams, len(r.Params), paramStr(params))
-	}
-
-	for k := range r.Params {
-		var ok bool
-		for _, p := range params {
-			if k == p.Name {
-				ok = true
-				break
+		if p.Required {
+			if _, ok := r.Params[p.Name]; !ok {
+				missingRequiredParams = append(missingRequiredParams, p.Name)
 			}
 		}
+	}
 
-		if !ok {
-			return fmt.Errorf("unknown parameter %s. %s", k, paramStr(params))
-		}
+	if len(missingRequiredParams) != 0 {
+		return fmt.Errorf("missing required parameter(s): %s", strings.Join(missingRequiredParams, ","))
+	}
+
+	unknownParams, _ := lo.Difference(
+		lo.MapToSlice(r.Params, func(k string, _ string) string { return k }),
+		lo.Map(params, func(v v1.PlaybookParameter, _ int) string { return v.Name }),
+	)
+
+	if len(unknownParams) != 0 {
+		return fmt.Errorf("unknown parameter(s): %s", strings.Join(unknownParams, ", "))
 	}
 
 	return nil

@@ -32,8 +32,8 @@ type PlaybookParameter struct {
 	// Name is the key for this parameter.
 	// It's used to address the parameter on templates.
 	Name string `json:"name" yaml:"name"`
-	// Specify the default value of the parameter. It is templatable.
-	Default string `json:"default,omitempty" yaml:"default,omitempty" template:"true"`
+	// Specify the default value of the parameter.
+	Default dutyTypes.GoTemplate `json:"default,omitempty" yaml:"default,omitempty" template:"true"`
 	// Label shown on the UI
 	Label       string `json:"label" yaml:"label"`
 	Required    bool   `json:"required,omitempty" yaml:"required,omitempty"`
