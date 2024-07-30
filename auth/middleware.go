@@ -76,7 +76,7 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 			return fmt.Errorf("failed to initialize kratos middleware: %v", err)
 		}
 		e.Use(middleware.Session)
-		e.POST("/auth/invite_user", kratosHandler.InviteUser, rbac.Authorization(rbac.ObjectAuth, rbac.ActionWrite))
+		e.POST("/auth/invite_user", kratosHandler.InviteUser, rbac.Authorization(rbac.ObjectAuth, rbac.ActionUpdate))
 
 	case Clerk:
 		if ClerkJWKSURL == "" {

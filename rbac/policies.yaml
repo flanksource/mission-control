@@ -39,4 +39,7 @@
     - objects: playbooks,database.public
       actions: read
     - objects: agent-push
-      actions: write
+      actions: create,read,update
+    # For topology push
+    - objects: topology
+      actions: update 

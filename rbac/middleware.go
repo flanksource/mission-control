@@ -81,7 +81,6 @@ func Authorization(object, action string) MiddlewareFunc {
 			}
 
 			if !CheckContext(ctx, object, action) {
-
 				c.Response().Header().Add("X-Rbac-Subject", u.ID.String())
 				c.Response().Header().Add("X-Rbac-Object", object)
 				c.Response().Header().Add("X-Rbac-Action", action)
@@ -95,7 +94,6 @@ func Authorization(object, action string) MiddlewareFunc {
 }
 
 func CheckContext(ctx context.Context, object, action string) bool {
-
 	user := ctx.User()
 	if user == nil {
 		return false
