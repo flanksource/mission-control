@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/http"
+	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
@@ -36,7 +37,7 @@ var _ = ginkgo.Describe("Playbook", func() {
 			playbookSpec := v1.PlaybookSpec{
 				Description: "write config name to file",
 				Parameters: []v1.PlaybookParameter{
-					{Name: "path", Label: "path of the file"},
+					{Name: "path", Required: true, Label: "path of the file"},
 					{Name: "footer", Label: "append this text to the file", Default: "{{.config.config_class}}"},
 				},
 				Configs: types.ResourceSelectors{
@@ -167,6 +168,52 @@ var _ = ginkgo.Describe("Playbook", func() {
 			playbooks, err = ListPlaybooksForConfig(DefaultContext, dummy.KubernetesCluster.ID.String())
 			Expect(err).NotTo(HaveOccurred())
 			Expect(len(playbooks)).To(Equal(0))
+		})
+
+		ginkgo.Context("parameter validation", func() {
+			testData := []struct {
+				name          string
+				expectedError string
+				param         map[string]string
+			}{
+				{
+					name:          "must validate required parameters",
+					expectedError: "missing required parameter(s): path",
+					param: map[string]string{
+						"footer": "test",
+					},
+				},
+				{
+					name:          "must validate unknown parameters",
+					expectedError: "unknown parameter(s): icon",
+					param: map[string]string{
+						"path": "test",
+						"icon": "flux",
+					},
+				},
+			}
+
+			for _, td := range testData {
+				ginkgo.It(td.name, func() {
+					run := RunParams{
+						ID:       configPlaybook.ID,
+						ConfigID: dummy.EKSCluster.ID,
+						Params:   td.param,
+					}
+
+					httpClient := http.NewClient().Auth(dummy.JohnDoe.Name, "admin").BaseURL(fmt.Sprintf("http://localhost:%d/playbook", echoServerPort))
+					resp, err := httpClient.R(DefaultContext).Header("Content-Type", "application/json").Post("/run", run)
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(resp.StatusCode).To(Equal(netHTTP.StatusBadRequest))
+
+					var runResp api.HTTPError
+					err = json.NewDecoder(resp.Body).Decode(&runResp)
+					Expect(err).NotTo(HaveOccurred())
+
+					Expect(runResp.Err).To(Equal(td.expectedError))
+				})
+			}
 		})
 
 		ginkgo.It("should store playbook run via API", func() {
