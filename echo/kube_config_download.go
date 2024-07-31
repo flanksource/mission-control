@@ -64,9 +64,11 @@ func DownloadKubeConfig(c echo.Context) error {
 		return fmt.Errorf("failed to create a new access token: %w", err)
 	}
 
+	// TODO: use the actual tenant slug once we pass it on from the chart
+	tenantSlug := strings.TrimSuffix(parsed.Hostname(), ".flanksource.com")
 	kcd := kubeConfigData{
 		Server:      parsed.String(),
-		ClusterName: "tenant",
+		ClusterName: fmt.Sprintf("mission-control-tenant-%s", tenantSlug),
 		ContextName: "default",
 		Password:    token,
 	}
