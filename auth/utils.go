@@ -111,13 +111,13 @@ func getAccessToken(ctx context.Context, tokenCache *cache.Cache, token string) 
 		return nil, err
 	}
 
-	if acessToken.ExpiresAt.Before(time.Now()) {
-		return nil, errTokenExpired
-	}
-
 	if acessToken.ExpiresAt == nil {
 		tokenCache.Set(token, &acessToken, -1)
 	} else {
+		if acessToken.ExpiresAt.Before(time.Now()) {
+			return nil, errTokenExpired
+		}
+
 		tokenCache.Set(token, &acessToken, time.Until(*acessToken.ExpiresAt))
 	}
 
