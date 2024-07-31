@@ -12,6 +12,7 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	dbModels "github.com/flanksource/incident-commander/db/models"
 	"github.com/google/uuid"
+	"github.com/samber/lo"
 	"golang.org/x/crypto/argon2"
 	"gorm.io/gorm/clause"
 )
@@ -83,7 +84,7 @@ const (
 	saltLength  = 12
 )
 
-func CreateAccessToken(ctx context.Context, personID uuid.UUID, name, password string, expiry time.Duration) (string, error) {
+func CreateAccessToken(ctx context.Context, personID uuid.UUID, name, password string, expiry *time.Duration) (string, error) {
 	saltRaw := make([]byte, saltLength)
 	if _, err := crand.Read(saltRaw); err != nil {
 		return "", err
@@ -94,11 +95,14 @@ func CreateAccessToken(ctx context.Context, personID uuid.UUID, name, password s
 	encodedHash := base64.URLEncoding.EncodeToString(hash)
 
 	accessToken := &models.AccessToken{
-		Name:      fmt.Sprintf("agent-%d", time.Now().Unix()),
-		Value:     encodedHash,
-		PersonID:  personID,
-		ExpiresAt: time.Now().Add(expiry), // long-lived token
+		Name:     fmt.Sprintf("agent-%d", time.Now().Unix()),
+		Value:    encodedHash,
+		PersonID: personID,
 	}
+	if expiry != nil {
+		accessToken.ExpiresAt = lo.ToPtr(time.Now().Add(*expiry))
+	}
+
 	if err := ctx.DB().Create(&accessToken).Error; err != nil {
 		return "", err
 	}

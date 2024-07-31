@@ -10,11 +10,13 @@ import (
 	"path"
 	"strings"
 
+	"github.com/flanksource/commons/rand"
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/labstack/echo/v4"
 
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/rbac"
 )
 
@@ -32,27 +34,43 @@ current-context: {{.ContextName}}
 users:
 - name: default-user
   user: 
-    username: "<placeholder>"
-    password: "<placeholder>"
+    username: "token"
+    password: "{{.Password}}"
 `
 
 type kubeConfigData struct {
 	Server      string
 	ClusterName string
+	Password    string
 	ContextName string
 }
 
 func DownloadKubeConfig(c echo.Context) error {
+	ctx := c.Request().Context().(context.Context)
+
 	parsed, err := url.Parse(api.PublicURL)
 	if err != nil {
 		return fmt.Errorf("failed to parse public web url")
 	}
 	parsed.Path = path.Join(parsed.Path, "kubeproxy")
 
+	seed, err := rand.GenerateRandHex(32)
+	if err != nil {
+		return err
+	}
+
+	token, err := db.CreateAccessToken(ctx, ctx.User().ID, ctx.User().Email, seed, nil)
+	if err != nil {
+		return fmt.Errorf("failed to create a new access token: %w", err)
+	}
+
+	// TODO: use the actual tenant slug once we pass it on from the chart
+	tenantSlug := strings.TrimSuffix(parsed.Hostname(), ".flanksource.com")
 	kcd := kubeConfigData{
 		Server:      parsed.String(),
-		ClusterName: "kubernetes",
+		ClusterName: fmt.Sprintf("mission-control-%s", tenantSlug),
 		ContextName: "default",
+		Password:    token,
 	}
 
 	tmpl, err := template.New("kubeconfig").Parse(kubeConfigTemplate)
