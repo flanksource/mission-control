@@ -68,7 +68,7 @@ func DownloadKubeConfig(c echo.Context) error {
 	tenantSlug := strings.TrimSuffix(parsed.Hostname(), ".flanksource.com")
 	kcd := kubeConfigData{
 		Server:      parsed.String(),
-		ClusterName: fmt.Sprintf("mission-control-tenant-%s", tenantSlug),
+		ClusterName: fmt.Sprintf("mission-control-%s", tenantSlug),
 		ContextName: "default",
 		Password:    token,
 	}
