@@ -9,7 +9,6 @@ import (
 	"os"
 	"path"
 	"strings"
-	"time"
 
 	"github.com/flanksource/commons/rand"
 	dutyAPI "github.com/flanksource/duty/api"
@@ -60,7 +59,7 @@ func DownloadKubeConfig(c echo.Context) error {
 		return err
 	}
 
-	token, err := db.CreateAccessToken(ctx, ctx.User().ID, ctx.User().Email, seed, time.Hour*24*90)
+	token, err := db.CreateAccessToken(ctx, ctx.User().ID, ctx.User().Email, seed, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create a new access token: %w", err)
 	}

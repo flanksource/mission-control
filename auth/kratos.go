@@ -98,7 +98,7 @@ func (k *kratosMiddleware) validateSession(ctx context.Context, r *http.Request)
 			s := &client.Session{
 				Id:        uuid.NewString(),
 				Active:    lo.ToPtr(true),
-				ExpiresAt: &accessToken.ExpiresAt,
+				ExpiresAt: accessToken.ExpiresAt,
 				Identity: client.Identity{
 					Id: accessToken.PersonID.String(),
 					Traits: map[string]any{

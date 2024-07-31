@@ -9,6 +9,7 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/rbac"
+	"github.com/samber/lo"
 )
 
 // generateAgent creates a new person and a new agent and associates them.
@@ -23,7 +24,7 @@ func generateAgent(ctx context.Context, body api.GenerateAgentRequest) (*api.Gen
 		return nil, fmt.Errorf("failed to create a new person: %w", err)
 	}
 
-	token, err := db.CreateAccessToken(ctx, person.ID, "default", password, time.Hour*24*365)
+	token, err := db.CreateAccessToken(ctx, person.ID, "default", password, lo.ToPtr(time.Hour*24*365))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create a new access token: %w", err)
 	}

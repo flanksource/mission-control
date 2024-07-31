@@ -36,7 +36,7 @@ var Token = &cobra.Command{
 		if err := ctx.DB().Where("email = ?", tokenUser).First(&user).Error; err != nil || user.ID == uuid.Nil {
 			return fmt.Errorf("User not found")
 		}
-		token, err := db.CreateAccessToken(ctx, user.ID, "default", password, tokenExpiry)
+		token, err := db.CreateAccessToken(ctx, user.ID, "default", password, &tokenExpiry)
 		if err != nil {
 			return fmt.Errorf("failed to create a new access token: %w", err)
 		}
