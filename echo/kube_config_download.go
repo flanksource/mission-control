@@ -84,6 +84,7 @@ func DownloadKubeConfig(c echo.Context) error {
 		return fmt.Errorf("failed to execute kubeconfig template")
 	}
 
+	c.Response().Header().Add(echo.HeaderContentDisposition, fmt.Sprintf("attachment; filename=%s-kubeconfig.yaml", tenantSlug))
 	return c.Stream(http.StatusOK, "text/yaml", &kubeconfig)
 }
 
