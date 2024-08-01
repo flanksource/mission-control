@@ -115,7 +115,7 @@ func New(ctx context.Context) *echov4.Echo {
 	Forward(ctx, e, "/apm", api.ApmHubPath, rbac.Authorization(rbac.ObjectLogs, "*")) // Deprecated
 	// webhooks perform their own auth
 	Forward(ctx, e, "/canary/webhook", api.CanaryCheckerPath+"/webhook")
-	Forward(ctx, e, "/canary", api.CanaryCheckerPath, rbac.Canary("*"))
+	Forward(ctx, e, "/canary", api.CanaryCheckerPath, rbac.Canary(""))
 	// kratos performs its own auth
 	Forward(ctx, e, "/kratos", auth.KratosAPI)
 
