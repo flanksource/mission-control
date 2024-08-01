@@ -68,7 +68,10 @@ func Authorization(object, action string) MiddlewareFunc {
 				return next(c)
 			}
 
-			action = GetActionFromHttpMethod(c.Request().Method)
+			// If action is unset, extract from HTTP Method
+			if action == "" {
+				action = GetActionFromHttpMethod(c.Request().Method)
+			}
 
 			ctx := c.Request().Context().(context.Context)
 			u := ctx.User()
