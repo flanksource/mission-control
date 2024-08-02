@@ -3,8 +3,8 @@ module github.com/flanksource/kopper/hack/generate-schemas
 go 1.22.3
 
 require (
-	github.com/flanksource/commons v1.24.2
-	github.com/flanksource/duty v1.0.556
+	github.com/flanksource/commons v1.25.0
+	github.com/flanksource/duty v1.0.557
 	github.com/flanksource/incident-commander v0.0.0-00010101000000-000000000000
 	github.com/spf13/cobra v1.8.0
 )
@@ -20,6 +20,7 @@ require (
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/Masterminds/semver/v3 v3.2.1 // indirect
 	github.com/RaveNoX/go-jsonmerge v1.0.0 // indirect
+	github.com/Snawoot/go-http-digest-auth-client v1.1.3 // indirect
 	github.com/TomOnTime/utfutil v0.0.0-20230223141146-125e65197b36 // indirect
 	github.com/WinterYukky/gorm-extra-clause-plugin v0.2.0 // indirect
 	github.com/agext/levenshtein v1.2.3 // indirect
@@ -41,7 +42,7 @@ require (
 	github.com/evanphx/json-patch v5.7.0+incompatible // indirect
 	github.com/exaring/otelpgx v0.5.2 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
-	github.com/flanksource/gomplate/v3 v3.24.16 // indirect
+	github.com/flanksource/gomplate/v3 v3.24.17 // indirect
 	github.com/flanksource/is-healthy v1.0.21 // indirect
 	github.com/flanksource/kommons v0.31.4 // indirect
 	github.com/flanksource/kubectl-neat v1.0.4 // indirect

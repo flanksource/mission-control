@@ -11,9 +11,9 @@ require (
 	github.com/casbin/gorm-adapter/v3 v3.26.0
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.25.0 // indirect
-	github.com/flanksource/commons v1.24.2
-	github.com/flanksource/duty v1.0.556
-	github.com/flanksource/gomplate/v3 v3.24.16
+	github.com/flanksource/commons v1.25.0
+	github.com/flanksource/duty v1.0.557
+	github.com/flanksource/gomplate/v3 v3.24.17
 	github.com/flanksource/kopper v1.0.9
 	github.com/flanksource/postq v0.1.5
 	github.com/gomarkdown/markdown v0.0.0-20240419095408-642f0ee99ae2
@@ -80,6 +80,7 @@ require (
 	github.com/Microsoft/go-winio v0.6.1 // indirect
 	github.com/ProtonMail/go-crypto v1.0.0 // indirect
 	github.com/RaveNoX/go-jsonmerge v1.0.0 // indirect
+	github.com/Snawoot/go-http-digest-auth-client v1.1.3 // indirect
 	github.com/WinterYukky/gorm-extra-clause-plugin v0.2.0 // indirect
 	github.com/agext/levenshtein v1.2.3 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect
