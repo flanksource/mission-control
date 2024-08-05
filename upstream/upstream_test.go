@@ -12,7 +12,6 @@ import (
 	"github.com/google/uuid"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/samber/lo"
 	"gorm.io/gorm"
 )
 
@@ -84,38 +83,6 @@ var _ = ginkgo.Describe("Upstream Push", ginkgo.Ordered, func() {
 			Expect(count).ToNot(BeZero())
 		})
 	})
-
-	ginkgo.XDescribe("should sync hard deletes", func() {
-		var _config models.ConfigItem
-		ginkgo.BeforeAll(func() {
-			_config = lo.Filter(pushAgent.dataset.Configs, func(c models.ConfigItem, i int) bool {
-				return lo.FromPtr(c.Type) == "Logistics::DB::RDS"
-			})[0]
-		})
-
-		ginkgo.It("Verify that the config we're deleting on the agent exists on the upstream", func() {
-			var count int
-			err := pushUpstream.DB().Select("COUNT(*)").Where("id = ?", _config.ID).Model(&models.ConfigItem{}).Scan(&count).Error
-			Expect(err).ToNot(HaveOccurred())
-			Expect(count).ToNot(BeZero())
-		})
-
-		ginkgo.It("delete a config item from the agent", func() {
-			err := pushAgent.DB().Exec("DELETE from config_component_relationships where config_id = ?", _config.ID).Error
-			Expect(err).NotTo(HaveOccurred())
-			err = pushAgent.DB().Delete(&_config).Error
-			Expect(err).NotTo(HaveOccurred())
-		})
-
-		ginkgo.It("should have deleted that from the upstream as well", func() {
-			pushAgent.runDeleteConsumer(pushUpstream)
-
-			var count int
-			err := pushUpstream.DB().Select("COUNT(*)").Where("id = ?", _config.ID).Model(&models.ConfigItem{}).Scan(&count).Error
-			Expect(err).ToNot(HaveOccurred())
-			Expect(count).To(BeZero())
-		})
-	})
 })
 
 // compareAgentEntities is a helper function that compares two sets of entities from an upstream and downstream database,
@@ -143,8 +110,8 @@ func compareAgentEntities[T any](table string, upstreamDB *gorm.DB, agent agentW
 	case "config_component_relationships":
 		err = upstreamDB.Joins("LEFT JOIN components ON config_component_relationships.component_id = components.id").
 			Joins("LEFT JOIN config_items ON config_items.id = config_component_relationships.config_id").
-			Where("components.agent_id = ? OR config_items.agent_id = ?", agent.id, agent.id).Order("created_at").Find(&upstream).Error
-		agentErr = agent.DB().Order("created_at").Find(&downstream).Error
+			Where("components.agent_id = ? OR config_items.agent_id = ?", agent.id, agent.id).Order("component_id, config_id, created_at").Find(&upstream).Error
+		agentErr = agent.DB().Order("component_id, config_id, created_at").Find(&downstream).Error
 
 	default:
 		err = upstreamDB.Where("agent_id = ?", agent.id).Order("id").Find(&upstream).Error

@@ -9,7 +9,6 @@ import (
 	"github.com/flanksource/duty/tests/setup"
 	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/auth"
-	"github.com/flanksource/postq"
 	"github.com/google/uuid"
 	echov4 "github.com/labstack/echo/v4"
 
@@ -94,36 +93,6 @@ func (t *agentWrapper) StartServer() {
 	t.port = port
 
 	shutdown = wrap(shutdown, stop)
-}
-
-func (t *agentWrapper) runDeleteConsumer(other agentWrapper) {
-	upstreamConfig := upstream.UpstreamConfig{
-		AgentName: t.name,
-		Host:      fmt.Sprintf("http://localhost:%d", other.port),
-		Username:  "System",
-		Password:  "admin",
-		Labels:    []string{"test"},
-	}
-
-	fn := upstream.NewDeleteFromUpstreamConsumer(upstreamConfig)
-	consumer, err := postq.AsyncEventConsumer{
-		WatchEvents: []string{upstream.EventPushQueueDelete},
-		BatchSize:   50,
-		Consumer: func(ctx postq.Context, e postq.Events) postq.Events {
-			t.Context.Debugf("processing [%s] %d events", upstream.EventPushQueueDelete, len(e))
-			e = fn(t.Context, e)
-			t.Context.Debugf("processed [%s] %d events", upstream.EventPushQueueDelete, len(e))
-			return e
-		},
-		ConsumerOption: &postq.ConsumerOption{
-			ErrorHandler: func(ctx postq.Context, e error) bool {
-				defer ginkgo.GinkgoRecover()
-				Expect(e).To(BeNil())
-				return true
-			},
-		}}.EventConsumer()
-	Expect(err).To(BeNil())
-	consumer.ConsumeUntilEmpty(t.Context)
 }
 
 func wrap(fn1, fn2 func()) func() {
