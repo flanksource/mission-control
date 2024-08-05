@@ -23,6 +23,9 @@ const (
 	// eventQueueUpdateChannel is the channel on which new events on the `event_queue` table
 	// are notified.
 	eventQueueUpdateChannel = "event_queue_updates"
+
+	// record the last `defaultEventLogSize` events for audit purpose.
+	defaultEventLogSize = 20
 )
 
 type Handler func(ctx context.Context, e postq.Event) error
@@ -32,6 +35,33 @@ var AsyncHandlers = utils.SyncedMap[string, asyncHandlerData]{}
 
 var consumers []*postq.PGConsumer
 var registers []func(ctx context.Context)
+
+type EventRecordProvider interface {
+	GetRecords() ([]postq.Event, error)
+}
+
+var syncConsumers []EventRecordProvider
+var asyncConsumers []EventRecordProvider
+
+func getRecords(providers ...EventRecordProvider) (map[string][]postq.Event, error) {
+	allEvents := map[string][]postq.Event{}
+	for _, consumer := range providers {
+		events, err := consumer.GetRecords()
+		if err != nil {
+			return nil, err
+		}
+
+		for _, event := range events {
+			allEvents[event.Name] = append(allEvents[event.Name], event)
+		}
+	}
+
+	return allEvents, nil
+}
+
+func ConsumerLogs() (map[string][]postq.Event, error) {
+	return getRecords(append(syncConsumers, asyncConsumers...)...)
+}
 
 func Register(fn func(ctx context.Context)) {
 	registers = append(registers, fn)
@@ -80,6 +110,9 @@ func StartConsumers(ctx context.Context) {
 				ErrorHandler: defaultLoggerErrorHandler,
 			},
 		}
+		consumer.RecordEvents(ctx.Properties().Int("events.audit.size", defaultEventLogSize))
+		syncConsumers = append(syncConsumers, consumer)
+
 		if ec, err := consumer.EventConsumer(); err != nil {
 			logger.Fatalf("failed to create event consumer: %s", err)
 		} else {
@@ -123,6 +156,10 @@ func StartConsumers(ctx context.Context) {
 					},
 				},
 			}
+
+			consumer.RecordEvents(ctx.Properties().Int("events.audit.size", defaultEventLogSize))
+			asyncConsumers = append(asyncConsumers, consumer)
+
 			if ec, err := consumer.EventConsumer(); err != nil {
 				logger.Fatalf("failed to create event consumer: %s", err)
 			} else {
@@ -132,7 +169,6 @@ func StartConsumers(ctx context.Context) {
 			}
 		}
 	})
-
 }
 
 // on conflict clause when inserting new events to the `event_queue` table
