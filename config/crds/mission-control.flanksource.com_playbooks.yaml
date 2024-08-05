@@ -1140,6 +1140,8 @@ spec:
                       type: string
                     id:
                       type: string
+                    includeDeleted:
+                      type: boolean
                     labelSelector:
                       type: string
                     name:
@@ -1152,6 +1154,10 @@ spec:
                         Example: For config items, the scope is the scraper id
                         - for checks, it's canaries and
                         - for components, it's topology.
+                      type: string
+                    search:
+                      description: Search query that applies to the resource name,
+                        tag & labels.
                       type: string
                     statuses:
                       items:
@@ -1185,6 +1191,8 @@ spec:
                       type: string
                     id:
                       type: string
+                    includeDeleted:
+                      type: boolean
                     labelSelector:
                       type: string
                     name:
@@ -1197,6 +1205,10 @@ spec:
                         Example: For config items, the scope is the scraper id
                         - for checks, it's canaries and
                         - for components, it's topology.
+                      type: string
+                    search:
+                      description: Search query that applies to the resource name,
+                        tag & labels.
                       type: string
                     statuses:
                       items:
@@ -1230,6 +1242,8 @@ spec:
                       type: string
                     id:
                       type: string
+                    includeDeleted:
+                      type: boolean
                     labelSelector:
                       type: string
                     name:
@@ -1242,6 +1256,10 @@ spec:
                         Example: For config items, the scope is the scraper id
                         - for checks, it's canaries and
                         - for components, it's topology.
+                      type: string
+                    search:
+                      description: Search query that applies to the resource name,
+                        tag & labels.
                       type: string
                     statuses:
                       items:
