@@ -125,6 +125,7 @@ var dbResourceObjMap = map[string]string{
 	"rpc/_related_config_ids_recursive":  ObjectCatalog,
 	"rpc/check_summary_for_component":    ObjectCanary,
 	"rpc/config_relationships_recursive": ObjectCatalog,
+	"rpc/get_recursive_path":             ObjectCatalog,
 	"rpc/lookup_analysis_by_component":   ObjectTopology,
 	"rpc/lookup_changes_by_component":    ObjectTopology,
 	"rpc/lookup_component_by_property":   ObjectTopology,

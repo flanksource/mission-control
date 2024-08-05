@@ -220,7 +220,6 @@ var _ = Describe("Authorization", func() {
 	}
 
 	It("Should cover all db objects", func() {
-
 		info := &db.Info{}
 		if err := info.Get(DefaultContext.DB()); err != nil {
 			Expect(err).NotTo(HaveOccurred())
@@ -230,10 +229,8 @@ var _ = Describe("Authorization", func() {
 		for _, table := range append(info.Views, info.Tables...) {
 			Expect(rbac.GetObjectByTable(table)).NotTo(BeEmpty(), table)
 		}
-		for _, table := range info.Functions {
-			Expect(rbac.GetObjectByTable("rpc/"+table)).NotTo(BeEmpty(), table)
+		for _, function := range info.Functions {
+			Expect(rbac.GetObjectByTable("rpc/"+function)).NotTo(BeEmpty(), function)
 		}
-
 	})
-
 })

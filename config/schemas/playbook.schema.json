@@ -1044,6 +1044,12 @@
         "cache": {
           "type": "string"
         },
+        "search": {
+          "type": "string"
+        },
+        "includeDeleted": {
+          "type": "boolean"
+        },
         "id": {
           "type": "string"
         },
