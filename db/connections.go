@@ -124,8 +124,8 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 
 	if obj.Spec.Mongo != nil {
 		dbObj.Type = models.ConnectionTypeMongo
-
-		if obj.Spec.Mongo.URL.String() == "" {
+		dbObj.URL = obj.Spec.Mongo.URL.String()
+		if dbObj.URL == "" {
 			dbObj.URL = "mongodb://$(username):$(password)@$(properties.host)/?$(properties.database)"
 		}
 		queryParams := url.Values{}
@@ -151,7 +151,8 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 
 	if obj.Spec.MSSQL != nil {
 		dbObj.Type = models.ConnectionTypeSQLServer
-		if obj.Spec.MSSQL.URL.String() == "" {
+		dbObj.URL = obj.Spec.MSSQL.URL.String()
+		if dbObj.URL == "" {
 			dbObj.URL = "sqlserver://$(username):$(password)@$(properties.host)?database=$(properties.database)&TrustServerCertificate=$(properties.trust_server_certificate)"
 		}
 		dbObj.Username = obj.Spec.MSSQL.Username.String()
@@ -165,7 +166,8 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 
 	if obj.Spec.MySQL != nil {
 		dbObj.Type = models.ConnectionTypeMySQL
-		if obj.Spec.MySQL.URL.String() == "" {
+		dbObj.URL = obj.Spec.MySQL.URL.String()
+		if dbObj.URL == "" {
 			dbObj.URL = "mysql://$(username):$(password)@$(properties.host)/$(properties.database)"
 		}
 		if obj.Spec.MySQL.InsecureTLS {
@@ -183,7 +185,8 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 
 	if obj.Spec.Postgres != nil {
 		dbObj.Type = models.ConnectionTypePostgres
-		if obj.Spec.Postgres.URL.String() == "" {
+		dbObj.URL = obj.Spec.Postgres.URL.String()
+		if dbObj.URL == "" {
 			dbObj.URL = "postgres://$(username):$(password)@$(properties.host)/$(properties.database)"
 		}
 		if obj.Spec.Postgres.InsecureTLS {
