@@ -9,20 +9,50 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/http"
-	"github.com/flanksource/duty/api"
+	dutyApi "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/tests/setup"
-	"github.com/flanksource/duty/types"
 	"github.com/flanksource/duty/upstream"
+	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/events"
+	"github.com/google/uuid"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/samber/lo"
+	"gopkg.in/yaml.v3"
 	"gorm.io/gorm/clause"
-	"k8s.io/apimachinery/pkg/util/yaml"
 )
+
+func createPlaybook(name string) (models.Playbook, v1.PlaybookSpec) {
+	var spec v1.PlaybookSpec
+	specContent, err := os.ReadFile(fmt.Sprintf("testdata/%s.yaml", name))
+	Expect(err).NotTo(HaveOccurred())
+
+	err = yaml.Unmarshal(specContent, &spec)
+	Expect(err).NotTo(HaveOccurred())
+
+	specJSON, err := json.Marshal(spec)
+	Expect(err).NotTo(HaveOccurred())
+
+	playbook := models.Playbook{
+		Name:   name,
+		Spec:   specJSON,
+		Source: models.SourceConfigFile,
+	}
+
+	err = DefaultContext.DB().Clauses(clause.Returning{}).Create(&playbook).Error
+	Expect(err).NotTo(HaveOccurred())
+	return playbook, spec
+}
+
+func ExpectPlaybook(list []api.PlaybookListItem, err error, playbooks ...models.Playbook) {
+	Expect(err).NotTo(HaveOccurred())
+	Expect(lo.Map(list, func(l api.PlaybookListItem, _ int) string { return l.ID.String() })).
+		To(ConsistOf(lo.Map(playbooks, func(p models.Playbook, _ int) string { return p.ID.String() })))
+}
 
 var _ = ginkgo.Describe("Playbook", func() {
 	var _ = ginkgo.Describe("Test Listing | Run API | Approvals", ginkgo.Ordered, func() {
@@ -34,140 +64,34 @@ var _ = ginkgo.Describe("Playbook", func() {
 		)
 
 		ginkgo.BeforeAll(func() {
-			playbookSpec := v1.PlaybookSpec{
-				Description: "write config name to file",
-				Parameters: []v1.PlaybookParameter{
-					{Name: "path", Required: true, Label: "path of the file"},
-					{Name: "footer", Label: "append this text to the file", Default: "{{.config.config_class}}"},
-				},
-				Configs: types.ResourceSelectors{
-					{Types: []string{*dummy.EKSCluster.Type}, LabelSelector: "environment=production"},
-				},
-				Approval: &v1.PlaybookApproval{
-					Type: v1.PlaybookApprovalTypeAny, // We have two approvers (John Doe & John Wick) and just a single approval is sufficient
-					Approvers: v1.PlaybookApprovers{
-						People: []string{
-							dummy.JohnDoe.Email,
-							dummy.JohnWick.Email,
-						},
-					},
-				},
-				Actions: []v1.PlaybookAction{
-					{
-						Name:    "write config id to a file",
-						Timeout: "1s",
-						Exec: &v1.ExecAction{
-							Script: "echo id={{.config.id}} > {{.params.path}}",
-						},
-					},
-					{
-						Name:    "append footer to the same file ",
-						Timeout: "2s",
-						Exec: &v1.ExecAction{
-							Script: "printf '{{.params.footer}}' >> {{.params.path}}",
-						},
-					},
-				},
-			}
+			configPlaybook, _ = createPlaybook("action-approvals")
+			checkPlaybook, _ = createPlaybook("action-check")
+			componentPlaybook, _ = createPlaybook("action-component")
 
-			spec, err := json.Marshal(playbookSpec)
-			Expect(err).NotTo(HaveOccurred())
-
-			configPlaybook = models.Playbook{
-				Name:   "config name saver",
-				Spec:   spec,
-				Source: models.SourceConfigFile,
-			}
-
-			err = DefaultContext.DB().Clauses(clause.Returning{}).Create(&configPlaybook).Error
-			Expect(err).NotTo(HaveOccurred())
-
-			checkPlaybookSpec := v1.PlaybookSpec{
-				Description: "write check name to file",
-				Checks: []types.ResourceSelector{
-					{Types: types.Items{dummy.LogisticsAPIHealthHTTPCheck.Type}},
-				},
-				Actions: []v1.PlaybookAction{
-					{
-						Name: "write check name to a file",
-						Exec: &v1.ExecAction{
-							Script: "printf {{.check.id}} > /tmp/{{.check.id}}.txt",
-						},
-					},
-				},
-			}
-
-			spec, err = json.Marshal(checkPlaybookSpec)
-			Expect(err).NotTo(HaveOccurred())
-
-			checkPlaybook = models.Playbook{
-				Name:   "check name saver",
-				Spec:   spec,
-				Source: models.SourceConfigFile,
-			}
-
-			err = DefaultContext.DB().Clauses(clause.Returning{}).Create(&checkPlaybook).Error
-			Expect(err).NotTo(HaveOccurred())
-
-			componentPlaybookSpec := v1.PlaybookSpec{
-				Description: "write component name to file",
-				Components: []types.ResourceSelector{
-					{Types: []string{dummy.Logistics.Type}, LabelSelector: "telemetry=enabled"},
-				},
-				Actions: []v1.PlaybookAction{
-					{
-						Name: "write component name to a file",
-						Exec: &v1.ExecAction{
-							Script: "echo name={{.component.name}}  && printf {{.component.name}} > /tmp/{{.component.name}}.txt",
-						},
-					},
-				},
-			}
-
-			spec, err = json.Marshal(componentPlaybookSpec)
-			Expect(err).NotTo(HaveOccurred())
-
-			componentPlaybook = models.Playbook{
-				Name:   "component name saver",
-				Spec:   spec,
-				Source: models.SourceConfigFile,
-			}
-
-			err = DefaultContext.DB().Clauses(clause.Returning{}).Create(&componentPlaybook).Error
-			Expect(err).NotTo(HaveOccurred())
 		})
 
 		ginkgo.It("Should fetch the suitable playbook for checks", func() {
 			playbooks, err := ListPlaybooksForCheck(DefaultContext, dummy.LogisticsAPIHealthHTTPCheck.ID.String())
-			Expect(err).NotTo(HaveOccurred())
-			Expect(len(playbooks)).To(Equal(1))
-			Expect(playbooks[0].ID).To(Equal(checkPlaybook.ID))
+			ExpectPlaybook(playbooks, err, checkPlaybook)
 
 			playbooks, err = ListPlaybooksForCheck(DefaultContext, dummy.LogisticsDBCheck.ID.String())
-			Expect(err).NotTo(HaveOccurred())
-			Expect(len(playbooks)).To(Equal(0))
+			ExpectPlaybook(playbooks, err)
 		})
 
 		ginkgo.It("Should fetch the suitable playbook for components", func() {
 			playbooks, err := ListPlaybooksForComponent(DefaultContext, dummy.Logistics.ID.String())
-			Expect(err).NotTo(HaveOccurred())
-			Expect(len(playbooks)).To(Equal(1))
-			Expect(playbooks[0].ID).To(Equal(componentPlaybook.ID))
+			ExpectPlaybook(playbooks, err, componentPlaybook)
 
 			playbooks, err = ListPlaybooksForComponent(DefaultContext, dummy.LogisticsUI.ID.String())
-			Expect(err).NotTo(HaveOccurred())
-			Expect(len(playbooks)).To(Equal(0))
+			ExpectPlaybook(playbooks, err)
 		})
 
 		ginkgo.It("Should fetch the suitable playbook for configs", func() {
 			playbooks, err := ListPlaybooksForConfig(DefaultContext, dummy.EKSCluster.ID.String())
-			Expect(err).NotTo(HaveOccurred())
-			Expect(len(playbooks)).To(Equal(1))
-			Expect(playbooks[0].ID).To(Equal(configPlaybook.ID))
+			ExpectPlaybook(playbooks, err, configPlaybook)
 
 			playbooks, err = ListPlaybooksForConfig(DefaultContext, dummy.KubernetesCluster.ID.String())
-			Expect(err).NotTo(HaveOccurred())
-			Expect(len(playbooks)).To(Equal(0))
+			ExpectPlaybook(playbooks, err)
 		})
 
 		ginkgo.Context("parameter validation", func() {
@@ -207,7 +131,7 @@ var _ = ginkgo.Describe("Playbook", func() {
 
 					Expect(resp.StatusCode).To(Equal(netHTTP.StatusBadRequest))
 
-					var runResp api.HTTPError
+					var runResp dutyApi.HTTPError
 					err = json.NewDecoder(resp.Body).Decode(&runResp)
 					Expect(err).NotTo(HaveOccurred())
 
@@ -259,25 +183,9 @@ var _ = ginkgo.Describe("Playbook", func() {
 		})
 
 		ginkgo.It("should execute playbook", func() {
-			var updatedRun models.PlaybookRun
-
-			// Wait until all the runs is marked as completed
-			var attempts int
-			for {
-				time.Sleep(time.Millisecond * 100)
-
-				err := DefaultContext.DB().Where("id = ? ", runResp.RunID).First(&updatedRun).Error
-				Expect(err).NotTo(HaveOccurred())
-
-				if updatedRun.Status == models.PlaybookRunStatusCompleted {
-					break
-				}
-
-				attempts += 1
-				if attempts > 50 { // wait for 5 seconds
-					ginkgo.Fail(fmt.Sprintf("Timed out waiting for run to complete. Run status: %s", updatedRun.Status))
-				}
-			}
+			waitFor(&models.PlaybookRun{
+				ID: uuid.MustParse(runResp.RunID),
+			})
 		})
 
 		ginkgo.It("should ensure that the action worked correctly", func() {
@@ -310,40 +218,7 @@ var _ = ginkgo.Describe("Playbook", func() {
 			Expect(err).NotTo(HaveOccurred())
 			tempFile = filepath.Join(tempDir, "test.txt")
 
-			playbookSpec := v1.PlaybookSpec{
-				Description: "echo config name",
-				Parameters: []v1.PlaybookParameter{
-					{Name: "path", Label: "The path"},
-					{Name: "my_config", Label: "The config", Type: v1.PlaybookParameterTypeConfig},
-					{Name: "my_component", Label: "The component", Type: v1.PlaybookParameterTypeComponent},
-				},
-				Actions: []v1.PlaybookAction{
-					{
-						Name: "write config name to the file",
-						Exec: &v1.ExecAction{
-							Script: "echo {{.params.my_config.config_class}} > {{.params.path}}",
-						},
-					},
-					{
-						Name: "append component name to the same file ",
-						Exec: &v1.ExecAction{
-							Script: "echo {{.params.my_component.name}} >> {{.params.path}}",
-						},
-					},
-				},
-			}
-
-			spec, err := json.Marshal(playbookSpec)
-			Expect(err).NotTo(HaveOccurred())
-
-			testPlaybook = models.Playbook{
-				Name:   "param-test-playbook",
-				Spec:   spec,
-				Source: models.SourceConfigFile,
-			}
-
-			err = DefaultContext.DB().Clauses(clause.Returning{}).Create(&testPlaybook).Error
-			Expect(err).NotTo(HaveOccurred())
+			testPlaybook, _ = createPlaybook("action-params")
 		})
 
 		ginkgo.AfterAll(func() {
@@ -366,8 +241,7 @@ var _ = ginkgo.Describe("Playbook", func() {
 
 			Expect(resp.StatusCode).To(Equal(netHTTP.StatusCreated))
 
-			err = json.NewDecoder(resp.Body).Decode(&runResp)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(json.NewDecoder(resp.Body).Decode(&runResp)).NotTo(HaveOccurred())
 
 			var savedRun models.PlaybookRun
 			err = DefaultContext.DB().Where("id = ? ", runResp.RunID).First(&savedRun).Error
@@ -378,18 +252,10 @@ var _ = ginkgo.Describe("Playbook", func() {
 		})
 
 		ginkgo.It("should have correctly used config & component fields from parameters", func() {
-			events.ConsumeAll(DefaultContext)
 
-			Eventually(func() models.PlaybookRunStatus {
-				var savedRun *models.PlaybookRun
-				if err := DefaultContext.DB().Select("status").Where("id = ? ", runResp.RunID).First(&savedRun).Error; err != nil {
-					Expect(err).To(BeNil())
-				}
-				if savedRun != nil {
-					return savedRun.Status
-				}
-				return models.PlaybookRunStatusPending
-			}, "15s").Should(Equal(models.PlaybookRunStatusCompleted))
+			waitFor(&models.PlaybookRun{
+				ID: uuid.MustParse(runResp.RunID),
+			})
 
 			f, err := os.ReadFile(tempFile)
 			Expect(err).NotTo(HaveOccurred())
@@ -402,51 +268,22 @@ var _ = ginkgo.Describe("Playbook", func() {
 			spec     v1.PlaybookSpec
 			playbook models.Playbook
 			run      *models.PlaybookRun
-			err      error
 			dataFile = "/tmp/action-filter-test.txt"
 			logFile  = "/tmp/action-filter-test-log.txt"
 		)
 
 		ginkgo.BeforeAll(func() {
-			specContent, err := os.ReadFile("testdata/action-filter.yaml")
-			Expect(err).NotTo(HaveOccurred())
-
-			err = yaml.Unmarshal(specContent, &spec)
-			Expect(err).NotTo(HaveOccurred())
-
-			specJSON, err := json.Marshal(spec)
-			Expect(err).NotTo(HaveOccurred())
-
-			playbook = models.Playbook{
-				Name:   "action-filter-tester",
-				Spec:   specJSON,
-				Source: models.SourceConfigFile,
-			}
-
-			err = DefaultContext.DB().Clauses(clause.Returning{}).Create(&playbook).Error
-			Expect(err).NotTo(HaveOccurred())
+			playbook, spec = createPlaybook("action-filter")
 		})
 
 		ginkgo.It("should execute the playbook", func() {
-			run, err = validateAndSavePlaybookRun(DefaultContext, &playbook, RunParams{
+			run = runPlaybook(playbook, RunParams{
 				ConfigID: dummy.EKSCluster.ID,
 				Params: map[string]string{
 					"path":     dataFile,
 					"log_path": logFile,
 				},
 			})
-			Expect(err).NotTo(HaveOccurred())
-
-			Eventually(func() models.PlaybookRunStatus {
-				var savedRun *models.PlaybookRun
-				err := DefaultContext.DB().Select("status").Where("id = ? ", run.ID).First(&savedRun).Error
-				Expect(err).To(BeNil())
-
-				if savedRun != nil {
-					return savedRun.Status
-				}
-				return models.PlaybookRunStatusPending
-			}, "15s").Should(Equal(models.PlaybookRunStatusFailed))
 		})
 
 		ginkgo.It("should have correctly ran some and skipped some of the actions", func() {
@@ -501,49 +338,20 @@ var _ = ginkgo.Describe("Playbook", func() {
 			spec     v1.PlaybookSpec
 			playbook models.Playbook
 			run      *models.PlaybookRun
-			err      error
 			dataFile = "/tmp/access-previous-result.txt"
 		)
 
 		ginkgo.BeforeAll(func() {
-			specContent, err := os.ReadFile("testdata/action-last-result.yaml")
-			Expect(err).NotTo(HaveOccurred())
-
-			err = yaml.Unmarshal(specContent, &spec)
-			Expect(err).NotTo(HaveOccurred())
-
-			specJSON, err := json.Marshal(spec)
-			Expect(err).NotTo(HaveOccurred())
-
-			playbook = models.Playbook{
-				Name:   "access-previous-result",
-				Spec:   specJSON,
-				Source: models.SourceConfigFile,
-			}
-
-			err = DefaultContext.DB().Clauses(clause.Returning{}).Create(&playbook).Error
-			Expect(err).NotTo(HaveOccurred())
+			playbook, spec = createPlaybook("action-last-result")
 		})
 
 		ginkgo.It("should store playbook run via API", func() {
-			run, err = validateAndSavePlaybookRun(DefaultContext, &playbook, RunParams{
+			run = runPlaybook(playbook, RunParams{
 				ConfigID: dummy.EKSCluster.ID,
 				Params: map[string]string{
 					"path": dataFile,
 				},
 			})
-			Expect(err).NotTo(HaveOccurred())
-
-			Eventually(func() models.PlaybookRunStatus {
-				var savedRun *models.PlaybookRun
-				err := DefaultContext.DB().Select("status").Where("id = ? ", run.ID).First(&savedRun).Error
-				Expect(err).To(BeNil())
-
-				if savedRun != nil {
-					return savedRun.Status
-				}
-				return models.PlaybookRunStatusPending
-			}, "45s").Should(Equal(models.PlaybookRunStatusCompleted))
 		})
 
 		ginkgo.It("should have correctly ran some and skipped some of the actions", func() {
@@ -595,23 +403,7 @@ var _ = ginkgo.Describe("Playbook", func() {
 		)
 
 		ginkgo.BeforeAll(func() {
-			specContent, err := os.ReadFile("testdata/agent-runner.yaml")
-			Expect(err).NotTo(HaveOccurred())
-
-			err = yaml.Unmarshal(specContent, &spec)
-			Expect(err).NotTo(HaveOccurred())
-
-			specJSON, err := json.Marshal(spec)
-			Expect(err).NotTo(HaveOccurred())
-
-			playbook = models.Playbook{
-				Name:   "agent-runners",
-				Spec:   specJSON,
-				Source: models.SourceConfigFile,
-			}
-
-			err = DefaultContext.DB().Clauses(clause.Returning{}).Create(&playbook).Error
-			Expect(err).NotTo(HaveOccurred())
+			playbook, spec = createPlaybook("agent-runner")
 
 			// Setup agent
 			agentContext, agentDBDrop, err = setup.NewDB(DefaultContext, "aws")
@@ -641,21 +433,9 @@ var _ = ginkgo.Describe("Playbook", func() {
 		})
 
 		ginkgo.It("should execute the playbook", func() {
-			run, err = validateAndSavePlaybookRun(DefaultContext, &playbook, RunParams{
+			run = runPlaybook(playbook, RunParams{
 				ConfigID: dummy.KubernetesNodeA.ID,
-			})
-			Expect(err).NotTo(HaveOccurred())
-
-			Eventually(func() models.PlaybookRunStatus {
-				var savedRun *models.PlaybookRun
-				err := DefaultContext.DB().Select("status").Where("id = ? ", run.ID).First(&savedRun).Error
-				Expect(err).To(BeNil())
-
-				if savedRun != nil {
-					return savedRun.Status
-				}
-				return models.PlaybookRunStatusPending
-			}, "10s").Should(Equal(models.PlaybookRunStatusWaiting))
+			}, models.PlaybookRunStatusWaiting)
 		})
 
 		ginkgo.It("should pull the action from the upstream", func() {
@@ -708,16 +488,7 @@ var _ = ginkgo.Describe("Playbook", func() {
 		// Since duty syncs schema changes from this repo, this becomes a deadlock situation
 		// Workaround for now is to update openapi schemas in duty manually and then bump duty
 		ginkgo.It("should ensure that the playbook ran to completion", func() {
-			Eventually(func() models.PlaybookRunStatus {
-				var savedRun *models.PlaybookRun
-				err := DefaultContext.DB().Select("status").Where("id = ? ", run.ID).First(&savedRun).Error
-				Expect(err).To(BeNil())
-
-				if savedRun != nil {
-					return savedRun.Status
-				}
-				return models.PlaybookRunStatusPending
-			}, "10s").Should(Equal(models.PlaybookRunStatusCompleted))
+			waitFor(run, models.PlaybookRunStatusCompleted)
 		})
 
 		ginkgo.It("should ensure that the playbook ran correctly", func() {
@@ -733,106 +504,75 @@ var _ = ginkgo.Describe("Playbook", func() {
 		})
 	})
 
-	var _ = ginkgo.Describe("Test errors on run consumer", ginkgo.Ordered, func() {
-		var (
-			spec     v1.PlaybookSpec
-			playbook models.Playbook
-			run      *models.PlaybookRun
-			err      error
-		)
+	type testData struct {
+		name        string
+		description string
+		status      models.PlaybookRunStatus
+		params      RunParams
+		extra       func(run *models.PlaybookRun)
+	}
 
-		ginkgo.BeforeAll(func() {
-			specContent, err := os.ReadFile("testdata/bad-spec.yaml")
-			Expect(err).NotTo(HaveOccurred())
-
-			err = yaml.Unmarshal(specContent, &spec)
-			Expect(err).NotTo(HaveOccurred())
-
-			specJSON, err := json.Marshal(spec)
-			Expect(err).NotTo(HaveOccurred())
-
-			playbook = models.Playbook{
-				Name:   "bad-spec",
-				Spec:   specJSON,
-				Source: models.SourceConfigFile,
-			}
-
-			err = DefaultContext.DB().Clauses(clause.Returning{}).Create(&playbook).Error
-			Expect(err).NotTo(HaveOccurred())
-		})
-
-		ginkgo.It("should error out during execution", func() {
-			run, err = validateAndSavePlaybookRun(DefaultContext, &playbook, RunParams{
-				ConfigID: dummy.EKSCluster.ID,
-			})
-			Expect(err).NotTo(HaveOccurred())
-
-			Eventually(func() models.PlaybookRunStatus {
-				var savedRun *models.PlaybookRun
-				err := DefaultContext.DB().Select("status").Where("id = ? ", run.ID).First(&savedRun).Error
+	tests := []testData{
+		{
+			name:        "bad-action-spec",
+			status:      models.PlaybookRunStatusFailed,
+			description: "invalid action spec should fail",
+			extra: func(run *models.PlaybookRun) {
+				var action models.PlaybookRunAction
+				err := DefaultContext.DB().Where("playbook_run_id = ? ", run.ID).First(&action).Error
 				Expect(err).To(BeNil())
-				if savedRun != nil {
-					return savedRun.Status
-				}
-
-				return models.PlaybookRunStatus("Unknown")
-			}, "15s").Should(Equal(models.PlaybookRunStatusFailed))
-		})
-
-		ginkgo.It("the run should have error populated", func() {
-			var savedRun *models.PlaybookRun
-			err := DefaultContext.DB().Select("error").Where("id = ? ", run.ID).First(&savedRun).Error
-			Expect(err).To(BeNil())
-
-			Expect(savedRun.Error).To(Not(BeNil()))
-			Expect(*savedRun.Error).To(Not(BeEmpty()))
-		})
-	})
-
-	var _ = ginkgo.Describe("Test errors on action consumer", ginkgo.Ordered, func() {
-		var (
-			spec     v1.PlaybookSpec
-			playbook models.Playbook
-			run      *models.PlaybookRun
-			err      error
-		)
-
-		ginkgo.BeforeAll(func() {
-			specContent, err := os.ReadFile("testdata/bad-action-spec.yaml")
-			Expect(err).NotTo(HaveOccurred())
-
-			err = yaml.Unmarshal(specContent, &spec)
-			Expect(err).NotTo(HaveOccurred())
-
-			specJSON, err := json.Marshal(spec)
-			Expect(err).NotTo(HaveOccurred())
-
-			playbook = models.Playbook{
-				Name:   "bad-action-spec",
-				Spec:   specJSON,
-				Source: models.SourceConfigFile,
+				Expect(lo.FromPtrOr(action.Error, "")).NotTo(BeEmpty())
+				Expect(action.Status).To(Equal(models.PlaybookActionStatusFailed))
+			},
+		},
+		{
+			name:        "bad-spec",
+			status:      models.PlaybookRunStatusFailed,
+			description: "invalid spec should fail",
+			extra: func(run *models.PlaybookRun) {
+				Expect(run.Error).ToNot(BeNil())
+			},
+		},
+	}
+	for _, test := range tests {
+		ginkgo.It(test.description, func() {
+			run := createAndRun(test.name, test.params, test.status)
+			if test.extra != nil {
+				test.extra(run)
 			}
-
-			err = DefaultContext.DB().Clauses(clause.Returning{}).Create(&playbook).Error
-			Expect(err).NotTo(HaveOccurred())
 		})
-
-		ginkgo.It("should error out during execution", func() {
-			run, err = validateAndSavePlaybookRun(DefaultContext, &playbook, RunParams{
-				ConfigID: dummy.EKSCluster.ID,
-			})
-			Expect(err).NotTo(HaveOccurred())
-
-			Eventually(func() models.PlaybookRunStatus {
-				var savedRun *models.PlaybookRun
-				err := DefaultContext.DB().Select("status").Where("id = ? ", run.ID).First(&savedRun).Error
-				Expect(err).To(BeNil())
-				if savedRun != nil {
-					return savedRun.Status
-				}
-
-				return models.PlaybookRunStatus("Unknown")
-			}, "15s").Should(Equal(models.PlaybookRunStatusFailed))
-		})
-	})
+	}
 })
+
+func createAndRun(name string, params RunParams, statuses ...models.PlaybookRunStatus) *models.PlaybookRun {
+	playbook, _ := createPlaybook(name)
+	return runPlaybook(playbook, params, statuses...)
+}
+
+func runPlaybook(playbook models.Playbook, params RunParams, statuses ...models.PlaybookRunStatus) *models.PlaybookRun {
+	run, err := validateAndSavePlaybookRun(DefaultContext, &playbook, params)
+	Expect(err).NotTo(HaveOccurred())
+	return waitFor(run, statuses...)
+}
+
+func waitFor(run *models.PlaybookRun, statuses ...models.PlaybookRunStatus) *models.PlaybookRun {
+	s := append([]models.PlaybookRunStatus{}, statuses...)
+	if len(s) == 0 {
+		s = append(s, models.PlaybookRunStatusFailed, models.PlaybookRunStatusCompleted)
+	}
+
+	var savedRun *models.PlaybookRun
+	Eventually(func(g Gomega) models.PlaybookRunStatus {
+		err := DefaultContext.DB().Where("id = ? ", run.ID).First(&savedRun).Error
+		Expect(err).ToNot(HaveOccurred())
+		if savedRun != nil {
+			return savedRun.Status
+		}
+		events.ConsumeAll(DefaultContext)
+		_, _ = RunConsumer(DefaultContext)
+
+		return models.PlaybookRunStatus("Unknown")
+	}).WithTimeout(15 * time.Second).WithPolling(time.Second).Should(BeElementOf(s))
+
+	return savedRun
+}

@@ -1,0 +1,16 @@
+parameters:
+  - name: path
+    label: The path
+  - name: my_config
+    label: The config
+    type: config
+  - name: my_component
+    label: The component
+    type: component
+actions:
+  - name: write config name to the file
+    exec:
+      script: echo {{.params.my_config.config_class}} > {{.params.path}}
+  - name: "append component name to the same file "
+    exec:
+      script: echo {{.params.my_component.name}} >> {{.params.path}}

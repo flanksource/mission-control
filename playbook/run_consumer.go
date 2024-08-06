@@ -24,7 +24,7 @@ type playbookRunError struct {
 }
 
 func (t *playbookRunError) Error() string {
-	return fmt.Sprintf("error running playbook (id=%s): %v", t.RunID, t.Err)
+	return t.Err.Error()
 }
 
 // Pg Notify channels for run and action updates
@@ -164,6 +164,7 @@ func ActionConsumer(c postq.Context) (int, error) {
 		}
 
 		runID := foundActions[i].PlaybookRunID
+		ctx = ctx.WithName(fmt.Sprintf("%s/%s", foundActions[i].PlaybookRunID, foundActions[i].Name))
 
 		if isAssignedToAgent {
 			var actionData models.PlaybookActionAgentData
