@@ -1,0 +1,8 @@
+description: write check name to file
+checks:
+  - types:
+      - http
+actions:
+  - name: write check name to a file
+    exec:
+      script: printf {{.check.id}} > /tmp/{{.check.id}}.txt

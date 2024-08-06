@@ -484,9 +484,8 @@ func executeAndSaveAction(ctx context.Context, playbookID, runID uuid.UUID, acti
 
 // templateAndExecuteAction executes the given playbook action after templating it.
 func templateAndExecuteAction(ctx context.Context, envs []types.EnvVar, playbook models.Playbook, run models.PlaybookRun, actionToRun models.PlaybookRunAction, actionSpec v1.PlaybookAction) error {
-	logger.WithValues("run.id", run.ID).WithValues("parameters", run.Parameters).
-		WithValues("config", run.ConfigID).WithValues("check", run.CheckID).WithValues("component", run.ComponentID).
-		Infof("Executing playbook action: %s", actionToRun.ID)
+
+	ctx.Debugf("running step %s", actionToRun.Name)
 
 	templateEnv, err := prepareTemplateEnv(ctx, playbook, run)
 	if err != nil {
@@ -550,7 +549,7 @@ func templateAction(ctx context.Context, run models.PlaybookRun, runAction model
 		"getLastAction": func() any {
 			r, err := GetLastAction(ctx, run.ID.String(), runAction.ID.String())
 			if err != nil {
-				logger.Errorf("failed to get last action for run(%s): %v", run.ID, err)
+				logger.Errorf("failed to get last action: %v", err)
 				return ""
 			}
 
@@ -559,7 +558,7 @@ func templateAction(ctx context.Context, run models.PlaybookRun, runAction model
 		"getAction": func(actionName string) any {
 			r, err := GetActionByName(ctx, run.ID.String(), actionName)
 			if err != nil {
-				logger.Errorf("failed to get action(%s) for run(%s): %v", actionName, run.ID, err)
+				logger.Errorf("failed to get action(%s)  %v", actionName, err)
 				return ""
 			}
 
@@ -613,7 +612,7 @@ func executeAction(ctx context.Context, playbookID, runID uuid.UUID, runAction m
 	ctx, span := ctx.StartSpan("executeAction")
 	defer span.End()
 
-	logger.WithValues("runID", runID).Infof("Executing action: %s", actionSpec.Name)
+	ctx.Debugf("executing")
 
 	if timeout, _ := actionSpec.TimeoutDuration(); timeout > 0 {
 		var cancel gocontext.CancelFunc
