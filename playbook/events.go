@@ -49,7 +49,11 @@ var eventToSpecEvent = map[string]PlaybookSpecEvent{
 	api.EventComponentUnknown:   {"component", "unknown"},
 }
 
-var eventPlaybooksCache = cache.New(time.Hour*1, time.Hour*1)
+var (
+	eventPlaybooksCache = cache.New(time.Hour*1, time.Hour*1)
+
+	EventRing *events.EventRing
+)
 
 func eventPlaybookCacheKey(eventClass, event string) string {
 	return fmt.Sprintf("%s::%s", eventClass, event)
@@ -60,7 +64,10 @@ func init() {
 }
 
 func RegisterEvents(ctx context.Context) {
-	events.RegisterSyncHandler(SchedulePlaybookRun, api.EventStatusGroup...)
+	EventRing = events.NewEventRing(ctx.Properties().Int("events.audit.size", events.DefaultEventLogSize))
+	nh := playbookScheduler{Ring: EventRing}
+	events.RegisterSyncHandler(nh.Handle, api.EventStatusGroup...)
+
 	events.RegisterSyncHandler(onApprovalUpdated, api.EventPlaybookSpecApprovalUpdated)
 	events.RegisterSyncHandler(onPlaybookRunNewApproval, api.EventPlaybookApprovalInserted)
 
@@ -80,16 +87,32 @@ type EventResource struct {
 }
 
 func (t *EventResource) AsMap() map[string]any {
-	return map[string]any{
-		"component":     t.Component,
-		"check":         t.Check,
-		"config":        t.Config,
-		"canary":        t.Canary,
-		"check_summary": t.CheckSummary,
+	output := map[string]any{}
+
+	if t.Component != nil {
+		output["component"] = t.Component.AsMap()
 	}
+	if t.Config != nil {
+		output["config"] = t.Config.AsMap()
+	}
+	if t.Check != nil {
+		output["check"] = t.Check.AsMap()
+	}
+	if t.Canary != nil {
+		output["canary"] = t.Canary.AsMap()
+	}
+	if t.CheckSummary != nil {
+		output["check_summary"] = t.CheckSummary.AsMap()
+	}
+
+	return output
 }
 
-func SchedulePlaybookRun(ctx context.Context, event postq.Event) error {
+type playbookScheduler struct {
+	Ring *events.EventRing
+}
+
+func (t *playbookScheduler) Handle(ctx context.Context, event postq.Event) error {
 	specEvent, ok := eventToSpecEvent[event.Name]
 	if !ok {
 		return nil
@@ -139,6 +162,9 @@ func SchedulePlaybookRun(ctx context.Context, event postq.Event) error {
 	}
 
 	for _, p := range playbooks {
+		celEnv := eventResource.AsMap()
+		t.Ring.Add(event, celEnv)
+
 		playbook, err := v1.PlaybookFromModel(p)
 		if err != nil {
 			logger.Errorf("error converting playbook model to spec: %s", err)
@@ -158,7 +184,7 @@ func SchedulePlaybookRun(ctx context.Context, event postq.Event) error {
 		switch specEvent.Class {
 		case "canary":
 			run.CheckID = &eventResource.Check.ID
-			if ok, err := matchResource(eventResource.Check.Labels, eventResource.AsMap(), playbook.Spec.On.Canary); err != nil {
+			if ok, err := matchResource(eventResource.Check.Labels, celEnv, playbook.Spec.On.Canary); err != nil {
 				logToJobHistory(ctx, p.ID.String(), err.Error())
 				continue
 			} else if ok {
@@ -168,7 +194,7 @@ func SchedulePlaybookRun(ctx context.Context, event postq.Event) error {
 			}
 		case "component":
 			run.ComponentID = &eventResource.Component.ID
-			if ok, err := matchResource(eventResource.Component.Labels, eventResource.AsMap(), playbook.Spec.On.Component); err != nil {
+			if ok, err := matchResource(eventResource.Component.Labels, celEnv, playbook.Spec.On.Component); err != nil {
 				logToJobHistory(ctx, p.ID.String(), err.Error())
 				continue
 			} else if ok {
@@ -178,7 +204,7 @@ func SchedulePlaybookRun(ctx context.Context, event postq.Event) error {
 			}
 		case "config":
 			run.ConfigID = &eventResource.Config.ID
-			if ok, err := matchResource(eventResource.Config.Tags, eventResource.AsMap(), playbook.Spec.On.Config); err != nil {
+			if ok, err := matchResource(eventResource.Config.Tags, celEnv, playbook.Spec.On.Config); err != nil {
 				logToJobHistory(ctx, p.ID.String(), err.Error())
 				continue
 			} else if ok {

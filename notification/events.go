@@ -31,6 +31,8 @@ var (
 
 	RateLimitWindow           = time.Hour * 4
 	MaxNotificationsPerWindow = 50
+
+	EventRing *events.EventRing
 )
 
 func init() {
@@ -38,7 +40,10 @@ func init() {
 }
 
 func RegisterEvents(ctx context.Context) {
-	events.RegisterSyncHandler(addNotificationEvent, append(api.EventStatusGroup, api.EventIncidentGroup...)...)
+	EventRing = events.NewEventRing(ctx.Properties().Int("events.audit.size", events.DefaultEventLogSize))
+	nh := notificationHandler{Ring: EventRing}
+	events.RegisterSyncHandler(nh.addNotificationEvent, append(api.EventStatusGroup, api.EventIncidentGroup...)...)
+
 	events.RegisterAsyncHandler(sendNotifications, 1, 5, api.EventNotificationSend)
 }
 
@@ -74,10 +79,14 @@ func getOrCreateRateLimiter(ctx context.Context, notificationID string) (*sw.Lim
 	return rateLimiter, nil
 }
 
+type notificationHandler struct {
+	Ring *events.EventRing
+}
+
 // addNotificationEvent responds to a event that can possibly generate a notification.
 // If a notification is found for the given event and passes all the filters, then
 // a new `notification.send` event is created.
-func addNotificationEvent(ctx context.Context, event postq.Event) error {
+func (t *notificationHandler) addNotificationEvent(ctx context.Context, event postq.Event) error {
 	notificationIDs, err := GetNotificationIDsForEvent(ctx, event.Name)
 	if err != nil {
 		return err
@@ -91,6 +100,8 @@ func addNotificationEvent(ctx context.Context, event postq.Event) error {
 	if err != nil {
 		return err
 	}
+
+	t.Ring.Add(event, celEnv)
 
 	for _, id := range notificationIDs {
 		n, err := GetNotification(ctx, id)

@@ -11,7 +11,6 @@ import (
 	"github.com/flanksource/commons/http/middlewares"
 	"github.com/flanksource/commons/logger"
 	cutils "github.com/flanksource/commons/utils"
-	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/schema/openapi"
 	"github.com/flanksource/incident-commander/agent"
@@ -21,8 +20,8 @@ import (
 	"github.com/flanksource/incident-commander/catalog"
 	"github.com/flanksource/incident-commander/connection"
 	"github.com/flanksource/incident-commander/db"
-	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/logs"
+	"github.com/flanksource/incident-commander/notification"
 	"github.com/flanksource/incident-commander/playbook"
 	"github.com/flanksource/incident-commander/push"
 	"github.com/flanksource/incident-commander/rbac"
@@ -96,12 +95,10 @@ func New(ctx context.Context) *echov4.Echo {
 	}))
 
 	e.GET("/event-log", func(c echov4.Context) error {
-		l, err := events.ConsumerLogs()
-		if err != nil {
-			return dutyAPI.WriteError(c, err)
-		}
-
-		return c.JSON(http.StatusOK, l)
+		return c.JSON(http.StatusOK, map[string]any{
+			"notifications": notification.EventRing.Get(),
+			"playbooks":     playbook.EventRing.Get(),
+		})
 	}, rbac.Authorization(rbac.ObjectMonitor, rbac.ActionRead))
 
 	e.GET("/health", func(c echov4.Context) error {
