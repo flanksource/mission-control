@@ -8,7 +8,6 @@ import (
 	"os"
 	osExec "os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	textTemplate "text/template"
 	"time"
@@ -41,26 +40,16 @@ type ExecDetails struct {
 }
 
 func (c *ExecAction) Run(ctx context.Context, exec v1.ExecAction) (*ExecDetails, error) {
-	execEnvParam, err := c.prepareEnvironment(ctx, exec)
+	envParams, err := c.prepareEnvironment(ctx, exec)
 	if err != nil {
 		return nil, err
 	}
 
-	switch runtime.GOOS {
-	case "windows":
-		return execPowershell(ctx, exec, execEnvParam)
-	default:
-		return execBash(ctx, exec, execEnvParam)
-	}
-}
-
-func execPowershell(ctx context.Context, check v1.ExecAction, envParams *execEnv) (*ExecDetails, error) {
-	ps, err := osExec.LookPath("powershell.exe")
+	cmd, err := CreateCommandFromScript(ctx, exec.Script)
 	if err != nil {
 		return nil, err
 	}
-	args := []string{check.Script}
-	cmd := osExec.CommandContext(ctx, ps, args...)
+
 	if len(envParams.envs) != 0 {
 		cmd.Env = append(os.Environ(), envParams.envs...)
 	}
@@ -68,7 +57,11 @@ func execPowershell(ctx context.Context, check v1.ExecAction, envParams *execEnv
 		cmd.Dir = envParams.mountPoint
 	}
 
-	return runCmd(ctx, cmd, check.Artifacts...)
+	if err := setupConnection(ctx, exec, cmd); err != nil {
+		return nil, fmt.Errorf("failed to setup connection: %w", err)
+	}
+
+	return runCmd(ctx, cmd, exec.Artifacts...)
 }
 
 func setupConnection(ctx context.Context, check v1.ExecAction, cmd *osExec.Cmd) error {
@@ -126,26 +119,6 @@ func setupConnection(ctx context.Context, check v1.ExecAction, cmd *osExec.Cmd) 
 	}
 
 	return nil
-}
-
-func execBash(ctx context.Context, check v1.ExecAction, execEnvParam *execEnv) (*ExecDetails, error) {
-	if len(check.Script) == 0 {
-		return nil, fmt.Errorf("no script provided")
-	}
-
-	cmd := osExec.CommandContext(ctx, "bash", "-e", "-c", check.Script)
-	if len(execEnvParam.envs) != 0 {
-		cmd.Env = append(os.Environ(), execEnvParam.envs...)
-	}
-	if execEnvParam.mountPoint != "" {
-		cmd.Dir = execEnvParam.mountPoint
-	}
-
-	if err := setupConnection(ctx, check, cmd); err != nil {
-		return nil, fmt.Errorf("failed to setup connection: %w", err)
-	}
-
-	return runCmd(ctx, cmd, check.Artifacts...)
 }
 
 func runCmd(ctx context.Context, cmd *osExec.Cmd, artifactConfigs ...v1.Artifact) (*ExecDetails, error) {
