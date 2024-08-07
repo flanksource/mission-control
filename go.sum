@@ -872,8 +872,8 @@ github.com/flanksource/kopper v1.0.9 h1:IZq5HBai5BMnHruB6IdpglZ0GoKWgTK1S+buWBGi
 github.com/flanksource/kopper v1.0.9/go.mod h1:6JMCgy+a/mzoAbhN5wo3cbCXb8BdHBFabLgjsIVS6nA=
 github.com/flanksource/kubectl-neat v1.0.4 h1:t5/9CqgE84oEtB0KitgJ2+WIeLfD+RhXSxYrqb4X8yI=
 github.com/flanksource/kubectl-neat v1.0.4/go.mod h1:Un/Voyh3cmiZNKQrW/TkAl28nAA7vwnwDGVjRErKjOw=
-github.com/flanksource/postq v0.1.5 h1:UA5mgIgqkk9Btczh5eWtR57kLXkAzHVQqcHrD2C4PcM=
-github.com/flanksource/postq v0.1.5/go.mod h1:AAuaPRhpqxvyF7JPs8X1NMsJVenh80ldpJPDVgWvFf8=
+github.com/flanksource/postq v0.1.6 h1:EgFO2+Eo5C6tRLiNqYdt3ZN4DXyqhpE/TLYzdxiaXEk=
+github.com/flanksource/postq v0.1.6/go.mod h1:AAuaPRhpqxvyF7JPs8X1NMsJVenh80ldpJPDVgWvFf8=
 github.com/fluxcd/gitkit v0.6.0 h1:iNg5LTx6ePo+Pl0ZwqHTAkhbUHxGVSY3YCxCdw7VIFg=
 github.com/fluxcd/gitkit v0.6.0/go.mod h1:svOHuKi0fO9HoawdK4HfHAJJseZDHHjk7I3ihnCIqNo=
 github.com/fluxcd/pkg/gittestserver v0.8.6 h1:YM8prVKB3LC9LBBe+a2p7l1BlfV9erXCgC1em9sbqW4=

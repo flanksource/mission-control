@@ -21,6 +21,7 @@ import (
 	"github.com/flanksource/incident-commander/connection"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/logs"
+	"github.com/flanksource/incident-commander/notification"
 	"github.com/flanksource/incident-commander/playbook"
 	"github.com/flanksource/incident-commander/push"
 	"github.com/flanksource/incident-commander/rbac"
@@ -92,6 +93,13 @@ func New(ctx context.Context) *echov4.Echo {
 		AllowCredentials: true,
 		AllowOrigins:     AllowedCORS,
 	}))
+
+	e.GET("/event-log", func(c echov4.Context) error {
+		return c.JSON(http.StatusOK, map[string]any{
+			"notifications": notification.EventRing.Get(),
+			"playbooks":     playbook.EventRing.Get(),
+		})
+	}, rbac.Authorization(rbac.ObjectMonitor, rbac.ActionRead))
 
 	e.GET("/health", func(c echov4.Context) error {
 		return c.String(http.StatusOK, "OK")

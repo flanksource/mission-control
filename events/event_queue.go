@@ -23,6 +23,9 @@ const (
 	// eventQueueUpdateChannel is the channel on which new events on the `event_queue` table
 	// are notified.
 	eventQueueUpdateChannel = "event_queue_updates"
+
+	// record the last `DefaultEventLogSize` events for audit purpose.
+	DefaultEventLogSize = 20
 )
 
 type Handler func(ctx context.Context, e postq.Event) error
@@ -80,6 +83,7 @@ func StartConsumers(ctx context.Context) {
 				ErrorHandler: defaultLoggerErrorHandler,
 			},
 		}
+
 		if ec, err := consumer.EventConsumer(); err != nil {
 			logger.Fatalf("failed to create event consumer: %s", err)
 		} else {
@@ -123,6 +127,7 @@ func StartConsumers(ctx context.Context) {
 					},
 				},
 			}
+
 			if ec, err := consumer.EventConsumer(); err != nil {
 				logger.Fatalf("failed to create event consumer: %s", err)
 			} else {
@@ -132,7 +137,6 @@ func StartConsumers(ctx context.Context) {
 			}
 		}
 	})
-
 }
 
 // on conflict clause when inserting new events to the `event_queue` table

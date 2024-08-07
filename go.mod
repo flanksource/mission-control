@@ -15,7 +15,7 @@ require (
 	github.com/flanksource/duty v1.0.561
 	github.com/flanksource/gomplate/v3 v3.24.17
 	github.com/flanksource/kopper v1.0.9
-	github.com/flanksource/postq v0.1.5
+	github.com/flanksource/postq v0.1.6
 	github.com/gomarkdown/markdown v0.0.0-20240419095408-642f0ee99ae2
 	github.com/google/cel-go v0.20.1
 	github.com/google/go-cmp v0.6.0
