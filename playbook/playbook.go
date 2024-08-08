@@ -96,7 +96,35 @@ func validateAndSavePlaybookRun(ctx context.Context, playbook *models.Playbook, 
 		return nil, fmt.Errorf("failed to create playbook run: %v", err)
 	}
 
+	if err := saveRunAsConfigChange(ctx, playbook, run, req.Params); err != nil {
+		return nil, fmt.Errorf("failed to save run as config change: %v", err)
+	}
+
 	return &run, nil
+}
+
+func saveRunAsConfigChange(ctx context.Context, playbook *models.Playbook, run models.PlaybookRun, parameters any) error {
+	details := map[string]any{
+		"spec":       playbook.Spec,
+		"parameters": parameters,
+	}
+
+	detailsJSON, err := json.Marshal(details)
+	if err != nil {
+		return fmt.Errorf("error marshaling playbook details into config changes: %w", err)
+	}
+
+	change := models.ConfigChange{
+		ExternalChangeId: run.ID.String(),
+		ConfigID:         playbook.ID.String(),
+		ChangeType:       "Scheduled",
+		Severity:         "info",
+		Source:           "Playbook",
+		Summary:          "Scheduled Playbook Run",
+		Details:          detailsJSON,
+	}
+
+	return ctx.DB().Create(&change).Error
 }
 
 // savePlaybookRun saves the run and attempts register an approval from the caller.
