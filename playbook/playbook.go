@@ -8,6 +8,7 @@ import (
 	"github.com/flanksource/commons/collections"
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
+	dutyDB "github.com/flanksource/duty/db"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
@@ -97,7 +98,7 @@ func validateAndSavePlaybookRun(ctx context.Context, playbook *models.Playbook, 
 	}
 
 	if err := saveRunAsConfigChange(ctx, playbook, run, req.Params); err != nil {
-		return nil, fmt.Errorf("failed to save run as config change: %v", err)
+		ctx.Logger.Errorf("failed to save playbook run as config change: %v", err)
 	}
 
 	return &run, nil
@@ -124,7 +125,15 @@ func saveRunAsConfigChange(ctx context.Context, playbook *models.Playbook, run m
 		Details:          detailsJSON,
 	}
 
-	return ctx.DB().Create(&change).Error
+	if err := ctx.DB().Create(&change).Error; err != nil {
+		if dutyDB.IsForeignKeyError(err) {
+			return nil
+		}
+
+		return fmt.Errorf("error creating config change: %w", err)
+	}
+
+	return nil
 }
 
 // savePlaybookRun saves the run and attempts register an approval from the caller.
