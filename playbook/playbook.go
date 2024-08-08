@@ -8,6 +8,7 @@ import (
 	"github.com/flanksource/commons/collections"
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
+	dutyDB "github.com/flanksource/duty/db"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
@@ -96,7 +97,43 @@ func validateAndSavePlaybookRun(ctx context.Context, playbook *models.Playbook, 
 		return nil, fmt.Errorf("failed to create playbook run: %v", err)
 	}
 
+	if err := saveRunAsConfigChange(ctx, playbook, run, req.Params); err != nil {
+		ctx.Logger.Errorf("failed to save playbook run as config change: %v", err)
+	}
+
 	return &run, nil
+}
+
+func saveRunAsConfigChange(ctx context.Context, playbook *models.Playbook, run models.PlaybookRun, parameters any) error {
+	details := map[string]any{
+		"spec":       playbook.Spec,
+		"parameters": parameters,
+	}
+
+	detailsJSON, err := json.Marshal(details)
+	if err != nil {
+		return fmt.Errorf("error marshaling playbook details into config changes: %w", err)
+	}
+
+	change := models.ConfigChange{
+		ExternalChangeId: run.ID.String(),
+		ConfigID:         playbook.ID.String(),
+		ChangeType:       "Scheduled",
+		Severity:         "info",
+		Source:           "Playbook",
+		Summary:          "Scheduled Playbook Run",
+		Details:          detailsJSON,
+	}
+
+	if err := ctx.DB().Create(&change).Error; err != nil {
+		if dutyDB.IsForeignKeyError(err) {
+			return nil
+		}
+
+		return fmt.Errorf("error creating config change: %w", err)
+	}
+
+	return nil
 }
 
 // savePlaybookRun saves the run and attempts register an approval from the caller.
