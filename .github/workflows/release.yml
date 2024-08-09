@@ -10,7 +10,7 @@ jobs:
       release-version: ${{ steps.semantic.outputs.release-version }}
       new-release-published: ${{ steps.semantic.outputs.new-release-published }}
     steps:
-      - uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3.5.3
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
       - uses: codfish/semantic-release-action@cbd853afe12037afb1306caca9d6b1ab6a58cf2a # v1.10.0
         id: semantic
         env:
@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: semantic-release
     steps:
-      - uses: actions/checkout@ee0669bd1cc54295c223e0bb666b733df41de1c5 # v2.7.0
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
       - name: Install Go
         uses: buildjet/setup-go@v5
         with:
@@ -49,7 +49,7 @@ jobs:
     needs: semantic-release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3.5.3
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
       - name: Set version
         # Always use git tags as semantic release can fail due to rate limit
         run: |
@@ -93,13 +93,13 @@ jobs:
     runs-on: ubuntu-latest
     needs: [semantic-release, docker]
     steps:
-      - uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3.5.3
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
       - name: Set version
         # Always use git tags as semantic release can fail due to rate limit
         run: |
           git fetch --prune --unshallow
           echo "RELEASE_VERSION=$(git describe --abbrev=0 --tags | sed -e 's/^v//')" >> $GITHUB_ENV
-      - uses: actions/checkout@c85c95e3d7251135ab7dc9ce3241c5835cc595a9 # v3.5.3
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
         with:
           repository: "${{ github.repository_owner }}/mission-control-chart"
           token: ${{ secrets.FLANKBOT }}
