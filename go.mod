@@ -13,7 +13,7 @@ require (
 	github.com/fergusstrange/embedded-postgres v1.25.0 // indirect
 	github.com/flanksource/commons v1.25.0
 	github.com/flanksource/duty v1.0.561
-	github.com/flanksource/gomplate/v3 v3.24.17
+	github.com/flanksource/gomplate/v3 v3.24.22
 	github.com/flanksource/kopper v1.0.9
 	github.com/flanksource/postq v0.1.6
 	github.com/gomarkdown/markdown v0.0.0-20240419095408-642f0ee99ae2
@@ -120,7 +120,7 @@ require (
 	github.com/exaring/otelpgx v0.5.2 // indirect
 	github.com/fatih/color v1.15.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
-	github.com/flanksource/is-healthy v1.0.25 // indirect
+	github.com/flanksource/is-healthy v1.0.26 // indirect
 	github.com/flanksource/kommons v0.31.4 // indirect
 	github.com/flanksource/kubectl-neat v1.0.4 // indirect
 	github.com/fluxcd/gitkit v0.6.0 // indirect
