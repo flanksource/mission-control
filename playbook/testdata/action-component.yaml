@@ -1,0 +1,9 @@
+description: write component name to file
+components:
+  - types:
+      - Entity
+    labelSelector: telemetry=enabled
+actions:
+  - name: write component name to a file
+    exec:
+      script: echo name={{.component.name}}  && printf {{.component.name}} > /tmp/{{.component.name}}.txt
