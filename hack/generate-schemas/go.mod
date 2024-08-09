@@ -6,7 +6,7 @@ require (
 	github.com/flanksource/commons v1.25.0
 	github.com/flanksource/duty v1.0.561
 	github.com/flanksource/incident-commander v0.0.0-00010101000000-000000000000
-	github.com/spf13/cobra v1.8.0
+	github.com/spf13/cobra v1.8.1
 )
 
 require (
