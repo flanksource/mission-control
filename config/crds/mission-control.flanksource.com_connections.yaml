@@ -2647,6 +2647,10 @@ spec:
                             type: string
                         type: object
                     type: object
+                  usePathStyle:
+                    description: 'Use path style path: http://s3.amazonaws.com/BUCKET/KEY
+                      instead of http://BUCKET.s3.amazonaws.com/KEY'
+                    type: boolean
                 required:
                 - bucket
                 type: object

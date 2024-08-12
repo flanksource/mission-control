@@ -130,6 +130,8 @@ type ConnectionMongo struct {
 type ConnectionAWSS3 struct {
 	ConnectionAWS `json:",inline"`
 	Bucket        string `json:"bucket"`
+	// Use path style path: http://s3.amazonaws.com/BUCKET/KEY instead of http://BUCKET.s3.amazonaws.com/KEY
+	UsePathStyle bool `yaml:"usePathStyle,omitempty" json:"usePathStyle,omitempty"`
 }
 
 type ConnectionAWS struct {

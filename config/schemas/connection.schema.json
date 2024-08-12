@@ -85,6 +85,9 @@
         },
         "bucket": {
           "type": "string"
+        },
+        "usePathStyle": {
+          "type": "boolean"
         }
       },
       "additionalProperties": false,
