@@ -12,6 +12,8 @@ import (
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	"github.com/patrickmn/go-cache"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -96,7 +98,57 @@ func validateAndSavePlaybookRun(ctx context.Context, playbook *models.Playbook, 
 		return nil, fmt.Errorf("failed to create playbook run: %v", err)
 	}
 
+	if err := saveRunAsConfigChange(ctx, playbook, run, req.Params); err != nil {
+		ctx.Logger.Errorf("failed to save playbook run as config change: %v", err)
+	}
+
 	return &run, nil
+}
+
+func saveRunAsConfigChange(ctx context.Context, playbook *models.Playbook, run models.PlaybookRun, parameters any) error {
+	if run.ConfigID == nil {
+		return nil
+	}
+
+	change := models.ConfigChange{
+		ExternalChangeId: uuid.NewString(),
+		Severity:         models.SeverityInfo,
+		ConfigID:         run.ConfigID.String(),
+		ChangeType:       fmt.Sprintf("Playbook%s", cases.Title(language.English).String(string(run.Status))),
+		Source:           "Playbook",
+		Summary:          fmt.Sprintf("Playbook: %s", playbook.Name),
+	}
+
+	switch run.Status {
+	case models.PlaybookRunStatusScheduled:
+		change.Severity = models.SeverityInfo
+		change.ChangeType = "PlaybookScheduled"
+		change.ExternalChangeId = run.ID.String()
+
+		details := map[string]any{
+			"parameters": parameters,
+			"spec":       playbook.Spec,
+		}
+		detailsJSON, err := json.Marshal(details)
+		if err != nil {
+			return fmt.Errorf("error marshaling playbook details into config changes: %w", err)
+		}
+		change.Details = detailsJSON
+
+	case models.PlaybookRunStatusRunning:
+		change.ChangeType = "PlaybookStarted"
+		change.Severity = models.SeverityInfo
+
+	case models.PlaybookRunStatusCompleted:
+                change.ChangeType = "PlaybookCompleted"
+		change.Severity = models.SeverityLow
+
+	case models.PlaybookRunStatusFailed:
+		change.Severity = models.SeverityHigh
+		change.ChangeType = "PlaybookFailed"
+	}
+
+	return ctx.DB().Create(&change).Error
 }
 
 // savePlaybookRun saves the run and attempts register an approval from the caller.
