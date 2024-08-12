@@ -122,6 +122,7 @@ func saveRunAsConfigChange(ctx context.Context, playbook *models.Playbook, run m
 	switch run.Status {
 	case models.PlaybookRunStatusScheduled:
 		change.Severity = models.SeverityInfo
+		change.ChangeType = "PlaybookScheduled"
 		change.ExternalChangeId = run.ID.String()
 
 		details := map[string]any{
@@ -139,10 +140,12 @@ func saveRunAsConfigChange(ctx context.Context, playbook *models.Playbook, run m
 		change.Severity = models.SeverityInfo
 
 	case models.PlaybookRunStatusCompleted:
+                change.ChangeType = "PlaybookCompleted"
 		change.Severity = models.SeverityLow
 
 	case models.PlaybookRunStatusFailed:
 		change.Severity = models.SeverityHigh
+		change.ChangeType = "PlaybookFailed"
 	}
 
 	return ctx.DB().Create(&change).Error
