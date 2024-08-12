@@ -105,24 +105,40 @@ func validateAndSavePlaybookRun(ctx context.Context, playbook *models.Playbook, 
 }
 
 func saveRunAsConfigChange(ctx context.Context, playbook *models.Playbook, run models.PlaybookRun, parameters any) error {
-	details := map[string]any{
-		"spec":       playbook.Spec,
-		"parameters": parameters,
-	}
-
-	detailsJSON, err := json.Marshal(details)
-	if err != nil {
-		return fmt.Errorf("error marshaling playbook details into config changes: %w", err)
-	}
-
 	change := models.ConfigChange{
-		ExternalChangeId: run.ID.String(),
+		ExternalChangeId: uuid.NewString(),
+		Severity:         models.SeverityInfo,
 		ConfigID:         playbook.ID.String(),
-		ChangeType:       "Scheduled",
-		Severity:         "info",
+		ChangeType:       string(run.Status),
 		Source:           "Playbook",
-		Summary:          "Scheduled Playbook Run",
-		Details:          detailsJSON,
+		Summary:          fmt.Sprintf("Playbook run %s", run.Status),
+	}
+
+	switch run.Status {
+	case models.PlaybookRunStatusScheduled:
+		change.Severity = models.SeverityLow
+		change.ExternalChangeId = run.ID.String()
+
+		details := map[string]any{
+			"parameters": parameters,
+			"spec":       playbook.Spec,
+		}
+		detailsJSON, err := json.Marshal(details)
+		if err != nil {
+			return fmt.Errorf("error marshaling playbook details into config changes: %w", err)
+		}
+		change.Details = detailsJSON
+
+	case models.PlaybookRunStatusRunning:
+		change.ChangeType = "started"
+		change.Summary = "Playbook run started"
+		change.Severity = models.SeverityHigh
+
+	case models.PlaybookRunStatusCompleted:
+		change.Severity = models.SeverityLow
+
+	case models.PlaybookRunStatusFailed:
+		change.Severity = models.SeverityHigh
 	}
 
 	if err := ctx.DB().Create(&change).Error; err != nil {

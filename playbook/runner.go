@@ -228,8 +228,18 @@ func HandleRun(ctx context.Context, run models.PlaybookRun) error {
 			"status":   evaluateRunStatus(actionStatuses),
 		}
 
-		return ctx.DB().Model(&models.PlaybookRun{}).Where("id = ?", run.ID).UpdateColumns(updateColumns).Error
+		if err := ctx.DB().Model(&run).Where("id = ?", run.ID).UpdateColumns(updateColumns).Error; err != nil {
+			return err
+		}
+
+		if err := saveRunAsConfigChange(ctx, &playbook, run, nil); err != nil {
+			ctx.Logger.Errorf("failed to save playbook run as config change: %v", err)
+		}
+
+		return nil
 	}
+
+	isFirstRun := run.StartTime == nil
 
 	runUpdates := map[string]any{
 		"start_time": gorm.Expr("CASE WHEN start_time IS NULL THEN CLOCK_TIMESTAMP() ELSE start_time END"),
@@ -282,7 +292,17 @@ func HandleRun(ctx context.Context, run models.PlaybookRun) error {
 		}
 	}
 
-	return ctx.DB().Model(&models.PlaybookRun{}).Where("id = ?", run.ID).UpdateColumns(runUpdates).Error
+	if err := ctx.DB().Model(&run).Where("id = ?", run.ID).UpdateColumns(runUpdates).Error; err != nil {
+		return fmt.Errorf("failed to update playbook run status: %w", err)
+	}
+
+	if isFirstRun {
+		if err := saveRunAsConfigChange(ctx, &playbook, run, nil); err != nil {
+			ctx.Logger.Errorf("failed to save playbook run as config change: %v", err)
+		}
+	}
+
+	return nil
 }
 
 func prepareTemplateEnv(ctx context.Context, playbook models.Playbook, run models.PlaybookRun) (actions.TemplateEnv, error) {
