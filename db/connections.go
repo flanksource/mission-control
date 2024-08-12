@@ -54,6 +54,7 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 			"region":       obj.Spec.S3.Region,
 			"profile":      obj.Spec.S3.Profile,
 			"insecure_tls": strconv.FormatBool(obj.Spec.S3.InsecureTLS),
+			"usePathStyle": strconv.FormatBool(obj.Spec.S3.UsePathStyle),
 		}
 	}
 
