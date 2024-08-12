@@ -9,7 +9,6 @@ import (
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	"github.com/patrickmn/go-cache"
@@ -105,25 +104,22 @@ func validateAndSavePlaybookRun(ctx context.Context, playbook *models.Playbook, 
 }
 
 func saveRunAsConfigChange(ctx context.Context, playbook *models.Playbook, run models.PlaybookRun, parameters any) error {
-	playbookConfigItem, err := query.GetCachedConfig(ctx, playbook.ID.String())
-	if err != nil {
-		return err
-	} else if playbookConfigItem == nil {
+	if run.ConfigID == nil {
 		return nil
 	}
 
 	change := models.ConfigChange{
 		ExternalChangeId: uuid.NewString(),
 		Severity:         models.SeverityInfo,
-		ConfigID:         playbook.ID.String(),
+		ConfigID:         run.ConfigID.String(),
 		ChangeType:       string(run.Status),
 		Source:           "Playbook",
-		Summary:          fmt.Sprintf("Playbook run %s", run.Status),
+		Summary:          fmt.Sprintf("Playbook: %s", playbook.Name),
 	}
 
 	switch run.Status {
 	case models.PlaybookRunStatusScheduled:
-		change.Severity = models.SeverityLow
+		change.Severity = models.SeverityInfo
 		change.ExternalChangeId = run.ID.String()
 
 		details := map[string]any{
@@ -138,8 +134,7 @@ func saveRunAsConfigChange(ctx context.Context, playbook *models.Playbook, run m
 
 	case models.PlaybookRunStatusRunning:
 		change.ChangeType = "started"
-		change.Summary = "Playbook run started"
-		change.Severity = models.SeverityHigh
+		change.Severity = models.SeverityInfo
 
 	case models.PlaybookRunStatusCompleted:
 		change.Severity = models.SeverityLow
