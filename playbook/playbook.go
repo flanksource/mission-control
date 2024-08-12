@@ -12,6 +12,8 @@ import (
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	"github.com/patrickmn/go-cache"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -112,7 +114,7 @@ func saveRunAsConfigChange(ctx context.Context, playbook *models.Playbook, run m
 		ExternalChangeId: uuid.NewString(),
 		Severity:         models.SeverityInfo,
 		ConfigID:         run.ConfigID.String(),
-		ChangeType:       string(run.Status),
+		ChangeType:       fmt.Sprintf("Playbook%s", cases.Title(language.English).String(string(run.Status))),
 		Source:           "Playbook",
 		Summary:          fmt.Sprintf("Playbook: %s", playbook.Name),
 	}
@@ -133,7 +135,7 @@ func saveRunAsConfigChange(ctx context.Context, playbook *models.Playbook, run m
 		change.Details = detailsJSON
 
 	case models.PlaybookRunStatusRunning:
-		change.ChangeType = "started"
+		change.ChangeType = "PlaybookStarted"
 		change.Severity = models.SeverityInfo
 
 	case models.PlaybookRunStatusCompleted:
