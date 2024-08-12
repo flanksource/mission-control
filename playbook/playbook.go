@@ -8,8 +8,8 @@ import (
 	"github.com/flanksource/commons/collections"
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
-	dutyDB "github.com/flanksource/duty/db"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	"github.com/patrickmn/go-cache"
@@ -105,6 +105,13 @@ func validateAndSavePlaybookRun(ctx context.Context, playbook *models.Playbook, 
 }
 
 func saveRunAsConfigChange(ctx context.Context, playbook *models.Playbook, run models.PlaybookRun, parameters any) error {
+	playbookConfigItem, err := query.GetCachedConfig(ctx, playbook.ID.String())
+	if err != nil {
+		return err
+	} else if playbookConfigItem == nil {
+		return nil
+	}
+
 	change := models.ConfigChange{
 		ExternalChangeId: uuid.NewString(),
 		Severity:         models.SeverityInfo,
@@ -141,15 +148,7 @@ func saveRunAsConfigChange(ctx context.Context, playbook *models.Playbook, run m
 		change.Severity = models.SeverityHigh
 	}
 
-	if err := ctx.DB().Create(&change).Error; err != nil {
-		if dutyDB.IsForeignKeyError(err) {
-			return nil
-		}
-
-		return fmt.Errorf("error creating config change: %w", err)
-	}
-
-	return nil
+	return ctx.DB().Create(&change).Error
 }
 
 // savePlaybookRun saves the run and attempts register an approval from the caller.
