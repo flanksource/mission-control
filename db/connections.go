@@ -34,6 +34,7 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 
 	if obj.Spec.AWS != nil {
 		dbObj.Type = models.ConnectionTypeAWS
+		dbObj.URL = obj.Spec.AWS.URL.String()
 		dbObj.Username = obj.Spec.AWS.AccessKey.String()
 		dbObj.Password = obj.Spec.AWS.SecretKey.String()
 		dbObj.Properties = map[string]string{
@@ -45,6 +46,7 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 
 	if obj.Spec.S3 != nil {
 		dbObj.Type = models.ConnectionTypeS3
+		dbObj.URL = obj.Spec.S3.URL.String()
 		dbObj.Username = obj.Spec.S3.AccessKey.String()
 		dbObj.Password = obj.Spec.S3.SecretKey.String()
 		dbObj.Properties = map[string]string{
