@@ -41,6 +41,9 @@
     },
     "ConnectionAWS": {
       "properties": {
+        "url": {
+          "$ref": "#/$defs/EnvVar"
+        },
         "region": {
           "type": "string"
         },
@@ -62,6 +65,9 @@
     },
     "ConnectionAWSS3": {
       "properties": {
+        "url": {
+          "$ref": "#/$defs/EnvVar"
+        },
         "region": {
           "type": "string"
         },

@@ -133,6 +133,8 @@ type ConnectionAWSS3 struct {
 }
 
 type ConnectionAWS struct {
+	// AWS Endpoint
+	URL         types.EnvVar `json:"url,omitempty"`
 	Region      string       `json:"region,omitempty"`
 	Profile     string       `json:"profile,omitempty"`
 	InsecureTLS bool         `json:"insecureTLS,omitempty"`
