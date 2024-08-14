@@ -93,6 +93,14 @@ type ActionForAgent struct {
 }
 
 func GetActionForAgent(ctx context.Context, agent *models.Agent) (*ActionForAgent, error) {
+	tx := ctx.DB().Begin()
+	if tx.Error != nil {
+		return nil, fmt.Errorf("error initiating db tx: %w", tx.Error)
+	}
+	defer tx.Rollback()
+
+	ctx = ctx.WithDB(tx, ctx.Pool())
+
 	action, err := getActionForAgent(ctx, agent)
 	if err != nil {
 		var runErr *playbookRunError
@@ -116,18 +124,10 @@ func GetActionForAgent(ctx context.Context, agent *models.Agent) (*ActionForAgen
 		}
 	}
 
-	return action, nil
+	return action, tx.Commit().Error
 }
 
 func getActionForAgent(ctx context.Context, agent *models.Agent) (*ActionForAgent, error) {
-	tx := ctx.DB().Begin()
-	if tx.Error != nil {
-		return nil, fmt.Errorf("error initiating db tx: %w", tx.Error)
-	}
-	defer tx.Rollback()
-
-	ctx = ctx.WithDB(tx, ctx.Pool())
-
 	query := `
 		SELECT playbook_runs.*
 		FROM playbook_runs
@@ -208,7 +208,7 @@ func getActionForAgent(ctx context.Context, agent *models.Agent) (*ActionForAgen
 		actionToRun.Filter = strconv.FormatBool(!skip)
 	}
 
-	return &output, tx.Commit().Error
+	return &output, nil
 }
 
 func checkPlaybookFilter(ctx context.Context, playbookSpec v1.PlaybookSpec, templateEnv actions.TemplateEnv) error {
