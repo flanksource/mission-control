@@ -3,6 +3,7 @@ package msplanner
 import (
 	gocontext "context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
@@ -87,17 +88,17 @@ func NewClient(ctx context.Context, team api.Team) (*MSPlannerClient, error) {
 func newClient(tenantID, clientID, groupID, username, password string) (*MSPlannerClient, error) {
 	cred, err := azidentity.NewUsernamePasswordCredential(tenantID, clientID, username, password, nil)
 	if err != nil {
-		return nil, fmt.Errorf("error creating credentials: %v\n", err)
+		return nil, fmt.Errorf("error creating credentials: %w", err)
 	}
 
 	auth, err := kiotaAuth.NewAzureIdentityAuthenticationProvider(cred)
 	if err != nil {
-		return nil, fmt.Errorf("error authentication provider: %v\n", err)
+		return nil, fmt.Errorf("error authentication provider: %w", err)
 	}
 
 	adapter, err := msgraphsdk.NewGraphRequestAdapter(auth)
 	if err != nil {
-		return nil, fmt.Errorf("error creating adapter: %v\n", err)
+		return nil, fmt.Errorf("error creating adapter: %w", err)
 	}
 	client := msgraphsdk.NewGraphServiceClient(adapter)
 	return &MSPlannerClient{client: client, groupID: groupID}, nil
@@ -268,5 +269,5 @@ func openDataError(err error) error {
 		errorStr += fmt.Sprintf("%T > error: %#v.", err, err)
 	}
 
-	return fmt.Errorf(errorStr)
+	return errors.New(errorStr)
 }

@@ -345,13 +345,13 @@ func (t *AWSConnection) Populate(ctx connectionContext, k8s kubernetes.Interface
 	}
 
 	if secretKey, err := duty.GetEnvValueFromCache(k8s, t.SecretKey, namespace); err != nil {
-		return fmt.Errorf(fmt.Sprintf("Could not parse AWS secret access key: %v", err))
+		return fmt.Errorf("could not parse AWS secret access key: %w", err)
 	} else {
 		t.SecretKey.ValueStatic = secretKey
 	}
 
 	if sessionToken, err := duty.GetEnvValueFromCache(k8s, t.SessionToken, namespace); err != nil {
-		return fmt.Errorf(fmt.Sprintf("Could not parse AWS session token: %v", err))
+		return fmt.Errorf("could not parse AWS session token: %w", err)
 	} else {
 		t.SessionToken.ValueStatic = sessionToken
 	}
