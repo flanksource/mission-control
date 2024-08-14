@@ -2,7 +2,7 @@ package playbook
 
 import (
 	"github.com/flanksource/duty/context"
-	"github.com/flanksource/postq/pg"
+	"github.com/flanksource/duty/postq/pg"
 )
 
 func ListenPlaybookPGNotify(ctx context.Context) {

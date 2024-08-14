@@ -19,7 +19,6 @@ import (
 	"github.com/flanksource/incident-commander/incidents/responder"
 	"github.com/flanksource/incident-commander/logs"
 	"github.com/flanksource/incident-commander/utils/expression"
-	"github.com/flanksource/postq"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 )
@@ -86,7 +85,7 @@ type notificationHandler struct {
 // addNotificationEvent responds to a event that can possibly generate a notification.
 // If a notification is found for the given event and passes all the filters, then
 // a new `notification.send` event is created.
-func (t *notificationHandler) addNotificationEvent(ctx context.Context, event postq.Event) error {
+func (t *notificationHandler) addNotificationEvent(ctx context.Context, event models.Event) error {
 	notificationIDs, err := GetNotificationIDsForEvent(ctx, event.Name)
 	if err != nil {
 		return err
@@ -159,8 +158,8 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event po
 
 // sendNotifications sends a notification for each of the given events - one at a time.
 // It returns any events that failed to send.
-func sendNotifications(ctx context.Context, events postq.Events) postq.Events {
-	var failedEvents []postq.Event
+func sendNotifications(ctx context.Context, events models.Events) models.Events {
+	var failedEvents []models.Event
 	for _, e := range events {
 		var payload NotificationEventPayload
 		payload.FromMap(e.Properties)
@@ -172,7 +171,7 @@ func sendNotifications(ctx context.Context, events postq.Events) postq.Events {
 
 		logs.IfError(notificationContext.StartLog(), "error persisting start of notification send history")
 
-		originalEvent := postq.Event{Name: payload.EventName, CreatedAt: payload.EventCreatedAt}
+		originalEvent := models.Event{Name: payload.EventName, CreatedAt: payload.EventCreatedAt}
 		if len(payload.Properties) > 0 {
 			if err := json.Unmarshal(payload.Properties, &originalEvent.Properties); err != nil {
 				e.SetError(err.Error())
@@ -201,7 +200,7 @@ func sendNotifications(ctx context.Context, events postq.Events) postq.Events {
 
 // getEnvForEvent gets the environment variables for the given event
 // that'll be passed to the cel expression or to the template renderer as a view.
-func getEnvForEvent(ctx context.Context, event postq.Event, properties map[string]string) (map[string]any, error) {
+func getEnvForEvent(ctx context.Context, event models.Event, properties map[string]string) (map[string]any, error) {
 	env := make(map[string]any)
 
 	if strings.HasPrefix(event.Name, "check.") {
