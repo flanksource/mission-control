@@ -93,6 +93,33 @@ type ActionForAgent struct {
 }
 
 func GetActionForAgent(ctx context.Context, agent *models.Agent) (*ActionForAgent, error) {
+	action, err := getActionForAgent(ctx, agent)
+	if err != nil {
+		var runErr *playbookRunError
+		if !errors.As(err, &runErr) {
+			return nil, err
+		}
+
+		actionUpdates := map[string]any{
+			"start_time": gorm.Expr("CASE WHEN start_time IS NULL THEN CLOCK_TIMESTAMP() ELSE start_time END"),
+			"status":     models.PlaybookActionStatusFailed,
+			"error":      err.Error(),
+			"end_time":   gorm.Expr("CLOCK_TIMESTAMP()"),
+		}
+		if err := ctx.DB().Model(&models.PlaybookRunAction{}).Where("id = ?", runErr.ActionID).UpdateColumns(actionUpdates).Error; err != nil {
+			return nil, fmt.Errorf("error updating playbook action status as failed: %w", err)
+		}
+
+		// Need to reschedule the run, so it continues with remaining actions
+		if err := ctx.DB().Model(&models.PlaybookRun{}).Where("id = ?", runErr.RunID).UpdateColumn("status", models.PlaybookRunStatusScheduled).Error; err != nil {
+			return nil, fmt.Errorf("error updating playbook action status as failed: %w", err)
+		}
+	}
+
+	return action, nil
+}
+
+func getActionForAgent(ctx context.Context, agent *models.Agent) (*ActionForAgent, error) {
 	tx := ctx.DB().Begin()
 	if tx.Error != nil {
 		return nil, fmt.Errorf("error initiating db tx: %w", tx.Error)
@@ -115,7 +142,7 @@ func GetActionForAgent(ctx context.Context, agent *models.Agent) (*ActionForAgen
 
 	var runs []models.PlaybookRun
 	if err := ctx.DB().Raw(query, models.PlaybookRunStatusScheduled, models.PlaybookRunStatusWaiting, fmt.Sprintf(`["%s"]`, agent.Name)).Find(&runs).Error; err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to query playbook run for agent(%s): %w", agent.Name, err)
 	}
 
 	if len(runs) == 0 {
@@ -125,7 +152,7 @@ func GetActionForAgent(ctx context.Context, agent *models.Agent) (*ActionForAgen
 
 	var playbook models.Playbook
 	if err := ctx.DB().Where("id = ?", run.PlaybookID).First(&playbook).Error; err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to query playbook(%s): %w", run.PlaybookID, err)
 	}
 	ctx = ctx.WithNamespace(playbook.Namespace)
 
@@ -149,21 +176,21 @@ func GetActionForAgent(ctx context.Context, agent *models.Agent) (*ActionForAgen
 		AgentID:       lo.ToPtr(agent.ID),
 	}
 	if err := ctx.DB().Create(&newAction).Error; err != nil {
-		return nil, fmt.Errorf("failed to create a new playbook run: %w", err)
+		return nil, fmt.Errorf("failed to create a new playbook action: %w", err)
 	}
 
 	templateEnv, err := prepareTemplateEnv(ctx, playbook, run)
 	if err != nil {
-		return nil, fmt.Errorf("failed to prepare template env: %w", err)
+		return nil, &playbookRunError{RunID: run.ID, ActionID: newAction.ID, Err: fmt.Errorf("failed to prepare template env: %w", err)}
 	}
 
 	if err := templateActionExpressions(ctx, run, newAction, actionToRun, templateEnv); err != nil {
-		return nil, fmt.Errorf("failed to template action: %w", err)
+		return nil, &playbookRunError{RunID: run.ID, ActionID: newAction.ID, Err: fmt.Errorf("failed to template action expressions: %w", err)}
 	}
 
 	if actionToRun.TemplatesOn == "" || actionToRun.TemplatesOn == runnerMain {
 		if err := templateAction(ctx, run, newAction, actionToRun, templateEnv); err != nil {
-			return nil, fmt.Errorf("failed to template action: %w", err)
+			return nil, &playbookRunError{RunID: run.ID, ActionID: newAction.ID, Err: fmt.Errorf("failed to template action: %w", err)}
 		}
 	}
 
@@ -175,7 +202,7 @@ func GetActionForAgent(ctx context.Context, agent *models.Agent) (*ActionForAgen
 	}
 
 	if skip, err := filterAction(ctx, newAction.ID, actionToRun.Filter); err != nil {
-		return nil, fmt.Errorf("failed to evaluate action filter: %w", err)
+		return nil, &playbookRunError{RunID: run.ID, ActionID: newAction.ID, Err: fmt.Errorf("failed to evaluate action filter: %w", err)}
 	} else {
 		// We run the filter on the upstream and simply send the filter result to the agent.
 		actionToRun.Filter = strconv.FormatBool(!skip)
