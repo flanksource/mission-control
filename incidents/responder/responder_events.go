@@ -8,10 +8,9 @@ import (
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/events"
-
-	"github.com/flanksource/postq"
 )
 
 func init() {
@@ -29,7 +28,7 @@ func RegisterEvents(ctx context.Context) {
 
 // generateResponderAddedAsyncEvent generates async events for each of the configured responder clients
 // in the associated team.
-func generateResponderAddedAsyncEvent(ctx context.Context, event postq.Event) error {
+func generateResponderAddedAsyncEvent(ctx context.Context, event models.Event) error {
 	responderID := event.Properties["id"]
 
 	var responder api.Responder
@@ -59,7 +58,7 @@ func generateResponderAddedAsyncEvent(ctx context.Context, event postq.Event) er
 }
 
 // generateCommentAddedAsyncEvent generates comment.add async events for each of the configured responder clients.
-func generateCommentAddedAsyncEvent(ctx context.Context, event postq.Event) error {
+func generateCommentAddedAsyncEvent(ctx context.Context, event models.Event) error {
 	commentID := event.Properties["id"]
 
 	var comment api.Comment
@@ -106,8 +105,8 @@ func generateCommentAddedAsyncEvent(ctx context.Context, event postq.Event) erro
 	return nil
 }
 
-func processResponderEvents(ctx context.Context, events postq.Events) postq.Events {
-	var failedEvents []postq.Event
+func processResponderEvents(ctx context.Context, events models.Events) models.Events {
+	var failedEvents []models.Event
 	for _, e := range events {
 		if err := handleResponderEvent(ctx, e); err != nil {
 			e.SetError(err.Error())
@@ -118,7 +117,7 @@ func processResponderEvents(ctx context.Context, events postq.Events) postq.Even
 	return failedEvents
 }
 
-func handleResponderEvent(ctx context.Context, event postq.Event) error {
+func handleResponderEvent(ctx context.Context, event models.Event) error {
 	switch event.Name {
 	case api.EventJiraResponderAdded, api.EventMSPlannerResponderAdded:
 		return reconcileResponderEvent(ctx, event)
@@ -130,7 +129,7 @@ func handleResponderEvent(ctx context.Context, event postq.Event) error {
 }
 
 // TODO: Modify this such that it only notifies the responder mentioned in the event.
-func reconcileResponderEvent(ctx context.Context, event postq.Event) error {
+func reconcileResponderEvent(ctx context.Context, event models.Event) error {
 	responderID := event.Properties["id"]
 
 	var responder api.Responder
@@ -157,7 +156,7 @@ func reconcileResponderEvent(ctx context.Context, event postq.Event) error {
 }
 
 // TODO: Modify this such that it only adds the comment to the particular responder mentioned in the event.
-func reconcileCommentEvent(ctx context.Context, event postq.Event) error {
+func reconcileCommentEvent(ctx context.Context, event models.Event) error {
 	commentID := event.Properties["id"]
 
 	var comment api.Comment

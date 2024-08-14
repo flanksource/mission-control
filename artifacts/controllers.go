@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/flanksource/artifacts"
+	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -15,16 +16,22 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/flanksource/incident-commander/db"
+	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/rbac"
 )
 
-func RegisterRoutes(e *echo.Echo, prefix string) *echo.Group {
-	g := e.Group(fmt.Sprintf("/%s", prefix), rbac.Authorization(rbac.ObjectArtifact, rbac.ActionRead))
+func init() {
+	echoSrv.RegisterRoutes(RegisterRoutes)
+}
+
+func RegisterRoutes(e *echo.Echo) {
+	logger.Infof("Registering /artifacts routes")
+
+	g := e.Group(fmt.Sprintf("/%s", "artifacts"), rbac.Authorization(rbac.ObjectArtifact, rbac.ActionRead))
 	g.GET("/list/check/:id/:check_time", ListArtifacts)
 	g.GET("/list/playbook_run/:id", ListArtifacts)
 	g.GET("/download/:id", DownloadArtifact)
 
-	return g
 }
 
 func ListArtifacts(c echo.Context) error {
