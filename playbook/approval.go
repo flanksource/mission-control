@@ -1,15 +1,44 @@
 package playbook
 
 import (
+	"net/http"
+
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/duty/api"
+	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
+	"github.com/labstack/echo/v4"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
 )
+
+func HandlePlaybookRunApproval(c echo.Context) error {
+	ctx := c.Request().Context().(context.Context)
+
+	var (
+		playbookID = c.Param("playbook_id")
+		runID      = c.Param("run_id")
+	)
+
+	playbookUUID, err := uuid.Parse(playbookID)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{Err: err.Error(), Message: "invalid playbook id"})
+	}
+
+	runUUID, err := uuid.Parse(runID)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{Err: err.Error(), Message: "invalid run id"})
+	}
+
+	if err := ApproveRun(ctx, playbookUUID, runUUID); err != nil {
+		return dutyAPI.WriteError(c, err)
+	}
+
+	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{Message: "playbook run approved"})
+}
 
 func ApproveRun(ctx context.Context, playbookID, runID uuid.UUID) error {
 	playbook, err := db.FindPlaybook(ctx, playbookID)
@@ -22,6 +51,11 @@ func ApproveRun(ctx context.Context, playbookID, runID uuid.UUID) error {
 	return approveRun(ctx, playbook, runID)
 }
 
+func requiresApproval(playbook *models.Playbook) bool {
+	playbookV1, _ := v1.PlaybookFromModel(*playbook)
+	return playbookV1.Spec.Approval != nil && !playbookV1.Spec.Approval.Approvers.Empty()
+}
+
 func approveRun(ctx context.Context, playbook *models.Playbook, runID uuid.UUID) error {
 	approver := ctx.User()
 
@@ -32,6 +66,10 @@ func approveRun(ctx context.Context, playbook *models.Playbook, runID uuid.UUID)
 
 	if playbookV1.Spec.Approval == nil || playbookV1.Spec.Approval.Approvers.Empty() {
 		return api.Errorf(api.EINVALID, "this playbook does not require approval")
+	}
+
+	if approver == nil {
+		return api.Errorf(api.EUNAUTHORIZED, "Not logged in")
 	}
 
 	approval := models.PlaybookApproval{

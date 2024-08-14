@@ -32,22 +32,29 @@ type ExecAction struct {
 type ExecDetails struct {
 	Error error `json:"-"`
 
-	Stdout   string `json:"stdout,omitempty"`
-	Stderr   string `json:"stderr,omitempty"`
-	ExitCode int    `json:"exitCode,omitempty"`
+	Stdout   string `json:"stdout"`
+	Stderr   string `json:"stderr"`
+	ExitCode int    `json:"exitCode"`
 
 	Artifacts []artifacts.Artifact `json:"-" yaml:"-"`
+}
+
+func (e *ExecDetails) GetArtifacts() []artifacts.Artifact {
+	if e == nil {
+		return nil
+	}
+	return e.Artifacts
 }
 
 func (c *ExecAction) Run(ctx context.Context, exec v1.ExecAction) (*ExecDetails, error) {
 	envParams, err := c.prepareEnvironment(ctx, exec)
 	if err != nil {
-		return nil, err
+		return nil, ctx.Oops().Wrap(err)
 	}
 
 	cmd, err := CreateCommandFromScript(ctx, exec.Script)
 	if err != nil {
-		return nil, err
+		return nil, ctx.Oops().Wrap(err)
 	}
 
 	if len(envParams.envs) != 0 {
@@ -58,7 +65,7 @@ func (c *ExecAction) Run(ctx context.Context, exec v1.ExecAction) (*ExecDetails,
 	}
 
 	if err := setupConnection(ctx, exec, cmd); err != nil {
-		return nil, fmt.Errorf("failed to setup connection: %w", err)
+		return nil, ctx.Oops().Wrapf(err, "failed to setup connection")
 	}
 
 	return runCmd(ctx, cmd, exec.Artifacts...)
@@ -131,15 +138,12 @@ func runCmd(ctx context.Context, cmd *osExec.Cmd, artifactConfigs ...v1.Artifact
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 
-	if ctx.IsTrace() {
-		cmd.Stderr = io.MultiWriter(&stderr, os.Stderr)
-		cmd.Stdout = io.MultiWriter(&stdout, os.Stdout)
-	}
-
 	result.Error = cmd.Run()
 	result.ExitCode = cmd.ProcessState.ExitCode()
 	result.Stderr = strings.TrimSpace(stderr.String())
 	result.Stdout = strings.TrimSpace(stdout.String())
+
+	ctx.Tracef("command exited with code %d and stdout=%d bytes, stderr=%d bytes", result.ExitCode, len(result.Stdout), len(result.Stderr))
 
 	for _, artifactConfig := range artifactConfigs {
 		switch artifactConfig.Path {
@@ -181,7 +185,14 @@ func runCmd(ctx context.Context, cmd *osExec.Cmd, artifactConfigs ...v1.Artifact
 		}
 	}
 	if result.ExitCode != 0 {
-		return nil, fmt.Errorf("non-zero exit-code: %d. (stdout=%s) (stderr=%s)", result.ExitCode, result.Stdout, result.Stderr)
+		return &result, ctx.Oops().With(
+			"cmd", cmd.Path,
+			"args", cmd.Args,
+			"error", result.Error.Error(),
+			"stderr", result.Stderr,
+			"stdout", result.Stdout,
+			"exit-code", result.ExitCode,
+		).Code(fmt.Sprintf("exited with %d", result.ExitCode)).Errorf(result.Error.Error())
 	}
 
 	return &result, nil

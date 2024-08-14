@@ -8,42 +8,42 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
-	"github.com/samber/lo"
 	"gorm.io/gorm"
 )
 
-// CheckAgentsExist returns all the non existing agents from the given names.
-func CheckAgentsExist(ctx context.Context, names ...string) ([]string, error) {
-	var found []string
-	err := ctx.DB().Model(&models.Agent{}).Select("name").
-		Where("name IN ?", names).
-		Find(&found).Error
-	if err != nil {
-		return nil, err
+func FindFirstAgent(ctx context.Context, names ...string) (*models.Agent, error) {
+	for _, name := range names {
+		agent, err := FindAgent(ctx, name)
+		if err != nil {
+			return nil, err
+		}
+		if agent != nil {
+			return agent, nil
+		}
 	}
-
-	diff, _ := lo.Difference(names, found)
-	return diff, nil
+	return nil, nil
 }
 
 func FindAgent(ctx context.Context, name string) (*models.Agent, error) {
-	var agent models.Agent
-	err := ctx.DB().Where("name = ?", name).First(&agent).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil
+	var t []models.Agent
+	if id, err := uuid.Parse(name); err == nil {
+		if err := ctx.DB().Where("id = ?", id).Find(&t).Error; err != nil {
+			return nil, err
 		}
-
-		return nil, err
+		if len(t) > 0 {
+			return &t[0], nil
+		}
 	}
-
-	return &agent, nil
+	err := ctx.DB().Where("name = ?", name).Find(&t).Error
+	if len(t) > 0 {
+		return &t[0], nil
+	}
+	return nil, err
 }
 
+// Deprecated used FindAgent
 func GetAgent(ctx context.Context, name string) (*models.Agent, error) {
-	var t models.Agent
-	tx := ctx.DB().Where("name = ?", name).First(&t)
-	return &t, tx.Error
+	return FindAgent(ctx, name)
 }
 
 func createAgent(ctx context.Context, name string) (*models.Agent, error) {

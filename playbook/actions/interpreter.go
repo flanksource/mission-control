@@ -2,13 +2,13 @@ package actions
 
 import (
 	"bufio"
-	"fmt"
 	"os/exec"
 	"runtime"
 	"strings"
 
 	"github.com/flanksource/duty/context"
 	"github.com/samber/lo"
+	"github.com/samber/oops"
 )
 
 var DefaultInterpreter string
@@ -50,7 +50,7 @@ func DetectInterpreterFromShebang(script string) (string, error) {
 			return strings.TrimSpace(firstLine[2:]), nil
 		}
 	}
-	return "", fmt.Errorf("no shebang line found")
+	return "", oops.Errorf("no shebang line found")
 }
 
 // DetectDefaultInterpreter detects the default interpreter based on the OS.

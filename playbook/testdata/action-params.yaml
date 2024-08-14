@@ -1,16 +1,22 @@
-parameters:
-  - name: path
-    label: The path
-  - name: my_config
-    label: The config
-    type: config
-  - name: my_component
-    label: The component
-    type: component
-actions:
-  - name: write config name to the file
-    exec:
-      script: echo {{.params.my_config.config_class}} > {{.params.path}}
-  - name: "append component name to the same file "
-    exec:
-      script: echo {{.params.my_component.name}} >> {{.params.path}}
+# yaml-language-server: $schema=../../config/schemas/playbook.schema.json
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: action-params
+spec:
+  parameters:
+    - name: path
+      label: The path
+    - name: my_config
+      label: The config
+      type: config
+    - name: my_component
+      label: The component
+      type: component
+  actions:
+    - name: write config name to the file
+      exec:
+        script: echo {{.params.my_config.config_class}} > {{.params.path}}
+    - name: "append component name to the same file "
+      exec:
+        script: echo {{.params.my_component.name}} >> {{.params.path}}

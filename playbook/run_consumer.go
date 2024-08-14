@@ -155,10 +155,9 @@ func getNextActionForAgent(db *gorm.DB) (*models.PlaybookActionAgentData, *model
 	query := `
 		SELECT playbook_action_agent_data.*
 		FROM playbook_action_agent_data
-		INNER JOIN playbook_run_actions on playbook_run_actions.id = playbook_action_agent_data.run_id
+		INNER JOIN playbook_run_actions on playbook_run_actions.id = playbook_action_agent_data.action_id
 		WHERE status = ?
 			AND scheduled_time <= NOW()
-			AND (agent_id IS NULL OR agent_id = ?)
 		ORDER BY scheduled_time
 		FOR UPDATE SKIP LOCKED
 		LIMIT 1
@@ -166,7 +165,7 @@ func getNextActionForAgent(db *gorm.DB) (*models.PlaybookActionAgentData, *model
 
 	var action []models.PlaybookActionAgentData
 
-	if err := db.Raw(query, models.PlaybookActionStatusWaiting, uuid.Nil).Find(&action).Error; err != nil {
+	if err := db.Raw(query, models.PlaybookActionStatusWaiting).Find(&action).Error; err != nil {
 		return nil, nil, oops.Tags("db").Wrap(err)
 	}
 	if len(action) == 0 {
@@ -204,7 +203,7 @@ func ActionAgentConsumer(ctx context.Context) (int, error) {
 
 	ctx.Logger = ctx.Logger.WithSkipReportLevel(-1)
 
-	err := ctx.Transaction("agent-runner", func(ctx context.Context, _ trace.Span) error {
+	err := ctx.Transaction(func(ctx context.Context, _ trace.Span) error {
 		action, run, err := getNextActionForAgent(ctx.DB())
 		if err != nil {
 			return err
@@ -212,14 +211,14 @@ func ActionAgentConsumer(ctx context.Context) (int, error) {
 		if action == nil {
 			return nil
 		}
-		ctx = ctx.WithObject(action, run)
+		ctx = ctx.WithObject(run, action)
 		spec, err := getActionSpec(ctx, *action, run)
 		if err != nil {
 			return oops.Wrap(err)
 		}
 
 		return runner.ExecuteAndSaveAction(ctx, spec.PlaybookID, run, *spec)
-	})
+	}, "agent-runner")
 
 	if err == nil {
 		return 0, err
@@ -244,7 +243,7 @@ func failOrRetryRun(tx *gorm.DB, run *models.PlaybookRun, err error) error {
 func ActionConsumer(ctx context.Context) (int, error) {
 	ctx.Logger = ctx.Logger.WithSkipReportLevel(-1)
 
-	err := ctx.Transaction("", func(ctx context.Context, _ trace.Span) error {
+	err := ctx.Transaction(func(ctx context.Context, _ trace.Span) error {
 		tx := ctx.DB()
 		action, err := getNextAction(tx)
 		if err != nil {
@@ -266,7 +265,7 @@ func ActionConsumer(ctx context.Context) (int, error) {
 		}
 
 		return nil
-	})
+	}, "action-consumer")
 
 	if err == nil {
 		return 0, nil
@@ -277,7 +276,7 @@ func ActionConsumer(ctx context.Context) (int, error) {
 // RunConsumer picks up scheduled runs and schedules the
 // execution of the next action on that run.
 func RunConsumer(ctx context.Context) (int, error) {
-	err := ctx.Transaction("", func(ctx context.Context, _ trace.Span) error {
+	err := ctx.Transaction(func(ctx context.Context, _ trace.Span) error {
 		tx := ctx.DB()
 
 		query := `
@@ -297,13 +296,12 @@ func RunConsumer(ctx context.Context) (int, error) {
 
 			return ctx.Oops("db").Wrap(err)
 		}
-
 		ctx = ctx.WithObject(run)
 		if err := runner.ScheduleRun(ctx, run); err != nil {
 			return failOrRetryRun(tx, &run, err)
 		}
 		return nil
-	})
+	}, "action-scheduler")
 
 	if err == nil {
 		return 0, nil

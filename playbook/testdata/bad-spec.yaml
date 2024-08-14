@@ -1,7 +1,11 @@
----
-actions:
-  - name: Create the file
-    delay: 'bad delay expression'
-    exec:
-      script: echo -n '{{.config.config_class}}' > {{.params.path}}
- 
+# yaml-language-server: $schema=../../config/schemas/playbook.schema.json
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: bad-spec
+spec:
+  actions:
+    - name: Create the file
+      delay: "bad delay expression"
+      exec:
+        script: echo -n '{{.config.config_class}}' > {{.params.path}}

@@ -8,6 +8,7 @@ import (
 	"crypto/subtle"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -19,17 +20,60 @@ import (
 	"github.com/MicahParks/keyfunc/v2"
 	durationutils "github.com/flanksource/commons/duration"
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty/api"
+	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/models"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/labstack/echo/v4"
 	"github.com/patrickmn/go-cache"
 
+	mcApi "github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/playbook/actions"
 )
 
 const svixWebhookSecretPrefix = "whsec_"
 
 var jwksCache = cache.New(10*time.Minute, time.Hour)
+
+func HandleWebhook(c echo.Context) error {
+	ctx := c.Request().Context().(context.Context).WithUser(&models.Person{ID: utils.Deref(mcApi.SystemUserID)})
+
+	var path = c.Param("webhook_path")
+	playbook, err := db.FindPlaybookByWebhookPath(ctx, path)
+	if err != nil {
+		return dutyAPI.WriteError(c, err)
+	} else if playbook == nil {
+		return c.JSON(http.StatusNotFound, dutyAPI.HTTPError{Err: "not found", Message: fmt.Sprintf("playbook(webhook_path=%s) not found", path)})
+	}
+
+	var spec v1.PlaybookSpec
+	if err := json.Unmarshal(playbook.Spec, &spec); err != nil {
+		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Err: err.Error(), Message: "playbook has an invalid spec"})
+	}
+
+	if err := authenticateWebhook(ctx, c.Request(), spec.On.Webhook.Authentication); err != nil {
+		return dutyAPI.WriteError(c, err)
+	}
+
+	var runRequest RunParams
+	whr, err := actions.NewWebhookRequest(c)
+	if err != nil {
+		return dutyAPI.WriteError(c, fmt.Errorf("error parsing webhook request data: %w", err))
+	}
+
+	runRequest.ID = playbook.ID
+	runRequest.Request = whr
+
+	if _, err = Run(ctx, playbook, runRequest); err != nil {
+		return dutyAPI.WriteError(c, fmt.Errorf("failed to save playbook run: %w", err))
+	}
+
+	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{Message: "ok"})
+}
 
 func authenticateWebhook(ctx context.Context, r *http.Request, auth *v1.PlaybookEventWebhookAuth) error {
 	if auth.Basic != nil {

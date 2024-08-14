@@ -11,7 +11,6 @@ import (
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
-	"github.com/google/uuid"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -367,7 +366,7 @@ type PlaybookAction struct {
 	// timeout is the parsed Timeout
 	timeout *time.Duration `json:"-" yaml:"-"`
 
-	PlaybookID uuid.UUID `json:"-" yaml:"-"`
+	PlaybookID string `json:"-" yaml:"-"`
 
 	// Name of the action
 	Name string `yaml:"name" json:"name"`

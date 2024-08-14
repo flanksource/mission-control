@@ -1,4 +1,4 @@
-package playbook
+package runner
 
 import (
 	"fmt"
