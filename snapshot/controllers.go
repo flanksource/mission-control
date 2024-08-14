@@ -8,8 +8,11 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/collections"
+	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
+	echoSrv "github.com/flanksource/incident-commander/echo"
+	"github.com/flanksource/incident-commander/rbac"
 	"github.com/labstack/echo/v4"
 )
 
@@ -24,6 +27,18 @@ type SnapshotContext struct {
 	LogStart  string
 	LogEnd    string
 	LogFormat string
+}
+
+func init() {
+	echoSrv.RegisterRoutes(RegisterRoutes)
+}
+
+func RegisterRoutes(e *echo.Echo) {
+	logger.Infof("Registering /snapshot routes")
+
+	e.GET("/snapshot/topology/:id", Topology, rbac.Topology(rbac.ActionRead))
+	e.GET("/snapshot/incident/:id", Incident, rbac.Topology(rbac.ActionRead))
+	e.GET("/snapshot/config/:id", Config, rbac.Catalog(rbac.ActionRead))
 }
 
 func NewSnapshotContext(c echo.Context) SnapshotContext {

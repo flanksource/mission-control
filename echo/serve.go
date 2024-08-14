@@ -1,12 +1,14 @@
 package echo
 
 import (
+	gocontext "context"
 	"crypto/tls"
 	"fmt"
 	"net/http"
 	"net/url"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/flanksource/commons/http/middlewares"
 	"github.com/flanksource/commons/logger"
@@ -15,18 +17,11 @@ import (
 	"github.com/flanksource/duty/schema/openapi"
 	"github.com/flanksource/incident-commander/agent"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/artifacts"
 	"github.com/flanksource/incident-commander/auth"
-	"github.com/flanksource/incident-commander/catalog"
-	"github.com/flanksource/incident-commander/connection"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/logs"
-	"github.com/flanksource/incident-commander/notification"
-	"github.com/flanksource/incident-commander/playbook"
 	"github.com/flanksource/incident-commander/push"
 	"github.com/flanksource/incident-commander/rbac"
-	"github.com/flanksource/incident-commander/snapshot"
-	"github.com/flanksource/incident-commander/upstream"
 	"github.com/flanksource/incident-commander/utils"
 	"github.com/flanksource/incident-commander/vars"
 	"github.com/labstack/echo-contrib/echoprometheus"
@@ -52,6 +47,12 @@ var (
 	AllowedCORS []string
 )
 
+var handlers []func(e *echov4.Echo)
+
+func RegisterRoutes(fn func(e *echov4.Echo)) {
+	handlers = append(handlers, fn)
+}
+
 func New(ctx context.Context) *echov4.Echo {
 	e := echov4.New()
 	e.HideBanner = true
@@ -71,16 +72,28 @@ func New(ctx context.Context) *echov4.Echo {
 		DoNotUseRequestPathFor404: true,
 	}))
 
-	e.GET("/metrics", echoprometheus.NewHandlerWithConfig(echoprometheus.HandlerConfig{
-		Gatherer: prom.DefaultGatherer,
+	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
+		AllowCredentials: true,
+		AllowOrigins:     AllowedCORS,
 	}))
 
 	if ctx.Properties().On(true, "access.log") {
-		echoLogConfig := middleware.DefaultLoggerConfig
-		echoLogConfig.Skipper = telemetryURLSkipper
-
-		e.Use(middleware.LoggerWithConfig(echoLogConfig))
+		if logger.IsJsonLogs() {
+			switch v := logger.StandardLogger().(type) {
+			case logger.SlogLogger:
+				e.Use(NewSlogLogger(ctx, v.Logger))
+			default:
+				e.Use(NewHttpSingleLineLogger(ctx, telemetryURLSkipper))
+			}
+		} else if ctx.Properties().On(false, "access.log.debug") {
+			e.Use(NewHttpPrettyLogger(ctx))
+		} else {
+			e.Use(NewHttpSingleLineLogger(ctx, telemetryURLSkipper))
+		}
 	}
+
+	AddDebugHandlers(e)
+
 	e.Use(ServerCache)
 
 	e.GET("/kubeconfig", DownloadKubeConfig, rbac.Authorization(rbac.ObjectKubernetesProxy, rbac.ActionCreate))
@@ -89,17 +102,14 @@ func New(ctx context.Context) *echov4.Echo {
 	e.GET("/properties", Properties)
 	e.POST("/resources/search", SearchResources, rbac.Authorization(rbac.ObjectCatalog, rbac.ActionRead))
 
+	e.GET("/metrics", echoprometheus.NewHandlerWithConfig(echoprometheus.HandlerConfig{
+		Gatherer: prom.DefaultGatherer,
+	}))
+
 	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
 		AllowCredentials: true,
 		AllowOrigins:     AllowedCORS,
 	}))
-
-	e.GET("/event-log", func(c echov4.Context) error {
-		return c.JSON(http.StatusOK, map[string]any{
-			"notifications": notification.EventRing.Get(),
-			"playbooks":     playbook.EventRing.Get(),
-		})
-	}, rbac.Authorization(rbac.ObjectMonitor, rbac.ActionRead))
 
 	e.GET("/health", func(c echov4.Context) error {
 		return c.String(http.StatusOK, "OK")
@@ -113,7 +123,6 @@ func New(ctx context.Context) *echov4.Echo {
 	}
 
 	if vars.AuthMode != "" {
-		db.PostgresDBAnonRole = "postgrest_api"
 		if err := auth.Middleware(ctx, e); err != nil {
 			logger.Fatalf(err.Error())
 		}
@@ -126,10 +135,6 @@ func New(ctx context.Context) *echov4.Echo {
 	Forward(ctx, e, "/canary", api.CanaryCheckerPath, rbac.Canary(""))
 	// kratos performs its own auth
 	Forward(ctx, e, "/kratos", auth.KratosAPI)
-
-	e.GET("/snapshot/topology/:id", snapshot.Topology, rbac.Topology(rbac.ActionRead))
-	e.GET("/snapshot/incident/:id", snapshot.Incident, rbac.Topology(rbac.ActionRead))
-	e.GET("/snapshot/config/:id", snapshot.Config, rbac.Catalog(rbac.ActionRead))
 
 	e.POST("/auth/:id/update_state", auth.UpdateAccountState)
 	e.POST("/auth/:id/properties", auth.UpdateAccountProperties)
@@ -147,13 +152,11 @@ func New(ctx context.Context) *echov4.Echo {
 	}
 	e.GET("/schemas/*", echov4.WrapHandler(http.StripPrefix("/schemas/", schemaServer)))
 
-	upstream.RegisterRoutes(e)
-	catalog.RegisterRoutes(e)
+	ctx.Infof("Registering %d handlers", len(handlers))
+	for _, fn := range handlers {
+		fn(e)
+	}
 
-	artifacts.RegisterRoutes(e, "artifacts")
-
-	playbook.RegisterRoutes(e)
-	connection.RegisterRoutes(e)
 	e.POST("/agent/generate", agent.GenerateAgent, rbac.Authorization(rbac.ObjectAgent, rbac.ActionUpdate))
 	e.POST("/logs", logs.LogsHandler, rbac.Authorization(rbac.ObjectLogs, rbac.ActionRead))
 	return e
@@ -241,5 +244,26 @@ func ModifyKratosRequestHeaders(next echov4.HandlerFunc) echov4.HandlerFunc {
 			c.Request().Header.Del(echov4.HeaderAuthorization)
 		}
 		return next(c)
+	}
+}
+
+func Shutdown(e *echov4.Echo) {
+	ctx, cancel := gocontext.WithTimeout(gocontext.Background(), 1*time.Minute)
+	defer cancel()
+
+	if err := e.Shutdown(ctx); err != nil {
+		e.Logger.Fatal(err)
+	}
+}
+
+func Start(e *echov4.Echo, httpPort int) {
+	if err := e.Start(fmt.Sprintf(":%d", httpPort)); err != nil && err != http.ErrServerClosed {
+		e.Logger.Fatal(err)
+	}
+
+	listenAddr := fmt.Sprintf(":%d", httpPort)
+	logger.Infof("Listening on %s", listenAddr)
+	if err := e.Start(listenAddr); err != nil {
+		logger.Fatalf("Failed to start server: %v", err)
 	}
 }

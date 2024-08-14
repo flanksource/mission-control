@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/flanksource/commons/logger"
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/upstream"
@@ -14,7 +15,8 @@ import (
 
 	"github.com/flanksource/incident-commander/artifacts"
 	"github.com/flanksource/incident-commander/db"
-	"github.com/flanksource/incident-commander/playbook"
+	echoSrv "github.com/flanksource/incident-commander/echo"
+	"github.com/flanksource/incident-commander/playbook/runner"
 	"github.com/flanksource/incident-commander/rbac"
 )
 
@@ -22,7 +24,13 @@ var (
 	agentCache = cache.New(3*24*time.Hour, 12*time.Hour)
 )
 
+func init() {
+	logger.Infof("Adding /upstream routes")
+	echoSrv.RegisterRoutes(RegisterRoutes)
+}
+
 func RegisterRoutes(e *echo.Echo) {
+	logger.Infof("Registering /upstream routes")
 	upstreamGroup := e.Group("/upstream", rbac.Authorization(rbac.ObjectAgentPush, rbac.ActionUpdate), upstream.AgentAuthMiddleware(agentCache))
 	upstreamGroup.GET("/ping", upstream.PingHandler)
 	upstreamGroup.POST("/push", upstream.PushHandler)
@@ -41,7 +49,7 @@ func handlePlaybookActionRequest(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
 
 	agent := ctx.Agent()
-	response, err := playbook.GetActionForAgent(ctx, agent)
+	response, err := runner.GetActionForAgent(ctx, agent)
 	if err != nil {
 		return dutyAPI.WriteError(c, err)
 	}
