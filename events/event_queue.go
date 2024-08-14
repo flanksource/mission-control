@@ -1,20 +1,19 @@
 package events
 
 import (
-	"strconv"
 	"time"
 
-	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/postq"
+	"github.com/flanksource/duty/postq/pg"
 	"github.com/flanksource/incident-commander/utils"
-	"github.com/flanksource/postq"
-	"github.com/flanksource/postq/pg"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
 type asyncHandlerData struct {
-	fn           func(ctx context.Context, e postq.Events) postq.Events
+	fn           func(ctx context.Context, e models.Events) models.Events
 	batchSize    int
 	numConsumers int
 }
@@ -28,9 +27,9 @@ const (
 	DefaultEventLogSize = 20
 )
 
-type Handler func(ctx context.Context, e postq.Event) error
+type Handler func(ctx context.Context, e models.Event) error
 
-var SyncHandlers = utils.SyncedMap[string, func(ctx context.Context, e postq.Event) error]{}
+var SyncHandlers = utils.SyncedMap[string, func(ctx context.Context, e models.Event) error]{}
 var AsyncHandlers = utils.SyncedMap[string, asyncHandlerData]{}
 
 var consumers []*postq.PGConsumer
@@ -40,7 +39,7 @@ func Register(fn func(ctx context.Context)) {
 	registers = append(registers, fn)
 }
 
-func RegisterAsyncHandler(fn func(ctx context.Context, e postq.Events) postq.Events, batchSize int, consumers int, events ...string) {
+func RegisterAsyncHandler(fn func(ctx context.Context, e models.Events) models.Events, batchSize int, consumers int, events ...string) {
 	for _, event := range events {
 		AsyncHandlers.Append(event, asyncHandlerData{
 			fn:           fn,
@@ -57,13 +56,16 @@ func RegisterSyncHandler(fn Handler, events ...string) {
 }
 
 func ConsumeAll(ctx context.Context) {
+	ctx = ctx.WithName("events")
 	ctx.Debugf("consuming all events")
 	for _, consumer := range consumers {
 		consumer.ConsumeUntilEmpty(ctx)
 	}
+
 }
 
 func StartConsumers(ctx context.Context) {
+	log := ctx.Logger.Named("events")
 	for _, fn := range registers {
 		fn(ctx)
 	}
@@ -72,10 +74,8 @@ func StartConsumers(ctx context.Context) {
 	notifyRouter := pg.NewNotifyRouter()
 	go notifyRouter.Run(ctx, eventQueueUpdateChannel)
 
-	properties := ctx.Properties()
-
-	SyncHandlers.Each(func(event string, handlers []func(ctx context.Context, e postq.Event) error) {
-		logger.Tracef("Registering %d sync event handlers for %s", len(handlers), event)
+	SyncHandlers.Each(func(event string, handlers []func(ctx context.Context, e models.Event) error) {
+		log.Tracef("Registering %d sync event handlers for %s", len(handlers), event)
 		consumer := postq.SyncEventConsumer{
 			WatchEvents: []string{event},
 			Consumers:   postq.SyncHandlers(handlers...),
@@ -85,7 +85,7 @@ func StartConsumers(ctx context.Context) {
 		}
 
 		if ec, err := consumer.EventConsumer(); err != nil {
-			logger.Fatalf("failed to create event consumer: %s", err)
+			log.Fatalf("failed to create event consumer: %s", err)
 		} else {
 			pgsyncNotifyChannel := notifyRouter.RegisterRoutes(event)
 			consumers = append(consumers, ec)
@@ -94,42 +94,35 @@ func StartConsumers(ctx context.Context) {
 	})
 
 	AsyncHandlers.Each(func(event string, handlers []asyncHandlerData) {
-		logger.Tracef("Registering %d async event handlers for %v", len(handlers), event)
+		log.Tracef("Registering %d async event handlers for %v", len(handlers), event)
 		for _, handler := range handlers {
 			h := handler.fn
-			batchSize := handler.batchSize
-			var err error
-			if size := properties[event+".batchSize"]; size != "" {
-				batchSize, err = strconv.Atoi(size)
-				if err != nil {
-					logger.Errorf("%s.batchSize of %s is not a number", event, size)
-				}
-			}
+			batchSize := ctx.Properties().Int(event+".batchSize", handler.batchSize)
 
 			consumer := postq.AsyncEventConsumer{
 				WatchEvents: []string{event},
 				BatchSize:   batchSize,
-				Consumer: func(_ctx postq.Context, e postq.Events) postq.Events {
+				Consumer: func(_ctx context.Context, e models.Events) models.Events {
 					c := ctx
-					if trace := properties[event+".trace"]; trace == "true" {
+					if ctx.Properties().Off(event+".trace", false) {
 						c = c.WithTrace()
 					}
-					if debug := properties[event+".debug"]; debug == "true" {
+					if ctx.Properties().Off(event+".debug", false) {
 						c = c.WithDebug()
 					}
 					return h(c, e)
 				},
 				ConsumerOption: &postq.ConsumerOption{
 					NumConsumers: handler.numConsumers,
-					ErrorHandler: func(ctx postq.Context, err error) bool {
-						logger.Errorf("error consuming event(%s): %v", event, err)
+					ErrorHandler: func(ctx context.Context, err error) bool {
+						log.Errorf("error consuming event(%s): %v", event, err)
 						return false // don't retry here. Event queue has its own retry mechanism.
 					},
 				},
 			}
 
 			if ec, err := consumer.EventConsumer(); err != nil {
-				logger.Fatalf("failed to create event consumer: %s", err)
+				log.Fatalf("failed to create event consumer: %s", err)
 			} else {
 				pgasyncNotifyChannel := notifyRouter.RegisterRoutes(event)
 				consumers = append(consumers, ec)
@@ -150,8 +143,8 @@ var EventQueueOnConflictClause = clause.OnConflict{
 	}),
 }
 
-func defaultLoggerErrorHandler(ctx postq.Context, err error) bool {
-	logger.Errorf("error consuming: %v", err)
+func defaultLoggerErrorHandler(ctx context.Context, err error) bool {
+	ctx.Errorf("error consuming: %v", err)
 	time.Sleep(time.Second * 5)
 	return true
 }

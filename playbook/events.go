@@ -18,7 +18,6 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/logs"
-	"github.com/flanksource/postq"
 	"github.com/patrickmn/go-cache"
 
 	"github.com/flanksource/incident-commander/api"
@@ -112,7 +111,7 @@ type playbookScheduler struct {
 	Ring *events.EventRing
 }
 
-func (t *playbookScheduler) Handle(ctx context.Context, event postq.Event) error {
+func (t *playbookScheduler) Handle(ctx context.Context, event models.Event) error {
 	specEvent, ok := eventToSpecEvent[event.Name]
 	if !ok {
 		return nil
@@ -265,7 +264,7 @@ outer:
 	return false, nil
 }
 
-func onApprovalUpdated(ctx context.Context, event postq.Event) error {
+func onApprovalUpdated(ctx context.Context, event models.Event) error {
 	playbookID := event.Properties["id"]
 
 	var playbook models.Playbook
@@ -285,7 +284,7 @@ func onApprovalUpdated(ctx context.Context, event postq.Event) error {
 	return db.UpdatePlaybookRunStatusIfApproved(ctx, playbookID, *spec.Approval)
 }
 
-func onPlaybookRunNewApproval(ctx context.Context, event postq.Event) error {
+func onPlaybookRunNewApproval(ctx context.Context, event models.Event) error {
 	runID := event.Properties["run_id"]
 
 	var run models.PlaybookRun

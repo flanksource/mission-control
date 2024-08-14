@@ -3,7 +3,7 @@ package events
 import (
 	"sync"
 
-	"github.com/flanksource/postq"
+	"github.com/flanksource/duty/models"
 )
 
 type EventRing struct {
@@ -20,7 +20,7 @@ func NewEventRing(size int) *EventRing {
 	}
 }
 
-func (t *EventRing) Add(event postq.Event, env map[string]any) {
+func (t *EventRing) Add(event models.Event, env map[string]any) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
