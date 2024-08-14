@@ -11,8 +11,8 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
-	"github.com/samber/lo"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -168,42 +168,49 @@ func FindPlaybookByWebhookPath(ctx context.Context, path string) (*models.Playbo
 }
 
 func PersistPlaybookFromCRD(ctx context.Context, obj *v1.Playbook) error {
-	specJSON, err := json.Marshal(obj.Spec)
+	_, err := SavePlaybook(ctx, obj)
+	return err
+}
+
+func SavePlaybook(ctx context.Context, obj *v1.Playbook) (*models.Playbook, error) {
+	playbook, err := obj.ToModel()
 	if err != nil {
-		return err
+		return nil, err
 	}
+
+	playbook.Source = models.SourceCRD
 
 	tx := ctx.DB().Begin()
 	defer tx.Rollback()
 
+	if playbook.ID == uuid.Nil {
+		var _playbook models.Playbook
+		if err := ctx.DB().Model(_playbook).Where("name = ?", playbook.Name).FirstOrInit(&_playbook).Error; err != nil {
+			return nil, err
+		}
+
+		playbook.ID = _playbook.ID
+	}
+
 	if obj.Spec.On != nil && obj.Spec.On.Webhook != nil && obj.Spec.On.Webhook.Path != "" {
-		playbook, err := FindPlaybookByWebhookPath(ctx, obj.Spec.On.Webhook.Path)
+		existing, err := FindPlaybookByWebhookPath(ctx, obj.Spec.On.Webhook.Path)
 		if err != nil {
-			return err
-		} else if playbook != nil {
+			return nil, err
+		} else if existing != nil && playbook.ID != existing.ID {
 			// TODO: We can move this unique constraint handling to DB once we upgrade to Postgres 15+
-			if playbook.ID.String() != string(obj.GetUID()) {
-				return dutyAPI.Errorf(dutyAPI.ECONFLICT, "Playbook with webhook path %s already exists", obj.Spec.On.Webhook.Path)
-			}
+			return nil, dutyAPI.Errorf(dutyAPI.ECONFLICT, "Playbook with webhook path %s already exists", obj.Spec.On.Webhook.Path)
 		}
 	}
 
-	name, _ := lo.Coalesce(obj.Spec.Title, obj.Name)
-	dbObj := models.Playbook{
-		ID:        uuid.MustParse(string(obj.GetUID())),
-		Name:      name,
-		Namespace: obj.Namespace,
-		Spec:      specJSON,
-		Source:    models.SourceCRD,
-		CreatedBy: api.SystemUserID,
-		Category:  obj.Spec.Category,
+	if playbook.CreatedBy == nil {
+		playbook.CreatedBy = api.SystemUserID
 	}
 
-	if err := tx.Save(&dbObj).Error; err != nil {
-		return err
+	if err := tx.Clauses(clause.Returning{}).Save(&playbook).Error; err != nil {
+		return nil, err
 	}
 
-	return tx.Commit().Error
+	return playbook, tx.Commit().Error
 }
 
 func DeletePlaybook(ctx context.Context, id string) error {

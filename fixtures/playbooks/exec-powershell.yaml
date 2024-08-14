@@ -1,0 +1,26 @@
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: exec-powershell
+  annotations:
+    trace: "true"
+spec:
+  configs:
+    - types:
+        - Kubernetes::Pod
+  actions:
+    - name: Powershell
+      exec:
+        script: |
+          #! pwsh
+          $env:NO_COLOR = $true
+          @{item= "{{.config.name}}"} | ConvertTo-JSON
+    - name: delims
+      exec:
+        script: |
+          #! pwsh
+          # gotemplate: left-delim=$[[ right-delim=]]
+          $message = "$[[.config.name]]"
+          Write-Host "{{  $message }}"
+          Write-Host  @{ Number = 1; Shape = "Square"; Color = "Blue"} | ConvertTo-JSON

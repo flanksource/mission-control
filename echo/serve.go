@@ -54,6 +54,7 @@ func RegisterRoutes(fn func(e *echov4.Echo)) {
 }
 
 func New(ctx context.Context) *echov4.Echo {
+	ctx.ClearCache()
 	e := echov4.New()
 	e.HideBanner = true
 
@@ -79,8 +80,11 @@ func New(ctx context.Context) *echov4.Echo {
 
 	if ctx.Properties().On(true, "access.log") {
 		if logger.IsJsonLogs() {
+			ctx.Infof("Enable JSON access logs")
 			switch v := logger.StandardLogger().(type) {
 			case logger.SlogLogger:
+				e.Use(NewSlogLogger(ctx, v.Logger))
+			case *logger.SlogLogger:
 				e.Use(NewSlogLogger(ctx, v.Logger))
 			default:
 				e.Use(NewHttpSingleLineLogger(ctx, telemetryURLSkipper))

@@ -1,4 +1,4 @@
-package playbook
+package runner
 
 import (
 	"github.com/flanksource/duty/context"

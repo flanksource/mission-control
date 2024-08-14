@@ -96,3 +96,12 @@ func (t *TemplateEnv) AsMap() map[string]any {
 
 	return m
 }
+
+func (t *TemplateEnv) String() string {
+	b, err := json.Marshal(t.AsMap())
+	if err != nil {
+		return ""
+	}
+
+	return string(b)
+}

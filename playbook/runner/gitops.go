@@ -1,8 +1,9 @@
-package playbook
+package runner
 
 import (
 	"encoding/json"
 	"fmt"
+
 	"gopkg.in/yaml.v3"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"

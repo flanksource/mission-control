@@ -1,0 +1,23 @@
+# yaml-language-server: $schema=../../config/schemas/playbook.schema.json
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: exec-powershell
+spec:
+  configs:
+    - types:
+        - Kubernetes::Pod
+  actions:
+    - name: Powershell
+      exec:
+        script: >+
+          #! pwsh
+          Write-Host @{item="{{.config.name}}"} | ConvertTo-JSON
+    - name: delims
+      if: always()
+      exec:
+        script: >
+          #! pwsh
+          # gotemplate: left-delim=$[[ right-delim=]]
+          $message = "$[[.config.name]]"
+          Write-Host @{item=$message} | ConvertTo-JSON

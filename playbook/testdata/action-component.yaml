@@ -1,9 +1,15 @@
-description: write component name to file
-components:
-  - types:
-      - Entity
-    labelSelector: telemetry=enabled
-actions:
-  - name: write component name to a file
-    exec:
-      script: echo name={{.component.name}}  && printf {{.component.name}} > /tmp/{{.component.name}}.txt
+# yaml-language-server: $schema=../../config/schemas/playbook.schema.json
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: action-components
+spec:
+  description: write component name to file
+  components:
+    - types:
+        - Entity
+      labelSelector: telemetry=enabled
+  actions:
+    - name: write component name to a file
+      exec:
+        script: echo name={{.component.name}}  && printf {{.component.name}} > /tmp/{{.component.name}}.txt

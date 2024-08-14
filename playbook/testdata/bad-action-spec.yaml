@@ -1,6 +1,10 @@
----
-actions:
-  - name: Create the file
-    exec:
-      script: echo -n '{{bad-template}}' > {{.params.path}}
- 
+# yaml-language-server: $schema=../../config/schemas/playbook.schema.json
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: bad-action-sepc
+spec:
+  actions:
+    - name: Create the file
+      exec:
+        script: echo -n '{{bad-template}}' > {{.params.path}}

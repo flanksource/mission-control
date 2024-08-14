@@ -7,9 +7,12 @@ import (
 
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/job"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/upstream"
+	"github.com/flanksource/incident-commander/playbook/runner"
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // PushPlaybookActions pushes unpushed playbook actions to the upstream
@@ -49,62 +52,61 @@ func PushPlaybookActions(ctx context.Context, upstreamConfig upstream.UpstreamCo
 
 // PullPlaybookAction pulls any runnable Playbook Action from the upstream
 // and simply saves it.
-func PullPlaybookAction(ctx context.Context, upstreamConfig upstream.UpstreamConfig) (bool, error) {
+func PullPlaybookAction(ctx job.JobRuntime, upstreamConfig upstream.UpstreamConfig) error {
 	client := upstream.NewUpstreamClient(upstreamConfig)
+
+	oops := ctx.Oops()
 
 	req := client.R(ctx).QueryParam(upstream.AgentNameQueryParam, upstreamConfig.AgentName)
 	resp, err := req.Get("playbook-action")
 	if err != nil {
-		return false, fmt.Errorf("error pushing to upstream: %w", err)
+		return oops.Wrapf(err, "error pushing to upstream")
 	}
 	defer resp.Body.Close()
 
 	if !resp.IsOK() {
 		respBody, _ := io.ReadAll(io.LimitReader(resp.Body, 200))
-		return false, fmt.Errorf("upstream server returned error status[%d]: %s", resp.StatusCode, string(respBody))
+		return oops.Hint(string(respBody)).Errorf("upstream returned code=%d", resp.StatusCode)
 	}
 
-	var response ActionForAgent
+	var response runner.ActionForAgent
 	if err := resp.Into(&response); err != nil {
-		return false, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid response: %v", err)
+		return oops.Code(dutyAPI.EINVALID).Wrapf(err, "invalid response")
 	}
 
 	if response.Action.ID == uuid.Nil {
-		return false, nil
+		return nil
 	}
 
-	tx := ctx.DB().Begin()
-	if tx.Error != nil {
-		return false, tx.Error
-	}
-	defer tx.Rollback()
+	err = ctx.Transaction(func(ctx context.Context, _ trace.Span) error {
+		// Don't save playbook_run_id to avoid foreign key constraint
+		if err := ctx.DB().Omit("playbook_run_id").Save(&response.Action).Error; err != nil {
+			return oops.Wrap(err)
+		}
 
-	ctx = ctx.WithDB(tx, ctx.Pool())
+		actionData := models.PlaybookActionAgentData{
+			ActionID:   response.Action.ID,
+			PlaybookID: response.Run.PlaybookID,
+			RunID:      response.Run.ID,
+		}
 
-	// Don't save playbook_run_id to avoid foreign key constraint
-	if err := ctx.DB().Omit("playbook_run_id").Save(&response.Action).Error; err != nil {
-		return false, fmt.Errorf("failed to save playbook action: %w", err)
-	}
+		actionData.Spec, err = json.Marshal(response.ActionSpec)
+		if err != nil {
+			return ctx.Oops().Wrap(err)
+		}
 
-	actionData := models.PlaybookActionAgentData{
-		ActionID:   response.Action.ID,
-		PlaybookID: response.Run.PlaybookID,
-		RunID:      response.Run.ID,
-	}
+		actionData.Env, err = json.Marshal(response.TemplateEnv)
+		if err != nil {
+			return ctx.Oops().Wrap(err)
+		}
+		return ctx.Oops("db").Wrap(ctx.DB().Create(&actionData).Error)
+	}, "save_action")
 
-	actionData.Spec, err = json.Marshal(response.ActionSpec)
-	if err != nil {
-		return false, fmt.Errorf("failed to marshal action spec: %w", err)
-	}
-
-	actionData.Env, err = json.Marshal(response.TemplateEnv)
-	if err != nil {
-		return false, fmt.Errorf("failed to marshal action template env: %w", err)
-	}
-
-	if err := ctx.DB().Create(&actionData).Error; err != nil {
-		return false, fmt.Errorf("failed to save playbook action data for the agent: %w", err)
+	if err == nil {
+		ctx.History.IncrSuccess()
+	} else {
+		ctx.History.AddError(err.Error())
 	}
 
-	return true, tx.Commit().Error
+	return err
 }

@@ -3,39 +3,84 @@ package playbook
 import (
 	"encoding/json"
 	"fmt"
-	"time"
+	"os"
 
 	"github.com/flanksource/commons/collections"
+	"github.com/flanksource/commons/logger"
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
-	"github.com/patrickmn/go-cache"
+	"github.com/samber/lo"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/playbook/runner"
+	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
 )
 
-var (
-	lastResultCache = cache.New(time.Minute*15, time.Minute*30)
-)
+type PlaybookSummary struct {
+	Playbook models.Playbook            `json:"playbook,omitempty"`
+	Run      models.PlaybookRun         `json:"run,omitempty"`
+	Actions  []models.PlaybookRunAction `json:"actions,omitempty"`
+}
+
+func GetPlaybookStatus(ctx context.Context, runId uuid.UUID) (PlaybookSummary, error) {
+	var summary = PlaybookSummary{}
+	run, err := models.PlaybookRun{ID: runId}.Load(ctx.DB())
+	if err != nil {
+		return summary, err
+	} else {
+		summary.Run = *run
+	}
+
+	playbook, err := models.Playbook{ID: run.PlaybookID}.Load(ctx.DB())
+	if err != nil {
+		return summary, err
+	} else {
+		summary.Playbook = *playbook
+	}
+
+	actions, err := run.GetActions(ctx.DB())
+	if err != nil {
+		return summary, err
+	} else {
+		summary.Actions = actions
+	}
+
+	return summary, nil
+}
+
+func CreateOrSaveFromFile(ctx context.Context, file string) (*models.Playbook, error) {
+	var spec v1.Playbook
+
+	manifest, err := os.ReadFile(file)
+	if err != nil {
+		return nil, err
+	}
+
+	err = yamlutil.Unmarshal(manifest, &spec)
+	if err != nil {
+		return nil, err
+	}
+
+	return db.SavePlaybook(ctx, &spec)
+}
 
 // validateAndSavePlaybookRun creates and saves a run from a run request after validating the run parameters.
-func validateAndSavePlaybookRun(ctx context.Context, playbook *models.Playbook, req RunParams) (*models.PlaybookRun, error) {
+func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models.PlaybookRun, error) {
 	var spec v1.PlaybookSpec
 	if err := json.Unmarshal(playbook.Spec, &spec); err != nil {
 		return nil, err
 	}
+	ctx = ctx.WithObject(playbook, req)
 
-	if err := req.validateParams(spec.Parameters); err != nil {
-		return nil, dutyAPI.Errorf(dutyAPI.EINVALID, err.Error())
-	}
-
-	ctx = ctx.WithNamespace(playbook.Namespace)
+	ctx = ctx.WithLoggingValues("req", req)
+	ctx.Infof("running \n%v\n", logger.Pretty(req))
 
 	run := models.PlaybookRun{
 		PlaybookID: playbook.ID,
@@ -66,23 +111,28 @@ func validateAndSavePlaybookRun(ctx context.Context, playbook *models.Playbook, 
 	if req.Request != nil {
 		whr, err := collections.StructToJSON(req.Request)
 		if err != nil {
-			return nil, fmt.Errorf("error marshalling webhook request to json: %w", err)
+			return nil, ctx.Oops().Wrap(err)
 		}
 		var whrMap map[string]any
 		if err := json.Unmarshal([]byte(whr), &whrMap); err != nil {
-			return nil, fmt.Errorf("error unmarshalling webhook request from json: %w", err)
+			return nil, ctx.Oops().Wrap(err)
 		}
 		run.Request = whrMap
 	}
 
-	templateEnv, err := prepareTemplateEnv(ctx, *playbook, run)
+	templateEnv, err := runner.CreateTemplateEnv(ctx, playbook, &run)
 	if err != nil {
-		return nil, fmt.Errorf("failed to prepare template env: %w", err)
+		return nil, ctx.Oops().Wrap(err)
 	}
 
 	if err := req.setDefaults(ctx, spec, templateEnv); err != nil {
-		return nil, fmt.Errorf("failed to set defaults: %v", err)
+		return nil, ctx.Oops().Wrap(err)
 	}
+
+	if err := req.validateParams(spec.Parameters); err != nil {
+		return nil, ctx.Oops().Wrap(err)
+	}
+
 	run.Parameters = types.JSONStringMap{}
 
 	for k, v := range req.Params {
@@ -90,12 +140,12 @@ func validateAndSavePlaybookRun(ctx context.Context, playbook *models.Playbook, 
 	}
 
 	// Check playbook filters
-	if err := checkPlaybookFilter(ctx, spec, templateEnv); err != nil {
+	if err := runner.CheckPlaybookFilter(ctx, spec, templateEnv); err != nil {
 		return nil, err
 	}
 
 	if err := savePlaybookRun(ctx, playbook, &run); err != nil {
-		return nil, fmt.Errorf("failed to create playbook run: %v", err)
+		return nil, ctx.Oops().Wrapf(err, "failed to create playbook run")
 	}
 
 	if err := saveRunAsConfigChange(ctx, playbook, run, req.Params); err != nil {
@@ -111,7 +161,7 @@ func saveRunAsConfigChange(ctx context.Context, playbook *models.Playbook, run m
 	}
 
 	change := models.ConfigChange{
-		ExternalChangeId: uuid.NewString(),
+		ExternalChangeID: lo.ToPtr(uuid.NewString()),
 		Severity:         models.SeverityInfo,
 		ConfigID:         run.ConfigID.String(),
 		ChangeType:       fmt.Sprintf("Playbook%s", cases.Title(language.English).String(string(run.Status))),
@@ -123,7 +173,7 @@ func saveRunAsConfigChange(ctx context.Context, playbook *models.Playbook, run m
 	case models.PlaybookRunStatusScheduled:
 		change.Severity = models.SeverityInfo
 		change.ChangeType = "PlaybookScheduled"
-		change.ExternalChangeId = run.ID.String()
+		change.ExternalChangeID = lo.ToPtr(run.ID.String())
 
 		details := map[string]any{
 			"parameters": parameters,
@@ -140,7 +190,7 @@ func saveRunAsConfigChange(ctx context.Context, playbook *models.Playbook, run m
 		change.Severity = models.SeverityInfo
 
 	case models.PlaybookRunStatusCompleted:
-                change.ChangeType = "PlaybookCompleted"
+		change.ChangeType = "PlaybookCompleted"
 		change.Severity = models.SeverityLow
 
 	case models.PlaybookRunStatusFailed:
@@ -155,23 +205,25 @@ func saveRunAsConfigChange(ctx context.Context, playbook *models.Playbook, run m
 func savePlaybookRun(ctx context.Context, playbook *models.Playbook, run *models.PlaybookRun) error {
 	tx := ctx.DB().Begin()
 	if tx.Error != nil {
-		return tx.Error
+		return ctx.Oops("db").Wrap(tx.Error)
 	}
 	defer tx.Rollback()
 
 	ctx = ctx.WithDB(tx, ctx.Pool())
 
 	if err := ctx.DB().Create(run).Error; err != nil {
-		return err
+		return ctx.Oops("db").Wrap(err)
 	}
 
-	// Attempt to auto approve run
-	if err := approveRun(ctx, playbook, run.ID); err != nil {
-		switch dutyAPI.ErrorCode(err) {
-		case dutyAPI.EFORBIDDEN, dutyAPI.EINVALID:
-			// ignore these errors
-		default:
-			return fmt.Errorf("error while attempting to auto approve run: %w", err)
+	if requiresApproval(playbook) {
+		// Attempt to auto approve run
+		if err := approveRun(ctx, playbook, run.ID); err != nil {
+			switch dutyAPI.ErrorCode(err) {
+			case dutyAPI.EFORBIDDEN, dutyAPI.EINVALID:
+				// ignore these errors
+			default:
+				return ctx.Oops().Errorf("error while attempting to auto approve run: %w", err)
+			}
 		}
 	}
 
@@ -181,78 +233,35 @@ func savePlaybookRun(ctx context.Context, playbook *models.Playbook, run *models
 func ListPlaybooksForConfig(ctx context.Context, id string) ([]api.PlaybookListItem, error) {
 	var config models.ConfigItem
 	if err := ctx.DB().Where("id = ?", id).Find(&config).Error; err != nil {
-		return nil, err
+		return nil, ctx.Oops("db").Wrap(err)
 	} else if config.ID == uuid.Nil {
-		return nil, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "config(id=%s) not found", id)
+		return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("config(id=%s) not found", id)
 	}
 
-	return db.FindPlaybooksForConfig(ctx, config)
+	list, err := db.FindPlaybooksForConfig(ctx, config)
+	return list, ctx.Oops().Wrap(err)
 }
 
 func ListPlaybooksForComponent(ctx context.Context, id string) ([]api.PlaybookListItem, error) {
 	var component models.Component
 	if err := ctx.DB().Where("id = ?", id).Find(&component).Error; err != nil {
-		return nil, err
+		return nil, ctx.Oops("db").Wrap(err)
 	} else if component.ID == uuid.Nil {
-		return nil, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "component(id=%s) not found", id)
+		return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("component '%s' not found", id)
 	}
 
-	return db.FindPlaybooksForComponent(ctx, component)
+	list, err := db.FindPlaybooksForComponent(ctx, component)
+	return list, ctx.Oops().Wrap(err)
 }
 
 func ListPlaybooksForCheck(ctx context.Context, id string) ([]api.PlaybookListItem, error) {
 	var check models.Check
 	if err := ctx.DB().Where("id = ?", id).Find(&check).Error; err != nil {
-		return nil, err
+		return nil, ctx.Oops("db").Wrap(err)
 	} else if check.ID == uuid.Nil {
-		return nil, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "check(id=%s) not found", id)
+		return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("check(id=%s) not found", id)
 	}
 
-	return db.FindPlaybooksForCheck(ctx, check)
-}
-
-func GetLastAction(ctx context.Context, runID, callerActionID string) (map[string]any, error) {
-	if cached, ok := lastResultCache.Get("last-action" + runID + callerActionID); ok {
-		return cached.(map[string]any), nil
-	}
-
-	var action models.PlaybookRunAction
-	query := ctx.DB().
-		Where("id != ?", callerActionID).
-		Where("playbook_run_id = ?", runID).
-		Order("start_time desc")
-	if err := query.First(&action).Error; err != nil {
-		return nil, err
-	}
-
-	output := action.AsMap()
-	lastResultCache.SetDefault("last-action"+runID+callerActionID, output)
-	return output, nil
-}
-
-func GetActionByName(ctx context.Context, runID, actionName string) (map[string]any, error) {
-	if cached, ok := lastResultCache.Get("action-by-name" + runID + actionName); ok {
-		return cached.(map[string]any), nil
-	}
-
-	var action models.PlaybookRunAction
-	query := ctx.DB().Where("name = ?", actionName).Where("playbook_run_id = ?", runID)
-	if err := query.First(&action).Error; err != nil {
-		return nil, err
-	}
-
-	output := action.AsMap()
-	lastResultCache.SetDefault("action-by-name"+runID+actionName, output)
-	return output, nil
-}
-
-// evaluateRunStatus determines the best fitting run status based on the status of the actions.
-func evaluateRunStatus(statuses []models.PlaybookActionStatus) models.PlaybookRunStatus {
-	for _, status := range statuses {
-		if status == models.PlaybookActionStatusFailed {
-			return models.PlaybookRunStatusFailed
-		}
-	}
-
-	return models.PlaybookRunStatusCompleted
+	list, err := db.FindPlaybooksForCheck(ctx, check)
+	return list, ctx.Oops().Wrap(err)
 }

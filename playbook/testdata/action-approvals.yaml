@@ -1,26 +1,37 @@
-description: write config name to file
-configs:
-  - types:
-      - EKS::Cluster
-    labelSelector: environment=production
-parameters:
-  - name: path
-    label: path of the file
-  - name: footer
-    default: "{{.config.config_class}}"
-    label: append this text to the file
-actions:
-  - name: write config id to a file
-    timeout: 1s
-    exec:
-      script: echo id={{.config.id}} > {{.params.path}}
-  - name: "append footer to the same file "
-    timeout: 2s
-    exec:
-      script: printf '{{.params.footer}}' >> {{.params.path}}
-approval:
-  type: any
-  approvers:
-    people:
-      - john@doe.com
-      - john@wick.com
+# yaml-language-server: $schema=../../config/schemas/playbook.schema.json
+
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: action-approvals
+  annotations:
+    trace: "true"
+spec:
+  description: write config name to file
+  configs:
+    - types:
+        - EKS::Cluster
+      labelSelector: environment=production
+  parameters:
+    - name: path
+      label: path of the file
+      required: true
+    - name: name
+      default: "{{.config.name}}"
+      label: append this text to the file
+      required: true
+  actions:
+    - name: write config id to a file
+      timeout: 1s
+      exec:
+        script: echo id={{.config.id}} > {{.params.path}}
+    - name: "append name to the same file "
+      timeout: 2s
+      exec:
+        script: printf '{{.params.name}}' >> {{.params.path}}
+  approval:
+    type: any
+    approvers:
+      people:
+        - john@doe.com
+        - john@wick.com

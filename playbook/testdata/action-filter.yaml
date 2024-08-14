@@ -1,33 +1,38 @@
----
-parameters:
-  - name: path
-    label: Path of the file
-  - name: log_path
-    label: Path of the log file
-actions:
-  - name: Create the file
-    exec:
-      script: echo -n '{{.config.config_class}}' > {{.params.path}}
-  - name: Log if the file creation failed
-    if: 'failure()'
-    exec:
-      script: echo 'File creation failed' > {{.params.log_path}}
-  - name: Log if the file creation succeeded
-    if: success()
-    exec:
-      script: echo 'File creation succeeded' > {{.params.log_path}}
-  - name: Run a non existing command
-    exec:
-      script: my-perfect-command start
-  - name: Log if the command failed
-    if: 'failure()'
-    exec:
-      script: echo 'Command failed' >> {{.params.log_path}}
-  - name: 'Skip if cluster config'
-    if: 'config.config_class != "Cluster" ? true: false'
-    exec:
-      script: echo 'Config is not a cluster' >> {{.params.log_path}}
-  - name: 'Log the end of the playbook'
-    if: 'always()'
-    exec:
-      script: echo '==end==' >> {{.params.log_path}}
+# yaml-language-server: $schema=../../config/schemas/playbook.schema.json
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: action-filter
+spec:
+  parameters:
+    - name: path
+      label: Path of the file
+    - name: log_path
+      label: Path of the log file
+  actions:
+    - name: Create the file
+      exec:
+        script: echo -n '{{.config.config_class}}' > {{.params.path}}
+    - name: Log if the file creation failed
+      if: "failure()"
+      exec:
+        script: echo 'File creation failed' > {{.params.log_path}}
+    - name: Log if the file creation succeeded
+      if: success()
+      exec:
+        script: echo 'File creation succeeded' > {{.params.log_path}}
+    - name: Run a non existing command
+      exec:
+        script: my-perfect-command start
+    - name: Log if the command failed
+      if: "failure()"
+      exec:
+        script: echo 'Command failed' >> {{.params.log_path}}
+    - name: "Skip if cluster config"
+      if: 'config.config_class != "Cluster" ? true: false'
+      exec:
+        script: echo 'Config is not a cluster' >> {{.params.log_path}}
+    - name: "Log the end of the playbook"
+      if: "always()"
+      exec:
+        script: echo '==end==' >> {{.params.log_path}}
