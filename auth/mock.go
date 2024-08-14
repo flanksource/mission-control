@@ -13,14 +13,17 @@ import (
 // users's ID to the context.
 func MockAuthMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
+		ctx := c.Request().Context().(context.Context)
+		logger := ctx.Logger.Named("auth")
 		name, _, ok := c.Request().BasicAuth()
 		if !ok {
+			logger.Warnf("no basic authentication")
 			return next(c)
 		}
-		ctx := c.Request().Context().(context.Context)
 
 		var person models.Person
 		if err := ctx.DB().Where("name = ? or email = ?", name, name).First(&person).Error; err != nil {
+			logger.Warnf("user %s not found", name)
 			return c.String(http.StatusUnauthorized, "Unauthorized - User not found")
 		}
 

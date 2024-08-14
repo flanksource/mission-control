@@ -11,6 +11,7 @@ import (
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
+	"github.com/google/uuid"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -366,6 +367,8 @@ type PlaybookAction struct {
 	// timeout is the parsed Timeout
 	timeout *time.Duration `json:"-" yaml:"-"`
 
+	PlaybookID uuid.UUID `json:"-" yaml:"-"`
+
 	// Name of the action
 	Name string `yaml:"name" json:"name"`
 
@@ -409,6 +412,12 @@ type PlaybookAction struct {
 	SQL                 *SQLAction                 `json:"sql,omitempty" yaml:"sql,omitempty" template:"true"`
 	Pod                 *PodAction                 `json:"pod,omitempty" yaml:"pod,omitempty" template:"true"`
 	Notification        *NotificationAction        `json:"notification,omitempty" yaml:"notification,omitempty" template:"true"`
+}
+
+func (p *PlaybookAction) Context() map[string]any {
+	return map[string]any{
+		"action_name": p.Name,
+	}
 }
 
 func (p *PlaybookAction) DelayDuration() (time.Duration, error) {

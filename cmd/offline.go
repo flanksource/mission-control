@@ -2,7 +2,7 @@ package cmd
 
 import (
 	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/duty/postgrest"
 	"github.com/spf13/cobra"
 )
 
@@ -12,7 +12,7 @@ var GoOffline = &cobra.Command{
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		if err := db.GoOffline(); err != nil {
+		if err := postgrest.GoOffline(); err != nil {
 			logger.Fatalf("Failed to go offline: %+v", err)
 		}
 	},

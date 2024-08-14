@@ -9,6 +9,7 @@ import (
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/hash"
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/gomplate/v3"
@@ -65,7 +66,7 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 
 	switch vars.AuthMode {
 	case Kratos:
-		kratosHandler := NewKratosHandler(KratosAPI, KratosAdminAPI, db.PostgRESTJWTSecret)
+		kratosHandler := NewKratosHandler(KratosAPI, KratosAdminAPI, duty.DefaultConfig.Postgrest.JWTSecret)
 		adminUserID, err = kratosHandler.CreateAdminUser(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to created admin user: %v", err)
@@ -86,7 +87,7 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 			return fmt.Errorf("failed to start server: clerk-org-id is required")
 		}
 
-		clerkHandler, err := NewClerkHandler(ClerkJWKSURL, ClerkOrgID, db.PostgRESTJWTSecret)
+		clerkHandler, err := NewClerkHandler(ClerkJWKSURL, ClerkOrgID, duty.DefaultConfig.Postgrest.JWTSecret)
 		if err != nil {
 			logger.Fatalf("failed to initialize clerk client: %v", err)
 		}

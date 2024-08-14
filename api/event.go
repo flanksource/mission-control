@@ -3,8 +3,8 @@ package api
 import (
 	"time"
 
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
-	"github.com/flanksource/postq"
 	"github.com/google/uuid"
 )
 
@@ -107,8 +107,8 @@ type Event struct {
 	Priority    int                 `json:"priority"`
 }
 
-func (t Event) ToPostQEvent() postq.Event {
-	return postq.Event{
+func (t Event) ToPostQEvent() models.Event {
+	return models.Event{
 		ID:          t.ID,
 		Name:        t.Name,
 		Error:       t.Error,
@@ -128,8 +128,8 @@ func (Event) TableName() string {
 
 type Events []Event
 
-func (events Events) ToPostQEvents() postq.Events {
-	var output []postq.Event
+func (events Events) ToPostQEvents() models.Events {
+	var output []models.Event
 	for _, event := range events {
 		output = append(output, event.ToPostQEvent())
 	}

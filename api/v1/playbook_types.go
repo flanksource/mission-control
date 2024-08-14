@@ -5,6 +5,8 @@ import (
 
 	"github.com/flanksource/duty/models"
 	dutyTypes "github.com/flanksource/duty/types"
+	"github.com/google/uuid"
+	"github.com/samber/lo"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -25,6 +27,8 @@ const (
 	PlaybookParameterTypePeople    = "people"
 	PlaybookParameterTypeTeam      = "team"
 	PlaybookParameterTypeText      = "text"
+	PlaybookParameterTypeMillis    = "Millis"
+	PlaybookParameterTypeBytes     = "Bytes"
 )
 
 // PlaybookParameter defines a parameter that a playbook needs to run.
@@ -209,7 +213,7 @@ type Playbook struct {
 func PlaybookFromModel(p models.Playbook) (Playbook, error) {
 	var spec PlaybookSpec
 	if err := json.Unmarshal(p.Spec, &spec); err != nil {
-		return Playbook{}, nil
+		return Playbook{}, err
 	}
 
 	out := Playbook{
@@ -217,11 +221,34 @@ func PlaybookFromModel(p models.Playbook) (Playbook, error) {
 			Name:              p.Name,
 			UID:               types.UID(p.ID.String()),
 			CreationTimestamp: metav1.Time{Time: p.CreatedAt},
+			Namespace:         p.Namespace,
 		},
 		Spec: spec,
 	}
 
 	return out, nil
+}
+
+func (p Playbook) ToModel() (*models.Playbook, error) {
+	var id uuid.UUID
+	if v, err := uuid.Parse(string(p.GetUID())); err == nil {
+		id = v
+	}
+
+	specJSON, err := json.Marshal(p.Spec)
+	if err != nil {
+		return nil, err
+	}
+
+	return &models.Playbook{
+		ID:          id,
+		Name:        lo.CoalesceOrEmpty(p.Spec.Title, p.Name),
+		Namespace:   p.Namespace,
+		Description: p.Spec.Description,
+		Icon:        p.Spec.Icon,
+		Spec:        specJSON,
+		Category:    p.Spec.Category,
+	}, nil
 }
 
 // +kubebuilder:object:root=true
