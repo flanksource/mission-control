@@ -3,7 +3,6 @@ package auth
 import (
 	"fmt"
 	"net/http"
-	"net/url"
 	"os"
 	"strings"
 
@@ -131,10 +130,6 @@ func WhoAmI(c echo.Context) error {
 	}
 
 	hostname, _ := os.Hostname()
-	var dbName string
-	if dbURL, err := url.Parse(db.ConnectionString); err == nil {
-		dbName = strings.TrimPrefix(dbURL.Path, "/")
-	}
 
 	roles, err := rbac.RolesForUser(user.ID.String())
 	if err != nil {
@@ -152,7 +147,6 @@ func WhoAmI(c echo.Context) error {
 			"roles":       roles,
 			"permissions": permissions,
 			"hostname":    hostname,
-			"database":    dbName,
 		},
 	})
 }

@@ -1,12 +1,11 @@
 package cmd
 
 import (
-	gocontext "context"
 	"fmt"
 	"time"
 
 	"github.com/flanksource/commons/rand"
-	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/rbac"
@@ -22,6 +21,10 @@ var Token = &cobra.Command{
 	Use:    "token",
 	PreRun: PreRun,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx, _, err := duty.Start("mission-control", duty.DisablePostgrest)
+		if err != nil {
+			return err
+		}
 		password, err := rand.GenerateRandHex(32)
 		if err != nil {
 			return err
@@ -29,8 +32,6 @@ var Token = &cobra.Command{
 		if tokenUser == "" {
 			return fmt.Errorf("Must specify --user")
 		}
-		ctx := context.NewContext(gocontext.Background()).
-			WithDB(db.Gorm, db.Pool)
 
 		var user models.Person
 		if err := ctx.DB().Where("email = ?", tokenUser).First(&user).Error; err != nil || user.ID == uuid.Nil {
@@ -51,8 +52,10 @@ var Check = &cobra.Command{
 	PreRun: PreRun,
 	Args:   cobra.ExactArgs(3),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx := context.NewContext(gocontext.Background()).
-			WithDB(db.Gorm, db.Pool)
+		ctx, _, err := duty.Start("mission-control", duty.DisablePostgrest)
+		if err != nil {
+			return err
+		}
 		fmt.Println(rbac.Check(ctx, args[0], args[1], args[2]))
 		return nil
 	},

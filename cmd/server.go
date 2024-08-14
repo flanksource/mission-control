@@ -1,19 +1,14 @@
 package cmd
 
 import (
-	gocontext "context"
 	"fmt"
-	"net/url"
-	"os"
-	"strings"
 
-	commonsCtx "github.com/flanksource/commons/context"
 	"github.com/flanksource/commons/logger"
-	"go.opentelemetry.io/otel"
+	"github.com/flanksource/duty"
 
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/postq/pg"
 	"github.com/flanksource/kopper"
-	"github.com/flanksource/postq/pg"
 
 	"github.com/spf13/cobra"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -29,12 +24,10 @@ import (
 	"github.com/flanksource/incident-commander/teams"
 
 	// register event handlers
+	_ "github.com/flanksource/incident-commander/artifacts"
+	_ "github.com/flanksource/incident-commander/connection"
 	_ "github.com/flanksource/incident-commander/playbook"
 	_ "github.com/flanksource/incident-commander/upstream"
-)
-
-const (
-	propertiesFile = "mission-control.properties"
 )
 
 func launchKopper(ctx context.Context) {
@@ -88,28 +81,14 @@ var Serve = &cobra.Command{
 		// PostgREST needs to know how it is exposed to create the correct links
 		db.HttpEndpoint = api.PublicURL + "/db"
 
-		ctx := context.NewContext(gocontext.Background(), commonsCtx.WithTracer(otel.GetTracerProvider().Tracer("mission-control"))).
-			WithDB(db.Gorm, db.Pool).
+		ctx, _, err := duty.Start("mission-control")
+		if err != nil {
+			logger.Fatalf(err.Error())
+		}
+
+		ctx = ctx.
 			WithKubernetes(api.Kubernetes).
 			WithNamespace(api.Namespace)
-
-		if _, err := os.Stat(propertiesFile); err == nil {
-			if err := context.LoadPropertiesFromFile(ctx, propertiesFile); err != nil {
-				logger.Fatalf("Error setting properties in database: %v", err)
-			}
-		}
-
-		if api.PostgrestURI != "" {
-			parsedURL, err := url.Parse(api.PostgrestURI)
-			if err != nil {
-				logger.Fatalf("Failed to parse PostgREST URL: %v", err)
-			}
-
-			host := strings.ToLower(parsedURL.Hostname())
-			if host == "localhost" {
-				go db.StartPostgrest(parsedURL.Port())
-			}
-		}
 
 		go jobs.Start(ctx)
 
@@ -117,7 +96,7 @@ var Serve = &cobra.Command{
 
 		go tableUpdatesHandler(ctx)
 
-		if !disableKubernetes {
+		if !disableKubernetes && !disableOperators {
 			go launchKopper(ctx)
 		}
 
