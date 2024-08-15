@@ -140,6 +140,8 @@ func New(ctx context.Context) *echov4.Echo {
 	// kratos performs its own auth
 	Forward(ctx, e, "/kratos", auth.KratosAPI)
 
+	auth.RegisterRoutes(e)
+
 	e.POST("/rbac/:id/update_role", rbac.UpdateRoleForUser, rbac.Authorization(rbac.ObjectRBAC, rbac.ActionUpdate))
 	e.GET("/rbac/dump", rbac.Dump, rbac.Authorization(rbac.ObjectRBAC, rbac.ActionRead))
 
