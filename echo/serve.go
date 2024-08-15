@@ -14,6 +14,7 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/properties"
 	cutils "github.com/flanksource/commons/utils"
+	dutyApi "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/schema/openapi"
 	"github.com/flanksource/incident-commander/agent"
@@ -119,8 +120,8 @@ func New(ctx context.Context) *echov4.Echo {
 		return c.String(http.StatusOK, "OK")
 	})
 
-	if api.PostgrestURI != "" {
-		Forward(ctx, e, "/db", api.PostgrestURI,
+	if dutyApi.DefaultConfig.Postgrest.URL != "" {
+		Forward(ctx, e, "/db", dutyApi.DefaultConfig.Postgrest.URL,
 			rbac.DbMiddleware(),
 			db.SearchQueryTransformMiddleware(),
 		)
