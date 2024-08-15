@@ -25,8 +25,11 @@ import (
 
 	// register event handlers
 	_ "github.com/flanksource/incident-commander/artifacts"
+	_ "github.com/flanksource/incident-commander/catalog"
 	_ "github.com/flanksource/incident-commander/connection"
+	_ "github.com/flanksource/incident-commander/notification"
 	_ "github.com/flanksource/incident-commander/playbook"
+	_ "github.com/flanksource/incident-commander/snapshot"
 	_ "github.com/flanksource/incident-commander/upstream"
 )
 
