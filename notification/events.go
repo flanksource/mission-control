@@ -8,7 +8,6 @@ import (
 	"time"
 
 	sw "github.com/RussellLuo/slidingwindow"
-	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
@@ -137,7 +136,7 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 		for _, payload := range payloads {
 			if !rateLimiter.Allow() {
 				// rate limited notifications are simply dropped.
-				logger.Warnf("notification(%s) rate limited for event=%s", id, event.Name)
+				ctx.Warnf("rate limited  event=%s id=%s ", event.Name, id)
 				ctx.Counter("notification_rate_limited", "id", id).Add(1)
 				continue
 			}
@@ -159,6 +158,7 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 // sendNotifications sends a notification for each of the given events - one at a time.
 // It returns any events that failed to send.
 func sendNotifications(ctx context.Context, events models.Events) models.Events {
+	ctx = ctx.WithName("notifications")
 	var failedEvents []models.Event
 	for _, e := range events {
 		var payload NotificationEventPayload

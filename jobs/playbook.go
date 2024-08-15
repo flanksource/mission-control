@@ -19,13 +19,8 @@ var PullPlaybookActions = &job.Job{
 	Fn: func(ctx job.JobRuntime) error {
 		ctx.History.ResourceType = job.ResourceTypePlaybook
 		ctx.History.ResourceID = api.UpstreamConf.Host
-		if pulled, err := playbook.PullPlaybookAction(ctx.Context, api.UpstreamConf); err != nil {
-			return err
-		} else if pulled {
-			ctx.History.SuccessCount = 1
-		}
 
-		return nil
+		return playbook.PullPlaybookAction(ctx, api.UpstreamConf)
 	},
 }
 
