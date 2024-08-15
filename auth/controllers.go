@@ -17,6 +17,13 @@ import (
 	"github.com/flanksource/incident-commander/rbac"
 )
 
+func RegisterRoutes(e echo.Echo) {
+	// Cannot register this routes in auth/rbac package as it would create a cyclic import
+	e.POST("/auth/:id/update_state", UpdateAccountState)
+	e.POST("/auth/:id/properties", UpdateAccountProperties)
+	e.GET("/auth/whoami", WhoAmI)
+}
+
 type InviteUserRequest struct {
 	FirstName string `json:"firstName"`
 	LastName  string `json:"lastName"`

@@ -12,6 +12,7 @@ import (
 
 	"github.com/flanksource/commons/http/middlewares"
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/commons/properties"
 	cutils "github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/schema/openapi"
@@ -20,7 +21,6 @@ import (
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/logs"
-	"github.com/flanksource/incident-commander/push"
 	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/utils"
 	"github.com/flanksource/incident-commander/vars"
@@ -140,14 +140,8 @@ func New(ctx context.Context) *echov4.Echo {
 	// kratos performs its own auth
 	Forward(ctx, e, "/kratos", auth.KratosAPI)
 
-	e.POST("/auth/:id/update_state", auth.UpdateAccountState)
-	e.POST("/auth/:id/properties", auth.UpdateAccountProperties)
-	e.GET("/auth/whoami", auth.WhoAmI)
-
 	e.POST("/rbac/:id/update_role", rbac.UpdateRoleForUser, rbac.Authorization(rbac.ObjectRBAC, rbac.ActionUpdate))
 	e.GET("/rbac/dump", rbac.Dump, rbac.Authorization(rbac.ObjectRBAC, rbac.ActionRead))
-
-	e.POST("/push/topology", push.PushTopology, rbac.Topology(rbac.ActionUpdate))
 
 	// Serve openapi schemas
 	schemaServer, err := utils.HTTPFileserver(openapi.Schemas)
@@ -200,7 +194,7 @@ func proxyMiddleware(ctx context.Context, e *echov4.Echo, prefix, targetURL stri
 		newTransport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 		proxyConfig.Transport = newTransport
 
-		if ctx.Properties().On(false, "log.kubeproxy") {
+		if properties.On(false, "log.kubeproxy") {
 			traceConfig := middlewares.TraceConfig{
 				MaxBodyLength:   1024,
 				Timing:          true,
