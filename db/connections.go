@@ -156,14 +156,18 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 		dbObj.Type = models.ConnectionTypeSQLServer
 		dbObj.URL = obj.Spec.MSSQL.URL.String()
 		if dbObj.URL == "" {
-			dbObj.URL = "sqlserver://$(username):$(password)@$(properties.host)?database=$(properties.database)&TrustServerCertificate=$(properties.trust_server_certificate)"
+			dbObj.URL = "sqlserver://$(username):$(password)@$(properties.host)?database=$(properties.database)"
 		}
+
 		dbObj.Username = obj.Spec.MSSQL.Username.String()
 		dbObj.Password = obj.Spec.MSSQL.Password.String()
 		dbObj.Properties = map[string]string{
-			"host":                     obj.Spec.MSSQL.Host.String(),
-			"database":                 obj.Spec.MSSQL.Database.String(),
-			"trust_server_certificate": strconv.FormatBool(obj.Spec.MSSQL.TrustServerCertificate),
+			"host":     obj.Spec.MSSQL.Host.String(),
+			"database": obj.Spec.MSSQL.Database.String(),
+		}
+		if obj.Spec.MSSQL.TrustServerCertificate != nil {
+			dbObj.URL += "&TrustServerCertificate=$(properties.trust_server_certificate)"
+			dbObj.Properties["trust_server_certificate"] = strconv.FormatBool(*obj.Spec.MSSQL.TrustServerCertificate)
 		}
 	}
 

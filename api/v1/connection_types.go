@@ -111,7 +111,7 @@ type ConnectionMSSQL struct {
 	Username               types.EnvVar `json:"username,omitempty"`
 	Password               types.EnvVar `json:"password,omitempty"`
 	Database               types.EnvVar `json:"database,omitempty"`
-	TrustServerCertificate bool         `json:"trustServerCertificate,omitempty"`
+	TrustServerCertificate *bool        `json:"trustServerCertificate,omitempty"`
 }
 
 type ConnectionMongo struct {
