@@ -549,17 +549,24 @@
         "channel": {
           "type": "string"
         },
-        "botname": {
+        "botName": {
+          "type": "string"
+        },
+        "color": {
+          "type": "string"
+        },
+        "icon": {
+          "type": "string"
+        },
+        "thread_ts": {
+          "type": "string"
+        },
+        "title": {
           "type": "string"
         }
       },
       "additionalProperties": false,
-      "type": "object",
-      "required": [
-        "token",
-        "channel",
-        "botname"
-      ]
+      "type": "object"
     },
     "ConnectionSpec": {
       "properties": {

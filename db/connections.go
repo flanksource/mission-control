@@ -303,7 +303,11 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 		dbObj.Username = obj.Spec.Slack.Channel
 		dbObj.Password = obj.Spec.Slack.Token.String()
 		dbObj.Properties = map[string]string{
-			"BotName": obj.Spec.Slack.BotName,
+			"BotName":  obj.Spec.Slack.BotName,
+			"Icon":     obj.Spec.Slack.Color,
+			"ThreadTS": obj.Spec.Slack.ThreadTS,
+			"Title":    obj.Spec.Slack.Title,
+			"Color":    obj.Spec.Slack.Color,
 		}
 	}
 

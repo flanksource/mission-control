@@ -2798,10 +2798,24 @@ spec:
                 type: object
               slack:
                 properties:
-                  botname:
+                  botName:
                     type: string
                   channel:
                     description: Channel to send messages to in Cxxxxxxxxxx format
+                    type: string
+                  color:
+                    description: good, warning, danger, or any URL encoded hex color
+                      code
+                    type: string
+                  icon:
+                    description: emoji or URL
+                    type: string
+                  thread_ts:
+                    description: ts value of the parent message (to send message as
+                      reply in thread)
+                    type: string
+                  title:
+                    description: Prepended text above the message
                     type: string
                   token:
                     properties:
@@ -2846,10 +2860,6 @@ spec:
                             type: string
                         type: object
                     type: object
-                required:
-                - botname
-                - channel
-                - token
                 type: object
               smb:
                 properties:
