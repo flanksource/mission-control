@@ -10,14 +10,14 @@ spec:
   actions:
     - name: Powershell
       exec:
-        script: >+
+        script: |
           #! pwsh
-          Write-Host @{item="{{.config.name}}"} | ConvertTo-JSON
+          @{item="{{.config.name}}"} | ConvertTo-JSON
     - name: delims
       if: always()
       exec:
-        script: >
+        script: |
           #! pwsh
           # gotemplate: left-delim=$[[ right-delim=]]
-          $message = "$[[.config.name]]"
-          Write-Host @{item=$message} | ConvertTo-JSON
+          $message = "name=$[[.config.name]]"
+          @{item=$message} | ConvertTo-JSON

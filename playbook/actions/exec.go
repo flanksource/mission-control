@@ -32,9 +32,11 @@ type ExecAction struct {
 type ExecDetails struct {
 	Error error `json:"-"`
 
-	Stdout   string `json:"stdout"`
-	Stderr   string `json:"stderr"`
-	ExitCode int    `json:"exitCode"`
+	Stdout   string   `json:"stdout"`
+	Stderr   string   `json:"stderr"`
+	ExitCode int      `json:"exitCode"`
+	Path     string   `json:"path"`
+	Args     []string `json:"args"`
 
 	Artifacts []artifacts.Artifact `json:"-" yaml:"-"`
 }
@@ -54,7 +56,7 @@ func (c *ExecAction) Run(ctx context.Context, exec v1.ExecAction) (*ExecDetails,
 
 	cmd, err := CreateCommandFromScript(ctx, exec.Script)
 	if err != nil {
-		return nil, ctx.Oops().Wrap(err)
+		return nil, ctx.Oops().With("script", exec.Script).Wrap(err)
 	}
 
 	if len(envParams.envs) != 0 {
@@ -139,6 +141,8 @@ func runCmd(ctx context.Context, cmd *osExec.Cmd, artifactConfigs ...v1.Artifact
 	cmd.Stderr = &stderr
 
 	result.Error = cmd.Run()
+	result.Args = cmd.Args
+	result.Path = cmd.Path
 	result.ExitCode = cmd.ProcessState.ExitCode()
 	result.Stderr = strings.TrimSpace(stderr.String())
 	result.Stdout = strings.TrimSpace(stdout.String())
