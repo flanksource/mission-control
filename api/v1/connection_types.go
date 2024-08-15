@@ -14,12 +14,24 @@ type ConnectionTelegram struct {
 }
 
 type ConnectionSlack struct {
-	Token types.EnvVar `json:"token"`
+	Token types.EnvVar `json:"token,omitempty"`
 
 	// Channel to send messages to in Cxxxxxxxxxx format
-	Channel string `json:"channel"`
+	Channel string `json:"channel,omitempty"`
 
-	BotName string `json:"botname"`
+	BotName string `json:"botName,omitempty"`
+
+	// good, warning, danger, or any URL encoded hex color code
+	Color string `json:"color,omitempty"`
+
+	// emoji or URL
+	Icon string `json:"icon,omitempty"`
+
+	// ts value of the parent message (to send message as reply in thread)
+	ThreadTS string `json:"thread_ts,omitempty"`
+
+	// Prepended text above the message
+	Title string `json:"title,omitempty"`
 }
 
 type ConnectionNtfy struct {
