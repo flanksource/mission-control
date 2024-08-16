@@ -242,7 +242,8 @@ func (p Playbook) ToModel() (*models.Playbook, error) {
 
 	return &models.Playbook{
 		ID:          id,
-		Name:        lo.CoalesceOrEmpty(p.Spec.Title, p.Name),
+		Name:        p.Name,
+		Title:       lo.CoalesceOrEmpty(p.Spec.Title, p.Name),
 		Namespace:   p.Namespace,
 		Description: p.Spec.Description,
 		Icon:        p.Spec.Icon,

@@ -5,6 +5,7 @@ import (
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty"
+	"go.opentelemetry.io/otel"
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/postq/pg"
@@ -89,6 +90,7 @@ var Serve = &cobra.Command{
 			logger.Fatalf(err.Error())
 		}
 
+		ctx.WithTracer(otel.GetTracerProvider().Tracer("mission-control"))
 		ctx = ctx.
 			WithKubernetes(api.Kubernetes).
 			WithNamespace(api.Namespace)
