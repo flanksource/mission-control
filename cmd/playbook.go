@@ -24,7 +24,6 @@ var Playbook = &cobra.Command{
 }
 
 var playbookNamespace string
-
 var paramFile string
 
 var Run = &cobra.Command{
@@ -118,9 +117,50 @@ var Run = &cobra.Command{
 	},
 }
 
+var Submit = &cobra.Command{
+	Use:              "submit playbook playbook.yaml params.yaml",
+	Args:             cobra.ExactArgs(1),
+	PersistentPreRun: PreRun,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		logger.UseSlog()
+		if err := properties.LoadFile("mission-control.properties"); err != nil {
+			logger.Errorf(err.Error())
+		}
+		ctx, stop, err := duty.Start("mission-control", duty.ClientOnly)
+		if err != nil {
+			return err
+		}
+		defer Shutdown()
+
+		AddShutdownHook(stop)
+
+		p, err := playbook.CreateOrSaveFromFile(ctx, args[0])
+		if err != nil {
+			return err
+		}
+
+		var params playbook.RunParams
+
+		if f, err := os.Open(paramFile); err == nil {
+			if err := yamlutil.NewYAMLOrJSONDecoder(f, 1024).Decode(&params); err != nil {
+				return err
+			}
+		}
+
+		run, err := playbook.Run(ctx, p, params)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println(logger.Pretty(run))
+
+		return nil
+	},
+}
+
 func init() {
-	Run.Flags().StringVarP(&playbookNamespace, "namespace", "n", "default", "Namespace for playbook to run under")
-	Run.Flags().StringVarP(&paramFile, "params", "p", "", "YAML/JSON file containing parameters")
-	Playbook.AddCommand(Run)
+	Playbook.PersistentFlags().StringVarP(&playbookNamespace, "namespace", "n", "default", "Namespace for playbook to run under")
+	Playbook.PersistentFlags().StringVarP(&paramFile, "params", "p", "", "YAML/JSON file containing parameters")
+	Playbook.AddCommand(Run, Submit)
 	Root.AddCommand(Playbook)
 }
