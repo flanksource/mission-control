@@ -20,10 +20,6 @@ import (
 	"gorm.io/gorm"
 )
 
-var (
-	KratosAPI, KratosAdminAPI string
-)
-
 // kratosLoginWithCache is a wrapper around kratosLogin and adds a cache layer
 func (k *kratosMiddleware) kratosLoginWithCache(ctx gocontext.Context, username, password string) (*client.Session, error) {
 	cacheKey := basicAuthCacheKey(username, k.basicAuthSeparator, password)
@@ -83,7 +79,7 @@ func (k *kratosMiddleware) validateSession(ctx context.Context, r *http.Request)
 	if username, password, ok := r.BasicAuth(); ok {
 		// logger.V(4).Infof("Logging in with Basic %s %s%s%s", username, password[0:1], strings.Repeat("*", len(password)-2), password[len(password)-1:])
 		if strings.ToLower(username) == "token" {
-			accessToken, err := getAccessToken(ctx, k.accessTokenCache, password)
+			accessToken, err := getAccessToken(ctx, password)
 			if err != nil {
 				return nil, err
 			} else if accessToken == nil {
@@ -168,14 +164,6 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 			return c.String(http.StatusUnauthorized, "Authorization Error")
 		}
 
-		token, err := getDBToken(ctx, k.tokenCache, k.jwtSecret, session.Id, session.Identity.GetId())
-		if err != nil {
-			logger.Errorf("Error generating JWT Token: %v", err)
-			return c.String(http.StatusUnauthorized, "Authorization Error")
-		}
-		// Used by downstream services like Postgrest to verify the request
-		c.Request().Header.Set("Authorization", fmt.Sprintf("Bearer %s", token))
-
 		person := models.Person{ID: uid}
 
 		if traits, ok := session.Identity.GetTraits().(map[string]any); ok {
@@ -200,6 +188,10 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 			}
 		}
 
+		if err := InjectToken(ctx, c, &person, session.Identity.GetId()); err != nil {
+			return err
+		}
+
 		ctx = ctx.WithUser(&person)
 		c.SetRequest(c.Request().WithContext(ctx))
 
@@ -209,7 +201,6 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 
 type kratosMiddleware struct {
 	client             *client.APIClient
-	jwtSecret          string
 	tokenCache         *cache.Cache
 	accessTokenCache   *cache.Cache
 	authSessionCache   *cache.Cache
@@ -226,7 +217,6 @@ func (k *KratosHandler) KratosMiddleware(ctx context.Context) (*kratosMiddleware
 	return &kratosMiddleware{
 		db:                 ctx.DB(),
 		client:             k.client,
-		jwtSecret:          k.jwtSecret,
 		tokenCache:         cache.New(3*24*time.Hour, 12*time.Hour),
 		accessTokenCache:   cache.New(3*24*time.Hour, 24*time.Hour),
 		authSessionCache:   cache.New(30*time.Minute, time.Hour),

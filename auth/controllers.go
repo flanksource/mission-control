@@ -9,7 +9,7 @@ import (
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/labstack/echo/v4"
-	oryclient "github.com/ory/client-go"
+	oryClient "github.com/ory/client-go"
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
@@ -87,10 +87,10 @@ func UpdateAccountState(c echo.Context) error {
 		})
 	}
 
-	if !oryclient.IdentityState(reqData.State).IsValid() {
+	if !oryClient.IdentityState(reqData.State).IsValid() {
 		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
 			Err:     fmt.Sprintf("Invalid state: %s", reqData.State),
-			Message: fmt.Sprintf("Invalid state. Allowed values are %s", oryclient.AllowedIdentityStateEnumValues),
+			Message: fmt.Sprintf("Invalid state. Allowed values are %s", oryClient.AllowedIdentityStateEnumValues),
 		})
 	}
 

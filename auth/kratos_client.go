@@ -2,23 +2,24 @@ package auth
 
 import (
 	gocontext "context"
-	"os"
 
 	"github.com/flanksource/duty/context"
 	client "github.com/ory/client-go"
 )
 
+var (
+	KratosAPI, KratosAdminAPI string
+)
+
 type KratosHandler struct {
 	client      *client.APIClient
 	adminClient *client.APIClient
-	jwtSecret   string
 }
 
-func NewKratosHandler(kratosAPI, kratosAdminAPI, jwtSecret string) *KratosHandler {
+func NewKratosHandler() *KratosHandler {
 	return &KratosHandler{
-		client:      newAPIClient(kratosAPI),
-		adminClient: newAdminAPIClient(kratosAdminAPI),
-		jwtSecret:   jwtSecret,
+		client:      newAPIClient(KratosAPI),
+		adminClient: newAdminAPIClient(KratosAdminAPI),
 	}
 }
 
@@ -35,12 +36,6 @@ func newKratosClient(apiURL string) *client.APIClient {
 	configuration.Servers = []client.ServerConfiguration{{URL: apiURL}}
 	return client.NewAPIClient(configuration)
 }
-
-const (
-	AdminName            = "Admin"
-	AdminEmail           = "admin@local"
-	DefaultAdminPassword = "admin"
-)
 
 func (k *KratosHandler) createUser(ctx gocontext.Context, firstName, lastName, email string) (*client.Identity, error) {
 	adminCreateIdentityBody := *client.NewCreateIdentityBody(
@@ -68,13 +63,9 @@ func (k *KratosHandler) createRecoveryLink(ctx gocontext.Context, id string) (st
 }
 
 func (k *KratosHandler) createAdminIdentity(ctx gocontext.Context) (string, error) {
-	adminPassword := os.Getenv("ADMIN_PASSWORD")
-	if adminPassword == "" {
-		adminPassword = DefaultAdminPassword
-	}
 
 	config := *client.NewIdentityWithCredentialsPasswordConfig()
-	config.SetPassword(adminPassword)
+	config.SetPassword(getDefaultAdminPassword())
 
 	password := *client.NewIdentityWithCredentialsPassword()
 	password.SetConfig(config)
