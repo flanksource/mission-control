@@ -37,7 +37,7 @@ const (
 // StartPlaybookConsumers starts the run and action consumers
 func StartPlaybookConsumers(ctx context.Context) error {
 	runEventConsumer, err := postq.NewPGConsumer(RunConsumer, &postq.ConsumerOption{
-		NumConsumers: 5,
+		NumConsumers: ctx.Properties().Int("playbook.schedulers", 5),
 		ErrorHandler: func(cctx context.Context, err error) bool {
 			ctx.Errorf("%+v", err)
 
@@ -276,6 +276,7 @@ func ActionConsumer(ctx context.Context) (int, error) {
 // RunConsumer picks up scheduled runs and schedules the
 // execution of the next action on that run.
 func RunConsumer(ctx context.Context) (int, error) {
+	var consumed = 0
 	err := ctx.Transaction(func(ctx context.Context, _ trace.Span) error {
 		tx := ctx.DB()
 
@@ -293,9 +294,9 @@ func RunConsumer(ctx context.Context) (int, error) {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return nil
 			}
-
 			return ctx.Oops("db").Wrap(err)
 		}
+		consumed = 1
 		ctx = ctx.WithObject(run)
 		if err := runner.ScheduleRun(ctx, run); err != nil {
 			return failOrRetryRun(tx, &run, err)
@@ -303,8 +304,5 @@ func RunConsumer(ctx context.Context) (int, error) {
 		return nil
 	}, "action-scheduler")
 
-	if err == nil {
-		return 0, nil
-	}
-	return 1, err
+	return consumed, err
 }
