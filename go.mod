@@ -11,8 +11,8 @@ require (
 	github.com/casbin/gorm-adapter/v3 v3.26.0
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.25.0 // indirect
-	github.com/flanksource/commons v1.26.2
-	github.com/flanksource/duty v1.0.576
+	github.com/flanksource/commons v1.27.0
+	github.com/flanksource/duty v1.0.578
 	github.com/flanksource/gomplate/v3 v3.24.22
 	github.com/flanksource/kopper v1.0.9
 	github.com/gomarkdown/markdown v0.0.0-20240419095408-642f0ee99ae2
@@ -53,7 +53,6 @@ require (
 	github.com/go-git/go-git/v5 v5.12.0
 	github.com/go-sql-driver/mysql v1.7.1
 	github.com/golang-jwt/jwt/v5 v5.2.1
-	github.com/google/gops v0.3.28
 	github.com/henvic/httpretty v0.1.3
 	github.com/jenkins-x/go-scm v1.14.17
 	github.com/redis/go-redis/v9 v9.5.1
@@ -151,6 +150,7 @@ require (
 	github.com/golang/mock v1.6.0 // indirect
 	github.com/google/btree v1.1.2 // indirect
 	github.com/google/gnostic-models v0.6.9-0.20230804172637-c7be7c783f49 // indirect
+	github.com/google/gops v0.3.28 // indirect
 	github.com/google/pprof v0.0.0-20240711041743-f6c9dda6c6da // indirect
 	github.com/google/s2a-go v0.1.7 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect

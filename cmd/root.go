@@ -10,17 +10,17 @@ import (
 	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty"
 	dutyApi "github.com/flanksource/duty/api"
+	"github.com/flanksource/duty/telemetry"
+	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/jobs"
 	"github.com/flanksource/incident-commander/mail"
-	"github.com/flanksource/incident-commander/telemetry"
 	"github.com/flanksource/incident-commander/vars"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"go.opentelemetry.io/otel/attribute"
 )
 
 func PreRun(cmd *cobra.Command, args []string) {
@@ -28,12 +28,8 @@ func PreRun(cmd *cobra.Command, args []string) {
 		logger.Warnf("Please ensure that all the required flags for upstream is supplied: %v", err)
 	}
 
-	if otelcollectorURL != "" {
-		resourceAttrs := []attribute.KeyValue{}
-		if vars.AuthMode == auth.Clerk && auth.ClerkOrgID != "" {
-			resourceAttrs = append(resourceAttrs, attribute.String("org.id", auth.ClerkOrgID))
-		}
-		telemetry.InitTracer(otelServiceName, otelcollectorURL, true, resourceAttrs)
+	if vars.AuthMode == auth.Clerk && auth.ClerkOrgID != "" {
+		telemetry.OtelAttributes = append(telemetry.OtelAttributes, attribute.String("org.id", auth.ClerkOrgID))
 	}
 
 	if strings.HasPrefix(auth.IdentityRoleMapper, "file://") {
@@ -67,9 +63,6 @@ var (
 	// disableKubernetes is used to run mission-control on a non-operator mode.
 	disableKubernetes bool
 	disableOperators  bool
-	// Telemetry flag vars
-	otelcollectorURL string
-	otelServiceName  string
 )
 
 func ServerFlags(flags *pflag.FlagSet) {
@@ -94,8 +87,6 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&mail.FromName, "email-from-name", "Mission Control", "Email name of the sender")
 	flags.StringSliceVar(&echo.AllowedCORS, "allowed-cors", []string{"https://app.flanksource.com", "https://beta.flanksource.com"}, "Allowed CORS credential origins")
 	flags.StringVar(&auth.IdentityRoleMapper, "identity-role-mapper", "", "CEL-Go expression to map identity to a role & a team (return: {role: string, teams: []string}). Supports file path (prefixed with 'file://').")
-	flags.StringVar(&otelcollectorURL, "otel-collector-url", "", "OpenTelemetry gRPC Collector URL in host:port format")
-	flags.StringVar(&otelServiceName, "otel-service-name", "mission-control", "OpenTelemetry service name for the resource")
 	flags.StringVar(&api.DefaultArtifactConnection, "artifact-connection", "", "Specify the default connection to use for artifacts (can be the connection string or the connection id)")
 
 	var upstreamPageSizeDefault = 500
@@ -124,6 +115,7 @@ func ServerFlags(flags *pflag.FlagSet) {
 func init() {
 	// http.DefaultUserAgent = api.BuildVersion
 	logger.BindFlags(Root.PersistentFlags())
+	telemetry.BindFlags(Root.PersistentFlags(), "mission-control")
 
 	Root.PersistentFlags().StringVar(&api.CanaryCheckerPath, "canary-checker", "http://canary-checker:8080", "Canary Checker URL")
 	Root.AddCommand(Serve, Sync, GoOffline)

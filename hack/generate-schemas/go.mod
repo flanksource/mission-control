@@ -3,8 +3,8 @@ module github.com/flanksource/kopper/hack/generate-schemas
 go 1.22.3
 
 require (
-	github.com/flanksource/commons v1.26.2
-	github.com/flanksource/duty v1.0.576
+	github.com/flanksource/commons v1.27.0
+	github.com/flanksource/duty v1.0.578
 	github.com/flanksource/incident-commander v0.0.0-00010101000000-000000000000
 	github.com/spf13/cobra v1.8.0
 )
@@ -46,6 +46,7 @@ require (
 	github.com/flanksource/is-healthy v1.0.26 // indirect
 	github.com/flanksource/kommons v0.31.4 // indirect
 	github.com/flanksource/kubectl-neat v1.0.4 // indirect
+	github.com/fsnotify/fsnotify v1.7.0 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/go-errors/errors v1.5.1 // indirect
 	github.com/go-logr/logr v1.4.1 // indirect
@@ -64,6 +65,7 @@ require (
 	github.com/google/gnostic-models v0.6.9-0.20230804172637-c7be7c783f49 // indirect
 	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
+	github.com/google/gops v0.3.28 // indirect
 	github.com/google/s2a-go v0.1.7 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/google/uuid v1.6.0 // indirect
