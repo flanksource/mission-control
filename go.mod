@@ -68,6 +68,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.22.0
 	go.opentelemetry.io/otel/trace v1.24.0
 	k8s.io/api v0.28.3
+	github.com/tg123/go-htpasswd v1.2.2
 )
 
 require (
@@ -78,6 +79,7 @@ require (
 	code.gitea.io/sdk/gitea v0.14.0 // indirect
 	dario.cat/mergo v1.0.0 // indirect
 	github.com/AlekSi/pointer v1.2.0 // indirect
+	github.com/GehirnInc/crypt v0.0.0-20200316065508-bb7000b8a962 // indirect
 	github.com/Masterminds/semver/v3 v3.2.1 // indirect
 	github.com/Microsoft/go-winio v0.6.1 // indirect
 	github.com/ProtonMail/go-crypto v1.0.0 // indirect
