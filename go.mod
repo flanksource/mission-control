@@ -60,6 +60,7 @@ require (
 	github.com/samber/lo v1.46.0
 	github.com/samber/oops v1.12.1
 	github.com/samber/slog-echo v1.14.4
+	github.com/tg123/go-htpasswd v1.2.2
 	github.com/timberio/go-datemath v0.1.0
 	go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho v0.44.0
 	go.opentelemetry.io/otel v1.24.0
@@ -68,7 +69,6 @@ require (
 	go.opentelemetry.io/otel/sdk v1.22.0
 	go.opentelemetry.io/otel/trace v1.24.0
 	k8s.io/api v0.28.3
-	github.com/tg123/go-htpasswd v1.2.2
 )
 
 require (
@@ -342,8 +342,8 @@ require (
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
 
-// replace github.com/flanksource/commons => ../commons
+replace github.com/flanksource/commons => ../commons
 
-// replace github.com/flanksource/duty => ../duty
+replace github.com/flanksource/duty => ../duty
 
 // replace github.com/flanksource/gomplate/v3 => ../gomplate
