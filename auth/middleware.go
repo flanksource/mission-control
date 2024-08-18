@@ -9,7 +9,6 @@ import (
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/hash"
 	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/gomplate/v3"
@@ -20,10 +19,6 @@ import (
 	"github.com/labstack/echo/v4"
 	client "github.com/ory/client-go"
 	"github.com/patrickmn/go-cache"
-)
-
-const (
-	DefaultPostgrestRole = "postgrest_api"
 )
 
 var (
@@ -44,6 +39,7 @@ var (
 	errTokenExpired       = errors.New("access token has expired")
 	Clerk                 = "clerk"
 	Kratos                = "kratos"
+	Basic                 = "basic"
 )
 
 var skipAuthPaths = []string{
@@ -65,8 +61,15 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 	)
 
 	switch vars.AuthMode {
+	case Basic:
+		UseBasic(e)
+		if admin, err := GetOrCreateAdminUser(ctx); err != nil {
+			return fmt.Errorf("failed to created admin user: %v", err)
+		} else if admin != nil {
+			adminUserID = admin.ID.String()
+		}
 	case Kratos:
-		kratosHandler := NewKratosHandler(KratosAPI, KratosAdminAPI, api.DefaultConfig.Postgrest.JWTSecret)
+		kratosHandler := NewKratosHandler()
 		adminUserID, err = kratosHandler.CreateAdminUser(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to created admin user: %v", err)
@@ -80,14 +83,7 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 		e.POST("/auth/invite_user", kratosHandler.InviteUser, rbac.Authorization(rbac.ObjectAuth, rbac.ActionUpdate))
 
 	case Clerk:
-		if ClerkJWKSURL == "" {
-			return fmt.Errorf("failed to start server: clerk-jwks-url is required")
-		}
-		if ClerkOrgID == "" {
-			return fmt.Errorf("failed to start server: clerk-org-id is required")
-		}
-
-		clerkHandler, err := NewClerkHandler(ClerkJWKSURL, ClerkOrgID, api.DefaultConfig.Postgrest.JWTSecret)
+		clerkHandler, err := NewClerkHandler()
 		if err != nil {
 			logger.Fatalf("failed to initialize clerk client: %v", err)
 		}
