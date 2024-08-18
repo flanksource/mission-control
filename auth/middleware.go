@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/hash"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/gomplate/v3"
 	"github.com/flanksource/incident-commander/db"
@@ -19,6 +21,7 @@ import (
 	"github.com/labstack/echo/v4"
 	client "github.com/ory/client-go"
 	"github.com/patrickmn/go-cache"
+	slogecho "github.com/samber/slog-echo"
 )
 
 var (
@@ -168,4 +171,12 @@ type sessionCache struct {
 
 func basicAuthCacheKey(username, separator, password string) string {
 	return hash.Sha256Hex(fmt.Sprintf("%s:%s:%s", username, separator, password))
+}
+
+func AddLoginContext(c echo.Context, person *models.Person) {
+	if person == nil {
+		return
+	}
+	slogecho.AddCustomAttributes(c, slog.String("user.name", person.Name))
+	slogecho.AddCustomAttributes(c, slog.String("user.id", person.ID.String()))
 }
