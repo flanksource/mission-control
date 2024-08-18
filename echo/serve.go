@@ -16,7 +16,9 @@ import (
 	cutils "github.com/flanksource/commons/utils"
 	dutyApi "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
+	dutyEcho "github.com/flanksource/duty/echo"
 	"github.com/flanksource/duty/schema/openapi"
+	"github.com/flanksource/duty/telemetry"
 	"github.com/flanksource/incident-commander/agent"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/auth"
@@ -48,6 +50,8 @@ var (
 	AllowedCORS []string
 )
 
+var otelShutdown func(gocontext.Context) error
+
 var handlers []func(e *echov4.Echo)
 
 func RegisterRoutes(fn func(e *echov4.Echo)) {
@@ -58,6 +62,8 @@ func New(ctx context.Context) *echov4.Echo {
 	ctx.ClearCache()
 	e := echov4.New()
 	e.HideBanner = true
+
+	otelShutdown = telemetry.InitTracer()
 
 	e.Use(otelecho.Middleware("mission-control", otelecho.WithSkipper(telemetryURLSkipper)))
 
@@ -97,7 +103,7 @@ func New(ctx context.Context) *echov4.Echo {
 		}
 	}
 
-	AddDebugHandlers(e)
+	dutyEcho.AddDebugHandlers(e, rbac.Authorization(rbac.ObjectMonitor, rbac.ActionUpdate))
 
 	e.Use(ServerCache)
 
@@ -109,11 +115,6 @@ func New(ctx context.Context) *echov4.Echo {
 
 	e.GET("/metrics", echoprometheus.NewHandlerWithConfig(echoprometheus.HandlerConfig{
 		Gatherer: prom.DefaultGatherer,
-	}))
-
-	e.Use(middleware.CORSWithConfig(middleware.CORSConfig{
-		AllowCredentials: true,
-		AllowOrigins:     AllowedCORS,
 	}))
 
 	e.GET("/health", func(c echov4.Context) error {
@@ -254,6 +255,10 @@ func Shutdown(e *echov4.Echo) {
 
 	if err := e.Shutdown(ctx); err != nil {
 		e.Logger.Fatal(err)
+	}
+
+	if otelShutdown != nil {
+		otelShutdown(ctx)
 	}
 }
 
