@@ -258,7 +258,7 @@ func Shutdown(e *echov4.Echo) {
 	}
 
 	if otelShutdown != nil {
-		otelShutdown(ctx)
+		_ = otelShutdown(ctx)
 	}
 }
 
