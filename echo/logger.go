@@ -2,6 +2,7 @@ package echo
 
 import (
 	"log/slog"
+	"strings"
 
 	"github.com/flanksource/commons/console"
 	"github.com/flanksource/commons/logger"
@@ -56,9 +57,13 @@ func NewHttpPrettyLogger(ctx context.Context) echo.MiddlewareFunc {
 }
 
 func NewSlogLogger(ctx context.Context, logger *slog.Logger) echo.MiddlewareFunc {
-	slogecho.HiddenRequestHeaders["vary"] = struct{}{}
-	// slogecho.HiddenRequestHeaders["vary"] = {}
-	slogecho.HiddenRequestHeaders["accept-encoding"] = struct{}{}
+	var ignore = "x-scheme,vary,accept-encoding,accept,accept-language,sec-ch-ua-platform,sec-fetch-mode,sec-fetch-site,sec-fetch-user,upgrade-insecure-requests,sec-fetch-dest,pragma,prefer,connection,cache-control,x-forwarded-proto,x-real-ip,x-request-id,referer,sec-ch-ua,sec-ch-ua-mobile,x-forwarded-port,service-worker"
+
+	for _, h := range strings.Split(ignore, ",") {
+		slogecho.HiddenRequestHeaders[h] = struct{}{}
+		slogecho.HiddenResponseHeaders[h] = struct{}{}
+	}
+
 	slogecho.RequestBodyMaxSize = ctx.Properties().Int("access.log.request.body.max", 2048)
 	slogecho.ResponseBodyMaxSize = ctx.Properties().Int("access.log.response.body.max", 8192)
 	// sanitize := ctx.Properties().On(false, "http.server.skip.sanitize"),

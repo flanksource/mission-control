@@ -26,7 +26,6 @@ var (
 )
 
 func init() {
-	logger.Infof("Adding /upstream routes")
 	echoSrv.RegisterRoutes(RegisterRoutes)
 }
 
