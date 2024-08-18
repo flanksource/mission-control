@@ -342,8 +342,8 @@ require (
 	sigs.k8s.io/yaml v1.4.0 // indirect
 )
 
-replace github.com/flanksource/commons => ../commons
+// replace github.com/flanksource/commons => ../commons
 
-replace github.com/flanksource/duty => ../duty
+// replace github.com/flanksource/duty => ../duty
 
 // replace github.com/flanksource/gomplate/v3 => ../gomplate
