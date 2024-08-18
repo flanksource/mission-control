@@ -24,12 +24,11 @@ const (
 )
 
 var (
-	ClerkJWKSURL string
+	ClerkJwksUrl string
 	ClerkOrgID   string
 )
 
 type ClerkHandler struct {
-	dbJwtSecret      string
 	jwksURL          string
 	orgID            string
 	tokenCache       *cache.Cache
@@ -37,11 +36,17 @@ type ClerkHandler struct {
 	userCache        *cache.Cache
 }
 
-func NewClerkHandler(jwksURL, orgID, dbJwtSecret string) (*ClerkHandler, error) {
+func NewClerkHandler() (*ClerkHandler, error) {
+	if ClerkJwksUrl == "" {
+		return nil, fmt.Errorf("failed to start server: clerk-jwks-url is required")
+	}
+	if ClerkOrgID == "" {
+		return nil, fmt.Errorf("failed to start server: clerk-org-id is required")
+	}
+
 	return &ClerkHandler{
-		jwksURL:          jwksURL,
-		orgID:            orgID,
-		dbJwtSecret:      dbJwtSecret,
+		jwksURL:          ClerkJwksUrl,
+		orgID:            ClerkOrgID,
 		tokenCache:       cache.New(3*24*time.Hour, 12*time.Hour),
 		accessTokenCache: cache.New(3*24*time.Hour, 12*time.Hour),
 		userCache:        cache.New(3*24*time.Hour, 12*time.Hour),
@@ -79,7 +84,7 @@ func (h ClerkHandler) Session(next echo.HandlerFunc) echo.HandlerFunc {
 			if strings.ToLower(username) != "token" {
 				return c.String(http.StatusUnauthorized, "Unauthorized: invalid username for basic auth")
 			}
-			accessToken, err := getAccessToken(ctx, h.accessTokenCache, password)
+			accessToken, err := getAccessToken(ctx, password)
 			if err != nil {
 				if errors.Is(err, errInvalidTokenFormat) || errors.Is(err, errTokenExpired) {
 					ctx.GetSpan().RecordError(err)
@@ -126,19 +131,15 @@ func (h ClerkHandler) Session(next echo.HandlerFunc) echo.HandlerFunc {
 
 		// This is a catch-all if user is unset
 		// In normal scenarios either the user will be set via session or token
-		// and errors in those flows should be handled eariler.
+		// and errors in those flows should be handled earlier.
 		// This condition should never be met, if it is, there is an implementation problem
 		if user == nil {
 			return c.String(http.StatusUnauthorized, "Unable to authenticate user")
 		}
 
-		token, err := getDBToken(ctx, h.tokenCache, h.dbJwtSecret, sessID, user.ID.String())
-		if err != nil {
-			logger.Errorf("Error generating JWT Token: %v", err)
-			return c.String(http.StatusUnauthorized, "Unauthorized")
+		if err := InjectToken(ctx, c, user, sessID); err != nil {
+			return err
 		}
-
-		c.Request().Header.Set(echo.HeaderAuthorization, fmt.Sprintf("Bearer %s", token))
 
 		ctx.GetSpan().SetAttributes(
 			attribute.String("clerk-user-id", user.ExternalID),

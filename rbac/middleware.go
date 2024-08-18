@@ -45,8 +45,12 @@ func DbMiddleware() MiddlewareFunc {
 
 			object := GetObjectByTable(resource)
 
-			if object == "" || action == "" {
+			if action == "" {
 				return c.String(http.StatusForbidden, ErrMisconfiguredRBAC.Error())
+			}
+			if object == "" {
+				return c.String(http.StatusNotFound, "")
+
 			}
 
 			ctx := c.Request().Context().(context.Context)

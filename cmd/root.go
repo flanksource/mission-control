@@ -56,6 +56,7 @@ var Root = &cobra.Command{
 			logger.Errorf(err.Error())
 		}
 		dutyApi.DefaultConfig.SkipMigrationFiles = []string{"012_changelog.sql"}
+		dutyApi.DefaultConfig = dutyApi.DefaultConfig.ReadEnv()
 	},
 }
 
@@ -85,7 +86,7 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&api.ConfigDB, "config-db", "http://config-db:8080", "Config DB URL")
 	flags.StringVar(&auth.KratosAPI, "kratos-api", "http://kratos-public:80", "Kratos API service")
 	flags.StringVar(&auth.KratosAdminAPI, "kratos-admin", "http://kratos-admin:80", "Kratos Admin API service")
-	flags.StringVar(&auth.ClerkJWKSURL, "clerk-jwks-url", "", "Clerk JWKS URL")
+	flags.StringVar(&auth.ClerkJwksUrl, "clerk-jwks-url", "", "Clerk JWKS URL")
 	flags.StringVar(&auth.ClerkOrgID, "clerk-org-id", "", "Clerk Organization ID")
 	flags.StringVar(&vars.AuthMode, "auth", "", "Enable authentication via Kratos or Clerk. Valid values are [kratos, clerk, basic]")
 	flags.StringVar(&auth.HtpasswdFile, "htpasswd-file", "htpasswd", "Path to htpasswd file for basic authentication")

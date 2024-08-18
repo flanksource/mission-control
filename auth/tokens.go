@@ -3,14 +3,19 @@ package auth
 import (
 	"encoding/base64"
 	"errors"
+	"fmt"
+	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/MicahParks/keyfunc"
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/labstack/echo/v4"
+
 	"github.com/flanksource/incident-commander/db"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/patrickmn/go-cache"
@@ -18,30 +23,42 @@ import (
 	"gorm.io/gorm"
 )
 
-func generateDBToken(secret, id string) (string, error) {
-	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
-		"role": DefaultPostgrestRole,
-		"id":   id,
-	})
-	return token.SignedString([]byte(secret))
+var tokenCache = cache.New(1*time.Hour, 1*time.Hour)
+
+func InjectToken(ctx context.Context, c echo.Context, user *models.Person, sessID string) error {
+	token, err := GetOrCreateJWTToken(ctx, user, sessID)
+	if err != nil {
+		logger.Errorf("Error generating JWT Token: %v", err)
+		return c.String(http.StatusUnauthorized, "Unauthorized")
+
+	}
+
+	c.Request().Header.Set(echo.HeaderAuthorization, fmt.Sprintf("Bearer %s", token))
+	return nil
 }
 
-func getDBToken(ctx context.Context, c *cache.Cache, dbJWTSecret, sessID, userID string) (string, error) {
-	key := sessID + userID
-	if token, exists := c.Get(key); exists {
+func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId string) (string, error) {
+	config := api.DefaultConfig
+	key := sessionId + user.ID.String()
+
+	if token, exists := tokenCache.Get(key); exists {
 		return token.(string), nil
 	}
-	// Adding Authorization Token for PostgREST
-	token, err := generateDBToken(dbJWTSecret, userID)
+
+	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+		"role": config.Postgrest.DBRole,
+		"id":   user.ID.String(),
+	}).SignedString([]byte(config.Postgrest.JWTSecret))
+
 	if err != nil {
-		return "", err
+		return "", ctx.Oops().Wrap(err)
 	}
 
-	if err := db.UpdateLastLogin(ctx, userID); err != nil {
-		logger.Errorf("Error updating last login for user[%s]: %v", userID, err)
+	if err := db.UpdateLastLogin(ctx, user.ID.String()); err != nil {
+		ctx.Errorf("Error updating last login for user[%s]: %v", user, err)
 	}
 
-	c.SetDefault(key, token)
+	tokenCache.SetDefault(key, token)
 	return token, nil
 }
 
@@ -68,7 +85,7 @@ func getJWTKeyFunc(jwksURL string) jwt.Keyfunc {
 	return jwks.Keyfunc
 }
 
-func getAccessToken(ctx context.Context, tokenCache *cache.Cache, token string) (*models.AccessToken, error) {
+func getAccessToken(ctx context.Context, token string) (*models.AccessToken, error) {
 	if token, ok := tokenCache.Get(token); ok {
 		return token.(*models.AccessToken), nil
 	}
@@ -102,8 +119,8 @@ func getAccessToken(ctx context.Context, tokenCache *cache.Cache, token string) 
 	encodedHash := base64.URLEncoding.EncodeToString(hash)
 
 	query := `SELECT access_tokens.* FROM access_tokens WHERE value = ?`
-	var acessToken models.AccessToken
-	if err := ctx.DB().Raw(query, encodedHash).First(&acessToken).Error; err != nil {
+	var accessToken models.AccessToken
+	if err := ctx.DB().Raw(query, encodedHash).First(&accessToken).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
 		}
@@ -111,15 +128,15 @@ func getAccessToken(ctx context.Context, tokenCache *cache.Cache, token string) 
 		return nil, err
 	}
 
-	if acessToken.ExpiresAt == nil {
-		tokenCache.Set(token, &acessToken, -1)
+	if accessToken.ExpiresAt == nil {
+		tokenCache.Set(token, &accessToken, -1)
 	} else {
-		if acessToken.ExpiresAt.Before(time.Now()) {
+		if accessToken.ExpiresAt.Before(time.Now()) {
 			return nil, errTokenExpired
 		}
 
-		tokenCache.Set(token, &acessToken, time.Until(*acessToken.ExpiresAt))
+		tokenCache.Set(token, &accessToken, time.Until(*accessToken.ExpiresAt))
 	}
 
-	return &acessToken, nil
+	return &accessToken, nil
 }

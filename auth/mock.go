@@ -27,6 +27,10 @@ func MockAuthMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 			return c.String(http.StatusUnauthorized, "Unauthorized - User not found")
 		}
 
+		if err := InjectToken(ctx, c, &person, ""); err != nil {
+			return err
+		}
+
 		ctx = ctx.WithUser(&person)
 
 		c.SetRequest(c.Request().WithContext(ctx))
