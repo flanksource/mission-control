@@ -30,8 +30,9 @@ func InjectToken(ctx context.Context, c echo.Context, user *models.Person, sessI
 	if err != nil {
 		logger.Errorf("Error generating JWT Token: %v", err)
 		return c.String(http.StatusUnauthorized, "Unauthorized")
-
 	}
+
+	AddLoginContext(c, user)
 
 	c.Request().Header.Set(echo.HeaderAuthorization, fmt.Sprintf("Bearer %s", token))
 	return nil
