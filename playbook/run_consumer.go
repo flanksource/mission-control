@@ -200,7 +200,6 @@ func getNextAction(db *gorm.DB) (*models.PlaybookRunAction, error) {
 
 // ActionConsumer picks up scheduled actions runs scheduled for agents
 func ActionAgentConsumer(ctx context.Context) (int, error) {
-
 	ctx.Logger = ctx.Logger.WithSkipReportLevel(-1)
 
 	err := ctx.Transaction(func(ctx context.Context, _ trace.Span) error {
@@ -218,7 +217,7 @@ func ActionAgentConsumer(ctx context.Context) (int, error) {
 		}
 
 		return runner.ExecuteAndSaveAction(ctx, spec.PlaybookID, run, *spec)
-	}, "agent-runner")
+	})
 
 	if err == nil {
 		return 0, err
@@ -265,7 +264,7 @@ func ActionConsumer(ctx context.Context) (int, error) {
 		}
 
 		return nil
-	}, "action-consumer")
+	})
 
 	if err == nil {
 		return 0, nil
@@ -278,7 +277,7 @@ func ActionConsumer(ctx context.Context) (int, error) {
 func RunConsumer(ctx context.Context) (int, error) {
 	var consumed = 0
 	err := ctx.Transaction(func(ctx context.Context, _ trace.Span) error {
-		tx := ctx.DB()
+		tx := ctx.FastDB("playbook.consumer")
 
 		query := `
 	SELECT playbook_runs.*

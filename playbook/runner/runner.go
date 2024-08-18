@@ -31,6 +31,7 @@ const (
 )
 
 func GetNextActionToRun(ctx context.Context, playbook models.Playbook, run models.PlaybookRun) (action *v1.PlaybookAction, err error) {
+	ctx.Logger.V(3).Infof("Getting next action to run for playbook %s run %s", playbook.Name, run.ID)
 	ctx = ctx.WithObject(playbook, run)
 	if validationErr, err := openapi.ValidatePlaybookSpec(playbook.Spec); err != nil {
 		ctx.Tracef("playbook validation error")
@@ -42,8 +43,6 @@ func GetNextActionToRun(ctx context.Context, playbook models.Playbook, run model
 
 	var playbookSpec v1.PlaybookSpec
 	if err := json.Unmarshal(playbook.Spec, &playbookSpec); err != nil {
-		ctx.Tracef("")
-
 		return nil, ctx.Oops().Wrap(err)
 	}
 
@@ -59,17 +58,13 @@ func GetNextActionToRun(ctx context.Context, playbook models.Playbook, run model
 	}
 
 	if lastRanAction.Name == "" { // Nothing has run yet
+		ctx.Logger.V(4).Infof("no previous action, running first action")
 		return &playbookSpec.Actions[0], nil
 	}
 
 	for i, action := range playbookSpec.Actions {
 		if i == len(playbookSpec.Actions)-1 {
-			// All the actions have run
-			actionStatuses, err := db.GetActionStatuses(ctx, run.ID)
-			if err != nil {
-				return nil, ctx.Oops().Wrap(err)
-			}
-			return nil, ctx.Oops("db").Wrap(run.End(ctx.DB(), evaluateRunStatus(actionStatuses)))
+			return nil, nil
 		}
 
 		if action.Name == lastRanAction.Name {
@@ -92,16 +87,6 @@ func findNextActionWithFilter(actions []v1.PlaybookAction) *v1.PlaybookAction {
 		}
 	}
 	return nil
-}
-
-// evaluateRunStatus determines the best fitting run status based on the status of the actions.
-func evaluateRunStatus(statuses []models.PlaybookActionStatus) models.PlaybookRunStatus {
-	for _, status := range statuses {
-		if status == models.PlaybookActionStatusFailed {
-			return models.PlaybookRunStatusFailed
-		}
-	}
-	return models.PlaybookRunStatusCompleted
 }
 
 func getActionSpec(ctx context.Context, playbook *models.Playbook, name string) (*v1.PlaybookAction, error) {
@@ -138,8 +123,6 @@ func CheckPlaybookFilter(ctx context.Context, playbookSpec v1.PlaybookSpec, temp
 // ScheduleRun finds the next action step that needs to run and
 // creates the PlaybookActionRun in a scheduled status, with an optional agentId
 func ScheduleRun(ctx context.Context, run models.PlaybookRun) error {
-	ctx, span := ctx.StartSpan("HandleRun")
-	defer span.End()
 
 	var playbook models.Playbook
 
@@ -155,8 +138,7 @@ func ScheduleRun(ctx context.Context, run models.PlaybookRun) error {
 		return ctx.Oops().Wrap(err)
 	}
 	if action == nil {
-		ctx.Tracef("Playbook is complete, no more actions to run")
-		return nil
+		return ctx.Oops("db").Wrap(run.End(ctx.DB()))
 	}
 
 	ctx = ctx.WithObject(playbook, action, run)
