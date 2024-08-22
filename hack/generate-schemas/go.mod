@@ -4,7 +4,7 @@ go 1.22.3
 
 require (
 	github.com/flanksource/commons v1.27.0
-	github.com/flanksource/duty v1.0.590
+	github.com/flanksource/duty v1.0.591
 	github.com/flanksource/incident-commander v0.0.0-00010101000000-000000000000
 	github.com/spf13/cobra v1.8.0
 )
