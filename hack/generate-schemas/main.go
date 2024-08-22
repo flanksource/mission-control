@@ -21,7 +21,7 @@ var schemas = map[string]any{
 var generateSchema = &cobra.Command{
 	Use: "generate-schema",
 	Run: func(cmd *cobra.Command, args []string) {
-		os.Mkdir(schemaPath, 0755)
+		_ = os.Mkdir(schemaPath, 0755)
 		for file, obj := range schemas {
 			p := path.Join(schemaPath, file+".schema.json")
 			if err := openapi.WriteSchemaToFile(p, obj); err != nil {
