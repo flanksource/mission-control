@@ -20,6 +20,7 @@ func GetAWSConfig(ctx *context.Context, conn connection.AWSConnection) (cfg aws.
 	}
 
 	if conn.Endpoint != "" {
+		// nolint:staticcheck // TODO: use the client from duty
 		options = append(options, config.WithEndpointResolverWithOptions(aws.EndpointResolverWithOptionsFunc(
 			func(service, region string, options ...any) (aws.Endpoint, error) {
 				return aws.Endpoint{
