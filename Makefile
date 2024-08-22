@@ -87,10 +87,21 @@ release: binaries
 lint:
 	golangci-lint run
 
+
+# Generate OpenAPI schema
+.PHONY: gen-schemas
+gen-schemas:
+	cp go.mod hack/generate-schemas && \
+	cd hack/generate-schemas && \
+	go mod edit -module=github.com/flanksource/incident-commander/hack/generate-schemas && \
+	go mod edit -require=github.com/flanksource/incident-commander@v1.0.0 && \
+ 	go mod edit -replace=github.com/flanksource/incident-commander=../../ && \
+	go mod tidy && \
+	go run ./main.go
+
 .PHONY: manifests
-manifests: controller-gen generate ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
+manifests: controller-gen generate gen-schemas ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
 	$(CONTROLLER_GEN) crd paths="./api/..." output:crd:artifacts:config=config/crds
-	cd hack/generate-schemas && go run ./main.go
 
 .PHONY: generate
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
