@@ -705,8 +705,8 @@ github.com/asaskevich/govalidator v0.0.0-20190424111038-f61b66f89f4a/go.mod h1:l
 github.com/asecurityteam/rolling v2.0.4+incompatible h1:WOSeokINZT0IDzYGc5BVcjLlR9vPol08RvI2GAsmB0s=
 github.com/asecurityteam/rolling v2.0.4+incompatible/go.mod h1:2D4ba5ZfYCWrIMleUgTvc8pmLExEuvu3PDwl+vnG58Q=
 github.com/aws/aws-sdk-go v1.44.122/go.mod h1:y4AeaBuwd2Lk+GepC1E9v0qOiTws0MIWAX4oIKwKHZo=
-github.com/aws/aws-sdk-go v1.49.16 h1:KAQwhLg296hfffRdh+itA9p7Nx/3cXS/qOa3uF9ssig=
-github.com/aws/aws-sdk-go v1.49.16/go.mod h1:LF8svs817+Nz+DmiMQKTO3ubZ/6IaTpq3TjupRn3Eqk=
+github.com/aws/aws-sdk-go v1.55.1 h1:ZTNPmbRMxaK5RlTJrBullX9r/rF1MPf3yAJOLlwDiT8=
+github.com/aws/aws-sdk-go v1.55.1/go.mod h1:eRwEWoyTWFMVYVQzKMNHWP5/RV4xIUGMQfXQHfHkpNU=
 github.com/aws/aws-sdk-go-v2 v1.30.4 h1:frhcagrVNrzmT95RJImMHgabt99vkXGslubDaDagTk8=
 github.com/aws/aws-sdk-go-v2 v1.30.4/go.mod h1:CT+ZPWXbYrci8chcARI3OmI/qgd+f6WtuLOoaIA8PR0=
 github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.5.4 h1:OCs21ST2LrepDfD3lwlQiOqIGp6JiEUqG84GzTDoyJs=
@@ -717,6 +717,8 @@ github.com/aws/aws-sdk-go-v2/credentials v1.17.28 h1:m8+AHY/ND8CMHJnPoH7PJIRakWG
 github.com/aws/aws-sdk-go-v2/credentials v1.17.28/go.mod h1:6TF7dSc78ehD1SL6KpRIPKMA1GyyWflIkjqg+qmf4+c=
 github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.12 h1:yjwoSyDZF8Jth+mUk5lSPJCkMC0lMy6FaCD51jm6ayE=
 github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.16.12/go.mod h1:fuR57fAgMk7ot3WcNQfb6rSEn+SUffl7ri+aa8uKysI=
+github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.15.7 h1:FnLf60PtjXp8ZOzQfhJVsqF0OtYKQZWQfqOLshh8YXg=
+github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.15.7/go.mod h1:tDVvl8hyU6E9B8TrnNrZQEVkQlB8hjJwcgpPhgtlnNg=
 github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.16 h1:TNyt/+X43KJ9IJJMjKfa3bNTiZbUP7DeCxfbTROESwY=
 github.com/aws/aws-sdk-go-v2/internal/configsources v1.3.16/go.mod h1:2DwJF39FlNAUiX5pAc0UNeiz16lK2t7IaFcm0LFHEgc=
 github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.6.16 h1:jYfy8UPmd+6kJW5YhY0L1/KftReOGxI/4NtVSTh9O/I=
@@ -754,6 +756,8 @@ github.com/bgentry/go-netrc v0.0.0-20140422174119-9fd32a8b3d3d/go.mod h1:6QX/PXZ
 github.com/bluekeyes/go-gitdiff v0.7.1 h1:graP4ElLRshr8ecu0UtqfNTCHrtSyZd3DABQm/DWesQ=
 github.com/bluekeyes/go-gitdiff v0.7.1/go.mod h1:QpfYYO1E0fTVHVZAZKiRjtSGY9823iCdvGXBcEzHGbM=
 github.com/bmatcuk/doublestar v1.1.1/go.mod h1:UD6OnuiIn0yFxxA2le/rnRU1G4RaI4UvFv1sNto9p6w=
+github.com/bmatcuk/doublestar/v4 v4.6.1 h1:FH9SifrbvJhnlQpztAx++wlkk70QBf0iBWDwNy7PA4I=
+github.com/bmatcuk/doublestar/v4 v4.6.1/go.mod h1:xBQ8jztBU6kakFMg+8WGxn0c6z1fTSPVIjEY1Wr7jzc=
 github.com/boombuler/barcode v1.0.0/go.mod h1:paBWMcWSl3LHKBqUq+rly7CNSldXjb2rDl3JlRe0mD8=
 github.com/boombuler/barcode v1.0.1/go.mod h1:paBWMcWSl3LHKBqUq+rly7CNSldXjb2rDl3JlRe0mD8=
 github.com/bsm/ginkgo/v2 v2.12.0 h1:Ny8MWAHyOepLGlLKYmXG4IEkioBysk6GpaRTLC8zwWs=
@@ -867,8 +871,8 @@ github.com/felixge/httpsnoop v1.0.4 h1:NFTV2Zj1bL4mc9sqWACXbQFVBBg2W3GPvqp8/ESS2
 github.com/felixge/httpsnoop v1.0.4/go.mod h1:m8KPJKqk1gH5J9DgRY2ASl2lWCfGKXixSwevea8zH2U=
 github.com/fergusstrange/embedded-postgres v1.25.0 h1:sa+k2Ycrtz40eCRPOzI7Ry7TtkWXXJ+YRsxpKMDhxK0=
 github.com/fergusstrange/embedded-postgres v1.25.0/go.mod h1:t/MLs0h9ukYM6FSt99R7InCHs1nW0ordoVCcnzmpTYw=
-github.com/flanksource/artifacts v1.0.7 h1:tLbY4+7l2H06Td3zSgGSwJy9Vfhto+M7L80cm0aqyyc=
-github.com/flanksource/artifacts v1.0.7/go.mod h1:pzO1hirM9RMrkJMsLbZbZyN6elsCwz8SNOk3z+mpv34=
+github.com/flanksource/artifacts v1.0.8 h1:Aucp8rYC0gI1+5joh3vv6+Ic8gb2VVe1rYLD6qzCFwc=
+github.com/flanksource/artifacts v1.0.8/go.mod h1:WUIzg0+qeHeFapPprdUVzSvZYFPLNNcqIbH1HKHZz3Q=
 github.com/flanksource/commons v1.27.0 h1:vdnSiDtYSdgegEit8bsefQlzookGVFBECSR49hAY6FU=
 github.com/flanksource/commons v1.27.0/go.mod h1:QFsj41YtvHSXqaVud5ddVYPF1bwBEmPkUioEsbg1lqc=
 github.com/flanksource/duty v1.0.595 h1:vEDxErduDiDAtnKddCv9CUjP1hrXh+vNY90JoOYU2DU=
@@ -885,6 +889,8 @@ github.com/flanksource/kopper v1.0.9 h1:IZq5HBai5BMnHruB6IdpglZ0GoKWgTK1S+buWBGi
 github.com/flanksource/kopper v1.0.9/go.mod h1:6JMCgy+a/mzoAbhN5wo3cbCXb8BdHBFabLgjsIVS6nA=
 github.com/flanksource/kubectl-neat v1.0.4 h1:t5/9CqgE84oEtB0KitgJ2+WIeLfD+RhXSxYrqb4X8yI=
 github.com/flanksource/kubectl-neat v1.0.4/go.mod h1:Un/Voyh3cmiZNKQrW/TkAl28nAA7vwnwDGVjRErKjOw=
+github.com/flanksource/s3fs/v2 v2.0.0-20240725044221-83a6635a9212 h1:HYf/+5pyMBSKMvU7b5dTDRihxjZxVYvUcp01FGfEpc8=
+github.com/flanksource/s3fs/v2 v2.0.0-20240725044221-83a6635a9212/go.mod h1:uUe9wx3l0wIkTJvxOumTCgsESmooemk9di3q0BvJ4Bg=
 github.com/fluxcd/gitkit v0.6.0 h1:iNg5LTx6ePo+Pl0ZwqHTAkhbUHxGVSY3YCxCdw7VIFg=
 github.com/fluxcd/gitkit v0.6.0/go.mod h1:svOHuKi0fO9HoawdK4HfHAJJseZDHHjk7I3ihnCIqNo=
 github.com/fluxcd/pkg/gittestserver v0.8.6 h1:YM8prVKB3LC9LBBe+a2p7l1BlfV9erXCgC1em9sbqW4=
