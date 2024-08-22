@@ -11,9 +11,9 @@ require (
 	github.com/casbin/gorm-adapter/v3 v3.26.0
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.25.0 // indirect
-	github.com/flanksource/commons v1.27.0
-	github.com/flanksource/duty v1.0.595
-	github.com/flanksource/gomplate/v3 v3.24.22
+	github.com/flanksource/commons v1.28.0
+	github.com/flanksource/duty v1.0.597
+	github.com/flanksource/gomplate/v3 v3.24.24
 	github.com/flanksource/kopper v1.0.9
 	github.com/gomarkdown/markdown v0.0.0-20240419095408-642f0ee99ae2
 	github.com/google/cel-go v0.20.1
@@ -26,8 +26,8 @@ require (
 	github.com/microsoft/kiota-authentication-azure-go v1.0.0
 	github.com/microsoftgraph/msgraph-sdk-go v1.13.0
 	github.com/mitchellh/mapstructure v1.5.0
-	github.com/onsi/ginkgo/v2 v2.17.2
-	github.com/onsi/gomega v1.33.0
+	github.com/onsi/ginkgo/v2 v2.20.1
+	github.com/onsi/gomega v1.34.1
 	github.com/ory/client-go v1.1.41
 	github.com/prometheus/client_golang v1.19.1
 	github.com/spf13/cobra v1.8.0
@@ -151,7 +151,7 @@ require (
 	github.com/google/btree v1.1.2 // indirect
 	github.com/google/gnostic-models v0.6.9-0.20230804172637-c7be7c783f49 // indirect
 	github.com/google/gops v0.3.28 // indirect
-	github.com/google/pprof v0.0.0-20240711041743-f6c9dda6c6da // indirect
+	github.com/google/pprof v0.0.0-20240727154555-813a5fbdbec8 // indirect
 	github.com/google/s2a-go v0.1.7 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.2 // indirect
@@ -226,11 +226,11 @@ require (
 	go.opentelemetry.io/otel/metric v1.24.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.0.0 // indirect
 	go.starlark.net v0.0.0-20231121155337-90ade8b19d09 // indirect
-	golang.org/x/exp v0.0.0-20240716175740-e3f259677ff7 // indirect
-	golang.org/x/mod v0.19.0 // indirect
-	golang.org/x/sync v0.7.0 // indirect
-	golang.org/x/term v0.22.0 // indirect
-	golang.org/x/tools v0.23.0 // indirect
+	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56 // indirect
+	golang.org/x/mod v0.20.0 // indirect
+	golang.org/x/sync v0.8.0 // indirect
+	golang.org/x/term v0.23.0 // indirect
+	golang.org/x/tools v0.24.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240318140521-94a12d6c2237 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240318140521-94a12d6c2237 // indirect
@@ -274,7 +274,7 @@ require (
 	github.com/cjlapao/common-go v0.0.39 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/fatih/structs v1.1.0 // indirect
-	github.com/go-logr/logr v1.4.1 // indirect
+	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang-jwt/jwt v3.2.2+incompatible // indirect
 	github.com/golang-jwt/jwt/v4 v4.5.0
@@ -326,11 +326,11 @@ require (
 	github.com/valyala/fasttemplate v1.2.2 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	go.opencensus.io v0.24.0 // indirect
-	golang.org/x/crypto v0.25.0
-	golang.org/x/net v0.27.0 // indirect
+	golang.org/x/crypto v0.26.0
+	golang.org/x/net v0.28.0 // indirect
 	golang.org/x/oauth2 v0.21.0 // indirect
-	golang.org/x/sys v0.22.0 // indirect
-	golang.org/x/text v0.16.0
+	golang.org/x/sys v0.23.0 // indirect
+	golang.org/x/text v0.17.0
 	golang.org/x/time v0.5.0 // indirect
 	google.golang.org/api v0.169.0
 	google.golang.org/genproto v0.0.0-20240227224415-6ceb2ff114de // indirect

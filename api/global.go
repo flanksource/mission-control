@@ -2,7 +2,6 @@ package api
 
 import (
 	"github.com/google/uuid"
-	"k8s.io/client-go/kubernetes"
 )
 
 var (
@@ -12,7 +11,6 @@ var (
 	CanaryCheckerPath string
 	ApmHubPath        string
 	ConfigDB          string
-	Kubernetes        kubernetes.Interface
 	Namespace         string
 
 	// Full URL of the mission control web UI.
