@@ -8,7 +8,6 @@ import (
 
 	"github.com/flanksource/commons/duration"
 	"github.com/flanksource/commons/utils"
-	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
 	"k8s.io/client-go/kubernetes"
@@ -338,19 +337,19 @@ func (t *AWSConnection) Populate(ctx connectionContext, k8s kubernetes.Interface
 		}
 	}
 
-	if accessKey, err := duty.GetEnvValueFromCache(k8s, t.AccessKey, namespace); err != nil {
+	if accessKey, err := ctx.GetEnvValueFromCache(t.AccessKey, namespace); err != nil {
 		return fmt.Errorf("could not parse AWS access key id: %v", err)
 	} else {
 		t.AccessKey.ValueStatic = accessKey
 	}
 
-	if secretKey, err := duty.GetEnvValueFromCache(k8s, t.SecretKey, namespace); err != nil {
+	if secretKey, err := ctx.GetEnvValueFromCache(t.SecretKey, namespace); err != nil {
 		return fmt.Errorf("could not parse AWS secret access key: %w", err)
 	} else {
 		t.SecretKey.ValueStatic = secretKey
 	}
 
-	if sessionToken, err := duty.GetEnvValueFromCache(k8s, t.SessionToken, namespace); err != nil {
+	if sessionToken, err := ctx.GetEnvValueFromCache(t.SessionToken, namespace); err != nil {
 		return fmt.Errorf("could not parse AWS session token: %w", err)
 	} else {
 		t.SessionToken.ValueStatic = sessionToken
