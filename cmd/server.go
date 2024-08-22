@@ -92,7 +92,6 @@ var Serve = &cobra.Command{
 
 		ctx.WithTracer(otel.GetTracerProvider().Tracer("mission-control"))
 		ctx = ctx.
-			WithKubernetes(api.Kubernetes).
 			WithNamespace(api.Namespace)
 
 		go jobs.Start(ctx)
