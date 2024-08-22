@@ -47,7 +47,7 @@ func GetActionForAgent(ctx context.Context, agent *models.Agent) (*ActionForAgen
 		return nil, ctx.Oops("db").Wrap(err)
 	}
 
-	if steps == nil {
+	if len(steps) == 0 {
 		return nil, nil
 	}
 	step := &steps[0]
