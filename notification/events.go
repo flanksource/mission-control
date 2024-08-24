@@ -2,12 +2,14 @@ package notification
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"sync"
 	"time"
 
 	sw "github.com/RussellLuo/slidingwindow"
+	"github.com/flanksource/commons/text"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
@@ -20,6 +22,8 @@ import (
 	"github.com/flanksource/incident-commander/utils/expression"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
+	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 var (
@@ -81,6 +85,44 @@ type notificationHandler struct {
 	Ring *events.EventRing
 }
 
+// Check if notification can be send in the interval based on group by, returns true if it can sent
+func checkRepeatInterval(ctx context.Context, n NotificationWithSpec, event models.Event) (bool, error) {
+	validKeys := map[string]string{
+		"notification_id": n.ID.String(),
+		"resource_id":     event.Properties["id"],
+		"source_event":    event.Name,
+	}
+	var clauses []clause.Expression
+	for _, g := range n.GroupBy {
+		if val, exists := validKeys[g]; exists {
+			clauses = append(clauses, clause.Eq{Column: g, Value: val})
+		}
+	}
+	var lastSent time.Time
+	if len(clauses) > 0 {
+		err := ctx.DB().Model(&models.NotificationSendHistory{}).Clauses(clauses...).Select("created_at").Scan(&lastSent).Error
+		if err != nil {
+			// Allow notification to be sent as there is no history
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return true, nil
+			}
+			return false, fmt.Errorf("error querying db for last send notification[%s]: %w", n.ID, err)
+		}
+		if lastSent.IsZero() {
+			return false, fmt.Errorf("last sent not found for notification[%s]", n.ID)
+		}
+		interval, err := text.ParseDuration(n.RepeatInterval)
+		if err != nil {
+			return false, fmt.Errorf("error parsing repeat interval[%s] to time.Duration: %w", n.RepeatInterval, err)
+		}
+		if time.Since(lastSent) <= *interval {
+			return false, nil
+		}
+	}
+
+	return true, nil
+}
+
 // addNotificationEvent responds to a event that can possibly generate a notification.
 // If a notification is found for the given event and passes all the filters, then
 // a new `notification.send` event is created.
@@ -101,6 +143,8 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 
 	t.Ring.Add(event, celEnv)
 
+	// Check repeat interval
+	// (notif_id, resource_id, event_name)
 	for _, id := range notificationIDs {
 		n, err := GetNotification(ctx, id)
 		if err != nil {
@@ -111,11 +155,22 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 			continue
 		}
 
+		// TODO: How does this get unset ?
 		if n.Error != nil {
 			// A notification that currently has errors is skipped.
 			continue
 		}
 
+		// Repeat interval check
+		if n.RepeatInterval != "" && n.GroupBy != nil {
+			allow, err := checkRepeatInterval(ctx, *n, event)
+			if err != nil {
+				ctx.Errorf("error checking repeat interval for notification[%s]: %v", n.ID, err)
+			} else if !allow {
+				ctx.Tracef("skipping notification[%s] due to repeat interval", n.ID)
+				continue
+			}
+		}
 		if valid, err := expression.Eval(n.Filter, celEnv, allEnvVars); err != nil {
 			logs.IfError(db.UpdateNotificationError(id, err.Error()), "failed to update notification")
 			continue
@@ -136,7 +191,7 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 		for _, payload := range payloads {
 			if !rateLimiter.Allow() {
 				// rate limited notifications are simply dropped.
-				ctx.Warnf("rate limited  event=%s id=%s ", event.Name, id)
+				ctx.Warnf("notification rate limited event=%s id=%s ", event.Name, id)
 				ctx.Counter("notification_rate_limited", "id", id).Add(1)
 				continue
 			}
@@ -203,6 +258,10 @@ func sendNotifications(ctx context.Context, events models.Events) models.Events 
 func getEnvForEvent(ctx context.Context, event models.Event, properties map[string]string) (map[string]any, error) {
 	env := make(map[string]any)
 
+	env["event"] = event.Name
+	if v, ok := event.Properties["id"]; ok {
+		env["resource_id"] = v
+	}
 	if strings.HasPrefix(event.Name, "check.") {
 		checkID := properties["id"]
 		lastRuntime := event.Properties["last_runtime"]
