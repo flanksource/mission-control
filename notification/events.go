@@ -2,7 +2,6 @@ package notification
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"sync"
@@ -22,7 +21,6 @@ import (
 	"github.com/flanksource/incident-commander/utils/expression"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
-	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
@@ -100,17 +98,18 @@ func checkRepeatInterval(ctx context.Context, n NotificationWithSpec, event mode
 	}
 	var lastSent time.Time
 	if len(clauses) > 0 {
-		err := ctx.DB().Model(&models.NotificationSendHistory{}).Clauses(clauses...).Select("created_at").Scan(&lastSent).Error
-		if err != nil {
-			// Allow notification to be sent as there is no history
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return true, nil
-			}
-			return false, fmt.Errorf("error querying db for last send notification[%s]: %w", n.ID, err)
+		tx := ctx.DB().Model(&models.NotificationSendHistory{}).Clauses(clauses...).Select("created_at").Scan(&lastSent)
+		if tx.Error != nil {
+			return false, fmt.Errorf("error querying db for last send notification[%s]: %w", n.ID, tx.Error)
+		}
+		// Allow notification to be sent as there is no history
+		if tx.RowsAffected == 0 {
+			return true, nil
 		}
 		if lastSent.IsZero() {
 			return false, fmt.Errorf("last sent not found for notification[%s]", n.ID)
 		}
+
 		interval, err := text.ParseDuration(n.RepeatInterval)
 		if err != nil {
 			return false, fmt.Errorf("error parsing repeat interval[%s] to time.Duration: %w", n.RepeatInterval, err)
@@ -143,8 +142,6 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 
 	t.Ring.Add(event, celEnv)
 
-	// Check repeat interval
-	// (notif_id, resource_id, event_name)
 	for _, id := range notificationIDs {
 		n, err := GetNotification(ctx, id)
 		if err != nil {
@@ -164,6 +161,8 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 		// Repeat interval check
 		if n.RepeatInterval != "" && n.GroupBy != nil {
 			allow, err := checkRepeatInterval(ctx, *n, event)
+			// If there are any errors in calculating interval, we sent the notification
+			// and log the error
 			if err != nil {
 				ctx.Errorf("error checking repeat interval for notification[%s]: %v", n.ID, err)
 			} else if !allow {
@@ -258,10 +257,6 @@ func sendNotifications(ctx context.Context, events models.Events) models.Events 
 func getEnvForEvent(ctx context.Context, event models.Event, properties map[string]string) (map[string]any, error) {
 	env := make(map[string]any)
 
-	env["event"] = event.Name
-	if v, ok := event.Properties["id"]; ok {
-		env["resource_id"] = v
-	}
 	if strings.HasPrefix(event.Name, "check.") {
 		checkID := properties["id"]
 		lastRuntime := event.Properties["last_runtime"]
