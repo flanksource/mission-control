@@ -1,13 +1,16 @@
 package connectors
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"net/url"
 	"regexp"
 	"strings"
 
+	"github.com/flanksource/duty/context"
+	"github.com/samber/lo"
+
+	"github.com/flanksource/commons/logger"
 	"github.com/go-git/go-billy/v5"
 	git "github.com/go-git/go-git/v5"
 	"github.com/jenkins-x/go-scm/scm"
@@ -39,14 +42,32 @@ type GitopsAPISpec struct {
 	// Open a new Pull request from the branch back to the base
 	PullRequest *PullRequestTemplate `json:"pull_request,omitempty"`
 
-	User     string `json:"auth_user,omitempty"`
+	User     string `json:"username,omitempty"`
 	Password string `json:"password,omitempty"`
+
+	Force bool `json:"force,omitempty"`
 
 	AccessToken string `json:"access_token,omitempty"`
 
 	// For SSH repositories the secret must contain SSH_PRIVATE_KEY, SSH_PRIVATE_KEY_PASSORD
 	SSHPrivateKey         string `json:"ssh_private_key,omitempty"`
 	SSHPrivateKeyPassword string `json:"ssh_private_key_password,omitempty"`
+}
+
+func (g GitopsAPISpec) GetContext() map[string]any {
+	return map[string]any{
+		"service":               g.Service,
+		"repository":            g.Repository,
+		"base":                  g.Base,
+		"branch":                g.Branch,
+		"author":                g.CommitAuthor,
+		"author.email":          g.CommitAuthorEmail,
+		"user":                  logger.PrintableSecret(g.User),
+		"password":              logger.PrintableSecret(g.Password),
+		"accessToken":           logger.PrintableSecret(g.AccessToken),
+		"sshPrivateKey":         logger.PrintableSecret(g.SSHPrivateKey),
+		"sshPrivateKeyPassword": logger.PrintableSecret(g.SSHPrivateKeyPassword),
+	}
 }
 
 type PullRequest scm.PullRequest
@@ -86,12 +107,15 @@ type Connector interface {
 }
 
 func NewConnector(gitConfig *GitopsAPISpec) (Connector, error) {
+
+	token := lo.CoalesceOrEmpty(gitConfig.AccessToken, gitConfig.Password, gitConfig.User)
+
 	if owner, repo, ok := parseGenericRepoURL(gitConfig.Repository, "github.com", false); ok {
-		return NewAccessTokenClient(ServiceGithub, owner, repo, gitConfig.AccessToken)
+		return NewAccessTokenClient(ServiceGithub, owner, repo, token)
 	} else if owner, repo, ok := parseGenericRepoURL(gitConfig.Repository, "gitlab.com", gitConfig.Service == ServiceGitlab); ok {
-		return NewAccessTokenClient(ServiceGitlab, owner, repo, gitConfig.AccessToken)
+		return NewAccessTokenClient(ServiceGitlab, owner, repo, token)
 	} else if azureOrg, azureProject, azureRepo, ok := parseAzureDevopsRepo(gitConfig.Repository); ok {
-		return NewAccessTokenClient("azure", fmt.Sprintf("%s/%s", azureOrg, azureProject), azureRepo, gitConfig.AccessToken)
+		return NewAccessTokenClient("azure", fmt.Sprintf("%s/%s", azureOrg, azureProject), azureRepo, token)
 	} else if strings.HasPrefix(gitConfig.Repository, "ssh://") {
 		sshURL := gitConfig.Repository[6:]
 		user := strings.Split(sshURL, "@")[0]

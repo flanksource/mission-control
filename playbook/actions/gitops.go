@@ -39,6 +39,7 @@ type GitOpsActionResult struct {
 }
 
 func (t *GitOps) log(msg string, args ...any) {
+	t.Logger.V(3).Infof(msg, args...)
 	msg = fmt.Sprintf("%s %s", time.Now().Format(time.RFC3339), msg)
 	t.logLines = append(t.logLines, fmt.Sprintf(msg, args...))
 }
@@ -47,29 +48,30 @@ func (t *GitOps) Run(ctx context.Context, action v1.GitOpsAction) (*GitOpsAction
 	var response GitOpsActionResult
 
 	if len(action.Patches) == 0 && len(action.Files) == 0 {
-		return nil, fmt.Errorf("no patches or files specified on gitops action")
+		return nil, ctx.Oops().Errorf("no patches or files specified on gitops action")
 	}
 
 	if err := t.generateSpec(ctx, action); err != nil {
 		return nil, err
 	}
+	ctx = ctx.WithAppendObject(t.spec)
 
 	connector, workTree, err := t.cloneRepo(ctx, action)
 	if err != nil {
-		return nil, fmt.Errorf("failed to clone repo: %w", err)
+		return nil, oops.Wrapf(err, "failed to clone repo")
 	}
 	t.workTree = workTree
 
 	if err := t.applyPatches(ctx, action); err != nil {
-		return nil, fmt.Errorf("failed to apply patches: %w", err)
+		return nil, oops.Wrapf(err, "failed to apply patches")
 	}
 
 	if err := t.modifyFiles(ctx, action); err != nil {
-		return nil, fmt.Errorf("failed to modify files: %w", err)
+		return nil, oops.Wrapf(err, "failed to modify files")
 	}
 
 	if hash, err := git.CommitAndPush(ctx, connector, workTree, t.spec); err != nil {
-		return nil, fmt.Errorf("failed to commit and push: %w", err)
+		return nil, oops.Wrapf(err, "failed to commit and push")
 	} else {
 		t.log("committed(%s) and pushed changes", hash)
 	}
@@ -79,7 +81,7 @@ func (t *GitOps) Run(ctx context.Context, action v1.GitOpsAction) (*GitOpsAction
 
 		pr, err := t.createPR(ctx, connector)
 		if err != nil {
-			return nil, err
+			return nil, ctx.Oops().Wrap(err)
 		}
 
 		if _pr, err := pr.AsMap(); err != nil {
@@ -124,41 +126,51 @@ func (t *GitOps) generateSpec(ctx context.Context, action v1.GitOpsAction) error
 	if action.Repo.Connection != "" {
 		conn, err := ctx.HydrateConnectionByURL(action.Repo.Connection)
 		if err != nil {
-			return err
+			return ctx.Oops().Wrap(err)
 		} else if conn == nil {
-			return fmt.Errorf("connection %s not found", action.Repo.Connection)
+			return ctx.Oops().Errorf("connection %s not found", action.Repo.Connection)
 		}
 
 		switch conn.Type {
 		case models.ConnectionTypeGithub, models.ConnectionTypeGitlab, models.ConnectionTypeAzureDevops:
+			ctx.Logger.V(6).Infof("Using %s authentication token %v", conn.Type, logger.PrintableSecret(conn.Password))
 			t.spec.AccessToken = conn.Password
 			t.shouldCreatePR = true
 
 		case models.ConnectionTypeHTTP:
+			ctx.Logger.V(6).Infof("Using http basic auth %s:%s", logger.PrintableSecret(conn.Username), logger.PrintableSecret(conn.Password))
+
 			t.spec.User = conn.Username
 			t.spec.Password = conn.Password
 
 		case models.ConnectionTypeGit:
+			ctx.Logger.V(6).Infof("Using git:// user=%s key=%s password=%s", logger.PrintableSecret(conn.Username), logger.PrintableSecret(conn.Certificate), logger.PrintableSecret(conn.Password))
+
 			t.spec.User = conn.Username
 			t.spec.Password = conn.Password
 			t.spec.SSHPrivateKey = conn.Certificate
 			t.spec.SSHPrivateKeyPassword = conn.Password
 
 		default:
-			return fmt.Errorf("unsupported connection type: %s", conn.Type)
+			return ctx.Oops().Errorf("unsupported connection type: %s", conn.Type)
 		}
 	}
 
+	}
+
+	t.shouldCreatePR = action.PullRequest != nil
 	if action.PullRequest == nil {
-		t.shouldCreatePR = false
+		ctx.Logger.V(3).Infof("Skipping PR creation, no pull request details provided")
 	}
 
 	if t.shouldCreatePR && action.Repo.Base == action.Repo.Branch {
-		logger.Warnf("no base branch was provided on gitops action. So no PR will be created")
+		ctx.Warnf("no base branch was provided on gitops action. So no PR will be created")
 		t.shouldCreatePR = false
 	}
 
 	if t.shouldCreatePR {
+
+		ctx.Logger.V(3).Infof("Will create a PR from %s -> %s", action.Repo.Branch, action.Repo.Base)
 		t.spec.PullRequest = &connectors.PullRequestTemplate{
 			Base:   action.Repo.Base,
 			Branch: action.Repo.Branch,
@@ -190,7 +202,7 @@ func (t *GitOps) applyPatches(ctx context.Context, action v1.GitOpsAction) error
 		for _, path := range paths {
 			relativePath, err := filepath.Rel(t.workTree.Filesystem.Root(), path)
 			if err != nil {
-				return fmt.Errorf("failed to get relative path: %w", err)
+				return ctx.Oops().Wrap(err)
 			}
 			t.log("Patching %s", relativePath)
 

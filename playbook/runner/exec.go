@@ -10,7 +10,6 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/playbook/actions"
 	"github.com/google/uuid"
-	"github.com/samber/lo"
 	"github.com/samber/oops"
 )
 
@@ -59,11 +58,9 @@ func executeAction(ctx context.Context, playbookID any, runID uuid.UUID, runActi
 	} else if actionSpec.Exec != nil {
 		var e actions.ExecAction
 		result, err = e.Run(ctx, *actionSpec.Exec)
-
 	} else if actionSpec.HTTP != nil {
 		var e actions.HTTP
 		result, err = e.Run(ctx, *actionSpec.HTTP)
-
 	} else if actionSpec.SQL != nil {
 		var e actions.SQL
 		result, err = e.Run(ctx, *actionSpec.SQL)
@@ -77,37 +74,45 @@ func executeAction(ctx context.Context, playbookID any, runID uuid.UUID, runActi
 		result, err = e.Run(ctx, *actionSpec.Pod, timeout)
 	}
 
-	results := executeActionResult{
-		data: result,
-	}
-
 	switch v := result.(type) {
 	case ArtifactAccessor:
 		if err := saveArtifacts(ctx, runAction.ID, v.GetArtifacts()); err != nil {
-			return results, ctx.Oops().Wrapf(err, "error saving artifacts")
+			return executeActionResult{
+				data: result,
+			}, ctx.Oops().Wrapf(err, "error saving artifacts")
 		}
 	}
 
+	if actionSpec.GitOps != nil {
+		var e = actions.GitOps{Context: ctx}
+		result1, err2 := e.Run(ctx, *actionSpec.GitOps)
+		if result != nil {
+			result = []any{result, result1}
+		} else {
+			result = result1
+		}
+
+		if err != nil && err2 != nil {
+			err = oops.Join(err, err2)
+		} else if err2 != nil {
+			err = err2
+		}
+	}
+
+	// notifications can run standalone or as part of another step
 	if actionSpec.Notification != nil {
 		var e actions.Notification
-		err := e.Run(ctx, *actionSpec.Notification)
-		if err != nil {
-			return results, err
+		err2 := e.Run(ctx, *actionSpec.Notification)
+		if err != nil && err2 != nil {
+			err = oops.Join(err, err2)
+		} else if err2 != nil {
+			err = err2
 		}
 
 	}
 
-	// GitOps and Notification actions can be specified in addition
-	if actionSpec.GitOps != nil {
-		var e actions.GitOps
-		result, err2 := e.Run(ctx, *actionSpec.GitOps)
-
-		if result != nil {
-			results.data = lo.Compact([]any{results.data, result})
-		}
-		if err2 != nil {
-			err = oops.Join(err, err2)
-		}
+	results := executeActionResult{
+		data: result,
 	}
 
 	return results, err
