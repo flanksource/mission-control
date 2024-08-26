@@ -4,6 +4,7 @@ import (
 	gocontext "context"
 	"crypto/tls"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"slices"
@@ -193,10 +194,20 @@ func proxyMiddleware(ctx context.Context, e *echov4.Echo, prefix, targetURL stri
 	}
 
 	if prefix == "/kubeproxy" {
-		// Disable TLS verification for kubeproxy.
-		newTransport := http.DefaultTransport.(*http.Transport).Clone()
-		newTransport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
-		proxyConfig.Transport = newTransport
+		// we use a new transport to override any tracing / instrumentation added in http.DefaultTransport
+		proxyConfig.Transport = &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   30 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).DialContext,
+			ForceAttemptHTTP2:     true,
+			MaxIdleConns:          100,
+			TLSClientConfig:       &tls.Config{InsecureSkipVerify: true},
+			IdleConnTimeout:       90 * time.Second,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ExpectContinueTimeout: 1 * time.Second,
+		}
 
 		if properties.On(false, "log.kubeproxy") {
 			traceConfig := middlewares.TraceConfig{

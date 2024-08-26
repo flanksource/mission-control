@@ -147,7 +147,7 @@ func runCmd(ctx context.Context, cmd *osExec.Cmd, artifactConfigs ...v1.Artifact
 	result.Stderr = strings.TrimSpace(stderr.String())
 	result.Stdout = strings.TrimSpace(stdout.String())
 
-	ctx.Tracef("command exited with code %d and stdout=%d bytes, stderr=%d bytes", result.ExitCode, len(result.Stdout), len(result.Stderr))
+	ctx.Logger.V(3).Infof("command exited with code %d and stdout=%d bytes, stderr=%d bytes", result.ExitCode, len(result.Stdout), len(result.Stderr))
 
 	for _, artifactConfig := range artifactConfigs {
 		switch artifactConfig.Path {

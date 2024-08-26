@@ -34,10 +34,8 @@ func GetNextActionToRun(ctx context.Context, playbook models.Playbook, run model
 	ctx.Logger.V(3).Infof("Getting next action to run for playbook %s run %s", playbook.Name, run.ID)
 	ctx = ctx.WithObject(playbook, run)
 	if validationErr, err := openapi.ValidatePlaybookSpec(playbook.Spec); err != nil {
-		ctx.Tracef("playbook validation error")
 		return nil, err
 	} else if validationErr != nil {
-		ctx.Tracef("playbook validation error")
 		return nil, validationErr
 	}
 

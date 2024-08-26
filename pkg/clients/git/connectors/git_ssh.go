@@ -1,11 +1,10 @@
 package connectors
 
 import (
-	"context"
 	"fmt"
-	"io"
 	"os"
 
+	"github.com/flanksource/duty/context"
 	"github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-billy/v5/osfs"
 	git "github.com/go-git/go-git/v5"
@@ -40,7 +39,7 @@ func (g *Git) Push(ctx context.Context, branch string) error {
 
 	return g.repo.Push(&git.PushOptions{
 		Auth:     g.auth,
-		Progress: io.Discard,
+		Progress: ctx.Logger.V(3),
 	})
 }
 
@@ -48,7 +47,7 @@ func (g *Git) Clone(ctx context.Context, branch, local string) (billy.Filesystem
 	dir, _ := os.MkdirTemp("", "git-*")
 	repo, err := git.PlainCloneContext(ctx, dir, false, &git.CloneOptions{
 		URL:           g.url,
-		Progress:      io.Discard,
+		Progress:      ctx.Logger.V(4),
 		Auth:          g.auth,
 		ReferenceName: plumbing.NewBranchReferenceName(branch),
 		Depth:         1,

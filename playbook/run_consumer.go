@@ -301,7 +301,7 @@ func RunConsumer(ctx context.Context) (int, error) {
 			return failOrRetryRun(tx, &run, err)
 		}
 		return nil
-	}, "action-scheduler")
+	})
 
 	return consumed, err
 }
