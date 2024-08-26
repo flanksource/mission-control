@@ -10,6 +10,18 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
+      - name: Free up disk space
+        run: |
+          initial_space=$(df / | grep / | awk '{print $4}')
+          rm -rf /usr/share/dotnet
+          rm -rf /opt/ghc
+          rm -rf /usr/local/share/boost
+          rm -rf $AGENT_TOOLSDIRECTORY
+          rm -rf /opt/hostedtoolcache
+
+          final_space=$(df / | grep / | awk '{print $4}')
+          difference=$((final_space - initial_space))
+          echo "Disk space difference (in KB): $difference"
       - name: Install Go
         uses: buildjet/setup-go@v5
         with:
