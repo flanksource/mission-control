@@ -15,9 +15,9 @@ import (
 
 type RunParams struct {
 	ID          uuid.UUID               `yaml:"id,omitempty" json:"id,omitempty"`
-	ConfigID    uuid.UUID               `yaml:"config_id,omitempty" json:"config_id,omitempty"`
-	CheckID     uuid.UUID               `yaml:"check_id,omitempty" json:"check_id,omitempty"`
-	ComponentID uuid.UUID               `yaml:"component_id,omitempty" json:"component_id,omitempty"`
+	ConfigID    *uuid.UUID              `yaml:"config_id,omitempty" json:"config_id,omitempty"`
+	CheckID     *uuid.UUID              `yaml:"check_id,omitempty" json:"check_id,omitempty"`
+	ComponentID *uuid.UUID              `yaml:"component_id,omitempty" json:"component_id,omitempty"`
 	Params      map[string]string       `yaml:"params,omitempty" json:"params,omitempty"`
 	Request     *actions.WebhookRequest `yaml:"request,omitempty" json:"request,omitempty"`
 }
@@ -46,13 +46,13 @@ func (r *RunParams) valid() error {
 	}
 
 	var providedCount int
-	if r.ConfigID != uuid.Nil {
+	if r.ConfigID != nil {
 		providedCount++
 	}
-	if r.ComponentID != uuid.Nil {
+	if r.ComponentID != nil {
 		providedCount++
 	}
-	if r.CheckID != uuid.Nil {
+	if r.CheckID != nil {
 		providedCount++
 	}
 

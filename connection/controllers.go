@@ -6,7 +6,6 @@ import (
 	"net/http"
 
 	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/commons/utils"
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -14,7 +13,6 @@ import (
 	"github.com/labstack/echo/v4"
 	"gorm.io/gorm"
 
-	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/rbac"
 )
 
@@ -31,7 +29,7 @@ func RegisterRoutes(e *echo.Echo) {
 }
 
 func TestConnection(c echo.Context) error {
-	ctx := c.Request().Context().(context.Context).WithUser(&models.Person{ID: utils.Deref(api.SystemUserID)})
+	ctx := c.Request().Context().(context.Context)
 
 	var id = c.Param("id")
 

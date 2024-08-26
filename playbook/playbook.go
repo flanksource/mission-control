@@ -96,16 +96,16 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 		run.Status = models.PlaybookRunStatusScheduled
 	}
 
-	if req.ComponentID != uuid.Nil {
-		run.ComponentID = &req.ComponentID
+	if req.ComponentID != nil {
+		run.ComponentID = req.ComponentID
 	}
 
-	if req.ConfigID != uuid.Nil {
-		run.ConfigID = &req.ConfigID
+	if req.ConfigID != nil {
+		run.ConfigID = req.ConfigID
 	}
 
-	if req.CheckID != uuid.Nil {
-		run.CheckID = &req.CheckID
+	if req.CheckID != nil {
+		run.CheckID = req.CheckID
 	}
 
 	if req.Request != nil {

@@ -115,6 +115,7 @@ func ServerFlags(flags *pflag.FlagSet) {
 func init() {
 	// http.DefaultUserAgent = api.BuildVersion
 	logger.BindFlags(Root.PersistentFlags())
+	properties.BindFlags(Root.PersistentFlags())
 	telemetry.BindFlags(Root.PersistentFlags(), "mission-control")
 
 	Root.PersistentFlags().StringVar(&api.CanaryCheckerPath, "canary-checker", "http://canary-checker:8080", "Canary Checker URL")

@@ -10,7 +10,6 @@ import (
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/samber/lo"
 	"github.com/samber/oops"
@@ -107,14 +106,14 @@ func HandleGetPlaybookParams(c echo.Context) error {
 		PlaybookID: playbook.ID,
 		CreatedBy:  lo.ToPtr(ctx.User().ID),
 	}
-	if req.ComponentID != uuid.Nil {
-		dummyRun.ComponentID = &req.ComponentID
+	if req.ComponentID != nil {
+		dummyRun.ComponentID = req.ComponentID
 	}
-	if req.ConfigID != uuid.Nil {
-		dummyRun.ConfigID = &req.ConfigID
+	if req.ConfigID != nil {
+		dummyRun.ConfigID = req.ConfigID
 	}
-	if req.CheckID != uuid.Nil {
-		dummyRun.CheckID = &req.CheckID
+	if req.CheckID != nil {
+		dummyRun.CheckID = req.CheckID
 	}
 
 	env, err := runner.CreateTemplateEnv(ctx, playbook, &dummyRun)
