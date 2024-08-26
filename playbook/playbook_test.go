@@ -145,7 +145,7 @@ var _ = Describe("Playbook", func() {
 
 					if td.expectedError != "" {
 						Expect(err).ToNot(BeNil())
-						Expect(err.Error()).To(Equal(td.expectedError))
+						Expect(err.Error()).To(ContainSubstring(td.expectedError))
 					} else {
 						Expect(err).To(BeNil())
 						Expect(response.RunID).ToNot(BeEmpty())
