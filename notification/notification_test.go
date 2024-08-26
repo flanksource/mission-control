@@ -3,6 +3,7 @@ package notification_test
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/duty/models"
@@ -14,6 +15,7 @@ import (
 	"github.com/lib/pq"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/samber/lo"
 
 	// register event handlers
 	_ "github.com/flanksource/incident-commander/incidents/responder"
@@ -119,5 +121,86 @@ var _ = ginkgo.Describe("Notification on incident creation", ginkgo.Ordered, fun
 		Expect(webhookPostdata).To(Not(BeNil()))
 		Expect(webhookPostdata["message"]).To(Equal(fmt.Sprintf("Severity: %s", incident.Severity)))
 		Expect(webhookPostdata["title"]).To(Equal(fmt.Sprintf("New incident: %s", incident.Title)))
+	})
+
+	ginkgo.It("should create a new notification with repeat interval", func() {
+		n := models.Notification{
+			ID:             uuid.New(),
+			Events:         pq.StringArray([]string{"config.created"}),
+			Template:       "Config created",
+			TeamID:         &team.ID,
+			Source:         models.SourceCRD,
+			RepeatInterval: "4h",
+			GroupBy:        pq.StringArray([]string{"notification_id", "source_event"}),
+		}
+		err := DefaultContext.DB().Create(&n).Error
+		Expect(err).To(BeNil())
+
+		config1 := &models.ConfigItem{
+			ID:          uuid.New(),
+			Name:        lo.ToPtr("Deployment1"),
+			ConfigClass: models.ConfigClassDeployment,
+			Type:        lo.ToPtr("Kubernetes::Deployment"),
+		}
+		err = DefaultContext.DB().Create(config1).Error
+		Expect(err).To(BeNil())
+
+		events.ConsumeAll(DefaultContext)
+		Eventually(func() int64 {
+			var c int64
+			DefaultContext.DB().Model(&models.Event{}).Count(&c)
+			return c
+		}, "10s", "200ms").Should(Equal(int64(0)))
+
+		// Check send history
+		var sentHistoryCount int64
+		err = DefaultContext.DB().Model(&models.NotificationSendHistory{}).Where("notification_id = ?", n.ID).Count(&sentHistoryCount).Error
+		Expect(err).To(BeNil())
+		Expect(sentHistoryCount).To(Equal(int64(1)))
+
+		config2 := &models.ConfigItem{
+			ID:          uuid.New(),
+			Name:        lo.ToPtr("Deployment2"),
+			ConfigClass: models.ConfigClassDeployment,
+			Type:        lo.ToPtr("Kubernetes::Deployment"),
+		}
+		err = DefaultContext.DB().Create(config2).Error
+		Expect(err).To(BeNil())
+
+		events.ConsumeAll(DefaultContext)
+		Eventually(func() int64 {
+			var c int64
+			DefaultContext.DB().Model(&models.Event{}).Count(&c)
+			return c
+		}, "10s", "200ms").Should(Equal(int64(0)))
+
+		// Check send history
+		err = DefaultContext.DB().Model(&models.NotificationSendHistory{}).Where("notification_id = ?", n.ID).Count(&sentHistoryCount).Error
+		Expect(err).To(BeNil())
+		Expect(sentHistoryCount).To(Equal(int64(1)))
+
+		err = DefaultContext.DB().Model(&models.NotificationSendHistory{}).Where("notification_id = ?", n.ID).Update("created_at", time.Now().Add(-10*time.Hour)).Error
+		Expect(err).To(BeNil())
+
+		config3 := &models.ConfigItem{
+			ID:          uuid.New(),
+			Name:        lo.ToPtr("Deployment3"),
+			ConfigClass: models.ConfigClassDeployment,
+			Type:        lo.ToPtr("Kubernetes::Deployment"),
+		}
+		err = DefaultContext.DB().Create(config3).Error
+		Expect(err).To(BeNil())
+
+		events.ConsumeAll(DefaultContext)
+		Eventually(func() int64 {
+			var c int64
+			DefaultContext.DB().Model(&models.Event{}).Count(&c)
+			return c
+		}, "10s", "200ms").Should(Equal(int64(0)))
+
+		// Check send history
+		err = DefaultContext.DB().Model(&models.NotificationSendHistory{}).Where("notification_id = ?", n.ID).Count(&sentHistoryCount).Error
+		Expect(err).To(BeNil())
+		Expect(sentHistoryCount).To(Equal(int64(2)))
 	})
 })

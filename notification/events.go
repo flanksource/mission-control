@@ -8,6 +8,7 @@ import (
 	"time"
 
 	sw "github.com/RussellLuo/slidingwindow"
+	"github.com/flanksource/commons/text"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
@@ -20,6 +21,7 @@ import (
 	"github.com/flanksource/incident-commander/utils/expression"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
+	"gorm.io/gorm/clause"
 )
 
 var (
@@ -81,6 +83,45 @@ type notificationHandler struct {
 	Ring *events.EventRing
 }
 
+// Check if notification can be send in the interval based on group by, returns true if it can sent
+func checkRepeatInterval(ctx context.Context, n NotificationWithSpec, event models.Event) (bool, error) {
+	validKeys := map[string]string{
+		"notification_id": n.ID.String(),
+		"resource_id":     event.Properties["id"],
+		"source_event":    event.Name,
+	}
+	var clauses []clause.Expression
+	for _, g := range n.GroupBy {
+		if val, exists := validKeys[g]; exists {
+			clauses = append(clauses, clause.Eq{Column: g, Value: val})
+		}
+	}
+	if len(clauses) > 0 {
+		interval, err := text.ParseDuration(n.RepeatInterval)
+		if err != nil {
+			return false, fmt.Errorf("error parsing repeat interval[%s] to time.Duration: %w", n.RepeatInterval, err)
+		}
+
+		var exists bool
+		tx := ctx.DB().Model(&models.NotificationSendHistory{}).Clauses(clauses...).
+			Select(fmt.Sprintf("(NOW() - created_at) > '%d minutes'::INTERVAL", int(interval.Minutes()))).
+			Order("created_at DESC").Limit(1).Scan(&exists)
+		if tx.Error != nil {
+			return false, fmt.Errorf("error querying db for last send notification[%s]: %w", n.ID, err)
+		}
+		// Allow notification to be sent as there is no history
+		if tx.RowsAffected == 0 {
+			return true, nil
+		}
+
+		if !exists {
+			return false, nil
+		}
+	}
+
+	return true, nil
+}
+
 // addNotificationEvent responds to a event that can possibly generate a notification.
 // If a notification is found for the given event and passes all the filters, then
 // a new `notification.send` event is created.
@@ -111,11 +152,24 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 			continue
 		}
 
+		// This gets unset by the database trigger: reset_notification_error_before_update_trigger
 		if n.Error != nil {
 			// A notification that currently has errors is skipped.
 			continue
 		}
 
+		// Repeat interval check
+		if n.RepeatInterval != "" && n.GroupBy != nil {
+			allow, err := checkRepeatInterval(ctx, *n, event)
+			// If there are any errors in calculating interval, we sent the notification
+			// and log the error
+			if err != nil {
+				ctx.Errorf("error checking repeat interval for notification[%s]: %v", n.ID, err)
+			} else if !allow {
+				ctx.Tracef("skipping notification[%s] due to repeat interval", n.ID)
+				continue
+			}
+		}
 		if valid, err := expression.Eval(n.Filter, celEnv, allEnvVars); err != nil {
 			logs.IfError(db.UpdateNotificationError(id, err.Error()), "failed to update notification")
 			continue
@@ -136,7 +190,7 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 		for _, payload := range payloads {
 			if !rateLimiter.Allow() {
 				// rate limited notifications are simply dropped.
-				ctx.Warnf("rate limited  event=%s id=%s ", event.Name, id)
+				ctx.Warnf("notification rate limited event=%s id=%s ", event.Name, id)
 				ctx.Counter("notification_rate_limited", "id", id).Add(1)
 				continue
 			}
