@@ -96,25 +96,25 @@ func checkRepeatInterval(ctx context.Context, n NotificationWithSpec, event mode
 			clauses = append(clauses, clause.Eq{Column: g, Value: val})
 		}
 	}
-	var lastSent time.Time
 	if len(clauses) > 0 {
-		tx := ctx.DB().Model(&models.NotificationSendHistory{}).Clauses(clauses...).Select("created_at").Scan(&lastSent)
+		interval, err := text.ParseDuration(n.RepeatInterval)
+		if err != nil {
+			return false, fmt.Errorf("error parsing repeat interval[%s] to time.Duration: %w", n.RepeatInterval, err)
+		}
+
+		var exists bool
+		tx := ctx.DB().Model(&models.NotificationSendHistory{}).Clauses(clauses...).
+			Select(fmt.Sprintf("(NOW() - created_at) > '%d minutes'::INTERVAL", int(interval.Minutes()))).
+			Order("created_at DESC").Limit(1).Scan(&exists)
 		if tx.Error != nil {
-			return false, fmt.Errorf("error querying db for last send notification[%s]: %w", n.ID, tx.Error)
+			return false, fmt.Errorf("error querying db for last send notification[%s]: %w", n.ID, err)
 		}
 		// Allow notification to be sent as there is no history
 		if tx.RowsAffected == 0 {
 			return true, nil
 		}
-		if lastSent.IsZero() {
-			return false, fmt.Errorf("last sent not found for notification[%s]", n.ID)
-		}
 
-		interval, err := text.ParseDuration(n.RepeatInterval)
-		if err != nil {
-			return false, fmt.Errorf("error parsing repeat interval[%s] to time.Duration: %w", n.RepeatInterval, err)
-		}
-		if time.Since(lastSent) <= *interval {
+		if !exists {
 			return false, nil
 		}
 	}
@@ -152,7 +152,7 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 			continue
 		}
 
-		// TODO: How does this get unset ?
+		// This gets unset by the database trigger: reset_notification_error_before_update_trigger
 		if n.Error != nil {
 			// A notification that currently has errors is skipped.
 			continue
