@@ -4,16 +4,20 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/properties"
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/shutdown"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/playbook"
 	"github.com/flanksource/incident-commander/playbook/runner"
+	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"github.com/spf13/cobra"
 	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
@@ -28,44 +32,77 @@ var paramFile string
 
 var Run = &cobra.Command{
 	Use:              "run playbook playbook.yaml params.yaml",
-	Args:             cobra.ExactArgs(1),
+	Args:             cobra.MinimumNArgs(1),
 	PersistentPreRun: PreRun,
-	RunE: func(cmd *cobra.Command, args []string) error {
+	Run: func(cmd *cobra.Command, args []string) {
 		logger.UseSlog()
 		if err := properties.LoadFile("mission-control.properties"); err != nil {
 			logger.Errorf(err.Error())
 		}
 		ctx, stop, err := duty.Start("mission-control", duty.ClientOnly)
 		if err != nil {
-			return err
+			logger.Fatalf(err.Error())
+			return
 		}
 
-		AddShutdownHook(stop)
+		shutdown.AddHook(stop)
 
 		e := echo.New(ctx)
 
-		AddShutdownHook(func() {
+		shutdown.AddHook(func() {
 			echo.Shutdown(e)
 		})
+
+		shutdown.AddHook(func() {
+			for k, v := range logger.GetNamedLoggingLevels() {
+				logger.Infof("logger: %s=%v", k, v)
+			}
+
+			for k, v := range properties.Global.GetAll() {
+				logger.Infof("property: %s=%v", k, v)
+			}
+		})
+		shutdown.WaitForSignal()
 
 		go echo.Start(e, httpPort)
 
 		p, err := playbook.CreateOrSaveFromFile(ctx, args[0])
 		if err != nil {
-			return err
+			logger.Fatalf(err.Error())
+			return
 		}
 
-		var params playbook.RunParams
+		var params = playbook.RunParams{Params: make(map[string]string)}
 
 		if f, err := os.Open(paramFile); err == nil {
 			if err := yamlutil.NewYAMLOrJSONDecoder(f, 1024).Decode(&params); err != nil {
-				return err
+				logger.Fatalf(err.Error())
+				return
 			}
 		}
 
+		for _, arg := range args[1:] {
+			parts := strings.Split(arg, "=")
+			if len(parts) != 2 {
+				logger.Warnf("Invalid param: %s", arg)
+				continue
+			}
+			if parts[0] == "config" || parts[0] == "config_id" {
+				params.ConfigID = lo.ToPtr(uuid.MustParse(parts[1]))
+			} else if parts[0] == "component" || parts[0] == "component_id" {
+				params.ComponentID = lo.ToPtr(uuid.MustParse(parts[1]))
+			} else if parts[0] == "check" || parts[0] == "check_id" {
+				params.CheckID = lo.ToPtr(uuid.MustParse(parts[1]))
+			} else {
+				params.Params[parts[0]] = parts[1]
+			}
+		}
+
+		ctx = ctx.WithUser(auth.GetSystemUser(&ctx))
 		run, err := playbook.Run(ctx, p, params)
 		if err != nil {
-			return err
+			logger.Fatalf(err.Error())
+			return
 		}
 
 		ctx = ctx.WithObject(p, run)
@@ -76,7 +113,8 @@ var Run = &cobra.Command{
 
 		action, err = runner.GetNextActionToRun(ctx, *p, *run)
 		if err != nil {
-			return err
+			logger.Fatalf(err.Error())
+			return
 		}
 
 		for action != nil {
@@ -97,7 +135,7 @@ var Run = &cobra.Command{
 
 			if action != nil && action.Name == runAction.Name {
 				ctx.Errorf("%v", ctx.Oops().Errorf("Action cycle detected for: %s", action.Name))
-				ShutdownAndExit(1, "")
+				shutdown.ShutdownAndExit(1, "")
 			}
 			if err != nil {
 				ctx.Errorf("Error getting next action %s: %v", action.Name, err)
@@ -109,11 +147,14 @@ var Run = &cobra.Command{
 
 		b, _ := json.MarshalIndent(summary, "", " ")
 		fmt.Println(string(b))
-		if err != nil || summary.Run.Status != models.PlaybookRunStatusCompleted {
-			ShutdownAndExit(1, "")
+		if err != nil {
+			shutdown.ShutdownAndExit(1, err.Error())
 		}
-		Shutdown()
-		return nil
+
+		if summary.Run.Status != models.PlaybookRunStatusCompleted {
+			shutdown.ShutdownAndExit(1, fmt.Sprintf("Playbook run status: %s ", summary.Run.Status))
+		}
+
 	},
 }
 
@@ -130,9 +171,10 @@ var Submit = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		defer Shutdown()
 
-		AddShutdownHook(stop)
+		shutdown.AddHook(stop)
+
+		shutdown.WaitForSignal()
 
 		p, err := playbook.CreateOrSaveFromFile(ctx, args[0])
 		if err != nil {

@@ -22,6 +22,14 @@ func getDefaultAdminPassword() string {
 	return DefaultAdminPassword
 }
 
+func GetSystemUser(ctx *context.Context) *models.Person {
+	var admin models.Person
+	if err := ctx.DB().Model(admin).Where("name = 'System'").First(&admin).Error; err != nil {
+		return nil
+	}
+	return &admin
+}
+
 func GetOrCreateAdminUser(ctx context.Context) (*models.Person, error) {
 	var admin models.Person
 	if err := ctx.DB().Model(admin).Where("name = ? OR email = ?", AdminName, AdminEmail).First(&admin).Error; err != nil {

@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
+	"net/http"
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty"
@@ -9,6 +11,7 @@ import (
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/postq/pg"
+	"github.com/flanksource/duty/shutdown"
 	"github.com/flanksource/kopper"
 
 	"github.com/spf13/cobra"
@@ -82,10 +85,23 @@ var Serve = &cobra.Command{
 	Use:    "serve",
 	PreRun: PreRun,
 	Run: func(cmd *cobra.Command, args []string) {
-		ctx, _, err := duty.Start("mission-control")
+		// PostgREST needs to know how it is exposed to create the correct links
+		db.HttpEndpoint = api.PublicURL + "/db"
+
+		ctx, stop, err := duty.Start("mission-control")
 		if err != nil {
 			logger.Fatalf(err.Error())
 		}
+
+		e := echo.New(ctx)
+
+		shutdown.AddHook(func() {
+			echo.Shutdown(e)
+		})
+
+		shutdown.AddHook(stop)
+
+		shutdown.WaitForSignal()
 
 		ctx.WithTracer(otel.GetTracerProvider().Tracer("mission-control"))
 		ctx = ctx.
@@ -101,11 +117,9 @@ var Serve = &cobra.Command{
 			go launchKopper(ctx)
 		}
 
-		e := echo.New(ctx)
-
 		listenAddr := fmt.Sprintf(":%d", httpPort)
 		logger.Infof("Listening on %s", listenAddr)
-		if err := e.Start(listenAddr); err != nil {
+		if err := e.Start(listenAddr); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logger.Fatalf("Failed to start server: %v", err)
 		}
 	},
