@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/flanksource/artifacts"
+	"github.com/flanksource/artifacts/fs"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/upstream"
@@ -14,7 +15,7 @@ import (
 // agentArtifactConnection is the cached agent artifact store connection
 var agentArtifactConnection *models.Connection
 
-func getArtifactStore(ctx context.Context) (artifacts.FilesystemRW, error) {
+func getArtifactStore(ctx context.Context) (fs.FilesystemRW, error) {
 	if agentArtifactConnection == nil {
 		artifactConnection, err := ctx.HydrateConnectionByURL(api.DefaultArtifactConnection)
 		if err != nil {
@@ -40,7 +41,7 @@ func SyncArtifactItems(ctx context.Context, config upstream.UpstreamConfig, batc
 	client := upstream.NewUpstreamClient(config)
 	var count int
 	var err error
-	var fs artifacts.FilesystemRW
+	var fs fs.FilesystemRW
 	for {
 		var artifacts []models.Artifact
 		if err := ctx.DB().Clauses(clause.Locking{Strength: "UPDATE", Options: "SKIP LOCKED"}).Where("is_data_pushed IS FALSE").Where("is_pushed IS TRUE").Order("created_at").Limit(batchSize).Find(&artifacts).Error; err != nil {

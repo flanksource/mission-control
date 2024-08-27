@@ -85,9 +85,6 @@ var Serve = &cobra.Command{
 	Use:    "serve",
 	PreRun: PreRun,
 	Run: func(cmd *cobra.Command, args []string) {
-		// PostgREST needs to know how it is exposed to create the correct links
-		db.HttpEndpoint = api.PublicURL + "/db"
-
 		ctx, stop, err := duty.Start("mission-control")
 		if err != nil {
 			logger.Fatalf(err.Error())
