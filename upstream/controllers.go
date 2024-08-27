@@ -8,6 +8,7 @@ import (
 	"github.com/flanksource/commons/logger"
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/job"
 	"github.com/flanksource/duty/upstream"
 	"github.com/labstack/echo/v4"
 	"github.com/patrickmn/go-cache"
@@ -37,7 +38,7 @@ func RegisterRoutes(e *echo.Echo) {
 
 	upstreamGroup := e.Group("/upstream", rbac.Authorization(rbac.ObjectAgentPush, rbac.ActionUpdate), upstream.AgentAuthMiddleware(agentCache))
 	upstreamGroup.GET("/ping", upstream.PingHandler)
-	upstreamGroup.POST("/push", upstream.PushHandler)
+	upstreamGroup.POST("/push", upstream.NewPushHandler(upstream.NewStatusRingStore(job.EvictedJobs)))
 	upstreamGroup.DELETE("/push", upstream.DeleteHandler)
 
 	upstreamGroup.GET("/canary/pull", PullCanaries)
