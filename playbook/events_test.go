@@ -105,7 +105,7 @@ var _ = ginkgo.Describe("Playbook Events", ginkgo.Ordered, func() {
 
 		ginkgo.It("Expect the event consumer to schedule a new playbook run", func() {
 			Eventually(func() models.PlaybookRunStatus {
-				// Manually publish a pg_notify event because for some reason the embedded db isn't realiable
+				// Manually publish a pg_notify event because for some reason the embedded db isn't reliable
 				err := DefaultContext.DB().Exec("NOTIFY event_queue_updates, 'config.created'").Error
 				Expect(err).NotTo(HaveOccurred())
 				events.ConsumeAll(DefaultContext)
