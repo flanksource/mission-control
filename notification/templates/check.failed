@@ -1,0 +1,56 @@
+{{ if eq outgoing_channel "slack"}}
+{
+	"blocks": [
+		{
+			"type": "section",
+			"text": {
+				"type": "mrkdwn",
+				"text": ":red_circle: *{{.check.name}}* is _unhealthy_"
+			}
+		},
+		{{ if .status.message}}{
+			"type": "section",
+			"text": {
+				"type": "mrkdwn",
+				"text": "{{.status.message}}"
+			}
+		},{{end}}
+		{
+			"type": "section",
+			"fields": [
+				{
+					"type": "mrkdwn",
+					"text": "*Canary*: {{.canary.name }}"
+				}{{ if .status.message}},
+				{
+					"type": "mrkdwn",
+					"text": "*Agent*: {{.agent.name}}",
+					"verbatim": true
+				}{{end}}
+			]
+		},
+		{
+			"type": "actions",
+			"elements": [
+				{
+					"type": "button",
+					"text": {
+						"type": "plain_text",
+						"text": "View Health Check",
+						"emoji": true
+					},
+					"url": "{{.permalink}}",
+					"action_id": "health_check_button"
+				}
+			]
+		}
+	]
+}
+{{ else }}
+Canary: {{.canary.name}}
+{{if .agent}}Agent: {{.agent.name}}{{end}}
+Error: {{.status.error}}
+%s
+
+[Reference]({{.permalink}})
+{{end}}

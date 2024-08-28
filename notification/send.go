@@ -1,6 +1,7 @@
 package notification
 
 import (
+	"embed"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -20,6 +21,9 @@ import (
 	"github.com/flanksource/incident-commander/teams"
 	"github.com/flanksource/incident-commander/utils/expression"
 )
+
+//go:embed templates/*
+var templates embed.FS
 
 // List of all possible variables for any expression related to notifications
 var allEnvVars = []string{"agent", "config", "check", "canary", "component", "incident", "team", "responder", "comment", "evidence", "hypothesis", "permalink"}
@@ -177,28 +181,16 @@ func labelsTemplate(field string) string {
 // defaultTitleAndBody returns the default title and body for notification
 // based on the given event.
 func defaultTitleAndBody(event string) (title string, body string) {
+	content, _ := templates.ReadFile(fmt.Sprintf("templates/%s", event))
+
 	switch event {
 	case api.EventCheckPassed:
-		title = "Check {{.check.name}} has passed"
-		body = fmt.Sprintf(`{{ if eq outgoing_channel "slack"}}
-Sending From Slack
-{{ else }}
-Canary: {{.canary.name}}
-{{if .agent}}Agent: {{.agent.name}}{{end}}
-{{if .status.message}}Message: {{.status.message}} {{end}}
-%s
-
-[Reference]({{.permalink}})
-{{end}}`, labelsTemplate(".check.labels"))
+		title = `{{ if ne outgoing_channel "slack"}}Check {{.check.name}} has passed{{end}}`
+		body = fmt.Sprintf(string(content), labelsTemplate(".check.labels"))
 
 	case api.EventCheckFailed:
-		title = "Check {{.check.name}} has failed"
-		body = fmt.Sprintf(`Canary: {{.canary.name}}
-{{if .agent}}Agent: {{.agent.name}}{{end}}
-Error: {{.status.error}}
-%s
-
-[Reference]({{.permalink}})`, labelsTemplate(".check.labels"))
+		title = `{{ if ne outgoing_channel "slack"}}Check {{.check.name}} has failed{{end}}`
+		body = fmt.Sprintf(string(content), labelsTemplate(".check.labels"))
 
 	case api.EventConfigHealthy, api.EventConfigUnhealthy, api.EventConfigWarning, api.EventConfigUnknown:
 		title = "{{.config.type}} {{.config.name}} is {{.config.health}}"
