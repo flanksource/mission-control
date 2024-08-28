@@ -76,7 +76,7 @@ func shoutrrrSend(ctx *Context, celEnv map[string]any, shoutrrrURL string, data 
 		data.Message = stripmd.StripOptions(data.Message, stripmd.Options{KeepURL: true})
 	}
 
-	celEnv["outgoing_channel"] = service
+	celEnv["channel"] = service
 	templater := ctx.NewStructTemplater(celEnv, "", templateFuncs)
 	if err := templater.Walk(&data); err != nil {
 		return "", fmt.Errorf("error templating notification: %w", err)

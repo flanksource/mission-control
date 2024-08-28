@@ -1,8 +1,9 @@
-{{ if eq outgoing_channel "slack"}}
+{{ if eq channel "slack"}}
 {
 	"blocks": [
 		{{slackSectionTextMD (printf `:red_circle: *%s* is _unhealthy_` .check.name)}},
-		{{ if .status.message}}{{slackSectionTextMD status.message}},{{end}}
+    {"type": "divider"},
+		{{ if .status.error}}{{slackSectionTextMD status.error}},{{end}}
 		{
 			"type": "section",
 			"fields": [
@@ -13,21 +14,8 @@
 				{{end}}
 			]
 		},
-		{
-			"type": "actions",
-			"elements": [
-				{
-					"type": "button",
-					"text": {
-						"type": "plain_text",
-						"text": "View Health Check",
-						"emoji": true
-					},
-					"url": "{{.permalink}}",
-					"action_id": "health_check_button"
-				}
-			]
-		}
+		{{ if .check.labels}}{{slackSectionLabels .check.labels}},{{end}}
+		{{ slackURLAction "View Health Check" .permalink}}
 	]
 }
 {{ else }}

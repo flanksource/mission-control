@@ -157,7 +157,7 @@ func SendNotification(ctx *Context, connectionName, shoutrrrURL string, celEnv m
 	if connection != nil && connection.Type == models.ConnectionTypeSlack {
 		// We know we are sending to slack.
 		// Send the notification with slack-api and don't go through Shoutrrr.
-		celEnv["outgoing_channel"] = "slack"
+		celEnv["channel"] = "slack"
 		templater := ctx.NewStructTemplater(celEnv, "", templateFuncs)
 		if err := templater.Walk(&data); err != nil {
 			return "", fmt.Errorf("error templating notification: %w", err)
@@ -165,7 +165,7 @@ func SendNotification(ctx *Context, connectionName, shoutrrrURL string, celEnv m
 		return "slack", SlackSend(ctx, connection.Password, connection.Username, data)
 	}
 
-	service, err := shoutrrrSend(ctx, nil, shoutrrrURL, data)
+	service, err := shoutrrrSend(ctx, celEnv, shoutrrrURL, data)
 	if err != nil {
 		return "", fmt.Errorf("failed to send message with Shoutrrr: %w", err)
 	}
@@ -185,11 +185,11 @@ func defaultTitleAndBody(event string) (title string, body string) {
 
 	switch event {
 	case api.EventCheckPassed:
-		title = `{{ if ne outgoing_channel "slack"}}Check {{.check.name}} has passed{{end}}`
+		title = `{{ if ne channel "slack"}}Check {{.check.name}} has passed{{end}}`
 		body = string(content)
 
 	case api.EventCheckFailed:
-		title = `{{ if ne outgoing_channel "slack"}}Check {{.check.name}} has failed{{end}}`
+		title = `{{ if ne channel "slack"}}Check {{.check.name}} has failed{{end}}`
 		body = string(content)
 
 	case api.EventConfigHealthy, api.EventConfigUnhealthy, api.EventConfigWarning, api.EventConfigUnknown:
