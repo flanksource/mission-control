@@ -1,32 +1,16 @@
 {{ if eq outgoing_channel "slack"}}
 {
 	"blocks": [
-		{
-			"type": "section",
-			"text": {
-				"type": "mrkdwn",
-				"text": ":red_circle: *{{.check.name}}* is _unhealthy_"
-			}
-		},
-		{{ if .status.message}}{
-			"type": "section",
-			"text": {
-				"type": "mrkdwn",
-				"text": "{{.status.message}}"
-			}
-		},{{end}}
+		{{slackSectionTextMD (printf `:red_circle: *%s* is _unhealthy_` .check.name)}},
+		{{ if .status.message}}{{slackSectionTextMD status.message}},{{end}}
 		{
 			"type": "section",
 			"fields": [
-				{
-					"type": "mrkdwn",
-					"text": "*Canary*: {{.canary.name }}"
-				}{{ if .status.message}},
-				{
-					"type": "mrkdwn",
-					"text": "*Agent*: {{.agent.name}}",
-					"verbatim": true
-				}{{end}}
+				{{slackSectionTextFieldMD (printf `*Canary*: %s` .canary.name) }},
+				{{slackSectionTextFieldMD (printf `*Namespace*: %s` .canary.namespace) }}
+				{{ if .agent.name}}
+					,{{slackSectionTextFieldMD (printf `*Agent*: %s` .agent.name) }}
+				{{end}}
 			]
 		},
 		{
@@ -50,7 +34,7 @@
 Canary: {{.canary.name}}
 {{if .agent}}Agent: {{.agent.name}}{{end}}
 Error: {{.status.error}}
-%s
+{{labelsFormat .check.labels}}
 
 [Reference]({{.permalink}})
 {{end}}
