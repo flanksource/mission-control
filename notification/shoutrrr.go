@@ -6,12 +6,10 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	stripmd "github.com/adityathebe/go-strip-markdown/v2"
 	"github.com/containrrr/shoutrrr"
 	"github.com/containrrr/shoutrrr/pkg/types"
-	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/mail"
@@ -42,33 +40,10 @@ func setSystemSMTPCredential(shoutrrrURL string) (string, error) {
 	return shoutrrrURL, nil
 }
 
-func Send(ctx *Context, connectionName, shoutrrrURL, title, message string, properties ...map[string]string) error {
-	start := time.Now()
-
-	service, err := send(ctx, connectionName, shoutrrrURL, title, message, properties...)
-	if err != nil {
-		notificationSendFailureCounter.WithLabelValues(service, string(ctx.recipientType), ctx.notificationID.String()).Inc()
-		return err
-	}
-
-	notificationSentCounter.WithLabelValues(service, string(ctx.recipientType), ctx.notificationID.String()).Inc()
-	notificationSendDuration.WithLabelValues(service, string(ctx.recipientType), ctx.notificationID.String()).Observe(time.Since(start).Seconds())
-
-	return nil
-}
-
-// send sends a notification and returns the service it sent the notification to
-func send(ctx *Context, connectionName, shoutrrrURL, title, message string, properties ...map[string]string) (string, error) {
-	if connectionName != "" {
-		connection, err := ctx.HydrateConnectionByURL(connectionName)
-		if err != nil {
-			return "", err
-		} else if connection == nil {
-			return "", fmt.Errorf("connection (%s) not found", connectionName)
-		}
-
-		shoutrrrURL = connection.URL
-		properties = append([]map[string]string{connection.Properties}, properties...)
+// shoutrrrSend sends a notification and returns the service it sent the notification to
+func shoutrrrSend(ctx *Context, celEnv map[string]any, shoutrrrURL string, data NotificationTemplate) (string, error) {
+	if celEnv == nil {
+		celEnv = make(map[string]any)
 	}
 
 	if strings.HasPrefix(shoutrrrURL, api.SystemSMTP) {
@@ -91,29 +66,30 @@ func send(ctx *Context, connectionName, shoutrrrURL, title, message string, prop
 
 	switch service {
 	case "smtp":
-		message = icUtils.MarkdownToHTML(message)
-		properties = append(properties, map[string]string{"UseHTML": "true"}) // enforce HTML for smtp
+		data.Message = icUtils.MarkdownToHTML(data.Message)
+		data.Properties["UseHTML"] = "true" // enforce HTML for smtp
 
 	case "telegram":
-		properties = append(properties, map[string]string{"ParseMode": "MarkdownV2"})
+		data.Properties["ParseMode"] = "MarkdownV2"
 
 	default:
-		message = stripmd.StripOptions(message, stripmd.Options{KeepURL: true})
+		data.Message = stripmd.StripOptions(data.Message, stripmd.Options{KeepURL: true})
 	}
 
-	ctx.WithMessage(message)
-
-	var allProps map[string]string
-	for _, prop := range properties {
-		prop = GetPropsForService(service, prop)
-		allProps = collections.MergeMap(allProps, prop)
+	celEnv["outgoing_channel"] = service
+	templater := ctx.NewStructTemplater(celEnv, "", nil)
+	if err := templater.Walk(&data); err != nil {
+		return "", fmt.Errorf("error templating notification: %w", err)
 	}
 
-	injectTitleIntoProperties(service, title, allProps)
+	ctx.WithMessage(data.Message)
+
+	data.Properties = GetPropsForService(service, data.Properties)
+	injectTitleIntoProperties(service, data.Title, data.Properties)
 
 	params := &types.Params{}
-	if properties != nil {
-		params = (*types.Params)(&allProps)
+	if data.Properties != nil {
+		params = (*types.Params)(&data.Properties)
 	}
 
 	// NOTE: Until shoutrrr fixes the "UseHTML" props, we'll use the mailer package
@@ -132,13 +108,13 @@ func send(ctx *Context, connectionName, shoutrrrURL, title, message string, prop
 			port, _     = strconv.Atoi(parsedURL.Port())
 		)
 
-		m := mail.New(to, title, message, `text/html; charset="UTF-8"`).
+		m := mail.New(to, data.Title, data.Message, `text/html; charset="UTF-8"`).
 			SetFrom(fromName, from).
 			SetCredentials(parsedURL.Hostname(), port, parsedURL.User.Username(), password)
 		return service, m.Send()
 	}
 
-	sendErrors := sender.Send(message, params)
+	sendErrors := sender.Send(data.Message, params)
 	for _, err := range sendErrors {
 		if err != nil {
 			return "", fmt.Errorf("error publishing notification (service=%s): %w", service, err)

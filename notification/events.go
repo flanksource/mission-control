@@ -240,7 +240,7 @@ func sendNotifications(ctx context.Context, events models.Events) models.Events 
 			e.SetError(err.Error())
 			failedEvents = append(failedEvents, e)
 			notificationContext.WithError(err.Error())
-		} else if err := SendNotification(notificationContext, payload, celEnv); err != nil {
+		} else if err := PrepareAndSendEventNotification(notificationContext, payload, celEnv); err != nil {
 			e.SetError(err.Error())
 			failedEvents = append(failedEvents, e)
 			notificationContext.WithError(err.Error())
