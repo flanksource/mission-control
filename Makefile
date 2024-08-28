@@ -55,7 +55,6 @@ docker-push:
 tidy:
 	go mod tidy
 	git add go.mod go.sum
-	cd hack/generate-schemas && go mod tidy && 	git add go.mod go.sum
 
 .PHONY: compress
 compress: .bin/upx

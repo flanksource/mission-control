@@ -1,12 +1,14 @@
 package notification
 
 import (
+	"embed"
 	"encoding/json"
 	"fmt"
 	"net/url"
 	"strings"
 	"time"
 
+	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -19,6 +21,9 @@ import (
 	"github.com/flanksource/incident-commander/teams"
 	"github.com/flanksource/incident-commander/utils/expression"
 )
+
+//go:embed templates/*
+var templates embed.FS
 
 // List of all possible variables for any expression related to notifications
 var allEnvVars = []string{"agent", "config", "check", "canary", "component", "incident", "team", "responder", "comment", "evidence", "hypothesis", "permalink"}
@@ -55,25 +60,11 @@ func (t *NotificationEventPayload) FromMap(m map[string]string) {
 	_ = json.Unmarshal(b, &t)
 }
 
-// SendNotification generates the notification from the given event and sends it.
-func SendNotification(ctx *Context, payload NotificationEventPayload, celEnv map[string]any) error {
-	templater := ctx.NewStructTemplater(celEnv, "", nil)
-
+// PrepareAndSendEventNotification generates the notification from the given event and sends it.
+func PrepareAndSendEventNotification(ctx *Context, payload NotificationEventPayload, celEnv map[string]any) error {
 	notification, err := GetNotification(ctx.Context, payload.NotificationID.String())
 	if err != nil {
 		return err
-	}
-
-	defaultTitle, defaultBody := defaultTitleAndBody(payload.EventName)
-
-	data := NotificationTemplate{
-		Title:      utils.Coalesce(notification.Title, defaultTitle),
-		Message:    utils.Coalesce(notification.Template, defaultBody),
-		Properties: notification.Properties,
-	}
-
-	if err := templater.Walk(&data); err != nil {
-		return fmt.Errorf("error templating notification: %w", err)
 	}
 
 	if payload.PersonID != nil {
@@ -84,7 +75,7 @@ func SendNotification(ctx *Context, payload NotificationEventPayload, celEnv map
 		}
 
 		smtpURL := fmt.Sprintf("%s?ToAddresses=%s", api.SystemSMTP, url.QueryEscape(emailAddress))
-		return Send(ctx, "", smtpURL, data.Title, data.Message, data.Properties)
+		return sendEventNotificationWithMetrics(ctx, celEnv, "", smtpURL, payload.EventName, notification, nil)
 	}
 
 	if payload.TeamID != "" {
@@ -99,11 +90,7 @@ func SendNotification(ctx *Context, payload NotificationEventPayload, celEnv map
 				continue
 			}
 
-			if err := templater.Walk(&cn); err != nil {
-				return fmt.Errorf("error templating notification: %w", err)
-			}
-
-			return Send(ctx, cn.Connection, cn.URL, data.Title, data.Message, data.Properties, cn.Properties)
+			return sendEventNotificationWithMetrics(ctx, celEnv, cn.Connection, cn.URL, payload.EventName, notification, cn.Properties)
 		}
 	}
 
@@ -114,15 +101,76 @@ func SendNotification(ctx *Context, payload NotificationEventPayload, celEnv map
 	// (SA4004: the surrounding loop is unconditionally terminated)
 	for _, cn := range notification.CustomNotifications {
 		ctx.WithRecipientType(RecipientTypeCustom)
-
-		if err := templater.Walk(&cn); err != nil {
-			return fmt.Errorf("error templating notification: %w", err)
-		}
-
-		return Send(ctx, cn.Connection, cn.URL, data.Title, data.Message, data.Properties, cn.Properties)
+		return sendEventNotificationWithMetrics(ctx, celEnv, cn.Connection, cn.URL, payload.EventName, notification, cn.Properties)
 	}
 
 	return nil
+}
+
+// SendEventNotification is a wrapper around sendEventNotification() for better error handling & metrics collection purpose.
+func sendEventNotificationWithMetrics(ctx *Context, celEnv map[string]any, connectionName, shoutrrrURL, eventName string, notification *NotificationWithSpec, customProperties map[string]string) error {
+	start := time.Now()
+
+	service, err := sendEventNotification(ctx, celEnv, connectionName, shoutrrrURL, eventName, notification, customProperties)
+	if err != nil {
+		notificationSendFailureCounter.WithLabelValues(service, string(ctx.recipientType), ctx.notificationID.String()).Inc()
+		return err
+	}
+
+	notificationSentCounter.WithLabelValues(service, string(ctx.recipientType), ctx.notificationID.String()).Inc()
+	notificationSendDuration.WithLabelValues(service, string(ctx.recipientType), ctx.notificationID.String()).Observe(time.Since(start).Seconds())
+
+	return nil
+}
+
+func sendEventNotification(ctx *Context, celEnv map[string]any, connectionName, shoutrrrURL, eventName string, notification *NotificationWithSpec, customProperties map[string]string) (string, error) {
+	defaultTitle, defaultBody := defaultTitleAndBody(eventName)
+	customProperties = collections.MergeMap(notification.Properties, customProperties)
+	data := NotificationTemplate{
+		Title:      utils.Coalesce(notification.Title, defaultTitle),
+		Message:    utils.Coalesce(notification.Template, defaultBody),
+		Properties: customProperties,
+	}
+
+	return SendNotification(ctx, connectionName, shoutrrrURL, celEnv, data)
+}
+
+func SendNotification(ctx *Context, connectionName, shoutrrrURL string, celEnv map[string]any, data NotificationTemplate) (string, error) {
+	if celEnv == nil {
+		celEnv = make(map[string]any)
+	}
+
+	var connection *models.Connection
+	var err error
+	if connectionName != "" {
+		connection, err = ctx.HydrateConnectionByURL(connectionName)
+		if err != nil {
+			return "", err
+		} else if connection == nil {
+			return "", fmt.Errorf("connection (%s) not found", connectionName)
+		}
+
+		shoutrrrURL = connection.URL
+		data.Properties = collections.MergeMap(connection.Properties, data.Properties)
+	}
+
+	if connection != nil && connection.Type == models.ConnectionTypeSlack {
+		// We know we are sending to slack.
+		// Send the notification with slack-api and don't go through Shoutrrr.
+		celEnv["channel"] = "slack"
+		templater := ctx.NewStructTemplater(celEnv, "", templateFuncs)
+		if err := templater.Walk(&data); err != nil {
+			return "", fmt.Errorf("error templating notification: %w", err)
+		}
+		return "slack", SlackSend(ctx, connection.Password, connection.Username, data)
+	}
+
+	service, err := shoutrrrSend(ctx, celEnv, shoutrrrURL, data)
+	if err != nil {
+		return "", fmt.Errorf("failed to send message with Shoutrrr: %w", err)
+	}
+
+	return service, nil
 }
 
 // labelsTemplate is a helper func to generate the template for displaying labels
@@ -133,24 +181,16 @@ func labelsTemplate(field string) string {
 // defaultTitleAndBody returns the default title and body for notification
 // based on the given event.
 func defaultTitleAndBody(event string) (title string, body string) {
+	content, _ := templates.ReadFile(fmt.Sprintf("templates/%s", event))
+
 	switch event {
 	case api.EventCheckPassed:
-		title = "Check {{.check.name}} has passed"
-		body = fmt.Sprintf(`Canary: {{.canary.name}}
-{{if .agent}}Agent: {{.agent.name}}{{end}}
-{{if .status.message}}Message: {{.status.message}} {{end}}
-%s
-
-[Reference]({{.permalink}})`, labelsTemplate(".check.labels"))
+		title = `{{ if ne channel "slack"}}Check {{.check.name}} has passed{{end}}`
+		body = string(content)
 
 	case api.EventCheckFailed:
-		title = "Check {{.check.name}} has failed"
-		body = fmt.Sprintf(`Canary: {{.canary.name}}
-{{if .agent}}Agent: {{.agent.name}}{{end}}
-Error: {{.status.error}}
-%s
-
-[Reference]({{.permalink}})`, labelsTemplate(".check.labels"))
+		title = `{{ if ne channel "slack"}}Check {{.check.name}} has failed{{end}}`
+		body = string(content)
 
 	case api.EventConfigHealthy, api.EventConfigUnhealthy, api.EventConfigWarning, api.EventConfigUnknown:
 		title = "{{.config.type}} {{.config.name}} is {{.config.health}}"

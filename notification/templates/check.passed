@@ -1,0 +1,28 @@
+{{ if eq .channel "slack"}}
+{
+	"blocks": [
+    {{slackSectionTextMD (printf `:large_green_circle: *%s* is _healthy_` .canary.name)}},
+    {"type": "divider"},
+    {{ if .status.message}}{{slackSectionTextMD status.message}},{{end}}
+		{
+			"type": "section",
+			"fields": [
+				{{slackSectionTextFieldMD (printf `*Canary*: %s` .canary.name) }},
+				{{slackSectionTextFieldMD (printf `*Namespace*: %s` .canary.namespace) }}
+				{{ if .agent.name}}
+					,{{slackSectionTextFieldMD (printf `*Agent*: %s` .agent.name) }}
+				{{end}}
+			]
+		},
+    {{ if .check.labels}}{{slackSectionLabels .check.labels}},{{end}}
+    {{ slackURLAction "View Health Check" .permalink}}
+  ]
+}
+{{ else }}
+Canary: {{.canary.name}}
+{{if .agent}}Agent: {{.agent.name}}{{end}}
+{{if .status.message}}Message: {{.status.message}} {{end}}
+{{labelsFormat .check.labels}}
+
+[Reference]({{.permalink}})
+{{end}}
