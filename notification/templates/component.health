@@ -1,0 +1,26 @@
+{{if eq channel "slack"}}
+{
+	"blocks": [
+		{{slackSectionTextMD (printf `%s *%s* is _%s_` (slackHealthEmoji .component.health) .component.name .component.health)}},
+    {"type": "divider"},
+    {{if .component.description}}{{slackSectionTextPlain .component.description}},{{end}}
+		{
+			"type": "section",
+			"fields": [
+        {{slackSectionTextFieldMD (printf `*Type*: %s` .component.type) }}
+        {{if .component.status}},{{slackSectionTextFieldMD (printf `*Status*: %s` .component.status) }}{{end}}
+				{{if ne .agent.name "local"}}
+					,{{slackSectionTextFieldMD (printf `*Agent*: %s` .agent.name)}}
+				{{end}}
+			]
+		},
+		{{if .component.labels}}{{slackSectionLabels .component.labels}},{{end}}
+		{{slackURLAction "View Component" .permalink}}
+	]
+}
+
+{{else}}
+{{labelsFormat .component.labels}}
+
+[Reference]({{.permalink}})
+{{end}}
