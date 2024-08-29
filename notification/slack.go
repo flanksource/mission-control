@@ -2,6 +2,7 @@ package notification
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/slack-go/slack"
@@ -23,7 +24,7 @@ func SlackSend(ctx *Context, apiToken, channel string, msg NotificationTemplate)
 		if strings.Contains(msg.Message, `"blocks"`) {
 			var slackMsg SlackMsgTemplate
 			if err := json.Unmarshal([]byte(msg.Message), &slackMsg); err != nil {
-				return err
+				return fmt.Errorf("failed to unmarshal slack template into blocks: %w", err)
 			}
 
 			opts = append(opts, slack.MsgOptionBlocks(slackMsg.Blocks.BlockSet...))

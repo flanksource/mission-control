@@ -173,36 +173,34 @@ func SendNotification(ctx *Context, connectionName, shoutrrrURL string, celEnv m
 	return service, nil
 }
 
-// labelsTemplate is a helper func to generate the template for displaying labels
-func labelsTemplate(field string) string {
-	return fmt.Sprintf("{{if %s}}### Labels: \n{{range $k, $v := %s}}**{{$k}}**: {{$v}} \n{{end}}{{end}}", field, field)
-}
-
 // defaultTitleAndBody returns the default title and body for notification
 // based on the given event.
 func defaultTitleAndBody(event string) (title string, body string) {
-	content, _ := templates.ReadFile(fmt.Sprintf("templates/%s", event))
-
 	switch event {
 	case api.EventCheckPassed:
 		title = `{{ if ne channel "slack"}}Check {{.check.name}} has passed{{end}}`
+		content, _ := templates.ReadFile(fmt.Sprintf("templates/%s", event))
 		body = string(content)
 
 	case api.EventCheckFailed:
 		title = `{{ if ne channel "slack"}}Check {{.check.name}} has failed{{end}}`
+		content, _ := templates.ReadFile(fmt.Sprintf("templates/%s", event))
 		body = string(content)
 
 	case api.EventConfigHealthy, api.EventConfigUnhealthy, api.EventConfigWarning, api.EventConfigUnknown:
-		title = "{{.config.type}} {{.config.name}} is {{.config.health}}"
-		body = fmt.Sprintf("%s\n[Reference]({{.permalink}})", labelsTemplate(".config.labels"))
+		title = `{{ if ne channel "slack"}}{{.config.type}} {{.config.name}} is {{.config.health}}{{end}}`
+		content, _ := templates.ReadFile("templates/config.health")
+		body = string(content)
 
 	case api.EventConfigCreated, api.EventConfigUpdated, api.EventConfigDeleted:
-		title = fmt.Sprintf("{{.config.type}} {{.config.name}} was %s", strings.TrimPrefix(event, "config."))
-		body = fmt.Sprintf("%s\n[Reference]({{.permalink}})", labelsTemplate(".config.labels"))
+		title = fmt.Sprintf(`{{ if ne channel "slack"}}{{.config.type}} {{.config.name}} was %s{{end}}`, strings.TrimPrefix(event, "config."))
+		content, _ := templates.ReadFile("templates/config.db.update")
+		body = string(content)
 
 	case api.EventComponentHealthy, api.EventComponentUnhealthy, api.EventComponentWarning, api.EventComponentUnknown:
-		title = "Component {{.component.name}} is {{.component.health}}"
-		body = fmt.Sprintf("%s\n[Reference]({{.permalink}})", labelsTemplate(".component.labels"))
+		title = `{{ if ne channel "slack"}}Component {{.component.name}} is {{.component.health}}{{end}}`
+		content, _ := templates.ReadFile("templates/component.health")
+		body = string(content)
 
 	case api.EventIncidentCommentAdded:
 		title = "{{.author.name}} left a comment on {{.incident.incident_id}}: {{.incident.title}}"

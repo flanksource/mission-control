@@ -3,6 +3,8 @@ package notification
 import (
 	"encoding/json"
 	"fmt"
+
+	"github.com/flanksource/duty/models"
 )
 
 var templateFuncs = map[string]any{
@@ -17,6 +19,18 @@ var templateFuncs = map[string]any{
 		}
 
 		return output
+	},
+	"slackHealthEmoji": func(health string) string {
+		switch models.Health(health) {
+		case models.HealthHealthy:
+			return ":large_green_circle:"
+		case models.HealthUnhealthy:
+			return ":red_circle:"
+		case models.HealthWarning:
+			return ":large_orange_circle:"
+		default:
+			return ":white_circle:"
+		}
 	},
 	"slackSectionLabels": func(labels map[string]any) string {
 		if len(labels) == 0 {
@@ -43,6 +57,12 @@ var templateFuncs = map[string]any{
 
 		out, _ := json.Marshal(m)
 		return string(out)
+	},
+	"slackSectionTextFieldPlain": func(text string) string {
+		return fmt.Sprintf(`{
+			"type": "plain_text",
+			"text": %q
+		}`, text)
 	},
 	"slackSectionTextFieldMD": func(text string) string {
 		return fmt.Sprintf(`{
