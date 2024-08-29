@@ -4,6 +4,7 @@ import (
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/files"
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty/context"
 
 	"github.com/flanksource/incident-commander/db"
 )
@@ -56,13 +57,13 @@ func topologySnapshot(ctx SnapshotContext, componentID string, related bool) err
 	componentIDs := []string{componentID}
 	resources.componentIDs = append(resources.componentIDs, componentIDs...)
 	if related {
-		relatedResources, err := fetchRelatedIDsForComponent(componentIDs)
+		relatedResources, err := fetchRelatedIDsForComponent(ctx.Context, componentIDs)
 		if err != nil {
 			return err
 		}
 		resources.merge(relatedResources)
 
-		relatedConfigResources, err := fetchRelatedIDsForConfig(relatedResources.configIDs)
+		relatedConfigResources, err := fetchRelatedIDsForConfig(ctx.Context, relatedResources.configIDs)
 		if err != nil {
 			return err
 		}
@@ -83,7 +84,7 @@ func configSnapshot(ctx SnapshotContext, configID string, related bool) error {
 	configIDs := []string{configID}
 	resources.configIDs = append(resources.configIDs, configIDs...)
 	if related {
-		relatedResources, err := fetchRelatedIDsForConfig(resources.configIDs)
+		relatedResources, err := fetchRelatedIDsForConfig(ctx.Context, resources.configIDs)
 		if err != nil {
 			return err
 		}
@@ -93,27 +94,27 @@ func configSnapshot(ctx SnapshotContext, configID string, related bool) error {
 	return resources.dump(ctx)
 }
 
-func fetchRelatedIDsForComponent(componentIDs []string) (resource, error) {
+func fetchRelatedIDsForComponent(ctx context.Context, componentIDs []string) (resource, error) {
 	var related resource
 	related.componentIDs = append(related.configIDs, componentIDs...)
 
 	for _, componentID := range componentIDs {
 		// Fetch related componentIDs
-		relatedComponentIDs, err := db.LookupRelatedComponentIDs(componentID, -1)
+		relatedComponentIDs, err := db.LookupRelatedComponentIDs(ctx, componentID, -1)
 		if err != nil {
 			return related, err
 		}
 		related.componentIDs = append(related.componentIDs, relatedComponentIDs...)
 
 		// Fetch related incidentIDs
-		incidentIDs, err := db.LookupIncidentsByComponent(componentID)
+		incidentIDs, err := db.LookupIncidentsByComponent(ctx, componentID)
 		if err != nil {
 			return related, err
 		}
 		related.incidentIDs = append(related.incidentIDs, incidentIDs...)
 
 		// Fetch related configIDs
-		configIDs, err := db.LookupConfigsByComponent(componentID)
+		configIDs, err := db.LookupConfigsByComponent(ctx, componentID)
 		if err != nil {
 			return related, err
 		}
@@ -123,12 +124,12 @@ func fetchRelatedIDsForComponent(componentIDs []string) (resource, error) {
 	return related, nil
 }
 
-func fetchRelatedIDsForConfig(configIDs []string) (resource, error) {
+func fetchRelatedIDsForConfig(ctx context.Context, configIDs []string) (resource, error) {
 	var related resource
 	related.configIDs = append(related.configIDs, configIDs...)
 
 	for _, configID := range configIDs {
-		relatedConfigIDs, err := db.LookupRelatedConfigIDs(configID, -1)
+		relatedConfigIDs, err := db.LookupRelatedConfigIDs(ctx, configID, -1)
 		if err != nil {
 			return related, err
 		}

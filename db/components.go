@@ -40,14 +40,14 @@ func PersistTeamComponents(ctx context.Context, teamComps []api.TeamComponent) e
 	}).Create(teamComps).Error
 }
 
-func LookupRelatedComponentIDs(componentID string, maxDepth int) ([]string, error) {
+func LookupRelatedComponentIDs(ctx context.Context, componentID string, maxDepth int) ([]string, error) {
 	var componentIDs []string
 
 	var childRows []struct {
 		ChildID  string
 		ParentID string
 	}
-	if err := Gorm.Raw(`SELECT child_id, parent_id FROM lookup_component_children(?, ?)`, componentID, maxDepth).
+	if err := ctx.DB().Raw(`SELECT child_id, parent_id FROM lookup_component_children(?, ?)`, componentID, maxDepth).
 		Scan(&childRows).Error; err != nil {
 		return componentIDs, err
 	}
@@ -60,7 +60,7 @@ func LookupRelatedComponentIDs(componentID string, maxDepth int) ([]string, erro
 	}
 
 	var relatedRows []string
-	if err := Gorm.Raw(`SELECT id FROM lookup_component_relations(?)`, componentID).
+	if err := ctx.DB().Raw(`SELECT id FROM lookup_component_relations(?)`, componentID).
 		Scan(&relatedRows).Error; err != nil {
 		return componentIDs, err
 	}
@@ -68,9 +68,9 @@ func LookupRelatedComponentIDs(componentID string, maxDepth int) ([]string, erro
 	return componentIDs, nil
 }
 
-func LookupIncidentsByComponent(componentID string) ([]string, error) {
+func LookupIncidentsByComponent(ctx context.Context, componentID string) ([]string, error) {
 	var incidentIDs []string
-	if err := Gorm.Raw(`SELECT id FROM lookup_component_incidents(?)`, componentID).
+	if err := ctx.DB().Raw(`SELECT id FROM lookup_component_incidents(?)`, componentID).
 		Scan(&incidentIDs).Error; err != nil {
 		return incidentIDs, err
 	}
@@ -78,9 +78,9 @@ func LookupIncidentsByComponent(componentID string) ([]string, error) {
 	return incidentIDs, nil
 }
 
-func LookupConfigsByComponent(componentID string) ([]string, error) {
+func LookupConfigsByComponent(ctx context.Context, componentID string) ([]string, error) {
 	var configIDs []string
-	err := Gorm.Raw(`SELECT config_id FROM config_component_relationships WHERE component_id = ?`, componentID).
+	err := ctx.DB().Raw(`SELECT config_id FROM config_component_relationships WHERE component_id = ?`, componentID).
 		Scan(&configIDs).Error
 	if err != nil {
 		return configIDs, err

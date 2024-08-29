@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/types"
-	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/db/models"
 	"github.com/flanksource/incident-commander/utils"
 	"github.com/spf13/cobra"
@@ -19,6 +19,11 @@ var Sync = &cobra.Command{
 	Use:    "sync",
 	PreRun: PreRun,
 	Run: func(cmd *cobra.Command, args []string) {
+		ctx, _, err := duty.Start("mission-control")
+		if err != nil {
+			logger.Fatalf(err.Error())
+		}
+
 		cwd, _ := os.Getwd()
 		for _, file := range args {
 			data, err := readFile(file)
@@ -42,7 +47,7 @@ var Sync = &cobra.Command{
 					}
 					rule.Spec = types.JSON(spec)
 
-					tx := db.Gorm.Table("incident_rules").Clauses(clause.OnConflict{
+					tx := ctx.DB().Table("incident_rules").Clauses(clause.OnConflict{
 						Columns:   []clause.Column{{Name: "name"}},
 						UpdateAll: true,
 					}).Create(&rule)
