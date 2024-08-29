@@ -1,0 +1,26 @@
+{{if eq channel "slack"}}
+{
+	"blocks": [
+		{{slackSectionTextMD (printf `:information_source: *%s* was _%s_` .config.name .new_state)}},
+    {"type": "divider"},
+    {{if .config.description}}{{slackSectionTextPlain .config.description}},{{end}}
+		{
+			"type": "section",
+			"fields": [
+        {{slackSectionTextFieldMD (printf `*Type*: %s` .config.type) }}
+        {{if .config.status}},{{slackSectionTextFieldMD (printf `*Status*: %s` .config.status) }}{{end}}
+				{{if ne .agent.name "local"}}
+					,{{slackSectionTextFieldMD (printf `*Agent*: %s` .agent.name)}}
+				{{end}}
+			]
+		},
+		{{if .config.labels}}{{slackSectionLabels .config.labels}},{{end}}
+		{{slackURLAction "View Catalog" .permalink}}
+	]
+}
+
+{{else}}
+{{labelsFormat .config.labels}}
+
+[Reference]({{.permalink}})
+{{end}}

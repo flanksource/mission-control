@@ -3,6 +3,7 @@ package notification
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -437,10 +438,16 @@ func getEnvForEvent(ctx context.Context, event models.Event, properties map[stri
 			env["agent"] = agent.AsMap()
 		}
 
-		// Use the health, description & status from the time of event
-		config.Health = lo.ToPtr(models.Health(strings.TrimPrefix(event.Name, "config.")))
-		config.Description = lo.ToPtr(event.Properties["description"])
-		config.Status = lo.ToPtr(event.Properties["status"])
+		eventSuffix := strings.TrimPrefix(event.Name, "config.")
+		isStateUpdateEvent := slices.Contains([]string{api.EventConfigCreated, api.EventConfigUpdated, api.EventConfigDeleted}, event.Name)
+		if isStateUpdateEvent {
+			env["new_state"] = eventSuffix
+		} else {
+			// Use the health, description & status from the time of event
+			config.Health = lo.ToPtr(models.Health(eventSuffix))
+			config.Description = lo.ToPtr(event.Properties["description"])
+			config.Status = lo.ToPtr(event.Properties["status"])
+		}
 
 		env["config"] = config.AsMap("last_scraped_time", "path", "parent_id")
 		env["permalink"] = fmt.Sprintf("%s/catalog/%s", api.FrontendURL, configID)

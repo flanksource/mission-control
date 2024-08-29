@@ -9,7 +9,7 @@
 			"fields": [
 				{{slackSectionTextFieldMD (printf `*Canary*: %s` .canary.name) }},
 				{{slackSectionTextFieldMD (printf `*Namespace*: %s` .canary.namespace) }}
-				{{ if .agent.name}}
+				{{if ne .agent.name "local"}}
 					,{{slackSectionTextFieldMD (printf `*Agent*: %s` .agent.name) }}
 				{{end}}
 			]
