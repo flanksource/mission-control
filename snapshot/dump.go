@@ -11,13 +11,13 @@ import (
 	"github.com/flanksource/duty/models"
 
 	"github.com/flanksource/duty"
+	dutyContext "github.com/flanksource/duty/context"
 	"github.com/flanksource/incident-commander/components"
-	"github.com/flanksource/incident-commander/db"
 )
 
-func getColumnNames(table string) (string, error) {
+func getColumnNames(ctx dutyContext.Context, table string) (string, error) {
 	var columns string
-	err := db.Gorm.Raw(`SELECT string_agg(column_name, ',') from information_schema.columns where table_name = ?`, table).
+	err := ctx.DB().Raw(`SELECT string_agg(column_name, ',') from information_schema.columns where table_name = ?`, table).
 		Scan(&columns).Error
 
 	if err != nil {
@@ -32,14 +32,14 @@ func generateCSVDumpQuery(table, columns, idField, whereClause string) string {
     `, columns, table, idField, whereClause)
 }
 
-func dumpTable(table string, idField, whereClause string, ids []string, csvDirectory string) error {
+func dumpTable(ctx dutyContext.Context, table string, idField, whereClause string, ids []string, csvDirectory string) error {
 	var rows []map[string]any
-	columnNames, err := getColumnNames(table)
+	columnNames, err := getColumnNames(ctx, table)
 	if err != nil {
 		return err
 	}
 	query := generateCSVDumpQuery(table, columnNames, idField, whereClause)
-	err = db.Gorm.Raw(query, ids).Scan(&rows).Error
+	err = ctx.DB().Raw(query, ids).Scan(&rows).Error
 	if err != nil {
 		return err
 	}
@@ -54,7 +54,7 @@ func dumpComponents(ctx SnapshotContext, componentIDs []string) error {
 
 	var allComponents models.Components
 	for _, componentID := range componentIDs {
-		response, err := duty.QueryTopology(context.Background(), db.Pool, duty.TopologyOptions{
+		response, err := duty.QueryTopology(context.Background(), ctx.Context.Pool(), duty.TopologyOptions{
 			ID: componentID,
 		})
 		if err != nil {
@@ -75,7 +75,7 @@ func dumpComponents(ctx SnapshotContext, componentIDs []string) error {
 		return err
 	}
 
-	err = dumpTable("components", "id", "?", componentIDs, ctx.Directory)
+	err = dumpTable(ctx.Context, "components", "id", "?", componentIDs, ctx.Directory)
 	if err != nil {
 		return err
 	}
@@ -93,18 +93,18 @@ func dumpIncidents(ctx SnapshotContext, incidentIDs []string) error {
 		return nil
 	}
 
-	err := dumpTable("incidents", "id", "?", incidentIDs, ctx.Directory)
+	err := dumpTable(ctx.Context, "incidents", "id", "?", incidentIDs, ctx.Directory)
 	if err != nil {
 		return err
 	}
 
-	err = dumpTable("hypotheses", "incident_id", "?", incidentIDs, ctx.Directory)
+	err = dumpTable(ctx.Context, "hypotheses", "incident_id", "?", incidentIDs, ctx.Directory)
 	if err != nil {
 		return err
 	}
 
 	whereClause := `SELECT id FROM hypotheses WHERE incident_id IN (?)`
-	err = dumpTable("evidences", "hypothesis_id", whereClause, incidentIDs, ctx.Directory)
+	err = dumpTable(ctx.Context, "evidences", "hypothesis_id", whereClause, incidentIDs, ctx.Directory)
 	if err != nil {
 		return err
 	}
@@ -116,17 +116,17 @@ func dumpConfigs(ctx SnapshotContext, configIDs []string) error {
 		return nil
 	}
 
-	err := dumpTable("config_items", "id", "?", configIDs, ctx.Directory)
+	err := dumpTable(ctx.Context, "config_items", "id", "?", configIDs, ctx.Directory)
 	if err != nil {
 		return err
 	}
 
-	err = dumpTable("config_changes", "config_id", "?", configIDs, ctx.Directory)
+	err = dumpTable(ctx.Context, "config_changes", "config_id", "?", configIDs, ctx.Directory)
 	if err != nil {
 		return err
 	}
 
-	err = dumpTable("config_analysis", "config_id", "?", configIDs, ctx.Directory)
+	err = dumpTable(ctx.Context, "config_analysis", "config_id", "?", configIDs, ctx.Directory)
 	if err != nil {
 		return err
 	}

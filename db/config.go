@@ -8,14 +8,14 @@ import (
 	"github.com/google/uuid"
 )
 
-func LookupRelatedConfigIDs(configID string, maxDepth int) ([]string, error) {
+func LookupRelatedConfigIDs(ctx context.Context, configID string, maxDepth int) ([]string, error) {
 	var configIDs []string
 
 	var rows []struct {
 		ChildID  string
 		ParentID string
 	}
-	if err := Gorm.Raw(`SELECT child_id, parent_id FROM lookup_config_children(?, ?)`, configID, maxDepth).
+	if err := ctx.DB().Raw(`SELECT child_id, parent_id FROM lookup_config_children(?, ?)`, configID, maxDepth).
 		Scan(&rows).Error; err != nil {
 		return configIDs, err
 	}
@@ -24,7 +24,7 @@ func LookupRelatedConfigIDs(configID string, maxDepth int) ([]string, error) {
 	}
 
 	var relatedRows []string
-	if err := Gorm.Raw(`SELECT id FROM lookup_config_relations(?)`, configID).
+	if err := ctx.DB().Raw(`SELECT id FROM lookup_config_relations(?)`, configID).
 		Scan(&relatedRows).Error; err != nil {
 		return configIDs, err
 	}

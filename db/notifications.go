@@ -81,8 +81,8 @@ func DeleteNotification(ctx context.Context, id string) error {
 	return ctx.DB().Delete(&models.Notification{}, "id = ?", id).Error
 }
 
-func UpdateNotificationError(id string, err string) error {
-	return Gorm.Model(&models.Notification{}).Where("id = ?", id).Update("error", err).Error
+func UpdateNotificationError(ctx context.Context, id string, err string) error {
+	return ctx.DB().Model(&models.Notification{}).Where("id = ?", id).Update("error", err).Error
 }
 
 func DeleteNotificationSendHistory(ctx context.Context, days int) (int64, error) {

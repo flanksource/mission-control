@@ -172,7 +172,7 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 			}
 		}
 		if valid, err := expression.Eval(n.Filter, celEnv, allEnvVars); err != nil {
-			logs.IfError(db.UpdateNotificationError(id, err.Error()), "failed to update notification")
+			logs.IfError(db.UpdateNotificationError(ctx, id, err.Error()), "failed to update notification")
 			continue
 		} else if !valid {
 			continue
