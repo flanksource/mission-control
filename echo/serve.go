@@ -103,7 +103,7 @@ func New(ctx context.Context) *echov4.Echo {
 		}
 	}
 
-	dutyEcho.AddDebugHandlers(e, rbac.Authorization(rbac.ObjectMonitor, rbac.ActionUpdate))
+	dutyEcho.AddDebugHandlers(ctx, e, rbac.Authorization(rbac.ObjectMonitor, rbac.ActionUpdate))
 
 	e.Use(ServerCache)
 
