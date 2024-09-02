@@ -1339,6 +1339,11 @@ func (in *NotificationSpec) DeepCopyInto(out *NotificationSpec) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.RepeatGroup != nil {
+		in, out := &in.RepeatGroup, &out.RepeatGroup
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	in.To.DeepCopyInto(&out.To)
 }
 
