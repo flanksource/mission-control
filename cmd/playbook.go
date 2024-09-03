@@ -29,6 +29,7 @@ var Playbook = &cobra.Command{
 
 var playbookNamespace string
 var paramFile string
+var debugPort int
 
 var Run = &cobra.Command{
 	Use:              "run playbook playbook.yaml params.yaml",
@@ -64,7 +65,12 @@ var Run = &cobra.Command{
 		})
 		shutdown.WaitForSignal()
 
-		go echo.Start(e, httpPort)
+		if debugPort >= 0 {
+			if debugPort == 0 {
+				debugPort = duty.FreePort()
+			}
+			go echo.Start(e, debugPort)
+		}
 
 		p, err := playbook.CreateOrSaveFromFile(ctx, args[0])
 		if err != nil {
@@ -203,6 +209,7 @@ var Submit = &cobra.Command{
 func init() {
 	Playbook.PersistentFlags().StringVarP(&playbookNamespace, "namespace", "n", "default", "Namespace for playbook to run under")
 	Playbook.PersistentFlags().StringVarP(&paramFile, "params", "p", "", "YAML/JSON file containing parameters")
+	Run.Flags().IntVar(&debugPort, "debug-port", 0, "Start an HTTP server to use the /debug routes, Use -1 to disable and 0 to pick a free port")
 	Playbook.AddCommand(Run, Submit)
 	Root.AddCommand(Playbook)
 }
