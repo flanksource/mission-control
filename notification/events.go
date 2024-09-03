@@ -86,23 +86,15 @@ type notificationHandler struct {
 
 // Check if notification can be sent in the interval based on group by, returns true if it can be sent
 func checkRepeatInterval(ctx context.Context, n NotificationWithSpec, event models.Event) (bool, error) {
-	validKeys := map[string]string{
-		"resource_id":  event.Properties["id"],
-		"source_event": event.Name,
-	}
-
-	clauses := []clause.Expression{clause.Eq{Column: "notification_id", Value: n.ID.String()}}
-	for _, g := range n.GroupBy {
-		if val, exists := validKeys[g]; exists {
-			clauses = append(clauses, clause.Eq{Column: g, Value: val})
-		} else {
-			ctx.Warnf("notification %s has an invalid groupBy key: %q", n.ID, g)
-		}
-	}
-
 	interval, err := text.ParseDuration(n.RepeatInterval)
 	if err != nil {
 		return false, fmt.Errorf("error parsing repeat interval[%s] to time.Duration: %w", n.RepeatInterval, err)
+	}
+
+	clauses := []clause.Expression{
+		clause.Eq{Column: "notification_id", Value: n.ID.String()},
+		clause.Eq{Column: "resource_id", Value: event.Properties["id"]},
+		clause.Eq{Column: "source_event", Value: event.Name},
 	}
 
 	var exists bool
