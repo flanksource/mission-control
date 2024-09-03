@@ -17,7 +17,6 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/vars"
-	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	client "github.com/ory/client-go"
 	"github.com/patrickmn/go-cache"
@@ -114,8 +113,11 @@ func canSkipAuth(c echo.Context) bool {
 	return collections.Contains(skipAuthPaths, c.Path())
 }
 
-func mapIDsToRoles(ctx context.Context, session *client.Session, uid uuid.UUID) error {
+func mapIDsToRoles(ctx context.Context, session *client.Session, person models.Person) error {
+	log := logger.GetLogger("auth")
+	name := person.GetName()
 	if _, exists := identityMapperLoginCache.Get(session.GetId()); exists {
+		log.V(6).Infof("[%s] skipping identity mapping for session %s, already mapped", name, session.GetId())
 		return nil
 	}
 
@@ -123,10 +125,18 @@ func mapIDsToRoles(ctx context.Context, session *client.Session, uid uuid.UUID) 
 		"identity": session.Identity,
 	}
 
+	if log.IsLevelEnabled(6) {
+		log.V(6).Infof("[%s] mapping identity to roles/teams using %s", name, IdentityRoleMapper)
+	} else if log.IsLevelEnabled(4) {
+		log.V(4).Infof("[%s] mapping identity to roles/teams", name)
+	}
+
 	res, err := ctx.RunTemplate(gomplate.Template{Expression: IdentityRoleMapper}, env)
 	if err != nil {
 		return fmt.Errorf("error running IdentityRoleMapper template: %v", err)
 	}
+
+	log.V(3).Infof("[%s] identity mapper returned %s", name, res)
 
 	if res == "" {
 		return nil
@@ -138,20 +148,22 @@ func mapIDsToRoles(ctx context.Context, session *client.Session, uid uuid.UUID) 
 	}
 
 	if result.Role != "" {
-		if err := rbac.AddRoleForUser(uid.String(), result.Role); err != nil {
-			return fmt.Errorf("error adding role:%s to user %s: %v", result.Role, uid, err)
+		log.V(3).Infof("[%s] adding role: %s", name, res)
+		if err := rbac.AddRoleForUser(person.ID.String(), result.Role); err != nil {
+			return ctx.Oops().Wrapf(err, "error adding role %s to user %s", result.Role, name)
 		}
 	}
 
 	for _, teamName := range result.Teams {
 		team, err := query.FindTeam(ctx, teamName)
 		if err != nil {
-			logger.Errorf("error finding team(name: %s) %v", team, err)
+			log.Warnf("error finding team %s %v", team, err)
 			continue
 		}
+		log.V(3).Infof("[%s] adding team: %s", name, team.Name)
 
-		if err := db.AddPersonToTeam(ctx, uid, team.ID); err != nil {
-			logger.Errorf("error adding person to team: %v", err)
+		if err := db.AddPersonToTeam(ctx, person.ID, team.ID); err != nil {
+			return ctx.Oops().Wrapf(err, "error adding team %s to user %s", team.ID, name)
 		}
 	}
 

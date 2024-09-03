@@ -181,10 +181,12 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 			}
 		}
 
+		mappingCtx := ctx.WithObject(person)
+
 		if IdentityRoleMapper != "" {
-			if err := mapIDsToRoles(ctx, session, uid); err != nil {
+			if err := mapIDsToRoles(mappingCtx, session, person); err != nil {
 				ctx.GetSpan().RecordError(err)
-				logger.Errorf("error mapping ids to roles: %v", err)
+				mappingCtx.Errorf("error mapping ids to roles: %v", err)
 			}
 		}
 
