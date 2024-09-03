@@ -368,11 +368,23 @@
         "url": {
           "type": "string"
         },
+        "username": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "password": {
+          "$ref": "#/$defs/EnvVar"
+        },
         "base": {
           "type": "string"
         },
         "branch": {
           "type": "string"
+        },
+        "skipExisting": {
+          "type": "boolean"
+        },
+        "force": {
+          "type": "boolean"
         },
         "connection": {
           "type": "string"
@@ -863,8 +875,7 @@
       "additionalProperties": false,
       "type": "object",
       "required": [
-        "name",
-        "label"
+        "name"
       ]
     },
     "PlaybookSpec": {

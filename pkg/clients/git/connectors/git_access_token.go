@@ -34,7 +34,6 @@ type GitAccessTokenClient struct {
 // NewAccessTokenClient is a generic git client that can communicate with
 // git services supporting access tokens. eg Github, GitLab & Azure Devops (WIP)
 func NewAccessTokenClient(service, owner, repoName, accessToken string) (Connector, error) {
-
 	logger.Infof("Creating %s client for %s/%s using access token: %s", service, owner, repoName, logger.PrintableSecret(accessToken))
 	scmClient, err := factory.NewClient(service, "", accessToken)
 
@@ -42,7 +41,7 @@ func NewAccessTokenClient(service, owner, repoName, accessToken string) (Connect
 	if err != nil {
 		return nil, fmt.Errorf("failed to create git client with access token: %v", err)
 	}
-	// scmClient.
+
 	client := &GitAccessTokenClient{
 		service:    service,
 		scm:        scmClient,
@@ -126,7 +125,7 @@ func (g *GitAccessTokenClient) Clone(ctx context.Context, branch, local string) 
 		}
 	}
 
-	ctx.Logger.V(9).Infof("Cloning %s@%s", url, branch)
+	ctx.Logger.V(5).Infof("Cloning %s@%s", url, branch)
 	repo, err := git.PlainCloneContext(ctx, dir, false, &git.CloneOptions{
 		ReferenceName: plumbing.NewBranchReferenceName(branch),
 		URL:           url,

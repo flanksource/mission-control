@@ -16,9 +16,11 @@ import (
 	"github.com/flanksource/incident-commander/pkg/clients/git"
 	"github.com/flanksource/incident-commander/pkg/clients/git/connectors"
 	gitv5 "github.com/go-git/go-git/v5"
+	"github.com/samber/oops"
 )
 
 type GitOps struct {
+	context.Context
 	workTree       *gitv5.Worktree
 	spec           *connectors.GitopsAPISpec
 	logLines       []string
@@ -56,7 +58,7 @@ func (t *GitOps) Run(ctx context.Context, action v1.GitOpsAction) (*GitOpsAction
 	}
 	ctx = ctx.WithAppendObject(t.spec)
 
-	connector, workTree, err := t.cloneRepo(ctx, action)
+	connector, workTree, err := t.cloneRepo(ctx)
 	if err != nil {
 		return nil, oops.Wrapf(err, "failed to clone repo")
 	}
@@ -115,6 +117,7 @@ func (t *GitOps) generateSpec(ctx context.Context, action v1.GitOpsAction) error
 	}
 
 	t.spec = &connectors.GitopsAPISpec{
+		Force:             action.Repo.Force,
 		Repository:        action.Repo.URL,
 		Base:              action.Repo.Base,
 		Branch:            action.Repo.Branch,
@@ -156,6 +159,19 @@ func (t *GitOps) generateSpec(ctx context.Context, action v1.GitOpsAction) error
 		}
 	}
 
+	var err error
+	if !action.Repo.Username.IsEmpty() {
+		t.spec.User, err = ctx.GetEnvValueFromCache(action.Repo.Username, ctx.GetNamespace())
+		if err != nil {
+			return err
+		}
+
+	}
+	if !action.Repo.Password.IsEmpty() {
+		t.spec.Password, err = ctx.GetEnvValueFromCache(action.Repo.Password, ctx.GetNamespace())
+		if err != nil {
+			return err
+		}
 	}
 
 	t.shouldCreatePR = action.PullRequest != nil
@@ -182,7 +198,7 @@ func (t *GitOps) generateSpec(ctx context.Context, action v1.GitOpsAction) error
 	return nil
 }
 
-func (t *GitOps) cloneRepo(ctx context.Context, action v1.GitOpsAction) (connectors.Connector, *gitv5.Worktree, error) {
+func (t *GitOps) cloneRepo(ctx context.Context) (connectors.Connector, *gitv5.Worktree, error) {
 	connector, workTree, err := git.Clone(ctx, t.spec)
 	if err != nil {
 		return nil, nil, err
@@ -221,9 +237,20 @@ func (t *GitOps) applyPatches(ctx context.Context, action v1.GitOpsAction) error
 				}
 			}
 
-			// TODO:
-			// if patch.JQ != "" {
-			// }
+			if patch.JQ != "" {
+				cmd := exec.Command("jq", patch.JQ, path)
+				if res, err := runCmd(ctx, cmd); err != nil {
+					return err
+				} else if res.Error != nil {
+					return res.Error
+				} else if res.Stdout != "" {
+					t.log(res.Stdout)
+				}
+
+				if _, err := t.workTree.Add(relativePath); err != nil {
+					return err
+				}
+			}
 		}
 	}
 
@@ -241,20 +268,28 @@ func (t *GitOps) modifyFiles(ctx context.Context, action v1.GitOpsAction) error 
 		for _, path := range paths {
 			relativePath, err := filepath.Rel(t.workTree.Filesystem.Root(), path)
 			if err != nil {
-				return fmt.Errorf("failed to get relative path: %w", err)
+				return ctx.Oops().Wrap(err)
 			}
 
 			switch f.Content {
 			case "$delete":
-				t.log("Deleting file %s", relativePath)
-				if _, err := t.workTree.Remove(relativePath); err != nil {
-					return fmt.Errorf("failed to delete file(%s): %w", relativePath, err)
+
+				if _, err := t.workTree.Filesystem.Stat(relativePath); os.IsNotExist(err) {
+					t.log("File does not exist, skipping delete: %s", relativePath)
+				} else if err != nil {
+					return err
+				} else {
+					t.log("Deleting file %s", relativePath)
+					if _, err := t.workTree.Remove(relativePath); err != nil {
+						return ctx.Oops().Wrap(err)
+					}
 				}
 
 			default:
 				t.log("Creating file %s", relativePath)
+				_ = t.workTree.Filesystem.MkdirAll(filepath.Dir(relativePath), 0600)
 				if err := os.WriteFile(path, []byte(f.Content), os.ModePerm); err != nil {
-					return fmt.Errorf("failed to create file(%s): %w", relativePath, err)
+					return ctx.Oops().Wrap(err)
 				}
 
 				if _, err := t.workTree.Add(relativePath); err != nil {
