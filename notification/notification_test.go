@@ -3,7 +3,6 @@ package notification_test
 import (
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/duty/models"
@@ -122,33 +121,58 @@ var _ = ginkgo.Describe("Notification on incident creation", ginkgo.Ordered, fun
 		Expect(webhookPostdata["message"]).To(Equal(fmt.Sprintf("Severity: %s", incident.Severity)))
 		Expect(webhookPostdata["title"]).To(Equal(fmt.Sprintf("New incident: %s", incident.Title)))
 	})
+})
 
-	ginkgo.It("should create a new notification with repeat interval", func() {
-		n := models.Notification{
-			ID:             uuid.New(),
-			Events:         pq.StringArray([]string{"config.created"}),
-			Template:       "Config created",
-			TeamID:         &team.ID,
-			Source:         models.SourceCRD,
-			RepeatInterval: "4h",
-			GroupBy:        pq.StringArray([]string{"notification_id", "source_event"}),
+var _ = ginkgo.Describe("repeat interval test", ginkgo.Ordered, func() {
+	var n models.Notification
+	var config models.ConfigItem
+
+	ginkgo.BeforeAll(func() {
+		customReceiver := []api.NotificationConfig{
+			{
+				URL: fmt.Sprintf("generic+%s", webhookEndpoint),
+				Properties: map[string]string{
+					"disabletls": "yes",
+					"template":   "json",
+				},
+			},
 		}
-		err := DefaultContext.DB().Create(&n).Error
+		customReceiverJson, err := json.Marshal(customReceiver)
 		Expect(err).To(BeNil())
 
-		config1 := &models.ConfigItem{
+		n = models.Notification{
+			ID:             uuid.New(),
+			Events:         pq.StringArray([]string{"config.updated"}),
+			Source:         models.SourceCRD,
+			Title:          "Dummy",
+			Template:       "dummy",
+			CustomServices: types.JSON(customReceiverJson),
+			RepeatInterval: "4h",
+		}
+
+		err = DefaultContext.DB().Create(&n).Error
+		Expect(err).To(BeNil())
+
+		config = models.ConfigItem{
 			ID:          uuid.New(),
 			Name:        lo.ToPtr("Deployment1"),
 			ConfigClass: models.ConfigClassDeployment,
+			Config:      lo.ToPtr(`{"color": "red"}`),
 			Type:        lo.ToPtr("Kubernetes::Deployment"),
 		}
-		err = DefaultContext.DB().Create(config1).Error
+
+		err = DefaultContext.DB().Create(&config).Error
+		Expect(err).To(BeNil())
+	})
+
+	ginkgo.It("should have sent a notification for a config update", func() {
+		err := DefaultContext.DB().Model(&models.ConfigItem{}).Where("id = ?", config.ID).UpdateColumn("config", `{"color": "blue"}`).Error
 		Expect(err).To(BeNil())
 
 		events.ConsumeAll(DefaultContext)
 		Eventually(func() int64 {
 			var c int64
-			DefaultContext.DB().Model(&models.Event{}).Count(&c)
+			DefaultContext.DB().Model(&models.Event{}).Where("name = 'config.updated'").Count(&c)
 			return c
 		}, "10s", "200ms").Should(Equal(int64(0)))
 
@@ -157,50 +181,23 @@ var _ = ginkgo.Describe("Notification on incident creation", ginkgo.Ordered, fun
 		err = DefaultContext.DB().Model(&models.NotificationSendHistory{}).Where("notification_id = ?", n.ID).Count(&sentHistoryCount).Error
 		Expect(err).To(BeNil())
 		Expect(sentHistoryCount).To(Equal(int64(1)))
+	})
 
-		config2 := &models.ConfigItem{
-			ID:          uuid.New(),
-			Name:        lo.ToPtr("Deployment2"),
-			ConfigClass: models.ConfigClassDeployment,
-			Type:        lo.ToPtr("Kubernetes::Deployment"),
-		}
-		err = DefaultContext.DB().Create(config2).Error
+	ginkgo.It("should NOT have sent a notification for a subsequent config update", func() {
+		err := DefaultContext.DB().Model(&models.ConfigItem{}).Where("id = ?", config.ID).UpdateColumn("config", `{"color": "yellow"}`).Error
 		Expect(err).To(BeNil())
 
 		events.ConsumeAll(DefaultContext)
 		Eventually(func() int64 {
 			var c int64
-			DefaultContext.DB().Model(&models.Event{}).Count(&c)
+			DefaultContext.DB().Model(&models.Event{}).Where("name = 'config.updated'").Count(&c)
 			return c
 		}, "10s", "200ms").Should(Equal(int64(0)))
 
 		// Check send history
+		var sentHistoryCount int64
 		err = DefaultContext.DB().Model(&models.NotificationSendHistory{}).Where("notification_id = ?", n.ID).Count(&sentHistoryCount).Error
 		Expect(err).To(BeNil())
 		Expect(sentHistoryCount).To(Equal(int64(1)))
-
-		err = DefaultContext.DB().Model(&models.NotificationSendHistory{}).Where("notification_id = ?", n.ID).Update("created_at", time.Now().Add(-10*time.Hour)).Error
-		Expect(err).To(BeNil())
-
-		config3 := &models.ConfigItem{
-			ID:          uuid.New(),
-			Name:        lo.ToPtr("Deployment3"),
-			ConfigClass: models.ConfigClassDeployment,
-			Type:        lo.ToPtr("Kubernetes::Deployment"),
-		}
-		err = DefaultContext.DB().Create(config3).Error
-		Expect(err).To(BeNil())
-
-		events.ConsumeAll(DefaultContext)
-		Eventually(func() int64 {
-			var c int64
-			DefaultContext.DB().Model(&models.Event{}).Count(&c)
-			return c
-		}, "10s", "200ms").Should(Equal(int64(0)))
-
-		// Check send history
-		err = DefaultContext.DB().Model(&models.NotificationSendHistory{}).Where("notification_id = ?", n.ID).Count(&sentHistoryCount).Error
-		Expect(err).To(BeNil())
-		Expect(sentHistoryCount).To(Equal(int64(2)))
 	})
 })
