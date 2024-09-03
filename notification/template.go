@@ -3,8 +3,10 @@ package notification
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/flanksource/duty/models"
+	"github.com/samber/lo"
 )
 
 var templateFuncs = map[string]any{
@@ -46,17 +48,28 @@ var templateFuncs = map[string]any{
 			})
 		}
 
-		var m = map[string]any{
-			"type":   "section",
-			"fields": fields,
-			"text": map[string]any{
-				"type": "mrkdwn",
-				"text": "*Labels*",
-			},
+		var outputs []string
+		const maxFieldsPerSection = 10
+		for i, chunk := range lo.Chunk(fields, maxFieldsPerSection) {
+			var m = map[string]any{
+				"type":   "section",
+				"fields": chunk,
+			}
+
+			if i == 0 {
+				m["text"] = map[string]any{
+					"type": "mrkdwn",
+					"text": "*Labels*",
+				}
+			}
+
+			out, err := json.Marshal(m)
+			if err == nil {
+				outputs = append(outputs, string(out))
+			}
 		}
 
-		out, _ := json.Marshal(m)
-		return string(out)
+		return strings.Join(outputs, ",")
 	},
 	"slackSectionTextFieldPlain": func(text string) string {
 		return fmt.Sprintf(`{
