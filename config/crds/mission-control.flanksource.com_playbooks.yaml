@@ -811,9 +811,57 @@ spec:
                                 to Base.
                               type: string
                             connection:
-                              description: Connection name to use the credentials
-                                for the git repo
                               type: string
+                            force:
+                              description: Overwrite history when pushing
+                              type: boolean
+                            password:
+                              properties:
+                                name:
+                                  type: string
+                                value:
+                                  type: string
+                                valueFrom:
+                                  properties:
+                                    configMapKeyRef:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          type: string
+                                      required:
+                                      - key
+                                      type: object
+                                    helmRef:
+                                      properties:
+                                        key:
+                                          description: Key is a JSONPath expression
+                                            used to fetch the key from the merged
+                                            JSON.
+                                          type: string
+                                        name:
+                                          type: string
+                                      required:
+                                      - key
+                                      type: object
+                                    secretKeyRef:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          type: string
+                                      required:
+                                      - key
+                                      type: object
+                                    serviceAccount:
+                                      description: ServiceAccount specifies the service
+                                        account whose token should be fetched
+                                      type: string
+                                  type: object
+                              type: object
+                            skipExisting:
+                              description: Do not push to existing branches
+                              type: boolean
                             type:
                               description: |-
                                 Type specifies the service the repository is hosted on (eg: github, gitlab, etc)
@@ -823,6 +871,50 @@ spec:
                             url:
                               description: URL of the git repository
                               type: string
+                            username:
+                              properties:
+                                name:
+                                  type: string
+                                value:
+                                  type: string
+                                valueFrom:
+                                  properties:
+                                    configMapKeyRef:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          type: string
+                                      required:
+                                      - key
+                                      type: object
+                                    helmRef:
+                                      properties:
+                                        key:
+                                          description: Key is a JSONPath expression
+                                            used to fetch the key from the merged
+                                            JSON.
+                                          type: string
+                                        name:
+                                          type: string
+                                      required:
+                                      - key
+                                      type: object
+                                    secretKeyRef:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          type: string
+                                      required:
+                                      - key
+                                      type: object
+                                    serviceAccount:
+                                      description: ServiceAccount specifies the service
+                                        account whose token should be fetched
+                                      type: string
+                                  type: object
+                              type: object
                           required:
                           - url
                           type: object
@@ -1658,7 +1750,6 @@ spec:
                       - millicores
                       type: string
                   required:
-                  - label
                   - name
                   type: object
                 type: array

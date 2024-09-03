@@ -28,12 +28,20 @@ type NotificationAction struct {
 
 type GitOpsActionRepo struct {
 	// URL of the git repository
-	URL string `yaml:"url" json:"url" template:"true"`
+	URL                  string `yaml:"url" json:"url" template:"true"`
+	types.Authentication `yaml:",inline" json:",inline"`
 	// Branch to clone. Defaults to "main".
 	Base string `yaml:"base,omitempty" json:"base,omitempty" template:"true"`
 	// Branch is the new branch to create. Defaults to Base.
 	Branch string `yaml:"branch,omitempty" json:"branch,omitempty" template:"true"`
-	// Connection name to use the credentials for the git repo
+	// Connection name to use for credentials to the git repo, if specified username, password, accessToken are ignored
+
+	// Do not push to existing branches
+	SkipExisting bool `yaml:"skipExisting,omitempty" json:"skipExisting,omitempty"`
+
+	// Overwrite history when pushing
+	Force bool `yaml:"force,omitempty" json:"force,omitempty"`
+
 	Connection string `yaml:"connection,omitempty" json:"connection,omitempty" template:"true"`
 	// Type specifies the service the repository is hosted on (eg: github, gitlab, etc)
 	// It is deduced from the repo URL however for private repository you can
@@ -410,6 +418,36 @@ type PlaybookAction struct {
 	SQL                 *SQLAction                 `json:"sql,omitempty" yaml:"sql,omitempty" template:"true"`
 	Pod                 *PodAction                 `json:"pod,omitempty" yaml:"pod,omitempty" template:"true"`
 	Notification        *NotificationAction        `json:"notification,omitempty" yaml:"notification,omitempty" template:"true"`
+}
+
+func (p *PlaybookAction) Count() int {
+	count := 0
+	if p.Exec != nil {
+		count++
+	}
+	if p.GitOps != nil {
+		count++
+	}
+	if p.Github != nil {
+		count++
+	}
+	if p.AzureDevopsPipeline != nil {
+		count++
+	}
+	if p.HTTP != nil {
+		count++
+	}
+	if p.SQL != nil {
+		count++
+	}
+	if p.Pod != nil {
+		count++
+	}
+	if p.Notification != nil {
+		count++
+	}
+
+	return count
 }
 
 func (p *PlaybookAction) Context() map[string]any {

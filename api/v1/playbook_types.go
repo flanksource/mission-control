@@ -39,7 +39,7 @@ type PlaybookParameter struct {
 	// Specify the default value of the parameter.
 	Default dutyTypes.GoTemplate `json:"default,omitempty" yaml:"default,omitempty" template:"true"`
 	// Label shown on the UI
-	Label       string `json:"label" yaml:"label"`
+	Label       string `json:"label,omitempty" yaml:"label,omitempty"`
 	Required    bool   `json:"required,omitempty" yaml:"required,omitempty"`
 	Icon        string `json:"icon,omitempty" yaml:"icon,omitempty"`
 	Description string `json:"description,omitempty" yaml:"description,omitempty"`

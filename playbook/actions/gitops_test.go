@@ -70,7 +70,7 @@ var _ = ginkgo.Describe("Playbook Action Gitops", ginkgo.Label("slow"), ginkgo.O
 		err := templater.Walk(&spec)
 		Expect(err).ToNot(HaveOccurred())
 
-		var runner GitOps
+		var runner = GitOps{Context: ctx}
 		res, err := runner.Run(ctx, spec)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(len(res.Links)).To(BeZero())
@@ -85,7 +85,7 @@ var _ = ginkgo.Describe("Playbook Action Gitops", ginkgo.Label("slow"), ginkgo.O
 		// should do a fresh clone
 		{
 			logger.Infof("Fresh cloning")
-			_, workTree, err = git.Clone(gocontext.TODO(), &connectors.GitopsAPISpec{
+			_, workTree, err = git.Clone(context.New(), &connectors.GitopsAPISpec{
 				Repository: gitServer.HTTPAddress() + "/dummy-repo",
 				Base:       fmt.Sprintf("playbook-%s", env.Params["namespace"]),
 				Branch:     fmt.Sprintf("playbook-%s", env.Params["namespace"]),

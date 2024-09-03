@@ -260,7 +260,7 @@ var _ = Describe("Playbook", func() {
 
 		It("should execute the playbook", func() {
 			run = runPlaybook(playbook, RunParams{
-				ConfigID: dummy.EKSCluster.ID,
+				ConfigID: lo.ToPtr(dummy.EKSCluster.ID),
 				Params: map[string]string{
 					"path":     dataFile,
 					"log_path": logFile,
@@ -329,7 +329,7 @@ var _ = Describe("Playbook", func() {
 
 		It("should store playbook run via API", func() {
 			run = runPlaybook(playbook, RunParams{
-				ConfigID: dummy.EKSCluster.ID,
+				ConfigID: lo.ToPtr(dummy.EKSCluster.ID),
 				Params: map[string]string{
 					"path": dataFile,
 				},
@@ -416,7 +416,7 @@ var _ = Describe("Playbook", func() {
 
 		It("should execute the playbook", func() {
 			run = runPlaybook(playbook, RunParams{
-				ConfigID: dummy.KubernetesNodeA.ID,
+				ConfigID: lo.ToPtr(dummy.KubernetesNodeA.ID),
 			}, models.PlaybookRunStatusScheduled, models.PlaybookRunStatusWaiting)
 
 			action, err := run.GetAction(DefaultContext.DB(), spec.Actions[0].Name)
@@ -484,7 +484,7 @@ var _ = Describe("Playbook", func() {
 	var _ = Describe("actions", func() {
 		It("exec | powershell", func() {
 			run := createAndRun("exec-powershell", RunParams{
-				ConfigID: dummy.KubernetesNodeA.ID,
+				ConfigID: lo.ToPtr(dummy.KubernetesNodeA.ID),
 			})
 			Expect(run.Status).To(Equal(models.PlaybookRunStatusCompleted), run.String(DefaultContext.DB()))
 			actions, err := run.GetActions(DefaultContext.DB())
