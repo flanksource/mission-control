@@ -25,13 +25,15 @@ func PersistNotificationFromCRD(ctx context.Context, obj *v1.Notification) error
 	}
 
 	dbObj := models.Notification{
-		ID:         uid,
-		Events:     obj.Spec.Events,
-		Title:      obj.Spec.Title,
-		Template:   obj.Spec.Template,
-		Filter:     obj.Spec.Filter,
-		Properties: obj.Spec.To.Properties,
-		Source:     models.SourceCRD,
+		ID:             uid,
+		Events:         obj.Spec.Events,
+		Title:          obj.Spec.Title,
+		Template:       obj.Spec.Template,
+		Filter:         obj.Spec.Filter,
+		Properties:     obj.Spec.To.Properties,
+		Source:         models.SourceCRD,
+		RepeatInterval: obj.Spec.RepeatInterval,
+		GroupBy:        obj.Spec.RepeatGroup,
 	}
 
 	switch {

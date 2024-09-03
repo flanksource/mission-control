@@ -47,6 +47,17 @@ spec:
                 description: Cel-expression used to decide whether this notification
                   client should send the notification
                 type: string
+              repeatGroup:
+                description: |-
+                  RepeatGroup allows notifications to be grouped by certain set of keys and only send
+                  one per group within the specified repeat interval.
+                items:
+                  type: string
+                type: array
+              repeatInterval:
+                description: RepeatInterval is the waiting time to resend a notification
+                  after it has been succefully sent.
+                type: string
               template:
                 description: Template is the notification body in markdown
                 type: string

@@ -45,6 +45,13 @@ type NotificationSpec struct {
 	// Cel-expression used to decide whether this notification client should send the notification
 	Filter string `json:"filter,omitempty" yaml:"filter,omitempty"`
 
+	// RepeatInterval is the waiting time to resend a notification after it has been succefully sent.
+	RepeatInterval string `json:"repeatInterval,omitempty" yaml:"repeatInterval,omitempty"`
+
+	// RepeatGroup allows notifications to be grouped by certain set of keys and only send
+	// one per group within the specified repeat interval.
+	RepeatGroup []string `json:"repeatGroup,omitempty" yaml:"repeatGroup,omitempty"`
+
 	// Specify the recipient
 	To NotificationRecipientSpec `json:"to" yaml:"to"`
 }
