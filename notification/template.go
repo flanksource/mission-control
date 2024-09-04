@@ -3,6 +3,7 @@ package notification
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/flanksource/duty/models"
@@ -39,7 +40,7 @@ var templateFuncs = map[string]any{
 			return ""
 		}
 
-		var fields []any
+		var fields []map[string]any
 		for k, v := range labels {
 			fields = append(fields, map[string]any{
 				"type":     "mrkdwn",
@@ -47,6 +48,10 @@ var templateFuncs = map[string]any{
 				"verbatim": true,
 			})
 		}
+
+		slices.SortFunc(fields, func(a, b map[string]any) int {
+			return strings.Compare(a["text"].(string), b["text"].(string))
+		})
 
 		var outputs []string
 		const maxFieldsPerSection = 10
