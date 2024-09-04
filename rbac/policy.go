@@ -176,6 +176,7 @@ const (
 	ObjectPlaybooks        = "playbooks"
 	ObjectRBAC             = "rbac"
 	ObjectTopology         = "topology"
+	ObjectPeople           = "people"
 )
 
 var (

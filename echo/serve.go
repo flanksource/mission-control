@@ -122,6 +122,9 @@ func New(ctx context.Context) *echov4.Echo {
 		return c.String(http.StatusOK, "OK")
 	})
 
+	personController := PersonController{kratos: auth.NewAPIClient(auth.KratosAPI)}
+	e.POST("/people/update", personController.UpdatePerson, rbac.Authorization(rbac.ObjectPeople, rbac.ActionUpdate))
+
 	if dutyApi.DefaultConfig.Postgrest.URL != "" {
 		Forward(ctx, e, "/db", dutyApi.DefaultConfig.Postgrest.URL,
 			rbac.DbMiddleware(),

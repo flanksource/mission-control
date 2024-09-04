@@ -111,7 +111,7 @@ var dbResourceObjMap = map[string]string{
 	"notifications_summary":              ObjectMonitor,
 	"notifications":                      ObjectDatabaseSettings,
 	"people_roles":                       ObjectDatabasePublic,
-	"people":                             ObjectDatabasePublic,
+	"people":                             ObjectPeople,
 	"playbook_action_agent_data":         ObjectPlaybooks,
 	"playbook_approvals":                 ObjectPlaybooks,
 	"playbook_names":                     ObjectDatabasePublic,
