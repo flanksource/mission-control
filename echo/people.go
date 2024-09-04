@@ -2,29 +2,31 @@ package echo
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/auth"
+	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/vars"
 	echov4 "github.com/labstack/echo/v4"
 	"github.com/ory/client-go"
 	"github.com/samber/lo"
 )
 
-type UpdateUserRequest struct {
-	ID string `json:"id" form:"id"`
+type UpdatePersonRequest struct {
+	ID string `form:"id"`
 
-	FirstName *string `json:"firstName" form:"firstName"`
-	LastName  *string `json:"lastName" form:"lastName"`
-	Email     *string `json:"email" form:"email"`
-	Role      *string `json:"role" form:"role"`
-	Active    *bool   `json:"active" form:"active"`
+	FirstName *string `form:"firstName"`
+	LastName  *string `form:"lastName"`
+	Email     *string `form:"email"`
+	Role      *string `form:"role"`
+	Active    *bool   `form:"active"`
 }
 
-func (t *UpdateUserRequest) ToUpdateIdentityBody(traits map[string]any) client.UpdateIdentityBody {
+func (t *UpdatePersonRequest) ToUpdateIdentityBody(traits map[string]any) client.UpdateIdentityBody {
 	out := client.UpdateIdentityBody{
 		Traits: traits,
 	}
@@ -67,10 +69,10 @@ func (t *PersonController) UpdatePerson(c echov4.Context) error {
 	ctx := c.Request().Context().(context.Context)
 
 	if vars.AuthMode != auth.Kratos {
-		return api.Errorf(api.EINVALID, "updating users is only supported when using Kratos auth mode")
+		return api.Errorf(api.EINVALID, "updating person is only supported when using Kratos auth mode")
 	}
 
-	var req UpdateUserRequest
+	var req UpdatePersonRequest
 	if err := c.Bind(&req); err != nil {
 		return api.Errorf(api.EINVALID, "invalid request body: %v", err)
 	}
@@ -92,6 +94,16 @@ func (t *PersonController) UpdatePerson(c echov4.Context) error {
 		}
 
 		return err
+	}
+
+	if req.Role != nil {
+		if err := rbac.DeleteAllRolesForUser(req.ID); err != nil {
+			return api.WriteError(c, fmt.Errorf("failed to delete existing roles: %w", err))
+		}
+
+		if err := rbac.AddRoleForUser(req.ID, *req.Role); err != nil {
+			return api.WriteError(c, fmt.Errorf("failed to add the new role: %w", err))
+		}
 	}
 
 	return c.JSON(http.StatusOK, identity.Traits)

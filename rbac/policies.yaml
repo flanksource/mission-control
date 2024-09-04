@@ -10,7 +10,7 @@
     - everyone
 - principal: viewer
   acl:
-    - objects: database.public,canaries,catalog,playbooks,topology
+    - objects: database.public,canaries,catalog,playbooks,topology,people
       actions: read
 - principal: commander
   acl:
