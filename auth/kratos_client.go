@@ -18,12 +18,12 @@ type KratosHandler struct {
 
 func NewKratosHandler() *KratosHandler {
 	return &KratosHandler{
-		client:      newAPIClient(KratosAPI),
+		client:      NewAPIClient(KratosAPI),
 		adminClient: newAdminAPIClient(KratosAdminAPI),
 	}
 }
 
-func newAPIClient(kratosAPI string) *client.APIClient {
+func NewAPIClient(kratosAPI string) *client.APIClient {
 	return newKratosClient(kratosAPI)
 }
 
