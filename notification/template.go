@@ -35,23 +35,56 @@ var templateFuncs = map[string]any{
 			return ":white_circle:"
 		}
 	},
-	"slackSectionLabels": func(labels map[string]any) string {
-		if len(labels) == 0 {
+	"slackSectionLabels": func(resource map[string]any) string {
+		if resource == nil {
 			return ""
 		}
 
-		var fields []map[string]any
-		for k, v := range labels {
-			fields = append(fields, map[string]any{
-				"type":     "mrkdwn",
-				"text":     fmt.Sprintf("*%s*: %s", k, v),
-				"verbatim": true,
-			})
+		configTags := map[string]any{}
+		var tagFields []map[string]any
+		if tagsRaw, ok := resource["tags"]; ok {
+			if tags, ok := tagsRaw.(map[string]any); ok {
+				configTags = tags
+				for k, v := range tags {
+					tagFields = append(tagFields, map[string]any{
+						"type":     "mrkdwn",
+						"text":     fmt.Sprintf("*%s*: %s", k, v),
+						"verbatim": true,
+					})
+				}
+			}
 		}
 
-		slices.SortFunc(fields, func(a, b map[string]any) int {
+		var labelFields []map[string]any
+		if labelsRaw, ok := resource["labels"]; ok {
+			if labels, ok := labelsRaw.(map[string]any); ok {
+				for k, v := range labels {
+					if _, ok := configTags[k]; ok {
+						continue // Already pulled from tags
+					}
+
+					labelFields = append(labelFields, map[string]any{
+						"type":     "mrkdwn",
+						"text":     fmt.Sprintf("*%s*: %s", k, v),
+						"verbatim": true,
+					})
+				}
+			}
+		}
+
+		if len(tagFields) == 0 && len(labelFields) == 0 {
+			return ""
+		}
+
+		slices.SortFunc(tagFields, func(a, b map[string]any) int {
 			return strings.Compare(a["text"].(string), b["text"].(string))
 		})
+
+		slices.SortFunc(labelFields, func(a, b map[string]any) int {
+			return strings.Compare(a["text"].(string), b["text"].(string))
+		})
+
+		fields := append(tagFields, labelFields...)
 
 		var outputs []string
 		const maxFieldsPerSection = 10
