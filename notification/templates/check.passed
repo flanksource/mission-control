@@ -14,7 +14,7 @@
 				{{end}}
 			]
 		},
-    {{ if .check.labels}}{{slackSectionLabels .check.labels}},{{end}}
+    {{ if .check.labels}}{{slackSectionLabels .check}},{{end}}
     {{ slackURLAction "View Health Check" .permalink}}
   ]
 }

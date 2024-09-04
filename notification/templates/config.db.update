@@ -14,7 +14,7 @@
 				{{end}}
 			]
 		},
-		{{if .config.labels}}{{slackSectionLabels .config.labels}},{{end}}
+		{{if .config.labels}}{{slackSectionLabels .config}},{{end}}
 		{{slackURLAction "View Catalog" .permalink}}
 	]
 }
