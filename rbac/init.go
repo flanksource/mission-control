@@ -104,10 +104,15 @@ func Stop() {
 		enforcer.StopAutoLoadPolicy()
 	}
 }
+
 func DeleteRoleForUser(user string, role string) error {
 	_, err := enforcer.DeleteRoleForUser(user, role)
 	return err
+}
 
+func DeleteAllRolesForUser(user string) error {
+	_, err := enforcer.DeleteRolesForUser(user)
+	return err
 }
 
 func AddRoleForUser(user string, role ...string) error {

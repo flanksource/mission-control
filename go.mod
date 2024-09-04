@@ -14,7 +14,7 @@ require (
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.25.0 // indirect
 	github.com/flanksource/commons v1.29.4
-	github.com/flanksource/duty v1.0.616
+	github.com/flanksource/duty v1.0.619
 	github.com/flanksource/gomplate/v3 v3.24.27
 	github.com/flanksource/kopper v1.0.9
 	github.com/gomarkdown/markdown v0.0.0-20240419095408-642f0ee99ae2
@@ -358,6 +358,6 @@ require (
 
 // replace github.com/flanksource/commons => /Users/moshe/go/src/github.com/flanksource/commons
 
-replace github.com/flanksource/duty => ../duty
+// replace github.com/flanksource/duty => ../dut9
 
 // replace github.com/flanksource/gomplate/v3 => /Users/moshe/go/src/github.com/flanksource/gomplate
