@@ -183,7 +183,6 @@ func ScheduleRun(ctx context.Context, run models.PlaybookRun) error {
 }
 
 func ExecuteAndSaveAction(ctx context.Context, playbookID any, action *models.PlaybookRunAction, actionSpec v1.PlaybookAction) error {
-
 	db := ctx.DB()
 
 	if err := action.Start(db); err != nil {
@@ -199,6 +198,11 @@ func ExecuteAndSaveAction(ctx context.Context, playbookID any, action *models.Pl
 		}
 	} else if result.skipped {
 		if err := action.Skip(db); err != nil {
+			return ctx.Oops("db").Wrap(err)
+		}
+	} else if accessor, ok := result.data.(StatusAccessor); ok && accessor.GetStatus() == models.PlaybookActionStatusFailed {
+		ctx.Warnf("action returned failure\n%v", logger.Pretty(result.data))
+		if err := action.Fail(db, result.data, nil); err != nil {
 			return ctx.Oops("db").Wrap(err)
 		}
 	} else {

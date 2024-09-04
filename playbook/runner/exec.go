@@ -17,6 +17,10 @@ type ArtifactAccessor interface {
 	GetArtifacts() []artifacts.Artifact
 }
 
+type StatusAccessor interface {
+	GetStatus() models.PlaybookActionStatus
+}
+
 // executeActionResult is the result of executing an action
 type executeActionResult struct {
 	// result of the action as JSON
