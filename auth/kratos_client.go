@@ -4,6 +4,8 @@ import (
 	gocontext "context"
 
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/models"
+	"github.com/google/uuid"
 	client "github.com/ory/client-go"
 )
 
@@ -101,6 +103,20 @@ func (k *KratosHandler) CreateAdminUser(ctx context.Context) (string, error) {
 
 	if tx.RowsAffected == 0 {
 		return k.createAdminIdentity(ctx)
+	}
+
+	{
+		// If in case the admin identity wasn't synced with the people table, we sync it now.
+		var admin models.Person
+		if err := ctx.DB().Where("id = ?", id).Find(&admin).Error; err != nil {
+			return "", err
+		} else if admin.ID == uuid.Nil {
+			// Do a dummy update so the postgres tirgger syncs the admin person.
+			// This way we have the sync logic in one place.
+			if err := ctx.DB().Raw(`UPDATE identities SET traits = traits WHERE id = ?`, id).Error; err != nil {
+				return "", tx.Error
+			}
+		}
 	}
 
 	return id, nil
