@@ -5,8 +5,8 @@ metadata:
   labels:
     a: b
     c: d
-priority: 1
 spec:
+  priority: 1
   filter:
     status:
       - unhealthy
@@ -19,7 +19,7 @@ spec:
   breakOnMatch: true
   autoClose:
     timeout: 15m
-  hoursOfOperation:
+  hoursOfOperation: []
 
   responders:
     email:

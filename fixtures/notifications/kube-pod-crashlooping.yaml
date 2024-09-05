@@ -8,7 +8,7 @@ spec:
     - config.unhealthy
   filter: config.type == 'Kubernetes::Pod' && config.status == 'CrashLoopBackOff'
   title: "Pod {{.config.name}} in namespace {{.config.tags.namespace}} is in CrashLoopBackOff"
-  body: |
+  template: |
     {{.config.tags.namespace}}/{{.config.name}}
     ## Reason
     {{.config.config | jq '.status.containerStatuses[0].state.waiting.message' }}
@@ -17,4 +17,5 @@ spec:
     {{range $k, $v := .config.config.metadata.labels}}
     **{{$k}}**: {{$v}}
     {{end}}
-  email: alerts@acme.com
+  to:
+    email: alerts@acme.com

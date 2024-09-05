@@ -160,8 +160,8 @@ func (f Filter) String() string {
 
 // +kubebuilder:object:generate=true
 type AutoClose struct {
-	// How long after the health checks have been passing before, autoclosing the incident.
-	Timeout time.Duration `json:"timeout,omitempty"`
+	// How long after the health checks have been passing before, autoclosing the incident (accepts goduration format)
+	Timeout string `json:"timeout,omitempty"`
 }
 
 // +kubebuilder:object:generate=true

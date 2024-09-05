@@ -61,6 +61,7 @@ require (
 	github.com/samber/lo v1.47.0
 	github.com/samber/oops v1.13.1
 	github.com/samber/slog-echo v1.14.4
+	github.com/santhosh-tekuri/jsonschema/v6 v6.0.1
 	github.com/slack-go/slack v0.14.0
 	github.com/tg123/go-htpasswd v1.2.2
 	github.com/timberio/go-datemath v0.1.0

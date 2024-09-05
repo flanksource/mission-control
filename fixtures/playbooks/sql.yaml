@@ -16,8 +16,7 @@ spec:
   actions:
     - name: Get the total event count
       sql:
-        connection: connection://Postgres/incident-commander
-        database: incident_commander
+        connection: connection://incident-commander
         driver: postgres
         query: SELECT COUNT(*) FROM event_queue
     # - name: Notify event count
