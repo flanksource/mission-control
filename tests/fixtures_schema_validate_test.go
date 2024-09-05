@@ -19,21 +19,26 @@ func TestFixtures(t *testing.T) {
 	RunSpecs(t, "Fixture schema validation")
 }
 
-func validateFixtureDirWithSchema(schema *jsonschema.Schema, dir string) {
-	err := filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+func validateFixtureDirWithSchema(schemaPath, dir string) {
+	schema, err := jsonschema.NewCompiler().Compile(schemaPath)
+	Expect(err).To(BeNil())
+
+	err = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if strings.HasSuffix(path, ".yaml") || strings.HasSuffix(path, ".yml") {
 			yamlRaw, err := os.ReadFile(path)
-			Expect(err).To(BeNil())
+			if err != nil {
+				return err
+			}
 
 			var m any
 			err = yaml.Unmarshal(yamlRaw, &m)
-			Expect(err).To(BeNil())
-
-			err = schema.Validate(m)
 			if err != nil {
-				err = fmt.Errorf("schema validation failed for %s: %w", path, err)
+				return err
 			}
-			Expect(err).To(BeNil())
+
+			if err := schema.Validate(m); err != nil {
+				return fmt.Errorf("schema validation failed for %s: %w", path, err)
+			}
 		}
 		return nil
 	})
@@ -43,25 +48,16 @@ func validateFixtureDirWithSchema(schema *jsonschema.Schema, dir string) {
 var _ = Describe("Fixture schema validation", func() {
 	It("Notifications", func() {
 		schemaPath := "../config/schemas/notification.schema.json"
-		c := jsonschema.NewCompiler()
-		schema, err := c.Compile(schemaPath)
-		Expect(err).To(BeNil())
-		validateFixtureDirWithSchema(schema, "../fixtures/notifications/")
+		validateFixtureDirWithSchema(schemaPath, "../fixtures/notifications/")
 	})
 
 	It("Playbooks", func() {
 		schemaPath := "../config/schemas/playbook.schema.json"
-		c := jsonschema.NewCompiler()
-		schema, err := c.Compile(schemaPath)
-		Expect(err).To(BeNil())
-		validateFixtureDirWithSchema(schema, "../fixtures/playbooks/")
+		validateFixtureDirWithSchema(schemaPath, "../fixtures/playbooks/")
 	})
 
 	It("Rules", func() {
 		schemaPath := "../config/schemas/incident-rules.schema.json"
-		c := jsonschema.NewCompiler()
-		schema, err := c.Compile(schemaPath)
-		Expect(err).To(BeNil())
-		validateFixtureDirWithSchema(schema, "../fixtures/rules")
+		validateFixtureDirWithSchema(schemaPath, "../fixtures/rules")
 	})
 })
