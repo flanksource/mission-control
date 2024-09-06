@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -9,6 +9,7 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/properties"
 	"github.com/flanksource/duty"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/shutdown"
 	"github.com/flanksource/incident-commander/api"
@@ -20,7 +21,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"github.com/spf13/cobra"
+	"gorm.io/gorm"
 	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
+	"sigs.k8s.io/yaml"
 )
 
 var Playbook = &cobra.Command{
@@ -30,6 +33,20 @@ var Playbook = &cobra.Command{
 var playbookNamespace string
 var paramFile string
 var debugPort int
+
+func GetOrCreateAgent(ctx context.Context, name string) (*models.Agent, error) {
+	var t models.Agent
+	if err := ctx.DB().Where("name = ?", name).First(&t).Error; err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+	if t.ID != uuid.Nil {
+		return &t, nil
+	}
+
+	t = models.Agent{Name: name}
+	tx := ctx.DB().Create(&t)
+	return &t, tx.Error
+}
 
 var Run = &cobra.Command{
 	Use:              "run playbook playbook.yaml params.yaml",
@@ -78,7 +95,17 @@ var Run = &cobra.Command{
 			return
 		}
 
-		var params = playbook.RunParams{Params: make(map[string]string)}
+		hostname, _ := os.Hostname()
+		agent, err := GetOrCreateAgent(ctx, hostname)
+		if err != nil {
+			logger.Fatalf(err.Error())
+			return
+		}
+
+		var params = playbook.RunParams{
+			Params:  make(map[string]string),
+			AgentID: &agent.ID,
+		}
 
 		if f, err := os.Open(paramFile); err == nil {
 			if err := yamlutil.NewYAMLOrJSONDecoder(f, 1024).Decode(&params); err != nil {
@@ -122,6 +149,10 @@ var Run = &cobra.Command{
 			logger.Fatalf(err.Error())
 			return
 		}
+		if action == nil {
+			logger.Errorf("No actions to run")
+			return
+		}
 
 		for action != nil {
 
@@ -151,7 +182,7 @@ var Run = &cobra.Command{
 
 		summary, err := playbook.GetPlaybookStatus(ctx, run.ID)
 
-		b, _ := json.MarshalIndent(summary, "", " ")
+		b, _ := yaml.Marshal(summary)
 		fmt.Println(string(b))
 		if err != nil {
 			shutdown.ShutdownAndExit(1, err.Error())

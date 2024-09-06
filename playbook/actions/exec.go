@@ -48,6 +48,13 @@ func (e *ExecDetails) GetArtifacts() []artifacts.Artifact {
 	return e.Artifacts
 }
 
+func (e *ExecDetails) GetStatus() models.PlaybookActionStatus {
+	if e.ExitCode != 0 {
+		return models.PlaybookActionStatusFailed
+	}
+	return models.PlaybookActionStatusCompleted
+}
+
 func (c *ExecAction) Run(ctx context.Context, exec v1.ExecAction) (*ExecDetails, error) {
 	envParams, err := c.prepareEnvironment(ctx, exec)
 	if err != nil {
@@ -187,16 +194,6 @@ func runCmd(ctx context.Context, cmd *osExec.Cmd, artifactConfigs ...v1.Artifact
 				})
 			}
 		}
-	}
-	if result.ExitCode != 0 {
-		return &result, ctx.Oops().With(
-			"cmd", cmd.Path,
-			"args", cmd.Args,
-			"error", result.Error.Error(),
-			"stderr", result.Stderr,
-			"stdout", result.Stdout,
-			"exit-code", result.ExitCode,
-		).Code(fmt.Sprintf("exited with %d", result.ExitCode)).Errorf(result.Error.Error())
 	}
 
 	return &result, nil
