@@ -6,7 +6,7 @@
     "AutoClose": {
       "properties": {
         "timeout": {
-          "type": "integer"
+          "type": "string"
         }
       },
       "additionalProperties": false,
