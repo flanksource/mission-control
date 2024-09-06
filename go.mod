@@ -359,6 +359,6 @@ require (
 
 // replace github.com/flanksource/commons => /Users/moshe/go/src/github.com/flanksource/commons
 
-// replace github.com/flanksource/duty => ../dut9
+// replace github.com/flanksource/duty => ../duty
 
 // replace github.com/flanksource/gomplate/v3 => /Users/moshe/go/src/github.com/flanksource/gomplate
