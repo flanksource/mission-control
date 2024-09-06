@@ -20,7 +20,7 @@ func GetTeamComponentsFromSelectors(ctx context.Context, teamID uuid.UUID, compo
 	var selectedComponents = make(map[string][]uuid.UUID)
 	for _, compSelector := range componentSelectors {
 		h, _ := hash.JSONMD5Hash(compSelector)
-		foundIDs, err := query.FindComponentIDs(ctx, compSelector)
+		foundIDs, err := query.FindComponentIDs(ctx, -1, compSelector)
 		if err != nil {
 			return nil, err
 		}
