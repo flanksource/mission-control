@@ -162,7 +162,14 @@ func ScheduleRun(ctx context.Context, run models.PlaybookRun) error {
 		return ctx.Oops().Wrap(run.Delay(ctx.DB(), delay))
 	}
 
-	if len(action.RunsOn) == 0 || lo.Contains(action.RunsOn, Main) {
+	if run.AgentID != nil {
+		ctx.Tracef("action already assigning to %s", run.AgentID.String())
+		return ctx.Oops("db").Wrap(run.Assign(ctx.DB(), &models.Agent{
+			ID: *run.AgentID,
+		}, action.Name))
+	}
+
+	if run.AgentID == nil && len(action.RunsOn) == 0 || lo.Contains(action.RunsOn, Main) {
 		if runAction, err := run.StartAction(ctx.DB(), action.Name); err != nil {
 			return ctx.Oops("db").Wrap(err)
 		} else {
@@ -286,7 +293,7 @@ func TemplateAndExecuteAction(ctx context.Context, spec v1.Playbook, playbook *m
 	}
 
 	if err := TemplateAction(ctx, run, action, &step, templateEnv); err != nil {
-		return oops.Wrapf(err, "failed to template")
+		return oops.Wrapf(err, "failed to template action")
 	}
 
 	return oops.Wrap(ExecuteAndSaveAction(ctx, run.PlaybookID, action, step))
