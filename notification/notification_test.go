@@ -129,7 +129,6 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 		var config models.ConfigItem
 
 		ginkgo.BeforeAll(func() {
-			ginkgo.Skip("Skipping due to bug in test implementation [config.updated event is never fired]")
 			customReceiver := []api.NotificationConfig{
 				{
 					URL: fmt.Sprintf("generic+%s", webhookEndpoint),
@@ -168,7 +167,11 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 		})
 
 		ginkgo.It("should have sent a notification for a config update", func() {
-			err := DefaultContext.DB().Model(&models.ConfigItem{}).Where("id = ?", config.ID).UpdateColumn("config", `{"color": "blue"}`).Error
+			event := models.Event{
+				Name:       "config.updated",
+				Properties: types.JSONStringMap{"id": config.ID.String()},
+			}
+			err := DefaultContext.DB().Create(&event).Error
 			Expect(err).To(BeNil())
 
 			events.ConsumeAll(DefaultContext)
@@ -186,7 +189,11 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 		})
 
 		ginkgo.It("should NOT have sent a notification for a subsequent config update", func() {
-			err := DefaultContext.DB().Model(&models.ConfigItem{}).Where("id = ?", config.ID).UpdateColumn("config", `{"color": "yellow"}`).Error
+			event := models.Event{
+				Name:       "config.updated",
+				Properties: types.JSONStringMap{"id": config.ID.String()},
+			}
+			err := DefaultContext.DB().Create(&event).Error
 			Expect(err).To(BeNil())
 
 			events.ConsumeAll(DefaultContext)
