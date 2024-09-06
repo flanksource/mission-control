@@ -6,18 +6,12 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"gopkg.in/yaml.v3"
 )
-
-func TestFixtures(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Fixture schema validation")
-}
 
 func validateFixtureDirWithSchema(schemaPath, dir string) {
 	schema, err := jsonschema.NewCompiler().Compile(schemaPath)
