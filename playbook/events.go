@@ -36,6 +36,7 @@ var eventToSpecEvent = map[string]PlaybookSpecEvent{
 
 	api.EventConfigCreated:   {"config", "created"},
 	api.EventConfigUpdated:   {"config", "updated"},
+	api.EventConfigChanged:   {"config", "changed"},
 	api.EventConfigDeleted:   {"config", "deleted"},
 	api.EventConfigHealthy:   {"config", "healthy"},
 	api.EventConfigUnhealthy: {"config", "unhealthy"},
@@ -154,7 +155,7 @@ func (t *playbookScheduler) Handle(ctx context.Context, event models.Event) erro
 			return dutyAPI.Errorf(dutyAPI.ENOTFOUND, "config(id=%s) not found", event.Properties["id"])
 		}
 
-	case api.EventConfigCreated, api.EventConfigUpdated, api.EventConfigDeleted:
+	case api.EventConfigCreated, api.EventConfigUpdated, api.EventConfigDeleted, api.EventConfigChanged:
 		if err := ctx.DB().Model(&models.ConfigItem{}).Where("id = ?", event.Properties["id"]).First(&eventResource.Config).Error; err != nil {
 			return dutyAPI.Errorf(dutyAPI.ENOTFOUND, "config(id=%s) not found", event.Properties["id"])
 		}

@@ -425,7 +425,7 @@ func getEnvForEvent(ctx context.Context, event models.Event, properties map[stri
 		}
 
 		eventSuffix := strings.TrimPrefix(event.Name, "config.")
-		isStateUpdateEvent := slices.Contains([]string{api.EventConfigCreated, api.EventConfigUpdated, api.EventConfigDeleted}, event.Name)
+		isStateUpdateEvent := slices.Contains([]string{api.EventConfigCreated, api.EventConfigChanged, api.EventConfigUpdated, api.EventConfigDeleted}, event.Name)
 		if isStateUpdateEvent {
 			env["new_state"] = eventSuffix
 		} else {
