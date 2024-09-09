@@ -200,6 +200,10 @@ func getNextAction(db *gorm.DB) (*models.PlaybookRunAction, error) {
 
 // ActionConsumer picks up scheduled actions runs scheduled for agents
 func ActionAgentConsumer(ctx context.Context) (int, error) {
+	if ctx.Properties().On(false, "playbook.runner.disabled") {
+		return 0, nil
+	}
+
 	ctx.Logger = ctx.Logger.WithSkipReportLevel(-1)
 
 	err := ctx.Transaction(func(ctx context.Context, _ trace.Span) error {
@@ -240,6 +244,10 @@ func failOrRetryRun(tx *gorm.DB, run *models.PlaybookRun, err error) error {
 
 // ActionConsumer picks up scheduled actions runs them.
 func ActionConsumer(ctx context.Context) (int, error) {
+	if ctx.Properties().On(false, "playbook.runner.disabled") {
+		return 0, nil
+	}
+
 	ctx.Logger = ctx.Logger.WithSkipReportLevel(-1)
 
 	err := ctx.Transaction(func(ctx context.Context, _ trace.Span) error {
@@ -275,6 +283,9 @@ func ActionConsumer(ctx context.Context) (int, error) {
 // RunConsumer picks up scheduled runs and schedules the
 // execution of the next action on that run.
 func RunConsumer(ctx context.Context) (int, error) {
+	if ctx.Properties().On(false, "playbook.scheduler.disabled") {
+		return 0, nil
+	}
 	var consumed = 0
 	err := ctx.Transaction(func(ctx context.Context, _ trace.Span) error {
 		tx := ctx.FastDB("playbook.consumer")
