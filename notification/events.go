@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -15,7 +14,6 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
-	"github.com/flanksource/gomplate/v3"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/events"
@@ -110,36 +108,6 @@ func checkRepeatInterval(ctx context.Context, n NotificationWithSpec, event mode
 	return !exists, nil
 }
 
-func shouldSilence(silences []models.NotificationSilence, celEnv map[string]any) (bool, error) {
-	now := time.Now()
-	for _, silence := range silences {
-		withinSilencePeriod := now.After(silence.From) && now.Before(silence.Until)
-		if !withinSilencePeriod {
-			continue
-		}
-
-		matcherMatched := true
-		if silence.Matcher != nil && *silence.Matcher != "" {
-			res, err := gomplate.RunTemplate(celEnv, gomplate.Template{Expression: *silence.Matcher})
-			if err != nil {
-				return false, err
-			}
-
-			if parsed, err := strconv.ParseBool(res); err != nil {
-				return false, fmt.Errorf("expected matcher %s to return a boolean value but got %s", *silence.Matcher, res)
-			} else if parsed {
-				matcherMatched = false
-			}
-		}
-
-		if matcherMatched {
-			return true, nil
-		}
-	}
-
-	return false, nil
-}
-
 // addNotificationEvent responds to a event that can possibly generate a notification.
 // If a notification is found for the given event and passes all the filters, then
 // a new `notification.send` event is created.
@@ -159,6 +127,12 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 	}
 
 	t.Ring.Add(event, celEnv)
+
+	silencedResource := getSilencedResourceFromCelEnv(celEnv)
+	matchingSilences, err := db.GetMatchingNotificationSilencesCount(ctx, silencedResource)
+	if err != nil {
+		return err
+	}
 
 	for _, id := range notificationIDs {
 		n, err := GetNotification(ctx, id)
@@ -196,18 +170,6 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 			continue
 		}
 
-		silences, err := query.GetAllNotificationSilences(ctx)
-		if err != nil {
-			return err
-		}
-
-		if s, err := shouldSilence(silences, celEnv); err != nil {
-			return err
-		} else if s {
-			// TODO: Save in notification send history as silenced
-			continue
-		}
-
 		payloads, err := CreateNotificationSendPayloads(ctx, event, n, celEnv)
 		if err != nil {
 			return err
@@ -224,6 +186,21 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 				ctx.Warnf("notification rate limited event=%s id=%s ", event.Name, id)
 				ctx.Counter("notification_rate_limited", "id", id).Add(1)
 				continue
+			}
+
+			if matchingSilences > 0 {
+				ctx.Logger.V(6).Infof("silencing notification for event %s due to %d matching silences", event.ID, matchingSilences)
+
+				if err := ctx.DB().Create(&models.NotificationSendHistory{
+					NotificationID: n.ID,
+					ResourceID:     payload.ID,
+					SourceEvent:    event.Name,
+					Status:         "silenced",
+				}).Error; err != nil {
+					return fmt.Errorf("failed to save silenced notification history: %w", err)
+				}
+
+				return nil
 			}
 
 			newEvent := api.Event{
@@ -484,4 +461,33 @@ func getEnvForEvent(ctx context.Context, event models.Event, properties map[stri
 	}
 
 	return env, nil
+}
+
+func getSilencedResourceFromCelEnv(celEnv map[string]any) models.NotificationSilenceResource {
+	var silencedResource models.NotificationSilenceResource
+	if v, ok := celEnv["config"]; ok {
+		if vv, ok := v.(map[string]any); ok {
+			silencedResource.ConfigID = lo.ToPtr(vv["id"].(string))
+		}
+	}
+
+	if v, ok := celEnv["check"]; ok {
+		if vv, ok := v.(map[string]any); ok {
+			silencedResource.CheckID = lo.ToPtr(vv["id"].(string))
+		}
+	}
+
+	if v, ok := celEnv["canary"]; ok {
+		if vv, ok := v.(map[string]any); ok {
+			silencedResource.CanaryID = lo.ToPtr(vv["id"].(string))
+		}
+	}
+
+	if v, ok := celEnv["component"]; ok {
+		if vv, ok := v.(map[string]any); ok {
+			silencedResource.ComponentID = lo.ToPtr(vv["id"].(string))
+		}
+	}
+
+	return silencedResource
 }

@@ -38,10 +38,16 @@ spec:
             type: object
           spec:
             properties:
+              canary_id:
+                type: string
+              check_id:
+                type: string
+              component_id:
+                type: string
+              config_id:
+                type: string
               from:
                 format: date-time
-                type: string
-              matcher:
                 type: string
               recursive:
                 type: boolean

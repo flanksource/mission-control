@@ -12,7 +12,6 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/google/uuid"
-	"github.com/samber/lo"
 	"gorm.io/gorm"
 )
 
@@ -28,10 +27,12 @@ func PersistNotificationSilenceFromCRD(ctx context.Context, obj *v1.Notification
 		From:      obj.Spec.From.Time,
 		Until:     obj.Spec.Until.Time,
 		Source:    models.SourceCRD,
-	}
-
-	if obj.Spec.Matcher != nil {
-		dbObj.Matcher = lo.ToPtr(string(*obj.Spec.Matcher))
+		NotificationSilenceResource: models.NotificationSilenceResource{
+			ConfigID:    obj.Spec.ConfigID,
+			ComponentID: obj.Spec.ComponentID,
+			CheckID:     obj.Spec.CheckID,
+			CanaryID:    obj.Spec.CanaryID,
+		},
 	}
 
 	return ctx.DB().Save(&dbObj).Error
@@ -137,4 +138,40 @@ func NotificationSendSummary(ctx context.Context, id string, window time.Duratio
 	var count int
 	err := ctx.DB().Raw(query, id, window).Row().Scan(&earliest, &count)
 	return earliest.Time, count, err
+}
+
+func GetMatchingNotificationSilencesCount(ctx context.Context, resources models.NotificationSilenceResource) (int64, error) {
+	query := ctx.DB().Model(&models.NotificationSilence{}).
+		Where(`"from" <= NOW()`).
+		Where("until >= NOW()").
+		Where("deleted_at IS NULL")
+
+	// Initialize with a false condition,
+	// if no resources are provided, the query won't return all records
+	orClauses := ctx.DB().Where("1 = 0")
+
+	if resources.ConfigID != nil {
+		orClauses = orClauses.Or("config_id = ?", *resources.ConfigID)
+	}
+
+	if resources.ComponentID != nil {
+		orClauses = orClauses.Or("component_id = ?", *resources.ComponentID)
+	}
+
+	if resources.CanaryID != nil {
+		orClauses = orClauses.Or("canary_id = ?", *resources.CanaryID)
+	}
+
+	if resources.CheckID != nil {
+		orClauses = orClauses.Or("check_id = ?", *resources.CheckID)
+	}
+	query = query.Where(orClauses)
+
+	var count int64
+	err := query.Count(&count).Error
+	if err != nil {
+		return 0, err
+	}
+
+	return count, nil
 }

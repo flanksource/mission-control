@@ -1,16 +1,23 @@
 package v1
 
 import (
-	"github.com/flanksource/duty/types"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+type NotificationSilenceResource struct {
+	ConfigID    *string `json:"config_id,omitempty"`
+	CanaryID    *string `json:"canary_id,omitempty"`
+	ComponentID *string `json:"component_id,omitempty"`
+	CheckID     *string `json:"check_id,omitempty"`
+}
+
 // +kubebuilder:object:generate=true
 type NotificationSilenceSpec struct {
-	Matcher   *types.CelExpression `json:"matcher,omitempty"`
-	From      metav1.Time          `json:"from"`
-	Until     metav1.Time          `json:"until"`
-	Recursive bool                 `json:"recursive,omitempty"`
+	NotificationSilenceResource `json:",inline" yaml:",inline"`
+
+	From      metav1.Time `json:"from"`
+	Until     metav1.Time `json:"until"`
+	Recursive bool        `json:"recursive,omitempty"`
 }
 
 // NotificationSilence defines the observed state of Notification Silence
