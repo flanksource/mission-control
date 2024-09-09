@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	extraClausePlugin "github.com/WinterYukky/gorm-extra-clause-plugin"
+	"github.com/WinterYukky/gorm-extra-clause-plugin/exclause"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
@@ -27,6 +29,7 @@ func PersistNotificationSilenceFromCRD(ctx context.Context, obj *v1.Notification
 		From:      obj.Spec.From.Time,
 		Until:     obj.Spec.Until.Time,
 		Source:    models.SourceCRD,
+		Recursive: obj.Spec.Recursive,
 		NotificationSilenceResource: models.NotificationSilenceResource{
 			ConfigID:    obj.Spec.ConfigID,
 			ComponentID: obj.Spec.ComponentID,
@@ -141,10 +144,9 @@ func NotificationSendSummary(ctx context.Context, id string, window time.Duratio
 }
 
 func GetMatchingNotificationSilencesCount(ctx context.Context, resources models.NotificationSilenceResource) (int64, error) {
-	query := ctx.DB().Model(&models.NotificationSilence{}).
-		Where(`"from" <= NOW()`).
-		Where("until >= NOW()").
-		Where("deleted_at IS NULL")
+	_ = ctx.DB().Use(extraClausePlugin.New())
+
+	query := ctx.DB().Debug().Model(&models.NotificationSilence{})
 
 	// Initialize with a false condition,
 	// if no resources are provided, the query won't return all records
@@ -152,10 +154,26 @@ func GetMatchingNotificationSilencesCount(ctx context.Context, resources models.
 
 	if resources.ConfigID != nil {
 		orClauses = orClauses.Or("config_id = ?", *resources.ConfigID)
+
+		// recursive stuff
+		orClauses = orClauses.Or("(recursive = true AND path_cte.path LIKE '%' || config_id::TEXT || '%')")
+		query = query.Clauses(exclause.NewWith(
+			"path_cte",
+			ctx.DB().Select("path").Model(&models.ConfigItem{}).Where("id = ?", *resources.ConfigID),
+		))
+		query = query.Joins("CROSS JOIN path_cte")
 	}
 
 	if resources.ComponentID != nil {
 		orClauses = orClauses.Or("component_id = ?", *resources.ComponentID)
+
+		// recursive stuff
+		orClauses = orClauses.Or("(recursive = true AND path_cte.path LIKE '%' || component_id::TEXT || '%')")
+		query = query.Clauses(exclause.NewWith(
+			"path_cte",
+			ctx.DB().Select("path").Model(&models.Component{}).Where("id = ?", *resources.ComponentID),
+		))
+		query = query.Joins("CROSS JOIN path_cte")
 	}
 
 	if resources.CanaryID != nil {
@@ -165,10 +183,11 @@ func GetMatchingNotificationSilencesCount(ctx context.Context, resources models.
 	if resources.CheckID != nil {
 		orClauses = orClauses.Or("check_id = ?", *resources.CheckID)
 	}
+
 	query = query.Where(orClauses)
 
 	var count int64
-	err := query.Count(&count).Error
+	err := query.Count(&count).Where(`"from" <= NOW()`).Where("until >= NOW()").Where("deleted_at IS NULL").Error
 	if err != nil {
 		return 0, err
 	}
