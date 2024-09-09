@@ -17,6 +17,7 @@ const (
 
 	EventConfigCreated   = "config.created"
 	EventConfigUpdated   = "config.updated"
+	EventConfigChanged   = "config.changed"
 	EventConfigDeleted   = "config.deleted"
 	EventConfigHealthy   = "config.healthy"
 	EventConfigUnhealthy = "config.unhealthy"
@@ -70,6 +71,7 @@ var (
 		EventCheckFailed,
 		EventCheckPassed,
 		EventConfigCreated,
+		EventConfigChanged,
 		EventConfigUpdated,
 		EventConfigDeleted,
 		EventConfigHealthy,
