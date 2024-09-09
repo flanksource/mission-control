@@ -86,6 +86,7 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 		PlaybookID: playbook.ID,
 		Status:     models.PlaybookRunStatusPending,
 		Parameters: req.Params,
+		AgentID:    req.AgentID,
 	}
 
 	if ctx.User() != nil {

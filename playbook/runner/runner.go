@@ -169,7 +169,7 @@ func ScheduleRun(ctx context.Context, run models.PlaybookRun) error {
 		}, action.Name))
 	}
 
-	if run.AgentID == nil && len(action.RunsOn) == 0 || lo.Contains(action.RunsOn, Main) {
+	if run.AgentID == nil && (len(action.RunsOn) == 0 || lo.Contains(action.RunsOn, Main)) {
 		if runAction, err := run.StartAction(ctx.DB(), action.Name); err != nil {
 			return ctx.Oops("db").Wrap(err)
 		} else {

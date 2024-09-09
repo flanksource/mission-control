@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -31,6 +32,8 @@ var Playbook = &cobra.Command{
 }
 
 var playbookNamespace string
+var outfile string
+var outFormat string
 var paramFile string
 var debugPort int
 
@@ -46,6 +49,48 @@ func GetOrCreateAgent(ctx context.Context, name string) (*models.Agent, error) {
 	t = models.Agent{Name: name}
 	tx := ctx.DB().Create(&t)
 	return &t, tx.Error
+}
+
+func parsePlaybookArgs(ctx context.Context, args []string) (*models.Playbook, *playbook.RunParams, error) {
+	p, err := playbook.CreateOrSaveFromFile(ctx, args[0])
+	if err != nil {
+		return nil, nil, err
+	}
+
+	hostname, _ := os.Hostname()
+	agent, err := GetOrCreateAgent(ctx, hostname)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var params = playbook.RunParams{
+		Params:  make(map[string]string),
+		AgentID: &agent.ID,
+	}
+
+	if f, err := os.Open(paramFile); err == nil {
+		if err := yamlutil.NewYAMLOrJSONDecoder(f, 1024).Decode(&params); err != nil {
+			return nil, nil, err
+		}
+	}
+
+	for _, arg := range args[1:] {
+		parts := strings.Split(arg, "=")
+		if len(parts) != 2 {
+			logger.Warnf("Invalid param: %s", arg)
+			continue
+		}
+		if parts[0] == "config" || parts[0] == "config_id" {
+			params.ConfigID = lo.ToPtr(uuid.MustParse(parts[1]))
+		} else if parts[0] == "component" || parts[0] == "component_id" {
+			params.ComponentID = lo.ToPtr(uuid.MustParse(parts[1]))
+		} else if parts[0] == "check" || parts[0] == "check_id" {
+			params.CheckID = lo.ToPtr(uuid.MustParse(parts[1]))
+		} else {
+			params.Params[parts[0]] = parts[1]
+		}
+	}
+	return p, &params, nil
 }
 
 var Run = &cobra.Command{
@@ -65,76 +110,29 @@ var Run = &cobra.Command{
 
 		shutdown.AddHook(stop)
 
-		e := echo.New(ctx)
-
-		shutdown.AddHook(func() {
-			echo.Shutdown(e)
-		})
-
-		shutdown.AddHook(func() {
-			for k, v := range logger.GetNamedLoggingLevels() {
-				logger.Infof("logger: %s=%v", k, v)
-			}
-
-			for k, v := range properties.Global.GetAll() {
-				logger.Infof("property: %s=%v", k, v)
-			}
-		})
-		shutdown.WaitForSignal()
-
 		if debugPort >= 0 {
+			e := echo.New(ctx)
+
+			shutdown.AddHook(func() {
+				echo.Shutdown(e)
+			})
+
 			if debugPort == 0 {
 				debugPort = duty.FreePort()
 			}
 			go echo.Start(e, debugPort)
 		}
+		shutdown.WaitForSignal()
 
-		p, err := playbook.CreateOrSaveFromFile(ctx, args[0])
+		p, params, err := parsePlaybookArgs(ctx, args)
 		if err != nil {
-			logger.Fatalf(err.Error())
-			return
-		}
-
-		hostname, _ := os.Hostname()
-		agent, err := GetOrCreateAgent(ctx, hostname)
-		if err != nil {
-			logger.Fatalf(err.Error())
-			return
-		}
-
-		var params = playbook.RunParams{
-			Params:  make(map[string]string),
-			AgentID: &agent.ID,
-		}
-
-		if f, err := os.Open(paramFile); err == nil {
-			if err := yamlutil.NewYAMLOrJSONDecoder(f, 1024).Decode(&params); err != nil {
-				logger.Fatalf(err.Error())
-				return
-			}
-		}
-
-		for _, arg := range args[1:] {
-			parts := strings.Split(arg, "=")
-			if len(parts) != 2 {
-				logger.Warnf("Invalid param: %s", arg)
-				continue
-			}
-			if parts[0] == "config" || parts[0] == "config_id" {
-				params.ConfigID = lo.ToPtr(uuid.MustParse(parts[1]))
-			} else if parts[0] == "component" || parts[0] == "component_id" {
-				params.ComponentID = lo.ToPtr(uuid.MustParse(parts[1]))
-			} else if parts[0] == "check" || parts[0] == "check_id" {
-				params.CheckID = lo.ToPtr(uuid.MustParse(parts[1]))
-			} else {
-				params.Params[parts[0]] = parts[1]
-			}
+			shutdown.ShutdownAndExit(1, err.Error())
 		}
 
 		ctx = ctx.WithUser(auth.GetSystemUser(&ctx))
-		run, err := playbook.Run(ctx, p, params)
+		run, err := playbook.Run(ctx, p, *params)
 		if err != nil {
-			logger.Fatalf(err.Error())
+			logger.Errorf("%+v", err)
 			return
 		}
 
@@ -155,7 +153,6 @@ var Run = &cobra.Command{
 		}
 
 		for action != nil {
-
 			runAction, err := run.StartAction(ctx.DB(), action.Name)
 
 			if err != nil {
@@ -182,11 +179,11 @@ var Run = &cobra.Command{
 
 		summary, err := playbook.GetPlaybookStatus(ctx, run.ID)
 
-		b, _ := yaml.Marshal(summary)
-		fmt.Println(string(b))
 		if err != nil {
 			shutdown.ShutdownAndExit(1, err.Error())
 		}
+
+		saveOutput(summary, outfile, outFormat)
 
 		if summary.Run.Status != models.PlaybookRunStatusCompleted {
 			shutdown.ShutdownAndExit(1, fmt.Sprintf("Playbook run status: %s ", summary.Run.Status))
@@ -195,9 +192,26 @@ var Run = &cobra.Command{
 	},
 }
 
+func saveOutput(object any, file string, format string) {
+	var out string
+	if outFormat == "yaml" {
+		b, _ := yaml.Marshal(object)
+		out = string(b)
+	} else {
+		b, _ := json.MarshalIndent(object, "", "  ")
+		out = string(b)
+	}
+
+	if outfile != "" {
+		_ = os.WriteFile(outfile, []byte(out), 0600)
+	} else {
+		fmt.Println(out)
+	}
+}
+
 var Submit = &cobra.Command{
 	Use:              "submit playbook playbook.yaml params.yaml",
-	Args:             cobra.ExactArgs(1),
+	Args:             cobra.MinimumNArgs(1),
 	PersistentPreRun: PreRun,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		logger.UseSlog()
@@ -213,20 +227,14 @@ var Submit = &cobra.Command{
 
 		shutdown.WaitForSignal()
 
-		p, err := playbook.CreateOrSaveFromFile(ctx, args[0])
+		p, params, err := parsePlaybookArgs(ctx, args)
+		params.AgentID = nil
 		if err != nil {
-			return err
+			shutdown.ShutdownAndExit(1, err.Error())
 		}
 
-		var params playbook.RunParams
-
-		if f, err := os.Open(paramFile); err == nil {
-			if err := yamlutil.NewYAMLOrJSONDecoder(f, 1024).Decode(&params); err != nil {
-				return err
-			}
-		}
-
-		run, err := playbook.Run(ctx, p, params)
+		ctx = ctx.WithUser(auth.GetSystemUser(&ctx))
+		run, err := playbook.Run(ctx, p, *params)
 		if err != nil {
 			return err
 		}
@@ -240,7 +248,10 @@ var Submit = &cobra.Command{
 func init() {
 	Playbook.PersistentFlags().StringVarP(&playbookNamespace, "namespace", "n", "default", "Namespace for playbook to run under")
 	Playbook.PersistentFlags().StringVarP(&paramFile, "params", "p", "", "YAML/JSON file containing parameters")
-	Run.Flags().IntVar(&debugPort, "debug-port", 0, "Start an HTTP server to use the /debug routes, Use -1 to disable and 0 to pick a free port")
+	Run.Flags().IntVar(&debugPort, "debug-port", -1, "Start an HTTP server to use the /debug routes, Use -1 to disable and 0 to pick a free port")
+	Run.Flags().StringVarP(&outfile, "out-file", "o", "", "Write playbook summary to file instead of stdout")
+	Run.Flags().StringVarP(&outFormat, "out-format", "f", "yaml", "Format of output file or stdout (yaml or json)")
+
 	Playbook.AddCommand(Run, Submit)
 	Root.AddCommand(Playbook)
 }
