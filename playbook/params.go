@@ -91,6 +91,7 @@ func (r *RunParams) setDefaults(ctx context.Context, spec v1.PlaybookSpec, templ
 }
 
 func (r *RunParams) validateParams(params []v1.PlaybookParameter) error {
+	all := lo.Map(params, func(v v1.PlaybookParameter, _ int) string { return v.Name })
 	required := lo.Map(lo.Filter(params, func(v v1.PlaybookParameter, _ int) bool {
 		return v.Required
 	}), func(v v1.PlaybookParameter, _ int) string { return v.Name })
@@ -112,7 +113,7 @@ func (r *RunParams) validateParams(params []v1.PlaybookParameter) error {
 	)
 
 	if len(unknownParams) != 0 {
-		return oops.Errorf("unknown parameter(s): %s", strings.Join(unknownParams, ", "))
+		return oops.Errorf("unknown parameter(s): %s, valid parameters are: %s", strings.Join(unknownParams, ", "), strings.Join(all, ", "))
 	}
 
 	return nil
