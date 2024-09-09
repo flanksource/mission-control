@@ -184,7 +184,7 @@ func (t *playbookScheduler) Handle(ctx context.Context, event models.Event) erro
 		switch specEvent.Class {
 		case "canary":
 			run.CheckID = &eventResource.Check.ID
-			if ok, err := matchResource(eventResource.Check.Labels, celEnv, playbook.Spec.On.Canary); err != nil {
+			if ok, err := matchResource(ctx, eventResource.Check.Labels, celEnv, playbook.Spec.On.Canary); err != nil {
 				logToJobHistory(ctx, p.ID.String(), err.Error())
 				continue
 			} else if ok {
@@ -194,7 +194,7 @@ func (t *playbookScheduler) Handle(ctx context.Context, event models.Event) erro
 			}
 		case "component":
 			run.ComponentID = &eventResource.Component.ID
-			if ok, err := matchResource(eventResource.Component.Labels, celEnv, playbook.Spec.On.Component); err != nil {
+			if ok, err := matchResource(ctx, eventResource.Component.Labels, celEnv, playbook.Spec.On.Component); err != nil {
 				logToJobHistory(ctx, p.ID.String(), err.Error())
 				continue
 			} else if ok {
@@ -204,7 +204,7 @@ func (t *playbookScheduler) Handle(ctx context.Context, event models.Event) erro
 			}
 		case "config":
 			run.ConfigID = &eventResource.Config.ID
-			if ok, err := matchResource(eventResource.Config.Tags, celEnv, playbook.Spec.On.Config); err != nil {
+			if ok, err := matchResource(ctx, eventResource.Config.Tags, celEnv, playbook.Spec.On.Config); err != nil {
 				logToJobHistory(ctx, p.ID.String(), err.Error())
 				continue
 			} else if ok {
@@ -231,11 +231,11 @@ func logToJobHistory(ctx context.Context, playbookID, err string) {
 
 // matchResource returns true if any one of the matchFilter is true
 // for the given labels and cel env.
-func matchResource(labels map[string]string, celEnv map[string]any, matchFilters []v1.PlaybookTriggerEvent) (bool, error) {
+func matchResource(ctx context.Context, labels map[string]string, celEnv map[string]any, matchFilters []v1.PlaybookTriggerEvent) (bool, error) {
 outer:
 	for _, mf := range matchFilters {
 		if mf.Filter != "" {
-			res, err := gomplate.RunTemplate(celEnv, gomplate.Template{Expression: mf.Filter})
+			res, err := ctx.RunTemplate(gomplate.Template{Expression: mf.Filter}, celEnv)
 			if err != nil {
 				return false, err
 			}

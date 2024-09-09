@@ -126,8 +126,7 @@ func templateActionExpressions(ctx context.Context, run *models.PlaybookRun, run
 	if actionSpec.Filter != "" {
 		gomplateTemplate := gomplate.Template{
 			Expression: actionSpec.Filter,
-			CelEnvs:    getActionCelEnvs(ctx, run.ID.String(), runAction.ID.String()),
-			Functions:  actionFilterFuncs,
+			CelEnvs:    getActionCelEnvs(ctx, run, runAction),
 		}
 		var err error
 		if actionSpec.Filter, err = ctx.RunTemplate(gomplateTemplate, env.AsMap()); err != nil {
@@ -160,7 +159,6 @@ func TemplateAction(ctx context.Context, run *models.PlaybookRun, runAction *mod
 			return r
 		},
 	}
-
-	templater := ctx.NewStructTemplater(env.AsMap(), "template", collections.MergeMap(templateFuncs, actionFilterFuncs))
+	templater := ctx.NewStructTemplater(env.AsMap(), "template", templateFuncs)
 	return templater.Walk(&actionSpec)
 }
