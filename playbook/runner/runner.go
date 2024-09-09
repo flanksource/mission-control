@@ -118,6 +118,30 @@ func CheckPlaybookFilter(ctx context.Context, playbookSpec v1.PlaybookSpec, temp
 	return nil
 }
 
+func CheckDelay(ctx context.Context, playbook models.Playbook, run models.PlaybookRun, action *v1.PlaybookAction) (bool, error) {
+	// The delays on the action should be applied here & action consumers do not run the delay.
+	var delay time.Duration
+	if action.Delay != "" && run.Status != models.PlaybookRunStatusSleeping {
+		templateEnv, err := CreateTemplateEnv(ctx, &playbook, &run)
+		if err != nil {
+			return false, ctx.Oops().Wrapf(err, "failed to template action")
+		}
+		oops := ctx.Oops().Hint(templateEnv.String())
+		if action.Delay, err = ctx.RunTemplate(gomplate.Template{Expression: action.Delay}, templateEnv.AsMap()); err != nil {
+			return false, oops.Wrapf(err, "failed to template action")
+		} else if delay, err = action.DelayDuration(); err != nil {
+			return false, oops.Wrapf(err, "invalid duration n (%s)", action.Delay)
+		}
+	}
+
+	if delay > 0 {
+		ctx.Tracef("delaying %s by %s", action.Name, delay)
+		// Defer the scheduling of this run,
+		return true, ctx.Oops().Wrap(run.Delay(ctx.DB(), delay))
+	}
+	return false, nil
+}
+
 // ScheduleRun finds the next action step that needs to run and
 // creates the PlaybookActionRun in a scheduled status, with an optional agentId
 func ScheduleRun(ctx context.Context, run models.PlaybookRun) error {
@@ -141,25 +165,11 @@ func ScheduleRun(ctx context.Context, run models.PlaybookRun) error {
 
 	ctx = ctx.WithObject(playbook, action, run)
 
-	// The delays on the action should be applied here & action consumers do not run the delay.
-	var delay time.Duration
-	if action.Delay != "" && run.Status != models.PlaybookRunStatusSleeping {
-		templateEnv, err := CreateTemplateEnv(ctx, &playbook, &run)
-		if err != nil {
-			return ctx.Oops().Wrapf(err, "failed to template action")
-		}
-		oops := ctx.Oops().Hint(templateEnv.String())
-		if action.Delay, err = ctx.RunTemplate(gomplate.Template{Expression: action.Delay}, templateEnv.AsMap()); err != nil {
-			return oops.Wrapf(err, "failed to template action")
-		} else if delay, err = action.DelayDuration(); err != nil {
-			return oops.Wrapf(err, "invalid duration n (%s)", action.Delay)
-		}
-	}
-
-	if delay > 0 {
-		ctx.Tracef("delaying %s by %s", action.Name, delay)
-		// Defer the scheduling of this run,
-		return ctx.Oops().Wrap(run.Delay(ctx.DB(), delay))
+	delayed, err := CheckDelay(ctx, playbook, run, action)
+	if err != nil {
+		return err
+	} else if delayed {
+		return nil
 	}
 
 	if run.AgentID != nil {

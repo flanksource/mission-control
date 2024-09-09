@@ -153,6 +153,14 @@ var Run = &cobra.Command{
 		}
 
 		for action != nil {
+
+			if delayed, err := runner.CheckDelay(ctx, *p, *run, action); err != nil {
+				ctx.Errorf("Error running action %s: %v", action.Name, err)
+				break
+			} else if delayed {
+				break
+			}
+
 			runAction, err := run.StartAction(ctx.DB(), action.Name)
 
 			if err != nil {
