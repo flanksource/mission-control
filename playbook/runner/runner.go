@@ -310,6 +310,9 @@ func TemplateAndExecuteAction(ctx context.Context, spec v1.Playbook, playbook *m
 }
 
 func filterAction(ctx context.Context, runID uuid.UUID, filter string) (bool, error) {
+	if strings.TrimSpace(filter) == "" {
+		return false, nil
+	}
 	switch filter {
 
 	case actionFilterSkip:
@@ -320,7 +323,7 @@ func filterAction(ctx context.Context, runID uuid.UUID, filter string) (bool, er
 
 	default:
 		if proceed, err := strconv.ParseBool(filter); err != nil {
-			return false, ctx.Oops().Errorf("action filter didn't evaluate to a boolean value (%s) neither returned any special command", filter)
+			return false, ctx.Oops().Errorf("invalid action filter result (%s) must be one of 'true', 'false', 'skip'", filter)
 		} else if !proceed {
 			return true, nil
 		}

@@ -68,19 +68,18 @@ func GetActionForAgent(ctx context.Context, agent *models.Agent) (*ActionForAgen
 	if err != nil {
 		return nil, ctx.Oops().Wrapf(err, "failed to template env")
 	}
-	oops := ctx.Oops().Hint(templateEnv.String())
 
 	spec, err := getActionSpec(ctx, playbook, step.Name)
 	if err != nil {
-		return nil, err
+		return nil, ctx.Oops().Wrap(err)
 	}
 	if err := templateActionExpressions(ctx, run, step, spec, templateEnv); err != nil {
-		return nil, oops.Wrapf(err, "failed to template expression")
+		return nil, ctx.Oops().Wrap(err)
 	}
 
 	if spec.TemplatesOn == "" || spec.TemplatesOn == Main {
 		if err := TemplateAction(ctx, run, step, spec, templateEnv); err != nil {
-			return nil, oops.Wrapf(err, "failed to  action")
+			return nil, ctx.Oops().Wrap(err)
 		}
 	}
 
@@ -92,7 +91,7 @@ func GetActionForAgent(ctx context.Context, agent *models.Agent) (*ActionForAgen
 	}
 
 	if skip, err := filterAction(ctx, run.ID, spec.Filter); err != nil {
-		return nil, oops.Wrapf(err, "filter failed")
+		return nil, ctx.Oops().Wrap(err)
 	} else {
 		// We run the filter on the upstream and simply send the filter result to the agent.
 		spec.Filter = strconv.FormatBool(!skip)
