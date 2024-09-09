@@ -44,17 +44,15 @@ spec:
                 properties:
                   timeout:
                     description: How long after the health checks have been passing
-                      before, autoclosing the incident.
-                    format: int64
-                    type: integer
+                      before, autoclosing the incident (accepts goduration format)
+                    type: string
                 type: object
               autoResolve:
                 properties:
                   timeout:
                     description: How long after the health checks have been passing
-                      before, autoclosing the incident.
-                    format: int64
-                    type: integer
+                      before, autoclosing the incident (accepts goduration format)
+                    type: string
                 type: object
               breakOnMatch:
                 description: stop processing other incident rules, when matched

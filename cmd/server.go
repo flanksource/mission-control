@@ -70,6 +70,14 @@ func launchKopper(ctx context.Context) {
 	}
 
 	if err = kopper.SetupReconciler(ctx, mgr,
+		db.PersistNotificationSilenceFromCRD,
+		db.DeleteNotificationSilence,
+		"notificationsilence.mission-control.flanksource.com",
+	); err != nil {
+		logger.Fatalf("Unable to create controller for Notification silence: %v", err)
+	}
+
+	if err = kopper.SetupReconciler(ctx, mgr,
 		db.PersistNotificationFromCRD,
 		db.DeleteNotification,
 		"notification.mission-control.flanksource.com",
