@@ -393,7 +393,7 @@ var _ = ginkgo.Describe("Match Resource", func() {
 
 		for _, tt := range tests {
 			ginkgo.By(tt.name, func() {
-				got, err := matchResource(tt.args.labels, tt.args.eventResource.AsMap(), tt.args.matchFilters)
+				got, err := matchResource(DefaultContext, tt.args.labels, tt.args.eventResource.AsMap(), tt.args.matchFilters)
 				Expect(err == nil).To(Equal(!tt.wantErr))
 				Expect(got).To(Equal(tt.want))
 			})

@@ -2,46 +2,88 @@ package runner
 
 import (
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/models"
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/common/types"
 	"github.com/google/cel-go/common/types/ref"
+	"github.com/samber/lo"
 )
 
 const (
-	// always run the action
-	actionFilterAlways = "always"
 
 	// skip the action
 	actionFilterSkip = "skip"
 
-	// run the action if any of the previous actions failed
-	actionFilterFailure = "failure"
-
 	// run the action if any of the previous actions timed out
 	actionFilterTimeout = "timeout"
-
-	// run the action if all of the previous actions succeeded
-	actionFilterSuccess = "success"
 )
 
-// Functions for filters in playbook actions.
-// Available in go template & cel expressions.
-var actionFilterFuncs = map[string]any{
-	"always":  func() any { return actionFilterAlways },
-	"failure": func() any { return actionFilterFailure },
-	"skip":    func() any { return actionFilterSkip },
-	"success": func() any { return actionFilterSuccess },
-	"timeout": func() any { return actionFilterTimeout },
-}
-
-func getActionCelEnvs(ctx context.Context, runID, callerActionID string) []cel.EnvOption {
+func getActionCelEnvs(ctx context.Context, run *models.PlaybookRun, action *models.PlaybookRunAction) []cel.EnvOption {
 	return []cel.EnvOption{
+
+		cel.Function("success",
+			cel.Overload("success",
+				nil,
+				cel.BoolType,
+				cel.FunctionBinding(func(args ...ref.Val) ref.Val {
+					var statuses []models.PlaybookActionStatus
+					err := ctx.DB().Select("status").Model(&models.PlaybookRunAction{}).
+						Where("playbook_run_id = ?", run.ID).Find(&statuses).Error
+					if err != nil {
+						return types.WrapErr(err)
+					}
+
+					return types.Bool(len(lo.Filter(statuses, func(i models.PlaybookActionStatus, _ int) bool {
+						return i == models.PlaybookActionStatusFailed
+					})) == 0)
+				}),
+			),
+		),
+
+		cel.Function("skip",
+			cel.Overload("skip",
+				nil,
+				cel.StringType,
+				cel.FunctionBinding(func(args ...ref.Val) ref.Val {
+					return types.String(actionFilterSkip)
+				}),
+			),
+		),
+
+		cel.Function("failure",
+			cel.Overload("failure",
+				nil,
+				cel.BoolType,
+				cel.FunctionBinding(func(args ...ref.Val) ref.Val {
+					var statuses []models.PlaybookActionStatus
+					err := ctx.DB().Select("status").Model(&models.PlaybookRunAction{}).
+						Where("playbook_run_id = ?", run.ID).Find(&statuses).Error
+					if err != nil {
+						return types.WrapErr(err)
+					}
+
+					return types.Bool(len(lo.Filter(statuses, func(i models.PlaybookActionStatus, _ int) bool {
+						return i == models.PlaybookActionStatusFailed
+					})) > 0)
+				}),
+			),
+		),
+		cel.Function("always",
+			cel.Overload("always",
+				nil,
+				cel.BoolType,
+				cel.FunctionBinding(func(args ...ref.Val) ref.Val {
+					return types.Bool(true)
+				}),
+			),
+		),
+
 		cel.Function("getLastAction",
 			cel.Overload("getLastAction",
 				[]*cel.Type{},
 				cel.MapType(cel.StringType, cel.DynType),
 				cel.FunctionBinding(func(value ...ref.Val) ref.Val {
-					r, err := GetLastAction(ctx, runID, callerActionID)
+					r, err := GetLastAction(ctx, run.ID.String(), action.ID.String())
 					if err != nil {
 						return types.WrapErr(err)
 					}
@@ -55,7 +97,7 @@ func getActionCelEnvs(ctx context.Context, runID, callerActionID string) []cel.E
 				[]*cel.Type{cel.StringType},
 				cel.MapType(cel.StringType, cel.DynType),
 				cel.UnaryBinding(func(value ref.Val) ref.Val {
-					r, err := GetActionByName(ctx, runID, value.Value().(string))
+					r, err := GetActionByName(ctx, run.ID.String(), value.Value().(string))
 					if err != nil {
 						return types.WrapErr(err)
 					}

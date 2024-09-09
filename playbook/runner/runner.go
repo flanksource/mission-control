@@ -301,25 +301,9 @@ func TemplateAndExecuteAction(ctx context.Context, spec v1.Playbook, playbook *m
 
 func filterAction(ctx context.Context, runID uuid.UUID, filter string) (bool, error) {
 	switch filter {
-	case actionFilterAlways, "":
-		return false, nil
 
 	case actionFilterSkip:
 		return true, nil
-
-	case actionFilterFailure:
-		if count, err := db.GetPlaybookActionsForStatus(ctx, runID, models.PlaybookActionStatusFailed); err != nil {
-			return false, ctx.Oops("db").Wrap(err)
-		} else if count == 0 {
-			return true, nil
-		}
-
-	case actionFilterSuccess:
-		if count, err := db.GetPlaybookActionsForStatus(ctx, runID, models.PlaybookActionStatusFailed); err != nil {
-			return false, ctx.Oops("db").Wrap(err)
-		} else if count > 0 {
-			return true, nil
-		}
 
 	case actionFilterTimeout:
 		// TODO: We don't properly store timed out action status.

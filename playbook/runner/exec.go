@@ -34,8 +34,6 @@ type executeActionResult struct {
 // It should received an already templated action spec.
 func executeAction(ctx context.Context, playbookID any, runID uuid.UUID, runAction models.PlaybookRunAction, actionSpec v1.PlaybookAction) (executeActionResult, error) {
 
-	ctx.Debugf("executing %s", actionSpec.Name)
-
 	if timeout, _ := actionSpec.TimeoutDuration(); timeout > 0 {
 		var cancel gocontext.CancelFunc
 		ctx, cancel = ctx.WithTimeout(timeout)
@@ -46,9 +44,12 @@ func executeAction(ctx context.Context, playbookID any, runID uuid.UUID, runActi
 		if skipped, err := filterAction(ctx, runID, actionSpec.Filter); err != nil {
 			return executeActionResult{}, err
 		} else if skipped {
+			ctx.Debugf("skipping %s", actionSpec.Name)
 			return executeActionResult{skipped: true}, nil
 		}
 	}
+
+	ctx.Debugf("executing %s", actionSpec.Name)
 
 	var result any
 	var err error

@@ -1,16 +1,15 @@
 apiVersion: mission-control.flanksource.com/v1
 kind: Playbook
 metadata:
-  name: delayed-exec
+  name: conditions-fail
 spec:
-  description: Creates a file with the content of the config
+  description: A playbook with an action that always fails
   parameters:
     - name: delay
-      default: "0"
   actions:
     - name: start
       exec:
-        script: date
+        script: date2
 
     - name: Failure
       if: "failure()"
@@ -25,7 +24,7 @@ spec:
       exec:
         script: echo "success"
     - name: Delay
-      if: 'params.delay != "0" && success()'
+      if: "success()"
       delay: "params.delay"
       exec:
         script: date
