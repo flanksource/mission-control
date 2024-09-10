@@ -2,6 +2,8 @@
   acl:
     - objects: database.kratos
       actions: "!*"
+    - objects: connection
+      actions: "!read"
 - principal: admin
   acl:
     - objects: "*"
@@ -28,6 +30,10 @@
   acl:
     - objects: canaries,catalog,topology,playbooks,kubernetes-proxy
       actions: create,read,update,delete
+    - objects: connection
+      actions: "create,!read,update,delete"
+    - objects: connection-detail
+      actions: read
     - objects: playbooks
       actions: run
     - objects: playbooks
