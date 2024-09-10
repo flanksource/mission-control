@@ -178,6 +178,8 @@ const (
 	ObjectRBAC             = "rbac"
 	ObjectTopology         = "topology"
 	ObjectPeople           = "people"
+
+	ObjectNotification = "notification"
 )
 
 var (

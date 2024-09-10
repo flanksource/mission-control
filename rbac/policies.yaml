@@ -28,7 +28,7 @@
     - viewer
 - principal: editor
   acl:
-    - objects: canaries,catalog,topology,playbooks,kubernetes-proxy
+    - objects: canaries,catalog,topology,playbooks,kubernetes-proxy,notification
       actions: create,read,update,delete
     - objects: connection
       actions: "create,!read,update,delete"
