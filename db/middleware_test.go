@@ -10,6 +10,8 @@ import (
 )
 
 var _ = ginkgo.Describe("Transform Query to postgREST", ginkgo.Ordered, func() {
+	now := time.Now()
+
 	testData := []struct {
 		description string
 		input       url.Values
@@ -50,7 +52,7 @@ var _ = ginkgo.Describe("Transform Query to postgREST", ginkgo.Ordered, func() {
 				"created_at.filter": []string{"now-20h"},
 			},
 			output: url.Values{
-				"created_at": []string{fmt.Sprintf(`lt.%s`, time.Now().UTC().Add(-time.Hour*20).Format(time.RFC3339))},
+				"created_at": []string{fmt.Sprintf(`lt.%s`, now.UTC().Add(-time.Hour*20).Format(time.RFC3339))},
 			},
 		},
 		{
@@ -59,14 +61,14 @@ var _ = ginkgo.Describe("Transform Query to postgREST", ginkgo.Ordered, func() {
 				"created_at.filter": []string{">now-20h"},
 			},
 			output: url.Values{
-				"created_at": []string{fmt.Sprintf(`gt.%s`, time.Now().UTC().Add(-time.Hour*20).Format(time.RFC3339))},
+				"created_at": []string{fmt.Sprintf(`gt.%s`, now.UTC().Add(-time.Hour*20).Format(time.RFC3339))},
 			},
 		},
 	}
 
 	for _, d := range testData {
 		ginkgo.It(d.description, func() {
-			transformQuery, err := transformQuery(d.input)
+			transformQuery, err := transformQuery(now.UTC(), d.input)
 			Expect(err).ShouldNot(HaveOccurred())
 			Expect(transformQuery).Should(Equal(d.output))
 		})
