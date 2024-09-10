@@ -1,6 +1,11 @@
 package jobs
 
 import (
+	gocontext "context"
+	"fmt"
+	"strings"
+	"time"
+
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/job"
@@ -8,6 +13,7 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/incidents"
 	"github.com/robfig/cron/v3"
+	"github.com/sethvargo/go-retry"
 )
 
 const (
@@ -24,7 +30,22 @@ var agentJobs = []*job.Job{
 	ReconcileAll,
 	SyncArtifactData,
 	PushPlaybookActions,
-	PullPlaybookActions,
+}
+
+func RunPullPlaybookActionsJob(ctx context.Context) {
+	for {
+		job := PullPlaybookActions(ctx)
+		backoff := retry.WithMaxRetries(10, retry.NewExponential(time.Second))
+		_ = retry.Do(ctx, backoff, func(_ctx gocontext.Context) error {
+			job.Run()
+
+			if len(job.LastJob.Errors) != 0 {
+				return retry.RetryableError(fmt.Errorf("%s", strings.Join(job.LastJob.Errors, ", ")))
+			}
+
+			return nil
+		})
+	}
 }
 
 func Start(ctx context.Context) {
@@ -56,6 +77,8 @@ func Start(ctx context.Context) {
 				logger.Errorf("Failed to schedule %s: %v", j, err)
 			}
 		}
+
+		go RunPullPlaybookActionsJob(ctx)
 	}
 
 	cleanupStaleJobHistory.Context = ctx

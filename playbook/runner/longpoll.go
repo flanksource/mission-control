@@ -9,7 +9,7 @@ import (
 // Global instance
 var ActionMgr = NewActionNotifyManager(make(chan string))
 
-var LongpollTimeout = time.Minute * 2 // time.Second * 5
+var LongpollTimeout = time.Minute
 
 type actionNotifyManager struct {
 	ch            chan string
