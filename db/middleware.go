@@ -42,7 +42,7 @@ var dateFields = map[string]struct{}{
 
 // parseTimestampField returns the postgREST operator (eq, gt, lt)
 // and the parsed datemath.
-func parseTimestampField(key, val string) (string, time.Time, error) {
+func parseTimestampField(now time.Time, key, val string) (string, time.Time, error) {
 	_, ok := dateFields[key]
 	if !ok {
 		return "", time.Time{}, nil
@@ -60,18 +60,18 @@ func parseTimestampField(key, val string) (string, time.Time, error) {
 		val = strings.TrimPrefix(val, "<")
 	}
 
-	expr, err := datemath.Parse(val)
+	parsedTime, err := datemath.ParseAndEvaluate(val, datemath.WithNow(now))
 	if err != nil {
 		return "", time.Time{}, err
 	}
 
-	return operator, expr.Time(), nil
+	return operator, parsedTime, nil
 }
 
 func SearchQueryTransformMiddleware() func(echo.HandlerFunc) echo.HandlerFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
-			queryParam, err := transformQuery(c.QueryParams())
+			queryParam, err := transformQuery(time.Now(), c.QueryParams())
 			if err != nil {
 				return err
 			}
@@ -88,7 +88,7 @@ func SearchQueryTransformMiddleware() func(echo.HandlerFunc) echo.HandlerFunc {
 }
 
 // transformQuery transforms any search query to native postgREST query
-func transformQuery(queryParam url.Values) (url.Values, error) {
+func transformQuery(now time.Time, queryParam url.Values) (url.Values, error) {
 	for k, values := range queryParam {
 		if !strings.HasSuffix(k, ".filter") || len(values) == 0 {
 			continue
@@ -99,7 +99,7 @@ func transformQuery(queryParam url.Values) (url.Values, error) {
 		key := strings.TrimSuffix(k, ".filter")
 		val := values[0] // Use the first one. We don't use multiple values.
 
-		if operator, timestamp, err := parseTimestampField(key, val); err != nil {
+		if operator, timestamp, err := parseTimestampField(now, key, val); err != nil {
 			return nil, fmt.Errorf("invalid datemath expression (%q) for field (%s): %w", val, key, err)
 		} else if !timestamp.IsZero() {
 			queryParam.Add(key, fmt.Sprintf("%s.%s", operator, timestamp.Format(time.RFC3339)))
