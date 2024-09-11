@@ -6,6 +6,7 @@ import (
 
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
+	dutydb "github.com/flanksource/duty/db"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/google/uuid"
@@ -49,7 +50,7 @@ func PushTopology(c echo.Context) error {
 	}
 
 	if err = topologyObj.Save(ctx.DB()); err != nil {
-		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINTERNAL, "error persisting topology: %v", err))
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINTERNAL, "error persisting topology: %v", dutydb.ErrorDetails(err)))
 	}
 
 	data.AgentID = agentID
@@ -61,17 +62,17 @@ func PushTopology(c echo.Context) error {
 	}
 
 	if err := data.Save(ctx.DB()); err != nil {
-		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINTERNAL, "error saving components: %v", err))
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINTERNAL, "error saving components: %v", dutydb.ErrorDetails(err)))
 	}
 
 	var idsToDelete []string
 	if err := ctx.DB().Model(&models.Component{}).Select("id").Where("topology_id = ?", data.TopologyID).Where("id NOT IN ?", compIDs).Find(&idsToDelete).Error; err != nil {
-		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINTERNAL, "error querying old components: %v", err))
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINTERNAL, "error querying old components: %v", dutydb.ErrorDetails(err)))
 	}
 
 	if len(idsToDelete) > 0 {
 		if err := models.DeleteComponentsWithIDs(ctx.DB(), idsToDelete); err != nil {
-			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINTERNAL, "error deleting old components: %v", err))
+			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINTERNAL, "error deleting old components: %v", dutydb.ErrorDetails(err)))
 		}
 	}
 
