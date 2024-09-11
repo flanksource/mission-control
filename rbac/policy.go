@@ -165,6 +165,7 @@ const (
 	ObjectCanary           = "canaries"
 	ObjectCatalog          = "catalog"
 	ObjectConnection       = "connection"
+	ObjectConnectionDetail = "connection-detail"
 	ObjectDatabase         = "database"
 	ObjectDatabaseIdentity = "database.identities"
 	ObjectAuthConfidential = "database.kratos"
@@ -177,6 +178,8 @@ const (
 	ObjectRBAC             = "rbac"
 	ObjectTopology         = "topology"
 	ObjectPeople           = "people"
+
+	ObjectNotification = "notification"
 )
 
 var (
