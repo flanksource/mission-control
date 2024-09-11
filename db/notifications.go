@@ -117,7 +117,7 @@ func NotificationSendSummary(ctx context.Context, id string, window time.Duratio
 func GetMatchingNotificationSilencesCount(ctx context.Context, resources models.NotificationSilenceResource) (int64, error) {
 	_ = ctx.DB().Use(extraClausePlugin.New())
 
-	query := ctx.DB().Debug().Model(&models.NotificationSilence{})
+	query := ctx.DB().Model(&models.NotificationSilence{})
 
 	// Initialize with a false condition,
 	// if no resources are provided, the query won't return all records

@@ -4,43 +4,51 @@ import (
 	"errors"
 	"time"
 
-	"github.com/flanksource/commons/duration"
+	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/db"
 	"github.com/flanksource/duty/models"
 	"github.com/samber/lo"
+	"github.com/timberio/go-datemath"
 )
 
 type SilenceSaveRequest struct {
 	models.NotificationSilenceResource
-	From        time.Time `json:"from"`
-	Until       time.Time `json:"until"`
-	Duration    string    `json:"duration"`
-	Description string    `json:"description"`
+	From        string `json:"from"`
+	Until       string `json:"until"`
+	Description string `json:"description"`
+	Recursive   bool   `json:"recursive"`
+
+	from  time.Time
+	until time.Time
 }
 
 func (t *SilenceSaveRequest) Validate() error {
-	if t.From.IsZero() {
+	if t.From == "" {
 		return errors.New("`from` time is required")
 	}
 
-	if t.Until.IsZero() {
-		if t.Duration == "" {
-			return errors.New("`until` or `duration` is required")
-		}
-
-		if parsed, err := duration.ParseDuration(t.Duration); err != nil {
-			return err
-		} else {
-			t.Until = t.From.Add(time.Duration(parsed))
-		}
+	if t.Until == "" {
+		return errors.New("`until` is required")
 	}
 
-	if t.From.After(t.Until) {
-		return errors.New("`from` time must be before `until` time")
+	if parsedTime, err := datemath.ParseAndEvaluate(t.From); err != nil {
+		return err
+	} else {
+		t.from = parsedTime
 	}
 
-	if t.NotificationSilenceResource.CanaryID == nil && t.NotificationSilenceResource.CheckID == nil && t.NotificationSilenceResource.ConfigID == nil &&
-		t.NotificationSilenceResource.ComponentID == nil {
+	if parsedTime, err := datemath.ParseAndEvaluate(t.Until); err != nil {
+		return err
+	} else {
+		t.until = parsedTime
+	}
+
+	if t.from.After(t.until) {
+		return errors.New("`from` time must be before `until")
+	}
+
+	if t.NotificationSilenceResource.Empty() {
 		return errors.New("at least one of `config_id`, `canary_id`, `check_id` or `component_id` is required")
 	}
 
@@ -49,19 +57,20 @@ func (t *SilenceSaveRequest) Validate() error {
 
 func SaveNotificationSilence(ctx context.Context, req SilenceSaveRequest) error {
 	if err := req.Validate(); err != nil {
-		return err
+		return api.Errorf(api.EINVALID, err.Error())
 	}
 
 	silence := models.NotificationSilence{
 		NotificationSilenceResource: req.NotificationSilenceResource,
-		From:                        req.From,
-		Until:                       req.Until,
+		From:                        req.from,
+		Until:                       req.until,
 		Description:                 req.Description,
+		Recursive:                   req.Recursive,
 		Source:                      models.SourceUI,
 		CreatedBy:                   lo.ToPtr(ctx.User().ID),
 	}
 
-	return ctx.DB().Create(&silence).Error
+	return db.ErrorDetails(ctx.DB().Create(&silence).Error)
 }
 
 func getSilencedResourceFromCelEnv(celEnv map[string]any) models.NotificationSilenceResource {

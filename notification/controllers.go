@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/rbac"
@@ -30,9 +31,9 @@ func RegisterRoutes(e *echo.Echo) {
 		}
 
 		if err := SaveNotificationSilence(ctx, req); err != nil {
-			return err
+			return api.WriteError(c, err)
 		}
 
 		return nil
-	}, rbac.Authorization(rbac.ObjectNotificationSilence, rbac.ActionCreate))
+	}, rbac.Authorization(rbac.ObjectNotification, rbac.ActionCreate))
 }
