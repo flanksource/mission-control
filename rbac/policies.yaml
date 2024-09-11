@@ -2,8 +2,9 @@
   acl:
     - objects: database.kratos
       actions: "!*"
-    - objects: connection
-      actions: "!read"
+    # Activate after UI update
+    # - objects: connection
+    #   actions: "!read"
 - principal: admin
   acl:
     - objects: "*"
@@ -31,7 +32,7 @@
     - objects: canaries,catalog,topology,playbooks,kubernetes-proxy,notification
       actions: create,read,update,delete
     - objects: connection
-      actions: "create,!read,update,delete"
+      actions: "create,read,update,delete"
     - objects: connection-detail
       actions: read
     - objects: playbooks
