@@ -44,6 +44,7 @@ require (
 require (
 	github.com/MicahParks/keyfunc/v2 v2.1.0
 	github.com/RussellLuo/slidingwindow v0.0.0-20200528002341-535bb99d338b
+	github.com/WinterYukky/gorm-extra-clause-plugin v0.2.0
 	github.com/aws/aws-sdk-go-v2 v1.30.4
 	github.com/aws/aws-sdk-go-v2/config v1.27.29
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.29
@@ -88,7 +89,6 @@ require (
 	github.com/ProtonMail/go-crypto v1.0.0 // indirect
 	github.com/RaveNoX/go-jsonmerge v1.0.0 // indirect
 	github.com/Snawoot/go-http-digest-auth-client v1.1.3 // indirect
-	github.com/WinterYukky/gorm-extra-clause-plugin v0.2.0 // indirect
 	github.com/agext/levenshtein v1.2.3 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.0 // indirect
 	github.com/apparentlymart/go-textseg/v15 v15.0.0 // indirect
@@ -359,6 +359,6 @@ require (
 
 // replace github.com/flanksource/commons => /Users/moshe/go/src/github.com/flanksource/commons
 
-replace github.com/flanksource/duty => ../duty
+// replace github.com/flanksource/duty => ../duty
 
 // replace github.com/flanksource/gomplate/v3 => /Users/moshe/go/src/github.com/flanksource/gomplate
