@@ -462,32 +462,3 @@ func getEnvForEvent(ctx context.Context, event models.Event, properties map[stri
 
 	return env, nil
 }
-
-func getSilencedResourceFromCelEnv(celEnv map[string]any) models.NotificationSilenceResource {
-	var silencedResource models.NotificationSilenceResource
-	if v, ok := celEnv["config"]; ok {
-		if vv, ok := v.(map[string]any); ok {
-			silencedResource.ConfigID = lo.ToPtr(vv["id"].(string))
-		}
-	}
-
-	if v, ok := celEnv["check"]; ok {
-		if vv, ok := v.(map[string]any); ok {
-			silencedResource.CheckID = lo.ToPtr(vv["id"].(string))
-		}
-	}
-
-	if v, ok := celEnv["canary"]; ok {
-		if vv, ok := v.(map[string]any); ok {
-			silencedResource.CanaryID = lo.ToPtr(vv["id"].(string))
-		}
-	}
-
-	if v, ok := celEnv["component"]; ok {
-		if vv, ok := v.(map[string]any); ok {
-			silencedResource.ComponentID = lo.ToPtr(vv["id"].(string))
-		}
-	}
-
-	return silencedResource
-}

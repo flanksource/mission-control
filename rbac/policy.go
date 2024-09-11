@@ -147,15 +147,15 @@ const (
 	RoleAgent     = "agent"
 
 	// Actions
-	ActionRead            = "read"
-	ActionUpdate          = "update"
-	ActionCreate          = "create"
-	ActionDelete          = "delete"
-	ActionRun             = "run"
-	ActionApprove         = "approve"
-	ActionAll             = "*"
-	ActionCRUD            = "create,read,update,delete"
-	ObjectKubernetesProxy = "kubernetes-proxy"
+	ActionRead    = "read"
+	ActionUpdate  = "update"
+	ActionCreate  = "create"
+	ActionDelete  = "delete"
+	ActionRun     = "run"
+	ActionApprove = "approve"
+	ActionAll     = "*"
+	ActionCRUD    = "create,read,update,delete"
+
 	// Objects
 	ObjectLogs             = "logs"
 	ObjectAgent            = "agent"
