@@ -18,7 +18,7 @@ func (info *Info) Get(db *gorm.DB) error {
 				functions
 	FROM   (SELECT array_agg(information_schema.views.table_name) AS views
 					FROM   information_schema.views
-					WHERE  information_schema.views.table_schema = any (current_schemas(false)) AND table_name not like 'pg_%'
+					WHERE  information_schema.views.table_schema = any (current_schemas(false)) AND NOT starts_with(table_name, 'pg_')
 				)
 				t,
 				(SELECT array_agg(information_schema.tables.table_name) AS tables
