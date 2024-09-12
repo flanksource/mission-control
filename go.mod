@@ -16,7 +16,7 @@ require (
 	github.com/flanksource/commons v1.29.10
 	github.com/flanksource/duty v1.0.640
 	github.com/flanksource/gomplate/v3 v3.24.30
-	github.com/flanksource/kopper v1.0.9
+	github.com/flanksource/kopper v1.0.10
 	github.com/gomarkdown/markdown v0.0.0-20240419095408-642f0ee99ae2
 	github.com/google/cel-go v0.21.0
 	github.com/google/go-cmp v0.6.0
