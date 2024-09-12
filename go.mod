@@ -14,7 +14,7 @@ require (
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.25.0 // indirect
 	github.com/flanksource/commons v1.29.10
-	github.com/flanksource/duty v1.0.640
+	github.com/flanksource/duty v1.0.642
 	github.com/flanksource/gomplate/v3 v3.24.30
 	github.com/flanksource/kopper v1.0.10
 	github.com/gomarkdown/markdown v0.0.0-20240419095408-642f0ee99ae2
