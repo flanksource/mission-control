@@ -8,6 +8,7 @@ import (
 	"github.com/flanksource/duty/context"
 	dutydb "github.com/flanksource/duty/db"
 	"github.com/flanksource/duty/models"
+	dutytopology "github.com/flanksource/duty/topology"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -61,7 +62,7 @@ func PushTopology(c echo.Context) error {
 		compIDs = append(compIDs, c.ID)
 	}
 
-	if err := data.Save(ctx.DB()); err != nil {
+	if err := dutytopology.SaveComponent(ctx, &data); err != nil {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINTERNAL, "error saving components: %v", dutydb.ErrorDetails(err)))
 	}
 
