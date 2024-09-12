@@ -63,6 +63,7 @@ require (
 	github.com/samber/oops v1.13.1
 	github.com/samber/slog-echo v1.14.4
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.1
+	github.com/sethvargo/go-retry v0.3.0
 	github.com/slack-go/slack v0.14.0
 	github.com/tg123/go-htpasswd v1.2.2
 	github.com/timberio/go-datemath v0.1.0
@@ -207,7 +208,6 @@ require (
 	github.com/rodaine/table v1.3.0 // indirect
 	github.com/rogpeppe/go-internal v1.12.0 // indirect
 	github.com/sergi/go-diff v1.3.2-0.20230802210424-5b0b94c5c0d3 // indirect
-	github.com/sethvargo/go-retry v0.3.0 // indirect
 	github.com/shirou/gopsutil/v3 v3.24.5 // indirect
 	github.com/shoenig/go-m1cpu v0.1.6 // indirect
 	github.com/shurcooL/githubv4 v0.0.0-20190718010115-4ba037080260 // indirect
@@ -359,6 +359,6 @@ require (
 
 // replace github.com/flanksource/commons => /Users/moshe/go/src/github.com/flanksource/commons
 
-// replace github.com/flanksource/duty => ../du31
+// replace github.com/flanksource/duty => ../duty
 
 // replace github.com/flanksource/gomplate/v3 => /Users/moshe/go/src/github.com/flanksource/gomplate

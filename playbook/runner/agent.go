@@ -20,36 +20,63 @@ type ActionForAgent struct {
 	TemplateEnv actions.TemplateEnv      `json:"template_env"`
 }
 
-func GetActionForAgent(ctx context.Context, agent *models.Agent) (*ActionForAgent, error) {
+func GetActionForAgentWithWait(ctx context.Context, agent *models.Agent) (*ActionForAgent, error) {
+	action, err := getActionForAgent(ctx, agent)
+	if err != nil {
+		return nil, err
+	}
+
+	if action != nil {
+		return action, err
+	}
+
+	// Go into waiting state
 	select {
-	case <-time.After(LongpollTimeout):
+	case <-time.After(ctx.Properties().Duration("playbook.runner.longpoll.timeout", DefaultLongpollTimeout)):
 		return &ActionForAgent{}, nil
 
-	case actionID := <-ActionMgr.Register(agent.ID.String()):
-		tx := ctx.DB().Begin()
-		if tx.Error != nil {
-			return nil, fmt.Errorf("error initiating db tx: %w", tx.Error)
-		}
-		defer tx.Rollback()
-
-		ctx = ctx.WithDB(tx, ctx.Pool())
-		ctx = ctx.WithObject(agent)
-
-		var action models.PlaybookRunAction
-		if err := ctx.DB().Where("id = ?", actionID).First(&action).Error; err != nil {
-			return nil, err
-		}
-
-		actionForAgent, err := getAgentAction(ctx, agent, &action)
+	case <-ActionNotifyRouter.RegisterRoutes(agent.ID.String()):
+		action, err := getActionForAgent(ctx, agent)
 		if err != nil {
 			return nil, err
 		}
 
-		return actionForAgent, ctx.Oops().Wrap(tx.Commit().Error)
+		return action, err
 	}
 }
 
-func getAgentAction(ctx context.Context, agent *models.Agent, step *models.PlaybookRunAction) (*ActionForAgent, error) {
+func getActionForAgent(ctx context.Context, agent *models.Agent) (*ActionForAgent, error) {
+	tx := ctx.DB().Begin()
+	if tx.Error != nil {
+		return nil, fmt.Errorf("error initiating db tx: %w", tx.Error)
+	}
+	defer tx.Rollback()
+
+	ctx = ctx.WithDB(tx, ctx.Pool())
+	ctx = ctx.WithObject(agent)
+
+	query := `
+		SELECT playbook_run_actions.*
+		FROM playbook_run_actions
+		INNER JOIN playbook_runs ON playbook_runs.id = playbook_run_actions.playbook_run_id
+		INNER JOIN playbooks ON playbooks.id = playbook_runs.playbook_id
+		WHERE playbook_run_actions.status = ?
+			AND (playbook_run_actions.scheduled_time IS NULL or playbook_run_actions.scheduled_time <= NOW())
+			AND playbook_run_actions.agent_id = ?
+		ORDER BY scheduled_time
+		FOR UPDATE SKIP LOCKED
+		LIMIT 1
+	`
+
+	var steps []models.PlaybookRunAction
+	if err := ctx.DB().Raw(query, models.PlaybookRunStatusWaiting, agent.ID).Find(&steps).Error; err != nil {
+		return nil, ctx.Oops("db").Wrap(err)
+	}
+
+	if len(steps) == 0 {
+		return nil, nil
+	}
+	step := &steps[0]
 	ctx = ctx.WithObject(agent, step)
 
 	run, err := step.GetRun(ctx.DB())
@@ -100,5 +127,5 @@ func getAgentAction(ctx context.Context, agent *models.Agent, step *models.Playb
 		return nil, ctx.Oops().Wrap(err)
 	}
 
-	return &output, nil
+	return &output, ctx.Oops().Wrap(tx.Commit().Error)
 }

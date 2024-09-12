@@ -2,63 +2,29 @@ package runner
 
 import (
 	"encoding/json"
-	"sync"
 	"time"
+
+	"github.com/flanksource/duty/postq/pg"
 )
 
+var DefaultLongpollTimeout = time.Minute
+
 // Global instance
-var ActionMgr = NewActionNotifyManager(make(chan string))
-
-var LongpollTimeout = time.Minute
-
-type actionNotifyManager struct {
-	ch            chan string
-	mu            *sync.RWMutex
-	subscriptions map[string]chan string
-}
-
-func NewActionNotifyManager(ch chan string) *actionNotifyManager {
-	return &actionNotifyManager{
-		ch:            ch,
-		mu:            &sync.RWMutex{},
-		subscriptions: make(map[string]chan string),
-	}
-}
+var ActionNotifyRouter = pg.NewNotifyRouter().WithRouteExtractor(playbookActionNotifyRouteExtractor)
 
 type playbookActionNotifyPayload struct {
 	ID      string `json:"id"`
 	AgentID string `json:"agent_id"`
 }
 
-func (d *actionNotifyManager) Chan() chan<- string {
-	return d.ch
-}
-
-func (d *actionNotifyManager) Listen() {
-	for payload := range d.ch {
-		var action playbookActionNotifyPayload
-		if err := json.Unmarshal([]byte(payload), &action); err != nil {
-			continue
-		}
-
-		d.mu.RLock()
-		if e, ok := d.subscriptions[action.AgentID]; ok {
-			e <- action.ID
-		}
-		d.mu.RUnlock()
-	}
-}
-
-func (d *actionNotifyManager) Register(agentID string) chan string {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	if e, ok := d.subscriptions[agentID]; ok {
-		return e
+func playbookActionNotifyRouteExtractor(payload string) (string, string, error) {
+	var p playbookActionNotifyPayload
+	if err := json.Unmarshal([]byte(payload), &p); err != nil {
+		return "", "", err
 	}
 
-	ch := make(chan string)
-	d.subscriptions[agentID] = ch
+	route := p.AgentID
+	extractedPayload := p.ID
 
-	return ch
+	return route, extractedPayload, nil
 }

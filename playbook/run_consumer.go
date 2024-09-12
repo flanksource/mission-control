@@ -128,8 +128,7 @@ func StartPlaybookConsumers(ctx context.Context) error {
 	go pg.Listen(ctx, pgNotifyPlaybookActionUpdates, actionAgentUpdatesPGNotifyChannel)
 	go actionAgentEventConsumer.Listen(ctx, actionAgentUpdatesPGNotifyChannel)
 
-	go pg.Listen(ctx, pgNotifyPlaybookActionUpdates, runner.ActionMgr.Chan())
-	go runner.ActionMgr.Listen()
+	go runner.ActionNotifyRouter.Run(ctx, pgNotifyPlaybookActionUpdates)
 
 	return nil
 }
