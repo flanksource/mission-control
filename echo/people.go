@@ -108,3 +108,24 @@ func (t *PersonController) UpdatePerson(c echov4.Context) error {
 
 	return c.JSON(http.StatusOK, identity.Traits)
 }
+
+func (t *PersonController) DeletePerson(c echov4.Context) error {
+	ctx := c.Request().Context().(context.Context)
+
+	if vars.AuthMode != auth.Kratos {
+		return api.Errorf(api.EINVALID, "deleting a person is only supported when using Kratos auth mode")
+	}
+
+	id := c.Param("id")
+	response, err := t.kratos.IdentityApi.DeleteIdentity(ctx, id).Execute()
+	if err != nil {
+		var clientErr *client.GenericOpenAPIError
+		if errors.As(err, &clientErr) {
+			return c.String(http.StatusBadRequest, string(clientErr.Body()))
+		}
+
+		return err
+	}
+
+	return c.Stream(response.StatusCode, "application/json", response.Body)
+}
