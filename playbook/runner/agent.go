@@ -35,7 +35,7 @@ func GetActionForAgentWithWait(ctx context.Context, agent *models.Agent) (*Actio
 	case <-time.After(ctx.Properties().Duration("playbook.runner.longpoll.timeout", DefaultLongpollTimeout)):
 		return &ActionForAgent{}, nil
 
-	case <-ActionNotifyRouter.RegisterRoutes(agent.ID.String()):
+	case <-ActionNotifyRouter.GetOrCreateChannel(agent.ID.String()):
 		action, err := getActionForAgent(ctx, agent)
 		if err != nil {
 			return nil, err
