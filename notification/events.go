@@ -128,6 +128,12 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 
 	t.Ring.Add(event, celEnv)
 
+	silencedResource := getSilencedResourceFromCelEnv(celEnv)
+	matchingSilences, err := db.GetMatchingNotificationSilencesCount(ctx, silencedResource)
+	if err != nil {
+		return err
+	}
+
 	for _, id := range notificationIDs {
 		n, err := GetNotification(ctx, id)
 		if err != nil {
@@ -180,6 +186,21 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 				ctx.Warnf("notification rate limited event=%s id=%s ", event.Name, id)
 				ctx.Counter("notification_rate_limited", "id", id).Add(1)
 				continue
+			}
+
+			if matchingSilences > 0 {
+				ctx.Logger.V(6).Infof("silencing notification for event %s due to %d matching silences", event.ID, matchingSilences)
+
+				if err := ctx.DB().Create(&models.NotificationSendHistory{
+					NotificationID: n.ID,
+					ResourceID:     payload.ID,
+					SourceEvent:    event.Name,
+					Status:         "silenced",
+				}).Error; err != nil {
+					return fmt.Errorf("failed to save silenced notification history: %w", err)
+				}
+
+				return nil
 			}
 
 			newEvent := api.Event{

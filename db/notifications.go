@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	extraClausePlugin "github.com/WinterYukky/gorm-extra-clause-plugin"
+	"github.com/WinterYukky/gorm-extra-clause-plugin/exclause"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
@@ -110,4 +112,56 @@ func NotificationSendSummary(ctx context.Context, id string, window time.Duratio
 	var count int
 	err := ctx.DB().Raw(query, id, window).Row().Scan(&earliest, &count)
 	return earliest.Time, count, err
+}
+
+func GetMatchingNotificationSilencesCount(ctx context.Context, resources models.NotificationSilenceResource) (int64, error) {
+	_ = ctx.DB().Use(extraClausePlugin.New())
+
+	query := ctx.DB().Model(&models.NotificationSilence{})
+
+	// Initialize with a false condition,
+	// if no resources are provided, the query won't return all records
+	orClauses := ctx.DB().Where("1 = 0")
+
+	if resources.ConfigID != nil {
+		orClauses = orClauses.Or("config_id = ?", *resources.ConfigID)
+
+		// recursive stuff
+		orClauses = orClauses.Or("(recursive = true AND path_cte.path LIKE '%' || config_id::TEXT || '%')")
+		query = query.Clauses(exclause.NewWith(
+			"path_cte",
+			ctx.DB().Select("path").Model(&models.ConfigItem{}).Where("id = ?", *resources.ConfigID),
+		))
+		query = query.Joins("CROSS JOIN path_cte")
+	}
+
+	if resources.ComponentID != nil {
+		orClauses = orClauses.Or("component_id = ?", *resources.ComponentID)
+
+		// recursive stuff
+		orClauses = orClauses.Or("(recursive = true AND path_cte.path LIKE '%' || component_id::TEXT || '%')")
+		query = query.Clauses(exclause.NewWith(
+			"path_cte",
+			ctx.DB().Select("path").Model(&models.Component{}).Where("id = ?", *resources.ComponentID),
+		))
+		query = query.Joins("CROSS JOIN path_cte")
+	}
+
+	if resources.CanaryID != nil {
+		orClauses = orClauses.Or("canary_id = ?", *resources.CanaryID)
+	}
+
+	if resources.CheckID != nil {
+		orClauses = orClauses.Or("check_id = ?", *resources.CheckID)
+	}
+
+	query = query.Where(orClauses)
+
+	var count int64
+	err := query.Count(&count).Where(`"from" <= NOW()`).Where("until >= NOW()").Where("deleted_at IS NULL").Error
+	if err != nil {
+		return 0, err
+	}
+
+	return count, nil
 }
