@@ -135,82 +135,104 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 	}
 
 	for _, id := range notificationIDs {
-		n, err := GetNotification(ctx, id)
-		if err != nil {
-			return err
+		if err := addNotificationEvent(ctx, id, celEnv, event, matchingSilences); err != nil {
+			return fmt.Errorf("failed to add notification.send event for event=%s notification=%s", event.Name, id)
 		}
+	}
 
-		if !n.HasRecipients() {
-			continue
-		}
+	return nil
+}
 
-		// This gets unset by the database trigger: reset_notification_error_before_update_trigger
-		if n.Error != nil {
-			// A notification that currently has errors is skipped.
+func addNotificationEvent(ctx context.Context, id string, celEnv map[string]any, event models.Event, matchingSilences int64) error {
+	n, err := GetNotification(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to get notification %s: %w", id, err)
+	}
+
+	if !n.HasRecipients() {
+		return nil
+	}
+
+	// This gets unset by the database trigger: reset_notification_error_before_update_trigger
+	if n.Error != nil {
+		// A notification that currently has errors is skipped.
+		return nil
+	}
+
+	if valid, err := expression.Eval(n.Filter, celEnv, allEnvVars); err != nil {
+		// On invalid spec error, we store the error on the notification itself and exit out.
+		logs.IfError(db.UpdateNotificationError(ctx, id, err.Error()), "failed to update notification")
+		return nil
+	} else if !valid {
+		return nil
+	}
+
+	payloads, err := CreateNotificationSendPayloads(ctx, event, n, celEnv)
+	if err != nil {
+		return fmt.Errorf("failed to create notification.send payloads: %w", err)
+	}
+
+	rateLimiter, err := getOrCreateRateLimiter(ctx, id)
+	if err != nil {
+		return fmt.Errorf("failed to create rate limiter: %w", err)
+	}
+
+	passesRepeatInterval, err := checkRepeatInterval(ctx, *n, event)
+	if err != nil {
+		// If there are any errors in calculating interval, we send the notification and log the error
+		ctx.Errorf("error checking repeat interval for notification[%s]: %v", n.ID, err)
+		passesRepeatInterval = true
+	}
+
+	for _, payload := range payloads {
+		if matchingSilences > 0 {
+			ctx.Logger.V(6).Infof("silencing notification for event %s due to %d matching silences", event.ID, matchingSilences)
+			ctx.Counter("notification_silenced", "id", id, "resource", payload.ID.String()).Add(1)
+
+			history := models.NotificationSendHistory{
+				NotificationID: n.ID,
+				ResourceID:     payload.ID,
+				SourceEvent:    event.Name,
+				Status:         models.NotificationStatusSilenced,
+			}
+			if err := db.SaveUnsentNotificationToHistory(ctx, history, time.Minute); err != nil {
+				return fmt.Errorf("failed to save silenced notification history: %w", err)
+			}
+
 			continue
 		}
 
 		// Repeat interval check
-		if n.RepeatInterval != "" {
-			allow, err := checkRepeatInterval(ctx, *n, event)
-			// If there are any errors in calculating interval, we send the notification
-			// and log the error
-			if err != nil {
-				ctx.Errorf("error checking repeat interval for notification[%s]: %v", n.ID, err)
-			} else if !allow {
-				ctx.Tracef("skipping notification[%s] due to repeat interval", n.ID)
-				continue
-			}
-		}
+		if n.RepeatInterval != "" && !passesRepeatInterval {
+			ctx.Logger.V(6).Infof("skipping notification[%s] due to repeat interval", n.ID)
+			ctx.Counter("notification_skipped_by_repeat_interval", "id", id, "resource", payload.ID.String(), "source_event", event.Name).Add(1)
 
-		if valid, err := expression.Eval(n.Filter, celEnv, allEnvVars); err != nil {
-			logs.IfError(db.UpdateNotificationError(ctx, id, err.Error()), "failed to update notification")
-			continue
-		} else if !valid {
+			history := models.NotificationSendHistory{
+				NotificationID: n.ID,
+				ResourceID:     payload.ID,
+				SourceEvent:    event.Name,
+				Status:         models.NotificationStatusRepeatInterval,
+			}
+			if err := db.SaveUnsentNotificationToHistory(ctx, history, time.Minute); err != nil {
+				return fmt.Errorf("failed to save silenced notification history: %w", err)
+			}
+
 			continue
 		}
 
-		payloads, err := CreateNotificationSendPayloads(ctx, event, n, celEnv)
-		if err != nil {
-			return err
+		if !rateLimiter.Allow() {
+			// rate limited notifications are simply dropped.
+			ctx.Warnf("notification rate limited event=%s id=%s ", event.Name, id)
+			ctx.Counter("notification_rate_limited", "id", id).Add(1)
+			continue
 		}
 
-		rateLimiter, err := getOrCreateRateLimiter(ctx, id)
-		if err != nil {
-			return fmt.Errorf("failed to create rate limiter: %w", err)
+		newEvent := api.Event{
+			Name:       api.EventNotificationSend,
+			Properties: payload.AsMap(),
 		}
-
-		for _, payload := range payloads {
-			if !rateLimiter.Allow() {
-				// rate limited notifications are simply dropped.
-				ctx.Warnf("notification rate limited event=%s id=%s ", event.Name, id)
-				ctx.Counter("notification_rate_limited", "id", id).Add(1)
-				continue
-			}
-
-			if matchingSilences > 0 {
-				ctx.Logger.V(6).Infof("silencing notification for event %s due to %d matching silences", event.ID, matchingSilences)
-
-				if err := ctx.DB().Create(&models.NotificationSendHistory{
-					NotificationID: n.ID,
-					ResourceID:     payload.ID,
-					SourceEvent:    event.Name,
-					Status:         "silenced",
-				}).Error; err != nil {
-					return fmt.Errorf("failed to save silenced notification history: %w", err)
-				}
-
-				return nil
-			}
-
-			newEvent := api.Event{
-				Name:       api.EventNotificationSend,
-				Properties: payload.AsMap(),
-			}
-
-			if err := ctx.DB().Clauses(events.EventQueueOnConflictClause).Create(&newEvent).Error; err != nil {
-				return fmt.Errorf("failed to saved `notification.send` event for payload (%v): %w", payload.AsMap(), err)
-			}
+		if err := ctx.DB().Clauses(events.EventQueueOnConflictClause).Create(&newEvent).Error; err != nil {
+			return fmt.Errorf("failed to saved `notification.send` event for payload (%v): %w", payload.AsMap(), err)
 		}
 	}
 

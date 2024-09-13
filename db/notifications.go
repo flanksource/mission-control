@@ -165,3 +165,13 @@ func GetMatchingNotificationSilencesCount(ctx context.Context, resources models.
 
 	return count, nil
 }
+
+func SaveUnsentNotificationToHistory(ctx context.Context, sendHistory models.NotificationSendHistory, window time.Duration) error {
+	return ctx.DB().Exec("SELECT * FROM insert_unsent_notification_to_history(?, ?, ?, ?, ?)",
+		sendHistory.NotificationID,
+		sendHistory.SourceEvent,
+		sendHistory.ResourceID,
+		sendHistory.Status,
+		window,
+	).Error
+}
