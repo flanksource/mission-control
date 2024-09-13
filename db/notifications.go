@@ -28,6 +28,8 @@ func PersistNotificationFromCRD(ctx context.Context, obj *v1.Notification) error
 
 	dbObj := models.Notification{
 		ID:             uid,
+		Name:           obj.ObjectMeta.Name,
+		Namespace:      obj.ObjectMeta.Namespace,
 		Events:         obj.Spec.Events,
 		Title:          obj.Spec.Title,
 		Template:       obj.Spec.Template,
