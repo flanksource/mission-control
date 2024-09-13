@@ -38,7 +38,7 @@ func (t *Context) EndLog() error {
 }
 
 func (t *Context) WithMessage(message string) {
-	t.log.Body = message
+	t.log.Body = &message
 }
 
 func (t *Context) WithRecipientType(recipientType RecipientType) {

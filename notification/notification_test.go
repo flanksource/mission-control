@@ -205,7 +205,10 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 
 			// Check send history
 			var sentHistoryCount int64
-			err = DefaultContext.DB().Model(&models.NotificationSendHistory{}).Where("notification_id = ?", n.ID).Count(&sentHistoryCount).Error
+			err = DefaultContext.DB().Model(&models.NotificationSendHistory{}).
+				Where("notification_id = ?", n.ID).
+				Where("status = ?", models.NotificationStatusRepeatInterval).
+				Count(&sentHistoryCount).Error
 			Expect(err).To(BeNil())
 			Expect(sentHistoryCount).To(Equal(int64(1)))
 		})
