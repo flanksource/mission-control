@@ -144,7 +144,9 @@ func getActionSpec(ctx context.Context, actionData models.PlaybookActionAgentDat
 	}
 
 	if actionSpec.TemplatesOn == runner.Agent {
-		if err := runner.TemplateAction(ctx, &models.PlaybookRun{ID: actionData.RunID, PlaybookID: actionData.PlaybookID}, run, &actionSpec, templateEnv); err != nil {
+		templateEnv.Run = models.PlaybookRun{ID: actionData.RunID, PlaybookID: actionData.PlaybookID}
+		templateEnv.Action = *run
+		if err := runner.TemplateAction(ctx, &actionSpec, templateEnv); err != nil {
 			return nil, oops.With(models.ErrorContext(&actionData, run)...).Wrap(err)
 		}
 	}

@@ -3,6 +3,7 @@ package runner
 import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/incident-commander/playbook/actions"
 	"github.com/google/cel-go/cel"
 	"github.com/google/cel-go/common/types"
 	"github.com/google/cel-go/common/types/ref"
@@ -18,7 +19,7 @@ const (
 	actionFilterTimeout = "timeout"
 )
 
-func getActionCelEnvs(ctx context.Context, run *models.PlaybookRun, action *models.PlaybookRunAction) []cel.EnvOption {
+func getActionCelEnvs(ctx context.Context, env actions.TemplateEnv) []cel.EnvOption {
 	return []cel.EnvOption{
 
 		cel.Function("success",
@@ -28,7 +29,7 @@ func getActionCelEnvs(ctx context.Context, run *models.PlaybookRun, action *mode
 				cel.FunctionBinding(func(args ...ref.Val) ref.Val {
 					var statuses []models.PlaybookActionStatus
 					err := ctx.DB().Select("status").Model(&models.PlaybookRunAction{}).
-						Where("playbook_run_id = ?", run.ID).Find(&statuses).Error
+						Where("playbook_run_id = ?", env.Run.ID).Find(&statuses).Error
 					if err != nil {
 						return types.WrapErr(err)
 					}
@@ -57,7 +58,7 @@ func getActionCelEnvs(ctx context.Context, run *models.PlaybookRun, action *mode
 				cel.FunctionBinding(func(args ...ref.Val) ref.Val {
 					var statuses []models.PlaybookActionStatus
 					err := ctx.DB().Select("status").Model(&models.PlaybookRunAction{}).
-						Where("playbook_run_id = ?", run.ID).Find(&statuses).Error
+						Where("playbook_run_id = ?", env.Run.ID).Find(&statuses).Error
 					if err != nil {
 						return types.WrapErr(err)
 					}
@@ -83,7 +84,7 @@ func getActionCelEnvs(ctx context.Context, run *models.PlaybookRun, action *mode
 				[]*cel.Type{},
 				cel.MapType(cel.StringType, cel.DynType),
 				cel.FunctionBinding(func(value ...ref.Val) ref.Val {
-					r, err := GetLastAction(ctx, run.ID.String(), action.ID.String())
+					r, err := GetLastAction(ctx, env.Run.ID.String(), env.Action.ID.String())
 					if err != nil {
 						return types.WrapErr(err)
 					}
@@ -97,7 +98,7 @@ func getActionCelEnvs(ctx context.Context, run *models.PlaybookRun, action *mode
 				[]*cel.Type{cel.StringType},
 				cel.MapType(cel.StringType, cel.DynType),
 				cel.UnaryBinding(func(value ref.Val) ref.Val {
-					r, err := GetActionByName(ctx, run.ID.String(), value.Value().(string))
+					r, err := GetActionByName(ctx, env.Run.ID.String(), value.Value().(string))
 					if err != nil {
 						return types.WrapErr(err)
 					}

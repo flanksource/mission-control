@@ -289,20 +289,13 @@ func TemplateAndExecuteAction(ctx context.Context, spec v1.Playbook, playbook *m
 
 	oops := ctx.Oops().Hint(templateEnv.String())
 
-	for _, e := range spec.Spec.Env {
-		val, err := ctx.GetEnvValueFromCache(e, ctx.GetNamespace())
-		if err != nil {
-			return ctx.Oops("env").Wrapf(err, "failed to get %s", e.Name)
-		} else {
-			templateEnv.Env[e.Name] = val
-		}
-	}
+	ctx.Logger.V(7).Infof("Using env: %s", logger.Pretty(templateEnv.Env))
 
-	if err := templateActionExpressions(ctx, run, action, &step, templateEnv); err != nil {
+	if err := templateActionExpressions(ctx, &step, templateEnv); err != nil {
 		return oops.Wrapf(err, "failed to template expressions")
 	}
 
-	if err := TemplateAction(ctx, run, action, &step, templateEnv); err != nil {
+	if err := TemplateAction(ctx, &step, templateEnv); err != nil {
 		return oops.Wrapf(err, "failed to template action")
 	}
 

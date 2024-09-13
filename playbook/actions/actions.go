@@ -48,14 +48,15 @@ func NewWebhookRequest(c echo.Context) (*WebhookRequest, error) {
 
 // TemplateEnv defines the config and component passed to a playbook run action.
 type TemplateEnv struct {
-	Config    *models.ConfigItem `json:"config,omitempty"`
-	Component *models.Component  `json:"component,omitempty"`
-	Check     *models.Check      `json:"check,omitempty"`
-	Playbook  models.Playbook    `json:"playbook"`
-	Run       models.PlaybookRun `json:"run"`
-	Params    map[string]any     `json:"params,omitempty"`
-	Request   types.JSONMap      `json:"request"`
-	Env       map[string]any     `json:"env,omitempty"`
+	Config    *models.ConfigItem       `json:"config,omitempty"`
+	Component *models.Component        `json:"component,omitempty"`
+	Check     *models.Check            `json:"check,omitempty"`
+	Playbook  models.Playbook          `json:"playbook"`
+	Run       models.PlaybookRun       `json:"run"`
+	Action    models.PlaybookRunAction `json:"action"`
+	Params    map[string]any           `json:"params,omitempty"`
+	Request   types.JSONMap            `json:"request,omitempty"`
+	Env       map[string]any           `json:"env,omitempty"`
 
 	// User is the user who triggered the playbook run
 	User *models.Person `json:"user,omitempty"`
@@ -72,6 +73,7 @@ func (t *TemplateEnv) AsMap() map[string]any {
 		"user":      nil,
 		"env":       t.Env,
 		"params":    t.Params,
+		"action":    t.Action.AsMap(),
 		"playbook":  t.Playbook.AsMap(),
 		"run":       t.Run.AsMap(),
 		"request":   t.Request,
@@ -95,6 +97,10 @@ func (t *TemplateEnv) AsMap() map[string]any {
 	}
 
 	return m
+}
+
+func (t *TemplateEnv) GetContext() map[string]any {
+	return t.AsMap()
 }
 
 func (t *TemplateEnv) String() string {

@@ -105,43 +105,64 @@ func CreateTemplateEnv(ctx context.Context, playbook *models.Playbook, run *mode
 		}
 	}
 
-	// isParamRenderCall is true when we are crafting the template env
-	// just to render the parameters.
-	// i.e. for a dummy run.
-	isParamRenderCall := run.ID == uuid.Nil
+	// We are just crafting the template for param rendering
+	if run.ID == uuid.Nil {
+		return templateEnv, nil
+	}
 
-	if !isParamRenderCall {
-		if gitOpsEnvVar, err := getGitOpsTemplateVars(ctx, *run, spec.Actions); err != nil {
-			return templateEnv, oops.Wrapf(err, "failed to get gitops vars")
-		} else if gitOpsEnvVar != nil {
-			templateEnv.Env = collections.MergeMap(templateEnv.Env, gitOpsEnvVar.AsMap())
+	var gitOpsEnvVar *GitOpsEnv
+	var err error
+	if gitOpsEnvVar, err = getGitOpsTemplateVars(ctx, *run, spec.Actions); err != nil {
+		return templateEnv, oops.Wrapf(err, "failed to get gitops vars")
+	}
+
+	if gitOpsEnvVar != nil {
+		templateEnv.Env = collections.MergeMap(templateEnv.Env, gitOpsEnvVar.AsMap())
+	}
+
+	env := make(map[string]any)
+	for _, e := range spec.Env {
+		val, err := ctx.GetEnvValueFromCache(e, ctx.GetNamespace())
+		if err != nil {
+			return templateEnv, ctx.Oops("env").Wrapf(err, "failed to get env[%s]", e.Name)
+		} else {
+			env[e.Name] = val
+
+			val, err := ctx.RunTemplate(gomplate.Template{
+				Template:  val,
+				Functions: getGomplateFuncs(ctx, templateEnv),
+			}, templateEnv.AsMap())
+			if err != nil {
+				return templateEnv, ctx.Oops().Wrap(err)
+			}
+			env[e.Name] = val
 		}
 	}
 
+	templateEnv.Env = collections.MergeMap(templateEnv.Env, env)
 	return templateEnv, nil
 }
 
 // templateAction templates all the cel-expressions in the action
-func templateActionExpressions(ctx context.Context, run *models.PlaybookRun, runAction *models.PlaybookRunAction, actionSpec *v1.PlaybookAction, env actions.TemplateEnv) error {
+func templateActionExpressions(ctx context.Context, actionSpec *v1.PlaybookAction, env actions.TemplateEnv) error {
 	if actionSpec.Filter != "" {
 		gomplateTemplate := gomplate.Template{
 			Expression: actionSpec.Filter,
-			CelEnvs:    getActionCelEnvs(ctx, run, runAction),
+			CelEnvs:    getActionCelEnvs(ctx, env),
 		}
 		var err error
 		if actionSpec.Filter, err = ctx.RunTemplate(gomplateTemplate, env.AsMap()); err != nil {
-			return oops.With(models.ErrorContext(run, runAction)...).Wrapf(err, "failed to parse action filter (%s)", actionSpec.Filter)
+			return ctx.WithObject(env).Oops().Wrapf(err, "failed to parse action filter (%s)", actionSpec.Filter)
 		}
 	}
 
 	return nil
 }
 
-// TemplateAction all the go templates in the action
-func TemplateAction(ctx context.Context, run *models.PlaybookRun, runAction *models.PlaybookRunAction, actionSpec *v1.PlaybookAction, env actions.TemplateEnv) error {
-	templateFuncs := map[string]any{
+func getGomplateFuncs(ctx context.Context, env actions.TemplateEnv) map[string]any {
+	return map[string]any{
 		"getLastAction": func() any {
-			r, err := GetLastAction(ctx, run.ID.String(), runAction.ID.String())
+			r, err := GetLastAction(ctx, env.Run.ID.String(), env.Action.ID.String())
 			if err != nil {
 				ctx.Errorf("failed to get last action: %v", err)
 				return ""
@@ -150,7 +171,7 @@ func TemplateAction(ctx context.Context, run *models.PlaybookRun, runAction *mod
 			return r
 		},
 		"getAction": func(actionName string) any {
-			r, err := GetActionByName(ctx, run.ID.String(), actionName)
+			r, err := GetActionByName(ctx, env.Run.ID.String(), actionName)
 			if err != nil {
 				ctx.Errorf("failed to get action(%s) %v", actionName, err)
 				return ""
@@ -159,6 +180,16 @@ func TemplateAction(ctx context.Context, run *models.PlaybookRun, runAction *mod
 			return r
 		},
 	}
-	templater := ctx.NewStructTemplater(env.AsMap(), "template", templateFuncs)
+}
+
+// TemplateAction all the go templates in the action
+func TemplateEnv(ctx context.Context, env actions.TemplateEnv, template string) (string, error) {
+	return ctx.RunTemplate(gomplate.Template{Template: template, Functions: getGomplateFuncs(ctx, env)}, env.AsMap())
+
+}
+
+// TemplateAction all the go templates in the action
+func TemplateAction(ctx context.Context, actionSpec *v1.PlaybookAction, env actions.TemplateEnv) error {
+	templater := ctx.NewStructTemplater(env.AsMap(), "template", getGomplateFuncs(ctx, env))
 	return templater.Walk(&actionSpec)
 }
