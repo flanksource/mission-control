@@ -12,7 +12,34 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/google/uuid"
+	"github.com/samber/lo"
+	"gorm.io/gorm"
 )
+
+func PersistNotificationSilenceFromCRD(ctx context.Context, obj *v1.NotificationSilence) error {
+	uid, err := uuid.Parse(string(obj.GetUID()))
+	if err != nil {
+		return err
+	}
+
+	dbObj := models.NotificationSilence{
+		ID:        uid,
+		Namespace: obj.Namespace,
+		From:      obj.Spec.From.Time,
+		Until:     obj.Spec.Until.Time,
+		Source:    models.SourceCRD,
+	}
+
+	if obj.Spec.Matcher != nil {
+		dbObj.Matcher = lo.ToPtr(string(*obj.Spec.Matcher))
+	}
+
+	return ctx.DB().Save(&dbObj).Error
+}
+
+func DeleteNotificationSilence(ctx context.Context, id string) error {
+	return ctx.DB().Model(&models.NotificationSilence{}).Where("id = ?", id).UpdateColumn("deleted_at", gorm.Expr("NOW()")).Error
+}
 
 func PersistNotificationFromCRD(ctx context.Context, obj *v1.Notification) error {
 	uid, err := uuid.Parse(string(obj.GetUID()))

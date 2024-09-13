@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -14,6 +15,7 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
+	"github.com/flanksource/gomplate/v3"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/events"
@@ -108,6 +110,36 @@ func checkRepeatInterval(ctx context.Context, n NotificationWithSpec, event mode
 	return !exists, nil
 }
 
+func shouldSilence(silences []models.NotificationSilence, celEnv map[string]any) (bool, error) {
+	now := time.Now()
+	for _, silence := range silences {
+		withinSilencePeriod := now.After(silence.From) && now.Before(silence.Until)
+		if !withinSilencePeriod {
+			continue
+		}
+
+		matcherMatched := true
+		if silence.Matcher != nil && *silence.Matcher != "" {
+			res, err := gomplate.RunTemplate(celEnv, gomplate.Template{Expression: *silence.Matcher})
+			if err != nil {
+				return false, err
+			}
+
+			if parsed, err := strconv.ParseBool(res); err != nil {
+				return false, fmt.Errorf("expected matcher %s to return a boolean value but got %s", *silence.Matcher, res)
+			} else if parsed {
+				matcherMatched = false
+			}
+		}
+
+		if matcherMatched {
+			return true, nil
+		}
+	}
+
+	return false, nil
+}
+
 // addNotificationEvent responds to a event that can possibly generate a notification.
 // If a notification is found for the given event and passes all the filters, then
 // a new `notification.send` event is created.
@@ -161,6 +193,18 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 			logs.IfError(db.UpdateNotificationError(ctx, id, err.Error()), "failed to update notification")
 			continue
 		} else if !valid {
+			continue
+		}
+
+		silences, err := query.GetAllNotificationSilences(ctx)
+		if err != nil {
+			return err
+		}
+
+		if s, err := shouldSilence(silences, celEnv); err != nil {
+			return err
+		} else if s {
+			// TODO: Save in notification send history as silenced
 			continue
 		}
 
