@@ -131,8 +131,8 @@ func tableUpdatesHandler(ctx context.Context) {
 	notifyRouter := pg.NewNotifyRouter()
 	go notifyRouter.Run(ctx, "table_activity")
 
-	notificationUpdateCh := notifyRouter.RegisterRoutes("notifications")
-	teamsUpdateChan := notifyRouter.RegisterRoutes("teams")
+	notificationUpdateCh := notifyRouter.GetOrCreateChannel("notifications")
+	teamsUpdateChan := notifyRouter.GetOrCreateChannel("teams")
 
 	for {
 		select {

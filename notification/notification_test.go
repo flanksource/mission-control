@@ -87,6 +87,7 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 		ginkgo.It("should create a new notification", func() {
 			notif := models.Notification{
 				ID:       uuid.New(),
+				Name:     "test-notif-1",
 				Events:   pq.StringArray([]string{"incident.created"}),
 				Template: "Severity: {{.incident.severity}}",
 				TeamID:   &team.ID,
@@ -143,6 +144,7 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 
 			n = models.Notification{
 				ID:             uuid.New(),
+				Name:           "test-notif-2",
 				Events:         pq.StringArray([]string{"config.updated"}),
 				Source:         models.SourceCRD,
 				Title:          "Dummy",

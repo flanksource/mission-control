@@ -87,7 +87,7 @@ func StartConsumers(ctx context.Context) {
 		if ec, err := consumer.EventConsumer(); err != nil {
 			log.Fatalf("failed to create event consumer: %s", err)
 		} else {
-			pgsyncNotifyChannel := notifyRouter.RegisterRoutes(event)
+			pgsyncNotifyChannel := notifyRouter.GetOrCreateChannel(event)
 			consumers = append(consumers, ec)
 			go ec.Listen(ctx, pgsyncNotifyChannel)
 		}
@@ -124,7 +124,7 @@ func StartConsumers(ctx context.Context) {
 			if ec, err := consumer.EventConsumer(); err != nil {
 				log.Fatalf("failed to create event consumer: %s", err)
 			} else {
-				pgasyncNotifyChannel := notifyRouter.RegisterRoutes(event)
+				pgasyncNotifyChannel := notifyRouter.GetOrCreateChannel(event)
 				consumers = append(consumers, ec)
 				go ec.Listen(ctx, pgasyncNotifyChannel)
 			}
