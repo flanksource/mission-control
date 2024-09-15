@@ -141,8 +141,9 @@ var Run = &cobra.Command{
 		ctx = ctx.WithNamespace(lo.CoalesceOrEmpty(p.Namespace, api.Namespace))
 
 		var action *v1.PlaybookAction
+		var step *models.PlaybookRunAction
 
-		action, err = runner.GetNextActionToRun(ctx, *p, *run)
+		action, step, err = runner.GetNextActionToRun(ctx, *p, *run)
 		if err != nil {
 			logger.Fatalf(err.Error())
 			return
@@ -154,7 +155,7 @@ var Run = &cobra.Command{
 
 		for action != nil {
 
-			if delayed, err := runner.CheckDelay(ctx, *p, *run, action); err != nil {
+			if delayed, err := runner.CheckDelay(ctx, *p, *run, action, step); err != nil {
 				ctx.Errorf("Error running action %s: %v", action.Name, err)
 				break
 			} else if delayed {
@@ -173,7 +174,7 @@ var Run = &cobra.Command{
 				break
 			}
 
-			action, err = runner.GetNextActionToRun(ctx, *p, *run)
+			action, _, err = runner.GetNextActionToRun(ctx, *p, *run)
 
 			if action != nil && action.Name == runAction.Name {
 				ctx.Errorf("%v", ctx.Oops().Errorf("Action cycle detected for: %s", action.Name))
