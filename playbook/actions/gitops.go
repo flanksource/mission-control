@@ -222,7 +222,7 @@ func (t *GitOps) applyPatches(ctx context.Context, action v1.GitOpsAction) error
 				return ctx.Oops().Wrap(err)
 			}
 
-			if _, err := os.Stat(relativePath); os.IsNotExist(err) {
+			if _, err := os.Stat(path); os.IsNotExist(err) {
 				return ctx.Oops().Errorf("%s does not exist", relativePath)
 			}
 			t.log("Patching %s", relativePath)

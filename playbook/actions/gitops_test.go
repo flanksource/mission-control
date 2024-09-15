@@ -27,7 +27,7 @@ var _ = ginkgo.Describe("Playbook Action Gitops", ginkgo.Label("slow"), ginkgo.O
 
 	ginkgo.It("should create a new git repository", func() {
 		err := gitServer.InitRepo("testdata/dummy-repo", "main", "dummy-repo")
-		Expect(err).NotTo(HaveOccurred())
+		Expect(err).To(BeNil())
 	})
 
 	ginkgo.It("should run the GitOps action", func() {
@@ -59,6 +59,7 @@ var _ = ginkgo.Describe("Playbook Action Gitops", ginkgo.Label("slow"), ginkgo.O
 		ctx := context.Context{
 			Context: commons.NewContext(gocontext.TODO()),
 		}
+		ctx.Context.Logger.SetLogLevel("trace2")
 
 		env = TemplateEnv{
 			Params: map[string]any{
@@ -68,11 +69,11 @@ var _ = ginkgo.Describe("Playbook Action Gitops", ginkgo.Label("slow"), ginkgo.O
 
 		templater := ctx.NewStructTemplater(env.AsMap(), "template", nil)
 		err := templater.Walk(&spec)
-		Expect(err).ToNot(HaveOccurred())
+		Expect(err).To(BeNil())
 
 		var runner = GitOps{Context: ctx}
 		res, err := runner.Run(ctx, spec)
-		Expect(err).ToNot(HaveOccurred())
+		Expect(err).To(BeNil())
 		Expect(len(res.Links)).To(BeZero())
 
 		logger.Infof("Runner response: %#v", res)
@@ -90,11 +91,11 @@ var _ = ginkgo.Describe("Playbook Action Gitops", ginkgo.Label("slow"), ginkgo.O
 				Base:       fmt.Sprintf("playbook-%s", env.Params["namespace"]),
 				Branch:     fmt.Sprintf("playbook-%s", env.Params["namespace"]),
 			})
-			Expect(err).NotTo(HaveOccurred(), "could not clone from remote")
+			Expect(err).To(BeNil())
 			logger.Infof("Cloned fresh repo to %s", workTree.Filesystem.Root())
 
 			entries, err := os.ReadDir(workTree.Filesystem.Root())
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).To(BeNil())
 			for _, e := range entries {
 				logger.Infof("Entry: %s", e.Name())
 			}
@@ -103,14 +104,14 @@ var _ = ginkgo.Describe("Playbook Action Gitops", ginkgo.Label("slow"), ginkgo.O
 		// ensure the the patch was applied
 		{
 			txtFile, err := workTree.Filesystem.Open("notification.yaml")
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).To(BeNil())
 
 			content, err := io.ReadAll(txtFile)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).To(BeNil())
 
 			var yamlContent map[string]any
 			err = yaml.Unmarshal(content, &yamlContent)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).To(BeNil())
 
 			metadata, ok := yamlContent["metadata"].(map[string]any)
 			Expect(ok).To(BeTrue())
@@ -121,10 +122,10 @@ var _ = ginkgo.Describe("Playbook Action Gitops", ginkgo.Label("slow"), ginkgo.O
 		// ensure the new file was created
 		{
 			txtFile, err := workTree.Filesystem.Open(fmt.Sprintf("%s.txt", env.Params["namespace"]))
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).To(BeNil())
 
 			txtContent, err := io.ReadAll(txtFile)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(err).To(BeNil())
 
 			Expect(string(txtContent)).To(Equal(spec.Files[0].Content), "should have created the new file")
 		}
