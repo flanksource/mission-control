@@ -121,7 +121,7 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 		run.Request = whrMap
 	}
 
-	templateEnv, err := runner.CreateTemplateEnv(ctx, playbook, &run)
+	templateEnv, err := runner.CreateTemplateEnv(ctx, playbook, &run, nil)
 	if err != nil {
 		return nil, ctx.Oops().Wrap(err)
 	}

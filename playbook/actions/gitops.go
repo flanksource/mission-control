@@ -16,6 +16,7 @@ import (
 	"github.com/flanksource/incident-commander/pkg/clients/git"
 	"github.com/flanksource/incident-commander/pkg/clients/git/connectors"
 	gitv5 "github.com/go-git/go-git/v5"
+	"github.com/samber/lo"
 	"github.com/samber/oops"
 )
 
@@ -220,30 +221,51 @@ func (t *GitOps) applyPatches(ctx context.Context, action v1.GitOpsAction) error
 			if err != nil {
 				return ctx.Oops().Wrap(err)
 			}
+
+			if _, err := os.Stat(path); os.IsNotExist(err) {
+				return ctx.Oops().Errorf("%s does not exist", relativePath)
+			}
 			t.log("Patching %s", relativePath)
 
 			if patch.YQ != "" {
 				cmd := exec.Command("yq", "eval", "-i", patch.YQ, path)
-				if res, err := runCmd(ctx, cmd); err != nil {
+				res, err := runCmd(ctx, cmd)
+
+				if err != nil {
 					return err
-				} else if res.Error != nil {
-					return res.Error
-				} else if res.Stdout != "" {
+				}
+				if res.ExitCode != 0 {
+					return ctx.Oops().
+						With("path", relativePath, "yq", patch.YQ).
+						Errorf("yq: " + lo.CoalesceOrEmpty(res.Stderr, res.Stdout, fmt.Sprintf("exit code %d ", res.ExitCode)))
+				}
+				if res != nil && res.Stderr != "" {
+					t.log(res.Stderr)
+				}
+				if res != nil && res.Stdout != "" {
 					t.log(res.Stdout)
 				}
 
 				if _, err := t.workTree.Add(relativePath); err != nil {
 					return err
 				}
-			}
-
-			if patch.JQ != "" {
+			} else if patch.JQ != "" {
 				cmd := exec.Command("jq", patch.JQ, path)
-				if res, err := runCmd(ctx, cmd); err != nil {
+				res, err := runCmd(ctx, cmd)
+
+				if err != nil {
 					return err
-				} else if res.Error != nil {
-					return res.Error
-				} else if res.Stdout != "" {
+				}
+				if res.ExitCode != 0 {
+					return ctx.Oops().
+						With("path", relativePath, "jq", patch.JQ).
+						Errorf("jq: " + lo.CoalesceOrEmpty(res.Stderr, res.Stdout, fmt.Sprintf("exit code %d ", res.ExitCode)))
+				}
+
+				if res != nil && res.Stderr != "" {
+					t.log(res.Stderr)
+				}
+				if res != nil && res.Stdout != "" {
 					t.log(res.Stdout)
 				}
 
