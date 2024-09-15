@@ -15,10 +15,11 @@ import (
 	"github.com/samber/oops"
 )
 
-func CreateTemplateEnv(ctx context.Context, playbook *models.Playbook, run *models.PlaybookRun) (actions.TemplateEnv, error) {
+func CreateTemplateEnv(ctx context.Context, playbook *models.Playbook, run *models.PlaybookRun, action *models.PlaybookRunAction) (actions.TemplateEnv, error) {
 	templateEnv := actions.TemplateEnv{
 		Params:   make(map[string]any, len(run.Parameters)),
 		Run:      *run,
+		Action:   action,
 		Playbook: *playbook,
 		Request:  run.Request,
 		Env:      make(map[string]any),
@@ -152,7 +153,7 @@ func templateActionExpressions(ctx context.Context, actionSpec *v1.PlaybookActio
 		}
 		var err error
 		if actionSpec.Filter, err = ctx.RunTemplate(gomplateTemplate, env.AsMap()); err != nil {
-			return ctx.WithObject(env).Oops().Wrapf(err, "failed to parse action filter (%s)", actionSpec.Filter)
+			return err
 		}
 	}
 
@@ -162,10 +163,13 @@ func templateActionExpressions(ctx context.Context, actionSpec *v1.PlaybookActio
 func getGomplateFuncs(ctx context.Context, env actions.TemplateEnv) map[string]any {
 	return map[string]any{
 		"getLastAction": func() any {
+			if env.Action == nil {
+				return make(map[string]any)
+			}
 			r, err := GetLastAction(ctx, env.Run.ID.String(), env.Action.ID.String())
 			if err != nil {
 				ctx.Errorf("failed to get last action: %v", err)
-				return ""
+				return make(map[string]any)
 			}
 
 			return r
@@ -174,7 +178,7 @@ func getGomplateFuncs(ctx context.Context, env actions.TemplateEnv) map[string]a
 			r, err := GetActionByName(ctx, env.Run.ID.String(), actionName)
 			if err != nil {
 				ctx.Errorf("failed to get action(%s) %v", actionName, err)
-				return ""
+				return make(map[string]any)
 			}
 
 			return r

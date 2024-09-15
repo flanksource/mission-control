@@ -56,7 +56,7 @@ var _ = ginkgo.BeforeSuite(func() {
 		return "", false
 	})
 	DefaultContext = setup.BeforeSuiteFn()
-	DefaultContext.Logger.SetLogLevel(DefaultContext.Properties().Int("log.level", 0))
+	DefaultContext.Logger.SetLogLevel(DefaultContext.Properties().String("log.level", "info"))
 	DefaultContext.Infof(DefaultContext.String())
 
 	format.RegisterCustomFormatter(func(value interface{}) (string, bool) {

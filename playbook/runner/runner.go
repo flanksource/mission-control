@@ -30,18 +30,18 @@ const (
 	Agent = "agent"
 )
 
-func GetNextActionToRun(ctx context.Context, playbook models.Playbook, run models.PlaybookRun) (action *v1.PlaybookAction, err error) {
+func GetNextActionToRun(ctx context.Context, playbook models.Playbook, run models.PlaybookRun) (action *v1.PlaybookAction, lastAction *models.PlaybookRunAction, err error) {
 	ctx.Logger.V(3).Infof("Getting next action to run for playbook %s run %s", playbook.Name, run.ID)
 	ctx = ctx.WithObject(playbook, run)
 	if validationErr, err := openapi.ValidatePlaybookSpec(playbook.Spec); err != nil {
-		return nil, err
+		return nil, nil, err
 	} else if validationErr != nil {
-		return nil, validationErr
+		return nil, nil, validationErr
 	}
 
 	var playbookSpec v1.PlaybookSpec
 	if err := json.Unmarshal(playbook.Spec, &playbookSpec); err != nil {
-		return nil, ctx.Oops().Wrap(err)
+		return nil, nil, ctx.Oops().Wrap(err)
 	}
 
 	var lastRanAction models.PlaybookRunAction
@@ -51,31 +51,31 @@ func GetNextActionToRun(ctx context.Context, playbook models.Playbook, run model
 		Order("start_time DESC").
 		First(&lastRanAction).Error; err != nil {
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, ctx.Oops("db").Wrap(err)
+			return nil, nil, ctx.Oops("db").Wrap(err)
 		}
 	}
 
 	if lastRanAction.Name == "" { // Nothing has run yet
 		ctx.Logger.V(4).Infof("no previous action, running first action")
-		return &playbookSpec.Actions[0], nil
+		return &playbookSpec.Actions[0], nil, nil
 	}
 
 	for i, action := range playbookSpec.Actions {
 		if i == len(playbookSpec.Actions)-1 {
-			return nil, nil
+			return nil, nil, nil
 		}
 
 		if action.Name == lastRanAction.Name {
 			// If last action failed do not run more steps unless it has a filter
 			if lastRanAction.Status == models.PlaybookActionStatusFailed {
 				alwaysAction := findNextActionWithFilter(playbookSpec.Actions[i+1:])
-				return alwaysAction, nil
+				return alwaysAction, &lastRanAction, nil
 			}
-			return &playbookSpec.Actions[i+1], nil
+			return &playbookSpec.Actions[i+1], &lastRanAction, nil
 		}
 	}
 
-	return nil, ctx.Oops("db").Errorf("could not find action to run or complete")
+	return nil, nil, ctx.Oops("db").Errorf("could not find action to run or complete")
 }
 
 func findNextActionWithFilter(actions []v1.PlaybookAction) *v1.PlaybookAction {
@@ -118,11 +118,11 @@ func CheckPlaybookFilter(ctx context.Context, playbookSpec v1.PlaybookSpec, temp
 	return nil
 }
 
-func CheckDelay(ctx context.Context, playbook models.Playbook, run models.PlaybookRun, action *v1.PlaybookAction) (bool, error) {
+func CheckDelay(ctx context.Context, playbook models.Playbook, run models.PlaybookRun, action *v1.PlaybookAction, lastRan *models.PlaybookRunAction) (bool, error) {
 	// The delays on the action should be applied here & action consumers do not run the delay.
 	var delay time.Duration
 	if action.Delay != "" && run.Status != models.PlaybookRunStatusSleeping {
-		templateEnv, err := CreateTemplateEnv(ctx, &playbook, &run)
+		templateEnv, err := CreateTemplateEnv(ctx, &playbook, &run, lastRan)
 		if err != nil {
 			return false, ctx.Oops().Wrapf(err, "failed to template action")
 		}
@@ -154,7 +154,7 @@ func ScheduleRun(ctx context.Context, run models.PlaybookRun) error {
 
 	ctx = ctx.WithObject(playbook, run)
 
-	action, err := GetNextActionToRun(ctx, playbook, run)
+	action, lastRan, err := GetNextActionToRun(ctx, playbook, run)
 	if err != nil {
 		ctx.Tracef("Unable to get next action")
 		return ctx.Oops().Wrap(err)
@@ -165,7 +165,7 @@ func ScheduleRun(ctx context.Context, run models.PlaybookRun) error {
 
 	ctx = ctx.WithObject(playbook, action, run)
 
-	delayed, err := CheckDelay(ctx, playbook, run, action)
+	delayed, err := CheckDelay(ctx, playbook, run, action, lastRan)
 	if err != nil {
 		return err
 	} else if delayed {
@@ -282,9 +282,9 @@ func TemplateAndExecuteAction(ctx context.Context, spec v1.Playbook, playbook *m
 		return ctx.Oops().Errorf("action '%s' not found", action.Name)
 	}
 
-	templateEnv, err := CreateTemplateEnv(ctx, playbook, run)
+	templateEnv, err := CreateTemplateEnv(ctx, playbook, run, action)
 	if err != nil {
-		return ctx.Oops().Wrapf(err, "failed to create template env")
+		return err
 	}
 
 	oops := ctx.Oops().Hint(templateEnv.String())
@@ -292,11 +292,11 @@ func TemplateAndExecuteAction(ctx context.Context, spec v1.Playbook, playbook *m
 	ctx.Logger.V(7).Infof("Using env: %s", logger.Pretty(templateEnv.Env))
 
 	if err := templateActionExpressions(ctx, &step, templateEnv); err != nil {
-		return oops.Wrapf(err, "failed to template expressions")
+		return err
 	}
 
 	if err := TemplateAction(ctx, &step, templateEnv); err != nil {
-		return oops.Wrapf(err, "failed to template action")
+		return err
 	}
 
 	return oops.Wrap(ExecuteAndSaveAction(ctx, run.PlaybookID, action, step))

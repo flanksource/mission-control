@@ -84,6 +84,9 @@ func getActionCelEnvs(ctx context.Context, env actions.TemplateEnv) []cel.EnvOpt
 				[]*cel.Type{},
 				cel.MapType(cel.StringType, cel.DynType),
 				cel.FunctionBinding(func(value ...ref.Val) ref.Val {
+					if env.Action == nil {
+						return types.DefaultTypeAdapter.NativeToValue(make(map[string]any))
+					}
 					r, err := GetLastAction(ctx, env.Run.ID.String(), env.Action.ID.String())
 					if err != nil {
 						return types.WrapErr(err)
