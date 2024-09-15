@@ -73,12 +73,14 @@ func (t *TemplateEnv) AsMap() map[string]any {
 		"user":      nil,
 		"env":       t.Env,
 		"params":    t.Params,
-		"action":    t.Action.AsMap(),
 		"playbook":  t.Playbook.AsMap(),
 		"run":       t.Run.AsMap(),
 		"request":   t.Request,
 	}
 
+	if t.Action != nil {
+		m["agent"] = t.Action.AsMap()
+	}
 	if t.Agent != nil {
 		m["agent"] = t.Agent.AsMap()
 	}
