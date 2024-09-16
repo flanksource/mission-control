@@ -23,6 +23,134 @@ import (
 	_ "github.com/flanksource/incident-commander/upstream"
 )
 
+var _ = ginkgo.Describe("notification error handling on send", ginkgo.Ordered, func() {
+	var goodNotif models.Notification
+	var badNotif models.Notification
+	var deployment1 models.ConfigItem
+	var pod1 models.ConfigItem
+
+	ginkgo.BeforeAll(func() {
+		{
+			customReceiver := []api.NotificationConfig{
+				{
+					URL: fmt.Sprintf("generic+%s", webhookEndpoint),
+					Properties: map[string]string{
+						"disabletls": "yes",
+						"template":   "json",
+					},
+				},
+			}
+			customReceiverJson, err := json.Marshal(customReceiver)
+			Expect(err).To(BeNil())
+
+			goodNotif = models.Notification{
+				ID:             uuid.New(),
+				Name:           "test-notif-1",
+				Events:         pq.StringArray([]string{"config.updated"}),
+				Filter:         ".config.type == 'Kubernetes::Deployment'",
+				Source:         models.SourceCRD,
+				Title:          "Dummy",
+				Template:       "dummy",
+				CustomServices: types.JSON(customReceiverJson),
+			}
+
+			err = DefaultContext.DB().Create(&goodNotif).Error
+			Expect(err).To(BeNil())
+		}
+
+		{
+			badReceiver := []api.NotificationConfig{
+				{
+					URL: "generic+bad",
+					Properties: map[string]string{
+						"disabletls": "yes",
+						"template":   "json",
+					},
+				},
+			}
+			customReceiverJson, err := json.Marshal(badReceiver)
+			Expect(err).To(BeNil())
+
+			badNotif = models.Notification{
+				ID:             uuid.New(),
+				Name:           "test-notif-2",
+				Events:         pq.StringArray([]string{"config.updated"}),
+				Filter:         ".config.type == 'Kubernetes::Pod'",
+				Source:         models.SourceCRD,
+				Title:          "Dummy",
+				Template:       "dummy",
+				CustomServices: types.JSON(customReceiverJson),
+			}
+
+			err = DefaultContext.DB().Create(&badNotif).Error
+			Expect(err).To(BeNil())
+		}
+
+		{
+			deployment1 = models.ConfigItem{
+				ID:          uuid.New(),
+				Name:        lo.ToPtr("deployment-1"),
+				ConfigClass: models.ConfigClassDeployment,
+				Config:      lo.ToPtr(`{"replicas": 1}`),
+				Type:        lo.ToPtr("Kubernetes::Deployment"),
+			}
+
+			err := DefaultContext.DB().Create(&deployment1).Error
+			Expect(err).To(BeNil())
+		}
+
+		{
+			pod1 = models.ConfigItem{
+				ID:          uuid.New(),
+				Name:        lo.ToPtr("deployment-2"),
+				ConfigClass: models.ConfigClassDeployment,
+				Config:      lo.ToPtr(`{"replicas": 2}`),
+				Type:        lo.ToPtr("Kubernetes::Pod"),
+			}
+
+			err := DefaultContext.DB().Create(&pod1).Error
+			Expect(err).To(BeNil())
+		}
+	})
+
+	ginkgo.It("should have consumed all events", func() {
+		testEvents := []models.Event{
+			{
+				Name:       "config.updated",
+				Properties: types.JSONStringMap{"id": deployment1.ID.String()},
+			}, {
+				Name:       "config.updated",
+				Properties: types.JSONStringMap{"id": pod1.ID.String()},
+			},
+		}
+		err := DefaultContext.DB().Create(&testEvents).Error
+		Expect(err).To(BeNil())
+
+		events.ConsumeAll(DefaultContext)
+		Eventually(func() int64 {
+			var c int64
+			DefaultContext.DB().Model(&models.Event{}).Where("name = 'config.updated'").Count(&c)
+			return c
+		}, "10s", "200ms").Should(Equal(int64(0)))
+	})
+
+	ginkgo.It("one notification.send event with max attempt should be in the event_queue", func() {
+		Eventually(func() int {
+			var event models.Event
+			err := DefaultContext.DB().Where("name = 'notification.send'").First(&event).Error
+			Expect(err).To(BeNil())
+			return event.Attempts
+		}, "10s", "200ms").Should(Equal(4))
+	})
+
+	ginkgo.It("only one notification must have been sent", func() {
+		var sentHistoryCount int64
+		err := DefaultContext.DB().Model(&models.NotificationSendHistory{}).Where("notification_id = ?", goodNotif.ID).Count(&sentHistoryCount).Error
+		Expect(err).To(BeNil())
+		Expect(sentHistoryCount).To(Equal(int64(1)))
+	})
+})
+
 var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 	var _ = ginkgo.Describe("Notification on incident creation", ginkgo.Ordered, func() {
 		var (
