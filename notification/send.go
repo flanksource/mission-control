@@ -162,7 +162,12 @@ func SendNotification(ctx *Context, connectionName, shoutrrrURL string, celEnv m
 		if err := templater.Walk(&data); err != nil {
 			return "", fmt.Errorf("error templating notification: %w", err)
 		}
-		return "slack", SlackSend(ctx, connection.Password, connection.Username, data)
+
+		if err := SlackSend(ctx, connection.Password, connection.Username, data); err != nil {
+			return "", fmt.Errorf("failed to send message (%s) to slack: %w", data.Message, err)
+		}
+
+		return "slack", nil
 	}
 
 	service, err := shoutrrrSend(ctx, celEnv, shoutrrrURL, data)
