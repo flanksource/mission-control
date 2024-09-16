@@ -117,7 +117,7 @@ func shoutrrrSend(ctx *Context, celEnv map[string]any, shoutrrrURL string, data 
 	sendErrors := sender.Send(data.Message, params)
 	for _, err := range sendErrors {
 		if err != nil {
-			return "", fmt.Errorf("error publishing notification (msg=%s) (service=%s): %w", data.Message, service, err)
+			return "", ctx.Oops().Hint(data.Message).Wrapf(err, "error publishing notification (service=%s)", service)
 		}
 	}
 
