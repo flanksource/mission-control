@@ -86,6 +86,10 @@ type notificationHandler struct {
 
 // Check if notification can be sent in the interval based on group by, returns true if it can be sent
 func checkRepeatInterval(ctx context.Context, n NotificationWithSpec, event models.Event) (bool, error) {
+	if n.RepeatInterval == "" {
+		return true, nil
+	}
+
 	interval, err := text.ParseDuration(n.RepeatInterval)
 	if err != nil {
 		return false, fmt.Errorf("error parsing repeat interval[%s] to time.Duration: %w", n.RepeatInterval, err)
