@@ -368,6 +368,11 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 				Expect(err).To(BeNil())
 				return event.Attempts
 			}, "10s", "200ms").Should(Equal(4))
+
+			var event models.Event
+			err := DefaultContext.DB().Where("name = 'notification.send'").First(&event).Error
+			Expect(err).To(BeNil())
+			Expect(event.Priority).To(Equal(-4))
 		})
 
 		ginkgo.It("only one notification must have been sent", func() {
