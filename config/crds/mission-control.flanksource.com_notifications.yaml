@@ -91,6 +91,19 @@ spec:
                     description: Specify shoutrrr URL
                     type: string
                 type: object
+              waitFor:
+                description: |-
+                  WaitFor defines a duration to delay sending a health-based notification.
+                  After this period, the health status is reassessed to confirm it hasn't
+                  changed, helping prevent false alarms from transient issues.
+
+
+                  The delay allows time for self-recovery or temporary fluctuations to
+                  resolve, reducing unnecessary alerts.
+
+
+                  If specified, it should be a valid duration string (e.g., "5m", "1h").
+                type: string
             required:
             - events
             - to

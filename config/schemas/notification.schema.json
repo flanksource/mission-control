@@ -111,6 +111,9 @@
         },
         "to": {
           "$ref": "#/$defs/NotificationRecipientSpec"
+        },
+        "waitFor": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
