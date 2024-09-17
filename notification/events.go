@@ -264,7 +264,7 @@ func sendNotifications(ctx context.Context, events models.Events) models.Events 
 			if err := json.Unmarshal(payload.Properties, &originalEvent.Properties); err != nil {
 				e.SetError(err.Error())
 				failedEvents = append(failedEvents, e)
-				notificationContext.WithError(err.Error())
+				notificationContext.WithError(err)
 				continue
 			}
 		}
@@ -273,11 +273,11 @@ func sendNotifications(ctx context.Context, events models.Events) models.Events 
 		if err != nil {
 			e.SetError(err.Error())
 			failedEvents = append(failedEvents, e)
-			notificationContext.WithError(err.Error())
+			notificationContext.WithError(err)
 		} else if err := PrepareAndSendEventNotification(notificationContext, payload, celEnv); err != nil {
 			e.SetError(err.Error())
 			failedEvents = append(failedEvents, e)
-			notificationContext.WithError(err.Error())
+			notificationContext.WithError(err)
 		}
 
 		logs.IfError(notificationContext.EndLog(), "error persisting end of notification send history")

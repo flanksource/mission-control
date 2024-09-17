@@ -7,6 +7,13 @@ jobs:
     name: lint
     runs-on: ubuntu-latest
     steps:
+      - name: Clear up disk space
+        run: |
+          rm -rf /usr/share/dotnet
+          rm -rf /opt/ghc
+          rm -rf /usr/local/share/boost
+          rm -rf $AGENT_TOOLSDIRECTORY
+          rm -rf /opt/hostedtoolcache
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
       - name: Install Go
         uses: buildjet/setup-go@v5
