@@ -280,8 +280,9 @@ func sendNotifications(ctx context.Context, events models.Events) models.Events 
 		if e.Delay != nil {
 			// This was a delayed notification.
 			// We need to re-evaluate the health of the resource.
+			previousHealth := api.EventToHealth(originalEvent.Name)
 
-			health, err := celEnv.GetResourceHealth(ctx)
+			currentHealth, err := celEnv.GetResourceHealth(ctx)
 			if err != nil {
 				e.SetError(err.Error())
 				failedEvents = append(failedEvents, e)
@@ -289,8 +290,16 @@ func sendNotifications(ctx context.Context, events models.Events) models.Events 
 				continue
 			}
 
-			if health != api.EventToHealth(originalEvent.Name) {
-				ctx.Logger.V(6).Infof("resource health has changed since the original event")
+			notif, err := GetNotification(ctx, payload.NotificationID.String())
+			if err != nil {
+				e.SetError(err.Error())
+				failedEvents = append(failedEvents, e)
+				notificationContext.WithError(err)
+				continue
+			}
+
+			if !isHealthReportable(notif.Events, currentHealth, previousHealth) {
+				ctx.Logger.V(6).Infof("skipping notification[%s] as health change is not reportable", notif.ID)
 				continue
 			}
 		}
@@ -305,6 +314,24 @@ func sendNotifications(ctx context.Context, events models.Events) models.Events 
 	}
 
 	return failedEvents
+}
+
+func isHealthReportable(events []string, previousHealth, currentHealth models.Health) bool {
+	isCurrentHealthInNotification := lo.ContainsBy(events, func(event string) bool {
+		return api.EventToHealth(event) == currentHealth
+	})
+	if !isCurrentHealthInNotification {
+		// Either the notification has changed
+		// or the health of the resource has changed to something that the notification isn't configured for
+		return false
+	}
+
+	if previousHealth == currentHealth {
+		return true
+	}
+
+	healthDegraded := models.WorseHealth(previousHealth, currentHealth) == currentHealth
+	return healthDegraded
 }
 
 // getEnvForEvent gets the environment variables for the given event
