@@ -61,7 +61,7 @@ require (
 	github.com/redis/go-redis/v9 v9.5.1
 	github.com/samber/lo v1.47.0
 	github.com/samber/oops v1.13.1
-	github.com/samber/slog-echo v1.14.4
+	github.com/samber/slog-echo v1.14.6
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.1
 	github.com/sethvargo/go-retry v0.3.0
 	github.com/slack-go/slack v0.14.0
