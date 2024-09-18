@@ -33,6 +33,7 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 	prom "github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 const (
@@ -130,6 +131,7 @@ func New(ctx context.Context) *echov4.Echo {
 		Forward(ctx, e, "/db", dutyApi.DefaultConfig.Postgrest.URL,
 			rbac.DbMiddleware(),
 			db.SearchQueryTransformMiddleware(),
+			postgrestTraceMiddleware,
 		)
 	}
 
@@ -169,6 +171,21 @@ func New(ctx context.Context) *echov4.Echo {
 	return e
 }
 
+func postgrestTraceMiddleware(next echov4.HandlerFunc) echov4.HandlerFunc {
+	return func(c echov4.Context) error {
+		ctx := c.Request().Context().(context.Context)
+
+		table := strings.TrimPrefix(c.Request().URL.Path, "/db/")
+		ctx.GetSpan().SetAttributes(attribute.String("postgrest.table", table))
+
+		for query, values := range c.Request().URL.Query() {
+			ctx.GetSpan().SetAttributes(attribute.String(fmt.Sprintf("postgrest.query.%s", query), values[0]))
+		}
+
+		return next(c)
+	}
+}
+
 // suffixesInItem checks if any of the suffixes are in the item.
 func suffixesInItem(item string, suffixes []string) bool {
 	for _, suffix := range suffixes {
@@ -180,11 +197,11 @@ func suffixesInItem(item string, suffixes []string) bool {
 }
 
 func Forward(ctx context.Context, e *echov4.Echo, prefix string, target string, middlewares ...echov4.MiddlewareFunc) {
-	middlewares = append(middlewares, ModifyKratosRequestHeaders, proxyMiddleware(ctx, e, prefix, target))
+	middlewares = append(middlewares, ModifyKratosRequestHeaders, proxyMiddleware(e, prefix, target))
 	e.Group(prefix).Use(middlewares...)
 }
 
-func proxyMiddleware(ctx context.Context, e *echov4.Echo, prefix, targetURL string) echov4.MiddlewareFunc {
+func proxyMiddleware(e *echov4.Echo, prefix, targetURL string) echov4.MiddlewareFunc {
 	_url, err := url.Parse(targetURL)
 	if err != nil {
 		e.Logger.Fatal(err)
