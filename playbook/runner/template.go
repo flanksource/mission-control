@@ -111,14 +111,10 @@ func CreateTemplateEnv(ctx context.Context, playbook *models.Playbook, run *mode
 		return templateEnv, nil
 	}
 
-	var gitOpsEnvVar *GitOpsEnv
-	var err error
-	if gitOpsEnvVar, err = getGitOpsTemplateVars(ctx, *run, spec.Actions); err != nil {
+	if gitOpsEnvVar, err := getGitOpsTemplateVars(ctx, *run, spec.Actions); err != nil {
 		return templateEnv, oops.Wrapf(err, "failed to get gitops vars")
-	}
-
-	if gitOpsEnvVar != nil {
-		templateEnv.Env = collections.MergeMap(templateEnv.Env, gitOpsEnvVar.AsMap())
+	} else if gitOpsEnvVar != nil {
+		templateEnv.Env["git"] = gitOpsEnvVar.AsMap()
 	}
 
 	env := make(map[string]any)
