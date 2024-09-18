@@ -139,10 +139,21 @@ var templateFuncs = map[string]any{
 			}
 		}`, text)
 	},
-	"slackURLAction": func(name, url string) string {
-		return fmt.Sprintf(`{
-			"type": "actions",
-			"elements": [
+	"slackURLAction": func(val ...string) string {
+		if len(val)%2 != 0 {
+			return "slackURLAction received an uneven pair of the action name and url"
+		}
+
+		var elements []string
+		for i, pair := range lo.Chunk(val, 2) {
+			name, url := pair[0], pair[1]
+
+			var buttonStyle string
+			if i == 0 {
+				buttonStyle = "primary"
+			}
+
+			elements = append(elements, fmt.Sprintf(`
 				{
 					"type": "button",
 					"text": {
@@ -151,9 +162,11 @@ var templateFuncs = map[string]any{
 						"emoji": true
 					},
 					"url": "%s",
-					"action_id": "%s"
-				}
-			]
-		}`, name, url, name)
+					"action_id": "%s",
+					"style": "%s"
+				}`, name, url, name, buttonStyle))
+		}
+
+		return fmt.Sprintf(`{"type": "actions", "elements": [%s]}`, strings.Join(elements, ","))
 	},
 }

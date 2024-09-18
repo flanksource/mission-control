@@ -534,5 +534,6 @@ func getEnvForEvent(ctx context.Context, event models.Event, properties map[stri
 		env.Permalink = fmt.Sprintf("%s/catalog/%s", api.FrontendURL, configID)
 	}
 
+	env.SetSilenceURL(api.FrontendURL)
 	return &env, nil
 }
