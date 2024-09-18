@@ -123,6 +123,7 @@ func compareAgentEntities[T any](table string, upstreamDB *gorm.DB, agent agentW
 
 	Expect(len(upstream)).To(Equal(len(downstream)), fmt.Sprintf("expected %s to sync all items to upstream ", agent.name))
 
+	ignoreOpts = append(ignoreOpts, cmpopts.IgnoreUnexported(models.ConfigItem{}))
 	diff := cmp.Diff(upstream, downstream, ignoreOpts...)
 	Expect(diff).To(BeEmpty(), fmt.Sprintf("expected %s to sync correct items to upstream ", agent.name))
 }
