@@ -203,7 +203,7 @@ var Run = &cobra.Command{
 
 func saveOutput(object any, file string, format string) {
 	var out string
-	if outFormat == "yaml" {
+	if format == "yaml" {
 		b, _ := yaml.Marshal(object)
 		out = string(b)
 	} else {
@@ -211,8 +211,8 @@ func saveOutput(object any, file string, format string) {
 		out = string(b)
 	}
 
-	if outfile != "" {
-		_ = os.WriteFile(outfile, []byte(out), 0600)
+	if file != "" {
+		_ = os.WriteFile(file, []byte(out), 0600)
 	} else {
 		fmt.Println(out)
 	}

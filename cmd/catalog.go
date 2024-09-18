@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -24,10 +25,15 @@ var Catalog = &cobra.Command{
 }
 
 func parseQuery(args []string) query.SearchResourcesRequest {
-	request := query.SearchResourcesRequest{}
+	logger.Infof("Search query %v", args)
+	request := query.SearchResourcesRequest{
+		Limit: 5,
+	}
 	tags := make(map[string]string)
-	var configTypes []string
-	for _, arg := range args[1:] {
+	selector := types.ResourceSelector{
+		Cache: "no-cache",
+	}
+	for _, arg := range args {
 		parts := strings.Split(arg, "=")
 		if len(parts) != 2 {
 			logger.Warnf("Invalid param: %s", arg)
@@ -35,45 +41,36 @@ func parseQuery(args []string) query.SearchResourcesRequest {
 		}
 
 		switch parts[0] {
-		case "config":
-			request.Configs = append(request.Configs, types.ResourceSelector{Search: parts[1]})
-		case "config_id":
-			request.Configs = append(request.Configs, types.ResourceSelector{ID: parts[1]})
-		case "component":
-			request.Components = append(request.Components, types.ResourceSelector{Search: parts[1]})
-		case "component_id":
-			request.Components = append(request.Components, types.ResourceSelector{ID: parts[1]})
-		case "check":
-			request.Checks = append(request.Checks, types.ResourceSelector{Search: parts[1]})
-		case "check_id":
-			request.Checks = append(request.Checks, types.ResourceSelector{ID: parts[1]})
+		case "limit":
+			l, _ := strconv.Atoi(parts[1])
+			request.Limit = l
+		case "search":
+			selector.Search = parts[1]
+		case "scope":
+			selector.Scope = parts[1]
 		case "type":
-			configTypes = append(configTypes, parts[1])
+			selector.Types = append(selector.Types, parts[1])
+		case "name":
+			selector.Name = parts[1]
+		case "namespace":
+			selector.Namespace = parts[1]
+		case "id":
+			selector.ID = parts[1]
+		case "status":
+			selector.Statuses = append(selector.Statuses, parts[1])
 		default:
 			tags[parts[0]] = parts[1]
 		}
+	}
 
-	}
-	if len(configTypes) > 0 {
-		for i := range request.Configs {
-			request.Configs[i].Types = configTypes
-		}
-		for i := range request.Components {
-			request.Components[i].Types = configTypes
+	for k, v := range tags {
+		if strings.HasPrefix(k, "@") {
+			selector.TagSelector += fmt.Sprintf(" %s=%s", k[1:], v)
+		} else {
+			selector.LabelSelector += fmt.Sprintf(" %s=%s", k, v)
 		}
 	}
-	if len(tags) > 0 {
-		for i := range request.Configs {
-			for k, v := range tags {
-				request.Configs[i].LabelSelector += fmt.Sprintf(" %s=%s", k, v)
-			}
-		}
-		for i := range request.Components {
-			for k, v := range tags {
-				request.Components[i].LabelSelector += fmt.Sprintf(" %s=%s", k, v)
-			}
-		}
-	}
+	request.Configs = []types.ResourceSelector{selector}
 
 	return request
 }
@@ -120,7 +117,7 @@ var Query = &cobra.Command{
 				os.Exit(1)
 			}
 
-			logger.Infof("Waiting %s for resources to be discovered...", catalogWaitFor-time.Since(start))
+			logger.Infof("Waiting %s for %s", req, catalogWaitFor-time.Since(start))
 			time.Sleep(3 * time.Second)
 
 		}
@@ -134,7 +131,7 @@ var Query = &cobra.Command{
 
 func init() {
 	Query.Flags().StringVarP(&catalogOutfile, "out-file", "o", "", "Write catalog output to a file instead of stdout")
-	Query.Flags().StringVarP(&catalogOutformat, "out-format", "f", "yaml", "Format of output file or stdout (yaml or json)")
+	Query.Flags().StringVarP(&catalogOutformat, "out-format", "f", "json", "Format of output file or stdout (yaml or json)")
 	Query.Flags().DurationVarP(&catalogWaitFor, "wait", "w", 60*time.Second, "Wait for this long for resources to be discovered")
 	Catalog.AddCommand(Query)
 	Root.AddCommand(Catalog)
