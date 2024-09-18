@@ -15,7 +15,7 @@ require (
 	github.com/fergusstrange/embedded-postgres v1.25.0 // indirect
 	github.com/flanksource/commons v1.29.10
 	github.com/flanksource/duty v1.0.658
-	github.com/flanksource/gomplate/v3 v3.24.30
+	github.com/flanksource/gomplate/v3 v3.24.32
 	github.com/flanksource/kopper v1.0.10
 	github.com/gomarkdown/markdown v0.0.0-20240419095408-642f0ee99ae2
 	github.com/google/cel-go v0.21.0
@@ -243,7 +243,7 @@ require (
 	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56 // indirect
 	golang.org/x/mod v0.20.0 // indirect
 	golang.org/x/sync v0.8.0 // indirect
-	golang.org/x/term v0.23.0 // indirect
+	golang.org/x/term v0.24.0 // indirect
 	golang.org/x/tools v0.24.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.4.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20240528184218-531527333157 // indirect
@@ -340,11 +340,11 @@ require (
 	github.com/valyala/fasttemplate v1.2.2 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	go.opencensus.io v0.24.0 // indirect
-	golang.org/x/crypto v0.26.0
-	golang.org/x/net v0.28.0 // indirect
+	golang.org/x/crypto v0.27.0
+	golang.org/x/net v0.29.0 // indirect
 	golang.org/x/oauth2 v0.21.0 // indirect
-	golang.org/x/sys v0.23.0 // indirect
-	golang.org/x/text v0.17.0
+	golang.org/x/sys v0.25.0 // indirect
+	golang.org/x/text v0.18.0
 	golang.org/x/time v0.5.0 // indirect
 	google.golang.org/api v0.169.0
 	google.golang.org/genproto v0.0.0-20240227224415-6ceb2ff114de // indirect
