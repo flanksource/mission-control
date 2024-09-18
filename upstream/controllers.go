@@ -54,7 +54,7 @@ func handlePlaybookActionRequest(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
 
 	agent := ctx.Agent()
-	response, err := runner.GetActionForAgent(ctx, agent)
+	response, err := runner.GetActionForAgentWithWait(ctx, agent)
 	if err != nil {
 		logger.Warnf("failed to get action for agent: %+v", err)
 		return dutyAPI.WriteError(c, err)

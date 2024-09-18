@@ -3,6 +3,7 @@ package runner
 import (
 	"fmt"
 	"strconv"
+	"time"
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -19,7 +20,32 @@ type ActionForAgent struct {
 	TemplateEnv actions.TemplateEnv      `json:"template_env"`
 }
 
-func GetActionForAgent(ctx context.Context, agent *models.Agent) (*ActionForAgent, error) {
+func GetActionForAgentWithWait(ctx context.Context, agent *models.Agent) (*ActionForAgent, error) {
+	action, err := getActionForAgent(ctx, agent)
+	if err != nil {
+		return nil, err
+	}
+
+	if action != nil {
+		return action, err
+	}
+
+	// Go into waiting state
+	select {
+	case <-time.After(ctx.Properties().Duration("playbook.runner.longpoll.timeout", DefaultLongpollTimeout)):
+		return &ActionForAgent{}, nil
+
+	case <-ActionNotifyRouter.GetOrCreateChannel(agent.ID.String()):
+		action, err := getActionForAgent(ctx, agent)
+		if err != nil {
+			return nil, err
+		}
+
+		return action, err
+	}
+}
+
+func getActionForAgent(ctx context.Context, agent *models.Agent) (*ActionForAgent, error) {
 	tx := ctx.DB().Begin()
 	if tx.Error != nil {
 		return nil, fmt.Errorf("error initiating db tx: %w", tx.Error)
