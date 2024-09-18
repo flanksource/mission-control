@@ -2,6 +2,7 @@ package notification
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -24,8 +25,24 @@ type celVariables struct {
 	Comment *models.Comment
 	Author  *models.Person
 
-	NewState  string
-	Permalink string
+	NewState   string
+	Permalink  string
+	SilenceURL string
+}
+
+func (t *celVariables) SetSilenceURL(frontendURL string) {
+	baseURL := fmt.Sprintf("%s/settings/notifications/silence", frontendURL)
+
+	switch {
+	case t.ConfigItem != nil:
+		t.SilenceURL = fmt.Sprintf("%s?config_id=%s", baseURL, t.ConfigItem.ID.String())
+	case t.Component != nil:
+		t.SilenceURL = fmt.Sprintf("%s?component_id=%s", baseURL, t.Component.ID.String())
+	case t.Check != nil:
+		t.SilenceURL = fmt.Sprintf("%s?check_id=%s", baseURL, t.Check.ID.String())
+	case t.Canary != nil:
+		t.SilenceURL = fmt.Sprintf("%s?canary_id=%s", baseURL, t.Canary.ID.String())
+	}
 }
 
 func (t *celVariables) GetResourceHealth(ctx context.Context) (models.Health, error) {
@@ -48,7 +65,8 @@ func (t *celVariables) GetResourceHealth(ctx context.Context) (models.Health, er
 
 func (t *celVariables) AsMap() map[string]any {
 	output := map[string]any{
-		"permalink": t.Permalink,
+		"permalink":  t.Permalink,
+		"silenceURL": t.SilenceURL,
 	}
 
 	if t.Agent != nil {

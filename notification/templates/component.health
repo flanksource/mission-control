@@ -15,7 +15,7 @@
 			]
 		},
 		{{if .component.labels}}{{slackSectionLabels .component}},{{end}}
-		{{slackURLAction "View Component" .permalink}}
+		{{slackURLAction "View Component" .permalink "🔕 Silence" .silenceURL}}
 	]
 }
 
