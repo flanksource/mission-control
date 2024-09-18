@@ -3,6 +3,7 @@ package notification_test
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/duty/models"
@@ -24,6 +25,23 @@ import (
 )
 
 var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
+	var customReceiverJson []byte
+
+	ginkgo.BeforeAll(func() {
+		customReceiver := []api.NotificationConfig{
+			{
+				URL: fmt.Sprintf("generic+%s", webhookEndpoint),
+				Properties: map[string]string{
+					"disabletls": "yes",
+					"template":   "json",
+				},
+			},
+		}
+		var err error
+		customReceiverJson, err = json.Marshal(customReceiver)
+		Expect(err).To(BeNil())
+	})
+
 	var _ = ginkgo.Describe("Notification on incident creation", ginkgo.Ordered, func() {
 		var (
 			notif     models.Notification
@@ -138,18 +156,6 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 		var config models.ConfigItem
 
 		ginkgo.BeforeAll(func() {
-			customReceiver := []api.NotificationConfig{
-				{
-					URL: fmt.Sprintf("generic+%s", webhookEndpoint),
-					Properties: map[string]string{
-						"disabletls": "yes",
-						"template":   "json",
-					},
-				},
-			}
-			customReceiverJson, err := json.Marshal(customReceiver)
-			Expect(err).To(BeNil())
-
 			n = models.Notification{
 				ID:             uuid.New(),
 				Name:           "repeat-interval-test",
@@ -161,7 +167,7 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 				RepeatInterval: "4h",
 			}
 
-			err = DefaultContext.DB().Create(&n).Error
+			err := DefaultContext.DB().Create(&n).Error
 			Expect(err).To(BeNil())
 
 			config = models.ConfigItem{
@@ -244,18 +250,6 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 
 		ginkgo.BeforeAll(func() {
 			{
-				customReceiver := []api.NotificationConfig{
-					{
-						URL: fmt.Sprintf("generic+%s", webhookEndpoint),
-						Properties: map[string]string{
-							"disabletls": "yes",
-							"template":   "json",
-						},
-					},
-				}
-				customReceiverJson, err := json.Marshal(customReceiver)
-				Expect(err).To(BeNil())
-
 				goodNotif = models.Notification{
 					ID:             uuid.New(),
 					Name:           "test-notification-error-on-send-1",
@@ -267,7 +261,7 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 					CustomServices: types.JSON(customReceiverJson),
 				}
 
-				err = DefaultContext.DB().Create(&goodNotif).Error
+				err := DefaultContext.DB().Create(&goodNotif).Error
 				Expect(err).To(BeNil())
 			}
 
@@ -380,6 +374,89 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 			err := DefaultContext.DB().Model(&models.NotificationSendHistory{}).Where("notification_id = ?", goodNotif.ID).Count(&sentHistoryCount).Error
 			Expect(err).To(BeNil())
 			Expect(sentHistoryCount).To(Equal(int64(1)))
+		})
+	})
+
+	var _ = ginkgo.Describe("notification wait for", ginkgo.Ordered, func() {
+		var n models.Notification
+		var config models.ConfigItem
+
+		ginkgo.BeforeAll(func() {
+			n = models.Notification{
+				ID:             uuid.New(),
+				Name:           "wait-for-test",
+				Events:         pq.StringArray([]string{"config.healthy", "config.unhealthy"}),
+				Source:         models.SourceCRD,
+				Title:          "Dummy",
+				Template:       "dummy",
+				CustomServices: types.JSON(customReceiverJson),
+				WaitFor:        lo.ToPtr(time.Second * 5),
+			}
+
+			err := DefaultContext.DB().Create(&n).Error
+			Expect(err).To(BeNil())
+
+			config = models.ConfigItem{
+				ID:          uuid.New(),
+				Name:        lo.ToPtr("navidrome"),
+				ConfigClass: models.ConfigClassDeployment,
+				Health:      lo.ToPtr(models.HealthHealthy),
+				Config:      lo.ToPtr(`{"color": "red"}`),
+				Type:        lo.ToPtr("Kubernetes::Deployment"),
+			}
+
+			err = DefaultContext.DB().Create(&config).Error
+			Expect(err).To(BeNil())
+
+			events.ConsumeAll(DefaultContext)
+		})
+
+		ginkgo.AfterAll(func() {
+			err := DefaultContext.DB().Delete(&n).Error
+			Expect(err).To(BeNil())
+
+			err = DefaultContext.DB().Delete(&config).Error
+			Expect(err).To(BeNil())
+
+			notification.PurgeCache(n.ID.String())
+		})
+
+		ginkgo.It("should create a notification.send event with a delay on it", func() {
+			err := DefaultContext.DB().Model(&models.ConfigItem{}).Where("id = ?", config.ID).Update("health", models.HealthUnhealthy).Error
+			Expect(err).To(BeNil())
+
+			events.ConsumeAll(DefaultContext)
+
+			Eventually(func() time.Duration {
+				var event models.Event
+				err := DefaultContext.DB().Where("properties->>'notification_id' = ?", n.ID.String()).Where("name = 'notification.send'").Find(&event).Error
+				Expect(err).To(BeNil())
+
+				return lo.FromPtr(event.Delay)
+			}, "2s", "200ms").Should(Equal(*n.WaitFor))
+		})
+
+		ginkgo.It("should not consume the event within the delay period", func() {
+			for i := 0; i < 5; i++ {
+				events.ConsumeAll(DefaultContext)
+
+				var event models.Event
+				err := DefaultContext.DB().Where("properties->>'notification_id' = ?", n.ID.String()).Where("name = 'notification.send'").First(&event).Error
+				Expect(err).To(BeNil())
+			}
+		})
+
+		ginkgo.It("it should eventually consume the event", func() {
+			Eventually(func() bool {
+				DefaultContext.Logger.V(0).Infof("checking if the delayed notificaiton.send event has been consumed")
+				events.ConsumeAll(DefaultContext)
+
+				var count int64
+				err := DefaultContext.DB().Model(&models.Event{}).Where("properties->>'notification_id' = ?", n.ID.String()).Where("name = 'notification.send'").Count(&count).Error
+				Expect(err).To(BeNil())
+
+				return count == 0
+			}, "15s", "1s").Should(BeTrue())
 		})
 	})
 })

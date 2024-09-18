@@ -98,6 +98,21 @@ var (
 	}
 )
 
+func EventToHealth(event string) models.Health {
+	switch event {
+	case EventCheckPassed, EventConfigHealthy, EventComponentHealthy:
+		return models.HealthHealthy
+	case EventCheckFailed, EventConfigUnhealthy, EventComponentUnhealthy:
+		return models.HealthUnhealthy
+	case EventConfigWarning, EventComponentWarning:
+		return models.HealthWarning
+	case EventConfigUnknown, EventComponentUnknown:
+		return models.HealthUnknown
+	}
+
+	return models.HealthUnknown
+}
+
 type Event struct {
 	ID          uuid.UUID           `gorm:"default:generate_ulid()"`
 	Name        string              `json:"name"`

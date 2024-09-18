@@ -73,30 +73,22 @@ func SaveNotificationSilence(ctx context.Context, req SilenceSaveRequest) error 
 	return db.ErrorDetails(ctx.DB().Create(&silence).Error)
 }
 
-func getSilencedResourceFromCelEnv(celEnv map[string]any) models.NotificationSilenceResource {
+func getSilencedResourceFromCelEnv(celEnv *celVariables) models.NotificationSilenceResource {
 	var silencedResource models.NotificationSilenceResource
-	if v, ok := celEnv["config"]; ok {
-		if vv, ok := v.(map[string]any); ok {
-			silencedResource.ConfigID = lo.ToPtr(vv["id"].(string))
-		}
+	if celEnv.ConfigItem != nil {
+		silencedResource.ConfigID = lo.ToPtr(celEnv.ConfigItem.ID.String())
 	}
 
-	if v, ok := celEnv["check"]; ok {
-		if vv, ok := v.(map[string]any); ok {
-			silencedResource.CheckID = lo.ToPtr(vv["id"].(string))
-		}
+	if celEnv.Check != nil {
+		silencedResource.CheckID = lo.ToPtr(celEnv.Check.ID.String())
 	}
 
-	if v, ok := celEnv["canary"]; ok {
-		if vv, ok := v.(map[string]any); ok {
-			silencedResource.CanaryID = lo.ToPtr(vv["id"].(string))
-		}
+	if celEnv.Canary != nil {
+		silencedResource.CanaryID = lo.ToPtr(celEnv.Canary.ID.String())
 	}
 
-	if v, ok := celEnv["component"]; ok {
-		if vv, ok := v.(map[string]any); ok {
-			silencedResource.ComponentID = lo.ToPtr(vv["id"].(string))
-		}
+	if celEnv.Component != nil {
+		silencedResource.ComponentID = lo.ToPtr(celEnv.Component.ID.String())
 	}
 
 	return silencedResource
