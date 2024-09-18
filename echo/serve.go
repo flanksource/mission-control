@@ -176,10 +176,10 @@ func postgrestTraceMiddleware(next echov4.HandlerFunc) echov4.HandlerFunc {
 		ctx := c.Request().Context().(context.Context)
 
 		table := strings.TrimPrefix(c.Request().URL.Path, "/db/")
-		ctx.GetSpan().SetAttributes(attribute.String("postgrest.table", table))
+		ctx.GetSpan().SetAttributes(attribute.String("db.table", table))
 
 		for query, values := range c.Request().URL.Query() {
-			ctx.GetSpan().SetAttributes(attribute.String(fmt.Sprintf("postgrest.query.%s", query), values[0]))
+			ctx.GetSpan().SetAttributes(attribute.String(fmt.Sprintf("db.query.%s", query), values[0]))
 		}
 
 		return next(c)
