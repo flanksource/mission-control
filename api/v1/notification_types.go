@@ -54,6 +54,16 @@ type NotificationSpec struct {
 
 	// Specify the recipient
 	To NotificationRecipientSpec `json:"to" yaml:"to"`
+
+	// WaitFor defines a duration to delay sending a health-based notification.
+	// After this period, the health status is reassessed to confirm it hasn't
+	// changed, helping prevent false alarms from transient issues.
+	//
+	// The delay allows time for self-recovery or temporary fluctuations to
+	// resolve, reducing unnecessary alerts.
+	//
+	// If specified, it should be a valid duration string (e.g., "5m", "1h").
+	WaitFor *string `json:"waitFor,omitempty" yaml:"waitFor,omitempty"`
 }
 
 // NotificationStatus defines the observed state of Notification

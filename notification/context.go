@@ -1,9 +1,13 @@
 package notification
 
 import (
+	"encoding/json"
+
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
+	"github.com/samber/lo"
+	"github.com/samber/oops"
 )
 
 type RecipientType string
@@ -45,8 +49,18 @@ func (t *Context) WithRecipientType(recipientType RecipientType) {
 	t.recipientType = recipientType
 }
 
-func (t *Context) WithError(err string) {
-	t.log.Error = &err
+func (t *Context) WithError(err error) {
+	if o, ok := oops.AsOops(err); ok {
+		oopsErr := map[string]any{
+			"error": o.ToMap(),
+			"hint":  o.Hint(),
+		}
+
+		bb, _ := json.Marshal(oopsErr)
+		t.log.Error = lo.ToPtr(string(bb))
+	} else {
+		t.log.Error = lo.ToPtr(err.Error())
+	}
 }
 
 func (t *Context) WithSource(event string, resourceID uuid.UUID) {

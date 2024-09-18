@@ -8,6 +8,7 @@ import (
 
 	extraClausePlugin "github.com/WinterYukky/gorm-extra-clause-plugin"
 	"github.com/WinterYukky/gorm-extra-clause-plugin/exclause"
+	"github.com/flanksource/commons/text"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
@@ -28,6 +29,8 @@ func PersistNotificationFromCRD(ctx context.Context, obj *v1.Notification) error
 
 	dbObj := models.Notification{
 		ID:             uid,
+		Name:           obj.ObjectMeta.Name,
+		Namespace:      obj.ObjectMeta.Namespace,
 		Events:         obj.Spec.Events,
 		Title:          obj.Spec.Title,
 		Template:       obj.Spec.Template,
@@ -36,6 +39,14 @@ func PersistNotificationFromCRD(ctx context.Context, obj *v1.Notification) error
 		Source:         models.SourceCRD,
 		RepeatInterval: obj.Spec.RepeatInterval,
 		GroupBy:        obj.Spec.RepeatGroup,
+	}
+
+	if obj.Spec.WaitFor != nil && *obj.Spec.WaitFor != "" {
+		if parsed, err := text.ParseDuration(*obj.Spec.WaitFor); err != nil {
+			return err
+		} else {
+			dbObj.WaitFor = parsed
+		}
 	}
 
 	switch {

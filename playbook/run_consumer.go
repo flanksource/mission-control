@@ -146,7 +146,9 @@ func getActionSpec(ctx context.Context, actionData models.PlaybookActionAgentDat
 	}
 
 	if actionSpec.TemplatesOn == runner.Agent {
-		if err := runner.TemplateAction(ctx, &models.PlaybookRun{ID: actionData.RunID, PlaybookID: actionData.PlaybookID}, run, &actionSpec, templateEnv); err != nil {
+		templateEnv.Run = models.PlaybookRun{ID: actionData.RunID, PlaybookID: actionData.PlaybookID}
+		templateEnv.Action = run
+		if err := runner.TemplateAction(ctx, &actionSpec, templateEnv); err != nil {
 			return nil, oops.With(models.ErrorContext(&actionData, run)...).Wrap(err)
 		}
 	}
@@ -290,7 +292,7 @@ func RunConsumer(ctx context.Context) (int, error) {
 	}
 	var consumed = 0
 	err := ctx.Transaction(func(ctx context.Context, _ trace.Span) error {
-		tx := ctx.FastDB("playbook.consumer")
+		tx := ctx.FastDB()
 
 		query := `
 	SELECT playbook_runs.*

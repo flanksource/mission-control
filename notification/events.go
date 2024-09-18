@@ -86,6 +86,10 @@ type notificationHandler struct {
 
 // Check if notification can be sent in the interval based on group by, returns true if it can be sent
 func checkRepeatInterval(ctx context.Context, n NotificationWithSpec, event models.Event) (bool, error) {
+	if n.RepeatInterval == "" {
+		return true, nil
+	}
+
 	interval, err := text.ParseDuration(n.RepeatInterval)
 	if err != nil {
 		return false, fmt.Errorf("error parsing repeat interval[%s] to time.Duration: %w", n.RepeatInterval, err)
@@ -126,7 +130,7 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 		return err
 	}
 
-	t.Ring.Add(event, celEnv)
+	t.Ring.Add(event, celEnv.AsMap())
 
 	silencedResource := getSilencedResourceFromCelEnv(celEnv)
 	matchingSilences, err := db.GetMatchingNotificationSilencesCount(ctx, silencedResource)
@@ -135,7 +139,7 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 	}
 
 	for _, id := range notificationIDs {
-		if err := addNotificationEvent(ctx, id, celEnv, event, matchingSilences); err != nil {
+		if err := addNotificationEvent(ctx, id, celEnv.AsMap(), event, matchingSilences); err != nil {
 			return fmt.Errorf("failed to add notification.send event for event=%s notification=%s", event.Name, id)
 		}
 	}
@@ -227,9 +231,10 @@ func addNotificationEvent(ctx context.Context, id string, celEnv map[string]any,
 			continue
 		}
 
-		newEvent := api.Event{
+		newEvent := models.Event{
 			Name:       api.EventNotificationSend,
 			Properties: payload.AsMap(),
+			Delay:      n.WaitFor,
 		}
 		if err := ctx.DB().Clauses(events.EventQueueOnConflictClause).Create(&newEvent).Error; err != nil {
 			return fmt.Errorf("failed to saved `notification.send` event for payload (%v): %w", payload.AsMap(), err)
@@ -260,7 +265,7 @@ func sendNotifications(ctx context.Context, events models.Events) models.Events 
 			if err := json.Unmarshal(payload.Properties, &originalEvent.Properties); err != nil {
 				e.SetError(err.Error())
 				failedEvents = append(failedEvents, e)
-				notificationContext.WithError(err.Error())
+				notificationContext.WithError(err)
 				continue
 			}
 		}
@@ -269,11 +274,40 @@ func sendNotifications(ctx context.Context, events models.Events) models.Events 
 		if err != nil {
 			e.SetError(err.Error())
 			failedEvents = append(failedEvents, e)
-			notificationContext.WithError(err.Error())
-		} else if err := PrepareAndSendEventNotification(notificationContext, payload, celEnv); err != nil {
+			notificationContext.WithError(err)
+		}
+
+		if e.Delay != nil {
+			// This was a delayed notification.
+			// We need to re-evaluate the health of the resource.
+			previousHealth := api.EventToHealth(originalEvent.Name)
+
+			currentHealth, err := celEnv.GetResourceHealth(ctx)
+			if err != nil {
+				e.SetError(err.Error())
+				failedEvents = append(failedEvents, e)
+				notificationContext.WithError(err)
+				continue
+			}
+
+			notif, err := GetNotification(ctx, payload.NotificationID.String())
+			if err != nil {
+				e.SetError(err.Error())
+				failedEvents = append(failedEvents, e)
+				notificationContext.WithError(err)
+				continue
+			}
+
+			if !isHealthReportable(notif.Events, currentHealth, previousHealth) {
+				ctx.Logger.V(6).Infof("skipping notification[%s] as health change is not reportable", notif.ID)
+				continue
+			}
+		}
+
+		if err := PrepareAndSendEventNotification(notificationContext, payload, celEnv.AsMap()); err != nil {
 			e.SetError(err.Error())
 			failedEvents = append(failedEvents, e)
-			notificationContext.WithError(err.Error())
+			notificationContext.WithError(err)
 		}
 
 		logs.IfError(notificationContext.EndLog(), "error persisting end of notification send history")
@@ -282,10 +316,28 @@ func sendNotifications(ctx context.Context, events models.Events) models.Events 
 	return failedEvents
 }
 
+func isHealthReportable(events []string, previousHealth, currentHealth models.Health) bool {
+	isCurrentHealthInNotification := lo.ContainsBy(events, func(event string) bool {
+		return api.EventToHealth(event) == currentHealth
+	})
+	if !isCurrentHealthInNotification {
+		// Either the notification has changed
+		// or the health of the resource has changed to something that the notification isn't configured for
+		return false
+	}
+
+	if previousHealth == currentHealth {
+		return true
+	}
+
+	healthDegraded := models.WorseHealth(previousHealth, currentHealth) == currentHealth
+	return healthDegraded
+}
+
 // getEnvForEvent gets the environment variables for the given event
 // that'll be passed to the cel expression or to the template renderer as a view.
-func getEnvForEvent(ctx context.Context, event models.Event, properties map[string]string) (map[string]any, error) {
-	env := make(map[string]any)
+func getEnvForEvent(ctx context.Context, event models.Event, properties map[string]string) (*celVariables, error) {
+	var env celVariables
 
 	if strings.HasPrefix(event.Name, "check.") {
 		checkID := properties["id"]
@@ -309,7 +361,7 @@ func getEnvForEvent(ctx context.Context, event models.Event, properties map[stri
 		if err != nil {
 			return nil, fmt.Errorf("error finding agent: %v", err)
 		} else if agent != nil {
-			env["agent"] = agent.AsMap()
+			env.Agent = agent
 		}
 
 		summary, err := query.CheckSummary(ctx, query.CheckSummaryOptions{
@@ -331,10 +383,10 @@ func getEnvForEvent(ctx context.Context, event models.Event, properties map[stri
 		// to the status corresponding to the time of event.
 		check.Status = models.CheckHealthStatus(lo.Ternary(checkStatus.Status, models.CheckStatusHealthy, models.CheckStatusUnhealthy))
 
-		env["status"] = checkStatus.AsMap()
-		env["canary"] = canary.AsMap("spec")
-		env["check"] = check.AsMap("spec")
-		env["permalink"] = fmt.Sprintf("%s/health?layout=table&checkId=%s&timeRange=1h", api.FrontendURL, check.ID)
+		env.CheckStatus = &checkStatus
+		env.Canary = canary
+		env.Check = check
+		env.Permalink = fmt.Sprintf("%s/health?layout=table&checkId=%s&timeRange=1h", api.FrontendURL, check.ID)
 	}
 
 	if event.Name == "incident.created" || strings.HasPrefix(event.Name, "incident.status.") {
@@ -347,8 +399,8 @@ func getEnvForEvent(ctx context.Context, event models.Event, properties map[stri
 			return nil, fmt.Errorf("incident(id=%s) not found", incidentID)
 		}
 
-		env["incident"] = incident.AsMap()
-		env["permalink"] = fmt.Sprintf("%s/incidents/%s", api.FrontendURL, incident.ID)
+		env.Incident = incident
+		env.Permalink = fmt.Sprintf("%s/incidents/%s", api.FrontendURL, incident.ID)
 	}
 
 	if strings.HasPrefix(event.Name, "incident.responder.") {
@@ -367,9 +419,9 @@ func getEnvForEvent(ctx context.Context, event models.Event, properties map[stri
 			return nil, fmt.Errorf("incident(id=%s) not found", responder.IncidentID)
 		}
 
-		env["incident"] = incident.AsMap()
-		env["responder"] = responder.AsMap()
-		env["permalink"] = fmt.Sprintf("%s/incidents/%s", api.FrontendURL, incident.ID)
+		env.Incident = incident
+		env.Responder = responder
+		env.Permalink = fmt.Sprintf("%s/incidents/%s", api.FrontendURL, incident.ID)
 	}
 
 	if strings.HasPrefix(event.Name, "incident.comment.") {
@@ -394,10 +446,10 @@ func getEnvForEvent(ctx context.Context, event models.Event, properties map[stri
 
 		// TODO: extract out mentioned users' emails from the comment body
 
-		env["incident"] = incident.AsMap()
-		env["comment"] = comment.AsMap()
-		env["author"] = author.AsMap()
-		env["permalink"] = fmt.Sprintf("%s/incidents/%s", api.FrontendURL, incident.ID)
+		env.Incident = incident
+		env.Comment = &comment
+		env.Author = author
+		env.Permalink = fmt.Sprintf("%s/incidents/%s", api.FrontendURL, incident.ID)
 	}
 
 	if strings.HasPrefix(event.Name, "incident.dod.") {
@@ -418,10 +470,10 @@ func getEnvForEvent(ctx context.Context, event models.Event, properties map[stri
 			return nil, fmt.Errorf("incident(id=%s) not found", hypotheses.IncidentID)
 		}
 
-		env["evidence"] = evidence.AsMap()
-		env["hypotheses"] = hypotheses.AsMap()
-		env["incident"] = incident.AsMap()
-		env["permalink"] = fmt.Sprintf("%s/incidents/%s", api.FrontendURL, incident.ID)
+		env.Evidence = &evidence
+		env.Hypothesis = &hypotheses
+		env.Incident = incident
+		env.Permalink = fmt.Sprintf("%s/incidents/%s", api.FrontendURL, incident.ID)
 	}
 
 	if strings.HasPrefix(event.Name, "component.") {
@@ -438,7 +490,7 @@ func getEnvForEvent(ctx context.Context, event models.Event, properties map[stri
 		if err != nil {
 			return nil, fmt.Errorf("error finding agent: %v", err)
 		} else if agent != nil {
-			env["agent"] = agent.AsMap()
+			env.Agent = agent
 		}
 
 		// Use the health, description & status from the time of event
@@ -446,8 +498,8 @@ func getEnvForEvent(ctx context.Context, event models.Event, properties map[stri
 		component.Description = event.Properties["description"]
 		component.Status = types.ComponentStatus(event.Properties["status"])
 
-		env["component"] = component.AsMap("checks", "incidents", "analysis", "components", "order", "relationship_id", "children", "parents")
-		env["permalink"] = fmt.Sprintf("%s/topology/%s", api.FrontendURL, componentID)
+		env.Component = component
+		env.Permalink = fmt.Sprintf("%s/topology/%s", api.FrontendURL, componentID)
 	}
 
 	if strings.HasPrefix(event.Name, "config.") {
@@ -464,13 +516,13 @@ func getEnvForEvent(ctx context.Context, event models.Event, properties map[stri
 		if err != nil {
 			return nil, fmt.Errorf("error finding agent: %v", err)
 		} else if agent != nil {
-			env["agent"] = agent.AsMap()
+			env.Agent = agent
 		}
 
 		eventSuffix := strings.TrimPrefix(event.Name, "config.")
 		isStateUpdateEvent := slices.Contains([]string{api.EventConfigCreated, api.EventConfigChanged, api.EventConfigUpdated, api.EventConfigDeleted}, event.Name)
 		if isStateUpdateEvent {
-			env["new_state"] = eventSuffix
+			env.NewState = eventSuffix
 		} else {
 			// Use the health, description & status from the time of event
 			config.Health = lo.ToPtr(models.Health(eventSuffix))
@@ -478,9 +530,9 @@ func getEnvForEvent(ctx context.Context, event models.Event, properties map[stri
 			config.Status = lo.ToPtr(event.Properties["status"])
 		}
 
-		env["config"] = config.AsMap("last_scraped_time", "path", "parent_id")
-		env["permalink"] = fmt.Sprintf("%s/catalog/%s", api.FrontendURL, configID)
+		env.ConfigItem = config
+		env.Permalink = fmt.Sprintf("%s/catalog/%s", api.FrontendURL, configID)
 	}
 
-	return env, nil
+	return &env, nil
 }

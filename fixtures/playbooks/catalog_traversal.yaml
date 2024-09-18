@@ -1,0 +1,40 @@
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: test-catalog-traverse
+spec:
+  category: Test
+  icon: namespace
+  title: Find GitSource
+  parameters:
+    - name: kustomization
+      label: Kustomization
+      description: Which kustomization to add the new namespace into
+      required: true
+      type: config
+      properties:
+        filter:
+          - types:
+              - Kubernetes::Kustomization
+
+  env:
+    - name: path
+      value: |
+         # gotemplate: left-delim=$[[ right-delim=]]
+         $[[ .params.kustomization.config | json |  jq ".spec.path" ]]
+    - name: git_url
+      value: |
+        # gotemplate: left-delim=$[[ right-delim=]]
+        $[[ (index (catalog_traverse .params.kustomization.id  "Kubernetes::GitRepository") 0).Config | json | jq ".spec.url"  ]]
+    - name: git_branch
+      value: |
+        # gotemplate: left-delim=$[[ right-delim=]]
+        $[[ (index (catalog_traverse .params.kustomization.id  "Kubernetes::GitRepository" "incoming") 0).Config | json | jq ".spec.ref.branch" ]]
+
+
+  actions:
+    - name: echo
+      exec:
+        script: |
+          echo "$(.params.kustomization.name) is in $(.env.git_url)@$(.env.git_branch)/$(.env.path)"
