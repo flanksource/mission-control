@@ -5,8 +5,9 @@ metadata:
   name: agent-runner
 spec:
   runsOn:
-    - local # Central instance
-    - aws # agent 1
+    - local
+    - aws
+    - azure
   description: Write a file to the node
   configs:
     - types:
@@ -15,11 +16,18 @@ spec:
     - name: Echo class on the host
       exec:
         script: |
-          echo "{{.config.config_class}}"
+          echo "class from local agent: {{.config.config_class}}"
     - name: Echo class on agent aws
       runsOn:
         - 'aws'
       templatesOn: agent
       exec:
         script: |
-          echo "{{.config.config_class}}"
+          echo "class from aws agent: {{.config.config_class}}"
+    - name: Echo class on agent azure
+      runsOn:
+        - 'azure'
+      templatesOn: agent
+      exec:
+        script: |
+          echo "class from azure agent: {{.config.config_class}}"
