@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"time"
 
@@ -26,51 +27,7 @@ import (
 	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
 )
 
-func createPlaybook(name string) (models.Playbook, v1.PlaybookSpec) {
-	var spec v1.Playbook
-	specContent, err := os.ReadFile(fmt.Sprintf("testdata/%s.yaml", name))
-	Expect(err).To(BeNil())
-
-	err = yamlutil.Unmarshal(specContent, &spec)
-	Expect(err).To(BeNil())
-
-	specJSON, err := json.Marshal(spec.Spec)
-	Expect(err).To(BeNil())
-
-	playbook := &models.Playbook{
-		Namespace: "default",
-		Name:      spec.Name,
-		Spec:      specJSON,
-		Source:    models.SourceConfigFile,
-	}
-
-	Expect(playbook.Save(DefaultContext.DB())).To(BeNil())
-	return *playbook, spec.Spec
-}
-
-func ExpectPlaybook(list []api.PlaybookListItem, err error, playbooks ...models.Playbook) {
-	Expect(err).To(BeNil())
-	Expect(lo.Map(list, func(l api.PlaybookListItem, _ int) string { return l.ID.String() })).
-		To(ConsistOf(lo.Map(playbooks, func(p models.Playbook, _ int) string { return p.ID.String() })))
-}
-
-func ExpectOKResponse(response *http.Response) {
-	var runResp dutyApi.HTTPError
-	if err := json.NewDecoder(response.Body).Decode(&runResp); err == nil {
-		Expect(runResp.Err).To(BeEmpty())
-	}
-	Expect(response.IsOK()).To(BeTrue())
-}
-func ExpectErrorResponse(response *http.Response, err string) {
-	var runResp dutyApi.HTTPError
-	if err := json.NewDecoder(response.Body).Decode(&runResp); err != nil {
-		Expect(runResp.Err).To(Equal(err), runResp)
-	}
-	Expect(response.IsOK()).To(BeFalse())
-}
-
 var _ = Describe("Playbook", func() {
-
 	var _ = Describe("Test Listing | Run API | Approvals", Ordered, func() {
 		var (
 			configPlaybook    models.Playbook
@@ -483,6 +440,10 @@ var _ = Describe("Playbook", func() {
 
 	var _ = Describe("actions", func() {
 		It("exec | powershell", func() {
+			if _, err := exec.LookPath("pwsh.exe"); err != nil {
+				return
+			}
+
 			run := createAndRun("exec-powershell", RunParams{
 				ConfigID: lo.ToPtr(dummy.KubernetesNodeA.ID),
 			})
@@ -492,47 +453,50 @@ var _ = Describe("Playbook", func() {
 			Expect(len(actions)).To(Equal(2))
 			Expect(actions[0].JSON()["item"]).To(Equal(*dummy.KubernetesNodeA.Name))
 			Expect(actions[1].JSON()["item"]).To(Equal(fmt.Sprintf("name=%s", *dummy.KubernetesNodeA.Name)))
-
 		})
 	})
-	type testData struct {
-		name        string
-		description string
-		status      models.PlaybookRunStatus
-		params      RunParams
-		extra       func(run *models.PlaybookRun)
-	}
 
-	tests := []testData{
-		{
-			name:        "bad-action-spec",
-			status:      models.PlaybookRunStatusFailed,
-			description: "invalid action spec should fail",
-			extra: func(run *models.PlaybookRun) {
-				var action models.PlaybookRunAction
-				err := DefaultContext.DB().Where("playbook_run_id = ? ", run.ID).First(&action).Error
-				Expect(err).To(BeNil())
-				Expect(lo.FromPtrOr(action.Error, "")).NotTo(BeEmpty())
-				Expect(action.Status).To(Equal(models.PlaybookActionStatusFailed))
+	var _ = Describe("spec runner", func() {
+		type testData struct {
+			name        string
+			description string
+			status      models.PlaybookRunStatus
+			params      RunParams
+			extra       func(run *models.PlaybookRun)
+		}
+
+		tests := []testData{
+			{
+				name:        "bad-action-spec",
+				status:      models.PlaybookRunStatusFailed,
+				description: "invalid action spec should fail",
+				extra: func(run *models.PlaybookRun) {
+					var action models.PlaybookRunAction
+					err := DefaultContext.DB().Where("playbook_run_id = ? ", run.ID).First(&action).Error
+					Expect(err).To(BeNil())
+					Expect(lo.FromPtrOr(action.Error, "")).NotTo(BeEmpty())
+					Expect(action.Status).To(Equal(models.PlaybookActionStatusFailed))
+				},
 			},
-		},
-		{
-			name:        "bad-spec",
-			status:      models.PlaybookRunStatusFailed,
-			description: "invalid spec should fail",
-			extra: func(run *models.PlaybookRun) {
-				Expect(run.Error).ToNot(BeNil())
+			{
+				name:        "bad-spec",
+				status:      models.PlaybookRunStatusFailed,
+				description: "invalid spec should fail",
+				extra: func(run *models.PlaybookRun) {
+					Expect(run.Error).ToNot(BeNil())
+				},
 			},
-		},
-	}
-	for _, test := range tests {
-		It(test.description, func() {
-			run := createAndRun(test.name, test.params, test.status)
-			if test.extra != nil {
-				test.extra(run)
-			}
-		})
-	}
+		}
+
+		for _, test := range tests {
+			It(test.description, func() {
+				run := createAndRun(test.name, test.params, test.status)
+				if test.extra != nil {
+					test.extra(run)
+				}
+			})
+		}
+	})
 })
 
 func createAndRun(name string, params RunParams, statuses ...models.PlaybookRunStatus) *models.PlaybookRun {
@@ -571,4 +535,48 @@ func waitFor(run *models.PlaybookRun, statuses ...models.PlaybookRunStatus) *mod
 	}).WithTimeout(15 * time.Second).WithPolling(time.Second).Should(BeElementOf(s))
 
 	return savedRun
+}
+
+func createPlaybook(name string) (models.Playbook, v1.PlaybookSpec) {
+	var spec v1.Playbook
+	specContent, err := os.ReadFile(fmt.Sprintf("testdata/%s.yaml", name))
+	Expect(err).To(BeNil())
+
+	err = yamlutil.Unmarshal(specContent, &spec)
+	Expect(err).To(BeNil())
+
+	specJSON, err := json.Marshal(spec.Spec)
+	Expect(err).To(BeNil())
+
+	playbook := &models.Playbook{
+		Namespace: "default",
+		Name:      spec.Name,
+		Spec:      specJSON,
+		Source:    models.SourceConfigFile,
+	}
+
+	Expect(playbook.Save(DefaultContext.DB())).To(BeNil())
+	return *playbook, spec.Spec
+}
+
+func ExpectPlaybook(list []api.PlaybookListItem, err error, playbooks ...models.Playbook) {
+	Expect(err).To(BeNil())
+	Expect(lo.Map(list, func(l api.PlaybookListItem, _ int) string { return l.ID.String() })).
+		To(ConsistOf(lo.Map(playbooks, func(p models.Playbook, _ int) string { return p.ID.String() })))
+}
+
+func ExpectOKResponse(response *http.Response) {
+	var runResp dutyApi.HTTPError
+	if err := json.NewDecoder(response.Body).Decode(&runResp); err == nil {
+		Expect(runResp.Err).To(BeEmpty())
+	}
+	Expect(response.IsOK()).To(BeTrue())
+}
+
+func ExpectErrorResponse(response *http.Response, err string) {
+	var runResp dutyApi.HTTPError
+	if err := json.NewDecoder(response.Body).Decode(&runResp); err != nil {
+		Expect(runResp.Err).To(Equal(err), runResp)
+	}
+	Expect(response.IsOK()).To(BeFalse())
 }
