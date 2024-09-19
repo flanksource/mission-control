@@ -69,6 +69,14 @@ func Start(ctx context.Context) {
 		logger.Errorf("Failed to schedule job for syncing config cache: %v", err)
 	}
 
+	for _, job := range []*job.Job{RefreshCatalogAnaylsisChangeCount7dView, RefreshCatalogAnaylsisChangeCount30dView} {
+		j := job
+		j.Context = ctx
+		if err := j.AddToScheduler(FuncScheduler); err != nil {
+			logger.Errorf("Failed to schedule %s: %v", j, err)
+		}
+	}
+
 	if api.UpstreamConf.Valid() {
 		for _, job := range agentJobs {
 			j := job
