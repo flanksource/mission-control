@@ -354,43 +354,76 @@ var _ = Describe("Playbook", func() {
 			playbook models.Playbook
 			run      *models.PlaybookRun
 
-			upstreamConfig upstream.UpstreamConfig
-			agentName      = "aws-agent"
-			awsAgent       models.Agent
+			awsAgentUpstreamConfig upstream.UpstreamConfig
+			awsAgentName           = "aws"
+			awsAgent               models.Agent
+			awsAgentContext        context.Context
+			awsAgentDBDrop         func()
 
-			agentContext context.Context
-			agentDBDrop  func()
+			azureAgentName           = "azure"
+			azureAgentUpstreamConfig upstream.UpstreamConfig
+			azureAgent               models.Agent
+			azureAgentContext        context.Context
+			azureAgentDBDrop         func()
 		)
 
 		BeforeAll(func() {
 			playbook, spec = createPlaybook("agent-runner")
 
-			// Setup agent
-			newCtx, drop, err := setup.NewDB(DefaultContext, "aws")
-			Expect(err).To(BeNil())
-			agentContext = *newCtx
-			agentDBDrop = drop
-			agentContext = agentContext.WithName("agent").WithDBLogger("agent", "info")
+			// Setup AWS agent
+			{
+				newCtx, drop, err := setup.NewDB(DefaultContext, awsAgentName)
+				Expect(err).To(BeNil())
+				awsAgentContext = *newCtx
+				awsAgentDBDrop = drop
+				awsAgentContext = awsAgentContext.WithName("aws-agent").WithDBLogger("aws-agent", "info")
 
-			upstreamConfig = upstream.UpstreamConfig{
-				AgentName: "aws",
-				Host:      server.URL,
-				Username:  agentName,
-				Password:  "dummy",
+				// save the agent to the db
+				agentPerson := &models.Person{Name: awsAgentName}
+				Expect(agentPerson.Save(DefaultContext.DB())).To(BeNil())
+
+				awsAgent = models.Agent{Name: awsAgentName, PersonID: &agentPerson.ID}
+				Expect((&awsAgent).Save(DefaultContext.DB())).To(BeNil())
+
+				awsAgentUpstreamConfig = upstream.UpstreamConfig{
+					AgentName: awsAgentName,
+					Host:      server.URL,
+					Username:  awsAgentName,
+					Password:  "dummy",
+				}
 			}
 
-			// save the agent to the db
-			agentPerson := &models.Person{Name: agentName}
-			Expect(agentPerson.Save(DefaultContext.DB())).To(BeNil())
+			// Setup Azure agent
+			{
+				newCtx, drop, err := setup.NewDB(DefaultContext, azureAgentName)
+				Expect(err).To(BeNil())
+				azureAgentContext = *newCtx
+				azureAgentDBDrop = drop
+				azureAgentContext = azureAgentContext.WithName("azure-agent").WithDBLogger("azure-agent", "info")
 
-			awsAgent = models.Agent{Name: "aws", PersonID: &agentPerson.ID}
-			Expect((&awsAgent).Save(DefaultContext.DB())).To(BeNil())
+				// save the agent to the db
+				agentPerson := &models.Person{Name: azureAgentName}
+				Expect(agentPerson.Save(DefaultContext.DB())).To(BeNil())
 
+				azureAgent = models.Agent{Name: azureAgentName, PersonID: &agentPerson.ID}
+				Expect((&azureAgent).Save(DefaultContext.DB())).To(BeNil())
+
+				azureAgentUpstreamConfig = upstream.UpstreamConfig{
+					AgentName: azureAgentName,
+					Host:      server.URL,
+					Username:  azureAgentName,
+					Password:  "dummy",
+				}
+			}
 		})
 
 		AfterAll(func() {
-			if agentDBDrop != nil {
-				agentDBDrop()
+			if awsAgentDBDrop != nil {
+				awsAgentDBDrop()
+			}
+
+			if azureAgentDBDrop != nil {
+				azureAgentDBDrop()
 			}
 		})
 
@@ -401,37 +434,46 @@ var _ = Describe("Playbook", func() {
 
 			action, err := run.GetAction(DefaultContext.DB(), spec.Actions[0].Name)
 			Expect(err).To(BeNil())
+
 			// first step schedules on local
 			Expect(action.AgentID).To(BeNil())
 
 			waitFor(run, models.PlaybookRunStatusWaiting)
 			action, err = run.GetAction(DefaultContext.DB(), spec.Actions[1].Name)
 			Expect(err).To(BeNil())
-			// second step runs on agent
+
+			// second step runs on aws agent
 			Expect(*action.AgentID).To(Equal(awsAgent.ID))
 			Expect(action.Status).To(Equal(models.PlaybookActionStatusWaiting))
-
 		})
 
-		It("should pull the action from the upstream", func() {
-			Expect(PullPlaybookAction(job.New(agentContext), upstreamConfig)).To(BeNil())
+		It("azure agent should not pull action meant for aws agent", func() {
+			// Try to pull actions from upstream multiple times.
+			for i := 0; i < 3; i++ {
+				Expect(PullPlaybookAction(job.New(azureAgentContext), azureAgentUpstreamConfig)).To(BeNil())
+				_, err := run.GetAgentAction(azureAgentContext.DB(), spec.Actions[1].Name)
+				Expect(err).To(Not(BeNil()))
+			}
+		})
 
-			action, err := run.GetAgentAction(agentContext.DB(), spec.Actions[1].Name)
+		It("(aws) should pull the action from the upstream", func() {
+			Expect(PullPlaybookAction(job.New(awsAgentContext), awsAgentUpstreamConfig)).To(BeNil())
+
+			action, err := run.GetAgentAction(awsAgentContext.DB(), spec.Actions[1].Name)
 			Expect(err).To(BeNil())
 
 			Expect(action.Status).To(Equal(models.PlaybookActionStatusWaiting))
-
 		})
 
-		It("should run the pulled action on the agent", func() {
-			err := StartPlaybookConsumers(agentContext)
+		It("(aws) should run the pulled action on the agent", func() {
+			err := StartPlaybookConsumers(awsAgentContext)
 			Expect(err).To(BeNil())
 
-			_, err = ActionAgentConsumer(agentContext)
+			_, err = ActionAgentConsumer(awsAgentContext)
 			Expect(err).To(BeNil())
 
 			Eventually(func() models.PlaybookActionStatus {
-				action, _ := run.GetAgentAction(agentContext.DB(), spec.Actions[1].Name)
+				action, _ := run.GetAgentAction(awsAgentContext.DB(), spec.Actions[1].Name)
 				if action != nil {
 					return action.Status
 				}
@@ -439,8 +481,39 @@ var _ = Describe("Playbook", func() {
 			}, "10s", "1s").Should(Equal(models.PlaybookActionStatusCompleted))
 		})
 
-		It("should push the action result to the upstream", func() {
-			pushed, err := PushPlaybookActions(agentContext, upstreamConfig, 10)
+		It("(aws) should push the action result to the upstream", func() {
+			pushed, err := PushPlaybookActions(awsAgentContext, awsAgentUpstreamConfig, 10)
+			Expect(err).To(BeNil())
+			Expect(pushed).To(Equal(1))
+		})
+
+		It("(azure) should pull the action from the upstream", func() {
+			Expect(PullPlaybookAction(job.New(azureAgentContext), azureAgentUpstreamConfig)).To(BeNil())
+
+			action, err := run.GetAgentAction(azureAgentContext.DB(), spec.Actions[2].Name)
+			Expect(err).To(BeNil())
+
+			Expect(action.Status).To(Equal(models.PlaybookActionStatusWaiting))
+		})
+
+		It("(azure) should run the pulled action on the agent", func() {
+			err := StartPlaybookConsumers(azureAgentContext)
+			Expect(err).To(BeNil())
+
+			_, err = ActionAgentConsumer(azureAgentContext)
+			Expect(err).To(BeNil())
+
+			Eventually(func() models.PlaybookActionStatus {
+				action, _ := run.GetAgentAction(azureAgentContext.DB(), spec.Actions[2].Name)
+				if action != nil {
+					return action.Status
+				}
+				return "unknown"
+			}, "10s", "1s").Should(Equal(models.PlaybookActionStatusCompleted))
+		})
+
+		It("(azure) should push the action result to the upstream", func() {
+			pushed, err := PushPlaybookActions(azureAgentContext, awsAgentUpstreamConfig, 10)
 			Expect(err).To(BeNil())
 			Expect(pushed).To(Equal(1))
 		})
@@ -453,10 +526,18 @@ var _ = Describe("Playbook", func() {
 			actions, err := run.GetActions(DefaultContext.DB())
 			Expect(err).To(BeNil())
 
-			Expect(len(actions)).To(Equal(2))
+			Expect(len(actions)).To(Equal(3))
 			for i := range actions {
 				Expect(actions[i].Status).To(Equal(models.PlaybookActionStatusCompleted))
-				Expect(actions[i].Result["stdout"]).To(Equal(dummy.KubernetesNodeA.ConfigClass))
+
+				switch i {
+				case 0:
+					Expect(actions[i].Result["stdout"]).To(Equal("class from local agent: Node"))
+				case 1:
+					Expect(actions[i].Result["stdout"]).To(Equal("class from aws agent: Node"))
+				case 2:
+					Expect(actions[i].Result["stdout"]).To(Equal("class from azure agent: Node"))
+				}
 			}
 		})
 	})
