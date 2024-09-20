@@ -8,7 +8,7 @@ RUN go mod download
 COPY ./ ./
 RUN make build
 
-FROM flanksource/base-image:main@sha256:fbf85eaa6ec4dfb67ab904401eae7e0a02d00068f5a924f560fa38e8e3276dbe
+FROM flanksource/base-image:0.5.15:@sha256:sha256:8d3fe5816e10e0eb0e74ef30dbbc66d54402dcbdab80b72c7461811a05825dbc
 WORKDIR /app
 
 ENV DEBIAN_FRONTEND=noninteractive
