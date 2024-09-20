@@ -16,7 +16,6 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/playbook/actions"
-	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"github.com/samber/oops"
 	"gorm.io/gorm"
@@ -87,7 +86,7 @@ func findNextActionWithFilter(actions []v1.PlaybookAction) *v1.PlaybookAction {
 	return nil
 }
 
-func getActionSpec(ctx context.Context, playbook *models.Playbook, name string) (*v1.PlaybookAction, error) {
+func getActionSpec(playbook *models.Playbook, name string) (*v1.PlaybookAction, error) {
 	var spec v1.PlaybookSpec
 	if err := json.Unmarshal(playbook.Spec, &spec); err != nil {
 		return nil, err
@@ -326,7 +325,7 @@ func TemplateAndExecuteAction(ctx context.Context, spec v1.Playbook, playbook *m
 	return oops.Wrap(ExecuteAndSaveAction(ctx, run.PlaybookID, action, step))
 }
 
-func filterAction(ctx context.Context, runID uuid.UUID, filter string) (bool, error) {
+func filterAction(ctx context.Context, filter string) (bool, error) {
 	if strings.TrimSpace(filter) == "" {
 		return false, nil
 	}
