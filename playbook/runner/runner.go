@@ -142,12 +142,26 @@ func CheckDelay(ctx context.Context, playbook models.Playbook, run models.Playbo
 	return false, nil
 }
 
+func getEligibleAgents(spec v1.PlaybookSpec, action *v1.PlaybookAction, run models.PlaybookRun) []string {
+	if run.AgentID != nil {
+		return []string{run.AgentID.String()}
+	}
+
+	if len(action.RunsOn) != 0 {
+		return action.RunsOn
+	}
+
+	if len(spec.RunsOn) != 0 {
+		return spec.RunsOn
+	}
+
+	return []string{Main}
+}
+
 // ScheduleRun finds the next action step that needs to run and
 // creates the PlaybookActionRun in a scheduled status, with an optional agentId
 func ScheduleRun(ctx context.Context, run models.PlaybookRun) error {
-
 	var playbook models.Playbook
-
 	if err := ctx.DB().First(&playbook, run.PlaybookID).Error; err != nil {
 		return ctx.Oops("db").Wrap(err)
 	}
@@ -179,24 +193,34 @@ func ScheduleRun(ctx context.Context, run models.PlaybookRun) error {
 		}, action.Name))
 	}
 
-	if run.AgentID == nil && (len(action.RunsOn) == 0 || lo.Contains(action.RunsOn, Main)) {
+	var playbookSpec v1.PlaybookSpec
+	if err := json.Unmarshal(playbook.Spec, &playbookSpec); err != nil {
+		return ctx.Oops().Wrap(err)
+	}
+
+	eligibleAgents := getEligibleAgents(playbookSpec, action, run)
+
+	agent, err := db.FindFirstAgent(ctx, eligibleAgents...)
+	if err != nil {
+		return ctx.Oops("db").Wrap(err)
+	} else if agent == nil {
+		return ctx.Oops("db").Wrapf(err, "failed to find any agent (%s)", strings.Join(eligibleAgents, ","))
+	}
+
+	if agent.Name == Main {
 		if runAction, err := run.StartAction(ctx.DB(), action.Name); err != nil {
 			return ctx.Oops("db").Wrap(err)
 		} else {
 			ctx.Tracef("started %s (%v) on local", action.Name, runAction.ID)
 		}
-	}
-
-	if agent, err := db.FindFirstAgent(ctx, action.RunsOn...); err != nil {
-		return ctx.Oops("db").Wrap(err)
-	} else if agent == nil {
-		return ctx.Oops("db").Wrapf(err, "failed to find any agent (%s)", strings.Join(action.RunsOn, ","))
 	} else {
 		// Assign the action to an agent and step the status to Waiting
 		// When the agent polls for new actions to run, we return and then set the status to Running
 		ctx.Tracef("assigning %s to agent %s", action.Name, agent.Name)
 		return ctx.Oops("db").Wrap(run.Assign(ctx.DB(), agent, action.Name))
 	}
+
+	return nil
 }
 
 func ExecuteAndSaveAction(ctx context.Context, playbookID any, action *models.PlaybookRunAction, actionSpec v1.PlaybookAction) error {
