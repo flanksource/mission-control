@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/properties"
@@ -34,6 +35,7 @@ var Playbook = &cobra.Command{
 var playbookNamespace string
 var outfile string
 var outFormat string
+var delay bool
 var paramFile string
 var debugPort int
 
@@ -58,14 +60,12 @@ func parsePlaybookArgs(ctx context.Context, args []string) (*models.Playbook, *p
 	}
 
 	hostname, _ := os.Hostname()
-	agent, err := GetOrCreateAgent(ctx, hostname)
-	if err != nil {
+	if _, err := GetOrCreateAgent(ctx, hostname); err != nil {
 		return nil, nil, err
 	}
 
 	var params = playbook.RunParams{
-		Params:  make(map[string]string),
-		AgentID: &agent.ID,
+		Params: make(map[string]string),
 	}
 
 	if f, err := os.Open(paramFile); err == nil {
@@ -99,6 +99,11 @@ var Run = &cobra.Command{
 	PersistentPreRun: PreRun,
 	Run: func(cmd *cobra.Command, args []string) {
 		logger.UseSlog()
+
+		if delay {
+			time.Sleep(time.Second * 3)
+		}
+
 		if err := properties.LoadFile("mission-control.properties"); err != nil {
 			logger.Errorf(err.Error())
 		}
@@ -237,7 +242,6 @@ var Submit = &cobra.Command{
 		shutdown.WaitForSignal()
 
 		p, params, err := parsePlaybookArgs(ctx, args)
-		params.AgentID = nil
 		if err != nil {
 			shutdown.ShutdownAndExit(1, err.Error())
 		}
@@ -260,6 +264,7 @@ func init() {
 	Run.Flags().IntVar(&debugPort, "debug-port", -1, "Start an HTTP server to use the /debug routes, Use -1 to disable and 0 to pick a free port")
 	Run.Flags().StringVarP(&outfile, "out-file", "o", "", "Write playbook summary to file instead of stdout")
 	Run.Flags().StringVarP(&outFormat, "out-format", "f", "yaml", "Format of output file or stdout (yaml or json)")
+	Run.Flags().BoolVar(&delay, "delay", false, "delay initial run by 3 seconds")
 
 	Playbook.AddCommand(Run, Submit)
 	Root.AddCommand(Playbook)

@@ -172,14 +172,7 @@ func ScheduleRun(ctx context.Context, run models.PlaybookRun) error {
 		return nil
 	}
 
-	if run.AgentID != nil {
-		ctx.Tracef("action already assigning to %s", run.AgentID.String())
-		return ctx.Oops("db").Wrap(run.Assign(ctx.DB(), &models.Agent{
-			ID: *run.AgentID,
-		}, action.Name))
-	}
-
-	if run.AgentID == nil && (len(action.RunsOn) == 0 || lo.Contains(action.RunsOn, Main)) {
+	if len(action.RunsOn) == 0 || lo.Contains(action.RunsOn, Main) {
 		if runAction, err := run.StartAction(ctx.DB(), action.Name); err != nil {
 			return ctx.Oops("db").Wrap(err)
 		} else {

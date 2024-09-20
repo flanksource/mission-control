@@ -15,7 +15,6 @@ import (
 
 type RunParams struct {
 	ID          uuid.UUID               `yaml:"id,omitempty" json:"id,omitempty"`
-	AgentID     *uuid.UUID              `yaml:"agent_id,omitempty" json:"agent_id,omitempty"`
 	ConfigID    *uuid.UUID              `yaml:"config_id,omitempty" json:"config_id,omitempty"`
 	CheckID     *uuid.UUID              `yaml:"check_id,omitempty" json:"check_id,omitempty"`
 	ComponentID *uuid.UUID              `yaml:"component_id,omitempty" json:"component_id,omitempty"`
