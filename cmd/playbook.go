@@ -148,13 +148,13 @@ var Run = &cobra.Command{
 			logger.Fatalf(err.Error())
 			return
 		}
+
 		if action == nil {
 			logger.Errorf("No actions to run")
 			return
 		}
 
 		for action != nil {
-
 			if delayed, err := runner.CheckDelay(ctx, *p, *run, action, step); err != nil {
 				ctx.Errorf("Error running action %s: %v", action.Name, err)
 				break
@@ -163,7 +163,6 @@ var Run = &cobra.Command{
 			}
 
 			runAction, err := run.StartAction(ctx.DB(), action.Name)
-
 			if err != nil {
 				ctx.Errorf("Error starting action %s: %v", action.Name, err)
 				break
@@ -175,11 +174,11 @@ var Run = &cobra.Command{
 			}
 
 			action, _, err = runner.GetNextActionToRun(ctx, *p, *run)
-
 			if action != nil && action.Name == runAction.Name {
 				ctx.Errorf("%v", ctx.Oops().Errorf("Action cycle detected for: %s", action.Name))
 				shutdown.ShutdownAndExit(1, "")
 			}
+
 			if err != nil {
 				ctx.Errorf("Error getting next action %s: %v", action.Name, err)
 				break
@@ -197,7 +196,6 @@ var Run = &cobra.Command{
 		if summary.Run.Status != models.PlaybookRunStatusCompleted {
 			shutdown.ShutdownAndExit(1, fmt.Sprintf("Playbook run status: %s ", summary.Run.Status))
 		}
-
 	},
 }
 
