@@ -95,7 +95,7 @@ func getActionForAgent(ctx context.Context, agent *models.Agent) (*ActionForAgen
 		return nil, ctx.Oops().Wrapf(err, "failed to template env")
 	}
 
-	spec, err := getActionSpec(ctx, playbook, step.Name)
+	spec, err := getActionSpec(playbook, step.Name)
 	if err != nil {
 		return nil, ctx.Oops().Wrap(err)
 	}
@@ -117,7 +117,7 @@ func getActionForAgent(ctx context.Context, agent *models.Agent) (*ActionForAgen
 		TemplateEnv: templateEnv,
 	}
 
-	if skip, err := filterAction(ctx, run.ID, spec.Filter); err != nil {
+	if skip, err := filterAction(ctx, spec.Filter); err != nil {
 		return nil, ctx.Oops().Wrap(err)
 	} else {
 		// We run the filter on the upstream and simply send the filter result to the agent.
