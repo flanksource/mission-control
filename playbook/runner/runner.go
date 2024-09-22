@@ -87,14 +87,15 @@ func findNextActionWithFilter(actions []v1.PlaybookAction) *v1.PlaybookAction {
 	return nil
 }
 
-func getActionSpec(playbook *models.Playbook, name string) (*v1.PlaybookAction, error) {
+func getActionSpec(run *models.PlaybookRun, name string) (*v1.PlaybookAction, error) {
 	var spec v1.PlaybookSpec
-	if err := json.Unmarshal(playbook.Spec, &spec); err != nil {
+	if err := json.Unmarshal(run.Spec, &spec); err != nil {
 		return nil, err
 	}
+
 	for _, action := range spec.Actions {
 		if action.Name == name {
-			action.PlaybookID = playbook.ID.String()
+			action.PlaybookID = run.PlaybookID.String()
 			return &action, nil
 		}
 	}
@@ -197,7 +198,7 @@ func ScheduleRun(ctx context.Context, run models.PlaybookRun) error {
 	}
 
 	var playbookSpec v1.PlaybookSpec
-	if err := json.Unmarshal(playbook.Spec, &playbookSpec); err != nil {
+	if err := json.Unmarshal(run.Spec, &playbookSpec); err != nil {
 		return ctx.Oops().Wrap(err)
 	}
 

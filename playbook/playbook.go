@@ -182,7 +182,7 @@ func saveRunAsConfigChange(ctx context.Context, playbook *models.Playbook, run m
 
 		details := map[string]any{
 			"parameters": parameters,
-			"spec":       playbook.Spec,
+			"spec":       run.Spec,
 		}
 		detailsJSON, err := json.Marshal(details)
 		if err != nil {
@@ -215,14 +215,18 @@ func savePlaybookRun(ctx context.Context, playbook *models.Playbook, run *models
 	defer tx.Rollback()
 
 	ctx = ctx.WithDB(tx, ctx.Pool())
-
 	if err := ctx.DB().Create(run).Error; err != nil {
 		return ctx.Oops("db").Wrap(err)
 	}
 
-	if requiresApproval(playbook) {
+	var spec v1.PlaybookSpec
+	if err := json.Unmarshal(run.Spec, &spec); err != nil {
+		return ctx.Oops().Wrap(err)
+	}
+
+	if requiresApproval(spec) {
 		// Attempt to auto approve run
-		if err := approveRun(ctx, playbook, run.ID); err != nil {
+		if err := ApproveRun(ctx, run.ID); err != nil {
 			switch dutyAPI.ErrorCode(err) {
 			case dutyAPI.EFORBIDDEN, dutyAPI.EINVALID:
 				// ignore these errors

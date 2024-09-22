@@ -1,6 +1,7 @@
 package playbook
 
 import (
+	"encoding/json"
 	"net/http"
 
 	"github.com/flanksource/commons/collections"
@@ -19,52 +20,45 @@ func HandlePlaybookRunApproval(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
 
 	var (
-		playbookID = c.Param("playbook_id")
-		runID      = c.Param("run_id")
+		runID = c.Param("run_id")
 	)
-
-	playbookUUID, err := uuid.Parse(playbookID)
-	if err != nil {
-		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{Err: err.Error(), Message: "invalid playbook id"})
-	}
 
 	runUUID, err := uuid.Parse(runID)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{Err: err.Error(), Message: "invalid run id"})
 	}
 
-	if err := ApproveRun(ctx, playbookUUID, runUUID); err != nil {
+	if err := ApproveRun(ctx, runUUID); err != nil {
 		return dutyAPI.WriteError(c, err)
 	}
 
 	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{Message: "playbook run approved"})
 }
 
-func ApproveRun(ctx context.Context, playbookID, runID uuid.UUID) error {
-	playbook, err := db.FindPlaybook(ctx, playbookID)
+func ApproveRun(ctx context.Context, runID uuid.UUID) error {
+	run, err := db.FindPlaybookRun(ctx, runID)
 	if err != nil {
-		return api.Errorf(api.EINTERNAL, "something went wrong while finding playbook(id=%s)", playbookID).WithDebugInfo("db.FindPlaybook(id=%s): %v", playbookID, err)
-	} else if playbook == nil {
-		return api.Errorf(api.ENOTFOUND, "playbook(id=%s) not found", playbookID)
+		return api.Errorf(api.EINTERNAL, "something went wrong while finding run (id=%s)", runID).WithDebugInfo("db.FindPlaybookRun(id=%s): %v", runID, err)
+	} else if run == nil {
+		return api.Errorf(api.ENOTFOUND, "playbook run (id=%s) not found", runID)
 	}
 
-	return approveRun(ctx, playbook, runID)
+	return approveRun(ctx, run)
 }
 
-func requiresApproval(playbook *models.Playbook) bool {
-	playbookV1, _ := v1.PlaybookFromModel(*playbook)
-	return playbookV1.Spec.Approval != nil && !playbookV1.Spec.Approval.Approvers.Empty()
+func requiresApproval(spec v1.PlaybookSpec) bool {
+	return spec.Approval != nil && !spec.Approval.Approvers.Empty()
 }
 
-func approveRun(ctx context.Context, playbook *models.Playbook, runID uuid.UUID) error {
+func approveRun(ctx context.Context, run *models.PlaybookRun) error {
 	approver := ctx.User()
 
-	playbookV1, err := v1.PlaybookFromModel(*playbook)
-	if err != nil {
-		return api.Errorf(api.EINTERNAL, "something went wrong").WithDebugInfo("v1.PlaybookFromModel: %v", err)
+	var spec v1.PlaybookSpec
+	if err := json.Unmarshal(run.Spec, &spec); err != nil {
+		return err
 	}
 
-	if playbookV1.Spec.Approval == nil || playbookV1.Spec.Approval.Approvers.Empty() {
+	if spec.Approval == nil || spec.Approval.Approvers.Empty() {
 		return api.Errorf(api.EINVALID, "this playbook does not require approval")
 	}
 
@@ -73,19 +67,19 @@ func approveRun(ctx context.Context, playbook *models.Playbook, runID uuid.UUID)
 	}
 
 	approval := models.PlaybookApproval{
-		RunID: runID,
+		RunID: run.ID,
 	}
 
-	if collections.Contains(playbookV1.Spec.Approval.Approvers.People, approver.Email) {
+	if collections.Contains(spec.Approval.Approvers.People, approver.Email) {
 		approval.PersonID = &approver.ID
 	} else {
 		teams, err := db.GetTeamsForUser(ctx, approver.ID.String())
 		if err != nil {
-			return api.Errorf(api.EINTERNAL, "something went wrong").WithDebugInfo("db.GetTeamIDsForUser(id=%s): %v", approver.ID, err)
+			return api.Errorf(api.EINTERNAL, "something went wrong").WithDebugInfo("db.GetTeamsForUser(id=%s): %v", approver.ID, err)
 		}
 
 		for _, team := range teams {
-			if collections.Contains(playbookV1.Spec.Approval.Approvers.Teams, team.Name) {
+			if collections.Contains(spec.Approval.Approvers.Teams, team.Name) {
 				approval.TeamID = &team.ID
 				break
 			}
@@ -97,7 +91,7 @@ func approveRun(ctx context.Context, playbook *models.Playbook, runID uuid.UUID)
 	}
 
 	if err := db.SavePlaybookRunApproval(ctx, approval); err != nil {
-		return api.Errorf(api.EINTERNAL, "something went wrong while approving").WithDebugInfo("db.ApprovePlaybookRun(runID=%s, approverID=%s): %v", runID, approver.ID, err)
+		return api.Errorf(api.EINTERNAL, "something went wrong while approving").WithDebugInfo("db.SavePlaybookRunApproval(runID=%s, approverID=%s): %v", run.ID, approver.ID, err)
 	}
 
 	return nil

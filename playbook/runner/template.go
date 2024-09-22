@@ -28,7 +28,7 @@ func CreateTemplateEnv(ctx context.Context, playbook *models.Playbook, run *mode
 	oops := oops.With(models.ErrorContext(playbook, run)...)
 
 	var spec v1.PlaybookSpec
-	if err := json.Unmarshal(playbook.Spec, &spec); err != nil {
+	if err := json.Unmarshal(run.Spec, &spec); err != nil {
 		return templateEnv, oops.Wrapf(err, "invalid playbook spec")
 	}
 
