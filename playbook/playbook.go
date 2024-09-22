@@ -89,6 +89,10 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 		AgentID:    req.AgentID,
 	}
 
+	// The run gets its own copy of the spec and uses that throughout its lifecycle.
+	// Any change to the playbook spec while the run is in progress should not affect the run.
+	run.Spec = playbook.Spec
+
 	if ctx.User() != nil {
 		run.CreatedBy = &ctx.User().ID
 	}

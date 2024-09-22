@@ -29,17 +29,18 @@ const (
 	Agent = "agent"
 )
 
-func GetNextActionToRun(ctx context.Context, playbook models.Playbook, run models.PlaybookRun) (action *v1.PlaybookAction, lastAction *models.PlaybookRunAction, err error) {
-	ctx.Logger.V(3).Infof("Getting next action to run for playbook %s run %s", playbook.Name, run.ID)
-	ctx = ctx.WithObject(playbook, run)
-	if validationErr, err := openapi.ValidatePlaybookSpec(playbook.Spec); err != nil {
+func GetNextActionToRun(ctx context.Context, run models.PlaybookRun) (action *v1.PlaybookAction, lastAction *models.PlaybookRunAction, err error) {
+	ctx.Logger.V(3).Infof("getting next action for run %s", run.ID)
+	ctx = ctx.WithObject(run)
+
+	if validationErr, err := openapi.ValidatePlaybookSpec(run.Spec); err != nil {
 		return nil, nil, err
 	} else if validationErr != nil {
 		return nil, nil, validationErr
 	}
 
 	var playbookSpec v1.PlaybookSpec
-	if err := json.Unmarshal(playbook.Spec, &playbookSpec); err != nil {
+	if err := json.Unmarshal(run.Spec, &playbookSpec); err != nil {
 		return nil, nil, ctx.Oops().Wrap(err)
 	}
 
@@ -165,9 +166,12 @@ func ScheduleRun(ctx context.Context, run models.PlaybookRun) error {
 		return ctx.Oops("db").Wrap(err)
 	}
 
-	ctx = ctx.WithObject(playbook, run)
+	// Override the current spec with the run's spec
+	playbook.Spec = run.Spec
 
-	action, lastRan, err := GetNextActionToRun(ctx, playbook, run)
+	ctx = ctx.WithObject(run)
+
+	action, lastRan, err := GetNextActionToRun(ctx, run)
 	if err != nil {
 		ctx.Tracef("Unable to get next action")
 		return ctx.Oops().Wrap(err)
@@ -176,7 +180,7 @@ func ScheduleRun(ctx context.Context, run models.PlaybookRun) error {
 		return ctx.Oops("db").Wrap(run.End(ctx.DB()))
 	}
 
-	ctx = ctx.WithObject(playbook, action, run)
+	ctx = ctx.WithObject(action, run)
 
 	delayed, err := CheckDelay(ctx, playbook, run, action, lastRan)
 	if err != nil {
@@ -261,22 +265,22 @@ func RunAction(ctx context.Context, run *models.PlaybookRun, action *models.Play
 	playbook, err := action.GetPlaybook(ctx.DB())
 	if err != nil {
 		return err
-	}
-	if playbook == nil {
+	} else if playbook == nil {
 		return ctx.Oops().Errorf("playbook not found")
 	}
 
-	spec, err := v1.PlaybookFromModel(*playbook)
-	if err != nil {
+	var spec v1.PlaybookSpec
+	if err := json.Unmarshal([]byte(run.Spec), &spec); err != nil {
 		return err
 	}
-	ctx = ctx.WithObject(playbook, action, run)
+
+	ctx = ctx.WithObject(action, run)
 	ctx, span := ctx.StartSpan(fmt.Sprintf("playbook.%s", playbook.Name))
 	defer span.End()
+
 	if err := TemplateAndExecuteAction(ctx, spec, playbook, run, action); err != nil {
 		if e, ok := oops.AsOops(err); ok {
 			if lo.Contains(e.Tags(), "db") {
-
 				// DB errors are retryable
 				return err
 			}
@@ -297,10 +301,10 @@ func RunAction(ctx context.Context, run *models.PlaybookRun, action *models.Play
 }
 
 // TemplateAndExecuteAction executes the given playbook action after templating it.
-func TemplateAndExecuteAction(ctx context.Context, spec v1.Playbook, playbook *models.Playbook, run *models.PlaybookRun, action *models.PlaybookRunAction) error {
+func TemplateAndExecuteAction(ctx context.Context, spec v1.PlaybookSpec, playbook *models.Playbook, run *models.PlaybookRun, action *models.PlaybookRunAction) error {
 	ctx = ctx.WithObject(playbook, run, action)
 
-	step, found := lo.Find(spec.Spec.Actions, func(i v1.PlaybookAction) bool { return i.Name == action.Name })
+	step, found := lo.Find(spec.Actions, func(i v1.PlaybookAction) bool { return i.Name == action.Name })
 	if !found {
 		return ctx.Oops().Errorf("action '%s' not found", action.Name)
 	}

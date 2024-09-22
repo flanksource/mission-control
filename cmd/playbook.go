@@ -143,7 +143,7 @@ var Run = &cobra.Command{
 		var action *v1.PlaybookAction
 		var step *models.PlaybookRunAction
 
-		action, step, err = runner.GetNextActionToRun(ctx, *p, *run)
+		action, step, err = runner.GetNextActionToRun(ctx, *run)
 		if err != nil {
 			logger.Fatalf(err.Error())
 			return
@@ -173,7 +173,7 @@ var Run = &cobra.Command{
 				break
 			}
 
-			action, _, err = runner.GetNextActionToRun(ctx, *p, *run)
+			action, _, err = runner.GetNextActionToRun(ctx, *run)
 			if action != nil && action.Name == runAction.Name {
 				ctx.Errorf("%v", ctx.Oops().Errorf("Action cycle detected for: %s", action.Name))
 				shutdown.ShutdownAndExit(1, "")

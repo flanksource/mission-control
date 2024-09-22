@@ -290,6 +290,7 @@ func RunConsumer(ctx context.Context) (int, error) {
 	if ctx.Properties().On(false, "playbook.scheduler.disabled") {
 		return 0, nil
 	}
+
 	var consumed = 0
 	err := ctx.Transaction(func(ctx context.Context, _ trace.Span) error {
 		tx := ctx.FastDB()
