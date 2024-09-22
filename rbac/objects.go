@@ -109,6 +109,7 @@ var dbResourceObjMap = map[string]string{
 	"migration_logs":                     ObjectDatabaseSystem,
 	"networks":                           ObjectAuthConfidential,
 	"notification_send_history":          ObjectMonitor,
+	"notification_send_history_summary":  ObjectMonitor,
 	"notifications_summary":              ObjectMonitor,
 	"notifications":                      ObjectNotification,
 	"notification_silences":              ObjectNotification,
