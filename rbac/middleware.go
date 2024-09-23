@@ -108,8 +108,16 @@ func CheckContext(ctx context.Context, object, action string) bool {
 
 	// Everyone with an account is a viewer
 	if action == ActionRead && Check(ctx, RoleViewer, object, action) {
-		return true
+		// Do nothing, proceed to ABAC check
+	} else if Check(ctx, user.ID.String(), object, action) {
+		// Do nothing, proceed to ABAC check
+	} else {
+		return false
 	}
 
-	return Check(ctx, user.ID.String(), object, action)
+	// Abac check here
+	// TODO: Get the abacRequest from the middleware
+	var abacReq ABACResource
+	enforcer.Enforce(user.ID.String(), abacReq, action)
+	return true
 }
