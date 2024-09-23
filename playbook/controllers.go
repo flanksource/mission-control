@@ -43,7 +43,7 @@ func RegisterRoutes(e *echo.Echo) {
 	runGroup := playbookGroup.Group("/run")
 	runGroup.POST("", HandlePlaybookRun, rbac.Playbook(rbac.ActionRun))
 	runGroup.GET("/:id", HandleGetPlaybookRun, rbac.Playbook(rbac.ActionRead))
-	runGroup.POST("/approve/:playbook_id/:run_id", HandlePlaybookRunApproval, rbac.Playbook(rbac.ActionApprove))
+	runGroup.POST("/approve/:run_id", HandlePlaybookRunApproval, rbac.Playbook(rbac.ActionApprove))
 }
 
 type RunResponse struct {

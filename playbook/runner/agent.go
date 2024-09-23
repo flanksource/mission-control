@@ -95,7 +95,7 @@ func getActionForAgent(ctx context.Context, agent *models.Agent) (*ActionForAgen
 		return nil, ctx.Oops().Wrapf(err, "failed to template env")
 	}
 
-	spec, err := getActionSpec(playbook, step.Name)
+	spec, err := getActionSpec(run, step.Name)
 	if err != nil {
 		return nil, ctx.Oops().Wrap(err)
 	}
