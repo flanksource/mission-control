@@ -111,6 +111,29 @@ var _ = Describe("Playbook", func() {
 			}
 		})
 
+		It("should render params", func() {
+			requestyBody := map[string]any{
+				"id":        configPlaybook.ID.String(),
+				"config_id": dummy.EKSCluster.ID.String(),
+			}
+
+			response, err := http.NewClient().
+				Auth(dummy.JohnDoe.Email, "").
+				R(DefaultContext).
+				Header("Content-Type", "application/json").
+				Post(fmt.Sprintf("%s/playbook/%s/params", server.URL, configPlaybook.ID), requestyBody)
+			Expect(err).To(BeNil())
+
+			var body GetParamsResponse
+			err = json.NewDecoder(response.Body).Decode(&body)
+			Expect(err).To(BeNil())
+
+			Expect(len(body.Params)).To(Equal(2))
+			Expect(body.Params[0].Name).To(Equal("path"))
+			Expect(body.Params[1].Name).To(Equal("name"))
+			Expect(string(body.Params[1].Default)).To(Equal(*dummy.EKSCluster.Name))
+		})
+
 		It("should store playbook run via API", func() {
 			run := sdk.RunParams{
 				ID:       configPlaybook.ID,

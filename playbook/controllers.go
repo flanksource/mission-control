@@ -82,6 +82,10 @@ func HandlePlaybookRun(c echo.Context) error {
 	})
 }
 
+type GetParamsResponse struct {
+	Params []v1.PlaybookParameter `json:"params"`
+}
+
 func HandleGetPlaybookParams(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
 
@@ -136,8 +140,8 @@ func HandleGetPlaybookParams(c echo.Context) error {
 		return ctx.Oops().Wrapf(err, "failed to walk template")
 	}
 
-	return c.JSON(http.StatusOK, map[string]any{
-		"params": spec.Parameters,
+	return c.JSON(http.StatusOK, GetParamsResponse{
+		Params: spec.Parameters,
 	})
 }
 
