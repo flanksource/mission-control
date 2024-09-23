@@ -28,6 +28,19 @@ func FindPlaybooksForEvent(ctx context.Context, eventClass, event string) ([]mod
 	return playbooks, nil
 }
 
+func FindPlaybookRun(ctx context.Context, id uuid.UUID) (*models.PlaybookRun, error) {
+	var p models.PlaybookRun
+	if err := ctx.DB().Where("id = ?", id).First(&p).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+
+		return nil, err
+	}
+
+	return &p, nil
+}
+
 func FindPlaybook(ctx context.Context, id uuid.UUID) (*models.Playbook, error) {
 	var p models.Playbook
 	if err := ctx.DB().Where("id = ?", id).First(&p).Error; err != nil {

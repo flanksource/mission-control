@@ -175,6 +175,7 @@ func (t *playbookScheduler) Handle(ctx context.Context, event models.Event) erro
 		run := models.PlaybookRun{
 			PlaybookID: p.ID,
 			Status:     models.PlaybookRunStatusPending,
+			Spec:       p.Spec,
 		}
 
 		if playbook.Spec.Approval == nil || playbook.Spec.Approval.Approvers.Empty() {

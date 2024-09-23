@@ -41,7 +41,7 @@ func executeAction(ctx context.Context, playbookID any, runID uuid.UUID, runActi
 	}
 
 	if actionSpec.Filter != "" {
-		if skipped, err := filterAction(ctx, runID, actionSpec.Filter); err != nil {
+		if skipped, err := filterAction(ctx, actionSpec.Filter); err != nil {
 			return executeActionResult{}, err
 		} else if skipped {
 			ctx.Debugf("skipping %s", actionSpec.Name)

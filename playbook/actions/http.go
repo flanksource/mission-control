@@ -34,7 +34,7 @@ func (c *HTTP) Run(ctx context.Context, action v1.HTTPAction) (*HTTPResult, erro
 		if _, err := url.Parse(connection.URL); err != nil {
 			return nil, fmt.Errorf("failed to parse url(%q): %w", connection.URL, err)
 		}
-	} else if connection == nil {
+	} else {
 		connection = &models.Connection{
 			URL: action.URL,
 		}

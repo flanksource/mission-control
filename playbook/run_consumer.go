@@ -290,6 +290,7 @@ func RunConsumer(ctx context.Context) (int, error) {
 	if ctx.Properties().On(false, "playbook.scheduler.disabled") {
 		return 0, nil
 	}
+
 	var consumed = 0
 	err := ctx.Transaction(func(ctx context.Context, _ trace.Span) error {
 		tx := ctx.FastDB()
@@ -299,12 +300,13 @@ func RunConsumer(ctx context.Context) (int, error) {
 	FROM playbook_runs
 	INNER JOIN playbooks ON playbooks.id = playbook_runs.playbook_id
 	WHERE status IN (?, ?) AND scheduled_time <= NOW()
+	AND (agent_id IS NULL OR agent_id = ?)
 	ORDER BY scheduled_time
 	FOR UPDATE SKIP LOCKED
 	LIMIT 1
 `
 		var run models.PlaybookRun
-		if err := tx.Raw(query, models.PlaybookRunStatusScheduled, models.PlaybookRunStatusSleeping).First(&run).Error; err != nil {
+		if err := tx.Raw(query, models.PlaybookRunStatusScheduled, models.PlaybookRunStatusSleeping, uuid.Nil).First(&run).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return nil
 			}
