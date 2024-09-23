@@ -104,6 +104,7 @@ func HandleGetPlaybookParams(c echo.Context) error {
 
 	dummyRun := models.PlaybookRun{
 		PlaybookID: playbook.ID,
+		Spec:       playbook.Spec,
 		CreatedBy:  lo.ToPtr(ctx.User().ID),
 	}
 	if req.ComponentID != nil {
