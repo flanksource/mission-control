@@ -135,6 +135,11 @@ var _ = ginkgo.Describe("Push", ginkgo.Ordered, func() {
 		tree, err := query.Topology(DefaultContext, query.TopologyOptions{ID: componentLaptop.ID.String(), Depth: 10, NoCache: true})
 		Expect(err).To(BeNil())
 
+		// Mess up ids to ensure pushed IDs do not matter and deletion works correctly
+		tree.Components[0].ID = uuid.New()
+		tree.Components[0].Components[0].ID = uuid.New()
+		tree.Components[0].Components[1].ID = uuid.New()
+
 		httpClient := http.NewClient()
 		endpoint := fmt.Sprintf("http://localhost:%d/push/topology", echoServerPort)
 		resp, err := httpClient.R(DefaultContext).
