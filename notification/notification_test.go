@@ -370,10 +370,18 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 		})
 
 		ginkgo.It("only one notification must have been sent", func() {
-			var sentHistoryCount int64
-			err := DefaultContext.DB().Model(&models.NotificationSendHistory{}).Where("notification_id = ?", goodNotif.ID).Count(&sentHistoryCount).Error
+			var sentHistory []models.NotificationSendHistory
+			err := DefaultContext.DB().Where("notification_id = ?", goodNotif.ID).Find(&sentHistory).Error
 			Expect(err).To(BeNil())
-			Expect(sentHistoryCount).To(Equal(int64(1)))
+			Expect(len(sentHistory)).To(Equal(1))
+			Expect(sentHistory[0].Status).To(Equal(models.NotificationStatusSent))
+		})
+
+		ginkgo.It("should correctly set error status", func() {
+			var sentHistory models.NotificationSendHistory
+			err := DefaultContext.DB().Where("notification_id = ?", badNotif.ID).Find(&sentHistory).Error
+			Expect(err).To(BeNil())
+			Expect(sentHistory.Status).To(Equal(models.NotificationStatusError))
 		})
 	})
 

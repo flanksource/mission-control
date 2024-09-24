@@ -50,6 +50,7 @@ func (t *Context) WithRecipientType(recipientType RecipientType) {
 }
 
 func (t *Context) WithError(err error) {
+	t.log.Status = models.NotificationStatusError
 	if o, ok := oops.AsOops(err); ok {
 		oopsErr := map[string]any{
 			"error": o.ToMap(),
