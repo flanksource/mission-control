@@ -68,10 +68,6 @@ func Authorization(object, action string) MiddlewareFunc {
 	return GetAuthorizer(object, action, nil)
 }
 
-func AuthorizationWithABAC(object, action string, getResource EchoABACResourceGetter) MiddlewareFunc {
-	return GetAuthorizer(object, action, getResource)
-}
-
 func GetAuthorizer(object, action string, getResource EchoABACResourceGetter) MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
@@ -143,6 +139,10 @@ func CheckEchoContext(c echo.Context, object, action string, getResource EchoABA
 }
 
 func HasPermission(ctx context.Context, subject string, object *ABACResource, action string) bool {
+	if enforcer == nil {
+		return true
+	}
+
 	allowed, err := enforcer.Enforce(subject, object.AsMap(), action)
 	if err != nil {
 		ctx.Debugf("error checking abac for subject=%s action=%s", subject, action)

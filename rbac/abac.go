@@ -21,6 +21,7 @@ func (r ABACResource) AsMap() map[string]any {
 	return map[string]any{
 		"component": r.Component.AsMap(),
 		"config":    r.Config.AsMap(),
+		"check":     r.Check.AsMap(),
 		"playbook":  r.Playbook.AsMap(),
 	}
 }
