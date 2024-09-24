@@ -136,13 +136,13 @@ func CheckEchoContext(c echo.Context, object, action string, getResource EchoABA
 			return false
 		}
 
-		return CheckABAC(ctx, user.ID.String(), abacReq, abacAction)
+		return HasPermission(ctx, user.ID.String(), abacReq, abacAction)
 	}
 
 	return true
 }
 
-func CheckABAC(ctx context.Context, subject string, object *ABACResource, action string) bool {
+func HasPermission(ctx context.Context, subject string, object *ABACResource, action string) bool {
 	allowed, err := enforcer.Enforce(subject, object.AsMap(), action)
 	if err != nil {
 		ctx.Debugf("error checking abac for subject=%s action=%s", subject, action)

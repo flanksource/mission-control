@@ -6,11 +6,13 @@ import (
 )
 
 const (
-	ActionPlaybookRun = "playbook:run"
+	ActionPlaybookRun     = "playbook:run"
+	ActionPlaybookApprove = "playbook:approve"
 )
 
 type ABACResource struct {
 	Playbook  models.Playbook   `json:"playbook"`
+	Check     models.Check      `json:"check"`
 	Config    models.ConfigItem `json:"config"`
 	Component models.Component  `json:"component"`
 }

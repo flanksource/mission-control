@@ -10,16 +10,17 @@ import (
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
+	"github.com/samber/oops"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
-	"github.com/flanksource/incident-commander/playbook/actions"
 	"github.com/flanksource/incident-commander/playbook/runner"
 	"github.com/flanksource/incident-commander/rbac"
 	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
@@ -132,8 +133,10 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 		return nil, ctx.Oops().Wrap(err)
 	}
 
-	if !rbac.CheckABAC(ctx, ctx.User().ID.String(), abacResourceFromTemplateEnv(templateEnv), rbac.ActionPlaybookRun) {
-		return nil, ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("unauthorized to run playbook")
+	if abacResource, err := runToABACResource(ctx, run); err != nil {
+		return nil, ctx.Oops().Wrap(err)
+	} else if !rbac.HasPermission(ctx, ctx.User().ID.String(), abacResource, rbac.ActionPlaybookRun) {
+		return nil, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("forbidden to run playbook")
 	}
 
 	if err := req.setDefaults(ctx, spec, templateEnv); err != nil {
@@ -155,7 +158,7 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 		return nil, err
 	}
 
-	if err := savePlaybookRun(ctx, playbook, &run); err != nil {
+	if err := savePlaybookRun(ctx, &run); err != nil {
 		return nil, ctx.Oops().Wrapf(err, "failed to create playbook run")
 	}
 
@@ -166,12 +169,40 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 	return &run, nil
 }
 
-func abacResourceFromTemplateEnv(templateEnv actions.TemplateEnv) *rbac.ABACResource {
-	return &rbac.ABACResource{
-		Playbook:  templateEnv.Playbook,
-		Config:    lo.FromPtr(templateEnv.Config),
-		Component: lo.FromPtr(templateEnv.Component),
+func runToABACResource(ctx context.Context, run models.PlaybookRun) (*rbac.ABACResource, error) {
+	var output rbac.ABACResource
+
+	playbook, err := query.FindPlaybook(ctx, run.PlaybookID.String())
+	if err != nil {
+		return nil, err
 	}
+	output.Playbook = *playbook
+
+	if run.ComponentID != nil {
+		component, err := query.GetCachedComponent(ctx, run.ComponentID.String())
+		if err != nil {
+			return nil, err
+		}
+		output.Component = *component
+	}
+
+	if run.CheckID != nil {
+		check, err := query.FindCachedCheck(ctx, run.CheckID.String())
+		if err != nil {
+			return nil, err
+		}
+		output.Check = *check
+	}
+
+	if run.ConfigID != nil {
+		config, err := query.GetCachedConfig(ctx, run.ConfigID.String())
+		if err != nil {
+			return nil, err
+		}
+		output.Config = *config
+	}
+
+	return &output, nil
 }
 
 func saveRunAsConfigChange(ctx context.Context, playbook *models.Playbook, run models.PlaybookRun, parameters any) error {
@@ -221,7 +252,7 @@ func saveRunAsConfigChange(ctx context.Context, playbook *models.Playbook, run m
 }
 
 // savePlaybookRun saves the run and attempts register an approval from the caller.
-func savePlaybookRun(ctx context.Context, playbook *models.Playbook, run *models.PlaybookRun) error {
+func savePlaybookRun(ctx context.Context, run *models.PlaybookRun) error {
 	tx := ctx.DB().Begin()
 	if tx.Error != nil {
 		return ctx.Oops("db").Wrap(tx.Error)
@@ -241,11 +272,13 @@ func savePlaybookRun(ctx context.Context, playbook *models.Playbook, run *models
 	if requiresApproval(spec) {
 		// Attempt to auto approve run
 		if err := ApproveRun(ctx, run.ID); err != nil {
-			switch dutyAPI.ErrorCode(err) {
-			case dutyAPI.EFORBIDDEN, dutyAPI.EINVALID:
-				// ignore these errors
-			default:
-				return ctx.Oops().Errorf("error while attempting to auto approve run: %w", err)
+			if oopserr, ok := oops.AsOops(err); ok {
+				switch oopserr.Code() {
+				case dutyAPI.EFORBIDDEN, dutyAPI.EINVALID:
+					// ignore these errors
+				default:
+					return ctx.Oops().Errorf("error while attempting to auto approve run: %w", err)
+				}
 			}
 		}
 	}
