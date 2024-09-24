@@ -55,19 +55,18 @@ func PushTopology(c echo.Context) error {
 	}
 
 	data.AgentID = agentID
-	compIDs := []uuid.UUID{data.ID}
 	for _, c := range data.Components.Walk() {
 		c.AgentID = agentID
 		c.TopologyID = &topologyObj.ID
-		compIDs = append(compIDs, c.ID)
 	}
 
-	if err := dutytopology.SaveComponent(ctx, &data); err != nil {
+	returnedIDs, err := dutytopology.SaveComponent(ctx, &data)
+	if err != nil {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINTERNAL, "error saving components: %v", dutydb.ErrorDetails(err)))
 	}
 
 	var idsToDelete []string
-	if err := ctx.DB().Model(&models.Component{}).Select("id").Where("topology_id = ?", data.TopologyID).Where("id NOT IN ?", compIDs).Find(&idsToDelete).Error; err != nil {
+	if err := ctx.DB().Model(&models.Component{}).Select("id").Where("topology_id = ?", data.TopologyID).Where("id NOT IN ?", returnedIDs).Find(&idsToDelete).Error; err != nil {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINTERNAL, "error querying old components: %v", dutydb.ErrorDetails(err)))
 	}
 
