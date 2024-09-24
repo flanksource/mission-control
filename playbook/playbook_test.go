@@ -239,7 +239,7 @@ var _ = Describe("Playbook", func() {
 		})
 
 		It("should execute the playbook", func() {
-			run = runPlaybook(playbook, RunParams{
+			run = runPlaybook(DefaultContext.WithUser(&dummy.JohnDoe), playbook, RunParams{
 				ConfigID: lo.ToPtr(dummy.EKSCluster.ID),
 				Params: map[string]string{
 					"path":     dataFile,
@@ -308,7 +308,7 @@ var _ = Describe("Playbook", func() {
 		})
 
 		It("should store playbook run via API", func() {
-			run = runPlaybook(playbook, RunParams{
+			run = runPlaybook(DefaultContext.WithUser(&dummy.JohnDoe), playbook, RunParams{
 				ConfigID: lo.ToPtr(dummy.EKSCluster.ID),
 				Params: map[string]string{
 					"path": dataFile,
@@ -395,7 +395,7 @@ var _ = Describe("Playbook", func() {
 		})
 
 		It("should execute the playbook", func() {
-			run = runPlaybook(playbook, RunParams{
+			run = runPlaybook(DefaultContext.WithUser(&dummy.JohnDoe), playbook, RunParams{
 				ConfigID: lo.ToPtr(dummy.KubernetesNodeA.ID),
 			}, models.PlaybookRunStatusScheduled, models.PlaybookRunStatusWaiting)
 
@@ -467,7 +467,7 @@ var _ = Describe("Playbook", func() {
 				return
 			}
 
-			run := createAndRun("exec-powershell", RunParams{
+			run := createAndRun(DefaultContext.WithUser(&dummy.JohnDoe), "exec-powershell", RunParams{
 				ConfigID: lo.ToPtr(dummy.KubernetesNodeA.ID),
 			})
 			Expect(run.Status).To(Equal(models.PlaybookRunStatusCompleted), run.String(DefaultContext.DB()))
@@ -513,7 +513,7 @@ var _ = Describe("Playbook", func() {
 
 		for _, test := range tests {
 			It(test.description, func() {
-				run := createAndRun(test.name, test.params, test.status)
+				run := createAndRun(DefaultContext.WithUser(&dummy.JohnDoe), test.name, test.params, test.status)
 				if test.extra != nil {
 					test.extra(run)
 				}
@@ -522,13 +522,13 @@ var _ = Describe("Playbook", func() {
 	})
 })
 
-func createAndRun(name string, params RunParams, statuses ...models.PlaybookRunStatus) *models.PlaybookRun {
+func createAndRun(ctx context.Context, name string, params RunParams, statuses ...models.PlaybookRunStatus) *models.PlaybookRun {
 	playbook, _ := createPlaybook(name)
-	return runPlaybook(playbook, params, statuses...)
+	return runPlaybook(ctx, playbook, params, statuses...)
 }
 
-func runPlaybook(playbook models.Playbook, params RunParams, statuses ...models.PlaybookRunStatus) *models.PlaybookRun {
-	run, err := Run(DefaultContext, &playbook, params)
+func runPlaybook(ctx context.Context, playbook models.Playbook, params RunParams, statuses ...models.PlaybookRunStatus) *models.PlaybookRun {
+	run, err := Run(ctx, &playbook, params)
 	Expect(err).To(BeNil())
 	return waitFor(run, statuses...)
 }
