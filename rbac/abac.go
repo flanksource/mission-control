@@ -2,6 +2,7 @@ package rbac
 
 import (
 	"github.com/flanksource/duty/models"
+	"github.com/labstack/echo/v4"
 )
 
 type ABACResource struct {
@@ -19,3 +20,5 @@ func (r ABACResource) AsMap() map[string]any {
 		"playbook":   r.Playbook.AsMap(),
 	}
 }
+
+type EchoABACResourceGetter func(c echo.Context, action string) (string, *ABACResource, error)

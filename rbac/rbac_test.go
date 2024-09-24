@@ -21,6 +21,8 @@ func NewEnforcer(policy string) (*casbin.Enforcer, error) {
 
 func TestEnforcer(t *testing.T) {
 	policy := `
+p, admin  , *, *           ,                                          , allow 
+g, johndoe, admin             ,         ,    ,       
 p, johndoe, *, playbook:run, r.obj.playbook.name == 'scale-deployment', allow
 p, johndoe, *, playbook:run, r.obj.playbook.name == 'delete-deployment', deny
 p, johndoe, *, playbook:run, r.obj.playbook.name == 'restart-deployment' && r.obj.config.tags.namespace == 'default', allow

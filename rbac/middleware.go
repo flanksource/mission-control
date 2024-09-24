@@ -65,6 +65,14 @@ func DbMiddleware() MiddlewareFunc {
 }
 
 func Authorization(object, action string) MiddlewareFunc {
+	return GetAuthorizer(object, action, nil)
+}
+
+func AuthorizationWithABAC(object, action string, getResource EchoABACResourceGetter) MiddlewareFunc {
+	return GetAuthorizer(object, action, getResource)
+}
+
+func GetAuthorizer(object, action string, getResource EchoABACResourceGetter) MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			// Skip auth if Enforcer is not initialized
@@ -87,7 +95,7 @@ func Authorization(object, action string) MiddlewareFunc {
 				return c.String(http.StatusForbidden, ErrMisconfiguredRBAC.Error())
 			}
 
-			if !CheckContext(ctx, object, action) {
+			if !CheckEchoContext(c, object, action, getResource) {
 				c.Response().Header().Add("X-Rbac-Subject", u.ID.String())
 				c.Response().Header().Add("X-Rbac-Object", object)
 				c.Response().Header().Add("X-Rbac-Action", action)
@@ -108,16 +116,32 @@ func CheckContext(ctx context.Context, object, action string) bool {
 
 	// Everyone with an account is a viewer
 	if action == ActionRead && Check(ctx, RoleViewer, object, action) {
-		// Do nothing, proceed to ABAC check
-	} else if Check(ctx, user.ID.String(), object, action) {
-		// Do nothing, proceed to ABAC check
-	} else {
+		return true
+	}
+
+	return Check(ctx, user.ID.String(), object, action)
+}
+
+func CheckEchoContext(c echo.Context, object, action string, getResource EchoABACResourceGetter) bool {
+	ctx := c.Request().Context().(context.Context)
+	user := ctx.User()
+
+	if !CheckContext(ctx, object, action) {
 		return false
 	}
 
-	// Abac check here
-	// TODO: Get the abacRequest from the middleware
-	var abacReq ABACResource
-	enforcer.Enforce(user.ID.String(), abacReq, action)
+	if getResource != nil {
+		abacAction, abacReq, err := getResource(c, action)
+		if err != nil {
+			return false
+		}
+
+		allowed, err := enforcer.Enforce(user.ID.String(), abacReq.AsMap(), abacAction)
+		if err != nil {
+			return false
+		}
+		return allowed
+	}
+
 	return true
 }
