@@ -308,6 +308,8 @@ func sendNotifications(ctx context.Context, events models.Events) models.Events 
 			e.SetError(err.Error())
 			failedEvents = append(failedEvents, e)
 			notificationContext.WithError(err)
+		} else {
+			notificationContext.log.Sent()
 		}
 
 		logs.IfError(notificationContext.EndLog(), "error persisting end of notification send history")
