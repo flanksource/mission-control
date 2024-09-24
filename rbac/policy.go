@@ -67,9 +67,9 @@ func (acl ACL) GetPolicyDefinition() [][]string {
 	for _, object := range strings.Split(acl.Objects, ",") {
 		for _, action := range strings.Split(acl.Actions, ",") {
 			if strings.HasPrefix(action, "!") {
-				definitions = append(definitions, []string{acl.Principal, object, action[1:], "", "deny"})
+				definitions = append(definitions, []string{acl.Principal, object, action[1:], "deny", "true"})
 			} else {
-				definitions = append(definitions, []string{acl.Principal, object, action, "", "allow"})
+				definitions = append(definitions, []string{acl.Principal, object, action, "allow", "true"})
 			}
 		}
 	}

@@ -51,8 +51,8 @@ func permissionToCasbinRule(permission models.Permission) []string {
 		permission.Principal(),
 		"*",
 		permission.Action,
-		permission.Condition(),
 		permission.Effect(),
+		permission.Condition(),
 	}
 
 	return m

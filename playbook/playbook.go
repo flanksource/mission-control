@@ -19,7 +19,9 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/playbook/actions"
 	"github.com/flanksource/incident-commander/playbook/runner"
+	"github.com/flanksource/incident-commander/rbac"
 	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
 )
 
@@ -130,6 +132,10 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 		return nil, ctx.Oops().Wrap(err)
 	}
 
+	if !rbac.CheckABAC(ctx, ctx.User().ID.String(), abacResourceFromTemplateEnv(templateEnv), rbac.ActionPlaybookRun) {
+		return nil, ctx.Oops().Code(dutyAPI.EUNAUTHORIZED).Errorf("unauthorized to run playbook")
+	}
+
 	if err := req.setDefaults(ctx, spec, templateEnv); err != nil {
 		return nil, ctx.Oops().Wrap(err)
 	}
@@ -158,6 +164,14 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 	}
 
 	return &run, nil
+}
+
+func abacResourceFromTemplateEnv(templateEnv actions.TemplateEnv) *rbac.ABACResource {
+	return &rbac.ABACResource{
+		Playbook:  templateEnv.Playbook,
+		Config:    lo.FromPtr(templateEnv.Config),
+		Component: lo.FromPtr(templateEnv.Component),
+	}
 }
 
 func saveRunAsConfigChange(ctx context.Context, playbook *models.Playbook, run models.PlaybookRun, parameters any) error {

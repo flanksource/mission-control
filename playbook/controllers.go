@@ -1,10 +1,8 @@
 package playbook
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"time"
 
@@ -30,41 +28,6 @@ func init() {
 	echoSrv.RegisterRoutes(RegisterRoutes)
 }
 
-const maxBodySize = 100 * 1024 // 100KB
-
-func abacResourceGetter(c echo.Context, action string) (string, *rbac.ABACResource, error) {
-	ctx := c.Request().Context().(context.Context)
-
-	preview, err := io.ReadAll(io.LimitReader(c.Request().Body, maxBodySize))
-	if err != nil && err != io.EOF {
-		return "", nil, err
-	}
-
-	c.Request().Body = io.NopCloser(bytes.NewReader(preview))
-
-	var req RunParams
-	if err := json.Unmarshal(preview, &req); err != nil {
-		return "", nil, err
-	}
-
-	var resource rbac.ABACResource
-	playbook, err := query.FindPlaybook(ctx, req.ID.String())
-	if err != nil {
-		return "", nil, err
-	}
-	resource.Playbook = *playbook
-
-	if req.ComponentID != nil {
-		component, err := query.GetComponent(ctx, req.ComponentID.String())
-		if err != nil {
-			return "", nil, err
-		}
-		resource.Component = *component
-	}
-
-	return "playbook:run", &resource, nil
-}
-
 func RegisterRoutes(e *echo.Echo) {
 	logger.Infof("Registering /playbook routes")
 
@@ -79,7 +42,7 @@ func RegisterRoutes(e *echo.Echo) {
 	}, rbac.Authorization(rbac.ObjectMonitor, rbac.ActionRead))
 
 	runGroup := playbookGroup.Group("/run")
-	runGroup.POST("", HandlePlaybookRun, rbac.AuthorizationWithABAC(rbac.ObjectPlaybooks, rbac.ActionRun, abacResourceGetter))
+	runGroup.POST("", HandlePlaybookRun, rbac.Playbook(rbac.ActionRun))
 	runGroup.GET("/:id", HandleGetPlaybookRun, rbac.Playbook(rbac.ActionRead))
 	runGroup.POST("/approve/:run_id", HandlePlaybookRunApproval, rbac.Playbook(rbac.ActionApprove))
 }
@@ -111,7 +74,7 @@ func HandlePlaybookRun(c echo.Context) error {
 
 	run, err := Run(ctx, playbook, req)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, oops.Wrap(err))
+		return dutyAPI.WriteError(c, oops.Wrap(err))
 	}
 
 	return c.JSON(http.StatusCreated, RunResponse{
