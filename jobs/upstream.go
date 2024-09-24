@@ -26,6 +26,7 @@ var ReconcileAll = &job.Job{
 		ctx.History.SuccessCount, ctx.History.ErrorCount = summary.GetSuccessFailure()
 		if summary.Error() != nil {
 			ctx.History.AddDetails("errors", summary.Error())
+			ctx.History.ErrorCount += 1
 		}
 
 		return nil
