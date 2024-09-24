@@ -64,6 +64,12 @@ func shoutrrrSend(ctx *Context, celEnv map[string]any, shoutrrrURL string, data 
 		return "", fmt.Errorf("failed to extract service name: %w", err)
 	}
 
+	celEnv["channel"] = service
+	templater := ctx.NewStructTemplater(celEnv, "", templateFuncs)
+	if err := templater.Walk(&data); err != nil {
+		return "", fmt.Errorf("error templating notification: %w", err)
+	}
+
 	switch service {
 	case "smtp":
 		data.Message = icUtils.MarkdownToHTML(data.Message)
@@ -74,12 +80,6 @@ func shoutrrrSend(ctx *Context, celEnv map[string]any, shoutrrrURL string, data 
 
 	default:
 		data.Message = stripmd.StripOptions(data.Message, stripmd.Options{KeepURL: true})
-	}
-
-	celEnv["channel"] = service
-	templater := ctx.NewStructTemplater(celEnv, "", templateFuncs)
-	if err := templater.Walk(&data); err != nil {
-		return "", fmt.Errorf("error templating notification: %w", err)
 	}
 
 	ctx.WithMessage(data.Message)
