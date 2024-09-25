@@ -12,6 +12,7 @@ import (
 	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/gomplate/v3"
 	"github.com/google/uuid"
 
 	"github.com/flanksource/incident-commander/api"
@@ -19,14 +20,10 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/logs"
 	"github.com/flanksource/incident-commander/teams"
-	"github.com/flanksource/incident-commander/utils/expression"
 )
 
 //go:embed templates/*
 var templates embed.FS
-
-// List of all possible variables for any expression related to notifications
-var allEnvVars = []string{"agent", "config", "check", "canary", "component", "incident", "team", "responder", "comment", "evidence", "hypothesis", "permalink"}
 
 // NotificationTemplate holds in data for notification
 // that'll be used by struct templater.
@@ -278,10 +275,13 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 		}
 
 		for _, cn := range teamSpec.Notifications {
-			if valid, err := expression.Eval(cn.Filter, celEnv, allEnvVars); err != nil {
-				logs.IfError(db.UpdateNotificationError(ctx, n.ID.String(), err.Error()), "failed to update notification")
-			} else if !valid {
-				continue
+			if cn.Filter != "" {
+				if valid, err := gomplate.RunTemplateBool(celEnv, gomplate.Template{Expression: cn.Filter}); err != nil {
+					logs.IfError(db.UpdateNotificationError(ctx, n.ID.String(), err.Error()), "failed to update notification")
+					continue
+				} else if !valid {
+					continue
+				}
 			}
 
 			payload := NotificationEventPayload{
@@ -299,10 +299,13 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 	}
 
 	for _, cn := range n.CustomNotifications {
-		if valid, err := expression.Eval(cn.Filter, celEnv, allEnvVars); err != nil {
-			logs.IfError(db.UpdateNotificationError(ctx, n.ID.String(), err.Error()), "failed to update notification")
-		} else if !valid {
-			continue
+		if cn.Filter != "" {
+			if valid, err := gomplate.RunTemplateBool(celEnv, gomplate.Template{Expression: cn.Filter}); err != nil {
+				logs.IfError(db.UpdateNotificationError(ctx, n.ID.String(), err.Error()), "failed to update notification")
+				continue
+			} else if !valid {
+				continue
+			}
 		}
 
 		payload := NotificationEventPayload{
