@@ -58,6 +58,8 @@ func PushTopology(c echo.Context) error {
 	for _, c := range data.Components.Walk() {
 		c.AgentID = agentID
 		c.TopologyID = &topologyObj.ID
+		// ConfigID will not be present in host and will cause FK Error
+		c.ConfigID = nil
 	}
 
 	returnedIDs, err := dutytopology.SaveComponent(ctx, &data)
