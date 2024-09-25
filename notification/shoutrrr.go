@@ -9,6 +9,7 @@ import (
 
 	stripmd "github.com/adityathebe/go-strip-markdown/v2"
 	"github.com/containrrr/shoutrrr"
+	"github.com/containrrr/shoutrrr/pkg/router"
 	"github.com/containrrr/shoutrrr/pkg/types"
 	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/incident-commander/api"
@@ -40,34 +41,37 @@ func setSystemSMTPCredential(shoutrrrURL string) (string, error) {
 	return shoutrrrURL, nil
 }
 
-// shoutrrrSend sends a notification and returns the service it sent the notification to
-func shoutrrrSend(ctx *Context, celEnv map[string]any, shoutrrrURL string, data NotificationTemplate) (string, error) {
+func PrepareShoutrrr(ctx *Context, celEnv map[string]any, shoutrrrURL string, data *NotificationTemplate) (string, string, *router.ServiceRouter, error) {
 	if celEnv == nil {
 		celEnv = make(map[string]any)
+	}
+
+	if data.Properties == nil {
+		data.Properties = make(map[string]string)
 	}
 
 	if strings.HasPrefix(shoutrrrURL, api.SystemSMTP) {
 		var err error
 		shoutrrrURL, err = setSystemSMTPCredential(shoutrrrURL)
 		if err != nil {
-			return "", err
+			return "", "", nil, err
 		}
 	}
 
 	sender, err := shoutrrr.CreateSender(shoutrrrURL)
 	if err != nil {
-		return "", fmt.Errorf("failed to create a shoutrrr sender client: %w", err)
+		return "", "", nil, fmt.Errorf("failed to create a shoutrrr sender client: %w", err)
 	}
 
 	service, _, err := sender.ExtractServiceName(shoutrrrURL)
 	if err != nil {
-		return "", fmt.Errorf("failed to extract service name: %w", err)
+		return "", "", nil, fmt.Errorf("failed to extract service name: %w", err)
 	}
 
 	celEnv["channel"] = service
 	templater := ctx.NewStructTemplater(celEnv, "", templateFuncs)
-	if err := templater.Walk(&data); err != nil {
-		return "", fmt.Errorf("error templating notification: %w", err)
+	if err := templater.Walk(data); err != nil {
+		return "", "", nil, fmt.Errorf("error templating notification: %w", err)
 	}
 
 	switch service {
@@ -80,6 +84,16 @@ func shoutrrrSend(ctx *Context, celEnv map[string]any, shoutrrrURL string, data 
 
 	default:
 		data.Message = stripmd.StripOptions(data.Message, stripmd.Options{KeepURL: true})
+	}
+
+	return service, shoutrrrURL, sender, nil
+}
+
+// shoutrrrSend sends a notification and returns the service it sent the notification to
+func shoutrrrSend(ctx *Context, celEnv map[string]any, shoutrrrURL string, data NotificationTemplate) (string, error) {
+	service, shoutrrrURL, sender, err := PrepareShoutrrr(ctx, celEnv, shoutrrrURL, &data)
+	if err != nil {
+		return "", err
 	}
 
 	ctx.WithMessage(data.Message)

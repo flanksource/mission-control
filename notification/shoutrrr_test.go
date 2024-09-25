@@ -5,7 +5,9 @@ import (
 	"reflect"
 
 	"github.com/flanksource/incident-commander/notification"
+	"github.com/google/uuid"
 	"github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
 var _ = ginkgo.Describe("Notification properties", func() {
@@ -57,4 +59,24 @@ var _ = ginkgo.Describe("Notification properties", func() {
 			}
 		})
 	}
+})
+
+var _ = ginkgo.Describe("Shoutrrr", func() {
+	ginkgo.It("should template smtp", func() {
+		env := map[string]any{
+			"config": map[string]any{
+				"name": "My Test Config",
+			},
+		}
+
+		ctx := notification.NewContext(DefaultContext, uuid.Nil)
+		data := notification.NotificationTemplate{
+			Message: `{{if .config.name}}{{.config.name}}{{else}}DefaultConfig{{end}}`,
+		}
+		url := "smtp://username:password@host:25/?from=test@flanksource.com&to=receiver@flanksource.com"
+
+		_, _, _, err := notification.PrepareShoutrrr(ctx, env, url, &data)
+		Expect(err).To(BeNil())
+		Expect(data.Message).To(Equal("<p>My Test Config</p>\n"))
+	})
 })
