@@ -6,6 +6,7 @@ import (
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/samber/lo"
 )
 
 type celVariables struct {
@@ -67,51 +68,25 @@ func (t *celVariables) AsMap() map[string]any {
 	output := map[string]any{
 		"permalink":  t.Permalink,
 		"silenceURL": t.SilenceURL,
-	}
 
-	if t.Agent != nil {
-		output["agent"] = t.Agent.AsMap()
-	}
+		"agent":     lo.FromPtr(t.Agent).AsMap(),
+		"status":    lo.FromPtr(t.CheckStatus).AsMap(),
+		"check":     lo.FromPtr(t.Check).AsMap("spec"),
+		"canary":    lo.FromPtr(t.Canary).AsMap("spec"),
+		"component": lo.ToPtr(lo.FromPtr(t.Component)).AsMap("checks", "incidents", "analysis", "components", "order", "relationship_id", "children", "parents"),
+		"config":    lo.FromPtr(t.ConfigItem).AsMap("last_scraped_time", "path", "parent_id"),
 
-	if t.ConfigItem != nil {
-		output["config"] = t.ConfigItem.AsMap("last_scraped_time", "path", "parent_id")
+		"evidence":   lo.FromPtr(t.Evidence).AsMap(),
+		"hypothesis": lo.FromPtr(t.Hypothesis).AsMap(),
+		"incident":   lo.FromPtr(t.Incident).AsMap(),
+		"responder":  lo.FromPtr(t.Responder).AsMap(),
+
+		"comment": lo.FromPtr(t.Comment).AsMap(),
+		"author":  lo.FromPtr(t.Author).AsMap(),
 	}
 
 	if t.NewState != "" {
 		output["new_state"] = t.NewState
-	}
-	if t.Component != nil {
-		output["component"] = t.Component.AsMap("checks", "incidents", "analysis", "components", "order", "relationship_id", "children", "parents")
-	}
-
-	if t.CheckStatus != nil {
-		output["status"] = t.CheckStatus.AsMap()
-	}
-	if t.Check != nil {
-		output["check"] = t.Check.AsMap("spec")
-	}
-	if t.Canary != nil {
-		output["canary"] = t.Canary.AsMap("spec")
-	}
-
-	if t.Incident != nil {
-		output["incident"] = t.Incident.AsMap()
-	}
-	if t.Responder != nil {
-		output["responder"] = t.Responder.AsMap()
-	}
-	if t.Evidence != nil {
-		output["evidence"] = t.Evidence.AsMap()
-	}
-	if t.Hypothesis != nil {
-		output["hypothesis"] = t.Hypothesis.AsMap()
-	}
-
-	if t.Comment != nil {
-		output["comment"] = t.Comment.AsMap()
-	}
-	if t.Author != nil {
-		output["author"] = t.Author.AsMap()
 	}
 
 	return output
