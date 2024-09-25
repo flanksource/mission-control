@@ -52,9 +52,9 @@ func requiresApproval(spec v1.PlaybookSpec) bool {
 
 func approveRun(ctx context.Context, run *models.PlaybookRun) error {
 	approver := ctx.User()
-	if abacResource, err := runToABACResource(ctx, *run); err != nil {
+	if objects, err := run.GetRBACAttributes(ctx.DB()); err != nil {
 		return ctx.Oops().Wrap(err)
-	} else if !rbac.HasPermission(ctx, approver.ID.String(), abacResource, rbac.ActionPlaybookApprove) {
+	} else if !rbac.HasPermission(ctx, approver.ID.String(), objects, rbac.ActionPlaybookApprove) {
 		return ctx.Oops().Code(api.EFORBIDDEN).Errorf("forbidden to approve playbook")
 	}
 

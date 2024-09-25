@@ -10,7 +10,6 @@ import (
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
@@ -133,9 +132,9 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 		return nil, ctx.Oops().Wrap(err)
 	}
 
-	if abacResource, err := runToABACResource(ctx, run); err != nil {
+	if objects, err := run.GetRBACAttributes(ctx.DB()); err != nil {
 		return nil, ctx.Oops().Wrap(err)
-	} else if !rbac.HasPermission(ctx, ctx.User().ID.String(), abacResource, rbac.ActionPlaybookRun) {
+	} else if !rbac.HasPermission(ctx, ctx.User().ID.String(), objects, rbac.ActionPlaybookRun) {
 		return nil, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("forbidden to run playbook")
 	}
 
@@ -167,42 +166,6 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 	}
 
 	return &run, nil
-}
-
-func runToABACResource(ctx context.Context, run models.PlaybookRun) (*rbac.ABACResource, error) {
-	var output rbac.ABACResource
-
-	playbook, err := query.FindPlaybook(ctx, run.PlaybookID.String())
-	if err != nil {
-		return nil, err
-	}
-	output.Playbook = *playbook
-
-	if run.ComponentID != nil {
-		component, err := query.GetCachedComponent(ctx, run.ComponentID.String())
-		if err != nil {
-			return nil, err
-		}
-		output.Component = *component
-	}
-
-	if run.CheckID != nil {
-		check, err := query.FindCachedCheck(ctx, run.CheckID.String())
-		if err != nil {
-			return nil, err
-		}
-		output.Check = *check
-	}
-
-	if run.ConfigID != nil {
-		config, err := query.GetCachedConfig(ctx, run.ConfigID.String())
-		if err != nil {
-			return nil, err
-		}
-		output.Config = *config
-	}
-
-	return &output, nil
 }
 
 func saveRunAsConfigChange(ctx context.Context, playbook *models.Playbook, run models.PlaybookRun, parameters any) error {
