@@ -14,12 +14,12 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
+	"github.com/flanksource/gomplate/v3"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/incidents/responder"
 	"github.com/flanksource/incident-commander/logs"
-	"github.com/flanksource/incident-commander/utils/expression"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"gorm.io/gorm/clause"
@@ -163,12 +163,14 @@ func addNotificationEvent(ctx context.Context, id string, celEnv map[string]any,
 		return nil
 	}
 
-	if valid, err := expression.Eval(n.Filter, celEnv, allEnvVars); err != nil {
-		// On invalid spec error, we store the error on the notification itself and exit out.
-		logs.IfError(db.UpdateNotificationError(ctx, id, err.Error()), "failed to update notification")
-		return nil
-	} else if !valid {
-		return nil
+	if n.Filter != "" {
+		if valid, err := gomplate.RunTemplateBool(celEnv, gomplate.Template{Expression: n.Filter}); err != nil {
+			// On invalid spec error, we store the error on the notification itself and exit out.
+			logs.IfError(db.UpdateNotificationError(ctx, id, err.Error()), "failed to update notification")
+			return nil
+		} else if !valid {
+			return nil
+		}
 	}
 
 	payloads, err := CreateNotificationSendPayloads(ctx, event, n, celEnv)
