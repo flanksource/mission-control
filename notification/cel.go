@@ -10,7 +10,8 @@ import (
 )
 
 type celVariables struct {
-	Agent *models.Agent
+	Agent   *models.Agent
+	Channel string
 
 	ConfigItem  *models.ConfigItem
 	Component   *models.Component
@@ -68,13 +69,14 @@ func (t *celVariables) AsMap() map[string]any {
 	output := map[string]any{
 		"permalink":  t.Permalink,
 		"silenceURL": t.SilenceURL,
+		"channel":    t.Channel,
 
 		"agent":     lo.FromPtr(t.Agent).AsMap(),
 		"status":    lo.FromPtr(t.CheckStatus).AsMap(),
 		"check":     lo.FromPtr(t.Check).AsMap("spec"),
+		"config":    lo.FromPtr(t.ConfigItem).AsMap("spec"),
 		"canary":    lo.FromPtr(t.Canary).AsMap("spec"),
 		"component": lo.ToPtr(lo.FromPtr(t.Component)).AsMap("checks", "incidents", "analysis", "components", "order", "relationship_id", "children", "parents"),
-		"config":    lo.FromPtr(t.ConfigItem).AsMap("last_scraped_time", "path", "parent_id"),
 
 		"evidence":   lo.FromPtr(t.Evidence).AsMap(),
 		"hypothesis": lo.FromPtr(t.Hypothesis).AsMap(),

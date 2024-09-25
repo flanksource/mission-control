@@ -3,10 +3,12 @@ package notification_test
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/api"
 	dbModels "github.com/flanksource/incident-commander/db/models"
@@ -466,5 +468,49 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 				return count == 0
 			}, "15s", "1s").Should(BeTrue())
 		})
+	})
+
+	var _ = ginkgo.Describe("template vailidity", func() {
+		for _, event := range api.EventStatusGroup {
+			ginkgo.It(event, func() {
+				title, body := notification.DefaultTitleAndBody(event)
+				msg := notification.NotificationTemplate{
+					Message: body,
+					Title:   title,
+				}
+
+				originalEvent := models.Event{
+					Name:       event,
+					Properties: map[string]string{},
+				}
+
+				switch {
+				case strings.HasPrefix(event, "config"):
+					originalEvent.Properties["id"] = dummy.EKSCluster.ID.String()
+				case strings.HasPrefix(event, "check"):
+					var latestCheckStatus models.CheckStatus
+					err := DefaultContext.DB().Where("check_id = ?", dummy.LogisticsAPIHealthHTTPCheck.ID).First(&latestCheckStatus).Error
+					Expect(err).To(BeNil())
+
+					originalEvent.Properties["id"] = dummy.LogisticsAPIHealthHTTPCheck.ID.String()
+					originalEvent.Properties["last_runtime"] = latestCheckStatus.Time
+
+				case strings.HasPrefix(event, "component"):
+					originalEvent.Properties["id"] = dummy.Logistics.ID.String()
+				}
+
+				celEnv, err := notification.GetEnvForEvent(DefaultContext, originalEvent)
+				Expect(err).To(BeNil())
+
+				celEnv.Channel = "slack"
+				templater := DefaultContext.NewStructTemplater(celEnv.AsMap(), "", notification.TemplateFuncs)
+				err = templater.Walk(&msg)
+				Expect(err).To(BeNil())
+
+				var slackBlock map[string]any
+				err = json.Unmarshal([]byte(msg.Message), &slackBlock)
+				Expect(err).To(BeNil())
+			})
+		}
 	})
 })

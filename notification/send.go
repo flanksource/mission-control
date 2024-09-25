@@ -121,7 +121,7 @@ func sendEventNotificationWithMetrics(ctx *Context, celEnv map[string]any, conne
 }
 
 func sendEventNotification(ctx *Context, celEnv map[string]any, connectionName, shoutrrrURL, eventName string, notification *NotificationWithSpec, customProperties map[string]string) (string, error) {
-	defaultTitle, defaultBody := defaultTitleAndBody(eventName)
+	defaultTitle, defaultBody := DefaultTitleAndBody(eventName)
 	customProperties = collections.MergeMap(notification.Properties, customProperties)
 	data := NotificationTemplate{
 		Title:      utils.Coalesce(notification.Title, defaultTitle),
@@ -155,7 +155,7 @@ func SendNotification(ctx *Context, connectionName, shoutrrrURL string, celEnv m
 		// We know we are sending to slack.
 		// Send the notification with slack-api and don't go through Shoutrrr.
 		celEnv["channel"] = "slack"
-		templater := ctx.NewStructTemplater(celEnv, "", templateFuncs)
+		templater := ctx.NewStructTemplater(celEnv, "", TemplateFuncs)
 		if err := templater.Walk(&data); err != nil {
 			return "", fmt.Errorf("error templating notification: %w", err)
 		}
@@ -175,9 +175,9 @@ func SendNotification(ctx *Context, connectionName, shoutrrrURL string, celEnv m
 	return service, nil
 }
 
-// defaultTitleAndBody returns the default title and body for notification
+// DefaultTitleAndBody returns the default title and body for notification
 // based on the given event.
-func defaultTitleAndBody(event string) (title string, body string) {
+func DefaultTitleAndBody(event string) (title string, body string) {
 	switch event {
 	case api.EventCheckPassed:
 		title = `{{ if ne channel "slack"}}Check {{.check.name}} has passed{{end}}`

@@ -10,7 +10,7 @@ import (
 	"github.com/samber/lo"
 )
 
-var templateFuncs = map[string]any{
+var TemplateFuncs = map[string]any{
 	"labelsFormat": func(labels map[string]any) string {
 		if len(labels) == 0 {
 			return ""
