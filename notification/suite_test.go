@@ -27,7 +27,7 @@ var (
 )
 
 var _ = ginkgo.BeforeSuite(func() {
-	DefaultContext = setup.BeforeSuiteFn(setup.WithoutDummyData)
+	DefaultContext = setup.BeforeSuiteFn()
 	_ = context.UpdateProperty(DefaultContext, api.PropertyIncidentsDisabled, "true")
 	_ = context.UpdateProperty(DefaultContext, "notification.send.trace", "true")
 	events.StartConsumers(DefaultContext)

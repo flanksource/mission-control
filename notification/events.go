@@ -125,7 +125,7 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 		return nil
 	}
 
-	celEnv, err := getEnvForEvent(ctx, event, event.Properties)
+	celEnv, err := GetEnvForEvent(ctx, event)
 	if err != nil {
 		return err
 	}
@@ -272,7 +272,7 @@ func sendNotifications(ctx context.Context, events models.Events) models.Events 
 			}
 		}
 
-		celEnv, err := getEnvForEvent(ctx, originalEvent, e.Properties)
+		celEnv, err := GetEnvForEvent(ctx, originalEvent)
 		if err != nil {
 			e.SetError(err.Error())
 			failedEvents = append(failedEvents, e)
@@ -338,13 +338,13 @@ func isHealthReportable(events []string, previousHealth, currentHealth models.He
 	return healthDegraded
 }
 
-// getEnvForEvent gets the environment variables for the given event
+// GetEnvForEvent gets the environment variables for the given event
 // that'll be passed to the cel expression or to the template renderer as a view.
-func getEnvForEvent(ctx context.Context, event models.Event, properties map[string]string) (*celVariables, error) {
+func GetEnvForEvent(ctx context.Context, event models.Event) (*celVariables, error) {
 	var env celVariables
 
 	if strings.HasPrefix(event.Name, "check.") {
-		checkID := properties["id"]
+		checkID := event.Properties["id"]
 		lastRuntime := event.Properties["last_runtime"]
 
 		check, err := query.FindCachedCheck(ctx, checkID)
@@ -394,7 +394,7 @@ func getEnvForEvent(ctx context.Context, event models.Event, properties map[stri
 	}
 
 	if event.Name == "incident.created" || strings.HasPrefix(event.Name, "incident.status.") {
-		incidentID := properties["id"]
+		incidentID := event.Properties["id"]
 
 		incident, err := query.GetCachedIncident(ctx, incidentID)
 		if err != nil {
@@ -408,7 +408,7 @@ func getEnvForEvent(ctx context.Context, event models.Event, properties map[stri
 	}
 
 	if strings.HasPrefix(event.Name, "incident.responder.") {
-		responderID := properties["id"]
+		responderID := event.Properties["id"]
 		responder, err := responder.FindResponderByID(ctx, responderID)
 		if err != nil {
 			return nil, fmt.Errorf("error finding responder(id=%s): %v", responderID, err)
@@ -430,8 +430,8 @@ func getEnvForEvent(ctx context.Context, event models.Event, properties map[stri
 
 	if strings.HasPrefix(event.Name, "incident.comment.") {
 		var comment models.Comment
-		if err := ctx.DB().Where("id = ?", properties["id"]).Find(&comment).Error; err != nil {
-			return nil, fmt.Errorf("error getting comment (id=%s)", properties["id"])
+		if err := ctx.DB().Where("id = ?", event.Properties["id"]).Find(&comment).Error; err != nil {
+			return nil, fmt.Errorf("error getting comment (id=%s)", event.Properties["id"])
 		}
 
 		incident, err := query.GetCachedIncident(ctx, comment.IncidentID.String())
@@ -458,7 +458,7 @@ func getEnvForEvent(ctx context.Context, event models.Event, properties map[stri
 
 	if strings.HasPrefix(event.Name, "incident.dod.") {
 		var evidence models.Evidence
-		if err := ctx.DB().Where("id = ?", properties["id"]).Find(&evidence).Error; err != nil {
+		if err := ctx.DB().Where("id = ?", event.Properties["id"]).Find(&evidence).Error; err != nil {
 			return nil, err
 		}
 
@@ -481,7 +481,7 @@ func getEnvForEvent(ctx context.Context, event models.Event, properties map[stri
 	}
 
 	if strings.HasPrefix(event.Name, "component.") {
-		componentID := properties["id"]
+		componentID := event.Properties["id"]
 
 		component, err := query.GetCachedComponent(ctx, componentID)
 		if err != nil {
@@ -507,7 +507,7 @@ func getEnvForEvent(ctx context.Context, event models.Event, properties map[stri
 	}
 
 	if strings.HasPrefix(event.Name, "config.") {
-		configID := properties["id"]
+		configID := event.Properties["id"]
 
 		config, err := query.GetCachedConfig(ctx, configID)
 		if err != nil {
