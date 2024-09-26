@@ -41,19 +41,6 @@ func FindPlaybookRun(ctx context.Context, id uuid.UUID) (*models.PlaybookRun, er
 	return &p, nil
 }
 
-func FindPlaybook(ctx context.Context, id uuid.UUID) (*models.Playbook, error) {
-	var p models.Playbook
-	if err := ctx.DB().Where("id = ?", id).First(&p).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, nil
-		}
-
-		return nil, err
-	}
-
-	return &p, nil
-}
-
 // CanApprove returns true if the given person can approve runs of the given playbook.
 func CanApprove(ctx context.Context, personID, playbookID string) (bool, error) {
 	query := `

@@ -6,7 +6,6 @@ import (
 
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/duty/api"
-	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
@@ -14,6 +13,7 @@ import (
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/rbac"
 )
 
 func HandlePlaybookRunApproval(c echo.Context) error {
@@ -25,14 +25,14 @@ func HandlePlaybookRunApproval(c echo.Context) error {
 
 	runUUID, err := uuid.Parse(runID)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{Err: err.Error(), Message: "invalid run id"})
+		return c.JSON(http.StatusBadRequest, api.HTTPError{Err: err.Error(), Message: "invalid run id"})
 	}
 
 	if err := ApproveRun(ctx, runUUID); err != nil {
-		return dutyAPI.WriteError(c, err)
+		return api.WriteError(c, err)
 	}
 
-	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{Message: "playbook run approved"})
+	return c.JSON(http.StatusOK, api.HTTPSuccess{Message: "playbook run approved"})
 }
 
 func ApproveRun(ctx context.Context, runID uuid.UUID) error {
@@ -52,6 +52,11 @@ func requiresApproval(spec v1.PlaybookSpec) bool {
 
 func approveRun(ctx context.Context, run *models.PlaybookRun) error {
 	approver := ctx.User()
+	if objects, err := run.GetRBACAttributes(ctx.DB()); err != nil {
+		return ctx.Oops().Wrap(err)
+	} else if !rbac.HasPermission(ctx, approver.ID.String(), objects, rbac.ActionPlaybookApprove) {
+		return ctx.Oops().Code(api.EFORBIDDEN).Errorf("forbidden to approve playbook")
+	}
 
 	var spec v1.PlaybookSpec
 	if err := json.Unmarshal(run.Spec, &spec); err != nil {

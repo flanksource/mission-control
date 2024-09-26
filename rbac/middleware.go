@@ -113,3 +113,17 @@ func CheckContext(ctx context.Context, object, action string) bool {
 
 	return Check(ctx, user.ID.String(), object, action)
 }
+
+func HasPermission(ctx context.Context, subject string, objects map[string]any, action string) bool {
+	if enforcer == nil {
+		return true
+	}
+
+	allowed, err := enforcer.Enforce(subject, objects, action)
+	if err != nil {
+		ctx.Debugf("error checking abac for subject=%s action=%s", subject, action)
+		return false
+	}
+
+	return allowed
+}

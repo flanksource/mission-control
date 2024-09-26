@@ -13,6 +13,7 @@ import (
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
+	"github.com/samber/oops"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 
@@ -20,6 +21,7 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/playbook/runner"
+	"github.com/flanksource/incident-commander/rbac"
 	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
 )
 
@@ -130,6 +132,12 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 		return nil, ctx.Oops().Wrap(err)
 	}
 
+	if objects, err := run.GetRBACAttributes(ctx.DB()); err != nil {
+		return nil, ctx.Oops().Wrap(err)
+	} else if !rbac.HasPermission(ctx, ctx.User().ID.String(), objects, rbac.ActionPlaybookRun) {
+		return nil, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("forbidden to run playbook")
+	}
+
 	if err := req.setDefaults(ctx, spec, templateEnv); err != nil {
 		return nil, ctx.Oops().Wrap(err)
 	}
@@ -149,7 +157,7 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 		return nil, err
 	}
 
-	if err := savePlaybookRun(ctx, playbook, &run); err != nil {
+	if err := savePlaybookRun(ctx, &run); err != nil {
 		return nil, ctx.Oops().Wrapf(err, "failed to create playbook run")
 	}
 
@@ -207,7 +215,7 @@ func saveRunAsConfigChange(ctx context.Context, playbook *models.Playbook, run m
 }
 
 // savePlaybookRun saves the run and attempts register an approval from the caller.
-func savePlaybookRun(ctx context.Context, playbook *models.Playbook, run *models.PlaybookRun) error {
+func savePlaybookRun(ctx context.Context, run *models.PlaybookRun) error {
 	tx := ctx.DB().Begin()
 	if tx.Error != nil {
 		return ctx.Oops("db").Wrap(tx.Error)
@@ -227,11 +235,13 @@ func savePlaybookRun(ctx context.Context, playbook *models.Playbook, run *models
 	if requiresApproval(spec) {
 		// Attempt to auto approve run
 		if err := ApproveRun(ctx, run.ID); err != nil {
-			switch dutyAPI.ErrorCode(err) {
-			case dutyAPI.EFORBIDDEN, dutyAPI.EINVALID:
-				// ignore these errors
-			default:
-				return ctx.Oops().Errorf("error while attempting to auto approve run: %w", err)
+			if oopserr, ok := oops.AsOops(err); ok {
+				switch oopserr.Code() {
+				case dutyAPI.EFORBIDDEN, dutyAPI.EINVALID:
+					// ignore these errors
+				default:
+					return ctx.Oops().Errorf("error while attempting to auto approve run: %w", err)
+				}
 			}
 		}
 	}

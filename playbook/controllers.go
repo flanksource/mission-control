@@ -10,6 +10,7 @@ import (
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/query"
 	"github.com/labstack/echo/v4"
 	"github.com/samber/lo"
 	"github.com/samber/oops"
@@ -64,7 +65,7 @@ func HandlePlaybookRun(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, oops.Wrapf(err, "invalid request"))
 	}
 
-	playbook, err := db.FindPlaybook(ctx, req.ID)
+	playbook, err := query.FindPlaybook(ctx, req.ID.String())
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, oops.Wrapf(err, "failed to get playbook"))
 	} else if playbook == nil {
@@ -73,7 +74,7 @@ func HandlePlaybookRun(c echo.Context) error {
 
 	run, err := Run(ctx, playbook, req)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, oops.Wrap(err))
+		return dutyAPI.WriteError(c, oops.Wrap(err))
 	}
 
 	return c.JSON(http.StatusCreated, RunResponse{
@@ -97,7 +98,7 @@ func HandleGetPlaybookParams(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{Err: err.Error(), Message: "invalid request"})
 	}
 
-	playbook, err := db.FindPlaybook(ctx, req.ID)
+	playbook, err := query.FindPlaybook(ctx, req.ID.String())
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Err: err.Error(), Message: "failed to get playbook"})
 	} else if playbook == nil {

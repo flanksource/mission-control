@@ -11,6 +11,7 @@ import (
 	gormadapter "github.com/casbin/gorm-adapter/v3"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/incident-commander/db"
+	pkgAdapater "github.com/flanksource/incident-commander/rbac/adapter"
 	"gopkg.in/yaml.v3"
 )
 
@@ -45,12 +46,14 @@ func Init(ctx context.Context, adminUserID string) error {
 	}
 
 	db := ctx.DB()
+
 	gormadapter.TurnOffAutoMigrate(db)
-	adapter, err := gormadapter.NewAdapterByDB(db)
+	casbinRuleAdapter, err := gormadapter.NewAdapterByDB(db)
 	if err != nil {
 		return fmt.Errorf("error creating rbac adapter: %v", err)
 	}
 
+	adapter := pkgAdapater.NewPermissionAdapter(db, casbinRuleAdapter)
 	enforcer, err = casbin.NewSyncedCachedEnforcer(model, adapter)
 	if err != nil {
 		return fmt.Errorf("error creating rbac enforcer: %v", err)
