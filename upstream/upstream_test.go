@@ -3,7 +3,7 @@ package upstream
 import (
 	"fmt"
 
-	"github.com/flanksource/duty/context"
+	"github.com/flanksource/commons/properties"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/types"
@@ -27,7 +27,7 @@ var _ = ginkgo.Describe("Upstream Push", ginkgo.Ordered, func() {
 		pushUpstream.StartServer()
 
 		DefaultContext.ClearCache()
-		context.SetLocalProperty("upstream.reconcile.pre-check", "false")
+		properties.Global.Set("upstream.reconcile.pre-check", "false")
 
 		Expect(pushUpstream.DB().Create(&models.Agent{ID: pushAgent.id, Name: pushAgent.name}).Error).To(BeNil())
 	})
