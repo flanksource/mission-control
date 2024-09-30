@@ -5,6 +5,7 @@ import (
 	"io"
 
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
 	"github.com/labstack/echo/v4"
 )
@@ -57,6 +58,7 @@ type TemplateEnv struct {
 	Params    map[string]any            `json:"params,omitempty"`
 	Request   types.JSONMap             `json:"request,omitempty"`
 	Env       map[string]any            `json:"env,omitempty"`
+	GitOps    query.GitOpsSource        `json:"git,omitempty"`
 
 	// User is the user who triggered the playbook run
 	User *models.Person `json:"user,omitempty"`
@@ -74,6 +76,7 @@ func (t *TemplateEnv) AsMap() map[string]any {
 		"env":       t.Env,
 		"params":    t.Params,
 		"playbook":  t.Playbook.AsMap(),
+		"git":       t.GitOps.AsMap(),
 		"run":       t.Run.AsMap(),
 		"request":   t.Request,
 	}

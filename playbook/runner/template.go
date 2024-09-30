@@ -114,7 +114,7 @@ func CreateTemplateEnv(ctx context.Context, playbook *models.Playbook, run *mode
 	if gitOpsEnvVar, err := getGitOpsTemplateVars(ctx, *run, spec.Actions); err != nil {
 		return templateEnv, oops.Wrapf(err, "failed to get gitops vars")
 	} else if gitOpsEnvVar != nil {
-		templateEnv.Env["git"] = gitOpsEnvVar.AsMap()
+		templateEnv.GitOps = *gitOpsEnvVar
 	}
 
 	env := make(map[string]any)
