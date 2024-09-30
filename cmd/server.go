@@ -25,6 +25,7 @@ import (
 	"github.com/flanksource/incident-commander/incidents/responder"
 	"github.com/flanksource/incident-commander/jobs"
 	"github.com/flanksource/incident-commander/notification"
+	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/teams"
 
 	// register event handlers
@@ -133,6 +134,7 @@ func tableUpdatesHandler(ctx context.Context) {
 
 	notificationUpdateCh := notifyRouter.GetOrCreateChannel("notifications")
 	teamsUpdateChan := notifyRouter.GetOrCreateChannel("teams")
+	permissionUpdateChan := notifyRouter.GetOrCreateChannel("permissions")
 
 	for {
 		select {
@@ -142,6 +144,13 @@ func tableUpdatesHandler(ctx context.Context) {
 		case id := <-teamsUpdateChan:
 			responder.PurgeCache(id)
 			teams.PurgeCache(id)
+
+		case <-permissionUpdateChan:
+			if err := rbac.ReloadPolicy(); err != nil {
+				ctx.Logger.Errorf("error reloading rbac policy due to permission updates: %v", err)
+			} else {
+				ctx.Logger.Debugf("reloading rbac policy due to permission updates")
+			}
 		}
 	}
 }

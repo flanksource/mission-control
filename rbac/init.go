@@ -186,3 +186,7 @@ func Check(ctx context.Context, subject, object, action string) bool {
 
 	return allowed
 }
+
+func ReloadPolicy() error {
+	return enforcer.LoadPolicy()
+}
