@@ -458,7 +458,7 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 
 		ginkgo.It("it should eventually consume the event", func() {
 			Eventually(func() bool {
-				DefaultContext.Logger.V(0).Infof("checking if the delayed notificaiton.send event has been consumed")
+				DefaultContext.Logger.V(0).Infof("checking if the delayed notification.send event has been consumed")
 				events.ConsumeAll(DefaultContext)
 
 				var count int64
