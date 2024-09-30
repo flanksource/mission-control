@@ -208,7 +208,7 @@ func ScheduleRun(ctx context.Context, run models.PlaybookRun) error {
 	if err != nil {
 		return ctx.Oops("db").Wrap(err)
 	} else if agent == nil {
-		return ctx.Oops("db").Wrapf(err, "failed to find any agent (%s)", strings.Join(eligibleAgents, ","))
+		return ctx.Oops().Errorf("failed to find any agent (%s)", strings.Join(eligibleAgents, ","))
 	}
 
 	if agent.Name == Main {
