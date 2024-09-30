@@ -54,8 +54,13 @@ func DbMiddleware() MiddlewareFunc {
 			}
 
 			ctx := c.Request().Context().(context.Context)
+			user := ctx.User()
 
 			if !CheckContext(ctx, object, action) {
+				c.Response().Header().Add("X-Rbac-Subject", user.ID.String())
+				c.Response().Header().Add("X-Rbac-Object", object)
+				c.Response().Header().Add("X-Rbac-Action", action)
+
 				return c.String(http.StatusForbidden, ErrAccessDenied.Error())
 			}
 
