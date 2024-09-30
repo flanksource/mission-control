@@ -7,7 +7,7 @@ import (
 	"github.com/flanksource/duty/postq/pg"
 )
 
-var DefaultLongpollTimeout = time.Minute
+var DefaultLongpollTimeout = 45 * time.Second
 
 // Global instance
 var ActionNotifyRouter = pg.NewNotifyRouter().WithRouteExtractor(playbookActionNotifyRouteExtractor)
