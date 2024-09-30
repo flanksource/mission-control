@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -47,11 +48,20 @@ func (t *GitOps) log(msg string, args ...any) {
 	t.logLines = append(t.logLines, fmt.Sprintf(msg, args...))
 }
 
+// DeleteFileDirective is a special path value that indicates a file should be deleted
+const DeleteFileDirective = "$delete"
+
+var blacklistedPathSymbols = regexp.MustCompile(`[${}[\]?*:<>|]`)
+
 func (t *GitOps) Run(ctx context.Context, action v1.GitOpsAction) (*GitOpsActionResult, error) {
 	var response GitOpsActionResult
 
 	if len(action.Patches) == 0 && len(action.Files) == 0 {
 		return nil, ctx.Oops().Errorf("no patches or files specified on gitops action")
+	}
+
+	if err := t.validatePaths(ctx, action); err != nil {
+		return nil, err
 	}
 
 	if err := t.generateSpec(ctx, action); err != nil {
@@ -105,6 +115,26 @@ func (t *GitOps) Run(ctx context.Context, action v1.GitOpsAction) (*GitOpsAction
 	response.Logs = strings.Join(t.logLines, "\n")
 
 	return &response, nil
+}
+
+func (t *GitOps) validatePaths(ctx context.Context, action v1.GitOpsAction) error {
+	for _, file := range action.Files {
+		if file.Path == DeleteFileDirective {
+			continue
+		}
+
+		if blacklistedPathSymbols.MatchString(file.Path) {
+			return ctx.Oops().Errorf("path %s contains illegal characters", file.Path)
+		}
+	}
+
+	for _, patch := range action.Patches {
+		if blacklistedPathSymbols.MatchString(patch.Path) {
+			return ctx.Oops().Errorf("path %s contains illegal characters", patch.Path)
+		}
+	}
+
+	return nil
 }
 
 // generateSpec generates the spec for the git client from the action
@@ -294,8 +324,7 @@ func (t *GitOps) modifyFiles(ctx context.Context, action v1.GitOpsAction) error 
 			}
 
 			switch f.Content {
-			case "$delete":
-
+			case DeleteFileDirective:
 				if _, err := t.workTree.Filesystem.Stat(relativePath); os.IsNotExist(err) {
 					t.log("File does not exist, skipping delete: %s", relativePath)
 				} else if err != nil {
