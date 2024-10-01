@@ -1,0 +1,18 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: delayed-option
+spec:
+  parameters:
+    - name: delay
+      default: "0"
+  actions:
+    - name: start
+      exec:
+        script: date
+
+    - name: Delay
+      if: 'success() && params.delay != "0"'
+      delay: "params.delay"
+      exec:
+        script: date
