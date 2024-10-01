@@ -1,0 +1,72 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: params-sink
+  namespace: mission-control
+spec:
+  title: Params Kitchen Sink
+  actions:
+    - name: echo
+      exec:
+        script: echo {{. | toJSON | shellQuote}} | jq
+  configs:
+    - types:
+        - Kubernetes::Namespace
+  description: Test playbook
+  category: Kitchen Sink
+  parameters:
+    - label: Text Input (Default)
+      name: text-input
+      type: text
+      default: "hello world"
+    - label: Checkbox
+      name: checkbox
+      type: checkbox
+    - label: Teams Selector
+      name: teams
+      type: team
+    - label: People Selector
+      name: people
+      properties:
+        role: admin
+      type: people
+    - label: Component Selector
+      name: component
+      properties:
+        filter:
+          - types:
+              - KubernetesPod
+      type: component
+    - label: Configs Selector
+      name: configs
+      properties:
+        filter:
+          - types:
+              - Kubernetes::Pod
+      type: config
+    - label: Code Editor (YAML)
+      name: code-editor-yaml
+      properties:
+        language: yaml
+      type: code
+    - label: Code Editor (JSON)
+      name: code-editor-json
+      properties:
+        language: json
+      type: code
+    - label: Textarea
+      name: textarea
+      properties:
+        multiline: "true"
+      type: text
+    - label: List
+      name: list
+      properties:
+        options:
+          - label: Option 1
+            value: option-1
+          - label: Option 2
+            value: option-2
+          - label: Option 3
+            value: option-3
+      type: list
