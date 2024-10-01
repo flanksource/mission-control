@@ -2,6 +2,7 @@ package playbook
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/flanksource/commons/collections"
@@ -55,7 +56,7 @@ func approveRun(ctx context.Context, run *models.PlaybookRun) error {
 	if objects, err := run.GetRBACAttributes(ctx.DB()); err != nil {
 		return ctx.Oops().Wrap(err)
 	} else if !rbac.HasPermission(ctx, approver.ID.String(), objects, rbac.ActionPlaybookApprove) {
-		return ctx.Oops().Code(api.EFORBIDDEN).Errorf("forbidden to approve playbook")
+		return ctx.Oops().With("permission", rbac.ActionPlaybookRun, "objects", objects).Code(api.EFORBIDDEN).Wrap(errors.New("access denied: approval permission required"))
 	}
 
 	var spec v1.PlaybookSpec
