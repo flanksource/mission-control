@@ -28,9 +28,12 @@ type InviteUserRequest struct {
 	FirstName string `json:"firstName"`
 	LastName  string `json:"lastName"`
 	Email     string `json:"email"`
+	Role      string `json:"role"`
 }
 
 func (k *KratosHandler) InviteUser(c echo.Context) error {
+	ctx := c.Request().Context().(context.Context)
+
 	var reqData InviteUserRequest
 	if err := c.Bind(&reqData); err != nil {
 		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{
@@ -39,7 +42,7 @@ func (k *KratosHandler) InviteUser(c echo.Context) error {
 		})
 	}
 
-	identity, err := k.createUser(c.Request().Context(), reqData.FirstName, reqData.LastName, reqData.Email)
+	identity, err := k.createUser(ctx, reqData.FirstName, reqData.LastName, reqData.Email)
 	if err != nil {
 		// User already exists
 		if strings.Contains(err.Error(), http.StatusText(http.StatusConflict)) {
@@ -55,7 +58,13 @@ func (k *KratosHandler) InviteUser(c echo.Context) error {
 		})
 	}
 
-	link, err := k.createRecoveryLink(c.Request().Context(), identity.Id)
+	if reqData.Role != "" {
+		if err := rbac.AddRoleForUser(identity.Id, reqData.Role); err != nil {
+			ctx.Logger.Errorf("failed to add role to user: %v", err)
+		}
+	}
+
+	link, err := k.createRecoveryLink(ctx, identity.Id)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Err: err.Error(), Message: "error creating recovery link"})
 	}
