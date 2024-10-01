@@ -27,8 +27,8 @@ const (
 	PlaybookParameterTypePeople    = "people"
 	PlaybookParameterTypeTeam      = "team"
 	PlaybookParameterTypeText      = "text"
-	PlaybookParameterTypeMillis    = "Millis"
-	PlaybookParameterTypeBytes     = "Bytes"
+	PlaybookParameterTypeMillis    = "millicores"
+	PlaybookParameterTypeBytes     = "bytes"
 )
 
 // PlaybookParameter defines a parameter that a playbook needs to run.
