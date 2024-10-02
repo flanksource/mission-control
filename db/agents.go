@@ -11,6 +11,8 @@ import (
 	"gorm.io/gorm"
 )
 
+const PersonTypeAgent = "agent"
+
 func FindFirstAgent(ctx context.Context, names ...string) (*models.Agent, error) {
 	for _, name := range names {
 		agent, err := FindAgent(ctx, name)
@@ -69,7 +71,7 @@ func GetOrCreateAgent(ctx context.Context, name string) (*models.Agent, error) {
 }
 
 func CreateAgent(ctx context.Context, name string, personID *uuid.UUID, properties map[string]string) error {
-	properties = collections.MergeMap(properties, map[string]string{"type": "agent"})
+	properties = collections.MergeMap(properties, map[string]string{"type": PersonTypeAgent})
 
 	a := models.Agent{
 		Name:       name,
