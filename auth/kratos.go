@@ -12,6 +12,7 @@ import (
 	"github.com/flanksource/commons/rand"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/incident-commander/db"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	client "github.com/ory/client-go"
@@ -164,20 +165,20 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 			return c.String(http.StatusUnauthorized, "Authorization Error")
 		}
 
-		person := models.Person{ID: uid}
+		person, err := db.GetUserByID(ctx, uid.String())
+		if err != nil {
+			ctx.GetSpan().RecordError(err)
+			return c.String(http.StatusInternalServerError, "Error fetching user details from database")
+		}
 
-		if traits, ok := session.Identity.GetTraits().(map[string]any); ok {
-			if e, ok := traits["email"].(string); ok {
-				person.Email = e
+		if person.Type == db.PersonTypeAgent {
+			agent, err := db.FindAgent(ctx, person.Name)
+			if err != nil {
+				ctx.GetSpan().RecordError(err)
+				return c.String(http.StatusInternalServerError, "Error fetching agent details from database")
 			}
-
-			switch v := traits["name"].(type) {
-			case map[string]string:
-				person.Name = fmt.Sprintf("%s %s", v["first"], v["last"])
-			}
-
-			if agent, ok := traits["agent"].(models.Agent); ok {
-				ctx = ctx.WithAgent(agent)
+			if agent != nil {
+				ctx = ctx.WithAgent(*agent)
 			}
 		}
 
