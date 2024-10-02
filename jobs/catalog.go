@@ -18,7 +18,7 @@ var RefreshConfigItemSummary3dView = &job.Job{
 
 var RefreshConfigItemSummary7dView = &job.Job{
 	Name:       "RefreshConfigItemSummary7dView",
-	Schedule:   "@every 10m",
+	Schedule:   "@every 30m",
 	Retention:  job.RetentionFew,
 	Singleton:  true,
 	JobHistory: true,
