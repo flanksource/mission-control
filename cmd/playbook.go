@@ -133,6 +133,7 @@ var Run = &cobra.Command{
 		run, err := playbook.Run(ctx, p, *params)
 		if err != nil {
 			logger.Errorf("%+v", err)
+			shutdown.ShutdownAndExit(1, err.Error())
 			return
 		}
 
@@ -146,11 +147,13 @@ var Run = &cobra.Command{
 		action, step, err = runner.GetNextActionToRun(ctx, *run)
 		if err != nil {
 			logger.Fatalf(err.Error())
+			shutdown.ShutdownAndExit(1, err.Error())
 			return
 		}
 
 		if action == nil {
 			logger.Errorf("No actions to run")
+			shutdown.ShutdownAndExit(1, err.Error())
 			return
 		}
 

@@ -12,6 +12,7 @@ charts/.devenv*
 devenv.local.nix
 ginkgo.report
 mission-control.properties
+test.properties
 cover.out
 coverprofile.out
 *.test

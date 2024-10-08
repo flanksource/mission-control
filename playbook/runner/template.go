@@ -106,11 +106,6 @@ func CreateTemplateEnv(ctx context.Context, playbook *models.Playbook, run *mode
 		}
 	}
 
-	// We are just crafting the template for param rendering
-	if run.ID == uuid.Nil {
-		return templateEnv, nil
-	}
-
 	if gitOpsEnvVar, err := getGitOpsTemplateVars(ctx, *run, spec.Actions); err != nil {
 		return templateEnv, oops.Wrapf(err, "failed to get gitops vars")
 	} else if gitOpsEnvVar != nil {
