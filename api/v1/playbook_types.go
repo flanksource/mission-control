@@ -155,7 +155,7 @@ type PlaybookSpec struct {
 
 	// RunsOn specifies the agents that can run this playbook.
 	// When left empty, the playbook will run on the main instance itself.
-	RunsOn []string `json:"runsOn,omitempty" yaml:"runsOn,omitempty"`
+	RunsOn []string `json:"runsOn,omitempty" yaml:"runsOn,omitempty" template:"true"`
 
 	// Env is a list of env vars that are templatable and accessible in templates.
 	// Env vars are similar to playbook parameters except they do not get

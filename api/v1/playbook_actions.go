@@ -401,7 +401,7 @@ type PlaybookAction struct {
 
 	// RunsOn specifies the agents that can run this action.
 	// When left empty, the action will run on the main instance itself.
-	RunsOn []string `json:"runsOn,omitempty" yaml:"runsOn,omitempty"`
+	RunsOn []string `json:"runsOn,omitempty" yaml:"runsOn,omitempty" template:"true"`
 
 	// TemplatesOn specifies where the templating happens.
 	// Available options:
