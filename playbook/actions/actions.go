@@ -82,7 +82,7 @@ func (t *TemplateEnv) AsMap() map[string]any {
 	}
 
 	if t.Action != nil {
-		m["agent"] = t.Action.AsMap()
+		m["action"] = t.Action.AsMap()
 	}
 	if t.Agent != nil {
 		m["agent"] = t.Agent.AsMap()
