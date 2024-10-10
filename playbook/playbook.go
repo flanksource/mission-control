@@ -12,6 +12,7 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
+	"github.com/flanksource/gomplate/v3"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"github.com/samber/oops"
@@ -156,6 +157,26 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 	// Check playbook filters
 	if err := runner.CheckPlaybookFilter(ctx, spec, templateEnv); err != nil {
 		return nil, err
+	}
+
+	// Template run's spec (runsOn)
+	var runSpec v1.PlaybookSpec
+	if err := json.Unmarshal(playbook.Spec, &runSpec); err != nil {
+		return nil, ctx.Oops().Wrap(err)
+	}
+	var runsOn []string
+	for _, specRunOn := range runSpec.RunsOn {
+		output, err := ctx.RunTemplate(gomplate.Template{Template: specRunOn}, templateEnv.AsMap())
+		if err != nil {
+			return nil, ctx.Oops().Wrap(err)
+		}
+		runsOn = append(runsOn, output)
+	}
+	runSpec.RunsOn = runsOn
+
+	run.Spec, err = json.Marshal(runSpec)
+	if err != nil {
+		return nil, ctx.Oops().Wrap(err)
 	}
 
 	if err := savePlaybookRun(ctx, &run); err != nil {
