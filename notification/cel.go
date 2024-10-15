@@ -33,7 +33,7 @@ type celVariables struct {
 }
 
 func (t *celVariables) SetSilenceURL(frontendURL string) {
-	baseURL := fmt.Sprintf("%s/settings/notifications/silences/add", frontendURL)
+	baseURL := fmt.Sprintf("%s/notifications/silences/add", frontendURL)
 
 	switch {
 	case t.ConfigItem != nil:
