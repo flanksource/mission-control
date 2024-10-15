@@ -247,7 +247,7 @@ func UpdatePlaybookRunStatusIfApproved(ctx context.Context, playbookID string, a
 		SELECT run_id FROM run_approvals WHERE approvers %s (SELECT array_agg(id) FROM allowed_approvers)
 	)`, operator)
 
-	tx := ctx.DB().Exec(query, approval.Approvers.Teams, approval.Approvers.People, models.PlaybookRunStatusScheduled, models.PlaybookRunStatusPending, playbookID)
+	tx := ctx.DB().Exec(query, approval.Approvers.Teams, approval.Approvers.People, models.PlaybookRunStatusScheduled, models.PlaybookRunStatusPendingApproval, playbookID)
 	if tx.RowsAffected > 0 {
 		ctx.Tracef("[%s] %d playbook runs approved", playbookID, tx.RowsAffected)
 	}

@@ -1,12 +1,11 @@
 package playbook
 
 import (
-	"fmt"
-	"time"
-
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
@@ -174,12 +173,12 @@ func (t *playbookScheduler) Handle(ctx context.Context, event models.Event) erro
 
 		run := models.PlaybookRun{
 			PlaybookID: p.ID,
-			Status:     models.PlaybookRunStatusPending,
+			Status:     models.PlaybookRunStatusScheduled,
 			Spec:       p.Spec,
 		}
 
-		if playbook.Spec.Approval == nil || playbook.Spec.Approval.Approvers.Empty() {
-			run.Status = models.PlaybookRunStatusScheduled
+		if playbook.Spec.Approval != nil && !playbook.Spec.Approval.Approvers.Empty() {
+			run.Status = models.PlaybookRunStatusPendingApproval
 		}
 
 		switch specEvent.Class {
@@ -294,7 +293,7 @@ func onPlaybookRunNewApproval(ctx context.Context, event models.Event) error {
 		return err
 	}
 
-	if run.Status != models.PlaybookRunStatusPending {
+	if run.Status != models.PlaybookRunStatusPendingApproval {
 		return nil
 	}
 
