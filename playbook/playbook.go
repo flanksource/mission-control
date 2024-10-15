@@ -34,7 +34,7 @@ type PlaybookSummary struct {
 }
 
 func GetPlaybookStatus(ctx context.Context, runId uuid.UUID) (PlaybookSummary, error) {
-	var summary = PlaybookSummary{}
+	summary := PlaybookSummary{}
 	run, err := models.PlaybookRun{ID: runId}.Load(ctx.DB())
 	if err != nil {
 		return summary, err
@@ -88,7 +88,7 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 
 	run := models.PlaybookRun{
 		PlaybookID: playbook.ID,
-		Status:     models.PlaybookRunStatusPending,
+		Status:     models.PlaybookRunStatusScheduled,
 		Parameters: req.Params,
 		AgentID:    req.AgentID,
 	}
@@ -101,8 +101,8 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 		run.CreatedBy = &ctx.User().ID
 	}
 
-	if spec.Approval == nil || spec.Approval.Approvers.Empty() {
-		run.Status = models.PlaybookRunStatusScheduled
+	if spec.Approval != nil && !spec.Approval.Approvers.Empty() {
+		run.Status = models.PlaybookRunStatusPendingApproval
 	}
 
 	if req.ComponentID != nil {
