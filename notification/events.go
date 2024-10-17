@@ -282,6 +282,8 @@ func sendNotifications(ctx context.Context, events models.Events) models.Events 
 		if e.Delay != nil {
 			// This was a delayed notification.
 			// We need to re-evaluate the health of the resource.
+
+			// previousHealth is the health that triggered the notification event
 			previousHealth := api.EventToHealth(originalEvent.Name)
 
 			currentHealth, err := celEnv.GetResourceHealth(ctx)
@@ -300,7 +302,7 @@ func sendNotifications(ctx context.Context, events models.Events) models.Events 
 				continue
 			}
 
-			if !isHealthReportable(notif.Events, currentHealth, previousHealth) {
+			if !isHealthReportable(notif.Events, previousHealth, currentHealth) {
 				ctx.Logger.V(6).Infof("skipping notification[%s] as health change is not reportable", notif.ID)
 				continue
 			}
@@ -324,6 +326,7 @@ func isHealthReportable(events []string, previousHealth, currentHealth models.He
 	isCurrentHealthInNotification := lo.ContainsBy(events, func(event string) bool {
 		return api.EventToHealth(event) == currentHealth
 	})
+
 	if !isCurrentHealthInNotification {
 		// Either the notification has changed
 		// or the health of the resource has changed to something that the notification isn't configured for
