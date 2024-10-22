@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"bytes"
 	"fmt"
 	"net/http"
 	"os"
@@ -69,8 +70,18 @@ func (k *KratosHandler) InviteUser(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Err: err.Error(), Message: "error creating recovery link"})
 	}
 
-	body := fmt.Sprintf(inviteUserTemplate, reqData.FirstName, recoveryLink, recoveryCode)
-	inviteMail := mail.New(reqData.Email, "User Invite", body, "text/html")
+	data := map[string]string{
+		"firstName": reqData.FirstName,
+		"link":      recoveryLink,
+		"code":      recoveryCode,
+	}
+
+	var body bytes.Buffer
+	if err := inviteUserTemplate.Execute(&body, data); err != nil {
+		return err
+	}
+
+	inviteMail := mail.New(reqData.Email, "User Invite", body.String(), "text/html")
 	if err = inviteMail.Send(); err != nil {
 		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
 			Err:     err.Error(),
@@ -78,10 +89,8 @@ func (k *KratosHandler) InviteUser(c echo.Context) error {
 		})
 	}
 
-	return c.JSON(http.StatusOK, map[string]string{
-		"link": recoveryLink,
-		"code": recoveryCode,
-	})
+	delete(data, "firstName")
+	return c.JSON(http.StatusOK, data)
 }
 
 func UpdateAccountState(c echo.Context) error {
