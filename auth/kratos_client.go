@@ -55,17 +55,20 @@ func (k *KratosHandler) createUser(ctx gocontext.Context, firstName, lastName, e
 	return createdIdentity, err
 }
 
-func (k *KratosHandler) createRecoveryLink(ctx gocontext.Context, id string) (string, error) {
-	adminCreateSelfServiceRecoveryLinkBody := client.NewCreateRecoveryLinkForIdentityBody(id)
-	resp, _, err := k.adminClient.IdentityApi.CreateRecoveryLinkForIdentity(ctx).CreateRecoveryLinkForIdentityBody(*adminCreateSelfServiceRecoveryLinkBody).Execute()
+func (k *KratosHandler) createRecoveryLink(ctx gocontext.Context, id string) (string, string, error) {
+	createRecoveryCodeForIdentityBody := client.NewCreateRecoveryCodeForIdentityBody(id)
+	resp, _, err := k.adminClient.IdentityApi.
+		CreateRecoveryCodeForIdentity(ctx).
+		CreateRecoveryCodeForIdentityBody(*createRecoveryCodeForIdentityBody).
+		Execute()
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
-	return resp.GetRecoveryLink(), nil
+
+	return resp.GetRecoveryCode(), resp.GetRecoveryLink(), nil
 }
 
 func (k *KratosHandler) createAdminIdentity(ctx gocontext.Context) (string, error) {
-
 	config := *client.NewIdentityWithCredentialsPasswordConfig()
 	config.SetPassword(getDefaultAdminPassword())
 
