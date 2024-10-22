@@ -870,7 +870,13 @@
         "type": {
           "type": "string"
         },
-        "properties": true
+        "properties": true,
+        "dependsOn": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
       },
       "additionalProperties": false,
       "type": "object",
@@ -1057,6 +1063,9 @@
         },
         "search": {
           "type": "string"
+        },
+        "limit": {
+          "type": "integer"
         },
         "includeDeleted": {
           "type": "boolean"

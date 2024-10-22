@@ -361,4 +361,4 @@ require (
 
 // replace github.com/flanksource/duty => ../duty
 
-// replace github.com/flanksource/gomplate/v3 => /Users/moshe/go/src/github.com/flanksource/gomplate
+// replace github.com/flanksource/gomplate/v3 => ../gomplate

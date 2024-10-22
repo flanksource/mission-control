@@ -36,19 +36,26 @@ type PlaybookParameter struct {
 	// Name is the key for this parameter.
 	// It's used to address the parameter on templates.
 	Name string `json:"name" yaml:"name"`
+
 	// Specify the default value of the parameter.
 	Default dutyTypes.GoTemplate `json:"default,omitempty" yaml:"default,omitempty" template:"true"`
+
 	// Label shown on the UI
 	Label       string `json:"label,omitempty" yaml:"label,omitempty"`
 	Required    bool   `json:"required,omitempty" yaml:"required,omitempty"`
 	Icon        string `json:"icon,omitempty" yaml:"icon,omitempty"`
 	Description string `json:"description,omitempty" yaml:"description,omitempty"`
+
 	// +kubebuilder:validation:Enum=check;checkbox;code;component;config;list;people;team;text;bytes;millicores
 	Type string `json:"type,omitempty" yaml:"type,omitempty"`
+
 	// +kubebuilder:validation:Schemaless
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +kubebuilder:validation:Type=object
-	Properties json.RawMessage `json:"properties,omitempty" yaml:"properties,omitempty"`
+	Properties json.RawMessage `json:"properties,omitempty" yaml:"properties,omitempty" template:"true"`
+
+	// DependsOn lists the parameters that influence this parameter's default values.
+	DependsOn []string `json:"dependsOn,omitempty" yaml:"dependsOn,omitempty"`
 }
 
 type PlaybookApprovers struct {
