@@ -80,28 +80,35 @@ spec:
                       type: boolean
                     labelSelector:
                       type: string
+                    limit:
+                      type: integer
                     name:
                       type: string
                     namespace:
                       type: string
                     scope:
                       description: |-
-                        Scope is the id parent of the resource to select.
-                        Example: For config items, the scope is the scraper id
-                        - for checks, it's canaries and
-                        - for components, it's topology.
+                        Scope is the reference for parent of the resource to select.
+                        For config items, the scope is the scraper id
+                        For checks, it's canaries and
+                        For components, it's topology.
+                        It can either be a uuid or namespace/name
                       type: string
                     search:
                       description: Search query that applies to the resource name,
                         tag & labels.
                       type: string
                     statuses:
+                      description: StringArray represents a one-dimensional array
+                        of the PostgreSQL character types.
                       items:
                         type: string
                       type: array
                     tagSelector:
                       type: string
                     types:
+                      description: StringArray represents a one-dimensional array
+                        of the PostgreSQL character types.
                       items:
                         type: string
                       type: array
