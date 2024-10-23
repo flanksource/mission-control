@@ -133,7 +133,7 @@ func mapIDsToRoles(ctx context.Context, session *client.Session, person models.P
 
 	res, err := ctx.RunTemplate(gomplate.Template{Expression: IdentityRoleMapper}, env)
 	if err != nil {
-		return fmt.Errorf("error running IdentityRoleMapper template: %v", err)
+		return fmt.Errorf("error running IdentityRoleMapper template: %w", err)
 	}
 
 	log.V(3).Infof("[%s] identity mapper returned %s", name, res)
@@ -144,7 +144,10 @@ func mapIDsToRoles(ctx context.Context, session *client.Session, person models.P
 
 	var result IdentityMapperExprResult
 	if err := json.Unmarshal([]byte(res), &result); err != nil {
-		return err
+		return ctx.Oops().
+			With("result", result).
+			Hint("https://docs.flanksource.com/reference/helm/mission-control/#identity-mapper").
+			Wrapf(err, "identity role mapper did not produce a valid JSON encoded result")
 	}
 
 	if result.Role != "" {
