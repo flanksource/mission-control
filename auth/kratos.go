@@ -187,7 +187,7 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 		if IdentityRoleMapper != "" {
 			if err := mapIDsToRoles(mappingCtx, session, person); err != nil {
 				ctx.GetSpan().RecordError(err)
-				mappingCtx.Errorf("error mapping ids to roles: %v", err)
+				mappingCtx.Error(err, "error mapping ids to roles")
 			}
 		}
 
