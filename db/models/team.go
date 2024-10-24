@@ -19,6 +19,10 @@ type Team struct {
 	DeletedAt *time.Time `gorm:"type:timestamp with time zone"`
 }
 
+func (t Team) PK() string {
+	return t.ID.String()
+}
+
 type TeamMember struct {
 	TeamID   uuid.UUID `gorm:"not null"`
 	PersonID uuid.UUID `gorm:"not null"`

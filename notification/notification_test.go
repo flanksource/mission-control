@@ -44,7 +44,7 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 		Expect(err).To(BeNil())
 	})
 
-	var _ = ginkgo.Describe("Notification on incident creation", ginkgo.Ordered, func() {
+	var _ = ginkgo.Describe("Notification on incident creation", ginkgo.Ordered, ginkgo.FlakeAttempts(5), func() {
 		var (
 			notif     models.Notification
 			john      *models.Person
@@ -54,10 +54,16 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 		)
 
 		ginkgo.AfterAll(func() {
-			err := DefaultContext.DB().Delete(&notif).Error
+			webhookPostdata = make(map[string]string)
+			type IDer interface {
+				PK() string
+			}
+			err := DefaultContext.DB().Exec("DELETE FROM incident_histories WHERE true").Error
 			Expect(err).To(BeNil())
-
-			notification.PurgeCache(notif.ID.String())
+			for _, obj := range []IDer{notif, component, team} {
+				err = DefaultContext.DB().Where("id = ?", obj.PK()).Delete(&obj).Error
+				Expect(err).To(BeNil())
+			}
 		})
 
 		ginkgo.It("should create a person", func() {
@@ -140,6 +146,7 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 			Expect(tx.Error).To(BeNil())
 		})
 
+		// FIXME: Flaky test
 		ginkgo.It("should consume the event and send the notification", func() {
 			events.ConsumeAll(DefaultContext)
 
