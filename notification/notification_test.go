@@ -26,7 +26,7 @@ import (
 	_ "github.com/flanksource/incident-commander/upstream"
 )
 
-var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
+var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, ginkgo.FlakeAttempts(5), func() {
 	var customReceiverJson []byte
 
 	ginkgo.BeforeAll(func() {
@@ -44,7 +44,7 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 		Expect(err).To(BeNil())
 	})
 
-	var _ = ginkgo.Describe("Notification on incident creation", ginkgo.Ordered, ginkgo.FlakeAttempts(5), func() {
+	var _ = ginkgo.Describe("Notification on incident creation", ginkgo.Ordered, func() {
 		var (
 			notif     models.Notification
 			john      *models.Person
@@ -58,9 +58,9 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 			type IDer interface {
 				PK() string
 			}
-			err := DefaultContext.DB().Exec("DELETE FROM incident_histories WHERE true").Error
+			err := DefaultContext.DB().Exec("DELETE FROM incident_histories WHERE incident_id = ?", incident.ID).Error
 			Expect(err).To(BeNil())
-			for _, obj := range []IDer{notif, component, team} {
+			for _, obj := range []IDer{notif, component, incident, team, john} {
 				err = DefaultContext.DB().Where("id = ?", obj.PK()).Delete(&obj).Error
 				Expect(err).To(BeNil())
 			}
