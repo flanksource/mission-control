@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
@@ -67,9 +68,21 @@ func CreateOrSaveFromFile(ctx context.Context, file string) (*models.Playbook, e
 		return nil, err
 	}
 
-	err = yamlutil.Unmarshal(manifest, &spec)
-	if err != nil {
-		return nil, err
+	// We can get multiple yamls, we choose first non empty, else throw an error
+	allManifests := strings.Split(string(manifest), "---")
+	for _, m := range allManifests {
+		err = yamlutil.Unmarshal([]byte(m), &spec)
+		if err != nil {
+			return nil, err
+		}
+
+		if spec.Name == "" {
+			logger.Infof("[Skipping] Got empty name for spec %s", m)
+			continue
+		}
+	}
+	if spec.Name == "" {
+		return nil, fmt.Errorf("Error no name in spec %v", spec)
 	}
 
 	return db.SavePlaybook(ctx, &spec)
