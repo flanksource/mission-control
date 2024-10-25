@@ -93,11 +93,11 @@ var Serve = &cobra.Command{
 
 		e := echo.New(ctx)
 
-		shutdown.AddHook(func() {
+		shutdown.AddHookWithPriority("echo", shutdown.PriorityIngress, func() {
 			echo.Shutdown(e)
 		})
 
-		shutdown.AddHook(stop)
+		shutdown.AddHookWithPriority("database", shutdown.PriorityCritical, stop)
 
 		shutdown.WaitForSignal()
 

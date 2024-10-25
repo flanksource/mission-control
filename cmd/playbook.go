@@ -108,12 +108,12 @@ var Run = &cobra.Command{
 			return
 		}
 
-		shutdown.AddHook(stop)
+		shutdown.AddHookWithPriority("database", shutdown.PriorityCritical, stop)
 
 		if debugPort >= 0 {
 			e := echo.New(ctx)
 
-			shutdown.AddHook(func() {
+			shutdown.AddHookWithPriority("echo", shutdown.PriorityIngress, func() {
 				echo.Shutdown(e)
 			})
 
@@ -233,7 +233,7 @@ var Submit = &cobra.Command{
 			return err
 		}
 
-		shutdown.AddHook(stop)
+		shutdown.AddHookWithPriority("database", shutdown.PriorityCritical, stop)
 
 		shutdown.WaitForSignal()
 
