@@ -69,7 +69,7 @@ func parsePlaybookArgs(ctx context.Context, args []string) (*models.Playbook, *p
 	}
 
 	if f, err := os.Open(paramFile); err == nil {
-		if err := yamlutil.NewYAMLOrJSONDecoder(f, 1024).Decode(&params); err != nil {
+		if err := yamlutil.NewYAMLOrJSONDecoder(f, 1024).Decode(&params.Params); err != nil {
 			return nil, nil, err
 		}
 	}

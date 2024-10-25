@@ -14,8 +14,8 @@ require (
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.25.0 // indirect
 	github.com/flanksource/commons v1.31.2
-	github.com/flanksource/duty v1.0.724
-	github.com/flanksource/gomplate/v3 v3.24.38
+	github.com/flanksource/duty v1.0.731
+	github.com/flanksource/gomplate/v3 v3.24.39
 	github.com/flanksource/kopper v1.0.10
 	github.com/gomarkdown/markdown v0.0.0-20240419095408-642f0ee99ae2
 	github.com/google/cel-go v0.21.0
@@ -129,7 +129,7 @@ require (
 	github.com/exaring/otelpgx v0.6.2 // indirect
 	github.com/fatih/color v1.15.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
-	github.com/flanksource/is-healthy v1.0.34 // indirect
+	github.com/flanksource/is-healthy v1.0.35 // indirect
 	github.com/flanksource/kommons v0.31.4 // indirect
 	github.com/flanksource/kubectl-neat v1.0.4 // indirect
 	github.com/fluxcd/gitkit v0.6.0 // indirect
