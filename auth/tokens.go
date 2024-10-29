@@ -46,11 +46,22 @@ func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId str
 		return token.(string), nil
 	}
 
-	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+	claims := jwt.MapClaims{
 		"role": config.Postgrest.DBRole,
 		"id":   user.ID.String(),
-	}).SignedString([]byte(config.Postgrest.JWTSecret))
+	}
 
+	if ctx.Agent() != nil {
+		claims["agent_id"] = ctx.Agent().ID.String()
+	}
+
+	// TODO where to get these tags for the user ?
+	// TODO: REMOVE THIS
+	claims["tags"] = map[string]string{
+		"cluster": "homelab",
+	}
+
+	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(config.Postgrest.JWTSecret))
 	if err != nil {
 		return "", ctx.Oops().Wrap(err)
 	}
