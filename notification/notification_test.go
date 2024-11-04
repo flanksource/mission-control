@@ -141,9 +141,6 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 		})
 
 		ginkgo.It("should consume the event and send the notification", func() {
-            // TODO: FIXME
-			ginkgo.Skip("Skipping webhook test due to race condition bug")
-
 			events.ConsumeAll(DefaultContext)
 
 			Eventually(func() int {
