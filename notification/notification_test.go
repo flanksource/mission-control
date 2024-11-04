@@ -120,6 +120,7 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 				Template: "Severity: {{.incident.severity}}",
 				TeamID:   &team.ID,
 				Source:   models.SourceCRD,
+				Filter:   fmt.Sprintf("incident.type == '%s'", models.IncidentTypeCost),
 			}
 
 			err := DefaultContext.DB().Create(&notif).Error
