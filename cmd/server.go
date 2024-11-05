@@ -10,7 +10,9 @@ import (
 	"go.opentelemetry.io/otel"
 
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/postq/pg"
+	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/shutdown"
 	"github.com/flanksource/kopper"
 
@@ -134,12 +136,16 @@ func tableUpdatesHandler(ctx context.Context) {
 
 	notificationUpdateCh := notifyRouter.GetOrCreateChannel("notifications")
 	teamsUpdateChan := notifyRouter.GetOrCreateChannel("teams")
+	playbooksUpdateChan := notifyRouter.GetOrCreateChannel("playbooks")
 	permissionUpdateChan := notifyRouter.GetOrCreateChannel("permissions")
 
 	for {
 		select {
 		case id := <-notificationUpdateCh:
 			notification.PurgeCache(id)
+
+		case id := <-playbooksUpdateChan:
+			query.InvalidateCacheByID[models.Playbook](id)
 
 		case id := <-teamsUpdateChan:
 			responder.PurgeCache(id)
