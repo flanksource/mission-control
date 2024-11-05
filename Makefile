@@ -28,7 +28,10 @@ static: manifests generate fmt ginkgo
 
 .PHONY: test
 test:
-	ginkgo -r   --keep-going --junit-report junit-report.xml   --github-output  --output-dir test-reports --succinct
+	go test -v ./...
+	# Ginkgo takes much longer to execute the same suite of tests
+	 #ginkgo -r -p --keep-going --junit-report junit-report.xml   --github-output  --output-dir test-reports --succinct
+	#ginkgo -r --keep-going --junit-report junit-report.xml   --github-output  --output-dir test-reports --succinct
 
 fmt:
 	go fmt ./...
