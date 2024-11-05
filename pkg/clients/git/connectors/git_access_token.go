@@ -37,6 +37,14 @@ func NewAccessTokenClient(service, owner, repoName, accessToken string) (Connect
 	logger.Infof("Creating %s client for %s/%s using access token: %s", service, owner, repoName, logger.PrintableSecret(accessToken))
 	scmClient, err := factory.NewClient(service, "", accessToken)
 
+	if scmClient.Client == nil {
+		if accessToken == "" {
+			return nil, fmt.Errorf("unable to create %s client. missing access token", service)
+		}
+
+		return nil, fmt.Errorf("unable to create %s client for unknown reason", service)
+	}
+
 	scmClient.Client.Transport = logger.NewHttpLogger(logger.GetLogger("git"), scmClient.Client.Transport)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create git client with access token: %v", err)
