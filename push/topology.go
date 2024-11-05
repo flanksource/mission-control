@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 
+	"github.com/flanksource/commons/properties"
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	dutydb "github.com/flanksource/duty/db"
@@ -12,6 +13,7 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+	"github.com/samber/lo"
 )
 
 func PushTopology(c echo.Context) error {
@@ -73,8 +75,12 @@ func PushTopology(c echo.Context) error {
 	}
 
 	if len(idsToDelete) > 0 {
-		if err := models.DeleteComponentsWithIDs(ctx.DB(), idsToDelete); err != nil {
-			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINTERNAL, "error deleting old components: %v", dutydb.ErrorDetails(err)))
+		chunkSize := properties.Int(5000, "push.topology.delete_chunk_size")
+		chunks := lo.Chunk(idsToDelete, chunkSize)
+		for _, chunk := range chunks {
+			if err := models.DeleteComponentsWithIDs(ctx.DB(), chunk); err != nil {
+				return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINTERNAL, "error deleting old components: %v", dutydb.ErrorDetails(err)))
+			}
 		}
 	}
 
