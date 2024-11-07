@@ -125,14 +125,12 @@ func NotificationSendSummary(ctx context.Context, id string, window time.Duratio
 	return earliest.Time, count, err
 }
 
-func GetMatchingNotificationSilencesCount(ctx context.Context, resources models.NotificationSilenceResource) (int64, error) {
+func GetMatchingNotificationSilences(ctx context.Context, resources models.NotificationSilenceResource) ([]models.NotificationSilence, error) {
 	_ = ctx.DB().Use(extraClausePlugin.New())
 
 	query := ctx.DB().Model(&models.NotificationSilence{})
 
-	// Initialize with a false condition,
-	// if no resources are provided, the query won't return all records
-	orClauses := ctx.DB().Where("1 = 0")
+	orClauses := ctx.DB().Where("filter != ''")
 
 	if resources.ConfigID != nil {
 		orClauses = orClauses.Or("config_id = ?", *resources.ConfigID)
@@ -168,13 +166,13 @@ func GetMatchingNotificationSilencesCount(ctx context.Context, resources models.
 
 	query = query.Where(orClauses)
 
-	var count int64
-	err := query.Count(&count).Where(`"from" <= NOW()`).Where("until >= NOW()").Where("deleted_at IS NULL").Error
+	var silences []models.NotificationSilence
+	err := query.Where(`"from" <= NOW()`).Where("until >= NOW()").Where("deleted_at IS NULL").Find(&silences).Error
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
-	return count, nil
+	return silences, nil
 }
 
 func SaveUnsentNotificationToHistory(ctx context.Context, sendHistory models.NotificationSendHistory, window time.Duration) error {

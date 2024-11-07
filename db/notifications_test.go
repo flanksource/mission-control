@@ -52,55 +52,55 @@ var _ = ginkgo.Describe("Notification Silence", ginkgo.Ordered, func() {
 
 	ginkgo.Context("non recursive match", func() {
 		ginkgo.It("should match", func() {
-			matched, err := GetMatchingNotificationSilencesCount(DefaultContext, models.NotificationSilenceResource{ConfigID: lo.ToPtr(dummy.EKSCluster.ID.String())})
+			matched, err := GetMatchingNotificationSilences(DefaultContext, models.NotificationSilenceResource{ConfigID: lo.ToPtr(dummy.EKSCluster.ID.String())})
 			Expect(err).To(BeNil())
-			Expect(matched).To(Equal(int64(1)))
+			Expect(len(matched)).To(Equal(1))
 		})
 
 		ginkgo.It("should not match", func() {
-			matched, err := GetMatchingNotificationSilencesCount(DefaultContext, models.NotificationSilenceResource{ConfigID: lo.ToPtr(dummy.KubernetesCluster.ID.String())})
+			matched, err := GetMatchingNotificationSilences(DefaultContext, models.NotificationSilenceResource{ConfigID: lo.ToPtr(dummy.KubernetesCluster.ID.String())})
 			Expect(err).To(BeNil())
-			Expect(matched).To(Equal(int64(0)))
+			Expect(len(matched)).To(Equal(0))
 		})
 	})
 
 	ginkgo.Context("config recursive match", func() {
 		ginkgo.It("should match a child", func() {
-			matched, err := GetMatchingNotificationSilencesCount(DefaultContext, models.NotificationSilenceResource{ConfigID: lo.ToPtr(dummy.LogisticsAPIReplicaSet.ID.String())})
+			matched, err := GetMatchingNotificationSilences(DefaultContext, models.NotificationSilenceResource{ConfigID: lo.ToPtr(dummy.LogisticsAPIReplicaSet.ID.String())})
 			Expect(err).To(BeNil())
-			Expect(matched).To(Equal(int64(1)))
+			Expect(len(matched)).To(Equal(1))
 		})
 
 		ginkgo.It("should match a grand child", func() {
-			matched, err := GetMatchingNotificationSilencesCount(DefaultContext, models.NotificationSilenceResource{ConfigID: lo.ToPtr(dummy.LogisticsAPIPodConfig.ID.String())})
+			matched, err := GetMatchingNotificationSilences(DefaultContext, models.NotificationSilenceResource{ConfigID: lo.ToPtr(dummy.LogisticsAPIPodConfig.ID.String())})
 			Expect(err).To(BeNil())
-			Expect(matched).To(Equal(int64(1)))
+			Expect(len(matched)).To(Equal(1))
 		})
 
 		ginkgo.It("should not match", func() {
-			matched, err := GetMatchingNotificationSilencesCount(DefaultContext, models.NotificationSilenceResource{ConfigID: lo.ToPtr(dummy.LogisticsUIDeployment.ID.String())})
+			matched, err := GetMatchingNotificationSilences(DefaultContext, models.NotificationSilenceResource{ConfigID: lo.ToPtr(dummy.LogisticsUIDeployment.ID.String())})
 			Expect(err).To(BeNil())
-			Expect(matched).To(Equal(int64(0)))
+			Expect(len(matched)).To(Equal(0))
 		})
 	})
 
 	ginkgo.Context("component recursive match", func() {
 		ginkgo.It("should match a child", func() {
-			matched, err := GetMatchingNotificationSilencesCount(DefaultContext, models.NotificationSilenceResource{ComponentID: lo.ToPtr(dummy.LogisticsAPI.ID.String())})
+			matched, err := GetMatchingNotificationSilences(DefaultContext, models.NotificationSilenceResource{ComponentID: lo.ToPtr(dummy.LogisticsAPI.ID.String())})
 			Expect(err).To(BeNil())
-			Expect(matched).To(Equal(int64(1)))
+			Expect(len(matched)).To(Equal(1))
 		})
 
 		ginkgo.It("should match a grand child", func() {
-			matched, err := GetMatchingNotificationSilencesCount(DefaultContext, models.NotificationSilenceResource{ComponentID: lo.ToPtr(dummy.LogisticsWorker.ID.String())})
+			matched, err := GetMatchingNotificationSilences(DefaultContext, models.NotificationSilenceResource{ComponentID: lo.ToPtr(dummy.LogisticsWorker.ID.String())})
 			Expect(err).To(BeNil())
-			Expect(matched).To(Equal(int64(1)))
+			Expect(len(matched)).To(Equal(1))
 		})
 
 		ginkgo.It("should not match", func() {
-			matched, err := GetMatchingNotificationSilencesCount(DefaultContext, models.NotificationSilenceResource{ComponentID: lo.ToPtr(dummy.ClusterComponent.ID.String())})
+			matched, err := GetMatchingNotificationSilences(DefaultContext, models.NotificationSilenceResource{ComponentID: lo.ToPtr(dummy.ClusterComponent.ID.String())})
 			Expect(err).To(BeNil())
-			Expect(matched).To(Equal(int64(0)))
+			Expect(len(matched)).To(Equal(0))
 		})
 	})
 })
