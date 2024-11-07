@@ -133,7 +133,7 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 	t.Ring.Add(event, celEnv.AsMap())
 
 	silencedResource := getSilencedResourceFromCelEnv(celEnv)
-	matchingSilences, err := db.GetMatchingNotificationSilencesCount(ctx, silencedResource)
+	matchingSilences, err := db.GetMatchingNotificationSilences(ctx, silencedResource)
 	if err != nil {
 		return err
 	}
@@ -147,7 +147,7 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 	return nil
 }
 
-func addNotificationEvent(ctx context.Context, id string, celEnv map[string]any, event models.Event, matchingSilences int64) error {
+func addNotificationEvent(ctx context.Context, id string, celEnv map[string]any, event models.Event, matchingSilences []models.NotificationSilence) error {
 	n, err := GetNotification(ctx, id)
 	if err != nil {
 		return fmt.Errorf("failed to get notification %s: %w", id, err)
@@ -191,7 +191,9 @@ func addNotificationEvent(ctx context.Context, id string, celEnv map[string]any,
 	}
 
 	for _, payload := range payloads {
-		if matchingSilences > 0 {
+		if ok, err := shouldSilence(celEnv, matchingSilences); err != nil {
+			return err
+		} else if ok {
 			ctx.Logger.V(6).Infof("silencing notification for event %s due to %d matching silences", event.ID, matchingSilences)
 			ctx.Counter("notification_silenced", "id", id, "resource", payload.ID.String()).Add(1)
 
@@ -527,7 +529,12 @@ func GetEnvForEvent(ctx context.Context, event models.Event) (*celVariables, err
 		}
 
 		eventSuffix := strings.TrimPrefix(event.Name, "config.")
-		isStateUpdateEvent := slices.Contains([]string{api.EventConfigCreated, api.EventConfigChanged, api.EventConfigUpdated, api.EventConfigDeleted}, event.Name)
+		isStateUpdateEvent := slices.Contains([]string{
+			api.EventConfigChanged,
+			api.EventConfigCreated,
+			api.EventConfigDeleted,
+			api.EventConfigUpdated,
+		}, event.Name)
 		if isStateUpdateEvent {
 			env.NewState = eventSuffix
 		} else {
@@ -543,4 +550,20 @@ func GetEnvForEvent(ctx context.Context, event models.Event) (*celVariables, err
 
 	env.SetSilenceURL(api.FrontendURL)
 	return &env, nil
+}
+
+func shouldSilence(celEnv map[string]any, matchingSilences []models.NotificationSilence) (bool, error) {
+	for _, silence := range matchingSilences {
+		if silence.Filter != "" {
+			if ok, err := gomplate.RunTemplateBool(celEnv, gomplate.Template{Expression: string(silence.Filter)}); err != nil {
+				return false, fmt.Errorf("failed to run filter expression(%s): %w", silence.Filter, err)
+			} else if !ok {
+				continue
+			}
+		}
+
+		return true, nil
+	}
+
+	return false, nil
 }
