@@ -19,3 +19,4 @@ coverprofile.out
 junit-report.xml
 nohup.out
 .envrc
+.creds

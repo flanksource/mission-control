@@ -261,7 +261,6 @@ func ExecuteAndSaveAction(ctx context.Context, playbookID any, action *models.Pl
 
 }
 
-// TemplateAndExecuteAction executes the given playbook action after templating it.
 func RunAction(ctx context.Context, run *models.PlaybookRun, action *models.PlaybookRunAction) error {
 	playbook, err := action.GetPlaybook(ctx.DB())
 	if err != nil {

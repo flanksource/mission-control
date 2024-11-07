@@ -1,0 +1,18 @@
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: kubernetes-connection-from-scraper
+  namespace: mc
+spec:
+  configs:
+    - types:
+        - Kubernetes::Deployment
+  actions:
+    - exec:
+        script: "kubectl get deployments"
+        connections:
+          fromConfigItem: "$(.config.id)"
+      name: list 
+  category: Echoer
+  description: Lists all deployments 
