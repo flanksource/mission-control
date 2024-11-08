@@ -50,8 +50,8 @@ func (t *SilenceSaveRequest) Validate() error {
 		return errors.New("`from` time must be before `until")
 	}
 
-	if t.NotificationSilenceResource.Empty() {
-		return errors.New("at least one of `config_id`, `canary_id`, `check_id` or `component_id` is required")
+	if t.NotificationSilenceResource.Empty() && t.Filter == "" {
+		return errors.New("at least one of config_id, canary_id, check_id, component_id, filter is required")
 	}
 
 	return nil
