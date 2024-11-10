@@ -558,6 +558,18 @@ var _ = Describe("Playbook", func() {
 			Expect(actions[0].JSON()["item"]).To(Equal(*dummy.KubernetesNodeA.Name))
 			Expect(actions[1].JSON()["item"]).To(Equal(fmt.Sprintf("name=%s", *dummy.KubernetesNodeA.Name)))
 		})
+
+		It("exec | connection | kubernetes", func() {
+			run := createAndRun(DefaultContext.WithUser(&dummy.JohnDoe), "exec-connection-kubernetes", RunParams{
+				ConfigID: lo.ToPtr(dummy.KubernetesCluster.ID),
+			})
+
+			Expect(run.Status).To(Equal(models.PlaybookRunStatusCompleted), run.String(DefaultContext.DB()))
+			actions, err := run.GetActions(DefaultContext.DB())
+			Expect(err).To(BeNil())
+			Expect(len(actions)).To(Equal(1))
+			Expect(actions[0].Result["stdout"]).To(HavePrefix(".creds/cred-"))
+		})
 	})
 
 	var _ = Describe("spec runner", func() {
@@ -634,6 +646,7 @@ func waitFor(run *models.PlaybookRun, statuses ...models.PlaybookRunStatus) *mod
 		if savedRun != nil {
 			return savedRun.Status
 		}
+
 		return models.PlaybookRunStatus("Unknown")
 
 	}).WithTimeout(15 * time.Second).WithPolling(time.Second).Should(BeElementOf(s))

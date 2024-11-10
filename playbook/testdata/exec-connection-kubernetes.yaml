@@ -5,14 +5,14 @@ metadata:
   name: kubernetes-connection-from-scraper
   namespace: mc
 spec:
+  category: Echoer
+  description: list kubeconfig env var 
   configs:
     - types:
         - Kubernetes::Deployment
   actions:
-    - exec:
-        script: "kubectl get deployments"
+    - name: echo 
+      exec:
         connections:
           fromConfigItem: "{{.config.id}}"
-      name: list 
-  category: Echoer
-  description: Lists all deployments 
+        script: "echo $KUBECONFIG"
