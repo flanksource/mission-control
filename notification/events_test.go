@@ -19,7 +19,7 @@ func TestIsHealthReportable(t *testing.T) {
 			events:         []string{"config.warning", "config.healthy"},
 			previousHealth: models.HealthHealthy,
 			currentHealth:  models.HealthWarning,
-			expected:       true,
+			expected:       false,
 		},
 		{
 			name:           "health changed and got better",
@@ -34,6 +34,13 @@ func TestIsHealthReportable(t *testing.T) {
 			previousHealth: models.HealthHealthy,
 			currentHealth:  models.HealthUnhealthy,
 			expected:       false,
+		},
+		{
+			name:           "health unchanged",
+			events:         []string{"config.warning", "config.healthy"},
+			previousHealth: models.HealthHealthy,
+			currentHealth:  models.HealthHealthy,
+			expected:       true,
 		},
 	}
 

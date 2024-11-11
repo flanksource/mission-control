@@ -335,12 +335,7 @@ func isHealthReportable(events []string, previousHealth, currentHealth models.He
 		return false
 	}
 
-	if previousHealth == currentHealth {
-		return true
-	}
-
-	healthDegraded := models.WorseHealth(previousHealth, currentHealth) == currentHealth
-	return healthDegraded
+	return previousHealth == currentHealth
 }
 
 // GetEnvForEvent gets the environment variables for the given event
