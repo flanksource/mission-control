@@ -29,6 +29,8 @@ func ProcessPendingNotificationsJob(ctx context.Context) *job.Job {
 			if err := tx.Clauses(clause.Locking{Strength: clause.LockingStrengthUpdate, Options: clause.LockingOptionsSkipLocked}).
 				Where("status = ?", models.NotificationStatusPending).
 				Where("delay IS NULL OR created_at + (delay * INTERVAL '1 second' / 1000000000)  <= NOW()").
+				Order("created_at + (delay * INTERVAL '1 second' / 1000000000)"). // smallest effective send time first
+				Limit(1).                                                         // one at a time; as one notification failure shouldn't affect a previous successful one
 				Find(&pending).Error; err != nil {
 				return fmt.Errorf("failed to get pending notifications: %w", err)
 			}
