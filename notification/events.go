@@ -192,7 +192,7 @@ func addNotificationEvent(ctx context.Context, id string, celEnv map[string]any,
 
 	for _, payload := range payloads {
 		if ok, err := shouldSilence(celEnv, matchingSilences); err != nil {
-			return err
+			return fmt.Errorf("failed to evaluation notification silence: %w", err)
 		} else if ok {
 			ctx.Logger.V(6).Infof("silencing notification for event %s due to %d matching silences", event.ID, matchingSilences)
 			ctx.Counter("notification_silenced", "id", id, "resource", payload.ID.String()).Add(1)
@@ -238,7 +238,6 @@ func addNotificationEvent(ctx context.Context, id string, celEnv map[string]any,
 		newEvent := models.Event{
 			Name:       api.EventNotificationSend,
 			Properties: payload.AsMap(),
-			Delay:      n.WaitFor,
 		}
 		if err := ctx.DB().Clauses(events.EventQueueOnConflictClause).Create(&newEvent).Error; err != nil {
 			return fmt.Errorf("failed to saved `notification.send` event for payload (%v): %w", payload.AsMap(), err)
@@ -279,43 +278,30 @@ func sendNotifications(ctx context.Context, events models.Events) models.Events 
 			e.SetError(err.Error())
 			failedEvents = append(failedEvents, e)
 			notificationContext.WithError(err)
+			continue
 		}
 
-		if e.Delay != nil {
-			// This was a delayed notification.
-			// We need to re-evaluate the health of the resource.
-
-			// previousHealth is the health that triggered the notification event
-			previousHealth := api.EventToHealth(originalEvent.Name)
-
-			currentHealth, err := celEnv.GetResourceHealth(ctx)
-			if err != nil {
-				e.SetError(err.Error())
-				failedEvents = append(failedEvents, e)
-				notificationContext.WithError(err)
-				continue
-			}
-
-			notif, err := GetNotification(ctx, payload.NotificationID.String())
-			if err != nil {
-				e.SetError(err.Error())
-				failedEvents = append(failedEvents, e)
-				notificationContext.WithError(err)
-				continue
-			}
-
-			if !isHealthReportable(notif.Events, previousHealth, currentHealth) {
-				ctx.Logger.V(6).Infof("skipping notification[%s] as health change is not reportable", notif.ID)
-				continue
-			}
-		}
-
-		if err := PrepareAndSendEventNotification(notificationContext, payload, celEnv.AsMap()); err != nil {
+		nn, err := GetNotification(ctx, payload.NotificationID.String())
+		if err != nil {
 			e.SetError(err.Error())
 			failedEvents = append(failedEvents, e)
 			notificationContext.WithError(err)
+			continue
+		}
+
+		if nn.WaitFor != nil {
+			// delayed notifications are saved to history with a pending status
+			// and are later consumed by a job.
+			notificationContext.log.Delay = nn.WaitFor
+			notificationContext.log.Status = models.NotificationStatusPending
 		} else {
-			notificationContext.log.Sent()
+			if err := PrepareAndSendEventNotification(notificationContext, payload, celEnv.AsMap()); err != nil {
+				e.SetError(err.Error())
+				failedEvents = append(failedEvents, e)
+				notificationContext.WithError(err)
+			} else {
+				notificationContext.log.Sent()
+			}
 		}
 
 		logs.IfError(notificationContext.EndLog(), "error persisting end of notification send history")
