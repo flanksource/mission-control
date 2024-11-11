@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"slices"
+	"strings"
 	"time"
 
 	"github.com/flanksource/commons/hash"
@@ -111,7 +111,12 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 
 // TODO: Use regex supported path matching
 func canSkipAuth(c echo.Context) bool {
-	return slices.Contains(skipAuthPaths, c.Path())
+	for _, p := range skipAuthPaths {
+		if strings.HasPrefix(c.Path(), p) {
+			return true
+		}
+	}
+	return false
 }
 
 func mapIDsToRoles(ctx context.Context, session *client.Session, person models.Person) error {
