@@ -140,7 +140,7 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 
 	for _, id := range notificationIDs {
 		if err := addNotificationEvent(ctx, id, celEnv.AsMap(), event, matchingSilences); err != nil {
-			return fmt.Errorf("failed to add notification.send event for event=%s notification=%s", event.Name, id)
+			return fmt.Errorf("failed to add notification.send event for event=%s notification=%s: %w", event.Name, id, err)
 		}
 	}
 
