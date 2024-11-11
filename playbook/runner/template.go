@@ -186,5 +186,18 @@ func TemplateEnv(ctx context.Context, env actions.TemplateEnv, template string) 
 // TemplateAction all the go templates in the action
 func TemplateAction(ctx context.Context, actionSpec *v1.PlaybookAction, env actions.TemplateEnv) error {
 	templater := ctx.NewStructTemplater(env.AsMap(), "template", getGomplateFuncs(ctx, env))
-	return templater.Walk(&actionSpec)
+	if err := templater.Walk(&actionSpec); err != nil {
+		return err
+	}
+
+	// TODO: make this work with template.Walk()
+	if actionSpec.Exec != nil && actionSpec.Exec.Connections.FromConfigItem != nil {
+		if v, err := ctx.RunTemplate(gomplate.Template{Template: *actionSpec.Exec.Connections.FromConfigItem}, env.AsMap()); err != nil {
+			return err
+		} else {
+			actionSpec.Exec.Connections.FromConfigItem = &v
+		}
+	}
+
+	return nil
 }

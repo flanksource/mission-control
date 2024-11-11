@@ -1,0 +1,18 @@
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: kubernetes-connection-from-scraper
+  namespace: mc
+spec:
+  category: Echoer
+  description: list kubeconfig env var 
+  configs:
+    - types:
+        - Kubernetes::Deployment
+  actions:
+    - name: echo 
+      exec:
+        connections:
+          fromConfigItem: "{{.config.id}}"
+        script: "echo $KUBECONFIG"

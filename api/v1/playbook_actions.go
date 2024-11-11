@@ -8,6 +8,7 @@ import (
 
 	"github.com/flanksource/commons/duration"
 	"github.com/flanksource/commons/utils"
+	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
 	"k8s.io/client-go/kubernetes"
@@ -237,20 +238,14 @@ func (git GitCheckout) GetCertificate() types.EnvVar {
 type ExecAction struct {
 	// Script can be an inline script or a path to a script that needs to be executed
 	// On windows executed via powershell and in darwin and linux executed using bash
-	Script      string          `yaml:"script" json:"script" template:"true"`
-	Connections ExecConnections `yaml:"connections,omitempty" json:"connections,omitempty"`
+	Script      string                     `yaml:"script" json:"script" template:"true"`
+	Connections connection.ExecConnections `yaml:"connections,omitempty" json:"connections,omitempty" template:"true"`
 	// Artifacts to save
 	Artifacts []Artifact `yaml:"artifacts,omitempty" json:"artifacts,omitempty" template:"true"`
 	// EnvVars are the environment variables that are accessible to exec processes
 	EnvVars []types.EnvVar `yaml:"env,omitempty" json:"env,omitempty"`
 	// Checkout details the git repository that should be mounted to the process
 	Checkout *GitCheckout `yaml:"checkout,omitempty" json:"checkout,omitempty"`
-}
-
-type ExecConnections struct {
-	AWS   *AWSConnection   `yaml:"aws,omitempty" json:"aws,omitempty"`
-	GCP   *GCPConnection   `yaml:"gcp,omitempty" json:"gcp,omitempty"`
-	Azure *AzureConnection `yaml:"azure,omitempty" json:"azure,omitempty"`
 }
 
 type connectionContext interface {

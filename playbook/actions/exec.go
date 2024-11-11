@@ -4,20 +4,18 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"math/rand"
 	"os"
 	osExec "os/exec"
 	"path/filepath"
 	"strings"
-	textTemplate "text/template"
 	"time"
 
 	"github.com/flanksource/artifacts"
 	fileUtils "github.com/flanksource/commons/files"
-	"github.com/flanksource/commons/logger"
 
 	"github.com/flanksource/commons/hash"
 	"github.com/flanksource/commons/utils"
+	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -73,68 +71,17 @@ func (c *ExecAction) Run(ctx context.Context, exec v1.ExecAction) (*ExecDetails,
 		cmd.Dir = envParams.mountPoint
 	}
 
-	if err := setupConnection(ctx, exec, cmd); err != nil {
+	if cleanup, err := connection.SetupConnection(ctx, exec.Connections, cmd); err != nil {
 		return nil, ctx.Oops().Wrapf(err, "failed to setup connection")
+	} else {
+		defer func() {
+			if err := cleanup(); err != nil {
+				ctx.Errorf("something went wrong cleaning up connection artifacts: %v", err)
+			}
+		}()
 	}
 
 	return runCmd(ctx, cmd, exec.Artifacts...)
-}
-
-func setupConnection(ctx context.Context, check v1.ExecAction, cmd *osExec.Cmd) error {
-	if check.Connections.AWS != nil {
-		if err := check.Connections.AWS.Populate(ctx, ctx.Kubernetes(), ctx.GetNamespace()); err != nil {
-			return fmt.Errorf("failed to hydrate aws connection: %w", err)
-		}
-
-		configPath, err := saveConfig(awsConfigTemplate, check.Connections.AWS)
-		defer os.RemoveAll(filepath.Dir(configPath))
-		if err != nil {
-			return fmt.Errorf("failed to store AWS credentials: %w", err)
-		}
-
-		cmd.Env = os.Environ()
-		cmd.Env = append(cmd.Env, "AWS_EC2_METADATA_DISABLED=true") // https://github.com/aws/aws-cli/issues/5262#issuecomment-705832151
-		cmd.Env = append(cmd.Env, fmt.Sprintf("AWS_SHARED_CREDENTIALS_FILE=%s", configPath))
-		if check.Connections.AWS.Region != "" {
-			cmd.Env = append(cmd.Env, fmt.Sprintf("AWS_DEFAULT_REGION=%s", check.Connections.AWS.Region))
-		}
-	}
-
-	if check.Connections.Azure != nil {
-		if err := check.Connections.Azure.HydrateConnection(ctx); err != nil {
-			return fmt.Errorf("failed to hydrate connection %w", err)
-		}
-
-		// login with service principal
-		runCmd := osExec.Command("az", "login", "--service-principal", "--username", check.Connections.Azure.ClientID.ValueStatic, "--password", check.Connections.Azure.ClientSecret.ValueStatic, "--tenant", check.Connections.Azure.TenantID)
-		if err := runCmd.Run(); err != nil {
-			return fmt.Errorf("failed to login: %w", err)
-		}
-	}
-
-	if check.Connections.GCP != nil {
-		if err := check.Connections.GCP.HydrateConnection(ctx); err != nil {
-			return fmt.Errorf("failed to hydrate connection %w", err)
-		}
-
-		configPath, err := saveConfig(gcloudConfigTemplate, check.Connections.GCP)
-		defer os.RemoveAll(filepath.Dir(configPath))
-		if err != nil {
-			return fmt.Errorf("failed to store gcloud credentials: %w", err)
-		}
-
-		// to configure gcloud CLI to use the service account specified in GOOGLE_APPLICATION_CREDENTIALS,
-		// we need to explicitly activate it
-		runCmd := osExec.Command("gcloud", "auth", "activate-service-account", "--key-file", configPath)
-		if err := runCmd.Run(); err != nil {
-			return fmt.Errorf("failed to activate GCP service account: %w", err)
-		}
-
-		cmd.Env = os.Environ()
-		cmd.Env = append(cmd.Env, fmt.Sprintf("GOOGLE_APPLICATION_CREDENTIALS=%s", configPath))
-	}
-
-	return nil
 }
 
 func runCmd(ctx context.Context, cmd *osExec.Cmd, artifactConfigs ...v1.Artifact) (*ExecDetails, error) {
@@ -197,43 +144,6 @@ func runCmd(ctx context.Context, cmd *osExec.Cmd, artifactConfigs ...v1.Artifact
 	}
 
 	return &result, nil
-}
-
-func saveConfig(configTemplate *textTemplate.Template, view any) (string, error) {
-	dirPath := filepath.Join(".creds", fmt.Sprintf("cred-%d", rand.Intn(10000000)))
-	if err := os.MkdirAll(dirPath, 0700); err != nil {
-		return "", err
-	}
-
-	configPath := fmt.Sprintf("%s/credentials", dirPath)
-	logger.Tracef("Creating credentials file: %s", configPath)
-
-	file, err := os.Create(configPath)
-	if err != nil {
-		return configPath, err
-	}
-	defer file.Close()
-
-	if err := configTemplate.Execute(file, view); err != nil {
-		return configPath, err
-	}
-
-	return configPath, nil
-}
-
-var (
-	awsConfigTemplate    *textTemplate.Template
-	gcloudConfigTemplate *textTemplate.Template
-)
-
-func init() {
-	awsConfigTemplate = textTemplate.Must(textTemplate.New("").Parse(`[default]
-aws_access_key_id = {{.AccessKey.ValueStatic}}
-aws_secret_access_key = {{.SecretKey.ValueStatic}}
-{{if .SessionToken.ValueStatic}}aws_session_token={{.SessionToken.ValueStatic}}{{end}}
-`))
-
-	gcloudConfigTemplate = textTemplate.Must(textTemplate.New("").Parse(`{{.Credentials}}`))
 }
 
 type execEnv struct {
