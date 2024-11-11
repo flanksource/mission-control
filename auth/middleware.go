@@ -5,9 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"time"
 
-	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/hash"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
@@ -47,9 +47,9 @@ var (
 var skipAuthPaths = []string{
 	"/health",
 	"/metrics",
-	"/kratos/*",
-	"/canary/webhook/*",
-	"/playbook/webhook/:webhook_path", // Playbook webhooks handle the authentication themselves
+	"/kratos/",
+	"/canary/webhook/",
+	"/playbook/webhook/", // Playbook webhooks handle the authentication themselves
 }
 
 func Middleware(ctx context.Context, e *echo.Echo) error {
@@ -109,8 +109,9 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 	return nil
 }
 
+// TODO: Use regex supported path matching
 func canSkipAuth(c echo.Context) bool {
-	return collections.Contains(skipAuthPaths, c.Path())
+	return slices.Contains(skipAuthPaths, c.Path())
 }
 
 func mapIDsToRoles(ctx context.Context, session *client.Session, person models.Person) error {
