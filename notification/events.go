@@ -191,9 +191,7 @@ func addNotificationEvent(ctx context.Context, id string, celEnv map[string]any,
 	}
 
 	for _, payload := range payloads {
-		if ok, err := shouldSilence(celEnv, matchingSilences); err != nil {
-			return err
-		} else if ok {
+		if shouldSilence(ctx, celEnv, matchingSilences) {
 			ctx.Logger.V(6).Infof("silencing notification for event %s due to %d matching silences", event.ID, matchingSilences)
 			ctx.Counter("notification_silenced", "id", id, "resource", payload.ID.String()).Add(1)
 
@@ -547,18 +545,20 @@ func GetEnvForEvent(ctx context.Context, event models.Event) (*celVariables, err
 	return &env, nil
 }
 
-func shouldSilence(celEnv map[string]any, matchingSilences []models.NotificationSilence) (bool, error) {
+func shouldSilence(ctx context.Context, celEnv map[string]any, matchingSilences []models.NotificationSilence) bool {
 	for _, silence := range matchingSilences {
 		if silence.Filter != "" {
 			if ok, err := gomplate.RunTemplateBool(celEnv, gomplate.Template{Expression: string(silence.Filter)}); err != nil {
-				return false, fmt.Errorf("failed to run filter expression(%s): %w", silence.Filter, err)
+				ctx.Errorf("failed to run silence filter expression(%s): %v", silence.Filter, err)
+				logs.IfError(db.UpdateNotificationSilenceError(ctx, silence.ID.String(), err.Error()), "failed to update notification silence")
+				continue
 			} else if !ok {
 				continue
 			}
 		}
 
-		return true, nil
+		return true
 	}
 
-	return false, nil
+	return false
 }

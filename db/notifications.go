@@ -100,6 +100,10 @@ func UpdateNotificationError(ctx context.Context, id string, err string) error {
 	return ctx.DB().Model(&models.Notification{}).Where("id = ?", id).Update("error", err).Error
 }
 
+func UpdateNotificationSilenceError(ctx context.Context, id string, err string) error {
+	return ctx.DB().Model(&models.NotificationSilence{}).Where("id = ?", id).Update("error", err).Error
+}
+
 func DeleteNotificationSendHistory(ctx context.Context, days int) (int64, error) {
 	tx := ctx.DB().
 		Model(&models.NotificationSendHistory{}).
@@ -167,7 +171,7 @@ func GetMatchingNotificationSilences(ctx context.Context, resources models.Notif
 	query = query.Where(orClauses)
 
 	var silences []models.NotificationSilence
-	err := query.Where(`"from" <= NOW()`).Where("until >= NOW()").Where("deleted_at IS NULL").Find(&silences).Error
+	err := query.Where(`"from" <= NOW()`).Where("error IS NULL").Where("until >= NOW()").Where("deleted_at IS NULL").Find(&silences).Error
 	if err != nil {
 		return nil, err
 	}
