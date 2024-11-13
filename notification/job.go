@@ -2,6 +2,7 @@ package notification
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/job"
@@ -24,6 +25,7 @@ func ProcessPendingNotificationsJob(ctx context.Context) *job.Job {
 				done, err := processPendingNotification(ctx.Context)
 				if err != nil {
 					ctx.History.AddErrorf("failed to send pending notification: %v", err)
+					time.Sleep(2 * time.Second) // prevent spinning on db errors
 					continue
 				}
 
