@@ -2,6 +2,7 @@ package notification
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -13,6 +14,10 @@ type SlackMsgTemplate struct {
 }
 
 func SlackSend(ctx *Context, apiToken, channel string, msg NotificationTemplate) error {
+	if channel == "" {
+		return errors.New("slack channel cannot be empty")
+	}
+
 	api := slack.New(apiToken)
 
 	var opts []slack.MsgOption
@@ -34,5 +39,14 @@ func SlackSend(ctx *Context, apiToken, channel string, msg NotificationTemplate)
 	}
 
 	_, _, err := api.PostMessage(channel, opts...)
-	return err
+
+	var slackError slack.SlackErrorResponse
+	if errors.As(err, &slackError) {
+		switch slackError.Err {
+		case "channel_not_found":
+			return fmt.Errorf("slack channel %q not found. ensure the channel exists & the bot has permission on that channel", channel)
+		}
+	}
+
+	return ctx.Oops().Hint(msg.Message).Wrap(err)
 }
