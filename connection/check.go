@@ -369,6 +369,32 @@ func Test(ctx context.Context, c *models.Connection) error {
 			return api.Errorf(api.EINVALID, "server returned msg: %s", body)
 		}
 
+		if c.Username != "" {
+			// Ensure the bot has permission on the channel
+			postResponse, err := http.NewClient().R(ctx).
+				Header("Authorization", fmt.Sprintf("Bearer %s", c.Password)).
+				Header("Content-Type", "application/json; charset=utf-8").
+				Post("https://slack.com/api/chat.postMessage", map[string]any{
+					"text":    "Test message from mission control",
+					"channel": c.Username,
+				})
+			if err != nil {
+				return err
+			}
+			defer postResponse.Body.Close()
+
+			if !postResponse.IsOK(200) {
+				body, _ := postResponse.AsString()
+				return api.Errorf(api.EINVALID, "failed to check channel access (code %d) (msg: %s)", postResponse.StatusCode, body)
+			}
+
+			if response, err := postResponse.AsJSON(); err != nil {
+				return err
+			} else if response["ok"] != true {
+				return api.Errorf(api.EINVALID, "bot does not have access to channel %s: %v", c.Username, response["error"])
+			}
+		}
+
 	case models.ConnectionTypeSlackWebhook:
 		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
 
