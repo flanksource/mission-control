@@ -6,6 +6,7 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/job"
 	"github.com/flanksource/duty/models"
+	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
@@ -19,25 +20,74 @@ func ProcessPendingNotificationsJob(ctx context.Context) *job.Job {
 		Singleton:  false,
 		Schedule:   "@every 30s",
 		Fn: func(ctx job.JobRuntime) error {
-			tx := ctx.DB().Begin()
-			if tx.Error != nil {
-				return nil
-			}
-			defer tx.Rollback()
+			for {
+				done, err := processPendingNotification(ctx.Context)
+				if err != nil {
+					ctx.History.AddErrorf("failed to send pending notification: %v", err)
+					continue
+				}
 
-			var pending []models.NotificationSendHistory
-			if err := tx.Clauses(clause.Locking{Strength: clause.LockingStrengthUpdate, Options: clause.LockingOptionsSkipLocked}).
-				Where("status = ?", models.NotificationStatusPending).
-				Where("delay IS NULL OR created_at + (delay * INTERVAL '1 second' / 1000000000)  <= NOW()").
-				Order("created_at + (delay * INTERVAL '1 second' / 1000000000)"). // smallest effective send time first
-				Limit(1).                                                         // one at a time; as one notification failure shouldn't affect a previous successful one
-				Find(&pending).Error; err != nil {
-				return fmt.Errorf("failed to get pending notifications: %w", err)
+				ctx.History.IncrSuccess()
+
+				if done {
+					break
+				}
 			}
 
-			ctx.Infof("Pending notifications: %d", len(pending))
-
-			return tx.Commit().Error
+			return nil
 		},
 	}
+}
+
+func processPendingNotification(ctx context.Context) (bool, error) {
+	var noMorePending bool
+
+	err := ctx.DB().Transaction(func(tx *gorm.DB) error {
+		ctx = ctx.WithDB(tx, ctx.Pool())
+
+		var pending []models.NotificationSendHistory
+		if err := ctx.DB().Clauses(clause.Locking{Strength: clause.LockingStrengthUpdate, Options: clause.LockingOptionsSkipLocked}).
+			Where("status = ?", models.NotificationStatusPending).
+			Where("not_before <= NOW()").
+			Where("retries < ? ", ctx.Properties().Int("notification.max-retries", 4)).
+			Order("not_before").
+			Limit(1). // one at a time; as one notification failure shouldn't affect a previous successful one
+			Find(&pending).Error; err != nil {
+			return fmt.Errorf("failed to get pending notifications: %w", err)
+		}
+
+		if len(pending) == 0 {
+			noMorePending = true
+			return nil
+		}
+
+		currentHistory := pending[0]
+
+		var payload NotificationEventPayload
+		payload.FromMap(currentHistory.Payload)
+
+		if err := sendPendingNotification(ctx, currentHistory, payload); err != nil {
+			if dberr := ctx.DB().Debug().Model(&models.NotificationSendHistory{}).Where("id = ?", currentHistory.ID).UpdateColumns(map[string]any{
+				"status":  gorm.Expr("CASE WHEN retries >= ? THEN ? ELSE ? END", ctx.Properties().Int("notification.max-retries", 4)-1, models.NotificationStatusError, models.NotificationStatusPending),
+				"error":   err.Error(),
+				"retries": gorm.Expr("retries + 1"),
+			}).Error; dberr != nil {
+				return err
+			}
+
+			// return nil
+			// or else the transaction will be rolled back and there'll be no trace of a failed attempt.
+			return nil
+		} else {
+			if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", currentHistory.ID).UpdateColumns(map[string]any{
+				"status": models.NotificationStatusSent,
+			}).Error; dberr != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+
+	return noMorePending, err
 }

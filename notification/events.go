@@ -267,14 +267,13 @@ func sendNotifications(ctx context.Context, events models.Events) models.Events 
 	return failedEvents
 }
 
-func sendNotification(ctx context.Context, payload NotificationEventPayload) error {
-	notificationContext := NewContext(ctx, payload.NotificationID)
+func sendPendingNotification(ctx context.Context, history models.NotificationSendHistory, payload NotificationEventPayload) error {
+	notificationContext := NewContext(ctx, payload.NotificationID).WithHistory(history)
 
 	ctx.Debugf("[notification.send] %s  ", payload.EventName)
 	notificationContext.WithSource(payload.EventName, payload.ID)
-	logs.IfError(notificationContext.StartLog(), "error persisting start of notification send history")
 
-	err := _sendNotification(notificationContext, payload)
+	err := _sendNotification(notificationContext, true, payload)
 	if err != nil {
 		notificationContext.WithError(err)
 	}
@@ -283,7 +282,23 @@ func sendNotification(ctx context.Context, payload NotificationEventPayload) err
 	return err
 }
 
-func _sendNotification(ctx *Context, payload NotificationEventPayload) error {
+func sendNotification(ctx context.Context, payload NotificationEventPayload) error {
+	notificationContext := NewContext(ctx, payload.NotificationID)
+
+	ctx.Debugf("[notification.send] %s  ", payload.EventName)
+	notificationContext.WithSource(payload.EventName, payload.ID)
+	logs.IfError(notificationContext.StartLog(), "error persisting start of notification send history")
+
+	err := _sendNotification(notificationContext, false, payload)
+	if err != nil {
+		notificationContext.WithError(err)
+	}
+
+	logs.IfError(notificationContext.EndLog(), "error persisting end of notification send history")
+	return err
+}
+
+func _sendNotification(ctx *Context, noWait bool, payload NotificationEventPayload) error {
 	originalEvent := models.Event{Name: payload.EventName, CreatedAt: payload.EventCreatedAt}
 	if len(payload.Properties) > 0 {
 		if err := json.Unmarshal(payload.Properties, &originalEvent.Properties); err != nil {
@@ -301,11 +316,12 @@ func _sendNotification(ctx *Context, payload NotificationEventPayload) error {
 		return fmt.Errorf("failed to get notification: %w", err)
 	}
 
-	if nn.WaitFor != nil {
+	if !noWait && nn.WaitFor != nil {
 		// delayed notifications are saved to history with a pending status
 		// and are later consumed by a job.
-		ctx.log.Delay = nn.WaitFor
+		ctx.log.NotBefore = lo.ToPtr(ctx.log.CreatedAt.Add(*nn.WaitFor))
 		ctx.log.Status = models.NotificationStatusPending
+		ctx.log.Payload = payload.AsMap()
 	} else {
 		if err := PrepareAndSendEventNotification(ctx, payload, celEnv.AsMap()); err != nil {
 			return fmt.Errorf("failed to send notification for event: %w", err)
