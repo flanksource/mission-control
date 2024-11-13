@@ -12,6 +12,7 @@ import (
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/incidents"
+	"github.com/flanksource/incident-commander/notification"
 	"github.com/robfig/cron/v3"
 	"github.com/sethvargo/go-retry"
 )
@@ -57,6 +58,10 @@ func Start(ctx context.Context) {
 	if err := job.NewJob(ctx, "Cleanup Event Queue", CleanupEventQueueTableSchedule, CleanupEventQueue).
 		AddToScheduler(FuncScheduler); err != nil {
 		logger.Errorf("Failed to schedule job for cleaning up event queue table: %v", err)
+	}
+
+	if err := notification.ProcessPendingNotificationsJob(ctx).AddToScheduler(FuncScheduler); err != nil {
+		logger.Errorf("failed to schedule job: %v", err)
 	}
 
 	if err := job.NewJob(ctx, "Cleanup NotificationSend History", CleanupNotificationSendHistorySchedule, CleanupNotificationSendHistory).

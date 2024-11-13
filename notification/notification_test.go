@@ -432,27 +432,28 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 			notification.PurgeCache(n.ID.String())
 		})
 
-		ginkgo.It("should create a notification.send event with a delay on it", func() {
+		ginkgo.It("should create a new pending send history", func() {
 			err := DefaultContext.DB().Model(&models.ConfigItem{}).Where("id = ?", config.ID).Update("health", models.HealthUnhealthy).Error
 			Expect(err).To(BeNil())
 
 			events.ConsumeAll(DefaultContext)
 
-			Eventually(func() time.Duration {
-				var event models.Event
-				err := DefaultContext.DB().Where("properties->>'notification_id' = ?", n.ID.String()).Where("name = 'notification.send'").Find(&event).Error
+			Eventually(func() bool {
+				var history models.NotificationSendHistory
+				err = DefaultContext.DB().Where("notification_id = ?", n.ID.String()).Where("status = ?", models.NotificationStatusPending).Find(&history).Error
 				Expect(err).To(BeNil())
 
-				return lo.FromPtr(event.Delay)
-			}, "2s", "200ms").Should(Equal(*n.WaitFor))
+				return history.ID != uuid.Nil
+			}, "5s", "1s").Should(BeTrue())
 		})
 
 		ginkgo.It("should not consume the event within the delay period", func() {
 			for i := 0; i < 5; i++ {
-				events.ConsumeAll(DefaultContext)
+				_, err := notification.ProcessPendingNotification(DefaultContext)
+				Expect(err).To(BeNil())
 
-				var event models.Event
-				err := DefaultContext.DB().Where("properties->>'notification_id' = ?", n.ID.String()).Where("name = 'notification.send'").First(&event).Error
+				var history models.NotificationSendHistory
+				err = DefaultContext.DB().Where("notification_id = ?", n.ID.String()).Where("status = ?", models.NotificationStatusPending).First(&history).Error
 				Expect(err).To(BeNil())
 			}
 		})
@@ -460,13 +461,14 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 		ginkgo.It("it should eventually consume the event", func() {
 			Eventually(func() bool {
 				DefaultContext.Logger.V(0).Infof("checking if the delayed notification.send event has been consumed")
-				events.ConsumeAll(DefaultContext)
 
-				var count int64
-				err := DefaultContext.DB().Model(&models.Event{}).Where("properties->>'notification_id' = ?", n.ID.String()).Where("name = 'notification.send'").Count(&count).Error
+				_, err := notification.ProcessPendingNotification(DefaultContext)
 				Expect(err).To(BeNil())
 
-				return count == 0
+				var pending []models.NotificationSendHistory
+				err = DefaultContext.DB().Where("notification_id = ?", n.ID.String()).Where("status = ?", models.NotificationStatusPending).Find(&pending).Error
+				Expect(err).To(BeNil())
+				return len(pending) == 0
 			}, "15s", "1s").Should(BeTrue())
 		})
 	})
