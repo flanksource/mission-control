@@ -2,6 +2,7 @@ package notification
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -31,6 +32,12 @@ func NewContext(ctx context.Context, notificationID uuid.UUID) *Context {
 		notificationID: notificationID,
 		log:            models.NewNotificationSendHistory(notificationID),
 	}
+}
+
+func (t Context) WithHistory(h models.NotificationSendHistory) *Context {
+	h.WithStartTime(time.Now())
+	t.log = &h
+	return &t
 }
 
 func (t *Context) StartLog() error {

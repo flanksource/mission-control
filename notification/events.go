@@ -236,7 +236,6 @@ func addNotificationEvent(ctx context.Context, id string, celEnv map[string]any,
 		newEvent := models.Event{
 			Name:       api.EventNotificationSend,
 			Properties: payload.AsMap(),
-			Delay:      n.WaitFor,
 		}
 		if err := ctx.DB().Clauses(events.EventQueueOnConflictClause).Create(&newEvent).Error; err != nil {
 			return fmt.Errorf("failed to saved `notification.send` event for payload (%v): %w", payload.AsMap(), err)
@@ -250,76 +249,86 @@ func addNotificationEvent(ctx context.Context, id string, celEnv map[string]any,
 // It returns any events that failed to send.
 func sendNotifications(ctx context.Context, events models.Events) models.Events {
 	ctx = ctx.WithName("notifications")
+
 	var failedEvents []models.Event
 	for _, e := range events {
 		var payload NotificationEventPayload
 		payload.FromMap(e.Properties)
 
-		ctx.Debugf("[notification.send] %s  ", payload.EventName)
-
-		notificationContext := NewContext(ctx, payload.NotificationID)
-		notificationContext.WithSource(payload.EventName, payload.ID)
-
-		logs.IfError(notificationContext.StartLog(), "error persisting start of notification send history")
-
-		originalEvent := models.Event{Name: payload.EventName, CreatedAt: payload.EventCreatedAt}
-		if len(payload.Properties) > 0 {
-			if err := json.Unmarshal(payload.Properties, &originalEvent.Properties); err != nil {
-				e.SetError(err.Error())
-				failedEvents = append(failedEvents, e)
-				notificationContext.WithError(err)
-				continue
-			}
-		}
-
-		celEnv, err := GetEnvForEvent(ctx, originalEvent)
-		if err != nil {
+		if err := sendNotification(ctx, payload); err != nil {
 			e.SetError(err.Error())
 			failedEvents = append(failedEvents, e)
-			notificationContext.WithError(err)
+			continue
 		}
-
-		if e.Delay != nil {
-			// This was a delayed notification.
-			// We need to re-evaluate the health of the resource.
-
-			// previousHealth is the health that triggered the notification event
-			previousHealth := api.EventToHealth(originalEvent.Name)
-
-			currentHealth, err := celEnv.GetResourceHealth(ctx)
-			if err != nil {
-				e.SetError(err.Error())
-				failedEvents = append(failedEvents, e)
-				notificationContext.WithError(err)
-				continue
-			}
-
-			notif, err := GetNotification(ctx, payload.NotificationID.String())
-			if err != nil {
-				e.SetError(err.Error())
-				failedEvents = append(failedEvents, e)
-				notificationContext.WithError(err)
-				continue
-			}
-
-			if !isHealthReportable(notif.Events, previousHealth, currentHealth) {
-				ctx.Logger.V(6).Infof("skipping notification[%s] as health change is not reportable", notif.ID)
-				continue
-			}
-		}
-
-		if err := PrepareAndSendEventNotification(notificationContext, payload, celEnv.AsMap()); err != nil {
-			e.SetError(err.Error())
-			failedEvents = append(failedEvents, e)
-			notificationContext.WithError(err)
-		} else {
-			notificationContext.log.Sent()
-		}
-
-		logs.IfError(notificationContext.EndLog(), "error persisting end of notification send history")
 	}
 
 	return failedEvents
+}
+
+func sendPendingNotification(ctx context.Context, history models.NotificationSendHistory, payload NotificationEventPayload) error {
+	notificationContext := NewContext(ctx, payload.NotificationID).WithHistory(history)
+
+	ctx.Debugf("[notification.send] %s  ", payload.EventName)
+	notificationContext.WithSource(payload.EventName, payload.ID)
+
+	err := _sendNotification(notificationContext, true, payload)
+	if err != nil {
+		notificationContext.WithError(err)
+	}
+
+	logs.IfError(notificationContext.EndLog(), "error persisting end of notification send history")
+	return err
+}
+
+func sendNotification(ctx context.Context, payload NotificationEventPayload) error {
+	notificationContext := NewContext(ctx, payload.NotificationID)
+
+	ctx.Debugf("[notification.send] %s  ", payload.EventName)
+	notificationContext.WithSource(payload.EventName, payload.ID)
+	logs.IfError(notificationContext.StartLog(), "error persisting start of notification send history")
+
+	err := _sendNotification(notificationContext, false, payload)
+	if err != nil {
+		notificationContext.WithError(err)
+	}
+
+	logs.IfError(notificationContext.EndLog(), "error persisting end of notification send history")
+	return err
+}
+
+func _sendNotification(ctx *Context, noWait bool, payload NotificationEventPayload) error {
+	originalEvent := models.Event{Name: payload.EventName, CreatedAt: payload.EventCreatedAt}
+	if len(payload.Properties) > 0 {
+		if err := json.Unmarshal(payload.Properties, &originalEvent.Properties); err != nil {
+			return fmt.Errorf("failed to unmarshal properties: %w", err)
+		}
+	}
+
+	celEnv, err := GetEnvForEvent(ctx.Context, originalEvent)
+	if err != nil {
+		return fmt.Errorf("failed to get cel env: %w", err)
+	}
+
+	nn, err := GetNotification(ctx.Context, payload.NotificationID.String())
+	if err != nil {
+		return fmt.Errorf("failed to get notification: %w", err)
+	}
+
+	if !noWait && nn.WaitFor != nil {
+		// delayed notifications are saved to history with a pending status
+		// and are later consumed by a job.
+		ctx.log.NotBefore = lo.ToPtr(ctx.log.CreatedAt.Add(*nn.WaitFor))
+		ctx.log.Status = models.NotificationStatusPending
+		ctx.log.Payload = payload.AsMap()
+	} else {
+		if err := PrepareAndSendEventNotification(ctx, payload, celEnv.AsMap()); err != nil {
+			return fmt.Errorf("failed to send notification for event: %w", err)
+		}
+
+		ctx.log.Sent()
+	}
+
+	return nil
 }
 
 func isHealthReportable(events []string, previousHealth, currentHealth models.Health) bool {
