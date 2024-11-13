@@ -161,7 +161,7 @@ func SendNotification(ctx *Context, connectionName, shoutrrrURL string, celEnv m
 		}
 
 		if err := SlackSend(ctx, connection.Password, connection.Username, data); err != nil {
-			return "", ctx.Oops().Hint(data.Message).Wrap(err)
+			return "", err
 		}
 
 		return "slack", nil
