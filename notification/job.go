@@ -22,7 +22,7 @@ func ProcessPendingNotificationsJob(ctx context.Context) *job.Job {
 		Schedule:   "@every 30s",
 		Fn: func(ctx job.JobRuntime) error {
 			for {
-				done, err := processPendingNotification(ctx.Context)
+				done, err := ProcessPendingNotification(ctx.Context)
 				if err != nil {
 					ctx.History.AddErrorf("failed to send pending notification: %v", err)
 					time.Sleep(2 * time.Second) // prevent spinning on db errors
@@ -41,7 +41,7 @@ func ProcessPendingNotificationsJob(ctx context.Context) *job.Job {
 	}
 }
 
-func processPendingNotification(ctx context.Context) (bool, error) {
+func ProcessPendingNotification(ctx context.Context) (bool, error) {
 	var noMorePending bool
 
 	err := ctx.DB().Transaction(func(tx *gorm.DB) error {
