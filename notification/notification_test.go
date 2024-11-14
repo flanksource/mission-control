@@ -483,7 +483,7 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 			Expect(len(sendHistory)).To(Equal(1))
 		})
 
-		ginkgo.It("should not send out a notification", func() {
+		ginkgo.It("`should not send out a notification`", func() {
 			{
 				// Change health to warning & then back to unknown
 				// This should create 1 notification.send event for the 'warning' health.
@@ -498,24 +498,27 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 			Eventually(func() bool {
 				events.ConsumeAll(DefaultContext)
 
-				var count int64
-				err := DefaultContext.DB().Model(&models.Event{}).Where("properties->>'notification_id' = ?", n.ID.String()).Where("name = 'notification.send'").Count(&count).Error
+				var pending []models.NotificationSendHistory
+				err := DefaultContext.DB().Where("notification_id = ?", n.ID.String()).Where("status = ?", models.NotificationStatusPending).Find(&pending).Error
 				Expect(err).To(BeNil())
 
-				return count == 0
-			}, "15s", "1s").Should(BeTrue())
+				return len(pending) == 1
+			}, "15s", "1s", "should create a pending notification").Should(BeTrue())
 
-			{
+			Eventually(func() int {
+				_, err := notification.ProcessPendingNotification(DefaultContext)
+				Expect(err).To(BeNil())
+
 				var sendHistory []models.NotificationSendHistory
-				err := DefaultContext.DB().
+				err = DefaultContext.DB().
 					Where("notification_id = ?", n.ID.String()).
 					Where("resource_id = ?", config.ID.String()).
 					Where("source_event = ?", "config.warning").
+					Where("status = ?", "skipped").
 					Find(&sendHistory).Error
 				Expect(err).To(BeNil())
-				Expect(len(sendHistory)).To(Equal(1))
-				Expect(sendHistory[0].Status).To(Equal(models.NotificationStatusPending))
-			}
+				return len(sendHistory)
+			}, "15s", "1s").Should(Equal(1))
 		})
 	})
 
