@@ -396,7 +396,7 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 			n = models.Notification{
 				ID:             uuid.New(),
 				Name:           "wait-for-test",
-				Events:         pq.StringArray([]string{"config.healthy", "config.unhealthy"}),
+				Events:         pq.StringArray([]string{"config.healthy", "config.warning", "config.unhealthy"}),
 				Source:         models.SourceCRD,
 				Title:          "Dummy",
 				Template:       "dummy",
@@ -470,6 +470,52 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 				Expect(err).To(BeNil())
 				return len(pending) == 0
 			}, "15s", "1s").Should(BeTrue())
+		})
+
+		ginkgo.It("should have sent out a notification", func() {
+			var sendHistory []models.NotificationSendHistory
+			err := DefaultContext.DB().
+				Where("notification_id = ?", n.ID.String()).
+				Where("resource_id = ?", config.ID.String()).
+				Where("source_event = ?", "config.unhealthy").
+				Find(&sendHistory).Error
+			Expect(err).To(BeNil())
+			Expect(len(sendHistory)).To(Equal(1))
+		})
+
+		ginkgo.It("should not send out a notification", func() {
+			{
+				// Change health to warning & then back to unknown
+				// This should create 1 notification.send event for the 'warning' health.
+				// since the health is changed immediately, we shouldn't receive a notification for it.
+				err := DefaultContext.DB().Model(&models.ConfigItem{}).Where("id = ?", config.ID).Update("health", models.HealthWarning).Error
+				Expect(err).To(BeNil())
+
+				err = DefaultContext.DB().Model(&models.ConfigItem{}).Where("id = ?", config.ID).Update("health", models.HealthUnknown).Error
+				Expect(err).To(BeNil())
+			}
+
+			Eventually(func() bool {
+				events.ConsumeAll(DefaultContext)
+
+				var count int64
+				err := DefaultContext.DB().Model(&models.Event{}).Where("properties->>'notification_id' = ?", n.ID.String()).Where("name = 'notification.send'").Count(&count).Error
+				Expect(err).To(BeNil())
+
+				return count == 0
+			}, "15s", "1s").Should(BeTrue())
+
+			{
+				var sendHistory []models.NotificationSendHistory
+				err := DefaultContext.DB().
+					Where("notification_id = ?", n.ID.String()).
+					Where("resource_id = ?", config.ID.String()).
+					Where("source_event = ?", "config.warning").
+					Find(&sendHistory).Error
+				Expect(err).To(BeNil())
+				Expect(len(sendHistory)).To(Equal(1))
+				Expect(sendHistory[0].Status).To(Equal(models.NotificationStatusPending))
+			}
 		})
 	})
 
