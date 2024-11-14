@@ -1,12 +1,14 @@
 package notification
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/job"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/incident-commander/api"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -68,23 +70,63 @@ func ProcessPendingNotification(ctx context.Context) (bool, error) {
 		var payload NotificationEventPayload
 		payload.FromMap(currentHistory.Payload)
 
+		{
+			// We need to re-evaluate the health of the resource.
+			// and ensure that the original event matches with the current health before we send out the notification.
+
+			// previousHealth is the health that triggered the notification event
+			originalEvent := models.Event{Name: payload.EventName, CreatedAt: payload.EventCreatedAt}
+			if len(payload.Properties) > 0 {
+				if err := json.Unmarshal(payload.Properties, &originalEvent.Properties); err != nil {
+					return fmt.Errorf("failed to unmarshal properties: %w", err)
+				}
+			}
+
+			celEnv, err := GetEnvForEvent(ctx, originalEvent)
+			if err != nil {
+				return fmt.Errorf("failed to get cel env: %w", err)
+			}
+
+			previousHealth := api.EventToHealth(payload.EventName)
+
+			currentHealth, err := celEnv.GetResourceHealth(ctx)
+			if err != nil {
+				return fmt.Errorf("failed to get resource health from cel env: %w", err)
+			}
+
+			notif, err := GetNotification(ctx, payload.NotificationID.String())
+			if err != nil {
+				return fmt.Errorf("failed to get notification: %w", err)
+			}
+
+			if !isHealthReportable(notif.Events, previousHealth, currentHealth) {
+				ctx.Logger.V(6).Infof("skipping notification[%s] as health change is not reportable", notif.ID)
+				if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", currentHistory.ID).UpdateColumns(map[string]any{
+					"status": models.NotificationStatusSkipped,
+				}).Error; dberr != nil {
+					return dberr
+				}
+
+				return nil
+			}
+		}
+
 		if err := sendPendingNotification(ctx, currentHistory, payload); err != nil {
 			if dberr := ctx.DB().Debug().Model(&models.NotificationSendHistory{}).Where("id = ?", currentHistory.ID).UpdateColumns(map[string]any{
 				"status":  gorm.Expr("CASE WHEN retries >= ? THEN ? ELSE ? END", ctx.Properties().Int("notification.max-retries", 4)-1, models.NotificationStatusError, models.NotificationStatusPending),
 				"error":   err.Error(),
 				"retries": gorm.Expr("retries + 1"),
 			}).Error; dberr != nil {
-				return err
+				return ctx.Oops().Join(dberr, err)
 			}
 
-			// return nil
-			// or else the transaction will be rolled back and there'll be no trace of a failed attempt.
+			// we return nil or else the transaction will be rolled back and there'll be no trace of a failed attempt.
 			return nil
 		} else {
 			if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", currentHistory.ID).UpdateColumns(map[string]any{
 				"status": models.NotificationStatusSent,
 			}).Error; dberr != nil {
-				return err
+				return dberr
 			}
 		}
 
