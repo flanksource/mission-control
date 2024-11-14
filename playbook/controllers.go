@@ -34,7 +34,7 @@ func RegisterRoutes(e *echo.Echo) {
 	prefix := "playbook"
 	playbookGroup := e.Group(fmt.Sprintf("/%s", prefix))
 	playbookGroup.GET("/list", HandlePlaybookList, rbac.Playbook(rbac.ActionRead))
-	playbookGroup.POST("/webhook/:webhook_path", HandleWebhook, rbac.Playbook(rbac.ActionRun))
+	playbookGroup.POST("/webhook/:webhook_path", HandleWebhook)
 	playbookGroup.POST("/:id/params", HandleGetPlaybookParams, rbac.Playbook(rbac.ActionRun))
 
 	playbookGroup.GET("/events", func(c echo.Context) error {
