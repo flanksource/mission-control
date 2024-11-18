@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -557,10 +558,14 @@ func GetEnvForEvent(ctx context.Context, event models.Event) (*celVariables, err
 func shouldSilence(ctx context.Context, celEnv map[string]any, matchingSilences []models.NotificationSilence) bool {
 	for _, silence := range matchingSilences {
 		if silence.Filter != "" {
-			if ok, err := gomplate.RunTemplateBool(celEnv, gomplate.Template{Expression: string(silence.Filter)}); err != nil {
+			res, err := ctx.RunTemplate(gomplate.Template{Expression: string(silence.Filter)}, celEnv)
+			if err != nil {
 				ctx.Errorf("failed to run silence filter expression(%s): %v", silence.Filter, err)
 				logs.IfError(db.UpdateNotificationSilenceError(ctx, silence.ID.String(), err.Error()), "failed to update notification silence")
 				continue
+			} else if ok, err := strconv.ParseBool(res); err != nil {
+				ctx.Errorf("silence filter did not return a boolean value(%s): %v", silence.Filter, err)
+				logs.IfError(db.UpdateNotificationSilenceError(ctx, silence.ID.String(), err.Error()), "failed to update notification silence")
 			} else if !ok {
 				continue
 			}
