@@ -34,8 +34,10 @@ var agentJobs = []*job.Job{
 }
 
 func RunPullPlaybookActionsJob(ctx context.Context) {
+	// use a single job instance to maintain retention
+	job := PullPlaybookActions(ctx)
+
 	for {
-		job := PullPlaybookActions(ctx)
 		backoff := retry.WithMaxRetries(10, retry.NewExponential(time.Second))
 		_ = retry.Do(ctx, backoff, func(_ctx gocontext.Context) error {
 			job.Run()
