@@ -67,9 +67,9 @@ func (acl ACL) GetPolicyDefinition() [][]string {
 	for _, object := range strings.Split(acl.Objects, ",") {
 		for _, action := range strings.Split(acl.Actions, ",") {
 			if strings.HasPrefix(action, "!") {
-				definitions = append(definitions, []string{acl.Principal, object, action[1:], "deny", "true"})
+				definitions = append(definitions, []string{acl.Principal, object, action[1:], "deny", "true", "na"})
 			} else {
-				definitions = append(definitions, []string{acl.Principal, object, action, "allow", "true"})
+				definitions = append(definitions, []string{acl.Principal, object, action, "allow", "true", "na"})
 			}
 		}
 	}
@@ -105,6 +105,7 @@ func (p Policy) String() string {
 }
 
 type Permission struct {
+	ID        string `json:"id,omitempty"`
 	Subject   string `json:"subject,omitempty"`
 	Object    string `json:"object,omitempty"`
 	Action    string `json:"action,omitempty"`
@@ -119,6 +120,7 @@ func NewPermission(perm []string) Permission {
 		Action:    perm[2],
 		Deny:      perm[3] == "deny",
 		Condition: perm[4],
+		ID:        perm[5],
 	}
 }
 

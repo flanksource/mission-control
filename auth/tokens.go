@@ -14,9 +14,11 @@ import (
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/rbac"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/patrickmn/go-cache"
 	"golang.org/x/crypto/argon2"
@@ -51,40 +53,46 @@ func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId str
 		"id":   user.ID.String(),
 	}
 
-	// {
-	// 	permissions, err := rbac.PermsForUser(user.ID.String())
-	// 	if err != nil {
-	// 		return "", err
-	// 	}
+	{
+		permissions, err := rbac.PermsForUser(user.ID.String())
+		if err != nil {
+			return "", err
+		}
 
-	// 	// add all the permitted agents & tags to the JWT claim to be used in Postgres RLS
+		var permissionWithIDs []string
+		for _, p := range permissions {
+			if p.Action != "ActionRead" && p.Action != "*" {
+				continue
+			}
 
-	// 	// TODO: support multiple values of the same tag
-	// 	var agentIDs []string
-	// 	for _, p := range permissions {
-	// 		if p.Action != "ActionRead" && p.Action != "*" {
-	// 			continue
-	// 		}
+			// TODO: support deny
+			if p.Deny {
+				continue
+			}
 
-	// 		// TODO: support deny
-	// 		if p.Deny {
-	// 			continue
-	// 		}
+			if uuid.Validate(p.ID) == nil {
+				permissionWithIDs = append(permissionWithIDs, p.ID)
+			}
+		}
 
-	// 		// TODO: Extract agents & tags from the condition
-	// 		var agents []string = []string{uuid.NewString()}
-	// 		var tags map[string]string = map[string]string{
-	// 			"region": "eu-west-1", // testing
-	// 		}
+		var permModels []models.Permission
+		if err := ctx.DB().Where("id IN ?", permissionWithIDs).Find(&permModels).Error; err != nil {
+			return "", fmt.Errorf("failed to get permission for ids: %w", err)
+		}
 
-	// 		agentIDs = append(agentIDs, agents...)
-	// 		if len(tags) > 0 {
-	// 			claims["tags"] = tags
-	// 		}
-	// 	}
+		var agentIDs []string
+		for _, p := range permModels {
+			agentIDs = append(agentIDs, p.Agents...)
+			if len(p.Tags) > 0 {
+				// TODO: support multiple values of the same tag
+				claims["tags"] = p.Tags
+			}
+		}
 
-	// 	claims["agents"] = agentIDs
-	// }
+		if len(agentIDs) > 0 {
+			claims["agents"] = agentIDs
+		}
+	}
 
 	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(config.Postgrest.JWTSecret))
 	if err != nil {
