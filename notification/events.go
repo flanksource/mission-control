@@ -202,7 +202,7 @@ func addNotificationEvent(ctx context.Context, id string, celEnv map[string]any,
 				SourceEvent:    event.Name,
 				Status:         models.NotificationStatusSilenced,
 			}
-			if err := db.SaveUnsentNotificationToHistory(ctx, history, time.Minute); err != nil {
+			if err := db.SaveUnsentNotificationToHistory(ctx, history, ctx.Properties().Duration("notifications.dedup.window", time.Hour*24)); err != nil {
 				return fmt.Errorf("failed to save silenced notification history: %w", err)
 			}
 
