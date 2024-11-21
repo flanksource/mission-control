@@ -11,6 +11,7 @@ import (
 	"github.com/casbin/casbin/v2"
 	"github.com/casbin/casbin/v2/model"
 	gormadapter "github.com/casbin/gorm-adapter/v3"
+	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/incident-commander/db"
 	pkgAdapater "github.com/flanksource/incident-commander/rbac/adapter"
@@ -78,13 +79,13 @@ func Init(ctx context.Context, adminUserID string) error {
 		_parent := args[0].(string)
 		child := args[1].(map[string]string)
 
-		var parent map[string]string
+		var parent map[string][]string
 		if err := json.Unmarshal([]byte(_parent), &parent); err != nil {
 			return nil, fmt.Errorf("invalid json parent: %w", err)
 		}
 
 		for k, v := range child {
-			if vv, ok := parent[k]; !ok || vv != v {
+			if vv, ok := parent[k]; !ok || collections.MatchItems(v, vv...) {
 				return false, nil
 			}
 		}

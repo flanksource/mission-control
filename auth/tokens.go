@@ -80,17 +80,28 @@ func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId str
 			return "", fmt.Errorf("failed to get permission for ids: %w", err)
 		}
 
-		var agentIDs []string
+		var (
+			agentIDs []string
+			tags     = []map[string]string{}
+		)
 		for _, p := range permModels {
 			agentIDs = append(agentIDs, p.Agents...)
-			if len(p.Tags) > 0 {
-				// TODO: support multiple values of the same tag
-				claims["tags"] = p.Tags
+
+			for k, vRaw := range p.Tags {
+				if vals, ok := vRaw.([]any); ok {
+					for _, val := range vals {
+						tags = append(tags, map[string]string{k: val.(string)})
+					}
+				}
 			}
 		}
 
 		if len(agentIDs) > 0 {
 			claims["agents"] = agentIDs
+		}
+
+		if len(tags) > 0 {
+			claims["tags"] = tags
 		}
 	}
 
