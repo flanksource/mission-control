@@ -71,7 +71,6 @@ func rlsMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 				return err
 			}
 
-			// TODO: This should be cached somewhere
 			rlsPayload, err := auth.GetAgentsAndTagPermission(ctx)
 			if err != nil {
 				return err
@@ -83,7 +82,6 @@ func rlsMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 			}
 
 			stmnt := fmt.Sprintf(`SET LOCAL request.jwt.claims = '%s'`, string(b))
-			fmt.Println(stmnt)
 			if err := ctx.DB().Exec(stmnt).Error; err != nil {
 				return err
 			}

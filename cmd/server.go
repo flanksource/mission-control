@@ -164,6 +164,10 @@ func tableUpdatesHandler(ctx context.Context) {
 			} else {
 				ctx.Logger.Debugf("reloading rbac policy due to permission updates")
 			}
+
+			// permissions affect RLS so we need to invalidate the postgrest JWT
+			// TODO: only invalidate tokens for the affect users
+			auth.FlushTokenCache()
 		}
 	}
 }

@@ -25,6 +25,14 @@ import (
 	"gorm.io/gorm"
 )
 
+func FlushTokenCache() {
+	tokenCache.Flush()
+}
+
+// tokenCache caches
+// - JWT for postgREST
+// - RLS payloads
+// - access tokens
 var tokenCache = cache.New(1*time.Hour, 1*time.Hour)
 
 func InjectToken(ctx context.Context, c echo.Context, user *models.Person, sessID string) error {
@@ -46,6 +54,11 @@ type RLSPayload struct {
 }
 
 func GetAgentsAndTagPermission(ctx context.Context) (*RLSPayload, error) {
+	cacheKey := fmt.Sprintf("rls-payload-%s", ctx.User().ID.String())
+	if cached, ok := tokenCache.Get(cacheKey); ok {
+		return cached.(*RLSPayload), nil
+	}
+
 	permissions, err := rbac.PermsForUser(ctx.User().ID.String())
 	if err != nil {
 		return nil, err
@@ -88,10 +101,13 @@ func GetAgentsAndTagPermission(ctx context.Context) (*RLSPayload, error) {
 		}
 	}
 
-	return &RLSPayload{
+	payload := &RLSPayload{
 		Agents: agentIDs,
 		Tags:   tags,
-	}, nil
+	}
+	tokenCache.SetDefault(cacheKey, payload)
+
+	return payload, nil
 }
 
 func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId string) (string, error) {
