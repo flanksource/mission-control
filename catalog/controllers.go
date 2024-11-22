@@ -66,18 +66,23 @@ func SearchConfigSummary(c echo.Context) error {
 func rlsMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		ctx := c.Request().Context().(context.Context)
-		err := ctx.Transaction(func(ctx context.Context, _ trace.Span) error {
+
+		rlsPayload, err := auth.GetRLSPayload(ctx)
+		if err != nil {
+			return err
+		}
+
+		if rlsPayload.Disable {
+			return next(c)
+		}
+
+		b, err := json.Marshal(rlsPayload)
+		if err != nil {
+			return err
+		}
+
+		err = ctx.Transaction(func(ctx context.Context, _ trace.Span) error {
 			if err := ctx.DB().Exec("SET LOCAL ROLE postgrest_api").Error; err != nil {
-				return err
-			}
-
-			rlsPayload, err := auth.GetAgentsAndTagPermission(ctx)
-			if err != nil {
-				return err
-			}
-
-			b, err := json.Marshal(rlsPayload)
-			if err != nil {
 				return err
 			}
 

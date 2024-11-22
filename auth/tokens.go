@@ -49,14 +49,21 @@ func InjectToken(ctx context.Context, c echo.Context, user *models.Person, sessI
 }
 
 type RLSPayload struct {
-	Tags   []map[string]string `json:"tags,omitempty"`
-	Agents []string            `json:"agents,omitempty"`
+	Tags    []map[string]string `json:"tags"`
+	Agents  []string            `json:"agents"`
+	Disable bool                `json:"disable_rls,omitempty"`
 }
 
-func GetAgentsAndTagPermission(ctx context.Context) (*RLSPayload, error) {
+func GetRLSPayload(ctx context.Context) (*RLSPayload, error) {
 	cacheKey := fmt.Sprintf("rls-payload-%s", ctx.User().ID.String())
 	if cached, ok := tokenCache.Get(cacheKey); ok {
 		return cached.(*RLSPayload), nil
+	}
+
+	// TODO: testing
+	// when do we actually disable RLS
+	if ctx.User().Email == "admin@local" {
+		return &RLSPayload{Disable: true}, nil
 	}
 
 	permissions, err := rbac.PermsForUser(ctx.User().ID.String())
@@ -123,11 +130,13 @@ func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId str
 		"id":   user.ID.String(),
 	}
 
-	if rlsPayload, err := GetAgentsAndTagPermission(ctx.WithUser(user)); err != nil {
+	if rlsPayload, err := GetRLSPayload(ctx.WithUser(user)); err != nil {
 		return "", ctx.Oops().Wrap(err)
+	} else if rlsPayload.Disable {
+		claims["disable_rls"] = true
 	} else {
 		if len(rlsPayload.Agents) > 0 {
-			claims["agents"] = rlsPayload
+			claims["agents"] = rlsPayload.Agents
 		}
 
 		if len(rlsPayload.Tags) > 0 {

@@ -18,7 +18,6 @@
 - principal: user
   inherit:
     - everyone
-    - viewer
 - principal: commander
   acl:
     - objects: incident
@@ -53,4 +52,4 @@
       actions: create,read,update
     # For topology push
     - objects: topology
-      actions: create,update 
+      actions: create,update
