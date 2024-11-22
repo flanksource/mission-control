@@ -40,6 +40,60 @@ func InjectToken(ctx context.Context, c echo.Context, user *models.Person, sessI
 	return nil
 }
 
+type RLSPayload struct {
+	Tags   []map[string]string `json:"tags,omitempty"`
+	Agents []string            `json:"agents,omitempty"`
+}
+
+func GetAgentsAndTagPermission(ctx context.Context) (*RLSPayload, error) {
+	permissions, err := rbac.PermsForUser(ctx.User().ID.String())
+	if err != nil {
+		return nil, err
+	}
+
+	var permissionWithIDs []string
+	for _, p := range permissions {
+		if p.Action != "ActionRead" && p.Action != "*" {
+			continue
+		}
+
+		// TODO: support deny
+		if p.Deny {
+			continue
+		}
+
+		if uuid.Validate(p.ID) == nil {
+			permissionWithIDs = append(permissionWithIDs, p.ID)
+		}
+	}
+
+	var permModels []models.Permission
+	if err := ctx.DB().Where("id IN ?", permissionWithIDs).Find(&permModels).Error; err != nil {
+		return nil, fmt.Errorf("failed to get permission for ids: %w", err)
+	}
+
+	var (
+		agentIDs []string
+		tags     = []map[string]string{}
+	)
+	for _, p := range permModels {
+		agentIDs = append(agentIDs, p.Agents...)
+
+		for k, vRaw := range p.Tags {
+			if vals, ok := vRaw.([]any); ok {
+				for _, val := range vals {
+					tags = append(tags, map[string]string{k: val.(string)})
+				}
+			}
+		}
+	}
+
+	return &RLSPayload{
+		Agents: agentIDs,
+		Tags:   tags,
+	}, nil
+}
+
 func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId string) (string, error) {
 	config := api.DefaultConfig
 	key := sessionId + user.ID.String()
@@ -53,55 +107,15 @@ func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId str
 		"id":   user.ID.String(),
 	}
 
-	{
-		permissions, err := rbac.PermsForUser(user.ID.String())
-		if err != nil {
-			return "", err
+	if rlsPayload, err := GetAgentsAndTagPermission(ctx.WithUser(user)); err != nil {
+		return "", ctx.Oops().Wrap(err)
+	} else {
+		if len(rlsPayload.Agents) > 0 {
+			claims["agents"] = rlsPayload
 		}
 
-		var permissionWithIDs []string
-		for _, p := range permissions {
-			if p.Action != "ActionRead" && p.Action != "*" {
-				continue
-			}
-
-			// TODO: support deny
-			if p.Deny {
-				continue
-			}
-
-			if uuid.Validate(p.ID) == nil {
-				permissionWithIDs = append(permissionWithIDs, p.ID)
-			}
-		}
-
-		var permModels []models.Permission
-		if err := ctx.DB().Where("id IN ?", permissionWithIDs).Find(&permModels).Error; err != nil {
-			return "", fmt.Errorf("failed to get permission for ids: %w", err)
-		}
-
-		var (
-			agentIDs []string
-			tags     = []map[string]string{}
-		)
-		for _, p := range permModels {
-			agentIDs = append(agentIDs, p.Agents...)
-
-			for k, vRaw := range p.Tags {
-				if vals, ok := vRaw.([]any); ok {
-					for _, val := range vals {
-						tags = append(tags, map[string]string{k: val.(string)})
-					}
-				}
-			}
-		}
-
-		if len(agentIDs) > 0 {
-			claims["agents"] = agentIDs
-		}
-
-		if len(tags) > 0 {
-			claims["tags"] = tags
+		if len(rlsPayload.Tags) > 0 {
+			claims["tags"] = rlsPayload.Tags
 		}
 	}
 
