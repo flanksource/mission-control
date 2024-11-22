@@ -24,7 +24,7 @@ func ProcessPendingNotificationsJob(ctx context.Context) *job.Job {
 		Schedule:   "@every 30s",
 		Fn: func(ctx job.JobRuntime) error {
 			for {
-				done, err := ProcessPendingNotification(ctx.Context)
+				done, err := ProcessPendingNotifications(ctx.Context)
 				if err != nil {
 					ctx.History.AddErrorf("failed to send pending notification: %v", err)
 					time.Sleep(2 * time.Second) // prevent spinning on db errors
@@ -43,7 +43,7 @@ func ProcessPendingNotificationsJob(ctx context.Context) *job.Job {
 	}
 }
 
-func ProcessPendingNotification(ctx context.Context) (bool, error) {
+func ProcessPendingNotifications(ctx context.Context) (bool, error) {
 	var noMorePending bool
 
 	err := ctx.DB().Transaction(func(tx *gorm.DB) error {
@@ -66,52 +66,7 @@ func ProcessPendingNotification(ctx context.Context) (bool, error) {
 		}
 
 		currentHistory := pending[0]
-
-		var payload NotificationEventPayload
-		payload.FromMap(currentHistory.Payload)
-
-		{
-			// We need to re-evaluate the health of the resource.
-			// and ensure that the original event matches with the current health before we send out the notification.
-
-			// previousHealth is the health that triggered the notification event
-			originalEvent := models.Event{Name: payload.EventName, CreatedAt: payload.EventCreatedAt}
-			if len(payload.Properties) > 0 {
-				if err := json.Unmarshal(payload.Properties, &originalEvent.Properties); err != nil {
-					return fmt.Errorf("failed to unmarshal properties: %w", err)
-				}
-			}
-
-			celEnv, err := GetEnvForEvent(ctx, originalEvent)
-			if err != nil {
-				return fmt.Errorf("failed to get cel env: %w", err)
-			}
-
-			previousHealth := api.EventToHealth(payload.EventName)
-
-			currentHealth, err := celEnv.GetResourceHealth(ctx)
-			if err != nil {
-				return fmt.Errorf("failed to get resource health from cel env: %w", err)
-			}
-
-			notif, err := GetNotification(ctx, payload.NotificationID.String())
-			if err != nil {
-				return fmt.Errorf("failed to get notification: %w", err)
-			}
-
-			if !isHealthReportable(notif.Events, previousHealth, currentHealth) {
-				ctx.Logger.V(6).Infof("skipping notification[%s] as health change is not reportable", notif.ID)
-				if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", currentHistory.ID).UpdateColumns(map[string]any{
-					"status": models.NotificationStatusSkipped,
-				}).Error; dberr != nil {
-					return dberr
-				}
-
-				return nil
-			}
-		}
-
-		if err := sendPendingNotification(ctx, currentHistory, payload); err != nil {
+		if err := processPendingNotification(ctx, currentHistory); err != nil {
 			if dberr := ctx.DB().Debug().Model(&models.NotificationSendHistory{}).Where("id = ?", currentHistory.ID).UpdateColumns(map[string]any{
 				"status":  gorm.Expr("CASE WHEN retries >= ? THEN ? ELSE ? END", ctx.Properties().Int("notification.max-retries", 4)-1, models.NotificationStatusError, models.NotificationStatusPending),
 				"error":   err.Error(),
@@ -119,19 +74,65 @@ func ProcessPendingNotification(ctx context.Context) (bool, error) {
 			}).Error; dberr != nil {
 				return ctx.Oops().Join(dberr, err)
 			}
-
-			// we return nil or else the transaction will be rolled back and there'll be no trace of a failed attempt.
-			return nil
-		} else {
-			if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", currentHistory.ID).UpdateColumns(map[string]any{
-				"status": models.NotificationStatusSent,
-			}).Error; dberr != nil {
-				return dberr
-			}
 		}
 
+		// we return nil or else the transaction will be rolled back and there'll be no trace of a failed attempt.
 		return nil
 	})
 
 	return noMorePending, err
+}
+
+func processPendingNotification(ctx context.Context, currentHistory models.NotificationSendHistory) error {
+	var payload NotificationEventPayload
+	payload.FromMap(currentHistory.Payload)
+
+	// We need to re-evaluate the health of the resource.
+	// and ensure that the original event matches with the current health before we send out the notification.
+
+	originalEvent := models.Event{Name: payload.EventName, CreatedAt: payload.EventCreatedAt}
+	if len(payload.Properties) > 0 {
+		if err := json.Unmarshal(payload.Properties, &originalEvent.Properties); err != nil {
+			return fmt.Errorf("failed to unmarshal properties: %w", err)
+		}
+	}
+
+	celEnv, err := GetEnvForEvent(ctx, originalEvent)
+	if err != nil {
+		return fmt.Errorf("failed to get cel env: %w", err)
+	}
+
+	// previousHealth is the health that triggered the notification event
+	previousHealth := api.EventToHealth(payload.EventName)
+
+	currentHealth, err := celEnv.GetResourceHealth(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to get resource health from cel env: %w", err)
+	}
+
+	notif, err := GetNotification(ctx, payload.NotificationID.String())
+	if err != nil {
+		return fmt.Errorf("failed to get notification: %w", err)
+	}
+
+	if !isHealthReportable(notif.Events, previousHealth, currentHealth) {
+		ctx.Logger.V(6).Infof("skipping notification[%s] as health change is not reportable", notif.ID)
+		if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", currentHistory.ID).UpdateColumns(map[string]any{
+			"status": models.NotificationStatusSkipped,
+		}).Error; dberr != nil {
+			return fmt.Errorf("failed to save notification status as skipped: %w", err)
+		}
+
+		return nil
+	}
+
+	if err := sendPendingNotification(ctx, currentHistory, payload); err != nil {
+		return fmt.Errorf("failed to send notification: %w", err)
+	} else if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", currentHistory.ID).UpdateColumns(map[string]any{
+		"status": models.NotificationStatusSent,
+	}).Error; dberr != nil {
+		return fmt.Errorf("failed to save notification status as sent: %w", err)
+	}
+
+	return nil
 }

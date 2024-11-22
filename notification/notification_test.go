@@ -449,7 +449,7 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 
 		ginkgo.It("should not consume the event within the delay period", func() {
 			for i := 0; i < 5; i++ {
-				_, err := notification.ProcessPendingNotification(DefaultContext)
+				_, err := notification.ProcessPendingNotifications(DefaultContext)
 				Expect(err).To(BeNil())
 
 				var history models.NotificationSendHistory
@@ -462,7 +462,7 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 			Eventually(func() bool {
 				DefaultContext.Logger.V(0).Infof("checking if the delayed notification.send event has been consumed")
 
-				_, err := notification.ProcessPendingNotification(DefaultContext)
+				_, err := notification.ProcessPendingNotifications(DefaultContext)
 				Expect(err).To(BeNil())
 
 				var pending []models.NotificationSendHistory
@@ -506,7 +506,7 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 			}, "15s", "1s", "should create a pending notification").Should(BeTrue())
 
 			Eventually(func() int {
-				_, err := notification.ProcessPendingNotification(DefaultContext)
+				_, err := notification.ProcessPendingNotifications(DefaultContext)
 				Expect(err).To(BeNil())
 
 				var sendHistory []models.NotificationSendHistory
