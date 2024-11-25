@@ -114,6 +114,9 @@
         },
         "waitFor": {
           "type": "string"
+        },
+        "waitForEvalPeriod": {
+          "type": "string"
         }
       },
       "additionalProperties": false,

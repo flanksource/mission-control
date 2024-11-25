@@ -111,8 +111,10 @@ func processPendingNotification(ctx context.Context, currentHistory models.Notif
 		return fmt.Errorf("failed to get cel env: %w", err)
 	}
 
-	// previousHealth is the health that triggered the notification event
-	previousHealth := api.EventToHealth(payload.EventName)
+	notif, err := GetNotification(ctx, payload.NotificationID.String())
+	if err != nil {
+		return fmt.Errorf("failed to get notification: %w", err)
+	}
 
 	// check if the notification should go through an evaluation phase.
 	// i.e. trigger an incremental scraper and re-process the notification.
@@ -129,7 +131,7 @@ func processPendingNotification(ctx context.Context, currentHistory models.Notif
 
 			if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", currentHistory.ID).UpdateColumns(map[string]any{
 				"status":     models.NotificationStatusEvaluatingWaitFor,
-				"not_before": gorm.Expr("not_before + INTERVAL '30s'"),
+				"not_before": gorm.Expr(fmt.Sprintf("not_before + INTERVAL '%f'", lo.CoalesceOrEmpty(lo.FromPtr(notif.WaitForEvalPeriod), time.Second*30).Seconds())),
 			}).Error; dberr != nil {
 				return dberr
 			}
@@ -138,14 +140,12 @@ func processPendingNotification(ctx context.Context, currentHistory models.Notif
 		}
 	}
 
+	// previousHealth is the health that triggered the notification event
+	previousHealth := api.EventToHealth(payload.EventName)
+
 	currentHealth, err := celEnv.GetResourceHealth(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get resource health from cel env: %w", err)
-	}
-
-	notif, err := GetNotification(ctx, payload.NotificationID.String())
-	if err != nil {
-		return fmt.Errorf("failed to get notification: %w", err)
 	}
 
 	if !isHealthReportable(notif.Events, previousHealth, currentHealth) {

@@ -49,6 +49,14 @@ func PersistNotificationFromCRD(ctx context.Context, obj *v1.Notification) error
 		}
 	}
 
+	if obj.Spec.WaitForEvalPeriod != nil && *obj.Spec.WaitForEvalPeriod != "" {
+		if parsed, err := text.ParseDuration(*obj.Spec.WaitForEvalPeriod); err != nil {
+			return err
+		} else {
+			dbObj.WaitForEvalPeriod = parsed
+		}
+	}
+
 	switch {
 	case obj.Spec.To.Person != "":
 		person, err := query.FindPerson(ctx, obj.Spec.To.Person)
