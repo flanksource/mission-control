@@ -60,9 +60,8 @@ func GetRLSPayload(ctx context.Context) (*RLSPayload, error) {
 		return cached.(*RLSPayload), nil
 	}
 
-	// TODO: testing
-	// when do we actually disable RLS
-	if ctx.User().Email == "admin@local" {
+	// TODO: differentiate between full read & tag read
+	if rbac.CheckContext(ctx, rbac.ObjectCatalog, rbac.ActionRead) {
 		return &RLSPayload{Disable: true}, nil
 	}
 

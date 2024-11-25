@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"strings"
 	"time"
 
@@ -71,7 +72,15 @@ func Init(ctx context.Context, adminUserID string) error {
 		enforcer.EnableLog(true)
 	}
 
-	enforcer.AddFunction("mapContains", func(args ...interface{}) (any, error) {
+	enforcer.AddFunction("isString", func(args ...any) (any, error) {
+		if len(args) == 0 {
+			return false, nil
+		}
+
+		return reflect.TypeOf(args[0]).Kind() == reflect.String, nil
+	})
+
+	enforcer.AddFunction("mapContains", func(args ...any) (any, error) {
 		if len(args) != 0 {
 			return nil, errors.New("need 2 arguments")
 		}

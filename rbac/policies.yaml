@@ -18,6 +18,7 @@
 - principal: user
   inherit:
     - everyone
+    - viewer
 - principal: commander
   acl:
     - objects: incident

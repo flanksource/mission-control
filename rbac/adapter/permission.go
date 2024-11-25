@@ -49,7 +49,7 @@ func permissionToCasbinRule(permission models.Permission) []string {
 	m := []string{
 		"p",
 		permission.Principal(),
-		"*",
+		permission.Object,
 		permission.Action,
 		permission.Effect(),
 		permission.Condition(),
