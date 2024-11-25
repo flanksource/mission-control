@@ -943,12 +943,6 @@
         "namespace": {
           "type": "string"
         },
-        "types": {
-          "$ref": "#/$defs/Items"
-        },
-        "statuses": {
-          "$ref": "#/$defs/Items"
-        },
         "tagSelector": {
           "type": "string"
         },
@@ -957,6 +951,12 @@
         },
         "fieldSelector": {
           "type": "string"
+        },
+        "types": {
+          "$ref": "#/$defs/Items"
+        },
+        "statuses": {
+          "$ref": "#/$defs/Items"
         }
       },
       "additionalProperties": false,
