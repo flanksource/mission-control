@@ -2,17 +2,13 @@ package rbac
 
 import (
 	_ "embed"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"reflect"
 	"strings"
 	"time"
 
 	"github.com/casbin/casbin/v2"
 	"github.com/casbin/casbin/v2/model"
 	gormadapter "github.com/casbin/gorm-adapter/v3"
-	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/incident-commander/db"
 	pkgAdapater "github.com/flanksource/incident-commander/rbac/adapter"
@@ -72,35 +68,7 @@ func Init(ctx context.Context, adminUserID string) error {
 		enforcer.EnableLog(true)
 	}
 
-	enforcer.AddFunction("isString", func(args ...any) (any, error) {
-		if len(args) == 0 {
-			return false, nil
-		}
-
-		return reflect.TypeOf(args[0]).Kind() == reflect.String, nil
-	})
-
-	enforcer.AddFunction("mapContains", func(args ...any) (any, error) {
-		if len(args) != 0 {
-			return nil, errors.New("need 2 arguments")
-		}
-
-		_parent := args[0].(string)
-		child := args[1].(map[string]string)
-
-		var parent map[string][]string
-		if err := json.Unmarshal([]byte(_parent), &parent); err != nil {
-			return nil, fmt.Errorf("invalid json parent: %w", err)
-		}
-
-		for k, v := range child {
-			if vv, ok := parent[k]; !ok || collections.MatchItems(v, vv...) {
-				return false, nil
-			}
-		}
-
-		return true, nil
-	})
+	addCustomFunctions(enforcer)
 
 	if adminUserID != "" {
 		if _, err := enforcer.AddRoleForUser(adminUserID, RoleAdmin); err != nil {

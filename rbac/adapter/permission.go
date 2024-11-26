@@ -36,7 +36,7 @@ func (a *PermissionAdapter) LoadPolicy(model model.Model) error {
 	}
 
 	for _, permission := range permissions {
-		policy := permissionToCasbinRule(permission)
+		policy := PermissionToCasbinRule(permission)
 		if err := persist.LoadPolicyArray(policy, model); err != nil {
 			return err
 		}
@@ -45,7 +45,7 @@ func (a *PermissionAdapter) LoadPolicy(model model.Model) error {
 	return nil
 }
 
-func permissionToCasbinRule(permission models.Permission) []string {
+func PermissionToCasbinRule(permission models.Permission) []string {
 	m := []string{
 		"p",
 		permission.Principal(),
