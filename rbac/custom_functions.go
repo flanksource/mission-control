@@ -6,22 +6,24 @@ import (
 
 	"github.com/casbin/govaluate"
 	"github.com/flanksource/commons/collections"
+	"github.com/samber/lo"
 )
 
 func matchPerm(obj any, _agents any, tagsEncoded string) (bool, error) {
 	var rObj map[string]any
 	switch v := obj.(type) {
 	case string:
-		return true, nil
+		// an object is required to satisfy the agents & tags requirement.
+		return false, nil
 
 	case map[string]any:
 		rObj = v
 	}
 
-	var rAgents []any
+	var rAgents []string
 	switch v := _agents.(type) {
 	case []any:
-		rAgents = v
+		rAgents = lo.Map(v, func(item any, _ int) string { return item.(string) })
 	case string:
 		if v != "" {
 			rAgents = append(rAgents, v)
@@ -30,30 +32,20 @@ func matchPerm(obj any, _agents any, tagsEncoded string) (bool, error) {
 
 	rTags := collections.SelectorToMap(tagsEncoded)
 	if config, ok := rObj["config"]; ok {
-		var tagsmatch = len(rTags) == 0
-		var agentsMatch = len(rAgents) == 0
+		var (
+			tagsmatch   = true
+			agentsMatch = true
+		)
 
-		// All tags must match
 		tagsRaw := config.(map[string]any)["tags"]
 		if tags, ok := tagsRaw.(map[string]any); ok {
-			for k, v := range rTags {
-				if tags[k] != v {
-					tagsmatch = false
-					break
-				}
-			}
-
-			tagsmatch = true
+			tagsmatch = mapContains(rTags, tags)
 		}
 
-		// Any agent must match
-		agentIDRaw := config.(map[string]any)["agent_id"]
-		if agentID, ok := agentIDRaw.(string); ok {
-			for _, id := range rAgents {
-				if agentID == id {
-					agentsMatch = true
-					break
-				}
+		if len(rAgents) > 0 {
+			agentIDRaw := config.(map[string]any)["agent_id"]
+			if agentID, ok := agentIDRaw.(string); ok {
+				agentsMatch = lo.Contains(rAgents, agentID)
 			}
 		}
 
@@ -84,4 +76,15 @@ func addCustomFunctions(enforcer addableEnforcer) {
 
 		return matchPerm(obj, agents, tagsEncoded)
 	})
+}
+
+// mapContains returns true if `request` fully contains `want`.
+func mapContains(want map[string]string, request map[string]any) bool {
+	for k, v := range want {
+		if request[k] != v {
+			return false
+		}
+	}
+
+	return true
 }

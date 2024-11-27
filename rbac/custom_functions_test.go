@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/flanksource/duty/models"
+	"github.com/google/uuid"
 )
 
 func Test_matchPerm(t *testing.T) {
@@ -12,6 +13,7 @@ func Test_matchPerm(t *testing.T) {
 		_agents any
 		_tags   string
 	}
+
 	tests := []struct {
 		name    string
 		args    args
@@ -21,10 +23,10 @@ func Test_matchPerm(t *testing.T) {
 		{
 			name: "string object",
 			args: args{obj: "catalog", _agents: "()", _tags: "namespace=default"},
-			want: true,
+			want: false,
 		},
 		{
-			name: "json object",
+			name: "tag only match",
 			args: args{
 				obj: map[string]any{
 					"config": models.ConfigItem{Tags: map[string]string{
@@ -37,7 +39,23 @@ func Test_matchPerm(t *testing.T) {
 			want: true,
 		},
 		{
-			name: "json object tags fully not match",
+			name: "multiple tags match",
+			args: args{
+				obj: map[string]any{
+					"config": models.ConfigItem{
+						Tags: map[string]string{
+							"namespace": "default",
+							"cluster":   "homelab",
+						},
+					}.AsMap(),
+				},
+				_agents: "",
+				_tags:   "namespace=default,cluster=homelab",
+			},
+			want: true,
+		},
+		{
+			name: "multiple tags no match",
 			args: args{
 				obj: map[string]any{
 					"config": models.ConfigItem{Tags: map[string]string{
@@ -49,13 +67,57 @@ func Test_matchPerm(t *testing.T) {
 			},
 			want: false,
 		},
+		{
+			name: "tags & agents match",
+			args: args{
+				obj: map[string]any{
+					"config": models.ConfigItem{
+						Tags: map[string]string{
+							"namespace": "default",
+						},
+						AgentID: uuid.MustParse("66eda456-315f-455a-95d4-6ef059fc13a8"),
+					}.AsMap(),
+				},
+				_agents: "66eda456-315f-455a-95d4-6ef059fc13a8",
+				_tags:   "namespace=default",
+			},
+			want: true,
+		},
+		{
+			name: "tags match & agent no match",
+			args: args{
+				obj: map[string]any{
+					"config": models.ConfigItem{
+						Tags: map[string]string{
+							"namespace": "default",
+						},
+						AgentID: uuid.MustParse("66eda456-315f-455a-95d4-6ef059fc13a8"),
+					}.AsMap(),
+				},
+				_agents: "",
+				_tags:   "namespace=default,cluster=homelab",
+			},
+			want: false,
+		},
+		{
+			name: "tags no match & agent match",
+			args: args{
+				obj: map[string]any{
+					"config": models.ConfigItem{
+						Tags: map[string]string{
+							"namespace": "default",
+						},
+						AgentID: uuid.MustParse("66eda456-315f-455a-95d4-6ef059fc13a8"),
+					}.AsMap(),
+				},
+				_agents: "66eda456-315f-455a-95d4-6ef059fc13a8",
+				_tags:   "namespace=mc",
+			},
+			want: false,
+		},
 	}
 
 	for _, tt := range tests {
-		if tt.name != "son object tags fully not match" {
-			continue
-		}
-
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := matchPerm(tt.args.obj, tt.args._agents, tt.args._tags)
 			if (err != nil) != tt.wantErr {
