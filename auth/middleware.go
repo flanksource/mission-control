@@ -151,7 +151,7 @@ func mapIDsToRoles(ctx context.Context, session *client.Session, person models.P
 	var result IdentityMapperExprResult
 	if err := json.Unmarshal([]byte(res), &result); err != nil {
 		return ctx.Oops().
-			With("result", result).
+			With("result", res).
 			Hint("https://docs.flanksource.com/reference/helm/mission-control/#identity-mapper").
 			Wrapf(err, "identity role mapper did not produce a valid JSON encoded result")
 	}
