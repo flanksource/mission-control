@@ -18,7 +18,7 @@
 - principal: user
   inherit:
     - everyone
-    - viewer
+    - viewer # remove this. the UI should handle just the user role.
 - principal: commander
   acl:
     - objects: incident

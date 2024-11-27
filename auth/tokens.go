@@ -49,8 +49,8 @@ func InjectToken(ctx context.Context, c echo.Context, user *models.Person, sessI
 }
 
 type RLSPayload struct {
-	Tags    []map[string]string `json:"tags"`
-	Agents  []string            `json:"agents"`
+	Tags    []map[string]string `json:"tags,omitempty"`
+	Agents  []string            `json:"agents,omitempty"`
 	Disable bool                `json:"disable_rls,omitempty"`
 }
 
@@ -60,9 +60,12 @@ func GetRLSPayload(ctx context.Context) (*RLSPayload, error) {
 		return cached.(*RLSPayload), nil
 	}
 
-	// TODO: differentiate between full read & tag read
-	if rbac.CheckContext(ctx, rbac.ObjectCatalog, rbac.ActionRead) {
-		return &RLSPayload{Disable: true}, nil
+	// TODO: Decided when to perform this check.
+	// maybe if the person only has a "user" role we can skip this check
+	if ctx.User().Email != "contact@adityathebe.com" {
+		if rbac.CheckContext(ctx, rbac.ObjectCatalog, rbac.ActionRead) {
+			return &RLSPayload{Disable: true}, nil
+		}
 	}
 
 	permissions, err := rbac.PermsForUser(ctx.User().ID.String())
@@ -72,7 +75,7 @@ func GetRLSPayload(ctx context.Context) (*RLSPayload, error) {
 
 	var permissionWithIDs []string
 	for _, p := range permissions {
-		if p.Action != "ActionRead" && p.Action != "*" {
+		if p.Action != rbac.ActionRead && p.Action != "*" {
 			continue
 		}
 
