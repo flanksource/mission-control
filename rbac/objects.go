@@ -154,6 +154,7 @@ var dbResourceObjMap = map[string]string{
 	"rpc/uuid_to_ulid":                                  ObjectDatabasePublic,
 	"saved_query":                                       ObjectDatabasePublic,
 	"schema_migration":                                  ObjectAuthConfidential,
+	"scrape_plugins":                                    ObjectCatalog,
 	"selfservice_errors":                                ObjectAuthConfidential,
 	"selfservice_login_flows":                           ObjectAuthConfidential,
 	"selfservice_recovery_flows":                        ObjectAuthConfidential,

@@ -21,6 +21,7 @@ import (
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/events"
@@ -29,6 +30,7 @@ import (
 	"github.com/flanksource/incident-commander/notification"
 	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/teams"
+	"github.com/flanksource/incident-commander/vars"
 
 	// register event handlers
 	_ "github.com/flanksource/incident-commander/artifacts"
@@ -88,7 +90,11 @@ var Serve = &cobra.Command{
 	Use:    "serve",
 	PreRun: PreRun,
 	Run: func(cmd *cobra.Command, args []string) {
-		ctx, stop, err := duty.Start("mission-control")
+		var dutyArgs []duty.StartOption
+		if vars.AuthMode == auth.Kratos {
+			dutyArgs = append(dutyArgs, duty.KratosAuth)
+		}
+		ctx, stop, err := duty.Start("mission-control", dutyArgs...)
 		if err != nil {
 			logger.Fatalf(err.Error())
 		}
