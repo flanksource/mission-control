@@ -17,6 +17,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/rbac"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/patrickmn/go-cache"
 	"golang.org/x/crypto/argon2"
@@ -51,14 +52,36 @@ func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId str
 		"id":   user.ID.String(),
 	}
 
-	if ctx.Agent() != nil {
-		claims["agent_id"] = ctx.Agent().ID.String()
-	}
+	{
+		roles, err := rbac.RolesForUser(user.ID.String())
+		if err != nil {
+			return "", err
+		}
 
-	// TODO where to get these tags for the user ?
-	// TODO: REMOVE THIS
-	claims["tags"] = map[string]string{
-		"cluster": "homelab",
+		// TODO: Need to get permissions for these roles as well
+		fmt.Println(roles)
+
+		// add all the permitted agents & tags to the JWT claim to be used in Postgres RLS
+		var permissions []models.Permission
+		if err := ctx.DB().Find(&permissions).Error; err != nil {
+			return "", err
+		}
+
+		// TODO: support multiple values of the same tag
+		var agentIDs []string
+		for _, p := range permissions {
+			// TODO: support deny
+			if p.Deny {
+				continue
+			}
+
+			agentIDs = append(agentIDs, p.Agents...)
+			if len(p.Tags) > 0 {
+				claims["tags"] = p.Tags
+			}
+		}
+
+		claims["agents"] = agentIDs
 	}
 
 	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(config.Postgrest.JWTSecret))

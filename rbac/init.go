@@ -2,6 +2,8 @@ package rbac
 
 import (
 	_ "embed"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -67,6 +69,28 @@ func Init(ctx context.Context, adminUserID string) error {
 	if ctx.Properties().Int("casbin.log.level", 1) >= 2 {
 		enforcer.EnableLog(true)
 	}
+
+	enforcer.AddFunction("mapContains", func(args ...interface{}) (any, error) {
+		if len(args) != 0 {
+			return nil, errors.New("need 2 arguments")
+		}
+
+		_parent := args[0].(string)
+		child := args[1].(map[string]string)
+
+		var parent map[string]string
+		if err := json.Unmarshal([]byte(_parent), &parent); err != nil {
+			return nil, fmt.Errorf("invalid json parent: %w", err)
+		}
+
+		for k, v := range child {
+			if vv, ok := parent[k]; !ok || vv != v {
+				return false, nil
+			}
+		}
+
+		return true, nil
+	})
 
 	if adminUserID != "" {
 		if _, err := enforcer.AddRoleForUser(adminUserID, RoleAdmin); err != nil {
