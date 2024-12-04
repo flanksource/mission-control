@@ -90,10 +90,11 @@ var Serve = &cobra.Command{
 	Use:    "serve",
 	PreRun: PreRun,
 	Run: func(cmd *cobra.Command, args []string) {
-		var dutyArgs []duty.StartOption
+		var dutyArgs = []duty.StartOption{duty.EnableRLS}
 		if vars.AuthMode == auth.Kratos {
 			dutyArgs = append(dutyArgs, duty.KratosAuth)
 		}
+
 		ctx, stop, err := duty.Start("mission-control", dutyArgs...)
 		if err != nil {
 			logger.Fatalf(err.Error())

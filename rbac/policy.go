@@ -105,18 +105,20 @@ func (p Policy) String() string {
 }
 
 type Permission struct {
-	Subject string `json:"subject,omitempty"`
-	Object  string `json:"object,omitempty"`
-	Action  string `json:"action,omitempty"`
-	Deny    bool   `json:"deny,omitempty"`
+	Subject   string `json:"subject,omitempty"`
+	Object    string `json:"object,omitempty"`
+	Action    string `json:"action,omitempty"`
+	Deny      bool   `json:"deny,omitempty"`
+	Condition string `json:"condition,omitempty"`
 }
 
 func NewPermission(perm []string) Permission {
 	return Permission{
-		Subject: perm[0],
-		Object:  perm[1],
-		Action:  perm[2],
-		Deny:    perm[3] == "deny",
+		Subject:   perm[0],
+		Object:    perm[1],
+		Action:    perm[2],
+		Deny:      perm[3] == "deny",
+		Condition: perm[4],
 	}
 }
 

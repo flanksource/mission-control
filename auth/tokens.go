@@ -17,7 +17,6 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/flanksource/incident-commander/db"
-	"github.com/flanksource/incident-commander/rbac"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/patrickmn/go-cache"
 	"golang.org/x/crypto/argon2"
@@ -52,37 +51,40 @@ func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId str
 		"id":   user.ID.String(),
 	}
 
-	{
-		roles, err := rbac.RolesForUser(user.ID.String())
-		if err != nil {
-			return "", err
-		}
+	// {
+	// 	permissions, err := rbac.PermsForUser(user.ID.String())
+	// 	if err != nil {
+	// 		return "", err
+	// 	}
 
-		// TODO: Need to get permissions for these roles as well
-		fmt.Println(roles)
+	// 	// add all the permitted agents & tags to the JWT claim to be used in Postgres RLS
 
-		// add all the permitted agents & tags to the JWT claim to be used in Postgres RLS
-		var permissions []models.Permission
-		if err := ctx.DB().Find(&permissions).Error; err != nil {
-			return "", err
-		}
+	// 	// TODO: support multiple values of the same tag
+	// 	var agentIDs []string
+	// 	for _, p := range permissions {
+	// 		if p.Action != "ActionRead" && p.Action != "*" {
+	// 			continue
+	// 		}
 
-		// TODO: support multiple values of the same tag
-		var agentIDs []string
-		for _, p := range permissions {
-			// TODO: support deny
-			if p.Deny {
-				continue
-			}
+	// 		// TODO: support deny
+	// 		if p.Deny {
+	// 			continue
+	// 		}
 
-			agentIDs = append(agentIDs, p.Agents...)
-			if len(p.Tags) > 0 {
-				claims["tags"] = p.Tags
-			}
-		}
+	// 		// TODO: Extract agents & tags from the condition
+	// 		var agents []string = []string{uuid.NewString()}
+	// 		var tags map[string]string = map[string]string{
+	// 			"region": "eu-west-1", // testing
+	// 		}
 
-		claims["agents"] = agentIDs
-	}
+	// 		agentIDs = append(agentIDs, agents...)
+	// 		if len(tags) > 0 {
+	// 			claims["tags"] = tags
+	// 		}
+	// 	}
+
+	// 	claims["agents"] = agentIDs
+	// }
 
 	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(config.Postgrest.JWTSecret))
 	if err != nil {
