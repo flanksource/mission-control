@@ -16,6 +16,7 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+	"github.com/samber/lo"
 
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/rbac"
@@ -54,18 +55,21 @@ type RLSPayload struct {
 	Disable bool                `json:"disable_rls,omitempty"`
 }
 
+// If a user only has these roles, then RLS must be enforced
+var rlsEnforcableRoles = []string{"user", "viewer", "everyone"}
+
 func GetRLSPayload(ctx context.Context) (*RLSPayload, error) {
 	cacheKey := fmt.Sprintf("rls-payload-%s", ctx.User().ID.String())
 	if cached, ok := tokenCache.Get(cacheKey); ok {
 		return cached.(*RLSPayload), nil
 	}
 
-	// TODO: Decided when to perform this check.
-	// maybe if the person only has a "user" role we can skip this check
-	if ctx.User().Email != "contact@adityathebe.com" {
-		if rbac.CheckContext(ctx, rbac.ObjectCatalog, rbac.ActionRead) {
-			return &RLSPayload{Disable: true}, nil
-		}
+	if roles, err := rbac.RolesForUser(ctx.User().ID.String()); err != nil {
+		return nil, err
+	} else if extra, _ := lo.Difference(roles, rlsEnforcableRoles); len(extra) > 0 {
+		payload := &RLSPayload{Disable: true}
+		tokenCache.SetDefault(cacheKey, payload)
+		return payload, nil
 	}
 
 	permissions, err := rbac.PermsForUser(ctx.User().ID.String())

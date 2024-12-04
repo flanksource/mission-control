@@ -12,7 +12,7 @@ require (
 	github.com/casbin/casbin/v2 v2.87.1
 	github.com/casbin/gorm-adapter/v3 v3.26.0
 	github.com/containrrr/shoutrrr v0.8.0
-	github.com/fergusstrange/embedded-postgres v1.25.0 // indirect
+	github.com/fergusstrange/embedded-postgres v1.29.0 // indirect
 	github.com/flanksource/commons v1.31.2
 	github.com/flanksource/duty v1.0.767
 	github.com/flanksource/gomplate/v3 v3.24.39
