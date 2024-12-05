@@ -68,6 +68,8 @@ func Init(ctx context.Context, adminUserID string) error {
 		enforcer.EnableLog(true)
 	}
 
+	addCustomFunctions(enforcer)
+
 	if adminUserID != "" {
 		if _, err := enforcer.AddRoleForUser(adminUserID, RoleAdmin); err != nil {
 			return fmt.Errorf("error adding role for admin user: %v", err)

@@ -12,7 +12,7 @@ require (
 	github.com/casbin/casbin/v2 v2.87.1
 	github.com/casbin/gorm-adapter/v3 v3.26.0
 	github.com/containrrr/shoutrrr v0.8.0
-	github.com/fergusstrange/embedded-postgres v1.25.0 // indirect
+	github.com/fergusstrange/embedded-postgres v1.29.0 // indirect
 	github.com/flanksource/commons v1.31.2
 	github.com/flanksource/duty v1.0.767
 	github.com/flanksource/gomplate/v3 v3.24.39
@@ -50,6 +50,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.29
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.48.0
 	github.com/aws/aws-sdk-go-v2/service/sts v1.30.5
+	github.com/casbin/govaluate v1.1.1
 	github.com/flanksource/artifacts v1.0.14
 	github.com/fluxcd/pkg/gittestserver v0.8.6
 	github.com/go-git/go-billy/v5 v5.5.0
@@ -112,7 +113,6 @@ require (
 	github.com/bluekeyes/go-gitdiff v0.7.1 // indirect
 	github.com/bmatcuk/doublestar/v4 v4.7.1 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
-	github.com/casbin/govaluate v1.1.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.2.1 // indirect
 	github.com/cert-manager/cert-manager v1.9.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -361,7 +361,7 @@ require (
 	sigs.k8s.io/yaml v1.4.0
 )
 
-// replace github.com/flanksource/duty => ../duty
+replace github.com/flanksource/duty => ../duty
 
 // replace github.com/flanksource/gomplate/v3 => ../gomplate
 

@@ -1,15 +1,19 @@
 package catalog
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/query"
+	"github.com/flanksource/incident-commander/auth"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/rbac"
 	"github.com/labstack/echo/v4"
+	"go.opentelemetry.io/otel/trace"
 )
 
 func init() {
@@ -20,12 +24,11 @@ func RegisterRoutes(e *echo.Echo) {
 	logger.Infof("Registering /catalog routes")
 
 	apiGroup := e.Group("/catalog", rbac.Catalog(rbac.ActionRead))
-	apiGroup.POST("/summary", SearchConfigSummary)
+	apiGroup.POST("/summary", SearchConfigSummary, rlsMiddleware)
 
-	apiGroup.POST("/changes", SearchCatalogChanges)
+	apiGroup.POST("/changes", SearchCatalogChanges, rlsMiddleware)
 	// Deprecated. Use POST
-	apiGroup.GET("/changes", SearchCatalogChanges)
-	apiGroup.POST("/summary", SearchConfigSummary)
+	apiGroup.GET("/changes", SearchCatalogChanges, rlsMiddleware)
 }
 
 func SearchCatalogChanges(c echo.Context) error {
@@ -51,10 +54,49 @@ func SearchConfigSummary(c echo.Context) error {
 	}
 
 	ctx := c.Request().Context().(context.Context)
+
 	response, err := query.ConfigSummary(ctx, req)
 	if err != nil {
 		return api.WriteError(c, err)
 	}
 
 	return c.JSON(http.StatusOK, response)
+}
+
+func rlsMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		ctx := c.Request().Context().(context.Context)
+
+		rlsPayload, err := auth.GetRLSPayload(ctx)
+		if err != nil {
+			return err
+		}
+
+		if rlsPayload.Disable {
+			return next(c)
+		}
+
+		b, err := json.Marshal(rlsPayload)
+		if err != nil {
+			return err
+		}
+
+		err = ctx.Transaction(func(ctx context.Context, _ trace.Span) error {
+			if err := ctx.DB().Exec("SET LOCAL ROLE postgrest_api").Error; err != nil {
+				return err
+			}
+
+			stmnt := fmt.Sprintf(`SET LOCAL request.jwt.claims = '%s'`, string(b))
+			if err := ctx.DB().Exec(stmnt).Error; err != nil {
+				return err
+			}
+
+			// set the context with the tx
+			c.SetRequest(c.Request().WithContext(ctx))
+
+			return next(c)
+		})
+
+		return err
+	}
 }
