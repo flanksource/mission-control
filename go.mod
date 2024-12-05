@@ -5,7 +5,7 @@ go 1.22.5
 toolchain go1.22.6
 
 require (
-	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.5.2
+	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.8.0
 	github.com/MicahParks/keyfunc v1.9.0
 	github.com/adityathebe/go-strip-markdown/v2 v2.0.1
 	github.com/andygrunwald/go-jira v1.16.0
@@ -58,7 +58,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.2.1
 	github.com/henvic/httpretty v0.1.3
 	github.com/jenkins-x/go-scm v1.14.17
-	github.com/redis/go-redis/v9 v9.5.1
+	github.com/redis/go-redis/v9 v9.6.1
 	github.com/samber/lo v1.47.0
 	github.com/samber/oops v1.13.1
 	github.com/samber/slog-echo v1.14.4
@@ -282,8 +282,8 @@ require (
 require (
 	cloud.google.com/go v0.112.1 // indirect
 	cloud.google.com/go/storage v1.38.0
-	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.11.1
-	github.com/Azure/azure-sdk-for-go/sdk/internal v1.5.2 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.14.0
+	github.com/Azure/azure-sdk-for-go/sdk/internal v1.10.0 // indirect
 	github.com/AzureAD/microsoft-authentication-library-for-go v1.2.2 // indirect
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/TomOnTime/utfutil v0.0.0-20230223141146-125e65197b36
