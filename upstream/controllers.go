@@ -22,21 +22,22 @@ import (
 	"github.com/flanksource/incident-commander/rbac"
 )
 
-var (
-	agentCache = cache.New(3*24*time.Hour, 12*time.Hour)
-)
+var agentCache = cache.New(3*24*time.Hour, 12*time.Hour)
 
 func init() {
 	echoSrv.RegisterRoutes(RegisterRoutes)
 }
 
 func RegisterRoutes(e *echo.Echo) {
-
 	logger.Infof("Registering /upstream routes")
 
 	e.POST("/push/topology", push.PushTopology, rbac.Topology(rbac.ActionUpdate))
 
-	upstreamGroup := e.Group("/upstream", rbac.Authorization(rbac.ObjectAgentPush, rbac.ActionUpdate), upstream.AgentAuthMiddleware(agentCache))
+	upstreamGroup := e.Group(
+		"/upstream",
+		rbac.Authorization(rbac.ObjectAgentPush, rbac.ActionUpdate),
+		upstream.AgentAuthMiddleware(agentCache),
+	)
 	upstreamGroup.GET("/ping", upstream.PingHandler)
 	upstreamGroup.POST("/push", upstream.NewPushHandler(upstream.NewStatusRingStore(job.EvictedJobs)))
 	upstreamGroup.DELETE("/push", upstream.DeleteHandler)
@@ -74,7 +75,10 @@ func PullCanaries(c echo.Context) error {
 	if sinceRaw := c.QueryParam("since"); sinceRaw != "" {
 		since, err = time.Parse(time.RFC3339, sinceRaw)
 		if err != nil {
-			return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{Err: fmt.Sprintf("'since' param needs to be a valid RFC3339 timestamp: %v", err)})
+			return c.JSON(
+				http.StatusBadRequest,
+				dutyAPI.HTTPError{Err: fmt.Sprintf("'since' param needs to be a valid RFC3339 timestamp: %v", err)},
+			)
 		}
 
 		ctx.GetSpan().SetAttributes(attribute.String("upstream.pull.canaries.since", sinceRaw))
@@ -100,7 +104,10 @@ func PullScrapeConfigs(c echo.Context) error {
 	if sinceRaw := c.QueryParam("since"); sinceRaw != "" {
 		since, err = time.Parse(time.RFC3339Nano, sinceRaw)
 		if err != nil {
-			return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{Err: fmt.Sprintf("'since' param needs to be a valid RFC3339Nano timestamp: %v", err)})
+			return c.JSON(
+				http.StatusBadRequest,
+				dutyAPI.HTTPError{Err: fmt.Sprintf("'since' param needs to be a valid RFC3339Nano timestamp: %v", err)},
+			)
 		}
 
 		ctx.GetSpan().SetAttributes(attribute.String("upstream.pull.configs.since", sinceRaw))
