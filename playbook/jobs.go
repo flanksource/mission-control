@@ -16,7 +16,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-var pushPullLagBuckets = []float64{10, 100, 200, 500, 1000, 3000, 5000, 10_000, 20_000, 30_000, 60_000, 100_000}
+var pushPullLagBuckets = []float64{100, 200, 500, 1000, 1500, 3000, 5000, 10_000, 20_000, 30_000, 60_000, 100_000}
 
 // PushPlaybookActions pushes unpushed playbook actions to the upstream
 func PushPlaybookActions(ctx context.Context, upstreamConfig upstream.UpstreamConfig, batchSize int) (int, error) {
