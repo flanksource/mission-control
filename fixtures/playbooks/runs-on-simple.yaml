@@ -1,0 +1,18 @@
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: write-to-file
+  namespace: mission-control
+spec:
+  category: testing
+  runsOn:
+    - aditya-desktop
+  description: writes the config on the agent host
+  configs:
+    - types:
+        - Kubernetes::ConfigMap
+  actions:
+    - name: write-to-file
+      exec:
+        script: echo "{{.config.config}}" > /tmp/{{.config.name}}.txt
