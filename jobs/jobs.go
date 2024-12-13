@@ -37,8 +37,11 @@ func RunPullPlaybookActionsJob(ctx context.Context) {
 	// use a single job instance to maintain retention
 	job := PullPlaybookActions(ctx)
 
+	// NOTE: keep a short max retry count.
+	// Because one bad playbook action will exponentially increase the pull interval.
+	const maxRetries = 5
 	for {
-		backoff := retry.WithMaxRetries(10, retry.NewExponential(time.Second))
+		backoff := retry.WithMaxRetries(maxRetries, retry.NewExponential(time.Second))
 		_ = retry.Do(ctx, backoff, func(_ctx gocontext.Context) error {
 			job.Run()
 

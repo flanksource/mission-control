@@ -8,8 +8,8 @@ import (
 	"github.com/flanksource/incident-commander/playbook"
 )
 
-// PullPlaybookActions periodically pulls playbook actions to run
-// from the upstream
+// PullPlaybookActions pulls playbook actions to run from the upstream
+// NOTE: This job isn't run by the cron scheduler.
 func PullPlaybookActions(ctx context.Context) *job.Job {
 	return &job.Job{
 		Name:       "PullPlaybookActions",
@@ -30,7 +30,7 @@ func PullPlaybookActions(ctx context.Context) *job.Job {
 // PullPlaybookActions pushes actions, that have been fully run, to the upstream
 var PushPlaybookActions = &job.Job{
 	Name:       "PushPlaybookActions",
-	Schedule:   "@every 60s",
+	Schedule:   "@every 5s", // TODO: Find a way to push the newly updated actions with least amount of delay.
 	Retention:  job.RetentionFailed,
 	JobHistory: true,
 	RunNow:     true,

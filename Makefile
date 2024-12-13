@@ -112,7 +112,7 @@ build:
 
 .PHONY: dev
 dev:
-	go build -x -v -o ./.bin/$(NAME) -gcflags="all=-N -l" main.go
+	go build -v -o ./.bin/$(NAME) -gcflags="all=-N -l" main.go
 
 .PHONY: install
 install:

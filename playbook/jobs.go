@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"time"
 
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
@@ -14,6 +15,8 @@ import (
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace"
 )
+
+var pushPullLagBuckets = []float64{10, 100, 200, 500, 1000, 3000, 5000, 10_000, 20_000, 30_000, 60_000, 100_000}
 
 // PushPlaybookActions pushes unpushed playbook actions to the upstream
 func PushPlaybookActions(ctx context.Context, upstreamConfig upstream.UpstreamConfig, batchSize int) (int, error) {
@@ -36,6 +39,18 @@ func PushPlaybookActions(ctx context.Context, upstreamConfig upstream.UpstreamCo
 		ctx.Tracef("pushing %d playbook actions to upstream", len(actions))
 		if err := client.Push(ctx, &upstream.PushData{PlaybookActions: actions}); err != nil {
 			return 0, fmt.Errorf("failed to push playbook actions to upstream: %w", err)
+		}
+
+		for _, action := range actions {
+			if action.EndTime == nil {
+				ctx.Warnf("attempted to push action with null end time. action=%s, run=%s", action.ID, action.PlaybookRunID)
+			} else {
+				lag := time.Since(*action.EndTime)
+				ctx.Histogram("playbook_action_push_lag", pushPullLagBuckets,
+					"upstream", upstreamConfig.Host,
+					"agent", upstreamConfig.AgentName).
+					Record(time.Duration(lag.Milliseconds()))
+			}
 		}
 
 		ids := make([]uuid.UUID, len(actions))
@@ -77,6 +92,11 @@ func PullPlaybookAction(ctx job.JobRuntime, upstreamConfig upstream.UpstreamConf
 	if response.Action.ID == uuid.Nil {
 		return nil
 	}
+
+	ctx.Histogram("playbook_action_pull_lag", pushPullLagBuckets,
+		"upstream", upstreamConfig.Host,
+		"agent", upstreamConfig.AgentName).
+		Record(time.Duration(time.Since(response.Action.ScheduledTime).Milliseconds()))
 
 	err = ctx.Transaction(func(ctx context.Context, _ trace.Span) error {
 		// Don't save playbook_run_id to avoid foreign key constraint
