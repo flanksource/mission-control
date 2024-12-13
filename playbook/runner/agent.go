@@ -1,7 +1,6 @@
 package runner
 
 import (
-	"fmt"
 	"strconv"
 	"time"
 
@@ -9,7 +8,12 @@ import (
 	"github.com/flanksource/duty/models"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/playbook/actions"
+	"github.com/samber/lo"
+	"github.com/samber/oops"
+	"gorm.io/gorm"
 )
+
+const errTagTemplate = "template-error"
 
 // ActionForAgent holds in all the necessary information
 // required by an agent to run an action.
@@ -46,15 +50,34 @@ func GetActionForAgentWithWait(ctx context.Context, agent *models.Agent) (*Actio
 }
 
 func getActionForAgent(ctx context.Context, agent *models.Agent) (*ActionForAgent, error) {
-	tx := ctx.DB().Begin()
-	if tx.Error != nil {
-		return nil, fmt.Errorf("error initiating db tx: %w", tx.Error)
+	var output *ActionForAgent
+
+	err := ctx.DB().Transaction(func(tx *gorm.DB) error {
+		ctx = ctx.WithDB(tx, ctx.Pool()).WithObject(agent)
+
+		result, err := _getActionForAgent(ctx, agent)
+		if err != nil {
+			if oopsErr, ok := oops.AsOops(err); ok {
+				if lo.Contains(oopsErr.Tags(), errTagTemplate) {
+					// mark the action as failed and move on
+					return result.Action.Fail(tx, nil, err)
+				}
+			}
+
+			return err
+		}
+
+		output = result
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
-	defer tx.Rollback()
 
-	ctx = ctx.WithDB(tx, ctx.Pool())
-	ctx = ctx.WithObject(agent)
+	return output, nil
+}
 
+func _getActionForAgent(ctx context.Context, agent *models.Agent) (*ActionForAgent, error) {
 	query := `
 		SELECT playbook_run_actions.*
 		FROM playbook_run_actions
@@ -76,6 +99,7 @@ func getActionForAgent(ctx context.Context, agent *models.Agent) (*ActionForAgen
 	if len(steps) == 0 {
 		return nil, nil
 	}
+
 	step := &steps[0]
 	ctx = ctx.WithObject(agent, step)
 
@@ -84,6 +108,7 @@ func getActionForAgent(ctx context.Context, agent *models.Agent) (*ActionForAgen
 		return nil, ctx.Oops().Wrap(err)
 	}
 	ctx = ctx.WithObject(agent, step, run)
+
 	playbook, err := step.GetPlaybook(ctx.DB())
 	if err != nil {
 		return nil, ctx.Oops().Wrap(err)
@@ -92,7 +117,7 @@ func getActionForAgent(ctx context.Context, agent *models.Agent) (*ActionForAgen
 
 	templateEnv, err := CreateTemplateEnv(ctx, playbook, run, step)
 	if err != nil {
-		return nil, ctx.Oops().Wrapf(err, "failed to template env")
+		return &ActionForAgent{Action: *step}, ctx.Oops().Tags(errTagTemplate).Wrapf(err, "failed to template env")
 	}
 
 	spec, err := getActionSpec(run, step.Name)
@@ -123,10 +148,11 @@ func getActionForAgent(ctx context.Context, agent *models.Agent) (*ActionForAgen
 		// We run the filter on the upstream and simply send the filter result to the agent.
 		spec.Filter = strconv.FormatBool(!skip)
 	}
+
 	// Update the step.status to Running, so that the action is locked and running only on the agent that polled it
 	if err := step.Start(ctx.DB()); err != nil {
 		return nil, ctx.Oops().Wrap(err)
 	}
 
-	return &output, ctx.Oops().Wrap(tx.Commit().Error)
+	return &output, nil
 }
