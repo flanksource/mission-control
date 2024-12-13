@@ -28,22 +28,25 @@ func PullPlaybookActions(ctx context.Context) *job.Job {
 }
 
 // PullPlaybookActions pushes actions, that have been fully run, to the upstream
-var PushPlaybookActions = &job.Job{
-	Name:       "PushPlaybookActions",
-	Schedule:   "@every 5s", // TODO: Find a way to push the newly updated actions with least amount of delay.
-	Retention:  job.RetentionFailed,
-	JobHistory: true,
-	RunNow:     true,
-	Singleton:  false,
-	Fn: func(ctx job.JobRuntime) error {
-		ctx.History.ResourceType = job.ResourceTypePlaybook
-		ctx.History.ResourceID = api.UpstreamConf.Host
-		if count, err := playbook.PushPlaybookActions(ctx.Context, api.UpstreamConf, 200); err != nil {
-			return err
-		} else {
-			ctx.History.SuccessCount += count
-		}
+func PushPlaybookActions(ctx context.Context) *job.Job {
+	return &job.Job{
+		Name:       "PushPlaybookActions",
+		Schedule:   "@every 1m", // we push actions real-time via pgNotify. This is just a safety fallback
+		Context:    ctx,
+		JobHistory: true,
+		Retention:  job.RetentionFailed,
+		RunNow:     true,
+		Singleton:  false,
+		Fn: func(ctx job.JobRuntime) error {
+			ctx.History.ResourceType = job.ResourceTypePlaybook
+			ctx.History.ResourceID = api.UpstreamConf.Host
+			if count, err := playbook.PushPlaybookActions(ctx.Context, api.UpstreamConf, 200); err != nil {
+				return err
+			} else {
+				ctx.History.SuccessCount += count
+			}
 
-		return nil
-	},
+			return nil
+		},
+	}
 }

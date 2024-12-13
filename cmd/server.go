@@ -110,8 +110,7 @@ var Serve = &cobra.Command{
 		shutdown.WaitForSignal()
 
 		ctx.WithTracer(otel.GetTracerProvider().Tracer("mission-control"))
-		ctx = ctx.
-			WithNamespace(api.Namespace)
+		ctx = ctx.WithNamespace(api.Namespace)
 
 		go jobs.Start(ctx)
 
@@ -143,7 +142,12 @@ func tableUpdatesHandler(ctx context.Context) {
 	notificationUpdateCh := notifyRouter.GetOrCreateChannel("notifications")
 	teamsUpdateChan := notifyRouter.GetOrCreateChannel("teams")
 	playbooksUpdateChan := notifyRouter.GetOrCreateChannel("playbooks")
+	playbooksActionUpdateChan := notifyRouter.GetOrCreateChannel("playbook_run_actions")
 	permissionUpdateChan := notifyRouter.GetOrCreateChannel("permissions")
+
+	// use a single job instance to maintain retention
+	pushPlaybookActionsJob := jobs.PushPlaybookActions(ctx)
+	pushPlaybookActionsJob.Schedule = "" // to disable jitter
 
 	for {
 		select {
@@ -152,6 +156,11 @@ func tableUpdatesHandler(ctx context.Context) {
 
 		case id := <-playbooksUpdateChan:
 			query.InvalidateCacheByID[models.Playbook](id)
+
+		case <-playbooksActionUpdateChan:
+			if api.UpstreamConf.Valid() {
+				pushPlaybookActionsJob.Run()
+			}
 
 		case id := <-teamsUpdateChan:
 			responder.PurgeCache(id)

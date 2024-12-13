@@ -26,11 +26,13 @@ const (
 
 var FuncScheduler = cron.New()
 
-var agentJobs = []*job.Job{
-	PingUpstream,
-	ReconcileAll,
-	SyncArtifactData,
-	PushPlaybookActions,
+func agentJobs(ctx context.Context) []*job.Job {
+	return []*job.Job{
+		PingUpstream,
+		ReconcileAll,
+		SyncArtifactData,
+		PushPlaybookActions(ctx),
+	}
 }
 
 func RunPullPlaybookActionsJob(ctx context.Context) {
@@ -88,7 +90,7 @@ func Start(ctx context.Context) {
 	}
 
 	if api.UpstreamConf.Valid() {
-		for _, job := range agentJobs {
+		for _, job := range agentJobs(ctx) {
 			j := job
 			j.Context = ctx
 			if err := j.AddToScheduler(FuncScheduler); err != nil {
