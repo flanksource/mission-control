@@ -86,7 +86,6 @@ release: binaries
 lint:
 	golangci-lint run
 
-
 # Generate OpenAPI schema
 .PHONY: gen-schemas
 gen-schemas:
@@ -95,6 +94,7 @@ gen-schemas:
 	go mod edit -module=github.com/flanksource/incident-commander/hack/generate-schemas && \
 	go mod edit -require=github.com/flanksource/incident-commander@v1.0.0 && \
  	go mod edit -replace=github.com/flanksource/incident-commander=../../ && \
+	go mod edit -replace=github.com/flanksource/duty=../../../duty
 	go mod tidy && \
 	go run ./main.go
 

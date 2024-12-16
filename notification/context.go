@@ -14,9 +14,10 @@ import (
 type RecipientType string
 
 const (
-	RecipientTypePerson RecipientType = "person"
-	RecipientTypeTeam   RecipientType = "team"
-	RecipientTypeCustom RecipientType = "custom"
+	RecipientTypePerson   RecipientType = "person"
+	RecipientTypePlaybook RecipientType = "playbook"
+	RecipientTypeTeam     RecipientType = "team"
+	RecipientTypeCustom   RecipientType = "custom"
 )
 
 type Context struct {
@@ -78,5 +79,10 @@ func (t *Context) WithSource(event string, resourceID uuid.UUID) {
 
 func (t *Context) WithPersonID(id *uuid.UUID) *Context {
 	t.log.PersonID = id
+	return t
+}
+
+func (t *Context) WithPlaybookRun(id *uuid.UUID) *Context {
+	t.log.PlaybookRunID = id
 	return t
 }

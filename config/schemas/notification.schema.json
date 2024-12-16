@@ -78,10 +78,16 @@
             "type": "string"
           },
           "type": "object"
+        },
+        "playbook": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
-      "type": "object"
+      "type": "object",
+      "required": [
+        "playbook"
+      ]
     },
     "NotificationSpec": {
       "properties": {

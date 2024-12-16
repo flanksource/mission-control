@@ -1,0 +1,12 @@
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Notification
+metadata:
+  name: check-echo-config
+spec:
+  events:
+    - config.healthy
+    - config.unhealthy
+    - config.warning
+  to:
+    playbook: mc/echo-config

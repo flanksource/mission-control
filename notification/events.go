@@ -322,7 +322,7 @@ func _sendNotification(ctx *Context, noWait bool, payload NotificationEventPaylo
 		ctx.log.Status = models.NotificationStatusPending
 		ctx.log.Payload = payload.AsMap()
 	} else {
-		if err := PrepareAndSendEventNotification(ctx, payload, celEnv.AsMap()); err != nil {
+		if err := PrepareAndSendEventNotification(ctx, payload, celEnv); err != nil {
 			return fmt.Errorf("failed to send notification for event: %w", err)
 		}
 

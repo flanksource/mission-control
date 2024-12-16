@@ -14,6 +14,7 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/gomplate/v3"
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/flanksource/incident-commander/api"
 
@@ -37,6 +38,7 @@ type NotificationTemplate struct {
 type NotificationEventPayload struct {
 	ID               uuid.UUID  `json:"id"`                          // Resource id. depends what it is based on the original event.
 	EventName        string     `json:"event_name"`                  // The name of the original event this notification is for.
+	PlaybookID       *uuid.UUID `json:"playbook_id"`                 // The playbook to trigger
 	PersonID         *uuid.UUID `json:"person_id,omitempty"`         // The person recipient.
 	TeamID           string     `json:"team_id,omitempty"`           // The team recipient.
 	NotificationName string     `json:"notification_name,omitempty"` // Name of the notification of a team
@@ -58,10 +60,14 @@ func (t *NotificationEventPayload) FromMap(m map[string]string) {
 }
 
 // PrepareAndSendEventNotification generates the notification from the given event and sends it.
-func PrepareAndSendEventNotification(ctx *Context, payload NotificationEventPayload, celEnv map[string]any) error {
+func PrepareAndSendEventNotification(ctx *Context, payload NotificationEventPayload, celEnv *celVariables) error {
 	notification, err := GetNotification(ctx.Context, payload.NotificationID.String())
 	if err != nil {
 		return err
+	}
+
+	if payload.PlaybookID != nil {
+		return triggerPlaybookRun(ctx, celEnv, *payload.PlaybookID)
 	}
 
 	if payload.PersonID != nil {
@@ -72,7 +78,7 @@ func PrepareAndSendEventNotification(ctx *Context, payload NotificationEventPayl
 		}
 
 		smtpURL := fmt.Sprintf("%s?ToAddresses=%s", api.SystemSMTP, url.QueryEscape(emailAddress))
-		return sendEventNotificationWithMetrics(ctx, celEnv, "", smtpURL, payload.EventName, notification, nil)
+		return sendEventNotificationWithMetrics(ctx, celEnv.AsMap(), "", smtpURL, payload.EventName, notification, nil)
 	}
 
 	if payload.TeamID != "" {
@@ -87,7 +93,7 @@ func PrepareAndSendEventNotification(ctx *Context, payload NotificationEventPayl
 				continue
 			}
 
-			return sendEventNotificationWithMetrics(ctx, celEnv, cn.Connection, cn.URL, payload.EventName, notification, cn.Properties)
+			return sendEventNotificationWithMetrics(ctx, celEnv.AsMap(), cn.Connection, cn.URL, payload.EventName, notification, cn.Properties)
 		}
 	}
 
@@ -98,8 +104,69 @@ func PrepareAndSendEventNotification(ctx *Context, payload NotificationEventPayl
 	// (SA4004: the surrounding loop is unconditionally terminated)
 	for _, cn := range notification.CustomNotifications {
 		ctx.WithRecipientType(RecipientTypeCustom)
-		return sendEventNotificationWithMetrics(ctx, celEnv, cn.Connection, cn.URL, payload.EventName, notification, cn.Properties)
+		return sendEventNotificationWithMetrics(ctx, celEnv.AsMap(), cn.Connection, cn.URL, payload.EventName, notification, cn.Properties)
 	}
+
+	return nil
+}
+
+func triggerPlaybookRun(ctx *Context, celEnv *celVariables, playbookID uuid.UUID) error {
+	start := time.Now()
+
+	ctx.WithPlaybookRun(nil).WithRecipientType(RecipientTypePlaybook)
+	err := ctx.Transaction(func(txCtx context.Context, _ trace.Span) error {
+		// Get the playbook and ensure it's not deleted
+		var playbook models.Playbook
+		if err := txCtx.DB().Where("id = ?", playbookID).Find(&playbook).Error; err != nil {
+			return err
+		} else if playbook.ID == uuid.Nil {
+			return fmt.Errorf("playbook (%s) not found", playbookID)
+		} else if playbook.DeletedAt != nil {
+			return fmt.Errorf("playbook (%s) has been deleted", playbook.NamespacedName())
+		}
+
+		run := models.PlaybookRun{
+			PlaybookID: playbookID,
+			Spec:       playbook.Spec,
+			Status:     models.PlaybookRunStatusScheduled,
+		}
+
+		if ctx.User() != nil {
+			run.CreatedBy = &ctx.User().ID
+		}
+
+		switch {
+		case celEnv.ConfigItem != nil:
+			run.ConfigID = &celEnv.ConfigItem.ID
+		case celEnv.Component != nil:
+			run.ComponentID = &celEnv.Component.ID
+		case celEnv.Check != nil:
+			run.CheckID = &celEnv.Check.ID
+		}
+
+		// TODO: Don't create it manually. must use Run() from playbook package as this doesn't do
+		// - approval
+		// - parameter validation (although we don't have parameters for playbooks triggered via events/notifications)
+		// - permission check
+		// - templating of runsOn
+		// - playbook filters
+		//
+		// can't import playbook package in here import cycle prevents this.
+		// might have to do this via event queue.
+		if err := txCtx.DB().Create(&run).Error; err != nil {
+			return fmt.Errorf("failed to create run: %w", err)
+		}
+
+		ctx.WithPlaybookRun(&run.ID)
+		return nil
+	})
+	if err != nil {
+		notificationSendFailureCounter.WithLabelValues("playbook", string(RecipientTypePlaybook), ctx.notificationID.String()).Inc()
+		return err
+	}
+
+	notificationSentCounter.WithLabelValues("playbook", string(RecipientTypePlaybook), ctx.notificationID.String()).Inc()
+	notificationSendDuration.WithLabelValues("playbook", string(RecipientTypePlaybook), ctx.notificationID.String()).Observe(time.Since(start).Seconds())
 
 	return nil
 }
@@ -258,6 +325,19 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal event properties: %v", err)
 		}
+	}
+
+	if n.PlaybookID != nil {
+		payload := NotificationEventPayload{
+			EventName:      event.Name,
+			NotificationID: n.ID,
+			ID:             resourceID,
+			PlaybookID:     n.PlaybookID,
+			EventCreatedAt: event.CreatedAt,
+			Properties:     eventProperties,
+		}
+
+		payloads = append(payloads, payload)
 	}
 
 	if n.PersonID != nil {
