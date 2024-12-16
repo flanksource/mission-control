@@ -59,7 +59,7 @@ func (t *SilenceSaveRequest) Validate() error {
 
 func SaveNotificationSilence(ctx context.Context, req SilenceSaveRequest) error {
 	if err := req.Validate(); err != nil {
-		return api.Errorf(api.EINVALID, err.Error())
+		return api.Errorf(api.EINVALID, "%s", err)
 	}
 
 	silence := models.NotificationSilence{
