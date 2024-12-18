@@ -2,7 +2,7 @@
 apiVersion: mission-control.flanksource.com/v1
 kind: Notification
 metadata:
-  name: check-echo-config
+  name: config-healths
 spec:
   events:
     - config.healthy
