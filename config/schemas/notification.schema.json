@@ -78,6 +78,9 @@
             "type": "string"
           },
           "type": "object"
+        },
+        "playbook": {
+          "type": "string"
         }
       },
       "additionalProperties": false,

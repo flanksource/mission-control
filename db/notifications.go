@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	extraClausePlugin "github.com/WinterYukky/gorm-extra-clause-plugin"
@@ -15,6 +16,7 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/google/uuid"
+	"github.com/samber/lo"
 )
 
 func PersistNotificationFromCRD(ctx context.Context, obj *v1.Notification) error {
@@ -77,6 +79,32 @@ func PersistNotificationFromCRD(ctx context.Context, obj *v1.Notification) error
 		}
 
 		dbObj.TeamID = &team.ID
+
+	case lo.FromPtr(obj.Spec.To.Playbook) != "":
+		split := strings.Split(*obj.Spec.To.Playbook, "/")
+		if len(split) == 1 {
+			name := split[0]
+			playbook, err := query.FindPlaybook(ctx, name)
+			if err != nil {
+				return err
+			} else if playbook == nil {
+				return fmt.Errorf("playbook (%s) not found", *obj.Spec.To.Playbook)
+			}
+
+			dbObj.PlaybookID = &playbook.ID
+		} else if len(split) == 2 {
+			namespace := split[0]
+			name := split[1]
+
+			var playbook models.Playbook
+			if err := ctx.DB().Where("namespace = ?", namespace).Where("name = ?", name).Find(&playbook).Error; err != nil {
+				return err
+			} else if playbook.ID == uuid.Nil {
+				return fmt.Errorf("playbook %s not found", *obj.Spec.To.Playbook)
+			} else {
+				dbObj.PlaybookID = &playbook.ID
+			}
+		}
 
 	default:
 		var customService api.NotificationConfig

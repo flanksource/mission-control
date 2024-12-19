@@ -100,10 +100,11 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 	ctx.Infof("running \n%v\n", logger.Pretty(req))
 
 	run := models.PlaybookRun{
-		PlaybookID: playbook.ID,
-		Status:     models.PlaybookRunStatusScheduled,
-		Parameters: req.Params,
-		AgentID:    req.AgentID,
+		PlaybookID:         playbook.ID,
+		Status:             models.PlaybookRunStatusScheduled,
+		Parameters:         req.Params,
+		AgentID:            req.AgentID,
+		NotificationSendID: req.NotificationSendID,
 	}
 
 	// The run gets its own copy of the spec and uses that throughout its lifecycle.
@@ -149,7 +150,7 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 
 	if objects, err := run.GetRBACAttributes(ctx.DB()); err != nil {
 		return nil, ctx.Oops().Wrap(err)
-	} else if !rbac.HasPermission(ctx, ctx.User().ID.String(), objects, rbac.ActionPlaybookRun) {
+	} else if !rbac.HasPermission(ctx, ctx.Subject(), objects, rbac.ActionPlaybookRun) {
 		return nil, ctx.Oops().With("permission", rbac.ActionPlaybookRun, "objects", objects).Code(dutyAPI.EFORBIDDEN).Wrap(errors.New("access denied: run permission required"))
 	}
 
