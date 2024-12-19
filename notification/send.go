@@ -12,6 +12,7 @@ import (
 	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/types"
 	"github.com/flanksource/gomplate/v3"
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace"
@@ -125,39 +126,52 @@ func triggerPlaybookRun(ctx *Context, celEnv *celVariables, playbookID uuid.UUID
 			return fmt.Errorf("playbook (%s) has been deleted", playbook.NamespacedName())
 		}
 
-		run := models.PlaybookRun{
-			PlaybookID: playbookID,
-			Spec:       playbook.Spec,
-			Status:     models.PlaybookRunStatusScheduled,
+		eventProp := types.JSONStringMap{
+			"id":              playbook.ID.String(),
+			"notification_id": ctx.notificationID.String(),
 		}
 
-		if ctx.User() != nil {
-			run.CreatedBy = &ctx.User().ID
-		}
+		// the ony reason we add the dispatch (send history id), is to avoid duplicate event unique constraint error.
+		// i.e. the same notification could be triggering the same playbook multiple times.
+		// we want one run per dispatch.
+		eventProp["notification_dispatch_id"] = ctx.log.ID.String()
 
 		switch {
 		case celEnv.ConfigItem != nil:
-			run.ConfigID = &celEnv.ConfigItem.ID
+			eventProp["config_id"] = celEnv.ConfigItem.ID.String()
 		case celEnv.Component != nil:
-			run.ComponentID = &celEnv.Component.ID
+			eventProp["component_id"] = celEnv.Component.ID.String()
 		case celEnv.Check != nil:
-			run.CheckID = &celEnv.Check.ID
+			eventProp["check_id"] = celEnv.Check.ID.String()
 		}
 
-		// TODO: Don't create it manually. must use Run() from playbook package as this doesn't do
-		// - approval
-		// - parameter validation (although we don't have parameters for playbooks triggered via events/notifications)
-		// - permission check
-		// - templating of runsOn
-		// - playbook filters
-		//
-		// can't import playbook package in here import cycle prevents this.
-		// might have to do this via event queue.
-		if err := txCtx.DB().Create(&run).Error; err != nil {
+		event := models.Event{
+			Name:       api.EventPlaybookRun,
+			Properties: eventProp,
+		}
+		if err := txCtx.DB().Create(&event).Error; err != nil {
 			return fmt.Errorf("failed to create run: %w", err)
 		}
 
-		ctx.WithPlaybookRun(&run.ID)
+		// level 1
+		// if event insert to the the event queue -> sent
+
+		// level 2
+		// a run was created -> sent
+
+		// level 3
+		// live sync with the playbook
+		// if playbook succeeds -> notification succeeds
+
+		// for {
+		// check if the event is deleted
+		// }
+
+		// find the playbook ru nfor this notification send
+
+		// TODO: wait for the event to be processed it to get the run id
+		// ctx.WithPlaybookRun(&run.ID)
+
 		return nil
 	})
 	if err != nil {

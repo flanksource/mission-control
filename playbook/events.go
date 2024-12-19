@@ -17,7 +17,9 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/logs"
+	"github.com/google/uuid"
 	"github.com/patrickmn/go-cache"
+	"github.com/samber/lo"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -67,6 +69,7 @@ func RegisterEvents(ctx context.Context) {
 	nh := playbookScheduler{Ring: EventRing}
 	events.RegisterSyncHandler(nh.Handle, api.EventStatusGroup...)
 
+	events.RegisterSyncHandler(onNewRun, api.EventPlaybookRun)
 	events.RegisterSyncHandler(onApprovalUpdated, api.EventPlaybookSpecApprovalUpdated)
 	events.RegisterSyncHandler(onPlaybookRunNewApproval, api.EventPlaybookApprovalInserted)
 
@@ -263,6 +266,34 @@ outer:
 	}
 
 	return false, nil
+}
+
+func onNewRun(ctx context.Context, event models.Event) error {
+	var (
+		playbookID     = event.Properties["id"]
+		notificationID = event.Properties["notification_id"]
+	)
+
+	var runParam RunParams
+	if v, ok := event.Properties["config_id"]; ok {
+		runParam.ConfigID = lo.ToPtr(uuid.MustParse(v))
+	}
+	if v, ok := event.Properties["component_id"]; ok {
+		runParam.ComponentID = lo.ToPtr(uuid.MustParse(v))
+	}
+	if v, ok := event.Properties["check_id"]; ok {
+		runParam.CheckID = lo.ToPtr(uuid.MustParse(v))
+	}
+
+	ctx = ctx.WithSubject(notificationID)
+
+	var playbook models.Playbook
+	if err := ctx.DB().Where("id = ?", playbookID).First(&playbook).Error; err != nil {
+		return err
+	}
+
+	_, err := Run(ctx, &playbook, runParam)
+	return err
 }
 
 func onApprovalUpdated(ctx context.Context, event models.Event) error {
