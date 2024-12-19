@@ -322,11 +322,19 @@ func _sendNotification(ctx *Context, noWait bool, payload NotificationEventPaylo
 		ctx.log.Status = models.NotificationStatusPending
 		ctx.log.Payload = payload.AsMap()
 	} else {
-		if err := PrepareAndSendEventNotification(ctx, payload, celEnv.AsMap()); err != nil {
-			return fmt.Errorf("failed to send notification for event: %w", err)
-		}
+		if payload.PlaybookID != nil {
+			if err := triggerPlaybookRun(ctx, celEnv, *payload.PlaybookID); err != nil {
+				return err
+			}
 
-		ctx.log.Sent()
+			ctx.log.PendingPlaybookRun()
+		} else {
+			if err := PrepareAndSendEventNotification(ctx, payload, celEnv); err != nil {
+				return fmt.Errorf("failed to send notification for event: %w", err)
+			}
+
+			ctx.log.Sent()
+		}
 	}
 
 	return nil

@@ -29,6 +29,8 @@ const (
 	EventComponentWarning   = "component.warning"
 	EventComponentUnknown   = "component.unknown"
 
+	EventPlaybookRun = "playbook.run"
+
 	EventPlaybookSpecApprovalUpdated = "playbook.spec.approval.updated"
 
 	EventPlaybookApprovalInserted = "playbook.approval.inserted"

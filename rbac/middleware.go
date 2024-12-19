@@ -126,7 +126,7 @@ func HasPermission(ctx context.Context, subject string, objects map[string]any, 
 
 	allowed, err := enforcer.Enforce(subject, objects, action)
 	if err != nil {
-		ctx.Debugf("error checking abac for subject=%s action=%s", subject, action)
+		ctx.Errorf("error checking abac for subject=%s action=%s", subject, action)
 		return false
 	}
 
