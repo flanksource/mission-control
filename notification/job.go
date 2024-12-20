@@ -97,6 +97,7 @@ func SyncCRDStatus(ctx context.Context, ids ...string) error {
 			Sent:     s.Sent,
 			Pending:  s.Pending,
 			Failed:   s.Failed,
+			Error:    s.Error,
 			LastSent: metav1.Time{Time: s.UpdatedAt},
 		}
 		if err := patchCRDStatus(ctx, s.Name, s.Namespace, status); err != nil {

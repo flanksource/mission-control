@@ -127,7 +127,26 @@
       ]
     },
     "NotificationStatus": {
-      "properties": {},
+      "properties": {
+        "sent": {
+          "type": "integer"
+        },
+        "failed": {
+          "type": "integer"
+        },
+        "pending": {
+          "type": "integer"
+        },
+        "status": {
+          "type": "string"
+        },
+        "error": {
+          "type": "string"
+        },
+        "lastSent": {
+          "$ref": "#/$defs/Time"
+        }
+      },
       "additionalProperties": false,
       "type": "object"
     },
