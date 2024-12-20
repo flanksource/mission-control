@@ -5,16 +5,124 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/job"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/incident-commander/api"
+	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+	"gorm.io/hints"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+var CRDStatusUpdateQueue *collections.Queue[string]
+
+func InitCRDStatusUpdates(ctx context.Context) error {
+	var err error
+	CRDStatusUpdateQueue, err = collections.NewQueue(collections.QueueOpts[string]{
+		Dedupe:     true,
+		Equals:     func(a, b string) bool { return a == b },
+		Comparator: func(a, b string) int { return 0 },
+	})
+
+	if err != nil {
+		return err
+	}
+
+	go SyncCRDWatcher(ctx)
+	return nil
+}
+
+func SyncCRDWatcher(ctx context.Context) {
+	for {
+		id, stop := CRDStatusUpdateQueue.Dequeue()
+		if stop || id == "" {
+			time.Sleep(30 * time.Second)
+			continue
+		}
+
+		if err := SyncCRDStatus(ctx, id); err != nil {
+			ctx.Errorf("error updating notification crd status: %v", err)
+		}
+	}
+
+}
+
+func SyncCRDStatusJob(ctx context.Context) *job.Job {
+	return &job.Job{
+		Name:       "SyncNotificationCRDStatus",
+		Retention:  job.RetentionFailed,
+		JobHistory: true,
+		RunNow:     true,
+		Context:    ctx,
+		Singleton:  true,
+		Schedule:   "@every 10m",
+		Fn: func(ctx job.JobRuntime) error {
+			return SyncCRDStatus(ctx.Context)
+		},
+	}
+}
+
+func SyncCRDStatus(ctx context.Context, ids ...string) error {
+	var summary []struct {
+		Name      string
+		Namespace string
+		Sent      int
+		Failed    int
+		Pending   int
+		UpdatedAt time.Time
+		Error     string
+	}
+
+	q := ctx.DB().Clauses(hints.CommentBefore("select", "notification_crd_sync")).
+		Table("notifications_summary").
+		Where("name != '' AND namespace != '' AND source = ?", models.SourceCRD)
+
+	if len(ids) > 0 {
+		q = q.Where("id in ?", ids)
+	}
+	if err := q.Find(&summary).Error; err != nil {
+		return fmt.Errorf("error querying notifications_summary: %w", err)
+	}
+
+	for _, s := range summary {
+		status := v1.NotificationStatus{
+			Sent:     s.Sent,
+			Pending:  s.Pending,
+			Failed:   s.Failed,
+			LastSent: metav1.Time{Time: s.UpdatedAt},
+		}
+		if err := patchCRDStatus(ctx, s.Name, s.Namespace, status); err != nil {
+			return fmt.Errorf("error in patchCRDStatus: %w", err)
+		}
+	}
+	return nil
+}
+
+func patchCRDStatus(ctx context.Context, name, namespace string, status v1.NotificationStatus) error {
+	obj := &v1.Notification{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+	}
+	rawPatch, err := json.Marshal(v1.Notification{Status: status})
+	if err != nil {
+		return fmt.Errorf("error marshaling status update for crd: %w", err)
+	}
+	patch := client.RawPatch(types.MergePatchType, rawPatch)
+	if err := v1.NotificationReconciler.Status().Patch(ctx, obj, patch); err != nil {
+		return fmt.Errorf("error patching crd status: %w", err)
+	}
+	return nil
+}
 
 func ProcessPendingNotificationsJob(ctx context.Context) *job.Job {
 	return &job.Job{
