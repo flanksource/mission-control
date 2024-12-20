@@ -75,12 +75,21 @@ func launchKopper(ctx context.Context) {
 	}
 
 	if err = kopper.SetupReconciler(ctx, mgr,
+		db.PersistNotificationSilenceFromCRD,
+		db.DeleteNotificationSilence,
+		"notificationsilence.mission-control.flanksource.com",
+	); err != nil {
+		logger.Fatalf("Unable to create controller for Notification Silence: %v", err)
+	}
+
+	if err = kopper.SetupReconciler(ctx, mgr,
 		db.PersistNotificationFromCRD,
 		db.DeleteNotification,
 		"notification.mission-control.flanksource.com",
 	); err != nil {
 		logger.Fatalf("Unable to create controller for Notification: %v", err)
 	}
+
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		logger.Fatalf("error running manager: %v", err)
 	}
