@@ -173,7 +173,7 @@ func SendNotification(ctx *Context, connectionName, shoutrrrURL string, celEnv m
 	}
 
 	// Update CRD Status
-	if notification != nil && notification.Source == models.SourceCRD {
+	if CRDStatusUpdateQueue != nil && notification != nil && notification.Source == models.SourceCRD {
 		CRDStatusUpdateQueue.EnqueueWithDelay(notification.ID.String(), 30*time.Second)
 	}
 
