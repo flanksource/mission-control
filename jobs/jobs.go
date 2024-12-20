@@ -71,6 +71,14 @@ func Start(ctx context.Context) {
 		logger.Errorf("failed to schedule job: %v", err)
 	}
 
+	if err := notification.SyncCRDStatusJob(ctx).AddToScheduler(FuncScheduler); err != nil {
+		logger.Errorf("failed to schedule job: %v", err)
+	}
+
+	if err := notification.InitCRDStatusUpdates(ctx); err != nil {
+		logger.Errorf("failed to start notificatino status update queue: %v", err)
+	}
+
 	if err := job.NewJob(ctx, "Cleanup NotificationSend History", CleanupNotificationSendHistorySchedule, CleanupNotificationSendHistory).
 		AddToScheduler(FuncScheduler); err != nil {
 		logger.Errorf("Failed to schedule job for cleaning up notification send history table: %v", err)

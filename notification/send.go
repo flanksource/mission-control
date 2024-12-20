@@ -129,10 +129,10 @@ func sendEventNotification(ctx *Context, celEnv map[string]any, connectionName, 
 		Properties: customProperties,
 	}
 
-	return SendNotification(ctx, connectionName, shoutrrrURL, celEnv, data)
+	return SendNotification(ctx, connectionName, shoutrrrURL, celEnv, data, notification)
 }
 
-func SendNotification(ctx *Context, connectionName, shoutrrrURL string, celEnv map[string]any, data NotificationTemplate) (string, error) {
+func SendNotification(ctx *Context, connectionName, shoutrrrURL string, celEnv map[string]any, data NotificationTemplate, notification *NotificationWithSpec) (string, error) {
 	if celEnv == nil {
 		celEnv = make(map[string]any)
 	}
@@ -170,6 +170,11 @@ func SendNotification(ctx *Context, connectionName, shoutrrrURL string, celEnv m
 	service, err := shoutrrrSend(ctx, celEnv, shoutrrrURL, data)
 	if err != nil {
 		return "", fmt.Errorf("failed to send message with Shoutrrr: %w", err)
+	}
+
+	// Update CRD Status
+	if notification != nil && notification.Source == models.SourceCRD {
+		CRDStatusUpdateQueue.EnqueueWithDelay(notification.ID.String(), 30*time.Second)
 	}
 
 	return service, nil
