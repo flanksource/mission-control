@@ -79,6 +79,7 @@ type NotificationStatus struct {
 	Failed   int         `json:"failed,omitempty"`
 	Pending  int         `json:"pending,omitempty"`
 	Status   string      `json:"status,omitempty"`
+	Error    string      `json:"error,omitempty"`
 	LastSent metav1.Time `json:"lastSent,omitempty"`
 }
 
