@@ -14,8 +14,52 @@ import (
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/utils"
 	"github.com/google/uuid"
 )
+
+func PersistNotificationSilenceFromCRD(ctx context.Context, obj *v1.NotificationSilence) error {
+	uid, err := uuid.Parse(string(obj.GetUID()))
+	if err != nil {
+		return fmt.Errorf("invalid id: %w", err)
+	}
+
+	dbObj := models.NotificationSilence{
+		ID:          uid,
+		Name:        obj.ObjectMeta.Name,
+		Namespace:   obj.ObjectMeta.Namespace,
+		Description: obj.Spec.Description,
+		Source:      models.SourceCRD,
+		Filter:      obj.Spec.Filter,
+		Recursive:   obj.Spec.Recursive,
+	}
+
+	if v := utils.ParseTime(obj.Spec.From); v == nil {
+		return fmt.Errorf("failed to parse from (%s)", obj.Spec.From)
+	} else {
+		dbObj.From = *v
+	}
+
+	if v := utils.ParseTime(obj.Spec.Until); v == nil {
+		return fmt.Errorf("failed to parse until (%s)", obj.Spec.Until)
+	} else {
+		dbObj.Until = *v
+	}
+
+	if len(obj.Spec.Selectors) > 0 {
+		if b, err := json.Marshal(obj.Spec.Selectors); err != nil {
+			return fmt.Errorf("failed to parse selectors: %w", err)
+		} else {
+			dbObj.Selectors = b
+		}
+	}
+
+	return ctx.DB().Save(&dbObj).Error
+}
+
+func DeleteNotificationSilence(ctx context.Context, id string) error {
+	return ctx.DB().Delete(&models.NotificationSilence{}, "id = ?", id).Error
+}
 
 func PersistNotificationFromCRD(ctx context.Context, obj *v1.Notification) error {
 	uid, err := uuid.Parse(string(obj.GetUID()))
@@ -142,7 +186,7 @@ func GetMatchingNotificationSilences(ctx context.Context, resources models.Notif
 
 	query := ctx.DB().Model(&models.NotificationSilence{})
 
-	orClauses := ctx.DB().Where("filter != ''")
+	orClauses := ctx.DB().Where("filter != '' OR selectors IS NOT NULL")
 
 	if resources.ConfigID != nil {
 		orClauses = orClauses.Or("config_id = ?", *resources.ConfigID)
