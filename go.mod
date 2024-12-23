@@ -13,7 +13,7 @@ require (
 	github.com/casbin/gorm-adapter/v3 v3.26.0
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.25.0 // indirect
-	github.com/flanksource/commons v1.31.2
+	github.com/flanksource/commons v1.35.2
 	github.com/flanksource/duty v1.0.777
 	github.com/flanksource/gomplate/v3 v3.24.39
 	github.com/flanksource/kopper v1.0.11
@@ -125,6 +125,7 @@ require (
 	github.com/eko/gocache/store/go_cache/v4 v4.2.2 // indirect
 	github.com/emicklei/go-restful/v3 v3.11.1 // indirect
 	github.com/emirpasic/gods v1.18.1 // indirect
+	github.com/emirpasic/gods/v2 v2.0.0-alpha // indirect
 	github.com/evanphx/json-patch v5.7.0+incompatible // indirect
 	github.com/evanphx/json-patch/v5 v5.7.0 // indirect
 	github.com/exaring/otelpgx v0.6.2 // indirect
