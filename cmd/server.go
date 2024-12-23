@@ -50,7 +50,7 @@ func launchKopper(ctx context.Context) {
 		logger.Fatalf("error creating manager: %v", err)
 	}
 
-	if err = kopper.SetupReconciler(ctx, mgr,
+	if _, err = kopper.SetupReconciler(ctx, mgr,
 		db.PersistConnectionFromCRD,
 		db.DeleteConnection,
 		"connection.mission-control.flanksource.com",
@@ -58,7 +58,7 @@ func launchKopper(ctx context.Context) {
 		logger.Fatalf("Unable to create controller for Connection: %v", err)
 	}
 
-	if err = kopper.SetupReconciler(ctx, mgr,
+	if _, err = kopper.SetupReconciler(ctx, mgr,
 		db.PersistIncidentRuleFromCRD,
 		db.DeleteIncidentRule,
 		"incidentrule.mission-control.flanksource.com",
@@ -66,7 +66,7 @@ func launchKopper(ctx context.Context) {
 		logger.Fatalf("Unable to create controller for IncidentRule: %v", err)
 	}
 
-	if err = kopper.SetupReconciler(ctx, mgr,
+	if _, err = kopper.SetupReconciler(ctx, mgr,
 		db.PersistPlaybookFromCRD,
 		db.DeletePlaybook,
 		"playbook.mission-control.flanksource.com",
@@ -74,7 +74,7 @@ func launchKopper(ctx context.Context) {
 		logger.Fatalf("Unable to create controller for Playbook: %v", err)
 	}
 
-	if err = kopper.SetupReconciler(ctx, mgr,
+	if v1.NotificationReconciler, err = kopper.SetupReconciler(ctx, mgr,
 		db.PersistNotificationFromCRD,
 		db.DeleteNotification,
 		"notification.mission-control.flanksource.com",

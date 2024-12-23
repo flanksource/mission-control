@@ -115,6 +115,20 @@ spec:
             type: object
           status:
             description: NotificationStatus defines the observed state of Notification
+            properties:
+              error:
+                type: string
+              failed:
+                type: integer
+              lastSent:
+                format: date-time
+                type: string
+              pending:
+                type: integer
+              sent:
+                type: integer
+              status:
+                type: string
             type: object
         type: object
     served: true
