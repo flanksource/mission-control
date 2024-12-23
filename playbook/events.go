@@ -270,11 +270,19 @@ outer:
 
 func onNewRun(ctx context.Context, event models.Event) error {
 	var (
-		playbookID     = event.Properties["id"]
-		notificationID = event.Properties["notification_id"]
+		playbookID              = event.Properties["id"]
+		notificationID          = event.Properties["notification_id"]
+		_notificationDispatchID = event.Properties["notification_dispatch_id"]
 	)
 
-	var runParam RunParams
+	notificationDispatchID, err := uuid.Parse(_notificationDispatchID)
+	if err != nil {
+		return fmt.Errorf("invalid notification dispatch id: %s", _notificationDispatchID)
+	}
+
+	runParam := RunParams{
+		NotificationSendID: &notificationDispatchID,
+	}
 	if v, ok := event.Properties["config_id"]; ok {
 		runParam.ConfigID = lo.ToPtr(uuid.MustParse(v))
 	}
@@ -292,8 +300,20 @@ func onNewRun(ctx context.Context, event models.Event) error {
 		return err
 	}
 
-	_, err := Run(ctx, &playbook, runParam)
-	return err
+	newRun, err := Run(ctx, &playbook, runParam)
+	if err != nil {
+		return err
+	}
+
+	columnUpdates := map[string]any{
+		"status":          models.NotificationStatusPendingPlaybookCompletion,
+		"playbook_run_id": newRun.ID.String(),
+	}
+	if err := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", notificationDispatchID).UpdateColumns(columnUpdates).Error; err != nil {
+		ctx.Errorf("playbook run initiated but failed to update the notification status (%s): %v", notificationDispatchID, err)
+	}
+
+	return nil
 }
 
 func onApprovalUpdated(ctx context.Context, event models.Event) error {

@@ -39,7 +39,7 @@ type NotificationTemplate struct {
 type NotificationEventPayload struct {
 	ID               uuid.UUID  `json:"id"`                          // Resource id. depends what it is based on the original event.
 	EventName        string     `json:"event_name"`                  // The name of the original event this notification is for.
-	PlaybookID       *uuid.UUID `json:"playbook_id"`                 // The playbook to trigger
+	PlaybookID       *uuid.UUID `json:"playbook_id,omitempty"`       // The playbook to trigger
 	PersonID         *uuid.UUID `json:"person_id,omitempty"`         // The person recipient.
 	TeamID           string     `json:"team_id,omitempty"`           // The team recipient.
 	NotificationName string     `json:"notification_name,omitempty"` // Name of the notification of a team
@@ -65,10 +65,6 @@ func PrepareAndSendEventNotification(ctx *Context, payload NotificationEventPayl
 	notification, err := GetNotification(ctx.Context, payload.NotificationID.String())
 	if err != nil {
 		return err
-	}
-
-	if payload.PlaybookID != nil {
-		return triggerPlaybookRun(ctx, celEnv, *payload.PlaybookID)
 	}
 
 	if payload.PersonID != nil {
@@ -111,30 +107,16 @@ func PrepareAndSendEventNotification(ctx *Context, payload NotificationEventPayl
 	return nil
 }
 
+// triggerPlaybookRun creates an event to trigger a playbook run.
+// The notification of the status is then handled entirely by playbook.
 func triggerPlaybookRun(ctx *Context, celEnv *celVariables, playbookID uuid.UUID) error {
-	start := time.Now()
-
 	ctx.WithPlaybookRun(nil).WithRecipientType(RecipientTypePlaybook)
 	err := ctx.Transaction(func(txCtx context.Context, _ trace.Span) error {
-		// Get the playbook and ensure it's not deleted
-		var playbook models.Playbook
-		if err := txCtx.DB().Where("id = ?", playbookID).Find(&playbook).Error; err != nil {
-			return err
-		} else if playbook.ID == uuid.Nil {
-			return fmt.Errorf("playbook (%s) not found", playbookID)
-		} else if playbook.DeletedAt != nil {
-			return fmt.Errorf("playbook (%s) has been deleted", playbook.NamespacedName())
-		}
-
 		eventProp := types.JSONStringMap{
-			"id":              playbook.ID.String(),
-			"notification_id": ctx.notificationID.String(),
+			"id":                       playbookID.String(),
+			"notification_id":          ctx.notificationID.String(),
+			"notification_dispatch_id": ctx.log.ID.String(),
 		}
-
-		// the ony reason we add the dispatch (send history id), is to avoid duplicate event unique constraint error.
-		// i.e. the same notification could be triggering the same playbook multiple times.
-		// we want one run per dispatch.
-		eventProp["notification_dispatch_id"] = ctx.log.ID.String()
 
 		switch {
 		case celEnv.ConfigItem != nil:
@@ -153,25 +135,6 @@ func triggerPlaybookRun(ctx *Context, celEnv *celVariables, playbookID uuid.UUID
 			return fmt.Errorf("failed to create run: %w", err)
 		}
 
-		// level 1
-		// if event insert to the the event queue -> sent
-
-		// level 2
-		// a run was created -> sent
-
-		// level 3
-		// live sync with the playbook
-		// if playbook succeeds -> notification succeeds
-
-		// for {
-		// check if the event is deleted
-		// }
-
-		// find the playbook ru nfor this notification send
-
-		// TODO: wait for the event to be processed it to get the run id
-		// ctx.WithPlaybookRun(&run.ID)
-
 		return nil
 	})
 	if err != nil {
@@ -179,8 +142,8 @@ func triggerPlaybookRun(ctx *Context, celEnv *celVariables, playbookID uuid.UUID
 		return err
 	}
 
-	notificationSentCounter.WithLabelValues("playbook", string(RecipientTypePlaybook), ctx.notificationID.String()).Inc()
-	notificationSendDuration.WithLabelValues("playbook", string(RecipientTypePlaybook), ctx.notificationID.String()).Observe(time.Since(start).Seconds())
+	// notificationSentCounter.WithLabelValues("playbook", string(RecipientTypePlaybook), ctx.notificationID.String()).Inc()
+	// notificationSendDuration.WithLabelValues("playbook", string(RecipientTypePlaybook), ctx.notificationID.String()).Observe(time.Since(start).Seconds())
 
 	return nil
 }

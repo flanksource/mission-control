@@ -1,18 +1,18 @@
-# apiVersion: mission-control.flanksource.com/v1
-# kind: Playbook
-# metadata:
-#   name: notify-file-creation
-# spec:
-#   description: Sends Telegram notification when a file is created
-#   parameters:
-#     - name: path
-#       label: path of the file
-#   actions:
-#     - name: 'Create the file'
-#       exec:
-#         script: touch {{.params.path}}
-#     - name: 'Send notification'
-#       notification:
-#         connection: connection://telegram/aditya
-#         title: 'File {{.params.path}} created successfully'
-#         message: 'File "{{.params.path}}" created successfully'
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: notify-file-creation
+spec:
+  description: Sends Telegram notification when a file is created
+  parameters:
+    - name: path
+      label: path of the file
+  actions:
+    - name: 'Create the file'
+      exec:
+        script: touch {{.params.path}}
+    - name: 'Send notification'
+      notification:
+        connection: connection://telegram/aditya
+        title: 'File {{.params.path}} created successfully'
+        message: 'File "{{.params.path}}" created successfully'

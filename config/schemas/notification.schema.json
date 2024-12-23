@@ -84,10 +84,7 @@
         }
       },
       "additionalProperties": false,
-      "type": "object",
-      "required": [
-        "playbook"
-      ]
+      "type": "object"
     },
     "NotificationSpec": {
       "properties": {
