@@ -1,4 +1,5 @@
 ---
+# yaml-language-server: $schema=../../config/schemas/playbook.schema.json
 apiVersion: mission-control.flanksource.com/v1
 kind: Playbook
 metadata:
@@ -23,16 +24,11 @@ spec:
             secretKeyRef:
               name: openai
               key: API_KEY
-        prompt: "{{.params.prompt}}"
-        config: "{{.config.id}}"
+        prompt: '{{.params.prompt}}'
+        config: '{{.config.id}}'
         changes:
           since: 2h
         analysis:
           since: 2h
         relationships:
-          depth: 3
-          changes:
-            since: 2h
-          analysis:
-            since: 2h
-
+          - depth: 3

@@ -1,4 +1,5 @@
 ---
+# yaml-language-server: $schema=../../config/schemas/playbook.schema.json
 apiVersion: mission-control.flanksource.com/v1
 kind: Playbook
 metadata:
@@ -28,8 +29,8 @@ spec:
         analysis:
           since: 2h
         relationships:
-          depth: 3
-          changes:
-            since: 2h
-          analysis:
-            since: 2h
+          - depth: 3
+            direction: outgoing
+          - depth: 5
+            direction: incoming
+            

@@ -27,7 +27,10 @@
           "$ref": "#/$defs/TimeMetadata"
         },
         "relationships": {
-          "$ref": "#/$defs/AIActionRelationship"
+          "items": {
+            "$ref": "#/$defs/AIActionRelationship"
+          },
+          "type": "array"
         },
         "prompt": {
           "type": "string"
@@ -45,6 +48,9 @@
         "depth": {
           "type": "integer"
         },
+        "direction": {
+          "type": "string"
+        },
         "changes": {
           "$ref": "#/$defs/TimeMetadata"
         },
@@ -53,12 +59,7 @@
         }
       },
       "additionalProperties": false,
-      "type": "object",
-      "required": [
-        "depth",
-        "changes",
-        "analysis"
-      ]
+      "type": "object"
     },
     "AWSConnection": {
       "properties": {
