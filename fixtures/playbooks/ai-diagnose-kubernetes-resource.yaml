@@ -9,6 +9,8 @@ spec:
     - types:
         - Kubernetes::Pod
         - Kubernetes::Deployment
+        - Kubernetes::HelmRelease
+        - AWS::CloudFormation::Stack
         - Kubernetes::ContainerCluster
   parameters:
     - name: prompt
