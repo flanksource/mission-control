@@ -79,6 +79,11 @@ spec:
                   person:
                     description: ID or email of the person
                     type: string
+                  playbook:
+                    description: |-
+                      Name or <namespace>/<name> of the playbook to run.
+                      When a playbook is set as the recipient, a run is triggered.
+                    type: string
                   properties:
                     additionalProperties:
                       type: string

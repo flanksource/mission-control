@@ -12,8 +12,10 @@ import (
 	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/types"
 	"github.com/flanksource/gomplate/v3"
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/trace"
 
 	"github.com/flanksource/incident-commander/api"
 
@@ -37,6 +39,7 @@ type NotificationTemplate struct {
 type NotificationEventPayload struct {
 	ID               uuid.UUID  `json:"id"`                          // Resource id. depends what it is based on the original event.
 	EventName        string     `json:"event_name"`                  // The name of the original event this notification is for.
+	PlaybookID       *uuid.UUID `json:"playbook_id,omitempty"`       // The playbook to trigger
 	PersonID         *uuid.UUID `json:"person_id,omitempty"`         // The person recipient.
 	TeamID           string     `json:"team_id,omitempty"`           // The team recipient.
 	NotificationName string     `json:"notification_name,omitempty"` // Name of the notification of a team
@@ -58,7 +61,7 @@ func (t *NotificationEventPayload) FromMap(m map[string]string) {
 }
 
 // PrepareAndSendEventNotification generates the notification from the given event and sends it.
-func PrepareAndSendEventNotification(ctx *Context, payload NotificationEventPayload, celEnv map[string]any) error {
+func PrepareAndSendEventNotification(ctx *Context, payload NotificationEventPayload, celEnv *celVariables) error {
 	notification, err := GetNotification(ctx.Context, payload.NotificationID.String())
 	if err != nil {
 		return err
@@ -72,7 +75,7 @@ func PrepareAndSendEventNotification(ctx *Context, payload NotificationEventPayl
 		}
 
 		smtpURL := fmt.Sprintf("%s?ToAddresses=%s", api.SystemSMTP, url.QueryEscape(emailAddress))
-		return sendEventNotificationWithMetrics(ctx, celEnv, "", smtpURL, payload.EventName, notification, nil)
+		return sendEventNotificationWithMetrics(ctx, celEnv.AsMap(), "", smtpURL, payload.EventName, notification, nil)
 	}
 
 	if payload.TeamID != "" {
@@ -87,7 +90,7 @@ func PrepareAndSendEventNotification(ctx *Context, payload NotificationEventPayl
 				continue
 			}
 
-			return sendEventNotificationWithMetrics(ctx, celEnv, cn.Connection, cn.URL, payload.EventName, notification, cn.Properties)
+			return sendEventNotificationWithMetrics(ctx, celEnv.AsMap(), cn.Connection, cn.URL, payload.EventName, notification, cn.Properties)
 		}
 	}
 
@@ -98,8 +101,49 @@ func PrepareAndSendEventNotification(ctx *Context, payload NotificationEventPayl
 	// (SA4004: the surrounding loop is unconditionally terminated)
 	for _, cn := range notification.CustomNotifications {
 		ctx.WithRecipientType(RecipientTypeCustom)
-		return sendEventNotificationWithMetrics(ctx, celEnv, cn.Connection, cn.URL, payload.EventName, notification, cn.Properties)
+		return sendEventNotificationWithMetrics(ctx, celEnv.AsMap(), cn.Connection, cn.URL, payload.EventName, notification, cn.Properties)
 	}
+
+	return nil
+}
+
+// triggerPlaybookRun creates an event to trigger a playbook run.
+// The notification of the status is then handled entirely by playbook.
+func triggerPlaybookRun(ctx *Context, celEnv *celVariables, playbookID uuid.UUID) error {
+	ctx.WithPlaybookRun(nil).WithRecipientType(RecipientTypePlaybook)
+	err := ctx.Transaction(func(txCtx context.Context, _ trace.Span) error {
+		eventProp := types.JSONStringMap{
+			"id":                       playbookID.String(),
+			"notification_id":          ctx.notificationID.String(),
+			"notification_dispatch_id": ctx.log.ID.String(),
+		}
+
+		switch {
+		case celEnv.ConfigItem != nil:
+			eventProp["config_id"] = celEnv.ConfigItem.ID.String()
+		case celEnv.Component != nil:
+			eventProp["component_id"] = celEnv.Component.ID.String()
+		case celEnv.Check != nil:
+			eventProp["check_id"] = celEnv.Check.ID.String()
+		}
+
+		event := models.Event{
+			Name:       api.EventPlaybookRun,
+			Properties: eventProp,
+		}
+		if err := txCtx.DB().Create(&event).Error; err != nil {
+			return fmt.Errorf("failed to create run: %w", err)
+		}
+
+		return nil
+	})
+	if err != nil {
+		notificationSendFailureCounter.WithLabelValues("playbook", string(RecipientTypePlaybook), ctx.notificationID.String()).Inc()
+		return err
+	}
+
+	// notificationSentCounter.WithLabelValues("playbook", string(RecipientTypePlaybook), ctx.notificationID.String()).Inc()
+	// notificationSendDuration.WithLabelValues("playbook", string(RecipientTypePlaybook), ctx.notificationID.String()).Observe(time.Since(start).Seconds())
 
 	return nil
 }
@@ -258,6 +302,19 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal event properties: %v", err)
 		}
+	}
+
+	if n.PlaybookID != nil {
+		payload := NotificationEventPayload{
+			EventName:      event.Name,
+			NotificationID: n.ID,
+			ID:             resourceID,
+			PlaybookID:     n.PlaybookID,
+			EventCreatedAt: event.CreatedAt,
+			Properties:     eventProperties,
+		}
+
+		payloads = append(payloads, payload)
 	}
 
 	if n.PersonID != nil {

@@ -25,11 +25,15 @@ type NotificationRecipientSpec struct {
 
 	// Properties for Shoutrrr
 	Properties map[string]string `json:"properties,omitempty" yaml:"properties,omitempty"`
+
+	// Name or <namespace>/<name> of the playbook to run.
+	// When a playbook is set as the recipient, a run is triggered.
+	Playbook *string `json:"playbook,omitempty" yaml:"playbook,omitempty"`
 }
 
 // Empty returns true if none of the receivers are set
 func (t *NotificationRecipientSpec) Empty() bool {
-	return t.Person == "" && t.Team == "" && t.Email == "" && t.Connection == "" && t.URL == ""
+	return t.Person == "" && t.Team == "" && t.Email == "" && t.Connection == "" && t.URL == "" && t.Playbook == nil
 }
 
 // +kubebuilder:object:generate=true

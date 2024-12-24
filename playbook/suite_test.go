@@ -23,7 +23,6 @@ import (
 	"github.com/samber/oops"
 
 	// register event handlers
-	_ "github.com/flanksource/incident-commander/auth"
 	_ "github.com/flanksource/incident-commander/incidents/responder"
 	_ "github.com/flanksource/incident-commander/notification"
 	_ "github.com/flanksource/incident-commander/rbac"
@@ -57,7 +56,7 @@ var _ = ginkgo.BeforeSuite(func() {
 	})
 	DefaultContext = setup.BeforeSuiteFn()
 	DefaultContext.Logger.SetLogLevel(DefaultContext.Properties().String("log.level", "info"))
-	DefaultContext.Infof(DefaultContext.String())
+	DefaultContext.Infof("%s", DefaultContext.String())
 
 	format.RegisterCustomFormatter(func(value interface{}) (string, bool) {
 		switch value.(type) {

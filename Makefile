@@ -86,7 +86,6 @@ release: binaries
 lint:
 	golangci-lint run
 
-
 # Generate OpenAPI schema
 .PHONY: gen-schemas
 gen-schemas:
@@ -97,6 +96,9 @@ gen-schemas:
  	go mod edit -replace=github.com/flanksource/incident-commander=../../ && \
 	go mod tidy && \
 	go run ./main.go
+
+	# TODO: Do this if mission-control uses local duty
+	# go mod edit -replace=github.com/flanksource/duty=../../../duty
 
 .PHONY: manifests
 manifests: controller-gen generate gen-schemas ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.

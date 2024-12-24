@@ -11,6 +11,7 @@ import (
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/api"
+	v1 "github.com/flanksource/incident-commander/api/v1"
 	dbModels "github.com/flanksource/incident-commander/db/models"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/notification"
@@ -151,6 +152,128 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 			Expect(webhookPostdata).To(Not(BeNil()))
 			Expect(webhookPostdata["message"]).To(Equal(fmt.Sprintf("Severity: %s", incident.Severity)))
 			Expect(webhookPostdata["title"]).To(Equal(fmt.Sprintf("New incident: %s", incident.Title)))
+		})
+	})
+
+	var _ = ginkgo.Describe("playbook recipient", ginkgo.Ordered, func() {
+		var myNotification models.Notification
+		var playbook models.Playbook
+		var config models.ConfigItem
+		var sendHistory models.NotificationSendHistory
+
+		ginkgo.BeforeAll(func() {
+			playbookSpec := v1.PlaybookSpec{
+				Actions: []v1.PlaybookAction{
+					{
+						Name: "just echo",
+						Exec: &v1.ExecAction{
+							Script: `echo "{{.config.name}} {{.config.id}}"`,
+						},
+					},
+				},
+			}
+			specRaw, err := json.Marshal(playbookSpec)
+			Expect(err).To(BeNil())
+
+			playbook = models.Playbook{
+				Source: models.SourceCRD,
+				Spec:   specRaw,
+			}
+
+			err = DefaultContext.DB().Create(&playbook).Error
+			Expect(err).To(BeNil())
+
+			myNotification = models.Notification{
+				ID:             uuid.New(),
+				Name:           "playbook",
+				Events:         pq.StringArray([]string{"config.updated"}),
+				Source:         models.SourceCRD,
+				Title:          "Dummy",
+				Template:       "dummy",
+				PlaybookID:     &playbook.ID,
+				RepeatInterval: "4h",
+			}
+
+			err = DefaultContext.DB().Create(&myNotification).Error
+			Expect(err).To(BeNil())
+
+			config = models.ConfigItem{
+				ID:          uuid.New(),
+				Name:        lo.ToPtr("Deployment2"),
+				ConfigClass: models.ConfigClassDeployment,
+				Config:      lo.ToPtr(`{"color": "red"}`),
+				Type:        lo.ToPtr("Kubernetes::Deployment"),
+			}
+
+			err = DefaultContext.DB().Create(&config).Error
+			Expect(err).To(BeNil())
+		})
+
+		ginkgo.AfterAll(func() {
+			if sendHistory.PlaybookRunID != nil {
+				err := DefaultContext.DB().Exec("DELETE FROM playbook_run_actions WHERE playbook_run_id = ?", *sendHistory.PlaybookRunID).Error
+				Expect(err).To(BeNil())
+			}
+
+			err := DefaultContext.DB().Delete(&playbook).Error
+			Expect(err).To(BeNil())
+
+			err = DefaultContext.DB().Delete(&myNotification).Error
+			Expect(err).To(BeNil())
+
+			err = DefaultContext.DB().Delete(&config).Error
+			Expect(err).To(BeNil())
+
+			notification.PurgeCache(myNotification.ID.String())
+		})
+
+		ginkgo.It("should have created a notification with a pending playbook run status for a config update", func() {
+			event := models.Event{
+				Name:       "config.updated",
+				Properties: types.JSONStringMap{"id": config.ID.String()},
+			}
+			err := DefaultContext.DB().Create(&event).Error
+			Expect(err).To(BeNil())
+
+			events.ConsumeAll(DefaultContext)
+			Eventually(func() int64 {
+				var c int64
+				DefaultContext.DB().Model(&models.Event{}).Where("name = 'config.updated'").Count(&c)
+				return c
+			}, "10s", "200ms").Should(Equal(int64(0)), "must have consumed the config.updated event")
+
+			Eventually(func() bool {
+				DefaultContext.DB().Where("source_event = ?", api.EventConfigUpdated).
+					Where("resource_id = ?", config.ID.String()).
+					Where("notification_id = ?", myNotification.ID.String()).
+					Where("playbook_run_id IS NOT NULL").
+					Where("status IN ?", []string{
+						models.NotificationStatusPendingPlaybookRun,
+						models.NotificationStatusPendingPlaybookCompletion,
+						models.NotificationStatusSent,
+						models.NotificationStatusError,
+					}).Find(&sendHistory)
+				return sendHistory.ID != uuid.Nil
+			}, "10s", "200ms").Should(BeTrue(), "must have created a notification with playbook run attached")
+		})
+
+		ginkgo.It("should have created a playbook run", func() {
+			Eventually(func() models.PlaybookRunStatus {
+				var playbookRun models.PlaybookRun
+				Expect(DefaultContext.DB().Where("id = ?", *sendHistory.PlaybookRunID).First(&playbookRun).Error).To(BeNil())
+
+				return playbookRun.Status
+			}, "10s", "200ms").Should(Equal(models.PlaybookRunStatusCompleted), "the recipient playbook must have completed successfully")
+		})
+
+		ginkgo.It("the playbook should have correct data", func() {
+			var playbookRunActions []models.PlaybookRunAction
+			Expect(DefaultContext.DB().Where("playbook_run_id = ?", *sendHistory.PlaybookRunID).Find(&playbookRunActions).Error).To(BeNil())
+
+			Expect(len(playbookRunActions)).To(Equal(1))
+
+			stdout := playbookRunActions[0].Result["stdout"]
+			Expect(stdout).To(Equal(fmt.Sprintf("%s %s", *config.Name, config.ID.String())))
 		})
 	})
 

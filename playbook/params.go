@@ -21,6 +21,8 @@ type RunParams struct {
 	ComponentID *uuid.UUID              `yaml:"component_id,omitempty" json:"component_id,omitempty"`
 	Params      map[string]string       `yaml:"params,omitempty" json:"params,omitempty"`
 	Request     *actions.WebhookRequest `yaml:"request,omitempty" json:"request,omitempty"`
+
+	NotificationSendID *uuid.UUID `yaml:"notification_send_id,omitempty" json:"notification_send_id,omitempty"`
 }
 
 func (p *RunParams) String() string {
