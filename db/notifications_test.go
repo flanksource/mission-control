@@ -17,8 +17,8 @@ var _ = ginkgo.Describe("Notification Silence", ginkgo.Ordered, func() {
 		silences = []models.NotificationSilence{
 			{
 				ID:     uuid.New(),
-				From:   time.Now().Add(-time.Hour),
-				Until:  time.Now().Add(time.Hour),
+				From:   lo.ToPtr(time.Now().Add(-time.Hour)),
+				Until:  lo.ToPtr(time.Now().Add(time.Hour)),
 				Source: models.SourceCRD,
 				NotificationSilenceResource: models.NotificationSilenceResource{
 					ConfigID: lo.ToPtr(dummy.EKSCluster.ID.String()),
@@ -26,8 +26,8 @@ var _ = ginkgo.Describe("Notification Silence", ginkgo.Ordered, func() {
 			},
 			{
 				ID:        uuid.New(),
-				From:      time.Now().Add(-time.Hour),
-				Until:     time.Now().Add(time.Hour),
+				From:      lo.ToPtr(time.Now().Add(-time.Hour)),
+				Until:     lo.ToPtr(time.Now().Add(time.Hour)),
 				Source:    models.SourceCRD,
 				Recursive: true,
 				NotificationSilenceResource: models.NotificationSilenceResource{
@@ -36,8 +36,8 @@ var _ = ginkgo.Describe("Notification Silence", ginkgo.Ordered, func() {
 			},
 			{
 				ID:        uuid.New(),
-				From:      time.Now().Add(-time.Hour),
-				Until:     time.Now().Add(time.Hour),
+				From:      lo.ToPtr(time.Now().Add(-time.Hour)),
+				Until:     lo.ToPtr(time.Now().Add(time.Hour)),
 				Source:    models.SourceCRD,
 				Recursive: true,
 				NotificationSilenceResource: models.NotificationSilenceResource{
