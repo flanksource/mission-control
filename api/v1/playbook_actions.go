@@ -279,19 +279,45 @@ type AIActionClient struct {
 	// Supported: anthropic (default), ollama, openai.
 	Backend api.LLMBackend `json:"backend,omitempty"`
 
-	// Example: gpt-4o for openai, claude-3-haiku-20240307 for Anthropic, llama3.1:8b for Ollama ...
+	// Model name based on the backend chosen.
+	// Example: gpt-4o for openai, claude-3-5-sonnet-latest for Anthropic, llama3.1:8b for Ollama
 	Model string `json:"model,omitempty"`
 
 	// BaseURL or API url.
-	// Example: server URL for ollama or custom url for Anthropic if using a proxy, ...
+	// Example: server URL for ollama or custom url for Anthropic if using a proxy
 	APIURL string `json:"apiURL,omitempty"`
 }
 
 type AIActionContext struct {
-	Config        string                 `json:"config" yaml:"config" template:"true"`
-	Changes       TimeMetadata           `json:"changes,omitempty" yaml:"changes,omitempty"`
-	Analysis      TimeMetadata           `json:"analysis,omitempty" yaml:"analysis,omitempty"`
+	// The config id to operate on.
+	// If not provided, the playbook's config is used.
+	Config string `json:"config,omitempty" yaml:"config,omitempty" template:"true"`
+
+	// Select changes for the config to provide as an additional context to the AI model.
+	Changes TimeMetadata `json:"changes,omitempty" yaml:"changes,omitempty"`
+
+	// Select analysis for the config to provide as an additional context to the AI model.
+	Analysis TimeMetadata `json:"analysis,omitempty" yaml:"analysis,omitempty"`
+
+	// Select related configs to provide as an additional context to the AI model.
 	Relationships []AIActionRelationship `json:"relationships,omitempty" yaml:"relationships,omitempty"`
+}
+
+func (t AIActionContext) ShouldFetchConfigChanges() bool {
+	// if changes are being fetched from relationships, we don't have to query
+	// the changes for just the config alone.
+
+	if t.Changes.Since == "" {
+		return false
+	}
+
+	for _, r := range t.Relationships {
+		if r.Changes.Since != "" {
+			return false
+		}
+	}
+
+	return true
 }
 
 type AIAction struct {

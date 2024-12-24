@@ -17,13 +17,9 @@ spec:
   actions:
     - name: query
       ai:
-        backend: openai
-        model: gpt-4o
-        apiKey:
-          valueFrom:
-            secretKeyRef:
-              name: openai
-              key: API_KEY
+        backend: ollama
+        model: llama3.1:8b
+        apiURL: http://localhost:11434
         prompt: '{{.params.prompt}}'
         changes:
           since: 2h
