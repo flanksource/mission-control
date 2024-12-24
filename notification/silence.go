@@ -64,13 +64,16 @@ func SaveNotificationSilence(ctx context.Context, req SilenceSaveRequest) error 
 
 	silence := models.NotificationSilence{
 		NotificationSilenceResource: req.NotificationSilenceResource,
-		From:                        req.from,
+		From:                        &req.from,
 		Filter:                      req.Filter,
-		Until:                       req.until,
-		Description:                 req.Description,
+		Until:                       &req.until,
 		Recursive:                   req.Recursive,
 		Source:                      models.SourceUI,
 		CreatedBy:                   lo.ToPtr(ctx.User().ID),
+	}
+
+	if req.Description != "" {
+		silence.Description = &req.Description
 	}
 
 	return db.ErrorDetails(ctx.DB().Create(&silence).Error)
