@@ -10,8 +10,11 @@ import (
 	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/google/uuid"
+	"github.com/samber/lo"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -241,9 +244,32 @@ type TimeMetadata struct {
 }
 
 type AIActionRelationship struct {
-	Depth    int          `json:"depth" yaml:"depth"`
-	Changes  TimeMetadata `json:"changes" yaml:"changes"`
-	Analysis TimeMetadata `json:"analysis" yaml:"analysis"`
+	// max depth to traverse the relationship. Defaults to 3
+	Depth *int `json:"depth,omitempty"`
+
+	// use incoming/outgoing/all relationships.
+	Direction query.RelationDirection `json:"direction,omitempty"`
+
+	Changes  TimeMetadata `json:"changes,omitempty"`
+	Analysis TimeMetadata `json:"analysis,omitempty"`
+}
+
+func (t AIActionRelationship) ToRelationshipQuery(configID uuid.UUID) query.RelationQuery {
+	q := query.RelationQuery{
+		ID:       configID,
+		MaxDepth: t.Depth,
+		Relation: t.Direction,
+	}
+
+	if q.MaxDepth == nil {
+		q.MaxDepth = lo.ToPtr(3)
+	}
+
+	if q.Relation == "" {
+		q.Relation = query.All
+	}
+
+	return q
 }
 
 type AIActionClient struct {
@@ -262,10 +288,10 @@ type AIActionClient struct {
 }
 
 type AIActionContext struct {
-	Config        string                `json:"config" yaml:"config" template:"true"`
-	Changes       TimeMetadata          `json:"changes,omitempty" yaml:"changes,omitempty"`
-	Analysis      TimeMetadata          `json:"analysis,omitempty" yaml:"analysis,omitempty"`
-	Relationships *AIActionRelationship `json:"relationships,omitempty" yaml:"relationships,omitempty"`
+	Config        string                 `json:"config" yaml:"config" template:"true"`
+	Changes       TimeMetadata           `json:"changes,omitempty" yaml:"changes,omitempty"`
+	Analysis      TimeMetadata           `json:"analysis,omitempty" yaml:"analysis,omitempty"`
+	Relationships []AIActionRelationship `json:"relationships,omitempty" yaml:"relationships,omitempty"`
 }
 
 type AIAction struct {

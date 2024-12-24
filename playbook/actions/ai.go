@@ -9,12 +9,8 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/llm"
-	"github.com/google/uuid"
 	"github.com/samber/lo"
-	"github.com/tmc/langchaingo/prompts"
 )
-
-const systemPrompt = "You are a kubernetes expert. Please be concise."
 
 type AIAction struct{}
 
@@ -55,52 +51,32 @@ func buildPrompt(ctx context.Context, prompt string, spec v1.AIActionContext) (s
 		return "", fmt.Errorf("config doesn't exist  (%s): %w", spec.Config, err)
 	}
 
-	humanPrompt := fmt.Sprintf("Config: %s\n", codeblock(string(lo.FromPtr(config.Config))))
+	output := fmt.Sprintf("Config: %s\n", codeblock(string(lo.FromPtr(config.Config))))
 
-	if spec.Relationships != nil {
-		relatedConfigs, err := query.GetRelatedConfigs(ctx, query.RelationQuery{MaxDepth: &spec.Relationships.Depth, ID: config.ID})
+	for _, relationship := range spec.Relationships {
+		relatedConfigs, err := query.GetRelatedConfigs(ctx, relationship.ToRelationshipQuery(config.ID))
 		if err != nil {
 			return "", fmt.Errorf("failed to get related config (%s): %w", config.ID, err)
 		}
 
-		if len(relatedConfigs) > 0 {
-			relatedConfigsJSON, err := json.Marshal(relatedConfigs)
-			if err != nil {
-				return "", err
-			}
-
-			humanPrompt += fmt.Sprintf("\n\nHere are the related configs: %s", codeblock(string(relatedConfigsJSON)))
-
-			relatedConfigIDs := lo.Map(relatedConfigs, func(c query.RelatedConfig, _ int) uuid.UUID {
-				return c.ID
-			})
-
-			relatedConfigDetails, err := query.GetConfigsByIDs(ctx, relatedConfigIDs)
-			if err != nil {
-				return "", err
-			}
-
-			// TODO: just one input for the related configs
-			relatedConfigDetailsJSON, err := json.Marshal(relatedConfigDetails)
-			if err != nil {
-				return "", err
-			}
-			humanPrompt += fmt.Sprintf("\n\nHere are the related config details: %s", codeblock(string(relatedConfigDetailsJSON)))
+		if len(relatedConfigs) == 0 {
+			continue
 		}
+
+		relatedConfigsJSON, err := json.Marshal(relatedConfigs)
+		if err != nil {
+			return "", err
+		}
+
+		output += fmt.Sprintf("\n\nHere are all the %s related configs down to depth=%d: %s",
+			relationship.Direction,
+			lo.FromPtr(relationship.Depth),
+			codeblock(string(relatedConfigsJSON)),
+		)
 	}
 
-	humanPrompt += fmt.Sprintf("\n\n----\n\n%s", prompt)
-
-	template := prompts.NewChatPromptTemplate([]prompts.MessageFormatter{
-		prompts.NewAIMessagePromptTemplate(systemPrompt, nil),
-		prompts.NewHumanMessagePromptTemplate(humanPrompt, nil),
-	})
-	output, err := template.Format(map[string]any{})
-	if err != nil {
-		return "", err
-	}
-
-	fmt.Println(output, err)
+	output += fmt.Sprintf("\n\n----\n\n%s", prompt)
+	fmt.Println(output)
 	return output, nil
 }
 

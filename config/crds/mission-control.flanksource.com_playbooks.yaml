@@ -120,28 +120,28 @@ spec:
                         prompt:
                           type: string
                         relationships:
-                          properties:
-                            analysis:
-                              properties:
-                                since:
-                                  type: string
-                              required:
-                              - since
-                              type: object
-                            changes:
-                              properties:
-                                since:
-                                  type: string
-                              required:
-                              - since
-                              type: object
-                            depth:
-                              type: integer
-                          required:
-                          - analysis
-                          - changes
-                          - depth
-                          type: object
+                          items:
+                            properties:
+                              analysis:
+                                properties:
+                                  since:
+                                    type: string
+                                required:
+                                - since
+                                type: object
+                              changes:
+                                properties:
+                                  since:
+                                    type: string
+                                required:
+                                - since
+                                type: object
+                              depth:
+                                type: integer
+                              direction:
+                                type: string
+                            type: object
+                          type: array
                       required:
                       - config
                       - prompt
