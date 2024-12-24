@@ -45,6 +45,11 @@ var _ = Describe("Fixture schema validation", func() {
 		validateFixtureDirWithSchema(schemaPath, "../fixtures/notifications/")
 	})
 
+	It("NotificationSilence", func() {
+		schemaPath := "../config/schemas/notificationsilence.schema.json"
+		validateFixtureDirWithSchema(schemaPath, "../fixtures/silences/")
+	})
+
 	It("Playbooks", func() {
 		schemaPath := "../config/schemas/playbook.schema.json"
 		validateFixtureDirWithSchema(schemaPath, "../fixtures/playbooks/")

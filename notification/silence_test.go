@@ -77,11 +77,11 @@ func TestSilenceSaveRequest_Validate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tr := &SilenceSaveRequest{
 				NotificationSilenceResource: tt.fields.NotificationSilenceResource,
-				From:                        tt.fields.From,
-				Until:                       tt.fields.Until,
-				Description:                 tt.fields.Description,
-				from:                        tt.fields.from,
-				until:                       tt.fields.until,
+				From:                        &tt.fields.From,
+				Until:                       &tt.fields.Until,
+				Description:                 &tt.fields.Description,
+				from:                        &tt.fields.from,
+				until:                       &tt.fields.until,
 			}
 			if err := tr.Validate(); (err != nil) != tt.wantErr {
 				t.Fatalf("SilenceSaveRequest.Validate() error = %v, wantErr %v", err, tt.wantErr)

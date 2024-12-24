@@ -1,7 +1,9 @@
 package notification
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/flanksource/duty/api"
@@ -9,49 +11,56 @@ import (
 	"github.com/flanksource/duty/db"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
+	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"github.com/timberio/go-datemath"
 )
 
 type SilenceSaveRequest struct {
 	models.NotificationSilenceResource
-	From        string              `json:"from"`
-	Until       string              `json:"until"`
-	Description string              `json:"description"`
-	Recursive   bool                `json:"recursive"`
-	Filter      types.CelExpression `json:"filter"`
 
-	from  time.Time
-	until time.Time
+	Name        string                   `json:"name"`
+	From        *string                  `json:"from,omitempty"`
+	Until       *string                  `json:"until,omitempty"`
+	Description *string                  `json:"description,omitempty"`
+	Recursive   bool                     `json:"recursive"`
+	Filter      types.CelExpression      `json:"filter"`
+	Selectors   []types.ResourceSelector `json:"selectors"`
+
+	ID        uuid.UUID `json:"-"`
+	Namespace string    `json:"-"`
+	Source    string    `json:"-"`
+
+	from  *time.Time
+	until *time.Time
 }
 
 func (t *SilenceSaveRequest) Validate() error {
-	if t.From == "" {
-		return errors.New("`from` time is required")
+	if t.From != nil {
+		if parsedTime, err := datemath.ParseAndEvaluate(*t.From); err != nil {
+			return err
+		} else {
+			t.from = &parsedTime
+		}
 	}
 
-	if t.Until == "" {
-		return errors.New("`until` is required")
+	if t.Until != nil {
+		if parsedTime, err := datemath.ParseAndEvaluate(*t.Until); err != nil {
+			return err
+		} else {
+			t.until = &parsedTime
+		}
 	}
 
-	if parsedTime, err := datemath.ParseAndEvaluate(t.From); err != nil {
-		return err
-	} else {
-		t.from = parsedTime
+	if t.from != nil && t.until != nil {
+		if t.from.After(*t.until) {
+			return errors.New("`from` time must be before `until")
+		}
 	}
 
-	if parsedTime, err := datemath.ParseAndEvaluate(t.Until); err != nil {
-		return err
-	} else {
-		t.until = parsedTime
-	}
-
-	if t.from.After(t.until) {
-		return errors.New("`from` time must be before `until")
-	}
-
-	if t.NotificationSilenceResource.Empty() && t.Filter == "" {
-		return errors.New("at least one of config_id, canary_id, check_id, component_id, filter is required")
+	if t.NotificationSilenceResource.Empty() && t.Filter == "" && len(t.Selectors) == 0 {
+		return errors.New("at least one of config_id, canary_id, check_id, component_id, filter or selectors is required")
 	}
 
 	return nil
@@ -64,19 +73,52 @@ func SaveNotificationSilence(ctx context.Context, req SilenceSaveRequest) error 
 
 	silence := models.NotificationSilence{
 		NotificationSilenceResource: req.NotificationSilenceResource,
-		From:                        &req.from,
+		Description:                 req.Description,
+		ID:                          req.ID,
+		Name:                        req.Name,
+		Namespace:                   req.Namespace,
+		From:                        req.from,
 		Filter:                      req.Filter,
-		Until:                       &req.until,
+		Until:                       req.until,
 		Recursive:                   req.Recursive,
-		Source:                      models.SourceUI,
-		CreatedBy:                   lo.ToPtr(ctx.User().ID),
+		Source:                      req.Source,
 	}
 
-	if req.Description != "" {
-		silence.Description = &req.Description
+	if len(req.Selectors) > 0 {
+		selectorsRaw, err := json.Marshal(req.Selectors)
+		if err != nil {
+			return api.Errorf(api.EINVALID, "%s", err.Error())
+		}
+		silence.Selectors = selectorsRaw
 	}
 
-	return db.ErrorDetails(ctx.DB().Create(&silence).Error)
+	if ctx.User() != nil {
+		silence.CreatedBy = lo.ToPtr(ctx.User().ID)
+	}
+
+	return db.ErrorDetails(ctx.DB().Save(&silence).Error)
+}
+
+func PersistNotificationSilenceFromCRD(ctx context.Context, obj *v1.NotificationSilence) error {
+	uid, err := uuid.Parse(string(obj.GetUID()))
+	if err != nil {
+		return fmt.Errorf("invalid uid: %w", err)
+	}
+
+	request := SilenceSaveRequest{
+		ID:          uid,
+		Name:        obj.ObjectMeta.Name,
+		Namespace:   obj.ObjectMeta.Namespace,
+		Description: obj.Spec.Description,
+		From:        obj.Spec.From,
+		Until:       obj.Spec.Until,
+		Source:      models.SourceCRD,
+		Filter:      obj.Spec.Filter,
+		Selectors:   obj.Spec.Selectors,
+		Recursive:   obj.Spec.Recursive,
+	}
+
+	return SaveNotificationSilence(ctx, request)
 }
 
 func getSilencedResourceFromCelEnv(celEnv *celVariables) models.NotificationSilenceResource {
