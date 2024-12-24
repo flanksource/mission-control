@@ -11,11 +11,12 @@ import (
 )
 
 var schemas = map[string]any{
-	"connection":     &v1.Connection{},
-	"notification":   &v1.Notification{},
-	"playbook":       &v1.Playbook{},
-	"playbook-spec":  &v1.PlaybookSpec{}, // for go-side validation
-	"incident-rules": &v1.IncidentRule{},
+	"connection":          &v1.Connection{},
+	"notification":        &v1.Notification{},
+	"notificationsilence": &v1.NotificationSilence{},
+	"playbook":            &v1.Playbook{},
+	"playbook-spec":       &v1.PlaybookSpec{}, // for go-side validation
+	"incident-rules":      &v1.IncidentRule{},
 }
 
 var generateSchema = &cobra.Command{

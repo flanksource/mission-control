@@ -6,6 +6,7 @@ import (
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/types"
 	"github.com/samber/lo"
 )
 
@@ -92,4 +93,20 @@ func (t *celVariables) AsMap() map[string]any {
 	}
 
 	return output
+}
+
+func (t *celVariables) SelectableResource() types.ResourceSelectable {
+	if t.Component != nil {
+		return t.Component
+	}
+	if t.ConfigItem != nil {
+		return t.ConfigItem
+	}
+	if t.Check != nil {
+		return t.Check
+	}
+	if t.Canary != nil {
+		return t.Canary
+	}
+	return nil
 }

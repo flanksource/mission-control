@@ -19,6 +19,10 @@ import (
 	"github.com/samber/lo"
 )
 
+func DeleteNotificationSilence(ctx context.Context, id string) error {
+	return ctx.DB().Delete(&models.NotificationSilence{}, "id = ?", id).Error
+}
+
 func PersistNotificationFromCRD(ctx context.Context, obj *v1.Notification) error {
 	uid, err := uuid.Parse(string(obj.GetUID()))
 	if err != nil {
@@ -170,7 +174,7 @@ func GetMatchingNotificationSilences(ctx context.Context, resources models.Notif
 
 	query := ctx.DB().Model(&models.NotificationSilence{})
 
-	orClauses := ctx.DB().Where("filter != ''")
+	orClauses := ctx.DB().Where("filter != '' OR selectors IS NOT NULL")
 
 	if resources.ConfigID != nil {
 		orClauses = orClauses.Or("config_id = ?", *resources.ConfigID)
@@ -207,7 +211,7 @@ func GetMatchingNotificationSilences(ctx context.Context, resources models.Notif
 	query = query.Where(orClauses)
 
 	var silences []models.NotificationSilence
-	err := query.Where(`"from" <= NOW()`).Where("error IS NULL").Where("until >= NOW()").Where("deleted_at IS NULL").Find(&silences).Error
+	err := query.Where(`"from" IS NULL OR "from" <= NOW()`).Where("error IS NULL").Where("until IS NULL OR until >= NOW()").Where("deleted_at IS NULL").Find(&silences).Error
 	if err != nil {
 		return nil, err
 	}

@@ -6,6 +6,7 @@ import (
 
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/models"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/rbac"
 	"github.com/labstack/echo/v4"
@@ -30,6 +31,7 @@ func RegisterRoutes(e *echo.Echo) {
 			return err
 		}
 
+		req.Source = models.SourceUI
 		if err := SaveNotificationSilence(ctx, req); err != nil {
 			return api.WriteError(c, err)
 		}

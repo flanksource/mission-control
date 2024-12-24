@@ -140,7 +140,7 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 	}
 
 	for _, id := range notificationIDs {
-		if err := addNotificationEvent(ctx, id, celEnv.AsMap(), event, matchingSilences); err != nil {
+		if err := addNotificationEvent(ctx, id, celEnv, event, matchingSilences); err != nil {
 			return fmt.Errorf("failed to add notification.send event for event=%s notification=%s: %w", event.Name, id, err)
 		}
 	}
@@ -148,7 +148,7 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 	return nil
 }
 
-func addNotificationEvent(ctx context.Context, id string, celEnv map[string]any, event models.Event, matchingSilences []models.NotificationSilence) error {
+func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, event models.Event, matchingSilences []models.NotificationSilence) error {
 	n, err := GetNotification(ctx, id)
 	if err != nil {
 		return fmt.Errorf("failed to get notification %s: %w", id, err)
@@ -165,7 +165,7 @@ func addNotificationEvent(ctx context.Context, id string, celEnv map[string]any,
 	}
 
 	if n.Filter != "" {
-		if valid, err := gomplate.RunTemplateBool(celEnv, gomplate.Template{Expression: n.Filter}); err != nil {
+		if valid, err := gomplate.RunTemplateBool(celEnv.AsMap(), gomplate.Template{Expression: n.Filter}); err != nil {
 			// On invalid spec error, we store the error on the notification itself and exit out.
 			logs.IfError(db.UpdateNotificationError(ctx, id, err.Error()), "failed to update notification")
 			return nil
@@ -174,7 +174,7 @@ func addNotificationEvent(ctx context.Context, id string, celEnv map[string]any,
 		}
 	}
 
-	payloads, err := CreateNotificationSendPayloads(ctx, event, n, celEnv)
+	payloads, err := CreateNotificationSendPayloads(ctx, event, n, celEnv.AsMap())
 	if err != nil {
 		return fmt.Errorf("failed to create notification.send payloads: %w", err)
 	}
@@ -563,10 +563,14 @@ func GetEnvForEvent(ctx context.Context, event models.Event) (*celVariables, err
 	return &env, nil
 }
 
-func shouldSilence(ctx context.Context, celEnv map[string]any, matchingSilences []models.NotificationSilence) bool {
+func shouldSilence(ctx context.Context, celEnv *celVariables, matchingSilences []models.NotificationSilence) bool {
 	for _, silence := range matchingSilences {
+		if silence.Filter == "" && silence.Selectors == nil {
+			return true
+		}
+
 		if silence.Filter != "" {
-			res, err := ctx.RunTemplate(gomplate.Template{Expression: string(silence.Filter)}, celEnv)
+			res, err := ctx.RunTemplate(gomplate.Template{Expression: string(silence.Filter)}, celEnv.AsMap())
 			if err != nil {
 				ctx.Errorf("failed to run silence filter expression(%s): %v", silence.Filter, err)
 				logs.IfError(db.UpdateNotificationSilenceError(ctx, silence.ID.String(), err.Error()), "failed to update notification silence")
@@ -574,12 +578,37 @@ func shouldSilence(ctx context.Context, celEnv map[string]any, matchingSilences 
 			} else if ok, err := strconv.ParseBool(res); err != nil {
 				ctx.Errorf("silence filter did not return a boolean value(%s): %v", silence.Filter, err)
 				logs.IfError(db.UpdateNotificationSilenceError(ctx, silence.ID.String(), err.Error()), "failed to update notification silence")
-			} else if !ok {
-				continue
+			} else if ok {
+				return true
 			}
 		}
 
-		return true
+		if silence.Selectors != nil {
+			var resourceSelectors []types.ResourceSelector
+			if err := json.Unmarshal(silence.Selectors, &resourceSelectors); err != nil {
+				ctx.Errorf("failed to parse silence selector(%s): %v", lo.Elipse(string(silence.Selectors), 25), err)
+				logs.IfError(db.UpdateNotificationSilenceError(ctx, silence.ID.String(), err.Error()), "failed to update notification silence")
+				continue
+			}
+
+			if matchSelectors(celEnv.SelectableResource(), resourceSelectors) {
+				return true
+			}
+		}
+	}
+
+	return false
+}
+
+func matchSelectors(selectableResource types.ResourceSelectable, resourceSelectors []types.ResourceSelector) bool {
+	if selectableResource == nil {
+		return false
+	}
+
+	for _, rs := range resourceSelectors {
+		if rs.Matches(selectableResource) {
+			return true
+		}
 	}
 
 	return false

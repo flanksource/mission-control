@@ -1,0 +1,11 @@
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: NotificationSilence
+metadata:
+  name: low-severity-jobs
+spec:
+  description: silence notification from all jobs with low severity
+  selectors:
+    - types:
+        - Kubernetes::Job
+      tagSelector: severity=low

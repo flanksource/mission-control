@@ -47,7 +47,7 @@ func launchKopper(ctx context.Context) {
 		AddToSchemeFunc: v1.AddToScheme,
 	})
 	if err != nil {
-		logger.Fatalf("error creating manager: %v", err)
+		shutdown.ShutdownAndExit(1, fmt.Sprintf("error creating manager: %v", err))
 	}
 
 	if _, err = kopper.SetupReconciler(ctx, mgr,
@@ -55,7 +55,7 @@ func launchKopper(ctx context.Context) {
 		db.DeleteConnection,
 		"connection.mission-control.flanksource.com",
 	); err != nil {
-		logger.Fatalf("Unable to create controller for Connection: %v", err)
+		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for Connection: %v", err))
 	}
 
 	if _, err = kopper.SetupReconciler(ctx, mgr,
@@ -63,7 +63,7 @@ func launchKopper(ctx context.Context) {
 		db.DeleteIncidentRule,
 		"incidentrule.mission-control.flanksource.com",
 	); err != nil {
-		logger.Fatalf("Unable to create controller for IncidentRule: %v", err)
+		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for IncidentRule: %v", err))
 	}
 
 	if _, err = kopper.SetupReconciler(ctx, mgr,
@@ -71,7 +71,7 @@ func launchKopper(ctx context.Context) {
 		db.DeletePlaybook,
 		"playbook.mission-control.flanksource.com",
 	); err != nil {
-		logger.Fatalf("Unable to create controller for Playbook: %v", err)
+		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for Playbook: %v", err))
 	}
 
 	if v1.NotificationReconciler, err = kopper.SetupReconciler(ctx, mgr,
@@ -79,10 +79,19 @@ func launchKopper(ctx context.Context) {
 		db.DeleteNotification,
 		"notification.mission-control.flanksource.com",
 	); err != nil {
-		logger.Fatalf("Unable to create controller for Notification: %v", err)
+		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for Notification: %v", err))
 	}
+
+	if _, err = kopper.SetupReconciler(ctx, mgr,
+		notification.PersistNotificationSilenceFromCRD,
+		db.DeleteNotificationSilence,
+		"notificationsilence.mission-control.flanksource.com",
+	); err != nil {
+		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for Notification Silence: %v", err))
+	}
+
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
-		logger.Fatalf("error running manager: %v", err)
+		shutdown.ShutdownAndExit(1, fmt.Sprintf("error running controller manager: %v", err))
 	}
 }
 
