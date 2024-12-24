@@ -93,7 +93,10 @@ gen-schemas:
 	cd hack/generate-schemas && \
 	go mod edit -module=github.com/flanksource/incident-commander/hack/generate-schemas && \
 	go mod edit -require=github.com/flanksource/incident-commander@v1.0.0 && \
- 	go mod edit -replace=github.com/flanksource/incident-commander=../../ && \
+	go mod edit -replace=github.com/flanksource/incident-commander=../../ && \
+	if grep -v "^//" ../../go.mod | grep -q "replace.*github.com/flanksource/duty.*=>"; then \
+		go mod edit -replace=github.com/flanksource/duty=../../../duty; \
+	fi && \
 	go mod tidy && \
 	go run ./main.go
 

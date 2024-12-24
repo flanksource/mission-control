@@ -26,3 +26,10 @@ var (
 const (
 	PropertyIncidentsDisabled = "incidents.disable"
 )
+
+type LLMBackend string
+
+const (
+	LLMBackendAnthropic LLMBackend = "anthropic"
+	LLMBackendOpenAI    LLMBackend = "openai"
+)

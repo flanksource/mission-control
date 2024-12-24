@@ -3,6 +3,61 @@
   "$id": "https://github.com/flanksource/incident-commander/api/v1/playbook-spec",
   "$ref": "#/$defs/PlaybookSpec",
   "$defs": {
+    "AIAction": {
+      "properties": {
+        "apiKey": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "backend": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "config": {
+          "type": "string"
+        },
+        "changes": {
+          "$ref": "#/$defs/TimeMetadata"
+        },
+        "analysis": {
+          "$ref": "#/$defs/TimeMetadata"
+        },
+        "relationships": {
+          "$ref": "#/$defs/AIActionRelationship"
+        },
+        "prompt": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "apiKey",
+        "config",
+        "prompt"
+      ]
+    },
+    "AIActionRelationship": {
+      "properties": {
+        "depth": {
+          "type": "integer"
+        },
+        "changes": {
+          "$ref": "#/$defs/TimeMetadata"
+        },
+        "analysis": {
+          "$ref": "#/$defs/TimeMetadata"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "depth",
+        "changes",
+        "analysis"
+      ]
+    },
     "AWSConnection": {
       "properties": {
         "connection": {
@@ -582,6 +637,9 @@
         "templatesOn": {
           "type": "string"
         },
+        "ai": {
+          "$ref": "#/$defs/AIAction"
+        },
         "exec": {
           "$ref": "#/$defs/ExecAction"
         },
@@ -1003,6 +1061,18 @@
       "type": "object",
       "required": [
         "key"
+      ]
+    },
+    "TimeMetadata": {
+      "properties": {
+        "since": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "since"
       ]
     }
   }
