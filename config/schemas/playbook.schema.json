@@ -39,7 +39,6 @@
       "additionalProperties": false,
       "type": "object",
       "required": [
-        "config",
         "prompt"
       ]
     },

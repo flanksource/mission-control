@@ -25,7 +25,6 @@ spec:
               name: openai
               key: API_KEY
         prompt: '{{.params.prompt}}'
-        config: '{{.config.id}}'
         changes:
           since: 2h
         analysis:

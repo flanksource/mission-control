@@ -326,6 +326,10 @@ func TemplateAndExecuteAction(ctx context.Context, spec v1.PlaybookSpec, playboo
 		return err
 	}
 
+	if step.AI != nil && step.AI.Config == "" {
+		step.AI.Config = run.ConfigID.String()
+	}
+
 	return oops.Wrap(ExecuteAndSaveAction(ctx, run.PlaybookID, action, step))
 }
 

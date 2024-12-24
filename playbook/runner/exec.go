@@ -33,7 +33,6 @@ type executeActionResult struct {
 // executeAction runs the executes the given palybook action.
 // It should received an already templated action spec.
 func executeAction(ctx context.Context, playbookID any, runID uuid.UUID, runAction models.PlaybookRunAction, actionSpec v1.PlaybookAction) (executeActionResult, error) {
-
 	if timeout, _ := actionSpec.TimeoutDuration(); timeout > 0 {
 		var cancel gocontext.CancelFunc
 		ctx, cancel = ctx.WithTimeout(timeout)
