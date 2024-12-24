@@ -17,24 +17,20 @@ import (
 )
 
 type Config struct {
-	Backend api.LLMBackend
-	Model   string
-	APIKey  string
+	Backend  api.LLMBackend
+	Model    string
+	APIKey   string
+	UseAgent bool
 }
 
-func Prompt(ctx context.Context, config Config, prompt string, useTools ...tools.Tool) (string, error) {
+func Prompt(ctx context.Context, config Config, prompt string) (string, error) {
 	model, err := getLLMModel(config)
 	if err != nil {
 		return "", err
 	}
 
-	return llms.GenerateFromSinglePrompt(ctx, model, prompt, llms.WithTemperature(0))
-}
-
-func PromptWithTools(ctx context.Context, config Config, prompt string) (string, error) {
-	model, err := getLLMModel(config)
-	if err != nil {
-		return "", err
+	if !config.UseAgent {
+		return llms.GenerateFromSinglePrompt(ctx, model, prompt, llms.WithTemperature(0))
 	}
 
 	agentTools := []tools.Tool{
@@ -45,8 +41,8 @@ func PromptWithTools(ctx context.Context, config Config, prompt string) (string,
 		agentTools,
 		agents.WithMaxIterations(3),
 	)
-	executor := agents.NewExecutor(agent)
 
+	executor := agents.NewExecutor(agent)
 	return chains.Run(ctx, executor, prompt, chains.WithTemperature(0))
 }
 

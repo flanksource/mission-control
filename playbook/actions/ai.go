@@ -11,7 +11,10 @@ import (
 	"github.com/flanksource/incident-commander/llm"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
+	"github.com/tmc/langchaingo/prompts"
 )
+
+const systemPrompt = "You are a kubernetes expert. Please be concise."
 
 type AIAction struct{}
 
@@ -34,9 +37,7 @@ func (t *AIAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 		return nil, fmt.Errorf("failed to form prompt: %w", err)
 	}
 
-	fmt.Println(prompt)
-
-	llmConf := llm.Config{APIKey: apiKey, Backend: spec.Backend, Model: spec.Model}
+	llmConf := llm.Config{APIKey: apiKey, Backend: spec.Backend, Model: spec.Model, UseAgent: spec.UseAgent}
 	response, err := llm.Prompt(ctx, llmConf, prompt)
 	if err != nil {
 		return nil, err
@@ -53,7 +54,7 @@ func buildPrompt(ctx context.Context, prompt string, spec v1.AIActionContext) (s
 		return "", fmt.Errorf("config doesn't exist  (%s): %w", spec.Config, err)
 	}
 
-	output := fmt.Sprintf("Config: %s\n", codeblock(string(lo.FromPtr(config.Config))))
+	humanPrompt := fmt.Sprintf("Config: %s\n", codeblock(string(lo.FromPtr(config.Config))))
 
 	if spec.Relationships != nil {
 		relatedConfigs, err := query.GetRelatedConfigs(ctx, query.RelationQuery{MaxDepth: &spec.Relationships.Depth, ID: config.ID})
@@ -67,7 +68,7 @@ func buildPrompt(ctx context.Context, prompt string, spec v1.AIActionContext) (s
 				return "", err
 			}
 
-			output += fmt.Sprintf("\n\nHere are the related configs: %s", codeblock(string(relatedConfigsJSON)))
+			humanPrompt += fmt.Sprintf("\n\nHere are the related configs: %s", codeblock(string(relatedConfigsJSON)))
 
 			relatedConfigIDs := lo.Map(relatedConfigs, func(c query.RelatedConfig, _ int) uuid.UUID {
 				return c.ID
@@ -83,11 +84,22 @@ func buildPrompt(ctx context.Context, prompt string, spec v1.AIActionContext) (s
 			if err != nil {
 				return "", err
 			}
-			output += fmt.Sprintf("\n\nHere are the related config details: %s", codeblock(string(relatedConfigDetailsJSON)))
+			humanPrompt += fmt.Sprintf("\n\nHere are the related config details: %s", codeblock(string(relatedConfigDetailsJSON)))
 		}
 	}
 
-	output += fmt.Sprintf("\n\n----\n\n%s", prompt)
+	humanPrompt += fmt.Sprintf("\n\n----\n\n%s", prompt)
+
+	template := prompts.NewChatPromptTemplate([]prompts.MessageFormatter{
+		prompts.NewAIMessagePromptTemplate(systemPrompt, nil),
+		prompts.NewHumanMessagePromptTemplate(humanPrompt, nil),
+	})
+	output, err := template.Format(map[string]any{})
+	if err != nil {
+		return "", err
+	}
+
+	fmt.Println(output, err)
 	return output, nil
 }
 

@@ -267,7 +267,11 @@ type AIAction struct {
 	AIActionClient  `json:",inline" yaml:",inline"`
 	AIActionContext `json:",inline" yaml:",inline" template:"true"`
 
-	Prompt string `json:"prompt" yaml:"prompt" template:"true"`
+	// Use an AI agent that can autonomously drive the diagnosis using tools that interface directly with the database.
+	// NOTE: Not exposed for now
+	UseAgent bool `json:"-"`
+
+	Prompt string `json:"prompt" template:"true"`
 }
 
 type ExecAction struct {
