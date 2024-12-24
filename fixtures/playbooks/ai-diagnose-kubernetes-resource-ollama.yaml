@@ -23,7 +23,6 @@ spec:
         model: llama3.1:8b
         apiURL: http://localhost:11434
         prompt: "{{.params.prompt}}"
-        config: "{{.config.id}}"
         changes:
           since: 2h
         analysis:
