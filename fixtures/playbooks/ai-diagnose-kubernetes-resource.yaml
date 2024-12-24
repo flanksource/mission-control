@@ -1,0 +1,45 @@
+---
+# yaml-language-server: $schema=../../config/schemas/playbook.schema.json
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: diagnose-kubernetes-resource
+spec:
+  description: Use AI to diagnose unhealthy kubernetes resources
+  configs:
+    - healths:
+        - unhealthy
+        - warning
+  parameters:
+    - name: prompt
+      label: Prompt
+      type: text
+      default: |
+        You are a Kubernetes expert. Use the context provided to find out why {{.config.name}} is unhealthy.
+        Explain your investigation in steps and then give a concise expert-level summary of your findings.
+      properties:
+        multiline: 'true'
+  actions:
+    - name: query
+      ai:
+        backend: anthropic
+        model: claude-3-5-sonnet-latest
+        apiKey:
+          valueFrom:
+            secretKeyRef:
+              name: anthropic
+              key: API_KEY
+        prompt: '{{.params.prompt}}'
+        changes:
+          since: 2d
+        analysis:
+          since: 2d
+        relationships:
+          - depth: 3
+            direction: outgoing
+            changes:
+              since: 12h
+          - depth: 5
+            direction: incoming
+            changes:
+              since: 12h

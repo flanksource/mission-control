@@ -1171,6 +1171,9 @@
         },
         "statuses": {
           "$ref": "#/$defs/Items"
+        },
+        "healths": {
+          "$ref": "#/$defs/Items"
         }
       },
       "additionalProperties": false,

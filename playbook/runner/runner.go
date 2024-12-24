@@ -11,9 +11,9 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/schema/openapi"
 	"github.com/flanksource/gomplate/v3"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/config/schemas"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/playbook/actions"
 	"github.com/samber/lo"
@@ -33,7 +33,7 @@ func GetNextActionToRun(ctx context.Context, run models.PlaybookRun) (action *v1
 	ctx.Logger.V(3).Infof("getting next action for run %s", run.ID)
 	ctx = ctx.WithObject(run)
 
-	if validationErr, err := openapi.ValidatePlaybookSpec(run.Spec); err != nil {
+	if validationErr, err := schemas.ValidatePlaybookSpec(run.Spec); err != nil {
 		return nil, nil, err
 	} else if validationErr != nil {
 		return nil, nil, validationErr

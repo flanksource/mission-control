@@ -3,33 +3,29 @@
 apiVersion: mission-control.flanksource.com/v1
 kind: Playbook
 metadata:
-  name: diagnose-kubernetes-resource
+  name: diagnose-aws-resource
 spec:
-  description: Use AI to diagnose unhealthy kubernetes resources
+  description: Use AI to diagnose AWS resources
   configs:
     - types:
-        - Kubernetes::Pod
-        - Kubernetes::Deployment
-        - Kubernetes::HelmRelease
-        - Kubernetes::ContainerCluster
+        - AWS::CloudFormation::Stack
+        - AWS::EC2::VPC
   parameters:
     - name: prompt
       label: Prompt
-      default: Using the context provided, as a Kubernetes engineer find out why {{.config.name}} is not healthy
+      default: Using the context provided, as an AWS engineer find out why {{.config.name}} is not healthy
+      properties:
+        multiline: "true"
   actions:
     - name: query
       ai:
         backend: ollama
         model: llama3.1:8b
         apiURL: http://localhost:11434
-        prompt: "{{.params.prompt}}"
+        prompt: '{{.params.prompt}}'
         changes:
           since: 2h
         analysis:
           since: 2h
         relationships:
           - depth: 3
-            direction: outgoing
-          - depth: 5
-            direction: incoming
-            
