@@ -10,7 +10,11 @@ import (
 	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
+	"github.com/flanksource/incident-commander/api"
+	"github.com/google/uuid"
+	"github.com/samber/lo"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -235,6 +239,98 @@ func (git GitCheckout) GetCertificate() types.EnvVar {
 	return utils.Deref(git.Certificate)
 }
 
+type TimeMetadata struct {
+	Since string `json:"since" yaml:"since"`
+}
+
+type AIActionRelationship struct {
+	// max depth to traverse the relationship. Defaults to 3
+	Depth *int `json:"depth,omitempty"`
+
+	// use incoming/outgoing/all relationships.
+	Direction query.RelationDirection `json:"direction,omitempty"`
+
+	Changes  TimeMetadata `json:"changes,omitempty"`
+	Analysis TimeMetadata `json:"analysis,omitempty"`
+}
+
+func (t AIActionRelationship) ToRelationshipQuery(configID uuid.UUID) query.RelationQuery {
+	q := query.RelationQuery{
+		ID:       configID,
+		MaxDepth: t.Depth,
+		Relation: t.Direction,
+	}
+
+	if q.MaxDepth == nil {
+		q.MaxDepth = lo.ToPtr(3)
+	}
+
+	if q.Relation == "" {
+		q.Relation = query.All
+	}
+
+	return q
+}
+
+type AIActionClient struct {
+	APIKey types.EnvVar `json:"apiKey,omitempty"`
+
+	// Optionally specify the LLM backend.
+	// Supported: anthropic (default), ollama, openai.
+	Backend api.LLMBackend `json:"backend,omitempty"`
+
+	// Model name based on the backend chosen.
+	// Example: gpt-4o for openai, claude-3-5-sonnet-latest for Anthropic, llama3.1:8b for Ollama
+	Model string `json:"model,omitempty"`
+
+	// BaseURL or API url.
+	// Example: server URL for ollama or custom url for Anthropic if using a proxy
+	APIURL string `json:"apiURL,omitempty"`
+}
+
+type AIActionContext struct {
+	// The config id to operate on.
+	// If not provided, the playbook's config is used.
+	Config string `json:"config,omitempty" yaml:"config,omitempty" template:"true"`
+
+	// Select changes for the config to provide as an additional context to the AI model.
+	Changes TimeMetadata `json:"changes,omitempty" yaml:"changes,omitempty"`
+
+	// Select analysis for the config to provide as an additional context to the AI model.
+	Analysis TimeMetadata `json:"analysis,omitempty" yaml:"analysis,omitempty"`
+
+	// Select related configs to provide as an additional context to the AI model.
+	Relationships []AIActionRelationship `json:"relationships,omitempty" yaml:"relationships,omitempty"`
+}
+
+func (t AIActionContext) ShouldFetchConfigChanges() bool {
+	// if changes are being fetched from relationships, we don't have to query
+	// the changes for just the config alone.
+
+	if t.Changes.Since == "" {
+		return false
+	}
+
+	for _, r := range t.Relationships {
+		if r.Changes.Since != "" {
+			return false
+		}
+	}
+
+	return true
+}
+
+type AIAction struct {
+	AIActionClient  `json:",inline" yaml:",inline"`
+	AIActionContext `json:",inline" yaml:",inline" template:"true"`
+
+	// Use an AI agent that can autonomously drive the diagnosis using tools that interface directly with the database.
+	// NOTE: Not exposed for now
+	UseAgent bool `json:"-"`
+
+	Prompt string `json:"prompt" template:"true"`
+}
+
 type ExecAction struct {
 	// Script can be an inline script or a path to a script that needs to be executed
 	// On windows executed via powershell and in darwin and linux executed using bash
@@ -405,6 +501,7 @@ type PlaybookAction struct {
 	// When left empty, the templating is done on the main instance(host) itself.
 	TemplatesOn string `json:"templatesOn,omitempty" yaml:"templatesOn,omitempty"`
 
+	AI                  *AIAction                  `json:"ai,omitempty" yaml:"ai,omitempty" template:"true"`
 	Exec                *ExecAction                `json:"exec,omitempty" yaml:"exec,omitempty" template:"true"`
 	GitOps              *GitOpsAction              `json:"gitops,omitempty" yaml:"gitops,omitempty" template:"true"`
 	Github              *GithubAction              `json:"github,omitempty" yaml:"github,omitempty" template:"true"`

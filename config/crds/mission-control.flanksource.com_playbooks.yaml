@@ -42,6 +42,122 @@ spec:
                 description: List of actions that need to be executed by this playbook.
                 items:
                   properties:
+                    ai:
+                      properties:
+                        analysis:
+                          description: Select analysis for the config to provide as
+                            an additional context to the AI model.
+                          properties:
+                            since:
+                              type: string
+                          required:
+                          - since
+                          type: object
+                        apiKey:
+                          properties:
+                            name:
+                              type: string
+                            value:
+                              type: string
+                            valueFrom:
+                              properties:
+                                configMapKeyRef:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      type: string
+                                  required:
+                                  - key
+                                  type: object
+                                helmRef:
+                                  properties:
+                                    key:
+                                      description: Key is a JSONPath expression used
+                                        to fetch the key from the merged JSON.
+                                      type: string
+                                    name:
+                                      type: string
+                                  required:
+                                  - key
+                                  type: object
+                                secretKeyRef:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      type: string
+                                  required:
+                                  - key
+                                  type: object
+                                serviceAccount:
+                                  description: ServiceAccount specifies the service
+                                    account whose token should be fetched
+                                  type: string
+                              type: object
+                          type: object
+                        apiURL:
+                          description: |-
+                            BaseURL or API url.
+                            Example: server URL for ollama or custom url for Anthropic if using a proxy
+                          type: string
+                        backend:
+                          description: |-
+                            Optionally specify the LLM backend.
+                            Supported: anthropic (default), ollama, openai.
+                          type: string
+                        changes:
+                          description: Select changes for the config to provide as
+                            an additional context to the AI model.
+                          properties:
+                            since:
+                              type: string
+                          required:
+                          - since
+                          type: object
+                        config:
+                          description: |-
+                            The config id to operate on.
+                            If not provided, the playbook's config is used.
+                          type: string
+                        model:
+                          description: |-
+                            Model name based on the backend chosen.
+                            Example: gpt-4o for openai, claude-3-5-sonnet-latest for Anthropic, llama3.1:8b for Ollama
+                          type: string
+                        prompt:
+                          type: string
+                        relationships:
+                          description: Select related configs to provide as an additional
+                            context to the AI model.
+                          items:
+                            properties:
+                              analysis:
+                                properties:
+                                  since:
+                                    type: string
+                                required:
+                                - since
+                                type: object
+                              changes:
+                                properties:
+                                  since:
+                                    type: string
+                                required:
+                                - since
+                                type: object
+                              depth:
+                                description: max depth to traverse the relationship.
+                                  Defaults to 3
+                                type: integer
+                              direction:
+                                description: use incoming/outgoing/all relationships.
+                                type: string
+                            type: object
+                          type: array
+                      required:
+                      - prompt
+                      type: object
                     azureDevopsPipeline:
                       properties:
                         org:

@@ -3,6 +3,63 @@
   "$id": "https://github.com/flanksource/incident-commander/api/v1/playbook",
   "$ref": "#/$defs/Playbook",
   "$defs": {
+    "AIAction": {
+      "properties": {
+        "apiKey": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "backend": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "apiURL": {
+          "type": "string"
+        },
+        "config": {
+          "type": "string"
+        },
+        "changes": {
+          "$ref": "#/$defs/TimeMetadata"
+        },
+        "analysis": {
+          "$ref": "#/$defs/TimeMetadata"
+        },
+        "relationships": {
+          "items": {
+            "$ref": "#/$defs/AIActionRelationship"
+          },
+          "type": "array"
+        },
+        "prompt": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "prompt"
+      ]
+    },
+    "AIActionRelationship": {
+      "properties": {
+        "depth": {
+          "type": "integer"
+        },
+        "direction": {
+          "type": "string"
+        },
+        "changes": {
+          "$ref": "#/$defs/TimeMetadata"
+        },
+        "analysis": {
+          "$ref": "#/$defs/TimeMetadata"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "AWSConnection": {
       "properties": {
         "connection": {
@@ -731,6 +788,9 @@
         "templatesOn": {
           "type": "string"
         },
+        "ai": {
+          "$ref": "#/$defs/AIAction"
+        },
         "exec": {
           "$ref": "#/$defs/ExecAction"
         },
@@ -1163,6 +1223,18 @@
       "properties": {},
       "additionalProperties": false,
       "type": "object"
+    },
+    "TimeMetadata": {
+      "properties": {
+        "since": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "since"
+      ]
     }
   }
 }
