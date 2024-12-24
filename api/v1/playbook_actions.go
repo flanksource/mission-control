@@ -247,13 +247,18 @@ type AIActionRelationship struct {
 }
 
 type AIActionClient struct {
-	APIKey types.EnvVar `json:"apiKey"`
+	APIKey types.EnvVar `json:"apiKey,omitempty"`
 
-	// Optionally specify the llm backend. Anthropic is the default.
+	// Optionally specify the LLM backend.
+	// Supported: anthropic (default), ollama, openai.
 	Backend api.LLMBackend `json:"backend,omitempty"`
 
-	// Example: gpt-4o for openai, claude-3-haiku-20240307 for Anthropic, ...
+	// Example: gpt-4o for openai, claude-3-haiku-20240307 for Anthropic, llama3.1:8b for Ollama ...
 	Model string `json:"model,omitempty"`
+
+	// BaseURL or API url.
+	// Example: server URL for ollama or custom url for Anthropic if using a proxy, ...
+	APIURL string `json:"apiURL,omitempty"`
 }
 
 type AIActionContext struct {

@@ -14,6 +14,9 @@
         "model": {
           "type": "string"
         },
+        "apiURL": {
+          "type": "string"
+        },
         "config": {
           "type": "string"
         },
@@ -33,7 +36,6 @@
       "additionalProperties": false,
       "type": "object",
       "required": [
-        "apiKey",
         "config",
         "prompt"
       ]

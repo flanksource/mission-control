@@ -24,12 +24,13 @@ type AIActionResult struct {
 
 func (t *AIAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, error) {
 	if spec.Backend == "" {
-		spec.Backend = api.LLMBackendAnthropic
+		spec.Backend = api.LLMBackendOpenAI
 	}
 
-	apiKey, err := ctx.GetEnvValueFromCache(spec.APIKey, ctx.GetNamespace())
-	if err != nil {
+	if apiKey, err := ctx.GetEnvValueFromCache(spec.APIKey, ctx.GetNamespace()); err != nil {
 		return nil, err
+	} else {
+		spec.APIKey.ValueStatic = apiKey
 	}
 
 	prompt, err := buildPrompt(ctx, spec.Prompt, spec.AIActionContext)
@@ -37,7 +38,7 @@ func (t *AIAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 		return nil, fmt.Errorf("failed to form prompt: %w", err)
 	}
 
-	llmConf := llm.Config{APIKey: apiKey, Backend: spec.Backend, Model: spec.Model, UseAgent: spec.UseAgent}
+	llmConf := llm.Config{AIActionClient: spec.AIActionClient, UseAgent: spec.UseAgent}
 	response, err := llm.Prompt(ctx, llmConf, prompt)
 	if err != nil {
 		return nil, err
