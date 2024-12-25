@@ -43,7 +43,7 @@ func (t *AIAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 	}
 
 	llmConf := llm.Config{AIActionClient: spec.AIActionClient, UseAgent: spec.UseAgent}
-	response, err := llm.Prompt(ctx, llmConf, prompt)
+	response, err := llm.Prompt(ctx, llmConf, spec.SystemPrompt, prompt)
 	if err != nil {
 		return nil, err
 	}

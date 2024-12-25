@@ -126,6 +126,7 @@ spec:
                             Example: gpt-4o for openai, claude-3-5-sonnet-latest for Anthropic, llama3.1:8b for Ollama
                           type: string
                         prompt:
+                          description: Prompt is the humna prompt
                           type: string
                         relationships:
                           description: Select related configs to provide as an additional
@@ -155,8 +156,16 @@ spec:
                                 type: string
                             type: object
                           type: array
+                        systemPrompt:
+                          description: |-
+                            system prompt is a way to provide context, instructions, and guidelines to the LLM before presenting it
+                            with a question or task.
+                            By using a system prompt, you can set the stage for the conversation, specifying LLM's role, personality,
+                            tone, or any other relevant information that will help it better understand and respond to the user's input.
+                          type: string
                       required:
                       - prompt
+                      - systemPrompt
                       type: object
                     azureDevopsPipeline:
                       properties:

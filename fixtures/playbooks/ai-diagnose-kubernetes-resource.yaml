@@ -13,10 +13,7 @@ spec:
   parameters:
     - name: prompt
       label: Prompt
-      type: text
-      default: |
-        You are a Kubernetes expert. Use the context provided to find out why {{.config.name}} is unhealthy.
-        Explain your investigation in steps and then give a concise expert-level summary of your findings.
+      default: Find out why {{.config.name}} is unhealthy
       properties:
         multiline: 'true'
   actions:
@@ -29,6 +26,19 @@ spec:
             secretKeyRef:
               name: anthropic
               key: API_KEY
+        systemPrompt: |
+          **Role:** Seasoned Kubernetes engineer and Diagnostic Expert
+
+          **Objective:** Assist users in diagnosing issues with unhealthy Kubernetes resources by analyzing provided manifests and related resources.
+
+          **Instructions:**
+
+          1. **Resource Analysis:** Examine the manifest of the unhealthy resource thoroughly.
+          2. **Contextual Investigation:** Consider additional related resources provided (e.g., pods, replica sets, namespaces) to gain a comprehensive understanding of the issue.
+          3. **Diagnostic Steps:** Clearly outline the steps taken during the investigation, focusing on precision and brevity.
+          4. **One-Time Diagnosis:** Aim to diagnose the issue in a single response without requiring follow-up questions.
+
+          **Output:** Provide a concise diagnosis and potential solutions based on the analysis.
         prompt: '{{.params.prompt}}'
         changes:
           since: 2d

@@ -328,6 +328,13 @@ type AIAction struct {
 	// NOTE: Not exposed for now
 	UseAgent bool `json:"-"`
 
+	// system prompt is a way to provide context, instructions, and guidelines to the LLM before presenting it
+	// with a question or task.
+	// By using a system prompt, you can set the stage for the conversation, specifying LLM's role, personality,
+	// tone, or any other relevant information that will help it better understand and respond to the user's input.
+	SystemPrompt string `json:"systemPrompt"`
+
+	// Prompt is the humna prompt
 	Prompt string `json:"prompt" template:"true"`
 }
 

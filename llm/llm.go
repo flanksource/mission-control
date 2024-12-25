@@ -23,27 +23,41 @@ type Config struct {
 	UseAgent bool
 }
 
-func Prompt(ctx context.Context, config Config, prompt string) (string, error) {
+func Prompt(ctx context.Context, config Config, systemPrompt, prompt string) (string, error) {
 	model, err := getLLMModel(config)
 	if err != nil {
 		return "", err
 	}
 
-	if !config.UseAgent {
-		return llms.GenerateFromSinglePrompt(ctx, model, prompt, llms.WithTemperature(0))
+	if config.UseAgent {
+		agentTools := []tools.Tool{
+			mcTools.NewCatalogTool(ctx),
+		}
+
+		agent := agents.NewOneShotAgent(model,
+			agentTools,
+			agents.WithMaxIterations(3),
+		)
+
+		executor := agents.NewExecutor(agent)
+		return chains.Run(ctx, executor, prompt, chains.WithTemperature(0))
 	}
 
-	agentTools := []tools.Tool{
-		mcTools.NewCatalogTool(ctx),
+	content := []llms.MessageContent{
+		llms.TextParts(llms.ChatMessageTypeSystem, systemPrompt),
+		llms.TextParts(llms.ChatMessageTypeHuman, prompt),
 	}
 
-	agent := agents.NewOneShotAgent(model,
-		agentTools,
-		agents.WithMaxIterations(3),
-	)
+	resp, err := model.GenerateContent(ctx, content, llms.WithTemperature(0))
+	if err != nil {
+		return "", fmt.Errorf("failed to generate resposne: %w", err)
+	}
 
-	executor := agents.NewExecutor(agent)
-	return chains.Run(ctx, executor, prompt, chains.WithTemperature(0))
+	if len(resp.Choices) == 0 {
+		return "", errors.New("no response from LLM")
+	}
+
+	return resp.Choices[0].Content, nil
 }
 
 func getLLMModel(config Config) (llms.Model, error) {

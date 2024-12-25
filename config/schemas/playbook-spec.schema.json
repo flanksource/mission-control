@@ -32,6 +32,9 @@
           },
           "type": "array"
         },
+        "systemPrompt": {
+          "type": "string"
+        },
         "prompt": {
           "type": "string"
         }
@@ -39,6 +42,7 @@
       "additionalProperties": false,
       "type": "object",
       "required": [
+        "systemPrompt",
         "prompt"
       ]
     },

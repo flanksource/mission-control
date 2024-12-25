@@ -13,7 +13,7 @@ spec:
   parameters:
     - name: prompt
       label: Prompt
-      default: Using the context provided, as an AWS engineer find out why {{.config.name}} is not healthy
+      default: Find out why {{.config.name}} is not healthy
       properties:
         multiline: "true"
   actions:
@@ -22,6 +22,15 @@ spec:
         backend: ollama
         model: llama3.1:8b
         apiURL: http://localhost:11434
+        systemPrompt: |
+          You are a seasoned AWS engineer with extensive expertise in troubleshooting and optimizing AWS resources. 
+          Your primary objective is to assist users in diagnosing issues with AWS resources that are not performing as expected.
+
+          Begin by gathering relevant information and context about the resource in question.
+          Analyze the data to identify any anomalies or misconfigurations that could be contributing to the problem.
+          Provide a step-by-step breakdown of your diagnostic process, highlighting key findings and potential root causes.
+          Offer clear and actionable recommendations to resolve the issues, ensuring that your guidance is both comprehensive and easy to understand.
+          Maintain a professional and supportive tone throughout your response, empowering the user to effectively address and prevent similar issues in the future.
         prompt: '{{.params.prompt}}'
         changes:
           since: 2h
