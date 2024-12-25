@@ -267,7 +267,7 @@ func (t *GitOps) applyPatches(ctx context.Context, action v1.GitOpsAction) error
 				if res.ExitCode != 0 {
 					return ctx.Oops().
 						With("path", relativePath, "yq", patch.YQ).
-						Errorf("yq: " + lo.CoalesceOrEmpty(res.Stderr, res.Stdout, fmt.Sprintf("exit code %d ", res.ExitCode)))
+						Errorf("yq: %s", lo.CoalesceOrEmpty(res.Stderr, res.Stdout, fmt.Sprintf("exit code %d ", res.ExitCode)))
 				}
 				if res != nil && res.Stderr != "" {
 					t.log(res.Stderr)
@@ -289,7 +289,7 @@ func (t *GitOps) applyPatches(ctx context.Context, action v1.GitOpsAction) error
 				if res.ExitCode != 0 {
 					return ctx.Oops().
 						With("path", relativePath, "jq", patch.JQ).
-						Errorf("jq: " + lo.CoalesceOrEmpty(res.Stderr, res.Stdout, fmt.Sprintf("exit code %d ", res.ExitCode)))
+						Errorf("jq: %s", lo.CoalesceOrEmpty(res.Stderr, res.Stdout, fmt.Sprintf("exit code %d ", res.ExitCode)))
 				}
 
 				if res != nil && res.Stderr != "" {

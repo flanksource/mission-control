@@ -48,8 +48,8 @@ spec:
           - depth: 3
             direction: outgoing
             changes:
-              since: 12h
+              since: 24h
           - depth: 5
             direction: incoming
             changes:
-              since: 12h
+              since: 24h

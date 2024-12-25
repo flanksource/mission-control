@@ -15,7 +15,7 @@ spec:
       label: Prompt
       default: Find out why {{.config.name}} is not healthy
       properties:
-        multiline: "true"
+        multiline: 'true'
   actions:
     - name: query
       ai:
@@ -35,6 +35,17 @@ spec:
         changes:
           since: 2h
         analysis:
-          since: 2h
+          since: 7d
         relationships:
           - depth: 3
+            direction: outgoing
+            changes:
+              since: 7d
+            analysis:
+              since: 30d
+          - depth: 5
+            direction: incoming
+            changes:
+              since: 7d
+            analysis:
+              since: 30d

@@ -3,7 +3,9 @@ package actions
 import (
 	"fmt"
 	"strings"
+	"time"
 
+	"github.com/flanksource/commons/duration"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
@@ -96,8 +98,13 @@ func getPromptContext(ctx context.Context, spec v1.AIActionContext) (*promptCont
 	}
 
 	if spec.Analysis.Since != "" {
+		parsed, err := duration.ParseDuration(spec.Analysis.Since)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse duration for analysis (%s): %w", spec.Analysis.Since, err)
+		}
+
 		var analyses []models.ConfigAnalysis
-		if err := ctx.DB().Where("config_id = ?", config.ID.String()).Find(&analyses).Error; err != nil {
+		if err := ctx.DB().Where("NOW() - last_observed < ?", time.Duration(parsed)).Where("config_id = ?", config.ID.String()).Find(&analyses).Error; err != nil {
 			return nil, fmt.Errorf("failed to get config analysis: %w", err)
 		}
 		pctx.analysisResults = append(pctx.analysisResults, analyses...)
@@ -128,8 +135,13 @@ func getPromptContext(ctx context.Context, spec v1.AIActionContext) (*promptCont
 				return c.ID.String()
 			})
 
+			parsed, err := duration.ParseDuration(spec.Analysis.Since)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse duration for analysis (%s): %w", spec.Analysis.Since, err)
+			}
+
 			var analyses []models.ConfigAnalysis
-			if err := ctx.DB().Where("config_id IN ?", relatedConfigIDs).Find(&analyses).Error; err != nil {
+			if err := ctx.DB().Where("NOW() - last_observed < ?", time.Duration(parsed)).Where("config_id IN ?", relatedConfigIDs).Find(&analyses).Error; err != nil {
 				return nil, fmt.Errorf("failed to get config analysis: %w", err)
 			}
 			pctx.analysisResults = append(pctx.analysisResults, analyses...)
