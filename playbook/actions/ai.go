@@ -1,26 +1,22 @@
 package actions
 
 import (
+	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/flanksource/commons/duration"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
+	"github.com/flanksource/duty/types"
+	"github.com/google/uuid"
+	"github.com/samber/lo"
+
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/llm"
-	"github.com/samber/lo"
 )
-
-type promptContext struct {
-	config          *models.ConfigItem
-	relatedConfigs  []query.RelatedConfig
-	relatedChanges  []query.ConfigChangeRow
-	analysisResults []models.ConfigAnalysis
-}
 
 type AIAction struct{}
 
@@ -45,7 +41,7 @@ func (t *AIAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 	}
 
 	llmConf := llm.Config{AIActionClient: spec.AIActionClient, UseAgent: spec.UseAgent}
-	response, err := llm.Prompt(ctx, llmConf, spec.SystemPrompt, prompt)
+	response, err := llm.Prompt(ctx, llmConf, spec.SystemPrompt, prompt...)
 	if err != nil {
 		return nil, err
 	}
@@ -53,40 +49,158 @@ func (t *AIAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 	return &AIActionResult{Logs: response}, nil
 }
 
-func buildPrompt(ctx context.Context, prompt string, spec v1.AIActionContext) (string, error) {
-	pctx, err := getPromptContext(ctx, spec)
+func buildPrompt(ctx context.Context, prompt string, spec v1.AIActionContext) ([]string, error) {
+	knowledge, err := getKnowledgeGraph(ctx, spec)
 	if err != nil {
-		return "", fmt.Errorf("failed to get prompt context: %w", err)
+		return nil, fmt.Errorf("failed to get prompt context: %w", err)
 	}
 
-	paragraphs := []string{
-		prompt,
-		fmt.Sprintf("here's the config:\n%s", jsonBlock(string(lo.FromPtr(pctx.config.Config)))),
-		formatRelatedConfigs(pctx.relatedConfigs),
-		formatRelatedConfigsGraph(pctx.relatedConfigs),
-		formatAnalyses(pctx.analysisResults),
-		formatChanges(pctx.config.ID.String(), pctx.relatedChanges),
+	knowledgeJSON, err := json.Marshal(knowledge)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get prompt context: %w", err)
 	}
 
-	paragraphs = lo.Filter(paragraphs, func(s string, _ int) bool { return s != "" })
-	output := strings.Join(paragraphs, "\n\n")
-	return output, nil
+	return []string{prompt, jsonBlock(string(knowledgeJSON))}, nil
 }
 
-func getPromptContext(ctx context.Context, spec v1.AIActionContext) (*promptContext, error) {
+func jsonBlock(code string) string {
+	const format = "```json\n%s\n```"
+	return fmt.Sprintf(format, code)
+}
+
+type Analysis struct {
+	ID            uuid.UUID     `json:"id"`
+	Analyzer      string        `json:"analyzer"`
+	Message       string        `json:"message"`
+	Summary       string        `json:"summary"`
+	Status        string        `json:"status"`
+	Severity      string        `json:"severity"`
+	AnalysisType  string        `json:"analysis_type"`
+	Analysis      types.JSONMap `json:"analysis"`
+	Source        string        `json:"source"`
+	FirstObserved *time.Time    `json:"first_observed"`
+	LastObserved  *time.Time    `json:"last_observed"`
+}
+
+func (t *Analysis) FromModel(c models.ConfigAnalysis) {
+	t.ID = c.ID
+	t.Analyzer = c.Analyzer
+	t.Message = c.Message
+	t.Summary = c.Summary
+	t.Status = c.Status
+	t.Severity = string(c.Severity)
+	t.AnalysisType = string(c.AnalysisType)
+	t.Analysis = c.Analysis
+	t.Source = c.Source
+	t.FirstObserved = c.FirstObserved
+	t.LastObserved = c.LastObserved
+}
+
+// Change represents a change made to a configuration.
+type Change struct {
+	Count         int        `json:"count"`
+	CreatedBy     string     `json:"created_by"`
+	FirstObserved *time.Time `json:"first_observed"`
+	LastObserved  *time.Time `json:"last_observed"`
+	Summary       string     `json:"summary"`
+	Type          string     `json:"type"`
+	Source        string     `json:"source"`
+
+	// TODO: These are not present in the related_changes_recursive.
+	// Diff    string `json:"diff,omitempty"`
+	// Patches string `json:"patches,,omitempty"`
+}
+
+func (t *Change) FromModel(c query.ConfigChangeRow) {
+	t.Count = c.Count
+	t.CreatedBy = c.ExternalCreatedBy
+	t.FirstObserved = c.FirstObserved
+	t.LastObserved = c.CreatedAt
+	t.Source = c.Source
+	t.Summary = c.Summary
+	t.Type = c.ChangeType
+}
+
+// Config represents a configuration in the knowledge graph.
+type Config struct {
+	Name     string     `json:"name"`
+	Type     string     `json:"type"`
+	Config   string     `json:"config"`
+	ID       string     `json:"id"`
+	Updated  *time.Time `json:"updated"`
+	Deleted  *time.Time `json:"deleted"`
+	Created  time.Time  `json:"created"`
+	Changes  []Change   `json:"changes"`
+	Analyses []Analysis `json:"analyses"`
+}
+
+// Edge represents a connection between two nodes in the graph.
+type Edge struct {
+	From string `json:"from"`
+	To   string `json:"to"`
+}
+
+// KnowledgeGraph represents the entire knowledge graph structure.
+type KnowledgeGraph struct {
+	Configs []Config `json:"configs"`
+	Graph   []Edge   `json:"graph"`
+}
+
+func (t *KnowledgeGraph) AddAnalysis(analyses ...models.ConfigAnalysis) {
+	for _, analysis := range analyses {
+		var a Analysis
+		a.FromModel(analysis)
+
+		for i, config := range t.Configs {
+			if analysis.ConfigID.String() == config.ID {
+				t.Configs[i].Analyses = append(t.Configs[i].Analyses, a)
+			}
+		}
+	}
+}
+
+func (t *KnowledgeGraph) AddChanges(changes ...query.ConfigChangeRow) {
+	for _, change := range changes {
+		var c Change
+		c.FromModel(change)
+
+		for i, config := range t.Configs {
+			if change.ConfigID == config.ID {
+				t.Configs[i].Changes = append(t.Configs[i].Changes, c)
+			}
+		}
+	}
+}
+
+func getKnowledgeGraph(ctx context.Context, spec v1.AIActionContext) (*KnowledgeGraph, error) {
+	var kg KnowledgeGraph
+
 	config, err := query.GetCachedConfig(ctx, spec.Config)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get config (%s): %w", spec.Config, err)
 	} else if config == nil {
 		return nil, fmt.Errorf("config doesn't exist (%s)", spec.Config)
+	} else {
+		kg.Configs = append(kg.Configs, Config{
+			ID:      config.ID.String(),
+			Name:    lo.FromPtr(config.Name),
+			Type:    lo.FromPtr(config.Type),
+			Config:  lo.FromPtr(config.Config),
+			Created: config.CreatedAt,
+			Updated: config.UpdatedAt,
+			Deleted: config.DeletedAt,
+		})
 	}
 
-	pctx := &promptContext{
-		config: config,
+	for _, relationship := range spec.Relationships {
+		err := kg.processRelationship(ctx, config.ID, relationship)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	if spec.ShouldFetchConfigChanges() {
-		response, err := query.FindCatalogChanges(ctx, query.CatalogChangesSearchRequest{
+		changes, err := query.FindCatalogChanges(ctx, query.CatalogChangesSearchRequest{
 			CatalogID: config.ID.String(),
 			Recursive: query.CatalogChangeRecursiveNone,
 			From:      fmt.Sprintf("now-%s", spec.Changes.Since),
@@ -94,185 +208,92 @@ func getPromptContext(ctx context.Context, spec v1.AIActionContext) (*promptCont
 		if err != nil {
 			return nil, fmt.Errorf("failed to get config changes (%s): %w", config.ID, err)
 		}
-		pctx.relatedChanges = append(pctx.relatedChanges, response.Changes...)
+
+		kg.AddChanges(changes.Changes...)
 	}
 
 	if spec.Analysis.Since != "" {
-		parsed, err := duration.ParseDuration(spec.Analysis.Since)
+		analyses, err := getConfigAnalysis(ctx, config.ID.String(), spec.Analysis.Since)
 		if err != nil {
-			return nil, fmt.Errorf("failed to parse duration for analysis (%s): %w", spec.Analysis.Since, err)
+			return nil, err
 		}
-
-		var analyses []models.ConfigAnalysis
-		if err := ctx.DB().Where("NOW() - last_observed < ?", time.Duration(parsed)).Where("config_id = ?", config.ID.String()).Find(&analyses).Error; err != nil {
-			return nil, fmt.Errorf("failed to get config analysis: %w", err)
-		}
-		pctx.analysisResults = append(pctx.analysisResults, analyses...)
+		kg.AddAnalysis(analyses...)
 	}
 
-	for _, relationship := range spec.Relationships {
-		relatedConfigs, err := query.GetRelatedConfigs(ctx, relationship.ToRelationshipQuery(config.ID))
-		if err != nil {
-			return nil, fmt.Errorf("failed to get related config (%s): %w", config.ID, err)
-		}
-		pctx.relatedConfigs = append(pctx.relatedConfigs, relatedConfigs...)
-
-		if relationship.Changes.Since != "" {
-			response, err := query.FindCatalogChanges(ctx, query.CatalogChangesSearchRequest{
-				CatalogID: config.ID.String(),
-				Depth:     lo.FromPtr(relationship.Depth),
-				Recursive: relationship.Direction.ToChangeDirection(),
-				From:      fmt.Sprintf("now-%s", relationship.Changes.Since),
-			})
-			if err != nil {
-				return nil, fmt.Errorf("failed to get config changes (%s): %w", config.ID, err)
-			}
-			pctx.relatedChanges = append(pctx.relatedChanges, response.Changes...)
-		}
-
-		if len(relatedConfigs) > 0 && relationship.Analysis.Since != "" {
-			relatedConfigIDs := lo.Map(relatedConfigs, func(c query.RelatedConfig, _ int) string {
-				return c.ID.String()
-			})
-
-			parsed, err := duration.ParseDuration(spec.Analysis.Since)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse duration for analysis (%s): %w", spec.Analysis.Since, err)
-			}
-
-			var analyses []models.ConfigAnalysis
-			if err := ctx.DB().Where("NOW() - last_observed < ?", time.Duration(parsed)).Where("config_id IN ?", relatedConfigIDs).Find(&analyses).Error; err != nil {
-				return nil, fmt.Errorf("failed to get config analysis: %w", err)
-			}
-			pctx.analysisResults = append(pctx.analysisResults, analyses...)
-		}
-	}
-
-	return pctx, nil
+	return &kg, nil
 }
 
-func formatChanges(configID string, changes []query.ConfigChangeRow) string {
-	if len(changes) == 0 {
-		return ""
+func getConfigAnalysis(ctx context.Context, configID, since string) ([]models.ConfigAnalysis, error) {
+	parsed, err := duration.ParseDuration(since)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse duration for analysis (%s): %w", since, err)
 	}
 
-	var outputs []string
-	var configChanges []string
-	var relatedConfigChanges []string
-
-	seen := make(map[string]struct{})
-	for _, c := range changes {
-		if _, ok := seen[c.ID]; ok {
-			continue
-		}
-
-		seen[c.ID] = struct{}{}
-		if c.ConfigID == configID {
-			configChanges = append(configChanges, fmt.Sprintf("%s | %s | %s | %s", c.ChangeType, c.Summary, c.Source, c.CreatedAt))
-		} else {
-			relatedConfigChanges = append(relatedConfigChanges, fmt.Sprintf("%s | %s | %s | %s | %s", c.ConfigID, c.ChangeType, c.Summary, c.Source, c.CreatedAt))
-		}
+	var analyses []models.ConfigAnalysis
+	if err := ctx.DB().
+		Where("NOW() - last_observed < ?", time.Duration(parsed)).
+		Where("config_id = ?", configID).
+		Find(&analyses).Error; err != nil {
+		return nil, fmt.Errorf("failed to get config analysis: %w", err)
 	}
 
-	if len(configChanges) > 0 {
-		lines := append([]string{
-			"here are the last few changes for the config:\n",
-			"change type | summary | source | created at",
-			"---         | ---     | ---    | ---",
-		}, configChanges...)
-		outputs = append(outputs, strings.Join(lines, "\n"))
-	}
-
-	if len(relatedConfigChanges) > 0 {
-		lines := append([]string{
-			"here are the last few changes for the related configs:\n",
-			"resource | change type | summary | source | created at",
-			"---      | ---         | ---     | ---    | ---",
-		}, relatedConfigChanges...)
-		outputs = append(outputs, strings.Join(lines, "\n"))
-	}
-
-	return strings.Join(outputs, "\n\n")
+	return analyses, nil
 }
 
-func formatRelatedConfigs(configs []query.RelatedConfig) string {
-	if len(configs) == 0 {
-		return ""
+func (t *KnowledgeGraph) processRelationship(ctx context.Context, configID uuid.UUID, relationship v1.AIActionRelationship) error {
+	relatedConfigs, err := query.GetRelatedConfigs(ctx, relationship.ToRelationshipQuery(configID))
+	if err != nil {
+		return fmt.Errorf("failed to get related config (%s): %w", configID, err)
 	}
 
-	seen := make(map[string]struct{})
-	lines := []string{
-		"here are the related configs:\n",
-		" id | name | type | created at | updated at | changes | status | health",
-		"--- | ---  | ---  | ---        | ---        | ---     | ---    | ---",
-	}
-	for _, c := range configs {
-		if _, ok := seen[c.ID.String()]; ok {
-			continue
-		}
+	relatedConfigIDs := lo.Map(relatedConfigs, func(c query.RelatedConfig, _ int) string {
+		return c.ID.String()
+	})
 
-		lines = append(lines, fmt.Sprintf("%s | %s | %s | %s | %s | %d | %s | %s",
-			c.ID.String(), c.Name, c.Type, c.CreatedAt, c.UpdatedAt, c.Changes, lo.FromPtr(c.Status), lo.FromPtr(c.Health),
-		))
-		seen[c.ID.String()] = struct{}{}
-	}
+	for _, rc := range relatedConfigs {
+		t.Configs = append(t.Configs, Config{
+			ID:      rc.ID.String(),
+			Name:    rc.Name,
+			Type:    rc.Type,
+			Created: rc.CreatedAt,
+			Updated: &rc.UpdatedAt,
+			Deleted: rc.DeletedAt,
+		})
 
-	return strings.Join(lines, "\n")
-}
-
-func formatRelatedConfigsGraph(configs []query.RelatedConfig) string {
-	if len(configs) == 0 {
-		return ""
-	}
-
-	nodes := make(map[string]struct{})
-	for _, c := range configs {
-		nodes[c.ID.String()] = struct{}{}
-	}
-
-	lines := []string{
-		"here's how these configs are related:\n",
-		"parent | child",
-		"--- | ---",
-	}
-	for _, c := range configs {
-		for _, relatedID := range c.RelatedIDs {
-			if _, ok := nodes[relatedID]; !ok {
+		for _, relatedID := range rc.RelatedIDs {
+			if !lo.Contains(relatedConfigIDs, relatedID) {
 				continue
 			}
 
-			lines = append(lines, fmt.Sprintf("%s | %s", c.ID.String(), relatedID))
+			t.Graph = append(t.Graph, Edge{
+				From: rc.ID.String(),
+				To:   relatedID,
+			})
 		}
 	}
 
-	return strings.Join(lines, "\n")
-}
-
-func formatAnalyses(analyses []models.ConfigAnalysis) string {
-	if len(analyses) == 0 {
-		return ""
-	}
-
-	seen := make(map[string]struct{})
-	lines := []string{
-		"here are the analysis for the configs:\n",
-		"config_id | source | analyzer | analysis | severity | summary | message | first observed",
-		"      --- | ---    | ---      | ---      | ---      | ---     |     --- | ---",
-	}
-	for _, a := range analyses {
-		if _, ok := seen[a.ID.String()]; ok {
-			continue
+	if relationship.Changes.Since != "" {
+		changes, err := query.FindCatalogChanges(ctx, query.CatalogChangesSearchRequest{
+			CatalogID: configID.String(),
+			Depth:     lo.FromPtr(relationship.Depth),
+			Recursive: relationship.Direction.ToChangeDirection(),
+			From:      fmt.Sprintf("now-%s", relationship.Changes.Since),
+		})
+		if err != nil {
+			return fmt.Errorf("failed to get config changes (%s): %w", configID, err)
 		}
-		seen[a.ID.String()] = struct{}{}
 
-		lines = append(lines, fmt.Sprintf("%s | %s | %s | %s | %s | %s | %s | %s",
-			a.ConfigID, a.Source, a.Analyzer, a.Analysis, a.Severity, a.Summary, a.Message, a.FirstObserved))
+		t.AddChanges(changes.Changes...)
 	}
 
-	return strings.Join(lines, "\n")
-}
+	if relationship.Analysis.Since != "" {
+		analysis, err := getConfigAnalysis(ctx, configID.String(), relationship.Analysis.Since)
+		if err != nil {
+			return fmt.Errorf("failed to get config analyses (%s): %w", configID, err)
+		}
 
-func jsonBlock(code string) string {
-	const format = "```json\n%s\n```"
-	return fmt.Sprintf(format, code)
+		t.AddAnalysis(analysis...)
+	}
+
+	return nil
 }

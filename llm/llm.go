@@ -23,7 +23,7 @@ type Config struct {
 	UseAgent bool
 }
 
-func Prompt(ctx context.Context, config Config, systemPrompt, prompt string) (string, error) {
+func Prompt(ctx context.Context, config Config, systemPrompt string, promptParts ...string) (string, error) {
 	model, err := getLLMModel(config)
 	if err != nil {
 		return "", err
@@ -40,12 +40,15 @@ func Prompt(ctx context.Context, config Config, systemPrompt, prompt string) (st
 		)
 
 		executor := agents.NewExecutor(agent)
-		return chains.Run(ctx, executor, prompt, chains.WithTemperature(0))
+		return chains.Run(ctx, executor, promptParts, chains.WithTemperature(0))
 	}
 
 	content := []llms.MessageContent{
 		llms.TextParts(llms.ChatMessageTypeSystem, systemPrompt),
-		llms.TextParts(llms.ChatMessageTypeHuman, prompt),
+	}
+
+	for _, p := range promptParts {
+		content = append(content, llms.TextParts(llms.ChatMessageTypeHuman, p))
 	}
 
 	resp, err := model.GenerateContent(ctx, content, llms.WithTemperature(0))
