@@ -21,7 +21,8 @@ import (
 type AIAction struct{}
 
 type AIActionResult struct {
-	Logs string `json:"logs,omitempty"` // TODO: only naming this "logs" because the frontend has proper formatted display for this field
+	Markdown string `json:"markdown,omitempty"`
+	Slack    string `json:"slack,omitempty"`
 }
 
 func (t *AIAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, error) {
@@ -44,7 +45,7 @@ func (t *AIAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 		return nil, err
 	}
 
-	return &AIActionResult{Logs: response}, nil
+	return &AIActionResult{Markdown: response}, nil
 }
 
 func buildPrompt(ctx context.Context, prompt string, spec v1.AIActionContext) ([]string, error) {

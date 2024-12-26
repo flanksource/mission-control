@@ -386,6 +386,10 @@ type AIAction struct {
 
 	// Prompt is the humna prompt
 	Prompt string `json:"prompt" template:"true"`
+
+	// Output format of the prompt.
+	// Supported: markdown (default), slack.
+	Formats []string `json:"formats,omitempty"`
 }
 
 type ExecAction struct {

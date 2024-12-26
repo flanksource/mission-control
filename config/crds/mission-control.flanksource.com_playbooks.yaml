@@ -124,6 +124,13 @@ spec:
                         connection:
                           description: Connection to setup the llm backend connection
                           type: string
+                        formats:
+                          description: |-
+                            Output format of the prompt.
+                            Supported: markdown (default), slack.
+                          items:
+                            type: string
+                          type: array
                         model:
                           description: |-
                             Model name based on the backend chosen.

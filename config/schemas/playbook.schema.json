@@ -40,6 +40,12 @@
         },
         "prompt": {
           "type": "string"
+        },
+        "formats": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,
