@@ -54,6 +54,7 @@ spec:
                           - since
                           type: object
                         apiKey:
+                          description: API Key
                           properties:
                             name:
                               type: string
@@ -119,6 +120,9 @@ spec:
                           description: |-
                             The config id to operate on.
                             If not provided, the playbook's config is used.
+                          type: string
+                        connection:
+                          description: Connection to setup the llm backend connection
                           type: string
                         model:
                           description: |-

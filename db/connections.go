@@ -120,6 +120,47 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 		}
 	}
 
+	if obj.Spec.Anthropic != nil {
+		dbObj.Type = models.ConnectionTypeAnthropic
+		dbObj.Password = obj.Spec.Anthropic.ApiKey.String()
+
+		if obj.Spec.Anthropic.BaseURL != nil {
+			dbObj.URL = obj.Spec.Anthropic.BaseURL.String()
+		}
+
+		if obj.Spec.Anthropic.Model != nil {
+			dbObj.Properties = map[string]string{
+				"model": *obj.Spec.Anthropic.Model,
+			}
+		}
+	}
+
+	if obj.Spec.OpenAI != nil {
+		dbObj.Type = models.ConnectionTypeOpenAI
+		dbObj.Password = obj.Spec.OpenAI.ApiKey.String()
+
+		if obj.Spec.OpenAI.BaseURL != nil {
+			dbObj.URL = obj.Spec.OpenAI.BaseURL.String()
+		}
+
+		if obj.Spec.OpenAI.Model != nil {
+			dbObj.Properties = map[string]string{
+				"model": *obj.Spec.OpenAI.Model,
+			}
+		}
+	}
+
+	if obj.Spec.Ollama != nil {
+		dbObj.Type = models.ConnectionTypeOllama
+		dbObj.URL = obj.Spec.Ollama.BaseURL.String()
+		dbObj.Password = obj.Spec.Ollama.ApiKey.String()
+		if obj.Spec.Ollama.Model != nil {
+			dbObj.Properties = map[string]string{
+				"model": *obj.Spec.Ollama.Model,
+			}
+		}
+	}
+
 	if obj.Spec.Kubernetes != nil {
 		dbObj.Type = models.ConnectionTypeKubernetes
 		dbObj.Certificate = obj.Spec.Kubernetes.Certificate.String()

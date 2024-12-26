@@ -53,7 +53,7 @@ func Prompt(ctx context.Context, config Config, systemPrompt string, promptParts
 
 	resp, err := model.GenerateContent(ctx, content, llms.WithTemperature(0))
 	if err != nil {
-		return "", fmt.Errorf("failed to generate resposne: %w", err)
+		return "", fmt.Errorf("failed to generate response: %w", err)
 	}
 
 	if len(resp.Choices) == 0 {

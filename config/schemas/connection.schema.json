@@ -96,6 +96,24 @@
         "bucket"
       ]
     },
+    "ConnectionAnthropic": {
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "url": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "apiKey": {
+          "$ref": "#/$defs/EnvVar"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "apiKey"
+      ]
+    },
     "ConnectionAzure": {
       "properties": {
         "clientID": {
@@ -361,6 +379,39 @@
         "password"
       ]
     },
+    "ConnectionOllama": {
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "url": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "apiKey": {
+          "$ref": "#/$defs/EnvVar"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ConnectionOpenAI": {
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "url": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "apiKey": {
+          "$ref": "#/$defs/EnvVar"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "apiKey"
+      ]
+    },
     "ConnectionPostgres": {
       "properties": {
         "url": {
@@ -573,11 +624,11 @@
         "properties": {
           "$ref": "#/$defs/JSONStringMap"
         },
+        "anthropic": {
+          "$ref": "#/$defs/ConnectionAnthropic"
+        },
         "aws": {
           "$ref": "#/$defs/ConnectionAWS"
-        },
-        "s3": {
-          "$ref": "#/$defs/ConnectionAWSS3"
         },
         "azure": {
           "$ref": "#/$defs/ConnectionAzure"
@@ -587,6 +638,15 @@
         },
         "gcp": {
           "$ref": "#/$defs/ConnectionGCP"
+        },
+        "ollama": {
+          "$ref": "#/$defs/ConnectionOllama"
+        },
+        "openai": {
+          "$ref": "#/$defs/ConnectionOpenAI"
+        },
+        "s3": {
+          "$ref": "#/$defs/ConnectionAWSS3"
         },
         "folder": {
           "$ref": "#/$defs/ConnectionFolder"

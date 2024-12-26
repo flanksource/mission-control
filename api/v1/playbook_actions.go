@@ -9,13 +9,15 @@ import (
 	"github.com/flanksource/commons/duration"
 	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty/connection"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
-	"github.com/flanksource/incident-commander/api"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"k8s.io/client-go/kubernetes"
+
+	"github.com/flanksource/incident-commander/api"
 )
 
 type NotificationAction struct {
@@ -273,6 +275,10 @@ func (t AIActionRelationship) ToRelationshipQuery(configID uuid.UUID) query.Rela
 }
 
 type AIActionClient struct {
+	// Connection to setup the llm backend connection
+	Connection *string `json:"connection,omitempty"`
+
+	// API Key
 	APIKey types.EnvVar `json:"apiKey,omitempty"`
 
 	// Optionally specify the LLM backend.
@@ -286,6 +292,50 @@ type AIActionClient struct {
 	// BaseURL or API url.
 	// Example: server URL for ollama or custom url for Anthropic if using a proxy
 	APIURL string `json:"apiURL,omitempty"`
+}
+
+func (t *AIActionClient) Populate(ctx context.Context) error {
+	if t.Connection != nil {
+		conn, err := ctx.HydrateConnectionByURL(*t.Connection)
+		if err != nil {
+			return err
+		} else if conn == nil {
+			return fmt.Errorf("connection(%s) was not found: %w", *t.Connection, err)
+		}
+
+		if err := t.APIKey.Scan(conn.Password); err != nil {
+			return err
+		}
+
+		t.APIURL = conn.URL
+
+		if m, ok := conn.Properties["model"]; ok {
+			t.Model = m
+		}
+
+		switch conn.Type {
+		case models.ConnectionTypeOllama:
+			t.Backend = api.LLMBackendOllama
+		case models.ConnectionTypeAnthropic:
+			t.Backend = api.LLMBackendAnthropic
+		case models.ConnectionTypeOpenAI:
+			t.Backend = api.LLMBackendOpenAI
+		default:
+			return fmt.Errorf("connection of type %q is not supported. Supported types: %s, %s & %s",
+				conn.Type, models.ConnectionTypeOllama, models.ConnectionTypeAnthropic, models.ConnectionTypeOpenAI,
+			)
+		}
+	}
+
+	if !t.APIKey.IsEmpty() {
+		if v, err := ctx.GetEnvValueFromCache(t.APIKey, ctx.GetNamespace()); err != nil {
+			return fmt.Errorf("failed to get api key from source ref : %w", err)
+		} else {
+			t.APIKey.ValueStatic = v
+		}
+	}
+
+	return nil
 }
 
 type AIActionContext struct {

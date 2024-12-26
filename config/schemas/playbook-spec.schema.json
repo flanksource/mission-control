@@ -5,6 +5,9 @@
   "$defs": {
     "AIAction": {
       "properties": {
+        "connection": {
+          "type": "string"
+        },
         "apiKey": {
           "$ref": "#/$defs/EnvVar"
         },

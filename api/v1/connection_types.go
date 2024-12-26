@@ -238,15 +238,36 @@ type ConnectionSMB struct {
 	Share string `json:"share"`
 }
 
+type ConnectionOpenAI struct {
+	Model   *string       `json:"model,omitempty"`
+	BaseURL *types.EnvVar `json:"url,omitempty"`
+	ApiKey  types.EnvVar  `json:"apiKey"`
+}
+
+type ConnectionOllama struct {
+	Model   *string      `json:"model,omitempty"`
+	BaseURL types.EnvVar `json:"url,omitempty"`
+	ApiKey  types.EnvVar `json:"apiKey,omitempty"`
+}
+
+type ConnectionAnthropic struct {
+	Model   *string       `json:"model,omitempty"`
+	BaseURL *types.EnvVar `json:"url,omitempty"`
+	ApiKey  types.EnvVar  `json:"apiKey"`
+}
+
 // ConnectionSpec defines the desired state of Connection
 type ConnectionSpec struct {
 	Properties types.JSONStringMap `json:"properties,omitempty"`
 
+	Anthropic   *ConnectionAnthropic   `json:"anthropic,omitempty"`
 	AWS         *ConnectionAWS         `json:"aws,omitempty"`
-	S3          *ConnectionAWSS3       `json:"s3,omitempty"`
 	Azure       *ConnectionAzure       `json:"azure,omitempty"`
 	AzureDevops *ConnectionAzureDevops `json:"azureDevops,omitempty"`
 	GCP         *ConnectionGCP         `json:"gcp,omitempty"`
+	Ollama      *ConnectionOllama      `json:"ollama,omitempty"`
+	OpenAI      *ConnectionOpenAI      `json:"openai,omitempty"`
+	S3          *ConnectionAWSS3       `json:"s3,omitempty"`
 
 	Folder     *ConnectionFolder     `json:"folder,omitempty"`
 	Git        *ConnectionGit        `json:"git,omitempty"`

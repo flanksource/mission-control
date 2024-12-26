@@ -19,13 +19,7 @@ spec:
   actions:
     - name: query
       ai:
-        backend: anthropic
-        model: claude-3-5-sonnet-latest
-        apiKey:
-          valueFrom:
-            secretKeyRef:
-              name: anthropic
-              key: API_KEY
+        connection: connection://mc/anthropic
         systemPrompt: |
           **Role:** Seasoned Kubernetes engineer and Diagnostic Expert
 

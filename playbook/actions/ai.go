@@ -29,15 +29,13 @@ func (t *AIAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 		spec.Backend = api.LLMBackendOpenAI
 	}
 
-	if apiKey, err := ctx.GetEnvValueFromCache(spec.APIKey, ctx.GetNamespace()); err != nil {
-		return nil, err
-	} else {
-		spec.APIKey.ValueStatic = apiKey
-	}
-
 	prompt, err := buildPrompt(ctx, spec.Prompt, spec.AIActionContext)
 	if err != nil {
 		return nil, fmt.Errorf("failed to form prompt: %w", err)
+	}
+
+	if err := spec.AIActionClient.Populate(ctx); err != nil {
+		return nil, fmt.Errorf("faield to populate llm client connection: %w", err)
 	}
 
 	llmConf := llm.Config{AIActionClient: spec.AIActionClient, UseAgent: spec.UseAgent}
