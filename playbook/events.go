@@ -17,6 +17,7 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/logs"
+	"github.com/flanksource/incident-commander/utils"
 	"github.com/google/uuid"
 	"github.com/patrickmn/go-cache"
 	"github.com/samber/lo"
@@ -301,14 +302,19 @@ func onNewRun(ctx context.Context, event models.Event) error {
 	}
 
 	newRun, err := Run(ctx, &playbook, runParam)
-	if err != nil {
+	if err != nil && !utils.MatchOopsErrCode(err, dutyAPI.EFORBIDDEN) {
 		return err
 	}
 
-	columnUpdates := map[string]any{
-		"status":          models.NotificationStatusPendingPlaybookCompletion,
-		"playbook_run_id": newRun.ID.String(),
+	columnUpdates := map[string]any{}
+	if newRun != nil {
+		columnUpdates["playbook_run_id"] = newRun.ID.String()
+		columnUpdates["status"] = models.NotificationStatusPendingPlaybookCompletion
+	} else {
+		columnUpdates["error"] = err.Error()
+		columnUpdates["status"] = models.NotificationStatusError
 	}
+
 	if err := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", notificationDispatchID).UpdateColumns(columnUpdates).Error; err != nil {
 		ctx.Errorf("playbook run initiated but failed to update the notification status (%s): %v", notificationDispatchID, err)
 	}
