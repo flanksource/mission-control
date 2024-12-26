@@ -58,7 +58,12 @@ func buildPrompt(ctx context.Context, prompt string, spec v1.AIActionContext) ([
 		return nil, fmt.Errorf("failed to get prompt context: %w", err)
 	}
 
-	return []string{prompt, jsonBlock(string(knowledgeJSON))}, nil
+	output := []string{prompt, jsonBlock(string(knowledgeJSON))}
+	if ctx.Properties().On(false, "playbook.action.ai.log-prompt") {
+		fmt.Println(output)
+	}
+
+	return output, nil
 }
 
 func jsonBlock(code string) string {
