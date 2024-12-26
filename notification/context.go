@@ -14,10 +14,11 @@ import (
 type RecipientType string
 
 const (
-	RecipientTypePerson   RecipientType = "person"
-	RecipientTypePlaybook RecipientType = "playbook"
-	RecipientTypeTeam     RecipientType = "team"
-	RecipientTypeCustom   RecipientType = "custom"
+	RecipientTypePerson     RecipientType = "person"
+	RecipientTypePlaybook   RecipientType = "playbook"
+	RecipientTypeTeam       RecipientType = "team"
+	RecipientTypeConnection RecipientType = "connection"
+	RecipientTypeURL        RecipientType = "url"
 )
 
 type Context struct {
@@ -53,8 +54,21 @@ func (t *Context) WithMessage(message string) {
 	t.log.Body = &message
 }
 
-func (t *Context) WithRecipientType(recipientType RecipientType) {
+func (t *Context) WithRecipient(recipientType RecipientType, id *uuid.UUID) {
 	t.recipientType = recipientType
+
+	switch recipientType {
+	case RecipientTypePerson:
+		t.log.PersonID = id
+	case RecipientTypePlaybook:
+		t.log.PlaybookRunID = id
+	case RecipientTypeTeam:
+		t.log.TeamID = id
+	case RecipientTypeConnection:
+		t.log.ConnectionID = id
+	case RecipientTypeURL:
+		// save nothing
+	}
 }
 
 func (t *Context) WithError(err error) {
@@ -75,14 +89,4 @@ func (t *Context) WithError(err error) {
 func (t *Context) WithSource(event string, resourceID uuid.UUID) {
 	t.log.SourceEvent = event
 	t.log.ResourceID = resourceID
-}
-
-func (t *Context) WithPersonID(id *uuid.UUID) *Context {
-	t.log.PersonID = id
-	return t
-}
-
-func (t *Context) WithPlaybookRun(id *uuid.UUID) *Context {
-	t.log.PlaybookRunID = id
-	return t
 }

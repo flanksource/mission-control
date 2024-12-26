@@ -41,7 +41,7 @@ type NotificationEventPayload struct {
 	EventName        string     `json:"event_name"`                  // The name of the original event this notification is for.
 	PlaybookID       *uuid.UUID `json:"playbook_id,omitempty"`       // The playbook to trigger
 	PersonID         *uuid.UUID `json:"person_id,omitempty"`         // The person recipient.
-	TeamID           string     `json:"team_id,omitempty"`           // The team recipient.
+	TeamID           *uuid.UUID `json:"team_id,omitempty"`           // The team recipient.
 	NotificationName string     `json:"notification_name,omitempty"` // Name of the notification of a team
 	NotificationID   uuid.UUID  `json:"notification_id,omitempty"`   // ID of the notification.
 	EventCreatedAt   time.Time  `json:"event_created_at"`            // Timestamp at which the original event was created
@@ -68,9 +68,9 @@ func PrepareAndSendEventNotification(ctx *Context, payload NotificationEventPayl
 	}
 
 	if payload.PersonID != nil {
-		ctx.WithPersonID(payload.PersonID).WithRecipientType(RecipientTypePerson)
+		ctx.WithRecipient(RecipientTypePerson, payload.PersonID)
 		var emailAddress string
-		if err := ctx.DB().Model(&models.Person{}).Select("email").Where("id = ?", payload.PersonID).Find(&emailAddress).Error; err != nil {
+		if err := ctx.DB().Model(&models.Person{}).Select("email").Where("id = ?", *payload.PersonID).Find(&emailAddress).Error; err != nil {
 			return fmt.Errorf("failed to get email of person(id=%s); %v", payload.PersonID, err)
 		}
 
@@ -78,9 +78,9 @@ func PrepareAndSendEventNotification(ctx *Context, payload NotificationEventPayl
 		return sendEventNotificationWithMetrics(ctx, celEnv.AsMap(), "", smtpURL, payload.EventName, notification, nil)
 	}
 
-	if payload.TeamID != "" {
-		ctx.WithRecipientType(RecipientTypeTeam)
-		teamSpec, err := teams.GetTeamSpec(ctx.Context, payload.TeamID)
+	if payload.TeamID != nil {
+		ctx.WithRecipient(RecipientTypeTeam, payload.TeamID)
+		teamSpec, err := teams.GetTeamSpec(ctx.Context, payload.TeamID.String())
 		if err != nil {
 			return fmt.Errorf("failed to get team(id=%s); %v", payload.TeamID, err)
 		}
@@ -100,7 +100,7 @@ func PrepareAndSendEventNotification(ctx *Context, payload NotificationEventPayl
 	// nolint: staticcheck
 	// (SA4004: the surrounding loop is unconditionally terminated)
 	for _, cn := range notification.CustomNotifications {
-		ctx.WithRecipientType(RecipientTypeCustom)
+		ctx.WithRecipient(RecipientTypeURL, nil)
 		return sendEventNotificationWithMetrics(ctx, celEnv.AsMap(), cn.Connection, cn.URL, payload.EventName, notification, cn.Properties)
 	}
 
@@ -110,7 +110,8 @@ func PrepareAndSendEventNotification(ctx *Context, payload NotificationEventPayl
 // triggerPlaybookRun creates an event to trigger a playbook run.
 // The notification of the status is then handled entirely by playbook.
 func triggerPlaybookRun(ctx *Context, celEnv *celVariables, playbookID uuid.UUID) error {
-	ctx.WithPlaybookRun(nil).WithRecipientType(RecipientTypePlaybook)
+	ctx.WithRecipient(RecipientTypePlaybook, nil) // the id is populated later by playbook when a run is triggered
+
 	err := ctx.Transaction(func(txCtx context.Context, _ trace.Span) error {
 		eventProp := types.JSONStringMap{
 			"id":                       playbookID.String(),
@@ -190,6 +191,8 @@ func SendNotification(ctx *Context, connectionName, shoutrrrURL string, celEnv m
 		} else if connection == nil {
 			return "", fmt.Errorf("connection (%s) not found", connectionName)
 		}
+
+		ctx.WithRecipient(RecipientTypeConnection, &connection.ID)
 
 		shoutrrrURL = connection.URL
 		data.Properties = collections.MergeMap(connection.Properties, data.Properties)
@@ -350,7 +353,7 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 				EventName:        event.Name,
 				NotificationID:   n.ID,
 				ID:               resourceID,
-				TeamID:           n.TeamID.String(),
+				TeamID:           n.TeamID,
 				NotificationName: cn.Name,
 				EventCreatedAt:   event.CreatedAt,
 				Properties:       eventProperties,
