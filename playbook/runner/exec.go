@@ -63,6 +63,9 @@ func executeAction(ctx context.Context, playbookID any, runID uuid.UUID, runActi
 	} else if actionSpec.Exec != nil {
 		var e actions.ExecAction
 		result, err = e.Run(ctx, *actionSpec.Exec)
+	} else if actionSpec.AI != nil {
+		var e actions.AIAction
+		result, err = e.Run(ctx, *actionSpec.AI)
 	} else if actionSpec.HTTP != nil {
 		var e actions.HTTP
 		result, err = e.Run(ctx, *actionSpec.HTTP)

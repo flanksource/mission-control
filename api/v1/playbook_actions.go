@@ -11,6 +11,7 @@ import (
 	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
+	"github.com/flanksource/incident-commander/api"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -235,6 +236,40 @@ func (git GitCheckout) GetCertificate() types.EnvVar {
 	return utils.Deref(git.Certificate)
 }
 
+type TimeMetadata struct {
+	Since string `json:"since" yaml:"since"`
+}
+
+type AIActionRelationship struct {
+	Depth    int          `json:"depth" yaml:"depth"`
+	Changes  TimeMetadata `json:"changes" yaml:"changes"`
+	Analysis TimeMetadata `json:"analysis" yaml:"analysis"`
+}
+
+type AIActionClient struct {
+	APIKey types.EnvVar `json:"apiKey"`
+
+	// Optionally specify the llm backend. Anthropic is the default.
+	Backend api.LLMBackend `json:"backend,omitempty"`
+
+	// Example: gpt-4o for openai, claude-3-haiku-20240307 for Anthropic, ...
+	Model string `json:"model,omitempty"`
+}
+
+type AIActionContext struct {
+	Config        string                `json:"config" yaml:"config" template:"true"`
+	Changes       TimeMetadata          `json:"changes,omitempty" yaml:"changes,omitempty"`
+	Analysis      TimeMetadata          `json:"analysis,omitempty" yaml:"analysis,omitempty"`
+	Relationships *AIActionRelationship `json:"relationships,omitempty" yaml:"relationships,omitempty"`
+}
+
+type AIAction struct {
+	AIActionClient  `json:",inline" yaml:",inline"`
+	AIActionContext `json:",inline" yaml:",inline" template:"true"`
+
+	Prompt string `json:"prompt" yaml:"prompt" template:"true"`
+}
+
 type ExecAction struct {
 	// Script can be an inline script or a path to a script that needs to be executed
 	// On windows executed via powershell and in darwin and linux executed using bash
@@ -405,6 +440,7 @@ type PlaybookAction struct {
 	// When left empty, the templating is done on the main instance(host) itself.
 	TemplatesOn string `json:"templatesOn,omitempty" yaml:"templatesOn,omitempty"`
 
+	AI                  *AIAction                  `json:"ai,omitempty" yaml:"ai,omitempty" template:"true"`
 	Exec                *ExecAction                `json:"exec,omitempty" yaml:"exec,omitempty" template:"true"`
 	GitOps              *GitOpsAction              `json:"gitops,omitempty" yaml:"gitops,omitempty" template:"true"`
 	Github              *GithubAction              `json:"github,omitempty" yaml:"github,omitempty" template:"true"`

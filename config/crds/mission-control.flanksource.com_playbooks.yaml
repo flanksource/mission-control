@@ -42,6 +42,105 @@ spec:
                 description: List of actions that need to be executed by this playbook.
                 items:
                   properties:
+                    ai:
+                      properties:
+                        analysis:
+                          properties:
+                            since:
+                              type: string
+                          required:
+                          - since
+                          type: object
+                        apiKey:
+                          properties:
+                            name:
+                              type: string
+                            value:
+                              type: string
+                            valueFrom:
+                              properties:
+                                configMapKeyRef:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      type: string
+                                  required:
+                                  - key
+                                  type: object
+                                helmRef:
+                                  properties:
+                                    key:
+                                      description: Key is a JSONPath expression used
+                                        to fetch the key from the merged JSON.
+                                      type: string
+                                    name:
+                                      type: string
+                                  required:
+                                  - key
+                                  type: object
+                                secretKeyRef:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      type: string
+                                  required:
+                                  - key
+                                  type: object
+                                serviceAccount:
+                                  description: ServiceAccount specifies the service
+                                    account whose token should be fetched
+                                  type: string
+                              type: object
+                          type: object
+                        backend:
+                          description: Optionally specify the llm backend. Anthropic
+                            is the default.
+                          type: string
+                        changes:
+                          properties:
+                            since:
+                              type: string
+                          required:
+                          - since
+                          type: object
+                        config:
+                          type: string
+                        model:
+                          description: 'Example: gpt-4o for openai, claude-3-haiku-20240307
+                            for Anthropic, ...'
+                          type: string
+                        prompt:
+                          type: string
+                        relationships:
+                          properties:
+                            analysis:
+                              properties:
+                                since:
+                                  type: string
+                              required:
+                              - since
+                              type: object
+                            changes:
+                              properties:
+                                since:
+                                  type: string
+                              required:
+                              - since
+                              type: object
+                            depth:
+                              type: integer
+                          required:
+                          - analysis
+                          - changes
+                          - depth
+                          type: object
+                      required:
+                      - apiKey
+                      - config
+                      - prompt
+                      type: object
                     azureDevopsPipeline:
                       properties:
                         org:

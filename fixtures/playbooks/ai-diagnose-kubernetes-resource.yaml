@@ -1,0 +1,42 @@
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: diagnose-kubernetes-resource
+spec:
+  description: Use AI to diagnose unhealthy kubernetes resources
+  configs:
+    - types:
+        - Kubernetes::Pod
+        - Kubernetes::Deployment
+        - Kubernetes::ContainerCluster
+  parameters:
+    - name: prompt
+      label: Prompt
+      default: Using the context provided, as a Kubernetes engineer find out why {{.config.name}} is not healthy
+  actions:
+    - name: query
+      ai:
+        backend: openai
+        model: gpt-4o
+        apiKey:
+          valueFrom:
+            secretKeyRef:
+              name: openai
+              key: API_KEY
+        prompt: "{{.params.prompt}}"
+        config: "{{.config.id}}"
+        changes:
+          since: 2h
+        analysis:
+          since: 2h
+        relationships:
+          depth: 3
+          changes:
+            since: 2h
+          analysis:
+            since: 2h
+    # - name: send notification
+      # notification:
+      #   title: "Diagnosis report for {{.config.name}}"
+      #   message: "{{ steps.ai.output }}"
