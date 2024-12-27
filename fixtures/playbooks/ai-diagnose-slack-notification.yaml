@@ -1,0 +1,76 @@
+---
+# yaml-language-server: $schema=../../config/schemas/playbook.schema.json
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: diagnose-and-send-to-slack
+spec:
+  description: Use AI to diagnose unhealthy config items and send a notification slack
+  configs:
+    - healths:
+        - unhealthy
+        - warning
+  parameters:
+    - name: prompt
+      label: Prompt
+      default: Find out why {{.config.name}} is unhealthy
+      properties:
+        multiline: 'true'
+  actions:
+    - name: query LLM
+      ai:
+        connection: connection://mc/openai
+        systemPrompt: |
+          **Role:** Seasoned Kubernetes engineer and Diagnostic Expert
+
+          **Objective:** Assist users in diagnosing issues with unhealthy Kubernetes resources by analyzing provided manifests and related resources.
+
+          **Instructions:**
+
+          1. **Resource Analysis:** Examine the manifest of the unhealthy resource thoroughly.
+          2. **Contextual Investigation:** Consider additional related resources provided (e.g., pods, replica sets, namespaces) to gain a comprehensive understanding of the issue.
+          4. **One-Time Diagnosis:** Aim to diagnose the issue in a single response without requiring follow-up questions.
+
+          **Output:** Provide a concise diagnosis and potential solutions based on the analysis.
+          The output should be in json using Block Kit(https://api.slack.com/block-kit) - a UI framework for Slack apps.
+          Example: output 
+          {
+            "blocks": [
+              {
+                "type": "section",
+                "fields": [
+                  {
+                    "type": "mrkdwn",
+                    "text": "Statefulset: alertmanager"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Namespace*: mc"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "Deployment has pods that are in a crash loop."
+                  }
+                ]
+              },
+            ]
+          }
+        prompt: '{{.params.prompt}}'
+        changes:
+          since: 2d
+        analysis:
+          since: 2d
+        relationships:
+          - depth: 3
+            direction: outgoing
+            changes:
+              since: 24h
+          - depth: 5
+            direction: incoming
+            changes:
+              since: 24h
+    - name: send notification
+      notification:
+        connection: connection://mc/flanksource-slack
+        title: Diagnosis report
+        message: '{{ getLastAction.result.logs }}'

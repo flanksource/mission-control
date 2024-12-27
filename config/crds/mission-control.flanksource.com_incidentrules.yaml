@@ -74,6 +74,11 @@ spec:
                       type: string
                     fieldSelector:
                       type: string
+                    healths:
+                      description: Healths filter resources by the health
+                      items:
+                        type: string
+                      type: array
                     id:
                       type: string
                     includeDeleted:

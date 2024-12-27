@@ -1,0 +1,51 @@
+---
+# yaml-language-server: $schema=../../config/schemas/playbook.schema.json
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: diagnose-aws-resource
+spec:
+  description: Use AI to diagnose AWS resources
+  configs:
+    - types:
+        - AWS::CloudFormation::Stack
+        - AWS::EC2::VPC
+  parameters:
+    - name: prompt
+      label: Prompt
+      default: Find out why {{.config.name}} is not healthy
+      properties:
+        multiline: 'true'
+  actions:
+    - name: query
+      ai:
+        backend: ollama
+        model: llama3.1:8b
+        apiURL: http://localhost:11434
+        systemPrompt: |
+          You are a seasoned AWS engineer with extensive expertise in troubleshooting and optimizing AWS resources. 
+          Your primary objective is to assist users in diagnosing issues with AWS resources that are not performing as expected.
+
+          Begin by gathering relevant information and context about the resource in question.
+          Analyze the data to identify any anomalies or misconfigurations that could be contributing to the problem.
+          Provide a step-by-step breakdown of your diagnostic process, highlighting key findings and potential root causes.
+          Offer clear and actionable recommendations to resolve the issues, ensuring that your guidance is both comprehensive and easy to understand.
+          Maintain a professional and supportive tone throughout your response, empowering the user to effectively address and prevent similar issues in the future.
+        prompt: '{{.params.prompt}}'
+        changes:
+          since: 2h
+        analysis:
+          since: 7d
+        relationships:
+          - depth: 3
+            direction: outgoing
+            changes:
+              since: 7d
+            analysis:
+              since: 30d
+          - depth: 5
+            direction: incoming
+            changes:
+              since: 7d
+            analysis:
+              since: 30d

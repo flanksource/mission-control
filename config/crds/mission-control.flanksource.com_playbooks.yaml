@@ -42,6 +42,142 @@ spec:
                 description: List of actions that need to be executed by this playbook.
                 items:
                   properties:
+                    ai:
+                      properties:
+                        analysis:
+                          description: Select analysis for the config to provide as
+                            an additional context to the AI model.
+                          properties:
+                            since:
+                              type: string
+                          required:
+                          - since
+                          type: object
+                        apiKey:
+                          description: API Key
+                          properties:
+                            name:
+                              type: string
+                            value:
+                              type: string
+                            valueFrom:
+                              properties:
+                                configMapKeyRef:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      type: string
+                                  required:
+                                  - key
+                                  type: object
+                                helmRef:
+                                  properties:
+                                    key:
+                                      description: Key is a JSONPath expression used
+                                        to fetch the key from the merged JSON.
+                                      type: string
+                                    name:
+                                      type: string
+                                  required:
+                                  - key
+                                  type: object
+                                secretKeyRef:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      type: string
+                                  required:
+                                  - key
+                                  type: object
+                                serviceAccount:
+                                  description: ServiceAccount specifies the service
+                                    account whose token should be fetched
+                                  type: string
+                              type: object
+                          type: object
+                        apiURL:
+                          description: |-
+                            BaseURL or API url.
+                            Example: server URL for ollama or custom url for Anthropic if using a proxy
+                          type: string
+                        backend:
+                          description: |-
+                            Optionally specify the LLM backend.
+                            Supported: anthropic (default), ollama, openai.
+                          type: string
+                        changes:
+                          description: Select changes for the config to provide as
+                            an additional context to the AI model.
+                          properties:
+                            since:
+                              type: string
+                          required:
+                          - since
+                          type: object
+                        config:
+                          description: |-
+                            The config id to operate on.
+                            If not provided, the playbook's config is used.
+                          type: string
+                        connection:
+                          description: Connection to setup the llm backend connection
+                          type: string
+                        formats:
+                          description: |-
+                            Output format of the prompt.
+                            Supported: markdown (default), slack.
+                          items:
+                            type: string
+                          type: array
+                        model:
+                          description: |-
+                            Model name based on the backend chosen.
+                            Example: gpt-4o for openai, claude-3-5-sonnet-latest for Anthropic, llama3.1:8b for Ollama
+                          type: string
+                        prompt:
+                          description: Prompt is the humna prompt
+                          type: string
+                        relationships:
+                          description: Select related configs to provide as an additional
+                            context to the AI model.
+                          items:
+                            properties:
+                              analysis:
+                                properties:
+                                  since:
+                                    type: string
+                                required:
+                                - since
+                                type: object
+                              changes:
+                                properties:
+                                  since:
+                                    type: string
+                                required:
+                                - since
+                                type: object
+                              depth:
+                                description: max depth to traverse the relationship.
+                                  Defaults to 3
+                                type: integer
+                              direction:
+                                description: use incoming/outgoing/all relationships.
+                                type: string
+                            type: object
+                          type: array
+                        systemPrompt:
+                          description: |-
+                            system prompt is a way to provide context, instructions, and guidelines to the LLM before presenting it
+                            with a question or task.
+                            By using a system prompt, you can set the stage for the conversation, specifying LLM's role, personality,
+                            tone, or any other relevant information that will help it better understand and respond to the user's input.
+                          type: string
+                      required:
+                      - prompt
+                      - systemPrompt
+                      type: object
                     azureDevopsPipeline:
                       properties:
                         org:
@@ -1279,6 +1415,11 @@ spec:
                       type: string
                     fieldSelector:
                       type: string
+                    healths:
+                      description: Healths filter resources by the health
+                      items:
+                        type: string
+                      type: array
                     id:
                       type: string
                     includeDeleted:
@@ -1335,6 +1476,11 @@ spec:
                       type: string
                     fieldSelector:
                       type: string
+                    healths:
+                      description: Healths filter resources by the health
+                      items:
+                        type: string
+                      type: array
                     id:
                       type: string
                     includeDeleted:
@@ -1391,6 +1537,11 @@ spec:
                       type: string
                     fieldSelector:
                       type: string
+                    healths:
+                      description: Healths filter resources by the health
+                      items:
+                        type: string
+                      type: array
                     id:
                       type: string
                     includeDeleted:
