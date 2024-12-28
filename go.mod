@@ -12,9 +12,9 @@ require (
 	github.com/casbin/casbin/v2 v2.87.1
 	github.com/casbin/gorm-adapter/v3 v3.26.0
 	github.com/containrrr/shoutrrr v0.8.0
-	github.com/fergusstrange/embedded-postgres v1.25.0 // indirect
+	github.com/fergusstrange/embedded-postgres v1.29.0 // indirect
 	github.com/flanksource/commons v1.35.3
-	github.com/flanksource/duty v1.0.784
+	github.com/flanksource/duty v1.0.786
 	github.com/flanksource/gomplate/v3 v3.24.49
 	github.com/flanksource/kopper v1.0.11
 	github.com/gomarkdown/markdown v0.0.0-20240419095408-642f0ee99ae2
