@@ -108,6 +108,21 @@ type PermissionObject struct {
 	Components []types.ResourceSelector `json:"components,omitempty"`
 }
 
+func (t PermissionObject) RequiredMatchCount() int {
+	var count int
+	if len(t.Playbooks) > 0 {
+		count++
+	}
+	if len(t.Configs) > 0 {
+		count++
+	}
+	if len(t.Components) > 0 {
+		count++
+	}
+
+	return count
+}
+
 // +kubebuilder:object:generate=true
 type PermissionSpec struct {
 	// Description provides a brief explanation of the permission.

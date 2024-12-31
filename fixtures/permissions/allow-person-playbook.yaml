@@ -5,10 +5,13 @@ kind: Permission
 metadata:
   name: allow-user-playbook-run
 spec:
-  description: allow user john to run any playbook
+  description: |
+    allow user john to run any playbook but only on configs in `mission-control` namespace
   subject:
     person: john@doe.com
-  action: playbook:run
+  action: playbook:*
   object:
     playbooks:
-      - {} # empty selector to allow any playbook
+      - name: "*" # this is a wildcard selector that matches any playbook
+    configs:
+      - namespace: mission-control
