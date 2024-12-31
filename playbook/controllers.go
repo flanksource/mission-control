@@ -43,9 +43,9 @@ func RegisterRoutes(e *echo.Echo) {
 	}, rbac.Authorization(policy.ObjectMonitor, policy.ActionRead))
 
 	runGroup := playbookGroup.Group("/run")
-	runGroup.POST("", HandlePlaybookRun, rbac.Playbook(policy.ActionPlaybookRun))
+	runGroup.POST("", HandlePlaybookRun)
 	runGroup.GET("/:id", HandleGetPlaybookRun, rbac.Playbook(policy.ActionRead))
-	runGroup.POST("/approve/:run_id", HandlePlaybookRunApproval, rbac.Playbook(policy.ActionPlaybookApprove))
+	runGroup.POST("/approve/:run_id", HandlePlaybookRunApproval)
 }
 
 type RunResponse struct {

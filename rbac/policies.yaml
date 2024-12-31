@@ -1,14 +1,14 @@
 - principal: everyone
   acl:
     - objects: database.kratos
-      actions: '!*'
+      actions: "!*"
     # Activate after UI update
     # - objects: connection
     #   actions: "!read"
 - principal: admin
   acl:
-    - objects: '*'
-      actions: '*'
+    - objects: "*"
+      actions: "*"
   inherit:
     - everyone
 - principal: viewer
@@ -32,13 +32,9 @@
     - objects: canaries,catalog,topology,playbooks,kubernetes-proxy,notification
       actions: create,read,update,delete
     - objects: connection
-      actions: 'create,read,update,delete'
+      actions: "create,read,update,delete"
     - objects: connection-detail
       actions: read
-    - objects: playbooks
-      actions: playbook:run
-    - objects: playbooks
-      actions: playbook:approve
   inherit:
     - viewer
 - principal: agent
