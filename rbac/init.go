@@ -203,34 +203,57 @@ func addCustomCasbinFunctions(enforcer *casbin.SyncedCachedEnforcer) {
 			return false, fmt.Errorf("matchResourceSelector needs 2 arguments. got %d", len(args))
 		}
 
-		var playbook models.Playbook
-		switch v := args[0].(type) {
-		case string:
+		attributeSet := args[0]
+		selector := args[1]
+
+		if _, ok := attributeSet.(string); ok {
 			return false, nil
-		case *models.RBACAttribute:
-			playbook = v.Playbook
 		}
 
-		rs, err := base64.StdEncoding.DecodeString(args[1].(string))
+		attr, ok := attributeSet.(*models.RBACAttribute)
+		if !ok {
+			return false, fmt.Errorf("unknown input type: %T", attributeSet)
+		}
+
+		rs, err := base64.StdEncoding.DecodeString(selector.(string))
 		if err != nil {
 			return false, err
 		}
 
-		var object v1.PermissionObject
-		if err := json.Unmarshal([]byte(rs), &object); err != nil {
+		var objectSelector v1.PermissionObject
+		if err := json.Unmarshal([]byte(rs), &objectSelector); err != nil {
 			return false, err
 		}
 
-		for _, rs := range object.Playbooks {
-			if rs.IsEmpty() {
-				return true, nil // empty selector matches any
-			}
+		var resourcesMatched int
 
-			if rs.Matches(&playbook) {
-				return true, nil
+		if attr.Component != nil {
+			for _, rs := range objectSelector.Components {
+				if rs.Matches(attr.Component) {
+					resourcesMatched++
+					break
+				}
 			}
 		}
 
-		return false, err
+		if attr.Playbook != nil {
+			for _, rs := range objectSelector.Playbooks {
+				if rs.Matches(attr.Playbook) {
+					resourcesMatched++
+					break
+				}
+			}
+		}
+
+		if attr.Config != nil {
+			for _, rs := range objectSelector.Configs {
+				if rs.Matches(attr.Config) {
+					resourcesMatched++
+					break
+				}
+			}
+		}
+
+		return resourcesMatched == objectSelector.RequiredMatchCount(), nil
 	})
 }
