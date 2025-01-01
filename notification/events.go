@@ -192,7 +192,7 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 	}
 
 	for _, payload := range payloads {
-		if shouldSilence(ctx, celEnv, matchingSilences) {
+		if silencedBy := getFirstSilencer(ctx, celEnv, matchingSilences); silencedBy != nil {
 			ctx.Logger.V(6).Infof("silencing notification for event %s due to %d matching silences", event.ID, matchingSilences)
 			ctx.Counter("notification_silenced", "id", id, "resource", payload.ID.String()).Add(1)
 
@@ -200,6 +200,7 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 				NotificationID: n.ID,
 				ResourceID:     payload.ID,
 				SourceEvent:    event.Name,
+				SilencedBy:     &silencedBy.ID,
 				Status:         models.NotificationStatusSilenced,
 			}
 			if err := db.SaveUnsentNotificationToHistory(ctx, history); err != nil {
@@ -563,10 +564,11 @@ func GetEnvForEvent(ctx context.Context, event models.Event) (*celVariables, err
 	return &env, nil
 }
 
-func shouldSilence(ctx context.Context, celEnv *celVariables, matchingSilences []models.NotificationSilence) bool {
+// getFirstSilencer returns the first matching silence that can silence notification on the given resource.
+func getFirstSilencer(ctx context.Context, celEnv *celVariables, matchingSilences []models.NotificationSilence) *models.NotificationSilence {
 	for _, silence := range matchingSilences {
 		if silence.Filter == "" && silence.Selectors == nil {
-			return true
+			return &silence
 		}
 
 		if silence.Filter != "" {
@@ -579,7 +581,7 @@ func shouldSilence(ctx context.Context, celEnv *celVariables, matchingSilences [
 				ctx.Errorf("silence filter did not return a boolean value(%s): %v", silence.Filter, err)
 				logs.IfError(db.UpdateNotificationSilenceError(ctx, silence.ID.String(), err.Error()), "failed to update notification silence")
 			} else if ok {
-				return true
+				return &silence
 			}
 		}
 
@@ -592,12 +594,12 @@ func shouldSilence(ctx context.Context, celEnv *celVariables, matchingSilences [
 			}
 
 			if matchSelectors(celEnv.SelectableResource(), resourceSelectors) {
-				return true
+				return &silence
 			}
 		}
 	}
 
-	return false
+	return nil
 }
 
 func matchSelectors(selectableResource types.ResourceSelectable, resourceSelectors []types.ResourceSelector) bool {
