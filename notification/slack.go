@@ -25,6 +25,10 @@ func SlackSend(ctx *Context, apiToken, channel string, msg NotificationTemplate)
 		opts = append(opts, slack.MsgOptionText(msg.Title, false))
 	}
 
+	// keep track of the message body for notification send history.
+	// we can't JSON marshal opts (type []slack.MsgOption)
+	var msgBody []any
+
 	if msg.Message != "" {
 		if strings.Contains(msg.Message, `"blocks"`) {
 			var slackMsg SlackMsgTemplate
@@ -33,12 +37,20 @@ func SlackSend(ctx *Context, apiToken, channel string, msg NotificationTemplate)
 			}
 
 			opts = append(opts, slack.MsgOptionBlocks(slackMsg.Blocks.BlockSet...))
+			msgBody = append(msgBody, slackMsg)
 		} else {
 			opts = append(opts, slack.MsgOptionText(msg.Message, false))
+			msgBody = append(msgBody, msg.Message)
 		}
 	}
 
-	_, _, err := api.PostMessage(channel, opts...)
+	if b, err := json.Marshal(msgBody); err != nil {
+		ctx.WithMessage(msg.Message)
+	} else {
+		ctx.WithMessage(string(b))
+	}
+
+	_, _, err := api.PostMessageContext(ctx, channel, opts...)
 
 	var slackError slack.SlackErrorResponse
 	if errors.As(err, &slackError) {
