@@ -21,12 +21,12 @@ func NewEnforcer(policy string) (*casbin.Enforcer, error) {
 
 func TestEnforcer(t *testing.T) {
 	policy := `
-p, admin, *, * , allow,  true
-g, johndoe, admin, , ,       
-p, johndoe, *, playbook:run, allow, r.obj.playbook.name == 'scale-deployment' 
-p, johndoe, *, playbook:run, deny, r.obj.playbook.name == 'delete-deployment' 
-p, johndoe, *, playbook:run, allow, r.obj.playbook.name == 'restart-deployment' && r.obj.config.tags.namespace == 'default' 
-p, alice, *, playbook:run, deny, r.obj.playbook.name == 'restart-deployment' && r.obj.config.tags.namespace == 'default'
+p, admin, *, * , allow,  true, na
+g, johndoe, admin, , ,       , na
+p, johndoe, *, playbook:run, allow, r.obj.playbook.name == 'scale-deployment' , na
+p, johndoe, *, playbook:run, deny, r.obj.playbook.name == 'delete-deployment' , na
+p, johndoe, *, playbook:run, allow, r.obj.playbook.name == 'restart-deployment' && r.obj.config.tags.namespace == 'default' , na
+p, alice, *, playbook:run, deny, r.obj.playbook.name == 'restart-deployment' && r.obj.config.tags.namespace == 'default', na
 `
 
 	enforcer, err := NewEnforcer(policy)
