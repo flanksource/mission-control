@@ -9,6 +9,7 @@ import (
 	"github.com/flanksource/duty/query"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/rbac"
+	"github.com/flanksource/incident-commander/rbac/policy"
 	"github.com/labstack/echo/v4"
 )
 
@@ -19,7 +20,7 @@ func init() {
 func RegisterRoutes(e *echo.Echo) {
 	logger.Infof("Registering /catalog routes")
 
-	apiGroup := e.Group("/catalog", rbac.Catalog(rbac.ActionRead))
+	apiGroup := e.Group("/catalog", rbac.Catalog(policy.ActionRead))
 	apiGroup.POST("/summary", SearchConfigSummary)
 
 	apiGroup.POST("/changes", SearchCatalogChanges)

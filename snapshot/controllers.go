@@ -13,6 +13,7 @@ import (
 	"github.com/flanksource/duty/context"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/rbac"
+	"github.com/flanksource/incident-commander/rbac/policy"
 	"github.com/labstack/echo/v4"
 )
 
@@ -36,9 +37,9 @@ func init() {
 func RegisterRoutes(e *echo.Echo) {
 	logger.Infof("Registering /snapshot routes")
 
-	e.GET("/snapshot/topology/:id", Topology, rbac.Topology(rbac.ActionRead))
-	e.GET("/snapshot/incident/:id", Incident, rbac.Topology(rbac.ActionRead))
-	e.GET("/snapshot/config/:id", Config, rbac.Catalog(rbac.ActionRead))
+	e.GET("/snapshot/topology/:id", Topology, rbac.Topology(policy.ActionRead))
+	e.GET("/snapshot/incident/:id", Incident, rbac.Topology(policy.ActionRead))
+	e.GET("/snapshot/config/:id", Config, rbac.Catalog(policy.ActionRead))
 }
 
 func NewSnapshotContext(c echo.Context) SnapshotContext {

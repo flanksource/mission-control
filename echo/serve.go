@@ -26,6 +26,7 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/logs"
 	"github.com/flanksource/incident-commander/rbac"
+	"github.com/flanksource/incident-commander/rbac/policy"
 	"github.com/flanksource/incident-commander/utils"
 	"github.com/flanksource/incident-commander/vars"
 	"github.com/labstack/echo-contrib/echoprometheus"
@@ -105,15 +106,15 @@ func New(ctx context.Context) *echov4.Echo {
 		}
 	}
 
-	dutyEcho.AddDebugHandlers(ctx, e, rbac.Authorization(rbac.ObjectMonitor, rbac.ActionUpdate))
+	dutyEcho.AddDebugHandlers(ctx, e, rbac.Authorization(policy.ObjectMonitor, policy.ActionUpdate))
 
 	e.Use(ServerCache)
 
-	e.GET("/kubeconfig", DownloadKubeConfig, rbac.Authorization(rbac.ObjectKubernetesProxy, rbac.ActionCreate))
+	e.GET("/kubeconfig", DownloadKubeConfig, rbac.Authorization(policy.ObjectKubernetesProxy, policy.ActionCreate))
 	Forward(ctx, e, "/kubeproxy", "https://kubernetes.default.svc", KubeProxyTokenMiddleware)
 
 	e.GET("/properties", dutyEcho.Properties)
-	e.POST("/resources/search", SearchResources, rbac.Authorization(rbac.ObjectCatalog, rbac.ActionRead))
+	e.POST("/resources/search", SearchResources, rbac.Authorization(policy.ObjectCatalog, policy.ActionRead))
 
 	e.GET("/metrics", echoprometheus.NewHandlerWithConfig(echoprometheus.HandlerConfig{
 		Gatherer: prom.DefaultGatherer,
@@ -124,8 +125,8 @@ func New(ctx context.Context) *echov4.Echo {
 	})
 
 	personController := PersonController{kratos: auth.NewAPIClient(auth.KratosAPI)}
-	e.POST("/people/update", personController.UpdatePerson, rbac.Authorization(rbac.ObjectPeople, rbac.ActionUpdate))
-	e.DELETE("/people/:id", personController.DeletePerson, rbac.Authorization(rbac.ObjectPeople, rbac.ActionDelete))
+	e.POST("/people/update", personController.UpdatePerson, rbac.Authorization(policy.ObjectPeople, policy.ActionUpdate))
+	e.DELETE("/people/:id", personController.DeletePerson, rbac.Authorization(policy.ObjectPeople, policy.ActionDelete))
 
 	if dutyApi.DefaultConfig.Postgrest.URL != "" {
 		Forward(ctx, e, "/db", dutyApi.DefaultConfig.Postgrest.URL,
@@ -142,7 +143,7 @@ func New(ctx context.Context) *echov4.Echo {
 	}
 
 	Forward(ctx, e, "/config", api.ConfigDB, rbac.Catalog("*"))
-	Forward(ctx, e, "/apm", api.ApmHubPath, rbac.Authorization(rbac.ObjectLogs, "*")) // Deprecated
+	Forward(ctx, e, "/apm", api.ApmHubPath, rbac.Authorization(policy.ObjectLogs, "*")) // Deprecated
 	// webhooks perform their own auth
 	Forward(ctx, e, "/canary/webhook", api.CanaryCheckerPath+"/webhook")
 	Forward(ctx, e, "/canary", api.CanaryCheckerPath, rbac.Canary(""))
@@ -151,8 +152,8 @@ func New(ctx context.Context) *echov4.Echo {
 
 	auth.RegisterRoutes(e)
 
-	e.POST("/rbac/:id/update_role", rbac.UpdateRoleForUser, rbac.Authorization(rbac.ObjectRBAC, rbac.ActionUpdate))
-	e.GET("/rbac/dump", rbac.Dump, rbac.Authorization(rbac.ObjectRBAC, rbac.ActionRead))
+	e.POST("/rbac/:id/update_role", rbac.UpdateRoleForUser, rbac.Authorization(policy.ObjectRBAC, policy.ActionUpdate))
+	e.GET("/rbac/dump", rbac.Dump, rbac.Authorization(policy.ObjectRBAC, policy.ActionRead))
 
 	// Serve openapi schemas
 	schemaServer, err := utils.HTTPFileserver(openapi.Schemas)
@@ -166,8 +167,8 @@ func New(ctx context.Context) *echov4.Echo {
 		fn(e)
 	}
 
-	e.POST("/agent/generate", agent.GenerateAgent, rbac.Authorization(rbac.ObjectAgent, rbac.ActionUpdate))
-	e.POST("/logs", logs.LogsHandler, rbac.Authorization(rbac.ObjectLogs, rbac.ActionRead))
+	e.POST("/agent/generate", agent.GenerateAgent, rbac.Authorization(policy.ObjectAgent, policy.ActionUpdate))
+	e.POST("/logs", logs.LogsHandler, rbac.Authorization(policy.ObjectLogs, policy.ActionRead))
 	return e
 }
 

@@ -20,6 +20,7 @@ import (
 	"github.com/flanksource/incident-commander/playbook/runner"
 	"github.com/flanksource/incident-commander/push"
 	"github.com/flanksource/incident-commander/rbac"
+	"github.com/flanksource/incident-commander/rbac/policy"
 )
 
 var agentCache = cache.New(3*24*time.Hour, 12*time.Hour)
@@ -31,11 +32,11 @@ func init() {
 func RegisterRoutes(e *echo.Echo) {
 	logger.Infof("Registering /upstream routes")
 
-	e.POST("/push/topology", push.PushTopology, rbac.Topology(rbac.ActionUpdate))
+	e.POST("/push/topology", push.PushTopology, rbac.Topology(policy.ActionUpdate))
 
 	upstreamGroup := e.Group(
 		"/upstream",
-		rbac.Authorization(rbac.ObjectAgentPush, rbac.ActionUpdate),
+		rbac.Authorization(policy.ObjectAgentPush, policy.ActionUpdate),
 		upstream.AgentAuthMiddleware(agentCache),
 	)
 	upstreamGroup.GET("/ping", upstream.PingHandler)

@@ -9,7 +9,8 @@ spec:
     allow user john to run any playbook but only on configs in `mission-control` namespace
   subject:
     person: john@doe.com
-  action: playbook:*
+  actions:
+    - playbook:*
   object:
     playbooks:
       - name: "*" # this is a wildcard selector that matches any playbook

@@ -187,8 +187,11 @@
         "description": {
           "type": "string"
         },
-        "action": {
-          "type": "string"
+        "actions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         },
         "subject": {
           "$ref": "#/$defs/PermissionSubject"
@@ -215,7 +218,7 @@
       "additionalProperties": false,
       "type": "object",
       "required": [
-        "action",
+        "actions",
         "subject",
         "object"
       ]

@@ -9,6 +9,7 @@ import (
 	"github.com/flanksource/duty/models"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/rbac"
+	"github.com/flanksource/incident-commander/rbac/policy"
 	"github.com/labstack/echo/v4"
 )
 
@@ -21,7 +22,7 @@ func RegisterRoutes(e *echo.Echo) {
 
 	g.GET("/events", func(c echo.Context) error {
 		return c.JSON(http.StatusOK, EventRing.Get())
-	}, rbac.Authorization(rbac.ObjectMonitor, rbac.ActionRead))
+	}, rbac.Authorization(policy.ObjectMonitor, policy.ActionRead))
 
 	g.POST("/silence", func(c echo.Context) error {
 		ctx := c.Request().Context().(context.Context)
@@ -37,5 +38,5 @@ func RegisterRoutes(e *echo.Echo) {
 		}
 
 		return nil
-	}, rbac.Authorization(rbac.ObjectNotification, rbac.ActionCreate))
+	}, rbac.Authorization(policy.ObjectNotification, policy.ActionCreate))
 }

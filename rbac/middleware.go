@@ -7,6 +7,7 @@ import (
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/incident-commander/rbac/policy"
 	"github.com/labstack/echo/v4"
 )
 
@@ -19,19 +20,19 @@ var (
 type MiddlewareFunc = func(echo.HandlerFunc) echo.HandlerFunc
 
 func Playbook(action string) MiddlewareFunc {
-	return Authorization(ObjectPlaybooks, action)
+	return Authorization(policy.ObjectPlaybooks, action)
 }
 
 func Catalog(action string) MiddlewareFunc {
-	return Authorization(ObjectCatalog, action)
+	return Authorization(policy.ObjectCatalog, action)
 }
 
 func Topology(action string) MiddlewareFunc {
-	return Authorization(ObjectTopology, action)
+	return Authorization(policy.ObjectTopology, action)
 }
 
 func Canary(action string) MiddlewareFunc {
-	return Authorization(ObjectCanary, action)
+	return Authorization(policy.ObjectCanary, action)
 }
 
 func DbMiddleware() MiddlewareFunc {
@@ -113,7 +114,7 @@ func CheckContext(ctx context.Context, object, action string) bool {
 	}
 
 	// Everyone with an account is a viewer
-	if action == ActionRead && Check(ctx, RoleViewer, object, action) {
+	if action == policy.ActionRead && Check(ctx, policy.RoleViewer, object, action) {
 		return true
 	}
 

@@ -8,7 +8,8 @@ spec:
   description: deny user food to run any playbook
   subject:
     person: foo@bar.com
-  action: playbook:run
+  actions:
+    - playbook:*
   deny: true
   object:
     playbooks:

@@ -18,6 +18,7 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/rbac"
+	"github.com/flanksource/incident-commander/rbac/policy"
 	"github.com/flanksource/incident-commander/vars"
 	"github.com/labstack/echo/v4"
 	. "github.com/onsi/ginkgo/v2"
@@ -48,11 +49,11 @@ var _ = BeforeSuite(func() {
 		Fail(fmt.Sprintf("error instantiating rbac: %v", err))
 	}
 	usersAndRoles := map[string]string{
-		"admin":     rbac.RoleAdmin,
-		"editor":    rbac.RoleEditor,
-		"commander": rbac.RoleCommander,
-		"responder": rbac.RoleResponder,
-		"viewer":    rbac.RoleViewer,
+		"admin":     policy.RoleAdmin,
+		"editor":    policy.RoleEditor,
+		"commander": policy.RoleCommander,
+		"responder": policy.RoleResponder,
+		"viewer":    policy.RoleViewer,
 	}
 
 	for user, role := range usersAndRoles {

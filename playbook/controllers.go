@@ -21,6 +21,7 @@ import (
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/playbook/runner"
 	"github.com/flanksource/incident-commander/rbac"
+	"github.com/flanksource/incident-commander/rbac/policy"
 	_ "github.com/flanksource/incident-commander/upstream"
 )
 
@@ -33,18 +34,18 @@ func RegisterRoutes(e *echo.Echo) {
 
 	prefix := "playbook"
 	playbookGroup := e.Group(fmt.Sprintf("/%s", prefix))
-	playbookGroup.GET("/list", HandlePlaybookList, rbac.Playbook(rbac.ActionRead))
+	playbookGroup.GET("/list", HandlePlaybookList, rbac.Playbook(policy.ActionRead))
 	playbookGroup.POST("/webhook/:webhook_path", HandleWebhook)
-	playbookGroup.POST("/:id/params", HandleGetPlaybookParams, rbac.Playbook(rbac.ActionPlaybookRun))
+	playbookGroup.POST("/:id/params", HandleGetPlaybookParams, rbac.Playbook(policy.ActionPlaybookRun))
 
 	playbookGroup.GET("/events", func(c echo.Context) error {
 		return c.JSON(http.StatusOK, EventRing.Get())
-	}, rbac.Authorization(rbac.ObjectMonitor, rbac.ActionRead))
+	}, rbac.Authorization(policy.ObjectMonitor, policy.ActionRead))
 
 	runGroup := playbookGroup.Group("/run")
-	runGroup.POST("", HandlePlaybookRun, rbac.Playbook(rbac.ActionPlaybookRun))
-	runGroup.GET("/:id", HandleGetPlaybookRun, rbac.Playbook(rbac.ActionRead))
-	runGroup.POST("/approve/:run_id", HandlePlaybookRunApproval, rbac.Playbook(rbac.ActionPlaybookApprove))
+	runGroup.POST("", HandlePlaybookRun, rbac.Playbook(policy.ActionPlaybookRun))
+	runGroup.GET("/:id", HandleGetPlaybookRun, rbac.Playbook(policy.ActionRead))
+	runGroup.POST("/approve/:run_id", HandlePlaybookRunApproval, rbac.Playbook(policy.ActionPlaybookApprove))
 }
 
 type RunResponse struct {

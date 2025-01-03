@@ -1,9 +1,6 @@
-package rbac
+package policy
 
-import (
-	"fmt"
-	"strings"
-)
+import "strings"
 
 func Read(objects ...string) ACL {
 	return ACL{
@@ -11,12 +8,14 @@ func Read(objects ...string) ACL {
 		Objects: strings.Join(objects, ","),
 	}
 }
+
 func Update(objects ...string) ACL {
 	return ACL{
 		Actions: ActionUpdate,
 		Objects: strings.Join(objects, ","),
 	}
 }
+
 func Approve(objects ...string) ACL {
 	return ACL{
 		Actions: ActionPlaybookApprove,
@@ -107,39 +106,7 @@ func (p Policy) String() string {
 	return s
 }
 
-type Permission struct {
-	Subject string `json:"subject,omitempty"`
-	Object  string `json:"object,omitempty"`
-	Action  string `json:"action,omitempty"`
-	Deny    bool   `json:"deny,omitempty"`
-}
-
-func NewPermission(perm []string) Permission {
-	return Permission{
-		Subject: perm[0],
-		Object:  perm[1],
-		Action:  perm[2],
-		Deny:    perm[3] == "deny",
-	}
-}
-
-func NewPermissions(perms [][]string) []Permission {
-	var arr []Permission
-
-	for _, p := range perms {
-		arr = append(arr, NewPermission(p))
-	}
-
-	return arr
-
-}
-
-func (p Permission) String() string {
-	return fmt.Sprintf("%s on %s (%s)", p.Subject, p.Object, p.Action)
-}
-
 const (
-
 	// Roles
 	RoleAdmin     = "admin"
 	RoleEveryone  = "everyone"
@@ -148,18 +115,6 @@ const (
 	RoleCommander = "commander"
 	RoleResponder = "responder"
 	RoleAgent     = "agent"
-
-	// Actions
-	ActionRead   = "read"
-	ActionUpdate = "update"
-	ActionCreate = "create"
-	ActionDelete = "delete"
-	ActionAll    = "*"
-	ActionCRUD   = "create,read,update,delete"
-
-	// Playbooks
-	ActionPlaybookRun     = "playbook:run"
-	ActionPlaybookApprove = "playbook:approve"
 
 	// Objects
 	ObjectKubernetesProxy  = "kubernetes-proxy"
@@ -184,10 +139,28 @@ const (
 	ObjectRBAC             = "rbac"
 	ObjectTopology         = "topology"
 	ObjectPeople           = "people"
-
-	ObjectNotification = "notification"
+	ObjectNotification     = "notification"
 )
 
-var (
-	AllActions = []string{ActionPlaybookApprove, ActionCreate, ActionRead, ActionPlaybookRun, ActionUpdate, ActionDelete}
+// Actions
+const (
+	ActionAll    = "*"
+	ActionCRUD   = "create,read,update,delete"
+	ActionCreate = "create"
+	ActionDelete = "delete"
+	ActionRead   = "read"
+	ActionUpdate = "update"
+
+	// Playbooks
+	ActionPlaybookRun     = "playbook:run"
+	ActionPlaybookApprove = "playbook:approve"
 )
+
+var AllActions = []string{
+	ActionCreate,
+	ActionDelete,
+	ActionRead,
+	ActionUpdate,
+	ActionPlaybookApprove,
+	ActionPlaybookRun,
+}
