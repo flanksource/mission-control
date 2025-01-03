@@ -113,6 +113,7 @@ func CheckContext(ctx context.Context, object, action string) bool {
 		return false
 	}
 
+	// TODO: Everyone with an account is not a viewer. i.e. user role.
 	// Everyone with an account is a viewer
 	if action == policy.ActionRead && Check(ctx, policy.RoleViewer, object, action) {
 		return true

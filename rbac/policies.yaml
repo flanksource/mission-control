@@ -15,6 +15,10 @@
   acl:
     - objects: database.public,canaries,catalog,playbooks,topology,people
       actions: read
+- principal: user
+  inherit:
+    - everyone
+    - viewer # remove this. the UI should handle just the user role.
 - principal: commander
   acl:
     - objects: incident

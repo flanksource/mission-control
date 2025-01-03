@@ -2,8 +2,6 @@ package rbac
 
 import (
 	_ "embed"
-	"encoding/base64"
-	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -12,8 +10,6 @@ import (
 	"github.com/casbin/casbin/v2/model"
 	gormadapter "github.com/casbin/gorm-adapter/v3"
 	"github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/models"
-	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
 	pkgAdapater "github.com/flanksource/incident-commander/rbac/adapter"
 	"github.com/flanksource/incident-commander/rbac/policy"
@@ -73,7 +69,7 @@ func Init(ctx context.Context, adminUserID string) error {
 		enforcer.EnableLog(true)
 	}
 
-	addCustomCasbinFunctions(enforcer)
+	addCustomFunctions(enforcer)
 
 	if adminUserID != "" {
 		if _, err := enforcer.AddRoleForUser(adminUserID, policy.RoleAdmin); err != nil {
@@ -144,7 +140,7 @@ func RolesForUser(user string) ([]string, error) {
 	return append(implicit, roles...), nil
 }
 
-func PermsForUser(user string) ([]Permission, error) {
+func PermsForUser(user string) ([]policy.Permission, error) {
 	implicit, err := enforcer.GetImplicitPermissionsForUser(user)
 	if err != nil {
 		return nil, err
@@ -153,9 +149,9 @@ func PermsForUser(user string) ([]Permission, error) {
 	if err != nil {
 		return nil, err
 	}
-	var s []Permission
+	var s []policy.Permission
 	for _, perm := range append(perms, implicit...) {
-		s = append(s, NewPermission(perm))
+		s = append(s, policy.NewPermission(perm))
 	}
 	return s, nil
 }
@@ -196,65 +192,4 @@ func Check(ctx context.Context, subject, object, action string) bool {
 
 func ReloadPolicy() error {
 	return enforcer.LoadPolicy()
-}
-
-func addCustomCasbinFunctions(enforcer *casbin.SyncedCachedEnforcer) {
-	enforcer.AddFunction("matchResourceSelector", func(args ...any) (any, error) {
-		if len(args) != 2 {
-			return false, fmt.Errorf("matchResourceSelector needs 2 arguments. got %d", len(args))
-		}
-
-		attributeSet := args[0]
-		selector := args[1]
-
-		if _, ok := attributeSet.(string); ok {
-			return false, nil
-		}
-
-		attr, ok := attributeSet.(*models.RBACAttribute)
-		if !ok {
-			return false, fmt.Errorf("unknown input type: %T", attributeSet)
-		}
-
-		rs, err := base64.StdEncoding.DecodeString(selector.(string))
-		if err != nil {
-			return false, err
-		}
-
-		var objectSelector v1.PermissionObject
-		if err := json.Unmarshal([]byte(rs), &objectSelector); err != nil {
-			return false, err
-		}
-
-		var resourcesMatched int
-
-		if attr.Component != nil {
-			for _, rs := range objectSelector.Components {
-				if rs.Matches(attr.Component) {
-					resourcesMatched++
-					break
-				}
-			}
-		}
-
-		if attr.Playbook != nil {
-			for _, rs := range objectSelector.Playbooks {
-				if rs.Matches(attr.Playbook) {
-					resourcesMatched++
-					break
-				}
-			}
-		}
-
-		if attr.Config != nil {
-			for _, rs := range objectSelector.Configs {
-				if rs.Matches(attr.Config) {
-					resourcesMatched++
-					break
-				}
-			}
-		}
-
-		return resourcesMatched == objectSelector.RequiredMatchCount(), nil
-	})
 }

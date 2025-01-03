@@ -14,15 +14,28 @@ import (
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+	"github.com/samber/lo"
 
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/rbac"
+	"github.com/flanksource/incident-commander/rbac/policy"
+	"github.com/flanksource/incident-commander/vars"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/patrickmn/go-cache"
 	"golang.org/x/crypto/argon2"
 	"gorm.io/gorm"
 )
 
+func FlushTokenCache() {
+	tokenCache.Flush()
+}
+
+// tokenCache caches
+// - JWT for postgREST
+// - RLS payloads
+// - access tokens
 var tokenCache = cache.New(1*time.Hour, 1*time.Hour)
 
 func InjectToken(ctx context.Context, c echo.Context, user *models.Person, sessID string) error {
@@ -38,6 +51,77 @@ func InjectToken(ctx context.Context, c echo.Context, user *models.Person, sessI
 	return nil
 }
 
+type RLSPayload struct {
+	Tags    []map[string]string `json:"tags,omitempty"`
+	Agents  []string            `json:"agents,omitempty"`
+	Disable bool                `json:"disable_rls,omitempty"`
+}
+
+// If a user only has these roles, then RLS must be enforced
+var rlsEnforcableRoles = []string{"user", "viewer", "everyone"}
+
+func GetRLSPayload(ctx context.Context) (*RLSPayload, error) {
+	if !ctx.Properties().On(false, vars.FlagRLSEnable) {
+		return &RLSPayload{Disable: true}, nil
+	}
+
+	cacheKey := fmt.Sprintf("rls-payload-%s", ctx.User().ID.String())
+	if cached, ok := tokenCache.Get(cacheKey); ok {
+		return cached.(*RLSPayload), nil
+	}
+
+	if roles, err := rbac.RolesForUser(ctx.User().ID.String()); err != nil {
+		return nil, err
+	} else if extra, _ := lo.Difference(roles, rlsEnforcableRoles); len(extra) > 0 {
+		payload := &RLSPayload{Disable: true}
+		tokenCache.SetDefault(cacheKey, payload)
+		return payload, nil
+	}
+
+	permissions, err := rbac.PermsForUser(ctx.User().ID.String())
+	if err != nil {
+		return nil, err
+	}
+
+	var permissionWithIDs []string
+	for _, p := range permissions {
+		if p.Action != policy.ActionRead && p.Action != "*" {
+			continue
+		}
+
+		// TODO: support deny
+		if p.Deny {
+			continue
+		}
+
+		if uuid.Validate(p.ID) == nil {
+			permissionWithIDs = append(permissionWithIDs, p.ID)
+		}
+	}
+
+	var permModels []models.Permission
+	if err := ctx.DB().Where("id IN ?", permissionWithIDs).Find(&permModels).Error; err != nil {
+		return nil, fmt.Errorf("failed to get permission for ids: %w", err)
+	}
+
+	var (
+		agentIDs []string
+		tags     = []map[string]string{}
+	)
+	for _, p := range permModels {
+		agentIDs = append(agentIDs, p.Agents...)
+		tags = append(tags, p.Tags)
+	}
+
+	payload := &RLSPayload{
+		Agents: agentIDs,
+		Tags:   tags,
+	}
+	tokenCache.SetDefault(cacheKey, payload)
+
+	return payload, nil
+}
+
 func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId string) (string, error) {
 	config := api.DefaultConfig
 	key := sessionId + user.ID.String()
@@ -46,11 +130,26 @@ func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId str
 		return token.(string), nil
 	}
 
-	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+	claims := jwt.MapClaims{
 		"role": config.Postgrest.DBRole,
 		"id":   user.ID.String(),
-	}).SignedString([]byte(config.Postgrest.JWTSecret))
+	}
 
+	if rlsPayload, err := GetRLSPayload(ctx.WithUser(user)); err != nil {
+		return "", ctx.Oops().Wrap(err)
+	} else if rlsPayload.Disable {
+		claims["disable_rls"] = true
+	} else {
+		if len(rlsPayload.Agents) > 0 {
+			claims["agents"] = rlsPayload.Agents
+		}
+
+		if len(rlsPayload.Tags) > 0 {
+			claims["tags"] = rlsPayload.Tags
+		}
+	}
+
+	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(config.Postgrest.JWTSecret))
 	if err != nil {
 		return "", ctx.Oops().Wrap(err)
 	}
