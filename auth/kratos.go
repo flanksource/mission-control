@@ -170,6 +170,7 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 			ctx.GetSpan().RecordError(err)
 			return c.String(http.StatusInternalServerError, "Error fetching user details from database")
 		}
+		ctx = ctx.WithUser(&person)
 
 		if person.Type == db.PersonTypeAgent {
 			agent, err := db.FindAgent(ctx, person.Name)
@@ -195,7 +196,6 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 			return err
 		}
 
-		ctx = ctx.WithUser(&person)
 		c.SetRequest(c.Request().WithContext(ctx))
 
 		return next(c)

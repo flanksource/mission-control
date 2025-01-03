@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/flanksource/duty/api"
+	"github.com/flanksource/incident-commander/rbac/policy"
 	"github.com/labstack/echo/v4"
 )
 
@@ -46,5 +47,5 @@ func GetRolesForUser(c echo.Context) error {
 }
 
 func Dump(c echo.Context) error {
-	return c.JSON(http.StatusOK, NewPermissions(enforcer.GetPolicy()))
+	return c.JSON(http.StatusOK, policy.NewPermissions(enforcer.GetPolicy()))
 }

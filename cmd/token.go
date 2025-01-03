@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -30,13 +31,14 @@ var Token = &cobra.Command{
 			return err
 		}
 		if tokenUser == "" {
-			return fmt.Errorf("Must specify --user")
+			return errors.New("must specify --user")
 		}
 
 		var user models.Person
 		if err := ctx.DB().Where("email = ?", tokenUser).First(&user).Error; err != nil || user.ID == uuid.Nil {
-			return fmt.Errorf("User not found")
+			return errors.New("user not found")
 		}
+
 		token, err := db.CreateAccessToken(ctx, user.ID, "default", password, &tokenExpiry)
 		if err != nil {
 			return fmt.Errorf("failed to create a new access token: %w", err)

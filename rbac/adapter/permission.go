@@ -43,7 +43,7 @@ func (a *PermissionAdapter) LoadPolicy(model model.Model) error {
 	}
 
 	for _, permission := range permissions {
-		policies := permissionToCasbinRule(permission)
+		policies := PermissionToCasbinRule(permission)
 		for _, policy := range policies {
 			if err := persist.LoadPolicyArray(policy, model); err != nil {
 				return err
@@ -72,7 +72,7 @@ func (a *PermissionAdapter) LoadPolicy(model model.Model) error {
 	return nil
 }
 
-func permissionToCasbinRule(permission models.Permission) [][]string {
+func PermissionToCasbinRule(permission models.Permission) [][]string {
 	var policies [][]string
 
 	patterns := strings.Split(permission.Action, ",")
@@ -88,7 +88,7 @@ func permissionToCasbinRule(permission models.Permission) [][]string {
 			action,
 			permission.Effect(),
 			permission.Condition(),
-			"na",
+			permission.ID.String(),
 		}
 		policies = append(policies, policy)
 	}

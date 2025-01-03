@@ -37,7 +37,6 @@ import (
 	_ "github.com/flanksource/incident-commander/artifacts"
 	_ "github.com/flanksource/incident-commander/catalog"
 	_ "github.com/flanksource/incident-commander/connection"
-	_ "github.com/flanksource/incident-commander/notification"
 	_ "github.com/flanksource/incident-commander/playbook"
 	_ "github.com/flanksource/incident-commander/snapshot"
 	_ "github.com/flanksource/incident-commander/upstream"
@@ -120,6 +119,14 @@ var Serve = &cobra.Command{
 		if vars.AuthMode == auth.Kratos {
 			dutyArgs = append(dutyArgs, duty.KratosAuth)
 		}
+
+		{
+			// Create a dummy context to access the properties
+			if context.NewContext(cmd.Context()).Properties().On(false, vars.FlagRLSEnable) {
+				dutyArgs = append(dutyArgs, duty.EnableRLS)
+			}
+		}
+
 		ctx, stop, err := duty.Start("mission-control", dutyArgs...)
 		if err != nil {
 			logger.Fatalf(err.Error())
@@ -242,12 +249,20 @@ func tableUpdatesHandler(ctx context.Context) {
 				ctx.Logger.Debugf("reloading rbac policy due to permission updates")
 			}
 
+			// permissions affect RLS so we need to invalidate the postgrest JWT
+			// TODO: only invalidate tokens for the affect users
+			auth.FlushTokenCache()
+
 		case <-permissionGroupUpdateChan:
 			if err := rbac.ReloadPolicy(); err != nil {
 				ctx.Logger.Errorf("error reloading rbac policy due to permission updates: %v", err)
 			} else {
 				ctx.Logger.Debugf("reloading rbac policy due to permission updates")
 			}
+
+			// permissions affect RLS so we need to invalidate the postgrest JWT
+			// TODO: only invalidate tokens for the affect users
+			auth.FlushTokenCache()
 		}
 	}
 }
