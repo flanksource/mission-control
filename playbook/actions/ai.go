@@ -3,6 +3,7 @@ package actions
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/flanksource/commons/duration"
@@ -39,6 +40,10 @@ func (t *AIAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 		return nil, fmt.Errorf("faield to populate llm client connection: %w", err)
 	}
 
+	if spec.DryRun {
+		return &AIActionResult{Markdown: strings.Join(prompt, "\n")}, nil
+	}
+
 	llmConf := llm.Config{AIActionClient: spec.AIActionClient, UseAgent: spec.UseAgent}
 	response, err := llm.Prompt(ctx, llmConf, spec.SystemPrompt, prompt...)
 	if err != nil {
@@ -54,7 +59,7 @@ func buildPrompt(ctx context.Context, prompt string, spec v1.AIActionContext) ([
 		return nil, fmt.Errorf("failed to get prompt context: %w", err)
 	}
 
-	knowledgeJSON, err := json.Marshal(knowledge)
+	knowledgeJSON, err := json.MarshalIndent(knowledge, "", "\t")
 	if err != nil {
 		return nil, fmt.Errorf("failed to get prompt context: %w", err)
 	}

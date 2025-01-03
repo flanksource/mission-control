@@ -374,6 +374,9 @@ type AIAction struct {
 	AIActionClient  `json:",inline" yaml:",inline"`
 	AIActionContext `json:",inline" yaml:",inline" template:"true"`
 
+	// When enabled, the prompt is simply saved without passing it on to the LLM.
+	DryRun bool `json:"dryRun,omitempty"`
+
 	// Use an AI agent that can autonomously drive the diagnosis using tools that interface directly with the database.
 	// NOTE: Not exposed for now
 	UseAgent bool `json:"-"`
