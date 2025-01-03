@@ -50,6 +50,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.34
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.48.0
 	github.com/aws/aws-sdk-go-v2/service/sts v1.31.0
+	github.com/casbin/govaluate v1.1.1
 	github.com/flanksource/artifacts v1.0.14
 	github.com/fluxcd/pkg/gittestserver v0.8.6
 	github.com/go-git/go-billy/v5 v5.5.0
@@ -118,7 +119,6 @@ require (
 	github.com/bluekeyes/go-gitdiff v0.7.1 // indirect
 	github.com/bmatcuk/doublestar/v4 v4.7.1 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
-	github.com/casbin/govaluate v1.1.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cert-manager/cert-manager v1.16.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
