@@ -35,16 +35,16 @@ func RegisterRoutes(e *echo.Echo) {
 	playbookGroup := e.Group(fmt.Sprintf("/%s", prefix))
 	playbookGroup.GET("/list", HandlePlaybookList, rbac.Playbook(rbac.ActionRead))
 	playbookGroup.POST("/webhook/:webhook_path", HandleWebhook)
-	playbookGroup.POST("/:id/params", HandleGetPlaybookParams, rbac.Playbook(rbac.ActionRun))
+	playbookGroup.POST("/:id/params", HandleGetPlaybookParams, rbac.Playbook(rbac.ActionPlaybookRun))
 
 	playbookGroup.GET("/events", func(c echo.Context) error {
 		return c.JSON(http.StatusOK, EventRing.Get())
 	}, rbac.Authorization(rbac.ObjectMonitor, rbac.ActionRead))
 
 	runGroup := playbookGroup.Group("/run")
-	runGroup.POST("", HandlePlaybookRun, rbac.Playbook(rbac.ActionRun))
+	runGroup.POST("", HandlePlaybookRun, rbac.Playbook(rbac.ActionPlaybookRun))
 	runGroup.GET("/:id", HandleGetPlaybookRun, rbac.Playbook(rbac.ActionRead))
-	runGroup.POST("/approve/:run_id", HandlePlaybookRunApproval, rbac.Playbook(rbac.ActionApprove))
+	runGroup.POST("/approve/:run_id", HandlePlaybookRunApproval, rbac.Playbook(rbac.ActionPlaybookApprove))
 }
 
 type RunResponse struct {

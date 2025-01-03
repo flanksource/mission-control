@@ -12,6 +12,8 @@ import (
 
 var schemas = map[string]any{
 	"connection":          &v1.Connection{},
+	"permission":          &v1.Permission{},
+	"permissiongroup":     &v1.PermissionGroup{},
 	"notification":        &v1.Notification{},
 	"notificationsilence": &v1.NotificationSilence{},
 	"playbook":            &v1.Playbook{},

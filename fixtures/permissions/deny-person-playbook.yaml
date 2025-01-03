@@ -1,0 +1,15 @@
+---
+# yaml-language-server: $schema=../../config/schemas/permission.schema.json
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: deny-user-foo-playbook-run
+spec:
+  description: deny user food to run any playbook
+  subject:
+    person: foo@bar.com
+  action: playbook:run
+  deny: true
+  object:
+    playbooks:
+      - {} # empty selector to allow any playbook

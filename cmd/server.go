@@ -90,6 +90,22 @@ func launchKopper(ctx context.Context) {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for Notification Silence: %v", err))
 	}
 
+	if _, err := kopper.SetupReconciler(ctx, mgr,
+		db.PersistPermissionFromCRD,
+		db.DeletePermission,
+		"permission.mission-control.flanksource.com",
+	); err != nil {
+		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for Permission: %v", err))
+	}
+
+	if _, err := kopper.SetupReconciler(ctx, mgr,
+		db.PersistPermissionGroupFromCRD,
+		db.DeletePermissionGroup,
+		"permissiongroup.mission-control.flanksource.com",
+	); err != nil {
+		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for PermissionGroup: %v", err))
+	}
+
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("error running controller manager: %v", err))
 	}
@@ -153,6 +169,7 @@ func tableUpdatesHandler(ctx context.Context) {
 	playbooksUpdateChan := notifyRouter.GetOrCreateChannel("playbooks")
 	playbooksActionUpdateChan := notifyRouter.GetOrCreateChannel("playbook_run_actions")
 	permissionUpdateChan := notifyRouter.GetOrCreateChannel("permissions")
+	permissionGroupUpdateChan := notifyRouter.GetOrCreateChannel("permission_groups")
 
 	// use a single job instance to maintain retention
 	pushPlaybookActionsJob := jobs.PushPlaybookActions(ctx)
@@ -176,6 +193,13 @@ func tableUpdatesHandler(ctx context.Context) {
 			teams.PurgeCache(id)
 
 		case <-permissionUpdateChan:
+			if err := rbac.ReloadPolicy(); err != nil {
+				ctx.Logger.Errorf("error reloading rbac policy due to permission updates: %v", err)
+			} else {
+				ctx.Logger.Debugf("reloading rbac policy due to permission updates")
+			}
+
+		case <-permissionGroupUpdateChan:
 			if err := rbac.ReloadPolicy(); err != nil {
 				ctx.Logger.Errorf("error reloading rbac policy due to permission updates: %v", err)
 			} else {

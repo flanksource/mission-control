@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/models"
 	"github.com/labstack/echo/v4"
 )
 
@@ -119,7 +120,7 @@ func CheckContext(ctx context.Context, object, action string) bool {
 	return Check(ctx, user.ID.String(), object, action)
 }
 
-func HasPermission(ctx context.Context, subject string, objects map[string]any, action string) bool {
+func HasPermission(ctx context.Context, subject string, objects *models.RBACAttribute, action string) bool {
 	if enforcer == nil {
 		return true
 	}
