@@ -124,6 +124,10 @@ spec:
                         connection:
                           description: Connection to setup the llm backend connection
                           type: string
+                        dryRun:
+                          description: When enabled, the prompt is simply saved without
+                            passing it on to the LLM.
+                          type: boolean
                         formats:
                           description: |-
                             Output format of the prompt.

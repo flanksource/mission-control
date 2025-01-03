@@ -35,6 +35,9 @@
           },
           "type": "array"
         },
+        "dryRun": {
+          "type": "boolean"
+        },
         "systemPrompt": {
           "type": "string"
         },
