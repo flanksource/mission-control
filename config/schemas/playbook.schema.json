@@ -742,21 +742,6 @@
         "uid"
       ]
     },
-    "Permission": {
-      "properties": {
-        "role": {
-          "type": "string"
-        },
-        "team": {
-          "type": "string"
-        },
-        "ref": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "Playbook": {
       "properties": {
         "kind": {
@@ -975,6 +960,21 @@
         "name"
       ]
     },
+    "PlaybookPermission": {
+      "properties": {
+        "role": {
+          "type": "string"
+        },
+        "team": {
+          "type": "string"
+        },
+        "ref": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "PlaybookSpec": {
       "properties": {
         "title": {
@@ -1009,7 +1009,7 @@
         },
         "permissions": {
           "items": {
-            "$ref": "#/$defs/Permission"
+            "$ref": "#/$defs/PlaybookPermission"
           },
           "type": "array"
         },

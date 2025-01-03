@@ -2,6 +2,8 @@ package rbac
 
 import (
 	_ "embed"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -10,6 +12,8 @@ import (
 	"github.com/casbin/casbin/v2/model"
 	gormadapter "github.com/casbin/gorm-adapter/v3"
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/models"
+	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
 	pkgAdapater "github.com/flanksource/incident-commander/rbac/adapter"
 	"gopkg.in/yaml.v3"
@@ -67,6 +71,8 @@ func Init(ctx context.Context, adminUserID string) error {
 	if ctx.Properties().Int("casbin.log.level", 1) >= 2 {
 		enforcer.EnableLog(true)
 	}
+
+	addCustomCasbinFunctions(enforcer)
 
 	if adminUserID != "" {
 		if _, err := enforcer.AddRoleForUser(adminUserID, RoleAdmin); err != nil {
@@ -189,4 +195,42 @@ func Check(ctx context.Context, subject, object, action string) bool {
 
 func ReloadPolicy() error {
 	return enforcer.LoadPolicy()
+}
+
+func addCustomCasbinFunctions(enforcer *casbin.SyncedCachedEnforcer) {
+	enforcer.AddFunction("matchResourceSelector", func(args ...any) (any, error) {
+		if len(args) != 2 {
+			return false, fmt.Errorf("matchResourceSelector needs 2 arguments. got %d", len(args))
+		}
+
+		var playbook models.Playbook
+		switch v := args[0].(type) {
+		case string:
+			return false, nil
+		case *models.RBACAttribute:
+			playbook = v.Playbook
+		}
+
+		rs, err := base64.StdEncoding.DecodeString(args[1].(string))
+		if err != nil {
+			return false, err
+		}
+
+		var object v1.PermissionObject
+		if err := json.Unmarshal([]byte(rs), &object); err != nil {
+			return false, err
+		}
+
+		for _, rs := range object.Playbooks {
+			if rs.IsEmpty() {
+				return true, nil // empty selector matches any
+			}
+
+			if rs.Matches(&playbook) {
+				return true, nil
+			}
+		}
+
+		return false, err
+	})
 }

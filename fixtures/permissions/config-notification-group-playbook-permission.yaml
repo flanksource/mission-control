@@ -1,0 +1,27 @@
+---
+# yaml-language-server: $schema=../../config/schemas/permission.schema.json
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: allow-config-notifications-to-run-playbook
+spec:
+  description: allow config notifications to run playbook
+  subject:
+    notification: config-notifications
+  action: playbook:run
+  object:
+    playbooks:
+      - name: echo-config
+---
+# yaml-language-server: $schema=../../config/schemas/permissiongroup.schema.json
+apiVersion: mission-control.flanksource.com/v1
+kind: PermissionGroup
+metadata:
+  name: config-notifications
+spec:
+  name: config-notifications
+  notifications:
+    - name: check-alerts
+      namespace: mc
+    - name: homelab-config-health-alerts
+      namespace: mc

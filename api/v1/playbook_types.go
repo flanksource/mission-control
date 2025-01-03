@@ -11,7 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-type Permission struct {
+type PlaybookPermission struct {
 	Role string `json:"role,omitempty" yaml:"role,omitempty"`
 	Team string `json:"team,omitempty" yaml:"team,omitempty"`
 	Ref  string `json:"ref,omitempty" yaml:"ref,omitempty"`
@@ -177,7 +177,7 @@ type PlaybookSpec struct {
 	TemplatesOn string `json:"templatesOn,omitempty" yaml:"templatesOn,omitempty"`
 
 	// Permissions ...
-	Permissions []Permission `json:"permissions,omitempty" yaml:"permissions,omitempty"`
+	Permissions []PlaybookPermission `json:"permissions,omitempty" yaml:"permissions,omitempty"`
 
 	// Configs filters what config items can run on this playbook.
 	Configs dutyTypes.ResourceSelectors `json:"configs,omitempty" yaml:"configs,omitempty"`

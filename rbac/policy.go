@@ -19,7 +19,7 @@ func Update(objects ...string) ACL {
 }
 func Approve(objects ...string) ACL {
 	return ACL{
-		Actions: ActionApprove,
+		Actions: ActionPlaybookApprove,
 		Objects: strings.Join(objects, ","),
 	}
 }
@@ -30,21 +30,24 @@ func Create(objects ...string) ACL {
 		Objects: strings.Join(objects, ","),
 	}
 }
+
 func Delete(objects ...string) ACL {
 	return ACL{
 		Actions: ActionDelete,
 		Objects: strings.Join(objects, ","),
 	}
 }
+
 func CRUD(objects ...string) ACL {
 	return ACL{
 		Actions: ActionCRUD,
 		Objects: strings.Join(objects, ","),
 	}
 }
+
 func Run(objects ...string) ACL {
 	return ACL{
-		Actions: ActionRun,
+		Actions: ActionPlaybookRun,
 		Objects: strings.Join(objects, ","),
 	}
 }
@@ -147,16 +150,19 @@ const (
 	RoleAgent     = "agent"
 
 	// Actions
-	ActionRead            = "read"
-	ActionUpdate          = "update"
-	ActionCreate          = "create"
-	ActionDelete          = "delete"
-	ActionRun             = "run"
-	ActionApprove         = "approve"
-	ActionAll             = "*"
-	ActionCRUD            = "create,read,update,delete"
-	ObjectKubernetesProxy = "kubernetes-proxy"
+	ActionRead   = "read"
+	ActionUpdate = "update"
+	ActionCreate = "create"
+	ActionDelete = "delete"
+	ActionAll    = "*"
+	ActionCRUD   = "create,read,update,delete"
+
+	// Playbooks
+	ActionPlaybookRun     = "playbook:run"
+	ActionPlaybookApprove = "playbook:approve"
+
 	// Objects
+	ObjectKubernetesProxy  = "kubernetes-proxy"
 	ObjectLogs             = "logs"
 	ObjectAgent            = "agent"
 	ObjectAgentPush        = "agent-push"
@@ -183,5 +189,5 @@ const (
 )
 
 var (
-	AllActions = []string{ActionApprove, ActionCreate, ActionRead, ActionRun, ActionUpdate, ActionDelete}
+	AllActions = []string{ActionPlaybookApprove, ActionCreate, ActionRead, ActionPlaybookRun, ActionUpdate, ActionDelete}
 )

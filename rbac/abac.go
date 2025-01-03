@@ -5,11 +5,6 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-const (
-	ActionPlaybookRun     = "playbook:run"
-	ActionPlaybookApprove = "playbook:approve"
-)
-
 type ABACResource struct {
 	Playbook  models.Playbook   `json:"playbook"`
 	Check     models.Check      `json:"check"`
