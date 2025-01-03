@@ -35,6 +35,9 @@
           },
           "type": "array"
         },
+        "draft": {
+          "type": "boolean"
+        },
         "systemPrompt": {
           "type": "string"
         },
