@@ -374,6 +374,10 @@ type AIAction struct {
 	AIActionClient  `json:",inline" yaml:",inline"`
 	AIActionContext `json:",inline" yaml:",inline" template:"true"`
 
+	// When in draft mode, the input to the LLM is simply printed out.
+	// It's like a dry run.
+	Draft bool `json:"draft,omitempty"`
+
 	// Use an AI agent that can autonomously drive the diagnosis using tools that interface directly with the database.
 	// NOTE: Not exposed for now
 	UseAgent bool `json:"-"`

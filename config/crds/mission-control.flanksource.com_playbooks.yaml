@@ -124,6 +124,11 @@ spec:
                         connection:
                           description: Connection to setup the llm backend connection
                           type: string
+                        draft:
+                          description: |-
+                            When in draft mode, the input to the LLM is simply printed out.
+                            It's like a dry run.
+                          type: boolean
                         formats:
                           description: |-
                             Output format of the prompt.
