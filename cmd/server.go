@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty"
@@ -170,6 +171,7 @@ func tableUpdatesHandler(ctx context.Context) {
 	playbooksActionUpdateChan := notifyRouter.GetOrCreateChannel("playbook_run_actions")
 	permissionUpdateChan := notifyRouter.GetOrCreateChannel("permissions")
 	permissionGroupUpdateChan := notifyRouter.GetOrCreateChannel("permission_groups")
+	teamMembersUpdateChan := notifyRouter.GetOrCreateChannel("team_members")
 
 	// use a single job instance to maintain retention
 	pushPlaybookActionsJob := jobs.PushPlaybookActions(ctx)
@@ -177,10 +179,12 @@ func tableUpdatesHandler(ctx context.Context) {
 
 	for {
 		select {
-		case id := <-notificationUpdateCh:
+		case v := <-notificationUpdateCh:
+			_, id := tableActivityPayload(v)
 			notification.PurgeCache(id)
 
-		case id := <-playbooksUpdateChan:
+		case v := <-playbooksUpdateChan:
+			_, id := tableActivityPayload(v)
 			query.InvalidateCacheByID[models.Playbook](id)
 
 		case <-playbooksActionUpdateChan:
@@ -188,9 +192,48 @@ func tableUpdatesHandler(ctx context.Context) {
 				pushPlaybookActionsJob.Run()
 			}
 
-		case id := <-teamsUpdateChan:
-			responder.PurgeCache(id)
-			teams.PurgeCache(id)
+		case v := <-teamsUpdateChan:
+			tgOperation, id := tableActivityPayload(v)
+
+			if tgOperation != TGOPInsert {
+				responder.PurgeCache(id)
+				teams.PurgeCache(id)
+			}
+
+			if tgOperation == TGOPDelete {
+				if ok, err := rbac.DeleteRole(id); err != nil {
+					ctx.Errorf("failed to delete rbac policy for team(%s): %v", id, err)
+				} else if ok {
+					if err := rbac.ReloadPolicy(); err != nil {
+						ctx.Errorf("failed to reload rbac policy: %v", err)
+					}
+				}
+			}
+
+		case v := <-teamMembersUpdateChan:
+			tgOperation, payload := tableActivityPayload(v)
+			fields := strings.Fields(payload)
+			if len(fields) != 2 {
+				ctx.Errorf("bad payload for team_members update: %s. expected (team_id person_id)", payload)
+				continue
+			}
+			teamID, personID := fields[0], fields[1]
+
+			switch tgOperation {
+			case TGOPDelete:
+				if err := rbac.DeleteRoleForUser(personID, teamID); err != nil {
+					ctx.Errorf("failed to delete team(%s)->user(%s) rbac policy: %v", teamID, personID, err)
+				} else if err := rbac.ReloadPolicy(); err != nil {
+					ctx.Errorf("failed to reload rbac policy: %v", err)
+				}
+
+			case TGOPInsert, TGOPUpdate:
+				if err := rbac.AddRoleForUser(personID, teamID); err != nil {
+					ctx.Errorf("failed to add team(%s)->user(%s) rbac policy: %v", teamID, personID, err)
+				} else if err := rbac.ReloadPolicy(); err != nil {
+					ctx.Errorf("failed to reload rbac policy: %v", err)
+				}
+			}
 
 		case <-permissionUpdateChan:
 			if err := rbac.ReloadPolicy(); err != nil {
@@ -208,3 +251,18 @@ func tableUpdatesHandler(ctx context.Context) {
 		}
 	}
 }
+
+func tableActivityPayload(payload string) (TGOP, string) {
+	fields := strings.Fields(payload)
+	derivedPayload := strings.Join(fields[1:], " ")
+	return TGOP(fields[0]), derivedPayload
+}
+
+// TG_OP from SQL trigger functions
+type TGOP string
+
+const (
+	TGOPDelete TGOP = "DELETE"
+	TGOPInsert TGOP = "INSERT"
+	TGOPUpdate TGOP = "UPDATE"
+)

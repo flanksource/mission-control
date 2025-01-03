@@ -115,6 +115,10 @@ func Stop() {
 	}
 }
 
+func DeleteRole(role string) (bool, error) {
+	return enforcer.DeleteRole(role)
+}
+
 func DeleteRoleForUser(user string, role string) error {
 	_, err := enforcer.DeleteRoleForUser(user, role)
 	return err
