@@ -38,10 +38,13 @@ spec:
             type: object
           spec:
             properties:
-              action:
-                description: Action specifies the operation that the permission allows
+              actions:
+                description: Actions specify the operation that the permission allows
                   or denies.
-                type: string
+                items:
+                  type: string
+                minItems: 1
+                type: array
               agents:
                 description: List of agent ids whose configs/components are accessible
                   to a person when RLS is enabled
@@ -279,7 +282,7 @@ spec:
                   access to when RLS is enabled
                 type: object
             required:
-            - action
+            - actions
             - object
             - subject
             type: object

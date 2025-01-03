@@ -18,6 +18,7 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/rbac"
+	"github.com/flanksource/incident-commander/rbac/policy"
 )
 
 func init() {
@@ -27,7 +28,7 @@ func init() {
 func RegisterRoutes(e *echo.Echo) {
 	logger.Infof("Registering /artifacts routes")
 
-	g := e.Group(fmt.Sprintf("/%s", "artifacts"), rbac.Authorization(rbac.ObjectArtifact, rbac.ActionRead))
+	g := e.Group(fmt.Sprintf("/%s", "artifacts"), rbac.Authorization(policy.ObjectArtifact, policy.ActionRead))
 	g.GET("/list/check/:id/:check_time", ListArtifacts)
 	g.GET("/list/playbook_run/:id", ListArtifacts)
 	g.GET("/download/:id", DownloadArtifact)

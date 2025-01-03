@@ -8,7 +8,9 @@ spec:
   description: allow config notifications to run playbook
   subject:
     notification: config-notifications
-  action: playbook:run
+  actions:
+    - playbook:run
+    - playbook:approve
   object:
     playbooks:
       - name: echo-config

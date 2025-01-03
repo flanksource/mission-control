@@ -15,6 +15,7 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/rbac"
+	"github.com/flanksource/incident-commander/rbac/policy"
 )
 
 func HandlePlaybookRunApproval(c echo.Context) error {
@@ -55,8 +56,8 @@ func approveRun(ctx context.Context, run *models.PlaybookRun) error {
 	approver := ctx.User()
 	if objects, err := run.GetRBACAttributes(ctx.DB()); err != nil {
 		return ctx.Oops().Wrap(err)
-	} else if !rbac.HasPermission(ctx, approver.ID.String(), objects, rbac.ActionPlaybookApprove) {
-		return ctx.Oops().With("permission", rbac.ActionPlaybookApprove, "objects", objects).Code(api.EFORBIDDEN).Wrap(errors.New("access denied: approval permission required"))
+	} else if !rbac.HasPermission(ctx, approver.ID.String(), objects, policy.ActionPlaybookApprove) {
+		return ctx.Oops().With("permission", policy.ActionPlaybookApprove, "objects", objects).Code(api.EFORBIDDEN).Wrap(errors.New("access denied: approval permission required"))
 	}
 
 	var spec v1.PlaybookSpec

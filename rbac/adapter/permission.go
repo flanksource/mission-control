@@ -3,15 +3,18 @@ package adapter
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/casbin/casbin/v2/model"
 	"github.com/casbin/casbin/v2/persist"
 	gormadapter "github.com/casbin/gorm-adapter/v3"
+	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/duty/models"
-
-	v1 "github.com/flanksource/incident-commander/api/v1"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+
+	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/rbac/policy"
 )
 
 type PermissionAdapter struct {
@@ -40,9 +43,11 @@ func (a *PermissionAdapter) LoadPolicy(model model.Model) error {
 	}
 
 	for _, permission := range permissions {
-		policy := permissionToCasbinRule(permission)
-		if err := persist.LoadPolicyArray(policy, model); err != nil {
-			return err
+		policies := permissionToCasbinRule(permission)
+		for _, policy := range policies {
+			if err := persist.LoadPolicyArray(policy, model); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -67,18 +72,28 @@ func (a *PermissionAdapter) LoadPolicy(model model.Model) error {
 	return nil
 }
 
-func permissionToCasbinRule(permission models.Permission) []string {
-	m := []string{
-		"p",
-		permission.Principal(),
-		permission.GetObject(),
-		permission.Action,
-		permission.Effect(),
-		permission.Condition(),
-		"na",
+func permissionToCasbinRule(permission models.Permission) [][]string {
+	var policies [][]string
+
+	patterns := strings.Split(permission.Action, ",")
+	for _, action := range policy.AllActions {
+		if !collections.MatchItems(action, patterns...) {
+			continue
+		}
+
+		policy := []string{
+			"p",
+			permission.Principal(),
+			permission.GetObject(),
+			action,
+			permission.Effect(),
+			permission.Condition(),
+			"na",
+		}
+		policies = append(policies, policy)
 	}
 
-	return m
+	return policies
 }
 
 func (a *PermissionAdapter) permissionGroupToCasbinRule(permission models.PermissionGroup) ([][]string, error) {
@@ -137,7 +152,7 @@ func (a *PermissionAdapter) permissionGroupToCasbinRule(permission models.Permis
 
 	var policies [][]string
 	for _, id := range allIDs {
-		m := []string{
+		policy := []string{
 			"g",
 			id,
 			permission.Name,
@@ -146,7 +161,7 @@ func (a *PermissionAdapter) permissionGroupToCasbinRule(permission models.Permis
 			"",
 		}
 
-		policies = append(policies, m)
+		policies = append(policies, policy)
 	}
 
 	return policies, nil

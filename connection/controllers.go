@@ -10,6 +10,7 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	echoSrv "github.com/flanksource/incident-commander/echo"
+	"github.com/flanksource/incident-commander/rbac/policy"
 	"github.com/labstack/echo/v4"
 	"gorm.io/gorm"
 
@@ -24,7 +25,7 @@ func RegisterRoutes(e *echo.Echo) {
 
 	prefix := "connection"
 	connectionGroup := e.Group(fmt.Sprintf("/%s", prefix))
-	connectionGroup.POST("/test/:id", TestConnection, rbac.Authorization(rbac.ObjectConnection, rbac.ActionUpdate))
+	connectionGroup.POST("/test/:id", TestConnection, rbac.Authorization(policy.ObjectConnection, policy.ActionUpdate))
 
 }
 

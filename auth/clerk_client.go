@@ -12,6 +12,7 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/rbac"
+	"github.com/flanksource/incident-commander/rbac/policy"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/labstack/echo/v4"
 	"github.com/patrickmn/go-cache"
@@ -225,15 +226,15 @@ func (h *ClerkHandler) createDBUserIfNotExists(ctx context.Context, user models.
 
 func (ClerkHandler) updateRole(userID, clerkRole string) error {
 	if clerkRole == "admin" {
-		if err := rbac.AddRoleForUser(userID, rbac.RoleAdmin); err != nil {
+		if err := rbac.AddRoleForUser(userID, policy.RoleAdmin); err != nil {
 			return err
 		}
 	} else {
 		// Remove admin in rbac if exists
-		if err := rbac.DeleteRoleForUser(userID, rbac.RoleAdmin); err != nil {
+		if err := rbac.DeleteRoleForUser(userID, policy.RoleAdmin); err != nil {
 			return err
 		}
-		if err := rbac.AddRoleForUser(userID, rbac.RoleViewer); err != nil {
+		if err := rbac.AddRoleForUser(userID, policy.RoleViewer); err != nil {
 			return err
 		}
 	}

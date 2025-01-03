@@ -128,8 +128,9 @@ type PermissionSpec struct {
 	// Description provides a brief explanation of the permission.
 	Description string `json:"description,omitempty"`
 
-	// Action specifies the operation that the permission allows or denies.
-	Action string `json:"action"`
+	//+kubebuilder:validation:MinItems=1
+	// Actions specify the operation that the permission allows or denies.
+	Actions []string `json:"actions"`
 
 	// Subject defines the entity (e.g., user, group) to which the permission applies.
 	Subject PermissionSubject `json:"subject"`

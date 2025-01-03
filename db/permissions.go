@@ -2,6 +2,7 @@ package db
 
 import (
 	"encoding/json"
+	"strings"
 
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
@@ -26,6 +27,8 @@ func PersistPermissionFromCRD(ctx context.Context, obj *v1.Permission) error {
 		return err
 	}
 
+	action := strings.Join(obj.Spec.Actions, ",")
+
 	p := models.Permission{
 		ID:             uid,
 		Name:           obj.GetName(),
@@ -33,7 +36,7 @@ func PersistPermissionFromCRD(ctx context.Context, obj *v1.Permission) error {
 		SubjectType:    subjectType,
 		Namespace:      obj.GetNamespace(),
 		Description:    obj.Spec.Description,
-		Action:         obj.Spec.Action,
+		Action:         action,
 		Source:         models.SourceCRD,
 		ObjectSelector: selectors,
 	}

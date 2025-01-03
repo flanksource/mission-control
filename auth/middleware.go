@@ -16,6 +16,7 @@ import (
 	"github.com/flanksource/gomplate/v3"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/rbac"
+	"github.com/flanksource/incident-commander/rbac/policy"
 	"github.com/flanksource/incident-commander/vars"
 	"github.com/labstack/echo/v4"
 	client "github.com/ory/client-go"
@@ -82,7 +83,7 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 			return fmt.Errorf("failed to initialize kratos middleware: %v", err)
 		}
 		e.Use(middleware.Session)
-		e.POST("/auth/invite_user", kratosHandler.InviteUser, rbac.Authorization(rbac.ObjectAuth, rbac.ActionUpdate))
+		e.POST("/auth/invite_user", kratosHandler.InviteUser, rbac.Authorization(policy.ObjectAuth, policy.ActionUpdate))
 
 	case Clerk:
 		clerkHandler, err := NewClerkHandler()

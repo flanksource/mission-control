@@ -16,6 +16,7 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
 	pkgAdapater "github.com/flanksource/incident-commander/rbac/adapter"
+	"github.com/flanksource/incident-commander/rbac/policy"
 	"gopkg.in/yaml.v3"
 )
 
@@ -75,12 +76,12 @@ func Init(ctx context.Context, adminUserID string) error {
 	addCustomCasbinFunctions(enforcer)
 
 	if adminUserID != "" {
-		if _, err := enforcer.AddRoleForUser(adminUserID, RoleAdmin); err != nil {
+		if _, err := enforcer.AddRoleForUser(adminUserID, policy.RoleAdmin); err != nil {
 			return fmt.Errorf("error adding role for admin user: %v", err)
 		}
 	}
 
-	var policies []Policy
+	var policies []policy.Policy
 
 	if err := yaml.Unmarshal([]byte(defaultPolicies), &policies); err != nil {
 		return fmt.Errorf("unable to load default policies: %v", err)
@@ -160,15 +161,15 @@ func PermsForUser(user string) ([]Permission, error) {
 }
 
 func Check(ctx context.Context, subject, object, action string) bool {
-	hasEveryone, err := enforcer.HasRoleForUser(subject, RoleEveryone)
+	hasEveryone, err := enforcer.HasRoleForUser(subject, policy.RoleEveryone)
 	if err != nil {
 		ctx.Errorf("RBAC Enforce failed: %v", err)
 		return false
 	}
 
 	if !hasEveryone {
-		if _, err := enforcer.AddRoleForUser(subject, RoleEveryone); err != nil {
-			ctx.Debugf("error adding role %s to user %s", RoleEveryone, subject)
+		if _, err := enforcer.AddRoleForUser(subject, policy.RoleEveryone); err != nil {
+			ctx.Debugf("error adding role %s to user %s", policy.RoleEveryone, subject)
 		}
 	}
 

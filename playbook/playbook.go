@@ -25,6 +25,7 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/playbook/runner"
 	"github.com/flanksource/incident-commander/rbac"
+	"github.com/flanksource/incident-commander/rbac/policy"
 	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
 )
 
@@ -150,8 +151,8 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 
 	if objects, err := run.GetRBACAttributes(ctx.DB()); err != nil {
 		return nil, ctx.Oops().Wrap(err)
-	} else if !rbac.HasPermission(ctx, ctx.Subject(), objects, rbac.ActionPlaybookRun) {
-		return nil, ctx.Oops().With("permission", rbac.ActionPlaybookRun, "objects", objects).Code(dutyAPI.EFORBIDDEN).Wrap(errors.New("access denied: run permission required"))
+	} else if !rbac.HasPermission(ctx, ctx.Subject(), objects, policy.ActionPlaybookRun) {
+		return nil, ctx.Oops().With("permission", policy.ActionPlaybookRun, "objects", objects).Code(dutyAPI.EFORBIDDEN).Wrap(errors.New("access denied: run permission required"))
 	}
 
 	if err := req.setDefaults(ctx, spec, templateEnv); err != nil {
