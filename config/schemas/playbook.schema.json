@@ -1182,13 +1182,13 @@
         "fieldSelector": {
           "type": "string"
         },
+        "health": {
+          "type": "string"
+        },
         "types": {
           "$ref": "#/$defs/Items"
         },
         "statuses": {
-          "$ref": "#/$defs/Items"
-        },
-        "healths": {
           "$ref": "#/$defs/Items"
         }
       },

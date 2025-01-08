@@ -1419,11 +1419,11 @@ spec:
                       type: string
                     fieldSelector:
                       type: string
-                    healths:
-                      description: Healths filter resources by the health
-                      items:
-                        type: string
-                      type: array
+                    health:
+                      description: |-
+                        Health filters resources by the health.
+                        Multiple healths can be provided separated by comma.
+                      type: string
                     id:
                       type: string
                     includeDeleted:
@@ -1480,11 +1480,11 @@ spec:
                       type: string
                     fieldSelector:
                       type: string
-                    healths:
-                      description: Healths filter resources by the health
-                      items:
-                        type: string
-                      type: array
+                    health:
+                      description: |-
+                        Health filters resources by the health.
+                        Multiple healths can be provided separated by comma.
+                      type: string
                     id:
                       type: string
                     includeDeleted:
@@ -1541,11 +1541,11 @@ spec:
                       type: string
                     fieldSelector:
                       type: string
-                    healths:
-                      description: Healths filter resources by the health
-                      items:
-                        type: string
-                      type: array
+                    health:
+                      description: |-
+                        Health filters resources by the health.
+                        Multiple healths can be provided separated by comma.
+                      type: string
                     id:
                       type: string
                     includeDeleted:
