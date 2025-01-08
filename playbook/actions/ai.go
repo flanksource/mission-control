@@ -3,7 +3,6 @@ package actions
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"text/template"
@@ -17,11 +16,13 @@ import (
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
+	"github.com/tmc/langchaingo/tools"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/llm"
+	llmTools "github.com/flanksource/incident-commander/llm/tools"
 )
 
 var recommendPlaybookPrompt *template.Template
@@ -123,8 +124,16 @@ func init() {
 	}
 }
 
-type AIAction struct {
+type aiAction struct {
 	PlaybookID uuid.UUID
+	RunID      uuid.UUID
+}
+
+func NewAIAction(playbookID, runID uuid.UUID) *aiAction {
+	return &aiAction{
+		PlaybookID: playbookID,
+		RunID:      runID,
+	}
 }
 
 type AIActionResult struct {
@@ -133,7 +142,7 @@ type AIActionResult struct {
 	RecommendedPlaybooks string `json:"recommendedPlaybooks,omitempty"`
 }
 
-func (t *AIAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, error) {
+func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, error) {
 	var result AIActionResult
 	if spec.Backend == "" {
 		spec.Backend = api.LLMBackendOpenAI
@@ -153,7 +162,18 @@ func (t *AIAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 	}
 
 	llmConf := llm.Config{AIActionClient: spec.AIActionClient}
-	response, conversation, err := llm.Prompt(ctx, llmConf, spec.SystemPrompt, prompt...)
+	var agentTools []tools.Tool
+	if len(spec.PlaybookAgents) > 0 {
+		playbooksJSON, err := getMatchingPlaybooks(ctx, t.PlaybookID, spec.Config, spec.RecommendPlaybooks...)
+		if err != nil {
+			return nil, err
+		}
+
+		llmConf.PlaybookAgents = playbooksJSON
+		agentTools = append(agentTools, llmTools.NewPlaybookRunner(ctx, spec.Config, t.PlaybookID, t.RunID))
+	}
+
+	response, conversation, err := llm.Prompt(ctx, llmConf, spec.SystemPrompt, prompt, agentTools...)
 	if err != nil {
 		return nil, err
 	}
@@ -173,50 +193,69 @@ func (t *AIAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 			result.Slack = response
 
 		case v1.AIActionFormatRecommendPlaybook:
-			config, err := query.GetCachedConfig(ctx, spec.Config)
-			if err != nil {
-				return nil, err
-			} else if config == nil {
-				return nil, errors.New("config not found")
-			}
-
-			_, supportedPlaybooks, err := db.FindPlaybooksForConfig(ctx, *config)
+			playbooksJSON, err := getMatchingPlaybooks(ctx, t.PlaybookID, spec.Config, spec.RecommendPlaybooks...)
 			if err != nil {
 				return nil, err
 			}
 
-			// The playbook shouldn't recommend itself.
-			supportedPlaybooks = lo.Filter(supportedPlaybooks, func(c *models.Playbook, _ int) bool {
-				return c.ID != t.PlaybookID
-			})
+			if len(playbooksJSON) == 0 {
+				result.RecommendedPlaybooks = `⚠ No playbooks found for the config that matches the given matchers`
+			} else {
+				var prompt bytes.Buffer
+				if err := recommendPlaybookPrompt.Execute(&prompt, map[string]any{
+					"base_url":  api.FrontendURL,
+					"playbooks": string(playbooksJSON),
+				}); err != nil {
+					return nil, err
+				}
 
-			// Only provide those playbooks that match the given filter
-			if len(spec.RecommendPlaybooks) > 0 {
-				supportedPlaybooks = types.MatchSelectables(supportedPlaybooks, spec.RecommendPlaybooks...)
+				response, _, err := llm.PromptWithHistory(ctx, llmConf, conversation, prompt.String())
+				if err != nil {
+					return nil, fmt.Errorf("failed to generate playbook recommendation: %w", err)
+				}
+				result.RecommendedPlaybooks = response
 			}
-
-			playbooksJSON, err := json.MarshalIndent(supportedPlaybooks, "", "\t")
-			if err != nil {
-				return nil, err
-			}
-
-			var prompt bytes.Buffer
-			if err := recommendPlaybookPrompt.Execute(&prompt, map[string]any{
-				"base_url":  api.FrontendURL,
-				"playbooks": string(playbooksJSON),
-			}); err != nil {
-				return nil, err
-			}
-
-			response, _, err := llm.PromptWithHistory(ctx, llmConf, conversation, prompt.String())
-			if err != nil {
-				return nil, fmt.Errorf("failed to generate playbook recommendation: %w", err)
-			}
-			result.RecommendedPlaybooks = response
 		}
 	}
 
 	return &result, nil
+}
+
+// getMatchingPlaybooks returns all the playbooks for the given config that additionally matches the given matchers.
+// when no matchers are passed, all supported playbooks are returned.
+func getMatchingPlaybooks(ctx context.Context, playbookID uuid.UUID, configID string, matchers ...types.ResourceSelector) ([]byte, error) {
+	config, err := query.GetCachedConfig(ctx, configID)
+	if err != nil {
+		return nil, err
+	} else if config == nil {
+		return nil, fmt.Errorf("config (%s) not found", configID)
+	}
+
+	_, supportedPlaybooks, err := db.FindPlaybooksForConfig(ctx, *config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get playbooks for config (%s): %w", config.ID, err)
+	}
+
+	// The playbook shouldn't recommend itself.
+	supportedPlaybooks = lo.Filter(supportedPlaybooks, func(c *models.Playbook, _ int) bool {
+		return c.ID != playbookID
+	})
+
+	// Only provide those playbooks that match the given filter
+	if len(matchers) > 0 {
+		supportedPlaybooks = types.MatchSelectables(supportedPlaybooks, matchers...)
+	}
+
+	if len(supportedPlaybooks) == 0 {
+		return nil, nil
+	}
+
+	playbooksJSON, err := json.MarshalIndent(supportedPlaybooks, "", "\t")
+	if err != nil {
+		return nil, fmt.Errorf("failed to json marshall supported playbooks: %w", err)
+	}
+
+	return playbooksJSON, nil
 }
 
 func buildPrompt(ctx context.Context, prompt string, spec v1.AIActionContext) ([]string, error) {

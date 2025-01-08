@@ -1,13 +1,18 @@
 ---
-# yaml-language-server: $schema=../../config/schemas/playbook.schema.json
+# yaml-language-server: $schema=../../../config/schemas/playbook.schema.json
 apiVersion: mission-control.flanksource.com/v1
 kind: Playbook
 metadata:
-  name: diagnose-and-send-to-slack
+  name: diagnose-kubernetes-resource
 spec:
-  description: Use AI to diagnose unhealthy config items and send a notification slack
+  description: Use AI to diagnose unhealthy kubernetes resources
+  category: AI
   configs:
-    - health: unhealthy,warning
+    - types:
+        - Kubernetes::DaemonSet
+        - Kubernetes::Deployment
+        - Kubernetes::Pod
+        - Kubernetes::StatefulSet
   parameters:
     - name: prompt
       label: Prompt
@@ -15,11 +20,9 @@ spec:
       properties:
         multiline: 'true'
   actions:
-    - name: query LLM
+    - name: query
       ai:
-        connection: connection://mc/openai
-        formats:
-          - slack
+        connection: connection://mc/anthropic
         systemPrompt: |
           **Role:** Seasoned Kubernetes engineer and Diagnostic Expert
 
@@ -29,7 +32,10 @@ spec:
 
           1. **Resource Analysis:** Examine the manifest of the unhealthy resource thoroughly.
           2. **Contextual Investigation:** Consider additional related resources provided (e.g., pods, replica sets, namespaces) to gain a comprehensive understanding of the issue.
+          3. **Diagnostic Steps:** Clearly outline the steps taken during the investigation, focusing on precision and brevity.
           4. **One-Time Diagnosis:** Aim to diagnose the issue in a single response without requiring follow-up questions.
+
+          **Output:** Provide a concise diagnosis and potential solutions based on the analysis.
         prompt: '{{.params.prompt}}'
         changes:
           since: 2d
@@ -44,8 +50,3 @@ spec:
             direction: incoming
             changes:
               since: 24h
-    - name: send notification
-      notification:
-        connection: connection://mc/flanksource-slack
-        title: Diagnosis report
-        message: '{{ getLastAction.result.slack }}'

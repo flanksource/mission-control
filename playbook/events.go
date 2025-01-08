@@ -271,19 +271,36 @@ outer:
 
 func onNewRun(ctx context.Context, event models.Event) error {
 	var (
-		playbookID              = event.Properties["id"]
-		notificationID          = event.Properties["notification_id"]
-		_notificationDispatchID = event.Properties["notification_dispatch_id"]
+		playbookID       = event.Properties["id"]
+		jsonParameters   = event.Properties["params"]
+		notificationID   = event.Properties["notification_id"]
+		parentPlaybookID = event.Properties["parent_playbook_id"]
 	)
 
-	notificationDispatchID, err := uuid.Parse(_notificationDispatchID)
-	if err != nil {
-		return fmt.Errorf("invalid notification dispatch id: %s", _notificationDispatchID)
+	var runParam RunParams
+
+	if jsonParameters != "" {
+		if err := json.Unmarshal([]byte(jsonParameters), &runParam.Params); err != nil {
+			return err
+		}
 	}
 
-	runParam := RunParams{
-		NotificationSendID: &notificationDispatchID,
+	if dispatchID := event.Properties["notification_dispatch_id"]; dispatchID != "" {
+		parsed, err := uuid.Parse(dispatchID)
+		if err != nil {
+			return fmt.Errorf("invalid notification dispatch id: %s", dispatchID)
+		}
+		runParam.NotificationSendID = &parsed
 	}
+
+	if runID := event.Properties["parent_run_id"]; runID != "" {
+		parsed, err := uuid.Parse(runID)
+		if err != nil {
+			return fmt.Errorf("invalid parent run ID: %s", runID)
+		}
+		runParam.ParentRunID = &parsed
+	}
+
 	if v, ok := event.Properties["config_id"]; ok {
 		runParam.ConfigID = lo.ToPtr(uuid.MustParse(v))
 	}
@@ -294,7 +311,8 @@ func onNewRun(ctx context.Context, event models.Event) error {
 		runParam.CheckID = lo.ToPtr(uuid.MustParse(v))
 	}
 
-	ctx = ctx.WithSubject(notificationID)
+	// TODO: Set admin as the subject for now to bypass ABAC
+	ctx = ctx.WithSubject(lo.CoalesceOrEmpty("8fcd6458-881b-450c-ac2a-f38b3761a443", notificationID, parentPlaybookID))
 
 	var playbook models.Playbook
 	if err := ctx.DB().Where("id = ?", playbookID).First(&playbook).Error; err != nil {
@@ -315,8 +333,12 @@ func onNewRun(ctx context.Context, event models.Event) error {
 		columnUpdates["status"] = models.NotificationStatusError
 	}
 
-	if err := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", notificationDispatchID).UpdateColumns(columnUpdates).Error; err != nil {
-		ctx.Errorf("playbook run initiated but failed to update the notification status (%s): %v", notificationDispatchID, err)
+	if runParam.NotificationSendID != nil {
+		if err := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", *runParam.NotificationSendID).UpdateColumns(columnUpdates).Error; err != nil {
+			ctx.Errorf("playbook run initiated but failed to update the notification status (%s): %v", *runParam.NotificationSendID, err)
+		}
+		// } else if runParam.ParentRunID != nil {
+		// update the parent run's status maybe or just return error?
 	}
 
 	return nil

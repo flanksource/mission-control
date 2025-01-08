@@ -12,6 +12,10 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+// events received on this channel are saved to DB.
+// NOTE: Not sure about this one. will probably remove it.
+var EventChan = make(chan models.Event)
+
 type asyncHandlerData struct {
 	fn           func(ctx context.Context, e models.Events) models.Events
 	batchSize    int
@@ -67,6 +71,15 @@ func StartConsumers(ctx context.Context) {
 	for _, fn := range registers {
 		fn(ctx)
 	}
+
+	go func() {
+		for e := range EventChan {
+			if err := ctx.DB().Create(&e).Error; err != nil {
+				log.Errorf("failed to create event: %w", err)
+			}
+		}
+	}()
+
 	// We listen to all PG Notifications on one channel and distribute it to other consumers
 	// based on the events.
 	notifyRouter := pg.NewNotifyRouter()
