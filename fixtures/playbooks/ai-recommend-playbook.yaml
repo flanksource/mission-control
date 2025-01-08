@@ -3,7 +3,7 @@
 apiVersion: mission-control.flanksource.com/v1
 kind: Playbook
 metadata:
-  name: diagnose-and-send-to-slack
+  name: recommend-playbook
 spec:
   description: Use AI to diagnose unhealthy config items and send a notification slack
   configs:
@@ -11,15 +11,18 @@ spec:
   parameters:
     - name: prompt
       label: Prompt
-      default: Find out why {{.config.name}} is unhealthy
+      default: Find out why {{.config.name}} is unhealthy and report in one short sentence.
       properties:
         multiline: 'true'
   actions:
     - name: query LLM
       ai:
-        connection: connection://mc/openai
+        connection: connection://mc/anthropic
         formats:
           - slack
+          - recommendPlaybook
+        recommendPlaybooks:
+          - namespace: mc
         systemPrompt: |
           **Role:** Seasoned Kubernetes engineer and Diagnostic Expert
 
@@ -44,8 +47,13 @@ spec:
             direction: incoming
             changes:
               since: 24h
-    - name: send notification
+    - name: send diagnosis report
       notification:
         connection: connection://mc/flanksource-slack
         title: Diagnosis report
-        message: '{{ getLastAction.result.slack }}'
+        message: '$(getLastAction.result.slack)'
+    - name: send recommended playbooks
+      notification:
+        connection: connection://mc/flanksource-slack
+        title: Recommended playbooks
+        message: '{{ index (getAction "query LLM").result.recommendedPlaybooks }}'

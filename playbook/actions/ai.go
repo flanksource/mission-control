@@ -1,32 +1,140 @@
 package actions
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
+	"text/template"
 	"time"
 
 	"github.com/flanksource/commons/duration"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
+	"github.com/flanksource/duty/shutdown"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/llm"
 )
 
-type AIAction struct{}
+var recommendPlaybookPrompt *template.Template
+
+const slackPrompt = `
+	Re-write the diagnosis formatted for a slack message.
+	The output should be in pure json using Block Kit(https://api.slack.com/block-kit) - a UI framework for Slack apps.
+	Example: output 
+	{
+		"blocks": [
+			{
+				"type": "section",
+				"fields": [
+					{
+						"type": "mrkdwn",
+						"text": "Statefulset: alertmanager"
+					},
+					{
+						"type": "mrkdwn",
+						"text": "*Namespace*: mc"
+					},
+					{
+						"type": "mrkdwn",
+						"text": "Deployment has pods that are in a crash loop."
+					}
+				]
+			},
+		]
+	}
+		
+	Please do not add code blocks around the JSON output.`
+
+func init() {
+	var err error
+
+	recommendPlaybookPrompt, err = template.New("recommend").Parse(`Analyze a list of playbooks and find the most suitable ones
+	and create a Slack message using Block Kit, allowing users to run these playbooks on a specific configuration.
+
+	First, here's the list of playbooks you need to analyze:
+
+	<playbooks>
+	{{.playbooks}}
+	</playbooks>
+
+	Your goal is to create a Slack message that presents buttons for each applicable playbook. 
+	Each button, when clicked, should trigger the execution of its corresponding playbook.
+
+	Follow these steps to complete the task:
+
+	1. Analyze the given playbooks and identify which ones can be run on the current configuration.
+
+	2. For each applicable playbook, create a button element in the Slack Block Kit JSON structure.
+
+	3. Generate a URL for each button that will trigger the playbook execution. The URL should follow this format:
+		GET {{.base_url}}/playbooks/runs
+		With these query parameters:
+		- playbook={playbook_id}
+		- run=true (always set to true)
+		- config_id={uuid_of_the_config}
+		- params.{key}={url_encoded(value)}
+
+		IMPORTANT: Ensure that you URL-encode the parameter values.
+
+	4. Compile all button elements into a single Block Kit JSON structure.
+
+	5. If no matching playbooks are found, create a message block with the text "No matching playbooks found."
+
+	Here's an example of the expected output structure:
+
+	{
+		"blocks": [
+			{
+				"type": "actions",
+				"block_id": "actionblock123",
+				"elements": [
+					{
+						"type": "button",
+						"text": {
+							"type": "plain_text",
+							"text": "Example Playbook"
+						},
+						"url": "{{.base_url}}/playbooks/runs?playbook=example-id&run=true&config_id=example-config-id&params.key=encoded_value"
+					}
+				]
+			}
+		]
+	}
+
+	Remember:
+	- Ensure the JSON is valid and follows the Block Kit structure. Do not wrap the json within a code block. It must be parsable.
+	- Include all necessary query parameters in the URL.
+	- URL-encode parameter values.
+	- Use a unique block_id for each action block (e.g., "actionblock" followed by a random number).
+	- If no playbooks match, return a block with a single text element.
+
+	Now, analyze the playbooks and create the appropriate Slack message.`)
+	if err != nil {
+		shutdown.ShutdownAndExit(1, "bad template for playbook recommendation prompt")
+	}
+}
+
+type AIAction struct {
+	PlaybookID uuid.UUID
+}
 
 type AIActionResult struct {
-	Markdown string `json:"markdown,omitempty"`
-	Slack    string `json:"slack,omitempty"`
+	Markdown             string `json:"markdown,omitempty"`
+	Slack                string `json:"slack,omitempty"`
+	RecommendedPlaybooks string `json:"recommendedPlaybooks,omitempty"`
 }
 
 func (t *AIAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, error) {
+	var result AIActionResult
 	if spec.Backend == "" {
 		spec.Backend = api.LLMBackendOpenAI
 	}
@@ -44,13 +152,71 @@ func (t *AIAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 		return &AIActionResult{Markdown: strings.Join(prompt, "\n")}, nil
 	}
 
-	llmConf := llm.Config{AIActionClient: spec.AIActionClient, UseAgent: spec.UseAgent}
-	response, err := llm.Prompt(ctx, llmConf, spec.SystemPrompt, prompt...)
+	llmConf := llm.Config{AIActionClient: spec.AIActionClient}
+	response, conversation, err := llm.Prompt(ctx, llmConf, spec.SystemPrompt, prompt...)
 	if err != nil {
 		return nil, err
 	}
+	result.Markdown = response
 
-	return &AIActionResult{Markdown: response}, nil
+	// Just use the last message from the AI.
+	// we don't want to re-send the entire conversation as that'll increase the chances of hiting the rate limit.
+	// lastConverstion := conversation[len(conversation)-1:]
+
+	for _, format := range lo.Uniq(spec.Formats) {
+		switch format {
+		case v1.AIActionFormatSlack:
+			response, _, err := llm.PromptWithHistory(ctx, llmConf, conversation, slackPrompt)
+			if err != nil {
+				return nil, fmt.Errorf("failed to generate slack message: %w", err)
+			}
+			result.Slack = response
+
+		case v1.AIActionFormatRecommendPlaybook:
+			config, err := query.GetCachedConfig(ctx, spec.Config)
+			if err != nil {
+				return nil, err
+			} else if config == nil {
+				return nil, errors.New("config not found")
+			}
+
+			_, supportedPlaybooks, err := db.FindPlaybooksForConfig(ctx, *config)
+			if err != nil {
+				return nil, err
+			}
+
+			// The playbook shouldn't recommend itself.
+			supportedPlaybooks = lo.Filter(supportedPlaybooks, func(c *models.Playbook, _ int) bool {
+				return c.ID != t.PlaybookID
+			})
+
+			// Only provide those playbooks that match the given filter
+			if len(spec.RecommendPlaybooks) > 0 {
+				supportedPlaybooks = types.MatchSelectables(supportedPlaybooks, spec.RecommendPlaybooks...)
+			}
+
+			playbooksJSON, err := json.MarshalIndent(supportedPlaybooks, "", "\t")
+			if err != nil {
+				return nil, err
+			}
+
+			var prompt bytes.Buffer
+			if err := recommendPlaybookPrompt.Execute(&prompt, map[string]any{
+				"base_url":  api.FrontendURL,
+				"playbooks": string(playbooksJSON),
+			}); err != nil {
+				return nil, err
+			}
+
+			response, _, err := llm.PromptWithHistory(ctx, llmConf, conversation, prompt.String())
+			if err != nil {
+				return nil, fmt.Errorf("failed to generate playbook recommendation: %w", err)
+			}
+			result.RecommendedPlaybooks = response
+		}
+	}
+
+	return &result, nil
 }
 
 func buildPrompt(ctx context.Context, prompt string, spec v1.AIActionContext) ([]string, error) {

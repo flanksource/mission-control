@@ -294,7 +294,7 @@ func ListPlaybooksForConfig(ctx context.Context, id string) ([]api.PlaybookListI
 		return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("config(id=%s) not found", id)
 	}
 
-	list, err := db.FindPlaybooksForConfig(ctx, config)
+	list, _, err := db.FindPlaybooksForConfig(ctx, config)
 	return list, ctx.Oops().Wrap(err)
 }
 
@@ -306,7 +306,7 @@ func ListPlaybooksForComponent(ctx context.Context, id string) ([]api.PlaybookLi
 		return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("component '%s' not found", id)
 	}
 
-	list, err := db.FindPlaybooksForComponent(ctx, component)
+	list, _, err := db.FindPlaybooksForComponent(ctx, component)
 	return list, ctx.Oops().Wrap(err)
 }
 
@@ -318,6 +318,6 @@ func ListPlaybooksForCheck(ctx context.Context, id string) ([]api.PlaybookListIt
 		return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("check(id=%s) not found", id)
 	}
 
-	list, err := db.FindPlaybooksForCheck(ctx, check)
+	list, _, err := db.FindPlaybooksForCheck(ctx, check)
 	return list, ctx.Oops().Wrap(err)
 }
