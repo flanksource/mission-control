@@ -16,9 +16,16 @@ func (in *AIAction) DeepCopyInto(out *AIAction) {
 	*out = *in
 	in.AIActionClient.DeepCopyInto(&out.AIActionClient)
 	in.AIActionContext.DeepCopyInto(&out.AIActionContext)
+	if in.RecommendPlaybooks != nil {
+		in, out := &in.RecommendPlaybooks, &out.RecommendPlaybooks
+		*out = make([]types.ResourceSelector, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
 	if in.Formats != nil {
 		in, out := &in.Formats, &out.Formats
-		*out = make([]string, len(*in))
+		*out = make([]AIActionFormat, len(*in))
 		copy(*out, *in)
 	}
 }

@@ -5,17 +5,13 @@ import (
 	"fmt"
 
 	"github.com/flanksource/duty/context"
-	"github.com/tmc/langchaingo/agents"
-	"github.com/tmc/langchaingo/chains"
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/anthropic"
 	"github.com/tmc/langchaingo/llms/ollama"
 	"github.com/tmc/langchaingo/llms/openai"
-	"github.com/tmc/langchaingo/tools"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
-	mcTools "github.com/flanksource/incident-commander/llm/tools"
 )
 
 type Config struct {
@@ -23,25 +19,25 @@ type Config struct {
 	UseAgent bool
 }
 
-func Prompt(ctx context.Context, config Config, systemPrompt string, promptParts ...string) (string, error) {
+func Prompt(ctx context.Context, config Config, systemPrompt string, promptParts ...string) (string, []llms.MessageContent, error) {
 	model, err := getLLMModel(config)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 
-	if config.UseAgent {
-		agentTools := []tools.Tool{
-			mcTools.NewCatalogTool(ctx),
-		}
+	// if config.UseAgent {
+	// 	agentTools := []tools.Tool{
+	// 		mcTools.NewCatalogTool(ctx),
+	// 	}
 
-		agent := agents.NewOneShotAgent(model,
-			agentTools,
-			agents.WithMaxIterations(3),
-		)
+	// 	agent := agents.NewOneShotAgent(model,
+	// 		agentTools,
+	// 		agents.WithMaxIterations(3),
+	// 	)
 
-		executor := agents.NewExecutor(agent)
-		return chains.Run(ctx, executor, promptParts, chains.WithTemperature(0))
-	}
+	// 	executor := agents.NewExecutor(agent)
+	// 	return chains.Run(ctx, executor, promptParts, chains.WithTemperature(0))
+	// }
 
 	content := []llms.MessageContent{
 		llms.TextParts(llms.ChatMessageTypeSystem, systemPrompt),
@@ -53,14 +49,36 @@ func Prompt(ctx context.Context, config Config, systemPrompt string, promptParts
 
 	resp, err := model.GenerateContent(ctx, content, llms.WithTemperature(0))
 	if err != nil {
-		return "", fmt.Errorf("failed to generate response: %w", err)
+		return "", nil, fmt.Errorf("failed to generate response: %w", err)
 	}
 
 	if len(resp.Choices) == 0 {
-		return "", errors.New("no response from LLM")
+		return "", nil, errors.New("no response from LLM")
 	}
 
-	return resp.Choices[0].Content, nil
+	content = append(content, llms.TextParts(llms.ChatMessageTypeAI, resp.Choices[0].Content))
+	return resp.Choices[0].Content, content, nil
+}
+
+func PromptWithHistory(ctx context.Context, config Config, history []llms.MessageContent, prompt string) (string, []llms.MessageContent, error) {
+	model, err := getLLMModel(config)
+	if err != nil {
+		return "", nil, err
+	}
+
+	content := append(history, llms.TextParts(llms.ChatMessageTypeHuman, prompt))
+
+	resp, err := model.GenerateContent(ctx, content, llms.WithTemperature(0))
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to generate response: %w", err)
+	}
+
+	if len(resp.Choices) == 0 {
+		return "", nil, errors.New("no response from LLM")
+	}
+
+	content = append(content, llms.TextParts(llms.ChatMessageTypeAI, resp.Choices[0].Content))
+	return resp.Choices[0].Content, content, nil
 }
 
 func getLLMModel(config Config) (llms.Model, error) {

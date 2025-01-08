@@ -38,6 +38,12 @@
         "dryRun": {
           "type": "boolean"
         },
+        "recommendPlaybooks": {
+          "items": {
+            "$ref": "#/$defs/ResourceSelector"
+          },
+          "type": "array"
+        },
         "systemPrompt": {
           "type": "string"
         },

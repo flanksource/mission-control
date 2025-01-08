@@ -14,6 +14,11 @@ type Notification struct {
 
 func (t *Notification) Run(ctx context.Context, action v1.NotificationAction) error {
 	notifContext := notification.NewContext(ctx, uuid.Nil)
-	_, err := notification.SendNotification(notifContext, action.Connection, action.URL, nil, notification.NotificationTemplate{Title: action.Title, Message: action.Message, Properties: action.Properties}, nil)
+	template := notification.NotificationTemplate{
+		Title:      action.Title,
+		Message:    action.Message,
+		Properties: action.Properties,
+	}
+	_, err := notification.SendNotification(notifContext, action.Connection, action.URL, nil, template, nil)
 	return err
 }

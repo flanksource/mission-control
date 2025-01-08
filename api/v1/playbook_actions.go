@@ -370,6 +370,14 @@ func (t AIActionContext) ShouldFetchConfigChanges() bool {
 	return true
 }
 
+type AIActionFormat string
+
+const (
+	AIActionFormatSlack             AIActionFormat = "slack"
+	AIActionFormatMarkdown          AIActionFormat = "markdown"
+	AIActionFormatRecommendPlaybook AIActionFormat = "recommendPlaybook"
+)
+
 type AIAction struct {
 	AIActionClient  `json:",inline" yaml:",inline"`
 	AIActionContext `json:",inline" yaml:",inline" template:"true"`
@@ -377,9 +385,9 @@ type AIAction struct {
 	// When enabled, the prompt is simply saved without passing it on to the LLM.
 	DryRun bool `json:"dryRun,omitempty"`
 
-	// Use an AI agent that can autonomously drive the diagnosis using tools that interface directly with the database.
-	// NOTE: Not exposed for now
-	UseAgent bool `json:"-"`
+	// Specify selectors for playbooks. The LLM will recommend the best suited playbooks
+	// in response to the prompt.
+	RecommendPlaybooks []types.ResourceSelector `json:"recommendPlaybooks,omitempty"`
 
 	// system prompt is a way to provide context, instructions, and guidelines to the LLM before presenting it
 	// with a question or task.
@@ -387,12 +395,12 @@ type AIAction struct {
 	// tone, or any other relevant information that will help it better understand and respond to the user's input.
 	SystemPrompt string `json:"systemPrompt"`
 
-	// Prompt is the humna prompt
+	// Prompt is the human prompt
 	Prompt string `json:"prompt" template:"true"`
 
 	// Output format of the prompt.
-	// Supported: markdown (default), slack.
-	Formats []string `json:"formats,omitempty"`
+	// Supported: markdown (default), slack, recommendPlaybook
+	Formats []AIActionFormat `json:"formats,omitempty"`
 }
 
 type ExecAction struct {

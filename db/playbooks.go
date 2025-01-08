@@ -18,16 +18,6 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 )
 
-func FindPlaybooksForEvent(ctx context.Context, eventClass, event string) ([]models.Playbook, error) {
-	var playbooks []models.Playbook
-	query := fmt.Sprintf(`SELECT * FROM playbooks WHERE spec->'on'->'%s' @> '[{"event": "%s"}]'`, eventClass, event)
-	if err := ctx.DB().Raw(query).Scan(&playbooks).Error; err != nil {
-		return nil, err
-	}
-
-	return playbooks, nil
-}
-
 func FindPlaybookRun(ctx context.Context, id uuid.UUID) (*models.PlaybookRun, error) {
 	var p models.PlaybookRun
 	if err := ctx.DB().Where("id = ?", id).First(&p).Error; err != nil {
@@ -83,14 +73,19 @@ func GetPlaybookRun(ctx context.Context, id string) (*models.PlaybookRun, error)
 	return &p, nil
 }
 
-func findPlaybooksForResourceSelector(ctx context.Context, selectable types.ResourceSelectable, selectorField string) ([]api.PlaybookListItem, error) {
+func findPlaybooksForResourceSelectable(ctx context.Context, selectable types.ResourceSelectable, selectorField string) (
+	[]api.PlaybookListItem,
+	[]*models.Playbook,
+	error,
+) {
 	var playbooks []models.Playbook
 	if err := ctx.DB().Model(&models.Playbook{}).Where(fmt.Sprintf("spec->>'%s' IS NOT NULL", selectorField)).Where("deleted_at IS NULL").Find(&playbooks).Error; err != nil {
-		return nil, fmt.Errorf("error finding playbooks with %s: %w", selectorField, err)
+		return nil, nil, fmt.Errorf("error finding playbooks with %s: %w", selectorField, err)
 	}
 
 	// To return empty list instead of null
 	playbookListItems := make([]api.PlaybookListItem, 0)
+	var matchedPlaybooks []*models.Playbook
 
 	for _, pb := range playbooks {
 		var spec v1.PlaybookSpec
@@ -127,31 +122,43 @@ func findPlaybooksForResourceSelector(ctx context.Context, selectable types.Reso
 
 		params, err := json.Marshal(spec.Parameters)
 		if err != nil {
-			return nil, fmt.Errorf("error marshaling params[%v] to json: %w", spec.Parameters, err)
+			return nil, nil, fmt.Errorf("error marshaling params[%v] to json: %w", spec.Parameters, err)
 		}
 		playbookListItems = append(playbookListItems, api.PlaybookListItem{
 			ID:         pb.ID,
 			Name:       pb.Name,
 			Parameters: params,
 		})
+
+		matchedPlaybooks = append(matchedPlaybooks, &pb)
 	}
 
-	return playbookListItems, nil
+	return playbookListItems, matchedPlaybooks, nil
 }
 
 // FindPlaybooksForCheck returns all the playbooks that match the given check type and tags.
-func FindPlaybooksForCheck(ctx context.Context, check models.Check) ([]api.PlaybookListItem, error) {
-	return findPlaybooksForResourceSelector(ctx, check, "checks")
+func FindPlaybooksForCheck(ctx context.Context, check models.Check) ([]api.PlaybookListItem, []*models.Playbook, error) {
+	return findPlaybooksForResourceSelectable(ctx, check, "checks")
 }
 
 // FindPlaybooksForConfig returns all the playbooks that match the given config's resource selectors
-func FindPlaybooksForConfig(ctx context.Context, config models.ConfigItem) ([]api.PlaybookListItem, error) {
-	return findPlaybooksForResourceSelector(ctx, config, "configs")
+func FindPlaybooksForConfig(ctx context.Context, config models.ConfigItem) ([]api.PlaybookListItem, []*models.Playbook, error) {
+	return findPlaybooksForResourceSelectable(ctx, config, "configs")
 }
 
 // FindPlaybooksForComponent returns all the playbooks that match the given component type and tags.
-func FindPlaybooksForComponent(ctx context.Context, component models.Component) ([]api.PlaybookListItem, error) {
-	return findPlaybooksForResourceSelector(ctx, component, "components")
+func FindPlaybooksForComponent(ctx context.Context, component models.Component) ([]api.PlaybookListItem, []*models.Playbook, error) {
+	return findPlaybooksForResourceSelectable(ctx, component, "components")
+}
+
+func FindPlaybooksForEvent(ctx context.Context, eventClass, event string) ([]models.Playbook, error) {
+	var playbooks []models.Playbook
+	query := fmt.Sprintf(`SELECT * FROM playbooks WHERE spec->'on'->'%s' @> '[{"event": "%s"}]'`, eventClass, event)
+	if err := ctx.DB().Raw(query).Scan(&playbooks).Error; err != nil {
+		return nil, err
+	}
+
+	return playbooks, nil
 }
 
 func FindPlaybookByWebhookPath(ctx context.Context, path string) (*models.Playbook, error) {
