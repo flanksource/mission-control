@@ -99,8 +99,8 @@ func PullPlaybookAction(ctx job.JobRuntime, upstreamConfig upstream.UpstreamConf
 		Record(time.Duration(time.Since(response.Action.ScheduledTime).Milliseconds()))
 
 	err = ctx.Transaction(func(ctx context.Context, _ trace.Span) error {
-		// Don't save playbook_run_id to avoid foreign key constraint
-		if err := ctx.DB().Omit("playbook_run_id").Save(&response.Action).Error; err != nil {
+		// Don't save playbook_run_id & agent_id to avoid foreign key constraint
+		if err := ctx.DB().Omit("playbook_run_id", "agent_id").Save(&response.Action).Error; err != nil {
 			return oops.Wrap(err)
 		}
 
