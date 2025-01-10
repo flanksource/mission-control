@@ -153,6 +153,7 @@ const (
 	RoleCommander = "commander"
 	RoleResponder = "responder"
 	RoleAgent     = "agent"
+	RoleGuest     = "guest"
 
 	// Objects
 	ObjectKubernetesProxy  = "kubernetes-proxy"
