@@ -58,7 +58,11 @@ type RLSPayload struct {
 }
 
 // If a user only has these roles, then RLS must be enforced
-var rlsEnforcableRoles = []string{"user", "viewer", "everyone"}
+var rlsEnforcableRoles = []string{
+	policy.RoleEveryone,
+	policy.RoleGuest,
+	policy.RoleViewer,
+}
 
 func GetRLSPayload(ctx context.Context) (*RLSPayload, error) {
 	if !ctx.Properties().On(false, vars.FlagRLSEnable) {

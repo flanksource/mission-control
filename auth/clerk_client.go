@@ -225,18 +225,31 @@ func (h *ClerkHandler) createDBUserIfNotExists(ctx context.Context, user models.
 }
 
 func (ClerkHandler) updateRole(userID, clerkRole string) error {
-	if clerkRole == "admin" {
-		if err := rbac.AddRoleForUser(userID, policy.RoleAdmin); err != nil {
-			return err
-		}
-	} else {
-		// Remove admin in rbac if exists
-		if err := rbac.DeleteRoleForUser(userID, policy.RoleAdmin); err != nil {
-			return err
-		}
-		if err := rbac.AddRoleForUser(userID, policy.RoleViewer); err != nil {
-			return err
+	// Clerk roles map to one of these 3 roles
+	roles := []string{policy.RoleAdmin, policy.RoleViewer, policy.RoleGuest}
+
+	var role string
+	switch clerkRole {
+	case "admin":
+		role = policy.RoleAdmin
+	case "org:guest":
+		role = policy.RoleGuest
+	default:
+		role = policy.RoleViewer
+	}
+
+	if err := rbac.AddRoleForUser(userID, role); err != nil {
+		return fmt.Errorf("failed to add role %s to user %s: %w", role, userID, err)
+	}
+
+	// Delete other roles
+	for _, r := range roles {
+		if r != role {
+			if err := rbac.DeleteRoleForUser(userID, r); err != nil {
+				return fmt.Errorf("failed to delete role %s: %w", r, err)
+			}
 		}
 	}
+
 	return nil
 }
