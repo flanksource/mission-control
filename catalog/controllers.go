@@ -2,6 +2,7 @@ package catalog
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/flanksource/commons/logger"
@@ -13,6 +14,7 @@ import (
 	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/rbac/policy"
 	"github.com/labstack/echo/v4"
+	"github.com/lib/pq"
 	"go.opentelemetry.io/otel/trace"
 )
 
@@ -24,7 +26,7 @@ func RegisterRoutes(e *echo.Echo) {
 	logger.Infof("Registering /catalog routes")
 
 	apiGroup := e.Group("/catalog", rbac.Catalog(policy.ActionRead))
-	apiGroup.POST("/summary", SearchConfigSummary)
+	apiGroup.POST("/summary", SearchConfigSummary, rlsMiddleware)
 
 	apiGroup.POST("/changes", SearchCatalogChanges, rlsMiddleware)
 	// Deprecated. Use POST
@@ -86,7 +88,10 @@ func rlsMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 				return err
 			}
 
-			if err := txCtx.DB().Exec(`SET LOCAL request.jwt.claims = ?`, string(rlsJSON)).Error; err != nil {
+			// NOTE: SET statements in PostgreSQL do not support parameterized queries, so we must use fmt.Sprintf
+			// to inject the rlsJSON safely using pq.QuoteLiteral.
+			rlsSet := fmt.Sprintf(`SET LOCAL request.jwt.claims TO %s`, pq.QuoteLiteral(string(rlsJSON)))
+			if err := txCtx.DB().Exec(rlsSet).Error; err != nil {
 				return err
 			}
 
