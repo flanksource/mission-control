@@ -1,0 +1,15 @@
+---
+# yaml-language-server: $schema=https://raw.githubusercontent.com/flanksource/mission-control/refs/heads/main/config/schemas/permission.schema.json
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: demo-cluster-access-to-john
+spec:
+  description: allow user john access to all resources in demo cluster
+  subject:
+    person: john@doe.com
+  actions:
+    - read
+  object: {}
+  tags:
+    cluster: demo
