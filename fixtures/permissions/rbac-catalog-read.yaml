@@ -1,0 +1,14 @@
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: rbac-john-catalog-read
+spec:
+  description: Grant John read permissions to catalogs
+  subject:
+    person: john@doe.com
+  actions:
+    - read
+  object:
+    configs:
+      - name: "*"

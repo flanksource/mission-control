@@ -8,6 +8,7 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
+	"github.com/flanksource/incident-commander/rbac/policy"
 	"github.com/google/uuid"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -106,6 +107,30 @@ type PermissionObject struct {
 	Playbooks  []types.ResourceSelector `json:"playbooks,omitempty"`
 	Configs    []types.ResourceSelector `json:"configs,omitempty"`
 	Components []types.ResourceSelector `json:"components,omitempty"`
+}
+
+// GlobalObject checks if the object selector semantically maps to a global object
+// and returns the corresponding global object if applicable.
+// For example:
+//
+//	configs:
+//		- name: '*'
+//
+// is interpreted as the object: catalog.
+func (t *PermissionObject) GlobalObject() (string, bool) {
+	if len(t.Playbooks) == 1 && len(t.Configs) == 0 && len(t.Components) == 0 && t.Playbooks[0].Wildcard() {
+		return policy.ObjectPlaybooks, true
+	}
+
+	if len(t.Configs) == 1 && len(t.Playbooks) == 0 && len(t.Components) == 0 && t.Configs[0].Wildcard() {
+		return policy.ObjectCatalog, true
+	}
+
+	if len(t.Components) == 1 && len(t.Playbooks) == 0 && len(t.Configs) == 0 && t.Components[0].Wildcard() {
+		return policy.ObjectTopology, true
+	}
+
+	return "", false
 }
 
 func (t PermissionObject) RequiredMatchCount() int {
