@@ -15,7 +15,7 @@ func SearchResources(c echov4.Context) error {
 
 	var request query.SearchResourcesRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&request); err != nil {
-		return api.WriteError(c, api.Errorf(api.EINVALID, err.Error()))
+		return api.WriteError(c, api.Errorf(api.EINVALID, "%s", err.Error()))
 	}
 
 	response, err := query.SearchResources(ctx, request)

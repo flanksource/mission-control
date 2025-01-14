@@ -3,6 +3,7 @@ package echo
 import (
 	gocontext "context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -32,9 +33,11 @@ import (
 	"github.com/labstack/echo-contrib/echoprometheus"
 	echov4 "github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"github.com/lib/pq"
 	prom "github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -114,7 +117,7 @@ func New(ctx context.Context) *echov4.Echo {
 	Forward(ctx, e, "/kubeproxy", "https://kubernetes.default.svc", KubeProxyTokenMiddleware)
 
 	e.GET("/properties", dutyEcho.Properties)
-	e.POST("/resources/search", SearchResources, rbac.Authorization(policy.ObjectCatalog, policy.ActionRead))
+	e.POST("/resources/search", SearchResources, rbac.Authorization(policy.ObjectCatalog, policy.ActionRead), RLSMiddleware)
 
 	e.GET("/metrics", echoprometheus.NewHandlerWithConfig(echoprometheus.HandlerConfig{
 		Gatherer: prom.DefaultGatherer,
@@ -304,5 +307,45 @@ func Start(e *echov4.Echo, httpPort int) {
 	logger.Infof("Listening on %s", listenAddr)
 	if err := e.Start(listenAddr); err != nil {
 		logger.Fatalf("Failed to start server: %v", err)
+	}
+}
+
+func RLSMiddleware(next echov4.HandlerFunc) echov4.HandlerFunc {
+	return func(c echov4.Context) error {
+		ctx := c.Request().Context().(context.Context)
+
+		rlsPayload, err := auth.GetRLSPayload(ctx)
+		if err != nil {
+			return err
+		}
+
+		if rlsPayload.Disable {
+			return next(c)
+		}
+
+		rlsJSON, err := json.Marshal(rlsPayload)
+		if err != nil {
+			return err
+		}
+
+		err = ctx.Transaction(func(txCtx context.Context, _ trace.Span) error {
+			if err := txCtx.DB().Exec("SET LOCAL ROLE postgrest_api").Error; err != nil {
+				return err
+			}
+
+			// NOTE: SET statements in PostgreSQL do not support parameterized queries, so we must use fmt.Sprintf
+			// to inject the rlsJSON safely using pq.QuoteLiteral.
+			rlsSet := fmt.Sprintf(`SET LOCAL request.jwt.claims TO %s`, pq.QuoteLiteral(string(rlsJSON)))
+			if err := txCtx.DB().Exec(rlsSet).Error; err != nil {
+				return err
+			}
+
+			// set the context with the tx
+			c.SetRequest(c.Request().WithContext(txCtx))
+
+			return next(c)
+		})
+
+		return err
 	}
 }
