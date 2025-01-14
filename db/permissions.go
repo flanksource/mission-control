@@ -2,6 +2,7 @@ package db
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/flanksource/duty"
@@ -17,11 +18,6 @@ func PersistPermissionFromCRD(ctx context.Context, obj *v1.Permission) error {
 		return err
 	}
 
-	selectors, err := json.Marshal(obj.Spec.Object)
-	if err != nil {
-		return err
-	}
-
 	subject, subjectType, err := obj.Spec.Subject.Populate(ctx)
 	if err != nil {
 		return err
@@ -30,17 +26,27 @@ func PersistPermissionFromCRD(ctx context.Context, obj *v1.Permission) error {
 	action := strings.Join(obj.Spec.Actions, ",")
 
 	p := models.Permission{
-		ID:             uid,
-		Name:           obj.GetName(),
-		Subject:        subject,
-		SubjectType:    subjectType,
-		Namespace:      obj.GetNamespace(),
-		Description:    obj.Spec.Description,
-		Action:         action,
-		Source:         models.SourceCRD,
-		ObjectSelector: selectors,
-		Tags:           obj.Spec.Tags,
-		Agents:         obj.Spec.Agents,
+		ID:          uid,
+		Name:        obj.GetName(),
+		Subject:     subject,
+		SubjectType: subjectType,
+		Namespace:   obj.GetNamespace(),
+		Description: obj.Spec.Description,
+		Action:      action,
+		Source:      models.SourceCRD,
+		Tags:        obj.Spec.Tags,
+		Agents:      obj.Spec.Agents,
+	}
+
+	// Check if the object selectors semantically match a global object.
+	if globalObject, ok := obj.Spec.Object.GlobalObject(); ok {
+		p.Object = globalObject
+	} else {
+		selectors, err := json.Marshal(obj.Spec.Object)
+		if err != nil {
+			return fmt.Errorf("failed to marshal object: %w", err)
+		}
+		p.ObjectSelector = selectors
 	}
 
 	return ctx.DB().Save(&p).Error
