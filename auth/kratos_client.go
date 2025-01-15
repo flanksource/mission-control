@@ -2,6 +2,7 @@ package auth
 
 import (
 	gocontext "context"
+	"fmt"
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -68,16 +69,19 @@ func (k *KratosHandler) createRecoveryLink(ctx gocontext.Context, id string) (st
 	return resp.GetRecoveryCode(), resp.GetRecoveryLink(), nil
 }
 
-func (k *KratosHandler) createAdminIdentity(ctx gocontext.Context) (string, error) {
+func (k *KratosHandler) getIdentityCredentials(password string) client.IdentityWithCredentials {
 	config := *client.NewIdentityWithCredentialsPasswordConfig()
-	config.SetPassword(getDefaultAdminPassword())
+	config.SetPassword(password)
 
-	password := *client.NewIdentityWithCredentialsPassword()
-	password.SetConfig(config)
+	passwordBody := *client.NewIdentityWithCredentialsPassword()
+	passwordBody.SetConfig(config)
 
 	creds := *client.NewIdentityWithCredentials()
-	creds.SetPassword(password)
+	creds.SetPassword(passwordBody)
+	return creds
+}
 
+func (k *KratosHandler) createAdminIdentity(ctx gocontext.Context) (string, error) {
 	body := *client.NewCreateIdentityBody(
 		"default",
 		map[string]any{
@@ -87,7 +91,7 @@ func (k *KratosHandler) createAdminIdentity(ctx gocontext.Context) (string, erro
 			},
 		},
 	)
-	body.SetCredentials(creds)
+	body.SetCredentials(k.getIdentityCredentials(getDefaultAdminPassword()))
 
 	createdIdentity, _, err := k.adminClient.IdentityApi.CreateIdentity(ctx).CreateIdentityBody(body).Execute()
 	if err != nil {
@@ -95,6 +99,22 @@ func (k *KratosHandler) createAdminIdentity(ctx gocontext.Context) (string, erro
 	}
 
 	return createdIdentity.Id, nil
+}
+
+func (k *KratosHandler) updateAdminPassword(ctx gocontext.Context, id string) error {
+	body := *client.NewUpdateIdentityBody(
+		"default", client.IDENTITYSTATE_ACTIVE,
+		map[string]any{
+			"email": AdminEmail,
+			"name": map[string]string{
+				"first": AdminName,
+			},
+		},
+	)
+	body.SetCredentials(k.getIdentityCredentials(getDefaultAdminPassword()))
+
+	_, _, err := k.adminClient.IdentityApi.UpdateIdentity(ctx, id).UpdateIdentityBody(body).Execute()
+	return err
 }
 
 func (k *KratosHandler) CreateAdminUser(ctx context.Context) (string, error) {
@@ -106,6 +126,11 @@ func (k *KratosHandler) CreateAdminUser(ctx context.Context) (string, error) {
 
 	if tx.RowsAffected == 0 {
 		return k.createAdminIdentity(ctx)
+	}
+
+	// Overwrite password in case database is reset
+	if err := k.updateAdminPassword(ctx, id); err != nil {
+		return "", fmt.Errorf("error updating admin password: %w", err)
 	}
 
 	{
