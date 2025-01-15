@@ -340,6 +340,9 @@ func RLSMiddleware(next echov4.HandlerFunc) echov4.HandlerFunc {
 				return err
 			}
 
+			// We attach this value to indicate that RLS is enforced.
+			txCtx = txCtx.WithValue("rls-enabled", "true")
+
 			// set the context with the tx
 			c.SetRequest(c.Request().WithContext(txCtx))
 
