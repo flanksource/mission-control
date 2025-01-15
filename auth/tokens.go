@@ -14,6 +14,7 @@ import (
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/rls"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/samber/lo"
@@ -51,12 +52,6 @@ func InjectToken(ctx context.Context, c echo.Context, user *models.Person, sessI
 	return nil
 }
 
-type RLSPayload struct {
-	Tags    []map[string]string `json:"tags,omitempty"`
-	Agents  []string            `json:"agents,omitempty"`
-	Disable bool                `json:"disable_rls,omitempty"`
-}
-
 // If a user only has these roles, then RLS must be enforced
 var rlsEnforcableRoles = []string{
 	policy.RoleEveryone,
@@ -64,20 +59,20 @@ var rlsEnforcableRoles = []string{
 	policy.RoleViewer,
 }
 
-func GetRLSPayload(ctx context.Context) (*RLSPayload, error) {
+func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 	if !ctx.Properties().On(false, vars.FlagRLSEnable) {
-		return &RLSPayload{Disable: true}, nil
+		return &rls.Payload{Disable: true}, nil
 	}
 
 	cacheKey := fmt.Sprintf("rls-payload-%s", ctx.User().ID.String())
 	if cached, ok := tokenCache.Get(cacheKey); ok {
-		return cached.(*RLSPayload), nil
+		return cached.(*rls.Payload), nil
 	}
 
 	if roles, err := rbac.RolesForUser(ctx.User().ID.String()); err != nil {
 		return nil, err
 	} else if extra, _ := lo.Difference(roles, rlsEnforcableRoles); len(extra) > 0 {
-		payload := &RLSPayload{Disable: true}
+		payload := &rls.Payload{Disable: true}
 		tokenCache.SetDefault(cacheKey, payload)
 		return payload, nil
 	}
@@ -117,7 +112,7 @@ func GetRLSPayload(ctx context.Context) (*RLSPayload, error) {
 		tags = append(tags, p.Tags)
 	}
 
-	payload := &RLSPayload{
+	payload := &rls.Payload{
 		Agents: agentIDs,
 		Tags:   tags,
 	}
