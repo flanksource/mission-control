@@ -2,6 +2,7 @@ package notification
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -71,6 +72,10 @@ func SyncCRDStatusJob(ctx context.Context) *job.Job {
 }
 
 func SyncCRDStatus(ctx context.Context, ids ...string) error {
+	if v1.NotificationReconciler.Client == nil {
+		return errors.New("notification reconciler is not initialized")
+	}
+
 	var summary []struct {
 		Name      string
 		Namespace string
