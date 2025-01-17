@@ -10,6 +10,7 @@ import (
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/duty/models"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/google/uuid"
 	"github.com/samber/lo"
 )
 
@@ -87,18 +88,22 @@ func addCustomFunctions(enforcer addableEnforcer) {
 		}
 
 		attributeSet := args[0]
-		selector := args[1]
 
 		if _, ok := attributeSet.(string); ok {
 			return false, nil
 		}
 
-		attr, ok := attributeSet.(*models.RBACAttribute)
+		attr, ok := attributeSet.(map[string]any)
 		if !ok {
-			return false, fmt.Errorf("unknown input type: %T", attributeSet)
+			return false, fmt.Errorf("[matchResourceSelector] unknown input type: %T. expected map[string]any", attributeSet)
 		}
 
-		rs, err := base64.StdEncoding.DecodeString(selector.(string))
+		selector, ok := args[1].(string)
+		if !ok {
+			return false, fmt.Errorf("[matchResourceSelector] selector must be a string")
+		}
+
+		rs, err := base64.StdEncoding.DecodeString(selector)
 		if err != nil {
 			return false, err
 		}
@@ -110,27 +115,29 @@ func addCustomFunctions(enforcer addableEnforcer) {
 
 		var resourcesMatched int
 
-		if attr.Component != nil {
-			for _, rs := range objectSelector.Components {
-				if rs.Matches(attr.Component) {
-					resourcesMatched++
-					break
+		if _component, ok := attr["component"]; ok {
+			if component, ok := _component.(models.Component); ok {
+				for _, rs := range objectSelector.Components {
+					if rs.Matches(component) {
+						resourcesMatched++
+						break
+					}
 				}
 			}
 		}
 
-		if attr.Playbook != nil {
+		if playbook, ok := attr["playbook"].(models.Playbook); ok && playbook.ID != uuid.Nil {
 			for _, rs := range objectSelector.Playbooks {
-				if rs.Matches(attr.Playbook) {
+				if rs.Matches(&playbook) {
 					resourcesMatched++
 					break
 				}
 			}
 		}
 
-		if attr.Config != nil {
+		if config, ok := attr["config"].(models.ConfigItem); ok && config.ID != uuid.Nil {
 			for _, rs := range objectSelector.Configs {
-				if rs.Matches(attr.Config) {
+				if rs.Matches(config) {
 					resourcesMatched++
 					break
 				}
