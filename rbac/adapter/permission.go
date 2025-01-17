@@ -84,10 +84,10 @@ func PermissionToCasbinRule(permission models.Permission) [][]string {
 
 		policies = append(policies, createPolicy(permission, action))
 
-		if shouldMapToABAC(permission, action) {
+		if objectSelector := rbacToABACObjectSelector(permission, action); objectSelector != nil {
 			abacPermission := permission
 			abacPermission.Object = ""
-			abacPermission.ObjectSelector = []byte(`{"playbooks": [{"name":"*"}]}`)
+			abacPermission.ObjectSelector = objectSelector
 			policies = append(policies, createPolicy(abacPermission, action))
 		}
 	}
@@ -108,9 +108,27 @@ func createPolicy(permission models.Permission, action string) []string {
 	}
 }
 
-func shouldMapToABAC(permission models.Permission, action string) bool {
-	return permission.Object == pkgPolicy.ObjectPlaybooks &&
-		lo.Contains([]string{pkgPolicy.ActionPlaybookRun, pkgPolicy.ActionPlaybookApprove}, action)
+// rbacToABACObjectSelector returns object selectors (v1.PermissionObject) in JSON
+// for ABAC policies from a global permission.
+func rbacToABACObjectSelector(permission models.Permission, action string) []byte {
+	switch permission.Object {
+	case pkgPolicy.ObjectPlaybooks:
+		if lo.Contains([]string{pkgPolicy.ActionPlaybookRun, pkgPolicy.ActionPlaybookApprove}, action) {
+			return []byte(`{"playbooks": [{"name":"*"}]}`)
+		}
+
+	case pkgPolicy.ObjectCatalog:
+		if pkgPolicy.ActionRead == action {
+			return []byte(`{"configs": [{"name":"*"}]}`)
+		}
+
+	case pkgPolicy.ObjectTopology:
+		if pkgPolicy.ActionRead == action {
+			return []byte(`{"components": [{"name":"*"}]}`)
+		}
+	}
+
+	return nil
 }
 
 func (a *PermissionAdapter) permissionGroupToCasbinRule(permission models.PermissionGroup) ([][]string, error) {
