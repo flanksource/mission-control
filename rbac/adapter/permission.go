@@ -10,11 +10,12 @@ import (
 	gormadapter "github.com/casbin/gorm-adapter/v3"
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/duty/models"
+	"github.com/samber/lo"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
-	"github.com/flanksource/incident-commander/rbac/policy"
+	pkgPolicy "github.com/flanksource/incident-commander/rbac/policy"
 )
 
 type PermissionAdapter struct {
@@ -74,26 +75,42 @@ func (a *PermissionAdapter) LoadPolicy(model model.Model) error {
 
 func PermissionToCasbinRule(permission models.Permission) [][]string {
 	var policies [][]string
-
 	patterns := strings.Split(permission.Action, ",")
-	for _, action := range policy.AllActions {
+
+	for _, action := range pkgPolicy.AllActions {
 		if !collections.MatchItems(action, patterns...) {
 			continue
 		}
 
-		policy := []string{
-			"p",
-			permission.Principal(),
-			permission.GetObject(),
-			action,
-			permission.Effect(),
-			permission.Condition(),
-			permission.ID.String(),
+		policies = append(policies, createPolicy(permission, action))
+
+		if shouldMapToABAC(permission, action) {
+			abacPermission := permission
+			abacPermission.Object = ""
+			abacPermission.ObjectSelector = []byte(`{"playbooks": [{"name":"*"}]}`)
+			policies = append(policies, createPolicy(abacPermission, action))
 		}
-		policies = append(policies, policy)
 	}
 
 	return policies
+}
+
+// createPolicy generates a Casbin policy rule from a permission.
+func createPolicy(permission models.Permission, action string) []string {
+	return []string{
+		"p",
+		permission.Principal(),
+		permission.GetObject(),
+		action,
+		permission.Effect(),
+		permission.Condition(),
+		permission.ID.String(),
+	}
+}
+
+func shouldMapToABAC(permission models.Permission, action string) bool {
+	return permission.Object == pkgPolicy.ObjectPlaybooks &&
+		lo.Contains([]string{pkgPolicy.ActionPlaybookRun, pkgPolicy.ActionPlaybookApprove}, action)
 }
 
 func (a *PermissionAdapter) permissionGroupToCasbinRule(permission models.PermissionGroup) ([][]string, error) {
