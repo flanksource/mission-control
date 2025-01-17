@@ -1,8 +1,6 @@
 package rbac
 
 import (
-	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/casbin/casbin/v2"
@@ -62,16 +60,17 @@ p, alice, *, playbook:run, deny, r.obj.playbook.name == 'restart-deployment' && 
 		},
 	}
 
-	for _, p := range permissions {
-		for _, policy := range adapter.PermissionToCasbinRule(p) {
-			_policy := strings.Join(policy, ",")
-			policies += fmt.Sprintf("\n%s", _policy)
-		}
-	}
-
 	enforcer, err := NewEnforcer(policies)
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	for _, p := range permissions {
+		for _, policy := range adapter.PermissionToCasbinRule(p) {
+			if ok, err := enforcer.AddPolicy(policy[1:]); err != nil || !ok {
+				t.Fatal()
+			}
+		}
 	}
 
 	testData := []struct {
@@ -84,35 +83,35 @@ p, alice, *, playbook:run, deny, r.obj.playbook.name == 'restart-deployment' && 
 		{
 			description: "simple | allow",
 			user:        "johndoe",
-			obj:         ABACResource{Playbook: models.Playbook{Name: "scale-deployment"}}.AsMap(),
+			obj:         models.RBACAttribute{Playbook: models.Playbook{Name: "scale-deployment"}}.AsMap(),
 			act:         "playbook:run",
 			allowed:     true,
 		},
 		{
 			description: "simple | explicit deny",
 			user:        "johndoe",
-			obj:         ABACResource{Playbook: models.Playbook{Name: "delete-deployment"}}.AsMap(),
+			obj:         models.RBACAttribute{Playbook: models.Playbook{Name: "delete-deployment"}}.AsMap(),
 			act:         "playbook:run",
 			allowed:     false,
 		},
 		{
 			description: "simple | default deny",
 			user:        "johndoe",
-			obj:         ABACResource{Playbook: models.Playbook{Name: "delete-namespace"}}.AsMap(),
+			obj:         models.RBACAttribute{Playbook: models.Playbook{Name: "delete-namespace"}}.AsMap(),
 			act:         "playbook:run",
 			allowed:     false,
 		},
 		{
 			description: "multi | allow",
 			user:        "johndoe",
-			obj:         ABACResource{Playbook: models.Playbook{Name: "restart-deployment"}, Config: models.ConfigItem{Tags: map[string]string{"namespace": "default"}}}.AsMap(),
+			obj:         models.RBACAttribute{Playbook: models.Playbook{Name: "restart-deployment"}, Config: models.ConfigItem{Tags: map[string]string{"namespace": "default"}}}.AsMap(),
 			act:         "playbook:run",
 			allowed:     true,
 		},
 		{
 			description: "multi | explicit deny",
 			user:        "alice",
-			obj:         ABACResource{Playbook: models.Playbook{Name: "restart-deployment"}, Config: models.ConfigItem{Tags: map[string]string{"namespace": "default"}}}.AsMap(),
+			obj:         models.RBACAttribute{Playbook: models.Playbook{Name: "restart-deployment"}, Config: models.ConfigItem{Tags: map[string]string{"namespace": "default"}}}.AsMap(),
 			act:         "playbook:run",
 			allowed:     false,
 		},
@@ -126,7 +125,7 @@ p, alice, *, playbook:run, deny, r.obj.playbook.name == 'restart-deployment' && 
 		{
 			description: "abac catalog test",
 			user:        userID.String(),
-			obj:         ABACResource{Config: models.ConfigItem{Tags: map[string]string{"namespace": "default"}}}.AsMap(),
+			obj:         models.RBACAttribute{Config: models.ConfigItem{Tags: map[string]string{"namespace": "default"}}}.AsMap(),
 			act:         "read",
 			allowed:     true,
 		},
