@@ -122,12 +122,12 @@ func CheckContext(ctx context.Context, object, action string) bool {
 	return Check(ctx, user.ID.String(), object, action)
 }
 
-func HasPermission(ctx context.Context, subject string, attr *models.RBACAttribute, action string) bool {
+func HasPermission(ctx context.Context, subject string, attr *models.ABACAttribute, action string) bool {
 	if enforcer == nil {
 		return true
 	}
 
-	allowed, err := enforcer.Enforce(subject, attr.AsMap(), action)
+	allowed, err := enforcer.Enforce(subject, attr, action)
 	if err != nil {
 		ctx.Errorf("error checking abac for subject=%s action=%s: %v", subject, action, err)
 		return false

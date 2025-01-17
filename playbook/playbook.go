@@ -149,7 +149,7 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 		return nil, ctx.Oops().Wrap(err)
 	}
 
-	if objects, err := run.GetRBACAttributes(ctx.DB()); err != nil {
+	if objects, err := run.GetABACAttributes(ctx.DB()); err != nil {
 		return nil, ctx.Oops().Wrap(err)
 	} else if !rbac.HasPermission(ctx, ctx.Subject(), objects, policy.ActionPlaybookRun) {
 		return nil, ctx.Oops().With("permission", policy.ActionPlaybookRun, "objects", objects).Code(dutyAPI.EFORBIDDEN).Wrap(errors.New("access denied: run permission required"))

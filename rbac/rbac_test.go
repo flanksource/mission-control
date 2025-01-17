@@ -29,10 +29,10 @@ func TestEnforcer(t *testing.T) {
 	policies := `
 p, admin, *, * , allow,  true, na
 g, johndoe, admin, , ,       , na
-p, johndoe, *, playbook:run, allow, r.obj.playbook.name == 'scale-deployment' , na
-p, johndoe, *, playbook:run, deny, r.obj.playbook.name == 'delete-deployment' , na
-p, johndoe, *, playbook:run, allow, r.obj.playbook.name == 'restart-deployment' && r.obj.config.tags.namespace == 'default' , na
-p, alice, *, playbook:run, deny, r.obj.playbook.name == 'restart-deployment' && r.obj.config.tags.namespace == 'default', na
+p, johndoe, *, playbook:run, allow, r.obj.Playbook.Name == 'scale-deployment' , na
+p, johndoe, *, playbook:run, deny, r.obj.Playbook.Name == 'delete-deployment' , na
+p, johndoe, *, playbook:run, allow, r.obj.Playbook.Name == 'restart-deployment' && r.obj.Config.Tags.namespace == 'default' , na
+p, alice, *, playbook:run, deny, r.obj.Playbook.Name == 'restart-deployment' && r.obj.Config.Tags.namespace == 'default', na
 `
 
 	var userID = uuid.New()
@@ -83,37 +83,53 @@ p, alice, *, playbook:run, deny, r.obj.playbook.name == 'restart-deployment' && 
 		{
 			description: "simple | allow",
 			user:        "johndoe",
-			obj:         models.RBACAttribute{Playbook: models.Playbook{Name: "scale-deployment"}}.AsMap(),
+			obj:         &models.ABACAttribute{Playbook: models.Playbook{Name: "scale-deployment"}},
 			act:         "playbook:run",
 			allowed:     true,
 		},
 		{
 			description: "simple | explicit deny",
 			user:        "johndoe",
-			obj:         models.RBACAttribute{Playbook: models.Playbook{Name: "delete-deployment"}}.AsMap(),
+			obj:         &models.ABACAttribute{Playbook: models.Playbook{Name: "delete-deployment"}},
 			act:         "playbook:run",
 			allowed:     false,
 		},
 		{
 			description: "simple | default deny",
 			user:        "johndoe",
-			obj:         models.RBACAttribute{Playbook: models.Playbook{Name: "delete-namespace"}}.AsMap(),
+			obj:         &models.ABACAttribute{Playbook: models.Playbook{Name: "delete-namespace"}},
 			act:         "playbook:run",
 			allowed:     false,
 		},
 		{
 			description: "multi | allow",
 			user:        "johndoe",
-			obj:         models.RBACAttribute{Playbook: models.Playbook{Name: "restart-deployment"}, Config: models.ConfigItem{Tags: map[string]string{"namespace": "default"}}}.AsMap(),
-			act:         "playbook:run",
-			allowed:     true,
+			obj: &models.ABACAttribute{
+				Playbook: models.Playbook{
+					Name: "restart-deployment",
+				},
+				Config: models.ConfigItem{
+					ID:   uuid.New(),
+					Tags: map[string]string{"namespace": "default"},
+				},
+			},
+			act:     "playbook:run",
+			allowed: true,
 		},
 		{
 			description: "multi | explicit deny",
 			user:        "alice",
-			obj:         models.RBACAttribute{Playbook: models.Playbook{Name: "restart-deployment"}, Config: models.ConfigItem{Tags: map[string]string{"namespace": "default"}}}.AsMap(),
-			act:         "playbook:run",
-			allowed:     false,
+			obj: &models.ABACAttribute{
+				Playbook: models.Playbook{
+					Name: "restart-deployment",
+				},
+				Config: models.ConfigItem{
+					ID:   uuid.New(),
+					Tags: map[string]string{"namespace": "default"},
+				},
+			},
+			act:     "playbook:run",
+			allowed: false,
 		},
 		{
 			description: "simple read test",
@@ -125,7 +141,7 @@ p, alice, *, playbook:run, deny, r.obj.playbook.name == 'restart-deployment' && 
 		{
 			description: "abac catalog test",
 			user:        userID.String(),
-			obj:         models.RBACAttribute{Config: models.ConfigItem{Tags: map[string]string{"namespace": "default"}}}.AsMap(),
+			obj:         &models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Tags: map[string]string{"namespace": "default"}}},
 			act:         "read",
 			allowed:     true,
 		},
