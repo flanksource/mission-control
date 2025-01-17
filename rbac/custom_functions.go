@@ -14,17 +14,7 @@ import (
 	"github.com/samber/lo"
 )
 
-func matchPerm(obj any, _agents any, tagsEncoded string) (bool, error) {
-	var rObj map[string]any
-	switch v := obj.(type) {
-	case string:
-		// an object is required to satisfy the agents & tags requirement.
-		return false, nil
-
-	case map[string]any:
-		rObj = v
-	}
-
+func matchPerm(attr *models.ABACAttribute, _agents any, tagsEncoded string) (bool, error) {
 	var rAgents []string
 	switch v := _agents.(type) {
 	case []any:
@@ -36,24 +26,13 @@ func matchPerm(obj any, _agents any, tagsEncoded string) (bool, error) {
 	}
 
 	rTags := collections.SelectorToMap(tagsEncoded)
-	if config, ok := rObj["config"]; ok {
-		var (
-			tagsmatch   = true
-			agentsMatch = true
-		)
-
-		tagsRaw := config.(map[string]any)["tags"]
-		if tags, ok := tagsRaw.(map[string]any); ok {
-			tagsmatch = mapContains(rTags, tags)
-		}
-
+	if attr.Config.ID != uuid.Nil {
+		var agentsMatch = true
 		if len(rAgents) > 0 {
-			agentIDRaw := config.(map[string]any)["agent_id"]
-			if agentID, ok := agentIDRaw.(string); ok {
-				agentsMatch = lo.Contains(rAgents, agentID)
-			}
+			agentsMatch = lo.Contains(rAgents, attr.Config.AgentID.String())
 		}
 
+		tagsmatch := mapContains(rTags, attr.Config.Tags)
 		return tagsmatch && agentsMatch, nil
 	}
 
@@ -71,6 +50,17 @@ func addCustomFunctions(enforcer addableEnforcer) {
 		}
 
 		obj := args[0]
+		if _, ok := obj.(string); ok {
+			// an object is required to satisfy the agents & tags requirement.
+			// If a role is passed, we don't match this permission.
+			return false, nil
+		}
+
+		attr, ok := obj.(*models.ABACAttribute)
+		if !ok {
+			return false, errors.New("[matchPerm] unknown input type: expected *models.ABACAttribute")
+		}
+
 		agents := args[1]
 		tags := args[2]
 
@@ -79,7 +69,7 @@ func addCustomFunctions(enforcer addableEnforcer) {
 			return false, errors.New("tags must be a string")
 		}
 
-		return matchPerm(obj, agents, tagsEncoded)
+		return matchPerm(attr, agents, tagsEncoded)
 	})
 
 	enforcer.AddFunction("matchResourceSelector", func(args ...any) (any, error) {
@@ -93,9 +83,9 @@ func addCustomFunctions(enforcer addableEnforcer) {
 			return false, nil
 		}
 
-		attr, ok := attributeSet.(map[string]any)
+		attr, ok := attributeSet.(*models.ABACAttribute)
 		if !ok {
-			return false, fmt.Errorf("[matchResourceSelector] unknown input type: %T. expected map[string]any", attributeSet)
+			return false, fmt.Errorf("[matchResourceSelector] unknown input type: %T. expected *models.ABACAttribute", attributeSet)
 		}
 
 		selector, ok := args[1].(string)
@@ -115,32 +105,24 @@ func addCustomFunctions(enforcer addableEnforcer) {
 
 		var resourcesMatched int
 
-		if _component, ok := attr["component"]; ok {
-			if component, ok := _component.(models.Component); ok {
-				for _, rs := range objectSelector.Components {
-					if rs.Matches(component) {
-						resourcesMatched++
-						break
-					}
-				}
+		for _, rs := range objectSelector.Components {
+			if rs.Matches(attr.Component) {
+				resourcesMatched++
+				break
 			}
 		}
 
-		if playbook, ok := attr["playbook"].(models.Playbook); ok && playbook.ID != uuid.Nil {
-			for _, rs := range objectSelector.Playbooks {
-				if rs.Matches(&playbook) {
-					resourcesMatched++
-					break
-				}
+		for _, rs := range objectSelector.Playbooks {
+			if rs.Matches(&attr.Playbook) {
+				resourcesMatched++
+				break
 			}
 		}
 
-		if config, ok := attr["config"].(models.ConfigItem); ok && config.ID != uuid.Nil {
-			for _, rs := range objectSelector.Configs {
-				if rs.Matches(config) {
-					resourcesMatched++
-					break
-				}
+		for _, rs := range objectSelector.Configs {
+			if rs.Matches(attr.Config) {
+				resourcesMatched++
+				break
 			}
 		}
 
@@ -149,7 +131,7 @@ func addCustomFunctions(enforcer addableEnforcer) {
 }
 
 // mapContains returns true if `request` fully contains `want`.
-func mapContains(want map[string]string, request map[string]any) bool {
+func mapContains(want map[string]string, request map[string]string) bool {
 	for k, v := range want {
 		if request[k] != v {
 			return false

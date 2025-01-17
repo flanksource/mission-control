@@ -9,7 +9,7 @@ import (
 
 func Test_matchPerm(t *testing.T) {
 	type args struct {
-		obj     any
+		obj     models.ABACAttribute
 		_agents any
 		_tags   string
 	}
@@ -21,17 +21,15 @@ func Test_matchPerm(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			name: "string object",
-			args: args{obj: "catalog", _agents: "()", _tags: "namespace=default"},
-			want: false,
-		},
-		{
 			name: "tag only match",
 			args: args{
-				obj: map[string]any{
-					"config": models.ConfigItem{Tags: map[string]string{
-						"namespace": "default",
-					}}.AsMap(),
+				obj: models.ABACAttribute{
+					Config: models.ConfigItem{
+						ID: uuid.New(),
+						Tags: map[string]string{
+							"namespace": "default",
+						},
+					},
 				},
 				_agents: "",
 				_tags:   "namespace=default",
@@ -41,13 +39,14 @@ func Test_matchPerm(t *testing.T) {
 		{
 			name: "multiple tags match",
 			args: args{
-				obj: map[string]any{
-					"config": models.ConfigItem{
+				obj: models.ABACAttribute{
+					Config: models.ConfigItem{
+						ID: uuid.New(),
 						Tags: map[string]string{
 							"namespace": "default",
 							"cluster":   "homelab",
 						},
-					}.AsMap(),
+					},
 				},
 				_agents: "",
 				_tags:   "namespace=default,cluster=homelab",
@@ -57,10 +56,13 @@ func Test_matchPerm(t *testing.T) {
 		{
 			name: "multiple tags no match",
 			args: args{
-				obj: map[string]any{
-					"config": models.ConfigItem{Tags: map[string]string{
-						"namespace": "default",
-					}}.AsMap(),
+				obj: models.ABACAttribute{
+					Config: models.ConfigItem{
+						ID: uuid.New(),
+						Tags: map[string]string{
+							"namespace": "default",
+						},
+					},
 				},
 				_agents: "",
 				_tags:   "namespace=default,cluster=homelab",
@@ -70,13 +72,14 @@ func Test_matchPerm(t *testing.T) {
 		{
 			name: "tags & agents match",
 			args: args{
-				obj: map[string]any{
-					"config": models.ConfigItem{
+				obj: models.ABACAttribute{
+					Config: models.ConfigItem{
+						ID: uuid.New(),
 						Tags: map[string]string{
 							"namespace": "default",
 						},
 						AgentID: uuid.MustParse("66eda456-315f-455a-95d4-6ef059fc13a8"),
-					}.AsMap(),
+					},
 				},
 				_agents: "66eda456-315f-455a-95d4-6ef059fc13a8",
 				_tags:   "namespace=default",
@@ -86,13 +89,14 @@ func Test_matchPerm(t *testing.T) {
 		{
 			name: "tags match & agent no match",
 			args: args{
-				obj: map[string]any{
-					"config": models.ConfigItem{
+				obj: models.ABACAttribute{
+					Config: models.ConfigItem{
+						ID: uuid.New(),
 						Tags: map[string]string{
 							"namespace": "default",
 						},
 						AgentID: uuid.MustParse("66eda456-315f-455a-95d4-6ef059fc13a8"),
-					}.AsMap(),
+					},
 				},
 				_agents: "",
 				_tags:   "namespace=default,cluster=homelab",
@@ -102,13 +106,14 @@ func Test_matchPerm(t *testing.T) {
 		{
 			name: "tags no match & agent match",
 			args: args{
-				obj: map[string]any{
-					"config": models.ConfigItem{
+				obj: models.ABACAttribute{
+					Config: models.ConfigItem{
+						ID: uuid.New(),
 						Tags: map[string]string{
 							"namespace": "default",
 						},
 						AgentID: uuid.MustParse("66eda456-315f-455a-95d4-6ef059fc13a8"),
-					}.AsMap(),
+					},
 				},
 				_agents: "66eda456-315f-455a-95d4-6ef059fc13a8",
 				_tags:   "namespace=mc",
@@ -119,7 +124,7 @@ func Test_matchPerm(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := matchPerm(tt.args.obj, tt.args._agents, tt.args._tags)
+			got, err := matchPerm(&tt.args.obj, tt.args._agents, tt.args._tags)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("matchPerm() error = %v, wantErr %v", err, tt.wantErr)
 				return
