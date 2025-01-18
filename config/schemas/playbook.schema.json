@@ -38,6 +38,12 @@
         "dryRun": {
           "type": "boolean"
         },
+        "playbookAgents": {
+          "items": {
+            "$ref": "#/$defs/ResourceSelector"
+          },
+          "type": "array"
+        },
         "recommendPlaybooks": {
           "items": {
             "$ref": "#/$defs/ResourceSelector"

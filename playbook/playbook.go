@@ -105,6 +105,7 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 		Status:             models.PlaybookRunStatusScheduled,
 		Parameters:         req.Params,
 		AgentID:            req.AgentID,
+		ParentID:           req.ParentRunID,
 		NotificationSendID: req.NotificationSendID,
 	}
 

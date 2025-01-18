@@ -1,11 +1,12 @@
 ---
-# yaml-language-server: $schema=../../config/schemas/playbook.schema.json
+# yaml-language-server: $schema=../../../config/schemas/playbook.schema.json
 apiVersion: mission-control.flanksource.com/v1
 kind: Playbook
 metadata:
   name: diagnose-aws-resource
 spec:
   description: Use AI to diagnose AWS resources
+  category: AI
   configs:
     - types:
         - AWS::CloudFormation::Stack

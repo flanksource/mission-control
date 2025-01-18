@@ -22,6 +22,7 @@ type RunParams struct {
 	Params      map[string]string       `yaml:"params,omitempty" json:"params,omitempty"`
 	Request     *actions.WebhookRequest `yaml:"request,omitempty" json:"request,omitempty"`
 
+	ParentRunID        *uuid.UUID `yaml:"parent_run_id,omitempty" json:"parent_run_id,omitempty"`
 	NotificationSendID *uuid.UUID `yaml:"notification_send_id,omitempty" json:"notification_send_id,omitempty"`
 }
 

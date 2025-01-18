@@ -3,12 +3,16 @@ package llm
 import (
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/flanksource/duty/context"
+	"github.com/tmc/langchaingo/agents"
+	"github.com/tmc/langchaingo/chains"
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/anthropic"
 	"github.com/tmc/langchaingo/llms/ollama"
 	"github.com/tmc/langchaingo/llms/openai"
+	"github.com/tmc/langchaingo/tools"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -16,28 +20,41 @@ import (
 
 type Config struct {
 	v1.AIActionClient
-	UseAgent bool
+	PlaybookAgents []byte
 }
 
-func Prompt(ctx context.Context, config Config, systemPrompt string, promptParts ...string) (string, []llms.MessageContent, error) {
+func Prompt(ctx context.Context, config Config, systemPrompt string, promptParts []string, agentTools ...tools.Tool) (string, []llms.MessageContent, error) {
 	model, err := getLLMModel(config)
 	if err != nil {
 		return "", nil, err
 	}
 
-	// if config.UseAgent {
-	// 	agentTools := []tools.Tool{
-	// 		mcTools.NewCatalogTool(ctx),
-	// 	}
+	if len(config.PlaybookAgents) != 0 {
+		agent := agents.NewOneShotAgent(model,
+			agentTools,
+			agents.WithMaxIterations(1),
+		)
 
-	// 	agent := agents.NewOneShotAgent(model,
-	// 		agentTools,
-	// 		agents.WithMaxIterations(3),
-	// 	)
+		// TODO: Find a better way to pass in the prompt than just string concat
+		playbookPrompt := fmt.Sprintf(`
+		You can call the following playbooks to take the fitting action to resolve the issue at hand.
+		<playbooks>
+		%s
+		</playbooks>
 
-	// 	executor := agents.NewExecutor(agent)
-	// 	return chains.Run(ctx, executor, promptParts, chains.WithTemperature(0))
-	// }
+		Once you execute the suitable playbook, analyze the result of the playbook run to ensure if it solved our problem.
+		If it did, please mention which playbook was used to solve this problem and summarize the fix.`, string(config.PlaybookAgents))
+		promptParts = append(promptParts, playbookPrompt)
+		prompt := strings.Join(promptParts, "\n")
+
+		executor := agents.NewExecutor(agent)
+		response, err := chains.Run(ctx, executor, prompt, chains.WithTemperature(0))
+		if err != nil {
+			return "", nil, err
+		}
+
+		return response, nil, err
+	}
 
 	content := []llms.MessageContent{
 		llms.TextParts(llms.ChatMessageTypeSystem, systemPrompt),

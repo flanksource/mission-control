@@ -300,7 +300,7 @@ func (t *AIActionClient) Populate(ctx context.Context) error {
 		if err != nil {
 			return err
 		} else if conn == nil {
-			return fmt.Errorf("connection(%s) was not found: %w", *t.Connection, err)
+			return fmt.Errorf("connection(%s) was not found", *t.Connection)
 		}
 
 		if err := t.APIKey.Scan(conn.Password); err != nil {
@@ -384,6 +384,8 @@ type AIAction struct {
 
 	// When enabled, the prompt is simply saved without passing it on to the LLM.
 	DryRun bool `json:"dryRun,omitempty"`
+
+	PlaybookAgents []types.ResourceSelector `json:"playbookAgents,omitempty"`
 
 	// Specify selectors for playbooks. The LLM will recommend the best suited playbooks
 	// in response to the prompt.
