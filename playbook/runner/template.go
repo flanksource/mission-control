@@ -192,7 +192,8 @@ func TemplateAction(ctx context.Context, actionSpec *v1.PlaybookAction, env acti
 
 	// TODO: make this work with template.Walk()
 	if actionSpec.Exec != nil && actionSpec.Exec.Connections.FromConfigItem != nil {
-		if v, err := ctx.RunTemplate(gomplate.Template{Template: *actionSpec.Exec.Connections.FromConfigItem}, env.AsMap()); err != nil {
+		if v, err := ctx.NewStructTemplater(env.AsMap(), "", getGomplateFuncs(ctx, env)).
+			Template(*actionSpec.Exec.Connections.FromConfigItem); err != nil {
 			return err
 		} else {
 			actionSpec.Exec.Connections.FromConfigItem = &v
