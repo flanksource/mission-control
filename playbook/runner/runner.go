@@ -235,7 +235,6 @@ func ExecuteAndSaveAction(ctx context.Context, playbookID any, action *models.Pl
 	}
 
 	result, err := executeAction(ctx, playbookID, action.PlaybookRunID, *action, actionSpec)
-
 	if err != nil {
 		ctx.Errorf("action failed %+v", err)
 		if err := action.Fail(db, result.data, err); err != nil {
