@@ -3,7 +3,6 @@ package actions
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -13,6 +12,7 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/shell"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/pkg/clients/git"
 	"github.com/flanksource/incident-commander/pkg/clients/git/connectors"
@@ -258,12 +258,11 @@ func (t *GitOps) applyPatches(ctx context.Context, action v1.GitOpsAction) error
 			t.log("Patching %s", relativePath)
 
 			if patch.YQ != "" {
-				cmd := exec.Command("yq", "eval", "-i", patch.YQ, path)
-				res, err := runCmd(ctx, cmd)
-
+				res, err := shell.Run(ctx, shell.Exec{Script: fmt.Sprintf("yq eval -i '%s' %s", patch.YQ, path)})
 				if err != nil {
 					return err
 				}
+
 				if res.ExitCode != 0 {
 					return ctx.Oops().
 						With("path", relativePath, "yq", patch.YQ).
@@ -280,12 +279,11 @@ func (t *GitOps) applyPatches(ctx context.Context, action v1.GitOpsAction) error
 					return err
 				}
 			} else if patch.JQ != "" {
-				cmd := exec.Command("jq", patch.JQ, path)
-				res, err := runCmd(ctx, cmd)
-
+				res, err := shell.Run(ctx, shell.Exec{Script: fmt.Sprintf("jq '%s' %s", patch.JQ, path)})
 				if err != nil {
 					return err
 				}
+
 				if res.ExitCode != 0 {
 					return ctx.Oops().
 						With("path", relativePath, "jq", patch.JQ).
