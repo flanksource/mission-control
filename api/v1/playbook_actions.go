@@ -12,6 +12,7 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
+	"github.com/flanksource/duty/shell"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
@@ -166,7 +167,7 @@ type PodAction struct {
 	// Spec is the container spec
 	Spec json.RawMessage `yaml:"spec" json:"spec"`
 	// Artifacts to save
-	Artifacts []Artifact `yaml:"artifacts,omitempty" json:"artifacts,omitempty"`
+	Artifacts []shell.Artifact `yaml:"artifacts,omitempty" json:"artifacts,omitempty"`
 }
 
 type SQLAction struct {
@@ -208,37 +209,6 @@ type HTTPAction struct {
 	Body string `yaml:"body,omitempty" json:"body,omitempty" template:"true"`
 	// TemplateBody controls whether the body of the request needs to be templated
 	TemplateBody bool `yaml:"templateBody,omitempty" json:"templateBody,omitempty"`
-}
-
-type Artifact struct {
-	Path string `json:"path" yaml:"path" template:"true"`
-}
-
-type GitCheckout struct {
-	URL         string        `yaml:"url,omitempty" json:"url,omitempty"`
-	Connection  string        `yaml:"connection,omitempty" json:"connection,omitempty"`
-	Username    *types.EnvVar `yaml:"username,omitempty" json:"username,omitempty"`
-	Password    *types.EnvVar `yaml:"password,omitempty" json:"password,omitempty"`
-	Certificate *types.EnvVar `yaml:"certificate,omitempty" json:"certificate,omitempty"`
-	// Destination is the full path to where the contents of the URL should be downloaded to.
-	// If left empty, the sha256 hash of the URL will be used as the dir name.
-	Destination *string `yaml:"destination,omitempty" json:"destination,omitempty"`
-}
-
-func (git GitCheckout) GetURL() types.EnvVar {
-	return types.EnvVar{ValueStatic: git.URL}
-}
-
-func (git GitCheckout) GetUsername() types.EnvVar {
-	return utils.Deref(git.Username)
-}
-
-func (git GitCheckout) GetPassword() types.EnvVar {
-	return utils.Deref(git.Password)
-}
-
-func (git GitCheckout) GetCertificate() types.EnvVar {
-	return utils.Deref(git.Certificate)
 }
 
 type TimeMetadata struct {
@@ -409,11 +379,21 @@ type ExecAction struct {
 	Script      string                     `yaml:"script" json:"script" template:"true"`
 	Connections connection.ExecConnections `yaml:"connections,omitempty" json:"connections,omitempty" template:"true"`
 	// Artifacts to save
-	Artifacts []Artifact `yaml:"artifacts,omitempty" json:"artifacts,omitempty" template:"true"`
+	Artifacts []shell.Artifact `yaml:"artifacts,omitempty" json:"artifacts,omitempty" template:"true"`
 	// EnvVars are the environment variables that are accessible to exec processes
 	EnvVars []types.EnvVar `yaml:"env,omitempty" json:"env,omitempty"`
 	// Checkout details the git repository that should be mounted to the process
-	Checkout *GitCheckout `yaml:"checkout,omitempty" json:"checkout,omitempty"`
+	Checkout *connection.GitConnection `yaml:"checkout,omitempty" json:"checkout,omitempty"`
+}
+
+func (e *ExecAction) ToShellExec() shell.Exec {
+	return shell.Exec{
+		Script:      e.Script,
+		Connections: e.Connections,
+		EnvVars:     e.EnvVars,
+		Artifacts:   e.Artifacts,
+		Checkout:    e.Checkout,
+	}
 }
 
 type connectionContext interface {
