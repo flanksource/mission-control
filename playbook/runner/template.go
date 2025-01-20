@@ -83,18 +83,18 @@ func CreateTemplateEnv(ctx context.Context, playbook *models.Playbook, run model
 				return templateEnv, oops.Errorf("a secret parameter requires a `keyID` property")
 			}
 
+			ciphertext, err := base64.StdEncoding.DecodeString(val)
+			if err != nil {
+				return templateEnv, oops.Wrapf(err, "failed to decode ciphertext. Note: It must be std base64 encoded.")
+			}
+
 			keeper, err := secret.GetKeeper(ctx, keyID, vars.SecretKeeperConnection)
 			if err != nil {
 				return templateEnv, oops.Wrapf(err, "failed to get secret keeper")
 			}
 			defer keeper.Close()
 
-			decoded, err := base64.StdEncoding.DecodeString(val)
-			if err != nil {
-				return templateEnv, oops.Wrapf(err, "failed to decode secret")
-			}
-
-			decrypted, err := keeper.Decrypt(ctx, decoded)
+			decrypted, err := keeper.Decrypt(ctx, ciphertext)
 			if err != nil {
 				return templateEnv, oops.Wrapf(err, "failed to decrypt secret")
 			}

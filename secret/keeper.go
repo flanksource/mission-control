@@ -10,6 +10,7 @@ import (
 	"github.com/samber/lo"
 	"gocloud.dev/secrets"
 	"gocloud.dev/secrets/awskms"
+	"gocloud.dev/secrets/gcpkms"
 )
 
 var allowedConnectionTypes = []string{
@@ -50,8 +51,23 @@ func GetKeeper(ctx context.Context, keeperURL, connectionString string) (*secret
 		return keeper, nil
 
 	case models.ConnectionTypeAzure:
-	case models.ConnectionTypeGCP:
 
+	case models.ConnectionTypeGCP:
+		var gcpConn connection.GCPConnection
+		gcpConn.FromModel(*conn)
+
+		oauthToken, err := gcpConn.TokenSource(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create GCP oauth2 token: %w", err)
+		}
+
+		kmsClient, _, err := gcpkms.Dial(ctx, oauthToken)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create GCP KMS client: %w", err)
+		}
+
+		keeper := gcpkms.OpenKeeper(kmsClient, keeperURL, nil)
+		return keeper, nil
 	}
 
 	return nil, nil
