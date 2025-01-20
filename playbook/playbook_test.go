@@ -568,7 +568,7 @@ var _ = Describe("Playbook", func() {
 			actions, err := run.GetActions(DefaultContext.DB())
 			Expect(err).To(BeNil())
 			Expect(len(actions)).To(Equal(1))
-			Expect(actions[0].Result["stdout"]).To(HavePrefix(".creds/cred-"))
+			Expect(actions[0].Result["stdout"]).To(Equal("/etc/my-kube-config")) // comes from dummy.KubeScrapeConfig
 		})
 	})
 
