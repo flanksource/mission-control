@@ -2,6 +2,7 @@ package playbook
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -36,7 +37,8 @@ func RegisterRoutes(e *echo.Echo) {
 	playbookGroup := e.Group(fmt.Sprintf("/%s", prefix))
 	playbookGroup.GET("/list", HandlePlaybookList, rbac.Playbook(policy.ActionRead))
 	playbookGroup.POST("/webhook/:webhook_path", HandleWebhook)
-	playbookGroup.POST("/:id/params", HandleGetPlaybookParams, rbac.Playbook(policy.ActionPlaybookRun))
+
+	playbookGroup.POST("/:id/params", HandleGetPlaybookParams)
 
 	playbookGroup.GET("/events", func(c echo.Context) error {
 		return c.JSON(http.StatusOK, EventRing.Get())
@@ -127,6 +129,22 @@ func HandleGetPlaybookParams(c echo.Context) error {
 	env, err := runner.CreateTemplateEnv(ctx, playbook, &dummyRun, nil)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Err: err.Error(), Message: "unable to prepare template env"})
+	}
+
+	if !rbac.HasPermission(ctx, ctx.Subject(), env.ABACAttributes(), policy.ActionRead) {
+		return ctx.Oops().
+			Code(dutyAPI.EFORBIDDEN).
+			With("permission", policy.ActionRead, "objects", env.ABACAttributes()).
+			Wrap(errors.New("access denied: read access to resource not allowed"))
+	}
+
+	if attr, err := dummyRun.GetABACAttributes(ctx.DB()); err != nil {
+		return ctx.Oops().Wrap(err)
+	} else if !rbac.HasPermission(ctx, ctx.Subject(), attr, policy.ActionPlaybookRun) {
+		return ctx.Oops().
+			Code(dutyAPI.EFORBIDDEN).
+			With("permission", policy.ActionPlaybookRun, "objects", attr).
+			Wrap(fmt.Errorf("access denied to subject(%s): cannot run playbook on this resource", ctx.Subject()))
 	}
 
 	var spec v1.PlaybookSpec

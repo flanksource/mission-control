@@ -1,0 +1,13 @@
+# yaml-language-server: $schema=../../config/schemas/playbook.schema.json
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: echo-simple
+spec:
+  configs:
+    - types:
+        - Kubernetes::Node
+  actions:
+    - name: echo
+      exec:
+        script: echo "simple"

@@ -162,7 +162,7 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 		return nil, ctx.Oops().
 			Code(dutyAPI.EFORBIDDEN).
 			With("permission", policy.ActionPlaybookRun, "objects", attr).
-			Wrap(errors.New("access denied: cannot run playbook on this resource"))
+			Wrap(fmt.Errorf("access denied to subject(%s): cannot run playbook on this resource", ctx.Subject()))
 	}
 
 	if err := req.setDefaults(ctx, spec, templateEnv); err != nil {

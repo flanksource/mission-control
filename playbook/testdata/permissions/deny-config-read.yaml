@@ -1,0 +1,18 @@
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: deny-john-node-read
+spec:
+  description: Disallow John to read Node catalogs from us-west-2
+  subject:
+    person: john@doe.com
+  deny: true
+  actions:
+    - read
+  object:
+    configs:
+      - tagSelector: cluster=aws,account=flanksource
+        name: node-b
+        types:
+          - Kubernetes::Node

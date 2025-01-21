@@ -14,6 +14,7 @@ import (
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/playbook/sdk"
+	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/vars"
 	"github.com/labstack/echo/v4"
 	ginkgo "github.com/onsi/ginkgo/v2"
@@ -25,7 +26,6 @@ import (
 	// register event handlers
 	_ "github.com/flanksource/incident-commander/incidents/responder"
 	_ "github.com/flanksource/incident-commander/notification"
-	_ "github.com/flanksource/incident-commander/rbac"
 )
 
 func TestPlaybook(t *testing.T) {
@@ -57,6 +57,10 @@ var _ = ginkgo.BeforeSuite(func() {
 	DefaultContext = setup.BeforeSuiteFn()
 	DefaultContext.Logger.SetLogLevel(DefaultContext.Properties().String("log.level", "info"))
 	DefaultContext.Infof("%s", DefaultContext.String())
+
+	if err := rbac.Init(DefaultContext, "admin"); err != nil {
+		ginkgo.Fail(err.Error())
+	}
 
 	format.RegisterCustomFormatter(func(value interface{}) (string, bool) {
 		switch value.(type) {

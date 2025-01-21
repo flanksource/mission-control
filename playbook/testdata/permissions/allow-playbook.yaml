@@ -1,0 +1,18 @@
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: allow-john-playbook-run
+spec:
+  description: |
+    allow user john to run any playbook but only on configs in `mission-control` namespace
+  subject:
+    person: john@doe.com
+  actions:
+    - playbook:*
+  object:
+    playbooks:
+      - name: "*" # this is a wildcard selector that matches any playbook
+    configs:
+      - tagSelector: cluster=aws # Allow running any playbook on configs with tag cluster=aws
+      - tagSelector: cluster=demo
