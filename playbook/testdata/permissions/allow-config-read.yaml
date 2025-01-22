@@ -1,4 +1,3 @@
----
 apiVersion: mission-control.flanksource.com/v1
 kind: Permission
 metadata:

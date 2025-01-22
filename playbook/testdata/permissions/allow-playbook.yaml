@@ -1,11 +1,9 @@
----
 apiVersion: mission-control.flanksource.com/v1
 kind: Permission
 metadata:
   name: allow-john-playbook-run
 spec:
-  description: |
-    allow user john to run any playbook but only on configs in `mission-control` namespace
+  description: allow user john to run any playbook on configs with tags cluster = demo or aws
   subject:
     person: john@doe.com
   actions:

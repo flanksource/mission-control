@@ -1,4 +1,3 @@
-# yaml-language-server: $schema=../../config/schemas/playbook.schema.json
 apiVersion: mission-control.flanksource.com/v1
 kind: Playbook
 metadata:
