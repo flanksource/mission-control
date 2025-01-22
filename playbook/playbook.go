@@ -95,16 +95,19 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 	if err := json.Unmarshal(playbook.Spec, &spec); err != nil {
 		return nil, err
 	}
-	ctx = ctx.WithObject(playbook, req)
 
-	ctx = ctx.WithLoggingValues("req", req)
+	if err := req.Params.Sanitize(ctx, spec.Parameters); err != nil {
+		return nil, ctx.Oops().Wrapf(err, "failed to sanitize parameters")
+	}
+
+	ctx = ctx.WithObject(playbook, req).WithLoggingValues("req", req)
 	ctx.Infof("running \n%v\n", logger.Pretty(req))
 
 	run := models.PlaybookRun{
 		PlaybookID:         playbook.ID,
 		Status:             models.PlaybookRunStatusScheduled,
-		Parameters:         req.Params,
 		AgentID:            req.AgentID,
+		Parameters:         types.JSONStringMap(req.Params),
 		NotificationSendID: req.NotificationSendID,
 	}
 
@@ -137,6 +140,7 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 		if err != nil {
 			return nil, ctx.Oops().Wrap(err)
 		}
+
 		var whrMap map[string]any
 		if err := json.Unmarshal([]byte(whr), &whrMap); err != nil {
 			return nil, ctx.Oops().Wrap(err)
@@ -164,12 +168,10 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 	}
 
 	run.Parameters = types.JSONStringMap{}
-
 	for k, v := range req.Params {
 		run.Parameters[k] = fmt.Sprintf("%v", v)
 	}
 
-	// Check playbook filters
 	if err := runner.CheckPlaybookFilter(ctx, spec, templateEnv); err != nil {
 		return nil, err
 	}

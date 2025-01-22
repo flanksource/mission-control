@@ -74,12 +74,12 @@ type TemplateEnv struct {
 
 func (t *TemplateEnv) AsMap(ctx context.Context) map[string]any {
 	plainTextParams := make(map[string]any)
-	for k, v := range t.Params {
-		switch vv := v.(type) {
+	for key, val := range t.Params {
+		switch v := val.(type) {
 		case secret.Sensitive:
-			plainTextParams[k] = vv.PlainText()
+			plainTextParams[key] = v.PlainText()
 		default:
-			plainTextParams[k] = v
+			plainTextParams[key] = val
 		}
 	}
 

@@ -15,7 +15,6 @@ import (
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/playbook/actions"
-	"github.com/flanksource/incident-commander/vars"
 )
 
 // CreateTemplateEnv creates a template environment for the playbook run.
@@ -72,13 +71,14 @@ func CreateTemplateEnv(ctx context.Context, playbook *models.Playbook, run model
 			}
 
 		case v1.PlaybookParameterTypeSecret:
-			if vars.SecretKeeperConnection == "" {
-				return templateEnv, oops.Errorf("secret keeper connection is not set. Use --secret-keeper-connection flag")
+			ciphertext, err := secret.ParseCiphertext(val)
+			if err != nil {
+				return templateEnv, oops.Wrapf(err, "failed to parse secret parameter (%s). not a valid cipher text", p.Name)
 			}
 
-			sensitive, err := secret.DecryptB64WithConnection(ctx, vars.SecretKeeperConnection, val)
+			sensitive, err := secret.Decrypt(ctx, ciphertext)
 			if err != nil {
-				return templateEnv, oops.Wrapf(err, "failed to decrypt secret")
+				return templateEnv, oops.Wrapf(err, "failed to decrypt secret parameter (%s)", p.Name)
 			}
 
 			templateEnv.Params[p.Name] = sensitive
