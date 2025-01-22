@@ -31,6 +31,8 @@ type celVariables struct {
 	NewState   string
 	Permalink  string
 	SilenceURL string
+
+	GroupedResources []string
 }
 
 func (t *celVariables) SetSilenceURL(frontendURL string) {
@@ -86,6 +88,8 @@ func (t *celVariables) AsMap() map[string]any {
 
 		"comment": lo.FromPtr(t.Comment).AsMap(),
 		"author":  lo.FromPtr(t.Author).AsMap(),
+
+		"groupedResources": t.GroupedResources,
 	}
 
 	if t.NewState != "" {
