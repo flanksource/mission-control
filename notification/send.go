@@ -37,15 +37,16 @@ type NotificationTemplate struct {
 
 // NotificationEventPayload holds data to create a notification.
 type NotificationEventPayload struct {
-	ID               uuid.UUID  `json:"id"`                          // Resource id. depends what it is based on the original event.
-	EventName        string     `json:"event_name"`                  // The name of the original event this notification is for.
-	PlaybookID       *uuid.UUID `json:"playbook_id,omitempty"`       // The playbook to trigger
-	PersonID         *uuid.UUID `json:"person_id,omitempty"`         // The person recipient.
-	TeamID           *uuid.UUID `json:"team_id,omitempty"`           // The team recipient.
-	NotificationName string     `json:"notification_name,omitempty"` // Name of the notification of a team
-	NotificationID   uuid.UUID  `json:"notification_id,omitempty"`   // ID of the notification.
-	EventCreatedAt   time.Time  `json:"event_created_at"`            // Timestamp at which the original event was created
-	Properties       []byte     `json:"properties,omitempty"`        // json encoded properties of the original event
+	ID               uuid.UUID                        `json:"id"`                          // Resource id. depends what it is based on the original event.
+	EventName        string                           `json:"event_name"`                  // The name of the original event this notification is for.
+	PlaybookID       *uuid.UUID                       `json:"playbook_id,omitempty"`       // The playbook to trigger
+	PersonID         *uuid.UUID                       `json:"person_id,omitempty"`         // The person recipient.
+	TeamID           *uuid.UUID                       `json:"team_id,omitempty"`           // The team recipient.
+	NotificationName string                           `json:"notification_name,omitempty"` // Name of the notification of a team
+	NotificationID   uuid.UUID                        `json:"notification_id,omitempty"`   // ID of the notification.
+	EventCreatedAt   time.Time                        `json:"event_created_at"`            // Timestamp at which the original event was created
+	Properties       []byte                           `json:"properties,omitempty"`        // json encoded properties of the original event
+	GroupedResources []models.NotificationSendHistory `json:"grouped_resources,omitempty"` // List of resources that were grouped with the notification
 }
 
 func (t *NotificationEventPayload) AsMap() map[string]string {
@@ -212,6 +213,14 @@ func SendNotification(ctx *Context, connectionName, shoutrrrURL string, celEnv m
 		}
 
 		return "slack", nil
+	}
+
+	if _, exists := celEnv["gropuedResources"]; exists {
+		data.Message += `
+        Resources grouped with notification:
+        {{- range .groupedResources }}
+        - {{ . }}
+        {{- end }}`
 	}
 
 	service, err := shoutrrrSend(ctx, celEnv, shoutrrrURL, data)

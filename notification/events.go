@@ -13,6 +13,7 @@ import (
 	"github.com/flanksource/commons/text"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/pkg/tokenizer"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/gomplate/v3"
@@ -282,14 +283,76 @@ func sendPendingNotification(ctx context.Context, history models.NotificationSen
 	return err
 }
 
+func calculateGroupByHash(ctx context.Context, groupBy []string, resourceID, event string) (string, error) {
+	var vals string
+	if strings.HasPrefix(event, "config") {
+		ci, err := query.GetCachedConfig(ctx, resourceID)
+		if err != nil {
+			return "", fmt.Errorf("error fetching cached config for group by hash: %w", err)
+		}
+		for _, group := range groupBy {
+			if strings.HasPrefix(group, "tag:") {
+				vals += ci.Tags[strings.ReplaceAll(group, "tag:", "")]
+				continue
+			}
+			if strings.HasPrefix(group, "label:") {
+				vals += lo.FromPtr(ci.Labels)[strings.ReplaceAll(group, "label:", "")]
+				continue
+			}
+
+			if group == "type" {
+				vals += lo.FromPtr(ci.Type)
+			}
+
+			if group == "description" || group == "status_reason" {
+				vals += tokenizer.TokenizedHash(ci.Description)
+			}
+		}
+	}
+	if strings.HasPrefix(event, "component") {
+		comp, err := query.GetCachedComponent(ctx, resourceID)
+		if err != nil {
+			return "", fmt.Errorf("error fetching cached component for group by hash: %w", err)
+		}
+		for _, g := range groupBy {
+			if strings.HasPrefix(g, "label:") {
+				vals += comp.Labels[strings.ReplaceAll(g, "label:", "")]
+				continue
+			}
+			if g == "type" {
+				vals += comp.Type
+			}
+			if g == "description" || g == "status_reason" {
+				vals += tokenizer.TokenizedHash(comp.StatusReason.String)
+			}
+		}
+	}
+
+	return vals, nil
+}
+
 func sendNotification(ctx context.Context, payload NotificationEventPayload) error {
 	notificationContext := NewContext(ctx, payload.NotificationID)
 
 	ctx.Debugf("[notification.send] %s  ", payload.EventName)
 	notificationContext.WithSource(payload.EventName, payload.ID)
+	dbNotif, err := GetNotification(ctx, payload.NotificationID.String())
+	if err != nil {
+		logs.IfError(err, "error fetching notification")
+		return fmt.Errorf("error fetching notification[%s]: %w", payload.NotificationID, err)
+	}
+	if len(dbNotif.GroupBy) > 0 {
+		h, err := calculateGroupByHash(ctx, dbNotif.GroupBy, payload.ID.String(), payload.EventName)
+		logs.IfError(err, "error persisting start of notification send history")
+		if err != nil {
+			return err
+		}
+		notificationContext.WithGroupByHash(h)
+	}
+
 	logs.IfError(notificationContext.StartLog(), "error persisting start of notification send history")
 
-	err := _sendNotification(notificationContext, false, payload)
+	err = _sendNotification(notificationContext, false, payload)
 	if err != nil {
 		notificationContext.WithError(err)
 	}
@@ -309,6 +372,20 @@ func _sendNotification(ctx *Context, noWait bool, payload NotificationEventPaylo
 	celEnv, err := GetEnvForEvent(ctx.Context, originalEvent)
 	if err != nil {
 		return fmt.Errorf("failed to get cel env: %w", err)
+	}
+	if len(payload.GroupedResources) > 0 {
+		celEnv.GroupedResources = lo.Map(payload.GroupedResources, func(h models.NotificationSendHistory, _ int) string {
+			if strings.HasPrefix(h.SourceEvent, "config") {
+				ci, _ := query.GetCachedConfig(ctx.Context, h.ResourceID.String())
+				return strings.Join([]string{ci.ID.String(), lo.FromPtr(ci.Type), lo.FromPtr(ci.Name)}, "/")
+			}
+			if strings.HasPrefix(h.SourceEvent, "component") {
+				comp, _ := query.GetCachedComponent(ctx.Context, h.ResourceID.String())
+				return strings.Join([]string{comp.ID.String(), comp.Type, comp.Name}, "/")
+			}
+			return ""
+		})
+
 	}
 
 	nn, err := GetNotification(ctx.Context, payload.NotificationID.String())
