@@ -4,9 +4,11 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
+	"github.com/flanksource/gomplate/v3"
 	"github.com/samber/lo"
 )
 
@@ -96,6 +98,22 @@ func (t *celVariables) AsMap() map[string]any {
 
 	if t.NewState != "" {
 		output["new_state"] = t.NewState
+	}
+
+	// Inject tags as top level variables
+	if t.ConfigItem != nil {
+		for k, v := range t.ConfigItem.Tags {
+			if gomplate.IsCelKeyword(k) {
+				continue
+			}
+
+			if _, ok := output[k]; ok {
+				logger.Warnf("skipping tag %s as it already exists in the notification template environment", k)
+				continue
+			}
+
+			output[k] = v
+		}
 	}
 
 	return output

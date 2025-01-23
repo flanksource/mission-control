@@ -4,10 +4,13 @@ import (
 	"encoding/json"
 	"io"
 
+	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
+	"github.com/flanksource/gomplate/v3"
 	"github.com/labstack/echo/v4"
+	"github.com/samber/lo"
 )
 
 type WebhookRequest struct {
@@ -69,10 +72,12 @@ type TemplateEnv struct {
 
 func (t *TemplateEnv) AsMap() map[string]any {
 	m := map[string]any{
-		"check":     nil,
-		"component": nil,
-		"config":    nil,
-		"user":      nil,
+		"check":     lo.FromPtr(t.Check).AsMap(),
+		"component": lo.ToPtr(lo.FromPtr(t.Component)).AsMap(),
+		"config":    lo.FromPtr(t.Config).AsMap(),
+		"user":      lo.FromPtr(t.User).AsMap(),
+		"agent":     lo.FromPtr(t.Agent).AsMap(),
+		"action":    lo.FromPtr(t.Action).AsMap(),
 		"env":       t.Env,
 		"params":    t.Params,
 		"playbook":  t.Playbook.AsMap(),
@@ -81,23 +86,20 @@ func (t *TemplateEnv) AsMap() map[string]any {
 		"request":   t.Request,
 	}
 
-	if t.Action != nil {
-		m["action"] = t.Action.AsMap()
-	}
-	if t.Agent != nil {
-		m["agent"] = t.Agent.AsMap()
-	}
-	if t.User != nil {
-		m["user"] = t.User.AsMap()
-	}
-	if t.Check != nil {
-		m["check"] = t.Check.AsMap()
-	}
-	if t.Component != nil {
-		m["component"] = t.Component.AsMap()
-	}
+	// Inject tags as top level variables
 	if t.Config != nil {
-		m["config"] = t.Config.AsMap()
+		for k, v := range t.Config.Tags {
+			if gomplate.IsCelKeyword(k) {
+				continue
+			}
+
+			if _, ok := m[k]; ok {
+				logger.Warnf("skipping tag %s as it already exists in the playbook template environment", k)
+				continue
+			}
+
+			m[k] = v
+		}
 	}
 
 	return m
