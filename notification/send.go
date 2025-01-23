@@ -27,6 +27,12 @@ import (
 //go:embed templates/*
 var templates embed.FS
 
+const groupedResourcesMessage = `
+Resources grouped with notification:
+{{- range .groupedResources }}
+- {{ . }}
+{{- end }}`
+
 // NotificationTemplate holds in data for notification
 // that'll be used by struct templater.
 type NotificationTemplate struct {
@@ -215,12 +221,8 @@ func SendNotification(ctx *Context, connectionName, shoutrrrURL string, celEnv m
 		return "slack", nil
 	}
 
-	if _, exists := celEnv["gropuedResources"]; exists {
-		data.Message += `
-        Resources grouped with notification:
-        {{- range .groupedResources }}
-        - {{ . }}
-        {{- end }}`
+	if _, exists := celEnv["groupedResources"]; exists {
+		data.Message += groupedResourcesMessage
 	}
 
 	service, err := shoutrrrSend(ctx, celEnv, shoutrrrURL, data)

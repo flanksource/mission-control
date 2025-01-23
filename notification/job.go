@@ -170,7 +170,6 @@ func ProcessPendingNotifications(parentCtx context.Context) (bool, error) {
 		if err := ctx.DB().Clauses(clause.Locking{Strength: clause.LockingStrengthUpdate, Options: clause.LockingOptionsSkipLocked}).
 			Where("status IN (?, ?)", models.NotificationStatusPending, models.NotificationStatusEvaluatingWaitFor).
 			Where("not_before <= NOW()").
-			Where("group_by_hash == ''").
 			Where("retries < ? ", ctx.Properties().Int("notification.max-retries", 4)).
 			Order("not_before").
 			Limit(1). // one at a time; as one notification failure shouldn't affect a previous successful one
