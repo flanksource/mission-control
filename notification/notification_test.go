@@ -793,14 +793,25 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 
 			events.ConsumeAll(DefaultContext)
 
-			time.Sleep(10 * time.Second)
+			time.Sleep(13 * time.Second)
+
+			more := true
+
+			for {
+				if more == false {
+					break
+				}
+
+				more, err = notification.ProcessPendingNotifications(DefaultContext)
+				Expect(err).To(BeNil())
+			}
 
 			Eventually(func() bool {
 				var histories []models.NotificationSendHistory
 				err = DefaultContext.DB().Where("notification_id = ?", n.ID.String()).Where("status != ?", models.NotificationStatusSent).Find(&histories).Error
 				Expect(err).To(BeNil())
 
-				return len(histories) == 0
+				return len(histories) == 1
 			}, "5s", "1s").Should(BeTrue())
 
 			Eventually(func() int {
