@@ -88,8 +88,10 @@ func (t *celVariables) AsMap() map[string]any {
 
 		"comment": lo.FromPtr(t.Comment).AsMap(),
 		"author":  lo.FromPtr(t.Author).AsMap(),
+	}
 
-		"groupedResources": t.GroupedResources,
+	if len(t.GroupedResources) > 0 {
+		output["groupedResources"] = t.GroupedResources
 	}
 
 	if t.NewState != "" {
