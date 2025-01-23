@@ -690,12 +690,6 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 	})
 
 	var _ = ginkgo.FDescribe("group notifications", func() {
-		// Create configs which have same type and reason
-		// Create a notification with group by spec
-		// Create an event which makes all 4 configs unhealthy
-		// Before waitfor, mark 1 as healthy
-		// Notif should fire once with 3 as grouped resources
-
 		var n models.Notification
 		var config1, config2, config3, config4 models.ConfigItem
 		ginkgo.BeforeAll(func() {
@@ -705,7 +699,7 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 				Events:         pq.StringArray([]string{"config.unhealthy"}),
 				Source:         models.SourceCRD,
 				Title:          "Dummy",
-				Template:       "dummy $(.config.name)",
+				Template:       "Failed: $(.config.id)/$(.config.name)",
 				CustomServices: types.JSON(customReceiverJson),
 				WaitFor:        lo.ToPtr(time.Second * 15),
 				GroupBy:        pq.StringArray{"description", "type"},
@@ -774,18 +768,21 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 			notification.PurgeCache(n.ID.String())
 		})
 
-		ginkgo.It("should work", func() {
-
+		ginkgo.It("should group config resources in a notification", func() {
 			for _, c := range []models.ConfigItem{config1, config2, config3, config4} {
 				err := DefaultContext.DB().Model(&models.ConfigItem{}).
 					Where("id = ?", c.ID).
-					UpdateColumns(map[string]any{"health": models.HealthUnhealthy, "description": fmt.Sprintf("%s is failing due to bad manifest", *c.Name)}).Error
+					UpdateColumns(map[string]any{
+						"health":      models.HealthUnhealthy,
+						"description": fmt.Sprintf("%s is failing due to bad manifest", *c.Name),
+					}).Error
 				Expect(err).To(BeNil())
 			}
 			events.ConsumeAll(DefaultContext)
 
 			time.Sleep(3 * time.Second)
 
+			// Mark config3 as healthy to ensure healthy configs are skipped
 			err := DefaultContext.DB().Model(&models.ConfigItem{}).
 				Where("id = ?", config3.ID).
 				UpdateColumns(map[string]any{"health": models.HealthHealthy, "description": "healthy"}).Error
@@ -793,25 +790,25 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 
 			events.ConsumeAll(DefaultContext)
 
-			time.Sleep(13 * time.Second)
+			time.Sleep(12 * time.Second)
 
+			// Process all notifications after wait for time finishes
 			more := true
-
 			for {
 				if more == false {
 					break
 				}
-
 				more, err = notification.ProcessPendingNotifications(DefaultContext)
 				Expect(err).To(BeNil())
 			}
 
 			Eventually(func() bool {
 				var histories []models.NotificationSendHistory
-				err = DefaultContext.DB().Where("notification_id = ?", n.ID.String()).Where("status != ?", models.NotificationStatusSent).Find(&histories).Error
+				err = DefaultContext.DB().Where("notification_id = ?", n.ID.String()).
+					Where("status NOT IN ?", []any{models.NotificationStatusSent, models.NotificationStatusSkipped}).
+					Find(&histories).Error
 				Expect(err).To(BeNil())
-
-				return len(histories) == 1
+				return len(histories) == 0
 			}, "5s", "1s").Should(BeTrue())
 
 			Eventually(func() int {
@@ -819,9 +816,19 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 			}, "10s", "200ms").Should(BeNumerically(">=", 1))
 
 			Expect(webhookPostdata).To(Not(BeNil()))
-			Expect(webhookPostdata["message"]).To(Equal(fmt.Sprintf("aa")))
-			Expect(webhookPostdata["title"]).To(Equal(fmt.Sprintf("bb")))
 
+			msg := webhookPostdata["message"]
+			msgBlocks := strings.Split(msg, "Resources grouped with notification:\n")
+			Expect(len(msgBlocks)).To(Equal(2))
+
+			groupedResources := strings.Split(msgBlocks[1], "\n")
+			// 2 other configs since 1 config is part of the original message
+			Expect(len(groupedResources)).To(Equal(2))
+
+			// All config names should be present
+			Expect(msg).To(ContainSubstring(*config1.Name))
+			Expect(msg).To(ContainSubstring(*config2.Name))
+			Expect(msg).To(ContainSubstring(*config4.Name))
 		})
 	})
 

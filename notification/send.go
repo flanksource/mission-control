@@ -30,7 +30,7 @@ var templates embed.FS
 const groupedResourcesMessage = `
 Resources grouped with notification:
 {{- range .groupedResources }}
-- {{ . }}
+-{{ . }}
 {{- end }}`
 
 // NotificationTemplate holds in data for notification
