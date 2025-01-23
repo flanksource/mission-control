@@ -305,6 +305,7 @@ func calculateGroupByHash(ctx context.Context, groupBy []string, resourceID, eve
 			}
 
 			if group == "description" || group == "status_reason" {
+				ci.Description = lo.ToPtr(strings.ReplaceAll(lo.FromPtr(ci.Description), lo.FromPtr(ci.Name), "<config-name>"))
 				vals += tokenizer.TokenizedHash(ci.Description)
 			}
 		}
