@@ -190,15 +190,21 @@ func ProcessPendingNotifications(parentCtx context.Context) (bool, error) {
 			currentHistory.ResourceID,
 		)
 
+		var groupedHistory []models.NotificationSendHistory
 		if currentHistory.GroupByHash != "" {
 			// Fetch all ids with same group by hash
-			// Update payload to have those ids
-			var extras []models.NotificationSendHistory
-			ctx.DB().Model(&models.NotificationSendHistory{}).Find(&extras)
+			if err := ctx.DB().Model(&models.NotificationSendHistory{}).
+				Where("group_by_hash = ?", currentHistory.GroupByHash).
+				Where("source_event = ?", currentHistory.SourceEvent).
+				Where("id != ?", currentHistory.ID).
+				Where("notification_id = ?", currentHistory.NotificationID).
+				Find(&groupedHistory).Error; err != nil {
+				return fmt.Errorf("%w", err)
+			}
 
 		}
 
-		if err := processPendingNotification(ctx, currentHistory); err != nil {
+		if err := processPendingNotification(ctx, currentHistory, groupedHistory); err != nil {
 			if dberr := ctx.DB().Debug().Model(&models.NotificationSendHistory{}).Where("id = ?", currentHistory.ID).UpdateColumns(map[string]any{
 				"status":  gorm.Expr("CASE WHEN retries >= ? THEN ? ELSE ? END", ctx.Properties().Int("notification.max-retries", 4)-1, models.NotificationStatusError, models.NotificationStatusPending),
 				"error":   err.Error(),
@@ -215,8 +221,11 @@ func ProcessPendingNotifications(parentCtx context.Context) (bool, error) {
 	return noMorePending, err
 }
 
-// If true, do not update in db
-func healthCheck(ctx context.Context, notif NotificationWithSpec, payload NotificationEventPayload, currentHistory models.NotificationSendHistory) (bool, error) {
+// If the resource is still unhealthy, it returns false
+func shouldSkipNotificationDueToHealth(ctx context.Context, notif NotificationWithSpec, currentHistory models.NotificationSendHistory) (bool, error) {
+	var payload NotificationEventPayload
+	payload.FromMap(currentHistory.Payload)
+
 	originalEvent := models.Event{Name: payload.EventName, CreatedAt: payload.EventCreatedAt}
 	if len(payload.Properties) > 0 {
 		if err := json.Unmarshal(payload.Properties, &originalEvent.Properties); err != nil {
@@ -274,38 +283,31 @@ func healthCheck(ctx context.Context, notif NotificationWithSpec, payload Notifi
 	return false, nil
 }
 
-func processPendingNotification(ctx context.Context, currentHistory models.NotificationSendHistory) error {
-	var payload NotificationEventPayload
-	payload.FromMap(currentHistory.Payload)
+func processPendingNotification(ctx context.Context, currentHistory models.NotificationSendHistory, groupedHistory []models.NotificationSendHistory) error {
 
-	notif, err := GetNotification(ctx, payload.NotificationID.String())
+	notif, err := GetNotification(ctx, currentHistory.NotificationID.String())
 	if err != nil {
 		return fmt.Errorf("failed to get notification: %w", err)
 	}
 
-	// Yash: If payload has group ids, then check for all of them
+	var historiesToUpdate []models.NotificationSendHistory
 
 	// We need to re-evaluate the health of the resource
 	// and ensure that the original event matches with the current health before we send out the notification.
-
-	var historiesToUpdate []models.NotificationSendHistory
-
-	report, err := healthCheck(ctx, *notif, payload, currentHistory)
+	skipNotif, err := shouldSkipNotificationDueToHealth(ctx, *notif, currentHistory)
 	if err != nil {
 		return err
 	}
-	if report {
+	if !skipNotif {
 		historiesToUpdate = append(historiesToUpdate, currentHistory)
 	}
-	for _, n := range payload.GroupedResources {
-		var npayload NotificationEventPayload
-		npayload.FromMap(n.Payload)
-		report, err := healthCheck(ctx, *notif, npayload, n)
+	for _, h := range groupedHistory {
+		skipNotif, err := shouldSkipNotificationDueToHealth(ctx, *notif, h)
 		if err != nil {
 			return err
 		}
-		if report {
-			historiesToUpdate = append(historiesToUpdate, n)
+		if !skipNotif {
+			historiesToUpdate = append(historiesToUpdate, h)
 		}
 	}
 
@@ -313,15 +315,15 @@ func processPendingNotification(ctx context.Context, currentHistory models.Notif
 		return nil
 	}
 
-	var mainPayload NotificationEventPayload
+	var payload NotificationEventPayload
 	historyToUpdate := historiesToUpdate[0]
-	mainPayload.FromMap(historyToUpdate.Payload)
+	payload.FromMap(historyToUpdate.Payload)
 	if len(historiesToUpdate) > 1 {
-		mainPayload.GroupedResources = historiesToUpdate[1:]
+		payload.GroupedResources = historiesToUpdate[1:]
 	}
 	historyIDs := lo.Map(historiesToUpdate, func(h models.NotificationSendHistory, _ int) uuid.UUID { return h.ID })
 
-	if err := sendPendingNotification(ctx, historyToUpdate, mainPayload); err != nil {
+	if err := sendPendingNotification(ctx, historyToUpdate, payload); err != nil {
 		return fmt.Errorf("failed to send notification: %w", err)
 	} else if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id IN ?", historyIDs).UpdateColumns(map[string]any{
 		"status": models.NotificationStatusSent,
