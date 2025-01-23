@@ -689,7 +689,7 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 		}
 	})
 
-	var _ = ginkgo.FDescribe("group notifications", func() {
+	var _ = ginkgo.Describe("group notifications", func() {
 		var n models.Notification
 		var config1, config2, config3, config4 models.ConfigItem
 		ginkgo.BeforeAll(func() {
