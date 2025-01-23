@@ -274,7 +274,7 @@ func shouldSkipNotificationDueToHealth(ctx context.Context, notif NotificationWi
 		if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", currentHistory.ID).UpdateColumns(map[string]any{
 			"status": models.NotificationStatusSkipped,
 		}).Error; dberr != nil {
-			return false, fmt.Errorf("failed to save notification status as skipped: %w", err)
+			return false, fmt.Errorf("failed to save notification status as skipped: %w", dberr)
 		}
 
 		return true, nil
