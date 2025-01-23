@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/collections"
+	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/job"
 	"github.com/flanksource/duty/models"
@@ -220,6 +221,11 @@ func ProcessPendingNotifications(parentCtx context.Context) (bool, error) {
 	return noMorePending, err
 }
 
+func traceLog(format string, args ...any) {
+	traceLogger := logger.GetLogger("notification.debug.trace")
+	traceLogger.Infof(format, args...)
+}
+
 // If the resource is still unhealthy, it returns false
 func shouldSkipNotificationDueToHealth(ctx context.Context, notif NotificationWithSpec, currentHistory models.NotificationSendHistory) (bool, error) {
 	var payload NotificationEventPayload
@@ -240,6 +246,8 @@ func shouldSkipNotificationDueToHealth(ctx context.Context, notif NotificationWi
 	// check if the notification should go through an evaluation phase.
 	// i.e. trigger an incremental scraper and re-process the notification.
 	if celEnv.ConfigItem != nil && celEnv.ConfigItem.ID != uuid.Nil && currentHistory.Status != models.NotificationStatusEvaluatingWaitFor {
+
+		traceLog("evaluating for config[%s] for notification[%s]", celEnv.ConfigItem.ID, currentHistory.NotificationID)
 		if ok, err := isKubernetesConfigItem(ctx, celEnv.ConfigItem.ID.String()); err != nil {
 			return false, fmt.Errorf("failed to check if the config belongs to a kubernetes scraper: %w", err)
 		} else if ok {
