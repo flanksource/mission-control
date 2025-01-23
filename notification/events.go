@@ -284,29 +284,23 @@ func sendPendingNotification(ctx context.Context, history models.NotificationSen
 }
 
 func calculateGroupByHash(ctx context.Context, groupBy []string, resourceID, event string) (string, error) {
-	var vals string
+	var hash string
 	if strings.HasPrefix(event, "config") {
 		ci, err := query.GetCachedConfig(ctx, resourceID)
 		if err != nil {
 			return "", fmt.Errorf("error fetching cached config for group by hash: %w", err)
 		}
 		for _, group := range groupBy {
-			if strings.HasPrefix(group, "tag:") {
-				vals += ci.Tags[strings.ReplaceAll(group, "tag:", "")]
-				continue
-			}
-			if strings.HasPrefix(group, "label:") {
-				vals += lo.FromPtr(ci.Labels)[strings.ReplaceAll(group, "label:", "")]
-				continue
-			}
-
-			if group == "type" {
-				vals += lo.FromPtr(ci.Type)
-			}
-
-			if group == "description" || group == "status_reason" {
+			switch {
+			case strings.HasPrefix(group, "tag:"):
+				hash += ci.Tags[strings.ReplaceAll(group, "tag:", "")]
+			case strings.HasPrefix(group, "label:"):
+				hash += lo.FromPtr(ci.Labels)[strings.ReplaceAll(group, "label:", "")]
+			case group == "type":
+				hash += lo.FromPtr(ci.Type)
+			case group == "description" || group == "status_reason":
 				description := strings.ReplaceAll(lo.FromPtr(ci.Description), lo.FromPtr(ci.Name), "<config-name>")
-				vals += tokenizer.TokenizedHash(description)
+				hash += tokenizer.TokenizedHash(description)
 			}
 		}
 	}
@@ -315,21 +309,19 @@ func calculateGroupByHash(ctx context.Context, groupBy []string, resourceID, eve
 		if err != nil {
 			return "", fmt.Errorf("error fetching cached component for group by hash: %w", err)
 		}
-		for _, g := range groupBy {
-			if strings.HasPrefix(g, "label:") {
-				vals += comp.Labels[strings.ReplaceAll(g, "label:", "")]
-				continue
-			}
-			if g == "type" {
-				vals += comp.Type
-			}
-			if g == "description" || g == "status_reason" {
-				vals += tokenizer.TokenizedHash(comp.StatusReason.String)
+		for _, group := range groupBy {
+			switch {
+			case strings.HasPrefix(group, "label:"):
+				hash += comp.Labels[strings.ReplaceAll(group, "label:", "")]
+			case group == "type":
+				hash += comp.Type
+			case group == "description" || group == "status_reason":
+				hash += tokenizer.TokenizedHash(comp.StatusReason.String)
 			}
 		}
 	}
 
-	return vals, nil
+	return hash, nil
 }
 
 func sendNotification(ctx context.Context, payload NotificationEventPayload) error {
