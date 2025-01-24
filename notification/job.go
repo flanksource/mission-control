@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/flanksource/commons/collections"
@@ -171,6 +172,7 @@ func ProcessPendingNotifications(parentCtx context.Context) (bool, error) {
 			Where("status IN (?, ?)", models.NotificationStatusPending, models.NotificationStatusEvaluatingWaitFor).
 			Where("not_before <= NOW()").
 			Where("retries < ? ", ctx.Properties().Int("notification.max-retries", 4)).
+			Where("group_by_hash = ''").
 			Order("not_before").
 			Limit(1). // one at a time; as one notification failure shouldn't affect a previous successful one
 			Find(&pending).Error; err != nil {
@@ -189,21 +191,7 @@ func ProcessPendingNotifications(parentCtx context.Context) (bool, error) {
 			currentHistory.ResourceID,
 		)
 
-		var groupedHistory []models.NotificationSendHistory
-		if currentHistory.GroupByHash != "" {
-			// Fetch all ids with same group by hash
-			if err := ctx.DB().Model(&models.NotificationSendHistory{}).
-				Where("group_by_hash = ?", currentHistory.GroupByHash).
-				Where("source_event = ?", currentHistory.SourceEvent).
-				Where("id != ?", currentHistory.ID).
-				Where("notification_id = ?", currentHistory.NotificationID).
-				Find(&groupedHistory).Error; err != nil {
-				return fmt.Errorf("%w", err)
-			}
-
-		}
-
-		if err := processPendingNotification(ctx, currentHistory, groupedHistory); err != nil {
+		if err := processPendingNotification(ctx, currentHistory, []models.NotificationSendHistory{}); err != nil {
 			if dberr := ctx.DB().Debug().Model(&models.NotificationSendHistory{}).Where("id = ?", currentHistory.ID).UpdateColumns(map[string]any{
 				"status":  gorm.Expr("CASE WHEN retries >= ? THEN ? ELSE ? END", ctx.Properties().Int("notification.max-retries", 4)-1, models.NotificationStatusError, models.NotificationStatusPending),
 				"error":   err.Error(),
@@ -218,6 +206,91 @@ func ProcessPendingNotifications(parentCtx context.Context) (bool, error) {
 	})
 
 	return noMorePending, err
+}
+
+func ProcessPendingGroupedNotificationsJob(ctx context.Context) *job.Job {
+	return &job.Job{
+		Name:       "ProcessPendingGroupedNotifications",
+		Retention:  job.RetentionFailed,
+		JobHistory: true,
+		RunNow:     true,
+		Context:    ctx,
+		Singleton:  true,
+		Schedule:   "@every 30s",
+		Fn: func(ctx job.JobRuntime) error {
+			return ProcessPendingGroupedNotifications(ctx.Context)
+		},
+	}
+}
+
+func ProcessPendingGroupedNotifications(parentCtx context.Context) error {
+	var rows []struct {
+		GroupByHash       string
+		EarliestNotBefore time.Time
+	}
+	if err := parentCtx.DB().Model(&models.NotificationSendHistory{}).
+		Select("group_by_hash, MIN(not_before) AS earliest_not_before").
+		Group("group_by_hash").
+		Where("status IN (?, ?)", models.NotificationStatusPending, models.NotificationStatusEvaluatingWaitFor).
+		Where("not_before <= NOW()").
+		Where("retries < ? ", parentCtx.Properties().Int("notification.max-retries", 4)).
+		Where("group_by_hash != ''").
+		Order("earliest_not_before").
+		Scan(&rows).Error; err != nil {
+		return fmt.Errorf("error fetching group_by_hash: %w", err)
+	}
+
+	for _, r := range rows {
+		err := parentCtx.DB().Transaction(func(tx *gorm.DB) error {
+			ctx := parentCtx.WithDB(tx, parentCtx.Pool())
+
+			var pending []models.NotificationSendHistory
+			if err := ctx.DB().Clauses(clause.Locking{Strength: clause.LockingStrengthUpdate, Options: clause.LockingOptionsSkipLocked}).
+				Where("status IN (?, ?)", models.NotificationStatusPending, models.NotificationStatusEvaluatingWaitFor).
+				Where("not_before <= NOW()").
+				Where("group_by_hash = ?", r.GroupByHash).
+				Find(&pending).Error; err != nil {
+				return fmt.Errorf("failed to get pending notifications: %w", err)
+			}
+
+			if len(pending) == 0 {
+				return nil
+			}
+
+			currentHistory := pending[0]
+			ctx.Logger.V(6).Infof("processing notification (%s/%s) for resource %s",
+				currentHistory.ID,
+				currentHistory.Status,
+				currentHistory.ResourceID,
+			)
+
+			var groupedHistory []models.NotificationSendHistory
+			if len(pending) > 1 {
+				groupedHistory = pending[1:]
+
+			}
+
+			historyIDs := lo.Map(pending, func(h models.NotificationSendHistory, _ int) uuid.UUID { return h.ID })
+			if err := processPendingNotification(ctx, currentHistory, groupedHistory); err != nil {
+				if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id IN ?", historyIDs).UpdateColumns(map[string]any{
+					"status":  gorm.Expr("CASE WHEN retries >= ? THEN ? ELSE ? END", ctx.Properties().Int("notification.max-retries", 4)-1, models.NotificationStatusError, models.NotificationStatusPending),
+					"error":   err.Error(),
+					"retries": gorm.Expr("retries + 1"),
+				}).Error; dberr != nil {
+					return ctx.Oops().Join(dberr, err)
+				}
+			}
+
+			// we return nil or else the transaction will be rolled back and there'll be no trace of a failed attempt.
+			return nil
+		})
+
+		if err != nil {
+			return fmt.Errorf("error processing grouped notification transaction: %w", err)
+		}
+	}
+
+	return nil
 }
 
 // If the resource is still unhealthy, it returns false
@@ -318,7 +391,24 @@ func processPendingNotification(ctx context.Context, currentHistory models.Notif
 	historyToUpdate := historiesToUpdate[0]
 	payload.FromMap(historyToUpdate.Payload)
 	if len(historiesToUpdate) > 1 {
-		payload.GroupedResources = historiesToUpdate[1:]
+		payload.GroupedResources = lo.Map(historiesToUpdate[1:], func(h models.NotificationSendHistory, _ int) string {
+			if strings.HasPrefix(h.SourceEvent, "config") {
+				ci, _ := query.GetCachedConfig(ctx, h.ResourceID.String())
+				return strings.Join([]string{ci.ID.String(), lo.FromPtr(ci.Type), lo.FromPtr(ci.Name)}, "/")
+			}
+			if strings.HasPrefix(h.SourceEvent, "component") {
+				comp, _ := query.GetCachedComponent(ctx, h.ResourceID.String())
+				return strings.Join([]string{comp.ID.String(), comp.Type, comp.Name}, "/")
+			}
+			if strings.HasPrefix(h.SourceEvent, "check") {
+				check, _ := query.FindCachedCheck(ctx, h.ResourceID.String())
+				if check != nil {
+					return strings.Join([]string{check.ID.String(), check.Type, check.Name}, "/")
+				}
+			}
+			return ""
+		})
+
 	}
 	historyIDs := lo.Map(historiesToUpdate, func(h models.NotificationSendHistory, _ int) uuid.UUID { return h.ID })
 

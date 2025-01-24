@@ -792,16 +792,8 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 
 			time.Sleep(12 * time.Second)
 
-			// Process all notifications after wait for time finishes
-			more := true
-			for {
-				if more == false {
-					break
-				}
-				more, err = notification.ProcessPendingNotifications(DefaultContext)
-				Expect(err).To(BeNil())
-			}
-
+			err = notification.ProcessPendingGroupedNotifications(DefaultContext)
+			Expect(err).To(BeNil())
 			Eventually(func() bool {
 				var histories []models.NotificationSendHistory
 				err = DefaultContext.DB().Where("notification_id = ?", n.ID.String()).
