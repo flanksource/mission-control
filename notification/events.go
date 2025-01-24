@@ -299,7 +299,7 @@ func calculateGroupByHash(ctx context.Context, groupBy []string, resourceID, eve
 			case group == "type":
 				hash += lo.FromPtr(ci.Type)
 			case group == "description" || group == "status_reason":
-				description := strings.ReplaceAll(lo.FromPtr(ci.Description), lo.FromPtr(ci.Name), "<config-name>")
+				description := strings.ReplaceAll(lo.FromPtr(ci.Description), lo.FromPtr(ci.Name), "<name>")
 				hash += tokenizer.TokenizedHash(description)
 			}
 		}
@@ -316,7 +316,28 @@ func calculateGroupByHash(ctx context.Context, groupBy []string, resourceID, eve
 			case group == "type":
 				hash += comp.Type
 			case group == "description" || group == "status_reason":
-				hash += tokenizer.TokenizedHash(comp.StatusReason.String)
+				description := strings.ReplaceAll(comp.StatusReason.String, comp.Name, "<name>")
+				hash += tokenizer.TokenizedHash(description)
+			}
+		}
+	}
+	if strings.HasPrefix(event, "check") {
+		check, err := query.FindCachedCheck(ctx, resourceID)
+		if err != nil {
+			return "", fmt.Errorf("error fetching cached check for group by hash: %w", err)
+		}
+		if check == nil {
+			return "", fmt.Errorf("check[%s] not found", resourceID)
+		}
+		for _, group := range groupBy {
+			switch {
+			case strings.HasPrefix(group, "label:"):
+				hash += check.Labels[strings.ReplaceAll(group, "label:", "")]
+			case group == "type":
+				hash += check.Type
+			case group == "description" || group == "status_reason":
+				description := strings.ReplaceAll(check.Description, check.Name, "<name>")
+				hash += tokenizer.TokenizedHash(description)
 			}
 		}
 	}
@@ -367,18 +388,7 @@ func _sendNotification(ctx *Context, noWait bool, payload NotificationEventPaylo
 		return fmt.Errorf("failed to get cel env: %w", err)
 	}
 	if len(payload.GroupedResources) > 0 {
-		celEnv.GroupedResources = lo.Map(payload.GroupedResources, func(h models.NotificationSendHistory, _ int) string {
-			if strings.HasPrefix(h.SourceEvent, "config") {
-				ci, _ := query.GetCachedConfig(ctx.Context, h.ResourceID.String())
-				return strings.Join([]string{ci.ID.String(), lo.FromPtr(ci.Type), lo.FromPtr(ci.Name)}, "/")
-			}
-			if strings.HasPrefix(h.SourceEvent, "component") {
-				comp, _ := query.GetCachedComponent(ctx.Context, h.ResourceID.String())
-				return strings.Join([]string{comp.ID.String(), comp.Type, comp.Name}, "/")
-			}
-			return ""
-		})
-
+		celEnv.GroupedResources = payload.GroupedResources
 	}
 
 	nn, err := GetNotification(ctx.Context, payload.NotificationID.String())
