@@ -10,6 +10,7 @@ import (
 	extraClausePlugin "github.com/WinterYukky/gorm-extra-clause-plugin"
 	"github.com/WinterYukky/gorm-extra-clause-plugin/exclause"
 	"github.com/flanksource/commons/text"
+	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
@@ -20,7 +21,7 @@ import (
 )
 
 func DeleteNotificationSilence(ctx context.Context, id string) error {
-	return ctx.DB().Delete(&models.NotificationSilence{}, "id = ?", id).Error
+	return ctx.DB().Model(&models.NotificationSilence{}).Where("id = ?", id).Update("deleted_at", duty.Now()).Error
 }
 
 func PersistNotificationFromCRD(ctx context.Context, obj *v1.Notification) error {
@@ -133,7 +134,7 @@ func PersistNotificationFromCRD(ctx context.Context, obj *v1.Notification) error
 }
 
 func DeleteNotification(ctx context.Context, id string) error {
-	return ctx.DB().Delete(&models.Notification{}, "id = ?", id).Error
+	return ctx.DB().Model(&models.Notification{}).Where("id = ?", id).Update("deleted_at", duty.Now()).Error
 }
 
 func UpdateNotificationError(ctx context.Context, id string, err string) error {
