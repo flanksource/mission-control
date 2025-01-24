@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/collections"
+	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -364,7 +365,5 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 }
 
 func DeleteConnection(ctx context.Context, id string) error {
-	return ctx.DB().Table("connections").
-		Delete(&models.Connection{}, "id = ?", id).
-		Error
+	return ctx.DB().Model(&models.Connection{}).Where("id = ?", id).Update("deleted_at", duty.Now()).Error
 }

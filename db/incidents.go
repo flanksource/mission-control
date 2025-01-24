@@ -3,6 +3,7 @@ package db
 import (
 	"time"
 
+	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
@@ -52,7 +53,5 @@ func PersistIncidentRuleFromCRD(ctx context.Context, obj *v1.IncidentRule) error
 }
 
 func DeleteIncidentRule(ctx context.Context, id string) error {
-	return ctx.DB().Table("incident_rules").
-		Delete(&api.IncidentRule{}, "id = ?", id).
-		Error
+	return ctx.DB().Table("incident_rules").Where("id = ?", id).Update("deleted_at", duty.Now()).Error
 }
