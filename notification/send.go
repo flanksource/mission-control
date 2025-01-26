@@ -83,7 +83,7 @@ func PrepareAndSendEventNotification(ctx *Context, payload NotificationEventPayl
 		}
 
 		smtpURL := fmt.Sprintf("%s?ToAddresses=%s", api.SystemSMTP, url.QueryEscape(emailAddress))
-		return sendEventNotificationWithMetrics(ctx, celEnv.AsMap(), "", smtpURL, payload.EventName, notification, nil)
+		return sendEventNotificationWithMetrics(ctx, celEnv.AsMap(ctx.Context), "", smtpURL, payload.EventName, notification, nil)
 	}
 
 	if payload.TeamID != nil {
@@ -98,7 +98,7 @@ func PrepareAndSendEventNotification(ctx *Context, payload NotificationEventPayl
 				continue
 			}
 
-			return sendEventNotificationWithMetrics(ctx, celEnv.AsMap(), cn.Connection, cn.URL, payload.EventName, notification, cn.Properties)
+			return sendEventNotificationWithMetrics(ctx, celEnv.AsMap(ctx.Context), cn.Connection, cn.URL, payload.EventName, notification, cn.Properties)
 		}
 	}
 
@@ -109,7 +109,7 @@ func PrepareAndSendEventNotification(ctx *Context, payload NotificationEventPayl
 	// (SA4004: the surrounding loop is unconditionally terminated)
 	for _, cn := range notification.CustomNotifications {
 		ctx.WithRecipient(RecipientTypeURL, nil)
-		return sendEventNotificationWithMetrics(ctx, celEnv.AsMap(), cn.Connection, cn.URL, payload.EventName, notification, cn.Properties)
+		return sendEventNotificationWithMetrics(ctx, celEnv.AsMap(ctx.Context), cn.Connection, cn.URL, payload.EventName, notification, cn.Properties)
 	}
 
 	return nil

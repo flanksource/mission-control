@@ -678,7 +678,7 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 				Expect(err).To(BeNil())
 
 				celEnv.Channel = "slack"
-				templater := DefaultContext.NewStructTemplater(celEnv.AsMap(), "", notification.TemplateFuncs)
+				templater := DefaultContext.NewStructTemplater(celEnv.AsMap(DefaultContext), "", notification.TemplateFuncs)
 				err = templater.Walk(&msg)
 				Expect(err).To(BeNil())
 

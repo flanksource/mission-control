@@ -67,7 +67,7 @@ var _ = ginkgo.Describe("Playbook Action Gitops", ginkgo.Label("slow"), ginkgo.O
 			},
 		}
 
-		templater := ctx.NewStructTemplater(env.AsMap(), "template", nil)
+		templater := ctx.NewStructTemplater(env.AsMap(ctx), "template", nil)
 		err := templater.Walk(&spec)
 		Expect(err).To(BeNil())
 
