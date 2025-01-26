@@ -78,7 +78,7 @@ func (r *RunParams) setDefaults(ctx context.Context, spec v1.PlaybookSpec, templ
 		}
 	}
 
-	templater := ctx.NewStructTemplater(templateEnv.AsMap(), "template", nil)
+	templater := ctx.NewStructTemplater(templateEnv.AsMap(ctx), "template", nil)
 	if err := templater.Walk(&defaultParams); err != nil {
 		return ctx.Oops().Wrap(err)
 	}

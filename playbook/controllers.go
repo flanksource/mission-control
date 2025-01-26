@@ -138,7 +138,7 @@ func HandleGetPlaybookParams(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Err: "Playbook validation failed", Message: err.Error()})
 	}
 
-	templater := ctx.NewStructTemplater(env.AsMap(), "template", nil)
+	templater := ctx.NewStructTemplater(env.AsMap(ctx), "template", nil)
 	if err := templater.Walk(&spec.Parameters); err != nil {
 		return ctx.Oops().Wrapf(err, "failed to walk template")
 	}

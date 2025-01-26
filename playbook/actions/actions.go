@@ -5,10 +5,12 @@ import (
 	"io"
 
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/gomplate/v3"
+	"github.com/flanksource/incident-commander/db"
 	"github.com/labstack/echo/v4"
 	"github.com/samber/lo"
 )
@@ -70,7 +72,7 @@ type TemplateEnv struct {
 	Agent *models.Agent `json:"agent,omitempty"`
 }
 
-func (t *TemplateEnv) AsMap() map[string]any {
+func (t *TemplateEnv) AsMap(ctx context.Context) map[string]any {
 	output := map[string]any{
 		"check":     lo.FromPtr(t.Check).AsMap(),
 		"component": lo.ToPtr(lo.FromPtr(t.Component)).AsMap(),
@@ -92,11 +94,10 @@ func (t *TemplateEnv) AsMap() map[string]any {
 	output["status"] = ""
 	output["health"] = ""
 	output["labels"] = map[string]string{}
-	output["tags"] = map[string]string{}
+	tags := map[string]string{}
 
 	if resource := t.SelectableResource(); resource != nil {
 		// set the alias name/status/health/labels/tags of the resource
-
 		output["name"] = resource.GetName()
 		if status, err := resource.GetStatus(); err == nil {
 			output["status"] = status
@@ -105,36 +106,47 @@ func (t *TemplateEnv) AsMap() map[string]any {
 			output["health"] = health
 		}
 		if table, ok := resource.(models.TaggableModel); ok {
-			output["tags"] = table.GetTags()
-
-			// Inject tags as top level variables
-			for k, v := range table.GetTags() {
-				if gomplate.IsCelKeyword(k) {
-					continue
-				}
-
-				if _, ok := output[k]; ok {
-					logger.Warnf("skipping tag %s as it already exists in the playbook template environment", k)
-					continue
-				}
-
-				output[k] = v
-			}
+			tags = table.GetTags()
 		}
 		if table, ok := resource.(models.LabelableModel); ok {
 			output["labels"] = table.GetLabels()
 		}
 	}
 
+	if ctx.DB() != nil {
+		if distinctTags, err := db.GetDistinctTags(ctx); err != nil {
+			logger.Errorf("failed to get distinct tags for notification cel variable: %w", err)
+		} else {
+			for _, tag := range distinctTags {
+				if _, ok := tags[tag]; !ok {
+					tags[tag] = ""
+				}
+			}
+		}
+	}
+
+	output["tags"] = tags
+
+	// Inject tags as top level variables
+	for k, v := range tags {
+		if !gomplate.IsValidCELIdentifier(k) {
+			logger.V(9).Infof("skipping tag %s as it is not a valid CEL identifier", k)
+			continue
+		}
+
+		if _, ok := output[k]; ok {
+			logger.V(9).Infof("skipping tag %s as it already exists in the playbook template environment", k)
+			continue
+		}
+
+		output[k] = v
+	}
+
 	return output
 }
 
-func (t *TemplateEnv) GetContext() map[string]any {
-	return t.AsMap()
-}
-
-func (t *TemplateEnv) String() string {
-	b, err := json.Marshal(t.AsMap())
+func (t *TemplateEnv) JSON(ctx context.Context) string {
+	b, err := json.Marshal(t.AsMap(ctx))
 	if err != nil {
 		return ""
 	}

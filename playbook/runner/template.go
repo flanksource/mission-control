@@ -123,7 +123,7 @@ func CreateTemplateEnv(ctx context.Context, playbook *models.Playbook, run *mode
 			val, err := ctx.RunTemplate(gomplate.Template{
 				Template:  val,
 				Functions: getGomplateFuncs(ctx, templateEnv),
-			}, templateEnv.AsMap())
+			}, templateEnv.AsMap(ctx))
 			if err != nil {
 				return templateEnv, ctx.Oops().Wrap(err)
 			}
@@ -143,7 +143,7 @@ func templateActionExpressions(ctx context.Context, actionSpec *v1.PlaybookActio
 			CelEnvs:    getActionCelEnvs(ctx, env),
 		}
 		var err error
-		if actionSpec.Filter, err = ctx.RunTemplate(gomplateTemplate, env.AsMap()); err != nil {
+		if actionSpec.Filter, err = ctx.RunTemplate(gomplateTemplate, env.AsMap(ctx)); err != nil {
 			return err
 		}
 	}
@@ -179,20 +179,20 @@ func getGomplateFuncs(ctx context.Context, env actions.TemplateEnv) map[string]a
 
 // TemplateAction all the go templates in the action
 func TemplateEnv(ctx context.Context, env actions.TemplateEnv, template string) (string, error) {
-	return ctx.RunTemplate(gomplate.Template{Template: template, Functions: getGomplateFuncs(ctx, env)}, env.AsMap())
+	return ctx.RunTemplate(gomplate.Template{Template: template, Functions: getGomplateFuncs(ctx, env)}, env.AsMap(ctx))
 
 }
 
 // TemplateAction all the go templates in the action
 func TemplateAction(ctx context.Context, actionSpec *v1.PlaybookAction, env actions.TemplateEnv) error {
-	templater := ctx.NewStructTemplater(env.AsMap(), "template", getGomplateFuncs(ctx, env))
+	templater := ctx.NewStructTemplater(env.AsMap(ctx), "template", getGomplateFuncs(ctx, env))
 	if err := templater.Walk(&actionSpec); err != nil {
 		return err
 	}
 
 	// TODO: make this work with template.Walk()
 	if actionSpec.Exec != nil && actionSpec.Exec.Connections.FromConfigItem != nil {
-		if v, err := ctx.NewStructTemplater(env.AsMap(), "", getGomplateFuncs(ctx, env)).
+		if v, err := ctx.NewStructTemplater(env.AsMap(ctx), "", getGomplateFuncs(ctx, env)).
 			Template(*actionSpec.Exec.Connections.FromConfigItem); err != nil {
 			return err
 		} else {

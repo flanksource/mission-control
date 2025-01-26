@@ -105,7 +105,7 @@ func getActionSpec(run *models.PlaybookRun, name string) (*v1.PlaybookAction, er
 
 func CheckPlaybookFilter(ctx context.Context, playbookSpec v1.PlaybookSpec, templateEnv actions.TemplateEnv) error {
 	for _, f := range playbookSpec.Filters {
-		val, err := ctx.RunTemplate(gomplate.Template{Expression: f}, templateEnv.AsMap())
+		val, err := ctx.RunTemplate(gomplate.Template{Expression: f}, templateEnv.AsMap(ctx))
 		if err != nil {
 			return ctx.Oops().Wrapf(err, "invalid playbook filter: %s", f)
 
@@ -127,8 +127,8 @@ func CheckDelay(ctx context.Context, playbook models.Playbook, run models.Playbo
 		if err != nil {
 			return false, ctx.Oops().Wrapf(err, "failed to template action")
 		}
-		oops := ctx.Oops().Hint(templateEnv.String())
-		if action.Delay, err = ctx.RunTemplate(gomplate.Template{Expression: action.Delay}, templateEnv.AsMap()); err != nil {
+		oops := ctx.Oops().Hint(templateEnv.JSON(ctx))
+		if action.Delay, err = ctx.RunTemplate(gomplate.Template{Expression: action.Delay}, templateEnv.AsMap(ctx)); err != nil {
 			return false, oops.Wrapf(err, "failed to template action")
 		} else if delay, err = action.DelayDuration(); err != nil {
 			return false, oops.Wrapf(err, "invalid duration n (%s)", action.Delay)
@@ -313,7 +313,7 @@ func TemplateAndExecuteAction(ctx context.Context, spec v1.PlaybookSpec, playboo
 		return err
 	}
 
-	oops := ctx.Oops().Hint(templateEnv.String())
+	oops := ctx.Oops().Hint(templateEnv.JSON(ctx))
 
 	ctx.Logger.V(7).Infof("Using env: %s", logger.Pretty(templateEnv.Env))
 

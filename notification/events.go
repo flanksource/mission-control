@@ -132,7 +132,7 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 		return err
 	}
 
-	t.Ring.Add(event, celEnv.AsMap())
+	t.Ring.Add(event, celEnv.AsMap(ctx))
 
 	silencedResource := getSilencedResourceFromCelEnv(celEnv)
 	matchingSilences, err := db.GetMatchingNotificationSilences(ctx, silencedResource)
@@ -166,7 +166,7 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 	}
 
 	if n.Filter != "" {
-		if valid, err := gomplate.RunTemplateBool(celEnv.AsMap(), gomplate.Template{Expression: n.Filter}); err != nil {
+		if valid, err := gomplate.RunTemplateBool(celEnv.AsMap(ctx), gomplate.Template{Expression: n.Filter}); err != nil {
 			// On invalid spec error, we store the error on the notification itself and exit out.
 			logs.IfError(db.UpdateNotificationError(ctx, id, err.Error()), "failed to update notification")
 			return nil
@@ -175,7 +175,7 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 		}
 	}
 
-	payloads, err := CreateNotificationSendPayloads(ctx, event, n, celEnv.AsMap())
+	payloads, err := CreateNotificationSendPayloads(ctx, event, n, celEnv.AsMap(ctx))
 	if err != nil {
 		return fmt.Errorf("failed to create notification.send payloads: %w", err)
 	}
@@ -653,7 +653,7 @@ func getFirstSilencer(ctx context.Context, celEnv *celVariables, matchingSilence
 		}
 
 		if silence.Filter != "" {
-			res, err := ctx.RunTemplate(gomplate.Template{Expression: string(silence.Filter)}, celEnv.AsMap())
+			res, err := ctx.RunTemplate(gomplate.Template{Expression: string(silence.Filter)}, celEnv.AsMap(ctx))
 			if err != nil {
 				ctx.Errorf("failed to run silence filter expression(%s): %v", silence.Filter, err)
 				logs.IfError(db.UpdateNotificationSilenceError(ctx, silence.ID.String(), err.Error()), "failed to update notification silence")

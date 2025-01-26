@@ -181,7 +181,7 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 	}
 	var runsOn []string
 	for _, specRunOn := range runSpec.RunsOn {
-		output, err := ctx.RunTemplate(gomplate.Template{Template: specRunOn}, templateEnv.AsMap())
+		output, err := ctx.RunTemplate(gomplate.Template{Template: specRunOn}, templateEnv.AsMap(ctx))
 		if err != nil {
 			return nil, ctx.Oops().Wrap(err)
 		}
