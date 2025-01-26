@@ -3,7 +3,7 @@
 	"blocks": [
     {{slackSectionTextMD (printf `:large_green_circle: *%s* is _healthy_` .canary.name)}},
     {"type": "divider"},
-    {{ if .status.message}}{{slackSectionTextMD status.message}},{{end}}
+    {{ if .check_status.message}}{{slackSectionTextMD check_status.message}},{{end}}
 		{
 			"type": "section",
 			"fields": [
@@ -21,7 +21,7 @@
 {{ else }}
 Canary: {{.canary.name}}
 {{if .agent}}Agent: {{.agent.name}}{{end}}
-{{if .status.message}}Message: {{.status.message}} {{end}}
+{{if .check_status.message}}Message: {{.check_status.message}} {{end}}
 {{labelsFormat .check.labels}}
 
 [Reference]({{.permalink}})

@@ -3,7 +3,7 @@
 	"blocks": [
 		{{slackSectionTextMD (printf `:red_circle: *%s* is _unhealthy_` .check.name)}},
     {"type": "divider"},
-		{{ if .status.error}}{{slackSectionTextMD status.error}},{{end}}
+		{{ if .check_status.error}}{{slackSectionTextMD check_status.error}},{{end}}
 		{
 			"type": "section",
 			"fields": [
@@ -21,7 +21,7 @@
 {{ else }}
 Canary: {{.canary.name}}
 {{if .agent}}Agent: {{.agent.name}}{{end}}
-Error: {{.status.error}}
+Error: {{.check_status.error}}
 {{labelsFormat .check.labels}}
 
 [Reference]({{.permalink}})

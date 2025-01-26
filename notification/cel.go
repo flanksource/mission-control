@@ -76,12 +76,13 @@ func (t *celVariables) AsMap() map[string]any {
 		"silenceURL": t.SilenceURL,
 		"channel":    t.Channel,
 
-		"agent":     lo.FromPtr(t.Agent).AsMap(),
-		"status":    lo.FromPtr(t.CheckStatus).AsMap(),
-		"check":     lo.FromPtr(t.Check).AsMap("spec"),
-		"config":    lo.FromPtr(t.ConfigItem).AsMap("spec"),
-		"canary":    lo.FromPtr(t.Canary).AsMap("spec"),
-		"component": lo.ToPtr(lo.FromPtr(t.Component)).AsMap("checks", "incidents", "analysis", "components", "order", "relationship_id", "children", "parents"),
+		"agent":        lo.FromPtr(t.Agent).AsMap(),
+		"check_status": lo.FromPtr(t.CheckStatus).AsMap(),
+		"check":        lo.FromPtr(t.Check).AsMap("spec"),
+		"config":       lo.FromPtr(t.ConfigItem).AsMap("spec"),
+		"canary":       lo.FromPtr(t.Canary).AsMap("spec"),
+		"component": lo.ToPtr(lo.FromPtr(t.Component)).
+			AsMap("checks", "incidents", "analysis", "components", "order", "relationship_id", "children", "parents"),
 
 		"evidence":   lo.FromPtr(t.Evidence).AsMap(),
 		"hypothesis": lo.FromPtr(t.Hypothesis).AsMap(),
@@ -100,19 +101,43 @@ func (t *celVariables) AsMap() map[string]any {
 		output["new_state"] = t.NewState
 	}
 
-	// Inject tags as top level variables
-	if t.ConfigItem != nil {
-		for k, v := range t.ConfigItem.Tags {
-			if gomplate.IsCelKeyword(k) {
-				continue
-			}
+	// Placeholders for commonly used fields of the resource
+	// If a resource exists, they'll be filled up below
+	output["name"] = ""
+	output["status"] = ""
+	output["health"] = ""
+	output["labels"] = map[string]string{}
+	output["tags"] = map[string]string{}
 
-			if _, ok := output[k]; ok {
-				logger.Warnf("skipping tag %s as it already exists in the notification template environment", k)
-				continue
-			}
+	if resource := t.SelectableResource(); resource != nil {
+		// set the alias name/status/health/labels/tags of the resource
 
-			output[k] = v
+		output["name"] = resource.GetName()
+		if status, err := resource.GetStatus(); err == nil {
+			output["status"] = status
+		}
+		if health, err := resource.GetHealth(); err == nil {
+			output["health"] = health
+		}
+		if table, ok := resource.(models.TaggableModel); ok {
+			output["tags"] = table.GetTags()
+
+			// Inject tags as top level variables
+			for k, v := range table.GetTags() {
+				if gomplate.IsCelKeyword(k) {
+					continue
+				}
+
+				if _, ok := output[k]; ok {
+					logger.Warnf("skipping tag %s as it already exists in the notification template environment", k)
+					continue
+				}
+
+				output[k] = v
+			}
+		}
+		if table, ok := resource.(models.LabelableModel); ok {
+			output["labels"] = table.GetLabels()
 		}
 	}
 

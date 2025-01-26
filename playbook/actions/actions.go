@@ -71,7 +71,7 @@ type TemplateEnv struct {
 }
 
 func (t *TemplateEnv) AsMap() map[string]any {
-	m := map[string]any{
+	output := map[string]any{
 		"check":     lo.FromPtr(t.Check).AsMap(),
 		"component": lo.ToPtr(lo.FromPtr(t.Component)).AsMap(),
 		"config":    lo.FromPtr(t.Config).AsMap(),
@@ -86,23 +86,47 @@ func (t *TemplateEnv) AsMap() map[string]any {
 		"request":   t.Request,
 	}
 
-	// Inject tags as top level variables
-	if t.Config != nil {
-		for k, v := range t.Config.Tags {
-			if gomplate.IsCelKeyword(k) {
-				continue
-			}
+	// Placeholders for commonly used fields of the resource
+	// If a resource exists, they'll be filled up below
+	output["name"] = ""
+	output["status"] = ""
+	output["health"] = ""
+	output["labels"] = map[string]string{}
+	output["tags"] = map[string]string{}
 
-			if _, ok := m[k]; ok {
-				logger.Warnf("skipping tag %s as it already exists in the playbook template environment", k)
-				continue
-			}
+	if resource := t.SelectableResource(); resource != nil {
+		// set the alias name/status/health/labels/tags of the resource
 
-			m[k] = v
+		output["name"] = resource.GetName()
+		if status, err := resource.GetStatus(); err == nil {
+			output["status"] = status
+		}
+		if health, err := resource.GetHealth(); err == nil {
+			output["health"] = health
+		}
+		if table, ok := resource.(models.TaggableModel); ok {
+			output["tags"] = table.GetTags()
+
+			// Inject tags as top level variables
+			for k, v := range table.GetTags() {
+				if gomplate.IsCelKeyword(k) {
+					continue
+				}
+
+				if _, ok := output[k]; ok {
+					logger.Warnf("skipping tag %s as it already exists in the playbook template environment", k)
+					continue
+				}
+
+				output[k] = v
+			}
+		}
+		if table, ok := resource.(models.LabelableModel); ok {
+			output["labels"] = table.GetLabels()
 		}
 	}
 
-	return m
+	return output
 }
 
 func (t *TemplateEnv) GetContext() map[string]any {
@@ -116,4 +140,17 @@ func (t *TemplateEnv) String() string {
 	}
 
 	return string(b)
+}
+
+func (t *TemplateEnv) SelectableResource() types.ResourceSelectable {
+	if t.Component != nil {
+		return t.Component
+	}
+	if t.Config != nil {
+		return t.Config
+	}
+	if t.Check != nil {
+		return t.Check
+	}
+	return nil
 }
