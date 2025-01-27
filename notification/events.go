@@ -271,7 +271,7 @@ func sendNotifications(ctx context.Context, events models.Events) models.Events 
 func sendPendingNotification(ctx context.Context, history models.NotificationSendHistory, payload NotificationEventPayload) error {
 	notificationContext := NewContext(ctx, payload.NotificationID).WithHistory(history)
 
-	ctx.Debugf("[notification.send] %s  ", payload.EventName)
+	ctx.Debugf("[notification.send] %s ", payload.EventName)
 	notificationContext.WithSource(payload.EventName, payload.ID)
 
 	err := _sendNotification(notificationContext, true, payload)
@@ -410,6 +410,7 @@ func _sendNotification(ctx *Context, noWait bool, payload NotificationEventPaylo
 
 			ctx.log.PendingPlaybookRun()
 		} else {
+			traceLog("NotificationID=%s Resource=[%s/%s] Sending ...", nn.ID, payload.EventName, payload.ID)
 			if err := PrepareAndSendEventNotification(ctx, payload, celEnv); err != nil {
 				return fmt.Errorf("failed to send notification for event: %w", err)
 			}
