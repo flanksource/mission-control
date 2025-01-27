@@ -15,6 +15,7 @@ import (
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/gomplate/v3"
 	"github.com/google/uuid"
+	"github.com/samber/lo"
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/flanksource/incident-commander/api"
@@ -214,7 +215,7 @@ func SendNotification(ctx *Context, connectionName, shoutrrrURL string, celEnv m
 			return "", fmt.Errorf("error templating notification: %w", err)
 		}
 
-		traceLog("NotificationID=%s Resource=[%s] Sent via slack ...", notification.ID, getResourceIDFromCELMap(celEnv))
+		traceLog("NotificationID=%s Resource=[%s] Sent via slack ...", lo.FromPtr(notification).ID, getResourceIDFromCELMap(celEnv))
 		if err := SlackSend(ctx, connection.Password, connection.Username, data); err != nil {
 			return "", err
 		}
@@ -230,7 +231,7 @@ func SendNotification(ctx *Context, connectionName, shoutrrrURL string, celEnv m
 	if err != nil {
 		return "", fmt.Errorf("failed to send message with Shoutrrr: %w", err)
 	}
-	traceLog("NotificationID=%s Resource=[%s] Sent via Shoutrrr ...", notification.ID, getResourceIDFromCELMap(celEnv))
+	traceLog("NotificationID=%s Resource=[%s] Sent via Shoutrrr ...", lo.FromPtr(notification).ID, getResourceIDFromCELMap(celEnv))
 
 	// Update CRD Status
 	if CRDStatusUpdateQueue != nil && notification != nil && notification.Source == models.SourceCRD {
