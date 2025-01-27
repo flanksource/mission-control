@@ -214,6 +214,7 @@ func SendNotification(ctx *Context, connectionName, shoutrrrURL string, celEnv m
 			return "", fmt.Errorf("error templating notification: %w", err)
 		}
 
+		traceLog("NotificationID=%s Resource=[%s] Sent via slack ...", notification.ID, getResourceIDFromCELMap(celEnv))
 		if err := SlackSend(ctx, connection.Password, connection.Username, data); err != nil {
 			return "", err
 		}
@@ -229,6 +230,7 @@ func SendNotification(ctx *Context, connectionName, shoutrrrURL string, celEnv m
 	if err != nil {
 		return "", fmt.Errorf("failed to send message with Shoutrrr: %w", err)
 	}
+	traceLog("NotificationID=%s Resource=[%s] Sent via Shoutrrr ...", notification.ID, getResourceIDFromCELMap(celEnv))
 
 	// Update CRD Status
 	if CRDStatusUpdateQueue != nil && notification != nil && notification.Source == models.SourceCRD {
@@ -396,4 +398,23 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 	}
 
 	return payloads, nil
+}
+
+func getResourceIDFromCELMap(celEnv map[string]any) string {
+	if c, exists := celEnv["check"]; exists {
+		if cm, ok := c.(map[string]any); ok {
+			return "check/" + fmt.Sprint(cm["id"])
+		}
+	}
+	if c, exists := celEnv["config"]; exists {
+		if cm, ok := c.(map[string]any); ok {
+			return "config/" + fmt.Sprint(cm["id"])
+		}
+	}
+	if c, exists := celEnv["component"]; exists {
+		if cm, ok := c.(map[string]any); ok {
+			return "component/" + fmt.Sprint(cm["id"])
+		}
+	}
+	return ""
 }

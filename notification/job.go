@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/collections"
+	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/commons/properties"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/job"
 	"github.com/flanksource/duty/models"
@@ -342,8 +344,10 @@ func shouldSkipNotificationDueToHealth(ctx context.Context, notif NotificationWi
 		return false, fmt.Errorf("failed to get resource health from cel env: %w", err)
 	}
 
+	traceLog("NotificationID=%s HistoryID=%s Resource=[%s/%s] PreviousHealth=%s CurrentHealth=%s Checking if reportable", notif.ID, currentHistory.ID, payload.EventName, payload.ID, previousHealth, currentHealth)
 	if !isHealthReportable(notif.Events, previousHealth, currentHealth) {
 		ctx.Logger.V(6).Infof("skipping notification[%s] as health change is not reportable", notif.ID)
+		traceLog("NotificationID=%s HistoryID=%s Resource=[%s/%s] PreviousHealth=%s CurrentHealth=%s Skipping", notif.ID, currentHistory.ID, payload.EventName, payload.ID, previousHealth, currentHealth)
 		if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", currentHistory.ID).UpdateColumns(map[string]any{
 			"status": models.NotificationStatusSkipped,
 		}).Error; dberr != nil {
@@ -352,11 +356,19 @@ func shouldSkipNotificationDueToHealth(ctx context.Context, notif NotificationWi
 
 		return true, nil
 	}
+	traceLog("NotificationID=%s HistoryID=%s Resource=[%s/%s] PreviousHealth=%s CurrentHealth=%s Reporting ...", notif.ID, currentHistory.ID, payload.EventName, payload.ID, previousHealth, currentHealth)
 	return false, nil
 }
 
-func processPendingNotification(ctx context.Context, currentHistory models.NotificationSendHistory, groupedHistory []models.NotificationSendHistory) error {
+var traceLogger = logger.GetLogger("notification.debug.trace")
 
+func traceLog(format string, args ...any) {
+	if properties.On(false, "notification.tracing") {
+		traceLogger.Infof(format, args...)
+	}
+}
+
+func processPendingNotification(ctx context.Context, currentHistory models.NotificationSendHistory, groupedHistory []models.NotificationSendHistory) error {
 	notif, err := GetNotification(ctx, currentHistory.NotificationID.String())
 	if err != nil {
 		return fmt.Errorf("failed to get notification: %w", err)
