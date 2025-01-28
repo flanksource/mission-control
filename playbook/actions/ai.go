@@ -57,8 +57,9 @@ const slackPrompt = `
 func init() {
 	var err error
 
-	recommendPlaybookPrompt, err = template.New("recommend").Parse(`Analyze a list of playbooks and find the most suitable ones
-	and create a Slack message using Block Kit, allowing users to run these playbooks on a specific configuration.
+	recommendPlaybookPrompt, err = template.New("recommend").Parse(`
+	Analyze a list of playbooks and find the most suitable ones and create a Slack message using Block Kit, 
+	allowing users to run these playbooks on a specific configuration.
 
 	First, here's the list of playbooks you need to analyze:
 
@@ -66,16 +67,18 @@ func init() {
 	{{.playbooks}}
 	</playbooks>
 
-	Your goal is to create a Slack message that presents buttons for each applicable playbook. 
+	Your goal is to create a Slack message that presents a summary of the diagnosis and the buttons for each applicable playbook. 
 	Each button, when clicked, should trigger the execution of its corresponding playbook.
 
 	Follow these steps to complete the task:
 
-	1. Analyze the given playbooks and identify which ones can be run on the current configuration.
+	- Create a concise summary of the diagnosis and wrap it in a slack text block.  
 
-	2. For each applicable playbook, create a button element in the Slack Block Kit JSON structure.
+	- Analyze the given playbooks and identify which ones can be run on the current configuration.
 
-	3. Generate a URL for each button that will trigger the playbook execution. The URL should follow this format:
+	- For each applicable playbook, create a button element in the Slack Block Kit JSON structure.
+
+	- Generate a URL for each button that will trigger the playbook execution. The URL should follow this format:
 		GET {{.base_url}}/playbooks/runs
 		With these query parameters:
 		- playbook={playbook_id}
@@ -85,14 +88,31 @@ func init() {
 
 		IMPORTANT: Ensure that you URL-encode the parameter values.
 
-	4. Compile all button elements into a single Block Kit JSON structure.
+	- Compile all button elements into a single Block Kit JSON structure.
 
-	5. If no matching playbooks are found, create a message block with the text "No matching playbooks found."
+	- If no matching playbooks are found, create a message block with the text "No matching playbooks found."
 
 	Here's an example of the expected output structure:
 
 	{
 		"blocks": [
+			{
+				"type": "section",
+				"fields": [
+					{
+						"type": "mrkdwn",
+						"text": "Deployment: grafana"
+					},
+					{
+						"type": "mrkdwn",
+						"text": "*Namespace*: mc"
+					},
+					{
+						"type": "mrkdwn",
+						"text": "Deployment has pods that are in a crash loop."
+					}
+				]
+			},
 			{
 				"type": "actions",
 				"block_id": "actionblock123",
@@ -111,7 +131,11 @@ func init() {
 	}
 
 	Remember:
-	- Ensure the JSON is valid and follows the Block Kit structure. Do not wrap the json within a code block. It must be parsable.
+	- Ensure the JSON is valid and follows the Block Kit structure.
+	- The response should contain nothing more than just the JSON.
+		**DO NOT** wrap the json within a code block.
+		Your next message should start with "{" and end with "}"
+	- Present a concise summary of the diagnosis in a slack text block using mrkdwn.
 	- Include all necessary query parameters in the URL.
 	- URL-encode parameter values.
 	- Use a unique block_id for each action block (e.g., "actionblock" followed by a random number).
