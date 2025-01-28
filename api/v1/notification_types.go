@@ -2,7 +2,10 @@ package v1
 
 import (
 	"github.com/flanksource/kopper"
+	"github.com/google/go-cmp/cmp"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type NotificationRecipientSpec struct {
@@ -97,6 +100,27 @@ type Notification struct {
 
 	Spec   NotificationSpec   `json:"spec,omitempty" yaml:"spec,omitempty"`
 	Status NotificationStatus `json:"status,omitempty" yaml:"status,omitempty"`
+}
+
+var _ kopper.StatusPatchGenerator = (*Notification)(nil)
+
+func (t *Notification) GenerateStatusPatch(original runtime.Object) client.Patch {
+	og, ok := original.(*Notification)
+	if !ok {
+		return nil
+	}
+
+	diff := cmp.Diff(t.Status, og.Status)
+	if diff == "" {
+		return nil
+	}
+
+	clientObj, ok := original.(client.Object)
+	if !ok {
+		return nil
+	}
+
+	return client.MergeFrom(clientObj)
 }
 
 //+kubebuilder:object:root=true

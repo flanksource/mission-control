@@ -3,7 +3,10 @@ package v1
 import (
 	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/types"
+	"github.com/flanksource/kopper"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type ConnectionTelegram struct {
@@ -327,6 +330,26 @@ type Connection struct {
 
 	Spec   ConnectionSpec   `json:"spec,omitempty"`
 	Status ConnectionStatus `json:"status,omitempty"`
+}
+
+var _ kopper.StatusPatchGenerator = (*Connection)(nil)
+
+func (t *Connection) GenerateStatusPatch(original runtime.Object) client.Patch {
+	og, ok := original.(*Connection)
+	if !ok {
+		return nil
+	}
+
+	if t.Status.Ref == og.Status.Ref {
+		return nil
+	}
+
+	clientObj, ok := original.(client.Object)
+	if !ok {
+		return nil
+	}
+
+	return client.MergeFrom(clientObj)
 }
 
 //+kubebuilder:object:root=true
