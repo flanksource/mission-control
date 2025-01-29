@@ -103,10 +103,15 @@ func _getActionForAgent(ctx context.Context, agent *models.Agent) (*ActionForAge
 	step := &steps[0]
 	ctx = ctx.WithObject(agent, step)
 
+	output := ActionForAgent{
+		Action: *step, // step.status will still be waiting
+	}
+
 	run, err := step.GetRun(ctx.DB())
 	if err != nil {
 		return nil, ctx.Oops().Wrap(err)
 	}
+	output.Run = *run
 	ctx = ctx.WithObject(agent, step, run)
 
 	playbook, err := step.GetPlaybook(ctx.DB())
@@ -117,8 +122,9 @@ func _getActionForAgent(ctx context.Context, agent *models.Agent) (*ActionForAge
 
 	templateEnv, err := CreateTemplateEnv(ctx, playbook, run, step)
 	if err != nil {
-		return &ActionForAgent{Action: *step}, ctx.Oops().Tags(errTagTemplate).Wrapf(err, "failed to template env")
+		return &output, ctx.Oops().Tags(errTagTemplate).Wrapf(err, "failed to create template env")
 	}
+	output.TemplateEnv = templateEnv
 
 	spec, err := getActionSpec(run, step.Name)
 	if err != nil {
@@ -126,24 +132,18 @@ func _getActionForAgent(ctx context.Context, agent *models.Agent) (*ActionForAge
 	}
 
 	if err := templateActionExpressions(ctx, spec, templateEnv); err != nil {
-		return nil, ctx.Oops().Wrap(err)
+		return &output, ctx.Oops().Tags(errTagTemplate).Wrapf(err, "failed to template action expressions")
 	}
 
 	if spec.TemplatesOn == "" || spec.TemplatesOn == Main {
 		if err := TemplateAction(ctx, spec, templateEnv); err != nil {
-			return nil, ctx.Oops().Wrap(err)
+			return &output, ctx.Oops().Tags(errTagTemplate).Wrapf(err, "failed to template action")
 		}
 	}
-
-	output := ActionForAgent{
-		Action:      *step, // step.status will still be waiting
-		Run:         *run,
-		ActionSpec:  *spec,
-		TemplateEnv: templateEnv,
-	}
+	output.ActionSpec = *spec
 
 	if skip, err := filterAction(ctx, spec.Filter); err != nil {
-		return nil, ctx.Oops().Wrap(err)
+		return &output, ctx.Oops().Tags(errTagTemplate).Wrapf(err, "action filter error")
 	} else {
 		// We run the filter on the upstream and simply send the filter result to the agent.
 		spec.Filter = strconv.FormatBool(!skip)
