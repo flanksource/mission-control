@@ -195,5 +195,8 @@ func Check(ctx context.Context, subject, object, action string) bool {
 }
 
 func ReloadPolicy() error {
+	if enforcer == nil {
+		return nil
+	}
 	return enforcer.LoadPolicy()
 }
