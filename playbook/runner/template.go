@@ -1,7 +1,6 @@
 package runner
 
 import (
-	"encoding/base64"
 	"encoding/json"
 
 	"github.com/flanksource/commons/collections"
@@ -77,23 +76,12 @@ func CreateTemplateEnv(ctx context.Context, playbook *models.Playbook, run model
 				return templateEnv, oops.Errorf("secret keeper connection is not set. Use --secret-keeper-connection flag")
 			}
 
-			ciphertext, err := base64.StdEncoding.DecodeString(val)
-			if err != nil {
-				return templateEnv, oops.Wrapf(err, "failed to decode ciphertext. Note: It must be std base64 encoded.")
-			}
-
-			keeper, err := secret.KeeperFromConnection(ctx, vars.SecretKeeperConnection)
-			if err != nil {
-				return templateEnv, oops.Wrapf(err, "failed to get secret keeper")
-			}
-			defer keeper.Close()
-
-			decrypted, err := keeper.Decrypt(ctx, ciphertext)
+			sensitive, err := secret.DecryptB64WithConnection(ctx, vars.SecretKeeperConnection, val)
 			if err != nil {
 				return templateEnv, oops.Wrapf(err, "failed to decrypt secret")
 			}
 
-			templateEnv.Params[p.Name] = decrypted
+			templateEnv.Params[p.Name] = sensitive
 
 		default:
 			templateEnv.Params[p.Name] = val
