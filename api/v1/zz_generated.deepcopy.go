@@ -9,7 +9,7 @@ import (
 	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/shell"
 	"github.com/flanksource/duty/types"
-	runtime "k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime"
 	timex "time"
 )
 
@@ -880,11 +880,6 @@ func (in *ConnectionSpec) DeepCopyInto(out *ConnectionSpec) {
 			(*out)[key] = val
 		}
 	}
-	if in.Anthropic != nil {
-		in, out := &in.Anthropic, &out.Anthropic
-		*out = new(ConnectionAnthropic)
-		(*in).DeepCopyInto(*out)
-	}
 	if in.AWS != nil {
 		in, out := &in.AWS, &out.AWS
 		*out = new(ConnectionAWS)
@@ -893,6 +888,11 @@ func (in *ConnectionSpec) DeepCopyInto(out *ConnectionSpec) {
 	if in.AWSKMS != nil {
 		in, out := &in.AWSKMS, &out.AWSKMS
 		*out = new(ConnectionAWSKMS)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.S3 != nil {
+		in, out := &in.S3, &out.S3
+		*out = new(ConnectionAWSS3)
 		(*in).DeepCopyInto(*out)
 	}
 	if in.Azure != nil {
@@ -920,6 +920,11 @@ func (in *ConnectionSpec) DeepCopyInto(out *ConnectionSpec) {
 		*out = new(ConnectionGCPKMS)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.Anthropic != nil {
+		in, out := &in.Anthropic, &out.Anthropic
+		*out = new(ConnectionAnthropic)
+		(*in).DeepCopyInto(*out)
+	}
 	if in.Ollama != nil {
 		in, out := &in.Ollama, &out.Ollama
 		*out = new(ConnectionOllama)
@@ -928,11 +933,6 @@ func (in *ConnectionSpec) DeepCopyInto(out *ConnectionSpec) {
 	if in.OpenAI != nil {
 		in, out := &in.OpenAI, &out.OpenAI
 		*out = new(ConnectionOpenAI)
-		(*in).DeepCopyInto(*out)
-	}
-	if in.S3 != nil {
-		in, out := &in.S3, &out.S3
-		*out = new(ConnectionAWSS3)
 		(*in).DeepCopyInto(*out)
 	}
 	if in.Folder != nil {

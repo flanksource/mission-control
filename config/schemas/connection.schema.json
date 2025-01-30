@@ -695,14 +695,14 @@
         "properties": {
           "$ref": "#/$defs/JSONStringMap"
         },
-        "anthropic": {
-          "$ref": "#/$defs/ConnectionAnthropic"
-        },
         "aws": {
           "$ref": "#/$defs/ConnectionAWS"
         },
         "awskms": {
           "$ref": "#/$defs/ConnectionAWSKMS"
+        },
+        "s3": {
+          "$ref": "#/$defs/ConnectionAWSS3"
         },
         "azure": {
           "$ref": "#/$defs/ConnectionAzure"
@@ -719,14 +719,14 @@
         "gcpkms": {
           "$ref": "#/$defs/ConnectionGCPKMS"
         },
+        "anthropic": {
+          "$ref": "#/$defs/ConnectionAnthropic"
+        },
         "ollama": {
           "$ref": "#/$defs/ConnectionOllama"
         },
         "openai": {
           "$ref": "#/$defs/ConnectionOpenAI"
-        },
-        "s3": {
-          "$ref": "#/$defs/ConnectionAWSS3"
         },
         "folder": {
           "$ref": "#/$defs/ConnectionFolder"

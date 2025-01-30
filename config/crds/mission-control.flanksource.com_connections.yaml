@@ -319,6 +319,8 @@ spec:
                   insecureTLS:
                     type: boolean
                   keyID:
+                    description: 'keyID can be an alias (eg: alias/ExampleAlias?region=us-east-1)
+                      or the ARN'
                     type: string
                   profile:
                     type: string
@@ -691,6 +693,7 @@ spec:
                         type: object
                     type: object
                   keyID:
+                    description: "keyID is a URL to the key in the format\n\thttps://<vault-name>.vault.azure.net/keys/<key-name>"
                     type: string
                   tenantID:
                     properties:
@@ -979,6 +982,9 @@ spec:
                         type: object
                     type: object
                   keyID:
+                    description: |-
+                      keyID points to the key in the format
+                      projects/MYPROJECT/locations/MYLOCATION/keyRings/MYKEYRING/cryptoKeys/MYKEY
                     type: string
                 required:
                 - keyID
