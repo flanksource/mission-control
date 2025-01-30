@@ -73,6 +73,10 @@ func CreateTemplateEnv(ctx context.Context, playbook *models.Playbook, run model
 			}
 
 		case v1.PlaybookParameterTypeSecret:
+			if vars.SecretKeeperConnection == "" {
+				return templateEnv, oops.Errorf("secret keeper connection is not set. Use --secret-keeper-connection flag")
+			}
+
 			var properties map[string]string
 			if err := json.Unmarshal(p.Properties, &properties); err != nil {
 				return templateEnv, oops.Wrapf(err, "failed to unmarshal properties")
