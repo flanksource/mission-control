@@ -3,6 +3,7 @@ package notification
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/duty"
@@ -52,22 +53,28 @@ func (t *celVariables) SetSilenceURL(frontendURL string) {
 	}
 }
 
-func (t *celVariables) GetResourceHealth(ctx context.Context) (models.Health, error) {
-	health := models.HealthUnknown
+func (t *celVariables) GetResourceHealth(ctx context.Context) (models.Health, bool, error) {
 	var err error
-
+	var row struct {
+		Health    models.Health
+		DeletedAt *time.Time
+	}
 	switch {
 	case t.ConfigItem != nil:
-		err = ctx.DB().Model(&models.ConfigItem{}).Select("health").Where("id = ?", t.ConfigItem.ID).Scan(&health).Error
+		err = ctx.DB().Model(&models.ConfigItem{}).Select("health, deleted_at").Where("id = ?", t.ConfigItem.ID).Scan(&row).Error
 	case t.Component != nil:
-		err = ctx.DB().Model(&models.Component{}).Select("health").Where("id = ?", t.Component.ID).Scan(&health).Error
+		err = ctx.DB().Model(&models.Component{}).Select("health, deleted_at").Where("id = ?", t.Component.ID).Scan(&row).Error
 	case t.Check != nil:
-		err = ctx.DB().Model(&models.Check{}).Select("status").Where("id = ?", t.Check.ID).Scan(&health).Error
+		err = ctx.DB().Model(&models.Check{}).Select("status, deleted_at").Where("id = ?", t.Check.ID).Scan(&row).Error
 	default:
-		return models.HealthUnknown, errors.New("no resource")
+		return models.HealthUnknown, false, errors.New("no resource")
 	}
 
-	return health, err
+	if row.Health == "" {
+		row.Health = models.HealthUnknown
+	}
+
+	return row.Health, row.DeletedAt != nil, err
 }
 
 func (t *celVariables) AsMap(ctx context.Context) map[string]any {
