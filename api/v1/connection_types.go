@@ -159,10 +159,25 @@ type ConnectionAWS struct {
 	SecretKey   types.EnvVar `json:"secretKey,omitempty"`
 }
 
+type ConnectionAWSKMS struct {
+	ConnectionAWS `json:",inline"`
+
+	// keyID can be an alias (eg: alias/ExampleAlias?region=us-east-1) or the ARN
+	KeyID string `json:"keyID"`
+}
+
 type ConnectionAzure struct {
 	ClientID     types.EnvVar `json:"clientID"`
 	ClientSecret types.EnvVar `json:"clientSecret,omitempty"`
 	TenantID     types.EnvVar `json:"tenantID"`
+}
+
+type ConnectionAzureKeyVault struct {
+	ConnectionAzure `json:",inline"`
+
+	// keyID is a URL to the key in the format
+	// 	https://<vault-name>.vault.azure.net/keys/<key-name>
+	KeyID string `json:"keyID"`
 }
 
 type ConnectionAzureDevops struct {
@@ -174,6 +189,14 @@ type ConnectionAzureDevops struct {
 type ConnectionGCP struct {
 	Endpoint    types.EnvVar `json:"endpoint,omitempty"`
 	Certificate types.EnvVar `json:"certificate,omitempty"`
+}
+
+type ConnectionGCPKMS struct {
+	ConnectionGCP `json:",inline"`
+
+	// keyID points to the key in the format
+	// projects/MYPROJECT/locations/MYLOCATION/keyRings/MYKEYRING/cryptoKeys/MYKEY
+	KeyID string `json:"keyID"`
 }
 
 type ConnectionFolder struct {
@@ -263,14 +286,20 @@ type ConnectionAnthropic struct {
 type ConnectionSpec struct {
 	Properties types.JSONStringMap `json:"properties,omitempty"`
 
-	Anthropic   *ConnectionAnthropic   `json:"anthropic,omitempty"`
-	AWS         *ConnectionAWS         `json:"aws,omitempty"`
-	Azure       *ConnectionAzure       `json:"azure,omitempty"`
-	AzureDevops *ConnectionAzureDevops `json:"azureDevops,omitempty"`
-	GCP         *ConnectionGCP         `json:"gcp,omitempty"`
-	Ollama      *ConnectionOllama      `json:"ollama,omitempty"`
-	OpenAI      *ConnectionOpenAI      `json:"openai,omitempty"`
-	S3          *ConnectionAWSS3       `json:"s3,omitempty"`
+	AWS    *ConnectionAWS    `json:"aws,omitempty"`
+	AWSKMS *ConnectionAWSKMS `json:"awskms,omitempty"`
+	S3     *ConnectionAWSS3  `json:"s3,omitempty"`
+
+	Azure         *ConnectionAzure         `json:"azure,omitempty"`
+	AzureKeyVault *ConnectionAzureKeyVault `json:"azureKeyVault,omitempty"`
+	AzureDevops   *ConnectionAzureDevops   `json:"azureDevops,omitempty"`
+
+	GCP    *ConnectionGCP    `json:"gcp,omitempty"`
+	GCPKMS *ConnectionGCPKMS `json:"gcpkms,omitempty"`
+
+	Anthropic *ConnectionAnthropic `json:"anthropic,omitempty"`
+	Ollama    *ConnectionOllama    `json:"ollama,omitempty"`
+	OpenAI    *ConnectionOpenAI    `json:"openai,omitempty"`
 
 	Folder     *ConnectionFolder     `json:"folder,omitempty"`
 	Git        *ConnectionGit        `json:"git,omitempty"`

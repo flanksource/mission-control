@@ -8,6 +8,7 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
+	"github.com/flanksource/duty/secret"
 	"github.com/flanksource/gomplate/v3"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
@@ -15,7 +16,6 @@ import (
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/playbook/actions"
-	"github.com/flanksource/incident-commander/secret"
 	"github.com/flanksource/incident-commander/vars"
 )
 
@@ -77,22 +77,12 @@ func CreateTemplateEnv(ctx context.Context, playbook *models.Playbook, run model
 				return templateEnv, oops.Errorf("secret keeper connection is not set. Use --secret-keeper-connection flag")
 			}
 
-			var properties map[string]string
-			if err := json.Unmarshal(p.Properties, &properties); err != nil {
-				return templateEnv, oops.Wrapf(err, "failed to unmarshal properties")
-			}
-
-			keyID, ok := properties["keyID"]
-			if !ok {
-				return templateEnv, oops.Errorf("a secret parameter requires a `keyID` property")
-			}
-
 			ciphertext, err := base64.StdEncoding.DecodeString(val)
 			if err != nil {
 				return templateEnv, oops.Wrapf(err, "failed to decode ciphertext. Note: It must be std base64 encoded.")
 			}
 
-			keeper, err := secret.GetKeeper(ctx, keyID, vars.SecretKeeperConnection)
+			keeper, err := secret.KeeperFromConnection(ctx, vars.SecretKeeperConnection)
 			if err != nil {
 				return templateEnv, oops.Wrapf(err, "failed to get secret keeper")
 			}

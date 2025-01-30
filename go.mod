@@ -42,7 +42,6 @@ require (
 )
 
 require (
-	github.com/Azure/azure-sdk-for-go/sdk/keyvault/azkeys v0.10.0
 	github.com/MicahParks/keyfunc/v2 v2.1.0
 	github.com/RussellLuo/slidingwindow v0.0.0-20200528002341-535bb99d338b
 	github.com/WinterYukky/gorm-extra-clause-plugin v0.2.0
@@ -77,7 +76,6 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.27.0
 	go.opentelemetry.io/otel/sdk v1.28.0
 	go.opentelemetry.io/otel/trace v1.29.0
-	gocloud.dev v0.40.0
 	gorm.io/hints v1.1.2
 	k8s.io/api v0.31.1
 )
@@ -95,6 +93,7 @@ require (
 	code.gitea.io/sdk/gitea v0.14.0 // indirect
 	dario.cat/mergo v1.0.0 // indirect
 	filippo.io/edwards25519 v1.1.0 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/keyvault/azkeys v0.10.0 // indirect
 	github.com/Azure/azure-sdk-for-go/sdk/keyvault/internal v0.7.1 // indirect
 	github.com/GehirnInc/crypt v0.0.0-20200316065508-bb7000b8a962 // indirect
 	github.com/Masterminds/semver/v3 v3.3.1 // indirect
@@ -260,6 +259,7 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.22.0 // indirect
 	go.opentelemetry.io/otel/metric v1.29.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.3.1 // indirect
+	gocloud.dev v0.40.0 // indirect
 	golang.org/x/exp v0.0.0-20241108190413-2d47ceb2692f // indirect
 	golang.org/x/mod v0.22.0 // indirect
 	golang.org/x/sync v0.10.0 // indirect
@@ -366,7 +366,7 @@ require (
 	sigs.k8s.io/yaml v1.4.0
 )
 
-// replace github.com/flanksource/duty => ../duty
+replace github.com/flanksource/duty => ../duty
 
 // replace github.com/flanksource/gomplate/v3 => ../gomplat3
 

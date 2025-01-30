@@ -45,6 +45,19 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 		}
 	}
 
+	if obj.Spec.AWSKMS != nil {
+		dbObj.Type = models.ConnectionTypeAWSKMS
+		dbObj.URL = obj.Spec.AWSKMS.URL.String()
+		dbObj.Username = obj.Spec.AWSKMS.AccessKey.String()
+		dbObj.Password = obj.Spec.AWSKMS.SecretKey.String()
+		dbObj.Properties = map[string]string{
+			"keyID":        obj.Spec.AWSKMS.KeyID,
+			"region":       obj.Spec.AWSKMS.Region,
+			"profile":      obj.Spec.AWSKMS.Profile,
+			"insecure_tls": strconv.FormatBool(obj.Spec.AWSKMS.InsecureTLS),
+		}
+	}
+
 	if obj.Spec.S3 != nil {
 		dbObj.Type = models.ConnectionTypeS3
 		dbObj.URL = obj.Spec.S3.URL.String()
@@ -68,10 +81,29 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 		}
 	}
 
+	if obj.Spec.AzureKeyVault != nil {
+		dbObj.Type = models.ConnectionTypeAzureKeyVault
+		dbObj.Username = obj.Spec.AzureKeyVault.ClientID.String()
+		dbObj.Password = obj.Spec.AzureKeyVault.ClientSecret.String()
+		dbObj.Properties = map[string]string{
+			"tenant": obj.Spec.AzureKeyVault.TenantID.String(),
+			"keyID":  obj.Spec.AzureKeyVault.KeyID,
+		}
+	}
+
 	if obj.Spec.GCP != nil {
 		dbObj.Type = models.ConnectionTypeGCP
 		dbObj.Certificate = obj.Spec.GCP.Certificate.String()
 		dbObj.URL = obj.Spec.GCP.Endpoint.String()
+	}
+
+	if obj.Spec.GCPKMS != nil {
+		dbObj.Type = models.ConnectionTypeGCPKMS
+		dbObj.Certificate = obj.Spec.GCPKMS.Certificate.String()
+		dbObj.URL = obj.Spec.GCPKMS.Endpoint.String()
+		dbObj.Properties = map[string]string{
+			"keyID": obj.Spec.GCPKMS.KeyID,
+		}
 	}
 
 	if obj.Spec.AzureDevops != nil {
