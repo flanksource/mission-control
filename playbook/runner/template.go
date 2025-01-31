@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"encoding/base64"
 	"encoding/json"
 
 	"github.com/flanksource/commons/collections"
@@ -8,17 +9,24 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/gomplate/v3"
-	v1 "github.com/flanksource/incident-commander/api/v1"
-	"github.com/flanksource/incident-commander/playbook/actions"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"github.com/samber/oops"
+
+	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/playbook/actions"
+	"github.com/flanksource/incident-commander/secret"
+	"github.com/flanksource/incident-commander/vars"
 )
 
-func CreateTemplateEnv(ctx context.Context, playbook *models.Playbook, run *models.PlaybookRun, action *models.PlaybookRunAction) (actions.TemplateEnv, error) {
+// CreateTemplateEnv creates a template environment for the playbook run.
+//
+// NOTE: It shouldn't mutate the input arguments
+// (example: setting the parameter value to playbook.parameters after templating)
+func CreateTemplateEnv(ctx context.Context, playbook *models.Playbook, run models.PlaybookRun, action *models.PlaybookRunAction) (actions.TemplateEnv, error) {
 	templateEnv := actions.TemplateEnv{
 		Params:   make(map[string]any, len(run.Parameters)),
-		Run:      *run,
+		Run:      run,
 		Action:   action,
 		Playbook: *playbook,
 		Request:  run.Request,
@@ -64,6 +72,35 @@ func CreateTemplateEnv(ctx context.Context, playbook *models.Playbook, run *mode
 				templateEnv.Params[p.Name] = component.AsMap()
 			}
 
+		case v1.PlaybookParameterTypeSecret:
+			var properties map[string]string
+			if err := json.Unmarshal(p.Properties, &properties); err != nil {
+				return templateEnv, oops.Wrapf(err, "failed to unmarshal properties")
+			}
+
+			keyID, ok := properties["keyID"]
+			if !ok {
+				return templateEnv, oops.Errorf("a secret parameter requires a `keyID` property")
+			}
+
+			keeper, err := secret.GetKeeper(ctx, keyID, vars.SecretKeeperConnection)
+			if err != nil {
+				return templateEnv, oops.Wrapf(err, "failed to get secret keeper")
+			}
+			defer keeper.Close()
+
+			decoded, err := base64.StdEncoding.DecodeString(val)
+			if err != nil {
+				return templateEnv, oops.Wrapf(err, "failed to decode secret")
+			}
+
+			decrypted, err := keeper.Decrypt(ctx, decoded)
+			if err != nil {
+				return templateEnv, oops.Wrapf(err, "failed to decrypt secret")
+			}
+
+			templateEnv.Params[p.Name] = decrypted
+
 		default:
 			templateEnv.Params[p.Name] = val
 		}
@@ -106,7 +143,7 @@ func CreateTemplateEnv(ctx context.Context, playbook *models.Playbook, run *mode
 		}
 	}
 
-	if gitOpsEnvVar, err := getGitOpsTemplateVars(ctx, *run, spec.Actions); err != nil {
+	if gitOpsEnvVar, err := getGitOpsTemplateVars(ctx, run, spec.Actions); err != nil {
 		return templateEnv, oops.Wrapf(err, "failed to get gitops vars")
 	} else if gitOpsEnvVar != nil {
 		templateEnv.GitOps = *gitOpsEnvVar

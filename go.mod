@@ -76,6 +76,7 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.27.0
 	go.opentelemetry.io/otel/sdk v1.28.0
 	go.opentelemetry.io/otel/trace v1.29.0
+	gocloud.dev v0.40.0
 	gorm.io/hints v1.1.2
 	k8s.io/api v0.31.1
 )
@@ -259,7 +260,6 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.22.0 // indirect
 	go.opentelemetry.io/otel/metric v1.29.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.3.1 // indirect
-	gocloud.dev v0.40.0 // indirect
 	golang.org/x/exp v0.0.0-20241108190413-2d47ceb2692f // indirect
 	golang.org/x/mod v0.22.0 // indirect
 	golang.org/x/sync v0.10.0 // indirect
@@ -366,7 +366,7 @@ require (
 	sigs.k8s.io/yaml v1.4.0
 )
 
-// replace github.com/flanksource/duty => ../duty
+replace github.com/flanksource/duty => ../duty
 
 // replace github.com/flanksource/gomplate/v3 => ../gomplat3
 

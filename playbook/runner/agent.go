@@ -120,7 +120,7 @@ func _getActionForAgent(ctx context.Context, agent *models.Agent) (*ActionForAge
 	}
 	ctx = ctx.WithObject(playbook, agent, step, run)
 
-	templateEnv, err := CreateTemplateEnv(ctx, playbook, run, step)
+	templateEnv, err := CreateTemplateEnv(ctx, playbook, *run, step)
 	if err != nil {
 		return &output, ctx.Oops().Tags(errTagTemplate).Wrapf(err, "failed to create template env")
 	}

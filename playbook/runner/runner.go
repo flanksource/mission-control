@@ -123,7 +123,7 @@ func CheckDelay(ctx context.Context, playbook models.Playbook, run models.Playbo
 	// The delays on the action should be applied here & action consumers do not run the delay.
 	var delay time.Duration
 	if action.Delay != "" && run.Status != models.PlaybookRunStatusSleeping {
-		templateEnv, err := CreateTemplateEnv(ctx, &playbook, &run, lastRan)
+		templateEnv, err := CreateTemplateEnv(ctx, &playbook, run, lastRan)
 		if err != nil {
 			return false, ctx.Oops().Wrapf(err, "failed to template action")
 		}
@@ -308,7 +308,7 @@ func TemplateAndExecuteAction(ctx context.Context, spec v1.PlaybookSpec, playboo
 		return ctx.Oops().Errorf("action '%s' not found", action.Name)
 	}
 
-	templateEnv, err := CreateTemplateEnv(ctx, playbook, run, action)
+	templateEnv, err := CreateTemplateEnv(ctx, playbook, *run, action)
 	if err != nil {
 		return err
 	}
