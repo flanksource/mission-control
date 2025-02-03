@@ -181,7 +181,7 @@ type ConnectionAzureKeyVault struct {
 }
 
 type ConnectionAzureDevops struct {
-	URL                 string       `json:"string,omitempty"`
+	URL                 string       `json:"url,omitempty"`
 	Organization        string       `json:"organization"`
 	PersonalAccessToken types.EnvVar `json:"personalAccessToken"`
 }
@@ -221,12 +221,12 @@ type ConnectionGitHub struct {
 }
 
 type ConnectionGitLab struct {
-	URL                 string       `json:"string,omitempty"`
+	URL                 string       `json:"url,omitempty"`
 	PersonalAccessToken types.EnvVar `json:"personalAccessToken"`
 }
 
 type ConnectionGit struct {
-	URL         string        `json:"string"`
+	URL         string        `json:"url"`
 	Ref         string        `json:"ref"`
 	Certificate *types.EnvVar `json:"certificate,omitempty"`
 	Username    *types.EnvVar `json:"username,omitempty"`
