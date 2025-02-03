@@ -7,18 +7,24 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
+	"github.com/flanksource/duty/secret"
 	"github.com/flanksource/gomplate/v3"
-	v1 "github.com/flanksource/incident-commander/api/v1"
-	"github.com/flanksource/incident-commander/playbook/actions"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"github.com/samber/oops"
+
+	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/playbook/actions"
 )
 
-func CreateTemplateEnv(ctx context.Context, playbook *models.Playbook, run *models.PlaybookRun, action *models.PlaybookRunAction) (actions.TemplateEnv, error) {
+// CreateTemplateEnv creates a template environment for the playbook run.
+//
+// NOTE: It shouldn't mutate the input arguments
+// (example: setting the parameter value to playbook.parameters after templating)
+func CreateTemplateEnv(ctx context.Context, playbook *models.Playbook, run models.PlaybookRun, action *models.PlaybookRunAction) (actions.TemplateEnv, error) {
 	templateEnv := actions.TemplateEnv{
 		Params:   make(map[string]any, len(run.Parameters)),
-		Run:      *run,
+		Run:      run,
 		Action:   action,
 		Playbook: *playbook,
 		Request:  run.Request,
@@ -64,6 +70,19 @@ func CreateTemplateEnv(ctx context.Context, playbook *models.Playbook, run *mode
 				templateEnv.Params[p.Name] = component.AsMap()
 			}
 
+		case v1.PlaybookParameterTypeSecret:
+			ciphertext, err := secret.ParseCiphertext(val)
+			if err != nil {
+				return templateEnv, oops.Wrapf(err, "failed to parse secret parameter (%s). not a valid cipher text", p.Name)
+			}
+
+			sensitive, err := secret.Decrypt(ctx, ciphertext)
+			if err != nil {
+				return templateEnv, oops.Wrapf(err, "failed to decrypt secret parameter (%s)", p.Name)
+			}
+
+			templateEnv.Params[p.Name] = sensitive
+
 		default:
 			templateEnv.Params[p.Name] = val
 		}
@@ -106,7 +125,7 @@ func CreateTemplateEnv(ctx context.Context, playbook *models.Playbook, run *mode
 		}
 	}
 
-	if gitOpsEnvVar, err := getGitOpsTemplateVars(ctx, *run, spec.Actions); err != nil {
+	if gitOpsEnvVar, err := getGitOpsTemplateVars(ctx, run, spec.Actions); err != nil {
 		return templateEnv, oops.Wrapf(err, "failed to get gitops vars")
 	} else if gitOpsEnvVar != nil {
 		templateEnv.GitOps = *gitOpsEnvVar

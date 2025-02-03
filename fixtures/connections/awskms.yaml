@@ -1,0 +1,20 @@
+---
+# yaml-language-server: $schema=../../config/schemas/connection.schema.json
+apiVersion: mission-control.flanksource.com/v1
+kind: Connection
+metadata:
+  name: flanksource-awskms
+spec:
+  awskms:
+    keyID: arn:aws:kms:eu-west-1:123123123123:alias/sops-key
+    region: eu-west-1
+    accessKey:
+      valueFrom:
+        secretKeyRef:
+          name: aws-flanksource
+          key: AWS_ACCESS_KEY_ID
+    secretKey:
+      valueFrom:
+        secretKeyRef:
+          name: aws-flanksource
+          key: AWS_SECRET_ACCESS_KEY

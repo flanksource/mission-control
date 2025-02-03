@@ -11,6 +11,7 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
+	"github.com/flanksource/duty/types"
 	"github.com/labstack/echo/v4"
 	"github.com/samber/lo"
 	"github.com/samber/oops"
@@ -112,7 +113,7 @@ func HandleGetPlaybookParams(c echo.Context) error {
 		PlaybookID: playbook.ID,
 		Spec:       playbook.Spec,
 		CreatedBy:  lo.ToPtr(ctx.User().ID),
-		Parameters: req.Params,
+		Parameters: types.JSONStringMap(req.Params),
 	}
 	if req.ComponentID != nil {
 		dummyRun.ComponentID = req.ComponentID
@@ -124,7 +125,7 @@ func HandleGetPlaybookParams(c echo.Context) error {
 		dummyRun.CheckID = req.CheckID
 	}
 
-	env, err := runner.CreateTemplateEnv(ctx, playbook, &dummyRun, nil)
+	env, err := runner.CreateTemplateEnv(ctx, playbook, dummyRun, nil)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Err: err.Error(), Message: "unable to prepare template env"})
 	}

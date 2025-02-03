@@ -17,18 +17,21 @@ type PlaybookPermission struct {
 	Ref  string `json:"ref,omitempty" yaml:"ref,omitempty"`
 }
 
+type PlaybookParameterType string
+
 const (
-	PlaybookParameterTypeCheck     = "check"
-	PlaybookParameterTypeCheckbox  = "checkbox"
-	PlaybookParameterTypeCode      = "code"
-	PlaybookParameterTypeComponent = "component"
-	PlaybookParameterTypeConfig    = "config"
-	PlaybookParameterTypeList      = "list"
-	PlaybookParameterTypePeople    = "people"
-	PlaybookParameterTypeTeam      = "team"
-	PlaybookParameterTypeText      = "text"
-	PlaybookParameterTypeMillis    = "millicores"
-	PlaybookParameterTypeBytes     = "bytes"
+	PlaybookParameterTypeCheck     PlaybookParameterType = "check"
+	PlaybookParameterTypeCheckbox  PlaybookParameterType = "checkbox"
+	PlaybookParameterTypeCode      PlaybookParameterType = "code"
+	PlaybookParameterTypeComponent PlaybookParameterType = "component"
+	PlaybookParameterTypeConfig    PlaybookParameterType = "config"
+	PlaybookParameterTypeList      PlaybookParameterType = "list"
+	PlaybookParameterTypePeople    PlaybookParameterType = "people"
+	PlaybookParameterTypeTeam      PlaybookParameterType = "team"
+	PlaybookParameterTypeText      PlaybookParameterType = "text"
+	PlaybookParameterTypeMillis    PlaybookParameterType = "millicores"
+	PlaybookParameterTypeBytes     PlaybookParameterType = "bytes"
+	PlaybookParameterTypeSecret    PlaybookParameterType = "secret"
 )
 
 // PlaybookParameter defines a parameter that a playbook needs to run.
@@ -46,8 +49,8 @@ type PlaybookParameter struct {
 	Icon        string `json:"icon,omitempty" yaml:"icon,omitempty"`
 	Description string `json:"description,omitempty" yaml:"description,omitempty"`
 
-	// +kubebuilder:validation:Enum=check;checkbox;code;component;config;list;people;team;text;bytes;millicores
-	Type string `json:"type,omitempty" yaml:"type,omitempty"`
+	// +kubebuilder:validation:Enum=check;checkbox;code;component;config;list;people;team;text;bytes;millicores;secret
+	Type PlaybookParameterType `json:"type,omitempty" yaml:"type,omitempty"`
 
 	// +kubebuilder:validation:Schemaless
 	// +kubebuilder:pruning:PreserveUnknownFields
@@ -202,8 +205,7 @@ type PlaybookSpec struct {
 }
 
 // PlaybookStatus defines the observed state of Playbook
-type PlaybookStatus struct {
-}
+type PlaybookStatus struct{}
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status

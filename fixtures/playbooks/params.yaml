@@ -70,3 +70,6 @@ spec:
           - label: Option 3
             value: option-3
       type: list
+    - label: secretKey
+      name: secretKey
+      type: secret

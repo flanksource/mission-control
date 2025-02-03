@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/secret"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/playbook/actions"
 	"github.com/google/uuid"
@@ -13,14 +14,43 @@ import (
 	"gopkg.in/yaml.v2"
 )
 
+// Parameters supplied to a playbook run
+type PlaybookRuntimeParameters map[string]string
+
+func (p *PlaybookRuntimeParameters) Sanitize(ctx context.Context, specs []v1.PlaybookParameter) error {
+	if p == nil {
+		return nil
+	}
+
+	secretParameters := make(map[string]struct{})
+	for _, spec := range specs {
+		if spec.Type == v1.PlaybookParameterTypeSecret {
+			secretParameters[spec.Name] = struct{}{}
+		}
+	}
+
+	for key, v := range *p {
+		if _, ok := secretParameters[key]; ok {
+			ciphertext, err := secret.Encrypt(ctx, secret.Sensitive(v))
+			if err != nil {
+				return oops.Wrapf(err, "failed to encrypt secret parameter %s", key)
+			}
+
+			(*p)[key] = ciphertext.String()
+		}
+	}
+
+	return nil
+}
+
 type RunParams struct {
-	ID          uuid.UUID               `yaml:"id,omitempty" json:"id,omitempty"`
-	AgentID     *uuid.UUID              `yaml:"agent_id,omitempty" json:"agent_id,omitempty"`
-	ConfigID    *uuid.UUID              `yaml:"config_id,omitempty" json:"config_id,omitempty"`
-	CheckID     *uuid.UUID              `yaml:"check_id,omitempty" json:"check_id,omitempty"`
-	ComponentID *uuid.UUID              `yaml:"component_id,omitempty" json:"component_id,omitempty"`
-	Params      map[string]string       `yaml:"params,omitempty" json:"params,omitempty"`
-	Request     *actions.WebhookRequest `yaml:"request,omitempty" json:"request,omitempty"`
+	ID          uuid.UUID                 `yaml:"id,omitempty" json:"id,omitempty"`
+	AgentID     *uuid.UUID                `yaml:"agent_id,omitempty" json:"agent_id,omitempty"`
+	ConfigID    *uuid.UUID                `yaml:"config_id,omitempty" json:"config_id,omitempty"`
+	CheckID     *uuid.UUID                `yaml:"check_id,omitempty" json:"check_id,omitempty"`
+	ComponentID *uuid.UUID                `yaml:"component_id,omitempty" json:"component_id,omitempty"`
+	Params      PlaybookRuntimeParameters `yaml:"params,omitempty" json:"params,omitempty"`
+	Request     *actions.WebhookRequest   `yaml:"request,omitempty" json:"request,omitempty"`
 
 	NotificationSendID *uuid.UUID `yaml:"notification_send_id,omitempty" json:"notification_send_id,omitempty"`
 }

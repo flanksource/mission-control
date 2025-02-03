@@ -63,6 +63,36 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "ConnectionAWSKMS": {
+      "properties": {
+        "url": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "region": {
+          "type": "string"
+        },
+        "profile": {
+          "type": "string"
+        },
+        "insecureTLS": {
+          "type": "boolean"
+        },
+        "accessKey": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "secretKey": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "keyID": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "keyID"
+      ]
+    },
     "ConnectionAWSS3": {
       "properties": {
         "url": {
@@ -152,6 +182,29 @@
         "personalAccessToken"
       ]
     },
+    "ConnectionAzureKeyVault": {
+      "properties": {
+        "clientID": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "clientSecret": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "tenantID": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "keyID": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "clientID",
+        "tenantID",
+        "keyID"
+      ]
+    },
     "ConnectionDiscord": {
       "properties": {
         "token": {
@@ -191,6 +244,24 @@
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "ConnectionGCPKMS": {
+      "properties": {
+        "endpoint": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "certificate": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "keyID": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "keyID"
+      ]
     },
     "ConnectionGit": {
       "properties": {
@@ -624,14 +695,20 @@
         "properties": {
           "$ref": "#/$defs/JSONStringMap"
         },
-        "anthropic": {
-          "$ref": "#/$defs/ConnectionAnthropic"
-        },
         "aws": {
           "$ref": "#/$defs/ConnectionAWS"
         },
+        "awskms": {
+          "$ref": "#/$defs/ConnectionAWSKMS"
+        },
+        "s3": {
+          "$ref": "#/$defs/ConnectionAWSS3"
+        },
         "azure": {
           "$ref": "#/$defs/ConnectionAzure"
+        },
+        "azureKeyVault": {
+          "$ref": "#/$defs/ConnectionAzureKeyVault"
         },
         "azureDevops": {
           "$ref": "#/$defs/ConnectionAzureDevops"
@@ -639,14 +716,17 @@
         "gcp": {
           "$ref": "#/$defs/ConnectionGCP"
         },
+        "gcpkms": {
+          "$ref": "#/$defs/ConnectionGCPKMS"
+        },
+        "anthropic": {
+          "$ref": "#/$defs/ConnectionAnthropic"
+        },
         "ollama": {
           "$ref": "#/$defs/ConnectionOllama"
         },
         "openai": {
           "$ref": "#/$defs/ConnectionOpenAI"
-        },
-        "s3": {
-          "$ref": "#/$defs/ConnectionAWSS3"
         },
         "folder": {
           "$ref": "#/$defs/ConnectionFolder"

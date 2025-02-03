@@ -9,6 +9,7 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
+	"github.com/flanksource/duty/secret"
 	"github.com/flanksource/duty/types"
 	"github.com/labstack/echo/v4"
 	"github.com/samber/lo"
@@ -72,6 +73,16 @@ type TemplateEnv struct {
 }
 
 func (t *TemplateEnv) AsMap(ctx context.Context) map[string]any {
+	plainTextParams := make(map[string]any)
+	for key, val := range t.Params {
+		switch v := val.(type) {
+		case secret.Sensitive:
+			plainTextParams[key] = v.PlainText()
+		default:
+			plainTextParams[key] = val
+		}
+	}
+
 	output := map[string]any{
 		"check":     lo.FromPtr(t.Check).AsMap(),
 		"component": lo.ToPtr(lo.FromPtr(t.Component)).AsMap(),
@@ -80,7 +91,7 @@ func (t *TemplateEnv) AsMap(ctx context.Context) map[string]any {
 		"agent":     lo.FromPtr(t.Agent).AsMap(),
 		"action":    lo.FromPtr(t.Action).AsMap(),
 		"env":       t.Env,
-		"params":    t.Params,
+		"params":    plainTextParams,
 		"playbook":  t.Playbook.AsMap(),
 		"git":       t.GitOps.AsMap(),
 		"run":       t.Run.AsMap(),

@@ -1,0 +1,14 @@
+---
+# yaml-language-server: $schema=../../config/schemas/connection.schema.json
+apiVersion: mission-control.flanksource.com/v1
+kind: Connection
+metadata:
+  name: flanksource-gcpkms
+spec:
+  gcpkms:
+    keyID: projects/flanksource-sandbox/locations/global/keyRings/sops-keyring/cryptoKeys/sops-key
+    certificate:
+      valueFrom:
+        secretKeyRef:
+          name: flanksource-gcloud
+          key: credentials
