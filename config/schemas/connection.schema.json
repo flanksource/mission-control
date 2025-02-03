@@ -135,7 +135,7 @@
     },
     "ConnectionAzureDevops": {
       "properties": {
-        "string": {
+        "url": {
           "type": "string"
         },
         "organization": {
@@ -194,7 +194,7 @@
     },
     "ConnectionGit": {
       "properties": {
-        "string": {
+        "url": {
           "type": "string"
         },
         "ref": {
@@ -213,7 +213,7 @@
       "additionalProperties": false,
       "type": "object",
       "required": [
-        "string",
+        "url",
         "ref"
       ]
     },
@@ -234,7 +234,7 @@
     },
     "ConnectionGitLab": {
       "properties": {
-        "string": {
+        "url": {
           "type": "string"
         },
         "personalAccessToken": {

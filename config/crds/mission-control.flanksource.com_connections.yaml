@@ -453,7 +453,7 @@ spec:
                             type: string
                         type: object
                     type: object
-                  string:
+                  url:
                     type: string
                 required:
                 - organization
@@ -699,7 +699,7 @@ spec:
                     type: object
                   ref:
                     type: string
-                  string:
+                  url:
                     type: string
                   username:
                     properties:
@@ -746,7 +746,7 @@ spec:
                     type: object
                 required:
                 - ref
-                - string
+                - url
                 type: object
               github:
                 properties:
@@ -843,7 +843,7 @@ spec:
                             type: string
                         type: object
                     type: object
-                  string:
+                  url:
                     type: string
                 required:
                 - personalAccessToken

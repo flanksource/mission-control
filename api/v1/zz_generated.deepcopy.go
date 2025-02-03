@@ -9,7 +9,7 @@ import (
 	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/shell"
 	"github.com/flanksource/duty/types"
-	runtime "k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime"
 	timex "time"
 )
 
