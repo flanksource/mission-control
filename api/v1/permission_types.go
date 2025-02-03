@@ -75,6 +75,10 @@ type PermissionSubject struct {
 	Person       PermissionSubjectSelector `json:"person,omitempty"`
 	Team         PermissionSubjectSelector `json:"team,omitempty"`
 	Notification PermissionSubjectSelector `json:"notification,omitempty"`
+	Playbook     PermissionSubjectSelector `json:"playbook,omitempty"`
+	Canary       PermissionSubjectSelector `json:"canary,omitempty"`
+	Scraper      PermissionSubjectSelector `json:"scraper,omitempty"`
+	Topology     PermissionSubjectSelector `json:"topology,omitempty"`
 }
 
 func (t *PermissionSubject) Validate() error {
@@ -104,9 +108,10 @@ func (t *PermissionSubject) Populate(ctx context.Context) (string, models.Permis
 }
 
 type PermissionObject struct {
-	Playbooks  []types.ResourceSelector `json:"playbooks,omitempty"`
-	Configs    []types.ResourceSelector `json:"configs,omitempty"`
-	Components []types.ResourceSelector `json:"components,omitempty"`
+	Playbooks   []types.ResourceSelector `json:"playbooks,omitempty"`
+	Connections []types.ResourceSelector `json:"connections,omitempty"`
+	Configs     []types.ResourceSelector `json:"configs,omitempty"`
+	Components  []types.ResourceSelector `json:"components,omitempty"`
 }
 
 // GlobalObject checks if the object selector semantically maps to a global object
