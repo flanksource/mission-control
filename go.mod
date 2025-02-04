@@ -76,7 +76,6 @@ require (
 	go.opentelemetry.io/otel/sdk v1.28.0
 	go.opentelemetry.io/otel/trace v1.29.0
 	gorm.io/hints v1.1.2
-	gotest.tools/v3 v3.5.1
 	k8s.io/api v0.31.1
 )
 
