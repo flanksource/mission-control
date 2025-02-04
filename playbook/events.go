@@ -239,7 +239,7 @@ func matchResource(ctx context.Context, labels map[string]string, celEnv map[str
 outer:
 	for _, mf := range matchFilters {
 		if mf.Filter != "" {
-			res, err := ctx.RunTemplate(gomplate.Template{CelEnvs: utils.CelFunctions, Expression: mf.Filter}, celEnv)
+			res, err := ctx.RunTemplate(gomplate.Template{Expression: mf.Filter}, celEnv)
 			if err != nil {
 				return false, err
 			}
