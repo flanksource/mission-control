@@ -22,6 +22,7 @@ import (
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/incidents/responder"
 	"github.com/flanksource/incident-commander/logs"
+	"github.com/flanksource/incident-commander/utils"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"gorm.io/gorm/clause"
@@ -166,7 +167,7 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 	}
 
 	if n.Filter != "" {
-		if valid, err := gomplate.RunTemplateBool(celEnv.AsMap(ctx), gomplate.Template{Expression: n.Filter}); err != nil {
+		if valid, err := gomplate.RunTemplateBool(celEnv.AsMap(ctx), gomplate.Template{CelEnvs: utils.CelFunctions, Expression: n.Filter}); err != nil {
 			// On invalid spec error, we store the error on the notification itself and exit out.
 			logs.IfError(db.UpdateNotificationError(ctx, id, err.Error()), "failed to update notification")
 			return nil
@@ -653,7 +654,7 @@ func getFirstSilencer(ctx context.Context, celEnv *celVariables, matchingSilence
 		}
 
 		if silence.Filter != "" {
-			res, err := ctx.RunTemplate(gomplate.Template{Expression: string(silence.Filter)}, celEnv.AsMap(ctx))
+			res, err := ctx.RunTemplate(gomplate.Template{CelEnvs: utils.CelFunctions, Expression: string(silence.Filter)}, celEnv.AsMap(ctx))
 			if err != nil {
 				ctx.Errorf("failed to run silence filter expression(%s): %v", silence.Filter, err)
 				logs.IfError(db.UpdateNotificationSilenceError(ctx, silence.ID.String(), err.Error()), "failed to update notification silence")
