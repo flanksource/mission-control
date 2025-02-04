@@ -30,8 +30,13 @@ type PermissionGroupStatus struct {
 // +kubebuilder:object:generate=true
 type PermissionGroupSubjects struct {
 	Notifications []PermissionGroupSelector `json:"notifications,omitempty"`
-	People        []string                  `json:"people,omitempty"`
-	Teams         []string                  `json:"teams,omitempty"`
+
+	// List of ids and email of people.
+	// To select all users, use the wildcard selector: ["*"]
+	People []string `json:"people,omitempty"`
+
+	// Teams is a list of team names
+	Teams []string `json:"teams,omitempty"`
 }
 
 // +kubebuilder:object:generate=true

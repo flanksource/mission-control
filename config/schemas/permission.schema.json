@@ -238,6 +238,9 @@
         },
         "notification": {
           "type": "string"
+        },
+        "group": {
+          "type": "string"
         }
       },
       "additionalProperties": false,

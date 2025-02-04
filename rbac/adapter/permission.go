@@ -168,7 +168,18 @@ func (a *PermissionAdapter) permissionGroupToCasbinRule(permission models.Permis
 
 	if len(subject.People) > 0 {
 		var personIDs []string
-		if err := a.db.Select("id").Model(&models.Person{}).Where("email IN ? OR name IN ?", subject.People, subject.People).Find(&personIDs).Error; err != nil {
+
+		query := a.db.Select("id").Model(&models.Person{}).
+			Where("deleted_at IS NULL").
+			Where("type IS DISTINCT FROM 'agent'").
+			Where("email IS NOT NULL") // Excludes system user
+
+		wildcard := len(subject.People) == 1 && subject.People[0] == "*"
+		if !wildcard {
+			query.Where("email IN ? OR name IN ?", subject.People, subject.People)
+		}
+
+		if err := query.Find(&personIDs).Error; err != nil {
 			return nil, err
 		}
 
