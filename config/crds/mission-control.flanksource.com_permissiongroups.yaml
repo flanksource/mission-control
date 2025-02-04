@@ -52,10 +52,14 @@ spec:
                   type: object
                 type: array
               people:
+                description: |-
+                  List of ids and email of people.
+                  To select all users, use the wildcard selector: ["*"]
                 items:
                   type: string
                 type: array
               teams:
+                description: Teams is a list of team names
                 items:
                   type: string
                 type: array

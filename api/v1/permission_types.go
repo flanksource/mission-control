@@ -28,7 +28,6 @@ type Permission struct {
 
 // Subject of the permission.
 // Can be
-// - a permission group name
 // - id of a resource
 // - <namespace>/<name> of a resource
 type PermissionSubjectSelector string
@@ -51,36 +50,39 @@ func (t PermissionSubjectSelector) Find(ctx context.Context, table string) (stri
 
 	case "notifications":
 		splits := strings.Split(string(t), "/")
-		switch len(splits) {
-		case 1:
-			return string(t), models.PermissionSubjectTypeGroup, nil // assume it's the group name
-
-		case 2:
-			namespace, name := splits[0], splits[1]
-			var id string
-			err := ctx.DB().Select("id").Table(table).
-				Where("namespace = ?", namespace).
-				Where("name = ?", name).
-				Find(&id).Error
-			return id, models.PermissionSubjectTypeNotification, err
+		if len(splits) != 2 {
+			return "", "", fmt.Errorf("%s is not a valid notification subject. must be <namespace>/<name>", t)
 		}
 
-	default:
-		return "", "", fmt.Errorf("unknown table: %v", table)
+		namespace, name := splits[0], splits[1]
+		var id string
+		err := ctx.DB().Select("id").Table(table).
+			Where("namespace = ?", namespace).
+			Where("name = ?", name).
+			Find(&id).Error
+		return id, models.PermissionSubjectTypeNotification, err
 	}
 
 	return "", "", nil
 }
 
 type PermissionSubject struct {
-	Person       PermissionSubjectSelector `json:"person,omitempty"`
-	Team         PermissionSubjectSelector `json:"team,omitempty"`
+	// ID or email of the person
+	Person PermissionSubjectSelector `json:"person,omitempty"`
+
+	// Team is the team name
+	Team PermissionSubjectSelector `json:"team,omitempty"`
+
+	// Notification <namespace>/<name> selector
 	Notification PermissionSubjectSelector `json:"notification,omitempty"`
+
+	// Group is the group name
+	Group string `json:"group,omitempty"`
 }
 
 func (t *PermissionSubject) Validate() error {
-	if t.Person == "" && t.Team == "" && t.Notification == "" {
-		return errors.New("subject is empty: one of permission, team or notification is required")
+	if t.Person == "" && t.Team == "" && t.Notification == "" && t.Group == "" {
+		return errors.New("subject is empty: one of person, team, notification or a group is required")
 	}
 
 	return nil
@@ -99,6 +101,9 @@ func (t *PermissionSubject) Populate(ctx context.Context) (string, models.Permis
 	}
 	if t.Notification != "" {
 		return t.Notification.Find(ctx, "notifications")
+	}
+	if t.Group != "" {
+		return string(t.Group), models.PermissionSubjectTypeGroup, nil
 	}
 
 	return "", "", errors.New("subject not found")
