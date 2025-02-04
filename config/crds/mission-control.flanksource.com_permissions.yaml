@@ -250,29 +250,17 @@ spec:
                 description: Subject defines the entity (e.g., user, group) to which
                   the permission applies.
                 properties:
+                  group:
+                    description: Group is the group name
+                    type: string
                   notification:
-                    description: |-
-                      Subject of the permission.
-                      Can be
-                      - a permission group name
-                      - id of a resource
-                      - <namespace>/<name> of a resource
+                    description: Notification <namespace>/<name> selector
                     type: string
                   person:
-                    description: |-
-                      Subject of the permission.
-                      Can be
-                      - a permission group name
-                      - id of a resource
-                      - <namespace>/<name> of a resource
+                    description: ID or email of the person
                     type: string
                   team:
-                    description: |-
-                      Subject of the permission.
-                      Can be
-                      - a permission group name
-                      - id of a resource
-                      - <namespace>/<name> of a resource
+                    description: Team is the team name
                     type: string
                 type: object
               tags:
