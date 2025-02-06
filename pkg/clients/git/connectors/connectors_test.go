@@ -47,10 +47,11 @@ func TestParseGitlabRepo(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		owner, repo, ok := parseGenericRepoURL(tc.repoURL, tc.host, tc.custom)
-		if owner != tc.expectedOwner || repo != tc.expectedRepo || ok != tc.expectedOk {
-			t.Errorf("parseGitlabRepo(%q, %t) = %q, %q, %t; want %q, %q, %t",
-				tc.repoURL, tc.custom, owner, repo, ok, tc.expectedOwner, tc.expectedRepo, tc.expectedOk)
+		//owner, repo, ok := parseGenericRepoURL(tc.repoURL, tc.host, tc.custom)
+		owner, repo, err := parseRepoURL(tc.repoURL)
+		if owner != tc.expectedOwner || repo != tc.expectedRepo || (err == nil) == tc.expectedOk {
+			t.Errorf("parseGitlabRepo(%q, %t) = %q, %q, %v; want %q, %q, %t",
+				tc.repoURL, tc.custom, owner, repo, err, tc.expectedOwner, tc.expectedRepo, tc.expectedOk)
 		}
 	}
 }

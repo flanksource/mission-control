@@ -170,6 +170,14 @@ func (t *GitOps) generateSpec(ctx context.Context, action v1.GitOpsAction) error
 			ctx.Logger.V(6).Infof("Using %s authentication token %v", conn.Type, logger.PrintableSecret(conn.Password))
 			t.spec.AccessToken = conn.Password
 			t.shouldCreatePR = true
+			switch conn.Type {
+			case models.ConnectionTypeGithub:
+				t.spec.Service = connectors.ServiceGithub
+			case models.ConnectionTypeGitlab:
+				t.spec.Service = connectors.ServiceGitlab
+			case models.ConnectionTypeAzureDevops:
+				t.spec.Service = connectors.ServiceAzure
+			}
 
 		case models.ConnectionTypeHTTP:
 			ctx.Logger.V(6).Infof("Using http basic auth %s:%s", logger.PrintableSecret(conn.Username), logger.PrintableSecret(conn.Password))

@@ -24,6 +24,7 @@ import (
 type GitAccessTokenClient struct {
 	// service is the name of the git service
 	service    string
+	url        string
 	scm        *scm.Client
 	repo       *git.Repository
 	auth       transport.AuthMethod
@@ -32,9 +33,30 @@ type GitAccessTokenClient struct {
 	repository string
 }
 
+func getOwnerRepoFromURL(url, service string) (owner, repo string, err error) {
+	if service == ServiceAzure {
+		org, project, repoName, ok := parseAzureDevopsRepo(url)
+		if !ok {
+			return "", "", fmt.Errorf("")
+		}
+		owner = fmt.Sprintf("%s/%s", org, project)
+		return owner, repoName, nil
+	}
+	owner, repo, err = parseRepoURL(url)
+	if err != nil {
+		return "", "", err
+	}
+	return owner, repo, nil
+}
+
 // NewAccessTokenClient is a generic git client that can communicate with
 // git services supporting access tokens. eg Github, GitLab & Azure Devops (WIP)
-func NewAccessTokenClient(service, owner, repoName, accessToken string) (Connector, error) {
+func NewAccessTokenClient(url, service, accessToken string) (Connector, error) {
+	owner, repoName, err := getOwnerRepoFromURL(url, service)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get owner/repo from url[%s]: %w", url, err)
+	}
+
 	logger.Infof("Creating %s client for %s/%s using access token: %s", service, owner, repoName, logger.PrintableSecret(accessToken))
 	scmClient, err := factory.NewClient(service, "", accessToken)
 	if err != nil {
@@ -48,12 +70,13 @@ func NewAccessTokenClient(service, owner, repoName, accessToken string) (Connect
 	scmClient.Client.Transport = logger.NewHttpLogger(logger.GetLogger("git"), scmClient.Client.Transport)
 
 	client := &GitAccessTokenClient{
+		url:        url,
 		service:    service,
 		scm:        scmClient,
 		owner:      owner,
 		repoName:   repoName,
 		repository: owner + "/" + repoName,
-		auth:       &http.BasicAuth{Password: accessToken, Username: "token"},
+		auth:       &http.BasicAuth{Username: "token", Password: accessToken},
 	}
 	return client, nil
 }
@@ -119,6 +142,7 @@ func (g *GitAccessTokenClient) ClosePullRequest(ctx context.Context, id int) err
 }
 
 func (g *GitAccessTokenClient) Clone(ctx context.Context, branch, local string) (billy.Filesystem, *git.Worktree, error) {
+	g.service = "gitlab.infoslipscloud"
 	dir, _ := os.MkdirTemp("", fmt.Sprintf("%s-*", g.service))
 	url := fmt.Sprintf("https://%s.com/%s/%s.git", g.service, g.owner, g.repoName)
 	transport.UnsupportedCapabilities = nil // reset the global list of unsupported capabilities
@@ -131,20 +155,24 @@ func (g *GitAccessTokenClient) Clone(ctx context.Context, branch, local string) 
 	}
 
 	ctx.Logger.V(5).Infof("Cloning %s@%s", url, branch)
+	logger.Infof("Auth is %v", g.auth)
 	repo, err := git.PlainCloneContext(ctx, dir, false, &git.CloneOptions{
-		ReferenceName: plumbing.NewBranchReferenceName(branch),
-		URL:           url,
-		Progress:      ctx.Logger.V(4).WithFilter("Compressing objects", "Counting objects"),
-		Auth:          g.auth,
-		Depth:         1,
+		ReferenceName:   plumbing.NewBranchReferenceName(branch),
+		URL:             url,
+		Progress:        ctx.Logger.V(4).WithFilter("Compressing objects", "Counting objects"),
+		Auth:            g.auth,
+		Depth:           1,
+		InsecureSkipTLS: true,
 	})
 	if err != nil {
-		return nil, nil, oops.Wrap(err)
+		logger.Infof("11111")
+		return nil, nil, oops.Hint("Yash").Wrap(err)
 	}
 	g.repo = repo
 
 	work, err := repo.Worktree()
 	if err != nil {
+		logger.Infof("2222")
 		return nil, nil, err
 	}
 	if branch != local {
