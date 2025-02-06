@@ -37,7 +37,7 @@ func getOwnerRepoFromURL(url, service string) (owner, repo string, err error) {
 	if service == ServiceAzure {
 		org, project, repoName, ok := parseAzureDevopsRepo(url)
 		if !ok {
-			return "", "", fmt.Errorf("")
+			return "", "", fmt.Errorf("error parsing azure devops repo: regex match failed")
 		}
 		owner = fmt.Sprintf("%s/%s", org, project)
 		return owner, repoName, nil
@@ -142,12 +142,11 @@ func (g *GitAccessTokenClient) ClosePullRequest(ctx context.Context, id int) err
 }
 
 func (g *GitAccessTokenClient) Clone(ctx context.Context, branch, local string) (billy.Filesystem, *git.Worktree, error) {
-	g.service = "gitlab.infoslipscloud"
-	dir, _ := os.MkdirTemp("", fmt.Sprintf("%s-*", g.service))
-	url := fmt.Sprintf("https://%s.com/%s/%s.git", g.service, g.owner, g.repoName)
+	dir, _ := os.MkdirTemp("", fmt.Sprintf("%s-*", g.url))
+	url := g.url
 	transport.UnsupportedCapabilities = nil // reset the global list of unsupported capabilities
 
-	if g.service == "azure" {
+	if g.service == ServiceAzure {
 		url = fmt.Sprintf("https://dev.azure.com/%s/_git/%s", g.owner, g.repoName)
 		transport.UnsupportedCapabilities = []capability.Capability{
 			capability.ThinPack,
@@ -155,7 +154,6 @@ func (g *GitAccessTokenClient) Clone(ctx context.Context, branch, local string) 
 	}
 
 	ctx.Logger.V(5).Infof("Cloning %s@%s", url, branch)
-	logger.Infof("Auth is %v", g.auth)
 	repo, err := git.PlainCloneContext(ctx, dir, false, &git.CloneOptions{
 		ReferenceName:   plumbing.NewBranchReferenceName(branch),
 		URL:             url,
@@ -165,14 +163,12 @@ func (g *GitAccessTokenClient) Clone(ctx context.Context, branch, local string) 
 		InsecureSkipTLS: true,
 	})
 	if err != nil {
-		logger.Infof("11111")
-		return nil, nil, oops.Hint("Yash").Wrap(err)
+		return nil, nil, oops.Wrap(err)
 	}
 	g.repo = repo
 
 	work, err := repo.Worktree()
 	if err != nil {
-		logger.Infof("2222")
 		return nil, nil, err
 	}
 	if branch != local {

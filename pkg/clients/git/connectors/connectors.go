@@ -134,12 +134,6 @@ func NewConnector(gitConfig *GitopsAPISpec) (Connector, error) {
 	service := inferServiceType(gitConfig)
 	if service != "" {
 		return NewAccessTokenClient(gitConfig.Repository, service, token)
-		//if owner, repo, ok := parseGenericRepoURL(gitConfig.Repository, "github.com", false); ok {
-		//return NewAccessTokenClient("github.com", ServiceGithub, owner, repo, token)
-		//} else if owner, repo, ok := parseGenericRepoURL(gitConfig.Repository, "gitlab.com", gitConfig.Service == ServiceGitlab); ok {
-		//return NewAccessTokenClient("gitlab.com", ServiceGitlab, owner, repo, token)
-		//} else if azureOrg, azureProject, azureRepo, ok := parseAzureDevopsRepo(gitConfig.Repository); ok {
-		//return NewAccessTokenClient("aa", "azure", fmt.Sprintf("%s/%s", azureOrg, azureProject), azureRepo, token)
 	} else if strings.HasPrefix(gitConfig.Repository, "ssh://") {
 		sshURL := gitConfig.Repository[6:]
 		user := strings.Split(sshURL, "@")[0]
@@ -162,31 +156,6 @@ func parseAzureDevopsRepo(url string) (org, project, repo string, ok bool) {
 
 	return matches[1], matches[2], matches[3], true
 }
-
-// parseGenericRepoURL parses a URL into owner and repo.
-//   - custom: true if the repo has custom domain
-//func parseGenericRepoURL(repoURL, host string, custom bool) (owner string, repo string, ok bool) {
-//parsed, err := url.Parse(repoURL)
-//if err != nil {
-//fmt.Println("1111")
-//return "", "", false
-//}
-
-//if !custom && parsed.Hostname() != host {
-//fmt.Println("2222")
-//return "", "", false
-//}
-
-//path := strings.TrimSuffix(parsed.Path, ".git")
-//path = strings.TrimPrefix(path, "/")
-//paths := strings.Split(path, "/")
-//if len(paths) != 2 && false {
-//fmt.Println("3333", paths)
-//return "", "", false
-//}
-
-//return strings.Join(paths[:len(paths)-1], "/"), paths[len(paths)-1], true
-//}
 
 func parseRepoURL(repoURL string) (owner string, repo string, err error) {
 	parsed, err := url.Parse(repoURL)
