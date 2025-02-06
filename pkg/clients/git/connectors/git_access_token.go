@@ -142,7 +142,7 @@ func (g *GitAccessTokenClient) ClosePullRequest(ctx context.Context, id int) err
 }
 
 func (g *GitAccessTokenClient) Clone(ctx context.Context, branch, local string) (billy.Filesystem, *git.Worktree, error) {
-	dir, _ := os.MkdirTemp("", fmt.Sprintf("%s-*", g.url))
+	dir, _ := os.MkdirTemp("", fmt.Sprintf("%s-*", g.service))
 	url := g.url
 	transport.UnsupportedCapabilities = nil // reset the global list of unsupported capabilities
 
