@@ -15,10 +15,10 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/labstack/echo/v4"
 
+	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/rbac"
-	"github.com/flanksource/incident-commander/rbac/policy"
 )
 
 const kubeConfigTemplate = `apiVersion: v1

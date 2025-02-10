@@ -10,12 +10,11 @@ import (
 	gormadapter "github.com/casbin/gorm-adapter/v3"
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/duty/models"
+	pkgPolicy "github.com/flanksource/duty/rbac/policy"
+	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/samber/lo"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-
-	v1 "github.com/flanksource/incident-commander/api/v1"
-	pkgPolicy "github.com/flanksource/incident-commander/rbac/policy"
 )
 
 type PermissionAdapter struct {
@@ -26,7 +25,7 @@ type PermissionAdapter struct {
 
 var _ persist.BatchAdapter = &PermissionAdapter{}
 
-func NewPermissionAdapter(db *gorm.DB, main *gormadapter.Adapter) *PermissionAdapter {
+func NewPermissionAdapter(db *gorm.DB, main *gormadapter.Adapter) persist.Adapter {
 	return &PermissionAdapter{
 		db:      db,
 		Adapter: main,

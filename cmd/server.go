@@ -14,6 +14,7 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/postq/pg"
 	"github.com/flanksource/duty/query"
+	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/shutdown"
 	"github.com/flanksource/kopper"
 
@@ -29,7 +30,6 @@ import (
 	"github.com/flanksource/incident-commander/incidents/responder"
 	"github.com/flanksource/incident-commander/jobs"
 	"github.com/flanksource/incident-commander/notification"
-	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/teams"
 	"github.com/flanksource/incident-commander/vars"
 

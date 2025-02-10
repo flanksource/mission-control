@@ -4,7 +4,8 @@ import (
 	"net/http"
 
 	"github.com/flanksource/duty/api"
-	"github.com/flanksource/incident-commander/rbac/policy"
+	"github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/rbac/policy"
 	"github.com/labstack/echo/v4"
 )
 
@@ -20,7 +21,7 @@ func UpdateRoleForUser(c echo.Context) error {
 		})
 	}
 
-	if err := AddRoleForUser(userID, reqData.Roles...); err != nil {
+	if err := rbac.AddRoleForUser(userID, reqData.Roles...); err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{
 			Err:     err.Error(),
 			Message: "Error updating roles",
@@ -34,7 +35,7 @@ func UpdateRoleForUser(c echo.Context) error {
 
 func GetRolesForUser(c echo.Context) error {
 	userID := c.Param("id")
-	roles, err := RolesForUser(userID)
+	roles, err := rbac.RolesForUser(userID)
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{
 			Err:     err.Error(),
@@ -47,5 +48,10 @@ func GetRolesForUser(c echo.Context) error {
 }
 
 func Dump(c echo.Context) error {
-	return c.JSON(http.StatusOK, policy.NewPermissions(enforcer.GetPolicy()))
+	perms, err := rbac.Enforcer().GetPolicy()
+	if err != nil {
+		return err
+	}
+
+	return c.JSON(http.StatusOK, policy.NewPermissions(perms))
 }

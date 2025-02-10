@@ -8,10 +8,11 @@ import (
 	"github.com/flanksource/commons/rand"
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/incident-commander/db"
-	"github.com/flanksource/incident-commander/rbac"
+	"github.com/flanksource/duty/rbac"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
+
+	"github.com/flanksource/incident-commander/db"
 )
 
 var Auth = &cobra.Command{

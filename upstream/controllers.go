@@ -14,13 +14,13 @@ import (
 	"github.com/patrickmn/go-cache"
 	"go.opentelemetry.io/otel/attribute"
 
+	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/incident-commander/artifacts"
 	"github.com/flanksource/incident-commander/db"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/playbook/runner"
 	"github.com/flanksource/incident-commander/push"
 	"github.com/flanksource/incident-commander/rbac"
-	"github.com/flanksource/incident-commander/rbac/policy"
 )
 
 var agentCache = cache.New(3*24*time.Hour, 12*time.Hour)
