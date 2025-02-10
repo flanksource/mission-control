@@ -119,6 +119,13 @@ func addCustomFunctions(enforcer addableEnforcer) {
 			}
 		}
 
+		for _, rs := range objectSelector.Connections {
+			if rs.Matches(&attr.Connection) {
+				resourcesMatched++
+				break
+			}
+		}
+
 		for _, rs := range objectSelector.Configs {
 			if rs.Matches(attr.Config) {
 				resourcesMatched++
