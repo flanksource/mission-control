@@ -64,7 +64,7 @@ jobs:
           git fetch --prune --unshallow
           echo "RELEASE_VERSION=$(git describe --abbrev=0 --tags | sed -e 's/^v//')" >> $GITHUB_ENV
       - name: Publish to Registry
-        uses: elgohr/Publish-Docker-Github-Action@686ffe1e82bed6639d202a799708561d18f30712 # v5
+        uses: elgohr/Publish-Docker-Github-Action@6aa7c6928f7dee6eaf9a3eef414438ed54b3506b # v5
         with:
           name: flanksource/incident-commander
           username: ${{ secrets.DOCKER_USERNAME }}
