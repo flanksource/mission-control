@@ -12,6 +12,8 @@ import (
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/gomplate/v3"
 	"github.com/google/uuid"
@@ -19,14 +21,12 @@ import (
 	"github.com/samber/oops"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
+	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/playbook/runner"
-	"github.com/flanksource/incident-commander/rbac"
-	"github.com/flanksource/incident-commander/rbac/policy"
-	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
 )
 
 type PlaybookSummary struct {

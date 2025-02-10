@@ -10,14 +10,15 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/incident-commander/db"
-	"github.com/flanksource/incident-commander/rbac"
-	"github.com/flanksource/incident-commander/rbac/policy"
+	"github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/rbac/policy"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/labstack/echo/v4"
 	"github.com/patrickmn/go-cache"
 	"go.opentelemetry.io/otel/attribute"
 	"gorm.io/gorm"
+
+	"github.com/flanksource/incident-commander/db"
 )
 
 const (

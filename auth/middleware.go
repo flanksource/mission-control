@@ -13,15 +13,18 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
+	dutyRBAC "github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/gomplate/v3"
 	"github.com/flanksource/incident-commander/db"
-	"github.com/flanksource/incident-commander/rbac"
-	"github.com/flanksource/incident-commander/rbac/policy"
-	"github.com/flanksource/incident-commander/vars"
+	"github.com/flanksource/incident-commander/rbac/adapter"
 	"github.com/labstack/echo/v4"
 	client "github.com/ory/client-go"
 	"github.com/patrickmn/go-cache"
 	slogecho "github.com/samber/slog-echo"
+
+	"github.com/flanksource/incident-commander/rbac"
+	"github.com/flanksource/incident-commander/vars"
 )
 
 var (
@@ -103,8 +106,8 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 	}
 
 	// Initiate RBAC
-	if err := rbac.Init(ctx, adminUserID); err != nil {
-		return fmt.Errorf("failed to initialize rbac: %v", err)
+	if err := dutyRBAC.Init(ctx, adminUserID, adapter.NewPermissionAdapter); err != nil {
+		return fmt.Errorf("failed to initialize rbac: %w", err)
 	}
 
 	return nil
@@ -159,7 +162,7 @@ func mapIDsToRoles(ctx context.Context, session *client.Session, person models.P
 
 	if result.Role != "" {
 		log.V(3).Infof("[%s] adding role: %s", name, res)
-		if err := rbac.AddRoleForUser(person.ID.String(), result.Role); err != nil {
+		if err := dutyRBAC.AddRoleForUser(person.ID.String(), result.Role); err != nil {
 			return ctx.Oops().Wrapf(err, "error adding role %s to user %s", result.Role, name)
 		}
 	}

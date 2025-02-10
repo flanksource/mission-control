@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/models"
-	"github.com/flanksource/incident-commander/rbac/policy"
+	"github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/rbac/policy"
 	"github.com/labstack/echo/v4"
 )
 
@@ -42,10 +42,10 @@ func DbMiddleware() MiddlewareFunc {
 			if !strings.HasPrefix(path, "/db/") {
 				return next(c)
 			}
-			action := GetActionFromHttpMethod(c.Request().Method)
+			action := rbac.GetActionFromHttpMethod(c.Request().Method)
 			resource := strings.ReplaceAll(path, "/db/", "")
 
-			object := GetObjectByTable(resource)
+			object := rbac.GetObjectByTable(resource)
 
 			if action == "" {
 				return c.String(http.StatusForbidden, ErrMisconfiguredRBAC.Error())
@@ -58,7 +58,7 @@ func DbMiddleware() MiddlewareFunc {
 			ctx := c.Request().Context().(context.Context)
 			user := ctx.User()
 
-			if !CheckContext(ctx, object, action) {
+			if !rbac.CheckContext(ctx, object, action) {
 				c.Response().Header().Add("X-Rbac-Subject", user.ID.String())
 				c.Response().Header().Add("X-Rbac-Object", object)
 				c.Response().Header().Add("X-Rbac-Action", action)
@@ -75,13 +75,13 @@ func Authorization(object, action string) MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
 			// Skip auth if Enforcer is not initialized
-			if enforcer == nil {
+			if rbac.Enforcer() == nil {
 				return next(c)
 			}
 
 			// If action is unset, extract from HTTP Method
 			if action == "" {
-				action = GetActionFromHttpMethod(c.Request().Method)
+				action = rbac.GetActionFromHttpMethod(c.Request().Method)
 			}
 
 			ctx := c.Request().Context().(context.Context)
@@ -94,7 +94,7 @@ func Authorization(object, action string) MiddlewareFunc {
 				return c.String(http.StatusForbidden, ErrMisconfiguredRBAC.Error())
 			}
 
-			if !CheckContext(ctx, object, action) {
+			if !rbac.CheckContext(ctx, object, action) {
 				c.Response().Header().Add("X-Rbac-Subject", u.ID.String())
 				c.Response().Header().Add("X-Rbac-Object", object)
 				c.Response().Header().Add("X-Rbac-Action", action)
@@ -105,33 +105,4 @@ func Authorization(object, action string) MiddlewareFunc {
 			return next(c)
 		}
 	}
-}
-
-func CheckContext(ctx context.Context, object, action string) bool {
-	user := ctx.User()
-	if user == nil {
-		return false
-	}
-
-	// TODO: Everyone with an account is not a viewer. i.e. user role.
-	// Everyone with an account is a viewer
-	if action == policy.ActionRead && Check(ctx, policy.RoleViewer, object, action) {
-		return true
-	}
-
-	return Check(ctx, user.ID.String(), object, action)
-}
-
-func HasPermission(ctx context.Context, subject string, attr *models.ABACAttribute, action string) bool {
-	if enforcer == nil {
-		return true
-	}
-
-	allowed, err := enforcer.Enforce(subject, attr, action)
-	if err != nil {
-		ctx.Errorf("error checking abac for subject=%s action=%s: %v", subject, action, err)
-		return false
-	}
-
-	return allowed
 }
