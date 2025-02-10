@@ -136,7 +136,7 @@ func (a *PermissionAdapter) permissionGroupToCasbinRule(permission models.Permis
 		return nil, err
 	}
 
-	var allIDs []string
+	var allSubjects []string
 
 	if len(subject.Notifications) > 0 {
 		var clauses []clause.Expression
@@ -162,28 +162,27 @@ func (a *PermissionAdapter) permissionGroupToCasbinRule(permission models.Permis
 				return nil, err
 			}
 
-			allIDs = append(allIDs, notifications...)
+			allSubjects = append(allSubjects, notifications...)
 		}
 	}
 
 	if len(subject.People) > 0 {
-		var personIDs []string
-
-		query := a.db.Select("id").Model(&models.Person{}).
-			Where("deleted_at IS NULL").
-			Where("type IS DISTINCT FROM 'agent'").
-			Where("email IS NOT NULL") // Excludes system user
-
 		wildcard := len(subject.People) == 1 && subject.People[0] == "*"
-		if !wildcard {
-			query.Where("email IN ? OR name IN ?", subject.People, subject.People)
-		}
+		if wildcard {
+			allSubjects = append(allSubjects, "everyone")
+		} else {
+			var personIDs []string
+			query := a.db.Select("id").Model(&models.Person{}).
+				Where("deleted_at IS NULL").
+				Where("type IS DISTINCT FROM 'agent'").
+				Where("email IS NOT NULL"). // Excludes system user
+				Where("email IN ? OR name IN ?", subject.People, subject.People)
+			if err := query.Find(&personIDs).Error; err != nil {
+				return nil, err
+			}
 
-		if err := query.Find(&personIDs).Error; err != nil {
-			return nil, err
+			allSubjects = append(allSubjects, personIDs...)
 		}
-
-		allIDs = append(allIDs, personIDs...)
 	}
 
 	if len(subject.Teams) > 0 {
@@ -192,14 +191,14 @@ func (a *PermissionAdapter) permissionGroupToCasbinRule(permission models.Permis
 			return nil, err
 		}
 
-		allIDs = append(allIDs, teamIDs...)
+		allSubjects = append(allSubjects, teamIDs...)
 	}
 
 	var policies [][]string
-	for _, id := range allIDs {
+	for _, subject := range allSubjects {
 		policy := []string{
 			"g",
-			id,
+			subject,
 			permission.Name,
 			"",
 			"",
