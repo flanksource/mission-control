@@ -9,13 +9,13 @@ import (
 
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/rbac"
 	"github.com/labstack/echo/v4"
 	oryClient "github.com/ory/client-go"
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/mail"
-	"github.com/flanksource/incident-commander/rbac"
 )
 
 func RegisterRoutes(e *echo.Echo) {

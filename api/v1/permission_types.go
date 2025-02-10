@@ -7,8 +7,9 @@ import (
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/types"
-	"github.com/flanksource/incident-commander/rbac/policy"
+	dutyRBAC "github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/rbac/policy"
+
 	"github.com/google/uuid"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -103,11 +104,7 @@ func (t *PermissionSubject) Populate(ctx context.Context) (string, models.Permis
 	return "", "", errors.New("subject not found")
 }
 
-type PermissionObject struct {
-	Playbooks  []types.ResourceSelector `json:"playbooks,omitempty"`
-	Configs    []types.ResourceSelector `json:"configs,omitempty"`
-	Components []types.ResourceSelector `json:"components,omitempty"`
-}
+type PermissionObject dutyRBAC.Selectors
 
 // GlobalObject checks if the object selector semantically maps to a global object
 // and returns the corresponding global object if applicable.
@@ -131,21 +128,6 @@ func (t *PermissionObject) GlobalObject() (string, bool) {
 	}
 
 	return "", false
-}
-
-func (t PermissionObject) RequiredMatchCount() int {
-	var count int
-	if len(t.Playbooks) > 0 {
-		count++
-	}
-	if len(t.Configs) > 0 {
-		count++
-	}
-	if len(t.Components) > 0 {
-		count++
-	}
-
-	return count
 }
 
 // +kubebuilder:object:generate=true

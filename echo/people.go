@@ -7,13 +7,14 @@ import (
 
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/types"
-	"github.com/flanksource/incident-commander/auth"
-	"github.com/flanksource/incident-commander/rbac"
-	"github.com/flanksource/incident-commander/vars"
 	echov4 "github.com/labstack/echo/v4"
 	"github.com/ory/client-go"
 	"github.com/samber/lo"
+
+	"github.com/flanksource/incident-commander/auth"
+	"github.com/flanksource/incident-commander/vars"
 )
 
 type UpdatePersonRequest struct {
