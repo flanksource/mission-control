@@ -110,10 +110,10 @@ func (g *GitAccessTokenClient) OpenPullRequest(ctx context.Context, spec PullReq
 		Head:  spec.Branch,
 		Base:  spec.Base,
 	})
-	ctx = ctx.WithLoggingValues("pr", pr.Number)
 	if err != nil {
 		return nil, ctx.Oops().Wrapf(err, "failed to create pr repo=%s title=%s, head=%s base=%s", g.repository, spec.Title, spec.Branch, spec.Base)
 	}
+	ctx = ctx.WithLoggingValues("pr", pr.Number)
 
 	if len(spec.Reviewers) > 0 {
 		ctx.Tracef("Requesting review from %v for PR #%d", spec.Reviewers, pr.Number)
