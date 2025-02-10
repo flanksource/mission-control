@@ -6,10 +6,11 @@ import (
 
 	"github.com/flanksource/commons/rand"
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/rbac"
+	"github.com/samber/lo"
+
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
-	"github.com/flanksource/incident-commander/rbac"
-	"github.com/samber/lo"
 )
 
 // generateAgent creates a new person and a new agent and associates them.

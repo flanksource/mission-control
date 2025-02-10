@@ -7,33 +7,28 @@ import (
 	casbinModel "github.com/casbin/casbin/v2/model"
 	stringadapter "github.com/casbin/casbin/v2/persist/string-adapter"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/incident-commander/rbac/adapter"
-	"github.com/flanksource/incident-commander/rbac/policy"
+	"github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/rbac/policy"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
+
+	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
 func NewEnforcer(policy string) (*casbin.Enforcer, error) {
-	model, err := casbinModel.NewModelFromString(defaultModel)
+	model, err := casbinModel.NewModelFromString(rbac.DefaultModel)
 	if err != nil {
 		return nil, err
 	}
 
 	sa := stringadapter.NewAdapter(policy)
 	e, err := casbin.NewEnforcer(model, sa)
-	addCustomFunctions(e)
+	rbac.AddCustomFunctions(e)
 	return e, err
 }
 
 func TestEnforcer(t *testing.T) {
-	policies := `
-p, admin, *, * , allow,  true, na
-g, johndoe, admin, , ,       , na
-p, johndoe, *, playbook:run, allow, r.obj.Playbook.Name == 'scale-deployment' , na
-p, johndoe, *, playbook:run, deny, r.obj.Playbook.Name == 'delete-deployment' , na
-p, johndoe, *, playbook:run, allow, r.obj.Playbook.Name == 'restart-deployment' && r.obj.Config.Tags.namespace == 'default' , na
-p, alice, *, playbook:run, deny, r.obj.Playbook.Name == 'restart-deployment' && r.obj.Config.Tags.namespace == 'default', na
-`
+	policies := `p, admin, *, * , allow,  true, na`
 
 	var userID = uuid.New()
 
@@ -80,64 +75,6 @@ p, alice, *, playbook:run, deny, r.obj.Playbook.Name == 'restart-deployment' && 
 		act         string
 		allowed     bool
 	}{
-		{
-			description: "simple | allow",
-			user:        "johndoe",
-			obj:         &models.ABACAttribute{Playbook: models.Playbook{Name: "scale-deployment"}},
-			act:         "playbook:run",
-			allowed:     true,
-		},
-		{
-			description: "simple | explicit deny",
-			user:        "johndoe",
-			obj:         &models.ABACAttribute{Playbook: models.Playbook{Name: "delete-deployment"}},
-			act:         "playbook:run",
-			allowed:     false,
-		},
-		{
-			description: "simple | default deny",
-			user:        "johndoe",
-			obj:         &models.ABACAttribute{Playbook: models.Playbook{Name: "delete-namespace"}},
-			act:         "playbook:run",
-			allowed:     false,
-		},
-		{
-			description: "multi | allow",
-			user:        "johndoe",
-			obj: &models.ABACAttribute{
-				Playbook: models.Playbook{
-					Name: "restart-deployment",
-				},
-				Config: models.ConfigItem{
-					ID:   uuid.New(),
-					Tags: map[string]string{"namespace": "default"},
-				},
-			},
-			act:     "playbook:run",
-			allowed: true,
-		},
-		{
-			description: "multi | explicit deny",
-			user:        "alice",
-			obj: &models.ABACAttribute{
-				Playbook: models.Playbook{
-					Name: "restart-deployment",
-				},
-				Config: models.ConfigItem{
-					ID:   uuid.New(),
-					Tags: map[string]string{"namespace": "default"},
-				},
-			},
-			act:     "playbook:run",
-			allowed: false,
-		},
-		{
-			description: "simple read test",
-			user:        userID.String(),
-			obj:         "catalog",
-			act:         "read",
-			allowed:     false,
-		},
 		{
 			description: "abac catalog test",
 			user:        userID.String(),

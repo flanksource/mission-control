@@ -15,10 +15,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
+	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/incident-commander/db"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/rbac"
-	"github.com/flanksource/incident-commander/rbac/policy"
 )
 
 func init() {

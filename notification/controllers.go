@@ -7,9 +7,9 @@ import (
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/rbac/policy"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/rbac"
-	"github.com/flanksource/incident-commander/rbac/policy"
 	"github.com/labstack/echo/v4"
 )
 

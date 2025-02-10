@@ -9,12 +9,12 @@ require (
 	github.com/MicahParks/keyfunc v1.9.0
 	github.com/adityathebe/go-strip-markdown/v2 v2.0.1
 	github.com/andygrunwald/go-jira v1.16.0
-	github.com/casbin/casbin/v2 v2.87.1
-	github.com/casbin/gorm-adapter/v3 v3.26.0
+	github.com/casbin/casbin/v2 v2.103.0
+	github.com/casbin/gorm-adapter/v3 v3.32.0
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.29.0 // indirect
 	github.com/flanksource/commons v1.36.1
-	github.com/flanksource/duty v1.0.838
+	github.com/flanksource/duty v1.0.841
 	github.com/flanksource/gomplate/v3 v3.24.55
 	github.com/flanksource/kopper v1.0.12
 	github.com/gomarkdown/markdown v0.0.0-20240419095408-642f0ee99ae2
@@ -50,7 +50,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/credentials v1.17.34
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.58.3
 	github.com/aws/aws-sdk-go-v2/service/sts v1.31.0
-	github.com/casbin/govaluate v1.1.1
 	github.com/flanksource/artifacts v1.0.14
 	github.com/fluxcd/pkg/gittestserver v0.8.6
 	github.com/go-git/go-billy/v5 v5.5.0
@@ -124,6 +123,7 @@ require (
 	github.com/bluekeyes/go-gitdiff v0.7.1 // indirect
 	github.com/bmatcuk/doublestar/v4 v4.7.1 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
+	github.com/casbin/govaluate v1.3.0 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cert-manager/cert-manager v1.16.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect

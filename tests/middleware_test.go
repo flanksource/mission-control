@@ -13,12 +13,13 @@ import (
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	dutyRBAC "github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/tests/setup"
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/rbac"
-	"github.com/flanksource/incident-commander/rbac/policy"
 	"github.com/flanksource/incident-commander/vars"
 	"github.com/labstack/echo/v4"
 	. "github.com/onsi/ginkgo/v2"
@@ -45,7 +46,7 @@ var _ = BeforeSuite(func() {
 	e.Use(auth.MockAuthMiddleware)
 
 	Expect(DefaultContext.DB().Exec("TRUNCATE casbin_rule").Error).To(BeNil())
-	if err := rbac.Init(DefaultContext, "admin"); err != nil {
+	if err := dutyRBAC.Init(DefaultContext, "admin"); err != nil {
 		Fail(fmt.Sprintf("error instantiating rbac: %v", err))
 	}
 	usersAndRoles := map[string]string{
@@ -61,7 +62,7 @@ var _ = BeforeSuite(func() {
 			Name:  user,
 			Email: user + "@test.com",
 		})
-		if err := rbac.AddRoleForUser(user, role); err != nil {
+		if err := dutyRBAC.AddRoleForUser(user, role); err != nil {
 			Fail(fmt.Sprintf("error adding roles for users: %v", err))
 		}
 	}
@@ -228,10 +229,10 @@ var _ = Describe("Authorization", func() {
 		Expect(len(info.Functions)).To(BeNumerically(">", 0))
 
 		for _, table := range append(info.Views, info.Tables...) {
-			Expect(rbac.GetObjectByTable(table)).NotTo(BeEmpty(), table)
+			Expect(dutyRBAC.GetObjectByTable(table)).NotTo(BeEmpty(), table)
 		}
 		for _, function := range info.Functions {
-			Expect(rbac.GetObjectByTable("rpc/"+function)).NotTo(BeEmpty(), function)
+			Expect(dutyRBAC.GetObjectByTable("rpc/"+function)).NotTo(BeEmpty(), function)
 		}
 	})
 })
