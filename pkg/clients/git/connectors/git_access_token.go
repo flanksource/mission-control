@@ -113,6 +113,7 @@ func (g *GitAccessTokenClient) OpenPullRequest(ctx context.Context, spec PullReq
 	if err != nil {
 		return nil, ctx.Oops().Wrapf(err, "failed to create pr repo=%s title=%s, head=%s base=%s", g.repository, spec.Title, spec.Branch, spec.Base)
 	}
+	ctx = ctx.WithLoggingValues("pr", pr.Number)
 
 	ctx = ctx.WithLoggingValues("pr", pr.Number)
 
