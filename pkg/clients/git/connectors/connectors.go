@@ -2,6 +2,7 @@ package connectors
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/url"
 	"regexp"
 	"strings"
@@ -157,14 +158,14 @@ func parseAzureDevopsRepo(url string) (org, project, repo string, ok bool) {
 	return matches[1], matches[2], matches[3], true
 }
 
-func parseRepoURL(repoURL string) (owner string, repo string, err error) {
+func parseRepoURL(repoURL string) (hostURL, owner, repo string, err error) {
 	parsed, err := url.Parse(repoURL)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 
 	path := strings.TrimSuffix(parsed.Path, ".git")
 	path = strings.TrimPrefix(path, "/")
 	paths := strings.Split(path, "/")
-	return strings.Join(paths[:len(paths)-1], "/"), paths[len(paths)-1], nil
+	return fmt.Sprintf("%s://%s", parsed.Scheme, parsed.Hostname()), strings.Join(paths[:len(paths)-1], "/"), paths[len(paths)-1], nil
 }

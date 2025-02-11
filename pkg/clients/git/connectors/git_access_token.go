@@ -33,32 +33,32 @@ type GitAccessTokenClient struct {
 	repository string
 }
 
-func getOwnerRepoFromURL(url, service string) (owner, repo string, err error) {
+func getOwnerRepoFromURL(url, service string) (hostURL, owner, repo string, err error) {
 	if service == ServiceAzure {
 		org, project, repoName, ok := parseAzureDevopsRepo(url)
 		if !ok {
-			return "", "", fmt.Errorf("error parsing azure devops repo: regex match failed")
+			return "", "", "", fmt.Errorf("error parsing azure devops repo: regex match failed")
 		}
 		owner = fmt.Sprintf("%s/%s", org, project)
-		return owner, repoName, nil
+		return "", owner, repoName, nil
 	}
-	owner, repo, err = parseRepoURL(url)
+	hostURL, owner, repo, err = parseRepoURL(url)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
-	return owner, repo, nil
+	return hostURL, owner, repo, nil
 }
 
 // NewAccessTokenClient is a generic git client that can communicate with
 // git services supporting access tokens. eg Github, GitLab & Azure Devops (WIP)
 func NewAccessTokenClient(url, service, accessToken string) (Connector, error) {
-	owner, repoName, err := getOwnerRepoFromURL(url, service)
+	hostURL, owner, repoName, err := getOwnerRepoFromURL(url, service)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get owner/repo from url[%s]: %w", url, err)
 	}
 
 	logger.Infof("Creating %s client for %s/%s using access token: %s", service, owner, repoName, logger.PrintableSecret(accessToken))
-	scmClient, err := factory.NewClient(service, "", accessToken)
+	scmClient, err := factory.NewClient(service, hostURL, accessToken)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create git client with access token: %v", err)
 	}
