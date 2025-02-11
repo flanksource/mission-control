@@ -143,10 +143,18 @@ func ProcessPendingNotificationsJob(ctx context.Context) *job.Job {
 		Singleton:  false,
 		Schedule:   "@every 30s",
 		Fn: func(ctx job.JobRuntime) error {
+			var errCount int
 			for {
 				done, err := ProcessPendingNotifications(ctx.Context)
 				if err != nil {
 					ctx.History.AddErrorf("failed to send pending notification: %v", err)
+
+					errCount++
+					if errCount > 3 {
+						// avoid getting stuck in a loop
+						break
+					}
+
 					time.Sleep(2 * time.Second) // prevent spinning on db errors
 					continue
 				}
@@ -429,7 +437,7 @@ func processPendingNotification(ctx context.Context, currentHistory models.Notif
 	} else if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id IN ?", historyIDs).UpdateColumns(map[string]any{
 		"status": models.NotificationStatusSent,
 	}).Error; dberr != nil {
-		return fmt.Errorf("failed to save notification status as sent: %w", err)
+		return fmt.Errorf("failed to save notification status as sent: %w", dberr)
 	}
 
 	return nil
