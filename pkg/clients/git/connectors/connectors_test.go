@@ -49,7 +49,7 @@ func TestParseGitlabRepo(t *testing.T) {
 	for _, tc := range tests {
 		hostURL, owner, repo, err := parseRepoURL(tc.repoURL)
 		if owner != tc.expectedOwner || repo != tc.expectedRepo || (err != nil) == tc.expectedOk || hostURL != tc.host {
-			t.Errorf("parseGitlabRepo(%q, %t, %q) = %q, %q, %v; want %q, %q, %v",
+			t.Errorf("parseGitlabRepo(%q, %t, %q) = %q, %q, %q, %v; want %q, %q, %v",
 				tc.repoURL, tc.custom, tc.host, owner, repo, hostURL, err, tc.expectedOwner, tc.expectedRepo, tc.expectedOk)
 		}
 	}
