@@ -76,6 +76,10 @@ type PermissionSubject struct {
 	Person       PermissionSubjectSelector `json:"person,omitempty"`
 	Team         PermissionSubjectSelector `json:"team,omitempty"`
 	Notification PermissionSubjectSelector `json:"notification,omitempty"`
+	Playbook     PermissionSubjectSelector `json:"playbook,omitempty"`
+	Canary       PermissionSubjectSelector `json:"canary,omitempty"`
+	Scraper      PermissionSubjectSelector `json:"scraper,omitempty"`
+	Topology     PermissionSubjectSelector `json:"topology,omitempty"`
 }
 
 func (t *PermissionSubject) Validate() error {
