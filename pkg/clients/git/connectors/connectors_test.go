@@ -39,18 +39,18 @@ func TestParseGitlabRepo(t *testing.T) {
 		expectedRepo  string
 		expectedOk    bool
 	}{
-		{"https://gitlab.com/foo/bar.git", "gitlab.com", false, "foo", "bar", true},
-		{"https://gitlab.com/my-group/my-project", "gitlab.com", false, "my-group", "my-project", true},
-		{"https://gitlab.flanksource.com/acme/project.git", "gitlab.com", true, "acme", "project", true},
-		{"https://github.com/flanksource/duty.git", "github.com", false, "flanksource", "duty", true},
-		{"https://github.com/adityathebe/homelab", "github.com", false, "adityathebe", "homelab", true},
+		{"https://gitlab.com/foo/bar.git", "https://gitlab.com", false, "foo", "bar", true},
+		{"https://gitlab.com/my-group/my-project", "https://gitlab.com", false, "my-group", "my-project", true},
+		{"https://gitlab.flanksource.com/acme/project.git", "https://gitlab.flanksource.com", true, "acme", "project", true},
+		{"https://github.com/flanksource/duty.git", "https://github.com", false, "flanksource", "duty", true},
+		{"https://github.com/adityathebe/homelab", "https://github.com", false, "adityathebe", "homelab", true},
 	}
 
 	for _, tc := range tests {
-		owner, repo, err := parseRepoURL(tc.repoURL)
-		if owner != tc.expectedOwner || repo != tc.expectedRepo || (err != nil) == tc.expectedOk {
-			t.Errorf("parseGitlabRepo(%q, %t) = %q, %q, %v; want %q, %q, %v",
-				tc.repoURL, tc.custom, owner, repo, err, tc.expectedOwner, tc.expectedRepo, tc.expectedOk)
+		hostURL, owner, repo, err := parseRepoURL(tc.repoURL)
+		if owner != tc.expectedOwner || repo != tc.expectedRepo || (err != nil) == tc.expectedOk || hostURL != tc.host {
+			t.Errorf("parseGitlabRepo(%q, %t, %q) = %q, %q, %q, %v; want %q, %q, %v",
+				tc.repoURL, tc.custom, tc.host, owner, repo, hostURL, err, tc.expectedOwner, tc.expectedRepo, tc.expectedOk)
 		}
 	}
 }
