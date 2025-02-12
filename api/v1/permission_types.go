@@ -27,9 +27,10 @@ type Permission struct {
 }
 
 // Subject of the permission.
-// Can be
+// Can be in various formats depending on the table
 // - id of a resource
-// - <namespace>/<name> of a resource
+// - name or email for person
+// - <namespace>/<name> of a notification
 type PermissionSubjectSelector string
 
 func (t PermissionSubjectSelector) Find(ctx context.Context, table string) (string, models.PermissionSubjectType, error) {
@@ -40,15 +41,31 @@ func (t PermissionSubjectSelector) Find(ctx context.Context, table string) (stri
 	switch table {
 	case "people":
 		var id string
-		err := ctx.DB().Select("id").Table(table).Where("name = ? OR email = ?", string(t), string(t)).Find(&id).Error
-		return id, models.PermissionSubjectTypePerson, err
+		if uuid.Validate(string(t)) == nil {
+			err := ctx.DB().Select("id").Model(table).Where("id = ?", string(t)).Find(&id).Error
+			return id, models.PermissionSubjectTypePerson, err
+		} else {
+			err := ctx.DB().Select("id").Model(table).Where("name = ? OR email = ?", string(t), string(t)).Find(&id).Error
+			return id, models.PermissionSubjectTypePerson, err
+		}
 
 	case "teams":
 		var id string
-		err := ctx.DB().Select("id").Table(table).Where("name = ?", string(t)).Find(&id).Error
-		return id, models.PermissionSubjectTypeTeam, err
+		if uuid.Validate(string(t)) == nil {
+			err := ctx.DB().Select("id").Model(table).Where("id = ?", string(t)).Find(&id).Error
+			return id, models.PermissionSubjectTypeTeam, err
+		} else {
+			err := ctx.DB().Select("id").Table(table).Where("name = ?", string(t)).Find(&id).Error
+			return id, models.PermissionSubjectTypeTeam, err
+		}
 
 	case "notifications":
+		if uuid.Validate(string(t)) == nil {
+			var id string
+			err := ctx.DB().Select("id").Table(table).Where("id = ?", string(t)).Find(&id).Error
+			return id, models.PermissionSubjectTypeNotification, err
+		}
+
 		splits := strings.Split(string(t), "/")
 		if len(splits) != 2 {
 			return "", "", fmt.Errorf("%s is not a valid notification subject. must be <namespace>/<name>", t)
