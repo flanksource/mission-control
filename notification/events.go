@@ -316,7 +316,7 @@ func calculateGroupByHash(ctx context.Context, groupBy []string, resourceID, eve
 			case group == "type":
 				hash += comp.Type
 			case group == "description" || group == "status_reason":
-				description := strings.ReplaceAll(comp.StatusReason.String, comp.Name, "<name>")
+				description := strings.ReplaceAll(comp.StatusReason, comp.Name, "<name>")
 				hash += tokenizer.TokenizedHash(description)
 			}
 		}
