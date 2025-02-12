@@ -7,6 +7,7 @@ import (
 	"github.com/flanksource/artifacts"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/utils"
+	pkgConnection "github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
@@ -24,7 +25,7 @@ func saveArtifacts(ctx context.Context, playbookActionID uuid.UUID, generatedArt
 		return nil
 	}
 
-	connection, err := ctx.HydrateConnectionByURL(api.DefaultArtifactConnection)
+	connection, err := pkgConnection.Get(ctx, api.DefaultArtifactConnection)
 	if err != nil {
 		return fmt.Errorf("error getting connection(%s): %w", api.DefaultArtifactConnection, err)
 	} else if connection == nil {

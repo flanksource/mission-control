@@ -65,6 +65,16 @@ func (t PermissionSubjectSelector) Find(ctx context.Context, table string) (stri
 			return id, models.PermissionSubjectTypeNotification, err
 		}
 
+	case "playbooks":
+		splits := strings.Split(string(t), "/")
+		namespace, name := splits[0], splits[1]
+		var id string
+		err := ctx.DB().Select("id").Table(table).
+			Where("namespace = ?", namespace).
+			Where("name = ?", name).
+			Find(&id).Error
+		return id, models.PermissionSubjectTypePlaybook, err
+
 	default:
 		return "", "", fmt.Errorf("unknown table: %v", table)
 	}
@@ -76,11 +86,15 @@ type PermissionSubject struct {
 	Person       PermissionSubjectSelector `json:"person,omitempty"`
 	Team         PermissionSubjectSelector `json:"team,omitempty"`
 	Notification PermissionSubjectSelector `json:"notification,omitempty"`
+	Playbook     PermissionSubjectSelector `json:"playbook,omitempty"`
+	Canary       PermissionSubjectSelector `json:"canary,omitempty"`
+	Scraper      PermissionSubjectSelector `json:"scraper,omitempty"`
+	Topology     PermissionSubjectSelector `json:"topology,omitempty"`
 }
 
 func (t *PermissionSubject) Validate() error {
-	if t.Person == "" && t.Team == "" && t.Notification == "" {
-		return errors.New("subject is empty: one of permission, team or notification is required")
+	if t.Person == "" && t.Team == "" && t.Notification == "" && t.Playbook == "" {
+		return errors.New("subject is empty: one of permission, team, playbook or notification is required")
 	}
 
 	return nil
@@ -99,6 +113,9 @@ func (t *PermissionSubject) Populate(ctx context.Context) (string, models.Permis
 	}
 	if t.Notification != "" {
 		return t.Notification.Find(ctx, "notifications")
+	}
+	if t.Playbook != "" {
+		return t.Playbook.Find(ctx, "playbooks")
 	}
 
 	return "", "", errors.New("subject not found")

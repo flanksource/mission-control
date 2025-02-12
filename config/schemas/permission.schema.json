@@ -166,6 +166,12 @@
           },
           "type": "array"
         },
+        "connections": {
+          "items": {
+            "$ref": "#/$defs/ResourceSelector"
+          },
+          "type": "array"
+        },
         "configs": {
           "items": {
             "$ref": "#/$defs/ResourceSelector"
@@ -237,6 +243,18 @@
           "type": "string"
         },
         "notification": {
+          "type": "string"
+        },
+        "playbook": {
+          "type": "string"
+        },
+        "canary": {
+          "type": "string"
+        },
+        "scraper": {
+          "type": "string"
+        },
+        "topology": {
           "type": "string"
         }
       },

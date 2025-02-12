@@ -1874,6 +1874,13 @@ func (in *PermissionObject) DeepCopyInto(out *PermissionObject) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
+	if in.Connections != nil {
+		in, out := &in.Connections, &out.Connections
+		*out = make([]types.ResourceSelector, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
 	if in.Configs != nil {
 		in, out := &in.Configs, &out.Configs
 		*out = make([]types.ResourceSelector, len(*in))
