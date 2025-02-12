@@ -355,7 +355,7 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 
 		for _, cn := range teamSpec.Notifications {
 			if cn.Filter != "" {
-				if valid, err := gomplate.RunTemplateBool(celEnv, gomplate.Template{Expression: cn.Filter}); err != nil {
+				if valid, err := ctx.RunTemplateBool(gomplate.Template{Expression: cn.Filter}, celEnv); err != nil {
 					logs.IfError(db.UpdateNotificationError(ctx, n.ID.String(), err.Error()), "failed to update notification")
 					continue
 				} else if !valid {
@@ -379,7 +379,7 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 
 	for _, cn := range n.CustomNotifications {
 		if cn.Filter != "" {
-			if valid, err := gomplate.RunTemplateBool(celEnv, gomplate.Template{Expression: cn.Filter}); err != nil {
+			if valid, err := ctx.RunTemplateBool(gomplate.Template{Expression: cn.Filter}, celEnv); err != nil {
 				logs.IfError(db.UpdateNotificationError(ctx, n.ID.String(), err.Error()), "failed to update notification")
 				continue
 			} else if !valid {

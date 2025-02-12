@@ -166,7 +166,7 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 	}
 
 	if n.Filter != "" {
-		if valid, err := gomplate.RunTemplateBool(celEnv.AsMap(ctx), gomplate.Template{Expression: n.Filter}); err != nil {
+		if valid, err := ctx.RunTemplateBool(gomplate.Template{Expression: n.Filter}, celEnv.AsMap(ctx)); err != nil {
 			// On invalid spec error, we store the error on the notification itself and exit out.
 			logs.IfError(db.UpdateNotificationError(ctx, id, err.Error()), "failed to update notification")
 			return nil
