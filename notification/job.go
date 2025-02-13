@@ -347,12 +347,15 @@ func shouldSkipNotificationDueToHealth(ctx context.Context, notif NotificationWi
 	// previousHealth is the health that triggered the notification event
 	previousHealth := api.EventToHealth(payload.EventName)
 
-	currentHealth, deleted, err := celEnv.GetResourceHealth(ctx)
+	resourceHealth, err := celEnv.GetResourceHealth(ctx)
 	if err != nil {
 		return false, fmt.Errorf("failed to get resource health from cel env: %w", err)
 	}
+	currentHealth := resourceHealth.Health
+	deleted := resourceHealth.DeletedAt != nil
+	relativeUpdatedAt := time.Since(lo.FromPtr(resourceHealth.UpdatedAt))
 
-	traceLog("NotificationID=%s HistoryID=%s Resource=[%s/%s] PreviousHealth=%s CurrentHealth=%s Checking if reportable", notif.ID, currentHistory.ID, payload.EventName, payload.ID, previousHealth, currentHealth)
+	traceLog("NotificationID=%s HistoryID=%s Resource=[%s/%s] PreviousHealth=%s CurrentHealth=%s UpdatedAt=%s RelativeUpdatedAtAgo=%s Checking if reportable", notif.ID, currentHistory.ID, payload.EventName, payload.ID, previousHealth, currentHealth, lo.FromPtr(resourceHealth.UpdatedAt), relativeUpdatedAt)
 	if !isHealthReportable(notif.Events, previousHealth, currentHealth) || deleted {
 		ctx.Logger.V(6).Infof("skipping notification[%s] as health change is not reportable", notif.ID)
 		traceLog("NotificationID=%s HistoryID=%s Resource=[%s/%s] PreviousHealth=%s CurrentHealth=%s ResourceDeleted=%v Skipping", notif.ID, currentHistory.ID, payload.EventName, payload.ID, previousHealth, currentHealth, deleted)
