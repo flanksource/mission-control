@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/flanksource/duty"
 	dutyApi "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/secret"
+	"github.com/flanksource/duty/shutdown"
 	"github.com/flanksource/duty/telemetry"
 	"go.opentelemetry.io/otel/attribute"
 
@@ -38,6 +40,7 @@ func PreRun(cmd *cobra.Command, args []string) {
 		content, err := os.ReadFile(path)
 		if err != nil {
 			logger.Fatalf("failed to read identity role mapper script file(%s): %v", path, err)
+			shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to read identity role mapper script file(%s): %v", path, err))
 		}
 
 		auth.IdentityRoleMapper = string(content)
@@ -94,7 +97,7 @@ func ServerFlags(flags *pflag.FlagSet) {
 	var upstreamPageSizeDefault = 500
 	if val, exists := os.LookupEnv("UPSTREAM_PAGE_SIZE"); exists {
 		if parsed, err := strconv.Atoi(val); err != nil {
-			logger.Fatalf("invalid value=%s for UPSTREAM_PAGE_SIZE: %v", val, err)
+			shutdown.ShutdownAndExit(1, fmt.Sprintf("invalid value=%s for UPSTREAM_PAGE_SIZE: %v", val, err))
 		} else {
 			upstreamPageSizeDefault = parsed
 		}

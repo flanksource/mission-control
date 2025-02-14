@@ -129,7 +129,7 @@ var Serve = &cobra.Command{
 
 		ctx, stop, err := duty.Start("mission-control", dutyArgs...)
 		if err != nil {
-			logger.Fatalf(err.Error())
+			shutdown.ShutdownAndExit(1, fmt.Sprintf("error setting up db connection: %v", err))
 		}
 
 		e := echo.New(ctx)
@@ -158,7 +158,7 @@ var Serve = &cobra.Command{
 		listenAddr := fmt.Sprintf(":%d", httpPort)
 		logger.Infof("Listening on %s", listenAddr)
 		if err := e.Start(listenAddr); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			logger.Fatalf("Failed to start server: %v", err)
+			shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to start server: %v", err))
 		}
 	},
 }
