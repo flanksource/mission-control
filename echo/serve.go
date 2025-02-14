@@ -21,6 +21,7 @@ import (
 	dutyEcho "github.com/flanksource/duty/echo"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/schema/openapi"
+	"github.com/flanksource/duty/shutdown"
 	"github.com/flanksource/duty/telemetry"
 	"github.com/flanksource/incident-commander/agent"
 	"github.com/flanksource/incident-commander/api"
@@ -141,7 +142,7 @@ func New(ctx context.Context) *echov4.Echo {
 
 	if vars.AuthMode != "" {
 		if err := auth.Middleware(ctx, e); err != nil {
-			logger.Fatalf(err.Error())
+			shutdown.ShutdownAndExit(1, fmt.Sprintf("error setting up auth middleware: %v", err))
 		}
 	}
 
@@ -306,7 +307,7 @@ func Start(e *echov4.Echo, httpPort int) {
 	listenAddr := fmt.Sprintf(":%d", httpPort)
 	logger.Infof("Listening on %s", listenAddr)
 	if err := e.Start(listenAddr); err != nil {
-		logger.Fatalf("Failed to start server: %v", err)
+		shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to start server: %v", err))
 	}
 }
 
