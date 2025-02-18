@@ -61,24 +61,28 @@ func GetNextActionToRun(ctx context.Context, run models.PlaybookRun) (action *v1
 	}
 
 	for i, action := range playbookSpec.Actions {
-		if action.Name == lastRanAction.Name {
-			// If last action failed do not run more steps unless it has a filter or a retry policy
-			if lastRanAction.Status == models.PlaybookActionStatusFailed {
-				canRetry := action.Retry != nil && lastRanAction.RetryCount < action.Retry.Limit
-				if canRetry {
-					return &playbookSpec.Actions[i], &lastRanAction, nil
-				}
+		isLastAction := i == len(playbookSpec.Actions)-1
+		lastActionFailed := lastRanAction.Status == models.PlaybookActionStatusFailed
 
+		if action.Name == lastRanAction.Name && lastActionFailed {
+			canRetry := action.Retry != nil && lastRanAction.RetryCount < action.Retry.Limit
+			if canRetry {
+				return &playbookSpec.Actions[i], &lastRanAction, nil
+			}
+		}
+
+		if isLastAction {
+			return nil, nil, nil
+		}
+
+		if action.Name == lastRanAction.Name {
+			// If last action failed do not run more steps unless it has a filter
+			if lastActionFailed {
 				alwaysAction := findNextActionWithFilter(playbookSpec.Actions[i+1:])
 				return alwaysAction, &lastRanAction, nil
 			}
 
 			return &playbookSpec.Actions[i+1], &lastRanAction, nil
-		}
-
-		if i == len(playbookSpec.Actions)-1 {
-			// return if this is the last action.
-			return nil, nil, nil
 		}
 	}
 
