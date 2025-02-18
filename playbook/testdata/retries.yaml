@@ -1,0 +1,16 @@
+# yaml-language-server: $schema=../../config/schemas/playbook.schema.json
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: retry-echo
+spec:
+  actions:
+    - name: echo
+      retry:
+        limit: 2
+        duration: 2s
+        jitter: 0
+        exponent:
+          multiplier: 2
+      exec:
+        script: bad-binary
