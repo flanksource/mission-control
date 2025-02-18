@@ -1626,11 +1626,6 @@ func (in *NotificationSpec) DeepCopyInto(out *NotificationSpec) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
-	if in.RepeatGroup != nil {
-		in, out := &in.RepeatGroup, &out.RepeatGroup
-		*out = make([]string, len(*in))
-		copy(*out, *in)
-	}
 	in.To.DeepCopyInto(&out.To)
 	if in.WaitFor != nil {
 		in, out := &in.WaitFor, &out.WaitFor
@@ -1641,6 +1636,11 @@ func (in *NotificationSpec) DeepCopyInto(out *NotificationSpec) {
 		in, out := &in.WaitForEvalPeriod, &out.WaitForEvalPeriod
 		*out = new(string)
 		**out = **in
+	}
+	if in.WaitForGroup != nil {
+		in, out := &in.WaitForGroup, &out.WaitForGroup
+		*out = make([]string, len(*in))
+		copy(*out, *in)
 	}
 }
 

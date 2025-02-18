@@ -106,12 +106,6 @@
         "repeatInterval": {
           "type": "string"
         },
-        "repeatGroup": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
         "to": {
           "$ref": "#/$defs/NotificationRecipientSpec"
         },
@@ -120,6 +114,12 @@
         },
         "waitForEvalPeriod": {
           "type": "string"
+        },
+        "waitForGroup": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,

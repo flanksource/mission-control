@@ -45,7 +45,7 @@ func PersistNotificationFromCRD(ctx context.Context, obj *v1.Notification) error
 		Properties:     obj.Spec.To.Properties,
 		Source:         models.SourceCRD,
 		RepeatInterval: obj.Spec.RepeatInterval,
-		GroupBy:        obj.Spec.RepeatGroup,
+		GroupBy:        obj.Spec.WaitForGroup,
 	}
 
 	if obj.Spec.WaitFor != nil && *obj.Spec.WaitFor != "" {

@@ -47,13 +47,6 @@ spec:
                 description: Cel-expression used to decide whether this notification
                   client should send the notification
                 type: string
-              repeatGroup:
-                description: |-
-                  RepeatGroup allows notifications to be grouped by certain set of keys and only send
-                  one per group within the specified repeat interval.
-                items:
-                  type: string
-                type: array
               repeatInterval:
                 description: RepeatInterval is the waiting time to resend a notification
                   after it has been succefully sent.
@@ -114,6 +107,13 @@ spec:
                   WaitForEvalPeriod is an additional delay after WaitFor before evaluating
                   Kubernetes config health. Format: "5m", "1h"
                 type: string
+              waitForGroup:
+                description: |-
+                  WaitForGroup allows notifications in waiting status to be grouped together
+                  based on certain set of keys.
+                items:
+                  type: string
+                type: array
             required:
             - events
             - to
