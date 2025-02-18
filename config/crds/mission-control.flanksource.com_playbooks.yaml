@@ -1737,7 +1737,9 @@ spec:
                             duration.
                           type: number
                         limit:
-                          description: Limit is the number of times to retry the action.
+                          description: |-
+                            Limit is the number of times to retry the action.
+                            With limit = 3, there will be a max of 4 attempts for the action (initial attempt + 3 retries).
                           type: integer
                       required:
                       - duration
