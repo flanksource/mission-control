@@ -49,6 +49,11 @@ func GetActionByName(ctx context.Context, runID, actionName string) (map[string]
 
 	var action models.PlaybookRunAction
 	query := ctx.DB().Where("name = ?", actionName).Where("playbook_run_id = ?", runID)
+
+	// there could be multiple actions with the same name due to retries.
+	// we fetch the latest one
+	query.Order("start_time ASC").Limit(1)
+
 	if err := query.First(&action).Error; err != nil {
 		ctx.Logger.V(4).Infof("getActionByName run=%s: %s ==> not found", runID, actionName)
 		return nil, err
