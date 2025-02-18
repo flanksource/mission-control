@@ -1,0 +1,14 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Notification
+metadata:
+  name: config-health
+spec:
+  events:
+    - config.unhealthy
+    - config.warning
+  waitFor: 2m
+  waitForEvalPeriod: 30s
+  groupBy:
+    - label:app
+  to:
+    connection: connection://default/slack
