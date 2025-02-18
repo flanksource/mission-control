@@ -115,7 +115,7 @@
         "waitForEvalPeriod": {
           "type": "string"
         },
-        "waitForGroup": {
+        "groupBy": {
           "items": {
             "type": "string"
           },

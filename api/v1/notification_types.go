@@ -77,9 +77,9 @@ type NotificationSpec struct {
 	// Kubernetes config health. Format: "5m", "1h"
 	WaitForEvalPeriod *string `json:"waitForEvalPeriod,omitempty" yaml:"waitForEvalPeriod,omitempty"`
 
-	// WaitForGroup allows notifications in waiting status to be grouped together
+	// GroupBy allows notifications in waiting status to be grouped together
 	// based on certain set of keys.
-	WaitForGroup []string `json:"waitForGroup,omitempty"`
+	GroupBy []string `json:"groupBy,omitempty"`
 }
 
 var NotificationReconciler kopper.Reconciler[Notification, *Notification]

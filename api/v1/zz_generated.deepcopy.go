@@ -1637,8 +1637,8 @@ func (in *NotificationSpec) DeepCopyInto(out *NotificationSpec) {
 		*out = new(string)
 		**out = **in
 	}
-	if in.WaitForGroup != nil {
-		in, out := &in.WaitForGroup, &out.WaitForGroup
+	if in.GroupBy != nil {
+		in, out := &in.GroupBy, &out.GroupBy
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}

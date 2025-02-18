@@ -45,7 +45,7 @@ func PersistNotificationFromCRD(ctx context.Context, obj *v1.Notification) error
 		Properties:     obj.Spec.To.Properties,
 		Source:         models.SourceCRD,
 		RepeatInterval: obj.Spec.RepeatInterval,
-		GroupBy:        obj.Spec.WaitForGroup,
+		GroupBy:        obj.Spec.GroupBy,
 	}
 
 	if obj.Spec.WaitFor != nil && *obj.Spec.WaitFor != "" {
@@ -62,6 +62,10 @@ func PersistNotificationFromCRD(ctx context.Context, obj *v1.Notification) error
 		} else {
 			dbObj.WaitForEvalPeriod = parsed
 		}
+	}
+
+	if len(obj.Spec.GroupBy) > 0 && obj.Spec.WaitFor != nil && *obj.Spec.WaitFor == "" {
+		return fmt.Errorf("groupBy provided with an empty waitFor. either remove the groupBy or set a waitFor period.")
 	}
 
 	switch {
