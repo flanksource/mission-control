@@ -58,7 +58,7 @@ type NotificationSpec struct {
 
 	// RepeatGroup allows notifications to be grouped by certain set of keys and only send
 	// one per group within the specified repeat interval.
-	RepeatGroup []string `json:"repeatGroup,omitempty" yaml:"repeatGroup,omitempty"`
+	// RepeatGroup []string `json:"repeatGroup,omitempty" yaml:"repeatGroup,omitempty"`
 
 	// Specify the recipient
 	To NotificationRecipientSpec `json:"to" yaml:"to"`
@@ -76,6 +76,13 @@ type NotificationSpec struct {
 	// WaitForEvalPeriod is an additional delay after WaitFor before evaluating
 	// Kubernetes config health. Format: "5m", "1h"
 	WaitForEvalPeriod *string `json:"waitForEvalPeriod,omitempty" yaml:"waitForEvalPeriod,omitempty"`
+
+	// GroupBy allows notifications in waiting status to be grouped together
+	// based on certain set of keys.
+	//
+	// Valid keys: type, description, status_reason or
+	// labels & tags in the format `label:<key>` or `tag:<key>`
+	GroupBy []string `json:"groupBy,omitempty"`
 }
 
 var NotificationReconciler kopper.Reconciler[Notification, *Notification]
