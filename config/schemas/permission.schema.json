@@ -166,6 +166,12 @@
           },
           "type": "array"
         },
+        "connections": {
+          "items": {
+            "$ref": "#/$defs/ResourceSelector"
+          },
+          "type": "array"
+        },
         "configs": {
           "items": {
             "$ref": "#/$defs/ResourceSelector"
