@@ -95,6 +95,11 @@ type PermissionSubject struct {
 
 	// Group is the group name
 	Group string `json:"group,omitempty"`
+
+	Playbook PermissionSubjectSelector `json:"playbook,omitempty"`
+	Canary   PermissionSubjectSelector `json:"canary,omitempty"`
+	Scraper  PermissionSubjectSelector `json:"scraper,omitempty"`
+	Topology PermissionSubjectSelector `json:"topology,omitempty"`
 }
 
 func (t *PermissionSubject) Validate() error {
