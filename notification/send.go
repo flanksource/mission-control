@@ -10,6 +10,7 @@ import (
 
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/utils"
+	pkgConnection "github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
@@ -18,7 +19,6 @@ import (
 	"github.com/samber/lo"
 	"go.opentelemetry.io/otel/trace"
 
-	pkgConnection "github.com/flanksource/duty/connection"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/logs"
@@ -193,7 +193,7 @@ func SendNotification(ctx *Context, connectionName, shoutrrrURL string, celEnv m
 	var connection *models.Connection
 	var err error
 	if connectionName != "" {
-		connection, err = pkgConnection.GetC(ctx.Context, connectionName)
+		connection, err = pkgConnection.Get(ctx.Context, connectionName)
 		if err != nil {
 			return "", err
 		}

@@ -166,6 +166,12 @@
           },
           "type": "array"
         },
+        "connections": {
+          "items": {
+            "$ref": "#/$defs/ResourceSelector"
+          },
+          "type": "array"
+        },
         "configs": {
           "items": {
             "$ref": "#/$defs/ResourceSelector"
@@ -239,7 +245,21 @@
         "notification": {
           "type": "string"
         },
+<<<<<<< HEAD
         "group": {
+||||||| parent of d278685 (feat: replace hydrateConnection with connection.Get)
+=======
+        "playbook": {
+          "type": "string"
+        },
+        "canary": {
+          "type": "string"
+        },
+        "scraper": {
+          "type": "string"
+        },
+        "topology": {
+>>>>>>> d278685 (feat: replace hydrateConnection with connection.Get)
           "type": "string"
         }
       },
