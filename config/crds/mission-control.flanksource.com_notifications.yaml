@@ -51,6 +51,10 @@ spec:
                 description: |-
                   GroupBy allows notifications in waiting status to be grouped together
                   based on certain set of keys.
+
+
+                  Valid keys: type, description, status_reason or
+                  labels & tags in the format `label:<key>` or `tag:<key>`
                 items:
                   type: string
                 type: array

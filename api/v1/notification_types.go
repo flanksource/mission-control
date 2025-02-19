@@ -79,6 +79,9 @@ type NotificationSpec struct {
 
 	// GroupBy allows notifications in waiting status to be grouped together
 	// based on certain set of keys.
+	//
+	// Valid keys: type, description, status_reason or
+	// labels & tags in the format `label:<key>` or `tag:<key>`
 	GroupBy []string `json:"groupBy,omitempty"`
 }
 
