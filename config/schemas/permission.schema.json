@@ -245,10 +245,9 @@
         "notification": {
           "type": "string"
         },
-<<<<<<< HEAD
         "group": {
-||||||| parent of d278685 (feat: replace hydrateConnection with connection.Get)
-=======
+          "type": "string"
+        },
         "playbook": {
           "type": "string"
         },
@@ -259,7 +258,6 @@
           "type": "string"
         },
         "topology": {
->>>>>>> d278685 (feat: replace hydrateConnection with connection.Get)
           "type": "string"
         }
       },

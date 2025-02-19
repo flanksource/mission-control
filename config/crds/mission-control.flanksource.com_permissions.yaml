@@ -310,19 +310,16 @@ spec:
                 description: Subject defines the entity (e.g., user, group) to which
                   the permission applies.
                 properties:
-<<<<<<< HEAD
-                  group:
-                    description: Group is the group name
-||||||| parent of d278685 (feat: replace hydrateConnection with connection.Get)
-=======
                   canary:
                     description: |-
                       Subject of the permission.
-                      Can be
-                      - a permission group name
+                      Can be in various formats depending on the table
                       - id of a resource
-                      - <namespace>/<name> of a resource
->>>>>>> d278685 (feat: replace hydrateConnection with connection.Get)
+                      - name or email for person
+                      - <namespace>/<name> of a notification
+                    type: string
+                  group:
+                    description: Group is the group name
                     type: string
                   notification:
                     description: Notification <namespace>/<name> selector
@@ -333,18 +330,18 @@ spec:
                   playbook:
                     description: |-
                       Subject of the permission.
-                      Can be
-                      - a permission group name
+                      Can be in various formats depending on the table
                       - id of a resource
-                      - <namespace>/<name> of a resource
+                      - name or email for person
+                      - <namespace>/<name> of a notification
                     type: string
                   scraper:
                     description: |-
                       Subject of the permission.
-                      Can be
-                      - a permission group name
+                      Can be in various formats depending on the table
                       - id of a resource
-                      - <namespace>/<name> of a resource
+                      - name or email for person
+                      - <namespace>/<name> of a notification
                     type: string
                   team:
                     description: Team is the team name
@@ -352,10 +349,10 @@ spec:
                   topology:
                     description: |-
                       Subject of the permission.
-                      Can be
-                      - a permission group name
+                      Can be in various formats depending on the table
                       - id of a resource
-                      - <namespace>/<name> of a resource
+                      - name or email for person
+                      - <namespace>/<name> of a notification
                     type: string
                 type: object
               tags:

@@ -68,7 +68,7 @@ func (t PermissionSubjectSelector) Find(ctx context.Context, table string) (stri
 
 		splits := strings.Split(string(t), "/")
 		if len(splits) != 2 {
-			return "", "", fmt.Errorf("%s is not a valid notification subject. must be <namespace>/<name>", t)
+			return "", "", fmt.Errorf("%s is not a valid notification subject. Must be <namespace>/<name>", t)
 		}
 
 		namespace, name := splits[0], splits[1]
@@ -81,6 +81,10 @@ func (t PermissionSubjectSelector) Find(ctx context.Context, table string) (stri
 
 	case "playbooks":
 		splits := strings.Split(string(t), "/")
+		if len(splits) != 2 {
+			return "", "", fmt.Errorf("%s is not a valid playbooks subject. Must be <namespace>/<name>", t)
+		}
+
 		namespace, name := splits[0], splits[1]
 		var id string
 		err := ctx.DB().Select("id").Table(table).
