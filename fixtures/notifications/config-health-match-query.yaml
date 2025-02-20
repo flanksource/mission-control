@@ -1,0 +1,11 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Notification
+metadata:
+  name: config-alerts
+spec:
+  events:
+    - config.unhealthy
+    - config.warning
+  filter: matchQuery(.config, "type=Kubernetes::Pod,Kubernetes::Deployment name!=postgres tags.cluster=prod")
+  to:
+    email: alerts@acme.com
