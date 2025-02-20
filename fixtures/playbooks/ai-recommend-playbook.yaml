@@ -13,9 +13,14 @@ spec:
       label: Prompt
       default: Find out why {{.config.name}} is unhealthy and report in one short sentence.
       properties:
-        multiline: 'true'
+        multiline: "true"
   actions:
     - name: query LLM
+      retry:
+        limit: 2
+        duration: 3m
+        exponent:
+          multiplier: 2
       ai:
         connection: connection://mc/anthropic
         formats:
@@ -33,7 +38,7 @@ spec:
           1. **Resource Analysis:** Examine the manifest of the unhealthy resource thoroughly.
           2. **Contextual Investigation:** Consider additional related resources provided (e.g., pods, replica sets, namespaces) to gain a comprehensive understanding of the issue.
           4. **One-Time Diagnosis:** Aim to diagnose the issue in a single response without requiring follow-up questions.
-        prompt: '{{.params.prompt}}'
+        prompt: "{{.params.prompt}}"
         changes:
           since: 2d
         analysis:
@@ -47,13 +52,8 @@ spec:
             direction: incoming
             changes:
               since: 24h
-    - name: send diagnosis report
-      notification:
-        connection: connection://mc/flanksource-slack
-        title: Diagnosis report
-        message: '$(getLastAction.result.slack)'
     - name: send recommended playbooks
       notification:
-        connection: connection://mc/flanksource-slack
+        connection: "{{.Values.slack.connection}}"
         title: Recommended playbooks
-        message: '{{ index (getAction "query LLM").result.recommendedPlaybooks }}'
+        message: "$(getLastAction.result.recommendedPlaybooks)"
