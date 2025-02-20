@@ -524,7 +524,10 @@ type PlaybookActionRetry struct {
 	Duration string `json:"duration"`
 
 	// Jitter is the random factor to apply to the duration.
-	Jitter float64 `json:"jitter"`
+	// Ranges from 0 to 100.
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=100
+	Jitter float64 `json:"jitter,omitempty"`
 
 	// Exponent is the exponential backoff configuration.
 	Exponent RetryExponent `json:"exponent"`

@@ -1733,8 +1733,11 @@ spec:
                           - multiplier
                           type: object
                         jitter:
-                          description: Jitter is the random factor to apply to the
-                            duration.
+                          description: |-
+                            Jitter is the random factor to apply to the duration.
+                            Ranges from 0 to 100.
+                          maximum: 100
+                          minimum: 0
                           type: number
                         limit:
                           description: |-
@@ -1744,7 +1747,6 @@ spec:
                       required:
                       - duration
                       - exponent
-                      - jitter
                       - limit
                       type: object
                     runsOn:
