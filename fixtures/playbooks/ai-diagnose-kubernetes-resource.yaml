@@ -7,11 +7,7 @@ metadata:
 spec:
   description: Use AI to diagnose unhealthy kubernetes resources
   configs:
-    - types:
-        - Kubernetes::DaemonSet
-        - Kubernetes::Deployment
-        - Kubernetes::Pod
-        - Kubernetes::StatefulSet
+    - health: unhealthy
   parameters:
     - name: prompt
       label: Prompt
@@ -20,6 +16,11 @@ spec:
         multiline: 'true'
   actions:
     - name: query
+      retry:
+        limit: 2
+        duration: 10s
+        exponent:
+          multiplier: 2
       ai:
         connection: connection://mc/anthropic
         systemPrompt: |
@@ -37,11 +38,11 @@ spec:
           **Output:** Provide a concise diagnosis and potential solutions based on the analysis.
         prompt: '{{.params.prompt}}'
         changes:
-          since: 2d
+          since: 24h
         analysis:
-          since: 2d
+          since: 24h
         relationships:
-          - depth: 3
+          - depth: 5
             direction: outgoing
             changes:
               since: 24h
