@@ -225,6 +225,22 @@ var _ = Describe("Playbook", func() {
 		})
 	})
 
+	var _ = Describe("retries", Ordered, func() {
+		It("should retry actions", func() {
+			run := createAndRun(DefaultContext, "retries", RunParams{}, models.PlaybookRunStatusFailed)
+			Expect(run.Status).To(Equal(models.PlaybookRunStatusFailed), run.String(DefaultContext.DB()))
+
+			var actions []models.PlaybookRunAction
+			err := DefaultContext.DB().Where("playbook_run_id = ?", run.ID).Find(&actions).Error
+			Expect(err).To(BeNil())
+
+			Expect(len(actions)).To(Equal(1 + 2)) // 1 initial + 2 retries
+			for i, a := range actions {
+				Expect(a.RetryCount).To(Equal(i))
+			}
+		})
+	})
+
 	var _ = Describe("action filters", Ordered, func() {
 		var (
 			spec     v1.PlaybookSpec
@@ -649,7 +665,7 @@ func waitFor(run *models.PlaybookRun, statuses ...models.PlaybookRunStatus) *mod
 
 		return models.PlaybookRunStatus("Unknown")
 
-	}).WithTimeout(15 * time.Second).WithPolling(time.Second).Should(BeElementOf(s))
+	}).WithTimeout(30 * time.Second).WithPolling(time.Second).Should(BeElementOf(s))
 
 	return savedRun
 }
