@@ -801,7 +801,7 @@
           "type": "string"
         },
         "jitter": {
-          "type": "number"
+          "type": "integer"
         },
         "exponent": {
           "$ref": "#/$defs/RetryExponent"
@@ -1191,7 +1191,7 @@
     "RetryExponent": {
       "properties": {
         "multiplier": {
-          "type": "number"
+          "type": "integer"
         }
       },
       "additionalProperties": false,
