@@ -512,7 +512,7 @@ func (t *AWSConnection) Populate(ctx connectionContext, k8s kubernetes.Interface
 }
 
 type RetryExponent struct {
-	Multiplier float64 `json:"multiplier"`
+	Multiplier int `json:"multiplier"`
 }
 
 type PlaybookActionRetry struct {
@@ -527,7 +527,7 @@ type PlaybookActionRetry struct {
 	// Ranges from 0 to 100.
 	// +kubebuilder:validation:Minimum=0
 	// +kubebuilder:validation:Maximum=100
-	Jitter float64 `json:"jitter,omitempty"`
+	Jitter int `json:"jitter,omitempty"`
 
 	// Exponent is the exponential backoff configuration.
 	Exponent RetryExponent `json:"exponent"`
@@ -539,9 +539,9 @@ func (t PlaybookActionRetry) NextRetryWait(retryNumber int) (time.Duration, erro
 		return 0, fmt.Errorf("failed to parse duration(%s): %w", t.Duration, err)
 	}
 
-	nextWaitDuration := float64(interval) * math.Pow(t.Exponent.Multiplier, float64(retryNumber))
+	nextWaitDuration := float64(interval) * math.Pow(float64(t.Exponent.Multiplier), float64(retryNumber))
 
-	jitterFactor := 1 + ((rand.Float64()*2 - 1) * t.Jitter * 0.01) // Scales jitter within [-Jitter, +Jitter]
+	jitterFactor := 1 + ((rand.Float64()*2 - 1) * float64(t.Jitter) * 0.01) // Scales jitter within [-Jitter, +Jitter]
 	nextWaitDurationWithJitter := nextWaitDuration * jitterFactor
 
 	return time.Duration(nextWaitDurationWithJitter), nil

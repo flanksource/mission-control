@@ -15,12 +15,12 @@ func TestNextRetryWait(t *testing.T) {
 		{
 			name:          "no jitter",
 			RetryCount:    1,
-			ExpectedRange: []float64{45, 45},
+			ExpectedRange: []float64{60, 60},
 			Retry: PlaybookActionRetry{
 				Limit:    1,
 				Duration: "30s",
 				Exponent: RetryExponent{
-					Multiplier: 1.5,
+					Multiplier: 2,
 				},
 				Jitter: 0,
 			},
@@ -28,12 +28,12 @@ func TestNextRetryWait(t *testing.T) {
 		{
 			name:          "no jitter second iteration",
 			RetryCount:    2,
-			ExpectedRange: []float64{67.5, 67.5},
+			ExpectedRange: []float64{120, 120},
 			Retry: PlaybookActionRetry{
 				Limit:    1,
 				Duration: "30s",
 				Exponent: RetryExponent{
-					Multiplier: 1.5,
+					Multiplier: 2,
 				},
 				Jitter: 0,
 			},
@@ -41,12 +41,12 @@ func TestNextRetryWait(t *testing.T) {
 		{
 			name:          "with jitter second iteration",
 			RetryCount:    2,
-			ExpectedRange: []float64{60, 75},
+			ExpectedRange: []float64{108, 132},
 			Retry: PlaybookActionRetry{
 				Limit:    1,
 				Duration: "30s",
 				Exponent: RetryExponent{
-					Multiplier: 1.5,
+					Multiplier: 2,
 				},
 				Jitter: 10,
 			},

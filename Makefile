@@ -105,7 +105,7 @@ gen-schemas:
 
 .PHONY: manifests
 manifests: controller-gen generate gen-schemas ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
-	$(CONTROLLER_GEN) crd:allowDangerousTypes=true paths="./api/..." output:crd:artifacts:config=config/crds
+	$(CONTROLLER_GEN) crd paths="./api/..." output:crd:artifacts:config=config/crds
 
 .PHONY: generate
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.

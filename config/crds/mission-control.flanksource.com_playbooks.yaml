@@ -1728,7 +1728,7 @@ spec:
                           description: Exponent is the exponential backoff configuration.
                           properties:
                             multiplier:
-                              type: number
+                              type: integer
                           required:
                           - multiplier
                           type: object
@@ -1738,7 +1738,7 @@ spec:
                             Ranges from 0 to 100.
                           maximum: 100
                           minimum: 0
-                          type: number
+                          type: integer
                         limit:
                           description: |-
                             Limit is the number of times to retry the action.
