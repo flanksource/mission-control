@@ -41,7 +41,8 @@ func GetNotificationIDsForEvent(ctx context.Context, eventName string) ([]string
 // A wrapper around notification that also contains the custom notifications.
 type NotificationWithSpec struct {
 	models.Notification
-	CustomNotifications []api.NotificationConfig
+	CustomNotifications        []api.NotificationConfig
+	FallbackCustomNotification *api.NotificationConfig
 }
 
 func GetNotification(ctx context.Context, id string) (*NotificationWithSpec, error) {
@@ -67,6 +68,22 @@ func GetNotification(ctx context.Context, id string) (*NotificationWithSpec, err
 	data := NotificationWithSpec{
 		Notification:        n,
 		CustomNotifications: customNotifications,
+	}
+
+	if len(n.FallbackCustomServices) > 0 {
+		b, err := json.Marshal(n.FallbackCustomServices)
+		if err != nil {
+			return nil, err
+		}
+
+		var customNotifications []api.NotificationConfig
+		if err := json.Unmarshal(b, &customNotifications); err != nil {
+			return nil, err
+		}
+
+		if len(customNotifications) > 0 {
+			data.FallbackCustomNotification = &customNotifications[0]
+		}
 	}
 
 	notificationByIDCache.Set(id, &data, cache.DefaultExpiration)

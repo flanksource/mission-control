@@ -72,6 +72,10 @@ func Start(ctx context.Context) {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to schedule job ProcessFallbackCheckNotificationsJob: %v", err))
 	}
 
+	if err := notification.ProcessFallbackNotificationsJob(ctx).AddToScheduler(FuncScheduler); err != nil {
+		shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to schedule job ProcessFallbackNotificationsJob: %v", err))
+	}
+
 	if err := notification.ProcessPendingNotificationsJob(ctx).AddToScheduler(FuncScheduler); err != nil {
 		logger.Errorf("failed to schedule job: %v", err)
 	}
