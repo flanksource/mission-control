@@ -123,3 +123,18 @@ func (t *TemplateEnv) SelectableResource() types.ResourceSelectable {
 	}
 	return nil
 }
+
+func (t *TemplateEnv) ABACAttributes() *models.ABACAttribute {
+	var output models.ABACAttribute
+	if t.Component != nil {
+		output.Component = *t.Component
+	}
+	if t.Check != nil {
+		output.Check = *t.Check
+	}
+	if t.Config != nil {
+		output.Config = *t.Config
+	}
+
+	return &output
+}
