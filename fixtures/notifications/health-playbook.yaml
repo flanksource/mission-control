@@ -9,4 +9,6 @@ spec:
     - config.unhealthy
     - config.warning
   to:
-    playbook: mc/echo-config
+    playbook: mc/diagnose-configs
+  fallback:
+    connection: connection://mc/slack
