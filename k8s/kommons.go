@@ -14,7 +14,12 @@ import (
 // WaitForPod waits for a pod to be in the specified phase, or returns an
 // error if the timeout is exceeded
 func WaitForPod(ctx context.Context, name string, timeout time.Duration, phases ...v1.PodPhase) error {
-	pods := ctx.Kubernetes().CoreV1().Pods(ctx.GetNamespace())
+	kubeclient, err := ctx.Kubernetes()
+	if err != nil {
+		return fmt.Errorf("failed to get kubernetes client: %w", err)
+	}
+
+	pods := kubeclient.CoreV1().Pods(ctx.GetNamespace())
 	start := time.Now()
 	for {
 		pod, err := pods.Get(ctx, name, metav1.GetOptions{})
@@ -44,7 +49,12 @@ func GetPodLogs(ctx context.Context, podName, container string) (string, error) 
 		podLogOptions.Container = container
 	}
 
-	req := ctx.Kubernetes().CoreV1().Pods(ctx.GetNamespace()).GetLogs(podName, &podLogOptions)
+	kubeclient, err := ctx.Kubernetes()
+	if err != nil {
+		return "", fmt.Errorf("failed to get kubernetes client: %w", err)
+	}
+
+	req := kubeclient.CoreV1().Pods(ctx.GetNamespace()).GetLogs(podName, &podLogOptions)
 	podLogs, err := req.Stream(ctx)
 	if err != nil {
 		return "", err
@@ -61,5 +71,10 @@ func GetPodLogs(ctx context.Context, podName, container string) (string, error) 
 }
 
 func DeletePod(ctx context.Context, name string) error {
-	return ctx.Kubernetes().CoreV1().Pods(ctx.GetNamespace()).Delete(ctx, name, metav1.DeleteOptions{})
+	kubeclient, err := ctx.Kubernetes()
+	if err != nil {
+		return fmt.Errorf("failed to get kubernetes client: %w", err)
+	}
+
+	return kubeclient.CoreV1().Pods(ctx.GetNamespace()).Delete(ctx, name, metav1.DeleteOptions{})
 }

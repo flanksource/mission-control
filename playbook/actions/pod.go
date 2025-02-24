@@ -45,7 +45,12 @@ func (c *Pod) Run(ctx context.Context, action v1.PodAction, timeout time.Duratio
 		return nil, fmt.Errorf("error creating pod struct: %w", err)
 	}
 
-	if _, err := ctx.Kubernetes().CoreV1().Pods(ctx.GetNamespace()).Create(ctx, pod, metav1.CreateOptions{}); err != nil {
+	kubeclient, err := ctx.Kubernetes()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get kubernetes client: %w", err)
+	}
+
+	if _, err := kubeclient.CoreV1().Pods(ctx.GetNamespace()).Create(ctx, pod, metav1.CreateOptions{}); err != nil {
 		return nil, fmt.Errorf("error creating pod: %w", err)
 	}
 	defer deletePod(ctx, pod)
