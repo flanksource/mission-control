@@ -56,6 +56,39 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "NotificationFallback": {
+      "properties": {
+        "person": {
+          "type": "string"
+        },
+        "team": {
+          "type": "string"
+        },
+        "email": {
+          "type": "string"
+        },
+        "connection": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "properties": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "playbook": {
+          "type": "string"
+        },
+        "delay": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "NotificationRecipientSpec": {
       "properties": {
         "person": {
@@ -108,6 +141,9 @@
         },
         "to": {
           "$ref": "#/$defs/NotificationRecipientSpec"
+        },
+        "fallback": {
+          "$ref": "#/$defs/NotificationFallback"
         },
         "waitFor": {
           "type": "string"
