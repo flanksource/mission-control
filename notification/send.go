@@ -44,28 +44,47 @@ type NotificationTemplate struct {
 
 // NotificationEventPayload holds data to create a notification.
 type NotificationEventPayload struct {
-	ID               uuid.UUID  `json:"id"`                          // Resource id. depends what it is based on the original event.
-	EventName        string     `json:"event_name"`                  // The name of the original event this notification is for.
-	PlaybookID       *uuid.UUID `json:"playbook_id,omitempty"`       // The playbook to trigger
-	PersonID         *uuid.UUID `json:"person_id,omitempty"`         // The person recipient.
-	TeamID           *uuid.UUID `json:"team_id,omitempty"`           // The team recipient.
-	NotificationName string     `json:"notification_name,omitempty"` // Name of the notification of a team
-	NotificationID   uuid.UUID  `json:"notification_id,omitempty"`   // ID of the notification.
-	EventCreatedAt   time.Time  `json:"event_created_at"`            // Timestamp at which the original event was created
-	Properties       []byte     `json:"properties,omitempty"`        // json encoded properties of the original event
-	GroupedResources []string   `json:"grouped_resources,omitempty"` // List of resources that were grouped with the notification
+	ID               uuid.UUID `json:"id"`                          // Resource id. depends what it is based on the original event.
+	EventName        string    `json:"event_name"`                  // The name of the original event this notification is for.
+	NotificationID   uuid.UUID `json:"notification_id,omitempty"`   // ID of the notification.
+	EventCreatedAt   time.Time `json:"event_created_at"`            // Timestamp at which the original event was created
+	Properties       []byte    `json:"properties,omitempty"`        // json encoded properties of the original event
+	GroupedResources []string  `json:"grouped_resources,omitempty"` // List of resources that were grouped with the notification
+
+	// Recipients //
+
+	CustomService    *api.NotificationConfig `json:"custom_service,omitempty"`    // Send to connection or shoutrrr service
+	PlaybookID       *uuid.UUID              `json:"playbook_id,omitempty"`       // The playbook to trigger
+	PersonID         *uuid.UUID              `json:"person_id,omitempty"`         // The person recipient.
+	TeamID           *uuid.UUID              `json:"team_id,omitempty"`           // The team recipient.
+	NotificationName string                  `json:"notification_name,omitempty"` // Name of the notification of a team
 }
 
 func (t *NotificationEventPayload) AsMap() map[string]string {
+	// NOTE: Because the payload is marshalled to map[string]string instead of map[string]any
+	// the custom_service field cannot be marshalled.
+	// So, we marshal it separately and add it to the map.
+	var customService string
+	if t.CustomService != nil {
+		b, _ := json.Marshal(t.CustomService)
+		customService = string(b)
+	}
+
 	m := make(map[string]string)
 	b, _ := json.Marshal(&t)
 	_ = json.Unmarshal(b, &m)
+
+	m["custom_service"] = customService
 	return m
 }
 
 func (t *NotificationEventPayload) FromMap(m map[string]string) {
 	b, _ := json.Marshal(m)
 	_ = json.Unmarshal(b, &t)
+
+	if customService, exists := m["custom_service"]; exists {
+		_ = json.Unmarshal([]byte(customService), &t.CustomService)
+	}
 }
 
 // PrepareAndSendEventNotification generates the notification from the given event and sends it.
@@ -102,12 +121,8 @@ func PrepareAndSendEventNotification(ctx *Context, payload NotificationEventPayl
 		}
 	}
 
-	// CustomNotifications, even though it's a slice,
-	// contains only a single notification.
-	// It's a slice for backward compatibility reasons.
-	// nolint: staticcheck
-	// (SA4004: the surrounding loop is unconditionally terminated)
-	for _, cn := range notification.CustomNotifications {
+	if payload.CustomService != nil {
+		cn := payload.CustomService
 		ctx.WithRecipient(RecipientTypeURL, nil)
 		return sendEventNotificationWithMetrics(ctx, celEnv.AsMap(ctx.Context), cn.Connection, cn.URL, payload.EventName, notification, cn.Properties)
 	}
@@ -390,6 +405,7 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 		payload := NotificationEventPayload{
 			EventName:      event.Name,
 			NotificationID: n.ID,
+			CustomService:  cn.DeepCopy(),
 			ID:             resourceID,
 			EventCreatedAt: event.CreatedAt,
 			Properties:     eventProperties,
