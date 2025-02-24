@@ -152,6 +152,7 @@ func UpdateNotificationSilenceError(ctx context.Context, id string, err string) 
 func DeleteNotificationSendHistory(ctx context.Context, days int) (int64, error) {
 	tx := ctx.DB().
 		Model(&models.NotificationSendHistory{}).
+		Where("playbook_run_id IS NULL").
 		Where(fmt.Sprintf("created_at < NOW() - INTERVAL '%d DAYS'", days)).
 		Delete(&models.NotificationSendHistory{})
 	return tx.RowsAffected, tx.Error
