@@ -23,6 +23,10 @@ type celVariables struct {
 	Check       *models.Check
 	Canary      *models.Canary
 
+	// For notifications related to config items
+	// we attach the most recent config changes (last 1h)
+	RecentEvents []string
+
 	Incident   *models.Incident
 	Responder  *models.Responder
 	Evidence   *models.Evidence
@@ -93,6 +97,7 @@ func (t *celVariables) AsMap(ctx context.Context) map[string]any {
 		"canary":       lo.FromPtr(t.Canary).AsMap("spec"),
 		"component": lo.ToPtr(lo.FromPtr(t.Component)).
 			AsMap("checks", "incidents", "analysis", "components", "order", "relationship_id", "children", "parents"),
+		"recent_events": t.RecentEvents,
 
 		"evidence":   lo.FromPtr(t.Evidence).AsMap(),
 		"hypothesis": lo.FromPtr(t.Hypothesis).AsMap(),
