@@ -125,6 +125,9 @@ var Serve = &cobra.Command{
 			if context.NewContext(cmd.Context()).Properties().On(false, vars.FlagRLSEnable) {
 				dutyArgs = append(dutyArgs, duty.EnableRLS)
 			}
+			if context.NewContext(cmd.Context()).Properties().On(false, vars.FlagRLSDisable) {
+				dutyArgs = append(dutyArgs, duty.DisableRLS)
+			}
 		}
 
 		ctx, stop, err := duty.Start("mission-control", dutyArgs...)
