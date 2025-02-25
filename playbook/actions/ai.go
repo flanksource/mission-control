@@ -72,7 +72,9 @@ func init() {
 
 	Follow these steps to complete the task:
 
-	- Create a concise summary of the diagnosis and wrap it in a slack text block.  
+	- Create a concise summary of the diagnosis and wrap it in a slack text block.
+
+	- If the resource has any labels, include them in a mrkdwn section with each labels being a field.
 
 	- Analyze the given playbooks and identify which ones can be run on the current configuration.
 
@@ -88,6 +90,16 @@ func init() {
 
 		IMPORTANT: Ensure that you URL-encode the parameter values.
 
+	- Create a primary button that links to the resource itself. The link depends on the type of resource
+		- health checks: {{.base_url}}/health?layout=table&checkId=df2882a1-bf2f-4f93-ae12-cf3781567388&timeRange=1h
+		- configs: {{.base_url}}/catalog/01953ca8-3d6b-eded-d4d2-37df290d9062
+		- topology/components: {{.base_url}}/topology/33373937-3765-6137-6539-313662663466
+
+	- Create a secondary button that links to a silence URL. The link also depends on the type of resource:
+		- health checks: {{.base_url}}/notifications/silences/add?check_id=df2882a1-bf2f-4f93-ae12-cf3781567388
+		- configs: {{.base_url}}/notifications/silences/add?config_id=01953ca8-3d6b-eded-d4d2-37df290d9062
+		- topology/components: {{.base_url}}/notifications/silences/add?config_id=33373937-3765-6137-6539-313662663466
+
 	- Compile all button elements into a single Block Kit JSON structure.
 
 	- If no matching playbooks are found, create a message block with the text "No matching playbooks found."
@@ -96,6 +108,24 @@ func init() {
 
 	{
 		"blocks": [
+			{
+				"type": "header",
+				"text": {
+					"type": "plain_text",
+					"text": "🚨 Grafana deployment is unhealthy",
+					"emoji": true
+				}
+			},
+			{
+				"type": "section",
+				"fields": [{
+					"type": "mrkdwn",
+					"text": "Deployment fails due to a typo in the environment variable GF_DATABASE_TYPE (set to "postgresqqql" instead of "postgres"), causing Grafana to crash when attempting database initialization. Container logs show database connection errors and enter CrashLoopBackOff state.",
+				}]
+			},
+			{
+				"type": "divider"
+			},
 			{
 				"type": "section",
 				"fields": [
@@ -106,12 +136,30 @@ func init() {
 					{
 						"type": "mrkdwn",
 						"text": "*Namespace*: mc"
+					}
+				]
+			},
+			{
+				"type": "section",
+				"text": {
+					"type": "mrkdwn",
+					"text": "*Labels*"
+				},
+				"fields": [
+					{
+						"type": "mrkdwn",
+						"text": "*app*: grafana",
+						"verbatim": true
 					},
 					{
 						"type": "mrkdwn",
-						"text": "Deployment has pods that are in a crash loop."
+						"text": "*tier*: monitoring",
+						"verbatim": true
 					}
 				]
+			},
+			{
+				"type": "divider"
 			},
 			{
 				"type": "actions",
@@ -126,7 +174,32 @@ func init() {
 						"url": "{{.base_url}}/playbooks/runs?playbook=example-id&run=true&config_id=example-config-id&params.key=encoded_value"
 					}
 				]
-			}
+			},
+			{
+				"type": "actions",
+				"block_id": "resourcelinks456",
+				"elements": [
+					{
+						"type": "button",
+						"style": "primary",
+						"text": {
+							"type": "plain_text",
+							"text": "View Config",
+							"emoji": "true"
+						},
+						"url": "{{.base_url}}/resources/{{.resource_id}}"
+					},
+					{
+						"type": "button",
+						"text": {
+							"type": "plain_text",
+							"text": "🔕 Silence",
+							"emoji": "true"
+						},
+						"url": "{{.base_url}}/notifications/silences/add?config_id={{.config_id}}"
+					}
+				]
+			},
 		]
 	}
 
