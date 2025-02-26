@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"strings"
 	"time"
 
 	"github.com/flanksource/commons/duration"
@@ -292,9 +293,12 @@ func (t *AIActionClient) Populate(ctx context.Context) error {
 			t.Backend = api.LLMBackendAnthropic
 		case models.ConnectionTypeOpenAI:
 			t.Backend = api.LLMBackendOpenAI
+		case models.ConnectionTypeGemini:
+			t.Backend = api.LLMBackendGemini
 		default:
-			return fmt.Errorf("connection of type %q is not supported. Supported types: %s, %s & %s",
-				conn.Type, models.ConnectionTypeOllama, models.ConnectionTypeAnthropic, models.ConnectionTypeOpenAI,
+			return fmt.Errorf("connection of type %q is not supported. Supported types: [%s]",
+				conn.Type,
+				strings.Join([]string{models.ConnectionTypeOllama, models.ConnectionTypeAnthropic, models.ConnectionTypeOpenAI, models.ConnectionTypeGemini}, ", "),
 			)
 		}
 	}
