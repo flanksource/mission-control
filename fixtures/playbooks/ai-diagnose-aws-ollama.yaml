@@ -18,6 +18,11 @@ spec:
         multiline: 'true'
   actions:
     - name: query
+      retry:
+        limit: 2
+        duration: 10s
+        exponent:
+          multiplier: 2
       ai:
         backend: ollama
         model: llama3.1:8b
