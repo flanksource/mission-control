@@ -889,6 +889,9 @@
         "delay": {
           "type": "string"
         },
+        "retry": {
+          "$ref": "#/$defs/PlaybookActionRetry"
+        },
         "timeout": {
           "type": "string"
         },
@@ -936,6 +939,30 @@
       "type": "object",
       "required": [
         "name"
+      ]
+    },
+    "PlaybookActionRetry": {
+      "properties": {
+        "limit": {
+          "type": "integer"
+        },
+        "duration": {
+          "type": "string"
+        },
+        "jitter": {
+          "type": "number"
+        },
+        "exponent": {
+          "$ref": "#/$defs/RetryExponent"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "limit",
+        "duration",
+        "jitter",
+        "exponent"
       ]
     },
     "PlaybookApproval": {
@@ -1315,6 +1342,18 @@
         "$ref": "#/$defs/ResourceSelector"
       },
       "type": "array"
+    },
+    "RetryExponent": {
+      "properties": {
+        "multiplier": {
+          "type": "number"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "multiplier"
+      ]
     },
     "SQLAction": {
       "properties": {

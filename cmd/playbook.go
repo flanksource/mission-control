@@ -151,6 +151,16 @@ var Run = &cobra.Command{
 			return
 		}
 
+		if action.Retry != nil {
+			if delay, err := action.Retry.NextRetryWait(1); err != nil {
+				logger.Errorf("error updating run delay: %v", err)
+				shutdown.ShutdownAndExit(1, err.Error())
+				return
+			} else {
+				fmt.Println(delay)
+			}
+		}
+
 		if action == nil {
 			logger.Errorf("No actions to run")
 			shutdown.ShutdownAndExit(1, err.Error())
@@ -158,10 +168,14 @@ var Run = &cobra.Command{
 		}
 
 		for action != nil {
-			if delayed, err := runner.CheckDelay(ctx, *p, *run, action, step); err != nil {
-				ctx.Errorf("Error running action %s: %v", action.Name, err)
+			if delay, err := runner.GetDelay(ctx, *p, *run, action, step); err != nil {
+				ctx.Errorf("error getting delay %s: %v", action.Name, err)
 				break
-			} else if delayed {
+			} else if delay > 0 {
+				if err := run.Delay(ctx.DB(), delay); err != nil {
+					ctx.Errorf("error updating run delay: %v", err)
+				}
+
 				break
 			}
 
