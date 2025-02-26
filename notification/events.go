@@ -268,6 +268,31 @@ func sendNotifications(ctx context.Context, events models.Events) models.Events 
 	return failedEvents
 }
 
+func sendFallbackNotification(ctx context.Context, sendHistory models.NotificationSendHistory) error {
+	notif, err := GetNotification(ctx, sendHistory.NotificationID.String())
+	if err != nil {
+		return fmt.Errorf("failed to get notification[%s]: %w", sendHistory.NotificationID, err)
+	}
+
+	var payload NotificationEventPayload
+	payload.FromMap(sendHistory.Payload)
+
+	payload.PersonID = notif.FallbackPersonID
+	payload.TeamID = notif.FallbackTeamID
+	payload.PlaybookID = notif.FallbackPlaybookID
+	payload.CustomService = notif.FallbackCustomNotification
+
+	if err := sendPendingNotification(ctx, sendHistory, payload); err != nil {
+		return fmt.Errorf("failed to send notification: %w", err)
+	} else if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", sendHistory.ID).UpdateColumns(map[string]any{
+		"status": models.NotificationStatusSent,
+	}).Error; dberr != nil {
+		return fmt.Errorf("failed to save notification status as sent: %w", dberr)
+	}
+
+	return nil
+}
+
 func sendPendingNotification(ctx context.Context, history models.NotificationSendHistory, payload NotificationEventPayload) error {
 	notificationContext := NewContext(ctx, payload.NotificationID).WithHistory(history)
 
@@ -396,12 +421,13 @@ func _sendNotification(ctx *Context, noWait bool, payload NotificationEventPaylo
 		return fmt.Errorf("failed to get notification: %w", err)
 	}
 
+	ctx.log.Payload = payload.AsMap()
+
 	if !noWait && nn.WaitFor != nil {
 		// delayed notifications are saved to history with a pending status
 		// and are later consumed by a job.
 		ctx.log.NotBefore = lo.ToPtr(ctx.log.CreatedAt.Add(*nn.WaitFor))
 		ctx.log.Status = models.NotificationStatusPending
-		ctx.log.Payload = payload.AsMap()
 	} else {
 		if payload.PlaybookID != nil {
 			if err := triggerPlaybookRun(ctx, celEnv, *payload.PlaybookID); err != nil {
