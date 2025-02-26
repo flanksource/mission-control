@@ -194,6 +194,17 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 		}
 	}
 
+	if obj.Spec.Gemini != nil {
+		dbObj.Type = models.ConnectionTypeGemini
+		dbObj.URL = obj.Spec.Ollama.BaseURL.String()
+		dbObj.Password = obj.Spec.Ollama.ApiKey.String()
+		if obj.Spec.Ollama.Model != nil {
+			dbObj.Properties = map[string]string{
+				"model": *obj.Spec.Ollama.Model,
+			}
+		}
+	}
+
 	if obj.Spec.Kubernetes != nil {
 		dbObj.Type = models.ConnectionTypeKubernetes
 		dbObj.Certificate = obj.Spec.Kubernetes.Certificate.String()

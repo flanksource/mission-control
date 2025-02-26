@@ -7,6 +7,7 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/anthropic"
+	"github.com/tmc/langchaingo/llms/googleai"
 	"github.com/tmc/langchaingo/llms/ollama"
 	"github.com/tmc/langchaingo/llms/openai"
 
@@ -20,7 +21,7 @@ type Config struct {
 }
 
 func Prompt(ctx context.Context, config Config, systemPrompt string, promptParts ...string) (string, []llms.MessageContent, error) {
-	model, err := getLLMModel(config)
+	model, err := getLLMModel(ctx, config)
 	if err != nil {
 		return "", nil, err
 	}
@@ -61,7 +62,7 @@ func Prompt(ctx context.Context, config Config, systemPrompt string, promptParts
 }
 
 func PromptWithHistory(ctx context.Context, config Config, history []llms.MessageContent, prompt string) (string, []llms.MessageContent, error) {
-	model, err := getLLMModel(config)
+	model, err := getLLMModel(ctx, config)
 	if err != nil {
 		return "", nil, err
 	}
@@ -81,7 +82,7 @@ func PromptWithHistory(ctx context.Context, config Config, history []llms.Messag
 	return resp.Choices[0].Content, content, nil
 }
 
-func getLLMModel(config Config) (llms.Model, error) {
+func getLLMModel(ctx context.Context, config Config) (llms.Model, error) {
 	switch config.Backend {
 	case api.LLMBackendOpenAI:
 		var opts []openai.Option
@@ -130,9 +131,24 @@ func getLLMModel(config Config) (llms.Model, error) {
 
 		anthropicLLM, err := anthropic.New(opts...)
 		if err != nil {
-			return nil, fmt.Errorf("failed to created Anthropic llm: %w", err)
+			return nil, fmt.Errorf("failed to create Anthropic llm: %w", err)
 		}
 		return anthropicLLM, nil
+
+	case api.LLMBackendGemini:
+		var opts []googleai.Option
+		if !config.APIKey.IsEmpty() {
+			opts = append(opts, googleai.WithAPIKey(config.APIKey.ValueStatic))
+		}
+		if config.Model != "" {
+			opts = append(opts, googleai.WithDefaultModel(config.Model))
+		}
+
+		googleLLM, err := googleai.New(ctx, opts...)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create google gemini llm: %w", err)
+		}
+		return googleLLM, nil
 
 	default:
 		return nil, errors.New("unknown config.Backend")

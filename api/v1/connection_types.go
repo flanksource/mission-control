@@ -282,6 +282,12 @@ type ConnectionAnthropic struct {
 	ApiKey  types.EnvVar  `json:"apiKey"`
 }
 
+type ConnectionGemini struct {
+	Model   *string       `json:"model,omitempty"`
+	BaseURL *types.EnvVar `json:"url,omitempty"`
+	ApiKey  types.EnvVar  `json:"apiKey"`
+}
+
 // ConnectionSpec defines the desired state of Connection
 type ConnectionSpec struct {
 	Properties types.JSONStringMap `json:"properties,omitempty"`
@@ -300,6 +306,7 @@ type ConnectionSpec struct {
 	Anthropic *ConnectionAnthropic `json:"anthropic,omitempty"`
 	Ollama    *ConnectionOllama    `json:"ollama,omitempty"`
 	OpenAI    *ConnectionOpenAI    `json:"openai,omitempty"`
+	Gemini    *ConnectionGemini    `json:"gemini,omitempty"`
 
 	Folder     *ConnectionFolder     `json:"folder,omitempty"`
 	Git        *ConnectionGit        `json:"git,omitempty"`

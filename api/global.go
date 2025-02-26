@@ -33,4 +33,5 @@ const (
 	LLMBackendAnthropic LLMBackend = "anthropic"
 	LLMBackendOpenAI    LLMBackend = "openai"
 	LLMBackendOllama    LLMBackend = "ollama"
+	LLMBackendGemini    LLMBackend = "gemini"
 )
