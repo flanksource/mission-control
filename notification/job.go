@@ -362,35 +362,43 @@ func ProcessFallbackCheckNotifications(parentCtx context.Context) (bool, error) 
 			return nil
 		}
 
-		var (
-			noFallback     []string // list of notification send histories that don't have fallback configured
-			shouldFallback []string // list of notification send histories that should be retried to fallback recipients
-		)
 		for _, history := range pending {
 			notif, err := GetNotification(ctx, history.NotificationID.String())
 			if err != nil {
 				return fmt.Errorf("failed to get notification: %w", err)
 			}
 
-			if len(notif.FallbackCustomServices) != 0 && !history.IsFallback {
-				shouldFallback = append(shouldFallback, history.ID.String())
-			} else {
-				noFallback = append(noFallback, history.ID.String())
-			}
-		}
+			shouldFallback := len(notif.FallbackCustomServices) != 0 && history.ParentID == nil
+			if shouldFallback {
+				// We need to create a new payload whose recipient points towards the fallback recipients
+				var payload NotificationEventPayload
+				payload.FromMap(history.Payload)
+				payload.PersonID = notif.FallbackPersonID
+				payload.TeamID = notif.FallbackTeamID
+				payload.PlaybookID = notif.FallbackPlaybookID
+				payload.CustomService = notif.FallbackCustomNotification
 
-		if len(shouldFallback) > 0 {
-			if err := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id IN ?", shouldFallback).UpdateColumns(map[string]any{
-				"status":      models.NotificationStatusAttemptingFallback,
-				"is_fallback": true,
-				"not_before":  gorm.Expr("CASE WHEN not_before IS NULL THEN NOW() + INTERVAL '1 MINUTE' ELSE not_before + INTERVAL '1 minute' END"),
-			}).Error; err != nil {
-				return fmt.Errorf("failed to update notification status to attempting fallback: %w", err)
-			}
-		}
+				newHistory := models.NotificationSendHistory{
+					Payload:        payload.AsMap(),
+					NotificationID: history.NotificationID,
+					Status:         models.NotificationStatusAttemptingFallback,
+					FirstObserved:  history.FirstObserved,
+					SourceEvent:    history.SourceEvent,
+					ParentID:       &history.ID,
+					ResourceID:     history.ResourceID,
+					NotBefore:      lo.ToPtr(time.Now()),
+				}
 
-		if len(noFallback) > 0 {
-			if err := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id IN ?", noFallback).UpdateColumns(map[string]any{
+				if notif.FallbackDelay != nil {
+					newHistory.NotBefore = lo.ToPtr(time.Now().Add(*notif.FallbackDelay))
+				}
+
+				if err := ctx.DB().Create(&newHistory).Error; err != nil {
+					return fmt.Errorf("failed to create new send history for fallback: %w", err)
+				}
+			}
+
+			if err := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", history.ID).UpdateColumns(map[string]any{
 				"status": models.NotificationStatusError,
 			}).Error; err != nil {
 				return fmt.Errorf("failed to update notification status to error: %w", err)
