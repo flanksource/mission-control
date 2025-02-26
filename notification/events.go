@@ -623,11 +623,14 @@ func GetEnvForEvent(ctx context.Context, event models.Event) (*celVariables, err
 
 		if err := ctx.DB().Model(&models.ConfigChange{}).
 			Select("change_type").
-			Limit(3).
-			Order("created_at DESC").
 			Where("config_id = ?", configID).
+			Where("severity IN ('low', 'medium', 'high')").
 			Where("source NOT IN ('diff', 'config-db', 'notification', 'Playbook')").
-			Where("created_at >= NOW() - INTERVAL '1 HOUR'").Find(&env.RecentEvents).Error; err != nil {
+			Where("created_at >= NOW() - INTERVAL '1 HOUR'").
+			Group("change_type").
+			Order("ANY_VALUE(severity)").
+			Limit(3).
+			Find(&env.RecentEvents).Error; err != nil {
 			return nil, fmt.Errorf("error finding recent changes for config(id=%s): %v", configID, err)
 		}
 

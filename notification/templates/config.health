@@ -15,7 +15,7 @@
 			]
 		},
 		{{if .config.labels}}{{slackSectionLabels .config}},{{end}}
-		{{slackSectionTextMD (printf `*Recent Events:* %v` (join .recent_events ", "))}},
+		{{if .recent_events}}{{slackSectionTextMD (printf `*Recent Events:* %v` (join .recent_events ", "))}},{{end}}
 		{"type": "divider"},
 		{{slackURLAction "View Catalog" .permalink "🔕 Silence" .silenceURL}}
 	]
