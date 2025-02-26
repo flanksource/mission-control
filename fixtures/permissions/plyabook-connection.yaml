@@ -1,0 +1,15 @@
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: playbook-read-connection
+  namespace: mc
+spec:
+  description: Grant John read permissions to catalogs
+  subject:
+    playbook: default/cause-error
+  actions:
+    - read
+  object:
+    connections:
+      - name: "*"
