@@ -9,6 +9,7 @@ import (
 
 	extraClausePlugin "github.com/WinterYukky/gorm-extra-clause-plugin"
 	"github.com/WinterYukky/gorm-extra-clause-plugin/exclause"
+	"github.com/flanksource/commons/duration"
 	"github.com/flanksource/commons/text"
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
@@ -86,6 +87,15 @@ func PersistNotificationFromCRD(ctx context.Context, obj *v1.Notification) error
 			dbObj.FallbackTeamID = recipient.TeamID
 			dbObj.FallbackPlaybookID = recipient.PlaybookID
 			dbObj.FallbackCustomServices = recipient.CustomServices
+		}
+
+		if obj.Spec.Fallback.Delay != "" {
+			parsed, err := duration.ParseDuration(obj.Spec.Fallback.Delay)
+			if err != nil {
+				return fmt.Errorf("failed to parse fallback delay: %w", err)
+			}
+
+			dbObj.FallbackDelay = lo.ToPtr(time.Duration(parsed))
 		}
 	}
 
