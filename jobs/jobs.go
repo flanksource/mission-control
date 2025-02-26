@@ -88,9 +88,12 @@ func Start(ctx context.Context) {
 		logger.Errorf("Failed to schedule job for cleaning up notification send history table: %v", err)
 	}
 
-	query.SyncConfigCacheJob.Context = ctx
-	if err := query.SyncConfigCacheJob.RunOnStart().AddToScheduler(FuncScheduler); err != nil {
-		logger.Errorf("Failed to schedule job for syncing config cache: %v", err)
+	for _, job := range query.Jobs {
+		j := job
+		j.Context = ctx
+		if err := j.AddToScheduler(FuncScheduler); err != nil {
+			logger.Errorf("Failed to schedule %s: %v", j, err)
+		}
 	}
 
 	for _, job := range CatalogRefreshJobs {
