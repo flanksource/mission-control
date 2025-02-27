@@ -121,3 +121,16 @@ func AddPersonToTeam(ctx context.Context, personID uuid.UUID, teamID uuid.UUID) 
 func UpdateLastLogin(ctx context.Context, id string) error {
 	return ctx.DB().Table("people").Where("id = ?", id).UpdateColumn("last_login", "NOW()").Error
 }
+
+var SystemUser *models.Person
+
+func GetSystemUser(ctx context.Context) (*models.Person, error) {
+	if SystemUser == nil {
+		if err := ctx.DB().Model(&models.Person{}).Where("name = 'System'").First(&SystemUser).Error; err != nil {
+			return nil, fmt.Errorf("error fetching system user from database: %w", err)
+		}
+	}
+
+	api.SystemUserID = lo.ToPtr(SystemUser.ID)
+	return SystemUser, nil
+}

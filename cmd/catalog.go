@@ -11,8 +11,9 @@ import (
 	"github.com/flanksource/commons/properties"
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/query"
+	"github.com/flanksource/duty/shutdown"
 	"github.com/flanksource/duty/types"
-	"github.com/flanksource/incident-commander/auth"
+	"github.com/flanksource/incident-commander/db"
 	"github.com/spf13/cobra"
 )
 
@@ -124,7 +125,11 @@ var Query = &cobra.Command{
 
 		saveOutput(response, catalogOutfile, catalogOutformat)
 
-		ctx = ctx.WithUser(auth.GetSystemUser(&ctx))
+		sysUser, err := db.GetSystemUser(ctx)
+		if err != nil {
+			shutdown.ShutdownAndExit(1, err.Error())
+		}
+		ctx = ctx.WithUser(sysUser)
 
 	},
 }
