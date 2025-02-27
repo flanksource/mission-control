@@ -135,6 +135,11 @@ var Serve = &cobra.Command{
 			shutdown.ShutdownAndExit(1, fmt.Sprintf("error setting up db connection: %v", err))
 		}
 
+		// GetSystemUser sets api.SystemUserID
+		if _, err := db.GetSystemUser(ctx); err != nil {
+			shutdown.ShutdownAndExit(1, fmt.Sprintf("error setting up system user: %v", err))
+		}
+
 		e := echo.New(ctx)
 
 		shutdown.AddHookWithPriority("echo", shutdown.PriorityIngress, func() {

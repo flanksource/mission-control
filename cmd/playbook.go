@@ -15,7 +15,7 @@ import (
 	"github.com/flanksource/duty/shutdown"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
-	"github.com/flanksource/incident-commander/auth"
+	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/playbook"
 	"github.com/flanksource/incident-commander/playbook/runner"
@@ -129,7 +129,11 @@ var Run = &cobra.Command{
 			shutdown.ShutdownAndExit(1, err.Error())
 		}
 
-		ctx = ctx.WithUser(auth.GetSystemUser(&ctx))
+		sysUser, err := db.GetSystemUser(ctx)
+		if err != nil {
+			shutdown.ShutdownAndExit(1, err.Error())
+		}
+		ctx = ctx.WithUser(sysUser)
 		run, err := playbook.Run(ctx, p, *params)
 		if err != nil {
 			logger.Errorf("%+v", err)
@@ -243,7 +247,13 @@ var Submit = &cobra.Command{
 			shutdown.ShutdownAndExit(1, err.Error())
 		}
 
-		ctx = ctx.WithUser(auth.GetSystemUser(&ctx))
+		sysUser, err := db.GetSystemUser(ctx)
+		if err != nil {
+			logger.Fatalf(err.Error())
+			os.Exit(1)
+		}
+		ctx = ctx.WithUser(sysUser)
+
 		run, err := playbook.Run(ctx, p, *params)
 		if err != nil {
 			return err
