@@ -11,9 +11,7 @@ import (
 	"github.com/flanksource/commons/properties"
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/query"
-	"github.com/flanksource/duty/shutdown"
 	"github.com/flanksource/duty/types"
-	"github.com/flanksource/incident-commander/db"
 	"github.com/spf13/cobra"
 )
 
@@ -105,10 +103,10 @@ var Query = &cobra.Command{
 		ctx.DB().Commit()
 
 		for time.Since(start) < catalogWaitFor {
-
 			if len(response.Configs) > 0 || len(response.Components) > 0 || len(response.Checks) > 0 {
 				break
 			}
+
 			ctx.DB().Begin()
 			response, err = query.SearchResources(ctx, req)
 			ctx.DB().Commit()
@@ -120,17 +118,9 @@ var Query = &cobra.Command{
 
 			logger.Infof("Waiting %s for %s", req, catalogWaitFor-time.Since(start))
 			time.Sleep(3 * time.Second)
-
 		}
 
 		saveOutput(response, catalogOutfile, catalogOutformat)
-
-		sysUser, err := db.GetSystemUser(ctx)
-		if err != nil {
-			shutdown.ShutdownAndExit(1, err.Error())
-		}
-		ctx = ctx.WithUser(sysUser)
-
 	},
 }
 
