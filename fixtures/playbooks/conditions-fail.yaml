@@ -10,7 +10,6 @@ spec:
     - name: start
       exec:
         script: date2
-
     - name: Failure
       if: "failure()"
       exec:

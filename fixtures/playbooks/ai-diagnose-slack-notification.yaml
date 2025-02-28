@@ -16,6 +16,11 @@ spec:
         multiline: 'true'
   actions:
     - name: query LLM
+      retry:
+        limit: 2
+        duration: 3m
+        exponent:
+          multiplier: 2
       ai:
         connection: connection://mc/openai
         formats:

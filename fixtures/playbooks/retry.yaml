@@ -1,0 +1,41 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: backup-postgres-db
+  namespace: mc
+spec:
+  category: Maintenance
+  description: Backs up a PostgreSQL database and retries on failure
+  actions:
+    - name: backup-database
+      retry:
+        limit: 5
+        jitter: 10 # 10% random jitter
+        duration: 10s
+        exponent:
+          multiplier: 2
+      exec:
+        script: |
+          # Define backup parameters
+          DB_NAME="my_database"
+          DB_USER="postgres"
+          DB_HOST="db.example.com"
+          BACKUP_DIR="/var/backups"
+          BACKUP_FILE="$BACKUP_DIR/$DB_NAME-$(date +%F_%H-%M-%S).sql.gz"
+
+          echo "Starting backup of database: $DB_NAME"
+
+          # Create the backup directory if it doesn't exist
+          mkdir -p "$BACKUP_DIR"
+
+          # Perform the database backup
+          PGPASSWORD="your_password" pg_dump -h $DB_HOST -U $DB_USER -F c $DB_NAME | gzip > $BACKUP_FILE
+          
+          # Verify backup success
+          if [ $? -ne 0 ]; then
+            echo "Database backup failed, retrying..."
+            exit 1
+          fi
+
+          echo "Backup successful! File saved at $BACKUP_FILE"
+          exit 0

@@ -4,6 +4,7 @@ import (
 	gocontext "context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/flanksource/commons/duration"
@@ -16,6 +17,7 @@ import (
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
+	"golang.org/x/exp/rand"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/flanksource/incident-commander/api"
@@ -509,6 +511,42 @@ func (t *AWSConnection) Populate(ctx connectionContext, k8s kubernetes.Interface
 	return nil
 }
 
+type RetryExponent struct {
+	Multiplier int `json:"multiplier"`
+}
+
+type PlaybookActionRetry struct {
+	// Limit is the number of times to retry the action.
+	// With limit = 3, there will be a max of 4 attempts for the action (initial attempt + 3 retries).
+	Limit int `json:"limit"`
+
+	// Duration is the duration to wait before retrying the action.
+	Duration string `json:"duration"`
+
+	// Jitter is the random factor to apply to the duration.
+	// Ranges from 0 to 100.
+	// +kubebuilder:validation:Minimum=0
+	// +kubebuilder:validation:Maximum=100
+	Jitter int `json:"jitter,omitempty"`
+
+	// Exponent is the exponential backoff configuration.
+	Exponent RetryExponent `json:"exponent"`
+}
+
+func (t PlaybookActionRetry) NextRetryWait(retryNumber int) (time.Duration, error) {
+	interval, err := duration.ParseDuration(t.Duration)
+	if err != nil {
+		return 0, fmt.Errorf("failed to parse duration(%s): %w", t.Duration, err)
+	}
+
+	nextWaitDuration := float64(interval) * math.Pow(float64(t.Exponent.Multiplier), float64(retryNumber))
+
+	jitterFactor := 1 + ((rand.Float64()*2 - 1) * float64(t.Jitter) * 0.01) // Scales jitter within [-Jitter, +Jitter]
+	nextWaitDurationWithJitter := nextWaitDuration * jitterFactor
+
+	return time.Duration(nextWaitDurationWithJitter), nil
+}
+
 type PlaybookAction struct {
 	// delay is the parsed Delay
 	delay *time.Duration `json:"-" yaml:"-"`
@@ -525,6 +563,9 @@ type PlaybookAction struct {
 	// Valid time units are "s", "m", "h", "d", "w", "y".
 	// It's only sensitive to the minute. i.e. if you delay by 20s it can take upto a minute to execute.
 	Delay string `yaml:"delay,omitempty" json:"delay,omitempty"`
+
+	// Retry specifies the retry policy for the action.
+	Retry *PlaybookActionRetry `json:"retry,omitempty" yaml:"retry,omitempty"`
 
 	// Timeout is the maximum duration to let an action run before it's cancelled.
 	Timeout string `yaml:"timeout,omitempty" json:"timeout,omitempty"`

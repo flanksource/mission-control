@@ -61,16 +61,27 @@ func GetNextActionToRun(ctx context.Context, run models.PlaybookRun) (action *v1
 	}
 
 	for i, action := range playbookSpec.Actions {
-		if i == len(playbookSpec.Actions)-1 {
+		isLastAction := i == len(playbookSpec.Actions)-1
+		lastActionFailed := lastRanAction.Status == models.PlaybookActionStatusFailed
+
+		if action.Name == lastRanAction.Name && lastActionFailed {
+			canRetry := action.Retry != nil && lastRanAction.RetryCount < action.Retry.Limit
+			if canRetry {
+				return &playbookSpec.Actions[i], &lastRanAction, nil
+			}
+		}
+
+		if isLastAction {
 			return nil, nil, nil
 		}
 
 		if action.Name == lastRanAction.Name {
 			// If last action failed do not run more steps unless it has a filter
-			if lastRanAction.Status == models.PlaybookActionStatusFailed {
+			if lastActionFailed {
 				alwaysAction := findNextActionWithFilter(playbookSpec.Actions[i+1:])
 				return alwaysAction, &lastRanAction, nil
 			}
+
 			return &playbookSpec.Actions[i+1], &lastRanAction, nil
 		}
 	}
@@ -119,28 +130,23 @@ func CheckPlaybookFilter(ctx context.Context, playbookSpec v1.PlaybookSpec, temp
 	return nil
 }
 
-func CheckDelay(ctx context.Context, playbook models.Playbook, run models.PlaybookRun, action *v1.PlaybookAction, lastRan *models.PlaybookRunAction) (bool, error) {
+func GetDelay(ctx context.Context, playbook models.Playbook, run models.PlaybookRun, action *v1.PlaybookAction, lastRan *models.PlaybookRunAction) (time.Duration, error) {
 	// The delays on the action should be applied here & action consumers do not run the delay.
 	var delay time.Duration
 	if action.Delay != "" && run.Status != models.PlaybookRunStatusSleeping {
 		templateEnv, err := CreateTemplateEnv(ctx, &playbook, run, lastRan)
 		if err != nil {
-			return false, ctx.Oops().Wrapf(err, "failed to template action")
+			return 0, ctx.Oops().Wrapf(err, "failed to template action")
 		}
 		oops := ctx.Oops().Hint(templateEnv.JSON(ctx))
 		if action.Delay, err = ctx.RunTemplate(gomplate.Template{Expression: action.Delay}, templateEnv.AsMap(ctx)); err != nil {
-			return false, oops.Wrapf(err, "failed to template action")
+			return 0, oops.Wrapf(err, "failed to template action")
 		} else if delay, err = action.DelayDuration(); err != nil {
-			return false, oops.Wrapf(err, "invalid duration n (%s)", action.Delay)
+			return 0, oops.Wrapf(err, "invalid duration n (%s)", action.Delay)
 		}
 	}
 
-	if delay > 0 {
-		ctx.Tracef("delaying %s by %s", action.Name, delay)
-		// Defer the scheduling of this run,
-		return true, ctx.Oops().Wrap(run.Delay(ctx.DB(), delay))
-	}
-	return false, nil
+	return delay, nil
 }
 
 func getEligibleAgents(spec v1.PlaybookSpec, action *v1.PlaybookAction, run models.PlaybookRun) []string {
@@ -183,11 +189,24 @@ func ScheduleRun(ctx context.Context, run models.PlaybookRun) error {
 
 	ctx = ctx.WithObject(action, run)
 
-	delayed, err := CheckDelay(ctx, playbook, run, action, lastRan)
-	if err != nil {
+	isRetrying := lastRan != nil && lastRan.Name == action.Name && action.Retry != nil
+	if isRetrying && run.Status != models.PlaybookRunStatusRetrying {
+		delay, err := action.Retry.NextRetryWait(lastRan.RetryCount + 1)
+		if err != nil {
+			return ctx.Oops().Wrap(err)
+		}
+
+		if delay > 0 {
+			ctx.Tracef("delaying %s by %s", action.Name, delay)
+			return ctx.Oops().Wrap(run.Retry(ctx.DB(), delay))
+		}
+	}
+
+	if delay, err := GetDelay(ctx, playbook, run, action, lastRan); err != nil {
 		return err
-	} else if delayed {
-		return nil
+	} else if delay > 0 {
+		ctx.Tracef("delaying %s by %s", action.Name, delay)
+		return ctx.Oops().Wrap(run.Delay(ctx.DB(), delay))
 	}
 
 	if run.AgentID != nil {
@@ -212,10 +231,18 @@ func ScheduleRun(ctx context.Context, run models.PlaybookRun) error {
 	}
 
 	if agent.Name == Main {
-		if runAction, err := run.StartAction(ctx.DB(), action.Name); err != nil {
-			return ctx.Oops("db").Wrap(err)
+		if isRetrying {
+			if runAction, err := run.RetryAction(ctx.DB(), action.Name, lastRan.RetryCount+1); err != nil {
+				return ctx.Oops("db").Wrap(err)
+			} else {
+				ctx.Tracef("started %s (%v) on local", action.Name, runAction.ID)
+			}
 		} else {
-			ctx.Tracef("started %s (%v) on local", action.Name, runAction.ID)
+			if runAction, err := run.StartAction(ctx.DB(), action.Name); err != nil {
+				return ctx.Oops("db").Wrap(err)
+			} else {
+				ctx.Tracef("started %s (%v) on local", action.Name, runAction.ID)
+			}
 		}
 	} else {
 		// Assign the action to an agent and step the status to Waiting

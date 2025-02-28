@@ -1717,6 +1717,38 @@ spec:
                       - name
                       - spec
                       type: object
+                    retry:
+                      description: Retry specifies the retry policy for the action.
+                      properties:
+                        duration:
+                          description: Duration is the duration to wait before retrying
+                            the action.
+                          type: string
+                        exponent:
+                          description: Exponent is the exponential backoff configuration.
+                          properties:
+                            multiplier:
+                              type: integer
+                          required:
+                          - multiplier
+                          type: object
+                        jitter:
+                          description: |-
+                            Jitter is the random factor to apply to the duration.
+                            Ranges from 0 to 100.
+                          maximum: 100
+                          minimum: 0
+                          type: integer
+                        limit:
+                          description: |-
+                            Limit is the number of times to retry the action.
+                            With limit = 3, there will be a max of 4 attempts for the action (initial attempt + 3 retries).
+                          type: integer
+                      required:
+                      - duration
+                      - exponent
+                      - limit
+                      type: object
                     runsOn:
                       description: |-
                         RunsOn specifies the agents that can run this action.
