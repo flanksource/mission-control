@@ -196,11 +196,10 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 
 	if obj.Spec.Gemini != nil {
 		dbObj.Type = models.ConnectionTypeGemini
-		dbObj.URL = obj.Spec.Ollama.BaseURL.String()
-		dbObj.Password = obj.Spec.Ollama.ApiKey.String()
-		if obj.Spec.Ollama.Model != nil {
+		dbObj.Password = obj.Spec.Gemini.ApiKey.String()
+		if obj.Spec.Gemini.Model != nil {
 			dbObj.Properties = map[string]string{
-				"model": *obj.Spec.Ollama.Model,
+				"model": *obj.Spec.Gemini.Model,
 			}
 		}
 	}

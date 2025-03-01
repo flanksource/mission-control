@@ -283,9 +283,8 @@ type ConnectionAnthropic struct {
 }
 
 type ConnectionGemini struct {
-	Model   *string       `json:"model,omitempty"`
-	BaseURL *types.EnvVar `json:"url,omitempty"`
-	ApiKey  types.EnvVar  `json:"apiKey"`
+	Model  *string      `json:"model,omitempty"`
+	ApiKey types.EnvVar `json:"apiKey"`
 }
 
 // ConnectionSpec defines the desired state of Connection
