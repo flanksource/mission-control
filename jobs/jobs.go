@@ -68,10 +68,6 @@ func Start(ctx context.Context) {
 		logger.Errorf("Failed to schedule job for cleaning up event queue table: %v", err)
 	}
 
-	if err := notification.ProcessFallbackCheckNotificationsJob(ctx).AddToScheduler(FuncScheduler); err != nil {
-		shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to schedule job ProcessFallbackCheckNotificationsJob: %v", err))
-	}
-
 	if err := notification.ProcessFallbackNotificationsJob(ctx).AddToScheduler(FuncScheduler); err != nil {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to schedule job ProcessFallbackNotificationsJob: %v", err))
 	}
