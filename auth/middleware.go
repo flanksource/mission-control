@@ -106,7 +106,7 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 	}
 
 	// Initiate RBAC
-	if err := dutyRBAC.Init(ctx, adminUserID, adapter.NewPermissionAdapter); err != nil {
+	if err := dutyRBAC.Init(ctx, []string{adminUserID}, adapter.NewPermissionAdapter); err != nil {
 		return fmt.Errorf("failed to initialize rbac: %w", err)
 	}
 
