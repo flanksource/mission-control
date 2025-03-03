@@ -16,6 +16,7 @@ import (
 	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/gomplate/v3"
+	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/rbac/adapter"
 	"github.com/labstack/echo/v4"
@@ -106,7 +107,7 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 	}
 
 	// Initiate RBAC
-	if err := dutyRBAC.Init(ctx, []string{adminUserID}, adapter.NewPermissionAdapter); err != nil {
+	if err := dutyRBAC.Init(ctx, []string{adminUserID, api.SystemUserID.String()}, adapter.NewPermissionAdapter); err != nil {
 		return fmt.Errorf("failed to initialize rbac: %w", err)
 	}
 
