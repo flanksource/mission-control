@@ -15,6 +15,7 @@
 			]
 		},
 		{{if .config.labels}}{{slackSectionLabels .config}},{{end}}
+		{{if .groupedResources}}{{slackSectionTextMD (printf `*Also Failing:* %s` (join .groupedResources "\n"))}},{{end}}
 		{{slackURLAction "View Catalog" .permalink "🔕 Silence" .silenceURL}}
 	]
 }
