@@ -46,7 +46,7 @@ var _ = BeforeSuite(func() {
 	e.Use(auth.MockAuthMiddleware)
 
 	Expect(DefaultContext.DB().Exec("TRUNCATE casbin_rule").Error).To(BeNil())
-	if err := dutyRBAC.Init(DefaultContext, "admin"); err != nil {
+	if err := dutyRBAC.Init(DefaultContext, []string{"admin"}); err != nil {
 		Fail(fmt.Sprintf("error instantiating rbac: %v", err))
 	}
 	usersAndRoles := map[string]string{
