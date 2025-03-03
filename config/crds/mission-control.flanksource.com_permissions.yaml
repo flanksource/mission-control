@@ -310,8 +310,19 @@ spec:
                 description: Subject defines the entity (e.g., user, group) to which
                   the permission applies.
                 properties:
+<<<<<<< HEAD
                   group:
                     description: Group is the group name
+||||||| parent of d278685 (feat: replace hydrateConnection with connection.Get)
+=======
+                  canary:
+                    description: |-
+                      Subject of the permission.
+                      Can be
+                      - a permission group name
+                      - id of a resource
+                      - <namespace>/<name> of a resource
+>>>>>>> d278685 (feat: replace hydrateConnection with connection.Get)
                     type: string
                   notification:
                     description: Notification <namespace>/<name> selector
@@ -319,8 +330,32 @@ spec:
                   person:
                     description: ID or email of the person
                     type: string
+                  playbook:
+                    description: |-
+                      Subject of the permission.
+                      Can be
+                      - a permission group name
+                      - id of a resource
+                      - <namespace>/<name> of a resource
+                    type: string
+                  scraper:
+                    description: |-
+                      Subject of the permission.
+                      Can be
+                      - a permission group name
+                      - id of a resource
+                      - <namespace>/<name> of a resource
+                    type: string
                   team:
                     description: Team is the team name
+                    type: string
+                  topology:
+                    description: |-
+                      Subject of the permission.
+                      Can be
+                      - a permission group name
+                      - id of a resource
+                      - <namespace>/<name> of a resource
                     type: string
                 type: object
               tags:
