@@ -153,10 +153,20 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 		return nil, ctx.Oops().Wrap(err)
 	}
 
-	if objects, err := run.GetABACAttributes(ctx.DB()); err != nil {
+	if !rbac.HasPermission(ctx, ctx.Subject(), templateEnv.ABACAttributes(), policy.ActionRead) {
+		return nil, ctx.Oops().
+			Code(dutyAPI.EFORBIDDEN).
+			With("permission", policy.ActionRead, "objects", templateEnv.ABACAttributes()).
+			Wrap(errors.New("access denied: read access to resource not allowed"))
+	}
+
+	if attr, err := run.GetABACAttributes(ctx.DB()); err != nil {
 		return nil, ctx.Oops().Wrap(err)
-	} else if !rbac.HasPermission(ctx, ctx.Subject(), objects, policy.ActionPlaybookRun) {
-		return nil, ctx.Oops().With("permission", policy.ActionPlaybookRun, "objects", objects).Code(dutyAPI.EFORBIDDEN).Wrap(errors.New("access denied: run permission required"))
+	} else if !rbac.HasPermission(ctx, ctx.Subject(), attr, policy.ActionPlaybookRun) {
+		return nil, ctx.Oops().
+			Code(dutyAPI.EFORBIDDEN).
+			With("permission", policy.ActionPlaybookRun, "objects", attr).
+			Wrap(fmt.Errorf("access denied to subject(%s): cannot run playbook on this resource", ctx.Subject()))
 	}
 
 	if err := req.setDefaults(ctx, spec, templateEnv); err != nil {

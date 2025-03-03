@@ -34,6 +34,7 @@ func PersistPermissionFromCRD(ctx context.Context, obj *v1.Permission) error {
 		Description: obj.Spec.Description,
 		Action:      action,
 		Source:      models.SourceCRD,
+		Deny:        obj.Spec.Deny,
 		Tags:        obj.Spec.Tags,
 		Agents:      obj.Spec.Agents,
 	}
