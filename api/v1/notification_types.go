@@ -39,6 +39,13 @@ func (t *NotificationRecipientSpec) Empty() bool {
 	return t.Person == "" && t.Team == "" && t.Email == "" && t.Connection == "" && t.URL == "" && t.Playbook == nil
 }
 
+type NotificationFallback struct {
+	NotificationRecipientSpec `json:",inline" yaml:",inline"`
+
+	// wait this long before considering a send a failure
+	Delay string `json:"delay,omitempty" yaml:"delay,omitempty"`
+}
+
 // +kubebuilder:object:generate=true
 type NotificationSpec struct {
 	// List of events that can trigger this notification
@@ -56,12 +63,11 @@ type NotificationSpec struct {
 	// RepeatInterval is the waiting time to resend a notification after it has been succefully sent.
 	RepeatInterval string `json:"repeatInterval,omitempty" yaml:"repeatInterval,omitempty"`
 
-	// RepeatGroup allows notifications to be grouped by certain set of keys and only send
-	// one per group within the specified repeat interval.
-	// RepeatGroup []string `json:"repeatGroup,omitempty" yaml:"repeatGroup,omitempty"`
-
 	// Specify the recipient
 	To NotificationRecipientSpec `json:"to" yaml:"to"`
+
+	// In case of failure, send the notification to this recipient
+	Fallback *NotificationFallback `json:"fallback,omitempty" yaml:"fallback,omitempty"`
 
 	// WaitFor defines a duration to delay sending a health-based notification.
 	// After this period, the health status is reassessed to confirm it hasn't

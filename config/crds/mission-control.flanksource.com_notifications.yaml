@@ -43,6 +43,41 @@ spec:
                 items:
                   type: string
                 type: array
+              fallback:
+                description: In case of failure, send the notification to this recipient
+                properties:
+                  connection:
+                    description: |-
+                      Specify connection string for an external service.
+                      Should be in the format of connection://<type>/name
+                      or the id of the connection.
+                    type: string
+                  delay:
+                    description: wait this long before considering a send a failure
+                    type: string
+                  email:
+                    description: Email of the recipient
+                    type: string
+                  person:
+                    description: ID or email of the person
+                    type: string
+                  playbook:
+                    description: |-
+                      Name or <namespace>/<name> of the playbook to run.
+                      When a playbook is set as the recipient, a run is triggered.
+                    type: string
+                  properties:
+                    additionalProperties:
+                      type: string
+                    description: Properties for Shoutrrr
+                    type: object
+                  team:
+                    description: name or ID of the recipient team
+                    type: string
+                  url:
+                    description: Specify shoutrrr URL
+                    type: string
+                type: object
               filter:
                 description: Cel-expression used to decide whether this notification
                   client should send the notification

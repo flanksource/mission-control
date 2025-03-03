@@ -17,6 +17,7 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/logs"
+	"github.com/flanksource/incident-commander/notification"
 	"github.com/flanksource/incident-commander/utils"
 	"github.com/google/uuid"
 	"github.com/patrickmn/go-cache"
@@ -317,6 +318,25 @@ func onNewRun(ctx context.Context, event models.Event) error {
 
 	if err := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", notificationDispatchID).UpdateColumns(columnUpdates).Error; err != nil {
 		ctx.Errorf("playbook run initiated but failed to update the notification status (%s): %v", notificationDispatchID, err)
+	}
+
+	// Attempt fallback on error if applicable
+	if newRun == nil {
+		notif, err := notification.GetNotification(ctx, notificationID)
+		if err != nil {
+			return fmt.Errorf("failed to get notification: %w", err)
+		}
+
+		if notif.HasFallbackSet() {
+			var sendHistory models.NotificationSendHistory
+			if err := ctx.DB().Where("id = ?", notificationDispatchID).First(&sendHistory).Error; err != nil {
+				return fmt.Errorf("failed to get notification send history: %w", err)
+			}
+
+			if err := models.GenerateFallbackAttempt(ctx.DB(), notif.Notification, sendHistory); err != nil {
+				return fmt.Errorf("failed to generate fallback attempt: %w", err)
+			}
+		}
 	}
 
 	return nil
