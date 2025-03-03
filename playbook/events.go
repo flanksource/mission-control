@@ -312,7 +312,7 @@ func onNewRun(ctx context.Context, event models.Event) error {
 		columnUpdates["status"] = models.NotificationStatusPendingPlaybookCompletion
 	} else {
 		columnUpdates["error"] = err.Error()
-		columnUpdates["status"] = models.NotificationStatusError
+		columnUpdates["status"] = models.NotificationStatusCheckingFallback
 	}
 
 	if err := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", notificationDispatchID).UpdateColumns(columnUpdates).Error; err != nil {

@@ -14,6 +14,7 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
+	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/google/uuid"
@@ -65,76 +66,108 @@ func PersistNotificationFromCRD(ctx context.Context, obj *v1.Notification) error
 	}
 
 	if len(obj.Spec.GroupBy) > 0 && obj.Spec.WaitFor != nil && *obj.Spec.WaitFor == "" {
-		return fmt.Errorf("groupBy provided with an empty waitFor. either remove the groupBy or set a waitFor period.")
+		return fmt.Errorf("groupBy provided with an empty waitFor. either remove the groupBy or set a waitFor period")
 	}
 
+	if recipient, err := resolveNotificationRecipient(ctx, obj.Spec.To); err != nil {
+		return fmt.Errorf("failed to resolve recipient: %w", err)
+	} else {
+		dbObj.PersonID = recipient.PersonID
+		dbObj.TeamID = recipient.TeamID
+		dbObj.PlaybookID = recipient.PlaybookID
+		dbObj.CustomServices = recipient.CustomServices
+	}
+
+	if obj.Spec.Fallback != nil {
+		if recipient, err := resolveNotificationRecipient(ctx, obj.Spec.Fallback.NotificationRecipientSpec); err != nil {
+			return fmt.Errorf("failed to resolve recipient: %w", err)
+		} else {
+			dbObj.FallbackPersonID = recipient.PersonID
+			dbObj.FallbackTeamID = recipient.TeamID
+			dbObj.FallbackPlaybookID = recipient.PlaybookID
+			dbObj.FallbackCustomServices = recipient.CustomServices
+		}
+	}
+
+	return ctx.DB().Save(&dbObj).Error
+}
+
+type notificationRecipient struct {
+	PersonID       *uuid.UUID
+	TeamID         *uuid.UUID
+	PlaybookID     *uuid.UUID
+	CustomServices types.JSON
+}
+
+func resolveNotificationRecipient(ctx context.Context, recipient v1.NotificationRecipientSpec) (*notificationRecipient, error) {
+	var result notificationRecipient
 	switch {
-	case obj.Spec.To.Person != "":
-		person, err := query.FindPerson(ctx, obj.Spec.To.Person)
+	case recipient.Person != "":
+		person, err := query.FindPerson(ctx, recipient.Person)
 		if err != nil {
-			return err
+			return nil, err
 		} else if person == nil {
-			return fmt.Errorf("person (%s) not found", obj.Spec.To.Person)
+			return nil, fmt.Errorf("person (%s) not found", recipient.Person)
 		}
 
-		dbObj.PersonID = &person.ID
+		result.PersonID = &person.ID
 
-	case obj.Spec.To.Team != "":
-		team, err := query.FindTeam(ctx, obj.Spec.To.Team)
+	case recipient.Team != "":
+		team, err := query.FindTeam(ctx, recipient.Team)
 		if err != nil {
-			return err
+			return nil, err
 		} else if team == nil {
-			return fmt.Errorf("team (%s) not found", obj.Spec.To.Team)
+			return nil, fmt.Errorf("team (%s) not found", recipient.Team)
 		}
 
-		dbObj.TeamID = &team.ID
+		result.TeamID = &team.ID
 
-	case lo.FromPtr(obj.Spec.To.Playbook) != "":
-		split := strings.Split(*obj.Spec.To.Playbook, "/")
+	case lo.FromPtr(recipient.Playbook) != "":
+		split := strings.Split(*recipient.Playbook, "/")
 		if len(split) == 1 {
 			name := split[0]
 			playbook, err := query.FindPlaybook(ctx, name)
 			if err != nil {
-				return err
+				return nil, err
 			} else if playbook == nil {
-				return fmt.Errorf("playbook (%s) not found", *obj.Spec.To.Playbook)
+				return nil, fmt.Errorf("playbook (%s) not found", *recipient.Playbook)
 			}
 
-			dbObj.PlaybookID = &playbook.ID
+			result.PlaybookID = &playbook.ID
 		} else if len(split) == 2 {
 			namespace := split[0]
 			name := split[1]
 
 			var playbook models.Playbook
 			if err := ctx.DB().Where("namespace = ?", namespace).Where("name = ?", name).Find(&playbook).Error; err != nil {
-				return err
+				return nil, err
 			} else if playbook.ID == uuid.Nil {
-				return fmt.Errorf("playbook %s not found", *obj.Spec.To.Playbook)
+				return nil, fmt.Errorf("playbook %s not found", *recipient.Playbook)
 			} else {
-				dbObj.PlaybookID = &playbook.ID
+				result.PlaybookID = &playbook.ID
 			}
 		}
 
 	default:
 		var customService api.NotificationConfig
 
-		if len(obj.Spec.To.Email) != 0 {
-			customService.URL = fmt.Sprintf("smtp://system/?To=%s", obj.Spec.To.Email)
-		} else if len(obj.Spec.To.Connection) != 0 {
-			customService.Connection = obj.Spec.To.Connection
-		} else if len(obj.Spec.To.URL) != 0 {
-			customService.URL = obj.Spec.To.URL
+		if len(recipient.Email) != 0 {
+			customService.URL = fmt.Sprintf("smtp://system/?To=%s", recipient.Email)
+		} else if len(recipient.Connection) != 0 {
+			customService.Connection = recipient.Connection
+		} else if len(recipient.URL) != 0 {
+			customService.URL = recipient.URL
 		}
 
 		customServices, err := json.Marshal([]api.NotificationConfig{customService})
 		if err != nil {
-			return err
+			return nil, err
 		}
 
-		dbObj.CustomServices = customServices
+		result.CustomServices = customServices
 	}
 
-	return ctx.DB().Save(&dbObj).Error
+	return &result, nil
 }
 
 func DeleteNotification(ctx context.Context, id string) error {

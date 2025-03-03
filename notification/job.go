@@ -203,7 +203,7 @@ func ProcessPendingNotifications(parentCtx context.Context) (bool, error) {
 
 		if err := processPendingNotification(ctx, currentHistory, []models.NotificationSendHistory{}); err != nil {
 			if dberr := ctx.DB().Debug().Model(&models.NotificationSendHistory{}).Where("id = ?", currentHistory.ID).UpdateColumns(map[string]any{
-				"status":  gorm.Expr("CASE WHEN retries >= ? THEN ? ELSE ? END", ctx.Properties().Int("notification.max-retries", 4)-1, models.NotificationStatusError, models.NotificationStatusPending),
+				"status":  gorm.Expr("CASE WHEN retries >= ? THEN ? ELSE ? END", ctx.Properties().Int("notification.max-retries", 4)-1, models.NotificationStatusCheckingFallback, models.NotificationStatusPending),
 				"error":   err.Error(),
 				"retries": gorm.Expr("retries + 1"),
 			}).Error; dberr != nil {
@@ -283,7 +283,7 @@ func ProcessPendingGroupedNotifications(parentCtx context.Context) error {
 			historyIDs := lo.Map(pending, func(h models.NotificationSendHistory, _ int) uuid.UUID { return h.ID })
 			if err := processPendingNotification(ctx, currentHistory, groupedHistory); err != nil {
 				if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id IN ?", historyIDs).UpdateColumns(map[string]any{
-					"status":  gorm.Expr("CASE WHEN retries >= ? THEN ? ELSE ? END", ctx.Properties().Int("notification.max-retries", 4)-1, models.NotificationStatusError, models.NotificationStatusPending),
+					"status":  gorm.Expr("CASE WHEN retries >= ? THEN ? ELSE ? END", ctx.Properties().Int("notification.max-retries", 4)-1, models.NotificationStatusCheckingFallback, models.NotificationStatusPending),
 					"error":   err.Error(),
 					"retries": gorm.Expr("retries + 1"),
 				}).Error; dberr != nil {
@@ -301,6 +301,106 @@ func ProcessPendingGroupedNotifications(parentCtx context.Context) error {
 	}
 
 	return nil
+}
+
+func ProcessFallbackCheckNotificationsJob(ctx context.Context) *job.Job {
+	return &job.Job{
+		Name:       "ProcessFallbackCheckNotifications",
+		Retention:  job.RetentionFailed,
+		JobHistory: true,
+		RunNow:     true,
+		Context:    ctx,
+		Singleton:  false,
+		Schedule:   "@every 15s",
+		Fn: func(ctx job.JobRuntime) error {
+			var errCount int
+			for {
+				done, err := ProcessFallbackCheckNotifications(ctx.Context)
+				if err != nil {
+					ctx.History.AddErrorf("failed to process notifications in status=%s : %v", models.NotificationStatusCheckingFallback, err)
+
+					errCount++
+					if errCount > 3 {
+						// avoid getting stuck in a loop
+						break
+					}
+
+					time.Sleep(2 * time.Second) // prevent spinning on db errors
+					continue
+				}
+
+				ctx.History.IncrSuccess()
+
+				if done {
+					break
+				}
+			}
+
+			return nil
+		},
+	}
+}
+
+func ProcessFallbackCheckNotifications(parentCtx context.Context) (bool, error) {
+	var noMorePending bool
+
+	err := parentCtx.DB().Transaction(func(tx *gorm.DB) error {
+		ctx := parentCtx.WithDB(tx, parentCtx.Pool())
+
+		var pending []models.NotificationSendHistory
+		if err := ctx.DB().Clauses(clause.Locking{Strength: clause.LockingStrengthUpdate, Options: clause.LockingOptionsSkipLocked}).
+			Where("status = ?", models.NotificationStatusCheckingFallback).
+			Where("not_before <= NOW() OR not_before IS NULL").
+			Order("not_before").
+			Limit(100). // safeguard limit
+			Find(&pending).Error; err != nil {
+			return fmt.Errorf("failed to get notifications awaiting fallback checks: %w", err)
+		}
+
+		if len(pending) == 0 {
+			noMorePending = true
+			return nil
+		}
+
+		var (
+			noFallback     []string // list of notification send histories that don't have fallback configured
+			shouldFallback []string // list of notification send histories that should be retried to fallback recipients
+		)
+		for _, history := range pending {
+			notif, err := GetNotification(ctx, history.NotificationID.String())
+			if err != nil {
+				return fmt.Errorf("failed to get notification: %w", err)
+			}
+
+			if len(notif.FallbackCustomServices) != 0 && !history.IsFallback {
+				shouldFallback = append(shouldFallback, history.ID.String())
+			} else {
+				noFallback = append(noFallback, history.ID.String())
+			}
+		}
+
+		if len(shouldFallback) > 0 {
+			if err := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id IN ?", shouldFallback).UpdateColumns(map[string]any{
+				"status":      models.NotificationStatusAttemptingFallback,
+				"is_fallback": true,
+			}).Error; err != nil {
+				return fmt.Errorf("failed to update notification status to attempting fallback: %w", err)
+			}
+		}
+
+		if len(noFallback) > 0 {
+			if err := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id IN ?", noFallback).UpdateColumns(map[string]any{
+				"status": models.NotificationStatusError,
+			}).Error; err != nil {
+				return fmt.Errorf("failed to update notification status to error: %w", err)
+			}
+		}
+
+		// we return nil or else the transaction will be rolled back and there'll be no trace of a failed attempt.
+		return nil
+	})
+
+	return noMorePending, err
 }
 
 // If the resource is still unhealthy, it returns false
