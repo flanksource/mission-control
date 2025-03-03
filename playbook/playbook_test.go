@@ -18,16 +18,45 @@ import (
 	"github.com/flanksource/duty/upstream"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/playbook/sdk"
+	"github.com/flanksource/incident-commander/rbac"
+	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/samber/lo"
+	"github.com/samber/oops"
 
+	"k8s.io/apimachinery/pkg/types"
 	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
 )
 
-var _ = Describe("Playbook", func() {
+var _ = Describe("Playbook", Ordered, func() {
+	BeforeAll(func() {
+		// We allow User=JohnDoe to run any playbook and read any configs (with some exceptions)
+		entries, err := os.ReadDir("testdata/permissions")
+		Expect(err).To(BeNil())
+
+		for _, entry := range entries {
+			fixturePath := filepath.Join("testdata/permissions", entry.Name())
+			content, err := os.ReadFile(fixturePath)
+			Expect(err).To(BeNil())
+
+			var perm v1.Permission
+			err = yamlutil.Unmarshal(content, &perm)
+			Expect(err).To(BeNil())
+
+			perm.UID = types.UID(uuid.New().String())
+
+			err = db.PersistPermissionFromCRD(DefaultContext, &perm)
+			Expect(err).To(BeNil())
+		}
+
+		err = rbac.ReloadPolicy()
+		Expect(err).To(BeNil())
+	})
+
 	var _ = Describe("Test Listing | Run API | Approvals", Ordered, func() {
 		var (
 			configPlaybook    models.Playbook
@@ -118,11 +147,13 @@ var _ = Describe("Playbook", func() {
 			}
 
 			response, err := http.NewClient().
-				Auth(dummy.JohnDoe.Email, "").
+				Auth(dummy.JohnDoe.Name, "admin").
 				R(DefaultContext).
 				Header("Content-Type", "application/json").
 				Post(fmt.Sprintf("%s/playbook/%s/params", server.URL, configPlaybook.ID), requestyBody)
 			Expect(err).To(BeNil())
+
+			Expect(response.StatusCode).To(Equal(200))
 
 			var body GetParamsResponse
 			err = json.NewDecoder(response.Body).Decode(&body)
@@ -197,7 +228,8 @@ var _ = Describe("Playbook", func() {
 
 		It("should store playbook run via API", func() {
 			run := sdk.RunParams{
-				ID: testPlaybook.ID,
+				ID:       testPlaybook.ID,
+				ConfigID: dummy.EKSCluster.ID,
 				Params: map[string]string{
 					"path":         tempFile,
 					"my_config":    dummy.EKSCluster.ID.String(),
@@ -216,7 +248,6 @@ var _ = Describe("Playbook", func() {
 		})
 
 		It("should have correctly used config & component fields from parameters", func() {
-
 			waitFor(&savedRun)
 
 			f, err := os.ReadFile(tempFile)
@@ -407,6 +438,12 @@ var _ = Describe("Playbook", func() {
 					Username:  awsAgentName,
 					Password:  "dummy",
 				}
+
+				err = rbac.AddRoleForUser(agentPerson.ID.String(), "agent")
+				Expect(err).To(BeNil())
+
+				err = rbac.ReloadPolicy()
+				Expect(err).To(BeNil())
 			}
 
 			// Setup Azure agent
@@ -430,6 +467,12 @@ var _ = Describe("Playbook", func() {
 					Username:  azureAgentName,
 					Password:  "dummy",
 				}
+
+				err = rbac.AddRoleForUser(agentPerson.ID.String(), "agent")
+				Expect(err).To(BeNil())
+
+				err = rbac.ReloadPolicy()
+				Expect(err).To(BeNil())
 			}
 		})
 
@@ -602,6 +645,9 @@ var _ = Describe("Playbook", func() {
 				name:        "bad-action-spec",
 				status:      models.PlaybookRunStatusFailed,
 				description: "invalid action spec should fail",
+				params: RunParams{
+					ConfigID: &dummy.EKSCluster.ID,
+				},
 				extra: func(run *models.PlaybookRun) {
 					var action models.PlaybookRunAction
 					err := DefaultContext.DB().Where("playbook_run_id = ? ", run.ID).First(&action).Error
@@ -611,8 +657,11 @@ var _ = Describe("Playbook", func() {
 				},
 			},
 			{
-				name:        "bad-spec",
-				status:      models.PlaybookRunStatusFailed,
+				name:   "bad-spec",
+				status: models.PlaybookRunStatusFailed,
+				params: RunParams{
+					ConfigID: &dummy.EKSCluster.ID,
+				},
 				description: "invalid spec should fail",
 				extra: func(run *models.PlaybookRun) {
 					Expect(run.Error).ToNot(BeNil())
@@ -629,11 +678,45 @@ var _ = Describe("Playbook", func() {
 			})
 		}
 	})
+
+	var _ = Describe("unauthorized playbooks and/or resources", func() {
+		It("should deny playbooks to unauthorized users", func() {
+			_, err := createAndRunNoWait(DefaultContext.WithUser(&dummy.JohnWick), "exec-powershell", RunParams{
+				ConfigID: lo.ToPtr(dummy.KubernetesNodeA.ID),
+			})
+			Expect(err).To(Not(BeNil()))
+			oe, _ := oops.AsOops(err)
+			Expect(oe.Code()).To(Equal(dutyApi.EFORBIDDEN))
+		})
+
+		It("John can run any playbook but not this one specifically", func() {
+			_, err := createAndRunNoWait(DefaultContext.WithUser(&dummy.JohnDoe), "echo", RunParams{
+				ConfigID: lo.ToPtr(dummy.KubernetesNodeA.ID),
+			})
+			Expect(err).To(Not(BeNil()))
+			oe, _ := oops.AsOops(err)
+			Expect(oe.Code()).To(Equal(dutyApi.EFORBIDDEN))
+		})
+
+		It("John can run the playbook but not on this resource", func() {
+			_, err := createAndRunNoWait(DefaultContext.WithUser(&dummy.JohnDoe), "exec-powershell", RunParams{
+				ConfigID: lo.ToPtr(dummy.KubernetesNodeB.ID),
+			})
+			Expect(err).To(Not(BeNil()))
+			oe, _ := oops.AsOops(err)
+			Expect(oe.Code()).To(Equal(dutyApi.EFORBIDDEN))
+		})
+	})
 })
 
 func createAndRun(ctx context.Context, name string, params RunParams, statuses ...models.PlaybookRunStatus) *models.PlaybookRun {
 	playbook, _ := createPlaybook(name)
 	return runPlaybook(ctx, playbook, params, statuses...)
+}
+
+func createAndRunNoWait(ctx context.Context, name string, params RunParams) (*models.PlaybookRun, error) {
+	playbook, _ := createPlaybook(name)
+	return Run(ctx, &playbook, params)
 }
 
 func runPlaybook(ctx context.Context, playbook models.Playbook, params RunParams, statuses ...models.PlaybookRunStatus) *models.PlaybookRun {
