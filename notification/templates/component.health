@@ -15,7 +15,7 @@
 			]
 		},
 		{{if .component.labels}}{{slackSectionLabels .component}},{{end}}
-		{{if .groupedResources}}{{slackSectionTextMD (printf `*Resources grouped with notification:* %s` (join .groupedResources "\n"))}},{{end}}
+		{{if .groupedResources}}{{slackSectionTextMD (printf `*Also Failing:* %s` (join .groupedResources "\n"))}},{{end}}
 		{{slackURLAction "View Component" .permalink "🔕 Silence" .silenceURL}}
 	]
 }
