@@ -905,7 +905,7 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 
 			time.Sleep(12 * time.Second)
 
-			err = notification.ProcessPendingGroupedNotifications(DefaultContext)
+			_, err = notification.ProcessPendingNotifications(DefaultContext)
 			Expect(err).To(BeNil())
 			Eventually(func() bool {
 				var histories []models.NotificationSendHistory

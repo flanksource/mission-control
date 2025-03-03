@@ -76,10 +76,6 @@ func Start(ctx context.Context) {
 		logger.Errorf("failed to schedule job: %v", err)
 	}
 
-	if err := notification.ProcessPendingGroupedNotificationsJob(ctx).AddToScheduler(FuncScheduler); err != nil {
-		logger.Errorf("failed to schedule job: %v", err)
-	}
-
 	if err := notification.SyncCRDStatusJob(ctx).AddToScheduler(FuncScheduler); err != nil {
 		logger.Errorf("failed to schedule job: %v", err)
 	}
