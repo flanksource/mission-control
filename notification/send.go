@@ -18,8 +18,8 @@ import (
 	"github.com/samber/lo"
 	"go.opentelemetry.io/otel/trace"
 
+	pkgConnection "github.com/flanksource/duty/connection"
 	"github.com/flanksource/incident-commander/api"
-
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/logs"
 	"github.com/flanksource/incident-commander/teams"
@@ -208,11 +208,9 @@ func SendNotification(ctx *Context, connectionName, shoutrrrURL string, celEnv m
 	var connection *models.Connection
 	var err error
 	if connectionName != "" {
-		connection, err = ctx.HydrateConnectionByURL(connectionName)
+		connection, err = pkgConnection.GetC(ctx.Context, connectionName)
 		if err != nil {
 			return "", err
-		} else if connection == nil {
-			return "", fmt.Errorf("connection (%s) not found", connectionName)
 		}
 
 		ctx.WithRecipient(RecipientTypeConnection, &connection.ID)
