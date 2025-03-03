@@ -15,6 +15,7 @@
 			]
 		},
 		{{if .config.labels}}{{slackSectionLabels .config}},{{end}}
+		{{if .groupedResources}}{{slackSectionTextMD (printf `*Resources grouped with notification:* %s` (join .groupedResources "\n"))}},{{end}}
 		{{slackURLAction "View Catalog" .permalink "🔕 Silence" .silenceURL}}
 	]
 }

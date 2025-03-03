@@ -417,18 +417,25 @@ func processPendingNotification(ctx context.Context, currentHistory models.Notif
 		payload.GroupedResources = lo.Map(historiesToUpdate[1:], func(h models.NotificationSendHistory, _ int) string {
 			if strings.HasPrefix(h.SourceEvent, "config") {
 				ci, _ := query.GetCachedConfig(ctx, h.ResourceID.String())
-				return strings.Join([]string{ci.ID.String(), lo.FromPtr(ci.Type), lo.FromPtr(ci.Name)}, "/")
+				if ns := ci.GetNamespace(); ns != "" {
+					return fmt.Sprintf("namespace=%s %s/%s", ns, lo.FromPtr(ci.Type), lo.FromPtr(ci.Name))
+				} else {
+					return fmt.Sprintf("%s/%s", lo.FromPtr(ci.Type), lo.FromPtr(ci.Name))
+				}
 			}
+
 			if strings.HasPrefix(h.SourceEvent, "component") {
 				comp, _ := query.GetCachedComponent(ctx, h.ResourceID.String())
-				return strings.Join([]string{comp.ID.String(), comp.Type, comp.Name}, "/")
+				return fmt.Sprintf("namespace=%s %s/%s", comp.GetNamespace(), comp.Type, comp.Name)
 			}
+
 			if strings.HasPrefix(h.SourceEvent, "check") {
 				check, _ := query.FindCachedCheck(ctx, h.ResourceID.String())
 				if check != nil {
-					return strings.Join([]string{check.ID.String(), check.Type, check.Name}, "/")
+					return fmt.Sprintf("namespace=%s %s/%s", check.GetNamespace(), check.Type, check.Name)
 				}
 			}
+
 			return ""
 		})
 
@@ -438,7 +445,8 @@ func processPendingNotification(ctx context.Context, currentHistory models.Notif
 	if err := sendPendingNotification(ctx, historyToUpdate, payload); err != nil {
 		return fmt.Errorf("failed to send notification: %w", err)
 	} else if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id IN ?", historyIDs).UpdateColumns(map[string]any{
-		"status": models.NotificationStatusSent,
+		"status":    models.NotificationStatusSent,
+		"parent_id": historyToUpdate.ID.String(),
 	}).Error; dberr != nil {
 		return fmt.Errorf("failed to save notification status as sent: %w", dberr)
 	}
