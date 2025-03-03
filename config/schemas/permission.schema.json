@@ -247,6 +247,18 @@
         },
         "group": {
           "type": "string"
+        },
+        "playbook": {
+          "type": "string"
+        },
+        "canary": {
+          "type": "string"
+        },
+        "scraper": {
+          "type": "string"
+        },
+        "topology": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
