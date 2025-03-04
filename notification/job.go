@@ -411,18 +411,12 @@ func processPendingNotification(ctx context.Context, currentHistory models.Notif
 
 	// We need to re-evaluate the health of the resource
 	// and ensure that the original event matches with the current health before we send out the notification.
-	skipNotif, err := shouldSkipNotificationDueToHealth(ctx, *notif, currentHistory)
-	if err != nil {
-		return err
-	}
-	if !skipNotif {
-		historiesToUpdate = append(historiesToUpdate, currentHistory)
-	}
-	for _, h := range groupedHistory {
+	for _, h := range append([]models.NotificationSendHistory{currentHistory}, groupedHistory...) {
 		skipNotif, err := shouldSkipNotificationDueToHealth(ctx, *notif, h)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to check if notification should be skipped: %w", err)
 		}
+
 		if !skipNotif {
 			historiesToUpdate = append(historiesToUpdate, h)
 		}
@@ -433,8 +427,9 @@ func processPendingNotification(ctx context.Context, currentHistory models.Notif
 	}
 
 	var payload NotificationEventPayload
-	historyToUpdate := historiesToUpdate[0]
-	payload.FromMap(historyToUpdate.Payload)
+	primaryHistory := historiesToUpdate[0]
+	payload.FromMap(primaryHistory.Payload)
+
 	if len(historiesToUpdate) > 1 {
 		payload.GroupedResources = lo.Map(historiesToUpdate[1:], func(h models.NotificationSendHistory, _ int) string {
 			if strings.HasPrefix(h.SourceEvent, "config") {
@@ -462,13 +457,18 @@ func processPendingNotification(ctx context.Context, currentHistory models.Notif
 		})
 	}
 
-	historyIDs := lo.Map(historiesToUpdate, func(h models.NotificationSendHistory, _ int) uuid.UUID { return h.ID })
-
-	if err := sendPendingNotification(ctx, historyToUpdate, payload); err != nil {
+	if err := sendPendingNotification(ctx, primaryHistory, payload); err != nil {
 		return fmt.Errorf("failed to send notification: %w", err)
-	} else if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id IN ?", historyIDs).UpdateColumns(map[string]any{
+	} else if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", primaryHistory.ID).UpdateColumns(map[string]any{
+		"status": models.NotificationStatusSent,
+	}).Error; dberr != nil {
+		return fmt.Errorf("failed to save notification status as sent: %w", dberr)
+	}
+
+	groupedHistoriesIDs := lo.Map(historiesToUpdate[1:], func(h models.NotificationSendHistory, _ int) uuid.UUID { return h.ID })
+	if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id IN ?", groupedHistoriesIDs).UpdateColumns(map[string]any{
 		"status":    models.NotificationStatusSent,
-		"parent_id": historyToUpdate.ID.String(),
+		"parent_id": primaryHistory.ID.String(),
 	}).Error; dberr != nil {
 		return fmt.Errorf("failed to save notification status as sent: %w", dberr)
 	}
