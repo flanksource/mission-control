@@ -79,6 +79,14 @@ func PersistNotificationFromCRD(ctx context.Context, obj *v1.Notification) error
 		dbObj.CustomServices = recipient.CustomServices
 	}
 
+	if obj.Spec.Inhibitions != nil {
+		if b, err := json.Marshal(obj.Spec.Inhibitions); err != nil {
+			return fmt.Errorf("failed to marshal inhibitions: %w", err)
+		} else {
+			dbObj.Inhibitions = b
+		}
+	}
+
 	if obj.Spec.Fallback != nil {
 		if recipient, err := resolveNotificationRecipient(ctx, obj.Spec.Fallback.NotificationRecipientSpec); err != nil {
 			return fmt.Errorf("failed to resolve recipient: %w", err)
