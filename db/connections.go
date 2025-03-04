@@ -194,6 +194,16 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 		}
 	}
 
+	if obj.Spec.Gemini != nil {
+		dbObj.Type = models.ConnectionTypeGemini
+		dbObj.Password = obj.Spec.Gemini.ApiKey.String()
+		if obj.Spec.Gemini.Model != nil {
+			dbObj.Properties = map[string]string{
+				"model": *obj.Spec.Gemini.Model,
+			}
+		}
+	}
+
 	if obj.Spec.Kubernetes != nil {
 		dbObj.Type = models.ConnectionTypeKubernetes
 		dbObj.Certificate = obj.Spec.Kubernetes.Certificate.String()

@@ -263,6 +263,21 @@
         "keyID"
       ]
     },
+    "ConnectionGemini": {
+      "properties": {
+        "model": {
+          "type": "string"
+        },
+        "apiKey": {
+          "$ref": "#/$defs/EnvVar"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "apiKey"
+      ]
+    },
     "ConnectionGit": {
       "properties": {
         "url": {
@@ -727,6 +742,9 @@
         },
         "openai": {
           "$ref": "#/$defs/ConnectionOpenAI"
+        },
+        "gemini": {
+          "$ref": "#/$defs/ConnectionGemini"
         },
         "folder": {
           "$ref": "#/$defs/ConnectionFolder"
