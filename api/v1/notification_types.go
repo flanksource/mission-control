@@ -96,6 +96,36 @@ type NotificationSpec struct {
 	// Valid keys: type, description, status_reason or
 	// labels & tags in the format `label:<key>` or `tag:<key>`
 	GroupBy []string `json:"groupBy,omitempty"`
+
+	// Inhibit controls notification suppression for related resources.
+	// It uses the repeat interval as the window for suppression
+	// as well as the wait for period.
+	Inibhit []NotificationInihibition `json:"inhibit,omitempty"`
+}
+
+type NotificationInihibition struct {
+	// Direction specifies the traversal direction in relation to the "From" resource.
+	// - "outgoing": Looks for child resources originating from the "From" resource.
+	//   Example: If "From" is "Kubernetes::Deployment", "To" could be ["Kubernetes::Pod", "Kubernetes::ReplicaSet"].
+	// - "incoming": Looks for parent resources related to the "From" resource.
+	//   Example: If "From" is "Kubernetes::Deployment", "To" could be ["Kubernetes::HelmRelease", "Kubernetes::Namespace"].
+	// - "all": Considers both incoming and outgoing relationships.
+	Direction string `json:"direction"`
+
+	// Soft indicates whether this inhibition is advisory or strictly enforced.
+	Soft bool `json:"soft,omitempty"`
+
+	// Depth defines how many levels of child or parent resources to traverse.
+	Depth int `json:"depth"`
+
+	// From specifies the starting resource type (for example, "Kubernetes::Deployment").
+	From string `json:"from"`
+
+	// To specifies the target resource types, which are determined based on the Direction.
+	// Example:
+	//   - If Direction is "outgoing", these are child resources.
+	//   - If Direction is "incoming", these are parent resources.
+	To []string `json:"to"`
 }
 
 var NotificationReconciler kopper.Reconciler[Notification, *Notification]

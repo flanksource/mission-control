@@ -93,6 +93,50 @@ spec:
                 items:
                   type: string
                 type: array
+              inhibit:
+                description: |-
+                  Inhibit controls notification suppression for related resources.
+                  It uses the repeat interval as the window for suppression
+                  as well as the wait for period.
+                items:
+                  properties:
+                    depth:
+                      description: Depth defines how many levels of child or parent
+                        resources to traverse.
+                      type: integer
+                    direction:
+                      description: |-
+                        Direction specifies the traversal direction in relation to the "From" resource.
+                        - "outgoing": Looks for child resources originating from the "From" resource.
+                          Example: If "From" is "Kubernetes::Deployment", "To" could be ["Kubernetes::Pod", "Kubernetes::ReplicaSet"].
+                        - "incoming": Looks for parent resources related to the "From" resource.
+                          Example: If "From" is "Kubernetes::Deployment", "To" could be ["Kubernetes::HelmRelease", "Kubernetes::Namespace"].
+                        - "all": Considers both incoming and outgoing relationships.
+                      type: string
+                    from:
+                      description: From specifies the starting resource type (for
+                        example, "Kubernetes::Deployment").
+                      type: string
+                    soft:
+                      description: Soft indicates whether this inhibition is advisory
+                        or strictly enforced.
+                      type: boolean
+                    to:
+                      description: |-
+                        To specifies the target resource types, which are determined based on the Direction.
+                        Example:
+                          - If Direction is "outgoing", these are child resources.
+                          - If Direction is "incoming", these are parent resources.
+                      items:
+                        type: string
+                      type: array
+                  required:
+                  - depth
+                  - direction
+                  - from
+                  - to
+                  type: object
+                type: array
               repeatInterval:
                 description: RepeatInterval is the waiting time to resend a notification
                   after it has been succefully sent.

@@ -89,6 +89,36 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "NotificationInihibition": {
+      "properties": {
+        "direction": {
+          "type": "string"
+        },
+        "soft": {
+          "type": "boolean"
+        },
+        "depth": {
+          "type": "integer"
+        },
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "direction",
+        "depth",
+        "from",
+        "to"
+      ]
+    },
     "NotificationRecipientSpec": {
       "properties": {
         "person": {
@@ -154,6 +184,12 @@
         "groupBy": {
           "items": {
             "type": "string"
+          },
+          "type": "array"
+        },
+        "inhibit": {
+          "items": {
+            "$ref": "#/$defs/NotificationInihibition"
           },
           "type": "array"
         }
