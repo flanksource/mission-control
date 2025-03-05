@@ -10,7 +10,6 @@ import (
 	"time"
 
 	sw "github.com/RussellLuo/slidingwindow"
-	"github.com/flanksource/commons/text"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/pkg/tokenizer"
@@ -88,13 +87,8 @@ type notificationHandler struct {
 
 // Check if notification can be sent in the interval based on group by, returns true if it can be sent
 func checkRepeatInterval(ctx context.Context, n NotificationWithSpec, event models.Event) (bool, error) {
-	if n.RepeatInterval == "" {
+	if n.RepeatInterval == nil {
 		return true, nil
-	}
-
-	interval, err := text.ParseDuration(n.RepeatInterval)
-	if err != nil {
-		return false, fmt.Errorf("error parsing repeat interval[%s] to time.Duration: %w", n.RepeatInterval, err)
 	}
 
 	clauses := []clause.Expression{
@@ -106,10 +100,10 @@ func checkRepeatInterval(ctx context.Context, n NotificationWithSpec, event mode
 
 	var exists bool
 	tx := ctx.DB().Model(&models.NotificationSendHistory{}).Clauses(clauses...).
-		Select(fmt.Sprintf("(NOW() - created_at) <= '%d minutes'::INTERVAL", int(interval.Minutes()))).
+		Select(fmt.Sprintf("(NOW() - created_at) <= '%d minutes'::INTERVAL", int(n.RepeatInterval.Minutes()))).
 		Order("created_at DESC").Limit(1).Scan(&exists)
 	if tx.Error != nil {
-		return false, fmt.Errorf("error querying db for last send notification[%s]: %w", n.ID, err)
+		return false, fmt.Errorf("error querying db for last send notification[%s]: %w", n.ID, tx.Error)
 	}
 
 	return !exists, nil
@@ -213,7 +207,7 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 		}
 
 		// Repeat interval check
-		if n.RepeatInterval != "" && !passesRepeatInterval {
+		if n.RepeatInterval != nil && !passesRepeatInterval {
 			ctx.Logger.V(6).Infof("skipping notification[%s] due to repeat interval", n.ID)
 			ctx.Counter("notification_skipped_by_repeat_interval", "id", id, "resource", payload.ID.String(), "source_event", event.Name).Add(1)
 
@@ -228,6 +222,31 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 			}
 
 			continue
+		}
+
+		if len(n.Inhibitions) > 0 && n.RepeatInterval != nil && celEnv.ConfigItem != nil {
+			inhibitor, err := checkInhibition(ctx, *n, celEnv.SelectableResource())
+			if err != nil {
+				return fmt.Errorf("failed to check inhibition for notification[%s]: %w", n.ID, err)
+			}
+
+			if inhibitor != nil {
+				ctx.Logger.V(6).Infof("skipping notification[%s] due to inhibition", n.ID)
+				ctx.Counter("notification_inhibited", "id", id, "resource", payload.ID.String(), "source_event", event.Name).Add(1)
+
+				history := models.NotificationSendHistory{
+					NotificationID: n.ID,
+					ResourceID:     payload.ID,
+					SourceEvent:    event.Name,
+					Status:         models.NotificationStatusInhibited,
+					ParentID:       inhibitor,
+				}
+				if err := db.SaveUnsentNotificationToHistory(ctx, history); err != nil {
+					return fmt.Errorf("failed to save inhibited notification history: %w", err)
+				}
+
+				continue
+			}
 		}
 
 		if !rateLimiter.Allow() {
@@ -247,6 +266,76 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 	}
 
 	return nil
+}
+
+func checkInhibition(ctx context.Context, notif NotificationWithSpec, resource types.ResourceSelectable) (*uuid.UUID, error) {
+	// Note: we use the repeat interval as the inhibition window.
+	inhibitionWindow := notif.RepeatInterval
+	if inhibitionWindow == nil {
+		return nil, nil
+	}
+
+	resourceID, err := uuid.Parse(resource.GetID())
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse resource id: %w", err)
+	}
+
+	for _, inhibition := range notif.Inhibitions {
+		if !lo.Contains(inhibition.To, resource.GetType()) {
+			continue
+		}
+
+		rq := query.RelationQuery{
+			ID:       resourceID,
+			MaxDepth: inhibition.Depth,
+		}
+
+		// We need to invert the direction because we're looking from the "to" perspective.
+		if inhibition.Direction == query.Outgoing {
+			rq.Relation = query.Incoming
+		} else if inhibition.Direction == query.Incoming {
+			rq.Relation = query.Outgoing
+		} else {
+			rq.Relation = query.All
+		}
+
+		if inhibition.Soft {
+			rq.Incoming = query.Both
+			rq.Outgoing = query.Both
+		} else {
+			rq.Incoming = query.Hard
+			rq.Outgoing = query.Hard
+		}
+
+		relatedConfigs, err := query.GetRelatedConfigs(ctx, rq)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get related configs: %w", err)
+		}
+
+		var relatedIDs []uuid.UUID
+		for _, rc := range relatedConfigs {
+			if rc.Type == inhibition.From {
+				relatedIDs = append(relatedIDs, rc.ID)
+			}
+		}
+
+		var id string
+		if err := ctx.DB().Model(&models.NotificationSendHistory{}).
+			Select("id").
+			Where("notification_id = ?", notif.ID).
+			Where("resource_id IN ?", relatedIDs).
+			Where(fmt.Sprintf("created_at >= NOW() - INTERVAL '%f MINUTES'", inhibitionWindow.Minutes())).
+			Limit(1).
+			Find(&id).Error; err != nil {
+			return nil, fmt.Errorf("failed to get related notification count: %w", err)
+		}
+
+		if id != "" {
+			return lo.ToPtr(uuid.MustParse(id)), nil
+		}
+	}
+
+	return nil, nil
 }
 
 // sendNotifications sends a notification for each of the given events - one at a time.

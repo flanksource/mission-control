@@ -114,7 +114,6 @@
       "type": "object",
       "required": [
         "direction",
-        "depth",
         "from",
         "to"
       ]
@@ -187,7 +186,7 @@
           },
           "type": "array"
         },
-        "inhibit": {
+        "inhibitions": {
           "items": {
             "$ref": "#/$defs/NotificationInihibition"
           },
