@@ -426,6 +426,9 @@ func processPendingNotification(ctx context.Context, currentHistory models.Notif
 		return nil
 	}
 
+	// TODO: Apply inhibitions
+	// among this group, see if any notifications inhibit another
+
 	var payload NotificationEventPayload
 	primaryHistory := historiesToUpdate[0]
 	payload.FromMap(primaryHistory.Payload)
