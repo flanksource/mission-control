@@ -93,7 +93,7 @@ spec:
                 items:
                   type: string
                 type: array
-              inhibit:
+              inhibitions:
                 description: |-
                   Inhibit controls notification suppression for related resources.
                   It uses the repeat interval as the window for suppression
@@ -118,8 +118,9 @@ spec:
                         example, "Kubernetes::Deployment").
                       type: string
                     soft:
-                      description: Soft indicates whether this inhibition is advisory
-                        or strictly enforced.
+                      description: |-
+                        Soft, when true, relates using soft relationships.
+                        Example: Deployment to Pod is hard relationship, But Node to Pod is soft relationship.
                       type: boolean
                     to:
                       description: |-
@@ -131,7 +132,6 @@ spec:
                         type: string
                       type: array
                   required:
-                  - depth
                   - direction
                   - from
                   - to

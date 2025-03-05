@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"github.com/flanksource/duty/query"
 	"github.com/flanksource/kopper"
 	"github.com/google/go-cmp/cmp"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -100,7 +101,7 @@ type NotificationSpec struct {
 	// Inhibit controls notification suppression for related resources.
 	// It uses the repeat interval as the window for suppression
 	// as well as the wait for period.
-	Inibhit []NotificationInihibition `json:"inhibit,omitempty"`
+	Inhibitions []NotificationInihibition `json:"inhibitions,omitempty"`
 }
 
 type NotificationInihibition struct {
@@ -110,13 +111,14 @@ type NotificationInihibition struct {
 	// - "incoming": Looks for parent resources related to the "From" resource.
 	//   Example: If "From" is "Kubernetes::Deployment", "To" could be ["Kubernetes::HelmRelease", "Kubernetes::Namespace"].
 	// - "all": Considers both incoming and outgoing relationships.
-	Direction string `json:"direction"`
+	Direction query.RelationDirection `json:"direction"`
 
-	// Soft indicates whether this inhibition is advisory or strictly enforced.
+	// Soft, when true, relates using soft relationships.
+	// Example: Deployment to Pod is hard relationship, But Node to Pod is soft relationship.
 	Soft bool `json:"soft,omitempty"`
 
 	// Depth defines how many levels of child or parent resources to traverse.
-	Depth int `json:"depth"`
+	Depth *int `json:"depth,omitempty"`
 
 	// From specifies the starting resource type (for example, "Kubernetes::Deployment").
 	From string `json:"from"`

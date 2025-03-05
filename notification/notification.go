@@ -2,11 +2,14 @@ package notification
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 
+	"github.com/flanksource/commons/text"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
+	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/patrickmn/go-cache"
 )
 
@@ -41,8 +44,11 @@ func GetNotificationIDsForEvent(ctx context.Context, eventName string) ([]string
 // A wrapper around notification that also contains the custom notifications.
 type NotificationWithSpec struct {
 	models.Notification
+
+	RepeatInterval             *time.Duration
 	CustomNotifications        []api.NotificationConfig
 	FallbackCustomNotification *api.NotificationConfig
+	Inhibitions                []v1.NotificationInihibition
 }
 
 func GetNotification(ctx context.Context, id string) (*NotificationWithSpec, error) {
@@ -83,6 +89,20 @@ func GetNotification(ctx context.Context, id string) (*NotificationWithSpec, err
 
 		if len(customNotifications) > 0 {
 			data.FallbackCustomNotification = &customNotifications[0]
+		}
+	}
+
+	if n.RepeatInterval != "" {
+		interval, err := text.ParseDuration(n.RepeatInterval)
+		if err != nil {
+			return nil, fmt.Errorf("error parsing repeat interval[%s] to time.Duration: %w", n.RepeatInterval, err)
+		}
+		data.RepeatInterval = interval
+	}
+
+	if len(n.Inhibitions) > 0 {
+		if err := json.Unmarshal(n.Inhibitions, &data.Inhibitions); err != nil {
+			return nil, fmt.Errorf("error parsing inhibitions[%s] to NotificationInihibition: %w", n.Inhibitions, err)
 		}
 	}
 
