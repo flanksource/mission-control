@@ -645,6 +645,119 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 		})
 	})
 
+	var _ = ginkgo.Describe("recent events", ginkgo.Ordered, func() {
+		var n models.Notification
+		var config models.ConfigItem
+		var changes []models.ConfigChange
+
+		ginkgo.BeforeAll(func() {
+			n = models.Notification{
+				ID:             uuid.New(),
+				Name:           "recent-events",
+				Events:         pq.StringArray([]string{"config.unhealthy"}),
+				Source:         models.SourceCRD,
+				Title:          "Dummy",
+				Template:       "{{.recent_events}}",
+				CustomServices: types.JSON(customReceiverJson),
+			}
+
+			err := DefaultContext.DB().Create(&n).Error
+			Expect(err).To(BeNil())
+
+			config = models.ConfigItem{
+				ID:          uuid.New(),
+				Name:        lo.ToPtr("my-app"),
+				ConfigClass: models.ConfigClassDeployment,
+				Health:      lo.ToPtr(models.HealthHealthy),
+				Config:      lo.ToPtr(`{"color": "red"}`),
+				Type:        lo.ToPtr("Kubernetes::Deployment"),
+			}
+
+			err = DefaultContext.DB().Create(&config).Error
+			Expect(err).To(BeNil())
+
+			changes = []models.ConfigChange{
+				{
+					ConfigID:   config.ID.String(),
+					ChangeType: "ScalingReplicaSet",
+					Severity:   "info",
+					Source:     "Kubernetes",
+					Summary:    "Scaling replica set",
+					Details:    types.JSON(`{"reason": "ScalingReplicaSet"}`),
+					CreatedAt:  lo.ToPtr(time.Now().Add(-time.Minute * 3)),
+					Count:      1,
+				},
+				{
+					ConfigID:   config.ID.String(),
+					ChangeType: "FailedCreate",
+					Severity:   "high",
+					Source:     "Kubernetes",
+					Summary:    "Error creating: pods \"my-app-74d4c6dcf4-vb4jk\" is forbidden: exceeded quota: compute-resources",
+					Details:    types.JSON(`{"reason": "FailedCreate"}`),
+					CreatedAt:  lo.ToPtr(time.Now().Add(-time.Minute * 2)),
+					Count:      1,
+				},
+				{
+					ConfigID:   config.ID.String(),
+					ChangeType: "Unhealthy",
+					Severity:   "medium",
+					Source:     "Kubernetes",
+					Summary:    "Readiness probe failed: HTTP probe failed with statuscode: 500",
+					Details:    types.JSON(`{"reason": "Unhealthy"}`),
+					CreatedAt:  lo.ToPtr(time.Now().Add(-time.Minute)),
+					Count:      1,
+				},
+				{
+					ConfigID:   config.ID.String(),
+					ChangeType: "ProgressDeadlineExceeded",
+					Severity:   "high",
+					Source:     "Kubernetes",
+					Summary:    "Deployment my-app has not progressed in 10 minutes",
+					Details:    types.JSON(`{"reason": "ProgressDeadlineExceeded"}`),
+					CreatedAt:  lo.ToPtr(time.Now().Add(-time.Second * 30)),
+					Count:      1,
+				},
+			}
+
+			err = DefaultContext.DB().Create(&changes).Error
+			Expect(err).To(BeNil())
+
+			events.ConsumeAll(DefaultContext)
+		})
+
+		ginkgo.AfterAll(func() {
+			err := DefaultContext.DB().Delete(&n).Error
+			Expect(err).To(BeNil())
+
+			err = DefaultContext.DB().Delete(&changes).Error
+			Expect(err).To(BeNil())
+
+			err = DefaultContext.DB().Delete(&config).Error
+			Expect(err).To(BeNil())
+
+			notification.PurgeCache(n.ID.String())
+		})
+
+		ginkgo.It("should create a new send history with recent events", func() {
+			err := DefaultContext.DB().Model(&models.ConfigItem{}).Where("id = ?", config.ID).Update("health", models.HealthUnhealthy).Error
+			Expect(err).To(BeNil())
+
+			events.ConsumeAll(DefaultContext)
+
+			Eventually(func() bool {
+				var sendHistory []models.NotificationSendHistory
+				err := DefaultContext.DB().
+					Where("notification_id = ?", n.ID.String()).
+					Where("resource_id = ?", config.ID.String()).
+					Where("source_event = ?", "config.unhealthy").
+					Find(&sendHistory).Error
+				Expect(err).To(BeNil())
+
+				return len(sendHistory) == 1 && *sendHistory[0].Body == "[FailedCreate ProgressDeadlineExceeded Unhealthy]"
+			}, "10s", "200ms").Should(BeTrue())
+		})
+	})
+
 	var _ = ginkgo.Describe("template vailidity", func() {
 		for _, event := range api.EventStatusGroup {
 			ginkgo.It(event, func() {
