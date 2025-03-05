@@ -88,6 +88,9 @@ spec:
                   based on certain set of keys.
 
 
+                  The group wait period is the waitFor period.
+
+
                   Valid keys: type, description, status_reason or
                   labels & tags in the format `label:<key>` or `tag:<key>`
                 items:

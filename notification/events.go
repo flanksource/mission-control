@@ -314,7 +314,7 @@ func checkInhibition(ctx context.Context, notif NotificationWithSpec, resource t
 
 		var relatedIDs []uuid.UUID
 		for _, rc := range relatedConfigs {
-			if rc.Type == inhibition.From {
+			if rc.Type == inhibition.From && rc.ID.String() != resource.GetID() {
 				relatedIDs = append(relatedIDs, rc.ID)
 			}
 		}
@@ -323,6 +323,7 @@ func checkInhibition(ctx context.Context, notif NotificationWithSpec, resource t
 		if err := ctx.DB().Model(&models.NotificationSendHistory{}).
 			Select("id").
 			Where("notification_id = ?", notif.ID).
+			Where("status = ?", models.NotificationStatusSent).
 			Where("resource_id IN ?", relatedIDs).
 			Where(fmt.Sprintf("created_at >= NOW() - INTERVAL '%f MINUTES'", inhibitionWindow.Minutes())).
 			Limit(1).
