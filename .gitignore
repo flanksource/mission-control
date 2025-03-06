@@ -21,3 +21,5 @@ junit-report.xml
 nohup.out
 .envrc
 .creds
+
+test-reports

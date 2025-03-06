@@ -20,6 +20,7 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/rbac"
+	"github.com/flanksource/incident-commander/rbac/adapter"
 	"github.com/flanksource/incident-commander/vars"
 	"github.com/labstack/echo/v4"
 	. "github.com/onsi/ginkgo/v2"
@@ -46,7 +47,7 @@ var _ = BeforeSuite(func() {
 	e.Use(auth.MockAuthMiddleware)
 
 	Expect(DefaultContext.DB().Exec("TRUNCATE casbin_rule").Error).To(BeNil())
-	if err := dutyRBAC.Init(DefaultContext, []string{"admin"}); err != nil {
+	if err := dutyRBAC.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter); err != nil {
 		Fail(fmt.Sprintf("error instantiating rbac: %v", err))
 	}
 	usersAndRoles := map[string]string{
