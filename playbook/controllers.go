@@ -12,12 +12,13 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
+	dutyRBAC "github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/types"
 	"github.com/labstack/echo/v4"
 	"github.com/samber/lo"
 	"github.com/samber/oops"
 
-	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
@@ -132,7 +133,7 @@ func HandleGetPlaybookParams(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Err: err.Error(), Message: "unable to prepare template env"})
 	}
 
-	if !rbac.HasPermission(ctx, ctx.Subject(), env.ABACAttributes(), policy.ActionRead) {
+	if !dutyRBAC.HasPermission(ctx, ctx.Subject(), env.ABACAttributes(), policy.ActionRead) {
 		return ctx.Oops().
 			Code(dutyAPI.EFORBIDDEN).
 			With("permission", policy.ActionRead, "objects", env.ABACAttributes()).
@@ -141,7 +142,7 @@ func HandleGetPlaybookParams(c echo.Context) error {
 
 	if attr, err := dummyRun.GetABACAttributes(ctx.DB()); err != nil {
 		return ctx.Oops().Wrap(err)
-	} else if !rbac.HasPermission(ctx, ctx.Subject(), attr, policy.ActionPlaybookRun) {
+	} else if !dutyRBAC.HasPermission(ctx, ctx.Subject(), attr, policy.ActionPlaybookRun) {
 		return ctx.Oops().
 			Code(dutyAPI.EFORBIDDEN).
 			With("permission", policy.ActionPlaybookRun, "objects", attr).

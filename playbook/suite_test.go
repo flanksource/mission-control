@@ -5,23 +5,25 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/tests/fixtures/dummy"
-	"github.com/flanksource/duty/tests/setup"
-	"github.com/flanksource/incident-commander/auth"
-	echoSrv "github.com/flanksource/incident-commander/echo"
-	"github.com/flanksource/incident-commander/events"
-	"github.com/flanksource/incident-commander/playbook/sdk"
-	"github.com/flanksource/incident-commander/rbac"
-	"github.com/flanksource/incident-commander/vars"
 	"github.com/labstack/echo/v4"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/format"
 	"github.com/samber/lo"
 	"github.com/samber/oops"
+
+	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/tests/fixtures/dummy"
+	"github.com/flanksource/duty/tests/setup"
+
+	"github.com/flanksource/incident-commander/auth"
+	echoSrv "github.com/flanksource/incident-commander/echo"
+	"github.com/flanksource/incident-commander/events"
+	"github.com/flanksource/incident-commander/playbook/sdk"
+	"github.com/flanksource/incident-commander/vars"
 
 	// register event handlers
 	_ "github.com/flanksource/incident-commander/incidents/responder"
@@ -58,7 +60,7 @@ var _ = ginkgo.BeforeSuite(func() {
 	DefaultContext.Logger.SetLogLevel(DefaultContext.Properties().String("log.level", "info"))
 	DefaultContext.Infof("%s", DefaultContext.String())
 
-	if err := rbac.Init(DefaultContext, "admin"); err != nil {
+	if err := rbac.Init(DefaultContext, []string{"admin"}); err != nil {
 		ginkgo.Fail(err.Error())
 	}
 
