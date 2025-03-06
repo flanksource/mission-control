@@ -180,73 +180,11 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 		return fmt.Errorf("failed to create rate limiter: %w", err)
 	}
 
-	passesRepeatInterval, err := checkRepeatInterval(ctx, *n, event)
-	if err != nil {
-		// If there are any errors in calculating interval, we send the notification and log the error
-		ctx.Errorf("error checking repeat interval for notification[%s]: %v", n.ID, err)
-		passesRepeatInterval = true
-	}
-
 	for _, payload := range payloads {
-		if silencedBy := getFirstSilencer(ctx, celEnv, matchingSilences); silencedBy != nil {
-			ctx.Logger.V(6).Infof("silencing notification for event %s due to %d matching silences", event.ID, matchingSilences)
-			ctx.Counter("notification_silenced", "id", id, "resource", payload.ID.String()).Add(1)
-
-			history := models.NotificationSendHistory{
-				NotificationID: n.ID,
-				ResourceID:     payload.ID,
-				SourceEvent:    event.Name,
-				SilencedBy:     &silencedBy.ID,
-				Status:         models.NotificationStatusSilenced,
-			}
-			if err := db.SaveUnsentNotificationToHistory(ctx, history); err != nil {
-				return fmt.Errorf("failed to save silenced notification history: %w", err)
-			}
-
+		if pass, err := passesAllChecks(ctx, *n, payload, event, celEnv, matchingSilences); err != nil {
+			return fmt.Errorf("failed to check all conditions for notification[%s]: %w", n.ID, err)
+		} else if !pass {
 			continue
-		}
-
-		// Repeat interval check
-		if n.RepeatInterval != nil && !passesRepeatInterval {
-			ctx.Logger.V(6).Infof("skipping notification[%s] due to repeat interval", n.ID)
-			ctx.Counter("notification_skipped_by_repeat_interval", "id", id, "resource", payload.ID.String(), "source_event", event.Name).Add(1)
-
-			history := models.NotificationSendHistory{
-				NotificationID: n.ID,
-				ResourceID:     payload.ID,
-				SourceEvent:    event.Name,
-				Status:         models.NotificationStatusRepeatInterval,
-			}
-			if err := db.SaveUnsentNotificationToHistory(ctx, history); err != nil {
-				return fmt.Errorf("failed to save silenced notification history: %w", err)
-			}
-
-			continue
-		}
-
-		if len(n.Inhibitions) > 0 && n.RepeatInterval != nil && celEnv.ConfigItem != nil {
-			inhibitor, err := checkInhibition(ctx, *n, celEnv.SelectableResource())
-			if err != nil {
-				return fmt.Errorf("failed to check inhibition for notification[%s]: %w", n.ID, err)
-			}
-
-			if inhibitor != nil {
-				ctx.Logger.V(6).Infof("skipping notification[%s] due to inhibition", n.ID)
-				ctx.Counter("notification_inhibited", "id", id, "resource", payload.ID.String(), "source_event", event.Name).Add(1)
-
-				history := models.NotificationSendHistory{
-					NotificationID: n.ID,
-					ResourceID:     payload.ID,
-					SourceEvent:    event.Name,
-					Status:         models.NotificationStatusInhibited,
-					ParentID:       inhibitor,
-				}
-				if err := db.SaveUnsentNotificationToHistory(ctx, history); err != nil {
-					return fmt.Errorf("failed to save inhibited notification history: %w", err)
-				}
-
-				continue
-			}
 		}
 
 		if !rateLimiter.Allow() {
@@ -256,16 +194,121 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 			continue
 		}
 
-		newEvent := models.Event{
-			Name:       api.EventNotificationSend,
-			Properties: payload.AsMap(),
-		}
-		if err := ctx.DB().Clauses(events.EventQueueOnConflictClause).Create(&newEvent).Error; err != nil {
-			return fmt.Errorf("failed to saved `notification.send` event for payload (%v): %w", payload.AsMap(), err)
+		// Notifications that have waitFor configured go through a waiting stage
+		// while the rest are sent immediately.
+		if n.WaitFor != nil {
+			pendingHistory := models.NotificationSendHistory{
+				NotificationID: n.ID,
+				ResourceID:     payload.ID,
+				SourceEvent:    event.Name,
+				Payload:        payload.AsMap(),
+				Status:         models.NotificationStatusPending,
+				NotBefore:      lo.ToPtr(time.Now().Add(*n.WaitFor)),
+			}
+			if len(n.GroupBy) > 0 {
+				h, err := calculateGroupByHash(ctx, n.GroupBy, payload.ID.String(), payload.EventName)
+				logs.IfError(err, "error persisting start of notification send history")
+				if err != nil {
+					return err
+				}
+				pendingHistory.GroupByHash = h
+			}
+
+			if err := ctx.DB().Create(&pendingHistory).Error; err != nil {
+				return fmt.Errorf("failed to save pending notification: %w", err)
+			}
+		} else {
+			newEvent := models.Event{
+				Name:       api.EventNotificationSend,
+				Properties: payload.AsMap(),
+			}
+			if err := ctx.DB().Clauses(events.EventQueueOnConflictClause).Create(&newEvent).Error; err != nil {
+				return fmt.Errorf("failed to saved `notification.send` event for payload (%v): %w", payload.AsMap(), err)
+			}
 		}
 	}
 
 	return nil
+}
+
+func passesAllChecks(ctx context.Context,
+	n NotificationWithSpec,
+	payload NotificationEventPayload,
+	event models.Event,
+	celEnv *celVariables,
+	matchingSilences []models.NotificationSilence,
+) (bool, error) {
+	if silencedBy := getFirstSilencer(ctx, celEnv, matchingSilences); silencedBy != nil {
+		ctx.Logger.V(6).Infof("silencing notification for event %s due to %d matching silences", event.ID, matchingSilences)
+		ctx.Counter("notification_silenced", "id", n.ID.String(), "resource", payload.ID.String()).Add(1)
+
+		history := models.NotificationSendHistory{
+			NotificationID: n.ID,
+			ResourceID:     payload.ID,
+			SourceEvent:    event.Name,
+			SilencedBy:     &silencedBy.ID,
+			Status:         models.NotificationStatusSilenced,
+		}
+		if err := db.SaveUnsentNotificationToHistory(ctx, history); err != nil {
+			return false, fmt.Errorf("failed to save silenced notification history: %w", err)
+		}
+
+		return false, nil
+	}
+
+	// Repeat interval check
+	if n.RepeatInterval != nil {
+		passesRepeatInterval, err := checkRepeatInterval(ctx, n, event)
+		if err != nil {
+			// If there are any errors in calculating interval, we send the notification and log the error
+			ctx.Errorf("error checking repeat interval for notification[%s]: %v", n.ID, err)
+			passesRepeatInterval = true
+		}
+
+		if !passesRepeatInterval {
+			ctx.Logger.V(6).Infof("skipping notification[%s] due to repeat interval", n.ID)
+			ctx.Counter("notification_skipped_by_repeat_interval", "id", n.ID.String(), "resource", payload.ID.String(), "source_event", event.Name).Add(1)
+
+			history := models.NotificationSendHistory{
+				NotificationID: n.ID,
+				ResourceID:     payload.ID,
+				SourceEvent:    event.Name,
+				Status:         models.NotificationStatusRepeatInterval,
+			}
+			if err := db.SaveUnsentNotificationToHistory(ctx, history); err != nil {
+				return false, fmt.Errorf("failed to save silenced notification history: %w", err)
+			}
+
+			return false, nil
+		}
+	}
+
+	if len(n.Inhibitions) > 0 && n.RepeatInterval != nil && celEnv.ConfigItem != nil {
+		inhibitor, err := checkInhibition(ctx, n, celEnv.SelectableResource())
+		if err != nil {
+			return false, fmt.Errorf("failed to check inhibition for notification[%s]: %w", n.ID, err)
+		}
+
+		if inhibitor != nil {
+			ctx.Logger.V(6).Infof("skipping notification[%s] due to inhibition", n.ID)
+			ctx.Counter("notification_inhibited", "id", n.ID.String(), "resource", payload.ID.String(), "source_event", event.Name).Add(1)
+
+			history := models.NotificationSendHistory{
+				NotificationID: n.ID,
+				ResourceID:     payload.ID,
+				SourceEvent:    event.Name,
+				Status:         models.NotificationStatusInhibited,
+				ParentID:       inhibitor,
+			}
+			if err := db.SaveUnsentNotificationToHistory(ctx, history); err != nil {
+				return false, fmt.Errorf("failed to save inhibited notification history: %w", err)
+			}
+
+			return false, nil
+		}
+	}
+
+	return true, nil
 }
 
 func checkInhibition(ctx context.Context, notif NotificationWithSpec, resource types.ResourceSelectable) (*uuid.UUID, error) {
@@ -390,7 +433,7 @@ func sendPendingNotification(ctx context.Context, history models.NotificationSen
 	ctx.Debugf("[notification.send] %s ", payload.EventName)
 	notificationContext.WithSource(payload.EventName, payload.ID)
 
-	err := _sendNotification(notificationContext, true, payload)
+	err := _sendNotification(notificationContext, payload)
 	if err != nil {
 		notificationContext.WithError(err)
 	}
@@ -466,23 +509,10 @@ func sendNotification(ctx context.Context, payload NotificationEventPayload) err
 
 	ctx.Debugf("[notification.send] %s  ", payload.EventName)
 	notificationContext.WithSource(payload.EventName, payload.ID)
-	dbNotif, err := GetNotification(ctx, payload.NotificationID.String())
-	if err != nil {
-		logs.IfError(err, "error fetching notification")
-		return fmt.Errorf("error fetching notification[%s]: %w", payload.NotificationID, err)
-	}
-	if len(dbNotif.GroupBy) > 0 {
-		h, err := calculateGroupByHash(ctx, dbNotif.GroupBy, payload.ID.String(), payload.EventName)
-		logs.IfError(err, "error persisting start of notification send history")
-		if err != nil {
-			return err
-		}
-		notificationContext.WithGroupByHash(h)
-	}
 
 	logs.IfError(notificationContext.StartLog(), "error persisting start of notification send history")
 
-	err = _sendNotification(notificationContext, false, payload)
+	err := _sendNotification(notificationContext, payload)
 	if err != nil {
 		notificationContext.WithError(err)
 	}
@@ -491,7 +521,7 @@ func sendNotification(ctx context.Context, payload NotificationEventPayload) err
 	return err
 }
 
-func _sendNotification(ctx *Context, noWait bool, payload NotificationEventPayload) error {
+func _sendNotification(ctx *Context, payload NotificationEventPayload) error {
 	originalEvent := models.Event{Name: payload.EventName, CreatedAt: payload.EventCreatedAt}
 	if len(payload.Properties) > 0 {
 		if err := json.Unmarshal(payload.Properties, &originalEvent.Properties); err != nil {
@@ -514,26 +544,19 @@ func _sendNotification(ctx *Context, noWait bool, payload NotificationEventPaylo
 
 	ctx.log.Payload = payload.AsMap()
 
-	if !noWait && nn.WaitFor != nil {
-		// delayed notifications are saved to history with a pending status
-		// and are later consumed by a job.
-		ctx.log.NotBefore = lo.ToPtr(ctx.log.CreatedAt.Add(*nn.WaitFor))
-		ctx.log.Status = models.NotificationStatusPending
-	} else {
-		if payload.PlaybookID != nil {
-			if err := triggerPlaybookRun(ctx, celEnv, *payload.PlaybookID); err != nil {
-				return err
-			}
-
-			ctx.log.PendingPlaybookRun()
-		} else {
-			traceLog("NotificationID=%s Resource=[%s/%s] Sending ...", nn.ID, payload.EventName, payload.ID)
-			if err := PrepareAndSendEventNotification(ctx, payload, celEnv); err != nil {
-				return fmt.Errorf("failed to send notification for event: %w", err)
-			}
-
-			ctx.log.Sent()
+	if payload.PlaybookID != nil {
+		if err := triggerPlaybookRun(ctx, celEnv, *payload.PlaybookID); err != nil {
+			return err
 		}
+
+		ctx.log.PendingPlaybookRun()
+	} else {
+		traceLog("NotificationID=%s Resource=[%s/%s] Sending ...", nn.ID, payload.EventName, payload.ID)
+		if err := PrepareAndSendEventNotification(ctx, payload, celEnv); err != nil {
+			return fmt.Errorf("failed to send notification for event: %w", err)
+		}
+
+		ctx.log.Sent()
 	}
 
 	return nil
