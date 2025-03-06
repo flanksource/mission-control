@@ -1,0 +1,13 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: allow-john-retyr-echo-playbook-run
+spec:
+  description: allow user john to run retry-echo playbook on any config
+  subject:
+    person: john@doe.com
+  actions:
+    - playbook:*
+  object:
+    playbooks:
+      - name: retry-echo

@@ -753,7 +753,7 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 					Find(&sendHistory).Error
 				Expect(err).To(BeNil())
 
-				return len(sendHistory) == 1 && *sendHistory[0].Body == "[FailedCreate ProgressDeadlineExceeded Unhealthy]"
+				return len(sendHistory) == 1 && lo.FromPtr(sendHistory[0].Body) == "[FailedCreate ProgressDeadlineExceeded Unhealthy]"
 			}, "10s", "200ms").Should(BeTrue())
 		})
 	})
