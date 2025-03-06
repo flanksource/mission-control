@@ -3,7 +3,6 @@ package echo
 import (
 	gocontext "context"
 	"crypto/tls"
-	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -34,7 +33,6 @@ import (
 	"github.com/labstack/echo-contrib/echoprometheus"
 	echov4 "github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
-	"github.com/lib/pq"
 	prom "github.com/prometheus/client_golang/prometheus"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 	"go.opentelemetry.io/otel/attribute"
@@ -324,20 +322,8 @@ func RLSMiddleware(next echov4.HandlerFunc) echov4.HandlerFunc {
 			return next(c)
 		}
 
-		rlsJSON, err := json.Marshal(rlsPayload)
-		if err != nil {
-			return err
-		}
-
 		err = ctx.Transaction(func(txCtx context.Context, _ trace.Span) error {
-			if err := txCtx.DB().Exec("SET LOCAL ROLE postgrest_api").Error; err != nil {
-				return err
-			}
-
-			// NOTE: SET statements in PostgreSQL do not support parameterized queries, so we must use fmt.Sprintf
-			// to inject the rlsJSON safely using pq.QuoteLiteral.
-			rlsSet := fmt.Sprintf(`SET LOCAL request.jwt.claims TO %s`, pq.QuoteLiteral(string(rlsJSON)))
-			if err := txCtx.DB().Exec(rlsSet).Error; err != nil {
+			if err := rlsPayload.SetPostgresSessionRLS(txCtx.DB()); err != nil {
 				return err
 			}
 
