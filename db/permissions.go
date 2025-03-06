@@ -20,7 +20,7 @@ func PersistPermissionFromCRD(ctx context.Context, obj *v1.Permission) error {
 
 	subject, subjectType, err := obj.Spec.Subject.Populate(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to populate subject: %w", err)
 	}
 
 	action := strings.Join(obj.Spec.Actions, ",")
