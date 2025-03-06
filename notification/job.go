@@ -16,6 +16,7 @@ import (
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/db"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"gorm.io/gorm"
@@ -141,26 +142,25 @@ func ProcessPendingNotificationsJob(ctx context.Context) *job.Job {
 		RunNow:     true,
 		Context:    ctx,
 		Singleton:  false,
-		Schedule:   "@every 30s",
+		Schedule:   "@every 15s",
 		Fn: func(ctx job.JobRuntime) error {
-			var errCount int
+			var iter int
 			for {
+				iter++
+				if iter > 3 {
+					// avoid getting stuck in a loop
+					break
+				}
+
 				done, err := ProcessPendingNotifications(ctx.Context)
 				if err != nil {
 					ctx.History.AddErrorf("failed to send pending notification: %v", err)
-
-					errCount++
-					if errCount > 3 {
-						// avoid getting stuck in a loop
-						break
-					}
 
 					time.Sleep(2 * time.Second) // prevent spinning on db errors
 					continue
 				}
 
 				ctx.History.IncrSuccess()
-
 				if done {
 					break
 				}
@@ -426,9 +426,6 @@ func processPendingNotification(ctx context.Context, currentHistory models.Notif
 		return nil
 	}
 
-	// TODO: Apply inhibitions
-	// among this group, see if any notifications inhibit another
-
 	var payload NotificationEventPayload
 	primaryHistory := historiesToUpdate[0]
 	payload.FromMap(primaryHistory.Payload)
@@ -460,6 +457,46 @@ func processPendingNotification(ctx context.Context, currentHistory models.Notif
 		})
 	}
 
+	event := models.Event{
+		Name:      payload.EventName,
+		CreatedAt: payload.EventCreatedAt,
+		Properties: map[string]string{
+			"id": payload.ID.String(),
+		},
+	}
+	celEnv, err := GetEnvForEvent(ctx, event)
+	if err != nil {
+		return fmt.Errorf("failed to get cel env: %w", err)
+	}
+
+	silencedResource := getSilencedResourceFromCelEnv(celEnv)
+	matchingSilences, err := db.GetMatchingNotificationSilences(ctx, silencedResource)
+	if err != nil {
+		return fmt.Errorf("failed to get matching silences: %w", err)
+	}
+
+	if blocker, err := validateSendHistory(ctx, *notif, payload, celEnv, matchingSilences); err != nil {
+		return fmt.Errorf("failed to check all conditions for notification[%s]: %w", notif.ID, err)
+	} else if blocker != nil {
+		columns := map[string]any{
+			"status": models.NotificationStatusSkipped,
+		}
+
+		if blocker.ParentID != nil {
+			columns["parent_id"] = blocker.ParentID.String()
+		}
+		if blocker.SilencedBy != nil {
+			columns["silenced_by"] = blocker.SilencedBy.String()
+		}
+
+		ids := lo.Map(historiesToUpdate, func(h models.NotificationSendHistory, _ int) uuid.UUID { return h.ID })
+		if err := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id IN ?", ids).UpdateColumns(columns).Error; err != nil {
+			return fmt.Errorf("failed to save notification status as skipped: %w", err)
+		}
+
+		return nil
+	}
+
 	if err := sendPendingNotification(ctx, primaryHistory, payload); err != nil {
 		return fmt.Errorf("failed to send notification: %w", err)
 	} else if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", primaryHistory.ID).UpdateColumns(map[string]any{
@@ -469,11 +506,13 @@ func processPendingNotification(ctx context.Context, currentHistory models.Notif
 	}
 
 	groupedHistoriesIDs := lo.Map(historiesToUpdate[1:], func(h models.NotificationSendHistory, _ int) uuid.UUID { return h.ID })
-	if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id IN ?", groupedHistoriesIDs).UpdateColumns(map[string]any{
-		"status":    models.NotificationStatusSent,
-		"parent_id": primaryHistory.ID.String(),
-	}).Error; dberr != nil {
-		return fmt.Errorf("failed to save notification status as sent: %w", dberr)
+	if len(groupedHistoriesIDs) == 0 {
+		if err := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id IN ?", groupedHistoriesIDs).UpdateColumns(map[string]any{
+			"status":    models.NotificationStatusSent,
+			"parent_id": primaryHistory.ID.String(),
+		}).Error; err != nil {
+			return fmt.Errorf("failed to save notification status as sent: %w", err)
+		}
 	}
 
 	return nil
