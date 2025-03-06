@@ -23,6 +23,7 @@ import (
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/playbook/sdk"
+	"github.com/flanksource/incident-commander/rbac/adapter"
 	"github.com/flanksource/incident-commander/vars"
 
 	// register event handlers
@@ -60,7 +61,7 @@ var _ = ginkgo.BeforeSuite(func() {
 	DefaultContext.Logger.SetLogLevel(DefaultContext.Properties().String("log.level", "info"))
 	DefaultContext.Infof("%s", DefaultContext.String())
 
-	if err := rbac.Init(DefaultContext, []string{"admin"}); err != nil {
+	if err := rbac.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter); err != nil {
 		ginkgo.Fail(err.Error())
 	}
 
