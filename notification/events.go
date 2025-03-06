@@ -101,6 +101,7 @@ func checkRepeatInterval(ctx context.Context, n NotificationWithSpec, event mode
 		clause.Eq{Column: "notification_id", Value: n.ID.String()},
 		clause.Eq{Column: "resource_id", Value: event.Properties["id"]},
 		clause.Eq{Column: "source_event", Value: event.Name},
+		clause.Eq{Column: "status", Value: models.NotificationStatusSent},
 	}
 
 	var exists bool
