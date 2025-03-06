@@ -79,8 +79,15 @@ type NotificationSpec struct {
 	// If specified, it should be a valid duration string (e.g., "5m", "1h").
 	WaitFor *string `json:"waitFor,omitempty" yaml:"waitFor,omitempty"`
 
-	// WaitForEvalPeriod is an additional delay after WaitFor before evaluating
-	// Kubernetes config health. Format: "5m", "1h"
+	// WaitForEvalPeriod defines an additional delay following the waitFor period.
+	// After waitFor completes, the system actively re-scrapes the resource
+	// and then waits this duration before final evaluation, unlike waitFor which
+	// simply delays without re-scraping.
+	//
+	// Only applies to Kubernetes health notifications and cannot be turned off.
+	// Defaults to 30s.
+	//
+	// Format: duration string (e.g., "30s", "2m")
 	WaitForEvalPeriod *string `json:"waitForEvalPeriod,omitempty" yaml:"waitForEvalPeriod,omitempty"`
 
 	// GroupBy allows notifications in waiting status to be grouped together
