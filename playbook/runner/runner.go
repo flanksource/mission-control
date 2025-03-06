@@ -300,7 +300,7 @@ func RunAction(ctx context.Context, run *models.PlaybookRun, action *models.Play
 		return err
 	}
 
-	ctx = ctx.WithObject(action, run)
+	ctx = ctx.WithObject(action, run).WithSubject(playbook.ID.String())
 	ctx, span := ctx.StartSpan(fmt.Sprintf("playbook.%s", playbook.Name))
 	defer span.End()
 
