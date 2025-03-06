@@ -86,16 +86,16 @@ type notificationHandler struct {
 }
 
 // Check if notification can be sent in the interval based on group by, returns true if it can be sent
-func checkRepeatInterval(ctx context.Context, n NotificationWithSpec, event models.Event) (bool, error) {
+func checkRepeatInterval(ctx context.Context, n NotificationWithSpec, resourceID, sourceEvent string) (bool, error) {
 	if n.RepeatInterval == nil {
 		return true, nil
 	}
 
 	clauses := []clause.Expression{
 		clause.Eq{Column: "notification_id", Value: n.ID.String()},
-		clause.Eq{Column: "resource_id", Value: event.Properties["id"]},
-		clause.Eq{Column: "source_event", Value: event.Name},
 		clause.Eq{Column: "status", Value: models.NotificationStatusSent},
+		clause.Eq{Column: "resource_id", Value: resourceID},
+		clause.Eq{Column: "source_event", Value: sourceEvent},
 	}
 
 	var exists bool
@@ -181,9 +181,21 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 	}
 
 	for _, payload := range payloads {
-		if pass, err := passesAllChecks(ctx, *n, payload, event, celEnv, matchingSilences); err != nil {
+		if blocker, err := validateSendHistory(ctx, *n, payload, celEnv, matchingSilences); err != nil {
 			return fmt.Errorf("failed to check all conditions for notification[%s]: %w", n.ID, err)
-		} else if !pass {
+		} else if blocker != nil {
+			history := models.NotificationSendHistory{
+				NotificationID: n.ID,
+				ResourceID:     payload.ID,
+				SourceEvent:    payload.EventName,
+				Status:         blocker.BlockedWithStatus,
+				ParentID:       blocker.ParentID,
+				SilencedBy:     blocker.SilencedBy,
+			}
+			if err := db.SaveUnsentNotificationToHistory(ctx, history); err != nil {
+				return fmt.Errorf("failed to save silenced notification history: %w", err)
+			}
+
 			continue
 		}
 
@@ -231,34 +243,34 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 	return nil
 }
 
-func passesAllChecks(ctx context.Context,
+type validateResult struct {
+	BlockedWithStatus string
+	ParentID          *uuid.UUID
+	SilencedBy        *uuid.UUID
+}
+
+// TODO: Rename to a better name
+// validateSendHistory checks if the notification passes multiple checks
+func validateSendHistory(ctx context.Context,
 	n NotificationWithSpec,
 	payload NotificationEventPayload,
-	event models.Event,
 	celEnv *celVariables,
 	matchingSilences []models.NotificationSilence,
-) (bool, error) {
+) (*validateResult, error) {
+	sourceEvent := payload.EventName
+
 	if silencedBy := getFirstSilencer(ctx, celEnv, matchingSilences); silencedBy != nil {
-		ctx.Logger.V(6).Infof("silencing notification for event %s due to %d matching silences", event.ID, matchingSilences)
+		ctx.Logger.V(6).Infof("silencing notification for event %s due to %d matching silences", sourceEvent, matchingSilences)
 		ctx.Counter("notification_silenced", "id", n.ID.String(), "resource", payload.ID.String()).Add(1)
-
-		history := models.NotificationSendHistory{
-			NotificationID: n.ID,
-			ResourceID:     payload.ID,
-			SourceEvent:    event.Name,
-			SilencedBy:     &silencedBy.ID,
-			Status:         models.NotificationStatusSilenced,
-		}
-		if err := db.SaveUnsentNotificationToHistory(ctx, history); err != nil {
-			return false, fmt.Errorf("failed to save silenced notification history: %w", err)
-		}
-
-		return false, nil
+		return &validateResult{
+			BlockedWithStatus: models.NotificationStatusSilenced,
+			SilencedBy:        &silencedBy.ID,
+		}, nil
 	}
 
 	// Repeat interval check
 	if n.RepeatInterval != nil {
-		passesRepeatInterval, err := checkRepeatInterval(ctx, n, event)
+		passesRepeatInterval, err := checkRepeatInterval(ctx, n, payload.ID.String(), sourceEvent)
 		if err != nil {
 			// If there are any errors in calculating interval, we send the notification and log the error
 			ctx.Errorf("error checking repeat interval for notification[%s]: %v", n.ID, err)
@@ -267,48 +279,32 @@ func passesAllChecks(ctx context.Context,
 
 		if !passesRepeatInterval {
 			ctx.Logger.V(6).Infof("skipping notification[%s] due to repeat interval", n.ID)
-			ctx.Counter("notification_skipped_by_repeat_interval", "id", n.ID.String(), "resource", payload.ID.String(), "source_event", event.Name).Add(1)
+			ctx.Counter("notification_skipped_by_repeat_interval", "id", n.ID.String(), "resource", payload.ID.String(), "source_event", sourceEvent).Add(1)
 
-			history := models.NotificationSendHistory{
-				NotificationID: n.ID,
-				ResourceID:     payload.ID,
-				SourceEvent:    event.Name,
-				Status:         models.NotificationStatusRepeatInterval,
-			}
-			if err := db.SaveUnsentNotificationToHistory(ctx, history); err != nil {
-				return false, fmt.Errorf("failed to save silenced notification history: %w", err)
-			}
-
-			return false, nil
+			return &validateResult{
+				BlockedWithStatus: models.NotificationStatusRepeatInterval,
+			}, nil
 		}
 	}
 
 	if len(n.Inhibitions) > 0 && n.RepeatInterval != nil && celEnv.ConfigItem != nil {
 		inhibitor, err := checkInhibition(ctx, n, celEnv.SelectableResource())
 		if err != nil {
-			return false, fmt.Errorf("failed to check inhibition for notification[%s]: %w", n.ID, err)
+			return nil, fmt.Errorf("failed to check inhibition for notification[%s]: %w", n.ID, err)
 		}
 
 		if inhibitor != nil {
 			ctx.Logger.V(6).Infof("skipping notification[%s] due to inhibition", n.ID)
-			ctx.Counter("notification_inhibited", "id", n.ID.String(), "resource", payload.ID.String(), "source_event", event.Name).Add(1)
+			ctx.Counter("notification_inhibited", "id", n.ID.String(), "resource", payload.ID.String(), "source_event", sourceEvent).Add(1)
 
-			history := models.NotificationSendHistory{
-				NotificationID: n.ID,
-				ResourceID:     payload.ID,
-				SourceEvent:    event.Name,
-				Status:         models.NotificationStatusInhibited,
-				ParentID:       inhibitor,
-			}
-			if err := db.SaveUnsentNotificationToHistory(ctx, history); err != nil {
-				return false, fmt.Errorf("failed to save inhibited notification history: %w", err)
-			}
-
-			return false, nil
+			return &validateResult{
+				BlockedWithStatus: models.NotificationStatusInhibited,
+				ParentID:          inhibitor,
+			}, nil
 		}
 	}
 
-	return true, nil
+	return nil, nil
 }
 
 func checkInhibition(ctx context.Context, notif NotificationWithSpec, resource types.ResourceSelectable) (*uuid.UUID, error) {
