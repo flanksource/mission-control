@@ -42,17 +42,17 @@ func (t PermissionSubjectSelector) Find(ctx context.Context, table string) (stri
 	case "people":
 		var id string
 		if uuid.Validate(string(t)) == nil {
-			err := ctx.DB().Select("id").Model(table).Where("id = ?", string(t)).Find(&id).Error
+			err := ctx.DB().Select("id").Table(table).Where("id = ?", string(t)).Find(&id).Error
 			return id, models.PermissionSubjectTypePerson, err
 		} else {
-			err := ctx.DB().Select("id").Model(table).Where("name = ? OR email = ?", string(t), string(t)).Find(&id).Error
+			err := ctx.DB().Select("id").Table(table).Where("name = ? OR email = ?", string(t), string(t)).Find(&id).Error
 			return id, models.PermissionSubjectTypePerson, err
 		}
 
 	case "teams":
 		var id string
 		if uuid.Validate(string(t)) == nil {
-			err := ctx.DB().Select("id").Model(table).Where("id = ?", string(t)).Find(&id).Error
+			err := ctx.DB().Select("id").Table(table).Where("id = ?", string(t)).Find(&id).Error
 			return id, models.PermissionSubjectTypeTeam, err
 		} else {
 			err := ctx.DB().Select("id").Table(table).Where("name = ?", string(t)).Find(&id).Error
