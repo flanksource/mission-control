@@ -185,7 +185,7 @@ func ProcessPendingNotifications(parentCtx context.Context) (bool, error) {
 			FROM notification_send_history
 			WHERE status IN ? 
 				AND not_before <= NOW() 
-				AND retries < ?
+				AND (retries IS NULL OR retries < ?)
 			ORDER BY not_before ASC
 			LIMIT 1
 			FOR UPDATE SKIP LOCKED
@@ -195,7 +195,7 @@ func ProcessPendingNotifications(parentCtx context.Context) (bool, error) {
 		JOIN next_notification nn 
 				ON (nsh.id = nn.id OR (nsh.group_by_hash != '' AND nsh.group_by_hash = nn.group_by_hash))
 		WHERE nsh.status IN ? 
-			AND nsh.retries < ?
+			AND (nsh.retries IS NULL OR nsh.retries < ?)
 		FOR UPDATE SKIP LOCKED`
 
 		statuses := []string{models.NotificationStatusEvaluatingWaitFor, models.NotificationStatusPending}
