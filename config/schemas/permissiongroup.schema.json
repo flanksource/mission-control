@@ -172,6 +172,30 @@
           },
           "type": "array"
         },
+        "playbooks": {
+          "items": {
+            "$ref": "#/$defs/PermissionGroupSelector"
+          },
+          "type": "array"
+        },
+        "topologies": {
+          "items": {
+            "$ref": "#/$defs/PermissionGroupSelector"
+          },
+          "type": "array"
+        },
+        "scrapers": {
+          "items": {
+            "$ref": "#/$defs/PermissionGroupSelector"
+          },
+          "type": "array"
+        },
+        "canaries": {
+          "items": {
+            "$ref": "#/$defs/PermissionGroupSelector"
+          },
+          "type": "array"
+        },
         "people": {
           "items": {
             "type": "string"
@@ -189,10 +213,7 @@
         }
       },
       "additionalProperties": false,
-      "type": "object",
-      "required": [
-        "name"
-      ]
+      "type": "object"
     },
     "PermissionGroupStatus": {
       "properties": {},

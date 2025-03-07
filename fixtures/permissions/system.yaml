@@ -1,0 +1,30 @@
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: PermissionGroup
+metadata:
+  name: system
+spec:
+  canaries:
+    - name: "*"
+  scrapers:
+    - name: "*"
+  playbooks:
+    - name: "*"
+  topologies:
+    - name: "*"
+  notifications:
+    - name: "*"
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: system-connections-read
+spec:
+  description: allow all mission control services access to read all the connections
+  subject:
+    group: system
+  actions:
+    - read
+  object:
+    connections:
+      - name: "*"

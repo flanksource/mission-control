@@ -1,0 +1,22 @@
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: PermissionGroup
+metadata:
+  name: all-topologies
+spec:
+  topologies:
+    - name: "*"
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: topology-connection
+spec:
+  description: allow group all-topologies access to read all connections
+  subject:
+    group: all-topologies
+  actions:
+    - read
+  object:
+    connections:
+      - name: "*"

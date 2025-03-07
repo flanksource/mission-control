@@ -1857,6 +1857,26 @@ func (in *PermissionGroupSubjects) DeepCopyInto(out *PermissionGroupSubjects) {
 		*out = make([]PermissionGroupSelector, len(*in))
 		copy(*out, *in)
 	}
+	if in.Playbooks != nil {
+		in, out := &in.Playbooks, &out.Playbooks
+		*out = make([]PermissionGroupSelector, len(*in))
+		copy(*out, *in)
+	}
+	if in.Topologies != nil {
+		in, out := &in.Topologies, &out.Topologies
+		*out = make([]PermissionGroupSelector, len(*in))
+		copy(*out, *in)
+	}
+	if in.Scrapers != nil {
+		in, out := &in.Scrapers, &out.Scrapers
+		*out = make([]PermissionGroupSelector, len(*in))
+		copy(*out, *in)
+	}
+	if in.Canaries != nil {
+		in, out := &in.Canaries, &out.Canaries
+		*out = make([]PermissionGroupSelector, len(*in))
+		copy(*out, *in)
+	}
 	if in.People != nil {
 		in, out := &in.People, &out.People
 		*out = make([]string, len(*in))

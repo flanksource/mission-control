@@ -1,0 +1,22 @@
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: PermissionGroup
+metadata:
+  name: all-scrapers
+spec:
+  scrapers:
+    - name: "*"
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: scraper-connection
+spec:
+  description: allow group all-scrapers access to read all connections
+  subject:
+    group: all-scrapers
+  actions:
+    - read
+  object:
+    connections:
+      - name: "*"
