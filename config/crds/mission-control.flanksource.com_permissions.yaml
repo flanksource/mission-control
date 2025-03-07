@@ -310,6 +310,9 @@ spec:
                 description: Subject defines the entity (e.g., user, group) to which
                   the permission applies.
                 properties:
+                  canary:
+                    description: Canary <namespace>/<name> selector
+                    type: string
                   group:
                     description: Group is the group name
                     type: string
@@ -319,8 +322,17 @@ spec:
                   person:
                     description: ID or email of the person
                     type: string
+                  playbook:
+                    description: Playbook <namespace>/<name> selector
+                    type: string
+                  scraper:
+                    description: Scraper <namespace>/<name> selector
+                    type: string
                   team:
                     description: Team is the team name
+                    type: string
+                  topology:
+                    description: Topology <namespace>/<name> selector
                     type: string
                 type: object
               tags:

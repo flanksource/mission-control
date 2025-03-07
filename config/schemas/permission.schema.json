@@ -236,6 +236,9 @@
     },
     "PermissionSubject": {
       "properties": {
+        "group": {
+          "type": "string"
+        },
         "person": {
           "type": "string"
         },
@@ -245,7 +248,16 @@
         "notification": {
           "type": "string"
         },
-        "group": {
+        "playbook": {
+          "type": "string"
+        },
+        "canary": {
+          "type": "string"
+        },
+        "scraper": {
+          "type": "string"
+        },
+        "topology": {
           "type": "string"
         }
       },

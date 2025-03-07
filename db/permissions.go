@@ -66,7 +66,7 @@ func PersistPermissionGroupFromCRD(ctx context.Context, obj *v1.PermissionGroup)
 
 	group := models.PermissionGroup{
 		ID:        uid,
-		Name:      obj.Spec.Name,
+		Name:      obj.GetName(),
 		Namespace: obj.GetNamespace(),
 		Source:    models.SourceCRD,
 		Selectors: selectors,

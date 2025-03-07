@@ -9,6 +9,7 @@ import (
 	"github.com/flanksource/duty/models"
 	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
+	"github.com/flanksource/duty/types"
 
 	"github.com/google/uuid"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -26,104 +27,110 @@ type Permission struct {
 	Status PermissionStatus `json:"status,omitempty" yaml:"status,omitempty"`
 }
 
-// Subject of the permission.
-// Can be in various formats depending on the table
-// - id of a resource
-// - name or email for person
-// - <namespace>/<name> of a notification
-type PermissionSubjectSelector string
-
-func (t PermissionSubjectSelector) Find(ctx context.Context, table string) (string, models.PermissionSubjectType, error) {
-	if uuid.Validate(string(t)) == nil {
-		return string(t), "", nil
+func findSubject(ctx context.Context, table string, selector string, subjectType models.PermissionSubjectType) (string, models.PermissionSubjectType, error) {
+	if uuid.Validate(selector) == nil {
+		var id string
+		err := ctx.DB().Select("id").Table(table).Where("id = ?", selector).Find(&id).Error
+		return id, subjectType, err
 	}
 
-	switch table {
-	case "people":
+	// Otherwise look up by name or email
+	var id string
+	var err error
+	if table == "people" {
+		err = ctx.DB().Select("id").Table(table).Where("name = ? OR email = ?", selector, selector).Find(&id).Error
+	} else {
+		err = ctx.DB().Select("id").Table(table).Where("name = ?", selector).Find(&id).Error
+	}
+	return id, subjectType, err
+}
+
+func findNamespacedResource(ctx context.Context, table string, selector string, subjectType models.PermissionSubjectType) (string, models.PermissionSubjectType, error) {
+	if uuid.Validate(selector) == nil {
 		var id string
-		if uuid.Validate(string(t)) == nil {
-			err := ctx.DB().Select("id").Table(table).Where("id = ?", string(t)).Find(&id).Error
-			return id, models.PermissionSubjectTypePerson, err
-		} else {
-			err := ctx.DB().Select("id").Table(table).Where("name = ? OR email = ?", string(t), string(t)).Find(&id).Error
-			return id, models.PermissionSubjectTypePerson, err
-		}
-
-	case "teams":
-		var id string
-		if uuid.Validate(string(t)) == nil {
-			err := ctx.DB().Select("id").Table(table).Where("id = ?", string(t)).Find(&id).Error
-			return id, models.PermissionSubjectTypeTeam, err
-		} else {
-			err := ctx.DB().Select("id").Table(table).Where("name = ?", string(t)).Find(&id).Error
-			return id, models.PermissionSubjectTypeTeam, err
-		}
-
-	case "notifications":
-		if uuid.Validate(string(t)) == nil {
-			var id string
-			err := ctx.DB().Select("id").Table(table).Where("id = ?", string(t)).Find(&id).Error
-			return id, models.PermissionSubjectTypeNotification, err
-		}
-
-		splits := strings.Split(string(t), "/")
-		if len(splits) != 2 {
-			return "", "", fmt.Errorf("%s is not a valid notification subject. must be <namespace>/<name>", t)
-		}
-
-		namespace, name := splits[0], splits[1]
-		var id string
-		err := ctx.DB().Select("id").Table(table).
-			Where("namespace = ?", namespace).
-			Where("name = ?", name).
-			Find(&id).Error
-		return id, models.PermissionSubjectTypeNotification, err
+		err := ctx.DB().Select("id").Table(table).Where("id = ?", selector).Find(&id).Error
+		return id, subjectType, err
 	}
 
-	return "", "", nil
+	// Parse namespace/name format
+	splits := strings.Split(selector, "/")
+	if len(splits) != 2 {
+		return "", "", fmt.Errorf("%s is not a valid subject. Must be <namespace>/<name>", selector)
+	}
+
+	namespace, name := splits[0], splits[1]
+	var id string
+	err := ctx.DB().Select("id").Table(table).
+		Where("namespace = ?", namespace).
+		Where("name = ?", name).
+		Find(&id).Error
+	return id, subjectType, err
 }
 
 type PermissionSubject struct {
-	// ID or email of the person
-	Person PermissionSubjectSelector `json:"person,omitempty"`
-
-	// Team is the team name
-	Team PermissionSubjectSelector `json:"team,omitempty"`
-
-	// Notification <namespace>/<name> selector
-	Notification PermissionSubjectSelector `json:"notification,omitempty"`
-
 	// Group is the group name
 	Group string `json:"group,omitempty"`
+
+	// ID or email of the person
+	Person string `json:"person,omitempty"`
+
+	// Team is the team name
+	Team string `json:"team,omitempty"`
+
+	// Notification <namespace>/<name> selector
+	Notification string `json:"notification,omitempty"`
+
+	// Playbook <namespace>/<name> selector
+	Playbook string `json:"playbook,omitempty"`
+
+	// Canary <namespace>/<name> selector
+	Canary string `json:"canary,omitempty"`
+
+	// Scraper <namespace>/<name> selector
+	Scraper string `json:"scraper,omitempty"`
+
+	// Topology <namespace>/<name> selector
+	Topology string `json:"topology,omitempty"`
 }
 
-func (t *PermissionSubject) Validate() error {
-	if t.Person == "" && t.Team == "" && t.Notification == "" && t.Group == "" {
-		return errors.New("subject is empty: one of person, team, notification or a group is required")
-	}
-
-	return nil
+func (t *PermissionSubject) Empty() bool {
+	return t.Person == "" && t.Team == "" && t.Notification == "" && t.Group == "" && t.Playbook == "" &&
+		t.Canary == "" && t.Scraper == "" && t.Topology == ""
 }
 
 func (t *PermissionSubject) Populate(ctx context.Context) (string, models.PermissionSubjectType, error) {
-	if err := t.Validate(); err != nil {
-		return "", "", err
+	if t.Empty() {
+		return "", "", errors.New("permission subject not specified")
 	}
 
-	if t.Person != "" {
-		return t.Person.Find(ctx, "people")
-	}
-	if t.Team != "" {
-		return t.Team.Find(ctx, "teams")
-	}
-	if t.Notification != "" {
-		return t.Notification.Find(ctx, "notifications")
-	}
 	if t.Group != "" {
 		return string(t.Group), models.PermissionSubjectTypeGroup, nil
 	}
 
-	return "", "", errors.New("subject not found")
+	if t.Person != "" {
+		return findSubject(ctx, "people", string(t.Person), models.PermissionSubjectTypePerson)
+	}
+	if t.Team != "" {
+		return findSubject(ctx, "teams", string(t.Team), models.PermissionSubjectTypeTeam)
+	}
+
+	if t.Notification != "" {
+		return findNamespacedResource(ctx, "notifications", string(t.Notification), models.PermissionSubjectTypeNotification)
+	}
+	if t.Playbook != "" {
+		return findNamespacedResource(ctx, "playbooks", string(t.Playbook), models.PermissionSubjectTypePlaybook)
+	}
+	if t.Canary != "" {
+		return findNamespacedResource(ctx, "canaries", string(t.Canary), models.PermissionSubjectTypeCanary)
+	}
+	if t.Scraper != "" {
+		return findNamespacedResource(ctx, "scrapers", string(t.Scraper), models.PermissionSubjectTypeScraper)
+	}
+	if t.Topology != "" {
+		return findNamespacedResource(ctx, "topologies", string(t.Topology), models.PermissionSubjectTypeTopology)
+	}
+
+	return "", "", errors.New("permission subject not specified")
 }
 
 type PermissionObject dutyRBAC.Selectors
@@ -137,19 +144,28 @@ type PermissionObject dutyRBAC.Selectors
 //
 // is interpreted as the object: catalog.
 func (t *PermissionObject) GlobalObject() (string, bool) {
-	if len(t.Playbooks) == 1 && len(t.Configs) == 0 && len(t.Components) == 0 && t.Playbooks[0].Wildcard() {
+	switch {
+	case t.isWildcardOnly(t.Playbooks, t.Configs, t.Components, t.Connections):
 		return policy.ObjectPlaybooks, true
-	}
-
-	if len(t.Configs) == 1 && len(t.Playbooks) == 0 && len(t.Components) == 0 && t.Configs[0].Wildcard() {
+	case t.isWildcardOnly(t.Configs, t.Playbooks, t.Components, t.Connections):
 		return policy.ObjectCatalog, true
-	}
-
-	if len(t.Components) == 1 && len(t.Playbooks) == 0 && len(t.Configs) == 0 && t.Components[0].Wildcard() {
+	case t.isWildcardOnly(t.Components, t.Playbooks, t.Configs, t.Connections):
 		return policy.ObjectTopology, true
+	case t.isWildcardOnly(t.Connections, t.Playbooks, t.Configs, t.Components):
+		return policy.ObjectConnection, true
+	default:
+		return "", false
+	}
+}
+
+func (t *PermissionObject) isWildcardOnly(primary []types.ResourceSelector, others ...[]types.ResourceSelector) bool {
+	for _, other := range others {
+		if len(other) != 0 {
+			return false
+		}
 	}
 
-	return "", false
+	return len(primary) == 1 && primary[0].Wildcard()
 }
 
 // +kubebuilder:object:generate=true

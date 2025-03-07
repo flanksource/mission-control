@@ -21,7 +21,8 @@ type PermissionGroupSpec struct {
 	PermissionGroupSubjects `json:",inline" yaml:",inline"`
 
 	// Name for the group
-	Name string `json:"name"`
+	// Deprecated: Use metadata.name instead
+	Name string `json:"name,omitempty"`
 }
 
 type PermissionGroupStatus struct {
@@ -30,6 +31,10 @@ type PermissionGroupStatus struct {
 // +kubebuilder:object:generate=true
 type PermissionGroupSubjects struct {
 	Notifications []PermissionGroupSelector `json:"notifications,omitempty"`
+	Playbooks     []PermissionGroupSelector `json:"playbooks,omitempty"`
+	Topologies    []PermissionGroupSelector `json:"topologies,omitempty"`
+	Scrapers      []PermissionGroupSelector `json:"scrapers,omitempty"`
+	Canaries      []PermissionGroupSelector `json:"canaries,omitempty"`
 
 	// List of ids and email of people.
 	// To select all users, use the wildcard selector: ["*"]
@@ -47,6 +52,10 @@ type PermissionGroupSelector struct {
 
 func (t PermissionGroupSelector) Empty() bool {
 	return t.Name == "" && t.Namespace == ""
+}
+
+func (t PermissionGroupSelector) Wildcard() bool {
+	return t.Name == "*" && t.Namespace == ""
 }
 
 // +kubebuilder:object:root=true

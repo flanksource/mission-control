@@ -130,6 +130,42 @@ func rbacToABACObjectSelector(permission models.Permission, action string) []byt
 	return nil
 }
 
+// Helper function for finding namespaced resources by selector
+func (a *PermissionAdapter) findNamespacedResources(tableName string, selectors []v1.PermissionGroupSelector) ([]string, error) {
+	var clauses []clause.Expression
+	for _, selector := range selectors {
+		if selector.Empty() {
+			continue
+		}
+
+		var conditions = []clause.Expression{
+			clause.Eq{Column: "deleted_at", Value: nil},
+		}
+
+		if !selector.Wildcard() {
+			if selector.Namespace != "" {
+				conditions = append(conditions, clause.Eq{Column: "namespace", Value: selector.Namespace})
+			}
+			if selector.Name != "" {
+				conditions = append(conditions, clause.Eq{Column: "name", Value: selector.Name})
+			}
+		}
+
+		clauses = append(clauses, clause.And(conditions...))
+	}
+
+	if len(clauses) == 0 {
+		return nil, nil
+	}
+
+	var ids []string
+	if err := a.db.Select("id").Table(tableName).Clauses(clause.Or(clauses...)).Find(&ids).Error; err != nil {
+		return nil, err
+	}
+
+	return ids, nil
+}
+
 func (a *PermissionAdapter) permissionGroupToCasbinRule(permission models.PermissionGroup) ([][]string, error) {
 	var subject v1.PermissionGroupSubjects
 	if err := json.Unmarshal(permission.Selectors, &subject); err != nil {
@@ -138,32 +174,26 @@ func (a *PermissionAdapter) permissionGroupToCasbinRule(permission models.Permis
 
 	var allSubjects []string
 
-	if len(subject.Notifications) > 0 {
-		var clauses []clause.Expression
-		for _, selector := range subject.Notifications {
-			if selector.Empty() {
-				continue
-			}
+	// Process namespaced resources
+	namespacedSubjects := map[string][]v1.PermissionGroupSelector{
+		"notifications":   subject.Notifications,
+		"playbooks":       subject.Playbooks,
+		"topologies":      subject.Topologies,
+		"config_scrapers": subject.Scrapers,
+		"canaries":        subject.Canaries,
+	}
 
-			var conditions []clause.Expression
-			if selector.Namespace != "" {
-				conditions = append(conditions, clause.Eq{Column: "namespace", Value: selector.Namespace})
-			}
-			if selector.Name != "" {
-				conditions = append(conditions, clause.Eq{Column: "name", Value: selector.Name})
-			}
-
-			clauses = append(clauses, clause.And(conditions...))
+	for modelName, selectors := range namespacedSubjects {
+		if len(selectors) == 0 {
+			continue
 		}
 
-		if len(clauses) > 0 {
-			var notifications []string
-			if err := a.db.Select("id").Model(&models.Notification{}).Clauses(clause.Or(clauses...)).Find(&notifications).Error; err != nil {
-				return nil, err
-			}
-
-			allSubjects = append(allSubjects, notifications...)
+		ids, err := a.findNamespacedResources(modelName, selectors)
+		if err != nil {
+			return nil, fmt.Errorf("failed to find %s subjects for permission group %s: %w", modelName, permission.Name, err)
 		}
+
+		allSubjects = append(allSubjects, ids...)
 	}
 
 	if len(subject.People) > 0 {

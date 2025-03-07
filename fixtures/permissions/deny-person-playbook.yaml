@@ -5,7 +5,7 @@ kind: Permission
 metadata:
   name: deny-user-foo-playbook-run
 spec:
-  description: deny user food to run any playbook
+  description: deny user foo from running
   subject:
     person: foo@bar.com
   actions:
