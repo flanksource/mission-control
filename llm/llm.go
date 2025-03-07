@@ -142,6 +142,8 @@ func getLLMModel(ctx context.Context, config Config) (llms.Model, error) {
 		}
 		if config.Model != "" {
 			opts = append(opts, googleai.WithDefaultModel(config.Model))
+		} else {
+			opts = append(opts, googleai.WithDefaultModel("gemini-2.0-flash"))
 		}
 
 		googleLLM, err := googleai.New(ctx, opts...)
