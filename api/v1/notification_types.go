@@ -1,6 +1,7 @@
 package v1
 
 import (
+	"github.com/flanksource/duty/query"
 	"github.com/flanksource/kopper"
 	"github.com/google/go-cmp/cmp"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -93,9 +94,42 @@ type NotificationSpec struct {
 	// GroupBy allows notifications in waiting status to be grouped together
 	// based on certain set of keys.
 	//
+	// The group wait period is the waitFor period.
+	//
 	// Valid keys: type, description, status_reason or
 	// labels & tags in the format `label:<key>` or `tag:<key>`
 	GroupBy []string `json:"groupBy,omitempty"`
+
+	// Inhibit controls notification suppression for related resources.
+	// It uses the repeat interval as the window for suppression
+	// as well as the wait for period.
+	Inhibitions []NotificationInihibition `json:"inhibitions,omitempty"`
+}
+
+type NotificationInihibition struct {
+	// Direction specifies the traversal direction in relation to the "From" resource.
+	// - "outgoing": Looks for child resources originating from the "From" resource.
+	//   Example: If "From" is "Kubernetes::Deployment", "To" could be ["Kubernetes::Pod", "Kubernetes::ReplicaSet"].
+	// - "incoming": Looks for parent resources related to the "From" resource.
+	//   Example: If "From" is "Kubernetes::Deployment", "To" could be ["Kubernetes::HelmRelease", "Kubernetes::Namespace"].
+	// - "all": Considers both incoming and outgoing relationships.
+	Direction query.RelationDirection `json:"direction"`
+
+	// Soft, when true, relates using soft relationships.
+	// Example: Deployment to Pod is hard relationship, But Node to Pod is soft relationship.
+	Soft bool `json:"soft,omitempty"`
+
+	// Depth defines how many levels of child or parent resources to traverse.
+	Depth *int `json:"depth,omitempty"`
+
+	// From specifies the starting resource type (for example, "Kubernetes::Deployment").
+	From string `json:"from"`
+
+	// To specifies the target resource types, which are determined based on the Direction.
+	// Example:
+	//   - If Direction is "outgoing", these are child resources.
+	//   - If Direction is "incoming", these are parent resources.
+	To []string `json:"to"`
 }
 
 var NotificationReconciler kopper.Reconciler[Notification, *Notification]

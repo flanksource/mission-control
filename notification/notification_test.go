@@ -368,6 +368,142 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 		})
 	})
 
+	var _ = ginkgo.Describe("inhibitions", ginkgo.Ordered, func() {
+		var n models.Notification
+		var deployment, pod models.ConfigItem
+
+		inhibitions := []v1.NotificationInihibition{
+			{
+				Direction: "outgoing",
+				From:      "Kubernetes::Deployment",
+				To: []string{
+					"Kubernetes::Pod",
+					"Kubernetes::ReplicaSet",
+				},
+			},
+		}
+
+		inhibitionsJSON, err := json.Marshal(inhibitions)
+		Expect(err).To(BeNil())
+
+		ginkgo.BeforeAll(func() {
+			n = models.Notification{
+				ID:             uuid.New(),
+				Name:           "inhibition-test",
+				Events:         pq.StringArray([]string{"config.unhealthy"}),
+				Source:         models.SourceCRD,
+				Title:          "Dummy",
+				Template:       "dummy",
+				CustomServices: types.JSON(customReceiverJson),
+				Inhibitions:    inhibitionsJSON,
+				RepeatInterval: "4h",
+			}
+
+			err := DefaultContext.DB().Create(&n).Error
+			Expect(err).To(BeNil())
+
+			deployment = models.ConfigItem{
+				ID:          uuid.New(),
+				Name:        lo.ToPtr("airsonic"),
+				ConfigClass: models.ConfigClassDeployment,
+				Config:      lo.ToPtr(`{"color": "red"}`),
+				Labels: &types.JSONStringMap{
+					"app": "airsonic",
+				},
+				Type: lo.ToPtr("Kubernetes::Deployment"),
+			}
+
+			err = DefaultContext.DB().Create(&deployment).Error
+			Expect(err).To(BeNil())
+
+			pod = models.ConfigItem{
+				ID:          uuid.New(),
+				Name:        lo.ToPtr("airsonic-pod"),
+				ConfigClass: models.ConfigClassPod,
+				ParentID:    &deployment.ID,
+				Config:      lo.ToPtr(`{"color": "blue"}`),
+				Labels: &types.JSONStringMap{
+					"app": "airsonic",
+				},
+				Type: lo.ToPtr("Kubernetes::Pod"),
+			}
+
+			err = DefaultContext.DB().Create(&pod).Error
+			Expect(err).To(BeNil())
+		})
+
+		ginkgo.AfterAll(func() {
+			err := DefaultContext.DB().Delete(&n).Error
+			Expect(err).To(BeNil())
+
+			err = DefaultContext.DB().Delete(&pod).Error
+			Expect(err).To(BeNil())
+
+			err = DefaultContext.DB().Delete(&deployment).Error
+			Expect(err).To(BeNil())
+
+			notification.PurgeCache(n.ID.String())
+		})
+
+		ginkgo.It("should have sent a notification for a config update", func() {
+			event := models.Event{
+				Name:       "config.unhealthy",
+				Properties: types.JSONStringMap{"id": deployment.ID.String()},
+			}
+			err := DefaultContext.DB().Create(&event).Error
+			Expect(err).To(BeNil())
+
+			events.ConsumeAll(DefaultContext)
+			Eventually(func() int64 {
+				var c int64
+				DefaultContext.DB().Model(&models.Event{}).Where("name = 'config.unhealthy'").Count(&c)
+				return c
+			}, "10s", "200ms").Should(Equal(int64(0)))
+
+			Eventually(func() int64 {
+				// Check send history
+				var sentHistoryCount int64
+				err = DefaultContext.DB().Model(&models.NotificationSendHistory{}).Where("notification_id = ?", n.ID).Count(&sentHistoryCount).Error
+				Expect(err).To(BeNil())
+				return sentHistoryCount
+			}, "10s", "200ms").Should(Equal(int64(1)))
+		})
+
+		ginkgo.It("should NOT have sent a notification for a subsequent pod update", func() {
+			event := models.Event{
+				Name:       "config.unhealthy",
+				Properties: types.JSONStringMap{"id": pod.ID.String()},
+			}
+			err := DefaultContext.DB().Create(&event).Error
+			Expect(err).To(BeNil())
+
+			events.ConsumeAll(DefaultContext)
+			Eventually(func() int64 {
+				events.ConsumeAll(DefaultContext)
+
+				var c int64
+				DefaultContext.DB().Model(&models.Event{}).Where("name = 'config.unhealthy'").Count(&c)
+				return c
+			}, "20s", "200ms").Should(Equal(int64(0)))
+
+			// Check send history
+			var histories []models.NotificationSendHistory
+			err = DefaultContext.DB().Where("notification_id = ?", n.ID).Find(&histories).Error
+			Expect(err).To(BeNil())
+			Expect(len(histories)).To(Equal(2))
+
+			for _, history := range histories {
+				if history.ResourceID == pod.ID {
+					Expect(history.Status).To(Equal(models.NotificationStatusInhibited))
+					Expect(history.ParentID).To(Not(BeNil()))
+				}
+				if history.ResourceID == deployment.ID {
+					Expect(history.Status).To(Equal(models.NotificationStatusSent))
+				}
+			}
+		})
+	})
+
 	var _ = ginkgo.Describe("notification error handling on send", ginkgo.Ordered, func() {
 		var goodNotif models.Notification
 		var badNotif models.Notification
@@ -905,7 +1041,7 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 
 			time.Sleep(12 * time.Second)
 
-			err = notification.ProcessPendingGroupedNotifications(DefaultContext)
+			_, err = notification.ProcessPendingNotifications(DefaultContext)
 			Expect(err).To(BeNil())
 			Eventually(func() bool {
 				var histories []models.NotificationSendHistory

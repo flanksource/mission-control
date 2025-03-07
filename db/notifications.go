@@ -79,6 +79,14 @@ func PersistNotificationFromCRD(ctx context.Context, obj *v1.Notification) error
 		dbObj.CustomServices = recipient.CustomServices
 	}
 
+	if obj.Spec.Inhibitions != nil {
+		if b, err := json.Marshal(obj.Spec.Inhibitions); err != nil {
+			return fmt.Errorf("failed to marshal inhibitions: %w", err)
+		} else {
+			dbObj.Inhibitions = b
+		}
+	}
+
 	if obj.Spec.Fallback != nil {
 		if recipient, err := resolveNotificationRecipient(ctx, obj.Spec.Fallback.NotificationRecipientSpec); err != nil {
 			return fmt.Errorf("failed to resolve recipient: %w", err)
@@ -271,12 +279,13 @@ func GetMatchingNotificationSilences(ctx context.Context, resources models.Notif
 func SaveUnsentNotificationToHistory(ctx context.Context, sendHistory models.NotificationSendHistory) error {
 	window := ctx.Properties().Duration("notifications.dedup.window", time.Hour*24)
 
-	return ctx.DB().Exec("SELECT * FROM insert_unsent_notification_to_history(?, ?, ?, ?, ?, ?)",
+	return ctx.DB().Exec("SELECT * FROM insert_unsent_notification_to_history(?, ?, ?, ?, ?, ?, ?)",
 		sendHistory.NotificationID,
 		sendHistory.SourceEvent,
 		sendHistory.ResourceID,
 		sendHistory.Status,
 		window,
 		sendHistory.SilencedBy,
+		sendHistory.ParentID,
 	).Error
 }
