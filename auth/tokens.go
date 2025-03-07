@@ -109,7 +109,9 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 	)
 	for _, p := range permModels {
 		agentIDs = append(agentIDs, p.Agents...)
-		tags = append(tags, p.Tags)
+		if len(p.Tags) > 0 {
+			tags = append(tags, p.Tags)
+		}
 	}
 
 	payload := &rls.Payload{
