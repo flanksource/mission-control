@@ -6,6 +6,7 @@ import (
 	"net/url"
 
 	"github.com/flanksource/commons/http"
+	pkgConnection "github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -21,7 +22,7 @@ type HTTP struct {
 }
 
 func (c *HTTP) Run(ctx context.Context, action v1.HTTPAction) (*HTTPResult, error) {
-	connection, err := ctx.HydrateConnectionByURL(action.HTTPConnection.Connection)
+	connection, err := pkgConnection.Get(ctx, action.HTTPConnection.Connection)
 	if err != nil {
 		return nil, fmt.Errorf("failed to hydrate connection: %w", err)
 	} else if connection != nil {
