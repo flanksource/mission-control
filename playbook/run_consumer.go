@@ -257,8 +257,7 @@ func ActionConsumer(parentCtx context.Context) (int, error) {
 	parentCtx.Logger = parentCtx.Logger.WithSkipReportLevel(-1)
 
 	err := parentCtx.Transaction(func(ctx context.Context, _ trace.Span) error {
-		tx := ctx.DB()
-		action, err := getNextAction(tx)
+		action, err := getNextAction(ctx.DB())
 		if err != nil {
 			return oops.Wrap(err)
 		}
@@ -273,9 +272,23 @@ func ActionConsumer(parentCtx context.Context) (int, error) {
 			return err
 		}
 
-		if err := runner.RunAction(ctx, run, action); err != nil {
+		// Create a SAVEPOINT to prevent full transaction rollback
+		if err := ctx.DB().Exec("SAVEPOINT action_execution").Error; err != nil {
+			return oops.Wrap(err)
+		}
+
+		err = runner.RunAction(ctx, run, action)
+		if err != nil {
 			if IsTxAbortedError(err) {
-				return action.Fail(parentCtx.DB(), nil, err)
+				if rollbackErr := ctx.DB().Exec("ROLLBACK TO SAVEPOINT action_execution").Error; rollbackErr != nil {
+					return oops.Wrapf(rollbackErr, "failed to rollback to savepoint")
+				}
+
+				if failErr := action.Fail(ctx.DB(), nil, err); failErr != nil {
+					return oops.Wrapf(failErr, "failed to update playbook action with tx abortion error")
+				}
+
+				return nil // so we don't rollback
 			}
 
 			return err
