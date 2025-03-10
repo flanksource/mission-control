@@ -183,8 +183,8 @@ func ProcessPendingNotifications(parentCtx context.Context) (bool, error) {
 			-- Select the earliest notification that is ready to be processed
 			SELECT *
 			FROM notification_send_history
-			WHERE status IN ? 
-				AND not_before <= NOW() 
+			WHERE status IN ?
+				AND not_before <= NOW()
 				AND (retries IS NULL OR retries < ?)
 			ORDER BY not_before ASC
 			LIMIT 1
@@ -192,9 +192,9 @@ func ProcessPendingNotifications(parentCtx context.Context) (bool, error) {
 		)
 		SELECT nsh.*
 		FROM notification_send_history nsh
-		JOIN next_notification nn 
+		JOIN next_notification nn
 				ON (nsh.id = nn.id OR (nsh.group_by_hash != '' AND nsh.group_by_hash = nn.group_by_hash))
-		WHERE nsh.status IN ? 
+		WHERE nsh.status IN ?
 			AND (nsh.retries IS NULL OR nsh.retries < ?)
 		FOR UPDATE SKIP LOCKED`
 
@@ -505,8 +505,10 @@ func processPendingNotification(ctx context.Context, currentHistory models.Notif
 		return fmt.Errorf("failed to save notification status as sent: %w", dberr)
 	}
 
-	groupedHistoriesIDs := lo.Map(historiesToUpdate[1:], func(h models.NotificationSendHistory, _ int) uuid.UUID { return h.ID })
-	if len(groupedHistoriesIDs) == 0 {
+	groupedHistoriesIDs := lo.Map(historiesToUpdate[1:], func(h models.NotificationSendHistory, _ int) uuid.UUID {
+		return h.ID
+	})
+	if len(groupedHistoriesIDs) > 0 {
 		if err := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id IN ?", groupedHistoriesIDs).UpdateColumns(map[string]any{
 			"status":    models.NotificationStatusSent,
 			"parent_id": primaryHistory.ID.String(),
