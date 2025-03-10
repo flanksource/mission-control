@@ -12,6 +12,8 @@ import (
 	"github.com/flanksource/incident-commander/playbook/actions"
 	"github.com/flanksource/incident-commander/playbook/runner"
 	"github.com/google/uuid"
+	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/samber/lo"
 	"github.com/samber/oops"
 	"go.opentelemetry.io/otel/trace"
@@ -247,14 +249,14 @@ func failOrRetryRun(tx *gorm.DB, run *models.PlaybookRun, err error) error {
 }
 
 // ActionConsumer picks up scheduled actions runs them.
-func ActionConsumer(ctx context.Context) (int, error) {
-	if ctx.Properties().On(false, "playbook.runner.disabled") {
+func ActionConsumer(parentCtx context.Context) (int, error) {
+	if parentCtx.Properties().On(false, "playbook.runner.disabled") {
 		return 0, nil
 	}
 
-	ctx.Logger = ctx.Logger.WithSkipReportLevel(-1)
+	parentCtx.Logger = parentCtx.Logger.WithSkipReportLevel(-1)
 
-	err := ctx.Transaction(func(ctx context.Context, _ trace.Span) error {
+	err := parentCtx.Transaction(func(ctx context.Context, _ trace.Span) error {
 		tx := ctx.DB()
 		action, err := getNextAction(tx)
 		if err != nil {
@@ -272,6 +274,10 @@ func ActionConsumer(ctx context.Context) (int, error) {
 		}
 
 		if err := runner.RunAction(ctx, run, action); err != nil {
+			if IsTxAbortedError(err) {
+				return action.Fail(parentCtx.DB(), nil, err)
+			}
+
 			return err
 		}
 
@@ -282,6 +288,15 @@ func ActionConsumer(ctx context.Context) (int, error) {
 		return 0, nil
 	}
 	return 1, err
+}
+
+func IsTxAbortedError(err error) bool {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.Code == pgerrcode.InFailedSQLTransaction
+	}
+
+	return false
 }
 
 // RunConsumer picks up scheduled runs and schedules the
