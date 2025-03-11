@@ -63,6 +63,7 @@ func findNamespacedResource(ctx context.Context, table string, selector string, 
 	err := ctx.DB().Select("id").Table(table).
 		Where("namespace = ?", namespace).
 		Where("name = ?", name).
+		Where("deleted_at IS NULL").
 		Find(&id).Error
 	return id, subjectType, err
 }
@@ -110,6 +111,7 @@ func (t *PermissionSubject) Populate(ctx context.Context) (string, models.Permis
 	if t.Person != "" {
 		return findSubject(ctx, "people", string(t.Person), models.PermissionSubjectTypePerson)
 	}
+
 	if t.Team != "" {
 		return findSubject(ctx, "teams", string(t.Team), models.PermissionSubjectTypeTeam)
 	}
@@ -117,15 +119,19 @@ func (t *PermissionSubject) Populate(ctx context.Context) (string, models.Permis
 	if t.Notification != "" {
 		return findNamespacedResource(ctx, "notifications", string(t.Notification), models.PermissionSubjectTypeNotification)
 	}
+
 	if t.Playbook != "" {
 		return findNamespacedResource(ctx, "playbooks", string(t.Playbook), models.PermissionSubjectTypePlaybook)
 	}
+
 	if t.Canary != "" {
 		return findNamespacedResource(ctx, "canaries", string(t.Canary), models.PermissionSubjectTypeCanary)
 	}
+
 	if t.Scraper != "" {
 		return findNamespacedResource(ctx, "scrapers", string(t.Scraper), models.PermissionSubjectTypeScraper)
 	}
+
 	if t.Topology != "" {
 		return findNamespacedResource(ctx, "topologies", string(t.Topology), models.PermissionSubjectTypeTopology)
 	}

@@ -157,7 +157,7 @@ func resolveNotificationRecipient(ctx context.Context, recipient v1.Notification
 			name := split[1]
 
 			var playbook models.Playbook
-			if err := ctx.DB().Where("namespace = ?", namespace).Where("name = ?", name).Find(&playbook).Error; err != nil {
+			if err := ctx.DB().Where("namespace = ?", namespace).Where("name = ?", name).Where("deleted_at IS NULL").Find(&playbook).Error; err != nil {
 				return nil, err
 			} else if playbook.ID == uuid.Nil {
 				return nil, fmt.Errorf("playbook %s not found", *recipient.Playbook)
