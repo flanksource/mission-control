@@ -16,6 +16,7 @@ import (
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/db"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"gorm.io/gorm"
@@ -141,26 +142,25 @@ func ProcessPendingNotificationsJob(ctx context.Context) *job.Job {
 		RunNow:     true,
 		Context:    ctx,
 		Singleton:  false,
-		Schedule:   "@every 30s",
+		Schedule:   "@every 15s",
 		Fn: func(ctx job.JobRuntime) error {
-			var errCount int
+			var iter int
 			for {
+				iter++
+				if iter > 3 {
+					// avoid getting stuck in a loop
+					break
+				}
+
 				done, err := ProcessPendingNotifications(ctx.Context)
 				if err != nil {
 					ctx.History.AddErrorf("failed to send pending notification: %v", err)
-
-					errCount++
-					if errCount > 3 {
-						// avoid getting stuck in a loop
-						break
-					}
 
 					time.Sleep(2 * time.Second) // prevent spinning on db errors
 					continue
 				}
 
 				ctx.History.IncrSuccess()
-
 				if done {
 					break
 				}
@@ -178,14 +178,29 @@ func ProcessPendingNotifications(parentCtx context.Context) (bool, error) {
 		ctx := parentCtx.WithDB(tx, parentCtx.Pool())
 
 		var pending []models.NotificationSendHistory
-		if err := ctx.DB().Clauses(clause.Locking{Strength: clause.LockingStrengthUpdate, Options: clause.LockingOptionsSkipLocked}).
-			Where("status IN (?, ?)", models.NotificationStatusPending, models.NotificationStatusEvaluatingWaitFor).
-			Where("not_before <= NOW()").
-			Where("retries < ? ", ctx.Properties().Int("notification.max-retries", 4)).
-			Where("group_by_hash = ''").
-			Order("not_before").
-			Limit(1). // one at a time; as one notification failure shouldn't affect a previous successful one
-			Find(&pending).Error; err != nil {
+		query := `
+		WITH next_notification AS (
+			-- Select the earliest notification that is ready to be processed
+			SELECT *
+			FROM notification_send_history
+			WHERE status IN ?
+				AND not_before <= NOW()
+				AND (retries IS NULL OR retries < ?)
+			ORDER BY not_before ASC
+			LIMIT 1
+			FOR UPDATE SKIP LOCKED
+		)
+		SELECT nsh.*
+		FROM notification_send_history nsh
+		JOIN next_notification nn
+				ON (nsh.id = nn.id OR (nsh.group_by_hash != '' AND nsh.group_by_hash = nn.group_by_hash))
+		WHERE nsh.status IN ?
+			AND (nsh.retries IS NULL OR nsh.retries < ?)
+		FOR UPDATE SKIP LOCKED`
+
+		statuses := []string{models.NotificationStatusEvaluatingWaitFor, models.NotificationStatusPending}
+		maxRetries := ctx.Properties().Int("notification.max-retries", 4) - 1
+		if err := ctx.DB().Raw(query, statuses, maxRetries, statuses, maxRetries).Find(&pending).Error; err != nil {
 			return fmt.Errorf("failed to get pending notifications: %w", err)
 		}
 
@@ -194,15 +209,15 @@ func ProcessPendingNotifications(parentCtx context.Context) (bool, error) {
 			return nil
 		}
 
-		currentHistory := pending[0]
+		currentHistory, grouped := pending[0], pending[1:]
 		ctx.Logger.V(6).Infof("processing notification (%s/%s) for resource %s",
 			currentHistory.ID,
 			currentHistory.Status,
 			currentHistory.ResourceID,
 		)
 
-		if err := processPendingNotification(ctx, currentHistory, []models.NotificationSendHistory{}); err != nil {
-			if dberr := ctx.DB().Debug().Model(&models.NotificationSendHistory{}).Where("id = ?", currentHistory.ID).UpdateColumns(map[string]any{
+		if err := processPendingNotification(ctx, currentHistory, grouped); err != nil {
+			if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", currentHistory.ID).UpdateColumns(map[string]any{
 				"status":  gorm.Expr("CASE WHEN retries >= ? THEN ? ELSE ? END", ctx.Properties().Int("notification.max-retries", 4)-1, models.NotificationStatusError, models.NotificationStatusPending),
 				"error":   err.Error(),
 				"retries": gorm.Expr("retries + 1"),
@@ -228,103 +243,6 @@ func ProcessPendingNotifications(parentCtx context.Context) (bool, error) {
 	})
 
 	return noMorePending, err
-}
-
-func ProcessPendingGroupedNotificationsJob(ctx context.Context) *job.Job {
-	return &job.Job{
-		Name:       "ProcessPendingGroupedNotifications",
-		Retention:  job.RetentionFailed,
-		JobHistory: true,
-		RunNow:     true,
-		Context:    ctx,
-		Singleton:  true,
-		Schedule:   "@every 30s",
-		Fn: func(ctx job.JobRuntime) error {
-			return ProcessPendingGroupedNotifications(ctx.Context)
-		},
-	}
-}
-
-func ProcessPendingGroupedNotifications(parentCtx context.Context) error {
-	var rows []struct {
-		GroupByHash       string
-		EarliestNotBefore time.Time
-	}
-	if err := parentCtx.DB().Model(&models.NotificationSendHistory{}).
-		Select("group_by_hash, MIN(not_before) AS earliest_not_before").
-		Group("group_by_hash").
-		Where("status IN (?, ?)", models.NotificationStatusPending, models.NotificationStatusEvaluatingWaitFor).
-		Where("not_before <= NOW()").
-		Where("retries < ? ", parentCtx.Properties().Int("notification.max-retries", 4)).
-		Where("group_by_hash != ''").
-		Order("earliest_not_before").
-		Scan(&rows).Error; err != nil {
-		return fmt.Errorf("error fetching group_by_hash: %w", err)
-	}
-
-	for _, r := range rows {
-		err := parentCtx.DB().Transaction(func(tx *gorm.DB) error {
-			ctx := parentCtx.WithDB(tx, parentCtx.Pool())
-
-			var pending []models.NotificationSendHistory
-			if err := ctx.DB().Clauses(clause.Locking{Strength: clause.LockingStrengthUpdate, Options: clause.LockingOptionsSkipLocked}).
-				Where("status IN (?, ?)", models.NotificationStatusPending, models.NotificationStatusEvaluatingWaitFor).
-				Where("not_before <= NOW()").
-				Where("group_by_hash = ?", r.GroupByHash).
-				Find(&pending).Error; err != nil {
-				return fmt.Errorf("failed to get pending notifications: %w", err)
-			}
-
-			if len(pending) == 0 {
-				return nil
-			}
-
-			currentHistory := pending[0]
-			ctx.Logger.V(6).Infof("processing notification (%s/%s) for resource %s",
-				currentHistory.ID,
-				currentHistory.Status,
-				currentHistory.ResourceID,
-			)
-
-			var groupedHistory []models.NotificationSendHistory
-			if len(pending) > 1 {
-				groupedHistory = pending[1:]
-
-			}
-
-			historyIDs := lo.Map(pending, func(h models.NotificationSendHistory, _ int) uuid.UUID { return h.ID })
-			if err := processPendingNotification(ctx, currentHistory, groupedHistory); err != nil {
-				if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id IN ?", historyIDs).UpdateColumns(map[string]any{
-					"status":  gorm.Expr("CASE WHEN retries >= ? THEN ? ELSE ? END", ctx.Properties().Int("notification.max-retries", 4)-1, models.NotificationStatusError, models.NotificationStatusPending),
-					"error":   err.Error(),
-					"retries": gorm.Expr("retries + 1"),
-				}).Error; dberr != nil {
-					return ctx.Oops().Join(dberr, err)
-				}
-			}
-
-			notif, notifErr := GetNotification(ctx, currentHistory.NotificationID.String())
-			if notifErr != nil {
-				return fmt.Errorf("failed to get notification: %w", notifErr)
-			}
-
-			if notif.HasFallbackSet() {
-				// If the notification has fallback, we send to it after exhausting retries
-				if err := models.GenerateFallbackAttempt(ctx.DB(), notif.Notification, currentHistory); err != nil {
-					return fmt.Errorf("failed to generate fallback attempt: %w", err)
-				}
-			}
-
-			// we return nil or else the transaction will be rolled back and there'll be no trace of a failed attempt.
-			return nil
-		})
-
-		if err != nil {
-			return fmt.Errorf("error processing grouped notification transaction: %w", err)
-		}
-	}
-
-	return nil
 }
 
 func ProcessFallbackNotificationsJob(ctx context.Context) *job.Job {
@@ -493,18 +411,12 @@ func processPendingNotification(ctx context.Context, currentHistory models.Notif
 
 	// We need to re-evaluate the health of the resource
 	// and ensure that the original event matches with the current health before we send out the notification.
-	skipNotif, err := shouldSkipNotificationDueToHealth(ctx, *notif, currentHistory)
-	if err != nil {
-		return err
-	}
-	if !skipNotif {
-		historiesToUpdate = append(historiesToUpdate, currentHistory)
-	}
-	for _, h := range groupedHistory {
+	for _, h := range append([]models.NotificationSendHistory{currentHistory}, groupedHistory...) {
 		skipNotif, err := shouldSkipNotificationDueToHealth(ctx, *notif, h)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to check if notification should be skipped: %w", err)
 		}
+
 		if !skipNotif {
 			historiesToUpdate = append(historiesToUpdate, h)
 		}
@@ -515,8 +427,9 @@ func processPendingNotification(ctx context.Context, currentHistory models.Notif
 	}
 
 	var payload NotificationEventPayload
-	historyToUpdate := historiesToUpdate[0]
-	payload.FromMap(historyToUpdate.Payload)
+	primaryHistory := historiesToUpdate[0]
+	payload.FromMap(primaryHistory.Payload)
+
 	if len(historiesToUpdate) > 1 {
 		payload.GroupedResources = lo.Map(historiesToUpdate[1:], func(h models.NotificationSendHistory, _ int) string {
 			if strings.HasPrefix(h.SourceEvent, "config") {
@@ -542,17 +455,66 @@ func processPendingNotification(ctx context.Context, currentHistory models.Notif
 
 			return ""
 		})
-
 	}
-	historyIDs := lo.Map(historiesToUpdate, func(h models.NotificationSendHistory, _ int) uuid.UUID { return h.ID })
 
-	if err := sendPendingNotification(ctx, historyToUpdate, payload); err != nil {
+	event := models.Event{
+		Name:      payload.EventName,
+		CreatedAt: payload.EventCreatedAt,
+		Properties: map[string]string{
+			"id": payload.ID.String(),
+		},
+	}
+	celEnv, err := GetEnvForEvent(ctx, event)
+	if err != nil {
+		return fmt.Errorf("failed to get cel env: %w", err)
+	}
+
+	silencedResource := getSilencedResourceFromCelEnv(celEnv)
+	matchingSilences, err := db.GetMatchingNotificationSilences(ctx, silencedResource)
+	if err != nil {
+		return fmt.Errorf("failed to get matching silences: %w", err)
+	}
+
+	if blocker, err := validateSendHistory(ctx, *notif, payload, celEnv, matchingSilences); err != nil {
+		return fmt.Errorf("failed to check all conditions for notification[%s]: %w", notif.ID, err)
+	} else if blocker != nil {
+		columns := map[string]any{
+			"status": models.NotificationStatusSkipped,
+		}
+
+		if blocker.ParentID != nil {
+			columns["parent_id"] = blocker.ParentID.String()
+		}
+		if blocker.SilencedBy != nil {
+			columns["silenced_by"] = blocker.SilencedBy.String()
+		}
+
+		ids := lo.Map(historiesToUpdate, func(h models.NotificationSendHistory, _ int) uuid.UUID { return h.ID })
+		if err := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id IN ?", ids).UpdateColumns(columns).Error; err != nil {
+			return fmt.Errorf("failed to save notification status as skipped: %w", err)
+		}
+
+		return nil
+	}
+
+	if err := sendPendingNotification(ctx, primaryHistory, payload); err != nil {
 		return fmt.Errorf("failed to send notification: %w", err)
-	} else if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id IN ?", historyIDs).UpdateColumns(map[string]any{
-		"status":    models.NotificationStatusSent,
-		"parent_id": historyToUpdate.ID.String(),
+	} else if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", primaryHistory.ID).UpdateColumns(map[string]any{
+		"status": models.NotificationStatusSent,
 	}).Error; dberr != nil {
 		return fmt.Errorf("failed to save notification status as sent: %w", dberr)
+	}
+
+	groupedHistoriesIDs := lo.Map(historiesToUpdate[1:], func(h models.NotificationSendHistory, _ int) uuid.UUID {
+		return h.ID
+	})
+	if len(groupedHistoriesIDs) > 0 {
+		if err := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id IN ?", groupedHistoriesIDs).UpdateColumns(map[string]any{
+			"status":    models.NotificationStatusSent,
+			"parent_id": primaryHistory.ID.String(),
+		}).Error; err != nil {
+			return fmt.Errorf("failed to save notification status as sent: %w", err)
+		}
 	}
 
 	return nil
