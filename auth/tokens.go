@@ -52,15 +52,6 @@ func InjectToken(ctx context.Context, c echo.Context, user *models.Person, sessI
 	return nil
 }
 
-// If a user has any of these roles, they are not a guest.
-// RLS should be disabled for users with this role as it's only intended for guest users.
-var rlsBypassableRoles = []string{
-	policy.RoleAdmin,
-	policy.RoleEditor,
-	policy.RoleCommander,
-	policy.RoleResponder,
-}
-
 func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 	if !ctx.Properties().On(false, vars.FlagRLSEnable) {
 		return &rls.Payload{Disable: true}, nil
@@ -73,7 +64,7 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 
 	if roles, err := rbac.RolesForUser(ctx.User().ID.String()); err != nil {
 		return nil, err
-	} else if lo.Some(roles, rlsBypassableRoles) {
+	} else if !lo.Contains(roles, policy.RoleGuest) {
 		payload := &rls.Payload{Disable: true}
 		tokenCache.SetDefault(cacheKey, payload)
 		return payload, nil
