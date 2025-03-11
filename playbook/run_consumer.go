@@ -12,6 +12,8 @@ import (
 	"github.com/flanksource/incident-commander/playbook/actions"
 	"github.com/flanksource/incident-commander/playbook/runner"
 	"github.com/google/uuid"
+	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/samber/lo"
 	"github.com/samber/oops"
 	"go.opentelemetry.io/otel/trace"
@@ -247,16 +249,15 @@ func failOrRetryRun(tx *gorm.DB, run *models.PlaybookRun, err error) error {
 }
 
 // ActionConsumer picks up scheduled actions runs them.
-func ActionConsumer(ctx context.Context) (int, error) {
-	if ctx.Properties().On(false, "playbook.runner.disabled") {
+func ActionConsumer(parentCtx context.Context) (int, error) {
+	if parentCtx.Properties().On(false, "playbook.runner.disabled") {
 		return 0, nil
 	}
 
-	ctx.Logger = ctx.Logger.WithSkipReportLevel(-1)
+	parentCtx.Logger = parentCtx.Logger.WithSkipReportLevel(-1)
 
-	err := ctx.Transaction(func(ctx context.Context, _ trace.Span) error {
-		tx := ctx.DB()
-		action, err := getNextAction(tx)
+	err := parentCtx.Transaction(func(ctx context.Context, _ trace.Span) error {
+		action, err := getNextAction(ctx.DB())
 		if err != nil {
 			return oops.Wrap(err)
 		}
@@ -271,7 +272,25 @@ func ActionConsumer(ctx context.Context) (int, error) {
 			return err
 		}
 
-		if err := runner.RunAction(ctx, run, action); err != nil {
+		// Create a SAVEPOINT to prevent full transaction rollback
+		if err := ctx.DB().Exec("SAVEPOINT action_execution").Error; err != nil {
+			return oops.Wrap(err)
+		}
+
+		err = runner.RunAction(ctx, run, action)
+		if err != nil {
+			if IsTxAbortedError(err) {
+				if rollbackErr := ctx.DB().Exec("ROLLBACK TO SAVEPOINT action_execution").Error; rollbackErr != nil {
+					return oops.Wrapf(rollbackErr, "failed to rollback to savepoint")
+				}
+
+				if failErr := action.Fail(ctx.DB(), nil, err); failErr != nil {
+					return oops.Wrapf(failErr, "failed to update playbook action with tx abortion error")
+				}
+
+				return nil // so we don't rollback
+			}
+
 			return err
 		}
 
@@ -282,6 +301,15 @@ func ActionConsumer(ctx context.Context) (int, error) {
 		return 0, nil
 	}
 	return 1, err
+}
+
+func IsTxAbortedError(err error) bool {
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) {
+		return pgErr.Code == pgerrcode.InFailedSQLTransaction
+	}
+
+	return false
 }
 
 // RunConsumer picks up scheduled runs and schedules the
