@@ -352,7 +352,7 @@ func TemplateAndExecuteAction(ctx context.Context, spec v1.PlaybookSpec, playboo
 		return err
 	}
 
-	if step.AI != nil && step.AI.Config == "" {
+	if step.AI != nil && step.AI.Config == "" && run.ConfigID != nil {
 		step.AI.Config = run.ConfigID.String()
 	}
 
