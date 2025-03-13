@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net/url"
-	"slices"
 	"strings"
 	"text/template"
 	"time"
@@ -48,16 +46,21 @@ func init() {
 	}
 }
 
+// AIAction represents an action that uses AI to analyze configurations and recommend playbooks.
 type AIAction struct {
-	PlaybookID uuid.UUID
+	PlaybookID uuid.UUID // ID of the playbook that is executing this action
 }
 
+// AIActionResult contains the results of an AI action execution.
 type AIActionResult struct {
-	Markdown             string `json:"markdown,omitempty"`
-	Slack                string `json:"slack,omitempty"`
-	RecommendedPlaybooks string `json:"recommendedPlaybooks,omitempty"`
+	Markdown             string `json:"markdown,omitempty"`             // Markdown formatted diagnosis report
+	Slack                string `json:"slack,omitempty"`                // Slack blocks formatted diagnosis report
+	RecommendedPlaybooks string `json:"recommendedPlaybooks,omitempty"` // Recommended playbooks in Slack blocks format
 }
 
+// Run executes the AI action with the given specification.
+// It builds a prompt using the knowledge graph, sends it to the LLM,
+// and processes the response into the requested formats.
 func (t *AIAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, error) {
 	var result AIActionResult
 	if spec.Backend == "" {
@@ -70,7 +73,7 @@ func (t *AIAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 	}
 
 	if err := spec.AIActionClient.Populate(ctx); err != nil {
-		return nil, fmt.Errorf("faield to populate llm client connection: %w", err)
+		return nil, fmt.Errorf("failed to populate llm client connection: %w", err)
 	}
 
 	if spec.DryRun {
@@ -84,15 +87,15 @@ func (t *AIAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 	}
 	result.Markdown = response
 
-	var diagnosisResport llm.DiagnosisReport
-	if err := json.Unmarshal([]byte(response), &diagnosisResport); err != nil {
+	var diagnosisReport llm.DiagnosisReport
+	if err := json.Unmarshal([]byte(response), &diagnosisReport); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal diagnosis report: %w", err)
 	}
 
 	for _, format := range lo.Uniq(spec.Formats) {
 		switch format {
 		case v1.AIActionFormatSlack:
-			result.Slack, err = slackBlocks(knowledgebase, diagnosisResport, llm.PlaybookRecommendations{})
+			result.Slack, err = slackBlocks(knowledgebase, diagnosisReport, llm.PlaybookRecommendations{})
 			if err != nil {
 				return nil, fmt.Errorf("failed to merge blocks: %w", err)
 			}
@@ -141,7 +144,7 @@ func (t *AIAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 				return nil, fmt.Errorf("failed to unmarshal diagnosis report: %w", err)
 			}
 
-			blocks, err := slackBlocks(knowledgebase, diagnosisResport, recommendations)
+			blocks, err := slackBlocks(knowledgebase, diagnosisReport, recommendations)
 			if err != nil {
 				return nil, fmt.Errorf("failed to marshal blocks: %w", err)
 			}
@@ -152,140 +155,8 @@ func (t *AIAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 	return &result, nil
 }
 
-func slackBlocks(knowledge *KnowledgeGraph, diagnosisReport llm.DiagnosisReport, recommendations llm.PlaybookRecommendations) (string, error) {
-	var blocks []map[string]any
-
-	addFieldsSection := func(title string, data map[string]string) {
-		if data != nil {
-			var fields []map[string]any
-			for key, value := range data {
-				fields = append(fields, map[string]any{
-					"type":     "mrkdwn",
-					"text":     fmt.Sprintf("*%s*: %s", key, value),
-					"verbatim": true,
-				})
-			}
-
-			// Sort fields alphabetically
-			slices.SortFunc(fields, func(a, b map[string]any) int {
-				return strings.Compare(a["text"].(string), b["text"].(string))
-			})
-
-			// Add section if fields are present
-			if len(fields) > 0 {
-				section := map[string]any{
-					"type":   "section",
-					"fields": fields,
-				}
-
-				if title != "" {
-					section["text"] = map[string]any{
-						"type": "mrkdwn",
-						"text": fmt.Sprintf("*%s*", title),
-					}
-				}
-				blocks = append(blocks, section)
-			}
-		}
-	}
-	var divider = map[string]any{
-		"type": "divider",
-	}
-
-	affectedResource := knowledge.Configs[0]
-
-	// Add header section with resource name and severity icon
-	blocks = append(blocks, map[string]any{
-		"type": "header",
-		"text": map[string]any{
-			"type": "plain_text",
-			"text": diagnosisReport.Headline,
-		},
-	})
-	addFieldsSection("", affectedResource.Tags)
-	blocks = append(blocks, divider)
-
-	blocks = append(blocks, map[string]any{
-		"type": "section",
-		"text": map[string]any{
-			"type": "mrkdwn",
-			"text": fmt.Sprintf("*Summary:*\n%s", diagnosisReport.Summary),
-		},
-	})
-
-	blocks = append(blocks, map[string]any{
-		"type": "section",
-		"text": map[string]any{
-			"type": "mrkdwn",
-			"text": fmt.Sprintf("*Recommended Fix:*\n%s", diagnosisReport.RecommendedFix),
-		},
-	})
-
-	blocks = append(blocks, divider)
-	addFieldsSection("Labels", *affectedResource.Labels)
-	blocks = append(blocks, divider)
-
-	if len(recommendations.Playbooks) > 0 {
-		elements := make([]map[string]any, 0, len(recommendations.Playbooks))
-		for _, playbook := range recommendations.Playbooks {
-			runURL := fmt.Sprintf("%s/playbooks/runs?playbook=%s&run=true&config_id=%s", api.FrontendURL, playbook.ID, playbook.ResourceID)
-			for key, value := range playbook.Parameters {
-				runURL += fmt.Sprintf("&params.%s=%s", key, url.QueryEscape(value))
-			}
-
-			elements = append(elements, map[string]any{
-				"type": "button",
-				"text": map[string]any{
-					"type": "plain_text",
-					"text": fmt.Sprintf("%s %s", playbook.Emoji, playbook.Title),
-				},
-				"url": runURL,
-			})
-		}
-
-		blocks = append(blocks, map[string]any{
-			"type":     "actions",
-			"block_id": "playbook_actions",
-			"elements": elements,
-		})
-	}
-
-	blocks = append(blocks, map[string]any{
-		"type":     "actions",
-		"block_id": "resource_actions",
-		"elements": []map[string]any{
-			{
-				"type":  "button",
-				"style": "primary",
-				"text": map[string]any{
-					"type":  "plain_text",
-					"text":  "View Config",
-					"emoji": true,
-				},
-				"url": fmt.Sprintf("%s/catalog/%s", api.FrontendURL, affectedResource.ID),
-			},
-			{
-				"type": "button",
-				"text": map[string]any{
-					"type":  "plain_text",
-					"text":  "🔕 Silence",
-					"emoji": true,
-				},
-				"url": fmt.Sprintf("%s/notifications/silences/add?config_id=%s", api.FrontendURL, affectedResource.ID),
-			},
-		},
-	})
-
-	slackBlocks, err := json.Marshal(map[string]any{
-		"blocks": blocks,
-	})
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal blocks: %w", err)
-	}
-
-	return string(slackBlocks), nil
-}
-
+// buildPrompt constructs a prompt for the LLM by combining the user prompt with knowledge graph data.
+// It returns the knowledge graph, the complete prompt array, and any error encountered.
 func buildPrompt(ctx context.Context, prompt string, spec v1.AIActionContext) (*KnowledgeGraph, []string, error) {
 	knowledge, err := getKnowledgeGraph(ctx, spec)
 	if err != nil {
@@ -305,11 +176,12 @@ func buildPrompt(ctx context.Context, prompt string, spec v1.AIActionContext) (*
 	return knowledge, output, nil
 }
 
+// jsonBlock wraps the given code in a JSON code block for markdown formatting.
 func jsonBlock(code string) string {
-	const format = "```json\n%s\n```"
-	return fmt.Sprintf(format, code)
+	return fmt.Sprintf(jsonCodeBlockFormat, code)
 }
 
+// Analysis represents an analysis performed on a configuration.
 type Analysis struct {
 	ID            uuid.UUID     `json:"id"`
 	Analyzer      string        `json:"analyzer"`
@@ -324,6 +196,7 @@ type Analysis struct {
 	LastObserved  *time.Time    `json:"last_observed"`
 }
 
+// FromModel populates the Analysis struct from a ConfigAnalysis model.
 func (t *Analysis) FromModel(c models.ConfigAnalysis) {
 	t.ID = c.ID
 	t.Analyzer = c.Analyzer
@@ -348,11 +221,11 @@ type Change struct {
 	Type          string     `json:"type"`
 	Source        string     `json:"source"`
 
-	// TODO: These are not present in the related_changes_recursive.
-	// Diff    string `json:"diff,omitempty"`
-	// Patches string `json:"patches,,omitempty"`
+	// Note: Diff and Patches fields are omitted as they are not available
+	// in related_changes_recursive queries.
 }
 
+// FromModel populates the Change struct from a ConfigChangeRow model.
 func (t *Change) FromModel(c query.ConfigChangeRow) {
 	t.Count = c.Count
 	t.CreatedBy = c.ExternalCreatedBy
@@ -392,6 +265,8 @@ type KnowledgeGraph struct {
 	Graph   []Edge   `json:"graph"`
 }
 
+// AddAnalysis adds the given analyses to the knowledge graph.
+// It converts each ConfigAnalysis to an Analysis and adds it to the appropriate Config.
 func (t *KnowledgeGraph) AddAnalysis(analyses ...models.ConfigAnalysis) {
 	for _, analysis := range analyses {
 		var a Analysis
@@ -405,6 +280,8 @@ func (t *KnowledgeGraph) AddAnalysis(analyses ...models.ConfigAnalysis) {
 	}
 }
 
+// AddChanges adds the given changes to the knowledge graph.
+// It converts each ConfigChangeRow to a Change and adds it to the appropriate Config.
 func (t *KnowledgeGraph) AddChanges(changes ...query.ConfigChangeRow) {
 	for _, change := range changes {
 		var c Change
@@ -418,6 +295,8 @@ func (t *KnowledgeGraph) AddChanges(changes ...query.ConfigChangeRow) {
 	}
 }
 
+// getKnowledgeGraph builds a knowledge graph for the given context.
+// It fetches the main config and its relationships, changes, and analyses.
 func getKnowledgeGraph(ctx context.Context, spec v1.AIActionContext) (*KnowledgeGraph, error) {
 	var kg KnowledgeGraph
 
@@ -471,6 +350,8 @@ func getKnowledgeGraph(ctx context.Context, spec v1.AIActionContext) (*Knowledge
 	return &kg, nil
 }
 
+// getConfigAnalysis fetches configuration analyses for the given config ID and time period.
+// The 'since' parameter is a duration string (e.g., "24h", "7d") that specifies how far back to look.
 func getConfigAnalysis(ctx context.Context, configID, since string) ([]models.ConfigAnalysis, error) {
 	parsed, err := duration.ParseDuration(since)
 	if err != nil {
@@ -488,6 +369,8 @@ func getConfigAnalysis(ctx context.Context, configID, since string) ([]models.Co
 	return analyses, nil
 }
 
+// processRelationship processes a relationship for the knowledge graph.
+// It fetches related configs, adds them to the graph, and fetches their changes and analyses if requested.
 func (t *KnowledgeGraph) processRelationship(ctx context.Context, configID uuid.UUID, relationship v1.AIActionRelationship) error {
 	relatedConfigs, err := query.GetRelatedConfigs(ctx, relationship.ToRelationshipQuery(configID))
 	if err != nil {
