@@ -15,9 +15,17 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 )
 
+type ResponseFormat int
+
+const (
+	ResponseFormatDiagnosis ResponseFormat = iota + 1
+	ResponseFormatPlaybookRecommendations
+)
+
 type Config struct {
 	v1.AIActionClient
-	UseAgent bool
+	UseAgent       bool
+	ResponseFormat ResponseFormat
 }
 
 func Prompt(ctx context.Context, config Config, systemPrompt string, promptParts ...string) (string, []llms.MessageContent, error) {
@@ -25,20 +33,6 @@ func Prompt(ctx context.Context, config Config, systemPrompt string, promptParts
 	if err != nil {
 		return "", nil, err
 	}
-
-	// if config.UseAgent {
-	// 	agentTools := []tools.Tool{
-	// 		mcTools.NewCatalogTool(ctx),
-	// 	}
-
-	// 	agent := agents.NewOneShotAgent(model,
-	// 		agentTools,
-	// 		agents.WithMaxIterations(3),
-	// 	)
-
-	// 	executor := agents.NewExecutor(agent)
-	// 	return chains.Run(ctx, executor, promptParts, chains.WithTemperature(0))
-	// }
 
 	content := []llms.MessageContent{
 		llms.TextParts(llms.ChatMessageTypeSystem, systemPrompt),
@@ -94,6 +88,78 @@ func getLLMModel(ctx context.Context, config Config) (llms.Model, error) {
 		}
 		if config.Model != "" {
 			opts = append(opts, openai.WithModel(config.Model))
+		}
+		if config.ResponseFormat == ResponseFormatDiagnosis {
+			openaiResponseFormatOpt := openai.WithResponseFormat(&openai.ResponseFormat{
+				Type: "json_schema",
+				JSONSchema: &openai.ResponseFormatJSONSchema{
+					Name:   "diagnosis",
+					Strict: true,
+					Schema: &openai.ResponseFormatJSONSchemaProperty{
+						Type: "object",
+						Properties: map[string]*openai.ResponseFormatJSONSchemaProperty{
+							"headline": {
+								Type:        "string",
+								Description: "Headline that clearly mentions the affected resource & the issue. Feel free to add emojis. Keep it short and concise.",
+							},
+							"summary": {
+								Type:        "string",
+								Description: "Summary of the issue in markdown. Use bullet points if needed.",
+							},
+							"recommended_fix": {
+								Type:        "string",
+								Description: "Short and concise recommended fix for the issue in markdown. Use bullet points if needed.",
+							},
+						},
+						Required: []string{"headline", "summary", "recommended_fix"},
+					},
+				},
+			})
+			opts = append(opts, openaiResponseFormatOpt)
+		} else if config.ResponseFormat == ResponseFormatPlaybookRecommendations {
+			openaiResponseFormatOpt := openai.WithResponseFormat(&openai.ResponseFormat{
+				Type: "json_schema",
+				JSONSchema: &openai.ResponseFormatJSONSchema{
+					Name: "playbook_recommendations",
+					Schema: &openai.ResponseFormatJSONSchemaProperty{
+						Type: "object",
+						Properties: map[string]*openai.ResponseFormatJSONSchemaProperty{
+							"playbooks": {
+								Type:        "array",
+								Description: "List of recommended playbooks to fix the issue. The playbooks are sorted by relevance to the issue. Only include playbooks that are relevant to the issue. It's okay if the list is empty.",
+								Items: &openai.ResponseFormatJSONSchemaProperty{
+									Type: "object",
+									Properties: map[string]*openai.ResponseFormatJSONSchemaProperty{
+										"id": {
+											Type:        "string",
+											Description: "The UUID of the playbook",
+										},
+										"emoji": {
+											Type:        "string",
+											Description: "The emoji to represent the playbook",
+										},
+										"title": {
+											Type:        "string",
+											Description: "The title of the playbook",
+										},
+										"parameters": {
+											Type:                 "object",
+											Description:          "A key-value (Record<string, string>) pair of parameters to pass to the playbook. Keep in mind the values are all strings even numbers and booleans are strings",
+											AdditionalProperties: true,
+										},
+										"resource_id": {
+											Type: "string",
+										},
+									},
+									Required: []string{"id", "emoji", "name", "parameters", "resource_id"},
+								},
+							},
+						},
+						Required: []string{"playbooks"},
+					},
+				},
+			})
+			opts = append(opts, openaiResponseFormatOpt)
 		}
 
 		openaiLLM, err := openai.New(opts...)

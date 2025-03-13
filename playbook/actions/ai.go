@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
+	"slices"
 	"strings"
 	"text/template"
 	"time"
@@ -26,195 +28,21 @@ import (
 
 var recommendPlaybookPrompt *template.Template
 
-const slackPrompt = `
-	Re-write the diagnosis formatted for a slack message.
-	The output should be in pure json using Block Kit(https://api.slack.com/block-kit) - a UI framework for Slack apps.
-	Example: output 
-	{
-		"blocks": [
-			{
-				"type": "section",
-				"fields": [
-					{
-						"type": "mrkdwn",
-						"text": "Statefulset: alertmanager"
-					},
-					{
-						"type": "mrkdwn",
-						"text": "*Namespace*: mc"
-					},
-					{
-						"type": "mrkdwn",
-						"text": "Deployment has pods that are in a crash loop."
-					}
-				]
-			},
-		]
-	}
-		
-	Please do not add code blocks around the JSON output.`
-
 func init() {
 	var err error
 
 	recommendPlaybookPrompt, err = template.New("recommend").Parse(`
-	Analyze a list of playbooks and find the most suitable ones and create a Slack message using Block Kit, 
-	allowing users to run these playbooks on a specific configuration.
+	<background>
+	Playbooks automate common workflows and processes by defining reusable templates of actions that can be triggered on 
+	a resource. Playbooks take parameters as defined in the parameters section of the playbook.
+	</background>
 
-	First, here's the list of playbooks you need to analyze:
+	Analyze a list of playbooks given below and find the most suitable ones to tackle the issue described in the diagnosis report.
+	It's important to select the most relevant playbooks that are most likely to resolve the issue.
 
 	<playbooks>
 	{{.playbooks}}
-	</playbooks>
-
-	Your goal is to create a Slack message that presents a summary of the diagnosis and the buttons for each applicable playbook. 
-	Each button, when clicked, should trigger the execution of its corresponding playbook.
-
-	Follow these steps to complete the task:
-
-	- Create a concise summary of the diagnosis and wrap it in a slack text block.
-
-	- If the resource has any labels, include them in a mrkdwn section with each labels being a field.
-
-	- Analyze the given playbooks and identify which ones can be run on the current configuration.
-
-	- For each applicable playbook, create a button element in the Slack Block Kit JSON structure.
-
-	- Generate a URL for each button that will trigger the playbook execution. The URL should follow this format:
-		GET {{.base_url}}/playbooks/runs
-		With these query parameters:
-		- playbook={playbook_id}
-		- run=true (always set to true)
-		- config_id={uuid_of_the_config}
-		- params.{key}={url_encoded(value)}
-
-		IMPORTANT: Ensure that you URL-encode the parameter values.
-
-	- Create a primary button that links to the resource itself. The link depends on the type of resource
-		- health checks: {{.base_url}}/health?layout=table&checkId=df2882a1-bf2f-4f93-ae12-cf3781567388&timeRange=1h
-		- configs: {{.base_url}}/catalog/01953ca8-3d6b-eded-d4d2-37df290d9062
-		- topology/components: {{.base_url}}/topology/33373937-3765-6137-6539-313662663466
-
-	- Create a secondary button that links to a silence URL. The link also depends on the type of resource:
-		- health checks: {{.base_url}}/notifications/silences/add?check_id=df2882a1-bf2f-4f93-ae12-cf3781567388
-		- configs: {{.base_url}}/notifications/silences/add?config_id=01953ca8-3d6b-eded-d4d2-37df290d9062
-		- topology/components: {{.base_url}}/notifications/silences/add?config_id=33373937-3765-6137-6539-313662663466
-
-	- Compile all button elements into a single Block Kit JSON structure.
-
-	- If no matching playbooks are found, create a message block with the text "No matching playbooks found."
-
-	Here's an example of the expected output structure:
-
-	{
-		"blocks": [
-			{
-				"type": "header",
-				"text": {
-					"type": "plain_text",
-					"text": "🚨 Grafana deployment is unhealthy",
-					"emoji": true
-				}
-			},
-			{
-				"type": "section",
-				"fields": [{
-					"type": "mrkdwn",
-					"text": "Deployment fails due to a typo in the environment variable GF_DATABASE_TYPE (set to "postgresqqql" instead of "postgres"), causing Grafana to crash when attempting database initialization. Container logs show database connection errors and enter CrashLoopBackOff state.",
-				}]
-			},
-			{
-				"type": "divider"
-			},
-			{
-				"type": "section",
-				"fields": [
-					{
-						"type": "mrkdwn",
-						"text": "Deployment: grafana"
-					},
-					{
-						"type": "mrkdwn",
-						"text": "*Namespace*: mc"
-					}
-				]
-			},
-			{
-				"type": "section",
-				"text": {
-					"type": "mrkdwn",
-					"text": "*Labels*"
-				},
-				"fields": [
-					{
-						"type": "mrkdwn",
-						"text": "*app*: grafana",
-						"verbatim": true
-					},
-					{
-						"type": "mrkdwn",
-						"text": "*tier*: monitoring",
-						"verbatim": true
-					}
-				]
-			},
-			{
-				"type": "divider"
-			},
-			{
-				"type": "actions",
-				"block_id": "actionblock123",
-				"elements": [
-					{
-						"type": "button",
-						"text": {
-							"type": "plain_text",
-							"text": "Example Playbook"
-						},
-						"url": "{{.base_url}}/playbooks/runs?playbook=example-id&run=true&config_id=example-config-id&params.key=encoded_value"
-					}
-				]
-			},
-			{
-				"type": "actions",
-				"block_id": "resourcelinks456",
-				"elements": [
-					{
-						"type": "button",
-						"style": "primary",
-						"text": {
-							"type": "plain_text",
-							"text": "View Config",
-							"emoji": "true"
-						},
-						"url": "{{.base_url}}/resources/{{.resource_id}}"
-					},
-					{
-						"type": "button",
-						"text": {
-							"type": "plain_text",
-							"text": "🔕 Silence",
-							"emoji": "true"
-						},
-						"url": "{{.base_url}}/notifications/silences/add?config_id={{.config_id}}"
-					}
-				]
-			},
-		]
-	}
-
-	Remember:
-	- Ensure the JSON is valid and follows the Block Kit structure.
-	- The response should contain nothing more than just the JSON.
-		**DO NOT** wrap the json within a code block.
-		Your next message should start with "{" and end with "}"
-	- Present a concise summary of the diagnosis in a slack text block using mrkdwn.
-	- Include all necessary query parameters in the URL.
-	- URL-encode parameter values.
-	- Use a unique block_id for each action block (e.g., "actionblock" followed by a random number).
-	- If no playbooks match, return a block with a single text element.
-
-	Now, analyze the playbooks and create the appropriate Slack message.`)
+	</playbooks>`)
 	if err != nil {
 		shutdown.ShutdownAndExit(1, "bad template for playbook recommendation prompt")
 	}
@@ -236,7 +64,7 @@ func (t *AIAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 		spec.Backend = api.LLMBackendOpenAI
 	}
 
-	prompt, err := buildPrompt(ctx, spec.Prompt, spec.AIActionContext)
+	knowledgebase, prompt, err := buildPrompt(ctx, spec.Prompt, spec.AIActionContext)
 	if err != nil {
 		return nil, fmt.Errorf("failed to form prompt: %w", err)
 	}
@@ -249,25 +77,25 @@ func (t *AIAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 		return &AIActionResult{Markdown: strings.Join(prompt, "\n")}, nil
 	}
 
-	llmConf := llm.Config{AIActionClient: spec.AIActionClient}
+	llmConf := llm.Config{AIActionClient: spec.AIActionClient, ResponseFormat: llm.ResponseFormatDiagnosis}
 	response, conversation, err := llm.Prompt(ctx, llmConf, spec.SystemPrompt, prompt...)
 	if err != nil {
 		return nil, err
 	}
 	result.Markdown = response
 
-	// Just use the last message from the AI.
-	// we don't want to re-send the entire conversation as that'll increase the chances of hiting the rate limit.
-	// lastConverstion := conversation[len(conversation)-1:]
+	var diagnosisResport llm.DiagnosisReport
+	if err := json.Unmarshal([]byte(response), &diagnosisResport); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal diagnosis report: %w", err)
+	}
 
 	for _, format := range lo.Uniq(spec.Formats) {
 		switch format {
 		case v1.AIActionFormatSlack:
-			response, _, err := llm.PromptWithHistory(ctx, llmConf, conversation, slackPrompt)
+			result.Slack, err = slackBlocks(knowledgebase, diagnosisResport, llm.PlaybookRecommendations{})
 			if err != nil {
-				return nil, fmt.Errorf("failed to generate slack message: %w", err)
+				return nil, fmt.Errorf("failed to merge blocks: %w", err)
 			}
-			result.Slack = response
 
 		case v1.AIActionFormatRecommendPlaybook:
 			config, err := query.GetCachedConfig(ctx, spec.Config)
@@ -298,33 +126,175 @@ func (t *AIAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 			}
 
 			var prompt bytes.Buffer
-			if err := recommendPlaybookPrompt.Execute(&prompt, map[string]any{
-				"base_url":  api.FrontendURL,
-				"playbooks": string(playbooksJSON),
-			}); err != nil {
+			if err := recommendPlaybookPrompt.Execute(&prompt, map[string]any{"playbooks": string(playbooksJSON)}); err != nil {
 				return nil, err
 			}
 
+			llmConf.ResponseFormat = llm.ResponseFormatPlaybookRecommendations
 			response, _, err := llm.PromptWithHistory(ctx, llmConf, conversation, prompt.String())
 			if err != nil {
 				return nil, fmt.Errorf("failed to generate playbook recommendation: %w", err)
 			}
-			result.RecommendedPlaybooks = response
+
+			var recommendations llm.PlaybookRecommendations
+			if err := json.Unmarshal([]byte(response), &recommendations); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal diagnosis report: %w", err)
+			}
+
+			blocks, err := slackBlocks(knowledgebase, diagnosisResport, recommendations)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal blocks: %w", err)
+			}
+			result.RecommendedPlaybooks = string(blocks)
 		}
 	}
 
 	return &result, nil
 }
 
-func buildPrompt(ctx context.Context, prompt string, spec v1.AIActionContext) ([]string, error) {
+func slackBlocks(knowledge *KnowledgeGraph, diagnosisReport llm.DiagnosisReport, recommendations llm.PlaybookRecommendations) (string, error) {
+	var blocks []map[string]any
+
+	addFieldsSection := func(title string, data map[string]string) {
+		if data != nil {
+			var fields []map[string]any
+			for key, value := range data {
+				fields = append(fields, map[string]any{
+					"type":     "mrkdwn",
+					"text":     fmt.Sprintf("*%s*: %s", key, value),
+					"verbatim": true,
+				})
+			}
+
+			// Sort fields alphabetically
+			slices.SortFunc(fields, func(a, b map[string]any) int {
+				return strings.Compare(a["text"].(string), b["text"].(string))
+			})
+
+			// Add section if fields are present
+			if len(fields) > 0 {
+				section := map[string]any{
+					"type":   "section",
+					"fields": fields,
+				}
+
+				if title != "" {
+					section["text"] = map[string]any{
+						"type": "mrkdwn",
+						"text": fmt.Sprintf("*%s*", title),
+					}
+				}
+				blocks = append(blocks, section)
+			}
+		}
+	}
+	var divider = map[string]any{
+		"type": "divider",
+	}
+
+	affectedResource := knowledge.Configs[0]
+
+	// Add header section with resource name and severity icon
+	blocks = append(blocks, map[string]any{
+		"type": "header",
+		"text": map[string]any{
+			"type": "plain_text",
+			"text": diagnosisReport.Headline,
+		},
+	})
+	addFieldsSection("", affectedResource.Tags)
+	blocks = append(blocks, divider)
+
+	blocks = append(blocks, map[string]any{
+		"type": "section",
+		"text": map[string]any{
+			"type": "mrkdwn",
+			"text": fmt.Sprintf("*Summary:*\n%s", diagnosisReport.Summary),
+		},
+	})
+
+	blocks = append(blocks, map[string]any{
+		"type": "section",
+		"text": map[string]any{
+			"type": "mrkdwn",
+			"text": fmt.Sprintf("*Recommended Fix:*\n%s", diagnosisReport.RecommendedFix),
+		},
+	})
+
+	blocks = append(blocks, divider)
+	addFieldsSection("Labels", *affectedResource.Labels)
+	blocks = append(blocks, divider)
+
+	if len(recommendations.Playbooks) > 0 {
+		elements := make([]map[string]any, 0, len(recommendations.Playbooks))
+		for _, playbook := range recommendations.Playbooks {
+			runURL := fmt.Sprintf("%s/playbooks/runs?playbook=%s&run=true&config_id=%s", api.FrontendURL, playbook.ID, playbook.ResourceID)
+			for key, value := range playbook.Parameters {
+				runURL += fmt.Sprintf("&params.%s=%s", key, url.QueryEscape(value))
+			}
+
+			elements = append(elements, map[string]any{
+				"type": "button",
+				"text": map[string]any{
+					"type": "plain_text",
+					"text": fmt.Sprintf("%s %s", playbook.Emoji, playbook.Title),
+				},
+				"url": runURL,
+			})
+		}
+
+		blocks = append(blocks, map[string]any{
+			"type":     "actions",
+			"block_id": "playbook_actions",
+			"elements": elements,
+		})
+	}
+
+	blocks = append(blocks, map[string]any{
+		"type":     "actions",
+		"block_id": "resource_actions",
+		"elements": []map[string]any{
+			{
+				"type":  "button",
+				"style": "primary",
+				"text": map[string]any{
+					"type":  "plain_text",
+					"text":  "View Config",
+					"emoji": true,
+				},
+				"url": fmt.Sprintf("%s/catalog/%s", api.FrontendURL, affectedResource.ID),
+			},
+			{
+				"type": "button",
+				"text": map[string]any{
+					"type":  "plain_text",
+					"text":  "🔕 Silence",
+					"emoji": true,
+				},
+				"url": fmt.Sprintf("%s/notifications/silences/add?config_id=%s", api.FrontendURL, affectedResource.ID),
+			},
+		},
+	})
+
+	slackBlocks, err := json.Marshal(map[string]any{
+		"blocks": blocks,
+	})
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal blocks: %w", err)
+	}
+
+	return string(slackBlocks), nil
+}
+
+func buildPrompt(ctx context.Context, prompt string, spec v1.AIActionContext) (*KnowledgeGraph, []string, error) {
 	knowledge, err := getKnowledgeGraph(ctx, spec)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get prompt context: %w", err)
+		return nil, nil, fmt.Errorf("failed to get prompt context: %w", err)
 	}
 
 	knowledgeJSON, err := json.MarshalIndent(knowledge, "", "\t")
 	if err != nil {
-		return nil, fmt.Errorf("failed to get prompt context: %w", err)
+		return nil, nil, fmt.Errorf("failed to get prompt context: %w", err)
 	}
 
 	output := []string{prompt, jsonBlock(string(knowledgeJSON))}
@@ -332,7 +302,7 @@ func buildPrompt(ctx context.Context, prompt string, spec v1.AIActionContext) ([
 		fmt.Println(output)
 	}
 
-	return output, nil
+	return knowledge, output, nil
 }
 
 func jsonBlock(code string) string {
@@ -404,6 +374,10 @@ type Config struct {
 	Created  time.Time  `json:"created"`
 	Changes  []Change   `json:"changes"`
 	Analyses []Analysis `json:"analyses"`
+
+	// Don't send these to the LLM
+	Labels *types.JSONStringMap `json:"-"`
+	Tags   map[string]string    `json:"-"`
 }
 
 // Edge represents a connection between two nodes in the graph.
@@ -460,6 +434,8 @@ func getKnowledgeGraph(ctx context.Context, spec v1.AIActionContext) (*Knowledge
 			Config:  lo.FromPtr(config.Config),
 			Created: config.CreatedAt,
 			Updated: config.UpdatedAt,
+			Labels:  config.Labels,
+			Tags:    config.Tags,
 			Deleted: config.DeletedAt,
 		})
 	}
