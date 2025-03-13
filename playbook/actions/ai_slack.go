@@ -40,6 +40,10 @@ func createSlackFieldsSection(title string, labels map[string]string) map[string
 			break
 		}
 
+		if strings.TrimSpace(value) == "" {
+			continue
+		}
+
 		fields = append(fields, map[string]any{
 			"type":     slackBlockTypeMarkdown,
 			"text":     fmt.Sprintf("*%s*: %s", key, value),
@@ -136,7 +140,6 @@ func slackBlocks(knowledge *KnowledgeGraph, diagnosisReport llm.DiagnosisReport,
 	divider := map[string]any{"type": slackBlockTypeDivider}
 	affectedResource := knowledge.Configs[0]
 
-	// Add header section with resource name
 	blocks = append(blocks, map[string]any{
 		"type": slackBlockTypeHeader,
 		"text": map[string]any{
@@ -145,13 +148,11 @@ func slackBlocks(knowledge *KnowledgeGraph, diagnosisReport llm.DiagnosisReport,
 		},
 	})
 
-	// Add tags section if available
 	if tagsSection := createSlackFieldsSection("", affectedResource.Tags); tagsSection != nil {
 		blocks = append(blocks, tagsSection)
 	}
 	blocks = append(blocks, divider)
 
-	// Add summary section
 	blocks = append(blocks, map[string]any{
 		"type": slackBlockTypeSection,
 		"text": map[string]any{
@@ -160,7 +161,6 @@ func slackBlocks(knowledge *KnowledgeGraph, diagnosisReport llm.DiagnosisReport,
 		},
 	})
 
-	// Add recommended fix section
 	blocks = append(blocks, map[string]any{
 		"type": slackBlockTypeSection,
 		"text": map[string]any{
@@ -171,21 +171,17 @@ func slackBlocks(knowledge *KnowledgeGraph, diagnosisReport llm.DiagnosisReport,
 
 	blocks = append(blocks, divider)
 
-	// Add labels section if available
 	if labelsSection := createSlackFieldsSection("Labels", *affectedResource.Labels); labelsSection != nil {
 		blocks = append(blocks, labelsSection)
 		blocks = append(blocks, divider)
 	}
 
-	// Add playbook buttons if available
 	if playbookButtons := createPlaybookButtons(recommendations); playbookButtons != nil {
 		blocks = append(blocks, playbookButtons)
 	}
 
-	// Add resource action buttons
 	blocks = append(blocks, createResourceActionButtons(affectedResource.ID))
 
-	// Marshal blocks to JSON
 	slackBlocks, err := json.Marshal(map[string]any{
 		"blocks": blocks,
 	})
