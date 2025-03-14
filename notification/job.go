@@ -475,11 +475,11 @@ func processPendingNotification(ctx context.Context, currentHistory models.Notif
 		return fmt.Errorf("failed to get matching silences: %w", err)
 	}
 
-	if blocker, err := validateSendHistory(ctx, *notif, payload, celEnv, matchingSilences); err != nil {
+	if blocker, err := processNotificationConstraints(ctx, *notif, payload, celEnv, matchingSilences); err != nil {
 		return fmt.Errorf("failed to check all conditions for notification[%s]: %w", notif.ID, err)
 	} else if blocker != nil {
 		columns := map[string]any{
-			"status": models.NotificationStatusSkipped,
+			"status": blocker.BlockedWithStatus,
 		}
 
 		if blocker.ParentID != nil {
