@@ -219,6 +219,9 @@
         },
         "lastSent": {
           "$ref": "#/$defs/Time"
+        },
+        "lastFailed": {
+          "$ref": "#/$defs/Time"
         }
       },
       "additionalProperties": false,

@@ -136,12 +136,13 @@ var NotificationReconciler kopper.Reconciler[Notification, *Notification]
 
 // NotificationStatus defines the observed state of Notification
 type NotificationStatus struct {
-	Sent     int         `json:"sent,omitempty"`
-	Failed   int         `json:"failed,omitempty"`
-	Pending  int         `json:"pending,omitempty"`
-	Status   string      `json:"status,omitempty"`
-	Error    string      `json:"error,omitempty"`
-	LastSent metav1.Time `json:"lastSent,omitempty"`
+	Sent       int         `json:"sent,omitempty"`
+	Failed     int         `json:"failed,omitempty"`
+	Pending    int         `json:"pending,omitempty"`
+	Status     string      `json:"status,omitempty"`
+	Error      string      `json:"error,omitempty"`
+	LastSent   metav1.Time `json:"lastSent,omitempty"`
+	LastFailed metav1.Time `json:"lastFailed,omitempty"`
 }
 
 //+kubebuilder:object:root=true
