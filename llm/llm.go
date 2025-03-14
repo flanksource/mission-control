@@ -138,8 +138,8 @@ func getLLMModel(ctx dutyctx.Context, config Config) (llms.Model, error) {
 			openaiResponseFormatOpt := openai.WithResponseFormat(&openai.ResponseFormat{
 				Type: "json_schema",
 				JSONSchema: &openai.ResponseFormatJSONSchema{
-					Name: "playbook_recommendations",
-					// Strict: true, // NOTE: cannot set this to strict, because playbook.parameters must be additionalProperties=true
+					Name:   "playbook_recommendations",
+					Strict: true,
 					Schema: &tools.RecommendPlaybooksToolSchema,
 				},
 			})

@@ -36,6 +36,7 @@ var ExtractDiagnosis = llms.Tool{
 	Function: &llms.FunctionDefinition{
 		Name:        ToolExtractDiagnosis,
 		Description: "Extract diagnosis information from the input",
+		Strict:      true,
 	},
 }
 

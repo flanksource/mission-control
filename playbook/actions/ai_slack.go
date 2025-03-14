@@ -83,8 +83,8 @@ func createPlaybookButtons(recommendations llm.PlaybookRecommendations) map[stri
 		runURL := fmt.Sprintf("%s/playbooks/runs?playbook=%s&run=true&config_id=%s",
 			api.FrontendURL, playbook.ID, playbook.ResourceID)
 
-		for key, value := range playbook.Parameters {
-			runURL += fmt.Sprintf("&params.%s=%s", key, url.QueryEscape(value))
+		for _, p := range playbook.Parameters {
+			runURL += fmt.Sprintf("&params.%s=%s", p.Key, url.QueryEscape(p.Value))
 		}
 
 		elements = append(elements, map[string]any{
