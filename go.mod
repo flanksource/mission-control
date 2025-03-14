@@ -148,7 +148,7 @@ require (
 	github.com/exaring/otelpgx v0.6.2 // indirect
 	github.com/fatih/color v1.17.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
-	github.com/flanksource/is-healthy v1.0.66 // indirect
+	github.com/flanksource/is-healthy v1.0.67 // indirect
 	github.com/flanksource/kubectl-neat v1.0.4 // indirect
 	github.com/fluxcd/gitkit v0.6.0 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
