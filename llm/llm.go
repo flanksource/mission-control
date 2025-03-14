@@ -5,12 +5,11 @@ import (
 	"fmt"
 
 	dutyctx "github.com/flanksource/duty/context"
-	"github.com/google/generative-ai-go/genai"
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/anthropic"
 	"github.com/tmc/langchaingo/llms/ollama"
 	"github.com/tmc/langchaingo/llms/openai"
-	"google.golang.org/api/option"
+	"google.golang.org/genai"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -48,7 +47,11 @@ func PromptWithHistory(ctx dutyctx.Context, config Config, history []llms.Messag
 		return "", nil, err
 	}
 
-	messages := append(history, llms.TextParts(llms.ChatMessageTypeHuman, prompt))
+	var messages []llms.MessageContent
+	messages = append(messages, history...)
+	if prompt != "" {
+		messages = append(messages, llms.TextParts(llms.ChatMessageTypeHuman, prompt))
+	}
 
 	options := []llms.CallOption{llms.WithTemperature(0)}
 
@@ -63,7 +66,6 @@ func PromptWithHistory(ctx dutyctx.Context, config Config, history []llms.Messag
 	case api.LLMBackendGemini:
 		// Do nothing
 		// NOTE: Handled by the wrapper
-		// Tools are configured during model creation not when prompting.
 
 	default:
 		const forceToolUsePrompt = `You MUST use the %s tool to extract the diagnosis information. 
@@ -192,39 +194,22 @@ func getLLMModel(ctx dutyctx.Context, config Config) (llms.Model, error) {
 			model = "gemini-2.0-flash"
 		}
 
-		client, err := genai.NewClient(ctx, option.WithAPIKey(apiKey))
+		client, err := genai.NewClient(ctx, &genai.ClientConfig{
+			APIKey:  apiKey,
+			Backend: genai.BackendGeminiAPI,
+		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create Gemini client: %w", err)
 		}
 
-		genModel := client.GenerativeModel(model)
-
-		if config.ResponseFormat == ResponseFormatDiagnosis {
-			genModel.Tools = []*genai.Tool{tools.GeminiDiagnosisTool}
-
-			// Force tool use
-			genModel.ToolConfig = &genai.ToolConfig{
-				FunctionCallingConfig: &genai.FunctionCallingConfig{
-					Mode:                 genai.FunctionCallingAny,
-					AllowedFunctionNames: []string{tools.ToolExtractDiagnosis},
-				},
-			}
-		} else if config.ResponseFormat == ResponseFormatPlaybookRecommendations {
-			genModel.Tools = []*genai.Tool{tools.GeminiRecommendPlaybookTool}
-
-			// Force tool use
-			genModel.ToolConfig = &genai.ToolConfig{
-				FunctionCallingConfig: &genai.FunctionCallingConfig{
-					Mode:                 genai.FunctionCallingAny,
-					AllowedFunctionNames: []string{tools.ToolPlaybookRecommendations},
-				},
-			}
+		// Create a wrapper that implements the langchaingo Model interface
+		wrapper := &GeminiModelWrapper{
+			model:          model,
+			client:         client,
+			ResponseFormat: config.ResponseFormat,
 		}
 
-		// Create a wrapper that implements the langchaingo Model interface
-		return &GeminiModelWrapper{
-			model: genModel,
-		}, nil
+		return wrapper, nil
 
 	default:
 		return nil, errors.New("unknown config.Backend")
