@@ -181,7 +181,7 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 	}
 
 	for _, payload := range payloads {
-		if blocker, err := validateSendHistory(ctx, *n, payload, celEnv, matchingSilences); err != nil {
+		if blocker, err := processNotificationConstraints(ctx, *n, payload, celEnv, matchingSilences); err != nil {
 			return fmt.Errorf("failed to check all conditions for notification[%s]: %w", n.ID, err)
 		} else if blocker != nil {
 			history := models.NotificationSendHistory{
@@ -249,9 +249,9 @@ type validateResult struct {
 	SilencedBy        *uuid.UUID
 }
 
-// TODO: Rename to a better name
-// validateSendHistory checks if the notification passes multiple checks
-func validateSendHistory(ctx context.Context,
+// processNotificationConstraints checks if the notification passes multiple constraints
+// like repeat interval, inhibition, etc.
+func processNotificationConstraints(ctx context.Context,
 	n NotificationWithSpec,
 	payload NotificationEventPayload,
 	celEnv *celVariables,
