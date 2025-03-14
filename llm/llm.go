@@ -4,42 +4,32 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/flanksource/duty/context"
+	dutyctx "github.com/flanksource/duty/context"
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/anthropic"
-	"github.com/tmc/langchaingo/llms/googleai"
 	"github.com/tmc/langchaingo/llms/ollama"
 	"github.com/tmc/langchaingo/llms/openai"
+	"google.golang.org/genai"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/llm/tools"
+)
+
+type ResponseFormat int
+
+const (
+	ResponseFormatDiagnosis ResponseFormat = iota + 1
+	ResponseFormatPlaybookRecommendations
 )
 
 type Config struct {
 	v1.AIActionClient
-	UseAgent bool
+	UseAgent       bool
+	ResponseFormat ResponseFormat
 }
 
-func Prompt(ctx context.Context, config Config, systemPrompt string, promptParts ...string) (string, []llms.MessageContent, error) {
-	model, err := getLLMModel(ctx, config)
-	if err != nil {
-		return "", nil, err
-	}
-
-	// if config.UseAgent {
-	// 	agentTools := []tools.Tool{
-	// 		mcTools.NewCatalogTool(ctx),
-	// 	}
-
-	// 	agent := agents.NewOneShotAgent(model,
-	// 		agentTools,
-	// 		agents.WithMaxIterations(3),
-	// 	)
-
-	// 	executor := agents.NewExecutor(agent)
-	// 	return chains.Run(ctx, executor, promptParts, chains.WithTemperature(0))
-	// }
-
+func Prompt(ctx dutyctx.Context, config Config, systemPrompt string, promptParts ...string) (string, []llms.MessageContent, error) {
 	content := []llms.MessageContent{
 		llms.TextParts(llms.ChatMessageTypeSystem, systemPrompt),
 	}
@@ -48,28 +38,59 @@ func Prompt(ctx context.Context, config Config, systemPrompt string, promptParts
 		content = append(content, llms.TextParts(llms.ChatMessageTypeHuman, p))
 	}
 
-	resp, err := model.GenerateContent(ctx, content, llms.WithTemperature(0))
-	if err != nil {
-		return "", nil, fmt.Errorf("failed to generate response: %w", err)
-	}
-
-	if len(resp.Choices) == 0 {
-		return "", nil, errors.New("no response from LLM")
-	}
-
-	content = append(content, llms.TextParts(llms.ChatMessageTypeAI, resp.Choices[0].Content))
-	return resp.Choices[0].Content, content, nil
+	return PromptWithHistory(ctx, config, content, "")
 }
 
-func PromptWithHistory(ctx context.Context, config Config, history []llms.MessageContent, prompt string) (string, []llms.MessageContent, error) {
+func PromptWithHistory(ctx dutyctx.Context, config Config, history []llms.MessageContent, prompt string) (string, []llms.MessageContent, error) {
 	model, err := getLLMModel(ctx, config)
 	if err != nil {
 		return "", nil, err
 	}
 
-	content := append(history, llms.TextParts(llms.ChatMessageTypeHuman, prompt))
+	var messages []llms.MessageContent
+	messages = append(messages, history...)
+	if prompt != "" {
+		messages = append(messages, llms.TextParts(llms.ChatMessageTypeHuman, prompt))
+	}
 
-	resp, err := model.GenerateContent(ctx, content, llms.WithTemperature(0))
+	options := []llms.CallOption{llms.WithTemperature(0)}
+
+	// Add backend-specific options for tool choice
+	switch config.Backend {
+	case api.LLMBackendOpenAI:
+		// Do nothing
+		// NOTE: we use `response_format` instead of function calling & that's configured during model creation not when prompting.
+		// OpenAI does support function calling, but I don't think we can force the model to use that tool
+		// like we can with Anthropic.
+
+	case api.LLMBackendGemini:
+		// Do nothing
+		// NOTE: Handled by the wrapper
+
+	default:
+		const forceToolUsePrompt = `You MUST use the %s tool to extract the diagnosis information. 
+	Do not provide any other response format. 
+	Only use the tool to respond.`
+
+		if config.ResponseFormat == ResponseFormatDiagnosis {
+			options = append(options, llms.WithTools([]llms.Tool{tools.ExtractDiagnosis}))
+			messages = append(messages, llms.TextParts(llms.ChatMessageTypeHuman, fmt.Sprintf(forceToolUsePrompt, tools.ToolExtractDiagnosis)))
+		} else if config.ResponseFormat == ResponseFormatPlaybookRecommendations {
+			options = append(options, llms.WithTools([]llms.Tool{tools.RecommendPlaybook}))
+			messages = append(messages, llms.TextParts(llms.ChatMessageTypeHuman, fmt.Sprintf(forceToolUsePrompt, tools.ToolPlaybookRecommendations)))
+		}
+
+		// NOTE: Anthropic has forced tool use, but it's not supported in LangChainGo.
+		// So, we force that with prompts for now.
+		//
+		// https://docs.anthropic.com/en/docs/build-with-claude/tool-use/overview#forcing-tool-use
+		// options = append(options, llms.WithToolChoice(map[string]any{
+		// 	"type": "tool",
+		// 	"name": "extract_diagnosis",
+		// }))
+	}
+
+	resp, err := model.GenerateContent(ctx, messages, options...)
 	if err != nil {
 		return "", nil, fmt.Errorf("failed to generate response: %w", err)
 	}
@@ -78,11 +99,21 @@ func PromptWithHistory(ctx context.Context, config Config, history []llms.Messag
 		return "", nil, errors.New("no response from LLM")
 	}
 
-	content = append(content, llms.TextParts(llms.ChatMessageTypeAI, resp.Choices[0].Content))
-	return resp.Choices[0].Content, content, nil
+	aiResponse := resp.Choices[0].Content
+
+	// We prioritize response from tools if available
+	for _, choice := range resp.Choices {
+		if len(choice.ToolCalls) > 0 {
+			aiResponse = choice.ToolCalls[0].FunctionCall.Arguments
+			break
+		}
+	}
+
+	messages = append(messages, llms.TextParts(llms.ChatMessageTypeAI, aiResponse))
+	return aiResponse, messages, nil
 }
 
-func getLLMModel(ctx context.Context, config Config) (llms.Model, error) {
+func getLLMModel(ctx dutyctx.Context, config Config) (llms.Model, error) {
 	switch config.Backend {
 	case api.LLMBackendOpenAI:
 		var opts []openai.Option
@@ -94,6 +125,27 @@ func getLLMModel(ctx context.Context, config Config) (llms.Model, error) {
 		}
 		if config.Model != "" {
 			opts = append(opts, openai.WithModel(config.Model))
+		}
+		if config.ResponseFormat == ResponseFormatDiagnosis {
+			openaiResponseFormatOpt := openai.WithResponseFormat(&openai.ResponseFormat{
+				Type: "json_schema",
+				JSONSchema: &openai.ResponseFormatJSONSchema{
+					Name:   "diagnosis",
+					Strict: true,
+					Schema: &tools.ExtractDiagnosisToolSchema,
+				},
+			})
+			opts = append(opts, openaiResponseFormatOpt)
+		} else if config.ResponseFormat == ResponseFormatPlaybookRecommendations {
+			openaiResponseFormatOpt := openai.WithResponseFormat(&openai.ResponseFormat{
+				Type: "json_schema",
+				JSONSchema: &openai.ResponseFormatJSONSchema{
+					Name:   "playbook_recommendations",
+					Strict: true,
+					Schema: &tools.RecommendPlaybooksToolSchema,
+				},
+			})
+			opts = append(opts, openaiResponseFormatOpt)
 		}
 
 		openaiLLM, err := openai.New(opts...)
@@ -136,21 +188,28 @@ func getLLMModel(ctx context.Context, config Config) (llms.Model, error) {
 		return anthropicLLM, nil
 
 	case api.LLMBackendGemini:
-		var opts []googleai.Option
-		if !config.APIKey.IsEmpty() {
-			opts = append(opts, googleai.WithAPIKey(config.APIKey.ValueStatic))
-		}
-		if config.Model != "" {
-			opts = append(opts, googleai.WithDefaultModel(config.Model))
-		} else {
-			opts = append(opts, googleai.WithDefaultModel("gemini-2.0-flash"))
+		apiKey := config.APIKey.ValueStatic
+		model := config.Model
+		if model == "" {
+			model = "gemini-2.0-flash"
 		}
 
-		googleLLM, err := googleai.New(ctx, opts...)
+		client, err := genai.NewClient(ctx, &genai.ClientConfig{
+			APIKey:  apiKey,
+			Backend: genai.BackendGeminiAPI,
+		})
 		if err != nil {
-			return nil, fmt.Errorf("failed to create google gemini llm: %w", err)
+			return nil, fmt.Errorf("failed to create Gemini client: %w", err)
 		}
-		return googleLLM, nil
+
+		// Create a wrapper that implements the langchaingo Model interface
+		wrapper := &GeminiModelWrapper{
+			model:          model,
+			client:         client,
+			ResponseFormat: config.ResponseFormat,
+		}
+
+		return wrapper, nil
 
 	default:
 		return nil, errors.New("unknown config.Backend")
