@@ -55,8 +55,9 @@ func HandleWebhook(c echo.Context) error {
 		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Err: err.Error(), Message: "playbook has an invalid spec"})
 	}
 
+	ctx = ctx.WithNamespace(playbook.Namespace)
 	if err := authenticateWebhook(ctx, c.Request(), spec.On.Webhook.Authentication); err != nil {
-		return dutyAPI.WriteError(c, err)
+		return dutyAPI.WriteError(c, fmt.Errorf("error authenticating webhook[%s]: %w", path, err))
 	}
 
 	var runRequest RunParams
