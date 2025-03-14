@@ -220,6 +220,9 @@ spec:
                 type: string
               failed:
                 type: integer
+              lastFailed:
+                format: date-time
+                type: string
               lastSent:
                 format: date-time
                 type: string

@@ -81,13 +81,14 @@ func SyncCRDStatus(ctx context.Context, ids ...string) error {
 	}
 
 	var summary []struct {
-		Name      string
-		Namespace string
-		Sent      int
-		Failed    int
-		Pending   int
-		UpdatedAt time.Time
-		Error     string
+		Name         string
+		Namespace    string
+		Sent         int
+		Failed       int
+		Pending      int
+		UpdatedAt    time.Time
+		Error        string
+		LastFailedAt time.Time
 	}
 
 	q := ctx.DB().Clauses(hints.CommentBefore("select", "notification_crd_sync")).
@@ -103,11 +104,12 @@ func SyncCRDStatus(ctx context.Context, ids ...string) error {
 
 	for _, s := range summary {
 		status := v1.NotificationStatus{
-			Sent:     s.Sent,
-			Pending:  s.Pending,
-			Failed:   s.Failed,
-			Error:    s.Error,
-			LastSent: metav1.Time{Time: s.UpdatedAt},
+			Sent:       s.Sent,
+			Pending:    s.Pending,
+			Failed:     s.Failed,
+			Error:      s.Error,
+			LastSent:   metav1.Time{Time: s.UpdatedAt},
+			LastFailed: metav1.Time{Time: s.LastFailedAt},
 		}
 		if err := patchCRDStatus(ctx, s.Name, s.Namespace, status); err != nil {
 			return fmt.Errorf("error in patchCRDStatus: %w", err)
