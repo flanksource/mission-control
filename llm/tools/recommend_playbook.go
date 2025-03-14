@@ -34,9 +34,16 @@ var RecommendPlaybooksToolSchema = openai.ResponseFormatJSONSchemaProperty{
 						Description: "The title of the playbook",
 					},
 					"parameters": {
-						Type:                 "object",
-						Description:          "A key-value (Record<string, string>) pair of parameters to pass to the playbook. Keep in mind the values are all strings even numbers and booleans are strings",
-						AdditionalProperties: true,
+						Type:        "array",
+						Description: "A list of parameters to pass to the playbook.",
+						Items: &openai.ResponseFormatJSONSchemaProperty{
+							Type: "object",
+							Properties: map[string]*openai.ResponseFormatJSONSchemaProperty{
+								"key":   {Type: "string", Description: "The key of the parameter"},
+								"value": {Type: "string", Description: "The value of the parameter"},
+							},
+							Required: []string{"key", "value"},
+						},
 					},
 					"resource_id": {
 						Type:        "string",
@@ -54,6 +61,7 @@ var RecommendPlaybook = llms.Tool{
 	Type: "function",
 	Function: &llms.FunctionDefinition{
 		Name:        ToolPlaybookRecommendations,
+		Strict:      true,
 		Description: "Extract playbook recommendations from the input",
 	},
 }
@@ -85,8 +93,16 @@ var GeminiRecommendPlaybookTool = &genai.Tool{
 									Description: "The title of the playbook",
 								},
 								"parameters": {
-									Type:        genai.TypeObject,
-									Description: "A key-value (Record<string, string>) pair of parameters to pass to the playbook. Keep in mind the values are all strings even numbers and booleans are strings",
+									Type:        genai.TypeArray,
+									Description: "A list of parameters to pass to the playbook.",
+									Items: &genai.Schema{
+										Type: genai.TypeObject,
+										Properties: map[string]*genai.Schema{
+											"key":   {Type: genai.TypeString, Description: "The key of the parameter"},
+											"value": {Type: genai.TypeString, Description: "The value of the parameter"},
+										},
+										Required: []string{"key", "value"},
+									},
 								},
 								"resource_id": {
 									Type:        genai.TypeString,
