@@ -21,6 +21,6 @@ junit-report.xml
 nohup.out
 .envrc
 .creds
-
-test-reports
 msg.tpl
+.windsurfrules
+test-reports
