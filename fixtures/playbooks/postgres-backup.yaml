@@ -1,0 +1,29 @@
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: backup-postgres
+spec:
+  actions:
+    - name: backup-postgres
+      exec:
+        env:
+          - name: CONN_STRING
+            valueFrom:
+              secretKeyRef:
+                name: flanksource_postgres
+                key: DB_URL
+        script: pg_dump --dbname "$CONN_STRING" -F c -b -v -f /mnt/backup/postgres.dump
+    - name: notify
+      if: 'failure()'
+      notification:
+        title: "Postgres backup failed"
+        message: |
+          {
+            "blocks": [
+              {{slackSectionTextMD (printf `:rotating_light: *Postgres backup failed*`)}},
+              {{slackSectionTextMD (printf "*Error:* %s" getLastAction.error)}},
+              {{slackURLAction "Report" "https://console.flanksource.com/mission-control/playbooks/postgres-backup"}}
+            ]
+          }
+        connection: connection://mc/flanksource-slack

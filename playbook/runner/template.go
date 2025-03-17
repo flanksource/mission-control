@@ -14,6 +14,7 @@ import (
 	"github.com/samber/oops"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/notification"
 	"github.com/flanksource/incident-commander/playbook/actions"
 )
 
@@ -204,16 +205,17 @@ func TemplateEnv(ctx context.Context, env actions.TemplateEnv, template string) 
 
 // TemplateAction all the go templates in the action
 func TemplateAction(ctx context.Context, actionSpec *v1.PlaybookAction, env actions.TemplateEnv) error {
-	templater := ctx.NewStructTemplater(env.AsMap(ctx), "template", getGomplateFuncs(ctx, env))
+	templateFuncs := collections.MergeMap(getGomplateFuncs(ctx, env), notification.TemplateFuncs)
+	templater := ctx.NewStructTemplater(env.AsMap(ctx), "template", templateFuncs)
 	if err := templater.Walk(&actionSpec); err != nil {
-		return err
+		return ctx.Oops().Wrapf(err, "failed to template action")
 	}
 
 	// TODO: make this work with template.Walk()
 	if actionSpec.Exec != nil && actionSpec.Exec.Connections.FromConfigItem != nil {
-		if v, err := ctx.NewStructTemplater(env.AsMap(ctx), "", getGomplateFuncs(ctx, env)).
+		if v, err := ctx.NewStructTemplater(env.AsMap(ctx), "", templateFuncs).
 			Template(*actionSpec.Exec.Connections.FromConfigItem); err != nil {
-			return err
+			return ctx.Oops().Wrapf(err, "failed to template exec action connection from config item")
 		} else {
 			actionSpec.Exec.Connections.FromConfigItem = &v
 		}
