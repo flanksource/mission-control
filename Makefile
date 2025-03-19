@@ -117,7 +117,8 @@ build:
 
 .PHONY: dev
 dev:
-	go build -v -o ./.bin/$(NAME) -gcflags="all=-N -l" main.go
+ 	# Disabling CGO because of slow build times in apple silicon (just experimenting)
+	CGO_ENABLED=0 go build -v -o ./.bin/$(NAME) -gcflags="all=-N -l" main.go
 
 .PHONY: install
 install:

@@ -15,6 +15,7 @@ import (
 	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/types"
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/samber/lo"
 	"github.com/samber/oops"
@@ -50,6 +51,7 @@ func RegisterRoutes(e *echo.Echo) {
 	runGroup.POST("", HandlePlaybookRun)
 	runGroup.GET("/:id", HandleGetPlaybookRun, rbac.Playbook(policy.ActionRead))
 	runGroup.POST("/approve/:run_id", HandlePlaybookRunApproval)
+	runGroup.POST("/cancel/:run_id", HandlePlaybookRunCancel, rbac.Playbook(policy.ActionUpdate))
 }
 
 type RunResponse struct {
@@ -216,4 +218,40 @@ func HandlePlaybookList(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, playbooks)
+}
+
+func HandlePlaybookRunCancel(c echo.Context) error {
+	ctx := c.Request().Context().(context.Context)
+
+	runID := c.Param("run_id")
+	runUUID, err := uuid.Parse(runID)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{Err: err.Error(), Message: "invalid run id"})
+	}
+
+	run, err := models.PlaybookRun{ID: runUUID}.Load(ctx.DB())
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Err: err.Error(), Message: "failed to get playbook run"})
+	} else if run == nil {
+		return c.JSON(http.StatusNotFound, dutyAPI.HTTPError{Err: "not found", Message: fmt.Sprintf("playbook run(id=%s) not found", runID)})
+	}
+
+	attr, err := run.GetABACAttributes(ctx.DB())
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Err: err.Error(), Message: "failed to get ABAC attributes"})
+	}
+
+	if !dutyRBAC.HasPermission(ctx, ctx.Subject(), attr, policy.ActionPlaybookCancel) {
+		return c.JSON(http.StatusForbidden, dutyAPI.HTTPError{Err: "access denied", Message: "you do not have permission to cancel this playbook run"})
+	}
+
+	if lo.Contains(models.PlaybookRunStatusFinalStates, run.Status) {
+		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{Err: "invalid state", Message: fmt.Sprintf("playbook run(id=%s) is in %s state and cannot be cancelled", runID, run.Status)})
+	}
+
+	if err := run.Cancel(ctx.DB()); err != nil {
+		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Err: err.Error(), Message: "failed to cancel playbook run"})
+	}
+
+	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{Message: "playbook run cancelled"})
 }
