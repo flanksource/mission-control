@@ -121,6 +121,13 @@ func PersistNotificationSilenceFromCRD(ctx context.Context, obj *v1.Notification
 	return SaveNotificationSilence(ctx, request)
 }
 
+func DeleteStaleNotificationSilence(ctx context.Context, newer *v1.NotificationSilence) error {
+	return ctx.DB().Model(&models.NotificationSilence{}).
+		Where("name = ? AND namespace = ?", newer.Name, newer.Namespace).
+		Where("deleted_at IS NULL").
+		Update("deleted_at", time.Now()).Error
+}
+
 func getSilencedResourceFromCelEnv(celEnv *celVariables) models.NotificationSilenceResource {
 	var silencedResource models.NotificationSilenceResource
 	if celEnv.ConfigItem != nil {

@@ -409,3 +409,10 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 func DeleteConnection(ctx context.Context, id string) error {
 	return ctx.DB().Model(&models.Connection{}).Where("id = ?", id).Update("deleted_at", duty.Now()).Error
 }
+
+func DeleteStaleConnection(ctx context.Context, newer *v1.Connection) error {
+	return ctx.DB().Model(&models.Connection{}).
+		Where("name = ? AND namespace = ?", newer.Name, newer.Namespace).
+		Where("deleted_at IS NULL").
+		Update("deleted_at", duty.Now()).Error
+}

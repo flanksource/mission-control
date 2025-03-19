@@ -79,6 +79,20 @@ func DeletePermission(ctx context.Context, id string) error {
 	return ctx.DB().Model(&models.Permission{}).Where("id = ?", id).Update("deleted_at", duty.Now()).Error
 }
 
+func DeleteStalePermission(ctx context.Context, newer *v1.Permission) error {
+	return ctx.DB().Model(&models.Permission{}).
+		Where("name = ? AND namespace = ?", newer.Name, newer.Namespace).
+		Where("deleted_at IS NULL").
+		Update("deleted_at", duty.Now()).Error
+}
+
 func DeletePermissionGroup(ctx context.Context, id string) error {
 	return ctx.DB().Model(&models.PermissionGroup{}).Where("id = ?", id).Update("deleted_at", duty.Now()).Error
+}
+
+func DeleteStalePermissionGroup(ctx context.Context, newer *v1.PermissionGroup) error {
+	return ctx.DB().Model(&models.PermissionGroup{}).
+		Where("namespace = ? AND name = ?", newer.Namespace, newer.Name).
+		Where("deleted_at IS NULL").
+		Update("deleted_at", duty.Now()).Error
 }

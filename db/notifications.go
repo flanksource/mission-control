@@ -192,6 +192,13 @@ func DeleteNotification(ctx context.Context, id string) error {
 	return ctx.DB().Model(&models.Notification{}).Where("id = ?", id).Update("deleted_at", duty.Now()).Error
 }
 
+func DeleteStaleNotification(ctx context.Context, newer *v1.Notification) error {
+	return ctx.DB().Model(&models.Notification{}).
+		Where("name = ? AND namespace = ?", newer.Name, newer.Namespace).
+		Where("deleted_at IS NULL").
+		Update("deleted_at", duty.Now()).Error
+}
+
 func UpdateNotificationError(ctx context.Context, id string, err string) error {
 	return ctx.DB().Model(&models.Notification{}).Where("id = ?", id).Update("error", err).Error
 }
