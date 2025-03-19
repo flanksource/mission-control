@@ -628,7 +628,7 @@ var _ = Describe("Playbook", Ordered, func() {
 			actions, err := run.GetActions(DefaultContext.DB())
 			Expect(err).To(BeNil())
 			Expect(len(actions)).To(Equal(1))
-			Expect(actions[0].Result["stdout"]).To(Equal("/etc/my-kube-config")) // comes from dummy.KubeScrapeConfig
+			Expect(actions[0].Result["stdout"]).To(Equal("testdata/my-kube-config.yaml")) // comes from dummy.KubeScrapeConfig
 		})
 	})
 
