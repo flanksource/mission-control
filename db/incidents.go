@@ -55,3 +55,11 @@ func PersistIncidentRuleFromCRD(ctx context.Context, obj *v1.IncidentRule) error
 func DeleteIncidentRule(ctx context.Context, id string) error {
 	return ctx.DB().Table("incident_rules").Where("id = ?", id).Update("deleted_at", duty.Now()).Error
 }
+
+func DeleteStaleIncidentRule(ctx context.Context, newer *v1.IncidentRule) error {
+	// Incident rules have a unique index on name
+	return ctx.DB().Table("incident_rules").
+		Where("name = ?", newer.Name).
+		Where("deleted_at IS NULL").
+		Update("deleted_at", duty.Now()).Error
+}

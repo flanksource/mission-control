@@ -224,6 +224,14 @@ func DeletePlaybook(ctx context.Context, id string) error {
 	return ctx.DB().Model(&models.Playbook{}).Where("id = ?", id).Update("deleted_at", duty.Now()).Error
 }
 
+func DeleteStalePlaybook(ctx context.Context, newer *v1.Playbook) error {
+	return ctx.DB().Model(&models.Playbook{}).
+		Where("name = ? AND namespace = ?", newer.Name, newer.Namespace).
+		Where("category = ?", newer.Spec.Category).
+		Where("deleted_at IS NULL").
+		Update("deleted_at", duty.Now()).Error
+}
+
 // UpdatePlaybookRunStatusIfApproved updates the status of the playbook run to "pending"
 // if all the approvers have approved it.
 func UpdatePlaybookRunStatusIfApproved(ctx context.Context, playbookID string, approval v1.PlaybookApproval) error {

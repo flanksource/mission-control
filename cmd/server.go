@@ -50,41 +50,46 @@ func launchKopper(ctx context.Context) {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("error creating manager: %v", err))
 	}
 
-	if _, err = kopper.SetupReconciler(ctx, mgr,
+	if _, err := kopper.SetupReconciler(ctx, mgr,
 		db.PersistConnectionFromCRD,
 		db.DeleteConnection,
+		db.DeleteStaleConnection,
 		"connection.mission-control.flanksource.com",
 	); err != nil {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for Connection: %v", err))
 	}
 
-	if _, err = kopper.SetupReconciler(ctx, mgr,
+	if _, err := kopper.SetupReconciler(ctx, mgr,
 		db.PersistIncidentRuleFromCRD,
 		db.DeleteIncidentRule,
+		db.DeleteStaleIncidentRule,
 		"incidentrule.mission-control.flanksource.com",
 	); err != nil {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for IncidentRule: %v", err))
 	}
 
-	if _, err = kopper.SetupReconciler(ctx, mgr,
+	if _, err := kopper.SetupReconciler(ctx, mgr,
 		db.PersistPlaybookFromCRD,
 		db.DeletePlaybook,
+		db.DeleteStalePlaybook,
 		"playbook.mission-control.flanksource.com",
 	); err != nil {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for Playbook: %v", err))
 	}
 
-	if v1.NotificationReconciler, err = kopper.SetupReconciler(ctx, mgr,
+	if _, err := kopper.SetupReconciler(ctx, mgr,
 		db.PersistNotificationFromCRD,
 		db.DeleteNotification,
+		db.DeleteStaleNotification,
 		"notification.mission-control.flanksource.com",
 	); err != nil {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for Notification: %v", err))
 	}
 
-	if _, err = kopper.SetupReconciler(ctx, mgr,
+	if _, err := kopper.SetupReconciler(ctx, mgr,
 		notification.PersistNotificationSilenceFromCRD,
 		db.DeleteNotificationSilence,
+		nil,
 		"notificationsilence.mission-control.flanksource.com",
 	); err != nil {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for Notification Silence: %v", err))
@@ -93,6 +98,7 @@ func launchKopper(ctx context.Context) {
 	if _, err := kopper.SetupReconciler(ctx, mgr,
 		db.PersistPermissionFromCRD,
 		db.DeletePermission,
+		nil,
 		"permission.mission-control.flanksource.com",
 	); err != nil {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for Permission: %v", err))
@@ -101,6 +107,7 @@ func launchKopper(ctx context.Context) {
 	if _, err := kopper.SetupReconciler(ctx, mgr,
 		db.PersistPermissionGroupFromCRD,
 		db.DeletePermissionGroup,
+		db.DeleteStalePermissionGroup,
 		"permissiongroup.mission-control.flanksource.com",
 	); err != nil {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for PermissionGroup: %v", err))
