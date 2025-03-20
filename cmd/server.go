@@ -77,7 +77,7 @@ func launchKopper(ctx context.Context) {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for Playbook: %v", err))
 	}
 
-	if _, err := kopper.SetupReconciler(ctx, mgr,
+	if v1.NotificationReconciler, err = kopper.SetupReconciler(ctx, mgr,
 		db.PersistNotificationFromCRD,
 		db.DeleteNotification,
 		db.DeleteStaleNotification,
