@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"text/template"
 	"time"
 
+	"github.com/flanksource/artifacts"
 	"github.com/flanksource/commons/duration"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -56,6 +58,20 @@ type AIActionResult struct {
 	Markdown             string `json:"markdown,omitempty"`             // Markdown formatted diagnosis report
 	Slack                string `json:"slack,omitempty"`                // Slack blocks formatted diagnosis report
 	RecommendedPlaybooks string `json:"recommendedPlaybooks,omitempty"` // Recommended playbooks in Slack blocks format
+
+	// Prompt can get very large so we don't want to store it in the database.
+	// It's stored as an artifact instead.
+	Prompt string `json:"-"`
+}
+
+func (t *AIActionResult) GetArtifacts() []artifacts.Artifact {
+	return []artifacts.Artifact{
+		{
+			ContentType: "markdown",
+			Content:     io.NopCloser(strings.NewReader(t.Prompt)),
+			Path:        "prompt.md",
+		},
+	}
 }
 
 // Run executes the AI action with the given specification.
@@ -71,6 +87,7 @@ func (t *AIAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to form prompt: %w", err)
 	}
+	result.Prompt = strings.Join(prompt, "\n")
 
 	if err := spec.AIActionClient.Populate(ctx); err != nil {
 		return nil, fmt.Errorf("failed to populate llm client connection: %w", err)
