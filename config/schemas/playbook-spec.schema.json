@@ -35,6 +35,12 @@
           },
           "type": "array"
         },
+        "playbooks": {
+          "items": {
+            "$ref": "#/$defs/AIActionContextProviderPlaybook"
+          },
+          "type": "array"
+        },
         "dryRun": {
           "type": "boolean"
         },
@@ -62,6 +68,31 @@
       "required": [
         "systemPrompt",
         "prompt"
+      ]
+    },
+    "AIActionContextProviderPlaybook": {
+      "properties": {
+        "namespace": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "if": {
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "namespace",
+        "name"
       ]
     },
     "AIActionRelationship": {

@@ -327,6 +327,9 @@ type AIActionContext struct {
 
 	// Select related configs to provide as an additional context to the AI model.
 	Relationships []AIActionRelationship `json:"relationships,omitempty" yaml:"relationships,omitempty"`
+
+	// List of playbooks that provide additional context to the LLM.
+	Playbooks []AIActionContextProviderPlaybook `json:"playbooks,omitempty" yaml:"playbooks,omitempty" template:"true"`
 }
 
 func (t AIActionContext) ShouldFetchConfigChanges() bool {
@@ -353,6 +356,22 @@ const (
 	AIActionFormatMarkdown          AIActionFormat = "markdown"
 	AIActionFormatRecommendPlaybook AIActionFormat = "recommendPlaybook"
 )
+
+// AIActionContextProviderPlaybook is a playbook that provides additional context to the LLM.
+// This playbook is run before calling the LLM and it's output is added to the context.
+type AIActionContextProviderPlaybook struct {
+	// Namespace of the playbook
+	Namespace string `json:"namespace" yaml:"namespace"`
+
+	// Name of the playbook
+	Name string `json:"name" yaml:"name"`
+
+	// If is a CEL expression that decides if this playbook should be included in the context
+	If string `json:"if,omitempty" yaml:"if,omitempty"`
+
+	// Parameters to pass to the playbook
+	Params map[string]string `json:"params,omitempty" yaml:"params,omitempty" template:"true"`
+}
 
 type AIAction struct {
 	AIActionClient  `json:",inline" yaml:",inline"`

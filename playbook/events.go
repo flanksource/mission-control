@@ -270,21 +270,35 @@ outer:
 	return false, nil
 }
 
+type RunInitiatorType string
+
+const (
+	RunInitiatorTypeNotification RunInitiatorType = "notification"
+	RunInitiatorTypePlaybook     RunInitiatorType = "playbook"
+)
+
 func onNewRun(ctx context.Context, event models.Event) error {
+	var playbookID = event.Properties["id"]
+
+	// What triggered the run?
+	// Must be either a notification, or a playbook run.
 	var (
-		playbookID              = event.Properties["id"]
-		notificationID          = event.Properties["notification_id"]
-		_notificationDispatchID = event.Properties["notification_dispatch_id"]
+		parentRunCreator = event.Properties["parent_run_creator"]
+		parentRunID      = event.Properties["parent_run_id"]
+
+		notificationID         = event.Properties["notification_id"]
+		notificationDispatchID = event.Properties["notification_dispatch_id"]
 	)
 
-	notificationDispatchID, err := uuid.Parse(_notificationDispatchID)
-	if err != nil {
-		return fmt.Errorf("invalid notification dispatch id: %s", _notificationDispatchID)
+	if parentRunID == "" && notificationID == "" {
+		return fmt.Errorf("invalid event: must have the identity of the trigger. can be a parent run or a notification")
+	} else if parentRunID != "" && notificationID != "" {
+		return fmt.Errorf("invalid event: cannot have both parent run and notification as the trigger")
 	}
 
-	runParam := RunParams{
-		NotificationSendID: &notificationDispatchID,
-	}
+	initiatorType := lo.Ternary(parentRunID != "", RunInitiatorTypePlaybook, RunInitiatorTypeNotification)
+
+	var runParam RunParams
 	if v, ok := event.Properties["config_id"]; ok {
 		runParam.ConfigID = lo.ToPtr(uuid.MustParse(v))
 	}
@@ -294,8 +308,31 @@ func onNewRun(ctx context.Context, event models.Event) error {
 	if v, ok := event.Properties["check_id"]; ok {
 		runParam.CheckID = lo.ToPtr(uuid.MustParse(v))
 	}
+	if v, ok := event.Properties["parameters"]; ok {
+		if err := json.Unmarshal([]byte(v), &runParam.Params); err != nil {
+			return fmt.Errorf("invalid parameters: %s", v)
+		}
+	}
 
-	ctx = ctx.WithSubject(notificationID)
+	switch initiatorType {
+	case RunInitiatorTypeNotification:
+		if parsed, err := uuid.Parse(notificationDispatchID); err != nil {
+			return fmt.Errorf("invalid notification dispatch id: %s", notificationDispatchID)
+		} else {
+			runParam.NotificationSendID = &parsed
+		}
+
+		ctx = ctx.WithSubject(notificationID)
+
+	case RunInitiatorTypePlaybook:
+		if parsed, err := uuid.Parse(parentRunID); err != nil {
+			return fmt.Errorf("invalid parent run id: %s", parentRunID)
+		} else {
+			runParam.ParentID = &parsed
+		}
+
+		ctx = ctx.WithSubject(parentRunCreator)
+	}
 
 	var playbook models.Playbook
 	if err := ctx.DB().Where("id = ?", playbookID).First(&playbook).Error; err != nil {
@@ -307,36 +344,43 @@ func onNewRun(ctx context.Context, event models.Event) error {
 		return err
 	}
 
-	columnUpdates := map[string]any{}
-	if newRun != nil {
-		columnUpdates["playbook_run_id"] = newRun.ID.String()
-		columnUpdates["status"] = models.NotificationStatusPendingPlaybookCompletion
-	} else {
-		columnUpdates["error"] = err.Error()
-		columnUpdates["status"] = models.NotificationStatusError
-	}
-
-	if err := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", notificationDispatchID).UpdateColumns(columnUpdates).Error; err != nil {
-		ctx.Errorf("playbook run initiated but failed to update the notification status (%s): %v", notificationDispatchID, err)
-	}
-
-	// Attempt fallback on error if applicable
-	if newRun == nil {
-		notif, err := notification.GetNotification(ctx, notificationID)
-		if err != nil {
-			return fmt.Errorf("failed to get notification: %w", err)
+	switch initiatorType {
+	case RunInitiatorTypeNotification:
+		columnUpdates := map[string]any{}
+		if newRun != nil {
+			columnUpdates["playbook_run_id"] = newRun.ID.String()
+			columnUpdates["status"] = models.NotificationStatusPendingPlaybookCompletion
+		} else {
+			columnUpdates["error"] = err.Error()
+			columnUpdates["status"] = models.NotificationStatusError
 		}
 
-		if notif.HasFallbackSet() {
-			var sendHistory models.NotificationSendHistory
-			if err := ctx.DB().Where("id = ?", notificationDispatchID).First(&sendHistory).Error; err != nil {
-				return fmt.Errorf("failed to get notification send history: %w", err)
+		if err := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", notificationDispatchID).UpdateColumns(columnUpdates).Error; err != nil {
+			ctx.Errorf("playbook run initiated but failed to update the notification status (%s): %v", notificationDispatchID, err)
+		}
+
+		// Attempt fallback on error if applicable
+		if newRun == nil {
+			notif, err := notification.GetNotification(ctx, notificationID)
+			if err != nil {
+				return fmt.Errorf("failed to get notification: %w", err)
 			}
 
-			if err := models.GenerateFallbackAttempt(ctx.DB(), notif.Notification, sendHistory); err != nil {
-				return fmt.Errorf("failed to generate fallback attempt: %w", err)
+			if notif.HasFallbackSet() {
+				var sendHistory models.NotificationSendHistory
+				if err := ctx.DB().Where("id = ?", notificationDispatchID).First(&sendHistory).Error; err != nil {
+					return fmt.Errorf("failed to get notification send history: %w", err)
+				}
+
+				if err := models.GenerateFallbackAttempt(ctx.DB(), notif.Notification, sendHistory); err != nil {
+					return fmt.Errorf("failed to generate fallback attempt: %w", err)
+				}
 			}
 		}
+
+	case RunInitiatorTypePlaybook:
+		// Do nothing
+		// Child playbooks resume their parent when they terminate.
 	}
 
 	return nil
