@@ -9,6 +9,7 @@ import (
 	"github.com/flanksource/artifacts"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/api"
+	pkgConnection "github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
@@ -82,7 +83,7 @@ func DownloadArtifact(c echo.Context) error {
 		return api.WriteError(c, api.Errorf(api.ENOTFOUND, "artifact(%s) was not found", artifactID))
 	}
 
-	conn, err := ctx.HydrateConnectionByURL(artifact.ConnectionID.String())
+	conn, err := pkgConnection.Get(ctx, artifact.ConnectionID.String())
 	if err != nil {
 		return api.WriteError(c, err)
 	} else if conn == nil {

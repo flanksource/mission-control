@@ -7,17 +7,19 @@ import (
 
 	"github.com/flanksource/artifacts"
 	dutyAPI "github.com/flanksource/duty/api"
+	pkgConnection "github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/incident-commander/api"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+
+	"github.com/flanksource/incident-commander/api"
 )
 
 // UploadArtifact Uploads the given artifact data to the default artifact store
 func UploadArtifact(ctx context.Context, artifactID string, reader io.ReadCloser) error {
 	if _, err := uuid.Parse(artifactID); err != nil {
-		return dutyAPI.Errorf(dutyAPI.EINVALID, fmt.Sprintf("(%s) is not a valid uuid", artifactID))
+		return dutyAPI.Errorf(dutyAPI.EINVALID, "(%s) is not a valid uuid", artifactID)
 	}
 
 	var artifact models.Artifact
@@ -29,7 +31,7 @@ func UploadArtifact(ctx context.Context, artifactID string, reader io.ReadCloser
 		return fmt.Errorf("failed to get artifact: %w", err)
 	}
 
-	conn, err := ctx.HydrateConnectionByURL(api.DefaultArtifactConnection)
+	conn, err := pkgConnection.Get(ctx, api.DefaultArtifactConnection)
 	if err != nil {
 		return fmt.Errorf("failed to get connection: %w", err)
 	} else if conn == nil {

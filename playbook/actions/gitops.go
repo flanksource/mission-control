@@ -10,15 +10,17 @@ import (
 
 	"github.com/flanksource/commons/files"
 	"github.com/flanksource/commons/logger"
+	pkgConnection "github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/shell"
-	v1 "github.com/flanksource/incident-commander/api/v1"
-	"github.com/flanksource/incident-commander/pkg/clients/git"
-	"github.com/flanksource/incident-commander/pkg/clients/git/connectors"
 	gitv5 "github.com/go-git/go-git/v5"
 	"github.com/samber/lo"
 	"github.com/samber/oops"
+
+	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/pkg/clients/git"
+	"github.com/flanksource/incident-commander/pkg/clients/git/connectors"
 )
 
 type GitOps struct {
@@ -158,7 +160,7 @@ func (t *GitOps) generateSpec(ctx context.Context, action v1.GitOpsAction) error
 	}
 
 	if action.Repo.Connection != "" {
-		conn, err := ctx.HydrateConnectionByURL(action.Repo.Connection)
+		conn, err := pkgConnection.Get(ctx, action.Repo.Connection)
 		if err != nil {
 			return ctx.Oops().Wrap(err)
 		} else if conn == nil {

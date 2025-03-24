@@ -20,6 +20,7 @@ import (
 func init() {
 	echoSrv.RegisterRoutes(RegisterRoutes)
 }
+
 func RegisterRoutes(e *echo.Echo) {
 	logger.Infof("Registering /connection routes")
 
