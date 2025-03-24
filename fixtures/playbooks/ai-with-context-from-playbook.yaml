@@ -1,0 +1,43 @@
+---
+# yaml-language-server: $schema=../../config/schemas/playbook.schema.json
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: diagnose-with-context-from-playbook
+  namespace: mc
+spec:
+  title: Diagnose Pods
+  description: Use AI to kubernetes pods
+  category: AI
+  icon: k8s
+  configs:
+    - types:
+        - Kubernetes::Pod
+  parameters:
+    - name: prompt
+      label: Prompt
+      default: Find out why {{.config.name}} is unhealthy
+      properties:
+        multiline: 'true'
+  actions:
+    - name: query
+      ai:
+        backend: gemini
+        connection: connection://mc/gemini
+        systemPrompt: |
+          You are a seasoned Kubernetes engineer with extensive expertise in troubleshooting and optimizing Kubernetes resources. 
+          Your primary objective is to assist users in diagnosing issues with Kubernetes pods that are not performing as expected.
+
+          Begin by gathering relevant information and context about the pod in question.
+          Analyze the logs and pod status to identify any anomalies or misconfigurations that could be contributing to the problem.
+          Provide a step-by-step breakdown of your diagnostic process, highlighting key findings and potential root causes.
+          Offer clear and actionable recommendations to resolve the issues, ensuring that your guidance is both comprehensive and easy to understand.
+          Maintain a professional and supportive tone throughout your response, empowering the user to effectively address and prevent similar issues in the future.
+        prompt: '{{.params.prompt}}'
+        playbooks:
+          - namespace: mc
+            name: kubernetes-logs
+            params:
+              since: 1h
+          - namespace: mc
+            name: kubernetes-node-status

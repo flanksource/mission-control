@@ -17,6 +17,7 @@ import (
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/shutdown"
 	"github.com/flanksource/duty/types"
+	"github.com/flanksource/gomplate/v3"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 
@@ -48,13 +49,24 @@ func init() {
 	}
 }
 
-// AIAction represents an action that uses AI to analyze configurations and recommend playbooks.
-type AIAction struct {
-	PlaybookID uuid.UUID // ID of the playbook that is executing this action
+// aiAction represents an action that uses AI to analyze configurations and recommend playbooks.
+type aiAction struct {
+	PlaybookID  uuid.UUID // ID of the playbook that is executing this action
+	RunID       uuid.UUID // ID of the run that is executing this action
+	TemplateEnv TemplateEnv
+}
+
+func NewAIAction(playbookID, runID uuid.UUID, templateEnv TemplateEnv) *aiAction {
+	return &aiAction{
+		PlaybookID:  playbookID,
+		RunID:       runID,
+		TemplateEnv: templateEnv,
+	}
 }
 
 // AIActionResult contains the results of an AI action execution.
 type AIActionResult struct {
+	JSON                 string `json:"json,omitempty"`                 // JSON formatted diagnosis report
 	Markdown             string `json:"markdown,omitempty"`             // Markdown formatted diagnosis report
 	Slack                string `json:"slack,omitempty"`                // Slack blocks formatted diagnosis report
 	RecommendedPlaybooks string `json:"recommendedPlaybooks,omitempty"` // Recommended playbooks in Slack blocks format
@@ -62,6 +74,8 @@ type AIActionResult struct {
 	// Prompt can get very large so we don't want to store it in the database.
 	// It's stored as an artifact instead.
 	Prompt string `json:"-"`
+
+	ChildRunsTriggered int `json:"-"`
 }
 
 func (t *AIActionResult) GetArtifacts() []artifacts.Artifact {
@@ -74,10 +88,23 @@ func (t *AIActionResult) GetArtifacts() []artifacts.Artifact {
 	}
 }
 
+func (e *AIActionResult) GetStatus() models.PlaybookActionStatus {
+	if e.ChildRunsTriggered > 0 {
+		return models.PlaybookActionStatusWaitingChildren
+	}
+
+	return models.PlaybookActionStatusCompleted
+}
+
+type childRunResultContext struct {
+	Playbook string          `json:"playbook"`
+	Results  []types.JSONMap `json:"results"`
+}
+
 // Run executes the AI action with the given specification.
 // It builds a prompt using the knowledge graph, sends it to the LLM,
 // and processes the response into the requested formats.
-func (t *AIAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, error) {
+func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, error) {
 	var result AIActionResult
 	if spec.Backend == "" {
 		spec.Backend = api.LLMBackendOpenAI
@@ -97,12 +124,77 @@ func (t *AIAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 		return &AIActionResult{Markdown: strings.Join(prompt, "\n")}, nil
 	}
 
+	if len(spec.AIActionContext.Playbooks) > 0 {
+		var childRuns []models.PlaybookRun
+		if err := ctx.DB().Where("parent_id = ?", t.RunID).Find(&childRuns).Error; err != nil {
+			return nil, fmt.Errorf("failed to get child playbook runs: %w", err)
+		}
+
+		// If child runs were already triggered, read the results from all of these child runs & add to the LLM's context
+		// else trigger them now.
+		if len(childRuns) > 0 {
+			// Read the results from all of these child runs & add to the LLM's context
+			var childRunResults []childRunResultContext
+
+			for _, childRun := range childRuns {
+				actions, err := childRun.GetActions(ctx.DB())
+				if err != nil {
+					return nil, fmt.Errorf("failed to get child playbook run actions: %w", err)
+				}
+
+				playbook, err := childRun.GetPlaybook(ctx.DB())
+				if err != nil {
+					return nil, fmt.Errorf("failed to get child playbook run playbook: %w", err)
+				}
+
+				var actionResult []types.JSONMap
+				for _, action := range actions {
+					actionResult = append(actionResult, action.Result)
+				}
+
+				childRunResults = append(childRunResults, childRunResultContext{
+					Playbook: playbook.Name,
+					Results:  actionResult,
+				})
+			}
+
+			childRunResultsJSON, err := json.Marshal(childRunResults)
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal child run results: %w", err)
+			}
+
+			prompt = append(prompt, string(childRunResultsJSON))
+		} else {
+			for _, contextProvider := range spec.AIActionContext.Playbooks {
+				if contextProvider.If != "" {
+					if pass, err := gomplate.RunTemplateBool(t.TemplateEnv.AsMap(ctx), gomplate.Template{Expression: contextProvider.If}); err != nil {
+						return nil, fmt.Errorf("failed to evaluate if condition for context provider playbook %s: %w", contextProvider.Name, err)
+					} else if !pass {
+						continue
+					}
+				}
+
+				if err := t.triggerPlaybookRun(ctx, contextProvider); err != nil {
+					return nil, fmt.Errorf("failed to trigger context provider playbook %s: %w", contextProvider.Name, err)
+				}
+
+				result.ChildRunsTriggered++
+			}
+
+			if result.ChildRunsTriggered > 0 {
+				// If child runs were triggered, then this (parent) run goes into a "awaiting children" state.
+				// A job monitors if all the child playbook runs have completed & resumes this run.
+				return &result, nil
+			}
+		}
+	}
+
 	llmConf := llm.Config{AIActionClient: spec.AIActionClient, ResponseFormat: llm.ResponseFormatDiagnosis}
 	response, conversation, err := llm.Prompt(ctx, llmConf, spec.SystemPrompt, prompt...)
 	if err != nil {
 		return nil, err
 	}
-	result.Markdown = response
+	result.JSON = response
 
 	var diagnosisReport llm.DiagnosisReport
 	if err := json.Unmarshal([]byte(response), &diagnosisReport); err != nil {
@@ -170,6 +262,50 @@ func (t *AIAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 	}
 
 	return &result, nil
+}
+
+// triggerPlaybookRun creates an event to trigger a playbook run.
+// The status of the playbook run is then handled entirely by playbook.
+func (t *aiAction) triggerPlaybookRun(ctx context.Context, contextProvider v1.AIActionContextProviderPlaybook) error {
+	parametersJSON, err := json.Marshal(contextProvider.Params)
+	if err != nil {
+		return fmt.Errorf("failed to marshal parameters: %w", err)
+	}
+
+	var playbook models.Playbook
+	if err := ctx.DB().Where("name = ?", contextProvider.Name).
+		Where("namespace = ?", contextProvider.Namespace).
+		Where("deleted_at IS NULL").
+		Find(&playbook).Error; err != nil {
+		return fmt.Errorf("failed to find playbook %s/%s: %w", contextProvider.Namespace, contextProvider.Name, err)
+	} else if playbook.ID == uuid.Nil {
+		return fmt.Errorf("playbook %s/%s not found", contextProvider.Namespace, contextProvider.Name)
+	}
+
+	eventProp := types.JSONStringMap{
+		"id":                 playbook.ID.String(),
+		"parent_run_id":      t.RunID.String(),
+		"parameters":         string(parametersJSON),
+		"parent_run_creator": ctx.Subject(),
+	}
+
+	if t.TemplateEnv.Config != nil && t.TemplateEnv.Config.ID != uuid.Nil {
+		eventProp["config_id"] = t.TemplateEnv.Config.ID.String()
+	} else if t.TemplateEnv.Component != nil && t.TemplateEnv.Component.ID != uuid.Nil {
+		eventProp["component_id"] = t.TemplateEnv.Component.ID.String()
+	} else if t.TemplateEnv.Check != nil && t.TemplateEnv.Check.ID != uuid.Nil {
+		eventProp["check_id"] = t.TemplateEnv.Check.ID.String()
+	}
+
+	event := models.Event{
+		Name:       api.EventPlaybookRun,
+		Properties: eventProp,
+	}
+	if err := ctx.DB().Create(&event).Error; err != nil {
+		return fmt.Errorf("failed to create run: %w", err)
+	}
+
+	return nil
 }
 
 // buildPrompt constructs a prompt for the LLM by combining the user prompt with knowledge graph data.

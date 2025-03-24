@@ -140,6 +140,34 @@ spec:
                             Model name based on the backend chosen.
                             Example: gpt-4o for openai, claude-3-5-sonnet-latest for Anthropic, llama3.1:8b for Ollama
                           type: string
+                        playbooks:
+                          description: List of playbooks that provide additional context
+                            to the LLM.
+                          items:
+                            description: |-
+                              AIActionContextProviderPlaybook is a playbook that provides additional context to the LLM.
+                              This playbook is run before calling the LLM and it's output is added to the context.
+                            properties:
+                              if:
+                                description: If is a CEL expression that decides if
+                                  this playbook should be included in the context
+                                type: string
+                              name:
+                                description: Name of the playbook
+                                type: string
+                              namespace:
+                                description: Namespace of the playbook
+                                type: string
+                              params:
+                                additionalProperties:
+                                  type: string
+                                description: Parameters to pass to the playbook
+                                type: object
+                            required:
+                            - name
+                            - namespace
+                            type: object
+                          type: array
                         prompt:
                           description: Prompt is the human prompt
                           type: string

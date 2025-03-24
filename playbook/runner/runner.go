@@ -44,30 +44,30 @@ func GetNextActionToRun(ctx context.Context, run models.PlaybookRun) (action *v1
 		return nil, nil, ctx.Oops().Wrap(err)
 	}
 
-	var lastRanAction models.PlaybookRunAction
+	var previouslyRanAction models.PlaybookRunAction
 	if err := ctx.DB().Model(&models.PlaybookRunAction{}).
 		Where("playbook_run_id = ?", run.ID).
 		Where("status IN ?", models.PlaybookActionFinalStates).
 		Order("start_time DESC").
-		First(&lastRanAction).Error; err != nil {
+		First(&previouslyRanAction).Error; err != nil {
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil, ctx.Oops("db").Wrap(err)
 		}
 	}
 
-	if lastRanAction.Name == "" { // Nothing has run yet
+	if previouslyRanAction.Name == "" { // Nothing has run yet
 		ctx.Logger.V(4).Infof("no previous action, running first action")
 		return &playbookSpec.Actions[0], nil, nil
 	}
 
 	for i, action := range playbookSpec.Actions {
 		isLastAction := i == len(playbookSpec.Actions)-1
-		lastActionFailed := lastRanAction.Status == models.PlaybookActionStatusFailed
+		previousActionFailed := previouslyRanAction.Status == models.PlaybookActionStatusFailed
 
-		if action.Name == lastRanAction.Name && lastActionFailed {
-			canRetry := action.Retry != nil && lastRanAction.RetryCount < action.Retry.Limit
+		if action.Name == previouslyRanAction.Name && previousActionFailed {
+			canRetry := action.Retry != nil && previouslyRanAction.RetryCount < action.Retry.Limit
 			if canRetry {
-				return &playbookSpec.Actions[i], &lastRanAction, nil
+				return &playbookSpec.Actions[i], &previouslyRanAction, nil
 			}
 		}
 
@@ -75,14 +75,14 @@ func GetNextActionToRun(ctx context.Context, run models.PlaybookRun) (action *v1
 			return nil, nil, nil
 		}
 
-		if action.Name == lastRanAction.Name {
+		if action.Name == previouslyRanAction.Name {
 			// If last action failed do not run more steps unless it has a filter
-			if lastActionFailed {
+			if previousActionFailed {
 				alwaysAction := findNextActionWithFilter(playbookSpec.Actions[i+1:])
-				return alwaysAction, &lastRanAction, nil
+				return alwaysAction, &previouslyRanAction, nil
 			}
 
-			return &playbookSpec.Actions[i+1], &lastRanAction, nil
+			return &playbookSpec.Actions[i+1], &previouslyRanAction, nil
 		}
 	}
 
@@ -254,14 +254,14 @@ func ScheduleRun(ctx context.Context, run models.PlaybookRun) error {
 	return nil
 }
 
-func ExecuteAndSaveAction(ctx context.Context, playbookID any, action *models.PlaybookRunAction, actionSpec v1.PlaybookAction) error {
+func ExecuteAndSaveAction(ctx context.Context, playbookID any, action *models.PlaybookRunAction, actionSpec v1.PlaybookAction, templateEnv actions.TemplateEnv) error {
 	db := ctx.DB()
 
 	if err := action.Start(db); err != nil {
 		return ctx.Oops().Wrap(err)
 	}
 
-	result, err := executeAction(ctx, playbookID, action.PlaybookRunID, *action, actionSpec)
+	result, err := executeAction(ctx, playbookID, action.PlaybookRunID, *action, actionSpec, templateEnv)
 	if err != nil {
 		ctx.Errorf("action failed %+v", err)
 		if err := action.Fail(db, result.data, err); err != nil {
@@ -271,10 +271,25 @@ func ExecuteAndSaveAction(ctx context.Context, playbookID any, action *models.Pl
 		if err := action.Skip(db); err != nil {
 			return ctx.Oops("db").Wrap(err)
 		}
-	} else if accessor, ok := result.data.(StatusAccessor); ok && accessor.GetStatus() == models.PlaybookActionStatusFailed {
-		ctx.Warnf("action returned failure\n%v", logger.Pretty(result.data))
-		if err := action.Fail(db, result.data, nil); err != nil {
-			return ctx.Oops("db").Wrap(err)
+	} else if accessor, ok := result.data.(StatusAccessor); ok {
+		switch accessor.GetStatus() {
+		case models.PlaybookActionStatusFailed:
+			ctx.Warnf("action returned failure\n%v", logger.Pretty(result.data))
+			if err := action.Fail(db, result.data, nil); err != nil {
+				return ctx.Oops("db").Wrap(err)
+			}
+
+		case models.PlaybookActionStatusWaitingChildren:
+			ctx.Tracef("action is awaiting children\n%v", logger.Pretty(result.data))
+			if err := action.WaitForChildren(db); err != nil {
+				return ctx.Oops("db").Wrap(err)
+			}
+
+		case models.PlaybookActionStatusCompleted:
+			ctx.Tracef("action completed\n%v", logger.Pretty(result.data))
+			if err := action.Complete(db, result.data); err != nil {
+				return ctx.Oops("db").Wrap(err)
+			}
 		}
 	} else {
 		ctx.Tracef("action completed\n%v", logger.Pretty(result.data))
@@ -284,7 +299,6 @@ func ExecuteAndSaveAction(ctx context.Context, playbookID any, action *models.Pl
 	}
 
 	return nil
-
 }
 
 func RunAction(ctx context.Context, run *models.PlaybookRun, action *models.PlaybookRunAction) error {
@@ -301,6 +315,10 @@ func RunAction(ctx context.Context, run *models.PlaybookRun, action *models.Play
 	}
 
 	ctx = ctx.WithObject(action, run)
+	if run.CreatedBy != nil {
+		ctx = ctx.WithSubject(run.CreatedBy.String())
+	}
+
 	ctx, span := ctx.StartSpan(fmt.Sprintf("playbook.%s", playbook.Name))
 	defer span.End()
 
@@ -356,7 +374,7 @@ func TemplateAndExecuteAction(ctx context.Context, spec v1.PlaybookSpec, playboo
 		step.AI.Config = run.ConfigID.String()
 	}
 
-	return oops.Wrap(ExecuteAndSaveAction(ctx, run.PlaybookID, action, step))
+	return oops.Wrap(ExecuteAndSaveAction(ctx, run.PlaybookID, action, step, templateEnv))
 }
 
 func filterAction(ctx context.Context, filter string) (bool, error) {
