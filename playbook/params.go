@@ -53,6 +53,7 @@ type RunParams struct {
 	Request     *actions.WebhookRequest   `yaml:"request,omitempty" json:"request,omitempty"`
 
 	NotificationSendID *uuid.UUID `yaml:"notification_send_id,omitempty" json:"notification_send_id,omitempty"`
+	ParentID           *uuid.UUID `yaml:"parent_id,omitempty" json:"parent_id,omitempty"`
 }
 
 func (p *RunParams) String() string {

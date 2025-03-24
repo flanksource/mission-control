@@ -109,6 +109,7 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 		AgentID:            req.AgentID,
 		Parameters:         types.JSONStringMap(req.Params),
 		NotificationSendID: req.NotificationSendID,
+		ParentID:           req.ParentID,
 	}
 
 	// The run gets its own copy of the spec and uses that throughout its lifecycle.

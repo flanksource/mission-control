@@ -135,17 +135,12 @@ func StartPlaybookConsumers(ctx context.Context) error {
 	return nil
 }
 
-func getActionSpec(ctx context.Context, actionData models.PlaybookActionAgentData, run *models.PlaybookRunAction) (*v1.PlaybookAction, error) {
+func getActionSpec(ctx context.Context, actionData models.PlaybookActionAgentData, run *models.PlaybookRunAction, templateEnv actions.TemplateEnv) (*v1.PlaybookAction, error) {
 	var actionSpec v1.PlaybookAction
 	if err := json.Unmarshal(actionData.Spec, &actionSpec); err != nil {
 		return nil, err
 	}
 	actionSpec.PlaybookID = actionData.PlaybookID.String()
-
-	var templateEnv actions.TemplateEnv
-	if err := json.Unmarshal(actionData.Env, &templateEnv); err != nil {
-		return nil, oops.With(models.ErrorContext(&actionData, run)...).Wrap(err)
-	}
 
 	if actionSpec.TemplatesOn == runner.Agent {
 		templateEnv.Run = models.PlaybookRun{ID: actionData.RunID, PlaybookID: actionData.PlaybookID}
@@ -154,6 +149,7 @@ func getActionSpec(ctx context.Context, actionData models.PlaybookActionAgentDat
 			return nil, oops.With(models.ErrorContext(&actionData, run)...).Wrap(err)
 		}
 	}
+
 	return &actionSpec, nil
 }
 
@@ -221,12 +217,18 @@ func ActionAgentConsumer(ctx context.Context) (int, error) {
 			return nil
 		}
 		ctx = ctx.WithObject(run, action)
-		spec, err := getActionSpec(ctx, *action, run)
+
+		var templateEnv actions.TemplateEnv
+		if err := json.Unmarshal(action.Env, &templateEnv); err != nil {
+			return oops.Wrap(err)
+		}
+
+		spec, err := getActionSpec(ctx, *action, run, templateEnv)
 		if err != nil {
 			return oops.Wrap(err)
 		}
 
-		return runner.ExecuteAndSaveAction(ctx, spec.PlaybookID, run, *spec)
+		return runner.ExecuteAndSaveAction(ctx, spec.PlaybookID, run, *spec, templateEnv)
 	})
 
 	if err == nil {
