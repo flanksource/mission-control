@@ -1,7 +1,6 @@
 package v1
 
 import (
-	gocontext "context"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -269,7 +268,7 @@ type AIActionClient struct {
 
 func (t *AIActionClient) Populate(ctx context.Context) error {
 	if t.Connection != nil {
-		conn, err := ctx.HydrateConnectionByURL(*t.Connection)
+		conn, err := connection.Get(ctx, *t.Connection)
 		if err != nil {
 			return err
 		} else if conn == nil {
@@ -421,12 +420,6 @@ func (e *ExecAction) ToShellExec() shell.Exec {
 	}
 }
 
-type connectionContext interface {
-	gocontext.Context
-	HydrateConnectionByURL(connectionName string) (*models.Connection, error)
-	GetEnvValueFromCache(env types.EnvVar, namespace string) (string, error)
-}
-
 type GCPConnection struct {
 	// ConnectionName of the connection. It'll be used to populate the endpoint and credentials.
 	ConnectionName string        `yaml:"connection,omitempty" json:"connection,omitempty"`
@@ -436,8 +429,8 @@ type GCPConnection struct {
 
 // HydrateConnection attempts to find the connection by name
 // and populate the endpoint and credentials.
-func (g *GCPConnection) HydrateConnection(ctx connectionContext) error {
-	connection, err := ctx.HydrateConnectionByURL(g.ConnectionName)
+func (g *GCPConnection) HydrateConnection(ctx context.Context) error {
+	connection, err := connection.Get(ctx, g.ConnectionName)
 	if err != nil {
 		return err
 	}
@@ -459,8 +452,8 @@ type AzureConnection struct {
 
 // HydrateConnection attempts to find the connection by name
 // and populate the endpoint and credentials.
-func (g *AzureConnection) HydrateConnection(ctx connectionContext) error {
-	connection, err := ctx.HydrateConnectionByURL(g.ConnectionName)
+func (g *AzureConnection) HydrateConnection(ctx context.Context) error {
+	connection, err := connection.Get(ctx, g.ConnectionName)
 	if err != nil {
 		return err
 	}
@@ -492,9 +485,9 @@ type AWSConnection struct {
 
 // Populate populates an AWSConnection with credentials and other information.
 // If a connection name is specified, it'll be used to populate the endpoint, accessKey and secretKey.
-func (t *AWSConnection) Populate(ctx connectionContext, k8s kubernetes.Interface, namespace string) error {
+func (t *AWSConnection) Populate(ctx context.Context, k8s kubernetes.Interface, namespace string) error {
 	if t.ConnectionName != "" {
-		connection, err := ctx.HydrateConnectionByURL(t.ConnectionName)
+		connection, err := connection.Get(ctx, t.ConnectionName)
 		if err != nil {
 			return fmt.Errorf("could not parse EC2 access key: %v", err)
 		}

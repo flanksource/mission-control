@@ -5,11 +5,13 @@ import (
 
 	"github.com/flanksource/artifacts"
 	"github.com/flanksource/artifacts/fs"
+	pkgConnection "github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/upstream"
-	"github.com/flanksource/incident-commander/api"
 	"gorm.io/gorm/clause"
+
+	"github.com/flanksource/incident-commander/api"
 )
 
 // agentArtifactConnection is the cached agent artifact store connection
@@ -17,7 +19,7 @@ var agentArtifactConnection *models.Connection
 
 func getArtifactStore(ctx context.Context) (fs.FilesystemRW, error) {
 	if agentArtifactConnection == nil {
-		artifactConnection, err := ctx.HydrateConnectionByURL(api.DefaultArtifactConnection)
+		artifactConnection, err := pkgConnection.Get(ctx, api.DefaultArtifactConnection)
 		if err != nil {
 			return nil, err
 		} else if artifactConnection == nil {
