@@ -263,6 +263,24 @@
         "keyID"
       ]
     },
+    "ConnectionGCS": {
+      "properties": {
+        "endpoint": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "certificate": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "bucket": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "bucket"
+      ]
+    },
     "ConnectionGemini": {
       "properties": {
         "model": {
@@ -730,6 +748,9 @@
         },
         "gcp": {
           "$ref": "#/$defs/ConnectionGCP"
+        },
+        "gcs": {
+          "$ref": "#/$defs/ConnectionGCS"
         },
         "gcpkms": {
           "$ref": "#/$defs/ConnectionGCPKMS"
