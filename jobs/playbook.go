@@ -50,3 +50,19 @@ func PushPlaybookActions(ctx context.Context) *job.Job {
 		},
 	}
 }
+
+func MarkTimedOutPlaybookRuns(ctx context.Context) *job.Job {
+	return &job.Job{
+		Name:          "MarkTimedOutPlaybookRuns",
+		Schedule:      "@every 30s",
+		Context:       ctx,
+		JobHistory:    true,
+		JitterDisable: true,
+		Retention:     job.RetentionFailed,
+		RunNow:        true,
+		Singleton:     true,
+		Fn: func(ctx job.JobRuntime) error {
+			return playbook.MarkTimedOutPlaybookRuns(ctx.Context)
+		},
+	}
+}

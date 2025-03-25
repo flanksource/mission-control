@@ -1015,6 +1015,9 @@
         "icon": {
           "type": "string"
         },
+        "timeout": {
+          "type": "string"
+        },
         "on": {
           "$ref": "#/$defs/PlaybookTrigger"
         },

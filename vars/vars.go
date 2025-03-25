@@ -1,5 +1,7 @@
 package vars
 
+import "time"
+
 var AuthMode = ""
 
 const (
@@ -7,3 +9,5 @@ const (
 	FlagRLSEnable  = "rls.enable"
 	FlagRLSDisable = "rls.disable"
 )
+
+const PlaybookRunTimeout = 30 * time.Minute

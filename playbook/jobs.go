@@ -130,3 +130,10 @@ func PullPlaybookAction(ctx job.JobRuntime, upstreamConfig upstream.UpstreamConf
 
 	return err
 }
+
+func MarkTimedOutPlaybookRuns(ctx context.Context) error {
+	return ctx.DB().Model(&models.PlaybookRun{}).
+		Where("timeout < EXTRACT(EPOCH FROM (NOW() - scheduled_time)) * 1000_000_000").
+		Where("status IN ?", models.PlaybookRunStatusExecutingGroup).
+		Update("status", models.PlaybookRunStatusTimedOut).Error
+}

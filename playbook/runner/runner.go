@@ -352,6 +352,7 @@ func TemplateAndExecuteAction(ctx context.Context, spec v1.PlaybookSpec, playboo
 	if !found {
 		return ctx.Oops().Errorf("action '%s' not found", action.Name)
 	}
+	step.EnforceTimeoutLimit(ctx, spec)
 
 	templateEnv, err := CreateTemplateEnv(ctx, playbook, *run, action)
 	if err != nil {
