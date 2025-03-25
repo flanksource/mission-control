@@ -3,6 +3,7 @@ package playbook
 import (
 	"encoding/json"
 	"errors"
+	"time"
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -39,6 +40,7 @@ const (
 // StartPlaybookConsumers starts the run and action consumers
 func StartPlaybookConsumers(ctx context.Context) error {
 	runEventConsumer, err := postq.NewPGConsumer(RunConsumer, &postq.ConsumerOption{
+		Timeout:      ctx.Properties().Duration("playbook.consumer.timeout", time.Minute),
 		NumConsumers: ctx.Properties().Int("playbook.schedulers", 5),
 		ErrorHandler: func(cctx context.Context, err error) bool {
 			ctx.Errorf("%+v", err)
@@ -61,8 +63,8 @@ func StartPlaybookConsumers(ctx context.Context) error {
 
 	actionEventConsumer, err := postq.NewPGConsumer(ActionConsumer, &postq.ConsumerOption{
 		NumConsumers: ctx.Properties().Int("playbook.action.consumers", 5),
+		Timeout:      ctx.Properties().Duration("playbook.consumer.timeout", time.Minute),
 		ErrorHandler: func(ctx context.Context, err error) bool {
-
 			logger := ctx.Logger.WithSkipReportLevel(1)
 			logger.Errorf("%+v", err)
 
@@ -90,10 +92,9 @@ func StartPlaybookConsumers(ctx context.Context) error {
 
 	actionAgentEventConsumer, err := postq.NewPGConsumer(ActionAgentConsumer, &postq.ConsumerOption{
 		NumConsumers: ctx.Properties().Int("playbook.action.consumers", 5),
+		Timeout:      ctx.Properties().Duration("playbook.consumer.timeout", time.Minute),
 		ErrorHandler: func(ctx context.Context, err error) bool {
-
 			logger := ctx.Logger.WithSkipReportLevel(1)
-
 			logger.Errorf("%v", err)
 
 			var runErr *playbookRunError
