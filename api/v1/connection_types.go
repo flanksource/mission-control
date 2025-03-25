@@ -191,6 +191,11 @@ type ConnectionGCP struct {
 	Certificate types.EnvVar `json:"certificate,omitempty"`
 }
 
+type ConnectionGCS struct {
+	ConnectionGCP `json:",inline"`
+	Bucket        string `json:"bucket"`
+}
+
 type ConnectionGCPKMS struct {
 	ConnectionGCP `json:",inline"`
 
@@ -301,6 +306,7 @@ type ConnectionSpec struct {
 
 	GCP    *ConnectionGCP    `json:"gcp,omitempty"`
 	GCPKMS *ConnectionGCPKMS `json:"gcpkms,omitempty"`
+	GCS    *ConnectionGCS    `json:"gcs,omitempty"`
 
 	Anthropic *ConnectionAnthropic `json:"anthropic,omitempty"`
 	Ollama    *ConnectionOllama    `json:"ollama,omitempty"`

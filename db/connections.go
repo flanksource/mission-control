@@ -97,6 +97,15 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 		dbObj.URL = obj.Spec.GCP.Endpoint.String()
 	}
 
+	if obj.Spec.GCS != nil {
+		dbObj.Type = models.ConnectionTypeGCS
+		dbObj.Certificate = obj.Spec.GCS.Certificate.String()
+		dbObj.URL = obj.Spec.GCS.Endpoint.String()
+		dbObj.Properties = map[string]string{
+			"bucket": obj.Spec.GCS.Bucket,
+		}
+	}
+
 	if obj.Spec.GCPKMS != nil {
 		dbObj.Type = models.ConnectionTypeGCPKMS
 		dbObj.Certificate = obj.Spec.GCPKMS.Certificate.String()
