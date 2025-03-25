@@ -125,6 +125,11 @@ func rbacToABACObjectSelector(permission models.Permission, action string) []byt
 		if pkgPolicy.ActionRead == action {
 			return []byte(`{"components": [{"name":"*"}]}`)
 		}
+
+	case pkgPolicy.ObjectConnection:
+		if pkgPolicy.ActionRead == action {
+			return []byte(`{"connections": [{"name":"*"}]}`)
+		}
 	}
 
 	return nil
