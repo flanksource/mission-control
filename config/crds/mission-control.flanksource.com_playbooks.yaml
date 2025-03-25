@@ -2447,6 +2447,11 @@ spec:
                    - agent
                   When left empty, the templating is done on the main instance(host) itself.
                 type: string
+              timeout:
+                description: |-
+                  Timeout is the maximum duration to let the playbook run before it's cancelled.
+                  Valid time units are "s", "m", "h", "d", "w", "y".
+                type: string
               title:
                 type: string
             required:

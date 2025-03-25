@@ -289,7 +289,7 @@ func Shutdown(e *echov4.Echo) {
 	defer cancel()
 
 	if err := e.Shutdown(ctx); err != nil {
-		e.Logger.Fatal(err)
+		e.Logger.Error(err)
 	}
 
 	if otelShutdown != nil {

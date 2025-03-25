@@ -73,11 +73,15 @@ func Start(ctx context.Context) {
 	}
 
 	if err := notification.ProcessPendingNotificationsJob(ctx).AddToScheduler(FuncScheduler); err != nil {
-		logger.Errorf("failed to schedule job: %v", err)
+		shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to schedule job ProcessPendingNotificationsJob: %v", err))
+	}
+
+	if err := MarkTimedOutPlaybookRuns(ctx).AddToScheduler(FuncScheduler); err != nil {
+		shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to schedule job MarkTimedOutPlaybookRuns: %v", err))
 	}
 
 	if err := notification.SyncCRDStatusJob(ctx).AddToScheduler(FuncScheduler); err != nil {
-		logger.Errorf("failed to schedule job: %v", err)
+		shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to schedule job SyncCRDStatusJob: %v", err))
 	}
 
 	if err := notification.InitCRDStatusUpdates(ctx); err != nil {

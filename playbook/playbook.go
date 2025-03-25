@@ -6,8 +6,10 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/flanksource/commons/collections"
+	"github.com/flanksource/commons/duration"
 	"github.com/flanksource/commons/logger"
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
@@ -28,6 +30,8 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/playbook/runner"
 )
+
+const DefaultPlaybookRunTimeout = time.Minute * 30
 
 type PlaybookSummary struct {
 	Playbook models.Playbook            `json:"playbook,omitempty"`
@@ -122,6 +126,17 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 
 	if spec.Approval != nil && !spec.Approval.Approvers.Empty() {
 		run.Status = models.PlaybookRunStatusPendingApproval
+	}
+
+	if spec.Timeout == "" {
+		run.Timeout = ctx.Properties().Duration("playbook.run.timeout", DefaultPlaybookRunTimeout)
+	} else {
+		timeout, err := duration.ParseDuration(spec.Timeout)
+		if err != nil {
+			return nil, ctx.Oops().Wrapf(err, "invalid timeout duration (%s)", spec.Timeout)
+		}
+
+		run.Timeout = time.Duration(timeout)
 	}
 
 	if req.ComponentID != nil {

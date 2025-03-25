@@ -158,6 +158,10 @@ type PlaybookSpec struct {
 
 	Icon string `json:"icon,omitempty" yaml:"icon,omitempty"`
 
+	// Timeout is the maximum duration to let the playbook run before it's cancelled.
+	// Valid time units are "s", "m", "h", "d", "w", "y".
+	Timeout string `json:"timeout,omitempty" yaml:"timeout,omitempty"`
+
 	// `On` defines triggers that will automatically trigger the playbook.
 	// If multiple events are defined, only one of those events needs to occur to trigger the playbook.
 	// If multiple triggering events occur at the same time, multiple playbook runs will be triggered.
