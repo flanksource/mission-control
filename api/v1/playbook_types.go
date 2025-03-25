@@ -2,9 +2,14 @@ package v1
 
 import (
 	"encoding/json"
+	"time"
 
+	"github.com/flanksource/commons/duration"
+	"github.com/flanksource/commons/utils"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	dutyTypes "github.com/flanksource/duty/types"
+	"github.com/flanksource/incident-commander/vars"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -149,6 +154,9 @@ type PlaybookTrigger struct {
 }
 
 type PlaybookSpec struct {
+	// timeout is the parsed Timeout
+	timeout *time.Duration `json:"-" yaml:"-"`
+
 	Title string `json:"title,omitempty" yaml:"title,omitempty"`
 
 	// Short description of the playbook.
@@ -206,6 +214,28 @@ type PlaybookSpec struct {
 
 	// Approval defines the individuals and teams authorized to approve runs of this playbook.
 	Approval *PlaybookApproval `json:"approval,omitempty" yaml:"approval,omitempty"`
+}
+
+func (p *PlaybookSpec) GetTimeout(ctx context.Context) (time.Duration, error) {
+	if p.timeout != nil {
+		return *p.timeout, nil
+	}
+
+	if p.Timeout == "" {
+		return ctx.Properties().Duration("playbook.run.timeout", vars.PlaybookRunTimeout), nil
+	}
+
+	if p.Timeout == "" {
+		return 0, nil
+	}
+
+	d, err := duration.ParseDuration(p.Timeout)
+	if err != nil {
+		return 0, err
+	}
+
+	p.timeout = utils.Ptr(time.Duration(d))
+	return time.Duration(d), nil
 }
 
 // PlaybookStatus defines the observed state of Playbook

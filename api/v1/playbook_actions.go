@@ -675,6 +675,24 @@ func (p *PlaybookAction) DelayDuration() (time.Duration, error) {
 	return time.Duration(d), nil
 }
 
+func (p *PlaybookAction) EnforceTimeoutLimit(ctx context.Context, spec PlaybookSpec) {
+	runTimeout, err := spec.GetTimeout(ctx)
+	if err != nil {
+		ctx.Errorf("failed to get timeout: %v", err)
+		return
+	}
+
+	if runTimeout == 0 {
+		return
+	}
+
+	actionTimeout, _ := p.TimeoutDuration()
+	if runTimeout < actionTimeout || actionTimeout == 0 {
+		p.Timeout = fmt.Sprintf("%0fm", runTimeout.Minutes())
+		p.timeout = &runTimeout
+	}
+}
+
 func (p *PlaybookAction) TimeoutDuration() (time.Duration, error) {
 	if p.timeout != nil {
 		return *p.timeout, nil

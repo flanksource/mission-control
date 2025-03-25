@@ -29,9 +29,8 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/playbook/runner"
+	"github.com/flanksource/incident-commander/vars"
 )
-
-const DefaultPlaybookRunTimeout = time.Minute * 30
 
 type PlaybookSummary struct {
 	Playbook models.Playbook            `json:"playbook,omitempty"`
@@ -129,7 +128,7 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 	}
 
 	if spec.Timeout == "" {
-		run.Timeout = ctx.Properties().Duration("playbook.run.timeout", DefaultPlaybookRunTimeout)
+		run.Timeout = ctx.Properties().Duration("playbook.run.timeout", vars.PlaybookRunTimeout)
 	} else {
 		timeout, err := duration.ParseDuration(spec.Timeout)
 		if err != nil {
