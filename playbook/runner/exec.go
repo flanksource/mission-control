@@ -3,6 +3,7 @@ package runner
 import (
 	gocontext "context"
 	"fmt"
+	"reflect"
 
 	"github.com/flanksource/artifacts"
 	"github.com/flanksource/duty/context"
@@ -81,8 +82,9 @@ func executeAction(ctx context.Context, playbookID any, runID uuid.UUID, runActi
 		result, err = e.Run(ctx, *actionSpec.Pod, timeout)
 	}
 
-	switch v := result.(type) {
-	case ArtifactAccessor:
+	// NOTE: v is never nil, it holds in nil values.
+	// So we need to check if the value is nil using reflect.ValueOf.
+	if v, ok := result.(ArtifactAccessor); ok && !reflect.ValueOf(v).IsNil() {
 		if err := saveArtifacts(ctx, runAction.ID, v.GetArtifacts()); err != nil {
 			return executeActionResult{
 				data: result,
