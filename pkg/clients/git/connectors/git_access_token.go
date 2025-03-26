@@ -60,7 +60,7 @@ func NewAccessTokenClient(url, service, accessToken string) (Connector, error) {
 	logger.Infof("Creating %s client for %s/%s using access token: %s", service, owner, repoName, logger.PrintableSecret(accessToken))
 	scmClient, err := factory.NewClient(service, hostURL, accessToken)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create git client with access token: %v", err)
+		return nil, fmt.Errorf("failed to create git client with access token: %w", err)
 	}
 
 	if scmClient.Client == nil {

@@ -73,7 +73,7 @@ func (t *GitOps) Run(ctx context.Context, action v1.GitOpsAction) (*GitOpsAction
 
 	connector, workTree, err := t.cloneRepo(ctx)
 	if err != nil {
-		return nil, oops.Wrapf(err, "failed to clone repo")
+		return nil, ctx.Oops().Wrapf(err, "failed to clone repo")
 	}
 	t.workTree = workTree
 

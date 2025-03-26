@@ -21,9 +21,9 @@ func Clone(ctx context.Context, spec *GitopsAPISpec) (connectors.Connector, *git
 	ctx.Logger.V(4).Infof("cloning %s", logger.Pretty(spec.GetContext()))
 	fs, work, err := connector.Clone(ctx, spec.Base, spec.Branch)
 	if err != nil {
-		return nil, nil, ctx.Oops().Wrapf(err, "failed to clone repo %s", spec.Repository)
+		return nil, nil, ctx.Oops().Wrapf(err, "failed to clone repo %s (remoteBranch: %s, localBranch: %s)", spec.Repository, spec.Base, spec.Branch)
 	}
-	ctx.Tracef("successfully cloned remote:%s to local:%s", spec.Base, fs.Root())
+	ctx.Tracef("successfully cloned remote: %s to local: %s", spec.Base, fs.Root())
 
 	return connector, work, nil
 }
