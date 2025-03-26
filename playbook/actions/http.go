@@ -2,7 +2,6 @@ package actions
 
 import (
 	"fmt"
-	netHTTP "net/http"
 	"net/url"
 
 	"github.com/flanksource/commons/http"
@@ -12,37 +11,41 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 )
 
+type HTTPResultResponse struct {
+	Headers    map[string]string `json:"headers"`
+	StatusCode int               `json:"statusCode"`
+}
+
 type HTTPResult struct {
-	Code    string
-	Headers netHTTP.Header
-	Body    string
+	Response HTTPResultResponse `json:"response"`
+	Body     string             `json:"body"`
 }
 
 type HTTP struct {
 }
 
 func (c *HTTP) Run(ctx context.Context, action v1.HTTPAction) (*HTTPResult, error) {
-	connection, err := pkgConnection.Get(ctx, action.HTTPConnection.Connection)
-	if err != nil {
-		return nil, fmt.Errorf("failed to hydrate connection: %w", err)
-	} else if connection != nil {
-		if ntlm, ok := connection.Properties["ntlm"]; ok {
-			action.NTLM = ntlm == "true"
-		} else if ntlm, ok := connection.Properties["ntlmv2"]; ok {
-			action.NTLMv2 = ntlm == "true"
-		}
+	var connection = &models.Connection{
+		URL: action.URL,
+	}
 
-		if _, err := url.Parse(connection.URL); err != nil {
-			return nil, fmt.Errorf("failed to parse url(%q): %w", connection.URL, err)
-		}
-	} else {
-		connection = &models.Connection{
-			URL: action.URL,
+	if action.HTTPConnection.Connection != "" {
+		connection, err := pkgConnection.Get(ctx, action.HTTPConnection.Connection)
+		if err != nil {
+			return nil, fmt.Errorf("failed to hydrate connection: %w", err)
+		} else if connection != nil {
+			if ntlm, ok := connection.Properties["ntlm"]; ok {
+				action.NTLM = ntlm == "true"
+			} else if ntlm, ok := connection.Properties["ntlmv2"]; ok {
+				action.NTLMv2 = ntlm == "true"
+			}
 		}
 	}
 
 	if connection.URL == "" {
 		return nil, fmt.Errorf("must specify a URL")
+	} else if _, err := url.Parse(connection.URL); err != nil {
+		return nil, fmt.Errorf("failed to parse url(%q): %w", connection.URL, err)
 	}
 
 	resp, err := c.makeRequest(ctx, action, connection)
@@ -56,9 +59,15 @@ func (c *HTTP) Run(ctx context.Context, action v1.HTTPAction) (*HTTPResult, erro
 	}
 
 	result := &HTTPResult{
-		Code:    resp.Status,
-		Headers: resp.Header,
-		Body:    body,
+		Response: HTTPResultResponse{
+			StatusCode: resp.StatusCode,
+			Headers:    make(map[string]string),
+		},
+		Body: body,
+	}
+
+	for k, v := range resp.Header {
+		result.Response.Headers[k] = v[0]
 	}
 
 	return result, nil
