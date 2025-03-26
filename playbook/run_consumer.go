@@ -332,7 +332,7 @@ func RunConsumer(ctx context.Context) (int, error) {
 	INNER JOIN playbooks ON playbooks.id = playbook_runs.playbook_id
 	WHERE status IN ? AND scheduled_time <= NOW()
 	AND (agent_id IS NULL OR agent_id = ?)
-	AND (timeout IS NULL OR timeout > EXTRACT(EPOCH FROM (NOW() - scheduled_time)) * 1000_000_000)
+	AND (timeout IS NULL OR timeout > EXTRACT(EPOCH FROM (NOW() - scheduled_time)) * 1000000000)
 	ORDER BY scheduled_time
 	FOR UPDATE SKIP LOCKED
 	LIMIT 1
