@@ -111,13 +111,12 @@ func executeAction(ctx context.Context, playbookID any, runID uuid.UUID, runActi
 	// notifications can run standalone or as part of another step
 	if actionSpec.Notification != nil {
 		var e actions.Notification
-		err2 := e.Run(ctx, *actionSpec.Notification)
-		if err != nil && err2 != nil {
+		var err2 error
+		if result, err2 = e.Run(ctx, *actionSpec.Notification); err != nil && err2 != nil {
 			err = oops.Join(err, err2)
 		} else if err2 != nil {
 			err = err2
 		}
-
 	}
 
 	results := executeActionResult{
