@@ -501,8 +501,7 @@ func calculateGroupByHash(ctx context.Context, groupBy []string, resourceID, eve
 }
 
 func sendNotification(ctx context.Context, payload NotificationEventPayload) error {
-	notificationContext := NewContext(ctx, payload.NotificationID)
-
+	notificationContext := NewContext(ctx.WithSubject(payload.NotificationID.String()), payload.NotificationID)
 	ctx.Debugf("[notification.send] %s  ", payload.EventName)
 	notificationContext.WithSource(payload.EventName, payload.ID)
 
