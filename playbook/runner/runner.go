@@ -16,6 +16,7 @@ import (
 	"github.com/flanksource/incident-commander/config/schemas"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/playbook/actions"
+	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"github.com/samber/oops"
 	"gorm.io/gorm"
@@ -149,7 +150,7 @@ func GetDelay(ctx context.Context, playbook models.Playbook, run models.Playbook
 	return delay, nil
 }
 
-func getEligibleAgents(spec v1.PlaybookSpec, action *v1.PlaybookAction, run models.PlaybookRun) []string {
+func getEligibleAgents(ctx context.Context, spec v1.PlaybookSpec, action *v1.PlaybookAction, run models.PlaybookRun) []string {
 	if run.AgentID != nil {
 		return []string{run.AgentID.String()}
 	}
@@ -160,6 +161,17 @@ func getEligibleAgents(spec v1.PlaybookSpec, action *v1.PlaybookAction, run mode
 
 	if len(spec.RunsOn) != 0 {
 		return spec.RunsOn
+	}
+
+	if action.Exec != nil && action.Exec.Connections.FromConfigItem != nil {
+		// If an exec action uses connection from the config item, and an agent isn't assigned to the action,
+		// we use the config's agent
+		var fromConfigItem models.ConfigItem
+		if err := ctx.DB().Select("id", "agent_id").Where("id = ?", run.ConfigID.String()).Find(&fromConfigItem).Error; err != nil {
+			ctx.Errorf("failed to find agent for config item %s", run.ConfigID.String())
+		} else if fromConfigItem.AgentID != uuid.Nil {
+			return []string{fromConfigItem.AgentID.String()}
+		}
 	}
 
 	return []string{Main}
@@ -221,7 +233,7 @@ func ScheduleRun(ctx context.Context, run models.PlaybookRun) error {
 		return ctx.Oops().Wrap(err)
 	}
 
-	eligibleAgents := getEligibleAgents(playbookSpec, action, run)
+	eligibleAgents := getEligibleAgents(ctx, playbookSpec, action, run)
 
 	agent, err := db.FindFirstAgent(ctx, eligibleAgents...)
 	if err != nil {
