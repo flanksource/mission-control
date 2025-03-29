@@ -204,20 +204,47 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 		return nil, err
 	}
 
-	// Template run's spec (runsOn)
 	var runSpec v1.PlaybookSpec
 	if err := json.Unmarshal(playbook.Spec, &runSpec); err != nil {
 		return nil, ctx.Oops().Wrap(err)
 	}
-	var runsOn []string
-	for _, specRunOn := range runSpec.RunsOn {
-		output, err := ctx.RunTemplate(gomplate.Template{Template: specRunOn}, templateEnv.AsMap(ctx))
-		if err != nil {
-			return nil, ctx.Oops().Wrap(err)
+
+	{
+		// If an exec action uses connection from the config item, and an agent isn't assigned to the action,
+		// we use the config's agent
+		for i, action := range runSpec.Actions {
+			hasExplicitAgent := len(runSpec.RunsOn) != 0 || len(action.RunsOn) != 0
+			usesFromConfigItem := action.Exec != nil && action.Exec.Connections.FromConfigItem != nil
+			if !hasExplicitAgent && usesFromConfigItem {
+				tpl := gomplate.Template{
+					Template: *action.Exec.Connections.FromConfigItem,
+				}
+				output, err := ctx.RunTemplate(tpl, templateEnv.AsMap(ctx))
+				if err != nil {
+					return nil, ctx.Oops().Wrap(err)
+				}
+
+				var fromConfigItem models.ConfigItem
+				if err := ctx.DB().Select("id", "agent_id").Where("id = ?", output).Find(&fromConfigItem).Error; err != nil {
+					return nil, ctx.Oops().Wrap(err)
+				} else if fromConfigItem.AgentID != uuid.Nil {
+					runSpec.Actions[i].RunsOn = []string{fromConfigItem.AgentID.String()}
+				}
+			}
 		}
-		runsOn = append(runsOn, output)
+
+		// Template run's spec (runsOn)
+		var runsOn []string
+		for _, specRunOn := range runSpec.RunsOn {
+			output, err := ctx.RunTemplate(gomplate.Template{Template: specRunOn}, templateEnv.AsMap(ctx))
+			if err != nil {
+				return nil, ctx.Oops().Wrap(err)
+			}
+			runsOn = append(runsOn, output)
+		}
+
+		runSpec.RunsOn = runsOn
 	}
-	runSpec.RunsOn = runsOn
 
 	run.Spec, err = json.Marshal(runSpec)
 	if err != nil {
