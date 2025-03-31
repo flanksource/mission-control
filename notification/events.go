@@ -424,8 +424,7 @@ func sendFallbackNotification(ctx context.Context, sendHistory models.Notificati
 }
 
 func sendPendingNotification(ctx context.Context, history models.NotificationSendHistory, payload NotificationEventPayload) error {
-	notificationContext := NewContext(ctx, payload.NotificationID).WithHistory(history)
-
+	notificationContext := NewContext(ctx.WithSubject(payload.NotificationID.String()), payload.NotificationID).WithHistory(history)
 	ctx.Debugf("[notification.send] %s ", payload.EventName)
 	notificationContext.WithSource(payload.EventName, payload.ID)
 
