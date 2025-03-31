@@ -2,7 +2,6 @@ package playbook
 
 import (
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -172,7 +171,7 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 		return nil, ctx.Oops().
 			Code(dutyAPI.EFORBIDDEN).
 			With("permission", policy.ActionRead, "objects", templateEnv.ABACAttributes()).
-			Wrap(errors.New("access denied: read access to resource not allowed"))
+			Wrap(fmt.Errorf("access denied: read access to resource not allowed for subject: %s", ctx.Subject()))
 	}
 
 	if attr, err := run.GetABACAttributes(ctx.DB()); err != nil {
