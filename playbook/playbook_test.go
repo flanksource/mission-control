@@ -259,7 +259,9 @@ var _ = Describe("Playbook", Ordered, func() {
 
 	var _ = Describe("retries", Ordered, func() {
 		It("should retry actions", func() {
-			run := createAndRun(DefaultContext.WithUser(&dummy.JohnDoe), "retries", RunParams{}, models.PlaybookRunStatusFailed)
+			run := createAndRun(DefaultContext.WithUser(&dummy.JohnDoe), "retries", RunParams{
+				ConfigID: lo.ToPtr(dummy.EKSCluster.ID),
+			}, models.PlaybookRunStatusFailed)
 			Expect(run.Status).To(Equal(models.PlaybookRunStatusFailed), run.String(DefaultContext.DB()))
 
 			var actions []models.PlaybookRunAction
