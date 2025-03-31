@@ -351,7 +351,7 @@ func onNewRun(ctx context.Context, event models.Event) error {
 			columnUpdates["playbook_run_id"] = newRun.ID.String()
 			columnUpdates["status"] = models.NotificationStatusPendingPlaybookCompletion
 		} else {
-			columnUpdates["error"] = err.Error()
+			columnUpdates["error"] = fmt.Sprintf("playbook run failed: %v", err)
 			columnUpdates["status"] = models.NotificationStatusError
 		}
 

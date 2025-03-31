@@ -132,8 +132,19 @@ func PullPlaybookAction(ctx job.JobRuntime, upstreamConfig upstream.UpstreamConf
 }
 
 func MarkTimedOutPlaybookRuns(ctx context.Context) error {
-	return ctx.DB().Model(&models.PlaybookRun{}).
+	var runs []models.PlaybookRun
+	if err := ctx.DB().
 		Where("timeout < EXTRACT(EPOCH FROM (NOW() - scheduled_time)) * 1000000000").
 		Where("status IN ?", models.PlaybookRunStatusExecutingGroup).
-		Update("status", models.PlaybookRunStatusTimedOut).Error
+		Find(&runs).Error; err != nil {
+		return ctx.Oops("db").Wrapf(err, "failed to fetch timed out playbook runs")
+	}
+
+	for _, run := range runs {
+		if err := run.EndAsTimedOut(ctx.DB()); err != nil {
+			return ctx.Oops("db").Wrapf(err, "failed to mark playbook run %s as timed out", run.ID)
+		}
+	}
+
+	return nil
 }
