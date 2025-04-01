@@ -3858,6 +3858,11 @@ spec:
                   fromAddress:
                     description: Email address that the mail are sent from
                     type: string
+                  headers:
+                    additionalProperties:
+                      type: string
+                    description: Headers for SMTP Server
+                    type: object
                   host:
                     type: string
                   insecureTLS:

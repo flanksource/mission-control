@@ -687,6 +687,12 @@
         },
         "auth": {
           "type": "string"
+        },
+        "headers": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
         }
       },
       "additionalProperties": false,
@@ -749,11 +755,11 @@
         "gcp": {
           "$ref": "#/$defs/ConnectionGCP"
         },
-        "gcs": {
-          "$ref": "#/$defs/ConnectionGCS"
-        },
         "gcpkms": {
           "$ref": "#/$defs/ConnectionGCPKMS"
+        },
+        "gcs": {
+          "$ref": "#/$defs/ConnectionGCS"
         },
         "anthropic": {
           "$ref": "#/$defs/ConnectionAnthropic"

@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"encoding/json"
+	"fmt"
 	"sync"
 
 	"github.com/samber/lo"
@@ -41,4 +43,29 @@ func (m *SyncedMap[K, V]) Append(key K, value V) {
 	}
 	m.m[key] = append(m.m[key], value)
 	m.mu.Unlock()
+}
+
+// StringMapToString converts a map[string]string to a string
+func StringMapToString(m map[string]string) string {
+	if m == nil {
+		return "{}"
+	}
+
+	b, _ := json.Marshal(m)
+	return string(b)
+}
+
+// StringToStringMap converts a string back to a map[string]string
+func StringToStringMap(s string) (map[string]string, error) {
+	m := make(map[string]string)
+	if s == "" {
+		return m, nil
+	}
+
+	err := json.Unmarshal([]byte(s), &m)
+	if err != nil {
+		return nil, fmt.Errorf("error unmarshaling string: %w", err)
+	}
+
+	return m, nil
 }
