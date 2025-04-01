@@ -14,7 +14,7 @@ import (
 type HTTPResult struct {
 	Content    string            `json:"content"`
 	Headers    map[string]string `json:"headers"`
-	StatusCode int               `json:"statusCode"`
+	StatusCode int               `json:"code"`
 }
 
 type HTTP struct {
