@@ -315,25 +315,6 @@ func RunAction(ctx context.Context, run *models.PlaybookRun, action *models.Play
 	}
 
 	ctx = ctx.WithObject(action, run).WithSubject(playbook.ID.String())
-	if run.CreatedBy != nil {
-		ctx = ctx.WithSubject(run.CreatedBy.String())
-	} else if run.ParentID != nil {
-		// For child runs, use the parent run's playbook as the subject
-		var parentRun models.PlaybookRun
-		if err := ctx.DB().Select("playbook_id").First(&parentRun, run.ParentID).Error; err != nil {
-			return ctx.Oops().Wrapf(err, "failed to get parent run")
-		}
-
-		ctx = ctx.WithSubject(parentRun.PlaybookID.String())
-	} else if run.NotificationSendID != nil {
-		// For runs triggered by notifications, use the notification as the subject
-		var sendHistory models.NotificationSendHistory
-		if err := ctx.DB().Select("notification_id").First(&sendHistory, run.NotificationSendID).Error; err != nil {
-			return ctx.Oops().Wrapf(err, "failed to get notification send history")
-		}
-
-		ctx = ctx.WithSubject(sendHistory.NotificationID.String())
-	}
 
 	ctx, span := ctx.StartSpan(fmt.Sprintf("playbook.%s", playbook.Name))
 	defer span.End()

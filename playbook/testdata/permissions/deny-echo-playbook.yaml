@@ -12,3 +12,5 @@ spec:
   object:
     playbooks:
       - name: echo-simple
+    configs:
+      - name: "*"
