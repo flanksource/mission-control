@@ -11,14 +11,10 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 )
 
-type HTTPResultResponse struct {
+type HTTPResult struct {
+	Content    string            `json:"content"`
 	Headers    map[string]string `json:"headers"`
 	StatusCode int               `json:"statusCode"`
-}
-
-type HTTPResult struct {
-	Response HTTPResultResponse `json:"response"`
-	Body     string             `json:"body"`
 }
 
 type HTTP struct {
@@ -59,15 +55,13 @@ func (c *HTTP) Run(ctx context.Context, action v1.HTTPAction) (*HTTPResult, erro
 	}
 
 	result := &HTTPResult{
-		Response: HTTPResultResponse{
-			StatusCode: resp.StatusCode,
-			Headers:    make(map[string]string),
-		},
-		Body: body,
+		StatusCode: resp.StatusCode,
+		Headers:    make(map[string]string),
+		Content:    body,
 	}
 
 	for k, v := range resp.Header {
-		result.Response.Headers[k] = v[0]
+		result.Headers[k] = v[0]
 	}
 
 	return result, nil
