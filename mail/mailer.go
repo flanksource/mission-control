@@ -32,6 +32,11 @@ func (t *Mail) SetFrom(name, email string) *Mail {
 	return t
 }
 
+func (t *Mail) SetHeader(key string, value string) *Mail {
+	t.message.SetHeader(key, value)
+	return t
+}
+
 func (t *Mail) SetCredentials(host string, port int, user, password string) *Mail {
 	t.dialer = gomail.NewDialer(host, port, user, password)
 	return t

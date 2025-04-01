@@ -15,6 +15,7 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/mail"
 	icUtils "github.com/flanksource/incident-commander/utils"
+	mcUtils "github.com/flanksource/incident-commander/utils"
 )
 
 // setSystemSMTPCredential modifies the shoutrrrURL to use the system's SMTP credentials.
@@ -115,16 +116,27 @@ func shoutrrrSend(ctx *Context, celEnv map[string]any, shoutrrrURL string, data 
 
 		query := parsedURL.Query()
 		var (
-			to          = utils.Coalesce(query.Get("ToAddresses"), (*params)["ToAddresses"])
-			from        = utils.Coalesce(query.Get("FromAddress"), (*params)["FromAddress"])
-			fromName    = utils.Coalesce(query.Get("FromName"), (*params)["FromName"])
-			password, _ = parsedURL.User.Password()
-			port, _     = strconv.Atoi(parsedURL.Port())
+			to           = utils.Coalesce(query.Get("ToAddresses"), (*params)["ToAddresses"])
+			from         = utils.Coalesce(query.Get("FromAddress"), (*params)["FromAddress"])
+			fromName     = utils.Coalesce(query.Get("FromName"), (*params)["FromName"])
+			password, _  = parsedURL.User.Password()
+			port, _      = strconv.Atoi(parsedURL.Port())
+			headerString = (*params)["headers"]
 		)
 
 		m := mail.New(to, data.Title, data.Message, `text/html; charset="UTF-8"`).
 			SetFrom(fromName, from).
 			SetCredentials(parsedURL.Hostname(), port, parsedURL.User.Username(), password)
+
+		if headerString != "" {
+			headers, err := mcUtils.StringToStringMap(headerString)
+			if err != nil {
+				return "", ctx.Oops().Wrapf(err, "error converting headerString[%s] to map", headerString)
+			}
+			for k, v := range headers {
+				m.SetHeader(k, v)
+			}
+		}
 		return service, m.Send()
 	}
 

@@ -12,6 +12,7 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/utils"
 	"github.com/google/uuid"
 )
 
@@ -348,6 +349,7 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 			"auth":        obj.Spec.SMTP.Auth,
 			"fromAddress": obj.Spec.SMTP.FromAddress,
 			"toAddress":   strings.Join(obj.Spec.SMTP.ToAddresses, ", "),
+			"headers":     utils.StringMapToString(obj.Spec.SMTP.Headers),
 		}
 	}
 

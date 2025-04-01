@@ -79,6 +79,9 @@ type ConnectionSMTP struct {
 	// Auth - SMTP authentication method
 	// Possible values: None, Plain, CRAMMD5, Unknown, OAuth2
 	Auth string `json:"auth,omitempty"`
+
+	// Headers for SMTP Server
+	Headers map[string]string `json:"headers,omitempty"`
 }
 
 type ConnectionPushbullet struct {
