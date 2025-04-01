@@ -8,8 +8,10 @@ spec:
     person: john@doe.com
   deny: true
   actions:
-    - read
+    - playbook:run
   object:
+    playbooks:
+      - name: "*"
     configs:
       - tagSelector: cluster=aws,account=flanksource
         name: node-b

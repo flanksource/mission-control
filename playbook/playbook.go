@@ -167,6 +167,7 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 		return nil, ctx.Oops().Wrap(err)
 	}
 
+	// Must have read access on the resource (required to prevent guests from accessing unauthorized resources)
 	if !rbac.HasPermission(ctx, ctx.Subject(), templateEnv.ABACAttributes(), policy.ActionRead) {
 		return nil, ctx.Oops().
 			Code(dutyAPI.EFORBIDDEN).
@@ -182,6 +183,9 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 			With("permission", policy.ActionPlaybookRun, "objects", attr).
 			Wrap(fmt.Errorf("access denied to subject(%s): cannot run playbook on this resource", ctx.Subject()))
 	}
+
+	// Rest of the playbook must run using the playbook's permission.
+	ctx = ctx.WithSubject(playbook.ID.String())
 
 	if err := req.setDefaults(ctx, spec, templateEnv); err != nil {
 		return nil, ctx.Oops().Wrap(err)
