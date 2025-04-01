@@ -340,8 +340,14 @@ func onNewRun(ctx context.Context, event models.Event) error {
 	}
 
 	newRun, err := Run(ctx, &playbook, runParam)
-	if err != nil && !utils.MatchOopsErrCode(err, dutyAPI.EFORBIDDEN) {
-		return err
+	if err != nil {
+		if !utils.MatchOopsErrCode(err, dutyAPI.EFORBIDDEN) {
+			return err
+		}
+
+		// We don't retry on forbidden errors.
+		// we resume the trigger (notification or playbook run)
+		ctx.Errorf("unable to start playbook run from events triggered by %s: %v", initiatorType, err)
 	}
 
 	switch initiatorType {
@@ -379,8 +385,20 @@ func onNewRun(ctx context.Context, event models.Event) error {
 		}
 
 	case RunInitiatorTypePlaybook:
-		// Do nothing
-		// Child playbooks resume their parent when they terminate.
+		// If there was a failure to initiate the child playbook run,
+		// we need to resume the parent action.
+		//
+		// This needs to be surfaced out though else the action will resume and attempt to trigger children again.
+		if newRun == nil {
+			var parentRun models.PlaybookRun
+			if err := ctx.DB().Where("id = ?", parentRunID).First(&parentRun).Error; err != nil {
+				return fmt.Errorf("failed to get parent run: %w", err)
+			}
+
+			if err := parentRun.ResumeChildrenWaitingAction(ctx.DB()); err != nil {
+				return fmt.Errorf("failed to resume children waiting action: %w", err)
+			}
+		}
 	}
 
 	return nil
