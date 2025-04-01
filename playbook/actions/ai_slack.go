@@ -9,18 +9,23 @@ import (
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/llm"
+	"github.com/samber/lo"
+)
+
+const (
+	maxSlackFieldsPerSection = 10  // Slack doesn't support more than 10 fields in a section
+	maxHeaderTextLength      = 150 // Slack doesn't support more than 150 characters in a header
 )
 
 // Constants for Slack block formatting
 const (
-	maxSlackFieldsPerSection = 10 // Slack doesn't support more than 10 fields in a section
-	slackBlockTypeSection    = "section"
-	slackBlockTypeHeader     = "header"
-	slackBlockTypeDivider    = "divider"
-	slackBlockTypeActions    = "actions"
-	slackBlockTypeButton     = "button"
-	slackBlockTypePlainText  = "plain_text"
-	slackBlockTypeMarkdown   = "mrkdwn"
+	slackBlockTypeSection   = "section"
+	slackBlockTypeHeader    = "header"
+	slackBlockTypeDivider   = "divider"
+	slackBlockTypeActions   = "actions"
+	slackBlockTypeButton    = "button"
+	slackBlockTypePlainText = "plain_text"
+	slackBlockTypeMarkdown  = "mrkdwn"
 )
 
 // JSON code block format template
@@ -144,7 +149,7 @@ func slackBlocks(knowledge *KnowledgeGraph, diagnosisReport llm.DiagnosisReport,
 		"type": slackBlockTypeHeader,
 		"text": map[string]any{
 			"type": slackBlockTypePlainText,
-			"text": diagnosisReport.Headline,
+			"text": lo.Elipse(diagnosisReport.Headline, maxHeaderTextLength),
 		},
 	})
 
