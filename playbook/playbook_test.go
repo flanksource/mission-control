@@ -33,29 +33,66 @@ import (
 	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
 )
 
+func loadPermissions() {
+	// We allow User=JohnDoe to run any playbook and read any configs (with some exceptions)
+	entries, err := os.ReadDir("testdata/permissions")
+	Expect(err).To(BeNil())
+
+	for _, entry := range entries {
+		fixturePath := filepath.Join("testdata/permissions", entry.Name())
+		content, err := os.ReadFile(fixturePath)
+		Expect(err).To(BeNil())
+
+		var perm v1.Permission
+		err = yamlutil.Unmarshal(content, &perm)
+		Expect(err).To(BeNil())
+
+		perm.UID = types.UID(uuid.New().String())
+
+		err = db.PersistPermissionFromCRD(DefaultContext, &perm)
+		Expect(err).To(BeNil())
+	}
+
+	err = rbac.ReloadPolicy()
+	Expect(err).To(BeNil())
+}
+
 var _ = Describe("Playbook", Ordered, func() {
 	BeforeAll(func() {
-		// We allow User=JohnDoe to run any playbook and read any configs (with some exceptions)
-		entries, err := os.ReadDir("testdata/permissions")
+		// Persist the connection
+		content, err := os.ReadFile("testdata/connections/httpbin.yaml")
 		Expect(err).To(BeNil())
 
-		for _, entry := range entries {
-			fixturePath := filepath.Join("testdata/permissions", entry.Name())
-			content, err := os.ReadFile(fixturePath)
-			Expect(err).To(BeNil())
-
-			var perm v1.Permission
-			err = yamlutil.Unmarshal(content, &perm)
-			Expect(err).To(BeNil())
-
-			perm.UID = types.UID(uuid.New().String())
-
-			err = db.PersistPermissionFromCRD(DefaultContext, &perm)
-			Expect(err).To(BeNil())
-		}
-
-		err = rbac.ReloadPolicy()
+		var conn v1.Connection
+		err = yamlutil.Unmarshal(content, &conn)
 		Expect(err).To(BeNil())
+
+		err = db.PersistConnectionFromCRD(DefaultContext, &conn)
+		Expect(err).To(BeNil())
+
+		loadPermissions()
+	})
+
+	var _ = Describe("Connection permissions", Ordered, func() {
+		It("playbook must now have access to the connection even though John can read the connection", func() {
+			run := createAndRun(DefaultContext.WithUser(&dummy.JohnDoe), "action-http-unauthorized", RunParams{
+				ConfigID: lo.ToPtr(dummy.EKSCluster.ID),
+			}, models.PlaybookRunStatusFailed)
+
+			var actions []models.PlaybookRunAction
+			err := DefaultContext.DB().Where("playbook_run_id = ?", run.ID).Find(&actions).Error
+			Expect(err).To(BeNil())
+
+			Expect(actions).To(HaveLen(1))
+			Expect(actions[0].Status).To(Equal(models.PlaybookActionStatusFailed))
+			Expect(*actions[0].Error).To(ContainSubstring("permission required on connection://mc/httpbin"))
+		})
+
+		It("should allow access to the connection", func() {
+			_ = createAndRun(DefaultContext.WithUser(&dummy.JohnDoe), "action-http-authorized", RunParams{
+				ConfigID: lo.ToPtr(dummy.EKSCluster.ID),
+			}, models.PlaybookRunStatusCompleted)
+		})
 	})
 
 	var _ = Describe("Test Listing | Run API | Approvals", Ordered, func() {
@@ -714,6 +751,7 @@ var _ = Describe("Playbook", Ordered, func() {
 
 func createAndRun(ctx context.Context, name string, params RunParams, statuses ...models.PlaybookRunStatus) *models.PlaybookRun {
 	playbook, _ := createPlaybook(name)
+	loadPermissions()
 	return runPlaybook(ctx, playbook, params, statuses...)
 }
 
@@ -768,10 +806,14 @@ func createPlaybook(name string) (models.Playbook, v1.PlaybookSpec) {
 	Expect(err).To(BeNil())
 
 	playbook := &models.Playbook{
-		Namespace: "default",
+		Namespace: lo.CoalesceOrEmpty(spec.Namespace, "default"),
 		Name:      spec.Name,
 		Spec:      specJSON,
 		Source:    models.SourceConfigFile,
+	}
+
+	if spec.GetUID() != "" {
+		playbook.ID = uuid.MustParse(string(spec.GetUID()))
 	}
 
 	Expect(playbook.Save(DefaultContext.DB())).To(BeNil())
