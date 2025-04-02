@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=../../config/schemas/playbook.schema.json
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  uid: d9e3a32d-e9c7-470f-a8a6-60197730d8c8
+  name: http-authorized
+  namespace: mc
+spec:
+  configs:
+    - types:
+        - Kubernetes::Pod
+  actions:
+    - name: HTTP
+      http:
+        connection: connection://mc/httpbin

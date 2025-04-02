@@ -1,0 +1,14 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: allow-playbook-connection
+spec:
+  description: allow john to read connection mc/httpbin
+  subject:
+    person: john@doe.com
+  actions:
+    - read
+  object:
+    connections:
+      - name: httpbin
+        namespace: mc

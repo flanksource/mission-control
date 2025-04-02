@@ -26,7 +26,8 @@ func (c *HTTP) Run(ctx context.Context, action v1.HTTPAction) (*HTTPResult, erro
 	}
 
 	if action.HTTPConnection.Connection != "" {
-		connection, err := pkgConnection.Get(ctx, action.HTTPConnection.Connection)
+		var err error
+		connection, err = pkgConnection.Get(ctx, action.HTTPConnection.Connection)
 		if err != nil {
 			return nil, fmt.Errorf("failed to hydrate connection: %w", err)
 		} else if connection != nil {
