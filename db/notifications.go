@@ -296,3 +296,16 @@ func SaveUnsentNotificationToHistory(ctx context.Context, sendHistory models.Not
 		sendHistory.ParentID,
 	).Error
 }
+
+func SkipNotificationSendHistory(ctx context.Context, sendHistoryID uuid.UUID) error {
+	if sendHistoryID == uuid.Nil {
+		return fmt.Errorf("cannot skip a non-existent notification send history")
+	}
+
+	window := ctx.Properties().Duration("notifications.dedup.window", time.Hour*24)
+
+	return ctx.DB().Exec("SELECT * FROM skip_notification_send_history(?, ?)",
+		sendHistoryID.String(),
+		window,
+	).Error
+}
