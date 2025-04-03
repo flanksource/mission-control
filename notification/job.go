@@ -383,10 +383,9 @@ func shouldSkipNotificationDueToHealth(ctx context.Context, notif NotificationWi
 	if !isHealthReportable(notif.Events, previousHealth, currentHealth) || deleted {
 		ctx.Logger.V(6).Infof("skipping notification[%s] as health change is not reportable", notif.ID)
 		traceLog("NotificationID=%s HistoryID=%s Resource=[%s/%s] PreviousHealth=%s CurrentHealth=%s ResourceDeleted=%v Skipping", notif.ID, currentHistory.ID, payload.EventName, payload.ID, previousHealth, currentHealth, deleted)
-		if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", currentHistory.ID).UpdateColumns(map[string]any{
-			"status": models.NotificationStatusSkipped,
-		}).Error; dberr != nil {
-			return false, fmt.Errorf("failed to save notification status as skipped: %w", dberr)
+
+		if err := db.SkipNotificationSendHistory(ctx, currentHistory.ID); err != nil {
+			return false, fmt.Errorf("failed to skip notification send history (%s): %w", currentHistory.ID, err)
 		}
 
 		return true, nil

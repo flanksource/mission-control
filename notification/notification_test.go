@@ -12,6 +12,7 @@ import (
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/db"
 	dbModels "github.com/flanksource/incident-commander/db/models"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/notification"
@@ -1073,4 +1074,84 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 		})
 	})
 
+	var _ = ginkgo.Describe("Dedup skipped notifications", func() {
+		var sendHistory models.NotificationSendHistory
+		var n models.Notification
+		var config models.ConfigItem
+
+		ginkgo.BeforeAll(func() {
+			n = models.Notification{
+				ID:             uuid.New(),
+				Name:           "group-by-test",
+				Events:         pq.StringArray([]string{"config.unhealthy"}),
+				Source:         models.SourceCRD,
+				Title:          "Dummy",
+				Template:       "Failed: $(.config.id)/$(.config.name)",
+				CustomServices: types.JSON(customReceiverJson),
+				WaitFor:        lo.ToPtr(time.Second * 15),
+			}
+
+			err := DefaultContext.DB().Create(&n).Error
+			Expect(err).To(BeNil())
+
+			config = models.ConfigItem{
+				ID:          uuid.New(),
+				Name:        lo.ToPtr("config1"),
+				ConfigClass: "HelmRelease",
+				Health:      lo.ToPtr(models.HealthHealthy),
+				Config:      lo.ToPtr(`{"color": "red"}`),
+				Type:        lo.ToPtr("Kubernetes::HelmRelease"),
+			}
+
+			err = DefaultContext.DB().Create(&config).Error
+			Expect(err).To(BeNil())
+
+			// Assume there's a notification that's currently evaluating a waitfor
+			sendHistory = models.NotificationSendHistory{
+				NotificationID: n.ID,
+				ResourceID:     config.ID,
+				SourceEvent:    "config.unhealthy",
+				Status:         models.NotificationStatusEvaluatingWaitFor,
+				CreatedAt:      time.Now().Add(-time.Second * 10),
+			}
+
+			err = DefaultContext.DB().Create(&sendHistory).Error
+			Expect(err).To(BeNil())
+		})
+
+		ginkgo.It("should skip the notification if the resource is unhealthy", func() {
+			err := db.SkipNotificationSendHistory(DefaultContext, sendHistory.ID)
+			Expect(err).To(BeNil())
+
+			var allSendHistories []models.NotificationSendHistory
+			err = DefaultContext.DB().Where("notification_id = ?", n.ID.String()).Find(&allSendHistories).Error
+			Expect(err).To(BeNil())
+			Expect(len(allSendHistories)).To(Equal(1))
+			Expect(allSendHistories[0].Status).To(Equal(models.NotificationStatusSkipped))
+		})
+
+		ginkgo.It("try to skip another send history", func() {
+			// Assume there's a notification that's currently evaluating a waitfor
+			anotherSendHistory := models.NotificationSendHistory{
+				NotificationID: n.ID,
+				ResourceID:     config.ID,
+				SourceEvent:    "config.unhealthy",
+				Status:         models.NotificationStatusEvaluatingWaitFor,
+				CreatedAt:      time.Now().Add(-time.Second * 10),
+			}
+
+			err := DefaultContext.DB().Create(&anotherSendHistory).Error
+			Expect(err).To(BeNil())
+
+			err = db.SkipNotificationSendHistory(DefaultContext, anotherSendHistory.ID)
+			Expect(err).To(BeNil())
+
+			var allSendHistories []models.NotificationSendHistory
+			err = DefaultContext.DB().Where("notification_id = ?", n.ID.String()).Find(&allSendHistories).Error
+			Expect(err).To(BeNil())
+			Expect(len(allSendHistories)).To(Equal(1))
+			Expect(allSendHistories[0].Status).To(Equal(models.NotificationStatusSkipped))
+			Expect(allSendHistories[0].Count).To(Equal(2))
+		})
+	})
 })
