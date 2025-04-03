@@ -370,14 +370,14 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 
 	var _ = ginkgo.Describe("inhibitions", ginkgo.Ordered, func() {
 		var n models.Notification
-		var deployment, pod models.ConfigItem
+		var deployment, pod, replicaSet models.ConfigItem
 
 		inhibitions := []v1.NotificationInihibition{
 			{
-				Direction: "outgoing",
-				From:      "Kubernetes::Deployment",
+				Direction: "incoming",
+				From:      "Kubernetes::Pod",
 				To: []string{
-					"Kubernetes::Pod",
+					"Kubernetes::Deployment",
 					"Kubernetes::ReplicaSet",
 				},
 			},
@@ -416,11 +416,26 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 			err = DefaultContext.DB().Create(&deployment).Error
 			Expect(err).To(BeNil())
 
+			replicaSet = models.ConfigItem{
+				ID:          uuid.New(),
+				Name:        lo.ToPtr("airsonic-replicaset"),
+				ConfigClass: "ReplicaSet",
+				ParentID:    &deployment.ID,
+				Config:      lo.ToPtr(`{"replicas": 1}`),
+				Labels: &types.JSONStringMap{
+					"app": "airsonic",
+				},
+				Type: lo.ToPtr("Kubernetes::ReplicaSet"),
+			}
+
+			err = DefaultContext.DB().Create(&replicaSet).Error
+			Expect(err).To(BeNil())
+
 			pod = models.ConfigItem{
 				ID:          uuid.New(),
 				Name:        lo.ToPtr("airsonic-pod"),
 				ConfigClass: models.ConfigClassPod,
-				ParentID:    &deployment.ID,
+				ParentID:    &replicaSet.ID,
 				Config:      lo.ToPtr(`{"color": "blue"}`),
 				Labels: &types.JSONStringMap{
 					"app": "airsonic",
@@ -439,6 +454,9 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 			err = DefaultContext.DB().Delete(&pod).Error
 			Expect(err).To(BeNil())
 
+			err = DefaultContext.DB().Delete(&replicaSet).Error
+			Expect(err).To(BeNil())
+
 			err = DefaultContext.DB().Delete(&deployment).Error
 			Expect(err).To(BeNil())
 
@@ -448,7 +466,7 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 		ginkgo.It("should have sent a notification for a config update", func() {
 			event := models.Event{
 				Name:       "config.unhealthy",
-				Properties: types.JSONStringMap{"id": deployment.ID.String()},
+				Properties: types.JSONStringMap{"id": pod.ID.String()},
 			}
 			err := DefaultContext.DB().Create(&event).Error
 			Expect(err).To(BeNil())
@@ -469,10 +487,10 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 			}, "10s", "200ms").Should(Equal(int64(1)))
 		})
 
-		ginkgo.It("should NOT have sent a notification for a subsequent pod update", func() {
+		ginkgo.It("should NOT have sent a notification for a subsequent deployment update", func() {
 			event := models.Event{
 				Name:       "config.unhealthy",
-				Properties: types.JSONStringMap{"id": pod.ID.String()},
+				Properties: types.JSONStringMap{"id": deployment.ID.String()},
 			}
 			err := DefaultContext.DB().Create(&event).Error
 			Expect(err).To(BeNil())
@@ -493,11 +511,11 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 			Expect(len(histories)).To(Equal(2))
 
 			for _, history := range histories {
-				if history.ResourceID == pod.ID {
+				if history.ResourceID == deployment.ID {
 					Expect(history.Status).To(Equal(models.NotificationStatusInhibited))
 					Expect(history.ParentID).To(Not(BeNil()))
 				}
-				if history.ResourceID == deployment.ID {
+				if history.ResourceID == pod.ID {
 					Expect(history.Status).To(Equal(models.NotificationStatusSent))
 				}
 			}
