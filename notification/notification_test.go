@@ -487,6 +487,40 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 			}, "10s", "200ms").Should(Equal(int64(1)))
 		})
 
+		ginkgo.It("should NOT have sent a notification for a subsequent replica set unhealthy", func() {
+			event := models.Event{
+				Name:       "config.unhealthy",
+				Properties: types.JSONStringMap{"id": replicaSet.ID.String()},
+			}
+			err := DefaultContext.DB().Create(&event).Error
+			Expect(err).To(BeNil())
+
+			events.ConsumeAll(DefaultContext)
+			Eventually(func() int64 {
+				events.ConsumeAll(DefaultContext)
+
+				var c int64
+				DefaultContext.DB().Model(&models.Event{}).Where("name = 'config.unhealthy'").Count(&c)
+				return c
+			}, "20s", "200ms").Should(Equal(int64(0)))
+
+			// Check send history
+			var histories []models.NotificationSendHistory
+			err = DefaultContext.DB().Where("notification_id = ?", n.ID).Find(&histories).Error
+			Expect(err).To(BeNil())
+			Expect(len(histories)).To(Equal(2))
+
+			for _, history := range histories {
+				if history.ResourceID == replicaSet.ID {
+					Expect(history.Status).To(Equal(models.NotificationStatusInhibited))
+					Expect(history.ParentID).To(Not(BeNil()))
+				}
+				if history.ResourceID == pod.ID {
+					Expect(history.Status).To(Equal(models.NotificationStatusSent))
+				}
+			}
+		})
+
 		ginkgo.It("should NOT have sent a notification for a subsequent deployment update", func() {
 			event := models.Event{
 				Name:       "config.unhealthy",
@@ -508,9 +542,52 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 			var histories []models.NotificationSendHistory
 			err = DefaultContext.DB().Where("notification_id = ?", n.ID).Find(&histories).Error
 			Expect(err).To(BeNil())
-			Expect(len(histories)).To(Equal(2))
+			Expect(len(histories)).To(Equal(3))
 
 			for _, history := range histories {
+				if history.ResourceID == replicaSet.ID {
+					Expect(history.Status).To(Equal(models.NotificationStatusInhibited))
+					Expect(history.ParentID).To(Not(BeNil()))
+				}
+				if history.ResourceID == deployment.ID {
+					Expect(history.Status).To(Equal(models.NotificationStatusInhibited))
+					Expect(history.ParentID).To(Not(BeNil()))
+				}
+				if history.ResourceID == pod.ID {
+					Expect(history.Status).To(Equal(models.NotificationStatusSent))
+				}
+			}
+		})
+
+		ginkgo.It("should NOT have sent a notification for a another replica set unhealthy", func() {
+			event := models.Event{
+				Name:       "config.unhealthy",
+				Properties: types.JSONStringMap{"id": replicaSet.ID.String()},
+			}
+			err := DefaultContext.DB().Create(&event).Error
+			Expect(err).To(BeNil())
+
+			events.ConsumeAll(DefaultContext)
+			Eventually(func() int64 {
+				events.ConsumeAll(DefaultContext)
+
+				var c int64
+				DefaultContext.DB().Model(&models.Event{}).Where("name = 'config.unhealthy'").Count(&c)
+				return c
+			}, "20s", "200ms").Should(Equal(int64(0)))
+
+			// Check send history
+			var histories []models.NotificationSendHistory
+			err = DefaultContext.DB().Where("notification_id = ?", n.ID).Find(&histories).Error
+			Expect(err).To(BeNil())
+			Expect(len(histories)).To(Equal(3))
+
+			for _, history := range histories {
+				if history.ResourceID == replicaSet.ID {
+					Expect(history.Status).To(Equal(models.NotificationStatusInhibited))
+					Expect(history.ParentID).To(Not(BeNil()))
+					Expect(history.Count).To(Equal(2))
+				}
 				if history.ResourceID == deployment.ID {
 					Expect(history.Status).To(Equal(models.NotificationStatusInhibited))
 					Expect(history.ParentID).To(Not(BeNil()))
