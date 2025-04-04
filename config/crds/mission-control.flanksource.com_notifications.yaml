@@ -99,8 +99,7 @@ spec:
               inhibitions:
                 description: |-
                   Inhibit controls notification suppression for related resources.
-                  It uses the repeat interval as the window for suppression
-                  as well as the wait for period.
+                  Inhibitions can be done via groupBy or via relationship.
                 items:
                   properties:
                     depth:
@@ -120,6 +119,21 @@ spec:
                       description: From specifies the starting resource type (for
                         example, "Kubernetes::Deployment").
                       type: string
+                    groupBy:
+                      description: |-
+                        Valid keys: type, description, status_reason or
+                        labels & tags in the format `label:<key>` or `tag:<key>`
+                      items:
+                        type: string
+                      type: array
+                    interval:
+                      description: |-
+                        Interval determines how far back in time do we look for previous notifications
+                        that can potentially inhibit the current notification.
+
+
+                        Defaults to 1h.
+                      type: string
                     soft:
                       description: |-
                         Soft, when true, relates using soft relationships.
@@ -135,7 +149,6 @@ spec:
                         type: string
                       type: array
                   required:
-                  - direction
                   - from
                   - to
                   type: object

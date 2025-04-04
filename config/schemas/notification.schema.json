@@ -8,6 +8,43 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "InhibitionRule": {
+      "properties": {
+        "direction": {
+          "type": "string"
+        },
+        "soft": {
+          "type": "boolean"
+        },
+        "depth": {
+          "type": "integer"
+        },
+        "groupBy": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "interval": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "from",
+        "to"
+      ]
+    },
     "ManagedFieldsEntry": {
       "properties": {
         "manager": {
@@ -89,35 +126,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "NotificationInihibition": {
-      "properties": {
-        "direction": {
-          "type": "string"
-        },
-        "soft": {
-          "type": "boolean"
-        },
-        "depth": {
-          "type": "integer"
-        },
-        "from": {
-          "type": "string"
-        },
-        "to": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object",
-      "required": [
-        "direction",
-        "from",
-        "to"
-      ]
-    },
     "NotificationRecipientSpec": {
       "properties": {
         "person": {
@@ -188,7 +196,7 @@
         },
         "inhibitions": {
           "items": {
-            "$ref": "#/$defs/NotificationInihibition"
+            "$ref": "#/$defs/InhibitionRule"
           },
           "type": "array"
         }

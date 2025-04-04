@@ -48,7 +48,7 @@ type NotificationWithSpec struct {
 	RepeatInterval             *time.Duration
 	CustomNotifications        []api.NotificationConfig
 	FallbackCustomNotification *api.NotificationConfig
-	Inhibitions                []v1.NotificationInihibition
+	Inhibitions                []v1.InhibitionRule
 }
 
 func GetNotification(ctx context.Context, id string) (*NotificationWithSpec, error) {
