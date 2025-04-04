@@ -369,11 +369,190 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 		})
 	})
 
+	var _ = ginkgo.Describe("inhibition by group by parameters", ginkgo.Ordered, func() {
+		var n models.Notification
+		var mcPod, canaryCheckerPod, configDBPod models.ConfigItem
+
+		inhibitions := []v1.InhibitionRule{
+			{
+				GroupBy: []string{"type", "status_reason"},
+				From:    "Kubernetes::Pod",
+				To: []string{
+					"Kubernetes::Pod",
+					"Kubernetes::Deployment",
+					"Kubernetes::ReplicaSet",
+				},
+			},
+		}
+
+		inhibitionsJSON, err := json.Marshal(inhibitions)
+		Expect(err).To(BeNil())
+
+		ginkgo.BeforeAll(func() {
+			n = models.Notification{
+				ID:             uuid.New(),
+				Name:           "inhibition-test-group-by",
+				Events:         pq.StringArray([]string{"config.unhealthy"}),
+				Source:         models.SourceCRD,
+				Title:          "Dummy",
+				Template:       "dummy",
+				CustomServices: types.JSON(customReceiverJson),
+				Inhibitions:    inhibitionsJSON,
+				RepeatInterval: "4h",
+			}
+
+			err := DefaultContext.DB().Create(&n).Error
+			Expect(err).To(BeNil())
+
+			mcPod = models.ConfigItem{
+				ID:          uuid.New(),
+				Name:        lo.ToPtr("mission-control"),
+				ConfigClass: models.ConfigClassPod,
+				Config:      lo.ToPtr(`{"color": "red"}`),
+				Status:      lo.ToPtr("0/5 nodes are available: 5 Insufficient memory, 3 Insufficient cpu"),
+				Type:        lo.ToPtr("Kubernetes::Pod"),
+			}
+
+			err = DefaultContext.DB().Create(&mcPod).Error
+			Expect(err).To(BeNil())
+
+			configDBPod = models.ConfigItem{
+				ID:          uuid.New(),
+				Name:        lo.ToPtr("config-db"),
+				ConfigClass: models.ConfigClassPod,
+				Config:      lo.ToPtr(`{"replicas": 1}`),
+				Status:      lo.ToPtr("0/5 nodes are available: 5 Insufficient memory, 3 Insufficient cpu"),
+				Type:        lo.ToPtr("Kubernetes::Pod"),
+			}
+
+			err = DefaultContext.DB().Create(&configDBPod).Error
+			Expect(err).To(BeNil())
+
+			canaryCheckerPod = models.ConfigItem{
+				ID:          uuid.New(),
+				Name:        lo.ToPtr("canary-checker"),
+				ConfigClass: models.ConfigClassPod,
+				Config:      lo.ToPtr(`{"color": "blue"}`),
+				Status:      lo.ToPtr("0/5 nodes are available: 5 Insufficient memory, 3 Insufficient cpu"),
+				Type:        lo.ToPtr("Kubernetes::Pod"),
+			}
+
+			err = DefaultContext.DB().Create(&canaryCheckerPod).Error
+			Expect(err).To(BeNil())
+		})
+
+		ginkgo.AfterAll(func() {
+			err := DefaultContext.DB().Delete(&n).Error
+			Expect(err).To(BeNil())
+
+			err = DefaultContext.DB().Delete(&canaryCheckerPod).Error
+			Expect(err).To(BeNil())
+
+			err = DefaultContext.DB().Delete(&configDBPod).Error
+			Expect(err).To(BeNil())
+
+			err = DefaultContext.DB().Delete(&mcPod).Error
+			Expect(err).To(BeNil())
+
+			notification.PurgeCache(n.ID.String())
+		})
+
+		ginkgo.It("should have sent a notification for config-db pod unhealthy", func() {
+			event := models.Event{
+				Name:       "config.unhealthy",
+				Properties: types.JSONStringMap{"id": configDBPod.ID.String()},
+			}
+			err := DefaultContext.DB().Create(&event).Error
+			Expect(err).To(BeNil())
+
+			events.ConsumeAll(DefaultContext)
+			Eventually(func() int64 {
+				var c int64
+				DefaultContext.DB().Model(&models.Event{}).Where("name = 'config.unhealthy'").Count(&c)
+				return c
+			}, "10s", "200ms").Should(Equal(int64(0)))
+
+			Eventually(func() int64 {
+				// Check send history
+				var sentHistoryCount int64
+				err = DefaultContext.DB().Model(&models.NotificationSendHistory{}).Where("notification_id = ?", n.ID).Count(&sentHistoryCount).Error
+				Expect(err).To(BeNil())
+				return sentHistoryCount
+			}, "10s", "200ms").Should(Equal(int64(1)))
+		})
+
+		ginkgo.It("should have inhibited a notification for canary-checker pod unhealthy", func() {
+			event := models.Event{
+				Name:       "config.unhealthy",
+				Properties: types.JSONStringMap{"id": canaryCheckerPod.ID.String()},
+			}
+			err := DefaultContext.DB().Create(&event).Error
+			Expect(err).To(BeNil())
+
+			events.ConsumeAll(DefaultContext)
+			Eventually(func() int64 {
+				var c int64
+				DefaultContext.DB().Model(&models.Event{}).Where("name = 'config.unhealthy'").Count(&c)
+				return c
+			}, "10s", "200ms").Should(Equal(int64(0)))
+
+			Eventually(func() bool {
+				var sendHistories []models.NotificationSendHistory
+				err = DefaultContext.DB().Model(&models.NotificationSendHistory{}).Where("notification_id = ?", n.ID).Order("created_at").Find(&sendHistories).Error
+				Expect(err).To(BeNil())
+				Expect(len(sendHistories)).To(Equal(2))
+
+				Expect(sendHistories[0].ResourceID).To(Equal(configDBPod.ID))
+				Expect(sendHistories[0].Status).To(Equal(models.NotificationStatusSent))
+
+				Expect(sendHistories[1].ResourceID).To(Equal(canaryCheckerPod.ID))
+				Expect(sendHistories[1].Status).To(Equal(models.NotificationStatusInhibited))
+				Expect(sendHistories[1].ParentID).To(Not(Equal(sendHistories[0].ID)))
+				return true
+			}, "10s", "200ms").Should(BeTrue(), "must have 2 send histories")
+		})
+
+		ginkgo.It("should have inhibited a notification for mission-control pod unhealthy", func() {
+			event := models.Event{
+				Name:       "config.unhealthy",
+				Properties: types.JSONStringMap{"id": mcPod.ID.String()},
+			}
+			err := DefaultContext.DB().Create(&event).Error
+			Expect(err).To(BeNil())
+
+			events.ConsumeAll(DefaultContext)
+			Eventually(func() int64 {
+				var c int64
+				DefaultContext.DB().Model(&models.Event{}).Where("name = 'config.unhealthy'").Count(&c)
+				return c
+			}, "10s", "200ms").Should(Equal(int64(0)))
+
+			Eventually(func() bool {
+				var sendHistories []models.NotificationSendHistory
+				err = DefaultContext.DB().Model(&models.NotificationSendHistory{}).Where("notification_id = ?", n.ID).Order("created_at").Find(&sendHistories).Error
+				Expect(err).To(BeNil())
+				Expect(len(sendHistories)).To(Equal(3))
+
+				Expect(sendHistories[0].ResourceID).To(Equal(configDBPod.ID))
+				Expect(sendHistories[0].Status).To(Equal(models.NotificationStatusSent))
+
+				Expect(sendHistories[1].ResourceID).To(Equal(canaryCheckerPod.ID))
+				Expect(sendHistories[1].Status).To(Equal(models.NotificationStatusInhibited))
+				Expect(sendHistories[1].ParentID).To(Not(Equal(sendHistories[0].ID)))
+
+				Expect(sendHistories[2].ResourceID).To(Equal(mcPod.ID))
+				Expect(sendHistories[2].Status).To(Equal(models.NotificationStatusInhibited))
+				Expect(sendHistories[2].ParentID).To(Not(Equal(sendHistories[0].ID)))
+				return true
+			}, "10s", "200ms").Should(BeTrue(), "must have 3 send histories")
+		})
+	})
+
 	var _ = ginkgo.Describe("inhibitions", ginkgo.Ordered, func() {
 		var n models.Notification
 		var deployment, pod, replicaSet models.ConfigItem
 
-		inhibitions := []v1.NotificationInihibition{
+		inhibitions := []v1.InhibitionRule{
 			{
 				Direction: "incoming",
 				From:      "Kubernetes::Pod",

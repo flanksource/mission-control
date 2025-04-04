@@ -10,6 +10,7 @@ import (
 	"time"
 
 	sw "github.com/RussellLuo/slidingwindow"
+	"github.com/flanksource/commons/duration"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/pkg/tokenizer"
@@ -25,6 +26,8 @@ import (
 	"github.com/samber/lo"
 	"gorm.io/gorm/clause"
 )
+
+const DefaultInhibitionWindow = 15 * time.Minute
 
 var (
 	// rateLimiters per notification
@@ -288,7 +291,7 @@ func processNotificationConstraints(ctx context.Context,
 	}
 
 	if len(n.Inhibitions) > 0 && n.RepeatInterval != nil && celEnv.ConfigItem != nil {
-		inhibitor, err := checkInhibition(ctx, n, celEnv.SelectableResource())
+		inhibitor, err := checkInhibition(ctx, n, payload, celEnv.SelectableResource())
 		if err != nil {
 			return nil, fmt.Errorf("failed to check inhibition for notification[%s]: %w", n.ID, err)
 		}
@@ -307,13 +310,7 @@ func processNotificationConstraints(ctx context.Context,
 	return nil, nil
 }
 
-func checkInhibition(ctx context.Context, notif NotificationWithSpec, resource types.ResourceSelectable) (*uuid.UUID, error) {
-	// Note: we use the repeat interval as the inhibition window.
-	inhibitionWindow := notif.RepeatInterval
-	if inhibitionWindow == nil {
-		return nil, nil
-	}
-
+func checkInhibition(ctx context.Context, notif NotificationWithSpec, payload NotificationEventPayload, resource types.ResourceSelectable) (*uuid.UUID, error) {
 	resourceID, err := uuid.Parse(resource.GetID())
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse resource id: %w", err)
@@ -321,6 +318,67 @@ func checkInhibition(ctx context.Context, notif NotificationWithSpec, resource t
 
 	for _, inhibition := range notif.Inhibitions {
 		if !lo.Contains(inhibition.To, resource.GetType()) {
+			continue
+		}
+
+		inhibitionWindow := ctx.Properties().Duration("notification.inhibition.window", DefaultInhibitionWindow)
+		if inhibition.Interval != nil {
+			w, err := duration.ParseDuration(*inhibition.Interval)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse inhibition interval: %w", err)
+			}
+
+			inhibitionWindow = time.Duration(w)
+		}
+
+		if len(inhibition.GroupBy) > 0 {
+			var sendHistories []struct {
+				ID         uuid.UUID
+				ResourceID uuid.UUID
+			}
+
+			var resourceTable string
+			if strings.HasPrefix(payload.EventName, "config") {
+				resourceTable = "config_items"
+			} else if strings.HasPrefix(payload.EventName, "component") {
+				resourceTable = "components"
+			} else if strings.HasPrefix(payload.EventName, "check") {
+				resourceTable = "checks"
+			} else {
+				return nil, fmt.Errorf("unsupported event type: %s", payload.EventName)
+			}
+
+			query := fmt.Sprintf(`
+				SELECT notification_send_history.id, resource_id
+				FROM notification_send_history
+				INNER JOIN %s on resource_id = %s.id and %s.type = ?
+				WHERE 
+				notification_send_history.notification_id = ?
+				AND notification_send_history.status = ?
+				AND notification_send_history.created_at >= NOW() - INTERVAL '%f MINUTES'`, resourceTable, resourceTable, resourceTable, inhibitionWindow.Minutes())
+			if err := ctx.DB().Raw(query, inhibition.From, notif.ID, models.NotificationStatusSent).Scan(&sendHistories).Error; err != nil {
+				return nil, fmt.Errorf("failed to get notification send history: %w", err)
+			}
+
+			if len(sendHistories) > 0 {
+				requiredHash, err := calculateGroupByHash(ctx, inhibition.GroupBy, payload.ID.String(), payload.EventName)
+				if err != nil {
+					return nil, fmt.Errorf("failed to calculate group by hash: %w", err)
+				}
+
+				for _, sendHistory := range sendHistories {
+					hash, err := calculateGroupByHash(ctx, inhibition.GroupBy, sendHistory.ResourceID.String(), payload.EventName)
+					if err != nil {
+						return nil, fmt.Errorf("failed to calculate group by hash: %w", err)
+					}
+
+					if hash == requiredHash {
+						return lo.ToPtr(sendHistory.ID), nil
+					}
+				}
+			}
+
+			// This is group based inhibition, we discard relationthip based inhibition
 			continue
 		}
 

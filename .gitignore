@@ -22,6 +22,8 @@ nohup.out
 .envrc
 .creds
 msg.tpl
-.windsurfrules
 test-reports
+
+.windsurfrules
+.aider*
 .cursor/

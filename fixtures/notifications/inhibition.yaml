@@ -15,3 +15,14 @@ spec:
         - Kubernetes::Deployment
         - Kubernetes::ReplicaSet
       depth: 2
+    - from: "Kubernetes::Namespace"
+      to:
+        - "Kubernetes::Deployment"
+        - "Kubernetes::StatefulSet"
+        - "Kubernetes::DaemonSet"
+        - "Kubernetes::Job"
+        - "Kubernetes::CronJob"
+      groupBy:
+        - type
+        - status_reason
+      interval: 1m
