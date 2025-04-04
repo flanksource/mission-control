@@ -163,7 +163,7 @@ func FindPlaybooksForEvent(ctx context.Context, eventClass, event string) ([]mod
 
 func FindPlaybookByWebhookPath(ctx context.Context, path string) (*models.Playbook, error) {
 	var p models.Playbook
-	if err := ctx.DB().Debug().Where("spec->'on'->'webhook'->>'path' = ?", path).First(&p).Error; err != nil {
+	if err := ctx.DB().Debug().Where("deleted_at IS NULL").Where("spec->'on'->'webhook'->>'path' = ?", path).First(&p).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
 		}

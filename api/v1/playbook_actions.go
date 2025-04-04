@@ -614,7 +614,7 @@ type PlaybookAction struct {
 	Exec                *ExecAction                `json:"exec,omitempty" yaml:"exec,omitempty" template:"true"`
 	GitOps              *GitOpsAction              `json:"gitops,omitempty" yaml:"gitops,omitempty" template:"true"`
 	Github              *GithubAction              `json:"github,omitempty" yaml:"github,omitempty" template:"true"`
-	AzureDevopsPipeline *AzureDevopsPipelineAction `json:"azureDevopsPipeline,omitempty" yaml:"azureDevops,omitempty" template:"true"`
+	AzureDevopsPipeline *AzureDevopsPipelineAction `json:"azureDevopsPipeline,omitempty" yaml:"azureDevopsPipeline,omitempty" template:"true"`
 	HTTP                *HTTPAction                `json:"http,omitempty" yaml:"http,omitempty" template:"true"`
 	SQL                 *SQLAction                 `json:"sql,omitempty" yaml:"sql,omitempty" template:"true"`
 	Pod                 *PodAction                 `json:"pod,omitempty" yaml:"pod,omitempty" template:"true"`
