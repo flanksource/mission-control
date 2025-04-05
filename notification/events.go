@@ -26,6 +26,8 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+const DefaultGroupByInterval = time.Hour * 24
+
 var (
 	// rateLimiters per notification
 	rateLimiters     = map[string]*sw.Limiter{}
@@ -86,7 +88,7 @@ type notificationHandler struct {
 }
 
 // Check if notification can be sent in the interval based on group by, returns true if it can be sent
-func checkRepeatInterval(ctx context.Context, n NotificationWithSpec, resourceID, sourceEvent string) (bool, error) {
+func checkRepeatInterval(ctx context.Context, n NotificationWithSpec, groupByHash, sourceEvent string) (bool, error) {
 	if n.RepeatInterval == nil {
 		return true, nil
 	}
@@ -94,7 +96,7 @@ func checkRepeatInterval(ctx context.Context, n NotificationWithSpec, resourceID
 	clauses := []clause.Expression{
 		clause.Eq{Column: "notification_id", Value: n.ID.String()},
 		clause.Eq{Column: "status", Value: models.NotificationStatusSent},
-		clause.Eq{Column: "resource_id", Value: resourceID},
+		clause.Eq{Column: "group_by_hash", Value: groupByHash},
 		clause.Eq{Column: "source_event", Value: sourceEvent},
 	}
 
@@ -181,7 +183,29 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 	}
 
 	for _, payload := range payloads {
-		if blocker, err := processNotificationConstraints(ctx, *n, payload, celEnv, matchingSilences); err != nil {
+		var groupByHash string
+		var err error
+
+		if len(n.GroupBy) > 0 {
+			groupByHash, err = calculateGroupByHash(ctx, n.GroupBy, payload.ID.String(), payload.EventName)
+			if err != nil {
+				return err
+			}
+		}
+
+		// If this falls in any group, we need to add the resource to that group
+		if groupByHash != "" {
+			groupByInterval := n.GroupByInterval
+			if groupByInterval == 0 {
+				groupByInterval = ctx.Properties().Duration("notifications.group_by_interval", DefaultGroupByInterval)
+			}
+
+			if err := db.AddResourceToGroup(ctx, groupByInterval, groupByHash, &payload.ID, nil, nil); err != nil {
+				return fmt.Errorf("failed to add resource to group: %w", err)
+			}
+		}
+
+		if blocker, err := processNotificationConstraints(ctx, *n, payload, groupByHash, celEnv, matchingSilences); err != nil {
 			return fmt.Errorf("failed to check all conditions for notification[%s]: %w", n.ID, err)
 		} else if blocker != nil {
 			history := models.NotificationSendHistory{
@@ -218,12 +242,7 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 				NotBefore:      lo.ToPtr(time.Now().Add(*n.WaitFor)),
 			}
 			if len(n.GroupBy) > 0 {
-				h, err := calculateGroupByHash(ctx, n.GroupBy, payload.ID.String(), payload.EventName)
-				logs.IfError(err, "error persisting start of notification send history")
-				if err != nil {
-					return err
-				}
-				pendingHistory.GroupByHash = h
+				pendingHistory.GroupByHash = groupByHash
 			}
 
 			if err := ctx.DB().Create(&pendingHistory).Error; err != nil {
@@ -254,23 +273,15 @@ type validateResult struct {
 func processNotificationConstraints(ctx context.Context,
 	n NotificationWithSpec,
 	payload NotificationEventPayload,
+	groupByHash string,
 	celEnv *celVariables,
 	matchingSilences []models.NotificationSilence,
 ) (*validateResult, error) {
 	sourceEvent := payload.EventName
 
-	if silencedBy := getFirstSilencer(ctx, celEnv, matchingSilences); silencedBy != nil {
-		ctx.Logger.V(6).Infof("silencing notification for event %s due to %d matching silences", sourceEvent, matchingSilences)
-		ctx.Counter("notification_silenced", "id", n.ID.String(), "resource", payload.ID.String()).Add(1)
-		return &validateResult{
-			BlockedWithStatus: models.NotificationStatusSilenced,
-			SilencedBy:        &silencedBy.ID,
-		}, nil
-	}
-
 	// Repeat interval check
 	if n.RepeatInterval != nil {
-		passesRepeatInterval, err := checkRepeatInterval(ctx, n, payload.ID.String(), sourceEvent)
+		passesRepeatInterval, err := checkRepeatInterval(ctx, n, groupByHash, sourceEvent)
 		if err != nil {
 			// If there are any errors in calculating interval, we send the notification and log the error
 			ctx.Errorf("error checking repeat interval for notification[%s]: %v", n.ID, err)
@@ -285,6 +296,15 @@ func processNotificationConstraints(ctx context.Context,
 				BlockedWithStatus: models.NotificationStatusRepeatInterval,
 			}, nil
 		}
+	}
+
+	if silencedBy := getFirstSilencer(ctx, celEnv, matchingSilences); silencedBy != nil {
+		ctx.Logger.V(6).Infof("silencing notification for event %s due to %d matching silences", sourceEvent, matchingSilences)
+		ctx.Counter("notification_silenced", "id", n.ID.String(), "resource", payload.ID.String()).Add(1)
+		return &validateResult{
+			BlockedWithStatus: models.NotificationStatusSilenced,
+			SilencedBy:        &silencedBy.ID,
+		}, nil
 	}
 
 	if len(n.Inhibitions) > 0 && n.RepeatInterval != nil && celEnv.ConfigItem != nil {
