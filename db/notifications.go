@@ -20,6 +20,7 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
+	"go.opentelemetry.io/otel/trace"
 )
 
 func DeleteNotificationSilence(ctx context.Context, id string) error {
@@ -308,4 +309,33 @@ func SkipNotificationSendHistory(ctx context.Context, sendHistoryID uuid.UUID) e
 		sendHistoryID.String(),
 		window,
 	).Error
+}
+
+func AddResourceToGroup(ctx context.Context, groupingInterval time.Duration, groupByHash string, configID, checkID, componentID *uuid.UUID) error {
+	if len(groupByHash) == 0 {
+		return nil
+	}
+
+	return ctx.Transaction(func(ctx context.Context, _ trace.Span) error {
+		var group models.NotificationGroup
+		if err := ctx.DB().Where("hash = ?", groupByHash).
+			Where("created_at > NOW() - ?", groupingInterval).
+			Order("created_at DESC").
+			Limit(1).
+			Find(&group).Error; err != nil {
+			return err
+		}
+
+		if group.ID == uuid.Nil {
+			return fmt.Errorf("no group found for hash %s", groupByHash)
+		}
+
+		groupResource := models.NotificationGroupResource{
+			NotificationGroupID: group.ID,
+			ConfigID:            configID,
+			CheckID:             checkID,
+			ComponentID:         componentID,
+		}
+		return ctx.DB().Create(&groupResource).Error
+	})
 }
