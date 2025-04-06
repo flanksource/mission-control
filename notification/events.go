@@ -241,9 +241,6 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 				Status:         models.NotificationStatusPending,
 				NotBefore:      lo.ToPtr(time.Now().Add(*n.WaitFor)),
 			}
-			if len(n.GroupBy) > 0 {
-				pendingHistory.GroupByHash = groupByHash
-			}
 
 			if err := ctx.DB().Create(&pendingHistory).Error; err != nil {
 				return fmt.Errorf("failed to save pending notification: %w", err)
