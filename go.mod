@@ -32,8 +32,8 @@ require (
 	github.com/onsi/gomega v1.36.2
 	github.com/ory/client-go v1.1.41
 	github.com/prometheus/client_golang v1.20.5
-	github.com/spf13/cobra v1.8.1
-	github.com/spf13/pflag v1.0.5
+	github.com/spf13/cobra v1.9.1
+	github.com/spf13/pflag v1.0.6
 	gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df
 	gorm.io/gorm v1.25.12
 	k8s.io/apimachinery v0.31.1
@@ -146,7 +146,7 @@ require (
 	github.com/exaring/otelpgx v0.6.2 // indirect
 	github.com/fatih/color v1.17.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
-	github.com/flanksource/is-healthy v1.0.68 // indirect
+	github.com/flanksource/is-healthy v1.0.70 // indirect
 	github.com/flanksource/kubectl-neat v1.0.4 // indirect
 	github.com/fluxcd/gitkit v0.6.0 // indirect
 	github.com/fsnotify/fsnotify v1.7.0 // indirect
