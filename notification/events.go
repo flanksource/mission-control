@@ -200,7 +200,7 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 				groupByInterval = ctx.Properties().Duration("notifications.group_by_interval", DefaultGroupByInterval)
 			}
 
-			if err := db.AddResourceToGroup(ctx, groupByInterval, groupByHash, &payload.ID, nil, nil); err != nil {
+			if err := db.AddResourceToGroup(ctx, groupByInterval, groupByHash, n.ID, &payload.ID, nil, nil); err != nil {
 				return fmt.Errorf("failed to add resource to group: %w", err)
 			}
 		}

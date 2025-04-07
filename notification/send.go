@@ -29,9 +29,9 @@ import (
 var templates embed.FS
 
 const groupedResourcesMessage = `
-Resources grouped with notification:
+Resources grouped with this notification:
 {{- range .groupedResources }}
--{{ . }}
+- {{ . }}
 {{- end }}`
 
 // NotificationTemplate holds in data for notification

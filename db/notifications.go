@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	extraClausePlugin "github.com/WinterYukky/gorm-extra-clause-plugin"
@@ -21,6 +22,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"go.opentelemetry.io/otel/trace"
+	"gorm.io/gorm/clause"
 )
 
 func DeleteNotificationSilence(ctx context.Context, id string) error {
@@ -311,31 +313,63 @@ func SkipNotificationSendHistory(ctx context.Context, sendHistoryID uuid.UUID) e
 	).Error
 }
 
-func AddResourceToGroup(ctx context.Context, groupingInterval time.Duration, groupByHash string, configID, checkID, componentID *uuid.UUID) error {
+// groupMutexes is a map of hash to mutex to prevent race conditions when creating notification groups
+var groupMutexes = &sync.Map{}
+
+// getOrCreateGroupLock gets or creates a mutex for a specific hash
+func getOrCreateGroupLock(hash string) *sync.Mutex {
+	mu, _ := groupMutexes.LoadOrStore(hash, &sync.Mutex{})
+	return mu.(*sync.Mutex)
+}
+
+// AddResourceToGroup adds a resource to an existing notification group or creates a new one
+// Uses a mutex to prevent race conditions when creating groups with the same hash
+func AddResourceToGroup(ctx context.Context, groupingInterval time.Duration, groupByHash string, notificationID uuid.UUID, configID, checkID, componentID *uuid.UUID) error {
 	if len(groupByHash) == 0 {
 		return nil
 	}
 
+	// Get a mutex for this specific hash to prevent race conditions
+	mu := getOrCreateGroupLock(groupByHash)
+	mu.Lock()
+	defer mu.Unlock()
+
 	return ctx.Transaction(func(ctx context.Context, _ trace.Span) error {
+		// Find an existing group with this hash that's within the grouping interval
+		// Groups are never closed/finalized.
+		// We just use the latest group within the grouping interval.
+		// That's how group lifetime is enforced.
 		var group models.NotificationGroup
 		if err := ctx.DB().Where("hash = ?", groupByHash).
-			Where("created_at > NOW() - ?", groupingInterval).
+			Where(fmt.Sprintf("created_at > NOW() - INTERVAL '%f MINUTES'", groupingInterval.Minutes())).
 			Order("created_at DESC").
 			Limit(1).
 			Find(&group).Error; err != nil {
-			return err
+			return ctx.Oops().Wrapf(err, "failed to find existing notification group")
 		}
 
+		// If no group exists, create a new one
 		if group.ID == uuid.Nil {
-			return fmt.Errorf("no group found for hash %s", groupByHash)
+			group = models.NotificationGroup{
+				ID:             uuid.New(),
+				NotificationID: notificationID,
+				Hash:           groupByHash,
+			}
+			if err := ctx.DB().Create(&group).Error; err != nil {
+				return ctx.Oops().Wrapf(err, "failed to create notification group")
+			}
 		}
 
 		groupResource := models.NotificationGroupResource{
-			NotificationGroupID: group.ID,
-			ConfigID:            configID,
-			CheckID:             checkID,
-			ComponentID:         componentID,
+			GroupID:     group.ID,
+			ConfigID:    configID,
+			CheckID:     checkID,
+			ComponentID: componentID,
 		}
-		return ctx.DB().Create(&groupResource).Error
+		if err := ctx.DB().Clauses(clause.OnConflict{DoNothing: true}).Create(&groupResource).Error; err != nil {
+			return ctx.Oops().Wrapf(err, "failed to add resource to group")
+		}
+
+		return nil
 	})
 }
