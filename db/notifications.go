@@ -324,9 +324,9 @@ func getOrCreateGroupLock(hash string) *sync.Mutex {
 
 // AddResourceToGroup adds a resource to an existing notification group or creates a new one
 // Uses a mutex to prevent race conditions when creating groups with the same hash
-func AddResourceToGroup(ctx context.Context, groupingInterval time.Duration, groupByHash string, notificationID uuid.UUID, configID, checkID, componentID *uuid.UUID) error {
+func AddResourceToGroup(ctx context.Context, groupingInterval time.Duration, groupByHash string, notificationID uuid.UUID, configID, checkID, componentID *uuid.UUID) (*models.NotificationGroup, error) {
 	if len(groupByHash) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	// Get a mutex for this specific hash to prevent race conditions
@@ -334,12 +334,12 @@ func AddResourceToGroup(ctx context.Context, groupingInterval time.Duration, gro
 	mu.Lock()
 	defer mu.Unlock()
 
-	return ctx.Transaction(func(ctx context.Context, _ trace.Span) error {
+	var group models.NotificationGroup
+	err := ctx.Transaction(func(ctx context.Context, _ trace.Span) error {
 		// Find an existing group with this hash that's within the grouping interval
 		// Groups are never closed/finalized.
 		// We just use the latest group within the grouping interval.
 		// That's how group lifetime is enforced.
-		var group models.NotificationGroup
 		if err := ctx.DB().Where("hash = ?", groupByHash).
 			Where(fmt.Sprintf("created_at > NOW() - INTERVAL '%f MINUTES'", groupingInterval.Minutes())).
 			Order("created_at DESC").
@@ -372,4 +372,5 @@ func AddResourceToGroup(ctx context.Context, groupingInterval time.Duration, gro
 
 		return nil
 	})
+	return &group, err
 }

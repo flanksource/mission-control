@@ -44,12 +44,13 @@ type NotificationTemplate struct {
 
 // NotificationEventPayload holds data to create a notification.
 type NotificationEventPayload struct {
-	ID               uuid.UUID `json:"id"`                          // Resource id. depends what it is based on the original event.
-	EventName        string    `json:"event_name"`                  // The name of the original event this notification is for.
-	NotificationID   uuid.UUID `json:"notification_id,omitempty"`   // ID of the notification.
-	EventCreatedAt   time.Time `json:"event_created_at"`            // Timestamp at which the original event was created
-	Properties       []byte    `json:"properties,omitempty"`        // json encoded properties of the original event
-	GroupedResources []string  `json:"grouped_resources,omitempty"` // List of resources that were grouped with the notification
+	ID               uuid.UUID  `json:"id"`                          // Resource id. depends what it is based on the original event.
+	EventName        string     `json:"event_name"`                  // The name of the original event this notification is for.
+	NotificationID   uuid.UUID  `json:"notification_id,omitempty"`   // ID of the notification.
+	EventCreatedAt   time.Time  `json:"event_created_at"`            // Timestamp at which the original event was created
+	Properties       []byte     `json:"properties,omitempty"`        // json encoded properties of the original event
+	GroupedResources []string   `json:"grouped_resources,omitempty"` // List of resources that were grouped with the notification
+	GroupID          *uuid.UUID `json:"group_id,omitempty"`          // ID of the group that the notification belongs to
 
 	// Recipients //
 
@@ -334,6 +335,26 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 		}
 	}
 
+	var groupID *uuid.UUID
+	if len(n.GroupBy) > 0 {
+		groupByHash, err := calculateGroupByHash(ctx, n.GroupBy, resourceID.String(), event.Name)
+		if err != nil {
+			return nil, err
+		}
+
+		groupByInterval := n.GroupByInterval
+		if groupByInterval == 0 {
+			groupByInterval = ctx.Properties().Duration("notifications.group_by_interval", DefaultGroupByInterval)
+		}
+
+		group, err := db.AddResourceToGroup(ctx, groupByInterval, groupByHash, n.ID, &resourceID, nil, nil)
+		if err != nil {
+			return nil, fmt.Errorf("failed to add resource to group: %w", err)
+		} else if group != nil {
+			groupID = &group.ID
+		}
+	}
+
 	if n.PlaybookID != nil {
 		payload := NotificationEventPayload{
 			EventName:      event.Name,
@@ -342,6 +363,7 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 			PlaybookID:     n.PlaybookID,
 			EventCreatedAt: event.CreatedAt,
 			Properties:     eventProperties,
+			GroupID:        groupID,
 		}
 
 		payloads = append(payloads, payload)
@@ -355,6 +377,7 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 			PersonID:       n.PersonID,
 			EventCreatedAt: event.CreatedAt,
 			Properties:     eventProperties,
+			GroupID:        groupID,
 		}
 
 		payloads = append(payloads, payload)
@@ -384,6 +407,7 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 				NotificationName: cn.Name,
 				EventCreatedAt:   event.CreatedAt,
 				Properties:       eventProperties,
+				GroupID:          groupID,
 			}
 
 			payloads = append(payloads, payload)
@@ -407,6 +431,7 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 			ID:             resourceID,
 			EventCreatedAt: event.CreatedAt,
 			Properties:     eventProperties,
+			GroupID:        groupID,
 		}
 
 		payloads = append(payloads, payload)

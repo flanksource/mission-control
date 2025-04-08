@@ -90,3 +90,7 @@ func (t *Context) WithSource(event string, resourceID uuid.UUID) {
 	t.log.SourceEvent = event
 	t.log.ResourceID = resourceID
 }
+
+func (t *Context) WithGroupID(groupID *uuid.UUID) {
+	t.log.GroupID = groupID
+}

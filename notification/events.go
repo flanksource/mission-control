@@ -88,7 +88,7 @@ type notificationHandler struct {
 }
 
 // Check if notification can be sent in the interval based on group by, returns true if it can be sent
-func checkRepeatInterval(ctx context.Context, n NotificationWithSpec, groupByHash, sourceEvent string) (bool, error) {
+func checkRepeatInterval(ctx context.Context, n NotificationWithSpec, groupID *uuid.UUID, resourceID, sourceEvent string) (bool, error) {
 	if n.RepeatInterval == nil {
 		return true, nil
 	}
@@ -96,8 +96,16 @@ func checkRepeatInterval(ctx context.Context, n NotificationWithSpec, groupByHas
 	clauses := []clause.Expression{
 		clause.Eq{Column: "notification_id", Value: n.ID.String()},
 		clause.Eq{Column: "status", Value: models.NotificationStatusSent},
-		clause.Eq{Column: "group_by_hash", Value: groupByHash},
 		clause.Eq{Column: "source_event", Value: sourceEvent},
+	}
+
+	if groupID != nil {
+		clauses = append(clauses, clause.Or(
+			clause.Eq{Column: "resource_id", Value: resourceID},
+			clause.Eq{Column: "group_id", Value: groupID},
+		))
+	} else {
+		clauses = append(clauses, clause.Eq{Column: "resource_id", Value: resourceID})
 	}
 
 	var exists bool
@@ -183,29 +191,7 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 	}
 
 	for _, payload := range payloads {
-		var groupByHash string
-		var err error
-
-		if len(n.GroupBy) > 0 {
-			groupByHash, err = calculateGroupByHash(ctx, n.GroupBy, payload.ID.String(), payload.EventName)
-			if err != nil {
-				return err
-			}
-		}
-
-		// If this falls in any group, we need to add the resource to that group
-		if groupByHash != "" {
-			groupByInterval := n.GroupByInterval
-			if groupByInterval == 0 {
-				groupByInterval = ctx.Properties().Duration("notifications.group_by_interval", DefaultGroupByInterval)
-			}
-
-			if err := db.AddResourceToGroup(ctx, groupByInterval, groupByHash, n.ID, &payload.ID, nil, nil); err != nil {
-				return fmt.Errorf("failed to add resource to group: %w", err)
-			}
-		}
-
-		if blocker, err := processNotificationConstraints(ctx, *n, payload, groupByHash, celEnv, matchingSilences); err != nil {
+		if blocker, err := processNotificationConstraints(ctx, *n, payload, celEnv, matchingSilences); err != nil {
 			return fmt.Errorf("failed to check all conditions for notification[%s]: %w", n.ID, err)
 		} else if blocker != nil {
 			history := models.NotificationSendHistory{
@@ -215,7 +201,9 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 				Status:         blocker.BlockedWithStatus,
 				ParentID:       blocker.ParentID,
 				SilencedBy:     blocker.SilencedBy,
+				GroupID:        payload.GroupID,
 			}
+
 			if err := db.SaveUnsentNotificationToHistory(ctx, history); err != nil {
 				return fmt.Errorf("failed to save silenced notification history: %w", err)
 			}
@@ -238,6 +226,7 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 				ResourceID:     payload.ID,
 				SourceEvent:    event.Name,
 				Payload:        payload.AsMap(),
+				GroupID:        payload.GroupID,
 				Status:         models.NotificationStatusPending,
 				NotBefore:      lo.ToPtr(time.Now().Add(*n.WaitFor)),
 			}
@@ -270,7 +259,6 @@ type validateResult struct {
 func processNotificationConstraints(ctx context.Context,
 	n NotificationWithSpec,
 	payload NotificationEventPayload,
-	groupByHash string,
 	celEnv *celVariables,
 	matchingSilences []models.NotificationSilence,
 ) (*validateResult, error) {
@@ -278,7 +266,7 @@ func processNotificationConstraints(ctx context.Context,
 
 	// Repeat interval check
 	if n.RepeatInterval != nil {
-		passesRepeatInterval, err := checkRepeatInterval(ctx, n, groupByHash, sourceEvent)
+		passesRepeatInterval, err := checkRepeatInterval(ctx, n, payload.GroupID, payload.ID.String(), sourceEvent)
 		if err != nil {
 			// If there are any errors in calculating interval, we send the notification and log the error
 			ctx.Errorf("error checking repeat interval for notification[%s]: %v", n.ID, err)
@@ -444,6 +432,7 @@ func sendPendingNotification(ctx context.Context, history models.NotificationSen
 	notificationContext := NewContext(ctx.WithSubject(payload.NotificationID.String()), payload.NotificationID).WithHistory(history)
 	ctx.Debugf("[notification.send] %s ", payload.EventName)
 	notificationContext.WithSource(payload.EventName, payload.ID)
+	notificationContext.WithGroupID(payload.GroupID)
 
 	err := _sendNotification(notificationContext, payload)
 	if err != nil {
