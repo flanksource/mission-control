@@ -10,7 +10,6 @@ import (
 	"time"
 
 	sw "github.com/RussellLuo/slidingwindow"
-	pkgConnection "github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/pkg/tokenizer"
@@ -209,14 +208,8 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 				GroupID:        payload.GroupID,
 				PersonID:       payload.PersonID,
 				TeamID:         payload.TeamID,
-			}
-
-			if payload.CustomService.Connection != "" {
-				c, err := pkgConnection.Get(ctx, payload.CustomService.Connection)
-				if err != nil {
-					return ctx.Oops().Wrapf(err, "failed to get connection")
-				}
-				history.ConnectionID = &c.ID
+				ConnectionID:   payload.Connection,
+				Body:           payload.Body,
 			}
 
 			if err := db.SaveUnsentNotificationToHistory(ctx, history); err != nil {
@@ -245,15 +238,9 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 				Status:         models.NotificationStatusPending,
 				NotBefore:      lo.ToPtr(time.Now().Add(*n.WaitFor)),
 				PersonID:       payload.PersonID,
+				ConnectionID:   payload.Connection,
 				TeamID:         payload.TeamID,
-			}
-
-			if payload.CustomService.Connection != "" {
-				c, err := pkgConnection.Get(ctx, payload.CustomService.Connection)
-				if err != nil {
-					return ctx.Oops().Wrapf(err, "failed to get connection")
-				}
-				pendingHistory.ConnectionID = &c.ID
+				Body:           payload.Body,
 			}
 
 			if err := ctx.DB().Create(&pendingHistory).Error; err != nil {
