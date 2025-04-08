@@ -44,13 +44,12 @@ type NotificationTemplate struct {
 
 // NotificationEventPayload holds data to create a notification.
 type NotificationEventPayload struct {
-	ID               uuid.UUID  `json:"id"`                          // Resource id. depends what it is based on the original event.
-	EventName        string     `json:"event_name"`                  // The name of the original event this notification is for.
-	NotificationID   uuid.UUID  `json:"notification_id,omitempty"`   // ID of the notification.
-	EventCreatedAt   time.Time  `json:"event_created_at"`            // Timestamp at which the original event was created
-	Properties       []byte     `json:"properties,omitempty"`        // json encoded properties of the original event
-	GroupedResources []string   `json:"grouped_resources,omitempty"` // List of resources that were grouped with the notification
-	GroupID          *uuid.UUID `json:"group_id,omitempty"`          // ID of the group that the notification belongs to
+	ID             uuid.UUID  `json:"id"`                        // Resource id. depends what it is based on the original event.
+	EventName      string     `json:"event_name"`                // The name of the original event this notification is for.
+	NotificationID uuid.UUID  `json:"notification_id,omitempty"` // ID of the notification.
+	EventCreatedAt time.Time  `json:"event_created_at"`          // Timestamp at which the original event was created
+	Properties     []byte     `json:"properties,omitempty"`      // json encoded properties of the original event
+	GroupID        *uuid.UUID `json:"group_id,omitempty"`        // ID of the group that the notification belongs to
 
 	// Recipients //
 

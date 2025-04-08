@@ -533,8 +533,12 @@ func _sendNotification(ctx *Context, payload NotificationEventPayload) error {
 	if err != nil {
 		return fmt.Errorf("failed to get cel env: %w", err)
 	}
-	if len(payload.GroupedResources) > 0 {
-		celEnv.GroupedResources = payload.GroupedResources
+
+	if payload.GroupID != nil {
+		celEnv.GroupedResources, err = db.GetGroupedResources(ctx.Context, *payload.GroupID, payload.ID.String())
+		if err != nil {
+			return ctx.Oops().Wrapf(err, "failed to get grouped resources for notification[%s]", payload.NotificationID)
+		}
 	}
 
 	nn, err := GetNotification(ctx.Context, payload.NotificationID.String())

@@ -374,3 +374,40 @@ func AddResourceToGroup(ctx context.Context, groupingInterval time.Duration, gro
 	})
 	return &group, err
 }
+
+func GetGroupedResources(ctx context.Context, groupID uuid.UUID, excludeResources ...string) ([]string, error) {
+	var resources []models.NotificationGroupResource
+	if err := ctx.DB().Where("group_id = ?", groupID).Find(&resources).Error; err != nil {
+		return nil, ctx.Oops().Wrapf(err, "failed to get grouped resources")
+	}
+
+	var resourceNames []string
+	for _, resource := range resources {
+		if lo.Contains(excludeResources, resource.ConfigID.String()) {
+			continue
+		}
+
+		if resource.ConfigID != nil {
+			ci, _ := query.GetCachedConfig(ctx, resource.ConfigID.String())
+			if ci != nil {
+				resourceNames = append(resourceNames, fmt.Sprintf("%s/%s/%s", ci.GetNamespace(), ci.GetType(), ci.GetName()))
+			}
+		}
+
+		if resource.CheckID != nil {
+			check, _ := query.FindCachedCheck(ctx, resource.CheckID.String())
+			if check != nil {
+				resourceNames = append(resourceNames, fmt.Sprintf("%s/%s/%s", check.GetNamespace(), check.GetType(), check.GetName()))
+			}
+		}
+
+		if resource.ComponentID != nil {
+			comp, _ := query.GetCachedComponent(ctx, resource.ComponentID.String())
+			if comp != nil {
+				resourceNames = append(resourceNames, fmt.Sprintf("%s/%s/%s", comp.GetNamespace(), comp.GetType(), comp.GetName()))
+			}
+		}
+	}
+
+	return resourceNames, nil
+}
