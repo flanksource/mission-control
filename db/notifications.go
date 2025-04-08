@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	extraClausePlugin "github.com/WinterYukky/gorm-extra-clause-plugin"
@@ -20,6 +21,8 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
+	"go.opentelemetry.io/otel/trace"
+	"gorm.io/gorm/clause"
 )
 
 func DeleteNotificationSilence(ctx context.Context, id string) error {
@@ -308,4 +311,103 @@ func SkipNotificationSendHistory(ctx context.Context, sendHistoryID uuid.UUID) e
 		sendHistoryID.String(),
 		window,
 	).Error
+}
+
+// groupMutexes is a map of hash to mutex to prevent race conditions when creating notification groups
+var groupMutexes = &sync.Map{}
+
+// getOrCreateGroupLock gets or creates a mutex for a specific hash
+func getOrCreateGroupLock(hash string) *sync.Mutex {
+	mu, _ := groupMutexes.LoadOrStore(hash, &sync.Mutex{})
+	return mu.(*sync.Mutex)
+}
+
+// AddResourceToGroup adds a resource to an existing notification group or creates a new one
+// Uses a mutex to prevent race conditions when creating groups with the same hash
+func AddResourceToGroup(ctx context.Context, groupingInterval time.Duration, groupByHash string, notificationID uuid.UUID, configID, checkID, componentID *uuid.UUID) (*models.NotificationGroup, error) {
+	if len(groupByHash) == 0 {
+		return nil, nil
+	}
+
+	// Get a mutex for this specific hash to prevent race conditions
+	mu := getOrCreateGroupLock(groupByHash)
+	mu.Lock()
+	defer mu.Unlock()
+
+	var group models.NotificationGroup
+	err := ctx.Transaction(func(ctx context.Context, _ trace.Span) error {
+		// Find an existing group with this hash that's within the grouping interval
+		// Groups are never closed/finalized.
+		// We just use the latest group within the grouping interval.
+		// That's how group lifetime is enforced.
+		if err := ctx.DB().Where("hash = ?", groupByHash).
+			Where(fmt.Sprintf("created_at > NOW() - INTERVAL '%f MINUTES'", groupingInterval.Minutes())).
+			Order("created_at DESC").
+			Limit(1).
+			Find(&group).Error; err != nil {
+			return ctx.Oops().Wrapf(err, "failed to find existing notification group")
+		}
+
+		// If no group exists, create a new one
+		if group.ID == uuid.Nil {
+			group = models.NotificationGroup{
+				ID:             uuid.New(),
+				NotificationID: notificationID,
+				Hash:           groupByHash,
+			}
+			if err := ctx.DB().Create(&group).Error; err != nil {
+				return ctx.Oops().Wrapf(err, "failed to create notification group")
+			}
+		}
+
+		groupResource := models.NotificationGroupResource{
+			GroupID:     group.ID,
+			ConfigID:    configID,
+			CheckID:     checkID,
+			ComponentID: componentID,
+		}
+		if err := ctx.DB().Clauses(clause.OnConflict{DoNothing: true}).Create(&groupResource).Error; err != nil {
+			return ctx.Oops().Wrapf(err, "failed to add resource to group")
+		}
+
+		return nil
+	})
+	return &group, err
+}
+
+func GetGroupedResources(ctx context.Context, groupID uuid.UUID, excludeResources ...string) ([]string, error) {
+	var resources []models.NotificationGroupResource
+	if err := ctx.DB().Where("group_id = ?", groupID).Find(&resources).Error; err != nil {
+		return nil, ctx.Oops().Wrapf(err, "failed to get grouped resources")
+	}
+
+	var resourceNames []string
+	for _, resource := range resources {
+		if lo.Contains(excludeResources, resource.ConfigID.String()) {
+			continue
+		}
+
+		if resource.ConfigID != nil {
+			ci, _ := query.GetCachedConfig(ctx, resource.ConfigID.String())
+			if ci != nil {
+				resourceNames = append(resourceNames, fmt.Sprintf("%s/%s/%s", ci.GetNamespace(), ci.GetType(), ci.GetName()))
+			}
+		}
+
+		if resource.CheckID != nil {
+			check, _ := query.FindCachedCheck(ctx, resource.CheckID.String())
+			if check != nil {
+				resourceNames = append(resourceNames, fmt.Sprintf("%s/%s/%s", check.GetNamespace(), check.GetType(), check.GetName()))
+			}
+		}
+
+		if resource.ComponentID != nil {
+			comp, _ := query.GetCachedComponent(ctx, resource.ComponentID.String())
+			if comp != nil {
+				resourceNames = append(resourceNames, fmt.Sprintf("%s/%s/%s", comp.GetNamespace(), comp.GetType(), comp.GetName()))
+			}
+		}
+	}
+
+	return resourceNames, nil
 }

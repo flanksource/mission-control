@@ -91,6 +91,6 @@ func (t *Context) WithSource(event string, resourceID uuid.UUID) {
 	t.log.ResourceID = resourceID
 }
 
-func (t *Context) WithGroupByHash(h string) {
-	t.log.GroupByHash = h
+func (t *Context) WithGroupID(groupID *uuid.UUID) {
+	t.log.GroupID = groupID
 }
