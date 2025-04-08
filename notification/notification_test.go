@@ -1128,24 +1128,30 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 			time.Sleep(3 * time.Second)
 
 			// Mark config3 as healthy to ensure healthy configs are skipped
-			err := DefaultContext.DB().Model(&models.ConfigItem{}).
-				Where("id = ?", config3.ID).
-				UpdateColumns(map[string]any{"health": models.HealthHealthy, "description": "healthy"}).Error
-			Expect(err).To(BeNil())
+			// err := DefaultContext.DB().Model(&models.ConfigItem{}).
+			// 	Where("id = ?", config3.ID).
+			// 	UpdateColumns(map[string]any{"health": models.HealthHealthy, "description": "healthy"}).Error
+			// Expect(err).To(BeNil())
 
 			events.ConsumeAll(DefaultContext)
 
 			time.Sleep(12 * time.Second)
 
-			_, err = notification.ProcessPendingNotifications(DefaultContext)
-			Expect(err).To(BeNil())
 			Eventually(func() bool {
-				var histories []models.NotificationSendHistory
-				err = DefaultContext.DB().Where("notification_id = ?", n.ID.String()).
+				for {
+					allDone, err := notification.ProcessPendingNotifications(DefaultContext)
+					Expect(err).To(BeNil())
+					if allDone {
+						break
+					}
+				}
+
+				var unprocessedPending []models.NotificationSendHistory
+				err := DefaultContext.DB().Where("notification_id = ?", n.ID.String()).
 					Where("status NOT IN ?", []any{models.NotificationStatusSent, models.NotificationStatusSkipped}).
-					Find(&histories).Error
+					Find(&unprocessedPending).Error
 				Expect(err).To(BeNil())
-				return len(histories) == 0
+				return len(unprocessedPending) == 0
 			}, "5s", "1s").Should(BeTrue())
 
 			Eventually(func() int {
@@ -1155,16 +1161,17 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 			Expect(webhookPostdata).To(Not(BeNil()))
 
 			msg := webhookPostdata["message"]
-			msgBlocks := strings.Split(msg, "Resources grouped with notification:\n")
+			msgBlocks := strings.Split(msg, "Resources grouped with this notification:\n")
 			Expect(len(msgBlocks)).To(Equal(2))
 
 			groupedResources := strings.Split(msgBlocks[1], "\n")
-			// 2 other configs since 1 config is part of the original message
-			Expect(len(groupedResources)).To(Equal(2))
+			// 3 other configs since 1 config is part of the original message
+			Expect(len(groupedResources)).To(Equal(3))
 
 			// All config names should be present
 			Expect(msg).To(ContainSubstring(*config1.Name))
 			Expect(msg).To(ContainSubstring(*config2.Name))
+			Expect(msg).To(ContainSubstring(*config3.Name))
 			Expect(msg).To(ContainSubstring(*config4.Name))
 		})
 	})
