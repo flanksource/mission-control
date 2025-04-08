@@ -192,13 +192,13 @@ func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 	llmConf := llm.Config{AIActionClient: spec.AIActionClient, ResponseFormat: llm.ResponseFormatDiagnosis}
 	response, conversation, err := llm.Prompt(ctx, llmConf, spec.SystemPrompt, prompt...)
 	if err != nil {
-		return nil, err
+		return nil, ctx.Oops().Wrapf(err, "failed to generate response")
 	}
 	result.JSON = response
 
 	var diagnosisReport llm.DiagnosisReport
 	if err := json.Unmarshal([]byte(response), &diagnosisReport); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal diagnosis report: %w", err)
+		return nil, ctx.Oops().With("response", response).Wrapf(err, "failed to unmarshal diagnosis report")
 	}
 
 	for _, format := range lo.Uniq(spec.Formats) {
@@ -250,7 +250,7 @@ func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 
 			var recommendations llm.PlaybookRecommendations
 			if err := json.Unmarshal([]byte(response), &recommendations); err != nil {
-				return nil, fmt.Errorf("failed to unmarshal diagnosis report: %w", err)
+				return nil, ctx.Oops().With("response", response).Wrapf(err, "failed to unmarshal playbook recommendations")
 			}
 
 			blocks, err := slackBlocks(knowledgebase, diagnosisReport, recommendations)

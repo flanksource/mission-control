@@ -305,9 +305,13 @@ var _ = Describe("Playbook", Ordered, func() {
 			err := DefaultContext.DB().Where("playbook_run_id = ?", run.ID).Find(&actions).Error
 			Expect(err).To(BeNil())
 
+			for i, a := range actions {
+				fmt.Printf("[%d] action %s: %d\n", i, a.Name, a.RetryCount)
+			}
+
 			Expect(len(actions)).To(Equal(1 + 2)) // 1 initial + 2 retries
 			for i, a := range actions {
-				Expect(a.RetryCount).To(Equal(i))
+				Expect(a.RetryCount).To(Equal(i), fmt.Sprintf("[%d] action %s should have been retried %d times", i, a.Name, i))
 			}
 		})
 	})
