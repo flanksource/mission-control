@@ -140,7 +140,7 @@ func createResourceActionButtons(resourceID string) map[string]any {
 
 // slackBlocks generates a Slack message with blocks for the diagnosis report and recommendations.
 // It returns the JSON string representation of the Slack blocks.
-func slackBlocks(knowledge *KnowledgeGraph, diagnosisReport llm.DiagnosisReport, recommendations llm.PlaybookRecommendations) (string, error) {
+func slackBlocks(knowledge *KnowledgeGraph, diagnosisReport llm.DiagnosisReport, recommendations llm.PlaybookRecommendations, groupedResources []string) (string, error) {
 	var blocks []map[string]any
 	divider := map[string]any{"type": slackBlockTypeDivider}
 	affectedResource := knowledge.Configs[0]
@@ -179,6 +179,16 @@ func slackBlocks(knowledge *KnowledgeGraph, diagnosisReport llm.DiagnosisReport,
 	if labelsSection := createSlackFieldsSection("Labels", *affectedResource.Labels); labelsSection != nil {
 		blocks = append(blocks, labelsSection)
 		blocks = append(blocks, divider)
+	}
+
+	if len(groupedResources) > 0 {
+		blocks = append(blocks, map[string]any{
+			"type": slackBlockTypeSection,
+			"text": map[string]any{
+				"type": slackBlockTypeMarkdown,
+				"text": fmt.Sprintf("*Also Affected:* \n- %s", strings.Join(groupedResources, "\n - ")),
+			},
+		})
 	}
 
 	if playbookButtons := createPlaybookButtons(recommendations); playbookButtons != nil {
