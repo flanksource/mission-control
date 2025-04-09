@@ -124,6 +124,25 @@ func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 		return &AIActionResult{Markdown: strings.Join(prompt, "\n")}, nil
 	}
 
+	// Note: when running on agents, the run will not be in the database.
+	var run models.PlaybookRun
+	var groupedResources []string
+	if err := ctx.DB().Where("id = ?", t.RunID).Limit(1).Find(&run).Error; err != nil {
+		return nil, ctx.Oops().Wrapf(err, "failed to get playbook run")
+	} else if run.NotificationSendID != nil {
+		var notificationSend models.NotificationSendHistory
+		if err := ctx.DB().Where("id = ?", *run.NotificationSendID).Limit(1).Find(&notificationSend).Error; err != nil {
+			return nil, ctx.Oops().Wrapf(err, "failed to get notification send history")
+		} else if notificationSend.GroupID != nil {
+			groupedResources, err = db.GetGroupedResources(ctx, *notificationSend.GroupID)
+			if err != nil {
+				return nil, ctx.Oops().Wrapf(err, "failed to get grouped resources")
+			}
+
+			prompt = append(prompt, fmt.Sprintf("Here are few resources that are related to the issue: %s", strings.Join(groupedResources, ", ")))
+		}
+	}
+
 	if len(spec.AIActionContext.Playbooks) > 0 {
 		var childRuns []models.PlaybookRun
 		if err := ctx.DB().Where("parent_id = ?", t.RunID).Find(&childRuns).Error; err != nil {
@@ -204,7 +223,7 @@ func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 	for _, format := range lo.Uniq(spec.Formats) {
 		switch format {
 		case v1.AIActionFormatSlack:
-			result.Slack, err = slackBlocks(knowledgebase, diagnosisReport, llm.PlaybookRecommendations{})
+			result.Slack, err = slackBlocks(knowledgebase, diagnosisReport, llm.PlaybookRecommendations{}, groupedResources)
 			if err != nil {
 				return nil, fmt.Errorf("failed to merge blocks: %w", err)
 			}
@@ -253,7 +272,7 @@ func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 				return nil, ctx.Oops().With("response", response).Wrapf(err, "failed to unmarshal playbook recommendations")
 			}
 
-			blocks, err := slackBlocks(knowledgebase, diagnosisReport, recommendations)
+			blocks, err := slackBlocks(knowledgebase, diagnosisReport, recommendations, groupedResources)
 			if err != nil {
 				return nil, fmt.Errorf("failed to marshal blocks: %w", err)
 			}
