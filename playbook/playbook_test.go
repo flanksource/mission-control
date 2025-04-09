@@ -302,12 +302,8 @@ var _ = Describe("Playbook", Ordered, func() {
 			Expect(run.Status).To(Equal(models.PlaybookRunStatusFailed), run.String(DefaultContext.DB()))
 
 			var actions []models.PlaybookRunAction
-			err := DefaultContext.DB().Where("playbook_run_id = ?", run.ID).Find(&actions).Error
+			err := DefaultContext.DB().Where("playbook_run_id = ?", run.ID).Order("scheduled_time ASC").Find(&actions).Error
 			Expect(err).To(BeNil())
-
-			for i, a := range actions {
-				fmt.Printf("[%d] action %s: %d\n", i, a.Name, a.RetryCount)
-			}
 
 			Expect(len(actions)).To(Equal(1 + 2)) // 1 initial + 2 retries
 			for i, a := range actions {
