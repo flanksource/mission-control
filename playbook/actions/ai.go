@@ -134,12 +134,23 @@ func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 		if err := ctx.DB().Where("id = ?", *run.NotificationSendID).Limit(1).Find(&notificationSend).Error; err != nil {
 			return nil, ctx.Oops().Wrapf(err, "failed to get notification send history")
 		} else if notificationSend.GroupID != nil {
-			groupedResources, err = db.GetGroupedResources(ctx, *notificationSend.GroupID)
+			var selfID []string
+			if run.ConfigID != nil {
+				selfID = append(selfID, lo.FromPtr(run.ConfigID).String())
+			} else if run.CheckID != nil {
+				selfID = append(selfID, lo.FromPtr(run.CheckID).String())
+			} else if run.ComponentID != nil {
+				selfID = append(selfID, lo.FromPtr(run.ComponentID).String())
+			}
+
+			groupedResources, err = db.GetGroupedResources(ctx, *notificationSend.GroupID, selfID...)
 			if err != nil {
 				return nil, ctx.Oops().Wrapf(err, "failed to get grouped resources")
 			}
 
-			prompt = append(prompt, fmt.Sprintf("Here are few resources that are related to the issue: %s", strings.Join(groupedResources, ", ")))
+			if len(groupedResources) > 0 {
+				prompt = append(prompt, fmt.Sprintf("Here are few resources that are related to the issue: %s", strings.Join(groupedResources, ", ")))
+			}
 		}
 	}
 
