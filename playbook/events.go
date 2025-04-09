@@ -283,8 +283,7 @@ func onNewRun(ctx context.Context, event models.Event) error {
 	// What triggered the run?
 	// Must be either a notification, or a playbook run.
 	var (
-		parentRunCreator = event.Properties["parent_run_creator"]
-		parentRunID      = event.Properties["parent_run_id"]
+		parentRunID = event.Properties["parent_run_id"]
 
 		notificationID         = event.Properties["notification_id"]
 		notificationDispatchID = event.Properties["notification_dispatch_id"]
@@ -331,7 +330,12 @@ func onNewRun(ctx context.Context, event models.Event) error {
 			runParam.ParentID = &parsed
 		}
 
-		ctx = ctx.WithSubject(parentRunCreator)
+		var parentPlaybookRun models.PlaybookRun
+		if err := ctx.DB().Select("playbook_id").Where("id = ?", parentRunID).First(&parentPlaybookRun).Error; err != nil {
+			return fmt.Errorf("failed to get parent playbook run: %w", err)
+		}
+
+		ctx = ctx.WithSubject(parentPlaybookRun.PlaybookID.String())
 	}
 
 	var playbook models.Playbook
@@ -387,12 +391,32 @@ func onNewRun(ctx context.Context, event models.Event) error {
 	case RunInitiatorTypePlaybook:
 		// If there was a failure to initiate the child playbook run,
 		// we need to resume the parent action.
-		//
-		// This needs to be surfaced out though else the action will resume and attempt to trigger children again.
 		if newRun == nil {
 			var parentRun models.PlaybookRun
 			if err := ctx.DB().Where("id = ?", parentRunID).First(&parentRun).Error; err != nil {
 				return fmt.Errorf("failed to get parent run: %w", err)
+			}
+
+			// Create a record of the failed playbook run.
+			// Else, there'll be no trace of this failure and the parent action will keep trying to run the child
+			// indefinitely.
+			var playbook models.Playbook
+			if dbErr := ctx.DB().Where("id = ?", playbookID).First(&playbook).Error; dbErr != nil {
+				return fmt.Errorf("failed to get playbook: %w", dbErr)
+			} else {
+				failedRun := models.PlaybookRun{
+					PlaybookID: playbook.ID,
+					ParentID:   &parentRun.ID,
+					Status:     models.PlaybookRunStatusFailed,
+					StartTime:  lo.ToPtr(time.Now()),
+					EndTime:    lo.ToPtr(time.Now()),
+					Spec:       playbook.Spec,
+					Error:      lo.ToPtr(fmt.Sprintf("failed to start playbook due to permissions: %v", err)),
+				}
+
+				if err := ctx.DB().Create(&failedRun).Error; err != nil {
+					return ctx.Oops().Wrapf(err, "failed to record a failed child playbook run")
+				}
 			}
 
 			if err := parentRun.ResumeChildrenWaitingAction(ctx.DB()); err != nil {
