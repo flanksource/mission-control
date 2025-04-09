@@ -340,7 +340,6 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 			obj.Spec.SMTP.Auth,
 		)
 		dbObj.Type = models.ConnectionTypeEmail
-		dbObj.URL = obj.Spec.SMTP.Host
 		dbObj.Username = obj.Spec.SMTP.Username.String()
 		dbObj.Password = obj.Spec.SMTP.Password.String()
 		dbObj.Properties = map[string]string{
