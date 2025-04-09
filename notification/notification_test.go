@@ -1128,10 +1128,10 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 			time.Sleep(3 * time.Second)
 
 			// Mark config3 as healthy to ensure healthy configs are skipped
-			// err := DefaultContext.DB().Model(&models.ConfigItem{}).
-			// 	Where("id = ?", config3.ID).
-			// 	UpdateColumns(map[string]any{"health": models.HealthHealthy, "description": "healthy"}).Error
-			// Expect(err).To(BeNil())
+			err := DefaultContext.DB().Model(&models.ConfigItem{}).
+				Where("id = ?", config3.ID).
+				UpdateColumns(map[string]any{"health": models.HealthHealthy, "description": "healthy"}).Error
+			Expect(err).To(BeNil())
 
 			events.ConsumeAll(DefaultContext)
 
@@ -1165,13 +1165,11 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 			Expect(len(msgBlocks)).To(Equal(2))
 
 			groupedResources := strings.Split(msgBlocks[1], "\n")
-			// 3 other configs since 1 config is part of the original message
-			Expect(len(groupedResources)).To(Equal(3))
+			Expect(len(groupedResources)).To(Equal(2), "2 other configs since 1 config is part of the original message")
 
-			// All config names should be present
+			// All config names (except config 3, as it was resolved) should be present
 			Expect(msg).To(ContainSubstring(*config1.Name))
 			Expect(msg).To(ContainSubstring(*config2.Name))
-			Expect(msg).To(ContainSubstring(*config3.Name))
 			Expect(msg).To(ContainSubstring(*config4.Name))
 		})
 	})

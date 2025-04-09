@@ -127,6 +127,12 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 	// So we use the system user as the subject.
 	ctx = ctx.WithSubject(api.SystemUserID.String())
 
+	if lo.Contains(api.ConfigHealthEvents, event.Name) {
+		if err := resolveGroupMembership(ctx, event.Properties["id"]); err != nil {
+			return ctx.Oops().Wrapf(err, "failed to resolve group membership for event")
+		}
+	}
+
 	notificationIDs, err := GetNotificationIDsForEvent(ctx, event.Name)
 	if err != nil {
 		return ctx.Oops().Wrapf(err, "failed to get notification ids for event")
@@ -156,6 +162,54 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 	}
 
 	return nil
+}
+
+// resolveGroupMembership removes any resources from notification group that
+// no longer match the notification event & filter.
+func resolveGroupMembership(ctx context.Context, configID string) error {
+	var notificationGroups []models.NotificationGroup
+	sql := `SELECT id, notification_id FROM notification_groups WHERE id IN (SELECT group_id FROM notification_group_resources WHERE config_id = ?)`
+	if err := ctx.DB().Raw(sql, configID).Scan(&notificationGroups).Error; err != nil {
+		return ctx.Oops().Wrapf(err, "failed to get notifications for config %s", configID)
+	}
+
+	for _, ng := range notificationGroups {
+		if resolved, err := resolveGroupMembershipForNotification(ctx, configID, ng.NotificationID.String()); err != nil {
+			return ctx.Oops().Wrapf(err, "failed to resolve notification group %s", ng.ID)
+		} else if resolved {
+			if err := ctx.DB().Exec("DELETE FROM notification_group_resources WHERE group_id = ? AND config_id = ?", ng.ID, configID).Error; err != nil {
+				return ctx.Oops().Wrapf(err, "failed to delete config from notification group %s", ng.ID)
+			}
+		}
+	}
+
+	return nil
+}
+
+func resolveGroupMembershipForNotification(ctx context.Context, configID, notificationID string) (bool, error) {
+	notification, err := GetNotification(ctx, notificationID)
+	if err != nil {
+		return false, ctx.Oops().Wrapf(err, "failed to get notification %s", notificationID)
+	}
+
+	// 1. the resource's current health must match the events the notification is listening to
+	var config models.ConfigItem
+	if err := ctx.DB().Where("id = ?", configID).Find(&config).Error; err != nil {
+		return false, ctx.Oops().Wrapf(err, "failed to get config %s", configID)
+	} else if config.ID == uuid.Nil {
+		return false, ctx.Oops().Wrapf(err, "config not found %s", configID)
+	}
+
+	if !lo.Contains(notification.Events, fmt.Sprintf("config.%s", string(*config.Health))) {
+		return true, nil
+	}
+
+	// 2. The resource must also pass the notification's filter
+	if notification.Filter != "" {
+		// TODO:
+	}
+
+	return false, nil
 }
 
 func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, event models.Event, matchingSilences []models.NotificationSilence) error {
