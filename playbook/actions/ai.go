@@ -283,10 +283,9 @@ func (t *aiAction) triggerPlaybookRun(ctx context.Context, contextProvider v1.AI
 	}
 
 	eventProp := types.JSONStringMap{
-		"id":                 playbook.ID.String(),
-		"parent_run_id":      t.RunID.String(),
-		"parameters":         string(parametersJSON),
-		"parent_run_creator": ctx.Subject(),
+		"id":            playbook.ID.String(),
+		"parent_run_id": t.RunID.String(),
+		"parameters":    string(parametersJSON),
 	}
 
 	if t.TemplateEnv.Config != nil && t.TemplateEnv.Config.ID != uuid.Nil {
