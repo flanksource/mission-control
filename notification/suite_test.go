@@ -10,6 +10,7 @@ import (
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/tests/setup"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/events"
@@ -28,11 +29,16 @@ var (
 
 var _ = ginkgo.BeforeSuite(func() {
 	DefaultContext = setup.BeforeSuiteFn()
+
+	// TODO: add a system user to dummy fixtures
+	api.SystemUserID = &dummy.JohnDoe.ID
+
 	_ = context.UpdateProperty(DefaultContext, api.PropertyIncidentsDisabled, "true")
 	_ = context.UpdateProperty(DefaultContext, "notification.send.trace", "true")
 	events.StartConsumers(DefaultContext)
 	setupWebhookServer()
 })
+
 var _ = ginkgo.AfterSuite(func() {
 	// setup.DumpEventQueue(DefaultContext)
 	setup.AfterSuiteFn()

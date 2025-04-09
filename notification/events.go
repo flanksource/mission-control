@@ -123,9 +123,13 @@ func checkRepeatInterval(ctx context.Context, n NotificationWithSpec, groupID *u
 // If a notification is found for the given event and passes all the filters, then
 // a new `notification.send` event is created.
 func (t *notificationHandler) addNotificationEvent(ctx context.Context, event models.Event) error {
+	// We need an authorized RBAC subject to read connections.
+	// So we use the system user as the subject.
+	ctx = ctx.WithSubject(api.SystemUserID.String())
+
 	notificationIDs, err := GetNotificationIDsForEvent(ctx, event.Name)
 	if err != nil {
-		return err
+		return ctx.Oops().Wrapf(err, "failed to get notification ids for event")
 	}
 
 	if len(notificationIDs) == 0 {
@@ -134,7 +138,7 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 
 	celEnv, err := GetEnvForEvent(ctx, event)
 	if err != nil {
-		return err
+		return ctx.Oops().Wrapf(err, "failed to get env for event")
 	}
 
 	t.Ring.Add(event, celEnv.AsMap(ctx))
@@ -142,12 +146,12 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 	silencedResource := getSilencedResourceFromCelEnv(celEnv)
 	matchingSilences, err := db.GetMatchingNotificationSilences(ctx, silencedResource)
 	if err != nil {
-		return err
+		return ctx.Oops().Wrapf(err, "failed to get matching notification silences")
 	}
 
 	for _, id := range notificationIDs {
 		if err := addNotificationEvent(ctx, id, celEnv, event, matchingSilences); err != nil {
-			return fmt.Errorf("failed to add notification.send event for event=%s notification=%s: %w", event.Name, id, err)
+			return ctx.Oops().Wrapf(err, "failed to add notification.send event for event=%s notification=%s", event.Name, id)
 		}
 	}
 
@@ -202,6 +206,10 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 				ParentID:       blocker.ParentID,
 				SilencedBy:     blocker.SilencedBy,
 				GroupID:        payload.GroupID,
+				PersonID:       payload.PersonID,
+				TeamID:         payload.TeamID,
+				ConnectionID:   payload.Connection,
+				Body:           payload.Body,
 			}
 
 			if err := db.SaveUnsentNotificationToHistory(ctx, history); err != nil {
@@ -229,6 +237,10 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 				GroupID:        payload.GroupID,
 				Status:         models.NotificationStatusPending,
 				NotBefore:      lo.ToPtr(time.Now().Add(*n.WaitFor)),
+				PersonID:       payload.PersonID,
+				ConnectionID:   payload.Connection,
+				TeamID:         payload.TeamID,
+				Body:           payload.Body,
 			}
 
 			if err := ctx.DB().Create(&pendingHistory).Error; err != nil {

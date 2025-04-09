@@ -50,10 +50,11 @@ type NotificationEventPayload struct {
 	EventCreatedAt time.Time  `json:"event_created_at"`          // Timestamp at which the original event was created
 	Properties     []byte     `json:"properties,omitempty"`      // json encoded properties of the original event
 	GroupID        *uuid.UUID `json:"group_id,omitempty"`        // ID of the group that the notification belongs to
+	Body           *string    `json:"-"`                         // Body of the notification
 
 	// Recipients //
-
 	CustomService    *api.NotificationConfig `json:"custom_service,omitempty"`    // Send to connection or shoutrrr service
+	Connection       *uuid.UUID              `json:"connection,omitempty"`        // Connection to use for the notification
 	PlaybookID       *uuid.UUID              `json:"playbook_id,omitempty"`       // The playbook to trigger
 	PersonID         *uuid.UUID              `json:"person_id,omitempty"`         // The person recipient.
 	TeamID           *uuid.UUID              `json:"team_id,omitempty"`           // The team recipient.
@@ -318,6 +319,32 @@ Hypothesis: {{.hypothesis.title}}
 	return title, body
 }
 
+func getNotificationMsg(ctx context.Context, celEnv map[string]any, payload NotificationEventPayload, n *NotificationWithSpec) (*NotificationTemplate, error) {
+	defaultTitle, defaultBody := DefaultTitleAndBody(payload.EventName)
+	data := NotificationTemplate{
+		Title:      utils.Coalesce(n.Title, defaultTitle),
+		Message:    utils.Coalesce(n.Template, defaultBody),
+		Properties: n.Properties,
+	}
+	templater := ctx.NewStructTemplater(celEnv, "", TemplateFuncs)
+	if err := templater.Walk(&data); err != nil {
+		return nil, fmt.Errorf("error templating notification: %w", err)
+	}
+
+	if strings.Contains(data.Message, `"blocks"`) {
+		var slackMsg SlackMsgTemplate
+		if err := json.Unmarshal([]byte(data.Message), &slackMsg); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal slack template into blocks: %w", err)
+		}
+
+		if b, err := json.Marshal([]any{slackMsg}); err == nil {
+			data.Message = string(b)
+		}
+	}
+
+	return &data, nil
+}
+
 func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *NotificationWithSpec, celEnv map[string]any) ([]NotificationEventPayload, error) {
 	var payloads []NotificationEventPayload
 
@@ -379,6 +406,13 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 			GroupID:        groupID,
 		}
 
+		msg, err := getNotificationMsg(ctx, celEnv, payload, n)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get notification body: %w", err)
+		}
+
+		payload.Body = &msg.Message
+
 		payloads = append(payloads, payload)
 	}
 
@@ -432,6 +466,21 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 			Properties:     eventProperties,
 			GroupID:        groupID,
 		}
+
+		if cn.Connection != "" {
+			c, err := pkgConnection.Get(ctx, cn.Connection)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get connection: %w", err)
+			}
+			celEnv["channel"] = c.Type
+			payload.Connection = &c.ID
+		}
+
+		msg, err := getNotificationMsg(ctx, celEnv, payload, n)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get notification body: %w", err)
+		}
+		payload.Body = &msg.Message
 
 		payloads = append(payloads, payload)
 	}

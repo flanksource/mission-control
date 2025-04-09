@@ -19,6 +19,7 @@ import (
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/tests/setup"
 
+	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/auth"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/events"
@@ -60,6 +61,9 @@ var _ = ginkgo.BeforeSuite(func() {
 	DefaultContext = setup.BeforeSuiteFn()
 	DefaultContext.Logger.SetLogLevel(DefaultContext.Properties().String("log.level", "info"))
 	DefaultContext.Infof("%s", DefaultContext.String())
+
+	// TODO: add a system user to dummy fixtures
+	api.SystemUserID = &dummy.JohnDoe.ID
 
 	if err := rbac.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter); err != nil {
 		ginkgo.Fail(err.Error())
