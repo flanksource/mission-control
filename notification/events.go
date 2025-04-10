@@ -133,7 +133,7 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 		return ctx.Oops().Wrapf(err, "failed to get env for event")
 	}
 
-	if lo.Contains(api.ConfigHealthEvents, event.Name) {
+	if lo.Contains(api.ConfigEvents, event.Name) {
 		if err := resolveGroupMembership(ctx, celEnv, event.Properties["id"]); err != nil {
 			return ctx.Oops().Wrapf(err, "failed to resolve group membership for event")
 		}

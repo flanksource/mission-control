@@ -1140,13 +1140,31 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 		})
 
 		ginkgo.It("should resolve some configs", func() {
-			// Mark config3 as healthy to ensure healthy configs are skipped
+			// Mark config3 as healthy to ensure healthy configs are resolved in the group
 			err := DefaultContext.DB().Model(&models.ConfigItem{}).
 				Where("id = ?", config3.ID).
 				UpdateColumns(map[string]any{
 					"health": models.HealthHealthy,
 					"status": "Running",
 				}).Error
+			Expect(err).To(BeNil())
+
+			// Mark Config 2 as Terminating
+			err = DefaultContext.DB().Model(&models.ConfigItem{}).
+				Where("id = ?", config2.ID).
+				UpdateColumns(map[string]any{
+					"config": types.JSON(`{"color": "red", "restart": 1}`),
+					"status": "Terminating",
+				}).Error
+			Expect(err).To(BeNil())
+
+			// add to config_change
+			err = DefaultContext.DB().Create(&models.ConfigChange{
+				ConfigID:   config2.ID.String(),
+				ChangeType: "diff",
+				Summary:    "Config 2 is terminating",
+				Details:    types.JSON(`{"reason": "Terminating"}`),
+			}).Error
 			Expect(err).To(BeNil())
 
 			var c3 models.ConfigItem
@@ -1172,7 +1190,7 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 				})
 
 				return len(unresolved)
-			}, "10s", "1s").Should(Equal(3))
+			}, "10s", "1s").Should(Equal(2))
 		})
 
 		ginkgo.It("should group config resources in a notification", func() {
@@ -1204,12 +1222,12 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 			Expect(len(msgBlocks)).To(Equal(2))
 
 			groupedResources := strings.Split(msgBlocks[1], "\n")
-			Expect(len(groupedResources)).To(Equal(2), "2 configs should be grouped")
+			Expect(len(groupedResources)).To(Equal(1), "1 additional resource should be added")
 
-			// Only config1, config2 and config4 should be present since config3 is healthy
+			// Only config1 and config4 should be present since config3 is healthy and config2 does not match the filter
 			Expect(msg).To(ContainSubstring(*config1.Name))
-			Expect(msg).To(ContainSubstring(*config2.Name))
 			Expect(msg).To(ContainSubstring(*config4.Name))
+			Expect(msg).ToNot(ContainSubstring(*config2.Name))
 			Expect(msg).ToNot(ContainSubstring(*config3.Name))
 		})
 	})

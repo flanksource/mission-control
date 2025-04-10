@@ -69,7 +69,11 @@ const (
 )
 
 var (
-	ConfigHealthEvents = []string{
+	ConfigEvents = []string{
+		EventConfigCreated,
+		EventConfigChanged,
+		EventConfigUpdated,
+		EventConfigDeleted,
 		EventConfigHealthy,
 		EventConfigUnhealthy,
 		EventConfigWarning,
