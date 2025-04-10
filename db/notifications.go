@@ -14,6 +14,7 @@ import (
 	"github.com/flanksource/commons/text"
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/db"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
@@ -365,24 +366,42 @@ func AddResourceToGroup(ctx context.Context, groupingInterval time.Duration, gro
 			}
 		}
 
+		columns := []clause.Column{{Name: "group_id"}, {Name: "config_id"}, {Name: "check_id"}, {Name: "component_id"}}
+		if ver, err := db.PGMajorVersion(ctx.DB()); err != nil {
+			return ctx.Oops().Wrapf(err, "failed to get pg version")
+		} else if ver < 15 {
+			if configID != nil {
+				columns = []clause.Column{{Name: "group_id"}, {Name: "config_id"}}
+			} else if checkID != nil {
+				columns = []clause.Column{{Name: "group_id"}, {Name: "check_id"}}
+			} else if componentID != nil {
+				columns = []clause.Column{{Name: "group_id"}, {Name: "component_id"}}
+			}
+		}
+
 		groupResource := models.NotificationGroupResource{
 			GroupID:     group.ID,
 			ConfigID:    configID,
 			CheckID:     checkID,
 			ComponentID: componentID,
 		}
-		if err := ctx.DB().Clauses(clause.OnConflict{DoNothing: true}).Create(&groupResource).Error; err != nil {
+		if err := ctx.DB().Clauses(clause.OnConflict{
+			Columns:     columns,
+			TargetWhere: clause.Where{Exprs: []clause.Expression{clause.Eq{Column: clause.Column{Name: "resolved_at"}, Value: nil}}},
+			DoUpdates:   clause.Assignments(map[string]any{"updated_at": duty.Now()}),
+		}).Create(&groupResource).Error; err != nil {
 			return ctx.Oops().Wrapf(err, "failed to add resource to group")
 		}
 
 		return nil
 	})
+
 	return &group, err
 }
 
 func GetGroupedResources(ctx context.Context, groupID uuid.UUID, excludeResources ...string) ([]string, error) {
 	var resources []models.NotificationGroupResource
-	if err := ctx.DB().Where("group_id = ?", groupID).Find(&resources).Error; err != nil {
+	if err := ctx.DB().Where("group_id = ?", groupID).Where("resolved_at IS NULL").Find(&resources).Error; err != nil {
 		return nil, ctx.Oops().Wrapf(err, "failed to get grouped resources")
 	}
 

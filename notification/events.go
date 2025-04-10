@@ -10,6 +10,7 @@ import (
 	"time"
 
 	sw "github.com/RussellLuo/slidingwindow"
+	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/pkg/tokenizer"
@@ -127,8 +128,13 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 	// So we use the system user as the subject.
 	ctx = ctx.WithSubject(api.SystemUserID.String())
 
+	celEnv, err := GetEnvForEvent(ctx, event)
+	if err != nil {
+		return ctx.Oops().Wrapf(err, "failed to get env for event")
+	}
+
 	if lo.Contains(api.ConfigHealthEvents, event.Name) {
-		if err := resolveGroupMembership(ctx, event.Properties["id"]); err != nil {
+		if err := resolveGroupMembership(ctx, celEnv, event.Properties["id"]); err != nil {
 			return ctx.Oops().Wrapf(err, "failed to resolve group membership for event")
 		}
 	}
@@ -140,11 +146,6 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 
 	if len(notificationIDs) == 0 {
 		return nil
-	}
-
-	celEnv, err := GetEnvForEvent(ctx, event)
-	if err != nil {
-		return ctx.Oops().Wrapf(err, "failed to get env for event")
 	}
 
 	t.Ring.Add(event, celEnv.AsMap(ctx))
@@ -166,7 +167,7 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 
 // resolveGroupMembership removes any resources from notification group that
 // no longer match the notification event & filter.
-func resolveGroupMembership(ctx context.Context, configID string) error {
+func resolveGroupMembership(ctx context.Context, celEnv *celVariables, configID string) error {
 	var notificationGroups []models.NotificationGroup
 	sql := `SELECT id, notification_id FROM notification_groups WHERE id IN (SELECT group_id FROM notification_group_resources WHERE config_id = ?)`
 	if err := ctx.DB().Raw(sql, configID).Scan(&notificationGroups).Error; err != nil {
@@ -174,10 +175,12 @@ func resolveGroupMembership(ctx context.Context, configID string) error {
 	}
 
 	for _, ng := range notificationGroups {
-		if resolved, err := resolveGroupMembershipForNotification(ctx, configID, ng.NotificationID.String()); err != nil {
+		if resolved, err := resolveGroupMembershipForNotification(ctx, celEnv, configID, ng.NotificationID.String()); err != nil {
 			return ctx.Oops().Wrapf(err, "failed to resolve notification group %s", ng.ID)
 		} else if resolved {
-			if err := ctx.DB().Exec("DELETE FROM notification_group_resources WHERE group_id = ? AND config_id = ?", ng.ID, configID).Error; err != nil {
+			if err := ctx.DB().Model(&models.NotificationGroupResource{}).
+				Where("group_id = ? AND config_id = ?", ng.ID, configID).
+				UpdateColumn("resolved_at", duty.Now()).Error; err != nil {
 				return ctx.Oops().Wrapf(err, "failed to delete config from notification group %s", ng.ID)
 			}
 		}
@@ -186,13 +189,12 @@ func resolveGroupMembership(ctx context.Context, configID string) error {
 	return nil
 }
 
-func resolveGroupMembershipForNotification(ctx context.Context, configID, notificationID string) (bool, error) {
+func resolveGroupMembershipForNotification(ctx context.Context, celEnv *celVariables, configID, notificationID string) (bool, error) {
 	notification, err := GetNotification(ctx, notificationID)
 	if err != nil {
 		return false, ctx.Oops().Wrapf(err, "failed to get notification %s", notificationID)
 	}
 
-	// 1. the resource's current health must match the events the notification is listening to
 	var config models.ConfigItem
 	if err := ctx.DB().Where("id = ?", configID).Find(&config).Error; err != nil {
 		return false, ctx.Oops().Wrapf(err, "failed to get config %s", configID)
@@ -204,9 +206,15 @@ func resolveGroupMembershipForNotification(ctx context.Context, configID, notifi
 		return true, nil
 	}
 
-	// 2. The resource must also pass the notification's filter
 	if notification.Filter != "" {
-		// TODO:
+		valid, err := ctx.RunTemplateBool(gomplate.Template{Expression: notification.Filter}, celEnv.AsMap(ctx))
+		if err != nil {
+			return false, ctx.Oops().Wrapf(err, "failed to validate notification filter for notification %s", notificationID)
+		}
+
+		if !valid {
+			return true, nil
+		}
 	}
 
 	return false, nil

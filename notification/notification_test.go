@@ -8,6 +8,7 @@ import (
 
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/api"
@@ -1048,6 +1049,7 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 				CustomServices: types.JSON(customReceiverJson),
 				WaitFor:        lo.ToPtr(time.Second * 15),
 				GroupBy:        pq.StringArray{"description", "type"},
+				Filter:         ".status == 'CrashLoopBackOff'",
 			}
 
 			err := DefaultContext.DB().Create(&n).Error
@@ -1056,34 +1058,38 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 			config1 = models.ConfigItem{
 				ID:          uuid.New(),
 				Name:        lo.ToPtr("config1"),
-				ConfigClass: "HelmRelease",
+				ConfigClass: "Pod",
 				Health:      lo.ToPtr(models.HealthHealthy),
 				Config:      lo.ToPtr(`{"color": "red"}`),
-				Type:        lo.ToPtr("Kubernetes::HelmRelease"),
+				Type:        lo.ToPtr("Kubernetes::Pod"),
+				Status:      lo.ToPtr("Running"),
 			}
 			config2 = models.ConfigItem{
 				ID:          uuid.New(),
 				Name:        lo.ToPtr("config2"),
-				ConfigClass: "HelmRelease",
+				ConfigClass: "Pod",
 				Health:      lo.ToPtr(models.HealthHealthy),
-				Config:      lo.ToPtr(`{"color": "red"}`),
-				Type:        lo.ToPtr("Kubernetes::HelmRelease"),
+				Config:      lo.ToPtr(`{"color": "blue"}`),
+				Type:        lo.ToPtr("Kubernetes::Pod"),
+				Status:      lo.ToPtr("Running"),
 			}
 			config3 = models.ConfigItem{
 				ID:          uuid.New(),
 				Name:        lo.ToPtr("config3"),
-				ConfigClass: "HelmRelease",
+				ConfigClass: "Pod",
 				Health:      lo.ToPtr(models.HealthHealthy),
-				Config:      lo.ToPtr(`{"color": "red"}`),
-				Type:        lo.ToPtr("Kubernetes::HelmRelease"),
+				Config:      lo.ToPtr(`{"color": "green"}`),
+				Type:        lo.ToPtr("Kubernetes::Pod"),
+				Status:      lo.ToPtr("Running"),
 			}
 			config4 = models.ConfigItem{
 				ID:          uuid.New(),
 				Name:        lo.ToPtr("config4"),
-				ConfigClass: "HelmRelease",
+				ConfigClass: "Pod",
 				Health:      lo.ToPtr(models.HealthHealthy),
-				Config:      lo.ToPtr(`{"color": "red"}`),
-				Type:        lo.ToPtr("Kubernetes::HelmRelease"),
+				Config:      lo.ToPtr(`{"color": "yellow"}`),
+				Type:        lo.ToPtr("Kubernetes::Pod"),
+				Status:      lo.ToPtr("Running"),
 			}
 			err = DefaultContext.DB().Create(&config1).Error
 			Expect(err).To(BeNil())
@@ -1113,30 +1119,63 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 			notification.PurgeCache(n.ID.String())
 		})
 
-		ginkgo.It("should group config resources in a notification", func() {
+		ginkgo.It("should mark the configs as unhealthy", func() {
 			for _, c := range []models.ConfigItem{config1, config2, config3, config4} {
 				err := DefaultContext.DB().Model(&models.ConfigItem{}).
 					Where("id = ?", c.ID).
 					UpdateColumns(map[string]any{
 						"health":      models.HealthUnhealthy,
 						"description": fmt.Sprintf("%s is failing due to bad manifest", *c.Name),
+						"status":      "CrashLoopBackOff",
 					}).Error
 				Expect(err).To(BeNil())
 			}
 			events.ConsumeAll(DefaultContext)
+			Eventually(func() bool {
+				var sendHistories []models.NotificationSendHistory
+				err := DefaultContext.DB().Where("notification_id = ?", n.ID.String()).Find(&sendHistories).Error
+				Expect(err).To(BeNil())
+				return len(sendHistories) == 4
+			}, "10s", "1s").Should(BeTrue())
+		})
 
-			time.Sleep(3 * time.Second)
-
+		ginkgo.It("should resolve some configs", func() {
 			// Mark config3 as healthy to ensure healthy configs are skipped
 			err := DefaultContext.DB().Model(&models.ConfigItem{}).
 				Where("id = ?", config3.ID).
-				UpdateColumns(map[string]any{"health": models.HealthHealthy, "description": "healthy"}).Error
+				UpdateColumns(map[string]any{
+					"health": models.HealthHealthy,
+					"status": "Running",
+				}).Error
 			Expect(err).To(BeNil())
 
-			events.ConsumeAll(DefaultContext)
+			var c3 models.ConfigItem
+			err = DefaultContext.DB().Where("id = ?", config3.ID).First(&c3).Error
+			Expect(err).To(BeNil())
+			Expect(*c3.Status).To(Equal("Running"))
 
-			time.Sleep(12 * time.Second)
+			Eventually(func() int {
+				query.FlushGettersCache()
+				query.FlushConfigCache(DefaultContext)
+				events.ConsumeAll(DefaultContext)
 
+				var group models.NotificationGroup
+				err := DefaultContext.DB().Where("notification_id = ?", n.ID.String()).First(&group).Error
+				Expect(err).To(BeNil())
+
+				var groupResources []models.NotificationGroupResource
+				err = DefaultContext.DB().Where("group_id = ?", group.ID).Find(&groupResources).Error
+				Expect(err).To(BeNil())
+
+				unresolved := lo.Filter(groupResources, func(gr models.NotificationGroupResource, _ int) bool {
+					return gr.ResolvedAt == nil
+				})
+
+				return len(unresolved)
+			}, "10s", "1s").Should(Equal(3))
+		})
+
+		ginkgo.It("should group config resources in a notification", func() {
 			Eventually(func() bool {
 				for {
 					allDone, err := notification.ProcessPendingNotifications(DefaultContext)
@@ -1152,7 +1191,7 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 					Find(&unprocessedPending).Error
 				Expect(err).To(BeNil())
 				return len(unprocessedPending) == 0
-			}, "5s", "1s").Should(BeTrue())
+			}, "20s", "1s").Should(BeTrue())
 
 			Eventually(func() int {
 				return len(webhookPostdata)
@@ -1165,12 +1204,13 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 			Expect(len(msgBlocks)).To(Equal(2))
 
 			groupedResources := strings.Split(msgBlocks[1], "\n")
-			Expect(len(groupedResources)).To(Equal(2), "2 other configs since 1 config is part of the original message")
+			Expect(len(groupedResources)).To(Equal(2), "2 configs should be grouped")
 
-			// All config names (except config 3, as it was resolved) should be present
+			// Only config1, config2 and config4 should be present since config3 is healthy
 			Expect(msg).To(ContainSubstring(*config1.Name))
 			Expect(msg).To(ContainSubstring(*config2.Name))
 			Expect(msg).To(ContainSubstring(*config4.Name))
+			Expect(msg).ToNot(ContainSubstring(*config3.Name))
 		})
 	})
 
