@@ -202,12 +202,31 @@ func tableUpdatesHandler(ctx context.Context) {
 	for {
 		select {
 		case v := <-notificationUpdateCh:
-			_, id := tableActivityPayload(v)
+			tgOperation, id := tableActivityPayload(v)
 			notification.PurgeCache(id)
 
+			// TODO: We shouldn't need to reload the policy on any update.
+			// Only updates to the "deleted_at" column should trigger a reload
+			// but the emitted event doesn't include that information.
+			if tgOperation == TGOPUpdate {
+				if err := rbac.ReloadPolicy(); err != nil {
+					ctx.Errorf("failed to reload rbac policy due to notification updates: %v", err)
+				} else {
+					ctx.Logger.Debugf("reloading rbac policy due to notification updates")
+				}
+			}
+
 		case v := <-playbooksUpdateChan:
-			_, id := tableActivityPayload(v)
+			tgOperation, id := tableActivityPayload(v)
 			query.InvalidateCacheByID[models.Playbook](id)
+
+			if tgOperation == TGOPUpdate {
+				if err := rbac.ReloadPolicy(); err != nil {
+					ctx.Errorf("failed to reload rbac policy due to playbook updates: %v", err)
+				} else {
+					ctx.Logger.Debugf("reloading rbac policy due to playbook updates")
+				}
+			}
 
 		case <-playbooksActionUpdateChan:
 			if api.UpstreamConf.Valid() {
@@ -227,7 +246,7 @@ func tableUpdatesHandler(ctx context.Context) {
 					ctx.Errorf("failed to delete rbac policy for team(%s): %v", id, err)
 				} else if ok {
 					if err := rbac.ReloadPolicy(); err != nil {
-						ctx.Errorf("failed to reload rbac policy: %v", err)
+						ctx.Errorf("failed to reload rbac policy due to team updates: %v", err)
 					}
 				}
 			}
@@ -246,14 +265,14 @@ func tableUpdatesHandler(ctx context.Context) {
 				if err := rbac.DeleteRoleForUser(personID, teamID); err != nil {
 					ctx.Errorf("failed to delete team(%s)->user(%s) rbac policy: %v", teamID, personID, err)
 				} else if err := rbac.ReloadPolicy(); err != nil {
-					ctx.Errorf("failed to reload rbac policy: %v", err)
+					ctx.Errorf("failed to reload rbac policy due to team_members updates: %v", err)
 				}
 
 			case TGOPInsert, TGOPUpdate:
 				if err := rbac.AddRoleForUser(personID, teamID); err != nil {
 					ctx.Errorf("failed to add team(%s)->user(%s) rbac policy: %v", teamID, personID, err)
 				} else if err := rbac.ReloadPolicy(); err != nil {
-					ctx.Errorf("failed to reload rbac policy: %v", err)
+					ctx.Errorf("failed to reload rbac policy due to team_members updates: %v", err)
 				}
 			}
 
@@ -270,9 +289,9 @@ func tableUpdatesHandler(ctx context.Context) {
 
 		case <-permissionGroupUpdateChan:
 			if err := rbac.ReloadPolicy(); err != nil {
-				ctx.Logger.Errorf("error reloading rbac policy due to permission updates: %v", err)
+				ctx.Logger.Errorf("error reloading rbac policy due to permission group updates: %v", err)
 			} else {
-				ctx.Logger.Debugf("reloading rbac policy due to permission updates")
+				ctx.Logger.Debugf("reloading rbac policy due to permission group updates")
 			}
 
 			// permissions affect RLS so we need to invalidate the postgrest JWT
