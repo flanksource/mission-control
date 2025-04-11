@@ -1174,7 +1174,7 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 
 			Eventually(func() int {
 				query.FlushGettersCache()
-				query.FlushConfigCache(DefaultContext)
+				Expect(query.FlushConfigCache(DefaultContext)).To(BeNil())
 				events.ConsumeAll(DefaultContext)
 
 				var group models.NotificationGroup
