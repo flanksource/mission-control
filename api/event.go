@@ -69,6 +69,16 @@ const (
 )
 
 var (
+	ConfigEvents = []string{
+		EventConfigCreated,
+		EventConfigChanged,
+		EventConfigUpdated,
+		EventConfigDeleted,
+		EventConfigHealthy,
+		EventConfigUnhealthy,
+		EventConfigWarning,
+		EventConfigUnknown,
+	}
 	EventStatusGroup = []string{
 		EventCheckFailed,
 		EventCheckPassed,

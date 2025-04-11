@@ -22,7 +22,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"go.opentelemetry.io/otel/trace"
-	"gorm.io/gorm/clause"
 )
 
 func DeleteNotificationSilence(ctx context.Context, id string) error {
@@ -371,18 +370,15 @@ func AddResourceToGroup(ctx context.Context, groupingInterval time.Duration, gro
 			CheckID:     checkID,
 			ComponentID: componentID,
 		}
-		if err := ctx.DB().Clauses(clause.OnConflict{DoNothing: true}).Create(&groupResource).Error; err != nil {
-			return ctx.Oops().Wrapf(err, "failed to add resource to group")
-		}
-
-		return nil
+		return groupResource.Upsert(ctx.DB())
 	})
+
 	return &group, err
 }
 
 func GetGroupedResources(ctx context.Context, groupID uuid.UUID, excludeResources ...string) ([]string, error) {
 	var resources []models.NotificationGroupResource
-	if err := ctx.DB().Where("group_id = ?", groupID).Find(&resources).Error; err != nil {
+	if err := ctx.DB().Where("group_id = ?", groupID).Where("resolved_at IS NULL").Find(&resources).Error; err != nil {
 		return nil, ctx.Oops().Wrapf(err, "failed to get grouped resources")
 	}
 
