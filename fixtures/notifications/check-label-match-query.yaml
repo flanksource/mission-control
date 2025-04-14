@@ -1,0 +1,10 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Notification
+metadata:
+  name: health-check-alerts
+spec:
+  events:
+    - check.failed
+  filter: matchQuery(.check, "type!=http labels.Expected-Fail!=true")
+  to:
+    email: alerts@acme.com
