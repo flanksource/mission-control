@@ -89,9 +89,9 @@ type notificationHandler struct {
 }
 
 // Check if notification can be sent in the interval based on group by, returns true if it can be sent
-func checkRepeatInterval(ctx context.Context, n NotificationWithSpec, groupID *uuid.UUID, resourceID, sourceEvent string) (bool, error) {
+func checkRepeatInterval(ctx context.Context, n NotificationWithSpec, groupID *uuid.UUID, resourceID, sourceEvent string) (*models.NotificationSendHistory, error) {
 	if n.RepeatInterval == nil {
-		return true, nil
+		return nil, nil
 	}
 
 	clauses := []clause.Expression{
@@ -109,15 +109,20 @@ func checkRepeatInterval(ctx context.Context, n NotificationWithSpec, groupID *u
 		clauses = append(clauses, clause.Eq{Column: "resource_id", Value: resourceID})
 	}
 
-	var exists bool
-	tx := ctx.DB().Model(&models.NotificationSendHistory{}).Clauses(clauses...).
-		Select(fmt.Sprintf("(NOW() - created_at) <= '%d minutes'::INTERVAL", int(n.RepeatInterval.Minutes()))).
-		Order("created_at DESC").Limit(1).Scan(&exists)
+	var sendHistory models.NotificationSendHistory
+	tx := ctx.DB().Clauses(clauses...).
+		Select("id", "group_id").
+		Where(fmt.Sprintf("(NOW() - created_at) <= '%d minutes'::INTERVAL", int(n.RepeatInterval.Minutes()))).
+		Order("created_at DESC").Limit(1).Find(&sendHistory)
 	if tx.Error != nil {
-		return false, fmt.Errorf("error querying db for last send notification[%s]: %w", n.ID, tx.Error)
+		return nil, fmt.Errorf("error querying db for last send notification[%s]: %w", n.ID, tx.Error)
 	}
 
-	return !exists, nil
+	if sendHistory.ID == uuid.Nil {
+		return nil, nil
+	}
+
+	return &sendHistory, nil
 }
 
 // addNotificationEvent responds to a event that can possibly generate a notification.
@@ -275,7 +280,7 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 			}
 
 			if err := db.SaveUnsentNotificationToHistory(ctx, history); err != nil {
-				return fmt.Errorf("failed to save silenced notification history: %w", err)
+				return fmt.Errorf("failed to save %s notification history: %w", blocker.BlockedWithStatus, err)
 			}
 
 			continue
@@ -340,20 +345,22 @@ func processNotificationConstraints(ctx context.Context,
 
 	// Repeat interval check
 	if n.RepeatInterval != nil {
-		passesRepeatInterval, err := checkRepeatInterval(ctx, n, payload.GroupID, payload.ID.String(), sourceEvent)
+		blockingSendHistory, err := checkRepeatInterval(ctx, n, payload.GroupID, payload.ID.String(), sourceEvent)
 		if err != nil {
 			// If there are any errors in calculating interval, we send the notification and log the error
 			ctx.Errorf("error checking repeat interval for notification[%s]: %v", n.ID, err)
-			passesRepeatInterval = true
 		}
 
-		if !passesRepeatInterval {
+		if blockingSendHistory != nil {
 			ctx.Logger.V(6).Infof("skipping notification[%s] due to repeat interval", n.ID)
 			ctx.Counter("notification_skipped_by_repeat_interval", "id", n.ID.String(), "resource", payload.ID.String(), "source_event", sourceEvent).Add(1)
 
-			return &validateResult{
+			result := &validateResult{
 				BlockedWithStatus: models.NotificationStatusRepeatInterval,
-			}, nil
+				ParentID:          &blockingSendHistory.ID,
+			}
+
+			return result, nil
 		}
 	}
 
