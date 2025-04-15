@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/flanksource/commons/collections"
@@ -17,6 +18,7 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/google/uuid"
+	"github.com/robfig/cron/v3"
 	"github.com/samber/lo"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -25,7 +27,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-var CRDStatusUpdateQueue *collections.Queue[string]
+var (
+	CRDStatusUpdateQueue *collections.Queue[string]
+
+	// Keeps track of all watchdog jobs
+	watchdogJobs sync.Map
+)
 
 func InitCRDStatusUpdates(ctx context.Context) error {
 	var err error
@@ -479,4 +486,118 @@ func isKubernetesConfigItem(ctx context.Context, configID string) (bool, error) 
 	}
 
 	return len(scraperSpec.Kubernetes) != 0, nil
+}
+
+func InitWatchdogNotifications(ctx context.Context, scheduler *cron.Cron) error {
+	var notifications []models.Notification
+	if err := ctx.DB().
+		Where("watchdog_interval IS NOT NULL AND watchdog_interval != 0").
+		Where("deleted_at IS NULL").
+		Find(&notifications).Error; err != nil {
+		return fmt.Errorf("failed to get notifications with watchdog interval: %w", err)
+	}
+
+	ctx.Debugf("initializing watchdog jobs for %d notifications", len(notifications))
+	for _, n := range notifications {
+		_ = scheduleWatchdogJob(ctx, scheduler, n.ID.String(), n.WatchdogInterval.String())
+	}
+
+	return nil
+}
+
+func SyncWatchdogJob(ctx context.Context, scheduler *cron.Cron, notificationID string, interval *string) error {
+	var scheduleChanged bool
+	var existingJob *job.Job
+
+	if j, ok := watchdogJobs.Load(notificationID); ok {
+		existingJob = j.(*job.Job)
+		if interval != nil {
+			scheduleChanged = existingJob.Schedule != fmt.Sprintf("@every %s", *interval)
+		}
+
+		if interval == nil || scheduleChanged {
+			ctx.Debugf("deleting existing watchdog job for %s", notificationID)
+			existingJob.Unschedule()
+			watchdogJobs.Delete(notificationID)
+		}
+	}
+
+	if interval != nil && (scheduleChanged || existingJob == nil) {
+		return scheduleWatchdogJob(ctx, scheduler, notificationID, *interval)
+	}
+
+	return nil
+}
+
+func scheduleWatchdogJob(ctx context.Context, scheduler *cron.Cron, notificationID string, interval string) error {
+	ctx.Debugf("scheduling watchdog job for %s with interval %s", notificationID, interval)
+	job := WatchdogNotificationJob(ctx, notificationID, interval)
+	job.AddToScheduler(scheduler)
+	watchdogJobs.Store(notificationID, job)
+	return nil
+}
+
+func WatchdogNotificationJob(ctx context.Context, notificationID string, interval string) *job.Job {
+	schedule := fmt.Sprintf("@every %s", interval)
+	return &job.Job{
+		Name:          "NotificationWatchdog",
+		Retention:     job.RetentionFailed,
+		JitterDisable: false,
+		ResourceID:    notificationID,
+		ResourceType:  "notification",
+		JobHistory:    true,
+		RunNow:        false,
+		Context:       ctx,
+		Singleton:     true,
+		Schedule:      schedule,
+		Fn: func(ctx job.JobRuntime) error {
+			return SendWatchdogNotification(ctx.Context.WithSubject(api.SystemUserID.String()), notificationID)
+		},
+	}
+}
+
+// SendWatchdogNotification sends a watchdog notification containing statistics
+// for the specified notification
+func SendWatchdogNotification(ctx context.Context, notificationID string) error {
+	stats, err := query.GetNotificationStats(ctx, notificationID)
+	if err != nil {
+		return fmt.Errorf("failed to get notification statistics: %w", err)
+	}
+
+	if len(stats) == 0 {
+		return nil
+	}
+
+	notificationUUID, err := uuid.Parse(notificationID)
+	if err != nil {
+		return fmt.Errorf("failed to parse notification ID: %w", err)
+	}
+
+	notification, err := GetNotification(ctx, notificationID)
+	if err != nil {
+		return fmt.Errorf("failed to get notification: %w", err)
+	}
+
+	celEnv := &celVariables{
+		Summary: stats[0],
+	}
+
+	payload := NotificationEventPayload{
+		EventName:      "notification.watchdog",
+		EventCreatedAt: time.Now(),
+		PersonID:       notification.PersonID,
+		TeamID:         notification.TeamID,
+	}
+
+	if len(notification.CustomNotifications) > 0 {
+		payload.CustomService = &notification.CustomNotifications[0]
+	}
+
+	nCtx := NewContext(ctx, notificationUUID)
+	nCtx.WithSource(payload.EventName, payload.ID)
+	if err := PrepareAndSendEventNotification(nCtx, payload, celEnv); err != nil {
+		return fmt.Errorf("failed to send watchdog notification: %w", err)
+	}
+
+	return nCtx.EndLog()
 }
