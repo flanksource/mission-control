@@ -76,8 +76,8 @@ func PersistNotificationFromCRD(ctx context.Context, obj *v1.Notification) error
 		}
 	}
 
-	if obj.Spec.WatchDogInterval != nil && *obj.Spec.WatchDogInterval != "" {
-		if parsed, err := text.ParseDuration(*obj.Spec.WatchDogInterval); err != nil {
+	if obj.Spec.WatchdogInterval != nil && *obj.Spec.WatchdogInterval != "" {
+		if parsed, err := text.ParseDuration(*obj.Spec.WatchdogInterval); err != nil {
 			return err
 		} else {
 			dbObj.WatchdogInterval = parsed

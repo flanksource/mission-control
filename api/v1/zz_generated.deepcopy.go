@@ -2169,8 +2169,8 @@ func (in *NotificationSpec) DeepCopyInto(out *NotificationSpec) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
-	if in.WatchDogInterval != nil {
-		in, out := &in.WatchDogInterval, &out.WatchDogInterval
+	if in.WatchdogInterval != nil {
+		in, out := &in.WatchdogInterval, &out.WatchdogInterval
 		*out = new(string)
 		**out = **in
 	}

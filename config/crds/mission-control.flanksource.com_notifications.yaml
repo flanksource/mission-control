@@ -212,9 +212,9 @@ spec:
 
                   Format: duration string (e.g., "30s", "2m")
                 type: string
-              watchDogInterval:
+              watchdogInterval:
                 description: |-
-                  WatchDogInterval is the interval at a watchdog notification is sent.
+                  WatchdogInterval is the interval at a watchdog notification is sent.
                   A watchdog notification contains the statistics of this notification.
 
 

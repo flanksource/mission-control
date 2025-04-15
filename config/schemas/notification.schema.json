@@ -195,7 +195,7 @@
           },
           "type": "array"
         },
-        "watchDogInterval": {
+        "watchdogInterval": {
           "type": "string"
         }
       },
