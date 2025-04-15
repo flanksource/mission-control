@@ -33,7 +33,7 @@ type NotificationAction struct {
 	// Message is the body of the notification
 	Message string `yaml:"message" json:"message" template:"true"`
 	// Properties for shoutrrr
-	Properties map[string]string `yaml:"properties,omitempty" json:"properties,omitempty"`
+	Properties map[string]string `yaml:"properties,omitempty" json:"properties,omitempty" template:"true"`
 }
 
 type GitOpsActionRepo struct {

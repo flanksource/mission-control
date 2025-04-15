@@ -200,7 +200,6 @@ func getGomplateFuncs(ctx context.Context, env actions.TemplateEnv) map[string]a
 // TemplateAction all the go templates in the action
 func TemplateEnv(ctx context.Context, env actions.TemplateEnv, template string) (string, error) {
 	return ctx.RunTemplate(gomplate.Template{Template: template, Functions: getGomplateFuncs(ctx, env)}, env.AsMap(ctx))
-
 }
 
 // TemplateAction all the go templates in the action

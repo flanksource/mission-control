@@ -70,6 +70,9 @@ type ConnectionSMTP struct {
 	// Email address that the mail are sent from
 	FromAddress string `json:"fromAddress"`
 
+	// Name that the mail are sent from
+	FromName string `json:"fromName"`
+
 	// List of recipient e-mails
 	ToAddresses []string `json:"toAddresses,omitempty"`
 
