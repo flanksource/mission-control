@@ -14,6 +14,7 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/utils"
 	"github.com/google/uuid"
+	"github.com/samber/lo"
 )
 
 func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
@@ -332,23 +333,34 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 	}
 
 	if obj.Spec.SMTP != nil {
-		dbObj.URL = fmt.Sprintf("smtp://$(username):$(password)@$%s:%d/?UseStartTLS=%s&Encryption=%s&Auth=%s",
+		obj.Spec.SMTP.Auth, _ = lo.Coalesce(obj.Spec.SMTP.Auth, "Plain")
+		obj.Spec.SMTP.Encryption, _ = lo.Coalesce(obj.Spec.SMTP.Encryption, "Auto")
+		obj.Spec.SMTP.FromAddress, _ = lo.Coalesce(obj.Spec.SMTP.FromAddress, "no-reply@example.com")
+		obj.Spec.SMTP.Port, _ = lo.Coalesce(obj.Spec.SMTP.Port, 25)
+		if len(obj.Spec.SMTP.ToAddresses) == 0 {
+			obj.Spec.SMTP.ToAddresses = []string{"no-reply@example.com"}
+		}
+		dbObj.URL = fmt.Sprintf("smtp://$(username):$(password)@$%s:%d/?UseStartTLS=%s&Encryption=%s&Auth=%s&from=%s&to=%s",
 			obj.Spec.SMTP.Host,
 			obj.Spec.SMTP.Port,
 			strconv.FormatBool(obj.Spec.SMTP.InsecureTLS),
 			obj.Spec.SMTP.Encryption,
+			obj.Spec.SMTP.FromAddress,
 			obj.Spec.SMTP.Auth,
+			strings.Join(obj.Spec.SMTP.ToAddresses, ","),
 		)
+
 		dbObj.Type = models.ConnectionTypeEmail
 		dbObj.Username = obj.Spec.SMTP.Username.String()
 		dbObj.Password = obj.Spec.SMTP.Password.String()
 		dbObj.Properties = map[string]string{
-			"port":        strconv.Itoa(obj.Spec.SMTP.Port),
-			"subject":     obj.Spec.SMTP.Subject,
-			"auth":        obj.Spec.SMTP.Auth,
-			"fromAddress": obj.Spec.SMTP.FromAddress,
-			"toAddress":   strings.Join(obj.Spec.SMTP.ToAddresses, ", "),
-			"headers":     utils.StringMapToString(obj.Spec.SMTP.Headers),
+			"port":     strconv.Itoa(obj.Spec.SMTP.Port),
+			"subject":  obj.Spec.SMTP.Subject,
+			"auth":     obj.Spec.SMTP.Auth,
+			"from":     obj.Spec.SMTP.FromAddress,
+			"to":       strings.Join(obj.Spec.SMTP.ToAddresses, ","),
+			"fromname": obj.Spec.SMTP.FromName,
+			"headers":  utils.StringMapToString(obj.Spec.SMTP.Headers),
 		}
 	}
 

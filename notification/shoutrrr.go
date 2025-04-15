@@ -116,9 +116,9 @@ func shoutrrrSend(ctx *Context, celEnv map[string]any, shoutrrrURL string, data 
 
 		query := parsedURL.Query()
 		var (
-			to           = utils.Coalesce(query.Get("ToAddresses"), (*params)["ToAddresses"])
-			from         = utils.Coalesce(query.Get("FromAddress"), (*params)["FromAddress"])
-			fromName     = utils.Coalesce(query.Get("FromName"), (*params)["FromName"])
+			to           = utils.Coalesce((*params)["to"], query.Get("to"))
+			from         = utils.Coalesce((*params)["from"], query.Get("from"))
+			fromName     = utils.Coalesce((*params)["fromname"], query.Get("fromname"))
 			password, _  = parsedURL.User.Password()
 			port, _      = strconv.Atoi(parsedURL.Port())
 			headerString = (*params)["headers"]
