@@ -74,31 +74,43 @@ func SyncCRDStatusJob(ctx context.Context) *job.Job {
 	}
 }
 
+type NotificationSummary struct {
+	ID           string
+	Name         string
+	Namespace    string
+	Sent         int
+	Failed       int
+	Pending      int
+	UpdatedAt    time.Time
+	Error        string
+	LastFailedAt time.Time
+}
+
+// GetNotificationStats retrieves statistics for a notification
+func GetNotificationStats(ctx context.Context, notificationIDs ...string) ([]NotificationSummary, error) {
+	q := ctx.DB().Clauses(hints.CommentBefore("select", "notification_stats")).
+		Table("notifications_summary").
+		Where("name != '' AND namespace != '' AND source = ?", models.SourceCRD)
+	if len(notificationIDs) > 0 {
+		q = q.Where("id in ?", notificationIDs)
+	}
+
+	var summaries []NotificationSummary
+	if err := q.Find(&summaries).Error; err != nil {
+		return nil, fmt.Errorf("error querying notifications_summary: %w", err)
+	}
+
+	return summaries, nil
+}
+
 func SyncCRDStatus(ctx context.Context, ids ...string) error {
 	if v1.NotificationReconciler.Client == nil {
 		return errors.New("notification reconciler is not initialized")
 	}
 
-	var summary []struct {
-		Name         string
-		Namespace    string
-		Sent         int
-		Failed       int
-		Pending      int
-		UpdatedAt    time.Time
-		Error        string
-		LastFailedAt time.Time
-	}
-
-	q := ctx.DB().Clauses(hints.CommentBefore("select", "notification_crd_sync")).
-		Table("notifications_summary").
-		Where("name != '' AND namespace != '' AND source = ?", models.SourceCRD)
-
-	if len(ids) > 0 {
-		q = q.Where("id in ?", ids)
-	}
-	if err := q.Find(&summary).Error; err != nil {
-		return fmt.Errorf("error querying notifications_summary: %w", err)
+	summary, err := GetNotificationStats(ctx, ids...)
+	if err != nil {
+		return ctx.Oops().Wrapf(err, "failed to get notification stats")
 	}
 
 	for _, s := range summary {
@@ -114,6 +126,7 @@ func SyncCRDStatus(ctx context.Context, ids ...string) error {
 			return fmt.Errorf("error in patchCRDStatus: %w", err)
 		}
 	}
+
 	return nil
 }
 
