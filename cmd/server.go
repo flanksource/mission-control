@@ -82,7 +82,7 @@ func launchKopper(ctx context.Context) {
 	}
 
 	if v1.NotificationReconciler, err = kopper.SetupReconciler(ctx, mgr,
-		db.PersistNotificationFromCRD,
+		PersistNotificationFromCRD,
 		db.DeleteNotification,
 		db.DeleteStaleNotification,
 		"notification.mission-control.flanksource.com",
@@ -138,6 +138,16 @@ func launchKopper(ctx context.Context) {
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("error running controller manager: %v", err))
 	}
+}
+
+func PersistNotificationFromCRD(ctx context.Context, obj *v1.Notification) error {
+	if err := db.PersistNotificationFromCRD(ctx, obj); err != nil {
+		return err
+	}
+
+	notification.SyncWatchdogJob(ctx, jobs.FuncScheduler, string(obj.GetUID()), obj.Spec.WatchdogInterval)
+
+	return nil
 }
 
 var Serve = &cobra.Command{
