@@ -1,0 +1,11 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Notification
+metadata:
+  name: component-alerts
+spec:
+  events:
+    - component.unhealthy
+    - component.warning
+  filter: matchQuery(.component, "type=Workload properties.os=linux labels.owner=data-team labels.environment=production")
+  to:
+    email: data-alerts@acme.com
