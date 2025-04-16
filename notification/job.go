@@ -532,7 +532,9 @@ func SyncWatchdogJob(ctx context.Context, scheduler *cron.Cron, notificationID s
 func scheduleWatchdogJob(ctx context.Context, scheduler *cron.Cron, notificationID string, interval string) error {
 	ctx.Debugf("scheduling watchdog job for %s with interval %s", notificationID, interval)
 	job := WatchdogNotificationJob(ctx, notificationID, interval)
-	job.AddToScheduler(scheduler)
+	if err := job.AddToScheduler(scheduler); err != nil {
+		return fmt.Errorf("failed to add watchdog job to scheduler: %w", err)
+	}
 	watchdogJobs.Store(notificationID, job)
 	return nil
 }
