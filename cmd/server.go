@@ -145,9 +145,7 @@ func PersistNotificationFromCRD(ctx context.Context, obj *v1.Notification) error
 		return err
 	}
 
-	notification.SyncWatchdogJob(ctx, jobs.FuncScheduler, string(obj.GetUID()), obj.Spec.WatchdogInterval)
-
-	return nil
+	return notification.SyncWatchdogJob(ctx, jobs.FuncScheduler, string(obj.GetUID()), obj.Spec.WatchdogInterval)
 }
 
 var Serve = &cobra.Command{
