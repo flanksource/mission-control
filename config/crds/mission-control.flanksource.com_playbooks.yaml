@@ -1884,7 +1884,7 @@ spec:
                             limit:
                               description: Limit is the maximum number of lines to
                                 return
-                              type: integer
+                              type: string
                             password:
                               properties:
                                 name:

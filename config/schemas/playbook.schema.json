@@ -808,7 +808,7 @@
           "type": "string"
         },
         "limit": {
-          "type": "integer"
+          "type": "string"
         },
         "since": {
           "type": "string"

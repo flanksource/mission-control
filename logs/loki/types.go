@@ -3,7 +3,6 @@ package loki
 import (
 	"encoding/json"
 	"net/url"
-	"strconv"
 )
 
 // LokiResponse represents the top-level response from Loki's query_range API.
@@ -27,7 +26,7 @@ type Request struct {
 	Query string `json:"query,omitempty" template:"true"`
 
 	// Limit is the maximum number of lines to return
-	Limit *int `json:"limit,omitempty"`
+	Limit string `json:"limit,omitempty" template:"true"`
 
 	// Since is a duration used to calculate start relative to end.
 	// If end is in the future, start is calculated as this duration before now.
@@ -58,8 +57,8 @@ func (r *Request) Params() url.Values {
 	if r.Query != "" {
 		params.Set("query", r.Query)
 	}
-	if r.Limit != nil {
-		params.Set("limit", strconv.Itoa(*r.Limit))
+	if r.Limit != "" {
+		params.Set("limit", r.Limit)
 	}
 	if r.Start != "" {
 		params.Set("start", r.Start)

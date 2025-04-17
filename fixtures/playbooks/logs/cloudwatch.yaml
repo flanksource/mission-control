@@ -12,6 +12,11 @@ spec:
       label: Log Group
       description: The log group to fetch events from
       required: true
+    - name: limit
+      label: Limit
+      description: The maximum number of events to fetch
+      required: false
+      default: '100'
   configs:
     - types:
         - AWS::::Account
@@ -24,4 +29,4 @@ spec:
           query: |
             fields @message, @timestamp, @logStream, @log
             | sort @timestamp desc
-            | limit 100
+            | limit $(.params.limit)
