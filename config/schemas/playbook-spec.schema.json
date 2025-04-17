@@ -735,6 +735,57 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "LogsAction": {
+      "properties": {
+        "loki": {
+          "$ref": "#/$defs/LogsActionLoki"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "LogsActionLoki": {
+      "properties": {
+        "query": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "integer"
+        },
+        "since": {
+          "type": "string"
+        },
+        "start": {
+          "type": "string"
+        },
+        "end": {
+          "type": "string"
+        },
+        "step": {
+          "type": "string"
+        },
+        "interval": {
+          "type": "string"
+        },
+        "direction": {
+          "type": "string"
+        },
+        "username": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "password": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "baseURL": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "baseURL"
+      ]
+    },
     "NotificationAction": {
       "properties": {
         "url": {
@@ -815,6 +866,9 @@
         },
         "notification": {
           "$ref": "#/$defs/NotificationAction"
+        },
+        "logs": {
+          "$ref": "#/$defs/LogsAction"
         }
       },
       "additionalProperties": false,

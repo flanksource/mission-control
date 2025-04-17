@@ -1,0 +1,30 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: loki-logs
+spec:
+  title: Loki Logs
+  icon: logs
+  category: Logs
+  description: Fetch logs from Loki
+  configs:
+    - types:
+        - Kubernetes::Pod
+        - Kubernetes::Deployment
+  actions:
+    - name: Fetch logs from Loki
+      logs:
+        loki:
+          baseURL: https://logs-prod-111.grafana.net
+          username:
+            valueFrom:
+              secretKeyRef:
+                name: loki-grafana-cloud
+                key: userid
+          password:
+            valueFrom:
+              secretKeyRef:
+                name: loki-grafana-cloud
+                key: password
+          query: |
+            {namespace="{{ .config.tags.namespace }}",{{.config.config_class | toLower}}="{{ .config.name }}"}

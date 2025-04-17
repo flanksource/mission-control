@@ -676,6 +676,9 @@
         "fromAddress": {
           "type": "string"
         },
+        "fromName": {
+          "type": "string"
+        },
         "toAddresses": {
           "items": {
             "type": "string"
@@ -699,7 +702,8 @@
       "type": "object",
       "required": [
         "host",
-        "fromAddress"
+        "fromAddress",
+        "fromName"
       ]
     },
     "ConnectionSlack": {

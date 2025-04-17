@@ -1691,6 +1691,138 @@ spec:
                         run only if any of the previous actions timed out\nskip():
                         skip running this action"
                       type: string
+                    logs:
+                      properties:
+                        loki:
+                          properties:
+                            baseURL:
+                              type: string
+                            direction:
+                              description: Direction is the direction of the query.
+                                "forward" or "backward" (default)
+                              type: string
+                            end:
+                              description: End is the end time of the query. Unix
+                                epoch in nanoseconds or supported time format
+                              type: string
+                            interval:
+                              description: Only return entries at (or greater than)
+                                the specified interval, can be a duration format or
+                                float number of seconds
+                              type: string
+                            limit:
+                              description: Limit is the maximum number of lines to
+                                return
+                              type: integer
+                            password:
+                              properties:
+                                name:
+                                  type: string
+                                value:
+                                  type: string
+                                valueFrom:
+                                  properties:
+                                    configMapKeyRef:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          type: string
+                                      required:
+                                      - key
+                                      type: object
+                                    helmRef:
+                                      properties:
+                                        key:
+                                          description: Key is a JSONPath expression
+                                            used to fetch the key from the merged
+                                            JSON.
+                                          type: string
+                                        name:
+                                          type: string
+                                      required:
+                                      - key
+                                      type: object
+                                    secretKeyRef:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          type: string
+                                      required:
+                                      - key
+                                      type: object
+                                    serviceAccount:
+                                      description: ServiceAccount specifies the service
+                                        account whose token should be fetched
+                                      type: string
+                                  type: object
+                              type: object
+                            query:
+                              description: Query is the LogQL query to perform
+                              type: string
+                            since:
+                              description: |-
+                                Since is a duration used to calculate start relative to end.
+                                If end is in the future, start is calculated as this duration before now.
+                                Any value specified for start supersedes this parameter.
+                              type: string
+                            start:
+                              description: Start is the start time of the query. Unix
+                                epoch in nanoseconds or supported time format
+                              type: string
+                            step:
+                              description: Step is the Query resolution step width
+                                in duration format or float number of seconds
+                              type: string
+                            username:
+                              properties:
+                                name:
+                                  type: string
+                                value:
+                                  type: string
+                                valueFrom:
+                                  properties:
+                                    configMapKeyRef:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          type: string
+                                      required:
+                                      - key
+                                      type: object
+                                    helmRef:
+                                      properties:
+                                        key:
+                                          description: Key is a JSONPath expression
+                                            used to fetch the key from the merged
+                                            JSON.
+                                          type: string
+                                        name:
+                                          type: string
+                                      required:
+                                      - key
+                                      type: object
+                                    secretKeyRef:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          type: string
+                                      required:
+                                      - key
+                                      type: object
+                                    serviceAccount:
+                                      description: ServiceAccount specifies the service
+                                        account whose token should be fetched
+                                      type: string
+                                  type: object
+                              type: object
+                          required:
+                          - baseURL
+                          type: object
+                      type: object
                     name:
                       description: Name of the action
                       type: string
