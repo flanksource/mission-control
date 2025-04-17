@@ -340,13 +340,13 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 		if len(obj.Spec.SMTP.ToAddresses) == 0 {
 			obj.Spec.SMTP.ToAddresses = []string{"no-reply@example.com"}
 		}
-		dbObj.URL = fmt.Sprintf("smtp://$(username):$(password)@$%s:%d/?UseStartTLS=%s&Encryption=%s&Auth=%s&from=%s&to=%s",
+		dbObj.URL = fmt.Sprintf("smtp://$(username):$(password)@%s:%d/?UseStartTLS=%s&Encryption=%s&Auth=%s&from=%s&to=%s",
 			obj.Spec.SMTP.Host,
 			obj.Spec.SMTP.Port,
 			strconv.FormatBool(obj.Spec.SMTP.InsecureTLS),
 			obj.Spec.SMTP.Encryption,
-			obj.Spec.SMTP.FromAddress,
 			obj.Spec.SMTP.Auth,
+			obj.Spec.SMTP.FromAddress,
 			strings.Join(obj.Spec.SMTP.ToAddresses, ","),
 		)
 
