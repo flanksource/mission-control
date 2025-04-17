@@ -82,6 +82,9 @@ func executeAction(ctx context.Context, playbookID any, runID uuid.UUID, runActi
 
 		timeout, _ := actionSpec.TimeoutDuration()
 		result, err = e.Run(ctx, *actionSpec.Pod, timeout)
+	} else if actionSpec.Logs != nil {
+		e := actions.NewLogsAction()
+		result, err = e.Run(ctx, actionSpec.Logs)
 	}
 
 	// NOTE: v is never nil, it holds in nil values.
