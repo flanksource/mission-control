@@ -21,6 +21,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/logs/cloudwatch"
 	"github.com/flanksource/incident-commander/logs/loki"
 )
 
@@ -30,8 +31,14 @@ type LogsActionLoki struct {
 	BaseURL               string `json:"baseURL"`
 }
 
+type LogsActionCloudWatch struct {
+	connection.AWSConnection `yaml:",inline" json:",inline"`
+	cloudwatch.Request       `json:",inline" yaml:",inline" template:"true"`
+}
+
 type LogsAction struct {
-	Loki *LogsActionLoki `json:"loki,omitempty" template:"true"`
+	Loki       *LogsActionLoki       `json:"loki,omitempty" template:"true"`
+	CloudWatch *LogsActionCloudWatch `json:"cloudWatch,omitempty" template:"true"`
 }
 
 type NotificationAction struct {

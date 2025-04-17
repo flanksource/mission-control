@@ -744,10 +744,63 @@
       "properties": {
         "loki": {
           "$ref": "#/$defs/LogsActionLoki"
+        },
+        "cloudWatch": {
+          "$ref": "#/$defs/LogsActionCloudWatch"
         }
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "LogsActionCloudWatch": {
+      "properties": {
+        "connection": {
+          "type": "string"
+        },
+        "accessKey": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "secretKey": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "sessionToken": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "assumeRole": {
+          "type": "string"
+        },
+        "region": {
+          "type": "string"
+        },
+        "endpoint": {
+          "type": "string"
+        },
+        "skipTLSVerify": {
+          "type": "boolean"
+        },
+        "logGroup": {
+          "type": "string"
+        },
+        "query": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "integer"
+        },
+        "start": {
+          "type": "string"
+        },
+        "end": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "logGroup",
+        "query",
+        "start"
+      ]
     },
     "LogsActionLoki": {
       "properties": {
