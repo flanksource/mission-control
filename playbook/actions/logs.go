@@ -11,6 +11,7 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/logs/cloudwatch"
 	"github.com/flanksource/incident-commander/logs/loki"
+	"github.com/flanksource/incident-commander/logs/opensearch"
 )
 
 type logsAction struct {
@@ -47,6 +48,27 @@ func (l *logsAction) Run(ctx context.Context, action *v1.LogsAction) (*logsResul
 		return &logsResult{
 			Metadata: response.Data.Stats,
 			logs:     string(response.Data.Result),
+		}, nil
+	}
+
+	if action.OpenSearch != nil {
+		searcher, err := opensearch.NewSearcher(ctx, action.OpenSearch.Backend)
+		if err != nil {
+			return nil, ctx.Oops().Wrapf(err, "failed to create opensearch searcher")
+		}
+
+		response, err := searcher.Search(ctx, &action.OpenSearch.Request)
+		if err != nil {
+			return nil, ctx.Oops().Wrapf(err, "failed to fetch logs from opensearch")
+		}
+
+		results, err := json.Marshal(response.Results)
+		if err != nil {
+			return nil, ctx.Oops().Wrapf(err, "failed to json marshal opensearch logs")
+		}
+
+		return &logsResult{
+			logs: string(results),
 		}, nil
 	}
 

@@ -747,6 +747,9 @@
         },
         "cloudWatch": {
           "$ref": "#/$defs/LogsActionCloudWatch"
+        },
+        "openSearch": {
+          "$ref": "#/$defs/LogsActionOpenSearch"
         }
       },
       "additionalProperties": false,
@@ -842,6 +845,35 @@
       "type": "object",
       "required": [
         "baseURL"
+      ]
+    },
+    "LogsActionOpenSearch": {
+      "properties": {
+        "address": {
+          "type": "string"
+        },
+        "username": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "password": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "index": {
+          "type": "string"
+        },
+        "query": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "address",
+        "index",
+        "query"
       ]
     },
     "ManagedFieldsEntry": {

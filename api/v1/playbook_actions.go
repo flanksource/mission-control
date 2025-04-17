@@ -23,6 +23,7 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/logs/cloudwatch"
 	"github.com/flanksource/incident-commander/logs/loki"
+	"github.com/flanksource/incident-commander/logs/opensearch"
 )
 
 type LogsActionLoki struct {
@@ -36,9 +37,15 @@ type LogsActionCloudWatch struct {
 	cloudwatch.Request       `json:",inline" yaml:",inline" template:"true"`
 }
 
+type LogsActionOpenSearch struct {
+	opensearch.Backend `yaml:",inline" json:",inline"`
+	opensearch.Request `json:",inline" yaml:",inline" template:"true"`
+}
+
 type LogsAction struct {
 	Loki       *LogsActionLoki       `json:"loki,omitempty" template:"true"`
 	CloudWatch *LogsActionCloudWatch `json:"cloudWatch,omitempty" template:"true"`
+	OpenSearch *LogsActionOpenSearch `json:"openSearch,omitempty" template:"true"`
 }
 
 type NotificationAction struct {

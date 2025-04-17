@@ -2,6 +2,7 @@ apiVersion: mission-control.flanksource.com/v1
 kind: Playbook
 metadata:
   name: cloudwatch-events
+  namespace: mc
 spec:
   title: Cloudwatch Events
   icon: cloudwatch

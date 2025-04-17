@@ -1,0 +1,38 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: opensearch-logs
+  namespace: mc
+spec:
+  title: OpenSearch Logs
+  icon: elasticsearch
+  category: Logs
+  description: Fetch logs from OpenSearch
+  configs:
+    - types:
+        - Kubernetes::Pod
+        - Kubernetes::Deployment
+  parameters:
+    - name: limit
+      label: Limit
+      description: The maximum number of logs to fetch
+      required: false
+      default: '100'
+  actions:
+    - name: Fetch logs from OpenSearch
+      logs:
+        openSearch:
+          address: http://localhost:9200
+          query: |
+            {
+              "query": {
+                "bool": {
+                  "filter": [
+                    { "term": { "kubernetes.namespace": "$(.config.tags.namespace)" } },
+                    { "term": { "kubernetes.labels.app": "$(.config.name)" } }
+                  ]
+                }
+              }
+            }
+          index: k8s-logs
+          limit: $(.params.limit)
