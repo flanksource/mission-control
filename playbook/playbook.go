@@ -16,7 +16,6 @@ import (
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/types"
-	"github.com/flanksource/gomplate/v3"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"github.com/samber/oops"
@@ -206,7 +205,7 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 
 	var runSpec v1.PlaybookSpec
 	if err := json.Unmarshal(playbook.Spec, &runSpec); err != nil {
-		return nil, ctx.Oops().Wrap(err)
+		return nil, ctx.Oops().Wrapf(err, "failed to unmarshal playbook spec")
 	}
 
 	{
@@ -216,17 +215,15 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 			hasExplicitAgent := len(runSpec.RunsOn) != 0 || len(action.RunsOn) != 0
 			usesFromConfigItem := action.Exec != nil && action.Exec.Connections.FromConfigItem != nil
 			if !hasExplicitAgent && usesFromConfigItem {
-				tpl := gomplate.Template{
-					Template: *action.Exec.Connections.FromConfigItem,
-				}
-				output, err := ctx.RunTemplate(tpl, templateEnv.AsMap(ctx))
+				templater := ctx.NewStructTemplater(templateEnv.AsMap(ctx), "", nil)
+				output, err := templater.Template(*action.Exec.Connections.FromConfigItem)
 				if err != nil {
-					return nil, ctx.Oops().Wrap(err)
+					return nil, ctx.Oops().Wrapf(err, "failed to template config item %s", *action.Exec.Connections.FromConfigItem)
 				}
 
 				var fromConfigItem models.ConfigItem
 				if err := ctx.DB().Select("id", "agent_id").Where("id = ?", output).Find(&fromConfigItem).Error; err != nil {
-					return nil, ctx.Oops().Wrap(err)
+					return nil, ctx.Oops().Wrapf(err, "failed to find config item %s", output)
 				} else if fromConfigItem.AgentID != uuid.Nil {
 					runSpec.Actions[i].RunsOn = []string{fromConfigItem.AgentID.String()}
 				}
@@ -236,9 +233,10 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 		// Template run's spec (runsOn)
 		var runsOn []string
 		for _, specRunOn := range runSpec.RunsOn {
-			output, err := ctx.RunTemplate(gomplate.Template{Template: specRunOn}, templateEnv.AsMap(ctx))
+			templater := ctx.NewStructTemplater(templateEnv.AsMap(ctx), "", nil)
+			output, err := templater.Template(specRunOn)
 			if err != nil {
-				return nil, ctx.Oops().Wrap(err)
+				return nil, ctx.Oops().Wrapf(err, "failed to template run's spec %s", specRunOn)
 			}
 			runsOn = append(runsOn, output)
 		}
