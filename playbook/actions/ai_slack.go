@@ -149,7 +149,7 @@ func slackBlocks(knowledge *KnowledgeGraph, diagnosisReport llm.DiagnosisReport,
 		"type": slackBlockTypeHeader,
 		"text": map[string]any{
 			"type": slackBlockTypePlainText,
-			"text": lo.Elipse(diagnosisReport.Headline, maxHeaderTextLength),
+			"text": lo.Ellipsis(diagnosisReport.Headline, maxHeaderTextLength),
 		},
 	})
 
