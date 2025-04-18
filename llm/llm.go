@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	dutyctx "github.com/flanksource/duty/context"
+	"github.com/samber/lo"
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/anthropic"
 	"github.com/tmc/langchaingo/llms/ollama"
@@ -29,7 +30,18 @@ type Config struct {
 	ResponseFormat ResponseFormat
 }
 
-func Prompt(ctx dutyctx.Context, config Config, systemPrompt string, promptParts ...string) (string, []llms.MessageContent, error) {
+type GenerationInfo struct {
+	InputTokens          int     `json:"inputTokens"`
+	OutputTokens         int     `json:"outputTokens"`
+	ReasoningTokens      *int    `json:"reasoningTokens,omitempty"`
+	CacheReadTokens      *int    `json:"cacheReadTokens,omitempty"`
+	CacheWriteTokens     *int    `json:"cacheWriteTokens,omitempty"`
+	Cost                 float64 `json:"cost"`
+	CostCalculationError *string `json:"costCalculationError,omitempty"`
+	Model                string  `json:"model"`
+}
+
+func Prompt(ctx dutyctx.Context, config Config, systemPrompt string, promptParts ...string) (string, []llms.MessageContent, []GenerationInfo, error) {
 	content := []llms.MessageContent{
 		llms.TextParts(llms.ChatMessageTypeSystem, systemPrompt),
 	}
@@ -41,10 +53,10 @@ func Prompt(ctx dutyctx.Context, config Config, systemPrompt string, promptParts
 	return PromptWithHistory(ctx, config, content, "")
 }
 
-func PromptWithHistory(ctx dutyctx.Context, config Config, history []llms.MessageContent, prompt string) (string, []llms.MessageContent, error) {
+func PromptWithHistory(ctx dutyctx.Context, config Config, history []llms.MessageContent, prompt string) (string, []llms.MessageContent, []GenerationInfo, error) {
 	model, err := getLLMModel(ctx, config)
 	if err != nil {
-		return "", nil, err
+		return "", nil, nil, err
 	}
 
 	var messages []llms.MessageContent
@@ -92,11 +104,11 @@ func PromptWithHistory(ctx dutyctx.Context, config Config, history []llms.Messag
 
 	resp, err := model.GenerateContent(ctx, messages, options...)
 	if err != nil {
-		return "", nil, fmt.Errorf("failed to generate response: %w", err)
+		return "", nil, nil, fmt.Errorf("failed to generate response: %w", err)
 	}
 
 	if len(resp.Choices) == 0 {
-		return "", nil, errors.New("no response from LLM")
+		return "", nil, nil, errors.New("no response from LLM")
 	}
 
 	aiResponse := resp.Choices[0].Content
@@ -110,7 +122,66 @@ func PromptWithHistory(ctx dutyctx.Context, config Config, history []llms.Messag
 	}
 
 	messages = append(messages, llms.TextParts(llms.ChatMessageTypeAI, aiResponse))
-	return aiResponse, messages, nil
+	genInfo := calculateGenerationInfo(config.Backend, config.Model, resp)
+	return aiResponse, messages, genInfo, nil
+}
+
+func calculateGenerationInfo(llmBackend api.LLMBackend, model string, resp *llms.ContentResponse) []GenerationInfo {
+	var generationInfoList []GenerationInfo
+	for _, choice := range resp.Choices {
+		if choice.GenerationInfo != nil {
+			genInfo := GenerationInfo{
+				Model: model,
+			}
+
+			switch llmBackend {
+			case api.LLMBackendOpenAI:
+				if inputTokens, ok := choice.GenerationInfo["PromptTokens"]; ok {
+					genInfo.InputTokens += inputTokens.(int)
+				}
+				if outputTokens, ok := choice.GenerationInfo["CompletionTokens"]; ok {
+					genInfo.OutputTokens += outputTokens.(int)
+				}
+				if reasoningTokens, ok := choice.GenerationInfo["ReasoningTokens"]; ok {
+					genInfo.ReasoningTokens = lo.ToPtr(reasoningTokens.(int))
+				}
+
+			case api.LLMBackendAnthropic:
+				if inputTokens, ok := choice.GenerationInfo["InputTokens"]; ok {
+					genInfo.InputTokens += inputTokens.(int)
+				}
+				if outputTokens, ok := choice.GenerationInfo["OutputTokens"]; ok {
+					genInfo.OutputTokens += outputTokens.(int)
+				}
+
+			case api.LLMBackendGemini:
+				if inputTokens, ok := choice.GenerationInfo["InputTokens"]; ok {
+					genInfo.InputTokens += int(inputTokens.(int32))
+				}
+				if outputTokens, ok := choice.GenerationInfo["OutputTokens"]; ok {
+					genInfo.OutputTokens += int(outputTokens.(int32))
+				}
+			}
+
+			cost, err := CalculateCost(llmBackend, model, genInfo)
+			if err != nil {
+				genInfo.CostCalculationError = lo.ToPtr(err.Error())
+			} else {
+				genInfo.Cost = cost
+			}
+
+			generationInfoList = append(generationInfoList, genInfo)
+		}
+
+		if llmBackend == api.LLMBackendAnthropic {
+			// NOTE: Anthropic returns two choices on tool use.
+			// Weirdly enough, the two choices have the same generation info (input/output tokens).
+			// So we only return the first one to avoid doubling the cost
+			break
+		}
+	}
+
+	return generationInfoList
 }
 
 func getLLMModel(ctx dutyctx.Context, config Config) (llms.Model, error) {
@@ -189,11 +260,6 @@ func getLLMModel(ctx dutyctx.Context, config Config) (llms.Model, error) {
 
 	case api.LLMBackendGemini:
 		apiKey := config.APIKey.ValueStatic
-		model := config.Model
-		if model == "" {
-			model = "gemini-2.0-flash"
-		}
-
 		client, err := genai.NewClient(ctx, &genai.ClientConfig{
 			APIKey:  apiKey,
 			Backend: genai.BackendGeminiAPI,
@@ -204,7 +270,7 @@ func getLLMModel(ctx dutyctx.Context, config Config) (llms.Model, error) {
 
 		// Create a wrapper that implements the langchaingo Model interface
 		wrapper := &GeminiModelWrapper{
-			model:          model,
+			model:          config.Model,
 			client:         client,
 			ResponseFormat: config.ResponseFormat,
 		}

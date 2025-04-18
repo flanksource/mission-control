@@ -7,6 +7,7 @@ import (
 	"math"
 
 	"github.com/flanksource/incident-commander/api"
+	"github.com/samber/lo"
 )
 
 // Prices are typically per million tokens
@@ -149,7 +150,8 @@ func populateGeminiDirectModels() {
 			{TokenLimit: math.MaxInt32, Price: 15.0},
 		},
 	}
-	models["gemini-2.0-flash-001"] = ModelInfo{
+
+	flash20 := ModelInfo{
 		Provider:            provider,
 		ModelID:             "gemini-2.0-flash-001",
 		MaxTokens:           8192,
@@ -159,6 +161,9 @@ func populateGeminiDirectModels() {
 		InputPrice:          0,
 		OutputPrice:         0,
 	}
+	models["gemini-2.0-flash"] = flash20
+	models["gemini-2.0-flash-001"] = flash20
+
 	models["gemini-2.0-flash-lite-preview-02-05"] = ModelInfo{
 		Provider:            provider,
 		ModelID:             "gemini-2.0-flash-lite-preview-02-05",
@@ -425,22 +430,25 @@ func populateOpenAIModels() {
 // CalculateCost calculates the estimated cost for a given model and token counts.
 // It considers tiered pricing if defined for the model.
 // cacheReadTokens and cacheWriteTokens are optional.
-func CalculateCost(provider api.LLMBackend, modelID string, inputTokens, outputTokens int, cacheReadTokens, cacheWriteTokens *int) (float64, error) {
+func CalculateCost(provider api.LLMBackend, modelID string, genInfo GenerationInfo) (float64, error) {
 	modelInfo, err := GetModelInfo(provider, modelID)
 	if err != nil {
 		return 0, err
 	}
 
-	inputCost := calculateTieredCost(inputTokens, modelInfo.InputPriceTiers, modelInfo.InputPrice)
-	outputCost := calculateTieredCost(outputTokens, modelInfo.OutputPriceTiers, modelInfo.OutputPrice)
+	inputCost := calculateTieredCost(genInfo.InputTokens, modelInfo.InputPriceTiers, modelInfo.InputPrice)
+
+	// NOTE: Couldn't find the price for reasoning tokens in the model info.
+	// Assuming it's the same as output tokens for now.
+	outputCost := calculateTieredCost(genInfo.OutputTokens+lo.FromPtr(genInfo.ReasoningTokens), modelInfo.OutputPriceTiers, modelInfo.OutputPrice)
 
 	readTokens := 0
-	if cacheReadTokens != nil {
-		readTokens = *cacheReadTokens
+	if genInfo.CacheReadTokens != nil {
+		readTokens = *genInfo.CacheReadTokens
 	}
 	writeTokens := 0
-	if cacheWriteTokens != nil {
-		writeTokens = *cacheWriteTokens
+	if genInfo.CacheWriteTokens != nil {
+		writeTokens = *genInfo.CacheWriteTokens
 	}
 
 	cacheReadCost := float64(readTokens) * modelInfo.CacheReadsPrice / million
