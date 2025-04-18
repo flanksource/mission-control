@@ -3858,6 +3858,9 @@ spec:
                   fromAddress:
                     description: Email address that the mail are sent from
                     type: string
+                  fromName:
+                    description: Name that the mail are sent from
+                    type: string
                   headers:
                     additionalProperties:
                       type: string
@@ -3967,6 +3970,7 @@ spec:
                     type: object
                 required:
                 - fromAddress
+                - fromName
                 - host
                 type: object
               telegram:
