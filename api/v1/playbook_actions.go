@@ -21,7 +21,32 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/logs/cloudwatch"
+	"github.com/flanksource/incident-commander/logs/loki"
+	"github.com/flanksource/incident-commander/logs/opensearch"
 )
+
+type LogsActionLoki struct {
+	loki.Request          `json:",inline" yaml:",inline" template:"true"`
+	*types.Authentication `json:",inline" yaml:",inline"`
+	BaseURL               string `json:"baseURL"`
+}
+
+type LogsActionCloudWatch struct {
+	connection.AWSConnection `yaml:",inline" json:",inline"`
+	cloudwatch.Request       `json:",inline" yaml:",inline" template:"true"`
+}
+
+type LogsActionOpenSearch struct {
+	opensearch.Backend `yaml:",inline" json:",inline"`
+	opensearch.Request `json:",inline" yaml:",inline" template:"true"`
+}
+
+type LogsAction struct {
+	Loki       *LogsActionLoki       `json:"loki,omitempty" template:"true"`
+	CloudWatch *LogsActionCloudWatch `json:"cloudWatch,omitempty" template:"true"`
+	OpenSearch *LogsActionOpenSearch `json:"openSearch,omitempty" template:"true"`
+}
 
 type NotificationAction struct {
 	// URL for the shoutrrr connection string
@@ -188,13 +213,8 @@ type HTTPConnection struct {
 	// Connection name e.g. connection://http/google
 	Connection string `yaml:"connection,omitempty" json:"connection,omitempty"`
 	// Connection url, interpolated with username,password
-	URL            string `yaml:"url,omitempty" json:"url,omitempty" template:"true"`
-	Authentication `yaml:",inline" json:",inline"`
-}
-
-type Authentication struct {
-	Username types.EnvVar `yaml:"username,omitempty" json:"username,omitempty"`
-	Password types.EnvVar `yaml:"password,omitempty" json:"password,omitempty"`
+	URL                  string `yaml:"url,omitempty" json:"url,omitempty" template:"true"`
+	types.Authentication `yaml:",inline" json:",inline"`
 }
 
 type HTTPAction struct {
@@ -619,6 +639,7 @@ type PlaybookAction struct {
 	SQL                 *SQLAction                 `json:"sql,omitempty" yaml:"sql,omitempty" template:"true"`
 	Pod                 *PodAction                 `json:"pod,omitempty" yaml:"pod,omitempty" template:"true"`
 	Notification        *NotificationAction        `json:"notification,omitempty" yaml:"notification,omitempty" template:"true"`
+	Logs                *LogsAction                `json:"logs,omitempty" template:"true"`
 }
 
 func (p *PlaybookAction) Count() int {
@@ -645,6 +666,9 @@ func (p *PlaybookAction) Count() int {
 		count++
 	}
 	if p.Notification != nil {
+		count++
+	}
+	if p.Logs != nil {
 		count++
 	}
 
