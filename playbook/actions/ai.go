@@ -71,6 +71,9 @@ type AIActionResult struct {
 	Slack                string `json:"slack,omitempty"`                // Slack blocks formatted diagnosis report
 	RecommendedPlaybooks string `json:"recommendedPlaybooks,omitempty"` // Recommended playbooks in Slack blocks format
 
+	// GenerationInfo about the all the LLM calls
+	GenerationInfo []llm.GenerationInfo `json:"generationInfo,omitempty"`
+
 	// Prompt can get very large so we don't want to store it in the database.
 	// It's stored as an artifact instead.
 	Prompt string `json:"-"`
@@ -108,6 +111,9 @@ func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 	var result AIActionResult
 	if spec.Backend == "" {
 		spec.Backend = api.LLMBackendOpenAI
+	}
+	if spec.Backend == api.LLMBackendGemini && spec.Model == "" {
+		spec.Model = "gemini-2.5-pro-exp-03-25" // free tier model
 	}
 
 	knowledgebase, prompt, err := buildPrompt(ctx, spec.Prompt, spec.AIActionContext)
@@ -220,11 +226,12 @@ func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 	}
 
 	llmConf := llm.Config{AIActionClient: spec.AIActionClient, ResponseFormat: llm.ResponseFormatDiagnosis}
-	response, conversation, err := llm.Prompt(ctx, llmConf, spec.SystemPrompt, prompt...)
+	response, conversation, genInfo, err := llm.Prompt(ctx, llmConf, spec.SystemPrompt, prompt...)
 	if err != nil {
 		return nil, ctx.Oops().Wrapf(err, "failed to generate response")
 	}
 	result.JSON = response
+	result.GenerationInfo = append(result.GenerationInfo, genInfo...)
 
 	var diagnosisReport llm.DiagnosisReport
 	if err := json.Unmarshal([]byte(response), &diagnosisReport); err != nil {
@@ -273,10 +280,11 @@ func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 			}
 
 			llmConf.ResponseFormat = llm.ResponseFormatPlaybookRecommendations
-			response, _, err := llm.PromptWithHistory(ctx, llmConf, conversation, prompt.String())
+			response, _, genInfo, err := llm.PromptWithHistory(ctx, llmConf, conversation, prompt.String())
 			if err != nil {
 				return nil, fmt.Errorf("failed to generate playbook recommendation: %w", err)
 			}
+			result.GenerationInfo = append(result.GenerationInfo, genInfo...)
 
 			var recommendations llm.PlaybookRecommendations
 			if err := json.Unmarshal([]byte(response), &recommendations); err != nil {

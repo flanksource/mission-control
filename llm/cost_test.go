@@ -45,7 +45,10 @@ func TestCalculateCost(t *testing.T) {
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("%s %s", test.provider, test.model), func(t *testing.T) {
 			g := gomega.NewGomegaWithT(t)
-			cost, err := CalculateCost(test.provider, test.model, test.inputTokens, test.outputTokens, nil, nil)
+			cost, err := CalculateCost(test.provider, test.model, GenerationInfo{
+				InputTokens:  test.inputTokens,
+				OutputTokens: test.outputTokens,
+			})
 			g.Expect(err).To(gomega.BeNil())
 			g.Expect(cost).To(gomega.BeNumerically("~", test.expectedCost, 0.0001), "expected to be equal to 4 decimal places")
 		})

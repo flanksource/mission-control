@@ -168,6 +168,14 @@ func convertGeminiResponse(resp *genai.GenerateContentResponse) (*llms.ContentRe
 	for _, candidate := range resp.Candidates {
 		choice := &llms.ContentChoice{}
 
+		if resp.UsageMetadata != nil {
+			genInfo := map[string]any{
+				"InputTokens":  resp.UsageMetadata.PromptTokenCount,
+				"OutputTokens": resp.UsageMetadata.CandidatesTokenCount,
+			}
+			choice.GenerationInfo = genInfo
+		}
+
 		if candidate.Content != nil && len(candidate.Content.Parts) > 0 {
 			for _, part := range candidate.Content.Parts {
 				if part.Text != "" {
