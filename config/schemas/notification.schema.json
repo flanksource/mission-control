@@ -168,6 +168,9 @@
         "repeatInterval": {
           "type": "string"
         },
+        "groupByInterval": {
+          "type": "string"
+        },
         "to": {
           "$ref": "#/$defs/NotificationRecipientSpec"
         },

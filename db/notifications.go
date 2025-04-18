@@ -52,6 +52,14 @@ func PersistNotificationFromCRD(ctx context.Context, obj *v1.Notification) error
 		GroupBy:        obj.Spec.GroupBy,
 	}
 
+	if obj.Spec.GroupByInterval != "" {
+		if parsed, err := text.ParseDuration(obj.Spec.GroupByInterval); err != nil {
+			return fmt.Errorf("invalid groupByInterval (%s) :%s", obj.Spec.GroupByInterval, err)
+		} else {
+			dbObj.GroupByInterval = *parsed
+		}
+	}
+
 	if obj.Spec.WaitFor != nil && *obj.Spec.WaitFor != "" {
 		if parsed, err := text.ParseDuration(*obj.Spec.WaitFor); err != nil {
 			return err
