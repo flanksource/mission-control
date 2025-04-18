@@ -96,6 +96,9 @@ spec:
                 items:
                   type: string
                 type: array
+              groupByInterval:
+                description: GroupByInterval is the grouping period.
+                type: string
               inhibitions:
                 description: |-
                   Inhibit controls notification suppression for related resources.

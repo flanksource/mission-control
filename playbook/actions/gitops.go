@@ -250,8 +250,7 @@ func (t *GitOps) cloneRepo(ctx context.Context) (connectors.Connector, *gitv5.Wo
 
 func (t *GitOps) applyPatches(ctx context.Context, action v1.GitOpsAction) error {
 	for _, patch := range action.Patches {
-		fullpath := filepath.Join(t.workTree.Filesystem.Root(), patch.Path)
-		paths, err := files.UnfoldGlobs(fullpath)
+		paths, err := files.DoubleStarGlob(t.workTree.Filesystem.Root(), []string{patch.Path})
 		if err != nil {
 			return err
 		}
@@ -319,8 +318,7 @@ func (t *GitOps) applyPatches(ctx context.Context, action v1.GitOpsAction) error
 
 func (t *GitOps) modifyFiles(ctx context.Context, action v1.GitOpsAction) error {
 	for _, f := range action.Files {
-		fullpath := filepath.Join(t.workTree.Filesystem.Root(), f.Path)
-		paths, err := files.UnfoldGlobs(fullpath)
+		paths, err := files.DoubleStarGlob(t.workTree.Filesystem.Root(), []string{f.Path})
 		if err != nil {
 			return err
 		}

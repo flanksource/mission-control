@@ -64,6 +64,9 @@ type NotificationSpec struct {
 	// RepeatInterval is the waiting time to resend a notification after it has been succefully sent.
 	RepeatInterval string `json:"repeatInterval,omitempty" yaml:"repeatInterval,omitempty"`
 
+	// GroupByInterval is the grouping period.
+	GroupByInterval string `json:"groupByInterval,omitempty"`
+
 	// Specify the recipient
 	To NotificationRecipientSpec `json:"to" yaml:"to"`
 

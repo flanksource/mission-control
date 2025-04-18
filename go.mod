@@ -2,7 +2,7 @@ module github.com/flanksource/incident-commander
 
 go 1.23.0
 
-toolchain go1.23.4
+toolchain go1.24.2
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.7.0

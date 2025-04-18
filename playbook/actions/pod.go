@@ -64,7 +64,7 @@ func (c *Pod) Run(ctx context.Context, action v1.PodAction, timeout time.Duratio
 	}
 
 	for _, artifactConfig := range action.Artifacts {
-		paths, err := fileUtils.UnfoldGlobs(artifactConfig.Path)
+		paths, err := fileUtils.DoubleStarGlob("", []string{artifactConfig.Path})
 		if err != nil {
 			return nil, err
 		}
