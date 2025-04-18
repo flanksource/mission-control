@@ -907,7 +907,7 @@ func getFirstSilencer(ctx context.Context, celEnv *celVariables, matchingSilence
 		if silence.Selectors != nil {
 			var resourceSelectors []types.ResourceSelector
 			if err := json.Unmarshal(silence.Selectors, &resourceSelectors); err != nil {
-				ctx.Errorf("failed to parse silence selector(%s): %v", lo.Elipse(string(silence.Selectors), 25), err)
+				ctx.Errorf("failed to parse silence selector(%s): %v", lo.Ellipsis(string(silence.Selectors), 25), err)
 				logs.IfError(db.UpdateNotificationSilenceError(ctx, silence.ID.String(), err.Error()), "failed to update notification silence")
 				continue
 			}
