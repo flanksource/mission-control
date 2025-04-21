@@ -26,3 +26,4 @@ msg.tpl
 .windsurfrules
 test-reports
 .cursor/
+.artifacts/
