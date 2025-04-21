@@ -116,7 +116,7 @@ func shoutrrrSend(ctx *Context, celEnv map[string]any, shoutrrrURL string, data 
 		firstNonEmpty := func(params *types.Params, q url.Values, keys ...string) string {
 			for _, k := range keys {
 				for p := range *params {
-					if strings.ToLower(k) == strings.ToLower(p) {
+					if strings.EqualFold(k, p) {
 						return (*params)[p]
 					}
 				}
