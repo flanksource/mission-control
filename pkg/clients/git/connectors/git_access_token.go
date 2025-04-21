@@ -3,10 +3,10 @@ package connectors
 import (
 	"fmt"
 	netHTTP "net/http"
-	"os"
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/incident-commander/utils"
 	"github.com/samber/oops"
 
 	"github.com/go-git/go-billy/v5"
@@ -142,7 +142,11 @@ func (g *GitAccessTokenClient) ClosePullRequest(ctx context.Context, id int) err
 }
 
 func (g *GitAccessTokenClient) Clone(ctx context.Context, branch, local string) (billy.Filesystem, *git.Worktree, error) {
-	dir, _ := os.MkdirTemp("", fmt.Sprintf("%s-*", g.service))
+	cloneDir, err := utils.CreateTempSubdir(".git-clones", "git-*")
+	if err != nil {
+		return nil, nil, err
+	}
+
 	url := g.url
 	transport.UnsupportedCapabilities = nil // reset the global list of unsupported capabilities
 
@@ -154,7 +158,7 @@ func (g *GitAccessTokenClient) Clone(ctx context.Context, branch, local string) 
 	}
 
 	ctx.Logger.V(5).Infof("Cloning %s@%s", url, branch)
-	repo, err := git.PlainCloneContext(ctx, dir, false, &git.CloneOptions{
+	repo, err := git.PlainCloneContext(ctx, cloneDir, false, &git.CloneOptions{
 		ReferenceName:   plumbing.NewBranchReferenceName(branch),
 		URL:             url,
 		Progress:        ctx.Logger.V(4).WithFilter("Compressing objects", "Counting objects"),
@@ -181,5 +185,5 @@ func (g *GitAccessTokenClient) Clone(ctx context.Context, branch, local string) 
 		}
 	}
 
-	return osfs.New(dir), work, nil
+	return osfs.New(cloneDir), work, nil
 }

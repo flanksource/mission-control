@@ -2,9 +2,9 @@ package connectors
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/incident-commander/utils"
 	"github.com/go-git/go-billy/v5"
 	"github.com/go-git/go-billy/v5/osfs"
 	git "github.com/go-git/go-git/v5"
@@ -44,8 +44,12 @@ func (g *Git) Push(ctx context.Context, branch string) error {
 }
 
 func (g *Git) Clone(ctx context.Context, branch, local string) (billy.Filesystem, *git.Worktree, error) {
-	dir, _ := os.MkdirTemp("", "git-*")
-	repo, err := git.PlainCloneContext(ctx, dir, false, &git.CloneOptions{
+	cloneDir, err := utils.CreateTempSubdir(".git-clones", "git-*")
+	if err != nil {
+		return nil, nil, err
+	}
+
+	repo, err := git.PlainCloneContext(ctx, cloneDir, false, &git.CloneOptions{
 		URL:           g.url,
 		Progress:      ctx.Logger.V(4),
 		Auth:          g.auth,
@@ -72,7 +76,7 @@ func (g *Git) Clone(ctx context.Context, branch, local string) (billy.Filesystem
 		}
 	}
 
-	return osfs.New(dir), work, nil
+	return osfs.New(cloneDir), work, nil
 }
 
 func NewGitSSH(url, user string, privateKey []byte, password string) (Connector, error) {
