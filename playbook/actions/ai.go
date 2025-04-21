@@ -76,16 +76,21 @@ type AIActionResult struct {
 
 	// Prompt can get very large so we don't want to store it in the database.
 	// It's stored as an artifact instead.
-	Prompt string `json:"-"`
+	Prompt strings.Builder `json:"-"`
 
 	ChildRunsTriggered int `json:"-"`
 }
 
 func (t *AIActionResult) GetArtifacts() []artifacts.Artifact {
+	if t.Prompt.Len() == 0 {
+		// Prompt can be empty when executing child runs.
+		return nil
+	}
+
 	return []artifacts.Artifact{
 		{
 			ContentType: "markdown",
-			Content:     io.NopCloser(strings.NewReader(t.Prompt)),
+			Content:     io.NopCloser(strings.NewReader(t.Prompt.String())),
 			Path:        "prompt.md",
 		},
 	}
@@ -113,7 +118,6 @@ func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to form prompt: %w", err)
 	}
-	result.Prompt = strings.Join(prompt, "\n")
 
 	if err := spec.AIActionClient.Populate(ctx); err != nil {
 		return nil, fmt.Errorf("failed to populate llm client connection: %w", err)
@@ -187,12 +191,18 @@ func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 				})
 			}
 
-			childRunResultsJSON, err := json.Marshal(childRunResults)
-			if err != nil {
-				return nil, fmt.Errorf("failed to marshal child run results: %w", err)
-			}
+			successfulChildRuns := lo.Filter(childRunResults, func(c childRunResultContext, _ int) bool {
+				return len(c.Results) > 0
+			})
 
-			prompt = append(prompt, string(childRunResultsJSON))
+			if len(successfulChildRuns) > 0 {
+				childRunResultsJSON, err := json.Marshal(successfulChildRuns)
+				if err != nil {
+					return nil, fmt.Errorf("failed to marshal child run results: %w", err)
+				}
+
+				prompt = append(prompt, fmt.Sprintf("Here are the results from the child playbook runs that may be relevant to the issue: %s", string(childRunResultsJSON)))
+			}
 		} else {
 			for _, contextProvider := range spec.AIActionContext.Playbooks {
 				if contextProvider.If != "" {
@@ -223,6 +233,7 @@ func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 	if err != nil {
 		return nil, ctx.Oops().Wrapf(err, "failed to generate response")
 	}
+	result.Prompt.WriteString(strings.Join(prompt, "\n"))
 	result.JSON = response
 	result.GenerationInfo = append(result.GenerationInfo, genInfo...)
 
@@ -262,7 +273,7 @@ func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 				supportedPlaybooks = types.MatchSelectables(supportedPlaybooks, spec.RecommendPlaybooks...)
 			}
 
-			playbooksJSON, err := json.MarshalIndent(supportedPlaybooks, "", "\t")
+			playbooksJSON, err := json.Marshal(supportedPlaybooks)
 			if err != nil {
 				return nil, err
 			}
@@ -277,6 +288,7 @@ func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 			if err != nil {
 				return nil, fmt.Errorf("failed to generate playbook recommendation: %w", err)
 			}
+			result.Prompt.WriteString(prompt.String())
 			result.GenerationInfo = append(result.GenerationInfo, genInfo...)
 
 			var recommendations llm.PlaybookRecommendations
@@ -346,7 +358,7 @@ func buildPrompt(ctx context.Context, prompt string, spec v1.AIActionContext) (*
 		return nil, nil, fmt.Errorf("failed to get prompt context: %w", err)
 	}
 
-	knowledgeJSON, err := json.MarshalIndent(knowledge, "", "\t")
+	knowledgeJSON, err := json.Marshal(knowledge)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to get prompt context: %w", err)
 	}
