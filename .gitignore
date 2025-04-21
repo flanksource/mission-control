@@ -2,6 +2,7 @@
 .kube
 .vscode/
 .idea/
+.git-clones/
 .env
 .DS_Store
 cover.out
