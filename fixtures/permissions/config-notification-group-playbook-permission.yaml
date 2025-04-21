@@ -1,4 +1,17 @@
 ---
+# yaml-language-server: $schema=../../config/schemas/permissiongroup.schema.json
+apiVersion: mission-control.flanksource.com/v1
+kind: PermissionGroup
+metadata:
+  name: config-notifications
+spec:
+  name: config-notifications
+  notifications:
+    - name: check-alerts
+      namespace: mc
+    - name: homelab-config-health-alerts
+      namespace: mc
+---
 # yaml-language-server: $schema=../../config/schemas/permission.schema.json
 apiVersion: mission-control.flanksource.com/v1
 kind: Permission
@@ -14,16 +27,20 @@ spec:
   object:
     playbooks:
       - name: echo-config
+    configs:
+      - name: '*'
 ---
-# yaml-language-server: $schema=../../config/schemas/permissiongroup.schema.json
+# yaml-language-server: $schema=../../config/schemas/permission.schema.json
 apiVersion: mission-control.flanksource.com/v1
-kind: PermissionGroup
+kind: Permission
 metadata:
-  name: config-notifications
+  name: allow-config-notifications-to-read-configs
 spec:
-  name: config-notifications
-  notifications:
-    - name: check-alerts
-      namespace: mc
-    - name: homelab-config-health-alerts
-      namespace: mc
+  description: allow config notifications to read configs
+  subject:
+    group: config-notifications
+  actions:
+    - read
+  object:
+    configs:
+      - name: '*'

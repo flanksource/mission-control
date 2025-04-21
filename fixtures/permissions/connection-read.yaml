@@ -1,0 +1,14 @@
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: john-connection-read
+spec:
+  description: allow john to read all connections
+  subject:
+    user: john
+  actions:
+    - read
+  object:
+    connections:
+      - name: "*"
