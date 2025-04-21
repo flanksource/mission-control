@@ -302,6 +302,13 @@ func (t *AIActionClient) Populate(ctx context.Context) error {
 		}
 	}
 
+	if t.Backend == "" {
+		t.Backend = api.LLMBackendOpenAI
+	}
+	if t.Backend == api.LLMBackendGemini && t.Model == "" {
+		t.Model = "gemini-2.5-pro-exp-03-25" // free tier model
+	}
+
 	if !t.APIKey.IsEmpty() {
 		if v, err := ctx.GetEnvValueFromCache(t.APIKey, ctx.GetNamespace()); err != nil {
 			return fmt.Errorf("failed to get api key from source ref : %w", err)
