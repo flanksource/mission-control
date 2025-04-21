@@ -109,13 +109,6 @@ type childRunResultContext struct {
 // and processes the response into the requested formats.
 func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, error) {
 	var result AIActionResult
-	if spec.Backend == "" {
-		spec.Backend = api.LLMBackendOpenAI
-	}
-	if spec.Backend == api.LLMBackendGemini && spec.Model == "" {
-		spec.Model = "gemini-2.5-pro-exp-03-25" // free tier model
-	}
-
 	knowledgebase, prompt, err := buildPrompt(ctx, spec.Prompt, spec.AIActionContext)
 	if err != nil {
 		return nil, fmt.Errorf("failed to form prompt: %w", err)
