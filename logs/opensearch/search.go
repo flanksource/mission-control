@@ -2,6 +2,7 @@ package opensearch
 
 import (
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -108,16 +109,12 @@ func (t *searcher) Search(ctx context.Context, q *Request) (*logs.LogResult, err
 					}
 				}
 			default:
-				switch vv := v.(type) {
-				case string:
-					line.Labels[k] = vv
-				case map[string]any:
-					for vvk, vvv := range vv {
-						vJSON, err := utils.Stringify(vvv)
-						if err == nil {
-							line.Labels[vvk] = vJSON
-						}
-					}
+				mm, err := flatMap(k, v)
+				if err != nil {
+					return nil, ctx.Oops().Wrapf(err, "error mapping the field %s", k)
+				}
+				for k, v := range mm {
+					line.Labels[k] = v
 				}
 			}
 		}
@@ -126,4 +123,38 @@ func (t *searcher) Search(ctx context.Context, q *Request) (*logs.LogResult, err
 	}
 
 	return &logResult, nil
+}
+
+func flatMap(prefix string, v any) (map[string]string, error) {
+	if v == nil {
+		return nil, nil
+	}
+
+	var m = make(map[string]string)
+	switch vv := v.(type) {
+	case map[string]any:
+		for k, v := range vv {
+			subMap, err := flatMap(k, v)
+			if err != nil {
+				return nil, err
+			}
+
+			for k, v := range subMap {
+				key := fmt.Sprintf("%s.%s", prefix, k)
+				if prefix == "" {
+					key = k
+				}
+				m[key] = v
+			}
+		}
+
+	default:
+		if vvJSON, err := utils.Stringify(vv); err != nil {
+			m[prefix] = vvJSON
+		} else {
+			m[prefix] = fmt.Sprintf("%v", vv)
+		}
+	}
+
+	return m, nil
 }

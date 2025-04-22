@@ -52,8 +52,3 @@ type Event struct {
 	Message string            `json:"message,omitempty"`
 	Labels  map[string]string `json:"labels,omitempty"`
 }
-
-type cloudWatchResult struct {
-	Total  int     `json:"total"`
-	Events []Event `json:"events"`
-}

@@ -29,8 +29,8 @@ func (t *LokiResponse) ToLogResult() logs.LogResult {
 				Labels:        result.Stream,
 			}
 
-			if sn, ok := result.Stream["service_name"]; ok {
-				line.Host = sn
+			if pod, ok := result.Stream["pod"]; ok {
+				line.Host = pod
 			}
 
 			output.Logs = append(output.Logs, line)
