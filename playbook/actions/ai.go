@@ -23,9 +23,13 @@ import (
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	pkgArtifacts "github.com/flanksource/incident-commander/artifacts"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/llm"
 )
+
+// We don't want to include large files in the LLM context.
+const maxArtifactSize = 5 * 1024 * 1024 // 5MB
 
 var recommendPlaybookPrompt *template.Template
 
@@ -137,36 +141,13 @@ func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 		// else trigger them now.
 		if len(childRuns) > 0 {
 			// Read the results from all of these child runs & add to the LLM's context
-			var childRunResults []childRunResultContext
-
-			for _, childRun := range childRuns {
-				actions, err := childRun.GetActions(ctx.DB())
-				if err != nil {
-					return nil, fmt.Errorf("failed to get child playbook run actions: %w", err)
-				}
-
-				playbook, err := childRun.GetPlaybook(ctx.DB())
-				if err != nil {
-					return nil, fmt.Errorf("failed to get child playbook run playbook: %w", err)
-				}
-
-				var actionResult []types.JSONMap
-				for _, action := range actions {
-					actionResult = append(actionResult, action.Result)
-				}
-
-				childRunResults = append(childRunResults, childRunResultContext{
-					Playbook: playbook.Name,
-					Results:  actionResult,
-				})
+			childRunResults, err := getChildRunsResults(ctx, childRuns)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get child run results: %w", err)
 			}
 
-			successfulChildRuns := lo.Filter(childRunResults, func(c childRunResultContext, _ int) bool {
-				return len(c.Results) > 0
-			})
-
-			if len(successfulChildRuns) > 0 {
-				childRunResultsJSON, err := json.Marshal(successfulChildRuns)
+			if len(childRunResults) > 0 {
+				childRunResultsJSON, err := json.Marshal(childRunResults)
 				if err != nil {
 					return nil, fmt.Errorf("failed to marshal child run results: %w", err)
 				}
@@ -642,4 +623,48 @@ func getGroupedResources(ctx context.Context, runID uuid.UUID) ([]string, error)
 	}
 
 	return groupedResources, nil
+}
+
+func getChildRunsResults(ctx context.Context, childRuns []models.PlaybookRun) ([]childRunResultContext, error) {
+	var childRunResults []childRunResultContext
+
+	for _, childRun := range childRuns {
+		actions, err := childRun.GetActions(ctx.DB())
+		if err != nil {
+			return nil, fmt.Errorf("failed to get child playbook run actions: %w", err)
+		}
+
+		playbook, err := childRun.GetPlaybook(ctx.DB())
+		if err != nil {
+			return nil, fmt.Errorf("failed to get child playbook run playbook: %w", err)
+		}
+
+		actionIDs := lo.Map(actions, func(action models.PlaybookRunAction, _ int) string {
+			return action.ID.String()
+		})
+
+		artifacts, err := pkgArtifacts.FetchArtifacts(ctx, maxArtifactSize, actionIDs...)
+		if err != nil {
+			return nil, fmt.Errorf("failed to fetch artifacts: %w", err)
+		}
+
+		var actionResult []types.JSONMap
+		for _, action := range actions {
+			actionResult = append(actionResult, action.Result)
+
+			artifact, ok := lo.Find(artifacts, func(a pkgArtifacts.ArtifactContent) bool {
+				return a.ActionID == action.ID.String()
+			})
+			if ok {
+				actionResult = append(actionResult, types.JSONMap{"artifact": artifact.Content})
+			}
+		}
+
+		childRunResults = append(childRunResults, childRunResultContext{
+			Playbook: playbook.Name,
+			Results:  actionResult,
+		})
+	}
+
+	return childRunResults, nil
 }
