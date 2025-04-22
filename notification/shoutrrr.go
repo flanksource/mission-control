@@ -11,7 +11,6 @@ import (
 	"github.com/containrrr/shoutrrr"
 	"github.com/containrrr/shoutrrr/pkg/router"
 	"github.com/containrrr/shoutrrr/pkg/types"
-	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/mail"
 	icUtils "github.com/flanksource/incident-commander/utils"
@@ -114,11 +113,25 @@ func shoutrrrSend(ctx *Context, celEnv map[string]any, shoutrrrURL string, data 
 			return "", fmt.Errorf("failed to parse shoutrrr URL: %w", err)
 		}
 
+		firstNonEmpty := func(params *types.Params, q url.Values, keys ...string) string {
+			for _, k := range keys {
+				for p := range *params {
+					if strings.EqualFold(k, p) {
+						return (*params)[p]
+					}
+				}
+				if v := q.Get(k); v != "" {
+					return v
+				}
+			}
+			return ""
+		}
+
 		query := parsedURL.Query()
 		var (
-			to           = utils.Coalesce((*params)["to"], query.Get("to"))
-			from         = utils.Coalesce((*params)["from"], query.Get("from"))
-			fromName     = utils.Coalesce((*params)["fromname"], query.Get("fromname"))
+			to           = firstNonEmpty(params, query, "to", "ToAddresses", "ToAddress")
+			from         = firstNonEmpty(params, query, "from", "FromAddress")
+			fromName     = firstNonEmpty(params, query, "fromname")
 			password, _  = parsedURL.User.Password()
 			port, _      = strconv.Atoi(parsedURL.Port())
 			headerString = (*params)["headers"]
