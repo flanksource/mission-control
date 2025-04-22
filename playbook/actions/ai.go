@@ -127,36 +127,6 @@ func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 		return &AIActionResult{Markdown: strings.Join(prompt, "\n")}, nil
 	}
 
-	// Note: when running on agents, the run will not be in the database.
-	var run models.PlaybookRun
-	var groupedResources []string
-	if err := ctx.DB().Where("id = ?", t.RunID).Limit(1).Find(&run).Error; err != nil {
-		return nil, ctx.Oops().Wrapf(err, "failed to get playbook run")
-	} else if run.NotificationSendID != nil {
-		var notificationSend models.NotificationSendHistory
-		if err := ctx.DB().Where("id = ?", *run.NotificationSendID).Limit(1).Find(&notificationSend).Error; err != nil {
-			return nil, ctx.Oops().Wrapf(err, "failed to get notification send history")
-		} else if notificationSend.GroupID != nil {
-			var selfID []string
-			if run.ConfigID != nil {
-				selfID = append(selfID, lo.FromPtr(run.ConfigID).String())
-			} else if run.CheckID != nil {
-				selfID = append(selfID, lo.FromPtr(run.CheckID).String())
-			} else if run.ComponentID != nil {
-				selfID = append(selfID, lo.FromPtr(run.ComponentID).String())
-			}
-
-			groupedResources, err = db.GetGroupedResources(ctx, *notificationSend.GroupID, selfID...)
-			if err != nil {
-				return nil, ctx.Oops().Wrapf(err, "failed to get grouped resources")
-			}
-
-			if len(groupedResources) > 0 {
-				prompt = append(prompt, fmt.Sprintf("Here are few resources that are related to the issue: %s", strings.Join(groupedResources, ", ")))
-			}
-		}
-	}
-
 	if len(spec.AIActionContext.Playbooks) > 0 {
 		var childRuns []models.PlaybookRun
 		if err := ctx.DB().Where("parent_id = ?", t.RunID).Find(&childRuns).Error; err != nil {
@@ -245,6 +215,11 @@ func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 	for _, format := range lo.Uniq(spec.Formats) {
 		switch format {
 		case v1.AIActionFormatSlack:
+			groupedResources, err := getGroupedResources(ctx, t.RunID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get grouped resources: %w", err)
+			}
+
 			result.Slack, err = slackBlocks(knowledgebase, diagnosisReport, llm.PlaybookRecommendations{}, groupedResources)
 			if err != nil {
 				return nil, fmt.Errorf("failed to merge blocks: %w", err)
@@ -294,6 +269,11 @@ func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 			var recommendations llm.PlaybookRecommendations
 			if err := json.Unmarshal([]byte(response), &recommendations); err != nil {
 				return nil, ctx.Oops().With("response", response).Wrapf(err, "failed to unmarshal playbook recommendations")
+			}
+
+			groupedResources, err := getGroupedResources(ctx, t.RunID)
+			if err != nil {
+				return nil, fmt.Errorf("failed to get grouped resources: %w", err)
 			}
 
 			blocks, err := slackBlocks(knowledgebase, diagnosisReport, recommendations, groupedResources)
@@ -622,4 +602,44 @@ func (t *KnowledgeGraph) processRelationship(ctx context.Context, configID uuid.
 	}
 
 	return nil
+}
+
+// getGroupedResources returns the list of grouped resources for the given run ID.
+// If this run was triggered by a notification.
+func getGroupedResources(ctx context.Context, runID uuid.UUID) ([]string, error) {
+	// Note: when running on agents, the run will not be in the database.
+	// i.e. if this ai action is running on an agent, it'll not have access to the list of grouped resources.
+	var run models.PlaybookRun
+	if err := ctx.DB().Select("notification_send_id").Where("id = ?", runID).Limit(1).Find(&run).Error; err != nil {
+		return nil, ctx.Oops().Wrapf(err, "failed to get playbook run")
+	}
+
+	if run.NotificationSendID == nil {
+		return nil, nil
+	}
+
+	var notificationSend models.NotificationSendHistory
+	if err := ctx.DB().Where("id = ?", *run.NotificationSendID).Limit(1).Find(&notificationSend).Error; err != nil {
+		return nil, ctx.Oops().Wrapf(err, "failed to get notification send history")
+	}
+
+	if notificationSend.GroupID == nil {
+		return nil, nil
+	}
+
+	var selfID []string
+	if run.ConfigID != nil {
+		selfID = append(selfID, lo.FromPtr(run.ConfigID).String())
+	} else if run.CheckID != nil {
+		selfID = append(selfID, lo.FromPtr(run.CheckID).String())
+	} else if run.ComponentID != nil {
+		selfID = append(selfID, lo.FromPtr(run.ComponentID).String())
+	}
+
+	groupedResources, err := db.GetGroupedResources(ctx, *notificationSend.GroupID, selfID...)
+	if err != nil {
+		return nil, ctx.Oops().Wrapf(err, "failed to get grouped resources")
+	}
+
+	return groupedResources, nil
 }
