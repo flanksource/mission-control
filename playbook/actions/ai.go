@@ -26,6 +26,7 @@ import (
 	pkgArtifacts "github.com/flanksource/incident-commander/artifacts"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/llm"
+	"github.com/flanksource/incident-commander/utils"
 )
 
 // We don't want to include large files in the LLM context.
@@ -643,9 +644,9 @@ func getChildRunsResults(ctx context.Context, childRuns []models.PlaybookRun) ([
 			return action.ID.String()
 		})
 
-		artifacts, err := pkgArtifacts.FetchArtifacts(ctx, maxArtifactSize, actionIDs...)
+		artifacts, err := pkgArtifacts.GetArtifactContents(ctx, actionIDs...)
 		if err != nil {
-			return nil, fmt.Errorf("failed to fetch artifacts: %w", err)
+			return nil, fmt.Errorf("failed to get artifact contents: %w", err)
 		}
 
 		var actionResult []types.JSONMap
@@ -656,7 +657,8 @@ func getChildRunsResults(ctx context.Context, childRuns []models.PlaybookRun) ([
 				return a.ActionID == action.ID.String()
 			})
 			if ok {
-				actionResult = append(actionResult, types.JSONMap{"artifact": artifact.Content})
+				content := utils.Tail(artifact.Content, maxArtifactSize)
+				actionResult = append(actionResult, types.JSONMap{"artifact": content})
 			}
 		}
 

@@ -20,6 +20,8 @@ import (
 	"github.com/flanksource/incident-commander/api"
 )
 
+const defaultMaxReadSize = 50 * 1024 * 1024 // 50 MB
+
 type ArtifactContent struct {
 	ActionID string `json:"action_id"`
 	Content  []byte `json:"content"`
@@ -77,7 +79,7 @@ func SaveArtifacts(ctx context.Context, playbookActionID uuid.UUID, generatedArt
 	return nil
 }
 
-func FetchArtifacts(ctx context.Context, maxSize int64, actionIDs ...string) ([]ArtifactContent, error) {
+func GetArtifactContents(ctx context.Context, actionIDs ...string) ([]ArtifactContent, error) {
 	if len(actionIDs) == 0 {
 		return nil, nil
 	}
@@ -85,10 +87,6 @@ func FetchArtifacts(ctx context.Context, maxSize int64, actionIDs ...string) ([]
 	if api.DefaultArtifactConnection == "" {
 		logger.Warnf("no artifact connection configured")
 		return nil, nil
-	}
-
-	if maxSize == 0 {
-		maxSize = int64(ctx.Properties().Int("max_artifact_size", -1))
 	}
 
 	var actionArtifacts []models.Artifact
@@ -110,7 +108,8 @@ func FetchArtifacts(ctx context.Context, maxSize int64, actionIDs ...string) ([]
 		}
 		defer reader.Close()
 
-		if maxSize > 0 {
+		if maxSize := int64(ctx.Properties().Int("artifacts.max_read_size", defaultMaxReadSize)); maxSize > 0 {
+			// Safeguard for rare cases.
 			reader = io.NopCloser(io.LimitReader(reader, maxSize))
 		}
 
