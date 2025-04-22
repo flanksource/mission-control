@@ -8,10 +8,12 @@ import (
 	"github.com/flanksource/artifacts"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	v1 "github.com/flanksource/incident-commander/api/v1"
-	"github.com/flanksource/incident-commander/playbook/actions"
 	"github.com/google/uuid"
 	"github.com/samber/oops"
+
+	v1 "github.com/flanksource/incident-commander/api/v1"
+	pkgArtifacts "github.com/flanksource/incident-commander/artifacts"
+	"github.com/flanksource/incident-commander/playbook/actions"
 )
 
 type ArtifactAccessor interface {
@@ -85,7 +87,7 @@ func executeAction(ctx context.Context, playbookID any, runID uuid.UUID, runActi
 	// NOTE: v is never nil, it holds in nil values.
 	// So we need to check if the value is nil using reflect.ValueOf.
 	if v, ok := result.(ArtifactAccessor); ok && !reflect.ValueOf(v).IsNil() {
-		if err := saveArtifacts(ctx, runAction.ID, v.GetArtifacts()); err != nil {
+		if err := pkgArtifacts.SaveArtifacts(ctx, runAction.ID, v.GetArtifacts()); err != nil {
 			return executeActionResult{
 				data: result,
 			}, ctx.Oops().Wrapf(err, "error saving artifacts")
