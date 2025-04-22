@@ -5,9 +5,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/incident-commander/logs"
 	opensearch "github.com/opensearch-project/opensearch-go/v2"
-	"github.com/samber/lo"
 )
 
 type searcher struct {
@@ -56,7 +57,7 @@ func NewSearcher(ctx context.Context, backend Backend) (*searcher, error) {
 	}, nil
 }
 
-func (t *searcher) Search(ctx context.Context, q *Request) (*SearchResults, error) {
+func (t *searcher) Search(ctx context.Context, q *Request) (*logs.LogResult, error) {
 	if q.Index == "" {
 		return nil, ctx.Oops().Errorf("index is empty")
 	}
@@ -87,10 +88,42 @@ func (t *searcher) Search(ctx context.Context, q *Request) (*SearchResults, erro
 		return nil, ctx.Oops().Wrapf(err, "error parsing the response body")
 	}
 
-	var result SearchResults
-	result.Results = lo.Map(r.Hits.Hits, func(hit SearchHit, _ int) map[string]any {
-		return hit.Source
-	})
-	result.NextPage = r.Hits.NextPage(limit)
-	return &result, nil
+	var logResult = logs.LogResult{}
+	for _, hit := range r.Hits.Hits {
+		line := logs.LogLine{
+			ID:     hit.ID,
+			Labels: make(map[string]string),
+		}
+
+		for k, v := range hit.Source {
+			switch k {
+			case "@timestamp":
+				line.FirstObserved = v.(string)
+			case "message":
+				line.Message = v.(string)
+			case "log":
+				if log, ok := v.(map[string]any); ok {
+					if level, ok := log["level"].(string); ok {
+						line.Severity = level
+					}
+				}
+			default:
+				switch vv := v.(type) {
+				case string:
+					line.Labels[k] = vv
+				case map[string]any:
+					for vvk, vvv := range vv {
+						vJSON, err := utils.Stringify(vvv)
+						if err == nil {
+							line.Labels[vvk] = vJSON
+						}
+					}
+				}
+			}
+		}
+
+		logResult.Logs = append(logResult.Logs, line)
+	}
+
+	return &logResult, nil
 }

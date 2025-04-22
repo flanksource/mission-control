@@ -1,14 +1,16 @@
 package actions
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
-	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/flanksource/artifacts"
+	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/logs"
 	"github.com/flanksource/incident-commander/logs/cloudwatch"
 	"github.com/flanksource/incident-commander/logs/loki"
 	"github.com/flanksource/incident-commander/logs/opensearch"
@@ -17,18 +19,19 @@ import (
 type logsAction struct {
 }
 
-type logsResult struct {
-	Metadata any `json:"metadata,omitempty"`
-
-	// Saved to artifacts
-	logs string
-}
+type logsResult logs.LogResult
 
 func (t *logsResult) GetArtifacts() []artifacts.Artifact {
+	var b bytes.Buffer
+	if err := json.NewEncoder(&b).Encode(t); err != nil {
+		logger.Errorf("failed to json marshal logs: %v", err)
+		return nil
+	}
+
 	return []artifacts.Artifact{
 		{
 			ContentType: "application/json",
-			Content:     io.NopCloser(strings.NewReader(string(t.logs))),
+			Content:     io.NopCloser(&b),
 			Path:        "logs.json",
 		},
 	}
@@ -45,10 +48,7 @@ func (l *logsAction) Run(ctx context.Context, action *v1.LogsAction) (*logsResul
 			return nil, ctx.Oops().Wrapf(err, "failed to fetch logs from loki")
 		}
 
-		return &logsResult{
-			Metadata: response.Data.Stats,
-			logs:     string(response.Data.Result),
-		}, nil
+		return (*logsResult)(response), nil
 	}
 
 	if action.OpenSearch != nil {
@@ -62,14 +62,7 @@ func (l *logsAction) Run(ctx context.Context, action *v1.LogsAction) (*logsResul
 			return nil, ctx.Oops().Wrapf(err, "failed to fetch logs from opensearch")
 		}
 
-		results, err := json.Marshal(response.Results)
-		if err != nil {
-			return nil, ctx.Oops().Wrapf(err, "failed to json marshal opensearch logs")
-		}
-
-		return &logsResult{
-			logs: string(results),
-		}, nil
+		return (*logsResult)(response), nil
 	}
 
 	if action.CloudWatch != nil {
@@ -92,14 +85,7 @@ func (l *logsAction) Run(ctx context.Context, action *v1.LogsAction) (*logsResul
 			return nil, ctx.Oops().Wrapf(err, "failed to fetch logs from cloudwatch")
 		}
 
-		events, err := json.Marshal(response.Events)
-		if err != nil {
-			return nil, ctx.Oops().Wrapf(err, "failed to json marshal cloudwatch logs")
-		}
-
-		return &logsResult{
-			logs: string(events),
-		}, nil
+		return (*logsResult)(response), nil
 	}
 
 	return nil, nil

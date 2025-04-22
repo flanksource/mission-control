@@ -10,9 +10,10 @@ import (
 	"github.com/flanksource/commons/http"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/types"
+	"github.com/flanksource/incident-commander/logs"
 )
 
-func Fetch(ctx context.Context, baseURL string, auth *types.Authentication, request Request) (*LokiResponse, error) {
+func Fetch(ctx context.Context, baseURL string, auth *types.Authentication, request Request) (*logs.LogResult, error) {
 	parsedBaseURL, err := url.Parse(baseURL)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse base URL '%s': %w", baseURL, err)
@@ -49,15 +50,11 @@ func Fetch(ctx context.Context, baseURL string, auth *types.Authentication, requ
 		return nil, fmt.Errorf("loki request failed with status %s: %s", resp.Status, string(bodyBytes))
 	}
 
-	bodyBytes, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response body: %w", err)
-	}
-
 	var lokiResp LokiResponse
-	if err := json.Unmarshal(bodyBytes, &lokiResp); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal loki response: %w", err)
+	if err := json.NewDecoder(resp.Body).Decode(&lokiResp); err != nil {
+		return nil, fmt.Errorf("failed to decode loki response: %w", err)
 	}
 
-	return &lokiResp, nil
+	result := lokiResp.ToLogResult()
+	return &result, nil
 }

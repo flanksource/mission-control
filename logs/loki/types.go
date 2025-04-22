@@ -1,8 +1,9 @@
 package loki
 
 import (
-	"encoding/json"
 	"net/url"
+
+	"github.com/flanksource/incident-commander/logs"
 )
 
 // LokiResponse represents the top-level response from Loki's query_range API.
@@ -11,11 +12,44 @@ type LokiResponse struct {
 	Data   Data   `json:"data"`
 }
 
+func (t *LokiResponse) ToLogResult() logs.LogResult {
+	output := logs.LogResult{
+		Metadata: t.Data.Stats,
+	}
+
+	for _, result := range t.Data.Result {
+		for _, v := range result.Values {
+			if len(v) != 2 {
+				continue
+			}
+
+			line := logs.LogLine{
+				FirstObserved: v[0],
+				Message:       v[1],
+				Labels:        result.Stream,
+			}
+
+			if sn, ok := result.Stream["service_name"]; ok {
+				line.Host = sn
+			}
+
+			output.Logs = append(output.Logs, line)
+		}
+	}
+
+	return output
+}
+
+type Result struct {
+	Stream map[string]string `json:"stream"`
+	Values [][]string        `json:"values"`
+}
+
 // Data holds the actual query results and statistics.
 type Data struct {
-	ResultType string          `json:"resultType"`
-	Result     json.RawMessage `json:"result"`
-	Stats      map[string]any  `json:"stats"`
+	ResultType string         `json:"resultType"`
+	Result     []Result       `json:"result"`
+	Stats      map[string]any `json:"stats"`
 }
 
 // Request represents available parameters for Loki queries.

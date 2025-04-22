@@ -7,6 +7,7 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
+	"github.com/flanksource/incident-commander/logs"
 	"github.com/samber/lo"
 )
 
@@ -20,7 +21,7 @@ func NewSearcher(client *cloudwatchlogs.Client) *Searcher {
 	}
 }
 
-func (t *Searcher) Search(ctx context.Context, request Request) (*cloudWatchResult, error) {
+func (t *Searcher) Search(ctx context.Context, request Request) (*logs.LogResult, error) {
 	searchQuery := &cloudwatchlogs.StartQueryInput{
 		LogGroupName: &request.LogGroup,
 		QueryString:  &request.Query,
@@ -50,33 +51,40 @@ func (t *Searcher) Search(ctx context.Context, request Request) (*cloudWatchResu
 		return nil, err
 	}
 
-	var result cloudWatchResult
-	result.Total = int(queryResult.Statistics.RecordsMatched)
-	result.Events = make([]Event, 0, len(queryResult.Results))
+	logResult := logs.LogResult{
+		Metadata: map[string]any{
+			"total":          int(queryResult.Statistics.RecordsMatched),
+			"statistics":     queryResult.Statistics,
+			"resultMetadata": queryResult.ResultMetadata,
+		},
+	}
+
 	for _, fields := range queryResult.Results {
-		var event = Event{
+		var line = logs.LogLine{
 			Labels: make(map[string]string),
 		}
 
 		for _, field := range fields {
 			switch lo.FromPtr(field.Field) {
 			case "@message":
-				event.Message = lo.FromPtr(field.Value)
+				line.Message = lo.FromPtr(field.Value)
 			case "@timestamp":
-				event.Time = toRFC339(lo.FromPtr(field.Value))
+				line.FirstObserved = toRFC339(lo.FromPtr(field.Value))
 			case "@ptr": // the value to use as logRecordPointer to retrieve that complete log event record.
-				event.ID = lo.FromPtr(field.Value)
-			case "":
+				line.ID = lo.FromPtr(field.Value)
+			case "@logStream":
+				line.Source = lo.FromPtr(field.Value)
+			case "", "@log":
 				// Do nothing
 			default:
-				event.Labels[lo.FromPtr(field.Field)] = lo.FromPtr(field.Value)
+				line.Labels[lo.FromPtr(field.Field)] = lo.FromPtr(field.Value)
 			}
 		}
 
-		result.Events = append(result.Events, event)
+		logResult.Logs = append(logResult.Logs, line)
 	}
 
-	return &result, nil
+	return &logResult, nil
 }
 
 func (t *Searcher) getQueryResults(ctx context.Context, queryID *string) (*cloudwatchlogs.GetQueryResultsOutput, error) {
