@@ -21,7 +21,7 @@ spec:
   actions:
     - name: Fetch logs from OpenSearch
       logs:
-        openSearch:
+        opensearch:
           address: http://localhost:9200
           query: |
             {

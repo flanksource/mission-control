@@ -44,8 +44,8 @@ type LogsActionOpenSearch struct {
 
 type LogsAction struct {
 	Loki       *LogsActionLoki       `json:"loki,omitempty" template:"true"`
-	CloudWatch *LogsActionCloudWatch `json:"cloudWatch,omitempty" template:"true"`
-	OpenSearch *LogsActionOpenSearch `json:"openSearch,omitempty" template:"true"`
+	CloudWatch *LogsActionCloudWatch `json:"cloudwatch,omitempty" template:"true"`
+	OpenSearch *LogsActionOpenSearch `json:"opensearch,omitempty" template:"true"`
 }
 
 type NotificationAction struct {

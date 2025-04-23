@@ -24,7 +24,7 @@ spec:
   actions:
     - name: Fetch events from CloudWatch
       logs:
-        cloudWatch:
+        cloudwatch:
           start: 24h
           logGroup: $(.params.logGroup)
           query: |

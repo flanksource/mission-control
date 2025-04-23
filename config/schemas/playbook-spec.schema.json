@@ -740,10 +740,10 @@
         "loki": {
           "$ref": "#/$defs/LogsActionLoki"
         },
-        "cloudWatch": {
+        "cloudwatch": {
           "$ref": "#/$defs/LogsActionCloudWatch"
         },
-        "openSearch": {
+        "opensearch": {
           "$ref": "#/$defs/LogsActionOpenSearch"
         }
       },

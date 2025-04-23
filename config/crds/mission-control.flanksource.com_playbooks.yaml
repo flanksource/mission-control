@@ -1693,7 +1693,7 @@ spec:
                       type: string
                     logs:
                       properties:
-                        cloudWatch:
+                        cloudwatch:
                           properties:
                             accessKey:
                               properties:
@@ -1993,7 +1993,7 @@ spec:
                           required:
                           - baseURL
                           type: object
-                        openSearch:
+                        opensearch:
                           properties:
                             address:
                               type: string
