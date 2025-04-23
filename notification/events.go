@@ -590,6 +590,7 @@ func sendNotification(ctx context.Context, payload NotificationEventPayload) err
 	notificationContext := NewContext(ctx.WithSubject(payload.NotificationID.String()), payload.NotificationID)
 	ctx.Debugf("[notification.send] %s  ", payload.EventName)
 	notificationContext.WithSource(payload.EventName, payload.ID)
+	notificationContext.WithGroupID(payload.GroupID)
 
 	logs.IfError(notificationContext.StartLog(), "error persisting start of notification send history")
 
