@@ -19,11 +19,14 @@ import (
 type logsAction struct {
 }
 
-type logsResult logs.LogResult
+type logsResult struct {
+	Metadata map[string]any `json:"metadata,omitempty"`
+	Logs     []logs.LogLine `json:"-"`
+}
 
 func (t *logsResult) GetArtifacts() []artifacts.Artifact {
 	var b bytes.Buffer
-	if err := json.NewEncoder(&b).Encode(t); err != nil {
+	if err := json.NewEncoder(&b).Encode(t.Logs); err != nil {
 		logger.Errorf("failed to json marshal logs: %v", err)
 		return nil
 	}
