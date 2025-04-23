@@ -33,7 +33,7 @@ func (t *logsResult) GetArtifacts() []artifacts.Artifact {
 
 	return []artifacts.Artifact{
 		{
-			ContentType: "application/json",
+			ContentType: "application/log+json", // so UI can distinguish between json and logs in JSON
 			Content:     io.NopCloser(&b),
 			Path:        "logs.json",
 		},
