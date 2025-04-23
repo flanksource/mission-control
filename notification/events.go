@@ -310,18 +310,6 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 				Body:           payload.Body,
 			}
 
-			if payload.GroupID != nil {
-				// The first notification in the group is the parent.
-				var parent models.NotificationSendHistory
-				if err := ctx.DB().Where("group_id = ?", *payload.GroupID).Order("created_at").Limit(1).Find(&parent).Error; err != nil {
-					return fmt.Errorf("failed to get group[%s]: %w", *payload.GroupID, err)
-				}
-
-				if parent.ID != uuid.Nil {
-					pendingHistory.ParentID = lo.ToPtr(parent.ID)
-				}
-			}
-
 			if err := ctx.DB().Create(&pendingHistory).Error; err != nil {
 				return fmt.Errorf("failed to save pending notification: %w", err)
 			}
@@ -632,18 +620,6 @@ func _sendNotification(ctx *Context, payload NotificationEventPayload) error {
 		celEnv.GroupedResources, err = db.GetGroupedResources(ctx.Context, *payload.GroupID, payload.ID.String())
 		if err != nil {
 			return ctx.Oops().Wrapf(err, "failed to get grouped resources for notification[%s]", payload.NotificationID)
-		}
-
-		if ctx.log.ParentID == nil {
-			// The first notification in the group is the parent.
-			var parent models.NotificationSendHistory
-			if err := ctx.DB().Where("group_id = ?", *payload.GroupID).Order("created_at").Limit(1).Find(&parent).Error; err != nil {
-				return fmt.Errorf("failed to get group[%s]: %w", *payload.GroupID, err)
-			}
-
-			if parent.ID != uuid.Nil && parent.ID != ctx.log.ID {
-				ctx.log.ParentID = lo.ToPtr(parent.ID)
-			}
 		}
 	}
 
