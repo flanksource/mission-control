@@ -1,0 +1,14 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: allow-playbook-artifacts
+spec:
+  description: allow playbook default/diagnose-resource to read connection default/artifacts
+  subject:
+    playbook: default/diagnose-resource
+  actions:
+    - read
+  object:
+    connections:
+      - name: artifacts
+        namespace: default
