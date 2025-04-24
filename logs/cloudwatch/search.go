@@ -8,6 +8,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
 	"github.com/flanksource/incident-commander/logs"
+	"github.com/flanksource/incident-commander/utils"
 	"github.com/samber/lo"
 )
 
@@ -69,7 +70,7 @@ func (t *Searcher) Search(ctx context.Context, request Request) (*logs.LogResult
 			case "@message":
 				line.Message = lo.FromPtr(field.Value)
 			case "@timestamp":
-				line.FirstObserved = toRFC339(lo.FromPtr(field.Value))
+				line.FirstObserved = lo.FromPtr(utils.ParseTime(lo.FromPtr(field.Value)))
 			case "@ptr": // the value to use as logRecordPointer to retrieve that complete log event record.
 				line.ID = lo.FromPtr(field.Value)
 			case "@logStream":
@@ -113,18 +114,4 @@ func (t *Searcher) getQueryResults(ctx context.Context, queryID *string) (*cloud
 			time.Sleep(time.Second)
 		}
 	}
-}
-
-// timestamp layout returned by Cloudwatch
-const timestampLayout = "2006-01-02 15:04:05.000"
-
-// Converts the timestamp returned by Cloudwatch
-// to RFC3339 format.
-func toRFC339(input string) string {
-	t, err := time.Parse(timestampLayout, input)
-	if err != nil {
-		return ""
-	}
-
-	return t.Format(time.RFC3339)
 }

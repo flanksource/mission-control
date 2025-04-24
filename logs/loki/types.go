@@ -2,7 +2,10 @@ package loki
 
 import (
 	"net/url"
+	"strconv"
+	"time"
 
+	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/logs"
 )
 
@@ -23,8 +26,14 @@ func (t *LokiResponse) ToLogResult() logs.LogResult {
 				continue
 			}
 
+			firstObserved, err := strconv.ParseInt(v[0], 10, 64)
+			if err != nil {
+				logger.Errorf("loki:failed to parse first observed %s: %v", v[0], err)
+				continue
+			}
+
 			line := logs.LogLine{
-				FirstObserved: v[0],
+				FirstObserved: time.Unix(0, firstObserved),
 				Message:       v[1],
 				Labels:        result.Stream,
 			}

@@ -8,8 +8,11 @@ import (
 
 	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty/context"
-	"github.com/flanksource/incident-commander/logs"
 	opensearch "github.com/opensearch-project/opensearch-go/v2"
+	"github.com/samber/lo"
+
+	"github.com/flanksource/incident-commander/logs"
+	icUtils "github.com/flanksource/incident-commander/utils"
 )
 
 type searcher struct {
@@ -99,7 +102,7 @@ func (t *searcher) Search(ctx context.Context, q *Request) (*logs.LogResult, err
 		for k, v := range hit.Source {
 			switch k {
 			case "@timestamp":
-				line.FirstObserved = v.(string)
+				line.FirstObserved = lo.FromPtr(icUtils.ParseTime(v.(string)))
 			case "message":
 				line.Message = v.(string)
 			case "log":

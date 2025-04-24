@@ -1,6 +1,8 @@
 package logs
 
 import (
+	"time"
+
 	"github.com/flanksource/commons/logger"
 )
 
@@ -19,8 +21,8 @@ func IfErrorf(err error, format string, args ...any) {
 
 type LogLine struct {
 	ID            string            `json:"id,omitempty"`
-	FirstObserved string            `json:"firstObserved,omitempty"`
-	LastObserved  string            `json:"lastObserved,omitempty"`
+	FirstObserved time.Time         `json:"firstObserved,omitempty"`
+	LastObserved  *time.Time        `json:"lastObserved,omitempty"`
 	Count         int               `json:"count,omitempty"`
 	Message       string            `json:"message"`
 	Hash          string            `json:"hash,omitempty"`
