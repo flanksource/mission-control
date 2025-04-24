@@ -65,6 +65,8 @@ var _ = ginkgo.BeforeSuite(func() {
 	// TODO: add a system user to dummy fixtures
 	api.SystemUserID = &dummy.JohnDoe.ID
 
+	api.DefaultArtifactConnection = "connection://default/artifacts"
+
 	if err := rbac.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter); err != nil {
 		ginkgo.Fail(err.Error())
 	}

@@ -1,0 +1,7 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Connection
+metadata:
+  name: artifacts
+spec:
+  folder:
+    path: .artifacts
