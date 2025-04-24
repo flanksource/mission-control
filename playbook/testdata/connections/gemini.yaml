@@ -1,0 +1,11 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Connection
+metadata:
+  name: gemini
+  namespace: default
+  uid: 135dc5b8-7216-4f2f-8683-0b4b728738fc
+spec:
+  gemini:
+    apiKey:
+      value: GEMINI_API_KEY_PLACEHOLDER
+    model: gemini-2.0-flash

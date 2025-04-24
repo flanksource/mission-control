@@ -99,11 +99,34 @@ var _ = Describe("Playbook", Ordered, func() {
 			Expect(err).To(BeNil())
 			Expect(artifacts).To(HaveLen(1))
 			Expect(artifacts[0].Filename).To(Equal("stdout"))
+			Expect(artifacts[0].Size).To(BeNumerically(">", 0))
+		})
+	})
+
+	var _ = Describe("AI", Ordered, func() {
+		It("should run ai action and save artifacts", func() {
+			run := createAndRun(DefaultContext.WithUser(&dummy.JohnDoe), "action-ai", RunParams{
+				ConfigID: lo.ToPtr(dummy.KubernetesNodeAKSPool1.ID),
+			}, models.PlaybookRunStatusCompleted)
+
+			var actions []models.PlaybookRunAction
+			err := DefaultContext.DB().Where("playbook_run_id = ?", run.ID).Find(&actions).Error
+			Expect(err).To(BeNil())
+
+			Expect(actions).To(HaveLen(1))
+			Expect(actions[0].Status).To(Equal(models.PlaybookActionStatusCompleted))
+
+			var artifacts []models.Artifact
+			err = DefaultContext.DB().Where("playbook_run_action_id = ?", actions[0].ID).Find(&artifacts).Error
+			Expect(err).To(BeNil())
+			Expect(artifacts).To(HaveLen(1))
+			Expect(artifacts[0].Filename).To(Equal("prompt.md"))
+			Expect(artifacts[0].Size).To(BeNumerically(">", 0))
 		})
 	})
 
 	var _ = Describe("Connection permissions", Ordered, func() {
-		It("playbook must now have access to the connection even though John can read the connection", func() {
+		It("playbook must not have access to the connection even though John can read the connection", func() {
 			run := createAndRun(DefaultContext.WithUser(&dummy.JohnDoe), "action-http-unauthorized", RunParams{
 				ConfigID: lo.ToPtr(dummy.EKSCluster.ID),
 			}, models.PlaybookRunStatusFailed)
