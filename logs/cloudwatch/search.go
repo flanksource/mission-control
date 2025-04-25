@@ -3,6 +3,7 @@ package cloudwatch
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
@@ -28,16 +29,20 @@ func (t *Searcher) Search(ctx context.Context, request Request) (*logs.LogResult
 		QueryString:  &request.Query,
 	}
 
-	if request.Limit > 0 {
-		searchQuery.Limit = lo.ToPtr(request.Limit)
+	if request.Limit != "" {
+		limit, err := strconv.Atoi(request.Limit)
+		if err != nil {
+			return nil, err
+		}
+		searchQuery.Limit = lo.ToPtr(int32(limit))
 	}
 
-	if request.GetStart() != nil {
-		searchQuery.StartTime = lo.ToPtr(request.GetStart().UnixMilli())
+	if s, err := request.GetStart(); err == nil {
+		searchQuery.StartTime = lo.ToPtr(s.UnixMilli())
 	}
 
-	if request.GetEnd() != nil {
-		searchQuery.EndTime = lo.ToPtr(request.GetEnd().UnixMilli())
+	if e, err := request.GetEnd(); err == nil {
+		searchQuery.EndTime = lo.ToPtr(e.UnixMilli())
 	} else {
 		searchQuery.EndTime = lo.ToPtr(time.Now().UnixMilli()) // end time is a required field
 	}

@@ -781,19 +781,19 @@
         "skipTLSVerify": {
           "type": "boolean"
         },
-        "logGroup": {
-          "type": "string"
-        },
-        "query": {
-          "type": "string"
-        },
-        "limit": {
-          "type": "integer"
-        },
         "start": {
           "type": "string"
         },
         "end": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "string"
+        },
+        "logGroup": {
+          "type": "string"
+        },
+        "query": {
           "type": "string"
         }
       },
@@ -801,8 +801,7 @@
       "type": "object",
       "required": [
         "logGroup",
-        "query",
-        "start"
+        "query"
       ]
     },
     "LogsActionLoki": {

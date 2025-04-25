@@ -66,7 +66,7 @@ func (t *searcher) Search(ctx context.Context, q *Request) (*logs.LogResult, err
 		return nil, ctx.Oops().Errorf("index is empty")
 	}
 
-	var limit = 50
+	var limit = 500
 	if q.Limit != "" {
 		var err error
 		limit, err = strconv.Atoi(q.Limit)
@@ -123,6 +123,11 @@ func (t *searcher) Search(ctx context.Context, q *Request) (*logs.LogResult, err
 		}
 
 		logResult.Logs = append(logResult.Logs, line)
+	}
+
+	if len(logResult.Logs) > limit {
+		logResult.Logs = logResult.Logs[:limit]
+		logResult.Metadata["nextPage"] = r.Hits.NextPage(limit)
 	}
 
 	return &logResult, nil

@@ -25,7 +25,8 @@ spec:
     - name: Fetch events from CloudWatch
       logs:
         cloudwatch:
-          start: 24h
+          start: now-24h
+          limit: $(.params.limit)
           logGroup: $(.params.logGroup)
           query: |
             fields @message, @timestamp, @logStream, @log

@@ -1746,16 +1746,16 @@ spec:
                                 be used to populate the endpoint, accessKey and secretKey.
                               type: string
                             end:
-                              description: A RFC3339 timestamp or an age string (e.g.
-                                "1h", "2d", "1w")
+                              description: |-
+                                The end time for the query
+                                Supports Datemath
                               type: string
                             endpoint:
                               type: string
                             limit:
-                              description: The maximum number of log events to return
-                                in the query.
-                              format: int32
-                              type: integer
+                              description: Limit is the maximum number of lines to
+                                return
+                              type: string
                             logGroup:
                               description: The log group on which to perform the query.
                               type: string
@@ -1856,13 +1856,13 @@ spec:
                               description: Skip TLS verify when connecting to aws
                               type: boolean
                             start:
-                              description: A RFC3339 timestamp or an age string (e.g.
-                                "1h", "2d", "1w")
+                              description: |-
+                                The start time for the query
+                                SupportsDatemath
                               type: string
                           required:
                           - logGroup
                           - query
-                          - start
                           type: object
                         loki:
                           properties:
