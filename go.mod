@@ -60,7 +60,6 @@ require (
 	github.com/henvic/httpretty v0.1.4
 	github.com/jackc/pgerrcode v0.0.0-20240316143900-6e2875d9b438
 	github.com/jenkins-x/go-scm v1.14.17
-	github.com/jeremywohl/flatten v0.0.0-20180923035001-588fe0d4c603
 	github.com/opensearch-project/opensearch-go/v2 v2.3.0
 	github.com/redis/go-redis/v9 v9.5.1
 	github.com/samber/lo v1.49.1
@@ -200,6 +199,7 @@ require (
 	github.com/jackc/puddle v1.3.0 // indirect
 	github.com/jackc/puddle/v2 v2.2.1 // indirect
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
+	github.com/jeremywohl/flatten v0.0.0-20180923035001-588fe0d4c603 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/kevinburke/ssh_config v1.2.0 // indirect
 	github.com/klauspost/compress v1.17.9 // indirect
@@ -346,7 +346,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/robfig/cron/v3 v3.0.1
-	github.com/stretchr/testify v1.10.0 // indirect
+	github.com/stretchr/testify v1.10.0
 	github.com/trivago/tgo v1.0.7 // indirect
 	github.com/ugorji/go/codec v1.2.12 // indirect
 	github.com/ulikunitz/xz v0.5.12 // indirect
@@ -371,7 +371,7 @@ require (
 	sigs.k8s.io/yaml v1.4.0
 )
 
-// replace github.com/flanksource/duty => ../duty
+replace github.com/flanksource/duty => ../duty
 
 // replace github.com/flanksource/gomplate/v3 => ../gomplat3
 

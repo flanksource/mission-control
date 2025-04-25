@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/logger"
+	"github.com/timberio/go-datemath"
 )
 
 // IfError logs the given error message if there's an error.
@@ -35,4 +36,25 @@ type LogLine struct {
 type LogResult struct {
 	Metadata map[string]any `json:"metadata,omitempty"`
 	Logs     []LogLine      `json:"logs,omitempty"`
+}
+
+type LogsRequestBase struct {
+	// The start time for the query
+	// SupportsDatemath
+	Start string `json:"start,omitempty"`
+
+	// The end time for the query
+	// Supports Datemath
+	End string `json:"end,omitempty"`
+
+	// Limit is the maximum number of lines to return
+	Limit string `json:"limit,omitempty" template:"true"`
+}
+
+func (r *LogsRequestBase) GetStart() (time.Time, error) {
+	return datemath.ParseAndEvaluate(r.Start, datemath.WithNow(time.Now()))
+}
+
+func (r *LogsRequestBase) GetEnd() (time.Time, error) {
+	return datemath.ParseAndEvaluate(r.End, datemath.WithNow(time.Now()))
 }

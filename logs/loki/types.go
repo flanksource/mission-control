@@ -65,22 +65,15 @@ type Data struct {
 //
 // +kubebuilder:object:generate=true
 type Request struct {
+	logs.LogsRequestBase `json:",inline" template:"true"`
+
 	// Query is the LogQL query to perform
 	Query string `json:"query,omitempty" template:"true"`
-
-	// Limit is the maximum number of lines to return
-	Limit string `json:"limit,omitempty" template:"true"`
 
 	// Since is a duration used to calculate start relative to end.
 	// If end is in the future, start is calculated as this duration before now.
 	// Any value specified for start supersedes this parameter.
 	Since string `json:"since,omitempty"`
-
-	// Start is the start time of the query. Unix epoch in nanoseconds or supported time format
-	Start string `json:"start,omitempty"`
-
-	// End is the end time of the query. Unix epoch in nanoseconds or supported time format
-	End string `json:"end,omitempty"`
 
 	// Step is the Query resolution step width in duration format or float number of seconds
 	Step string `json:"step,omitempty"`
@@ -103,11 +96,11 @@ func (r *Request) Params() url.Values {
 	if r.Limit != "" {
 		params.Set("limit", r.Limit)
 	}
-	if r.Start != "" {
-		params.Set("start", r.Start)
+	if s, err := r.GetStart(); err == nil {
+		params.Set("start", s.Format(time.RFC3339))
 	}
-	if r.End != "" {
-		params.Set("end", r.End)
+	if e, err := r.GetEnd(); err == nil {
+		params.Set("end", e.Format(time.RFC3339))
 	}
 	if r.Since != "" {
 		params.Set("since", r.Since)

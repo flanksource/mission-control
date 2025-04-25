@@ -1866,15 +1866,16 @@ spec:
                           type: object
                         loki:
                           properties:
-                            baseURL:
+                            connection:
                               type: string
                             direction:
                               description: Direction is the direction of the query.
                                 "forward" or "backward" (default)
                               type: string
                             end:
-                              description: End is the end time of the query. Unix
-                                epoch in nanoseconds or supported time format
+                              description: |-
+                                The end time for the query
+                                Supports Datemath
                               type: string
                             interval:
                               description: Only return entries at (or greater than)
@@ -1939,12 +1940,15 @@ spec:
                                 Any value specified for start supersedes this parameter.
                               type: string
                             start:
-                              description: Start is the start time of the query. Unix
-                                epoch in nanoseconds or supported time format
+                              description: |-
+                                The start time for the query
+                                SupportsDatemath
                               type: string
                             step:
                               description: Step is the Query resolution step width
                                 in duration format or float number of seconds
+                              type: string
+                            url:
                               type: string
                             username:
                               properties:
@@ -1991,7 +1995,7 @@ spec:
                                   type: object
                               type: object
                           required:
-                          - baseURL
+                          - url
                           type: object
                         opensearch:
                           properties:

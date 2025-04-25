@@ -27,9 +27,8 @@ import (
 )
 
 type LogsActionLoki struct {
-	loki.Request          `json:",inline" yaml:",inline" template:"true"`
-	*types.Authentication `json:",inline" yaml:",inline"`
-	BaseURL               string `json:"baseURL"`
+	loki.Request    `json:",inline" yaml:",inline" template:"true"`
+	connection.Loki `yaml:",inline" json:",inline"`
 }
 
 type LogsActionCloudWatch struct {

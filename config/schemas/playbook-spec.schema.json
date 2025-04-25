@@ -802,19 +802,19 @@
     },
     "LogsActionLoki": {
       "properties": {
-        "query": {
+        "start": {
+          "type": "string"
+        },
+        "end": {
           "type": "string"
         },
         "limit": {
           "type": "string"
         },
+        "query": {
+          "type": "string"
+        },
         "since": {
-          "type": "string"
-        },
-        "start": {
-          "type": "string"
-        },
-        "end": {
           "type": "string"
         },
         "step": {
@@ -826,20 +826,23 @@
         "direction": {
           "type": "string"
         },
+        "connection": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
         "username": {
           "$ref": "#/$defs/EnvVar"
         },
         "password": {
           "$ref": "#/$defs/EnvVar"
-        },
-        "baseURL": {
-          "type": "string"
         }
       },
       "additionalProperties": false,
       "type": "object",
       "required": [
-        "baseURL"
+        "url"
       ]
     },
     "LogsActionOpenSearch": {

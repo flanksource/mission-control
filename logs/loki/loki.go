@@ -8,31 +8,28 @@ import (
 	"net/url"
 
 	"github.com/flanksource/commons/http"
+	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/types"
+
 	"github.com/flanksource/incident-commander/logs"
 )
 
-func Fetch(ctx context.Context, baseURL string, auth *types.Authentication, request Request) (*logs.LogResult, error) {
-	parsedBaseURL, err := url.Parse(baseURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse base URL '%s': %w", baseURL, err)
+func Fetch(ctx context.Context, conn connection.Loki, request Request) (*logs.LogResult, error) {
+	if err := conn.Populate(ctx); err != nil {
+		return nil, fmt.Errorf("failed to populate connection: %w", err)
 	}
 
+	parsedBaseURL, err := url.Parse(conn.URL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse base URL '%s': %w", conn.URL, err)
+	}
 	apiURL := parsedBaseURL.JoinPath("/loki/api/v1/query_range")
 	apiURL.RawQuery = request.Params().Encode()
 
 	client := http.NewClient()
-	if auth != nil {
-		username, err := ctx.GetEnvValueFromCache(auth.Username, ctx.GetNamespace())
-		if err != nil {
-			return nil, fmt.Errorf("failed to get username: %w", err)
-		}
-		password, err := ctx.GetEnvValueFromCache(auth.Password, ctx.GetNamespace())
-		if err != nil {
-			return nil, fmt.Errorf("failed to get password: %w", err)
-		}
-		client.Auth(username, password)
+
+	if conn.Username != nil && conn.Password != nil {
+		client.Auth(conn.Username.ValueStatic, conn.Password.ValueStatic)
 	}
 
 	resp, err := client.R(ctx).Get(apiURL.String())

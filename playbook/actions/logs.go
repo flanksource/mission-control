@@ -46,7 +46,7 @@ func NewLogsAction() *logsAction {
 
 func (l *logsAction) Run(ctx context.Context, action *v1.LogsAction) (*logsResult, error) {
 	if action.Loki != nil {
-		response, err := loki.Fetch(ctx, action.Loki.BaseURL, action.Loki.Authentication, action.Loki.Request)
+		response, err := loki.Fetch(ctx, action.Loki.Loki, action.Loki.Request)
 		if err != nil {
 			return nil, ctx.Oops().Wrapf(err, "failed to fetch logs from loki")
 		}

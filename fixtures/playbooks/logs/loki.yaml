@@ -22,7 +22,7 @@ spec:
     - name: Fetch logs from Loki
       logs:
         loki:
-          baseURL: https://logs-prod-111.grafana.net
+          url: https://logs-prod-111.grafana.net
           username:
             valueFrom:
               secretKeyRef:
@@ -36,3 +36,4 @@ spec:
           query: |
             {namespace="{{ .config.tags.namespace }}",{{.config.config_class | toLower}}="{{ .config.name }}"}
           limit: $(.params.limit)
+          start: now-2h
