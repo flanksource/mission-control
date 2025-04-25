@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flanksource/commons/duration"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -133,17 +134,29 @@ func CheckPlaybookFilter(ctx context.Context, playbookSpec v1.PlaybookSpec, temp
 func GetDelay(ctx context.Context, playbook models.Playbook, run models.PlaybookRun, action *v1.PlaybookAction, lastRan *models.PlaybookRunAction) (time.Duration, error) {
 	// The delays on the action should be applied here & action consumers do not run the delay.
 	var delay time.Duration
-	if action.Delay != "" && run.Status != models.PlaybookRunStatusSleeping {
-		templateEnv, err := CreateTemplateEnv(ctx, &playbook, run, lastRan)
-		if err != nil {
-			return 0, ctx.Oops().Wrapf(err, "failed to template action")
-		}
-		oops := ctx.Oops().Hint(templateEnv.JSON(ctx))
-		if action.Delay, err = ctx.RunTemplate(gomplate.Template{Expression: action.Delay}, templateEnv.AsMap(ctx)); err != nil {
-			return 0, oops.Wrapf(err, "failed to template action")
-		} else if delay, err = action.DelayDuration(); err != nil {
-			return 0, oops.Wrapf(err, "invalid duration n (%s)", action.Delay)
-		}
+	if action.Delay == "" || run.Status == models.PlaybookRunStatusSleeping {
+		return delay, nil
+	}
+
+	// We try to parse it directly as a duration first
+	if d, err := duration.ParseDuration(action.Delay); err == nil {
+		return time.Duration(d), nil
+	}
+
+	templateEnv, err := CreateTemplateEnv(ctx, &playbook, run, lastRan)
+	if err != nil {
+		return 0, ctx.Oops().Wrapf(err, "failed to template action")
+	}
+
+	oops := ctx.Oops().Hint(templateEnv.JSON(ctx))
+	action.Delay, err = ctx.RunTemplate(gomplate.Template{Expression: action.Delay}, templateEnv.AsMap(ctx))
+	if err != nil {
+		return 0, oops.Wrapf(err, "failed to template action")
+	}
+
+	delay, err = action.DelayDuration()
+	if err != nil {
+		return 0, oops.Wrapf(err, "invalid duration (%s)", action.Delay)
 	}
 
 	return delay, nil
