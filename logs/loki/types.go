@@ -5,14 +5,18 @@ import (
 	"strconv"
 	"time"
 
+	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
+
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/incident-commander/logs"
 )
 
 // LokiResponse represents the top-level response from Loki's query_range API.
 type LokiResponse struct {
-	Status string `json:"status"`
-	Data   Data   `json:"data"`
+	Status    string       `json:"status"`
+	Data      Data         `json:"data"`
+	ErrorType v1.ErrorType `json:"errorType,omitempty"`
+	Error     string       `json:"error,omitempty"`
 }
 
 func (t *LokiResponse) ToLogResult() logs.LogResult {

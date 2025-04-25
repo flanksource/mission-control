@@ -30,7 +30,7 @@ func (t *Searcher) Search(ctx context.Context, request Request) (*logs.LogResult
 	}
 
 	if request.Limit != "" {
-		limit, err := strconv.Atoi(request.Limit)
+		limit, err := strconv.ParseInt(request.Limit, 10, 32)
 		if err != nil {
 			return nil, err
 		}

@@ -10,6 +10,7 @@ import (
 	"github.com/flanksource/commons/http"
 	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
+	"github.com/samber/lo"
 
 	"github.com/flanksource/incident-commander/logs"
 )
@@ -38,18 +39,19 @@ func Fetch(ctx context.Context, conn connection.Loki, request Request) (*logs.Lo
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != netHTTP.StatusOK {
-		bodyBytes, readErr := io.ReadAll(io.LimitReader(resp.Body, 1024*10))
-		if readErr != nil {
-			return nil, fmt.Errorf("loki request failed with status %s (failed to read error response body: %v)", resp.Status, readErr)
-		}
-
-		return nil, fmt.Errorf("loki request failed with status %s: %s", resp.Status, string(bodyBytes))
+	// Read the response first cuz it may not always be JSON
+	response, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
 	var lokiResp LokiResponse
-	if err := json.NewDecoder(resp.Body).Decode(&lokiResp); err != nil {
-		return nil, fmt.Errorf("failed to decode loki response: %w", err)
+	if err := json.Unmarshal(response, &lokiResp); err != nil {
+		return nil, fmt.Errorf("%s", lo.Ellipsis(string(response), 256))
+	}
+
+	if resp.StatusCode != netHTTP.StatusOK {
+		return nil, fmt.Errorf("loki request failed wth status %s: (error: %s, errorType: %s)", resp.Status, lokiResp.Error, lokiResp.ErrorType)
 	}
 
 	result := lokiResp.ToLogResult()
