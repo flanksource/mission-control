@@ -156,7 +156,7 @@ func GetDelay(ctx context.Context, playbook models.Playbook, run models.Playbook
 
 	delay, err = action.DelayDuration()
 	if err != nil {
-		return 0, oops.Wrapf(err, "invalid duration n (%s)", action.Delay)
+		return 0, oops.Wrapf(err, "invalid duration (%s)", action.Delay)
 	}
 
 	return delay, nil
