@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"github.com/flanksource/artifacts"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/shell"
@@ -11,6 +12,13 @@ type ExecAction struct {
 }
 
 type ExecDetails shell.ExecDetails
+
+func (e *ExecDetails) GetArtifacts() []artifacts.Artifact {
+	if e == nil {
+		return nil
+	}
+	return e.Artifacts
+}
 
 func (e *ExecDetails) GetStatus() models.PlaybookActionStatus {
 	if e.ExitCode != 0 {

@@ -2,6 +2,8 @@ apiVersion: mission-control.flanksource.com/v1
 kind: Connection
 metadata:
   name: artifacts
+  namespace: default
+  uid: 7a195fca-de26-4711-9c6f-fff50c7e6672
 spec:
   folder:
     path: .artifacts

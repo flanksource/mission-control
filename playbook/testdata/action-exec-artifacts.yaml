@@ -1,0 +1,17 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: exec-artifact
+spec:
+  description: Simple script to generate an artifact
+  configs:
+    - types: 
+        - EC2 Instance
+      labelSelector: "telemetry=enabled"
+  actions:
+    - name: 'Generate artifact'
+      exec:
+        script: echo "hello world"
+        artifacts:
+          - path: /dev/stdout
+    

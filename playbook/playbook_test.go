@@ -57,10 +57,13 @@ func loadPermissions() {
 	Expect(err).To(BeNil())
 }
 
-var _ = Describe("Playbook", Ordered, func() {
-	BeforeAll(func() {
-		// Persist the connection
-		content, err := os.ReadFile("testdata/connections/httpbin.yaml")
+func loadConnections() {
+	entries, err := os.ReadDir("testdata/connections")
+	Expect(err).To(BeNil())
+
+	for _, entry := range entries {
+		fixturePath := filepath.Join("testdata/connections", entry.Name())
+		content, err := os.ReadFile(fixturePath)
 		Expect(err).To(BeNil())
 
 		var conn v1.Connection
@@ -69,8 +72,34 @@ var _ = Describe("Playbook", Ordered, func() {
 
 		err = db.PersistConnectionFromCRD(DefaultContext, &conn)
 		Expect(err).To(BeNil())
+	}
+}
 
+var _ = Describe("Playbook", Ordered, func() {
+	BeforeAll(func() {
+		loadConnections()
 		loadPermissions()
+	})
+
+	var _ = Describe("Artifacts", Ordered, func() {
+		It("run exec action and save artifacts", func() {
+			run := createAndRun(DefaultContext.WithUser(&dummy.JohnDoe), "action-exec-artifacts", RunParams{
+				ConfigID: lo.ToPtr(dummy.EKSCluster.ID),
+			}, models.PlaybookRunStatusCompleted)
+
+			var actions []models.PlaybookRunAction
+			err := DefaultContext.DB().Where("playbook_run_id = ?", run.ID).Find(&actions).Error
+			Expect(err).To(BeNil())
+
+			Expect(actions).To(HaveLen(1))
+			Expect(actions[0].Status).To(Equal(models.PlaybookActionStatusCompleted))
+
+			var artifacts []models.Artifact
+			err = DefaultContext.DB().Where("playbook_run_action_id = ?", actions[0].ID).Find(&artifacts).Error
+			Expect(err).To(BeNil())
+			Expect(artifacts).To(HaveLen(1))
+			Expect(artifacts[0].Filename).To(Equal("stdout"))
+		})
 	})
 
 	var _ = Describe("Connection permissions", Ordered, func() {
