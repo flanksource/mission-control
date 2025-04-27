@@ -8,7 +8,6 @@ import (
 	"github.com/samber/lo"
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/anthropic"
-	"github.com/tmc/langchaingo/llms/ollama"
 	"github.com/tmc/langchaingo/llms/openai"
 	"google.golang.org/genai"
 
@@ -76,6 +75,10 @@ func PromptWithHistory(ctx dutyctx.Context, config Config, history []llms.Messag
 		// like we can with Anthropic.
 
 	case api.LLMBackendGemini:
+		// Do nothing
+		// NOTE: Handled by the wrapper
+
+	case api.LLMBackendOllama:
 		// Do nothing
 		// NOTE: Handled by the wrapper
 
@@ -161,6 +164,14 @@ func calculateGenerationInfo(llmBackend api.LLMBackend, model string, resp *llms
 				if outputTokens, ok := choice.GenerationInfo["OutputTokens"]; ok {
 					genInfo.OutputTokens += int(outputTokens.(int32))
 				}
+
+			case api.LLMBackendOllama:
+				if inputTokens, ok := choice.GenerationInfo["PromptTokens"]; ok {
+					genInfo.InputTokens += inputTokens.(int)
+				}
+				if outputTokens, ok := choice.GenerationInfo["CompletionTokens"]; ok {
+					genInfo.OutputTokens += outputTokens.(int)
+				}
 			}
 
 			cost, err := CalculateCost(llmBackend, model, genInfo)
@@ -226,19 +237,12 @@ func getLLMModel(ctx dutyctx.Context, config Config) (llms.Model, error) {
 		return openaiLLM, nil
 
 	case api.LLMBackendOllama:
-		var opts []ollama.Option
-		if config.APIURL != "" {
-			opts = append(opts, ollama.WithServerURL(config.APIURL))
-		}
-		if config.Model != "" {
-			opts = append(opts, ollama.WithModel(config.Model))
+		client, err := NewOllamaClient(config.Model, config.APIURL)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create ollama client: %w", err)
 		}
 
-		openaiLLM, err := ollama.New(opts...)
-		if err != nil {
-			return nil, fmt.Errorf("failed to created ollama llm: %w", err)
-		}
-		return openaiLLM, nil
+		return client, nil
 
 	case api.LLMBackendAnthropic:
 		var opts []anthropic.Option

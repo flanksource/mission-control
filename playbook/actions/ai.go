@@ -183,7 +183,7 @@ func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 	llmConf := llm.Config{AIActionClient: spec.AIActionClient, ResponseFormat: llm.ResponseFormatDiagnosis}
 	response, conversation, genInfo, err := llm.Prompt(ctx, llmConf, spec.SystemPrompt, prompt...)
 	if err != nil {
-		return nil, ctx.Oops().Wrapf(err, "failed to generate response")
+		return &result, ctx.Oops().Wrapf(err, "failed to generate response")
 	}
 	result.Prompt.WriteString(strings.Join(prompt, "\n"))
 	result.JSON = response
@@ -191,7 +191,7 @@ func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 
 	var diagnosisReport llm.DiagnosisReport
 	if err := json.Unmarshal([]byte(response), &diagnosisReport); err != nil {
-		return nil, ctx.Oops().With("response", response).Wrapf(err, "failed to unmarshal diagnosis report")
+		return &result, ctx.Oops().With("response", response).Wrapf(err, "failed to unmarshal diagnosis report")
 	}
 
 	for _, format := range lo.Uniq(spec.Formats) {
@@ -243,14 +243,14 @@ func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 			llmConf.ResponseFormat = llm.ResponseFormatPlaybookRecommendations
 			response, _, genInfo, err := llm.PromptWithHistory(ctx, llmConf, conversation, prompt.String())
 			if err != nil {
-				return nil, fmt.Errorf("failed to generate playbook recommendation: %w", err)
+				return &result, fmt.Errorf("failed to generate playbook recommendation: %w", err)
 			}
 			result.Prompt.WriteString(prompt.String())
 			result.GenerationInfo = append(result.GenerationInfo, genInfo...)
 
 			var recommendations llm.PlaybookRecommendations
 			if err := json.Unmarshal([]byte(response), &recommendations); err != nil {
-				return nil, ctx.Oops().With("response", response).Wrapf(err, "failed to unmarshal playbook recommendations")
+				return &result, ctx.Oops().With("response", response).Wrapf(err, "failed to unmarshal playbook recommendations")
 			}
 
 			groupedResources, err := getGroupedResources(ctx, t.RunID)
