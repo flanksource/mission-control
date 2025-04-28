@@ -251,7 +251,7 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 		}
 	}
 
-	payloads, err := CreateNotificationSendPayloads(ctx, event, n, celEnv.AsMap(ctx))
+	payloads, err := CreateNotificationSendPayloads(ctx, event, n, celEnv)
 	if err != nil {
 		return fmt.Errorf("failed to create notification.send payloads: %w", err)
 	}
@@ -268,6 +268,8 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 			history := models.NotificationSendHistory{
 				NotificationID: n.ID,
 				ResourceID:     payload.ID,
+				ResourceHealth: payload.ResourceHealth,
+				ResourceStatus: payload.ResourceStatus,
 				SourceEvent:    payload.EventName,
 				Status:         blocker.BlockedWithStatus,
 				ParentID:       blocker.ParentID,
@@ -299,6 +301,8 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 			pendingHistory := models.NotificationSendHistory{
 				NotificationID: n.ID,
 				ResourceID:     payload.ID,
+				ResourceHealth: payload.ResourceHealth,
+				ResourceStatus: payload.ResourceStatus,
 				SourceEvent:    event.Name,
 				Payload:        payload.AsMap(),
 				GroupID:        payload.GroupID,

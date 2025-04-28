@@ -63,7 +63,7 @@ type ResourceHealthRow struct {
 	UpdatedAt *time.Time
 }
 
-func (t *celVariables) GetResourceHealth(ctx context.Context) (ResourceHealthRow, error) {
+func (t *celVariables) GetResourceCurrentHealth(ctx context.Context) (ResourceHealthRow, error) {
 	var err error
 	var row ResourceHealthRow
 	switch {

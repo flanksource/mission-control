@@ -355,9 +355,9 @@ func shouldSkipNotificationDueToHealth(ctx context.Context, notif NotificationWi
 	// previousHealth is the health that triggered the notification event
 	previousHealth := api.EventToHealth(payload.EventName)
 
-	resourceHealth, err := celEnv.GetResourceHealth(ctx)
+	resourceHealth, err := celEnv.GetResourceCurrentHealth(ctx)
 	if err != nil {
-		return false, fmt.Errorf("failed to get resource health from cel env: %w", err)
+		return false, fmt.Errorf("failed to get resource current health from cel env: %w", err)
 	}
 	currentHealth := resourceHealth.Health
 	deleted := resourceHealth.DeletedAt != nil
