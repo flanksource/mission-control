@@ -22,9 +22,5 @@ func (e *ExecDetails) GetStatus() models.PlaybookActionStatus {
 
 func (c *ExecAction) Run(ctx context.Context, exec v1.ExecAction) (*ExecDetails, error) {
 	details, err := shell.Run(ctx, exec.ToShellExec())
-	if err != nil {
-		return nil, err
-	}
-
-	return (*ExecDetails)(details), nil
+	return (*ExecDetails)(details), err
 }
