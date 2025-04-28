@@ -44,7 +44,10 @@ type NotificationTemplate struct {
 
 // NotificationEventPayload holds data to create a notification.
 type NotificationEventPayload struct {
-	ID             uuid.UUID  `json:"id"`                        // Resource id. depends what it is based on the original event.
+	ID             uuid.UUID     `json:"id"` // Resource id. depends what it is based on the original event.
+	ResourceHealth models.Health `json:"resource_health"`
+	ResourceStatus string        `json:"resource_status"`
+
 	EventName      string     `json:"event_name"`                // The name of the original event this notification is for.
 	NotificationID uuid.UUID  `json:"notification_id,omitempty"` // ID of the notification.
 	EventCreatedAt time.Time  `json:"event_created_at"`          // Timestamp at which the original event was created
@@ -345,7 +348,9 @@ func getNotificationMsg(ctx context.Context, celEnv map[string]any, payload Noti
 	return &data, nil
 }
 
-func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *NotificationWithSpec, celEnv map[string]any) ([]NotificationEventPayload, error) {
+func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *NotificationWithSpec, celEnv *celVariables) ([]NotificationEventPayload, error) {
+	celEnvMap := celEnv.AsMap(ctx)
+
 	var payloads []NotificationEventPayload
 
 	resourceID, err := uuid.Parse(event.Properties["id"])
@@ -381,10 +386,27 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 		}
 	}
 
+	resource := celEnv.SelectableResource()
+	var resourceHealth, resourceStatus string
+	if resource != nil {
+		var err error
+		resourceHealth, err = resource.GetHealth()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get resource health: %w", err)
+		}
+
+		resourceStatus, err = resource.GetStatus()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get resource status: %w", err)
+		}
+	}
+
 	if n.PlaybookID != nil {
 		payload := NotificationEventPayload{
 			EventName:      event.Name,
 			NotificationID: n.ID,
+			ResourceHealth: models.Health(resourceHealth),
+			ResourceStatus: resourceStatus,
 			ID:             resourceID,
 			PlaybookID:     n.PlaybookID,
 			EventCreatedAt: event.CreatedAt,
@@ -399,6 +421,8 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 		payload := NotificationEventPayload{
 			EventName:      event.Name,
 			NotificationID: n.ID,
+			ResourceHealth: models.Health(resourceHealth),
+			ResourceStatus: resourceStatus,
 			ID:             resourceID,
 			PersonID:       n.PersonID,
 			EventCreatedAt: event.CreatedAt,
@@ -406,7 +430,7 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 			GroupID:        groupID,
 		}
 
-		msg, err := getNotificationMsg(ctx, celEnv, payload, n)
+		msg, err := getNotificationMsg(ctx, celEnvMap, payload, n)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get notification body: %w", err)
 		}
@@ -424,7 +448,7 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 
 		for _, cn := range teamSpec.Notifications {
 			if cn.Filter != "" {
-				if valid, err := ctx.RunTemplateBool(gomplate.Template{Expression: cn.Filter}, celEnv); err != nil {
+				if valid, err := ctx.RunTemplateBool(gomplate.Template{Expression: cn.Filter}, celEnvMap); err != nil {
 					logs.IfError(db.UpdateNotificationError(ctx, n.ID.String(), err.Error()), "failed to update notification")
 					continue
 				} else if !valid {
@@ -435,6 +459,8 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 			payload := NotificationEventPayload{
 				EventName:        event.Name,
 				NotificationID:   n.ID,
+				ResourceHealth:   models.Health(resourceHealth),
+				ResourceStatus:   resourceStatus,
 				ID:               resourceID,
 				TeamID:           n.TeamID,
 				NotificationName: cn.Name,
@@ -449,7 +475,7 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 
 	for _, cn := range n.CustomNotifications {
 		if cn.Filter != "" {
-			if valid, err := ctx.RunTemplateBool(gomplate.Template{Expression: cn.Filter}, celEnv); err != nil {
+			if valid, err := ctx.RunTemplateBool(gomplate.Template{Expression: cn.Filter}, celEnvMap); err != nil {
 				logs.IfError(db.UpdateNotificationError(ctx, n.ID.String(), err.Error()), "failed to update notification")
 				continue
 			} else if !valid {
@@ -460,6 +486,8 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 		payload := NotificationEventPayload{
 			EventName:      event.Name,
 			NotificationID: n.ID,
+			ResourceHealth: models.Health(resourceHealth),
+			ResourceStatus: resourceStatus,
 			CustomService:  cn.DeepCopy(),
 			ID:             resourceID,
 			EventCreatedAt: event.CreatedAt,
@@ -472,11 +500,11 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 			if err != nil {
 				return nil, fmt.Errorf("failed to get connection: %w", err)
 			}
-			celEnv["channel"] = c.Type
+			celEnvMap["channel"] = c.Type
 			payload.Connection = &c.ID
 		}
 
-		msg, err := getNotificationMsg(ctx, celEnv, payload, n)
+		msg, err := getNotificationMsg(ctx, celEnvMap, payload, n)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get notification body: %w", err)
 		}
