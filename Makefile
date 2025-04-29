@@ -109,7 +109,7 @@ manifests: controller-gen generate gen-schemas ## Generate WebhookConfiguration,
 
 .PHONY: generate
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
-	$(CONTROLLER_GEN) object paths="./api/..."
+	$(CONTROLLER_GEN) object paths="./api/..." paths="./logs/..."
 
 .PHONY: build
 build:

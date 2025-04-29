@@ -1691,6 +1691,416 @@ spec:
                         run only if any of the previous actions timed out\nskip():
                         skip running this action"
                       type: string
+                    logs:
+                      properties:
+                        cloudwatch:
+                          properties:
+                            accessKey:
+                              properties:
+                                name:
+                                  type: string
+                                value:
+                                  type: string
+                                valueFrom:
+                                  properties:
+                                    configMapKeyRef:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          type: string
+                                      required:
+                                      - key
+                                      type: object
+                                    helmRef:
+                                      properties:
+                                        key:
+                                          description: Key is a JSONPath expression
+                                            used to fetch the key from the merged
+                                            JSON.
+                                          type: string
+                                        name:
+                                          type: string
+                                      required:
+                                      - key
+                                      type: object
+                                    secretKeyRef:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          type: string
+                                      required:
+                                      - key
+                                      type: object
+                                    serviceAccount:
+                                      description: ServiceAccount specifies the service
+                                        account whose token should be fetched
+                                      type: string
+                                  type: object
+                              type: object
+                            assumeRole:
+                              type: string
+                            connection:
+                              description: ConnectionName of the connection. It'll
+                                be used to populate the endpoint, accessKey and secretKey.
+                              type: string
+                            end:
+                              description: |-
+                                The end time for the query
+                                Supports Datemath
+                              type: string
+                            endpoint:
+                              type: string
+                            limit:
+                              description: Limit is the maximum number of lines to
+                                return
+                              type: string
+                            logGroup:
+                              description: The log group on which to perform the query.
+                              type: string
+                            query:
+                              description: The query to perform on the log group.
+                              type: string
+                            region:
+                              type: string
+                            secretKey:
+                              properties:
+                                name:
+                                  type: string
+                                value:
+                                  type: string
+                                valueFrom:
+                                  properties:
+                                    configMapKeyRef:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          type: string
+                                      required:
+                                      - key
+                                      type: object
+                                    helmRef:
+                                      properties:
+                                        key:
+                                          description: Key is a JSONPath expression
+                                            used to fetch the key from the merged
+                                            JSON.
+                                          type: string
+                                        name:
+                                          type: string
+                                      required:
+                                      - key
+                                      type: object
+                                    secretKeyRef:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          type: string
+                                      required:
+                                      - key
+                                      type: object
+                                    serviceAccount:
+                                      description: ServiceAccount specifies the service
+                                        account whose token should be fetched
+                                      type: string
+                                  type: object
+                              type: object
+                            sessionToken:
+                              properties:
+                                name:
+                                  type: string
+                                value:
+                                  type: string
+                                valueFrom:
+                                  properties:
+                                    configMapKeyRef:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          type: string
+                                      required:
+                                      - key
+                                      type: object
+                                    helmRef:
+                                      properties:
+                                        key:
+                                          description: Key is a JSONPath expression
+                                            used to fetch the key from the merged
+                                            JSON.
+                                          type: string
+                                        name:
+                                          type: string
+                                      required:
+                                      - key
+                                      type: object
+                                    secretKeyRef:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          type: string
+                                      required:
+                                      - key
+                                      type: object
+                                    serviceAccount:
+                                      description: ServiceAccount specifies the service
+                                        account whose token should be fetched
+                                      type: string
+                                  type: object
+                              type: object
+                            skipTLSVerify:
+                              description: Skip TLS verify when connecting to aws
+                              type: boolean
+                            start:
+                              description: |-
+                                The start time for the query
+                                SupportsDatemath
+                              type: string
+                          required:
+                          - logGroup
+                          - query
+                          type: object
+                        loki:
+                          properties:
+                            connection:
+                              type: string
+                            direction:
+                              description: Direction is the direction of the query.
+                                "forward" or "backward" (default)
+                              type: string
+                            end:
+                              description: |-
+                                The end time for the query
+                                Supports Datemath
+                              type: string
+                            interval:
+                              description: Only return entries at (or greater than)
+                                the specified interval, can be a duration format or
+                                float number of seconds
+                              type: string
+                            limit:
+                              description: Limit is the maximum number of lines to
+                                return
+                              type: string
+                            password:
+                              properties:
+                                name:
+                                  type: string
+                                value:
+                                  type: string
+                                valueFrom:
+                                  properties:
+                                    configMapKeyRef:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          type: string
+                                      required:
+                                      - key
+                                      type: object
+                                    helmRef:
+                                      properties:
+                                        key:
+                                          description: Key is a JSONPath expression
+                                            used to fetch the key from the merged
+                                            JSON.
+                                          type: string
+                                        name:
+                                          type: string
+                                      required:
+                                      - key
+                                      type: object
+                                    secretKeyRef:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          type: string
+                                      required:
+                                      - key
+                                      type: object
+                                    serviceAccount:
+                                      description: ServiceAccount specifies the service
+                                        account whose token should be fetched
+                                      type: string
+                                  type: object
+                              type: object
+                            query:
+                              description: Query is the LogQL query to perform
+                              type: string
+                            since:
+                              description: |-
+                                Since is a duration used to calculate start relative to end.
+                                If end is in the future, start is calculated as this duration before now.
+                                Any value specified for start supersedes this parameter.
+                              type: string
+                            start:
+                              description: |-
+                                The start time for the query
+                                SupportsDatemath
+                              type: string
+                            step:
+                              description: Step is the Query resolution step width
+                                in duration format or float number of seconds
+                              type: string
+                            url:
+                              type: string
+                            username:
+                              properties:
+                                name:
+                                  type: string
+                                value:
+                                  type: string
+                                valueFrom:
+                                  properties:
+                                    configMapKeyRef:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          type: string
+                                      required:
+                                      - key
+                                      type: object
+                                    helmRef:
+                                      properties:
+                                        key:
+                                          description: Key is a JSONPath expression
+                                            used to fetch the key from the merged
+                                            JSON.
+                                          type: string
+                                        name:
+                                          type: string
+                                      required:
+                                      - key
+                                      type: object
+                                    secretKeyRef:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          type: string
+                                      required:
+                                      - key
+                                      type: object
+                                    serviceAccount:
+                                      description: ServiceAccount specifies the service
+                                        account whose token should be fetched
+                                      type: string
+                                  type: object
+                              type: object
+                          required:
+                          - url
+                          type: object
+                        opensearch:
+                          properties:
+                            address:
+                              type: string
+                            index:
+                              type: string
+                            limit:
+                              type: string
+                            password:
+                              properties:
+                                name:
+                                  type: string
+                                value:
+                                  type: string
+                                valueFrom:
+                                  properties:
+                                    configMapKeyRef:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          type: string
+                                      required:
+                                      - key
+                                      type: object
+                                    helmRef:
+                                      properties:
+                                        key:
+                                          description: Key is a JSONPath expression
+                                            used to fetch the key from the merged
+                                            JSON.
+                                          type: string
+                                        name:
+                                          type: string
+                                      required:
+                                      - key
+                                      type: object
+                                    secretKeyRef:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          type: string
+                                      required:
+                                      - key
+                                      type: object
+                                    serviceAccount:
+                                      description: ServiceAccount specifies the service
+                                        account whose token should be fetched
+                                      type: string
+                                  type: object
+                              type: object
+                            query:
+                              type: string
+                            username:
+                              properties:
+                                name:
+                                  type: string
+                                value:
+                                  type: string
+                                valueFrom:
+                                  properties:
+                                    configMapKeyRef:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          type: string
+                                      required:
+                                      - key
+                                      type: object
+                                    helmRef:
+                                      properties:
+                                        key:
+                                          description: Key is a JSONPath expression
+                                            used to fetch the key from the merged
+                                            JSON.
+                                          type: string
+                                        name:
+                                          type: string
+                                      required:
+                                      - key
+                                      type: object
+                                    secretKeyRef:
+                                      properties:
+                                        key:
+                                          type: string
+                                        name:
+                                          type: string
+                                      required:
+                                      - key
+                                      type: object
+                                    serviceAccount:
+                                      description: ServiceAccount specifies the service
+                                        account whose token should be fetched
+                                      type: string
+                                  type: object
+                              type: object
+                          required:
+                          - address
+                          - index
+                          - query
+                          type: object
+                      type: object
                     name:
                       description: Name of the action
                       type: string

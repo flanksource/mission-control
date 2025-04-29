@@ -8,6 +8,7 @@ import (
 	"github.com/flanksource/artifacts"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/incident-commander/api"
 	"github.com/google/uuid"
 	"github.com/samber/oops"
 
@@ -82,6 +83,15 @@ func executeAction(ctx context.Context, playbookID any, runID uuid.UUID, runActi
 
 		timeout, _ := actionSpec.TimeoutDuration()
 		result, err = e.Run(ctx, *actionSpec.Pod, timeout)
+	} else if actionSpec.Logs != nil {
+		if api.DefaultArtifactConnection == "" {
+			return executeActionResult{}, ctx.Oops().
+				Hint("https://flanksource.com/docs/installation/artifacts/#setting-up-artifact-store").
+				Errorf("logs action requires an artifact connection to be configured.")
+		}
+
+		e := actions.NewLogsAction()
+		result, err = e.Run(ctx, actionSpec.Logs)
 	}
 
 	// NOTE: v is never nil, it holds in nil values.

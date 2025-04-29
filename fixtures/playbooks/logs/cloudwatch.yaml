@@ -1,0 +1,34 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: cloudwatch-events
+  namespace: mc
+spec:
+  title: Cloudwatch Events
+  icon: cloudwatch
+  category: Logs
+  description: Fetch events from Cloudwatch
+  parameters:
+    - name: logGroup
+      label: Log Group
+      description: The log group to fetch events from
+      required: true
+    - name: limit
+      label: Limit
+      description: The maximum number of events to fetch
+      required: false
+      default: '100'
+  configs:
+    - types:
+        - AWS::::Account
+  actions:
+    - name: Fetch events from CloudWatch
+      logs:
+        cloudwatch:
+          start: now-24h
+          limit: $(.params.limit)
+          logGroup: $(.params.logGroup)
+          query: |
+            fields @message, @timestamp, @logStream, @log
+            | sort @timestamp desc
+            | limit $(.params.limit)
