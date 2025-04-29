@@ -21,6 +21,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/logs"
 	"github.com/flanksource/incident-commander/logs/cloudwatch"
 	"github.com/flanksource/incident-commander/logs/loki"
 	"github.com/flanksource/incident-commander/logs/opensearch"
@@ -34,11 +35,15 @@ type LogsActionLoki struct {
 type LogsActionCloudWatch struct {
 	connection.AWSConnection `yaml:",inline" json:",inline"`
 	cloudwatch.Request       `json:",inline" yaml:",inline" template:"true"`
+
+	Mapping *logs.FieldMappingConfig `yaml:"mapping,omitempty" json:"mapping,omitempty"`
 }
 
 type LogsActionOpenSearch struct {
 	opensearch.Backend `yaml:",inline" json:",inline"`
 	opensearch.Request `json:",inline" yaml:",inline" template:"true"`
+
+	Mapping *logs.FieldMappingConfig `yaml:"mapping,omitempty" json:"mapping,omitempty"`
 }
 
 type LogsAction struct {

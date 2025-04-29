@@ -2,25 +2,22 @@ package opensearch
 
 import (
 	"encoding/json"
-	"fmt"
 	"strconv"
 	"strings"
 
-	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty/context"
 	opensearch "github.com/opensearch-project/opensearch-go/v2"
-	"github.com/samber/lo"
 
 	"github.com/flanksource/incident-commander/logs"
-	icUtils "github.com/flanksource/incident-commander/utils"
 )
 
 type searcher struct {
-	client *opensearch.Client
-	config *Backend
+	client        *opensearch.Client
+	config        *Backend
+	mappingConfig *logs.FieldMappingConfig
 }
 
-func NewSearcher(ctx context.Context, backend Backend) (*searcher, error) {
+func NewSearcher(ctx context.Context, backend Backend, mappingConfig *logs.FieldMappingConfig) (*searcher, error) {
 	cfg := opensearch.Config{
 		Addresses: []string{backend.Address},
 	}
@@ -56,8 +53,9 @@ func NewSearcher(ctx context.Context, backend Backend) (*searcher, error) {
 	}
 
 	return &searcher{
-		client: client,
-		config: &backend,
+		client:        client,
+		config:        &backend,
+		mappingConfig: mappingConfig,
 	}, nil
 }
 
@@ -79,7 +77,7 @@ func (t *searcher) Search(ctx context.Context, q *Request) (*logs.LogResult, err
 		t.client.Search.WithContext(ctx),
 		t.client.Search.WithIndex(q.Index),
 		t.client.Search.WithBody(strings.NewReader(q.Query)),
-		t.client.Search.WithSize(limit+1),
+		t.client.Search.WithSize(limit),
 		t.client.Search.WithErrorTrace(),
 	)
 	if err != nil {
@@ -93,76 +91,33 @@ func (t *searcher) Search(ctx context.Context, q *Request) (*logs.LogResult, err
 	}
 
 	var logResult = logs.LogResult{}
+	logResult.Logs = make([]logs.LogLine, 0, len(r.Hits.Hits))
+
+	mappingConfig := DefaultFieldMappingConfig
+	if t.mappingConfig != nil {
+		mappingConfig = t.mappingConfig.WithDefaults(DefaultFieldMappingConfig)
+	}
+
 	for _, hit := range r.Hits.Hits {
 		line := logs.LogLine{
-			ID:     hit.ID,
-			Labels: make(map[string]string),
+			ID: hit.ID,
 		}
 
 		for k, v := range hit.Source {
-			switch k {
-			case "@timestamp":
-				line.FirstObserved = lo.FromPtr(icUtils.ParseTime(v.(string)))
-			case "message":
-				line.Message = v.(string)
-			case "log":
-				if log, ok := v.(map[string]any); ok {
-					if level, ok := log["level"].(string); ok {
-						line.Severity = level
-					}
-				}
-			default:
-				mm, err := flatMap(k, v)
-				if err != nil {
-					return nil, ctx.Oops().Wrapf(err, "error mapping the field %s", k)
-				}
-				for k, v := range mm {
-					line.Labels[k] = v
-				}
+			if err := logs.MapFieldToLogLine(k, v, &line, mappingConfig); err != nil {
+				// Log or handle mapping error? For now, just log it.
+				ctx.Warnf("Error mapping field %s for log %s: %v", k, line.ID, err)
 			}
 		}
 
 		logResult.Logs = append(logResult.Logs, line)
 	}
 
-	if len(logResult.Logs) > limit {
-		logResult.Logs = logResult.Logs[:limit]
-		logResult.Metadata["nextPage"] = r.Hits.NextPage(limit)
-	}
-
 	return &logResult, nil
 }
 
-func flatMap(prefix string, v any) (map[string]string, error) {
-	if v == nil {
-		return nil, nil
-	}
-
-	var m = make(map[string]string)
-	switch vv := v.(type) {
-	case map[string]any:
-		for k, v := range vv {
-			subMap, err := flatMap(k, v)
-			if err != nil {
-				return nil, err
-			}
-
-			for k, v := range subMap {
-				key := fmt.Sprintf("%s.%s", prefix, k)
-				if prefix == "" {
-					key = k
-				}
-				m[key] = v
-			}
-		}
-
-	default:
-		if vvJSON, err := utils.Stringify(vv); err != nil {
-			m[prefix] = vvJSON
-		} else {
-			m[prefix] = fmt.Sprintf("%v", vv)
-		}
-	}
-
-	return m, nil
+var DefaultFieldMappingConfig = logs.FieldMappingConfig{
+	Message:   []string{"message"},
+	Timestamp: []string{"@timestamp"},
+	Severity:  []string{"log"},
 }

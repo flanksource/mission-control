@@ -1759,6 +1759,37 @@ spec:
                             logGroup:
                               description: The log group on which to perform the query.
                               type: string
+                            mapping:
+                              description: |-
+                                FieldMappingConfig defines how source log fields map to canonical LogLine fields.
+                                Each key represents a canonical field (e.g., "message", "timestamp"),
+                                and the value is a list of possible source field names.
+                              properties:
+                                id:
+                                  items:
+                                    type: string
+                                  type: array
+                                ignore:
+                                  items:
+                                    type: string
+                                  type: array
+                                message:
+                                  items:
+                                    type: string
+                                  type: array
+                                severity:
+                                  items:
+                                    type: string
+                                  type: array
+                                source:
+                                  items:
+                                    type: string
+                                  type: array
+                                timestamp:
+                                  items:
+                                    type: string
+                                  type: array
+                              type: object
                             query:
                               description: The query to perform on the log group.
                               type: string
@@ -2005,6 +2036,37 @@ spec:
                               type: string
                             limit:
                               type: string
+                            mapping:
+                              description: |-
+                                FieldMappingConfig defines how source log fields map to canonical LogLine fields.
+                                Each key represents a canonical field (e.g., "message", "timestamp"),
+                                and the value is a list of possible source field names.
+                              properties:
+                                id:
+                                  items:
+                                    type: string
+                                  type: array
+                                ignore:
+                                  items:
+                                    type: string
+                                  type: array
+                                message:
+                                  items:
+                                    type: string
+                                  type: array
+                                severity:
+                                  items:
+                                    type: string
+                                  type: array
+                                source:
+                                  items:
+                                    type: string
+                                  type: array
+                                timestamp:
+                                  items:
+                                    type: string
+                                  type: array
+                              type: object
                             password:
                               properties:
                                 name:
