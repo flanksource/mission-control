@@ -9,17 +9,18 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs/types"
 	"github.com/flanksource/incident-commander/logs"
-	"github.com/flanksource/incident-commander/utils"
 	"github.com/samber/lo"
 )
 
 type Searcher struct {
-	client *cloudwatchlogs.Client
+	client        *cloudwatchlogs.Client
+	mappingConfig *logs.FieldMappingConfig
 }
 
-func NewSearcher(client *cloudwatchlogs.Client) *Searcher {
+func NewSearcher(client *cloudwatchlogs.Client, mappingConfig *logs.FieldMappingConfig) *Searcher {
 	return &Searcher{
-		client: client,
+		client:        client,
+		mappingConfig: mappingConfig,
 	}
 }
 
@@ -63,27 +64,22 @@ func (t *Searcher) Search(ctx context.Context, request Request) (*logs.LogResult
 			"statistics":     queryResult.Statistics,
 			"resultMetadata": queryResult.ResultMetadata,
 		},
+		Logs: make([]logs.LogLine, 0, len(queryResult.Results)),
+	}
+
+	mappingConfig := DefaultFieldMappingConfig()
+	if t.mappingConfig != nil {
+		mappingConfig = t.mappingConfig.WithDefaults(DefaultFieldMappingConfig())
 	}
 
 	for _, fields := range queryResult.Results {
-		var line = logs.LogLine{
-			Labels: make(map[string]string),
-		}
-
+		var line logs.LogLine
 		for _, field := range fields {
-			switch lo.FromPtr(field.Field) {
-			case "@message":
-				line.Message = lo.FromPtr(field.Value)
-			case "@timestamp":
-				line.FirstObserved = lo.FromPtr(utils.ParseTime(lo.FromPtr(field.Value)))
-			case "@ptr": // the value to use as logRecordPointer to retrieve that complete log event record.
-				line.ID = lo.FromPtr(field.Value)
-			case "@logStream":
-				line.Source = lo.FromPtr(field.Value)
-			case "", "@log":
-				// Do nothing
-			default:
-				line.Labels[lo.FromPtr(field.Field)] = lo.FromPtr(field.Value)
+			key := lo.FromPtr(field.Field)
+			value := lo.FromPtr(field.Value)
+
+			if err := logs.MapFieldToLogLine(key, value, &line, mappingConfig); err != nil {
+				return nil, fmt.Errorf("error mapping field %s: %w", key, err)
 			}
 		}
 
@@ -118,5 +114,15 @@ func (t *Searcher) getQueryResults(ctx context.Context, queryID *string) (*cloud
 			// Wait before retrying.
 			time.Sleep(time.Second)
 		}
+	}
+}
+
+func DefaultFieldMappingConfig() logs.FieldMappingConfig {
+	return logs.FieldMappingConfig{
+		ID:        []string{"@ptr"},
+		Ignore:    []string{"@log", ""},
+		Source:    []string{"@logStream"},
+		Message:   []string{"@message"},
+		Timestamp: []string{"@timestamp"},
 	}
 }

@@ -391,6 +391,48 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "FieldMappingConfig": {
+      "properties": {
+        "id": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "message": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "timestamp": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "severity": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "source": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "ignore": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "FieldsV1": {
       "properties": {},
       "additionalProperties": false,
@@ -795,6 +837,9 @@
         },
         "query": {
           "type": "string"
+        },
+        "mapping": {
+          "$ref": "#/$defs/FieldMappingConfig"
         }
       },
       "additionalProperties": false,
@@ -868,6 +913,9 @@
         },
         "limit": {
           "type": "string"
+        },
+        "mapping": {
+          "$ref": "#/$defs/FieldMappingConfig"
         }
       },
       "additionalProperties": false,

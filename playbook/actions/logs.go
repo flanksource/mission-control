@@ -55,7 +55,7 @@ func (l *logsAction) Run(ctx context.Context, action *v1.LogsAction) (*logsResul
 	}
 
 	if action.OpenSearch != nil {
-		searcher, err := opensearch.NewSearcher(ctx, action.OpenSearch.Backend)
+		searcher, err := opensearch.NewSearcher(ctx, action.OpenSearch.Backend, action.OpenSearch.Mapping)
 		if err != nil {
 			return nil, ctx.Oops().Wrapf(err, "failed to create opensearch searcher")
 		}
@@ -82,7 +82,7 @@ func (l *logsAction) Run(ctx context.Context, action *v1.LogsAction) (*logsResul
 
 		client := cloudwatchlogs.NewFromConfig(awsConfig)
 
-		searcher := cloudwatch.NewSearcher(client)
+		searcher := cloudwatch.NewSearcher(client, cw.Mapping)
 		response, err := searcher.Search(ctx, cw.Request)
 		if err != nil {
 			return nil, ctx.Oops().Wrapf(err, "failed to fetch logs from cloudwatch")
