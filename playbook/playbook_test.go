@@ -3,11 +3,13 @@ package playbook
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"time"
 
+	"github.com/flanksource/artifacts"
 	"github.com/flanksource/commons/http"
 	dutyApi "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
@@ -104,24 +106,59 @@ var _ = Describe("Playbook", Ordered, func() {
 	})
 
 	var _ = Describe("AI", Ordered, func() {
-		It("should run ai action and save artifacts", func() {
-			run := createAndRun(DefaultContext.WithUser(&dummy.JohnDoe), "action-ai", RunParams{
-				ConfigID: lo.ToPtr(dummy.KubernetesNodeAKSPool1.ID),
-			}, models.PlaybookRunStatusCompleted)
-
+		Context("should run AI action and save artifacts", func() {
 			var actions []models.PlaybookRunAction
-			err := DefaultContext.DB().Where("playbook_run_id = ?", run.ID).Find(&actions).Error
-			Expect(err).To(BeNil())
+			var artifactList []models.Artifact
 
-			Expect(actions).To(HaveLen(1))
-			Expect(actions[0].Status).To(Equal(models.PlaybookActionStatusCompleted))
+			It("should have run the action", func() {
+				run := createAndRun(DefaultContext.WithUser(&dummy.JohnDoe), "action-ai", RunParams{
+					ConfigID: lo.ToPtr(dummy.KubernetesNodeAKSPool1.ID),
+				}, models.PlaybookRunStatusCompleted)
 
-			var artifacts []models.Artifact
-			err = DefaultContext.DB().Where("playbook_run_action_id = ?", actions[0].ID).Find(&artifacts).Error
-			Expect(err).To(BeNil())
-			Expect(artifacts).To(HaveLen(1))
-			Expect(artifacts[0].Filename).To(Equal("prompt.md"))
-			Expect(artifacts[0].Size).To(BeNumerically(">", 0))
+				err := DefaultContext.DB().Where("playbook_run_id = ?", run.ID).Find(&actions).Error
+				Expect(err).To(BeNil())
+
+				Expect(actions).To(HaveLen(1))
+				Expect(actions[0].Status).To(Equal(models.PlaybookActionStatusCompleted))
+
+				err = DefaultContext.DB().Where("playbook_run_action_id = ?", actions[0].ID).Find(&artifactList).Error
+				Expect(err).To(BeNil())
+				Expect(artifactList).To(HaveLen(1))
+			})
+
+			It("should have saved the prompt", func() {
+				Expect(artifactList[0].Filename).To(Equal("prompt.md"))
+				Expect(artifactList[0].Size).To(BeNumerically(">", 0))
+
+				conn, err := DefaultContext.HydrateConnectionByURL(api.DefaultArtifactConnection)
+				Expect(err).To(BeNil())
+				Expect(conn).ToNot(BeNil())
+
+				artifactStore, err := artifacts.GetFSForConnection(DefaultContext, *conn)
+				Expect(err).To(BeNil())
+
+				prompt, err := artifactStore.Read(DefaultContext, artifactList[0].Path)
+				Expect(err).To(BeNil())
+
+				content, err := io.ReadAll(prompt)
+				Expect(err).To(BeNil())
+
+				Expect(string(content)).To(ContainSubstring("Find out why %s is not healthy", *dummy.KubernetesNodeAKSPool1.Name))
+			})
+
+			It("should have generated valid json result", func() {
+				Expect(actions[0].Result).ToNot(BeNil())
+				Expect(actions[0].Result).To(HaveKey("json"))
+				Expect(actions[0].Result).To(HaveKey("generationInfo"))
+
+				var jsonResult map[string]any
+				err := json.Unmarshal([]byte(actions[0].Result["json"].(string)), &jsonResult)
+				Expect(err).To(BeNil())
+
+				Expect(jsonResult).To(HaveKey("headline"))
+				Expect(jsonResult).To(HaveKey("summary"))
+				Expect(jsonResult).To(HaveKey("recommended_fix"))
+			})
 		})
 	})
 
