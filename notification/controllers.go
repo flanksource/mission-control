@@ -7,6 +7,7 @@ import (
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/rbac/policy"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/rbac"
@@ -19,6 +20,8 @@ func init() {
 
 func RegisterRoutes(e *echo.Echo) {
 	g := e.Group("/notification")
+
+	g.POST("/summary", NotificationSendHistorySummary, echoSrv.RLSMiddleware)
 
 	g.GET("/events", func(c echo.Context) error {
 		return c.JSON(http.StatusOK, EventRing.Get())
@@ -39,4 +42,20 @@ func RegisterRoutes(e *echo.Echo) {
 
 		return nil
 	}, rbac.Authorization(policy.ObjectNotification, policy.ActionCreate))
+}
+
+func NotificationSendHistorySummary(c echo.Context) error {
+	var req query.NotificationSendHistorySummaryRequest
+	if err := c.Bind(&req); err != nil {
+		return err
+	}
+
+	ctx := c.Request().Context().(context.Context)
+
+	response, err := query.NotificationSendHistorySummary(ctx, req)
+	if err != nil {
+		return api.WriteError(c, err)
+	}
+
+	return c.JSON(http.StatusOK, response)
 }
