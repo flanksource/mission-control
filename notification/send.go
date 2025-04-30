@@ -44,9 +44,10 @@ type NotificationTemplate struct {
 
 // NotificationEventPayload holds data to create a notification.
 type NotificationEventPayload struct {
-	ID             uuid.UUID     `json:"id"` // Resource id. depends what it is based on the original event.
-	ResourceHealth models.Health `json:"resource_health"`
-	ResourceStatus string        `json:"resource_status"`
+	ID                        uuid.UUID     `json:"id"` // Resource id. depends what it is based on the original event.
+	ResourceHealth            models.Health `json:"resource_health"`
+	ResourceStatus            string        `json:"resource_status"`
+	ResourceHealthDescription string        `json:"resource_health_description"`
 
 	EventName      string     `json:"event_name"`                // The name of the original event this notification is for.
 	NotificationID uuid.UUID  `json:"notification_id,omitempty"` // ID of the notification.
@@ -387,7 +388,7 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 	}
 
 	resource := celEnv.SelectableResource()
-	var resourceHealth, resourceStatus string
+	var resourceHealth, resourceStatus, resourceHealthDescription string
 	if resource != nil {
 		var err error
 		resourceHealth, err = resource.GetHealth()
@@ -399,19 +400,24 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 		if err != nil {
 			return nil, fmt.Errorf("failed to get resource status: %w", err)
 		}
+
+		if dd, ok := resource.(types.DescriptionProvider); ok {
+			resourceHealthDescription = dd.GetHealthDescription()
+		}
 	}
 
 	if n.PlaybookID != nil {
 		payload := NotificationEventPayload{
-			EventName:      event.Name,
-			NotificationID: n.ID,
-			ResourceHealth: models.Health(resourceHealth),
-			ResourceStatus: resourceStatus,
-			ID:             resourceID,
-			PlaybookID:     n.PlaybookID,
-			EventCreatedAt: event.CreatedAt,
-			Properties:     eventProperties,
-			GroupID:        groupID,
+			EventName:                 event.Name,
+			NotificationID:            n.ID,
+			ResourceHealth:            models.Health(resourceHealth),
+			ResourceStatus:            resourceStatus,
+			ResourceHealthDescription: resourceHealthDescription,
+			ID:                        resourceID,
+			PlaybookID:                n.PlaybookID,
+			EventCreatedAt:            event.CreatedAt,
+			Properties:                eventProperties,
+			GroupID:                   groupID,
 		}
 
 		payloads = append(payloads, payload)
@@ -419,15 +425,16 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 
 	if n.PersonID != nil {
 		payload := NotificationEventPayload{
-			EventName:      event.Name,
-			NotificationID: n.ID,
-			ResourceHealth: models.Health(resourceHealth),
-			ResourceStatus: resourceStatus,
-			ID:             resourceID,
-			PersonID:       n.PersonID,
-			EventCreatedAt: event.CreatedAt,
-			Properties:     eventProperties,
-			GroupID:        groupID,
+			EventName:                 event.Name,
+			NotificationID:            n.ID,
+			ResourceHealth:            models.Health(resourceHealth),
+			ResourceHealthDescription: resourceHealthDescription,
+			ResourceStatus:            resourceStatus,
+			ID:                        resourceID,
+			PersonID:                  n.PersonID,
+			EventCreatedAt:            event.CreatedAt,
+			Properties:                eventProperties,
+			GroupID:                   groupID,
 		}
 
 		msg, err := getNotificationMsg(ctx, celEnvMap, payload, n)
@@ -457,16 +464,17 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 			}
 
 			payload := NotificationEventPayload{
-				EventName:        event.Name,
-				NotificationID:   n.ID,
-				ResourceHealth:   models.Health(resourceHealth),
-				ResourceStatus:   resourceStatus,
-				ID:               resourceID,
-				TeamID:           n.TeamID,
-				NotificationName: cn.Name,
-				EventCreatedAt:   event.CreatedAt,
-				Properties:       eventProperties,
-				GroupID:          groupID,
+				EventName:                 event.Name,
+				NotificationID:            n.ID,
+				ResourceHealth:            models.Health(resourceHealth),
+				ResourceHealthDescription: resourceHealthDescription,
+				ResourceStatus:            resourceStatus,
+				ID:                        resourceID,
+				TeamID:                    n.TeamID,
+				NotificationName:          cn.Name,
+				EventCreatedAt:            event.CreatedAt,
+				Properties:                eventProperties,
+				GroupID:                   groupID,
 			}
 
 			payloads = append(payloads, payload)
@@ -484,15 +492,16 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 		}
 
 		payload := NotificationEventPayload{
-			EventName:      event.Name,
-			NotificationID: n.ID,
-			ResourceHealth: models.Health(resourceHealth),
-			ResourceStatus: resourceStatus,
-			CustomService:  cn.DeepCopy(),
-			ID:             resourceID,
-			EventCreatedAt: event.CreatedAt,
-			Properties:     eventProperties,
-			GroupID:        groupID,
+			EventName:                 event.Name,
+			NotificationID:            n.ID,
+			ResourceHealth:            models.Health(resourceHealth),
+			ResourceHealthDescription: resourceHealthDescription,
+			ResourceStatus:            resourceStatus,
+			CustomService:             cn.DeepCopy(),
+			ID:                        resourceID,
+			EventCreatedAt:            event.CreatedAt,
+			Properties:                eventProperties,
+			GroupID:                   groupID,
 		}
 
 		if cn.Connection != "" {
