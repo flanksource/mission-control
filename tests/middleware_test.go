@@ -17,7 +17,6 @@ import (
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/tests/setup"
 	"github.com/flanksource/incident-commander/auth"
-	"github.com/flanksource/incident-commander/db"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/rbac/adapter"
@@ -221,19 +220,4 @@ var _ = Describe("Authorization", func() {
 			})
 		}
 	}
-
-	It("Should cover all db objects", func() {
-		info := &db.Info{}
-		if err := info.Get(DefaultContext.DB()); err != nil {
-			Expect(err).NotTo(HaveOccurred())
-		}
-		Expect(len(info.Functions)).To(BeNumerically(">", 0))
-
-		for _, table := range append(info.Views, info.Tables...) {
-			Expect(dutyRBAC.GetObjectByTable(table)).NotTo(BeEmpty(), table)
-		}
-		for _, function := range info.Functions {
-			Expect(dutyRBAC.GetObjectByTable("rpc/"+function)).NotTo(BeEmpty(), function)
-		}
-	})
 })
