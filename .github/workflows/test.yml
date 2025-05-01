@@ -51,7 +51,7 @@ jobs:
         run: make static test
       
       - name: Publish Unit Test Results
-        uses: EnricoMi/publish-unit-test-result-action@82082dac68ad6a19d980f8ce817e108b9f496c2a # v2.17.1
+        uses: EnricoMi/publish-unit-test-result-action@afb2984f4d89672b2f9d9c13ae23d53779671984 # v2.19.0
         if: always() && github.event.repository.fork == 'false'
         with:
           files: test/test-results.xml
