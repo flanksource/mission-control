@@ -38,3 +38,5 @@ spec:
           limit: $(.params.limit)
           start: now-2h
           match: severity != "info" && severity != "unknown"
+          dedupe:
+            - message

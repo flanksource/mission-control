@@ -114,7 +114,24 @@ func dedupLogs(logLines []logs.LogLine, dedupFields []string) []logs.LogLine {
 		return logLines
 	}
 
-	return logLines
+	dedupedLogs := make([]logs.LogLine, 0, len(logLines))
+
+	seen := make(map[string]struct{})
+outer:
+	for _, logLine := range logLines {
+		for _, field := range dedupFields {
+			fieldValue := logLine.GetDedupField(field)
+			if _, ok := seen[fieldValue]; ok {
+				continue outer
+			}
+
+			seen[fieldValue] = struct{}{}
+		}
+
+		dedupedLogs = append(dedupedLogs, logLine)
+	}
+
+	return dedupedLogs
 }
 
 func matchLogs(ctx context.Context, logLines []logs.LogLine, matchExpr string) []logs.LogLine {
