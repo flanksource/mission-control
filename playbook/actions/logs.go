@@ -9,6 +9,7 @@ import (
 	"github.com/flanksource/artifacts"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/types"
 	"github.com/flanksource/gomplate/v3"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/logs"
@@ -105,7 +106,7 @@ func postProcessLogs(ctx context.Context, logLines []logs.LogLine, postProcess v
 	}
 
 	filteredLogs := dedupLogs(logLines, postProcess.Dedupe)
-	matchedLogs := matchLogs(ctx, filteredLogs, string(postProcess.Match))
+	matchedLogs := matchLogs(ctx, filteredLogs, postProcess.Match)
 	return matchedLogs
 }
 
@@ -134,22 +135,29 @@ outer:
 	return dedupedLogs
 }
 
-func matchLogs(ctx context.Context, logLines []logs.LogLine, matchExpr string) []logs.LogLine {
-	if matchExpr == "" {
+func matchLogs(ctx context.Context, logLines []logs.LogLine, matchExprs []types.MatchExpression) []logs.LogLine {
+	if len(matchExprs) == 0 {
 		return logLines
 	}
 
 	var matchedLogs []logs.LogLine
-	expr := gomplate.Template{Expression: matchExpr}
-	for _, logLine := range logLines {
-		ok, err := gomplate.RunTemplateBool(logLine.TemplateContext(), expr)
-		if err != nil {
-			ctx.Logger.V(4).Infof("failed to evaluate match expression '%s': %v", matchExpr, err)
-			continue
-		}
 
-		if ok {
-			matchedLogs = append(matchedLogs, logLine)
+outer:
+	for _, logLine := range logLines {
+		env := logLine.TemplateContext()
+
+		for _, matchExpr := range matchExprs {
+			expr := gomplate.Template{Expression: string(matchExpr)}
+			ok, err := gomplate.RunTemplateBool(env, expr)
+			if err != nil {
+				ctx.Logger.V(4).Infof("failed to evaluate match expression '%s': %v", matchExprs, err)
+				continue
+			}
+
+			if ok {
+				matchedLogs = append(matchedLogs, logLine)
+				continue outer
+			}
 		}
 	}
 

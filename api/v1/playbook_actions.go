@@ -33,15 +33,16 @@ type LogsPostProcess struct {
 	// If any of the field matches, the log is deduped (i.e. it's a OR condition).
 	Dedupe []string `json:"dedupe,omitempty" yaml:"dedupe,omitempty"`
 
-	// Match is a CEL expression that decides if the log should be included.
-	Match types.MatchExpression `json:"match,omitempty" yaml:"match,omitempty"`
+	// Match is a list of CEL expressions that decide if the log should be included.
+	// If even one of the expressions match, the log will be included.
+	Match []types.MatchExpression `json:"match,omitempty" yaml:"match,omitempty"`
 
 	// Map labels to fields
 	Mapping *logs.FieldMappingConfig `yaml:"mapping,omitempty" json:"mapping,omitempty"`
 }
 
 func (t LogsPostProcess) Empty() bool {
-	return t.Match == "" && len(t.Dedupe) == 0
+	return len(t.Match) == 0 && len(t.Dedupe) == 0
 }
 
 type LogsActionLoki struct {

@@ -1800,9 +1800,13 @@ spec:
                                   type: array
                               type: object
                             match:
-                              description: Match is a CEL expression that decides
-                                if the log should be included.
-                              type: string
+                              description: |-
+                                Match is a list of CEL expressions that decide if the log should be included.
+                                If even one of the expressions match, the log will be included.
+                              items:
+                                description: MatchExpression uses MatchItems
+                                type: string
+                              type: array
                             query:
                               description: The query to perform on the log group.
                               type: string
@@ -1971,9 +1975,13 @@ spec:
                                   type: array
                               type: object
                             match:
-                              description: Match is a CEL expression that decides
-                                if the log should be included.
-                              type: string
+                              description: |-
+                                Match is a list of CEL expressions that decide if the log should be included.
+                                If even one of the expressions match, the log will be included.
+                              items:
+                                description: MatchExpression uses MatchItems
+                                type: string
+                              type: array
                             password:
                               properties:
                                 name:
@@ -2132,9 +2140,13 @@ spec:
                                   type: array
                               type: object
                             match:
-                              description: Match is a CEL expression that decides
-                                if the log should be included.
-                              type: string
+                              description: |-
+                                Match is a list of CEL expressions that decide if the log should be included.
+                                If even one of the expressions match, the log will be included.
+                              items:
+                                description: MatchExpression uses MatchItems
+                                type: string
+                              type: array
                             password:
                               properties:
                                 name:

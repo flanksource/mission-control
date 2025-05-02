@@ -1580,6 +1580,11 @@ func (in *LogsPostProcess) DeepCopyInto(out *LogsPostProcess) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.Match != nil {
+		in, out := &in.Match, &out.Match
+		*out = make([]types.MatchExpression, len(*in))
+		copy(*out, *in)
+	}
 	if in.Mapping != nil {
 		in, out := &in.Mapping, &out.Mapping
 		*out = new(logs.FieldMappingConfig)

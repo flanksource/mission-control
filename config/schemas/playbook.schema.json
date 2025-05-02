@@ -812,7 +812,10 @@
           "type": "array"
         },
         "match": {
-          "type": "string"
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         },
         "mapping": {
           "$ref": "#/$defs/FieldMappingConfig"
@@ -873,7 +876,10 @@
           "type": "array"
         },
         "match": {
-          "type": "string"
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         },
         "mapping": {
           "$ref": "#/$defs/FieldMappingConfig"
@@ -927,7 +933,10 @@
           "type": "array"
         },
         "match": {
-          "type": "string"
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         },
         "mapping": {
           "$ref": "#/$defs/FieldMappingConfig"
