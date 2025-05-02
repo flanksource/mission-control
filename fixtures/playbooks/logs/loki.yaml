@@ -37,3 +37,4 @@ spec:
             {namespace="{{ .config.tags.namespace }}",{{.config.config_class | toLower}}="{{ .config.name }}"}
           limit: $(.params.limit)
           start: now-2h
+          match: severity != "info" && severity != "unknown"

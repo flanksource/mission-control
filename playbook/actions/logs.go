@@ -9,6 +9,7 @@ import (
 	"github.com/flanksource/artifacts"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/gomplate/v3"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/logs"
 	"github.com/flanksource/incident-commander/logs/cloudwatch"
@@ -46,11 +47,13 @@ func NewLogsAction() *logsAction {
 
 func (l *logsAction) Run(ctx context.Context, action *v1.LogsAction) (*logsResult, error) {
 	if action.Loki != nil {
-		response, err := loki.Fetch(ctx, action.Loki.Loki, action.Loki.Request)
+		searcher := loki.NewSearcher(action.Loki.Loki, action.Loki.Mapping)
+		response, err := searcher.Fetch(ctx, action.Loki.Request)
 		if err != nil {
 			return nil, ctx.Oops().Wrapf(err, "failed to fetch logs from loki")
 		}
 
+		response.Logs = postProcessLogs(ctx, response.Logs, action.Loki.LogsPostProcess)
 		return (*logsResult)(response), nil
 	}
 
@@ -65,6 +68,7 @@ func (l *logsAction) Run(ctx context.Context, action *v1.LogsAction) (*logsResul
 			return nil, ctx.Oops().Wrapf(err, "failed to fetch logs from opensearch")
 		}
 
+		response.Logs = postProcessLogs(ctx, response.Logs, action.OpenSearch.LogsPostProcess)
 		return (*logsResult)(response), nil
 	}
 
@@ -88,8 +92,49 @@ func (l *logsAction) Run(ctx context.Context, action *v1.LogsAction) (*logsResul
 			return nil, ctx.Oops().Wrapf(err, "failed to fetch logs from cloudwatch")
 		}
 
+		response.Logs = postProcessLogs(ctx, response.Logs, action.CloudWatch.LogsPostProcess)
 		return (*logsResult)(response), nil
 	}
 
 	return nil, nil
+}
+
+func postProcessLogs(ctx context.Context, logLines []logs.LogLine, postProcess v1.LogsPostProcess) []logs.LogLine {
+	if postProcess.Empty() {
+		return logLines
+	}
+
+	filteredLogs := dedupLogs(logLines, postProcess.Dedupe)
+	matchedLogs := matchLogs(ctx, filteredLogs, string(postProcess.Match))
+	return matchedLogs
+}
+
+func dedupLogs(logLines []logs.LogLine, dedupFields []string) []logs.LogLine {
+	if len(dedupFields) == 0 {
+		return logLines
+	}
+
+	return logLines
+}
+
+func matchLogs(ctx context.Context, logLines []logs.LogLine, matchExpr string) []logs.LogLine {
+	if matchExpr == "" {
+		return logLines
+	}
+
+	var matchedLogs []logs.LogLine
+	expr := gomplate.Template{Expression: matchExpr}
+	for _, logLine := range logLines {
+		ok, err := gomplate.RunTemplateBool(logLine.TemplateContext(), expr)
+		if err != nil {
+			ctx.Logger.V(4).Infof("failed to evaluate match expression '%s': %v", matchExpr, err)
+			continue
+		}
+
+		if ok {
+			matchedLogs = append(matchedLogs, logLine)
+		}
+	}
+
+	return matchedLogs
 }

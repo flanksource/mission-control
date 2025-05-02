@@ -24,6 +24,11 @@ func (in *FieldMappingConfig) DeepCopyInto(out *FieldMappingConfig) {
 		*out = make([]string, len(*in))
 		copy(*out, *in)
 	}
+	if in.Host != nil {
+		in, out := &in.Host, &out.Host
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	if in.Severity != nil {
 		in, out := &in.Severity, &out.Severity
 		*out = make([]string, len(*in))

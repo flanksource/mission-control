@@ -27,23 +27,37 @@ import (
 	"github.com/flanksource/incident-commander/logs/opensearch"
 )
 
+type LogsPostProcess struct {
+	// Dedupe is a list of fields to dedupe on.
+	Dedupe []string `json:"dedupe,omitempty" yaml:"dedupe,omitempty"`
+
+	// Match is a CEL expression that decides if the log should be included.
+	Match types.MatchExpression `json:"match,omitempty" yaml:"match,omitempty"`
+
+	// Map labels to fields
+	Mapping *logs.FieldMappingConfig `yaml:"mapping,omitempty" json:"mapping,omitempty"`
+}
+
+func (t LogsPostProcess) Empty() bool {
+	return t.Match == "" && len(t.Dedupe) == 0
+}
+
 type LogsActionLoki struct {
+	LogsPostProcess `json:",inline" yaml:",inline"`
 	loki.Request    `json:",inline" yaml:",inline" template:"true"`
 	connection.Loki `yaml:",inline" json:",inline"`
 }
 
 type LogsActionCloudWatch struct {
+	LogsPostProcess          `json:",inline" yaml:",inline"`
 	connection.AWSConnection `yaml:",inline" json:",inline"`
 	cloudwatch.Request       `json:",inline" yaml:",inline" template:"true"`
-
-	Mapping *logs.FieldMappingConfig `yaml:"mapping,omitempty" json:"mapping,omitempty"`
 }
 
 type LogsActionOpenSearch struct {
+	LogsPostProcess    `json:",inline" yaml:",inline"`
 	opensearch.Backend `yaml:",inline" json:",inline"`
 	opensearch.Request `json:",inline" yaml:",inline" template:"true"`
-
-	Mapping *logs.FieldMappingConfig `yaml:"mapping,omitempty" json:"mapping,omitempty"`
 }
 
 type LogsAction struct {

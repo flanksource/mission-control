@@ -411,6 +411,12 @@
           },
           "type": "array"
         },
+        "host": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "severity": {
           "items": {
             "type": "string"
@@ -794,6 +800,18 @@
     },
     "LogsActionCloudWatch": {
       "properties": {
+        "dedupe": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "match": {
+          "type": "string"
+        },
+        "mapping": {
+          "$ref": "#/$defs/FieldMappingConfig"
+        },
         "connection": {
           "type": "string"
         },
@@ -832,9 +850,6 @@
         },
         "query": {
           "type": "string"
-        },
-        "mapping": {
-          "$ref": "#/$defs/FieldMappingConfig"
         }
       },
       "additionalProperties": false,
@@ -846,6 +861,18 @@
     },
     "LogsActionLoki": {
       "properties": {
+        "dedupe": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "match": {
+          "type": "string"
+        },
+        "mapping": {
+          "$ref": "#/$defs/FieldMappingConfig"
+        },
         "start": {
           "type": "string"
         },
@@ -888,6 +915,18 @@
     },
     "LogsActionOpenSearch": {
       "properties": {
+        "dedupe": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "match": {
+          "type": "string"
+        },
+        "mapping": {
+          "$ref": "#/$defs/FieldMappingConfig"
+        },
         "address": {
           "type": "string"
         },
@@ -905,9 +944,6 @@
         },
         "limit": {
           "type": "string"
-        },
-        "mapping": {
-          "$ref": "#/$defs/FieldMappingConfig"
         }
       },
       "additionalProperties": false,

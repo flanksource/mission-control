@@ -33,6 +33,21 @@ type LogLine struct {
 	Labels        map[string]string `json:"labels,omitempty"`
 }
 
+func (t *LogLine) TemplateContext() map[string]any {
+	return map[string]any{
+		"id":            t.ID,
+		"firstObserved": t.FirstObserved,
+		"lastObserved":  t.LastObserved,
+		"count":         t.Count,
+		"message":       t.Message,
+		"hash":          t.Hash,
+		"severity":      t.Severity,
+		"source":        t.Source,
+		"host":          t.Host,
+		"labels":        t.Labels,
+	}
+}
+
 type LogResult struct {
 	Metadata map[string]any `json:"metadata,omitempty"`
 	Logs     []LogLine      `json:"logs,omitempty"`
