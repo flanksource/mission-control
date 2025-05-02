@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/flanksource/artifacts"
@@ -22,8 +23,8 @@ type logsAction struct {
 }
 
 type logsResult struct {
-	Metadata map[string]any `json:"metadata,omitempty"`
-	Logs     []logs.LogLine `json:"-"`
+	Metadata map[string]any  `json:"metadata,omitempty"`
+	Logs     []*logs.LogLine `json:"-"`
 }
 
 func (t *logsResult) GetArtifacts() []artifacts.Artifact {
@@ -100,33 +101,45 @@ func (l *logsAction) Run(ctx context.Context, action *v1.LogsAction) (*logsResul
 	return nil, nil
 }
 
-func postProcessLogs(ctx context.Context, logLines []logs.LogLine, postProcess v1.LogsPostProcess) []logs.LogLine {
+func postProcessLogs(ctx context.Context, logLines []*logs.LogLine, postProcess v1.LogsPostProcess) []*logs.LogLine {
 	if postProcess.Empty() {
 		return logLines
 	}
 
-	filteredLogs := dedupLogs(logLines, postProcess.Dedupe)
-	matchedLogs := matchLogs(ctx, filteredLogs, postProcess.Match)
-	return matchedLogs
+	matchedLogs := matchLogs(ctx, logLines, postProcess.Match)
+	filteredLogs := dedupLogs(matchedLogs, postProcess.Dedupe)
+	return filteredLogs
 }
 
-func dedupLogs(logLines []logs.LogLine, dedupFields []string) []logs.LogLine {
+func dedupLogs(logLines []*logs.LogLine, dedupFields []string) []*logs.LogLine {
 	if len(dedupFields) == 0 {
 		return logLines
 	}
 
-	dedupedLogs := make([]logs.LogLine, 0, len(logLines))
+	dedupedLogs := make([]*logs.LogLine, 0, len(logLines))
 
-	seen := make(map[string]struct{})
+	seen := make(map[string]*logs.LogLine)
 outer:
 	for _, logLine := range logLines {
 		for _, field := range dedupFields {
 			fieldValue := logLine.GetDedupField(field)
-			if _, ok := seen[fieldValue]; ok {
+			if foundLogLine, ok := seen[fieldValue]; ok {
+				foundLogLine.Count++
+
+				if logLine.FirstObserved.Before(foundLogLine.FirstObserved) {
+					foundLogLine.FirstObserved = logLine.FirstObserved
+				} else {
+					foundLogLine.Message = logLine.Message
+				}
+
+				if l := maxTime(&logLine.FirstObserved, logLine.LastObserved, &foundLogLine.FirstObserved, foundLogLine.LastObserved); !l.IsZero() {
+					foundLogLine.LastObserved = &l
+				}
+
 				continue outer
 			}
 
-			seen[fieldValue] = struct{}{}
+			seen[fieldValue] = logLine
 		}
 
 		dedupedLogs = append(dedupedLogs, logLine)
@@ -135,12 +148,12 @@ outer:
 	return dedupedLogs
 }
 
-func matchLogs(ctx context.Context, logLines []logs.LogLine, matchExprs []types.MatchExpression) []logs.LogLine {
+func matchLogs(ctx context.Context, logLines []*logs.LogLine, matchExprs []types.MatchExpression) []*logs.LogLine {
 	if len(matchExprs) == 0 {
 		return logLines
 	}
 
-	var matchedLogs []logs.LogLine
+	var matchedLogs []*logs.LogLine
 
 outer:
 	for _, logLine := range logLines {
@@ -162,4 +175,19 @@ outer:
 	}
 
 	return matchedLogs
+}
+
+func maxTime(timestamps ...*time.Time) time.Time {
+	max := time.Time{}
+	for _, t := range timestamps {
+		if t == nil {
+			continue
+		}
+
+		if t.After(max) {
+			max = *t
+		}
+	}
+
+	return max
 }

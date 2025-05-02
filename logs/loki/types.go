@@ -36,14 +36,15 @@ func (t *LokiResponse) ToLogResult(mappingConfig logs.FieldMappingConfig) logs.L
 				continue
 			}
 
-			line := logs.LogLine{
+			line := &logs.LogLine{
+				Count:         1,
 				FirstObserved: time.Unix(0, firstObserved),
 				Message:       v[1],
 				Labels:        result.Stream,
 			}
 
 			for k, v := range result.Stream {
-				if err := logs.MapFieldToLogLine(k, v, &line, mappingConfig); err != nil {
+				if err := logs.MapFieldToLogLine(k, v, line, mappingConfig); err != nil {
 					// Log or handle mapping error? For now, just log it.
 					logger.Errorf("Error mapping field %s for log %s: %v", k, line.ID, err)
 				}

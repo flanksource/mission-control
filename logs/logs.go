@@ -88,7 +88,7 @@ func (t *LogLine) TemplateContext() map[string]any {
 
 type LogResult struct {
 	Metadata map[string]any `json:"metadata,omitempty"`
-	Logs     []LogLine      `json:"logs,omitempty"`
+	Logs     []*LogLine     `json:"logs,omitempty"`
 }
 
 type LogsRequestBase struct {

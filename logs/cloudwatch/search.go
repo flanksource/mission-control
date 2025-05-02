@@ -64,7 +64,7 @@ func (t *Searcher) Search(ctx context.Context, request Request) (*logs.LogResult
 			"statistics":     queryResult.Statistics,
 			"resultMetadata": queryResult.ResultMetadata,
 		},
-		Logs: make([]logs.LogLine, 0, len(queryResult.Results)),
+		Logs: make([]*logs.LogLine, 0, len(queryResult.Results)),
 	}
 
 	mappingConfig := DefaultFieldMappingConfig()
@@ -73,12 +73,15 @@ func (t *Searcher) Search(ctx context.Context, request Request) (*logs.LogResult
 	}
 
 	for _, fields := range queryResult.Results {
-		var line logs.LogLine
+		line := &logs.LogLine{
+			Count: 1,
+		}
+
 		for _, field := range fields {
 			key := lo.FromPtr(field.Field)
 			value := lo.FromPtr(field.Value)
 
-			if err := logs.MapFieldToLogLine(key, value, &line, mappingConfig); err != nil {
+			if err := logs.MapFieldToLogLine(key, value, line, mappingConfig); err != nil {
 				return nil, fmt.Errorf("error mapping field %s: %w", key, err)
 			}
 		}

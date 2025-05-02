@@ -91,7 +91,7 @@ func (t *searcher) Search(ctx context.Context, q *Request) (*logs.LogResult, err
 	}
 
 	var logResult = logs.LogResult{}
-	logResult.Logs = make([]logs.LogLine, 0, len(r.Hits.Hits))
+	logResult.Logs = make([]*logs.LogLine, 0, len(r.Hits.Hits))
 
 	mappingConfig := DefaultFieldMappingConfig
 	if t.mappingConfig != nil {
@@ -99,12 +99,13 @@ func (t *searcher) Search(ctx context.Context, q *Request) (*logs.LogResult, err
 	}
 
 	for _, hit := range r.Hits.Hits {
-		line := logs.LogLine{
-			ID: hit.ID,
+		line := &logs.LogLine{
+			ID:    hit.ID,
+			Count: 1,
 		}
 
 		for k, v := range hit.Source {
-			if err := logs.MapFieldToLogLine(k, v, &line, mappingConfig); err != nil {
+			if err := logs.MapFieldToLogLine(k, v, line, mappingConfig); err != nil {
 				// Log or handle mapping error? For now, just log it.
 				ctx.Warnf("Error mapping field %s for log %s: %v", k, line.ID, err)
 			}
