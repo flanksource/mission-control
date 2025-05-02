@@ -153,6 +153,7 @@ func matchLogs(ctx context.Context, logLines []*logs.LogLine, matchExprs []types
 		return logLines
 	}
 
+	faultyExpressions := make(map[string]struct{})
 	var matchedLogs []*logs.LogLine
 
 outer:
@@ -160,10 +161,15 @@ outer:
 		env := logLine.TemplateContext()
 
 		for _, matchExpr := range matchExprs {
+			if _, ok := faultyExpressions[string(matchExpr)]; ok {
+				continue
+			}
+
 			expr := gomplate.Template{Expression: string(matchExpr)}
 			ok, err := gomplate.RunTemplateBool(env, expr)
 			if err != nil {
 				ctx.Logger.V(4).Infof("failed to evaluate match expression '%s': %v", matchExprs, err)
+				faultyExpressions[string(matchExpr)] = struct{}{}
 				continue
 			}
 
