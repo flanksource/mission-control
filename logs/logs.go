@@ -50,12 +50,19 @@ func (t LogLine) GetDedupField(field string) string {
 	case "firstObserved":
 		return fmt.Sprintf("firstObserved::%d", t.FirstObserved.UnixNano())
 	case "lastObserved":
+		if t.LastObserved == nil {
+			return "lastObserved::unknown"
+		}
 		return fmt.Sprintf("lastObserved::%d", t.LastObserved.UnixNano())
 	case "count":
 		return fmt.Sprintf("count::%d", t.Count)
 	case "id":
 		return fmt.Sprintf("id::%s", t.ID)
 	default:
+		if t.Labels == nil {
+			return fmt.Sprintf("label.%s=unknown", field)
+		}
+
 		if strings.HasPrefix(field, "label.") {
 			return fmt.Sprintf("label.%s=%s", strings.TrimPrefix(field, "label."), t.Labels[strings.TrimPrefix(field, "label.")])
 		}

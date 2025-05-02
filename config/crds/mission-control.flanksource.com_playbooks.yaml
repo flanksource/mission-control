@@ -1746,7 +1746,10 @@ spec:
                                 be used to populate the endpoint, accessKey and secretKey.
                               type: string
                             dedupe:
-                              description: Dedupe is a list of fields to dedupe on.
+                              description: |-
+                                Dedupe is a list of fields to dedupe on.
+                                If two logs have empty value for the field, they are still deduped.
+                                If any of the field matches, the log is deduped (i.e. it's a OR condition).
                               items:
                                 type: string
                               type: array
@@ -1910,7 +1913,10 @@ spec:
                             connection:
                               type: string
                             dedupe:
-                              description: Dedupe is a list of fields to dedupe on.
+                              description: |-
+                                Dedupe is a list of fields to dedupe on.
+                                If two logs have empty value for the field, they are still deduped.
+                                If any of the field matches, the log is deduped (i.e. it's a OR condition).
                               items:
                                 type: string
                               type: array
@@ -2082,7 +2088,10 @@ spec:
                             address:
                               type: string
                             dedupe:
-                              description: Dedupe is a list of fields to dedupe on.
+                              description: |-
+                                Dedupe is a list of fields to dedupe on.
+                                If two logs have empty value for the field, they are still deduped.
+                                If any of the field matches, the log is deduped (i.e. it's a OR condition).
                               items:
                                 type: string
                               type: array
