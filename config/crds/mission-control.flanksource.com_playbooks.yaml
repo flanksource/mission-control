@@ -2025,8 +2025,6 @@ spec:
                                       type: string
                                   type: object
                               type: object
-                          required:
-                          - url
                           type: object
                         opensearch:
                           properties:

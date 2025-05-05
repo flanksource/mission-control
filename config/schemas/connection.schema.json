@@ -384,6 +384,24 @@
         "certificate"
       ]
     },
+    "ConnectionLoki": {
+      "properties": {
+        "url": {
+          "type": "string"
+        },
+        "username": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "password": {
+          "$ref": "#/$defs/EnvVar"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "url"
+      ]
+    },
     "ConnectionMSSQL": {
       "properties": {
         "url": {
@@ -794,6 +812,9 @@
         },
         "kubernetes": {
           "$ref": "#/$defs/ConnectionKubernetes"
+        },
+        "loki": {
+          "$ref": "#/$defs/ConnectionLoki"
         },
         "mssql": {
           "$ref": "#/$defs/ConnectionMSSQL"

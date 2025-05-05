@@ -889,10 +889,7 @@
         }
       },
       "additionalProperties": false,
-      "type": "object",
-      "required": [
-        "url"
-      ]
+      "type": "object"
     },
     "LogsActionOpenSearch": {
       "properties": {

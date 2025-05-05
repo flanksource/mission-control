@@ -202,6 +202,12 @@ type ConnectionGCS struct {
 	Bucket        string `json:"bucket"`
 }
 
+type ConnectionLoki struct {
+	URL      string       `json:"url"`
+	Username types.EnvVar `json:"username,omitempty"`
+	Password types.EnvVar `json:"password,omitempty"`
+}
+
 type ConnectionGCPKMS struct {
 	ConnectionGCP `json:",inline"`
 
@@ -325,6 +331,7 @@ type ConnectionSpec struct {
 	GitLab     *ConnectionGitLab     `json:"gitlab,omitempty"`
 	HTTP       *ConnectionHTTP       `json:"http,omitempty"`
 	Kubernetes *ConnectionKubernetes `json:"kubernetes,omitempty"`
+	Loki       *ConnectionLoki       `json:"loki,omitempty"`
 	MSSQL      *ConnectionMSSQL      `json:"mssql,omitempty"`
 	Mongo      *ConnectionMongo      `json:"mongo,omitempty"`
 	MySQL      *ConnectionMySQL      `json:"mysql,omitempty"`
