@@ -164,6 +164,13 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 		}
 	}
 
+	if obj.Spec.Loki != nil {
+		dbObj.Type = models.ConnectionTypeLoki
+		dbObj.URL = obj.Spec.Loki.URL
+		dbObj.Username = obj.Spec.Loki.Username.String()
+		dbObj.Password = obj.Spec.Loki.Password.String()
+	}
+
 	if obj.Spec.Anthropic != nil {
 		dbObj.Type = models.ConnectionTypeAnthropic
 		dbObj.Password = obj.Spec.Anthropic.ApiKey.String()
