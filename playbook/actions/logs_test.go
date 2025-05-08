@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
@@ -211,6 +212,42 @@ func Test_dedupLogs(t *testing.T) {
 					FirstObserved: referenceTime.Add(-time.Minute * 5),
 					LastObserved:  lo.ToPtr(referenceTime.Add(-time.Minute * 1)),
 					Count:         2,
+				},
+			},
+		},
+		{
+			name: "dedupe on hash",
+			postProcess: v1.LogsPostProcess{
+				Dedupe: []string{"hash"},
+			},
+			got: []*logs.LogLine{
+				{
+					Message:       fmt.Sprintf("new request received: %s", referenceTime.Add(-time.Minute*20).Format(time.RFC3339)),
+					FirstObserved: referenceTime.Add(-time.Minute * 20),
+					Count:         1,
+				},
+				{
+					Message:       fmt.Sprintf("new request received: %s", referenceTime.Add(-time.Minute*10).Format(time.RFC3339)),
+					FirstObserved: referenceTime.Add(-time.Minute * 10),
+					Count:         1,
+				},
+				{
+					Message:       fmt.Sprintf("new request received: %s", referenceTime.Add(-time.Minute*5).Format(time.RFC3339)),
+					FirstObserved: referenceTime.Add(-time.Minute * 5),
+					Count:         1,
+				},
+				{
+					Message:       fmt.Sprintf("new request received: %s", referenceTime.Add(-time.Minute*1).Format(time.RFC3339)),
+					FirstObserved: referenceTime.Add(-time.Minute * 1),
+					Count:         1,
+				},
+			},
+			want: []*logs.LogLine{
+				{
+					Message:       fmt.Sprintf("new request received: %s", referenceTime.Add(-time.Minute*1).Format(time.RFC3339)),
+					FirstObserved: referenceTime.Add(-time.Minute * 20),
+					LastObserved:  lo.ToPtr(referenceTime.Add(-time.Minute * 1)),
+					Count:         4,
 				},
 			},
 		},

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/commons/tokenizer"
 	"github.com/timberio/go-datemath"
 )
 
@@ -35,6 +36,10 @@ type LogLine struct {
 	Labels        map[string]string `json:"labels,omitempty"`
 }
 
+func (t *LogLine) SetHash() {
+	t.Hash = tokenizer.Tokenize(t.Message)
+}
+
 func (t LogLine) GetDedupKey(fields ...string) string {
 	if len(fields) == 0 {
 		return ""
@@ -51,7 +56,7 @@ func (t LogLine) GetDedupKey(fields ...string) string {
 func (t LogLine) GetDedupField(field string) string {
 	switch field {
 	case "message":
-		return fmt.Sprintf("msg::%s", t.Message) // TODO: return tokenized message
+		return fmt.Sprintf("msg::%s", t.Message)
 	case "hash":
 		return fmt.Sprintf("hash::%s", t.Hash)
 	case "severity":

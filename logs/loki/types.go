@@ -50,6 +50,7 @@ func (t *LokiResponse) ToLogResult(mappingConfig logs.FieldMappingConfig) logs.L
 				}
 			}
 
+			line.SetHash()
 			output.Logs = append(output.Logs, line)
 		}
 	}

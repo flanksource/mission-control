@@ -86,6 +86,7 @@ func (t *Searcher) Search(ctx context.Context, request Request) (*logs.LogResult
 			}
 		}
 
+		line.SetHash()
 		logResult.Logs = append(logResult.Logs, line)
 	}
 
