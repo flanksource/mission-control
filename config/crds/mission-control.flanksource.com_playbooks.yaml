@@ -1748,8 +1748,10 @@ spec:
                             dedupe:
                               description: |-
                                 Dedupe is a list of fields to dedupe on.
+                                For two logs to be deduped, they should match on all the fields.
+
+
                                 If two logs have empty value for the field, they are still deduped.
-                                If any of the field matches, the log is deduped (i.e. it's a OR condition).
                               items:
                                 type: string
                               type: array
@@ -1919,8 +1921,10 @@ spec:
                             dedupe:
                               description: |-
                                 Dedupe is a list of fields to dedupe on.
+                                For two logs to be deduped, they should match on all the fields.
+
+
                                 If two logs have empty value for the field, they are still deduped.
-                                If any of the field matches, the log is deduped (i.e. it's a OR condition).
                               items:
                                 type: string
                               type: array
@@ -2098,8 +2102,10 @@ spec:
                             dedupe:
                               description: |-
                                 Dedupe is a list of fields to dedupe on.
+                                For two logs to be deduped, they should match on all the fields.
+
+
                                 If two logs have empty value for the field, they are still deduped.
-                                If any of the field matches, the log is deduped (i.e. it's a OR condition).
                               items:
                                 type: string
                               type: array

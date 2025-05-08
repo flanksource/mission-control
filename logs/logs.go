@@ -35,6 +35,19 @@ type LogLine struct {
 	Labels        map[string]string `json:"labels,omitempty"`
 }
 
+func (t LogLine) GetDedupKey(fields ...string) string {
+	if len(fields) == 0 {
+		return ""
+	}
+
+	values := make([]string, len(fields))
+	for i, field := range fields {
+		values[i] = t.GetDedupField(field)
+	}
+
+	return strings.Join(values, "\u0000")
+}
+
 func (t LogLine) GetDedupField(field string) string {
 	switch field {
 	case "message":

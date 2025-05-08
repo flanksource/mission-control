@@ -29,8 +29,9 @@ import (
 
 type LogsPostProcess struct {
 	// Dedupe is a list of fields to dedupe on.
+	// For two logs to be deduped, they should match on all the fields.
+	//
 	// If two logs have empty value for the field, they are still deduped.
-	// If any of the field matches, the log is deduped (i.e. it's a OR condition).
 	Dedupe []string `json:"dedupe,omitempty" yaml:"dedupe,omitempty"`
 
 	// Match is a list of CEL expressions that decide if the log should be included.

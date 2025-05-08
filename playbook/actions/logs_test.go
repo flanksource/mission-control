@@ -161,6 +161,59 @@ func Test_dedupLogs(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "dedupe on multiple fields",
+			postProcess: v1.LogsPostProcess{
+				Dedupe: []string{"host", "message"},
+			},
+			got: []*logs.LogLine{
+				{
+					Message:       "new request",
+					Host:          "pod-a",
+					FirstObserved: referenceTime.Add(-time.Minute * 20),
+					Count:         1,
+				},
+				{
+					Message:       "user saved",
+					Host:          "pod-a",
+					FirstObserved: referenceTime.Add(-time.Minute * 10),
+					Count:         1,
+				},
+				{
+					Message:       "new request",
+					Host:          "pod-b",
+					FirstObserved: referenceTime.Add(-time.Minute * 5),
+					Count:         1,
+				},
+				{
+					Message:       "new request",
+					Host:          "pod-b",
+					FirstObserved: referenceTime.Add(-time.Minute * 1),
+					Count:         1,
+				},
+			},
+			want: []*logs.LogLine{
+				{
+					Message:       "new request",
+					Host:          "pod-a",
+					FirstObserved: referenceTime.Add(-time.Minute * 20),
+					Count:         1,
+				},
+				{
+					Message:       "user saved",
+					Host:          "pod-a",
+					FirstObserved: referenceTime.Add(-time.Minute * 10),
+					Count:         1,
+				},
+				{
+					Message:       "new request",
+					Host:          "pod-b",
+					FirstObserved: referenceTime.Add(-time.Minute * 5),
+					LastObserved:  lo.ToPtr(referenceTime.Add(-time.Minute * 1)),
+					Count:         2,
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -169,10 +222,13 @@ func Test_dedupLogs(t *testing.T) {
 			result := postProcessLogs(ctx, tt.got, tt.postProcess)
 			gg.Expect(len(result)).To(gomega.Equal(len(tt.want)))
 			for i, log := range result {
-				gg.Expect(log.Message).To(gomega.Equal(tt.want[i].Message))
-				gg.Expect(log.FirstObserved).To(gomega.Equal(tt.want[i].FirstObserved), "first observed")
-				gg.Expect(log.LastObserved).To(gomega.Equal(tt.want[i].LastObserved), "last observed")
-				gg.Expect(log.Count).To(gomega.Equal(tt.want[i].Count), "count")
+				want := tt.want[i]
+
+				gg.Expect(log.Message).To(gomega.Equal(want.Message))
+				gg.Expect(log.FirstObserved).To(gomega.Equal(want.FirstObserved), "first observed")
+				gg.Expect(log.LastObserved).To(gomega.Equal(want.LastObserved), "last observed")
+				gg.Expect(log.Count).To(gomega.Equal(want.Count), "count")
+				gg.Expect(log.Host).To(gomega.Equal(want.Host), "host")
 			}
 		})
 	}

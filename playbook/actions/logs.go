@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"io"
-	"time"
+	"sort"
 
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/flanksource/artifacts"
@@ -111,38 +111,47 @@ func postProcessLogs(ctx context.Context, logLines []*logs.LogLine, postProcess 
 	return filteredLogs
 }
 
+// dedupLogs consolidates log lines by matching all specified fields together.
 func dedupLogs(logLines []*logs.LogLine, dedupFields []string) []*logs.LogLine {
 	if len(dedupFields) == 0 {
 		return logLines
 	}
 
+	sort.Slice(logLines, func(i, j int) bool {
+		return logLines[i].FirstObserved.Before(logLines[j].FirstObserved)
+	})
+
 	dedupedLogs := make([]*logs.LogLine, 0, len(logLines))
-
 	seen := make(map[string]*logs.LogLine)
-outer:
+
 	for _, logLine := range logLines {
-		for _, field := range dedupFields {
-			fieldValue := logLine.GetDedupField(field)
-			if foundLogLine, ok := seen[fieldValue]; ok {
-				foundLogLine.Count++
+		key := logLine.GetDedupKey(dedupFields...)
 
-				if logLine.FirstObserved.Before(foundLogLine.FirstObserved) {
-					foundLogLine.FirstObserved = logLine.FirstObserved
-				} else {
-					foundLogLine.Message = logLine.Message
-				}
-
-				if l := maxTime(&logLine.FirstObserved, logLine.LastObserved, &foundLogLine.FirstObserved, foundLogLine.LastObserved); !l.IsZero() {
-					foundLogLine.LastObserved = &l
-				}
-
-				continue outer
-			}
-
-			seen[fieldValue] = logLine
+		previous, found := seen[key]
+		if !found {
+			seen[key] = logLine
+			dedupedLogs = append(dedupedLogs, logLine)
+			continue
 		}
 
-		dedupedLogs = append(dedupedLogs, logLine)
+		previous.Count += logLine.Count
+		if logLine.FirstObserved.Before(previous.FirstObserved) {
+			previous.FirstObserved = logLine.FirstObserved
+		}
+
+		if logLine.LastObserved != nil {
+			if previous.LastObserved == nil || logLine.LastObserved.After(*previous.LastObserved) {
+				previous.LastObserved = logLine.LastObserved
+			}
+		} else if !logLine.FirstObserved.IsZero() {
+			previous.LastObserved = &logLine.FirstObserved
+		}
+
+		// Use the values from the latest log
+		previous.Message = logLine.Message
+		previous.Host = logLine.Host
+		previous.Severity = logLine.Severity
+		previous.Source = logLine.Source
 	}
 
 	return dedupedLogs
@@ -181,19 +190,4 @@ outer:
 	}
 
 	return matchedLogs
-}
-
-func maxTime(timestamps ...*time.Time) time.Time {
-	max := time.Time{}
-	for _, t := range timestamps {
-		if t == nil {
-			continue
-		}
-
-		if t.After(max) {
-			max = *t
-		}
-	}
-
-	return max
 }
