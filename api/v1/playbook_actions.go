@@ -27,12 +27,18 @@ import (
 	"github.com/flanksource/incident-commander/logs/opensearch"
 )
 
+type LogDedupe struct {
+	Window string `json:"window,omitempty" yaml:"window,omitempty"`
+
+	Fields []string `json:"fields" yaml:"fields"`
+}
+
 type LogsPostProcess struct {
 	// Dedupe is a list of fields to dedupe on.
 	// For two logs to be deduped, they should match on all the fields.
 	//
 	// If two logs have empty value for the field, they are still deduped.
-	Dedupe []string `json:"dedupe,omitempty" yaml:"dedupe,omitempty"`
+	Dedupe *LogDedupe `json:"dedupe,omitempty" yaml:"dedupe,omitempty"`
 
 	// Match is a list of CEL expressions that decide if the log should be included.
 	// If even one of the expressions match, the log will be included.
@@ -43,7 +49,7 @@ type LogsPostProcess struct {
 }
 
 func (t LogsPostProcess) Empty() bool {
-	return len(t.Match) == 0 && len(t.Dedupe) == 0
+	return len(t.Match) == 0 && t.Dedupe == nil
 }
 
 type LogsActionLoki struct {

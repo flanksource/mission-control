@@ -80,7 +80,7 @@ func Test_matchLogs(t *testing.T) {
 }
 
 func Test_dedupLogs(t *testing.T) {
-	referenceTime := time.Now()
+	referenceTime := time.Date(2025, 5, 8, 12, 0, 0, 0, time.UTC)
 	ctx := context.New()
 
 	tests := []struct {
@@ -92,7 +92,9 @@ func Test_dedupLogs(t *testing.T) {
 		{
 			name: "dedupe on message",
 			postProcess: v1.LogsPostProcess{
-				Dedupe: []string{"message"},
+				Dedupe: &v1.LogDedupe{
+					Fields: []string{"message"},
+				},
 			},
 			got: []*logs.LogLine{
 				{
@@ -133,7 +135,9 @@ func Test_dedupLogs(t *testing.T) {
 		{
 			name: "dedupe on labels",
 			postProcess: v1.LogsPostProcess{
-				Dedupe: []string{"label.namespace"},
+				Dedupe: &v1.LogDedupe{
+					Fields: []string{"label.namespace"},
+				},
 			},
 			got: []*logs.LogLine{
 				{
@@ -165,7 +169,9 @@ func Test_dedupLogs(t *testing.T) {
 		{
 			name: "dedupe on multiple fields",
 			postProcess: v1.LogsPostProcess{
-				Dedupe: []string{"host", "message"},
+				Dedupe: &v1.LogDedupe{
+					Fields: []string{"host", "message"},
+				},
 			},
 			got: []*logs.LogLine{
 				{
@@ -218,7 +224,9 @@ func Test_dedupLogs(t *testing.T) {
 		{
 			name: "dedupe on hash",
 			postProcess: v1.LogsPostProcess{
-				Dedupe: []string{"hash"},
+				Dedupe: &v1.LogDedupe{
+					Fields: []string{"hash"},
+				},
 			},
 			got: []*logs.LogLine{
 				{
@@ -251,20 +259,81 @@ func Test_dedupLogs(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "dedupe on message with a window",
+			postProcess: v1.LogsPostProcess{
+				Dedupe: &v1.LogDedupe{
+					Fields: []string{"message"},
+					Window: "5m",
+				},
+			},
+			got: []*logs.LogLine{
+				{
+					Message:       "new request",
+					FirstObserved: referenceTime.Add(-time.Minute * 20),
+					Count:         1,
+				},
+				{
+					Message:       "new request",
+					FirstObserved: referenceTime.Add(-time.Minute * 17),
+					Count:         1,
+				},
+				{
+					Message:       "new request",
+					FirstObserved: referenceTime.Add(-time.Minute * 14),
+					Count:         1,
+				},
+				{
+					Message:       "new request",
+					FirstObserved: referenceTime.Add(-time.Minute * 13),
+					Count:         1,
+				},
+				{
+					Message:       "new request",
+					FirstObserved: referenceTime.Add(-time.Minute * 11),
+					Count:         1,
+				},
+				{
+					Message:       "new request",
+					FirstObserved: referenceTime,
+					Count:         1,
+				},
+			},
+			want: []*logs.LogLine{
+				{
+					Message:       "new request",
+					FirstObserved: referenceTime.Add(-time.Minute * 20),
+					LastObserved:  lo.ToPtr(referenceTime.Add(-time.Minute * 17)),
+					Count:         2,
+				},
+				{
+					Message:       "new request",
+					FirstObserved: referenceTime.Add(-time.Minute * 14),
+					LastObserved:  lo.ToPtr(referenceTime.Add(-time.Minute * 11)),
+					Count:         3,
+				},
+				{
+					Message:       "new request",
+					FirstObserved: referenceTime,
+					Count:         1,
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			gg := gomega.NewWithT(t)
 			result := postProcessLogs(ctx, tt.got, tt.postProcess)
-			gg.Expect(len(result)).To(gomega.Equal(len(tt.want)))
+			gg.Expect(len(result)).To(gomega.Equal(len(tt.want)), "total logs")
+
 			for i, log := range result {
 				want := tt.want[i]
 
 				gg.Expect(log.Message).To(gomega.Equal(want.Message))
+				gg.Expect(log.Count).To(gomega.Equal(want.Count), "count")
 				gg.Expect(log.FirstObserved).To(gomega.Equal(want.FirstObserved), "first observed")
 				gg.Expect(log.LastObserved).To(gomega.Equal(want.LastObserved), "last observed")
-				gg.Expect(log.Count).To(gomega.Equal(want.Count), "count")
 				gg.Expect(log.Host).To(gomega.Equal(want.Host), "host")
 			}
 		})

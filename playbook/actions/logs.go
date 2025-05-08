@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"io"
 	"sort"
+	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
 	"github.com/flanksource/artifacts"
+	"github.com/flanksource/commons/duration"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/types"
@@ -112,8 +114,8 @@ func postProcessLogs(ctx context.Context, logLines []*logs.LogLine, postProcess 
 }
 
 // dedupLogs consolidates log lines by matching all specified fields together.
-func dedupLogs(logLines []*logs.LogLine, dedupFields []string) []*logs.LogLine {
-	if len(dedupFields) == 0 {
+func dedupLogs(logLines []*logs.LogLine, dedupe *v1.LogDedupe) []*logs.LogLine {
+	if dedupe == nil {
 		return logLines
 	}
 
@@ -121,11 +123,65 @@ func dedupLogs(logLines []*logs.LogLine, dedupFields []string) []*logs.LogLine {
 		return logLines[i].FirstObserved.Before(logLines[j].FirstObserved)
 	})
 
+	if dedupe.Window != "" {
+		window, err := duration.ParseDuration(dedupe.Window)
+		if err != nil {
+			return logLines
+		}
+
+		windowedLogs := divideLogsByWindow(logLines, time.Duration(window))
+
+		dedupedLogs := make([]*logs.LogLine, 0, len(logLines))
+		for _, windowedLogs := range windowedLogs {
+			dedupedLogs = append(dedupedLogs, dedupeWindow(windowedLogs, dedupe.Fields)...)
+		}
+
+		return dedupedLogs
+	}
+
+	return dedupeWindow(logLines, dedupe.Fields)
+}
+
+func divideLogsByWindow(logLines []*logs.LogLine, window time.Duration) [][]*logs.LogLine {
+	logsByWindow := make([][]*logs.LogLine, 0, len(logLines))
+
+	var currentWindowStart time.Time
+	var currentWindow []*logs.LogLine
+
+	for _, logLine := range logLines {
+		logWindow := logLine.FirstObserved.Truncate(window)
+		if currentWindowStart.IsZero() {
+			currentWindowStart = logWindow
+			currentWindow = append(currentWindow, logLine)
+			continue
+		}
+
+		if logWindow.Equal(currentWindowStart) {
+			currentWindow = append(currentWindow, logLine)
+			continue
+		}
+
+		// start of a new window
+		logsByWindow = append(logsByWindow, currentWindow)
+		currentWindow = []*logs.LogLine{logLine}
+		currentWindowStart = logWindow
+	}
+
+	if len(currentWindow) > 0 {
+		logsByWindow = append(logsByWindow, currentWindow)
+	}
+
+	return logsByWindow
+}
+
+// dedupeWindow deduplicates log lines in a given time window.
+// all logs provided are expected to be in the same time window.
+func dedupeWindow(logLines []*logs.LogLine, fields []string) []*logs.LogLine {
 	dedupedLogs := make([]*logs.LogLine, 0, len(logLines))
 	seen := make(map[string]*logs.LogLine)
 
 	for _, logLine := range logLines {
-		key := logLine.GetDedupKey(dedupFields...)
+		key := logLine.GetDedupKey(fields...)
 
 		previous, found := seen[key]
 		if !found {

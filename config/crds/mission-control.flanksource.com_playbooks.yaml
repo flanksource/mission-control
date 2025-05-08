@@ -1752,9 +1752,16 @@ spec:
 
 
                                 If two logs have empty value for the field, they are still deduped.
-                              items:
-                                type: string
-                              type: array
+                              properties:
+                                fields:
+                                  items:
+                                    type: string
+                                  type: array
+                                window:
+                                  type: string
+                              required:
+                              - fields
+                              type: object
                             end:
                               description: |-
                                 The end time for the query
@@ -1925,9 +1932,16 @@ spec:
 
 
                                 If two logs have empty value for the field, they are still deduped.
-                              items:
-                                type: string
-                              type: array
+                              properties:
+                                fields:
+                                  items:
+                                    type: string
+                                  type: array
+                                window:
+                                  type: string
+                              required:
+                              - fields
+                              type: object
                             direction:
                               description: Direction is the direction of the query.
                                 "forward" or "backward" (default)
@@ -2106,9 +2120,16 @@ spec:
 
 
                                 If two logs have empty value for the field, they are still deduped.
-                              items:
-                                type: string
-                              type: array
+                              properties:
+                                fields:
+                                  items:
+                                    type: string
+                                  type: array
+                                window:
+                                  type: string
+                              required:
+                              - fields
+                              type: object
                             index:
                               type: string
                             limit:

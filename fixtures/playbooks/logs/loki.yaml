@@ -41,4 +41,6 @@ spec:
             - severity != "info" && severity != "unknown"
             - labels.service == 'payment'
           dedupe:
-            - message
+            window: 1h
+            fields:
+              - message

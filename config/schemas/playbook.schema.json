@@ -788,6 +788,24 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "LogDedupe": {
+      "properties": {
+        "window": {
+          "type": "string"
+        },
+        "fields": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "fields"
+      ]
+    },
     "LogsAction": {
       "properties": {
         "loki": {
@@ -806,10 +824,7 @@
     "LogsActionCloudWatch": {
       "properties": {
         "dedupe": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
+          "$ref": "#/$defs/LogDedupe"
         },
         "match": {
           "items": {
@@ -870,10 +885,7 @@
     "LogsActionLoki": {
       "properties": {
         "dedupe": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
+          "$ref": "#/$defs/LogDedupe"
         },
         "match": {
           "items": {
@@ -927,10 +939,7 @@
     "LogsActionOpenSearch": {
       "properties": {
         "dedupe": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
+          "$ref": "#/$defs/LogDedupe"
         },
         "match": {
           "items": {
