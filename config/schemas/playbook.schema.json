@@ -411,6 +411,12 @@
           },
           "type": "array"
         },
+        "host": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "severity": {
           "items": {
             "type": "string"
@@ -782,6 +788,24 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "LogDedupe": {
+      "properties": {
+        "window": {
+          "type": "string"
+        },
+        "fields": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "fields"
+      ]
+    },
     "LogsAction": {
       "properties": {
         "loki": {
@@ -799,6 +823,18 @@
     },
     "LogsActionCloudWatch": {
       "properties": {
+        "dedupe": {
+          "$ref": "#/$defs/LogDedupe"
+        },
+        "match": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "mapping": {
+          "$ref": "#/$defs/FieldMappingConfig"
+        },
         "connection": {
           "type": "string"
         },
@@ -837,9 +873,6 @@
         },
         "query": {
           "type": "string"
-        },
-        "mapping": {
-          "$ref": "#/$defs/FieldMappingConfig"
         }
       },
       "additionalProperties": false,
@@ -851,6 +884,18 @@
     },
     "LogsActionLoki": {
       "properties": {
+        "dedupe": {
+          "$ref": "#/$defs/LogDedupe"
+        },
+        "match": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "mapping": {
+          "$ref": "#/$defs/FieldMappingConfig"
+        },
         "start": {
           "type": "string"
         },
@@ -893,6 +938,18 @@
     },
     "LogsActionOpenSearch": {
       "properties": {
+        "dedupe": {
+          "$ref": "#/$defs/LogDedupe"
+        },
+        "match": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "mapping": {
+          "$ref": "#/$defs/FieldMappingConfig"
+        },
         "address": {
           "type": "string"
         },
@@ -910,9 +967,6 @@
         },
         "limit": {
           "type": "string"
-        },
-        "mapping": {
-          "$ref": "#/$defs/FieldMappingConfig"
         }
       },
       "additionalProperties": false,

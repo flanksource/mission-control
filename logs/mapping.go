@@ -55,6 +55,14 @@ func MapFieldToLogLine(key string, value any, line *LogLine, config FieldMapping
 		return nil
 	}
 
+	if slices.Contains(config.Host, key) {
+		if host, ok := value.(string); ok {
+			line.Host, _ = utils.Stringify(host)
+		}
+
+		return nil
+	}
+
 	if line.Labels == nil {
 		line.Labels = make(map[string]string)
 	}

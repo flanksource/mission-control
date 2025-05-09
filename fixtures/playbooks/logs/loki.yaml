@@ -17,7 +17,7 @@ spec:
       label: Limit
       description: The maximum number of logs to fetch
       required: false
-      default: '100'
+      default: "100"
   actions:
     - name: Fetch logs from Loki
       logs:
@@ -37,3 +37,10 @@ spec:
             {namespace="{{ .config.tags.namespace }}",{{.config.config_class | toLower}}="{{ .config.name }}"}
           limit: $(.params.limit)
           start: now-2h
+          match:
+            - severity != "info" && severity != "unknown"
+            - labels.service == 'payment'
+          dedupe:
+            window: 1h
+            fields:
+              - message

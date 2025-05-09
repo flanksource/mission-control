@@ -1745,6 +1745,23 @@ spec:
                               description: ConnectionName of the connection. It'll
                                 be used to populate the endpoint, accessKey and secretKey.
                               type: string
+                            dedupe:
+                              description: |-
+                                Dedupe is a list of fields to dedupe on.
+                                For two logs to be deduped, they should match on all the fields.
+
+
+                                If two logs have empty value for the field, they are still deduped.
+                              properties:
+                                fields:
+                                  items:
+                                    type: string
+                                  type: array
+                                window:
+                                  type: string
+                              required:
+                              - fields
+                              type: object
                             end:
                               description: |-
                                 The end time for the query
@@ -1760,11 +1777,12 @@ spec:
                               description: The log group on which to perform the query.
                               type: string
                             mapping:
-                              description: |-
-                                FieldMappingConfig defines how source log fields map to canonical LogLine fields.
-                                Each key represents a canonical field (e.g., "message", "timestamp"),
-                                and the value is a list of possible source field names.
+                              description: Map labels to fields
                               properties:
+                                host:
+                                  items:
+                                    type: string
+                                  type: array
                                 id:
                                   items:
                                     type: string
@@ -1790,6 +1808,14 @@ spec:
                                     type: string
                                   type: array
                               type: object
+                            match:
+                              description: |-
+                                Match is a list of CEL expressions that decide if the log should be included.
+                                If even one of the expressions match, the log will be included.
+                              items:
+                                description: MatchExpression uses MatchItems
+                                type: string
+                              type: array
                             query:
                               description: The query to perform on the log group.
                               type: string
@@ -1899,6 +1925,23 @@ spec:
                           properties:
                             connection:
                               type: string
+                            dedupe:
+                              description: |-
+                                Dedupe is a list of fields to dedupe on.
+                                For two logs to be deduped, they should match on all the fields.
+
+
+                                If two logs have empty value for the field, they are still deduped.
+                              properties:
+                                fields:
+                                  items:
+                                    type: string
+                                  type: array
+                                window:
+                                  type: string
+                              required:
+                              - fields
+                              type: object
                             direction:
                               description: Direction is the direction of the query.
                                 "forward" or "backward" (default)
@@ -1917,6 +1960,46 @@ spec:
                               description: Limit is the maximum number of lines to
                                 return
                               type: string
+                            mapping:
+                              description: Map labels to fields
+                              properties:
+                                host:
+                                  items:
+                                    type: string
+                                  type: array
+                                id:
+                                  items:
+                                    type: string
+                                  type: array
+                                ignore:
+                                  items:
+                                    type: string
+                                  type: array
+                                message:
+                                  items:
+                                    type: string
+                                  type: array
+                                severity:
+                                  items:
+                                    type: string
+                                  type: array
+                                source:
+                                  items:
+                                    type: string
+                                  type: array
+                                timestamp:
+                                  items:
+                                    type: string
+                                  type: array
+                              type: object
+                            match:
+                              description: |-
+                                Match is a list of CEL expressions that decide if the log should be included.
+                                If even one of the expressions match, the log will be included.
+                              items:
+                                description: MatchExpression uses MatchItems
+                                type: string
+                              type: array
                             password:
                               properties:
                                 name:
@@ -2030,16 +2113,34 @@ spec:
                           properties:
                             address:
                               type: string
+                            dedupe:
+                              description: |-
+                                Dedupe is a list of fields to dedupe on.
+                                For two logs to be deduped, they should match on all the fields.
+
+
+                                If two logs have empty value for the field, they are still deduped.
+                              properties:
+                                fields:
+                                  items:
+                                    type: string
+                                  type: array
+                                window:
+                                  type: string
+                              required:
+                              - fields
+                              type: object
                             index:
                               type: string
                             limit:
                               type: string
                             mapping:
-                              description: |-
-                                FieldMappingConfig defines how source log fields map to canonical LogLine fields.
-                                Each key represents a canonical field (e.g., "message", "timestamp"),
-                                and the value is a list of possible source field names.
+                              description: Map labels to fields
                               properties:
+                                host:
+                                  items:
+                                    type: string
+                                  type: array
                                 id:
                                   items:
                                     type: string
@@ -2065,6 +2166,14 @@ spec:
                                     type: string
                                   type: array
                               type: object
+                            match:
+                              description: |-
+                                Match is a list of CEL expressions that decide if the log should be included.
+                                If even one of the expressions match, the log will be included.
+                              items:
+                                description: MatchExpression uses MatchItems
+                                type: string
+                              type: array
                             password:
                               properties:
                                 name:

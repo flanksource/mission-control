@@ -9,6 +9,7 @@ type FieldMappingConfig struct {
 	ID        []string `json:"id,omitempty" yaml:"id,omitempty"`
 	Message   []string `json:"message,omitempty" yaml:"message,omitempty"`
 	Timestamp []string `json:"timestamp,omitempty" yaml:"timestamp,omitempty"`
+	Host      []string `json:"host,omitempty" yaml:"host,omitempty"`
 	Severity  []string `json:"severity,omitempty" yaml:"severity,omitempty"`
 	Source    []string `json:"source,omitempty" yaml:"source,omitempty"`
 	Ignore    []string `json:"ignore,omitempty" yaml:"ignore,omitempty"`
@@ -33,9 +34,12 @@ func (c FieldMappingConfig) WithDefaults(defaultMap FieldMappingConfig) FieldMap
 	if len(c.Ignore) == 0 {
 		c.Ignore = defaultMap.Ignore
 	}
+	if len(c.Host) == 0 {
+		c.Host = defaultMap.Host
+	}
 	return c
 }
 
 func (c FieldMappingConfig) Empty() bool {
-	return len(c.ID) == 0 && len(c.Message) == 0 && len(c.Timestamp) == 0 && len(c.Severity) == 0 && len(c.Source) == 0 && len(c.Ignore) == 0
+	return len(c.ID) == 0 && len(c.Message) == 0 && len(c.Timestamp) == 0 && len(c.Severity) == 0 && len(c.Source) == 0 && len(c.Ignore) == 0 && len(c.Host) == 0
 }

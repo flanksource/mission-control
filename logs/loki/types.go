@@ -19,7 +19,7 @@ type LokiResponse struct {
 	Error     string       `json:"error,omitempty"`
 }
 
-func (t *LokiResponse) ToLogResult() logs.LogResult {
+func (t *LokiResponse) ToLogResult(mappingConfig logs.FieldMappingConfig) logs.LogResult {
 	output := logs.LogResult{
 		Metadata: t.Data.Stats,
 	}
@@ -36,16 +36,21 @@ func (t *LokiResponse) ToLogResult() logs.LogResult {
 				continue
 			}
 
-			line := logs.LogLine{
+			line := &logs.LogLine{
+				Count:         1,
 				FirstObserved: time.Unix(0, firstObserved),
 				Message:       v[1],
 				Labels:        result.Stream,
 			}
 
-			if pod, ok := result.Stream["pod"]; ok {
-				line.Host = pod
+			for k, v := range result.Stream {
+				if err := logs.MapFieldToLogLine(k, v, line, mappingConfig); err != nil {
+					// Log or handle mapping error? For now, just log it.
+					logger.Errorf("Error mapping field %s for log %s: %v", k, line.ID, err)
+				}
 			}
 
+			line.SetHash()
 			output.Logs = append(output.Logs, line)
 		}
 	}
@@ -61,8 +66,10 @@ type Result struct {
 // Data holds the actual query results and statistics.
 type Data struct {
 	ResultType string         `json:"resultType"`
-	Result     []Result       `json:"result"`
 	Stats      map[string]any `json:"stats"`
+
+	// Logs per label (aka. stream)
+	Result []Result `json:"result"`
 }
 
 // Request represents available parameters for Loki queries.

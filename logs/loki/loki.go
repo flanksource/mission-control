@@ -15,22 +15,34 @@ import (
 	"github.com/flanksource/incident-commander/logs"
 )
 
-func Fetch(ctx context.Context, conn connection.Loki, request Request) (*logs.LogResult, error) {
-	if err := conn.Populate(ctx); err != nil {
+type lokiSearcher struct {
+	conn          connection.Loki
+	mappingConfig *logs.FieldMappingConfig
+}
+
+func NewSearcher(conn connection.Loki, mappingConfig *logs.FieldMappingConfig) *lokiSearcher {
+	return &lokiSearcher{
+		conn:          conn,
+		mappingConfig: mappingConfig,
+	}
+}
+
+func (t *lokiSearcher) Fetch(ctx context.Context, request Request) (*logs.LogResult, error) {
+	if err := t.conn.Populate(ctx); err != nil {
 		return nil, fmt.Errorf("failed to populate connection: %w", err)
 	}
 
-	parsedBaseURL, err := url.Parse(conn.URL)
+	parsedBaseURL, err := url.Parse(t.conn.URL)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse base URL '%s': %w", conn.URL, err)
+		return nil, fmt.Errorf("failed to parse base URL '%s': %w", t.conn.URL, err)
 	}
 	apiURL := parsedBaseURL.JoinPath("/loki/api/v1/query_range")
 	apiURL.RawQuery = request.Params().Encode()
 
 	client := http.NewClient()
 
-	if conn.Username != nil && conn.Password != nil {
-		client.Auth(conn.Username.ValueStatic, conn.Password.ValueStatic)
+	if t.conn.Username != nil && t.conn.Password != nil {
+		client.Auth(t.conn.Username.ValueStatic, t.conn.Password.ValueStatic)
 	}
 
 	resp, err := client.R(ctx).Get(apiURL.String())
@@ -54,6 +66,17 @@ func Fetch(ctx context.Context, conn connection.Loki, request Request) (*logs.Lo
 		return nil, fmt.Errorf("loki request failed wth status %s: (error: %s, errorType: %s)", resp.Status, lokiResp.Error, lokiResp.ErrorType)
 	}
 
-	result := lokiResp.ToLogResult()
+	mappingConfig := DefaultFieldMappingConfig
+	if t.mappingConfig != nil {
+		mappingConfig = t.mappingConfig.WithDefaults(DefaultFieldMappingConfig)
+	}
+
+	result := lokiResp.ToLogResult(mappingConfig)
+
 	return &result, nil
+}
+
+var DefaultFieldMappingConfig = logs.FieldMappingConfig{
+	Severity: []string{"detected_level"},
+	Host:     []string{"pod"},
 }
