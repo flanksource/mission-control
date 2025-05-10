@@ -178,6 +178,70 @@ func getEligibleAgents(spec v1.PlaybookSpec, action *v1.PlaybookAction, run mode
 	return []string{Main}
 }
 
+func saveAIResultToSendHistory(ctx context.Context, run models.PlaybookRun) error {
+	if run.NotificationSendID == nil {
+		return nil
+	}
+
+	var playbookSpec v1.PlaybookSpec
+	if err := json.Unmarshal(run.Spec, &playbookSpec); err != nil {
+		return ctx.Oops().Wrap(err)
+	}
+
+	completedActions, err := run.GetActions(ctx.DB())
+	if err != nil {
+		return ctx.Oops().Wrap(err)
+	}
+
+	var aiActionNames, notificationActionNames []string
+	for _, action := range playbookSpec.Actions {
+		if action.AI != nil {
+			aiActionNames = append(aiActionNames, action.Name)
+		}
+		if action.Notification != nil {
+			notificationActionNames = append(notificationActionNames, action.Name)
+		}
+	}
+
+	sendHistoryUpdate := models.NotificationSendHistory{
+		ID: *run.NotificationSendID,
+	}
+	for _, action := range completedActions {
+		if action.Status != models.PlaybookActionStatusCompleted || action.Result == nil {
+			continue
+		}
+
+		if lo.Contains(aiActionNames, action.Name) {
+			if diagnosisReport, ok := action.Result["json"].(string); ok {
+				var aiDiagnosisReport map[string]string
+				if err := json.Unmarshal([]byte(diagnosisReport), &aiDiagnosisReport); err != nil {
+					return ctx.Oops().Wrap(err)
+				}
+
+				if headline, ok := aiDiagnosisReport["headline"]; ok {
+					sendHistoryUpdate.ResourceHealthDescription = headline
+				}
+			}
+		}
+
+		if lo.Contains(notificationActionNames, action.Name) {
+			if slackMsg, ok := action.Result["slack"].(string); ok {
+				sendHistoryUpdate.Body = &slackMsg
+			} else if body, ok := action.Result["body"].(string); ok {
+				sendHistoryUpdate.Body = &body
+			}
+		}
+	}
+
+	if len(sendHistoryUpdate.ResourceHealthDescription) > 0 {
+		if err := ctx.DB().Updates(sendHistoryUpdate).Error; err != nil {
+			return ctx.Oops().Wrap(err)
+		}
+	}
+
+	return nil
+}
+
 // ScheduleRun finds the next action step that needs to run and
 // creates the PlaybookActionRun in a scheduled status, with an optional agentId
 func ScheduleRun(ctx context.Context, run models.PlaybookRun) error {
@@ -197,7 +261,19 @@ func ScheduleRun(ctx context.Context, run models.PlaybookRun) error {
 		return ctx.Oops().Wrap(err)
 	}
 	if action == nil {
-		return ctx.Oops("db").Wrap(run.End(ctx.DB()))
+		if err := run.End(ctx.DB()); err != nil {
+			return ctx.Oops("db").Wrap(err)
+		}
+
+		// Callbacks once a run completes
+		if err := saveAIResultToSendHistory(ctx, run); err != nil {
+			// NOTE: we dont' want this error to cause a retry
+			// Maybe, at some point we can have a callback registry that are tried in a separate cycle
+			// and are retried on failure.
+			ctx.Errorf("failed to save AI diagnosis to send history: %v", err)
+		}
+
+		return nil
 	}
 
 	ctx = ctx.WithObject(action, run)
