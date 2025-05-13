@@ -19,6 +19,7 @@ var schemas = map[string]any{
 	"playbook":            &v1.Playbook{},
 	"playbook-spec":       &v1.PlaybookSpec{}, // for go-side validation
 	"incident-rules":      &v1.IncidentRule{},
+	"application":         &v1.Application{},
 }
 
 var generateSchema = &cobra.Command{
