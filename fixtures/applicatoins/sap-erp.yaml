@@ -1,0 +1,23 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Application
+metadata:
+  name: sap-erp
+  namespace: mc
+spec:
+  mapping:
+    logins:
+      - search: type=Azure::AppRegistration name="SAP-ERP"
+    accessReviews:
+      - search: type=Sailpoint::Role name=SAP ERP*
+    roles:
+      - search: type=Azure::Group name=sap-erp-group
+        # role: User
+      - search: type=Azure::Group name=sap-erp-group-admins
+        # role: Admin
+    environments:
+      "Prod":
+        - search: type=AWS::* account=12345
+      "Non-Prod":
+        - search: type=AWS::* account=12345
+    datasources:
+      - search: type=AWS::RDS,AWS::S3,AWS::EFS account=12345
