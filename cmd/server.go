@@ -113,6 +113,15 @@ func launchKopper(ctx context.Context) {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for PermissionGroup: %v", err))
 	}
 
+	if _, err := kopper.SetupReconciler(ctx, mgr,
+		db.PersistApplicationFromCRD,
+		db.DeleteApplication,
+		db.DeleteStaleApplication,
+		"application.mission-control.flanksource.com",
+	); err != nil {
+		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for Application: %v", err))
+	}
+
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("error running controller manager: %v", err))
 	}

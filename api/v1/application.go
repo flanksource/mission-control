@@ -14,7 +14,8 @@ type ApplicationMapping struct {
 }
 
 type ApplicationSpec struct {
-	Mapping ApplicationMapping `json:"mapping"`
+	Description string             `json:"description,omitempty"`
+	Mapping     ApplicationMapping `json:"mapping"`
 }
 
 // ApplicationStatus defines the observed state of Application
