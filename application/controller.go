@@ -6,11 +6,12 @@ import (
 	"net/http"
 
 	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/duty/api"
+	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/labstack/echo/v4"
 
+	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/rbac"
@@ -35,7 +36,7 @@ func ApplicationSpec(c echo.Context) error {
 
 	response, err := applicationSpec(ctx, namespace, name)
 	if err != nil {
-		return api.WriteError(c, err)
+		return dutyAPI.WriteError(c, err)
 	}
 
 	return c.JSONBlob(http.StatusOK, response)
@@ -46,14 +47,23 @@ func applicationSpec(ctx context.Context, namespace, name string) ([]byte, error
 	if err != nil {
 		return nil, ctx.Oops().Errorf("failed to find application %s/%s: %w", namespace, name, err)
 	} else if application == nil {
-		return nil, ctx.Oops().Code(api.ENOTFOUND).Errorf("application %s/%s not found", namespace, name)
+		return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("application %s/%s not found", namespace, name)
 	}
 
-	// TODO: build the application JSON the UI requires
-	spec, err := json.Marshal(application)
+	app, err := v1.ApplicationFromModel(*application)
 	if err != nil {
-		return nil, ctx.Oops().Errorf("failed to marshal application spec: %w", err)
+		return nil, ctx.Oops().Errorf("failed to convert application to kubernetes application: %w", err)
 	}
 
-	return spec, nil
+	generated, err := buildApplication(ctx, app)
+	if err != nil {
+		return nil, ctx.Oops().Errorf("failed to generate application: %w", err)
+	}
+
+	specJSON, err := json.Marshal(generated)
+	if err != nil {
+		return nil, ctx.Oops().Errorf("failed to marshal generated application: %w", err)
+	}
+
+	return specJSON, nil
 }
