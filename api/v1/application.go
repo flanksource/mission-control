@@ -18,8 +18,13 @@ type ApplicationMapping struct {
 }
 
 type ApplicationSpec struct {
-	Description string             `json:"description,omitempty"`
-	Mapping     ApplicationMapping `json:"mapping"`
+	// Description of the application
+	Description string `json:"description,omitempty"`
+
+	// Schedule on which the application scrapes the data
+	Schedule string `json:"schedule"`
+
+	Mapping ApplicationMapping `json:"mapping"`
 }
 
 // ApplicationStatus defines the observed state of Application

@@ -68,6 +68,9 @@
         "description": {
           "type": "string"
         },
+        "schedule": {
+          "type": "string"
+        },
         "mapping": {
           "$ref": "#/$defs/ApplicationMapping"
         }
@@ -75,6 +78,7 @@
       "additionalProperties": false,
       "type": "object",
       "required": [
+        "schedule",
         "mapping"
       ]
     },
