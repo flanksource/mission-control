@@ -251,8 +251,8 @@ func (in *ApplicationMapping) DeepCopyInto(out *ApplicationMapping) {
 			(*out)[key] = outVal
 		}
 	}
-	if in.Login != nil {
-		in, out := &in.Login, &out.Login
+	if in.Logins != nil {
+		in, out := &in.Logins, &out.Logins
 		*out = make([]types.ResourceSelector, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
