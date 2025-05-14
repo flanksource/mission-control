@@ -39,6 +39,7 @@ spec:
           spec:
             properties:
               description:
+                description: Description of the application
                 type: string
               mapping:
                 properties:
@@ -345,8 +346,12 @@ spec:
                       type: object
                     type: array
                 type: object
+              schedule:
+                description: Schedule on which the application scrapes the data
+                type: string
             required:
             - mapping
+            - schedule
             type: object
           status:
             description: ApplicationStatus defines the observed state of Application
