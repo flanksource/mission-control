@@ -1,15 +1,19 @@
 package v1
 
 import (
+	"encoding/json"
+
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	k8sTypes "k8s.io/apimachinery/pkg/types"
 )
 
 type ApplicationMapping struct {
 	AccessReviews []types.ResourceSelector            `json:"accessReviews,omitempty"`
 	Datasources   []types.ResourceSelector            `json:"datasources,omitempty"`
 	Environments  map[string][]types.ResourceSelector `json:"environments,omitempty"`
-	Login         []types.ResourceSelector            `json:"logins,omitempty"`
+	Logins        []types.ResourceSelector            `json:"logins,omitempty"`
 	Roles         []types.ResourceSelector            `json:"roles,omitempty"`
 }
 
@@ -34,8 +38,26 @@ type Application struct {
 	Status ApplicationStatus `json:"status,omitempty"`
 }
 
-//+kubebuilder:object:root=true
+func ApplicationFromModel(app models.Application) (*Application, error) {
+	var spec ApplicationSpec
+	if err := json.Unmarshal([]byte(app.Spec), &spec); err != nil {
+		return nil, err
+	}
 
+	application := Application{
+		ObjectMeta: metav1.ObjectMeta{
+			UID:               k8sTypes.UID(app.ID.String()),
+			Namespace:         app.Namespace,
+			Name:              app.Name,
+			CreationTimestamp: metav1.NewTime(app.CreatedAt),
+		},
+		Spec: spec,
+	}
+
+	return &application, nil
+}
+
+// +kubebuilder:object:root=true
 // ApplicationList contains a list of Application
 type ApplicationList struct {
 	metav1.TypeMeta `json:",inline"`

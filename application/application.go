@@ -1,0 +1,46 @@
+package application
+
+import (
+	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/query"
+	"github.com/flanksource/incident-commander/api"
+	v1 "github.com/flanksource/incident-commander/api/v1"
+)
+
+func buildApplication(ctx context.Context, app *v1.Application) (*api.Application, error) {
+	response := api.Application{
+		Details: api.ApplicationDetail{
+			Namespace:   app.Namespace,
+			Name:        app.Name,
+			Description: app.Spec.Description,
+			CreatedAt:   app.CreationTimestamp.Time,
+		},
+	}
+
+	mapping := app.Spec.Mapping
+	if len(mapping.Logins) > 0 {
+		configs, err := query.FindConfigIDsByResourceSelector(ctx, -1, mapping.Logins...)
+		if err != nil {
+			return nil, ctx.Oops().Errorf("failed to find login IDs: %w", err)
+		}
+
+		configAccesses, err := query.FindConfigAccessByConfigIDs(ctx, configs)
+		if err != nil {
+			return nil, ctx.Oops().Errorf("failed to find config accesses: %w", err)
+		}
+
+		for _, ca := range configAccesses {
+			response.UserAndRoles = append(response.UserAndRoles, api.UserAndRole{
+				Name:             ca.ExternalUserName,
+				Email:            ca.ExternalUserEmail,
+				Roles:            []string{}, // TODO:
+				AuthType:         "sso",      // TODO:
+				CreatedAt:        ca.CreatedAt,
+				LastLogin:        ca.LastSignedInAt,
+				LastAccessReview: ca.LastReviewedAt,
+			})
+		}
+	}
+
+	return &response, nil
+}
