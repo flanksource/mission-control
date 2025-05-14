@@ -138,10 +138,11 @@ func (g *GeminiModelWrapper) GenerateContent(ctx context.Context, messages []llm
 	}
 
 	if g.ResponseFormat == ResponseFormatDiagnosis || g.ResponseFormat == ResponseFormatPlaybookRecommendations {
-		if g.ResponseFormat == ResponseFormatDiagnosis {
+		switch g.ResponseFormat {
+		case ResponseFormatDiagnosis:
 			genOptions.ResponseSchema = &DiagnosisSchema
 			genOptions.ResponseMIMEType = "application/json"
-		} else if g.ResponseFormat == ResponseFormatPlaybookRecommendations {
+		case ResponseFormatPlaybookRecommendations:
 			genOptions.ResponseSchema = &PlaybookRecommendationSchema
 			genOptions.ResponseMIMEType = "application/json"
 		}

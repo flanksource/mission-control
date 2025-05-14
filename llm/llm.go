@@ -80,18 +80,18 @@ func PromptWithHistory(ctx dutyctx.Context, config Config, history []llms.Messag
 		// NOTE: Handled by the wrapper
 
 	default:
-		const forceToolUsePrompt = `You MUST use the %s tool to extract the diagnosis information. 
-	Do not provide any other response format. 
+		const forceToolUsePrompt = `You MUST use the %s tool to extract the diagnosis information.
+	Do not provide any other response format.
 	Only use the tool to respond.`
 
-		if config.ResponseFormat == ResponseFormatDiagnosis {
+		switch config.ResponseFormat {
+		case ResponseFormatDiagnosis:
 			options = append(options, llms.WithTools([]llms.Tool{tools.ExtractDiagnosis}))
 			messages = append(messages, llms.TextParts(llms.ChatMessageTypeHuman, fmt.Sprintf(forceToolUsePrompt, tools.ToolExtractDiagnosis)))
-		} else if config.ResponseFormat == ResponseFormatPlaybookRecommendations {
+		case ResponseFormatPlaybookRecommendations:
 			options = append(options, llms.WithTools([]llms.Tool{tools.RecommendPlaybook}))
 			messages = append(messages, llms.TextParts(llms.ChatMessageTypeHuman, fmt.Sprintf(forceToolUsePrompt, tools.ToolPlaybookRecommendations)))
 		}
-
 		// NOTE: Anthropic has forced tool use, but it's not supported in LangChainGo.
 		// So, we force that with prompts for now.
 		//
@@ -197,26 +197,25 @@ func getLLMModel(ctx dutyctx.Context, config Config) (llms.Model, error) {
 		if config.Model != "" {
 			opts = append(opts, openai.WithModel(config.Model))
 		}
-		if config.ResponseFormat == ResponseFormatDiagnosis {
-			openaiResponseFormatOpt := openai.WithResponseFormat(&openai.ResponseFormat{
+
+		switch config.ResponseFormat {
+		case ResponseFormatDiagnosis, ResponseFormatPlaybookRecommendations:
+			schemaName := "diagnosis"
+			schemaObj := &tools.ExtractDiagnosisToolSchema
+
+			if config.ResponseFormat == ResponseFormatPlaybookRecommendations {
+				schemaName = "playbook_recommendations"
+				schemaObj = &tools.RecommendPlaybooksToolSchema
+			}
+
+			opts = append(opts, openai.WithResponseFormat(&openai.ResponseFormat{
 				Type: "json_schema",
 				JSONSchema: &openai.ResponseFormatJSONSchema{
-					Name:   "diagnosis",
+					Name:   schemaName,
 					Strict: true,
-					Schema: &tools.ExtractDiagnosisToolSchema,
+					Schema: schemaObj,
 				},
-			})
-			opts = append(opts, openaiResponseFormatOpt)
-		} else if config.ResponseFormat == ResponseFormatPlaybookRecommendations {
-			openaiResponseFormatOpt := openai.WithResponseFormat(&openai.ResponseFormat{
-				Type: "json_schema",
-				JSONSchema: &openai.ResponseFormatJSONSchema{
-					Name:   "playbook_recommendations",
-					Strict: true,
-					Schema: &tools.RecommendPlaybooksToolSchema,
-				},
-			})
-			opts = append(opts, openaiResponseFormatOpt)
+			}))
 		}
 
 		openaiLLM, err := openai.New(opts...)

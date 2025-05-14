@@ -422,14 +422,14 @@ func checkInhibition(ctx context.Context, notif NotificationWithSpec, resource t
 		}
 
 		// We need to invert the direction because we're looking from the "to" perspective.
-		if inhibition.Direction == query.Outgoing {
+		switch inhibition.Direction {
+		case query.Outgoing:
 			rq.Relation = query.Incoming
-		} else if inhibition.Direction == query.Incoming {
+		case query.Incoming:
 			rq.Relation = query.Outgoing
-		} else {
+		default:
 			rq.Relation = query.All
 		}
-
 		if inhibition.Soft {
 			rq.Incoming = query.Both
 			rq.Outgoing = query.Both

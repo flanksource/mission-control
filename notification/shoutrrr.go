@@ -13,7 +13,6 @@ import (
 	"github.com/containrrr/shoutrrr/pkg/types"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/mail"
-	icUtils "github.com/flanksource/incident-commander/utils"
 	mcUtils "github.com/flanksource/incident-commander/utils"
 )
 
@@ -76,7 +75,7 @@ func PrepareShoutrrr(ctx *Context, celEnv map[string]any, shoutrrrURL string, da
 
 	switch service {
 	case "smtp":
-		data.Message = icUtils.MarkdownToHTML(data.Message)
+		data.Message = mcUtils.MarkdownToHTML(data.Message)
 		data.Properties["UseHTML"] = "true" // enforce HTML for smtp
 
 	case "telegram":

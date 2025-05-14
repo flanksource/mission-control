@@ -80,13 +80,15 @@ func parsePlaybookArgs(ctx context.Context, args []string) (*models.Playbook, *p
 			logger.Warnf("Invalid param: %s", arg)
 			continue
 		}
-		if parts[0] == "config" || parts[0] == "config_id" {
+
+		switch parts[0] {
+		case "config", "config_id":
 			params.ConfigID = lo.ToPtr(uuid.MustParse(parts[1]))
-		} else if parts[0] == "component" || parts[0] == "component_id" {
+		case "component", "component_id":
 			params.ComponentID = lo.ToPtr(uuid.MustParse(parts[1]))
-		} else if parts[0] == "check" || parts[0] == "check_id" {
+		case "check", "check_id":
 			params.CheckID = lo.ToPtr(uuid.MustParse(parts[1]))
-		} else {
+		default:
 			params.Params[parts[0]] = parts[1]
 		}
 	}
