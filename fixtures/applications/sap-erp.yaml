@@ -4,9 +4,10 @@ metadata:
   name: sap-erp
   namespace: mc
 spec:
+  schedule: "@every 1h"
   mapping:
     logins:
-      - search: type=Azure::AppRegistration name="SAP-ERP"
+      - search: type=Azure::EnterpriseApplication name="SAP-ERP"
     accessReviews:
       - search: type=Sailpoint::Role name=SAP ERP*
     roles:
