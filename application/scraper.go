@@ -67,7 +67,7 @@ func generateConfigScraper(ctx context.Context, app *v1.Application) error {
 		scraper := &models.ConfigScraper{
 			ID:            id,
 			Namespace:     scrapeConfig.Namespace,
-			Name:          fmt.Sprintf("%s/%s-app-generated", scrapeConfig.Namespace, app.Name),
+			Name:          fmt.Sprintf("%s/%s-%s-app-generated", scrapeConfig.Namespace, app.Name, scrapeConfig.Name),
 			Description:   scrapeConfig.Description,
 			Spec:          string(specJSON),
 			Source:        models.SourceApplicationCRD,
@@ -139,6 +139,7 @@ func GetAllAzureScrapeConfigs(ctx context.Context) ([]models.ConfigScraper, erro
 	var configs []models.ConfigScraper
 	if err := ctx.DB().Where("deleted_at IS NULL").
 		Where("spec->>'azure' IS NOT NULL").
+		Where("application_id IS NULL").
 		Find(&configs).Error; err != nil {
 		return nil, err
 	}
