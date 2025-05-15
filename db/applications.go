@@ -10,6 +10,15 @@ import (
 	"github.com/google/uuid"
 )
 
+func GetAllApplications(ctx context.Context) ([]models.Application, error) {
+	var apps []models.Application
+	if err := ctx.DB().Where("deleted_at IS NULL").Find(&apps).Error; err != nil {
+		return nil, err
+	}
+
+	return apps, nil
+}
+
 func FindApplication(ctx context.Context, namespace, name string) (*models.Application, error) {
 	var app models.Application
 	if err := ctx.DB().Where("name = ? AND namespace = ?", name, namespace).Find(&app).Error; err != nil {
