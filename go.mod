@@ -56,6 +56,7 @@ require (
 	github.com/go-git/go-billy/v5 v5.5.0
 	github.com/go-git/go-git/v5 v5.12.0
 	github.com/go-sql-driver/mysql v1.9.1
+	github.com/gofrs/uuid/v5 v5.3.2
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/henvic/httpretty v0.1.4
 	github.com/jackc/pgerrcode v0.0.0-20240316143900-6e2875d9b438

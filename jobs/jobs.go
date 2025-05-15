@@ -12,6 +12,7 @@ import (
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/shutdown"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/application"
 	"github.com/flanksource/incident-commander/incidents"
 	"github.com/flanksource/incident-commander/notification"
 	"github.com/robfig/cron/v3"
@@ -66,6 +67,12 @@ func Start(ctx context.Context) {
 	if err := job.NewJob(ctx, "Cleanup Event Queue", CleanupEventQueueTableSchedule, CleanupEventQueue).
 		AddToScheduler(FuncScheduler); err != nil {
 		logger.Errorf("Failed to schedule job for cleaning up event queue table: %v", err)
+	}
+
+	if j := application.SyncApplicationScrapeConfigs(ctx); j != nil {
+		if err := j.AddToScheduler(FuncScheduler); err != nil {
+			shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to schedule job SyncApplicationScrapeConfigs: %v", err))
+		}
 	}
 
 	if err := notification.ProcessFallbackNotificationsJob(ctx).AddToScheduler(FuncScheduler); err != nil {
