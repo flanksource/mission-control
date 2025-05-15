@@ -21,7 +21,6 @@ import (
 	durationutils "github.com/flanksource/commons/duration"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/utils"
-	"github.com/flanksource/duty/api"
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -80,7 +79,7 @@ func authenticateWebhook(ctx context.Context, r *http.Request, auth *v1.Playbook
 	if auth.Basic != nil {
 		username, password, ok := r.BasicAuth()
 		if !ok {
-			return api.Errorf(api.EFORBIDDEN, "username and password required")
+			return dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "username and password required")
 		}
 
 		expectedUsername, err := ctx.GetEnvValueFromCache(auth.Basic.Username, ctx.GetNamespace())
@@ -95,7 +94,7 @@ func authenticateWebhook(ctx context.Context, r *http.Request, auth *v1.Playbook
 
 		if subtle.ConstantTimeCompare([]byte(username), []byte(expectedUsername)) == 0 ||
 			subtle.ConstantTimeCompare([]byte(password), []byte(expectedPassword)) == 0 {
-			return api.Errorf(api.EUNAUTHORIZED, "username/password did not match")
+			return dutyAPI.Errorf(dutyAPI.EUNAUTHORIZED, "username/password did not match")
 		}
 	}
 
@@ -121,7 +120,7 @@ func authenticateWebhook(ctx context.Context, r *http.Request, auth *v1.Playbook
 
 		expectedHash := hex.EncodeToString(hash.Sum(nil))
 		if subtle.ConstantTimeCompare([]byte(expectedHash), []byte(sig)) == 0 {
-			return api.Errorf(api.EUNAUTHORIZED, "invalid signature")
+			return dutyAPI.Errorf(dutyAPI.EUNAUTHORIZED, "invalid signature")
 		}
 	}
 
@@ -156,13 +155,13 @@ func authenticateWebhook(ctx context.Context, r *http.Request, auth *v1.Playbook
 			msgSignature = r.Header.Get("webhook-signature")
 			msgTimestamp = r.Header.Get("webhook-timestamp")
 			if msgID == "" || msgSignature == "" || msgTimestamp == "" {
-				return api.Errorf(api.EINVALID, "missing svix headers")
+				return dutyAPI.Errorf(dutyAPI.EINVALID, "missing svix headers")
 			}
 		}
 
 		timestamp, err := verifier.parseTimestampHeader(msgTimestamp)
 		if err != nil {
-			return api.Errorf(api.EINVALID, "bad timestamp")
+			return dutyAPI.Errorf(dutyAPI.EINVALID, "bad timestamp")
 		}
 
 		if auth.SVIX.TimestampTolerance != "" {
@@ -208,7 +207,7 @@ func authenticateWebhook(ctx context.Context, r *http.Request, auth *v1.Playbook
 			}
 		}
 
-		return api.Errorf(api.EUNAUTHORIZED, "invalid signature")
+		return dutyAPI.Errorf(dutyAPI.EUNAUTHORIZED, "invalid signature")
 	}
 
 	return nil
@@ -284,14 +283,14 @@ func validateJWT(ctx gocontext.Context, jwksURL, jwtB64 string) error {
 			errors.Is(err, jwt.ErrTokenSignatureInvalid) ||
 			errors.Is(err, jwt.ErrTokenExpired) ||
 			errors.Is(err, jwt.ErrTokenMalformed) {
-			return api.Errorf(api.EUNAUTHORIZED, "%v", err)
+			return dutyAPI.Errorf(dutyAPI.EUNAUTHORIZED, "%v", err)
 		}
 
 		return fmt.Errorf("failed to parse the JWT: %w", err)
 	}
 
 	if !token.Valid {
-		return api.Errorf(api.EUNAUTHORIZED, "the token is not valid.")
+		return dutyAPI.Errorf(dutyAPI.EUNAUTHORIZED, "the token is not valid.")
 	}
 
 	return nil

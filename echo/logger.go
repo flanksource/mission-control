@@ -10,11 +10,10 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/henvic/httpretty"
 	"github.com/labstack/echo/v4"
-	echov4 "github.com/labstack/echo/v4"
 	slogecho "github.com/samber/slog-echo"
 )
 
-func NewHttpSingleLineLogger(ctx context.Context, skipper func(c echov4.Context) bool) echo.MiddlewareFunc {
+func NewHttpSingleLineLogger(ctx context.Context, skipper func(c echo.Context) bool) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 
 		log := ctx.WithName("http").Logger
