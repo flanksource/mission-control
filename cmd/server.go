@@ -115,7 +115,7 @@ func launchKopper(ctx context.Context) {
 	}
 
 	if _, err := kopper.SetupReconciler(ctx, mgr,
-		persistApplication,
+		application.PersistApplication,
 		db.DeleteApplication,
 		db.DeleteStaleApplication,
 		"application.mission-control.flanksource.com",
@@ -126,17 +126,6 @@ func launchKopper(ctx context.Context) {
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("error running controller manager: %v", err))
 	}
-}
-
-func persistApplication(ctx context.Context, app *v1.Application) error {
-	if err := db.PersistApplicationFromCRD(ctx, app); err != nil {
-		return err
-	}
-
-	// TODO: This needs to be called once after all applications are persisted.
-	job := application.SyncApplicationScrapeConfigs(ctx)
-	job.Run()
-	return nil
 }
 
 var Serve = &cobra.Command{
