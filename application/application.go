@@ -3,8 +3,10 @@ package application
 import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/query"
+
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/db"
 )
 
 func buildApplication(ctx context.Context, app *v1.Application) (*api.Application, error) {
@@ -43,4 +45,14 @@ func buildApplication(ctx context.Context, app *v1.Application) (*api.Applicatio
 	}
 
 	return &response, nil
+}
+
+func PersistApplication(ctx context.Context, app *v1.Application) error {
+	if err := db.PersistApplicationFromCRD(ctx, app); err != nil {
+		return err
+	}
+
+	job := SyncApplicationScrapeConfigs(ctx)
+	job.Run()
+	return nil
 }
