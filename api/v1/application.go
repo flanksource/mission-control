@@ -5,6 +5,7 @@ import (
 
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
+	"github.com/google/uuid"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sTypes "k8s.io/apimachinery/pkg/types"
 )
@@ -41,6 +42,15 @@ type Application struct {
 
 	Spec   ApplicationSpec   `json:"spec,omitempty"`
 	Status ApplicationStatus `json:"status,omitempty"`
+}
+
+func (a *Application) GetID() uuid.UUID {
+	uid, err := uuid.Parse(string(a.UID))
+	if err != nil {
+		return uuid.Nil
+	}
+
+	return uid
 }
 
 func ApplicationFromModel(app models.Application) (*Application, error) {

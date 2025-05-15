@@ -8,6 +8,7 @@ import (
 	"github.com/flanksource/duty/models"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/trace"
 )
 
 func GetAllApplications(ctx context.Context) ([]models.Application, error) {
@@ -21,7 +22,7 @@ func GetAllApplications(ctx context.Context) ([]models.Application, error) {
 
 func FindApplication(ctx context.Context, namespace, name string) (*models.Application, error) {
 	var app models.Application
-	if err := ctx.DB().Where("name = ? AND namespace = ?", name, namespace).Find(&app).Error; err != nil {
+	if err := ctx.DB().Where("deleted_at IS NULL").Where("name = ? AND namespace = ?", name, namespace).Find(&app).Error; err != nil {
 		return nil, err
 	}
 
@@ -56,12 +57,32 @@ func PersistApplicationFromCRD(ctx context.Context, obj *v1.Application) error {
 }
 
 func DeleteApplication(ctx context.Context, id string) error {
-	return ctx.DB().Model(&models.Application{}).Where("id = ?", id).Update("deleted_at", duty.Now()).Error
+	return ctx.Transaction(func(txCtx context.Context, span trace.Span) error {
+		if err := txCtx.DB().Model(&models.Application{}).Where("id = ?", id).Update("deleted_at", duty.Now()).Error; err != nil {
+			return err
+		}
+
+		if err := txCtx.DB().Model(&models.ConfigScraper{}).Where("application_id = ?", id).Update("deleted_at", duty.Now()).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
 }
 
 func DeleteStaleApplication(ctx context.Context, newer *v1.Application) error {
-	return ctx.DB().Model(&models.Application{}).
-		Where("name = ? AND namespace = ?", newer.Name, newer.Namespace).
-		Where("deleted_at IS NULL").
-		Update("deleted_at", duty.Now()).Error
+	return ctx.Transaction(func(txCtx context.Context, span trace.Span) error {
+		if err := ctx.DB().Model(&models.Application{}).
+			Where("name = ? AND namespace = ?", newer.Name, newer.Namespace).
+			Where("deleted_at IS NULL").
+			Update("deleted_at", duty.Now()).Error; err != nil {
+			return err
+		}
+
+		if err := txCtx.DB().Model(&models.ConfigScraper{}).Where("application_id = ?", newer.GetID()).Update("deleted_at", duty.Now()).Error; err != nil {
+			return err
+		}
+
+		return nil
+	})
 }
