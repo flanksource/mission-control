@@ -55,13 +55,70 @@
         },
         "roles": {
           "items": {
-            "$ref": "#/$defs/ResourceSelector"
+            "$ref": "#/$defs/ApplicationRoleMapping"
           },
           "type": "array"
         }
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "ApplicationRoleMapping": {
+      "properties": {
+        "agent": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "string"
+        },
+        "cache": {
+          "type": "string"
+        },
+        "search": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "integer"
+        },
+        "includeDeleted": {
+          "type": "boolean"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string"
+        },
+        "tagSelector": {
+          "type": "string"
+        },
+        "labelSelector": {
+          "type": "string"
+        },
+        "fieldSelector": {
+          "type": "string"
+        },
+        "health": {
+          "type": "string"
+        },
+        "types": {
+          "$ref": "#/$defs/Items"
+        },
+        "statuses": {
+          "$ref": "#/$defs/Items"
+        },
+        "role": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "role"
+      ]
     },
     "ApplicationSpec": {
       "properties": {
