@@ -63,7 +63,7 @@ func generateConfigScraper(ctx context.Context, app *v1.Application) error {
 		}
 
 		// generate a deterministic id for the scraper based on the application id
-		id := uuid.UUID(uuidV5.NewV5(uuidV5.Nil, string(app.UID)))
+		id := uuid.UUID(uuidV5.NewV5(uuidV5.UUID(scrapeConfig.ID), string(app.UID)))
 		scraper := &models.ConfigScraper{
 			ID:            id,
 			Namespace:     scrapeConfig.Namespace,
