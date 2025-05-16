@@ -10,6 +10,19 @@ import (
 	"github.com/google/uuid"
 )
 
+func FindApplication(ctx context.Context, namespace, name string) (*models.Application, error) {
+	var app models.Application
+	if err := ctx.DB().Where("name = ? AND namespace = ?", name, namespace).Find(&app).Error; err != nil {
+		return nil, err
+	}
+
+	if app.ID == uuid.Nil {
+		return nil, nil
+	}
+
+	return &app, nil
+}
+
 func PersistApplicationFromCRD(ctx context.Context, obj *v1.Application) error {
 	uid, err := uuid.Parse(string(obj.GetUID()))
 	if err != nil {

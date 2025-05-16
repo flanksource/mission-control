@@ -33,7 +33,8 @@ import (
 	"github.com/flanksource/incident-commander/teams"
 	"github.com/flanksource/incident-commander/vars"
 
-	// register event handlers
+	// register event handlers & echo routers
+	_ "github.com/flanksource/incident-commander/application"
 	_ "github.com/flanksource/incident-commander/artifacts"
 	_ "github.com/flanksource/incident-commander/catalog"
 	_ "github.com/flanksource/incident-commander/connection"
