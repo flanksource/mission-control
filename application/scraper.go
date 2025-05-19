@@ -133,6 +133,13 @@ func SyncApplicationScrapeConfigs(sc context.Context) *job.Job {
 				if err := linkToConfigs(sc, app); err != nil {
 					return err
 				}
+
+				// TODO: Decide on this
+				// Maybe config access should be linked to application ID directly.
+				scraperID := uuid.MustParse("6e1fe094-550f-40c7-9286-d4e4fafebdcc")
+				if err := generateCustomRoles(sc, scraperID, app); err != nil {
+					return err
+				}
 			}
 
 			applicationIDs := lo.Map(applications, func(app models.Application, _ int) uuid.UUID {
@@ -142,6 +149,47 @@ func SyncApplicationScrapeConfigs(sc context.Context) *job.Job {
 			return cleanupStaleScrapers(sc, applicationIDs)
 		},
 	}
+}
+
+// Generate new custom roles & config accesses for those roles
+func generateCustomRoles(ctx context.Context, scraperID uuid.UUID, app *v1.Application) error {
+	for _, role := range app.Spec.Mapping.Roles {
+		roleID := uuid.UUID(uuidV5.NewV5(uuidV5.NamespaceDNS, fmt.Sprintf("%s-%s", app.UID, role.Role)))
+
+		externalRole := models.ExternalRole{
+			ID:          roleID,
+			Name:        role.Role,
+			ScraperID:   scraperID,
+			Description: "Custom Mapped Role",
+		}
+
+		if err := ctx.DB().Save(&externalRole).Error; err != nil {
+			return ctx.Oops().Errorf("failed to persist custom external role: %w", err)
+		}
+
+		configIDs, err := query.FindConfigIDsByResourceSelector(ctx, -1, role.ResourceSelector)
+		if err != nil {
+			return ctx.Oops().Errorf("failed to find login IDs: %w", err)
+		}
+
+		if len(configIDs) == 0 {
+			continue
+		}
+
+		roleConfigAccesses := lo.Map(configIDs, func(configID uuid.UUID, _ int) models.ConfigAccess {
+			return models.ConfigAccess{
+				ConfigID:       configID,
+				ExternalRoleID: lo.ToPtr(roleID),
+				ScraperID:      scraperID,
+			}
+		})
+
+		if err := ctx.DB().Save(roleConfigAccesses).Error; err != nil {
+			return ctx.Oops().Errorf("failed to persist config accesses: %w", err)
+		}
+	}
+
+	return nil
 }
 
 func cleanupStaleScrapers(ctx context.Context, activeApplicationIDs []uuid.UUID) error {
