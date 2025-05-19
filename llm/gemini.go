@@ -20,11 +20,12 @@ var DiagnosisSchema = genai.Schema{
 		},
 		"summary": {
 			Type:        genai.TypeString,
-			Description: "Summary of the issue in markdown. Use bullet points if needed.",
+			Description: "Summary of the issue in markdown. Keep it short and concise.",
+			MaxLength:   lo.ToPtr(int64(50)),
 		},
 		"recommended_fix": {
 			Type:        genai.TypeString,
-			Description: "Short and concise recommended fix for the issue in markdown. Use bullet points if needed.",
+			Description: "Short and concise recommended fix for the issue in markdown. Use bullet points if needed and keep each points under 10 words.",
 		},
 	},
 	Required: []string{"headline", "summary", "recommended_fix"},
