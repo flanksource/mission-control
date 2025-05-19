@@ -33,8 +33,8 @@ func buildApplication(ctx context.Context, app *v1.Application) (*api.Applicatio
 
 		for _, ca := range configAccesses {
 			response.UserAndRoles = append(response.UserAndRoles, api.UserAndRole{
-				Name:             ca.ExternalUserName,
-				Email:            ca.ExternalUserEmail,
+				Name:             ca.User,
+				Email:            ca.Email,
 				Roles:            []string{}, // TODO:
 				AuthType:         "sso",      // TODO:
 				CreatedAt:        ca.CreatedAt,

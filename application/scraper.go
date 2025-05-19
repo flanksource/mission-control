@@ -8,6 +8,7 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/job"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
 	uuidV5 "github.com/gofrs/uuid/v5"
 	"github.com/google/uuid"
@@ -81,6 +82,28 @@ func generateConfigScraper(ctx context.Context, app *v1.Application) error {
 	return nil
 }
 
+func linkToConfigs(ctx context.Context, app *v1.Application) error {
+	configIDs, err := query.FindConfigIDsByResourceSelector(ctx, -1, app.Spec.Mapping.Logins...)
+	if err != nil {
+		return err
+	}
+
+	relationships := make([]models.ConfigRelationship, len(configIDs))
+	for i, configID := range configIDs {
+		relationships[i] = models.ConfigRelationship{
+			ConfigID:  string(app.GetUID()),
+			RelatedID: configID.String(),
+			Relation:  "ApplicationLogin",
+		}
+	}
+
+	if err := ctx.DB().Save(relationships).Error; err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func SyncApplicationScrapeConfigs(sc context.Context) *job.Job {
 	return &job.Job{
 		Name:          "ApplicationConfigScraperSync",
@@ -104,6 +127,10 @@ func SyncApplicationScrapeConfigs(sc context.Context) *job.Job {
 				}
 
 				if err := generateConfigScraper(sc, app); err != nil {
+					return err
+				}
+
+				if err := linkToConfigs(sc, app); err != nil {
 					return err
 				}
 			}
