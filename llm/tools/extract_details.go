@@ -11,6 +11,11 @@ import (
 
 const ToolExtractDiagnosis = "extract_diagnosis"
 
+// NOTE: OpenAI response format doesn't support max length.
+// Notable keywords not supported include:
+// For strings: minLength, maxLength, pattern, format
+// https://platform.openai.com/docs/guides/structured-outputs?api-mode=responses#some-type-specific-keywords-are-not-yet-supported
+
 var ExtractDiagnosisToolSchema = openai.ResponseFormatJSONSchemaProperty{
 	Type: "object",
 	Properties: map[string]*openai.ResponseFormatJSONSchemaProperty{
@@ -20,11 +25,11 @@ var ExtractDiagnosisToolSchema = openai.ResponseFormatJSONSchemaProperty{
 		},
 		"summary": {
 			Type:        "string",
-			Description: "Summary of the issue in markdown. Use bullet points if needed.",
+			Description: "Brief markdown summary (≤50 words) of the issue and impact.",
 		},
 		"recommended_fix": {
 			Type:        "string",
-			Description: "Short and concise recommended fix for the issue in markdown. Use bullet points if needed.",
+			Description: "Markdown bullet array of 1–5 concise fixes (≤10 words each).",
 		},
 	},
 	Required: []string{"headline", "summary", "recommended_fix"},

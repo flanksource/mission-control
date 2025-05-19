@@ -20,11 +20,12 @@ var DiagnosisSchema = genai.Schema{
 		},
 		"summary": {
 			Type:        genai.TypeString,
-			Description: "Summary of the issue in markdown. Use bullet points if needed.",
+			Description: "Brief markdown summary (≤50 words) of the issue and impact.",
+			MaxLength:   lo.ToPtr(int64(50)), // Doesn't seem to work: https://cloud.google.com/vertex-ai/generative-ai/docs/multimodal/control-generated-output
 		},
 		"recommended_fix": {
 			Type:        genai.TypeString,
-			Description: "Short and concise recommended fix for the issue in markdown. Use bullet points if needed.",
+			Description: "Markdown bullet array of 1–5 concise fixes (≤10 words each).",
 		},
 	},
 	Required: []string{"headline", "summary", "recommended_fix"},
