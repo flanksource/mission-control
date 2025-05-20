@@ -4,6 +4,7 @@ metadata:
   name: sap-erp
   namespace: mc
 spec:
+  type: ERP
   schedule: "@every 1h"
   mapping:
     logins:

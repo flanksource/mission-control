@@ -33,6 +33,9 @@ type ApplicationSpec struct {
 	// Description of the application
 	Description string `json:"description,omitempty"`
 
+	// Type of the application
+	Type string `json:"type"`
+
 	// Schedule on which the application scrapes the data
 	Schedule string `json:"schedule"`
 

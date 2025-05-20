@@ -11,7 +11,9 @@ import (
 
 func buildApplication(ctx context.Context, app *v1.Application) (*api.Application, error) {
 	response := api.Application{
-		Details: api.ApplicationDetail{
+		ApplicationDetail: api.ApplicationDetail{
+			ID:          app.GetID().String(),
+			Type:        app.Spec.Type,
 			Namespace:   app.Namespace,
 			Name:        app.Name,
 			Description: app.Spec.Description,
@@ -32,11 +34,11 @@ func buildApplication(ctx context.Context, app *v1.Application) (*api.Applicatio
 		}
 
 		for _, ca := range configAccesses {
-			response.UserAndRoles = append(response.UserAndRoles, api.UserAndRole{
+			response.AccessControl.Users = append(response.AccessControl.Users, api.UserAndRole{
 				Name:             ca.User,
 				Email:            ca.Email,
-				Roles:            []string{}, // TODO:
-				AuthType:         "sso",      // TODO:
+				Role:             "",    // TODO:
+				AuthType:         "sso", // TODO:
 				CreatedAt:        ca.CreatedAt,
 				LastLogin:        ca.LastSignedInAt,
 				LastAccessReview: ca.LastReviewedAt,
