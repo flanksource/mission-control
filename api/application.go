@@ -6,6 +6,18 @@ import "time"
 type Application struct {
 	ApplicationDetail `json:",inline"`
 	AccessControl     ApplicationAccessControl `json:"accessControl"`
+	Changes           []ApplicationChange      `json:"changes"`
+	Incidents         []ApplicationIncident    `json:"incidents"`
+}
+
+type ApplicationChange struct {
+	ID          string    `json:"id"`
+	Date        time.Time `json:"date"`
+	User        string    `json:"user"`
+	Description string    `json:"description"`
+	Status      string    `json:"status"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
 }
 
 type ApplicationAccessControl struct {
@@ -36,5 +48,20 @@ type UserAndRole struct {
 type AuthMethod struct {
 	Name       string            `json:"name"`
 	Type       string            `json:"type"`
+	MFA        *AuthMethodMFA    `json:"mfa,omitempty"`
 	Properties map[string]string `json:"properties"`
+}
+
+type AuthMethodMFA struct {
+	Type     string `json:"type"`
+	Enforced string `json:"enforced"`
+}
+
+type ApplicationIncident struct {
+	ID           string     `json:"id"`
+	Date         time.Time  `json:"date"`
+	Severity     string     `json:"severity"`
+	Description  string     `json:"description"`
+	Status       string     `json:"status"`
+	ResolvedDate *time.Time `json:"resolvedDate,omitempty"`
 }
