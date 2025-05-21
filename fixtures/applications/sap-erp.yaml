@@ -12,9 +12,9 @@ spec:
       - search: type=Sailpoint::Role name=SAP ERP*
     roles:
       - search: type=Azure::Group name=sap-erp-group
-        # role: User
+        role: User
       - search: type=Azure::Group name=sap-erp-group-admins
-        # role: Admin
+        role: Admin
     environments:
       "Prod":
         - search: type=AWS::* account=12345
