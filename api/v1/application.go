@@ -40,6 +40,24 @@ type ApplicationSpec struct {
 	Schedule string `json:"schedule"`
 
 	Mapping ApplicationMapping `json:"mapping"`
+
+	Properties []Property `json:"properties,omitempty"`
+}
+
+type Property struct {
+	Label   string       `json:"label,omitempty"`
+	Name    string       `json:"name,omitempty"`
+	Tooltip string       `json:"tooltip,omitempty"`
+	Icon    string       `json:"icon,omitempty"`
+	Text    string       `json:"text,omitempty"`
+	Order   int          `json:"order,omitempty"`
+	Type    string       `json:"type,omitempty"`
+	Color   string       `json:"color,omitempty"`
+	Value   *int64       `json:"value,omitempty"`
+	Links   []types.Link `json:"links,omitempty"`
+
+	// e.g. milliseconds, bytes, millicores, epoch etc.
+	Unit string `json:"unit,omitempty"`
 }
 
 // ApplicationStatus defines the observed state of Application
