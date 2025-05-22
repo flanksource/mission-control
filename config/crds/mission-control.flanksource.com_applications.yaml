@@ -355,6 +355,51 @@ spec:
                       type: object
                     type: array
                 type: object
+              properties:
+                items:
+                  properties:
+                    color:
+                      type: string
+                    icon:
+                      type: string
+                    label:
+                      type: string
+                    links:
+                      items:
+                        properties:
+                          icon:
+                            type: string
+                          label:
+                            type: string
+                          text:
+                            type: string
+                          tooltip:
+                            type: string
+                          type:
+                            description: e.g. documentation, support, playbook
+                            type: string
+                          url:
+                            type: string
+                        type: object
+                      type: array
+                    name:
+                      type: string
+                    order:
+                      type: integer
+                    text:
+                      type: string
+                    tooltip:
+                      type: string
+                    type:
+                      type: string
+                    unit:
+                      description: e.g. milliseconds, bytes, millicores, epoch etc.
+                      type: string
+                    value:
+                      format: int64
+                      type: integer
+                  type: object
+                type: array
               schedule:
                 description: Schedule on which the application scrapes the data
                 type: string

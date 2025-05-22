@@ -6,6 +6,23 @@ metadata:
 spec:
   type: ERP
   schedule: "@every 1h"
+  properties:
+    - label: Classification
+      order: 1
+      text: Confidential
+      icon: shield
+    - label: Criticality
+      order: 2
+      text: High
+      icon: alert-triangle
+    - label: Usage
+      order: 3
+      text: Internal
+      icon: globe
+    - label: Source
+      order: 4
+      text: COTS
+      icon: box
   mapping:
     logins:
       - search: type=Azure::EnterpriseApplication name="SAP-ERP"
