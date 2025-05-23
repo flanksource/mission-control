@@ -17,6 +17,7 @@ func buildApplication(ctx context.Context, app *v1.Application) (*api.Applicatio
 			Namespace:   app.Namespace,
 			Name:        app.Name,
 			Description: app.Spec.Description,
+			Properties:  app.Spec.Properties,
 			CreatedAt:   app.CreationTimestamp.Time,
 		},
 	}

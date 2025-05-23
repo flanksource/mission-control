@@ -1,6 +1,10 @@
 package api
 
-import "time"
+import (
+	"time"
+
+	"github.com/flanksource/duty/types"
+)
 
 // Application is the schema that UI uses.
 type Application struct {
@@ -26,12 +30,13 @@ type ApplicationAccessControl struct {
 }
 
 type ApplicationDetail struct {
-	ID          string    `json:"id"`
-	Name        string    `json:"name"`
-	Type        string    `json:"type"`
-	Namespace   string    `json:"namespace"`
-	Description string    `json:"description,omitempty"`
-	CreatedAt   time.Time `json:"createdAt"`
+	ID          string     `json:"id"`
+	Name        string     `json:"name"`
+	Type        string     `json:"type"`
+	Namespace   string     `json:"namespace"`
+	Description string     `json:"description,omitempty"`
+	Properties  []Property `json:"properties,omitempty"`
+	CreatedAt   time.Time  `json:"createdAt"`
 }
 
 type UserAndRole struct {
@@ -64,4 +69,21 @@ type ApplicationIncident struct {
 	Description  string     `json:"description"`
 	Status       string     `json:"status"`
 	ResolvedDate *time.Time `json:"resolvedDate,omitempty"`
+}
+
+// +kubebuilder:object:generate=true
+type Property struct {
+	Label   string       `json:"label,omitempty"`
+	Name    string       `json:"name,omitempty"`
+	Tooltip string       `json:"tooltip,omitempty"`
+	Icon    string       `json:"icon,omitempty"`
+	Text    string       `json:"text,omitempty"`
+	Order   int          `json:"order,omitempty"`
+	Type    string       `json:"type,omitempty"`
+	Color   string       `json:"color,omitempty"`
+	Value   *int64       `json:"value,omitempty"`
+	Links   []types.Link `json:"links,omitempty"`
+
+	// e.g. milliseconds, bytes, millicores, epoch etc.
+	Unit string `json:"unit,omitempty"`
 }
