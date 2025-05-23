@@ -69,9 +69,9 @@ func Start(ctx context.Context) {
 		logger.Errorf("Failed to schedule job for cleaning up event queue table: %v", err)
 	}
 
-	if j := application.SyncApplicationScrapeConfigs(ctx); j != nil {
+	if j := application.SyncApplications(ctx); j != nil {
 		if err := j.AddToScheduler(FuncScheduler); err != nil {
-			shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to schedule job SyncApplicationScrapeConfigs: %v", err))
+			shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to schedule job SyncApplications: %v", err))
 		}
 	}
 

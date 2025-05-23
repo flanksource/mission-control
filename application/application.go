@@ -52,7 +52,5 @@ func PersistApplication(ctx context.Context, app *v1.Application) error {
 		return err
 	}
 
-	job := SyncApplicationScrapeConfigs(ctx)
-	job.Run()
-	return nil
+	return syncApplication(ctx, app)
 }
