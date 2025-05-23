@@ -1,0 +1,19 @@
+---
+apiVersion: configs.flanksource.com/v1
+kind: ScrapeConfig
+metadata:
+  uid: 123e4567-e89b-12d3-a456-426614174000
+  name: azure
+  namespace: mc
+spec:
+  azure:
+    - connection: connection://mc/azure-aditya
+      subscriptionID: cf2ed699-d6c6-4ee3-965f-bf48fc64beda
+      include:
+        - users
+        - groups
+        - appRegistrations
+        - appRoles
+        - accessReviews
+        - authMethods
+        - enterpriseApps
