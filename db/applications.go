@@ -66,6 +66,11 @@ func DeleteApplication(ctx context.Context, id string) error {
 			return err
 		}
 
+		// Delete custom roles
+		if err := txCtx.DB().Model(&models.ExternalRole{}).Where("application_id = ?", id).Update("deleted_at", duty.Now()).Error; err != nil {
+			return err
+		}
+
 		return nil
 	})
 }
@@ -80,6 +85,11 @@ func DeleteStaleApplication(ctx context.Context, newer *v1.Application) error {
 		}
 
 		if err := txCtx.DB().Model(&models.ConfigScraper{}).Where("application_id = ?", newer.GetID()).Update("deleted_at", duty.Now()).Error; err != nil {
+			return err
+		}
+
+		// Delete custom roles
+		if err := txCtx.DB().Model(&models.ExternalRole{}).Where("application_id = ?", newer.GetID()).Update("deleted_at", duty.Now()).Error; err != nil {
 			return err
 		}
 

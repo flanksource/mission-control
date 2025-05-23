@@ -104,11 +104,11 @@ func linkToConfigs(ctx context.Context, app *v1.Application) error {
 	return nil
 }
 
-func SyncApplicationScrapeConfigs(sc context.Context) *job.Job {
+func SyncApplications(sc context.Context) *job.Job {
 	return &job.Job{
-		Name:          "ApplicationConfigScraperSync",
+		Name:          "SyncApplications",
 		Context:       sc,
-		Schedule:      "@every 10m",
+		Schedule:      "@every 1h",
 		Singleton:     true,
 		JitterDisable: true,
 		JobHistory:    true,
@@ -117,25 +117,17 @@ func SyncApplicationScrapeConfigs(sc context.Context) *job.Job {
 		Fn: func(jr job.JobRuntime) error {
 			applications, err := db.GetAllApplications(sc)
 			if err != nil {
-				return err
+				return sc.Oops().Errorf("failed to get applications: %w", err)
 			}
 
 			for _, application := range applications {
 				app, err := v1.ApplicationFromModel(application)
 				if err != nil {
-					return err
+					return sc.Oops().Errorf("failed to get application: %w", err)
 				}
 
-				if err := generateConfigScraper(sc, app); err != nil {
-					return err
-				}
-
-				if err := linkToConfigs(sc, app); err != nil {
-					return err
-				}
-
-				if err := generateCustomRoles(sc, app.GetID(), app); err != nil {
-					return err
+				if err := syncApplication(sc, app); err != nil {
+					return sc.Oops().Errorf("failed to sync application (%s/%s): %w", app.Namespace, app.Name, err)
 				}
 			}
 
@@ -146,6 +138,23 @@ func SyncApplicationScrapeConfigs(sc context.Context) *job.Job {
 			return cleanupStaleScrapers(sc, applicationIDs)
 		},
 	}
+}
+
+// syncApplication processes aplication mappings
+func syncApplication(ctx context.Context, app *v1.Application) error {
+	if err := generateConfigScraper(ctx, app); err != nil {
+		return ctx.Oops().Errorf("failed to generate config scraper: %w", err)
+	}
+
+	if err := linkToConfigs(ctx, app); err != nil {
+		return ctx.Oops().Errorf("failed to link to configs: %w", err)
+	}
+
+	if err := generateCustomRoles(ctx, app.GetID(), app); err != nil {
+		return ctx.Oops().Errorf("failed to generate custom roles: %w", err)
+	}
+
+	return nil
 }
 
 // Generate new custom roles & config accesses for those roles
