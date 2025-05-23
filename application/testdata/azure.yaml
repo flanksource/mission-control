@@ -1,0 +1,26 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Application
+metadata:
+  uid: 2889c7b1-4cc7-442a-8fa7-e5333d0b4b58
+  name: azure-flanksource
+  namespace: mc
+spec:
+  type: App Registration
+  schedule: "@every 10m"
+  properties:
+    - label: Classification
+      text: Confidential
+      icon: shield
+    - label: Criticality
+      text: High
+      icon: alert-triangle
+  mapping:
+    logins:
+      - name: the-application
+        types:
+          - Azure::EnterpriseApplication
+    roles:
+      - search: type=Azure::Group name=sap-erp-group
+        role: User
+      - search: type=Azure::Group name=sap-erp-group-admins
+        role: Admin

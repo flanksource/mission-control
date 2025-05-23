@@ -1,0 +1,89 @@
+package api
+
+import (
+	"time"
+
+	"github.com/flanksource/duty/types"
+)
+
+// Application is the schema that UI uses.
+type Application struct {
+	ApplicationDetail `json:",inline"`
+	AccessControl     ApplicationAccessControl `json:"accessControl"`
+	Changes           []ApplicationChange      `json:"changes"`
+	Incidents         []ApplicationIncident    `json:"incidents"`
+}
+
+type ApplicationChange struct {
+	ID          string    `json:"id"`
+	Date        time.Time `json:"date"`
+	User        string    `json:"user"`
+	Description string    `json:"description"`
+	Status      string    `json:"status"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
+type ApplicationAccessControl struct {
+	Users          []UserAndRole `json:"users"`
+	Authentication []AuthMethod  `json:"authentication"`
+}
+
+type ApplicationDetail struct {
+	ID          string     `json:"id"`
+	Name        string     `json:"name"`
+	Type        string     `json:"type"`
+	Namespace   string     `json:"namespace"`
+	Description string     `json:"description,omitempty"`
+	Properties  []Property `json:"properties,omitempty"`
+	CreatedAt   time.Time  `json:"createdAt"`
+}
+
+type UserAndRole struct {
+	ID               string     `json:"id"`
+	Name             string     `json:"name"`
+	Email            string     `json:"email"`
+	Role             string     `json:"role"`
+	AuthType         string     `json:"authType"`
+	CreatedAt        time.Time  `json:"created"`
+	LastLogin        *time.Time `json:"lastLogin,omitempty"`
+	LastAccessReview *time.Time `json:"lastAccessReview,omitempty"`
+}
+
+type AuthMethod struct {
+	Name       string            `json:"name"`
+	Type       string            `json:"type"`
+	MFA        *AuthMethodMFA    `json:"mfa,omitempty"`
+	Properties map[string]string `json:"properties"`
+}
+
+type AuthMethodMFA struct {
+	Type     string `json:"type"`
+	Enforced string `json:"enforced"`
+}
+
+type ApplicationIncident struct {
+	ID           string     `json:"id"`
+	Date         time.Time  `json:"date"`
+	Severity     string     `json:"severity"`
+	Description  string     `json:"description"`
+	Status       string     `json:"status"`
+	ResolvedDate *time.Time `json:"resolvedDate,omitempty"`
+}
+
+// +kubebuilder:object:generate=true
+type Property struct {
+	Label   string       `json:"label,omitempty"`
+	Name    string       `json:"name,omitempty"`
+	Tooltip string       `json:"tooltip,omitempty"`
+	Icon    string       `json:"icon,omitempty"`
+	Text    string       `json:"text,omitempty"`
+	Order   int          `json:"order,omitempty"`
+	Type    string       `json:"type,omitempty"`
+	Color   string       `json:"color,omitempty"`
+	Value   *int64       `json:"value,omitempty"`
+	Links   []types.Link `json:"links,omitempty"`
+
+	// e.g. milliseconds, bytes, millicores, epoch etc.
+	Unit string `json:"unit,omitempty"`
+}
