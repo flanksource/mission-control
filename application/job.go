@@ -17,6 +17,14 @@ import (
 )
 
 func linkToConfigs(ctx context.Context, app *v1.Application) error {
+	// Ensure the application config item exists before we form the relationships
+	var application models.ConfigItem
+	if err := ctx.DB().Where("id = ?", app.GetID()).Find(&application).Error; err != nil {
+		return err
+	} else if application.ID == uuid.Nil {
+		return nil
+	}
+
 	configIDs, err := query.FindConfigIDsByResourceSelector(ctx, -1, app.Spec.Mapping.Logins...)
 	if err != nil {
 		return err
@@ -63,6 +71,8 @@ func SyncApplications(sc context.Context) *job.Job {
 				if err := syncApplication(sc, app); err != nil {
 					return sc.Oops().Errorf("failed to sync application (%s/%s): %w", app.Namespace, app.Name, err)
 				}
+
+				jr.History.IncrSuccess()
 			}
 
 			applicationIDs := lo.Map(applications, func(app models.Application, _ int) uuid.UUID {

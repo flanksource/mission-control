@@ -39,13 +39,15 @@ func generateConfigScraper(ctx context.Context, app *v1.Application) error {
 
 	azureScrapeConfigs, err := GetAllAzureScrapeConfigs(ctx)
 	if err != nil {
-		return nil
+		return ctx.Oops().Wrapf(err, "failed to get all azure scrape configs")
 	}
+
+	ctx.Infof("found %d azure scrape configs", len(azureScrapeConfigs))
 
 	for _, scrapeConfig := range azureScrapeConfigs {
 		var spec ScraperSpec
 		if err := json.Unmarshal([]byte(scrapeConfig.Spec), &spec); err != nil {
-			return ctx.Oops().Errorf("failed to unmarshal scrape config %s: %v", scrapeConfig.ID, err)
+			return ctx.Oops().Wrapf(err, "failed to unmarshal scrape config %s", scrapeConfig.ID)
 		}
 
 		spec.Azure[0].Include = []string{"appRoleAssignments"}
@@ -56,7 +58,7 @@ func generateConfigScraper(ctx context.Context, app *v1.Application) error {
 
 		specJSON, err := json.Marshal(spec)
 		if err != nil {
-			return err
+			return ctx.Oops().Wrapf(err, "failed to marshal scrape config %s", scrapeConfig.ID)
 		}
 
 		// generate a deterministic id for the scraper based on the application id
@@ -71,7 +73,7 @@ func generateConfigScraper(ctx context.Context, app *v1.Application) error {
 			ApplicationID: lo.ToPtr(app.GetID()),
 		}
 		if err := ctx.DB().Save(scraper).Error; err != nil {
-			return err
+			return ctx.Oops().Wrapf(err, "failed to save scrape config %s", scrapeConfig.ID)
 		}
 	}
 
