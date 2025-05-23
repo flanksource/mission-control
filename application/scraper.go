@@ -134,10 +134,7 @@ func SyncApplicationScrapeConfigs(sc context.Context) *job.Job {
 					return err
 				}
 
-				// TODO: Decide on this
-				// Maybe config access should be linked to application ID directly.
-				scraperID := uuid.MustParse("6e1fe094-550f-40c7-9286-d4e4fafebdcc")
-				if err := generateCustomRoles(sc, scraperID, app); err != nil {
+				if err := generateCustomRoles(sc, app.GetID(), app); err != nil {
 					return err
 				}
 			}
@@ -152,15 +149,15 @@ func SyncApplicationScrapeConfigs(sc context.Context) *job.Job {
 }
 
 // Generate new custom roles & config accesses for those roles
-func generateCustomRoles(ctx context.Context, scraperID uuid.UUID, app *v1.Application) error {
+func generateCustomRoles(ctx context.Context, applicationID uuid.UUID, app *v1.Application) error {
 	for _, role := range app.Spec.Mapping.Roles {
 		roleID := uuid.UUID(uuidV5.NewV5(uuidV5.NamespaceDNS, fmt.Sprintf("%s-%s", app.UID, role.Role)))
 
 		externalRole := models.ExternalRole{
-			ID:          roleID,
-			Name:        role.Role,
-			ScraperID:   scraperID,
-			Description: "Custom Mapped Role",
+			ID:            roleID,
+			Name:          role.Role,
+			ApplicationID: &applicationID,
+			Description:   "Custom Mapped Role",
 		}
 
 		if err := ctx.DB().Save(&externalRole).Error; err != nil {
@@ -180,7 +177,7 @@ func generateCustomRoles(ctx context.Context, scraperID uuid.UUID, app *v1.Appli
 			return models.ConfigAccess{
 				ConfigID:       configID,
 				ExternalRoleID: lo.ToPtr(roleID),
-				ScraperID:      scraperID,
+				ApplicationID:  &applicationID,
 			}
 		})
 
