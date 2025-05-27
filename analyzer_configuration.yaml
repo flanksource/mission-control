@@ -1,0 +1,13 @@
+Sources:
+  - Package: github.com/flanksource/incident-commander/api/v1
+    Type: ConnectionAWS
+    Field: SecretKey
+Sinks:
+  - Package: github.com/flanksource/commons/logger
+    Method: Infof
+  - Package: github.com/flanksource/commons/logger
+    Method: Errorf
+  - Package: github.com/flanksource/commons/logger
+    Method: Warnf
+  - Package: github.com/flanksource/commons/logger
+    Method: Debugf
