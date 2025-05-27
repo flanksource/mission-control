@@ -1,13 +1,6 @@
 Sources:
-  - Package: github.com/flanksource/incident-commander/api/v1
-    Type: ConnectionAWS
-    Field: SecretKey
+  - TypeRE: "^EnvVar$"
+  - FieldRE: "^Password$|^Username$|^Token$|^SecretKey$"
 Sinks:
   - Package: github.com/flanksource/commons/logger
-    Method: Infof
-  - Package: github.com/flanksource/commons/logger
-    Method: Errorf
-  - Package: github.com/flanksource/commons/logger
-    Method: Warnf
-  - Package: github.com/flanksource/commons/logger
-    Method: Debugf
+    MethodRE: "Infof|Errorf|Warnf|Debugf"
