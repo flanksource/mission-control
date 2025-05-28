@@ -36,9 +36,9 @@ spec:
     environments:
       "Prod":
         - search: type=AWS::* account=12345
-          role: primary
+          purpose: primary
       "Non-Prod":
         - search: type=AWS::* account=12345
-          role: backup
+          purpose: backup
     datasources:
       - search: type=AWS::RDS,AWS::S3,AWS::EFS account=12345

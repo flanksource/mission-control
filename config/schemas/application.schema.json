@@ -71,14 +71,14 @@
         "statuses": {
           "$ref": "#/$defs/Items"
         },
-        "role": {
+        "purpose": {
           "type": "string"
         }
       },
       "additionalProperties": false,
       "type": "object",
       "required": [
-        "role"
+        "purpose"
       ]
     },
     "ApplicationMapping": {

@@ -39,6 +39,10 @@ func linkToConfigs(ctx context.Context, app *v1.Application) error {
 		}
 	}
 
+	if len(relationships) == 0 {
+		return nil
+	}
+
 	if err := ctx.DB().Save(relationships).Error; err != nil {
 		return err
 	}

@@ -9,10 +9,29 @@ import (
 // Application is the schema that UI uses.
 type Application struct {
 	ApplicationDetail `json:",inline"`
-	AccessControl     ApplicationAccessControl `json:"accessControl"`
-	Changes           []ApplicationChange      `json:"changes"`
-	Incidents         []ApplicationIncident    `json:"incidents"`
-	Locations         []ApplicationLocation    `json:"locations"`
+	AccessControl     ApplicationAccessControl   `json:"accessControl"`
+	Changes           []ApplicationChange        `json:"changes"`
+	Incidents         []ApplicationIncident      `json:"incidents"`
+	Locations         []ApplicationLocation      `json:"locations"`
+	Backups           []ApplicationBackup        `json:"backups"`
+	Restores          []ApplicationBackupRestore `json:"restores"`
+}
+
+type ApplicationBackup struct {
+	ID       string    `json:"id"`
+	Database string    `json:"database"`
+	Date     time.Time `json:"date"`
+	Size     string    `json:"size"`
+	Status   string    `json:"status"`
+}
+
+type ApplicationBackupRestore struct {
+	ID          string    `json:"id"`
+	Database    string    `json:"database"`
+	Date        time.Time `json:"date"`
+	Source      string    `json:"source"`
+	Status      string    `json:"status"`
+	CompletedAt time.Time `json:"completedAt"`
 }
 
 type ApplicationLocation struct {
@@ -25,8 +44,8 @@ type ApplicationLocation struct {
 	// Type of the environment. Example: cloud, on-prem, etc.
 	Type string `json:"type"`
 
-	// Role of the location (e.g., "primary", "backup").
-	Role string `json:"role"`
+	// Purpose of the environment (e.g., "primary", "backup").
+	Purpose string `json:"purpose"`
 
 	// Region or the location
 	Region string `json:"region"`

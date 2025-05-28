@@ -33,8 +33,8 @@ type ApplicationRoleMapping struct {
 type ApplicationEnvironment struct {
 	types.ResourceSelector `json:",inline"`
 
-	// Role of the environment
-	Role string `json:"role"`
+	// Purpose of the environment
+	Purpose string `json:"purpose"`
 }
 
 type ApplicationSpec struct {

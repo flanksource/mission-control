@@ -198,8 +198,8 @@ spec:
                             type: string
                           namespace:
                             type: string
-                          role:
-                            description: Role of the environment
+                          purpose:
+                            description: Purpose of the environment
                             type: string
                           scope:
                             description: |-
@@ -226,7 +226,7 @@ spec:
                               type: string
                             type: array
                         required:
-                        - role
+                        - purpose
                         type: object
                       type: array
                     type: object
