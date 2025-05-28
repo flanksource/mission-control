@@ -198,6 +198,9 @@ spec:
                             type: string
                           namespace:
                             type: string
+                          role:
+                            description: Role of the environment
+                            type: string
                           scope:
                             description: |-
                               Scope is the reference for parent of the resource to select.
@@ -222,6 +225,8 @@ spec:
                             items:
                               type: string
                             type: array
+                        required:
+                        - role
                         type: object
                       type: array
                     type: object

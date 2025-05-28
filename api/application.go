@@ -12,6 +12,27 @@ type Application struct {
 	AccessControl     ApplicationAccessControl `json:"accessControl"`
 	Changes           []ApplicationChange      `json:"changes"`
 	Incidents         []ApplicationIncident    `json:"incidents"`
+	Locations         []ApplicationLocation    `json:"locations"`
+}
+
+type ApplicationLocation struct {
+	// Environment ID like an AWS account ID or Azure subscription ID
+	ID string `json:"id"`
+
+	// Name of the environment
+	Name string `json:"name"`
+
+	// Type of the environment. Example: cloud, on-prem, etc.
+	Type string `json:"type"`
+
+	// Role of the location (e.g., "primary", "backup").
+	Role string `json:"role"`
+
+	// Region or the location
+	Region string `json:"region"`
+
+	// Provider of the location. Example: AWS, Azure, etc.
+	Provider string `json:"provider"`
 }
 
 type ApplicationChange struct {

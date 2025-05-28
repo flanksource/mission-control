@@ -14,7 +14,7 @@ import (
 type ApplicationMapping struct {
 	AccessReviews []types.ResourceSelector            `json:"accessReviews,omitempty"`
 	Datasources   []types.ResourceSelector            `json:"datasources,omitempty"`
-	Environments  map[string][]types.ResourceSelector `json:"environments,omitempty"`
+	Environments  map[string][]ApplicationEnvironment `json:"environments,omitempty"`
 
 	// Specifies which applications's users/groups and user-group membership are required
 	Logins []types.ResourceSelector `json:"logins,omitempty"`
@@ -27,6 +27,13 @@ type ApplicationRoleMapping struct {
 	types.ResourceSelector `json:",inline"`
 
 	// Assign a name for the role
+	Role string `json:"role"`
+}
+
+type ApplicationEnvironment struct {
+	types.ResourceSelector `json:",inline"`
+
+	// Role of the environment
 	Role string `json:"role"`
 }
 
