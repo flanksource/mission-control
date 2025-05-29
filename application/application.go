@@ -88,6 +88,15 @@ func buildApplication(ctx context.Context, app *v1.Application) (*api.Applicatio
 		}
 	}
 
+	if len(mapping.Environments) > 0 {
+		locations, err := db.GetApplicationLocations(ctx, mapping.Environments)
+		if err != nil {
+			return nil, ctx.Oops().Errorf("failed to find locations: %w", err)
+		}
+
+		response.Locations = locations
+	}
+
 	return &response, nil
 }
 

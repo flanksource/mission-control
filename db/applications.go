@@ -1,7 +1,9 @@
 package db
 
 import (
+	"database/sql"
 	"encoding/json"
+	"fmt"
 	"slices"
 	"strings"
 	"time"
@@ -9,9 +11,12 @@ import (
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/query"
+	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace"
+	"gorm.io/gorm/clause"
 )
 
 func GetAllApplications(ctx context.Context) ([]models.Application, error) {
@@ -198,4 +203,53 @@ func GetApplicationRestores(ctx context.Context, configIDs []uuid.UUID, changeTy
 	}
 
 	return changes, nil
+}
+
+type ConfigLocationInfo struct {
+	Type   sql.NullString `json:"type"`
+	Region sql.NullString `json:"region"`
+}
+
+func GetApplicationLocations(ctx context.Context, environments map[string][]v1.ApplicationEnvironment) ([]api.ApplicationLocation, error) {
+	var locations []api.ApplicationLocation
+	for env, selectors := range environments {
+		for _, purposeSelector := range selectors {
+			selectColumns := []string{"DISTINCT tags->>'region' as region, type"}
+			clauses := []clause.Expression{
+				clause.Expr{SQL: "tags->>'region' IS NOT NULL"},
+			}
+			response, err := query.QueryTableColumnsWithResourceSelectors[ConfigLocationInfo](ctx, "config_items", selectColumns, -1, clauses, purposeSelector.ResourceSelector)
+			if err != nil {
+				return nil, err
+			}
+
+			seen := make(map[string]struct{})
+
+			for _, row := range response {
+				provider := configTypeToProvider(row.Type.String)
+				key := fmt.Sprintf("%s-%s", row.Region.String, provider)
+				if _, ok := seen[key]; ok {
+					continue
+				}
+				seen[key] = struct{}{}
+
+				location := api.ApplicationLocation{
+					Name:     env,
+					Purpose:  purposeSelector.Purpose,
+					Type:     "cloud",
+					Region:   row.Region.String,
+					Provider: provider,
+				}
+
+				locations = append(locations, location)
+			}
+		}
+	}
+
+	return locations, nil
+}
+
+func configTypeToProvider(configType string) string {
+	splits := strings.Split(configType, "::")
+	return splits[0]
 }

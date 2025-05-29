@@ -13,8 +13,11 @@ import (
 
 type ApplicationMapping struct {
 	AccessReviews []types.ResourceSelector            `json:"accessReviews,omitempty"`
-	Datasources   []types.ResourceSelector            `json:"datasources,omitempty"`
 	Environments  map[string][]ApplicationEnvironment `json:"environments,omitempty"`
+
+	// Datasources targets config items representing data sources (e.g. databases)
+	// whose backups and restores should be monitored
+	Datasources []types.ResourceSelector `json:"datasources,omitempty"`
 
 	// Specifies which applications's users/groups and user-group membership are required
 	Logins []types.ResourceSelector `json:"logins,omitempty"`

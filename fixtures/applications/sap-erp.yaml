@@ -35,10 +35,12 @@ spec:
         role: Admin
     environments:
       "Prod":
-        - search: type=AWS::* account=12345
+        - search: type=AWS::*
+          tagSelector: account-name='flanksource'
           purpose: primary
       "Non-Prod":
-        - search: type=AWS::* account=12345
+        - search: type=AWS::*
+          tagSelector: account-name='flanksource'
           purpose: backup
     datasources:
       - search: type=AWS::RDS,AWS::S3,AWS::EFS account=12345
