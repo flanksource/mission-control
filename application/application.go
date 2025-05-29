@@ -2,7 +2,9 @@ package application
 
 import (
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
+	"github.com/samber/lo"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -95,6 +97,31 @@ func buildApplication(ctx context.Context, app *v1.Application) (*api.Applicatio
 		}
 
 		response.Locations = locations
+	}
+
+	if selectors := app.AllSelectors(); len(selectors) > 0 {
+		configIDs, err := query.FindConfigIDsByResourceSelector(ctx, -1, selectors...)
+		if err != nil {
+			return nil, ctx.Oops().Errorf("failed to find locations: %w", err)
+		}
+
+		var analyses []models.ConfigAnalysis
+		if err := ctx.DB().Where("config_id IN ?", lo.Uniq(configIDs)).Find(&analyses).Error; err != nil {
+			return nil, ctx.Oops().Errorf("failed to find analyses: %w", err)
+		}
+
+		for _, analysis := range analyses {
+			response.Findings = append(response.Findings, api.ApplicationFinding{
+				ID:           analysis.ID.String(),
+				Type:         string(analysis.AnalysisType),
+				Severity:     string(analysis.Severity),
+				Title:        analysis.Summary,
+				Description:  analysis.Message,
+				Date:         lo.FromPtr(analysis.FirstObserved),
+				LastObserved: lo.FromPtr(analysis.LastObserved),
+				Status:       analysis.Status,
+			})
+		}
 	}
 
 	return &response, nil

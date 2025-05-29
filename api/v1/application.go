@@ -80,6 +80,24 @@ func (a *Application) GetID() uuid.UUID {
 	return uid
 }
 
+func (a *Application) AllSelectors() []types.ResourceSelector {
+	var selectors []types.ResourceSelector
+	selectors = append(selectors, a.Spec.Mapping.AccessReviews...)
+	selectors = append(selectors, a.Spec.Mapping.Datasources...)
+	selectors = append(selectors, a.Spec.Mapping.Logins...)
+	for _, role := range a.Spec.Mapping.Roles {
+		selectors = append(selectors, role.ResourceSelector)
+	}
+
+	for _, environment := range a.Spec.Mapping.Environments {
+		for _, env := range environment {
+			selectors = append(selectors, env.ResourceSelector)
+		}
+	}
+
+	return selectors
+}
+
 func ApplicationFromModel(app models.Application) (*Application, error) {
 	var spec ApplicationSpec
 	if err := json.Unmarshal([]byte(app.Spec), &spec); err != nil {

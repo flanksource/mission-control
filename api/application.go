@@ -15,6 +15,18 @@ type Application struct {
 	Locations         []ApplicationLocation      `json:"locations"`
 	Backups           []ApplicationBackup        `json:"backups"`
 	Restores          []ApplicationBackupRestore `json:"restores"`
+	Findings          []ApplicationFinding       `json:"findings"`
+}
+
+type ApplicationFinding struct {
+	ID           string    `json:"id"`
+	Type         string    `json:"type"`
+	Severity     string    `json:"severity"`
+	Title        string    `json:"title"`
+	Description  string    `json:"description"`
+	Date         time.Time `json:"date"`
+	LastObserved time.Time `json:"lastObserved"`
+	Status       string    `json:"status"`
 }
 
 type ApplicationBackup struct {
