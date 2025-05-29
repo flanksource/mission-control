@@ -20,6 +20,8 @@ type Application struct {
 type ApplicationBackup struct {
 	ID       string    `json:"id"`
 	Database string    `json:"database"`
+	Type     string    `json:"type"`
+	Source   string    `json:"source"`
 	Date     time.Time `json:"date"`
 	Size     string    `json:"size"`
 	Status   string    `json:"status"`

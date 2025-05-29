@@ -2,6 +2,8 @@ package db
 
 import (
 	"encoding/json"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/flanksource/duty"
@@ -98,7 +100,7 @@ func DeleteStaleApplication(ctx context.Context, newer *v1.Application) error {
 	})
 }
 
-type BackupConfigChanges struct {
+type ApplicationBackups struct {
 	ID          uuid.UUID `json:"id"`
 	ConfigID    uuid.UUID `json:"config_id"`
 	Name        string    `json:"name"`
@@ -107,15 +109,16 @@ type BackupConfigChanges struct {
 	ChangeType  string    `json:"change_type"`
 	CreatedAt   time.Time `json:"created_at"`
 	Size        string    `json:"size"`
+	Source      string    `json:"source"`
 	Status      string    `json:"status"`
 }
 
-func GetBackupChangesForTypes(ctx context.Context, configIDs []uuid.UUID, changeTypes []string) ([]BackupConfigChanges, error) {
+func GetApplicationBackups(ctx context.Context, configIDs []uuid.UUID, changeTypes []string) ([]ApplicationBackups, error) {
 	if len(configIDs) == 0 {
 		return nil, nil
 	}
 
-	var changes []BackupConfigChanges
+	var changes []ApplicationBackups
 	selectColumns := []string{
 		"config_changes.id",
 		"config_changes.config_id",
@@ -124,6 +127,7 @@ func GetBackupChangesForTypes(ctx context.Context, configIDs []uuid.UUID, change
 		"config_items.config_class",
 		"config_changes.change_type",
 		"config_changes.created_at",
+		"config_changes.source",
 		"config_changes.details->>'status' AS status",
 		"config_changes.details->>'size' AS size",
 	}
@@ -132,14 +136,29 @@ func GetBackupChangesForTypes(ctx context.Context, configIDs []uuid.UUID, change
 		Select(selectColumns).
 		Joins("LEFT JOIN config_items ON config_items.id = config_changes.config_id").
 		Where("config_changes.config_id IN (?) AND config_changes.change_type IN (?)", configIDs, changeTypes).
+		Order("config_changes.created_at").
 		Find(&changes).Error; err != nil {
 		return nil, err
 	}
 
-	return changes, nil
+	// filterChanges contains only BackupCompleted events.
+	// It removes BackupStarted events if there's a corresponding BackupCompleted event
+	var filteredChanges []ApplicationBackups
+	for _, change := range changes {
+		if strings.Contains(strings.ToLower(change.ChangeType), "completed") {
+			// Pop the last element
+			filteredChanges = filteredChanges[:len(filteredChanges)-1]
+		}
+
+		filteredChanges = append(filteredChanges, change)
+	}
+
+	slices.Reverse(filteredChanges)
+
+	return filteredChanges, nil
 }
 
-type BackupRestoreConfigChanges struct {
+type ApplicationRestore struct {
 	ID          uuid.UUID `json:"id"`
 	ConfigID    uuid.UUID `json:"config_id"`
 	Name        string    `json:"name"`
@@ -151,12 +170,12 @@ type BackupRestoreConfigChanges struct {
 	Status      string    `json:"status"`
 }
 
-func GetBackupRestoreChangesForTypes(ctx context.Context, configIDs []uuid.UUID, changeTypes []string) ([]BackupRestoreConfigChanges, error) {
+func GetApplicationRestores(ctx context.Context, configIDs []uuid.UUID, changeTypes []string) ([]ApplicationRestore, error) {
 	if len(configIDs) == 0 {
 		return nil, nil
 	}
 
-	var changes []BackupRestoreConfigChanges
+	var changes []ApplicationRestore
 	selectColumns := []string{
 		"config_changes.id",
 		"config_changes.config_id",
@@ -173,6 +192,7 @@ func GetBackupRestoreChangesForTypes(ctx context.Context, configIDs []uuid.UUID,
 		Select(selectColumns).
 		Joins("LEFT JOIN config_items ON config_items.id = config_changes.config_id").
 		Where("config_changes.config_id IN (?) AND config_changes.change_type IN (?)", configIDs, changeTypes).
+		Order("config_changes.created_at").
 		Find(&changes).Error; err != nil {
 		return nil, err
 	}

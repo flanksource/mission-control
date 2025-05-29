@@ -56,7 +56,7 @@ func buildApplication(ctx context.Context, app *v1.Application) (*api.Applicatio
 			return nil, ctx.Oops().Errorf("failed to find login IDs: %w", err)
 		}
 
-		backups, err := db.GetBackupChangesForTypes(ctx, configIDs, backupChangeTypes)
+		backups, err := db.GetApplicationBackups(ctx, configIDs, backupChangeTypes)
 		if err != nil {
 			return nil, ctx.Oops().Errorf("failed to find changes for backups: %w", err)
 		}
@@ -65,13 +65,15 @@ func buildApplication(ctx context.Context, app *v1.Application) (*api.Applicatio
 			response.Backups = append(response.Backups, api.ApplicationBackup{
 				ID:       change.ID.String(),
 				Database: change.Name,
+				Type:     change.ConfigType,
+				Source:   change.Source,
 				Date:     change.CreatedAt,
 				Size:     change.Size,
 				Status:   change.Status,
 			})
 		}
 
-		restores, err := db.GetBackupRestoreChangesForTypes(ctx, configIDs, backupRestoreChangeTypes)
+		restores, err := db.GetApplicationRestores(ctx, configIDs, backupRestoreChangeTypes)
 		if err != nil {
 			return nil, ctx.Oops().Errorf("failed to find changes for restores: %w", err)
 		}
