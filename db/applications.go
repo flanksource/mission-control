@@ -105,7 +105,7 @@ func DeleteStaleApplication(ctx context.Context, newer *v1.Application) error {
 	})
 }
 
-type ApplicationBackups struct {
+type ApplicationBackup struct {
 	ID          uuid.UUID `json:"id"`
 	ConfigID    uuid.UUID `json:"config_id"`
 	Name        string    `json:"name"`
@@ -118,12 +118,12 @@ type ApplicationBackups struct {
 	Status      string    `json:"status"`
 }
 
-func GetApplicationBackups(ctx context.Context, configIDs []uuid.UUID, changeTypes []string) ([]ApplicationBackups, error) {
+func GetApplicationBackups(ctx context.Context, configIDs []uuid.UUID, changeTypes []string) ([]ApplicationBackup, error) {
 	if len(configIDs) == 0 {
 		return nil, nil
 	}
 
-	var changes []ApplicationBackups
+	var changes []ApplicationBackup
 	selectColumns := []string{
 		"config_changes.id",
 		"config_changes.config_id",
@@ -146,21 +146,56 @@ func GetApplicationBackups(ctx context.Context, configIDs []uuid.UUID, changeTyp
 		return nil, err
 	}
 
-	// filterChanges contains only BackupCompleted events.
-	// It removes BackupStarted events if there's a corresponding BackupCompleted event
-	var filteredChanges []ApplicationBackups
-	for _, change := range changes {
-		if strings.Contains(strings.ToLower(change.ChangeType), "completed") {
-			// Pop the last element
-			filteredChanges = filteredChanges[:len(filteredChanges)-1]
-		}
-
-		filteredChanges = append(filteredChanges, change)
-	}
-
+	filteredChanges := dedupBackupChanges(changes)
 	slices.Reverse(filteredChanges)
 
 	return filteredChanges, nil
+}
+
+// removes BackupStarted events if there's a corresponding BackupCompleted event
+func dedupBackupChanges(changes []ApplicationBackup) []ApplicationBackup {
+	if len(changes) == 0 {
+		return changes
+	}
+
+	// Track the last change for each (ConfigID, Source) pair
+	lastChange := make(map[string]*ApplicationBackup)
+
+	var result []ApplicationBackup
+	for i := range changes {
+		change := &changes[i]
+		key := fmt.Sprintf("%s|%s", change.ConfigID, change.Source)
+
+		if lastChange[key] != nil {
+			// If we have a previous change for this (ConfigID, Source) pair
+			prevChange := lastChange[key]
+
+			if prevChange.ChangeType == "BackupStarted" && change.ChangeType == "BackupCompleted" {
+				// Remove the previous BackupStarted from result and add the BackupCompleted
+				// Find and remove the previous BackupStarted
+				for j := len(result) - 1; j >= 0; j-- {
+					if result[j].ConfigID == prevChange.ConfigID &&
+						result[j].Source == prevChange.Source &&
+						result[j].ChangeType == "BackupStarted" &&
+						result[j].CreatedAt.Equal(prevChange.CreatedAt) {
+						result = append(result[:j], result[j+1:]...)
+						break
+					}
+				}
+				result = append(result, *change)
+			} else {
+				// Different pattern, just add the current change
+				result = append(result, *change)
+			}
+		} else {
+			// First change for this (ConfigID, Source) pair
+			result = append(result, *change)
+		}
+
+		lastChange[key] = change
+	}
+
+	return result
 }
 
 type ApplicationRestore struct {
