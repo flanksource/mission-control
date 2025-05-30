@@ -1,0 +1,8 @@
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: NotificationSilence
+metadata:
+  name: postgresql-sts
+spec:
+  description: silence notification from all postgresql sts
+  filter: config.name == "postgresql" && config.type == "Kubernetes::StatefulSet"
