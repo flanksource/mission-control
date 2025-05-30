@@ -49,8 +49,8 @@ type ApplicationBackupRestore struct {
 }
 
 type ApplicationLocation struct {
-	// Environment ID like an AWS account ID or Azure subscription ID
-	ID string `json:"id"`
+	// Environment Account like an AWS account Account or Azure subscription Account
+	Account string `json:"account"`
 
 	// Name of the environment
 	Name string `json:"name"`
@@ -66,6 +66,9 @@ type ApplicationLocation struct {
 
 	// Provider of the location. Example: AWS, Azure, etc.
 	Provider string `json:"provider"`
+
+	// Total number of resources in the environment
+	ResourceCount int `json:"resourceCount"`
 }
 
 type ApplicationChange struct {
