@@ -23,6 +23,7 @@ import (
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/application"
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/echo"
@@ -33,7 +34,7 @@ import (
 	"github.com/flanksource/incident-commander/teams"
 	"github.com/flanksource/incident-commander/vars"
 
-	// register event handlers
+	// register event handlers & echo routers
 	_ "github.com/flanksource/incident-commander/artifacts"
 	_ "github.com/flanksource/incident-commander/catalog"
 	_ "github.com/flanksource/incident-commander/connection"
@@ -111,6 +112,15 @@ func launchKopper(ctx context.Context) {
 		"permissiongroup.mission-control.flanksource.com",
 	); err != nil {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for PermissionGroup: %v", err))
+	}
+
+	if _, err := kopper.SetupReconciler(ctx, mgr,
+		application.PersistApplication,
+		db.DeleteApplication,
+		db.DeleteStaleApplication,
+		"application.mission-control.flanksource.com",
+	); err != nil {
+		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for Application: %v", err))
 	}
 
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {

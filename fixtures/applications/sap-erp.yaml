@@ -1,0 +1,46 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Application
+metadata:
+  name: sap-erp
+  namespace: mc
+spec:
+  type: ERP
+  schedule: "@every 1h"
+  properties:
+    - label: Classification
+      order: 1
+      text: Confidential
+      icon: shield
+    - label: Criticality
+      order: 2
+      text: High
+      icon: alert-triangle
+    - label: Usage
+      order: 3
+      text: Internal
+      icon: globe
+    - label: Source
+      order: 4
+      text: COTS
+      icon: box
+  mapping:
+    logins:
+      - search: type=Azure::EnterpriseApplication name="SAP-ERP"
+    accessReviews:
+      - search: type=Sailpoint::Role name=SAP ERP*
+    roles:
+      - search: type=Azure::Group name=sap-erp-group
+        role: User
+      - search: type=Azure::Group name=sap-erp-group-admins
+        role: Admin
+    environments:
+      "Prod":
+        - search: type=AWS::*
+          tagSelector: account-name='flanksource'
+          purpose: primary
+      "Non-Prod":
+        - search: type=AWS::*
+          tagSelector: account-name='flanksource'
+          purpose: backup
+    datasources:
+      - search: type=AWS::RDS,AWS::S3,AWS::EFS account=12345
