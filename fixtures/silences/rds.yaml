@@ -1,0 +1,12 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: NotificationSilence
+metadata:
+  name: aws-rds-readreplica-maintenance
+spec:
+  description: >
+    Silence planned maintenance and brief healthy/unhealthy flaps 
+    for RDS Postgres instances in flanksource account
+  filter: >
+    config.type == "AWS::RDS::DBInstance" &&
+    config.tags["account-name"] == "flanksource" &&
+    config.config.Engine == "postgres"
