@@ -241,17 +241,30 @@ func GetApplicationRestores(ctx context.Context, configIDs []uuid.UUID, changeTy
 }
 
 type ConfigLocationInfo struct {
-	Type   sql.NullString `json:"type"`
-	Region sql.NullString `json:"region"`
+	Count   int            `json:"count"`
+	Type    sql.NullString `json:"type"`
+	Region  sql.NullString `json:"region"`
+	Account sql.NullString `json:"account"`
 }
 
 func GetApplicationLocations(ctx context.Context, environments map[string][]v1.ApplicationEnvironment) ([]api.ApplicationLocation, error) {
 	var locations []api.ApplicationLocation
 	for env, selectors := range environments {
 		for _, purposeSelector := range selectors {
-			selectColumns := []string{"DISTINCT tags->>'region' as region, type"}
+			selectColumns := []string{
+				"tags->>'region' as region",
+				"tags->>'account-name' as account",
+				"MAX(type) as type",
+				"COUNT(*) as count",
+			}
 			clauses := []clause.Expression{
-				clause.Expr{SQL: "tags->>'region' IS NOT NULL"},
+				clause.Expr{SQL: "tags->>'region' IS NOT NULL AND tags->>'account-name' IS NOT NULL"},
+				clause.GroupBy{
+					Columns: []clause.Column{
+						{Name: "region"},
+						{Name: "account"},
+					},
+				},
 			}
 			response, err := query.QueryTableColumnsWithResourceSelectors[ConfigLocationInfo](ctx, "config_items", selectColumns, -1, clauses, purposeSelector.ResourceSelector)
 			if err != nil {
@@ -269,11 +282,13 @@ func GetApplicationLocations(ctx context.Context, environments map[string][]v1.A
 				seen[key] = struct{}{}
 
 				location := api.ApplicationLocation{
-					Name:     env,
-					Purpose:  purposeSelector.Purpose,
-					Type:     "cloud",
-					Region:   row.Region.String,
-					Provider: provider,
+					Name:          env,
+					Account:       row.Account.String,
+					Purpose:       purposeSelector.Purpose,
+					Type:          "cloud",
+					Region:        row.Region.String,
+					Provider:      provider,
+					ResourceCount: row.Count,
 				}
 
 				locations = append(locations, location)
