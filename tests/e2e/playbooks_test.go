@@ -101,11 +101,23 @@ var _ = ginkgo.Describe("Playbooks", ginkgo.Ordered, func() {
 			content, err := os.ReadFile("setup/seed-loki.json")
 			Expect(err).To(BeNil())
 
+			// Generate recent timestamps
+			baseTime := time.Now().Add(-5 * time.Minute)
+			timestamp1 := fmt.Sprintf("%d", baseTime.UnixNano())
+			timestamp2 := fmt.Sprintf("%d", baseTime.Add(1*time.Second).UnixNano())
+			timestamp3 := fmt.Sprintf("%d", baseTime.Add(2*time.Second).UnixNano())
+
+			// Replace placeholders with actual timestamps
+			updatedContent := string(content)
+			updatedContent = strings.ReplaceAll(updatedContent, "{{TIMESTAMP_1}}", timestamp1)
+			updatedContent = strings.ReplaceAll(updatedContent, "{{TIMESTAMP_2}}", timestamp2)
+			updatedContent = strings.ReplaceAll(updatedContent, "{{TIMESTAMP_3}}", timestamp3)
+
 			endpoint, err := url.JoinPath(lokiEndpoint, "loki/api/v1/push")
 			Expect(err).To(BeNil())
 
 			response, err := http.NewClient().R(DefaultContext).Header("Content-Type", "application/json").
-				Post(endpoint, string(content))
+				Post(endpoint, updatedContent)
 			Expect(err).To(BeNil())
 			Expect(response.IsOK()).To(BeTrue())
 

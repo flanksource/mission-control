@@ -8,11 +8,11 @@
       },
       "values": [
         [
-          "1748869492150488485",
+          "{{TIMESTAMP_1}}",
           "INFO Starting API Gateway server on port 8080"
         ],
-        ["1748869492150488486", "INFO Received GET request for /api/health"],
-        ["1748869492150488487", "INFO Health check completed successfully"]
+        ["{{TIMESTAMP_2}}", "INFO Received GET request for /api/health"],
+        ["{{TIMESTAMP_3}}", "INFO Health check completed successfully"]
       ]
     },
     {
@@ -23,15 +23,15 @@
       },
       "values": [
         [
-          "1748869492150488485",
+          "{{TIMESTAMP_1}}",
           "ERROR Payment gateway timeout for transaction: txn-abc123"
         ],
         [
-          "1748869492150488486",
+          "{{TIMESTAMP_2}}",
           "ERROR Failed to process payment for order: order-456789"
         ],
         [
-          "1748869492150488487",
+          "{{TIMESTAMP_3}}",
           "ERROR Credit card validation failed: invalid card number"
         ]
       ]
@@ -43,8 +43,8 @@
         "environment": "production"
       },
       "values": [
-        ["1748869492150488486", "INFO Payment successful: txn-123"],
-        ["1748869492150488487", "INFO Payment successful: txn-456"]
+        ["{{TIMESTAMP_2}}", "INFO Payment successful: txn-123"],
+        ["{{TIMESTAMP_3}}", "INFO Payment successful: txn-456"]
       ]
     }
   ]
