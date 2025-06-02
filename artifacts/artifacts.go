@@ -90,7 +90,7 @@ func GetArtifactContents(ctx context.Context, actionIDs ...string) ([]ArtifactCo
 	}
 
 	var actionArtifacts []models.Artifact
-	if err := ctx.DB().Where("playbook_run_action_id = ?", actionIDs).Find(&actionArtifacts).Error; err != nil {
+	if err := ctx.DB().Where("playbook_run_action_id IN ?", actionIDs).Find(&actionArtifacts).Error; err != nil {
 		return nil, fmt.Errorf("failed to get playbook run action artifacts: %w", err)
 	}
 
@@ -119,7 +119,7 @@ func GetArtifactContents(ctx context.Context, actionIDs ...string) ([]ArtifactCo
 		}
 
 		contents = append(contents, ArtifactContent{
-			ActionID: a.ID.String(),
+			ActionID: a.PlaybookRunActionID.String(),
 			Content:  content,
 		})
 	}
