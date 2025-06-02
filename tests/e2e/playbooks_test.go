@@ -25,8 +25,8 @@ import (
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/samber/lo"
-	"gopkg.in/yaml.v3"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/yaml"
 )
 
 var (
@@ -60,6 +60,41 @@ func waitFor(ctx context.Context, run *models.PlaybookRun, statuses ...models.Pl
 	return savedRun
 }
 
+func waitForLokiLogs() {
+	client := http.NewClient()
+
+	Eventually(func(g Gomega) {
+		endpoint, err := url.JoinPath(lokiEndpoint, "loki/api/v1/query_range")
+		g.Expect(err).To(BeNil())
+
+		// Query parameters
+		lokiQuery := `{environment="production"}`
+
+		params := url.Values{}
+		params.Set("query", lokiQuery)
+		params.Set("start", time.Now().Add(time.Hour*-24).Format(time.RFC3339)) // Before our test timestamps
+		params.Set("end", time.Now().Format(time.RFC3339))                      // After our test timestamps
+		params.Set("limit", "100")
+
+		queryURL := endpoint + "?" + params.Encode()
+		resp, err := client.R(DefaultContext).Get(queryURL)
+		g.Expect(err).To(BeNil())
+		g.Expect(resp.IsOK()).To(BeTrue())
+
+		var result map[string]any
+		err = resp.Into(&result)
+		g.Expect(err).To(BeNil())
+
+		// Check that we got results
+		data, exists := result["data"].(map[string]any)
+		g.Expect(exists).To(BeTrue(), "Expected 'data' field in Loki response")
+
+		results, exists := data["result"].([]any)
+		g.Expect(exists).To(BeTrue(), "Expected 'result' field in Loki data")
+		g.Expect(len(results)).To(BeNumerically(">", 0), "Expected at least one log entry for query: %s", lokiQuery)
+	}).WithTimeout(30 * time.Second).WithPolling(1 * time.Second).Should(Succeed())
+}
+
 var _ = ginkgo.Describe("Playbooks", ginkgo.Ordered, func() {
 	var _ = ginkgo.Context("logs", func() {
 		ginkgo.BeforeAll(func() {
@@ -73,6 +108,8 @@ var _ = ginkgo.Describe("Playbooks", ginkgo.Ordered, func() {
 				Post(endpoint, string(content))
 			Expect(err).To(BeNil())
 			Expect(response.IsOK()).To(BeTrue())
+
+			waitForLokiLogs()
 		})
 
 		base := "../../playbook/testdata/e2e/"
@@ -122,7 +159,7 @@ var _ = ginkgo.Describe("Playbooks", ginkgo.Ordered, func() {
 				err = DefaultContext.DB().Where("playbook_run_id = ?", run.ID).Find(&actions).Error
 				Expect(err).To(BeNil())
 
-				Expect(actions).To(HaveLen(2))
+				Expect(actions).To(HaveLen(len(customResource.Spec.Actions)))
 
 				actionIDs := lo.Map(actions, func(item models.PlaybookRunAction, _ int) string {
 					return item.ID.String()

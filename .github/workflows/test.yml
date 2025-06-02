@@ -59,6 +59,14 @@ jobs:
 
   e2e:
     runs-on: ubuntu-latest
+
+    services:
+      loki:
+        image: grafana/loki:3.0.0
+        ports:
+          - 3100:3100
+        options: --health-cmd="wget --no-verbose --tries=1 --spider http://localhost:3100/ready || exit 1" --health-interval=10s --health-timeout=5s --health-retries=3
+
     steps:
       - name: Free up disk space
         run: |
@@ -97,4 +105,4 @@ jobs:
       #     cluster_name: kind-test
 
       - name: E2E Test
-        run: make e2e
+        run: make ginkgo e2e
