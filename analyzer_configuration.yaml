@@ -1,0 +1,6 @@
+Sources:
+  - TypeRE: "^EnvVar$"
+  - FieldRE: "^Password$|^Username$|^Token$|^SecretKey$"
+Sinks:
+  - Package: github.com/flanksource/commons/logger
+    MethodRE: "Infof|Errorf|Warnf|Debugf"
