@@ -28,7 +28,11 @@ static: manifests generate fmt ginkgo
 
 .PHONY: test
 test:
-	ginkgo -r   --keep-going --junit-report junit-report.xml   --github-output  --output-dir test-reports --succinct
+	ginkgo -r --skip-package=tests/e2e --keep-going --junit-report junit-report.xml --github-output --output-dir test-reports --succinct
+
+.PHONY: e2e
+e2e:
+	ginkgo -r ./tests/e2e/... --keep-going --succinct
 
 fmt:
 	go fmt ./...
