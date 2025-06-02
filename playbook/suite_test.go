@@ -24,6 +24,7 @@ import (
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/playbook/sdk"
+	"github.com/flanksource/incident-commander/playbook/testdata"
 	"github.com/flanksource/incident-commander/rbac/adapter"
 	"github.com/flanksource/incident-commander/vars"
 
@@ -102,6 +103,13 @@ var _ = ginkgo.BeforeSuite(func() {
 		Auth(dummy.JohnDoe.Name, "admin").
 		Header("X-Trace", "true")
 	logger.Infof("Started test server @ %s", server.URL)
+
+	if err := testdata.LoadConnections(DefaultContext); err != nil {
+		ginkgo.Fail(err.Error())
+	}
+	if err := testdata.LoadPermissions(DefaultContext); err != nil {
+		ginkgo.Fail(err.Error())
+	}
 })
 
 var _ = ginkgo.AfterSuite(func() {
