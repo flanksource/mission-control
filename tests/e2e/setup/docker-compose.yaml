@@ -4,11 +4,14 @@ services:
     ports: ["3100:3100"]
     command: -config.file=/etc/loki/local-config.yaml
 
-  # opensearch:
-  #   image: opensearchproject/opensearch:2.15.0
-  #   environment:
-  #     - discovery.type=single-node
-  #   ports: ["9200:9200"]
+  opensearch:
+    container_name: opensearch
+    image: opensearchproject/opensearch:3
+    environment:
+      - discovery.type=single-node
+      - DISABLE_INSTALL_DEMO_CONFIG=true
+      - DISABLE_SECURITY_PLUGIN=true
+    ports: ["9200:9200"]
 
   # localstack:
   #   image: localstack/localstack:3

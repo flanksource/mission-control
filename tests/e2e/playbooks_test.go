@@ -3,9 +3,11 @@ package e2e
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -30,11 +32,12 @@ import (
 )
 
 var (
-	lokiEndpoint = lo.CoalesceOrEmpty(os.Getenv("LOKI_ENDPOINT"), "http://localhost:3100")
+	lokiEndpoint       = lo.CoalesceOrEmpty(os.Getenv("LOKI_ENDPOINT"), "http://localhost:3100")
+	openSearchEndpoint = lo.CoalesceOrEmpty(os.Getenv("OPENSEARCH_ENDPOINT"), "http://localhost:9200")
 )
 
 func waitFor(ctx context.Context, run *models.PlaybookRun, statuses ...models.PlaybookRunStatus) *models.PlaybookRun {
-	s := append([]models.PlaybookRunStatus{}, statuses...)
+	s := slices.Clone(statuses)
 	if len(s) == 0 {
 		s = append(s, models.PlaybookRunStatusFailed, models.PlaybookRunStatusCompleted)
 	}
@@ -98,30 +101,54 @@ func waitForLokiLogs() {
 var _ = ginkgo.Describe("Playbooks", ginkgo.Ordered, func() {
 	var _ = ginkgo.Context("logs", func() {
 		ginkgo.BeforeAll(func() {
-			content, err := os.ReadFile("setup/seed-loki.json")
-			Expect(err).To(BeNil())
+			// Loki seeding
+			{
+				lokiContent, err := os.ReadFile("setup/seed-loki.json")
+				Expect(err).To(BeNil())
 
-			// Generate recent timestamps
-			baseTime := time.Now().Add(-5 * time.Minute)
-			timestamp1 := fmt.Sprintf("%d", baseTime.UnixNano())
-			timestamp2 := fmt.Sprintf("%d", baseTime.Add(1*time.Second).UnixNano())
-			timestamp3 := fmt.Sprintf("%d", baseTime.Add(2*time.Second).UnixNano())
+				baseTimeLoki := time.Now().Add(-5 * time.Minute)
+				timestamp1Loki := fmt.Sprintf("%d", baseTimeLoki.UnixNano())
+				timestamp2Loki := fmt.Sprintf("%d", baseTimeLoki.Add(1*time.Second).UnixNano())
+				timestamp3Loki := fmt.Sprintf("%d", baseTimeLoki.Add(2*time.Second).UnixNano())
 
-			// Replace placeholders with actual timestamps
-			updatedContent := string(content)
-			updatedContent = strings.ReplaceAll(updatedContent, "{{TIMESTAMP_1}}", timestamp1)
-			updatedContent = strings.ReplaceAll(updatedContent, "{{TIMESTAMP_2}}", timestamp2)
-			updatedContent = strings.ReplaceAll(updatedContent, "{{TIMESTAMP_3}}", timestamp3)
+				updatedLokiContent := string(lokiContent)
+				updatedLokiContent = strings.ReplaceAll(updatedLokiContent, "{{TIMESTAMP_1}}", timestamp1Loki)
+				updatedLokiContent = strings.ReplaceAll(updatedLokiContent, "{{TIMESTAMP_2}}", timestamp2Loki)
+				updatedLokiContent = strings.ReplaceAll(updatedLokiContent, "{{TIMESTAMP_3}}", timestamp3Loki)
 
-			endpoint, err := url.JoinPath(lokiEndpoint, "loki/api/v1/push")
-			Expect(err).To(BeNil())
+				lokiPushEndpoint, err := url.JoinPath(lokiEndpoint, "loki/api/v1/push")
+				Expect(err).To(BeNil())
 
-			response, err := http.NewClient().R(DefaultContext).Header("Content-Type", "application/json").
-				Post(endpoint, updatedContent)
-			Expect(err).To(BeNil())
-			Expect(response.IsOK()).To(BeTrue())
+				responseLoki, err := http.NewClient().R(DefaultContext).Header("Content-Type", "application/json").Post(lokiPushEndpoint, updatedLokiContent)
+				Expect(err).To(BeNil())
+				Expect(responseLoki.IsOK()).To(BeTrue())
 
-			waitForLokiLogs()
+				waitForLokiLogs()
+			}
+
+			// OpenSearch seeding
+			{
+				opensearchContent, err := os.ReadFile("setup/seed-opensearch.json")
+				Expect(err).To(BeNil())
+
+				opensearchBulkEndpoint, err := url.JoinPath(openSearchEndpoint, "_bulk")
+				Expect(err).To(BeNil())
+
+				responseOpenSearch, err := http.NewClient().R(DefaultContext).Header("Content-Type", "application/json").Post(opensearchBulkEndpoint, opensearchContent)
+				Expect(err).To(BeNil())
+
+				opensearchBodyBytes, err := io.ReadAll(responseOpenSearch.Body)
+				Expect(err).To(BeNil())
+				responseOpenSearch.Body.Close()
+
+				Expect(responseOpenSearch.IsOK()).To(BeTrue(), "OpenSearch bulk insert failed with status: %s and body: %s", responseOpenSearch.Response.Status, string(opensearchBodyBytes))
+
+				// Check for errors in the bulk response
+				var bulkResponse map[string]any
+				err = json.Unmarshal(opensearchBodyBytes, &bulkResponse)
+				Expect(err).To(BeNil())
+				Expect(bulkResponse["errors"]).To(Equal(false), "OpenSearch bulk insert had errors: %+v", bulkResponse)
+			}
 		})
 
 		base := "../../playbook/testdata/e2e/"

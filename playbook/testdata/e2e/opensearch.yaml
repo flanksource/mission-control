@@ -1,0 +1,41 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: opensearch-logs
+  namespace: default
+  annotations:
+    expected-frontend-logs: |
+      React app started successfully
+      User authentication successful for user: john.doe@example.com
+spec:
+  title: OpenSearch Logs
+  icon: elasticsearch
+  category: Logs
+  description: Fetch logs from OpenSearch
+  configs:
+    - types:
+        - Kubernetes::Pod
+        - Kubernetes::Deployment
+  parameters:
+    - name: limit
+      label: Limit
+      description: The maximum number of logs to fetch
+      required: false
+      default: "100"
+  actions:
+    - name: frontend-logs
+      logs:
+        opensearch:
+          address: http://localhost:9200
+          query: |
+            {
+              "query": {
+                "bool": {
+                  "filter": [
+                    { "term": { "kubernetes.labels.app": "frontend" } }
+                  ]
+                }
+              }
+            }
+          index: k8s-logs
+          limit: $(.params.limit)
