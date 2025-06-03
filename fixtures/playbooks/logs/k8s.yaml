@@ -1,0 +1,32 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: kubernetes-logs
+  namespace: mc
+spec:
+  title: Kubernetes Logs
+  icon: logs
+  category: Logs
+  description: Fetch logs from Kubernetes
+  configs:
+    - types:
+        - Kubernetes::Pod
+        - Kubernetes::Deployment
+        - Kubernetes::StatefulSet
+        - Kubernetes::DaemonSet
+  parameters:
+    - name: limit
+      label: Limit
+      description: The maximum number of logs to fetch
+      required: false
+      default: "100"
+  actions:
+    - name: Fetch logs from Loki
+      logs:
+        kubernetes:
+          kind: $(.config.config_class)
+          apiVersion: $(.config.config.apiVersion)
+          namespace: $(.config.tags.namespace)
+          name: $(.config.name)
+          limit: $(.params.limit)
+          start: now-2h

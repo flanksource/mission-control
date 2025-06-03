@@ -104,6 +104,9 @@ spec:
                       type: object
                     type: array
                   datasources:
+                    description: |-
+                      Datasources targets config items representing data sources (e.g. databases)
+                      whose backups and restores should be monitored
                     items:
                       properties:
                         agent:

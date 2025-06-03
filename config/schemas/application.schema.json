@@ -89,12 +89,6 @@
           },
           "type": "array"
         },
-        "datasources": {
-          "items": {
-            "$ref": "#/$defs/ResourceSelector"
-          },
-          "type": "array"
-        },
         "environments": {
           "additionalProperties": {
             "items": {
@@ -103,6 +97,12 @@
             "type": "array"
           },
           "type": "object"
+        },
+        "datasources": {
+          "items": {
+            "$ref": "#/$defs/ResourceSelector"
+          },
+          "type": "array"
         },
         "logins": {
           "items": {

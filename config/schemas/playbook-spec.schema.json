@@ -811,6 +811,9 @@
         },
         "opensearch": {
           "$ref": "#/$defs/LogsActionOpenSearch"
+        },
+        "kubernetes": {
+          "$ref": "#/$defs/LogsKubernetes"
         }
       },
       "additionalProperties": false,
@@ -971,6 +974,78 @@
         "index",
         "query"
       ]
+    },
+    "LogsKubernetes": {
+      "properties": {
+        "dedupe": {
+          "$ref": "#/$defs/LogDedupe"
+        },
+        "match": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "mapping": {
+          "$ref": "#/$defs/FieldMappingConfig"
+        },
+        "connection": {
+          "type": "string"
+        },
+        "kubeconfig": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "eks": {
+          "$ref": "#/$defs/EKSConnection"
+        },
+        "gke": {
+          "$ref": "#/$defs/GKEConnection"
+        },
+        "cnrm": {
+          "$ref": "#/$defs/CNRMConnection"
+        },
+        "start": {
+          "type": "string"
+        },
+        "end": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "string"
+        },
+        "kind": {
+          "type": "string"
+        },
+        "apiVersion": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "pods": {
+          "$ref": "#/$defs/ResourceSelectors"
+        },
+        "containers": {
+          "$ref": "#/$defs/MatchExpressions"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "kind",
+        "apiVersion",
+        "namespace",
+        "name"
+      ]
+    },
+    "MatchExpressions": {
+      "items": {
+        "type": "string"
+      },
+      "type": "array"
     },
     "NotificationAction": {
       "properties": {
