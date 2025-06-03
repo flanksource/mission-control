@@ -23,6 +23,7 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/logs"
 	"github.com/flanksource/incident-commander/logs/cloudwatch"
+	"github.com/flanksource/incident-commander/logs/k8s"
 	"github.com/flanksource/incident-commander/logs/loki"
 	"github.com/flanksource/incident-commander/logs/opensearch"
 )
@@ -70,10 +71,17 @@ type LogsActionOpenSearch struct {
 	opensearch.Request `json:",inline" yaml:",inline" template:"true"`
 }
 
+type LogsKubernetes struct {
+	LogsPostProcess                 `json:",inline" yaml:",inline"`
+	connection.KubernetesConnection `yaml:",inline" json:",inline"`
+	k8s.Request                     `json:",inline" yaml:",inline" template:"true"`
+}
+
 type LogsAction struct {
 	Loki       *LogsActionLoki       `json:"loki,omitempty" template:"true"`
 	CloudWatch *LogsActionCloudWatch `json:"cloudwatch,omitempty" template:"true"`
 	OpenSearch *LogsActionOpenSearch `json:"opensearch,omitempty" template:"true"`
+	Kubernetes *LogsKubernetes       `json:"kubernetes,omitempty" template:"true"`
 }
 
 type NotificationAction struct {

@@ -14,9 +14,11 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/gomplate/v3"
+
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/logs"
 	"github.com/flanksource/incident-commander/logs/cloudwatch"
+	"github.com/flanksource/incident-commander/logs/k8s"
 	"github.com/flanksource/incident-commander/logs/loki"
 	"github.com/flanksource/incident-commander/logs/opensearch"
 )
@@ -98,6 +100,25 @@ func (l *logsAction) Run(ctx context.Context, action *v1.LogsAction) (*logsResul
 
 		response.Logs = postProcessLogs(ctx, response.Logs, action.CloudWatch.LogsPostProcess)
 		return (*logsResult)(response), nil
+	}
+
+	if action.Kubernetes != nil {
+		searcher := k8s.NewK8sLogsFetcher(action.Kubernetes.KubernetesConnection)
+		response, err := searcher.Fetch(ctx, action.Kubernetes.Request)
+		if err != nil {
+			return nil, ctx.Oops().Wrapf(err, "failed to fetch logs from kubernetes")
+		}
+
+		result := &logsResult{
+			Metadata: map[string]any{},
+			Logs:     []*logs.LogLine{},
+		}
+
+		for _, logGroup := range response {
+			result.Logs = append(result.Logs, postProcessLogs(ctx, logGroup.Logs, action.Kubernetes.LogsPostProcess)...)
+		}
+
+		return result, nil
 	}
 
 	return nil, nil
