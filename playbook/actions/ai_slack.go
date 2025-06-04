@@ -15,6 +15,7 @@ import (
 const (
 	maxSlackFieldsPerSection = 10  // Slack doesn't support more than 10 fields in a section
 	maxHeaderTextLength      = 150 // Slack doesn't support more than 150 characters in a header
+	maxMarkdownTextLength    = 3000
 )
 
 // Constants for Slack block formatting
@@ -158,21 +159,9 @@ func slackBlocks(knowledge *KnowledgeGraph, diagnosisReport llm.DiagnosisReport,
 	}
 	blocks = append(blocks, divider)
 
-	blocks = append(blocks, map[string]any{
-		"type": slackBlockTypeSection,
-		"text": map[string]any{
-			"type": slackBlockTypeMarkdown,
-			"text": fmt.Sprintf("*Summary:*\n%s", diagnosisReport.Summary),
-		},
-	})
+	blocks = append(blocks, markdownSection(fmt.Sprintf("*Summary:*\n%s", diagnosisReport.Summary)))
 
-	blocks = append(blocks, map[string]any{
-		"type": slackBlockTypeSection,
-		"text": map[string]any{
-			"type": slackBlockTypeMarkdown,
-			"text": fmt.Sprintf("*Recommended Fix:*\n%s", diagnosisReport.RecommendedFix),
-		},
-	})
+	blocks = append(blocks, markdownSection(fmt.Sprintf("*Recommended Fix:*\n%s", diagnosisReport.RecommendedFix)))
 
 	blocks = append(blocks, divider)
 
@@ -182,13 +171,7 @@ func slackBlocks(knowledge *KnowledgeGraph, diagnosisReport llm.DiagnosisReport,
 	}
 
 	if len(groupedResources) > 0 {
-		blocks = append(blocks, map[string]any{
-			"type": slackBlockTypeSection,
-			"text": map[string]any{
-				"type": slackBlockTypeMarkdown,
-				"text": fmt.Sprintf("*Also Affected:* \n- %s", strings.Join(groupedResources, "\n - ")),
-			},
-		})
+		blocks = append(blocks, markdownSection(fmt.Sprintf("*Also Affected:* \n- %s", strings.Join(groupedResources, "\n - "))))
 	}
 
 	if playbookButtons := createPlaybookButtons(recommendations); playbookButtons != nil {
@@ -205,4 +188,14 @@ func slackBlocks(knowledge *KnowledgeGraph, diagnosisReport llm.DiagnosisReport,
 	}
 
 	return string(slackBlocks), nil
+}
+
+func markdownSection(text string) map[string]any {
+	return map[string]any{
+		"type": slackBlockTypeSection,
+		"text": map[string]any{
+			"type": slackBlockTypeMarkdown,
+			"text": lo.Ellipsis(text, maxMarkdownTextLength),
+		},
+	}
 }
