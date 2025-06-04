@@ -94,7 +94,7 @@ func (t *AIActionResult) GetArtifacts() []artifacts.Artifact {
 
 	return []artifacts.Artifact{
 		{
-			ContentType: "markdown",
+			ContentType: "text/markdown",
 			Content:     io.NopCloser(strings.NewReader(t.Prompt.String())),
 			Path:        "prompt.md",
 		},
