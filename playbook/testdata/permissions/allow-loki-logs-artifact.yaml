@@ -1,0 +1,14 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: allow-loki-logs-artifacts
+spec:
+  description: allow loki-logs to read connection default/artifacts
+  subject:
+    playbook: default/loki-logs
+  actions:
+    - read
+  object:
+    connections:
+      - name: artifacts
+        namespace: default

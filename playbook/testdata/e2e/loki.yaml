@@ -1,0 +1,47 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: loki-logs
+  namespace: default
+  annotations:
+    expected-payment-processor: |
+      ERROR Credit card validation failed: invalid card number
+      ERROR Failed to process payment for order: order-456789
+      ERROR Payment gateway timeout for transaction: txn-abc123
+    expected-api-gateway: |
+      INFO Health check completed successfully
+      INFO Received GET request for /api/health
+      INFO Starting API Gateway server on port 8080
+spec:
+  title: Loki Logs
+  icon: logs
+  category: Logs
+  description: Fetch logs from Loki
+  configs:
+    - types:
+        - Kubernetes::Pod
+        - Kubernetes::Deployment
+  parameters:
+    - name: limit
+      label: Limit
+      description: The maximum number of logs to fetch
+      required: false
+      default: "100"
+  actions:
+    - name: payment-processor
+      logs:
+        loki:
+          url: http://localhost:3100
+          query: >
+            {service="payment-processor",level="error"}
+          limit: $(.params.limit)
+          start: now-2h
+    - name: api-gateway
+      logs:
+        loki:
+          url: http://localhost:3100
+          query: >
+            {service="api-gateway"}
+          limit: $(.params.limit)
+          start: now-2h
+

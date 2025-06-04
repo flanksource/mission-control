@@ -22,12 +22,12 @@ jobs:
           final_space=$(df / | grep / | awk '{print $4}')
           difference=$((final_space - initial_space))
           echo "Disk space difference (in KB): $difference"
-      
+
       - name: Install Go
         uses: buildjet/setup-go@v5
         with:
           go-version: 1.24.x
-      
+
       - name: Checkout code
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
 
@@ -36,7 +36,7 @@ jobs:
           sed -i "s/GEMINI_API_KEY_PLACEHOLDER/${GEMINI_API_KEY}/" playbook/testdata/connections/gemini.yaml
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      
+
       - uses: buildjet/cache@v4
         with:
           path: |
@@ -46,13 +46,72 @@ jobs:
           key: cache-${{ hashFiles('**/go.sum') }}-${{ hashFiles('.bin/*') }}
           restore-keys: |
             cache-
-      
+
       - name: Test
         run: make static test
-      
+
       - name: Publish Unit Test Results
         uses: EnricoMi/publish-unit-test-result-action@82082dac68ad6a19d980f8ce817e108b9f496c2a # v2.17.1
         if: always() && github.event.repository.fork == 'false'
         with:
           files: test/test-results.xml
           check_name: E2E - ${{matrix.suite}}
+
+  e2e:
+    runs-on: ubuntu-latest
+
+    services:
+      loki:
+        image: grafana/loki:3.0.0
+        ports:
+          - 3100:3100
+        options: --health-cmd="wget --no-verbose --tries=1 --spider http://localhost:3100/ready || exit 1" --health-interval=10s --health-timeout=5s --health-retries=3
+
+      opensearch:
+        image: opensearchproject/opensearch:3
+        env:
+          discovery.type: single-node
+          DISABLE_INSTALL_DEMO_CONFIG: 'true'
+          DISABLE_SECURITY_PLUGIN: 'true'
+        ports:
+          - 9200:9200
+
+    steps:
+      - name: Free up disk space
+        run: |
+          initial_space=$(df / | grep / | awk '{print $4}')
+          rm -rf /usr/share/dotnet
+          rm -rf /opt/ghc
+          rm -rf /usr/local/share/boost
+          rm -rf $AGENT_TOOLSDIRECTORY
+          rm -rf /opt/hostedtoolcache
+
+          final_space=$(df / | grep / | awk '{print $4}')
+          difference=$((final_space - initial_space))
+          echo "Disk space difference (in KB): $difference"
+
+      - name: Install Go
+        uses: buildjet/setup-go@v5
+        with:
+          go-version: 1.24.x
+
+      - name: Checkout code
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+
+      - uses: buildjet/cache@v4
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+            .bin
+          key: cache-${{ hashFiles('**/go.sum') }}-${{ hashFiles('.bin/*') }}
+          restore-keys: |
+            cache-
+
+      # - name: Set up Kind & Kubectl
+      #   uses: helm/kind-action@v1.12.0
+      #   with:
+      #     cluster_name: kind-test
+
+      - name: E2E Test
+        run: make ginkgo e2e

@@ -22,67 +22,19 @@ import (
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
-	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/playbook/sdk"
+	"github.com/flanksource/incident-commander/playbook/testdata"
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/samber/lo"
 	"github.com/samber/oops"
 
-	"k8s.io/apimachinery/pkg/types"
 	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
 )
 
-func loadPermissions() {
-	// We allow User=JohnDoe to run any playbook and read any configs (with some exceptions)
-	entries, err := os.ReadDir("testdata/permissions")
-	Expect(err).To(BeNil())
-
-	for _, entry := range entries {
-		fixturePath := filepath.Join("testdata/permissions", entry.Name())
-		content, err := os.ReadFile(fixturePath)
-		Expect(err).To(BeNil())
-
-		var perm v1.Permission
-		err = yamlutil.Unmarshal(content, &perm)
-		Expect(err).To(BeNil())
-
-		perm.UID = types.UID(uuid.New().String())
-
-		err = db.PersistPermissionFromCRD(DefaultContext, &perm)
-		Expect(err).To(BeNil())
-	}
-
-	err = rbac.ReloadPolicy()
-	Expect(err).To(BeNil())
-}
-
-func loadConnections() {
-	entries, err := os.ReadDir("testdata/connections")
-	Expect(err).To(BeNil())
-
-	for _, entry := range entries {
-		fixturePath := filepath.Join("testdata/connections", entry.Name())
-		content, err := os.ReadFile(fixturePath)
-		Expect(err).To(BeNil())
-
-		var conn v1.Connection
-		err = yamlutil.Unmarshal(content, &conn)
-		Expect(err).To(BeNil())
-
-		err = db.PersistConnectionFromCRD(DefaultContext, &conn)
-		Expect(err).To(BeNil())
-	}
-}
-
 var _ = Describe("Playbook", Ordered, func() {
-	BeforeAll(func() {
-		loadConnections()
-		loadPermissions()
-	})
-
 	var _ = Describe("Artifacts", Ordered, func() {
 		It("run exec action and save artifacts", func() {
 			run := createAndRun(DefaultContext.WithUser(&dummy.JohnDoe), "action-exec-artifacts", RunParams{
@@ -840,7 +792,7 @@ var _ = Describe("Playbook", Ordered, func() {
 
 func createAndRun(ctx context.Context, name string, params RunParams, statuses ...models.PlaybookRunStatus) *models.PlaybookRun {
 	playbook, _ := createPlaybook(name)
-	loadPermissions()
+	Expect(testdata.LoadPermissions(ctx)).To(BeNil())
 	return runPlaybook(ctx, playbook, params, statuses...)
 }
 

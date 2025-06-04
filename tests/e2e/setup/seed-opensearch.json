@@ -1,0 +1,32 @@
+{ "index": { "_index": "k8s-logs" } }
+{ "@timestamp": "2024-01-15T10:00:00.000Z", "kubernetes": { "namespace": "default", "labels": { "app": "nginx" }, "pod": { "name": "nginx-deployment-abc123" } }, "message": "192.168.1.100 - - [15/Jan/2024:10:00:00 +0000] \"GET / HTTP/1.1\" 200 612 \"-\" \"Mozilla/5.0\"", "level": "info", "stream": "stdout" }
+{ "index": { "_index": "k8s-logs" } }
+{ "@timestamp": "2024-01-15T10:01:00.000Z", "kubernetes": { "namespace": "default", "labels": { "app": "nginx" }, "pod": { "name": "nginx-deployment-abc123" } }, "message": "192.168.1.101 - - [15/Jan/2024:10:01:00 +0000] \"GET /health HTTP/1.1\" 200 2 \"-\" \"kube-probe/1.28\"", "level": "info", "stream": "stdout" }
+{ "index": { "_index": "k8s-logs" } }
+{ "@timestamp": "2024-01-15T10:02:00.000Z", "kubernetes": { "namespace": "default", "labels": { "app": "nginx" }, "pod": { "name": "nginx-deployment-def456" } }, "message": "192.168.1.102 - - [15/Jan/2024:10:02:00 +0000] \"POST /api/v1/data HTTP/1.1\" 201 45 \"-\" \"curl/7.68.0\"", "level": "info", "stream": "stdout" }
+{ "index": { "_index": "k8s-logs" } }
+{ "@timestamp": "2024-01-15T10:03:00.000Z", "kubernetes": { "namespace": "production", "labels": { "app": "api-server" }, "pod": { "name": "api-server-789xyz" } }, "message": "Starting API server on port 8080", "level": "info", "stream": "stdout", "service": "api-server" }
+{ "index": { "_index": "k8s-logs" } }
+{ "@timestamp": "2024-01-15T10:04:00.000Z", "kubernetes": { "namespace": "production", "labels": { "app": "api-server" }, "pod": { "name": "api-server-789xyz" } }, "message": "Database connection established successfully", "level": "info", "stream": "stdout", "service": "api-server" }
+{ "index": { "_index": "k8s-logs" } }
+{ "@timestamp": "2024-01-15T10:05:00.000Z", "kubernetes": { "namespace": "production", "labels": { "app": "api-server" }, "pod": { "name": "api-server-789xyz" } }, "message": "Failed to process request: connection timeout", "level": "error", "stream": "stderr", "service": "api-server", "error": { "type": "ConnectionTimeoutError", "message": "Connection to database timed out after 30s" } }
+{ "index": { "_index": "k8s-logs" } }
+{ "@timestamp": "2024-01-15T10:06:00.000Z", "kubernetes": { "namespace": "staging", "labels": { "app": "frontend" }, "pod": { "name": "frontend-deployment-ghi789" } }, "message": "React app started successfully", "level": "info", "stream": "stdout", "service": "frontend" }
+{ "index": { "_index": "k8s-logs" } }
+{ "@timestamp": "2024-01-15T10:07:00.000Z", "kubernetes": { "namespace": "staging", "labels": { "app": "frontend" }, "pod": { "name": "frontend-deployment-ghi789" } }, "message": "User authentication successful for user: john.doe@example.com", "level": "info", "stream": "stdout", "service": "frontend", "user": { "email": "john.doe@example.com", "id": "user123" } }
+{ "index": { "_index": "k8s-logs" } }
+{ "@timestamp": "2024-01-15T10:08:00.000Z", "kubernetes": { "namespace": "default", "labels": { "app": "redis" }, "pod": { "name": "redis-master-jkl012" } }, "message": "Redis server started, version=7.0.15 port=6379", "level": "info", "stream": "stdout", "service": "redis" }
+{ "index": { "_index": "k8s-logs" } }
+{ "@timestamp": "2024-01-15T10:09:00.000Z", "kubernetes": { "namespace": "default", "labels": { "app": "redis" }, "pod": { "name": "redis-master-jkl012" } }, "message": "Ready to accept connections", "level": "info", "stream": "stdout", "service": "redis" }
+{ "index": { "_index": "k8s-logs" } }
+{ "@timestamp": "2024-01-15T10:10:00.000Z", "kubernetes": { "namespace": "monitoring", "labels": { "app": "prometheus" }, "pod": { "name": "prometheus-server-mno345" } }, "message": "Server is ready to receive web requests.", "level": "info", "stream": "stdout", "service": "prometheus" }
+{ "index": { "_index": "k8s-logs" } }
+{ "@timestamp": "2024-01-15T10:11:00.000Z", "kubernetes": { "namespace": "monitoring", "labels": { "app": "grafana" }, "pod": { "name": "grafana-dashboard-pqr678" } }, "message": "HTTP Server Listen", "level": "info", "stream": "stdout", "service": "grafana", "port": 3000 }
+{ "index": { "_index": "k8s-logs" } }
+{ "@timestamp": "2024-01-15T10:12:00.000Z", "kubernetes": { "namespace": "production", "labels": { "app": "database" }, "pod": { "name": "postgres-primary-stu901" } }, "message": "database system is ready to accept connections", "level": "info", "stream": "stdout", "service": "postgresql" }
+{ "index": { "_index": "k8s-logs" } }
+{ "@timestamp": "2024-01-15T10:13:00.000Z", "kubernetes": { "namespace": "production", "labels": { "app": "database" }, "pod": { "name": "postgres-primary-stu901" } }, "message": "checkpoint starting: time", "level": "debug", "stream": "stdout", "service": "postgresql" }
+{ "index": { "_index": "k8s-logs" } }
+{ "@timestamp": "2024-01-15T10:14:00.000Z", "kubernetes": { "namespace": "default", "labels": { "app": "nginx" }, "pod": { "name": "nginx-deployment-abc123" } }, "message": "192.168.1.103 - - [15/Jan/2024:10:14:00 +0000] \"GET /favicon.ico HTTP/1.1\" 404 153 \"http://localhost/\" \"Mozilla/5.0\"", "level": "warn", "stream": "stdout" }
+{ "index": { "_index": "k8s-logs" } }
+{ "@timestamp": "2024-01-15T10:15:00.000Z", "kubernetes": { "namespace": "kube-system", "labels": { "app": "coredns" }, "pod": { "name": "coredns-vwx234" } }, "message": "[INFO] plugin/reload: Running configuration SHA512 = abc123def456", "level": "info", "stream": "stdout", "service": "coredns" }

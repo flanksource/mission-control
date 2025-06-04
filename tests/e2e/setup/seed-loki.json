@@ -1,0 +1,51 @@
+{
+  "streams": [
+    {
+      "stream": {
+        "service": "api-gateway",
+        "level": "info",
+        "environment": "production"
+      },
+      "values": [
+        [
+          "{{TIMESTAMP_1}}",
+          "INFO Starting API Gateway server on port 8080"
+        ],
+        ["{{TIMESTAMP_2}}", "INFO Received GET request for /api/health"],
+        ["{{TIMESTAMP_3}}", "INFO Health check completed successfully"]
+      ]
+    },
+    {
+      "stream": {
+        "service": "payment-processor",
+        "level": "error",
+        "environment": "production"
+      },
+      "values": [
+        [
+          "{{TIMESTAMP_1}}",
+          "ERROR Payment gateway timeout for transaction: txn-abc123"
+        ],
+        [
+          "{{TIMESTAMP_2}}",
+          "ERROR Failed to process payment for order: order-456789"
+        ],
+        [
+          "{{TIMESTAMP_3}}",
+          "ERROR Credit card validation failed: invalid card number"
+        ]
+      ]
+    },
+    {
+      "stream": {
+        "service": "payment-processor",
+        "level": "info",
+        "environment": "production"
+      },
+      "values": [
+        ["{{TIMESTAMP_2}}", "INFO Payment successful: txn-123"],
+        ["{{TIMESTAMP_3}}", "INFO Payment successful: txn-456"]
+      ]
+    }
+  ]
+}

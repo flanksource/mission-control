@@ -1,0 +1,24 @@
+services:
+  loki:
+    image: grafana/loki:3.0.0
+    ports: ["3100:3100"]
+    command: -config.file=/etc/loki/local-config.yaml
+
+  opensearch:
+    container_name: opensearch
+    image: opensearchproject/opensearch:3
+    environment:
+      - discovery.type=single-node
+      - DISABLE_INSTALL_DEMO_CONFIG=true
+      - DISABLE_SECURITY_PLUGIN=true
+    ports: ["9200:9200"]
+
+  # localstack:
+  #   image: localstack/localstack:3
+  #   environment:
+  #     - SERVICES=cloudwatch,logs
+  #   ports: ["4566:4566"]
+
+  # kindctl:  # optional helper; KinD cluster spins up in the job step
+  #   image: docker
+  #   command: ["true"]  # placeholder, no container running during tests

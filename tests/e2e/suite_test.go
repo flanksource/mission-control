@@ -1,4 +1,4 @@
-package playbook
+package e2e
 
 import (
 	"fmt"
@@ -23,6 +23,7 @@ import (
 	"github.com/flanksource/incident-commander/auth"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/events"
+	"github.com/flanksource/incident-commander/playbook"
 	"github.com/flanksource/incident-commander/playbook/sdk"
 	"github.com/flanksource/incident-commander/playbook/testdata"
 	"github.com/flanksource/incident-commander/rbac/adapter"
@@ -93,7 +94,7 @@ var _ = ginkgo.BeforeSuite(func() {
 	e.Use(auth.MockAuthMiddleware)
 
 	events.StartConsumers(DefaultContext)
-	if err := StartPlaybookConsumers(DefaultContext); err != nil {
+	if err := playbook.StartPlaybookConsumers(DefaultContext); err != nil {
 		ginkgo.Fail(err.Error())
 	}
 

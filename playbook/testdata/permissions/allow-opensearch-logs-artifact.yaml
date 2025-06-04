@@ -1,0 +1,14 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: allow-opensearch-logs-artifacts
+spec:
+  description: allow opensearch-logs to read connection default/artifacts
+  subject:
+    playbook: default/opensearch-logs
+  actions:
+    - read
+  object:
+    connections:
+      - name: artifacts
+        namespace: default
