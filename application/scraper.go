@@ -16,12 +16,20 @@ import (
 
 // A minimal copy of azure scraper from config-db
 type AzureScraper struct {
-	ConnectionName     string                   `yaml:"connection,omitempty" json:"connection,omitempty"`
-	SubscriptionID     string                   `yaml:"subscriptionID" json:"subscriptionID"`
-	ClientID           types.EnvVar             `yaml:"clientID,omitempty" json:"clientID,omitempty"`
-	ClientSecret       types.EnvVar             `yaml:"clientSecret,omitempty" json:"clientSecret,omitempty"`
-	TenantID           string                   `yaml:"tenantID,omitempty" json:"tenantID,omitempty"`
-	Include            []string                 `yaml:"include,omitempty" json:"include,omitempty"`
+	ConnectionName string       `yaml:"connection,omitempty" json:"connection,omitempty"`
+	SubscriptionID string       `yaml:"subscriptionID" json:"subscriptionID"`
+	ClientID       types.EnvVar `yaml:"clientID,omitempty" json:"clientID,omitempty"`
+	ClientSecret   types.EnvVar `yaml:"clientSecret,omitempty" json:"clientSecret,omitempty"`
+	TenantID       string       `yaml:"tenantID,omitempty" json:"tenantID,omitempty"`
+	Include        []string     `yaml:"include,omitempty" json:"include,omitempty"`
+	Entra          *Entra       `yaml:"entra,omitempty" json:"entra,omitempty"`
+}
+
+type Entra struct {
+	Users              []types.ResourceSelector `yaml:"users,omitempty" json:"users,omitempty"`
+	Groups             []types.ResourceSelector `yaml:"groups,omitempty" json:"groups,omitempty"`
+	AppRegistrations   []types.ResourceSelector `yaml:"appRegistrations,omitempty" json:"appRegistrations,omitempty"`
+	EnterpriseApps     []types.ResourceSelector `yaml:"enterpriseApps,omitempty" json:"enterpriseApps,omitempty"`
 	AppRoleAssignments []types.ResourceSelector `yaml:"appRoleAssignments,omitempty" json:"appRoleAssignments,omitempty"`
 }
 
@@ -50,11 +58,13 @@ func generateConfigScraper(ctx context.Context, app *v1.Application) error {
 			return ctx.Oops().Wrapf(err, "failed to unmarshal scrape config %s", scrapeConfig.ID)
 		}
 
-		spec.Azure[0].Include = []string{"appRoleAssignments"}
-		spec.Azure[0].AppRoleAssignments = lo.Map(loginSelector, func(selector types.ResourceSelector, _ int) types.ResourceSelector {
-			selector.Scope = scrapeConfig.ID.String()
-			return selector
-		})
+		spec.Azure[0].Include = []string{"entra", "appRoleAssignments"}
+		spec.Azure[0].Entra = &Entra{
+			AppRoleAssignments: lo.Map(loginSelector, func(selector types.ResourceSelector, _ int) types.ResourceSelector {
+				selector.Scope = scrapeConfig.ID.String()
+				return selector
+			}),
+		}
 
 		specJSON, err := json.Marshal(spec)
 		if err != nil {
