@@ -27,6 +27,7 @@ type AzureScraper struct {
 	ClientID       types.EnvVar `yaml:"clientID" json:"clientID"`
 	ClientSecret   types.EnvVar `yaml:"clientSecret" json:"clientSecret"`
 	TenantID       string       `yaml:"tenantID,omitempty" json:"tenantID,omitempty"`
+	Include        []string     `yaml:"include,omitempty" json:"include,omitempty"`
 	Entra          *Entra       `yaml:"entra,omitempty" json:"entra,omitempty"`
 }
 
@@ -108,6 +109,7 @@ func generateConfigScraper(ctx context.Context, app *v1.Application) error {
 			})
 
 			// Keep the remaining fields the same. Just modify the Entra config.
+			spec.Azure[0].Include = []string{"entra"}
 			spec.Azure[0].Entra = &Entra{
 				AppRoleAssignments: appRoleSelectors,
 			}
