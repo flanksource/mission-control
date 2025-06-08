@@ -150,6 +150,7 @@ $(LOCALBIN):
 KUSTOMIZE ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
+LEVEE ?= $(LOCALBIN)/levee
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v3.8.7
@@ -179,3 +180,8 @@ $(CONTROLLER_GEN): $(LOCALBIN)
 envtest: $(ENVTEST) ## Download envtest-setup locally if necessary.
 $(ENVTEST): $(LOCALBIN)
 	test -s $(LOCALBIN)/setup-envtest || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
+
+.PHONY: levee
+levee: $(LEVEE)
+	test -s $(LOCALBIN)/levee || GOBIN=$(LOCALBIN) go install github.com/google/go-flow-levee/cmd/levee@latest
+	go vet -vettool="$(LOCALBIN)/levee" -config=$(realpath analyzer_configuration.yaml) ./...
