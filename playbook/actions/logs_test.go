@@ -9,8 +9,8 @@ import (
 	"github.com/flanksource/duty/types"
 	"github.com/onsi/gomega"
 
+	"github.com/flanksource/duty/logs"
 	v1 "github.com/flanksource/incident-commander/api/v1"
-	"github.com/flanksource/incident-commander/logs"
 	"github.com/samber/lo"
 )
 

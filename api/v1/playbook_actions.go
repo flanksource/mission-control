@@ -20,12 +20,12 @@ import (
 	"golang.org/x/exp/rand"
 	"k8s.io/client-go/kubernetes"
 
+	"github.com/flanksource/duty/logs"
+	"github.com/flanksource/duty/logs/cloudwatch"
+	"github.com/flanksource/duty/logs/k8s"
+	"github.com/flanksource/duty/logs/loki"
+	"github.com/flanksource/duty/logs/opensearch"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/logs"
-	"github.com/flanksource/incident-commander/logs/cloudwatch"
-	"github.com/flanksource/incident-commander/logs/k8s"
-	"github.com/flanksource/incident-commander/logs/loki"
-	"github.com/flanksource/incident-commander/logs/opensearch"
 )
 
 type LogDedupe struct {

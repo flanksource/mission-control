@@ -15,12 +15,12 @@ import (
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/gomplate/v3"
 
+	"github.com/flanksource/duty/logs"
+	"github.com/flanksource/duty/logs/cloudwatch"
+	"github.com/flanksource/duty/logs/k8s"
+	"github.com/flanksource/duty/logs/loki"
+	"github.com/flanksource/duty/logs/opensearch"
 	v1 "github.com/flanksource/incident-commander/api/v1"
-	"github.com/flanksource/incident-commander/logs"
-	"github.com/flanksource/incident-commander/logs/cloudwatch"
-	"github.com/flanksource/incident-commander/logs/k8s"
-	"github.com/flanksource/incident-commander/logs/loki"
-	"github.com/flanksource/incident-commander/logs/opensearch"
 )
 
 type logsAction struct {

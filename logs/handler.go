@@ -12,7 +12,7 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
-	"github.com/labstack/echo/v4"
+	echo "github.com/labstack/echo/v4"
 
 	"github.com/flanksource/incident-commander/api"
 )
