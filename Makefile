@@ -104,11 +104,8 @@ gen-schemas:
 	go mod tidy && \
 	go run ./main.go
 
-	# TODO: Do this if mission-control uses local duty
-	# go mod edit -replace=github.com/flanksource/duty=../../../duty
-
 .PHONY: manifests
-manifests: controller-gen generate gen-schemas ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
+manifests: generate gen-schemas ## Generate WebhookConfiguration, ClusterRole and CustomResourceDefinition objects.
 	$(CONTROLLER_GEN) crd paths="./api/..." output:crd:artifacts:config=config/crds
 
 .PHONY: generate

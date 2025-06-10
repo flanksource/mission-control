@@ -7,10 +7,10 @@ package v1
 import (
 	"encoding/json"
 	"github.com/flanksource/duty/connection"
+	"github.com/flanksource/duty/logs"
 	"github.com/flanksource/duty/shell"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/logs"
 	"k8s.io/apimachinery/pkg/runtime"
 	timex "time"
 )
