@@ -12,11 +12,12 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
-	"github.com/flanksource/incident-commander/api"
-	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel/trace"
 	"gorm.io/gorm/clause"
+
+	"github.com/flanksource/incident-commander/api"
+	v1 "github.com/flanksource/incident-commander/api/v1"
 )
 
 func GetAllApplications(ctx context.Context) ([]models.Application, error) {
@@ -253,12 +254,19 @@ func GetApplicationLocations(ctx context.Context, environments map[string][]v1.A
 		for _, purposeSelector := range selectors {
 			selectColumns := []string{
 				"tags->>'region' as region",
-				"tags->>'account-name' as account",
+				"COALESCE(tags->>'account-name', tags->>'project') as account",
 				"MAX(type) as type",
 				"COUNT(*) as count",
 			}
+
 			clauses := []clause.Expression{
-				clause.Expr{SQL: "tags->>'region' IS NOT NULL AND tags->>'account-name' IS NOT NULL"},
+				// NOTE: We are targetting AWS and GCP config items by only matching configs
+				// that have
+				// tags.region
+				// tags.account-name for aws OR tags.project for GCP
+				clause.Expr{
+					SQL: "tags->>'region' IS NOT NULL AND (tags->>'account-name' IS NOT NULL OR tags->>'project' IS NOT NULL)",
+				},
 				clause.GroupBy{
 					Columns: []clause.Column{
 						{Name: "region"},
