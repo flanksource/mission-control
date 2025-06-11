@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/samber/lo"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/yaml"
 )
@@ -31,6 +32,18 @@ var _ = ginkgo.Describe("Application Job", ginkgo.Ordered, func() {
 		{
 			scrapeConfig := readScrapeConfig("testdata/azure-scrapeconfig.yaml")
 			Expect(DefaultContext.DB().Save(&scrapeConfig).Error).To(Succeed())
+
+			// Create Azure::EnterpriseApplication named "the-application"
+			enterpriseApplication := models.ConfigItem{
+				Name: lo.ToPtr("the-application"),
+				Type: lo.ToPtr("Azure::EnterpriseApplication"),
+				Tags: map[string]string{
+					"namespace": "mc",
+				},
+				ScraperID: lo.ToPtr(scrapeConfig.ID.String()),
+				Config:    lo.ToPtr(`{"type": "Azure::EnterpriseApplication"}`),
+			}
+			Expect(DefaultContext.DB().Save(&enterpriseApplication).Error).To(Succeed())
 		}
 	})
 
