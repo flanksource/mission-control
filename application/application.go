@@ -104,9 +104,10 @@ func buildApplication(ctx context.Context, app *v1.Application) (*api.Applicatio
 		if err != nil {
 			return nil, ctx.Oops().Errorf("failed to find locations: %w", err)
 		}
+		configIDs = lo.Uniq(configIDs)
 
 		var analyses []models.ConfigAnalysis
-		if err := ctx.DB().Where("config_id IN ?", lo.Uniq(configIDs)).Find(&analyses).Error; err != nil {
+		if err := ctx.DB().Where("config_id IN ?", configIDs).Find(&analyses).Error; err != nil {
 			return nil, ctx.Oops().Errorf("failed to find analyses: %w", err)
 		}
 
@@ -120,6 +121,26 @@ func buildApplication(ctx context.Context, app *v1.Application) (*api.Applicatio
 				Date:         lo.FromPtr(analysis.FirstObserved),
 				LastObserved: lo.FromPtr(analysis.LastObserved),
 				Status:       analysis.Status,
+			})
+		}
+
+		changes, err := db.GetApplicationChanges(ctx, configIDs)
+		if err != nil {
+			return nil, ctx.Oops().Errorf("failed to find application changes: %w", err)
+		}
+
+		for _, change := range changes {
+			user := lo.CoalesceOrEmpty(change.User, change.Source)
+
+			// TODO:
+			status := "Unknown"
+
+			response.Changes = append(response.Changes, api.ApplicationChange{
+				ID:          change.ID,
+				Date:        change.CreatedAt,
+				User:        user,
+				Description: change.Summary,
+				Status:      status,
 			})
 		}
 	}
