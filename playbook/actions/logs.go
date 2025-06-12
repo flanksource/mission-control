@@ -12,14 +12,14 @@ import (
 	"github.com/flanksource/commons/duration"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/types"
-	"github.com/flanksource/gomplate/v3"
-
 	"github.com/flanksource/duty/logs"
 	"github.com/flanksource/duty/logs/cloudwatch"
 	"github.com/flanksource/duty/logs/k8s"
 	"github.com/flanksource/duty/logs/loki"
 	"github.com/flanksource/duty/logs/opensearch"
+	"github.com/flanksource/duty/types"
+	"github.com/flanksource/gomplate/v3"
+
 	v1 "github.com/flanksource/incident-commander/api/v1"
 )
 
@@ -53,8 +53,8 @@ func NewLogsAction() *logsAction {
 
 func (l *logsAction) Run(ctx context.Context, action *v1.LogsAction) (*logsResult, error) {
 	if action.Loki != nil {
-		searcher := loki.NewSearcher(action.Loki.Loki, action.Loki.Mapping)
-		response, err := searcher.Fetch(ctx, action.Loki.Request)
+		searcher := loki.New(action.Loki.Loki, action.Loki.Mapping)
+		response, err := searcher.Search(ctx, action.Loki.Request)
 		if err != nil {
 			return nil, ctx.Oops().Wrapf(err, "failed to fetch logs from loki")
 		}
@@ -64,12 +64,12 @@ func (l *logsAction) Run(ctx context.Context, action *v1.LogsAction) (*logsResul
 	}
 
 	if action.OpenSearch != nil {
-		searcher, err := opensearch.NewSearcher(ctx, action.OpenSearch.Backend, action.OpenSearch.Mapping)
+		searcher, err := opensearch.New(ctx, action.OpenSearch.Backend, action.OpenSearch.Mapping)
 		if err != nil {
 			return nil, ctx.Oops().Wrapf(err, "failed to create opensearch searcher")
 		}
 
-		response, err := searcher.Search(ctx, &action.OpenSearch.Request)
+		response, err := searcher.Search(ctx, action.OpenSearch.Request)
 		if err != nil {
 			return nil, ctx.Oops().Wrapf(err, "failed to fetch logs from opensearch")
 		}
@@ -92,7 +92,7 @@ func (l *logsAction) Run(ctx context.Context, action *v1.LogsAction) (*logsResul
 
 		client := cloudwatchlogs.NewFromConfig(awsConfig)
 
-		searcher := cloudwatch.NewSearcher(client, cw.Mapping)
+		searcher := cloudwatch.New(client, cw.Mapping)
 		response, err := searcher.Search(ctx, cw.Request)
 		if err != nil {
 			return nil, ctx.Oops().Wrapf(err, "failed to fetch logs from cloudwatch")
@@ -103,8 +103,8 @@ func (l *logsAction) Run(ctx context.Context, action *v1.LogsAction) (*logsResul
 	}
 
 	if action.Kubernetes != nil {
-		searcher := k8s.NewK8sLogsFetcher(action.Kubernetes.KubernetesConnection)
-		response, err := searcher.Fetch(ctx, action.Kubernetes.Request)
+		searcher := k8s.New(action.Kubernetes.KubernetesConnection)
+		response, err := searcher.Search(ctx, action.Kubernetes.Request)
 		if err != nil {
 			return nil, ctx.Oops().Wrapf(err, "failed to fetch logs from kubernetes")
 		}
