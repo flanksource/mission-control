@@ -17,14 +17,15 @@ import (
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/gomplate/v3"
+	"github.com/google/uuid"
+	"github.com/samber/lo"
+	"gorm.io/gorm/clause"
+
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/incidents/responder"
 	"github.com/flanksource/incident-commander/logs"
-	"github.com/google/uuid"
-	"github.com/samber/lo"
-	"gorm.io/gorm/clause"
 )
 
 const DefaultGroupByInterval = time.Hour * 24
@@ -900,12 +901,17 @@ func getFirstSilencer(ctx context.Context, celEnv *celVariables, matchingSilence
 		if silence.Filter != "" {
 			res, err := ctx.RunTemplate(gomplate.Template{Expression: string(silence.Filter)}, celEnv.AsMap(ctx))
 			if err != nil {
-				ctx.Errorf("failed to run silence filter expression(%s): %v", silence.Filter, err)
-				logs.IfError(db.UpdateNotificationSilenceError(ctx, silence.ID.String(), err.Error()), "failed to update notification silence")
+				errMsg := fmt.Sprintf("filter evaluation failed for resource '%s': %v", celEnv.SelectableResource().GetID(), err)
+				ctx.Errorf("silence %s (%q) failed: %s", silence.ID, lo.Ellipsis(string(silence.Filter), 30), errMsg)
+				logs.IfError(db.UpdateNotificationSilenceError(ctx, silence.ID.String(), errMsg),
+					fmt.Sprintf("failed to update notification silence(%s)", silence.ID))
 				continue
 			} else if ok, err := strconv.ParseBool(res); err != nil {
-				ctx.Errorf("silence filter did not return a boolean value(%s): %v", silence.Filter, err)
-				logs.IfError(db.UpdateNotificationSilenceError(ctx, silence.ID.String(), err.Error()), "failed to update notification silence")
+				errMsg := fmt.Sprintf("non-boolean result for resource '%s': %v", celEnv.SelectableResource().GetID(), err)
+				ctx.Errorf("silence %q failed: %s", silence.Filter, errMsg)
+				logs.IfError(db.UpdateNotificationSilenceError(ctx, silence.ID.String(), errMsg),
+					fmt.Sprintf("failed to update notification silence(%s)", silence.ID))
+				continue
 			} else if ok {
 				return &silence
 			}
@@ -914,8 +920,10 @@ func getFirstSilencer(ctx context.Context, celEnv *celVariables, matchingSilence
 		if silence.Selectors != nil {
 			var resourceSelectors []types.ResourceSelector
 			if err := json.Unmarshal(silence.Selectors, &resourceSelectors); err != nil {
-				ctx.Errorf("failed to parse silence selector(%s): %v", lo.Ellipsis(string(silence.Selectors), 25), err)
-				logs.IfError(db.UpdateNotificationSilenceError(ctx, silence.ID.String(), err.Error()), "failed to update notification silence")
+				errMsg := fmt.Sprintf("failed to parse selectors for resource '%s': %v", celEnv.SelectableResource().GetID(), err)
+				ctx.Errorf("silence %s (%s) failed: %s", silence.ID, lo.Ellipsis(string(silence.Selectors), 30), errMsg)
+				logs.IfError(db.UpdateNotificationSilenceError(ctx, silence.ID.String(), errMsg),
+					fmt.Sprintf("failed to update notification silence(%s)", silence.ID))
 				continue
 			}
 
