@@ -262,10 +262,10 @@ func GetApplicationLocations(ctx context.Context, environments map[string][]v1.A
 			clauses := []clause.Expression{
 				// NOTE: We are targetting AWS and GCP config items by only matching configs
 				// that have
-				// tags.region
-				// tags.account-name for aws OR tags.project for GCP
+				// tags.region + tags.account-name for aws OR
+				// tags.project for GCP (gcp resources can be empty region)
 				clause.Expr{
-					SQL: "tags->>'region' IS NOT NULL AND (tags->>'account-name' IS NOT NULL OR tags->>'project' IS NOT NULL)",
+					SQL: "(tags->>'region' IS NOT NULL AND tags->>'account-name' IS NOT NULL) OR tags->>'project' IS NOT NULL",
 				},
 				clause.GroupBy{
 					Columns: []clause.Column{
