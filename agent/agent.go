@@ -60,7 +60,7 @@ func genUsernamePassword() (username, password string, err error) {
 	return fmt.Sprintf("agent-%s", username), password, nil
 }
 
-func generateToken(ctx context.Context, body api.GenerateTokenRequest) (*api.GeneratedAgent, error) {
+func generateToken(ctx context.Context, body api.GenerateTokenRequest) (*api.GeneratedToken, error) {
 	agentName := body.AgentName
 	agent, err := db.GetAgent(ctx, agentName)
 	if err != nil {
@@ -75,7 +75,7 @@ func generateToken(ctx context.Context, body api.GenerateTokenRequest) (*api.Gen
 	if err != nil {
 		return nil, fmt.Errorf("failed to create a new access token: %w", err)
 	}
-	return &api.GeneratedAgent{
+	return &api.GeneratedToken{
 		ID:          lo.FromPtr(agent.PersonID).String(),
 		Username:    agentName,
 		AccessToken: token,
