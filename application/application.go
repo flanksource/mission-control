@@ -12,7 +12,16 @@ import (
 )
 
 var (
-	backupChangeTypes        = []string{"BackupCompleted", "BackupStarted"}
+	// List of backup statuses we show on the application UI
+	backupChangeTypes = []string{
+		"BackupCompleted",
+		"BackupEnqueued",
+		"BackupFailed",
+		"BackupRunning",
+		"BackupStarted",
+		"BackupSuccessful",
+	}
+
 	backupRestoreChangeTypes = []string{"BackupRestored", "RestoreCompleted"}
 )
 
