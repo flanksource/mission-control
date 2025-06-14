@@ -39,6 +39,13 @@ func FlushTokenCache() {
 // - access tokens
 var tokenCache = cache.New(1*time.Hour, 1*time.Hour)
 
+const (
+	// If token is expiring within 15 days we update it's expiry
+	preExpiryWindow = 15 * 24 * time.Hour
+
+	expiryExtension = 30 * 24 * time.Hour
+)
+
 func InjectToken(ctx context.Context, c echo.Context, user *models.Person, sessID string) error {
 	token, err := GetOrCreateJWTToken(ctx, user, sessID)
 	if err != nil {
@@ -222,14 +229,21 @@ func getAccessToken(ctx context.Context, token string) (*models.AccessToken, err
 		return nil, err
 	}
 
-	if accessToken.ExpiresAt == nil {
+	expiry := accessToken.ExpiresAt
+	if expiry == nil {
 		tokenCache.Set(token, &accessToken, -1)
 	} else {
-		if accessToken.ExpiresAt.Before(time.Now()) {
+		if time.Until(*expiry) < preExpiryWindow {
+			if err := db.UpdateAccessTokenExpiry(ctx, accessToken.ID, time.Now().Add(expiryExtension)); err != nil {
+				return nil, err
+			}
+		}
+
+		if expiry.Before(time.Now()) {
 			return nil, errTokenExpired
 		}
 
-		tokenCache.Set(token, &accessToken, time.Until(*accessToken.ExpiresAt))
+		tokenCache.Set(token, &accessToken, time.Until(*expiry))
 	}
 
 	return &accessToken, nil

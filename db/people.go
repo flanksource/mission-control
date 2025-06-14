@@ -111,6 +111,13 @@ func CreateAccessToken(ctx context.Context, personID uuid.UUID, name, password s
 	return formattedHash, nil
 }
 
+func UpdateAccessTokenExpiry(ctx context.Context, tokenID uuid.UUID, newExpiry time.Time) error {
+	return ctx.DB().Model(&models.AccessToken{}).
+		Where("id = ?", tokenID).
+		Update("expires_at", newExpiry).
+		Error
+}
+
 func AddPersonToTeam(ctx context.Context, personID uuid.UUID, teamID uuid.UUID) error {
 	return ctx.DB().
 		Clauses(clause.OnConflict{DoNothing: true}).
