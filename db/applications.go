@@ -303,3 +303,40 @@ func configTypeToProvider(configType string) string {
 	splits := strings.Split(configType, "::")
 	return splits[0]
 }
+
+type ApplicationChange struct {
+	ID        string
+	CreatedAt time.Time
+	User      string
+	Source    string
+	Summary   string
+}
+
+func GetApplicationChanges(ctx context.Context, configIDs []uuid.UUID) ([]ApplicationChange, error) {
+	if len(configIDs) == 0 {
+		return nil, nil
+	}
+
+	selectColumns := []string{
+		"config_changes.id",
+		"config_changes.created_at",
+		"config_changes.summary",
+		"config_changes.source",
+		"people.name AS user",
+	}
+
+	var changes []ApplicationChange
+	if err := ctx.DB().
+		Select(selectColumns).
+		Table("config_changes").
+		Joins("LEFT JOIN people ON people.id = config_changes.created_by").
+		Where("config_id IN ?", configIDs).
+		Order("created_at DESC").
+		Where("change_type != 'diff'").
+		Limit(15).
+		Find(&changes).Error; err != nil {
+		return nil, err
+	}
+
+	return changes, nil
+}
