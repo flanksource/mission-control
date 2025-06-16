@@ -233,14 +233,14 @@ func getAccessToken(ctx context.Context, token string) (*models.AccessToken, err
 	if expiry == nil {
 		tokenCache.Set(token, &accessToken, -1)
 	} else {
+		if expiry.Before(time.Now()) {
+			return nil, errTokenExpired
+		}
+
 		if time.Until(*expiry) < preExpiryWindow {
 			if err := db.UpdateAccessTokenExpiry(ctx, accessToken.ID, time.Now().Add(expiryExtension)); err != nil {
 				return nil, err
 			}
-		}
-
-		if expiry.Before(time.Now()) {
-			return nil, errTokenExpired
 		}
 
 		tokenCache.Set(token, &accessToken, time.Until(*expiry))
