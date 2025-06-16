@@ -1,0 +1,43 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Application
+metadata:
+  name: gcp
+  namespace: mc
+spec:
+  type: Application
+  description: Google Cloud Platform
+  schedule: "@every 10m"
+  properties:
+    - label: Classification
+      order: 1
+      text: Confidential
+      icon: shield
+    - label: Criticality
+      order: 2
+      text: High
+      icon: alert-triangle
+    - label: Usage
+      order: 3
+      text: Internal
+      icon: globe
+    - label: Source
+      order: 4
+      text: COTS
+      icon: box
+  mapping:
+    logins:
+      - tagSelector: project=workload-prod-eu-02
+        types:
+          - GCP::*
+    datasources:
+      - types:
+          - GCP::Sqladmin::Instance
+    environments:
+      "Prod":
+        - search: type=GCP::*
+          tagSelector: project=workload-prod-eu-02
+          purpose: primary
+      "Non-Prod":
+        - search: type=GCP::*
+          tagSelector: project=flanksource-sandbox
+          purpose: backup
