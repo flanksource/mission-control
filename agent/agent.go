@@ -59,3 +59,25 @@ func genUsernamePassword() (username, password string, err error) {
 
 	return fmt.Sprintf("agent-%s", username), password, nil
 }
+
+func generateToken(ctx context.Context, body api.GenerateTokenRequest) (*api.GeneratedToken, error) {
+	agentName := body.AgentName
+	agent, err := db.GetAgent(ctx, agentName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch agent[%s]: %w", agentName, err)
+	}
+
+	password, err := rand.GenerateRandHex(32)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate password for agent[%s]: %w", agentName, err)
+	}
+	token, err := db.CreateAccessToken(ctx, lo.FromPtr(agent.PersonID), "default", password, lo.ToPtr(time.Hour*24*365))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create a new access token: %w", err)
+	}
+	return &api.GeneratedToken{
+		ID:          lo.FromPtr(agent.PersonID).String(),
+		Username:    agentName,
+		AccessToken: token,
+	}, nil
+}
