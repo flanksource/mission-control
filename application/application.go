@@ -54,6 +54,7 @@ func buildApplication(ctx context.Context, app *v1.Application) (*api.Applicatio
 			response.AccessControl.Users = append(response.AccessControl.Users, api.UserAndRole{
 				Name:             ca.User,
 				Email:            ca.Email,
+				Role:             ca.Role,
 				CreatedAt:        ca.CreatedAt,
 				LastLogin:        ca.LastSignedInAt,
 				LastAccessReview: ca.LastReviewedAt,
