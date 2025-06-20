@@ -46,18 +46,13 @@ type Entra struct {
 type GCPScraper struct {
 	connection.GCPConnection `json:",inline"`
 	ConnectionName           string       `yaml:"connection,omitempty" json:"connection,omitempty"`
-	Project                  string       `yaml:"project" json:"project"`
 	AuditLogs                GCPAuditLogs `yaml:"auditLogs" json:"auditLogs"`
+	Include                  []string     `yaml:"include,omitempty" json:"include,omitempty"`
 }
 
 type GCPAuditLogs struct {
-	Enabled      bool     `json:"enabled,omitempty"`
-	IncludeTypes []string `json:"includeTypes,omitempty"`
-	ExcludeTypes []string `json:"excludeTypes,omitempty"`
-
-	// The lookback period for audit logs.
-	// Default: 7d
-	MaxDuration string `json:"maxDuration,omitempty"`
+	Dataset      string   `json:"dataset,omitempty"`
+	ServiceNames []string `yaml:"serviceNames,omitempty" json:"serviceNames,omitempty"`
 }
 
 type ScraperSpec struct {
@@ -116,9 +111,12 @@ func generateConfigScraper(ctx context.Context, app *v1.Application) error {
 		}
 
 		if len(spec.GCP) > 0 {
-			// Keep the remaining fields the same. Just modify the audit logs.
+			// We keep the remaining fields (connection details) the same
+			// and just modify the audit logs.
+			spec.GCP[0].Include = []string{"AuditLogs"}
 			spec.GCP[0].AuditLogs = GCPAuditLogs{
-				Enabled: true,
+				Dataset:      "default._AllLogs",
+				ServiceNames: []string{"!k8s.io"},
 			}
 		}
 
