@@ -25,7 +25,7 @@ func TestApplication(t *testing.T) {
 var DefaultContext context.Context
 
 var _ = ginkgo.BeforeSuite(func() {
-	format.RegisterCustomFormatter(func(value interface{}) (string, bool) {
+	format.RegisterCustomFormatter(func(value any) (string, bool) {
 		switch v := value.(type) {
 		case error:
 			if err, ok := oops.AsOops(v); ok {

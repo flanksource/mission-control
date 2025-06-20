@@ -37,6 +37,10 @@ e2e:
 fmt:
 	go fmt ./...
 
+.PHONY: modernize
+modernize: modernize-tool ## Run modernize against code.
+	$(MODERNIZE) ./...
+
 docker:
 	docker build . -t ${IMG}
 
@@ -147,6 +151,7 @@ $(LOCALBIN):
 KUSTOMIZE ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
+MODERNIZE ?= $(LOCALBIN)/modernize
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v3.8.7
@@ -176,3 +181,8 @@ $(CONTROLLER_GEN): $(LOCALBIN)
 envtest: $(ENVTEST) ## Download envtest-setup locally if necessary.
 $(ENVTEST): $(LOCALBIN)
 	test -s $(LOCALBIN)/setup-envtest || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
+
+.PHONY: modernize-tool
+modernize-tool: $(MODERNIZE) ## Download modernize locally if necessary.
+$(MODERNIZE): $(LOCALBIN)
+	test -s $(LOCALBIN)/modernize || GOBIN=$(LOCALBIN) go install golang.org/x/tools/gopls/internal/analysis/modernize/cmd/modernize@latest
