@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
@@ -39,26 +38,9 @@ type Entra struct {
 	AppRoleAssignments []types.ResourceSelector `yaml:"appRoleAssignments,omitempty" json:"appRoleAssignments,omitempty"`
 }
 
-// A minimal copy of GCP scraper from config-db.
-//
-// It should have only the connection details and just the field that we want to set
-// i.e. AuditLogs.
-type GCPScraper struct {
-	connection.GCPConnection `json:",inline"`
-	ConnectionName           string       `yaml:"connection,omitempty" json:"connection,omitempty"`
-	AuditLogs                GCPAuditLogs `yaml:"auditLogs" json:"auditLogs"`
-	Include                  []string     `yaml:"include,omitempty" json:"include,omitempty"`
-}
-
-type GCPAuditLogs struct {
-	Dataset      string   `json:"dataset,omitempty"`
-	ServiceNames []string `yaml:"serviceNames,omitempty" json:"serviceNames,omitempty"`
-}
-
 type ScraperSpec struct {
 	Schedule string         `json:"schedule,omitempty"`
 	Azure    []AzureScraper `yaml:"azure,omitempty" json:"azure,omitempty"`
-	GCP      []GCPScraper   `yaml:"gcp,omitempty" json:"gcp,omitempty"`
 }
 
 // generateConfigScraper generates a config scraper for the configs targetted by the login selector
@@ -107,16 +89,6 @@ func generateConfigScraper(ctx context.Context, app *v1.Application) error {
 			spec.Azure[0].Include = []string{"entra"}
 			spec.Azure[0].Entra = &Entra{
 				AppRoleAssignments: appRoleSelectors,
-			}
-		}
-
-		if len(spec.GCP) > 0 {
-			// We keep the remaining fields (connection details) the same
-			// and just modify the audit logs.
-			spec.GCP[0].Include = []string{"AuditLogs"}
-			spec.GCP[0].AuditLogs = GCPAuditLogs{
-				Dataset:      "default._AllLogs",
-				ServiceNames: []string{"!k8s.io"},
 			}
 		}
 
