@@ -174,8 +174,7 @@ func calculateGenerationInfo(llmBackend api.LLMBackend, model string, resp *llms
 		}
 
 		if llmBackend == api.LLMBackendAnthropic || llmBackend == api.LLMBackendBedrock {
-			// NOTE: Anthropic and Bedrock may return multiple choices for tool use,
-			// but we only return the first one to avoid double counting.
+			// For Anthropic and Bedrock, only use the first choice to avoid double-counting.
 			break
 		}
 	}
@@ -276,15 +275,17 @@ func getLLMModel(ctx dutyctx.Context, config Config) (llms.Model, error) {
 		return wrapper, nil
 
 	case api.LLMBackendBedrock:
-		region := config.APIURL // AWS region (may be empty)
 		modelID := config.Model
 		if modelID == "" {
 			modelID = "anthropic.claude-v2"
 		}
-		wrapper, err := NewBedrockModelWrapper(ctx, modelID, region, config.ResponseFormat)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create Bedrock LLM: %w", err)
-		}
+		wrapper, err := NewBedrockModelWrapper(ctx, modelID, config.APIURL, config.ResponseFormat)
+		return wrapper, err
+
+	default:
+		return nil, errors.New("unknown config.Backend")
+	}
+}
 		return wrapper, nil
 
 	default:
