@@ -35,6 +35,7 @@ require (
 	github.com/prometheus/client_golang v1.20.5
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.6
+	github.com/aws/aws-sdk-go-v2/service/bedrockruntime v1.25.0
 	gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df
 	gorm.io/gorm v1.25.12
 	k8s.io/apimachinery v0.31.1
