@@ -350,10 +350,23 @@ func (t *AIActionClient) Populate(ctx context.Context) error {
 			t.Backend = api.LLMBackendOpenAI
 		case models.ConnectionTypeGemini:
 			t.Backend = api.LLMBackendGemini
+		case models.ConnectionTypeAWS:
+			t.Backend = api.LLMBackendBedrock
+			// Use the "region" property as the APIURL for bedrock.
+			if region, ok := conn.Properties["region"]; ok {
+				t.APIURL = region
+			}
+		// Optionally: add support for a future ConnectionTypeBedrock here as well.
 		default:
 			return fmt.Errorf("connection of type %q is not supported. Supported types: [%s]",
 				conn.Type,
-				strings.Join([]string{models.ConnectionTypeOllama, models.ConnectionTypeAnthropic, models.ConnectionTypeOpenAI, models.ConnectionTypeGemini}, ", "),
+				strings.Join([]string{
+					models.ConnectionTypeOllama,
+					models.ConnectionTypeAnthropic,
+					models.ConnectionTypeOpenAI,
+					models.ConnectionTypeGemini,
+					models.ConnectionTypeAWS,
+				}, ", "),
 			)
 		}
 	}
@@ -363,6 +376,9 @@ func (t *AIActionClient) Populate(ctx context.Context) error {
 	}
 	if t.Backend == api.LLMBackendGemini && t.Model == "" {
 		t.Model = "gemini-2.5-pro-exp-03-25" // free tier model
+	}
+	if t.Backend == api.LLMBackendBedrock && t.Model == "" {
+		t.Model = "anthropic.claude-v2"
 	}
 
 	if !t.APIKey.IsEmpty() {

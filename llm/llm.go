@@ -12,6 +12,8 @@ import (
 	"github.com/tmc/langchaingo/llms/openai"
 	"google.golang.org/genai"
 
+	"github.com/build-on-aws/langchaingo-amazon-bedrock-llm/claude"
+
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/llm/tools"

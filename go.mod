@@ -8,6 +8,7 @@ require (
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.8.2
 	github.com/MicahParks/keyfunc v1.9.0
 	github.com/adityathebe/go-strip-markdown/v2 v2.0.1
+	github.com/build-on-aws/langchaingo-amazon-bedrock-llm v0.0.0-20240601-3ab9e12bf36e // latest main as of June 1 2024
 	github.com/andygrunwald/go-jira v1.16.0
 	github.com/casbin/casbin/v2 v2.103.0
 	github.com/casbin/gorm-adapter/v3 v3.32.0
