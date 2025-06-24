@@ -1,17 +1,16 @@
 package llm
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"strings"
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
-	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime/types"
+	"github.com/flanksource/incident-commander/api"
+	"github.com/samber/lo"
 	"github.com/tmc/langchaingo/llms"
 )
 
@@ -39,16 +38,15 @@ func NewBedrockModelWrapper(ctx context.Context, modelID, region string, respFmt
 	}, nil
 }
 
-func (b *BedrockModelWrapper) Call(ctx context.Context, prompt string, opts ...llms.CallOption) (string, error) {
-	// Used by some upstream code, but our main usage is GenerateContent.
+func (b *BedrockModelWrapper) Call(ctx context.Context, prompt string, options ...llms.CallOption) (string, error) {
 	resp, _, err := b.GenerateContent(ctx, []llms.MessageContent{
 		llms.TextParts(llms.ChatMessageTypeHuman, prompt),
-	})
+	}, options...)
 	if err != nil {
 		return "", err
 	}
 	if len(resp.Choices) == 0 {
-		return "", errors.New("no response from Bedrock")
+		return "", fmt.Errorf("no response from Bedrock")
 	}
 	return resp.Choices[0].Content, nil
 }
@@ -56,16 +54,19 @@ func (b *BedrockModelWrapper) Call(ctx context.Context, prompt string, opts ...l
 func (b *BedrockModelWrapper) GenerateContent(
 	ctx context.Context,
 	messages []llms.MessageContent,
-	opts ...llms.CallOption,
+	options ...llms.CallOption,
 ) (*llms.ContentResponse, error) {
-	// Convert llms.MessageContent to Bedrock Claude-style payload.
+	// Collect CallOptions (e.g., temperature)
+	optsParsed := &llms.CallOptions{}
+	for _, o := range options {
+		o(optsParsed)
+	}
 	var promptMsgs []map[string]any
 	for _, m := range messages {
 		role := "user"
 		if m.Role == llms.ChatMessageTypeAI {
 			role = "assistant"
 		}
-		// m.Parts might be []any, but we expect string slices.
 		var contentBuilder strings.Builder
 		for _, part := range m.Parts {
 			if s, ok := part.(string); ok {
@@ -83,27 +84,23 @@ func (b *BedrockModelWrapper) GenerateContent(
 		"messages":          promptMsgs,
 		"max_tokens":        1024,
 	}
-	// Parse temperature if present in opts
-	for _, opt := range opts {
-		if t := llms.GetTemperature(opt); t != nil {
-			payload["temperature"] = *t
-		}
+	if optsParsed.Temperature > 0 {
+		payload["temperature"] = optsParsed.Temperature
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal bedrock payload: %w", err)
 	}
-
 	in := &bedrockruntime.InvokeModelInput{
-		ModelId:     &b.modelID,
-		ContentType: awsString("application/json"),
+		ModelId:     lo.ToPtr(b.modelID),
+		ContentType: lo.ToPtr("application/json"),
 		Body:        body,
 	}
 	out, err := b.client.InvokeModel(ctx, in)
 	if err != nil {
 		return nil, fmt.Errorf("bedrock InvokeModel failed: %w", err)
 	}
-	// Read and decode response.
+	defer out.Body.Close()
 	respBytes, err := io.ReadAll(out.Body)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read bedrock response: %w", err)
@@ -112,7 +109,6 @@ func (b *BedrockModelWrapper) GenerateContent(
 	if err := json.Unmarshal(respBytes, &respData); err != nil {
 		return nil, fmt.Errorf("failed to decode bedrock response: %w", err)
 	}
-	// Extract output text.
 	var text string
 	switch {
 	case respData["completion"] != nil:
@@ -128,9 +124,7 @@ func (b *BedrockModelWrapper) GenerateContent(
 		Content:        text,
 		GenerationInfo: map[string]any{},
 	}
-	// Try to extract token usage if present.
 	if usage, ok := respData["usage"].(map[string]any); ok {
-		// Try both possible key pairs.
 		if pt, ok := usage["prompt_tokens"]; ok {
 			if v, ok := asInt(pt); ok {
 				choice.GenerationInfo["InputTokens"] = v
@@ -156,8 +150,6 @@ func (b *BedrockModelWrapper) GenerateContent(
 		Choices: []llms.ContentChoice{choice},
 	}, nil
 }
-
-func awsString(s string) *string { return &s }
 
 func asInt(val any) (int, bool) {
 	switch t := val.(type) {

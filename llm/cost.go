@@ -431,15 +431,7 @@ func populateOpenAIModels() {
 // It considers tiered pricing if defined for the model.
 // cacheReadTokens and cacheWriteTokens are optional.
 func CalculateCost(provider api.LLMBackend, modelID string, genInfo GenerationInfo) (float64, error) {
-	switch provider {
-	case api.LLMBackendOpenAI:
-		return calculateOpenAICost(modelID, genInfo)
-	case api.LLMBackendAnthropic:
-		return calculateAnthropicCost(modelID, genInfo)
-	case api.LLMBackendGemini:
-		return calculateGeminiCost(modelID, genInfo)
-	case api.LLMBackendBedrock:
-		// No-op, cost handled by usage map in bedrock wrapper.
+	if provider == api.LLMBackendBedrock {
 		return 0, nil
 	}
 
@@ -518,8 +510,10 @@ func calculateTieredCost(tokens int, tiers []PriceTier, flatPrice float64) float
 		return cost
 	} else {
 		// Use flat pricing if no tiers are defined
-		return float64(tokens) * flatPrice / million
-	}
+	return float64(tokens) * flatPrice / million
+}
+
+// Remove any unneeded calculateOpenAICost, calculateGeminiCost, calculateAnthropicCost helpers if present below (none should remain).
 }
 
 // GetModelInfo retrieves the ModelInfo for a given provider and model ID.

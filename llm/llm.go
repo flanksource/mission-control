@@ -12,8 +12,6 @@ import (
 	"github.com/tmc/langchaingo/llms/openai"
 	"google.golang.org/genai"
 
-	"github.com/build-on-aws/langchaingo-amazon-bedrock-llm/claude"
-
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/llm/tools"
@@ -279,6 +277,16 @@ func getLLMModel(ctx dutyctx.Context, config Config) (llms.Model, error) {
 		return wrapper, nil
 
 	case api.LLMBackendBedrock:
+		region := config.APIURL // AWS region (may be empty)
+		modelID := config.Model
+		if modelID == "" {
+			modelID = "anthropic.claude-v2"
+		}
+		wrapper, err := NewBedrockModelWrapper(ctx, modelID, region, config.ResponseFormat)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create Bedrock LLM: %w", err)
+		}
+		return wrapper, nil
 		region := config.APIURL // optional, may be empty
 		wrapper, err := NewBedrockModelWrapper(ctx, config.Model, region, config.ResponseFormat)
 		return wrapper, err
