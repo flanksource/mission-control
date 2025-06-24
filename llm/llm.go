@@ -146,7 +146,7 @@ func calculateGenerationInfo(llmBackend api.LLMBackend, model string, resp *llms
 					genInfo.ReasoningTokens = lo.ToPtr(reasoningTokens.(int))
 				}
 
-			case api.LLMBackendAnthropic:
+			case api.LLMBackendAnthropic, api.LLMBackendBedrock:
 				if inputTokens, ok := choice.GenerationInfo["InputTokens"]; ok {
 					genInfo.InputTokens += inputTokens.(int)
 				}
@@ -173,10 +173,9 @@ func calculateGenerationInfo(llmBackend api.LLMBackend, model string, resp *llms
 			generationInfoList = append(generationInfoList, genInfo)
 		}
 
-		if llmBackend == api.LLMBackendAnthropic {
-			// NOTE: Anthropic returns two choices on tool use.
-			// Weirdly enough, the two choices have the same generation info (input/output tokens).
-			// So we only return the first one to avoid doubling the cost
+		if llmBackend == api.LLMBackendAnthropic || llmBackend == api.LLMBackendBedrock {
+			// NOTE: Anthropic and Bedrock may return multiple choices for tool use,
+			// but we only return the first one to avoid double counting.
 			break
 		}
 	}
@@ -287,9 +286,6 @@ func getLLMModel(ctx dutyctx.Context, config Config) (llms.Model, error) {
 			return nil, fmt.Errorf("failed to create Bedrock LLM: %w", err)
 		}
 		return wrapper, nil
-		region := config.APIURL // optional, may be empty
-		wrapper, err := NewBedrockModelWrapper(ctx, config.Model, region, config.ResponseFormat)
-		return wrapper, err
 
 	default:
 		return nil, errors.New("unknown config.Backend")

@@ -513,7 +513,7 @@ func calculateTieredCost(tokens int, tiers []PriceTier, flatPrice float64) float
 	return float64(tokens) * flatPrice / million
 }
 
-// Remove any unneeded calculateOpenAICost, calculateGeminiCost, calculateAnthropicCost helpers if present below (none should remain).
+
 }
 
 // GetModelInfo retrieves the ModelInfo for a given provider and model ID.

@@ -56,7 +56,6 @@ func (b *BedrockModelWrapper) GenerateContent(
 	messages []llms.MessageContent,
 	options ...llms.CallOption,
 ) (*llms.ContentResponse, error) {
-	// Collect CallOptions (e.g., temperature)
 	optsParsed := &llms.CallOptions{}
 	for _, o := range options {
 		o(optsParsed)
