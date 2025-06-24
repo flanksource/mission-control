@@ -287,4 +287,3 @@ func getLLMModel(ctx dutyctx.Context, config Config) (llms.Model, error) {
 		return nil, errors.New("unknown config.Backend")
 	}
 }
-}
