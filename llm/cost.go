@@ -510,10 +510,8 @@ func calculateTieredCost(tokens int, tiers []PriceTier, flatPrice float64) float
 		return cost
 	} else {
 		// Use flat pricing if no tiers are defined
-	return float64(tokens) * flatPrice / million
-}
-
-
+		return float64(tokens) * flatPrice / million
+	}
 }
 
 // GetModelInfo retrieves the ModelInfo for a given provider and model ID.

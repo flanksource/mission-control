@@ -9,7 +9,6 @@ import (
 
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/bedrockruntime"
-	"github.com/flanksource/incident-commander/api"
 	"github.com/samber/lo"
 	"github.com/tmc/langchaingo/llms"
 )
