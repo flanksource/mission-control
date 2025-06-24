@@ -275,20 +275,16 @@ func getLLMModel(ctx dutyctx.Context, config Config) (llms.Model, error) {
 		return wrapper, nil
 
 	case api.LLMBackendBedrock:
+		region := config.APIURL // optional, may be empty
 		modelID := config.Model
 		if modelID == "" {
 			modelID = "anthropic.claude-v2"
 		}
-		wrapper, err := NewBedrockModelWrapper(ctx, modelID, config.APIURL, config.ResponseFormat)
+		wrapper, err := NewBedrockModelWrapper(ctx, modelID, region, config.ResponseFormat)
 		return wrapper, err
 
 	default:
 		return nil, errors.New("unknown config.Backend")
 	}
 }
-		return wrapper, nil
-
-	default:
-		return nil, errors.New("unknown config.Backend")
-	}
 }
