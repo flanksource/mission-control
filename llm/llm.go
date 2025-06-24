@@ -278,6 +278,11 @@ func getLLMModel(ctx dutyctx.Context, config Config) (llms.Model, error) {
 
 		return wrapper, nil
 
+	case api.LLMBackendBedrock:
+		region := config.APIURL // optional, may be empty
+		wrapper, err := NewBedrockModelWrapper(ctx, config.Model, region, config.ResponseFormat)
+		return wrapper, err
+
 	default:
 		return nil, errors.New("unknown config.Backend")
 	}

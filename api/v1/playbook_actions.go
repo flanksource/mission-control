@@ -358,6 +358,7 @@ func (t *AIActionClient) Populate(ctx context.Context) error {
 			}
 		// Optionally: add support for a future ConnectionTypeBedrock here as well.
 		default:
+			// If you add another LLM backend, also update this error message and list.
 			return fmt.Errorf("connection of type %q is not supported. Supported types: [%s]",
 				conn.Type,
 				strings.Join([]string{
