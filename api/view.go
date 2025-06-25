@@ -67,8 +67,8 @@ type GaugeConfig struct {
 // PiechartConfig defines configuration for piechart visualization
 // +kubebuilder:object:generate=true
 type PiechartConfig struct {
-	ShowLabels bool     `json:"showLabels,omitempty" yaml:"showLabels,omitempty"`
-	Colors     []string `json:"colors,omitempty" yaml:"colors,omitempty"`
+	ShowLabels bool              `json:"showLabels,omitempty" yaml:"showLabels,omitempty"`
+	Colors     map[string]string `json:"colors,omitempty" yaml:"colors,omitempty"`
 }
 
 // NumberConfig defines configuration for number visualization

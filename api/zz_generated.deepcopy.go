@@ -308,8 +308,10 @@ func (in *PiechartConfig) DeepCopyInto(out *PiechartConfig) {
 	*out = *in
 	if in.Colors != nil {
 		in, out := &in.Colors, &out.Colors
-		*out = make([]string, len(*in))
-		copy(*out, *in)
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
 	}
 }
 

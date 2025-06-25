@@ -281,10 +281,10 @@
           "type": "boolean"
         },
         "colors": {
-          "items": {
+          "additionalProperties": {
             "type": "string"
           },
-          "type": "array"
+          "type": "object"
         }
       },
       "additionalProperties": false,

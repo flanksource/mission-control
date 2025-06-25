@@ -276,9 +276,9 @@ spec:
                       description: Configuration for piechart visualization
                       properties:
                         colors:
-                          items:
+                          additionalProperties:
                             type: string
-                          type: array
+                          type: object
                         showLabels:
                           type: boolean
                       type: object
