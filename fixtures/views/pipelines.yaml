@@ -4,6 +4,37 @@ metadata:
   name: pipelines
   namespace: mc
 spec:
+  panels:
+    - name: Repository
+      type: table
+      source: changes
+      query:
+        search: change_type=GithubActionRun
+        types:
+          - GitHubAction::Workflow
+        groupBy:
+          - details.repository.full_name
+        aggregates:
+          - function: COUNT
+            alias: value
+            field: '*'
+    - name: Average Duration
+      description: Create Release average duration
+      type: number
+      source: changes
+      number:
+        unit: seconds
+      query:
+        search: change_type=GithubActionRun
+        name: Create Release
+        types:
+          - GitHubAction::Workflow
+        groupBy:
+          - details.repository.full_name
+        aggregates:
+          - function: AVG
+            alias: value
+            field: 'details.duration'
   columns:
     - name: name
       type: string
@@ -18,7 +49,7 @@ spec:
       type: string
       description: The chart name.
     - name: duration
-      type: number
+      type: duration
       description: The duration of the pipeline.
     - name: status
       type: string
@@ -26,10 +57,9 @@ spec:
   queries:
     changes:
       - selector:
-          search: change_type=GithubAction
-          order: created_at DESC
+          search: change_type=GithubActionRun @order=-created_at
           types:
-            - GithubActions::WorkflowRun
+            - GitHubAction::Workflow
         max: 10
         mapping:
           name: row.name

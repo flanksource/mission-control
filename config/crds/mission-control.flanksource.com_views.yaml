@@ -215,7 +215,7 @@ spec:
                       - text
                       - gauge
                       - number
-                      - breakdown
+                      - table
                       type: string
                   required:
                   - name

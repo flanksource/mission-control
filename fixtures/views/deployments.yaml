@@ -2,72 +2,116 @@ apiVersion: mission-control.flanksource.com/v1
 kind: View
 metadata:
   name: deployments
-  namespace: default
+  namespace: mc
 spec:
-  summary:
-    - type: count
-      groupBy:
-        - environment
-      description: Count of deployments by environment.
-    - type: average
-      field: duration
-      groupBy:
-        - environment
-      description: Average deployment duration by environment.
+  panels:
+    - name: Health
+      description: Helm Releases grouped by health
+      type: piechart
+      source: configs
+      piechart:
+        showLabels: true
+        colors:
+          healthy: '#28C19B'
+          unhealthy: '#F04E6E'
+      query:
+        groupBy:
+          - 'health'
+        aggregates:
+          - function: COUNT
+            alias: count
+            field: '*'
+        types:
+          - 'Kubernetes::HelmRelease'
+    - name: Status
+      description: Helm Releases grouped by status
+      type: piechart
+      source: configs
+      piechart:
+        colors:
+          InstallSucceeded: '#28C19B'
+          RollbackSucceeded: '#F4B23C'
+          UpgradeFailed: '#F04E6E'
+          UpgradeSucceeded: '#5965F2'
+      query:
+        groupBy:
+          - 'status'
+        aggregates:
+          - function: COUNT
+            alias: count
+            field: '*'
+        types:
+          - 'Kubernetes::HelmRelease'
+    - name: Namespace
+      description: Helm Releases grouped by namespace
+      type: piechart
+      source: configs
+      query:
+        groupBy:
+          - 'tags.namespace'
+        aggregates:
+          - function: COUNT
+            alias: count
+            field: '*'
+        types:
+          - 'Kubernetes::HelmRelease'
+    - name: Type
+      description: Helm Releases grouped by type
+      type: gauge
+      gauge:
+        min: 0
+        max: 100
+        thresholds:
+          - value: 0
+            color: green
+          - value: 70
+            color: yellow
+          - value: 90
+            color: red
+      source: configs
+      query:
+        groupBy:
+          - 'type'
+        aggregates:
+          - function: COUNT
+            alias: value
+            field: '*'
+        types:
+          - 'Kubernetes::HelmRelease'
   columns:
-    - name: repo
+    - name: application
       type: string
-      description: The repository name.
-    - name: branch
+      description: The application name.
+    - name: namespace
       type: string
-      description: The branch name.
-    - name: environment
+      description: The namespace name.
+    - name: chart
       type: string
-      description: The environment where the deployment occurred.
+      description: The chart name.
+    - name: version
+      type: string
+      description: The version of the deployment.
     - name: status
       type: string
-      description: The status of the deployment (e.g., success, failure).
-    - name: timestamp
-      type: datetime
-      description: The timestamp of the deployment.
-    - name: duration
-      type: number
-      description: The duration of the deployment in seconds.
-    - name: user
+      description: The status of the deployment.
+    - name: health
       type: string
-      description: The user who initiated the deployment.
+      description: The health of the deployment.
+    - name: lastUpdated
+      type: datetime
+      description: The last updated time.
   queries:
     configs:
       - selector:
+          search: '@order=name'
           types:
-            - Github::Workflow
-          changeType: Workflow*
-        max: 1
+            - Kubernetes::HelmRelease
+          tagSelector: namespace in (monitoring,media)
         mapping:
-          repo: "$.repository.name"
-    changes:
-      - selector:
-          types:
-            - Github::Workflow
-          changeType: Workflow*
-        max: 1
-        mapping:
-          repo: "$.repository.name"
-          branch: "head_branch"
-          environment: "environment.name"
-          status: "conclusion"
-          timestamp: "created_at"
-          duration: "run_duration"
-          user: "actor.login"
-      - selector:
-          types:
-            - Flux::Kustomization
-          changeType: updated
-        mapping:
-          repo: "$.metadata.name"
-          branch: "$.spec.sourceRef.branch"
-          environment: "$.spec.environment"
-          status: "$.status.phase"
-          timestamp: "$.metadata.creationTimestamp"
-          duration: "$.status.duration"
-          user: "$.spec.user"
+          application: row.name
+          namespace: row.tags.namespace
+          chart: row.config.status.history[0].chartName
+          version: row.config.status.history[0].chartVersion
+          status: row.status
+          health: row.health
+          lastUpdated: row.updated_at

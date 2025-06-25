@@ -6,11 +6,11 @@ import "github.com/flanksource/duty/types"
 type PanelType string
 
 const (
-	PanelTypePiechart  PanelType = "piechart"
-	PanelTypeBreakdown PanelType = "breakdown"
-	PanelTypeText      PanelType = "text"
-	PanelTypeNumber    PanelType = "number"
-	PanelTypeGauge     PanelType = "gauge"
+	PanelTypePiechart PanelType = "piechart"
+	PanelTypeTable    PanelType = "table"
+	PanelTypeText     PanelType = "text"
+	PanelTypeNumber   PanelType = "number"
+	PanelTypeGauge    PanelType = "gauge"
 )
 
 // PanelDef defines a panel for the view
@@ -38,7 +38,7 @@ type PanelMeta struct {
 	Description string `json:"description,omitempty" yaml:"description,omitempty"`
 
 	// Type of panel visualization (piechart, text, gauge, number)
-	// +kubebuilder:validation:Enum=piechart;text;gauge;number;breakdown
+	// +kubebuilder:validation:Enum=piechart;text;gauge;number;table
 	Type PanelType `json:"type" yaml:"type"`
 
 	// Configuration for gauge visualization
