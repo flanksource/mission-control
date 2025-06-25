@@ -15,9 +15,9 @@ var _ = Describe("Views", func() {
 	Describe("Run", func() {
 		DescribeTable("queries",
 			func(view v1.View, expectedRows []api.ViewRow) {
-				rows, err := Run(DefaultContext, &view)
+				result, err := Run(DefaultContext, &view)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(rows).To(Equal(expectedRows))
+				Expect(result.Rows).To(Equal(expectedRows))
 			},
 			Entry("config queries", v1.View{
 				Spec: v1.ViewSpec{

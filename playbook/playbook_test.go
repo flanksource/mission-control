@@ -19,19 +19,18 @@ import (
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/tests/setup"
 	"github.com/flanksource/duty/upstream"
+	"github.com/google/uuid"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/samber/lo"
+	"github.com/samber/oops"
+	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/playbook/sdk"
 	"github.com/flanksource/incident-commander/playbook/testdata"
-	"github.com/google/uuid"
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-	"github.com/samber/lo"
-	"github.com/samber/oops"
-
-	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
 )
 
 var _ = Describe("Playbook", Ordered, func() {
@@ -57,7 +56,7 @@ var _ = Describe("Playbook", Ordered, func() {
 		})
 	})
 
-	var _ = Describe("AI", Ordered, func() {
+	var _ = Describe("AI", Ordered, Label("ignore_local"), func() {
 		Context("should run AI action and save artifacts", func() {
 			var actions []models.PlaybookRunAction
 			var artifactList []models.Artifact
