@@ -63,6 +63,177 @@ spec:
                   - type
                   type: object
                 type: array
+              panels:
+                description: Panels for the view
+                items:
+                  description: PanelDef defines a panel for the view
+                  properties:
+                    description:
+                      description: Description of what this panel represents
+                      type: string
+                    gauge:
+                      description: Configuration for gauge visualization
+                      properties:
+                        max:
+                          type: integer
+                        min:
+                          type: integer
+                        thresholds:
+                          items:
+                            description: GaugeThreshold defines a threshold configuration
+                              for gauge charts
+                            properties:
+                              color:
+                                type: string
+                              value:
+                                type: integer
+                            required:
+                            - color
+                            - value
+                            type: object
+                          type: array
+                      required:
+                      - max
+                      - min
+                      type: object
+                    name:
+                      description: Name of the panel
+                      type: string
+                    number:
+                      description: Configuration for number visualization
+                      properties:
+                        precision:
+                          type: integer
+                        unit:
+                          type: string
+                      type: object
+                    piechart:
+                      description: Configuration for piechart visualization
+                      properties:
+                        colors:
+                          additionalProperties:
+                            type: string
+                          type: object
+                        showLabels:
+                          type: boolean
+                      type: object
+                    query:
+                      description: AggregatedResourceSelector combines filtering and
+                        aggregation requirements
+                      properties:
+                        agent:
+                          description: |-
+                            Agent can be the agent id or the name of the agent.
+                             Additionally, the special "self" value can be used to select resources without an agent.
+                          type: string
+                        aggregates:
+                          items:
+                            description: AggregationField defines a single aggregation
+                              operation
+                            properties:
+                              alias:
+                                type: string
+                              field:
+                                type: string
+                              function:
+                                type: string
+                            required:
+                            - alias
+                            - field
+                            - function
+                            type: object
+                          type: array
+                        cache:
+                          description: |-
+                            Cache directives
+                             'no-cache' (should not fetch from cache but can be cached)
+                             'no-store' (should not cache)
+                             'max-age=X' (cache for X duration)
+                          type: string
+                        fieldSelector:
+                          type: string
+                        groupBy:
+                          items:
+                            type: string
+                          type: array
+                        health:
+                          description: |-
+                            Health filters resources by the health.
+                            Multiple healths can be provided separated by comma.
+                          type: string
+                        id:
+                          type: string
+                        includeDeleted:
+                          type: boolean
+                        labelSelector:
+                          type: string
+                        limit:
+                          type: integer
+                        name:
+                          type: string
+                        namespace:
+                          type: string
+                        scope:
+                          description: |-
+                            Scope is the reference for parent of the resource to select.
+                            For config items, the scope is the scraper id
+                            For checks, it's canaries and
+                            For components, it's topology.
+                            It can either be a uuid or namespace/name
+                          type: string
+                        search:
+                          description: Search query that applies to the resource name,
+                            tag & labels.
+                          type: string
+                        statuses:
+                          description: Statuses filter resources by the status
+                          items:
+                            type: string
+                          type: array
+                        tagSelector:
+                          type: string
+                        types:
+                          description: Types filter resources by the type
+                          items:
+                            type: string
+                          type: array
+                      type: object
+                    source:
+                      description: Source specifies the data source of the panel
+                      enum:
+                      - configs
+                      - changes
+                      type: string
+                    table:
+                      description: Configuration for breakdown visualization
+                      type: object
+                    type:
+                      description: Type of panel visualization (piechart, text, gauge,
+                        number)
+                      enum:
+                      - piechart
+                      - text
+                      - gauge
+                      - number
+                      - breakdown
+                      type: string
+                  required:
+                  - name
+                  - query
+                  - source
+                  - type
+                  type: object
+                  x-kubernetes-validations:
+                  - message: gauge config required when type is gauge, not allowed
+                      for other types
+                    rule: 'self.type==''gauge'' ? has(self.gauge) : !has(self.gauge)'
+                  - message: piechart config not allowed for this type
+                    rule: 'self.type!=''piechart'' ? !has(self.piechart) : true'
+                  - message: number config not allowed for this type
+                    rule: 'self.type!=''number'' ? !has(self.number) : true'
+                  - message: table config not allowed for this type
+                    rule: 'self.type!=''table'' ? !has(self.table) : true'
+                type: array
               queries:
                 description: Queries define the queries and mappings to populate the
                   view
@@ -224,177 +395,6 @@ spec:
                       type: object
                     type: array
                 type: object
-              summary:
-                description: Summary calculations for the view
-                items:
-                  description: ViewSummaryDef defines a summary calculation for the
-                    view
-                  properties:
-                    breakdown:
-                      description: Configuration for breakdown visualization
-                      type: object
-                    description:
-                      description: Description of what this summary represents
-                      type: string
-                    gauge:
-                      description: Configuration for gauge visualization
-                      properties:
-                        max:
-                          type: integer
-                        min:
-                          type: integer
-                        thresholds:
-                          items:
-                            description: GaugeThreshold defines a threshold configuration
-                              for gauge charts
-                            properties:
-                              color:
-                                type: string
-                              value:
-                                type: integer
-                            required:
-                            - color
-                            - value
-                            type: object
-                          type: array
-                      required:
-                      - max
-                      - min
-                      type: object
-                    name:
-                      description: Name of the summary
-                      type: string
-                    number:
-                      description: Configuration for number visualization
-                      properties:
-                        precision:
-                          type: integer
-                        unit:
-                          type: string
-                      type: object
-                    piechart:
-                      description: Configuration for piechart visualization
-                      properties:
-                        colors:
-                          additionalProperties:
-                            type: string
-                          type: object
-                        showLabels:
-                          type: boolean
-                      type: object
-                    query:
-                      description: AggregatedResourceSelector combines filtering and
-                        aggregation requirements
-                      properties:
-                        agent:
-                          description: |-
-                            Agent can be the agent id or the name of the agent.
-                             Additionally, the special "self" value can be used to select resources without an agent.
-                          type: string
-                        aggregates:
-                          items:
-                            description: AggregationField defines a single aggregation
-                              operation
-                            properties:
-                              alias:
-                                type: string
-                              field:
-                                type: string
-                              function:
-                                type: string
-                            required:
-                            - alias
-                            - field
-                            - function
-                            type: object
-                          type: array
-                        cache:
-                          description: |-
-                            Cache directives
-                             'no-cache' (should not fetch from cache but can be cached)
-                             'no-store' (should not cache)
-                             'max-age=X' (cache for X duration)
-                          type: string
-                        fieldSelector:
-                          type: string
-                        groupBy:
-                          items:
-                            type: string
-                          type: array
-                        health:
-                          description: |-
-                            Health filters resources by the health.
-                            Multiple healths can be provided separated by comma.
-                          type: string
-                        id:
-                          type: string
-                        includeDeleted:
-                          type: boolean
-                        labelSelector:
-                          type: string
-                        limit:
-                          type: integer
-                        name:
-                          type: string
-                        namespace:
-                          type: string
-                        scope:
-                          description: |-
-                            Scope is the reference for parent of the resource to select.
-                            For config items, the scope is the scraper id
-                            For checks, it's canaries and
-                            For components, it's topology.
-                            It can either be a uuid or namespace/name
-                          type: string
-                        search:
-                          description: Search query that applies to the resource name,
-                            tag & labels.
-                          type: string
-                        statuses:
-                          description: Statuses filter resources by the status
-                          items:
-                            type: string
-                          type: array
-                        tagSelector:
-                          type: string
-                        types:
-                          description: Types filter resources by the type
-                          items:
-                            type: string
-                          type: array
-                      type: object
-                    source:
-                      enum:
-                      - configs
-                      - changes
-                      type: string
-                    type:
-                      description: Type of summary visualization (piechart, text,
-                        gauge, number)
-                      enum:
-                      - piechart
-                      - text
-                      - gauge
-                      - number
-                      - breakdown
-                      type: string
-                  required:
-                  - name
-                  - query
-                  - source
-                  - type
-                  type: object
-                  x-kubernetes-validations:
-                  - message: gauge config required when type is gauge, not allowed
-                      for other types
-                    rule: 'self.type==''gauge'' ? has(self.gauge) : !has(self.gauge)'
-                  - message: piechart config not allowed for this type
-                    rule: 'self.type!=''piechart'' ? !has(self.piechart) : true'
-                  - message: number config not allowed for this type
-                    rule: 'self.type!=''number'' ? !has(self.number) : true'
-                  - message: breakdown config not allowed for this type
-                    rule: 'self.type!=''breakdown'' ? !has(self.breakdown) : true'
-                type: array
             required:
             - columns
             - queries

@@ -17,15 +17,15 @@ import (
 func Run(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 	output := api.ViewResult{}
 
-	for _, summary := range view.Spec.Summary {
-		summaryRows, err := executeSummaryQueries(ctx, summary)
+	for _, summary := range view.Spec.Panels {
+		summaryRows, err := executePanel(ctx, summary)
 		if err != nil {
 			return nil, fmt.Errorf("failed to execute summary queries: %w", err)
 		}
 
-		output.Summaries = append(output.Summaries, api.SummaryResult{
-			ViewSummaryMeta: summary.ViewSummaryMeta,
-			Rows:            summaryRows,
+		output.Panels = append(output.Panels, api.PanelResult{
+			PanelMeta: summary.PanelMeta,
+			Rows:      summaryRows,
 		})
 	}
 
@@ -44,7 +44,7 @@ func Run(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 	return &output, nil
 }
 
-func executeSummaryQueries(ctx context.Context, q api.ViewSummaryDef) ([]types.AggregateRow, error) {
+func executePanel(ctx context.Context, q api.PanelDef) ([]types.AggregateRow, error) {
 	table := "config_items"
 	if q.Source == "changes" {
 		table = "catalog_changes"

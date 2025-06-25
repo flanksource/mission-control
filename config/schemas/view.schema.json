@@ -86,11 +86,6 @@
         "alias"
       ]
     },
-    "BreakdownConfig": {
-      "properties": {},
-      "additionalProperties": false,
-      "type": "object"
-    },
     "FieldsV1": {
       "properties": {},
       "additionalProperties": false,
@@ -162,18 +157,6 @@
         },
         "subresource": {
           "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "NumberConfig": {
-      "properties": {
-        "unit": {
-          "type": "string"
-        },
-        "precision": {
-          "type": "integer"
         }
       },
       "additionalProperties": false,
@@ -274,6 +257,62 @@
         "name",
         "uid"
       ]
+    },
+    "PanelDef": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "gauge": {
+          "$ref": "#/$defs/GaugeConfig"
+        },
+        "piechart": {
+          "$ref": "#/$defs/PiechartConfig"
+        },
+        "number": {
+          "$ref": "#/$defs/PanelNumberConfig"
+        },
+        "table": {
+          "$ref": "#/$defs/PanelTableConfig"
+        },
+        "source": {
+          "type": "string"
+        },
+        "query": {
+          "$ref": "#/$defs/AggregatedResourceSelector"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "type",
+        "source",
+        "query"
+      ]
+    },
+    "PanelNumberConfig": {
+      "properties": {
+        "unit": {
+          "type": "string"
+        },
+        "precision": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "PanelTableConfig": {
+      "properties": {},
+      "additionalProperties": false,
+      "type": "object"
     },
     "PiechartConfig": {
       "properties": {
@@ -433,9 +472,9 @@
     },
     "ViewSpec": {
       "properties": {
-        "summary": {
+        "panels": {
           "items": {
-            "$ref": "#/$defs/ViewSummaryDef"
+            "$ref": "#/$defs/PanelDef"
           },
           "type": "array"
         },
@@ -460,45 +499,6 @@
       "properties": {},
       "additionalProperties": false,
       "type": "object"
-    },
-    "ViewSummaryDef": {
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "description": {
-          "type": "string"
-        },
-        "type": {
-          "type": "string"
-        },
-        "gauge": {
-          "$ref": "#/$defs/GaugeConfig"
-        },
-        "piechart": {
-          "$ref": "#/$defs/PiechartConfig"
-        },
-        "number": {
-          "$ref": "#/$defs/NumberConfig"
-        },
-        "breakdown": {
-          "$ref": "#/$defs/BreakdownConfig"
-        },
-        "source": {
-          "type": "string"
-        },
-        "query": {
-          "$ref": "#/$defs/AggregatedResourceSelector"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object",
-      "required": [
-        "name",
-        "type",
-        "source",
-        "query"
-      ]
     }
   }
 }

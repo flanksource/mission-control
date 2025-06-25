@@ -30,8 +30,8 @@ type ViewQueriesSpec struct {
 
 // ViewSpec defines the desired state of View
 type ViewSpec struct {
-	// Summary calculations for the view
-	Summary []api.ViewSummaryDef `json:"summary,omitempty" yaml:"summary,omitempty"`
+	// Panels for the view
+	Panels []api.PanelDef `json:"panels,omitempty" yaml:"panels,omitempty"`
 
 	// Columns define the structure of the view
 	Columns []api.ViewColumnDef `json:"columns" yaml:"columns"`
