@@ -17,6 +17,13 @@ type ViewRef struct {
 	Name      string `json:"name"`
 }
 
+// ApplicationSection is a section rendered in the application view
+type ApplicationSection struct {
+	Title   string  `json:"title"`
+	Icon    string  `json:"icon,omitempty"`
+	ViewRef ViewRef `json:"viewRef"`
+}
+
 type ApplicationMapping struct {
 	AccessReviews []types.ResourceSelector            `json:"accessReviews,omitempty"`
 	Environments  map[string][]ApplicationEnvironment `json:"environments,omitempty"`
@@ -30,9 +37,6 @@ type ApplicationMapping struct {
 
 	// Defines mappings to automatically generate roles based on specified group associations
 	Roles []ApplicationRoleMapping `json:"roles,omitempty"`
-
-	Deployments *ViewRef `json:"deployments,omitempty"`
-	Pipelines   *ViewRef `json:"pipelines,omitempty"`
 }
 
 type ApplicationRoleMapping struct {
@@ -60,6 +64,8 @@ type ApplicationSpec struct {
 	Schedule string `json:"schedule"`
 
 	Mapping ApplicationMapping `json:"mapping"`
+
+	Sections []ApplicationSection `json:"sections,omitempty"`
 
 	Properties []api.Property `json:"properties,omitempty"`
 }

@@ -166,16 +166,6 @@ spec:
                           type: array
                       type: object
                     type: array
-                  deployments:
-                    properties:
-                      name:
-                        type: string
-                      namespace:
-                        type: string
-                    required:
-                    - name
-                    - namespace
-                    type: object
                   environments:
                     additionalProperties:
                       items:
@@ -305,16 +295,6 @@ spec:
                           type: array
                       type: object
                     type: array
-                  pipelines:
-                    properties:
-                      name:
-                        type: string
-                      namespace:
-                        type: string
-                    required:
-                    - name
-                    - namespace
-                    type: object
                   roles:
                     description: Defines mappings to automatically generate roles
                       based on specified group associations
@@ -431,6 +411,30 @@ spec:
               schedule:
                 description: Schedule on which the application scrapes the data
                 type: string
+              sections:
+                items:
+                  description: ApplicationSection is a section rendered in the application
+                    view
+                  properties:
+                    icon:
+                      type: string
+                    title:
+                      type: string
+                    viewRef:
+                      properties:
+                        name:
+                          type: string
+                        namespace:
+                          type: string
+                      required:
+                      - name
+                      - namespace
+                      type: object
+                  required:
+                  - title
+                  - viewRef
+                  type: object
+                type: array
               type:
                 description: Type of the application
                 type: string

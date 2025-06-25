@@ -10,14 +10,18 @@ import (
 type Application struct {
 	ApplicationDetail `json:",inline"`
 	AccessControl     ApplicationAccessControl   `json:"accessControl"`
-	Changes           []ApplicationChange        `json:"changes"`
 	Incidents         []ApplicationIncident      `json:"incidents"`
 	Locations         []ApplicationLocation      `json:"locations"`
 	Backups           []ApplicationBackup        `json:"backups"`
 	Restores          []ApplicationBackupRestore `json:"restores"`
 	Findings          []ApplicationFinding       `json:"findings"`
-	Deployments       *ViewResult                `json:"deployments,omitempty"`
-	Pipelines         *ViewResult                `json:"pipelines,omitempty"`
+	Sections          []ViewSection              `json:"sections"`
+}
+
+type ViewSection struct {
+	Title  string      `json:"title"`
+	Icon   string      `json:"icon,omitempty"`
+	Result *ViewResult `json:"result"`
 }
 
 type ApplicationFinding struct {

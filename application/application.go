@@ -135,20 +135,16 @@ func buildApplication(ctx context.Context, app *v1.Application) (*api.Applicatio
 		}
 	}
 
-	if app.Spec.Mapping.Deployments != nil && app.Spec.Mapping.Deployments.Name != "" {
-		viewResult, err := buildViewResult(ctx, app.Spec.Mapping.Deployments.Namespace, app.Spec.Mapping.Deployments.Name)
+	for _, section := range app.Spec.Sections {
+		viewResult, err := buildViewResult(ctx, section.ViewRef.Namespace, section.ViewRef.Name)
 		if err != nil {
-			return nil, ctx.Oops().Errorf("failed to build deployment view: %w", err)
+			return nil, ctx.Oops().Errorf("failed to build section view: %w", err)
 		}
-		response.Deployments = viewResult
-	}
-
-	if app.Spec.Mapping.Pipelines != nil && app.Spec.Mapping.Pipelines.Name != "" {
-		viewResult, err := buildViewResult(ctx, app.Spec.Mapping.Pipelines.Namespace, app.Spec.Mapping.Pipelines.Name)
-		if err != nil {
-			return nil, ctx.Oops().Errorf("failed to build pipeline view: %w", err)
-		}
-		response.Pipelines = viewResult
+		response.Sections = append(response.Sections, api.ViewSection{
+			Title:  section.Title,
+			Icon:   section.Icon,
+			Result: viewResult,
+		})
 	}
 
 	return &response, nil

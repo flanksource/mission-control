@@ -115,12 +115,6 @@
             "$ref": "#/$defs/ApplicationRoleMapping"
           },
           "type": "array"
-        },
-        "deployments": {
-          "$ref": "#/$defs/ViewRef"
-        },
-        "pipelines": {
-          "$ref": "#/$defs/ViewRef"
         }
       },
       "additionalProperties": false,
@@ -183,6 +177,25 @@
         "role"
       ]
     },
+    "ApplicationSection": {
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "icon": {
+          "type": "string"
+        },
+        "viewRef": {
+          "$ref": "#/$defs/ViewRef"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "title",
+        "viewRef"
+      ]
+    },
     "ApplicationSpec": {
       "properties": {
         "description": {
@@ -196,6 +209,12 @@
         },
         "mapping": {
           "$ref": "#/$defs/ApplicationMapping"
+        },
+        "sections": {
+          "items": {
+            "$ref": "#/$defs/ApplicationSection"
+          },
+          "type": "array"
         },
         "properties": {
           "items": {
