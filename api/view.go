@@ -8,6 +8,8 @@ const (
 	ViewColumnTypeBoolean  ViewColumnType = "boolean"
 	ViewColumnTypeDateTime ViewColumnType = "datetime"
 	ViewColumnTypeDuration ViewColumnType = "duration"
+	ViewColumnTypeHealth   ViewColumnType = "health"
+	ViewColumnTypeStatus   ViewColumnType = "status"
 )
 
 // ViewRow represents a single row of data mapped to view columns
@@ -18,7 +20,7 @@ type ViewColumnDef struct {
 	// Name of the column
 	Name string `json:"name" yaml:"name"`
 
-	// +kubebuilder:validation:Enum=string;number;boolean;datetime;duration
+	// +kubebuilder:validation:Enum=string;number;boolean;datetime;duration;health;status
 	Type ViewColumnType `json:"type" yaml:"type"`
 
 	// Description of the column

@@ -57,6 +57,8 @@ spec:
                       - boolean
                       - datetime
                       - duration
+                      - health
+                      - status
                       type: string
                   required:
                   - name
