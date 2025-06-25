@@ -86,10 +86,53 @@
         "alias"
       ]
     },
+    "BreakdownConfig": {
+      "properties": {},
+      "additionalProperties": false,
+      "type": "object"
+    },
     "FieldsV1": {
       "properties": {},
       "additionalProperties": false,
       "type": "object"
+    },
+    "GaugeConfig": {
+      "properties": {
+        "min": {
+          "type": "integer"
+        },
+        "max": {
+          "type": "integer"
+        },
+        "thresholds": {
+          "items": {
+            "$ref": "#/$defs/GaugeThreshold"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "min",
+        "max"
+      ]
+    },
+    "GaugeThreshold": {
+      "properties": {
+        "value": {
+          "type": "integer"
+        },
+        "color": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "value",
+        "color"
+      ]
     },
     "Items": {
       "items": {
@@ -119,6 +162,18 @@
         },
         "subresource": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "NumberConfig": {
+      "properties": {
+        "unit": {
+          "type": "string"
+        },
+        "precision": {
+          "type": "integer"
         }
       },
       "additionalProperties": false,
@@ -220,6 +275,21 @@
         "uid"
       ]
     },
+    "PiechartConfig": {
+      "properties": {
+        "showLabels": {
+          "type": "boolean"
+        },
+        "colors": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "ResourceSelector": {
       "properties": {
         "agent": {
@@ -295,7 +365,12 @@
         }
       },
       "additionalProperties": false,
-      "type": "object"
+      "type": "object",
+      "required": [
+        "metadata",
+        "spec",
+        "status"
+      ]
     },
     "ViewColumnDef": {
       "properties": {
@@ -388,29 +463,41 @@
     },
     "ViewSummaryDef": {
       "properties": {
-        "query": {
-          "$ref": "#/$defs/AggregatedResourceSelector"
-        },
         "name": {
           "type": "string"
         },
         "description": {
           "type": "string"
         },
-        "table": {
-          "type": "string"
-        },
         "type": {
           "type": "string"
+        },
+        "gauge": {
+          "$ref": "#/$defs/GaugeConfig"
+        },
+        "piechart": {
+          "$ref": "#/$defs/PiechartConfig"
+        },
+        "number": {
+          "$ref": "#/$defs/NumberConfig"
+        },
+        "breakdown": {
+          "$ref": "#/$defs/BreakdownConfig"
+        },
+        "source": {
+          "type": "string"
+        },
+        "query": {
+          "$ref": "#/$defs/AggregatedResourceSelector"
         }
       },
       "additionalProperties": false,
       "type": "object",
       "required": [
-        "query",
         "name",
-        "table",
-        "type"
+        "type",
+        "source",
+        "query"
       ]
     }
   }

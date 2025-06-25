@@ -230,12 +230,58 @@ spec:
                   description: ViewSummaryDef defines a summary calculation for the
                     view
                   properties:
+                    breakdown:
+                      description: Configuration for breakdown visualization
+                      type: object
                     description:
                       description: Description of what this summary represents
                       type: string
+                    gauge:
+                      description: Configuration for gauge visualization
+                      properties:
+                        max:
+                          type: integer
+                        min:
+                          type: integer
+                        thresholds:
+                          items:
+                            description: GaugeThreshold defines a threshold configuration
+                              for gauge charts
+                            properties:
+                              color:
+                                type: string
+                              value:
+                                type: integer
+                            required:
+                            - color
+                            - value
+                            type: object
+                          type: array
+                      required:
+                      - max
+                      - min
+                      type: object
                     name:
                       description: Name of the summary
                       type: string
+                    number:
+                      description: Configuration for number visualization
+                      properties:
+                        precision:
+                          type: integer
+                        unit:
+                          type: string
+                      type: object
+                    piechart:
+                      description: Configuration for piechart visualization
+                      properties:
+                        colors:
+                          items:
+                            type: string
+                          type: array
+                        showLabels:
+                          type: boolean
+                      type: object
                     query:
                       description: AggregatedResourceSelector combines filtering and
                         aggregation requirements
@@ -317,8 +363,7 @@ spec:
                             type: string
                           type: array
                       type: object
-                    table:
-                      description: 'Table to query for the summary. (default: configs)'
+                    source:
                       enum:
                       - configs
                       - changes
@@ -336,9 +381,19 @@ spec:
                   required:
                   - name
                   - query
-                  - table
+                  - source
                   - type
                   type: object
+                  x-kubernetes-validations:
+                  - message: gauge config required when type is gauge, not allowed
+                      for other types
+                    rule: 'self.type==''gauge'' ? has(self.gauge) : !has(self.gauge)'
+                  - message: piechart config not allowed for this type
+                    rule: 'self.type!=''piechart'' ? !has(self.piechart) : true'
+                  - message: number config not allowed for this type
+                    rule: 'self.type!=''number'' ? !has(self.number) : true'
+                  - message: breakdown config not allowed for this type
+                    rule: 'self.type!=''breakdown'' ? !has(self.breakdown) : true'
                 type: array
             required:
             - columns
@@ -347,6 +402,9 @@ spec:
           status:
             description: ViewStatus defines the observed state of View
             type: object
+        required:
+        - metadata
+        - spec
         type: object
     served: true
     storage: true

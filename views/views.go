@@ -24,10 +24,8 @@ func Run(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 		}
 
 		output.Summaries = append(output.Summaries, api.SummaryResult{
-			Name:        summary.Name,
-			Description: summary.Description,
-			Type:        summary.Type,
-			Rows:        summaryRows,
+			ViewSummaryMeta: summary.ViewSummaryMeta,
+			Rows:            summaryRows,
 		})
 	}
 
@@ -46,9 +44,9 @@ func Run(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 	return &output, nil
 }
 
-func executeSummaryQueries(ctx context.Context, q v1.ViewSummaryDef) ([]types.AggregateRow, error) {
+func executeSummaryQueries(ctx context.Context, q api.ViewSummaryDef) ([]types.AggregateRow, error) {
 	table := "config_items"
-	if q.Table == "changes" {
+	if q.Source == "changes" {
 		table = "catalog_changes"
 	}
 

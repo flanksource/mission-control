@@ -7,25 +7,6 @@ import (
 	"github.com/flanksource/incident-commander/api"
 )
 
-// ViewSummaryDef defines a summary calculation for the view
-type ViewSummaryDef struct {
-	Query types.AggregatedResourceSelector `json:"query" yaml:"query"`
-
-	// Name of the summary
-	Name string `json:"name" yaml:"name"`
-
-	// Description of what this summary represents
-	Description string `json:"description,omitempty" yaml:"description,omitempty"`
-
-	// Table to query for the summary. (default: configs)
-	// +kubebuilder:validation:Enum=configs;changes
-	Table string `json:"table" yaml:"table"`
-
-	// Type of summary visualization (piechart, text, gauge, number)
-	// +kubebuilder:validation:Enum=piechart;text;gauge;number;breakdown
-	Type api.ViewSummaryType `json:"type" yaml:"type"`
-}
-
 // ViewQuery defines a query configuration for populating the view
 type ViewQuery struct {
 	// Selector defines the resource selector for finding matching resources
@@ -50,7 +31,7 @@ type ViewQueriesSpec struct {
 // ViewSpec defines the desired state of View
 type ViewSpec struct {
 	// Summary calculations for the view
-	Summary []ViewSummaryDef `json:"summary,omitempty" yaml:"summary,omitempty"`
+	Summary []api.ViewSummaryDef `json:"summary,omitempty" yaml:"summary,omitempty"`
 
 	// Columns define the structure of the view
 	Columns []api.ViewColumnDef `json:"columns" yaml:"columns"`
@@ -68,10 +49,12 @@ type ViewStatus struct{}
 // View is the schema for the Views API
 type View struct {
 	metav1.TypeMeta   `json:",inline" yaml:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty" yaml:"metadata,omitempty"`
+	metav1.ObjectMeta `json:"metadata" yaml:"metadata"`
 
-	Spec   ViewSpec   `json:"spec,omitempty" yaml:"spec,omitempty"`
-	Status ViewStatus `json:"status,omitempty" yaml:"status,omitempty"`
+	Spec ViewSpec `json:"spec" yaml:"spec"`
+
+	// +kubebuilder:validation:Optional
+	Status ViewStatus `json:"status" yaml:"status"`
 }
 
 // +kubebuilder:object:root=true
