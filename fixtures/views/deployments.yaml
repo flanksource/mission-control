@@ -92,10 +92,10 @@ spec:
       type: string
       description: The version of the deployment.
     - name: status
-      type: string
+      type: status
       description: The status of the deployment.
     - name: health
-      type: string
+      type: health
       description: The health of the deployment.
     - name: lastUpdated
       type: datetime

@@ -9,7 +9,7 @@ spec:
       type: table
       source: changes
       query:
-        search: change_type=GithubActionRun
+        search: change_type=GitHubActionRun
         types:
           - GitHubAction::Workflow
         groupBy:
@@ -25,7 +25,7 @@ spec:
       number:
         unit: seconds
       query:
-        search: change_type=GithubActionRun
+        search: change_type=GitHubActionRun
         name: Create Release
         types:
           - GitHubAction::Workflow
@@ -52,12 +52,12 @@ spec:
       type: duration
       description: The duration of the pipeline.
     - name: status
-      type: string
+      type: status
       description: The status of the pipeline.
   queries:
     changes:
       - selector:
-          search: change_type=GithubActionRun @order=-created_at
+          search: change_type=GitHubActionRun @order=-created_at
           types:
             - GitHubAction::Workflow
         max: 10

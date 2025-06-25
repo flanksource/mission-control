@@ -1,7 +1,6 @@
 package views
 
 import (
-	"fmt"
 	"net/http"
 
 	"github.com/flanksource/commons/logger"
@@ -23,7 +22,7 @@ func init() {
 func RegisterRoutes(e *echo.Echo) {
 	logger.Infof("Registering /views routes")
 
-	g := e.Group(fmt.Sprintf("/%s", "views"), rbac.Authorization(policy.ObjectCatalog, policy.ActionRead))
+	g := e.Group("/views", rbac.Authorization(policy.ObjectCatalog, policy.ActionRead))
 	g.GET("/:namespace/:name", ViewRun)
 }
 

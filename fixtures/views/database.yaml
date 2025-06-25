@@ -1,0 +1,29 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: database
+  namespace: mc
+spec:
+  columns:
+    - name: database
+      type: string
+      description: The name of the helm release.
+    - name: date
+      type: datetime
+      description: The namespace name.
+    - name: status
+      type: status
+      description: The status of the backup.
+    - name: source
+      type: string
+      description: The source of the backup.
+  queries:
+    changes:
+      - selector:
+          search: change_type=BackupSuccessful
+        max: 10
+        mapping:
+          database: row.name
+          date: row.created_at
+          status: row.details.status
+          source: row.source
