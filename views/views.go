@@ -20,7 +20,7 @@ func Run(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 	for _, summary := range view.Spec.Panels {
 		summaryRows, err := executePanel(ctx, summary)
 		if err != nil {
-			return nil, fmt.Errorf("failed to execute summary queries: %w", err)
+			return nil, fmt.Errorf("failed to execute panel '%s': %w", summary.Name, err)
 		}
 
 		output.Panels = append(output.Panels, api.PanelResult{
@@ -41,6 +41,7 @@ func Run(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 	}
 	output.Rows = append(output.Rows, changeRows...)
 
+	output.Columns = view.Spec.Columns
 	return &output, nil
 }
 

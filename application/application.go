@@ -169,6 +169,5 @@ func buildViewResult(ctx context.Context, namespace, name string) (*api.ViewResu
 		return nil, ctx.Oops().Errorf("failed to execute view %s/%s: %w", namespace, name, err)
 	}
 
-	response.Columns = view.Spec.Columns
 	return response, nil
 }

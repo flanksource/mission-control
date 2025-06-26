@@ -54,6 +54,5 @@ func runView(ctx context.Context, namespace, name string) (*api.ViewResult, erro
 		return nil, ctx.Oops().Errorf("failed to run view %s/%s: %w", namespace, name, err)
 	}
 
-	response.Columns = view.Spec.Columns
 	return response, nil
 }
