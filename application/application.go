@@ -9,6 +9,7 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/views"
 )
 
 var (
@@ -134,6 +135,22 @@ func buildApplication(ctx context.Context, app *v1.Application) (*api.Applicatio
 		}
 	}
 
+	if app.Spec.Mapping.Deployments != nil && app.Spec.Mapping.Deployments.Name != "" {
+		viewResult, err := buildViewResult(ctx, app.Spec.Mapping.Deployments.Namespace, app.Spec.Mapping.Deployments.Name)
+		if err != nil {
+			return nil, ctx.Oops().Errorf("failed to build deployment view: %w", err)
+		}
+		response.Deployments = viewResult
+	}
+
+	if app.Spec.Mapping.Pipelines != nil && app.Spec.Mapping.Pipelines.Name != "" {
+		viewResult, err := buildViewResult(ctx, app.Spec.Mapping.Pipelines.Namespace, app.Spec.Mapping.Pipelines.Name)
+		if err != nil {
+			return nil, ctx.Oops().Errorf("failed to build pipeline view: %w", err)
+		}
+		response.Pipelines = viewResult
+	}
+
 	return &response, nil
 }
 
@@ -143,4 +160,19 @@ func PersistApplication(ctx context.Context, app *v1.Application) error {
 	}
 
 	return syncApplication(ctx, app)
+}
+
+func buildViewResult(ctx context.Context, namespace, name string) (*api.ViewResult, error) {
+	view, err := db.GetView(ctx, namespace, name)
+	if err != nil {
+		return nil, ctx.Oops().Errorf("failed to find view %s/%s: %w", namespace, name, err)
+	}
+
+	response, err := views.Run(ctx, view)
+	if err != nil {
+		return nil, ctx.Oops().Errorf("failed to execute view %s/%s: %w", namespace, name, err)
+	}
+
+	response.Columns = view.Spec.Columns
+	return response, nil
 }

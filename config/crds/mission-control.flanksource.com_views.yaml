@@ -1,0 +1,354 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.14.0
+  name: views.mission-control.flanksource.com
+spec:
+  group: mission-control.flanksource.com
+  names:
+    kind: View
+    listKind: ViewList
+    plural: views
+    singular: view
+  scope: Namespaced
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: View is the schema for the Views API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ViewSpec defines the desired state of View
+            properties:
+              columns:
+                description: Columns define the structure of the view
+                items:
+                  description: ViewColumnDef defines a column in the view
+                  properties:
+                    description:
+                      description: Description of the column
+                      type: string
+                    name:
+                      description: Name of the column
+                      type: string
+                    type:
+                      enum:
+                      - string
+                      - number
+                      - boolean
+                      - datetime
+                      - duration
+                      type: string
+                  required:
+                  - name
+                  - type
+                  type: object
+                type: array
+              queries:
+                description: Queries define the queries and mappings to populate the
+                  view
+                properties:
+                  changes:
+                    items:
+                      description: ViewQuery defines a query configuration for populating
+                        the view
+                      properties:
+                        mapping:
+                          description: Mapping defines how to map query results to
+                            view columns
+                          type: object
+                          x-kubernetes-preserve-unknown-fields: true
+                        max:
+                          description: Max number of results to return
+                          type: integer
+                        selector:
+                          description: Selector defines the resource selector for
+                            finding matching resources
+                          properties:
+                            agent:
+                              description: |-
+                                Agent can be the agent id or the name of the agent.
+                                 Additionally, the special "self" value can be used to select resources without an agent.
+                              type: string
+                            cache:
+                              description: |-
+                                Cache directives
+                                 'no-cache' (should not fetch from cache but can be cached)
+                                 'no-store' (should not cache)
+                                 'max-age=X' (cache for X duration)
+                              type: string
+                            fieldSelector:
+                              type: string
+                            health:
+                              description: |-
+                                Health filters resources by the health.
+                                Multiple healths can be provided separated by comma.
+                              type: string
+                            id:
+                              type: string
+                            includeDeleted:
+                              type: boolean
+                            labelSelector:
+                              type: string
+                            limit:
+                              type: integer
+                            name:
+                              type: string
+                            namespace:
+                              type: string
+                            scope:
+                              description: |-
+                                Scope is the reference for parent of the resource to select.
+                                For config items, the scope is the scraper id
+                                For checks, it's canaries and
+                                For components, it's topology.
+                                It can either be a uuid or namespace/name
+                              type: string
+                            search:
+                              description: Search query that applies to the resource
+                                name, tag & labels.
+                              type: string
+                            statuses:
+                              description: Statuses filter resources by the status
+                              items:
+                                type: string
+                              type: array
+                            tagSelector:
+                              type: string
+                            types:
+                              description: Types filter resources by the type
+                              items:
+                                type: string
+                              type: array
+                          type: object
+                      required:
+                      - mapping
+                      - selector
+                      type: object
+                    type: array
+                  configs:
+                    items:
+                      description: ViewQuery defines a query configuration for populating
+                        the view
+                      properties:
+                        mapping:
+                          description: Mapping defines how to map query results to
+                            view columns
+                          type: object
+                          x-kubernetes-preserve-unknown-fields: true
+                        max:
+                          description: Max number of results to return
+                          type: integer
+                        selector:
+                          description: Selector defines the resource selector for
+                            finding matching resources
+                          properties:
+                            agent:
+                              description: |-
+                                Agent can be the agent id or the name of the agent.
+                                 Additionally, the special "self" value can be used to select resources without an agent.
+                              type: string
+                            cache:
+                              description: |-
+                                Cache directives
+                                 'no-cache' (should not fetch from cache but can be cached)
+                                 'no-store' (should not cache)
+                                 'max-age=X' (cache for X duration)
+                              type: string
+                            fieldSelector:
+                              type: string
+                            health:
+                              description: |-
+                                Health filters resources by the health.
+                                Multiple healths can be provided separated by comma.
+                              type: string
+                            id:
+                              type: string
+                            includeDeleted:
+                              type: boolean
+                            labelSelector:
+                              type: string
+                            limit:
+                              type: integer
+                            name:
+                              type: string
+                            namespace:
+                              type: string
+                            scope:
+                              description: |-
+                                Scope is the reference for parent of the resource to select.
+                                For config items, the scope is the scraper id
+                                For checks, it's canaries and
+                                For components, it's topology.
+                                It can either be a uuid or namespace/name
+                              type: string
+                            search:
+                              description: Search query that applies to the resource
+                                name, tag & labels.
+                              type: string
+                            statuses:
+                              description: Statuses filter resources by the status
+                              items:
+                                type: string
+                              type: array
+                            tagSelector:
+                              type: string
+                            types:
+                              description: Types filter resources by the type
+                              items:
+                                type: string
+                              type: array
+                          type: object
+                      required:
+                      - mapping
+                      - selector
+                      type: object
+                    type: array
+                type: object
+              summary:
+                description: Summary calculations for the view
+                items:
+                  description: ViewSummaryDef defines a summary calculation for the
+                    view
+                  properties:
+                    description:
+                      description: Description of what this summary represents
+                      type: string
+                    name:
+                      description: Name of the summary
+                      type: string
+                    query:
+                      description: AggregatedResourceSelector combines filtering and
+                        aggregation requirements
+                      properties:
+                        agent:
+                          description: |-
+                            Agent can be the agent id or the name of the agent.
+                             Additionally, the special "self" value can be used to select resources without an agent.
+                          type: string
+                        aggregates:
+                          items:
+                            description: AggregationField defines a single aggregation
+                              operation
+                            properties:
+                              alias:
+                                type: string
+                              field:
+                                type: string
+                              function:
+                                type: string
+                            required:
+                            - alias
+                            - field
+                            - function
+                            type: object
+                          type: array
+                        cache:
+                          description: |-
+                            Cache directives
+                             'no-cache' (should not fetch from cache but can be cached)
+                             'no-store' (should not cache)
+                             'max-age=X' (cache for X duration)
+                          type: string
+                        fieldSelector:
+                          type: string
+                        groupBy:
+                          items:
+                            type: string
+                          type: array
+                        health:
+                          description: |-
+                            Health filters resources by the health.
+                            Multiple healths can be provided separated by comma.
+                          type: string
+                        id:
+                          type: string
+                        includeDeleted:
+                          type: boolean
+                        labelSelector:
+                          type: string
+                        limit:
+                          type: integer
+                        name:
+                          type: string
+                        namespace:
+                          type: string
+                        scope:
+                          description: |-
+                            Scope is the reference for parent of the resource to select.
+                            For config items, the scope is the scraper id
+                            For checks, it's canaries and
+                            For components, it's topology.
+                            It can either be a uuid or namespace/name
+                          type: string
+                        search:
+                          description: Search query that applies to the resource name,
+                            tag & labels.
+                          type: string
+                        statuses:
+                          description: Statuses filter resources by the status
+                          items:
+                            type: string
+                          type: array
+                        tagSelector:
+                          type: string
+                        types:
+                          description: Types filter resources by the type
+                          items:
+                            type: string
+                          type: array
+                      type: object
+                    table:
+                      description: 'Table to query for the summary. (default: configs)'
+                      enum:
+                      - configs
+                      - changes
+                      type: string
+                    type:
+                      description: Type of summary visualization (piechart, text,
+                        gauge, number)
+                      enum:
+                      - piechart
+                      - text
+                      - gauge
+                      - number
+                      - breakdown
+                      type: string
+                  required:
+                  - name
+                  - query
+                  - table
+                  - type
+                  type: object
+                type: array
+            required:
+            - columns
+            - queries
+            type: object
+          status:
+            description: ViewStatus defines the observed state of View
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

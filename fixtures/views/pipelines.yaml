@@ -1,0 +1,40 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: pipelines
+  namespace: mc
+spec:
+  columns:
+    - name: name
+      type: string
+      description: The name of the pipeline.
+    - name: repository
+      type: string
+      description: The repository of the pipeline.
+    - name: lastRun
+      type: datetime
+      description: The namespace name.
+    - name: lastRunBy
+      type: string
+      description: The chart name.
+    - name: duration
+      type: number
+      description: The duration of the pipeline.
+    - name: status
+      type: string
+      description: The status of the pipeline.
+  queries:
+    changes:
+      - selector:
+          search: change_type=GithubAction
+          order: created_at DESC
+          types:
+            - GithubActions::WorkflowRun
+        max: 10
+        mapping:
+          name: row.name
+          lastRun: row.details.created_at
+          lastRunBy: row.details.triggering_actor.login
+          repository: row.details.repository.full_name
+          status: row.details.conclusion
+          duration: timestamp(row.details.updated_at) - timestamp(row.details.run_started_at)

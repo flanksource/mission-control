@@ -1,0 +1,21 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: helm-release-health-piechart
+  namespace: mc
+spec:
+  columns: []
+  queries: {}
+  summary:
+    - name: Helm Release
+      description: "Status of helm releases grouped by team ownership"
+      type: piechart
+      query:
+        groupBy:
+          - "health"
+        aggregates:
+          - function: COUNT
+            alias: count
+            field: "*"
+        types:
+          - "Kubernetes::HelmRelease"

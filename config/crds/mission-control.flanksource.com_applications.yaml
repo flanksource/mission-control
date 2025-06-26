@@ -166,6 +166,16 @@ spec:
                           type: array
                       type: object
                     type: array
+                  deployments:
+                    properties:
+                      name:
+                        type: string
+                      namespace:
+                        type: string
+                    required:
+                    - name
+                    - namespace
+                    type: object
                   environments:
                     additionalProperties:
                       items:
@@ -295,6 +305,16 @@ spec:
                           type: array
                       type: object
                     type: array
+                  pipelines:
+                    properties:
+                      name:
+                        type: string
+                      namespace:
+                        type: string
+                    required:
+                    - name
+                    - namespace
+                    type: object
                   roles:
                     description: Defines mappings to automatically generate roles
                       based on specified group associations

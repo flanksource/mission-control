@@ -1,0 +1,73 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: deployments
+  namespace: default
+spec:
+  summary:
+    - type: count
+      groupBy:
+        - environment
+      description: Count of deployments by environment.
+    - type: average
+      field: duration
+      groupBy:
+        - environment
+      description: Average deployment duration by environment.
+  columns:
+    - name: repo
+      type: string
+      description: The repository name.
+    - name: branch
+      type: string
+      description: The branch name.
+    - name: environment
+      type: string
+      description: The environment where the deployment occurred.
+    - name: status
+      type: string
+      description: The status of the deployment (e.g., success, failure).
+    - name: timestamp
+      type: datetime
+      description: The timestamp of the deployment.
+    - name: duration
+      type: number
+      description: The duration of the deployment in seconds.
+    - name: user
+      type: string
+      description: The user who initiated the deployment.
+  queries:
+    configs:
+      - selector:
+          types:
+            - Github::Workflow
+          changeType: Workflow*
+        max: 1
+        mapping:
+          repo: "$.repository.name"
+    changes:
+      - selector:
+          types:
+            - Github::Workflow
+          changeType: Workflow*
+        max: 1
+        mapping:
+          repo: "$.repository.name"
+          branch: "head_branch"
+          environment: "environment.name"
+          status: "conclusion"
+          timestamp: "created_at"
+          duration: "run_duration"
+          user: "actor.login"
+      - selector:
+          types:
+            - Flux::Kustomization
+          changeType: updated
+        mapping:
+          repo: "$.metadata.name"
+          branch: "$.spec.sourceRef.branch"
+          environment: "$.spec.environment"
+          status: "$.status.phase"
+          timestamp: "$.metadata.creationTimestamp"
+          duration: "$.status.duration"
+          user: "$.spec.user"

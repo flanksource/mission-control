@@ -5,11 +5,17 @@ import (
 
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
-	"github.com/flanksource/incident-commander/api"
 	"github.com/google/uuid"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sTypes "k8s.io/apimachinery/pkg/types"
+
+	"github.com/flanksource/incident-commander/api"
 )
+
+type ViewRef struct {
+	Namespace string `json:"namespace"`
+	Name      string `json:"name"`
+}
 
 type ApplicationMapping struct {
 	AccessReviews []types.ResourceSelector            `json:"accessReviews,omitempty"`
@@ -24,6 +30,9 @@ type ApplicationMapping struct {
 
 	// Defines mappings to automatically generate roles based on specified group associations
 	Roles []ApplicationRoleMapping `json:"roles,omitempty"`
+
+	Deployments *ViewRef `json:"deployments,omitempty"`
+	Pipelines   *ViewRef `json:"pipelines,omitempty"`
 }
 
 type ApplicationRoleMapping struct {

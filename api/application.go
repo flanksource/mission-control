@@ -16,6 +16,8 @@ type Application struct {
 	Backups           []ApplicationBackup        `json:"backups"`
 	Restores          []ApplicationBackupRestore `json:"restores"`
 	Findings          []ApplicationFinding       `json:"findings"`
+	Deployments       *ViewResult                `json:"deployments,omitempty"`
+	Pipelines         *ViewResult                `json:"pipelines,omitempty"`
 }
 
 type ApplicationFinding struct {
