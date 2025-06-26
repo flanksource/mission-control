@@ -20,12 +20,12 @@ var DiagnosisSchema = genai.Schema{
 		},
 		"summary": {
 			Type:        genai.TypeString,
-			Description: "Brief markdown summary (≤50 words) of the issue and impact.",
+			Description: "Brief slack flavored markdown summary (≤50 words) of the issue and impact. Slack uses single * for bold, _ for italic and asterisk<space> for bullet point.",
 			MaxLength:   lo.ToPtr(int64(50)), // Doesn't seem to work: https://cloud.google.com/vertex-ai/generative-ai/docs/multimodal/control-generated-output
 		},
 		"recommended_fix": {
 			Type:        genai.TypeString,
-			Description: "Markdown bullet array of 1–5 concise fixes (≤10 words each).",
+			Description: "Slack flavored markdown bullet array of 1–5 concise fixes (≤10 words each). Slack uses single * for bold, _ for italic and asterisk<space> for bullet point.",
 		},
 	},
 	Required: []string{"headline", "summary", "recommended_fix"},
