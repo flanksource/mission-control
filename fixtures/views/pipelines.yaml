@@ -1,0 +1,70 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: pipelines
+  namespace: mc
+spec:
+  panels:
+    - name: Repository
+      type: table
+      source: changes
+      query:
+        search: change_type=GitHubActionRun
+        types:
+          - GitHubAction::Workflow
+        groupBy:
+          - details.repository.full_name
+        aggregates:
+          - function: COUNT
+            alias: value
+            field: '*'
+    - name: Average Duration
+      description: Create Release average duration
+      type: number
+      source: changes
+      number:
+        unit: seconds
+      query:
+        search: change_type=GitHubActionRun
+        name: Create Release
+        types:
+          - GitHubAction::Workflow
+        groupBy:
+          - details.repository.full_name
+        aggregates:
+          - function: AVG
+            alias: value
+            field: 'details.duration'
+  columns:
+    - name: name
+      type: string
+      description: The name of the pipeline.
+    - name: repository
+      type: string
+      description: The repository of the pipeline.
+    - name: lastRun
+      type: datetime
+      description: The namespace name.
+    - name: lastRunBy
+      type: string
+      description: The chart name.
+    - name: duration
+      type: duration
+      description: The duration of the pipeline.
+    - name: status
+      type: status
+      description: The status of the pipeline.
+  queries:
+    changes:
+      - selector:
+          search: change_type=GitHubActionRun @order=-created_at
+          types:
+            - GitHubAction::Workflow
+        max: 10
+        mapping:
+          name: row.name
+          lastRun: row.details.created_at
+          lastRunBy: row.details.triggering_actor.login
+          repository: row.details.repository.full_name
+          status: row.details.conclusion
+          duration: timestamp(row.details.updated_at) - timestamp(row.details.run_started_at)

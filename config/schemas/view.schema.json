@@ -1,30 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/flanksource/incident-commander/api/v1/application",
-  "$ref": "#/$defs/Application",
+  "$id": "https://github.com/flanksource/incident-commander/api/v1/view",
+  "$ref": "#/$defs/View",
   "$defs": {
-    "Application": {
-      "properties": {
-        "kind": {
-          "type": "string"
-        },
-        "apiVersion": {
-          "type": "string"
-        },
-        "metadata": {
-          "$ref": "#/$defs/ObjectMeta"
-        },
-        "spec": {
-          "$ref": "#/$defs/ApplicationSpec"
-        },
-        "status": {
-          "$ref": "#/$defs/ApplicationStatus"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "ApplicationEnvironment": {
+    "AggregatedResourceSelector": {
       "properties": {
         "agent": {
           "type": "string"
@@ -71,48 +50,15 @@
         "statuses": {
           "$ref": "#/$defs/Items"
         },
-        "purpose": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object",
-      "required": [
-        "purpose"
-      ]
-    },
-    "ApplicationMapping": {
-      "properties": {
-        "accessReviews": {
+        "groupBy": {
           "items": {
-            "$ref": "#/$defs/ResourceSelector"
+            "type": "string"
           },
           "type": "array"
         },
-        "environments": {
-          "additionalProperties": {
-            "items": {
-              "$ref": "#/$defs/ApplicationEnvironment"
-            },
-            "type": "array"
-          },
-          "type": "object"
-        },
-        "datasources": {
+        "aggregates": {
           "items": {
-            "$ref": "#/$defs/ResourceSelector"
-          },
-          "type": "array"
-        },
-        "logins": {
-          "items": {
-            "$ref": "#/$defs/ResourceSelector"
-          },
-          "type": "array"
-        },
-        "roles": {
-          "items": {
-            "$ref": "#/$defs/ApplicationRoleMapping"
+            "$ref": "#/$defs/AggregationField"
           },
           "type": "array"
         }
@@ -120,156 +66,74 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "ApplicationRoleMapping": {
+    "AggregationField": {
       "properties": {
-        "agent": {
+        "function": {
           "type": "string"
         },
-        "scope": {
+        "field": {
           "type": "string"
         },
-        "cache": {
-          "type": "string"
-        },
-        "search": {
-          "type": "string"
-        },
-        "limit": {
-          "type": "integer"
-        },
-        "includeDeleted": {
-          "type": "boolean"
-        },
-        "id": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        },
-        "namespace": {
-          "type": "string"
-        },
-        "tagSelector": {
-          "type": "string"
-        },
-        "labelSelector": {
-          "type": "string"
-        },
-        "fieldSelector": {
-          "type": "string"
-        },
-        "health": {
-          "type": "string"
-        },
-        "types": {
-          "$ref": "#/$defs/Items"
-        },
-        "statuses": {
-          "$ref": "#/$defs/Items"
-        },
-        "role": {
+        "alias": {
           "type": "string"
         }
       },
       "additionalProperties": false,
       "type": "object",
       "required": [
-        "role"
+        "function",
+        "field",
+        "alias"
       ]
-    },
-    "ApplicationSection": {
-      "properties": {
-        "title": {
-          "type": "string"
-        },
-        "icon": {
-          "type": "string"
-        },
-        "viewRef": {
-          "$ref": "#/$defs/ViewRef"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object",
-      "required": [
-        "title",
-        "viewRef"
-      ]
-    },
-    "ApplicationSpec": {
-      "properties": {
-        "description": {
-          "type": "string"
-        },
-        "type": {
-          "type": "string"
-        },
-        "schedule": {
-          "type": "string"
-        },
-        "mapping": {
-          "$ref": "#/$defs/ApplicationMapping"
-        },
-        "sections": {
-          "items": {
-            "$ref": "#/$defs/ApplicationSection"
-          },
-          "type": "array"
-        },
-        "properties": {
-          "items": {
-            "$ref": "#/$defs/Property"
-          },
-          "type": "array"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object",
-      "required": [
-        "type",
-        "schedule",
-        "mapping"
-      ]
-    },
-    "ApplicationStatus": {
-      "properties": {},
-      "additionalProperties": false,
-      "type": "object"
     },
     "FieldsV1": {
       "properties": {},
       "additionalProperties": false,
       "type": "object"
     },
+    "GaugeConfig": {
+      "properties": {
+        "min": {
+          "type": "integer"
+        },
+        "max": {
+          "type": "integer"
+        },
+        "thresholds": {
+          "items": {
+            "$ref": "#/$defs/GaugeThreshold"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "min",
+        "max"
+      ]
+    },
+    "GaugeThreshold": {
+      "properties": {
+        "value": {
+          "type": "integer"
+        },
+        "color": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "value",
+        "color"
+      ]
+    },
     "Items": {
       "items": {
         "type": "string"
       },
       "type": "array"
-    },
-    "Link": {
-      "properties": {
-        "type": {
-          "type": "string"
-        },
-        "url": {
-          "type": "string"
-        },
-        "tooltip": {
-          "type": "string"
-        },
-        "icon": {
-          "type": "string"
-        },
-        "text": {
-          "type": "string"
-        },
-        "label": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
     },
     "ManagedFieldsEntry": {
       "properties": {
@@ -394,43 +258,72 @@
         "uid"
       ]
     },
-    "Property": {
+    "PanelDef": {
       "properties": {
-        "label": {
-          "type": "string"
-        },
         "name": {
           "type": "string"
         },
-        "tooltip": {
+        "description": {
           "type": "string"
-        },
-        "icon": {
-          "type": "string"
-        },
-        "text": {
-          "type": "string"
-        },
-        "order": {
-          "type": "integer"
         },
         "type": {
           "type": "string"
         },
-        "color": {
+        "gauge": {
+          "$ref": "#/$defs/GaugeConfig"
+        },
+        "piechart": {
+          "$ref": "#/$defs/PiechartConfig"
+        },
+        "number": {
+          "$ref": "#/$defs/PanelNumberConfig"
+        },
+        "table": {
+          "$ref": "#/$defs/PanelTableConfig"
+        },
+        "source": {
           "type": "string"
         },
-        "value": {
-          "type": "integer"
-        },
-        "links": {
-          "items": {
-            "$ref": "#/$defs/Link"
-          },
-          "type": "array"
-        },
+        "query": {
+          "$ref": "#/$defs/AggregatedResourceSelector"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "type",
+        "source",
+        "query"
+      ]
+    },
+    "PanelNumberConfig": {
+      "properties": {
         "unit": {
           "type": "string"
+        },
+        "precision": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "PanelTableConfig": {
+      "properties": {},
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "PiechartConfig": {
+      "properties": {
+        "showLabels": {
+          "type": "boolean"
+        },
+        "colors": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
         }
       },
       "additionalProperties": false,
@@ -492,21 +385,120 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "ViewRef": {
+    "View": {
       "properties": {
-        "namespace": {
+        "kind": {
           "type": "string"
         },
+        "apiVersion": {
+          "type": "string"
+        },
+        "metadata": {
+          "$ref": "#/$defs/ObjectMeta"
+        },
+        "spec": {
+          "$ref": "#/$defs/ViewSpec"
+        },
+        "status": {
+          "$ref": "#/$defs/ViewStatus"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "metadata",
+        "spec",
+        "status"
+      ]
+    },
+    "ViewColumnDef": {
+      "properties": {
         "name": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "description": {
           "type": "string"
         }
       },
       "additionalProperties": false,
       "type": "object",
       "required": [
-        "namespace",
-        "name"
+        "name",
+        "type"
       ]
+    },
+    "ViewQueriesSpec": {
+      "properties": {
+        "configs": {
+          "items": {
+            "$ref": "#/$defs/ViewQuery"
+          },
+          "type": "array"
+        },
+        "changes": {
+          "items": {
+            "$ref": "#/$defs/ViewQuery"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ViewQuery": {
+      "properties": {
+        "selector": {
+          "$ref": "#/$defs/ResourceSelector"
+        },
+        "max": {
+          "type": "integer"
+        },
+        "mapping": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "selector",
+        "mapping"
+      ]
+    },
+    "ViewSpec": {
+      "properties": {
+        "panels": {
+          "items": {
+            "$ref": "#/$defs/PanelDef"
+          },
+          "type": "array"
+        },
+        "columns": {
+          "items": {
+            "$ref": "#/$defs/ViewColumnDef"
+          },
+          "type": "array"
+        },
+        "queries": {
+          "$ref": "#/$defs/ViewQueriesSpec"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "columns",
+        "queries"
+      ]
+    },
+    "ViewStatus": {
+      "properties": {},
+      "additionalProperties": false,
+      "type": "object"
     }
   }
 }

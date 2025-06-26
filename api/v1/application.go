@@ -5,11 +5,24 @@ import (
 
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
-	"github.com/flanksource/incident-commander/api"
 	"github.com/google/uuid"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8sTypes "k8s.io/apimachinery/pkg/types"
+
+	"github.com/flanksource/incident-commander/api"
 )
+
+type ViewRef struct {
+	Namespace string `json:"namespace"`
+	Name      string `json:"name"`
+}
+
+// ApplicationSection is a section rendered in the application view
+type ApplicationSection struct {
+	Title   string  `json:"title"`
+	Icon    string  `json:"icon,omitempty"`
+	ViewRef ViewRef `json:"viewRef"`
+}
 
 type ApplicationMapping struct {
 	AccessReviews []types.ResourceSelector            `json:"accessReviews,omitempty"`
@@ -51,6 +64,8 @@ type ApplicationSpec struct {
 	Schedule string `json:"schedule"`
 
 	Mapping ApplicationMapping `json:"mapping"`
+
+	Sections []ApplicationSection `json:"sections,omitempty"`
 
 	Properties []api.Property `json:"properties,omitempty"`
 }
