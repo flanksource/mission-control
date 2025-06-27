@@ -8,8 +8,6 @@ import (
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty"
-	"go.opentelemetry.io/otel"
-
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/postq/pg"
@@ -17,30 +15,29 @@ import (
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/shutdown"
 	"github.com/flanksource/kopper"
-
 	"github.com/spf13/cobra"
+	"go.opentelemetry.io/otel"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/application"
+	_ "github.com/flanksource/incident-commander/artifacts"
 	"github.com/flanksource/incident-commander/auth"
+	_ "github.com/flanksource/incident-commander/catalog"
+	_ "github.com/flanksource/incident-commander/connection"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/incidents/responder"
 	"github.com/flanksource/incident-commander/jobs"
 	"github.com/flanksource/incident-commander/notification"
-	"github.com/flanksource/incident-commander/teams"
-	"github.com/flanksource/incident-commander/vars"
-
-	// register event handlers & echo routers
-	_ "github.com/flanksource/incident-commander/artifacts"
-	_ "github.com/flanksource/incident-commander/catalog"
-	_ "github.com/flanksource/incident-commander/connection"
 	_ "github.com/flanksource/incident-commander/playbook"
+	_ "github.com/flanksource/incident-commander/shorturl"
 	_ "github.com/flanksource/incident-commander/snapshot"
+	"github.com/flanksource/incident-commander/teams"
 	_ "github.com/flanksource/incident-commander/upstream"
+	"github.com/flanksource/incident-commander/vars"
 )
 
 func launchKopper(ctx context.Context) {
