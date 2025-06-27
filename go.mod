@@ -219,6 +219,7 @@ require (
 	github.com/lrita/cmap v0.0.0-20231108122212-cb084a67f554 // indirect
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
+	github.com/matoous/go-nanoid/v2 v2.1.0 // indirect
 	github.com/microsoft/go-mssqldb v1.6.0 // indirect
 	github.com/microsoft/kiota-serialization-form-go v1.0.0 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
