@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/job"
 	"github.com/flanksource/duty/models"
@@ -21,11 +22,8 @@ const (
 	DefaultCacheTTL    = 24 * time.Hour
 )
 
-var urlCache *cache.Cache
-
-func init() {
-	urlCache = cache.New(DefaultCacheTTL, DefaultCacheTTL)
-}
+// Caches <alias, originalURL>
+var urlCache = cache.New(DefaultCacheTTL, DefaultCacheTTL)
 
 // Create creates a new shortened URL
 func Create(ctx context.Context, targetURL string, expiresAt *time.Time) (*string, error) {
@@ -48,42 +46,44 @@ func Create(ctx context.Context, targetURL string, expiresAt *time.Time) (*strin
 		return nil, fmt.Errorf("failed to save shortened URL: %w", err)
 	}
 
-	urlCache.Set(alias, shortURL, lo.If(shortURL.ExpiresAt != nil, time.Until(*shortURL.ExpiresAt)).Else(cache.NoExpiration))
+	urlCache.Set(alias, targetURL, lo.If(shortURL.ExpiresAt != nil, time.Until(lo.FromPtr(shortURL.ExpiresAt))).Else(cache.NoExpiration))
 	return &alias, nil
 }
 
-func Get(ctx context.Context, alias string) (*models.ShortURL, error) {
+func Get(ctx context.Context, alias string) (string, error) {
 	if cachedItem, found := urlCache.Get(alias); found {
-		if shortURL, ok := cachedItem.(models.ShortURL); ok {
-			return &shortURL, nil
+		if targetURL, ok := cachedItem.(string); ok {
+			return targetURL, nil
 		}
 	}
 
 	var shortURL models.ShortURL
 	if err := ctx.DB().Where("alias = ?", alias).Where("expires_at IS NULL OR expires_at > NOW()").First(&shortURL).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return nil, fmt.Errorf("alias '%s' not found", alias)
+			return "", api.Errorf(api.ENOTFOUND, "alias '%s' not found", alias)
 		}
-		return nil, fmt.Errorf("failed to retrieve URL (alias: %s): %w", alias, err)
+		return "", fmt.Errorf("failed to retrieve URL (alias: %s): %w", alias, err)
 	}
 
-	urlCache.Set(alias, shortURL, lo.If(shortURL.ExpiresAt != nil, time.Until(*shortURL.ExpiresAt)).Else(cache.NoExpiration))
-	return &shortURL, nil
+	urlCache.Set(alias, shortURL.URL, lo.If(shortURL.ExpiresAt != nil, time.Until(lo.FromPtr(shortURL.ExpiresAt))).Else(cache.NoExpiration))
+	return shortURL.URL, nil
 }
 
 // generateUniqueAlias generates a unique random alias
 func generateUniqueAlias(ctx context.Context) (string, error) {
-	const maxAttempts = 10
+	const maxAttempts = 5
 
 	for range maxAttempts {
-		alias := generateRandomAlias(DefaultAliasLength)
+		alias, err := generateRandomAlias(DefaultAliasLength)
+		if err != nil {
+			return "", err
+		}
 
 		var existing models.ShortURL
-		err := ctx.DB().Where("alias = ?", alias).First(&existing).Error
-		if err == gorm.ErrRecordNotFound {
+		if err := ctx.DB().Where("alias = ?", alias).Find(&existing).Error; existing.Alias == "" {
 			return alias, nil
 		} else if err != nil {
-			return "", err
+			return "", fmt.Errorf("failed to check for existing alias: %w", err)
 		}
 	}
 
@@ -91,10 +91,10 @@ func generateUniqueAlias(ctx context.Context) (string, error) {
 }
 
 // generateRandomAlias generates a random base64 URL-safe string
-func generateRandomAlias(length int) string {
+func generateRandomAlias(length int) (string, error) {
 	bytes := make([]byte, length)
 	if _, err := rand.Read(bytes); err != nil {
-		return fmt.Sprintf("%d", time.Now().UnixNano())[len(fmt.Sprintf("%d", time.Now().UnixNano()))-length:]
+		return "", fmt.Errorf("failed to generate random bytes: %w", err)
 	}
 
 	encoded := base64.URLEncoding.EncodeToString(bytes)
@@ -102,7 +102,7 @@ func generateRandomAlias(length int) string {
 		encoded = encoded[:length]
 	}
 
-	return encoded
+	return encoded, nil
 }
 
 func CleanupExpired(ctx job.JobRuntime) error {
