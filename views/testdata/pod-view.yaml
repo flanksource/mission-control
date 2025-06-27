@@ -1,0 +1,36 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: test-populate-multi-column
+  namespace: test
+  annotations:
+    expected-rows: |
+      [
+        ["logistics-api-pod-1", "Kubernetes::Pod", "Running", "healthy", "missioncontrol", "5"]
+      ]
+spec:
+  columns:
+    - name: component_name
+      type: string
+    - name: component_type
+      type: string
+    - name: status
+      type: string
+    - name: health
+      type: string
+    - name: namespace
+      type: string
+    - name: cost
+      type: string
+  queries:
+    configs:
+      - selector:
+          types: ["Kubernetes::Pod"]
+          tagSelector: "namespace=missioncontrol"
+        mapping:
+          component_name: "row.name"
+          component_type: "row.type"
+          status: "row.status"
+          health: "row.health"
+          namespace: "row.tags.namespace"
+          cost: "row.cost_total_30d"

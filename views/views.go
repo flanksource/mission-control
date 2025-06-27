@@ -11,6 +11,7 @@ import (
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/db"
 )
 
 // Run executes the view queries and returns the rows with data
@@ -150,4 +151,61 @@ func applyMapping(data map[string]any, columnDefs []api.ViewColumnDef, mapping m
 	}
 
 	return row, nil
+}
+
+// ReadFromTable reads view data from the cached table
+func ReadFromTable(ctx context.Context, namespace, name string) (*api.ViewResult, error) {
+	view, err := db.GetView(ctx, namespace, name)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get view: %w", err)
+	}
+
+	tableName := view.TableName()
+
+	if !ctx.DB().Migrator().HasTable(tableName) {
+		if err := db.CreateViewTable(ctx, view); err != nil {
+			return nil, fmt.Errorf("failed to create view table: %w", err)
+		}
+	}
+
+	var count int64
+	if err := ctx.DB().Raw(fmt.Sprintf("SELECT COUNT(*) FROM %s", tableName)).Scan(&count).Error; err != nil {
+		return nil, fmt.Errorf("failed to count rows in table: %w", err)
+	}
+
+	if count == 0 {
+		if err := PopulateView(ctx, view); err != nil {
+			return nil, fmt.Errorf("failed to run view: %w", err)
+		}
+	}
+
+	rows, err := db.ReadViewTable(ctx, tableName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read view table: %w", err)
+	}
+
+	return &api.ViewResult{
+		Columns: view.Spec.Columns,
+		Rows:    rows,
+	}, nil
+}
+
+// PopulateView runs the view queries and saves to the view table
+func PopulateView(ctx context.Context, view *v1.View) error {
+	tableName := view.TableName()
+	if !ctx.DB().Migrator().HasTable(tableName) {
+		if err := db.CreateViewTable(ctx, view); err != nil {
+			return fmt.Errorf("failed to create view table: %w", err)
+		}
+	}
+
+	// We only run the table queries and persist them to the view table
+	view.Spec.Panels = nil
+
+	result, err := Run(ctx, view)
+	if err != nil {
+		return fmt.Errorf("failed to run view: %w", err)
+	}
+
+	return db.InsertViewRows(ctx, tableName, result.Columns, result.Rows)
 }

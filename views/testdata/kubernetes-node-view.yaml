@@ -1,0 +1,26 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: test-populate
+  namespace: test
+  annotations:
+    expected-rows: |
+      [
+        ["node-a", "healthy"],
+        ["node-b", "healthy"]
+      ]
+spec:
+  columns:
+    - name: pod_name
+      type: string
+    - name: status
+      type: string
+  queries:
+    configs:
+      - selector:
+          types: ["Kubernetes::Node"]
+          tagSelector: "account=flanksource"
+        max: 2
+        mapping:
+          pod_name: "row.name"
+          status: "row.status"

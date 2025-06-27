@@ -1,8 +1,15 @@
 package v1
 
 import (
+	"encoding/json"
+	"fmt"
+	"strings"
+
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
+	"github.com/google/uuid"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	k8stypes "k8s.io/apimachinery/pkg/types"
 
 	"github.com/flanksource/incident-commander/api"
 )
@@ -64,6 +71,53 @@ type ViewList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata"`
 	Items           []View `json:"items"`
+}
+
+func (v *View) TableName() string {
+	cleanNamespace := strings.ReplaceAll(v.Namespace, "-", "_")
+	cleanName := strings.ReplaceAll(v.Name, "-", "_")
+	return fmt.Sprintf("view_%s_%s", cleanNamespace, cleanName)
+}
+
+func (v *View) ToModel() (*models.View, error) {
+	specJSON, err := json.Marshal(v.Spec)
+	if err != nil {
+		return nil, err
+	}
+
+	var uid uuid.UUID
+	if v.UID != "" {
+		uid, err = uuid.Parse(string(v.UID))
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &models.View{
+		ID:        uid,
+		Name:      v.Name,
+		Namespace: v.Namespace,
+		Spec:      specJSON,
+		Source:    models.SourceCRD,
+	}, nil
+}
+
+func ViewFromModel(model *models.View) (*View, error) {
+	var spec ViewSpec
+	if err := json.Unmarshal(model.Spec, &spec); err != nil {
+		return nil, err
+	}
+
+	view := View{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      model.Name,
+			Namespace: model.Namespace,
+			UID:       k8stypes.UID(model.ID.String()),
+		},
+		Spec: spec,
+	}
+
+	return &view, nil
 }
 
 func init() {
