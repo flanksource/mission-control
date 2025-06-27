@@ -2,14 +2,18 @@ package shorturl
 
 import (
 	"net/http"
+	"net/url"
 
 	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/duty/api"
+	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/labstack/echo/v4"
 
+	"github.com/flanksource/incident-commander/api"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 )
+
+const redirectPath = "/redirect"
 
 func init() {
 	echoSrv.RegisterRoutes(RegisterRoutes)
@@ -17,7 +21,7 @@ func init() {
 
 func RegisterRoutes(e *echo.Echo) {
 	logger.Infof("Registering /redirect routes")
-	e.GET("/redirect/:alias", Redirect)
+	e.GET(redirectPath+"/:alias", Redirect)
 }
 
 func Redirect(c echo.Context) error {
@@ -25,13 +29,18 @@ func Redirect(c echo.Context) error {
 	alias := c.Param("alias")
 
 	if alias == "" {
-		return api.WriteError(c, api.Errorf(api.EINVALID, "alias is required"))
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "alias is required"))
 	}
 
-	shortener, err := Get(ctx, alias)
+	targetURL, err := Get(ctx, alias)
 	if err != nil {
-		return api.WriteError(c, err)
+		return dutyAPI.WriteError(c, err)
 	}
 
-	return c.Redirect(http.StatusFound, shortener.URL)
+	return c.Redirect(http.StatusFound, targetURL)
+}
+
+func FullShortURL(alias string) string {
+	f, _ := url.JoinPath(api.FrontendURL, redirectPath, alias)
+	return f
 }
