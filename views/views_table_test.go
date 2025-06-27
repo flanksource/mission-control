@@ -29,7 +29,7 @@ var _ = Describe("View Database Table", func() {
 			viewObj, err := loadViewFromYAML(file.Name())
 			Expect(err).ToNot(HaveOccurred())
 
-			err = PopulateView(DefaultContext, viewObj)
+			_, err = PopulateView(DefaultContext, viewObj)
 			Expect(err).ToNot(HaveOccurred())
 
 			tableName := viewObj.TableName()

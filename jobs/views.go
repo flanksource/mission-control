@@ -35,7 +35,7 @@ func newPopulateViewsJob(ctx context.Context) *job.Job {
 					return fmt.Errorf("failed to convert view model to resource: %v", err)
 				}
 
-				if err := views.PopulateView(ctx.Context, viewResource); err != nil {
+				if _, err := views.PopulateView(ctx.Context, viewResource); err != nil {
 					return fmt.Errorf("failed to populate view %s/%s: %v", view.Namespace, view.Name, err)
 				}
 
