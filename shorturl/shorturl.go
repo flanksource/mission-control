@@ -1,8 +1,6 @@
 package shorturl
 
 import (
-	"crypto/rand"
-	"encoding/base64"
 	"fmt"
 	"net/url"
 	"time"
@@ -11,13 +9,14 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/job"
 	"github.com/flanksource/duty/models"
+	gonanoid "github.com/matoous/go-nanoid/v2"
 	"github.com/patrickmn/go-cache"
 	"github.com/samber/lo"
 	"gorm.io/gorm"
 )
 
 const (
-	DefaultAliasLength = 6
+	DefaultAliasLength = 15
 	MaxAliasLength     = 50
 	DefaultCacheTTL    = 24 * time.Hour
 )
@@ -71,12 +70,12 @@ func Get(ctx context.Context, alias string) (string, error) {
 
 // generateUniqueAlias generates a unique random alias
 func generateUniqueAlias(ctx context.Context) (string, error) {
-	const maxAttempts = 5
+	const maxAttempts = 3
 
 	for range maxAttempts {
-		alias, err := generateRandomAlias(DefaultAliasLength)
+		alias, err := gonanoid.New(DefaultAliasLength)
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("failed to generate random alias: %w", err)
 		}
 
 		var existing models.ShortURL
@@ -88,21 +87,6 @@ func generateUniqueAlias(ctx context.Context) (string, error) {
 	}
 
 	return "", fmt.Errorf("failed to generate unique alias after %d attempts", maxAttempts)
-}
-
-// generateRandomAlias generates a random base64 URL-safe string
-func generateRandomAlias(length int) (string, error) {
-	bytes := make([]byte, length)
-	if _, err := rand.Read(bytes); err != nil {
-		return "", fmt.Errorf("failed to generate random bytes: %w", err)
-	}
-
-	encoded := base64.URLEncoding.EncodeToString(bytes)
-	if len(encoded) > length {
-		encoded = encoded[:length]
-	}
-
-	return encoded, nil
 }
 
 func CleanupExpired(ctx job.JobRuntime) error {
