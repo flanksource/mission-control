@@ -11,12 +11,14 @@ import (
 	"github.com/flanksource/duty/job"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/shutdown"
+	"github.com/robfig/cron/v3"
+	"github.com/sethvargo/go-retry"
+
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/application"
 	"github.com/flanksource/incident-commander/incidents"
 	"github.com/flanksource/incident-commander/notification"
-	"github.com/robfig/cron/v3"
-	"github.com/sethvargo/go-retry"
+	"github.com/flanksource/incident-commander/shorturl"
 )
 
 const (
@@ -24,6 +26,7 @@ const (
 	CleanupJobHistoryTableSchedule         = "@every 24h"
 	CleanupEventQueueTableSchedule         = "@every 24h"
 	CleanupNotificationSendHistorySchedule = "@every 24h"
+	CleanupExpiredShortURLsSchedule        = "@every 24h"
 )
 
 var FuncScheduler = cron.New()
@@ -98,6 +101,11 @@ func Start(ctx context.Context) {
 	if err := job.NewJob(ctx, "Cleanup NotificationSend History", CleanupNotificationSendHistorySchedule, CleanupNotificationSendHistory).
 		AddToScheduler(FuncScheduler); err != nil {
 		logger.Errorf("Failed to schedule job for cleaning up notification send history table: %v", err)
+	}
+
+	if err := job.NewJob(ctx, "Cleanup Short URLs", CleanupExpiredShortURLsSchedule, shorturl.CleanupExpired).
+		AddToScheduler(FuncScheduler); err != nil {
+		logger.Errorf("Failed to schedule job for cleaning up short URLs: %v", err)
 	}
 
 	for _, job := range query.Jobs {
