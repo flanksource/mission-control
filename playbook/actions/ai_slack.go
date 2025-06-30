@@ -1,17 +1,14 @@
 package actions
 
 import (
-	gocontext "context"
 	"encoding/json"
 	"fmt"
 	"net/url"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/flanksource/duty/context"
 	"github.com/samber/lo"
-	"github.com/sethvargo/go-retry"
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/llm"
@@ -45,17 +42,7 @@ func shortenURLIfNeeded(ctx context.Context, originalURL string) (string, error)
 		return originalURL, nil
 	}
 
-	var shortAlias *string
-	backoff := retry.WithMaxRetries(3, retry.NewExponential(time.Second))
-	err := retry.Do(ctx, backoff, func(_ gocontext.Context) error {
-		alias, err := shorturl.Create(ctx, originalURL, nil)
-		if err != nil {
-			return retry.RetryableError(fmt.Errorf("failed to create short URL: %w", err))
-		}
-		shortAlias = alias
-		return nil
-	})
-
+	shortAlias, err := shorturl.Create(ctx, originalURL, nil)
 	if err != nil {
 		return "", fmt.Errorf("failed to create short URL after retries: %w", err)
 	}

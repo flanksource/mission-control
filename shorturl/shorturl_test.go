@@ -49,7 +49,6 @@ var _ = ginkgo.Describe("URL Shortener", func() {
 			alias, err := Create(DefaultContext, testURL, nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(alias).ToNot(BeNil())
-			Expect(*alias).To(HaveLen(DefaultAliasLength))
 		})
 
 		ginkgo.It("should create a short URL with expiration", func() {
@@ -57,7 +56,6 @@ var _ = ginkgo.Describe("URL Shortener", func() {
 			alias, err := Create(DefaultContext, testURL, &expiresAt)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(alias).ToNot(BeNil())
-			Expect(*alias).To(HaveLen(DefaultAliasLength))
 		})
 
 		ginkgo.It("should fail with invalid URL", func() {

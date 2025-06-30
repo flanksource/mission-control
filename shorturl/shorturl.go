@@ -9,16 +9,14 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/job"
 	"github.com/flanksource/duty/models"
-	gonanoid "github.com/matoous/go-nanoid/v2"
+	"github.com/oklog/ulid/v2"
 	"github.com/patrickmn/go-cache"
 	"github.com/samber/lo"
 	"gorm.io/gorm"
 )
 
 const (
-	DefaultAliasLength = 15
-	MaxAliasLength     = 50
-	DefaultCacheTTL    = 24 * time.Hour
+	DefaultCacheTTL = 24 * time.Hour
 )
 
 // Caches <alias, originalURL>
@@ -30,11 +28,7 @@ func Create(ctx context.Context, targetURL string, expiresAt *time.Time) (*strin
 		return nil, fmt.Errorf("invalid URL: %w", err)
 	}
 
-	alias, err := generateUniqueAlias(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate unique alias: %w", err)
-	}
-
+	alias := ulid.Make().String()
 	shortURL := models.ShortURL{
 		Alias:     alias,
 		URL:       targetURL,
@@ -66,27 +60,6 @@ func Get(ctx context.Context, alias string) (string, error) {
 
 	urlCache.Set(alias, shortURL.URL, lo.If(shortURL.ExpiresAt != nil, time.Until(lo.FromPtr(shortURL.ExpiresAt))).Else(cache.NoExpiration))
 	return shortURL.URL, nil
-}
-
-// generateUniqueAlias generates a unique random alias
-func generateUniqueAlias(ctx context.Context) (string, error) {
-	const maxAttempts = 3
-
-	for range maxAttempts {
-		alias, err := gonanoid.New(DefaultAliasLength)
-		if err != nil {
-			return "", fmt.Errorf("failed to generate random alias: %w", err)
-		}
-
-		var existing models.ShortURL
-		if err := ctx.DB().Where("alias = ?", alias).Find(&existing).Error; existing.Alias == "" {
-			return alias, nil
-		} else if err != nil {
-			return "", fmt.Errorf("failed to check for existing alias: %w", err)
-		}
-	}
-
-	return "", fmt.Errorf("failed to generate unique alias after %d attempts", maxAttempts)
 }
 
 func CleanupExpired(ctx job.JobRuntime) error {
