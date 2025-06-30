@@ -3,10 +3,21 @@ kind: View
 metadata:
   name: test-populate-multi-column
   namespace: test
+  uid: 22222222-2222-2222-2222-222222222222
   annotations:
     expected-rows: |
       [
         ["logistics-api-pod-1", "Kubernetes::Pod", "Running", "healthy", "missioncontrol", "5"]
+      ]
+    expected-panels: |
+      [
+        {
+          "name": "Pod Health Summary", 
+          "type": "number",
+          "rows": [
+            {"total": 18.0}
+          ]
+        }
       ]
 spec:
   columns:
@@ -34,3 +45,12 @@ spec:
           health: "row.health"
           namespace: "row.tags.namespace"
           cost: "row.cost_total_30d"
+  panels:
+    - name: "Pod Health Summary"
+      type: number
+      source: configs
+      query:
+        aggregates:
+          - function: count
+            field: "*"
+            alias: total
