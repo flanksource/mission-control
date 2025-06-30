@@ -11,12 +11,13 @@ import (
 	"github.com/flanksource/duty/job"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/shutdown"
+	"github.com/robfig/cron/v3"
+	"github.com/sethvargo/go-retry"
+
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/application"
 	"github.com/flanksource/incident-commander/incidents"
 	"github.com/flanksource/incident-commander/notification"
-	"github.com/robfig/cron/v3"
-	"github.com/sethvargo/go-retry"
 )
 
 const (
@@ -139,6 +140,10 @@ func Start(ctx context.Context) {
 	}
 
 	startIncidentsJobs(ctx)
+
+	if err := newPopulateViewsJob(ctx).AddToScheduler(FuncScheduler); err != nil {
+		shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to schedule populate views job: %v", err))
+	}
 
 	FuncScheduler.Start()
 }
