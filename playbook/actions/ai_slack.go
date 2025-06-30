@@ -19,7 +19,7 @@ const (
 	maxSlackFieldsPerSection = 10  // Slack doesn't support more than 10 fields in a section
 	maxHeaderTextLength      = 150 // Slack doesn't support more than 150 characters in a header
 	maxMarkdownTextLength    = 3000
-	maxURLLength             = 3000 // Maximum URL length before shortening
+	maxSlackURLLength        = 3000 // Maximum URL length before shortening
 )
 
 // Constants for Slack block formatting
@@ -38,7 +38,16 @@ const jsonCodeBlockFormat = "```json\n%s\n```"
 
 // shortenURLIfNeeded shortens a URL if it exceeds the maximum length
 func shortenURLIfNeeded(ctx context.Context, originalURL string) (string, error) {
-	if len(originalURL) <= maxURLLength {
+	maxLength := maxSlackURLLength
+	if contextMaxLength := ctx.Properties().Int("slack.max-url-length", 0); contextMaxLength > 0 {
+		if contextMaxLength > maxSlackURLLength {
+			ctx.Logger.Warnf("slack.max-url-length property (%d) exceeds maximum allowed length (%d), using default", contextMaxLength, maxSlackURLLength)
+		} else {
+			maxLength = contextMaxLength
+		}
+	}
+
+	if len(originalURL) <= maxLength {
 		return originalURL, nil
 	}
 
