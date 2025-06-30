@@ -64,6 +64,10 @@ type View struct {
 	Status ViewStatus `json:"status" yaml:"status"`
 }
 
+func (v *View) GetUUID() (uuid.UUID, error) {
+	return uuid.Parse(string(v.UID))
+}
+
 // +kubebuilder:object:root=true
 
 // ViewList contains a list of View

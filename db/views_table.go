@@ -1,12 +1,14 @@
 package db
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/Masterminds/squirrel"
 	"github.com/flanksource/duty/context"
-	"gorm.io/gorm"
+	"github.com/flanksource/duty/models"
+	"github.com/google/uuid"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -49,34 +51,50 @@ func getPostgresType(colType api.ViewColumnType) string {
 	}
 }
 
+func InsertPanelResults(ctx context.Context, viewID uuid.UUID, panels []api.PanelResult) error {
+	results, err := json.Marshal(panels)
+	if err != nil {
+		return fmt.Errorf("failed to marshal panel results: %w", err)
+	}
+
+	record := models.PanelResult{
+		ViewID:  viewID,
+		Results: results,
+	}
+
+	if err := ctx.DB().Save(&record).Error; err != nil {
+		return fmt.Errorf("failed to save panel results: %w", err)
+	}
+
+	return nil
+}
+
 func InsertViewRows(ctx context.Context, tableName string, columns []api.ViewColumnDef, rows []api.ViewRow) error {
-	return ctx.DB().Transaction(func(tx *gorm.DB) error {
-		if err := tx.Exec(fmt.Sprintf("TRUNCATE TABLE %s", tableName)).Error; err != nil {
-			return fmt.Errorf("failed to clear existing data: %w", err)
-		}
+	if err := ctx.DB().Exec(fmt.Sprintf("TRUNCATE TABLE %s", tableName)).Error; err != nil {
+		return fmt.Errorf("failed to clear existing data: %w", err)
+	}
 
-		if len(rows) == 0 {
-			return nil
-		}
+	if len(rows) == 0 {
+		return nil
+	}
 
-		var colNames []string
-		for _, col := range columns {
-			colNames = append(colNames, col.Name)
-		}
+	var colNames []string
+	for _, col := range columns {
+		colNames = append(colNames, col.Name)
+	}
 
-		psql := squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar)
-		insertBuilder := psql.Insert(tableName).Columns(colNames...)
-		for _, row := range rows {
-			insertBuilder = insertBuilder.Values(row...)
-		}
+	psql := squirrel.StatementBuilder.PlaceholderFormat(squirrel.Dollar)
+	insertBuilder := psql.Insert(tableName).Columns(colNames...)
+	for _, row := range rows {
+		insertBuilder = insertBuilder.Values(row...)
+	}
 
-		sql, args, err := insertBuilder.ToSql()
-		if err != nil {
-			return fmt.Errorf("failed to build insert query: %w", err)
-		}
+	sql, args, err := insertBuilder.ToSql()
+	if err != nil {
+		return fmt.Errorf("failed to build insert query: %w", err)
+	}
 
-		return tx.Exec(sql, args...).Error
-	})
+	return ctx.DB().Exec(sql, args...).Error
 }
 
 func ReadViewTable(ctx context.Context, tableName string) ([]api.ViewRow, error) {

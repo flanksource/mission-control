@@ -11,7 +11,6 @@ import (
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
-	"github.com/flanksource/incident-commander/db"
 )
 
 // Run executes the view queries and returns the rows with data
@@ -151,58 +150,4 @@ func applyMapping(data map[string]any, columnDefs []api.ViewColumnDef, mapping m
 	}
 
 	return row, nil
-}
-
-// ReadOrPopulateViewTable reads view data from the view's table.
-// If the table does not exist, it will be created and the view will be populated.
-func ReadOrPopulateViewTable(ctx context.Context, namespace, name string) (*api.ViewResult, error) {
-	view, err := db.GetView(ctx, namespace, name)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get view: %w", err)
-	}
-
-	tableName := view.TableName()
-
-	if !ctx.DB().Migrator().HasTable(tableName) {
-		if err := db.CreateViewTable(ctx, view); err != nil {
-			return nil, fmt.Errorf("failed to create view table: %w", err)
-		}
-
-		result, err := PopulateView(ctx, view)
-		if err != nil {
-			return nil, fmt.Errorf("failed to run view: %w", err)
-		}
-
-		return result, nil
-	}
-
-	rows, err := db.ReadViewTable(ctx, tableName)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read view table: %w", err)
-	}
-
-	return &api.ViewResult{
-		Columns: view.Spec.Columns,
-		Rows:    rows,
-	}, nil
-}
-
-// PopulateView runs the view queries and saves to the view table
-func PopulateView(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
-	tableName := view.TableName()
-	if !ctx.DB().Migrator().HasTable(tableName) {
-		if err := db.CreateViewTable(ctx, view); err != nil {
-			return nil, fmt.Errorf("failed to create view table: %w", err)
-		}
-	}
-
-	// TODO: Must run panels and save them to the view table
-	view.Spec.Panels = nil
-
-	result, err := Run(ctx, view)
-	if err != nil {
-		return nil, fmt.Errorf("failed to run view: %w", err)
-	}
-
-	return result, db.InsertViewRows(ctx, tableName, result.Columns, result.Rows)
 }
