@@ -445,3 +445,9 @@ func DeleteStaleConnection(ctx context.Context, newer *v1.Connection) error {
 		Where("deleted_at IS NULL").
 		Update("deleted_at", duty.Now()).Error
 }
+
+func ListConnections(ctx context.Context) ([]models.Connection, error) {
+	var c []models.Connection
+	err := ctx.DB().Omit("password", "certificate").Where("deleted_at IS NULL").Find(&c).Error
+	return c, err
+}
