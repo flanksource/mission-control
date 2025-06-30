@@ -45,21 +45,21 @@ var _ = ginkgo.Describe("URL Shortener", func() {
 	var testURL = "https://example.com/test"
 
 	ginkgo.Describe("Create", func() {
-		ginkgo.It("should create a short URL without expiration", func() {
-			alias, err := Create(DefaultContext, testURL, nil)
+		ginkgo.It("should create a short URL with default expiration", func() {
+			alias, err := Create(DefaultContext, testURL)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(alias).ToNot(BeNil())
 		})
 
-		ginkgo.It("should create a short URL with expiration", func() {
+		ginkgo.It("should create a short URL with custom expiration", func() {
 			expiresAt := time.Now().Add(1 * time.Hour)
-			alias, err := Create(DefaultContext, testURL, &expiresAt)
+			alias, err := CreateWithExpiry(DefaultContext, testURL, &expiresAt)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(alias).ToNot(BeNil())
 		})
 
 		ginkgo.It("should fail with invalid URL", func() {
-			alias, err := Create(DefaultContext, "://invalid-url", nil)
+			alias, err := Create(DefaultContext, "://invalid-url")
 			Expect(err).To(HaveOccurred())
 			Expect(alias).To(BeNil())
 		})
@@ -68,7 +68,7 @@ var _ = ginkgo.Describe("URL Shortener", func() {
 	ginkgo.Describe("Fetch", func() {
 		ginkgo.It("should retrieve URL from cache", func() {
 			expiresAt := time.Now().Add(1 * time.Hour)
-			aliasPtr, err := Create(DefaultContext, testURL, &expiresAt)
+			aliasPtr, err := CreateWithExpiry(DefaultContext, testURL, &expiresAt)
 			Expect(err).ToNot(HaveOccurred())
 			alias := *aliasPtr
 
@@ -87,7 +87,7 @@ var _ = ginkgo.Describe("URL Shortener", func() {
 
 		ginkgo.It("should handle expired URLs", func() {
 			expiresAt := time.Now().Add(50 * time.Millisecond)
-			aliasPtr, err := Create(DefaultContext, testURL, &expiresAt)
+			aliasPtr, err := CreateWithExpiry(DefaultContext, testURL, &expiresAt)
 			Expect(err).ToNot(HaveOccurred())
 
 			time.Sleep(time.Second)
@@ -106,7 +106,7 @@ var _ = ginkgo.Describe("URL Shortener", func() {
 		}
 
 		ginkgo.It("should redirect to the original URL", func() {
-			alias, err := Create(DefaultContext, testURL, nil)
+			alias, err := Create(DefaultContext, testURL)
 			Expect(err).ToNot(HaveOccurred())
 
 			fullURL, err := url.JoinPath(server.URL, redirectPath, *alias)
@@ -137,10 +137,10 @@ var _ = ginkgo.Describe("URL Shortener", func() {
 			expiredTime := time.Now().Add(-1 * time.Hour)
 			validTime := time.Now().Add(1 * time.Hour)
 
-			expiredAlias, err := Create(DefaultContext, testURL, &expiredTime)
+			expiredAlias, err := CreateWithExpiry(DefaultContext, testURL, &expiredTime)
 			Expect(err).ToNot(HaveOccurred())
 
-			validAlias, err := Create(DefaultContext, testURL, &validTime)
+			validAlias, err := CreateWithExpiry(DefaultContext, testURL, &validTime)
 			Expect(err).ToNot(HaveOccurred())
 
 			Expect(CleanupExpired(job.JobRuntime{Context: DefaultContext, History: &models.JobHistory{}})).To(Succeed())

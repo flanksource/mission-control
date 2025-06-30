@@ -42,7 +42,7 @@ func shortenURLIfNeeded(ctx context.Context, originalURL string) (string, error)
 		return originalURL, nil
 	}
 
-	shortAlias, err := shorturl.Create(ctx, originalURL, nil)
+	shortAlias, err := shorturl.Create(ctx, originalURL)
 	if err != nil {
 		return "", fmt.Errorf("failed to create short URL after retries: %w", err)
 	}

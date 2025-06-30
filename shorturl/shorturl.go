@@ -16,14 +16,22 @@ import (
 )
 
 const (
-	DefaultCacheTTL = 24 * time.Hour
+	DefaultCacheTTL    = 24 * time.Hour
+	DefaultURLExpiry   = 90 * 24 * time.Hour // 90 days
 )
 
 // Caches <alias, originalURL>
 var urlCache = cache.New(DefaultCacheTTL, DefaultCacheTTL)
 
-// Create creates a new shortened URL
-func Create(ctx context.Context, targetURL string, expiresAt *time.Time) (*string, error) {
+// Create creates a new shortened URL with default expiry
+func Create(ctx context.Context, targetURL string) (*string, error) {
+	defaultExpiry := ctx.Properties().Duration("shorturl.defaultExpiry", DefaultURLExpiry)
+	expiryTime := time.Now().Add(defaultExpiry)
+	return CreateWithExpiry(ctx, targetURL, &expiryTime)
+}
+
+// CreateWithExpiry creates a new shortened URL with custom expiry
+func CreateWithExpiry(ctx context.Context, targetURL string, expiresAt *time.Time) (*string, error) {
 	if _, err := url.Parse(targetURL); err != nil {
 		return nil, fmt.Errorf("invalid URL: %w", err)
 	}
