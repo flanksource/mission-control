@@ -486,6 +486,9 @@
         },
         "queries": {
           "$ref": "#/$defs/ViewQueriesSpec"
+        },
+        "schedule": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
