@@ -147,19 +147,9 @@ func createPlaybookButtons(ctx context.Context, recommendations llm.PlaybookReco
 }
 
 // createResourceActionButtons creates a Slack actions block with buttons for resource actions.
-func createResourceActionButtons(ctx context.Context, resourceID string) (map[string]any, error) {
+func createResourceActionButtons(resourceID string) map[string]any {
 	viewConfigURL := fmt.Sprintf("%s/catalog/%s", api.FrontendURL, resourceID)
 	silenceURL := fmt.Sprintf("%s/notifications/silences/add?config_id=%s", api.FrontendURL, resourceID)
-
-	finalViewConfigURL, err := shortenURLIfNeeded(ctx, viewConfigURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to shorten view config URL: %w", err)
-	}
-
-	finalSilenceURL, err := shortenURLIfNeeded(ctx, silenceURL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to shorten silence URL: %w", err)
-	}
 
 	return map[string]any{
 		"type":     slackBlockTypeActions,
@@ -173,7 +163,7 @@ func createResourceActionButtons(ctx context.Context, resourceID string) (map[st
 					"text":  "View Config",
 					"emoji": true,
 				},
-				"url": finalViewConfigURL,
+				"url": viewConfigURL,
 			},
 			{
 				"type": slackBlockTypeButton,
@@ -182,10 +172,10 @@ func createResourceActionButtons(ctx context.Context, resourceID string) (map[st
 					"text":  "🔕 Silence",
 					"emoji": true,
 				},
-				"url": finalSilenceURL,
+				"url": silenceURL,
 			},
 		},
-	}, nil
+	}
 }
 
 // slackBlocks generates a Slack message with blocks for the diagnosis report and recommendations.
@@ -229,10 +219,7 @@ func slackBlocks(ctx context.Context, knowledge *KnowledgeGraph, diagnosisReport
 		blocks = append(blocks, playbookButtons)
 	}
 
-	resourceButtons, err := createResourceActionButtons(ctx, affectedResource.ID)
-	if err != nil {
-		return "", fmt.Errorf("failed to create resource action buttons: %w", err)
-	}
+	resourceButtons := createResourceActionButtons(affectedResource.ID)
 	blocks = append(blocks, resourceButtons)
 
 	slackBlocks, err := json.Marshal(map[string]any{
