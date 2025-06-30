@@ -53,10 +53,15 @@ func createPlaybookRunShortURL(ctx context.Context, originalURL string) (string,
 
 	shortAlias, err := shorturl.Create(ctx, originalURL)
 	if err != nil {
-		return "", fmt.Errorf("failed to create short URL after retries: %w", err)
+		return "", fmt.Errorf("failed to create short URL: %w", err)
 	}
 
-	return shorturl.PlaybookRunShortURL(*shortAlias), nil
+	shortURL, err := shorturl.FullShortURL(*shortAlias)
+	if err != nil {
+		return "", fmt.Errorf("failed to create playbook run URL: %w", err)
+	}
+
+	return shortURL, nil
 }
 
 // createSlackFieldsSection creates a Slack section block with fields from a map of labels.

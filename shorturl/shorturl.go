@@ -22,7 +22,6 @@ const (
 	DefaultURLExpiry = 90 * 24 * time.Hour // 90 days
 )
 
-// Caches <alias, originalURL>
 var urlCache = cache.New(DefaultCacheTTL, DefaultCacheTTL)
 
 // Create creates a new shortened URL with default expiry
@@ -73,11 +72,26 @@ func Get(ctx context.Context, alias string) (string, error) {
 }
 
 func CleanupExpired(ctx job.JobRuntime) error {
+	var expiredAliases []string
+	if err := ctx.DB().Model(&models.ShortURL{}).
+		Where("expires_at IS NOT NULL AND expires_at < ?", time.Now()).
+		Pluck("alias", &expiredAliases).Error; err != nil {
+		return fmt.Errorf("failed to fetch expired aliases: %w", err)
+	}
+
+	if len(expiredAliases) == 0 {
+		return nil
+	}
+
 	result := ctx.DB().Where("expires_at IS NOT NULL AND expires_at < ?", time.Now()).
 		Delete(&models.ShortURL{})
 
 	if result.Error != nil {
 		return fmt.Errorf("failed to cleanup expired URLs: %w", result.Error)
+	}
+
+	for _, alias := range expiredAliases {
+		urlCache.Delete(alias)
 	}
 
 	if result.RowsAffected > 0 {
@@ -87,13 +101,6 @@ func CleanupExpired(ctx job.JobRuntime) error {
 	return nil
 }
 
-func FullShortURL(alias string) string {
-	f, _ := url.JoinPath(api.FrontendURL, redirectPath, alias)
-	return f
-}
-
-// PlaybookRunShortURL creates a playbook run redirect URL using the short alias
-func PlaybookRunShortURL(alias string) string {
-	f, _ := url.JoinPath(api.FrontendURL, redirectPlaybookRunPath, alias)
-	return f
+func FullShortURL(alias string) (string, error) {
+	return url.JoinPath(api.FrontendURL, redirectPath, alias)
 }

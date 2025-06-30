@@ -172,15 +172,8 @@ var _ = ginkgo.Describe("URL Shortener", func() {
 			alias := "test-alias"
 			expectedURL := "http://localhost:3000/redirect/test-alias"
 
-			result := FullShortURL(alias)
-			Expect(result).To(Equal(expectedURL))
-		})
-
-		ginkgo.It("should generate correct playbook run short URL", func() {
-			alias := "test-playbook-alias"
-			expectedURL := "http://localhost:3000/redirect/playbook/run/test-playbook-alias"
-
-			result := PlaybookRunShortURL(alias)
+			result, err := FullShortURL(alias)
+			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(Equal(expectedURL))
 		})
 	})
