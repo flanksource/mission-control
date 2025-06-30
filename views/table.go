@@ -41,7 +41,7 @@ func ReadOrPopulateViewTable(ctx context.Context, namespace, name string) (*api.
 		return nil, fmt.Errorf("failed to read view table: %w", err)
 	}
 
-	var panelResult models.PanelResult
+	var panelResult models.ViewPanel
 	if err := ctx.DB().Where("view_id = ?", view.GetUID()).Find(&panelResult).Error; err != nil {
 		return nil, fmt.Errorf("failed to find panel results: %w", err)
 	}

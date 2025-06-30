@@ -57,7 +57,7 @@ func InsertPanelResults(ctx context.Context, viewID uuid.UUID, panels []api.Pane
 		return fmt.Errorf("failed to marshal panel results: %w", err)
 	}
 
-	record := models.PanelResult{
+	record := models.ViewPanel{
 		ViewID:  viewID,
 		Results: results,
 	}

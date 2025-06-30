@@ -39,6 +39,10 @@ spec:
           spec:
             description: ViewSpec defines the desired state of View
             properties:
+              cacheTTL:
+                description: CacheTTL defines how long to cache the view data (e.g.,
+                  "1h", "30m")
+                type: string
               columns:
                 description: Columns define the structure of the view
                 items:
@@ -397,10 +401,6 @@ spec:
                       type: object
                     type: array
                 type: object
-              schedule:
-                description: Schedule defines when to refresh the view data (e.g.,
-                  "@every 10m")
-                type: string
             required:
             - columns
             - queries

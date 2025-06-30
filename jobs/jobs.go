@@ -148,9 +148,6 @@ func Start(ctx context.Context) {
 
 	startIncidentsJobs(ctx)
 
-	if err := newSyncViewJobsJob(ctx).AddToScheduler(FuncScheduler); err != nil {
-		shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to schedule sync view jobs job: %v", err))
-	}
 
 	FuncScheduler.Start()
 }

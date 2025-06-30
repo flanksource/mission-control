@@ -46,8 +46,8 @@ type ViewSpec struct {
 	// Queries define the queries and mappings to populate the view
 	Queries ViewQueriesSpec `json:"queries" yaml:"queries"`
 
-	// Schedule defines when to refresh the view data (e.g., "@every 10m")
-	Schedule string `json:"schedule,omitempty" yaml:"schedule,omitempty"`
+	// CacheTTL defines how long to cache the view data (e.g., "1h", "30m")
+	CacheTTL string `json:"cacheTTL,omitempty" yaml:"cacheTTL,omitempty"`
 }
 
 // ViewStatus defines the observed state of View
