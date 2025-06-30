@@ -5,7 +5,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/flanksource/duty/api"
+	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/job"
 	"github.com/flanksource/duty/models"
@@ -13,11 +13,13 @@ import (
 	"github.com/patrickmn/go-cache"
 	"github.com/samber/lo"
 	"gorm.io/gorm"
+
+	"github.com/flanksource/incident-commander/api"
 )
 
 const (
-	DefaultCacheTTL    = 24 * time.Hour
-	DefaultURLExpiry   = 90 * 24 * time.Hour // 90 days
+	DefaultCacheTTL  = 24 * time.Hour
+	DefaultURLExpiry = 90 * 24 * time.Hour // 90 days
 )
 
 // Caches <alias, originalURL>
@@ -61,7 +63,7 @@ func Get(ctx context.Context, alias string) (string, error) {
 	var shortURL models.ShortURL
 	if err := ctx.DB().Where("alias = ?", alias).Where("expires_at IS NULL OR expires_at > NOW()").First(&shortURL).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return "", api.Errorf(api.ENOTFOUND, "alias '%s' not found", alias)
+			return "", dutyAPI.Errorf(dutyAPI.ENOTFOUND, "alias '%s' not found", alias)
 		}
 		return "", fmt.Errorf("failed to retrieve URL (alias: %s): %w", alias, err)
 	}
@@ -83,4 +85,15 @@ func CleanupExpired(ctx job.JobRuntime) error {
 	}
 
 	return nil
+}
+
+func FullShortURL(alias string) string {
+	f, _ := url.JoinPath(api.FrontendURL, redirectPath, alias)
+	return f
+}
+
+// PlaybookRunShortURL creates a playbook run redirect URL using the short alias
+func PlaybookRunShortURL(alias string) string {
+	f, _ := url.JoinPath(api.FrontendURL, redirectPlaybookRunPath, alias)
+	return f
 }

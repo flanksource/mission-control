@@ -15,6 +15,7 @@ import (
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
+	"github.com/flanksource/incident-commander/api"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 )
 
@@ -152,6 +153,35 @@ var _ = ginkgo.Describe("URL Shortener", func() {
 			var validURL models.ShortURL
 			err = DefaultContext.DB().Where("alias = ?", *validAlias).First(&validURL).Error
 			Expect(err).ToNot(HaveOccurred())
+		})
+	})
+
+	ginkgo.Describe("URL Generation", ginkgo.Ordered, func() {
+		var originalFrontendURL string
+
+		ginkgo.BeforeEach(func() {
+			originalFrontendURL = api.FrontendURL
+			api.FrontendURL = "http://localhost:3000"
+		})
+
+		ginkgo.AfterEach(func() {
+			api.FrontendURL = originalFrontendURL
+		})
+
+		ginkgo.It("should generate correct full short URL", func() {
+			alias := "test-alias"
+			expectedURL := "http://localhost:3000/redirect/test-alias"
+
+			result := FullShortURL(alias)
+			Expect(result).To(Equal(expectedURL))
+		})
+
+		ginkgo.It("should generate correct playbook run short URL", func() {
+			alias := "test-playbook-alias"
+			expectedURL := "http://localhost:3000/redirect/playbook/run/test-playbook-alias"
+
+			result := PlaybookRunShortURL(alias)
+			Expect(result).To(Equal(expectedURL))
 		})
 	})
 })

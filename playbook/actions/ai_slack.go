@@ -36,8 +36,8 @@ const (
 // JSON code block format template
 const jsonCodeBlockFormat = "```json\n%s\n```"
 
-// shortenURLIfNeeded shortens a URL if it exceeds the maximum length
-func shortenURLIfNeeded(ctx context.Context, originalURL string) (string, error) {
+// createPlaybookRunShortURL shortens a URL if it exceeds the maximum length
+func createPlaybookRunShortURL(ctx context.Context, originalURL string) (string, error) {
 	maxLength := maxSlackURLLength
 	if contextMaxLength := ctx.Properties().Int("slack.max-url-length", 0); contextMaxLength > 0 {
 		if contextMaxLength > maxSlackURLLength {
@@ -56,7 +56,7 @@ func shortenURLIfNeeded(ctx context.Context, originalURL string) (string, error)
 		return "", fmt.Errorf("failed to create short URL after retries: %w", err)
 	}
 
-	return shorturl.FullShortURL(*shortAlias), nil
+	return shorturl.PlaybookRunShortURL(*shortAlias), nil
 }
 
 // createSlackFieldsSection creates a Slack section block with fields from a map of labels.
@@ -120,7 +120,7 @@ func createPlaybookButtons(ctx context.Context, recommendations llm.PlaybookReco
 			runURL += fmt.Sprintf("&params.%s=%s", p.Key, url.QueryEscape(p.Value))
 		}
 
-		finalURL, err := shortenURLIfNeeded(ctx, runURL)
+		finalURL, err := createPlaybookRunShortURL(ctx, runURL)
 		if err != nil {
 			return nil, fmt.Errorf("failed to shorten playbook URL: %w", err)
 		}
