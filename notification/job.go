@@ -138,7 +138,7 @@ func patchCRDStatus(ctx context.Context, name, namespace string, status v1.Notif
 func ProcessPendingNotificationsJob(ctx context.Context) *job.Job {
 	return &job.Job{
 		Name:       "ProcessPendingNotifications",
-		Retention:  job.RetentionFailed,
+		Retention:  job.RetentionFew,
 		JobHistory: true,
 		RunNow:     true,
 		Context:    ctx,
@@ -234,7 +234,7 @@ func ProcessPendingNotifications(parentCtx context.Context) (bool, error) {
 func ProcessFallbackNotificationsJob(ctx context.Context) *job.Job {
 	return &job.Job{
 		Name:       "ProcessFallbackNotifications",
-		Retention:  job.RetentionFailed,
+		Retention:  job.RetentionFew,
 		JobHistory: true,
 		RunNow:     true,
 		Context:    ctx,
