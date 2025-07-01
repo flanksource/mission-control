@@ -3,7 +3,6 @@ package shorturl
 import (
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"testing"
 	"time"
 
@@ -15,7 +14,6 @@ import (
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/flanksource/incident-commander/api"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 )
 
@@ -110,7 +108,7 @@ var _ = ginkgo.Describe("URL Shortener", func() {
 			alias, err := Create(DefaultContext, testURL)
 			Expect(err).ToNot(HaveOccurred())
 
-			fullURL, err := url.JoinPath(server.URL, redirectPath, *alias)
+			fullURL, err := fullShortURL(server.URL, *alias, "playbook", "run")
 			Expect(err).ToNot(HaveOccurred())
 
 			resp, err := client.Get(fullURL)
@@ -122,7 +120,7 @@ var _ = ginkgo.Describe("URL Shortener", func() {
 		})
 
 		ginkgo.It("should return 404 for non-existent alias", func() {
-			fullURL, err := url.JoinPath(server.URL, redirectPath, "nonexistent")
+			fullURL, err := fullShortURL(server.URL, "nonexistent-alias")
 			Expect(err).ToNot(HaveOccurred())
 
 			resp, err := client.Get(fullURL)
@@ -157,22 +155,22 @@ var _ = ginkgo.Describe("URL Shortener", func() {
 	})
 
 	ginkgo.Describe("URL Generation", ginkgo.Ordered, func() {
-		var originalFrontendURL string
-
-		ginkgo.BeforeEach(func() {
-			originalFrontendURL = api.FrontendURL
-			api.FrontendURL = "http://localhost:3000"
-		})
-
-		ginkgo.AfterEach(func() {
-			api.FrontendURL = originalFrontendURL
-		})
+		dummyHost := "http://localhost:3000"
 
 		ginkgo.It("should generate correct full short URL", func() {
-			alias := "test-alias"
-			expectedURL := "http://localhost:3000/redirect/test-alias"
+			alias := "abcdef"
+			expectedURL := "http://localhost:3000/redirect?alias=abcdef"
 
-			result, err := FullShortURL(alias)
+			result, err := fullShortURL(dummyHost, alias)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(Equal(expectedURL))
+		})
+
+		ginkgo.It("should generate correct full short URL with prefix", func() {
+			alias := "abcdef"
+			expectedURL := "http://localhost:3000/redirect/playbook/run?alias=abcdef"
+
+			result, err := fullShortURL(dummyHost, alias, "playbook", "run")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(Equal(expectedURL))
 		})

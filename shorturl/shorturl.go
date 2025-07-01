@@ -101,6 +101,21 @@ func CleanupExpired(ctx job.JobRuntime) error {
 	return nil
 }
 
-func FullShortURL(alias string) (string, error) {
-	return url.JoinPath(api.FrontendURL, redirectPath, alias)
+func FullShortURL(alias string, prefix ...string) (string, error) {
+	return fullShortURL(api.FrontendURL, alias, prefix...)
+}
+
+func fullShortURL(host, alias string, prefix ...string) (string, error) {
+	u, err := url.Parse(host)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse frontend URL: %w", err)
+	}
+
+	u = u.JoinPath(redirectPath)
+	u = u.JoinPath(prefix...)
+
+	query := u.Query()
+	query.Set("alias", alias)
+	u.RawQuery = query.Encode()
+	return u.String(), nil
 }

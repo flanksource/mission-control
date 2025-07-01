@@ -39,7 +39,7 @@ const jsonCodeBlockFormat = "```json\n%s\n```"
 // createPlaybookRunShortURL shortens a URL if it exceeds the maximum length
 func createPlaybookRunShortURL(ctx context.Context, originalURL string) (string, error) {
 	maxLength := maxSlackURLLength
-	if contextMaxLength := ctx.Properties().Int("slack.max-url-length", 0); contextMaxLength > 0 {
+	if contextMaxLength := ctx.Properties().Int("slack.max-url-length", 50); contextMaxLength > 0 {
 		if contextMaxLength > maxSlackURLLength {
 			ctx.Logger.Warnf("slack.max-url-length property (%d) exceeds maximum allowed length (%d), using default", contextMaxLength, maxSlackURLLength)
 		} else {
