@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"go.opentelemetry.io/otel/trace"
@@ -15,6 +16,7 @@ import (
 
 // ReadOrPopulateViewTable reads view data from the view's table.
 // If the table does not exist, it will be created and the view will be populated.
+// If the cache has expired based on cacheTTL, the view will be repopulated.
 func ReadOrPopulateViewTable(ctx context.Context, namespace, name string) (*api.ViewResult, error) {
 	view, err := db.GetView(ctx, namespace, name)
 	if err != nil {
@@ -22,15 +24,10 @@ func ReadOrPopulateViewTable(ctx context.Context, namespace, name string) (*api.
 	}
 
 	tableName := view.TableName()
-
-	if !ctx.DB().Migrator().HasTable(tableName) {
-		if err := db.CreateViewTable(ctx, view); err != nil {
-			return nil, fmt.Errorf("failed to create view table: %w", err)
-		}
-
+	if view.CacheExpired() || !ctx.DB().Migrator().HasTable(tableName) {
 		result, err := PopulateView(ctx, view)
 		if err != nil {
-			return nil, fmt.Errorf("failed to run view: %w", err)
+			return nil, fmt.Errorf("failed to populate view: %w", err)
 		}
 
 		return result, nil
@@ -94,8 +91,18 @@ func PopulateView(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 			}
 		}
 
+		// Update lastRan field after successful population
+		if err := ctx.DB().Model(&models.View{}).
+			Where("id = ?", view.GetUID()).
+			Update("last_ran", duty.Now()).Error; err != nil {
+			return fmt.Errorf("failed to update lastRan field: %w", err)
+		}
+
 		return nil
 	})
+	if err != nil {
+		return result, err
+	}
 
-	return result, err
+	return result, nil
 }

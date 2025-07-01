@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
+	"github.com/flanksource/commons/duration"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
@@ -51,19 +53,19 @@ type ViewSpec struct {
 }
 
 // ViewStatus defines the observed state of View
-type ViewStatus struct{}
+type ViewStatus struct {
+	LastRan *metav1.Time `json:"lastRan,omitempty" yaml:"lastRan,omitempty"`
+}
 
-// +kubebuilder:object:root=true
-// +kubebuilder:subresource:status
+//+kubebuilder:object:root=true
+//+kubebuilder:subresource:status
 
 // View is the schema for the Views API
 type View struct {
 	metav1.TypeMeta   `json:",inline" yaml:",inline"`
 	metav1.ObjectMeta `json:"metadata" yaml:"metadata"`
 
-	Spec ViewSpec `json:"spec" yaml:"spec"`
-
-	// +kubebuilder:validation:Optional
+	Spec   ViewSpec   `json:"spec" yaml:"spec"`
 	Status ViewStatus `json:"status" yaml:"status"`
 }
 
@@ -107,6 +109,24 @@ func (v *View) ToModel() (*models.View, error) {
 		Spec:      specJSON,
 		Source:    models.SourceCRD,
 	}, nil
+}
+
+// isCacheExpired checks if the view cache has expired based on lastRan and cacheTTL
+func (v *View) CacheExpired() bool {
+	if v.Status.LastRan == nil {
+		return true
+	}
+	if v.Spec.CacheTTL == "" {
+		return false
+	}
+
+	duration, err := duration.ParseDuration(v.Spec.CacheTTL)
+	if err != nil {
+		// The cache TTL must be validated the the operator, so we should never get here.
+		return true
+	}
+
+	return time.Since(v.Status.LastRan.Time) > time.Duration(duration)
 }
 
 func ViewFromModel(model *models.View) (*View, error) {

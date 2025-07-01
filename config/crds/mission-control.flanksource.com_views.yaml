@@ -407,10 +407,15 @@ spec:
             type: object
           status:
             description: ViewStatus defines the observed state of View
+            properties:
+              lastRan:
+                format: date-time
+                type: string
             type: object
         required:
         - metadata
         - spec
+        - status
         type: object
     served: true
     storage: true

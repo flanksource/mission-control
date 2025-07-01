@@ -499,7 +499,11 @@
       ]
     },
     "ViewStatus": {
-      "properties": {},
+      "properties": {
+        "lastRan": {
+          "$ref": "#/$defs/Time"
+        }
+      },
       "additionalProperties": false,
       "type": "object"
     }

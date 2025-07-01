@@ -10,6 +10,7 @@ import (
 	. "github.com/onsi/gomega"
 	"gopkg.in/yaml.v2"
 
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
@@ -35,6 +36,12 @@ var _ = Describe("View Database Table", func() {
 			// save the results to DB first so ReadOrPopulateViewTable reads them
 			_, err = PopulateView(DefaultContext, viewObj)
 			Expect(err).ToNot(HaveOccurred())
+
+			// Verify that lastRan field is populated after PopulateView
+			var dbView models.View
+			err = DefaultContext.DB().Where("name = ? AND namespace = ?", viewObj.Name, viewObj.Namespace).First(&dbView).Error
+			Expect(err).ToNot(HaveOccurred())
+			Expect(dbView.LastRan).ToNot(BeNil(), "lastRan field should be populated after PopulateView")
 
 			tableName := viewObj.TableName()
 			Expect(DefaultContext.DB().Migrator().HasTable(tableName)).To(BeTrue())

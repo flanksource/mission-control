@@ -61,14 +61,20 @@ func GetView(ctx context.Context, namespace, name string) (*v1.View, error) {
 		return nil, err
 	}
 
-	return &v1.View{
+	viewCR := &v1.View{
 		ObjectMeta: metav1.ObjectMeta{
 			UID:       types.UID(view.ID.String()),
 			Name:      view.Name,
 			Namespace: view.Namespace,
 		},
 		Spec: spec,
-	}, nil
+	}
+
+	if view.LastRan != nil {
+		viewCR.Status.LastRan = &metav1.Time{Time: *view.LastRan}
+	}
+
+	return viewCR, nil
 }
 
 // GetAllViews fetches all views from the database
