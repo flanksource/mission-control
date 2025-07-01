@@ -1,5 +1,7 @@
 package api
 
+import "time"
+
 type ViewColumnType string
 
 const (
@@ -29,7 +31,8 @@ type ViewColumnDef struct {
 
 // ViewResult is the result of a view query
 type ViewResult struct {
-	Columns []ViewColumnDef `json:"columns,omitempty"`
-	Rows    []ViewRow       `json:"rows,omitempty"`
-	Panels  []PanelResult   `json:"panels,omitempty"`
+	LastRefreshedAt time.Time       `json:"lastRefreshedAt,omitempty"`
+	Columns         []ViewColumnDef `json:"columns,omitempty"`
+	Rows            []ViewRow       `json:"rows,omitempty"`
+	Panels          []PanelResult   `json:"panels,omitempty"`
 }

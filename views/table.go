@@ -1,38 +1,146 @@
 package views
 
 import (
+	gocontext "context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/flanksource/duty"
+	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"go.opentelemetry.io/otel/trace"
+	"golang.org/x/sync/singleflight"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
 )
 
-// ReadOrPopulateViewTable reads view data from the view's table.
+// A hard limit on the refresh timeout.
+const defaultMaxRefreshTimeout = time.Minute
+
+var (
+	// refreshGroup deduplicates concurrent view refresh operations
+	refreshGroup singleflight.Group
+)
+
+// ViewOption is a functional option for configuring view operations
+type ViewOption func(*viewConfig)
+
+// viewConfig holds configuration options for view operations
+type viewConfig struct {
+	maxAge         *time.Duration
+	refreshTimeout *time.Duration
+}
+
+// WithMaxAge sets the maximum age for cached view data
+func WithMaxAge(maxAge time.Duration) ViewOption {
+	return func(c *viewConfig) {
+		c.maxAge = &maxAge
+	}
+}
+
+// WithRefreshTimeout sets the timeout for view refresh operations
+func WithRefreshTimeout(timeout time.Duration) ViewOption {
+	return func(c *viewConfig) {
+		c.refreshTimeout = &timeout
+	}
+}
+
+// ReadOrPopulateViewTable reads view data from the view's table with cache control.
 // If the table does not exist, it will be created and the view will be populated.
-// If the cache has expired based on cacheTTL, the view will be repopulated.
-func ReadOrPopulateViewTable(ctx context.Context, namespace, name string) (*api.ViewResult, error) {
+// If the cache has expired based on maxAge, the view will be refreshed with timeout handling.
+func ReadOrPopulateViewTable(ctx context.Context, namespace, name string, opts ...ViewOption) (*api.ViewResult, error) {
 	view, err := db.GetView(ctx, namespace, name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get view: %w", err)
 	}
 
+	config := &viewConfig{}
+	for _, opt := range opts {
+		opt(config)
+	}
+
+	var headerMaxAge, headerRefreshTimeout time.Duration
+	if config.maxAge != nil {
+		headerMaxAge = *config.maxAge
+	}
+	if config.refreshTimeout != nil {
+		headerRefreshTimeout = *config.refreshTimeout
+	}
+
+	cacheOptions, err := view.GetCacheOptions(headerMaxAge, headerRefreshTimeout)
+	if err != nil {
+		return nil, dutyAPI.Errorf(dutyAPI.EINVALID, "%s", err.Error())
+	}
+
 	tableName := view.TableName()
-	if view.CacheExpired() || !ctx.DB().Migrator().HasTable(tableName) {
-		result, err := PopulateView(ctx, view)
+	tableExists := ctx.DB().Migrator().HasTable(tableName)
+	cacheExpired := view.CacheExpired(cacheOptions.MaxAge)
+
+	if tableExists && !cacheExpired {
+		return readCachedViewData(ctx, view)
+	}
+
+	return handleViewRefresh(ctx, view, cacheOptions, tableExists)
+}
+
+// handleViewRefresh deduplicates concurrent view refresh operations using singleflight
+func handleViewRefresh(ctx context.Context, view *v1.View, cacheOptions *v1.CacheOptions, tableExists bool) (*api.ViewResult, error) {
+	done := make(chan struct{})
+	var result *api.ViewResult
+	var err error
+
+	go func() {
+		defer close(done)
+
+		// Need to create a new context with a longer timeout.
+		// The refresh needs to outlive the request context.
+		newCtx, cancel := gocontext.WithTimeout(gocontext.Background(), ctx.Properties().Duration("view.refresh.max-timeout", defaultMaxRefreshTimeout))
+		defer cancel()
+		clonedCtx := ctx.Clone()
+		clonedCtx.Context = newCtx
+		refreshCtx := context.NewContext(clonedCtx).WithDB(ctx.DB(), ctx.Pool())
+
+		res, refreshErr, _ := refreshGroup.Do(string(view.GetUID()), func() (any, error) {
+			return populateView(refreshCtx, view)
+		})
+		if refreshErr != nil {
+			ctx.Errorf("failed to refresh view %s: %v", view.GetNamespacedName(), refreshErr)
+			err = refreshErr
+		} else {
+			result = res.(*api.ViewResult)
+		}
+	}()
+
+	select {
+	case <-done:
 		if err != nil {
-			return nil, fmt.Errorf("failed to populate view: %w", err)
+			if tableExists {
+				ctx.Logger.Errorf("failed to refresh view %s: %v", view.GetNamespacedName(), err)
+				return readCachedViewData(ctx, view)
+			}
+
+			return nil, fmt.Errorf("failed to refresh view %s: %v", view.GetNamespacedName(), err)
 		}
 
 		return result, nil
-	}
 
+	case <-time.After(cacheOptions.RefreshTimeout):
+		if tableExists {
+			ctx.Logger.Debugf("view %s refresh timeout reached. returning cached data", view.GetNamespacedName())
+			return readCachedViewData(ctx, view)
+		}
+
+		return nil, fmt.Errorf("view %s refresh timeout reached. try again", view.GetNamespacedName())
+	}
+}
+
+// readCachedViewData reads cached data from the view table
+func readCachedViewData(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
+	tableName := view.TableName()
 	rows, err := db.ReadViewTable(ctx, tableName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read view table: %w", err)
@@ -51,51 +159,31 @@ func ReadOrPopulateViewTable(ctx context.Context, namespace, name string) (*api.
 	}
 
 	return &api.ViewResult{
-		Columns: view.Spec.Columns,
-		Rows:    rows,
-		Panels:  finalPanelResults,
+		Columns:         view.Spec.Columns,
+		Rows:            rows,
+		Panels:          finalPanelResults,
+		LastRefreshedAt: view.Status.LastRan.Time,
 	}, nil
 }
 
-// PopulateView runs the view queries and saves to the view table.
-func PopulateView(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
+// populateView runs the view queries and saves to the view table.
+func populateView(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 	result, err := Run(ctx, view)
 	if err != nil {
 		return nil, fmt.Errorf("failed to run view: %w", err)
 	}
 
-	// The following queries first remove existing records and then save them.
-	// So they are done in a single transaction.
 	err = ctx.Transaction(func(ctx context.Context, span trace.Span) error {
-		tableName := view.TableName()
-		if !ctx.DB().Migrator().HasTable(tableName) {
-			if err := db.CreateViewTable(ctx, view); err != nil {
-				return fmt.Errorf("failed to create view table: %w", err)
-			}
+		if err := ensureViewTableExists(ctx, view); err != nil {
+			return err
 		}
 
-		// View rows are saved into their own dedicated table.
-		if err := db.InsertViewRows(ctx, tableName, result.Columns, result.Rows); err != nil {
-			return fmt.Errorf("failed to insert view rows: %w", err)
+		if err := persistViewData(ctx, view, result); err != nil {
+			return err
 		}
 
-		// All the panel results from all the views are saved into the same table
-		if len(result.Panels) > 0 {
-			uid, err := view.GetUUID()
-			if err != nil {
-				return fmt.Errorf("failed to get view uid: %w", err)
-			}
-
-			if err := db.InsertPanelResults(ctx, uid, result.Panels); err != nil {
-				return fmt.Errorf("failed to insert view panels: %w", err)
-			}
-		}
-
-		// Update lastRan field after successful population
-		if err := ctx.DB().Model(&models.View{}).
-			Where("id = ?", view.GetUID()).
-			Update("last_ran", duty.Now()).Error; err != nil {
-			return fmt.Errorf("failed to update lastRan field: %w", err)
+		if err := updateViewLastRan(ctx, string(view.GetUID())); err != nil {
+			return err
 		}
 
 		return nil
@@ -104,5 +192,51 @@ func PopulateView(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 		return result, err
 	}
 
+	result.LastRefreshedAt = time.Now()
 	return result, nil
+}
+
+// ensureViewTableExists creates the view table if it doesn't exist
+func ensureViewTableExists(ctx context.Context, view *v1.View) error {
+	tableName := view.TableName()
+	if !ctx.DB().Migrator().HasTable(tableName) {
+		if err := db.CreateViewTable(ctx, view); err != nil {
+			return fmt.Errorf("failed to create view table: %w", err)
+		}
+	}
+	return nil
+}
+
+// persistViewData saves view rows and panel results to their respective tables
+func persistViewData(ctx context.Context, view *v1.View, result *api.ViewResult) error {
+	tableName := view.TableName()
+
+	// Save view rows to the dedicated table
+	if err := db.InsertViewRows(ctx, tableName, result.Columns, result.Rows); err != nil {
+		return fmt.Errorf("failed to insert view rows: %w", err)
+	}
+
+	// Save panel results if any exist
+	if len(result.Panels) > 0 {
+		uid, err := view.GetUUID()
+		if err != nil {
+			return fmt.Errorf("failed to get view uid: %w", err)
+		}
+
+		if err := db.InsertPanelResults(ctx, uid, result.Panels); err != nil {
+			return fmt.Errorf("failed to insert view panels: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// updateViewLastRan updates the last_ran timestamp for the view
+func updateViewLastRan(ctx context.Context, id string) error {
+	if err := ctx.DB().Model(&models.View{}).
+		Where("id = ?", id).
+		Update("last_ran", duty.Now()).Error; err != nil {
+		return fmt.Errorf("failed to update lastRan field: %w", err)
+	}
+	return nil
 }

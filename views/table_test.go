@@ -5,12 +5,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/flanksource/duty/models"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"gopkg.in/yaml.v2"
 
-	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
@@ -22,7 +23,7 @@ var _ = Describe("View Database Table", func() {
 	Expect(err).ToNot(HaveOccurred())
 
 	for _, file := range files {
-		if !strings.HasSuffix(file.Name(), ".yaml") {
+		if !strings.HasSuffix(file.Name(), ".yaml") || strings.HasPrefix(file.Name(), "cache-test-") {
 			continue
 		}
 
@@ -34,7 +35,7 @@ var _ = Describe("View Database Table", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			// save the results to DB first so ReadOrPopulateViewTable reads them
-			_, err = PopulateView(DefaultContext, viewObj)
+			_, err = populateView(DefaultContext, viewObj)
 			Expect(err).ToNot(HaveOccurred())
 
 			// Verify that lastRan field is populated after PopulateView
@@ -82,6 +83,26 @@ var _ = Describe("View Database Table", func() {
 			}
 		})
 	}
+})
+
+var _ = Describe("ReadOrPopulateViewTable Cache Control", func() {
+	It("should return an error when refresh-timeout is very low", func() {
+		viewObj, err := loadViewFromYAML("cache-test-view.yaml")
+		Expect(err).ToNot(HaveOccurred())
+
+		err = db.PersistViewFromCRD(DefaultContext, viewObj)
+		Expect(err).ToNot(HaveOccurred())
+
+		tableName := viewObj.TableName()
+		if DefaultContext.DB().Migrator().HasTable(tableName) {
+			err = DefaultContext.DB().Migrator().DropTable(tableName)
+			Expect(err).ToNot(HaveOccurred())
+		}
+
+		_, err = ReadOrPopulateViewTable(DefaultContext, viewObj.Namespace, viewObj.Name, WithRefreshTimeout(1*time.Microsecond))
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("refresh timeout reached. try again"))
+	})
 })
 
 // loadViewFromYAML loads a View from a YAML fixture file

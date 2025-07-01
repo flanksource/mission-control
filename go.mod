@@ -81,6 +81,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.35.0
 	go.opentelemetry.io/otel/trace v1.35.0
 	golang.org/x/exp v0.0.0-20241108190413-2d47ceb2692f
+	golang.org/x/sync v0.13.0
 	google.golang.org/genai v1.1.0
 	gorm.io/hints v1.1.2
 	k8s.io/api v0.31.1
@@ -280,7 +281,6 @@ require (
 	go.opentelemetry.io/proto/otlp v1.3.1 // indirect
 	gocloud.dev v0.41.0 // indirect
 	golang.org/x/mod v0.22.0 // indirect
-	golang.org/x/sync v0.13.0 // indirect
 	golang.org/x/term v0.31.0 // indirect
 	golang.org/x/tools v0.29.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect

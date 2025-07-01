@@ -7,6 +7,7 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
+	"gorm.io/gorm/clause"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -33,7 +34,10 @@ func PersistViewFromCRD(ctx context.Context, obj *v1.View) error {
 		Source:    models.SourceCRD,
 	}
 
-	return ctx.DB().Save(&view).Error
+	return ctx.DB().Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "id"}},
+		DoUpdates: clause.AssignmentColumns([]string{"spec", "source"}), // only these values can be updated. (otherwise last_ran, error fields would reset)
+	}).Create(&view).Error
 }
 
 // DeleteView soft deletes a View by setting deleted_at timestamp

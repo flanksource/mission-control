@@ -11,6 +11,7 @@ import (
 
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/rbac"
+	"github.com/flanksource/incident-commander/utils"
 )
 
 func init() {
@@ -20,17 +21,31 @@ func init() {
 func RegisterRoutes(e *echo.Echo) {
 	logger.Infof("Registering /views routes")
 
-	g := e.Group("/views", rbac.Authorization(policy.ObjectCatalog, policy.ActionRead))
-	g.GET("/:namespace/:name", ViewRun)
+	g := e.Group("/view", rbac.Authorization(policy.ObjectCatalog, policy.ActionRead))
+	g.GET("/:namespace/:name", GetView)
 }
 
-func ViewRun(c echo.Context) error {
+func GetView(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
 
 	namespace := c.Param("namespace")
 	name := c.Param("name")
 
-	response, err := ReadOrPopulateViewTable(ctx, namespace, name)
+	cacheControl := c.Request().Header.Get("Cache-Control")
+	headerMaxAge, headerRefreshTimeout, err := utils.ParseCacheControlHeader(cacheControl)
+	if err != nil {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid cache control header: %s", err.Error()))
+	}
+
+	var opts []ViewOption
+	if headerMaxAge > 0 {
+		opts = append(opts, WithMaxAge(headerMaxAge))
+	}
+	if headerRefreshTimeout > 0 {
+		opts = append(opts, WithRefreshTimeout(headerRefreshTimeout))
+	}
+
+	response, err := ReadOrPopulateViewTable(ctx, namespace, name, opts...)
 	if err != nil {
 		return dutyAPI.WriteError(c, err)
 	}
