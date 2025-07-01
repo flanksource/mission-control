@@ -26,6 +26,9 @@ func CreateViewTable(ctx context.Context, view *v1.View) error {
 		columnDefs = append(columnDefs, colDef)
 	}
 
+	columnDefs = append(columnDefs, "agent_id UUID NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000'::uuid")
+	columnDefs = append(columnDefs, "is_pushed BOOLEAN DEFAULT FALSE")
+
 	sql := fmt.Sprintf("CREATE TABLE IF NOT EXISTS %s (%s)", tableName, strings.Join(columnDefs, ", "))
 	return ctx.DB().Exec(sql).Error
 }

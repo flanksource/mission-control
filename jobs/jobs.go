@@ -148,7 +148,6 @@ func Start(ctx context.Context) {
 
 	startIncidentsJobs(ctx)
 
-
 	FuncScheduler.Start()
 }
 
