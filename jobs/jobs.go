@@ -148,6 +148,10 @@ func Start(ctx context.Context) {
 
 	startIncidentsJobs(ctx)
 
+	if err := newPopulateViewsJob(ctx).AddToScheduler(FuncScheduler); err != nil {
+		shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to schedule populate views job: %v", err))
+	}
+
 	FuncScheduler.Start()
 }
 
