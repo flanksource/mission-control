@@ -202,7 +202,7 @@ func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 				return nil, fmt.Errorf("failed to get grouped resources: %w", err)
 			}
 
-			result.Slack, err = slackBlocks(knowledgebase, diagnosisReport, llm.PlaybookRecommendations{}, groupedResources)
+			result.Slack, err = slackBlocks(ctx, knowledgebase, diagnosisReport, llm.PlaybookRecommendations{}, groupedResources)
 			if err != nil {
 				return nil, fmt.Errorf("failed to merge blocks: %w", err)
 			}
@@ -258,7 +258,7 @@ func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 				return nil, fmt.Errorf("failed to get grouped resources: %w", err)
 			}
 
-			blocks, err := slackBlocks(knowledgebase, diagnosisReport, recommendations, groupedResources)
+			blocks, err := slackBlocks(ctx, knowledgebase, diagnosisReport, recommendations, groupedResources)
 			if err != nil {
 				return nil, fmt.Errorf("failed to marshal blocks: %w", err)
 			}

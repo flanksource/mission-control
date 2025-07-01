@@ -7,15 +7,19 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/flanksource/duty/context"
+	"github.com/samber/lo"
+
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/llm"
-	"github.com/samber/lo"
+	"github.com/flanksource/incident-commander/shorturl"
 )
 
 const (
 	maxSlackFieldsPerSection = 10  // Slack doesn't support more than 10 fields in a section
 	maxHeaderTextLength      = 150 // Slack doesn't support more than 150 characters in a header
 	maxMarkdownTextLength    = 3000
+	maxSlackURLLength        = 3000 // Maximum URL length before shortening
 )
 
 // Constants for Slack block formatting
@@ -31,6 +35,34 @@ const (
 
 // JSON code block format template
 const jsonCodeBlockFormat = "```json\n%s\n```"
+
+// createPlaybookRunShortURL shortens a URL if it exceeds the maximum length
+func createPlaybookRunShortURL(ctx context.Context, originalURL string) (string, error) {
+	maxLength := maxSlackURLLength
+	if contextMaxLength := ctx.Properties().Int("slack.max-url-length", 50); contextMaxLength > 0 {
+		if contextMaxLength > maxSlackURLLength {
+			ctx.Logger.Warnf("slack.max-url-length property (%d) exceeds maximum allowed length (%d), using default", contextMaxLength, maxSlackURLLength)
+		} else {
+			maxLength = contextMaxLength
+		}
+	}
+
+	if len(originalURL) <= maxLength {
+		return originalURL, nil
+	}
+
+	shortAlias, err := shorturl.Create(ctx, originalURL)
+	if err != nil {
+		return "", fmt.Errorf("failed to create short URL: %w", err)
+	}
+
+	shortURL, err := shorturl.FullShortURL(*shortAlias)
+	if err != nil {
+		return "", fmt.Errorf("failed to create playbook run URL: %w", err)
+	}
+
+	return shortURL, nil
+}
 
 // createSlackFieldsSection creates a Slack section block with fields from a map of labels.
 // It handles sorting and limiting the number of fields to Slack's maximum.
@@ -79,9 +111,9 @@ func createSlackFieldsSection(title string, labels map[string]string) map[string
 }
 
 // createPlaybookButtons creates a Slack actions block with buttons for recommended playbooks.
-func createPlaybookButtons(recommendations llm.PlaybookRecommendations) map[string]any {
+func createPlaybookButtons(ctx context.Context, recommendations llm.PlaybookRecommendations) (map[string]any, error) {
 	if len(recommendations.Playbooks) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	elements := make([]map[string]any, 0, len(recommendations.Playbooks))
@@ -93,13 +125,18 @@ func createPlaybookButtons(recommendations llm.PlaybookRecommendations) map[stri
 			runURL += fmt.Sprintf("&params.%s=%s", p.Key, url.QueryEscape(p.Value))
 		}
 
+		finalURL, err := createPlaybookRunShortURL(ctx, runURL)
+		if err != nil {
+			return nil, fmt.Errorf("failed to shorten playbook URL: %w", err)
+		}
+
 		elements = append(elements, map[string]any{
 			"type": slackBlockTypeButton,
 			"text": map[string]any{
 				"type": slackBlockTypePlainText,
 				"text": fmt.Sprintf("%s %s", playbook.Emoji, playbook.Title),
 			},
-			"url": runURL,
+			"url": finalURL,
 		})
 	}
 
@@ -107,11 +144,14 @@ func createPlaybookButtons(recommendations llm.PlaybookRecommendations) map[stri
 		"type":     slackBlockTypeActions,
 		"block_id": "playbook_actions",
 		"elements": elements,
-	}
+	}, nil
 }
 
 // createResourceActionButtons creates a Slack actions block with buttons for resource actions.
 func createResourceActionButtons(resourceID string) map[string]any {
+	viewConfigURL := fmt.Sprintf("%s/catalog/%s", api.FrontendURL, resourceID)
+	silenceURL := fmt.Sprintf("%s/notifications/silences/add?config_id=%s", api.FrontendURL, resourceID)
+
 	return map[string]any{
 		"type":     slackBlockTypeActions,
 		"block_id": "resource_actions",
@@ -124,7 +164,7 @@ func createResourceActionButtons(resourceID string) map[string]any {
 					"text":  "View Config",
 					"emoji": true,
 				},
-				"url": fmt.Sprintf("%s/catalog/%s", api.FrontendURL, resourceID),
+				"url": viewConfigURL,
 			},
 			{
 				"type": slackBlockTypeButton,
@@ -133,7 +173,7 @@ func createResourceActionButtons(resourceID string) map[string]any {
 					"text":  "🔕 Silence",
 					"emoji": true,
 				},
-				"url": fmt.Sprintf("%s/notifications/silences/add?config_id=%s", api.FrontendURL, resourceID),
+				"url": silenceURL,
 			},
 		},
 	}
@@ -141,7 +181,7 @@ func createResourceActionButtons(resourceID string) map[string]any {
 
 // slackBlocks generates a Slack message with blocks for the diagnosis report and recommendations.
 // It returns the JSON string representation of the Slack blocks.
-func slackBlocks(knowledge *KnowledgeGraph, diagnosisReport llm.DiagnosisReport, recommendations llm.PlaybookRecommendations, groupedResources []string) (string, error) {
+func slackBlocks(ctx context.Context, knowledge *KnowledgeGraph, diagnosisReport llm.DiagnosisReport, recommendations llm.PlaybookRecommendations, groupedResources []string) (string, error) {
 	var blocks []map[string]any
 	divider := map[string]any{"type": slackBlockTypeDivider}
 	affectedResource := knowledge.Configs[0]
@@ -174,11 +214,14 @@ func slackBlocks(knowledge *KnowledgeGraph, diagnosisReport llm.DiagnosisReport,
 		blocks = append(blocks, markdownSection(fmt.Sprintf("*Also Affected:* \n- %s", strings.Join(groupedResources, "\n - "))))
 	}
 
-	if playbookButtons := createPlaybookButtons(recommendations); playbookButtons != nil {
+	if playbookButtons, err := createPlaybookButtons(ctx, recommendations); err != nil {
+		return "", fmt.Errorf("failed to create playbook buttons: %w", err)
+	} else if playbookButtons != nil {
 		blocks = append(blocks, playbookButtons)
 	}
 
-	blocks = append(blocks, createResourceActionButtons(affectedResource.ID))
+	resourceButtons := createResourceActionButtons(affectedResource.ID)
+	blocks = append(blocks, resourceButtons)
 
 	slackBlocks, err := json.Marshal(map[string]any{
 		"blocks": blocks,
