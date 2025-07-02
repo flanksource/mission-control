@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/labstack/echo/v4"
@@ -15,7 +14,7 @@ import (
 )
 
 func ConnectionListHandler(goctx gocontext.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
-	ctx, _, err := duty.Start("mission-control-2", duty.ClientOnly)
+	ctx, err := getDutyCtx(goctx)
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +42,7 @@ func ConnectionListHandler(goctx gocontext.Context, req mcp.ReadResourceRequest)
 }
 
 func ConnectionResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
-	ctx, _, err := duty.Start("mission-control-2", duty.ClientOnly)
+	ctx, err := getDutyCtx(goctx)
 	if err != nil {
 		return nil, err
 	}
