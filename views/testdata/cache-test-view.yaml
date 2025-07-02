@@ -1,0 +1,37 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: cache-test-view
+  namespace: test
+  uid: 33333333-3333-3333-3333-333333333333
+  annotations:
+    expected-rows: |
+      [
+        ["test-pod", "Kubernetes::Pod", "Running", "healthy", "test", "1", "00000000-0000-0000-0000-000000000000", false]
+      ]
+spec:
+  columns:
+    - name: component_name
+      type: string
+    - name: component_type
+      type: string
+    - name: status
+      type: string
+    - name: health
+      type: string
+    - name: namespace
+      type: string
+    - name: cost
+      type: string
+  queries:
+    configs:
+      - selector:
+          types: ["Kubernetes::Pod"]
+          tagSelector: "namespace=test"
+        mapping:
+          component_name: "row.name"
+          component_type: "row.type"
+          status: "row.status"
+          health: "row.health"
+          namespace: "row.tags.namespace"
+          cost: "row.cost_total_30d"

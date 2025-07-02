@@ -42,6 +42,7 @@ require (
 )
 
 require (
+	github.com/Masterminds/squirrel v1.5.4
 	github.com/MicahParks/keyfunc/v2 v2.1.0
 	github.com/RussellLuo/slidingwindow v0.0.0-20200528002341-535bb99d338b
 	github.com/WinterYukky/gorm-extra-clause-plugin v0.2.0
@@ -80,6 +81,7 @@ require (
 	go.opentelemetry.io/otel/sdk v1.35.0
 	go.opentelemetry.io/otel/trace v1.35.0
 	golang.org/x/exp v0.0.0-20241108190413-2d47ceb2692f
+	golang.org/x/sync v0.13.0
 	google.golang.org/genai v1.1.0
 	gorm.io/hints v1.1.2
 	k8s.io/api v0.31.1
@@ -106,7 +108,6 @@ require (
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/exporter/metric v0.51.0 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/internal/resourcemapping v0.51.0 // indirect
 	github.com/Masterminds/semver/v3 v3.3.1 // indirect
-	github.com/Masterminds/squirrel v1.5.4 // indirect
 	github.com/Microsoft/go-winio v0.6.1 // indirect
 	github.com/ProtonMail/go-crypto v1.0.0 // indirect
 	github.com/RaveNoX/go-jsonmerge v1.0.0 // indirect
@@ -280,7 +281,6 @@ require (
 	go.opentelemetry.io/proto/otlp v1.3.1 // indirect
 	gocloud.dev v0.41.0 // indirect
 	golang.org/x/mod v0.22.0 // indirect
-	golang.org/x/sync v0.13.0 // indirect
 	golang.org/x/term v0.31.0 // indirect
 	golang.org/x/tools v0.29.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect

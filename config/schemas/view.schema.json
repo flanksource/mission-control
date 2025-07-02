@@ -411,6 +411,21 @@
         "status"
       ]
     },
+    "ViewCache": {
+      "properties": {
+        "maxAge": {
+          "type": "string"
+        },
+        "minAge": {
+          "type": "string"
+        },
+        "refreshTimeout": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "ViewColumnDef": {
       "properties": {
         "name": {
@@ -486,17 +501,25 @@
         },
         "queries": {
           "$ref": "#/$defs/ViewQueriesSpec"
+        },
+        "cache": {
+          "$ref": "#/$defs/ViewCache"
         }
       },
       "additionalProperties": false,
       "type": "object",
       "required": [
         "columns",
-        "queries"
+        "queries",
+        "cache"
       ]
     },
     "ViewStatus": {
-      "properties": {},
+      "properties": {
+        "lastRan": {
+          "$ref": "#/$defs/Time"
+        }
+      },
       "additionalProperties": false,
       "type": "object"
     }

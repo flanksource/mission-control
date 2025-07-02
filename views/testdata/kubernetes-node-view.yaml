@@ -1,0 +1,47 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: test-populate
+  namespace: test
+  uid: 11111111-1111-1111-1111-111111111111
+  annotations:
+    expected-rows: |
+      [
+        ["node-a", "healthy", "00000000-0000-0000-0000-000000000000", false],
+        ["node-b", "healthy", "00000000-0000-0000-0000-000000000000", false]
+      ]
+    expected-panels: |
+      [
+        {
+          "name": "Config Status Distribution",
+          "type": "piechart",
+          "rows": [
+            {"value": 18.0}
+          ]
+        }
+      ]
+spec:
+  columns:
+    - name: pod_name
+      type: string
+    - name: status
+      type: string
+  queries:
+    configs:
+      - selector:
+          types: ["Kubernetes::Node"]
+          tagSelector: "account=flanksource"
+        max: 2
+        mapping:
+          pod_name: "row.name"
+          status: "row.status"
+  panels:
+    - name: "Config Status Distribution"
+      type: piechart
+      source: configs
+      query:
+        groupBy: [status]
+        aggregates:
+          - function: count
+            field: "*"
+            alias: value

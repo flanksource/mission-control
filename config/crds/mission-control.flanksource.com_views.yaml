@@ -39,6 +39,26 @@ spec:
           spec:
             description: ViewSpec defines the desired state of View
             properties:
+              cache:
+                description: Cache configuration
+                properties:
+                  maxAge:
+                    description: |-
+                      MaxAge is the maximum age of a cache before it's deemed stale.
+                      Can be overridden with cache-control headers.
+                      Default: 15m
+                    type: string
+                  minAge:
+                    description: |-
+                      MinAge is the minimum age of a cache a user can request.
+                      Default: 10s
+                    type: string
+                  refreshTimeout:
+                    description: |-
+                      RefreshTimeout is the duration to wait for a view to process before returning stale data.
+                      Default: 5s
+                    type: string
+                type: object
               columns:
                 description: Columns define the structure of the view
                 items:
@@ -397,12 +417,18 @@ spec:
                       type: object
                     type: array
                 type: object
-            required:
-            - columns
-            - queries
             type: object
+            x-kubernetes-validations:
+            - message: view spec must have either panels or both columns and queries
+                defined
+              rule: size(self.panels) > 0 || (size(self.columns) > 0 && (size(self.queries.configs)
+                > 0 || size(self.queries.changes) > 0))
           status:
             description: ViewStatus defines the observed state of View
+            properties:
+              lastRan:
+                format: date-time
+                type: string
             type: object
         required:
         - metadata

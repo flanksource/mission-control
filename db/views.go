@@ -7,6 +7,7 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
+	"gorm.io/gorm/clause"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
@@ -33,7 +34,10 @@ func PersistViewFromCRD(ctx context.Context, obj *v1.View) error {
 		Source:    models.SourceCRD,
 	}
 
-	return ctx.DB().Save(&view).Error
+	return ctx.DB().Clauses(clause.OnConflict{
+		Columns:   []clause.Column{{Name: "id"}},
+		DoUpdates: clause.AssignmentColumns([]string{"spec", "source"}), // only these values can be updated. (otherwise last_ran, error fields would reset)
+	}).Create(&view).Error
 }
 
 // DeleteView soft deletes a View by setting deleted_at timestamp
@@ -61,12 +65,25 @@ func GetView(ctx context.Context, namespace, name string) (*v1.View, error) {
 		return nil, err
 	}
 
-	return &v1.View{
+	viewCR := &v1.View{
 		ObjectMeta: metav1.ObjectMeta{
 			UID:       types.UID(view.ID.String()),
 			Name:      view.Name,
 			Namespace: view.Namespace,
 		},
 		Spec: spec,
-	}, nil
+	}
+
+	if view.LastRan != nil {
+		viewCR.Status.LastRan = &metav1.Time{Time: *view.LastRan}
+	}
+
+	return viewCR, nil
+}
+
+// GetAllViews fetches all views from the database
+func GetAllViews(ctx context.Context) ([]models.View, error) {
+	var views []models.View
+	err := ctx.DB().Where("deleted_at IS NULL").Find(&views).Error
+	return views, err
 }
