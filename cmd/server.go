@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"strings"
 
@@ -13,7 +15,9 @@ import (
 	"github.com/flanksource/duty/postq/pg"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/shutdown"
+	icrbac "github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/kopper"
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/otel"
@@ -174,7 +178,7 @@ var Serve = &cobra.Command{
 		// This is outside echo pkg to prevent import cycle
 		// Cannot be registered because we need to pass ctx for
 		// context injection middleware
-		e.POST("/mcp", echov4.WrapHandler(mcp.Server(ctx)))
+		e.POST("/mcp", echov4.WrapHandler(mcp.Server(ctx)), LogPostDataMiddleware(), icrbac.Authorization(policy.ObjectCatalog, policy.ActionRead))
 
 		shutdown.AddHookWithPriority("echo", shutdown.PriorityIngress, func() {
 			echo.Shutdown(e)
@@ -203,6 +207,41 @@ var Serve = &cobra.Command{
 			shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to start server: %v", err))
 		}
 	},
+}
+
+func LogPostDataMiddleware() echov4.MiddlewareFunc {
+	return echov4.MiddlewareFunc(func(next echov4.HandlerFunc) echov4.HandlerFunc {
+		return func(c echov4.Context) error {
+			if c.Request().Method == "POST" {
+				// Read the body
+				body, err := ioutil.ReadAll(c.Request().Body)
+				if err != nil {
+					return err
+				}
+
+				// Restore the body for next handlers
+				c.Request().Body = ioutil.NopCloser(bytes.NewBuffer(body))
+
+				// Log based on content type
+				contentType := c.Request().Header.Get("Content-Type")
+
+				if strings.Contains(contentType, "application/json") {
+					logger.Infof("JSON Body: %s", string(body))
+				} else if strings.Contains(contentType, "application/x-www-form-urlencoded") {
+					logger.Infof("Form Data: %s", string(body))
+				} else if strings.Contains(contentType, "multipart/form-data") {
+					// Parse multipart form
+					c.Request().ParseMultipartForm(32 << 20) // 32MB max
+					logger.Infof("Multipart Form Values: %v", c.Request().MultipartForm.Value)
+					logger.Infof("Multipart Form Files: %v", c.Request().MultipartForm.File)
+				} else {
+					logger.Infof("Raw Body: %s", string(body))
+				}
+			}
+
+			return next(c)
+		}
+	})
 }
 
 func init() {

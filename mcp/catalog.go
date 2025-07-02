@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
@@ -43,7 +42,7 @@ func SearchConfigChangesHandler(goctx gocontext.Context, req mcp.CallToolRequest
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	ctx, _, err := duty.Start("mission-control-2", duty.ClientOnly)
+	ctx, err := getDutyCtx(goctx)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -88,7 +87,7 @@ func ConfigTypeResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequ
 func ConfigItemResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 	id := extractID(req.Params.URI)
 
-	ctx, _, err := duty.Start("mission-control-2", duty.ClientOnly)
+	ctx, err := getDutyCtx(goctx)
 	if err != nil {
 		return nil, err
 	}
