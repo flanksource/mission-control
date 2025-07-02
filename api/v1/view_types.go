@@ -162,11 +162,7 @@ func (v *View) GetCacheOptions(maxAge, refreshTimeout time.Duration) (*CacheOpti
 			return nil, fmt.Errorf("failed to parse minAge: %w", err)
 		}
 
-		if maxAge < minAge {
-			return nil, fmt.Errorf("view %s does not allow maxAge (%s) to be less than %s", v.GetNamespacedName(), maxAge, minAge)
-		}
-
-		opts.MaxAge = maxAge
+		opts.MaxAge = max(maxAge, minAge)
 	} else {
 		maxAge, err := v.getMaxAge()
 		if err != nil {
