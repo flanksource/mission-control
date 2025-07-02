@@ -436,6 +436,9 @@
         },
         "description": {
           "type": "string"
+        },
+        "gauge": {
+          "$ref": "#/$defs/GaugeConfig"
         }
       },
       "additionalProperties": false,

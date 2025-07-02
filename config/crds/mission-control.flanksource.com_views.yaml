@@ -67,6 +67,31 @@ spec:
                     description:
                       description: Description of the column
                       type: string
+                    gauge:
+                      description: Configuration for gauge visualization
+                      properties:
+                        max:
+                          type: integer
+                        min:
+                          type: integer
+                        thresholds:
+                          items:
+                            description: GaugeThreshold defines a threshold configuration
+                              for gauge charts
+                            properties:
+                              color:
+                                type: string
+                              value:
+                                type: integer
+                            required:
+                            - color
+                            - value
+                            type: object
+                          type: array
+                      required:
+                      - max
+                      - min
+                      type: object
                     name:
                       description: Name of the column
                       type: string
@@ -79,11 +104,16 @@ spec:
                       - duration
                       - health
                       - status
+                      - gauge
                       type: string
                   required:
                   - name
                   - type
                   type: object
+                  x-kubernetes-validations:
+                  - message: gauge config required when type is gauge, not allowed
+                      for other types
+                    rule: 'self.type==''gauge'' ? has(self.gauge) : !has(self.gauge)'
                 type: array
               panels:
                 description: Panels for the view
