@@ -3283,7 +3283,9 @@ func (in *ViewSpec) DeepCopyInto(out *ViewSpec) {
 	if in.Columns != nil {
 		in, out := &in.Columns, &out.Columns
 		*out = make([]api.ViewColumnDef, len(*in))
-		copy(*out, *in)
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
 	}
 	in.Queries.DeepCopyInto(&out.Queries)
 	out.Cache = in.Cache
