@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/Masterminds/squirrel"
 	"github.com/flanksource/duty/context"
@@ -102,8 +103,8 @@ func InsertViewRows(ctx context.Context, tableName string, columns []api.ViewCol
 	return ctx.DB().Exec(sql, args...).Error
 }
 
-func ReadViewTable(ctx context.Context, tableName string) ([]api.ViewRow, error) {
-	rows, err := ctx.DB().Raw(fmt.Sprintf("SELECT * FROM %s", tableName)).Rows()
+func ReadViewTable(ctx context.Context, columnDef api.ViewColumnDefList, tableName string) ([]api.ViewRow, error) {
+	rows, err := ctx.DB().Select(columnDef.SelectColumns()).Table(tableName).Rows()
 	if err != nil {
 		return nil, err
 	}
@@ -129,5 +130,22 @@ func ReadViewTable(ctx context.Context, tableName string) ([]api.ViewRow, error)
 		viewRows = append(viewRows, viewRow)
 	}
 
-	return viewRows, nil
+	return postProcessViewRows(viewRows, columnDef), nil
+}
+
+func postProcessViewRows(viewRows []api.ViewRow, columnDef []api.ViewColumnDef) []api.ViewRow {
+	for _, viewRow := range viewRows {
+		for i, colDef := range columnDef {
+			switch colDef.Type {
+			case api.ViewColumnTypeGauge:
+				viewRow[i] = json.RawMessage(viewRow[i].([]uint8))
+			case api.ViewColumnTypeDuration:
+				viewRow[i] = time.Duration(viewRow[i].(int64))
+			case api.ViewColumnTypeDateTime:
+				viewRow[i] = time.Time(viewRow[i].(time.Time))
+			}
+		}
+	}
+
+	return viewRows
 }
