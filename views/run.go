@@ -1,6 +1,7 @@
 package views
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -143,6 +144,17 @@ func applyMapping(data map[string]any, columnDefs []api.ViewColumnDef, mapping m
 			}
 
 			row = append(row, time.Duration(v))
+
+		case api.ViewColumnTypeGauge:
+			if value != "" {
+				var cel map[string]any
+				if err := json.Unmarshal([]byte(value), &cel); err != nil {
+					return nil, fmt.Errorf("failed to unmarshal gauge value: %w", err)
+				}
+				row = append(row, cel)
+			} else {
+				row = append(row, nil)
+			}
 
 		default:
 			row = append(row, value)

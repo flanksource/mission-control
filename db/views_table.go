@@ -50,7 +50,7 @@ func getPostgresType(colType api.ViewColumnType) string {
 	case api.ViewColumnTypeStatus:
 		return "TEXT"
 	case api.ViewColumnTypeGauge:
-		return "NUMERIC"
+		return "JSONB"
 	default:
 		return "TEXT"
 	}

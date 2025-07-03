@@ -64,8 +64,8 @@ type GaugeThreshold struct {
 // GaugeConfig defines configuration for gauge visualization
 // +kubebuilder:object:generate=true
 type GaugeConfig struct {
-	Min        int              `json:"min" yaml:"min"`
-	Max        int              `json:"max" yaml:"max"`
+	Min        int              `json:"min,omitempty" yaml:"min,omitempty"`
+	Max        int              `json:"max,omitempty" yaml:"max,omitempty"`
 	Thresholds []GaugeThreshold `json:"thresholds,omitempty" yaml:"thresholds,omitempty"`
 }
 
