@@ -58,6 +58,30 @@ func SearchConfigChangesHandler(goctx gocontext.Context, req mcp.CallToolRequest
 	return mcp.NewToolResultText(string(jsonData)), nil
 }
 
+func relatedCatalogHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	id, err := req.RequireString("id")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	ctx, err := getDutyCtx(goctx)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	cis, err := query.GetRelatedConfigs(ctx, query.RelationQuery{
+		ID: id,
+	})
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	jsonData, err := json.Marshal(cis)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	return mcp.NewToolResultText(string(jsonData)), nil
+}
+
 func ConfigTypeResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 	ctx, err := getDutyCtx(goctx)
 	if err != nil {
@@ -140,4 +164,13 @@ func registerCatalog(s *server.MCPServer) {
 		),
 	)
 	s.AddTool(searchCatalogTool, SearchCatalogHandler)
+
+	relatedCatalogTool := mcp.NewTool("related_configs",
+		mcp.WithDescription("Get related configs"),
+		mcp.WithString("id",
+			mcp.Required(),
+			mcp.Description("Config ID"),
+		),
+	)
+	s.AddTool(relatedCatalogTool, relatedCatalogHandler)
 }
