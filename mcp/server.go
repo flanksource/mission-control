@@ -26,6 +26,10 @@ func Server(dutyctx context.Context) http.HandlerFunc {
 
 	httpServer := server.NewStreamableHTTPServer(s,
 		server.WithHTTPContextFunc(func(ctx gocontext.Context, r *http.Request) gocontext.Context {
+			gctx, ok := r.Context().(context.Context)
+			if ok {
+				return gocontext.WithValue(ctx, dutyContextKey, gctx)
+			}
 			return gocontext.WithValue(ctx, dutyContextKey, dutyctx)
 		}),
 	)
