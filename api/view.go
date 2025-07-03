@@ -37,7 +37,7 @@ type ViewColumnDef struct {
 
 // ViewResult is the result of a view query
 type ViewResult struct {
-	LastRefreshedAt time.Time       `json:"lastRefreshedAt,omitempty"`
+	LastRefreshedAt time.Time       `json:"lastRefreshedAt"`
 	Columns         []ViewColumnDef `json:"columns,omitempty"`
 	Rows            []ViewRow       `json:"rows,omitempty"`
 	Panels          []PanelResult   `json:"panels,omitempty"`
