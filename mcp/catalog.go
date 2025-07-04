@@ -9,12 +9,13 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
 
-func SearchCatalogHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func searchCatalogHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	q, err := req.RequireString("query")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -36,8 +37,14 @@ func SearchCatalogHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mc
 	return mcp.NewToolResultText(string(jsonData)), nil
 }
 
-func SearchConfigChangesHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	q, err := req.RequireString("query")
+func searchConfigChangesHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	// TODO: Query not implemented (use peg search)
+	//q, err := req.RequireString("query")
+	//if err != nil {
+	//return mcp.NewToolResultError(err.Error()), nil
+	//}
+
+	catalogID, err := req.RequireString("catalog_id")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -46,7 +53,7 @@ func SearchConfigChangesHandler(goctx gocontext.Context, req mcp.CallToolRequest
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	cis, err := query.FindConfigsByResourceSelector(ctx, 10, types.ResourceSelector{Search: q})
+	cis, err := query.FindCatalogChanges(ctx, query.CatalogChangesSearchRequest{CatalogID: catalogID})
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -59,7 +66,7 @@ func SearchConfigChangesHandler(goctx gocontext.Context, req mcp.CallToolRequest
 }
 
 func relatedCatalogHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	id, err := req.RequireString("id")
+	rawID, err := req.RequireString("id")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -68,6 +75,11 @@ func relatedCatalogHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*m
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
+	id, err := uuid.Parse(rawID)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	cis, err := query.GetRelatedConfigs(ctx, query.RelationQuery{
 		ID: id,
 	})
@@ -82,7 +94,7 @@ func relatedCatalogHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*m
 	return mcp.NewToolResultText(string(jsonData)), nil
 }
 
-func ConfigTypeResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+func configTypeResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 	ctx, err := getDutyCtx(goctx)
 	if err != nil {
 		return nil, err
@@ -154,7 +166,7 @@ func registerCatalog(s *server.MCPServer) {
 
 	s.AddResource(mcp.NewResource("config_item://config_types", "Config Types",
 		mcp.WithResourceDescription("List all config types"), mcp.WithMIMEType(echo.MIMEApplicationJSON)),
-		ConfigTypeResourceHandler)
+		configTypeResourceHandler)
 
 	searchCatalogTool := mcp.NewTool("catalog_search",
 		mcp.WithDescription("Search across catalog"),
@@ -163,7 +175,18 @@ func registerCatalog(s *server.MCPServer) {
 			mcp.Description("Search query"),
 		),
 	)
-	s.AddTool(searchCatalogTool, SearchCatalogHandler)
+	s.AddTool(searchCatalogTool, searchCatalogHandler)
+
+	searchCatalogChangesTool := mcp.NewTool("catalog_changes_search",
+		mcp.WithDescription("Search across catalog changes"),
+		mcp.WithString("catalog_id",
+			mcp.Description("Catalog ID"),
+		),
+		mcp.WithString("query",
+			mcp.Description("Search query"),
+		),
+	)
+	s.AddTool(searchCatalogChangesTool, searchConfigChangesHandler)
 
 	relatedCatalogTool := mcp.NewTool("related_configs",
 		mcp.WithDescription("Get related configs"),
