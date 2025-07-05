@@ -43,6 +43,9 @@ func playbookFailedRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) 
 	limit := req.GetInt("limit", 20)
 
 	runs, err := db.GetRecentPlaybookRuns(ctx, limit, models.PlaybookRunStatusFailed)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
 	jsonData, err := json.Marshal(runs)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -70,6 +73,9 @@ func playbookRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.
 	}
 
 	pj, err := json.Marshal(params)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
 
 	var rp playbook.RunParams
 	if err := json.Unmarshal(pj, &rp); err != nil {
