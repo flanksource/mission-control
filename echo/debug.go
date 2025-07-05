@@ -32,7 +32,9 @@ func LogPostDataMiddleware() echov4.MiddlewareFunc {
 					logger.Infof("Form Data: %s", string(body))
 				} else if strings.Contains(contentType, "multipart/form-data") {
 					// Parse multipart form
-					c.Request().ParseMultipartForm(32 << 20) // 32MB max
+					if err := c.Request().ParseMultipartForm(32 << 20); err != nil { // 32MB max
+						return err
+					}
 					logger.Infof("Multipart Form Values: %v", c.Request().MultipartForm.Value)
 					logger.Infof("Multipart Form Files: %v", c.Request().MultipartForm.File)
 				} else {
