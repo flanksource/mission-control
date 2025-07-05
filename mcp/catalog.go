@@ -38,22 +38,18 @@ func searchCatalogHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mc
 }
 
 func searchConfigChangesHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	// TODO: Query not implemented (use peg search)
-	//q, err := req.RequireString("query")
-	//if err != nil {
-	//return mcp.NewToolResultError(err.Error()), nil
-	//}
-
-	catalogID, err := req.RequireString("catalog_id")
+	q, err := req.RequireString("query")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
+
+	limit := req.GetInt("limit", 20)
 
 	ctx, err := getDutyCtx(goctx)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	cis, err := query.FindCatalogChanges(ctx, query.CatalogChangesSearchRequest{CatalogID: catalogID})
+	cis, err := query.FindConfigChangesByResourceSelector(ctx, limit, types.ResourceSelector{Search: q})
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -179,12 +175,11 @@ func registerCatalog(s *server.MCPServer) {
 
 	searchCatalogChangesTool := mcp.NewTool("catalog_changes_search",
 		mcp.WithDescription("Search across catalog changes"),
-		mcp.WithString("catalog_id",
-			mcp.Description("Catalog ID"),
-		),
 		mcp.WithString("query",
+			mcp.Required(),
 			mcp.Description("Search query"),
 		),
+		mcp.WithNumber("limit", mcp.Description("Number of results to return")),
 	)
 	s.AddTool(searchCatalogChangesTool, searchConfigChangesHandler)
 
