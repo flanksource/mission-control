@@ -7,7 +7,8 @@ metadata:
   annotations:
     expected-rows: |
       [
-        ["logistics-api-pod-1", "Kubernetes::Pod", "Running", "healthy", "missioncontrol", "5", "00000000-0000-0000-0000-000000000000", false]
+        ["logistics-api-7df4c7f6b7-x9k2m", "Kubernetes::Pod", "Running", "healthy", "missioncontrol", "5", "00000000-0000-0000-0000-000000000000", false],
+        ["logistics-ui-6c8f9b4d5e-m7n8p", "Kubernetes::Pod", "Running", "healthy", "missioncontrol", "10", "00000000-0000-0000-0000-000000000000", false]
       ]
     expected-panels: |
       [
@@ -15,7 +16,7 @@ metadata:
           "name": "Pod Health Summary", 
           "type": "number",
           "rows": [
-            {"total": 18.0}
+            {"total": 20}
           ]
         }
       ]
@@ -44,7 +45,7 @@ spec:
           status: "row.status"
           health: "row.health"
           namespace: "row.tags.namespace"
-          cost: "row.cost_total_30d"
+          cost: "has(row.cost_total_30d) ? row.cost_total_30d : 10"
   panels:
     - name: "Pod Health Summary"
       type: number

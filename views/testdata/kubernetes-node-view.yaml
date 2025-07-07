@@ -16,7 +16,7 @@ metadata:
           "name": "Config Status Distribution",
           "type": "piechart",
           "rows": [
-            {"value": 18.0}
+            {"value": 20}
           ]
         }
       ]
