@@ -158,12 +158,17 @@ func readCachedViewData(ctx context.Context, view *v1.View) (*api.ViewResult, er
 		}
 	}
 
-	return &api.ViewResult{
-		Columns:         view.Spec.Columns,
-		Rows:            rows,
-		Panels:          finalPanelResults,
-		LastRefreshedAt: view.Status.LastRan.Time,
-	}, nil
+	result := &api.ViewResult{
+		Columns: view.Spec.Columns,
+		Rows:    rows,
+		Panels:  finalPanelResults,
+	}
+
+	if view.Status.LastRan != nil {
+		result.LastRefreshedAt = view.Status.LastRan.Time
+	}
+
+	return result, nil
 }
 
 // populateView runs the view queries and saves to the view table.
