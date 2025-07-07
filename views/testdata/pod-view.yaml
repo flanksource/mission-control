@@ -35,17 +35,18 @@ spec:
     - name: cost
       type: string
   queries:
-    configs:
-      - selector:
-          types: ["Kubernetes::Pod"]
-          tagSelector: "namespace=missioncontrol"
-        mapping:
-          component_name: "row.name"
-          component_type: "row.type"
-          status: "row.status"
-          health: "row.health"
-          namespace: "row.tags.namespace"
-          cost: "has(row.cost_total_30d) ? row.cost_total_30d : 10"
+    pod:
+      primaryKey: ["namespace", "name"]
+      configs:
+        types: ["Kubernetes::Pod"]
+        tagSelector: "namespace=missioncontrol"
+  mapping:
+    component_name: "pod.name"
+    component_type: "pod.type"
+    status: "pod.status"
+    health: "pod.health"
+    namespace: "pod.tags.namespace"
+    cost: "has(row.cost_total_30d) ? row.cost_total_30d : 10"
   panels:
     - name: "Pod Health Summary"
       type: number

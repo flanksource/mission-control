@@ -27,14 +27,13 @@ spec:
     - name: status
       type: string
   queries:
-    configs:
-      - selector:
-          types: ["Kubernetes::Node"]
-          tagSelector: "account=flanksource"
-        max: 2
-        mapping:
-          pod_name: "row.name"
-          status: "row.status"
+    config:
+      configs:
+        types: ["Kubernetes::Node"]
+        tagSelector: "account=flanksource"
+  mapping:
+    pod_name: "config.name"
+    status: "config.status"
   panels:
     - name: "Config Status Distribution"
       type: piechart

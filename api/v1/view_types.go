@@ -16,29 +16,42 @@ import (
 	"github.com/flanksource/incident-commander/api"
 )
 
-// ViewQuery defines a query configuration for populating the view
-type ViewQuery struct {
-	// Selector defines the resource selector for finding matching resources
-	Selector types.ResourceSelector `json:"selector" yaml:"selector"`
+type ViewMergeStrategy string
 
-	// Max number of results to return
-	Max int `json:"max,omitempty" yaml:"max,omitempty"`
+const (
+	ViewMergeStrategyLeft  ViewMergeStrategy = "left"
+	ViewMergeStrategyUnion ViewMergeStrategy = "union"
+)
 
-	// Mapping defines how to map query results to view columns
-	// +kubebuilder:validation:Schemaless
-	// +kubebuilder:pruning:PreserveUnknownFields
-	// +kubebuilder:validation:Type=object
-	Mapping map[string]types.CelExpression `json:"mapping" yaml:"mapping" template:"true"`
+// ViewMergeSpec defines how to merge/join data from multiple queries
+type ViewMergeSpec struct {
+	// Strategy defines the merge strategy (left join or union)
+	// Default: union
+	// +kubebuilder:validation:Enum=left;union
+	// +kubebuilder:validation:Optional
+	Strategy ViewMergeStrategy `json:"strategy" yaml:"strategy"`
+
+	// Order defines the order of queries for joining
+	// +kubebuilder:validation:MinItems=1
+	Order []string `json:"order" yaml:"order"`
 }
 
-// ViewQueriesSpec defines the structure for different types of queries
-type ViewQueriesSpec struct {
-	Configs []ViewQuery `json:"configs,omitempty" yaml:"configs,omitempty"`
-	Changes []ViewQuery `json:"changes,omitempty" yaml:"changes,omitempty"`
+// ViewQuery defines a query configuration for populating the view
+// +kubebuilder:validation:XValidation:rule="(has(self.configs) && !has(self.changes)) || (!has(self.configs) && has(self.changes))",message="exactly one of configs or changes must be specified"
+type ViewQuery struct {
+	// PrimaryKey defines the fields used for joining this query with others
+	// +kubebuilder:validation:MinItems=1
+	PrimaryKey []string `json:"primaryKey" yaml:"primaryKey"`
+
+	// Configs queries config items
+	Configs *types.ResourceSelector `json:"configs,omitempty" yaml:"configs,omitempty"`
+
+	// Changes queries config changes
+	Changes *types.ResourceSelector `json:"changes,omitempty" yaml:"changes,omitempty"`
 }
 
 // ViewSpec defines the desired state of View
-// +kubebuilder:validation:XValidation:rule="size(self.panels) > 0 || (size(self.columns) > 0 && (size(self.queries.configs) > 0 || size(self.queries.changes) > 0))",message="view spec must have either panels or both columns and queries defined"
+// +kubebuilder:validation:XValidation:rule="size(self.panels) > 0 || (size(self.columns) > 0 && size(self.queries) > 0)",message="view spec must have either panels or both columns and queries defined"
 type ViewSpec struct {
 	// Panels for the view
 	//+kubebuilder:validation:Optional
@@ -50,7 +63,18 @@ type ViewSpec struct {
 
 	// Queries define the queries and mappings to populate the view
 	//+kubebuilder:validation:Optional
-	Queries ViewQueriesSpec `json:"queries" yaml:"queries"`
+	Queries map[string]ViewQuery `json:"queries" yaml:"queries"`
+
+	// Merge defines how to merge/join data from multiple queries
+	//+kubebuilder:validation:Optional
+	Merge *ViewMergeSpec `json:"merge,omitempty" yaml:"merge,omitempty"`
+
+	// Mapping defines how to map query results to view columns
+	//+kubebuilder:validation:Optional
+	// +kubebuilder:validation:Schemaless
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Type=object
+	Mapping map[string]types.CelExpression `json:"mapping,omitempty" yaml:"mapping,omitempty" template:"true"`
 
 	// Cache configuration
 	//+kubebuilder:validation:Optional
