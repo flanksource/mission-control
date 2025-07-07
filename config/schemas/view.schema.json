@@ -329,6 +329,22 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "PrometheusQuery": {
+      "properties": {
+        "connection": {
+          "type": "string"
+        },
+        "query": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "connection",
+        "query"
+      ]
+    },
     "ResourceSelector": {
       "properties": {
         "agent": {
@@ -477,6 +493,9 @@
         },
         "changes": {
           "$ref": "#/$defs/ResourceSelector"
+        },
+        "prometheus": {
+          "$ref": "#/$defs/PrometheusQuery"
         }
       },
       "additionalProperties": false,

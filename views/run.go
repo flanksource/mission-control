@@ -118,6 +118,13 @@ func executeQuery(ctx context.Context, q v1.ViewQuery) ([]QueryResultRow, error)
 		for _, change := range changes {
 			results = append(results, change.AsMap())
 		}
+	} else if q.Prometheus != nil {
+		prometheusResults, err := executePrometheusQuery(ctx, *q.Prometheus)
+		if err != nil {
+			return nil, fmt.Errorf("failed to execute prometheus query: %w", err)
+		}
+
+		results = prometheusResults
 	} else {
 		return nil, fmt.Errorf("view query has not datasource specified")
 	}

@@ -410,13 +410,28 @@ spec:
                         type: string
                       minItems: 1
                       type: array
+                    prometheus:
+                      description: Prometheus queries metrics from Prometheus
+                      properties:
+                        connection:
+                          description: Connection name for Prometheus
+                          type: string
+                        query:
+                          description: Query is the PromQL query string
+                          type: string
+                      required:
+                      - connection
+                      - query
+                      type: object
                   required:
                   - primaryKey
                   type: object
                   x-kubernetes-validations:
-                  - message: exactly one of configs or changes must be specified
-                    rule: (has(self.configs) && !has(self.changes)) || (!has(self.configs)
-                      && has(self.changes))
+                  - message: exactly one of configs, changes, or prometheus must be
+                      specified
+                    rule: (has(self.configs) && !has(self.changes) && !has(self.prometheus))
+                      || (!has(self.configs) && has(self.changes) && !has(self.prometheus))
+                      || (!has(self.configs) && !has(self.changes) && has(self.prometheus))
                 description: Queries define the queries and mappings to populate the
                   view
                 type: object
