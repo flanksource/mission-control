@@ -10,6 +10,7 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
+	"github.com/samber/lo"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 
@@ -33,7 +34,29 @@ type ViewMergeSpec struct {
 
 	// Order defines the order of queries for joining
 	// +kubebuilder:validation:MinItems=1
-	Order []string `json:"order" yaml:"order"`
+	Order []string `json:"order,omitempty" yaml:"order,omitempty"`
+
+	// JoinOn defines the join conditions for each query
+	// Map key is the query name, value is a CEL expression for the join condition
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Schemaless
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Type=object
+	JoinOn map[string]types.CelExpression `json:"joinOn,omitempty" yaml:"joinOn,omitempty" template:"true"`
+}
+
+func (v *ViewMergeSpec) Validate() error {
+	if v.Strategy == ViewMergeStrategyLeft {
+		if len(v.Order) != len(v.JoinOn) {
+			return fmt.Errorf("order and joinOn must have the same number of items")
+		}
+
+		if len(lo.Uniq(v.Order)) != len(v.Order) {
+			return fmt.Errorf("order must contain unique values")
+		}
+	}
+
+	return nil
 }
 
 // PrometheusQuery defines a Prometheus query configuration
@@ -46,12 +69,7 @@ type PrometheusQuery struct {
 }
 
 // ViewQuery defines a query configuration for populating the view
-// +kubebuilder:validation:XValidation:rule="(has(self.configs) && !has(self.changes) && !has(self.prometheus)) || (!has(self.configs) && has(self.changes) && !has(self.prometheus)) || (!has(self.configs) && !has(self.changes) && has(self.prometheus))",message="exactly one of configs, changes, or prometheus must be specified"
 type ViewQuery struct {
-	// PrimaryKey defines the fields used for joining this query with others
-	// +kubebuilder:validation:MinItems=1
-	PrimaryKey []string `json:"primaryKey" yaml:"primaryKey"`
-
 	// Configs queries config items
 	Configs *types.ResourceSelector `json:"configs,omitempty" yaml:"configs,omitempty"`
 
@@ -60,6 +78,10 @@ type ViewQuery struct {
 
 	// Prometheus queries metrics from Prometheus
 	Prometheus *PrometheusQuery `json:"prometheus,omitempty" yaml:"prometheus,omitempty"`
+}
+
+func (v *ViewQuery) IsEmpty() bool {
+	return v.Configs == nil && v.Changes == nil && v.Prometheus == nil
 }
 
 // ViewSpec defines the desired state of View
@@ -91,6 +113,28 @@ type ViewSpec struct {
 	// Cache configuration
 	//+kubebuilder:validation:Optional
 	Cache ViewCache `json:"cache" yaml:"cache"`
+}
+
+func (t ViewSpec) Validate() error {
+	if t.Merge != nil {
+		if err := t.Merge.Validate(); err != nil {
+			return err
+		}
+
+		if missing, extra := lo.Difference(lo.Keys(t.Queries), t.Merge.Order); len(missing) > 0 {
+			return fmt.Errorf("merge order must address all the queries. missing queries: %v", missing)
+		} else if len(extra) > 0 {
+			return fmt.Errorf("merge order must not contain extra queries: %v", extra)
+		}
+	}
+
+	for k, query := range t.Queries {
+		if query.IsEmpty() {
+			return fmt.Errorf("query %s is empty", k)
+		}
+	}
+
+	return nil
 }
 
 // ViewStatus defines the observed state of View
