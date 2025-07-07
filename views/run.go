@@ -2,13 +2,13 @@ package views
 
 import (
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/flanksource/commons/duration"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
+	"github.com/samber/lo"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -16,21 +16,11 @@ import (
 
 // QueryResult represents all results from a single query
 type QueryResult struct {
-	Name       string
-	PrimaryKey []string
-	Rows       []QueryResultRow
+	Name string
+	Rows []QueryResultRow
 }
 
 type QueryResultRow map[string]any
-
-func (r QueryResultRow) PK(pk []string) string {
-	var pkValues []string
-	for _, key := range pk {
-		pkValues = append(pkValues, fmt.Sprintf("%v", r[key]))
-	}
-
-	return strings.Join(pkValues, "-")
-}
 
 // Run executes the view queries and returns the rows with data
 func Run(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
@@ -56,29 +46,15 @@ func Run(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 		}
 
 		queryResults = append(queryResults, QueryResult{
-			Rows:       results,
-			Name:       queryName,
-			PrimaryKey: q.PrimaryKey,
+			Rows: results,
+			Name: queryName,
 		})
 	}
 
-	var mergedData []QueryResultRow
-	if view.Spec.Merge != nil {
-		strategy := view.Spec.Merge.Strategy
-		if strategy == "" {
-			strategy = v1.ViewMergeStrategyUnion
-		}
-
-		order := view.Spec.Merge.Order
-		if len(order) == 0 {
-			for queryName := range view.Spec.Queries {
-				order = append(order, queryName)
-			}
-		}
-
-		mergedData = mergeResults(queryResults, order, strategy)
-	} else {
-		mergedData = mergeResults(queryResults, nil, v1.ViewMergeStrategyUnion)
+	merge := lo.If(view.Spec.Merge != nil, *view.Spec.Merge).Else(v1.ViewMergeSpec{})
+	mergedData, err := mergeResults(queryResults, merge)
+	if err != nil {
+		return nil, fmt.Errorf("failed to merge results: %w", err)
 	}
 
 	var rows []api.ViewRow

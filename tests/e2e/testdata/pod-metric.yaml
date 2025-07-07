@@ -24,6 +24,9 @@ spec:
   merge:
     strategy: left
     order: [pod, metrics]
+    joinOn:
+      pod: row.name
+      metrics: row.pod
   columns:
     - description: The pod name.
       name: name
@@ -42,7 +45,6 @@ spec:
       type: string
   queries:
     metrics:
-      primaryKey: [pod]
       prometheus:
         connection: connection://mc/prometheus
         query: |
@@ -54,7 +56,6 @@ spec:
             }
           ) / 1024 / 1024
     pod:
-      primaryKey: [name]
       configs:
         search: "@order=name"
         tagSelector: namespace in (missioncontrol)

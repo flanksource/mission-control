@@ -21,6 +21,10 @@ func PersistViewFromCRD(ctx context.Context, obj *v1.View) error {
 		return err
 	}
 
+	if err := obj.Spec.Validate(); err != nil {
+		return err
+	}
+
 	specJSON, err := json.Marshal(obj.Spec)
 	if err != nil {
 		return err

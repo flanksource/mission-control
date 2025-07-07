@@ -18,12 +18,12 @@ spec:
       type: string
       description: The source of the backup.
   queries:
-    changes:
-      - selector:
-          search: change_type=BackupSuccessful
-        max: 10
-        mapping:
-          database: row.name
-          date: row.created_at
-          status: row.details.status
-          source: row.source
+    backups:
+      changes:
+        search: change_type=BackupSuccessful
+      max: 10
+  mapping:
+    database: row.name
+    date: row.created_at
+    status: row.details.status
+    source: row.source
