@@ -3,33 +3,43 @@ package views
 import (
 	"testing"
 
+	"github.com/flanksource/duty/types"
 	. "github.com/onsi/gomega"
+
+	v1 "github.com/flanksource/incident-commander/api/v1"
 )
 
-func TestJoinLeft(t *testing.T) {
+func TestMerge(t *testing.T) {
 	tests := []struct {
 		name         string
 		queryResults []QueryResult
+		mergeSpec    v1.ViewMergeSpec
 		expected     []QueryResultRow
 	}{
 		{
 			name: "basic left join with matching records",
 			queryResults: []QueryResult{
 				{
-					PrimaryKey: []string{"id"},
-					Name:       "users",
+					Name: "users",
 					Rows: []QueryResultRow{
 						{"id": "1", "name": "Alice"},
 						{"id": "2", "name": "Bob"},
 					},
 				},
 				{
-					PrimaryKey: []string{"id"},
-					Name:       "orders",
+					Name: "orders",
 					Rows: []QueryResultRow{
 						{"id": "1", "amount": 100},
 						{"id": "3", "amount": 200},
 					},
+				},
+			},
+			mergeSpec: v1.ViewMergeSpec{
+				Strategy: v1.ViewMergeStrategyLeft,
+				Order:    []string{"users", "orders"},
+				JoinOn: map[string]types.CelExpression{
+					"users":  types.CelExpression("row.id"),
+					"orders": types.CelExpression("row.id"),
 				},
 			},
 			expected: []QueryResultRow{
@@ -47,18 +57,24 @@ func TestJoinLeft(t *testing.T) {
 			name: "left join with no matching records",
 			queryResults: []QueryResult{
 				{
-					PrimaryKey: []string{"id"},
-					Name:       "users",
+					Name: "users",
 					Rows: []QueryResultRow{
 						{"id": "1", "name": "Alice"},
 					},
 				},
 				{
-					PrimaryKey: []string{"id"},
-					Name:       "orders",
+					Name: "orders",
 					Rows: []QueryResultRow{
 						{"id": "2", "amount": 100},
 					},
+				},
+			},
+			mergeSpec: v1.ViewMergeSpec{
+				Strategy: v1.ViewMergeStrategyLeft,
+				Order:    []string{"users", "orders"},
+				JoinOn: map[string]types.CelExpression{
+					"users":  types.CelExpression("row.id"),
+					"orders": types.CelExpression("row.id"),
 				},
 			},
 			expected: []QueryResultRow{
@@ -72,25 +88,31 @@ func TestJoinLeft(t *testing.T) {
 			name: "left join with multiple matching queries",
 			queryResults: []QueryResult{
 				{
-					PrimaryKey: []string{"id"},
-					Name:       "users",
+					Name: "users",
 					Rows: []QueryResultRow{
 						{"id": "1", "name": "Alice"},
 					},
 				},
 				{
-					PrimaryKey: []string{"id"},
-					Name:       "orders",
+					Name: "orders",
 					Rows: []QueryResultRow{
 						{"id": "1", "amount": 100},
 					},
 				},
 				{
-					PrimaryKey: []string{"id"},
-					Name:       "addresses",
+					Name: "addresses",
 					Rows: []QueryResultRow{
 						{"id": "1", "address": "123 Main St"},
 					},
+				},
+			},
+			mergeSpec: v1.ViewMergeSpec{
+				Strategy: v1.ViewMergeStrategyLeft,
+				Order:    []string{"users", "orders", "addresses"},
+				JoinOn: map[string]types.CelExpression{
+					"users":     types.CelExpression("row.id"),
+					"orders":    types.CelExpression("row.id"),
+					"addresses": types.CelExpression("row.id"),
 				},
 			},
 			expected: []QueryResultRow{
@@ -102,22 +124,28 @@ func TestJoinLeft(t *testing.T) {
 			},
 		},
 		{
-			name: "left join with custom primary key",
+			name: "left join with custom join expression",
 			queryResults: []QueryResult{
 				{
-					PrimaryKey: []string{"name", "namespace"},
-					Name:       "pods",
+					Name: "pods",
 					Rows: []QueryResultRow{
 						{"name": "pod1", "namespace": "default"},
 						{"name": "pod2", "namespace": "kube-system"},
 					},
 				},
 				{
-					PrimaryKey: []string{"name", "namespace"},
-					Name:       "services",
+					Name: "services",
 					Rows: []QueryResultRow{
 						{"name": "pod1", "namespace": "default", "port": 80},
 					},
+				},
+			},
+			mergeSpec: v1.ViewMergeSpec{
+				Strategy: v1.ViewMergeStrategyLeft,
+				Order:    []string{"pods", "services"},
+				JoinOn: map[string]types.CelExpression{
+					"pods":     types.CelExpression("row.name + '-' + row.namespace"),
+					"services": types.CelExpression("row.name + '-' + row.namespace"),
 				},
 			},
 			expected: []QueryResultRow{
@@ -132,21 +160,27 @@ func TestJoinLeft(t *testing.T) {
 			},
 		},
 		{
-			name: "left join with partial primary key match (no match)",
+			name: "left join with no match due to different join values",
 			queryResults: []QueryResult{
 				{
-					PrimaryKey: []string{"name", "namespace"},
-					Name:       "base",
+					Name: "base",
 					Rows: []QueryResultRow{
 						{"name": "app1", "namespace": "default"},
 					},
 				},
 				{
-					PrimaryKey: []string{"name", "namespace"},
-					Name:       "joined",
+					Name: "joined",
 					Rows: []QueryResultRow{
 						{"name": "app1", "namespace": "production"},
 					},
+				},
+			},
+			mergeSpec: v1.ViewMergeSpec{
+				Strategy: v1.ViewMergeStrategyLeft,
+				Order:    []string{"base", "joined"},
+				JoinOn: map[string]types.CelExpression{
+					"base":   types.CelExpression("row.name + '-' + row.namespace"),
+					"joined": types.CelExpression("row.name + '-' + row.namespace"),
 				},
 			},
 			expected: []QueryResultRow{
@@ -159,14 +193,14 @@ func TestJoinLeft(t *testing.T) {
 		{
 			name:         "empty queryResults returns nil",
 			queryResults: []QueryResult{},
+			mergeSpec:    v1.ViewMergeSpec{},
 			expected:     nil,
 		},
 		{
 			name: "single query returns all records",
 			queryResults: []QueryResult{
 				{
-					PrimaryKey: []string{"id"},
-					Name:       "users",
+					Name: "users",
 					Rows: []QueryResultRow{
 						{"id": "1", "name": "Alice"},
 						{"id": "2", "name": "Bob"},
@@ -182,37 +216,13 @@ func TestJoinLeft(t *testing.T) {
 				},
 			},
 		},
-		{
-			name: "fallback to common fields when no primary key specified",
-			queryResults: []QueryResult{
-				{
-					PrimaryKey: []string{}, // Empty primary key should fallback to common fields
-					Name:       "base",
-					Rows: []QueryResultRow{
-						{"id": "1", "name": "Alice"},
-					},
-				},
-				{
-					PrimaryKey: []string{},
-					Name:       "joined",
-					Rows: []QueryResultRow{
-						{"id": "1", "name": "Alice", "extra": "data"},
-					},
-				},
-			},
-			expected: []QueryResultRow{
-				{
-					"base":   QueryResultRow{"id": "1", "name": "Alice"},
-					"joined": QueryResultRow{"id": "1", "name": "Alice", "extra": "data"},
-				},
-			},
-		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			RegisterTestingT(t)
-			result := joinLeft(tt.queryResults)
+			result, err := mergeResults(tt.queryResults, tt.mergeSpec)
+			Expect(err).To(BeNil())
 			Expect(result).To(Equal(tt.expected))
 		})
 	}

@@ -92,6 +92,12 @@ spec:
               merge:
                 description: Merge defines how to merge/join data from multiple queries
                 properties:
+                  joinOn:
+                    description: |-
+                      JoinOn defines the join conditions for each query
+                      Map key is the query name, value is a CEL expression for the join condition
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
                   order:
                     description: Order defines the order of queries for joining
                     items:
@@ -106,8 +112,6 @@ spec:
                     - left
                     - union
                     type: string
-                required:
-                - order
                 type: object
               panels:
                 description: Panels for the view
@@ -403,13 +407,6 @@ spec:
                             type: string
                           type: array
                       type: object
-                    primaryKey:
-                      description: PrimaryKey defines the fields used for joining
-                        this query with others
-                      items:
-                        type: string
-                      minItems: 1
-                      type: array
                     prometheus:
                       description: Prometheus queries metrics from Prometheus
                       properties:
@@ -423,15 +420,7 @@ spec:
                       - connection
                       - query
                       type: object
-                  required:
-                  - primaryKey
                   type: object
-                  x-kubernetes-validations:
-                  - message: exactly one of configs, changes, or prometheus must be
-                      specified
-                    rule: (has(self.configs) && !has(self.changes) && !has(self.prometheus))
-                      || (!has(self.configs) && has(self.changes) && !has(self.prometheus))
-                      || (!has(self.configs) && !has(self.changes) && has(self.prometheus))
                 description: Queries define the queries and mappings to populate the
                   view
                 type: object
