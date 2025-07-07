@@ -445,44 +445,44 @@
         "type"
       ]
     },
-    "ViewQueriesSpec": {
+    "ViewMergeSpec": {
       "properties": {
-        "configs": {
+        "strategy": {
+          "type": "string"
+        },
+        "order": {
           "items": {
-            "$ref": "#/$defs/ViewQuery"
-          },
-          "type": "array"
-        },
-        "changes": {
-          "items": {
-            "$ref": "#/$defs/ViewQuery"
-          },
-          "type": "array"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "ViewQuery": {
-      "properties": {
-        "selector": {
-          "$ref": "#/$defs/ResourceSelector"
-        },
-        "max": {
-          "type": "integer"
-        },
-        "mapping": {
-          "additionalProperties": {
             "type": "string"
           },
-          "type": "object"
+          "type": "array"
         }
       },
       "additionalProperties": false,
       "type": "object",
       "required": [
-        "selector",
-        "mapping"
+        "strategy",
+        "order"
+      ]
+    },
+    "ViewQuery": {
+      "properties": {
+        "primaryKey": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "configs": {
+          "$ref": "#/$defs/ResourceSelector"
+        },
+        "changes": {
+          "$ref": "#/$defs/ResourceSelector"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "primaryKey"
       ]
     },
     "ViewSpec": {
@@ -500,7 +500,19 @@
           "type": "array"
         },
         "queries": {
-          "$ref": "#/$defs/ViewQueriesSpec"
+          "additionalProperties": {
+            "$ref": "#/$defs/ViewQuery"
+          },
+          "type": "object"
+        },
+        "merge": {
+          "$ref": "#/$defs/ViewMergeSpec"
+        },
+        "mapping": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
         },
         "cache": {
           "$ref": "#/$defs/ViewCache"

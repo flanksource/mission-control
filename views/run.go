@@ -2,6 +2,7 @@ package views
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/flanksource/commons/duration"
@@ -12,6 +13,24 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 )
+
+// QueryResult represents all results from a single query
+type QueryResult struct {
+	Name       string
+	PrimaryKey []string
+	Rows       []QueryResultRow
+}
+
+type QueryResultRow map[string]any
+
+func (r QueryResultRow) PK(pk []string) string {
+	var pkValues []string
+	for _, key := range pk {
+		pkValues = append(pkValues, fmt.Sprintf("%v", r[key]))
+	}
+
+	return strings.Join(pkValues, "-")
+}
 
 // Run executes the view queries and returns the rows with data
 func Run(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
@@ -29,94 +48,81 @@ func Run(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 		})
 	}
 
-	configRows, err := executeConfigQueries(ctx, view.Spec.Columns, view.Spec.Queries.Configs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute config queries: %w", err)
-	}
-	output.Rows = append(output.Rows, configRows...)
+	var queryResults []QueryResult
+	for queryName, q := range view.Spec.Queries {
+		results, err := executeQuery(ctx, q)
+		if err != nil {
+			return nil, fmt.Errorf("failed to execute config query '%s': %w", queryName, err)
+		}
 
-	changeRows, err := executeChangeQueries(ctx, view.Spec.Columns, view.Spec.Queries.Changes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute change queries: %w", err)
+		queryResults = append(queryResults, QueryResult{
+			Rows:       results,
+			Name:       queryName,
+			PrimaryKey: q.PrimaryKey,
+		})
 	}
-	output.Rows = append(output.Rows, changeRows...)
 
+	var mergedData []QueryResultRow
+	if view.Spec.Merge != nil {
+		strategy := view.Spec.Merge.Strategy
+		if strategy == "" {
+			strategy = v1.ViewMergeStrategyUnion
+		}
+
+		order := view.Spec.Merge.Order
+		if len(order) == 0 {
+			for queryName := range view.Spec.Queries {
+				order = append(order, queryName)
+			}
+		}
+
+		mergedData = mergeResults(queryResults, order, strategy)
+	} else {
+		mergedData = mergeResults(queryResults, nil, v1.ViewMergeStrategyUnion)
+	}
+
+	var rows []api.ViewRow
+	for _, result := range mergedData {
+		row, err := applyMapping(result, view.Spec.Columns, view.Spec.Mapping)
+		if err != nil {
+			return nil, fmt.Errorf("failed to apply view mapping: %w", err)
+		}
+
+		rows = append(rows, row)
+	}
+
+	output.Rows = rows
 	output.Columns = view.Spec.Columns
 	return &output, nil
 }
 
-func executePanel(ctx context.Context, q api.PanelDef) ([]types.AggregateRow, error) {
-	table := "config_items"
-	if q.Source == "changes" {
-		table = "catalog_changes"
-	}
+// executeQuery executes a single query and returns results with query name
+func executeQuery(ctx context.Context, q v1.ViewQuery) ([]QueryResultRow, error) {
+	var results []QueryResultRow
 
-	result, err := query.Aggregate(ctx, table, q.Query)
-	if err != nil {
-		return nil, fmt.Errorf("failed to aggregate: %w", err)
-	}
-
-	return result, nil
-}
-
-// executeConfigQueries executes configuration-based queries
-func executeConfigQueries(ctx context.Context, columnDefs []api.ViewColumnDef, queries []v1.ViewQuery) ([]api.ViewRow, error) {
-	var rows []api.ViewRow
-
-	for _, q := range queries {
-		limit := q.Max
-		if limit <= 0 {
-			limit = -1 // No limit
-		}
-
-		configs, err := query.FindConfigsByResourceSelector(ctx, limit, q.Selector)
+	if q.Configs != nil && !q.Configs.IsEmpty() {
+		configs, err := query.FindConfigsByResourceSelector(ctx, -1, *q.Configs)
 		if err != nil {
 			return nil, fmt.Errorf("failed to find configs: %w", err)
 		}
 
-		// Process each config and apply mappings
 		for _, config := range configs {
-			row, err := applyMapping(map[string]any{
-				"row": config.AsMap(),
-			}, columnDefs, q.Mapping)
-			if err != nil {
-				return nil, fmt.Errorf("failed to apply mapping to config %s: %w", config.ID, err)
-			}
-			rows = append(rows, row)
+			results = append(results, config.AsMap())
 		}
-	}
-
-	return rows, nil
-}
-
-// executeChangeQueries executes change-based queries using duty's FindConfigChangesByResourceSelector
-func executeChangeQueries(ctx context.Context, columnDefs []api.ViewColumnDef, queries []v1.ViewQuery) ([]api.ViewRow, error) {
-	var rows []api.ViewRow
-
-	for _, q := range queries {
-		limit := q.Max
-		if limit <= 0 {
-			limit = -1 // No limit
-		}
-
-		changes, err := query.FindConfigChangesByResourceSelector(ctx, limit, q.Selector)
+	} else if q.Changes != nil && !q.Changes.IsEmpty() {
+		changes, err := query.FindConfigChangesByResourceSelector(ctx, -1, *q.Changes)
 		if err != nil {
 			return nil, fmt.Errorf("failed to find changes: %w", err)
 		}
 
-		// Process each change and apply mappings
 		for _, change := range changes {
-			row, err := applyMapping(map[string]any{
-				"row": change.AsMap(),
-			}, columnDefs, q.Mapping)
-			if err != nil {
-				return nil, fmt.Errorf("failed to apply mapping to change %s: %w", change.ID, err)
-			}
-			rows = append(rows, row)
+			results = append(results, change.AsMap())
 		}
+	} else {
+		return nil, fmt.Errorf("view query has not datasource specified")
 	}
 
-	return rows, nil
+	return results, nil
 }
 
 // applyMapping applies CEL expression mappings to data
