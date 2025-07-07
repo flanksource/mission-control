@@ -1,0 +1,10 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Connection
+metadata:
+  name: prometheus
+  namespace: mc
+  uid: 7eb7d4c8-faad-4809-9643-e8116eef6e3f
+spec:
+  prometheus:
+    url:
+      value: http://localhost:9090
