@@ -36,8 +36,17 @@ type ViewMergeSpec struct {
 	Order []string `json:"order" yaml:"order"`
 }
 
+// PrometheusQuery defines a Prometheus query configuration
+type PrometheusQuery struct {
+	// Connection name for Prometheus
+	Connection string `json:"connection" yaml:"connection"`
+
+	// Query is the PromQL query string
+	Query string `json:"query" yaml:"query"`
+}
+
 // ViewQuery defines a query configuration for populating the view
-// +kubebuilder:validation:XValidation:rule="(has(self.configs) && !has(self.changes)) || (!has(self.configs) && has(self.changes))",message="exactly one of configs or changes must be specified"
+// +kubebuilder:validation:XValidation:rule="(has(self.configs) && !has(self.changes) && !has(self.prometheus)) || (!has(self.configs) && has(self.changes) && !has(self.prometheus)) || (!has(self.configs) && !has(self.changes) && has(self.prometheus))",message="exactly one of configs, changes, or prometheus must be specified"
 type ViewQuery struct {
 	// PrimaryKey defines the fields used for joining this query with others
 	// +kubebuilder:validation:MinItems=1
@@ -48,6 +57,9 @@ type ViewQuery struct {
 
 	// Changes queries config changes
 	Changes *types.ResourceSelector `json:"changes,omitempty" yaml:"changes,omitempty"`
+
+	// Prometheus queries metrics from Prometheus
+	Prometheus *PrometheusQuery `json:"prometheus,omitempty" yaml:"prometheus,omitempty"`
 }
 
 // ViewSpec defines the desired state of View

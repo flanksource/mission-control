@@ -46,7 +46,7 @@ spec:
     status: "pod.status"
     health: "pod.health"
     namespace: "pod.tags.namespace"
-    cost: "has(row.cost_total_30d) ? row.cost_total_30d : 10"
+    cost: "has(pod.cost_total_30d) ? pod.cost_total_30d : 10"
   panels:
     - name: "Pod Health Summary"
       type: number
