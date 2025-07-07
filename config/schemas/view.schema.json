@@ -471,23 +471,22 @@
             "type": "string"
           },
           "type": "array"
+        },
+        "joinOn": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
         }
       },
       "additionalProperties": false,
       "type": "object",
       "required": [
-        "strategy",
-        "order"
+        "strategy"
       ]
     },
     "ViewQuery": {
       "properties": {
-        "primaryKey": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
         "configs": {
           "$ref": "#/$defs/ResourceSelector"
         },
@@ -499,10 +498,7 @@
         }
       },
       "additionalProperties": false,
-      "type": "object",
-      "required": [
-        "primaryKey"
-      ]
+      "type": "object"
     },
     "ViewSpec": {
       "properties": {

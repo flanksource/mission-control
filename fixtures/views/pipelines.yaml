@@ -55,16 +55,16 @@ spec:
       type: status
       description: The status of the pipeline.
   queries:
-    changes:
-      - selector:
-          search: change_type=GitHubActionRun @order=-created_at
-          types:
-            - GitHubAction::Workflow
+    runs:
+      selector:
+        search: change_type=GitHubActionRun @order=-created_at
+        types:
+          - GitHubAction::Workflow
         max: 10
-        mapping:
-          name: row.name
-          lastRun: row.details.created_at
-          lastRunBy: row.details.triggering_actor.login
-          repository: row.details.repository.full_name
-          status: row.details.conclusion
-          duration: timestamp(row.details.updated_at) - timestamp(row.details.run_started_at)
+  mapping:
+    name: row.name
+    lastRun: row.details.created_at
+    lastRunBy: row.details.triggering_actor.login
+    repository: row.details.repository.full_name
+    status: row.details.conclusion
+    duration: timestamp(row.details.updated_at) - timestamp(row.details.run_started_at)
