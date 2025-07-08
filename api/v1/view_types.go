@@ -9,36 +9,59 @@ import (
 	"github.com/flanksource/commons/duration"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
+	"github.com/flanksource/duty/view"
 	"github.com/google/uuid"
+	"github.com/samber/lo"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 
 	"github.com/flanksource/incident-commander/api"
 )
 
-// ViewQuery defines a query configuration for populating the view
-type ViewQuery struct {
-	// Selector defines the resource selector for finding matching resources
-	Selector types.ResourceSelector `json:"selector" yaml:"selector"`
+type ViewMergeStrategy string
 
-	// Max number of results to return
-	Max int `json:"max,omitempty" yaml:"max,omitempty"`
+const (
+	ViewMergeStrategyLeft  ViewMergeStrategy = "left"
+	ViewMergeStrategyUnion ViewMergeStrategy = "union"
+)
 
-	// Mapping defines how to map query results to view columns
+// ViewMergeSpec defines how to merge/join data from multiple queries
+type ViewMergeSpec struct {
+	// Strategy defines the merge strategy (left join or union)
+	// Default: union
+	// +kubebuilder:validation:Enum=left;union
+	// +kubebuilder:validation:Optional
+	Strategy ViewMergeStrategy `json:"strategy" yaml:"strategy"`
+
+	// Order defines the order of queries for joining
+	// +kubebuilder:validation:MinItems=1
+	Order []string `json:"order,omitempty" yaml:"order,omitempty"`
+
+	// JoinOn defines the join conditions for each query
+	// Map key is the query name, value is a CEL expression for the join condition
+	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:Schemaless
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +kubebuilder:validation:Type=object
-	Mapping map[string]types.CelExpression `json:"mapping" yaml:"mapping" template:"true"`
+	JoinOn map[string]types.CelExpression `json:"joinOn,omitempty" yaml:"joinOn,omitempty" template:"true"`
 }
 
-// ViewQueriesSpec defines the structure for different types of queries
-type ViewQueriesSpec struct {
-	Configs []ViewQuery `json:"configs,omitempty" yaml:"configs,omitempty"`
-	Changes []ViewQuery `json:"changes,omitempty" yaml:"changes,omitempty"`
+func (v *ViewMergeSpec) Validate() error {
+	if v.Strategy == ViewMergeStrategyLeft {
+		if len(v.Order) != len(v.JoinOn) {
+			return fmt.Errorf("order and joinOn must have the same number of items")
+		}
+
+		if len(lo.Uniq(v.Order)) != len(v.Order) {
+			return fmt.Errorf("order must contain unique values")
+		}
+	}
+
+	return nil
 }
 
 // ViewSpec defines the desired state of View
-// +kubebuilder:validation:XValidation:rule="size(self.panels) > 0 || (size(self.columns) > 0 && (size(self.queries.configs) > 0 || size(self.queries.changes) > 0))",message="view spec must have either panels or both columns and queries defined"
+// +kubebuilder:validation:XValidation:rule="size(self.panels) > 0 || (size(self.columns) > 0 && size(self.queries) > 0)",message="view spec must have either panels or both columns and queries defined"
 type ViewSpec struct {
 	// Panels for the view
 	//+kubebuilder:validation:Optional
@@ -50,11 +73,44 @@ type ViewSpec struct {
 
 	// Queries define the queries and mappings to populate the view
 	//+kubebuilder:validation:Optional
-	Queries ViewQueriesSpec `json:"queries" yaml:"queries"`
+	Queries map[string]view.Query `json:"queries" yaml:"queries"`
+
+	// Merge defines how to merge/join data from multiple queries
+	//+kubebuilder:validation:Optional
+	Merge *ViewMergeSpec `json:"merge,omitempty" yaml:"merge,omitempty"`
+
+	// Mapping defines how to map query results to view columns
+	//+kubebuilder:validation:Optional
+	// +kubebuilder:validation:Schemaless
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Type=object
+	Mapping map[string]types.CelExpression `json:"mapping,omitempty" yaml:"mapping,omitempty" template:"true"`
 
 	// Cache configuration
 	//+kubebuilder:validation:Optional
 	Cache ViewCache `json:"cache" yaml:"cache"`
+}
+
+func (t ViewSpec) Validate() error {
+	if t.Merge != nil {
+		if err := t.Merge.Validate(); err != nil {
+			return err
+		}
+
+		if missing, extra := lo.Difference(lo.Keys(t.Queries), t.Merge.Order); len(missing) > 0 {
+			return fmt.Errorf("merge order must address all the queries. missing queries: %v", missing)
+		} else if len(extra) > 0 {
+			return fmt.Errorf("merge order must not contain extra queries: %v", extra)
+		}
+	}
+
+	for k, query := range t.Queries {
+		if query.IsEmpty() {
+			return fmt.Errorf("query %s is empty", k)
+		}
+	}
+
+	return nil
 }
 
 // ViewStatus defines the observed state of View

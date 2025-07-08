@@ -6,12 +6,20 @@ import (
 
 	"github.com/flanksource/commons/duration"
 	"github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/query"
+	"github.com/flanksource/duty/dataquery"
 	"github.com/flanksource/duty/types"
+	pkgView "github.com/flanksource/duty/view"
+	"github.com/samber/lo"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 )
+
+// QueryResult represents all results from a single query
+type QueryResult struct {
+	Name string
+	Rows []dataquery.QueryResultRow
+}
 
 // Run executes the view queries and returns the rows with data
 func Run(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
@@ -29,94 +37,38 @@ func Run(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 		})
 	}
 
-	configRows, err := executeConfigQueries(ctx, view.Spec.Columns, view.Spec.Queries.Configs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute config queries: %w", err)
-	}
-	output.Rows = append(output.Rows, configRows...)
+	var queryResults []QueryResult
+	for queryName, q := range view.Spec.Queries {
+		results, err := pkgView.ExecuteQuery(ctx, q)
+		if err != nil {
+			return nil, fmt.Errorf("failed to execute config query '%s': %w", queryName, err)
+		}
 
-	changeRows, err := executeChangeQueries(ctx, view.Spec.Columns, view.Spec.Queries.Changes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to execute change queries: %w", err)
+		queryResults = append(queryResults, QueryResult{
+			Rows: results,
+			Name: queryName,
+		})
 	}
-	output.Rows = append(output.Rows, changeRows...)
 
+	merge := lo.FromPtr(view.Spec.Merge)
+	mergedData, err := mergeResults(queryResults, merge)
+	if err != nil {
+		return nil, fmt.Errorf("failed to merge results: %w", err)
+	}
+
+	var rows []api.ViewRow
+	for _, result := range mergedData {
+		row, err := applyMapping(result, view.Spec.Columns, view.Spec.Mapping)
+		if err != nil {
+			return nil, fmt.Errorf("failed to apply view mapping: %w", err)
+		}
+
+		rows = append(rows, row)
+	}
+
+	output.Rows = rows
 	output.Columns = view.Spec.Columns
 	return &output, nil
-}
-
-func executePanel(ctx context.Context, q api.PanelDef) ([]types.AggregateRow, error) {
-	table := "config_items"
-	if q.Source == "changes" {
-		table = "catalog_changes"
-	}
-
-	result, err := query.Aggregate(ctx, table, q.Query)
-	if err != nil {
-		return nil, fmt.Errorf("failed to aggregate: %w", err)
-	}
-
-	return result, nil
-}
-
-// executeConfigQueries executes configuration-based queries
-func executeConfigQueries(ctx context.Context, columnDefs []api.ViewColumnDef, queries []v1.ViewQuery) ([]api.ViewRow, error) {
-	var rows []api.ViewRow
-
-	for _, q := range queries {
-		limit := q.Max
-		if limit <= 0 {
-			limit = -1 // No limit
-		}
-
-		configs, err := query.FindConfigsByResourceSelector(ctx, limit, q.Selector)
-		if err != nil {
-			return nil, fmt.Errorf("failed to find configs: %w", err)
-		}
-
-		// Process each config and apply mappings
-		for _, config := range configs {
-			row, err := applyMapping(map[string]any{
-				"row": config.AsMap(),
-			}, columnDefs, q.Mapping)
-			if err != nil {
-				return nil, fmt.Errorf("failed to apply mapping to config %s: %w", config.ID, err)
-			}
-			rows = append(rows, row)
-		}
-	}
-
-	return rows, nil
-}
-
-// executeChangeQueries executes change-based queries using duty's FindConfigChangesByResourceSelector
-func executeChangeQueries(ctx context.Context, columnDefs []api.ViewColumnDef, queries []v1.ViewQuery) ([]api.ViewRow, error) {
-	var rows []api.ViewRow
-
-	for _, q := range queries {
-		limit := q.Max
-		if limit <= 0 {
-			limit = -1 // No limit
-		}
-
-		changes, err := query.FindConfigChangesByResourceSelector(ctx, limit, q.Selector)
-		if err != nil {
-			return nil, fmt.Errorf("failed to find changes: %w", err)
-		}
-
-		// Process each change and apply mappings
-		for _, change := range changes {
-			row, err := applyMapping(map[string]any{
-				"row": change.AsMap(),
-			}, columnDefs, q.Mapping)
-			if err != nil {
-				return nil, fmt.Errorf("failed to apply mapping to change %s: %w", change.ID, err)
-			}
-			rows = append(rows, row)
-		}
-	}
-
-	return rows, nil
 }
 
 // applyMapping applies CEL expression mappings to data

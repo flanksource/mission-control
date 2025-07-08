@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/flanksource/duty/types"
+	pkgView "github.com/flanksource/duty/view"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -31,20 +32,17 @@ var _ = Describe("Views", func() {
 							Type: api.ViewColumnTypeString,
 						},
 					},
-					Queries: v1.ViewQueriesSpec{
-						Configs: []v1.ViewQuery{
-							{
-								Selector: types.ResourceSelector{
-									Types:       []string{"Kubernetes::Node"},
-									TagSelector: "account=flanksource",
-								},
-								Max: 10,
-								Mapping: map[string]types.CelExpression{
-									"name":   "row.name",
-									"status": "row.status",
-								},
+					Queries: map[string]pkgView.Query{
+						"nodes": {
+							Configs: &types.ResourceSelector{
+								Types:       []string{"Kubernetes::Node"},
+								TagSelector: "account=flanksource",
 							},
 						},
+					},
+					Mapping: map[string]types.CelExpression{
+						"name":   "nodes.name",
+						"status": "nodes.status",
 					},
 				},
 			}, []api.ViewRow{
@@ -63,19 +61,16 @@ var _ = Describe("Views", func() {
 							Type: api.ViewColumnTypeString,
 						},
 					},
-					Queries: v1.ViewQueriesSpec{
-						Changes: []v1.ViewQuery{
-							{
-								Selector: types.ResourceSelector{
-									Search: "change_type=CREATE",
-								},
-								Max: 10,
-								Mapping: map[string]types.CelExpression{
-									"name":   "row.name",
-									"status": "row.type",
-								},
+					Queries: map[string]pkgView.Query{
+						"items": {
+							Changes: &types.ResourceSelector{
+								Search: "change_type=CREATE",
 							},
 						},
+					},
+					Mapping: map[string]types.CelExpression{
+						"name":   "items.name",
+						"status": "items.type",
 					},
 				},
 			}, []api.ViewRow{
@@ -98,21 +93,18 @@ var _ = Describe("Views", func() {
 							Type: api.ViewColumnTypeString,
 						},
 					},
-					Queries: v1.ViewQueriesSpec{
-						Changes: []v1.ViewQuery{
-							{
-								Selector: types.ResourceSelector{
-									Types:  []string{"Helm::Release"},
-									Search: "change_type=UPDATE",
-								},
-								Max: 10,
-								Mapping: map[string]types.CelExpression{
-									"chart":   "row.name",
-									"version": "row.summary.split(' to ')[1]",
-									"source":  "row.source",
-								},
+					Queries: map[string]pkgView.Query{
+						"releases": {
+							Changes: &types.ResourceSelector{
+								Types:  []string{"Helm::Release"},
+								Search: "change_type=UPDATE",
 							},
 						},
+					},
+					Mapping: map[string]types.CelExpression{
+						"chart":   "releases.name",
+						"version": "releases.summary.split(' to ')[1]",
+						"source":  "releases.source",
 					},
 				},
 			}, []api.ViewRow{

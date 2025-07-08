@@ -103,6 +103,9 @@ func handleViewRefresh(ctx context.Context, view *v1.View, cacheOptions *v1.Cach
 		clonedCtx := ctx.Clone()
 		clonedCtx.Context = newCtx
 		refreshCtx := context.NewContext(clonedCtx).WithDB(ctx.DB(), ctx.Pool())
+		if ctx.User() != nil {
+			refreshCtx = refreshCtx.WithUser(ctx.User())
+		}
 
 		res, refreshErr, _ := refreshGroup.Do(string(view.GetUID()), func() (any, error) {
 			return populateView(refreshCtx, view)
@@ -158,12 +161,17 @@ func readCachedViewData(ctx context.Context, view *v1.View) (*api.ViewResult, er
 		}
 	}
 
-	return &api.ViewResult{
-		Columns:         view.Spec.Columns,
-		Rows:            rows,
-		Panels:          finalPanelResults,
-		LastRefreshedAt: view.Status.LastRan.Time,
-	}, nil
+	result := &api.ViewResult{
+		Columns: view.Spec.Columns,
+		Rows:    rows,
+		Panels:  finalPanelResults,
+	}
+
+	if view.Status.LastRan != nil {
+		result.LastRefreshedAt = view.Status.LastRan.Time
+	}
+
+	return result, nil
 }
 
 // populateView runs the view queries and saves to the view table.

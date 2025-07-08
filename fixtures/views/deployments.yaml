@@ -101,17 +101,17 @@ spec:
       type: datetime
       description: The last updated time.
   queries:
-    configs:
-      - selector:
-          search: '@order=name'
-          types:
-            - Kubernetes::HelmRelease
-          tagSelector: namespace in (monitoring,media)
-        mapping:
-          application: row.name
-          namespace: row.tags.namespace
-          chart: row.config.status.history[0].chartName
-          version: row.config.status.history[0].chartVersion
-          status: row.status
-          health: row.health
-          lastUpdated: row.updated_at
+    helmReleases:
+      selector:
+        search: '@order=name'
+        types:
+          - Kubernetes::HelmRelease
+        tagSelector: namespace in (monitoring,media)
+  mapping:
+    application: row.name
+    namespace: row.tags.namespace
+    chart: row.config.status.history[0].chartName
+    version: row.config.status.history[0].chartVersion
+    status: row.status
+    health: row.health
+    lastUpdated: row.updated_at
