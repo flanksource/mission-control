@@ -74,3 +74,19 @@ var PingUpstream = &job.Job{
 		return client.Ping(ctx.Context)
 	},
 }
+
+// ResetIsPushed sets is_pushed field to false for all entities
+// updated in the last 7 days
+var ResetIsPushed = &job.Job{
+	Name:       "ResetIsPushed",
+	Schedule:   "15 3 * * *", // Everyday at 3:15 AM
+	Retention:  job.RetentionFew,
+	JobHistory: true,
+	RunNow:     false,
+	Singleton:  true,
+	Fn: func(ctx job.JobRuntime) error {
+		ctx.History.ResourceType = job.ResourceTypeUpstream
+		ctx.History.ResourceID = api.UpstreamConf.Host
+		return upstream.ResetIsPushed(ctx.Context)
+	},
+}
