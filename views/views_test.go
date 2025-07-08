@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/flanksource/duty/types"
+	pkgView "github.com/flanksource/duty/view"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -31,7 +32,7 @@ var _ = Describe("Views", func() {
 							Type: api.ViewColumnTypeString,
 						},
 					},
-					Queries: map[string]v1.ViewQuery{
+					Queries: map[string]pkgView.Query{
 						"nodes": {
 							Configs: &types.ResourceSelector{
 								Types:       []string{"Kubernetes::Node"},
@@ -60,7 +61,7 @@ var _ = Describe("Views", func() {
 							Type: api.ViewColumnTypeString,
 						},
 					},
-					Queries: map[string]v1.ViewQuery{
+					Queries: map[string]pkgView.Query{
 						"items": {
 							Changes: &types.ResourceSelector{
 								Search: "change_type=CREATE",
@@ -92,7 +93,7 @@ var _ = Describe("Views", func() {
 							Type: api.ViewColumnTypeString,
 						},
 					},
-					Queries: map[string]v1.ViewQuery{
+					Queries: map[string]pkgView.Query{
 						"releases": {
 							Changes: &types.ResourceSelector{
 								Types:  []string{"Helm::Release"},
