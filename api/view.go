@@ -1,6 +1,8 @@
 package api
 
-import "time"
+import (
+	"time"
+)
 
 type ViewColumnType string
 
@@ -33,6 +35,17 @@ type ViewColumnDef struct {
 
 	// Configuration for gauge visualization
 	Gauge *GaugeConfig `json:"gauge,omitempty" yaml:"gauge,omitempty"`
+}
+
+type ViewColumnDefList []ViewColumnDef
+
+func (c ViewColumnDefList) SelectColumns() []string {
+	output := make([]string, len(c))
+	for i, col := range c {
+		output[i] = col.Name
+	}
+
+	return output
 }
 
 // ViewResult is the result of a view query
