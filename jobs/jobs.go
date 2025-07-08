@@ -36,6 +36,7 @@ func agentJobs(ctx context.Context) []*job.Job {
 		PingUpstream,
 		ReconcileAll,
 		SyncArtifactData,
+		ResetIsPushed,
 		PushPlaybookActions(ctx),
 	}
 }
