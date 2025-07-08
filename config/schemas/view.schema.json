@@ -99,6 +99,9 @@
         "max": {
           "type": "integer"
         },
+        "unit": {
+          "type": "string"
+        },
         "thresholds": {
           "items": {
             "$ref": "#/$defs/GaugeThreshold"
@@ -107,11 +110,7 @@
         }
       },
       "additionalProperties": false,
-      "type": "object",
-      "required": [
-        "min",
-        "max"
-      ]
+      "type": "object"
     },
     "GaugeThreshold": {
       "properties": {

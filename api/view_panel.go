@@ -66,6 +66,7 @@ type GaugeThreshold struct {
 type GaugeConfig struct {
 	Min        int              `json:"min,omitempty" yaml:"min,omitempty"`
 	Max        int              `json:"max,omitempty" yaml:"max,omitempty"`
+	Unit       string           `json:"unit,omitempty" yaml:"unit,omitempty"`
 	Thresholds []GaugeThreshold `json:"thresholds,omitempty" yaml:"thresholds,omitempty"`
 }
 

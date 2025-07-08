@@ -7,13 +7,13 @@ metadata:
   annotations:
     expected-rows: |
       [
-        ["logistics-api-7df4c7f6b7-x9k2m", "Kubernetes::Pod", "Running", "healthy", "missioncontrol", "5", "00000000-0000-0000-0000-000000000000", false],
-        ["logistics-ui-6c8f9b4d5e-m7n8p", "Kubernetes::Pod", "Running", "healthy", "missioncontrol", "10", "00000000-0000-0000-0000-000000000000", false]
+        ["logistics-api-7df4c7f6b7-x9k2m", "Kubernetes::Pod", "Running", "healthy", "missioncontrol", "5"],
+        ["logistics-ui-6c8f9b4d5e-m7n8p", "Kubernetes::Pod", "Running", "healthy", "missioncontrol", "10"]
       ]
     expected-panels: |
       [
         {
-          "name": "Pod Health Summary", 
+          "name": "Pod Health Summary",
           "type": "number",
           "rows": [
             {"total": 20}
@@ -55,3 +55,4 @@ spec:
           - function: count
             field: "*"
             alias: total
+

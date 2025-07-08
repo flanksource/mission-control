@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/Masterminds/squirrel"
+	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
@@ -130,19 +131,54 @@ func ReadViewTable(ctx context.Context, columnDef api.ViewColumnDefList, tableNa
 		viewRows = append(viewRows, viewRow)
 	}
 
-	return postProcessViewRows(viewRows, columnDef), nil
+	return convertViewRecordsToNativeTypes(viewRows, columnDef), nil
 }
 
-func postProcessViewRows(viewRows []api.ViewRow, columnDef []api.ViewColumnDef) []api.ViewRow {
+// convertViewRecordsToNativeTypes converts view cell to native go types
+func convertViewRecordsToNativeTypes(viewRows []api.ViewRow, columnDef []api.ViewColumnDef) []api.ViewRow {
 	for _, viewRow := range viewRows {
 		for i, colDef := range columnDef {
+			if i >= len(viewRow) {
+				continue
+			}
+
+			if viewRow[i] == nil {
+				continue
+			}
+
 			switch colDef.Type {
 			case api.ViewColumnTypeGauge:
-				viewRow[i] = json.RawMessage(viewRow[i].([]uint8))
+				if raw, ok := viewRow[i].([]uint8); ok {
+					viewRow[i] = json.RawMessage(raw)
+				}
+
 			case api.ViewColumnTypeDuration:
-				viewRow[i] = time.Duration(viewRow[i].(int64))
+				switch v := viewRow[i].(type) {
+				case int:
+					viewRow[i] = time.Duration(v)
+				case int32:
+					viewRow[i] = time.Duration(v)
+				case int64:
+					viewRow[i] = time.Duration(v)
+				case float64:
+					viewRow[i] = time.Duration(int64(v))
+				default:
+					logger.Warnf("postProcessViewRows: unknown duration type: %T", v)
+				}
+
 			case api.ViewColumnTypeDateTime:
-				viewRow[i] = time.Time(viewRow[i].(time.Time))
+				switch v := viewRow[i].(type) {
+				case time.Time:
+					viewRow[i] = v
+				case string:
+					parsed, err := time.Parse(time.RFC3339, v)
+					if err != nil {
+						logger.Warnf("postProcessViewRows: failed to parse datetime: %v", err)
+					}
+					viewRow[i] = parsed
+				default:
+					logger.Warnf("postProcessViewRows: unknown datetime type: %T", v)
+				}
 			}
 		}
 	}

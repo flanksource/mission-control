@@ -88,9 +88,8 @@ spec:
                             - value
                             type: object
                           type: array
-                      required:
-                      - max
-                      - min
+                        unit:
+                          type: string
                       type: object
                     name:
                       description: Name of the column
@@ -144,9 +143,8 @@ spec:
                             - value
                             type: object
                           type: array
-                      required:
-                      - max
-                      - min
+                        unit:
+                          type: string
                       type: object
                     name:
                       description: Name of the panel
