@@ -19,6 +19,7 @@ func Server() http.HandlerFunc {
 	s := server.NewMCPServer("mission-control", api.BuildVersion,
 		server.WithResourceCapabilities(true, true),
 		server.WithToolCapabilities(true),
+		server.WithPromptCapabilities(true),
 		server.WithRecovery(),
 	)
 
