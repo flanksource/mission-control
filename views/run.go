@@ -6,8 +6,9 @@ import (
 
 	"github.com/flanksource/commons/duration"
 	"github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/query"
+	"github.com/flanksource/duty/dataquery"
 	"github.com/flanksource/duty/types"
+	pkgView "github.com/flanksource/duty/view"
 	"github.com/samber/lo"
 
 	"github.com/flanksource/incident-commander/api"
@@ -17,10 +18,8 @@ import (
 // QueryResult represents all results from a single query
 type QueryResult struct {
 	Name string
-	Rows []QueryResultRow
+	Rows []dataquery.QueryResultRow
 }
-
-type QueryResultRow map[string]any
 
 // Run executes the view queries and returns the rows with data
 func Run(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
@@ -40,7 +39,7 @@ func Run(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 
 	var queryResults []QueryResult
 	for queryName, q := range view.Spec.Queries {
-		results, err := executeQuery(ctx, q)
+		results, err := pkgView.ExecuteQuery(ctx, q)
 		if err != nil {
 			return nil, fmt.Errorf("failed to execute config query '%s': %w", queryName, err)
 		}
@@ -51,13 +50,13 @@ func Run(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 		})
 	}
 
-	merge := lo.If(view.Spec.Merge != nil, *view.Spec.Merge).Else(v1.ViewMergeSpec{})
+	merge := lo.FromPtr(view.Spec.Merge)
 	mergedData, err := mergeResults(queryResults, merge)
 	if err != nil {
 		return nil, fmt.Errorf("failed to merge results: %w", err)
 	}
 
-	var rows []api.ViewRow
+	var rows []pkgView.Row
 	for _, result := range mergedData {
 		row, err := applyMapping(result, view.Spec.Columns, view.Spec.Mapping)
 		if err != nil {
@@ -72,45 +71,9 @@ func Run(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 	return &output, nil
 }
 
-// executeQuery executes a single query and returns results with query name
-func executeQuery(ctx context.Context, q v1.ViewQuery) ([]QueryResultRow, error) {
-	var results []QueryResultRow
-
-	if q.Configs != nil && !q.Configs.IsEmpty() {
-		configs, err := query.FindConfigsByResourceSelector(ctx, -1, *q.Configs)
-		if err != nil {
-			return nil, fmt.Errorf("failed to find configs: %w", err)
-		}
-
-		for _, config := range configs {
-			results = append(results, config.AsMap())
-		}
-	} else if q.Changes != nil && !q.Changes.IsEmpty() {
-		changes, err := query.FindConfigChangesByResourceSelector(ctx, -1, *q.Changes)
-		if err != nil {
-			return nil, fmt.Errorf("failed to find changes: %w", err)
-		}
-
-		for _, change := range changes {
-			results = append(results, change.AsMap())
-		}
-	} else if q.Prometheus != nil {
-		prometheusResults, err := executePrometheusQuery(ctx, *q.Prometheus)
-		if err != nil {
-			return nil, fmt.Errorf("failed to execute prometheus query: %w", err)
-		}
-
-		results = prometheusResults
-	} else {
-		return nil, fmt.Errorf("view query has not datasource specified")
-	}
-
-	return results, nil
-}
-
 // applyMapping applies CEL expression mappings to data
-func applyMapping(data map[string]any, columnDefs []api.ViewColumnDef, mapping map[string]types.CelExpression) (api.ViewRow, error) {
-	var row api.ViewRow
+func applyMapping(data map[string]any, columnDefs []pkgView.ViewColumnDef, mapping map[string]types.CelExpression) (pkgView.Row, error) {
+	var row pkgView.Row
 
 	for _, columnDef := range columnDefs {
 		expr, ok := mapping[columnDef.Name]
@@ -125,7 +88,7 @@ func applyMapping(data map[string]any, columnDefs []api.ViewColumnDef, mapping m
 		}
 
 		switch columnDef.Type {
-		case api.ViewColumnTypeDuration:
+		case pkgView.ColumnTypeDuration:
 			v, err := duration.ParseDuration(value)
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse as duration (%s): %w", value, err)

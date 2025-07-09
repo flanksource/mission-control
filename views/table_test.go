@@ -9,6 +9,7 @@ import (
 
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
+	pkgView "github.com/flanksource/duty/view"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"gopkg.in/yaml.v2"
@@ -59,9 +60,9 @@ var _ = Describe("View Database Table", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result.Rows).To(HaveLen(len(expectedRows)))
 
-			expectedResults := make([]api.ViewRow, len(expectedRows))
+			expectedResults := make([]pkgView.Row, len(expectedRows))
 			for i, row := range expectedRows {
-				expectedResults[i] = api.ViewRow(row)
+				expectedResults[i] = pkgView.Row(row)
 			}
 			Expect(result.Rows).To(Equal(expectedResults))
 

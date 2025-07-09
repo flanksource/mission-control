@@ -86,6 +86,54 @@
         "alias"
       ]
     },
+    "ConfigMapKeySelector": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "key"
+      ]
+    },
+    "EnvVar": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        },
+        "valueFrom": {
+          "$ref": "#/$defs/EnvVarSource"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "EnvVarSource": {
+      "properties": {
+        "serviceAccount": {
+          "type": "string"
+        },
+        "helmRef": {
+          "$ref": "#/$defs/HelmRefKeySelector"
+        },
+        "configMapKeyRef": {
+          "$ref": "#/$defs/ConfigMapKeySelector"
+        },
+        "secretKeyRef": {
+          "$ref": "#/$defs/SecretKeySelector"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "FieldsV1": {
       "properties": {},
       "additionalProperties": false,
@@ -129,6 +177,21 @@
         "color"
       ]
     },
+    "HelmRefKeySelector": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "key"
+      ]
+    },
     "Items": {
       "items": {
         "type": "string"
@@ -157,6 +220,33 @@
         },
         "subresource": {
           "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "OAuth": {
+      "properties": {
+        "clientID": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "clientSecret": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "scope": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "tokenURL": {
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
         }
       },
       "additionalProperties": false,
@@ -334,6 +424,33 @@
         "connection": {
           "type": "string"
         },
+        "username": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "password": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "ntlm": {
+          "type": "boolean"
+        },
+        "ntlmv2": {
+          "type": "boolean"
+        },
+        "digest": {
+          "type": "boolean"
+        },
+        "url": {
+          "type": "string"
+        },
+        "bearer": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "oauth": {
+          "$ref": "#/$defs/OAuth"
+        },
+        "tls": {
+          "$ref": "#/$defs/TLSConfig"
+        },
         "query": {
           "type": "string"
         }
@@ -341,9 +458,23 @@
       "additionalProperties": false,
       "type": "object",
       "required": [
-        "connection",
         "query"
       ]
+    },
+    "Query": {
+      "properties": {
+        "configs": {
+          "$ref": "#/$defs/ResourceSelector"
+        },
+        "changes": {
+          "$ref": "#/$defs/ResourceSelector"
+        },
+        "prometheus": {
+          "$ref": "#/$defs/PrometheusQuery"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
     },
     "ResourceSelector": {
       "properties": {
@@ -391,6 +522,42 @@
         },
         "statuses": {
           "$ref": "#/$defs/Items"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "SecretKeySelector": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "key": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "key"
+      ]
+    },
+    "TLSConfig": {
+      "properties": {
+        "insecureSkipVerify": {
+          "type": "boolean"
+        },
+        "handshakeTimeout": {
+          "type": "integer"
+        },
+        "ca": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "cert": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "key": {
+          "$ref": "#/$defs/EnvVar"
         }
       },
       "additionalProperties": false,
@@ -485,21 +652,6 @@
         "strategy"
       ]
     },
-    "ViewQuery": {
-      "properties": {
-        "configs": {
-          "$ref": "#/$defs/ResourceSelector"
-        },
-        "changes": {
-          "$ref": "#/$defs/ResourceSelector"
-        },
-        "prometheus": {
-          "$ref": "#/$defs/PrometheusQuery"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "ViewSpec": {
       "properties": {
         "panels": {
@@ -516,7 +668,7 @@
         },
         "queries": {
           "additionalProperties": {
-            "$ref": "#/$defs/ViewQuery"
+            "$ref": "#/$defs/Query"
           },
           "type": "object"
         },
