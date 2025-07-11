@@ -62,3 +62,27 @@ func SlackSend(ctx *Context, apiToken, channel string, msg NotificationTemplate)
 
 	return ctx.Oops().Hint(msg.Message).Wrap(err)
 }
+
+const DefaultLabelsWhitelist = `app|batch.kubernetes.io/jobname|app.kubernetes.io/name|kustomize.toolkit.fluxcd.io/name;
+app.kubernetes.io/version;
+`
+
+// TrimLabels returns a subset of labels that match the whitelist.
+// The whitelist contains a set of groups separated by semicolons
+// with group members separated by pipes.
+func TrimLabels(whitelist string, labels map[string]string) map[string]string {
+	groups := strings.Split(whitelist, ";")
+	matchedLabels := make(map[string]string)
+
+	for _, group := range groups {
+		for key := range strings.SplitSeq(group, "|") {
+			key = strings.TrimSpace(key)
+			if val, ok := labels[key]; ok {
+				matchedLabels[key] = val
+				break // move to the next group
+			}
+		}
+	}
+
+	return matchedLabels
+}

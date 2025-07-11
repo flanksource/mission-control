@@ -12,6 +12,7 @@ import (
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/llm"
+	"github.com/flanksource/incident-commander/notification"
 	"github.com/flanksource/incident-commander/shorturl"
 )
 
@@ -205,9 +206,12 @@ func slackBlocks(ctx context.Context, knowledge *KnowledgeGraph, diagnosisReport
 
 	blocks = append(blocks, divider)
 
-	if labelsSection := createSlackFieldsSection("", *affectedResource.Labels); labelsSection != nil {
-		blocks = append(blocks, labelsSection)
-		blocks = append(blocks, divider)
+	if affectedResource.Labels != nil {
+		trimmedLabels := notification.TrimLabels(ctx.Properties().String("notifications.whitelist.labels", notification.DefaultLabelsWhitelist), *affectedResource.Labels)
+		if labelsSection := createSlackFieldsSection("", trimmedLabels); labelsSection != nil {
+			blocks = append(blocks, labelsSection)
+			blocks = append(blocks, divider)
+		}
 	}
 
 	if len(groupedResources) > 0 {
