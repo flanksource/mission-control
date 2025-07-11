@@ -205,7 +205,7 @@ func slackBlocks(ctx context.Context, knowledge *KnowledgeGraph, diagnosisReport
 
 	blocks = append(blocks, divider)
 
-	if labelsSection := createSlackFieldsSection("Labels", *affectedResource.Labels); labelsSection != nil {
+	if labelsSection := createSlackFieldsSection("", *affectedResource.Labels); labelsSection != nil {
 		blocks = append(blocks, labelsSection)
 		blocks = append(blocks, divider)
 	}
