@@ -43,7 +43,7 @@ func searchConfigChangesHandler(goctx gocontext.Context, req mcp.CallToolRequest
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	limit := req.GetInt("limit", 20)
+	limit := req.GetInt("limit", 30)
 
 	ctx, err := getDutyCtx(goctx)
 	if err != nil {
@@ -90,7 +90,7 @@ func relatedCatalogHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*m
 	return mcp.NewToolResultText(string(jsonData)), nil
 }
 
-func configTypeResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+func configTypeResourceHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	ctx, err := getDutyCtx(goctx)
 	if err != nil {
 		return nil, err
@@ -99,7 +99,7 @@ func configTypeResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequ
 	var types []string
 	err = ctx.DB().Model(&models.ConfigItem{}).Select("DISTINCT(type)").Find(&types).Error
 	if err != nil {
-		return nil, err
+		return mcp.NewToolResultError(err.Error()), nil
 	}
 
 	jsonData, err := json.Marshal(types)
@@ -107,13 +107,7 @@ func configTypeResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequ
 		return nil, err
 	}
 
-	return []mcp.ResourceContents{
-		mcp.TextResourceContents{
-			URI:      req.Params.URI,
-			MIMEType: "application/json",
-			Text:     string(jsonData),
-		},
-	}, nil
+	return mcp.NewToolResultText(string(jsonData)), nil
 }
 
 func ConfigItemResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
@@ -128,7 +122,7 @@ func ConfigItemResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequ
 		return nil, err
 	}
 	if ci == nil {
-		return nil, err
+		return nil, fmt.Errorf("config item[%s] not found", id)
 	}
 	jsonData, err := json.Marshal(ci)
 	if err != nil {
@@ -176,35 +170,68 @@ func registerCatalog(s *server.MCPServer) {
 			mcp.WithTemplateDescription("Config Item Data"), mcp.WithTemplateMIMEType(echo.MIMEApplicationJSON)),
 		ConfigItemResourceHandler)
 
-	s.AddResource(mcp.NewResource("config_item://config_types", "Config Types",
-		mcp.WithResourceDescription("List all config types"), mcp.WithMIMEType(echo.MIMEApplicationJSON)),
-		configTypeResourceHandler)
+	s.AddTool(mcp.NewTool("list_catalog_types",
+		mcp.WithDescription("List all config types")), configTypeResourceHandler)
 
 	var queryDescription = `
-	Using the below args, query the catalog search tool:
-	type could be in the format of GCP::xxx, Kubernetes::xxx, Azure::xxx, AWS::xxx
-	Use the resource config_item://config_types to get the list
+	We can search our entire catalog via query
+	Use the tool: list_catalog_types to get all the types first to make inference is better (cache them for 15m)
 
-	Fields we support in query: id, agent, name, namespace, labelSelector, tagSelector, status, health, limit (max items to return)
-	Example queries:
-	- Query all kubernetes namespaces that start with kube is -> type=Kubernetes::Namespace kube*
-	- Query all unhealthy ec2 instances -> type=AWS::EC2::Instance health=unhealthy
+	FORMAL PEG GRAMMAR:
+	Query = AndQuery _ OrQuery*
+	OrQuery = _ '|' _ AndQuery
+	AndQuery = _ FieldQuery _ FieldQuery*
+	FieldQuery = _ '(' _ Query _ ')' _
+	/ _ Field _
+	/ _ '-' Word _
+	/ _ (Word / Identifier) _
+	Field = Source _ Operator _ Value
+	Source = Identifier ('.' Identifier)*
+	Operator = "<=" / ">=" / "=" / ":" / "!=" / "<" / ">"
+	Value = DateTime / ISODate / Time / Measure
+	/ Float / Integer / Identifier / String
+	String = '"' [^"]* '"'
+	ISODate = [0-9]{4} '-' [0-9]{2} '-' [0-9]{2}
+	Time = [0-2][0-9] ':' [0-5][0-9] ':' [0-5][0-9]
+	DateTime = "now" (("+" / "-") Integer DurationUnit)?
+	/ ISODate ? Time?
+	DurationUnit = "s" / "m" / "h" / "d" / "w" / "mo" / "y"
+	Word = String / '-'? [@a-zA-Z0-9-]+
+	Integer = [+-]?[0-9]+ ![a-zA-Z0-9_-]
+	Float = [+-]? [0-9] '.' [0-9]+
+	Measure = (Integer / Float) Identifier
+	Identifier = [@a-zA-Z0-9_\,-:\[\]]+
+	_ = [ \t]
+	EOF = !.
 
-	Whatever comes after the first :: is the config_class
-
-	For health we use healthy, unhealthy, warning and unknown
-
-	And we support * searches for prefix (pattern*), suffix (*pattern) and glob (*pattern*)
-
-	If you are asked things like name contains or type contains, use "*" around it, for example, name contains
-	postgres should mean query -> name=*postgres*
-
-	Status can be a lot of different things
-
-	When you are asked to query, its in peg format "type=Kuberntes::Deployment name=nginx*" which fetches all nginx deployments
-	the query, "type=Kuberntes::* health=unhealthy" will get all unhealthy kubernetes resources
-
-	`
+	Query Shape
+	A query is one or more space-separated pairs: field=value.
+	Order does not matter.
+	Fields:  type | id | agent | name | namespace | labelSelector | tagSelector | status | health | limit | created_at | updated_at | deleted_at | label.* | tag.*
+	• label.* and tag.* accept any key after the dot, following Kubernetes label grammar.
+	• labelSelector and tagSelector accept full Kubernetes selector expressions (e.g. env in (prod,stage), !deprecated).
+	type: <Provider>::<ConfigClass> or <Provider>::* (Providers: AWS, Azure, GCP, Kubernetes)
+	health: healthy | unhealthy | warning | unknown
+	status free text (wildcards allowed)
+	limit: positive integer
+	date fields compare with <, >, <=, >= against:
+	– absolute ISO date YYYY-MM-DD
+	– date-math now±N{ s | m | h | d | w | mo | y } (e.g. now-24h, now-7d)
+	WILDCARDS
+	value*: prefix match
+	*value: suffix match
+	*value*:  contains match
+	EXAMPLES
+	type=Kubernetes::Namespace name=kube*
+	type=AWS::EC2::Instance health=unhealthy
+	type=Kubernetes::Deployment name=nginx*
+	type=Kubernetes::* health=unhealthy
+	created_at>now-24h
+	updated_at>2025-01-01 updated_at<2025-01-31
+	type=Kubernetes::Pod labelSelector="team in (payments,orders)"
+	type=Kubernetes::Pod label.app=nginx tag.cluster=prod
+	Use this single specification to parse requests, generate valid catalog-search queries, and validate existing ones.
+`
 	searchCatalogTool := mcp.NewTool("catalog_search",
 		mcp.WithDescription("Search across catalog"),
 		mcp.WithReadOnlyHintAnnotation(true),
@@ -216,23 +243,65 @@ func registerCatalog(s *server.MCPServer) {
 	s.AddTool(searchCatalogTool, searchCatalogHandler)
 
 	var configChangeQueryDescription = `
-	Using the below args, query the catalog search tool:
-	type could be in the format of GCP::xxx, Kubernetes::xxx, Azure::xxx, AWS::xxx
-	Use the resource config_item://change_types to get the list
+	We can search all the catalog changes via query
+	Use the tool: list_catalog_types to get all the types first to make inference is better (cache them for 15m)
 
-	Fields we support in query: "id", "config_id", "name", "type", "created_at", "severity", "change_type", "summary", "count", "first_observed", "agent_id"
-	Example queries:
-	- Query all changes for config_id in last 7 days is -> config_id=7f8d56ee-55cb-468e-9f93-7d46f9a94f44 created_at=now-7d
-
-	For severity we use info,low,medium,high and critical
-
-	And we support * searches for prefix (pattern*), suffix (*pattern) and glob (*pattern*)
-
-	If you are asked things like name contains or type contains, use "*" around it, for example, name contains
-	postgres should mean query -> name=*postgres*
-
-	When you are asked to query, its in peg format "type=Kuberntes::Deployment name=nginx*" which fetches all nginx deployments
-	the query, "type=Kuberntes::* health=unhealthy" will get all unhealthy kubernetes resources
+	FORMAL PEG GRAMMAR:
+	Query = AndQuery _ OrQuery*
+	OrQuery = _ '|' _ AndQuery
+	AndQuery = _ FieldQuery _ FieldQuery*
+	FieldQuery = _ '(' _ Query _ ')' _
+	/ _ Field _
+	/ _ '-' Word _
+	/ _ (Word / Identifier) _
+	Field = Source _ Operator _ Value
+	Source = Identifier ('.' Identifier)*
+	Operator = "<=" / ">=" / "=" / ":" / "!=" / "<" / ">"
+	Value = DateTime / ISODate / Time / Measure
+	/ Float / Integer / Identifier / String
+	String = '"' [^"]* '"'
+	ISODate = [0-9]{4} '-' [0-9]{2} '-' [0-9]{2}
+	Time = [0-2][0-9] ':' [0-5][0-9] ':' [0-5][0-9]
+	DateTime = "now" (("+" / "-") Integer DurationUnit)?
+	/ ISODate ? Time?
+	DurationUnit = "s" / "m" / "h" / "d" / "w" / "mo" / "y"
+	Word = String / '-'? [@a-zA-Z0-9-]+
+	Integer = [+-]?[0-9]+ ![a-zA-Z0-9_-]
+	Float = [+-]? [0-9] '.' [0-9]+
+	Measure = (Integer / Float) Identifier
+	Identifier = [@a-zA-Z0-9_\,-:\[\]]+
+	_ = [ \t]
+	EOF = !.
+	QUERY SHAPE
+	A query is one or more space-separated pairs: field=value.
+	Order does not matter.
+	Fields that match against the config item:  type | id | config_id | agent | name | namespace  | labelSelector | tagSelector | status | health | limit | created_at | updated_at | deleted_at | label.* | tag.*
+	• label.* and tag.* accept any key after the dot, following Kubernetes label grammar.
+	• labelSelector and tagSelector accept full Kubernetes selector expressions (e.g. env in (prod,stage), !deprecated).
+	fields that match against the config items changes: change_type | severity | summary | count | first_observed
+	type: <Provider>::<ConfigClass> or <Provider>::* (Providers: AWS, Azure, GCP, Kubernetes)
+	health: healthy | unhealthy | warning | unknown
+	severity: info,low,medium,high and critical
+	status free text (wildcards allowed)
+	limit: positive integer
+	date fields compare with <, >, <=, >= against:
+	– absolute ISO date YYYY-MM-DD
+	– date-math now±N{ s | m | h | d | w | mo | y } (e.g. now-24h, now-7d)
+	WILDCARDS
+	value*: prefix match
+	*value: suffix match
+	*value*:  contains match
+	EXAMPLES
+	type=Kubernetes::Namespace name=kube*
+	type=AWS::EC2::Instance health=unhealthy
+	type=AWS::* severity=critical
+	type=Kubernetes::Deployment name=nginx*
+	type=Kubernetes::* health=unhealthy
+	created_at>now-24h
+	updated_at>2025-01-01 updated_at<2025-01-31
+	type=Kubernetes::Pod labelSelector="team in (payments,orders)"
+	type=Kubernetes::Pod label.app=nginx tag.cluster=prod
+	Use this single specification to parse requests, generate valid catalog-search queries, and validate existing ones.
 	`
 
 	searchCatalogChangesTool := mcp.NewTool("catalog_changes_search",

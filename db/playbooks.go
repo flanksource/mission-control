@@ -74,8 +74,13 @@ func GetPlaybookRun(ctx context.Context, id string) (*models.PlaybookRun, error)
 }
 
 func GetRecentPlaybookRuns(ctx context.Context, limit int, statuses ...models.PlaybookRunStatus) ([]models.PlaybookRun, error) {
+	query := ctx.DB().Order("created_at DESC").Limit(limit)
+	if len(statuses) > 0 {
+		query = query.Where("status IN ?", statuses)
+	}
+
 	var p []models.PlaybookRun
-	if err := ctx.DB().Order("created_at DESC").Where("status IN ?", statuses).Limit(limit).Find(&p).Error; err != nil {
+	if err := query.Find(&p).Error; err != nil {
 		return nil, dutyAPI.Errorf(dutyAPI.EINTERNAL, "something went wrong").WithDebugInfo("db.GetRecentPlaybookRuns(limit=%d): %v", limit, err)
 	}
 

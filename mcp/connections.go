@@ -13,7 +13,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
-func ConnectionListHandler(goctx gocontext.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+func ConnectionListHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	ctx, err := getDutyCtx(goctx)
 	if err != nil {
 		return nil, err
@@ -21,24 +21,15 @@ func ConnectionListHandler(goctx gocontext.Context, req mcp.ReadResourceRequest)
 
 	conns, err := db.ListConnections(ctx)
 	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	jsonData, err := json.Marshal(conns)
+	if err != nil {
 		return nil, err
 	}
 
-	var contents []mcp.ResourceContents
-	for _, c := range conns {
-		jsonData, err := json.Marshal(conns)
-		if err != nil {
-			return nil, err
-		}
-		contents = append(contents, mcp.TextResourceContents{
-			URI:      fmt.Sprintf("connection://%s/%s", c.Namespace, c.Name),
-			MIMEType: "application/json",
-			Text:     string(jsonData),
-		})
-
-	}
-
-	return contents, nil
+	return mcp.NewToolResultText(string(jsonData)), nil
 }
 
 func ConnectionResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
@@ -48,17 +39,21 @@ func ConnectionResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequ
 	}
 	parts := strings.Split(strings.TrimPrefix(req.Params.URI, "connection://"), "/")
 	if len(parts) != 2 {
-		return nil, fmt.Errorf("")
+		return nil, fmt.Errorf("invalid connection format: %s", req.Params.URI)
 	}
 
-	namespace, name := parts[1], parts[0]
+	namespace, name := parts[0], parts[1]
 
-	conns, err := context.FindConnection(ctx, name, namespace)
+	conn, err := context.FindConnection(ctx, name, namespace)
 	if err != nil {
 		return nil, err
 	}
 
-	jsonData, err := json.Marshal(conns)
+	if conn == nil {
+		return nil, fmt.Errorf("connection not found")
+	}
+
+	jsonData, err := json.Marshal(conn)
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +73,5 @@ func registerConnections(s *server.MCPServer) {
 			mcp.WithTemplateDescription("Config Item Data"), mcp.WithTemplateMIMEType(echo.MIMEApplicationJSON)),
 		ConnectionResourceHandler)
 
-	s.AddResource(mcp.NewResource("connection://list", "Config Types",
-		mcp.WithResourceDescription("List all config types"), mcp.WithMIMEType(echo.MIMEApplicationJSON)),
-		ConnectionListHandler)
+	s.AddTool(mcp.NewTool("list_connections", mcp.WithDescription("List all connections")), ConnectionListHandler)
 }

@@ -3,6 +3,7 @@ package mcp
 import (
 	gocontext "context"
 	"encoding/json"
+	"fmt"
 	"strings"
 
 	"github.com/flanksource/duty/models"
@@ -69,7 +70,7 @@ func playbookRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.
 	}
 
 	if pb == nil {
-		return mcp.NewToolResultError("playbook[%s] not found"), nil
+		return mcp.NewToolResultError(fmt.Sprintf("playbook[%s] not found", playbookID)), nil
 	}
 
 	pj, err := json.Marshal(params)
@@ -182,6 +183,7 @@ func registerPlaybook(s *server.MCPServer) {
 	playbookRunTool := mcp.NewTool("playbook_exec_run",
 		mcp.WithDescription("Playbook execute run."),
 		mcp.WithOpenWorldHintAnnotation(true),
+		mcp.WithDestructiveHintAnnotation(true),
 		mcp.WithString("id",
 			mcp.Required(),
 			mcp.Description("Playbook ID"),
