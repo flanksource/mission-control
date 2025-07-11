@@ -292,7 +292,8 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 
 		if !rateLimiter.Allow() {
 			// rate limited notifications are simply dropped.
-			ctx.Warnf("notification rate limited event=%s id=%s ", event.Name, id)
+			ctx.Warnf("notification rate limited event=%s notification=%s resource=%s (health=%s, status=%s, description=%s)",
+				event.Name, id, payload.ID, payload.ResourceHealth, payload.ResourceStatus, payload.ResourceHealthDescription)
 			ctx.Counter("notification_rate_limited", "id", id).Add(1)
 			continue
 		}
