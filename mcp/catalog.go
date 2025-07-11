@@ -145,10 +145,8 @@ func searchCatalogPromptHandler(ctx gocontext.Context, req mcp.GetPromptRequest)
 		Description: fmt.Sprintf("Catalog search for %s query", query),
 		Messages: []mcp.PromptMessage{
 			{
-				Role: "user",
-				Content: mcp.NewTextContent(fmt.Sprintf(
-					`
-					`)),
+				Role:    "user",
+				Content: mcp.NewTextContent(fmt.Sprintf("Query the catalog using catalog_search with this query: %s", query)),
 			},
 		},
 	}, nil

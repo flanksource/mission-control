@@ -26,13 +26,16 @@ func playbookRecentRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) 
 	limit := req.GetInt("limit", 20)
 
 	pbrs, err := db.GetRecentPlaybookRuns(ctx, limit)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
 	jsonData, err := json.Marshal(pbrs)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
 	return mcp.NewToolResultText(string(jsonData)), nil
-
 }
 
 func playbookFailedRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
