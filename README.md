@@ -3,27 +3,27 @@
 Incident Commander is a mission control center for enterprises, managed service providers and SaaS providers, it provides:
 
 * Single pane of glass across infrastructure, applications and the cloud by aggregating data from multiple data sources:
-  * Monitoring & APM 
+  * Monitoring & APM
   * Logs
   * Configuration (Both declared via Git and runtime)
   * Change
-  
+
  * Incident lifecycle automation that automatically opens and closes tickets based on the system health across multiple dimensions:
   * Availibility
   * Cost
   * Integration
   * Compliance
-  * Performance 
+  * Performance
 
 
 ## Components
 
-* [Incident Commander](https://github.com/flanksource/incident-commander) (this repo) 
+* [Incident Commander](https://github.com/flanksource/incident-commander) (this repo)
   - Primary entrypoint for all services
   - Bi-Directional communication with other help desk systems
-  - Incident lifeycle automation 
-* [Canary Checker](https://github.com/flanksource/canary-checker) 
-  - Synethetic health checks 
+  - Incident lifeycle automation
+* [Canary Checker](https://github.com/flanksource/canary-checker)
+  - Synethetic health checks
   - Topology discovery and scanning
 * [Config DB](https://github.com/flanksource/config-db)
   - Scanning configuration from AWS, Kubernetes, Git, SQL etc..
@@ -155,4 +155,28 @@ flanksource-ui:
       - secretName: incident-commander-tls
         hosts:
         - incident-commander.flanksource.com
+```
+
+
+### Setting up MCP
+
+#### Claude
+
+Install mcp-remote: `npm i -g mcp-remote`
+
+Update mcp server settings in `$HOME/.config/Claude/claude_desktop_config.json`
+
+```json
+{
+  "mcpServers": {
+    "mission-control": {
+      "command": "npx",
+      "args": [
+        "mcp-remote",
+        "http://127.0.0.1:8080/mcp"
+      ]
+    }
+  }
+}
+
 ```

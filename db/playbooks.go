@@ -73,6 +73,20 @@ func GetPlaybookRun(ctx context.Context, id string) (*models.PlaybookRun, error)
 	return &p, nil
 }
 
+func GetRecentPlaybookRuns(ctx context.Context, limit int, statuses ...models.PlaybookRunStatus) ([]models.PlaybookRun, error) {
+	query := ctx.DB().Order("created_at DESC").Limit(limit)
+	if len(statuses) > 0 {
+		query = query.Where("status IN ?", statuses)
+	}
+
+	var p []models.PlaybookRun
+	if err := query.Find(&p).Error; err != nil {
+		return nil, dutyAPI.Errorf(dutyAPI.EINTERNAL, "something went wrong").WithDebugInfo("db.GetRecentPlaybookRuns(limit=%d): %v", limit, err)
+	}
+
+	return p, nil
+}
+
 func findPlaybooksForResourceSelectable(ctx context.Context, selectable types.ResourceSelectable, selectorField string) (
 	[]api.PlaybookListItem,
 	[]*models.Playbook,
