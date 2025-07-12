@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/Masterminds/squirrel"
+	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
@@ -49,6 +51,8 @@ func getPostgresType(colType api.ViewColumnType) string {
 		return "TEXT"
 	case api.ViewColumnTypeStatus:
 		return "TEXT"
+	case api.ViewColumnTypeGauge:
+		return "JSONB"
 	default:
 		return "TEXT"
 	}
@@ -100,8 +104,8 @@ func InsertViewRows(ctx context.Context, tableName string, columns []api.ViewCol
 	return ctx.DB().Exec(sql, args...).Error
 }
 
-func ReadViewTable(ctx context.Context, tableName string) ([]api.ViewRow, error) {
-	rows, err := ctx.DB().Raw(fmt.Sprintf("SELECT * FROM %s", tableName)).Rows()
+func ReadViewTable(ctx context.Context, columnDef api.ViewColumnDefList, tableName string) ([]api.ViewRow, error) {
+	rows, err := ctx.DB().Select(columnDef.SelectColumns()).Table(tableName).Rows()
 	if err != nil {
 		return nil, err
 	}
@@ -127,5 +131,57 @@ func ReadViewTable(ctx context.Context, tableName string) ([]api.ViewRow, error)
 		viewRows = append(viewRows, viewRow)
 	}
 
-	return viewRows, nil
+	return convertViewRecordsToNativeTypes(viewRows, columnDef), nil
+}
+
+// convertViewRecordsToNativeTypes converts view cell to native go types
+func convertViewRecordsToNativeTypes(viewRows []api.ViewRow, columnDef []api.ViewColumnDef) []api.ViewRow {
+	for _, viewRow := range viewRows {
+		for i, colDef := range columnDef {
+			if i >= len(viewRow) {
+				continue
+			}
+
+			if viewRow[i] == nil {
+				continue
+			}
+
+			switch colDef.Type {
+			case api.ViewColumnTypeGauge:
+				if raw, ok := viewRow[i].([]uint8); ok {
+					viewRow[i] = json.RawMessage(raw)
+				}
+
+			case api.ViewColumnTypeDuration:
+				switch v := viewRow[i].(type) {
+				case int:
+					viewRow[i] = time.Duration(v)
+				case int32:
+					viewRow[i] = time.Duration(v)
+				case int64:
+					viewRow[i] = time.Duration(v)
+				case float64:
+					viewRow[i] = time.Duration(int64(v))
+				default:
+					logger.Warnf("postProcessViewRows: unknown duration type: %T", v)
+				}
+
+			case api.ViewColumnTypeDateTime:
+				switch v := viewRow[i].(type) {
+				case time.Time:
+					viewRow[i] = v
+				case string:
+					parsed, err := time.Parse(time.RFC3339, v)
+					if err != nil {
+						logger.Warnf("postProcessViewRows: failed to parse datetime: %v", err)
+					}
+					viewRow[i] = parsed
+				default:
+					logger.Warnf("postProcessViewRows: unknown datetime type: %T", v)
+				}
+			}
+		}
+	}
+
+	return viewRows
 }
