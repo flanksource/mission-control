@@ -10,11 +10,11 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
+	pkgView "github.com/flanksource/duty/view"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/util/yaml"
 
-	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/views"
@@ -127,13 +127,11 @@ var _ = ginkgo.Describe("Views E2E", ginkgo.Ordered, func() {
 		result, err := views.ReadOrPopulateViewTable(DefaultContext.WithUser(&dummy.AlanTuring), view.GetNamespace(), view.GetName())
 		Expect(err).NotTo(HaveOccurred())
 
-		expectedRows := []api.ViewRow{
-			{
+		expectedRows := []pkgView.Row{
+			pkgView.Row{
 				*dummy.LogisticsAPIPodConfig.Name,
 				dummy.LogisticsAPIPodConfig.GetNamespace(),
-				"Running",
-				"healthy",
-				"256Mi/128",
+				time.Duration(128),
 			},
 			{
 				*dummy.LogisticsUIPodConfig.Name,

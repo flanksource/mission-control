@@ -3,6 +3,7 @@ package views
 import (
 	"testing"
 
+	"github.com/flanksource/duty/dataquery"
 	"github.com/flanksource/duty/types"
 	. "github.com/onsi/gomega"
 
@@ -14,21 +15,21 @@ func TestMerge(t *testing.T) {
 		name         string
 		queryResults []QueryResult
 		mergeSpec    v1.ViewMergeSpec
-		expected     []QueryResultRow
+		expected     []dataquery.QueryResultRow
 	}{
 		{
 			name: "basic left join with matching records",
 			queryResults: []QueryResult{
 				{
 					Name: "users",
-					Rows: []QueryResultRow{
+					Rows: []dataquery.QueryResultRow{
 						{"id": "1", "name": "Alice"},
 						{"id": "2", "name": "Bob"},
 					},
 				},
 				{
 					Name: "orders",
-					Rows: []QueryResultRow{
+					Rows: []dataquery.QueryResultRow{
 						{"id": "1", "amount": 100},
 						{"id": "3", "amount": 200},
 					},
@@ -42,13 +43,13 @@ func TestMerge(t *testing.T) {
 					"orders": types.CelExpression("row.id"),
 				},
 			},
-			expected: []QueryResultRow{
+			expected: []dataquery.QueryResultRow{
 				{
-					"users":  QueryResultRow{"id": "1", "name": "Alice"},
-					"orders": QueryResultRow{"id": "1", "amount": 100},
+					"users":  dataquery.QueryResultRow{"id": "1", "name": "Alice"},
+					"orders": dataquery.QueryResultRow{"id": "1", "amount": 100},
 				},
 				{
-					"users":  QueryResultRow{"id": "2", "name": "Bob"},
+					"users":  dataquery.QueryResultRow{"id": "2", "name": "Bob"},
 					"orders": nil,
 				},
 			},
@@ -58,13 +59,13 @@ func TestMerge(t *testing.T) {
 			queryResults: []QueryResult{
 				{
 					Name: "users",
-					Rows: []QueryResultRow{
+					Rows: []dataquery.QueryResultRow{
 						{"id": "1", "name": "Alice"},
 					},
 				},
 				{
 					Name: "orders",
-					Rows: []QueryResultRow{
+					Rows: []dataquery.QueryResultRow{
 						{"id": "2", "amount": 100},
 					},
 				},
@@ -77,9 +78,9 @@ func TestMerge(t *testing.T) {
 					"orders": types.CelExpression("row.id"),
 				},
 			},
-			expected: []QueryResultRow{
+			expected: []dataquery.QueryResultRow{
 				{
-					"users":  QueryResultRow{"id": "1", "name": "Alice"},
+					"users":  dataquery.QueryResultRow{"id": "1", "name": "Alice"},
 					"orders": nil,
 				},
 			},
@@ -89,19 +90,19 @@ func TestMerge(t *testing.T) {
 			queryResults: []QueryResult{
 				{
 					Name: "users",
-					Rows: []QueryResultRow{
+					Rows: []dataquery.QueryResultRow{
 						{"id": "1", "name": "Alice"},
 					},
 				},
 				{
 					Name: "orders",
-					Rows: []QueryResultRow{
+					Rows: []dataquery.QueryResultRow{
 						{"id": "1", "amount": 100},
 					},
 				},
 				{
 					Name: "addresses",
-					Rows: []QueryResultRow{
+					Rows: []dataquery.QueryResultRow{
 						{"id": "1", "address": "123 Main St"},
 					},
 				},
@@ -115,11 +116,11 @@ func TestMerge(t *testing.T) {
 					"addresses": types.CelExpression("row.id"),
 				},
 			},
-			expected: []QueryResultRow{
+			expected: []dataquery.QueryResultRow{
 				{
-					"users":     QueryResultRow{"id": "1", "name": "Alice"},
-					"orders":    QueryResultRow{"id": "1", "amount": 100},
-					"addresses": QueryResultRow{"id": "1", "address": "123 Main St"},
+					"users":     dataquery.QueryResultRow{"id": "1", "name": "Alice"},
+					"orders":    dataquery.QueryResultRow{"id": "1", "amount": 100},
+					"addresses": dataquery.QueryResultRow{"id": "1", "address": "123 Main St"},
 				},
 			},
 		},
@@ -128,14 +129,14 @@ func TestMerge(t *testing.T) {
 			queryResults: []QueryResult{
 				{
 					Name: "pods",
-					Rows: []QueryResultRow{
+					Rows: []dataquery.QueryResultRow{
 						{"name": "pod1", "namespace": "default"},
 						{"name": "pod2", "namespace": "kube-system"},
 					},
 				},
 				{
 					Name: "services",
-					Rows: []QueryResultRow{
+					Rows: []dataquery.QueryResultRow{
 						{"name": "pod1", "namespace": "default", "port": 80},
 					},
 				},
@@ -148,13 +149,13 @@ func TestMerge(t *testing.T) {
 					"services": types.CelExpression("row.name + '-' + row.namespace"),
 				},
 			},
-			expected: []QueryResultRow{
+			expected: []dataquery.QueryResultRow{
 				{
-					"pods":     QueryResultRow{"name": "pod1", "namespace": "default"},
-					"services": QueryResultRow{"name": "pod1", "namespace": "default", "port": 80},
+					"pods":     dataquery.QueryResultRow{"name": "pod1", "namespace": "default"},
+					"services": dataquery.QueryResultRow{"name": "pod1", "namespace": "default", "port": 80},
 				},
 				{
-					"pods":     QueryResultRow{"name": "pod2", "namespace": "kube-system"},
+					"pods":     dataquery.QueryResultRow{"name": "pod2", "namespace": "kube-system"},
 					"services": nil,
 				},
 			},
@@ -164,13 +165,13 @@ func TestMerge(t *testing.T) {
 			queryResults: []QueryResult{
 				{
 					Name: "base",
-					Rows: []QueryResultRow{
+					Rows: []dataquery.QueryResultRow{
 						{"name": "app1", "namespace": "default"},
 					},
 				},
 				{
 					Name: "joined",
-					Rows: []QueryResultRow{
+					Rows: []dataquery.QueryResultRow{
 						{"name": "app1", "namespace": "production"},
 					},
 				},
@@ -183,9 +184,9 @@ func TestMerge(t *testing.T) {
 					"joined": types.CelExpression("row.name + '-' + row.namespace"),
 				},
 			},
-			expected: []QueryResultRow{
+			expected: []dataquery.QueryResultRow{
 				{
-					"base":   QueryResultRow{"name": "app1", "namespace": "default"},
+					"base":   dataquery.QueryResultRow{"name": "app1", "namespace": "default"},
 					"joined": nil,
 				},
 			},
@@ -201,18 +202,18 @@ func TestMerge(t *testing.T) {
 			queryResults: []QueryResult{
 				{
 					Name: "users",
-					Rows: []QueryResultRow{
+					Rows: []dataquery.QueryResultRow{
 						{"id": "1", "name": "Alice"},
 						{"id": "2", "name": "Bob"},
 					},
 				},
 			},
-			expected: []QueryResultRow{
+			expected: []dataquery.QueryResultRow{
 				{
-					"users": QueryResultRow{"id": "1", "name": "Alice"},
+					"users": dataquery.QueryResultRow{"id": "1", "name": "Alice"},
 				},
 				{
-					"users": QueryResultRow{"id": "2", "name": "Bob"},
+					"users": dataquery.QueryResultRow{"id": "2", "name": "Bob"},
 				},
 			},
 		},

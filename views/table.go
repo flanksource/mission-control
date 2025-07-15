@@ -10,6 +10,7 @@ import (
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	pkgView "github.com/flanksource/duty/view"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/singleflight"
 
@@ -144,7 +145,7 @@ func handleViewRefresh(ctx context.Context, view *v1.View, cacheOptions *v1.Cach
 // readCachedViewData reads cached data from the view table
 func readCachedViewData(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 	tableName := view.TableName()
-	rows, err := db.ReadViewTable(ctx, tableName)
+	rows, err := pkgView.ReadViewTable(ctx, tableName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read view table: %w", err)
 	}
@@ -208,7 +209,7 @@ func populateView(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 func ensureViewTableExists(ctx context.Context, view *v1.View) error {
 	tableName := view.TableName()
 	if !ctx.DB().Migrator().HasTable(tableName) {
-		if err := db.CreateViewTable(ctx, view); err != nil {
+		if err := pkgView.CreateViewTable(ctx, view.TableName(), view.Spec.Columns); err != nil {
 			return fmt.Errorf("failed to create view table: %w", err)
 		}
 	}
@@ -220,7 +221,7 @@ func persistViewData(ctx context.Context, view *v1.View, result *api.ViewResult)
 	tableName := view.TableName()
 
 	// Save view rows to the dedicated table
-	if err := db.InsertViewRows(ctx, tableName, result.Columns, result.Rows); err != nil {
+	if err := pkgView.InsertViewRows(ctx, tableName, result.Columns, result.Rows); err != nil {
 		return fmt.Errorf("failed to insert view rows: %w", err)
 	}
 
