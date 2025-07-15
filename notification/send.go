@@ -273,7 +273,7 @@ func DefaultTitleAndBody(event string) (title string, body string) {
 		content, _ := templates.ReadFile(fmt.Sprintf("templates/%s", event))
 		body = string(content)
 
-	case api.EventConfigHealthy, api.EventConfigUnhealthy, api.EventConfigWarning, api.EventConfigUnknown:
+	case api.EventConfigHealthy, api.EventConfigUnhealthy, api.EventConfigWarning, api.EventConfigUnknown, api.EventConfigDegraded:
 		title = `{{ if ne channel "slack"}}{{.config.type}} {{.config.name}} is {{.config.health}}{{end}}`
 		content, _ := templates.ReadFile("templates/config.health")
 		body = string(content)
