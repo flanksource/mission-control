@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"slices"
 
+	"github.com/flanksource/duty/dataquery"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 )
 
 // mergeResults merges query results based on the specified strategy
-func mergeResults(resultSet []QueryResult, merge v1.ViewMergeSpec) ([]QueryResultRow, error) {
+func mergeResults(resultSet []QueryResult, merge v1.ViewMergeSpec) ([]dataquery.QueryResultRow, error) {
 	if len(resultSet) == 0 {
 		return nil, nil
 	}
@@ -27,7 +28,7 @@ func mergeResults(resultSet []QueryResult, merge v1.ViewMergeSpec) ([]QueryResul
 	}
 }
 
-func joinLeft(queryResults []QueryResult, merge v1.ViewMergeSpec) ([]QueryResultRow, error) {
+func joinLeft(queryResults []QueryResult, merge v1.ViewMergeSpec) ([]dataquery.QueryResultRow, error) {
 	if len(queryResults) == 0 {
 		return nil, nil
 	}
@@ -35,14 +36,14 @@ func joinLeft(queryResults []QueryResult, merge v1.ViewMergeSpec) ([]QueryResult
 	// Start with the first query as the base
 	baseQuery := queryResults[0]
 
-	inverted := []map[string]QueryResultRow{}
+	inverted := []map[string]dataquery.QueryResultRow{}
 	for _, queryResult := range queryResults[1:] {
 		inverted = append(inverted, invertQueryResultRows(queryResult, merge))
 	}
 
-	var mergedResults []QueryResultRow
+	var mergedResults []dataquery.QueryResultRow
 	for _, baseRecord := range baseQuery.Rows {
-		merged := QueryResultRow{
+		merged := dataquery.QueryResultRow{
 			baseQuery.Name: baseRecord,
 		}
 
@@ -65,8 +66,8 @@ func joinLeft(queryResults []QueryResult, merge v1.ViewMergeSpec) ([]QueryResult
 	return mergedResults, nil
 }
 
-func invertQueryResultRows(queryResult QueryResult, merge v1.ViewMergeSpec) map[string]QueryResultRow {
-	pkValues := make(map[string]QueryResultRow)
+func invertQueryResultRows(queryResult QueryResult, merge v1.ViewMergeSpec) map[string]dataquery.QueryResultRow {
+	pkValues := make(map[string]dataquery.QueryResultRow)
 	for _, row := range queryResult.Rows {
 		joinValue, err := getJoinValue(row, queryResult.Name, merge)
 		if err != nil {
@@ -80,7 +81,7 @@ func invertQueryResultRows(queryResult QueryResult, merge v1.ViewMergeSpec) map[
 }
 
 // getJoinValue calculates the join value for a row using the CEL expression
-func getJoinValue(row QueryResultRow, queryName string, merge v1.ViewMergeSpec) (string, error) {
+func getJoinValue(row dataquery.QueryResultRow, queryName string, merge v1.ViewMergeSpec) (string, error) {
 	if merge.JoinOn == nil {
 		return "", fmt.Errorf("merge spec or joinOn not provided")
 	}
@@ -100,11 +101,11 @@ func getJoinValue(row QueryResultRow, queryName string, merge v1.ViewMergeSpec) 
 	return fmt.Sprintf("%v", result), nil
 }
 
-func union(queryResults []QueryResult) []QueryResultRow {
-	var mergedResults []QueryResultRow
+func union(queryResults []QueryResult) []dataquery.QueryResultRow {
+	var mergedResults []dataquery.QueryResultRow
 	for _, queryResult := range queryResults {
 		for _, row := range queryResult.Rows {
-			mergedResults = append(mergedResults, QueryResultRow{
+			mergedResults = append(mergedResults, dataquery.QueryResultRow{
 				queryResult.Name: row,
 			})
 		}

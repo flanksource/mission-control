@@ -9,6 +9,7 @@ import (
 	"github.com/flanksource/commons/duration"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
+	"github.com/flanksource/duty/view"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -59,31 +60,6 @@ func (v *ViewMergeSpec) Validate() error {
 	return nil
 }
 
-// PrometheusQuery defines a Prometheus query configuration
-type PrometheusQuery struct {
-	// Connection name for Prometheus
-	Connection string `json:"connection" yaml:"connection"`
-
-	// Query is the PromQL query string
-	Query string `json:"query" yaml:"query"`
-}
-
-// ViewQuery defines a query configuration for populating the view
-type ViewQuery struct {
-	// Configs queries config items
-	Configs *types.ResourceSelector `json:"configs,omitempty" yaml:"configs,omitempty"`
-
-	// Changes queries config changes
-	Changes *types.ResourceSelector `json:"changes,omitempty" yaml:"changes,omitempty"`
-
-	// Prometheus queries metrics from Prometheus
-	Prometheus *PrometheusQuery `json:"prometheus,omitempty" yaml:"prometheus,omitempty"`
-}
-
-func (v *ViewQuery) IsEmpty() bool {
-	return v.Configs == nil && v.Changes == nil && v.Prometheus == nil
-}
-
 // ViewSpec defines the desired state of View
 // +kubebuilder:validation:XValidation:rule="size(self.panels) > 0 || (size(self.columns) > 0 && size(self.queries) > 0)",message="view spec must have either panels or both columns and queries defined"
 type ViewSpec struct {
@@ -93,11 +69,11 @@ type ViewSpec struct {
 
 	// Columns define the structure of the view
 	//+kubebuilder:validation:Optional
-	Columns []api.ViewColumnDef `json:"columns" yaml:"columns"`
+	Columns []view.ViewColumnDef `json:"columns" yaml:"columns"`
 
 	// Queries define the queries and mappings to populate the view
 	//+kubebuilder:validation:Optional
-	Queries map[string]ViewQuery `json:"queries" yaml:"queries"`
+	Queries map[string]view.Query `json:"queries" yaml:"queries"`
 
 	// Merge defines how to merge/join data from multiple queries
 	//+kubebuilder:validation:Optional

@@ -84,10 +84,3 @@ func GetView(ctx context.Context, namespace, name string) (*v1.View, error) {
 
 	return viewCR, nil
 }
-
-// GetAllViews fetches all views from the database
-func GetAllViews(ctx context.Context) ([]models.View, error) {
-	var views []models.View
-	err := ctx.DB().Where("deleted_at IS NULL").Find(&views).Error
-	return views, err
-}
