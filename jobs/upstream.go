@@ -3,6 +3,7 @@ package jobs
 import (
 	"github.com/flanksource/duty/job"
 	"github.com/flanksource/duty/upstream"
+
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/artifacts"
 )
@@ -11,26 +12,29 @@ var (
 	ReconcilePageSize int
 )
 
-var ReconcileAll = &job.Job{
-	Name:       "ReconcileAll",
-	Schedule:   "@every 1m",
-	Retention:  job.RetentionBalanced,
-	Singleton:  true,
-	JobHistory: true,
-	RunNow:     true,
-	Fn: func(ctx job.JobRuntime) error {
-		ctx.History.ResourceType = job.ResourceTypeUpstream
-		ctx.History.ResourceID = api.UpstreamConf.Host
-		summary := upstream.ReconcileAll(ctx.Context, api.UpstreamConf, ReconcilePageSize)
-		ctx.History.AddDetails("summary", summary)
-		ctx.History.SuccessCount, ctx.History.ErrorCount = summary.GetSuccessFailure()
-		if summary.Error() != nil {
-			ctx.History.AddDetails("errors", summary.Error())
-			ctx.History.ErrorCount += 1
-		}
+func ReconcileAllJob(config upstream.UpstreamConfig) *job.Job {
+	client := upstream.NewUpstreamClient(api.UpstreamConf)
+	return &job.Job{
+		Name:       "ReconcileAll",
+		Schedule:   "@every 1m",
+		Retention:  job.RetentionBalanced,
+		Singleton:  true,
+		JobHistory: true,
+		RunNow:     true,
+		Fn: func(ctx job.JobRuntime) error {
+			ctx.History.ResourceType = job.ResourceTypeUpstream
+			ctx.History.ResourceID = api.UpstreamConf.Host
+			summary := upstream.ReconcileAll(ctx.Context, client, ReconcilePageSize)
+			ctx.History.AddDetails("summary", summary)
+			ctx.History.SuccessCount, ctx.History.ErrorCount = summary.GetSuccessFailure()
+			if summary.Error() != nil {
+				ctx.History.AddDetails("errors", summary.Error())
+				ctx.History.ErrorCount += 1
+			}
 
-		return nil
-	},
+			return nil
+		},
+	}
 }
 
 // SyncArtifactRecords pushes any unpushed artifact records to the upstream.
