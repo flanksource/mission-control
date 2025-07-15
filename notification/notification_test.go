@@ -6,25 +6,26 @@ import (
 	"strings"
 	"time"
 
+	// register event handlers
+
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/types"
-	"github.com/flanksource/incident-commander/api"
-	v1 "github.com/flanksource/incident-commander/api/v1"
-	"github.com/flanksource/incident-commander/db"
-	dbModels "github.com/flanksource/incident-commander/db/models"
-	"github.com/flanksource/incident-commander/events"
-	"github.com/flanksource/incident-commander/notification"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/samber/lo"
 
-	// register event handlers
+	"github.com/flanksource/incident-commander/api"
+	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/db"
+	dbModels "github.com/flanksource/incident-commander/db/models"
+	"github.com/flanksource/incident-commander/events"
 	_ "github.com/flanksource/incident-commander/incidents/responder"
+	"github.com/flanksource/incident-commander/notification"
 	_ "github.com/flanksource/incident-commander/playbook"
 	_ "github.com/flanksource/incident-commander/upstream"
 )
@@ -752,7 +753,7 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 			n = models.Notification{
 				ID:             uuid.New(),
 				Name:           "wait-for-test",
-				Events:         pq.StringArray([]string{"config.healthy", "config.warning", "config.unhealthy"}),
+				Events:         pq.StringArray([]string{"config.healthy", "config.warning", "config.degraded", "config.unhealthy"}),
 				Source:         models.SourceCRD,
 				Title:          "Dummy",
 				Template:       "dummy",
@@ -869,7 +870,7 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 				err = DefaultContext.DB().
 					Where("notification_id = ?", n.ID.String()).
 					Where("resource_id = ?", config.ID.String()).
-					Where("source_event = ?", "config.warning").
+					Where("source_event = ?", "config.degraded").
 					Where("status = ?", "skipped").
 					Find(&sendHistory).Error
 				Expect(err).To(BeNil())

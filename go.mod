@@ -14,7 +14,7 @@ require (
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.30.0 // indirect
 	github.com/flanksource/commons v1.40.0
-	github.com/flanksource/duty v1.0.977
+	github.com/flanksource/duty v1.0.982
 	github.com/flanksource/gomplate/v3 v3.24.58
 	github.com/flanksource/kopper v1.0.13
 	github.com/gomarkdown/markdown v0.0.0-20240419095408-642f0ee99ae2
@@ -62,8 +62,8 @@ require (
 	github.com/henvic/httpretty v0.1.4
 	github.com/jackc/pgerrcode v0.0.0-20240316143900-6e2875d9b438
 	github.com/jenkins-x/go-scm v1.14.17
-	github.com/oklog/ulid/v2 v2.1.0
 	github.com/mark3labs/mcp-go v0.32.0
+	github.com/oklog/ulid/v2 v2.1.0
 	github.com/redis/go-redis/v9 v9.7.0
 	github.com/samber/lo v1.49.1
 	github.com/samber/oops v1.17.0

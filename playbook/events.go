@@ -14,17 +14,17 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/gomplate/v3"
-	"github.com/flanksource/incident-commander/db"
-	"github.com/flanksource/incident-commander/events"
-	"github.com/flanksource/incident-commander/logs"
-	"github.com/flanksource/incident-commander/notification"
-	"github.com/flanksource/incident-commander/utils"
 	"github.com/google/uuid"
 	"github.com/patrickmn/go-cache"
 	"github.com/samber/lo"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/events"
+	"github.com/flanksource/incident-commander/logs"
+	"github.com/flanksource/incident-commander/notification"
+	"github.com/flanksource/incident-commander/utils"
 )
 
 type PlaybookSpecEvent struct {
@@ -44,6 +44,7 @@ var eventToSpecEvent = map[string]PlaybookSpecEvent{
 	api.EventConfigHealthy:   {"config", "healthy"},
 	api.EventConfigUnhealthy: {"config", "unhealthy"},
 	api.EventConfigWarning:   {"config", "warning"},
+	api.EventConfigDegraded:  {"config", "degraded"},
 	api.EventConfigUnknown:   {"config", "unknown"},
 
 	api.EventComponentHealthy:   {"component", "healthy"},
@@ -154,7 +155,7 @@ func (t *playbookScheduler) Handle(ctx context.Context, event models.Event) erro
 			return dutyAPI.Errorf(dutyAPI.ENOTFOUND, "component(id=%s) not found", event.Properties["id"])
 		}
 
-	case api.EventConfigHealthy, api.EventConfigUnhealthy, api.EventConfigWarning, api.EventConfigUnknown:
+	case api.EventConfigHealthy, api.EventConfigUnhealthy, api.EventConfigWarning, api.EventConfigUnknown, api.EventConfigDegraded:
 		if err := ctx.DB().Model(&models.ConfigItem{}).Where("id = ?", event.Properties["id"]).First(&eventResource.Config).Error; err != nil {
 			return dutyAPI.Errorf(dutyAPI.ENOTFOUND, "config(id=%s) not found", event.Properties["id"])
 		}
