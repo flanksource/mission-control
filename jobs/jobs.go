@@ -34,7 +34,7 @@ var FuncScheduler = cron.New()
 func agentJobs(ctx context.Context) []*job.Job {
 	return []*job.Job{
 		PingUpstream,
-		ReconcileAll,
+		ReconcileAllJob(api.UpstreamConf),
 		SyncArtifactData,
 		ResetIsPushed,
 		PushPlaybookActions(ctx),
