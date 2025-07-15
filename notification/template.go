@@ -3,10 +3,10 @@ package notification
 import (
 	"encoding/json"
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/types"
 	"github.com/samber/lo"
 )
 
@@ -40,74 +40,39 @@ var TemplateFuncs = map[string]any{
 			return ""
 		}
 
-		configTags := map[string]any{}
-		var tagFields []map[string]any
+		var dummyResource models.ConfigItem
 		if tagsRaw, ok := resource["tags"]; ok {
 			if tags, ok := tagsRaw.(map[string]any); ok {
-				configTags = tags
+				dummyResource.Tags = make(map[string]string)
 				for k, v := range tags {
-					tagFields = append(tagFields, map[string]any{
-						"type":     "mrkdwn",
-						"text":     fmt.Sprintf("*%s*: %s", k, v),
-						"verbatim": true,
-					})
+					dummyResource.Tags[k] = v.(string)
 				}
 			}
 		}
 
-		var labelFields []map[string]any
 		if labelsRaw, ok := resource["labels"]; ok {
 			if labels, ok := labelsRaw.(map[string]any); ok {
+				labelsMap := types.JSONStringMap{}
 				for k, v := range labels {
-					if _, ok := configTags[k]; ok {
-						continue // Already pulled from tags
-					}
-
-					labelFields = append(labelFields, map[string]any{
-						"type":     "mrkdwn",
-						"text":     fmt.Sprintf("*%s*: %s", k, v),
-						"verbatim": true,
-					})
+					labelsMap[k] = v.(string)
 				}
+				dummyResource.Labels = &labelsMap
 			}
 		}
 
-		if len(tagFields) == 0 && len(labelFields) == 0 {
-			return ""
+		fields := dummyResource.GetTrimmedLabels()
+		slackFields := CreateSlackFieldsSection(fields)
+
+		if len(slackFields) == 0 {
+			return "{}"
 		}
 
-		slices.SortFunc(tagFields, func(a, b map[string]any) int {
-			return strings.Compare(a["text"].(string), b["text"].(string))
-		})
-
-		slices.SortFunc(labelFields, func(a, b map[string]any) int {
-			return strings.Compare(a["text"].(string), b["text"].(string))
-		})
-
-		fields := append(tagFields, labelFields...)
-
-		var outputs []string
-		const maxFieldsPerSection = 10
-		for i, chunk := range lo.Chunk(fields, maxFieldsPerSection) {
-			var m = map[string]any{
-				"type":   "section",
-				"fields": chunk,
-			}
-
-			if i == 0 {
-				m["text"] = map[string]any{
-					"type": "mrkdwn",
-					"text": "*Labels*",
-				}
-			}
-
-			out, err := json.Marshal(m)
-			if err == nil {
-				outputs = append(outputs, string(out))
-			}
+		out, err := json.Marshal(slackFields)
+		if err != nil {
+			return "{}"
 		}
 
-		return strings.Join(outputs, ",")
+		return string(out)
 	},
 	"slackSectionTextFieldPlain": func(text string) string {
 		return fmt.Sprintf(`{
@@ -169,4 +134,44 @@ var TemplateFuncs = map[string]any{
 
 		return fmt.Sprintf(`{"type": "actions", "elements": [%s]}`, strings.Join(elements, ","))
 	},
+}
+
+const (
+	maxSlackFieldsPerSection = 10 // Slack doesn't support more than 10 fields in a section
+
+	slackBlockTypeMarkdown = "mrkdwn"
+	slackBlockTypeSection  = "section"
+)
+
+// CreateSlackFieldsSection creates a Slack section block with fields from a sorted list of labels.
+func CreateSlackFieldsSection(labels []models.Label) map[string]any {
+	if len(labels) == 0 {
+		return nil
+	}
+
+	var fields []map[string]any
+	count := 0
+	for _, l := range labels {
+		if count >= maxSlackFieldsPerSection {
+			break
+		}
+
+		if strings.TrimSpace(l.Value) == "" {
+			continue
+		}
+
+		fields = append(fields, map[string]any{
+			"type":     slackBlockTypeMarkdown,
+			"text":     fmt.Sprintf("*%s*: %s", l.Key, l.Value),
+			"verbatim": true,
+		})
+		count++
+	}
+
+	section := map[string]any{
+		"type":   slackBlockTypeSection,
+		"fields": fields,
+	}
+
+	return section
 }

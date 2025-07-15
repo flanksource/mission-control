@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
-	"slices"
 	"strings"
 
 	"github.com/flanksource/duty/context"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/llm"
+	"github.com/flanksource/incident-commander/notification"
 	"github.com/flanksource/incident-commander/shorturl"
 )
 
@@ -62,52 +62,6 @@ func createPlaybookRunShortURL(ctx context.Context, originalURL string) (string,
 	}
 
 	return shortURL, nil
-}
-
-// createSlackFieldsSection creates a Slack section block with fields from a map of labels.
-// It handles sorting and limiting the number of fields to Slack's maximum.
-func createSlackFieldsSection(title string, labels map[string]string) map[string]any {
-	if len(labels) == 0 {
-		return nil
-	}
-
-	var fields []map[string]any
-	count := 0
-	for key, value := range labels {
-		if count >= maxSlackFieldsPerSection {
-			break
-		}
-
-		if strings.TrimSpace(value) == "" {
-			continue
-		}
-
-		fields = append(fields, map[string]any{
-			"type":     slackBlockTypeMarkdown,
-			"text":     fmt.Sprintf("*%s*: %s", key, value),
-			"verbatim": true,
-		})
-		count++
-	}
-
-	// Sort fields alphabetically
-	slices.SortFunc(fields, func(a, b map[string]any) int {
-		return strings.Compare(a["text"].(string), b["text"].(string))
-	})
-
-	section := map[string]any{
-		"type":   slackBlockTypeSection,
-		"fields": fields,
-	}
-
-	if title != "" {
-		section["text"] = map[string]any{
-			"type": slackBlockTypeMarkdown,
-			"text": fmt.Sprintf("*%s*", title),
-		}
-	}
-
-	return section
 }
 
 // createPlaybookButtons creates a Slack actions block with buttons for recommended playbooks.
@@ -194,21 +148,15 @@ func slackBlocks(ctx context.Context, knowledge *KnowledgeGraph, diagnosisReport
 		},
 	})
 
-	if tagsSection := createSlackFieldsSection("", affectedResource.Tags); tagsSection != nil {
-		blocks = append(blocks, tagsSection)
+	if trimmedTagsAndLabels := affectedResource.GetTrimmedLabels(); len(trimmedTagsAndLabels) > 0 {
+		blocks = append(blocks, notification.CreateSlackFieldsSection(trimmedTagsAndLabels))
 	}
+
 	blocks = append(blocks, divider)
 
 	blocks = append(blocks, markdownSection(fmt.Sprintf("*Summary:*\n%s", diagnosisReport.Summary)))
 
 	blocks = append(blocks, markdownSection(fmt.Sprintf("*Recommended Fix:*\n%s", diagnosisReport.RecommendedFix)))
-
-	blocks = append(blocks, divider)
-
-	if labelsSection := createSlackFieldsSection("Labels", *affectedResource.Labels); labelsSection != nil {
-		blocks = append(blocks, labelsSection)
-		blocks = append(blocks, divider)
-	}
 
 	if len(groupedResources) > 0 {
 		blocks = append(blocks, markdownSection(fmt.Sprintf("*Also Affected:* \n- %s", strings.Join(groupedResources, "\n - "))))
