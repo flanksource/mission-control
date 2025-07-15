@@ -410,6 +410,11 @@ type Config struct {
 	Tags   map[string]string    `json:"-"`
 }
 
+func (t *Config) GetTrimmedLabels() []models.Label {
+	cc := models.ConfigItem{Labels: t.Labels, Tags: t.Tags}
+	return cc.GetTrimmedLabels()
+}
+
 // Edge represents a connection between two nodes in the graph.
 type Edge struct {
 	From string `json:"from"`
