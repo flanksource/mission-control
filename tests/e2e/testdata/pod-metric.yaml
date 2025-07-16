@@ -8,19 +8,19 @@ spec:
   merge: |
     SELECT 
       pod.name,
-      json_extract(pod.tags, '$.namespace') AS namespace,
+      pod.tags->>'namespace' AS namespace,
       pod.status,
       pod.health,
       pod.created_at,
       COALESCE(CAST(metrics.value AS TEXT), '0') || '/' || 
       COALESCE(
-        json_extract(pod.config, '$.spec.containers[0].resources.limits.memory'), 
+        pod.config->'spec'->'containers'->0->'resources'->'limits'->>'memory', 
         ''
       ) AS memory
     FROM pod
     LEFT JOIN metrics 
       ON pod.name = metrics.pod 
-      AND json_extract(pod.tags, '$.namespace') = metrics.namespace
+      AND pod.tags->>'namespace' = metrics.namespace
   columns:
     - description: The pod name.
       name: name
