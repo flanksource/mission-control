@@ -13,6 +13,7 @@ spec:
   columns:
     - name: component_name
       type: string
+      primaryKey: true
     - name: component_type
       type: string
     - name: status

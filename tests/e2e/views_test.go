@@ -128,17 +128,19 @@ var _ = ginkgo.Describe("Views E2E", ginkgo.Ordered, func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		expectedRows := []pkgView.Row{
-			pkgView.Row{
+			{
 				*dummy.LogisticsAPIPodConfig.Name,
 				dummy.LogisticsAPIPodConfig.GetNamespace(),
-				time.Duration(128),
+				"Running",
+				"healthy",
+				"128.0/256Mi",
 			},
 			{
 				*dummy.LogisticsUIPodConfig.Name,
 				dummy.LogisticsUIPodConfig.GetNamespace(),
 				"Running",
 				"healthy",
-				"128Mi/64",
+				"64.0/128Mi",
 			},
 		}
 		Expect(result.Rows).To(Equal(expectedRows))

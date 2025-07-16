@@ -24,6 +24,7 @@ spec:
   columns:
     - name: component_name
       type: string
+      primaryKey: true
     - name: component_type
       type: string
     - name: status
@@ -41,12 +42,12 @@ spec:
         types: ["Kubernetes::Pod"]
         tagSelector: "namespace=missioncontrol"
   mapping:
-    component_name: "pod.name"
-    component_type: "pod.type"
-    status: "pod.status"
-    health: "pod.health"
-    namespace: "pod.tags.namespace"
-    cost: "has(pod.cost_total_30d) ? pod.cost_total_30d : 10"
+    component_name: "row.name"
+    component_type: "row.type"
+    status: "row.status"
+    health: "row.health"
+    namespace: "row.tags.namespace"
+    cost: "has(row.cost_total_30d) ? row.cost_total_30d : 10"
   panels:
     - name: "Pod Health Summary"
       type: number

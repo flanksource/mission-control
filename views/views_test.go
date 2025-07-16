@@ -23,8 +23,9 @@ var _ = Describe("Views", func() {
 				Spec: v1.ViewSpec{
 					Columns: []pkgView.ViewColumnDef{
 						{
-							Name: "name",
-							Type: pkgView.ColumnTypeString,
+							Name:       "name",
+							Type:       pkgView.ColumnTypeString,
+							PrimaryKey: true,
 						},
 						{
 							Name: "status",
@@ -40,8 +41,8 @@ var _ = Describe("Views", func() {
 						},
 					},
 					Mapping: map[string]types.CelExpression{
-						"name":   "nodes.name",
-						"status": "nodes.status",
+						"name":   "row.name",
+						"status": "row.status",
 					},
 				},
 			}, []pkgView.Row{
@@ -52,8 +53,9 @@ var _ = Describe("Views", func() {
 				Spec: v1.ViewSpec{
 					Columns: []pkgView.ViewColumnDef{
 						{
-							Name: "name",
-							Type: pkgView.ColumnTypeString,
+							Name:       "name",
+							Type:       pkgView.ColumnTypeString,
+							PrimaryKey: true,
 						},
 						{
 							Name: "status",
@@ -68,8 +70,8 @@ var _ = Describe("Views", func() {
 						},
 					},
 					Mapping: map[string]types.CelExpression{
-						"name":   "items.name",
-						"status": "items.type",
+						"name":   "row.name",
+						"status": "row.type",
 					},
 				},
 			}, []pkgView.Row{
@@ -80,12 +82,14 @@ var _ = Describe("Views", func() {
 				Spec: v1.ViewSpec{
 					Columns: []pkgView.ViewColumnDef{
 						{
-							Name: "chart",
-							Type: pkgView.ColumnTypeString,
+							Name:       "chart",
+							Type:       pkgView.ColumnTypeString,
+							PrimaryKey: true,
 						},
 						{
-							Name: "version",
-							Type: pkgView.ColumnTypeString,
+							Name:       "version",
+							Type:       pkgView.ColumnTypeString,
+							PrimaryKey: true,
 						},
 						{
 							Name: "source",
@@ -101,9 +105,9 @@ var _ = Describe("Views", func() {
 						},
 					},
 					Mapping: map[string]types.CelExpression{
-						"chart":   "releases.name",
-						"version": "releases.summary.split(' to ')[1]",
-						"source":  "releases.source",
+						"chart":   "row.name",
+						"version": "row.summary.split(' to ')[1]",
+						"source":  "row.source",
 					},
 				},
 			}, []pkgView.Row{

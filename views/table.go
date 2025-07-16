@@ -103,7 +103,7 @@ func handleViewRefresh(ctx context.Context, view *v1.View, cacheOptions *v1.Cach
 		defer cancel()
 		clonedCtx := ctx.Clone()
 		clonedCtx.Context = newCtx
-		refreshCtx := context.NewContext(clonedCtx).WithDB(ctx.DB(), ctx.Pool())
+		refreshCtx := context.NewContext(clonedCtx).WithDB(ctx.DB(), ctx.Pool()).WithConnectionString(ctx.ConnectionString())
 		if ctx.User() != nil {
 			refreshCtx = refreshCtx.WithUser(ctx.User())
 		}
@@ -183,8 +183,8 @@ func populateView(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 	}
 
 	err = ctx.Transaction(func(ctx context.Context, span trace.Span) error {
-		if err := ensureViewTableExists(ctx, view); err != nil {
-			return err
+		if err := pkgView.CreateViewTable(ctx, view.TableName(), view.Spec.Columns); err != nil {
+			return fmt.Errorf("failed to create view table: %w", err)
 		}
 
 		if err := persistViewData(ctx, view, result); err != nil {
@@ -203,17 +203,6 @@ func populateView(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 
 	result.LastRefreshedAt = time.Now()
 	return result, nil
-}
-
-// ensureViewTableExists creates the view table if it doesn't exist
-func ensureViewTableExists(ctx context.Context, view *v1.View) error {
-	tableName := view.TableName()
-	if !ctx.DB().Migrator().HasTable(tableName) {
-		if err := pkgView.CreateViewTable(ctx, view.TableName(), view.Spec.Columns); err != nil {
-			return fmt.Errorf("failed to create view table: %w", err)
-		}
-	}
-	return nil
 }
 
 // persistViewData saves view rows and panel results to their respective tables

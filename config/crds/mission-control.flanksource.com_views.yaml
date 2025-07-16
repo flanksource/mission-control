@@ -67,9 +67,35 @@ spec:
                     description:
                       description: Description of the column
                       type: string
+                    gauge:
+                      description: Configuration for gauge visualization
+                      properties:
+                        max:
+                          type: integer
+                        min:
+                          type: integer
+                        thresholds:
+                          items:
+                            description: GaugeThreshold defines a threshold configuration
+                              for gauge charts
+                            properties:
+                              color:
+                                type: string
+                              value:
+                                type: integer
+                            required:
+                            - color
+                            - value
+                            type: object
+                          type: array
+                      type: object
                     name:
                       description: Name of the column
                       type: string
+                    primaryKey:
+                      description: PrimaryKey indicates if the column is a primary
+                        key
+                      type: boolean
                     type:
                       enum:
                       - string
@@ -79,11 +105,16 @@ spec:
                       - duration
                       - health
                       - status
+                      - gauge
                       type: string
                   required:
                   - name
                   - type
                   type: object
+                  x-kubernetes-validations:
+                  - message: gauge config required when type is gauge, not allowed
+                      for other types
+                    rule: 'self.type==''gauge'' ? has(self.gauge) : !has(self.gauge)'
                 type: array
               mapping:
                 description: Mapping defines how to map query results to view columns
@@ -91,28 +122,7 @@ spec:
                 x-kubernetes-preserve-unknown-fields: true
               merge:
                 description: Merge defines how to merge/join data from multiple queries
-                properties:
-                  joinOn:
-                    description: |-
-                      JoinOn defines the join conditions for each query
-                      Map key is the query name, value is a CEL expression for the join condition
-                    type: object
-                    x-kubernetes-preserve-unknown-fields: true
-                  order:
-                    description: Order defines the order of queries for joining
-                    items:
-                      type: string
-                    minItems: 1
-                    type: array
-                  strategy:
-                    description: |-
-                      Strategy defines the merge strategy (left join or union)
-                      Default: union
-                    enum:
-                    - left
-                    - union
-                    type: string
-                type: object
+                type: string
               panels:
                 description: Panels for the view
                 items:
@@ -286,8 +296,6 @@ spec:
                 type: array
               queries:
                 additionalProperties:
-                  description: Query defines a query configuration for populating
-                    the view
                   properties:
                     changes:
                       description: Changes queries config changes
@@ -814,6 +822,9 @@ spec:
                 defined
               rule: size(self.panels) > 0 || (size(self.columns) > 0 && size(self.queries)
                 > 0)
+            - message: at least one column must have primaryKey set to true
+              rule: size(self.columns) == 0 || self.columns.exists(c, c.primaryKey
+                == true)
           status:
             description: ViewStatus defines the observed state of View
             properties:
