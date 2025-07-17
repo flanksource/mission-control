@@ -238,14 +238,22 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 
 	// This gets unset by the database trigger: reset_notification_error_before_update_trigger
 	if n.Error != nil {
-		// A notification that currently has errors is skipped.
-		return nil
+		// We ignore error and retry after an hour to see if it works
+		if n.ErrorAt != nil && time.Since(*n.ErrorAt) >= ctx.Properties().Duration("notifications.error_reset_duration", 1*time.Hour) {
+			if err := db.ResetNotificationError(ctx, id); err != nil {
+				return fmt.Errorf("error resetting notification[%s] error: %w", id, err)
+			}
+			// Remove this notification from cache
+			PurgeCache(id)
+		} else {
+			return nil
+		}
 	}
 
 	if n.Filter != "" {
 		if valid, err := ctx.RunTemplateBool(gomplate.Template{Expression: n.Filter}, celEnv.AsMap(ctx)); err != nil {
 			// On invalid spec error, we store the error on the notification itself and exit out.
-			logs.IfError(db.UpdateNotificationError(ctx, id, err.Error()), "failed to update notification")
+			logs.IfError(db.SetNotificationError(ctx, id, err.Error()), "failed to update notification")
 			return nil
 		} else if !valid {
 			return nil
