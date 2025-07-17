@@ -182,23 +182,25 @@ func populateView(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 		return nil, fmt.Errorf("failed to run view: %w", err)
 	}
 
-	err = ctx.Transaction(func(ctx context.Context, span trace.Span) error {
-		if err := pkgView.CreateViewTable(ctx, view.TableName(), view.Spec.Columns); err != nil {
-			return fmt.Errorf("failed to create view table: %w", err)
-		}
+	if len(result.Columns) > 0 {
+		err = ctx.Transaction(func(ctx context.Context, span trace.Span) error {
+			if err := pkgView.CreateViewTable(ctx, view.TableName(), view.Spec.Columns); err != nil {
+				return fmt.Errorf("failed to create view table: %w", err)
+			}
 
-		if err := persistViewData(ctx, view, result); err != nil {
-			return err
-		}
+			if err := persistViewData(ctx, view, result); err != nil {
+				return err
+			}
 
-		if err := updateViewLastRan(ctx, string(view.GetUID())); err != nil {
-			return err
-		}
+			if err := updateViewLastRan(ctx, string(view.GetUID())); err != nil {
+				return err
+			}
 
-		return nil
-	})
-	if err != nil {
-		return result, err
+			return nil
+		})
+		if err != nil {
+			return result, err
+		}
 	}
 
 	result.LastRefreshedAt = time.Now()
