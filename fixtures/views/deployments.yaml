@@ -42,42 +42,6 @@ spec:
             field: '*'
         types:
           - 'Kubernetes::HelmRelease'
-    - name: Namespace
-      description: Helm Releases grouped by namespace
-      type: piechart
-      source: configs
-      query:
-        groupBy:
-          - 'tags.namespace'
-        aggregates:
-          - function: COUNT
-            alias: count
-            field: '*'
-        types:
-          - 'Kubernetes::HelmRelease'
-    - name: Type
-      description: Helm Releases grouped by type
-      type: gauge
-      gauge:
-        min: 0
-        max: 100
-        thresholds:
-          - value: 0
-            color: green
-          - value: 70
-            color: yellow
-          - value: 90
-            color: red
-      source: configs
-      query:
-        groupBy:
-          - 'type'
-        aggregates:
-          - function: COUNT
-            alias: value
-            field: '*'
-        types:
-          - 'Kubernetes::HelmRelease'
   columns:
     - name: application
       type: string
