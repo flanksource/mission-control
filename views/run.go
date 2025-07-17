@@ -52,7 +52,7 @@ func Run(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to merge results: %w", err)
 		}
-	} else {
+	} else if len(queryResults) == 1 {
 		mergedData = queryResults[0].Results
 	}
 

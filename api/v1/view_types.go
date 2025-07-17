@@ -19,7 +19,7 @@ import (
 
 // ViewSpec defines the desired state of View
 // +kubebuilder:validation:XValidation:rule="size(self.panels) > 0 || (size(self.columns) > 0 && size(self.queries) > 0)",message="view spec must have either panels or both columns and queries defined"
-// +kubebuilder:validation:XValidation:rule="size(self.columns) == 0 || self.columns.exists(c, c.primaryKey == true)",message="at least one column must have primaryKey set to true"
+// +kubebuilder:validation:XValidation:rule="!(has(self.columns)) || size(self.columns) == 0 || self.columns.exists(c, c.primaryKey == true)",message="if columns is specified, at least one column must have primaryKey set to true"
 type ViewSpec struct {
 	// Panels for the view
 	//+kubebuilder:validation:Optional
@@ -60,8 +60,12 @@ func (t ViewSpec) Validate() error {
 		return fmt.Errorf("merge query must be specified when there are multiple queries")
 	}
 
-	if len(t.Columns.PrimaryKey()) == 0 {
+	if len(t.Columns) > 0 && len(t.Columns.PrimaryKey()) == 0 {
 		return fmt.Errorf("view must have at least one primary key column")
+	}
+
+	if len(t.Panels) == 0 && (len(t.Queries) == 0 || len(t.Columns) == 0) {
+		return fmt.Errorf("view must have either panels or both columns and queries defined")
 	}
 
 	return nil
