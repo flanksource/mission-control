@@ -1,0 +1,22 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: number
+  namespace: mc
+spec:
+  panels:
+    - name: Total Services
+      description: List of all the kubernetes services in the default namespace
+      type: number
+      source: configs
+      number:
+        unit: count
+        precision: 0
+      query:
+        aggregates:
+          - function: COUNT
+            alias: value
+            field: '*'
+        types:
+          - 'Kubernetes::Service'
+        tagSelector: namespace=default

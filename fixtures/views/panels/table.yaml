@@ -1,0 +1,20 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: table
+  namespace: mc
+spec:
+  panels:
+    - name: Deployments by Namespace
+      description: List of all the deployments in the default namespace
+      type: table
+      source: configs
+      query:
+        types:
+          - 'Kubernetes::Deployment'
+        groupBy:
+          - 'tags.namespace'
+        aggregates:
+          - function: COUNT
+            alias: value
+            field: '*'
