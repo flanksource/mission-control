@@ -42,42 +42,6 @@ spec:
             field: '*'
         types:
           - 'Kubernetes::HelmRelease'
-    - name: Namespace
-      description: Helm Releases grouped by namespace
-      type: piechart
-      source: configs
-      query:
-        groupBy:
-          - 'tags.namespace'
-        aggregates:
-          - function: COUNT
-            alias: count
-            field: '*'
-        types:
-          - 'Kubernetes::HelmRelease'
-    - name: Type
-      description: Helm Releases grouped by type
-      type: gauge
-      gauge:
-        min: 0
-        max: 100
-        thresholds:
-          - value: 0
-            color: green
-          - value: 70
-            color: yellow
-          - value: 90
-            color: red
-      source: configs
-      query:
-        groupBy:
-          - 'type'
-        aggregates:
-          - function: COUNT
-            alias: value
-            field: '*'
-        types:
-          - 'Kubernetes::HelmRelease'
   columns:
     - name: application
       type: string
@@ -101,17 +65,17 @@ spec:
       type: datetime
       description: The last updated time.
   queries:
-    configs:
-      - selector:
-          search: '@order=name'
-          types:
-            - Kubernetes::HelmRelease
-          tagSelector: namespace in (monitoring,media)
-        mapping:
-          application: row.name
-          namespace: row.tags.namespace
-          chart: row.config.status.history[0].chartName
-          version: row.config.status.history[0].chartVersion
-          status: row.status
-          health: row.health
-          lastUpdated: row.updated_at
+    helmReleases:
+      selector:
+        search: '@order=name'
+        types:
+          - Kubernetes::HelmRelease
+        tagSelector: namespace in (monitoring,media)
+  mapping:
+    application: row.name
+    namespace: row.tags.namespace
+    chart: row.config.status.history[0].chartName
+    version: row.config.status.history[0].chartVersion
+    status: row.status
+    health: row.health
+    lastUpdated: row.updated_at

@@ -4,118 +4,113 @@ import (
 	"time"
 
 	"github.com/flanksource/duty/types"
+	pkgView "github.com/flanksource/duty/view"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 )
 
 var _ = Describe("Views", func() {
 	Describe("Run", func() {
 		DescribeTable("queries",
-			func(view v1.View, expectedRows []api.ViewRow) {
+			func(view v1.View, expectedRows []pkgView.Row) {
 				result, err := Run(DefaultContext, &view)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(result.Rows).To(Equal(expectedRows))
 			},
 			Entry("config queries", v1.View{
 				Spec: v1.ViewSpec{
-					Columns: []api.ViewColumnDef{
+					Columns: []pkgView.ViewColumnDef{
 						{
-							Name: "name",
-							Type: api.ViewColumnTypeString,
+							Name:       "name",
+							Type:       pkgView.ColumnTypeString,
+							PrimaryKey: true,
 						},
 						{
 							Name: "status",
-							Type: api.ViewColumnTypeString,
+							Type: pkgView.ColumnTypeString,
 						},
 					},
-					Queries: v1.ViewQueriesSpec{
-						Configs: []v1.ViewQuery{
-							{
-								Selector: types.ResourceSelector{
-									Types:       []string{"Kubernetes::Node"},
-									TagSelector: "account=flanksource",
-								},
-								Max: 10,
-								Mapping: map[string]types.CelExpression{
-									"name":   "row.name",
-									"status": "row.status",
-								},
+					Queries: map[string]pkgView.Query{
+						"nodes": {
+							Configs: &types.ResourceSelector{
+								Types:       []string{"Kubernetes::Node"},
+								TagSelector: "account=flanksource",
 							},
 						},
 					},
+					Mapping: map[string]types.CelExpression{
+						"name":   "row.name",
+						"status": "row.status",
+					},
 				},
-			}, []api.ViewRow{
+			}, []pkgView.Row{
 				{"node-a", "healthy"},
 				{"node-b", "healthy"},
 			}),
 			Entry("changes queries", v1.View{
 				Spec: v1.ViewSpec{
-					Columns: []api.ViewColumnDef{
+					Columns: []pkgView.ViewColumnDef{
 						{
-							Name: "name",
-							Type: api.ViewColumnTypeString,
+							Name:       "name",
+							Type:       pkgView.ColumnTypeString,
+							PrimaryKey: true,
 						},
 						{
 							Name: "status",
-							Type: api.ViewColumnTypeString,
+							Type: pkgView.ColumnTypeString,
 						},
 					},
-					Queries: v1.ViewQueriesSpec{
-						Changes: []v1.ViewQuery{
-							{
-								Selector: types.ResourceSelector{
-									Search: "change_type=CREATE",
-								},
-								Max: 10,
-								Mapping: map[string]types.CelExpression{
-									"name":   "row.name",
-									"status": "row.type",
-								},
+					Queries: map[string]pkgView.Query{
+						"items": {
+							Changes: &types.ResourceSelector{
+								Search: "change_type=CREATE",
 							},
 						},
 					},
+					Mapping: map[string]types.CelExpression{
+						"name":   "row.name",
+						"status": "row.type",
+					},
 				},
-			}, []api.ViewRow{
+			}, []pkgView.Row{
 				{"Production EKS", "EKS::Cluster"},
 				{"node-a", "Kubernetes::Node"},
 			}),
 			Entry("helm release changes queries", v1.View{
 				Spec: v1.ViewSpec{
-					Columns: []api.ViewColumnDef{
+					Columns: []pkgView.ViewColumnDef{
 						{
-							Name: "chart",
-							Type: api.ViewColumnTypeString,
+							Name:       "chart",
+							Type:       pkgView.ColumnTypeString,
+							PrimaryKey: true,
 						},
 						{
-							Name: "version",
-							Type: api.ViewColumnTypeString,
+							Name:       "version",
+							Type:       pkgView.ColumnTypeString,
+							PrimaryKey: true,
 						},
 						{
 							Name: "source",
-							Type: api.ViewColumnTypeString,
+							Type: pkgView.ColumnTypeString,
 						},
 					},
-					Queries: v1.ViewQueriesSpec{
-						Changes: []v1.ViewQuery{
-							{
-								Selector: types.ResourceSelector{
-									Types:  []string{"Helm::Release"},
-									Search: "change_type=UPDATE",
-								},
-								Max: 10,
-								Mapping: map[string]types.CelExpression{
-									"chart":   "row.name",
-									"version": "row.summary.split(' to ')[1]",
-									"source":  "row.source",
-								},
+					Queries: map[string]pkgView.Query{
+						"releases": {
+							Changes: &types.ResourceSelector{
+								Types:  []string{"Helm::Release"},
+								Search: "change_type=UPDATE",
 							},
 						},
 					},
+					Mapping: map[string]types.CelExpression{
+						"chart":   "row.name",
+						"version": "row.summary.split(' to ')[1]",
+						"source":  "row.source",
+					},
 				},
-			}, []api.ViewRow{
+			}, []pkgView.Row{
 				{"nginx-ingress", "4.8.0", "Flux"},
 				{"nginx-ingress", "4.7.2", "Flux"},
 				{"nginx-ingress", "4.7.1", "Flux"},
@@ -129,16 +124,16 @@ var _ = Describe("Views", func() {
 	Describe("applyMapping", func() {
 		type applyMappingTestCase struct {
 			data     map[string]any
-			columns  []api.ViewColumnDef
+			columns  []pkgView.ViewColumnDef
 			mapping  map[string]types.CelExpression
-			expected api.ViewRow
+			expected pkgView.Row
 		}
 
 		DescribeTable("applyMapping test cases",
 			func(tc applyMappingTestCase) {
 				row, err := applyMapping(tc.data, tc.columns, tc.mapping)
 				Expect(err).ToNot(HaveOccurred())
-				Expect(api.ViewRow(row)).To(Equal(tc.expected))
+				Expect(pkgView.Row(row)).To(Equal(tc.expected))
 			},
 			Entry("should apply CEL expressions to data", applyMappingTestCase{
 				data: map[string]any{
@@ -150,17 +145,17 @@ var _ = Describe("Views", func() {
 					"pod_name":   "name",
 					"pod_status": "status",
 				},
-				columns: []api.ViewColumnDef{
+				columns: []pkgView.ViewColumnDef{
 					{
 						Name: "pod_name",
-						Type: api.ViewColumnTypeString,
+						Type: pkgView.ColumnTypeString,
 					},
 					{
 						Name: "pod_status",
-						Type: api.ViewColumnTypeString,
+						Type: pkgView.ColumnTypeString,
 					},
 				},
-				expected: api.ViewRow{"test-pod", "Running"},
+				expected: pkgView.Row{"test-pod", "Running"},
 			}),
 			Entry("should handle empty mapping", applyMappingTestCase{
 				data: map[string]any{
@@ -176,13 +171,13 @@ var _ = Describe("Views", func() {
 				mapping: map[string]types.CelExpression{
 					"duration": "duration('1m')",
 				},
-				columns: []api.ViewColumnDef{
+				columns: []pkgView.ViewColumnDef{
 					{
 						Name: "duration",
-						Type: api.ViewColumnTypeDuration,
+						Type: pkgView.ColumnTypeDuration,
 					},
 				},
-				expected: api.ViewRow{1 * time.Minute},
+				expected: pkgView.Row{1 * time.Minute},
 			}),
 		)
 	})
