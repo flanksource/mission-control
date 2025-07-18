@@ -209,8 +209,22 @@ func DeleteStaleNotification(ctx context.Context, newer *v1.Notification) error 
 		Update("deleted_at", duty.Now()).Error
 }
 
-func UpdateNotificationError(ctx context.Context, id string, err string) error {
-	return ctx.DB().Model(&models.Notification{}).Where("id = ?", id).Update("error", err).Error
+func SetNotificationError(ctx context.Context, id string, err string) error {
+	return ctx.DB().Model(&models.Notification{}).Where("id = ?", id).
+		Updates(map[string]any{
+			"error":    err,
+			"error_at": duty.Now(),
+		}).
+		Error
+}
+
+func ResetNotificationError(ctx context.Context, id string) error {
+	return ctx.DB().Model(&models.Notification{}).Where("id = ?", id).
+		Updates(map[string]any{
+			"error":    "",
+			"error_at": nil,
+		}).
+		Error
 }
 
 func UpdateNotificationSilenceError(ctx context.Context, id string, err string) error {
