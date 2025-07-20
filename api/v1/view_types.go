@@ -11,57 +11,15 @@ import (
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/duty/view"
 	"github.com/google/uuid"
-	"github.com/samber/lo"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 
 	"github.com/flanksource/incident-commander/api"
 )
 
-type ViewMergeStrategy string
-
-const (
-	ViewMergeStrategyLeft  ViewMergeStrategy = "left"
-	ViewMergeStrategyUnion ViewMergeStrategy = "union"
-)
-
-// ViewMergeSpec defines how to merge/join data from multiple queries
-type ViewMergeSpec struct {
-	// Strategy defines the merge strategy (left join or union)
-	// Default: union
-	// +kubebuilder:validation:Enum=left;union
-	// +kubebuilder:validation:Optional
-	Strategy ViewMergeStrategy `json:"strategy" yaml:"strategy"`
-
-	// Order defines the order of queries for joining
-	// +kubebuilder:validation:MinItems=1
-	Order []string `json:"order,omitempty" yaml:"order,omitempty"`
-
-	// JoinOn defines the join conditions for each query
-	// Map key is the query name, value is a CEL expression for the join condition
-	// +kubebuilder:validation:Optional
-	// +kubebuilder:validation:Schemaless
-	// +kubebuilder:pruning:PreserveUnknownFields
-	// +kubebuilder:validation:Type=object
-	JoinOn map[string]types.CelExpression `json:"joinOn,omitempty" yaml:"joinOn,omitempty" template:"true"`
-}
-
-func (v *ViewMergeSpec) Validate() error {
-	if v.Strategy == ViewMergeStrategyLeft {
-		if len(v.Order) != len(v.JoinOn) {
-			return fmt.Errorf("order and joinOn must have the same number of items")
-		}
-
-		if len(lo.Uniq(v.Order)) != len(v.Order) {
-			return fmt.Errorf("order must contain unique values")
-		}
-	}
-
-	return nil
-}
-
 // ViewSpec defines the desired state of View
 // +kubebuilder:validation:XValidation:rule="size(self.panels) > 0 || (size(self.columns) > 0 && size(self.queries) > 0)",message="view spec must have either panels or both columns and queries defined"
+// +kubebuilder:validation:XValidation:rule="size(self.columns) == 0 || self.columns.exists(c, c.primaryKey == true)",message="at least one column must have primaryKey set to true"
 type ViewSpec struct {
 	// Panels for the view
 	//+kubebuilder:validation:Optional
@@ -69,7 +27,7 @@ type ViewSpec struct {
 
 	// Columns define the structure of the view
 	//+kubebuilder:validation:Optional
-	Columns []view.ViewColumnDef `json:"columns" yaml:"columns"`
+	Columns view.ViewColumnDefList `json:"columns" yaml:"columns"`
 
 	// Queries define the queries and mappings to populate the view
 	//+kubebuilder:validation:Optional
@@ -77,13 +35,13 @@ type ViewSpec struct {
 
 	// Merge defines how to merge/join data from multiple queries
 	//+kubebuilder:validation:Optional
-	Merge *ViewMergeSpec `json:"merge,omitempty" yaml:"merge,omitempty"`
+	Merge *string `json:"merge,omitempty" yaml:"merge,omitempty"`
 
 	// Mapping defines how to map query results to view columns
 	//+kubebuilder:validation:Optional
-	// +kubebuilder:validation:Schemaless
-	// +kubebuilder:pruning:PreserveUnknownFields
-	// +kubebuilder:validation:Type=object
+	//+kubebuilder:validation:Schemaless
+	//+kubebuilder:pruning:PreserveUnknownFields
+	//+kubebuilder:validation:Type=object
 	Mapping map[string]types.CelExpression `json:"mapping,omitempty" yaml:"mapping,omitempty" template:"true"`
 
 	// Cache configuration
@@ -92,22 +50,18 @@ type ViewSpec struct {
 }
 
 func (t ViewSpec) Validate() error {
-	if t.Merge != nil {
-		if err := t.Merge.Validate(); err != nil {
-			return err
-		}
-
-		if missing, extra := lo.Difference(lo.Keys(t.Queries), t.Merge.Order); len(missing) > 0 {
-			return fmt.Errorf("merge order must address all the queries. missing queries: %v", missing)
-		} else if len(extra) > 0 {
-			return fmt.Errorf("merge order must not contain extra queries: %v", extra)
-		}
-	}
-
 	for k, query := range t.Queries {
 		if query.IsEmpty() {
 			return fmt.Errorf("query %s is empty", k)
 		}
+	}
+
+	if len(t.Queries) > 1 && t.Merge == nil {
+		return fmt.Errorf("merge query must be specified when there are multiple queries")
+	}
+
+	if len(t.Columns.PrimaryKey()) == 0 {
+		return fmt.Errorf("view must have at least one primary key column")
 	}
 
 	return nil
@@ -140,7 +94,7 @@ func (v *View) GetUUID() (uuid.UUID, error) {
 	return uuid.Parse(string(v.UID))
 }
 
-// +kubebuilder:object:root=true
+//+kubebuilder:object:root=true
 
 // ViewList contains a list of View
 type ViewList struct {

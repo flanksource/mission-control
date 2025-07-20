@@ -7,6 +7,7 @@ import (
 	"github.com/flanksource/commons/duration"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/dataquery"
+	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
 	pkgView "github.com/flanksource/duty/view"
 	"github.com/samber/lo"
@@ -14,12 +15,6 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 )
-
-// QueryResult represents all results from a single query
-type QueryResult struct {
-	Name string
-	Rows []dataquery.QueryResultRow
-}
 
 // Run executes the view queries and returns the rows with data
 func Run(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
@@ -37,28 +32,34 @@ func Run(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 		})
 	}
 
-	var queryResults []QueryResult
+	var queryResults []dataquery.QueryResultSet
 	for queryName, q := range view.Spec.Queries {
 		results, err := pkgView.ExecuteQuery(ctx, q)
 		if err != nil {
 			return nil, fmt.Errorf("failed to execute config query '%s': %w", queryName, err)
 		}
 
-		queryResults = append(queryResults, QueryResult{
-			Rows: results,
-			Name: queryName,
+		queryResults = append(queryResults, dataquery.QueryResultSet{
+			Results: results,
+			Name:    queryName,
 		})
 	}
 
-	merge := lo.FromPtr(view.Spec.Merge)
-	mergedData, err := mergeResults(queryResults, merge)
-	if err != nil {
-		return nil, fmt.Errorf("failed to merge results: %w", err)
+	var mergedData []dataquery.QueryResultRow
+	if len(view.Spec.Queries) > 1 {
+		var err error
+		mergedData, err = dataquery.MergeQueryResults(ctx, queryResults, lo.FromPtr(view.Spec.Merge))
+		if err != nil {
+			return nil, fmt.Errorf("failed to merge results: %w", err)
+		}
+	} else {
+		mergedData = queryResults[0].Results
 	}
 
 	var rows []pkgView.Row
 	for _, result := range mergedData {
-		row, err := applyMapping(result, view.Spec.Columns, view.Spec.Mapping)
+		env := map[string]any{"row": result} // We cannot directly pass result because of identifier collision with the reserved ones in cel.
+		row, err := applyMapping(env, view.Spec.Columns, view.Spec.Mapping)
 		if err != nil {
 			return nil, fmt.Errorf("failed to apply view mapping: %w", err)
 		}
@@ -102,4 +103,18 @@ func applyMapping(data map[string]any, columnDefs []pkgView.ViewColumnDef, mappi
 	}
 
 	return row, nil
+}
+
+func executePanel(ctx context.Context, q api.PanelDef) ([]types.AggregateRow, error) {
+	table := "config_items"
+	if q.Source == "changes" {
+		table = "catalog_changes"
+	}
+
+	result, err := query.Aggregate(ctx, table, q.Query)
+	if err != nil {
+		return nil, fmt.Errorf("failed to aggregate: %w", err)
+	}
+
+	return result, nil
 }

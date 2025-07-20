@@ -463,14 +463,14 @@
     },
     "Query": {
       "properties": {
+        "prometheus": {
+          "$ref": "#/$defs/PrometheusQuery"
+        },
         "configs": {
           "$ref": "#/$defs/ResourceSelector"
         },
         "changes": {
           "$ref": "#/$defs/ResourceSelector"
-        },
-        "prometheus": {
-          "$ref": "#/$defs/PrometheusQuery"
         }
       },
       "additionalProperties": false,
@@ -614,11 +614,17 @@
         "name": {
           "type": "string"
         },
+        "primaryKey": {
+          "type": "boolean"
+        },
         "type": {
           "type": "string"
         },
         "description": {
           "type": "string"
+        },
+        "gauge": {
+          "$ref": "#/$defs/GaugeConfig"
         }
       },
       "additionalProperties": false,
@@ -628,29 +634,11 @@
         "type"
       ]
     },
-    "ViewMergeSpec": {
-      "properties": {
-        "strategy": {
-          "type": "string"
-        },
-        "order": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "joinOn": {
-          "additionalProperties": {
-            "type": "string"
-          },
-          "type": "object"
-        }
+    "ViewColumnDefList": {
+      "items": {
+        "$ref": "#/$defs/ViewColumnDef"
       },
-      "additionalProperties": false,
-      "type": "object",
-      "required": [
-        "strategy"
-      ]
+      "type": "array"
     },
     "ViewSpec": {
       "properties": {
@@ -661,10 +649,7 @@
           "type": "array"
         },
         "columns": {
-          "items": {
-            "$ref": "#/$defs/ViewColumnDef"
-          },
-          "type": "array"
+          "$ref": "#/$defs/ViewColumnDefList"
         },
         "queries": {
           "additionalProperties": {
@@ -673,7 +658,7 @@
           "type": "object"
         },
         "merge": {
-          "$ref": "#/$defs/ViewMergeSpec"
+          "type": "string"
         },
         "mapping": {
           "additionalProperties": {

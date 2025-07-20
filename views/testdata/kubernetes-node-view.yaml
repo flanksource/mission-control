@@ -24,6 +24,7 @@ spec:
   columns:
     - name: pod_name
       type: string
+      primaryKey: true
     - name: status
       type: string
   queries:
@@ -32,8 +33,8 @@ spec:
         types: ["Kubernetes::Node"]
         tagSelector: "account=flanksource"
   mapping:
-    pod_name: "config.name"
-    status: "config.status"
+    pod_name: "row.name"
+    status: "row.status"
   panels:
     - name: "Config Status Distribution"
       type: piechart
