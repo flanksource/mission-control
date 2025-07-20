@@ -3,89 +3,6 @@
   "$id": "https://github.com/flanksource/incident-commander/api/v1/view",
   "$ref": "#/$defs/View",
   "$defs": {
-    "AggregatedResourceSelector": {
-      "properties": {
-        "agent": {
-          "type": "string"
-        },
-        "scope": {
-          "type": "string"
-        },
-        "cache": {
-          "type": "string"
-        },
-        "search": {
-          "type": "string"
-        },
-        "limit": {
-          "type": "integer"
-        },
-        "includeDeleted": {
-          "type": "boolean"
-        },
-        "id": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        },
-        "namespace": {
-          "type": "string"
-        },
-        "tagSelector": {
-          "type": "string"
-        },
-        "labelSelector": {
-          "type": "string"
-        },
-        "fieldSelector": {
-          "type": "string"
-        },
-        "health": {
-          "type": "string"
-        },
-        "types": {
-          "$ref": "#/$defs/Items"
-        },
-        "statuses": {
-          "$ref": "#/$defs/Items"
-        },
-        "groupBy": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "aggregates": {
-          "items": {
-            "$ref": "#/$defs/AggregationField"
-          },
-          "type": "array"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "AggregationField": {
-      "properties": {
-        "function": {
-          "type": "string"
-        },
-        "field": {
-          "type": "string"
-        },
-        "alias": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object",
-      "required": [
-        "function",
-        "field",
-        "alias"
-      ]
-    },
     "ConfigMapKeySelector": {
       "properties": {
         "name": {
@@ -371,11 +288,8 @@
         "table": {
           "$ref": "#/$defs/PanelTableConfig"
         },
-        "source": {
-          "type": "string"
-        },
         "query": {
-          "$ref": "#/$defs/AggregatedResourceSelector"
+          "type": "string"
         }
       },
       "additionalProperties": false,
@@ -383,7 +297,6 @@
       "required": [
         "name",
         "type",
-        "source",
         "query"
       ]
     },

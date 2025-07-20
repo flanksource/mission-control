@@ -67,8 +67,4 @@ spec:
     - name: "Pod Health Summary"
       type: number
       source: configs
-      query:
-        aggregates:
-          - function: count
-            field: "*"
-            alias: total
+      query: SELECT count(*) as total FROM pod

@@ -4,6 +4,11 @@ metadata:
   name: gauge
   namespace: mc
 spec:
+  queries:
+    pods:
+      configs:
+        types:
+          - "Kubernetes::Pod"
   panels:
     - name: Pods
       description: Number of Pods
@@ -18,11 +23,4 @@ spec:
             color: yellow
           - value: 90
             color: red
-      source: configs
-      query:
-        aggregates:
-          - function: COUNT
-            alias: value
-            field: "*"
-        types:
-          - "Kubernetes::Pod"
+      query: SELECT COUNT(*) AS value FROM pods

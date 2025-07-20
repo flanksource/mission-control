@@ -16,7 +16,7 @@ metadata:
           "name": "Pod Health Summary", 
           "type": "number",
           "rows": [
-            {"total": 20}
+            {"total": 2}
           ]
         }
       ]
@@ -51,9 +51,4 @@ spec:
   panels:
     - name: "Pod Health Summary"
       type: number
-      source: configs
-      query:
-        aggregates:
-          - function: count
-            field: "*"
-            alias: total
+      query: SELECT count(*) as total FROM pod

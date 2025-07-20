@@ -8,40 +8,22 @@ spec:
     - name: Health
       description: Helm Releases grouped by health
       type: piechart
-      source: configs
       piechart:
         showLabels: true
         colors:
           healthy: '#28C19B'
           unhealthy: '#F04E6E'
-      query:
-        groupBy:
-          - 'health'
-        aggregates:
-          - function: COUNT
-            alias: count
-            field: '*'
-        types:
-          - 'Kubernetes::HelmRelease'
+      query: SELECT COUNT(*) AS count, health FROM helm_releases GROUP BY health
     - name: Status
       description: Helm Releases grouped by status
       type: piechart
-      source: configs
       piechart:
         colors:
           InstallSucceeded: '#28C19B'
           RollbackSucceeded: '#F4B23C'
           UpgradeFailed: '#F04E6E'
           UpgradeSucceeded: '#5965F2'
-      query:
-        groupBy:
-          - 'status'
-        aggregates:
-          - function: COUNT
-            alias: count
-            field: '*'
-        types:
-          - 'Kubernetes::HelmRelease'
+      query: SELECT COUNT(*) AS count, status FROM helm_releases GROUP BY status
   columns:
     - name: application
       type: string
@@ -65,7 +47,7 @@ spec:
       type: datetime
       description: The last updated time.
   queries:
-    helmReleases:
+    helm_releases:
       selector:
         search: '@order=name'
         types:

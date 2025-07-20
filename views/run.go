@@ -7,7 +7,6 @@ import (
 	"github.com/flanksource/commons/duration"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/dataquery"
-	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
 	pkgView "github.com/flanksource/duty/view"
 	"github.com/samber/lo"
@@ -18,19 +17,7 @@ import (
 
 // Run executes the view queries and returns the rows with data
 func Run(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
-	output := api.ViewResult{}
-
-	for _, summary := range view.Spec.Panels {
-		summaryRows, err := executePanel(ctx, summary)
-		if err != nil {
-			return nil, fmt.Errorf("failed to execute panel '%s': %w", summary.Name, err)
-		}
-
-		output.Panels = append(output.Panels, api.PanelResult{
-			PanelMeta: summary.PanelMeta,
-			Rows:      summaryRows,
-		})
-	}
+	var output api.ViewResult
 
 	var queryResults []dataquery.QueryResultSet
 	for queryName, q := range view.Spec.Queries {
@@ -45,30 +32,55 @@ func Run(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 		})
 	}
 
-	var mergedData []dataquery.QueryResultRow
-	if len(view.Spec.Queries) > 1 {
-		var err error
-		mergedData, err = dataquery.MergeQueryResults(ctx, queryResults, lo.FromPtr(view.Spec.Merge))
-		if err != nil {
-			return nil, fmt.Errorf("failed to merge results: %w", err)
-		}
-	} else if len(queryResults) == 1 {
-		mergedData = queryResults[0].Results
+	sqliteCtx, close, err := dataquery.DBFromResultsets(ctx, queryResults)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create in-memory SQLite database: %w", err)
 	}
+	defer func() {
+		if err := close(); err != nil {
+			ctx.Errorf("failed to close in-memory SQLite database: %v", err)
+		}
+	}()
 
-	var rows []pkgView.Row
-	for _, result := range mergedData {
-		env := map[string]any{"row": result} // We cannot directly pass result because of identifier collision with the reserved ones in cel.
-		row, err := applyMapping(env, view.Spec.Columns, view.Spec.Mapping)
+	for _, summary := range view.Spec.Panels {
+		summaryRows, err := dataquery.RunSQL(sqliteCtx, summary.Query)
 		if err != nil {
-			return nil, fmt.Errorf("failed to apply view mapping: %w", err)
+			return nil, fmt.Errorf("failed to execute panel '%s': %w", summary.Name, err)
 		}
 
-		rows = append(rows, row)
+		output.Panels = append(output.Panels, api.PanelResult{
+			PanelMeta: summary.PanelMeta,
+			Rows:      summaryRows,
+		})
 	}
 
-	output.Rows = rows
-	output.Columns = view.Spec.Columns
+	if len(view.Spec.Columns) != 0 {
+		var mergedData []dataquery.QueryResultRow
+		if lo.FromPtr(view.Spec.Merge) != "" {
+			var err error
+			mergedData, err = dataquery.RunSQL(sqliteCtx, lo.FromPtr(view.Spec.Merge))
+			if err != nil {
+				return nil, fmt.Errorf("failed to merge results: %w", err)
+			}
+		} else if len(queryResults) == 1 {
+			mergedData = queryResults[0].Results
+		}
+
+		var rows []pkgView.Row
+		for _, result := range mergedData {
+			env := map[string]any{"row": result} // We cannot directly pass result because of identifier collision with the reserved ones in cel.
+			row, err := applyMapping(env, view.Spec.Columns, view.Spec.Mapping)
+			if err != nil {
+				return nil, fmt.Errorf("failed to apply view mapping: %w", err)
+			}
+
+			rows = append(rows, row)
+		}
+
+		output.Rows = rows
+		output.Columns = view.Spec.Columns
+	}
+
 	return &output, nil
 }
 
@@ -103,18 +115,4 @@ func applyMapping(data map[string]any, columnDefs []pkgView.ViewColumnDef, mappi
 	}
 
 	return row, nil
-}
-
-func executePanel(ctx context.Context, q api.PanelDef) ([]types.AggregateRow, error) {
-	table := "config_items"
-	if q.Source == "changes" {
-		table = "catalog_changes"
-	}
-
-	result, err := query.Aggregate(ctx, table, q.Query)
-	if err != nil {
-		return nil, fmt.Errorf("failed to aggregate: %w", err)
-	}
-
-	return result, nil
 }

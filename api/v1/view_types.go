@@ -18,7 +18,8 @@ import (
 )
 
 // ViewSpec defines the desired state of View
-// +kubebuilder:validation:XValidation:rule="size(self.panels) > 0 || (size(self.columns) > 0 && size(self.queries) > 0)",message="view spec must have either panels or both columns and queries defined"
+// +kubebuilder:validation:XValidation:rule="size(self.queries) > 0",message="query must be specified"
+// +kubebuilder:validation:XValidation:rule="size(self.panels) > 0 || size(self.columns) > 0",message="view spec must have either panels or columns defined"
 // +kubebuilder:validation:XValidation:rule="!(has(self.columns)) || size(self.columns) == 0 || self.columns.exists(c, c.primaryKey == true)",message="if columns is specified, at least one column must have primaryKey set to true"
 type ViewSpec struct {
 	// Panels for the view

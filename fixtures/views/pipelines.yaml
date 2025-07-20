@@ -7,34 +7,13 @@ spec:
   panels:
     - name: Repository
       type: table
-      source: changes
-      query:
-        search: change_type=GitHubActionRun
-        types:
-          - GitHubAction::Workflow
-        groupBy:
-          - details.repository.full_name
-        aggregates:
-          - function: COUNT
-            alias: value
-            field: '*'
+      query: SELECT COUNT(*) AS count, details->'repository'->>'full_name' as repository FROM workflows GROUP BY details->'repository'->>'full_name'
     - name: Average Duration
       description: Create Release average duration
       type: number
-      source: changes
       number:
         unit: seconds
-      query:
-        search: change_type=GitHubActionRun
-        name: Create Release
-        types:
-          - GitHubAction::Workflow
-        groupBy:
-          - details.repository.full_name
-        aggregates:
-          - function: AVG
-            alias: value
-            field: 'details.duration'
+      query: SELECT AVG(details->'duration') AS value FROM workflows GROUP BY details->'repository'->>'full_name'
   columns:
     - name: name
       type: string
@@ -54,7 +33,7 @@ spec:
     - name: status
       type: status
       description: The status of the pipeline.
-  queries:
+  workflows:
     runs:
       selector:
         search: change_type=GitHubActionRun @order=-created_at
