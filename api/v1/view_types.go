@@ -57,16 +57,22 @@ func (t ViewSpec) Validate() error {
 		}
 	}
 
-	if len(t.Queries) > 1 && t.Merge == nil {
-		return fmt.Errorf("merge query must be specified when there are multiple queries")
+	if len(t.Queries) == 0 {
+		return fmt.Errorf("view must have at least one query")
+	}
+
+	tableOnly := len(t.Columns) > 0 && len(t.Panels) == 0
+
+	if len(t.Queries) > 1 && tableOnly && t.Merge == nil {
+		return fmt.Errorf("merge query must be specified when there are multiple queries and no panels")
 	}
 
 	if len(t.Columns) > 0 && len(t.Columns.PrimaryKey()) == 0 {
 		return fmt.Errorf("view must have at least one primary key column")
 	}
 
-	if len(t.Panels) == 0 && (len(t.Queries) == 0 || len(t.Columns) == 0) {
-		return fmt.Errorf("view must have either panels or both columns and queries defined")
+	if len(t.Panels) == 0 && len(t.Columns) == 0 {
+		return fmt.Errorf("view must have either panels or columns for table")
 	}
 
 	return nil

@@ -4,7 +4,16 @@ metadata:
   name: database
   namespace: mc
 spec:
+  cache:
+    maxAge: 1h
+    minAge: 1m
+    refreshTimeout: 10s
   columns:
+    - name: id
+      type: string
+      description: The id of the database.
+      primaryKey: true
+      hidden: true
     - name: database
       type: string
       description: The name of the helm release.
@@ -21,8 +30,9 @@ spec:
     backups:
       changes:
         search: change_type=BackupSuccessful
-      max: 10
+        limit: 10
   mapping:
+    id: row.id
     database: row.name
     date: row.created_at
     status: row.details.status

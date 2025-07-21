@@ -89,6 +89,10 @@ spec:
                             type: object
                           type: array
                       type: object
+                    hidden:
+                      description: Hidden indicates if the column should be hidden
+                        from view
+                      type: boolean
                     name:
                       description: Name of the column
                       type: string
