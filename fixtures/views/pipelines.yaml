@@ -15,6 +15,10 @@ spec:
         unit: seconds
       query: SELECT AVG(details->'duration') AS value FROM workflows GROUP BY details->'repository'->>'full_name'
   columns:
+    - name: id
+      type: string
+      description: The id of the pipeline.
+      primaryKey: true
     - name: name
       type: string
       description: The name of the pipeline.
@@ -33,14 +37,15 @@ spec:
     - name: status
       type: status
       description: The status of the pipeline.
-  workflows:
-    runs:
-      selector:
-        search: change_type=GitHubActionRun @order=-created_at
+  queries:
+    workflows:
+      changes:
+        search: change_type=GitHubActionRun* @order=-created_at
         types:
           - GitHubAction::Workflow
-        max: 10
+        limit: 10
   mapping:
+    id: row.id
     name: row.name
     lastRun: row.details.created_at
     lastRunBy: row.details.triggering_actor.login
