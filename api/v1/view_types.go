@@ -9,6 +9,7 @@ import (
 	"github.com/flanksource/commons/duration"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
+	"github.com/flanksource/duty/view"
 	"github.com/google/uuid"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
@@ -16,29 +17,10 @@ import (
 	"github.com/flanksource/incident-commander/api"
 )
 
-// ViewQuery defines a query configuration for populating the view
-type ViewQuery struct {
-	// Selector defines the resource selector for finding matching resources
-	Selector types.ResourceSelector `json:"selector" yaml:"selector"`
-
-	// Max number of results to return
-	Max int `json:"max,omitempty" yaml:"max,omitempty"`
-
-	// Mapping defines how to map query results to view columns
-	// +kubebuilder:validation:Schemaless
-	// +kubebuilder:pruning:PreserveUnknownFields
-	// +kubebuilder:validation:Type=object
-	Mapping map[string]types.CelExpression `json:"mapping" yaml:"mapping" template:"true"`
-}
-
-// ViewQueriesSpec defines the structure for different types of queries
-type ViewQueriesSpec struct {
-	Configs []ViewQuery `json:"configs,omitempty" yaml:"configs,omitempty"`
-	Changes []ViewQuery `json:"changes,omitempty" yaml:"changes,omitempty"`
-}
-
 // ViewSpec defines the desired state of View
-// +kubebuilder:validation:XValidation:rule="size(self.panels) > 0 || (size(self.columns) > 0 && (size(self.queries.configs) > 0 || size(self.queries.changes) > 0))",message="view spec must have either panels or both columns and queries defined"
+// +kubebuilder:validation:XValidation:rule="size(self.queries) > 0",message="query must be specified"
+// +kubebuilder:validation:XValidation:rule="size(self.panels) > 0 || size(self.columns) > 0",message="view spec must have either panels or columns defined"
+// +kubebuilder:validation:XValidation:rule="!(has(self.columns)) || size(self.columns) == 0 || self.columns.exists(c, c.primaryKey == true)",message="if columns is specified, at least one column must have primaryKey set to true"
 type ViewSpec struct {
 	// Panels for the view
 	//+kubebuilder:validation:Optional
@@ -46,15 +28,48 @@ type ViewSpec struct {
 
 	// Columns define the structure of the view
 	//+kubebuilder:validation:Optional
-	Columns []api.ViewColumnDef `json:"columns" yaml:"columns"`
+	Columns view.ViewColumnDefList `json:"columns" yaml:"columns"`
 
 	// Queries define the queries and mappings to populate the view
 	//+kubebuilder:validation:Optional
-	Queries ViewQueriesSpec `json:"queries" yaml:"queries"`
+	Queries map[string]view.Query `json:"queries" yaml:"queries"`
+
+	// Merge defines how to merge/join data from multiple queries
+	//+kubebuilder:validation:Optional
+	Merge *string `json:"merge,omitempty" yaml:"merge,omitempty"`
+
+	// Mapping defines how to map query results to view columns
+	//+kubebuilder:validation:Optional
+	//+kubebuilder:validation:Schemaless
+	//+kubebuilder:pruning:PreserveUnknownFields
+	//+kubebuilder:validation:Type=object
+	Mapping map[string]types.CelExpression `json:"mapping,omitempty" yaml:"mapping,omitempty" template:"true"`
 
 	// Cache configuration
 	//+kubebuilder:validation:Optional
 	Cache ViewCache `json:"cache" yaml:"cache"`
+}
+
+func (t ViewSpec) Validate() error {
+	for k, query := range t.Queries {
+		if query.IsEmpty() {
+			return fmt.Errorf("query %s is empty", k)
+		}
+	}
+
+	if len(t.Queries) > 1 && t.Merge == nil {
+		return fmt.Errorf("merge query must be specified when there are multiple queries")
+	}
+
+	if len(t.Columns) > 0 && len(t.Columns.PrimaryKey()) == 0 {
+		return fmt.Errorf("view must have at least one primary key column")
+	}
+
+	if len(t.Panels) == 0 && (len(t.Queries) == 0 || len(t.Columns) == 0) {
+		return fmt.Errorf("view must have either panels or both columns and queries defined")
+	}
+
+	return nil
 }
 
 // ViewStatus defines the observed state of View
@@ -84,7 +99,7 @@ func (v *View) GetUUID() (uuid.UUID, error) {
 	return uuid.Parse(string(v.UID))
 }
 
-// +kubebuilder:object:root=true
+//+kubebuilder:object:root=true
 
 // ViewList contains a list of View
 type ViewList struct {

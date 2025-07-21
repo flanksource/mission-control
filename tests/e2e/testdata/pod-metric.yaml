@@ -1,0 +1,70 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: pod-metric
+  namespace: default
+  uid: 49faeac7-b90b-4cb9-9db1-7db9d7f463f9
+spec:
+  merge: |
+    SELECT 
+      pod.name,
+      pod.tags->>'namespace' AS namespace,
+      pod.status,
+      pod.health,
+      pod.created_at,
+      COALESCE(CAST(metrics.value AS TEXT), '0') || '/' || 
+      COALESCE(
+        pod.config->'spec'->'containers'->0->'resources'->'limits'->>'memory', 
+        ''
+      ) AS memory
+    FROM pod
+    LEFT JOIN metrics 
+      ON pod.name = metrics.pod 
+      AND pod.tags->>'namespace' = metrics.namespace
+  columns:
+    - description: The pod name.
+      name: name
+      type: string
+      primaryKey: true
+    - description: The namespace name.
+      name: namespace
+      type: string
+      primaryKey: true
+    - description: The status of the deployment.
+      name: status
+      type: status
+    - description: The health of the deployment.
+      name: health
+      type: health
+    - description: The memory usage of the deployment.
+      name: memory
+      type: string
+  queries:
+    metrics:
+      prometheus:
+        connection: connection://mc/prometheus
+        query: |
+          sum by (namespace, pod) (
+            container_memory_usage_bytes{
+              namespace="missioncontrol",
+              container!="POD", # Skip The pause/infra container
+              image!="" # Skip dead containers
+            }
+          ) / 1024 / 1024
+    pod:
+      configs:
+        search: "@order=name"
+        tagSelector: namespace in (missioncontrol)
+        types:
+          - Kubernetes::Pod
+  mapping:
+    health: row.health
+    memory: row.memory
+    name: row.name
+    namespace: row.namespace
+    status: row.status
+  panels:
+    - name: "Pod Health Summary"
+      type: number
+      source: configs
+      query: SELECT count(*) as total FROM pod

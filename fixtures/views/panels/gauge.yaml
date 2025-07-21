@@ -1,0 +1,26 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: gauge
+  namespace: mc
+spec:
+  queries:
+    pods:
+      configs:
+        types:
+          - "Kubernetes::Pod"
+  panels:
+    - name: Pods
+      description: Number of Pods
+      type: gauge
+      gauge:
+        min: 0
+        max: 100
+        thresholds:
+          - value: 0
+            color: green
+          - value: 60
+            color: yellow
+          - value: 90
+            color: red
+      query: SELECT COUNT(*) AS value FROM pods

@@ -3,7 +3,7 @@ kind: View
 metadata:
   name: cache-test-view
   namespace: test
-  uid: 33333333-3333-3333-3333-333333333333
+  uid: ae2a85f2-155c-4b02-8191-9e2a5b07b0dc
   annotations:
     expected-rows: |
       [
@@ -13,6 +13,7 @@ spec:
   columns:
     - name: component_name
       type: string
+      primaryKey: true
     - name: component_type
       type: string
     - name: status
@@ -24,14 +25,14 @@ spec:
     - name: cost
       type: string
   queries:
-    configs:
-      - selector:
-          types: ["Kubernetes::Pod"]
-          tagSelector: "namespace=test"
-        mapping:
-          component_name: "row.name"
-          component_type: "row.type"
-          status: "row.status"
-          health: "row.health"
-          namespace: "row.tags.namespace"
-          cost: "row.cost_total_30d"
+    pod:
+      configs:
+        types: ["Kubernetes::Pod"]
+        tagSelector: "namespace=test"
+  mapping:
+    component_name: "row.name"
+    component_type: "row.type"
+    status: "row.status"
+    health: "row.health"
+    namespace: "row.tags.namespace"
+    cost: "row.cost_total_30d"

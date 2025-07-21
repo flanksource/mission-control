@@ -2,6 +2,7 @@ package db
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
@@ -11,6 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
+	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 )
 
@@ -18,6 +20,10 @@ import (
 func PersistViewFromCRD(ctx context.Context, obj *v1.View) error {
 	uid, err := uuid.Parse(string(obj.GetUID()))
 	if err != nil {
+		return err
+	}
+
+	if err := obj.Spec.Validate(); err != nil {
 		return err
 	}
 
@@ -81,9 +87,20 @@ func GetView(ctx context.Context, namespace, name string) (*v1.View, error) {
 	return viewCR, nil
 }
 
-// GetAllViews fetches all views from the database
-func GetAllViews(ctx context.Context) ([]models.View, error) {
-	var views []models.View
-	err := ctx.DB().Where("deleted_at IS NULL").Find(&views).Error
-	return views, err
+func InsertPanelResults(ctx context.Context, viewID uuid.UUID, panels []api.PanelResult) error {
+	results, err := json.Marshal(panels)
+	if err != nil {
+		return fmt.Errorf("failed to marshal panel results: %w", err)
+	}
+
+	record := models.ViewPanel{
+		ViewID:  viewID,
+		Results: results,
+	}
+
+	if err := ctx.DB().Save(&record).Error; err != nil {
+		return fmt.Errorf("failed to save panel results: %w", err)
+	}
+
+	return nil
 }

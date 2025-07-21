@@ -10,6 +10,7 @@ import (
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	pkgView "github.com/flanksource/duty/view"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/singleflight"
 
@@ -102,7 +103,10 @@ func handleViewRefresh(ctx context.Context, view *v1.View, cacheOptions *v1.Cach
 		defer cancel()
 		clonedCtx := ctx.Clone()
 		clonedCtx.Context = newCtx
-		refreshCtx := context.NewContext(clonedCtx).WithDB(ctx.DB(), ctx.Pool())
+		refreshCtx := context.NewContext(clonedCtx).WithDB(ctx.DB(), ctx.Pool()).WithConnectionString(ctx.ConnectionString())
+		if ctx.User() != nil {
+			refreshCtx = refreshCtx.WithUser(ctx.User())
+		}
 
 		res, refreshErr, _ := refreshGroup.Do(string(view.GetUID()), func() (any, error) {
 			return populateView(refreshCtx, view)
@@ -141,7 +145,7 @@ func handleViewRefresh(ctx context.Context, view *v1.View, cacheOptions *v1.Cach
 // readCachedViewData reads cached data from the view table
 func readCachedViewData(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 	tableName := view.TableName()
-	rows, err := db.ReadViewTable(ctx, tableName)
+	rows, err := pkgView.ReadViewTable(ctx, tableName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read view table: %w", err)
 	}
@@ -158,12 +162,17 @@ func readCachedViewData(ctx context.Context, view *v1.View) (*api.ViewResult, er
 		}
 	}
 
-	return &api.ViewResult{
-		Columns:         view.Spec.Columns,
-		Rows:            rows,
-		Panels:          finalPanelResults,
-		LastRefreshedAt: view.Status.LastRan.Time,
-	}, nil
+	result := &api.ViewResult{
+		Columns: view.Spec.Columns,
+		Rows:    rows,
+		Panels:  finalPanelResults,
+	}
+
+	if view.Status.LastRan != nil {
+		result.LastRefreshedAt = view.Status.LastRan.Time
+	}
+
+	return result, nil
 }
 
 // populateView runs the view queries and saves to the view table.
@@ -173,38 +182,29 @@ func populateView(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 		return nil, fmt.Errorf("failed to run view: %w", err)
 	}
 
-	err = ctx.Transaction(func(ctx context.Context, span trace.Span) error {
-		if err := ensureViewTableExists(ctx, view); err != nil {
-			return err
-		}
+	if len(result.Columns) > 0 {
+		err = ctx.Transaction(func(ctx context.Context, span trace.Span) error {
+			if err := pkgView.CreateViewTable(ctx, view.TableName(), view.Spec.Columns); err != nil {
+				return fmt.Errorf("failed to create view table: %w", err)
+			}
 
-		if err := persistViewData(ctx, view, result); err != nil {
-			return err
-		}
+			if err := persistViewData(ctx, view, result); err != nil {
+				return err
+			}
 
-		if err := updateViewLastRan(ctx, string(view.GetUID())); err != nil {
-			return err
-		}
+			if err := updateViewLastRan(ctx, string(view.GetUID())); err != nil {
+				return err
+			}
 
-		return nil
-	})
-	if err != nil {
-		return result, err
+			return nil
+		})
+		if err != nil {
+			return result, err
+		}
 	}
 
 	result.LastRefreshedAt = time.Now()
 	return result, nil
-}
-
-// ensureViewTableExists creates the view table if it doesn't exist
-func ensureViewTableExists(ctx context.Context, view *v1.View) error {
-	tableName := view.TableName()
-	if !ctx.DB().Migrator().HasTable(tableName) {
-		if err := db.CreateViewTable(ctx, view); err != nil {
-			return fmt.Errorf("failed to create view table: %w", err)
-		}
-	}
-	return nil
 }
 
 // persistViewData saves view rows and panel results to their respective tables
@@ -212,7 +212,7 @@ func persistViewData(ctx context.Context, view *v1.View, result *api.ViewResult)
 	tableName := view.TableName()
 
 	// Save view rows to the dedicated table
-	if err := db.InsertViewRows(ctx, tableName, result.Columns, result.Rows); err != nil {
+	if err := pkgView.InsertViewRows(ctx, tableName, result.Columns, result.Rows); err != nil {
 		return fmt.Errorf("failed to insert view rows: %w", err)
 	}
 

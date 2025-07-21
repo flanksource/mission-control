@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/tests/fixtures/dummy"
+	pkgView "github.com/flanksource/duty/view"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"gopkg.in/yaml.v2"
@@ -47,7 +49,7 @@ var _ = Describe("View Database Table", func() {
 			tableName := viewObj.TableName()
 			Expect(DefaultContext.DB().Migrator().HasTable(tableName)).To(BeTrue())
 
-			result, err := ReadOrPopulateViewTable(DefaultContext, viewObj.Namespace, viewObj.Name)
+			result, err := ReadOrPopulateViewTable(DefaultContext.WithUser(&dummy.JohnDoe), viewObj.Namespace, viewObj.Name)
 			Expect(err).ToNot(HaveOccurred())
 
 			expectedRowsAnnotation, exists := viewObj.Annotations["expected-rows"]
@@ -58,9 +60,9 @@ var _ = Describe("View Database Table", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result.Rows).To(HaveLen(len(expectedRows)))
 
-			expectedResults := make([]api.ViewRow, len(expectedRows))
+			expectedResults := make([]pkgView.Row, len(expectedRows))
 			for i, row := range expectedRows {
-				expectedResults[i] = api.ViewRow(row)
+				expectedResults[i] = pkgView.Row(row)
 			}
 			Expect(result.Rows).To(Equal(expectedResults))
 
@@ -99,7 +101,7 @@ var _ = Describe("ReadOrPopulateViewTable Cache Control", func() {
 			Expect(err).ToNot(HaveOccurred())
 		}
 
-		_, err = ReadOrPopulateViewTable(DefaultContext, viewObj.Namespace, viewObj.Name, WithRefreshTimeout(1*time.Microsecond))
+		_, err = ReadOrPopulateViewTable(DefaultContext.WithUser(&dummy.JohnDoe), viewObj.Namespace, viewObj.Name, WithRefreshTimeout(1*time.Microsecond))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("refresh timeout reached. try again"))
 	})

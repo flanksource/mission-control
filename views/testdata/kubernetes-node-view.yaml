@@ -16,7 +16,7 @@ metadata:
           "name": "Config Status Distribution",
           "type": "piechart",
           "rows": [
-            {"value": 20}
+            {"value": 2}
           ]
         }
       ]
@@ -24,24 +24,18 @@ spec:
   columns:
     - name: pod_name
       type: string
+      primaryKey: true
     - name: status
       type: string
   queries:
-    configs:
-      - selector:
-          types: ["Kubernetes::Node"]
-          tagSelector: "account=flanksource"
-        max: 2
-        mapping:
-          pod_name: "row.name"
-          status: "row.status"
+    nodes:
+      configs:
+        types: ["Kubernetes::Node"]
+        tagSelector: "account=flanksource"
+  mapping:
+    pod_name: "row.name"
+    status: "row.status"
   panels:
     - name: "Config Status Distribution"
       type: piechart
-      source: configs
-      query:
-        groupBy: [status]
-        aggregates:
-          - function: count
-            field: "*"
-            alias: value
+      query: SELECT count(*) as value FROM nodes

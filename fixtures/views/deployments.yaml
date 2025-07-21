@@ -8,76 +8,22 @@ spec:
     - name: Health
       description: Helm Releases grouped by health
       type: piechart
-      source: configs
       piechart:
         showLabels: true
         colors:
           healthy: '#28C19B'
           unhealthy: '#F04E6E'
-      query:
-        groupBy:
-          - 'health'
-        aggregates:
-          - function: COUNT
-            alias: count
-            field: '*'
-        types:
-          - 'Kubernetes::HelmRelease'
+      query: SELECT COUNT(*) AS count, health FROM helm_releases GROUP BY health
     - name: Status
       description: Helm Releases grouped by status
       type: piechart
-      source: configs
       piechart:
         colors:
           InstallSucceeded: '#28C19B'
           RollbackSucceeded: '#F4B23C'
           UpgradeFailed: '#F04E6E'
           UpgradeSucceeded: '#5965F2'
-      query:
-        groupBy:
-          - 'status'
-        aggregates:
-          - function: COUNT
-            alias: count
-            field: '*'
-        types:
-          - 'Kubernetes::HelmRelease'
-    - name: Namespace
-      description: Helm Releases grouped by namespace
-      type: piechart
-      source: configs
-      query:
-        groupBy:
-          - 'tags.namespace'
-        aggregates:
-          - function: COUNT
-            alias: count
-            field: '*'
-        types:
-          - 'Kubernetes::HelmRelease'
-    - name: Type
-      description: Helm Releases grouped by type
-      type: gauge
-      gauge:
-        min: 0
-        max: 100
-        thresholds:
-          - value: 0
-            color: green
-          - value: 70
-            color: yellow
-          - value: 90
-            color: red
-      source: configs
-      query:
-        groupBy:
-          - 'type'
-        aggregates:
-          - function: COUNT
-            alias: value
-            field: '*'
-        types:
-          - 'Kubernetes::HelmRelease'
+      query: SELECT COUNT(*) AS count, status FROM helm_releases GROUP BY status
   columns:
     - name: application
       type: string
@@ -101,17 +47,17 @@ spec:
       type: datetime
       description: The last updated time.
   queries:
-    configs:
-      - selector:
-          search: '@order=name'
-          types:
-            - Kubernetes::HelmRelease
-          tagSelector: namespace in (monitoring,media)
-        mapping:
-          application: row.name
-          namespace: row.tags.namespace
-          chart: row.config.status.history[0].chartName
-          version: row.config.status.history[0].chartVersion
-          status: row.status
-          health: row.health
-          lastUpdated: row.updated_at
+    helm_releases:
+      selector:
+        search: '@order=name'
+        types:
+          - Kubernetes::HelmRelease
+        tagSelector: namespace in (monitoring,media)
+  mapping:
+    application: row.name
+    namespace: row.tags.namespace
+    chart: row.config.status.history[0].chartName
+    version: row.config.status.history[0].chartVersion
+    status: row.status
+    health: row.health
+    lastUpdated: row.updated_at

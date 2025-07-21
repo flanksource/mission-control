@@ -1,6 +1,8 @@
 package api
 
-import "github.com/flanksource/duty/types"
+import (
+	"github.com/flanksource/duty/dataquery"
+)
 
 // PanelType defines the type of panel visualization
 type PanelType string
@@ -22,11 +24,8 @@ const (
 type PanelDef struct {
 	PanelMeta `json:",inline" yaml:",inline"`
 
-	// +kubebuilder:validation:Enum=configs;changes
-	// Source specifies the data source of the panel
-	Source string `json:"source" yaml:"source"`
-
-	Query types.AggregatedResourceSelector `json:"query" yaml:"query"`
+	// Query is a raw SQL query that has access to the queries as tables
+	Query string `json:"query" yaml:"query"`
 }
 
 // +kubebuilder:object:generate=true
@@ -90,5 +89,5 @@ type PanelTableConfig struct {
 
 type PanelResult struct {
 	PanelMeta `json:",inline" yaml:",inline"`
-	Rows      []types.AggregateRow `json:"rows" yaml:"rows"`
+	Rows      []dataquery.QueryResultRow `json:"rows" yaml:"rows"`
 }
