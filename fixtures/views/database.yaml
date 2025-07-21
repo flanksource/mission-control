@@ -4,6 +4,10 @@ metadata:
   name: database
   namespace: mc
 spec:
+  cache:
+    maxAge: 1h
+    minAge: 1m
+    refreshTimeout: 10s
   columns:
     - name: id
       type: string
