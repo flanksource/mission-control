@@ -19,6 +19,7 @@ spec:
       type: string
       description: The id of the pipeline.
       primaryKey: true
+      hidden: true
     - name: name
       type: string
       description: The name of the pipeline.

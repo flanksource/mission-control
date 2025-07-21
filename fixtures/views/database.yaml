@@ -9,6 +9,7 @@ spec:
       type: string
       description: The id of the database.
       primaryKey: true
+      hidden: true
     - name: database
       type: string
       description: The name of the helm release.

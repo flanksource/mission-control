@@ -29,6 +29,7 @@ spec:
       type: string
       description: The id of the deployment.
       primaryKey: true
+      hidden: true
     - name: application
       type: string
       description: The application name.

@@ -536,6 +536,9 @@
         "description": {
           "type": "string"
         },
+        "hidden": {
+          "type": "boolean"
+        },
         "gauge": {
           "$ref": "#/$defs/GaugeConfig"
         }
