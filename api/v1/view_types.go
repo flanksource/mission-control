@@ -22,6 +22,12 @@ import (
 // +kubebuilder:validation:XValidation:rule="size(self.panels) > 0 || size(self.columns) > 0",message="view spec must have either panels or columns defined"
 // +kubebuilder:validation:XValidation:rule="!(has(self.columns)) || size(self.columns) == 0 || self.columns.exists(c, c.primaryKey == true)",message="if columns is specified, at least one column must have primaryKey set to true"
 type ViewSpec struct {
+	// Title of the view to be displayed in the UI
+	Title string `json:"title" yaml:"title"`
+
+	// Icon to use for the view
+	Icon string `json:"icon,omitempty" yaml:"icon,omitempty"`
+
 	// Panels for the view
 	//+kubebuilder:validation:Optional
 	Panels []api.PanelDef `json:"panels,omitempty" yaml:"panels,omitempty"`

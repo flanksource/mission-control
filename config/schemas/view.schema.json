@@ -558,6 +558,12 @@
     },
     "ViewSpec": {
       "properties": {
+        "title": {
+          "type": "string"
+        },
+        "icon": {
+          "type": "string"
+        },
         "panels": {
           "items": {
             "$ref": "#/$defs/PanelDef"
@@ -589,6 +595,7 @@
       "additionalProperties": false,
       "type": "object",
       "required": [
+        "title",
         "columns",
         "queries",
         "cache"

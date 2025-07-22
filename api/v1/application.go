@@ -57,17 +57,16 @@ type ApplicationSpec struct {
 	// Description of the application
 	Description string `json:"description,omitempty"`
 
+	// Properties to be displayed in the application view
+	Properties []api.Property `json:"properties,omitempty"`
+
 	// Type of the application
 	Type string `json:"type"`
 
-	// Schedule on which the application scrapes the data
-	Schedule string `json:"schedule"`
-
-	Mapping ApplicationMapping `json:"mapping"`
+	//+kubebuilder:validation:Optional
+	Mapping ApplicationMapping `json:"mapping,omitempty"`
 
 	Sections []ApplicationSection `json:"sections,omitempty"`
-
-	Properties []api.Property `json:"properties,omitempty"`
 }
 
 // ApplicationStatus defines the observed state of Application
