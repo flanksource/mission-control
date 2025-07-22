@@ -201,10 +201,13 @@
         "description": {
           "type": "string"
         },
-        "type": {
-          "type": "string"
+        "properties": {
+          "items": {
+            "$ref": "#/$defs/Property"
+          },
+          "type": "array"
         },
-        "schedule": {
+        "type": {
           "type": "string"
         },
         "mapping": {
@@ -215,20 +218,12 @@
             "$ref": "#/$defs/ApplicationSection"
           },
           "type": "array"
-        },
-        "properties": {
-          "items": {
-            "$ref": "#/$defs/Property"
-          },
-          "type": "array"
         }
       },
       "additionalProperties": false,
       "type": "object",
       "required": [
-        "type",
-        "schedule",
-        "mapping"
+        "type"
       ]
     },
     "ApplicationStatus": {

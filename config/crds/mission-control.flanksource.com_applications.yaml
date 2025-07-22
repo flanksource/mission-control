@@ -364,6 +364,7 @@ spec:
                     type: array
                 type: object
               properties:
+                description: Properties to be displayed in the application view
                 items:
                   properties:
                     color:
@@ -408,9 +409,6 @@ spec:
                       type: integer
                   type: object
                 type: array
-              schedule:
-                description: Schedule on which the application scrapes the data
-                type: string
               sections:
                 items:
                   description: ApplicationSection is a section rendered in the application
@@ -439,8 +437,6 @@ spec:
                 description: Type of the application
                 type: string
             required:
-            - mapping
-            - schedule
             - type
             type: object
           status:
