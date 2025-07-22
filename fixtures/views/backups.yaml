@@ -1,9 +1,11 @@
 apiVersion: mission-control.flanksource.com/v1
 kind: View
 metadata:
-  name: database
+  name: backups
   namespace: mc
 spec:
+  title: Backups
+  icon: database
   cache:
     maxAge: 1h
     minAge: 1m

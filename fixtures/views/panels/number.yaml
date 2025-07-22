@@ -4,6 +4,8 @@ metadata:
   name: number
   namespace: mc
 spec:
+  title: Number View
+  icon: service
   queries:
     services:
       configs:
@@ -12,9 +14,6 @@ spec:
         tagSelector: namespace=default
   panels:
     - name: Total Services
-      description: List of all the kubernetes services in the default namespace
+      description: Total number of services in the default namespace
       type: number
-      number:
-        unit: count
-        precision: 0
       query: SELECT COUNT(*) AS value FROM services
