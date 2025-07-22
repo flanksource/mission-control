@@ -4,8 +4,9 @@ metadata:
   name: pods
   namespace: mc
 spec:
-  title: Pods
-  icon: pod
+  display:
+    title: Pods
+    icon: pod
   columns:
     - description: The pod name.
       name: name

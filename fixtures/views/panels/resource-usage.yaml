@@ -4,8 +4,6 @@ metadata:
   name: resource-usage
   namespace: mc
 spec:
-  title: Resource Usage
-  icon: cpu
   queries:
     cpu:
       prometheus:

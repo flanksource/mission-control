@@ -4,8 +4,10 @@ metadata:
   name: backups
   namespace: mc
 spec:
-  title: Backups
-  icon: database
+  display:
+    title: Backups
+    icon: database
+    sidebar: true
   cache:
     maxAge: 1h
     minAge: 1m

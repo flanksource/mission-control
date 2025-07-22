@@ -556,13 +556,28 @@
       },
       "type": "array"
     },
-    "ViewSpec": {
+    "ViewDisplay": {
       "properties": {
-        "title": {
-          "type": "string"
+        "ordinal": {
+          "type": "integer"
+        },
+        "sidebar": {
+          "type": "boolean"
         },
         "icon": {
           "type": "string"
+        },
+        "title": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ViewSpec": {
+      "properties": {
+        "display": {
+          "$ref": "#/$defs/ViewDisplay"
         },
         "panels": {
           "items": {
@@ -595,7 +610,6 @@
       "additionalProperties": false,
       "type": "object",
       "required": [
-        "title",
         "columns",
         "queries",
         "cache"
