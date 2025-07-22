@@ -4,8 +4,6 @@ metadata:
   name: piechart
   namespace: mc
 spec:
-  title: Piechart View
-  icon: pod
   queries:
     pods:
       configs:

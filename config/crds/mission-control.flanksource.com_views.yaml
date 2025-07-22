@@ -120,9 +120,23 @@ spec:
                       for other types
                     rule: 'self.type==''gauge'' ? has(self.gauge) : !has(self.gauge)'
                 type: array
-              icon:
-                description: Icon to use for the view
-                type: string
+              display:
+                description: Display properties for the view
+                properties:
+                  icon:
+                    description: Icon to use for the view
+                    type: string
+                  ordinal:
+                    description: Ordinal defines the order of the view
+                    type: integer
+                  sidebar:
+                    description: Sidebar indicates if the view should be shown in
+                      sidebar
+                    type: boolean
+                  title:
+                    description: Title of the view to be displayed in the UI
+                    type: string
+                type: object
               mapping:
                 description: Mapping defines how to map query results to view columns
                 type: object
@@ -739,11 +753,6 @@ spec:
                 description: Queries define the queries and mappings to populate the
                   view
                 type: object
-              title:
-                description: Title of the view to be displayed in the UI
-                type: string
-            required:
-            - title
             type: object
             x-kubernetes-validations:
             - message: query must be specified

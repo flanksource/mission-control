@@ -4,8 +4,6 @@ metadata:
   name: table
   namespace: mc
 spec:
-  title: Table View
-  icon: deployment
   queries:
     deployments:
       configs:

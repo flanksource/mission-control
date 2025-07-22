@@ -17,16 +17,28 @@ import (
 	"github.com/flanksource/incident-commander/api"
 )
 
+// ViewDisplay defines display properties for the view
+type ViewDisplay struct {
+	// Ordinal defines the order of the view
+	Ordinal int `json:"ordinal,omitempty" yaml:"ordinal,omitempty"`
+
+	// Sidebar indicates if the view should be shown in sidebar
+	Sidebar bool `json:"sidebar,omitempty" yaml:"sidebar,omitempty"`
+
+	// Icon to use for the view
+	Icon string `json:"icon,omitempty" yaml:"icon,omitempty"`
+
+	// Title of the view to be displayed in the UI
+	Title string `json:"title,omitempty" yaml:"title,omitempty"`
+}
+
 // ViewSpec defines the desired state of View
 // +kubebuilder:validation:XValidation:rule="size(self.queries) > 0",message="query must be specified"
 // +kubebuilder:validation:XValidation:rule="size(self.panels) > 0 || size(self.columns) > 0",message="view spec must have either panels or columns defined"
 // +kubebuilder:validation:XValidation:rule="!(has(self.columns)) || size(self.columns) == 0 || self.columns.exists(c, c.primaryKey == true)",message="if columns is specified, at least one column must have primaryKey set to true"
 type ViewSpec struct {
-	// Title of the view to be displayed in the UI
-	Title string `json:"title" yaml:"title"`
-
-	// Icon to use for the view
-	Icon string `json:"icon,omitempty" yaml:"icon,omitempty"`
+	// Display properties for the view
+	Display ViewDisplay `json:"display,omitempty" yaml:"display,omitempty"`
 
 	// Panels for the view
 	//+kubebuilder:validation:Optional

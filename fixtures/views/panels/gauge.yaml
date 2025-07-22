@@ -4,8 +4,6 @@ metadata:
   name: gauge
   namespace: mc
 spec:
-  title: Gauge View
-  icon: pod
   queries:
     pods:
       configs:

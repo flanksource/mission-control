@@ -4,8 +4,10 @@ metadata:
   name: deployments
   namespace: mc
 spec:
-  title: Helm Releases
-  icon: rocket
+  display:
+    title: Helm Releases
+    icon: rocket
+    sidebar: true
   panels:
     - name: Health
       description: Helm Releases grouped by health

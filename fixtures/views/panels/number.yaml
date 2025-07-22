@@ -4,8 +4,6 @@ metadata:
   name: number
   namespace: mc
 spec:
-  title: Number View
-  icon: service
   queries:
     services:
       configs:

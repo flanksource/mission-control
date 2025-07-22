@@ -4,8 +4,10 @@ metadata:
   name: pipelines
   namespace: mc
 spec:
-  title: Pipelines
-  icon: github
+  display:
+    title: Pipelines
+    icon: github
+    sidebar: true
   cache:
     maxAge: 30m
     minAge: 1m
