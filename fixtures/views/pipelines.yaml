@@ -56,8 +56,6 @@ spec:
         types:
           - GitHubAction::Workflow
   mapping:
-    id: row.id
-    name: row.name
     lastRun: row.details.created_at
     lastRunBy: row.details.triggering_actor.login
     repository: row.details.repository.full_name

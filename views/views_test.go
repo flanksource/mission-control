@@ -1,15 +1,128 @@
 package views
 
 import (
+	"testing"
 	"time"
 
 	"github.com/flanksource/duty/types"
 	pkgView "github.com/flanksource/duty/view"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/samber/lo"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
 )
+
+func TestApplyMapping(t *testing.T) {
+	type applyMappingTestCase struct {
+		name     string
+		data     map[string]any
+		columns  []pkgView.ViewColumnDef
+		mapping  map[string]types.CelExpression
+		expected pkgView.Row
+	}
+
+	testCases := []applyMappingTestCase{
+		{
+			name: "should apply CEL expressions to data",
+			data: map[string]any{
+				"name":   "test-pod",
+				"status": "Running",
+				"ready":  true,
+			},
+			mapping: map[string]types.CelExpression{
+				"pod_name":   "row.name",
+				"pod_status": "row.status",
+			},
+			columns: []pkgView.ViewColumnDef{
+				{
+					Name: "pod_name",
+					Type: pkgView.ColumnTypeString,
+				},
+				{
+					Name: "pod_status",
+					Type: pkgView.ColumnTypeString,
+				},
+			},
+			expected: pkgView.Row{"test-pod", "Running"},
+		},
+		{
+			name: "should handle empty mapping",
+			data: map[string]any{
+				"name": "test",
+			},
+			mapping:  map[string]types.CelExpression{},
+			expected: nil,
+		},
+		{
+			name: "helper columns",
+			columns: []pkgView.ViewColumnDef{
+				{
+					Name: "name",
+					Type: pkgView.ColumnTypeString,
+				},
+				{
+					Name: "url",
+					Type: pkgView.ColumnTypeString,
+					For:  lo.ToPtr("name"),
+				},
+			},
+			data: map[string]any{
+				"name": "test",
+			},
+			mapping: map[string]types.CelExpression{
+				"name": `row.name`,
+				"url":  `"https://example.com/" + row.name`,
+			},
+			expected: pkgView.Row{"test", "https://example.com/test"},
+		},
+		{
+			name: "no explicit mapping",
+			columns: []pkgView.ViewColumnDef{
+				{
+					Name: "name",
+					Type: pkgView.ColumnTypeString,
+				},
+				{
+					Name: "url",
+					Type: pkgView.ColumnTypeString,
+					For:  lo.ToPtr("name"),
+				},
+			},
+			data: map[string]any{
+				"name": "test",
+				"url":  "https://example.com/test",
+			},
+			mapping:  nil,
+			expected: pkgView.Row{"test", "https://example.com/test"},
+		},
+		{
+			name: "should handle durations",
+			data: map[string]any{
+				"duration": "does not matter. the value is hardcoded in the mapping.",
+			},
+			mapping: map[string]types.CelExpression{
+				"duration": "duration('1m')",
+			},
+			columns: []pkgView.ViewColumnDef{
+				{
+					Name: "duration",
+					Type: pkgView.ColumnTypeDuration,
+				},
+			},
+			expected: pkgView.Row{1 * time.Minute},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			g := NewWithT(t)
+			row, err := applyMapping(tc.data, tc.columns, tc.mapping)
+			g.Expect(err).ToNot(HaveOccurred())
+			g.Expect(pkgView.Row(row)).To(Equal(tc.expected))
+		})
+	}
+}
 
 var _ = Describe("Views", func() {
 	Describe("Run", func() {
@@ -121,64 +234,4 @@ var _ = Describe("Views", func() {
 		)
 	})
 
-	Describe("applyMapping", func() {
-		type applyMappingTestCase struct {
-			data     map[string]any
-			columns  []pkgView.ViewColumnDef
-			mapping  map[string]types.CelExpression
-			expected pkgView.Row
-		}
-
-		DescribeTable("applyMapping test cases",
-			func(tc applyMappingTestCase) {
-				row, err := applyMapping(tc.data, tc.columns, tc.mapping)
-				Expect(err).ToNot(HaveOccurred())
-				Expect(pkgView.Row(row)).To(Equal(tc.expected))
-			},
-			Entry("should apply CEL expressions to data", applyMappingTestCase{
-				data: map[string]any{
-					"name":   "test-pod",
-					"status": "Running",
-					"ready":  true,
-				},
-				mapping: map[string]types.CelExpression{
-					"pod_name":   "name",
-					"pod_status": "status",
-				},
-				columns: []pkgView.ViewColumnDef{
-					{
-						Name: "pod_name",
-						Type: pkgView.ColumnTypeString,
-					},
-					{
-						Name: "pod_status",
-						Type: pkgView.ColumnTypeString,
-					},
-				},
-				expected: pkgView.Row{"test-pod", "Running"},
-			}),
-			Entry("should handle empty mapping", applyMappingTestCase{
-				data: map[string]any{
-					"name": "test",
-				},
-				mapping:  map[string]types.CelExpression{},
-				expected: nil,
-			}),
-			Entry("should handle durations", applyMappingTestCase{
-				data: map[string]any{
-					"duration": "does not matter. the value is hardcoded in the mapping.",
-				},
-				mapping: map[string]types.CelExpression{
-					"duration": "duration('1m')",
-				},
-				columns: []pkgView.ViewColumnDef{
-					{
-						Name: "duration",
-						Type: pkgView.ColumnTypeDuration,
-					},
-				},
-				expected: pkgView.Row{1 * time.Minute},
-			}),
-		)
-	})
 })

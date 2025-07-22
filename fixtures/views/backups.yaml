@@ -36,8 +36,6 @@ spec:
         search: change_type=BackupSuccessful
         limit: 10
   mapping:
-    id: row.id
     database: row.name
     date: row.created_at
     status: row.details.status
-    source: row.source
