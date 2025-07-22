@@ -4,6 +4,8 @@ metadata:
   name: gauge
   namespace: mc
 spec:
+  title: Gauge View
+  icon: pod
   queries:
     pods:
       configs:
@@ -20,7 +22,7 @@ spec:
           - value: 0
             color: green
           - value: 60
-            color: yellow
+            color: orange
           - value: 90
             color: red
       query: SELECT COUNT(*) AS value FROM pods

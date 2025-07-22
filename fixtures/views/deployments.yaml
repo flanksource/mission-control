@@ -4,6 +4,8 @@ metadata:
   name: deployments
   namespace: mc
 spec:
+  title: Helm Releases
+  icon: rocket
   panels:
     - name: Health
       description: Helm Releases grouped by health
@@ -11,18 +13,18 @@ spec:
       piechart:
         showLabels: true
         colors:
-          healthy: "#28C19B"
-          unhealthy: "#F04E6E"
+          healthy: '#28C19B'
+          unhealthy: '#F04E6E'
       query: SELECT COUNT(*) AS count, health FROM helm_releases GROUP BY health
     - name: Status
       description: Helm Releases grouped by status
       type: piechart
       piechart:
         colors:
-          InstallSucceeded: "#28C19B"
-          RollbackSucceeded: "#F4B23C"
-          UpgradeFailed: "#F04E6E"
-          UpgradeSucceeded: "#5965F2"
+          InstallSucceeded: '#28C19B'
+          RollbackSucceeded: '#F4B23C'
+          UpgradeFailed: '#F04E6E'
+          UpgradeSucceeded: '#5965F2'
       query: SELECT COUNT(*) AS count, status FROM helm_releases GROUP BY status
   columns:
     - name: id
@@ -54,10 +56,8 @@ spec:
   queries:
     helm_releases:
       configs:
-        search: "@order=name"
         types:
           - Kubernetes::HelmRelease
-        tagSelector: namespace in (monitoring,media)
   mapping:
     id: row.id
     application: row.name

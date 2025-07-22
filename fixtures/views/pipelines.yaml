@@ -4,16 +4,24 @@ metadata:
   name: pipelines
   namespace: mc
 spec:
+  title: Pipelines
+  icon: github
+  cache:
+    maxAge: 30m
+    minAge: 1m
+    refreshTimeout: 30s
   panels:
     - name: Repository
       type: table
-      query: SELECT COUNT(*) AS count, details->'repository'->>'full_name' as repository FROM workflows GROUP BY details->'repository'->>'full_name'
+      query: SELECT COUNT(*) AS value, details->'repository'->>'full_name' as repository FROM workflows GROUP BY details->'repository'->>'full_name'
     - name: Average Duration
       description: Create Release average duration
       type: number
       number:
         unit: seconds
-      query: SELECT AVG(details->'duration') AS value FROM workflows GROUP BY details->'repository'->>'full_name'
+      query: >
+        SELECT AVG(details->'duration') AS value, details->'repository'->>'full_name' as label
+        FROM workflows GROUP BY details->'repository'->>'full_name'
   columns:
     - name: id
       type: string
@@ -41,15 +49,16 @@ spec:
   queries:
     workflows:
       changes:
+        limit: 10
         search: change_type=GitHubActionRun* @order=-created_at
         types:
           - GitHubAction::Workflow
-        limit: 10
   mapping:
     id: row.id
     name: row.name
     lastRun: row.details.created_at
     lastRunBy: row.details.triggering_actor.login
     repository: row.details.repository.full_name
-    status: row.details.conclusion
+    status: >
+      has(row.details.conclusion) ? row.details.conclusion : 'pending'
     duration: timestamp(row.details.updated_at) - timestamp(row.details.run_started_at)

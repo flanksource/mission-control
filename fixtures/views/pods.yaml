@@ -1,0 +1,70 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: pods
+  namespace: mc
+spec:
+  title: Pods
+  icon: pod
+  columns:
+    - description: The pod name.
+      name: name
+      type: string
+      primaryKey: true
+    - description: The namespace name.
+      name: namespace
+      type: string
+      primaryKey: true
+    - description: The status of the pod.
+      name: status
+      type: status
+    - description: The health of the pod.
+      name: health
+      type: health
+    - description: The memory usage of the pod.
+      name: memory
+      type: string
+    - description: The last updated time.
+      name: created
+      type: datetime
+  merge: |
+    SELECT 
+      pod.name,
+      json_extract(pod.tags, '$.namespace') AS namespace,
+      pod.status,
+      pod.health,
+      pod.created_at,
+      COALESCE(CAST(metrics.value AS TEXT), '0') || '/' || 
+      COALESCE(
+        json_extract(pod.config, '$.spec.containers[0].resources.limits.memory'), 
+        ''
+      ) AS memory
+    FROM pod
+    LEFT JOIN metrics 
+      ON pod.name = metrics.pod 
+      AND json_extract(pod.tags, '$.namespace') = metrics.namespace
+  queries:
+    metrics:
+      prometheus:
+        connection: connection://mc/prometheus
+        query: |
+          sum by (namespace, pod) (
+            container_memory_working_set_bytes{
+              namespace="media",
+              container!="POD", # Skip The pause/infra container
+              image!="" # Skip dead containers
+            }
+          ) / 1024 / 1024
+    pod:
+      configs:
+        search: '@order=name'
+        tagSelector: namespace in (media)
+        types:
+          - Kubernetes::Pod
+  mapping:
+    health: row.health
+    created: row.created_at
+    memory: row.memory
+    name: row.name
+    namespace: row.namespace
+    status: row.status
