@@ -82,8 +82,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.35.0
 	golang.org/x/exp v0.0.0-20241108190413-2d47ceb2692f
 	golang.org/x/sync v0.13.0
-	google.golang.org/genai v1.1.0
-	gorm.io/hints v1.1.2
+	google.golang.org/genai v0.5.0
 	k8s.io/api v0.31.1
 )
 
