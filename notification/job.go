@@ -559,15 +559,6 @@ func WatchdogNotificationJob(ctx context.Context, notificationID string, interva
 // SendWatchdogNotification sends a watchdog notification containing statistics
 // for the specified notification
 func SendWatchdogNotification(ctx context.Context, notificationID string) error {
-	stats, err := query.GetNotificationStats(ctx, notificationID)
-	if err != nil {
-		return fmt.Errorf("failed to get notification statistics: %w", err)
-	}
-
-	if len(stats) == 0 {
-		return nil
-	}
-
 	notificationUUID, err := uuid.Parse(notificationID)
 	if err != nil {
 		return fmt.Errorf("failed to parse notification ID: %w", err)
@@ -578,26 +569,46 @@ func SendWatchdogNotification(ctx context.Context, notificationID string) error 
 		return fmt.Errorf("failed to get notification: %w", err)
 	}
 
-	celEnv := &celVariables{
-		Summary: stats[0],
+	if notification.PlaybookID == nil {
+		// NOTE: Watchdog notifications aren't sent to playbook recievers.
+
+		// Manually craft a payload (unlike other payloads that are generated from events)
+		// This allows us to bypass the event queue and process synchronously
+		payload := NotificationEventPayload{
+			EventName:      api.EventWatchdog,
+			EventCreatedAt: time.Now(),
+			ID:             notificationUUID,
+			PersonID:       notification.PersonID,
+			NotificationID: notificationUUID,
+			TeamID:         notification.TeamID,
+			Properties:     fmt.Appendf(nil, `{"id": "%s"}`, notificationUUID.String()),
+		}
+		if len(notification.CustomNotifications) > 0 {
+			payload.CustomService = &notification.CustomNotifications[0]
+		}
+
+		if err := sendNotification(ctx, payload); err != nil {
+			return fmt.Errorf("failed to send watchdog notification to primary recipient: %w", err)
+		}
 	}
 
-	payload := NotificationEventPayload{
-		EventName:      "notification.watchdog",
-		EventCreatedAt: time.Now(),
-		PersonID:       notification.PersonID,
-		TeamID:         notification.TeamID,
+	if notification.FallbackPlaybookID == nil {
+		// Also, send to fallback recipient
+		payload := NotificationEventPayload{
+			EventName:      api.EventWatchdog,
+			EventCreatedAt: time.Now(),
+			ID:             notificationUUID,
+			NotificationID: notificationUUID,
+			PersonID:       notification.FallbackPersonID,
+			TeamID:         notification.FallbackTeamID,
+			CustomService:  notification.FallbackCustomNotification,
+			Properties:     fmt.Appendf(nil, `{"id": "%s"}`, notificationUUID.String()),
+		}
+
+		if err := sendNotification(ctx, payload); err != nil {
+			return fmt.Errorf("failed to send watchdog notification to fallback recipient: %w", err)
+		}
 	}
 
-	if len(notification.CustomNotifications) > 0 {
-		payload.CustomService = &notification.CustomNotifications[0]
-	}
-
-	nCtx := NewContext(ctx, notificationUUID)
-	nCtx.WithSource(payload.EventName, payload.ID)
-	if err := PrepareAndSendEventNotification(nCtx, payload, celEnv); err != nil {
-		return fmt.Errorf("failed to send watchdog notification: %w", err)
-	}
-
-	return nCtx.EndLog()
+	return nil
 }
