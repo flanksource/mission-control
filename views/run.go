@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/duration"
+	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/dataquery"
 	"github.com/flanksource/duty/types"
@@ -60,7 +61,7 @@ func Run(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 			var err error
 			mergedData, err = dataquery.RunSQL(sqliteCtx, lo.FromPtr(view.Spec.Merge))
 			if err != nil {
-				return nil, fmt.Errorf("failed to merge results: %w", err)
+				return nil, ctx.Oops(dutyAPI.EINVALID).Wrapf(err, "failed to run sql query")
 			}
 		} else if len(queryResults) == 1 {
 			mergedData = queryResults[0].Results
@@ -70,7 +71,7 @@ func Run(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 		for _, result := range mergedData {
 			row, err := applyMapping(result, view.Spec.Columns, view.Spec.Mapping)
 			if err != nil {
-				return nil, fmt.Errorf("failed to apply view mapping: %w", err)
+				return nil, ctx.Oops(dutyAPI.EINVALID).Wrapf(err, "failed to apply view mapping")
 			}
 
 			rows = append(rows, row)

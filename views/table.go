@@ -129,7 +129,7 @@ func handleViewRefresh(ctx context.Context, view *v1.View, cacheOptions *v1.Cach
 				return readCachedViewData(ctx, view)
 			}
 
-			return nil, fmt.Errorf("failed to refresh view %s: %v", view.GetNamespacedName(), err)
+			return nil, fmt.Errorf("failed to refresh view %s: %w", view.GetNamespacedName(), err)
 		}
 
 		return result, nil
