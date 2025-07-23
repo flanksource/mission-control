@@ -4,29 +4,33 @@ metadata:
   name: pods
   namespace: mc
 spec:
+  cache:
+    maxAge: 1m
+    minAge: 5s
   display:
     title: Pods
     icon: pod
+    sidebar: true
   columns:
-    - description: The pod name.
-      name: name
+    - name: name
       type: string
       primaryKey: true
-    - description: The namespace name.
-      name: namespace
+    - name: namespace
       type: string
       primaryKey: true
-    - description: The status of the pod.
-      name: status
+    - name: status
       type: status
-    - description: The health of the pod.
-      name: health
+    - name: health
       type: health
-    - description: The memory usage of the pod.
-      name: memory
-      type: string
-    - description: The last updated time.
-      name: created
+    - name: memory
+      type: bytes
+    - name: memory_limit
+      type: bytes
+    - name: cpu
+      type: millicore
+    - name: cpu_limit
+      type: millicore
+    - name: created
       type: datetime
   merge: |
     SELECT 
@@ -35,31 +39,48 @@ spec:
       pod.status,
       pod.health,
       pod.created_at,
-      COALESCE(CAST(metrics.value AS TEXT), '0') || '/' || 
+      CAST(memory.value AS TEXT) as memory,
       COALESCE(
         json_extract(pod.config, '$.spec.containers[0].resources.limits.memory'), 
         ''
-      ) AS memory
+      ) AS memory_limit,
+      COALESCE(CAST(cpu.value AS TEXT), '0') as cpu,
+      COALESCE(
+        json_extract(pod.config, '$.spec.containers[0].resources.limits.cpu'), 
+        ''
+      ) AS cpu_limit
     FROM pod
-    LEFT JOIN metrics 
-      ON pod.name = metrics.pod 
-      AND json_extract(pod.tags, '$.namespace') = metrics.namespace
+    LEFT JOIN memory
+      ON pod.name = memory.pod 
+      AND json_extract(pod.tags, '$.namespace') = memory.namespace
+    LEFT JOIN cpu
+      ON pod.name = cpu.pod 
+      AND json_extract(pod.tags, '$.namespace') = cpu.namespace
   queries:
-    metrics:
+    memory:
       prometheus:
         connection: connection://mc/prometheus
         query: |
           sum by (namespace, pod) (
             container_memory_working_set_bytes{
-              namespace="media",
               container!="POD", # Skip The pause/infra container
               image!="" # Skip dead containers
             }
-          ) / 1024 / 1024
+          )
+    cpu:
+      prometheus:
+        connection: connection://mc/prometheus
+        query: |
+          sum by (namespace, pod) (
+            irate(container_cpu_usage_seconds_total{
+              container!="POD", # Skip The pause/infra container
+              image!="" # Skip dead containers
+            }[30s])
+          ) * 1000
     pod:
       configs:
         search: "@order=name"
-        tagSelector: namespace in (media)
+        tagSelector: namespace in (default)
         types:
           - Kubernetes::Pod
   mapping:
