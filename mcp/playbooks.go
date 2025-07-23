@@ -98,72 +98,104 @@ func playbookRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.
 	return mcp.NewToolResultText(string(jsonData)), nil
 }
 
-func playbookListResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+type playbookParams struct {
+	Name string
+	Type string
+}
+
+type playbookWithParams struct {
+	ID        uuid.UUID
+	Name      string
+	Namespace string
+	Params    []playbookParams
+}
+
+func toPlaybookWithParams(pb models.Playbook) (playbookWithParams, error) {
+	var parsedSpec v1.PlaybookSpec
+	if err := json.Unmarshal(pb.Spec, &parsedSpec); err != nil {
+		return playbookWithParams{}, err
+	}
+	var params []playbookParams
+	for _, param := range parsedSpec.Parameters {
+		params = append(params, playbookParams{
+			Name: param.Name,
+			Type: string(param.Type),
+		})
+	}
+
+	return playbookWithParams{
+		ID:        pb.ID,
+		Name:      pb.Name,
+		Namespace: pb.Namespace,
+		Params:    params,
+	}, nil
+}
+
+func playbookListToolHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	ctx, err := getDutyCtx(goctx)
 	if err != nil {
 		return nil, err
 	}
 
-	type playbookParams struct {
-		Name string
-		Type string
-	}
-
-	type playbookWithParams struct {
-		ID        uuid.UUID
-		Name      string
-		Namespace string
-		Params    []playbookParams
-	}
-
 	var pbs []models.Playbook
 	err = ctx.DB().Where("deleted_at IS NULL").Find(&pbs).Error
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	var allPlaybooks []playbookWithParams
+	for _, pb := range pbs {
+		pbWithParams, err := toPlaybookWithParams(pb)
+		if err != nil {
+			return mcp.NewToolResultError(err.Error()), nil
+		}
+		allPlaybooks = append(allPlaybooks, pbWithParams)
+	}
+
+	jsonData, err := json.Marshal(allPlaybooks)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+	return mcp.NewToolResultText(string(jsonData)), nil
+}
+
+func playbookResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+	ctx, err := getDutyCtx(goctx)
 	if err != nil {
 		return nil, err
 	}
 
-	var resources []mcp.ResourceContents
-	for _, pb := range pbs {
-		var parsedSpec v1.PlaybookSpec
-		if err := json.Unmarshal(pb.Spec, &parsedSpec); err != nil {
-			return nil, err
-		}
-		var params []playbookParams
-
-		for _, param := range parsedSpec.Parameters {
-			params = append(params, playbookParams{
-				Name: param.Name,
-				Type: string(param.Type),
-			})
-		}
-
-		p := playbookWithParams{
-			ID:        pb.ID,
-			Name:      pb.Name,
-			Namespace: pb.Namespace,
-			Params:    params,
-		}
-
-		jsonData, err := json.Marshal(p)
-		if err != nil {
-			return nil, err
-		}
-
-		resources = append(resources, mcp.TextResourceContents{
-			URI:      req.Params.URI,
-			MIMEType: echo.MIMEApplicationJSON,
-			Text:     string(jsonData),
-		})
-
+	id := extractID(req.Params.URI)
+	pb, err := query.FindPlaybook(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if pb == nil {
+		return nil, fmt.Errorf("playbook[%s] not found", id)
+	}
+	jsonData, err := json.Marshal(pb)
+	if err != nil {
+		return nil, err
 	}
 
-	return resources, nil
+	return []mcp.ResourceContents{
+		mcp.TextResourceContents{
+			URI:      req.Params.URI,
+			MIMEType: "application/json",
+			Text:     string(jsonData),
+		},
+	}, nil
 }
 
 func registerPlaybook(s *server.MCPServer) {
-	s.AddResource(mcp.NewResource("playbooks://all", "All Playbooks",
-		mcp.WithResourceDescription("List all available playbooks"), mcp.WithMIMEType(echo.MIMEApplicationJSON)),
-		playbookListResourceHandler)
+	s.AddResourceTemplate(
+		mcp.NewResourceTemplate("playbook://{id}", "Playbook",
+			mcp.WithTemplateDescription("Playbook data"), mcp.WithTemplateMIMEType(echo.MIMEApplicationJSON)),
+		playbookResourceHandler,
+	)
+
+	s.AddTool(mcp.NewTool("playbooks_list_all",
+		mcp.WithDescription("List all available playbooks")), playbookListToolHandler)
 
 	playbookRecentRunTool := mcp.NewTool("playbook_recent_runs",
 		mcp.WithDescription("Playbook recent runs"),
