@@ -58,14 +58,9 @@ spec:
           ) / 1024 / 1024
     pod:
       configs:
-        search: '@order=name'
+        search: "@order=name"
         tagSelector: namespace in (media)
         types:
           - Kubernetes::Pod
   mapping:
-    health: row.health
     created: row.created_at
-    memory: row.memory
-    name: row.name
-    namespace: row.namespace
-    status: row.status

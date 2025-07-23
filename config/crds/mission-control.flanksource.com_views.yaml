@@ -67,6 +67,15 @@ spec:
                     description:
                       description: Description of the column
                       type: string
+                    for:
+                      description: |-
+                        For references the column this column is for.
+                        Applicable only for type=url.
+
+
+                        When a column is designated for a different column,
+                        it's not rendered on the UI but the designated column uses it to render itself.
+                      type: string
                     gauge:
                       description: Configuration for gauge visualization
                       properties:
@@ -110,6 +119,10 @@ spec:
                       - health
                       - status
                       - gauge
+                      - bytes
+                      - decimal
+                      - millicore
+                      - url
                       type: string
                   required:
                   - name

@@ -15,18 +15,18 @@ spec:
       piechart:
         showLabels: true
         colors:
-          healthy: '#28C19B'
-          unhealthy: '#F04E6E'
+          healthy: "#28C19B"
+          unhealthy: "#F04E6E"
       query: SELECT COUNT(*) AS count, health FROM helm_releases GROUP BY health
     - name: Status
       description: Helm Releases grouped by status
       type: piechart
       piechart:
         colors:
-          InstallSucceeded: '#28C19B'
-          RollbackSucceeded: '#F4B23C'
-          UpgradeFailed: '#F04E6E'
-          UpgradeSucceeded: '#5965F2'
+          InstallSucceeded: "#28C19B"
+          RollbackSucceeded: "#F4B23C"
+          UpgradeFailed: "#F04E6E"
+          UpgradeSucceeded: "#5965F2"
       query: SELECT COUNT(*) AS count, status FROM helm_releases GROUP BY status
   columns:
     - name: id
@@ -34,6 +34,9 @@ spec:
       description: The id of the deployment.
       primaryKey: true
       hidden: true
+    - name: url
+      type: url
+      for: application
     - name: application
       type: string
       description: The application name.
@@ -61,11 +64,10 @@ spec:
         types:
           - Kubernetes::HelmRelease
   mapping:
-    id: row.id
     application: row.name
     namespace: row.tags.namespace
     chart: row.config.status.history[0].chartName
     version: row.config.status.history[0].chartVersion
-    status: row.status
-    health: row.health
     lastUpdated: row.updated_at
+    url: >
+      "/catalog/" + row.id

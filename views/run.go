@@ -68,8 +68,7 @@ func Run(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 
 		var rows []pkgView.Row
 		for _, result := range mergedData {
-			env := map[string]any{"row": result} // We cannot directly pass result because of identifier collision with the reserved ones in cel.
-			row, err := applyMapping(env, view.Spec.Columns, view.Spec.Mapping)
+			row, err := applyMapping(result, view.Spec.Columns, view.Spec.Mapping)
 			if err != nil {
 				return nil, fmt.Errorf("failed to apply view mapping: %w", err)
 			}
@@ -91,11 +90,18 @@ func applyMapping(data map[string]any, columnDefs []pkgView.ViewColumnDef, mappi
 	for _, columnDef := range columnDefs {
 		expr, ok := mapping[columnDef.Name]
 		if !ok {
-			row = append(row, nil)
+			// If mapping is not specified, look for the column name in the data row
+			if value, ok := data[columnDef.Name]; ok {
+				row = append(row, value)
+			} else {
+				row = append(row, nil)
+			}
+
 			continue
 		}
 
-		value, err := expr.Eval(data)
+		env := map[string]any{"row": data} // We cannot directly pass result because of identifier collision with the reserved ones in cel.
+		value, err := expr.Eval(env)
 		if err != nil {
 			return nil, fmt.Errorf("failed to evaluate CEL expression for column %s: %w", columnDef.Name, err)
 		}
