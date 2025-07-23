@@ -62,8 +62,10 @@ func DeleteStaleView(ctx context.Context, newer *v1.View) error {
 // GetView retrieves a view by name and namespace
 func GetView(ctx context.Context, namespace, name string) (*v1.View, error) {
 	var view models.View
-	if err := ctx.DB().Where("name = ? AND namespace = ? AND deleted_at IS NULL", name, namespace).First(&view).Error; err != nil {
+	if err := ctx.DB().Where("name = ? AND namespace = ? AND deleted_at IS NULL", name, namespace).Find(&view).Error; err != nil {
 		return nil, err
+	} else if view.ID == uuid.Nil {
+		return nil, nil
 	}
 
 	var spec v1.ViewSpec
