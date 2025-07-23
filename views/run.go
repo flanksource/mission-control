@@ -116,6 +116,9 @@ func applyMapping(data map[string]any, columnDefs []pkgView.ViewColumnDef, mappi
 
 			row = append(row, time.Duration(v))
 
+		case pkgView.ColumnTypeGauge:
+			row = append(row, types.JSON(value))
+
 		default:
 			row = append(row, value)
 		}
