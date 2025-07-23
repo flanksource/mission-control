@@ -683,6 +683,17 @@ func isHealthReportable(events []string, previousHealth, currentHealth models.He
 func GetEnvForEvent(ctx context.Context, event models.Event) (*celVariables, error) {
 	var env celVariables
 
+	if event.Name == api.EventWatchdog {
+		notificationID := event.Properties["id"]
+
+		stats, err := query.GetNotificationStats(ctx, notificationID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get notification statistics: %w", err)
+		}
+
+		env.Summary = stats[0]
+	}
+
 	if strings.HasPrefix(event.Name, "check.") {
 		checkID := event.Properties["id"]
 		lastRuntime := event.Properties["last_runtime"]

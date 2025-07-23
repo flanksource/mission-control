@@ -263,6 +263,11 @@ func SendNotification(ctx *Context, connectionName, shoutrrrURL string, celEnv m
 // based on the given event.
 func DefaultTitleAndBody(event string) (title string, body string) {
 	switch event {
+	case api.EventWatchdog:
+		title = `{{ if ne channel "slack"}}Notification {{.summary.namespace}}/{{.summary.name}} Summary{{end}}`
+		content, _ := templates.ReadFile(fmt.Sprintf("templates/%s", event))
+		body = string(content)
+
 	case api.EventCheckPassed:
 		title = `{{ if ne channel "slack"}}Check {{.check.name}} has passed{{end}}`
 		content, _ := templates.ReadFile(fmt.Sprintf("templates/%s", event))
