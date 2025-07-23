@@ -57,6 +57,8 @@ func ReadOrPopulateViewTable(ctx context.Context, namespace, name string, opts .
 	view, err := db.GetView(ctx, namespace, name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get view: %w", err)
+	} else if view == nil {
+		return nil, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "view %s/%s not found", namespace, name)
 	}
 
 	config := &viewConfig{}
