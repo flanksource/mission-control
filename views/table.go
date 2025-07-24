@@ -129,7 +129,7 @@ func handleViewRefresh(ctx context.Context, view *v1.View, cacheOptions *v1.Cach
 				return readCachedViewData(ctx, view)
 			}
 
-			return nil, fmt.Errorf("failed to refresh view %s: %v", view.GetNamespacedName(), err)
+			return nil, fmt.Errorf("failed to refresh view %s: %w", view.GetNamespacedName(), err)
 		}
 
 		return result, nil
@@ -147,7 +147,7 @@ func handleViewRefresh(ctx context.Context, view *v1.View, cacheOptions *v1.Cach
 // readCachedViewData reads cached data from the view table
 func readCachedViewData(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 	tableName := view.TableName()
-	rows, err := pkgView.ReadViewTable(ctx, tableName)
+	rows, err := pkgView.ReadViewTable(ctx, view.Spec.Columns, tableName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read view table: %w", err)
 	}
