@@ -50,7 +50,7 @@ type ViewSpec struct {
 
 	// Queries define the queries and mappings to populate the view
 	//+kubebuilder:validation:Optional
-	Queries map[string]view.Query `json:"queries" yaml:"queries"`
+	Queries map[string]ViewQueryWithColumnDefs `json:"queries" yaml:"queries"`
 
 	// Merge defines how to merge/join data from multiple queries
 	//+kubebuilder:validation:Optional
@@ -66,6 +66,18 @@ type ViewSpec struct {
 	// Cache configuration
 	//+kubebuilder:validation:Optional
 	Cache ViewCache `json:"cache" yaml:"cache"`
+}
+
+type ViewQueryWithColumnDefs struct {
+	view.Query `json:",inline" yaml:",inline"`
+
+	// Define the column types for the results from the query.
+	// It's optional for configs and changes.
+	//
+	// This information is used to create the Sqlite table for the query.
+	// If not provided, the column types will be inferred from the query results.
+	// However, if this isn't provided and the query results are empty, the query will result in an error.
+	Columns map[string]models.ColumnType `json:"columns,omitempty"`
 }
 
 func (t ViewSpec) Validate() error {

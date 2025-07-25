@@ -8,6 +8,7 @@ import (
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/dataquery"
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
 	pkgView "github.com/flanksource/duty/view"
 	"github.com/samber/lo"
@@ -22,15 +23,24 @@ func Run(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 
 	var queryResults []dataquery.QueryResultSet
 	for queryName, q := range view.Spec.Queries {
-		results, err := pkgView.ExecuteQuery(ctx, q)
+		results, err := pkgView.ExecuteQuery(ctx, q.Query)
 		if err != nil {
 			return nil, fmt.Errorf("failed to execute config query '%s': %w", queryName, err)
 		}
 
-		queryResults = append(queryResults, dataquery.QueryResultSet{
-			Results: results,
-			Name:    queryName,
-		})
+		resultSet := dataquery.QueryResultSet{
+			Results:    results,
+			Name:       queryName,
+			ColumnDefs: q.Columns,
+		}
+
+		if q.Configs != nil {
+			resultSet.ColumnDefs = configQueryResultSchema
+		} else if q.Changes != nil {
+			resultSet.ColumnDefs = changeQueryResultSchema
+		}
+
+		queryResults = append(queryResults, resultSet)
 	}
 
 	sqliteCtx, close, err := dataquery.DBFromResultsets(ctx, queryResults)
@@ -125,4 +135,61 @@ func applyMapping(data map[string]any, columnDefs []pkgView.ViewColumnDef, mappi
 	}
 
 	return row, nil
+}
+
+var configQueryResultSchema = map[string]models.ColumnType{
+	"id":                models.ColumnTypeString,
+	"agent_id":          models.ColumnTypeString,
+	"icon":              models.ColumnTypeString,
+	"scraper_id":        models.ColumnTypeString,
+	"config_class":      models.ColumnTypeString,
+	"status":            models.ColumnTypeString,
+	"health":            models.ColumnTypeString,
+	"ready":             models.ColumnTypeBoolean,
+	"external_id":       models.ColumnTypeJSONB,
+	"type":              models.ColumnTypeString,
+	"cost_per_minute":   models.ColumnTypeDecimal,
+	"cost_total_1d":     models.ColumnTypeDecimal,
+	"cost_total_7d":     models.ColumnTypeDecimal,
+	"cost_total_30d":    models.ColumnTypeDecimal,
+	"name":              models.ColumnTypeString,
+	"description":       models.ColumnTypeString,
+	"config":            models.ColumnTypeJSONB,
+	"source":            models.ColumnTypeString,
+	"labels":            models.ColumnTypeJSONB,
+	"tags":              models.ColumnTypeJSONB,
+	"tags_values":       models.ColumnTypeJSONB,
+	"properties":        models.ColumnTypeJSONB,
+	"parent_id":         models.ColumnTypeString,
+	"path":              models.ColumnTypeString,
+	"is_pushed":         models.ColumnTypeBoolean,
+	"created_by":        models.ColumnTypeString,
+	"last_scraped_time": models.ColumnTypeString,
+	"created_at":        models.ColumnTypeString,
+	"updated_at":        models.ColumnTypeString,
+	"deleted_at":        models.ColumnTypeString,
+	"delete_reason":     models.ColumnTypeString,
+	"inserted_at":       models.ColumnTypeString,
+	"properties_values": models.ColumnTypeJSONB,
+}
+
+var changeQueryResultSchema = map[string]models.ColumnType{
+	"id":                  models.ColumnTypeString,
+	"config_id":           models.ColumnTypeString,
+	"external_change_id":  models.ColumnTypeString,
+	"external_created_by": models.ColumnTypeString,
+	"change_type":         models.ColumnTypeString,
+	"severity":            models.ColumnTypeString,
+	"source":              models.ColumnTypeString,
+	"summary":             models.ColumnTypeString,
+	"patches":             models.ColumnTypeJSONB,
+	"diff":                models.ColumnTypeString,
+	"details":             models.ColumnTypeJSONB,
+	"created_by":          models.ColumnTypeString,
+	"created_at":          models.ColumnTypeString,
+	"count":               models.ColumnTypeInteger,
+	"fingerprint":         models.ColumnTypeString,
+	"first_observed":      models.ColumnTypeString,
+	"is_pushed":           models.ColumnTypeBoolean,
+	"inserted_at":         models.ColumnTypeString,
 }
