@@ -8,6 +8,7 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"gorm.io/gorm/clause"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -46,8 +47,26 @@ func PersistViewFromCRD(ctx context.Context, obj *v1.View) error {
 	}).Create(&view).Error
 }
 
-// DeleteView soft deletes a View by setting deleted_at timestamp
+// DeleteView soft deletes a View by setting deleted_at timestamp and cleans up associated tables
 func DeleteView(ctx context.Context, id string) error {
+	var view models.View
+	if err := ctx.DB().Where("id = ? AND deleted_at IS NULL", id).Find(&view).Error; err != nil {
+		return fmt.Errorf("failed to find view: %w", err)
+	}
+
+	if view.ID == uuid.Nil {
+		return nil
+	}
+
+	generatedTableName := view.GeneratedTableName()
+	if err := ctx.DB().Exec("DROP TABLE IF EXISTS " + pq.QuoteIdentifier(generatedTableName)).Error; err != nil {
+		return fmt.Errorf("failed to drop generated table %s: %w", generatedTableName, err)
+	}
+
+	if err := ctx.DB().Where("view_id = ?", id).Delete(&models.ViewPanel{}).Error; err != nil {
+		return fmt.Errorf("failed to delete view panels: %w", err)
+	}
+
 	return ctx.DB().Model(&models.View{}).Where("id = ?", id).Update("deleted_at", duty.Now()).Error
 }
 
