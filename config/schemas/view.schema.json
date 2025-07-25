@@ -374,21 +374,6 @@
         "query"
       ]
     },
-    "Query": {
-      "properties": {
-        "prometheus": {
-          "$ref": "#/$defs/PrometheusQuery"
-        },
-        "configs": {
-          "$ref": "#/$defs/ResourceSelector"
-        },
-        "changes": {
-          "$ref": "#/$defs/ResourceSelector"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
-    },
     "ResourceSelector": {
       "properties": {
         "agent": {
@@ -577,6 +562,27 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "ViewQueryWithColumnDefs": {
+      "properties": {
+        "prometheus": {
+          "$ref": "#/$defs/PrometheusQuery"
+        },
+        "configs": {
+          "$ref": "#/$defs/ResourceSelector"
+        },
+        "changes": {
+          "$ref": "#/$defs/ResourceSelector"
+        },
+        "columns": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "ViewSpec": {
       "properties": {
         "display": {
@@ -593,7 +599,7 @@
         },
         "queries": {
           "additionalProperties": {
-            "$ref": "#/$defs/Query"
+            "$ref": "#/$defs/ViewQueryWithColumnDefs"
           },
           "type": "object"
         },

@@ -306,6 +306,18 @@ spec:
                             type: string
                           type: array
                       type: object
+                    columns:
+                      additionalProperties:
+                        type: string
+                      description: |-
+                        Define the column types for the results from the query.
+                        It's optional for configs and changes.
+
+
+                        This information is used to create the Sqlite table for the query.
+                        If not provided, the column types will be inferred from the query results.
+                        However, if this isn't provided and the query results are empty, the query will result in an error.
+                      type: object
                     configs:
                       description: Configs queries config items
                       properties:
