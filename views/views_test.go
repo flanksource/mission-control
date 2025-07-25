@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flanksource/duty/dataquery"
 	"github.com/flanksource/duty/types"
 	pkgView "github.com/flanksource/duty/view"
 	. "github.com/onsi/ginkgo/v2"
@@ -145,11 +146,13 @@ var _ = Describe("Views", func() {
 							Type: pkgView.ColumnTypeString,
 						},
 					},
-					Queries: map[string]pkgView.Query{
+					Queries: map[string]v1.ViewQueryWithColumnDefs{
 						"nodes": {
-							Configs: &types.ResourceSelector{
-								Types:       []string{"Kubernetes::Node"},
-								TagSelector: "account=flanksource",
+							Query: pkgView.Query{
+								Configs: &types.ResourceSelector{
+									Types:       []string{"Kubernetes::Node"},
+									TagSelector: "account=flanksource",
+								},
 							},
 						},
 					},
@@ -175,10 +178,12 @@ var _ = Describe("Views", func() {
 							Type: pkgView.ColumnTypeString,
 						},
 					},
-					Queries: map[string]pkgView.Query{
+					Queries: map[string]v1.ViewQueryWithColumnDefs{
 						"items": {
-							Changes: &types.ResourceSelector{
-								Search: "change_type=CREATE",
+							Query: pkgView.Query{
+								Changes: &types.ResourceSelector{
+									Search: "change_type=CREATE",
+								},
 							},
 						},
 					},
@@ -209,11 +214,13 @@ var _ = Describe("Views", func() {
 							Type: pkgView.ColumnTypeString,
 						},
 					},
-					Queries: map[string]pkgView.Query{
+					Queries: map[string]v1.ViewQueryWithColumnDefs{
 						"releases": {
-							Changes: &types.ResourceSelector{
-								Types:  []string{"Helm::Release"},
-								Search: "change_type=UPDATE",
+							Query: pkgView.Query{
+								Changes: &types.ResourceSelector{
+									Types:  []string{"Helm::Release"},
+									Search: "change_type=UPDATE",
+								},
 							},
 						},
 					},
@@ -231,7 +238,36 @@ var _ = Describe("Views", func() {
 				{"redis", "18.1.3", "Flux"},
 				{"redis", "18.1.0", "Flux"},
 			}),
+			Entry("prometheus query with empty results", v1.View{
+				Spec: v1.ViewSpec{
+					Columns: []pkgView.ViewColumnDef{
+						{
+							Name:       "pod",
+							Type:       pkgView.ColumnTypeString,
+							PrimaryKey: true,
+						},
+						{
+							Name: "memory_usage",
+							Type: pkgView.ColumnTypeNumber,
+						},
+					},
+					Queries: map[string]v1.ViewQueryWithColumnDefs{
+						"metrics": {
+							Query: pkgView.Query{
+								Query: dataquery.Query{
+									Prometheus: &dataquery.PrometheusQuery{
+										Query: "up{nonexistent_label=\"value\"}", // This should return no results
+									},
+								},
+							},
+						},
+					},
+					Mapping: map[string]types.CelExpression{
+						"pod":          "row.pod || 'unknown'",
+						"memory_usage": "row.value || 0",
+					},
+				},
+			}, []pkgView.Row{}), // Empty results expected but should not error
 		)
 	})
-
 })
