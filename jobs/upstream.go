@@ -50,7 +50,7 @@ func ReconcileAllJob(config upstream.UpstreamConfig) *job.Job {
 				}
 			}
 
-			client.Push(ctx.Context, &upstream.PushData{
+			err := client.Push(ctx.Context, &upstream.PushData{
 				ConfigItems: []dutymodels.ConfigItem{{
 					ID:          uuid.New(),
 					ScraperID:   lo.ToPtr(uuid.Nil.String()),
@@ -62,6 +62,10 @@ func ReconcileAllJob(config upstream.UpstreamConfig) *job.Job {
 					Status:      lo.ToPtr("Online"),
 				}},
 			})
+
+			if err != nil {
+				ctx.Errorf("error pushing agent config_item: %v", err)
+			}
 
 			return nil
 		},
