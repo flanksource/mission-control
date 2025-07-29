@@ -1,8 +1,14 @@
 package jobs
 
 import (
+	"encoding/json"
+	"os"
+
 	"github.com/flanksource/duty/job"
+	dutymodels "github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/upstream"
+	"github.com/google/uuid"
+	"github.com/samber/lo"
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/artifacts"
@@ -31,6 +37,31 @@ func ReconcileAllJob(config upstream.UpstreamConfig) *job.Job {
 				ctx.History.AddDetails("errors", summary.Error())
 				ctx.History.ErrorCount += 1
 			}
+
+			hostname, _ := os.Hostname()
+			summaryBytes, _ := json.Marshal(summary)
+
+			health := dutymodels.HealthHealthy
+			if ctx.History.ErrorCount > 0 {
+				if ctx.History.SuccessCount > 0 {
+					health = dutymodels.HealthWarning
+				} else if ctx.History.SuccessCount == 0 {
+					health = dutymodels.HealthUnhealthy
+				}
+			}
+
+			client.Push(ctx.Context, &upstream.PushData{
+				ConfigItems: []dutymodels.ConfigItem{{
+					ID:          uuid.New(),
+					ScraperID:   lo.ToPtr(uuid.Nil.String()),
+					Name:        lo.ToPtr(hostname),
+					Type:        lo.ToPtr("MissionControl::Agent"),
+					ConfigClass: "Agent",
+					Config:      lo.ToPtr(string(summaryBytes)),
+					Health:      &health,
+					Status:      lo.ToPtr("Online"),
+				}},
+			})
 
 			return nil
 		},
