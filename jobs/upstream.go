@@ -52,9 +52,11 @@ func ReconcileAllJob(config upstream.UpstreamConfig) *job.Job {
 
 			err := client.Push(ctx.Context, &upstream.PushData{
 				ConfigItems: []dutymodels.ConfigItem{{
+					// The ID and Name are overriden in the upstream push handler with
+					// agent id and name
 					ID:          uuid.New(),
-					ScraperID:   lo.ToPtr(uuid.Nil.String()),
 					Name:        lo.ToPtr(hostname),
+					ScraperID:   lo.ToPtr(uuid.Nil.String()),
 					Type:        lo.ToPtr("MissionControl::Agent"),
 					ConfigClass: "Agent",
 					Config:      lo.ToPtr(string(summaryBytes)),
