@@ -1,8 +1,14 @@
 package jobs
 
 import (
+	"encoding/json"
+	"os"
+
 	"github.com/flanksource/duty/job"
+	dutymodels "github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/upstream"
+	"github.com/google/uuid"
+	"github.com/samber/lo"
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/artifacts"
@@ -30,6 +36,37 @@ func ReconcileAllJob(config upstream.UpstreamConfig) *job.Job {
 			if summary.Error() != nil {
 				ctx.History.AddDetails("errors", summary.Error())
 				ctx.History.ErrorCount += 1
+			}
+
+			hostname, _ := os.Hostname()
+			summaryBytes, _ := json.Marshal(summary)
+
+			health := dutymodels.HealthHealthy
+			if ctx.History.ErrorCount > 0 {
+				if ctx.History.SuccessCount > 0 {
+					health = dutymodels.HealthWarning
+				} else if ctx.History.SuccessCount == 0 {
+					health = dutymodels.HealthUnhealthy
+				}
+			}
+
+			err := client.Push(ctx.Context, &upstream.PushData{
+				ConfigItems: []dutymodels.ConfigItem{{
+					// The ID and Name are overriden in the upstream push handler with
+					// agent id and name
+					ID:          uuid.New(),
+					Name:        lo.ToPtr(hostname),
+					ScraperID:   lo.ToPtr(uuid.Nil.String()),
+					Type:        lo.ToPtr("MissionControl::Agent"),
+					ConfigClass: "Agent",
+					Config:      lo.ToPtr(string(summaryBytes)),
+					Health:      &health,
+					Status:      lo.ToPtr("Online"),
+				}},
+			})
+
+			if err != nil {
+				ctx.Errorf("error pushing agent config_item: %v", err)
 			}
 
 			return nil
