@@ -29,6 +29,14 @@ func searchCatalogHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mc
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
+
+	// Only show full config for `describe_config` tool
+	if req.Params.Name != "describe_config" {
+		for i := range cis {
+			cis[i].Config = nil
+		}
+	}
+
 	jsonData, err := json.Marshal(cis)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -175,6 +183,8 @@ func registerCatalog(s *server.MCPServer) {
 	We can search our entire catalog via query
 	Use the tool: list_catalog_types to get all the types first to make inference is better (cache them for 15m)
 
+	%s
+
 	FORMAL PEG GRAMMAR:
 	Query = AndQuery _ OrQuery*
 	OrQuery = _ '|' _ AndQuery
@@ -230,15 +240,35 @@ func registerCatalog(s *server.MCPServer) {
 	type=Kubernetes::Pod label.app=nginx tag.cluster=prod
 	Use this single specification to parse requests, generate valid catalog-search queries, and validate existing ones.
 `
+
+	catalogSearchDescription := `
+	Each catalog item also has more information in its config field which can be queried by calling the tool describe_config(query), the query is the same
+	but that tool should only be called when "describe" is explicitly used
+	`
 	searchCatalogTool := mcp.NewTool("catalog_search",
-		mcp.WithDescription("Search across catalog"),
+		mcp.WithDescription("Search across catalog."+catalogSearchDescription),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("query",
 			mcp.Required(),
-			mcp.Description("Search query"+queryDescription),
+			mcp.Description("Search query"+fmt.Sprintf(queryDescription, catalogSearchDescription)),
 		),
 	)
 	s.AddTool(searchCatalogTool, searchCatalogHandler)
+
+	describeConfigDescription := `
+	This tool should only be called when "describe" is explicitly used, for all other purposes catalog_search tool should be used.
+	Ideally, when prompted to describe configs use either the previous query or the config ids in the query field in csv format.
+
+	Example query: id=f47ac10b-58cc-4372-a567-0e02b2c3d479,6ba7b810-9dad-11d1-80b4-00c04fd430c8,a1b2c3d4-e5f6-7890-abcd-ef1234567890
+	`
+	s.AddTool(mcp.NewTool("describe_config",
+		mcp.WithDescription("Get all data for configs."+describeConfigDescription),
+		mcp.WithReadOnlyHintAnnotation(true),
+		mcp.WithString("query",
+			mcp.Required(),
+			mcp.Description("Search query"+fmt.Sprintf(queryDescription, describeConfigDescription)),
+		),
+	), searchCatalogHandler)
 
 	var configChangeQueryDescription = `
 	We can search all the catalog changes via query
