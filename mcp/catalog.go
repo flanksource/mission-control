@@ -183,8 +183,6 @@ func registerCatalog(s *server.MCPServer) {
 	We can search our entire catalog via query
 	Use the tool: list_catalog_types to get all the types first to make inference is better (cache them for 15m)
 
-	%s
-
 	FORMAL PEG GRAMMAR:
 	Query = AndQuery _ OrQuery*
 	OrQuery = _ '|' _ AndQuery
@@ -250,7 +248,7 @@ func registerCatalog(s *server.MCPServer) {
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("query",
 			mcp.Required(),
-			mcp.Description("Search query"+fmt.Sprintf(queryDescription, catalogSearchDescription)),
+			mcp.Description("Search query."+queryDescription),
 		),
 	)
 	s.AddTool(searchCatalogTool, searchCatalogHandler)
@@ -266,7 +264,7 @@ func registerCatalog(s *server.MCPServer) {
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("query",
 			mcp.Required(),
-			mcp.Description("Search query"+fmt.Sprintf(queryDescription, describeConfigDescription)),
+			mcp.Description("Search query."+queryDescription),
 		),
 	), searchCatalogHandler)
 
