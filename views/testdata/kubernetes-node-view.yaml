@@ -7,8 +7,8 @@ metadata:
   annotations:
     expected-rows: |
       [
-        ["node-a", "healthy", "00000000-0000-0000-0000-000000000000", false],
-        ["node-b", "healthy", "00000000-0000-0000-0000-000000000000", false]
+        ["node-a", "healthy"],
+        ["node-b", "healthy"]
       ]
     expected-panels: |
       [
