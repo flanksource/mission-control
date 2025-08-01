@@ -16,25 +16,26 @@ import (
 )
 
 func searchCatalogHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	q, err := req.RequireString("query")
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
 	ctx, err := getDutyCtx(goctx)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	cis, err := query.FindConfigsByResourceSelector(ctx, 10, types.ResourceSelector{Search: q})
+
+	q, err := req.RequireString("query")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
+	limit := req.GetInt("limit", 30)
 
-	// Only show full config for `describe_config` tool
-	if req.Params.Name != "describe_config" {
-		for i := range cis {
-			cis[i].Config = nil
-		}
+	var cis any
+	switch req.Params.Name {
+	case "describe_config":
+		cis, err = query.FindConfigItemSummaryByResourceSelector(ctx, limit, types.ResourceSelector{Search: q})
+	default:
+		cis, err = query.FindConfigsByResourceSelector(ctx, limit, types.ResourceSelector{Search: q})
+	}
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
 	}
 
 	jsonData, err := json.Marshal(cis)
@@ -250,6 +251,7 @@ func registerCatalog(s *server.MCPServer) {
 			mcp.Required(),
 			mcp.Description("Search query."+queryDescription),
 		),
+		mcp.WithNumber("limit", mcp.Description("Number of items to return")),
 	)
 	s.AddTool(searchCatalogTool, searchCatalogHandler)
 
@@ -266,6 +268,7 @@ func registerCatalog(s *server.MCPServer) {
 			mcp.Required(),
 			mcp.Description("Search query."+queryDescription),
 		),
+		mcp.WithNumber("limit", mcp.Description("Number of items to return")),
 	), searchCatalogHandler)
 
 	var configChangeQueryDescription = `
