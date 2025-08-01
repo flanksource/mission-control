@@ -26,6 +26,7 @@ func Server() http.HandlerFunc {
 	registerCatalog(s)
 	registerConnections(s)
 	registerPlaybook(s)
+	registerViews(s)
 
 	httpServer := server.NewStreamableHTTPServer(s,
 		server.WithHTTPContextFunc(func(ctx gocontext.Context, r *http.Request) gocontext.Context {
