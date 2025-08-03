@@ -1,0 +1,34 @@
+{{- if eq channel "slack"}}
+{
+	"blocks": [
+		{{slackSectionTextMD (printf `:bell: *Notification Watchdog*`)}},
+		{"type": "divider"},
+		{
+			"type": "section",
+			"fields": [
+				{{slackSectionTextFieldMD (printf `*Sent*: %d` .summary.sent)}},
+				{{slackSectionTextFieldMD (printf `*Failed*: %d` .summary.failed)}},
+				{{slackSectionTextFieldMD (printf `*Pending*: %d` .summary.pending)}}
+			]
+		}
+    {{- if not .summary.last_failed_at.IsZero}},
+    {{slackSectionTextMD (printf `*Last Failed At*: %s` .summary.last_failed_at)}}
+    {{- end}}
+		{{- if .summary.error}},
+		{{slackSectionTextMD (printf `*Error*: %s` .summary.error)}}
+		{{- end}}
+	]
+}
+{{- else}}
+Sent: `{{.summary.sent}}`
+Failed: `{{.summary.failed}}`
+Pending: `{{.summary.pending}}`
+
+{{- if .summary.error}}
+Error: `{{.summary.error}}`
+{{- end}}
+{{- if not .summary.last_failed_at.IsZero}}
+Last Failed At: `{{.summary.last_failed_at}}`
+{{- end}}
+{{- end}}
+

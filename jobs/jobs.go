@@ -95,6 +95,10 @@ func Start(ctx context.Context) {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to schedule job SyncCRDStatusJob: %v", err))
 	}
 
+	if err := notification.InitWatchdogNotifications(ctx, FuncScheduler); err != nil {
+		shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to schedule job InitWatchdogNotifications: %v", err))
+	}
+
 	if err := notification.InitCRDStatusUpdates(ctx); err != nil {
 		logger.Errorf("failed to start notificatino status update queue: %v", err)
 	}

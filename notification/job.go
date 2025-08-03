@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/flanksource/commons/collections"
@@ -17,16 +18,21 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/google/uuid"
+	"github.com/robfig/cron/v3"
 	"github.com/samber/lo"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-	"gorm.io/hints"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-var CRDStatusUpdateQueue *collections.Queue[string]
+var (
+	CRDStatusUpdateQueue *collections.Queue[string]
+
+	// Keeps track of all watchdog jobs
+	watchdogJobs sync.Map
+)
 
 func InitCRDStatusUpdates(ctx context.Context) error {
 	var err error
@@ -79,26 +85,9 @@ func SyncCRDStatus(ctx context.Context, ids ...string) error {
 		return errors.New("notification reconciler is not initialized")
 	}
 
-	var summary []struct {
-		Name         string
-		Namespace    string
-		Sent         int
-		Failed       int
-		Pending      int
-		UpdatedAt    time.Time
-		Error        string
-		LastFailedAt time.Time
-	}
-
-	q := ctx.DB().Clauses(hints.CommentBefore("select", "notification_crd_sync")).
-		Table("notifications_summary").
-		Where("name != '' AND namespace != '' AND source = ?", models.SourceCRD)
-
-	if len(ids) > 0 {
-		q = q.Where("id in ?", ids)
-	}
-	if err := q.Find(&summary).Error; err != nil {
-		return fmt.Errorf("error querying notifications_summary: %w", err)
+	summary, err := query.GetNotificationStats(ctx, ids...)
+	if err != nil {
+		return ctx.Oops().Wrapf(err, "failed to get notification stats")
 	}
 
 	for _, s := range summary {
@@ -114,6 +103,7 @@ func SyncCRDStatus(ctx context.Context, ids ...string) error {
 			return fmt.Errorf("error in patchCRDStatus: %w", err)
 		}
 	}
+
 	return nil
 }
 
@@ -496,4 +486,131 @@ func isKubernetesConfigItem(ctx context.Context, configID string) (bool, error) 
 	}
 
 	return len(scraperSpec.Kubernetes) != 0, nil
+}
+
+func InitWatchdogNotifications(ctx context.Context, scheduler *cron.Cron) error {
+	var notifications []models.Notification
+	if err := ctx.DB().
+		Where("watchdog_interval IS NOT NULL AND watchdog_interval != 0").
+		Where("deleted_at IS NULL").
+		Find(&notifications).Error; err != nil {
+		return fmt.Errorf("failed to get notifications with watchdog interval: %w", err)
+	}
+
+	ctx.Debugf("initializing watchdog jobs for %d notifications", len(notifications))
+	for _, n := range notifications {
+		_ = scheduleWatchdogJob(ctx, scheduler, n.ID.String(), n.WatchdogInterval.String())
+	}
+
+	return nil
+}
+
+func SyncWatchdogJob(ctx context.Context, scheduler *cron.Cron, notificationID string, interval *string) error {
+	var scheduleChanged bool
+	var existingJob *job.Job
+
+	if j, ok := watchdogJobs.Load(notificationID); ok {
+		existingJob = j.(*job.Job)
+		if interval != nil {
+			scheduleChanged = existingJob.Schedule != fmt.Sprintf("@every %s", *interval)
+		}
+
+		if interval == nil || scheduleChanged {
+			ctx.Debugf("deleting existing watchdog job for %s", notificationID)
+			existingJob.Unschedule()
+			watchdogJobs.Delete(notificationID)
+		}
+	}
+
+	if interval != nil && (scheduleChanged || existingJob == nil) {
+		return scheduleWatchdogJob(ctx, scheduler, notificationID, *interval)
+	}
+
+	return nil
+}
+
+func scheduleWatchdogJob(ctx context.Context, scheduler *cron.Cron, notificationID string, interval string) error {
+	ctx.Debugf("scheduling watchdog job for %s with interval %s", notificationID, interval)
+	job := WatchdogNotificationJob(ctx, notificationID, interval)
+	if err := job.AddToScheduler(scheduler); err != nil {
+		return fmt.Errorf("failed to add watchdog job to scheduler: %w", err)
+	}
+	watchdogJobs.Store(notificationID, job)
+	return nil
+}
+
+func WatchdogNotificationJob(ctx context.Context, notificationID string, interval string) *job.Job {
+	schedule := fmt.Sprintf("@every %s", interval)
+	return &job.Job{
+		Name:          "NotificationWatchdog",
+		Retention:     job.RetentionFailed,
+		JitterDisable: false,
+		ResourceID:    notificationID,
+		ResourceType:  "notification",
+		JobHistory:    true,
+		RunNow:        false,
+		Context:       ctx,
+		Singleton:     true,
+		Schedule:      schedule,
+		Fn: func(ctx job.JobRuntime) error {
+			return SendWatchdogNotification(ctx.Context.WithSubject(api.SystemUserID.String()), notificationID)
+		},
+	}
+}
+
+// SendWatchdogNotification sends a watchdog notification containing statistics
+// for the specified notification
+func SendWatchdogNotification(ctx context.Context, notificationID string) error {
+	notificationUUID, err := uuid.Parse(notificationID)
+	if err != nil {
+		return fmt.Errorf("failed to parse notification ID: %w", err)
+	}
+
+	notification, err := GetNotification(ctx, notificationID)
+	if err != nil {
+		return fmt.Errorf("failed to get notification: %w", err)
+	}
+
+	if notification.PlaybookID == nil {
+		// NOTE: Watchdog notifications aren't sent to playbook recievers.
+
+		// Manually craft a payload (unlike other payloads that are generated from events)
+		// This allows us to bypass the event queue and process synchronously
+		payload := NotificationEventPayload{
+			EventName:      api.EventWatchdog,
+			EventCreatedAt: time.Now(),
+			ID:             notificationUUID,
+			PersonID:       notification.PersonID,
+			NotificationID: notificationUUID,
+			TeamID:         notification.TeamID,
+			Properties:     fmt.Appendf(nil, `{"id": "%s"}`, notificationUUID.String()),
+		}
+		if len(notification.CustomNotifications) > 0 {
+			payload.CustomService = &notification.CustomNotifications[0]
+		}
+
+		if err := sendNotification(ctx, payload); err != nil {
+			return fmt.Errorf("failed to send watchdog notification to primary recipient: %w", err)
+		}
+	}
+
+	if notification.FallbackPlaybookID == nil {
+		// Also, send to fallback recipient
+		payload := NotificationEventPayload{
+			EventName:      api.EventWatchdog,
+			EventCreatedAt: time.Now(),
+			ID:             notificationUUID,
+			NotificationID: notificationUUID,
+			PersonID:       notification.FallbackPersonID,
+			TeamID:         notification.FallbackTeamID,
+			CustomService:  notification.FallbackCustomNotification,
+			Properties:     fmt.Appendf(nil, `{"id": "%s"}`, notificationUUID.String()),
+		}
+
+		if err := sendNotification(ctx, payload); err != nil {
+			return fmt.Errorf("failed to send watchdog notification to fallback recipient: %w", err)
+		}
+	}
+
+	return nil
 }

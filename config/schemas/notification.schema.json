@@ -194,6 +194,9 @@
             "$ref": "#/$defs/NotificationInihibition"
           },
           "type": "array"
+        },
+        "watchdogInterval": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
