@@ -173,23 +173,24 @@ var configQueryResultSchema = map[string]models.ColumnType{
 	"properties_values": models.ColumnTypeJSONB,
 }
 
+// Represents the catalog_changes view
 var changeQueryResultSchema = map[string]models.ColumnType{
 	"id":                  models.ColumnTypeString,
 	"config_id":           models.ColumnTypeString,
-	"external_change_id":  models.ColumnTypeString,
+	"name":                models.ColumnTypeString,
+	"deleted_at":          models.ColumnTypeString,
+	"type":                models.ColumnTypeString,
+	"tags":                models.ColumnTypeJSONB,
+	"config":              models.ColumnTypeJSONB,
 	"external_created_by": models.ColumnTypeString,
-	"change_type":         models.ColumnTypeString,
+	"created_at":          models.ColumnTypeString,
 	"severity":            models.ColumnTypeString,
+	"change_type":         models.ColumnTypeString,
 	"source":              models.ColumnTypeString,
 	"summary":             models.ColumnTypeString,
-	"patches":             models.ColumnTypeJSONB,
-	"diff":                models.ColumnTypeString,
 	"details":             models.ColumnTypeJSONB,
 	"created_by":          models.ColumnTypeString,
-	"created_at":          models.ColumnTypeString,
 	"count":               models.ColumnTypeInteger,
-	"fingerprint":         models.ColumnTypeString,
 	"first_observed":      models.ColumnTypeString,
-	"is_pushed":           models.ColumnTypeBoolean,
-	"inserted_at":         models.ColumnTypeString,
+	"agent_id":            models.ColumnTypeString,
 }
