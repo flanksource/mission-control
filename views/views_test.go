@@ -4,7 +4,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/dataquery"
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
 	pkgView "github.com/flanksource/duty/view"
 	. "github.com/onsi/ginkgo/v2"
@@ -253,10 +255,19 @@ var _ = Describe("Views", func() {
 					},
 					Queries: map[string]v1.ViewQueryWithColumnDefs{
 						"metrics": {
+							Columns: map[string]models.ColumnType{
+								"pod":   models.ColumnTypeString,
+								"value": models.ColumnTypeDecimal,
+							},
 							Query: pkgView.Query{
 								Query: dataquery.Query{
 									Prometheus: &dataquery.PrometheusQuery{
-										Query: "up{nonexistent_label=\"value\"}", // This should return no results
+										PrometheusConnection: connection.PrometheusConnection{
+											HTTPConnection: connection.HTTPConnection{
+												URL: "https://prometheus.demo.prometheus.io/",
+											},
+										},
+										Query: `up{nonexistent_label="value"}`, // This should return no results
 									},
 								},
 							},
@@ -267,7 +278,7 @@ var _ = Describe("Views", func() {
 						"memory_usage": "row.value || 0",
 					},
 				},
-			}, []pkgView.Row{}), // Empty results expected but should not error
+			}, nil), // Empty results expected but should not error
 		)
 	})
 })
