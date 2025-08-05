@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"golang.org/x/crypto/argon2"
+	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
@@ -128,9 +129,10 @@ type AccessTokenWithUser struct {
 }
 
 func ListAccessTokens(ctx context.Context) ([]AccessTokenWithUser, error) {
-	var accessTokens []AccessTokenWithUser
-	err := ctx.DB().Select("id", "name", "person_id", "created_at", "value").Preload("Person").Find(&accessTokens).Error
-	return accessTokens, err
+	return gorm.G[AccessTokenWithUser](ctx.DB()).
+		Select("id", "name", "person_id", "created_at", "value").
+		Preload("Person", nil).
+		Find(ctx)
 }
 
 func AddPersonToTeam(ctx context.Context, personID uuid.UUID, teamID uuid.UUID) error {

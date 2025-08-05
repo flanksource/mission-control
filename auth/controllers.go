@@ -230,7 +230,7 @@ func ListTokens(c echo.Context) error {
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
 			Err:     err.Error(),
-			Message: "Unable to create token",
+			Message: "Unable to list tokens",
 		})
 	}
 	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{Message: "success", Payload: payload})
