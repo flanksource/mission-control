@@ -78,7 +78,6 @@ func (k *kratosMiddleware) validateSession(ctx context.Context, r *http.Request)
 	}
 
 	if username, password, ok := r.BasicAuth(); ok {
-		// logger.V(4).Infof("Logging in with Basic %s %s%s%s", username, password[0:1], strings.Repeat("*", len(password)-2), password[len(password)-1:])
 		if strings.ToLower(username) == "token" {
 			accessToken, err := getAccessToken(ctx, password)
 			if err != nil {
@@ -87,9 +86,19 @@ func (k *kratosMiddleware) validateSession(ctx context.Context, r *http.Request)
 				return &client.Session{Active: lo.ToPtr(false)}, nil
 			}
 
+			traits := map[string]any{
+				"name": map[string]string{
+					"first": accessToken.Name,
+					"last":  "",
+				},
+			}
+
 			var agent models.Agent
 			if err := ctx.DB().Where("person_id = ?", accessToken.PersonID.String()).Find(&agent).Error; err != nil {
 				return nil, err
+			}
+			if agent.ID != uuid.Nil {
+				traits["agent"] = agent
 			}
 
 			s := &client.Session{
@@ -97,14 +106,8 @@ func (k *kratosMiddleware) validateSession(ctx context.Context, r *http.Request)
 				Active:    lo.ToPtr(true),
 				ExpiresAt: accessToken.ExpiresAt,
 				Identity: client.Identity{
-					Id: accessToken.PersonID.String(),
-					Traits: map[string]any{
-						"agent": agent,
-						"name": map[string]string{
-							"first": accessToken.Name,
-							"last":  "",
-						},
-					},
+					Id:     accessToken.PersonID.String(),
+					Traits: traits,
 				},
 			}
 
