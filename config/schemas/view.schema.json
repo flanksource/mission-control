@@ -544,6 +544,21 @@
       },
       "type": "array"
     },
+    "ViewConfigPlacement": {
+      "properties": {
+        "config": {
+          "$ref": "#/$defs/ResourceSelector"
+        },
+        "filter": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "config"
+      ]
+    },
     "ViewDisplay": {
       "properties": {
         "ordinal": {
@@ -585,6 +600,12 @@
     },
     "ViewSpec": {
       "properties": {
+        "placements": {
+          "items": {
+            "$ref": "#/$defs/ViewConfigPlacement"
+          },
+          "type": "array"
+        },
         "display": {
           "$ref": "#/$defs/ViewDisplay"
         },

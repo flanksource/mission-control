@@ -125,3 +125,45 @@ func InsertPanelResults(ctx context.Context, viewID uuid.UUID, panels []api.Pane
 
 	return nil
 }
+
+// FindViewsForConfig returns all the views that match the given config's resource selectors
+func FindViewsForConfig(ctx context.Context, config models.ConfigItem) ([]api.ViewListItem, error) {
+	var views []models.View
+	if err := ctx.DB().Model(&models.View{}).Where("spec ? 'placements'").Where("deleted_at IS NULL").Find(&views).Error; err != nil {
+		return nil, fmt.Errorf("error finding views with placements: %w", err)
+	}
+
+	viewListItems := make([]api.ViewListItem, 0)
+	for _, view := range views {
+		var spec v1.ViewSpec
+		if err := json.Unmarshal(view.Spec, &spec); err != nil {
+			return nil, fmt.Errorf("error unmarshaling view[%s] spec: %w", view.ID, err)
+		}
+
+		if len(spec.Placements) == 0 {
+			continue
+		}
+
+		var matches bool
+		for _, attachment := range spec.Placements {
+			if attachment.Config.Matches(config) {
+				matches = true
+				break
+			}
+		}
+
+		if !matches {
+			continue
+		}
+
+		viewListItems = append(viewListItems, api.ViewListItem{
+			ID:        view.ID,
+			Name:      view.Name,
+			Namespace: view.Namespace,
+			Title:     spec.Display.Title,
+			Icon:      spec.Display.Icon,
+		})
+	}
+
+	return viewListItems, nil
+}
