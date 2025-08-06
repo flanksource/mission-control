@@ -30,7 +30,7 @@ func RegisterRoutes(e *echo.Echo) {
 	e.GET("/auth/whoami", WhoAmI)
 	e.POST("/auth/create_token", CreateToken)
 	e.GET("/auth/tokens", ListTokens)
-	e.DELETE("/auth/delete_token/:id", DeleteToken)
+	e.DELETE("/auth/token/:id", DeleteToken)
 }
 
 type InviteUserRequest struct {
