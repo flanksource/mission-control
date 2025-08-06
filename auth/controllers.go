@@ -6,7 +6,10 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
+	"github.com/flanksource/commons/properties"
+	"github.com/flanksource/commons/rand"
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/rbac"
@@ -23,6 +26,8 @@ func RegisterRoutes(e *echo.Echo) {
 	e.POST("/auth/:id/update_state", UpdateAccountState)
 	e.POST("/auth/:id/properties", UpdateAccountProperties)
 	e.GET("/auth/whoami", WhoAmI)
+	e.POST("/auth/create_token", CreateToken)
+	e.GET("/auth/tokens", ListTokens)
 }
 
 type InviteUserRequest struct {
@@ -176,4 +181,57 @@ func WhoAmI(c echo.Context) error {
 			"hostname":    hostname,
 		},
 	})
+}
+
+type CreateTokenRequest struct {
+	Name string
+}
+
+func CreateToken(c echo.Context) error {
+	ctx := c.Request().Context().(context.Context)
+	user := ctx.User()
+	if user == nil {
+		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
+			Message: "Error fetching user",
+		})
+	}
+
+	var reqData CreateTokenRequest
+	if err := c.Bind(&reqData); err != nil {
+		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{
+			Err:     err.Error(),
+			Message: "Invalid request body",
+		})
+	}
+
+	password, err := rand.GenerateRandHex(32)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
+			Err:     err.Error(),
+			Message: "Unable to generate random password to token",
+		})
+	}
+
+	expiry := properties.Duration(30*24*time.Hour, "access_token.default_expiry")
+	token, err := db.CreateAccessToken(ctx, user.ID, reqData.Name, password, &expiry)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
+			Err:     err.Error(),
+			Message: "Unable to create token",
+		})
+	}
+
+	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{Message: "success", Payload: map[string]string{"token": token}})
+}
+
+func ListTokens(c echo.Context) error {
+	ctx := c.Request().Context().(context.Context)
+	payload, err := db.ListAccessTokens(ctx)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
+			Err:     err.Error(),
+			Message: "Unable to list tokens",
+		})
+	}
+	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{Message: "success", Payload: payload})
 }

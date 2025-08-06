@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"golang.org/x/crypto/argon2"
+	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
 
@@ -94,8 +95,12 @@ func CreateAccessToken(ctx context.Context, personID uuid.UUID, name, password s
 	hash := argon2.IDKey([]byte(password), []byte(salt), timeCost, memoryCost, parallelism, keyLength)
 	encodedHash := base64.URLEncoding.EncodeToString(hash)
 
+	if name == "default" {
+		name = fmt.Sprintf("agent-%d", time.Now().Unix())
+	}
+
 	accessToken := &models.AccessToken{
-		Name:     fmt.Sprintf("agent-%d", time.Now().Unix()),
+		Name:     name,
 		Value:    encodedHash,
 		PersonID: personID,
 	}
@@ -116,6 +121,18 @@ func UpdateAccessTokenExpiry(ctx context.Context, tokenID uuid.UUID, newExpiry t
 		Where("id = ?", tokenID).
 		Update("expires_at", newExpiry).
 		Error
+}
+
+type AccessTokenWithUser struct {
+	models.AccessToken
+	Person models.Person `json:"person" gorm:"foreignKey:PersonID"`
+}
+
+func ListAccessTokens(ctx context.Context) ([]AccessTokenWithUser, error) {
+	return gorm.G[AccessTokenWithUser](ctx.DB()).
+		Select("id", "name", "person_id", "created_at", "value").
+		Preload("Person", nil).
+		Find(ctx)
 }
 
 func AddPersonToTeam(ctx context.Context, personID uuid.UUID, teamID uuid.UUID) error {
