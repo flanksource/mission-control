@@ -262,7 +262,8 @@ func DeleteToken(c echo.Context) error {
 			Message: "error fetching existing roles for user",
 		})
 	}
-	if !(token.PersonID == ctx.User().ID || slices.Contains(roles, policy.RoleAdmin)) {
+
+	if token.PersonID != ctx.User().ID || !slices.Contains(roles, policy.RoleAdmin) {
 		return c.JSON(http.StatusUnauthorized, dutyAPI.HTTPError{
 			Err:     "Unauthorized",
 			Message: "Only the creator or admins can delete access tokens",
