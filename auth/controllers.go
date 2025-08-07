@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/rbac/policy"
 	"github.com/labstack/echo/v4"
 	oryClient "github.com/ory/client-go"
 
@@ -28,6 +30,7 @@ func RegisterRoutes(e *echo.Echo) {
 	e.GET("/auth/whoami", WhoAmI)
 	e.POST("/auth/create_token", CreateToken)
 	e.GET("/auth/tokens", ListTokens)
+	e.DELETE("/auth/token/:id", DeleteToken)
 }
 
 type InviteUserRequest struct {
@@ -234,4 +237,44 @@ func ListTokens(c echo.Context) error {
 		})
 	}
 	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{Message: "success", Payload: payload})
+}
+
+func DeleteToken(c echo.Context) error {
+	ctx := c.Request().Context().(context.Context)
+	tokenID := c.Param("id")
+	if tokenID == "" {
+		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{
+			Err: "token id not provided",
+		})
+	}
+
+	token, err := db.GetAccessToken(ctx, tokenID)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, dutyAPI.HTTPError{
+			Err:     err.Error(),
+			Message: "error fetching token",
+		})
+	}
+	roles, err := rbac.RolesForUser(ctx.User().ID.String())
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, dutyAPI.HTTPError{
+			Err:     err.Error(),
+			Message: "error fetching existing roles for user",
+		})
+	}
+
+	if token.PersonID != ctx.User().ID || !slices.Contains(roles, policy.RoleAdmin) {
+		return c.JSON(http.StatusUnauthorized, dutyAPI.HTTPError{
+			Err:     "Unauthorized",
+			Message: "Only the creator or admins can delete access tokens",
+		})
+	}
+
+	if err := db.DeleteAccessToken(ctx, tokenID); err != nil {
+		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
+			Err:     err.Error(),
+			Message: "Unable to delete token",
+		})
+	}
+	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{Message: "success"})
 }

@@ -130,9 +130,23 @@ type AccessTokenWithUser struct {
 
 func ListAccessTokens(ctx context.Context) ([]AccessTokenWithUser, error) {
 	return gorm.G[AccessTokenWithUser](ctx.DB()).
-		Select("id", "name", "person_id", "created_at", "value").
+		Select("id", "name", "person_id", "created_at").
 		Preload("Person", nil).
 		Find(ctx)
+}
+
+func GetAccessToken(ctx context.Context, id string) (models.AccessToken, error) {
+	return gorm.G[models.AccessToken](ctx.DB()).
+		Select("id", "name", "person_id", "created_at").
+		Where("id = ?", id).
+		First(ctx)
+}
+
+func DeleteAccessToken(ctx context.Context, id string) error {
+	_, err := gorm.G[models.AccessToken](ctx.DB()).
+		Where("id = ?", id).
+		Delete(ctx)
+	return err
 }
 
 func AddPersonToTeam(ctx context.Context, personID uuid.UUID, teamID uuid.UUID) error {
