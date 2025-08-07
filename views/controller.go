@@ -26,16 +26,36 @@ func RegisterRoutes(e *echo.Echo) {
 	logger.Infof("Registering /views routes")
 
 	g := e.Group("/view", rbac.Authorization(policy.ObjectCatalog, policy.ActionRead))
-	g.GET("/:namespace/:name", GetView)
+	g.GET("/:namespace/:name", GetViewByNamespaceName)
+	g.GET("/:id", GetViewByID)
 	g.GET("/list", HandleViewList)
 }
 
-func GetView(c echo.Context) error {
+func GetViewByID(c echo.Context) error {
+	ctx := c.Request().Context().(context.Context)
+
+	id := c.Param("id")
+
+	var view models.View
+	if err := ctx.DB().Select("id, namespace, name").Where("id = ?", id).Where("deleted_at IS NULL").Find(&view).Error; err != nil {
+		return dutyAPI.WriteError(c, err)
+	} else if view.ID == uuid.Nil {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "view(id=%s) not found", id))
+	}
+
+	return getViewByNamespaceName(ctx, c, view.Namespace, view.Name)
+}
+
+func GetViewByNamespaceName(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
 
 	namespace := c.Param("namespace")
 	name := c.Param("name")
 
+	return getViewByNamespaceName(ctx, c, namespace, name)
+}
+
+func getViewByNamespaceName(ctx context.Context, c echo.Context, namespace, name string) error {
 	cacheControl := c.Request().Header.Get("Cache-Control")
 	headerMaxAge, headerRefreshTimeout, err := utils.ParseCacheControlHeader(cacheControl)
 	if err != nil {
