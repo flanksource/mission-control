@@ -129,8 +129,8 @@ func InsertPanelResults(ctx context.Context, viewID uuid.UUID, panels []api.Pane
 // FindViewsForConfig returns all the views that match the given config's resource selectors
 func FindViewsForConfig(ctx context.Context, config models.ConfigItem) ([]api.ViewListItem, error) {
 	var views []models.View
-	if err := ctx.DB().Model(&models.View{}).Where("spec ? 'placements'").Where("deleted_at IS NULL").Find(&views).Error; err != nil {
-		return nil, fmt.Errorf("error finding views with placements: %w", err)
+	if err := ctx.DB().Model(&models.View{}).Where(`spec->'display'->'plugins' IS NOT NULL AND jsonb_array_length(spec->'display'->'plugins') > 0`).Where("deleted_at IS NULL").Find(&views).Error; err != nil {
+		return nil, fmt.Errorf("error finding views with ui plugins: %w", err)
 	}
 
 	viewListItems := make([]api.ViewListItem, 0)
@@ -140,13 +140,9 @@ func FindViewsForConfig(ctx context.Context, config models.ConfigItem) ([]api.Vi
 			return nil, fmt.Errorf("error unmarshaling view[%s] spec: %w", view.ID, err)
 		}
 
-		if len(spec.Placements) == 0 {
-			continue
-		}
-
 		var matches bool
-		for _, attachment := range spec.Placements {
-			if attachment.Config.Matches(config) {
+		for _, uiPlugin := range spec.Display.Plugins {
+			if uiPlugin.ConfigTab.Matches(config) {
 				matches = true
 				break
 			}

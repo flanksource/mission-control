@@ -3,6 +3,18 @@
   "$id": "https://github.com/flanksource/incident-commander/api/v1/view",
   "$ref": "#/$defs/View",
   "$defs": {
+    "ColumnFilter": {
+      "properties": {
+        "type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "type"
+      ]
+    },
     "ConfigMapKeySelector": {
       "properties": {
         "name": {
@@ -529,6 +541,9 @@
         },
         "for": {
           "type": "string"
+        },
+        "filter": {
+          "$ref": "#/$defs/ColumnFilter"
         }
       },
       "additionalProperties": false,
@@ -544,9 +559,9 @@
       },
       "type": "array"
     },
-    "ViewConfigPlacement": {
+    "ViewConfigUIPlugin": {
       "properties": {
-        "config": {
+        "configTab": {
           "$ref": "#/$defs/ResourceSelector"
         },
         "filter": {
@@ -556,7 +571,7 @@
       "additionalProperties": false,
       "type": "object",
       "required": [
-        "config"
+        "configTab"
       ]
     },
     "ViewDisplay": {
@@ -572,6 +587,12 @@
         },
         "title": {
           "type": "string"
+        },
+        "plugins": {
+          "items": {
+            "$ref": "#/$defs/ViewConfigUIPlugin"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,
@@ -600,12 +621,6 @@
     },
     "ViewSpec": {
       "properties": {
-        "placements": {
-          "items": {
-            "$ref": "#/$defs/ViewConfigPlacement"
-          },
-          "type": "array"
-        },
         "display": {
           "$ref": "#/$defs/ViewDisplay"
         },
