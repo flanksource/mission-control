@@ -3,6 +3,18 @@
   "$id": "https://github.com/flanksource/incident-commander/api/v1/view",
   "$ref": "#/$defs/View",
   "$defs": {
+    "ColumnFilter": {
+      "properties": {
+        "type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "type"
+      ]
+    },
     "ConfigMapKeySelector": {
       "properties": {
         "name": {
@@ -529,6 +541,9 @@
         },
         "for": {
           "type": "string"
+        },
+        "filter": {
+          "$ref": "#/$defs/ColumnFilter"
         }
       },
       "additionalProperties": false,
@@ -544,6 +559,21 @@
       },
       "type": "array"
     },
+    "ViewConfigUIPlugin": {
+      "properties": {
+        "configTab": {
+          "$ref": "#/$defs/ResourceSelector"
+        },
+        "filter": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "configTab"
+      ]
+    },
     "ViewDisplay": {
       "properties": {
         "ordinal": {
@@ -557,6 +587,12 @@
         },
         "title": {
           "type": "string"
+        },
+        "plugins": {
+          "items": {
+            "$ref": "#/$defs/ViewConfigUIPlugin"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,

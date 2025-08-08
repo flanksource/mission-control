@@ -53,15 +53,15 @@ func Run(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 		}
 	}()
 
-	for _, summary := range view.Spec.Panels {
-		summaryRows, err := dataquery.RunSQL(sqliteCtx, summary.Query)
+	for _, panel := range view.Spec.Panels {
+		rows, err := dataquery.RunSQL(sqliteCtx, panel.Query)
 		if err != nil {
-			return nil, fmt.Errorf("failed to execute panel '%s': %w", summary.Name, err)
+			return nil, fmt.Errorf("failed to execute panel '%s': %w", panel.Name, err)
 		}
 
 		output.Panels = append(output.Panels, api.PanelResult{
-			PanelMeta: summary.PanelMeta,
-			Rows:      summaryRows,
+			PanelMeta: panel.PanelMeta,
+			Rows:      rows,
 		})
 	}
 
