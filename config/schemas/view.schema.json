@@ -559,6 +559,21 @@
       },
       "type": "array"
     },
+    "ViewConfigPlacement": {
+      "properties": {
+        "config": {
+          "$ref": "#/$defs/ResourceSelector"
+        },
+        "filter": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "config"
+      ]
+    },
     "ViewConfigUIPlugin": {
       "properties": {
         "configTab": {
@@ -621,6 +636,12 @@
     },
     "ViewSpec": {
       "properties": {
+        "placements": {
+          "items": {
+            "$ref": "#/$defs/ViewConfigPlacement"
+          },
+          "type": "array"
+        },
         "display": {
           "$ref": "#/$defs/ViewDisplay"
         },
