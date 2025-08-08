@@ -15,7 +15,7 @@ var (
 	dutyContextKey dutyContextType = "dutyContext"
 )
 
-func Server() http.HandlerFunc {
+func Server(ctx context.Context) http.HandlerFunc {
 	s := server.NewMCPServer("mission-control", api.BuildVersion,
 		server.WithResourceCapabilities(true, true),
 		server.WithToolCapabilities(true),
@@ -25,7 +25,7 @@ func Server() http.HandlerFunc {
 
 	registerCatalog(s)
 	registerConnections(s)
-	registerPlaybook(s)
+	registerPlaybook(ctx, s)
 	registerViews(s)
 
 	httpServer := server.NewStreamableHTTPServer(s,

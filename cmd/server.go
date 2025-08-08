@@ -173,7 +173,7 @@ var Serve = &cobra.Command{
 		// This is outside echo pkg to prevent import cycle
 		// Cannot be registered because we need to pass ctx for
 		// context injection middleware
-		e.POST("/mcp", echov4.WrapHandler(mcp.Server()), icrbac.Authorization(policy.ObjectMCP, policy.ActionAll))
+		e.POST("/mcp", echov4.WrapHandler(mcp.Server(ctx)), icrbac.Authorization(policy.ObjectMCP, policy.ActionAll))
 
 		shutdown.AddHookWithPriority("echo", shutdown.PriorityIngress, func() {
 			echo.Shutdown(e)
