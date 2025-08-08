@@ -47,11 +47,24 @@ type ViewConfigUIPlugin struct {
 	Filter string `json:"filter,omitempty"`
 }
 
+type ViewConfigPlacement struct {
+	// Config is the selector for the config to attach to.
+	Config types.ResourceSelector `json:"config"`
+
+	// Filter is the filter to apply to the view.
+	Filter string `json:"filter,omitempty"`
+}
+
 // ViewSpec defines the desired state of View
 // +kubebuilder:validation:XValidation:rule="size(self.queries) > 0",message="query must be specified"
 // +kubebuilder:validation:XValidation:rule="size(self.panels) > 0 || size(self.columns) > 0",message="view spec must have either panels or columns defined"
 // +kubebuilder:validation:XValidation:rule="!(has(self.columns)) || size(self.columns) == 0 || self.columns.exists(c, c.primaryKey == true)",message="if columns is specified, at least one column must have primaryKey set to true"
 type ViewSpec struct {
+	// Placements ties this view to a config based on the config selector.
+	//
+	// When a view is attached to a config, the view shows up as a tab in the config page.
+	Placements []ViewConfigPlacement `json:"placements,omitempty" yaml:"placements,omitempty"`
+
 	// Display properties for the view
 	Display ViewDisplay `json:"display,omitempty" yaml:"display,omitempty"`
 

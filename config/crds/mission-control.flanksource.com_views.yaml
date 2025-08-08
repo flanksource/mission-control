@@ -369,6 +369,81 @@ spec:
                   - message: table config not allowed for this type
                     rule: 'self.type!=''table'' ? !has(self.table) : true'
                 type: array
+              placements:
+                description: |-
+                  Placements ties this view to a config based on the config selector.
+
+
+                  When a view is attached to a config, the view shows up as a tab in the config page.
+                items:
+                  properties:
+                    config:
+                      description: Config is the selector for the config to attach
+                        to.
+                      properties:
+                        agent:
+                          description: |-
+                            Agent can be the agent id or the name of the agent.
+                             Additionally, the special "self" value can be used to select resources without an agent.
+                          type: string
+                        cache:
+                          description: |-
+                            Cache directives
+                             'no-cache' (should not fetch from cache but can be cached)
+                             'no-store' (should not cache)
+                             'max-age=X' (cache for X duration)
+                          type: string
+                        fieldSelector:
+                          type: string
+                        health:
+                          description: |-
+                            Health filters resources by the health.
+                            Multiple healths can be provided separated by comma.
+                          type: string
+                        id:
+                          type: string
+                        includeDeleted:
+                          type: boolean
+                        labelSelector:
+                          type: string
+                        limit:
+                          type: integer
+                        name:
+                          type: string
+                        namespace:
+                          type: string
+                        scope:
+                          description: |-
+                            Scope is the reference for parent of the resource to select.
+                            For config items, the scope is the scraper id
+                            For checks, it's canaries and
+                            For components, it's topology.
+                            It can either be a uuid or namespace/name
+                          type: string
+                        search:
+                          description: Search query that applies to the resource name,
+                            tag & labels.
+                          type: string
+                        statuses:
+                          description: Statuses filter resources by the status
+                          items:
+                            type: string
+                          type: array
+                        tagSelector:
+                          type: string
+                        types:
+                          description: Types filter resources by the type
+                          items:
+                            type: string
+                          type: array
+                      type: object
+                    filter:
+                      description: Filter is the filter to apply to the view.
+                      type: string
+                  required:
+                  - config
+                  type: object
+                type: array
               queries:
                 additionalProperties:
                   properties:
