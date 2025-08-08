@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
+	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
@@ -17,6 +19,8 @@ import (
 	"github.com/labstack/echo/v4"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/samber/lo"
+	orderedmap "github.com/wk8/go-ordered-map/v2"
 	"gorm.io/gorm"
 )
 
@@ -67,7 +71,7 @@ func playbookRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	playbookID := req.GetString("id", "")
+	playbookID := strings.TrimPrefix(req.Params.Name, "playbook_exec_")
 	pb, err := query.FindPlaybook(ctx, playbookID)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -188,11 +192,14 @@ func playbookResourceHandler(goctx gocontext.Context, req mcp.ReadResourceReques
 	}, nil
 }
 
-func addPlaybooksAsTools(ctx context.Context, s *server.MCPServer) error {
+var currentPlaybookTools []string
+
+func syncPlaybooksAsTools(ctx context.Context, s *server.MCPServer) error {
 	playbooks, err := gorm.G[models.Playbook](ctx.DB()).Where("deleted_at IS NULL").Find(ctx)
 	if err != nil {
 		return fmt.Errorf("error fetching playbooks: %w", err)
 	}
+	var newPlaybookTools []string
 	for _, pb := range playbooks {
 		var spec v1.PlaybookSpec
 		if err := json.Unmarshal(pb.Spec, &spec); err != nil {
@@ -200,23 +207,29 @@ func addPlaybooksAsTools(ctx context.Context, s *server.MCPServer) error {
 		}
 
 		root := &jsonschema.Schema{
-			Type:     "object",
-			Required: []string{"id"},
+			Type:       "object",
+			Required:   []string{"id"},
+			Properties: orderedmap.New[string, *jsonschema.Schema](),
 		}
 
-		root.Properties.Set("id", &jsonschema.Schema{Type: "string", Description: "UUID of playbook to execute"})
 		root.Properties.Set("agent_id", &jsonschema.Schema{Type: "string", Description: "UUID of agent to run playbook on. Leave empty if not specified"})
 		if len(spec.Checks) > 0 {
 			root.Properties.Set("check_id", &jsonschema.Schema{Type: "string", Description: "UUID of the health check this playbook belongs to"})
+			root.Required = append(root.Required, "check_id")
 		}
 		if len(spec.Configs) > 0 {
 			root.Properties.Set("config_id", &jsonschema.Schema{Type: "string", Description: "UUID of config_item/catalog_item this playbook belongs to"})
+			root.Required = append(root.Required, "config_id")
 		}
 		if len(spec.Components) > 0 {
 			root.Properties.Set("component_id", &jsonschema.Schema{Type: "string", Description: "UUID of component this playbook belongs to"})
+			root.Required = append(root.Required, "component_id")
 		}
 
-		paramsSchema := &jsonschema.Schema{Type: "object"}
+		paramsSchema := &jsonschema.Schema{
+			Type:       "object",
+			Properties: orderedmap.New[string, *jsonschema.Schema](),
+		}
 		var requiredParams []string
 		for _, param := range spec.Parameters {
 			s := &jsonschema.Schema{Type: "string", Description: param.Description}
@@ -239,8 +252,16 @@ func addPlaybooksAsTools(ctx context.Context, s *server.MCPServer) error {
 			return fmt.Errorf("error marshalling root json schema: %w", err)
 		}
 
-		s.AddTool(mcp.NewToolWithRawSchema("playbook_exec_"+pb.ID.String(), "Run the playbook: "+pb.Name+"\n"+pb.Description, rj), playbookRunHandler)
+		toolName := "playbook_exec_" + pb.ID.String()
+		s.AddTool(mcp.NewToolWithRawSchema(toolName, "Run the playbook: "+pb.Name+"\n"+pb.Description, rj), playbookRunHandler)
+		newPlaybookTools = append(newPlaybookTools, toolName)
 	}
+
+	// Delete old playbooks and update currentPlaybookTools list
+	_, playbookToolsToDelete := lo.Difference(newPlaybookTools, currentPlaybookTools)
+	s.DeleteTools(playbookToolsToDelete...)
+	currentPlaybookTools = newPlaybookTools[:]
+
 	return nil
 }
 
@@ -277,7 +298,16 @@ func registerPlaybook(ctx context.Context, s *server.MCPServer) {
 
 	s.AddTool(playbookFailedRunTool, playbookFailedRunHandler)
 
-	addPlaybooksAsTools(ctx, s)
+	// Periodically call sync to handle new playbooks added
+	go func() {
+		for {
+			if err := syncPlaybooksAsTools(ctx, s); err != nil {
+				logger.Fatalf("error adding playbooks as mcp tool: %w", err)
+			}
+
+			time.Sleep(1 * time.Hour)
+		}
+	}()
 }
 
 func extractID(uri string) string {
