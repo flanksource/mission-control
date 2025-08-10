@@ -146,8 +146,13 @@ func handleViewRefresh(ctx context.Context, view *v1.View, cacheOptions *v1.Cach
 
 // readCachedViewData reads cached data from the view table
 func readCachedViewData(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
+	columns := append(view.Spec.Columns, pkgView.ColumnDef{
+		Name: pkgView.ReservedColumnAttributes,
+		Type: pkgView.ColumnTypeAttributes,
+	})
+
 	tableName := view.TableName()
-	rows, err := pkgView.ReadViewTable(ctx, view.Spec.Columns, tableName)
+	rows, err := pkgView.ReadViewTable(ctx, columns, tableName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read view table: %w", err)
 	}
@@ -165,7 +170,7 @@ func readCachedViewData(ctx context.Context, view *v1.View) (*api.ViewResult, er
 	}
 
 	result := &api.ViewResult{
-		Columns: view.Spec.Columns,
+		Columns: columns,
 		Rows:    rows,
 		Panels:  finalPanelResults,
 	}
@@ -184,7 +189,7 @@ func populateView(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 		return nil, fmt.Errorf("failed to run view: %w", err)
 	}
 
-	if len(result.Columns) > 0 {
+	if view.HasTable() {
 		err = ctx.Transaction(func(ctx context.Context, span trace.Span) error {
 			if err := pkgView.CreateViewTable(ctx, view.TableName(), view.Spec.Columns); err != nil {
 				return fmt.Errorf("failed to create view table: %w", err)

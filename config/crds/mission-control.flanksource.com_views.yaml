@@ -62,12 +62,13 @@ spec:
               columns:
                 description: Columns define the structure of the view
                 items:
-                  description: ViewColumnDef defines a column in the view
+                  description: ColumnDef defines a column in the view
                   properties:
                     description:
                       description: Description of the column
                       type: string
                     filter:
+                      description: Enable filters in the UI
                       properties:
                         type:
                           type: string
@@ -76,6 +77,9 @@ spec:
                       type: object
                     for:
                       description: |-
+                        Deprecated: Use properties instead. Example: URL
+
+
                         For references the column this column is for.
                         Applicable only for type=url.
 
@@ -131,6 +135,25 @@ spec:
                       - millicore
                       - url
                       type: string
+                    url:
+                      description: Link to various mission control components.
+                      properties:
+                        config:
+                          description: ID of the config to link to.
+                          type: string
+                        view:
+                          description: Link to a view.
+                          properties:
+                            filter:
+                              additionalProperties:
+                                type: string
+                              type: object
+                            name:
+                              type: string
+                            namespace:
+                              type: string
+                          type: object
+                      type: object
                   required:
                   - name
                   - type
