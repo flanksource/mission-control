@@ -150,6 +150,10 @@ func (v *View) GetUUID() (uuid.UUID, error) {
 	return uuid.Parse(string(v.UID))
 }
 
+func (v *View) HasTable() bool {
+	return len(v.Spec.Columns) > 0
+}
+
 //+kubebuilder:object:root=true
 
 // ViewList contains a list of View

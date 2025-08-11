@@ -134,6 +134,7 @@ var _ = ginkgo.Describe("Views E2E", ginkgo.Ordered, func() {
 				"Running",
 				"healthy",
 				"128.0/256Mi",
+				nil,
 			},
 			{
 				*dummy.LogisticsUIPodConfig.Name,
@@ -141,6 +142,7 @@ var _ = ginkgo.Describe("Views E2E", ginkgo.Ordered, func() {
 				"Running",
 				"healthy",
 				"64.0/128Mi",
+				nil,
 			},
 		}
 		Expect(result.Rows).To(Equal(expectedRows))

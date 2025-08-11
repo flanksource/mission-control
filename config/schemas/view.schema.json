@@ -3,6 +3,43 @@
   "$id": "https://github.com/flanksource/incident-commander/api/v1/view",
   "$ref": "#/$defs/View",
   "$defs": {
+    "ColumnDef": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "primaryKey": {
+          "type": "boolean"
+        },
+        "type": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "hidden": {
+          "type": "boolean"
+        },
+        "gauge": {
+          "$ref": "#/$defs/GaugeConfig"
+        },
+        "for": {
+          "type": "string"
+        },
+        "filter": {
+          "$ref": "#/$defs/ColumnFilter"
+        },
+        "url": {
+          "$ref": "#/$defs/ColumnURL"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "type"
+      ]
+    },
     "ColumnFilter": {
       "properties": {
         "type": {
@@ -14,6 +51,18 @@
       "required": [
         "type"
       ]
+    },
+    "ColumnURL": {
+      "properties": {
+        "config": {
+          "type": "string"
+        },
+        "view": {
+          "$ref": "#/$defs/ViewURLRef"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
     },
     "ConfigMapKeySelector": {
       "properties": {
@@ -519,43 +568,9 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "ViewColumnDef": {
-      "properties": {
-        "name": {
-          "type": "string"
-        },
-        "primaryKey": {
-          "type": "boolean"
-        },
-        "type": {
-          "type": "string"
-        },
-        "description": {
-          "type": "string"
-        },
-        "hidden": {
-          "type": "boolean"
-        },
-        "gauge": {
-          "$ref": "#/$defs/GaugeConfig"
-        },
-        "for": {
-          "type": "string"
-        },
-        "filter": {
-          "$ref": "#/$defs/ColumnFilter"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object",
-      "required": [
-        "name",
-        "type"
-      ]
-    },
     "ViewColumnDefList": {
       "items": {
-        "$ref": "#/$defs/ViewColumnDef"
+        "$ref": "#/$defs/ColumnDef"
       },
       "type": "array"
     },
@@ -664,6 +679,24 @@
       "properties": {
         "lastRan": {
           "$ref": "#/$defs/Time"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ViewURLRef": {
+      "properties": {
+        "namespace": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "filter": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
         }
       },
       "additionalProperties": false,
