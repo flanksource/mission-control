@@ -141,7 +141,7 @@ func applyMapping(data map[string]any, columnDefs []pkgView.ColumnDef, mapping m
 
 		row = append(row, rowValue)
 
-		if columnDef.HasProperties() {
+		if columnDef.HasAttributes() {
 			properties := map[string]any{}
 
 			env := map[string]any{"row": data}
@@ -152,6 +152,26 @@ func applyMapping(data map[string]any, columnDefs []pkgView.ColumnDef, mapping m
 				}
 
 				properties["url"] = value
+			}
+
+			if columnDef.Gauge != nil {
+				if columnDef.Gauge.Max != "" {
+					max, err := types.CelExpression(columnDef.Gauge.Max).Eval(env)
+					if err != nil {
+						return nil, fmt.Errorf("failed to evaluate gauge max expression '%s' for column %s: %w", columnDef.Gauge.Max, columnDef.Name, err)
+					}
+
+					properties["max"] = max
+				}
+
+				if columnDef.Gauge.Min != "" {
+					min, err := types.CelExpression(columnDef.Gauge.Min).Eval(env)
+					if err != nil {
+						return nil, fmt.Errorf("failed to evaluate gauge min expression '%s' for column %s: %w", columnDef.Gauge.Min, columnDef.Name, err)
+					}
+
+					properties["min"] = min
+				}
 			}
 
 			rowProperties[columnDef.Name] = properties

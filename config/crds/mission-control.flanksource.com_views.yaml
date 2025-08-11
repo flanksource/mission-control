@@ -91,8 +91,10 @@ spec:
                       description: Configuration for gauge visualization
                       properties:
                         max:
-                          type: integer
+                          type: string
                         min:
+                          type: string
+                        precision:
                           type: integer
                         thresholds:
                           items:
@@ -100,12 +102,18 @@ spec:
                               for gauge charts
                             properties:
                               color:
+                                description: Color is the color of the threshold
                                 type: string
+                              percent:
+                                description: Percent is the percentage value of the
+                                  threshold
+                                type: integer
                               value:
+                                description: 'Deprecated: Use Percent instead'
                                 type: integer
                             required:
                             - color
-                            - value
+                            - percent
                             type: object
                           type: array
                       type: object
@@ -134,6 +142,9 @@ spec:
                       - decimal
                       - millicore
                       - url
+                      type: string
+                    unit:
+                      description: Unit of the column
                       type: string
                     url:
                       description: Link to various mission control components.

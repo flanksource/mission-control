@@ -31,6 +31,9 @@
         },
         "url": {
           "$ref": "#/$defs/ColumnURL"
+        },
+        "unit": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
