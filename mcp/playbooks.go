@@ -4,6 +4,7 @@ import (
 	gocontext "context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -252,8 +253,11 @@ func syncPlaybooksAsTools(ctx context.Context, s *server.MCPServer) error {
 			return fmt.Errorf("error marshalling root json schema: %w", err)
 		}
 
-		toolName := "playbook_exec_" + pb.ID.String()
-		s.AddTool(mcp.NewToolWithRawSchema(toolName, "Run the playbook: "+pb.Name+"\n"+pb.Description, rj), playbookRunHandler)
+		toolName := strings.ToLower(strings.ReplaceAll(lo.CoalesceOrEmpty(pb.Title, pb.Name), " ", "-"))
+		if slices.Contains(newPlaybookTools, toolName) {
+			toolName = strings.ToLower(fmt.Sprintf("%s_%s_%s", pb.Name, pb.Namespace, pb.Category))
+		}
+		s.AddTool(mcp.NewToolWithRawSchema(toolName, pb.Description, rj), playbookRunHandler)
 		newPlaybookTools = append(newPlaybookTools, toolName)
 	}
 
@@ -273,12 +277,7 @@ func registerPlaybook(ctx context.Context, s *server.MCPServer) {
 	)
 
 	s.AddTool(mcp.NewTool("playbooks_list_all",
-		mcp.WithDescription(`
-			List all available playbooks. These playbooks can be executed by calling the tool playbook_exec_<uuid>.
-			If a playbook's uuid is 7f373ce2-e064-478a-b31e-33407a92ae0b, if the user asks to execute the playbook,
-			call the tool playbook_exec_7f373ce2-e064-478a-b31e-33407a92ae0b with its input.
-			ALWAYS CONFIRM WITH USER BEFORE CALLING THE playbook_exec_<uuid> TOOL BY SHOWING ALL THE TOOL NAME AND COMPLETE INPUT TO BE PASSED.
-		`)), playbookListToolHandler)
+		mcp.WithDescription("List all available playbooks")), playbookListToolHandler)
 
 	playbookRecentRunTool := mcp.NewTool("playbook_recent_runs",
 		mcp.WithDescription("Playbook recent runs"),
