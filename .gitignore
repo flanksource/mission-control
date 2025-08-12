@@ -28,4 +28,5 @@ test-reports
 .cursor/
 .artifacts/
 Claude.md
+.claude/
 __debug_bin*

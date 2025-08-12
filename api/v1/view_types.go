@@ -30,6 +30,21 @@ type ViewDisplay struct {
 
 	// Title of the view to be displayed in the UI
 	Title string `json:"title,omitempty" yaml:"title,omitempty"`
+
+	// Plugins tie this view to various pages in the UI.
+	//
+	// When a view is attached to a config, the view shows up as a tab in the config page.
+	Plugins []ViewConfigUIPlugin `json:"plugins,omitempty" yaml:"plugins,omitempty"`
+}
+
+type ViewConfigUIPlugin struct {
+	// ConfigTab is the selector for the config to attach to.
+	ConfigTab types.ResourceSelector `json:"configTab"`
+
+	// Filter to apply to the view.
+	//
+	// When a filter is specified, the filtered view is displayed.
+	Filter string `json:"filter,omitempty"`
 }
 
 // ViewSpec defines the desired state of View
@@ -133,6 +148,10 @@ func (v *View) GetNamespacedName() string {
 
 func (v *View) GetUUID() (uuid.UUID, error) {
 	return uuid.Parse(string(v.UID))
+}
+
+func (v *View) HasTable() bool {
+	return len(v.Spec.Columns) > 0
 }
 
 //+kubebuilder:object:root=true

@@ -14,7 +14,7 @@ require (
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.30.0 // indirect
 	github.com/flanksource/commons v1.40.0
-	github.com/flanksource/duty v1.0.1006
+	github.com/flanksource/duty v1.0.1013
 	github.com/flanksource/gomplate/v3 v3.24.58
 	github.com/flanksource/kopper v1.0.13
 	github.com/gomarkdown/markdown v0.0.0-20240419095408-642f0ee99ae2
@@ -167,7 +167,6 @@ require (
 	github.com/gabriel-vasile/mimetype v1.4.3 // indirect
 	github.com/geoffgarside/ber v1.1.0 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
-	github.com/glebarez/go-sqlite v1.20.3 // indirect
 	github.com/glebarez/sqlite v1.7.0 // indirect
 	github.com/go-git/gcfg v1.5.1-0.20230307220236-3a3c6141e376 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
@@ -212,6 +211,7 @@ require (
 	github.com/jbenet/go-context v0.0.0-20150711004518-d14ea06fba99 // indirect
 	github.com/jeremywohl/flatten v0.0.0-20180923035001-588fe0d4c603 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
+	github.com/kballard/go-shellquote v0.0.0-20180428030007-95032a82bc51 // indirect
 	github.com/kevinburke/ssh_config v1.2.0 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
 	github.com/kr/fs v0.1.0 // indirect
@@ -304,10 +304,16 @@ require (
 	k8s.io/kube-openapi v0.0.0-20240903163716-9e1beecbcb38 // indirect
 	k8s.io/utils v0.0.0-20240921022957-49e7df575cb6 // indirect
 	layeh.com/gopher-json v0.0.0-20201124131017-552bb3c4c3bf // indirect
-	modernc.org/libc v1.22.4 // indirect
+	lukechampine.com/uint128 v1.3.0 // indirect
+	modernc.org/cc/v3 v3.40.0 // indirect
+	modernc.org/ccgo/v3 v3.16.13 // indirect
+	modernc.org/libc v1.22.5 // indirect
 	modernc.org/mathutil v1.5.0 // indirect
 	modernc.org/memory v1.5.0 // indirect
-	modernc.org/sqlite v1.21.2 // indirect
+	modernc.org/opt v0.1.3 // indirect
+	modernc.org/sqlite v1.23.1 // indirect
+	modernc.org/strutil v1.1.3 // indirect
+	modernc.org/token v1.1.0 // indirect
 	sigs.k8s.io/gateway-api v1.1.0 // indirect
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 )
@@ -392,3 +398,5 @@ require (
 // replace github.com/flanksource/gomplate/v3 => ../gomplat3
 
 // replace github.com/flanksource/commons => ../commons
+
+replace github.com/glebarez/sqlite => github.com/clarkmcc/gorm-sqlite v0.0.0-20240426202654-00ed082c0311

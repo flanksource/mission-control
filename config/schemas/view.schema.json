@@ -3,6 +3,70 @@
   "$id": "https://github.com/flanksource/incident-commander/api/v1/view",
   "$ref": "#/$defs/View",
   "$defs": {
+    "ColumnDef": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "primaryKey": {
+          "type": "boolean"
+        },
+        "type": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "hidden": {
+          "type": "boolean"
+        },
+        "gauge": {
+          "$ref": "#/$defs/GaugeConfig"
+        },
+        "for": {
+          "type": "string"
+        },
+        "filter": {
+          "$ref": "#/$defs/ColumnFilter"
+        },
+        "url": {
+          "$ref": "#/$defs/ColumnURL"
+        },
+        "unit": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "type"
+      ]
+    },
+    "ColumnFilter": {
+      "properties": {
+        "type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "type"
+      ]
+    },
+    "ColumnURL": {
+      "properties": {
+        "config": {
+          "type": "string"
+        },
+        "view": {
+          "$ref": "#/$defs/ViewURLRef"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "ConfigMapKeySelector": {
       "properties": {
         "name": {
@@ -58,10 +122,13 @@
     },
     "GaugeConfig": {
       "properties": {
-        "min": {
-          "type": "integer"
-        },
         "max": {
+          "type": "string"
+        },
+        "min": {
+          "type": "string"
+        },
+        "precision": {
           "type": "integer"
         },
         "thresholds": {
@@ -72,15 +139,14 @@
         }
       },
       "additionalProperties": false,
-      "type": "object",
-      "required": [
-        "min",
-        "max"
-      ]
+      "type": "object"
     },
     "GaugeThreshold": {
       "properties": {
         "value": {
+          "type": "integer"
+        },
+        "percent": {
           "type": "integer"
         },
         "color": {
@@ -90,7 +156,7 @@
       "additionalProperties": false,
       "type": "object",
       "required": [
-        "value",
+        "percent",
         "color"
       ]
     },
@@ -507,42 +573,26 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "ViewColumnDef": {
+    "ViewColumnDefList": {
+      "items": {
+        "$ref": "#/$defs/ColumnDef"
+      },
+      "type": "array"
+    },
+    "ViewConfigUIPlugin": {
       "properties": {
-        "name": {
-          "type": "string"
+        "configTab": {
+          "$ref": "#/$defs/ResourceSelector"
         },
-        "primaryKey": {
-          "type": "boolean"
-        },
-        "type": {
-          "type": "string"
-        },
-        "description": {
-          "type": "string"
-        },
-        "hidden": {
-          "type": "boolean"
-        },
-        "gauge": {
-          "$ref": "#/$defs/GaugeConfig"
-        },
-        "for": {
+        "filter": {
           "type": "string"
         }
       },
       "additionalProperties": false,
       "type": "object",
       "required": [
-        "name",
-        "type"
+        "configTab"
       ]
-    },
-    "ViewColumnDefList": {
-      "items": {
-        "$ref": "#/$defs/ViewColumnDef"
-      },
-      "type": "array"
     },
     "ViewDisplay": {
       "properties": {
@@ -557,6 +607,12 @@
         },
         "title": {
           "type": "string"
+        },
+        "plugins": {
+          "items": {
+            "$ref": "#/$defs/ViewConfigUIPlugin"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,
@@ -628,6 +684,24 @@
       "properties": {
         "lastRan": {
           "$ref": "#/$defs/Time"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ViewURLRef": {
+      "properties": {
+        "namespace": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "filter": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
         }
       },
       "additionalProperties": false,

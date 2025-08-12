@@ -20,7 +20,7 @@ func TestApplyMapping(t *testing.T) {
 	type applyMappingTestCase struct {
 		name     string
 		data     map[string]any
-		columns  []pkgView.ViewColumnDef
+		columns  []pkgView.ColumnDef
 		mapping  map[string]types.CelExpression
 		expected pkgView.Row
 	}
@@ -37,7 +37,7 @@ func TestApplyMapping(t *testing.T) {
 				"pod_name":   "row.name",
 				"pod_status": "row.status",
 			},
-			columns: []pkgView.ViewColumnDef{
+			columns: []pkgView.ColumnDef{
 				{
 					Name: "pod_name",
 					Type: pkgView.ColumnTypeString,
@@ -47,7 +47,7 @@ func TestApplyMapping(t *testing.T) {
 					Type: pkgView.ColumnTypeString,
 				},
 			},
-			expected: pkgView.Row{"test-pod", "Running"},
+			expected: pkgView.Row{"test-pod", "Running", nil},
 		},
 		{
 			name: "should handle empty mapping",
@@ -55,11 +55,11 @@ func TestApplyMapping(t *testing.T) {
 				"name": "test",
 			},
 			mapping:  map[string]types.CelExpression{},
-			expected: nil,
+			expected: pkgView.Row{nil},
 		},
 		{
 			name: "helper columns",
-			columns: []pkgView.ViewColumnDef{
+			columns: []pkgView.ColumnDef{
 				{
 					Name: "name",
 					Type: pkgView.ColumnTypeString,
@@ -77,11 +77,11 @@ func TestApplyMapping(t *testing.T) {
 				"name": `row.name`,
 				"url":  `"https://example.com/" + row.name`,
 			},
-			expected: pkgView.Row{"test", "https://example.com/test"},
+			expected: pkgView.Row{"test", "https://example.com/test", nil},
 		},
 		{
 			name: "no explicit mapping",
-			columns: []pkgView.ViewColumnDef{
+			columns: []pkgView.ColumnDef{
 				{
 					Name: "name",
 					Type: pkgView.ColumnTypeString,
@@ -97,7 +97,7 @@ func TestApplyMapping(t *testing.T) {
 				"url":  "https://example.com/test",
 			},
 			mapping:  nil,
-			expected: pkgView.Row{"test", "https://example.com/test"},
+			expected: pkgView.Row{"test", "https://example.com/test", nil},
 		},
 		{
 			name: "should handle durations",
@@ -107,13 +107,13 @@ func TestApplyMapping(t *testing.T) {
 			mapping: map[string]types.CelExpression{
 				"duration": "duration('1m')",
 			},
-			columns: []pkgView.ViewColumnDef{
+			columns: []pkgView.ColumnDef{
 				{
 					Name: "duration",
 					Type: pkgView.ColumnTypeDuration,
 				},
 			},
-			expected: pkgView.Row{1 * time.Minute},
+			expected: pkgView.Row{1 * time.Minute, nil},
 		},
 	}
 
@@ -137,7 +137,7 @@ var _ = Describe("Views", func() {
 			},
 			Entry("config queries", v1.View{
 				Spec: v1.ViewSpec{
-					Columns: []pkgView.ViewColumnDef{
+					Columns: []pkgView.ColumnDef{
 						{
 							Name:       "name",
 							Type:       pkgView.ColumnTypeString,
@@ -164,12 +164,12 @@ var _ = Describe("Views", func() {
 					},
 				},
 			}, []pkgView.Row{
-				{"node-a", "healthy"},
-				{"node-b", "healthy"},
+				{"node-a", "healthy", nil},
+				{"node-b", "healthy", nil},
 			}),
 			Entry("changes queries", v1.View{
 				Spec: v1.ViewSpec{
-					Columns: []pkgView.ViewColumnDef{
+					Columns: []pkgView.ColumnDef{
 						{
 							Name:       "name",
 							Type:       pkgView.ColumnTypeString,
@@ -195,12 +195,12 @@ var _ = Describe("Views", func() {
 					},
 				},
 			}, []pkgView.Row{
-				{"Production EKS", "EKS::Cluster"},
-				{"node-a", "Kubernetes::Node"},
+				{"Production EKS", "EKS::Cluster", nil},
+				{"node-a", "Kubernetes::Node", nil},
 			}),
 			Entry("helm release changes queries", v1.View{
 				Spec: v1.ViewSpec{
-					Columns: []pkgView.ViewColumnDef{
+					Columns: []pkgView.ColumnDef{
 						{
 							Name:       "chart",
 							Type:       pkgView.ColumnTypeString,
@@ -233,16 +233,16 @@ var _ = Describe("Views", func() {
 					},
 				},
 			}, []pkgView.Row{
-				{"nginx-ingress", "4.8.0", "Flux"},
-				{"nginx-ingress", "4.7.2", "Flux"},
-				{"nginx-ingress", "4.7.1", "Flux"},
-				{"redis", "18.1.5", "Flux"},
-				{"redis", "18.1.3", "Flux"},
-				{"redis", "18.1.0", "Flux"},
+				{"nginx-ingress", "4.8.0", "Flux", nil},
+				{"nginx-ingress", "4.7.2", "Flux", nil},
+				{"nginx-ingress", "4.7.1", "Flux", nil},
+				{"redis", "18.1.5", "Flux", nil},
+				{"redis", "18.1.3", "Flux", nil},
+				{"redis", "18.1.0", "Flux", nil},
 			}),
 			Entry("prometheus query with empty results", v1.View{
 				Spec: v1.ViewSpec{
-					Columns: []pkgView.ViewColumnDef{
+					Columns: []pkgView.ColumnDef{
 						{
 							Name:       "pod",
 							Type:       pkgView.ColumnTypeString,

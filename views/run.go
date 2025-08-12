@@ -53,15 +53,15 @@ func Run(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 		}
 	}()
 
-	for _, summary := range view.Spec.Panels {
-		summaryRows, err := dataquery.RunSQL(sqliteCtx, summary.Query)
+	for _, panel := range view.Spec.Panels {
+		rows, err := dataquery.RunSQL(sqliteCtx, panel.Query)
 		if err != nil {
-			return nil, fmt.Errorf("failed to execute panel '%s': %w", summary.Name, err)
+			return nil, fmt.Errorf("failed to execute panel '%s': %w", panel.Name, err)
 		}
 
 		output.Panels = append(output.Panels, api.PanelResult{
-			PanelMeta: summary.PanelMeta,
-			Rows:      summaryRows,
+			PanelMeta: panel.PanelMeta,
+			Rows:      rows,
 		})
 	}
 
@@ -89,49 +89,99 @@ func Run(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 
 		output.Rows = rows
 		output.Columns = view.Spec.Columns
+
+		output.Columns = append(output.Columns, pkgView.ColumnDef{
+			Name: pkgView.ReservedColumnAttributes,
+			Type: pkgView.ColumnTypeAttributes,
+		})
 	}
 
 	return &output, nil
 }
 
 // applyMapping applies CEL expression mappings to data
-func applyMapping(data map[string]any, columnDefs []pkgView.ViewColumnDef, mapping map[string]types.CelExpression) (pkgView.Row, error) {
+func applyMapping(data map[string]any, columnDefs []pkgView.ColumnDef, mapping map[string]types.CelExpression) (pkgView.Row, error) {
 	var row pkgView.Row
+	rowProperties := map[string]any{}
 
 	for _, columnDef := range columnDefs {
+		var rowValue any
+
 		expr, ok := mapping[columnDef.Name]
 		if !ok {
 			// If mapping is not specified, look for the column name in the data row
 			if value, ok := data[columnDef.Name]; ok {
-				row = append(row, value)
+				rowValue = value
 			} else {
-				row = append(row, nil)
+				rowValue = nil
 			}
-
-			continue
-		}
-
-		env := map[string]any{"row": data} // We cannot directly pass result because of identifier collision with the reserved ones in cel.
-		value, err := expr.Eval(env)
-		if err != nil {
-			return nil, fmt.Errorf("failed to evaluate CEL expression for column %s: %w", columnDef.Name, err)
-		}
-
-		switch columnDef.Type {
-		case pkgView.ColumnTypeDuration:
-			v, err := duration.ParseDuration(value)
+		} else {
+			env := map[string]any{"row": data} // We cannot directly pass result because of identifier collision with the reserved ones in cel.
+			value, err := expr.Eval(env)
 			if err != nil {
-				return nil, fmt.Errorf("failed to parse as duration (%s): %w", value, err)
+				return nil, fmt.Errorf("failed to evaluate CEL expression for column %s: %w", columnDef.Name, err)
 			}
 
-			row = append(row, time.Duration(v))
+			switch columnDef.Type {
+			case pkgView.ColumnTypeDuration:
+				v, err := duration.ParseDuration(value)
+				if err != nil {
+					return nil, fmt.Errorf("failed to parse as duration (%s): %w", value, err)
+				}
 
-		case pkgView.ColumnTypeGauge:
-			row = append(row, types.JSON(value))
+				rowValue = time.Duration(v)
 
-		default:
-			row = append(row, value)
+			case pkgView.ColumnTypeGauge:
+				rowValue = types.JSON(value)
+
+			default:
+				rowValue = value
+			}
 		}
+
+		row = append(row, rowValue)
+
+		if columnDef.HasAttributes() {
+			properties := map[string]any{}
+
+			env := map[string]any{"row": data}
+			if columnDef.URL != nil {
+				value, err := columnDef.URL.Eval(env)
+				if err != nil {
+					return nil, fmt.Errorf("failed to evaluate CEL expression for column %s: %w", columnDef.Name, err)
+				}
+
+				properties["url"] = value
+			}
+
+			if columnDef.Gauge != nil {
+				if columnDef.Gauge.Max != "" {
+					max, err := types.CelExpression(columnDef.Gauge.Max).Eval(env)
+					if err != nil {
+						return nil, fmt.Errorf("failed to evaluate gauge max expression '%s' for column %s: %w", columnDef.Gauge.Max, columnDef.Name, err)
+					}
+
+					properties["max"] = max
+				}
+
+				if columnDef.Gauge.Min != "" {
+					min, err := types.CelExpression(columnDef.Gauge.Min).Eval(env)
+					if err != nil {
+						return nil, fmt.Errorf("failed to evaluate gauge min expression '%s' for column %s: %w", columnDef.Gauge.Min, columnDef.Name, err)
+					}
+
+					properties["min"] = min
+				}
+			}
+
+			rowProperties[columnDef.Name] = properties
+		}
+	}
+
+	if len(rowProperties) > 0 {
+		row = append(row, rowProperties)
+	} else {
+		row = append(row, nil)
 	}
 
 	return row, nil
