@@ -142,6 +142,7 @@ spec:
                       - decimal
                       - millicore
                       - url
+                      - badge
                       type: string
                     unit:
                       description: Unit of the column
