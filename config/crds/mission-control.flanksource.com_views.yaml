@@ -290,8 +290,10 @@ spec:
                       description: Configuration for gauge visualization
                       properties:
                         max:
-                          type: integer
+                          type: string
                         min:
+                          type: string
+                        precision:
                           type: integer
                         thresholds:
                           items:
@@ -299,17 +301,20 @@ spec:
                               for gauge charts
                             properties:
                               color:
+                                description: Color is the color of the threshold
                                 type: string
+                              percent:
+                                description: Percent is the percentage value of the
+                                  threshold
+                                type: integer
                               value:
+                                description: 'Deprecated: Use Percent instead'
                                 type: integer
                             required:
                             - color
-                            - value
+                            - percent
                             type: object
                           type: array
-                      required:
-                      - max
-                      - min
                       type: object
                     name:
                       description: Name of the panel
@@ -355,9 +360,8 @@ spec:
                   - type
                   type: object
                   x-kubernetes-validations:
-                  - message: gauge config required when type is gauge, not allowed
-                      for other types
-                    rule: 'self.type==''gauge'' ? has(self.gauge) : !has(self.gauge)'
+                  - message: gauge config not allowed for this type
+                    rule: 'self.type!=''gauge'' ? !has(self.gauge) : true'
                   - message: piechart config not allowed for this type
                     rule: 'self.type!=''piechart'' ? !has(self.piechart) : true'
                   - message: number config not allowed for this type

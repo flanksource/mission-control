@@ -2,6 +2,7 @@ package api
 
 import (
 	"github.com/flanksource/duty/dataquery"
+	pkgView "github.com/flanksource/duty/view"
 )
 
 // PanelType defines the type of panel visualization
@@ -17,7 +18,7 @@ const (
 
 // PanelDef defines a panel for the view
 // +kubebuilder:object:generate=true
-// +kubebuilder:validation:XValidation:rule="self.type=='gauge' ? has(self.gauge) : !has(self.gauge)",message="gauge config required when type is gauge, not allowed for other types"
+// +kubebuilder:validation:XValidation:rule="self.type!='gauge' ? !has(self.gauge) : true",message="gauge config not allowed for this type"
 // +kubebuilder:validation:XValidation:rule="self.type!='piechart' ? !has(self.piechart) : true",message="piechart config not allowed for this type"
 // +kubebuilder:validation:XValidation:rule="self.type!='number' ? !has(self.number) : true",message="number config not allowed for this type"
 // +kubebuilder:validation:XValidation:rule="self.type!='table' ? !has(self.table) : true",message="table config not allowed for this type"
@@ -41,7 +42,7 @@ type PanelMeta struct {
 	Type PanelType `json:"type" yaml:"type"`
 
 	// Configuration for gauge visualization
-	Gauge *GaugeConfig `json:"gauge,omitempty" yaml:"gauge,omitempty"`
+	Gauge *pkgView.GaugeConfig `json:"gauge,omitempty" yaml:"gauge,omitempty"`
 
 	// Configuration for piechart visualization
 	Piechart *PiechartConfig `json:"piechart,omitempty" yaml:"piechart,omitempty"`
@@ -51,21 +52,6 @@ type PanelMeta struct {
 
 	// Configuration for breakdown visualization
 	Table *PanelTableConfig `json:"table,omitempty" yaml:"table,omitempty"`
-}
-
-// GaugeThreshold defines a threshold configuration for gauge charts
-// +kubebuilder:object:generate=true
-type GaugeThreshold struct {
-	Value int    `json:"value" yaml:"value"`
-	Color string `json:"color" yaml:"color"`
-}
-
-// GaugeConfig defines configuration for gauge visualization
-// +kubebuilder:object:generate=true
-type GaugeConfig struct {
-	Min        int              `json:"min" yaml:"min"`
-	Max        int              `json:"max" yaml:"max"`
-	Thresholds []GaugeThreshold `json:"thresholds,omitempty" yaml:"thresholds,omitempty"`
 }
 
 // PiechartConfig defines configuration for piechart visualization
