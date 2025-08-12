@@ -122,10 +122,13 @@
     },
     "GaugeConfig": {
       "properties": {
-        "min": {
-          "type": "integer"
-        },
         "max": {
+          "type": "string"
+        },
+        "min": {
+          "type": "string"
+        },
+        "precision": {
           "type": "integer"
         },
         "thresholds": {
@@ -136,15 +139,14 @@
         }
       },
       "additionalProperties": false,
-      "type": "object",
-      "required": [
-        "min",
-        "max"
-      ]
+      "type": "object"
     },
     "GaugeThreshold": {
       "properties": {
         "value": {
+          "type": "integer"
+        },
+        "percent": {
           "type": "integer"
         },
         "color": {
@@ -154,7 +156,7 @@
       "additionalProperties": false,
       "type": "object",
       "required": [
-        "value",
+        "percent",
         "color"
       ]
     },
