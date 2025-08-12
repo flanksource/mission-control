@@ -34,6 +34,7 @@ type ViewOption func(*viewConfig)
 type viewConfig struct {
 	maxAge         *time.Duration
 	refreshTimeout *time.Duration
+	filter         string
 }
 
 // WithMaxAge sets the maximum age for cached view data
@@ -47,6 +48,13 @@ func WithMaxAge(maxAge time.Duration) ViewOption {
 func WithRefreshTimeout(timeout time.Duration) ViewOption {
 	return func(c *viewConfig) {
 		c.refreshTimeout = &timeout
+	}
+}
+
+// WithFilter sets the filter for the view table
+func WithFilter(filter string) ViewOption {
+	return func(c *viewConfig) {
+		c.filter = filter
 	}
 }
 
@@ -84,7 +92,7 @@ func ReadOrPopulateViewTable(ctx context.Context, namespace, name string, opts .
 	cacheExpired := view.CacheExpired(cacheOptions.MaxAge)
 
 	if tableExists && !cacheExpired {
-		return readCachedViewData(ctx, view)
+		return readCachedViewData(ctx, view, config.filter)
 	}
 
 	return handleViewRefresh(ctx, view, cacheOptions, tableExists)
@@ -126,7 +134,7 @@ func handleViewRefresh(ctx context.Context, view *v1.View, cacheOptions *v1.Cach
 		if err != nil {
 			if tableExists {
 				ctx.Logger.Errorf("failed to refresh view %s: %v", view.GetNamespacedName(), err)
-				return readCachedViewData(ctx, view)
+				return readCachedViewData(ctx, view, "")
 			}
 
 			return nil, fmt.Errorf("failed to refresh view %s: %w", view.GetNamespacedName(), err)
@@ -137,7 +145,7 @@ func handleViewRefresh(ctx context.Context, view *v1.View, cacheOptions *v1.Cach
 	case <-time.After(cacheOptions.RefreshTimeout):
 		if tableExists {
 			ctx.Logger.Debugf("view %s refresh timeout reached. returning cached data", view.GetNamespacedName())
-			return readCachedViewData(ctx, view)
+			return readCachedViewData(ctx, view, "")
 		}
 
 		return nil, fmt.Errorf("view %s refresh timeout reached. try again", view.GetNamespacedName())
@@ -145,14 +153,14 @@ func handleViewRefresh(ctx context.Context, view *v1.View, cacheOptions *v1.Cach
 }
 
 // readCachedViewData reads cached data from the view table
-func readCachedViewData(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
+func readCachedViewData(ctx context.Context, view *v1.View, filter string) (*api.ViewResult, error) {
 	columns := append(view.Spec.Columns, pkgView.ColumnDef{
 		Name: pkgView.ReservedColumnAttributes,
 		Type: pkgView.ColumnTypeAttributes,
 	})
 
 	tableName := view.TableName()
-	rows, err := pkgView.ReadViewTable(ctx, columns, tableName)
+	rows, err := pkgView.ReadViewTable(ctx, columns, tableName, filter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read view table: %w", err)
 	}

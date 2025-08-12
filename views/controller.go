@@ -43,7 +43,7 @@ func GetViewByID(c echo.Context) error {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "view(id=%s) not found", id))
 	}
 
-	return getViewByNamespaceName(ctx, c, view.Namespace, view.Name)
+	return getViewByNamespaceName(ctx, c, view.Namespace, view.Name, "")
 }
 
 func GetViewByNamespaceName(c echo.Context) error {
@@ -51,11 +51,12 @@ func GetViewByNamespaceName(c echo.Context) error {
 
 	namespace := c.Param("namespace")
 	name := c.Param("name")
+	filter := c.QueryParam("filter")
 
-	return getViewByNamespaceName(ctx, c, namespace, name)
+	return getViewByNamespaceName(ctx, c, namespace, name, filter)
 }
 
-func getViewByNamespaceName(ctx context.Context, c echo.Context, namespace, name string) error {
+func getViewByNamespaceName(ctx context.Context, c echo.Context, namespace, name string, filter string) error {
 	cacheControl := c.Request().Header.Get("Cache-Control")
 	headerMaxAge, headerRefreshTimeout, err := utils.ParseCacheControlHeader(cacheControl)
 	if err != nil {
@@ -68,6 +69,9 @@ func getViewByNamespaceName(ctx context.Context, c echo.Context, namespace, name
 	}
 	if headerRefreshTimeout > 0 {
 		opts = append(opts, WithRefreshTimeout(headerRefreshTimeout))
+	}
+	if filter != "" {
+		opts = append(opts, WithFilter(filter))
 	}
 
 	response, err := ReadOrPopulateViewTable(ctx, namespace, name, opts...)
