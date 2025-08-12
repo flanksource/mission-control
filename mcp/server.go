@@ -4,6 +4,7 @@ import (
 	gocontext "context"
 	"net/http"
 
+	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/mark3labs/mcp-go/server"
@@ -25,8 +26,11 @@ func Server(ctx context.Context) http.HandlerFunc {
 
 	registerCatalog(s)
 	registerConnections(s)
+	registerHealthChecks(s)
 	registerPlaybook(ctx, s)
 	registerViews(s)
+	registerHealthChecks(s)
+	logger.Infof("Registering /mcp routes")
 
 	httpServer := server.NewStreamableHTTPServer(s,
 		server.WithHTTPContextFunc(func(ctx gocontext.Context, r *http.Request) gocontext.Context {
