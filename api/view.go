@@ -22,4 +22,7 @@ type ViewResult struct {
 	Columns         []view.ColumnDef `json:"columns,omitempty"`
 	Rows            []view.Row       `json:"rows,omitempty"`
 	Panels          []PanelResult    `json:"panels,omitempty"`
+
+	// List of all possible values for each column where filter is enabled.
+	ColumnOptions map[string][]string `json:"columnOptions,omitempty"`
 }

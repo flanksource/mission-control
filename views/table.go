@@ -151,12 +151,6 @@ func readCachedViewData(ctx context.Context, view *v1.View) (*api.ViewResult, er
 		Type: pkgView.ColumnTypeAttributes,
 	})
 
-	tableName := view.TableName()
-	rows, err := pkgView.ReadViewTable(ctx, columns, tableName)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read view table: %w", err)
-	}
-
 	var panelResult models.ViewPanel
 	if err := ctx.DB().Where("view_id = ?", view.GetUID()).Find(&panelResult).Error; err != nil {
 		return nil, fmt.Errorf("failed to find panel results: %w", err)
@@ -171,13 +165,19 @@ func readCachedViewData(ctx context.Context, view *v1.View) (*api.ViewResult, er
 
 	result := &api.ViewResult{
 		Columns: columns,
-		Rows:    rows,
 		Panels:  finalPanelResults,
 	}
 
 	if view.Status.LastRan != nil {
 		result.LastRefreshedAt = view.Status.LastRan.Time
 	}
+
+	// Populate column options for multiselect filters
+	columnOptions, err := getColumnOptions(ctx, view)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get column options: %w", err)
+	}
+	result.ColumnOptions = columnOptions
 
 	return result, nil
 }
@@ -210,7 +210,16 @@ func populateView(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 		}
 	}
 
+	result.Rows = []pkgView.Row{}
 	result.LastRefreshedAt = time.Now()
+
+	// Populate column options for multiselect filters
+	columnOptions, err := getColumnOptions(ctx, view)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get column options: %w", err)
+	}
+	result.ColumnOptions = columnOptions
+
 	return result, nil
 }
 
@@ -246,4 +255,38 @@ func updateViewLastRan(ctx context.Context, id string) error {
 		return fmt.Errorf("failed to update lastRan field: %w", err)
 	}
 	return nil
+}
+
+// getColumnOptions retrieves distinct values for columns with multiselect filters
+func getColumnOptions(ctx context.Context, view *v1.View) (map[string][]string, error) {
+	if !view.HasTable() {
+		return nil, nil
+	}
+
+	columnOptions := make(map[string][]string)
+	tableName := view.TableName()
+
+	// Check if the table exists
+	if !ctx.DB().Migrator().HasTable(tableName) {
+		return columnOptions, nil
+	}
+
+	// Find columns with multiselect filters
+	for _, column := range view.Spec.Columns {
+		if column.Filter != nil && column.Filter.Type == pkgView.ColumnFilterTypeMultiSelect {
+			var values []string
+			
+			// Query distinct values for this column, excluding null values
+			if err := ctx.DB().Table(tableName).
+				Distinct(column.Name).
+				Where(fmt.Sprintf("%s IS NOT NULL AND %s != ''", column.Name, column.Name)).
+				Pluck(column.Name, &values).Error; err != nil {
+				return nil, fmt.Errorf("failed to get distinct values for column %s: %w", column.Name, err)
+			}
+
+			columnOptions[column.Name] = values
+		}
+	}
+
+	return columnOptions, nil
 }

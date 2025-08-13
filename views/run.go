@@ -148,7 +148,7 @@ func applyMapping(data map[string]any, columnDefs []pkgView.ColumnDef, mapping m
 			if columnDef.URL != nil {
 				value, err := columnDef.URL.Eval(env)
 				if err != nil {
-					return nil, fmt.Errorf("failed to evaluate CEL expression for column %s: %w", columnDef.Name, err)
+					return nil, fmt.Errorf("failed to evaluate URL for column %s: %w", columnDef.Name, err)
 				}
 
 				properties["url"] = value

@@ -14,7 +14,7 @@ require (
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.30.0 // indirect
 	github.com/flanksource/commons v1.40.0
-	github.com/flanksource/duty v1.0.1013
+	github.com/flanksource/duty v1.0.1014
 	github.com/flanksource/gomplate/v3 v3.24.58
 	github.com/flanksource/kopper v1.0.13
 	github.com/gomarkdown/markdown v0.0.0-20240419095408-642f0ee99ae2
@@ -59,6 +59,7 @@ require (
 	github.com/gofrs/uuid/v5 v5.3.2
 	github.com/golang-jwt/jwt/v5 v5.2.2
 	github.com/henvic/httpretty v0.1.4
+	github.com/invopop/jsonschema v0.13.0
 	github.com/jackc/pgerrcode v0.0.0-20240316143900-6e2875d9b438
 	github.com/jenkins-x/go-scm v1.14.17
 	github.com/mark3labs/mcp-go v0.37.0
@@ -73,6 +74,7 @@ require (
 	github.com/tg123/go-htpasswd v1.2.2
 	github.com/timberio/go-datemath v0.1.0
 	github.com/tmc/langchaingo v0.1.13
+	github.com/wk8/go-ordered-map/v2 v2.1.8
 	github.com/xeipuuv/gojsonschema v1.2.0
 	go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho v0.44.0
 	go.opentelemetry.io/otel v1.35.0
@@ -197,7 +199,6 @@ require (
 	github.com/hairyhenderson/yaml v0.0.0-20220618171115-2d35fca545ce // indirect
 	github.com/hashicorp/hcl/v2 v2.21.0 // indirect
 	github.com/hirochachacha/go-smb2 v1.1.0 // indirect
-	github.com/invopop/jsonschema v0.13.0 // indirect
 	github.com/itchyny/gojq v0.12.17 // indirect
 	github.com/itchyny/timefmt-go v0.1.6 // indirect
 	github.com/jackc/chunkreader/v2 v2.0.1 // indirect
@@ -264,7 +265,6 @@ require (
 	github.com/vadimi/go-http-ntlm v1.0.3 // indirect
 	github.com/vadimi/go-http-ntlm/v2 v2.5.0 // indirect
 	github.com/vadimi/go-ntlm v1.2.1 // indirect
-	github.com/wk8/go-ordered-map/v2 v2.1.8 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
 	github.com/xeipuuv/gojsonpointer v0.0.0-20180127040702-4e3ac2762d5f // indirect
