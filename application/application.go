@@ -141,11 +141,7 @@ func buildApplication(ctx context.Context, app *v1.Application) (*api.Applicatio
 			return nil, ctx.Oops().Errorf("failed to read view table (%s/%s): %w", section.ViewRef.Namespace, section.ViewRef.Name, err)
 		}
 
-		response.Sections = append(response.Sections, api.ViewSection{
-			Title:  section.Title,
-			Icon:   section.Icon,
-			Result: viewResult,
-		})
+		response.Sections = append(response.Sections, viewResult)
 	}
 
 	return &response, nil

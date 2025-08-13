@@ -15,13 +15,7 @@ type Application struct {
 	Backups           []ApplicationBackup        `json:"backups"`
 	Restores          []ApplicationBackupRestore `json:"restores"`
 	Findings          []ApplicationFinding       `json:"findings"`
-	Sections          []ViewSection              `json:"sections"`
-}
-
-type ViewSection struct {
-	Title  string      `json:"title"`
-	Icon   string      `json:"icon,omitempty"`
-	Result *ViewResult `json:"result"`
+	Sections          []*ViewResult              `json:"sections"`
 }
 
 type ApplicationFinding struct {
