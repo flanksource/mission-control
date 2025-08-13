@@ -124,7 +124,7 @@ var _ = ginkgo.Describe("Views E2E", ginkgo.Ordered, func() {
 		err = db.PersistViewFromCRD(DefaultContext, view)
 		Expect(err).NotTo(HaveOccurred())
 
-		result, err := views.ReadOrPopulateViewTable(DefaultContext.WithUser(&dummy.AlanTuring), view.GetNamespace(), view.GetName())
+		result, err := views.ReadOrPopulateViewTable(DefaultContext.WithUser(&dummy.AlanTuring), view.GetNamespace(), view.GetName(), views.WithIncludeRows(true))
 		Expect(err).NotTo(HaveOccurred())
 
 		expectedRows := []pkgView.Row{

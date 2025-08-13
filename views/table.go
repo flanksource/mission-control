@@ -11,6 +11,7 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	pkgView "github.com/flanksource/duty/view"
+	"github.com/lib/pq"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/singleflight"
 
@@ -34,6 +35,7 @@ type ViewOption func(*viewConfig)
 type viewConfig struct {
 	maxAge         *time.Duration
 	refreshTimeout *time.Duration
+	includeRows    bool
 }
 
 // WithMaxAge sets the maximum age for cached view data
@@ -47,6 +49,13 @@ func WithMaxAge(maxAge time.Duration) ViewOption {
 func WithRefreshTimeout(timeout time.Duration) ViewOption {
 	return func(c *viewConfig) {
 		c.refreshTimeout = &timeout
+	}
+}
+
+// WithIncludeRows sets whether to include table rows in the response
+func WithIncludeRows(include bool) ViewOption {
+	return func(c *viewConfig) {
+		c.includeRows = include
 	}
 }
 
@@ -84,14 +93,14 @@ func ReadOrPopulateViewTable(ctx context.Context, namespace, name string, opts .
 	cacheExpired := view.CacheExpired(cacheOptions.MaxAge)
 
 	if tableExists && !cacheExpired {
-		return readCachedViewData(ctx, view)
+		return readCachedViewData(ctx, view, config.includeRows)
 	}
 
-	return handleViewRefresh(ctx, view, cacheOptions, tableExists)
+	return handleViewRefresh(ctx, view, cacheOptions, tableExists, config.includeRows)
 }
 
 // handleViewRefresh deduplicates concurrent view refresh operations using singleflight
-func handleViewRefresh(ctx context.Context, view *v1.View, cacheOptions *v1.CacheOptions, tableExists bool) (*api.ViewResult, error) {
+func handleViewRefresh(ctx context.Context, view *v1.View, cacheOptions *v1.CacheOptions, tableExists bool, includeRows bool) (*api.ViewResult, error) {
 	done := make(chan struct{})
 	var result *api.ViewResult
 	var err error
@@ -111,7 +120,7 @@ func handleViewRefresh(ctx context.Context, view *v1.View, cacheOptions *v1.Cach
 		}
 
 		res, refreshErr, _ := refreshGroup.Do(string(view.GetUID()), func() (any, error) {
-			return populateView(refreshCtx, view)
+			return populateView(refreshCtx, view, includeRows)
 		})
 		if refreshErr != nil {
 			ctx.Errorf("failed to refresh view %s: %v", view.GetNamespacedName(), refreshErr)
@@ -126,7 +135,7 @@ func handleViewRefresh(ctx context.Context, view *v1.View, cacheOptions *v1.Cach
 		if err != nil {
 			if tableExists {
 				ctx.Logger.Errorf("failed to refresh view %s: %v", view.GetNamespacedName(), err)
-				return readCachedViewData(ctx, view)
+				return readCachedViewData(ctx, view, includeRows)
 			}
 
 			return nil, fmt.Errorf("failed to refresh view %s: %w", view.GetNamespacedName(), err)
@@ -137,7 +146,7 @@ func handleViewRefresh(ctx context.Context, view *v1.View, cacheOptions *v1.Cach
 	case <-time.After(cacheOptions.RefreshTimeout):
 		if tableExists {
 			ctx.Logger.Debugf("view %s refresh timeout reached. returning cached data", view.GetNamespacedName())
-			return readCachedViewData(ctx, view)
+			return readCachedViewData(ctx, view, includeRows)
 		}
 
 		return nil, fmt.Errorf("view %s refresh timeout reached. try again", view.GetNamespacedName())
@@ -145,11 +154,21 @@ func handleViewRefresh(ctx context.Context, view *v1.View, cacheOptions *v1.Cach
 }
 
 // readCachedViewData reads cached data from the view table
-func readCachedViewData(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
+func readCachedViewData(ctx context.Context, view *v1.View, includeRows bool) (*api.ViewResult, error) {
 	columns := append(view.Spec.Columns, pkgView.ColumnDef{
 		Name: pkgView.ReservedColumnAttributes,
 		Type: pkgView.ColumnTypeAttributes,
 	})
+
+	tableName := view.TableName()
+	var rows []pkgView.Row
+	if includeRows {
+		var err error
+		rows, err = pkgView.ReadViewTable(ctx, columns, tableName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read view table: %w", err)
+		}
+	}
 
 	var panelResult models.ViewPanel
 	if err := ctx.DB().Where("view_id = ?", view.GetUID()).Find(&panelResult).Error; err != nil {
@@ -165,6 +184,7 @@ func readCachedViewData(ctx context.Context, view *v1.View) (*api.ViewResult, er
 
 	result := &api.ViewResult{
 		Columns: columns,
+		Rows:    rows,
 		Panels:  finalPanelResults,
 	}
 
@@ -172,7 +192,6 @@ func readCachedViewData(ctx context.Context, view *v1.View) (*api.ViewResult, er
 		result.LastRefreshedAt = view.Status.LastRan.Time
 	}
 
-	// Populate column options for multiselect filters
 	columnOptions, err := getColumnOptions(ctx, view)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get column options: %w", err)
@@ -183,7 +202,7 @@ func readCachedViewData(ctx context.Context, view *v1.View) (*api.ViewResult, er
 }
 
 // populateView runs the view queries and saves to the view table.
-func populateView(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
+func populateView(ctx context.Context, view *v1.View, includeRows bool) (*api.ViewResult, error) {
 	result, err := Run(ctx, view)
 	if err != nil {
 		return nil, fmt.Errorf("failed to run view: %w", err)
@@ -210,10 +229,11 @@ func populateView(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 		}
 	}
 
-	result.Rows = []pkgView.Row{}
+	if !includeRows {
+		result.Rows = nil // don't return rows. UI uses postgREST to get the table rows.
+	}
 	result.LastRefreshedAt = time.Now()
 
-	// Populate column options for multiselect filters
 	columnOptions, err := getColumnOptions(ctx, view)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get column options: %w", err)
@@ -258,6 +278,7 @@ func updateViewLastRan(ctx context.Context, id string) error {
 }
 
 // getColumnOptions retrieves distinct values for columns with multiselect filters
+// The UI uses this to populate the filters.
 func getColumnOptions(ctx context.Context, view *v1.View) (map[string][]string, error) {
 	if !view.HasTable() {
 		return nil, nil
@@ -266,22 +287,17 @@ func getColumnOptions(ctx context.Context, view *v1.View) (map[string][]string, 
 	columnOptions := make(map[string][]string)
 	tableName := view.TableName()
 
-	// Check if the table exists
-	if !ctx.DB().Migrator().HasTable(tableName) {
-		return columnOptions, nil
-	}
-
 	// Find columns with multiselect filters
 	for _, column := range view.Spec.Columns {
 		if column.Filter != nil && column.Filter.Type == pkgView.ColumnFilterTypeMultiSelect {
 			var values []string
-			
-			// Query distinct values for this column, excluding null values
+			columnName := pq.QuoteIdentifier(column.Name)
+
 			if err := ctx.DB().Table(tableName).
-				Distinct(column.Name).
-				Where(fmt.Sprintf("%s IS NOT NULL AND %s != ''", column.Name, column.Name)).
-				Pluck(column.Name, &values).Error; err != nil {
-				return nil, fmt.Errorf("failed to get distinct values for column %s: %w", column.Name, err)
+				Distinct(columnName).
+				Where(columnName+" IS NOT NULL").
+				Pluck(columnName, &values).Error; err != nil {
+				return nil, fmt.Errorf("failed to get distinct values for column %s: %w", columnName, err)
 			}
 
 			columnOptions[column.Name] = values

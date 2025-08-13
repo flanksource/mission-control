@@ -37,7 +37,7 @@ var _ = Describe("View Database Table", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			// save the results to DB first so ReadOrPopulateViewTable reads them
-			_, err = populateView(DefaultContext, viewObj)
+			_, err = populateView(DefaultContext, viewObj, false)
 			Expect(err).ToNot(HaveOccurred())
 
 			// Verify that lastRan field is populated after PopulateView
@@ -49,7 +49,7 @@ var _ = Describe("View Database Table", func() {
 			tableName := viewObj.TableName()
 			Expect(DefaultContext.DB().Migrator().HasTable(tableName)).To(BeTrue())
 
-			result, err := ReadOrPopulateViewTable(DefaultContext.WithUser(&dummy.JohnDoe), viewObj.Namespace, viewObj.Name)
+			result, err := ReadOrPopulateViewTable(DefaultContext.WithUser(&dummy.JohnDoe), viewObj.Namespace, viewObj.Name, WithIncludeRows(true))
 			Expect(err).ToNot(HaveOccurred())
 
 			expectedRowsAnnotation, exists := viewObj.Annotations["expected-rows"]
