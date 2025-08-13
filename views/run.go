@@ -19,7 +19,12 @@ import (
 
 // Run executes the view queries and returns the rows with data
 func Run(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
-	var output api.ViewResult
+	output := api.ViewResult{
+		Namespace: view.Namespace,
+		Name:      view.Name,
+		Icon:      view.Spec.Display.Icon,
+		Title:     view.Spec.Display.Title,
+	}
 
 	var queryResults []dataquery.QueryResultSet
 	for queryName, q := range view.Spec.Queries {

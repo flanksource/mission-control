@@ -18,6 +18,11 @@ type ViewListItem struct {
 
 // ViewResult is the result of a view query
 type ViewResult struct {
+	Namespace string `json:"namespace,omitempty"`
+	Name      string `json:"name"`
+	Title     string `json:"title"`
+	Icon      string `json:"icon,omitempty"`
+
 	LastRefreshedAt time.Time        `json:"lastRefreshedAt"`
 	Columns         []view.ColumnDef `json:"columns,omitempty"`
 	Rows            []view.Row       `json:"rows,omitempty"`

@@ -183,6 +183,11 @@ func readCachedViewData(ctx context.Context, view *v1.View, includeRows bool) (*
 	}
 
 	result := &api.ViewResult{
+		Namespace: view.Namespace,
+		Name:      view.Name,
+		Title:     view.Spec.Display.Title,
+		Icon:      view.Spec.Display.Icon,
+
 		Columns: columns,
 		Rows:    rows,
 		Panels:  finalPanelResults,
