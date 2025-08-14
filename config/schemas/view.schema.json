@@ -23,6 +23,9 @@
         "gauge": {
           "$ref": "#/$defs/GaugeConfig"
         },
+        "icon": {
+          "type": "string"
+        },
         "for": {
           "type": "string"
         },

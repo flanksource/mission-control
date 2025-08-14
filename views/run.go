@@ -111,6 +111,7 @@ func applyMapping(data map[string]any, columnDefs []pkgView.ColumnDef, mapping m
 
 	for _, columnDef := range columnDefs {
 		var rowValue any
+		env := map[string]any{"row": data} // We cannot directly pass result because of identifier collision with the reserved ones in cel.
 
 		expr, ok := mapping[columnDef.Name]
 		if !ok {
@@ -121,7 +122,6 @@ func applyMapping(data map[string]any, columnDefs []pkgView.ColumnDef, mapping m
 				rowValue = nil
 			}
 		} else {
-			env := map[string]any{"row": data} // We cannot directly pass result because of identifier collision with the reserved ones in cel.
 			value, err := expr.Eval(env)
 			if err != nil {
 				return nil, fmt.Errorf("failed to evaluate CEL expression for column %s: %w", columnDef.Name, err)
@@ -146,40 +146,10 @@ func applyMapping(data map[string]any, columnDefs []pkgView.ColumnDef, mapping m
 
 		row = append(row, rowValue)
 
-		if columnDef.HasAttributes() {
-			properties := map[string]any{}
-
-			env := map[string]any{"row": data}
-			if columnDef.URL != nil {
-				value, err := columnDef.URL.Eval(env)
-				if err != nil {
-					return nil, fmt.Errorf("failed to evaluate URL for column %s: %w", columnDef.Name, err)
-				}
-
-				properties["url"] = value
-			}
-
-			if columnDef.Gauge != nil {
-				if columnDef.Gauge.Max != "" {
-					max, err := types.CelExpression(columnDef.Gauge.Max).Eval(env)
-					if err != nil {
-						return nil, fmt.Errorf("failed to evaluate gauge max expression '%s' for column %s: %w", columnDef.Gauge.Max, columnDef.Name, err)
-					}
-
-					properties["max"] = max
-				}
-
-				if columnDef.Gauge.Min != "" {
-					min, err := types.CelExpression(columnDef.Gauge.Min).Eval(env)
-					if err != nil {
-						return nil, fmt.Errorf("failed to evaluate gauge min expression '%s' for column %s: %w", columnDef.Gauge.Min, columnDef.Name, err)
-					}
-
-					properties["min"] = min
-				}
-			}
-
-			rowProperties[columnDef.Name] = properties
+		if attributes, err := columnAttributes(columnDef, env); err != nil {
+			return nil, fmt.Errorf("failed to evaluate attributes for column %s: %w", columnDef.Name, err)
+		} else if len(attributes) > 0 {
+			rowProperties[columnDef.Name] = attributes
 		}
 	}
 
@@ -190,6 +160,49 @@ func applyMapping(data map[string]any, columnDefs []pkgView.ColumnDef, mapping m
 	}
 
 	return row, nil
+}
+
+func columnAttributes(columnDef pkgView.ColumnDef, env map[string]any) (map[string]any, error) {
+	attributes := map[string]any{}
+	if columnDef.Icon != nil {
+		icon, err := types.CelExpression(*columnDef.Icon).Eval(env)
+		if err != nil {
+			return nil, fmt.Errorf("failed to evaluate icon expression '%s' for column %s: %w", *columnDef.Icon, columnDef.Name, err)
+		}
+
+		attributes["icon"] = icon
+	}
+
+	if columnDef.URL != nil {
+		value, err := columnDef.URL.Eval(env)
+		if err != nil {
+			return nil, fmt.Errorf("failed to evaluate URL for column %s: %w", columnDef.Name, err)
+		}
+
+		attributes["url"] = value
+	}
+
+	if columnDef.Gauge != nil {
+		if columnDef.Gauge.Max != "" {
+			max, err := types.CelExpression(columnDef.Gauge.Max).Eval(env)
+			if err != nil {
+				return nil, fmt.Errorf("failed to evaluate gauge max expression '%s' for column %s: %w", columnDef.Gauge.Max, columnDef.Name, err)
+			}
+
+			attributes["max"] = max
+		}
+
+		if columnDef.Gauge.Min != "" {
+			min, err := types.CelExpression(columnDef.Gauge.Min).Eval(env)
+			if err != nil {
+				return nil, fmt.Errorf("failed to evaluate gauge min expression '%s' for column %s: %w", columnDef.Gauge.Min, columnDef.Name, err)
+			}
+
+			attributes["min"] = min
+		}
+	}
+
+	return attributes, nil
 }
 
 var configQueryResultSchema = map[string]models.ColumnType{

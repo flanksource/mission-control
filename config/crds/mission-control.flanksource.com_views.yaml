@@ -121,6 +121,14 @@ spec:
                       description: Hidden indicates if the column should be hidden
                         from view
                       type: boolean
+                    icon:
+                      description: |-
+                        Icon to use for the column.
+
+
+                        Supports mapping to a row value.
+                        Example: icon: row.health
+                      type: string
                     name:
                       description: Name of the column
                       type: string
@@ -151,7 +159,7 @@ spec:
                       description: Link to various mission control components.
                       properties:
                         config:
-                          description: ID of the config to link to.
+                          description: ID of the config or search query.
                           type: string
                         view:
                           description: Link to a view.
