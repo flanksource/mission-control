@@ -92,7 +92,7 @@ func ReadOrPopulateViewTable(ctx context.Context, namespace, name string, opts .
 	tableExists := ctx.DB().Migrator().HasTable(tableName)
 	cacheExpired := view.CacheExpired(cacheOptions.MaxAge)
 
-	if tableExists && !cacheExpired {
+	if ((view.HasTable() && tableExists) || !view.HasTable()) && !cacheExpired {
 		return readCachedViewData(ctx, view, config.includeRows)
 	}
 
