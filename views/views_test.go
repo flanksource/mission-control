@@ -280,5 +280,43 @@ var _ = Describe("Views", func() {
 				},
 			}, nil), // Empty results expected but should not error
 		)
+
+		It("should work without SQLite database when no panels or merge query", func() {
+			view := v1.View{
+				Spec: v1.ViewSpec{
+					Columns: []pkgView.ColumnDef{
+						{
+							Name:       "name",
+							Type:       pkgView.ColumnTypeString,
+							PrimaryKey: true,
+						},
+						{
+							Name: "status",
+							Type: pkgView.ColumnTypeString,
+						},
+					},
+					Queries: map[string]v1.ViewQueryWithColumnDefs{
+						"nodes": {
+							Query: pkgView.Query{
+								Configs: &types.ResourceSelector{
+									Types:       []string{"Kubernetes::Node"},
+									TagSelector: "account=flanksource",
+								},
+							},
+						},
+					},
+					Mapping: map[string]types.CelExpression{
+						"name":   "row.name",
+						"status": "row.status",
+					},
+					// No panels and no merge query - should not create SQLite database
+				},
+			}
+
+			result, err := Run(DefaultContext, &view)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).ToNot(BeNil())
+			Expect(result.Rows).To(HaveLen(2))
+		})
 	})
 })

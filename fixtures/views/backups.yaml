@@ -28,7 +28,7 @@ spec:
       type: status
       description: The status of the backup.
     - name: source
-      type: string
+      type: badge
       description: The source of the backup.
   queries:
     backups:
