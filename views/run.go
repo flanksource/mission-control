@@ -48,15 +48,25 @@ func Run(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 		queryResults = append(queryResults, resultSet)
 	}
 
-	sqliteCtx, close, err := dataquery.DBFromResultsets(ctx, queryResults)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create in-memory SQLite database: %w", err)
-	}
-	defer func() {
-		if err := close(); err != nil {
-			ctx.Errorf("failed to close in-memory SQLite database: %v", err)
+	// If there's no merge query and no panels,
+	// there's no need to create an in-memory SQLite database.
+	// The results from the dataqueries are directly mapped to the table columns.
+	needsSQL := len(view.Spec.Panels) > 0 || view.Spec.Merge != nil
+
+	var sqliteCtx context.Context
+	if needsSQL {
+		var err error
+		var close func() error
+		sqliteCtx, close, err = dataquery.DBFromResultsets(ctx, queryResults)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create in-memory SQLite database: %w", err)
 		}
-	}()
+		defer func() {
+			if err := close(); err != nil {
+				ctx.Errorf("failed to close in-memory SQLite database: %v", err)
+			}
+		}()
+	}
 
 	for _, panel := range view.Spec.Panels {
 		rows, err := dataquery.RunSQL(sqliteCtx, panel.Query)
@@ -70,7 +80,7 @@ func Run(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 		})
 	}
 
-	if len(view.Spec.Columns) != 0 {
+	if view.HasTable() {
 		var mergedData []dataquery.QueryResultRow
 		if lo.FromPtr(view.Spec.Merge) != "" {
 			var err error
