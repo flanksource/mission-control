@@ -155,10 +155,13 @@ func handleViewRefresh(ctx context.Context, view *v1.View, cacheOptions *v1.Cach
 
 // readCachedViewData reads cached data from the view table
 func readCachedViewData(ctx context.Context, view *v1.View, includeRows bool) (*api.ViewResult, error) {
-	columns := append(view.Spec.Columns, pkgView.ColumnDef{
-		Name: pkgView.ReservedColumnAttributes,
-		Type: pkgView.ColumnTypeAttributes,
-	})
+	columns := view.Spec.Columns
+	if view.HasTable() {
+		columns = append(view.Spec.Columns, pkgView.ColumnDef{
+			Name: pkgView.ReservedColumnAttributes,
+			Type: pkgView.ColumnTypeAttributes,
+		})
+	}
 
 	tableName := view.TableName()
 	var rows []pkgView.Row
