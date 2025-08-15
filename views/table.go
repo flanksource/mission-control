@@ -213,25 +213,25 @@ func populateView(ctx context.Context, view *v1.View, includeRows bool) (*api.Vi
 		return nil, fmt.Errorf("failed to run view: %w", err)
 	}
 
-	if view.HasTable() {
-		err = ctx.Transaction(func(ctx context.Context, span trace.Span) error {
+	err = ctx.Transaction(func(ctx context.Context, span trace.Span) error {
+		if view.HasTable() {
 			if err := pkgView.CreateViewTable(ctx, view.TableName(), view.Spec.Columns); err != nil {
 				return fmt.Errorf("failed to create view table: %w", err)
 			}
-
-			if err := persistViewData(ctx, view, result); err != nil {
-				return err
-			}
-
-			if err := updateViewLastRan(ctx, string(view.GetUID())); err != nil {
-				return err
-			}
-
-			return nil
-		})
-		if err != nil {
-			return result, err
 		}
+
+		if err := persistViewData(ctx, view, result); err != nil {
+			return err
+		}
+
+		if err := updateViewLastRan(ctx, string(view.GetUID())); err != nil {
+			return err
+		}
+
+		return nil
+	})
+	if err != nil {
+		return result, err
 	}
 
 	if !includeRows {
@@ -253,8 +253,10 @@ func persistViewData(ctx context.Context, view *v1.View, result *api.ViewResult)
 	tableName := view.TableName()
 
 	// Save view rows to the dedicated table
-	if err := pkgView.InsertViewRows(ctx, tableName, result.Columns, result.Rows); err != nil {
-		return fmt.Errorf("failed to insert view rows: %w", err)
+	if view.HasTable() {
+		if err := pkgView.InsertViewRows(ctx, tableName, result.Columns, result.Rows); err != nil {
+			return fmt.Errorf("failed to insert view rows: %w", err)
+		}
 	}
 
 	// Save panel results if any exist
