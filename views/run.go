@@ -94,7 +94,7 @@ func Run(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 
 		var rows []pkgView.Row
 		for _, result := range mergedData {
-			row, err := applyMapping(result, view.Spec.Columns, view.Spec.Mapping)
+			row, err := applyMapping(ctx, result, view.Spec.Columns, view.Spec.Mapping)
 			if err != nil {
 				return nil, ctx.Oops(dutyAPI.EINVALID).Wrapf(err, "failed to apply view mapping")
 			}
@@ -115,7 +115,7 @@ func Run(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 }
 
 // applyMapping applies CEL expression mappings to data
-func applyMapping(data map[string]any, columnDefs []pkgView.ColumnDef, mapping map[string]types.CelExpression) (pkgView.Row, error) {
+func applyMapping(ctx context.Context, data map[string]any, columnDefs []pkgView.ColumnDef, mapping map[string]types.CelExpression) (pkgView.Row, error) {
 	var row pkgView.Row
 	rowProperties := map[string]any{}
 
@@ -156,7 +156,7 @@ func applyMapping(data map[string]any, columnDefs []pkgView.ColumnDef, mapping m
 
 		row = append(row, rowValue)
 
-		if attributes, err := columnAttributes(columnDef, env); err != nil {
+		if attributes, err := columnAttributes(ctx, columnDef, env); err != nil {
 			return nil, fmt.Errorf("failed to evaluate attributes for column %s: %w", columnDef.Name, err)
 		} else if len(attributes) > 0 {
 			rowProperties[columnDef.Name] = attributes
@@ -172,7 +172,7 @@ func applyMapping(data map[string]any, columnDefs []pkgView.ColumnDef, mapping m
 	return row, nil
 }
 
-func columnAttributes(columnDef pkgView.ColumnDef, env map[string]any) (map[string]any, error) {
+func columnAttributes(ctx context.Context, columnDef pkgView.ColumnDef, env map[string]any) (map[string]any, error) {
 	attributes := map[string]any{}
 	if columnDef.Icon != nil {
 		icon, err := types.CelExpression(*columnDef.Icon).Eval(env)
@@ -184,7 +184,7 @@ func columnAttributes(columnDef pkgView.ColumnDef, env map[string]any) (map[stri
 	}
 
 	if columnDef.URL != nil {
-		value, err := columnDef.URL.Eval(env)
+		value, err := columnDef.URL.Eval(ctx, env)
 		if err != nil {
 			return nil, fmt.Errorf("failed to evaluate URL for column %s: %w", columnDef.Name, err)
 		}

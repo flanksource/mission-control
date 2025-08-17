@@ -33,21 +33,29 @@ spec:
     - name: name
       type: string
       description: The name of the pipeline.
+      filter:
+        type: multiselect
     - name: repository
       type: string
       description: The repository of the pipeline.
+      filter:
+        type: multiselect
     - name: lastRun
       type: datetime
       description: The namespace name.
     - name: lastRunBy
       type: string
       description: The chart name.
+      filter:
+        type: multiselect
     - name: duration
       type: duration
       description: The duration of the pipeline.
     - name: status
       type: status
       description: The status of the pipeline.
+      filter:
+        type: multiselect
   queries:
     workflows:
       changes:
