@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/flanksource/duty/connection"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/dataquery"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
@@ -118,9 +119,10 @@ func TestApplyMapping(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
+		ctx := context.New()
 		t.Run(tc.name, func(t *testing.T) {
 			g := NewWithT(t)
-			row, err := applyMapping(tc.data, tc.columns, tc.mapping)
+			row, err := applyMapping(ctx, tc.data, tc.columns, tc.mapping)
 			g.Expect(err).ToNot(HaveOccurred())
 			g.Expect(pkgView.Row(row)).To(Equal(tc.expected))
 		})
