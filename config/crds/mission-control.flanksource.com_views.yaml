@@ -159,7 +159,11 @@ spec:
                       description: Link to various mission control components.
                       properties:
                         config:
-                          description: ID of the config or search query.
+                          description: |-
+                            Cel expression that evaluates to the id of the config or search query.
+                            Example:
+                            - uuid: row.id
+                            - search term:  f("name=$(tags.namespace) tags.cluster=$(tags.cluster) type=Kubernetes::Namespace", row)
                           type: string
                         view:
                           description: Link to a view.
