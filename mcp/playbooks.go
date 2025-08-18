@@ -116,51 +116,10 @@ type playbookWithParams struct {
 	Params    []playbookParams
 }
 
-func toPlaybookWithParams(pb models.Playbook) (playbookWithParams, error) {
-	var parsedSpec v1.PlaybookSpec
-	if err := json.Unmarshal(pb.Spec, &parsedSpec); err != nil {
-		return playbookWithParams{}, err
-	}
-	var params []playbookParams
-	for _, param := range parsedSpec.Parameters {
-		params = append(params, playbookParams{
-			Name: param.Name,
-			Type: string(param.Type),
-		})
-	}
-
-	return playbookWithParams{
-		ID:        pb.ID,
-		Name:      pb.Name,
-		Namespace: pb.Namespace,
-		Params:    params,
-	}, nil
-}
-
 func playbookListToolHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	ctx, err := getDutyCtx(goctx)
+	jsonData, err := json.Marshal(currentPlaybookTools)
 	if err != nil {
-		return nil, err
-	}
-
-	var pbs []models.Playbook
-	err = ctx.DB().Where("deleted_at IS NULL").Find(&pbs).Error
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	var allPlaybooks []playbookWithParams
-	for _, pb := range pbs {
-		pbWithParams, err := toPlaybookWithParams(pb)
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
-		allPlaybooks = append(allPlaybooks, pbWithParams)
-	}
-
-	jsonData, err := json.Marshal(allPlaybooks)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return mcp.NewToolResultError(err.Error()), err
 	}
 	return mcp.NewToolResultText(string(jsonData)), nil
 }
