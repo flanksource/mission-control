@@ -82,7 +82,7 @@ func healthCheckRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*m
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to call health check URL: %v", err)), nil
 	}
 
-	resp, err := http.NewClient().R(ctx).Get(endpoint)
+	resp, err := http.NewClient().R(ctx).Post(endpoint, nil)
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to call health check URL: %v", err)), nil
 	}
