@@ -50,7 +50,7 @@ func checkStatusHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	limit := req.GetInt("limit", 20)
+	limit := req.GetInt("limit", 30)
 
 	var checkStatuses []models.CheckStatus
 	err = ctx.DB().Where("check_id = ?", checkID).Order("time DESC").Limit(limit).Find(&checkStatuses).Error
@@ -105,9 +105,7 @@ func listAllChecksHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mc
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	limit := req.GetInt("limit", -1)
-
-	checks, err := query.FindChecks(ctx, limit, types.ResourceSelector{})
+	checks, err := query.FindChecks(ctx, -1, types.ResourceSelector{})
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -198,7 +196,7 @@ func registerHealthChecks(s *server.MCPServer) {
 	s.AddTool(getCheckStatusTool, checkStatusHandler)
 
 	healthCheckRunTool := mcp.NewTool("health_check_run",
-		mcp.WithDescription("Run a health check by calling example.com/run/check/<check_id>"),
+		mcp.WithDescription("Run any health check instantly"),
 		mcp.WithString("id",
 			mcp.Required(),
 			mcp.Description("Health check ID to run"),
@@ -209,7 +207,6 @@ func registerHealthChecks(s *server.MCPServer) {
 	listAllChecksTool := mcp.NewTool("list_all_checks",
 		mcp.WithDescription("List all health checks"),
 		mcp.WithReadOnlyHintAnnotation(true),
-		mcp.WithNumber("limit", mcp.Description("Number of checks to return")),
 	)
 	s.AddTool(listAllChecksTool, listAllChecksHandler)
 }
