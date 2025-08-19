@@ -15,7 +15,6 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/playbook"
-	"github.com/google/uuid"
 	"github.com/invopop/jsonschema"
 	"github.com/labstack/echo/v4"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -102,18 +101,6 @@ func playbookRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 	return mcp.NewToolResultText(string(jsonData)), nil
-}
-
-type playbookParams struct {
-	Name string
-	Type string
-}
-
-type playbookWithParams struct {
-	ID        uuid.UUID
-	Name      string
-	Namespace string
-	Params    []playbookParams
 }
 
 func playbookListToolHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
