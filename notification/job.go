@@ -13,9 +13,6 @@ import (
 	"github.com/flanksource/duty/job"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
-	"github.com/flanksource/incident-commander/api"
-	v1 "github.com/flanksource/incident-commander/api/v1"
-	"github.com/flanksource/incident-commander/db"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"gorm.io/gorm"
@@ -24,6 +21,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/flanksource/incident-commander/api"
+	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/db"
 )
 
 var CRDStatusUpdateQueue *collections.Queue[string]
@@ -465,7 +466,7 @@ func triggerIncrementalScrape(ctx context.Context, configID string) error {
 	}
 
 	onConflictClause := clause.OnConflict{
-		Columns: []clause.Column{{Name: "name"}, {Name: "properties"}},
+		Columns: models.EventQueueUniqueConstraint(),
 		DoUpdates: clause.Assignments(map[string]any{
 			"created_at": gorm.Expr("CURRENT_TIMESTAMP"),
 		}),
