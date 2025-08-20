@@ -67,6 +67,12 @@ func (h ClerkHandler) parseJWTToken(token string) (jwt.MapClaims, error) {
 	return claims, err
 }
 
+type AuthResult struct {
+	User      *models.Person
+	SessionID string
+	Error     error
+}
+
 func (h ClerkHandler) Session(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		if canSkipAuth(c) {
@@ -75,61 +81,16 @@ func (h ClerkHandler) Session(next echo.HandlerFunc) echo.HandlerFunc {
 
 		ctx := c.Request().Context().(context.Context)
 
-		var (
-			user   *models.Person
-			sessID string
-			err    error
-		)
-
 		// Agents use basic auth with `token:<access_token>` format
-		if username, password, ok := c.Request().BasicAuth(); ok {
-			if strings.ToLower(username) != "token" {
-				return c.String(http.StatusUnauthorized, "Unauthorized: invalid username for basic auth")
+		authResult := h.authenticateRequest(ctx, c)
+		if err := authResult.Error; err != nil {
+			// Check if response is set, then return that as error
+			if c.Response().Committed {
+				return err
 			}
-			accessToken, err := getAccessToken(ctx, password)
-			if err != nil {
-				if errors.Is(err, errInvalidTokenFormat) || errors.Is(err, errTokenExpired) {
-					ctx.GetSpan().RecordError(err)
-					return c.String(http.StatusUnauthorized, fmt.Sprintf("Unauthorized: %s", err.Error()))
-				}
-				ctx.GetSpan().RecordError(fmt.Errorf("error fetching access_token: %w", err))
-				return c.String(http.StatusInternalServerError, "server error while fetching access token")
-			}
-			if accessToken == nil {
-				ctx.GetSpan().RecordError(fmt.Errorf("access token not found"))
-				return c.String(http.StatusUnauthorized, "Unauthorized: access token not found")
-			}
-
-			user, sessID, err = h.getUserFromAccessToken(ctx, accessToken)
-			if err != nil {
-				logger.Errorf("Error fetching user from access token: %v", err)
-				return c.String(http.StatusUnauthorized, "Unauthorized")
-			}
-
-		} else {
-			// Extract session token from Authorization header
-			sessionToken := c.Request().Header.Get(echo.HeaderAuthorization)
-			sessionToken = strings.TrimSpace(strings.TrimPrefix(sessionToken, "Bearer "))
-			if sessionToken == "" {
-				// Check for `__session` cookie
-				sessionTokenCookie, err := c.Request().Cookie(clerkSessionCookie)
-				if err != nil {
-					// Cookie not found
-					return c.String(http.StatusUnauthorized, "Unauthorized")
-				}
-				sessionToken = sessionTokenCookie.Value
-			}
-
-			if sessionToken == "" {
-				return c.String(http.StatusUnauthorized, "Unauthorized")
-			}
-
-			user, sessID, err = h.getUserFromSessionToken(ctx, sessionToken)
-			if err != nil {
-				logger.Errorf("Error fetching user from clerk: %v", err)
-				return c.String(http.StatusUnauthorized, "Unauthorized")
-			}
+			return c.String(http.StatusUnauthorized, "Unauthorized")
 		}
+		user, sessID := authResult.User, authResult.SessionID
 
 		// This is a catch-all if user is unset
 		// In normal scenarios either the user will be set via session or token
@@ -154,34 +115,34 @@ func (h ClerkHandler) Session(next echo.HandlerFunc) echo.HandlerFunc {
 	}
 }
 
-func (h *ClerkHandler) getUserFromAccessToken(ctx context.Context, accessToken *models.AccessToken) (*models.Person, string, error) {
+func (h *ClerkHandler) getUserFromAccessToken(ctx context.Context, accessToken *models.AccessToken) AuthResult {
 	sessionID := accessToken.ID.String()
 	if user, exists := h.userCache.Get(sessionID); exists {
-		return user.(*models.Person), sessionID, nil
+		return AuthResult{User: user.(*models.Person), SessionID: sessionID}
 	}
 
 	dbUser, err := db.GetUserByID(ctx, accessToken.PersonID.String())
 	if err != nil {
-		return nil, "", fmt.Errorf("error fetching user by id[%s]: %w", accessToken.PersonID, err)
+		return AuthResult{Error: fmt.Errorf("error fetching user by id[%s]: %w", accessToken.PersonID, err)}
 	}
 
 	h.userCache.SetDefault(sessionID, &dbUser)
-	return &dbUser, sessionID, nil
+	return AuthResult{User: &dbUser, SessionID: sessionID}
 }
 
-func (h *ClerkHandler) getUserFromSessionToken(ctx context.Context, sessionToken string) (*models.Person, string, error) {
+func (h *ClerkHandler) getUserFromSessionToken(ctx context.Context, sessionToken string) AuthResult {
 	claims, err := h.parseJWTToken(sessionToken)
 	if err != nil {
-		return nil, "", err
+		return AuthResult{Error: err}
 	}
 	sessionID := fmt.Sprint(claims["sid"])
 
 	if user, exists := h.userCache.Get(sessionID); exists {
-		return user.(*models.Person), sessionID, nil
+		return AuthResult{User: user.(*models.Person), SessionID: sessionID}
 	}
 
 	if fmt.Sprint(claims["org_id"]) != h.orgID {
-		return nil, "", fmt.Errorf("organization id does not match")
+		return AuthResult{Error: fmt.Errorf("organization id does not match")}
 	}
 
 	user := models.Person{
@@ -192,17 +153,17 @@ func (h *ClerkHandler) getUserFromSessionToken(ctx context.Context, sessionToken
 	}
 	dbUser, err := h.createDBUserIfNotExists(ctx, user)
 	if err != nil {
-		return nil, "", err
+		return AuthResult{Error: err}
 	}
 
 	// If session expires, and clerk role is different from our rbac
 	// we update the rbac
 	if err := h.updateRole(dbUser.ID.String(), fmt.Sprint(claims["role"])); err != nil {
-		return nil, "", err
+		return AuthResult{Error: err}
 	}
 
 	h.userCache.SetDefault(sessionID, &dbUser)
-	return &dbUser, sessionID, nil
+	return AuthResult{User: &dbUser, SessionID: sessionID}
 }
 
 func (h *ClerkHandler) createDBUserIfNotExists(ctx context.Context, user models.Person) (models.Person, error) {
@@ -253,4 +214,92 @@ func (ClerkHandler) updateRole(userID, clerkRole string) error {
 	}
 
 	return nil
+}
+
+// authenticateRequest handles all authentication methods and returns the authenticated user
+func (h ClerkHandler) authenticateRequest(ctx context.Context, c echo.Context) AuthResult {
+	// Try basic auth first
+	if authResult := h.authenticateBasicAuth(ctx, c); authResult.Error != nil || authResult.User != nil {
+		return authResult
+	}
+
+	// Try bearer token or cookie authentication
+	return h.authenticateBearerOrCookie(ctx, c)
+}
+
+func (h ClerkHandler) authenticateBasicAuth(ctx context.Context, c echo.Context) AuthResult {
+	username, password, ok := c.Request().BasicAuth()
+	if !ok {
+		return AuthResult{}
+	}
+
+	if strings.ToLower(username) != "token" {
+		return AuthResult{Error: c.String(http.StatusUnauthorized, "Unauthorized: invalid username for basic auth")}
+	}
+
+	return h.authenticateWithToken(ctx, c, password)
+}
+
+// authenticateBearerOrCookie handles regular user authentication
+func (h ClerkHandler) authenticateBearerOrCookie(ctx context.Context, c echo.Context) AuthResult {
+	sessionToken := h.extractSessionToken(c)
+	if sessionToken == "" {
+		return AuthResult{Error: c.String(http.StatusUnauthorized, "Unauthorized")}
+	}
+
+	// Check if it's our custom token format (4 dots) or Clerk JWT (2 dots)
+	if strings.Count(sessionToken, ".") == 4 {
+		return h.authenticateWithToken(ctx, c, sessionToken)
+	}
+
+	// Standard Clerk JWT
+	authResult := h.getUserFromSessionToken(ctx, sessionToken)
+	if authResult.Error != nil {
+		logger.Errorf("Error fetching user from clerk: %v", authResult.Error)
+		return AuthResult{Error: c.String(http.StatusUnauthorized, "Unauthorized")}
+	}
+
+	return authResult
+}
+
+// authenticateWithToken handles authentication using our custom access token format
+func (h ClerkHandler) authenticateWithToken(ctx context.Context, c echo.Context, token string) AuthResult {
+	accessToken, err := getAccessToken(ctx, token)
+	if err != nil {
+		if errors.Is(err, errInvalidTokenFormat) || errors.Is(err, errTokenExpired) {
+			ctx.GetSpan().RecordError(err)
+			return AuthResult{Error: c.String(http.StatusUnauthorized, fmt.Sprintf("Unauthorized: %s", err.Error()))}
+		}
+
+		ctx.GetSpan().RecordError(fmt.Errorf("error fetching access_token: %w", err))
+		return AuthResult{Error: c.String(http.StatusInternalServerError, "server error while fetching access token")}
+	}
+
+	if accessToken == nil {
+		ctx.GetSpan().RecordError(fmt.Errorf("access token not found"))
+		return AuthResult{Error: c.String(http.StatusUnauthorized, "Unauthorized: access token not found")}
+	}
+
+	authResult := h.getUserFromAccessToken(ctx, accessToken)
+	if authResult.Error != nil {
+		logger.Errorf("Error fetching user from access token: %v", authResult.Error)
+		return AuthResult{Error: c.String(http.StatusUnauthorized, "Unauthorized")}
+	}
+
+	return authResult
+}
+
+// extractSessionToken retrieves the token from either the Authorization header or cookie
+func (h ClerkHandler) extractSessionToken(c echo.Context) string {
+	// Try Bearer Authorization header first
+	if token, ok := extractBearerAuthToken(c.Request().Header); ok {
+		return token
+	}
+
+	// Fall back to session cookie
+	if cookie, err := c.Request().Cookie(clerkSessionCookie); err == nil {
+		return cookie.Value
+	}
+
+	return ""
 }
