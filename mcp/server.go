@@ -29,6 +29,7 @@ func Server(ctx context.Context) http.HandlerFunc {
 	registerHealthChecks(s)
 	registerPlaybook(ctx, s)
 	registerViews(s)
+
 	logger.Infof("Registering /mcp routes")
 
 	httpServer := server.NewStreamableHTTPServer(s,

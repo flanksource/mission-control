@@ -105,7 +105,7 @@ func listAllChecksHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mc
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	checks, err := query.FindChecks(ctx, -1, types.ResourceSelector{})
+	checks, err := query.FindChecks(ctx, -1, types.ResourceSelector{Search: "limit=-1"})
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}

@@ -15,7 +15,6 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/playbook"
-	"github.com/google/uuid"
 	"github.com/invopop/jsonschema"
 	"github.com/labstack/echo/v4"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -104,63 +103,10 @@ func playbookRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.
 	return mcp.NewToolResultText(string(jsonData)), nil
 }
 
-type playbookParams struct {
-	Name string
-	Type string
-}
-
-type playbookWithParams struct {
-	ID        uuid.UUID
-	Name      string
-	Namespace string
-	Params    []playbookParams
-}
-
-func toPlaybookWithParams(pb models.Playbook) (playbookWithParams, error) {
-	var parsedSpec v1.PlaybookSpec
-	if err := json.Unmarshal(pb.Spec, &parsedSpec); err != nil {
-		return playbookWithParams{}, err
-	}
-	var params []playbookParams
-	for _, param := range parsedSpec.Parameters {
-		params = append(params, playbookParams{
-			Name: param.Name,
-			Type: string(param.Type),
-		})
-	}
-
-	return playbookWithParams{
-		ID:        pb.ID,
-		Name:      pb.Name,
-		Namespace: pb.Namespace,
-		Params:    params,
-	}, nil
-}
-
 func playbookListToolHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	ctx, err := getDutyCtx(goctx)
+	jsonData, err := json.Marshal(currentPlaybookTools)
 	if err != nil {
-		return nil, err
-	}
-
-	var pbs []models.Playbook
-	err = ctx.DB().Where("deleted_at IS NULL").Find(&pbs).Error
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	var allPlaybooks []playbookWithParams
-	for _, pb := range pbs {
-		pbWithParams, err := toPlaybookWithParams(pb)
-		if err != nil {
-			return mcp.NewToolResultError(err.Error()), nil
-		}
-		allPlaybooks = append(allPlaybooks, pbWithParams)
-	}
-
-	jsonData, err := json.Marshal(allPlaybooks)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return mcp.NewToolResultError(err.Error()), err
 	}
 	return mcp.NewToolResultText(string(jsonData)), nil
 }
