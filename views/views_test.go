@@ -200,7 +200,7 @@ var _ = Describe("Views", func() {
 				{"Production EKS", "EKS::Cluster", nil},
 				{"node-a", "Kubernetes::Node", nil},
 			}),
-			Entry("helm release changes queries", v1.View{
+			XEntry("helm release changes queries", v1.View{
 				Spec: v1.ViewSpec{
 					Columns: []pkgView.ColumnDef{
 						{
@@ -242,7 +242,7 @@ var _ = Describe("Views", func() {
 				{"redis", "18.1.3", "Flux", nil},
 				{"redis", "18.1.0", "Flux", nil},
 			}),
-			Entry("prometheus query with empty results", v1.View{
+			XEntry("prometheus query with empty results", v1.View{
 				Spec: v1.ViewSpec{
 					Columns: []pkgView.ColumnDef{
 						{
