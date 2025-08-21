@@ -4,7 +4,6 @@ import (
 	gocontext "context"
 	"encoding/json"
 	"fmt"
-	"slices"
 	"strings"
 	"time"
 
@@ -199,10 +198,7 @@ func syncPlaybooksAsTools(ctx context.Context, s *server.MCPServer) error {
 			return fmt.Errorf("error marshalling root json schema: %w", err)
 		}
 
-		toolName := strings.ToLower(strings.ReplaceAll(lo.CoalesceOrEmpty(pb.Title, pb.Name), " ", "-"))
-		if slices.Contains(newPlaybookTools, toolName) {
-			toolName = strings.ToLower(fmt.Sprintf("%s_%s_%s", pb.Name, pb.Namespace, pb.Category))
-		}
+		toolName := generatePlaybookToolName(pb)
 		s.AddTool(mcp.NewToolWithRawSchema(toolName, pb.Description, rj), playbookRunHandler)
 		newPlaybookTools = append(newPlaybookTools, toolName)
 	}
@@ -213,6 +209,12 @@ func syncPlaybooksAsTools(ctx context.Context, s *server.MCPServer) error {
 	currentPlaybookTools = newPlaybookTools[:]
 
 	return nil
+}
+
+func generatePlaybookToolName(pb models.Playbook) string {
+	name := strings.ToLower(strings.ReplaceAll(lo.CoalesceOrEmpty(pb.Title, pb.Name), " ", "-"))
+	toolName := strings.ToLower(fmt.Sprintf("%s_%s_%s", name, pb.Namespace, pb.Category))
+	return fixMCPToolNameIfRequired(toolName)
 }
 
 func registerPlaybook(ctx context.Context, s *server.MCPServer) {
@@ -253,13 +255,4 @@ func registerPlaybook(ctx context.Context, s *server.MCPServer) {
 			time.Sleep(1 * time.Hour)
 		}
 	}()
-}
-
-func extractID(uri string) string {
-	// Extract ID from "users://123" format
-	parts := strings.Split(uri, "://")
-	if len(parts) == 2 {
-		return parts[1]
-	}
-	return ""
 }

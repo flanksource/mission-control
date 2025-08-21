@@ -242,7 +242,7 @@ var _ = Describe("Views", func() {
 				{"redis", "18.1.3", "Flux", nil},
 				{"redis", "18.1.0", "Flux", nil},
 			}),
-			XEntry("prometheus query with empty results", v1.View{
+			PEntry("prometheus query with empty results", v1.View{
 				Spec: v1.ViewSpec{
 					Columns: []pkgView.ColumnDef{
 						{
