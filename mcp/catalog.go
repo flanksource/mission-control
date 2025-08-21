@@ -9,10 +9,12 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
+	"github.com/flanksource/incident-commander/db"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/samber/lo"
 )
 
 func searchCatalogHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -30,10 +32,11 @@ func searchCatalogHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mc
 	var cis any
 	switch req.Params.Name {
 	case "describe_config":
-		cis, err = query.FindConfigItemSummaryByResourceSelector(ctx, limit, types.ResourceSelector{Search: q})
+		cis, err = queryConfigItemSummary(ctx, limit, q)
 	default:
 		cis, err = query.FindConfigsByResourceSelector(ctx, limit, types.ResourceSelector{Search: q})
 	}
+
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -46,6 +49,32 @@ func searchCatalogHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mc
 	return mcp.NewToolResultText(string(jsonData)), nil
 }
 
+type ConfigDescription struct {
+	models.ConfigItemSummary
+	AvailableTools []string `json:"available_tools"`
+}
+
+func queryConfigItemSummary(ctx context.Context, limit int, q string) ([]ConfigDescription, error) {
+	configs, err := query.FindConfigItemSummaryByResourceSelector(ctx, limit, types.ResourceSelector{Search: q})
+	if err != nil {
+		return nil, err
+	}
+	var cds []ConfigDescription
+	for _, c := range configs {
+		_, pbs, err := db.FindPlaybooksForConfig(ctx, c.ToConfigItem())
+		if err != nil {
+			return nil, err
+		}
+
+		cds = append(cds, ConfigDescription{
+			ConfigItemSummary: c,
+			AvailableTools: lo.Map(pbs, func(p *models.Playbook, _ int) string {
+				return generatePlaybookToolName(lo.FromPtr(p))
+			}),
+		})
+	}
+	return cds, nil
+}
 func searchConfigChangesHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	q, err := req.RequireString("query")
 	if err != nil {
@@ -258,6 +287,9 @@ func registerCatalog(s *server.MCPServer) {
 	describeConfigDescription := `
 	This tool should only be called when "describe" is explicitly used, for all other purposes catalog_search tool should be used.
 	Ideally, when prompted to describe configs use either the previous query or the config ids in the query field in csv format.
+
+	Each config item returned will have a field "available_tools", which refers to all the existing tools in the current mcp server. We can call
+	those tools with the param config_id=<id> and ask the user for any other parameters if the input schema requires any.
 
 	Example query: id=f47ac10b-58cc-4372-a567-0e02b2c3d479,6ba7b810-9dad-11d1-80b4-00c04fd430c8,a1b2c3d4-e5f6-7890-abcd-ef1234567890
 	`
