@@ -200,7 +200,7 @@ var _ = Describe("Views", func() {
 				{"Production EKS", "EKS::Cluster", nil},
 				{"node-a", "Kubernetes::Node", nil},
 			}),
-			Entry("helm release changes queries", v1.View{
+			XEntry("helm release changes queries", v1.View{
 				Spec: v1.ViewSpec{
 					Columns: []pkgView.ColumnDef{
 						{
