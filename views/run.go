@@ -2,6 +2,7 @@ package views
 
 import (
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/flanksource/commons/duration"
@@ -146,8 +147,27 @@ func applyMapping(ctx context.Context, data map[string]any, columnDefs []pkgView
 
 				rowValue = time.Duration(v)
 
-			case pkgView.ColumnTypeGauge:
-				rowValue = types.JSON(value)
+			case pkgView.ColumnTypeBytes:
+				if value == "" {
+					rowValue = int64(0)
+				} else {
+					v, err := strconv.ParseInt(value, 10, 64)
+					if err != nil {
+						return nil, fmt.Errorf("failed to parse as int64 (%s): %w", value, err)
+					}
+					rowValue = int64(v)
+				}
+
+			case pkgView.ColumnTypeMillicore, pkgView.ColumnTypeGauge:
+				if value == "" {
+					rowValue = float64(0)
+				} else {
+					v, err := strconv.ParseFloat(value, 64)
+					if err != nil {
+						return nil, fmt.Errorf("failed to parse as float (%s): %w", value, err)
+					}
+					rowValue = float64(v)
+				}
 
 			default:
 				rowValue = value
