@@ -78,49 +78,11 @@ func (k *kratosMiddleware) validateSession(ctx context.Context, r *http.Request)
 	}
 
 	if username, password, ok := r.BasicAuth(); ok {
-		if strings.ToLower(username) == "token" {
-			accessToken, err := getAccessToken(ctx, password)
-			if err != nil {
-				return nil, err
-			} else if accessToken == nil {
-				return &client.Session{Active: lo.ToPtr(false)}, nil
-			}
+		return k.basicAuthLogin(ctx, username, password)
+	}
 
-			traits := map[string]any{
-				"name": map[string]string{
-					"first": accessToken.Name,
-					"last":  "",
-				},
-			}
-
-			var agent models.Agent
-			if err := ctx.DB().Where("person_id = ?", accessToken.PersonID.String()).Find(&agent).Error; err != nil {
-				return nil, err
-			}
-			if agent.ID != uuid.Nil {
-				traits["agent"] = agent
-			}
-
-			s := &client.Session{
-				Id:        uuid.NewString(),
-				Active:    lo.ToPtr(true),
-				ExpiresAt: accessToken.ExpiresAt,
-				Identity: client.Identity{
-					Id:     accessToken.PersonID.String(),
-					Traits: traits,
-				},
-			}
-
-			return s, nil
-		}
-
-		sess, err := k.kratosLoginWithCache(r.Context(), username, password)
-		if err != nil {
-			logger.V(4).Infof("Login failed: %v", err)
-			return nil, fmt.Errorf("failed to login: %w", err)
-		}
-
-		return sess, nil
+	if bearerToken, ok := extractBearerAuthToken(r.Header); ok {
+		return k.basicAuthLogin(ctx, "token", bearerToken)
 	}
 
 	cookie, err := r.Cookie("ory_kratos_session")
@@ -138,6 +100,53 @@ func (k *kratosMiddleware) validateSession(ctx context.Context, r *http.Request)
 	}
 
 	return session, nil
+}
+
+func (k *kratosMiddleware) basicAuthLogin(ctx context.Context, username, password string) (*client.Session, error) {
+	if strings.ToLower(username) == "token" {
+		accessToken, err := getAccessToken(ctx, password)
+		if err != nil {
+			return nil, err
+		} else if accessToken == nil {
+			return &client.Session{Active: lo.ToPtr(false)}, nil
+		}
+
+		traits := map[string]any{
+			"name": map[string]string{
+				"first": accessToken.Name,
+				"last":  "",
+			},
+		}
+
+		var agent models.Agent
+		if err := ctx.DB().Where("person_id = ?", accessToken.PersonID.String()).Find(&agent).Error; err != nil {
+			return nil, err
+		}
+		if agent.ID != uuid.Nil {
+			traits["agent"] = agent
+		}
+
+		s := &client.Session{
+			Id:        uuid.NewString(),
+			Active:    lo.ToPtr(true),
+			ExpiresAt: accessToken.ExpiresAt,
+			Identity: client.Identity{
+				Id:     accessToken.PersonID.String(),
+				Traits: traits,
+			},
+		}
+
+		return s, nil
+	}
+
+	sess, err := k.kratosLoginWithCache(ctx, username, password)
+	if err != nil {
+		logger.V(4).Infof("Login failed: %v", err)
+		return nil, fmt.Errorf("failed to login: %w", err)
+	}
+
+	return sess, nil
+
 }
 
 func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
