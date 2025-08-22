@@ -248,3 +248,14 @@ func getAccessToken(ctx context.Context, token string) (*models.AccessToken, err
 
 	return &accessToken, nil
 }
+
+func extractBearerAuthToken(header http.Header) (string, bool) {
+	auth := header.Get(echo.HeaderAuthorization)
+	if auth == "" {
+		return "", false
+	}
+	if !strings.HasPrefix(auth, "Bearer ") {
+		return "", false
+	}
+	return strings.TrimPrefix(auth, "Bearer "), true
+}
