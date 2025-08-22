@@ -4,6 +4,8 @@ import (
 	gocontext "context"
 	"encoding/json"
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 	"time"
 
@@ -70,7 +72,12 @@ func playbookRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	playbookID := strings.TrimPrefix(req.Params.Name, "playbook_exec_")
+	playbookToolName := req.Params.Name
+	playbookID := currentPlaybookTools[playbookToolName]
+	if playbookID == "" {
+		return mcp.NewToolResultError(fmt.Sprintf("tool[%s] is not associated with any playbok", playbookToolName)), nil
+	}
+
 	pb, err := query.FindPlaybook(ctx, playbookID)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -103,7 +110,7 @@ func playbookRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.
 }
 
 func playbookListToolHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	jsonData, err := json.Marshal(currentPlaybookTools)
+	jsonData, err := json.Marshal(slices.Collect(maps.Keys(currentPlaybookTools)))
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), err
 	}
@@ -138,7 +145,8 @@ func playbookResourceHandler(goctx gocontext.Context, req mcp.ReadResourceReques
 	}, nil
 }
 
-var currentPlaybookTools []string
+// ToolName -> Playbook ID
+var currentPlaybookTools = make(map[string]string)
 
 func syncPlaybooksAsTools(ctx context.Context, s *server.MCPServer) error {
 	playbooks, err := gorm.G[models.Playbook](ctx.DB()).Where("deleted_at IS NULL").Find(ctx)
@@ -201,12 +209,17 @@ func syncPlaybooksAsTools(ctx context.Context, s *server.MCPServer) error {
 		toolName := generatePlaybookToolName(pb)
 		s.AddTool(mcp.NewToolWithRawSchema(toolName, pb.Description, rj), playbookRunHandler)
 		newPlaybookTools = append(newPlaybookTools, toolName)
+		currentPlaybookTools[toolName] = pb.GetID()
 	}
 
 	// Delete old playbooks and update currentPlaybookTools list
-	_, playbookToolsToDelete := lo.Difference(newPlaybookTools, currentPlaybookTools)
+	currentToolNames := slices.Collect(maps.Keys(currentPlaybookTools))
+	_, playbookToolsToDelete := lo.Difference(newPlaybookTools, currentToolNames)
 	s.DeleteTools(playbookToolsToDelete...)
-	currentPlaybookTools = newPlaybookTools[:]
+	// Remove from currentPlaybookTools
+	maps.DeleteFunc(currentPlaybookTools, func(k, v string) bool {
+		return slices.Contains(playbookToolsToDelete, k)
+	})
 
 	return nil
 }
