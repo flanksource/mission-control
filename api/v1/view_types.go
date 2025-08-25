@@ -82,8 +82,10 @@ type ViewSpec struct {
 	//+kubebuilder:validation:Optional
 	Cache ViewCache `json:"cache" yaml:"cache"`
 
-	// Filter parameters for the view
-	Filter []api.ViewFilterParameter `json:"filter,omitempty" yaml:"filter,omitempty"`
+	// Templating parameters for the view data queries.
+	//
+	// These vars are available as `var.<key>` in the data queries.
+	Templating []api.ViewVariable `json:"templating,omitempty" yaml:"templating,omitempty"`
 }
 
 type ViewQueryWithColumnDefs struct {

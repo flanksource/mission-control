@@ -38,15 +38,15 @@ type requestOpt struct {
 	maxAge         *time.Duration
 	refreshTimeout *time.Duration
 	includeRows    bool
-	filters        map[string]string
+	variables      map[string]string
 }
 
-func WithFilter(key, value string) ViewOption {
+func WithVariable(key, value string) ViewOption {
 	return func(c *requestOpt) {
-		if c.filters == nil {
-			c.filters = make(map[string]string)
+		if c.variables == nil {
+			c.variables = make(map[string]string)
 		}
-		c.filters[key] = value
+		c.variables[key] = value
 	}
 }
 
@@ -102,7 +102,10 @@ func ReadOrPopulateViewTable(ctx context.Context, namespace, name string, opts .
 
 	tableName := view.TableName()
 	tableExists := ctx.DB().Migrator().HasTable(tableName)
-	cacheExpired := true // view.CacheExpired(cacheOptions.MaxAge)
+	cacheExpired := view.CacheExpired(cacheOptions.MaxAge)
+
+	// TODO: Remove this (debugging)
+	cacheExpired = true
 
 	if ((view.HasTable() && tableExists) || !view.HasTable()) && !cacheExpired {
 		return readCachedViewData(ctx, view, request.includeRows)
@@ -208,11 +211,11 @@ func readCachedViewData(ctx context.Context, view *v1.View, includeRows bool) (*
 		Panels:  finalPanelResults,
 	}
 
-	for _, filter := range view.Spec.Filter {
+	for _, filter := range view.Spec.Templating {
 		if len(filter.Values) > 0 {
-			result.Filters = append(result.Filters, api.ViewFilterParameterWithOptions{
-				ViewFilterParameter: filter,
-				Options:             filter.Values,
+			result.Filters = append(result.Filters, api.ViewVariableWithOptions{
+				ViewVariable: filter,
+				Options:      filter.Values,
 			})
 		} else if filter.ValueFrom != nil {
 			if !filter.ValueFrom.Config.IsEmpty() {
@@ -224,9 +227,9 @@ func readCachedViewData(ctx context.Context, view *v1.View, includeRows bool) (*
 				values := lo.Map(resources, func(r models.ConfigItem, _ int) string {
 					return lo.FromPtr(r.Name)
 				})
-				result.Filters = append(result.Filters, api.ViewFilterParameterWithOptions{
-					ViewFilterParameter: filter,
-					Options:             values,
+				result.Filters = append(result.Filters, api.ViewVariableWithOptions{
+					ViewVariable: filter,
+					Options:      values,
 				})
 			}
 		}

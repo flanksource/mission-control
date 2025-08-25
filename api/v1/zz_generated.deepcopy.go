@@ -3319,9 +3319,9 @@ func (in *ViewSpec) DeepCopyInto(out *ViewSpec) {
 		}
 	}
 	out.Cache = in.Cache
-	if in.Filter != nil {
-		in, out := &in.Filter, &out.Filter
-		*out = make([]api.ViewFilterParameter, len(*in))
+	if in.Templating != nil {
+		in, out := &in.Templating, &out.Templating
+		*out = make([]api.ViewVariable, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
