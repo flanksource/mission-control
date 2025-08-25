@@ -283,107 +283,6 @@ spec:
                     description: Title of the view to be displayed in the UI
                     type: string
                 type: object
-              filter:
-                description: Filter parameters for the view
-                items:
-                  properties:
-                    default:
-                      description: Default is the default value of the filter.
-                      type: string
-                    key:
-                      description: |-
-                        Key is the unique identifier of the filter.
-                        The filter's value is accessible in the dataquery templates as {{ .filter.key }}.
-                      type: string
-                    label:
-                      description: Label is the human-readable name of the filter.
-                      type: string
-                    type:
-                      description: 'Type is the type of the filter (default: dropdown).'
-                      enum:
-                      - dropdown
-                      - toggle
-                      type: string
-                    valueFrom:
-                      description: ValueFrom is the source of the filter's values.
-                      properties:
-                        config:
-                          properties:
-                            agent:
-                              description: |-
-                                Agent can be the agent id or the name of the agent.
-                                 Additionally, the special "self" value can be used to select resources without an agent.
-                              type: string
-                            cache:
-                              description: |-
-                                Cache directives
-                                 'no-cache' (should not fetch from cache but can be cached)
-                                 'no-store' (should not cache)
-                                 'max-age=X' (cache for X duration)
-                              type: string
-                            fieldSelector:
-                              type: string
-                            health:
-                              description: |-
-                                Health filters resources by the health.
-                                Multiple healths can be provided separated by comma.
-                              type: string
-                            id:
-                              type: string
-                            includeDeleted:
-                              type: boolean
-                            labelSelector:
-                              type: string
-                            limit:
-                              type: integer
-                            name:
-                              type: string
-                            namespace:
-                              type: string
-                            scope:
-                              description: |-
-                                Scope is the reference for parent of the resource to select.
-                                For config items, the scope is the scraper id
-                                For checks, it's canaries and
-                                For components, it's topology.
-                                It can either be a uuid or namespace/name
-                              type: string
-                            search:
-                              description: Search query that applies to the resource
-                                name, tag & labels.
-                              type: string
-                            statuses:
-                              description: Statuses filter resources by the status
-                              items:
-                                type: string
-                              type: array
-                            tagSelector:
-                              type: string
-                            types:
-                              description: Types filter resources by the type
-                              items:
-                                type: string
-                              type: array
-                          type: object
-                      required:
-                      - config
-                      type: object
-                    values:
-                      description: Values is the list of values that the filter can
-                        take.
-                      items:
-                        type: string
-                      type: array
-                  required:
-                  - default
-                  - key
-                  - label
-                  type: object
-                  x-kubernetes-validations:
-                  - message: exactly one of values or valueFrom is required
-                    rule: (has(self.values) && !has(self.valueFrom)) || (!has(self.values)
-                      && has(self.valueFrom))
-                type: array
               mapping:
                 description: Mapping defines how to map query results to view columns
                 type: object
@@ -1018,6 +917,105 @@ spec:
                 description: Queries define the queries and mappings to populate the
                   view
                 type: object
+              templating:
+                description: Templating parameters for the view data queries.
+                items:
+                  description: |-
+                    A variable represents a dynamic parameter that can be substituted into data queries.
+                    Modifying the variable's value will update all elements that reference it.
+                    Variables appear as interactive controls (dropdown menus or text inputs) at the top of the view interface.
+                  properties:
+                    default:
+                      description: Default is the default value of the filter.
+                      type: string
+                    key:
+                      description: |-
+                        Key is the unique identifier of the filter.
+                        The filter's value is accessible in the dataquery templates as {{ .filter.key }}.
+                      type: string
+                    label:
+                      description: Label is the human-readable name of the filter.
+                      type: string
+                    valueFrom:
+                      description: ValueFrom is the source of the filter's values.
+                      properties:
+                        config:
+                          properties:
+                            agent:
+                              description: |-
+                                Agent can be the agent id or the name of the agent.
+                                 Additionally, the special "self" value can be used to select resources without an agent.
+                              type: string
+                            cache:
+                              description: |-
+                                Cache directives
+                                 'no-cache' (should not fetch from cache but can be cached)
+                                 'no-store' (should not cache)
+                                 'max-age=X' (cache for X duration)
+                              type: string
+                            fieldSelector:
+                              type: string
+                            health:
+                              description: |-
+                                Health filters resources by the health.
+                                Multiple healths can be provided separated by comma.
+                              type: string
+                            id:
+                              type: string
+                            includeDeleted:
+                              type: boolean
+                            labelSelector:
+                              type: string
+                            limit:
+                              type: integer
+                            name:
+                              type: string
+                            namespace:
+                              type: string
+                            scope:
+                              description: |-
+                                Scope is the reference for parent of the resource to select.
+                                For config items, the scope is the scraper id
+                                For checks, it's canaries and
+                                For components, it's topology.
+                                It can either be a uuid or namespace/name
+                              type: string
+                            search:
+                              description: Search query that applies to the resource
+                                name, tag & labels.
+                              type: string
+                            statuses:
+                              description: Statuses filter resources by the status
+                              items:
+                                type: string
+                              type: array
+                            tagSelector:
+                              type: string
+                            types:
+                              description: Types filter resources by the type
+                              items:
+                                type: string
+                              type: array
+                          type: object
+                      required:
+                      - config
+                      type: object
+                    values:
+                      description: Values is the list of values that the filter can
+                        take.
+                      items:
+                        type: string
+                      type: array
+                  required:
+                  - default
+                  - key
+                  - label
+                  type: object
+                  x-kubernetes-validations:
+                  - message: exactly one of values or valueFrom is required
+                    rule: (has(self.values) && !has(self.valueFrom)) || (!has(self.values)
+                      && has(self.valueFrom))
+                type: array
             type: object
             x-kubernetes-validations:
             - message: query must be specified

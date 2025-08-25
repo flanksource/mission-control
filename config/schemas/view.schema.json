@@ -645,50 +645,6 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "ViewFilterParameter": {
-      "properties": {
-        "key": {
-          "type": "string"
-        },
-        "label": {
-          "type": "string"
-        },
-        "values": {
-          "items": {
-            "type": "string"
-          },
-          "type": "array"
-        },
-        "valueFrom": {
-          "$ref": "#/$defs/ViewFilterValueFrom"
-        },
-        "default": {
-          "type": "string"
-        },
-        "type": {
-          "type": "string"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object",
-      "required": [
-        "key",
-        "label",
-        "default"
-      ]
-    },
-    "ViewFilterValueFrom": {
-      "properties": {
-        "config": {
-          "$ref": "#/$defs/ResourceSelector"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object",
-      "required": [
-        "config"
-      ]
-    },
     "ViewQueryWithColumnDefs": {
       "properties": {
         "prometheus": {
@@ -742,9 +698,9 @@
         "cache": {
           "$ref": "#/$defs/ViewCache"
         },
-        "filter": {
+        "templating": {
           "items": {
-            "$ref": "#/$defs/ViewFilterParameter"
+            "$ref": "#/$defs/ViewVariable"
           },
           "type": "array"
         }
@@ -783,6 +739,47 @@
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "ViewVariable": {
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "values": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "valueFrom": {
+          "$ref": "#/$defs/ViewVariableValueFrom"
+        },
+        "default": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "key",
+        "label",
+        "default"
+      ]
+    },
+    "ViewVariableValueFrom": {
+      "properties": {
+        "config": {
+          "$ref": "#/$defs/ResourceSelector"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "config"
+      ]
     }
   }
 }

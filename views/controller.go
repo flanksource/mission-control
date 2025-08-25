@@ -61,7 +61,7 @@ func GetViewByNamespaceName(c echo.Context) error {
 }
 
 type viewRequestPostBody struct {
-	Filter map[string]string `json:"filter"`
+	Variables map[string]string `json:"variables"`
 }
 
 func getViewByNamespaceName(ctx context.Context, c echo.Context, namespace, name string) error {
@@ -85,8 +85,8 @@ func getViewByNamespaceName(ctx context.Context, c echo.Context, namespace, name
 			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid request body: %s", err.Error()))
 		}
 
-		for k, v := range request.Filter {
-			opts = append(opts, WithFilter(k, v))
+		for k, v := range request.Variables {
+			opts = append(opts, WithVariable(k, v))
 		}
 	}
 

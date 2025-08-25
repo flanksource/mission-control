@@ -30,8 +30,8 @@ func Run(ctx context.Context, view *v1.View, request *requestOpt) (*api.ViewResu
 		Title:     view.Spec.Display.Title,
 	}
 
-	if len(request.filters) > 0 {
-		st := ctx.NewStructTemplater(map[string]any{"filter": request.filters}, "", nil)
+	if len(request.variables) > 0 {
+		st := ctx.NewStructTemplater(map[string]any{"var": request.variables}, "", nil)
 		if err := st.Walk(&view.Spec.Queries); err != nil {
 			return nil, fmt.Errorf("failed to template queries: %w", err)
 		}
@@ -141,11 +141,11 @@ func Run(ctx context.Context, view *v1.View, request *requestOpt) (*api.ViewResu
 		})
 	}
 
-	for _, filter := range view.Spec.Filter {
+	for _, filter := range view.Spec.Templating {
 		if len(filter.Values) > 0 {
-			output.Filters = append(output.Filters, api.ViewFilterParameterWithOptions{
-				ViewFilterParameter: filter,
-				Options:             filter.Values,
+			output.Filters = append(output.Filters, api.ViewVariableWithOptions{
+				ViewVariable: filter,
+				Options:      filter.Values,
 			})
 		} else if filter.ValueFrom != nil {
 			if !filter.ValueFrom.Config.IsEmpty() {
@@ -157,9 +157,9 @@ func Run(ctx context.Context, view *v1.View, request *requestOpt) (*api.ViewResu
 				values := lo.Map(resources, func(r models.ConfigItem, _ int) string {
 					return lo.FromPtr(r.Name)
 				})
-				output.Filters = append(output.Filters, api.ViewFilterParameterWithOptions{
-					ViewFilterParameter: filter,
-					Options:             values,
+				output.Filters = append(output.Filters, api.ViewVariableWithOptions{
+					ViewVariable: filter,
+					Options:      values,
 				})
 			}
 		}
