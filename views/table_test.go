@@ -7,12 +7,15 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
+	"github.com/flanksource/duty/types"
 	pkgView "github.com/flanksource/duty/view"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"gopkg.in/yaml.v2"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -37,14 +40,15 @@ var _ = Describe("View Database Table", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			// save the results to DB first so ReadOrPopulateViewTable reads them
-			_, err = populateView(DefaultContext, viewObj, false)
+			request := &requestOpt{includeRows: true}
+			_, err = populateView(DefaultContext, viewObj, request)
 			Expect(err).ToNot(HaveOccurred())
 
-			// Verify that lastRan field is populated after PopulateView
+			// Verify that request_last_ran field is populated after PopulateView
 			var dbView models.View
 			err = DefaultContext.DB().Where("name = ? AND namespace = ?", viewObj.Name, viewObj.Namespace).First(&dbView).Error
 			Expect(err).ToNot(HaveOccurred())
-			Expect(dbView.LastRan).ToNot(BeNil(), "lastRan field should be populated after PopulateView")
+			Expect(dbView.RequestLastRan).ToNot(BeNil(), "request_last_ran field should be populated after PopulateView")
 
 			tableName := viewObj.TableName()
 			Expect(DefaultContext.DB().Migrator().HasTable(tableName)).To(BeTrue())
@@ -104,6 +108,168 @@ var _ = Describe("ReadOrPopulateViewTable Cache Control", func() {
 		_, err = ReadOrPopulateViewTable(DefaultContext.WithUser(&dummy.JohnDoe), viewObj.Namespace, viewObj.Name, WithRefreshTimeout(1*time.Microsecond))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("refresh timeout reached. try again"))
+	})
+})
+
+// testViewRequestHelper is a helper function to test view requests with variables
+func testViewRequestHelper(ctx context.Context, viewObj *v1.View, variables map[string]string, expectedRows int) *api.ViewResult {
+	return testViewRequestHelperWithMaxAge(ctx, viewObj, variables, expectedRows, 0)
+}
+
+// testViewRequestHelperWithMaxAge is a helper function with configurable cache max age
+func testViewRequestHelperWithMaxAge(ctx context.Context, viewObj *v1.View, variables map[string]string, expectedRows int, maxAge time.Duration) *api.ViewResult {
+	request := &requestOpt{
+		includeRows: true,
+		variables:   variables,
+	}
+
+	opts := []ViewOption{}
+	for k, v := range variables {
+		opts = append(opts, WithVariable(k, v))
+	}
+	opts = append(opts, WithIncludeRows(true))
+	if maxAge > 0 {
+		opts = append(opts, WithMaxAge(maxAge))
+	}
+
+	result, err := ReadOrPopulateViewTable(ctx, viewObj.GetNamespace(), viewObj.GetName(), opts...)
+	Expect(err).ToNot(HaveOccurred())
+	Expect(result.Rows).To(HaveLen(expectedRows))
+
+	// Verify request_last_ran contains the fingerprint
+	var dbView models.View
+	err = ctx.DB().Where("name = ? AND namespace = ?", viewObj.Name, viewObj.Namespace).First(&dbView).Error
+	Expect(err).ToNot(HaveOccurred())
+	Expect(dbView.RequestLastRan).ToNot(BeNil())
+
+	var requestLastRan map[string]string
+	err = json.Unmarshal(dbView.RequestLastRan, &requestLastRan)
+	Expect(err).ToNot(HaveOccurred())
+	Expect(requestLastRan).To(HaveKey(request.Fingerprint()))
+
+	return result
+}
+
+var _ = Describe("View Variables Caching", func() {
+	It("should cache results separately for different namespace variables", func() {
+		// Create a test view with namespace variable
+		viewObj := &v1.View{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "pod-view-test",
+				Namespace: "default",
+				UID:       "a0580b13-61ad-47c2-b02a-1cac446be75b",
+			},
+			Spec: v1.ViewSpec{
+				Columns: []pkgView.ColumnDef{
+					{Name: "name", Type: pkgView.ColumnTypeString, PrimaryKey: true},
+					{Name: "namespace", Type: pkgView.ColumnTypeString, PrimaryKey: true},
+					{Name: "status", Type: pkgView.ColumnTypeString},
+				},
+				Queries: map[string]v1.ViewQueryWithColumnDefs{
+					"pods": {
+						Query: pkgView.Query{
+							Configs: &types.ResourceSelector{
+								TagSelector: "namespace=$(var.namespace)",
+								Types:       []string{"Kubernetes::Pod"},
+							},
+						},
+					},
+				},
+				Mapping: map[string]types.CelExpression{
+					"namespace": "row.tags.namespace",
+				},
+				Templating: []api.ViewVariable{
+					{
+						Key:    "namespace",
+						Label:  "Namespace",
+						Values: []string{"missioncontrol", "ingress-nginx"},
+					},
+				},
+			},
+		}
+
+		err := db.PersistViewFromCRD(DefaultContext, viewObj)
+		Expect(err).ToNot(HaveOccurred())
+
+		testViewRequestHelper(DefaultContext, viewObj, map[string]string{"namespace": "missioncontrol"}, 2)
+		testViewRequestHelper(DefaultContext, viewObj, map[string]string{"namespace": "ingress-nginx"}, 1)
+	})
+
+	It("should use cached results when same variables are provided", func() {
+		viewObj := &v1.View{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "cache-test-pod-view",
+				Namespace: "default",
+				UID:       "022bce1e-8274-438e-8294-fdb8ec25cdd2",
+			},
+			Spec: v1.ViewSpec{
+				Columns: []pkgView.ColumnDef{
+					{Name: "name", Type: pkgView.ColumnTypeString, PrimaryKey: true},
+					{Name: "namespace", Type: pkgView.ColumnTypeString, PrimaryKey: true},
+				},
+				Queries: map[string]v1.ViewQueryWithColumnDefs{
+					"pods": {
+						Query: pkgView.Query{
+							Configs: &types.ResourceSelector{
+								TagSelector: "namespace=$(var.namespace)",
+								Types:       []string{"Kubernetes::Pod"},
+							},
+						},
+					},
+				},
+				Mapping: map[string]types.CelExpression{
+					"namespace": "row.tags.namespace",
+				},
+				Templating: []api.ViewVariable{
+					{
+						Key:    "namespace",
+						Label:  "Namespace",
+						Values: []string{"missioncontrol"},
+					},
+				},
+			},
+		}
+
+		err := db.PersistViewFromCRD(DefaultContext, viewObj)
+		Expect(err).ToNot(HaveOccurred())
+
+		// Multiple sequential requests.
+		firstResult := testViewRequestHelper(DefaultContext, viewObj, map[string]string{"namespace": "missioncontrol"}, 2)
+		testViewRequestHelper(DefaultContext, viewObj, map[string]string{"namespace": "missioncontrol"}, 2)
+		testViewRequestHelper(DefaultContext, viewObj, map[string]string{"namespace": "missioncontrol"}, 2)
+		secondResult := testViewRequestHelper(DefaultContext, viewObj, map[string]string{"namespace": "missioncontrol"}, 2)
+		Expect(firstResult.LastRefreshedAt).To(Equal(secondResult.LastRefreshedAt))
+	})
+
+	It("should handle requests without variables", func() {
+		viewObj := &v1.View{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "no-vars-view",
+				Namespace: "default",
+				UID:       "77c1d1c5-1e2e-4dd2-92c6-e2791994c272",
+			},
+			Spec: v1.ViewSpec{
+				Columns: []pkgView.ColumnDef{
+					{Name: "name", Type: pkgView.ColumnTypeString, PrimaryKey: true},
+				},
+				Queries: map[string]v1.ViewQueryWithColumnDefs{
+					"data": {
+						Query: pkgView.Query{
+							Configs: &types.ResourceSelector{
+								TagSelector: "namespace=ingress-nginx",
+								Types:       []string{"Kubernetes::Pod"},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		err := db.PersistViewFromCRD(DefaultContext, viewObj)
+		Expect(err).ToNot(HaveOccurred())
+
+		testViewRequestHelper(DefaultContext, viewObj, map[string]string{}, 1)
+		testViewRequestHelper(DefaultContext, viewObj, map[string]string{}, 1)
 	})
 })
 

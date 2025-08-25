@@ -918,7 +918,11 @@ spec:
                   view
                 type: object
               templating:
-                description: Templating parameters for the view data queries.
+                description: |-
+                  Templating parameters for the view data queries.
+
+
+                  These vars are available as `var.<key>` in the data queries.
                 items:
                   description: |-
                     A variable represents a dynamic parameter that can be substituted into data queries.
