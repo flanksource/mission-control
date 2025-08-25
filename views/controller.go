@@ -26,9 +26,14 @@ func RegisterRoutes(e *echo.Echo) {
 	logger.Infof("Registering /views routes")
 
 	g := e.Group("/view", rbac.Authorization(policy.ObjectCatalog, policy.ActionRead))
+	g.GET("/list", HandleViewList)
+
+	// Deprecated: Use POST request
 	g.GET("/:namespace/:name", GetViewByNamespaceName)
 	g.GET("/:id", GetViewByID)
-	g.GET("/list", HandleViewList)
+
+	g.POST("/:namespace/:name", GetViewByNamespaceName)
+	g.POST("/:id", GetViewByID)
 }
 
 func GetViewByID(c echo.Context) error {
@@ -55,6 +60,10 @@ func GetViewByNamespaceName(c echo.Context) error {
 	return getViewByNamespaceName(ctx, c, namespace, name)
 }
 
+type viewRequestPostBody struct {
+	Filter map[string]string `json:"filter"`
+}
+
 func getViewByNamespaceName(ctx context.Context, c echo.Context, namespace, name string) error {
 	cacheControl := c.Request().Header.Get("Cache-Control")
 	headerMaxAge, headerRefreshTimeout, err := utils.ParseCacheControlHeader(cacheControl)
@@ -68,6 +77,17 @@ func getViewByNamespaceName(ctx context.Context, c echo.Context, namespace, name
 	}
 	if headerRefreshTimeout > 0 {
 		opts = append(opts, WithRefreshTimeout(headerRefreshTimeout))
+	}
+
+	if c.Request().Method == http.MethodPost {
+		var request viewRequestPostBody
+		if err := c.Bind(&request); err != nil {
+			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid request body: %s", err.Error()))
+		}
+
+		for k, v := range request.Filter {
+			opts = append(opts, WithFilter(k, v))
+		}
 	}
 
 	response, err := ReadOrPopulateViewTable(ctx, namespace, name, opts...)
