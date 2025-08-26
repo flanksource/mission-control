@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/types"
 	pkgView "github.com/flanksource/duty/view"
@@ -44,11 +43,10 @@ var _ = Describe("View Database Table", func() {
 			_, err = populateView(DefaultContext, viewObj, request)
 			Expect(err).ToNot(HaveOccurred())
 
-			// Verify that request_last_ran field is populated after PopulateView
-			var dbView models.View
-			err = DefaultContext.DB().Where("name = ? AND namespace = ?", viewObj.Name, viewObj.Namespace).First(&dbView).Error
+			// Verify that last_refresh field is populated after PopulateView
+			lastRefresh, err := getLastRefresh(DefaultContext, string(viewObj.GetUID()), request.Fingerprint())
 			Expect(err).ToNot(HaveOccurred())
-			Expect(dbView.RequestLastRan).ToNot(BeNil(), "request_last_ran field should be populated after PopulateView")
+			Expect(lastRefresh).ToNot(BeNil())
 
 			tableName := viewObj.TableName()
 			Expect(DefaultContext.DB().Migrator().HasTable(tableName)).To(BeTrue())
@@ -136,16 +134,9 @@ func testViewRequestHelperWithMaxAge(ctx context.Context, viewObj *v1.View, vari
 	Expect(err).ToNot(HaveOccurred())
 	Expect(result.Rows).To(HaveLen(expectedRows))
 
-	// Verify request_last_ran contains the fingerprint
-	var dbView models.View
-	err = ctx.DB().Where("name = ? AND namespace = ?", viewObj.Name, viewObj.Namespace).First(&dbView).Error
+	lastRefresh, err := getLastRefresh(ctx, string(viewObj.GetUID()), request.Fingerprint())
 	Expect(err).ToNot(HaveOccurred())
-	Expect(dbView.RequestLastRan).ToNot(BeNil())
-
-	var requestLastRan map[string]string
-	err = json.Unmarshal(dbView.RequestLastRan, &requestLastRan)
-	Expect(err).ToNot(HaveOccurred())
-	Expect(requestLastRan).To(HaveKey(request.Fingerprint()))
+	Expect(lastRefresh).ToNot(BeNil())
 
 	return result
 }
@@ -233,12 +224,16 @@ var _ = Describe("View Variables Caching", func() {
 		err := db.PersistViewFromCRD(DefaultContext, viewObj)
 		Expect(err).ToNot(HaveOccurred())
 
-		// Multiple sequential requests.
+		// The first request returns the result directly. Ensure that it returns the last refreshedAt time.
 		firstResult := testViewRequestHelper(DefaultContext, viewObj, map[string]string{"namespace": "missioncontrol"}, 2)
-		testViewRequestHelper(DefaultContext, viewObj, map[string]string{"namespace": "missioncontrol"}, 2)
-		testViewRequestHelper(DefaultContext, viewObj, map[string]string{"namespace": "missioncontrol"}, 2)
+		Expect(firstResult.LastRefreshedAt).To(BeTemporally("~", time.Now(), 5*time.Second))
+
+		// Multiple sequential requests. and ensure they all come from the cache.
 		secondResult := testViewRequestHelper(DefaultContext, viewObj, map[string]string{"namespace": "missioncontrol"}, 2)
-		Expect(firstResult.LastRefreshedAt).To(Equal(secondResult.LastRefreshedAt))
+		thirdResult := testViewRequestHelper(DefaultContext, viewObj, map[string]string{"namespace": "missioncontrol"}, 2)
+		fourthResult := testViewRequestHelper(DefaultContext, viewObj, map[string]string{"namespace": "missioncontrol"}, 2)
+		Expect(secondResult.LastRefreshedAt).To(Equal(thirdResult.LastRefreshedAt))
+		Expect(thirdResult.LastRefreshedAt).To(Equal(fourthResult.LastRefreshedAt))
 	})
 
 	It("should handle requests without variables", func() {

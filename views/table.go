@@ -12,7 +12,6 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
-	"github.com/flanksource/duty/types"
 	pkgView "github.com/flanksource/duty/view"
 	"github.com/lib/pq"
 	"github.com/samber/lo"
@@ -246,7 +245,7 @@ func readCachedViewData(ctx context.Context, view *v1.View, request *requestOpt)
 	}
 
 	// Get the last refresh time for this specific request fingerprint
-	lastRan, err := getRequestLastRan(ctx, string(view.GetUID()), request.Fingerprint())
+	lastRan, err := getLastRefresh(ctx, string(view.GetUID()), request.Fingerprint())
 	if err != nil {
 		ctx.Logger.Warnf("failed to get request last ran: %v", err)
 	} else if lastRan != nil {
@@ -258,6 +257,7 @@ func readCachedViewData(ctx context.Context, view *v1.View, request *requestOpt)
 		return nil, fmt.Errorf("failed to get column options: %w", err)
 	}
 	result.ColumnOptions = columnOptions
+	result.LastRefreshedAt = lo.FromPtr(lastRan)
 
 	return result, nil
 }
@@ -269,7 +269,6 @@ func populateView(ctx context.Context, view *v1.View, request *requestOpt) (*api
 		return nil, fmt.Errorf("failed to run view: %w", err)
 	}
 
-	refreshedAt := time.Now().Truncate(time.Second)
 	err = ctx.Transaction(func(ctx context.Context, span trace.Span) error {
 		if view.HasTable() {
 			if err := pkgView.CreateViewTable(ctx, view.TableName(), view.Spec.Columns); err != nil {
@@ -278,10 +277,6 @@ func populateView(ctx context.Context, view *v1.View, request *requestOpt) (*api
 		}
 
 		if err := persistViewData(ctx, view, result, request); err != nil {
-			return err
-		}
-
-		if err := updateRequestLastRan(ctx, string(view.GetUID()), request.Fingerprint(), refreshedAt); err != nil {
 			return err
 		}
 
@@ -294,13 +289,13 @@ func populateView(ctx context.Context, view *v1.View, request *requestOpt) (*api
 	if !request.includeRows {
 		result.Rows = nil // don't return rows. UI uses postgREST to get the table rows.
 	}
-	result.LastRefreshedAt = refreshedAt
 
 	columnOptions, err := getColumnOptions(ctx, view)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get column options: %w", err)
 	}
 	result.ColumnOptions = columnOptions
+	result.LastRefreshedAt = time.Now()
 
 	return result, nil
 }
@@ -316,76 +311,31 @@ func persistViewData(ctx context.Context, view *v1.View, result *api.ViewResult,
 		}
 	}
 
-	// Save panel results if any exist
-	if len(result.Panels) > 0 {
-		uid, err := view.GetUUID()
-		if err != nil {
-			return fmt.Errorf("failed to get view uid: %w", err)
-		}
+	uid, err := view.GetUUID()
+	if err != nil {
+		return fmt.Errorf("failed to get view uid: %w", err)
+	}
 
-		if err := db.InsertPanelResults(ctx, uid, result.Panels, request.Fingerprint()); err != nil {
-			return fmt.Errorf("failed to insert view panels: %w", err)
-		}
+	if err := db.InsertPanelResults(ctx, uid, result.Panels, request.Fingerprint()); err != nil {
+		return fmt.Errorf("failed to insert view panels: %w", err)
 	}
 
 	return nil
 }
 
-// getRequestLastRan retrieves the last run time for a specific request fingerprint
-func getRequestLastRan(ctx context.Context, viewID string, fingerprint string) (*time.Time, error) {
-	var requestLastRan types.JSONStringMap
-	if err := ctx.DB().Model(&models.View{}).Select("request_last_ran").Where("id = ?", viewID).Scan(&requestLastRan).Error; err != nil {
-		return nil, fmt.Errorf("failed to get view: %w", err)
+// getLastRefresh retrieves the last run time for a specific request fingerprint
+func getLastRefresh(ctx context.Context, viewID string, fingerprint string) (*time.Time, error) {
+	var panel models.ViewPanel
+	if err := ctx.DB().Select("refreshed_at").Where("view_id = ? AND request_fingerprint = ?", viewID, fingerprint).Limit(1).Find(&panel).Error; err != nil {
+		return nil, fmt.Errorf("failed to get view panel: %w", err)
 	}
 
-	timeStr, exists := requestLastRan[fingerprint]
-	if !exists {
-		return nil, nil
-	}
-
-	parsedTime, err := time.Parse(time.RFC3339, timeStr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse cached time: %w", err)
-	}
-
-	return &parsedTime, nil
-}
-
-// updateRequestLastRan updates the last run time for a specific request fingerprint
-func updateRequestLastRan(ctx context.Context, viewID string, fingerprint string, refreshedAt time.Time) error {
-	// Get current request_last_ran
-	var view models.View
-	if err := ctx.DB().Select("request_last_ran").Where("id = ?", viewID).Find(&view).Error; err != nil {
-		return fmt.Errorf("failed to get view: %w", err)
-	}
-
-	// Initialize or update the cache map
-	var requestLastRan map[string]string
-	if view.RequestLastRan != nil {
-		if err := json.Unmarshal(view.RequestLastRan, &requestLastRan); err != nil {
-			return fmt.Errorf("failed to unmarshal request last ran: %w", err)
-		}
-	} else {
-		requestLastRan = make(map[string]string)
-	}
-
-	requestLastRan[fingerprint] = refreshedAt.Format(time.RFC3339)
-
-	// Marshal back to JSON
-	updatedCache, err := json.Marshal(requestLastRan)
-	if err != nil {
-		return fmt.Errorf("failed to marshal request last ran: %w", err)
-	}
-
-	// Update database
-	return ctx.DB().Model(&models.View{}).
-		Where("id = ?", viewID).
-		Update("request_last_ran", updatedCache).Error
+	return panel.RefreshedAt, nil
 }
 
 // requestCacheExpired checks if cache has expired for a specific request fingerprint
 func requestCacheExpired(ctx context.Context, view *v1.View, fingerprint string, maxAge time.Duration) (bool, error) {
-	lastRan, err := getRequestLastRan(ctx, string(view.GetUID()), fingerprint)
+	lastRan, err := getLastRefresh(ctx, string(view.GetUID()), fingerprint)
 	if err != nil {
 		return true, fmt.Errorf("failed to get request last ran: %w", err)
 	}

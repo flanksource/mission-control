@@ -14,7 +14,7 @@ require (
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.30.0 // indirect
 	github.com/flanksource/commons v1.40.0
-	github.com/flanksource/duty v1.0.1024
+	github.com/flanksource/duty v1.0.1026
 	github.com/flanksource/gomplate/v3 v3.24.60
 	github.com/flanksource/kopper v1.0.13
 	github.com/gomarkdown/markdown v0.0.0-20240419095408-642f0ee99ae2
@@ -393,7 +393,7 @@ require (
 	sigs.k8s.io/yaml v1.4.0
 )
 
-replace github.com/flanksource/duty => ../duty
+// replace github.com/flanksource/duty => ../duty
 
 // replace github.com/flanksource/gomplate/v3 => ../gomplat3
 
