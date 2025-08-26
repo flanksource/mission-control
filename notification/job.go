@@ -363,10 +363,10 @@ func shouldSkipNotificationDueToHealth(ctx context.Context, notif NotificationWi
 	deleted := resourceHealth.DeletedAt != nil
 	relativeUpdatedAt := time.Since(lo.FromPtr(resourceHealth.UpdatedAt))
 
-	traceLog("NotificationID=%s HistoryID=%s Resource=[%s/%s] PreviousHealth=%s CurrentHealth=%s UpdatedAt=%s RelativeUpdatedAtAgo=%s Checking if reportable", notif.ID, currentHistory.ID, payload.EventName, payload.ID, previousHealth, currentHealth, lo.FromPtr(resourceHealth.UpdatedAt), relativeUpdatedAt)
+	traceLog("NotificationID=%s HistoryID=%s Resource=[%s/%s] PreviousHealth=%s CurrentHealth=%s UpdatedAt=%s RelativeUpdatedAtAgo=%s Checking if reportable", notif.ID, currentHistory.ID, payload.EventName, payload.ResourceID, previousHealth, currentHealth, lo.FromPtr(resourceHealth.UpdatedAt), relativeUpdatedAt)
 	if !isHealthReportable(notif.Events, previousHealth, currentHealth) || deleted {
 		ctx.Logger.V(6).Infof("skipping notification[%s] as health change is not reportable", notif.ID)
-		traceLog("NotificationID=%s HistoryID=%s Resource=[%s/%s] PreviousHealth=%s CurrentHealth=%s ResourceDeleted=%v Skipping", notif.ID, currentHistory.ID, payload.EventName, payload.ID, previousHealth, currentHealth, deleted)
+		traceLog("NotificationID=%s HistoryID=%s Resource=[%s/%s] PreviousHealth=%s CurrentHealth=%s ResourceDeleted=%v Skipping", notif.ID, currentHistory.ID, payload.EventName, payload.ResourceID, previousHealth, currentHealth, deleted)
 
 		if err := db.SkipNotificationSendHistory(ctx, currentHistory.ID); err != nil {
 			return false, fmt.Errorf("failed to skip notification send history (%s): %w", currentHistory.ID, err)
@@ -374,7 +374,7 @@ func shouldSkipNotificationDueToHealth(ctx context.Context, notif NotificationWi
 
 		return true, nil
 	}
-	traceLog("NotificationID=%s HistoryID=%s Resource=[%s/%s] PreviousHealth=%s CurrentHealth=%s Reporting ...", notif.ID, currentHistory.ID, payload.EventName, payload.ID, previousHealth, currentHealth)
+	traceLog("NotificationID=%s HistoryID=%s Resource=[%s/%s] PreviousHealth=%s CurrentHealth=%s Reporting ...", notif.ID, currentHistory.ID, payload.EventName, payload.ResourceID, previousHealth, currentHealth)
 	return false, nil
 }
 
@@ -410,7 +410,7 @@ func processPendingNotification(ctx context.Context, currentHistory models.Notif
 		Name:      payload.EventName,
 		CreatedAt: payload.EventCreatedAt,
 		Properties: map[string]string{
-			"id": payload.ID.String(),
+			"id": payload.ResourceID.String(),
 		},
 	}
 	celEnv, err := GetEnvForEvent(ctx, event)

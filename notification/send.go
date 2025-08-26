@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/collections"
+	"github.com/flanksource/commons/hash"
 	"github.com/flanksource/commons/utils"
 	pkgConnection "github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
@@ -55,7 +56,11 @@ func DefaultTitleAndBody(payload NotificationEventPayload, celEnv *celVariables)
 
 // NotificationEventPayload holds data to create a notification.
 type NotificationEventPayload struct {
-	ID                        uuid.UUID     `json:"id"` // Resource id. depends what it is based on the original event.
+	// Uniquely identifies the notification to be sent.
+	// Needed for idempotency.
+	ID uuid.UUID `json:"id"`
+
+	ResourceID                uuid.UUID     `json:"resource_id"` // Resource id. depends what it is based on the original event.
 	ResourceHealth            models.Health `json:"resource_health"`
 	ResourceStatus            string        `json:"resource_status"`
 	ResourceHealthDescription string        `json:"resource_health_description"`
@@ -75,7 +80,27 @@ type NotificationEventPayload struct {
 	NotificationName string                  `json:"notification_name,omitempty"` // Name of the notification of a team
 }
 
-func (t *NotificationEventPayload) AsMap() map[string]string {
+func (t NotificationEventPayload) WithIDSet() NotificationEventPayload {
+	var recipientSig string
+	if t.Connection != nil {
+		recipientSig = t.Connection.String()
+	} else if t.PersonID != nil {
+		recipientSig = t.PersonID.String()
+	} else if t.TeamID != nil {
+		recipientSig = t.TeamID.String()
+		if t.NotificationName != "" {
+			recipientSig += "-" + t.NotificationName
+		}
+	} else if t.CustomService != nil {
+		recipientSig = t.CustomService.Name
+	}
+
+	sig := fmt.Sprintf("%s-%s-recipient-%s", t.NotificationID.String(), t.ResourceID.String(), recipientSig)
+	t.ID, _ = hash.DeterministicUUID(sig)
+	return t
+}
+
+func (t NotificationEventPayload) AsMap() map[string]string {
 	// NOTE: Because the payload is marshalled to map[string]string instead of map[string]any
 	// the custom_service field cannot be marshalled.
 	// So, we marshal it separately and add it to the map.
@@ -471,7 +496,7 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 			ResourceHealth:            models.Health(resourceHealth),
 			ResourceStatus:            resourceStatus,
 			ResourceHealthDescription: resourceHealthDescription,
-			ID:                        resourceID,
+			ResourceID:                resourceID,
 			PlaybookID:                n.PlaybookID,
 			EventCreatedAt:            event.CreatedAt,
 			Properties:                eventProperties,
@@ -488,7 +513,7 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 			ResourceHealth:            models.Health(resourceHealth),
 			ResourceHealthDescription: resourceHealthDescription,
 			ResourceStatus:            resourceStatus,
-			ID:                        resourceID,
+			ResourceID:                resourceID,
 			PersonID:                  n.PersonID,
 			EventCreatedAt:            event.CreatedAt,
 			Properties:                eventProperties,
@@ -520,7 +545,7 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 				ResourceHealth:            models.Health(resourceHealth),
 				ResourceHealthDescription: resourceHealthDescription,
 				ResourceStatus:            resourceStatus,
-				ID:                        resourceID,
+				ResourceID:                resourceID,
 				TeamID:                    n.TeamID,
 				NotificationName:          cn.Name,
 				EventCreatedAt:            event.CreatedAt,
@@ -549,7 +574,7 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 			ResourceHealthDescription: resourceHealthDescription,
 			ResourceStatus:            resourceStatus,
 			CustomService:             cn.DeepCopy(),
-			ID:                        resourceID,
+			ResourceID:                resourceID,
 			EventCreatedAt:            event.CreatedAt,
 			Properties:                eventProperties,
 			GroupID:                   groupID,
