@@ -276,7 +276,7 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 		} else if blocker != nil {
 			history := models.NotificationSendHistory{
 				NotificationID:            n.ID,
-				ResourceID:                payload.ID,
+				ResourceID:                payload.ResourceID,
 				ResourceHealth:            payload.ResourceHealth,
 				ResourceStatus:            payload.ResourceStatus,
 				ResourceHealthDescription: payload.ResourceHealthDescription,
@@ -301,7 +301,7 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 		if !rateLimiter.Allow() {
 			// rate limited notifications are simply dropped.
 			ctx.Warnf("notification rate limited event=%s notification=%s resource=%s (health=%s, status=%s, description=%s)",
-				event.Name, id, payload.ID, payload.ResourceHealth, payload.ResourceStatus, payload.ResourceHealthDescription)
+				event.Name, id, payload.ResourceID, payload.ResourceHealth, payload.ResourceStatus, payload.ResourceHealthDescription)
 			ctx.Counter("notification_rate_limited", "id", id).Add(1)
 			continue
 		}
@@ -311,7 +311,7 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 		if n.WaitFor != nil {
 			pendingHistory := models.NotificationSendHistory{
 				NotificationID:            n.ID,
-				ResourceID:                payload.ID,
+				ResourceID:                payload.ResourceID,
 				ResourceHealth:            payload.ResourceHealth,
 				ResourceStatus:            payload.ResourceStatus,
 				ResourceHealthDescription: payload.ResourceHealthDescription,
@@ -332,7 +332,7 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 		} else {
 			newEvent := models.Event{
 				Name:       api.EventNotificationSend,
-				Properties: payload.AsMap(),
+				Properties: payload.WithIDSet().AsMap(),
 			}
 			if err := ctx.DB().Clauses(events.EventQueueOnConflictClause).Create(&newEvent).Error; err != nil {
 				return fmt.Errorf("failed to saved `notification.send` event for payload (%v): %w", payload.AsMap(), err)
@@ -361,7 +361,7 @@ func processNotificationConstraints(ctx context.Context,
 
 	// Repeat interval check
 	if n.RepeatInterval != nil {
-		blockingSendHistory, err := checkRepeatInterval(ctx, n, payload.GroupID, payload.ID.String(), sourceEvent)
+		blockingSendHistory, err := checkRepeatInterval(ctx, n, payload.GroupID, payload.ResourceID.String(), sourceEvent)
 		if err != nil {
 			// If there are any errors in calculating interval, we send the notification and log the error
 			ctx.Errorf("error checking repeat interval for notification[%s]: %v", n.ID, err)
@@ -369,7 +369,7 @@ func processNotificationConstraints(ctx context.Context,
 
 		if blockingSendHistory != nil {
 			ctx.Logger.V(6).Infof("skipping notification[%s] due to repeat interval", n.ID)
-			ctx.Counter("notification_skipped_by_repeat_interval", "id", n.ID.String(), "resource", payload.ID.String(), "source_event", sourceEvent).Add(1)
+			ctx.Counter("notification_skipped_by_repeat_interval", "id", n.ID.String(), "resource", payload.ResourceID.String(), "source_event", sourceEvent).Add(1)
 
 			result := &validateResult{
 				BlockedWithStatus: models.NotificationStatusRepeatInterval,
@@ -382,7 +382,7 @@ func processNotificationConstraints(ctx context.Context,
 
 	if silencedBy := getFirstSilencer(ctx, celEnv, matchingSilences); silencedBy != nil {
 		ctx.Logger.V(6).Infof("silencing notification for event %s due to %d matching silences", sourceEvent, matchingSilences)
-		ctx.Counter("notification_silenced", "id", n.ID.String(), "resource", payload.ID.String()).Add(1)
+		ctx.Counter("notification_silenced", "id", n.ID.String(), "resource", payload.ResourceID.String()).Add(1)
 		return &validateResult{
 			BlockedWithStatus: models.NotificationStatusSilenced,
 			SilencedBy:        &silencedBy.ID,
@@ -397,7 +397,7 @@ func processNotificationConstraints(ctx context.Context,
 
 		if inhibitor != nil {
 			ctx.Logger.V(6).Infof("skipping notification[%s] due to inhibition", n.ID)
-			ctx.Counter("notification_inhibited", "id", n.ID.String(), "resource", payload.ID.String(), "source_event", sourceEvent).Add(1)
+			ctx.Counter("notification_inhibited", "id", n.ID.String(), "resource", payload.ResourceID.String(), "source_event", sourceEvent).Add(1)
 
 			return &validateResult{
 				BlockedWithStatus: models.NotificationStatusInhibited,
@@ -528,7 +528,7 @@ func sendFallbackNotification(ctx context.Context, sendHistory models.Notificati
 func sendPendingNotification(ctx context.Context, history models.NotificationSendHistory, payload NotificationEventPayload) error {
 	notificationContext := NewContext(ctx.WithSubject(payload.NotificationID.String()), payload.NotificationID).WithHistory(history)
 	ctx.Debugf("[notification.send] %s ", payload.EventName)
-	notificationContext.WithSource(payload.EventName, payload.ID)
+	notificationContext.WithSource(payload.EventName, payload.ResourceID)
 	notificationContext.WithGroupID(payload.GroupID)
 
 	err := _sendNotification(notificationContext, payload)
@@ -605,7 +605,7 @@ func calculateGroupByHash(ctx context.Context, groupBy []string, resourceID, eve
 func sendNotification(ctx context.Context, payload NotificationEventPayload) error {
 	notificationContext := NewContext(ctx.WithSubject(payload.NotificationID.String()), payload.NotificationID)
 	ctx.Debugf("[notification.send] %s  ", payload.EventName)
-	notificationContext.WithSource(payload.EventName, payload.ID)
+	notificationContext.WithSource(payload.EventName, payload.ResourceID)
 	notificationContext.WithGroupID(payload.GroupID)
 
 	logs.IfError(notificationContext.StartLog(), "error persisting start of notification send history")
@@ -633,7 +633,7 @@ func _sendNotification(ctx *Context, payload NotificationEventPayload) error {
 	}
 
 	if payload.GroupID != nil {
-		celEnv.GroupedResources, err = db.GetGroupedResources(ctx.Context, *payload.GroupID, payload.ID.String())
+		celEnv.GroupedResources, err = db.GetGroupedResources(ctx.Context, *payload.GroupID, payload.ResourceID.String())
 		if err != nil {
 			return ctx.Oops().Wrapf(err, "failed to get grouped resources for notification[%s]", payload.NotificationID)
 		}
@@ -653,7 +653,7 @@ func _sendNotification(ctx *Context, payload NotificationEventPayload) error {
 
 		ctx.log.PendingPlaybookRun()
 	} else {
-		traceLog("NotificationID=%s Resource=[%s/%s] Sending ...", nn.ID, payload.EventName, payload.ID)
+		traceLog("NotificationID=%s Resource=[%s/%s] Sending ...", nn.ID, payload.EventName, payload.ResourceID)
 		if err := PrepareAndSendEventNotification(ctx, payload, celEnv); err != nil {
 			return fmt.Errorf("failed to send notification for event: %w", err)
 		}
