@@ -158,9 +158,14 @@ func (t *playbookScheduler) Handle(ctx context.Context, event models.Event) erro
 			return dutyAPI.Errorf(dutyAPI.ENOTFOUND, "config(id=%s) not found", event.Properties["id"])
 		}
 
-	case api.EventConfigCreated, api.EventConfigUpdated, api.EventConfigDeleted, api.EventConfigChanged:
+	case api.EventConfigCreated, api.EventConfigUpdated, api.EventConfigDeleted:
 		if err := ctx.DB().Model(&models.ConfigItem{}).Where("id = ?", event.Properties["id"]).First(&eventResource.Config).Error; err != nil {
 			return dutyAPI.Errorf(dutyAPI.ENOTFOUND, "config(id=%s) not found", event.Properties["id"])
+		}
+
+	case api.EventConfigChanged:
+		if err := ctx.DB().Model(&models.ConfigItem{}).Where("id = ?", event.Properties["config_id"]).First(&eventResource.Config).Error; err != nil {
+			return dutyAPI.Errorf(dutyAPI.ENOTFOUND, "config(id=%s) not found", event.Properties["config_id"])
 		}
 	}
 
