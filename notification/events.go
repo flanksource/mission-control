@@ -136,7 +136,7 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 
 	celEnv, err := GetEnvForEvent(ctx, event)
 	if err != nil {
-		return ctx.Oops().Wrapf(err, "failed to get env for event")
+		return ctx.Oops().Wrapf(err, "failed to get env for event %s %s", event.ID, event.Name)
 	}
 
 	if lo.Contains(api.ConfigEvents, event.Name) {
@@ -918,6 +918,9 @@ func GetEnvForEvent(ctx context.Context, event models.Event) (*celVariables, err
 
 	if strings.HasPrefix(event.Name, "config.") {
 		configID := event.Properties["id"]
+		if event.Name == api.EventConfigChanged || event.Name == api.EventConfigUpdated {
+			configID = event.Properties["config_id"]
+		}
 
 		config, err := query.GetCachedConfig(ctx, configID)
 		if err != nil {
