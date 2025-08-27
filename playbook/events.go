@@ -69,8 +69,8 @@ func init() {
 
 func RegisterEvents(ctx context.Context) {
 	EventRing = events.NewEventRing(ctx.Properties().Int("events.audit.size", events.DefaultEventLogSize))
-	nh := playbookScheduler{Ring: EventRing}
-	events.RegisterSyncHandler(nh.Handle, api.EventStatusGroup...)
+	ps := playbookScheduler{Ring: EventRing}
+	events.RegisterSyncHandler(ps.Handle, api.EventStatusGroup...)
 
 	events.RegisterSyncHandler(onNewRun, api.EventPlaybookRun)
 	events.RegisterSyncHandler(onApprovalUpdated, api.EventPlaybookSpecApprovalUpdated)
@@ -115,6 +115,49 @@ type playbookScheduler struct {
 	Ring *events.EventRing
 }
 
+// buildEventResource creates an EventResource from an event by fetching the appropriate models from the database
+func buildEventResource(ctx context.Context, event models.Event) (EventResource, error) {
+	var eventResource EventResource
+	switch event.Name {
+	case api.EventCheckFailed, api.EventCheckPassed:
+		checkID := event.Properties["id"]
+		if err := ctx.DB().Where("id = ?", checkID).First(&eventResource.Check).Error; err != nil {
+			return eventResource, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "check(id=%s) not found", checkID)
+		}
+
+		if summary, err := duty.CheckSummary(ctx, checkID); err != nil {
+			return eventResource, err
+		} else if summary != nil {
+			eventResource.CheckSummary = summary
+		}
+
+		if err := ctx.DB().Where("id = ?", eventResource.Check.CanaryID).First(&eventResource.Canary).Error; err != nil {
+			return eventResource, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "canary(id=%s) not found", eventResource.Check.CanaryID)
+		}
+
+	case api.EventComponentHealthy, api.EventComponentUnhealthy, api.EventComponentWarning, api.EventComponentUnknown:
+		if err := ctx.DB().Model(&models.Component{}).Where("id = ?", event.Properties["id"]).First(&eventResource.Component).Error; err != nil {
+			return eventResource, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "component(id=%s) not found", event.Properties["id"])
+		}
+
+	case api.EventConfigHealthy, api.EventConfigUnhealthy, api.EventConfigWarning, api.EventConfigUnknown, api.EventConfigDegraded:
+		if err := ctx.DB().Model(&models.ConfigItem{}).Where("id = ?", event.Properties["id"]).First(&eventResource.Config).Error; err != nil {
+			return eventResource, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "config(id=%s) not found", event.Properties["id"])
+		}
+
+	case api.EventConfigCreated, api.EventConfigUpdated, api.EventConfigDeleted:
+		if err := ctx.DB().Model(&models.ConfigItem{}).Where("id = ?", event.Properties["id"]).First(&eventResource.Config).Error; err != nil {
+			return eventResource, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "config(id=%s) not found", event.Properties["id"])
+		}
+
+	case api.EventConfigChanged:
+		if err := ctx.DB().Model(&models.ConfigItem{}).Where("id = ?", event.Properties["config_id"]).First(&eventResource.Config).Error; err != nil {
+			return eventResource, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "config(id=%s) not found", event.Properties["config_id"])
+		}
+	}
+	return eventResource, nil
+}
+
 func (t *playbookScheduler) Handle(ctx context.Context, event models.Event) error {
 	specEvent, ok := eventToSpecEvent[event.Name]
 	if !ok {
@@ -130,43 +173,9 @@ func (t *playbookScheduler) Handle(ctx context.Context, event models.Event) erro
 		return nil
 	}
 
-	var eventResource EventResource
-	switch event.Name {
-	case api.EventCheckFailed, api.EventCheckPassed:
-		checkID := event.Properties["id"]
-		if err := ctx.DB().Where("id = ?", checkID).First(&eventResource.Check).Error; err != nil {
-			return dutyAPI.Errorf(dutyAPI.ENOTFOUND, "check(id=%s) not found", checkID)
-		}
-
-		if summary, err := duty.CheckSummary(ctx, checkID); err != nil {
-			return err
-		} else if summary != nil {
-			eventResource.CheckSummary = summary
-		}
-
-		if err := ctx.DB().Where("id = ?", eventResource.Check.CanaryID).First(&eventResource.Canary).Error; err != nil {
-			return dutyAPI.Errorf(dutyAPI.ENOTFOUND, "canary(id=%s) not found", eventResource.Check.CanaryID)
-		}
-
-	case api.EventComponentHealthy, api.EventComponentUnhealthy, api.EventComponentWarning, api.EventComponentUnknown:
-		if err := ctx.DB().Model(&models.Component{}).Where("id = ?", event.Properties["id"]).First(&eventResource.Component).Error; err != nil {
-			return dutyAPI.Errorf(dutyAPI.ENOTFOUND, "component(id=%s) not found", event.Properties["id"])
-		}
-
-	case api.EventConfigHealthy, api.EventConfigUnhealthy, api.EventConfigWarning, api.EventConfigUnknown, api.EventConfigDegraded:
-		if err := ctx.DB().Model(&models.ConfigItem{}).Where("id = ?", event.Properties["id"]).First(&eventResource.Config).Error; err != nil {
-			return dutyAPI.Errorf(dutyAPI.ENOTFOUND, "config(id=%s) not found", event.Properties["id"])
-		}
-
-	case api.EventConfigCreated, api.EventConfigUpdated, api.EventConfigDeleted:
-		if err := ctx.DB().Model(&models.ConfigItem{}).Where("id = ?", event.Properties["id"]).First(&eventResource.Config).Error; err != nil {
-			return dutyAPI.Errorf(dutyAPI.ENOTFOUND, "config(id=%s) not found", event.Properties["id"])
-		}
-
-	case api.EventConfigChanged:
-		if err := ctx.DB().Model(&models.ConfigItem{}).Where("id = ?", event.Properties["config_id"]).First(&eventResource.Config).Error; err != nil {
-			return dutyAPI.Errorf(dutyAPI.ENOTFOUND, "config(id=%s) not found", event.Properties["config_id"])
-		}
+	eventResource, err := buildEventResource(ctx, event)
+	if err != nil {
+		return err
 	}
 
 	for _, p := range playbooks {
