@@ -346,7 +346,7 @@
           "type": "string"
         },
         "gauge": {
-          "$ref": "#/$defs/GaugeConfig"
+          "$ref": "#/$defs/PanelGaugeConfig"
         },
         "piechart": {
           "$ref": "#/$defs/PiechartConfig"
@@ -368,6 +368,30 @@
         "type",
         "query"
       ]
+    },
+    "PanelGaugeConfig": {
+      "properties": {
+        "max": {
+          "type": "string"
+        },
+        "min": {
+          "type": "string"
+        },
+        "precision": {
+          "type": "integer"
+        },
+        "thresholds": {
+          "items": {
+            "$ref": "#/$defs/GaugeThreshold"
+          },
+          "type": "array"
+        },
+        "unit": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
     },
     "PanelNumberConfig": {
       "properties": {

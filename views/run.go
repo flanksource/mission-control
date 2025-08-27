@@ -69,16 +69,35 @@ func Run(ctx context.Context, view *v1.View) (*api.ViewResult, error) {
 		}()
 	}
 
-	for _, panel := range view.Spec.Panels {
-		rows, err := dataquery.RunSQL(sqliteCtx, panel.Query)
-		if err != nil {
-			return nil, fmt.Errorf("failed to execute panel '%s': %w", panel.Name, err)
+	if len(view.Spec.Panels) > 0 {
+		dataset := map[string]any{}
+		for _, queryResult := range queryResults {
+			dataset[queryResult.Name] = queryResult.Results
 		}
 
-		output.Panels = append(output.Panels, api.PanelResult{
-			PanelMeta: panel.PanelMeta,
-			Rows:      rows,
-		})
+		env := map[string]any{"dataset": dataset}
+		for _, panel := range view.Spec.Panels {
+			rows, err := dataquery.RunSQL(sqliteCtx, panel.Query)
+			if err != nil {
+				return nil, fmt.Errorf("failed to execute panel '%s': %w", panel.Name, err)
+			}
+
+			switch panel.Type {
+			case api.PanelTypeGauge:
+				if panel.Gauge.Max != "" {
+					value, err := types.CelExpression(panel.Gauge.Max).Eval(env)
+					if err != nil {
+						return nil, fmt.Errorf("failed to evaluate gauge max expression '%s': %w", panel.Gauge.Max, err)
+					}
+					panel.Gauge.Max = value
+				}
+			}
+
+			output.Panels = append(output.Panels, api.PanelResult{
+				PanelMeta: panel.PanelMeta,
+				Rows:      rows,
+			})
+		}
 	}
 
 	if view.HasTable() {
