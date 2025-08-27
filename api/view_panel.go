@@ -42,7 +42,7 @@ type PanelMeta struct {
 	Type PanelType `json:"type" yaml:"type"`
 
 	// Configuration for gauge visualization
-	Gauge *pkgView.GaugeConfig `json:"gauge,omitempty" yaml:"gauge,omitempty"`
+	Gauge *PanelGaugeConfig `json:"gauge,omitempty" yaml:"gauge,omitempty"`
 
 	// Configuration for piechart visualization
 	Piechart *PiechartConfig `json:"piechart,omitempty" yaml:"piechart,omitempty"`
@@ -52,6 +52,12 @@ type PanelMeta struct {
 
 	// Configuration for breakdown visualization
 	Table *PanelTableConfig `json:"table,omitempty" yaml:"table,omitempty"`
+}
+
+// +kubebuilder:object:generate=true
+type PanelGaugeConfig struct {
+	pkgView.GaugeConfig `json:",inline" yaml:",inline"`
+	Unit                string `json:"unit,omitempty" yaml:"unit,omitempty"`
 }
 
 // PiechartConfig defines configuration for piechart visualization

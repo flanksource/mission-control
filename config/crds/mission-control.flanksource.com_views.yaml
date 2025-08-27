@@ -327,6 +327,8 @@ spec:
                             - percent
                             type: object
                           type: array
+                        unit:
+                          type: string
                       type: object
                     name:
                       description: Name of the panel
