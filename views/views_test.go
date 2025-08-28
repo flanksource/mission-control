@@ -133,7 +133,8 @@ var _ = Describe("Views", func() {
 	Describe("Run", func() {
 		DescribeTable("queries",
 			func(view v1.View, expectedRows []pkgView.Row) {
-				result, err := Run(DefaultContext, &view)
+				request := &requestOpt{}
+				result, err := Run(DefaultContext, &view, request)
 				Expect(err).ToNot(HaveOccurred())
 				Expect(result.Rows).To(Equal(expectedRows))
 			},
@@ -315,7 +316,8 @@ var _ = Describe("Views", func() {
 				},
 			}
 
-			result, err := Run(DefaultContext, &view)
+			request := &requestOpt{}
+			result, err := Run(DefaultContext, &view, request)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result).ToNot(BeNil())
 			Expect(result.Rows).To(HaveLen(2))

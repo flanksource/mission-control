@@ -101,25 +101,27 @@ func GetView(ctx context.Context, namespace, name string) (*v1.View, error) {
 		Spec: spec,
 	}
 
-	if view.LastRan != nil {
-		viewCR.Status.LastRan = &metav1.Time{Time: *view.LastRan}
-	}
-
 	return viewCR, nil
 }
 
-func InsertPanelResults(ctx context.Context, viewID uuid.UUID, panels []api.PanelResult) error {
+func InsertPanelResults(ctx context.Context, viewID uuid.UUID, panels []api.PanelResult, requestFingerprint string) error {
 	results, err := json.Marshal(panels)
 	if err != nil {
 		return fmt.Errorf("failed to marshal panel results: %w", err)
 	}
 
-	record := models.ViewPanel{
-		ViewID:  viewID,
-		Results: results,
+	// Delete existing panel results for this view and fingerprint
+	if err := ctx.DB().Where("view_id = ? AND request_fingerprint = ?", viewID, requestFingerprint).Delete(&models.ViewPanel{}).Error; err != nil {
+		return fmt.Errorf("failed to delete existing panel results: %w", err)
 	}
 
-	if err := ctx.DB().Save(&record).Error; err != nil {
+	record := models.ViewPanel{
+		ViewID:             viewID,
+		RequestFingerprint: requestFingerprint,
+		Results:            results,
+	}
+
+	if err := ctx.DB().Create(&record).Error; err != nil {
 		return fmt.Errorf("failed to save panel results: %w", err)
 	}
 

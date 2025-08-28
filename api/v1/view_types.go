@@ -65,7 +65,7 @@ type ViewSpec struct {
 
 	// Queries define the queries and mappings to populate the view
 	//+kubebuilder:validation:Optional
-	Queries map[string]ViewQueryWithColumnDefs `json:"queries" yaml:"queries"`
+	Queries map[string]ViewQueryWithColumnDefs `json:"queries" yaml:"queries" template:"true"`
 
 	// Merge defines how to merge/join data from multiple queries
 	//+kubebuilder:validation:Optional
@@ -81,10 +81,15 @@ type ViewSpec struct {
 	// Cache configuration
 	//+kubebuilder:validation:Optional
 	Cache ViewCache `json:"cache" yaml:"cache"`
+
+	// Templating parameters for the view data queries.
+	//
+	// These vars are available as `var.<key>` in the data queries.
+	Templating []api.ViewVariable `json:"templating,omitempty" yaml:"templating,omitempty"`
 }
 
 type ViewQueryWithColumnDefs struct {
-	view.Query `json:",inline" yaml:",inline"`
+	view.Query `json:",inline" yaml:",inline" template:"true"`
 
 	// Define the column types for the results from the query.
 	// It's optional for configs and changes.
