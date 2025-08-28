@@ -24,10 +24,11 @@ const valueFromMaxResults = 100
 // Run executes the view queries and returns the rows with data
 func Run(ctx context.Context, view *v1.View, request *requestOpt) (*api.ViewResult, error) {
 	output := api.ViewResult{
-		Namespace: view.Namespace,
-		Name:      view.Name,
-		Icon:      view.Spec.Display.Icon,
-		Title:     view.Spec.Display.Title,
+		Namespace:          view.Namespace,
+		Name:               view.Name,
+		Icon:               view.Spec.Display.Icon,
+		Title:              view.Spec.Display.Title,
+		RequestFingerprint: request.Fingerprint(),
 	}
 
 	if len(request.variables) > 0 {
