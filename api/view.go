@@ -30,7 +30,7 @@ type ViewResult struct {
 	Rows               []view.Row       `json:"rows,omitempty"`
 	Panels             []PanelResult    `json:"panels,omitempty"`
 
-	Filters []ViewVariableWithOptions `json:"filters,omitempty"`
+	Variables []ViewVariableWithOptions `json:"variables,omitempty"`
 
 	// List of all possible values for each column where filter is enabled.
 	ColumnOptions map[string][]string `json:"columnOptions,omitempty"`

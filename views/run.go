@@ -144,7 +144,7 @@ func Run(ctx context.Context, view *v1.View, request *requestOpt) (*api.ViewResu
 
 	for _, filter := range view.Spec.Templating {
 		if len(filter.Values) > 0 {
-			output.Filters = append(output.Filters, api.ViewVariableWithOptions{
+			output.Variables = append(output.Variables, api.ViewVariableWithOptions{
 				ViewVariable: filter,
 				Options:      filter.Values,
 			})
@@ -158,7 +158,7 @@ func Run(ctx context.Context, view *v1.View, request *requestOpt) (*api.ViewResu
 				values := lo.Map(resources, func(r models.ConfigItem, _ int) string {
 					return lo.FromPtr(r.Name)
 				})
-				output.Filters = append(output.Filters, api.ViewVariableWithOptions{
+				output.Variables = append(output.Variables, api.ViewVariableWithOptions{
 					ViewVariable: filter,
 					Options:      values,
 				})

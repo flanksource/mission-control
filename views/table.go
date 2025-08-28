@@ -227,14 +227,14 @@ func readCachedViewData(ctx context.Context, view *v1.View, request *requestOpt)
 		Icon:      view.Spec.Display.Icon,
 
 		RequestFingerprint: request.Fingerprint(),
-		Columns:           columns,
-		Rows:              rows,
-		Panels:            finalPanelResults,
+		Columns:            columns,
+		Rows:               rows,
+		Panels:             finalPanelResults,
 	}
 
 	for _, filter := range view.Spec.Templating {
 		if len(filter.Values) > 0 {
-			result.Filters = append(result.Filters, api.ViewVariableWithOptions{
+			result.Variables = append(result.Variables, api.ViewVariableWithOptions{
 				ViewVariable: filter,
 				Options:      filter.Values,
 			})
@@ -248,7 +248,7 @@ func readCachedViewData(ctx context.Context, view *v1.View, request *requestOpt)
 				values := lo.Map(resources, func(r models.ConfigItem, _ int) string {
 					return lo.FromPtr(r.Name)
 				})
-				result.Filters = append(result.Filters, api.ViewVariableWithOptions{
+				result.Variables = append(result.Variables, api.ViewVariableWithOptions{
 					ViewVariable: filter,
 					Options:      values,
 				})
