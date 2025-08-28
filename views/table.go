@@ -10,8 +10,10 @@ import (
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/query"
 	pkgView "github.com/flanksource/duty/view"
 	"github.com/lib/pq"
+	"github.com/samber/lo"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/singleflight"
 
@@ -29,32 +31,42 @@ var (
 )
 
 // ViewOption is a functional option for configuring view operations
-type ViewOption func(*viewConfig)
+type ViewOption func(*requestOpt)
 
-// viewConfig holds configuration options for view operations
-type viewConfig struct {
+// requestOpt holds configuration options for view operations
+type requestOpt struct {
 	maxAge         *time.Duration
 	refreshTimeout *time.Duration
 	includeRows    bool
+	filters        map[string]string
+}
+
+func WithFilter(key, value string) ViewOption {
+	return func(c *requestOpt) {
+		if c.filters == nil {
+			c.filters = make(map[string]string)
+		}
+		c.filters[key] = value
+	}
 }
 
 // WithMaxAge sets the maximum age for cached view data
 func WithMaxAge(maxAge time.Duration) ViewOption {
-	return func(c *viewConfig) {
+	return func(c *requestOpt) {
 		c.maxAge = &maxAge
 	}
 }
 
 // WithRefreshTimeout sets the timeout for view refresh operations
 func WithRefreshTimeout(timeout time.Duration) ViewOption {
-	return func(c *viewConfig) {
+	return func(c *requestOpt) {
 		c.refreshTimeout = &timeout
 	}
 }
 
 // WithIncludeRows sets whether to include table rows in the response
 func WithIncludeRows(include bool) ViewOption {
-	return func(c *viewConfig) {
+	return func(c *requestOpt) {
 		c.includeRows = include
 	}
 }
@@ -70,17 +82,17 @@ func ReadOrPopulateViewTable(ctx context.Context, namespace, name string, opts .
 		return nil, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "view %s/%s not found", namespace, name)
 	}
 
-	config := &viewConfig{}
+	request := &requestOpt{}
 	for _, opt := range opts {
-		opt(config)
+		opt(request)
 	}
 
 	var headerMaxAge, headerRefreshTimeout time.Duration
-	if config.maxAge != nil {
-		headerMaxAge = *config.maxAge
+	if request.maxAge != nil {
+		headerMaxAge = *request.maxAge
 	}
-	if config.refreshTimeout != nil {
-		headerRefreshTimeout = *config.refreshTimeout
+	if request.refreshTimeout != nil {
+		headerRefreshTimeout = *request.refreshTimeout
 	}
 
 	cacheOptions, err := view.GetCacheOptions(headerMaxAge, headerRefreshTimeout)
@@ -90,17 +102,17 @@ func ReadOrPopulateViewTable(ctx context.Context, namespace, name string, opts .
 
 	tableName := view.TableName()
 	tableExists := ctx.DB().Migrator().HasTable(tableName)
-	cacheExpired := view.CacheExpired(cacheOptions.MaxAge)
+	cacheExpired := true // view.CacheExpired(cacheOptions.MaxAge)
 
 	if ((view.HasTable() && tableExists) || !view.HasTable()) && !cacheExpired {
-		return readCachedViewData(ctx, view, config.includeRows)
+		return readCachedViewData(ctx, view, request.includeRows)
 	}
 
-	return handleViewRefresh(ctx, view, cacheOptions, tableExists, config.includeRows)
+	return handleViewRefresh(ctx, view, cacheOptions, tableExists, request)
 }
 
 // handleViewRefresh deduplicates concurrent view refresh operations using singleflight
-func handleViewRefresh(ctx context.Context, view *v1.View, cacheOptions *v1.CacheOptions, tableExists bool, includeRows bool) (*api.ViewResult, error) {
+func handleViewRefresh(ctx context.Context, view *v1.View, cacheOptions *v1.CacheOptions, tableExists bool, request *requestOpt) (*api.ViewResult, error) {
 	done := make(chan struct{})
 	var result *api.ViewResult
 	var err error
@@ -120,7 +132,7 @@ func handleViewRefresh(ctx context.Context, view *v1.View, cacheOptions *v1.Cach
 		}
 
 		res, refreshErr, _ := refreshGroup.Do(string(view.GetUID()), func() (any, error) {
-			return populateView(refreshCtx, view, includeRows)
+			return populateView(refreshCtx, view, request)
 		})
 		if refreshErr != nil {
 			ctx.Errorf("failed to refresh view %s: %v", view.GetNamespacedName(), refreshErr)
@@ -135,7 +147,7 @@ func handleViewRefresh(ctx context.Context, view *v1.View, cacheOptions *v1.Cach
 		if err != nil {
 			if tableExists {
 				ctx.Logger.Errorf("failed to refresh view %s: %v", view.GetNamespacedName(), err)
-				return readCachedViewData(ctx, view, includeRows)
+				return readCachedViewData(ctx, view, request.includeRows)
 			}
 
 			return nil, fmt.Errorf("failed to refresh view %s: %w", view.GetNamespacedName(), err)
@@ -146,7 +158,7 @@ func handleViewRefresh(ctx context.Context, view *v1.View, cacheOptions *v1.Cach
 	case <-time.After(cacheOptions.RefreshTimeout):
 		if tableExists {
 			ctx.Logger.Debugf("view %s refresh timeout reached. returning cached data", view.GetNamespacedName())
-			return readCachedViewData(ctx, view, includeRows)
+			return readCachedViewData(ctx, view, request.includeRows)
 		}
 
 		return nil, fmt.Errorf("view %s refresh timeout reached. try again", view.GetNamespacedName())
@@ -196,6 +208,30 @@ func readCachedViewData(ctx context.Context, view *v1.View, includeRows bool) (*
 		Panels:  finalPanelResults,
 	}
 
+	for _, filter := range view.Spec.Filter {
+		if len(filter.Values) > 0 {
+			result.Filters = append(result.Filters, api.ViewFilterParameterWithOptions{
+				ViewFilterParameter: filter,
+				Options:             filter.Values,
+			})
+		} else if filter.ValueFrom != nil {
+			if !filter.ValueFrom.Config.IsEmpty() {
+				resources, err := query.FindConfigsByResourceSelector(ctx, valueFromMaxResults, filter.ValueFrom.Config)
+				if err != nil {
+					return nil, fmt.Errorf("failed to get resources for filter %s: %w", filter.Key, err)
+				}
+
+				values := lo.Map(resources, func(r models.ConfigItem, _ int) string {
+					return lo.FromPtr(r.Name)
+				})
+				result.Filters = append(result.Filters, api.ViewFilterParameterWithOptions{
+					ViewFilterParameter: filter,
+					Options:             values,
+				})
+			}
+		}
+	}
+
 	if view.Status.LastRan != nil {
 		result.LastRefreshedAt = view.Status.LastRan.Time
 	}
@@ -210,8 +246,8 @@ func readCachedViewData(ctx context.Context, view *v1.View, includeRows bool) (*
 }
 
 // populateView runs the view queries and saves to the view table.
-func populateView(ctx context.Context, view *v1.View, includeRows bool) (*api.ViewResult, error) {
-	result, err := Run(ctx, view)
+func populateView(ctx context.Context, view *v1.View, request *requestOpt) (*api.ViewResult, error) {
+	result, err := Run(ctx, view, request)
 	if err != nil {
 		return nil, fmt.Errorf("failed to run view: %w", err)
 	}
@@ -237,7 +273,7 @@ func populateView(ctx context.Context, view *v1.View, includeRows bool) (*api.Vi
 		return result, err
 	}
 
-	if !includeRows {
+	if !request.includeRows {
 		result.Rows = nil // don't return rows. UI uses postgREST to get the table rows.
 	}
 	result.LastRefreshedAt = time.Now()

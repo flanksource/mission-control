@@ -645,6 +645,50 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "ViewFilterParameter": {
+      "properties": {
+        "key": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "values": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "valueFrom": {
+          "$ref": "#/$defs/ViewFilterValueFrom"
+        },
+        "default": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "key",
+        "label",
+        "default"
+      ]
+    },
+    "ViewFilterValueFrom": {
+      "properties": {
+        "config": {
+          "$ref": "#/$defs/ResourceSelector"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "config"
+      ]
+    },
     "ViewQueryWithColumnDefs": {
       "properties": {
         "prometheus": {
@@ -697,6 +741,12 @@
         },
         "cache": {
           "$ref": "#/$defs/ViewCache"
+        },
+        "filter": {
+          "items": {
+            "$ref": "#/$defs/ViewFilterParameter"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,
