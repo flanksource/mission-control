@@ -206,16 +206,7 @@ func CreateToken(c echo.Context) error {
 		})
 	}
 
-	tokenResult, err := CreateAccessTokenForPerson(ctx, ctx.User(), reqData.Name)
-	if err := c.Bind(&reqData); err != nil {
-		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{
-			Err:     err.Error(),
-			Message: "Invalid request body",
-		})
-	}
-
 	var permsToGive [][]string
-
 	existingPerms, err := rbac.PermsForUser(user.ID.String())
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
@@ -224,13 +215,20 @@ func CreateToken(c echo.Context) error {
 		})
 	}
 	denyPermHashes := lo.Map(reqData.DenyPermissions, func(p policy.Permission, _ int) string { return p.Hash() })
-	for _, pp := range existingPerms {
-		if slices.Contains(denyPermHashes, pp.Hash()) {
+	for _, perm := range existingPerms {
+		if slices.Contains(denyPermHashes, perm.Hash()) {
 			continue
 		}
-		permsToGive = append(permsToGive, pp.ToArgs())
+		permsToGive = append(permsToGive, perm.ToArgs())
 	}
 
+	tokenResult, err := CreateAccessTokenForPerson(ctx, ctx.User(), reqData.Name)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{
+			Err:     err.Error(),
+			Message: "Error creating access token",
+		})
+	}
 	if _, err := rbac.Enforcer().AddPermissionsForUser(tokenResult.Person.ID.String(), permsToGive...); err != nil {
 		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
 			Err:     err.Error(),
