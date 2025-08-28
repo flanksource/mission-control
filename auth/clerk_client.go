@@ -68,8 +68,9 @@ func (h ClerkHandler) parseJWTToken(token string) (jwt.MapClaims, error) {
 }
 
 type AuthResult struct {
-	User      *models.Person
-	SessionID string
+	User        *models.Person
+	AccessToken *models.AccessToken
+	SessionID   string
 }
 
 func (h ClerkHandler) Session(next echo.HandlerFunc) echo.HandlerFunc {
@@ -126,7 +127,7 @@ func (h *ClerkHandler) getUserFromAccessToken(ctx context.Context, accessToken *
 	}
 
 	h.userCache.SetDefault(sessionID, &dbUser)
-	return AuthResult{User: &dbUser, SessionID: sessionID}, nil
+	return AuthResult{User: &dbUser, SessionID: sessionID, AccessToken: accessToken}, nil
 }
 
 func (h *ClerkHandler) getUserFromSessionToken(ctx context.Context, sessionToken string) (AuthResult, error) {

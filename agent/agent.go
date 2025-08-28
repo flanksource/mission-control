@@ -25,7 +25,7 @@ func generateAgent(ctx context.Context, body api.GenerateAgentRequest) (*api.Gen
 		return nil, fmt.Errorf("failed to create a new person: %w", err)
 	}
 
-	token, err := db.CreateAccessToken(ctx, person.ID, "default", password, lo.ToPtr(time.Hour*24*365))
+	token, _, err := db.CreateAccessToken(ctx, person.ID, "default", password, lo.ToPtr(time.Hour*24*365), nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create a new access token: %w", err)
 	}
@@ -71,7 +71,7 @@ func generateToken(ctx context.Context, body api.GenerateTokenRequest) (*api.Gen
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate password for agent[%s]: %w", agentName, err)
 	}
-	token, err := db.CreateAccessToken(ctx, lo.FromPtr(agent.PersonID), "default", password, lo.ToPtr(time.Hour*24*365))
+	token, _, err := db.CreateAccessToken(ctx, lo.FromPtr(agent.PersonID), "default", password, lo.ToPtr(time.Hour*24*365), nil)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create a new access token: %w", err)
 	}
