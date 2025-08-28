@@ -46,6 +46,18 @@ func (t requestOpt) Fingerprint() string {
 	return hash.Sha256Hex(collections.SortedMap(t.variables))
 }
 
+func WithVariableDefault(key, value string) ViewOption {
+	return func(c *requestOpt) {
+		if c.variables == nil {
+			c.variables = make(map[string]string)
+		}
+
+		if _, ok := c.variables[key]; !ok {
+			c.variables[key] = value
+		}
+	}
+}
+
 func WithVariable(key, value string) ViewOption {
 	return func(c *requestOpt) {
 		if c.variables == nil {
@@ -87,20 +99,19 @@ func ReadOrPopulateViewTable(ctx context.Context, namespace, name string, opts .
 		return nil, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "view %s/%s not found", namespace, name)
 	}
 
+	// Set default variables from the view spec even if it wasn't provided
+	for _, variable := range view.Spec.Templating {
+		if variable.Default != "" {
+			opts = append(opts, WithVariableDefault(variable.Key, variable.Default))
+		}
+	}
+
 	request := &requestOpt{}
 	for _, opt := range opts {
 		opt(request)
 	}
 
-	var headerMaxAge, headerRefreshTimeout time.Duration
-	if request.maxAge != nil {
-		headerMaxAge = *request.maxAge
-	}
-	if request.refreshTimeout != nil {
-		headerRefreshTimeout = *request.refreshTimeout
-	}
-
-	cacheOptions, err := view.GetCacheOptions(headerMaxAge, headerRefreshTimeout)
+	cacheOptions, err := view.GetCacheOptions(lo.FromPtr(request.maxAge), lo.FromPtr(request.refreshTimeout))
 	if err != nil {
 		return nil, dutyAPI.Errorf(dutyAPI.EINVALID, "%s", err.Error())
 	}
@@ -215,9 +226,10 @@ func readCachedViewData(ctx context.Context, view *v1.View, request *requestOpt)
 		Title:     view.Spec.Display.Title,
 		Icon:      view.Spec.Display.Icon,
 
-		Columns: columns,
-		Rows:    rows,
-		Panels:  finalPanelResults,
+		RequestFingerprint: request.Fingerprint(),
+		Columns:           columns,
+		Rows:              rows,
+		Panels:            finalPanelResults,
 	}
 
 	for _, filter := range view.Spec.Templating {
@@ -296,6 +308,7 @@ func populateView(ctx context.Context, view *v1.View, request *requestOpt) (*api
 	}
 	result.ColumnOptions = columnOptions
 	result.LastRefreshedAt = time.Now()
+	result.RequestFingerprint = request.Fingerprint()
 
 	return result, nil
 }

@@ -24,10 +24,11 @@ type ViewResult struct {
 	Title     string `json:"title"`
 	Icon      string `json:"icon,omitempty"`
 
-	LastRefreshedAt time.Time        `json:"lastRefreshedAt"`
-	Columns         []view.ColumnDef `json:"columns,omitempty"`
-	Rows            []view.Row       `json:"rows,omitempty"`
-	Panels          []PanelResult    `json:"panels,omitempty"`
+	LastRefreshedAt    time.Time        `json:"lastRefreshedAt"`
+	RequestFingerprint string           `json:"requestFingerprint,omitempty"`
+	Columns            []view.ColumnDef `json:"columns,omitempty"`
+	Rows               []view.Row       `json:"rows,omitempty"`
+	Panels             []PanelResult    `json:"panels,omitempty"`
 
 	Filters []ViewVariableWithOptions `json:"filters,omitempty"`
 
