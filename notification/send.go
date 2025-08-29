@@ -45,15 +45,12 @@ type NotificationTemplate struct {
 
 // NotificationEventPayload holds data to create a notification.
 type NotificationEventPayload struct {
-	// Uniquely identifies the notification to be sent.
-	// Needed for idempotency.
-	ID uuid.UUID `json:"id"`
-
 	ResourceID                uuid.UUID     `json:"resource_id"` // Resource id. depends what it is based on the original event.
 	ResourceHealth            models.Health `json:"resource_health"`
 	ResourceStatus            string        `json:"resource_status"`
 	ResourceHealthDescription string        `json:"resource_health_description"`
 
+	EventID        uuid.UUID  `json:"event_id"`                  // The id of the original event this notification is for.
 	EventName      string     `json:"event_name"`                // The name of the original event this notification is for.
 	NotificationID uuid.UUID  `json:"notification_id,omitempty"` // ID of the notification.
 	EventCreatedAt time.Time  `json:"event_created_at"`          // Timestamp at which the original event was created
@@ -70,7 +67,8 @@ type NotificationEventPayload struct {
 	NotificationName string                  `json:"notification_name,omitempty"` // Name of the notification of a team
 }
 
-func (t NotificationEventPayload) WithIDSet() NotificationEventPayload {
+// Generates an idempotent event id for this notification send.
+func (t NotificationEventPayload) GenerateEventID() uuid.UUID {
 	var recipientSig string
 	if t.Connection != nil {
 		recipientSig = t.Connection.String()
@@ -86,8 +84,8 @@ func (t NotificationEventPayload) WithIDSet() NotificationEventPayload {
 	}
 
 	sig := fmt.Sprintf("%s-%s-recipient-%s", t.NotificationID.String(), t.ResourceID.String(), recipientSig)
-	t.ID, _ = hash.DeterministicUUID(sig)
-	return t
+	generated, _ := hash.DeterministicUUID(sig)
+	return generated
 }
 
 func (t NotificationEventPayload) AsMap() map[string]string {
@@ -106,6 +104,22 @@ func (t NotificationEventPayload) AsMap() map[string]string {
 
 	m["custom_service"] = customService
 	return m
+}
+
+func (t NotificationEventPayload) ParentEvent() models.Event {
+	event := models.Event{
+		Name:      t.EventName,
+		CreatedAt: t.EventCreatedAt,
+		EventID:   t.EventID,
+	}
+
+	if t.EventName == api.EventConfigChanged || t.EventName == api.EventConfigUpdated {
+		event.Properties = map[string]string{
+			"config_id": t.ResourceID.String(),
+		}
+	}
+
+	return event
 }
 
 func (t *NotificationEventPayload) FromMap(m map[string]string) {
@@ -431,6 +445,7 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 
 	if n.PlaybookID != nil {
 		payload := NotificationEventPayload{
+			EventID:                   event.EventID,
 			EventName:                 event.Name,
 			NotificationID:            n.ID,
 			ResourceHealth:            models.Health(resourceHealth),
@@ -448,6 +463,7 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 
 	if n.PersonID != nil {
 		payload := NotificationEventPayload{
+			EventID:                   event.EventID,
 			EventName:                 event.Name,
 			NotificationID:            n.ID,
 			ResourceHealth:            models.Health(resourceHealth),
@@ -487,6 +503,7 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 			}
 
 			payload := NotificationEventPayload{
+				EventID:                   event.EventID,
 				EventName:                 event.Name,
 				NotificationID:            n.ID,
 				ResourceHealth:            models.Health(resourceHealth),
@@ -515,6 +532,7 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 		}
 
 		payload := NotificationEventPayload{
+			EventID:                   event.EventID,
 			EventName:                 event.Name,
 			NotificationID:            n.ID,
 			ResourceHealth:            models.Health(resourceHealth),

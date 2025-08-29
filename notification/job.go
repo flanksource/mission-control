@@ -13,9 +13,6 @@ import (
 	"github.com/flanksource/duty/job"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
-	"github.com/flanksource/incident-commander/api"
-	v1 "github.com/flanksource/incident-commander/api/v1"
-	"github.com/flanksource/incident-commander/db"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"gorm.io/gorm"
@@ -24,6 +21,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/flanksource/incident-commander/api"
+	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/db"
 )
 
 var CRDStatusUpdateQueue *collections.Queue[string]
@@ -316,7 +317,7 @@ func shouldSkipNotificationDueToHealth(ctx context.Context, notif NotificationWi
 	var payload NotificationEventPayload
 	payload.FromMap(currentHistory.Payload)
 
-	originalEvent := models.Event{Name: payload.EventName, CreatedAt: payload.EventCreatedAt}
+	originalEvent := models.Event{Name: payload.EventName, EventID: payload.EventID, CreatedAt: payload.EventCreatedAt}
 	if len(payload.Properties) > 0 {
 		if err := json.Unmarshal(payload.Properties, &originalEvent.Properties); err != nil {
 			return false, fmt.Errorf("failed to unmarshal properties: %w", err)
@@ -406,14 +407,7 @@ func processPendingNotification(ctx context.Context, currentHistory models.Notif
 	var payload NotificationEventPayload
 	payload.FromMap(currentHistory.Payload)
 
-	event := models.Event{
-		Name:      payload.EventName,
-		CreatedAt: payload.EventCreatedAt,
-		Properties: map[string]string{
-			"id": payload.ResourceID.String(),
-		},
-	}
-	celEnv, err := GetEnvForEvent(ctx, event)
+	celEnv, err := GetEnvForEvent(ctx, payload.ParentEvent())
 	if err != nil {
 		return fmt.Errorf("failed to get cel env: %w", err)
 	}
@@ -465,7 +459,7 @@ func triggerIncrementalScrape(ctx context.Context, configID string) error {
 	}
 
 	onConflictClause := clause.OnConflict{
-		Columns: []clause.Column{{Name: "name"}, {Name: "properties"}},
+		Columns: models.EventQueueUniqueConstraint(),
 		DoUpdates: clause.Assignments(map[string]any{
 			"created_at": gorm.Expr("CURRENT_TIMESTAMP"),
 		}),

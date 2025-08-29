@@ -69,12 +69,12 @@ func BuildEventResource(ctx context.Context, event models.Event) (EventResource,
 			return eventResource, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "config(id=%s) not found", event.EventID)
 		}
 
-	case api.EventConfigCreated, api.EventConfigUpdated, api.EventConfigDeleted:
+	case api.EventConfigCreated, api.EventConfigDeleted:
 		if err := ctx.DB().Model(&models.ConfigItem{}).Where("id = ?", event.EventID).First(&eventResource.Config).Error; err != nil {
 			return eventResource, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "config(id=%s) not found", event.EventID)
 		}
 
-	case api.EventConfigChanged:
+	case api.EventConfigChanged, api.EventConfigUpdated:
 		if err := ctx.DB().Model(&models.ConfigItem{}).Where("id = ?", event.Properties["config_id"]).First(&eventResource.Config).Error; err != nil {
 			return eventResource, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "config(id=%s) not found", event.Properties["config_id"])
 		}
