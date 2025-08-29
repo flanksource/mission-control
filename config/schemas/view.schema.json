@@ -765,8 +765,7 @@
       "type": "object",
       "required": [
         "key",
-        "label",
-        "default"
+        "label"
       ]
     },
     "ViewVariableValueFrom": {

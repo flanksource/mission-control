@@ -1011,7 +1011,6 @@ spec:
                         type: string
                       type: array
                   required:
-                  - default
                   - key
                   - label
                   type: object
