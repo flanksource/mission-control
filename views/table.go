@@ -142,7 +142,7 @@ func ReadOrPopulateViewTable(ctx context.Context, namespace, name string, opts .
 			if len(variable.Options) > 0 {
 				opts = append(opts, WithVariableDefault(variable.Key, variable.Options[0]))
 			} else {
-				return nil, dutyAPI.Errorf(dutyAPI.EINVALID, "%s has no default values and no options were found", variable.Key)
+				return nil, dutyAPI.Errorf(dutyAPI.EINVALID, "variable %s has no default value and no options were found to use as fallback", variable.Key)
 			}
 		}
 	}
@@ -166,19 +166,17 @@ func ReadOrPopulateViewTable(ctx context.Context, namespace, name string, opts .
 		return nil, fmt.Errorf("failed to check cache expiration: %w", err)
 	}
 
+	var result *api.ViewResult
 	if ((view.HasTable() && tableExists) || !view.HasTable()) && !cacheExpired {
-		result, err := readCachedViewData(ctx, view, request)
+		result, err = readCachedViewData(ctx, view, request)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read cached view data: %w", err)
 		}
-
-		result.Variables = variables
-		return result, nil
-	}
-
-	result, err := handleViewRefresh(ctx, view, cacheOptions, tableExists, request)
-	if err != nil {
-		return nil, fmt.Errorf("failed to handle view refresh: %w", err)
+	} else {
+		result, err = handleViewRefresh(ctx, view, cacheOptions, tableExists, request)
+		if err != nil {
+			return nil, fmt.Errorf("failed to handle view refresh: %w", err)
+		}
 	}
 
 	result.Variables = variables
