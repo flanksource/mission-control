@@ -437,13 +437,11 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 
 	var payloads []NotificationEventPayload
 
-	resourceID, err := uuid.Parse(event.Properties["id"])
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse resource id: %v", err)
-	}
+	resourceID := event.EventID
 
 	var eventProperties []byte
 	if len(event.Properties) > 0 {
+		var err error
 		eventProperties, err = json.Marshal(event.Properties)
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal event properties: %v", err)

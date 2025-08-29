@@ -140,7 +140,7 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 	}
 
 	if lo.Contains(api.ConfigEvents, event.Name) {
-		if err := resolveGroupMembership(ctx, celEnv, event.Properties["id"]); err != nil {
+		if err := resolveGroupMembership(ctx, celEnv, event.EventID.String()); err != nil {
 			return ctx.Oops().Wrapf(err, "failed to resolve group membership for event")
 		}
 	}
@@ -754,7 +754,7 @@ func GetEnvForEvent(ctx context.Context, event models.Event) (*celVariables, err
 	var env celVariables
 
 	if strings.HasPrefix(event.Name, "check.") {
-		checkID := event.Properties["id"]
+		checkID := event.EventID.String()
 		lastRuntime := event.Properties["last_runtime"]
 
 		check, err := query.FindCachedCheck(ctx, checkID)
@@ -804,7 +804,7 @@ func GetEnvForEvent(ctx context.Context, event models.Event) (*celVariables, err
 	}
 
 	if event.Name == "incident.created" || strings.HasPrefix(event.Name, "incident.status.") {
-		incidentID := event.Properties["id"]
+		incidentID := event.EventID.String()
 
 		incident, err := query.GetCachedIncident(ctx, incidentID)
 		if err != nil {
@@ -818,7 +818,7 @@ func GetEnvForEvent(ctx context.Context, event models.Event) (*celVariables, err
 	}
 
 	if strings.HasPrefix(event.Name, "incident.responder.") {
-		responderID := event.Properties["id"]
+		responderID := event.EventID.String()
 		responder, err := responder.FindResponderByID(ctx, responderID)
 		if err != nil {
 			return nil, fmt.Errorf("error finding responder(id=%s): %v", responderID, err)
@@ -840,8 +840,8 @@ func GetEnvForEvent(ctx context.Context, event models.Event) (*celVariables, err
 
 	if strings.HasPrefix(event.Name, "incident.comment.") {
 		var comment models.Comment
-		if err := ctx.DB().Where("id = ?", event.Properties["id"]).Find(&comment).Error; err != nil {
-			return nil, fmt.Errorf("error getting comment (id=%s)", event.Properties["id"])
+		if err := ctx.DB().Where("id = ?", event.EventID).Find(&comment).Error; err != nil {
+			return nil, fmt.Errorf("error getting comment (id=%s)", event.EventID)
 		}
 
 		incident, err := query.GetCachedIncident(ctx, comment.IncidentID.String())
@@ -868,7 +868,7 @@ func GetEnvForEvent(ctx context.Context, event models.Event) (*celVariables, err
 
 	if strings.HasPrefix(event.Name, "incident.dod.") {
 		var evidence models.Evidence
-		if err := ctx.DB().Where("id = ?", event.Properties["id"]).Find(&evidence).Error; err != nil {
+		if err := ctx.DB().Where("id = ?", event.EventID).Find(&evidence).Error; err != nil {
 			return nil, err
 		}
 
@@ -891,7 +891,7 @@ func GetEnvForEvent(ctx context.Context, event models.Event) (*celVariables, err
 	}
 
 	if strings.HasPrefix(event.Name, "component.") {
-		componentID := event.Properties["id"]
+		componentID := event.EventID.String()
 
 		component, err := query.GetCachedComponent(ctx, componentID)
 		if err != nil {
@@ -917,7 +917,7 @@ func GetEnvForEvent(ctx context.Context, event models.Event) (*celVariables, err
 	}
 
 	if strings.HasPrefix(event.Name, "config.") {
-		configID := event.Properties["id"]
+		configID := event.EventID.String()
 		if event.Name == api.EventConfigChanged || event.Name == api.EventConfigUpdated {
 			configID = event.Properties["config_id"]
 		}

@@ -29,7 +29,7 @@ func RegisterEvents(ctx context.Context) {
 // generateResponderAddedAsyncEvent generates async events for each of the configured responder clients
 // in the associated team.
 func generateResponderAddedAsyncEvent(ctx context.Context, event models.Event) error {
-	responderID := event.Properties["id"]
+	responderID := event.EventID.String()
 
 	var responder api.Responder
 	err := ctx.DB().Where("id = ? AND external_id is NULL", responderID).Preload("Incident").Preload("Team").Find(&responder).Error
@@ -59,7 +59,7 @@ func generateResponderAddedAsyncEvent(ctx context.Context, event models.Event) e
 
 // generateCommentAddedAsyncEvent generates comment.add async events for each of the configured responder clients.
 func generateCommentAddedAsyncEvent(ctx context.Context, event models.Event) error {
-	commentID := event.Properties["id"]
+	commentID := event.EventID.String()
 
 	var comment api.Comment
 	err := ctx.DB().Where("id = ? AND external_id IS NULL", commentID).First(&comment).Error
@@ -130,7 +130,7 @@ func handleResponderEvent(ctx context.Context, event models.Event) error {
 
 // TODO: Modify this such that it only notifies the responder mentioned in the event.
 func reconcileResponderEvent(ctx context.Context, event models.Event) error {
-	responderID := event.Properties["id"]
+	responderID := event.EventID.String()
 
 	var responder api.Responder
 	err := ctx.DB().Where("id = ? AND external_id is NULL", responderID).Preload("Incident").Preload("Team").Find(&responder).Error
@@ -157,7 +157,7 @@ func reconcileResponderEvent(ctx context.Context, event models.Event) error {
 
 // TODO: Modify this such that it only adds the comment to the particular responder mentioned in the event.
 func reconcileCommentEvent(ctx context.Context, event models.Event) error {
-	commentID := event.Properties["id"]
+	commentID := event.EventID.String()
 
 	var comment api.Comment
 	err := ctx.DB().Where("id = ? AND external_id IS NULL", commentID).First(&comment).Error

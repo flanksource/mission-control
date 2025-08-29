@@ -217,7 +217,7 @@ const (
 )
 
 func onNewRun(ctx context.Context, event models.Event) error {
-	var playbookID = event.Properties["id"]
+	var playbookID = event.EventID.String()
 
 	// What triggered the run?
 	// Must be either a notification, or a playbook run.
@@ -368,7 +368,7 @@ func onNewRun(ctx context.Context, event models.Event) error {
 }
 
 func onApprovalUpdated(ctx context.Context, event models.Event) error {
-	playbookID := event.Properties["id"]
+	playbookID := event.EventID.String()
 
 	var playbook models.Playbook
 	if err := ctx.DB().Where("id = ?", playbookID).First(&playbook).Error; err != nil {
