@@ -10,7 +10,6 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/dataquery"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
 	pkgView "github.com/flanksource/duty/view"
 	"github.com/samber/lo"
@@ -140,30 +139,6 @@ func Run(ctx context.Context, view *v1.View, request *requestOpt) (*api.ViewResu
 			Name: pkgView.ReservedColumnAttributes,
 			Type: pkgView.ColumnTypeAttributes,
 		})
-	}
-
-	for _, filter := range view.Spec.Templating {
-		if len(filter.Values) > 0 {
-			output.Variables = append(output.Variables, api.ViewVariableWithOptions{
-				ViewVariable: filter,
-				Options:      filter.Values,
-			})
-		} else if filter.ValueFrom != nil {
-			if !filter.ValueFrom.Config.IsEmpty() {
-				resources, err := query.FindConfigsByResourceSelector(ctx, valueFromMaxResults, filter.ValueFrom.Config)
-				if err != nil {
-					return nil, fmt.Errorf("failed to get resources for filter %s: %w", filter.Key, err)
-				}
-
-				values := lo.Map(resources, func(r models.ConfigItem, _ int) string {
-					return lo.FromPtr(r.Name)
-				})
-				output.Variables = append(output.Variables, api.ViewVariableWithOptions{
-					ViewVariable: filter,
-					Options:      values,
-				})
-			}
-		}
 	}
 
 	return &output, nil

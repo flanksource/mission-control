@@ -57,7 +57,7 @@ type ViewVariable struct {
 	ValueFrom *ViewVariableValueFrom `json:"valueFrom,omitempty" yaml:"valueFrom,omitempty"`
 
 	// Default is the default value of the filter.
-	Default string `json:"default" yaml:"default"`
+	Default string `json:"default,omitempty" yaml:"default,omitempty"`
 }
 
 // +kubebuilder:object:generate=true

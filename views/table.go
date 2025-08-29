@@ -88,6 +88,35 @@ func WithIncludeRows(include bool) ViewOption {
 	}
 }
 
+func populateViewVariables(ctx context.Context, variables []api.ViewVariable) ([]api.ViewVariableWithOptions, error) {
+	output := []api.ViewVariableWithOptions{}
+	for _, filter := range variables {
+		if len(filter.Values) > 0 {
+			output = append(output, api.ViewVariableWithOptions{
+				ViewVariable: filter,
+				Options:      filter.Values,
+			})
+		} else if filter.ValueFrom != nil {
+			if !filter.ValueFrom.Config.IsEmpty() {
+				resources, err := query.FindConfigsByResourceSelector(ctx, valueFromMaxResults, filter.ValueFrom.Config)
+				if err != nil {
+					return nil, fmt.Errorf("failed to get resources for filter %s: %w", filter.Key, err)
+				}
+
+				values := lo.Map(resources, func(r models.ConfigItem, _ int) string {
+					return lo.FromPtr(r.Name)
+				})
+				output = append(output, api.ViewVariableWithOptions{
+					ViewVariable: filter,
+					Options:      values,
+				})
+			}
+		}
+	}
+
+	return output, nil
+}
+
 // ReadOrPopulateViewTable reads view data from the view's table with cache control.
 // If the table does not exist, it will be created and the view will be populated.
 // If the cache has expired based on maxAge, the view will be refreshed with timeout handling.
@@ -99,10 +128,22 @@ func ReadOrPopulateViewTable(ctx context.Context, namespace, name string, opts .
 		return nil, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "view %s/%s not found", namespace, name)
 	}
 
-	// Set default variables from the view spec even if it wasn't provided
-	for _, variable := range view.Spec.Templating {
+	variables, err := populateViewVariables(ctx, view.Spec.Templating)
+	if err != nil {
+		return nil, fmt.Errorf("failed to populate view variables: %w", err)
+	}
+
+	// Set initial values for variables
+	for _, variable := range variables {
 		if variable.Default != "" {
 			opts = append(opts, WithVariableDefault(variable.Key, variable.Default))
+		} else {
+			// Set the first value as the default
+			if len(variable.Options) > 0 {
+				opts = append(opts, WithVariableDefault(variable.Key, variable.Options[0]))
+			} else {
+				return nil, dutyAPI.Errorf(dutyAPI.EINVALID, "variable %s has no default value and no options were found to use as fallback", variable.Key)
+			}
 		}
 	}
 
@@ -125,11 +166,21 @@ func ReadOrPopulateViewTable(ctx context.Context, namespace, name string, opts .
 		return nil, fmt.Errorf("failed to check cache expiration: %w", err)
 	}
 
+	var result *api.ViewResult
 	if ((view.HasTable() && tableExists) || !view.HasTable()) && !cacheExpired {
-		return readCachedViewData(ctx, view, request)
+		result, err = readCachedViewData(ctx, view, request)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read cached view data: %w", err)
+		}
+	} else {
+		result, err = handleViewRefresh(ctx, view, cacheOptions, tableExists, request)
+		if err != nil {
+			return nil, fmt.Errorf("failed to handle view refresh: %w", err)
+		}
 	}
 
-	return handleViewRefresh(ctx, view, cacheOptions, tableExists, request)
+	result.Variables = variables
+	return result, nil
 }
 
 // handleViewRefresh deduplicates concurrent view refresh operations using singleflight
