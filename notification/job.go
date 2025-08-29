@@ -13,9 +13,6 @@ import (
 	"github.com/flanksource/duty/job"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
-	"github.com/flanksource/incident-commander/api"
-	v1 "github.com/flanksource/incident-commander/api/v1"
-	"github.com/flanksource/incident-commander/db"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"gorm.io/gorm"
@@ -24,6 +21,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/flanksource/incident-commander/api"
+	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/db"
 )
 
 var CRDStatusUpdateQueue *collections.Queue[string]
@@ -316,7 +317,7 @@ func shouldSkipNotificationDueToHealth(ctx context.Context, notif NotificationWi
 	var payload NotificationEventPayload
 	payload.FromMap(currentHistory.Payload)
 
-	originalEvent := models.Event{Name: payload.EventName, CreatedAt: payload.EventCreatedAt}
+	originalEvent := models.Event{Name: payload.EventName, EventID: payload.EventID, CreatedAt: payload.EventCreatedAt}
 	if len(payload.Properties) > 0 {
 		if err := json.Unmarshal(payload.Properties, &originalEvent.Properties); err != nil {
 			return false, fmt.Errorf("failed to unmarshal properties: %w", err)
@@ -363,10 +364,10 @@ func shouldSkipNotificationDueToHealth(ctx context.Context, notif NotificationWi
 	deleted := resourceHealth.DeletedAt != nil
 	relativeUpdatedAt := time.Since(lo.FromPtr(resourceHealth.UpdatedAt))
 
-	traceLog("NotificationID=%s HistoryID=%s Resource=[%s/%s] PreviousHealth=%s CurrentHealth=%s UpdatedAt=%s RelativeUpdatedAtAgo=%s Checking if reportable", notif.ID, currentHistory.ID, payload.EventName, payload.ID, previousHealth, currentHealth, lo.FromPtr(resourceHealth.UpdatedAt), relativeUpdatedAt)
+	traceLog("NotificationID=%s HistoryID=%s Resource=[%s/%s] PreviousHealth=%s CurrentHealth=%s UpdatedAt=%s RelativeUpdatedAtAgo=%s Checking if reportable", notif.ID, currentHistory.ID, payload.EventName, payload.ResourceID, previousHealth, currentHealth, lo.FromPtr(resourceHealth.UpdatedAt), relativeUpdatedAt)
 	if !isHealthReportable(notif.Events, previousHealth, currentHealth) || deleted {
 		ctx.Logger.V(6).Infof("skipping notification[%s] as health change is not reportable", notif.ID)
-		traceLog("NotificationID=%s HistoryID=%s Resource=[%s/%s] PreviousHealth=%s CurrentHealth=%s ResourceDeleted=%v Skipping", notif.ID, currentHistory.ID, payload.EventName, payload.ID, previousHealth, currentHealth, deleted)
+		traceLog("NotificationID=%s HistoryID=%s Resource=[%s/%s] PreviousHealth=%s CurrentHealth=%s ResourceDeleted=%v Skipping", notif.ID, currentHistory.ID, payload.EventName, payload.ResourceID, previousHealth, currentHealth, deleted)
 
 		if err := db.SkipNotificationSendHistory(ctx, currentHistory.ID); err != nil {
 			return false, fmt.Errorf("failed to skip notification send history (%s): %w", currentHistory.ID, err)
@@ -374,7 +375,7 @@ func shouldSkipNotificationDueToHealth(ctx context.Context, notif NotificationWi
 
 		return true, nil
 	}
-	traceLog("NotificationID=%s HistoryID=%s Resource=[%s/%s] PreviousHealth=%s CurrentHealth=%s Reporting ...", notif.ID, currentHistory.ID, payload.EventName, payload.ID, previousHealth, currentHealth)
+	traceLog("NotificationID=%s HistoryID=%s Resource=[%s/%s] PreviousHealth=%s CurrentHealth=%s Reporting ...", notif.ID, currentHistory.ID, payload.EventName, payload.ResourceID, previousHealth, currentHealth)
 	return false, nil
 }
 
@@ -406,14 +407,7 @@ func processPendingNotification(ctx context.Context, currentHistory models.Notif
 	var payload NotificationEventPayload
 	payload.FromMap(currentHistory.Payload)
 
-	event := models.Event{
-		Name:      payload.EventName,
-		CreatedAt: payload.EventCreatedAt,
-		Properties: map[string]string{
-			"id": payload.ID.String(),
-		},
-	}
-	celEnv, err := GetEnvForEvent(ctx, event)
+	celEnv, err := GetEnvForEvent(ctx, payload.ParentEvent())
 	if err != nil {
 		return fmt.Errorf("failed to get cel env: %w", err)
 	}
@@ -465,7 +459,7 @@ func triggerIncrementalScrape(ctx context.Context, configID string) error {
 	}
 
 	onConflictClause := clause.OnConflict{
-		Columns: []clause.Column{{Name: "name"}, {Name: "properties"}},
+		Columns: models.EventQueueUniqueConstraint(),
 		DoUpdates: clause.Assignments(map[string]any{
 			"created_at": gorm.Expr("CURRENT_TIMESTAMP"),
 		}),
