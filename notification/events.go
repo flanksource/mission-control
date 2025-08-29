@@ -342,7 +342,8 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 		} else {
 			newEvent := models.Event{
 				Name:       api.EventNotificationSend,
-				Properties: payload.WithIDSet().AsMap(),
+				EventID:    payload.GenerateEventID(),
+				Properties: payload.AsMap(),
 			}
 			if err := ctx.DB().Clauses(events.EventQueueOnConflictClause).Create(&newEvent).Error; err != nil {
 				return fmt.Errorf("failed to saved `notification.send` event for payload (%v): %w", payload.AsMap(), err)
@@ -690,7 +691,7 @@ func sendNotification(ctx context.Context, payload NotificationEventPayload) err
 }
 
 func _sendNotification(ctx *Context, payload NotificationEventPayload) error {
-	originalEvent := models.Event{Name: payload.EventName, CreatedAt: payload.EventCreatedAt}
+	originalEvent := payload.ParentEvent()
 	if len(payload.Properties) > 0 {
 		if err := json.Unmarshal(payload.Properties, &originalEvent.Properties); err != nil {
 			return fmt.Errorf("failed to unmarshal properties: %w", err)
