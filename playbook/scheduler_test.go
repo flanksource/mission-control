@@ -13,6 +13,7 @@ import (
 	"github.com/samber/lo"
 
 	"github.com/flanksource/incident-commander/api"
+	pkgEvents "github.com/flanksource/incident-commander/events"
 )
 
 type TestResource struct {
@@ -28,7 +29,7 @@ type TestCase struct {
 	DatabaseChange        func(context.Context, TestResource) error
 	IgnoreEvents          []string
 	ExpectedEvents        []string
-	ExpectedEventResource func(TestResource) EventResource
+	ExpectedEventResource func(TestResource) pkgEvents.EventResource
 }
 
 var _ = ginkgo.Describe("Playbook Scheduler EventResource Generation", ginkgo.Ordered, func() {
@@ -111,7 +112,7 @@ var _ = ginkgo.Describe("Playbook Scheduler EventResource Generation", ginkgo.Or
 			Expect(eventNames).To(ConsistOf(tc.ExpectedEvents))
 
 			for _, event := range events {
-				actualEventResource, err := buildEventResource(ctx, event)
+				actualEventResource, err := pkgEvents.BuildEventResource(ctx, event)
 				Expect(err).NotTo(HaveOccurred())
 
 				expectedEventResource := tc.ExpectedEventResource(tc.Resources)
@@ -171,8 +172,8 @@ var _ = ginkgo.Describe("Playbook Scheduler EventResource Generation", ginkgo.Or
 				return ctx.DB().Model(res.Check).UpdateColumn("status", models.CheckStatusHealthy).Error
 			},
 			ExpectedEvents: []string{api.EventCheckPassed},
-			ExpectedEventResource: func(res TestResource) EventResource {
-				return EventResource{
+			ExpectedEventResource: func(res TestResource) pkgEvents.EventResource {
+				return pkgEvents.EventResource{
 					Check:  res.Check,
 					Canary: res.Canary,
 				}
@@ -198,8 +199,8 @@ var _ = ginkgo.Describe("Playbook Scheduler EventResource Generation", ginkgo.Or
 				return ctx.DB().Model(res.Check).UpdateColumn("status", models.CheckStatusUnhealthy).Error
 			},
 			ExpectedEvents: []string{api.EventCheckFailed},
-			ExpectedEventResource: func(res TestResource) EventResource {
-				return EventResource{
+			ExpectedEventResource: func(res TestResource) pkgEvents.EventResource {
+				return pkgEvents.EventResource{
 					Check:  res.Check,
 					Canary: res.Canary,
 				}
@@ -223,8 +224,8 @@ var _ = ginkgo.Describe("Playbook Scheduler EventResource Generation", ginkgo.Or
 				return ctx.DB().Model(res.Component).UpdateColumn("health", models.HealthUnhealthy).Error
 			},
 			ExpectedEvents: []string{api.EventComponentUnhealthy},
-			ExpectedEventResource: func(res TestResource) EventResource {
-				return EventResource{
+			ExpectedEventResource: func(res TestResource) pkgEvents.EventResource {
+				return pkgEvents.EventResource{
 					Component: res.Component,
 				}
 			},
@@ -245,8 +246,8 @@ var _ = ginkgo.Describe("Playbook Scheduler EventResource Generation", ginkgo.Or
 				return ctx.DB().Model(res.Component).UpdateColumn("health", models.HealthHealthy).Error
 			},
 			ExpectedEvents: []string{api.EventComponentHealthy},
-			ExpectedEventResource: func(res TestResource) EventResource {
-				return EventResource{
+			ExpectedEventResource: func(res TestResource) pkgEvents.EventResource {
+				return pkgEvents.EventResource{
 					Component: res.Component,
 				}
 			},
@@ -267,8 +268,8 @@ var _ = ginkgo.Describe("Playbook Scheduler EventResource Generation", ginkgo.Or
 				return ctx.DB().Model(res.Component).UpdateColumn("health", models.HealthWarning).Error
 			},
 			ExpectedEvents: []string{api.EventComponentWarning},
-			ExpectedEventResource: func(res TestResource) EventResource {
-				return EventResource{
+			ExpectedEventResource: func(res TestResource) pkgEvents.EventResource {
+				return pkgEvents.EventResource{
 					Component: res.Component,
 				}
 			},
@@ -289,8 +290,8 @@ var _ = ginkgo.Describe("Playbook Scheduler EventResource Generation", ginkgo.Or
 				return ctx.DB().Model(res.Component).UpdateColumn("health", "").Error
 			},
 			ExpectedEvents: []string{api.EventComponentUnknown},
-			ExpectedEventResource: func(res TestResource) EventResource {
-				return EventResource{
+			ExpectedEventResource: func(res TestResource) pkgEvents.EventResource {
+				return pkgEvents.EventResource{
 					Component: res.Component,
 				}
 			},
@@ -315,8 +316,8 @@ var _ = ginkgo.Describe("Playbook Scheduler EventResource Generation", ginkgo.Or
 			},
 			IgnoreEvents:   []string{api.EventConfigChanged, api.EventConfigCreated},
 			ExpectedEvents: []string{api.EventConfigUnhealthy},
-			ExpectedEventResource: func(res TestResource) EventResource {
-				return EventResource{
+			ExpectedEventResource: func(res TestResource) pkgEvents.EventResource {
+				return pkgEvents.EventResource{
 					Config: res.Config,
 				}
 			},
@@ -339,8 +340,8 @@ var _ = ginkgo.Describe("Playbook Scheduler EventResource Generation", ginkgo.Or
 			},
 			IgnoreEvents:   []string{api.EventConfigChanged, api.EventConfigCreated, api.EventConfigUnhealthy},
 			ExpectedEvents: []string{api.EventConfigHealthy},
-			ExpectedEventResource: func(res TestResource) EventResource {
-				return EventResource{
+			ExpectedEventResource: func(res TestResource) pkgEvents.EventResource {
+				return pkgEvents.EventResource{
 					Config: res.Config,
 				}
 			},
@@ -363,8 +364,8 @@ var _ = ginkgo.Describe("Playbook Scheduler EventResource Generation", ginkgo.Or
 			},
 			IgnoreEvents:   []string{api.EventConfigCreated, api.EventConfigChanged},
 			ExpectedEvents: []string{api.EventConfigWarning},
-			ExpectedEventResource: func(res TestResource) EventResource {
-				return EventResource{
+			ExpectedEventResource: func(res TestResource) pkgEvents.EventResource {
+				return pkgEvents.EventResource{
 					Config: res.Config,
 				}
 			},
@@ -388,8 +389,8 @@ var _ = ginkgo.Describe("Playbook Scheduler EventResource Generation", ginkgo.Or
 			},
 			IgnoreEvents:   []string{api.EventConfigCreated, api.EventConfigChanged, api.EventConfigUnhealthy},
 			ExpectedEvents: []string{api.EventConfigDegraded},
-			ExpectedEventResource: func(res TestResource) EventResource {
-				return EventResource{
+			ExpectedEventResource: func(res TestResource) pkgEvents.EventResource {
+				return pkgEvents.EventResource{
 					Config: res.Config,
 				}
 			},
@@ -412,8 +413,8 @@ var _ = ginkgo.Describe("Playbook Scheduler EventResource Generation", ginkgo.Or
 			},
 			IgnoreEvents:   []string{api.EventConfigCreated, api.EventConfigChanged},
 			ExpectedEvents: []string{api.EventConfigUnknown},
-			ExpectedEventResource: func(res TestResource) EventResource {
-				return EventResource{
+			ExpectedEventResource: func(res TestResource) pkgEvents.EventResource {
+				return pkgEvents.EventResource{
 					Config: res.Config,
 				}
 			},
@@ -436,8 +437,8 @@ var _ = ginkgo.Describe("Playbook Scheduler EventResource Generation", ginkgo.Or
 				return nil // do nothing
 			},
 			ExpectedEvents: []string{api.EventConfigCreated},
-			ExpectedEventResource: func(res TestResource) EventResource {
-				return EventResource{
+			ExpectedEventResource: func(res TestResource) pkgEvents.EventResource {
+				return pkgEvents.EventResource{
 					Config: res.Config,
 				}
 			},
@@ -464,8 +465,8 @@ var _ = ginkgo.Describe("Playbook Scheduler EventResource Generation", ginkgo.Or
 			},
 			IgnoreEvents:   []string{api.EventConfigCreated},
 			ExpectedEvents: []string{api.EventConfigChanged},
-			ExpectedEventResource: func(res TestResource) EventResource {
-				return EventResource{
+			ExpectedEventResource: func(res TestResource) pkgEvents.EventResource {
+				return pkgEvents.EventResource{
 					Config: res.Config,
 				}
 			},
@@ -487,8 +488,8 @@ var _ = ginkgo.Describe("Playbook Scheduler EventResource Generation", ginkgo.Or
 			},
 			IgnoreEvents:   []string{api.EventConfigCreated},
 			ExpectedEvents: []string{api.EventConfigDeleted},
-			ExpectedEventResource: func(res TestResource) EventResource {
-				return EventResource{
+			ExpectedEventResource: func(res TestResource) pkgEvents.EventResource {
+				return pkgEvents.EventResource{
 					Config: res.Config,
 				}
 			},
