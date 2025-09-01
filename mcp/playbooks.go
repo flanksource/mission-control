@@ -176,7 +176,7 @@ func syncPlaybooksAsTools(ctx context.Context, s *server.MCPServer) error {
 			root.Required = append(root.Required, "check_id")
 		}
 		if len(spec.Configs) > 0 {
-			root.Properties.Set("config_id", &jsonschema.Schema{Type: "string", Description: "UUID of config_item/catalog_item this playbook belongs to"})
+			root.Properties.Set("config_id", &jsonschema.Schema{Type: "string", Description: "UUID of config item (from catalog_search results). Example: f47ac10b-58cc-4372-a567-0e02b2c3d479"})
 			root.Required = append(root.Required, "config_id")
 		}
 		if len(spec.Components) > 0 {
@@ -245,19 +245,17 @@ func registerPlaybook(ctx context.Context, s *server.MCPServer) {
 		mcp.WithDescription("List all available playbooks")), playbookListToolHandler)
 
 	playbookRecentRunTool := mcp.NewTool("playbook_recent_runs",
-		mcp.WithDescription("Playbook recent runs"),
+		mcp.WithDescription("Get recent playbook execution history as JSON array. Each entry contains run details, status, timing, and results."),
 		mcp.WithNumber("limit",
-			mcp.Required(),
-			mcp.Description("Search query"),
+			mcp.Description("Maximum number of recent runs to return (default: 20)"),
 		))
 
 	s.AddTool(playbookRecentRunTool, playbookRecentRunHandler)
 
 	playbookFailedRunTool := mcp.NewTool("playbook_failed_runs",
-		mcp.WithDescription("Playbook recent runs"),
+		mcp.WithDescription("Get recent failed playbook runs as JSON array. Each entry contains failure details, error messages, and timing information."),
 		mcp.WithNumber("limit",
-			mcp.Required(),
-			mcp.Description("Search query"),
+			mcp.Description("Maximum number of failed runs to return (default: 20)"),
 		))
 
 	s.AddTool(playbookFailedRunTool, playbookFailedRunHandler)

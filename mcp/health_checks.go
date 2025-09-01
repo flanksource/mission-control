@@ -173,8 +173,8 @@ func registerHealthChecks(s *server.MCPServer) {
 	Use this single specification to parse requests, generate valid health check search queries, and validate existing ones.
 `
 
-	healthCheckSearchTool := mcp.NewTool("health_check_search",
-		mcp.WithDescription("Search across health checks"),
+	healthCheckSearchTool := mcp.NewTool("search_health_checks",
+		mcp.WithDescription("Search and find health checks returning JSON array with check metadata"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("query",
 			mcp.Required(),
@@ -185,7 +185,7 @@ func registerHealthChecks(s *server.MCPServer) {
 	s.AddTool(healthCheckSearchTool, healthCheckSearchHandler)
 
 	getCheckStatusTool := mcp.NewTool("get_check_status",
-		mcp.WithDescription("Get status history for a specific health check"),
+		mcp.WithDescription("Get health check execution history as JSON array. Each entry contains status, time, duration, and error (if any). Ordered by most recent first."),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("id",
 			mcp.Required(),
@@ -195,8 +195,8 @@ func registerHealthChecks(s *server.MCPServer) {
 	)
 	s.AddTool(getCheckStatusTool, checkStatusHandler)
 
-	healthCheckRunTool := mcp.NewTool("health_check_run",
-		mcp.WithDescription("Run any health check instantly"),
+	healthCheckRunTool := mcp.NewTool("run_health_check",
+		mcp.WithDescription("Execute a health check immediately and return results. Returns execution status and timing information."),
 		mcp.WithString("id",
 			mcp.Required(),
 			mcp.Description("Health check ID to run"),
@@ -205,7 +205,7 @@ func registerHealthChecks(s *server.MCPServer) {
 	s.AddTool(healthCheckRunTool, healthCheckRunHandler)
 
 	listAllChecksTool := mcp.NewTool("list_all_checks",
-		mcp.WithDescription("List all health checks"),
+		mcp.WithDescription("List all health checks as JSON array with complete metadata including names, IDs, and current status"),
 		mcp.WithReadOnlyHintAnnotation(true),
 	)
 	s.AddTool(listAllChecksTool, listAllChecksHandler)
