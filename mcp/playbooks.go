@@ -148,6 +148,10 @@ func playbookResourceHandler(goctx gocontext.Context, req mcp.ReadResourceReques
 // ToolName -> Playbook ID
 var currentPlaybookTools = make(map[string]string)
 
+var commonPlaybookToolDescription = strings.TrimSpace(`
+
+`)
+
 func syncPlaybooksAsTools(ctx context.Context, s *server.MCPServer) error {
 	playbooks, err := gorm.G[models.Playbook](ctx.DB()).Where("deleted_at IS NULL").Find(ctx)
 	if err != nil {
@@ -203,7 +207,7 @@ func syncPlaybooksAsTools(ctx context.Context, s *server.MCPServer) error {
 
 		rj, err := root.MarshalJSON()
 		if err != nil {
-			return fmt.Errorf("error marshalling root json schema: %w", err)
+			return fmt.Errorf("error marshaling root json schema: %w", err)
 		}
 
 		toolName := generatePlaybookToolName(pb)

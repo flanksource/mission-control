@@ -32,9 +32,9 @@ func searchCatalogHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mc
 	var cis any
 	switch req.Params.Name {
 	case "describe_config":
-		cis, err = queryConfigItemSummary(ctx, limit, q)
+		cis, err = queryConfigItemDescription(ctx, limit, q)
 	default:
-		cis, err = query.FindConfigsByResourceSelector(ctx, limit, types.ResourceSelector{Search: q})
+		cis, err = queryConfigItemSummary(ctx, limit, q)
 	}
 
 	if err != nil {
@@ -50,23 +50,28 @@ func searchCatalogHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mc
 }
 
 type ConfigDescription struct {
+	models.ConfigItem
+	AvailableTools []string `json:"available_tools"`
+}
+
+type ConfigSummary struct {
 	models.ConfigItemSummary
 	AvailableTools []string `json:"available_tools"`
 }
 
-func queryConfigItemSummary(ctx context.Context, limit int, q string) ([]ConfigDescription, error) {
+func queryConfigItemSummary(ctx context.Context, limit int, q string) ([]ConfigSummary, error) {
 	configs, err := query.FindConfigItemSummaryByResourceSelector(ctx, limit, types.ResourceSelector{Search: q})
 	if err != nil {
 		return nil, err
 	}
-	var cds []ConfigDescription
+	var cds []ConfigSummary
 	for _, c := range configs {
 		_, pbs, err := db.FindPlaybooksForConfig(ctx, c.ToConfigItem())
 		if err != nil {
 			return nil, err
 		}
 
-		cds = append(cds, ConfigDescription{
+		cds = append(cds, ConfigSummary{
 			ConfigItemSummary: c,
 			AvailableTools: lo.Map(pbs, func(p *models.Playbook, _ int) string {
 				return generatePlaybookToolName(lo.FromPtr(p))
@@ -75,6 +80,29 @@ func queryConfigItemSummary(ctx context.Context, limit int, q string) ([]ConfigD
 	}
 	return cds, nil
 }
+
+func queryConfigItemDescription(ctx context.Context, limit int, q string) ([]ConfigDescription, error) {
+	configs, err := query.FindConfigsByResourceSelector(ctx, limit, types.ResourceSelector{Search: q})
+	if err != nil {
+		return nil, err
+	}
+	var cds []ConfigDescription
+	for _, c := range configs {
+		_, pbs, err := db.FindPlaybooksForConfig(ctx, c)
+		if err != nil {
+			return nil, err
+		}
+
+		cds = append(cds, ConfigDescription{
+			ConfigItem: c,
+			AvailableTools: lo.Map(pbs, func(p *models.Playbook, _ int) string {
+				return generatePlaybookToolName(lo.FromPtr(p))
+			}),
+		})
+	}
+	return cds, nil
+}
+
 func searchConfigChangesHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	q, err := req.RequireString("query")
 	if err != nil {
