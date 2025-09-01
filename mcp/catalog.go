@@ -301,8 +301,8 @@ func registerCatalog(s *server.MCPServer) {
 	Each catalog item also has more information in its config field which can be queried by calling the tool describe_config(query), the query is the same
 	but that tool should only be called when "describe" is explicitly used
 	`
-	searchCatalogTool := mcp.NewTool("catalog_search",
-		mcp.WithDescription("Search across catalog."+catalogSearchDescription),
+	searchCatalogTool := mcp.NewTool("search_catalog",
+		mcp.WithDescription("Search and find configuration items in the catalog. Found items expose 'available_tools' field listing applicable playbook tools. For detailed config data, use describe_config tool."+catalogSearchDescription),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("query",
 			mcp.Required(),
@@ -393,8 +393,8 @@ func registerCatalog(s *server.MCPServer) {
 	Use this single specification to parse requests, generate valid catalog-search queries, and validate existing ones.
 	`
 
-	searchCatalogChangesTool := mcp.NewTool("catalog_changes_search",
-		mcp.WithDescription("Search across catalog changes"),
+	searchCatalogChangesTool := mcp.NewTool("search_catalog_changes",
+		mcp.WithDescription("Search and find configuration change events across catalog items"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("query",
 			mcp.Required(),
@@ -404,8 +404,8 @@ func registerCatalog(s *server.MCPServer) {
 	)
 	s.AddTool(searchCatalogChangesTool, searchConfigChangesHandler)
 
-	relatedCatalogTool := mcp.NewTool("related_configs",
-		mcp.WithDescription("Get related configs"),
+	relatedCatalogTool := mcp.NewTool("get_related_configs",
+		mcp.WithDescription("Find configuration items related to a specific config by relationships and dependencies"),
 		mcp.WithString("id",
 			mcp.Required(),
 			mcp.Description("Config ID"),

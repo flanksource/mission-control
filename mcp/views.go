@@ -66,14 +66,12 @@ func getViewHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.Call
 }
 
 func registerViews(s *server.MCPServer) {
-	s.AddTool(mcp.NewTool("list_views", mcp.WithDescription("List all available views")), listViewHandler)
+	s.AddTool(mcp.NewTool("list_views", mcp.WithDescription("List all available dashboard views with their namespace, name, and title")), listViewHandler)
 
 	s.AddTool(mcp.NewTool("get_view",
-		mcp.WithDescription(`
-			Get all information of a view. The list_views tool should be called first to get the namespace/name of the available views.
-			The response has rows and columns, so unless specified otherwise, show them in a markdown table format.
-			The panels in response are graphical data, but the rows in panel can be shown. If you have the ability to display the panel as its type (piechart, graph etc.) prefer that.
-		`),
+		mcp.WithDescription(`Retrieve dashboard view data containing business metrics and operational data.
+		Views include tabular data (display as markdown tables) and chart panels (show panel data if visualization unavailable).
+		Use list_views first to discover available views by their namespace and name.`),
 		mcp.WithString("namespace", mcp.Description("Namespace of the view")),
 		mcp.WithString("name", mcp.Description("Name of the view")),
 	), getViewHandler)
