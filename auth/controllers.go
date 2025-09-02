@@ -214,12 +214,12 @@ func CreateToken(c echo.Context) error {
 			Message: "Unable to fetch permissions",
 		})
 	}
-	denyPermHashes := lo.Map(reqData.DenyPermissions, func(p policy.Permission, _ int) string { return p.Hash() })
+	denyPermHashes := lo.Map(reqData.DenyPermissions, func(p policy.Permission, _ int) string { return p.HashWithoutSubject() })
 	for _, perm := range existingPerms {
-		if slices.Contains(denyPermHashes, perm.Hash()) {
+		if slices.Contains(denyPermHashes, perm.HashWithoutSubject()) {
 			continue
 		}
-		permsToGive = append(permsToGive, perm.ToArgs())
+		permsToGive = append(permsToGive, perm.ToArgsWithoutSubject())
 	}
 
 	tokenResult, err := CreateAccessTokenForPerson(ctx, ctx.User(), reqData.Name)
@@ -229,11 +229,14 @@ func CreateToken(c echo.Context) error {
 			Message: "Error creating access token",
 		})
 	}
-	if _, err := rbac.Enforcer().AddPermissionsForUser(tokenResult.Person.ID.String(), permsToGive...); err != nil {
-		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
-			Err:     err.Error(),
-			Message: "Unable to create token",
-		})
+
+	if len(permsToGive) > 0 {
+		if _, err := rbac.Enforcer().AddPermissionsForUser(tokenResult.Person.ID.String(), permsToGive...); err != nil {
+			return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
+				Err:     err.Error(),
+				Message: "Unable to create token",
+			})
+		}
 	}
 
 	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{Message: "success", Payload: map[string]string{"token": tokenResult.Token}})
