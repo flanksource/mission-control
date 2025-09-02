@@ -34,7 +34,7 @@ contexts:
 current-context: {{.ContextName}}
 users:
 - name: default-user
-  user: 
+  user:
     username: "token"
     password: "{{.Password}}"
 `
@@ -60,7 +60,7 @@ func DownloadKubeConfig(c echo.Context) error {
 		return err
 	}
 
-	token, err := db.CreateAccessToken(ctx, ctx.User().ID, ctx.User().Email, seed, nil)
+	token, _, err := db.CreateAccessToken(ctx, ctx.User().ID, ctx.User().Email, seed, nil, nil)
 	if err != nil {
 		return fmt.Errorf("failed to create a new access token: %w", err)
 	}

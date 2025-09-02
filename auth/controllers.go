@@ -7,16 +7,14 @@ import (
 	"os"
 	"slices"
 	"strings"
-	"time"
 
-	"github.com/flanksource/commons/properties"
-	"github.com/flanksource/commons/rand"
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/labstack/echo/v4"
 	oryClient "github.com/ory/client-go"
+	"github.com/samber/lo"
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
@@ -187,7 +185,8 @@ func WhoAmI(c echo.Context) error {
 }
 
 type CreateTokenRequest struct {
-	Name string
+	Name            string              `json:"name"`
+	DenyPermissions []policy.Permission `json:"deny_permissions"`
 }
 
 func CreateToken(c echo.Context) error {
@@ -207,24 +206,40 @@ func CreateToken(c echo.Context) error {
 		})
 	}
 
-	password, err := rand.GenerateRandHex(32)
+	var permsToGive [][]string
+	existingPerms, err := rbac.PermsForUser(user.ID.String())
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
 			Err:     err.Error(),
-			Message: "Unable to generate random password to token",
+			Message: "Unable to fetch permissions",
 		})
 	}
+	denyPermHashes := lo.Map(reqData.DenyPermissions, func(p policy.Permission, _ int) string { return p.HashWithoutSubject() })
+	for _, perm := range existingPerms {
+		if slices.Contains(denyPermHashes, perm.HashWithoutSubject()) {
+			continue
+		}
+		permsToGive = append(permsToGive, perm.ToArgsWithoutSubject())
+	}
 
-	expiry := properties.Duration(30*24*time.Hour, "access_token.default_expiry")
-	token, err := db.CreateAccessToken(ctx, user.ID, reqData.Name, password, &expiry)
+	tokenResult, err := CreateAccessTokenForPerson(ctx, ctx.User(), reqData.Name)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
+		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{
 			Err:     err.Error(),
-			Message: "Unable to create token",
+			Message: "Error creating access token",
 		})
 	}
 
-	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{Message: "success", Payload: map[string]string{"token": token}})
+	if len(permsToGive) > 0 {
+		if _, err := rbac.Enforcer().AddPermissionsForUser(tokenResult.Person.ID.String(), permsToGive...); err != nil {
+			return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
+				Err:     err.Error(),
+				Message: "Unable to create token",
+			})
+		}
+	}
+
+	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{Message: "success", Payload: map[string]string{"token": tokenResult.Token}})
 }
 
 func ListTokens(c echo.Context) error {

@@ -395,7 +395,7 @@ require (
 
 // replace github.com/flanksource/duty => ../duty
 
-// replace github.com/flanksource/gomplate/v3 => ../gomplat3
+// replace github.com/flanksource/gomplate/v3 => ../gomplate
 
 // replace github.com/flanksource/commons => ../commons
 

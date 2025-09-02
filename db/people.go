@@ -18,6 +18,8 @@ import (
 	"gorm.io/gorm/clause"
 )
 
+const PersonTypeAccessToken = "access_token"
+
 func UpdateUserProperties(ctx context.Context, userID string, newProps api.PersonProperties) error {
 	var current api.Person
 	if err := ctx.DB().Table("people").Where("id = ?", userID).First(&current).Error; err != nil {
@@ -85,10 +87,10 @@ const (
 	saltLength  = 12
 )
 
-func CreateAccessToken(ctx context.Context, personID uuid.UUID, name, password string, expiry *time.Duration) (string, error) {
+func CreateAccessToken(ctx context.Context, personID uuid.UUID, name, password string, expiry *time.Duration, createdBy *uuid.UUID) (string, *models.AccessToken, error) {
 	saltRaw := make([]byte, saltLength)
 	if _, err := crand.Read(saltRaw); err != nil {
-		return "", err
+		return "", nil, err
 	}
 	salt := base64.URLEncoding.EncodeToString(saltRaw)
 
@@ -107,13 +109,16 @@ func CreateAccessToken(ctx context.Context, personID uuid.UUID, name, password s
 	if expiry != nil {
 		accessToken.ExpiresAt = lo.ToPtr(time.Now().Add(*expiry))
 	}
+	if createdBy != nil {
+		accessToken.CreatedBy = createdBy
+	}
 
 	if err := ctx.DB().Create(&accessToken).Error; err != nil {
-		return "", err
+		return "", nil, err
 	}
 
 	formattedHash := fmt.Sprintf("%s.%s.%d.%d.%d", password, salt, timeCost, memoryCost, parallelism)
-	return formattedHash, nil
+	return formattedHash, accessToken, nil
 }
 
 func UpdateAccessTokenExpiry(ctx context.Context, tokenID uuid.UUID, newExpiry time.Time) error {
