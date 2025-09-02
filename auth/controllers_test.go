@@ -114,8 +114,10 @@ var _ = Describe("CreateToken", Ordered, func() {
 
 		AfterEach(func() {
 			// Clean up permissions
-			dutyRBAC.Enforcer().DeleteRolesForUser(testUser.ID.String())
-			dutyRBAC.Enforcer().DeletePermissionsForUser(testUser.ID.String())
+			_, err = dutyRBAC.Enforcer().DeleteRolesForUser(testUser.ID.String())
+			Expect(err).To(BeNil())
+			_, err = dutyRBAC.Enforcer().DeletePermissionsForUser(testUser.ID.String())
+			Expect(err).To(BeNil())
 		})
 
 		It("should create token successfully with all user permissions", func() {
