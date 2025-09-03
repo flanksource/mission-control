@@ -44,7 +44,7 @@ type ViewResult struct {
 // Variables appear as interactive controls (dropdown menus or text inputs) at the top of the view interface.
 type ViewVariable struct {
 	// Key is the unique identifier of the filter.
-	// The filter's value is accessible in the dataquery templates as {{ .filter.key }}.
+	// The filter's value is accessible in the dataquery templates as  $(.filter.key)
 	Key string `json:"key" yaml:"key"`
 
 	// Label is the human-readable name of the filter.
