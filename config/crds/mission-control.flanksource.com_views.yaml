@@ -935,7 +935,7 @@ spec:
                     key:
                       description: |-
                         Key is the unique identifier of the filter.
-                        The filter's value is accessible in the dataquery templates as {{ .filter.key }}.
+                        The filter's value is accessible in the dataquery templates as  $(.filter.key)
                       type: string
                     label:
                       description: Label is the human-readable name of the filter.
