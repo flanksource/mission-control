@@ -23,7 +23,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.6.0
 	github.com/labstack/echo-contrib v0.17.1
-	github.com/labstack/echo/v4 v4.12.0
+	github.com/labstack/echo/v4 v4.13.3
 	github.com/lib/pq v1.10.9
 	github.com/microsoft/kiota-authentication-azure-go v1.0.0
 	github.com/microsoftgraph/msgraph-sdk-go v1.13.0
@@ -65,9 +65,9 @@ require (
 	github.com/mark3labs/mcp-go v0.37.0
 	github.com/oklog/ulid/v2 v2.1.0
 	github.com/redis/go-redis/v9 v9.7.0
-	github.com/samber/lo v1.49.1
+	github.com/samber/lo v1.51.0
 	github.com/samber/oops v1.17.0
-	github.com/samber/slog-echo v1.14.4
+	github.com/samber/slog-echo v1.17.1
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.1
 	github.com/sethvargo/go-retry v0.3.0
 	github.com/slack-go/slack v0.14.0
@@ -331,7 +331,6 @@ require (
 	github.com/fatih/structs v1.1.0 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
-	github.com/golang-jwt/jwt v3.2.2+incompatible // indirect
 	github.com/golang-jwt/jwt/v4 v4.5.0
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
