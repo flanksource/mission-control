@@ -187,6 +187,7 @@ func WhoAmI(c echo.Context) error {
 type CreateTokenRequest struct {
 	Name            string              `json:"name"`
 	DenyPermissions []policy.Permission `json:"deny_permissions"`
+	Scope           []policy.Permission `json:"scope"`
 }
 
 func CreateToken(c echo.Context) error {
@@ -206,28 +207,23 @@ func CreateToken(c echo.Context) error {
 		})
 	}
 
-	var permsToGive [][]string
-	existingPerms, err := rbac.PermsForUser(user.ID.String())
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
-			Err:     err.Error(),
-			Message: "Unable to fetch permissions",
-		})
-	}
-	denyPermHashes := lo.Map(reqData.DenyPermissions, func(p policy.Permission, _ int) string { return p.HashWithoutSubject() })
-	for _, perm := range existingPerms {
-		if slices.Contains(denyPermHashes, perm.HashWithoutSubject()) {
-			continue
-		}
-		permsToGive = append(permsToGive, perm.ToArgsWithoutSubject())
-	}
-
 	tokenResult, err := CreateAccessTokenForPerson(ctx, ctx.User(), reqData.Name)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{
 			Err:     err.Error(),
 			Message: "Error creating access token",
 		})
+	}
+
+	allPerms := []policy.Permission{}
+	allPermHashes := lo.Map(allPerms, func(p policy.Permission, _ int) string { return p.HashWithoutSubject() })
+
+	var permsToGive [][]string
+	for _, s := range reqData.Scope {
+		if !slices.Contains(allPermHashes, s.HashWithoutSubject()) {
+			s.Deny = true
+			permsToGive = append(permsToGive, s.ToArgsWithoutSubject())
+		}
 	}
 
 	if len(permsToGive) > 0 {
