@@ -56,7 +56,7 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 		ginkgo.It("should search health checks", func() {
 			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
 				Params: mcp.CallToolParams{
-					Name: "health_check_search",
+					Name: "search_health_checks",
 					Arguments: map[string]any{
 						"query": "status=unhealthy",
 					},
@@ -112,7 +112,7 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 		ginkgo.It("should search catalog", func() {
 			result, err := mcpClient.CallTool(context.Background(), mcp.CallToolRequest{
 				Params: mcp.CallToolParams{
-					Name: "catalog_search",
+					Name: "search_catalog",
 					Arguments: map[string]any{
 						"query": "type=Kubernetes::*",
 						"limit": 50,
@@ -134,7 +134,7 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 		ginkgo.It("should search catalog changes", func() {
 			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
 				Params: mcp.CallToolParams{
-					Name: "catalog_changes_search",
+					Name: "search_catalog_changes",
 					Arguments: map[string]any{
 						"query": "change_type=CREATE",
 					},
@@ -152,7 +152,7 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 			testConfigID := dummy.LogisticsAPIDeployment.ID.String()
 			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
 				Params: mcp.CallToolParams{
-					Name: "related_configs",
+					Name: "get_related_configs",
 					Arguments: map[string]any{
 						"id": testConfigID,
 					},
@@ -295,7 +295,7 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 		ginkgo.It("should handle invalid parameters gracefully", func() {
 			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
 				Params: mcp.CallToolParams{
-					Name: "health_check_search",
+					Name: "search_health_checks",
 					Arguments: map[string]interface{}{
 						// Missing required "query" parameter
 						"limit": 5,
