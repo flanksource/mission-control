@@ -19,6 +19,7 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/mail"
+	icrbac "github.com/flanksource/incident-commander/rbac"
 )
 
 func RegisterRoutes(e *echo.Echo) {
@@ -185,8 +186,10 @@ func WhoAmI(c echo.Context) error {
 }
 
 type CreateTokenRequest struct {
-	Name            string              `json:"name"`
-	DenyPermissions []policy.Permission `json:"deny_permissions"`
+	Name string `json:"name"`
+
+	// Empty scope means all permissions the user has
+	Scope []policy.Permission `json:"scope"`
 }
 
 func CreateToken(c echo.Context) error {
@@ -206,22 +209,6 @@ func CreateToken(c echo.Context) error {
 		})
 	}
 
-	var permsToGive [][]string
-	existingPerms, err := rbac.PermsForUser(user.ID.String())
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
-			Err:     err.Error(),
-			Message: "Unable to fetch permissions",
-		})
-	}
-	denyPermHashes := lo.Map(reqData.DenyPermissions, func(p policy.Permission, _ int) string { return p.HashWithoutSubject() })
-	for _, perm := range existingPerms {
-		if slices.Contains(denyPermHashes, perm.HashWithoutSubject()) {
-			continue
-		}
-		permsToGive = append(permsToGive, perm.ToArgsWithoutSubject())
-	}
-
 	tokenResult, err := CreateAccessTokenForPerson(ctx, ctx.User(), reqData.Name)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{
@@ -230,12 +217,34 @@ func CreateToken(c echo.Context) error {
 		})
 	}
 
-	if len(permsToGive) > 0 {
-		if _, err := rbac.Enforcer().AddPermissionsForUser(tokenResult.Person.ID.String(), permsToGive...); err != nil {
-			return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
-				Err:     err.Error(),
-				Message: "Unable to create token",
-			})
+	if _, err := rbac.Enforcer().AddGroupingPolicy(tokenResult.Person.ID.String(), user.ID.String()); err != nil {
+		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{
+			Err:     err.Error(),
+			Message: "Error grouping token with user",
+		})
+
+	}
+
+	if len(reqData.Scope) > 0 {
+		// Remove subject from scope if exists
+		for i := range reqData.Scope {
+			reqData.Scope[i].Subject = ""
+		}
+
+		var permsToDeny [][]string
+		diff, _ := lo.Difference(icrbac.AllPermissions, reqData.Scope)
+		for _, p := range diff {
+			p.Deny = true
+			permsToDeny = append(permsToDeny, p.ToArgsWithoutSubject())
+		}
+
+		if len(permsToDeny) > 0 {
+			if _, err := rbac.Enforcer().AddPermissionsForUser(tokenResult.Person.ID.String(), permsToDeny...); err != nil {
+				return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
+					Err:     err.Error(),
+					Message: "Unable to create token",
+				})
+			}
 		}
 	}
 
