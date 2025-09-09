@@ -54,31 +54,8 @@ type ConfigDescription struct {
 	AvailableTools []string `json:"available_tools"`
 }
 
-type ConfigSummary struct {
-	models.ConfigItemSummary
-	AvailableTools []string `json:"available_tools"`
-}
-
-func queryConfigItemSummary(ctx context.Context, limit int, q string) ([]ConfigSummary, error) {
-	configs, err := query.FindConfigItemSummaryByResourceSelector(ctx, limit, types.ResourceSelector{Search: q})
-	if err != nil {
-		return nil, err
-	}
-	var cds []ConfigSummary
-	for _, c := range configs {
-		_, pbs, err := db.FindPlaybooksForConfig(ctx, c.ToConfigItem())
-		if err != nil {
-			return nil, err
-		}
-
-		cds = append(cds, ConfigSummary{
-			ConfigItemSummary: c,
-			AvailableTools: lo.Map(pbs, func(p *models.Playbook, _ int) string {
-				return generatePlaybookToolName(lo.FromPtr(p))
-			}),
-		})
-	}
-	return cds, nil
+func queryConfigItemSummary(ctx context.Context, limit int, q string) ([]models.ConfigItemSummary, error) {
+	return query.FindConfigItemSummaryByResourceSelector(ctx, limit, types.ResourceSelector{Search: q})
 }
 
 func queryConfigItemDescription(ctx context.Context, limit int, q string) ([]ConfigDescription, error) {
