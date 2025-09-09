@@ -279,7 +279,7 @@ func registerCatalog(s *server.MCPServer) {
 	but that tool should only be called when "describe" is explicitly used
 	`
 	searchCatalogTool := mcp.NewTool("search_catalog",
-		mcp.WithDescription("Search and find configuration items in the catalog. Found items expose 'available_tools' field listing applicable playbook tools. For detailed config data, use describe_config tool."+catalogSearchDescription),
+		mcp.WithDescription("Search and find configuration items in the catalog. For detailed config data, use describe_config tool."+catalogSearchDescription),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("query",
 			mcp.Required(),
