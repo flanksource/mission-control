@@ -59,20 +59,21 @@ func (t *celVariables) SetSilenceURL(frontendURL string) {
 
 type ResourceHealthRow struct {
 	Health    models.Health
+	Status    string
 	DeletedAt *time.Time
 	UpdatedAt *time.Time
 }
 
-func (t *celVariables) GetResourceCurrentHealth(ctx context.Context) (ResourceHealthRow, error) {
+func (t *celVariables) GetResourceCurrentHealthStatus(ctx context.Context) (ResourceHealthRow, error) {
 	var err error
 	var row ResourceHealthRow
 	switch {
 	case t.ConfigItem != nil:
-		err = ctx.DB().Model(&models.ConfigItem{}).Select("health, deleted_at", "updated_at").Where("id = ?", t.ConfigItem.ID).Scan(&row).Error
+		err = ctx.DB().Model(&models.ConfigItem{}).Select("health", "status", "deleted_at", "updated_at").Where("id = ?", t.ConfigItem.ID).Scan(&row).Error
 	case t.Component != nil:
-		err = ctx.DB().Model(&models.Component{}).Select("health, deleted_at", "updated_at").Where("id = ?", t.Component.ID).Scan(&row).Error
+		err = ctx.DB().Model(&models.Component{}).Select("health", "status", "deleted_at", "updated_at").Where("id = ?", t.Component.ID).Scan(&row).Error
 	case t.Check != nil:
-		err = ctx.DB().Model(&models.Check{}).Select("status, deleted_at", "updated_at").Where("id = ?", t.Check.ID).Scan(&row).Error
+		err = ctx.DB().Model(&models.Check{}).Select("status AS health", "status", "deleted_at", "updated_at").Where("id = ?", t.Check.ID).Scan(&row).Error
 	default:
 		return ResourceHealthRow{}, errors.New("no resource")
 	}
@@ -117,6 +118,12 @@ func (t *celVariables) AsMap(ctx context.Context) map[string]any {
 	}
 
 	resourceContext := duty.GetResourceContext(ctx, t.SelectableResource())
+	if ctx.DB() != nil {
+		if r, err := t.GetResourceCurrentHealthStatus(ctx); err == nil {
+			resourceContext["health"] = r.Health
+			resourceContext["status"] = r.Status
+		}
+	}
 	return collections.MergeMap(resourceContext, output)
 }
 

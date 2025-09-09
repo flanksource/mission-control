@@ -208,7 +208,7 @@ func resolveGroupMembershipForNotification(ctx context.Context, celEnv *celVaria
 		return false, ctx.Oops().Wrapf(err, "config not found %s", configID)
 	}
 
-	if !lo.Contains(notification.Events, fmt.Sprintf("config.%s", string(*config.Health))) {
+	if !lo.Contains(notification.Events, fmt.Sprintf("config.%s", lo.FromPtr(config.Health))) {
 		return true, nil
 	}
 
