@@ -10,7 +10,6 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
-	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/google/uuid"
@@ -70,7 +69,7 @@ var _ = Describe("CreateToken", Ordered, func() {
 
 	BeforeAll(func() {
 		// Initialize RBAC with admin user
-		if err := dutyRBAC.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter); err != nil {
+		if err := rbac.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter); err != nil {
 			Fail("Failed to initialize RBAC: " + err.Error())
 		}
 
@@ -85,7 +84,7 @@ var _ = Describe("CreateToken", Ordered, func() {
 	Context("with valid user and permissions", func() {
 		BeforeEach(func() {
 			// Add specific permissions for test user
-			_, err = dutyRBAC.Enforcer().AddPermissionsForUser(testUser.ID.String(),
+			_, err = rbac.Enforcer().AddPermissionsForUser(testUser.ID.String(),
 				[]string{policy.ObjectCatalog, policy.ActionRead, "allow", "true", "na"},
 				[]string{policy.ObjectPlaybooks, policy.ActionRead, "allow", "true", "na"},
 			)
@@ -94,9 +93,9 @@ var _ = Describe("CreateToken", Ordered, func() {
 
 		AfterEach(func() {
 			// Clean up permissions
-			_, err = dutyRBAC.Enforcer().DeleteRolesForUser(testUser.ID.String())
+			_, err = rbac.Enforcer().DeleteRolesForUser(testUser.ID.String())
 			Expect(err).To(BeNil())
-			_, err = dutyRBAC.Enforcer().DeletePermissionsForUser(testUser.ID.String())
+			_, err = rbac.Enforcer().DeletePermissionsForUser(testUser.ID.String())
 			Expect(err).To(BeNil())
 		})
 
@@ -176,7 +175,7 @@ var _ = Describe("CreateToken", Ordered, func() {
 			token := findTokenByName(ctx, reqData.Name)
 			Expect(token.ID.String()).ToNot(Equal(uuid.Nil.String()))
 
-			perms, err := dutyRBAC.PermsForUser(token.PersonID.String())
+			perms, err := rbac.PermsForUser(token.PersonID.String())
 			Expect(err).To(BeNil())
 			Expect(perms).To(HaveLen(0), "Token should have no permissions")
 		})
