@@ -213,7 +213,7 @@ func resolveGroupMembershipForNotification(ctx context.Context, celEnv *celVaria
 	}
 
 	if notification.Filter != "" {
-		valid, err := ctx.RunTemplateBool(gomplate.Template{Expression: notification.Filter}, celEnv.AsMap(ctx))
+		valid, err := ctx.RunTemplateBool(gomplate.Template{Expression: notification.Filter}, celEnv.AsMap(ctx, celVarGetLatestHealthStatus))
 		if err != nil {
 			return false, ctx.Oops().Wrapf(err, "failed to validate notification filter for notification %s", notificationID)
 		}

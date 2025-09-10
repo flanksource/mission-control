@@ -3,6 +3,7 @@ package notification
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/flanksource/commons/collections"
@@ -85,7 +86,13 @@ func (t *celVariables) GetResourceCurrentHealthStatus(ctx context.Context) (Reso
 	return row, err
 }
 
-func (t *celVariables) AsMap(ctx context.Context) map[string]any {
+type celAsMapOption string
+
+var (
+	celVarGetLatestHealthStatus celAsMapOption = "latestHealthStatus"
+)
+
+func (t *celVariables) AsMap(ctx context.Context, opts ...celAsMapOption) map[string]any {
 	output := map[string]any{
 		"permalink":  t.Permalink,
 		"silenceURL": t.SilenceURL,
@@ -118,7 +125,7 @@ func (t *celVariables) AsMap(ctx context.Context) map[string]any {
 	}
 
 	resourceContext := duty.GetResourceContext(ctx, t.SelectableResource())
-	if ctx.DB() != nil {
+	if ctx.DB() != nil && slices.Contains(opts, celVarGetLatestHealthStatus) {
 		if r, err := t.GetResourceCurrentHealthStatus(ctx); err == nil {
 			resourceContext["health"] = r.Health
 			resourceContext["status"] = r.Status
