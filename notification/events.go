@@ -208,12 +208,12 @@ func resolveGroupMembershipForNotification(ctx context.Context, celEnv *celVaria
 		return false, ctx.Oops().Wrapf(err, "config not found %s", configID)
 	}
 
-	if !lo.Contains(notification.Events, fmt.Sprintf("config.%s", string(*config.Health))) {
+	if !lo.Contains(notification.Events, fmt.Sprintf("config.%s", lo.FromPtr(config.Health))) {
 		return true, nil
 	}
 
 	if notification.Filter != "" {
-		valid, err := ctx.RunTemplateBool(gomplate.Template{Expression: notification.Filter}, celEnv.AsMap(ctx))
+		valid, err := ctx.RunTemplateBool(gomplate.Template{Expression: notification.Filter}, celEnv.AsMap(ctx, celVarGetLatestHealthStatus))
 		if err != nil {
 			return false, ctx.Oops().Wrapf(err, "failed to validate notification filter for notification %s", notificationID)
 		}
