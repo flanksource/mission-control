@@ -32,9 +32,9 @@ func searchCatalogHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mc
 	var cis any
 	switch req.Params.Name {
 	case "describe_config":
-		cis, err = queryConfigItemSummary(ctx, limit, q)
+		cis, err = queryConfigItemDescription(ctx, limit, q)
 	default:
-		cis, err = query.FindConfigsByResourceSelector(ctx, limit, types.ResourceSelector{Search: q})
+		cis, err = queryConfigItemSummary(ctx, limit, q)
 	}
 
 	if err != nil {
@@ -50,24 +50,28 @@ func searchCatalogHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mc
 }
 
 type ConfigDescription struct {
-	models.ConfigItemSummary
+	models.ConfigItem
 	AvailableTools []string `json:"available_tools"`
 }
 
-func queryConfigItemSummary(ctx context.Context, limit int, q string) ([]ConfigDescription, error) {
-	configs, err := query.FindConfigItemSummaryByResourceSelector(ctx, limit, types.ResourceSelector{Search: q})
+func queryConfigItemSummary(ctx context.Context, limit int, q string) ([]models.ConfigItemSummary, error) {
+	return query.FindConfigItemSummaryByResourceSelector(ctx, limit, types.ResourceSelector{Search: q})
+}
+
+func queryConfigItemDescription(ctx context.Context, limit int, q string) ([]ConfigDescription, error) {
+	configs, err := query.FindConfigsByResourceSelector(ctx, limit, types.ResourceSelector{Search: q})
 	if err != nil {
 		return nil, err
 	}
 	var cds []ConfigDescription
 	for _, c := range configs {
-		_, pbs, err := db.FindPlaybooksForConfig(ctx, c.ToConfigItem())
+		_, pbs, err := db.FindPlaybooksForConfig(ctx, c)
 		if err != nil {
 			return nil, err
 		}
 
 		cds = append(cds, ConfigDescription{
-			ConfigItemSummary: c,
+			ConfigItem: c,
 			AvailableTools: lo.Map(pbs, func(p *models.Playbook, _ int) string {
 				return generatePlaybookToolName(lo.FromPtr(p))
 			}),
@@ -75,6 +79,7 @@ func queryConfigItemSummary(ctx context.Context, limit int, q string) ([]ConfigD
 	}
 	return cds, nil
 }
+
 func searchConfigChangesHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	q, err := req.RequireString("query")
 	if err != nil {
@@ -273,8 +278,8 @@ func registerCatalog(s *server.MCPServer) {
 	Each catalog item also has more information in its config field which can be queried by calling the tool describe_config(query), the query is the same
 	but that tool should only be called when "describe" is explicitly used
 	`
-	searchCatalogTool := mcp.NewTool("catalog_search",
-		mcp.WithDescription("Search across catalog."+catalogSearchDescription),
+	searchCatalogTool := mcp.NewTool("search_catalog",
+		mcp.WithDescription("Search and find configuration items in the catalog. For detailed config data, use describe_config tool."+catalogSearchDescription),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("query",
 			mcp.Required(),
@@ -365,8 +370,8 @@ func registerCatalog(s *server.MCPServer) {
 	Use this single specification to parse requests, generate valid catalog-search queries, and validate existing ones.
 	`
 
-	searchCatalogChangesTool := mcp.NewTool("catalog_changes_search",
-		mcp.WithDescription("Search across catalog changes"),
+	searchCatalogChangesTool := mcp.NewTool("search_catalog_changes",
+		mcp.WithDescription("Search and find configuration change events across catalog items"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("query",
 			mcp.Required(),
@@ -376,8 +381,8 @@ func registerCatalog(s *server.MCPServer) {
 	)
 	s.AddTool(searchCatalogChangesTool, searchConfigChangesHandler)
 
-	relatedCatalogTool := mcp.NewTool("related_configs",
-		mcp.WithDescription("Get related configs"),
+	relatedCatalogTool := mcp.NewTool("get_related_configs",
+		mcp.WithDescription("Find configuration items related to a specific config by relationships and dependencies"),
 		mcp.WithString("id",
 			mcp.Required(),
 			mcp.Description("Config ID"),
