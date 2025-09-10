@@ -48,7 +48,7 @@ func GetRolesForUser(c echo.Context) error {
 	})
 }
 
-func GetPermissionsForSelf(c echo.Context) error {
+func GetPermissionsForToken(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
 	userID := ctx.User().ID.String()
 	perms, err := rbac.PermsForUser(userID)

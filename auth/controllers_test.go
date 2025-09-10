@@ -5,19 +5,17 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"slices"
 
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	dutyRBAC "github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/samber/lo"
 	"gorm.io/gorm"
 
 	"github.com/flanksource/incident-commander/rbac/adapter"
@@ -56,29 +54,10 @@ func findTokenByName(ctx context.Context, tokenName string) models.AccessToken {
 	return token
 }
 
-func permsMatch(set, subset []policy.Permission, ignoreSubject bool) bool {
-	if ignoreSubject {
-		for i := range set {
-			set[i].Subject = ""
-		}
-		for i := range set {
-			subset[i].Subject = ""
-		}
-	}
-
-	// Compare hashes
-	hashes1 := lo.Map(set, func(p policy.Permission, _ int) string { return p.Hash() })
-	hashes2 := lo.Map(subset, func(p policy.Permission, _ int) string { return p.Hash() })
-
-	slices.Sort(hashes1)
-	slices.Sort(hashes2)
-
-	for _, h := range hashes2 {
-		if !slices.Contains(hashes1, h) {
-			return false
-		}
-	}
-	return true
+func canEnforce(sub, obj, act string) bool {
+	allowed, err := rbac.Enforcer().Enforce(sub, obj, act)
+	Expect(err).To(BeNil())
+	return allowed
 }
 
 var _ = Describe("CreateToken", Ordered, func() {
@@ -90,7 +69,7 @@ var _ = Describe("CreateToken", Ordered, func() {
 
 	BeforeAll(func() {
 		// Initialize RBAC with admin user
-		if err := dutyRBAC.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter); err != nil {
+		if err := rbac.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter); err != nil {
 			Fail("Failed to initialize RBAC: " + err.Error())
 		}
 
@@ -105,45 +84,45 @@ var _ = Describe("CreateToken", Ordered, func() {
 	Context("with valid user and permissions", func() {
 		BeforeEach(func() {
 			// Add specific permissions for test user
-			_, err = dutyRBAC.Enforcer().AddPermissionsForUser(testUser.ID.String(),
-				[]string{policy.ObjectCatalog, policy.ActionRead, "allow"},
-				[]string{policy.ObjectPlaybooks, policy.ActionRead, "allow"},
+			_, err = rbac.Enforcer().AddPermissionsForUser(testUser.ID.String(),
+				[]string{policy.ObjectCatalog, policy.ActionRead, "allow", "true", "na"},
+				[]string{policy.ObjectPlaybooks, policy.ActionRead, "allow", "true", "na"},
 			)
 			Expect(err).To(BeNil())
 		})
 
 		AfterEach(func() {
 			// Clean up permissions
-			_, err = dutyRBAC.Enforcer().DeleteRolesForUser(testUser.ID.String())
+			_, err = rbac.Enforcer().DeleteRolesForUser(testUser.ID.String())
 			Expect(err).To(BeNil())
-			_, err = dutyRBAC.Enforcer().DeletePermissionsForUser(testUser.ID.String())
+			_, err = rbac.Enforcer().DeletePermissionsForUser(testUser.ID.String())
 			Expect(err).To(BeNil())
 		})
 
 		It("should create token successfully with all user permissions", func() {
 			ctx := DefaultContext.WithUser(testUser)
 			reqData := CreateTokenRequest{
-				Name:            "test-token",
-				DenyPermissions: []policy.Permission{},
+				Name:  "test-token",
+				Scope: []policy.Permission{},
 			}
 			_ = postCreateToken(ctx, e, reqData, http.StatusOK)
 
 			token := findTokenByName(ctx, reqData.Name)
 			Expect(token.ID.String()).ToNot(Equal(uuid.Nil.String()))
 
-			permsUser, err := dutyRBAC.PermsForUser(testUser.ID.String())
-			Expect(err).To(BeNil())
+			Expect(canEnforce(token.PersonID.String(), policy.ObjectCatalog, policy.ActionRead)).To(BeTrue())
+			Expect(canEnforce(token.PersonID.String(), policy.ObjectPlaybooks, policy.ActionRead)).To(BeTrue())
 
-			permsToken, err := dutyRBAC.PermsForUser(token.PersonID.String())
-			Expect(err).To(BeNil())
+			Expect(canEnforce(token.PersonID.String(), policy.ObjectTopology, policy.ActionRead)).To(BeFalse())
+			Expect(canEnforce(token.PersonID.String(), policy.ObjectCatalog, policy.ActionCRUD)).To(BeFalse())
+			Expect(canEnforce(token.PersonID.String(), policy.ObjectCanary, policy.ActionAll)).To(BeFalse())
 
-			Expect(permsMatch(permsUser, permsToken, true)).To(BeTrue())
 		})
 
 		It("should create token with denied permissions filtered out", func() {
 			reqData := CreateTokenRequest{
 				Name: "limited-token",
-				DenyPermissions: []policy.Permission{
+				Scope: []policy.Permission{
 					{
 						Subject: testUser.ID.String(),
 						Object:  policy.ObjectCatalog,
@@ -159,15 +138,11 @@ var _ = Describe("CreateToken", Ordered, func() {
 			token := findTokenByName(ctx, reqData.Name)
 			Expect(token.ID.String()).ToNot(Equal(uuid.Nil.String()))
 
-			// Verify the denied permission is not present
-			perms, err := dutyRBAC.PermsForUser(token.PersonID.String())
-			Expect(err).To(BeNil())
+			Expect(canEnforce(token.PersonID.String(), policy.ObjectCatalog, policy.ActionRead)).To(BeTrue())
 
-			for _, perm := range perms {
-				if perm.Object == policy.ObjectCatalog && perm.Action == policy.ActionRead {
-					Fail("Denied permission should not be present in token permissions")
-				}
-			}
+			Expect(canEnforce(token.PersonID.String(), policy.ObjectPlaybooks, policy.ActionRead)).To(BeFalse())
+			Expect(canEnforce(token.PersonID.String(), policy.ObjectCatalog, policy.ActionCRUD)).To(BeFalse())
+			Expect(canEnforce(token.PersonID.String(), policy.ObjectCanary, policy.ActionAll)).To(BeFalse())
 		})
 	})
 
@@ -200,7 +175,7 @@ var _ = Describe("CreateToken", Ordered, func() {
 			token := findTokenByName(ctx, reqData.Name)
 			Expect(token.ID.String()).ToNot(Equal(uuid.Nil.String()))
 
-			perms, err := dutyRBAC.PermsForUser(token.PersonID.String())
+			perms, err := rbac.PermsForUser(token.PersonID.String())
 			Expect(err).To(BeNil())
 			Expect(perms).To(HaveLen(0), "Token should have no permissions")
 		})
