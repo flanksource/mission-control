@@ -668,6 +668,9 @@
     },
     "ViewSpec": {
       "properties": {
+        "description": {
+          "type": "string"
+        },
         "display": {
           "$ref": "#/$defs/ViewDisplay"
         },

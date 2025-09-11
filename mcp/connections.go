@@ -4,7 +4,6 @@ import (
 	gocontext "context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/incident-commander/db"
@@ -37,12 +36,11 @@ func ConnectionResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequ
 	if err != nil {
 		return nil, err
 	}
-	parts := strings.Split(strings.TrimPrefix(req.Params.URI, "connection://"), "/")
-	if len(parts) != 2 {
+
+	namespace, name, err := extractNamespaceName(req.Params.URI)
+	if err != nil {
 		return nil, fmt.Errorf("invalid connection format: %s", req.Params.URI)
 	}
-
-	namespace, name := parts[0], parts[1]
 
 	conn, err := context.FindConnection(ctx, name, namespace)
 	if err != nil {
