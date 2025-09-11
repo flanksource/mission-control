@@ -181,28 +181,46 @@ func ConfigItemResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequ
 	}, nil
 }
 
-func searchCatalogPromptHandler(ctx gocontext.Context, req mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-	query := req.Params.Arguments["query"]
-
+func unhealthyCatalogItemsPromptHandler(ctx gocontext.Context, req mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	return &mcp.GetPromptResult{
-		Description: fmt.Sprintf("Catalog search for %s query", query),
+		Description: fmt.Sprintf("Search for unhealthy catalog items"),
 		Messages: []mcp.PromptMessage{
 			{
 				Role:    "user",
-				Content: mcp.NewTextContent(fmt.Sprintf("Query the catalog using catalog_search with this query: %s", query)),
+				Content: mcp.NewTextContent("Query the catalog using search_catalog tool for all unhealthy items with the query: health!=healthy"),
 			},
 		},
 	}, nil
 }
 
-func getDutyCtx(ctx gocontext.Context) (context.Context, error) {
-	if v := ctx.Value(dutyContextKey); v != nil {
-		dutyCtx, ok := v.(context.Context)
-		if ok {
-			return dutyCtx, nil
-		}
-	}
-	return context.Context{}, fmt.Errorf("no duty ctx")
+func troubleshootKubernetesErrorPrompt(ctx gocontext.Context, req mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+	//configID := req.Params.Arguments["config_id"]
+	prompt := `
+	We need to troubleshoot a resource in kubernetes. First, we will use the tool "search_catalog" and look for non healthy kubernetes resources.
+	The query can be: health!=healthy type=Kubernetes::*
+
+	Once we have these catalog resources, we will deep dive into each to figure out what is wrong. Using the resources' id, call "describe_config" with
+	the query: id=<id>
+
+	See its spec and status in config to figure out what the problem can be.
+
+	You also need to query its recent changes, call "search_catalog_changes" tool with query: config_id=<id>
+
+	If it is a pod/deployment and is crashing, see if there is any tool in available_tools field from describe_config result which can help you get its logs.
+	Before running any tool from available_tools, take explicit consent from the user
+
+	Based on the logs, changes and config description, use your best guess as to why it is not healthy
+	`
+
+	return &mcp.GetPromptResult{
+		Description: "Troubleshoot kubernetes resources",
+		Messages: []mcp.PromptMessage{
+			{
+				Role:    "user",
+				Content: mcp.NewTextContent(prompt),
+			},
+		},
+	}, nil
 }
 
 func registerCatalog(s *server.MCPServer) {
@@ -290,7 +308,7 @@ func registerCatalog(s *server.MCPServer) {
 	s.AddTool(searchCatalogTool, searchCatalogHandler)
 
 	describeConfigDescription := `
-	This tool should only be called when "describe" is explicitly used, for all other purposes catalog_search tool should be used.
+	This tool should only be called when "describe" is explicitly used, for all other purposes search_catalog tool should be used.
 	Ideally, when prompted to describe configs use either the previous query or the config ids in the query field in csv format.
 
 	Each config item returned will have a field "available_tools", which refers to all the existing tools in the current mcp server. We can call
@@ -390,5 +408,6 @@ func registerCatalog(s *server.MCPServer) {
 	)
 	s.AddTool(relatedCatalogTool, relatedCatalogHandler)
 
-	s.AddPrompt(mcp.NewPrompt("Search catalog prompt"), searchCatalogPromptHandler)
+	s.AddPrompt(mcp.NewPrompt("Unhealthy catalog items"), unhealthyCatalogItemsPromptHandler)
+	s.AddPrompt(mcp.NewPrompt("Troubleshoot kubernetes resource"), troubleshootKubernetesErrorPrompt)
 }
