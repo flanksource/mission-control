@@ -172,7 +172,7 @@ func syncPlaybooksAsTools(ctx context.Context, s *server.MCPServer) error {
 			root.Required = append(root.Required, "check_id")
 		}
 		if len(spec.Configs) > 0 {
-			root.Properties.Set("config_id", &jsonschema.Schema{Type: "string", Description: "UUID of config item (from catalog_search results). Example: f47ac10b-58cc-4372-a567-0e02b2c3d479"})
+			root.Properties.Set("config_id", &jsonschema.Schema{Type: "string", Description: "UUID of config item (from search_catalog results). Example: f47ac10b-58cc-4372-a567-0e02b2c3d479"})
 			root.Required = append(root.Required, "config_id")
 		}
 		if len(spec.Components) > 0 {
