@@ -28,7 +28,7 @@ func Server(ctx context.Context) http.HandlerFunc {
 	registerConnections(s)
 	registerHealthChecks(s)
 	registerPlaybook(ctx, s)
-	registerViews(s)
+	registerViews(ctx, s)
 
 	logger.Infof("Registering /mcp routes")
 

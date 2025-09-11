@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.14.0
+    controller-gen.kubebuilder.io/version: v0.19.0
   name: notifications.mission-control.flanksource.com
 spec:
   group: mission-control.flanksource.com
@@ -87,9 +87,7 @@ spec:
                   GroupBy allows notifications in waiting status to be grouped together
                   based on certain set of keys.
 
-
                   The group wait period is the waitFor period.
-
 
                   Valid keys: type, description, status_reason or
                   labels & tags in the format `label:<key>` or `tag:<key>`
@@ -191,10 +189,8 @@ spec:
                   After this period, the health status is reassessed to confirm it hasn't
                   changed, helping prevent false alarms from transient issues.
 
-
                   The delay allows time for self-recovery or temporary fluctuations to
                   resolve, reducing unnecessary alerts.
-
 
                   If specified, it should be a valid duration string (e.g., "5m", "1h").
                 type: string
@@ -205,10 +201,8 @@ spec:
                   and then waits this duration before final evaluation, unlike waitFor which
                   simply delays without re-scraping.
 
-
                   Only applies to Kubernetes health notifications and cannot be turned off.
                   Defaults to 30s.
-
 
                   Format: duration string (e.g., "30s", "2m")
                 type: string
