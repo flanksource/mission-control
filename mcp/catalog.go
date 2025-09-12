@@ -183,7 +183,7 @@ func ConfigItemResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequ
 
 func unhealthyCatalogItemsPromptHandler(ctx gocontext.Context, req mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	return &mcp.GetPromptResult{
-		Description: fmt.Sprintf("Search for unhealthy catalog items"),
+		Description: "Search for unhealthy catalog items",
 		Messages: []mcp.PromptMessage{
 			{
 				Role:    "user",
@@ -194,10 +194,11 @@ func unhealthyCatalogItemsPromptHandler(ctx gocontext.Context, req mcp.GetPrompt
 }
 
 func troubleshootKubernetesErrorPrompt(ctx gocontext.Context, req mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-	//configID := req.Params.Arguments["config_id"]
-	prompt := `
+	q := lo.CoalesceOrEmpty(req.Params.Arguments["query"], "health!=healthy type=Kubernetes::*")
+
+	prompt := fmt.Sprintf(`
 	We need to troubleshoot a resource in kubernetes. First, we will use the tool "search_catalog" and look for non healthy kubernetes resources.
-	The query can be: health!=healthy type=Kubernetes::*
+	The query is: %s
 
 	Once we have these catalog resources, we will deep dive into each to figure out what is wrong. Using the resources' id, call "describe_config" with
 	the query: id=<id>
@@ -210,7 +211,7 @@ func troubleshootKubernetesErrorPrompt(ctx gocontext.Context, req mcp.GetPromptR
 	Before running any tool from available_tools, take explicit consent from the user
 
 	Based on the logs, changes and config description, use your best guess as to why it is not healthy
-	`
+	`, q)
 
 	return &mcp.GetPromptResult{
 		Description: "Troubleshoot kubernetes resources",
@@ -409,5 +410,7 @@ func registerCatalog(s *server.MCPServer) {
 	s.AddTool(relatedCatalogTool, relatedCatalogHandler)
 
 	s.AddPrompt(mcp.NewPrompt("Unhealthy catalog items"), unhealthyCatalogItemsPromptHandler)
-	s.AddPrompt(mcp.NewPrompt("Troubleshoot kubernetes resource"), troubleshootKubernetesErrorPrompt)
+	s.AddPrompt(mcp.NewPrompt("Troubleshoot kubernetes resource",
+		mcp.WithArgument("query", mcp.ArgumentDescription("query to use for fetching catalog items to troubleshoot")),
+	), troubleshootKubernetesErrorPrompt)
 }
