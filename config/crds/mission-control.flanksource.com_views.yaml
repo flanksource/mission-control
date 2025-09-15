@@ -367,6 +367,7 @@ spec:
                       - gauge
                       - number
                       - table
+                      - duration
                       type: string
                   required:
                   - name

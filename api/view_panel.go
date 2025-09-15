@@ -13,6 +13,7 @@ const (
 	PanelTypeTable    PanelType = "table"
 	PanelTypeText     PanelType = "text"
 	PanelTypeNumber   PanelType = "number"
+	PanelTypeDuration PanelType = "duration"
 	PanelTypeGauge    PanelType = "gauge"
 )
 
@@ -38,7 +39,7 @@ type PanelMeta struct {
 	Description string `json:"description,omitempty" yaml:"description,omitempty"`
 
 	// Type of panel visualization (piechart, text, gauge, number)
-	// +kubebuilder:validation:Enum=piechart;text;gauge;number;table
+	// +kubebuilder:validation:Enum=piechart;text;gauge;number;table;duration
 	Type PanelType `json:"type" yaml:"type"`
 
 	// Configuration for gauge visualization
