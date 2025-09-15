@@ -13,15 +13,15 @@ spec:
     minAge: 1m
     refreshTimeout: 30s
   panels:
-    - name: Repository
-      type: table
-      query: SELECT COUNT(*) AS value, details->'repository'->>'full_name' as repository FROM workflows GROUP BY details->'repository'->>'full_name'
     - name: Average Duration
       description: Create Release average duration
       type: duration
       query: >
         SELECT AVG(details->'duration') AS value, details->'repository'->>'full_name' as label
         FROM workflows GROUP BY details->'repository'->>'full_name'
+    - name: Repositories
+      type: table
+      query: SELECT details->'repository'->>'full_name' as repository FROM workflows GROUP BY details->'repository'->>'full_name'
   columns:
     - name: id
       type: string
