@@ -18,9 +18,7 @@ spec:
       query: SELECT COUNT(*) AS value, details->'repository'->>'full_name' as repository FROM workflows GROUP BY details->'repository'->>'full_name'
     - name: Average Duration
       description: Create Release average duration
-      type: number
-      number:
-        unit: seconds
+      type: duration
       query: >
         SELECT AVG(details->'duration') AS value, details->'repository'->>'full_name' as label
         FROM workflows GROUP BY details->'repository'->>'full_name'
