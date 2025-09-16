@@ -120,6 +120,10 @@ func Run(ctx context.Context, view *v1.View, request *requestOpt) (*api.ViewResu
 			}
 		} else if len(queryResults) == 1 {
 			mergedData = queryResults[0].Results
+		} else {
+			// NOTE: The view has multiple data sources defined however it's not clear which data source
+			// must be used to populate the view table.
+			return nil, ctx.Oops(dutyAPI.EINVALID).Errorf("multiple data sources defined but merge query is not specified")
 		}
 
 		var rows []pkgView.Row
