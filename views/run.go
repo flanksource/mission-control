@@ -94,7 +94,7 @@ func Run(ctx context.Context, view *v1.View, request *requestOpt) (*api.ViewResu
 
 			switch panel.Type {
 			case api.PanelTypeGauge:
-				if panel.Gauge.Max != "" {
+				if panel.Gauge != nil && panel.Gauge.Max != "" {
 					value, err := types.CelExpression(panel.Gauge.Max).Eval(env)
 					if err != nil {
 						return nil, fmt.Errorf("failed to evaluate gauge max expression '%s': %w", panel.Gauge.Max, err)
