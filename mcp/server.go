@@ -16,7 +16,7 @@ var (
 	dutyContextKey dutyContextType = "dutyContext"
 )
 
-func Server(ctx context.Context) http.HandlerFunc {
+func Server(ctx context.Context) http.Handler {
 	s := server.NewMCPServer("mission-control", api.BuildVersion,
 		server.WithResourceCapabilities(true, true),
 		server.WithToolCapabilities(true),
@@ -44,5 +44,5 @@ func Server(ctx context.Context) http.HandlerFunc {
 		}),
 	)
 
-	return httpServer.ServeHTTP
+	return httpServer
 }

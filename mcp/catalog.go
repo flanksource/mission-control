@@ -410,7 +410,7 @@ func registerCatalog(s *server.MCPServer) {
 	s.AddTool(relatedCatalogTool, relatedCatalogHandler)
 
 	s.AddPrompt(mcp.NewPrompt("Unhealthy catalog items"), unhealthyCatalogItemsPromptHandler)
-	s.AddPrompt(mcp.NewPrompt("Troubleshoot kubernetes resource",
+	s.AddPrompt(mcp.NewPrompt("troubleshoot_kubernetes_resource",
 		mcp.WithArgument("query", mcp.ArgumentDescription("query to use for fetching catalog items to troubleshoot")),
 	), troubleshootKubernetesErrorPrompt)
 }
