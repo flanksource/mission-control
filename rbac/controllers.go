@@ -7,6 +7,7 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
+	"github.com/flanksource/incident-commander/db"
 	"github.com/labstack/echo/v4"
 )
 
@@ -50,8 +51,16 @@ func GetRolesForUser(c echo.Context) error {
 
 func GetPermissionsForToken(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
-	userID := ctx.User().ID.String()
-	perms, err := rbac.PermsForUser(userID)
+	tokenID := c.Param("id")
+	token, err := db.GetAccessToken(ctx, tokenID)
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, api.HTTPError{
+			Err:     err.Error(),
+			Message: "Error getting token",
+		})
+	}
+
+	perms, err := rbac.PermsForUser(token.PersonID.String())
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, api.HTTPError{
 			Err:     err.Error(),
