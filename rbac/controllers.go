@@ -11,6 +11,13 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+func RegisterRoutes(e *echo.Echo) {
+	e.POST("/rbac/:id/update_role", UpdateRoleForUser, Authorization(policy.ObjectRBAC, policy.ActionUpdate))
+	e.GET("/rbac/dump", Dump, Authorization(policy.ObjectRBAC, policy.ActionRead))
+	e.GET("/rbac/:id/roles", GetRolesForUser, Authorization(policy.ObjectRBAC, policy.ActionRead))
+	e.GET("/rbac/token/:id/permissions", GetPermissionsForToken, Authorization(policy.ObjectRBAC, policy.ActionRead))
+}
+
 func UpdateRoleForUser(c echo.Context) error {
 	userID := c.Param("id")
 	reqData := struct {
