@@ -153,10 +153,7 @@ func New(ctx context.Context) *echov4.Echo {
 	Forward(ctx, e, "/kratos", auth.KratosAPI)
 
 	auth.RegisterRoutes(e)
-
-	e.POST("/rbac/:id/update_role", rbac.UpdateRoleForUser, rbac.Authorization(policy.ObjectRBAC, policy.ActionUpdate))
-	e.GET("/rbac/dump", rbac.Dump, rbac.Authorization(policy.ObjectRBAC, policy.ActionRead))
-	e.GET("/rbac/:id/roles", rbac.GetRolesForUser, rbac.Authorization(policy.ObjectRBAC, policy.ActionRead))
+	rbac.RegisterRoutes(e)
 
 	// Serve openapi schemas
 	schemaServer, err := utils.HTTPFileserver(openapi.Schemas)

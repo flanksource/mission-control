@@ -287,7 +287,7 @@ func DeleteToken(c echo.Context) error {
 		})
 	}
 
-	if token.PersonID != ctx.User().ID || !slices.Contains(roles, policy.RoleAdmin) {
+	if lo.FromPtr(token.CreatedBy) != ctx.User().ID || !slices.Contains(roles, policy.RoleAdmin) {
 		return c.JSON(http.StatusUnauthorized, dutyAPI.HTTPError{
 			Err:     "Unauthorized",
 			Message: "Only the creator or admins can delete access tokens",
