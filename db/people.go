@@ -142,7 +142,7 @@ func ListAccessTokens(ctx context.Context) ([]AccessTokenWithUser, error) {
 
 func GetAccessToken(ctx context.Context, id string) (models.AccessToken, error) {
 	return gorm.G[models.AccessToken](ctx.DB()).
-		Select("id", "name", "person_id", "created_at").
+		Select("id", "name", "person_id", "created_at", "created_by").
 		Where("id = ?", id).
 		First(ctx)
 }
