@@ -4,6 +4,22 @@ metadata:
   name: pods
   namespace: mc
 spec:
+  templating:
+    - key: cluster
+      label: Cluster
+      valueFrom:
+        config:
+          types:
+            - Kubernetes::Cluster
+    - key: namespace
+      label: Namespace
+      dependsOn:
+        - cluster
+      valueFrom:
+        config:
+          # tagSelector: "cluster=$(.var.cluster)"
+          types:
+            - Kubernetes::Namespace
   cache:
     maxAge: 1m
     minAge: 5s

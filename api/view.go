@@ -58,6 +58,9 @@ type ViewVariable struct {
 
 	// Default is the default value of the filter.
 	Default string `json:"default,omitempty" yaml:"default,omitempty"`
+
+	// Variables this variable depends on - must be resolved before this variable can be populated
+	DependsOn []string `json:"dependsOn,omitempty" yaml:"dependsOn,omitempty"`
 }
 
 // +kubebuilder:object:generate=true

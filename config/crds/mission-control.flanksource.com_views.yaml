@@ -933,6 +933,12 @@ spec:
                     default:
                       description: Default is the default value of the filter.
                       type: string
+                    dependsOn:
+                      description: Variables this variable depends on - must be resolved
+                        before this variable can be populated
+                      items:
+                        type: string
+                      type: array
                     key:
                       description: |-
                         Key is the unique identifier of the filter.

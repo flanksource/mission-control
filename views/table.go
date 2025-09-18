@@ -12,6 +12,7 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
+	"github.com/flanksource/duty/types"
 	pkgView "github.com/flanksource/duty/view"
 	"github.com/lib/pq"
 	"github.com/samber/lo"
@@ -88,33 +89,230 @@ func WithIncludeRows(include bool) ViewOption {
 	}
 }
 
-func populateViewVariables(ctx context.Context, variables []api.ViewVariable) ([]api.ViewVariableWithOptions, error) {
-	output := []api.ViewVariableWithOptions{}
-	for _, filter := range variables {
-		if len(filter.Values) > 0 {
-			output = append(output, api.ViewVariableWithOptions{
-				ViewVariable: filter,
-				Options:      filter.Values,
-			})
-		} else if filter.ValueFrom != nil {
-			if !filter.ValueFrom.Config.IsEmpty() {
-				resources, err := query.FindConfigsByResourceSelector(ctx, valueFromMaxResults, filter.ValueFrom.Config)
-				if err != nil {
-					return nil, fmt.Errorf("failed to get resources for filter %s: %w", filter.Key, err)
-				}
+// populateViewVariables populates view variables with their options, handling dependencies
+// and user selections. Variables are processed in dependency order, with dependent
+// variables being templated using the values of their dependencies.
+// Returns both the populated variables with options and the templated variable definitions.
+func populateViewVariables(ctx context.Context, variables []api.ViewVariable, userVariables map[string]string) ([]api.ViewVariableWithOptions, []api.ViewVariable, error) {
+	if userVariables == nil {
+		userVariables = make(map[string]string)
+	}
 
-				values := lo.Map(resources, func(r models.ConfigItem, _ int) string {
-					return lo.FromPtr(r.Name)
-				})
-				output = append(output, api.ViewVariableWithOptions{
-					ViewVariable: filter,
-					Options:      values,
-				})
+	levels := organizeVariablesByLevels(variables)
+	variableValues := make(map[string]string)
+	var result []api.ViewVariableWithOptions
+	templatedVariables := make([]api.ViewVariable, len(variables))
+
+	// Create a map to track variable indices for updating templated variables
+	variableIndexMap := make(map[string]int)
+	for i, v := range variables {
+		variableIndexMap[v.Key] = i
+		templatedVariables[i] = v // Initialize with original values
+	}
+
+	for _, level := range levels {
+		for _, variable := range level {
+			populatedVar, err := processVariable(ctx, variable, variableValues, userVariables)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to process variable %s: %w", variable.Key, err)
+			}
+
+			result = append(result, populatedVar)
+
+			// Track selected value for templating dependent variables
+			if populatedVar.Default != "" {
+				variableValues[variable.Key] = populatedVar.Default
+			}
+
+			// Update templated variable if it has dependencies
+			if len(variable.DependsOn) > 0 && variable.ValueFrom != nil && !variable.ValueFrom.Config.IsEmpty() {
+				templatedSelector, err := templateResourceSelector(ctx, variable.ValueFrom.Config, variableValues)
+				if err != nil {
+					return nil, nil, fmt.Errorf("failed to template config selector for variable %s: %w", variable.Key, err)
+				} else {
+					idx := variableIndexMap[variable.Key]
+					templatedVariables[idx].ValueFrom.Config = templatedSelector
+				}
 			}
 		}
 	}
 
-	return output, nil
+	return result, templatedVariables, nil
+}
+
+// processVariable handles the complete processing of a single variable including
+// population and value selection
+func processVariable(ctx context.Context, variable api.ViewVariable, variableValues, userVariables map[string]string) (api.ViewVariableWithOptions, error) {
+	// Populate the variable with its options
+	variableWithOptions, err := populateVariable(ctx, variable, variableValues)
+	if err != nil {
+		return api.ViewVariableWithOptions{}, err
+	}
+
+	// Determine the selected value (user selection takes precedence)
+	selectedValue := selectVariableValue(variable.Key, variableWithOptions, userVariables)
+
+	// Set the selected value as the default in the response
+	if selectedValue != "" {
+		variableWithOptions.Default = selectedValue
+	}
+
+	return variableWithOptions, nil
+}
+
+// selectVariableValue determines the value to use for a variable, prioritizing
+// user selection, then default, then first option
+func selectVariableValue(key string, variable api.ViewVariableWithOptions, userVariables map[string]string) string {
+	if userValue, exists := userVariables[key]; exists && userValue != "" {
+		return userValue
+	}
+
+	return getDefaultValue(variable)
+}
+
+// organizeVariablesByLevels organizes variables into dependency levels using topological sort.
+// Variables with no dependencies are at level 0, variables that depend only on level 0
+// variables are at level 1, and so on.
+func organizeVariablesByLevels(variables []api.ViewVariable) [][]api.ViewVariable {
+	varMap := buildVariableMap(variables)
+	depths := calculateVariableDepths(varMap, variables)
+	return groupVariablesByLevel(variables, depths)
+}
+
+// buildVariableMap creates a map for quick variable lookup by key
+func buildVariableMap(variables []api.ViewVariable) map[string]api.ViewVariable {
+	varMap := make(map[string]api.ViewVariable)
+	for _, v := range variables {
+		varMap[v.Key] = v
+	}
+	return varMap
+}
+
+// calculateVariableDepths calculates the dependency depth for each variable using memoization
+func calculateVariableDepths(varMap map[string]api.ViewVariable, variables []api.ViewVariable) map[string]int {
+	depths := make(map[string]int)
+
+	var calculateDepth func(string) int
+	calculateDepth = func(varKey string) int {
+		if depth, exists := depths[varKey]; exists {
+			return depth
+		}
+
+		variable := varMap[varKey]
+		maxDepth := 0
+		for _, dep := range variable.DependsOn {
+			depDepth := calculateDepth(dep)
+			if depDepth >= maxDepth {
+				maxDepth = depDepth + 1
+			}
+		}
+
+		depths[varKey] = maxDepth
+		return maxDepth
+	}
+
+	for _, variable := range variables {
+		calculateDepth(variable.Key)
+	}
+
+	return depths
+}
+
+// groupVariablesByLevel groups variables into levels based on their dependency depth
+func groupVariablesByLevel(variables []api.ViewVariable, depths map[string]int) [][]api.ViewVariable {
+	levelMap := make(map[int][]api.ViewVariable)
+	maxLevel := 0
+
+	for _, variable := range variables {
+		level := depths[variable.Key]
+		levelMap[level] = append(levelMap[level], variable)
+		if level > maxLevel {
+			maxLevel = level
+		}
+	}
+
+	levels := make([][]api.ViewVariable, maxLevel+1)
+	for i := 0; i <= maxLevel; i++ {
+		levels[i] = levelMap[i]
+	}
+
+	return levels
+}
+
+// populateVariable populates a single variable with its options, applying templating if needed
+func populateVariable(ctx context.Context, variable api.ViewVariable, variableValues map[string]string) (api.ViewVariableWithOptions, error) {
+	if len(variable.Values) > 0 {
+		return api.ViewVariableWithOptions{
+			ViewVariable: variable,
+			Options:      variable.Values,
+		}, nil
+	}
+
+	if variable.ValueFrom == nil {
+		return api.ViewVariableWithOptions{
+			ViewVariable: variable,
+			Options:      []string{},
+		}, nil
+	}
+
+	if !variable.ValueFrom.Config.IsEmpty() {
+		selector := variable.ValueFrom.Config
+
+		// Template the config selector if this variable has dependencies
+		if len(variable.DependsOn) > 0 {
+			templatedSelector, err := templateResourceSelector(ctx, selector, variableValues)
+			if err != nil {
+				return api.ViewVariableWithOptions{}, fmt.Errorf("failed to template config selector: %w", err)
+			}
+			selector = templatedSelector
+		}
+
+		resources, err := query.FindConfigsByResourceSelector(ctx, valueFromMaxResults, selector)
+		if err != nil {
+			return api.ViewVariableWithOptions{}, fmt.Errorf("failed to get resources for filter %s: %w", variable.Key, err)
+		}
+
+		values := lo.Map(resources, func(r models.ConfigItem, _ int) string {
+			return lo.FromPtr(r.Name)
+		})
+
+		return api.ViewVariableWithOptions{
+			ViewVariable: variable,
+			Options:      values,
+		}, nil
+	}
+
+	return api.ViewVariableWithOptions{
+		ViewVariable: variable,
+		Options:      []string{},
+	}, nil
+}
+
+// getDefaultValue returns the default value for a variable or the first option if no default is set
+func getDefaultValue(variable api.ViewVariableWithOptions) string {
+	if variable.Default != "" {
+		return variable.Default
+	}
+	if len(variable.Options) > 0 {
+		return variable.Options[0]
+	}
+	return ""
+}
+
+// templateResourceSelector applies templating to a resource selector using variable values
+func templateResourceSelector(ctx context.Context, selector types.ResourceSelector, variableValues map[string]string) (types.ResourceSelector, error) {
+	// Create template environment
+	env := map[string]any{
+		"var": variableValues,
+	}
+
+	// Use structemplater to template the entire selector
+	st := ctx.NewStructTemplater(env, "", nil)
+	if err := st.Walk(&selector); err != nil {
+		return selector, fmt.Errorf("failed to template resource selector with env %v: %w", env, err)
+	}
+
+	return selector, nil
 }
 
 // ReadOrPopulateViewTable reads view data from the view's table with cache control.
@@ -128,29 +326,19 @@ func ReadOrPopulateViewTable(ctx context.Context, namespace, name string, opts .
 		return nil, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "view %s/%s not found", namespace, name)
 	}
 
-	variables, err := populateViewVariables(ctx, view.Spec.Templating)
-	if err != nil {
-		return nil, fmt.Errorf("failed to populate view variables: %w", err)
-	}
-
-	// Set initial values for variables
-	for _, variable := range variables {
-		if variable.Default != "" {
-			opts = append(opts, WithVariableDefault(variable.Key, variable.Default))
-		} else {
-			// Set the first value as the default
-			if len(variable.Options) > 0 {
-				opts = append(opts, WithVariableDefault(variable.Key, variable.Options[0]))
-			} else {
-				return nil, dutyAPI.Errorf(dutyAPI.EINVALID, "variable %s has no default value and no options were found to use as fallback", variable.Key)
-			}
-		}
-	}
-
+	// Process request options first to get user-selected variable values
 	request := &requestOpt{}
 	for _, opt := range opts {
 		opt(request)
 	}
+
+	// Populate variables with user selections considered
+	variables, templatedVariables, err := populateViewVariables(ctx, view.Spec.Templating, request.variables)
+	if err != nil {
+		return nil, fmt.Errorf("failed to populate view variables: %w", err)
+	}
+
+	view.Spec.Templating = templatedVariables
 
 	cacheOptions, err := view.GetCacheOptions(lo.FromPtr(request.maxAge), lo.FromPtr(request.refreshTimeout))
 	if err != nil {
