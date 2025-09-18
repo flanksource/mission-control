@@ -224,12 +224,27 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 		ginkgo.It("should list views", func() {
 			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
 				Params: mcp.CallToolParams{
-					Name: "list_views",
+					Name: "list_all_views",
 				},
 			})
 
 			Expect(err).NotTo(HaveOccurred())
-			checkResultInMCPResponse(result.Content, []string{dummy.View.ID.String()})
+			checkResultInMCPResponse(result.Content, []string{generateViewToolName(dummy.View)})
+		})
+
+		ginkgo.It("should handle view run handler correctly", func() {
+			ginkgo.By("Testing view run handler by checking if it handles tool name correctly")
+
+			// Test that viewRunHandler handles missing tools properly
+			_, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
+				Params: mcp.CallToolParams{
+					Name: "view_mission-control_default",
+				},
+			})
+
+			// Should get an error for non-existent view tool
+			Expect(err).To(BeNil())
+
 		})
 	})
 

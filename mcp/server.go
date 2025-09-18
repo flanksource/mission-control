@@ -30,6 +30,8 @@ func Server(ctx context.Context) http.Handler {
 	registerPlaybook(ctx, s)
 	registerViews(ctx, s)
 
+	registerJobs(ctx, s)
+
 	logger.Infof("Registering /mcp routes")
 
 	httpServer := server.NewStreamableHTTPServer(s,

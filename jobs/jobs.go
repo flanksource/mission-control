@@ -11,6 +11,7 @@ import (
 	"github.com/flanksource/duty/job"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/shutdown"
+	"github.com/mark3labs/mcp-go/server"
 	"github.com/robfig/cron/v3"
 	"github.com/sethvargo/go-retry"
 
@@ -62,7 +63,7 @@ func RunPullPlaybookActionsJob(ctx context.Context) {
 	}
 }
 
-func Start(ctx context.Context) {
+func Start(ctx context.Context, mcpServer *server.MCPServer) {
 	if err := job.NewJob(ctx, "Team Component Ownership", "@every 15m", TeamComponentOwnershipRun).
 		RunOnStart().AddToScheduler(FuncScheduler); err != nil {
 		logger.Errorf("Failed to schedule sync jobs for team component: %v", err)

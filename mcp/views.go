@@ -31,26 +31,6 @@ type viewSummary struct {
 	Title     string    `json:"title"`
 }
 
-func listViewHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	ctx, err := getDutyCtx(goctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var views []viewSummary
-	err = ctx.DB().Select("id", "name", "namespace", "title").Table("views_summary").Scan(&views).Error
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	jsonData, err := json.Marshal(views)
-	if err != nil {
-		return nil, err
-	}
-
-	return mcp.NewToolResultText(string(jsonData)), nil
-}
-
 func getViewHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	ctx, err := getDutyCtx(goctx)
 	if err != nil {
@@ -224,8 +204,6 @@ func registerViews(ctx context.Context, s *server.MCPServer) {
 
 	s.AddTool(mcp.NewTool("list_all_views",
 		mcp.WithDescription("List all available view tools")), viewListToolHandler)
-
-	s.AddTool(mcp.NewTool("list_views", mcp.WithDescription("List all available dashboard views with their namespace, name, and title")), listViewHandler)
 
 	s.AddTool(mcp.NewTool("get_view",
 		mcp.WithDescription(`Retrieve dashboard view data containing business metrics and operational data.
