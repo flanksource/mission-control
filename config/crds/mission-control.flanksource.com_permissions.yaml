@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.14.0
+    controller-gen.kubebuilder.io/version: v0.19.0
   name: permissions.mission-control.flanksource.com
 spec:
   group: mission-control.flanksource.com
@@ -54,7 +54,6 @@ spec:
               deny:
                 description: |-
                   Deny indicates whether the permission should explicitly deny the specified action.
-
 
                   Default: false
                 type: boolean

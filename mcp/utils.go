@@ -1,9 +1,23 @@
 package mcp
 
 import (
+	gocontext "context"
+	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/flanksource/duty/context"
 )
+
+func getDutyCtx(ctx gocontext.Context) (context.Context, error) {
+	if v := ctx.Value(dutyContextKey); v != nil {
+		dutyCtx, ok := v.(context.Context)
+		if ok {
+			return dutyCtx, nil
+		}
+	}
+	return context.Context{}, fmt.Errorf("no duty ctx")
+}
 
 // fixMCPToolNameIfRequired removes invalid chars that do not
 // match the MCP Tool Naming regex
@@ -34,4 +48,17 @@ func extractID(uri string) string {
 		return parts[1]
 	}
 	return ""
+}
+
+func extractNamespaceName(uri string) (string, string, error) {
+	parts := strings.Split(uri, "://")
+	if len(parts) != 2 {
+		return "", "", fmt.Errorf("invalid format: %s", uri)
+	}
+	namespaceName := parts[1]
+	parts = strings.Split(namespaceName, "/")
+	if len(parts) != 2 {
+		return "", "", fmt.Errorf("invalid format: %s", uri)
+	}
+	return parts[0], parts[1], nil
 }

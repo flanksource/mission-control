@@ -52,6 +52,9 @@ type ViewConfigUIPlugin struct {
 // +kubebuilder:validation:XValidation:rule="size(self.panels) > 0 || size(self.columns) > 0",message="view spec must have either panels or columns defined"
 // +kubebuilder:validation:XValidation:rule="!(has(self.columns)) || size(self.columns) == 0 || self.columns.exists(c, c.primaryKey == true)",message="if columns is specified, at least one column must have primaryKey set to true"
 type ViewSpec struct {
+	// Description about the view
+	Description string `json:"description,omitempty" yaml:"description,omitempty"`
+
 	// Display properties for the view
 	Display ViewDisplay `json:"display,omitempty" yaml:"display,omitempty"`
 

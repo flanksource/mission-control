@@ -34,7 +34,8 @@ var _ = ginkgo.BeforeSuite(func() {
 
 	// Create a test server with the MCP handler
 	e := echoSrv.New(DefaultContext)
-	e.POST("/mcp", echov4.WrapHandler(Server(DefaultContext)))
+	mcpServer := Server(DefaultContext)
+	e.POST("/mcp", echov4.WrapHandler(mcpServer.HTTPHandler))
 	testServer = httptest.NewServer(e)
 
 	// Initialize MCP client
