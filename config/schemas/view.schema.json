@@ -759,6 +759,12 @@
         },
         "default": {
           "type": "string"
+        },
+        "dependsOn": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,

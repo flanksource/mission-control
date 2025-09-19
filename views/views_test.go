@@ -14,6 +14,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/samber/lo"
 
+	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 )
 
@@ -125,6 +126,126 @@ func TestApplyMapping(t *testing.T) {
 			row, err := applyMapping(ctx, tc.data, tc.columns, tc.mapping)
 			g.Expect(err).ToNot(HaveOccurred())
 			g.Expect(pkgView.Row(row)).To(Equal(tc.expected))
+		})
+	}
+}
+
+func TestCalculateVariableDepths(t *testing.T) {
+	type testCase struct {
+		name          string
+		variables     []api.ViewVariable
+		expectedError string
+		expectedMap   map[string]int
+	}
+
+	testCases := []testCase{
+		{
+			name: "no dependencies",
+			variables: []api.ViewVariable{
+				{Key: "var1"},
+				{Key: "var2"},
+				{Key: "var3"},
+			},
+			expectedMap: map[string]int{
+				"var1": 0,
+				"var2": 0,
+				"var3": 0,
+			},
+		},
+		{
+			name: "simple linear dependency",
+			variables: []api.ViewVariable{
+				{Key: "var1"},
+				{Key: "var2", DependsOn: []string{"var1"}},
+				{Key: "var3", DependsOn: []string{"var2"}},
+			},
+			expectedMap: map[string]int{
+				"var1": 0,
+				"var2": 1,
+				"var3": 2,
+			},
+		},
+		{
+			name: "multiple dependencies same level",
+			variables: []api.ViewVariable{
+				{Key: "var1"},
+				{Key: "var2"},
+				{Key: "var3", DependsOn: []string{"var1", "var2"}},
+			},
+			expectedMap: map[string]int{
+				"var1": 0,
+				"var2": 0,
+				"var3": 1,
+			},
+		},
+		{
+			name: "complex dependency tree",
+			variables: []api.ViewVariable{
+				{Key: "base1"},
+				{Key: "base2"},
+				{Key: "level1a", DependsOn: []string{"base1"}},
+				{Key: "level1b", DependsOn: []string{"base2"}},
+				{Key: "level2", DependsOn: []string{"level1a", "level1b"}},
+				{Key: "top", DependsOn: []string{"level2"}},
+			},
+			expectedMap: map[string]int{
+				"base1":   0,
+				"base2":   0,
+				"level1a": 1,
+				"level1b": 1,
+				"level2":  2,
+				"top":     3,
+			},
+		},
+		{
+			name: "circular dependency",
+			variables: []api.ViewVariable{
+				{Key: "var1", DependsOn: []string{"var2"}},
+				{Key: "var2", DependsOn: []string{"var1"}},
+			},
+			expectedError: "circular dependency detected involving variable: var1",
+		},
+		{
+			name: "self dependency",
+			variables: []api.ViewVariable{
+				{Key: "var1", DependsOn: []string{"var1"}},
+			},
+			expectedError: "circular dependency detected involving variable: var1",
+		},
+		{
+			name: "undefined variable reference",
+			variables: []api.ViewVariable{
+				{Key: "var1", DependsOn: []string{"nonexistent"}},
+			},
+			expectedError: "undefined variable referenced: nonexistent",
+		},
+		{
+			name: "mixed valid and invalid dependencies",
+			variables: []api.ViewVariable{
+				{Key: "var1"},
+				{Key: "var2", DependsOn: []string{"var1", "missing"}},
+			},
+			expectedError: "undefined variable referenced: missing",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			g := NewWithT(t)
+			varMap := make(map[string]api.ViewVariable)
+			for _, v := range tc.variables {
+				varMap[v.Key] = v
+			}
+			depths, err := calculateVariableDepths(varMap, tc.variables)
+
+			if tc.expectedError != "" {
+				g.Expect(err).To(HaveOccurred())
+				g.Expect(err.Error()).To(ContainSubstring(tc.expectedError))
+				g.Expect(depths).To(BeNil())
+			} else {
+				g.Expect(err).ToNot(HaveOccurred())
+				g.Expect(depths).To(Equal(tc.expectedMap))
+			}
 		})
 	}
 }
