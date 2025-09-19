@@ -174,7 +174,7 @@ var Serve = &cobra.Command{
 		// Cannot be registered because we need to pass ctx for
 		// context injection middleware
 		mcpServer := mcp.Server(ctx)
-		e.POST("/mcp", echov4.WrapHandler(mcpServer), icrbac.Authorization(policy.ObjectMCP, policy.ActionAll))
+		e.POST("/mcp", echov4.WrapHandler(mcpServer.HTTPHandler), icrbac.Authorization(policy.ObjectMCP, policy.ActionAll))
 
 		shutdown.AddHookWithPriority("echo", shutdown.PriorityIngress, func() {
 			echo.Shutdown(e)
@@ -187,7 +187,7 @@ var Serve = &cobra.Command{
 		ctx.WithTracer(otel.GetTracerProvider().Tracer("mission-control"))
 		ctx = ctx.WithNamespace(api.Namespace)
 
-		go jobs.Start(ctx, mcpServer)
+		go jobs.Start(ctx, mcpServer.Server)
 
 		events.StartConsumers(ctx)
 

@@ -2,9 +2,11 @@ package mcp
 
 import (
 	gocontext "context"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 
+	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
@@ -16,6 +18,9 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/samber/lo"
 )
+
+//go:embed k8s_troubleshooting_prompt.txt
+var k8sTroubleshootingPrompt string
 
 func searchCatalogHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	ctx, err := getDutyCtx(goctx)
@@ -195,30 +200,12 @@ func unhealthyCatalogItemsPromptHandler(ctx gocontext.Context, req mcp.GetPrompt
 
 func troubleshootKubernetesErrorPrompt(ctx gocontext.Context, req mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	q := lo.CoalesceOrEmpty(req.Params.Arguments["query"], "health!=healthy type=Kubernetes::*")
-
-	prompt := fmt.Sprintf(`
-	We need to troubleshoot a resource in kubernetes. First, we will use the tool "search_catalog" and look for non healthy kubernetes resources.
-	The query is: %s
-
-	Once we have these catalog resources, we will deep dive into each to figure out what is wrong. Using the resources' id, call "describe_config" with
-	the query: id=<id>
-
-	See its spec and status in config to figure out what the problem can be.
-
-	You also need to query its recent changes, call "search_catalog_changes" tool with query: config_id=<id>
-
-	If it is a pod/deployment and is crashing, see if there is any tool in available_tools field from describe_config result which can help you get its logs.
-	Before running any tool from available_tools, take explicit consent from the user
-
-	Based on the logs, changes and config description, use your best guess as to why it is not healthy
-	`, q)
-
 	return &mcp.GetPromptResult{
 		Description: "Troubleshoot kubernetes resources",
 		Messages: []mcp.PromptMessage{
 			{
 				Role:    "user",
-				Content: mcp.NewTextContent(prompt),
+				Content: mcp.NewTextContent(fmt.Sprintf(k8sTroubleshootingPrompt, q)),
 			},
 		},
 	}, nil
