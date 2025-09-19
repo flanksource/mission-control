@@ -221,7 +221,7 @@ func SendNotification(ctx *Context, connectionName, shoutrrrURL string, celEnv m
 		ctx.WithRecipient(RecipientTypeConnection, &connection.ID)
 
 		shoutrrrURL = connection.URL
-		data.Properties = collections.MergeMap(connection.Properties, data.Properties)
+		data.Properties = collections.MergeMap(data.Properties, connection.Properties)
 	}
 
 	if connection != nil && connection.Type == models.ConnectionTypeSlack {
