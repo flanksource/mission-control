@@ -106,11 +106,10 @@ func populateViewVariables(ctx context.Context, variables []api.ViewVariable, us
 	var result []api.ViewVariableWithOptions
 	templatedVariables := make([]api.ViewVariable, len(variables))
 
-	// Create a map to track variable indices for updating templated variables
 	variableIndexMap := make(map[string]int)
 	for i, v := range variables {
 		variableIndexMap[v.Key] = i
-		templatedVariables[i] = v // Initialize with original values
+		templatedVariables[i] = v
 	}
 
 	for _, level := range levels {
@@ -122,12 +121,11 @@ func populateViewVariables(ctx context.Context, variables []api.ViewVariable, us
 
 			result = append(result, populatedVar)
 
-			// Track selected value for templating dependent variables
-			if populatedVar.Default != "" {
-				variableValues[variable.Key] = populatedVar.Default
+			selectedValue := selectVariableValue(variable.Key, populatedVar, userVariables)
+			if selectedValue != "" {
+				variableValues[variable.Key] = selectedValue
 			}
 
-			// Update templated variable if it has dependencies
 			if len(variable.DependsOn) > 0 && variable.ValueFrom != nil && !variable.ValueFrom.Config.IsEmpty() {
 				templatedSelector, err := templateResourceSelector(ctx, variable.ValueFrom.Config, variableValues)
 				if err != nil {
@@ -146,16 +144,13 @@ func populateViewVariables(ctx context.Context, variables []api.ViewVariable, us
 // processVariable handles the complete processing of a single variable including
 // population and value selection
 func processVariable(ctx context.Context, variable api.ViewVariable, variableValues, userVariables map[string]string) (api.ViewVariableWithOptions, error) {
-	// Populate the variable with its options
 	variableWithOptions, err := populateVariable(ctx, variable, variableValues)
 	if err != nil {
 		return api.ViewVariableWithOptions{}, err
 	}
 
-	// Determine the selected value (user selection takes precedence)
 	selectedValue := selectVariableValue(variable.Key, variableWithOptions, userVariables)
 
-	// Set the selected value as the default in the response
 	if selectedValue != "" {
 		variableWithOptions.Default = selectedValue
 	}
@@ -324,12 +319,10 @@ func getDefaultValue(variable api.ViewVariableWithOptions) string {
 
 // templateResourceSelector applies templating to a resource selector using variable values
 func templateResourceSelector(ctx context.Context, selector types.ResourceSelector, variableValues map[string]string) (types.ResourceSelector, error) {
-	// Create template environment
 	env := map[string]any{
 		"var": variableValues,
 	}
 
-	// Use structemplater to template the entire selector
 	st := ctx.NewStructTemplater(env, "", nil)
 	if err := st.Walk(&selector); err != nil {
 		return selector, fmt.Errorf("failed to template resource selector with env %v: %w", env, err)
@@ -371,7 +364,6 @@ func ReadOrPopulateViewTable(ctx context.Context, namespace, name string, opts .
 	tableName := view.TableName()
 	tableExists := ctx.DB().Migrator().HasTable(tableName)
 
-	// Check cache expiration for the specific request fingerprint
 	cacheExpired, err := requestCacheExpired(ctx, view, request.Fingerprint(), cacheOptions.MaxAge)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check cache expiration: %w", err)
@@ -404,7 +396,6 @@ func handleViewRefresh(ctx context.Context, view *v1.View, cacheOptions *v1.Cach
 		defer close(done)
 
 		// Need to create a new context with a longer timeout.
-		// The refresh needs to outlive the request context.
 		newCtx, cancel := gocontext.WithTimeout(gocontext.Background(), ctx.Properties().Duration("view.refresh.max-timeout", defaultMaxRefreshTimeout))
 		defer cancel()
 		clonedCtx := ctx.Clone()
@@ -414,7 +405,6 @@ func handleViewRefresh(ctx context.Context, view *v1.View, cacheOptions *v1.Cach
 			refreshCtx = refreshCtx.WithUser(ctx.User())
 		}
 
-		// Use a key that includes both view ID and request fingerprint for deduplication
 		refreshKey := fmt.Sprintf("%s:%s", view.GetUID(), request.Fingerprint())
 		res, refreshErr, _ := refreshGroup.Do(refreshKey, func() (any, error) {
 			return populateView(refreshCtx, view, request)
@@ -518,7 +508,6 @@ func readCachedViewData(ctx context.Context, view *v1.View, request *requestOpt)
 		}
 	}
 
-	// Get the last refresh time for this specific request fingerprint
 	lastRan, err := getLastRefresh(ctx, string(view.GetUID()), request.Fingerprint())
 	if err != nil {
 		ctx.Logger.Warnf("failed to get request last ran: %v", err)
@@ -579,7 +568,6 @@ func populateView(ctx context.Context, view *v1.View, request *requestOpt) (*api
 func persistViewData(ctx context.Context, view *v1.View, result *api.ViewResult, request *requestOpt) error {
 	tableName := view.TableName()
 
-	// Save view rows to the dedicated table
 	if view.HasTable() {
 		if err := pkgView.InsertViewRows(ctx, tableName, result.Columns, result.Rows, request.Fingerprint()); err != nil {
 			return fmt.Errorf("failed to insert view rows: %w", err)
@@ -632,7 +620,6 @@ func getColumnOptions(ctx context.Context, view *v1.View) (map[string][]string, 
 	columnOptions := make(map[string][]string)
 	tableName := view.TableName()
 
-	// Find columns with multiselect filters
 	for _, column := range view.Spec.Columns {
 		if column.Filter != nil && column.Filter.Type == pkgView.ColumnFilterTypeMultiSelect {
 			var values []string

@@ -17,7 +17,7 @@ spec:
         - cluster
       valueFrom:
         config:
-          # tagSelector: "cluster=$(.var.cluster)"
+          tagSelector: "cluster=$(.var.cluster)"
           types:
             - Kubernetes::Namespace
   cache:
