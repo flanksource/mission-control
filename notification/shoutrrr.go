@@ -136,7 +136,7 @@ func shoutrrrSend(ctx *Context, celEnv map[string]any, shoutrrrURL string, data 
 			headerString = (*params)["headers"]
 		)
 
-		m := mail.New(to, data.Title, data.Message, `text/html; charset="UTF-8"`).
+		m := mail.New(strings.Split(to, ","), data.Title, data.Message, `text/html; charset="UTF-8"`).
 			SetFrom(fromName, from).
 			SetCredentials(parsedURL.Hostname(), port, parsedURL.User.Username(), password)
 
