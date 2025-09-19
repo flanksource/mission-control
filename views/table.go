@@ -98,7 +98,10 @@ func populateViewVariables(ctx context.Context, variables []api.ViewVariable, us
 		userVariables = make(map[string]string)
 	}
 
-	levels := organizeVariablesByLevels(variables)
+	levels, err := organizeVariablesByLevels(variables)
+	if err != nil {
+		return nil, nil, err
+	}
 	variableValues := make(map[string]string)
 	var result []api.ViewVariableWithOptions
 	templatedVariables := make([]api.ViewVariable, len(variables))
@@ -173,10 +176,13 @@ func selectVariableValue(key string, variable api.ViewVariableWithOptions, userV
 // organizeVariablesByLevels organizes variables into dependency levels using topological sort.
 // Variables with no dependencies are at level 0, variables that depend only on level 0
 // variables are at level 1, and so on.
-func organizeVariablesByLevels(variables []api.ViewVariable) [][]api.ViewVariable {
+func organizeVariablesByLevels(variables []api.ViewVariable) ([][]api.ViewVariable, error) {
 	varMap := buildVariableMap(variables)
-	depths := calculateVariableDepths(varMap, variables)
-	return groupVariablesByLevel(variables, depths)
+	depths, err := calculateVariableDepths(varMap, variables)
+	if err != nil {
+		return nil, err
+	}
+	return groupVariablesByLevel(variables, depths), nil
 }
 
 // buildVariableMap creates a map for quick variable lookup by key
@@ -188,34 +194,51 @@ func buildVariableMap(variables []api.ViewVariable) map[string]api.ViewVariable 
 	return varMap
 }
 
-// calculateVariableDepths calculates the dependency depth for each variable using memoization
-func calculateVariableDepths(varMap map[string]api.ViewVariable, variables []api.ViewVariable) map[string]int {
+// calculateVariableDepths calculates the dependency depth for each variable
+func calculateVariableDepths(varMap map[string]api.ViewVariable, variables []api.ViewVariable) (map[string]int, error) {
 	depths := make(map[string]int)
+	calculating := make(map[string]bool) // Track variables currently being calculated to detect cycles
 
-	var calculateDepth func(string) int
-	calculateDepth = func(varKey string) int {
+	var calculateDepth func(string) (int, error)
+	calculateDepth = func(varKey string) (int, error) {
 		if depth, exists := depths[varKey]; exists {
-			return depth
+			return depth, nil
 		}
 
-		variable := varMap[varKey]
+		if calculating[varKey] {
+			return 0, fmt.Errorf("circular dependency detected involving variable: %s", varKey)
+		}
+
+		variable, exists := varMap[varKey]
+		if !exists {
+			return 0, fmt.Errorf("undefined variable referenced: %s", varKey)
+		}
+
+		calculating[varKey] = true
+		defer func() { calculating[varKey] = false }()
+
 		maxDepth := 0
 		for _, dep := range variable.DependsOn {
-			depDepth := calculateDepth(dep)
+			depDepth, err := calculateDepth(dep)
+			if err != nil {
+				return 0, err
+			}
 			if depDepth >= maxDepth {
 				maxDepth = depDepth + 1
 			}
 		}
 
 		depths[varKey] = maxDepth
-		return maxDepth
+		return maxDepth, nil
 	}
 
 	for _, variable := range variables {
-		calculateDepth(variable.Key)
+		if _, err := calculateDepth(variable.Key); err != nil {
+			return nil, err
+		}
 	}
 
-	return depths
+	return depths, nil
 }
 
 // groupVariablesByLevel groups variables into levels based on their dependency depth
