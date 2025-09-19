@@ -7,14 +7,11 @@ import (
 	"maps"
 	"slices"
 	"strings"
-	"time"
 
-	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/views"
-	"github.com/google/uuid"
 	"github.com/invopop/jsonschema"
 	"github.com/labstack/echo/v4"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -23,13 +20,6 @@ import (
 	orderedmap "github.com/wk8/go-ordered-map/v2"
 	"gorm.io/gorm"
 )
-
-type viewSummary struct {
-	ID        uuid.UUID `json:"id"`
-	Name      string    `json:"name"`
-	Namespace string    `json:"namespace"`
-	Title     string    `json:"title"`
-}
 
 func getViewHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	ctx, err := getDutyCtx(goctx)
@@ -212,15 +202,4 @@ func registerViews(ctx context.Context, s *server.MCPServer) {
 		mcp.WithString("namespace", mcp.Description("Namespace of the view")),
 		mcp.WithString("name", mcp.Description("Name of the view")),
 	), getViewHandler)
-
-	// Periodically call sync to handle new views added
-	go func() {
-		for {
-			if err := syncViewsAsTools(ctx, s); err != nil {
-				logger.Fatalf("error adding views as mcp tool: %w", err)
-			}
-
-			time.Sleep(1 * time.Hour)
-		}
-	}()
 }
