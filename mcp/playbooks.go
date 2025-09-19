@@ -7,9 +7,7 @@ import (
 	"maps"
 	"slices"
 	"strings"
-	"time"
 
-	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
@@ -255,15 +253,4 @@ func registerPlaybook(ctx context.Context, s *server.MCPServer) {
 		))
 
 	s.AddTool(playbookFailedRunTool, playbookFailedRunHandler)
-
-	// Periodically call sync to handle new playbooks added
-	go func() {
-		for {
-			if err := syncPlaybooksAsTools(ctx, s); err != nil {
-				logger.Fatalf("error adding playbooks as mcp tool: %w", err)
-			}
-
-			time.Sleep(1 * time.Hour)
-		}
-	}()
 }
