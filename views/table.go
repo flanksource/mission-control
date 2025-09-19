@@ -93,35 +93,39 @@ func WithIncludeRows(include bool) ViewOption {
 // and user selections. Variables are processed in dependency order, with dependent
 // variables being templated using the values of their dependencies.
 // Returns both the populated variables with options and the templated variable definitions.
-func populateViewVariables(ctx context.Context, variables []api.ViewVariable, userVariables map[string]string) ([]api.ViewVariableWithOptions, []api.ViewVariable, error) {
-	if userVariables == nil {
-		userVariables = make(map[string]string)
+func populateViewVariables(ctx context.Context, variables []api.ViewVariable, requestVariables map[string]string) ([]api.ViewVariableWithOptions, []api.ViewVariable, error) {
+	if requestVariables == nil {
+		requestVariables = make(map[string]string)
 	}
 
+	// We categorize the dependencies into levels based on their depth in the dependency chain.
 	levels, err := organizeVariablesByLevels(variables)
 	if err != nil {
 		return nil, nil, err
 	}
-	variableValues := make(map[string]string)
-	var result []api.ViewVariableWithOptions
-	templatedVariables := make([]api.ViewVariable, len(variables))
 
+	templatedVariables := make([]api.ViewVariable, len(variables))
 	variableIndexMap := make(map[string]int)
 	for i, v := range variables {
 		variableIndexMap[v.Key] = i
 		templatedVariables[i] = v
 	}
 
+	var (
+		variableValues = make(map[string]string)
+		result         = make([]api.ViewVariableWithOptions, 0, len(variables))
+	)
+
 	for _, level := range levels {
 		for _, variable := range level {
-			populatedVar, err := processVariable(ctx, variable, variableValues, userVariables)
+			populatedVar, err := processVariable(ctx, variable, variableValues, requestVariables)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to process variable %s: %w", variable.Key, err)
 			}
 
 			result = append(result, populatedVar)
 
-			selectedValue := selectVariableValue(variable.Key, populatedVar, userVariables)
+			selectedValue := selectVariableValue(variable.Key, populatedVar, requestVariables)
 			if selectedValue != "" {
 				variableValues[variable.Key] = selectedValue
 			}
@@ -160,9 +164,9 @@ func processVariable(ctx context.Context, variable api.ViewVariable, variableVal
 
 // selectVariableValue determines the value to use for a variable, prioritizing
 // user selection, then default, then first option
-func selectVariableValue(key string, variable api.ViewVariableWithOptions, userVariables map[string]string) string {
-	if userValue, exists := userVariables[key]; exists && userValue != "" {
-		return userValue
+func selectVariableValue(key string, variable api.ViewVariableWithOptions, requestVariables map[string]string) string {
+	if suppliedValue, exists := requestVariables[key]; exists && suppliedValue != "" {
+		return suppliedValue
 	}
 
 	return getDefaultValue(variable)
@@ -172,21 +176,17 @@ func selectVariableValue(key string, variable api.ViewVariableWithOptions, userV
 // Variables with no dependencies are at level 0, variables that depend only on level 0
 // variables are at level 1, and so on.
 func organizeVariablesByLevels(variables []api.ViewVariable) ([][]api.ViewVariable, error) {
-	varMap := buildVariableMap(variables)
-	depths, err := calculateVariableDepths(varMap, variables)
-	if err != nil {
-		return nil, err
-	}
-	return groupVariablesByLevel(variables, depths), nil
-}
-
-// buildVariableMap creates a map for quick variable lookup by key
-func buildVariableMap(variables []api.ViewVariable) map[string]api.ViewVariable {
 	varMap := make(map[string]api.ViewVariable)
 	for _, v := range variables {
 		varMap[v.Key] = v
 	}
-	return varMap
+
+	depths, err := calculateVariableDepths(varMap, variables)
+	if err != nil {
+		return nil, err
+	}
+
+	return groupVariablesByLevel(variables, depths), nil
 }
 
 // calculateVariableDepths calculates the dependency depth for each variable
@@ -355,6 +355,13 @@ func ReadOrPopulateViewTable(ctx context.Context, namespace, name string, opts .
 	}
 
 	view.Spec.Templating = templatedVariables
+
+	// if request.variables == nil {
+	// 	request.variables = make(map[string]string)
+	// }
+	// for _, templatedVariable := range templatedVariables {
+	// 	request.variables[templatedVariable.Key] = templatedVariable.Default
+	// }
 
 	cacheOptions, err := view.GetCacheOptions(lo.FromPtr(request.maxAge), lo.FromPtr(request.refreshTimeout))
 	if err != nil {

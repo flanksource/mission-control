@@ -232,7 +232,10 @@ func TestCalculateVariableDepths(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			g := NewWithT(t)
-			varMap := buildVariableMap(tc.variables)
+			varMap := make(map[string]api.ViewVariable)
+			for _, v := range tc.variables {
+				varMap[v.Key] = v
+			}
 			depths, err := calculateVariableDepths(varMap, tc.variables)
 
 			if tc.expectedError != "" {

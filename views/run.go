@@ -41,7 +41,7 @@ func Run(ctx context.Context, view *v1.View, request *requestOpt) (*api.ViewResu
 	for queryName, q := range view.Spec.Queries {
 		results, err := pkgView.ExecuteQuery(ctx, q.Query)
 		if err != nil {
-			return nil, fmt.Errorf("failed to execute config query '%s': %w", queryName, err)
+			return nil, fmt.Errorf("failed to execute view query '%s': %w", queryName, err)
 		}
 
 		resultSet := dataquery.QueryResultSet{
