@@ -39,11 +39,12 @@ func PersistViewFromCRD(ctx context.Context, obj *v1.View) error {
 		Namespace: obj.Namespace,
 		Spec:      specJSON,
 		Source:    models.SourceCRD,
+		Labels:    obj.Labels,
 	}
 
 	return ctx.DB().Clauses(clause.OnConflict{
 		Columns:   []clause.Column{{Name: "id"}},
-		DoUpdates: clause.AssignmentColumns([]string{"spec", "source"}), // only these values can be updated. (otherwise last_ran, error fields would reset)
+		DoUpdates: clause.AssignmentColumns([]string{"spec", "source", "labels"}), // only these values can be updated. (otherwise last_ran, error fields would reset)
 	}).Create(&view).Error
 }
 
@@ -97,6 +98,7 @@ func GetView(ctx context.Context, namespace, name string) (*v1.View, error) {
 			UID:       types.UID(view.ID.String()),
 			Name:      view.Name,
 			Namespace: view.Namespace,
+			Labels:    view.Labels,
 		},
 		Spec: spec,
 	}
