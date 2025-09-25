@@ -656,11 +656,29 @@
         "changes": {
           "$ref": "#/$defs/ResourceSelector"
         },
+        "viewTableSelector": {
+          "$ref": "#/$defs/ViewSelector"
+        },
         "columns": {
           "additionalProperties": {
             "type": "string"
           },
           "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ViewSelector": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string"
+        },
+        "labelSelector": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
