@@ -911,6 +911,17 @@ spec:
                       required:
                       - query
                       type: object
+                    viewTableSelector:
+                      description: ViewTableSelector queries data from tables generated
+                        by other views
+                      properties:
+                        labelSelector:
+                          type: string
+                        name:
+                          type: string
+                        namespace:
+                          type: string
+                      type: object
                   type: object
                 description: Queries define the queries and mappings to populate the
                   view
