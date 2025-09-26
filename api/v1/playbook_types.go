@@ -2,6 +2,7 @@ package v1
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/flanksource/commons/duration"
@@ -293,6 +294,17 @@ func (p Playbook) ToModel() (*models.Playbook, error) {
 		Spec:        specJSON,
 		Category:    p.Spec.Category,
 	}, nil
+}
+
+func (p PlaybookSpec) Validate() error {
+	actionNames := make(map[string]struct{})
+	for _, n := range p.Actions {
+		if _, ok := actionNames[n.Name]; ok {
+			return fmt.Errorf("all actions should have unique names. %s is repeated", n.Name)
+		}
+		actionNames[n.Name] = struct{}{}
+	}
+	return nil
 }
 
 // +kubebuilder:object:root=true
