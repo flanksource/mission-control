@@ -194,6 +194,10 @@ func PersistPlaybookFromCRD(ctx context.Context, obj *v1.Playbook) error {
 }
 
 func SavePlaybook(ctx context.Context, obj *v1.Playbook) (*models.Playbook, error) {
+	if err := obj.Spec.Validate(); err != nil {
+		return nil, err
+	}
+
 	playbook, err := obj.ToModel()
 	if err != nil {
 		return nil, err
