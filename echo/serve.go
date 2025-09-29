@@ -319,7 +319,9 @@ func RLSMiddleware(next echov4.HandlerFunc) echov4.HandlerFunc {
 			return err
 		}
 
-		ctx.WithName("userRlsPayload").Logger.WithValues("user", lo.FromPtr(ctx.User()).ID).Tracef("RLS payload: %s", logger.Pretty(rlsPayload))
+		if ctx.Properties().On(false, "rls.debug") {
+			ctx.Logger.WithValues("user", lo.FromPtr(ctx.User()).ID).Infof("RLS payload: %s", logger.Pretty(rlsPayload))
+		}
 
 		if rlsPayload.Disable {
 			return next(c)
