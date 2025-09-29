@@ -19,6 +19,7 @@ import (
 	"github.com/flanksource/duty/context"
 	dutyEcho "github.com/flanksource/duty/echo"
 	"github.com/flanksource/duty/rbac/policy"
+	"github.com/flanksource/duty/rls"
 	"github.com/flanksource/duty/schema/openapi"
 	"github.com/flanksource/duty/shutdown"
 	"github.com/flanksource/duty/telemetry"
@@ -26,10 +27,8 @@ import (
 	echov4 "github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	prom "github.com/prometheus/client_golang/prometheus"
-	"github.com/samber/lo"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 
 	"github.com/flanksource/incident-commander/agent"
 	"github.com/flanksource/incident-commander/api"
@@ -118,7 +117,7 @@ func New(ctx context.Context) *echov4.Echo {
 	Forward(ctx, e, "/kubeproxy", "https://kubernetes.default.svc", KubeProxyTokenMiddleware)
 
 	e.GET("/properties", dutyEcho.Properties)
-	e.POST("/resources/search", SearchResources, rbac.Authorization(policy.ObjectCatalog, policy.ActionRead), RLSMiddleware)
+	e.POST("/resources/search", SearchResources, rbac.Authorization(policy.ObjectCatalog, policy.ActionRead), rls.Middleware)
 
 	e.GET("/metrics", echoprometheus.NewHandlerWithConfig(echoprometheus.HandlerConfig{
 		Gatherer: prom.DefaultGatherer,
@@ -307,39 +306,5 @@ func Start(e *echov4.Echo, httpPort int) {
 	logger.Infof("Listening on %s", listenAddr)
 	if err := e.Start(listenAddr); err != nil {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to start server: %v", err))
-	}
-}
-
-func RLSMiddleware(next echov4.HandlerFunc) echov4.HandlerFunc {
-	return func(c echov4.Context) error {
-		ctx := c.Request().Context().(context.Context)
-
-		rlsPayload, err := auth.GetRLSPayload(ctx)
-		if err != nil {
-			return err
-		}
-
-		if ctx.Properties().On(false, "rls.debug") {
-			ctx.Logger.WithValues("user", lo.FromPtr(ctx.User()).ID).Infof("RLS payload: %s", logger.Pretty(rlsPayload))
-		}
-
-		if rlsPayload.Disable {
-			return next(c)
-		}
-
-		err = ctx.Transaction(func(txCtx context.Context, _ trace.Span) error {
-			if err := rlsPayload.SetPostgresSessionRLS(txCtx.DB()); err != nil {
-				return err
-			}
-
-			txCtx = txCtx.WithRLSPayload(rlsPayload)
-
-			// set the context with the tx
-			c.SetRequest(c.Request().WithContext(txCtx))
-
-			return next(c)
-		})
-
-		return err
 	}
 }

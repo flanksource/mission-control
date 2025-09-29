@@ -8,9 +8,11 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/rbac/policy"
+	"github.com/flanksource/duty/rls"
+	"github.com/labstack/echo/v4"
+
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/rbac"
-	"github.com/labstack/echo/v4"
 )
 
 func init() {
@@ -21,11 +23,11 @@ func RegisterRoutes(e *echo.Echo) {
 	logger.Infof("Registering /catalog routes")
 
 	apiGroup := e.Group("/catalog", rbac.Catalog(policy.ActionRead))
-	apiGroup.POST("/summary", SearchConfigSummary, echoSrv.RLSMiddleware)
+	apiGroup.POST("/summary", SearchConfigSummary, rls.Middleware)
 
-	apiGroup.POST("/changes", SearchCatalogChanges, echoSrv.RLSMiddleware)
+	apiGroup.POST("/changes", SearchCatalogChanges, rls.Middleware)
 	// Deprecated. Use POST
-	apiGroup.GET("/changes", SearchCatalogChanges, echoSrv.RLSMiddleware)
+	apiGroup.GET("/changes", SearchCatalogChanges, rls.Middleware)
 }
 
 func SearchCatalogChanges(c echo.Context) error {

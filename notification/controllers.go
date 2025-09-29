@@ -9,9 +9,11 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/rbac/policy"
+	"github.com/flanksource/duty/rls"
+	"github.com/labstack/echo/v4"
+
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/rbac"
-	"github.com/labstack/echo/v4"
 )
 
 func init() {
@@ -21,7 +23,7 @@ func init() {
 func RegisterRoutes(e *echo.Echo) {
 	g := e.Group("/notification")
 
-	g.POST("/summary", NotificationSendHistorySummary, echoSrv.RLSMiddleware)
+	g.POST("/summary", NotificationSendHistorySummary, rls.Middleware)
 
 	g.GET("/events", func(c echo.Context) error {
 		return c.JSON(http.StatusOK, EventRing.Get())

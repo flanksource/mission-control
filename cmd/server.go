@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"strings"
 
+	// register event handlers & echo routers
+
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
@@ -14,9 +16,10 @@ import (
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
+	"github.com/flanksource/duty/rls"
 	"github.com/flanksource/duty/shutdown"
-	icrbac "github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/kopper"
+	echov4 "github.com/labstack/echo/v4"
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/otel"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -24,7 +27,10 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/application"
+	_ "github.com/flanksource/incident-commander/artifacts"
 	"github.com/flanksource/incident-commander/auth"
+	_ "github.com/flanksource/incident-commander/catalog"
+	_ "github.com/flanksource/incident-commander/connection"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/events"
@@ -32,13 +38,8 @@ import (
 	"github.com/flanksource/incident-commander/jobs"
 	"github.com/flanksource/incident-commander/mcp"
 	"github.com/flanksource/incident-commander/notification"
-	echov4 "github.com/labstack/echo/v4"
-
-	// register event handlers & echo routers
-	_ "github.com/flanksource/incident-commander/artifacts"
-	_ "github.com/flanksource/incident-commander/catalog"
-	_ "github.com/flanksource/incident-commander/connection"
 	_ "github.com/flanksource/incident-commander/playbook"
+	icrbac "github.com/flanksource/incident-commander/rbac"
 	_ "github.com/flanksource/incident-commander/shorturl"
 	_ "github.com/flanksource/incident-commander/snapshot"
 	"github.com/flanksource/incident-commander/teams"
@@ -151,10 +152,10 @@ var Serve = &cobra.Command{
 
 		{
 			// Create a dummy context to access the properties
-			if context.NewContext(cmd.Context()).Properties().On(false, vars.FlagRLSEnable) {
+			if context.NewContext(cmd.Context()).Properties().On(false, rls.FlagRLSEnable) {
 				dutyArgs = append(dutyArgs, duty.EnableRLS)
 			}
-			if context.NewContext(cmd.Context()).Properties().On(false, vars.FlagRLSDisable) {
+			if context.NewContext(cmd.Context()).Properties().On(false, rls.FlagRLSDisable) {
 				dutyArgs = append(dutyArgs, duty.DisableRLS)
 			}
 		}
