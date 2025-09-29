@@ -22,6 +22,15 @@ import (
 	"github.com/flanksource/duty/schema/openapi"
 	"github.com/flanksource/duty/shutdown"
 	"github.com/flanksource/duty/telemetry"
+	"github.com/labstack/echo-contrib/echoprometheus"
+	echov4 "github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
+	prom "github.com/prometheus/client_golang/prometheus"
+	"github.com/samber/lo"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
+
 	"github.com/flanksource/incident-commander/agent"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/auth"
@@ -30,13 +39,6 @@ import (
 	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/utils"
 	"github.com/flanksource/incident-commander/vars"
-	"github.com/labstack/echo-contrib/echoprometheus"
-	echov4 "github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
-	prom "github.com/prometheus/client_golang/prometheus"
-	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -316,6 +318,8 @@ func RLSMiddleware(next echov4.HandlerFunc) echov4.HandlerFunc {
 		if err != nil {
 			return err
 		}
+
+		ctx.WithName("userRlsPayload").Logger.WithValues("user", lo.FromPtr(ctx.User()).ID).Tracef("RLS payload: %s", logger.Pretty(rlsPayload))
 
 		if rlsPayload.Disable {
 			return next(c)
