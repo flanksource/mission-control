@@ -4,13 +4,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/db"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
+	"github.com/flanksource/gomplate/v3"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
@@ -147,4 +151,85 @@ func getSilencedResourceFromCelEnv(celEnv *celVariables) models.NotificationSile
 	}
 
 	return silencedResource
+}
+
+func CanSilenceViaSelectors(ctx context.Context, n []models.NotificationSendHistory, selectors types.ResourceSelectors) ([]models.NotificationSendHistory, error) {
+	var hasConfig, hasComponent, hasCheck bool
+	notifResourceID := make(map[uuid.UUID][]models.NotificationSendHistory)
+	for _, notif := range n {
+		notifResourceID[notif.ResourceID] = append(notifResourceID[notif.ResourceID], notif)
+		switch strings.Split(notif.SourceEvent, ".")[0] {
+		case "config":
+			hasConfig = true
+		case "component":
+			hasComponent = true
+		case "check":
+			hasCheck = true
+		}
+	}
+	var silenced []models.NotificationSendHistory
+	if hasConfig {
+		ids, err := query.FindConfigIDsByResourceSelector(ctx, -1, selectors...)
+		if err != nil {
+			return nil, fmt.Errorf("error querying configs for selector[%v]: %w", selectors, err)
+		}
+		for _, id := range ids {
+			if n, ok := notifResourceID[id]; ok {
+				silenced = append(silenced, n...)
+			}
+		}
+	}
+	if hasComponent {
+		ids, err := query.FindComponentIDs(ctx, -1, selectors...)
+		if err != nil {
+			return nil, fmt.Errorf("error querying components for selector[%v]: %w", selectors, err)
+		}
+		for _, id := range ids {
+			if n, ok := notifResourceID[id]; ok {
+				silenced = append(silenced, n...)
+			}
+		}
+	}
+	if hasCheck {
+		ids, err := query.FindCheckIDs(ctx, -1, selectors...)
+		if err != nil {
+			return nil, fmt.Errorf("error querying checks for selector[%v]: %w", selectors, err)
+		}
+		for _, id := range ids {
+			if n, ok := notifResourceID[id]; ok {
+				silenced = append(silenced, n...)
+			}
+		}
+	}
+	return silenced, nil
+}
+
+func CanSilenceViaResourceID(n []models.NotificationSendHistory, resourceID string) []models.NotificationSendHistory {
+	var silenced []models.NotificationSendHistory
+	for _, notif := range n {
+		if notif.ResourceID.String() == resourceID {
+			silenced = append(silenced, notif)
+		}
+	}
+	return silenced
+}
+
+func CanSilenceViaFilter(ctx context.Context, n []models.NotificationSendHistory, filter string) ([]models.NotificationSendHistory, error) {
+	var silenced []models.NotificationSendHistory
+	for _, notif := range n {
+		eventProps := notif.Payload["properties"]
+		// TODO: Base64 decode
+		event := models.Event{
+			Name:       notif.SourceEvent,
+			Properties: eventProps,
+		}
+		celEnv, err := GetEnvForEvent(ctx, event)
+
+		res, err := ctx.RunTemplate(gomplate.Template{Expression: string(filter)}, celEnv.AsMap(ctx))
+		ok, err := strconv.ParseBool(res)
+		if ok {
+			silenced = append(silenced, notif)
+		}
+	}
+	return silenced, nil
 }

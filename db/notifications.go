@@ -22,6 +22,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"go.opentelemetry.io/otel/trace"
+	"gorm.io/gorm"
 )
 
 func DeleteNotificationSilence(ctx context.Context, id string) error {
@@ -433,4 +434,9 @@ func GetGroupedResources(ctx context.Context, groupID uuid.UUID, excludeResource
 	}
 
 	return resourceNames, nil
+}
+
+func GetNotificationSendHistory(ctx context.Context, timeWindow time.Duration, limit int, offset int) ([]models.NotificationSendHistory, error) {
+	h, err := gorm.G[models.NotificationSendHistory](ctx.DB()).Where("created_at > ?", timeWindow).Limit(limit).Find(ctx)
+	return h, err
 }
