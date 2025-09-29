@@ -5,15 +5,13 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/tests/fixtures/dummy"
+	"github.com/google/uuid"
+	"github.com/mark3labs/mcp-go/mcp"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/samber/lo"
-
-	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/tests/fixtures/dummy"
-
-	"github.com/google/uuid"
-	"github.com/mark3labs/mcp-go/mcp"
 )
 
 func checkResultInMCPResponse(toolResult any, results []string) {
@@ -229,7 +227,7 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 			})
 
 			Expect(err).NotTo(HaveOccurred())
-			checkResultInMCPResponse(result.Content, []string{generateViewToolName(dummy.View)})
+			checkResultInMCPResponse(result.Content, []string{generateViewToolName(dummy.PodView)})
 		})
 
 		ginkgo.It("should handle view run handler correctly", func() {
