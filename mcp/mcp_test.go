@@ -227,7 +227,10 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 			})
 
 			Expect(err).NotTo(HaveOccurred())
-			checkResultInMCPResponse(result.Content, []string{generateViewToolName(dummy.PodView)})
+			checkResultInMCPResponse(result.Content, []string{
+				generateViewToolName(dummy.PodView),
+				generateViewToolName(dummy.ViewDev),
+			})
 		})
 
 		ginkgo.It("should handle view run handler correctly", func() {
@@ -241,8 +244,7 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 			})
 
 			// Should get an error for non-existent view tool
-			Expect(err).To(BeNil())
-
+			Expect(err).To(Not(BeNil()))
 		})
 	})
 
