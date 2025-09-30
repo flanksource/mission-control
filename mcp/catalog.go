@@ -2,6 +2,7 @@ package mcp
 
 import (
 	gocontext "context"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 
@@ -16,6 +17,9 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/samber/lo"
 )
+
+//go:embed k8s_troubleshooting_prompt.txt
+var k8sTroubleshootingPrompt string
 
 func searchCatalogHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	ctx, err := getDutyCtx(goctx)
@@ -181,28 +185,29 @@ func ConfigItemResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequ
 	}, nil
 }
 
-func searchCatalogPromptHandler(ctx gocontext.Context, req mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-	query := req.Params.Arguments["query"]
-
+func unhealthyCatalogItemsPromptHandler(ctx gocontext.Context, req mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	return &mcp.GetPromptResult{
-		Description: fmt.Sprintf("Catalog search for %s query", query),
+		Description: "Search for unhealthy catalog items",
 		Messages: []mcp.PromptMessage{
 			{
 				Role:    "user",
-				Content: mcp.NewTextContent(fmt.Sprintf("Query the catalog using catalog_search with this query: %s", query)),
+				Content: mcp.NewTextContent("Query the catalog using search_catalog tool for all unhealthy items with the query: health!=healthy"),
 			},
 		},
 	}, nil
 }
 
-func getDutyCtx(ctx gocontext.Context) (context.Context, error) {
-	if v := ctx.Value(dutyContextKey); v != nil {
-		dutyCtx, ok := v.(context.Context)
-		if ok {
-			return dutyCtx, nil
-		}
-	}
-	return context.Context{}, fmt.Errorf("no duty ctx")
+func troubleshootKubernetesErrorPrompt(ctx gocontext.Context, req mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+	q := lo.CoalesceOrEmpty(req.Params.Arguments["query"], "health!=healthy type=Kubernetes::*")
+	return &mcp.GetPromptResult{
+		Description: "Troubleshoot kubernetes resources",
+		Messages: []mcp.PromptMessage{
+			{
+				Role:    "user",
+				Content: mcp.NewTextContent(fmt.Sprintf(k8sTroubleshootingPrompt, q)),
+			},
+		},
+	}, nil
 }
 
 func registerCatalog(s *server.MCPServer) {
@@ -290,7 +295,7 @@ func registerCatalog(s *server.MCPServer) {
 	s.AddTool(searchCatalogTool, searchCatalogHandler)
 
 	describeConfigDescription := `
-	This tool should only be called when "describe" is explicitly used, for all other purposes catalog_search tool should be used.
+	This tool should only be called when "describe" is explicitly used, for all other purposes search_catalog tool should be used.
 	Ideally, when prompted to describe configs use either the previous query or the config ids in the query field in csv format.
 
 	Each config item returned will have a field "available_tools", which refers to all the existing tools in the current mcp server. We can call
@@ -390,5 +395,8 @@ func registerCatalog(s *server.MCPServer) {
 	)
 	s.AddTool(relatedCatalogTool, relatedCatalogHandler)
 
-	s.AddPrompt(mcp.NewPrompt("Search catalog prompt"), searchCatalogPromptHandler)
+	s.AddPrompt(mcp.NewPrompt("Unhealthy catalog items"), unhealthyCatalogItemsPromptHandler)
+	s.AddPrompt(mcp.NewPrompt("troubleshoot_kubernetes_resource",
+		mcp.WithArgument("query", mcp.ArgumentDescription("query to use for fetching catalog items to troubleshoot")),
+	), troubleshootKubernetesErrorPrompt)
 }

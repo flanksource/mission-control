@@ -16,7 +16,12 @@ var (
 	dutyContextKey dutyContextType = "dutyContext"
 )
 
-func Server(ctx context.Context) http.HandlerFunc {
+type MCPServer struct {
+	HTTPHandler http.Handler
+	Server      *server.MCPServer
+}
+
+func Server(ctx context.Context) *MCPServer {
 	s := server.NewMCPServer("mission-control", api.BuildVersion,
 		server.WithResourceCapabilities(true, true),
 		server.WithToolCapabilities(true),
@@ -28,7 +33,9 @@ func Server(ctx context.Context) http.HandlerFunc {
 	registerConnections(s)
 	registerHealthChecks(s)
 	registerPlaybook(ctx, s)
-	registerViews(s)
+	registerViews(ctx, s)
+
+	registerJobs(ctx, s)
 
 	logger.Infof("Registering /mcp routes")
 
@@ -44,5 +51,8 @@ func Server(ctx context.Context) http.HandlerFunc {
 		}),
 	)
 
-	return httpServer.ServeHTTP
+	return &MCPServer{
+		Server:      s,
+		HTTPHandler: httpServer,
+	}
 }

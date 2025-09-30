@@ -9,12 +9,12 @@ import (
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/job"
+	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/upstream"
 	"github.com/labstack/echo/v4"
 	"github.com/patrickmn/go-cache"
 	"go.opentelemetry.io/otel/attribute"
 
-	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/incident-commander/artifacts"
 	"github.com/flanksource/incident-commander/db"
 	echoSrv "github.com/flanksource/incident-commander/echo"
@@ -40,6 +40,7 @@ func RegisterRoutes(e *echo.Echo) {
 		upstream.AgentAuthMiddleware(agentCache),
 	)
 	upstreamGroup.GET("/ping", upstream.PingHandler)
+	upstreamGroup.POST("/list-views", upstream.ListViewsHandler)
 	upstreamGroup.POST("/push", upstream.NewPushHandler(upstream.NewStatusRingStore(job.EvictedJobs)))
 	upstreamGroup.DELETE("/push", upstream.DeleteHandler)
 

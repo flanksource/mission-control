@@ -18,10 +18,10 @@ type Mail struct {
 	dialer  *gomail.Dialer
 }
 
-func New(to, subject, body, contentType string) *Mail {
+func New(to []string, subject, body, contentType string) *Mail {
 	m := gomail.NewMessage()
 	m.SetHeader("From", fmt.Sprintf("%s <%s>", FromName, FromAddress))
-	m.SetHeader("To", to)
+	m.SetHeader("To", to...)
 	m.SetHeader("Subject", subject)
 	m.SetBody(contentType, body)
 	return &Mail{message: m}

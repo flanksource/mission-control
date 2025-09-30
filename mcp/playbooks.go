@@ -7,9 +7,7 @@ import (
 	"maps"
 	"slices"
 	"strings"
-	"time"
 
-	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
@@ -172,7 +170,7 @@ func syncPlaybooksAsTools(ctx context.Context, s *server.MCPServer) error {
 			root.Required = append(root.Required, "check_id")
 		}
 		if len(spec.Configs) > 0 {
-			root.Properties.Set("config_id", &jsonschema.Schema{Type: "string", Description: "UUID of config item (from catalog_search results). Example: f47ac10b-58cc-4372-a567-0e02b2c3d479"})
+			root.Properties.Set("config_id", &jsonschema.Schema{Type: "string", Description: "UUID of config item (from search_catalog results). Example: f47ac10b-58cc-4372-a567-0e02b2c3d479"})
 			root.Required = append(root.Required, "config_id")
 		}
 		if len(spec.Components) > 0 {
@@ -255,15 +253,4 @@ func registerPlaybook(ctx context.Context, s *server.MCPServer) {
 		))
 
 	s.AddTool(playbookFailedRunTool, playbookFailedRunHandler)
-
-	// Periodically call sync to handle new playbooks added
-	go func() {
-		for {
-			if err := syncPlaybooksAsTools(ctx, s); err != nil {
-				logger.Fatalf("error adding playbooks as mcp tool: %w", err)
-			}
-
-			time.Sleep(1 * time.Hour)
-		}
-	}()
 }

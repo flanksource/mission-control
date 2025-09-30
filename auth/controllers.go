@@ -88,7 +88,7 @@ func (k *KratosHandler) InviteUser(c echo.Context) error {
 		return err
 	}
 
-	inviteMail := mail.New(reqData.Email, "User Invite", body.String(), "text/html")
+	inviteMail := mail.New([]string{reqData.Email}, "User Invite", body.String(), "text/html")
 	if err = inviteMail.Send(); err != nil {
 		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
 			Err:     err.Error(),

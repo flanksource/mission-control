@@ -60,7 +60,7 @@ func (t *agentWrapper) setup(context context.Context) {
 
 	if t.datasetFunc != nil {
 		t.dataset = t.datasetFunc(t.DB())
-		if err := t.dataset.Populate(t.WithDBLogLevel("info").DB()); err != nil {
+		if err := t.dataset.Populate(t.WithDBLogLevel("info")); err != nil {
 			ginkgo.Fail(err.Error())
 		}
 	}
