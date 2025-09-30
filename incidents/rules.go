@@ -2,11 +2,12 @@ package incidents
 
 import (
 	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/job"
 	dutyModels "github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
+
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db/models"
 )
@@ -38,7 +39,7 @@ var IncidentRules = &job.Job{
 		}
 
 		statuses := getAllStatii()
-		response, err := duty.QueryTopology(ctx, ctx.Pool(), duty.TopologyOptions{
+		response, err := query.Topology(ctx.Context, query.TopologyOptions{
 			Flatten: true,
 			Status:  statuses,
 		})
