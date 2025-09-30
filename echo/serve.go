@@ -25,6 +25,7 @@ import (
 	"github.com/flanksource/duty/schema/openapi"
 	"github.com/flanksource/duty/shutdown"
 	"github.com/flanksource/duty/telemetry"
+	"github.com/flanksource/duty/topology"
 	"github.com/labstack/echo-contrib/echoprometheus"
 	echov4 "github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -150,6 +151,8 @@ func New(ctx context.Context) *echov4.Echo {
 			shutdown.ShutdownAndExit(1, fmt.Sprintf("error setting up auth middleware: %v", err))
 		}
 	}
+
+	e.GET("/canary/api/topology", topology.QueryHandler, RLSMiddleware)
 
 	Forward(ctx, e, "/config", api.ConfigDB, rbac.Catalog("*"))
 	Forward(ctx, e, "/apm", api.ApmHubPath, rbac.Authorization(policy.ObjectLogs, "*")) // Deprecated
