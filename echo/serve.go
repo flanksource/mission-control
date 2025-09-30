@@ -203,8 +203,20 @@ func postgrestInterceptor(next echov4.HandlerFunc) echov4.HandlerFunc {
 		path := strings.TrimPrefix(c.Request().URL.Path, "/db/")
 		table := strings.Split(path, "?")[0] // Remove query parameters
 
+		switch table {
+		case "playbook_names":
+			if c.Request().Method == http.MethodGet {
+				q := c.Request().URL.Query()
+
+				// TODO: The additional query must come from the user's permissions on playbook
+				q.Set("name", "eq.bad-exec")
+
+				c.Request().URL.RawQuery = q.Encode()
+				c.Request().RequestURI = c.Request().URL.String()
+			}
+
 		// For playbooks we need to validate the spec for create/update requests
-		if table == "playbooks" {
+		case "playbooks":
 			method := c.Request().Method
 			if method != http.MethodPost && method != http.MethodPatch {
 				return next(c)
