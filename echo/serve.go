@@ -1,9 +1,12 @@
 package echo
 
 import (
+	"bytes"
 	gocontext "context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -33,6 +36,7 @@ import (
 
 	"github.com/flanksource/incident-commander/agent"
 	"github.com/flanksource/incident-commander/api"
+	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/logs"
@@ -136,6 +140,7 @@ func New(ctx context.Context) *echov4.Echo {
 		Forward(ctx, e, "/db", dutyApi.DefaultConfig.Postgrest.URL,
 			rbac.DbMiddleware(),
 			db.SearchQueryTransformMiddleware(),
+			postgrestInterceptor,
 			postgrestTraceMiddleware,
 		)
 	}
@@ -184,6 +189,52 @@ func postgrestTraceMiddleware(next echov4.HandlerFunc) echov4.HandlerFunc {
 
 		for query, values := range c.Request().URL.Query() {
 			ctx.GetSpan().SetAttributes(attribute.String(fmt.Sprintf("db.query.%s", query), values[0]))
+		}
+
+		return next(c)
+	}
+}
+
+func postgrestInterceptor(next echov4.HandlerFunc) echov4.HandlerFunc {
+	return func(c echov4.Context) error {
+		path := strings.TrimPrefix(c.Request().URL.Path, "/db/")
+		table := strings.Split(path, "?")[0] // Remove query parameters
+
+		// For playbooks we need to validate the spec for create/update requests
+		if table == "playbooks" {
+			method := c.Request().Method
+			if method != http.MethodPost && method != http.MethodPatch {
+				return next(c)
+			}
+
+			bodyBytes, err := io.ReadAll(c.Request().Body)
+			if err != nil {
+				return dutyApi.WriteError(c, dutyApi.Errorf(dutyApi.EINVALID, "failed to read request body: %v", err))
+			}
+			// Restore the body for the next handler
+			c.Request().Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+			var requestData map[string]any
+			if err := json.Unmarshal(bodyBytes, &requestData); err != nil {
+				return dutyApi.WriteError(c, dutyApi.Errorf(dutyApi.EINVALID, "error unmarshaling request body: %v", err))
+			}
+			specValue, hasSpec := requestData["spec"]
+			if !hasSpec {
+				return next(c)
+			}
+
+			specBytes, err := json.Marshal(specValue)
+			if err != nil {
+				return dutyApi.WriteError(c, dutyApi.Errorf(dutyApi.EINVALID, "error marshaling json: %v", err))
+			}
+			var spec v1.PlaybookSpec
+			if err := json.Unmarshal(specBytes, &spec); err != nil {
+				return dutyApi.WriteError(c, dutyApi.Errorf(dutyApi.EINVALID, "invalid playbook spec: %v", err))
+			}
+
+			if err := spec.Validate(); err != nil {
+				return dutyApi.WriteError(c, dutyApi.Errorf(dutyApi.EINVALID, "playbook validation failed: %v", err))
+			}
 		}
 
 		return next(c)
