@@ -214,7 +214,7 @@ func postgrestInterceptor(next echov4.HandlerFunc) echov4.HandlerFunc {
 
 			var requestData map[string]any
 			if err := json.Unmarshal(bodyBytes, &requestData); err != nil {
-				return next(c)
+				return dutyApi.WriteError(c, dutyApi.Errorf(dutyApi.EINVALID, "error unmarshaling request body: %v", err))
 			}
 			specValue, hasSpec := requestData["spec"]
 			if !hasSpec {
