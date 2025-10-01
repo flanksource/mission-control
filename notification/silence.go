@@ -1,6 +1,7 @@
 package notification
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -217,17 +218,31 @@ func CanSilenceViaResourceID(n []models.NotificationSendHistory, resourceID stri
 func CanSilenceViaFilter(ctx context.Context, n []models.NotificationSendHistory, filter string) ([]models.NotificationSendHistory, error) {
 	var silenced []models.NotificationSendHistory
 	for _, notif := range n {
-		eventProps := notif.Payload["properties"]
-		// TODO: Base64 decode
+		eventPropsRaw := notif.Payload["properties"]
+		var properties types.JSONStringMap
+		decodedBytes, err := base64.StdEncoding.DecodeString(eventPropsRaw)
+		if err != nil {
+			return nil, fmt.Errorf("error decoding from base64: %w", err)
+		}
+		if err := json.Unmarshal(decodedBytes, &properties); err != nil {
+			return nil, fmt.Errorf("error unmarshaling json: %w", err)
+		}
+
 		event := models.Event{
 			Name:       notif.SourceEvent,
-			Properties: eventProps,
+			Properties: properties,
 		}
 		celEnv, err := GetEnvForEvent(ctx, event)
+		if err != nil {
+			return nil, fmt.Errorf("error getting env for event: %w", err)
+		}
 
 		res, err := ctx.RunTemplate(gomplate.Template{Expression: string(filter)}, celEnv.AsMap(ctx))
-		ok, err := strconv.ParseBool(res)
-		if ok {
+		if err != nil {
+			return nil, fmt.Errorf("error in templating: %w", err)
+		}
+
+		if ok, _ := strconv.ParseBool(res); ok {
 			silenced = append(silenced, notif)
 		}
 	}
