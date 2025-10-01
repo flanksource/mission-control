@@ -28,8 +28,6 @@ func TestSilenceSaveRequest_Validate(t *testing.T) {
 		From                        string
 		Until                       string
 		Description                 string
-		from                        time.Time
-		until                       time.Time
 	}
 	tests := []struct {
 		name    string
