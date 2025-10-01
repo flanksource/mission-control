@@ -67,7 +67,8 @@ func NotificationSendHistorySummary(c echo.Context) error {
 
 func NotificationSilencePreview(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
-	h, err := db.GetNotificationSendHistory(ctx, 15*24*time.Hour, 50, 0)
+	// Get all the notifications sent in past 15 days
+	h, err := db.GetNotificationSendHistory(ctx, 15*24*time.Hour, -1, -1)
 	if err != nil {
 		return api.WriteError(c, err)
 	}
