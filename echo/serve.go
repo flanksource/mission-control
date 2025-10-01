@@ -21,14 +21,11 @@ import (
 	dutyApi "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	dutyEcho "github.com/flanksource/duty/echo"
-	"github.com/flanksource/duty/models"
-	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/schema/openapi"
 	"github.com/flanksource/duty/shutdown"
 	"github.com/flanksource/duty/telemetry"
 	"github.com/flanksource/duty/topology"
-	"github.com/google/uuid"
 	"github.com/labstack/echo-contrib/echoprometheus"
 	echov4 "github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -199,85 +196,6 @@ func postgrestTraceMiddleware(next echov4.HandlerFunc) echov4.HandlerFunc {
 
 		return next(c)
 	}
-}
-
-func applyPlaybookPermissionFilters(ctx context.Context, q url.Values) error {
-	roles, err := dutyRBAC.RolesForUser(ctx.User().ID.String())
-	if err != nil {
-		return fmt.Errorf("failed to get roles for user: %w", err)
-	}
-
-	// Only apply filters for guest users
-	if !lo.Contains(roles, policy.RoleGuest) {
-		return nil
-	}
-
-	// Get permissions for the user
-	permissions, err := dutyRBAC.PermsForUser(ctx.User().ID.String())
-	if err != nil {
-		return fmt.Errorf("failed to get permissions for user: %w", err)
-	}
-
-	var permissionIDs []string
-	for _, p := range permissions {
-		if p.Action != policy.ActionRead && p.Action != "*" {
-			continue
-		}
-
-		if p.Deny {
-			continue
-		}
-
-		if uuid.Validate(p.ID) == nil {
-			permissionIDs = append(permissionIDs, p.ID)
-		}
-	}
-
-	if len(permissionIDs) == 0 {
-		return dutyApi.Errorf(dutyApi.EFORBIDDEN, "guest user %s has no permissions to view playbooks", ctx.User().ID.String())
-	}
-
-	var permModels []models.Permission
-	if err := ctx.DB().Where("id IN ?", permissionIDs).Find(&permModels).Error; err != nil {
-		return fmt.Errorf("failed to query permissions: %w", err)
-	}
-
-	var namespaceFilters []string
-	var nameFilters []string
-	var idFilters []string
-
-	for _, perm := range permModels {
-		if len(perm.ObjectSelector) == 0 {
-			continue
-		}
-
-		var selectors dutyRBAC.Selectors
-		if err := json.Unmarshal(perm.ObjectSelector, &selectors); err != nil {
-			return fmt.Errorf("failed to parse object selector: %w", err)
-		}
-
-		for _, playbookSelector := range selectors.Playbooks {
-			if playbookSelector.ID != "" {
-				idFilters = append(idFilters, playbookSelector.ID)
-			}
-			if playbookSelector.Namespace != "" {
-				namespaceFilters = append(namespaceFilters, playbookSelector.Namespace)
-			}
-			if playbookSelector.Name != "" {
-				nameFilters = append(nameFilters, playbookSelector.Name)
-			}
-		}
-	}
-
-	if len(idFilters) > 0 {
-		q.Set("id", fmt.Sprintf("in.(%s)", strings.Join(idFilters, ",")))
-	} else if len(namespaceFilters) > 0 {
-		q.Set("namespace", fmt.Sprintf("in.(%s)", strings.Join(lo.Uniq(namespaceFilters), ",")))
-	} else if len(nameFilters) > 0 {
-		q.Set("name", fmt.Sprintf("in.(%s)", strings.Join(lo.Uniq(nameFilters), ",")))
-	}
-
-	return nil
 }
 
 func postgrestInterceptor(next echov4.HandlerFunc) echov4.HandlerFunc {
