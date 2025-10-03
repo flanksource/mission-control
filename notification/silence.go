@@ -225,7 +225,7 @@ func CanSilenceViaFilter(ctx context.Context, n []models.NotificationSendHistory
 			return nil, fmt.Errorf("error decoding from base64: %w", err)
 		}
 		if err := json.Unmarshal(decodedBytes, &properties); err != nil {
-			return nil, fmt.Errorf("error unmarshaling json: %w", err)
+			return nil, fmt.Errorf("error unmarshaling json[%s] for id[%s]: %w", string(decodedBytes), notif.ID, err)
 		}
 
 		event := models.Event{
