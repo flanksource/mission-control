@@ -43,23 +43,23 @@ func Test(ctx context.Context, c *models.Connection) error {
 			ConnectionName: c.ID.String(),
 		}
 		if err := cc.Populate(ctx); err != nil {
-			return api.Errorf(api.EINVALID, err.Error())
+			return api.Errorf(api.EINVALID, "%v", err)
 		}
 
 		sess, err := aws.GetAWSConfig(&ctx, cc)
 		if err != nil {
-			return api.Errorf(api.EINVALID, err.Error())
+			return api.Errorf(api.EINVALID, "%v", err)
 		}
 
 		svc := sts.NewFromConfig(sess)
 		if _, err := svc.GetCallerIdentity(ctx, nil); err != nil {
-			return api.Errorf(api.EINVALID, err.Error())
+			return api.Errorf(api.EINVALID, "%v", err)
 		}
 
 	case models.ConnectionTypeAzure:
 		cred, err := azidentity.NewClientSecretCredential(c.Properties["tenant"], c.Username, c.Password, nil)
 		if err != nil {
-			return api.Errorf(api.EINVALID, err.Error())
+			return api.Errorf(api.EINVALID, "%v", err)
 		}
 
 		tokenPolicy := policy.TokenRequestOptions{
@@ -67,7 +67,7 @@ func Test(ctx context.Context, c *models.Connection) error {
 			TenantID: c.Properties["tenant"],
 		}
 		if _, err := cred.GetToken(ctx, tokenPolicy); err != nil {
-			return api.Errorf(api.EINVALID, err.Error())
+			return api.Errorf(api.EINVALID, "%v", err)
 		}
 
 	case models.ConnectionTypeAzureDevops:
@@ -78,7 +78,7 @@ func Test(ctx context.Context, c *models.Connection) error {
 
 		response, err := client.R(ctx).Get("me?api-version=7.2-preview.3")
 		if err != nil {
-			return api.Errorf(api.EINVALID, err.Error())
+			return api.Errorf(api.EINVALID, "%v", err)
 		}
 
 		if response.IsOK(200) {
@@ -105,7 +105,7 @@ func Test(ctx context.Context, c *models.Connection) error {
 
 		if !response.IsOK(200) {
 			body, _ := response.AsString()
-			return api.Errorf(api.EINVALID, body)
+			return api.Errorf(api.EINVALID, "%s", body)
 		}
 
 	case models.ConnectionTypeEmail:
@@ -121,12 +121,12 @@ func Test(ctx context.Context, c *models.Connection) error {
 		parsed.RawQuery = queryParams.Encode()
 
 		if err := shoutrrr.Send(parsed.String(), "Test Connection Email"); err != nil {
-			return api.Errorf(api.EINVALID, err.Error())
+			return api.Errorf(api.EINVALID, "%v", err)
 		}
 
 	case models.ConnectionTypeFolder:
 		if _, err := os.Stat(c.Properties["path"]); err != nil {
-			return api.Errorf(api.EINVALID, err.Error())
+			return api.Errorf(api.EINVALID, "%v", err)
 		}
 
 	case models.ConnectionTypeGCP:
@@ -152,7 +152,7 @@ func Test(ctx context.Context, c *models.Connection) error {
 		defer session.Close()
 
 		if _, err := session.Bucket(c.Properties["bucket"]).Attrs(ctx); err != nil {
-			return api.Errorf(api.EINVALID, err.Error())
+			return api.Errorf(api.EINVALID, "%v", err)
 		}
 
 	case models.ConnectionTypeGenericWebhook:
@@ -168,7 +168,7 @@ func Test(ctx context.Context, c *models.Connection) error {
 			SSHPrivateKey: c.Certificate,
 		})
 		if err != nil {
-			return api.Errorf(api.EINVALID, err.Error())
+			return api.Errorf(api.EINVALID, "%v", err)
 		}
 
 	case models.ConnectionTypeGithub:
@@ -180,7 +180,7 @@ func Test(ctx context.Context, c *models.Connection) error {
 
 		if !response.IsOK(200) {
 			body, _ := response.AsString()
-			return api.Errorf(api.EINVALID, body)
+			return api.Errorf(api.EINVALID, "%s", body)
 		}
 
 	case models.ConnectionTypeGitlab:
@@ -218,7 +218,7 @@ func Test(ctx context.Context, c *models.Connection) error {
 
 		if !response.IsOK() {
 			body, _ := response.AsString()
-			return api.Errorf(api.EINVALID, body)
+			return api.Errorf(api.EINVALID, "%s", body)
 		}
 
 	case models.ConnectionTypeIFTTT:
@@ -296,7 +296,7 @@ func Test(ctx context.Context, c *models.Connection) error {
 
 		if !response.IsOK() {
 			body, _ := response.AsString()
-			return api.Errorf(api.EINVALID, body)
+			return api.Errorf(api.EINVALID, "%s", body)
 		}
 
 	case models.ConnectionTypePushbullet:
@@ -312,7 +312,7 @@ func Test(ctx context.Context, c *models.Connection) error {
 			Password: c.Password,
 		})
 		if err := rdb.Ping(ctx).Err(); err != nil {
-			return api.Errorf(api.EINVALID, err.Error())
+			return api.Errorf(api.EINVALID, "%v", err)
 		}
 
 	case models.ConnectionTypeRestic:
