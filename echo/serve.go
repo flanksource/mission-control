@@ -19,6 +19,7 @@ import (
 	"github.com/flanksource/commons/properties"
 	cutils "github.com/flanksource/commons/utils"
 	dutyApi "github.com/flanksource/duty/api"
+	"github.com/flanksource/duty/canary"
 	"github.com/flanksource/duty/context"
 	dutyEcho "github.com/flanksource/duty/echo"
 	"github.com/flanksource/duty/rbac/policy"
@@ -152,13 +153,11 @@ func New(ctx context.Context) *echov4.Echo {
 		}
 	}
 
-	e.GET("/canary/api/topology", topology.QueryHandler, RLSMiddleware)
+	registerCanaryEndpoints(ctx, e)
 
 	Forward(ctx, e, "/config", api.ConfigDB, rbac.Catalog("*"))
 	Forward(ctx, e, "/apm", api.ApmHubPath, rbac.Authorization(policy.ObjectLogs, "*")) // Deprecated
-	// webhooks perform their own auth
-	Forward(ctx, e, "/canary/webhook", api.CanaryCheckerPath+"/webhook")
-	Forward(ctx, e, "/canary", api.CanaryCheckerPath, rbac.Canary(""))
+
 	// kratos performs its own auth
 	Forward(ctx, e, "/kratos", auth.KratosAPI)
 
@@ -181,6 +180,18 @@ func New(ctx context.Context) *echov4.Echo {
 	e.POST("/agent/token", agent.GenerateToken, rbac.Authorization(policy.ObjectAgent, policy.ActionUpdate))
 	e.POST("/logs", logs.LogsHandler, rbac.Authorization(policy.ObjectLogs, policy.ActionRead))
 	return e
+}
+
+func registerCanaryEndpoints(ctx context.Context, e *echov4.Echo) {
+	// NOTE: Some canary endpoints are handled here for RLS reasons.
+	// Rest are forwarded to canary-checker
+	e.GET("/canary/api/topology", topology.QueryHandler, RLSMiddleware)
+	e.POST("/canary/api/summary", canary.SummaryHandler, RLSMiddleware)
+	e.GET("/canary/api/summary", canary.SummaryHandler, RLSMiddleware)
+
+	// webhooks perform their own auth
+	Forward(ctx, e, "/canary/webhook", api.CanaryCheckerPath+"/webhook")
+	Forward(ctx, e, "/canary", api.CanaryCheckerPath, rbac.Canary(""))
 }
 
 func postgrestTraceMiddleware(next echov4.HandlerFunc) echov4.HandlerFunc {
