@@ -1,0 +1,14 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: allow-guest-playbook-read
+  namespace: mc
+spec:
+  description: allow guest playbook read
+  subject:
+    person: aditya+guest@flanksource.com
+  actions:
+    - read
+  object:
+    playbooks:
+      - name: backup-postgres,loki-logs
