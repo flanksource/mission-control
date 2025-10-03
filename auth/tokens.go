@@ -289,7 +289,7 @@ func CreateAccessTokenForPerson(ctx context.Context, user *models.Person, tokenN
 
 	// 0 expiry means default
 	if expiry == 0 {
-		expiry = properties.Duration(30*24*time.Hour, "access_token.default_expiry")
+		expiry = properties.Duration(90*24*time.Hour, "access_token.default_expiry")
 	}
 
 	token, tokenModel, err := db.CreateAccessToken(ctx, person.ID, tokenName, password, &expiry, lo.ToPtr(user.ID))
