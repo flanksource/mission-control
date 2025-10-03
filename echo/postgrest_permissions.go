@@ -140,6 +140,12 @@ func permissionsToPostgRESTParams(ctx context.Context, q url.Values, config Perm
 		}
 	}
 
+	if len(filtersByField) == 0 {
+		// NOTE: nothing matched, so the user must not have access to any resources
+		// Add a never matching filter
+		filtersByField[ResourceSelectorID] = []string{"6f18a61b-b758-47f8-8c12-b48b7e18dbdd"}
+	}
+
 	// Apply filters in priority order (first non-empty field wins)
 	for _, field := range config.Fields {
 		if filters := filtersByField[field]; len(filters) > 0 {
