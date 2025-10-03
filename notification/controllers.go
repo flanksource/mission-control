@@ -3,7 +3,6 @@ package notification
 import (
 	"encoding/json"
 	"net/http"
-	"time"
 
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
