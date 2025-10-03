@@ -50,6 +50,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.88.2
 	github.com/aws/aws-sdk-go-v2/service/sts v1.33.17
 	github.com/flanksource/artifacts v1.0.18
+	github.com/flanksource/clicky v1.4.0
 	github.com/fluxcd/pkg/gittestserver v0.8.6
 	github.com/go-git/go-billy/v5 v5.5.0
 	github.com/go-git/go-git/v5 v5.12.0
@@ -167,7 +168,6 @@ require (
 	github.com/f-amaral/go-async v0.3.0 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
-	github.com/flanksource/clicky v1.4.0 // indirect
 	github.com/flanksource/is-healthy v1.0.79 // indirect
 	github.com/flanksource/kubectl-neat v1.0.4 // indirect
 	github.com/flanksource/maroto/v2 v2.4.2 // indirect
@@ -240,7 +240,6 @@ require (
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
-	github.com/mattn/go-sqlite3 v1.14.30 // indirect
 	github.com/microsoft/go-mssqldb v1.6.0 // indirect
 	github.com/microsoft/kiota-serialization-form-go v1.0.0 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
