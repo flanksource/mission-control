@@ -33,7 +33,7 @@ func NewHttpSingleLineLogger(ctx context.Context, skipper func(c echo.Context) b
 			} else if status >= 400 {
 				l = logger.V(logger.Warn)
 			}
-			l.Infof("%s	%s	%d	%s", console.Greenf(c.Request().Method), c.Request().URL, status, timer)
+			l.Infof("%s	%s	%d	%s", console.Greenf("%s", c.Request().Method), c.Request().URL, status, timer)
 			return err
 		}
 	}

@@ -1,0 +1,14 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: test-guest-playbook-by-namespace
+  namespace: test
+spec:
+  description: Test guest playbook read by namespace
+  subject:
+    person: guest@test.com
+  actions:
+    - read
+  object:
+    playbooks:
+      - namespace: default
