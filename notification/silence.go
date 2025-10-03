@@ -248,3 +248,22 @@ func CanSilenceViaFilter(ctx context.Context, n []models.NotificationSendHistory
 	}
 	return silenced, nil
 }
+
+func GetResourceAsMapFromEvent(ctx context.Context, event, id string) (map[string]any, error) {
+	var c gomplate.AsMapper
+	var err error
+	switch strings.Split(event, ".")[0] {
+	case "config":
+		c, err = query.ConfigItemFromCache(ctx, id)
+	case "component":
+		var g models.Component
+		g, err = query.ComponentFromCache(ctx, id, true)
+		c = &g
+	case "check":
+		c, err = query.FindCachedCheck(ctx, id)
+	}
+	if c == nil || err != nil {
+		return nil, err
+	}
+	return c.AsMap("spec", "config"), nil
+}

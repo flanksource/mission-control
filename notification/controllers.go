@@ -64,6 +64,11 @@ func NotificationSendHistorySummary(c echo.Context) error {
 	return c.JSON(http.StatusOK, response)
 }
 
+type NotificationSilencePreviewItem struct {
+	models.NotificationSendHistory `json:",inline"`
+	Resource                       map[string]any `json:"resource"`
+}
+
 func NotificationSilencePreview(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
 	// Get all the notifications sent in past 15 days
@@ -89,5 +94,18 @@ func NotificationSilencePreview(c echo.Context) error {
 	if err2 != nil {
 		return api.WriteError(c, err2)
 	}
-	return c.JSON(200, silenced)
+
+	var resp []NotificationSilencePreviewItem
+	for _, s := range silenced {
+		rMap, err := GetResourceAsMapFromEvent(ctx, s.SourceEvent, s.ResourceID.String())
+		if err != nil {
+			return api.WriteError(c, err)
+		}
+		resp = append(resp, NotificationSilencePreviewItem{
+			NotificationSendHistory: s,
+			Resource:                rMap,
+		})
+	}
+
+	return c.JSON(200, resp)
 }
