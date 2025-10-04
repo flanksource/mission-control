@@ -72,7 +72,7 @@ type NotificationSilencePreviewItem struct {
 func NotificationSilencePreview(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
 	// Get all the notifications sent in past 15 days
-	h, err := db.GetNotificationSendHistory(ctx, 15, -1, -1)
+	h, err := db.GetNotificationSendHistory(ctx, 15, []string{models.NotificationStatusSent}, -1, -1)
 	if err != nil {
 		return api.WriteError(c, err)
 	}
