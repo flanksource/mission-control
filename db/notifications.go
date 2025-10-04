@@ -436,9 +436,13 @@ func GetGroupedResources(ctx context.Context, groupID uuid.UUID, excludeResource
 	return resourceNames, nil
 }
 
-func GetNotificationSendHistory(ctx context.Context, timeWindowDays int, limit int, offset int) ([]models.NotificationSendHistory, error) {
+func GetNotificationSendHistory(ctx context.Context, timeWindowDays int, status []string, limit int, offset int) ([]models.NotificationSendHistory, error) {
 	q := gorm.G[models.NotificationSendHistory](ctx.DB()).
 		Where(fmt.Sprintf("created_at > NOW() - INTERVAL '%d days'", timeWindowDays))
+
+	if len(status) > 0 {
+		q = q.Where("status IN ?", status)
+	}
 	if limit > 0 {
 		q = q.Limit(limit)
 	}

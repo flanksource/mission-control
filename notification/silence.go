@@ -219,6 +219,9 @@ func CanSilenceViaFilter(ctx context.Context, n []models.NotificationSendHistory
 	var silenced []models.NotificationSendHistory
 	for _, notif := range n {
 		eventPropsRaw := notif.Payload["properties"]
+		if eventPropsRaw == "" {
+			continue
+		}
 		var properties types.JSONStringMap
 		decodedBytes, err := base64.StdEncoding.DecodeString(eventPropsRaw)
 		if err != nil {
