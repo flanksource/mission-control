@@ -268,7 +268,7 @@ type CreateAccessTokenForPersonResult struct {
 	Person     *models.Person
 }
 
-func CreateAccessTokenForPerson(ctx context.Context, user *models.Person, tokenName string) (CreateAccessTokenForPersonResult, error) {
+func CreateAccessTokenForPerson(ctx context.Context, user *models.Person, tokenName string, expiry time.Duration) (CreateAccessTokenForPersonResult, error) {
 	name := user.Name + " (Token)"
 	emailParts := strings.Split(user.Email, "@")
 	if len(emailParts) != 2 {
@@ -287,7 +287,11 @@ func CreateAccessTokenForPerson(ctx context.Context, user *models.Person, tokenN
 		return CreateAccessTokenForPersonResult{}, fmt.Errorf("unable to generate random password for token: %w", err)
 	}
 
-	expiry := properties.Duration(30*24*time.Hour, "access_token.default_expiry")
+	// 0 expiry means default
+	if expiry == 0 {
+		expiry = properties.Duration(90*24*time.Hour, "access_token.default_expiry")
+	}
+
 	token, tokenModel, err := db.CreateAccessToken(ctx, person.ID, tokenName, password, &expiry, lo.ToPtr(user.ID))
 	return CreateAccessTokenForPersonResult{
 		Token:      token,

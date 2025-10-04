@@ -7,7 +7,9 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"time"
 
+	"github.com/flanksource/commons/duration"
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/rbac"
@@ -186,7 +188,8 @@ func WhoAmI(c echo.Context) error {
 }
 
 type CreateTokenRequest struct {
-	Name string `json:"name"`
+	Name   string `json:"name"`
+	Expiry string `json:"expiry"`
 
 	// Empty scope means all permissions the user has
 	Scope []policy.Permission `json:"scope"`
@@ -201,6 +204,7 @@ func CreateToken(c echo.Context) error {
 		})
 	}
 
+	var err error
 	var reqData CreateTokenRequest
 	if err := c.Bind(&reqData); err != nil {
 		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{
@@ -209,7 +213,18 @@ func CreateToken(c echo.Context) error {
 		})
 	}
 
-	tokenResult, err := CreateAccessTokenForPerson(ctx, ctx.User(), reqData.Name)
+	var expiry duration.Duration = 0 // Default
+	if reqData.Expiry != "" {
+		expiry, err = duration.ParseDuration(reqData.Expiry)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{
+				Err:     err.Error(),
+				Message: fmt.Sprintf("Error parsing expiry[%s]", reqData.Expiry),
+			})
+		}
+	}
+
+	tokenResult, err := CreateAccessTokenForPerson(ctx, ctx.User(), reqData.Name, time.Duration(expiry))
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{
 			Err:     err.Error(),
