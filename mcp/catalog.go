@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -133,7 +134,7 @@ func configTypeResourceHandler(goctx gocontext.Context, req mcp.CallToolRequest)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	return structToMCPResponse(types), nil
+	return mcp.NewToolResultText(strings.Join(types, "\n")), nil
 }
 
 func ConfigItemResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
