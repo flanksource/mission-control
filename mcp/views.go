@@ -40,13 +40,7 @@ func getViewHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.Call
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	jsonData, err := json.Marshal(response)
-	if err != nil {
-		return nil, err
-	}
-
-	return mcp.NewToolResultText(string(jsonData)), nil
+	return structToMCPResponse(response), nil
 }
 
 // ToolName -> View ID
@@ -73,13 +67,7 @@ func viewRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.Call
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	jsonData, err := json.Marshal(response)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	return mcp.NewToolResultText(string(jsonData)), nil
+	return structToMCPResponse(response), nil
 }
 
 func viewListToolHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {

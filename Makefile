@@ -56,7 +56,7 @@ ci-test:
 
 .PHONY: e2e
 e2e:
-	ginkgo -r ./tests/e2e/... --keep-going --succinct
+	ginkgo -r --keep-going --succinct ./tests/e2e/...
 
 fmt:
 	go fmt ./...

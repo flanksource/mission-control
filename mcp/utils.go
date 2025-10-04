@@ -6,7 +6,9 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/flanksource/clicky"
 	"github.com/flanksource/duty/context"
+	"github.com/mark3labs/mcp-go/mcp"
 )
 
 func getDutyCtx(ctx gocontext.Context) (context.Context, error) {
@@ -61,4 +63,12 @@ func extractNamespaceName(uri string) (string, string, error) {
 		return "", "", fmt.Errorf("invalid format: %s", uri)
 	}
 	return parts[0], parts[1], nil
+}
+
+func structToMCPResponse(s any) *mcp.CallToolResult {
+	md, err := clicky.Format(s, clicky.FormatOptions{Format: "markdown"})
+	if err != nil {
+		return mcp.NewToolResultError(err.Error())
+	}
+	return mcp.NewToolResultText(md)
 }

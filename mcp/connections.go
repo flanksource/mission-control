@@ -22,13 +22,7 @@ func ConnectionListHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*m
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	jsonData, err := json.Marshal(conns)
-	if err != nil {
-		return nil, err
-	}
-
-	return mcp.NewToolResultText(string(jsonData)), nil
+	return structToMCPResponse(conns), nil
 }
 
 func ConnectionResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {

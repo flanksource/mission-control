@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/flanksource/duty/models"
@@ -87,8 +88,23 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// As per dummy data for last 10 check_status, we should get 8 passing and 2 failing check status
-			Expect(strings.Count(fmt.Sprint(result.Content), `"status":true`)).To(Equal(8))
-			Expect(strings.Count(fmt.Sprint(result.Content), `"status":false`)).To(Equal(2))
+			contentLines := strings.Split(fmt.Sprint(result.Content), "\n")
+			statusIndex := slices.Index(strings.Split(contentLines[0], " | "), "status")
+			var trueCount, falseCount int
+			for _, line := range contentLines[1:] {
+				checkStatusData := strings.Split(line, " | ")
+				if len(checkStatusData) > statusIndex {
+					status := strings.TrimSpace(checkStatusData[statusIndex-1])
+					if status == "true" {
+						trueCount++
+					}
+					if status == "false" {
+						falseCount++
+					}
+				}
+			}
+			Expect(trueCount).To(Equal(8))
+			Expect(falseCount).To(Equal(2))
 		})
 	})
 

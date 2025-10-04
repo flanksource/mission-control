@@ -35,13 +35,7 @@ func playbookRecentRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) 
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	jsonData, err := json.Marshal(pbrs)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	return mcp.NewToolResultText(string(jsonData)), nil
+	return structToMCPResponse(pbrs), nil
 }
 
 func playbookFailedRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -56,12 +50,7 @@ func playbookFailedRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) 
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	jsonData, err := json.Marshal(runs)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	return mcp.NewToolResultText(string(jsonData)), nil
-
+	return structToMCPResponse(runs), nil
 }
 
 func playbookRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -99,12 +88,7 @@ func playbookRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	jsonData, err := json.Marshal(run)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	return mcp.NewToolResultText(string(jsonData)), nil
+	return structToMCPResponse(run), nil
 }
 
 func playbookListToolHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
