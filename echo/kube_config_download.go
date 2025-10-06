@@ -60,7 +60,7 @@ func DownloadKubeConfig(c echo.Context) error {
 		return err
 	}
 
-	token, _, err := db.CreateAccessToken(ctx, ctx.User().ID, ctx.User().Email, seed, nil, nil)
+	token, _, err := db.CreateAccessToken(ctx, ctx.User().ID, ctx.User().Email, seed, nil, nil, false)
 	if err != nil {
 		return fmt.Errorf("failed to create a new access token: %w", err)
 	}

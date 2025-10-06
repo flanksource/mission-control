@@ -40,7 +40,7 @@ var Token = &cobra.Command{
 			return errors.New("user not found")
 		}
 
-		token, _, err := db.CreateAccessToken(ctx, user.ID, "default", password, &tokenExpiry, nil)
+		token, _, err := db.CreateAccessToken(ctx, user.ID, "default", password, &tokenExpiry, nil, false)
 		if err != nil {
 			return fmt.Errorf("failed to create a new access token: %w", err)
 		}

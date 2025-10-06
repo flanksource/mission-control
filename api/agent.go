@@ -1,8 +1,9 @@
 package api
 
 type GenerateAgentRequest struct {
-	Name       string
-	Properties map[string]string
+	Name       string            `json:"name"`
+	AutoRenew  bool              `json:"auto_renew"`
+	Properties map[string]string `json:"properties"`
 }
 
 type GeneratedAgent struct {
@@ -13,6 +14,7 @@ type GeneratedAgent struct {
 
 type GenerateTokenRequest struct {
 	AgentName string
+	AutoRenew bool `json:"auto_renew"`
 }
 
 type GeneratedToken struct {

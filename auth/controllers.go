@@ -188,8 +188,9 @@ func WhoAmI(c echo.Context) error {
 }
 
 type CreateTokenRequest struct {
-	Name   string `json:"name"`
-	Expiry string `json:"expiry"`
+	Name      string `json:"name"`
+	Expiry    string `json:"expiry"`
+	AutoRenew bool   `json:"auto_renew"`
 
 	// Empty scope means all permissions the user has
 	Scope []policy.Permission `json:"scope"`
@@ -224,7 +225,7 @@ func CreateToken(c echo.Context) error {
 		}
 	}
 
-	tokenResult, err := CreateAccessTokenForPerson(ctx, ctx.User(), reqData.Name, time.Duration(expiry))
+	tokenResult, err := CreateAccessTokenForPerson(ctx, ctx.User(), reqData.Name, time.Duration(expiry), reqData.AutoRenew)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{
 			Err:     err.Error(),
