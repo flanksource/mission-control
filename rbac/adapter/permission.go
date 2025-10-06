@@ -10,7 +10,9 @@ import (
 	gormadapter "github.com/casbin/gorm-adapter/v3"
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/duty/models"
+	dutyRBAC "github.com/flanksource/duty/rbac"
 	pkgPolicy "github.com/flanksource/duty/rbac/policy"
+	"github.com/flanksource/duty/types"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/samber/lo"
 	"gorm.io/gorm"
@@ -89,6 +91,19 @@ func PermissionToCasbinRule(permission models.Permission) [][]string {
 			abacPermission.ObjectSelector = objectSelector
 			policies = append(policies, createPolicy(abacPermission, action))
 		}
+
+		// If permission has ObjectSelector and Tags, create additional ABAC policy 
+		// that combines object selection with tag filtering
+		if len(permission.ObjectSelector) > 0 && len(permission.Tags) > 0 {
+			combinedSelector := combineObjectSelectorWithTags(permission.ObjectSelector, permission.Tags, action)
+			if combinedSelector != nil {
+				abacPermission := permission
+				abacPermission.Object = ""
+				abacPermission.ObjectSelector = combinedSelector
+				abacPermission.Tags = nil // Clear tags since they're now in the ObjectSelector
+				policies = append(policies, createPolicy(abacPermission, action))
+			}
+		}
 	}
 
 	return policies
@@ -133,6 +148,68 @@ func rbacToABACObjectSelector(permission models.Permission, action string) []byt
 	}
 
 	return nil
+}
+
+// combineObjectSelectorWithTags merges ObjectSelector with Tags to create a unified selector
+// that applies tag filtering to the selected objects
+func combineObjectSelectorWithTags(objectSelector []byte, tags map[string]string, action string) []byte {
+	if len(objectSelector) == 0 || len(tags) == 0 {
+		return nil
+	}
+
+	// Parse the existing object selector
+	var selectors dutyRBAC.Selectors
+	if err := json.Unmarshal(objectSelector, &selectors); err != nil {
+		return nil
+	}
+
+	// Only apply tag filtering for read actions on configs and components
+	if action != pkgPolicy.ActionRead {
+		return nil
+	}
+
+	// Convert tags map to tag selector string
+	var tagPairs []string
+	for key, value := range tags {
+		tagPairs = append(tagPairs, fmt.Sprintf("%s=%s", key, value))
+	}
+	tagSelector := strings.Join(tagPairs, ",")
+
+	// Create a modified selector with tag filtering applied
+	modifiedSelectors := dutyRBAC.Selectors{
+		Configs:     addTagSelectorToResources(selectors.Configs, tagSelector),
+		Components:  addTagSelectorToResources(selectors.Components, tagSelector),
+		Playbooks:   selectors.Playbooks,   // Don't modify playbooks
+		Connections: selectors.Connections, // Don't modify connections
+	}
+
+	result, err := json.Marshal(modifiedSelectors)
+	if err != nil {
+		return nil
+	}
+
+	return result
+}
+
+// addTagSelectorToResources adds tag selector to resource selectors while preserving existing selectors
+func addTagSelectorToResources(resources []types.ResourceSelector, tagSelector string) []types.ResourceSelector {
+	if len(resources) == 0 {
+		return resources
+	}
+
+	var modified []types.ResourceSelector
+	for _, resource := range resources {
+		modifiedResource := resource
+		if modifiedResource.TagSelector == "" {
+			modifiedResource.TagSelector = tagSelector
+		} else {
+			// Combine existing tag selector with new tags
+			modifiedResource.TagSelector = modifiedResource.TagSelector + "," + tagSelector
+		}
+		modified = append(modified, modifiedResource)
+	}
+
+	return modified
 }
 
 // Helper function for finding namespaced resources by selector
