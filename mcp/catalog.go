@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -45,12 +46,7 @@ func searchCatalogHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mc
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	jsonData, err := json.Marshal(cis)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	return mcp.NewToolResultText(string(jsonData)), nil
+	return structToMCPResponse(cis), nil
 }
 
 type ConfigDescription struct {
@@ -100,12 +96,7 @@ func searchConfigChangesHandler(goctx gocontext.Context, req mcp.CallToolRequest
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	jsonData, err := json.Marshal(cis)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	return mcp.NewToolResultText(string(jsonData)), nil
+	return structToMCPResponse(cis), nil
 }
 
 func relatedCatalogHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -129,12 +120,7 @@ func relatedCatalogHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*m
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	jsonData, err := json.Marshal(cis)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	return mcp.NewToolResultText(string(jsonData)), nil
+	return structToMCPResponse(cis), nil
 }
 
 func configTypeResourceHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -148,13 +134,7 @@ func configTypeResourceHandler(goctx gocontext.Context, req mcp.CallToolRequest)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-
-	jsonData, err := json.Marshal(types)
-	if err != nil {
-		return nil, err
-	}
-
-	return mcp.NewToolResultText(string(jsonData)), nil
+	return mcp.NewToolResultText(strings.Join(types, "\n")), nil
 }
 
 func ConfigItemResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
