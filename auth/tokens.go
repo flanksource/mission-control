@@ -2,6 +2,7 @@ package auth
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -19,16 +20,16 @@ import (
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/rls"
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+	"github.com/patrickmn/go-cache"
 	"github.com/samber/lo"
+	"golang.org/x/crypto/argon2"
+	"gorm.io/gorm"
 
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/vars"
-	"github.com/golang-jwt/jwt/v4"
-	"github.com/patrickmn/go-cache"
-	"golang.org/x/crypto/argon2"
-	"gorm.io/gorm"
 )
 
 func FlushTokenCache() {
@@ -106,20 +107,48 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 	}
 
 	var (
-		agentIDs []string
-		tags     = []map[string]string{}
+		agentIDs        []string
+		tags            = []map[string]string{}
+		objects         []string
+		objectSelectors = &rls.ObjectSelectors{}
 	)
 	for _, p := range permModels {
 		agentIDs = append(agentIDs, p.Agents...)
 		if len(p.Tags) > 0 {
 			tags = append(tags, p.Tags)
 		}
+
+		// Collect objects (e.g., "catalog", "component", "canaries", "playbooks")
+		if p.Object != "" {
+			objects = append(objects, p.Object)
+		}
+
+		// Parse and merge object_selector
+		if len(p.ObjectSelector) > 0 {
+			var selectors rls.ObjectSelectors
+			if err := json.Unmarshal(p.ObjectSelector, &selectors); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal object_selector for permission %s: %w", p.ID, err)
+			}
+
+			objectSelectors.Playbooks = append(objectSelectors.Playbooks, selectors.Playbooks...)
+			objectSelectors.Connections = append(objectSelectors.Connections, selectors.Connections...)
+			objectSelectors.Configs = append(objectSelectors.Configs, selectors.Configs...)
+			objectSelectors.Components = append(objectSelectors.Components, selectors.Components...)
+		}
 	}
 
 	payload := &rls.Payload{
-		Agents: agentIDs,
-		Tags:   tags,
+		Agents:  agentIDs,
+		Tags:    tags,
+		Objects: objects,
 	}
+
+	// Only add ObjectSelectors if there are any selectors
+	if len(objectSelectors.Playbooks) > 0 || len(objectSelectors.Connections) > 0 ||
+		len(objectSelectors.Configs) > 0 || len(objectSelectors.Components) > 0 {
+		payload.ObjectSelectors = objectSelectors
+	}
+
 	tokenCache.SetDefault(cacheKey, payload)
 
 	return payload, nil
@@ -149,6 +178,14 @@ func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId str
 
 		if len(rlsPayload.Tags) > 0 {
 			claims["tags"] = rlsPayload.Tags
+		}
+
+		if len(rlsPayload.Objects) > 0 {
+			claims["objects"] = rlsPayload.Objects
+		}
+
+		if rlsPayload.ObjectSelectors != nil {
+			claims["object_selectors"] = rlsPayload.ObjectSelectors
 		}
 	}
 
