@@ -190,10 +190,8 @@ func createTestNotificationSendHistories() []models.NotificationSendHistory {
 var _ = ginkgo.Describe("Notification silence preview", func() {
 	ginkgo.It("should check silence via resource_id", func() {
 		testHistories := createTestNotificationSendHistories()
-		err := DefaultContext.DB().Debug().Create(testHistories).Error
-		Expect(err).To(BeNil())
 
-		err = DefaultContext.DB().Exec(`UPDATE config_items SET path=? WHERE id = ?`, dummy.EKSCluster.ID.String(), dummy.KubernetesNodeA.ID.String()).Error
+		err := DefaultContext.DB().Exec(`UPDATE config_items SET path=? WHERE id = ?`, dummy.EKSCluster.ID.String(), dummy.KubernetesNodeA.ID.String()).Error
 		Expect(err).To(BeNil())
 
 		tests := []struct {

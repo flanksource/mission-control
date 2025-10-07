@@ -20,6 +20,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"github.com/timberio/go-datemath"
+	"gorm.io/gorm"
 )
 
 type SilenceSaveRequest struct {
@@ -231,7 +232,7 @@ func CanSilence(ctx context.Context, h []models.NotificationSendHistory, params 
 func CanSilenceViaResourceID(ctx context.Context, histories []models.NotificationSendHistory, resourceType, resourceID string, recursive bool) ([]models.NotificationSendHistory, error) {
 	var silenced []models.NotificationSendHistory
 
-	// Build a map of resource_id -> path for recursive lookup
+	// Map of resource_id -> path for recursive lookup
 	var pathMap map[uuid.UUID]string
 
 	if recursive && (resourceType == "config" || resourceType == "component") {
@@ -247,46 +248,36 @@ func CanSilenceViaResourceID(ctx context.Context, histories []models.Notificatio
 		}
 
 		if len(resourceIDs) > 0 {
-			// Query paths in bulk
 			type PathResult struct {
 				ID   uuid.UUID
 				Path string
 			}
 			var results []PathResult
-
-			var err error
+			var q *gorm.DB
 			if resourceType == "config" {
-				err = ctx.DB().Model(&models.ConfigItem{}).
-					Select("id, path").
-					Where("id IN ?", resourceIDs).
-					Find(&results).Error
+				q = ctx.DB().Model(&models.ConfigItem{})
 			} else if resourceType == "component" {
-				err = ctx.DB().Model(&models.Component{}).
-					Select("id, path").
-					Where("id IN ?", resourceIDs).
-					Find(&results).Error
+				q = ctx.DB().Model(&models.Component{})
 			}
-
-			if err != nil {
+			if err := q.
+				Select("id, path").
+				Where("id IN ?", resourceIDs).
+				Find(&results).Error; err != nil {
 				return nil, err
 			}
 
-			// Build the map
 			for _, r := range results {
 				pathMap[r.ID] = r.Path
 			}
 		}
 	}
 
-	// Check each history
 	for _, h := range histories {
-		// Direct match
 		if h.ResourceID.String() == resourceID {
 			silenced = append(silenced, h)
 			continue
 		}
 
-		// Recursive match
 		if recursive && pathMap != nil {
 			if path, ok := pathMap[h.ResourceID]; ok {
 				if strings.Contains(path, resourceID) {
