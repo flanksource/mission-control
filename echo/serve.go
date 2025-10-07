@@ -215,19 +215,6 @@ func postgrestInterceptor(next echov4.HandlerFunc) echov4.HandlerFunc {
 		table := strings.Split(path, "?")[0] // Remove query parameters
 
 		switch table {
-		case "playbook_names":
-			if c.Request().Method == http.MethodGet {
-				ctx := c.Request().Context().(context.Context)
-				q := c.Request().URL.Query()
-
-				if err := applyPlaybookPermissionFilters(ctx, q); err != nil {
-					return dutyApi.WriteError(c, dutyApi.Errorf(dutyApi.EFORBIDDEN, "failed to apply permission filters: %v", err))
-				}
-
-				c.Request().URL.RawQuery = q.Encode()
-				c.Request().RequestURI = c.Request().URL.String()
-			}
-
 		// For playbooks we need to validate the spec for create/update requests
 		case "playbooks":
 			method := c.Request().Method

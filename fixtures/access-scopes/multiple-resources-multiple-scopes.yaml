@@ -1,0 +1,24 @@
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: AccessScope
+metadata:
+  name: guest-multi-scope
+  namespace: mc
+spec:
+  description: |
+    Allow guest user to access all configs and components 
+    from local agent in dev namespace and stage namespace from kind agents
+  subject:
+    person: aditya+guest@flanksource.com
+  resources:
+    - config
+    - component
+  scopes:
+    - tags:
+        namespace: dev
+      agents:
+        - local
+    - tags:
+        namespace: stage
+      agents:
+        - kind

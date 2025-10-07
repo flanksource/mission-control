@@ -11,10 +11,11 @@ import (
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/duty/models"
 	pkgPolicy "github.com/flanksource/duty/rbac/policy"
-	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/samber/lo"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+
+	v1 "github.com/flanksource/incident-commander/api/v1"
 )
 
 type PermissionAdapter struct {

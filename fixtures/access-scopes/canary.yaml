@@ -1,0 +1,14 @@
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: AccessScope
+metadata:
+  name: canary
+  namespace: mc
+spec:
+  description: Allow guest user to access all canaries named localhost
+  subject:
+    person: aditya+guest@flanksource.com
+  resources: ["canary"]
+  scopes:
+    - names:
+        - localhost

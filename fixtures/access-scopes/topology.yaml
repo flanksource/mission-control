@@ -1,0 +1,14 @@
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: AccessScope
+metadata:
+  name: topology
+  namespace: mc
+spec:
+  description: Allow guest user read all topology
+  subject:
+    person: aditya+guest@flanksource.com
+  resources: ["component"]
+  scopes:
+    - names:
+        - "*"

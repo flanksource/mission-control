@@ -38,20 +38,12 @@ func TestEnforcer(t *testing.T) {
 			PersonID: lo.ToPtr(userID),
 			Object:   policy.ObjectCatalog,
 			Action:   policy.ActionRead,
-			Tags: map[string]string{
-				"namespace": "default",
-				"cluster":   "aws",
-			},
-			Agents: []string{"123"},
 		},
 		{
 			ID:       uuid.New(),
 			PersonID: lo.ToPtr(userID),
 			Object:   "*",
 			Action:   policy.ActionRead,
-			Tags: map[string]string{
-				"namespace": "default",
-			},
 		},
 	}
 

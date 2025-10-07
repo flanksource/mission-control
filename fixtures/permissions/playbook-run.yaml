@@ -1,14 +1,16 @@
 apiVersion: mission-control.flanksource.com/v1
 kind: Permission
 metadata:
-  name: allow-guest-playbook-read
+  name: allow-playbook-run
   namespace: mc
 spec:
-  description: allow guest playbook read
+  description: allow this user to run loki-logs playbook on any config
   subject:
     person: aditya+guest@flanksource.com
   actions:
-    - read
+    - playbook:run
   object:
     playbooks:
-      - name: backup-postgres,loki-logs
+      - name: loki-logs
+    configs:
+      - name: "*"

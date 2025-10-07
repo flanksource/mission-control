@@ -195,9 +195,13 @@ type PermissionSpec struct {
 	Deny bool `json:"deny,omitempty"`
 
 	// List of agent ids whose configs/components are accessible to a person when RLS is enabled
+	// DEPRECATED: Use AccessScope CRD instead. This field is ignored.
+	// +optional
 	Agents []string `json:"agents,omitempty"`
 
 	// List of config/component tags a person is allowed to access to when RLS is enabled
+	// DEPRECATED: Use AccessScope CRD instead. This field is ignored.
+	// +optional
 	Tags map[string]string `json:"tags,omitempty"`
 }
 

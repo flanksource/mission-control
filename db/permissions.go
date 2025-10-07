@@ -8,8 +8,9 @@ import (
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/google/uuid"
+
+	v1 "github.com/flanksource/incident-commander/api/v1"
 )
 
 func PersistPermissionFromCRD(ctx context.Context, obj *v1.Permission) error {
@@ -21,6 +22,12 @@ func PersistPermissionFromCRD(ctx context.Context, obj *v1.Permission) error {
 	subject, subjectType, err := obj.Spec.Subject.Populate(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to populate subject: %w", err)
+	}
+
+	// Check for deprecated fields and emit warning
+	if len(obj.Spec.Tags) > 0 || len(obj.Spec.Agents) > 0 {
+		ctx.Warnf("Permission %s/%s uses deprecated fields (tags or agents). These fields are ignored. Use AccessScope CRD instead.",
+			obj.Namespace, obj.Name)
 	}
 
 	action := strings.Join(obj.Spec.Actions, ",")
@@ -35,8 +42,6 @@ func PersistPermissionFromCRD(ctx context.Context, obj *v1.Permission) error {
 		Action:      action,
 		Source:      models.SourceCRD,
 		Deny:        obj.Spec.Deny,
-		Tags:        obj.Spec.Tags,
-		Agents:      obj.Spec.Agents,
 	}
 
 	// Check if the object selectors semantically match a global object.

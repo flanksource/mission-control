@@ -1,0 +1,15 @@
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: AccessScope
+metadata:
+  name: guest-access-all-in-cluster
+  namespace: mc
+spec:
+  description: Allow guest user read access to all resources in homelab cluster
+  subject:
+    person: aditya+guest@flanksource.com
+  resources: ["*"]
+  scopes:
+    - tags:
+        cluster: homelab
+        namespace: default
