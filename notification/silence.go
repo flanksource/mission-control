@@ -254,11 +254,13 @@ func CanSilenceViaResourceID(ctx context.Context, histories []models.Notificatio
 			}
 			var results []PathResult
 			var q *gorm.DB
-			if resourceType == "config" {
+			switch resourceType {
+			case "config":
 				q = ctx.DB().Model(&models.ConfigItem{})
-			} else if resourceType == "component" {
+			case "component":
 				q = ctx.DB().Model(&models.Component{})
 			}
+
 			if err := q.
 				Select("id, path").
 				Where("id IN ?", resourceIDs).
