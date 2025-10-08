@@ -87,7 +87,7 @@ const (
 	saltLength  = 12
 )
 
-func CreateAccessToken(ctx context.Context, personID uuid.UUID, name, password string, expiry *time.Duration, createdBy *uuid.UUID) (string, *models.AccessToken, error) {
+func CreateAccessToken(ctx context.Context, personID uuid.UUID, name, password string, expiry *time.Duration, createdBy *uuid.UUID, autoRenew bool) (string, *models.AccessToken, error) {
 	saltRaw := make([]byte, saltLength)
 	if _, err := crand.Read(saltRaw); err != nil {
 		return "", nil, err
@@ -102,9 +102,10 @@ func CreateAccessToken(ctx context.Context, personID uuid.UUID, name, password s
 	}
 
 	accessToken := &models.AccessToken{
-		Name:     name,
-		Value:    encodedHash,
-		PersonID: personID,
+		Name:      name,
+		Value:     encodedHash,
+		PersonID:  personID,
+		AutoRenew: autoRenew,
 	}
 	if expiry != nil {
 		accessToken.ExpiresAt = lo.ToPtr(time.Now().Add(*expiry))

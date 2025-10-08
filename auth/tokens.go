@@ -239,7 +239,7 @@ func getAccessToken(ctx context.Context, token string) (*models.AccessToken, err
 			return nil, errTokenExpired
 		}
 
-		if time.Until(*expiry) < preExpiryWindow {
+		if time.Until(*expiry) < preExpiryWindow && accessToken.AutoRenew {
 			if err := db.UpdateAccessTokenExpiry(ctx, accessToken.ID, time.Now().Add(expiryExtension)); err != nil {
 				return nil, err
 			}
@@ -268,7 +268,7 @@ type CreateAccessTokenForPersonResult struct {
 	Person     *models.Person
 }
 
-func CreateAccessTokenForPerson(ctx context.Context, user *models.Person, tokenName string, expiry time.Duration) (CreateAccessTokenForPersonResult, error) {
+func CreateAccessTokenForPerson(ctx context.Context, user *models.Person, tokenName string, expiry time.Duration, autoRenew bool) (CreateAccessTokenForPersonResult, error) {
 	name := user.Name + " (Token)"
 	emailParts := strings.Split(user.Email, "@")
 	if len(emailParts) != 2 {
@@ -292,7 +292,7 @@ func CreateAccessTokenForPerson(ctx context.Context, user *models.Person, tokenN
 		expiry = properties.Duration(90*24*time.Hour, "access_token.default_expiry")
 	}
 
-	token, tokenModel, err := db.CreateAccessToken(ctx, person.ID, tokenName, password, &expiry, lo.ToPtr(user.ID))
+	token, tokenModel, err := db.CreateAccessToken(ctx, person.ID, tokenName, password, &expiry, lo.ToPtr(user.ID), autoRenew)
 	return CreateAccessTokenForPersonResult{
 		Token:      token,
 		TokenModel: tokenModel,
