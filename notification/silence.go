@@ -11,7 +11,7 @@ import (
 
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/db"
+	dutydb "github.com/flanksource/duty/db"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
@@ -20,6 +20,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"github.com/timberio/go-datemath"
+	"gorm.io/gorm"
 )
 
 type SilenceSaveRequest struct {
@@ -101,7 +102,7 @@ func SaveNotificationSilence(ctx context.Context, req SilenceSaveRequest) error 
 		silence.CreatedBy = lo.ToPtr(ctx.User().ID)
 	}
 
-	return db.ErrorDetails(ctx.DB().Save(&silence).Error)
+	return dutydb.ErrorDetails(ctx.DB().Save(&silence).Error)
 }
 
 func PersistNotificationSilenceFromCRD(ctx context.Context, obj *v1.NotificationSilence) error {
@@ -205,14 +206,90 @@ func CanSilenceViaSelectors(ctx context.Context, n []models.NotificationSendHist
 	return silenced, nil
 }
 
-func CanSilenceViaResourceID(n []models.NotificationSendHistory, resourceID string) []models.NotificationSendHistory {
+type CanSilenceParams struct {
+	ResourceID   string
+	ResourceType string
+	Recursive    bool
+	Filter       string
+	Selectors    types.ResourceSelectors
+}
+
+func CanSilence(ctx context.Context, h []models.NotificationSendHistory, params CanSilenceParams) ([]models.NotificationSendHistory, error) {
+	// Get all the notifications sent in past 15 days
+
+	if params.ResourceID != "" && params.ResourceType != "" {
+		return CanSilenceViaResourceID(ctx, h, params.ResourceType, params.ResourceID, params.Recursive)
+	}
+	if params.Filter != "" {
+		return CanSilenceViaFilter(ctx, h, params.Filter)
+	}
+	if len(params.Selectors) > 0 {
+		return CanSilenceViaSelectors(ctx, h, params.Selectors)
+	}
+	return nil, nil
+}
+
+func CanSilenceViaResourceID(ctx context.Context, histories []models.NotificationSendHistory, resourceType, resourceID string, recursive bool) ([]models.NotificationSendHistory, error) {
 	var silenced []models.NotificationSendHistory
-	for _, notif := range n {
-		if notif.ResourceID.String() == resourceID {
-			silenced = append(silenced, notif)
+
+	// Map of resource_id -> path for recursive lookup
+	var pathMap map[uuid.UUID]string
+
+	if recursive && (resourceType == "config" || resourceType == "component") {
+		pathMap = make(map[uuid.UUID]string)
+
+		// Collect resource IDs that need path lookup
+		var resourceIDs []uuid.UUID
+		for _, h := range histories {
+			eventType := strings.Split(h.SourceEvent, ".")[0]
+			if eventType == resourceType {
+				resourceIDs = append(resourceIDs, h.ResourceID)
+			}
+		}
+
+		if len(resourceIDs) > 0 {
+			type PathResult struct {
+				ID   uuid.UUID
+				Path string
+			}
+			var results []PathResult
+			var q *gorm.DB
+			switch resourceType {
+			case "config":
+				q = ctx.DB().Model(&models.ConfigItem{})
+			case "component":
+				q = ctx.DB().Model(&models.Component{})
+			}
+
+			if err := q.
+				Select("id, path").
+				Where("id IN ?", resourceIDs).
+				Find(&results).Error; err != nil {
+				return nil, err
+			}
+
+			for _, r := range results {
+				pathMap[r.ID] = r.Path
+			}
 		}
 	}
-	return silenced
+
+	for _, h := range histories {
+		if h.ResourceID.String() == resourceID {
+			silenced = append(silenced, h)
+			continue
+		}
+
+		if recursive && pathMap != nil {
+			if path, ok := pathMap[h.ResourceID]; ok {
+				if strings.Contains(path, resourceID) {
+					silenced = append(silenced, h)
+				}
+			}
+		}
+	}
+
+	return silenced, nil
 }
 
 func CanSilenceViaFilter(ctx context.Context, n []models.NotificationSendHistory, filter string) ([]models.NotificationSendHistory, error) {

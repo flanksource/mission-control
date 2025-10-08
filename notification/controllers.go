@@ -71,28 +71,27 @@ type NotificationSilencePreviewItem struct {
 
 func NotificationSilencePreview(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
-	// Get all the notifications sent in past 15 days
-	h, err := db.GetNotificationSendHistory(ctx, 15, []string{models.NotificationStatusSent}, -1, -1)
-	if err != nil {
-		return api.WriteError(c, err)
-	}
-	var silenced []models.NotificationSendHistory
-	var err2 error
-	if resourceID := c.QueryParam("id"); resourceID != "" {
-		silenced = CanSilenceViaResourceID(h, resourceID)
-	}
-	if filter := c.QueryParam("filter"); filter != "" {
-		silenced, err2 = CanSilenceViaFilter(ctx, h, filter)
+	params := CanSilenceParams{
+		ResourceID:   c.QueryParam("id"),
+		ResourceType: c.QueryParam("type"),
+		Recursive:    c.QueryParam("recursive") == "true",
+		Filter:       c.QueryParam("filter"),
 	}
 	if selectorsRaw := c.QueryParam("selectors"); selectorsRaw != "" {
 		var selectors types.ResourceSelectors
 		if err := json.Unmarshal([]byte(selectorsRaw), &selectors); err != nil {
 			return api.WriteError(c, err)
 		}
-		silenced, err2 = CanSilenceViaSelectors(ctx, h, selectors)
+		params.Selectors = selectors
 	}
-	if err2 != nil {
-		return api.WriteError(c, err2)
+
+	h, err := db.GetNotificationSendHistory(ctx, 15, []string{models.NotificationStatusSent}, -1, -1)
+	if err != nil {
+		return api.WriteError(c, err)
+	}
+	silenced, err := CanSilence(ctx, h, params)
+	if err != nil {
+		return api.WriteError(c, err)
 	}
 
 	var resp []NotificationSilencePreviewItem

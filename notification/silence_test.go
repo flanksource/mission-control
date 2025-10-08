@@ -14,7 +14,6 @@ import (
 	"github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/samber/lo"
-	"github.com/stretchr/testify/assert"
 )
 
 func mapToBase64Str(m map[string]any) string {
@@ -100,20 +99,16 @@ func TestSilenceSaveRequest_Validate(t *testing.T) {
 }
 
 func createTestNotificationSendHistories() []models.NotificationSendHistory {
-	config1ID := uuid.New()
-	config2ID := uuid.New()
-	config3ID := uuid.New()
+	config1ID := dummy.LogisticsAPIDeployment.ID
+	config2ID := dummy.LogisticsAPIReplicaSet.ID
+	config3ID := dummy.LogisticsUIDeployment.ID
 	check1ID := uuid.New()
 	component1ID := uuid.New()
 
-	props1 := map[string]any{
-		"id": config1ID.String(),
-	}
-	props2 := map[string]any{
-		"id": config2ID.String(),
-	}
-	props3 := map[string]any{
-		"id": config3ID.String(),
+	getProps := func(id uuid.UUID) string {
+		return mapToBase64Str(map[string]any{
+			"id": id.String(),
+		})
 	}
 
 	return []models.NotificationSendHistory{
@@ -121,10 +116,10 @@ func createTestNotificationSendHistories() []models.NotificationSendHistory {
 			ID:             uuid.New(),
 			ResourceID:     config1ID,
 			SourceEvent:    "config.unhealthy",
-			NotificationID: uuid.New(),
+			NotificationID: dummy.NoMatchNotification.ID,
 			Status:         models.NotificationStatusSent,
 			Payload: types.JSONStringMap{
-				"properties":  mapToBase64Str(props1),
+				"properties":  getProps(config1ID),
 				"resource_id": config1ID.String(),
 			},
 			CreatedAt: time.Now().Add(-time.Hour),
@@ -133,10 +128,10 @@ func createTestNotificationSendHistories() []models.NotificationSendHistory {
 			ID:             uuid.New(),
 			ResourceID:     config2ID,
 			SourceEvent:    "config.updated",
-			NotificationID: uuid.New(),
+			NotificationID: dummy.NoMatchNotification.ID,
 			Status:         models.NotificationStatusSent,
 			Payload: types.JSONStringMap{
-				"properties": mapToBase64Str(props2),
+				"properties": getProps(config2ID),
 				"id":         config2ID.String(),
 			},
 			CreatedAt: time.Now().Add(-30 * time.Minute),
@@ -145,10 +140,10 @@ func createTestNotificationSendHistories() []models.NotificationSendHistory {
 			ID:             uuid.New(),
 			ResourceID:     config3ID,
 			SourceEvent:    "config.healthy",
-			NotificationID: uuid.New(),
+			NotificationID: dummy.NoMatchNotification.ID,
 			Status:         models.NotificationStatusSent,
 			Payload: types.JSONStringMap{
-				"properties": mapToBase64Str(props3),
+				"properties": getProps(config3ID),
 				"id":         config3ID.String(),
 			},
 			CreatedAt: time.Now().Add(-15 * time.Minute),
@@ -157,10 +152,10 @@ func createTestNotificationSendHistories() []models.NotificationSendHistory {
 			ID:             uuid.New(),
 			ResourceID:     check1ID,
 			SourceEvent:    "check.failed",
-			NotificationID: uuid.New(),
+			NotificationID: dummy.NoMatchNotification.ID,
 			Status:         models.NotificationStatusSent,
 			Payload: types.JSONStringMap{
-				"properties": mapToBase64Str(props1),
+				"properties": getProps(check1ID),
 				"id":         check1ID.String(),
 			},
 			CreatedAt: time.Now().Add(-10 * time.Minute),
@@ -169,75 +164,109 @@ func createTestNotificationSendHistories() []models.NotificationSendHistory {
 			ID:             uuid.New(),
 			ResourceID:     component1ID,
 			SourceEvent:    "component.unhealthy",
-			NotificationID: uuid.New(),
+			NotificationID: dummy.NoMatchNotification.ID,
 			Status:         models.NotificationStatusSent,
 			Payload: types.JSONStringMap{
-				"properties": mapToBase64Str(props2),
+				"properties": getProps(component1ID),
 				"id":         component1ID.String(),
+			},
+			CreatedAt: time.Now().Add(-5 * time.Minute),
+		},
+		{
+			ID:             uuid.New(),
+			ResourceID:     dummy.KubernetesNodeA.ID,
+			SourceEvent:    "config.unhealthy",
+			NotificationID: dummy.NoMatchNotification.ID,
+			Status:         models.NotificationStatusSent,
+			Payload: types.JSONStringMap{
+				"properties": getProps(dummy.KubernetesNodeA.ID),
+				"id":         dummy.KubernetesNodeA.ID.String(),
 			},
 			CreatedAt: time.Now().Add(-5 * time.Minute),
 		},
 	}
 }
 
-func TestCanSilenceViaResourceID(t *testing.T) {
-	testHistories := createTestNotificationSendHistories()
+var _ = ginkgo.Describe("Notification silence preview", func() {
+	ginkgo.It("should check silence via resource_id", func() {
+		testHistories := createTestNotificationSendHistories()
 
-	tests := []struct {
-		name             string
-		histories        []models.NotificationSendHistory
-		resourceID       string
-		expectedSilenced int
-		expectedIDs      []uuid.UUID
-	}{
-		{
-			name:             "single matching resource ID",
-			histories:        testHistories,
-			resourceID:       testHistories[0].ResourceID.String(),
-			expectedSilenced: 1,
-			expectedIDs:      []uuid.UUID{testHistories[0].ID},
-		},
-		{
-			name:             "no matching resource ID",
-			histories:        testHistories,
-			resourceID:       uuid.New().String(),
-			expectedSilenced: 0,
-			expectedIDs:      []uuid.UUID{},
-		},
-		{
-			name:             "empty resource ID",
-			histories:        testHistories,
-			resourceID:       "",
-			expectedSilenced: 0,
-			expectedIDs:      []uuid.UUID{},
-		},
-		{
-			name:             "empty histories",
-			histories:        []models.NotificationSendHistory{},
-			resourceID:       testHistories[0].ResourceID.String(),
-			expectedSilenced: 0,
-			expectedIDs:      []uuid.UUID{},
-		},
-	}
+		err := DefaultContext.DB().Exec(`UPDATE config_items SET path=? WHERE id = ?`, dummy.EKSCluster.ID.String(), dummy.KubernetesNodeA.ID.String()).Error
+		Expect(err).To(BeNil())
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			silenced := notification.CanSilenceViaResourceID(tt.histories, tt.resourceID)
+		tests := []struct {
+			name             string
+			histories        []models.NotificationSendHistory
+			resourceID       string
+			resourceType     string
+			recursive        bool
+			expectedSilenced int
+			expectedIDs      []uuid.UUID
+		}{
+			{
+				name:             "single matching resource ID",
+				histories:        testHistories,
+				resourceID:       testHistories[0].ResourceID.String(),
+				resourceType:     "config",
+				expectedSilenced: 1,
+				expectedIDs:      []uuid.UUID{testHistories[0].ID},
+			},
+			{
+				name:             "matching recursive resource_id ID",
+				histories:        testHistories,
+				resourceID:       dummy.EKSCluster.ID.String(),
+				resourceType:     "config",
+				expectedSilenced: 1,
+				recursive:        true,
+				expectedIDs:      []uuid.UUID{testHistories[5].ID},
+			},
+			{
+				name:             "no matching resource ID",
+				histories:        testHistories,
+				resourceID:       uuid.New().String(),
+				resourceType:     "config",
+				expectedSilenced: 0,
+				expectedIDs:      []uuid.UUID{},
+			},
+			{
+				name:             "empty resource ID",
+				histories:        testHistories,
+				resourceID:       "",
+				resourceType:     "",
+				expectedSilenced: 0,
+				expectedIDs:      []uuid.UUID{},
+			},
+			{
+				name:             "empty histories",
+				histories:        []models.NotificationSendHistory{},
+				resourceID:       testHistories[0].ResourceID.String(),
+				expectedSilenced: 0,
+				resourceType:     "config",
+				expectedIDs:      []uuid.UUID{},
+			},
+		}
 
-			assert.Equal(t, tt.expectedSilenced, len(silenced))
+		for _, tt := range tests {
+			silenced, err := notification.CanSilence(DefaultContext, tt.histories, notification.CanSilenceParams{
+				ResourceID:   tt.resourceID,
+				Recursive:    tt.recursive,
+				ResourceType: tt.resourceType,
+			})
+			Expect(err).To(BeNil())
+
+			Expect(tt.expectedSilenced).To(Equal(len(silenced)))
 
 			if len(tt.expectedIDs) > 0 {
 				actualIDs := make([]uuid.UUID, len(silenced))
 				for i, h := range silenced {
 					actualIDs[i] = h.ID
 				}
-				assert.ElementsMatch(t, tt.expectedIDs, actualIDs)
+				Expect(tt.expectedIDs).To(HaveExactElements(actualIDs))
 			}
-		})
-	}
-}
 
-var _ = ginkgo.Describe("Notification silence preview", func() {
+		}
+	})
+
 	ginkgo.It("should check silence via filter", func() {
 		testConfig1 := &models.ConfigItem{
 			ID:          uuid.New(),
