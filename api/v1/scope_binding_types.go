@@ -6,6 +6,7 @@ import (
 
 // ScopeBindingSubjects defines the human subjects for the binding
 // +kubebuilder:object:generate=true
+// +kubebuilder:validation:XValidation:rule="size(self.persons) > 0 || size(self.teams) > 0",message="at least one person or team must be specified"
 type ScopeBindingSubjects struct {
 	// Persons is a list of person emails
 	Persons []string `json:"persons,omitempty"`

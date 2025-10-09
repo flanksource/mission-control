@@ -62,6 +62,9 @@ spec:
                       type: string
                     type: array
                 type: object
+                x-kubernetes-validations:
+                - message: at least one person or team must be specified
+                  rule: size(self.persons) > 0 || size(self.teams) > 0
             required:
             - scopes
             - subjects
