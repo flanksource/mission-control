@@ -3541,8 +3541,8 @@ func (in *ScopeTarget) DeepCopyInto(out *ScopeTarget) {
 		*out = new(ScopeResourceSelector)
 		**out = **in
 	}
-	if in.All != nil {
-		in, out := &in.All, &out.All
+	if in.Global != nil {
+		in, out := &in.Global, &out.Global
 		*out = new(ScopeResourceSelector)
 		**out = **in
 	}
