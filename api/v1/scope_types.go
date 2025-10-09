@@ -4,18 +4,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// ScopeResourceType defines the valid resource types for Scope targets
-// +kubebuilder:validation:Enum=*;config;component;playbook;canary
-type ScopeResourceType string
-
-const (
-	ScopeResourceAll       ScopeResourceType = "*"
-	ScopeResourceConfig    ScopeResourceType = "config"
-	ScopeResourceComponent ScopeResourceType = "component"
-	ScopeResourcePlaybook  ScopeResourceType = "playbook"
-	ScopeResourceCanary    ScopeResourceType = "canary"
-)
-
 // ScopeResourceSelector is a subset of ResourceSelector used for defining scope targets
 // +kubebuilder:object:generate=true
 type ScopeResourceSelector struct {
@@ -50,46 +38,6 @@ type ScopeTarget struct {
 
 	// Global selector - applies to all resource types (wildcard)
 	Global *ScopeResourceSelector `json:"global,omitempty"`
-}
-
-// GetResourceType returns the resource type and selector for this target
-// Returns empty string if multiple or no resource types are set
-func (t *ScopeTarget) GetResourceType() (ScopeResourceType, *ScopeResourceSelector) {
-	count := 0
-	var resourceType ScopeResourceType
-	var selector *ScopeResourceSelector
-
-	if t.Config != nil {
-		count++
-		resourceType = ScopeResourceConfig
-		selector = t.Config
-	}
-	if t.Component != nil {
-		count++
-		resourceType = ScopeResourceComponent
-		selector = t.Component
-	}
-	if t.Playbook != nil {
-		count++
-		resourceType = ScopeResourcePlaybook
-		selector = t.Playbook
-	}
-	if t.Canary != nil {
-		count++
-		resourceType = ScopeResourceCanary
-		selector = t.Canary
-	}
-	if t.Global != nil {
-		count++
-		resourceType = ScopeResourceAll
-		selector = t.Global
-	}
-
-	if count != 1 {
-		return "", nil
-	}
-
-	return resourceType, selector
 }
 
 // +kubebuilder:object:generate=true

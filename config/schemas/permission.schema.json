@@ -183,6 +183,12 @@
             "$ref": "#/$defs/ResourceSelector"
           },
           "type": "array"
+        },
+        "scopes": {
+          "items": {
+            "$ref": "#/$defs/ScopeRef"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,
@@ -310,6 +316,18 @@
         },
         "statuses": {
           "$ref": "#/$defs/Items"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ScopeRef": {
+      "properties": {
+        "namespace": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
         }
       },
       "additionalProperties": false,

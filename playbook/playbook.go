@@ -167,12 +167,12 @@ func Run(ctx context.Context, playbook *models.Playbook, req RunParams) (*models
 	}
 
 	// Must have read access on the resource (required to prevent guests from accessing unauthorized resources)
-	// if !rbac.HasPermission(ctx, ctx.Subject(), templateEnv.ABACAttributes(), policy.ActionRead) {
-	// 	return nil, ctx.Oops().
-	// 		Code(dutyAPI.EFORBIDDEN).
-	// 		With("permission", policy.ActionRead, "objects", templateEnv.ABACAttributes()).
-	// 		Wrap(fmt.Errorf("access denied: read access to resource not allowed for subject: %s", ctx.Subject()))
-	// }
+	if !rbac.HasPermission(ctx, ctx.Subject(), templateEnv.ABACAttributes(), policy.ActionRead) {
+		return nil, ctx.Oops().
+			Code(dutyAPI.EFORBIDDEN).
+			With("permission", policy.ActionRead, "objects", templateEnv.ABACAttributes()).
+			Wrap(fmt.Errorf("access denied: read access to resource not allowed for subject: %s", ctx.Subject()))
+	}
 
 	if attr, err := run.GetABACAttributes(ctx.DB()); err != nil {
 		return nil, ctx.Oops().Wrap(err)

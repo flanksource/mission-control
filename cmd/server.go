@@ -136,12 +136,12 @@ func launchKopper(ctx context.Context) {
 	}
 
 	if _, err := kopper.SetupReconciler(ctx, mgr,
-		db.PersistAccessScopeFromCRD,
-		db.DeleteAccessScope,
-		db.DeleteStaleAccessScope,
-		"accessscope.mission-control.flanksource.com",
+		db.PersistScopeFromCRD,
+		db.DeleteScope,
+		db.DeleteStaleScope,
+		"scope.mission-control.flanksource.com",
 	); err != nil {
-		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for AccessScope: %v", err))
+		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for Scope: %v", err))
 	}
 
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
@@ -229,7 +229,7 @@ func tableUpdatesHandler(ctx context.Context) {
 	playbooksActionUpdateChan := notifyRouter.GetOrCreateChannel("playbook_run_actions")
 	permissionUpdateChan := notifyRouter.GetOrCreateChannel("permissions")
 	permissionGroupUpdateChan := notifyRouter.GetOrCreateChannel("permission_groups")
-	accessScopeUpdateChan := notifyRouter.GetOrCreateChannel("access_scopes")
+	scopeUpdateChan := notifyRouter.GetOrCreateChannel("scopes")
 	teamMembersUpdateChan := notifyRouter.GetOrCreateChannel("team_members")
 
 	// use a single job instance to maintain retention
@@ -335,10 +335,10 @@ func tableUpdatesHandler(ctx context.Context) {
 			// TODO: only invalidate tokens for the affect users
 			auth.FlushTokenCache()
 
-		case <-accessScopeUpdateChan:
-			// AccessScope changes affect RLS payload (tags/agents in JWT)
+		case <-scopeUpdateChan:
+			// Scope changes affect RLS payload (tags/agents in JWT)
 			// We need to invalidate the cache so users get updated visibility immediately
-			ctx.Logger.Debugf("flushing RLS token cache due to access_scopes updates")
+			ctx.Logger.Debugf("flushing RLS token cache due to scopes updates")
 			// TODO: only invalidate tokens for the affected users
 			auth.FlushTokenCache()
 		}

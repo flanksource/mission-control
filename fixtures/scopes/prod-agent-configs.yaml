@@ -1,0 +1,13 @@
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: prod-agent-configs
+  namespace: mc
+spec:
+  description: Configs from production agents
+  targets:
+    - config:
+        agent: agent-prod-1
+    - config:
+        agent: agent-prod-2

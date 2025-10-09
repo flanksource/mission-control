@@ -305,6 +305,15 @@ spec:
                           type: array
                       type: object
                     type: array
+                  scopes:
+                    items:
+                      properties:
+                        name:
+                          type: string
+                        namespace:
+                          type: string
+                      type: object
+                    type: array
                 type: object
               subject:
                 description: Subject defines the entity (e.g., user, group) to which

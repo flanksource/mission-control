@@ -27,7 +27,6 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/flanksource/incident-commander/db"
-	mcRBAC "github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/vars"
 )
 
@@ -79,18 +78,9 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 		return payload, nil
 	}
 
-	// Get AccessScopes for the person (includes team scopes)
-	accessScopes, err := mcRBAC.GetAccessScopesForPerson(ctx, ctx.User().ID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get access scopes: %w", err)
-	}
-
-	// Build RLS payload from AccessScopes
-	payload, err := mcRBAC.GetRLSPayloadFromAccessScopes(ctx, accessScopes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build access scope filters: %w", err)
-	}
-
+	// TODO: Implement RLS payload generation from Scopes
+	// For now, disable RLS for guest users
+	payload := &rls.Payload{Disable: true}
 	tokenCache.SetDefault(cacheKey, payload)
 
 	return payload, nil

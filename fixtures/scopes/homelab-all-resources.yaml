@@ -1,0 +1,11 @@
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: homelab-monitoring
+  namespace: mc
+spec:
+  description: All resources in homelab cluster monitoring namespace
+  targets:
+    - config:
+        tagSelector: "cluster=homelab,namespace=monitoring"

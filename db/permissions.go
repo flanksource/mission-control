@@ -26,7 +26,7 @@ func PersistPermissionFromCRD(ctx context.Context, obj *v1.Permission) error {
 
 	// Check for deprecated fields and emit warning
 	if len(obj.Spec.Tags) > 0 || len(obj.Spec.Agents) > 0 {
-		ctx.Warnf("Permission %s/%s uses deprecated fields (tags or agents). These fields are ignored. Use AccessScope CRD instead.",
+		ctx.Warnf("Permission %s/%s uses deprecated fields (tags or agents). These fields are ignored. Use Scope CRD instead.",
 			obj.Namespace, obj.Name)
 	}
 
