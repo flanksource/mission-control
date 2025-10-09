@@ -34,6 +34,7 @@ type ScopeResourceSelector struct {
 // ScopeTarget defines a single target in a Scope
 // Each target should contain exactly ONE resource type
 // +kubebuilder:object:generate=true
+// +kubebuilder:validation:XValidation:rule="[has(self.config), has(self.component), has(self.playbook), has(self.canary), has(self.global)].filter(x, x).size() == 1",message="exactly one of config, component, playbook, canary, or global must be specified"
 type ScopeTarget struct {
 	// Config selector (mutually exclusive with other resource types in practice)
 	Config *ScopeResourceSelector `json:"config,omitempty"`
@@ -47,8 +48,8 @@ type ScopeTarget struct {
 	// Canary selector
 	Canary *ScopeResourceSelector `json:"canary,omitempty"`
 
-	// All resources (wildcard)
-	All *ScopeResourceSelector `json:"*,omitempty"`
+	// Global selector - applies to all resource types (wildcard)
+	Global *ScopeResourceSelector `json:"global,omitempty"`
 }
 
 // GetResourceType returns the resource type and selector for this target
@@ -78,10 +79,10 @@ func (t *ScopeTarget) GetResourceType() (ScopeResourceType, *ScopeResourceSelect
 		resourceType = ScopeResourceCanary
 		selector = t.Canary
 	}
-	if t.All != nil {
+	if t.Global != nil {
 		count++
 		resourceType = ScopeResourceAll
-		selector = t.All
+		selector = t.Global
 	}
 
 	if count != 1 {
@@ -101,6 +102,7 @@ type ScopeSpec struct {
 	// Multiple targets are combined with OR logic
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=10
 	Targets []ScopeTarget `json:"targets"`
 }
 

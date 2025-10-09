@@ -53,24 +53,6 @@ spec:
                     ScopeTarget defines a single target in a Scope
                     Each target should contain exactly ONE resource type
                   properties:
-                    '*':
-                      description: All resources (wildcard)
-                      properties:
-                        agent:
-                          description: |-
-                            Agent can be the agent id or the name of the agent.
-                            Additionally, the special "self" value can be used to select resources without an agent.
-                          type: string
-                        name:
-                          description: Name is the name of the resource. Supports
-                            wildcards.
-                          type: string
-                        tagSelector:
-                          description: |-
-                            TagSelector selects resources by tags using label selector syntax
-                            Example: "env=prod,region=us-west"
-                          type: string
-                      type: object
                     canary:
                       description: Canary selector
                       properties:
@@ -126,6 +108,25 @@ spec:
                             Example: "env=prod,region=us-west"
                           type: string
                       type: object
+                    global:
+                      description: Global selector - applies to all resource types
+                        (wildcard)
+                      properties:
+                        agent:
+                          description: |-
+                            Agent can be the agent id or the name of the agent.
+                            Additionally, the special "self" value can be used to select resources without an agent.
+                          type: string
+                        name:
+                          description: Name is the name of the resource. Supports
+                            wildcards.
+                          type: string
+                        tagSelector:
+                          description: |-
+                            TagSelector selects resources by tags using label selector syntax
+                            Example: "env=prod,region=us-west"
+                          type: string
+                      type: object
                     playbook:
                       description: Playbook selector
                       properties:
@@ -145,6 +146,12 @@ spec:
                           type: string
                       type: object
                   type: object
+                  x-kubernetes-validations:
+                  - message: exactly one of config, component, playbook, canary, or
+                      global must be specified
+                    rule: '[has(self.config), has(self.component), has(self.playbook),
+                      has(self.canary), has(self.global)].filter(x, x).size() == 1'
+                maxItems: 10
                 minItems: 1
                 type: array
             required:

@@ -45,6 +45,7 @@ spec:
                 description: Scopes is a list of Scope names in the same namespace
                 items:
                   type: string
+                maxItems: 10
                 minItems: 1
                 type: array
               subjects:
@@ -55,11 +56,13 @@ spec:
                     description: Persons is a list of person emails
                     items:
                       type: string
+                    maxItems: 10
                     type: array
                   teams:
                     description: Teams is a list of team names
                     items:
                       type: string
+                    maxItems: 10
                     type: array
                 type: object
                 x-kubernetes-validations:

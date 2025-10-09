@@ -9,9 +9,11 @@ import (
 // +kubebuilder:validation:XValidation:rule="size(self.persons) > 0 || size(self.teams) > 0",message="at least one person or team must be specified"
 type ScopeBindingSubjects struct {
 	// Persons is a list of person emails
+	// +kubebuilder:validation:MaxItems=10
 	Persons []string `json:"persons,omitempty"`
 
 	// Teams is a list of team names
+	// +kubebuilder:validation:MaxItems=10
 	Teams []string `json:"teams,omitempty"`
 }
 
@@ -32,6 +34,7 @@ type ScopeBindingSpec struct {
 	// Scopes is a list of Scope names in the same namespace
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=10
 	Scopes []string `json:"scopes"`
 }
 
