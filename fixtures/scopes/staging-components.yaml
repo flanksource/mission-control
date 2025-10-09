@@ -1,0 +1,11 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: staging-components
+  namespace: mc
+spec:
+  description: Staging topology components
+  targets:
+    - component:
+        name: "staging-*"
+        tagSelector: "env=staging"
