@@ -1,4 +1,4 @@
-package auth
+package permissions_test
 
 import (
 	"os"
@@ -15,11 +15,12 @@ import (
 	"sigs.k8s.io/yaml"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
-var _ = Describe("GetRLSPayload", Ordered, func() {
+var _ = Describe("Permissions", Ordered, func() {
 	var (
 		guestUser            *models.Person
 		guestUserNoPerms     *models.Person
@@ -104,93 +105,96 @@ var _ = Describe("GetRLSPayload", Ordered, func() {
 		}
 	})
 
-	It("should return RLS payload with config scope for guest user", func() {
-		ctx := DefaultContext.WithUser(guestUser)
+	Context("Permission to RLS translation", func() {
 
-		payload, err := GetRLSPayload(ctx)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(payload).ToNot(BeNil())
+		It("should return RLS payload with config scope for guest user", func() {
+			ctx := DefaultContext.WithUser(guestUser)
 
-		Expect(payload.Disable).To(BeFalse(), "RLS should be enabled for guest users with scopes")
-		Expect(payload.Config).To(HaveLen(3), "should have three config scopes")
-		Expect(payload.Config).To(ContainElements([]rls.Scope{
-			{Tags: map[string]string{"namespace": "missioncontrol"}},
-			{Tags: map[string]string{"namespace": "monitoring"}},
-			{Tags: map[string]string{"namespace": "media"}},
-		}))
+			payload, err := auth.GetRLSPayload(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(payload).ToNot(BeNil())
 
-		// Other resource types should be empty since we only granted config access
-		Expect(payload.Component).To(BeEmpty(), "component scope should be empty")
-		Expect(payload.Playbook).To(BeEmpty(), "playbook scope should be empty")
-		Expect(payload.Canary).To(BeEmpty(), "canary scope should be empty")
-	})
+			Expect(payload.Disable).To(BeFalse(), "RLS should be enabled for guest users with scopes")
+			Expect(payload.Config).To(HaveLen(3), "should have three config scopes")
+			Expect(payload.Config).To(ContainElements([]rls.Scope{
+				{Tags: map[string]string{"namespace": "missioncontrol"}},
+				{Tags: map[string]string{"namespace": "monitoring"}},
+				{Tags: map[string]string{"namespace": "media"}},
+			}))
 
-	It("should disable RLS for non-guest users", func() {
-		ctx := DefaultContext.WithUser(adminUser)
+			// Other resource types should be empty since we only granted config access
+			Expect(payload.Component).To(BeEmpty(), "component scope should be empty")
+			Expect(payload.Playbook).To(BeEmpty(), "playbook scope should be empty")
+			Expect(payload.Canary).To(BeEmpty(), "canary scope should be empty")
+		})
 
-		payload, err := GetRLSPayload(ctx)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(payload).ToNot(BeNil())
+		It("should disable RLS for non-guest users", func() {
+			ctx := DefaultContext.WithUser(adminUser)
 
-		// Admin users should have RLS disabled
-		Expect(payload.Disable).To(BeTrue(), "RLS should be disabled for admin users")
-	})
+			payload, err := auth.GetRLSPayload(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(payload).ToNot(BeNil())
 
-	It("should return empty RLS payload for guest user with no permissions", func() {
-		ctx := DefaultContext.WithUser(guestUserNoPerms)
+			// Admin users should have RLS disabled
+			Expect(payload.Disable).To(BeTrue(), "RLS should be disabled for admin users")
+		})
 
-		payload, err := GetRLSPayload(ctx)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(payload).ToNot(BeNil())
+		It("should return empty RLS payload for guest user with no permissions", func() {
+			ctx := DefaultContext.WithUser(guestUserNoPerms)
 
-		// RLS should be enabled (not disabled) for guest users even without permissions
-		Expect(payload.Disable).To(BeFalse(), "RLS should be enabled for guest users even without permissions")
+			payload, err := auth.GetRLSPayload(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(payload).ToNot(BeNil())
 
-		// All resource scopes should be empty since user has no permissions
-		Expect(payload.Config).To(BeEmpty(), "config scope should be empty for guest user with no permissions")
-		Expect(payload.Component).To(BeEmpty(), "component scope should be empty for guest user with no permissions")
-		Expect(payload.Playbook).To(BeEmpty(), "playbook scope should be empty for guest user with no permissions")
-		Expect(payload.Canary).To(BeEmpty(), "canary scope should be empty for guest user with no permissions")
-	})
+			// RLS should be enabled (not disabled) for guest users even without permissions
+			Expect(payload.Disable).To(BeFalse(), "RLS should be enabled for guest users even without permissions")
 
-	It("should include direct ID-based permissions in RLS payload", func() {
-		ctx := DefaultContext.WithUser(guestUserDirectPerms)
+			// All resource scopes should be empty since user has no permissions
+			Expect(payload.Config).To(BeEmpty(), "config scope should be empty for guest user with no permissions")
+			Expect(payload.Component).To(BeEmpty(), "component scope should be empty for guest user with no permissions")
+			Expect(payload.Playbook).To(BeEmpty(), "playbook scope should be empty for guest user with no permissions")
+			Expect(payload.Canary).To(BeEmpty(), "canary scope should be empty for guest user with no permissions")
+		})
 
-		payload, err := GetRLSPayload(ctx)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(payload).ToNot(BeNil())
+		It("should include direct ID-based permissions in RLS payload", func() {
+			ctx := DefaultContext.WithUser(guestUserDirectPerms)
 
-		Expect(payload.Disable).To(BeFalse(), "RLS should be enabled for guest users")
+			payload, err := auth.GetRLSPayload(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(payload).ToNot(BeNil())
 
-		// Verify playbook scope includes the direct playbook ID
-		var hasPlaybookID bool
-		for _, scope := range payload.Playbook {
-			if scope.ID == dummy.EchoConfig.ID.String() {
-				hasPlaybookID = true
-				break
+			Expect(payload.Disable).To(BeFalse(), "RLS should be enabled for guest users")
+
+			// Verify playbook scope includes the direct playbook ID
+			var hasPlaybookID bool
+			for _, scope := range payload.Playbook {
+				if scope.ID == dummy.EchoConfig.ID.String() {
+					hasPlaybookID = true
+					break
+				}
 			}
-		}
-		Expect(hasPlaybookID).To(BeTrue(), "playbook scope should include direct playbook ID")
+			Expect(hasPlaybookID).To(BeTrue(), "playbook scope should include direct playbook ID")
 
-		// Verify canary scope includes the direct canary ID
-		var hasCanaryID bool
-		for _, scope := range payload.Canary {
-			if scope.ID == dummy.LogisticsAPICanary.ID.String() {
-				hasCanaryID = true
-				break
+			// Verify canary scope includes the direct canary ID
+			var hasCanaryID bool
+			for _, scope := range payload.Canary {
+				if scope.ID == dummy.LogisticsAPICanary.ID.String() {
+					hasCanaryID = true
+					break
+				}
 			}
-		}
-		Expect(hasCanaryID).To(BeTrue(), "canary scope should include direct canary ID")
+			Expect(hasCanaryID).To(BeTrue(), "canary scope should include direct canary ID")
 
-		// Verify component scope includes the direct component ID
-		var hasComponentID bool
-		for _, scope := range payload.Component {
-			if scope.ID == dummy.Logistics.ID.String() {
-				hasComponentID = true
-				break
+			// Verify component scope includes the direct component ID
+			var hasComponentID bool
+			for _, scope := range payload.Component {
+				if scope.ID == dummy.Logistics.ID.String() {
+					hasComponentID = true
+					break
+				}
 			}
-		}
-		Expect(hasComponentID).To(BeTrue(), "component scope should include direct component ID")
+			Expect(hasComponentID).To(BeTrue(), "component scope should include direct component ID")
+		})
 	})
 })
 
