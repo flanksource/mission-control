@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/samber/lo"
 	"sigs.k8s.io/yaml"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -20,7 +21,7 @@ import (
 	"github.com/flanksource/incident-commander/rbac/adapter"
 )
 
-var _ = Describe("Permissions", Ordered, func() {
+var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 	var (
 		guestUser            *models.Person
 		guestUserNoPerms     *models.Person
@@ -33,7 +34,6 @@ var _ = Describe("Permissions", Ordered, func() {
 	)
 
 	BeforeAll(func() {
-		// Initialize RBAC
 		err := rbac.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter)
 		Expect(err).ToNot(HaveOccurred())
 
@@ -83,6 +83,13 @@ var _ = Describe("Permissions", Ordered, func() {
 		}
 		err = DefaultContext.DB().Create(directComponentPermission).Error
 		Expect(err).ToNot(HaveOccurred())
+
+		var permissions []models.Permission
+		err = DefaultContext.DB().Where("deleted_at IS NULL").Find(&permissions).Error
+		Expect(err).ToNot(HaveOccurred())
+
+		// Initialize RBAC only after saving all the permissions.
+		Expect(rbac.ReloadPolicy()).ToNot(HaveOccurred())
 	})
 
 	AfterAll(func() {
@@ -103,10 +110,11 @@ var _ = Describe("Permissions", Ordered, func() {
 				Expect(err).ToNot(HaveOccurred())
 			}
 		}
+
+		Expect(rbac.ReloadPolicy()).ToNot(HaveOccurred())
 	})
 
 	Context("Permission to RLS translation", func() {
-
 		It("should return RLS payload with config scope for guest user", func() {
 			ctx := DefaultContext.WithUser(guestUser)
 
@@ -122,9 +130,15 @@ var _ = Describe("Permissions", Ordered, func() {
 				{Tags: map[string]string{"namespace": "media"}},
 			}))
 
-			// Other resource types should be empty since we only granted config access
+			// Playbook scopes should include echo-config and restart-pod
+			Expect(payload.Playbook).To(HaveLen(2), "should have two playbook scopes")
+			Expect(payload.Playbook).To(ContainElements([]rls.Scope{
+				{Names: []string{"echo-config"}},
+				{Names: []string{"restart-pod"}},
+			}))
+
+			// Other resource types should be empty
 			Expect(payload.Component).To(BeEmpty(), "component scope should be empty")
-			Expect(payload.Playbook).To(BeEmpty(), "playbook scope should be empty")
 			Expect(payload.Canary).To(BeEmpty(), "canary scope should be empty")
 		})
 
@@ -195,6 +209,152 @@ var _ = Describe("Permissions", Ordered, func() {
 			}
 			Expect(hasComponentID).To(BeTrue(), "component scope should include direct component ID")
 		})
+	})
+
+	Context("Permission to Casbin policy translation", func() {
+		DescribeTable("guest user with some permissions",
+			func(attr models.ABACAttribute, action string, expectedAllowed bool, description string) {
+				allowed := rbac.HasPermission(DefaultContext, guestUser.ID.String(), &attr, action)
+				Expect(allowed).To(Equal(expectedAllowed), description)
+			},
+			// Config read access - allowed via scopes
+			Entry("should allow read access to missioncontrol namespace config via scope",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Tags: map[string]string{"namespace": "missioncontrol"}}},
+				policy.ActionRead, true,
+				"guest user should have read access to missioncontrol namespace configs via scope"),
+			Entry("should allow read access to monitoring namespace config via scope",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Tags: map[string]string{"namespace": "monitoring"}}},
+				policy.ActionRead, true,
+				"guest user should have read access to monitoring namespace configs via scope"),
+			Entry("should allow read access to media namespace config via direct permission",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Tags: map[string]string{"namespace": "media"}}},
+				policy.ActionRead, true,
+				"guest user should have read access to media namespace configs via direct permission"),
+
+			// Config read access - denied (not in scopes or permissions)
+			Entry("should deny read access to kube-system namespace config",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Tags: map[string]string{"namespace": "kube-system"}}},
+				policy.ActionRead, false,
+				"guest user should NOT have read access to kube-system namespace configs"),
+			Entry("should deny read access to configs with no namespace tag",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Name: lo.ToPtr("notag")}},
+				policy.ActionRead, false,
+				"guest user should NOT have read access to configs with no namespace tag"),
+
+			// Playbook read access - allowed via direct permission for echo-config
+			Entry("should allow read access to echo-config playbook via direct permission",
+				models.ABACAttribute{Playbook: models.Playbook{ID: dummy.EchoConfig.ID, Name: "echo-config"}},
+				policy.ActionRead, true,
+				"guest user should have read access to echo-config playbook via direct permission"),
+
+			// Playbook read access - allowed via scope permission for restart-pod
+			Entry("should allow read access to restart-pod playbook via scope",
+				models.ABACAttribute{Playbook: models.Playbook{ID: dummy.RestartPod.ID, Name: "restart-pod"}},
+				policy.ActionRead, true,
+				"guest user should have read access to restart-pod playbook via scope"),
+
+			// Playbook read access - denied for other playbooks
+			Entry("should deny read access to other playbooks",
+				models.ABACAttribute{Playbook: models.Playbook{ID: uuid.New(), Name: "other-playbook"}},
+				policy.ActionRead, false,
+				"guest user should NOT have read access to other playbooks"),
+
+			// Playbook run access - allowed for echo-config on missioncontrol configs via direct permission
+			Entry("should allow playbook:run on echo-config for missioncontrol configs",
+				models.ABACAttribute{
+					Playbook: models.Playbook{ID: dummy.EchoConfig.ID, Name: "echo-config"},
+					Config:   models.ConfigItem{ID: uuid.New(), Tags: map[string]string{"namespace": "missioncontrol"}},
+				},
+				policy.ActionPlaybookRun, true,
+				"guest user should have playbook:run access to echo-config on missioncontrol configs"),
+
+			// Playbook run access - denied for other playbooks
+			Entry("should deny playbook:run on echo-config for monitoring configs",
+				models.ABACAttribute{
+					Playbook: models.Playbook{ID: dummy.EchoConfig.ID, Name: "echo-config"},
+					Config:   models.ConfigItem{ID: uuid.New(), Tags: map[string]string{"namespace": "monitoring"}},
+				},
+				policy.ActionPlaybookRun, false,
+				"guest user should have playbook:run access to echo-config on missioncontrol configs"),
+			Entry("should deny playbook:run on restart-pod (no run permission)",
+				models.ABACAttribute{Playbook: models.Playbook{ID: dummy.RestartPod.ID, Name: "restart-pod"}},
+				policy.ActionPlaybookRun, false,
+				"guest user should NOT have playbook:run access to restart-pod (only read)"),
+			Entry("should deny playbook:run on restart-pod (no run permission)",
+				models.ABACAttribute{
+					Playbook: models.Playbook{ID: dummy.RestartPod.ID, Name: "restart-pod"},
+					Config:   models.ConfigItem{ID: uuid.New(), Tags: map[string]string{"namespace": "monitoring"}},
+				},
+				policy.ActionPlaybookRun, false,
+				"guest user should NOT have playbook:run access to restart-pod (only read)"),
+			Entry("should deny playbook:run on other playbooks",
+				models.ABACAttribute{Playbook: models.Playbook{ID: uuid.New(), Name: "other-playbook"}},
+				policy.ActionPlaybookRun, false,
+				"guest user should NOT have playbook:run access to other playbooks"),
+		)
+
+		DescribeTable("guest user with no permissions at all",
+			func(attr models.ABACAttribute, action string, description string) {
+				allowed := rbac.HasPermission(DefaultContext, guestUserNoPerms.ID.String(), &attr, action)
+				Expect(allowed).To(BeFalse(), description)
+			},
+			Entry("should deny read access to missioncontrol namespace config",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Tags: map[string]string{"namespace": "missioncontrol"}}},
+				policy.ActionRead,
+				"guest user with no permissions should NOT have read access to any configs"),
+			Entry("should deny read access to monitoring namespace config",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Tags: map[string]string{"namespace": "monitoring"}}},
+				policy.ActionRead,
+				"guest user with no permissions should NOT have read access to any configs"),
+			Entry("should deny read access to media namespace config",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Tags: map[string]string{"namespace": "media"}}},
+				policy.ActionRead,
+				"guest user with no permissions should NOT have read access to any configs"),
+			Entry("should deny read access to playbooks",
+				models.ABACAttribute{Playbook: models.Playbook{ID: dummy.EchoConfig.ID, Name: "echo-config"}},
+				policy.ActionRead,
+				"guest user with no permissions should NOT have read access to playbooks"),
+			Entry("should deny playbook:run access",
+				models.ABACAttribute{Playbook: models.Playbook{ID: dummy.RestartPod.ID, Name: "restart-pod"}},
+				policy.ActionPlaybookRun,
+				"guest user with no permissions should NOT have playbook:run access"),
+			Entry("should deny read access to other playbooks",
+				models.ABACAttribute{Playbook: models.Playbook{ID: uuid.New(), Name: "other-playbook"}},
+				policy.ActionRead,
+				"guest user should NOT have read access to other playbooks"),
+		)
+
+		DescribeTable("admin user must have access to everything",
+			func(attr models.ABACAttribute, action string, description string) {
+				allowed := rbac.HasPermission(DefaultContext, adminUser.ID.String(), &attr, action)
+				Expect(allowed).To(BeTrue(), description)
+			},
+			// Admin should have access to everything
+			Entry("should allow read access to missioncontrol namespace config",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Tags: map[string]string{"namespace": "missioncontrol"}}},
+				policy.ActionRead,
+				"admin user should have read access to all configs"),
+			Entry("should allow read access to monitoring namespace config",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Tags: map[string]string{"namespace": "monitoring"}}},
+				policy.ActionRead,
+				"admin user should have read access to all configs"),
+			Entry("should allow read access to kube-system namespace config",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Tags: map[string]string{"namespace": "kube-system"}}},
+				policy.ActionRead,
+				"admin user should have read access to all configs"),
+			Entry("should allow read access to configs with no namespace tag",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Name: lo.ToPtr("notag")}},
+				policy.ActionRead,
+				"admin user should have read access to all configs"),
+			Entry("should allow read access to playbooks",
+				models.ABACAttribute{Playbook: models.Playbook{ID: uuid.New()}},
+				policy.ActionRead,
+				"admin user should have read access to playbooks"),
+			Entry("should allow playbook:run access",
+				models.ABACAttribute{Playbook: models.Playbook{ID: uuid.New()}},
+				policy.ActionPlaybookRun,
+				"admin user should have playbook:run access"),
+		)
 	})
 })
 

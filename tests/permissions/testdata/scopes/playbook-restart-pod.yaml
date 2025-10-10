@@ -1,0 +1,11 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: restart-pod-playbook
+  namespace: default
+  uid: f1e2d3c4-b5a6-4978-8abc-def012345678
+spec:
+  description: Scope for the restart-pod playbook
+  targets:
+    - playbook:
+        name: restart-pod
