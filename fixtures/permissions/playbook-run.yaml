@@ -6,11 +6,9 @@ metadata:
 spec:
   description: allow this user to run loki-logs playbook on any config
   subject:
-    person: aditya+guest@flanksource.com
+    playbook: mc/loki-logs
   actions:
-    - playbook:run
+    - read
   object:
-    playbooks:
-      - name: loki-logs
-    configs:
-      - name: "*"
+    connections:
+      - type: aws-s3

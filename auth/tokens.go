@@ -16,9 +16,6 @@ import (
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/rbac"
-	"github.com/flanksource/duty/rbac/policy"
-	"github.com/flanksource/duty/rls"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/labstack/echo/v4"
 	"github.com/patrickmn/go-cache"
@@ -27,7 +24,6 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/flanksource/incident-commander/db"
-	"github.com/flanksource/incident-commander/vars"
 )
 
 func FlushTokenCache() {
@@ -58,32 +54,6 @@ func InjectToken(ctx context.Context, c echo.Context, user *models.Person, sessI
 
 	c.Request().Header.Set(echo.HeaderAuthorization, fmt.Sprintf("Bearer %s", token))
 	return nil
-}
-
-func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
-	if !ctx.Properties().On(false, vars.FlagRLSEnable) {
-		return &rls.Payload{Disable: true}, nil
-	}
-
-	cacheKey := fmt.Sprintf("rls-payload-%s", ctx.User().ID.String())
-	if cached, ok := tokenCache.Get(cacheKey); ok {
-		return cached.(*rls.Payload), nil
-	}
-
-	if roles, err := rbac.RolesForUser(ctx.User().ID.String()); err != nil {
-		return nil, err
-	} else if !lo.Contains(roles, policy.RoleGuest) {
-		payload := &rls.Payload{Disable: true}
-		tokenCache.SetDefault(cacheKey, payload)
-		return payload, nil
-	}
-
-	// TODO: Implement RLS payload generation from Scopes
-	// For now, disable RLS for guest users
-	payload := &rls.Payload{Disable: true}
-	tokenCache.SetDefault(cacheKey, payload)
-
-	return payload, nil
 }
 
 func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId string) (string, error) {

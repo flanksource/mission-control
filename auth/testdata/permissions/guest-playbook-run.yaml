@@ -1,0 +1,16 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: guest-missioncontrol-configs
+  namespace: default
+  uid: f62ce34c-b66c-43f6-8b8d-4c41921f8c5d
+spec:
+  subject:
+    person: guest@test.com
+  actions:
+    - playbook:run
+  object:
+    playbooks:
+      - name: "*"
+    configs:
+      - name: "*"

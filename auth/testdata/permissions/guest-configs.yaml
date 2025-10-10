@@ -1,0 +1,15 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: guest-media-configs
+  namespace: default
+  uid: 287937c8-c012-409d-834c-8a7a0357164e
+spec:
+  description: Grant read access to media configs for guest users
+  subject:
+    person: guest@test.com
+  actions:
+    - read
+  object:
+    configs:
+      - tagSelector: namespace=media
