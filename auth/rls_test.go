@@ -7,6 +7,8 @@ import (
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/rls"
+	"github.com/flanksource/duty/tests/fixtures/dummy"
+	"github.com/flanksource/duty/tests/setup"
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -21,7 +23,12 @@ var _ = Describe("GetRLSPayload", Ordered, func() {
 	var (
 		guestUser            *models.Person
 		guestUserNoPerms     *models.Person
+		guestUserDirectPerms *models.Person
 		adminUser            *models.Person
+
+		directPlaybookPermission  *models.Permission
+		directCanaryPermission    *models.Permission
+		directComponentPermission *models.Permission
 	)
 
 	BeforeAll(func() {
@@ -29,67 +36,71 @@ var _ = Describe("GetRLSPayload", Ordered, func() {
 		err := rbac.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter)
 		Expect(err).ToNot(HaveOccurred())
 
-		// Create a guest user
-		guestUser = &models.Person{
-			ID:    uuid.New(),
-			Name:  "Guest User",
-			Email: "guest@test.com",
-		}
-		err = DefaultContext.DB().Create(guestUser).Error
-		Expect(err).ToNot(HaveOccurred())
-
-		// Assign guest role to the user
-		_, err = rbac.Enforcer().AddRoleForUser(guestUser.ID.String(), policy.RoleGuest)
-		Expect(err).ToNot(HaveOccurred())
-
-		// Create a guest user with no permissions
-		guestUserNoPerms = &models.Person{
-			ID:    uuid.New(),
-			Name:  "Guest User No Permissions",
-			Email: "guest-noperms@test.com",
-		}
-		err = DefaultContext.DB().Create(guestUserNoPerms).Error
-		Expect(err).ToNot(HaveOccurred())
-
-		// Assign guest role but no permissions
-		_, err = rbac.Enforcer().AddRoleForUser(guestUserNoPerms.ID.String(), policy.RoleGuest)
-		Expect(err).ToNot(HaveOccurred())
-
-		// Create an admin user
-		adminUser = &models.Person{
-			ID:    uuid.New(),
-			Name:  "Admin User",
-			Email: "admin@test.com",
-		}
-		err = DefaultContext.DB().Create(adminUser).Error
-		Expect(err).ToNot(HaveOccurred())
-
-		// Assign admin role
-		_, err = rbac.Enforcer().AddRoleForUser(adminUser.ID.String(), policy.RoleAdmin)
-		Expect(err).ToNot(HaveOccurred())
+		guestUser = setup.CreateUserWithRole(DefaultContext, "Guest User", "guest@test.com", policy.RoleGuest)
+		guestUserNoPerms = setup.CreateUserWithRole(DefaultContext, "Guest User No Permissions", "guest-noperms@test.com", policy.RoleGuest)
+		guestUserDirectPerms = setup.CreateUserWithRole(DefaultContext, "Guest User Direct Permissions", "guest-direct@test.com", policy.RoleGuest)
+		adminUser = setup.CreateUserWithRole(DefaultContext, "Admin User", "admin@test.com", policy.RoleAdmin)
 
 		// Load fixtures
 		loadScopes()
 		loadPermissions()
+
+		// Create direct ID-based permissions for guest user with direct permissions
+		// These test permissions that use specific resource IDs instead of object_selector
+		directPlaybookPermission = &models.Permission{
+			ID:          uuid.New(),
+			Name:        "direct-playbook-permission",
+			Namespace:   "default",
+			Action:      policy.ActionRead,
+			Subject:     guestUserDirectPerms.ID.String(),
+			SubjectType: models.PermissionSubjectTypePerson,
+			PlaybookID:  &dummy.EchoConfig.ID,
+		}
+		err = DefaultContext.DB().Create(directPlaybookPermission).Error
+		Expect(err).ToNot(HaveOccurred())
+
+		directCanaryPermission = &models.Permission{
+			ID:          uuid.New(),
+			Name:        "direct-canary-permission",
+			Namespace:   "default",
+			Action:      policy.ActionRead,
+			Subject:     guestUserDirectPerms.ID.String(),
+			SubjectType: models.PermissionSubjectTypePerson,
+			CanaryID:    &dummy.LogisticsAPICanary.ID,
+		}
+		err = DefaultContext.DB().Create(directCanaryPermission).Error
+		Expect(err).ToNot(HaveOccurred())
+
+		directComponentPermission = &models.Permission{
+			ID:          uuid.New(),
+			Name:        "direct-component-permission",
+			Namespace:   "default",
+			Action:      policy.ActionRead,
+			Subject:     guestUserDirectPerms.ID.String(),
+			SubjectType: models.PermissionSubjectTypePerson,
+			ComponentID: &dummy.Logistics.ID,
+		}
+		err = DefaultContext.DB().Create(directComponentPermission).Error
+		Expect(err).ToNot(HaveOccurred())
 	})
 
 	AfterAll(func() {
-		// Clean up the guest user
-		if guestUser != nil {
-			err := DefaultContext.DB().Delete(guestUser).Error
-			Expect(err).ToNot(HaveOccurred())
+		// Clean up direct permissions
+		permissions := []*models.Permission{directPlaybookPermission, directCanaryPermission, directComponentPermission}
+		for _, perm := range permissions {
+			if perm != nil {
+				err := DefaultContext.DB().Delete(perm).Error
+				Expect(err).ToNot(HaveOccurred())
+			}
 		}
 
-		// Clean up the guest user with no permissions
-		if guestUserNoPerms != nil {
-			err := DefaultContext.DB().Delete(guestUserNoPerms).Error
-			Expect(err).ToNot(HaveOccurred())
-		}
-
-		// Clean up the admin user
-		if adminUser != nil {
-			err := DefaultContext.DB().Delete(adminUser).Error
-			Expect(err).ToNot(HaveOccurred())
+		// Clean up users
+		users := []*models.Person{guestUser, guestUserNoPerms, guestUserDirectPerms, adminUser}
+		for _, user := range users {
+			if user != nil {
+				err := DefaultContext.DB().Delete(user).Error
+				Expect(err).ToNot(HaveOccurred())
+			}
 		}
 	})
 
@@ -140,6 +151,46 @@ var _ = Describe("GetRLSPayload", Ordered, func() {
 		Expect(payload.Component).To(BeEmpty(), "component scope should be empty for guest user with no permissions")
 		Expect(payload.Playbook).To(BeEmpty(), "playbook scope should be empty for guest user with no permissions")
 		Expect(payload.Canary).To(BeEmpty(), "canary scope should be empty for guest user with no permissions")
+	})
+
+	It("should include direct ID-based permissions in RLS payload", func() {
+		ctx := DefaultContext.WithUser(guestUserDirectPerms)
+
+		payload, err := GetRLSPayload(ctx)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(payload).ToNot(BeNil())
+
+		Expect(payload.Disable).To(BeFalse(), "RLS should be enabled for guest users")
+
+		// Verify playbook scope includes the direct playbook ID
+		var hasPlaybookID bool
+		for _, scope := range payload.Playbook {
+			if scope.ID == dummy.EchoConfig.ID.String() {
+				hasPlaybookID = true
+				break
+			}
+		}
+		Expect(hasPlaybookID).To(BeTrue(), "playbook scope should include direct playbook ID")
+
+		// Verify canary scope includes the direct canary ID
+		var hasCanaryID bool
+		for _, scope := range payload.Canary {
+			if scope.ID == dummy.LogisticsAPICanary.ID.String() {
+				hasCanaryID = true
+				break
+			}
+		}
+		Expect(hasCanaryID).To(BeTrue(), "canary scope should include direct canary ID")
+
+		// Verify component scope includes the direct component ID
+		var hasComponentID bool
+		for _, scope := range payload.Component {
+			if scope.ID == dummy.Logistics.ID.String() {
+				hasComponentID = true
+				break
+			}
+		}
+		Expect(hasComponentID).To(BeTrue(), "component scope should include direct component ID")
 	})
 })
 

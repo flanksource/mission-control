@@ -62,7 +62,7 @@ func buildRLSPayloadFromScopes(ctx context.Context) (*rls.Payload, error) {
 		Where("subject IN ?", subjects).
 		Where("action = ?", policy.ActionRead).
 		Where("deleted_at IS NULL").
-		Where("object_selector IS NOT NULL").
+		Where("(object_selector IS NOT NULL) OR playbook_id IS NOT NULL OR canary_id IS NOT NULL OR component_id IS NOT NULL OR config_id IS NOT NULL OR connection_id IS NOT NULL").
 		Find(&permissions).Error
 	if err != nil {
 		return nil, fmt.Errorf("failed to query permissions: %w", err)
@@ -71,6 +71,22 @@ func buildRLSPayloadFromScopes(ctx context.Context) (*rls.Payload, error) {
 	payload := &rls.Payload{}
 
 	for _, perm := range permissions {
+		if perm.ConfigID != nil {
+			payload.Config = append(payload.Config, rls.Scope{ID: perm.ConfigID.String()})
+		}
+
+		if perm.ComponentID != nil {
+			payload.Component = append(payload.Component, rls.Scope{ID: perm.ComponentID.String()})
+		}
+
+		if perm.PlaybookID != nil {
+			payload.Playbook = append(payload.Playbook, rls.Scope{ID: perm.PlaybookID.String()})
+		}
+
+		if perm.CanaryID != nil {
+			payload.Canary = append(payload.Canary, rls.Scope{ID: perm.CanaryID.String()})
+		}
+
 		if len(perm.ObjectSelector) == 0 {
 			continue
 		}
