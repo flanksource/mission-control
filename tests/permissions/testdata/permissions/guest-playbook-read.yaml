@@ -1,0 +1,15 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: guest-playbook-read
+  namespace: default
+  uid: a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d
+spec:
+  description: Grant read access to echo-config playbook for guest users
+  subject:
+    person: guest@test.com
+  actions:
+    - read
+  object:
+    playbooks:
+      - name: echo-config
