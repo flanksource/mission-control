@@ -106,7 +106,7 @@ func PermissionToCasbinRule(permission models.Permission) [][]string {
 
 // createPolicy generates a Casbin policy rule from a permission.
 func createPolicy(permission models.Permission, action string) []string {
-	return []string{
+	policy := []string{
 		"p",
 		permission.Principal(),
 		permission.GetObject(),
@@ -115,6 +115,7 @@ func createPolicy(permission models.Permission, action string) []string {
 		permission.Condition(),
 		permission.ID.String(),
 	}
+	return policy
 }
 
 // rbacToABACObjectSelector returns object selectors (v1.PermissionObject) in JSON

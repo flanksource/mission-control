@@ -1,16 +1,17 @@
 apiVersion: mission-control.flanksource.com/v1
 kind: Permission
 metadata:
-  name: guest-missioncontrol-configs
+  name: guest-playbook-run
   namespace: default
   uid: f62ce34c-b66c-43f6-8b8d-4c41921f8c5d
 spec:
+  description: Grant playbook:run access to echo-config playbook on missioncontrol configs for guest users
   subject:
     person: guest@test.com
   actions:
     - playbook:run
   object:
     playbooks:
-      - name: "*"
+      - name: echo-config
     configs:
-      - name: "*"
+      - tagSelector: namespace=missioncontrol
