@@ -1,0 +1,11 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: monitoring-configs
+  namespace: default
+  uid: eb5a2647-f377-4fd9-83fd-07020e761740
+spec:
+  description: Scope for configs in the monitoring namespace
+  targets:
+    - config:
+        tagSelector: "namespace=monitoring"

@@ -1,0 +1,16 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: guest-missioncontrol-configs
+  namespace: default
+  uid: 18bd77aa-6a8b-4bcb-99e3-06cf589fc240
+spec:
+  description: Grant read access to missioncontrol configs scope for guest users
+  subject:
+    person: guest@test.com
+  actions:
+    - read
+  object:
+    scopes:
+      - namespace: default
+        name: missioncontrol-configs

@@ -135,6 +135,15 @@ func launchKopper(ctx context.Context) {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for View: %v", err))
 	}
 
+	if _, err := kopper.SetupReconciler(ctx, mgr,
+		db.PersistScopeFromCRD,
+		db.DeleteScope,
+		db.DeleteStaleScope,
+		"scope.mission-control.flanksource.com",
+	); err != nil {
+		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for Scope: %v", err))
+	}
+
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("error running controller manager: %v", err))
 	}
@@ -220,6 +229,7 @@ func tableUpdatesHandler(ctx context.Context) {
 	playbooksActionUpdateChan := notifyRouter.GetOrCreateChannel("playbook_run_actions")
 	permissionUpdateChan := notifyRouter.GetOrCreateChannel("permissions")
 	permissionGroupUpdateChan := notifyRouter.GetOrCreateChannel("permission_groups")
+	scopeUpdateChan := notifyRouter.GetOrCreateChannel("scopes")
 	teamMembersUpdateChan := notifyRouter.GetOrCreateChannel("team_members")
 
 	// use a single job instance to maintain retention
@@ -323,6 +333,13 @@ func tableUpdatesHandler(ctx context.Context) {
 
 			// permissions affect RLS so we need to invalidate the postgrest JWT
 			// TODO: only invalidate tokens for the affect users
+			auth.FlushTokenCache()
+
+		case <-scopeUpdateChan:
+			// Scope changes affect RLS payload (tags/agents in JWT)
+			// We need to invalidate the cache so users get updated visibility immediately
+			ctx.Logger.Debugf("flushing RLS token cache due to scopes updates")
+			// TODO: only invalidate tokens for the affected users
 			auth.FlushTokenCache()
 		}
 	}

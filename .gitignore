@@ -14,7 +14,6 @@ charts/.devenv*
 devenv.local.nix
 ginkgo.report
 mission-control.properties
-test.properties
 cover.out
 coverprofile.out
 *.test
@@ -29,3 +28,6 @@ test-reports
 .artifacts/
 .claude/
 __debug_bin*
+
+# AI Agent plans
+/plans

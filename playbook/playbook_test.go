@@ -168,10 +168,10 @@ var _ = Describe("Playbook", Ordered, func() {
 
 			It("Should fetch the suitable playbook for configs", func() {
 				playbooks, err := ListPlaybooksForConfig(DefaultContext, dummy.EKSCluster.ID.String())
-				ExpectPlaybook(playbooks, err, configPlaybook)
+				ExpectPlaybook(playbooks, err, configPlaybook, dummy.EchoConfig)
 
 				playbooks, err = ListPlaybooksForConfig(DefaultContext, dummy.KubernetesCluster.ID.String())
-				ExpectPlaybook(playbooks, err)
+				ExpectPlaybook(playbooks, err, dummy.EchoConfig)
 			})
 		})
 

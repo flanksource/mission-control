@@ -46,8 +46,9 @@ spec:
                 minItems: 1
                 type: array
               agents:
-                description: List of agent ids whose configs/components are accessible
-                  to a person when RLS is enabled
+                description: |-
+                  List of agent ids whose configs/components are accessible to a person when RLS is enabled
+                  DEPRECATED: Use AccessScope CRD instead. This field is ignored.
                 items:
                   type: string
                 type: array
@@ -304,6 +305,15 @@ spec:
                           type: array
                       type: object
                     type: array
+                  scopes:
+                    items:
+                      properties:
+                        name:
+                          type: string
+                        namespace:
+                          type: string
+                      type: object
+                    type: array
                 type: object
               subject:
                 description: Subject defines the entity (e.g., user, group) to which
@@ -337,8 +347,9 @@ spec:
               tags:
                 additionalProperties:
                   type: string
-                description: List of config/component tags a person is allowed to
-                  access to when RLS is enabled
+                description: |-
+                  List of config/component tags a person is allowed to access to when RLS is enabled
+                  DEPRECATED: Use AccessScope CRD instead. This field is ignored.
                 type: object
             required:
             - actions

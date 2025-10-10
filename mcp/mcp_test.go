@@ -19,8 +19,7 @@ func checkResultInMCPResponse(toolResult any, results []string) {
 	Expect(toolResult).ToNot(BeNil())
 	content := fmt.Sprint(toolResult)
 	for _, result := range results {
-		inResult := strings.Contains(content, result)
-		Expect(inResult).To(BeTrue(), "did not find: "+result)
+		Expect(content).To(ContainSubstring(result))
 	}
 }
 
@@ -28,8 +27,7 @@ func checkResultNotInMCPResponse(toolResult any, results []string) {
 	Expect(toolResult).ToNot(BeNil())
 	content := fmt.Sprint(toolResult)
 	for _, result := range results {
-		inResult := strings.Contains(content, result)
-		Expect(inResult).To(BeFalse(), "found: "+result)
+		Expect(content).ToNot(ContainSubstring(result))
 	}
 }
 

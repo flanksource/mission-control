@@ -16,19 +16,14 @@ import (
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/rbac"
-	"github.com/flanksource/duty/rbac/policy"
-	"github.com/flanksource/duty/rls"
-	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
-	"github.com/samber/lo"
-
-	"github.com/flanksource/incident-commander/db"
-	"github.com/flanksource/incident-commander/vars"
 	"github.com/golang-jwt/jwt/v4"
+	"github.com/labstack/echo/v4"
 	"github.com/patrickmn/go-cache"
+	"github.com/samber/lo"
 	"golang.org/x/crypto/argon2"
 	"gorm.io/gorm"
+
+	"github.com/flanksource/incident-commander/db"
 )
 
 func FlushTokenCache() {
@@ -61,70 +56,6 @@ func InjectToken(ctx context.Context, c echo.Context, user *models.Person, sessI
 	return nil
 }
 
-func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
-	if !ctx.Properties().On(false, vars.FlagRLSEnable) {
-		return &rls.Payload{Disable: true}, nil
-	}
-
-	cacheKey := fmt.Sprintf("rls-payload-%s", ctx.User().ID.String())
-	if cached, ok := tokenCache.Get(cacheKey); ok {
-		return cached.(*rls.Payload), nil
-	}
-
-	if roles, err := rbac.RolesForUser(ctx.User().ID.String()); err != nil {
-		return nil, err
-	} else if !lo.Contains(roles, policy.RoleGuest) {
-		payload := &rls.Payload{Disable: true}
-		tokenCache.SetDefault(cacheKey, payload)
-		return payload, nil
-	}
-
-	permissions, err := rbac.PermsForUser(ctx.User().ID.String())
-	if err != nil {
-		return nil, err
-	}
-
-	var permissionWithIDs []string
-	for _, p := range permissions {
-		if p.Action != policy.ActionRead && p.Action != "*" {
-			continue
-		}
-
-		// TODO: support deny
-		if p.Deny {
-			continue
-		}
-
-		if uuid.Validate(p.ID) == nil {
-			permissionWithIDs = append(permissionWithIDs, p.ID)
-		}
-	}
-
-	var permModels []models.Permission
-	if err := ctx.DB().Where("id IN ?", permissionWithIDs).Find(&permModels).Error; err != nil {
-		return nil, fmt.Errorf("failed to get permission for ids: %w", err)
-	}
-
-	var (
-		agentIDs []string
-		tags     = []map[string]string{}
-	)
-	for _, p := range permModels {
-		agentIDs = append(agentIDs, p.Agents...)
-		if len(p.Tags) > 0 {
-			tags = append(tags, p.Tags)
-		}
-	}
-
-	payload := &rls.Payload{
-		Agents: agentIDs,
-		Tags:   tags,
-	}
-	tokenCache.SetDefault(cacheKey, payload)
-
-	return payload, nil
-}
-
 func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId string) (string, error) {
 	config := api.DefaultConfig
 	key := sessionId + user.ID.String()
@@ -143,12 +74,21 @@ func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId str
 	} else if rlsPayload.Disable {
 		claims["disable_rls"] = true
 	} else {
-		if len(rlsPayload.Agents) > 0 {
-			claims["agents"] = rlsPayload.Agents
+		// Add resource-specific scopes to JWT claims
+		if len(rlsPayload.Config) > 0 {
+			claims["config"] = rlsPayload.Config
 		}
 
-		if len(rlsPayload.Tags) > 0 {
-			claims["tags"] = rlsPayload.Tags
+		if len(rlsPayload.Component) > 0 {
+			claims["component"] = rlsPayload.Component
+		}
+
+		if len(rlsPayload.Playbook) > 0 {
+			claims["playbook"] = rlsPayload.Playbook
+		}
+
+		if len(rlsPayload.Canary) > 0 {
+			claims["canary"] = rlsPayload.Canary
 		}
 	}
 
