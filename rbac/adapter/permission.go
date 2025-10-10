@@ -2,6 +2,7 @@ package adapter
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -10,7 +11,9 @@ import (
 	gormadapter "github.com/casbin/gorm-adapter/v3"
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/duty/models"
+	dutyRBAC "github.com/flanksource/duty/rbac"
 	pkgPolicy "github.com/flanksource/duty/rbac/policy"
+	"github.com/flanksource/duty/types"
 	"github.com/samber/lo"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -44,7 +47,13 @@ func (a *PermissionAdapter) LoadPolicy(model model.Model) error {
 	}
 
 	for _, permission := range permissions {
-		policies := PermissionToCasbinRule(permission)
+		// Expand scope references in object_selector before converting to Casbin rules
+		expandedPerm, err := a.expandPermissionScopes(permission)
+		if err != nil {
+			return err
+		}
+
+		policies := PermissionToCasbinRule(expandedPerm)
 		for _, policy := range policies {
 			if err := persist.LoadPolicyArray(policy, model); err != nil {
 				return err
@@ -245,4 +254,81 @@ func (a *PermissionAdapter) permissionGroupToCasbinRule(permission models.Permis
 	}
 
 	return policies, nil
+}
+
+// expandPermissionScopes expands scope references in a permission's object_selector
+// and returns a new permission with the expanded selectors merged in.
+func (a *PermissionAdapter) expandPermissionScopes(perm models.Permission) (models.Permission, error) {
+	// If no object selector, nothing to expand
+	if len(perm.ObjectSelector) == 0 {
+		return perm, nil
+	}
+
+	var selectors dutyRBAC.Selectors
+	if err := json.Unmarshal(perm.ObjectSelector, &selectors); err != nil {
+		return perm, fmt.Errorf("failed to unmarshal object_selector: %w", err)
+	}
+
+	// If no scope references, return as-is
+	if len(selectors.Scopes) == 0 {
+		return perm, nil
+	}
+
+	// Expand scopes and merge into selectors
+	for _, scopeRef := range selectors.Scopes {
+		var scope models.Scope
+		err := a.db.
+			Where("name = ? AND namespace = ? AND deleted_at IS NULL", scopeRef.Name, scopeRef.Namespace).
+			First(&scope).Error
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				// Log warning and skip - scope not found (similar to RLS behavior in auth/rls.go:147)
+				continue
+			}
+			return perm, fmt.Errorf("failed to query scope %s/%s: %w", scopeRef.Namespace, scopeRef.Name, err)
+		}
+
+		var targets []v1.ScopeTarget
+		if err := json.Unmarshal([]byte(scope.Targets), &targets); err != nil {
+			// Log warning and skip - invalid JSON in scope targets (similar to RLS behavior in auth/rls.go:155)
+			continue
+		}
+
+		// Merge targets into selectors (union approach)
+		for _, target := range targets {
+			if target.Config != nil {
+				selectors.Configs = append(selectors.Configs, convertScopeResourceSelectorToResourceSelector(target.Config))
+			}
+			if target.Component != nil {
+				selectors.Components = append(selectors.Components, convertScopeResourceSelectorToResourceSelector(target.Component))
+			}
+			if target.Playbook != nil {
+				selectors.Playbooks = append(selectors.Playbooks, convertScopeResourceSelectorToResourceSelector(target.Playbook))
+			}
+			// Note: Canary targets are skipped - dutyRBAC.Selectors doesn't have a Canaries field
+			// Note: Global targets are ignored per design decision
+			// Note: Connection targets are ignored (no RLS support yet per auth/rls.go:127-132)
+		}
+	}
+
+	// Marshal the expanded selectors back to JSON
+	expandedObjectSelector, err := json.Marshal(selectors)
+	if err != nil {
+		return perm, fmt.Errorf("failed to marshal expanded selectors: %w", err)
+	}
+
+	// Create a new permission with the expanded object selector
+	expandedPerm := perm
+	expandedPerm.ObjectSelector = expandedObjectSelector
+
+	return expandedPerm, nil
+}
+
+// convertScopeResourceSelectorToResourceSelector converts a v1.ScopeResourceSelector to types.ResourceSelector
+func convertScopeResourceSelectorToResourceSelector(scopeSel *v1.ScopeResourceSelector) types.ResourceSelector {
+	return types.ResourceSelector{
+		Agent:       scopeSel.Agent,
+		Name:        scopeSel.Name,
+		TagSelector: scopeSel.TagSelector,
+	}
 }
