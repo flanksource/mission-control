@@ -5,11 +5,12 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/types"
+	"github.com/google/uuid"
 	gocache "github.com/patrickmn/go-cache"
-	"gorm.io/gorm"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
 )
@@ -37,19 +38,19 @@ func NewValidationError(format string, args ...any) error {
 // getScopeTargets retrieves scope targets by namespace and name, using cache when available.
 // Returns gorm.ErrRecordNotFound if scope doesn't exist.
 // Returns json unmarshal error if scope.Targets contains invalid JSON.
-func (a *PermissionAdapter) getScopeTargets(namespace, name string) ([]v1.ScopeTarget, error) {
+func getScopeTargets(ctx context.Context, cache *gocache.Cache, namespace, name string) ([]v1.ScopeTarget, error) {
 	cacheKey := namespace + "/" + name
 
-	if cached, found := a.cache.Get(cacheKey); found {
+	if cached, found := cache.Get(cacheKey); found {
 		return cached.([]v1.ScopeTarget), nil
 	}
 
 	var scope models.Scope
-	err := a.db.
-		Where("name = ? AND namespace = ? AND deleted_at IS NULL", name, namespace).
-		First(&scope).Error
+	err := ctx.DB().Where("name = ? AND namespace = ? AND deleted_at IS NULL", name, namespace).Find(&scope).Error
 	if err != nil {
 		return nil, err
+	} else if scope.ID == uuid.Nil {
+		return nil, nil
 	}
 
 	var targets []v1.ScopeTarget
@@ -57,47 +58,49 @@ func (a *PermissionAdapter) getScopeTargets(namespace, name string) ([]v1.ScopeT
 		return nil, NewValidationError("%s:%s/%s", ErrScopeExpansionInvalidScopeTargets, namespace, name)
 	}
 
-	a.cache.Set(cacheKey, targets, gocache.DefaultExpiration)
+	cache.Set(cacheKey, targets, gocache.DefaultExpiration)
 
 	return targets, nil
 }
 
-// expandPermissionScopes expands scope references in a permission's object_selector
+// ExpandPermissionScopes expands scope references in a permission's object_selector
 // and returns a new permission with the expanded selectors merged in.
-func (a *PermissionAdapter) expandPermissionScopes(perm models.Permission) (models.Permission, error) {
+// This is the exported version for testing.
+func ExpandPermissionScopes(ctx context.Context, cache *gocache.Cache, perm models.Permission) ([]dutyRBAC.Selectors, error) {
 	// If no object selector, nothing to expand
 	if len(perm.ObjectSelector) == 0 {
-		return perm, nil
+		return nil, nil
 	}
 
 	var selectors dutyRBAC.Selectors
 	if err := json.Unmarshal(perm.ObjectSelector, &selectors); err != nil {
-		return perm, NewValidationError(ErrScopeExpansionInvalidObjectSelector)
+		return nil, NewValidationError(ErrScopeExpansionInvalidObjectSelector)
 	}
 
 	// If no scope references, return as-is
 	if len(selectors.Scopes) == 0 {
-		return perm, nil
+		return nil, nil
 	}
+
+	var output []dutyRBAC.Selectors
 
 	// Expand scopes and merge into selectors
 	for _, scopeRef := range selectors.Scopes {
-		targets, err := a.getScopeTargets(scopeRef.Namespace, scopeRef.Name)
+		targets, err := getScopeTargets(ctx, cache, scopeRef.Namespace, scopeRef.Name)
 		if err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				return perm, NewValidationError("%s:%s/%s", ErrScopeExpansionScopeNotFound, scopeRef.Namespace, scopeRef.Name)
-			}
-
 			var validationErr *scopeExpansionValidationError
 			if errors.As(err, &validationErr) {
-				return perm, err
+				return nil, err
 			}
 
-			return perm, fmt.Errorf("failed to get scope targets: %w", err)
+			return nil, fmt.Errorf("failed to get scope targets: %w", err)
+		} else if targets == nil {
+			return nil, NewValidationError("%s:%s/%s", ErrScopeExpansionScopeNotFound, scopeRef.Namespace, scopeRef.Name)
 		}
 
 		// Merge targets into selectors (union approach)
 		for _, target := range targets {
+			var selectors dutyRBAC.Selectors
 			if target.Config != nil {
 				selectors.Configs = append(selectors.Configs, convertScopeResourceSelectorToResourceSelector(target.Config))
 			}
@@ -108,23 +111,15 @@ func (a *PermissionAdapter) expandPermissionScopes(perm models.Permission) (mode
 				selectors.Playbooks = append(selectors.Playbooks, convertScopeResourceSelectorToResourceSelector(target.Playbook))
 			}
 
+			output = append(output, selectors)
+
 			// Note: Canary targets are skipped - dutyRBAC.Selectors doesn't have a Canaries field
 			// Note: Global targets are ignored per design decision
 			// Note: Connection targets are ignored (no RLS support yet per auth/rls.go:127-132)
 		}
 	}
 
-	// Marshal the expanded selectors back to JSON
-	expandedObjectSelector, err := json.Marshal(selectors)
-	if err != nil {
-		return perm, fmt.Errorf("failed to marshal expanded selectors: %w", err)
-	}
-
-	// Create a new permission with the expanded object selector
-	expandedPerm := perm
-	expandedPerm.ObjectSelector = expandedObjectSelector
-
-	return expandedPerm, nil
+	return output, nil
 }
 
 // convertScopeResourceSelectorToResourceSelector converts a v1.ScopeResourceSelector to types.ResourceSelector

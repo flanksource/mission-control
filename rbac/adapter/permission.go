@@ -16,7 +16,6 @@ import (
 	pkgPolicy "github.com/flanksource/duty/rbac/policy"
 	gocache "github.com/patrickmn/go-cache"
 	"github.com/samber/lo"
-	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -25,7 +24,7 @@ import (
 type PermissionAdapter struct {
 	*gormadapter.Adapter // gorm adapter for `casbin_rules` table
 
-	db    *gorm.DB
+	ctx   context.Context
 	cache *gocache.Cache
 }
 
@@ -36,7 +35,7 @@ const defaultScopeCacheTTL = 1 * time.Minute
 func NewPermissionAdapter(ctx context.Context, main *gormadapter.Adapter) persist.Adapter {
 	ttl := ctx.Properties().Duration("scope.cache.ttl", defaultScopeCacheTTL)
 	return &PermissionAdapter{
-		db:      ctx.DB(),
+		ctx:     ctx,
 		Adapter: main,
 		cache:   gocache.New(ttl, ttl*2),
 	}
@@ -48,18 +47,18 @@ func (a *PermissionAdapter) LoadPolicy(model model.Model) error {
 	}
 
 	var permissions []models.Permission
-	if err := a.db.Where("deleted_at IS NULL AND error IS NULL").Find(&permissions).Error; err != nil {
+	if err := a.ctx.DB().Where("deleted_at IS NULL AND error IS NULL").Find(&permissions).Error; err != nil {
 		return fmt.Errorf("failed to load permissions: %w", err)
 	}
 
 	for _, permission := range permissions {
 		// Expand scope references in object_selector before converting to Casbin rules
-		expandedPerm, err := a.expandPermissionScopes(permission)
+		expandedPerms, err := ExpandPermissionScopes(a.ctx, a.cache, permission)
 		if err != nil {
 			var validationErr *scopeExpansionValidationError
 			if errors.As(err, &validationErr) {
 				// Persist validation error to database
-				if updateErr := a.db.Model(&permission).Update("error", err.Error()).Error; updateErr != nil {
+				if updateErr := a.ctx.DB().Model(&permission).Update("error", err.Error()).Error; updateErr != nil {
 					return fmt.Errorf("failed to update permission error: %w", updateErr)
 				}
 
@@ -69,16 +68,38 @@ func (a *PermissionAdapter) LoadPolicy(model model.Model) error {
 			return err
 		}
 
-		policies := PermissionToCasbinRule(expandedPerm)
-		for _, policy := range policies {
-			if err := persist.LoadPolicyArray(policy, model); err != nil {
-				return err
+		if len(expandedPerms) == 0 {
+			policies := PermissionToCasbinRule(permission)
+			for _, policy := range policies {
+				if err := persist.LoadPolicyArray(policy, model); err != nil {
+					return err
+				}
+			}
+		} else {
+			// A permission that targets a scope will generate multiple expanded permissions
+			// If the targeted scope as N scopes, then this will generate N permissions
+			// everything about the permission remains the same apart from the object_selector
+
+			for _, expandedPerm := range expandedPerms {
+				marshalled, err := json.Marshal(expandedPerm)
+				if err != nil {
+					return err
+				}
+
+				newPerm := permission
+				newPerm.ObjectSelector = marshalled
+				policies := PermissionToCasbinRule(newPerm)
+				for _, policy := range policies {
+					if err := persist.LoadPolicyArray(policy, model); err != nil {
+						return err
+					}
+				}
 			}
 		}
 	}
 
 	var permissionGroups []models.PermissionGroup
-	if err := a.db.Where("deleted_at IS NULL").Find(&permissionGroups).Error; err != nil {
+	if err := a.ctx.DB().Where("deleted_at IS NULL").Find(&permissionGroups).Error; err != nil {
 		return fmt.Errorf("failed to load permissions: %w", err)
 	}
 
@@ -191,7 +212,7 @@ func (a *PermissionAdapter) findNamespacedResources(tableName string, selectors 
 	}
 
 	var ids []string
-	if err := a.db.Select("id").Table(tableName).Clauses(clause.Or(clauses...)).Find(&ids).Error; err != nil {
+	if err := a.ctx.DB().Select("id").Table(tableName).Clauses(clause.Or(clauses...)).Find(&ids).Error; err != nil {
 		return nil, err
 	}
 
@@ -234,7 +255,7 @@ func (a *PermissionAdapter) permissionGroupToCasbinRule(permission models.Permis
 			allSubjects = append(allSubjects, "everyone")
 		} else {
 			var personIDs []string
-			query := a.db.Select("id").Model(&models.Person{}).
+			query := a.ctx.DB().Select("id").Model(&models.Person{}).
 				Where("deleted_at IS NULL").
 				Where("type IS DISTINCT FROM 'agent'").
 				Where("email IS NOT NULL"). // Excludes system user
@@ -249,7 +270,7 @@ func (a *PermissionAdapter) permissionGroupToCasbinRule(permission models.Permis
 
 	if len(subject.Teams) > 0 {
 		var teamIDs []string
-		if err := a.db.Select("id").Model(&models.Team{}).Where("name = ?", subject.Teams).Find(&teamIDs).Error; err != nil {
+		if err := a.ctx.DB().Select("id").Model(&models.Team{}).Where("name = ?", subject.Teams).Find(&teamIDs).Error; err != nil {
 			return nil, err
 		}
 

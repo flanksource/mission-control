@@ -2,6 +2,7 @@ package permissions_test
 
 import (
 	"os"
+	"time"
 
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
@@ -9,9 +10,11 @@ import (
 	"github.com/flanksource/duty/rls"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/tests/setup"
+	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/patrickmn/go-cache"
 	"github.com/samber/lo"
 	"sigs.k8s.io/yaml"
 
@@ -26,6 +29,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 		guestUser            *models.Person
 		guestUserNoPerms     *models.Person
 		guestUserDirectPerms *models.Person
+		guestUserMultiTarget *models.Person
 		adminUser            *models.Person
 
 		directPlaybookPermission  *models.Permission
@@ -41,6 +45,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 		guestUser = setup.CreateUserWithRole(DefaultContext, "Guest User", "guest@test.com", policy.RoleGuest)
 		guestUserNoPerms = setup.CreateUserWithRole(DefaultContext, "Guest User No Permissions", "guest-noperms@test.com", policy.RoleGuest)
 		guestUserDirectPerms = setup.CreateUserWithRole(DefaultContext, "Guest User Direct Permissions", "guest-direct@test.com", policy.RoleGuest)
+		guestUserMultiTarget = setup.CreateUserWithRole(DefaultContext, "Guest User Multi Target", "guest-multi@test.com", policy.RoleGuest)
 		adminUser = setup.CreateUserWithRole(DefaultContext, "Admin User", "admin@test.com", policy.RoleAdmin)
 
 		// Load fixtures
@@ -116,7 +121,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 		}
 
 		// Clean up users
-		users := []*models.Person{guestUser, guestUserNoPerms, guestUserDirectPerms, adminUser}
+		users := []*models.Person{guestUser, guestUserNoPerms, guestUserDirectPerms, guestUserMultiTarget, adminUser}
 		for _, user := range users {
 			if user != nil {
 				err := DefaultContext.DB().Delete(user).Error
@@ -154,6 +159,29 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			// Other resource types should be empty
 			Expect(payload.Component).To(BeEmpty(), "component scope should be empty")
 			Expect(payload.Canary).To(BeEmpty(), "canary scope should be empty")
+		})
+
+		It("should return RLS payload for guest user with multi-target scope", func() {
+			ctx := DefaultContext.WithUser(guestUserMultiTarget)
+
+			payload, err := auth.GetRLSPayload(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(payload).ToNot(BeNil())
+
+			// Verify exact match of entire payload - user should have access to ONLY these resources
+			expectedPayload := &rls.Payload{
+				Disable: false,
+				Config: []rls.Scope{
+					{Tags: map[string]string{"namespace": "database"}},
+				},
+				Playbook: []rls.Scope{
+					{Names: []string{"echo-config"}},
+				},
+				Component: nil,
+				Canary:    nil,
+			}
+
+			Expect(payload).To(Equal(expectedPayload), "RLS payload should match exactly - user should only see database configs and echo-config playbook")
 		})
 
 		It("should disable RLS for non-guest users", func() {
@@ -222,6 +250,27 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 				}
 			}
 			Expect(hasComponentID).To(BeTrue(), "component scope should include direct component ID")
+		})
+	})
+
+	Context("Scope expansion", func() {
+		It("should expand multi-target scope into permission object_selector", func() {
+			var permission models.Permission
+			err := DefaultContext.DB().
+				Where("subject = ? AND deleted_at IS NULL", guestUserMultiTarget.ID.String()).
+				Where("object_selector IS NOT NULL").
+				First(&permission).Error
+			Expect(err).ToNot(HaveOccurred(), "should find the multi-target scope permission")
+
+			// Expand the permission
+			expandedPerm, err := adapter.ExpandPermissionScopes(DefaultContext, cache.New(time.Minute, time.Minute), permission)
+			Expect(err).ToNot(HaveOccurred(), "scope expansion should succeed")
+
+			Expect(expandedPerm).To(HaveLen(2))
+			Expect(expandedPerm).To(Equal([]rbac.Selectors{
+				{Configs: []types.ResourceSelector{{TagSelector: "namespace=database"}}},
+				{Playbooks: []types.ResourceSelector{{Name: "echo-config"}}},
+			}))
 		})
 	})
 
@@ -368,6 +417,50 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 				models.ABACAttribute{Playbook: models.Playbook{ID: uuid.New(), Name: "other-playbook"}},
 				policy.ActionRead,
 				"guest user should NOT have read access to other playbooks"),
+		)
+
+		DescribeTable("guest user with multi-target scope",
+			func(attr models.ABACAttribute, action string, expectedAllowed bool, description string) {
+				allowed := rbac.HasPermission(DefaultContext, guestUserMultiTarget.ID.String(), &attr, action)
+				Expect(allowed).To(Equal(expectedAllowed), description)
+			},
+			// Config read access - allowed only for database namespace
+			Entry("should allow read access to database namespace config via multi-target scope",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Tags: map[string]string{"namespace": "database"}}},
+				policy.ActionRead, true,
+				"guest user with multi-target scope should have read access to database namespace configs"),
+			Entry("should deny read access to monitoring namespace config",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Tags: map[string]string{"namespace": "monitoring"}}},
+				policy.ActionRead, false,
+				"guest user with multi-target scope should NOT have read access to monitoring namespace configs"),
+			Entry("should deny read access to missioncontrol namespace config",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Tags: map[string]string{"namespace": "missioncontrol"}}},
+				policy.ActionRead, false,
+				"guest user with multi-target scope should NOT have read access to missioncontrol namespace configs"),
+			Entry("should deny read access to other namespace configs",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Tags: map[string]string{"namespace": "kube-system"}}},
+				policy.ActionRead, false,
+				"guest user with multi-target scope should NOT have read access to kube-system namespace configs"),
+
+			// Playbook read access - allowed only for echo-config
+			Entry("should allow read access to echo-config playbook via multi-target scope",
+				models.ABACAttribute{Playbook: models.Playbook{ID: dummy.EchoConfig.ID, Name: "echo-config"}},
+				policy.ActionRead, true,
+				"guest user with multi-target scope should have read access to echo-config playbook"),
+			Entry("should deny read access to restart-pod playbook",
+				models.ABACAttribute{Playbook: models.Playbook{ID: dummy.RestartPod.ID, Name: "restart-pod"}},
+				policy.ActionRead, false,
+				"guest user with multi-target scope should NOT have read access to restart-pod playbook"),
+			Entry("should deny read access to other playbooks",
+				models.ABACAttribute{Playbook: models.Playbook{ID: uuid.New(), Name: "other-playbook"}},
+				policy.ActionRead, false,
+				"guest user with multi-target scope should NOT have read access to other playbooks"),
+
+			// Playbook run access - should be denied (only read permission granted)
+			Entry("should deny playbook:run on echo-config",
+				models.ABACAttribute{Playbook: models.Playbook{ID: dummy.EchoConfig.ID, Name: "echo-config"}},
+				policy.ActionPlaybookRun, false,
+				"guest user with multi-target scope should NOT have playbook:run access (only read)"),
 		)
 
 		DescribeTable("admin user must have access to everything",
