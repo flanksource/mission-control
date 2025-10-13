@@ -336,6 +336,12 @@ func tableUpdatesHandler(ctx context.Context) {
 			auth.FlushTokenCache()
 
 		case <-scopeUpdateChan:
+			if err := rbac.ReloadPolicy(); err != nil {
+				ctx.Logger.Errorf("error reloading rbac policy due to permission group updates: %v", err)
+			} else {
+				ctx.Logger.Debugf("reloading rbac policy due to permission group updates")
+			}
+
 			// Scope changes affect RLS payload (tags/agents in JWT)
 			// We need to invalidate the cache so users get updated visibility immediately
 			ctx.Logger.Debugf("flushing RLS token cache due to scopes updates")

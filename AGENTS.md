@@ -10,6 +10,7 @@
   - properties (via ctx.Properties())
   - logger (via ctx.Logger. Example: ctx.Logger.Infof("Hello, world!"))
 - If a file needs to use both context and duty's context, alias context to "gocontext".
+- Prefer `any` over `interface{}`
 
 ### CRD
 
