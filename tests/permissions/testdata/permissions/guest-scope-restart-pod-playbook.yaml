@@ -1,0 +1,16 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: guest-restart-pod-playbook
+  namespace: default
+  uid: b9c8d7e6-f5a4-4b3c-8d2e-1f0a9b8c7d6e
+spec:
+  description: Grant read access to restart-pod playbook scope for guest users
+  subject:
+    person: guest@test.com
+  actions:
+    - read
+  object:
+    scopes:
+      - namespace: default
+        name: restart-pod-playbook
