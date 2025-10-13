@@ -5,15 +5,18 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/casbin/casbin/v2/model"
 	"github.com/casbin/casbin/v2/persist"
 	gormadapter "github.com/casbin/gorm-adapter/v3"
 	"github.com/flanksource/commons/collections"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	dutyRBAC "github.com/flanksource/duty/rbac"
 	pkgPolicy "github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/types"
+	gocache "github.com/patrickmn/go-cache"
 	"github.com/samber/lo"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -24,15 +27,20 @@ import (
 type PermissionAdapter struct {
 	*gormadapter.Adapter // gorm adapter for `casbin_rules` table
 
-	db *gorm.DB
+	db    *gorm.DB
+	cache *gocache.Cache
 }
 
 var _ persist.BatchAdapter = &PermissionAdapter{}
 
-func NewPermissionAdapter(db *gorm.DB, main *gormadapter.Adapter) persist.Adapter {
+const defaultScopeCacheTTL = 1 * time.Minute
+
+func NewPermissionAdapter(ctx context.Context, main *gormadapter.Adapter) persist.Adapter {
+	ttl := ctx.Properties().Duration("scope.cache.ttl", defaultScopeCacheTTL)
 	return &PermissionAdapter{
-		db:      db,
+		db:      ctx.DB(),
 		Adapter: main,
+		cache:   gocache.New(ttl, ttl*2),
 	}
 }
 
@@ -257,6 +265,34 @@ func (a *PermissionAdapter) permissionGroupToCasbinRule(permission models.Permis
 	return policies, nil
 }
 
+// getScopeTargets retrieves scope targets by namespace and name, using cache when available.
+// Returns gorm.ErrRecordNotFound if scope doesn't exist.
+// Returns json unmarshal error if scope.Targets contains invalid JSON.
+func (a *PermissionAdapter) getScopeTargets(namespace, name string) ([]v1.ScopeTarget, error) {
+	cacheKey := namespace + "/" + name
+
+	if cached, found := a.cache.Get(cacheKey); found {
+		return cached.([]v1.ScopeTarget), nil
+	}
+
+	var scope models.Scope
+	err := a.db.
+		Where("name = ? AND namespace = ? AND deleted_at IS NULL", name, namespace).
+		First(&scope).Error
+	if err != nil {
+		return nil, err
+	}
+
+	var targets []v1.ScopeTarget
+	if err := json.Unmarshal([]byte(scope.Targets), &targets); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal scope targets for %s/%s: %w", namespace, name, err)
+	}
+
+	a.cache.Set(cacheKey, targets, gocache.DefaultExpiration)
+
+	return targets, nil
+}
+
 // expandPermissionScopes expands scope references in a permission's object_selector
 // and returns a new permission with the expanded selectors merged in.
 func (a *PermissionAdapter) expandPermissionScopes(perm models.Permission) (models.Permission, error) {
@@ -277,22 +313,14 @@ func (a *PermissionAdapter) expandPermissionScopes(perm models.Permission) (mode
 
 	// Expand scopes and merge into selectors
 	for _, scopeRef := range selectors.Scopes {
-		var scope models.Scope
-		err := a.db.
-			Where("name = ? AND namespace = ? AND deleted_at IS NULL", scopeRef.Name, scopeRef.Namespace).
-			First(&scope).Error
+		targets, err := a.getScopeTargets(scopeRef.Namespace, scopeRef.Name)
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
-				// Log warning and skip - scope not found (similar to RLS behavior in auth/rls.go:147)
+				// Scope not found - skip
 				continue
 			}
-			return perm, fmt.Errorf("failed to query scope %s/%s: %w", scopeRef.Namespace, scopeRef.Name, err)
-		}
 
-		var targets []v1.ScopeTarget
-		if err := json.Unmarshal([]byte(scope.Targets), &targets); err != nil {
-			// Log warning and skip - invalid JSON in scope targets (similar to RLS behavior in auth/rls.go:155)
-			continue
+			return perm, err
 		}
 
 		// Merge targets into selectors (union approach)
