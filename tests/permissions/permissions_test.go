@@ -31,6 +31,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 		directPlaybookPermission  *models.Permission
 		directCanaryPermission    *models.Permission
 		directComponentPermission *models.Permission
+		directConfigPermission    *models.Permission
 	)
 
 	BeforeAll(func() {
@@ -84,6 +85,18 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 		err = DefaultContext.DB().Create(directComponentPermission).Error
 		Expect(err).ToNot(HaveOccurred())
 
+		directConfigPermission = &models.Permission{
+			ID:          uuid.New(),
+			Name:        "direct-config-permission",
+			Namespace:   "default",
+			Action:      policy.ActionRead,
+			Subject:     guestUser.ID.String(),
+			SubjectType: models.PermissionSubjectTypePerson,
+			ConfigID:    &dummy.NginxIngressPod.ID,
+		}
+		err = DefaultContext.DB().Create(directConfigPermission).Error
+		Expect(err).ToNot(HaveOccurred())
+
 		var permissions []models.Permission
 		err = DefaultContext.DB().Where("deleted_at IS NULL").Find(&permissions).Error
 		Expect(err).ToNot(HaveOccurred())
@@ -94,7 +107,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 
 	AfterAll(func() {
 		// Clean up direct permissions
-		permissions := []*models.Permission{directPlaybookPermission, directCanaryPermission, directComponentPermission}
+		permissions := []*models.Permission{directPlaybookPermission, directCanaryPermission, directComponentPermission, directConfigPermission}
 		for _, perm := range permissions {
 			if perm != nil {
 				err := DefaultContext.DB().Delete(perm).Error
@@ -123,11 +136,12 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			Expect(payload).ToNot(BeNil())
 
 			Expect(payload.Disable).To(BeFalse(), "RLS should be enabled for guest users with scopes")
-			Expect(payload.Config).To(HaveLen(3), "should have three config scopes")
+			Expect(payload.Config).To(HaveLen(4), "should have four config scopes including ID-based permission")
 			Expect(payload.Config).To(ContainElements([]rls.Scope{
 				{Tags: map[string]string{"namespace": "missioncontrol"}},
 				{Tags: map[string]string{"namespace": "monitoring"}},
 				{Tags: map[string]string{"namespace": "media"}},
+				{ID: dummy.NginxIngressPod.ID.String()},
 			}))
 
 			// Playbook scopes should include echo-config and restart-pod
@@ -211,6 +225,28 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 		})
 	})
 
+	Context("Database constraints", func() {
+		It("should prevent creating permission with both object_selector and resource ID", func() {
+			// This test verifies the database CHECK constraint that prevents the AND'ing bug
+			// A permission cannot have BOTH object_selector AND a resource ID field set
+			configID := dummy.NginxIngressPod.ID
+			buggyPermission := &models.Permission{
+				ID:             uuid.New(),
+				Name:           "buggy-permission",
+				Namespace:      "default",
+				Action:         policy.ActionRead,
+				Subject:        guestUser.ID.String(),
+				SubjectType:    models.PermissionSubjectTypePerson,
+				ObjectSelector: []byte(`{"configs":[{"tagSelector":"namespace=monitoring"}]}`),
+				ConfigID:       &configID, // BOTH object_selector AND config_id - should fail!
+			}
+
+			err := DefaultContext.DB().Create(buggyPermission).Error
+			Expect(err).To(HaveOccurred(), "should reject permission with both object_selector and config_id")
+			Expect(err.Error()).To(ContainSubstring("permissions_selector_or_id_check"), "error should mention the check constraint")
+		})
+	})
+
 	Context("Permission to Casbin policy translation", func() {
 		DescribeTable("guest user with some permissions",
 			func(attr models.ABACAttribute, action string, expectedAllowed bool, description string) {
@@ -230,6 +266,16 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Tags: map[string]string{"namespace": "media"}}},
 				policy.ActionRead, true,
 				"guest user should have read access to media namespace configs via direct permission"),
+
+			// Config read access by ID - tests for potential AND'ing bug with scope-based permissions
+			Entry("should allow read access to specific config by ID",
+				models.ABACAttribute{Config: models.ConfigItem{ID: dummy.NginxIngressPod.ID, Tags: map[string]string{"namespace": "production"}}},
+				policy.ActionRead, true,
+				"guest user should have read access to specific config by ID"),
+			Entry("should still allow read access to monitoring configs after adding ID-based permission",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Tags: map[string]string{"namespace": "monitoring"}}},
+				policy.ActionRead, true,
+				"guest user should still have read access to monitoring configs (verifies permissions aren't AND'ed)"),
 
 			// Config read access - denied (not in scopes or permissions)
 			Entry("should deny read access to kube-system namespace config",
