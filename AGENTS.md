@@ -1,17 +1,27 @@
 # Repository Guidelines
 
-- CRD definitions are in the api/v1 directory.
 - Domain models and REST API models are in @api/ directory.
-- Whenever the CRD definition is updated, run `make manifests`.
-- To run the entire test suite, run `make test`. To run individual tests, use ginkgo. Always use ginkgo to run tests. Never run `go test` directly.
-- Don't run go build. Use make dev instead.
-- never manually update files in @config/crds and @config/schemas. Always use `make manifests` to update the CRDs.
-- never update `zz_generated.deepcopy.go` files. use `make generate` instead.
+- Don't run `go build`. Use `make dev` instead.
+
+### Coding guidelines
+
 - we use context from github.com/flanksource/duty/context.Context for most things. That context is how we access
   - db (via ctx.DB())
   - properties (via ctx.Properties())
   - logger (via ctx.Logger. Example: ctx.Logger.Infof("Hello, world!"))
 - If a file needs to use both context and duty's context, alias context to "gocontext".
+
+### CRD
+
+- CRD definitions are in the api/v1 directory.
+- Whenever the CRD definition is updated, run `make manifests`.
+- never manually update files in @config/crds and @config/schemas. Always use `make manifests` to update the CRDs.
+- never update `zz_generated.deepcopy.go` files. use `make generate` instead.
+
+### Tests
+
+- To run the entire test suite, run `make test`.
+- To run individual tests, use ginkgo with `--label-filter='!ignore_local'` flag. Always use ginkgo to run tests. Never run `go test` directly.
 
 ### Errors
 
@@ -23,6 +33,7 @@
 ### Database
 
 - Use `duty.Now()` instead of `time.Now()` for database timestamps and soft deletes.
+- The migrations are handled by an external package `github.com/flanksource/duty` using Atlas-go.
 
 ### Comments guidelines
 
