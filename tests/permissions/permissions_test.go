@@ -30,12 +30,15 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 		guestUserNoPerms     *models.Person
 		guestUserDirectPerms *models.Person
 		guestUserMultiTarget *models.Person
+		homelabManager       *models.Person
 		adminUser            *models.Person
 
 		directPlaybookPermission  *models.Permission
 		directCanaryPermission    *models.Permission
 		directComponentPermission *models.Permission
 		directConfigPermission    *models.Permission
+
+		homelabConfigsScope *models.Scope
 	)
 
 	BeforeAll(func() {
@@ -46,10 +49,24 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 		guestUserNoPerms = setup.CreateUserWithRole(DefaultContext, "Guest User No Permissions", "guest-noperms@test.com", policy.RoleGuest)
 		guestUserDirectPerms = setup.CreateUserWithRole(DefaultContext, "Guest User Direct Permissions", "guest-direct@test.com", policy.RoleGuest)
 		guestUserMultiTarget = setup.CreateUserWithRole(DefaultContext, "Guest User Multi Target", "guest-multi@test.com", policy.RoleGuest)
+		homelabManager = setup.CreateUserWithRole(DefaultContext, "Homelab Manager", "manager@homelab.com", policy.RoleGuest)
 		adminUser = setup.CreateUserWithRole(DefaultContext, "Admin User", "admin@test.com", policy.RoleAdmin)
 
 		// Load fixtures
 		loadScopes()
+
+		// Create agent-based scope for homelab configs (before loadPermissions so the permission can reference it)
+		homelabConfigsScope = &models.Scope{
+			ID:          uuid.New(),
+			Name:        "homelab-configs",
+			Namespace:   "default",
+			Description: "Scope for configs from homelab agent",
+			Source:      models.SourceUI,
+			Targets:     types.JSON(`[{"config": {"agent": "homelab"}}]`),
+		}
+		err = DefaultContext.DB().Create(homelabConfigsScope).Error
+		Expect(err).ToNot(HaveOccurred())
+
 		loadPermissions()
 
 		// Create direct ID-based permissions for guest user with direct permissions
@@ -120,8 +137,14 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			}
 		}
 
+		// Clean up scopes
+		if homelabConfigsScope != nil {
+			err := DefaultContext.DB().Delete(homelabConfigsScope).Error
+			Expect(err).ToNot(HaveOccurred())
+		}
+
 		// Clean up users
-		users := []*models.Person{guestUser, guestUserNoPerms, guestUserDirectPerms, guestUserMultiTarget, adminUser}
+		users := []*models.Person{guestUser, guestUserNoPerms, guestUserDirectPerms, guestUserMultiTarget, homelabManager, adminUser}
 		for _, user := range users {
 			if user != nil {
 				err := DefaultContext.DB().Delete(user).Error
@@ -182,6 +205,27 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			}
 
 			Expect(payload).To(Equal(expectedPayload), "RLS payload should match exactly - user should only see database configs and echo-config playbook")
+		})
+
+		It("should return RLS payload for guest user with agent-based scope", func() {
+			ctx := DefaultContext.WithUser(homelabManager)
+
+			payload, err := auth.GetRLSPayload(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(payload).ToNot(BeNil())
+
+			// Verify exact match of entire payload - user should have access to ONLY homelab agent configs
+			expectedPayload := &rls.Payload{
+				Disable: false,
+				Config: []rls.Scope{
+					{Agents: []string{"homelab"}},
+				},
+				Playbook:  nil,
+				Component: nil,
+				Canary:    nil,
+			}
+
+			Expect(payload).To(Equal(expectedPayload), "RLS payload should match exactly - user should only see homelab agent configs")
 		})
 
 		It("should disable RLS for non-guest users", func() {
@@ -461,6 +505,26 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 				models.ABACAttribute{Playbook: models.Playbook{ID: dummy.EchoConfig.ID, Name: "echo-config"}},
 				policy.ActionPlaybookRun, false,
 				"guest user with multi-target scope should NOT have playbook:run access (only read)"),
+		)
+
+		DescribeTable("guest user with agent-based scope",
+			func(attr models.ABACAttribute, action string, expectedAllowed bool, description string) {
+				allowed := rbac.HasPermission(DefaultContext, homelabManager.ID.String(), &attr, action)
+				Expect(allowed).To(Equal(expectedAllowed), description)
+			},
+			// Config read access - allowed only for homelab agent configs
+			Entry("should allow read access to config with homelab agent",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), AgentID: dummy.HomelabAgent.ID}},
+				policy.ActionRead, true,
+				"guest user with agent scope should have read access to homelab agent configs"),
+			Entry("should deny read access to config with GCP agent",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), AgentID: dummy.GCPAgent.ID}},
+				policy.ActionRead, false,
+				"guest user with agent scope should NOT have read access to GCP agent configs"),
+			Entry("should deny read access to config with no agent",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Tags: map[string]string{"namespace": "default"}}},
+				policy.ActionRead, false,
+				"guest user with agent scope should NOT have read access to configs without an agent"),
 		)
 
 		DescribeTable("admin user must have access to everything",
