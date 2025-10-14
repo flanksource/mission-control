@@ -151,7 +151,7 @@ var _ = Describe("CreateToken", Ordered, func() {
 			reqData := CreateTokenRequest{
 				Name: "test-token",
 			}
-			_ = postCreateToken(DefaultContext, e, reqData, http.StatusInternalServerError)
+			_ = postCreateToken(DefaultContext, e, reqData, http.StatusUnauthorized)
 		})
 	})
 
