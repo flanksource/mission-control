@@ -2,17 +2,20 @@ package adapter
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/casbin/casbin/v2/model"
 	"github.com/casbin/casbin/v2/persist"
 	gormadapter "github.com/casbin/gorm-adapter/v3"
 	"github.com/flanksource/commons/collections"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	pkgPolicy "github.com/flanksource/duty/rbac/policy"
+	gocache "github.com/patrickmn/go-cache"
 	"github.com/samber/lo"
-	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -21,15 +24,20 @@ import (
 type PermissionAdapter struct {
 	*gormadapter.Adapter // gorm adapter for `casbin_rules` table
 
-	db *gorm.DB
+	ctx   context.Context
+	cache *gocache.Cache
 }
 
 var _ persist.BatchAdapter = &PermissionAdapter{}
 
-func NewPermissionAdapter(db *gorm.DB, main *gormadapter.Adapter) persist.Adapter {
+const defaultScopeCacheTTL = 1 * time.Minute
+
+func NewPermissionAdapter(ctx context.Context, main *gormadapter.Adapter) persist.Adapter {
+	ttl := ctx.Properties().Duration("scope.cache.ttl", defaultScopeCacheTTL)
 	return &PermissionAdapter{
-		db:      db,
+		ctx:     ctx,
 		Adapter: main,
+		cache:   gocache.New(ttl, ttl*2),
 	}
 }
 
@@ -39,21 +47,59 @@ func (a *PermissionAdapter) LoadPolicy(model model.Model) error {
 	}
 
 	var permissions []models.Permission
-	if err := a.db.Where("deleted_at IS NULL").Find(&permissions).Error; err != nil {
+	if err := a.ctx.DB().Where("deleted_at IS NULL AND error IS NULL").Find(&permissions).Error; err != nil {
 		return fmt.Errorf("failed to load permissions: %w", err)
 	}
 
 	for _, permission := range permissions {
-		policies := PermissionToCasbinRule(permission)
-		for _, policy := range policies {
-			if err := persist.LoadPolicyArray(policy, model); err != nil {
-				return err
+		// Expand scope references in object_selector before converting to Casbin rules
+		expandedPerms, err := ExpandPermissionScopes(a.ctx, a.cache, permission)
+		if err != nil {
+			var validationErr *scopeExpansionValidationError
+			if errors.As(err, &validationErr) {
+				// Persist validation error to database
+				if updateErr := a.ctx.DB().Model(&permission).Update("error", err.Error()).Error; updateErr != nil {
+					return fmt.Errorf("failed to update permission error: %w", updateErr)
+				}
+
+				continue // Skip this permission
+			}
+
+			return err
+		}
+
+		if len(expandedPerms) == 0 {
+			policies := PermissionToCasbinRule(permission)
+			for _, policy := range policies {
+				if err := persist.LoadPolicyArray(policy, model); err != nil {
+					return err
+				}
+			}
+		} else {
+			// A permission that targets a scope will generate multiple expanded permissions
+			// If the targeted scope as N scopes, then this will generate N permissions
+			// everything about the permission remains the same apart from the object_selector
+
+			for _, expandedPerm := range expandedPerms {
+				marshalled, err := json.Marshal(expandedPerm)
+				if err != nil {
+					return err
+				}
+
+				newPerm := permission
+				newPerm.ObjectSelector = marshalled
+				policies := PermissionToCasbinRule(newPerm)
+				for _, policy := range policies {
+					if err := persist.LoadPolicyArray(policy, model); err != nil {
+						return err
+					}
+				}
 			}
 		}
 	}
 
 	var permissionGroups []models.PermissionGroup
-	if err := a.db.Where("deleted_at IS NULL").Find(&permissionGroups).Error; err != nil {
+	if err := a.ctx.DB().Where("deleted_at IS NULL").Find(&permissionGroups).Error; err != nil {
 		return fmt.Errorf("failed to load permissions: %w", err)
 	}
 
@@ -97,7 +143,7 @@ func PermissionToCasbinRule(permission models.Permission) [][]string {
 
 // createPolicy generates a Casbin policy rule from a permission.
 func createPolicy(permission models.Permission, action string) []string {
-	return []string{
+	policy := []string{
 		"p",
 		permission.Principal(),
 		permission.GetObject(),
@@ -106,6 +152,7 @@ func createPolicy(permission models.Permission, action string) []string {
 		permission.Condition(),
 		permission.ID.String(),
 	}
+	return policy
 }
 
 // rbacToABACObjectSelector returns object selectors (v1.PermissionObject) in JSON
@@ -165,7 +212,7 @@ func (a *PermissionAdapter) findNamespacedResources(tableName string, selectors 
 	}
 
 	var ids []string
-	if err := a.db.Select("id").Table(tableName).Clauses(clause.Or(clauses...)).Find(&ids).Error; err != nil {
+	if err := a.ctx.DB().Select("id").Table(tableName).Clauses(clause.Or(clauses...)).Find(&ids).Error; err != nil {
 		return nil, err
 	}
 
@@ -208,7 +255,7 @@ func (a *PermissionAdapter) permissionGroupToCasbinRule(permission models.Permis
 			allSubjects = append(allSubjects, "everyone")
 		} else {
 			var personIDs []string
-			query := a.db.Select("id").Model(&models.Person{}).
+			query := a.ctx.DB().Select("id").Model(&models.Person{}).
 				Where("deleted_at IS NULL").
 				Where("type IS DISTINCT FROM 'agent'").
 				Where("email IS NOT NULL"). // Excludes system user
@@ -223,7 +270,7 @@ func (a *PermissionAdapter) permissionGroupToCasbinRule(permission models.Permis
 
 	if len(subject.Teams) > 0 {
 		var teamIDs []string
-		if err := a.db.Select("id").Model(&models.Team{}).Where("name = ?", subject.Teams).Find(&teamIDs).Error; err != nil {
+		if err := a.ctx.DB().Select("id").Model(&models.Team{}).Where("name = ?", subject.Teams).Find(&teamIDs).Error; err != nil {
 			return nil, err
 		}
 

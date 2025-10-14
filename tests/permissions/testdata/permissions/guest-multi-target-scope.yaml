@@ -1,0 +1,16 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: guest-multi-target-scope
+  namespace: default
+  uid: d5e6f7a8-b9c0-4d1e-2f3a-4b5c6d7e8f9a
+spec:
+  description: Grant read access to multi-target scope for new guest user
+  subject:
+    person: guest-multi@test.com
+  actions:
+    - read
+  object:
+    scopes:
+      - namespace: default
+        name: multi-target-scope

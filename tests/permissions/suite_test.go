@@ -1,4 +1,4 @@
-package rbac
+package permissions_test
 
 import (
 	"testing"
@@ -9,9 +9,9 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-func TestRBAC(t *testing.T) {
+func TestPermissions(t *testing.T) {
 	RegisterFailHandler(ginkgo.Fail)
-	ginkgo.RunSpecs(t, "RBAC")
+	ginkgo.RunSpecs(t, "Permissions")
 }
 
 var (
