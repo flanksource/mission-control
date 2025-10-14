@@ -99,17 +99,17 @@ func HandleGetPlaybookParams(c echo.Context) error {
 
 	var req RunParams
 	if err := c.Bind(&req); err != nil {
-		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{Err: err.Error(), Message: "invalid request"})
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid request: %v", err))
 	}
 	if err := req.valid(); err != nil {
-		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{Err: err.Error(), Message: "invalid request"})
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid request: %v", err))
 	}
 
 	playbook, err := query.FindPlaybook(ctx, req.ID.String())
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Err: err.Error(), Message: "failed to get playbook"})
+		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
 	} else if playbook == nil {
-		return c.JSON(http.StatusNotFound, dutyAPI.HTTPError{Err: "not found", Message: fmt.Sprintf("playbook(id=%s) not found", req.ID)})
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "playbook(id=%s) not found", req.ID))
 	}
 
 	ctx = ctx.WithNamespace(playbook.Namespace)
@@ -132,37 +132,37 @@ func HandleGetPlaybookParams(c echo.Context) error {
 
 	env, err := runner.CreateTemplateEnv(ctx, playbook, dummyRun, nil)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Err: err.Error(), Message: "unable to prepare template env"})
+		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
 	}
 
 	if !dutyRBAC.HasPermission(ctx, ctx.Subject(), env.ABACAttributes(), policy.ActionRead) {
-		return ctx.Oops().
+		return dutyAPI.WriteError(c, ctx.Oops().
 			Code(dutyAPI.EFORBIDDEN).
 			With("permission", policy.ActionRead, "objects", env.ABACAttributes()).
-			Wrap(errors.New("access denied: read access to resource not allowed"))
+			Wrap(errors.New("access denied: read access to resource not allowed")))
 	}
 
 	if attr, err := dummyRun.GetABACAttributes(ctx.DB()); err != nil {
-		return ctx.Oops().Wrap(err)
+		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
 	} else if !dutyRBAC.HasPermission(ctx, ctx.Subject(), attr, policy.ActionPlaybookRun) {
-		return ctx.Oops().
+		return dutyAPI.WriteError(c, ctx.Oops().
 			Code(dutyAPI.EFORBIDDEN).
 			With("permission", policy.ActionPlaybookRun, "objects", attr).
-			Wrap(fmt.Errorf("access denied to subject(%s): cannot run playbook on this resource", ctx.Subject()))
+			Wrap(fmt.Errorf("access denied to subject(%s): cannot run playbook on this resource", ctx.Subject())))
 	}
 
 	var spec v1.PlaybookSpec
 	if err := json.Unmarshal(playbook.Spec, &spec); err != nil {
-		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Err: err.Error(), Message: "failed to unmarshal playbook spec"})
+		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
 	}
 
 	if err := runner.CheckPlaybookFilter(ctx, spec, env); err != nil {
-		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Err: "Playbook validation failed", Message: err.Error()})
+		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
 	}
 
 	templater := ctx.NewStructTemplater(env.AsMap(ctx), "template", nil)
 	if err := templater.Walk(&spec.Parameters); err != nil {
-		return ctx.Oops().Wrapf(err, "failed to walk template")
+		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "failed to walk template"))
 	}
 
 	return c.JSON(http.StatusOK, GetParamsResponse{
