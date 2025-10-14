@@ -46,12 +46,12 @@ func HandleWebhook(c echo.Context) error {
 	if err != nil {
 		return dutyAPI.WriteError(c, err)
 	} else if playbook == nil {
-		return c.JSON(http.StatusNotFound, dutyAPI.HTTPError{Err: "not found", Message: fmt.Sprintf("playbook(webhook_path=%s) not found", path)})
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "playbook(webhook_path=%s) not found", path))
 	}
 
 	var spec v1.PlaybookSpec
 	if err := json.Unmarshal(playbook.Spec, &spec); err != nil {
-		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Err: err.Error(), Message: "playbook has an invalid spec"})
+		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "playbook has an invalid spec"))
 	}
 
 	ctx = ctx.WithNamespace(playbook.Namespace)
