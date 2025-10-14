@@ -134,12 +134,18 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Content).NotTo(BeEmpty())
 
-			ids := lo.Map(dummy.AllDummyConfigs, func(c models.ConfigItem, _ int) string {
-				if strings.HasPrefix(lo.FromPtr(c.Type), "Kubernetes::") {
-					return c.ID.String()
+			var ids []string
+			for _, config := range dummy.AllDummyConfigs {
+				if config.ID != uuid.Nil {
+					// There are dummy configs from different agents that search_catalog will not return
+					continue
 				}
-				return ""
-			})
+
+				if strings.HasPrefix(lo.FromPtr(config.Type), "Kubernetes::") {
+					ids = append(ids, config.ID.String())
+				}
+			}
+
 			checkResultInMCPResponse(result.Content, ids)
 		})
 
