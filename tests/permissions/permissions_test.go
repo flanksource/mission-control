@@ -33,12 +33,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 		homelabManager       *models.Person
 		adminUser            *models.Person
 
-		directPlaybookPermission  *models.Permission
-		directCanaryPermission    *models.Permission
-		directComponentPermission *models.Permission
-		directConfigPermission    *models.Permission
-
-		homelabConfigsScope *models.Scope
+		directPermissions []*models.Permission
 	)
 
 	BeforeAll(func() {
@@ -54,70 +49,11 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 
 		// Load fixtures
 		loadScopes()
-
-		// Create agent-based scope for homelab configs (before loadPermissions so the permission can reference it)
-		homelabConfigsScope = &models.Scope{
-			ID:          uuid.New(),
-			Name:        "homelab-configs",
-			Namespace:   "default",
-			Description: "Scope for configs from homelab agent",
-			Source:      models.SourceUI,
-			Targets:     types.JSON(`[{"config": {"agent": "homelab"}}]`),
-		}
-		err = DefaultContext.DB().Create(homelabConfigsScope).Error
-		Expect(err).ToNot(HaveOccurred())
-
 		loadPermissions()
 
-		// Create direct ID-based permissions for guest user with direct permissions
-		// These test permissions that use specific resource IDs instead of object_selector
-		directPlaybookPermission = &models.Permission{
-			ID:          uuid.New(),
-			Name:        "direct-playbook-permission",
-			Namespace:   "default",
-			Action:      policy.ActionRead,
-			Subject:     guestUserDirectPerms.ID.String(),
-			SubjectType: models.PermissionSubjectTypePerson,
-			PlaybookID:  &dummy.EchoConfig.ID,
-		}
-		err = DefaultContext.DB().Create(directPlaybookPermission).Error
-		Expect(err).ToNot(HaveOccurred())
-
-		directCanaryPermission = &models.Permission{
-			ID:          uuid.New(),
-			Name:        "direct-canary-permission",
-			Namespace:   "default",
-			Action:      policy.ActionRead,
-			Subject:     guestUserDirectPerms.ID.String(),
-			SubjectType: models.PermissionSubjectTypePerson,
-			CanaryID:    &dummy.LogisticsAPICanary.ID,
-		}
-		err = DefaultContext.DB().Create(directCanaryPermission).Error
-		Expect(err).ToNot(HaveOccurred())
-
-		directComponentPermission = &models.Permission{
-			ID:          uuid.New(),
-			Name:        "direct-component-permission",
-			Namespace:   "default",
-			Action:      policy.ActionRead,
-			Subject:     guestUserDirectPerms.ID.String(),
-			SubjectType: models.PermissionSubjectTypePerson,
-			ComponentID: &dummy.Logistics.ID,
-		}
-		err = DefaultContext.DB().Create(directComponentPermission).Error
-		Expect(err).ToNot(HaveOccurred())
-
-		directConfigPermission = &models.Permission{
-			ID:          uuid.New(),
-			Name:        "direct-config-permission",
-			Namespace:   "default",
-			Action:      policy.ActionRead,
-			Subject:     guestUser.ID.String(),
-			SubjectType: models.PermissionSubjectTypePerson,
-			ConfigID:    &dummy.NginxIngressPod.ID,
-		}
-		err = DefaultContext.DB().Create(directConfigPermission).Error
-		Expect(err).ToNot(HaveOccurred())
+		// These are permissions that cannot be created via the CRD as they refer to the resource directly via the ID.
+		// That's why they are created here in the test setup.
+		directPermissions = createGuestUserPermissions(guestUserDirectPerms.ID.String(), guestUser.ID.String())
 
 		var permissions []models.Permission
 		err = DefaultContext.DB().Where("deleted_at IS NULL").Find(&permissions).Error
@@ -129,18 +65,11 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 
 	AfterAll(func() {
 		// Clean up direct permissions
-		permissions := []*models.Permission{directPlaybookPermission, directCanaryPermission, directComponentPermission, directConfigPermission}
-		for _, perm := range permissions {
+		for _, perm := range directPermissions {
 			if perm != nil {
 				err := DefaultContext.DB().Delete(perm).Error
 				Expect(err).ToNot(HaveOccurred())
 			}
-		}
-
-		// Clean up scopes
-		if homelabConfigsScope != nil {
-			err := DefaultContext.DB().Delete(homelabConfigsScope).Error
-			Expect(err).ToNot(HaveOccurred())
 		}
 
 		// Clean up users
@@ -218,7 +147,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			expectedPayload := &rls.Payload{
 				Disable: false,
 				Config: []rls.Scope{
-					{Agents: []string{"homelab"}},
+					{Agents: []string{dummy.HomelabAgent.ID.String()}},
 				},
 				Playbook:  nil,
 				Component: nil,
@@ -601,4 +530,60 @@ func loadPermissions() {
 		err = db.PersistPermissionFromCRD(DefaultContext, &permission)
 		Expect(err).ToNot(HaveOccurred())
 	}
+}
+
+func createGuestUserPermissions(directPermissionuser string, guestUser string) []*models.Permission {
+	// TODO: Make this just rely on directPermissionuser.
+
+	// Create direct ID-based permissions for guest user with direct permissions
+	// These test permissions that use specific resource IDs instead of object_selector
+	directPlaybookPermission := &models.Permission{
+		ID:          uuid.New(),
+		Name:        "direct-playbook-permission",
+		Namespace:   "default",
+		Action:      policy.ActionRead,
+		Subject:     directPermissionuser,
+		SubjectType: models.PermissionSubjectTypePerson,
+		PlaybookID:  &dummy.EchoConfig.ID,
+	}
+	err := DefaultContext.DB().Create(directPlaybookPermission).Error
+	Expect(err).ToNot(HaveOccurred())
+
+	directCanaryPermission := &models.Permission{
+		ID:          uuid.New(),
+		Name:        "direct-canary-permission",
+		Namespace:   "default",
+		Action:      policy.ActionRead,
+		Subject:     directPermissionuser,
+		SubjectType: models.PermissionSubjectTypePerson,
+		CanaryID:    &dummy.LogisticsAPICanary.ID,
+	}
+	err = DefaultContext.DB().Create(directCanaryPermission).Error
+	Expect(err).ToNot(HaveOccurred())
+
+	directComponentPermission := &models.Permission{
+		ID:          uuid.New(),
+		Name:        "direct-component-permission",
+		Namespace:   "default",
+		Action:      policy.ActionRead,
+		Subject:     directPermissionuser,
+		SubjectType: models.PermissionSubjectTypePerson,
+		ComponentID: &dummy.Logistics.ID,
+	}
+	err = DefaultContext.DB().Create(directComponentPermission).Error
+	Expect(err).ToNot(HaveOccurred())
+
+	directConfigPermission := &models.Permission{
+		ID:          uuid.New(),
+		Name:        "direct-config-permission",
+		Namespace:   "default",
+		Action:      policy.ActionRead,
+		Subject:     guestUser,
+		SubjectType: models.PermissionSubjectTypePerson,
+		ConfigID:    &dummy.NginxIngressPod.ID,
+	}
+	err = DefaultContext.DB().Create(directConfigPermission).Error
+	Expect(err).ToNot(HaveOccurred())
+
+	return []*models.Permission{directPlaybookPermission, directCanaryPermission, directComponentPermission, directConfigPermission}
 }
