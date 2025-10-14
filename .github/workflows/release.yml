@@ -16,7 +16,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   binary:
-    runs-on: ubuntu-latest
+    runs-on: buildjet-8vcpu-ubuntu-2204
     needs: semantic-release
     steps:
       - name: Clear up disk space
@@ -26,22 +26,25 @@ jobs:
           rm -rf /usr/local/share/boost
           rm -rf $AGENT_TOOLSDIRECTORY
           rm -rf /opt/hostedtoolcache
+          # Additional cleanup for more space
+          rm -rf /usr/local/lib/android
+          rm -rf /usr/local/.ghcup
+          rm -rf /opt/microsoft
+          df -h
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
       - name: Install Go
         uses: buildjet/setup-go@v5
         with:
           go-version: v1.23.x
 
-      - uses: buildjet/cache@v4
+      - name: Cache Go modules (modules only)
+        uses: buildjet/cache@v4
         with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-            .bin
-          key: cache-${{ hashFiles('**/go.sum') }}-${{ hashFiles('.bin/*') }}
+          path: ~/go/pkg/mod
+          key: go-mod-${{ hashFiles('**/go.sum') }}
           restore-keys: |
-            cache-
-      - run: make release
+            go-mod-
+      - run: make release-space-efficient
         env:
           VERSION: v${{ needs.semantic-release.outputs.release-version }}
       - name: Upload binaries to release

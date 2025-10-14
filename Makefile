@@ -114,6 +114,30 @@ release: binaries
 	mkdir -p .release
 	cp .bin/incident-commander* .release/
 
+# Space-efficient release build - build and move one at a time to avoid disk space issues
+.PHONY: release-space-efficient
+release-space-efficient:
+	mkdir -p .release
+	# Build Linux binaries and compress them immediately
+	GOOS=linux GOARCH=amd64 go build -o ./.bin/$(NAME)_linux_amd64 -ldflags "-X \"main.version=$(VERSION_TAG)\"" main.go
+	GOOS=linux GOARCH=arm64 go build -o ./.bin/$(NAME)_linux_arm64 -ldflags "-X \"main.version=$(VERSION_TAG)\"" main.go
+	# Get UPX and compress Linux binaries immediately to save space
+	$(MAKE) .bin/upx
+	upx -5 ./.bin/$(NAME)_linux_amd64 ./.bin/$(NAME)_linux_arm64
+	cp ./.bin/$(NAME)_linux_amd64 ./.bin/$(NAME)_linux_arm64 .release/
+	rm ./.bin/$(NAME)_linux_amd64 ./.bin/$(NAME)_linux_arm64
+	# Build and move Darwin binaries one at a time
+	GOOS=darwin GOARCH=amd64 go build -o ./.bin/$(NAME)_darwin_amd64 -ldflags "-X \"main.version=$(VERSION_TAG)\"" main.go
+	cp ./.bin/$(NAME)_darwin_amd64 .release/
+	rm ./.bin/$(NAME)_darwin_amd64
+	GOOS=darwin GOARCH=arm64 go build -o ./.bin/$(NAME)_darwin_arm64 -ldflags "-X \"main.version=$(VERSION_TAG)\"" main.go
+	cp ./.bin/$(NAME)_darwin_arm64 .release/
+	rm ./.bin/$(NAME)_darwin_arm64
+	# Build and move Windows binary
+	GOOS=windows GOARCH=amd64 go build -o ./.bin/$(NAME).exe -ldflags "-X \"main.version=$(VERSION_TAG)\"" main.go
+	cp ./.bin/$(NAME).exe .release/
+	rm ./.bin/$(NAME).exe
+
 # Generate OpenAPI schema
 .PHONY: gen-schemas
 gen-schemas:

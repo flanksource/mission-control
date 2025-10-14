@@ -30,3 +30,5 @@ test-reports
 Claude.md
 .claude/
 __debug_bin*
+.release/
+upx.tar.xz
