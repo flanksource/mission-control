@@ -7,15 +7,15 @@ import (
 	"path/filepath"
 	"strings"
 
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
+	"github.com/onsi/ginkgo/v2"
+	"github.com/onsi/gomega"
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"gopkg.in/yaml.v3"
 )
 
 func validateFixtureDirWithSchema(schemaPath, dir string) {
 	schema, err := jsonschema.NewCompiler().Compile(schemaPath)
-	Expect(err).To(BeNil())
+	gomega.Expect(err).To(gomega.BeNil())
 
 	err = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if strings.HasSuffix(path, ".yaml") || strings.HasSuffix(path, ".yml") {
@@ -36,26 +36,27 @@ func validateFixtureDirWithSchema(schemaPath, dir string) {
 		}
 		return nil
 	})
-	Expect(err).To(BeNil())
+
+	gomega.Expect(err).To(gomega.BeNil())
 }
 
-var _ = Describe("Fixture schema validation", func() {
-	It("Notifications", func() {
+var _ = ginkgo.Describe("Fixture schema validation", func() {
+	ginkgo.It("Notifications", func() {
 		schemaPath := "../config/schemas/notification.schema.json"
 		validateFixtureDirWithSchema(schemaPath, "../fixtures/notifications/")
 	})
 
-	It("NotificationSilence", func() {
+	ginkgo.It("NotificationSilence", func() {
 		schemaPath := "../config/schemas/notificationsilence.schema.json"
 		validateFixtureDirWithSchema(schemaPath, "../fixtures/silences/")
 	})
 
-	It("Playbooks", func() {
+	ginkgo.It("Playbooks", func() {
 		schemaPath := "../config/schemas/playbook.schema.json"
 		validateFixtureDirWithSchema(schemaPath, "../fixtures/playbooks/")
 	})
 
-	It("Rules", func() {
+	ginkgo.It("Rules", func() {
 		schemaPath := "../config/schemas/incident-rules.schema.json"
 		validateFixtureDirWithSchema(schemaPath, "../fixtures/rules")
 	})
