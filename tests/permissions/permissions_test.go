@@ -31,6 +31,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 		guestUserDirectPerms *models.Person
 		guestUserMultiTarget *models.Person
 		homelabManager       *models.Person
+		wildcardManager      *models.Person
 		adminUser            *models.Person
 
 		directPermissions []*models.Permission
@@ -45,6 +46,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 		guestUserDirectPerms = setup.CreateUserWithRole(DefaultContext, "Guest User Direct Permissions", "guest-direct@test.com", policy.RoleGuest)
 		guestUserMultiTarget = setup.CreateUserWithRole(DefaultContext, "Guest User Multi Target", "guest-multi@test.com", policy.RoleGuest)
 		homelabManager = setup.CreateUserWithRole(DefaultContext, "Homelab Manager", "manager@homelab.com", policy.RoleGuest)
+		wildcardManager = setup.CreateUserWithRole(DefaultContext, "Wildcard Manager", "wildcard@manager.com", policy.RoleGuest)
 		adminUser = setup.CreateUserWithRole(DefaultContext, "Admin User", "admin@test.com", policy.RoleAdmin)
 
 		// Load fixtures
@@ -73,7 +75,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 		}
 
 		// Clean up users
-		users := []*models.Person{guestUser, guestUserNoPerms, guestUserDirectPerms, guestUserMultiTarget, homelabManager, adminUser}
+		users := []*models.Person{guestUser, guestUserNoPerms, guestUserDirectPerms, guestUserMultiTarget, homelabManager, wildcardManager, adminUser}
 		for _, user := range users {
 			if user != nil {
 				err := DefaultContext.DB().Delete(user).Error
@@ -155,6 +157,27 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			}
 
 			Expect(payload).To(Equal(expectedPayload), "RLS payload should match exactly - user should only see homelab agent configs")
+		})
+
+		It("should return RLS payload for wildcard manager with name prefix scope", func() {
+			ctx := DefaultContext.WithUser(wildcardManager)
+
+			payload, err := auth.GetRLSPayload(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(payload).ToNot(BeNil())
+
+			// Verify exact match of entire payload - user should have access to ONLY nginx-* configs
+			expectedPayload := &rls.Payload{
+				Disable: false,
+				Config: []rls.Scope{
+					{Names: []string{"nginx-*"}},
+				},
+				Playbook:  nil,
+				Component: nil,
+				Canary:    nil,
+			}
+
+			Expect(payload).To(Equal(expectedPayload), "RLS payload should match exactly - user should only see nginx-* configs")
 		})
 
 		It("should disable RLS for non-guest users", func() {
@@ -490,6 +513,34 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 				models.ABACAttribute{Playbook: models.Playbook{ID: uuid.New()}},
 				policy.ActionPlaybookRun,
 				"admin user should have playbook:run access"),
+		)
+
+		DescribeTable("wildcard manager with name prefix scope",
+			func(attr models.ABACAttribute, action string, expectedAllowed bool, description string) {
+				allowed := rbac.HasPermission(DefaultContext, wildcardManager.ID.String(), &attr, action)
+				Expect(allowed).To(Equal(expectedAllowed), description)
+			},
+			// Config read access - allowed only for configs with name prefix nginx-
+			Entry("should allow read access to nginx-ingress config via wildcard scope",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Name: lo.ToPtr("nginx-ingress")}},
+				policy.ActionRead, true,
+				"wildcard manager should have read access to nginx-ingress config via wildcard scope"),
+			Entry("should allow read access to nginx-ingress-controller config via wildcard scope",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Name: lo.ToPtr("nginx-ingress-controller-7d9b8f6c4-xplmn")}},
+				policy.ActionRead, true,
+				"wildcard manager should have read access to nginx-ingress-controller config via wildcard scope"),
+			Entry("should deny read access to redis config (doesn't match wildcard)",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Name: lo.ToPtr("redis")}},
+				policy.ActionRead, false,
+				"wildcard manager should NOT have read access to redis config"),
+			Entry("should deny read access to config without nginx prefix",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Name: lo.ToPtr("other-config")}},
+				policy.ActionRead, false,
+				"wildcard manager should NOT have read access to configs without nginx- prefix"),
+			Entry("should deny read access to configs in monitoring namespace",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Tags: map[string]string{"namespace": "monitoring"}}},
+				policy.ActionRead, false,
+				"wildcard manager should NOT have read access to configs by namespace tag"),
 		)
 	})
 })
