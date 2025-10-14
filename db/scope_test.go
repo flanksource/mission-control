@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	"github.com/onsi/ginkgo/v2"
@@ -33,7 +34,7 @@ var _ = ginkgo.Describe("Scope Persistence", func() {
 						{
 							Config: &v1.ScopeResourceSelector{
 								Name:        "prod-*",
-								Agent:       "agent1",
+								Agent:       "homelab",
 								TagSelector: "env=prod",
 							},
 						},
@@ -59,7 +60,7 @@ var _ = ginkgo.Describe("Scope Persistence", func() {
 			Expect(targets).To(HaveLen(1))
 			Expect(targets[0].Config).ToNot(BeNil())
 			Expect(targets[0].Config.Name).To(Equal("prod-*"))
-			Expect(targets[0].Config.Agent).To(Equal("agent1"))
+			Expect(targets[0].Config.Agent).To(Equal(dummy.HomelabAgent.ID.String()))
 			Expect(targets[0].Config.TagSelector).To(Equal("env=prod"))
 		})
 

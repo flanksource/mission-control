@@ -1,0 +1,11 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: homelab-configs
+  namespace: default
+  uid: 3c4e5f6a-7b8c-4d9e-0f1a-2b3c4d5e6f7a
+spec:
+  description: Scope for configs from homelab agent
+  targets:
+    - config:
+        agent: homelab

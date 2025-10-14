@@ -1,0 +1,16 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: homelab-default-manager-read
+  namespace: default
+  uid: 8b9c0d1e-2f3a-4b5c-6d7e-8f9a0b1c2d3e
+spec:
+  description: Grant read access to homelab-default-configs scope (agent + tag selector)
+  subject:
+    person: homelab-default@manager.com
+  actions:
+    - read
+  object:
+    scopes:
+      - namespace: default
+        name: homelab-default-configs

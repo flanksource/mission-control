@@ -1,6 +1,7 @@
 package permissions_test
 
 import (
+	"database/sql"
 	"os"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/patrickmn/go-cache"
 	"github.com/samber/lo"
+	"gorm.io/gorm"
 	"sigs.k8s.io/yaml"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -26,17 +28,18 @@ import (
 
 var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 	var (
-		guestUser            *models.Person
-		guestUserNoPerms     *models.Person
-		guestUserDirectPerms *models.Person
-		guestUserMultiTarget *models.Person
-		adminUser            *models.Person
-
-		directPlaybookPermission  *models.Permission
-		directCanaryPermission    *models.Permission
-		directComponentPermission *models.Permission
-		directConfigPermission    *models.Permission
+		guestUser             *models.Person
+		guestUserNoPerms      *models.Person
+		guestUserDirectPerms  *models.Person
+		guestUserMultiTarget  *models.Person
+		homelabManager        *models.Person
+		wildcardManager       *models.Person
+		adminUser             *models.Person
+		multiScopeUser        *models.Person
+		homelabDefaultManager *models.Person
 	)
+
+	var directPermissions []*models.Permission
 
 	BeforeAll(func() {
 		err := rbac.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter)
@@ -46,61 +49,19 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 		guestUserNoPerms = setup.CreateUserWithRole(DefaultContext, "Guest User No Permissions", "guest-noperms@test.com", policy.RoleGuest)
 		guestUserDirectPerms = setup.CreateUserWithRole(DefaultContext, "Guest User Direct Permissions", "guest-direct@test.com", policy.RoleGuest)
 		guestUserMultiTarget = setup.CreateUserWithRole(DefaultContext, "Guest User Multi Target", "guest-multi@test.com", policy.RoleGuest)
+		homelabManager = setup.CreateUserWithRole(DefaultContext, "Homelab Manager", "manager@homelab.com", policy.RoleGuest)
+		homelabDefaultManager = setup.CreateUserWithRole(DefaultContext, "Homelab Default Manager", "homelab-default@manager.com", policy.RoleGuest)
+		multiScopeUser = setup.CreateUserWithRole(DefaultContext, "Multi Scope User", "multi-scope@test.com", policy.RoleGuest)
+		wildcardManager = setup.CreateUserWithRole(DefaultContext, "Wildcard Manager", "wildcard@manager.com", policy.RoleGuest)
 		adminUser = setup.CreateUserWithRole(DefaultContext, "Admin User", "admin@test.com", policy.RoleAdmin)
 
 		// Load fixtures
 		loadScopes()
 		loadPermissions()
 
-		// Create direct ID-based permissions for guest user with direct permissions
-		// These test permissions that use specific resource IDs instead of object_selector
-		directPlaybookPermission = &models.Permission{
-			ID:          uuid.New(),
-			Name:        "direct-playbook-permission",
-			Namespace:   "default",
-			Action:      policy.ActionRead,
-			Subject:     guestUserDirectPerms.ID.String(),
-			SubjectType: models.PermissionSubjectTypePerson,
-			PlaybookID:  &dummy.EchoConfig.ID,
-		}
-		err = DefaultContext.DB().Create(directPlaybookPermission).Error
-		Expect(err).ToNot(HaveOccurred())
-
-		directCanaryPermission = &models.Permission{
-			ID:          uuid.New(),
-			Name:        "direct-canary-permission",
-			Namespace:   "default",
-			Action:      policy.ActionRead,
-			Subject:     guestUserDirectPerms.ID.String(),
-			SubjectType: models.PermissionSubjectTypePerson,
-			CanaryID:    &dummy.LogisticsAPICanary.ID,
-		}
-		err = DefaultContext.DB().Create(directCanaryPermission).Error
-		Expect(err).ToNot(HaveOccurred())
-
-		directComponentPermission = &models.Permission{
-			ID:          uuid.New(),
-			Name:        "direct-component-permission",
-			Namespace:   "default",
-			Action:      policy.ActionRead,
-			Subject:     guestUserDirectPerms.ID.String(),
-			SubjectType: models.PermissionSubjectTypePerson,
-			ComponentID: &dummy.Logistics.ID,
-		}
-		err = DefaultContext.DB().Create(directComponentPermission).Error
-		Expect(err).ToNot(HaveOccurred())
-
-		directConfigPermission = &models.Permission{
-			ID:          uuid.New(),
-			Name:        "direct-config-permission",
-			Namespace:   "default",
-			Action:      policy.ActionRead,
-			Subject:     guestUser.ID.String(),
-			SubjectType: models.PermissionSubjectTypePerson,
-			ConfigID:    &dummy.NginxIngressPod.ID,
-		}
-		err = DefaultContext.DB().Create(directConfigPermission).Error
-		Expect(err).ToNot(HaveOccurred())
+		// These are permissions that cannot be created via the CRD as they refer to the resource directly via the ID.
+		// That's why they are created here in the test setup.
+		directPermissions = createDirectPermissions(guestUserDirectPerms.ID.String())
 
 		var permissions []models.Permission
 		err = DefaultContext.DB().Where("deleted_at IS NULL").Find(&permissions).Error
@@ -112,8 +73,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 
 	AfterAll(func() {
 		// Clean up direct permissions
-		permissions := []*models.Permission{directPlaybookPermission, directCanaryPermission, directComponentPermission, directConfigPermission}
-		for _, perm := range permissions {
+		for _, perm := range directPermissions {
 			if perm != nil {
 				err := DefaultContext.DB().Delete(perm).Error
 				Expect(err).ToNot(HaveOccurred())
@@ -121,7 +81,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 		}
 
 		// Clean up users
-		users := []*models.Person{guestUser, guestUserNoPerms, guestUserDirectPerms, guestUserMultiTarget, adminUser}
+		users := []*models.Person{guestUser, guestUserNoPerms, guestUserDirectPerms, guestUserMultiTarget, homelabManager, homelabDefaultManager, multiScopeUser, wildcardManager, adminUser}
 		for _, user := range users {
 			if user != nil {
 				err := DefaultContext.DB().Delete(user).Error
@@ -141,12 +101,11 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			Expect(payload).ToNot(BeNil())
 
 			Expect(payload.Disable).To(BeFalse(), "RLS should be enabled for guest users with scopes")
-			Expect(payload.Config).To(HaveLen(4), "should have four config scopes including ID-based permission")
+			Expect(payload.Config).To(HaveLen(3), "should have three config scopes")
 			Expect(payload.Config).To(ContainElements([]rls.Scope{
 				{Tags: map[string]string{"namespace": "missioncontrol"}},
 				{Tags: map[string]string{"namespace": "monitoring"}},
 				{Tags: map[string]string{"namespace": "media"}},
-				{ID: dummy.NginxIngressPod.ID.String()},
 			}))
 
 			// Playbook scopes should include echo-config and restart-pod
@@ -182,6 +141,96 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			}
 
 			Expect(payload).To(Equal(expectedPayload), "RLS payload should match exactly - user should only see database configs and echo-config playbook")
+		})
+
+		It("should return RLS payload for guest user with agent-based scope", func() {
+			ctx := DefaultContext.WithUser(homelabManager)
+
+			payload, err := auth.GetRLSPayload(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(payload).ToNot(BeNil())
+
+			// Verify exact match of entire payload - user should have access to ONLY homelab agent configs
+			expectedPayload := &rls.Payload{
+				Disable: false,
+				Config: []rls.Scope{
+					{Agents: []string{dummy.HomelabAgent.ID.String()}},
+				},
+				Playbook:  nil,
+				Component: nil,
+				Canary:    nil,
+			}
+
+			Expect(payload).To(Equal(expectedPayload), "RLS payload should match exactly - user should only see homelab agent configs")
+		})
+
+		It("should return RLS payload for wildcard manager with full wildcard scope", func() {
+			ctx := DefaultContext.WithUser(wildcardManager)
+
+			payload, err := auth.GetRLSPayload(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(payload).ToNot(BeNil())
+
+			// Verify exact match of entire payload - user should have access to ALL configs via "*"
+			expectedPayload := &rls.Payload{
+				Disable: false,
+				Config: []rls.Scope{
+					{Names: []string{"*"}},
+				},
+				Playbook:  nil,
+				Component: nil,
+				Canary:    nil,
+			}
+
+			Expect(payload).To(Equal(expectedPayload), "RLS payload should match exactly - user should see all configs via wildcard '*'")
+		})
+
+		It("should return RLS payload for homelab default manager with combined agent+tag scope", func() {
+			ctx := DefaultContext.WithUser(homelabDefaultManager)
+
+			payload, err := auth.GetRLSPayload(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(payload).ToNot(BeNil())
+
+			// Verify exact match of entire payload - user should have access to homelab agent configs in default namespace
+			expectedPayload := &rls.Payload{
+				Disable: false,
+				Config: []rls.Scope{
+					{
+						Agents: []string{dummy.HomelabAgent.ID.String()},
+						Tags:   map[string]string{"namespace": "default"},
+					},
+				},
+				Playbook:  nil,
+				Component: nil,
+				Canary:    nil,
+			}
+
+			Expect(payload).To(Equal(expectedPayload), "RLS payload should match exactly - user should see homelab agent configs in default namespace")
+		})
+
+		It("should return RLS payload for multi-scope user with multiple scopes (OR behavior)", func() {
+			ctx := DefaultContext.WithUser(multiScopeUser)
+
+			payload, err := auth.GetRLSPayload(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(payload).ToNot(BeNil())
+
+			// Verify the payload contains all three scopes (not merged/AND'ed)
+			Expect(payload.Disable).To(BeFalse(), "RLS should be enabled for guest users")
+			Expect(payload.Config).To(HaveLen(3), "should have three separate config scopes")
+
+			// Verify all three scopes are present
+			Expect(payload.Config).To(ContainElements([]rls.Scope{
+				{Tags: map[string]string{"namespace": "missioncontrol"}},
+				{Tags: map[string]string{"namespace": "monitoring"}},
+				{Agents: []string{dummy.HomelabAgent.ID.String()}},
+			}))
+
+			// Other resource types should be empty
+			Expect(payload.Playbook).To(BeEmpty(), "playbook scope should be empty")
+			Expect(payload.Component).To(BeEmpty(), "component scope should be empty")
+			Expect(payload.Canary).To(BeEmpty(), "canary scope should be empty")
 		})
 
 		It("should disable RLS for non-guest users", func() {
@@ -272,6 +321,27 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 				{Playbooks: []types.ResourceSelector{{Name: "echo-config"}}},
 			}))
 		})
+
+		It("should expand combined agent+tag scope into permission object_selector", func() {
+			var permission models.Permission
+			err := DefaultContext.DB().
+				Where("subject = ? AND deleted_at IS NULL", homelabDefaultManager.ID.String()).
+				Where("object_selector IS NOT NULL").
+				First(&permission).Error
+			Expect(err).ToNot(HaveOccurred(), "should find the combined agent+tag scope permission")
+
+			// Expand the permission
+			expandedPerm, err := adapter.ExpandPermissionScopes(DefaultContext, cache.New(time.Minute, time.Minute), permission)
+			Expect(err).ToNot(HaveOccurred(), "scope expansion should succeed")
+
+			Expect(expandedPerm).To(HaveLen(1))
+			Expect(expandedPerm).To(Equal([]rbac.Selectors{
+				{Configs: []types.ResourceSelector{{
+					Agent:       dummy.HomelabAgent.ID.String(),
+					TagSelector: "namespace=default",
+				}}},
+			}))
+		})
 	})
 
 	Context("Database constraints", func() {
@@ -315,16 +385,6 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Tags: map[string]string{"namespace": "media"}}},
 				policy.ActionRead, true,
 				"guest user should have read access to media namespace configs via direct permission"),
-
-			// Config read access by ID - tests for potential AND'ing bug with scope-based permissions
-			Entry("should allow read access to specific config by ID",
-				models.ABACAttribute{Config: models.ConfigItem{ID: dummy.NginxIngressPod.ID, Tags: map[string]string{"namespace": "production"}}},
-				policy.ActionRead, true,
-				"guest user should have read access to specific config by ID"),
-			Entry("should still allow read access to monitoring configs after adding ID-based permission",
-				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Tags: map[string]string{"namespace": "monitoring"}}},
-				policy.ActionRead, true,
-				"guest user should still have read access to monitoring configs (verifies permissions aren't AND'ed)"),
 
 			// Config read access - denied (not in scopes or permissions)
 			Entry("should deny read access to kube-system namespace config",
@@ -463,6 +523,30 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 				"guest user with multi-target scope should NOT have playbook:run access (only read)"),
 		)
 
+		DescribeTable("guest user with agent-based scope",
+			func(attr models.ABACAttribute, action string, expectedAllowed bool, description string) {
+				allowed := rbac.HasPermission(DefaultContext, homelabManager.ID.String(), &attr, action)
+				Expect(allowed).To(Equal(expectedAllowed), description)
+			},
+			// Config read access - allowed only for homelab agent configs
+			Entry("should allow read access to config with homelab agent",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), AgentID: dummy.HomelabAgent.ID}},
+				policy.ActionRead, true,
+				"guest user with agent scope should have read access to homelab agent configs"),
+			Entry("should deny read access to config with GCP agent",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), AgentID: dummy.GCPAgent.ID}},
+				policy.ActionRead, false,
+				"guest user with agent scope should NOT have read access to GCP agent configs"),
+			Entry("should deny read access to local agent's config",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), AgentID: uuid.Nil}},
+				policy.ActionRead, false,
+				"guest user with agent scope should NOT have read access to local agent's config"),
+			Entry("should deny read access to config with no agent",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Tags: map[string]string{"namespace": "default"}}},
+				policy.ActionRead, false,
+				"guest user with agent scope should NOT have read access to configs without an agent"),
+		)
+
 		DescribeTable("admin user must have access to everything",
 			func(attr models.ABACAttribute, action string, description string) {
 				allowed := rbac.HasPermission(DefaultContext, adminUser.ID.String(), &attr, action)
@@ -494,6 +578,461 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 				policy.ActionPlaybookRun,
 				"admin user should have playbook:run access"),
 		)
+
+		DescribeTable("wildcard manager with full wildcard scope",
+			func(attr models.ABACAttribute, action string, expectedAllowed bool, description string) {
+				allowed := rbac.HasPermission(DefaultContext, wildcardManager.ID.String(), &attr, action)
+				Expect(allowed).To(Equal(expectedAllowed), description)
+			},
+			// Config read access - allowed for ALL configs via "*" wildcard
+			Entry("should allow read access to nginx-ingress config via wildcard scope",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Name: lo.ToPtr("nginx-ingress")}},
+				policy.ActionRead, true,
+				"wildcard manager should have read access to nginx-ingress config via wildcard scope"),
+			Entry("should allow read access to nginx-ingress-controller config via wildcard scope",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Name: lo.ToPtr("nginx-ingress-controller-7d9b8f6c4-xplmn")}},
+				policy.ActionRead, true,
+				"wildcard manager should have read access to nginx-ingress-controller config via wildcard scope"),
+			Entry("should allow read access to redis config via wildcard scope",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Name: lo.ToPtr("redis")}},
+				policy.ActionRead, true,
+				"wildcard manager should have read access to redis config via wildcard scope"),
+			Entry("should allow read access to any config via wildcard scope",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Name: lo.ToPtr("other-config")}},
+				policy.ActionRead, true,
+				"wildcard manager should have read access to any config via wildcard scope"),
+			Entry("should allow read access to configs in any namespace via wildcard scope",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Tags: map[string]string{"namespace": "monitoring"}}},
+				policy.ActionRead, true,
+				"wildcard manager should have read access to configs in any namespace via wildcard scope"),
+		)
+
+		DescribeTable("homelab default manager with combined agent+tag scope",
+			func(attr models.ABACAttribute, action string, expectedAllowed bool, description string) {
+				allowed := rbac.HasPermission(DefaultContext, homelabDefaultManager.ID.String(), &attr, action)
+				Expect(allowed).To(Equal(expectedAllowed), description)
+			},
+			// Config read access - allowed ONLY for homelab agent configs in default namespace (AND condition)
+			Entry("should allow read access to config with homelab agent AND default namespace",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), AgentID: dummy.HomelabAgent.ID, Tags: map[string]string{"namespace": "default"}}},
+				policy.ActionRead, true,
+				"homelab default manager should have read access to homelab agent configs in default namespace"),
+			Entry("should deny read access to config with homelab agent but production namespace",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), AgentID: dummy.HomelabAgent.ID, Tags: map[string]string{"namespace": "production"}}},
+				policy.ActionRead, false,
+				"homelab default manager should NOT have read access to homelab agent configs in production namespace"),
+			Entry("should deny read access to config with GCP agent but default namespace",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), AgentID: dummy.GCPAgent.ID, Tags: map[string]string{"namespace": "default"}}},
+				policy.ActionRead, false,
+				"homelab default manager should NOT have read access to GCP agent configs even in default namespace"),
+			Entry("should deny read access to config with no agent",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Tags: map[string]string{"namespace": "default"}}},
+				policy.ActionRead, false,
+				"homelab default manager should NOT have read access to configs without agent"),
+		)
+
+		DescribeTable("multi-scope user with multiple scopes (OR behavior)",
+			func(attr models.ABACAttribute, action string, expectedAllowed bool, description string) {
+				allowed := rbac.HasPermission(DefaultContext, multiScopeUser.ID.String(), &attr, action)
+				Expect(allowed).To(Equal(expectedAllowed), description)
+			},
+			// Config read access - allowed for ANY of the three scopes (OR condition)
+			Entry("should allow read access to missioncontrol namespace config",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Tags: map[string]string{"namespace": "missioncontrol"}}},
+				policy.ActionRead, true,
+				"multi-scope user should have read access to missioncontrol namespace configs"),
+			Entry("should allow read access to monitoring namespace config",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Tags: map[string]string{"namespace": "monitoring"}}},
+				policy.ActionRead, true,
+				"multi-scope user should have read access to monitoring namespace configs"),
+			Entry("should allow read access to homelab agent config (any namespace)",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), AgentID: dummy.HomelabAgent.ID}},
+				policy.ActionRead, true,
+				"multi-scope user should have read access to homelab agent configs"),
+			Entry("should allow read access to homelab agent config in production namespace",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), AgentID: dummy.HomelabAgent.ID, Tags: map[string]string{"namespace": "production"}}},
+				policy.ActionRead, true,
+				"multi-scope user should have read access to homelab agent configs in any namespace"),
+			Entry("should deny read access to database namespace config without homelab agent",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Tags: map[string]string{"namespace": "database"}}},
+				policy.ActionRead, false,
+				"multi-scope user should NOT have read access to database namespace configs"),
+			Entry("should deny read access to GCP agent config",
+				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), AgentID: dummy.GCPAgent.ID}},
+				policy.ActionRead, false,
+				"multi-scope user should NOT have read access to GCP agent configs"),
+		)
+	})
+
+	Context("Permission to RLS E2E", func() {
+		var (
+			tx *gorm.DB
+
+			// Expected counts calculated from dummy data
+			guestUserConfigCount              int64
+			guestUserPlaybookCount            int64
+			guestUserNoPermsConfigCount       int64
+			guestUserNoPermsPlaybookCount     int64
+			guestUserMultiTargetConfigCount   int64
+			guestUserMultiTargetPlaybookCount int64
+			homelabManagerConfigCount         int64
+			homelabDefaultManagerConfigCount  int64
+			multiScopeUserConfigCount         int64
+			totalConfigs                      int64
+			totalPlaybooks                    int64
+		)
+
+		BeforeAll(func() {
+			// Calculate expected counts from dummy data (without RLS)
+			// Guest user: namespace in [missioncontrol, monitoring, media]
+			DefaultContext.DB().
+				Where("tags->>'namespace' IN ?", []string{"missioncontrol", "monitoring", "media"}).
+				Model(&models.ConfigItem{}).
+				Count(&guestUserConfigCount)
+
+			// Guest user: playbooks [echo-config, restart-pod]
+			DefaultContext.DB().
+				Where("name IN ?", []string{"echo-config", "restart-pod"}).
+				Model(&models.Playbook{}).
+				Count(&guestUserPlaybookCount)
+
+			// Multi-target user: namespace=database
+			DefaultContext.DB().
+				Where("tags->>'namespace' = ?", "database").
+				Model(&models.ConfigItem{}).
+				Count(&guestUserMultiTargetConfigCount)
+
+			// Multi-target user: playbook=echo-config only
+			DefaultContext.DB().
+				Where("name = ?", "echo-config").
+				Model(&models.Playbook{}).
+				Count(&guestUserMultiTargetPlaybookCount)
+
+			// Homelab manager: agent_id=HomelabAgent.ID
+			DefaultContext.DB().
+				Where("agent_id = ?", dummy.HomelabAgent.ID).
+				Model(&models.ConfigItem{}).
+				Count(&homelabManagerConfigCount)
+
+			// Homelab default manager: agent_id=HomelabAgent.ID AND namespace=default (should be 3)
+			DefaultContext.DB().
+				Where("agent_id = ? AND tags->>'namespace' = ?", dummy.HomelabAgent.ID, "default").
+				Model(&models.ConfigItem{}).
+				Count(&homelabDefaultManagerConfigCount)
+
+			// Multi-scope user: namespace IN (missioncontrol, monitoring) OR agent_id=HomelabAgent.ID
+			var missionControlCount, monitoringCount int64
+			DefaultContext.DB().
+				Where("tags->>'namespace' = ?", "missioncontrol").
+				Model(&models.ConfigItem{}).
+				Count(&missionControlCount)
+			DefaultContext.DB().
+				Where("tags->>'namespace' = ?", "monitoring").
+				Model(&models.ConfigItem{}).
+				Count(&monitoringCount)
+			multiScopeUserConfigCount = missionControlCount + monitoringCount + homelabManagerConfigCount
+
+			// Wildcard manager: has wildcard "*" which matches all configs
+			// Expected count is same as totalConfigs
+
+			// Total counts for admin user verification
+			DefaultContext.DB().Model(&models.ConfigItem{}).Count(&totalConfigs)
+			DefaultContext.DB().Model(&models.Playbook{}).Count(&totalPlaybooks)
+
+			// No-perms user should see 0 rows
+			guestUserNoPermsConfigCount = 0
+			guestUserNoPermsPlaybookCount = 0
+		})
+
+		BeforeEach(func() {
+			// Create a fresh transaction for each test
+			tx = DefaultContext.DB().Session(&gorm.Session{NewDB: true}).Begin(&sql.TxOptions{ReadOnly: true})
+
+			// Set role to postgrest_api
+			Expect(tx.Exec("SET LOCAL ROLE 'postgrest_api'").Error).To(BeNil())
+
+			// Verify role is set correctly
+			var currentRole string
+			Expect(tx.Raw("SELECT CURRENT_USER").Scan(&currentRole).Error).To(BeNil())
+			Expect(currentRole).To(Equal("postgrest_api"))
+		})
+
+		AfterEach(func() {
+			Expect(tx.Rollback().Error).To(BeNil())
+		})
+
+		// Config items tests
+		It("should allow guest user to see only configs in permitted namespaces (missioncontrol, monitoring, media)", func() {
+			ctx := DefaultContext.WithUser(guestUser)
+
+			payload, err := auth.GetRLSPayload(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(payload.SetPostgresSessionRLS(tx)).To(BeNil())
+
+			var count int64
+			Expect(tx.Model(&models.ConfigItem{}).Count(&count).Error).To(BeNil())
+			Expect(count).To(Equal(guestUserConfigCount), "guest user should see configs in missioncontrol, monitoring, and media namespaces")
+		})
+
+		It("should deny access to all configs for guest user with no permissions", func() {
+			ctx := DefaultContext.WithUser(guestUserNoPerms)
+
+			payload, err := auth.GetRLSPayload(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(payload.SetPostgresSessionRLS(tx)).To(BeNil())
+
+			var count int64
+			Expect(tx.Model(&models.ConfigItem{}).Count(&count).Error).To(BeNil())
+			Expect(count).To(Equal(guestUserNoPermsConfigCount), "guest user with no permissions should see no configs")
+		})
+
+		It("should allow multi-target guest user to see only database namespace configs", func() {
+			ctx := DefaultContext.WithUser(guestUserMultiTarget)
+
+			payload, err := auth.GetRLSPayload(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(payload.SetPostgresSessionRLS(tx)).To(BeNil())
+
+			var count int64
+			Expect(tx.Model(&models.ConfigItem{}).Count(&count).Error).To(BeNil())
+			Expect(count).To(Equal(guestUserMultiTargetConfigCount), "multi-target guest user should see only database namespace configs")
+		})
+
+		It("should allow homelab manager to see only configs with homelab agent", func() {
+			ctx := DefaultContext.WithUser(homelabManager)
+
+			payload, err := auth.GetRLSPayload(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(payload.SetPostgresSessionRLS(tx)).To(BeNil())
+
+			var count int64
+			Expect(tx.Model(&models.ConfigItem{}).Count(&count).Error).To(BeNil())
+			Expect(count).To(Equal(homelabManagerConfigCount), "homelab manager should see only configs with homelab agent")
+		})
+
+		It("should allow wildcard manager to see all configs (wildcard name '*')", func() {
+			ctx := DefaultContext.WithUser(wildcardManager)
+
+			payload, err := auth.GetRLSPayload(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(payload.SetPostgresSessionRLS(tx)).To(BeNil())
+
+			var count int64
+			Expect(tx.Model(&models.ConfigItem{}).Count(&count).Error).To(BeNil())
+			Expect(count).To(Equal(totalConfigs), "wildcard manager with '*' should see all configs")
+		})
+
+		It("should allow admin user to see all configs (RLS disabled)", func() {
+			ctx := DefaultContext.WithUser(adminUser)
+
+			payload, err := auth.GetRLSPayload(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(payload.SetPostgresSessionRLS(tx)).To(BeNil())
+
+			var count int64
+			Expect(tx.Model(&models.ConfigItem{}).Count(&count).Error).To(BeNil())
+			Expect(count).To(Equal(totalConfigs), "admin user should see all configs")
+		})
+
+		// Playbook tests
+		It("should allow guest user to see permitted playbooks (echo-config, restart-pod)", func() {
+			ctx := DefaultContext.WithUser(guestUser)
+
+			payload, err := auth.GetRLSPayload(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(payload.SetPostgresSessionRLS(tx)).To(BeNil())
+
+			var count int64
+			Expect(tx.Model(&models.Playbook{}).Count(&count).Error).To(BeNil())
+			Expect(count).To(Equal(guestUserPlaybookCount), "guest user should see echo-config and restart-pod playbooks")
+		})
+
+		It("should deny access to all playbooks for guest user with no permissions", func() {
+			ctx := DefaultContext.WithUser(guestUserNoPerms)
+
+			payload, err := auth.GetRLSPayload(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(payload.SetPostgresSessionRLS(tx)).To(BeNil())
+
+			var count int64
+			Expect(tx.Model(&models.Playbook{}).Count(&count).Error).To(BeNil())
+			Expect(count).To(Equal(guestUserNoPermsPlaybookCount), "guest user with no permissions should see no playbooks")
+		})
+
+		It("should allow multi-target guest user to see only echo-config playbook", func() {
+			ctx := DefaultContext.WithUser(guestUserMultiTarget)
+
+			payload, err := auth.GetRLSPayload(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(payload.SetPostgresSessionRLS(tx)).To(BeNil())
+
+			var count int64
+			Expect(tx.Model(&models.Playbook{}).Count(&count).Error).To(BeNil())
+			Expect(count).To(Equal(guestUserMultiTargetPlaybookCount), "multi-target guest user should see only echo-config playbook")
+		})
+
+		It("should allow admin user to see all playbooks (RLS disabled)", func() {
+			ctx := DefaultContext.WithUser(adminUser)
+
+			payload, err := auth.GetRLSPayload(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(payload.SetPostgresSessionRLS(tx)).To(BeNil())
+
+			var count int64
+			Expect(tx.Model(&models.Playbook{}).Count(&count).Error).To(BeNil())
+			Expect(count).To(Equal(totalPlaybooks), "admin user should see all playbooks")
+		})
+
+		// Direct ID permissions tests
+		It("should include direct ID-based playbook permission in RLS filtering", func() {
+			ctx := DefaultContext.WithUser(guestUserDirectPerms)
+
+			payload, err := auth.GetRLSPayload(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(payload.SetPostgresSessionRLS(tx)).To(BeNil())
+
+			// guestUserDirectPerms has direct permission to echo-config playbook by ID
+			// They should see at least the echo-config playbook
+			var count int64
+			Expect(tx.Model(&models.Playbook{}).Where("id = ?", dummy.EchoConfig.ID).Count(&count).Error).To(BeNil())
+			Expect(count).To(BeNumerically(">=", 1), "guest user with direct permissions should see echo-config playbook by ID")
+		})
+
+		// Specific resource verification tests
+		It("should allow guest user to see specific config in permitted namespace (LogisticsDBRDS)", func() {
+			ctx := DefaultContext.WithUser(guestUser)
+
+			payload, err := auth.GetRLSPayload(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(payload.SetPostgresSessionRLS(tx)).To(BeNil())
+
+			var count int64
+			Expect(tx.Model(&models.ConfigItem{}).Where("id = ?", dummy.LogisticsDBRDS.ID).Count(&count).Error).To(BeNil())
+			Expect(count).To(Equal(int64(1)), "guest user should see LogisticsDBRDS (namespace=missioncontrol)")
+		})
+
+		It("should deny guest user access to specific config in unpermitted namespace (RedisHelmRelease)", func() {
+			ctx := DefaultContext.WithUser(guestUser)
+
+			payload, err := auth.GetRLSPayload(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(payload.SetPostgresSessionRLS(tx)).To(BeNil())
+
+			var count int64
+			Expect(tx.Model(&models.ConfigItem{}).Where("id = ?", dummy.RedisHelmRelease.ID).Count(&count).Error).To(BeNil())
+			Expect(count).To(Equal(int64(0)), "guest user should NOT see RedisHelmRelease (namespace=database)")
+		})
+
+		It("should allow multi-target user to see specific config in permitted namespace (RedisHelmRelease)", func() {
+			ctx := DefaultContext.WithUser(guestUserMultiTarget)
+
+			payload, err := auth.GetRLSPayload(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(payload.SetPostgresSessionRLS(tx)).To(BeNil())
+
+			var count int64
+			Expect(tx.Model(&models.ConfigItem{}).Where("id = ?", dummy.RedisHelmRelease.ID).Count(&count).Error).To(BeNil())
+			Expect(count).To(Equal(int64(1)), "multi-target user should see RedisHelmRelease (namespace=database)")
+		})
+
+		It("should deny multi-target user access to specific config in unpermitted namespace (LogisticsDBRDS)", func() {
+			ctx := DefaultContext.WithUser(guestUserMultiTarget)
+
+			payload, err := auth.GetRLSPayload(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(payload.SetPostgresSessionRLS(tx)).To(BeNil())
+
+			var count int64
+			Expect(tx.Model(&models.ConfigItem{}).Where("id = ?", dummy.LogisticsDBRDS.ID).Count(&count).Error).To(BeNil())
+			Expect(count).To(Equal(int64(0)), "multi-target user should NOT see LogisticsDBRDS (namespace=missioncontrol)")
+		})
+
+		It("should allow homelab manager to see config with homelab agent", func() {
+			ctx := DefaultContext.WithUser(homelabManager)
+
+			payload, err := auth.GetRLSPayload(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(payload.SetPostgresSessionRLS(tx)).To(BeNil())
+
+			// Find a config with homelab agent
+			var config models.ConfigItem
+			err = DefaultContext.DB().Where("agent_id = ?", dummy.HomelabAgent.ID).First(&config).Error
+			Expect(err).ToNot(HaveOccurred(), "should find at least one config with homelab agent")
+
+			var count int64
+			Expect(tx.Model(&models.ConfigItem{}).Where("id = ?", config.ID).Count(&count).Error).To(BeNil())
+			Expect(count).To(Equal(int64(1)), "homelab manager should see config with homelab agent")
+		})
+
+		It("should deny homelab manager access to config without homelab agent", func() {
+			ctx := DefaultContext.WithUser(homelabManager)
+
+			payload, err := auth.GetRLSPayload(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(payload.SetPostgresSessionRLS(tx)).To(BeNil())
+
+			// LogisticsDBRDS doesn't have homelab agent
+			var count int64
+			Expect(tx.Model(&models.ConfigItem{}).Where("id = ?", dummy.LogisticsDBRDS.ID).Count(&count).Error).To(BeNil())
+			Expect(count).To(Equal(int64(0)), "homelab manager should NOT see LogisticsDBRDS (no homelab agent)")
+		})
+
+		It("should allow guestUserDirectPerms to see NginxIngressPod via direct ID permission", func() {
+			ctx := DefaultContext.WithUser(guestUserDirectPerms)
+
+			payload, err := auth.GetRLSPayload(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(payload.SetPostgresSessionRLS(tx)).To(BeNil())
+
+			// guestUserDirectPerms has direct permission to NginxIngressPod config by ID
+			var count int64
+			Expect(tx.Model(&models.ConfigItem{}).Where("id = ?", dummy.NginxIngressPod.ID).Count(&count).Error).To(BeNil())
+			Expect(count).To(Equal(int64(1)), "guest user with direct permissions should see NginxIngressPod config by ID")
+		})
+
+		It("should allow homelab default manager to see only configs with homelab agent AND default namespace (combined scope)", func() {
+			ctx := DefaultContext.WithUser(homelabDefaultManager)
+
+			payload, err := auth.GetRLSPayload(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(payload.SetPostgresSessionRLS(tx)).To(BeNil())
+
+			var count int64
+			Expect(tx.Model(&models.ConfigItem{}).Count(&count).Error).To(BeNil())
+			Expect(count).To(Equal(homelabDefaultManagerConfigCount), "homelab default manager should see exactly 3 configs (homelab agent + default namespace)")
+		})
+
+		It("should allow multi-scope user to see configs from ALL three scopes (OR behavior)", func() {
+			ctx := DefaultContext.WithUser(multiScopeUser)
+
+			payload, err := auth.GetRLSPayload(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(payload.SetPostgresSessionRLS(tx)).To(BeNil())
+
+			var count int64
+			Expect(tx.Model(&models.ConfigItem{}).Count(&count).Error).To(BeNil())
+			Expect(count).To(Equal(multiScopeUserConfigCount), "multi-scope user should see all configs from missioncontrol, monitoring, and homelab agent (OR behavior)")
+		})
 	})
 })
 
@@ -537,4 +1076,59 @@ func loadPermissions() {
 		err = db.PersistPermissionFromCRD(DefaultContext, &permission)
 		Expect(err).ToNot(HaveOccurred())
 	}
+}
+
+func createDirectPermissions(userID string) []*models.Permission {
+	// Create direct ID-based permissions for guest user with direct permissions
+	// These test permissions that use specific resource IDs instead of object_selector.
+
+	directPlaybookPermission := &models.Permission{
+		ID:          uuid.New(),
+		Name:        "direct-playbook-permission",
+		Namespace:   "default",
+		Action:      policy.ActionRead,
+		Subject:     userID,
+		SubjectType: models.PermissionSubjectTypePerson,
+		PlaybookID:  &dummy.EchoConfig.ID,
+	}
+	err := DefaultContext.DB().Create(directPlaybookPermission).Error
+	Expect(err).ToNot(HaveOccurred())
+
+	directCanaryPermission := &models.Permission{
+		ID:          uuid.New(),
+		Name:        "direct-canary-permission",
+		Namespace:   "default",
+		Action:      policy.ActionRead,
+		Subject:     userID,
+		SubjectType: models.PermissionSubjectTypePerson,
+		CanaryID:    &dummy.LogisticsAPICanary.ID,
+	}
+	err = DefaultContext.DB().Create(directCanaryPermission).Error
+	Expect(err).ToNot(HaveOccurred())
+
+	directComponentPermission := &models.Permission{
+		ID:          uuid.New(),
+		Name:        "direct-component-permission",
+		Namespace:   "default",
+		Action:      policy.ActionRead,
+		Subject:     userID,
+		SubjectType: models.PermissionSubjectTypePerson,
+		ComponentID: &dummy.Logistics.ID,
+	}
+	err = DefaultContext.DB().Create(directComponentPermission).Error
+	Expect(err).ToNot(HaveOccurred())
+
+	directConfigPermission := &models.Permission{
+		ID:          uuid.New(),
+		Name:        "direct-config-permission",
+		Namespace:   "default",
+		Action:      policy.ActionRead,
+		Subject:     userID,
+		SubjectType: models.PermissionSubjectTypePerson,
+		ConfigID:    &dummy.NginxIngressPod.ID,
+	}
+	err = DefaultContext.DB().Create(directConfigPermission).Error
+	Expect(err).ToNot(HaveOccurred())
+
+	return []*models.Permission{directPlaybookPermission, directCanaryPermission, directComponentPermission, directConfigPermission}
 }
