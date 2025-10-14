@@ -57,9 +57,8 @@ spec:
                       description: Canary selector
                       properties:
                         agent:
-                          description: |-
-                            Agent can be the agent id or the name of the agent.
-                            Additionally, the special "self" value can be used to select resources without an agent.
+                          description: Agent can be the agent id or the name of the
+                            agent.
                           type: string
                         name:
                           description: Name is the name of the resource. Supports
@@ -75,9 +74,8 @@ spec:
                       description: Component selector
                       properties:
                         agent:
-                          description: |-
-                            Agent can be the agent id or the name of the agent.
-                            Additionally, the special "self" value can be used to select resources without an agent.
+                          description: Agent can be the agent id or the name of the
+                            agent.
                           type: string
                         name:
                           description: Name is the name of the resource. Supports
@@ -94,9 +92,8 @@ spec:
                         resource types in practice)
                       properties:
                         agent:
-                          description: |-
-                            Agent can be the agent id or the name of the agent.
-                            Additionally, the special "self" value can be used to select resources without an agent.
+                          description: Agent can be the agent id or the name of the
+                            agent.
                           type: string
                         name:
                           description: Name is the name of the resource. Supports
@@ -113,9 +110,8 @@ spec:
                         (wildcard)
                       properties:
                         agent:
-                          description: |-
-                            Agent can be the agent id or the name of the agent.
-                            Additionally, the special "self" value can be used to select resources without an agent.
+                          description: Agent can be the agent id or the name of the
+                            agent.
                           type: string
                         name:
                           description: Name is the name of the resource. Supports
@@ -131,9 +127,8 @@ spec:
                       description: Playbook selector
                       properties:
                         agent:
-                          description: |-
-                            Agent can be the agent id or the name of the agent.
-                            Additionally, the special "self" value can be used to select resources without an agent.
+                          description: Agent can be the agent id or the name of the
+                            agent.
                           type: string
                         name:
                           description: Name is the name of the resource. Supports
