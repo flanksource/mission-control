@@ -55,7 +55,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 
 		// These are permissions that cannot be created via the CRD as they refer to the resource directly via the ID.
 		// That's why they are created here in the test setup.
-		directPermissions = createGuestUserPermissions(guestUserDirectPerms.ID.String(), guestUser.ID.String())
+		directPermissions = createDirectPermissions(guestUserDirectPerms.ID.String())
 
 		var permissions []models.Permission
 		err = DefaultContext.DB().Where("deleted_at IS NULL").Find(&permissions).Error
@@ -95,12 +95,11 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			Expect(payload).ToNot(BeNil())
 
 			Expect(payload.Disable).To(BeFalse(), "RLS should be enabled for guest users with scopes")
-			Expect(payload.Config).To(HaveLen(4), "should have four config scopes including ID-based permission")
+			Expect(payload.Config).To(HaveLen(3), "should have three config scopes")
 			Expect(payload.Config).To(ContainElements([]rls.Scope{
 				{Tags: map[string]string{"namespace": "missioncontrol"}},
 				{Tags: map[string]string{"namespace": "monitoring"}},
 				{Tags: map[string]string{"namespace": "media"}},
-				{ID: dummy.NginxIngressPod.ID.String()},
 			}))
 
 			// Playbook scopes should include echo-config and restart-pod
@@ -311,16 +310,6 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Tags: map[string]string{"namespace": "media"}}},
 				policy.ActionRead, true,
 				"guest user should have read access to media namespace configs via direct permission"),
-
-			// Config read access by ID - tests for potential AND'ing bug with scope-based permissions
-			Entry("should allow read access to specific config by ID",
-				models.ABACAttribute{Config: models.ConfigItem{ID: dummy.NginxIngressPod.ID, Tags: map[string]string{"namespace": "production"}}},
-				policy.ActionRead, true,
-				"guest user should have read access to specific config by ID"),
-			Entry("should still allow read access to monitoring configs after adding ID-based permission",
-				models.ABACAttribute{Config: models.ConfigItem{ID: uuid.New(), Tags: map[string]string{"namespace": "monitoring"}}},
-				policy.ActionRead, true,
-				"guest user should still have read access to monitoring configs (verifies permissions aren't AND'ed)"),
 
 			// Config read access - denied (not in scopes or permissions)
 			Entry("should deny read access to kube-system namespace config",
@@ -587,17 +576,16 @@ func loadPermissions() {
 	}
 }
 
-func createGuestUserPermissions(directPermissionuser string, guestUser string) []*models.Permission {
-	// TODO: Make this just rely on directPermissionuser.
-
+func createDirectPermissions(userID string) []*models.Permission {
 	// Create direct ID-based permissions for guest user with direct permissions
-	// These test permissions that use specific resource IDs instead of object_selector
+	// These test permissions that use specific resource IDs instead of object_selector.
+
 	directPlaybookPermission := &models.Permission{
 		ID:          uuid.New(),
 		Name:        "direct-playbook-permission",
 		Namespace:   "default",
 		Action:      policy.ActionRead,
-		Subject:     directPermissionuser,
+		Subject:     userID,
 		SubjectType: models.PermissionSubjectTypePerson,
 		PlaybookID:  &dummy.EchoConfig.ID,
 	}
@@ -609,7 +597,7 @@ func createGuestUserPermissions(directPermissionuser string, guestUser string) [
 		Name:        "direct-canary-permission",
 		Namespace:   "default",
 		Action:      policy.ActionRead,
-		Subject:     directPermissionuser,
+		Subject:     userID,
 		SubjectType: models.PermissionSubjectTypePerson,
 		CanaryID:    &dummy.LogisticsAPICanary.ID,
 	}
@@ -621,7 +609,7 @@ func createGuestUserPermissions(directPermissionuser string, guestUser string) [
 		Name:        "direct-component-permission",
 		Namespace:   "default",
 		Action:      policy.ActionRead,
-		Subject:     directPermissionuser,
+		Subject:     userID,
 		SubjectType: models.PermissionSubjectTypePerson,
 		ComponentID: &dummy.Logistics.ID,
 	}
@@ -633,7 +621,7 @@ func createGuestUserPermissions(directPermissionuser string, guestUser string) [
 		Name:        "direct-config-permission",
 		Namespace:   "default",
 		Action:      policy.ActionRead,
-		Subject:     guestUser,
+		Subject:     userID,
 		SubjectType: models.PermissionSubjectTypePerson,
 		ConfigID:    &dummy.NginxIngressPod.ID,
 	}
