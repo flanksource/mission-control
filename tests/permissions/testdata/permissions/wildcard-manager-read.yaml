@@ -5,7 +5,7 @@ metadata:
   namespace: default
   uid: a9b8c7d6-e5f4-4a3b-2c1d-0e9f8a7b6c5d
 spec:
-  description: Grant read access to nginx wildcard configs scope for wildcard manager
+  description: Grant read access to all configs via wildcard scope for wildcard manager
   subject:
     person: wildcard@manager.com
   actions:
@@ -13,4 +13,4 @@ spec:
   object:
     scopes:
       - namespace: default
-        name: nginx-wildcard-configs
+        name: wildcard-all-configs

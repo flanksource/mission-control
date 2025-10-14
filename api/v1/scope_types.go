@@ -10,7 +10,9 @@ type ScopeResourceSelector struct {
 	// Agent can be the agent id or the name of the agent.
 	Agent string `yaml:"agent,omitempty" json:"agent,omitempty"`
 
-	// Name is the name of the resource. Supports wildcards.
+	// Name is the name of the resource.
+	// Supports special wildcard directive '*' which matches any resource.
+	// NOTE: Prefix and suffix wildcards (e.g. 'nginx-*') are NOT supported.
 	Name string `yaml:"name,omitempty" json:"name,omitempty"`
 
 	// TagSelector selects resources by tags using label selector syntax
