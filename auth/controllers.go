@@ -2,7 +2,6 @@ package auth
 
 import (
 	"bytes"
-	"fmt"
 	"net/http"
 	"os"
 	"slices"
@@ -46,26 +45,17 @@ func (k *KratosHandler) InviteUser(c echo.Context) error {
 
 	var reqData InviteUserRequest
 	if err := c.Bind(&reqData); err != nil {
-		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{
-			Err:     err.Error(),
-			Message: "Invalid request body",
-		})
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid request body: %v", err))
 	}
 
 	identity, err := k.createUser(ctx, reqData.FirstName, reqData.LastName, reqData.Email)
 	if err != nil {
 		// User already exists
 		if strings.Contains(err.Error(), http.StatusText(http.StatusConflict)) {
-			return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
-				Err:     "User already exists",
-				Message: "Error creating user",
-			})
+			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ECONFLICT, "user already exists"))
 		}
 
-		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
-			Err:     err.Error(),
-			Message: "Error creating user",
-		})
+		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "error creating user"))
 	}
 
 	if reqData.Role != "" {
@@ -76,7 +66,7 @@ func (k *KratosHandler) InviteUser(c echo.Context) error {
 
 	recoveryCode, recoveryLink, err := k.createRecoveryLink(ctx, identity.Id)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Err: err.Error(), Message: "error creating recovery link"})
+		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "error creating recovery link"))
 	}
 
 	data := map[string]string{
@@ -87,15 +77,12 @@ func (k *KratosHandler) InviteUser(c echo.Context) error {
 
 	var body bytes.Buffer
 	if err := inviteUserTemplate.Execute(&body, data); err != nil {
-		return err
+		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
 	}
 
 	inviteMail := mail.New([]string{reqData.Email}, "User Invite", body.String(), "text/html")
 	if err = inviteMail.Send(); err != nil {
-		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
-			Err:     err.Error(),
-			Message: "Error sending email",
-		})
+		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "error sending email"))
 	}
 
 	delete(data, "firstName")
@@ -110,24 +97,15 @@ func UpdateAccountState(c echo.Context) error {
 		State string `json:"state"`
 	}
 	if err := c.Bind(&reqData); err != nil {
-		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
-			Err:     err.Error(),
-			Message: "Invalid request body",
-		})
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid request body: %v", err))
 	}
 
 	if !oryClient.IdentityState(reqData.State).IsValid() {
-		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
-			Err:     fmt.Sprintf("Invalid state: %s", reqData.State),
-			Message: fmt.Sprintf("Invalid state. Allowed values are %s", oryClient.AllowedIdentityStateEnumValues),
-		})
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid state: %s. Allowed values are %s", reqData.State, oryClient.AllowedIdentityStateEnumValues))
 	}
 
 	if err := db.UpdateIdentityState(ctx, reqData.ID, reqData.State); err != nil {
-		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
-			Err:     err.Error(),
-			Message: "Error updating database",
-		})
+		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
 	}
 
 	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{Message: "success"})
@@ -138,18 +116,12 @@ func UpdateAccountProperties(c echo.Context) error {
 
 	var props api.PersonProperties
 	if err := c.Bind(&props); err != nil {
-		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
-			Err:     err.Error(),
-			Message: "Invalid request body",
-		})
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid request body: %v", err))
 	}
 
 	err := db.UpdateUserProperties(ctx, c.Param("id"), props)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
-			Err:     err.Error(),
-			Message: "Error updating database",
-		})
+		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
 	}
 
 	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{Message: "success"})
@@ -160,9 +132,7 @@ func WhoAmI(c echo.Context) error {
 
 	user := ctx.User()
 	if user == nil {
-		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
-			Message: "Error fetching user",
-		})
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EUNAUTHORIZED, "error fetching user"))
 	}
 
 	hostname, _ := os.Hostname()
@@ -200,44 +170,30 @@ func CreateToken(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
 	user := ctx.User()
 	if user == nil {
-		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
-			Message: "Error fetching user",
-		})
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EUNAUTHORIZED, "error fetching user"))
 	}
 
 	var err error
 	var reqData CreateTokenRequest
 	if err := c.Bind(&reqData); err != nil {
-		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{
-			Err:     err.Error(),
-			Message: "Invalid request body",
-		})
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid request body: %v", err))
 	}
 
 	var expiry duration.Duration = 0 // Default
 	if reqData.Expiry != "" {
 		expiry, err = duration.ParseDuration(reqData.Expiry)
 		if err != nil {
-			return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{
-				Err:     err.Error(),
-				Message: fmt.Sprintf("Error parsing expiry[%s]", reqData.Expiry),
-			})
+			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "error parsing expiry[%s]: %v", reqData.Expiry, err))
 		}
 	}
 
 	tokenResult, err := CreateAccessTokenForPerson(ctx, ctx.User(), reqData.Name, time.Duration(expiry), reqData.AutoRenew)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{
-			Err:     err.Error(),
-			Message: "Error creating access token",
-		})
+		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "error creating access token"))
 	}
 
 	if _, err := rbac.Enforcer().AddGroupingPolicy(tokenResult.Person.ID.String(), user.ID.String()); err != nil {
-		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{
-			Err:     err.Error(),
-			Message: "Error grouping token with user",
-		})
+		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "error grouping token with user"))
 
 	}
 
@@ -256,10 +212,7 @@ func CreateToken(c echo.Context) error {
 
 		if len(permsToDeny) > 0 {
 			if _, err := rbac.Enforcer().AddPermissionsForUser(tokenResult.Person.ID.String(), permsToDeny...); err != nil {
-				return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
-					Err:     err.Error(),
-					Message: "Unable to create token",
-				})
+				return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "unable to create token"))
 			}
 		}
 	}
@@ -271,10 +224,7 @@ func ListTokens(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
 	payload, err := db.ListAccessTokens(ctx)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
-			Err:     err.Error(),
-			Message: "Unable to list tokens",
-		})
+		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "unable to list tokens"))
 	}
 	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{Message: "success", Payload: payload})
 }
@@ -283,38 +233,24 @@ func DeleteToken(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
 	tokenID := c.Param("id")
 	if tokenID == "" {
-		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{
-			Err: "token id not provided",
-		})
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "token id not provided"))
 	}
 
 	token, err := db.GetAccessToken(ctx, tokenID)
 	if err != nil {
-		return c.JSON(http.StatusUnauthorized, dutyAPI.HTTPError{
-			Err:     err.Error(),
-			Message: "error fetching token",
-		})
+		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "error fetching token"))
 	}
 	roles, err := rbac.RolesForUser(ctx.User().ID.String())
 	if err != nil {
-		return c.JSON(http.StatusUnauthorized, dutyAPI.HTTPError{
-			Err:     err.Error(),
-			Message: "error fetching existing roles for user",
-		})
+		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "error fetching existing roles for user"))
 	}
 
 	if lo.FromPtr(token.CreatedBy) != ctx.User().ID || !slices.Contains(roles, policy.RoleAdmin) {
-		return c.JSON(http.StatusUnauthorized, dutyAPI.HTTPError{
-			Err:     "Unauthorized",
-			Message: "Only the creator or admins can delete access tokens",
-		})
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EUNAUTHORIZED, "only the creator or admins can delete access tokens"))
 	}
 
 	if err := db.DeleteAccessToken(ctx, tokenID); err != nil {
-		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
-			Err:     err.Error(),
-			Message: "Unable to delete token",
-		})
+		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "unable to delete token"))
 	}
 	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{Message: "success"})
 }
