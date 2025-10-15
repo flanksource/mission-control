@@ -1,7 +1,11 @@
 package permissions_test
 
 import (
+	"bytes"
 	"database/sql"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"time"
 
@@ -13,6 +17,7 @@ import (
 	"github.com/flanksource/duty/tests/setup"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
+	"github.com/labstack/echo/v4"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/patrickmn/go-cache"
@@ -1033,6 +1038,124 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			Expect(tx.Model(&models.ConfigItem{}).Count(&count).Error).To(BeNil())
 			Expect(count).To(Equal(multiScopeUserConfigCount), "multi-scope user should see all configs from missioncontrol, monitoring, and homelab agent (OR behavior)")
 		})
+	})
+
+	Describe("/can-i endpoint", func() {
+		type testCase struct {
+			name             string
+			getSubject       func() *models.Person
+			requestBody      []auth.CanIRequest
+			expectedStatus   int
+			expectedResponse []map[string]bool
+		}
+
+		testCases := []testCase{
+			{
+				name:       "should return true for guest user checking playbook:run permission on echo-config with missioncontrol config",
+				getSubject: func() *models.Person { return guestUser },
+				requestBody: []auth.CanIRequest{
+					{
+						PlaybookID: &dummy.EchoConfig.ID,
+						ConfigID:   &dummy.LogisticsDBRDS.ID,
+						Actions:    []string{policy.ActionPlaybookRun, policy.ActionRead},
+					},
+				},
+				expectedStatus: http.StatusOK,
+				expectedResponse: []map[string]bool{
+					{
+						policy.ActionPlaybookRun: true,
+						policy.ActionRead:        true,
+					},
+				},
+			},
+			{
+				name:       "should allow read but not playbook:run for guest user on restart-pod with a config that's not in missioncontrol namespace",
+				getSubject: func() *models.Person { return guestUser },
+				requestBody: []auth.CanIRequest{
+					{
+						PlaybookID: &dummy.EchoConfig.ID,
+						ConfigID:   &dummy.EC2InstanceB.ID,
+						Actions:    []string{policy.ActionPlaybookRun, policy.ActionRead},
+					},
+				},
+				expectedStatus: http.StatusOK,
+				expectedResponse: []map[string]bool{
+					{
+						policy.ActionPlaybookRun: false,
+						policy.ActionRead:        true,
+					},
+				},
+			},
+			{
+				name:       "should return false for guest user with no permissions checking any action",
+				getSubject: func() *models.Person { return guestUserNoPerms },
+				requestBody: []auth.CanIRequest{
+					{
+						PlaybookID: &dummy.EchoConfig.ID,
+						Actions:    []string{policy.ActionPlaybookRun, policy.ActionRead},
+					},
+				},
+				expectedStatus: http.StatusOK,
+				expectedResponse: []map[string]bool{
+					{
+						policy.ActionPlaybookRun: false,
+						policy.ActionRead:        false,
+					},
+				},
+			},
+			{
+				name:       "should handle multiple requests in a single call",
+				getSubject: func() *models.Person { return guestUser },
+				requestBody: []auth.CanIRequest{
+					{
+						PlaybookID: &dummy.EchoConfig.ID,
+						ConfigID:   &dummy.LogisticsDBRDS.ID,
+						Actions:    []string{policy.ActionPlaybookRun, policy.ActionRead},
+					},
+					{
+						PlaybookID: &dummy.RestartPod.ID,
+						Actions:    []string{policy.ActionRead},
+					},
+				},
+				expectedStatus: http.StatusOK,
+				expectedResponse: []map[string]bool{
+					{
+						policy.ActionPlaybookRun: true,
+						policy.ActionRead:        true,
+					},
+					{
+						policy.ActionRead: true,
+					},
+				},
+			},
+		}
+
+		for _, tc := range testCases {
+			It(tc.name, func() {
+				ctx := DefaultContext.WithUser(tc.getSubject())
+				e := echo.New()
+
+				body, err := json.Marshal(tc.requestBody)
+				Expect(err).ToNot(HaveOccurred())
+
+				req := httptest.NewRequest(http.MethodPost, "/can-i", bytes.NewReader(body))
+				req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+				req = req.WithContext(ctx)
+				rec := httptest.NewRecorder()
+				c := e.NewContext(req, rec)
+
+				Expect(auth.CanIHandler(c)).ToNot(HaveOccurred())
+				Expect(rec.Code).To(Equal(tc.expectedStatus))
+
+				var response struct {
+					Response []map[string]bool `json:"response"`
+				}
+				err = json.Unmarshal(rec.Body.Bytes(), &response)
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(response.Response).To(Equal(tc.expectedResponse))
+			})
+		}
 	})
 })
 
