@@ -124,6 +124,11 @@ func CreateTemplateEnv(ctx context.Context, playbook *models.Playbook, run model
 			return templateEnv, oops.Tags("db").Wrap(err)
 		}
 		resourceAgentID = templateEnv.Check.AgentID
+	} else if run.CanaryID != nil {
+		if err := ctx.DB().Where("id = ?", run.CanaryID).First(&templateEnv.Canary).Error; err != nil {
+			return templateEnv, oops.Tags("db").Wrap(err)
+		}
+		resourceAgentID = templateEnv.Canary.AgentID
 	}
 
 	if resourceAgentID != uuid.Nil {
