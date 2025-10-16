@@ -24,7 +24,7 @@ jobs:
           echo "Disk space difference (in KB): $difference"
 
       - name: Install Go
-        uses: buildjet/setup-go@v5
+        uses: actions/setup-go@v5
         with:
           go-version: 1.25.x
 
@@ -37,15 +37,15 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
-      - uses: buildjet/cache@v4
+      - uses: actions/cache@v4
         with:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
             .bin
-          key: cache-${{ hashFiles('**/go.sum') }}-${{ hashFiles('.bin/*') }}
+          key: cache-go-1.25-${{ hashFiles('**/go.sum') }}-${{ hashFiles('.bin/*') }}
           restore-keys: |
-            cache-
+            cache-go-1.25-
 
       - name: Test
         run: make static ci-test
@@ -91,22 +91,22 @@ jobs:
           echo "Disk space difference (in KB): $difference"
 
       - name: Install Go
-        uses: buildjet/setup-go@v5
+        uses: actions/setup-go@v5
         with:
           go-version: 1.25.x
 
       - name: Checkout code
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
 
-      - uses: buildjet/cache@v4
+      - uses: actions/cache@v4
         with:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
             .bin
-          key: cache-${{ hashFiles('**/go.sum') }}-${{ hashFiles('.bin/*') }}
+          key: cache-go-1.25-${{ hashFiles('**/go.sum') }}-${{ hashFiles('.bin/*') }}
           restore-keys: |
-            cache-
+            cache-go-1.25-
 
       # - name: Set up Kind & Kubectl
       #   uses: helm/kind-action@v1.12.0

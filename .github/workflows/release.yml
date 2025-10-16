@@ -28,19 +28,19 @@ jobs:
           rm -rf /opt/hostedtoolcache
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
       - name: Install Go
-        uses: buildjet/setup-go@v5
+        uses: actions/setup-go@v5
         with:
-          go-version: v1.23.x
+          go-version: v1.25.x
 
-      - uses: buildjet/cache@v4
+      - uses: actions/cache@v4
         with:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
             .bin
-          key: cache-${{ hashFiles('**/go.sum') }}-${{ hashFiles('.bin/*') }}
+          key: cache-go-1.25-${{ hashFiles('**/go.sum') }}-${{ hashFiles('.bin/*') }}
           restore-keys: |
-            cache-
+            cache-go-1.25-
       - run: make release
         env:
           VERSION: v${{ needs.semantic-release.outputs.release-version }}
