@@ -3,10 +3,10 @@ package echo
 import (
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/flanksource/commons/console"
 	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/commons/timer"
 	"github.com/flanksource/duty/context"
 	"github.com/henvic/httpretty"
 	"github.com/labstack/echo/v4"
@@ -15,16 +15,15 @@ import (
 
 func NewHttpSingleLineLogger(ctx context.Context, skipper func(c echo.Context) bool) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
-
 		log := ctx.WithName("http").Logger
-
 		return func(c echo.Context) error {
+			start := time.Now()
+
 			err := next(c)
 			if skipper != nil && skipper(c) {
 				return err
 			}
 
-			timer := timer.NewTimer()
 			status := c.Response().Status
 
 			l := log.V(logger.Info)
@@ -33,7 +32,8 @@ func NewHttpSingleLineLogger(ctx context.Context, skipper func(c echo.Context) b
 			} else if status >= 400 {
 				l = logger.V(logger.Warn)
 			}
-			l.Infof("%s	%s	%d	%s", console.Greenf("%s", c.Request().Method), c.Request().URL, status, timer)
+
+			l.Infof("%s	%s	%d	%s", console.Greenf("%s", c.Request().Method), c.Request().URL, status, time.Since(start))
 			return err
 		}
 	}
