@@ -13,6 +13,7 @@ import (
 	pkgView "github.com/flanksource/duty/view"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/samber/lo"
 	"gopkg.in/yaml.v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
@@ -22,17 +23,17 @@ import (
 )
 
 var _ = Describe("View Database Table", func() {
-	testdataDir := "testdata"
+	testdataDir := "testdata/auto"
 	files, err := os.ReadDir(testdataDir)
 	Expect(err).ToNot(HaveOccurred())
 
 	for _, file := range files {
-		if !strings.HasSuffix(file.Name(), ".yaml") || strings.HasPrefix(file.Name(), "cache-test-") {
+		if !strings.HasSuffix(file.Name(), ".yaml") {
 			continue
 		}
 
 		It(file.Name(), func() {
-			viewObj, err := loadViewFromYAML(file.Name())
+			viewObj, err := loadViewFromYAML(filepath.Join("auto", file.Name()))
 			Expect(err).ToNot(HaveOccurred())
 
 			err = db.PersistViewFromCRD(DefaultContext, viewObj)
@@ -89,23 +90,94 @@ var _ = Describe("View Database Table", func() {
 	}
 })
 
-var _ = Describe("ReadOrPopulateViewTable Cache Control", func() {
-	It("should return an error when refresh-timeout is very low", func() {
-		viewObj, err := loadViewFromYAML("cache-test-view.yaml")
-		Expect(err).ToNot(HaveOccurred())
-
-		err = db.PersistViewFromCRD(DefaultContext, viewObj)
-		Expect(err).ToNot(HaveOccurred())
-
-		tableName := viewObj.TableName()
-		if DefaultContext.DB().Migrator().HasTable(tableName) {
-			err = DefaultContext.DB().Migrator().DropTable(tableName)
+var _ = Describe("ReadOrPopulateViewTable", func() {
+	Describe("Cache Control", func() {
+		It("should return an error when refresh-timeout is very low", func() {
+			viewObj, err := loadViewFromYAML("cache-test-view.yaml")
 			Expect(err).ToNot(HaveOccurred())
-		}
 
-		_, err = ReadOrPopulateViewTable(DefaultContext.WithUser(&dummy.JohnDoe), viewObj.Namespace, viewObj.Name, WithRefreshTimeout(1*time.Microsecond))
-		Expect(err).To(HaveOccurred())
-		Expect(err.Error()).To(ContainSubstring("refresh timeout reached. try again"))
+			err = db.PersistViewFromCRD(DefaultContext, viewObj)
+			Expect(err).ToNot(HaveOccurred())
+
+			tableName := viewObj.TableName()
+			if DefaultContext.DB().Migrator().HasTable(tableName) {
+				err = DefaultContext.DB().Migrator().DropTable(tableName)
+				Expect(err).ToNot(HaveOccurred())
+			}
+
+			_, err = ReadOrPopulateViewTable(DefaultContext.WithUser(&dummy.JohnDoe), viewObj.Namespace, viewObj.Name, WithRefreshTimeout(1*time.Microsecond))
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("refresh timeout reached. try again"))
+		})
+	})
+
+	Describe("Request variables", Ordered, func() {
+		var namespaceView, namespaceWithDefaultTemplateVars *v1.View
+
+		BeforeAll(func() {
+			var err error
+			namespaceView, err = loadViewFromYAML("namespace.yaml")
+			Expect(err).ToNot(HaveOccurred())
+
+			err = db.PersistViewFromCRD(DefaultContext, namespaceView)
+			Expect(err).ToNot(HaveOccurred())
+
+			namespaceWithDefaultTemplateVars, err = loadViewFromYAML("namespace-with-defaults.yaml")
+			Expect(err).ToNot(HaveOccurred())
+
+			err = db.PersistViewFromCRD(DefaultContext, namespaceWithDefaultTemplateVars)
+			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("should populate variables with default options", func() {
+			result, err := ReadOrPopulateViewTable(DefaultContext.WithUser(&dummy.JohnDoe), namespaceWithDefaultTemplateVars.Namespace, namespaceWithDefaultTemplateVars.Name, WithIncludeRows(false))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.Variables).To(HaveLen(2))
+
+			variableWithOptions := lo.Map(namespaceWithDefaultTemplateVars.Spec.Templating, func(v api.ViewVariable, _ int) api.ViewVariableWithOptions {
+				vo := api.ViewVariableWithOptions{
+					ViewVariable: v,
+				}
+
+				switch v.Key {
+				case "cluster":
+					vo.ViewVariable.Default = "demo"
+					vo.Options = []string{"demo"}
+				case "namespace":
+					vo.ViewVariable.Default = "dummy-namespace"
+					vo.Options = []string{"flux", "missioncontrol"}
+				}
+
+				return vo
+			})
+
+			Expect(result.Variables).To(Equal(variableWithOptions))
+		})
+
+		It("should populate variables when not provided in request", func() {
+			result, err := ReadOrPopulateViewTable(DefaultContext.WithUser(&dummy.JohnDoe), namespaceView.Namespace, namespaceView.Name, WithIncludeRows(false))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.Variables).To(HaveLen(2))
+
+			variableWithOptions := lo.Map(namespaceView.Spec.Templating, func(v api.ViewVariable, _ int) api.ViewVariableWithOptions {
+				vo := api.ViewVariableWithOptions{
+					ViewVariable: v,
+				}
+
+				switch v.Key {
+				case "cluster":
+					vo.ViewVariable.Default = "demo"
+					vo.Options = []string{"demo"}
+				case "namespace":
+					vo.ViewVariable.Default = "flux"
+					vo.Options = []string{"flux", "missioncontrol"}
+				}
+
+				return vo
+			})
+
+			Expect(result.Variables).To(Equal(variableWithOptions))
+		})
 	})
 })
 

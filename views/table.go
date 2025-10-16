@@ -4,6 +4,7 @@ import (
 	gocontext "context"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/flanksource/commons/collections"
@@ -293,6 +294,7 @@ func populateVariable(ctx context.Context, variable api.ViewVariable, variableVa
 		values := lo.Map(resources, func(r models.ConfigItem, _ int) string {
 			return lo.FromPtr(r.Name)
 		})
+		sort.Strings(values)
 
 		return api.ViewVariableWithOptions{
 			ViewVariable: variable,
@@ -356,12 +358,21 @@ func ReadOrPopulateViewTable(ctx context.Context, namespace, name string, opts .
 
 	view.Spec.Templating = templatedVariables
 
-	// if request.variables == nil {
-	// 	request.variables = make(map[string]string)
-	// }
-	// for _, templatedVariable := range templatedVariables {
-	// 	request.variables[templatedVariable.Key] = templatedVariable.Default
-	// }
+	// For all the variables, that were not provided in the request,
+	// set them to their default values (or the first value if no default is set)
+	if request.variables == nil {
+		request.variables = make(map[string]string)
+	}
+	for _, v := range variables {
+		if _, ok := request.variables[v.Key]; !ok {
+			if v.Default != "" {
+				request.variables[v.Key] = v.Default
+			} else if len(v.Options) > 0 {
+				request.variables[v.Key] = v.Options[0]
+			}
+			// Skip setting if no default and no options (don't add empty string)
+		}
+	}
 
 	cacheOptions, err := view.GetCacheOptions(lo.FromPtr(request.maxAge), lo.FromPtr(request.refreshTimeout))
 	if err != nil {
@@ -507,6 +518,7 @@ func readCachedViewData(ctx context.Context, view *v1.View, request *requestOpt)
 				values := lo.Map(resources, func(r models.ConfigItem, _ int) string {
 					return lo.FromPtr(r.Name)
 				})
+				sort.Strings(values)
 				result.Variables = append(result.Variables, api.ViewVariableWithOptions{
 					ViewVariable: filter,
 					Options:      values,
