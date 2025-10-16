@@ -1,0 +1,25 @@
+
+## Notification
+notifications.max.count=5
+notifications.max.window=1h
+notification.tracing=true
+
+secretkeeper.cache.ttl=1m
+
+events.audit.size=2
+
+jobs.ReconcileAll.retention.success=100
+jobs.ReconcileAll.failed.success=100
+
+# Log the matching policy that was used to make the authorization decision
+# casbin.explain=true
+
+rls.enable=true
+# rls.debug=true
+
+# Logs
+log.kubeproxy=true
+log.level.db=warn
+log.level.resourceSelector=trace
+log.db.slowThreshold=100ms
+log.level.http=warn
