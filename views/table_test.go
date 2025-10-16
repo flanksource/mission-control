@@ -23,22 +23,17 @@ import (
 )
 
 var _ = Describe("View Database Table", func() {
-	testdataDir := "testdata"
+	testdataDir := "testdata/auto"
 	files, err := os.ReadDir(testdataDir)
 	Expect(err).ToNot(HaveOccurred())
 
-	ignore := []string{
-		"cache-test-view.yaml", // handled in a separate test
-		"namespace.yaml",       // handled in a separate test
-	}
-
 	for _, file := range files {
-		if !strings.HasSuffix(file.Name(), ".yaml") || lo.Contains(ignore, file.Name()) {
+		if !strings.HasSuffix(file.Name(), ".yaml") {
 			continue
 		}
 
 		It(file.Name(), func() {
-			viewObj, err := loadViewFromYAML(file.Name())
+			viewObj, err := loadViewFromYAML(filepath.Join("auto", file.Name()))
 			Expect(err).ToNot(HaveOccurred())
 
 			err = db.PersistViewFromCRD(DefaultContext, viewObj)

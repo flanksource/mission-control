@@ -365,7 +365,12 @@ func ReadOrPopulateViewTable(ctx context.Context, namespace, name string, opts .
 	}
 	for _, v := range variables {
 		if _, ok := request.variables[v.Key]; !ok {
-			request.variables[v.Key] = v.Default
+			if v.Default != "" {
+				request.variables[v.Key] = v.Default
+			} else if len(v.Options) > 0 {
+				request.variables[v.Key] = v.Options[0]
+			}
+			// Skip setting if no default and no options (don't add empty string)
 		}
 	}
 
