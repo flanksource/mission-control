@@ -1,0 +1,69 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  creationTimestamp: "2025-08-28T04:03:55Z"
+  name: namespace-with-default
+  namespace: mc
+  uid: 85c52ed4-5c8f-4d0f-88c1-65477dd72237
+spec:
+  cache: {}
+  columns:
+    - name: name
+      primaryKey: true
+      type: string
+      url:
+        config: row.id
+    - filter:
+        type: multiselect
+      icon: row.health
+      name: status
+      type: status
+    - filter:
+        type: multiselect
+      hidden: true
+      name: health
+      type: health
+    - name: updated_at
+      type: datetime
+  display:
+    icon: namespace
+    sidebar: true
+    title: Namespace
+  mapping:
+    created: row.created_at
+  merge: |
+    SELECT
+      pod.id,
+      pod.name,
+      json_extract(pod.tags, '$.namespace') AS namespace,
+      pod.status,
+      pod.health,
+      pod.updated_at
+    FROM pod
+    ORDER BY namespace, name
+  panels:
+    - description: Total Pods in the namespace
+      name: Total Pods
+      query: SELECT COUNT(*) AS value FROM pod
+      type: number
+  queries:
+    pod:
+      configs:
+        agent: all
+        tagSelector: cluster=$(.var.cluster),namespace=$(.var.namespace)
+        types:
+          - Kubernetes::Pod
+  templating:
+    - key: namespace
+      label: Namespace
+      default: dummy-namespace
+      valueFrom:
+        config:
+          types:
+            - Kubernetes::Namespace
+    - key: cluster
+      label: Cluster
+      valueFrom:
+        config:
+          types:
+            - Kubernetes::Cluster
