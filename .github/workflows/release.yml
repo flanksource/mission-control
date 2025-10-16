@@ -31,6 +31,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: v1.25.x
+          cache: false
 
       - uses: actions/cache@v4
         with:
