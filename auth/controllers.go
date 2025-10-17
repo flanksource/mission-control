@@ -11,8 +11,11 @@ import (
 	"github.com/flanksource/commons/duration"
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	oryClient "github.com/ory/client-go"
 	"github.com/samber/lo"
@@ -31,6 +34,7 @@ func RegisterRoutes(e *echo.Echo) {
 	e.POST("/auth/create_token", CreateToken)
 	e.GET("/auth/tokens", ListTokens)
 	e.DELETE("/auth/token/:id", DeleteToken)
+	e.POST("/auth/can-i", CanIHandler)
 }
 
 type InviteUserRequest struct {
@@ -253,4 +257,119 @@ func DeleteToken(c echo.Context) error {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "unable to delete token"))
 	}
 	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{Message: "success"})
+}
+
+type CanIRequest struct {
+	PlaybookID   *uuid.UUID `json:"playbook_id,omitempty"`
+	ConfigID     *uuid.UUID `json:"config_id,omitempty"`
+	ComponentID  *uuid.UUID `json:"component_id,omitempty"`
+	CheckID      *uuid.UUID `json:"check_id,omitempty"`
+	ConnectionID *uuid.UUID `json:"connection_id,omitempty"`
+	Actions      []string   `json:"actions"`
+}
+
+type CanIResponse struct {
+	Response []map[string]bool `json:"response"`
+}
+
+func canI(ctx context.Context, userID string, req CanIRequest) (map[string]bool, error) {
+	if len(req.Actions) == 0 {
+		return nil, dutyAPI.Errorf(dutyAPI.EINVALID, "at least one action is required")
+	}
+
+	// Build ABAC attribute from the provided resource IDs
+	var attr models.ABACAttribute
+
+	if req.PlaybookID != nil {
+		playbook, err := query.FindPlaybook(ctx, req.PlaybookID.String())
+		if err != nil {
+			return nil, ctx.Oops().Wrapf(err, "error fetching playbook")
+		}
+		if playbook == nil {
+			return nil, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "playbook(id=%s) not found", req.PlaybookID)
+		}
+		attr.Playbook = *playbook
+	}
+
+	if req.ConfigID != nil {
+		config, err := query.GetCachedConfig(ctx, req.ConfigID.String())
+		if err != nil {
+			return nil, ctx.Oops().Wrapf(err, "error fetching config")
+		}
+		if config == nil {
+			return nil, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "config(id=%s) not found", req.ConfigID)
+		}
+		attr.Config = *config
+	}
+
+	if req.ComponentID != nil {
+		component, err := query.GetCachedComponent(ctx, req.ComponentID.String())
+		if err != nil {
+			return nil, ctx.Oops().Wrapf(err, "error fetching component")
+		}
+		if component == nil {
+			return nil, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "component(id=%s) not found", req.ComponentID)
+		}
+		attr.Component = *component
+	}
+
+	if req.CheckID != nil {
+		check, err := query.FindCachedCheck(ctx, req.CheckID.String())
+		if err != nil {
+			return nil, ctx.Oops().Wrapf(err, "error fetching check")
+		}
+		if check == nil {
+			return nil, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "check(id=%s) not found", req.CheckID)
+		}
+		attr.Check = *check
+	}
+
+	if req.ConnectionID != nil {
+		var connection models.Connection
+		if err := ctx.DB().First(&connection, req.ConnectionID).Error; err != nil {
+			return nil, ctx.Oops().Wrapf(err, "error fetching connection")
+		}
+		attr.Connection = connection
+	}
+
+	response := make(map[string]bool)
+
+	// Check permissions for each action
+	for _, action := range req.Actions {
+		allowed := rbac.HasPermission(ctx, userID, &attr, action)
+		response[action] = allowed
+	}
+
+	return response, nil
+}
+
+func CanIHandler(c echo.Context) error {
+	ctx := c.Request().Context().(context.Context)
+
+	user := ctx.User()
+	if user == nil {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EUNAUTHORIZED, "error fetching user"))
+	}
+
+	var requests []CanIRequest
+	if err := c.Bind(&requests); err != nil {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid request body: %v", err))
+	}
+
+	if len(requests) == 0 {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "at least one request is required"))
+	}
+
+	var responses []map[string]bool
+
+	for _, req := range requests {
+		result, err := canI(ctx, user.ID.String(), req)
+		if err != nil {
+			return dutyAPI.WriteError(c, err)
+		}
+
+		responses = append(responses, result)
+	}
+
+	return c.JSON(http.StatusOK, CanIResponse{Response: responses})
 }
