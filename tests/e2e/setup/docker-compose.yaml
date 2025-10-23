@@ -1,12 +1,12 @@
 services:
   loki:
-    image: grafana/loki:3.0.0
+    image: grafana/loki:3.0.0@sha256:757b5fadf816a1396f1fea598152947421fa49cb8b2db1ddd2a6e30fae003253
     ports: ["3100:3100"]
     command: -config.file=/etc/loki/local-config.yaml
 
   opensearch:
     container_name: opensearch
-    image: opensearchproject/opensearch:3
+    image: opensearchproject/opensearch:3@sha256:773b05b026c01e7d520f6b857f486b7312d9290e14f2aebe4630eb80787e9eb3
     environment:
       - discovery.type=single-node
       - DISABLE_INSTALL_DEMO_CONFIG=true

@@ -16,7 +16,7 @@ jobs:
           rm -rf /opt/hostedtoolcache
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
       - name: Install Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@2f82e019ff52d53b53e592efde1a896edc20acc0 # v5.2.0
         with:
           go-version: 1.25.x
           cache: false

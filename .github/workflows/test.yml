@@ -24,7 +24,7 @@ jobs:
           echo "Disk space difference (in KB): $difference"
 
       - name: Install Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@2f82e019ff52d53b53e592efde1a896edc20acc0 # v5.2.0
         with:
           go-version: 1.25.x
           cache: false
@@ -38,7 +38,7 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.2.0
         with:
           path: |
             ~/go/pkg/mod
@@ -63,13 +63,13 @@ jobs:
 
     services:
       loki:
-        image: grafana/loki:3.0.0
+        image: grafana/loki:3.0.0@sha256:757b5fadf816a1396f1fea598152947421fa49cb8b2db1ddd2a6e30fae003253
         ports:
           - 3100:3100
         options: --health-cmd="wget --no-verbose --tries=1 --spider http://localhost:3100/ready || exit 1" --health-interval=10s --health-timeout=5s --health-retries=3
 
       opensearch:
-        image: opensearchproject/opensearch:3
+        image: opensearchproject/opensearch:3@sha256:773b05b026c01e7d520f6b857f486b7312d9290e14f2aebe4630eb80787e9eb3
         env:
           discovery.type: single-node
           DISABLE_INSTALL_DEMO_CONFIG: 'true'
@@ -92,7 +92,7 @@ jobs:
           echo "Disk space difference (in KB): $difference"
 
       - name: Install Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@2f82e019ff52d53b53e592efde1a896edc20acc0 # v5.2.0
         with:
           go-version: 1.25.x
           cache: false
@@ -100,7 +100,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.2.0
         with:
           path: |
             ~/go/pkg/mod

@@ -28,12 +28,12 @@ jobs:
           rm -rf /opt/hostedtoolcache
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
       - name: Install Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@2f82e019ff52d53b53e592efde1a896edc20acc0 # v5.2.0
         with:
           go-version: v1.25.x
           cache: false
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4.2.0
         with:
           path: |
             ~/go/pkg/mod
@@ -77,7 +77,7 @@ jobs:
           cache: true
 
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
+        uses: aws-actions/configure-aws-credentials@e96c4ebaf48b0b82b81c46b6b4ba2b34e25f3e32 # v4.1.0
         with:
           aws-access-key-id: ${{ secrets.ECR_AWS_ACCESS_KEY }}
           aws-secret-access-key: ${{ secrets.ECR_AWS_SECRET_ACCESS_KEY }}
@@ -85,7 +85,7 @@ jobs:
 
       - name: Login to Amazon ECR Public
         id: login-ecr-public
-        uses: aws-actions/amazon-ecr-login@v2
+        uses: aws-actions/amazon-ecr-login@062b18b96a7aff071d4dc91bc00c4c1a7945b076 # v2.0.1
         with:
           registry-type: public
 
