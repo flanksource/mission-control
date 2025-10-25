@@ -56,7 +56,7 @@ jobs:
         if: always() && github.event.repository.fork == 'false'
         with:
           files: test/test-results.xml
-          check_name: E2E - ${{matrix.suite}}
+          check_name: Unit Tests
 
   e2e:
     runs-on: ubuntu-latest
