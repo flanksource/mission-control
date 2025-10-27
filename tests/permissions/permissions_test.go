@@ -37,6 +37,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 		adminUser             *models.Person
 		multiScopeUser        *models.Person
 		homelabDefaultManager *models.Person
+		userMetrics           *models.Person
 	)
 
 	var directPermissions []*models.Permission
@@ -53,6 +54,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 		homelabDefaultManager = setup.CreateUserWithRole(DefaultContext, "Homelab Default Manager", "homelab-default@manager.com", policy.RoleGuest)
 		multiScopeUser = setup.CreateUserWithRole(DefaultContext, "Multi Scope User", "multi-scope@test.com", policy.RoleGuest)
 		wildcardManager = setup.CreateUserWithRole(DefaultContext, "Wildcard Manager", "wildcard@manager.com", policy.RoleGuest)
+		userMetrics = setup.CreateUserWithRole(DefaultContext, "User Metrics", "user-metrics@test.com", policy.RoleGuest)
 		adminUser = setup.CreateUserWithRole(DefaultContext, "Admin User", "admin@test.com", policy.RoleAdmin)
 
 		// Load fixtures
@@ -81,7 +83,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 		}
 
 		// Clean up users
-		users := []*models.Person{guestUser, guestUserNoPerms, guestUserDirectPerms, guestUserMultiTarget, homelabManager, homelabDefaultManager, multiScopeUser, wildcardManager, adminUser}
+		users := []*models.Person{guestUser, guestUserNoPerms, guestUserDirectPerms, guestUserMultiTarget, homelabManager, homelabDefaultManager, multiScopeUser, wildcardManager, userMetrics, adminUser}
 		for _, user := range users {
 			if user != nil {
 				err := DefaultContext.DB().Delete(user).Error
@@ -115,6 +117,12 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 				{Names: []string{"restart-pod"}},
 			}))
 
+			// View scopes should be included if user has view permissions
+			Expect(payload.View).To(HaveLen(1), "should have one view scope for pods view")
+			Expect(payload.View).To(ContainElement(rls.Scope{
+				Names: []string{"pods"},
+			}))
+
 			// Other resource types should be empty
 			Expect(payload.Component).To(BeEmpty(), "component scope should be empty")
 			Expect(payload.Canary).To(BeEmpty(), "canary scope should be empty")
@@ -136,11 +144,14 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 				Playbook: []rls.Scope{
 					{Names: []string{"echo-config"}},
 				},
+				View: []rls.Scope{
+					{Names: []string{"metrics"}},
+				},
 				Component: nil,
 				Canary:    nil,
 			}
 
-			Expect(payload).To(Equal(expectedPayload), "RLS payload should match exactly - user should only see database configs and echo-config playbook")
+			Expect(payload).To(Equal(expectedPayload), "RLS payload should match exactly - user should only see database configs, echo-config playbook, and metrics view")
 		})
 
 		It("should return RLS payload for guest user with agent-based scope", func() {
@@ -231,6 +242,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			Expect(payload.Playbook).To(BeEmpty(), "playbook scope should be empty")
 			Expect(payload.Component).To(BeEmpty(), "component scope should be empty")
 			Expect(payload.Canary).To(BeEmpty(), "canary scope should be empty")
+			Expect(payload.View).To(BeEmpty(), "view scope should be empty")
 		})
 
 		It("should disable RLS for non-guest users", func() {
@@ -259,6 +271,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			Expect(payload.Component).To(BeEmpty(), "component scope should be empty for guest user with no permissions")
 			Expect(payload.Playbook).To(BeEmpty(), "playbook scope should be empty for guest user with no permissions")
 			Expect(payload.Canary).To(BeEmpty(), "canary scope should be empty for guest user with no permissions")
+			Expect(payload.View).To(BeEmpty(), "view scope should be empty for guest user with no permissions")
 		})
 
 		It("should include direct ID-based permissions in RLS payload", func() {
@@ -300,6 +313,28 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			}
 			Expect(hasComponentID).To(BeTrue(), "component scope should include direct component ID")
 		})
+
+		It("should return RLS payload for user with metrics view permission", func() {
+			ctx := DefaultContext.WithUser(userMetrics)
+
+			payload, err := auth.GetRLSPayload(ctx)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(payload).ToNot(BeNil())
+
+			// Verify exact match of entire payload - user should have access to ONLY metrics view
+			expectedPayload := &rls.Payload{
+				Disable:   false,
+				Config:    nil,
+				Playbook:  nil,
+				Component: nil,
+				Canary:    nil,
+				View: []rls.Scope{
+					{Names: []string{"metrics"}},
+				},
+			}
+
+			Expect(payload).To(Equal(expectedPayload), "RLS payload should match exactly - user should only see metrics view")
+		})
 	})
 
 	Context("Scope expansion", func() {
@@ -315,11 +350,24 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			expandedPerm, err := adapter.ExpandPermissionScopes(DefaultContext, cache.New(time.Minute, time.Minute), permission)
 			Expect(err).ToNot(HaveOccurred(), "scope expansion should succeed")
 
-			Expect(expandedPerm).To(HaveLen(2))
-			Expect(expandedPerm).To(Equal([]rbac.Selectors{
-				{Configs: []types.ResourceSelector{{TagSelector: "namespace=database"}}},
-				{Playbooks: []types.ResourceSelector{{Name: "echo-config"}}},
-			}))
+			Expect(expandedPerm).To(HaveLen(3))
+			Expect(expandedPerm).To(ContainElements(
+				v1.PermissionObject{
+					Selectors: rbac.Selectors{
+						Configs: []types.ResourceSelector{{TagSelector: "namespace=database"}},
+					},
+				},
+				v1.PermissionObject{
+					Selectors: rbac.Selectors{
+						Playbooks: []types.ResourceSelector{{Name: "echo-config"}},
+					},
+				},
+				v1.PermissionObject{
+					Selectors: rbac.Selectors{
+						Views: []rbac.ViewRef{{Name: "metrics", Namespace: "mc"}},
+					},
+				},
+			))
 		})
 
 		It("should expand combined agent+tag scope into permission object_selector", func() {
@@ -335,11 +383,15 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			Expect(err).ToNot(HaveOccurred(), "scope expansion should succeed")
 
 			Expect(expandedPerm).To(HaveLen(1))
-			Expect(expandedPerm).To(Equal([]rbac.Selectors{
-				{Configs: []types.ResourceSelector{{
-					Agent:       dummy.HomelabAgent.ID.String(),
-					TagSelector: "namespace=default",
-				}}},
+			Expect(expandedPerm).To(Equal([]v1.PermissionObject{
+				{
+					Selectors: rbac.Selectors{
+						Configs: []types.ResourceSelector{{
+							Agent:       dummy.HomelabAgent.ID.String(),
+							TagSelector: "namespace=default",
+						}},
+					},
+				},
 			}))
 		})
 	})
@@ -1033,6 +1085,89 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			Expect(tx.Model(&models.ConfigItem{}).Count(&count).Error).To(BeNil())
 			Expect(count).To(Equal(multiScopeUserConfigCount), "multi-scope user should see all configs from missioncontrol, monitoring, and homelab agent (OR behavior)")
 		})
+
+		// View RLS tests
+		It("should filter views based on RLS for users with view permissions", func() {
+			// Admin should see all views
+			ctx := DefaultContext.WithUser(adminUser)
+
+			payload, err := auth.GetRLSPayload(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(payload.SetPostgresSessionRLS(tx)).To(BeNil())
+
+			var adminViewCount int64
+			Expect(tx.Model(&models.View{}).Where("deleted_at IS NULL").Count(&adminViewCount).Error).To(BeNil())
+			Expect(adminViewCount).To(BeNumerically(">", 0), "admin user should see all views")
+
+			// Guest user with no permissions should see no views
+			ctx = DefaultContext.WithUser(guestUserNoPerms)
+
+			payload, err = auth.GetRLSPayload(ctx)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(payload.SetPostgresSessionRLS(tx)).To(BeNil())
+
+			var guestNoPermsViewCount int64
+			Expect(tx.Model(&models.View{}).Where("deleted_at IS NULL").Count(&guestNoPermsViewCount).Error).To(BeNil())
+			Expect(guestNoPermsViewCount).To(Equal(int64(0)), "guest user with no permissions should see no views")
+		})
+	})
+
+	Describe("View ABAC Permissions", func() {
+		DescribeTable("admin user with view permissions",
+			func(view models.View, description string) {
+				attr := &models.ABACAttribute{
+					View: view,
+				}
+				allowed := rbac.HasPermission(DefaultContext, adminUser.ID.String(), attr, policy.ActionRead)
+				Expect(allowed).To(BeTrue(), description)
+			},
+			Entry("should have access to pods view",
+				dummy.PodView,
+				"admin user should have read access to pods view"),
+			Entry("should have access to dev dashboard view",
+				dummy.ViewDev,
+				"admin user should have read access to dev dashboard view"),
+		)
+
+		DescribeTable("guest user with no permissions",
+			func(view models.View, description string) {
+				attr := &models.ABACAttribute{
+					View: view,
+				}
+				allowed := rbac.HasPermission(DefaultContext, guestUserNoPerms.ID.String(), attr, policy.ActionRead)
+				Expect(allowed).To(BeFalse(), description)
+			},
+			Entry("should NOT have access to pods view",
+				dummy.PodView,
+				"guest user with no permissions should NOT have read access to pods view"),
+			Entry("should NOT have access to dev dashboard view",
+				dummy.ViewDev,
+				"guest user with no permissions should NOT have read access to dev dashboard view"),
+		)
+
+		DescribeTable("user with metrics view permission",
+			func(view models.View, action string, expectedAllowed bool, description string) {
+				attr := &models.ABACAttribute{
+					View: view,
+				}
+				allowed := rbac.HasPermission(DefaultContext, userMetrics.ID.String(), attr, action)
+				Expect(allowed).To(Equal(expectedAllowed), description)
+			},
+			Entry("should have read access to metrics view",
+				dummy.ImportedDummyViews["mc/metrics"],
+				policy.ActionRead, true,
+				"user with metrics permission should have read access to metrics view"),
+			Entry("should NOT have read access to pods view",
+				dummy.PodView,
+				policy.ActionRead, false,
+				"user with metrics permission should NOT have read access to pods view"),
+			Entry("should NOT have read access to dev dashboard view",
+				dummy.ViewDev,
+				policy.ActionRead, false,
+				"user with metrics permission should NOT have read access to dev dashboard view"),
+		)
 	})
 })
 
