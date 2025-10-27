@@ -42,17 +42,16 @@ func DbMiddleware() MiddlewareFunc {
 			if !strings.HasPrefix(path, "/db/") {
 				return next(c)
 			}
+
 			action := rbac.GetActionFromHttpMethod(c.Request().Method)
-			resource := strings.ReplaceAll(path, "/db/", "")
-
-			object := rbac.GetObjectByTable(resource)
-
 			if action == "" {
 				return c.String(http.StatusForbidden, ErrMisconfiguredRBAC.Error())
 			}
+
+			resource := strings.ReplaceAll(path, "/db/", "")
+			object := rbac.GetObjectByTable(resource)
 			if object == "" {
 				return c.String(http.StatusNotFound, "")
-
 			}
 
 			ctx := c.Request().Context().(context.Context)
