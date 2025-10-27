@@ -306,8 +306,22 @@ spec:
                       type: object
                     type: array
                   scopes:
+                    description: Scopes that is expanded onto Selectors
                     items:
                       properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        namespace:
+                          type: string
+                      type: object
+                    type: array
+                  views:
+                    items:
+                      properties:
+                        id:
+                          type: string
                         name:
                           type: string
                         namespace:
