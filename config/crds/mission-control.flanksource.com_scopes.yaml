@@ -66,6 +66,9 @@ spec:
                             Supports special wildcard directive '*' which matches any resource.
                             NOTE: Prefix and suffix wildcards (e.g. 'nginx-*') are NOT supported.
                           type: string
+                        namespace:
+                          description: Namespace is the namespace of the resource.
+                          type: string
                         tagSelector:
                           description: |-
                             TagSelector selects resources by tags using label selector syntax
@@ -84,6 +87,9 @@ spec:
                             Name is the name of the resource.
                             Supports special wildcard directive '*' which matches any resource.
                             NOTE: Prefix and suffix wildcards (e.g. 'nginx-*') are NOT supported.
+                          type: string
+                        namespace:
+                          description: Namespace is the namespace of the resource.
                           type: string
                         tagSelector:
                           description: |-
@@ -105,6 +111,9 @@ spec:
                             Supports special wildcard directive '*' which matches any resource.
                             NOTE: Prefix and suffix wildcards (e.g. 'nginx-*') are NOT supported.
                           type: string
+                        namespace:
+                          description: Namespace is the namespace of the resource.
+                          type: string
                         tagSelector:
                           description: |-
                             TagSelector selects resources by tags using label selector syntax
@@ -125,6 +134,9 @@ spec:
                             Supports special wildcard directive '*' which matches any resource.
                             NOTE: Prefix and suffix wildcards (e.g. 'nginx-*') are NOT supported.
                           type: string
+                        namespace:
+                          description: Namespace is the namespace of the resource.
+                          type: string
                         tagSelector:
                           description: |-
                             TagSelector selects resources by tags using label selector syntax
@@ -144,6 +156,31 @@ spec:
                             Supports special wildcard directive '*' which matches any resource.
                             NOTE: Prefix and suffix wildcards (e.g. 'nginx-*') are NOT supported.
                           type: string
+                        namespace:
+                          description: Namespace is the namespace of the resource.
+                          type: string
+                        tagSelector:
+                          description: |-
+                            TagSelector selects resources by tags using label selector syntax
+                            Example: "env=prod,region=us-west"
+                          type: string
+                      type: object
+                    view:
+                      description: View selector
+                      properties:
+                        agent:
+                          description: Agent can be the agent id or the name of the
+                            agent.
+                          type: string
+                        name:
+                          description: |-
+                            Name is the name of the resource.
+                            Supports special wildcard directive '*' which matches any resource.
+                            NOTE: Prefix and suffix wildcards (e.g. 'nginx-*') are NOT supported.
+                          type: string
+                        namespace:
+                          description: Namespace is the namespace of the resource.
+                          type: string
                         tagSelector:
                           description: |-
                             TagSelector selects resources by tags using label selector syntax
@@ -152,10 +189,11 @@ spec:
                       type: object
                   type: object
                   x-kubernetes-validations:
-                  - message: exactly one of config, component, playbook, canary, or
-                      global must be specified
+                  - message: exactly one of config, component, playbook, canary, view,
+                      or global must be specified
                     rule: '[has(self.config), has(self.component), has(self.playbook),
-                      has(self.canary), has(self.global)].filter(x, x).size() == 1'
+                      has(self.canary), has(self.view), has(self.global)].filter(x,
+                      x).size() == 1'
                 maxItems: 10
                 minItems: 1
                 type: array

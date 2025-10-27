@@ -51,6 +51,7 @@ func resolveAgentInTarget(ctx context.Context, target *v1.ScopeTarget) error {
 		target.Component,
 		target.Playbook,
 		target.Canary,
+		target.View,
 	}
 
 	for _, selector := range selectors {
