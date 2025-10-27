@@ -85,8 +85,8 @@ var _ = Describe("CreateToken", Ordered, func() {
 		BeforeEach(func() {
 			// Add specific permissions for test user
 			_, err = rbac.Enforcer().AddPermissionsForUser(testUser.ID.String(),
-				[]string{policy.ObjectCatalog, policy.ActionRead, "allow", "true", "na"},
-				[]string{policy.ObjectPlaybooks, policy.ActionRead, "allow", "true", "na"},
+				[]string{policy.ObjectCatalog, policy.ActionRead, "allow", "", "na"},
+				[]string{policy.ObjectPlaybooks, policy.ActionRead, "allow", "", "na"},
 			)
 			Expect(err).To(BeNil())
 		})
