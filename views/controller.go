@@ -7,6 +7,7 @@ import (
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -25,7 +26,7 @@ func init() {
 func RegisterRoutes(e *echo.Echo) {
 	logger.Infof("Registering /views routes")
 
-	g := e.Group("/view", rbac.Authorization(policy.ObjectCatalog, policy.ActionRead))
+	g := e.Group("/view", rbac.Authorization(policy.ObjectViews, policy.ActionRead))
 	g.GET("/list", HandleViewList)
 
 	// Deprecated: Use POST request
@@ -48,6 +49,14 @@ func GetViewByID(c echo.Context) error {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "view(id=%s) not found", id))
 	}
 
+	// Check ABAC permissions for this specific view
+	attr := &models.ABACAttribute{
+		View: view,
+	}
+	if !dutyRBAC.HasPermission(ctx, ctx.Subject(), attr, policy.ActionRead) {
+		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("access denied to view %s/%s", view.Namespace, view.Name))
+	}
+
 	return getViewByNamespaceName(ctx, c, view.Namespace, view.Name)
 }
 
@@ -56,6 +65,22 @@ func GetViewByNamespaceName(c echo.Context) error {
 
 	namespace := c.Param("namespace")
 	name := c.Param("name")
+
+	// Fetch the view to check ABAC permissions
+	var view models.View
+	if err := ctx.DB().Select("id, namespace, name").Where("namespace = ? AND name = ?", namespace, name).Where("deleted_at IS NULL").Find(&view).Error; err != nil {
+		return dutyAPI.WriteError(c, err)
+	} else if view.ID == uuid.Nil {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "view(namespace=%s, name=%s) not found", namespace, name))
+	}
+
+	// Check ABAC permissions for this specific view
+	attr := &models.ABACAttribute{
+		View: view,
+	}
+	if !dutyRBAC.HasPermission(ctx, ctx.Subject(), attr, policy.ActionRead) {
+		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("access denied to view %s/%s", view.Namespace, view.Name))
+	}
 
 	return getViewByNamespaceName(ctx, c, namespace, name)
 }
