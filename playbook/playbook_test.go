@@ -140,6 +140,7 @@ var _ = Describe("Playbook", Ordered, func() {
 			configPlaybook    models.Playbook
 			checkPlaybook     models.Playbook
 			componentPlaybook models.Playbook
+			agentAllPlaybook  models.Playbook
 			savedRun          models.PlaybookRun
 		)
 
@@ -147,6 +148,7 @@ var _ = Describe("Playbook", Ordered, func() {
 			configPlaybook, _ = createPlaybook("action-approvals")
 			checkPlaybook, _ = createPlaybook("action-check")
 			componentPlaybook, _ = createPlaybook("action-component")
+			agentAllPlaybook, _ = createPlaybook("action-agent-all")
 		})
 
 		Context("api | list playbooks ", func() {
@@ -172,6 +174,17 @@ var _ = Describe("Playbook", Ordered, func() {
 
 				playbooks, err = ListPlaybooksForConfig(DefaultContext, dummy.KubernetesCluster.ID.String())
 				ExpectPlaybook(playbooks, err, dummy.EchoConfig)
+			})
+
+			It("Should fetch playbook with agent=all for configs with any agent", func() {
+				// Test with KubernetesNodeA which has an agent
+				// Both agentAllPlaybook (with agent=all) and EchoConfig (with name=*) should match
+				playbooks, err := ListPlaybooksForConfig(DefaultContext, dummy.KubernetesNodeA.ID.String())
+				ExpectPlaybook(playbooks, err, agentAllPlaybook, dummy.EchoConfig)
+
+				// Test with KubernetesNodeB which also has an agent
+				playbooks, err = ListPlaybooksForConfig(DefaultContext, dummy.KubernetesNodeB.ID.String())
+				ExpectPlaybook(playbooks, err, agentAllPlaybook, dummy.EchoConfig)
 			})
 		})
 
