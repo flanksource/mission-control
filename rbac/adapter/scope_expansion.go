@@ -66,13 +66,13 @@ func getScopeTargets(ctx context.Context, cache *gocache.Cache, namespace, name 
 // ExpandPermissionScopes expands scope references in a permission's object_selector
 // and returns a new permission with the expanded selectors merged in.
 // This is the exported version for testing.
-func ExpandPermissionScopes(ctx context.Context, cache *gocache.Cache, perm models.Permission) ([]dutyRBAC.Selectors, error) {
+func ExpandPermissionScopes(ctx context.Context, cache *gocache.Cache, perm models.Permission) ([]v1.PermissionObject, error) {
 	// If no object selector, nothing to expand
 	if len(perm.ObjectSelector) == 0 {
 		return nil, nil
 	}
 
-	var selectors dutyRBAC.Selectors
+	var selectors v1.PermissionObject
 	if err := json.Unmarshal(perm.ObjectSelector, &selectors); err != nil {
 		return nil, NewValidationError(ErrScopeExpansionInvalidObjectSelector)
 	}
@@ -82,7 +82,7 @@ func ExpandPermissionScopes(ctx context.Context, cache *gocache.Cache, perm mode
 		return nil, nil
 	}
 
-	var output []dutyRBAC.Selectors
+	var output []v1.PermissionObject
 
 	// Expand scopes and merge into selectors
 	for _, scopeRef := range selectors.Scopes {
@@ -100,7 +100,7 @@ func ExpandPermissionScopes(ctx context.Context, cache *gocache.Cache, perm mode
 
 		// Merge targets into selectors (union approach)
 		for _, target := range targets {
-			var selectors dutyRBAC.Selectors
+			var selectors v1.PermissionObject
 			if target.Config != nil {
 				selectors.Configs = append(selectors.Configs, convertScopeResourceSelectorToResourceSelector(target.Config))
 			}
@@ -110,10 +110,16 @@ func ExpandPermissionScopes(ctx context.Context, cache *gocache.Cache, perm mode
 			if target.Playbook != nil {
 				selectors.Playbooks = append(selectors.Playbooks, convertScopeResourceSelectorToResourceSelector(target.Playbook))
 			}
+			if target.View != nil {
+				selectors.Views = append(selectors.Views, dutyRBAC.ViewRef{
+					Name:      target.View.Name,
+					Namespace: target.View.Namespace,
+				})
+			}
 
 			output = append(output, selectors)
 
-			// Note: Canary targets are skipped - dutyRBAC.Selectors doesn't have a Canaries field
+			// Note: Canary targets are skipped - v1.PermissionObject doesn't have a Canaries field
 			// Note: Global targets are ignored per design decision
 			// Note: Connection targets are ignored (no RLS support yet per auth/rls.go:127-132)
 		}
@@ -127,6 +133,7 @@ func convertScopeResourceSelectorToResourceSelector(scopeSel *v1.ScopeResourceSe
 	return types.ResourceSelector{
 		Agent:       scopeSel.Agent,
 		Name:        scopeSel.Name,
+		Namespace:   scopeSel.Namespace,
 		TagSelector: scopeSel.TagSelector,
 	}
 }

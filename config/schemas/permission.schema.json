@@ -41,6 +41,21 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "NamespacedNameIDSelector": {
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "ObjectMeta": {
       "properties": {
         "name": {
@@ -184,9 +199,15 @@
           },
           "type": "array"
         },
+        "views": {
+          "items": {
+            "$ref": "#/$defs/ViewRef"
+          },
+          "type": "array"
+        },
         "scopes": {
           "items": {
-            "$ref": "#/$defs/ScopeRef"
+            "$ref": "#/$defs/NamespacedNameIDSelector"
           },
           "type": "array"
         }
@@ -321,8 +342,16 @@
       "additionalProperties": false,
       "type": "object"
     },
-    "ScopeRef": {
+    "Time": {
+      "properties": {},
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ViewRef": {
       "properties": {
+        "id": {
+          "type": "string"
+        },
         "namespace": {
           "type": "string"
         },
@@ -330,11 +359,6 @@
           "type": "string"
         }
       },
-      "additionalProperties": false,
-      "type": "object"
-    },
-    "Time": {
-      "properties": {},
       "additionalProperties": false,
       "type": "object"
     }

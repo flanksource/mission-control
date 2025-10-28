@@ -87,6 +87,7 @@ func DeletePermission(ctx context.Context, id string) error {
 func DeleteStalePermission(ctx context.Context, newer *v1.Permission) error {
 	return ctx.DB().Model(&models.Permission{}).
 		Where("name = ? AND namespace = ?", newer.Name, newer.Namespace).
+		Where("id != ?", newer.UID).
 		Where("deleted_at IS NULL").
 		Update("deleted_at", duty.Now()).Error
 }

@@ -10,7 +10,6 @@ import (
 	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/types"
-
 	"github.com/google/uuid"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -139,7 +138,13 @@ func (t *PermissionSubject) Populate(ctx context.Context) (string, models.Permis
 	return "", "", errors.New("permission subject not specified")
 }
 
-type PermissionObject dutyRBAC.Selectors
+// +kubebuilder:object:generate=false
+type PermissionObject struct {
+	dutyRBAC.Selectors `json:",inline"`
+
+	// Scopes that is expanded onto Selectors
+	Scopes []dutyRBAC.NamespacedNameIDSelector `json:"scopes,omitempty"`
+}
 
 // GlobalObject checks if the object selector semantically maps to a global object
 // and returns the corresponding global object if applicable.
@@ -151,14 +156,16 @@ type PermissionObject dutyRBAC.Selectors
 // is interpreted as the object: catalog.
 func (t *PermissionObject) GlobalObject() (string, bool) {
 	switch {
-	case t.isWildcardOnly(t.Playbooks, t.Configs, t.Components, t.Connections):
+	case t.isWildcardOnly(t.Playbooks, t.Configs, t.Components, t.Connections) && len(t.Views) == 0:
 		return policy.ObjectPlaybooks, true
-	case t.isWildcardOnly(t.Configs, t.Playbooks, t.Components, t.Connections):
+	case t.isWildcardOnly(t.Configs, t.Playbooks, t.Components, t.Connections) && len(t.Views) == 0:
 		return policy.ObjectCatalog, true
-	case t.isWildcardOnly(t.Components, t.Playbooks, t.Configs, t.Connections):
+	case t.isWildcardOnly(t.Components, t.Playbooks, t.Configs, t.Connections) && len(t.Views) == 0:
 		return policy.ObjectTopology, true
-	case t.isWildcardOnly(t.Connections, t.Playbooks, t.Configs, t.Components):
+	case t.isWildcardOnly(t.Connections, t.Playbooks, t.Configs, t.Components) && len(t.Views) == 0:
 		return policy.ObjectConnection, true
+	case t.isViewWildcardOnly():
+		return policy.ObjectViews, true
 	default:
 		return "", false
 	}
@@ -172,6 +179,19 @@ func (t *PermissionObject) isWildcardOnly(primary []types.ResourceSelector, othe
 	}
 
 	return len(primary) == 1 && primary[0].Wildcard()
+}
+
+// isViewWildcardOnly checks if the permission object has only a wildcard view selector
+// and no other resource selectors
+func (t *PermissionObject) isViewWildcardOnly() bool {
+	// Check that all other selectors are empty
+	if len(t.Configs) != 0 || len(t.Components) != 0 ||
+		len(t.Playbooks) != 0 || len(t.Connections) != 0 {
+		return false
+	}
+
+	// Check that we have exactly one view with wildcard name
+	return len(t.Views) == 1 && t.Views[0].Name == "*"
 }
 
 // +kubebuilder:object:generate=true

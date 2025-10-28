@@ -5,9 +5,12 @@ metadata:
   namespace: default
   uid: a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d
 spec:
-  description: Scope with multiple targets - database configs and echo-config playbook
+  description: Scope with multiple targets - database configs, echo-config playbook, and metrics view
   targets:
     - config:
         tagSelector: "namespace=database"
     - playbook:
         name: echo-config
+    - view:
+        namespace: mc
+        name: metrics

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/MicahParks/keyfunc"
+	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/properties"
 	"github.com/flanksource/commons/rand"
@@ -64,6 +65,8 @@ func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId str
 		return token.(string), nil
 	}
 
+	// Postgrest makes this jwt available as a session parameter inside postgres.
+	// We inject the rls payload here and then access it inside postgres using request.jwt.claims parameter.
 	claims := jwt.MapClaims{
 		"role": config.Postgrest.DBRole,
 		"id":   user.ID.String(),
@@ -71,25 +74,8 @@ func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId str
 
 	if rlsPayload, err := GetRLSPayload(ctx.WithUser(user)); err != nil {
 		return "", ctx.Oops().Wrap(err)
-	} else if rlsPayload.Disable {
-		claims["disable_rls"] = true
-	} else {
-		// Add resource-specific scopes to JWT claims
-		if len(rlsPayload.Config) > 0 {
-			claims["config"] = rlsPayload.Config
-		}
-
-		if len(rlsPayload.Component) > 0 {
-			claims["component"] = rlsPayload.Component
-		}
-
-		if len(rlsPayload.Playbook) > 0 {
-			claims["playbook"] = rlsPayload.Playbook
-		}
-
-		if len(rlsPayload.Canary) > 0 {
-			claims["canary"] = rlsPayload.Canary
-		}
+	} else if jwtClaim := rlsPayload.JWTClaims(); jwtClaim != nil {
+		claims = collections.MergeMap(claims, jwtClaim)
 	}
 
 	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(config.Postgrest.JWTSecret))

@@ -91,7 +91,7 @@ func buildRLSPayloadFromScopes(ctx context.Context) (*rls.Payload, error) {
 			continue
 		}
 
-		var selectors dutyRBAC.Selectors
+		var selectors v1.PermissionObject
 		if err := json.Unmarshal([]byte(perm.ObjectSelector), &selectors); err != nil {
 			ctx.Warnf("failed to unmarshal object_selector for permission %s: %v", perm.ID, err)
 			continue
@@ -124,6 +124,12 @@ func buildRLSPayloadFromScopes(ctx context.Context) (*rls.Payload, error) {
 			}
 		}
 
+		if len(selectors.Views) > 0 {
+			for _, viewRef := range selectors.Views {
+				payload.View = append(payload.View, convertViewScopeRefToRLSScope(viewRef))
+			}
+		}
+
 		// TODO: No RLS support for connections yet!
 		// if len(selectors.Connections) > 0 {
 		// 	for _, selector := range selectors.Connections {
@@ -136,7 +142,7 @@ func buildRLSPayloadFromScopes(ctx context.Context) (*rls.Payload, error) {
 }
 
 // processScopeRefs fetches scopes from database and adds their targets to the payload
-func processScopeRefs(ctx context.Context, scopeRefs []dutyRBAC.ScopeRef, payload *rls.Payload) error {
+func processScopeRefs(ctx context.Context, scopeRefs []dutyRBAC.NamespacedNameIDSelector, payload *rls.Payload) error {
 	for _, ref := range scopeRefs {
 		var scope models.Scope
 		err := ctx.DB().
@@ -173,12 +179,17 @@ func processScopeRefs(ctx context.Context, scopeRefs []dutyRBAC.ScopeRef, payloa
 				rlsScope := convertToRLSScope(target.Canary)
 				payload.Canary = append(payload.Canary, rlsScope)
 			}
+			if target.View != nil {
+				rlsScope := convertToRLSScope(target.View)
+				payload.View = append(payload.View, rlsScope)
+			}
 			if target.Global != nil {
 				rlsScope := convertToRLSScope(target.Global)
 				payload.Config = append(payload.Config, rlsScope)
 				payload.Component = append(payload.Component, rlsScope)
 				payload.Playbook = append(payload.Playbook, rlsScope)
 				payload.Canary = append(payload.Canary, rlsScope)
+				payload.View = append(payload.View, rlsScope)
 			}
 		}
 	}
@@ -220,6 +231,25 @@ func convertResourceSelectorToRLSScope(selector types.ResourceSelector) rls.Scop
 	if selector.TagSelector != "" {
 		rlsScope.Tags = collections.SelectorToMap(selector.TagSelector)
 	}
+
+	return rlsScope
+}
+
+// convertViewScopeRefToRLSScope converts a view ViewRef (namespace/name) to rls.Scope
+// Views only support id and name in match_scope (namespace is not supported)
+func convertViewScopeRefToRLSScope(viewRef dutyRBAC.ViewRef) rls.Scope {
+	rlsScope := rls.Scope{}
+
+	if viewRef.Name != "" {
+		rlsScope.Names = []string{viewRef.Name}
+	}
+
+	if viewRef.ID != "" {
+		rlsScope.ID = viewRef.ID
+	}
+
+	// Note: namespace is not supported by match_scope for views
+	// ID would be set if we have a direct ID reference, but ViewRef doesn't have ID field
 
 	return rlsScope
 }
