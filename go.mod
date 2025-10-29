@@ -12,7 +12,7 @@ require (
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.32.0 // indirect
 	github.com/flanksource/commons v1.43.0
-	github.com/flanksource/duty v1.0.1075
+	github.com/flanksource/duty v1.0.1076
 	github.com/flanksource/gomplate/v3 v3.24.60
 	github.com/flanksource/kopper v1.0.13
 	github.com/gomarkdown/markdown v0.0.0-20250810172220-2e2c11897d1a
@@ -351,7 +351,7 @@ require (
 
 require (
 	cloud.google.com/go v0.121.6 // indirect
-	cloud.google.com/go/storage v1.57.0
+	cloud.google.com/go/storage v1.57.1
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.19.1
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.11.2 // indirect
 	github.com/AzureAD/microsoft-authentication-library-for-go v1.5.0 // indirect
