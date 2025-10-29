@@ -51,9 +51,9 @@ jobs:
             ~/go/pkg/mod
             ~/.cache/go-build
             .bin
-          key: cache-go-1.25-${{ hashFiles('**/go.sum') }}-${{ hashFiles('.bin/*') }}
+          key: cache-go-1.25.x-${{ hashFiles('**/go.sum') }}-${{ hashFiles('.bin/*') }}
           restore-keys: |
-            cache-go-1.25-
+            cache-go-1.25.x-
 
       - name: Check disk space after cache
         run: |
@@ -128,9 +128,9 @@ jobs:
             ~/go/pkg/mod
             ~/.cache/go-build
             .bin
-          key: cache-go-1.25-${{ hashFiles('**/go.sum') }}-${{ hashFiles('.bin/*') }}
+          key: cache-go-1.25.x-${{ hashFiles('**/go.sum') }}-${{ hashFiles('.bin/*') }}
           restore-keys: |
-            cache-go-1.25-
+            cache-go-1.25.x-
 
       - name: Check disk space after cache
         run: |
