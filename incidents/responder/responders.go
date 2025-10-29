@@ -9,7 +9,6 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/incidents/responder/jira"
-	"github.com/flanksource/incident-commander/incidents/responder/msplanner"
 	"github.com/patrickmn/go-cache"
 	"gorm.io/gorm"
 )
@@ -43,10 +42,11 @@ func GetResponder(ctx context.Context, team api.Team) (ResponderInterface, error
 			return nil, err
 		}
 	} else if teamSpec.ResponderClients.MSPlanner != nil {
-		responder, err = msplanner.NewClient(ctx, team)
-		if err != nil {
-			return nil, err
-		}
+		return nil, fmt.Errorf("MS Planner is not supported")
+		//responder, err = msplanner.NewClient(ctx, team)
+		//if err != nil {
+		//return nil, err
+		//}
 	} else {
 		return nil, fmt.Errorf("no responder client found for team %s", team.ID)
 	}
