@@ -17,7 +17,7 @@ import (
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
-	"golang.org/x/exp/rand"
+	"math/rand/v2"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/flanksource/duty/logs"
