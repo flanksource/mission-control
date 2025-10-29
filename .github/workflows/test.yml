@@ -39,6 +39,12 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
+      - name: Check disk space before cache
+        run: |
+          echo "Disk space before cache restore:"
+          df -h / | grep -E '^Filesystem|/'
+          echo "Available: $(df / | grep / | awk '{print $4}') KB"
+
       - uses: actions/cache@v4
         with:
           path: |
@@ -48,6 +54,14 @@ jobs:
           key: cache-go-1.25-${{ hashFiles('**/go.sum') }}-${{ hashFiles('.bin/*') }}
           restore-keys: |
             cache-go-1.25-
+
+      - name: Check disk space after cache
+        run: |
+          echo "Disk space after cache restore:"
+          df -h / | grep -E '^Filesystem|/'
+          echo "Available: $(df / | grep / | awk '{print $4}') KB"
+          echo "Cache directories size:"
+          du -sh ~/go/pkg/mod ~/.cache/go-build .bin 2>/dev/null || echo "Some cache directories not found yet"
 
       - name: Test
         run: make static ci-test
@@ -102,6 +116,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
 
+      - name: Check disk space before cache
+        run: |
+          echo "Disk space before cache restore:"
+          df -h / | grep -E '^Filesystem|/'
+          echo "Available: $(df / | grep / | awk '{print $4}') KB"
+
       - uses: actions/cache@v4
         with:
           path: |
@@ -111,6 +131,14 @@ jobs:
           key: cache-go-1.25-${{ hashFiles('**/go.sum') }}-${{ hashFiles('.bin/*') }}
           restore-keys: |
             cache-go-1.25-
+
+      - name: Check disk space after cache
+        run: |
+          echo "Disk space after cache restore:"
+          df -h / | grep -E '^Filesystem|/'
+          echo "Available: $(df / | grep / | awk '{print $4}') KB"
+          echo "Cache directories size:"
+          du -sh ~/go/pkg/mod ~/.cache/go-build .bin 2>/dev/null || echo "Some cache directories not found yet"
 
       # - name: Set up Kind & Kubectl
       #   uses: helm/kind-action@v1.12.0
