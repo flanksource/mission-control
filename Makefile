@@ -52,11 +52,11 @@ test:
 
 .PHONY: ci-test
 ci-test:
-	ginkgo -r --skip-package=tests/e2e --keep-going --junit-report junit-report.xml --github-output --output-dir test-reports --succinct
+	ginkgo -r --skip-package=tests/e2e --keep-going --junit-report junit-report.xml --github-output --output-dir test-reports --succinct -p
 
 .PHONY: e2e
 e2e:
-	ginkgo -r --keep-going --succinct ./tests/e2e/...
+	ginkgo -r --keep-going --succinct -p ./tests/e2e/...
 
 fmt:
 	go fmt ./...
