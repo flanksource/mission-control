@@ -14,7 +14,6 @@ import (
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/labstack/echo/v4"
-	oryClient "github.com/ory/client-go"
 	"github.com/samber/lo"
 
 	"github.com/flanksource/incident-commander/api"
@@ -100,8 +99,8 @@ func UpdateAccountState(c echo.Context) error {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid request body: %v", err))
 	}
 
-	if !oryClient.IdentityState(reqData.State).IsValid() {
-		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid state: %s. Allowed values are %s", reqData.State, oryClient.AllowedIdentityStateEnumValues))
+	if !slices.Contains(AllowedIdentityStates, reqData.State) {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid state: %s. Allowed values are %v", reqData.State, AllowedIdentityStates))
 	}
 
 	if err := db.UpdateIdentityState(ctx, reqData.ID, reqData.State); err != nil {
