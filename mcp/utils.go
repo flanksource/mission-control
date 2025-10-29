@@ -8,7 +8,7 @@ import (
 
 	"github.com/flanksource/clicky"
 	"github.com/flanksource/duty/context"
-	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
 func getDutyCtx(ctx gocontext.Context) (context.Context, error) {
@@ -68,7 +68,87 @@ func extractNamespaceName(uri string) (string, string, error) {
 func structToMCPResponse(s any) *mcp.CallToolResult {
 	md, err := clicky.Format(s, clicky.FormatOptions{Format: "markdown"})
 	if err != nil {
-		return mcp.NewToolResultError(err.Error())
+		return &mcp.CallToolResult{
+			IsError: true,
+			Content: []mcp.Content{
+				&mcp.TextContent{Text: err.Error()},
+			},
+		}
 	}
-	return mcp.NewToolResultText(md)
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: md},
+		},
+	}
+}
+
+// Helper functions to extract arguments from CallToolRequest
+func requireString(req *mcp.CallToolRequest, key string) (string, error) {
+	if req.Params.Arguments == nil {
+		return "", fmt.Errorf("missing required parameter: %s", key)
+	}
+	val, ok := req.Params.Arguments[key]
+	if !ok {
+		return "", fmt.Errorf("missing required parameter: %s", key)
+	}
+	str, ok := val.(string)
+	if !ok {
+		return "", fmt.Errorf("parameter %s must be a string", key)
+	}
+	return str, nil
+}
+
+func getInt(req *mcp.CallToolRequest, key string, defaultValue int) int {
+	if req.Params.Arguments == nil {
+		return defaultValue
+	}
+	val, ok := req.Params.Arguments[key]
+	if !ok {
+		return defaultValue
+	}
+	// Try float64 first (JSON numbers are float64)
+	if f, ok := val.(float64); ok {
+		return int(f)
+	}
+	// Try int
+	if i, ok := val.(int); ok {
+		return i
+	}
+	return defaultValue
+}
+
+func getArguments(req *mcp.CallToolRequest) map[string]any {
+	if req.Params.Arguments == nil {
+		return make(map[string]any)
+	}
+	return req.Params.Arguments
+}
+
+func newToolResultError(msg string) *mcp.CallToolResult {
+	return &mcp.CallToolResult{
+		IsError: true,
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: msg},
+		},
+	}
+}
+
+func newToolResultText(text string) *mcp.CallToolResult {
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: text},
+		},
+	}
+}
+
+// Helper to create a simple input schema for tools
+func createInputSchema(properties map[string]any, required []string) any {
+	schema := map[string]any{
+		"type":       "object",
+		"properties": properties,
+	}
+	if len(required) > 0 {
+		schema["required"] = required
+	}
+	return schema
 }

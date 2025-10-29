@@ -15,91 +15,89 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/playbook"
 	"github.com/invopop/jsonschema"
-	"github.com/labstack/echo/v4"
-	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/samber/lo"
 	orderedmap "github.com/wk8/go-ordered-map/v2"
 	"gorm.io/gorm"
 )
 
-func playbookRecentRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func playbookRecentRunHandler(goctx gocontext.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	ctx, err := getDutyCtx(goctx)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return newToolResultError(err.Error()), nil
 	}
 
-	limit := req.GetInt("limit", 20)
+	limit := getInt(req, "limit", 20)
 
 	pbrs, err := db.GetRecentPlaybookRuns(ctx, limit)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return newToolResultError(err.Error()), nil
 	}
 	return structToMCPResponse(pbrs), nil
 }
 
-func playbookFailedRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func playbookFailedRunHandler(goctx gocontext.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	ctx, err := getDutyCtx(goctx)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return newToolResultError(err.Error()), nil
 	}
 
-	limit := req.GetInt("limit", 20)
+	limit := getInt(req, "limit", 20)
 
 	runs, err := db.GetRecentPlaybookRuns(ctx, limit, models.PlaybookRunStatusFailed)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return newToolResultError(err.Error()), nil
 	}
 	return structToMCPResponse(runs), nil
 }
 
-func playbookRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func playbookRunHandler(goctx gocontext.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	ctx, err := getDutyCtx(goctx)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return newToolResultError(err.Error()), nil
 	}
 
 	playbookToolName := req.Params.Name
 	playbookID := currentPlaybookTools[playbookToolName]
 	if playbookID == "" {
-		return mcp.NewToolResultError(fmt.Sprintf("tool[%s] is not associated with any playbok", playbookToolName)), nil
+		return newToolResultError(fmt.Sprintf("tool[%s] is not associated with any playbok", playbookToolName)), nil
 	}
 
 	pb, err := query.FindPlaybook(ctx, playbookID)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return newToolResultError(err.Error()), nil
 	}
 	if pb == nil {
-		return mcp.NewToolResultError(fmt.Sprintf("playbook[%s] not found", playbookID)), nil
+		return newToolResultError(fmt.Sprintf("playbook[%s] not found", playbookID)), nil
 	}
 
-	params := req.GetArguments()
+	params := getArguments(req)
 	pj, err := json.Marshal(params)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return newToolResultError(err.Error()), nil
 	}
 
 	var rp playbook.RunParams
 	if err := json.Unmarshal(pj, &rp); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return newToolResultError(err.Error()), nil
 	}
 
 	run, err := playbook.Run(ctx, pb, rp)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return newToolResultError(err.Error()), nil
 	}
 	return structToMCPResponse(run), nil
 }
 
-func playbookListToolHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func playbookListToolHandler(goctx gocontext.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	jsonData, err := json.Marshal(slices.Collect(maps.Keys(currentPlaybookTools)))
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), err
+		return newToolResultError(err.Error()), err
 	}
-	return mcp.NewToolResultText(string(jsonData)), nil
+	return newToolResultText(string(jsonData)), nil
 }
 
-func playbookResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+func playbookResourceHandler(goctx gocontext.Context, req *mcp.ReadResourceRequest) ([]*mcp.ResourceContents, error) {
 	ctx, err := getDutyCtx(goctx)
 	if err != nil {
 		return nil, err
@@ -118,11 +116,11 @@ func playbookResourceHandler(goctx gocontext.Context, req mcp.ReadResourceReques
 		return nil, err
 	}
 
-	return []mcp.ResourceContents{
-		mcp.TextResourceContents{
+	return []*mcp.ResourceContents{
+		{
 			URI:      req.Params.URI,
-			MIMEType: "application/json",
-			Text:     string(jsonData),
+			MIMEType: "application/json"),
+			Text:     lo.ToPtr(string(jsonData)),
 		},
 	}, nil
 }
@@ -130,7 +128,7 @@ func playbookResourceHandler(goctx gocontext.Context, req mcp.ReadResourceReques
 // ToolName -> Playbook ID
 var currentPlaybookTools = make(map[string]string)
 
-func syncPlaybooksAsTools(ctx context.Context, s *server.MCPServer) error {
+func syncPlaybooksAsTools(ctx context.Context, s *mcp.Server) error {
 	playbooks, err := gorm.G[models.Playbook](ctx.DB()).Where("deleted_at IS NULL").Find(ctx)
 	if err != nil {
 		return fmt.Errorf("error fetching playbooks: %w", err)
@@ -189,7 +187,11 @@ func syncPlaybooksAsTools(ctx context.Context, s *server.MCPServer) error {
 		}
 
 		toolName := generatePlaybookToolName(pb)
-		s.AddTool(mcp.NewToolWithRawSchema(toolName, pb.Description, rj), playbookRunHandler)
+		s.AddTool(&mcp.Tool{
+			Name:        toolName,
+			Description: pb.Description),
+			InputSchema: json.RawMessage(rj),
+		}, playbookRunHandler)
 		newPlaybookTools = append(newPlaybookTools, toolName)
 		currentPlaybookTools[toolName] = pb.GetID()
 	}
@@ -212,29 +214,38 @@ func generatePlaybookToolName(pb models.Playbook) string {
 	return fixMCPToolNameIfRequired(toolName)
 }
 
-func registerPlaybook(ctx context.Context, s *server.MCPServer) {
-	s.AddResourceTemplate(
-		mcp.NewResourceTemplate("playbook://{id}", "Playbook",
-			mcp.WithTemplateDescription("Playbook data"), mcp.WithTemplateMIMEType(echo.MIMEApplicationJSON)),
-		playbookResourceHandler,
-	)
+func registerPlaybook(ctx context.Context, s *mcp.Server) {
+	s.AddResourceTemplate(&mcp.ResourceTemplate{
+		URITemplate: "playbook://{id}",
+		Name:        "Playbook",
+		Description: "Playbook data"),
+		MIMEType:    lo.ToPtr("application/json"),
+	}, playbookResourceHandler)
 
-	s.AddTool(mcp.NewTool("playbooks_list_all",
-		mcp.WithDescription("List all available playbooks")), playbookListToolHandler)
+	s.AddTool(&mcp.Tool{
+		Name:        "playbooks_list_all",
+		Description: "List all available playbooks"),
+	}, playbookListToolHandler)
 
-	playbookRecentRunTool := mcp.NewTool("playbook_recent_runs",
-		mcp.WithDescription("Get recent playbook execution history as JSON array. Each entry contains run details, status, timing, and results."),
-		mcp.WithNumber("limit",
-			mcp.Description("Maximum number of recent runs to return (default: 20)"),
-		))
+	s.AddTool(&mcp.Tool{
+		Name:        "playbook_recent_runs",
+		Description: "Get recent playbook execution history as JSON array. Each entry contains run details, status, timing, and results."),
+		InputSchema: createInputSchema(map[string]any{
+			"limit": map[string]any{
+				"type":        "number",
+				"description": "Maximum number of recent runs to return (default: 20)",
+			},
+		}, nil),
+	}, playbookRecentRunHandler)
 
-	s.AddTool(playbookRecentRunTool, playbookRecentRunHandler)
-
-	playbookFailedRunTool := mcp.NewTool("playbook_failed_runs",
-		mcp.WithDescription("Get recent failed playbook runs as JSON array. Each entry contains failure details, error messages, and timing information."),
-		mcp.WithNumber("limit",
-			mcp.Description("Maximum number of failed runs to return (default: 20)"),
-		))
-
-	s.AddTool(playbookFailedRunTool, playbookFailedRunHandler)
+	s.AddTool(&mcp.Tool{
+		Name:        "playbook_failed_runs",
+		Description: "Get recent failed playbook runs as JSON array. Each entry contains failure details, error messages, and timing information."),
+		InputSchema: createInputSchema(map[string]any{
+			"limit": map[string]any{
+				"type":        "number",
+				"description": "Maximum number of failed runs to return (default: 20)",
+			},
+		}, nil),
+	}, playbookFailedRunHandler)
 }

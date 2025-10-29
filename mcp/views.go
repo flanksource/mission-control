@@ -13,32 +13,30 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/views"
 	"github.com/invopop/jsonschema"
-	"github.com/labstack/echo/v4"
-	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/samber/lo"
 	orderedmap "github.com/wk8/go-ordered-map/v2"
 	"gorm.io/gorm"
 )
 
-func getViewHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func getViewHandler(goctx gocontext.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	ctx, err := getDutyCtx(goctx)
 	if err != nil {
 		return nil, err
 	}
 
-	namespace, err := req.RequireString("namespace")
+	namespace, err := requireString(req, "namespace")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return newToolResultError(err.Error()), nil
 	}
-	name, err := req.RequireString("name")
+	name, err := requireString(req, "name")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return newToolResultError(err.Error()), nil
 	}
 
 	response, err := views.ReadOrPopulateViewTable(ctx, namespace, name)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return newToolResultError(err.Error()), nil
 	}
 	return structToMCPResponse(response), nil
 }
@@ -51,34 +49,34 @@ type viewNamespaceName struct {
 	Name      string
 }
 
-func viewRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func viewRunHandler(goctx gocontext.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	ctx, err := getDutyCtx(goctx)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return newToolResultError(err.Error()), nil
 	}
 
 	viewToolName := req.Params.Name
 	v := currentViewTools[viewToolName]
 	if v.Name == "" {
-		return mcp.NewToolResultError(fmt.Sprintf("tool[%s] is not associated with any view", viewToolName)), nil
+		return newToolResultError(fmt.Sprintf("tool[%s] is not associated with any view", viewToolName)), nil
 	}
 
 	response, err := views.ReadOrPopulateViewTable(ctx, v.Namespace, v.Name)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return newToolResultError(err.Error()), nil
 	}
 	return structToMCPResponse(response), nil
 }
 
-func viewListToolHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func viewListToolHandler(goctx gocontext.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	jsonData, err := json.Marshal(slices.Collect(maps.Keys(currentViewTools)))
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), err
+		return newToolResultError(err.Error()), err
 	}
-	return mcp.NewToolResultText(string(jsonData)), nil
+	return newToolResultText(string(jsonData)), nil
 }
 
-func viewResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+func viewResourceHandler(goctx gocontext.Context, req *mcp.ReadResourceRequest) ([]*mcp.ResourceContents, error) {
 	ctx, err := getDutyCtx(goctx)
 	if err != nil {
 		return nil, err
@@ -99,16 +97,16 @@ func viewResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequest) (
 		return nil, err
 	}
 
-	return []mcp.ResourceContents{
-		mcp.TextResourceContents{
+	return []*mcp.ResourceContents{
+		{
 			URI:      req.Params.URI,
-			MIMEType: "application/json",
-			Text:     string(jsonData),
+			MIMEType: "application/json"),
+			Text:     lo.ToPtr(string(jsonData)),
 		},
 	}, nil
 }
 
-func syncViewsAsTools(ctx context.Context, s *server.MCPServer) error {
+func syncViewsAsTools(ctx context.Context, s *mcp.Server) error {
 	views, err := gorm.G[models.View](ctx.DB()).Where("deleted_at IS NULL").Find(ctx)
 	if err != nil {
 		return fmt.Errorf("error fetching views: %w", err)
@@ -150,7 +148,11 @@ func syncViewsAsTools(ctx context.Context, s *server.MCPServer) error {
 
 		toolName := generateViewToolName(view)
 		description := fmt.Sprintf("Execute view %s [%s/%s]. %s", spec.Display.Title, view.Namespace, view.Name, spec.Description)
-		s.AddTool(mcp.NewToolWithRawSchema(toolName, description, rj), viewRunHandler)
+		s.AddTool(&mcp.Tool{
+			Name:        toolName,
+			Description: description),
+			InputSchema: json.RawMessage(rj),
+		}, viewRunHandler)
 		newViewTools = append(newViewTools, toolName)
 		currentViewTools[toolName] = viewNamespaceName{Namespace: view.Namespace, Name: view.Name}
 	}
@@ -173,21 +175,33 @@ func generateViewToolName(view models.View) string {
 	return fixMCPToolNameIfRequired(toolName)
 }
 
-func registerViews(ctx context.Context, s *server.MCPServer) {
-	s.AddResourceTemplate(
-		mcp.NewResourceTemplate("view://{namespace}/{name}", "View",
-			mcp.WithTemplateDescription("View resource data"), mcp.WithTemplateMIMEType(echo.MIMEApplicationJSON)),
-		viewResourceHandler,
-	)
+func registerViews(ctx context.Context, s *mcp.Server) {
+	s.AddResourceTemplate(&mcp.ResourceTemplate{
+		URITemplate: "view://{namespace}/{name}",
+		Name:        "View",
+		Description: "View resource data"),
+		MIMEType:    lo.ToPtr("application/json"),
+	}, viewResourceHandler)
 
-	s.AddTool(mcp.NewTool("list_all_views",
-		mcp.WithDescription("List all available view tools")), viewListToolHandler)
+	s.AddTool(&mcp.Tool{
+		Name:        "list_all_views",
+		Description: "List all available view tools"),
+	}, viewListToolHandler)
 
-	s.AddTool(mcp.NewTool("get_view",
-		mcp.WithDescription(`Retrieve dashboard view data containing business metrics and operational data.
+	s.AddTool(&mcp.Tool{
+		Name: "get_view",
+		Description: `Retrieve dashboard view data containing business metrics and operational data.
 		Views include tabular data (display as markdown tables) and chart panels (show panel data if visualization unavailable).
 		Use list_views first to discover available views by their namespace and name.`),
-		mcp.WithString("namespace", mcp.Description("Namespace of the view")),
-		mcp.WithString("name", mcp.Description("Name of the view")),
-	), getViewHandler)
+		InputSchema: createInputSchema(map[string]any{
+			"namespace": map[string]any{
+				"type":        "string",
+				"description": "Namespace of the view",
+			},
+			"name": map[string]any{
+				"type":        "string",
+				"description": "Name of the view",
+			},
+		}, nil),
+	}, getViewHandler)
 }

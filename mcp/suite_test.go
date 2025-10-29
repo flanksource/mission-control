@@ -5,8 +5,7 @@ import (
 	"testing"
 
 	echov4 "github.com/labstack/echo/v4"
-	"github.com/mark3labs/mcp-go/client"
-	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -23,7 +22,7 @@ func TestMCP(t *testing.T) {
 var DefaultContext context.Context
 
 var (
-	mcpClient  *client.Client
+	mcpClient  *mcp.ClientSession
 	testServer *httptest.Server
 )
 
@@ -40,10 +39,7 @@ var _ = ginkgo.BeforeSuite(func() {
 
 	// Initialize MCP client
 	var err error
-	mcpClient, err = client.NewStreamableHttpClient(testServer.URL+"/mcp", nil)
-	Expect(err).NotTo(HaveOccurred())
-
-	_, err = mcpClient.Initialize(DefaultContext, mcp.InitializeRequest{})
+	mcpClient, err = initializeTestClient(testServer.URL + "/mcp")
 	Expect(err).NotTo(HaveOccurred())
 })
 
@@ -51,3 +47,22 @@ var _ = ginkgo.AfterSuite(func() {
 	testServer.Close()
 	setup.AfterSuiteFn()
 })
+
+// Helper function to initialize test client with the new SDK
+func initializeTestClient(url string) (*mcp.ClientSession, error) {
+	client := mcp.NewClient(&mcp.Implementation{
+		Name:    "test-client",
+		Version: "1.0.0",
+	}, nil)
+
+	transport := &mcp.StreamableClientTransport{
+		URL: url,
+	}
+
+	session, err := client.Connect(DefaultContext, transport, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return session, nil
+}

@@ -10,97 +10,97 @@ import (
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/samber/lo"
 )
 
-func healthCheckSearchHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func healthCheckSearchHandler(goctx gocontext.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	ctx, err := getDutyCtx(goctx)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return newToolResultError(err.Error()), nil
 	}
 
-	q, err := req.RequireString("query")
+	q, err := requireString(req, "query")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return newToolResultError(err.Error()), nil
 	}
-	limit := req.GetInt("limit", 30)
+	limit := getInt(req, "limit", 30)
 
 	checks, err := query.FindChecks(ctx, limit, types.ResourceSelector{Search: q})
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return newToolResultError(err.Error()), nil
 	}
 	return structToMCPResponse(checks), nil
 }
 
-func checkStatusHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func checkStatusHandler(goctx gocontext.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	ctx, err := getDutyCtx(goctx)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return newToolResultError(err.Error()), nil
 	}
 
-	checkID, err := req.RequireString("id")
+	checkID, err := requireString(req, "id")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return newToolResultError(err.Error()), nil
 	}
-	limit := req.GetInt("limit", 30)
+	limit := getInt(req, "limit", 30)
 
 	var checkStatuses []models.CheckStatus
 	err = ctx.DB().Where("check_id = ?", checkID).Order("time DESC").Limit(limit).Find(&checkStatuses).Error
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return newToolResultError(err.Error()), nil
 	}
 	return structToMCPResponse(checkStatuses), nil
 }
 
-func healthCheckRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func healthCheckRunHandler(goctx gocontext.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	ctx, err := getDutyCtx(goctx)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return newToolResultError(err.Error()), nil
 	}
 
-	checkID, err := req.RequireString("id")
+	checkID, err := requireString(req, "id")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return newToolResultError(err.Error()), nil
 	}
 
 	endpoint, err := url.JoinPath(api.CanaryCheckerPath, fmt.Sprintf("/run/check/%s", checkID))
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to call health check URL: %v", err)), nil
+		return newToolResultError(fmt.Sprintf("Failed to call health check URL: %v", err)), nil
 	}
 
 	resp, err := http.NewClient().R(ctx).Post(endpoint, nil)
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to call health check URL: %v", err)), nil
+		return newToolResultError(fmt.Sprintf("Failed to call health check URL: %v", err)), nil
 	}
 
 	if !resp.IsOK() {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to call health check URL: %v", err)), nil
+		return newToolResultError(fmt.Sprintf("Failed to call health check URL: %v", err)), nil
 	}
 
 	body, err := resp.AsString()
 	if err != nil {
-		return mcp.NewToolResultError(fmt.Sprintf("Failed to call health check URL: %v", err)), nil
+		return newToolResultError(fmt.Sprintf("Failed to call health check URL: %v", err)), nil
 	}
 
 	return structToMCPResponse(body), nil
 
 }
 
-func listAllChecksHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func listAllChecksHandler(goctx gocontext.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	ctx, err := getDutyCtx(goctx)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return newToolResultError(err.Error()), nil
 	}
 
 	checks, err := query.FindChecks(ctx, -1, types.ResourceSelector{Search: "limit=-1"})
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return newToolResultError(err.Error()), nil
 	}
 	return structToMCPResponse(checks), nil
 }
 
-func registerHealthChecks(s *server.MCPServer) {
+func registerHealthChecks(s *mcp.Server) {
 	var queryDescription = `
 	We can search health checks via query using the same grammar as catalog_search
 	Use the tool: health_check_search to find health checks based on search criteria
@@ -155,40 +155,49 @@ func registerHealthChecks(s *server.MCPServer) {
 	Use this single specification to parse requests, generate valid health check search queries, and validate existing ones.
 `
 
-	healthCheckSearchTool := mcp.NewTool("search_health_checks",
-		mcp.WithDescription("Search and find health checks returning JSON array with check metadata"),
-		mcp.WithReadOnlyHintAnnotation(true),
-		mcp.WithString("query",
-			mcp.Required(),
-			mcp.Description("Search query."+queryDescription),
-		),
-		mcp.WithNumber("limit", mcp.Description("Number of items to return")),
-	)
-	s.AddTool(healthCheckSearchTool, healthCheckSearchHandler)
+	s.AddTool(&mcp.Tool{
+		Name:        "search_health_checks",
+		Description: "Search and find health checks returning JSON array with check metadata"),
+		InputSchema: createInputSchema(map[string]any{
+			"query": map[string]any{
+				"type":        "string",
+				"description": "Search query." + queryDescription,
+			},
+			"limit": map[string]any{
+				"type":        "number",
+				"description": "Number of items to return",
+			},
+		}, []string{"query"}),
+	}, healthCheckSearchHandler)
 
-	getCheckStatusTool := mcp.NewTool("get_check_status",
-		mcp.WithDescription("Get health check execution history as JSON array. Each entry contains status, time, duration, and error (if any). Ordered by most recent first."),
-		mcp.WithReadOnlyHintAnnotation(true),
-		mcp.WithString("id",
-			mcp.Required(),
-			mcp.Description("Health check ID to get status history for"),
-		),
-		mcp.WithNumber("limit", mcp.Description("Number of status entries to return (default: 30)")),
-	)
-	s.AddTool(getCheckStatusTool, checkStatusHandler)
+	s.AddTool(&mcp.Tool{
+		Name:        "get_check_status",
+		Description: "Get health check execution history as JSON array. Each entry contains status, time, duration, and error (if any). Ordered by most recent first."),
+		InputSchema: createInputSchema(map[string]any{
+			"id": map[string]any{
+				"type":        "string",
+				"description": "Health check ID to get status history for",
+			},
+			"limit": map[string]any{
+				"type":        "number",
+				"description": "Number of status entries to return (default: 30)",
+			},
+		}, []string{"id"}),
+	}, checkStatusHandler)
 
-	healthCheckRunTool := mcp.NewTool("run_health_check",
-		mcp.WithDescription("Execute a health check immediately and return results. Returns execution status and timing information."),
-		mcp.WithString("id",
-			mcp.Required(),
-			mcp.Description("Health check ID to run"),
-		),
-	)
-	s.AddTool(healthCheckRunTool, healthCheckRunHandler)
+	s.AddTool(&mcp.Tool{
+		Name:        "run_health_check",
+		Description: "Execute a health check immediately and return results. Returns execution status and timing information."),
+		InputSchema: createInputSchema(map[string]any{
+			"id": map[string]any{
+				"type":        "string",
+				"description": "Health check ID to run",
+			},
+		}, []string{"id"}),
+	}, healthCheckRunHandler)
 
-	listAllChecksTool := mcp.NewTool("list_all_checks",
-		mcp.WithDescription("List all health checks as JSON array with complete metadata including names, IDs, and current status"),
-		mcp.WithReadOnlyHintAnnotation(true),
-	)
-	s.AddTool(listAllChecksTool, listAllChecksHandler)
+	s.AddTool(&mcp.Tool{
+		Name:        "list_all_checks",
+		Description: "List all health checks as JSON array with complete metadata including names, IDs, and current status"),
+	}, listAllChecksHandler)
 }

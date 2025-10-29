@@ -9,7 +9,7 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/google/uuid"
-	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/samber/lo"
@@ -35,10 +35,8 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 
 	ginkgo.Describe("Health Check Tools", func() {
 		ginkgo.It("should list all health checks", func() {
-			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
-				Params: mcp.CallToolParams{
-					Name: "list_all_checks",
-				},
+			result, err := mcpClient.CallTool(DefaultContext, &mcp.CallToolParams{
+				Name: "list_all_checks",
 			})
 
 			Expect(err).NotTo(HaveOccurred())
@@ -51,12 +49,10 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 		})
 
 		ginkgo.It("should search health checks", func() {
-			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
-				Params: mcp.CallToolParams{
-					Name: "search_health_checks",
-					Arguments: map[string]any{
-						"query": "status=unhealthy",
-					},
+			result, err := mcpClient.CallTool(DefaultContext, &mcp.CallToolParams{
+				Name: "search_health_checks",
+				Arguments: map[string]any{
+					"query": "status=unhealthy",
 				},
 			})
 
@@ -73,8 +69,8 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 		ginkgo.It("should get check status", func() {
 			testCheckID := dummy.LogisticsAPIHealthHTTPCheck.ID.String()
 
-			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
-				Params: mcp.CallToolParams{
+			result, err := mcpClient.CallTool(DefaultContext, &mcp.CallToolParams{
+				
 					Name: "get_check_status",
 					Arguments: map[string]any{
 						"id":    testCheckID,
@@ -108,8 +104,8 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 
 	ginkgo.Describe("Catalog Tools", func() {
 		ginkgo.It("should list catalog types", func() {
-			result, err := mcpClient.CallTool(context.Background(), mcp.CallToolRequest{
-				Params: mcp.CallToolParams{
+			result, err := mcpClient.CallTool(context.Background(), &mcp.CallToolParams{
+				
 					Name: "list_catalog_types",
 				},
 			})
@@ -122,8 +118,8 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 		})
 
 		ginkgo.It("should search catalog", func() {
-			result, err := mcpClient.CallTool(context.Background(), mcp.CallToolRequest{
-				Params: mcp.CallToolParams{
+			result, err := mcpClient.CallTool(context.Background(), &mcp.CallToolParams{
+				
 					Name: "search_catalog",
 					Arguments: map[string]any{
 						"query": "type=Kubernetes::*",
@@ -150,8 +146,8 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 		})
 
 		ginkgo.It("should search catalog changes", func() {
-			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
-				Params: mcp.CallToolParams{
+			result, err := mcpClient.CallTool(DefaultContext, &mcp.CallToolParams{
+				
 					Name: "search_catalog_changes",
 					Arguments: map[string]any{
 						"query": "change_type=CREATE",
@@ -168,8 +164,8 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 
 		ginkgo.It("should get related configs", func() {
 			testConfigID := dummy.LogisticsAPIDeployment.ID.String()
-			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
-				Params: mcp.CallToolParams{
+			result, err := mcpClient.CallTool(DefaultContext, &mcp.CallToolParams{
+				
 					Name: "get_related_configs",
 					Arguments: map[string]any{
 						"id": testConfigID,
@@ -188,8 +184,8 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 
 	ginkgo.Describe("Playbook Tools", func() {
 		ginkgo.It("should list all playbooks", func() {
-			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
-				Params: mcp.CallToolParams{
+			result, err := mcpClient.CallTool(DefaultContext, &mcp.CallToolParams{
+				
 					Name: "playbooks_list_all",
 				},
 			})
@@ -201,8 +197,8 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 
 		ginkgo.It("should get recent playbook runs", func() {
 			// TODO: Add playbook run fixtures
-			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
-				Params: mcp.CallToolParams{
+			result, err := mcpClient.CallTool(DefaultContext, &mcp.CallToolParams{
+				
 					Name: "playbook_recent_runs",
 				},
 			})
@@ -213,8 +209,8 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 
 		ginkgo.It("should get failed playbook runs", func() {
 			// TODO: Add playbook run fixtures
-			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
-				Params: mcp.CallToolParams{
+			result, err := mcpClient.CallTool(DefaultContext, &mcp.CallToolParams{
+				
 					Name: "playbook_failed_runs",
 				},
 			})
@@ -227,8 +223,8 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 	ginkgo.Describe("Connection Tools", func() {
 		ginkgo.It("should list connections", func() {
 			// TODO: Add connection fixtures
-			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
-				Params: mcp.CallToolParams{
+			result, err := mcpClient.CallTool(DefaultContext, &mcp.CallToolParams{
+				
 					Name: "list_connections",
 				},
 			})
@@ -240,8 +236,8 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 
 	ginkgo.Describe("View Tools", func() {
 		ginkgo.It("should list views", func() {
-			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
-				Params: mcp.CallToolParams{
+			result, err := mcpClient.CallTool(DefaultContext, &mcp.CallToolParams{
+				
 					Name: "list_all_views",
 				},
 			})
@@ -257,8 +253,8 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 			ginkgo.By("Testing view run handler by checking if it handles tool name correctly")
 
 			// Test that viewRunHandler handles missing tools properly
-			_, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
-				Params: mcp.CallToolParams{
+			_, err := mcpClient.CallTool(DefaultContext, &mcp.CallToolParams{
+				
 					Name: "view_mission-control_default",
 				},
 			})
@@ -273,8 +269,8 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 			testConfigID := dummy.EKSCluster.ID.String()
 			resourceURI := fmt.Sprintf("config_item://%s", testConfigID)
 
-			result, err := mcpClient.ReadResource(DefaultContext, mcp.ReadResourceRequest{
-				Params: mcp.ReadResourceParams{
+			result, err := mcpClient.ReadResource(DefaultContext, &mcp.ReadResourceParams{
+				
 					URI: resourceURI,
 				},
 			})
@@ -287,8 +283,8 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 			testPlaybookID := dummy.EchoConfig.ID.String()
 			resourceURI := fmt.Sprintf("playbook://%s", testPlaybookID)
 
-			result, err := mcpClient.ReadResource(DefaultContext, mcp.ReadResourceRequest{
-				Params: mcp.ReadResourceParams{
+			result, err := mcpClient.ReadResource(DefaultContext, &mcp.ReadResourceParams{
+				
 					URI: resourceURI,
 				},
 			})
@@ -304,8 +300,8 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 			testConnectionName := "kubernetes"
 			resourceURI := fmt.Sprintf("connection://%s/%s", testConnectionNamespace, testConnectionName)
 
-			result, err := mcpClient.ReadResource(DefaultContext, mcp.ReadResourceRequest{
-				Params: mcp.ReadResourceParams{
+			result, err := mcpClient.ReadResource(DefaultContext, &mcp.ReadResourceParams{
+				
 					URI: resourceURI,
 				},
 			})
@@ -317,8 +313,8 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 
 	ginkgo.Describe("Error Handling", func() {
 		ginkgo.It("should handle invalid tool names gracefully", func() {
-			_, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
-				Params: mcp.CallToolParams{
+			_, err := mcpClient.CallTool(DefaultContext, &mcp.CallToolParams{
+				
 					Name:      "invalid_tool_name",
 					Arguments: map[string]interface{}{},
 				},
@@ -328,8 +324,8 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 		})
 
 		ginkgo.It("should handle invalid parameters gracefully", func() {
-			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
-				Params: mcp.CallToolParams{
+			result, err := mcpClient.CallTool(DefaultContext, &mcp.CallToolParams{
+				
 					Name: "search_health_checks",
 					Arguments: map[string]interface{}{
 						// Missing required "query" parameter
@@ -343,8 +339,8 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 		})
 
 		ginkgo.It("should handle invalid resource URIs gracefully", func() {
-			_, err := mcpClient.ReadResource(DefaultContext, mcp.ReadResourceRequest{
-				Params: mcp.ReadResourceParams{
+			_, err := mcpClient.ReadResource(DefaultContext, &mcp.ReadResourceParams{
+				
 					URI: "invalid://resource/uri",
 				},
 			})
@@ -356,8 +352,8 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 			nonExistentID := uuid.New().String()
 			resourceURI := fmt.Sprintf("config_item://%s", nonExistentID)
 
-			_, err := mcpClient.ReadResource(DefaultContext, mcp.ReadResourceRequest{
-				Params: mcp.ReadResourceParams{
+			_, err := mcpClient.ReadResource(DefaultContext, &mcp.ReadResourceParams{
+				
 					URI: resourceURI,
 				},
 			})

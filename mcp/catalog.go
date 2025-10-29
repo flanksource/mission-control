@@ -13,26 +13,24 @@ import (
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
-	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mark3labs/mcp-go/server"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/samber/lo"
 )
 
 //go:embed k8s_troubleshooting_prompt.txt
 var k8sTroubleshootingPrompt string
 
-func searchCatalogHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func searchCatalogHandler(goctx gocontext.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	ctx, err := getDutyCtx(goctx)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return newToolResultError(err.Error()), nil
 	}
 
-	q, err := req.RequireString("query")
+	q, err := requireString(req, "query")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return newToolResultError(err.Error()), nil
 	}
-	limit := req.GetInt("limit", 30)
+	limit := getInt(req, "limit", 30)
 
 	var cis any
 	switch req.Params.Name {
@@ -43,7 +41,7 @@ func searchCatalogHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mc
 	}
 
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return newToolResultError(err.Error()), nil
 	}
 
 	return structToMCPResponse(cis), nil
@@ -80,50 +78,50 @@ func queryConfigItemDescription(ctx context.Context, limit int, q string) ([]Con
 	return cds, nil
 }
 
-func searchConfigChangesHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	q, err := req.RequireString("query")
+func searchConfigChangesHandler(goctx gocontext.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	q, err := requireString(req, "query")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return newToolResultError(err.Error()), nil
 	}
 
-	limit := req.GetInt("limit", 30)
+	limit := getInt(req, "limit", 30)
 
 	ctx, err := getDutyCtx(goctx)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return newToolResultError(err.Error()), nil
 	}
 	cis, err := query.FindConfigChangesByResourceSelector(ctx, limit, types.ResourceSelector{Search: q})
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return newToolResultError(err.Error()), nil
 	}
 	return structToMCPResponse(cis), nil
 }
 
-func relatedCatalogHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	rawID, err := req.RequireString("id")
+func relatedCatalogHandler(goctx gocontext.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	rawID, err := requireString(req, "id")
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return newToolResultError(err.Error()), nil
 	}
 
 	ctx, err := getDutyCtx(goctx)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return newToolResultError(err.Error()), nil
 	}
 	id, err := uuid.Parse(rawID)
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return newToolResultError(err.Error()), nil
 	}
 
 	cis, err := query.GetRelatedConfigs(ctx, query.RelationQuery{
 		ID: id,
 	})
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return newToolResultError(err.Error()), nil
 	}
 	return structToMCPResponse(cis), nil
 }
 
-func configTypeResourceHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func configTypeResourceHandler(goctx gocontext.Context, req *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	ctx, err := getDutyCtx(goctx)
 	if err != nil {
 		return nil, err
@@ -132,12 +130,12 @@ func configTypeResourceHandler(goctx gocontext.Context, req mcp.CallToolRequest)
 	var types []string
 	err = ctx.DB().Model(&models.ConfigItem{}).Select("DISTINCT(type)").Find(&types).Error
 	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
+		return newToolResultError(err.Error()), nil
 	}
-	return mcp.NewToolResultText(strings.Join(types, "\n")), nil
+	return newToolResultText(strings.Join(types, "\n")), nil
 }
 
-func ConfigItemResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
+func ConfigItemResourceHandler(goctx gocontext.Context, req *mcp.ReadResourceRequest) ([]*mcp.ResourceContents, error) {
 	id := extractID(req.Params.URI)
 
 	ctx, err := getDutyCtx(goctx)
@@ -156,8 +154,8 @@ func ConfigItemResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequ
 		return nil, err
 	}
 
-	return []mcp.ResourceContents{
-		mcp.TextResourceContents{
+	return []*mcp.ResourceContents{
+		{
 			URI:      req.Params.URI,
 			MIMEType: "application/json",
 			Text:     string(jsonData),
@@ -165,39 +163,51 @@ func ConfigItemResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequ
 	}, nil
 }
 
-func unhealthyCatalogItemsPromptHandler(ctx gocontext.Context, req mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+func unhealthyCatalogItemsPromptHandler(ctx gocontext.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	return &mcp.GetPromptResult{
 		Description: "Search for unhealthy catalog items",
-		Messages: []mcp.PromptMessage{
+		Messages: []*mcp.PromptMessage{
 			{
-				Role:    "user",
-				Content: mcp.NewTextContent("Query the catalog using search_catalog tool for all unhealthy items with the query: health!=healthy"),
+				Role: mcp.RoleUser,
+				Content: mcp.Content{
+					&mcp.TextContent{
+						Text: "Query the catalog using search_catalog tool for all unhealthy items with the query: health!=healthy",
+					},
+				},
 			},
 		},
 	}, nil
 }
 
-func troubleshootKubernetesErrorPrompt(ctx gocontext.Context, req mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+func troubleshootKubernetesErrorPrompt(ctx gocontext.Context, req *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 	q := lo.CoalesceOrEmpty(req.Params.Arguments["query"], "health!=healthy type=Kubernetes::*")
 	return &mcp.GetPromptResult{
 		Description: "Troubleshoot kubernetes resources",
-		Messages: []mcp.PromptMessage{
+		Messages: []*mcp.PromptMessage{
 			{
-				Role:    "user",
-				Content: mcp.NewTextContent(fmt.Sprintf(k8sTroubleshootingPrompt, q)),
+				Role: mcp.RoleUser,
+				Content: mcp.Content{
+					&mcp.TextContent{
+						Text: fmt.Sprintf(k8sTroubleshootingPrompt, q),
+					},
+				},
 			},
 		},
 	}, nil
 }
 
-func registerCatalog(s *server.MCPServer) {
-	s.AddResourceTemplate(
-		mcp.NewResourceTemplate("config_item://{id}", "Config Item",
-			mcp.WithTemplateDescription("Config Item Data"), mcp.WithTemplateMIMEType(echo.MIMEApplicationJSON)),
-		ConfigItemResourceHandler)
+func registerCatalog(s *mcp.Server) {
+	s.AddResourceTemplate(&mcp.ResourceTemplate{
+		URITemplate: "config_item://{id}",
+		Name:        "Config Item",
+		Description: "Config Item Data",
+		MIMEType:    "application/json",
+	}, ConfigItemResourceHandler)
 
-	s.AddTool(mcp.NewTool("list_catalog_types",
-		mcp.WithDescription("List all config types")), configTypeResourceHandler)
+	s.AddTool(&mcp.Tool{
+		Name:        "list_catalog_types",
+		Description: "List all config types",
+	}, configTypeResourceHandler)
 
 	var queryDescription = `
 	We can search our entire catalog via query
@@ -263,16 +273,21 @@ func registerCatalog(s *server.MCPServer) {
 	Each catalog item also has more information in its config field which can be queried by calling the tool describe_config(query), the query is the same
 	but that tool should only be called when "describe" is explicitly used
 	`
-	searchCatalogTool := mcp.NewTool("search_catalog",
-		mcp.WithDescription("Search and find configuration items in the catalog. For detailed config data, use describe_config tool."+catalogSearchDescription),
-		mcp.WithReadOnlyHintAnnotation(true),
-		mcp.WithString("query",
-			mcp.Required(),
-			mcp.Description("Search query."+queryDescription),
-		),
-		mcp.WithNumber("limit", mcp.Description("Number of items to return")),
-	)
-	s.AddTool(searchCatalogTool, searchCatalogHandler)
+
+	s.AddTool(&mcp.Tool{
+		Name:        "search_catalog",
+		Description: "Search and find configuration items in the catalog. For detailed config data, use describe_config tool." + catalogSearchDescription,
+		InputSchema: createInputSchema(map[string]any{
+			"query": map[string]any{
+				"type":        "string",
+				"description": "Search query." + queryDescription,
+			},
+			"limit": map[string]any{
+				"type":        "number",
+				"description": "Number of items to return",
+			},
+		}, []string{"query"}),
+	}, searchCatalogHandler)
 
 	describeConfigDescription := `
 	This tool should only be called when "describe" is explicitly used, for all other purposes search_catalog tool should be used.
@@ -283,15 +298,21 @@ func registerCatalog(s *server.MCPServer) {
 
 	Example query: id=f47ac10b-58cc-4372-a567-0e02b2c3d479,6ba7b810-9dad-11d1-80b4-00c04fd430c8,a1b2c3d4-e5f6-7890-abcd-ef1234567890
 	`
-	s.AddTool(mcp.NewTool("describe_config",
-		mcp.WithDescription("Get all data for configs."+describeConfigDescription),
-		mcp.WithReadOnlyHintAnnotation(true),
-		mcp.WithString("query",
-			mcp.Required(),
-			mcp.Description("Search query."+queryDescription),
-		),
-		mcp.WithNumber("limit", mcp.Description("Number of items to return")),
-	), searchCatalogHandler)
+
+	s.AddTool(&mcp.Tool{
+		Name:        "describe_config",
+		Description: "Get all data for configs." + describeConfigDescription,
+		InputSchema: createInputSchema(map[string]any{
+			"query": map[string]any{
+				"type":        "string",
+				"description": "Search query." + queryDescription,
+			},
+			"limit": map[string]any{
+				"type":        "number",
+				"description": "Number of items to return",
+			},
+		}, []string{"query"}),
+	}, searchCatalogHandler)
 
 	var configChangeQueryDescription = `
 	We can search all the catalog changes via query
@@ -355,28 +376,44 @@ func registerCatalog(s *server.MCPServer) {
 	Use this single specification to parse requests, generate valid catalog-search queries, and validate existing ones.
 	`
 
-	searchCatalogChangesTool := mcp.NewTool("search_catalog_changes",
-		mcp.WithDescription("Search and find configuration change events across catalog items"),
-		mcp.WithReadOnlyHintAnnotation(true),
-		mcp.WithString("query",
-			mcp.Required(),
-			mcp.Description("Search query"+configChangeQueryDescription),
-		),
-		mcp.WithNumber("limit", mcp.Description("Number of results to return")),
-	)
-	s.AddTool(searchCatalogChangesTool, searchConfigChangesHandler)
+	s.AddTool(&mcp.Tool{
+		Name:        "search_catalog_changes",
+		Description: "Search and find configuration change events across catalog items",
+		InputSchema: createInputSchema(map[string]any{
+			"query": map[string]any{
+				"type":        "string",
+				"description": "Search query" + configChangeQueryDescription,
+			},
+			"limit": map[string]any{
+				"type":        "number",
+				"description": "Number of results to return",
+			},
+		}, []string{"query"}),
+	}, searchConfigChangesHandler)
 
-	relatedCatalogTool := mcp.NewTool("get_related_configs",
-		mcp.WithDescription("Find configuration items related to a specific config by relationships and dependencies"),
-		mcp.WithString("id",
-			mcp.Required(),
-			mcp.Description("Config ID"),
-		),
-	)
-	s.AddTool(relatedCatalogTool, relatedCatalogHandler)
+	s.AddTool(&mcp.Tool{
+		Name:        "get_related_configs",
+		Description: "Find configuration items related to a specific config by relationships and dependencies",
+		InputSchema: createInputSchema(map[string]any{
+			"id": map[string]any{
+				"type":        "string",
+				"description": "Config ID",
+			},
+		}, []string{"id"}),
+	}, relatedCatalogHandler)
 
-	s.AddPrompt(mcp.NewPrompt("Unhealthy catalog items"), unhealthyCatalogItemsPromptHandler)
-	s.AddPrompt(mcp.NewPrompt("troubleshoot_kubernetes_resource",
-		mcp.WithArgument("query", mcp.ArgumentDescription("query to use for fetching catalog items to troubleshoot")),
-	), troubleshootKubernetesErrorPrompt)
+	s.AddPrompt(&mcp.Prompt{
+		Name: "Unhealthy catalog items",
+	}, unhealthyCatalogItemsPromptHandler)
+
+	s.AddPrompt(&mcp.Prompt{
+		Name: "troubleshoot_kubernetes_resource",
+		Arguments: []*mcp.PromptArgument{
+			{
+				Name:        "query",
+				Description: "query to use for fetching catalog items to troubleshoot"),
+				Required:    false,
+			},
+		},
+	}, troubleshootKubernetesErrorPrompt)
 }

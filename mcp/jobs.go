@@ -5,10 +5,10 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/job"
 	"github.com/flanksource/incident-commander/jobs"
-	"github.com/mark3labs/mcp-go/server"
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-func SyncViewTools(ctx context.Context, s *server.MCPServer) *job.Job {
+func SyncViewTools(ctx context.Context, s *mcp.Server) *job.Job {
 	return &job.Job{
 		Name:          "SyncMCPViewTools",
 		Context:       ctx,
@@ -24,7 +24,7 @@ func SyncViewTools(ctx context.Context, s *server.MCPServer) *job.Job {
 	}
 }
 
-func SyncPlaybookTools(ctx context.Context, s *server.MCPServer) *job.Job {
+func SyncPlaybookTools(ctx context.Context, s *mcp.Server) *job.Job {
 	return &job.Job{
 		Name:          "SyncMCPPlaybookTools",
 		Context:       ctx,
@@ -40,7 +40,7 @@ func SyncPlaybookTools(ctx context.Context, s *server.MCPServer) *job.Job {
 	}
 }
 
-func registerJobs(ctx context.Context, s *server.MCPServer) {
+func registerJobs(ctx context.Context, s *mcp.Server) {
 	for _, job := range GetAllJobs(ctx, s) {
 		j := job
 		j.Context = ctx
@@ -50,7 +50,7 @@ func registerJobs(ctx context.Context, s *server.MCPServer) {
 	}
 }
 
-func GetAllJobs(ctx context.Context, s *server.MCPServer) []*job.Job {
+func GetAllJobs(ctx context.Context, s *mcp.Server) []*job.Job {
 	return []*job.Job{
 		SyncViewTools(ctx, s),
 		SyncPlaybookTools(ctx, s),
