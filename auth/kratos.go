@@ -56,13 +56,13 @@ func (k *kratosMiddleware) kratosLoginWithCache(ctx gocontext.Context, username,
 
 // kratosLogin performs login with password
 func (k *kratosMiddleware) kratosLogin(ctx gocontext.Context, username, password string) (*client.Session, error) {
-	loginFlow, _, err := k.client.FrontendApi.CreateNativeLoginFlow(ctx).Execute()
+	loginFlow, _, err := k.client.FrontendAPI.CreateNativeLoginFlow(ctx).Execute()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create native login flow: %w", err)
 	}
 
 	updateLoginFlowBody := client.UpdateLoginFlowBody{UpdateLoginFlowWithPasswordMethod: client.NewUpdateLoginFlowWithPasswordMethod(username, "password", password)}
-	login, _, err := k.client.FrontendApi.UpdateLoginFlow(ctx).Flow(loginFlow.Id).UpdateLoginFlowBody(updateLoginFlowBody).Execute()
+	login, _, err := k.client.FrontendAPI.UpdateLoginFlow(ctx).Flow(loginFlow.Id).UpdateLoginFlowBody(updateLoginFlowBody).Execute()
 	if err != nil {
 		return nil, fmt.Errorf("failed to update native login flow: %w", err)
 	}
@@ -94,7 +94,7 @@ func (k *kratosMiddleware) validateSession(ctx context.Context, r *http.Request)
 		return nil, errors.New("no session found in cookie")
 	}
 
-	session, _, err := k.client.FrontendApi.ToSession(r.Context()).Cookie(cookie.String()).Execute()
+	session, _, err := k.client.FrontendAPI.ToSession(r.Context()).Cookie(cookie.String()).Execute()
 	if err != nil {
 		return nil, err
 	}
@@ -130,7 +130,7 @@ func (k *kratosMiddleware) basicAuthLogin(ctx context.Context, username, passwor
 			Id:        uuid.NewString(),
 			Active:    lo.ToPtr(true),
 			ExpiresAt: accessToken.ExpiresAt,
-			Identity: client.Identity{
+			Identity: &client.Identity{
 				Id:     accessToken.PersonID.String(),
 				Traits: traits,
 			},

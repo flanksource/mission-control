@@ -14,6 +14,13 @@ var (
 	KratosAPI, KratosAdminAPI string
 )
 
+const (
+	IdentityStateActive   = "active"
+	IdentityStateInactive = "inactive"
+)
+
+var AllowedIdentityStates = []string{IdentityStateActive, IdentityStateInactive}
+
 type KratosHandler struct {
 	client      *client.APIClient
 	adminClient *client.APIClient
@@ -52,13 +59,13 @@ func (k *KratosHandler) createUser(ctx gocontext.Context, firstName, lastName, e
 		},
 	)
 
-	createdIdentity, _, err := k.adminClient.IdentityApi.CreateIdentity(ctx).CreateIdentityBody(adminCreateIdentityBody).Execute()
+	createdIdentity, _, err := k.adminClient.IdentityAPI.CreateIdentity(ctx).CreateIdentityBody(adminCreateIdentityBody).Execute()
 	return createdIdentity, err
 }
 
 func (k *KratosHandler) createRecoveryLink(ctx gocontext.Context, id string) (string, string, error) {
 	createRecoveryCodeForIdentityBody := client.NewCreateRecoveryCodeForIdentityBody(id)
-	resp, _, err := k.adminClient.IdentityApi.
+	resp, _, err := k.adminClient.IdentityAPI.
 		CreateRecoveryCodeForIdentity(ctx).
 		CreateRecoveryCodeForIdentityBody(*createRecoveryCodeForIdentityBody).
 		Execute()
@@ -93,7 +100,7 @@ func (k *KratosHandler) createAdminIdentity(ctx gocontext.Context) (string, erro
 	)
 	body.SetCredentials(k.getIdentityCredentials(getDefaultAdminPassword()))
 
-	createdIdentity, _, err := k.adminClient.IdentityApi.CreateIdentity(ctx).CreateIdentityBody(body).Execute()
+	createdIdentity, _, err := k.adminClient.IdentityAPI.CreateIdentity(ctx).CreateIdentityBody(body).Execute()
 	if err != nil {
 		return "", err
 	}
@@ -103,7 +110,7 @@ func (k *KratosHandler) createAdminIdentity(ctx gocontext.Context) (string, erro
 
 func (k *KratosHandler) updateAdminPassword(ctx gocontext.Context, id string) error {
 	body := *client.NewUpdateIdentityBody(
-		"default", client.IDENTITYSTATE_ACTIVE,
+		"default", IdentityStateActive,
 		map[string]any{
 			"email": AdminEmail,
 			"name": map[string]string{
@@ -113,7 +120,7 @@ func (k *KratosHandler) updateAdminPassword(ctx gocontext.Context, id string) er
 	)
 	body.SetCredentials(k.getIdentityCredentials(getDefaultAdminPassword()))
 
-	_, _, err := k.adminClient.IdentityApi.UpdateIdentity(ctx, id).UpdateIdentityBody(body).Execute()
+	_, _, err := k.adminClient.IdentityAPI.UpdateIdentity(ctx, id).UpdateIdentityBody(body).Execute()
 	return err
 }
 
