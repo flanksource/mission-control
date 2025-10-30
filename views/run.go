@@ -24,6 +24,8 @@ const valueFromMaxResults = 100
 
 // Run executes the view queries and returns the rows with data
 func Run(ctx context.Context, view *v1.View, request *requestOpt) (*api.ViewResult, error) {
+	ctx = ctx.WithName("view")
+
 	output := api.ViewResult{
 		Namespace:          view.Namespace,
 		Name:               view.Name,
@@ -48,11 +50,13 @@ func Run(ctx context.Context, view *v1.View, request *requestOpt) (*api.ViewResu
 
 	for queryName, q := range view.Spec.Queries {
 		eg.Go(func() error {
+			queryStart := time.Now()
 			results, err := pkgView.ExecuteQuery(ctx, q.Query)
 			if err != nil {
 				return fmt.Errorf("failed to execute view query '%s': %w", queryName, err)
 			}
-			ctx.Logger.Infof("query=%s results=%d", queryName, len(results))
+			queryDuration := time.Since(queryStart)
+			ctx.Tracef("view=%s query=%s results=%d duration=%s", view.GetNamespacedName(), queryName, len(results), queryDuration)
 
 			resultSet := dataquery.QueryResultSet{
 				Results:    results,
@@ -106,10 +110,15 @@ func Run(ctx context.Context, view *v1.View, request *requestOpt) (*api.ViewResu
 
 		env := map[string]any{"dataset": dataset}
 		for _, panel := range view.Spec.Panels {
+			panelStart := time.Now()
+			ctx.Tracef("executing panel=%s type=%s", panel.Name, panel.Type)
+
 			rows, err := dataquery.RunSQL(sqliteCtx, panel.Query)
 			if err != nil {
 				return nil, fmt.Errorf("failed to execute panel '%s': %w", panel.Name, err)
 			}
+
+			ctx.Tracef("panel completed panel=%s rows=%d duration=%s", panel.Name, len(rows), time.Since(panelStart))
 
 			switch panel.Type {
 			case api.PanelTypeGauge:
@@ -132,13 +141,14 @@ func Run(ctx context.Context, view *v1.View, request *requestOpt) (*api.ViewResu
 	if view.HasTable() {
 		var mergedData []dataquery.QueryResultRow
 		if lo.FromPtr(view.Spec.Merge) != "" {
+			mergeStart := time.Now()
 			var err error
 			mergedData, err = dataquery.RunSQL(sqliteCtx, lo.FromPtr(view.Spec.Merge))
 			if err != nil {
 				return nil, ctx.Oops(dutyAPI.EINVALID).Wrapf(err, "failed to run sql query")
 			}
 
-			ctx.Infof("merge query results: %d", len(mergedData))
+			ctx.Tracef("merge completed results=%d duration=%s", len(mergedData), time.Since(mergeStart))
 		} else if len(queryResults) == 1 {
 			mergedData = queryResults[0].Results
 		} else {

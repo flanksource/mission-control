@@ -23,3 +23,4 @@ log.level.db=warn
 log.level.resourceSelector=trace
 log.db.slowThreshold=100ms
 log.level.http=warn
+log.level.view=trace
