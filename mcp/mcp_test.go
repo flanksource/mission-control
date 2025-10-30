@@ -1,7 +1,5 @@
 package mcp
 
-/*
-
 import (
 	"context"
 	"fmt"
@@ -387,4 +385,3 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 		})
 	})
 })
-*/
