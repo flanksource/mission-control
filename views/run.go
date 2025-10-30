@@ -111,14 +111,14 @@ func Run(ctx context.Context, view *v1.View, request *requestOpt) (*api.ViewResu
 		env := map[string]any{"dataset": dataset}
 		for _, panel := range view.Spec.Panels {
 			panelStart := time.Now()
-			ctx.Tracef("executing panel=%s type=%s", panel.Name, panel.Type)
+			ctx.Logger.V(4).Infof("executing panel=%s type=%s", panel.Name, panel.Type)
 
 			rows, err := dataquery.RunSQL(sqliteCtx, panel.Query)
 			if err != nil {
 				return nil, fmt.Errorf("failed to execute panel '%s': %w", panel.Name, err)
 			}
 
-			ctx.Tracef("panel completed panel=%s rows=%d duration=%s", panel.Name, len(rows), time.Since(panelStart))
+			ctx.Logger.V(4).Infof("panel completed panel=%s rows=%d duration=%s", panel.Name, len(rows), time.Since(panelStart))
 
 			switch panel.Type {
 			case api.PanelTypeGauge:
@@ -148,7 +148,7 @@ func Run(ctx context.Context, view *v1.View, request *requestOpt) (*api.ViewResu
 				return nil, ctx.Oops(dutyAPI.EINVALID).Wrapf(err, "failed to run sql query")
 			}
 
-			ctx.Tracef("merge completed results=%d duration=%s", len(mergedData), time.Since(mergeStart))
+			ctx.Logger.V(3).Infof("merge completed results=%d duration=%s", len(mergedData), time.Since(mergeStart))
 		} else if len(queryResults) == 1 {
 			mergedData = queryResults[0].Results
 		} else {
