@@ -1,0 +1,32 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: bargauge
+  namespace: mc
+spec:
+  queries:
+    cpu_usage:
+      configs:
+        types:
+          - "Kubernetes::Pod"
+  panels:
+    - name: Global CPU Usage
+      description: CPU usage showing real, requested, and limits
+      type: bargauge
+      bargauge:
+        min: "0"
+        max: "100"
+        unit: "%"
+        thresholds:
+          - value: "0"
+            color: "#10b981"
+          - value: "50"
+            color: "#eab308"
+          - value: "80"
+            color: "#ef4444"
+      query: |
+        SELECT 'Real' as name, 9.10 as value
+        UNION ALL
+        SELECT 'Requests' as name, 35.7 as value
+        UNION ALL
+        SELECT 'Limits' as name, 189.12 as value

@@ -15,6 +15,7 @@ const (
 	PanelTypeNumber   PanelType = "number"
 	PanelTypeDuration PanelType = "duration"
 	PanelTypeGauge    PanelType = "gauge"
+	PanelTypeBargauge PanelType = "bargauge"
 )
 
 // PanelDef defines a panel for the view
@@ -23,6 +24,7 @@ const (
 // +kubebuilder:validation:XValidation:rule="self.type!='piechart' ? !has(self.piechart) : true",message="piechart config not allowed for this type"
 // +kubebuilder:validation:XValidation:rule="self.type!='number' ? !has(self.number) : true",message="number config not allowed for this type"
 // +kubebuilder:validation:XValidation:rule="self.type!='table' ? !has(self.table) : true",message="table config not allowed for this type"
+// +kubebuilder:validation:XValidation:rule="self.type!='bargauge' ? !has(self.bargauge) : true",message="bargauge config not allowed for this type"
 type PanelDef struct {
 	PanelMeta `json:",inline" yaml:",inline"`
 
@@ -38,8 +40,8 @@ type PanelMeta struct {
 	// Description of what this panel represents
 	Description string `json:"description,omitempty" yaml:"description,omitempty"`
 
-	// Type of panel visualization (piechart, text, gauge, number)
-	// +kubebuilder:validation:Enum=piechart;text;gauge;number;table;duration
+	// Type of panel visualization (piechart, text, gauge, number, table, duration, bargauge)
+	// +kubebuilder:validation:Enum=piechart;text;gauge;number;table;duration;bargauge
 	Type PanelType `json:"type" yaml:"type"`
 
 	// Configuration for gauge visualization
@@ -53,10 +55,20 @@ type PanelMeta struct {
 
 	// Configuration for breakdown visualization
 	Table *PanelTableConfig `json:"table,omitempty" yaml:"table,omitempty"`
+
+	// Configuration for bargauge visualization
+	Bargauge *PanelBargaugeConfig `json:"bargauge,omitempty" yaml:"bargauge,omitempty"`
 }
 
 // +kubebuilder:object:generate=true
 type PanelGaugeConfig struct {
+	pkgView.GaugeConfig `json:",inline" yaml:",inline"`
+	Unit                string `json:"unit,omitempty" yaml:"unit,omitempty"`
+}
+
+// PanelBargaugeConfig defines configuration for bargauge visualization
+// +kubebuilder:object:generate=true
+type PanelBargaugeConfig struct {
 	pkgView.GaugeConfig `json:",inline" yaml:",inline"`
 	Unit                string `json:"unit,omitempty" yaml:"unit,omitempty"`
 }

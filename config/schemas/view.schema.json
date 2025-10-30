@@ -334,6 +334,30 @@
         "uid"
       ]
     },
+    "PanelBargaugeConfig": {
+      "properties": {
+        "max": {
+          "type": "string"
+        },
+        "min": {
+          "type": "string"
+        },
+        "precision": {
+          "type": "integer"
+        },
+        "thresholds": {
+          "items": {
+            "$ref": "#/$defs/GaugeThreshold"
+          },
+          "type": "array"
+        },
+        "unit": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "PanelDef": {
       "properties": {
         "name": {
@@ -356,6 +380,9 @@
         },
         "table": {
           "$ref": "#/$defs/PanelTableConfig"
+        },
+        "bargauge": {
+          "$ref": "#/$defs/PanelBargaugeConfig"
         },
         "query": {
           "type": "string"
