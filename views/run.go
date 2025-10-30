@@ -68,6 +68,23 @@ func Run(ctx context.Context, view *v1.View, request *requestOpt) (*api.ViewResu
 				resultSet.ColumnDefs = configQueryResultSchema
 			} else if q.Changes != nil {
 				resultSet.ColumnDefs = changeQueryResultSchema
+			} else if q.Prometheus != nil {
+				// When prometheus query returns no result, we a column def is necessary to
+				// generate the table in sqlite3 database.
+				if len(results) == 0 {
+					if len(resultSet.ColumnDefs) == 0 {
+						// It is assumed that the query only returns a single "value" column.
+						resultSet.ColumnDefs = map[string]models.ColumnType{
+							"value": models.ColumnTypeDecimal,
+						}
+					}
+				} else {
+					if len(resultSet.ColumnDefs) != 0 {
+						if _, ok := resultSet.ColumnDefs["value"]; !ok {
+							resultSet.ColumnDefs["value"] = models.ColumnTypeDecimal
+						}
+					}
+				}
 			}
 
 			mu.Lock()

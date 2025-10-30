@@ -41,6 +41,9 @@ spec:
       type: string
   queries:
     metrics:
+      columns:
+        namespace: string
+        pod: string
       prometheus:
         connection: connection://mc/prometheus
         query: |
