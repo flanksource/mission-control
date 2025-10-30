@@ -3,6 +3,7 @@ package views
 import (
 	"fmt"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/flanksource/commons/duration"
@@ -13,6 +14,7 @@ import (
 	"github.com/flanksource/duty/types"
 	pkgView "github.com/flanksource/duty/view"
 	"github.com/samber/lo"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -37,26 +39,43 @@ func Run(ctx context.Context, view *v1.View, request *requestOpt) (*api.ViewResu
 		}
 	}
 
+	// Execute queries in parallel with a concurrency limit
 	var queryResults []dataquery.QueryResultSet
+	var mu sync.Mutex
+
+	eg := errgroup.Group{}
+	eg.SetLimit(10)
+
 	for queryName, q := range view.Spec.Queries {
-		results, err := pkgView.ExecuteQuery(ctx, q.Query)
-		if err != nil {
-			return nil, fmt.Errorf("failed to execute view query '%s': %w", queryName, err)
-		}
+		eg.Go(func() error {
+			results, err := pkgView.ExecuteQuery(ctx, q.Query)
+			if err != nil {
+				return fmt.Errorf("failed to execute view query '%s': %w", queryName, err)
+			}
+			ctx.Logger.Infof("query=%s results=%d", queryName, len(results))
 
-		resultSet := dataquery.QueryResultSet{
-			Results:    results,
-			Name:       queryName,
-			ColumnDefs: q.Columns,
-		}
+			resultSet := dataquery.QueryResultSet{
+				Results:    results,
+				Name:       queryName,
+				ColumnDefs: q.Columns,
+			}
 
-		if q.Configs != nil {
-			resultSet.ColumnDefs = configQueryResultSchema
-		} else if q.Changes != nil {
-			resultSet.ColumnDefs = changeQueryResultSchema
-		}
+			if q.Configs != nil {
+				resultSet.ColumnDefs = configQueryResultSchema
+			} else if q.Changes != nil {
+				resultSet.ColumnDefs = changeQueryResultSchema
+			}
 
-		queryResults = append(queryResults, resultSet)
+			mu.Lock()
+			queryResults = append(queryResults, resultSet)
+			mu.Unlock()
+
+			return nil
+		})
+	}
+
+	if err := eg.Wait(); err != nil {
+		return nil, err
 	}
 
 	// If there's no merge query and no panels,
@@ -118,6 +137,8 @@ func Run(ctx context.Context, view *v1.View, request *requestOpt) (*api.ViewResu
 			if err != nil {
 				return nil, ctx.Oops(dutyAPI.EINVALID).Wrapf(err, "failed to run sql query")
 			}
+
+			ctx.Infof("merge query results: %d", len(mergedData))
 		} else if len(queryResults) == 1 {
 			mergedData = queryResults[0].Results
 		} else {
