@@ -33,7 +33,10 @@ func checkResultNotInMCPResponse(toolResult any, results []string) {
 
 var _ = ginkgo.Describe("MCP Tools", func() {
 	ginkgo.Describe("Health Check Tools", func() {
-		ginkgo.It("should list all health checks", func() {
+		// TODO: Remove skip once mcp-go v0.43.0+ is released with streamable HTTP fixes
+		// These tests fail intermittently in v0.42.0 due to "unexpected nil response" bug
+		// See: https://github.com/mark3labs/mcp-go/issues/447
+		ginkgo.It("should list all health checks", ginkgo.FlakeAttempts(3), func() {
 			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
 				Params: mcp.CallToolParams{
 					Name: "list_all_checks",
@@ -49,7 +52,7 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 			checkResultInMCPResponse(result.Content, ids)
 		})
 
-		ginkgo.It("should search health checks", func() {
+		ginkgo.It("should search health checks", ginkgo.FlakeAttempts(3), func() {
 			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
 				Params: mcp.CallToolParams{
 					Name: "search_health_checks",
@@ -69,7 +72,7 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 			checkResultNotInMCPResponse(result.Content, healthyCheckIDs)
 		})
 
-		ginkgo.It("should get check status", func() {
+		ginkgo.It("should get check status", ginkgo.FlakeAttempts(3), func() {
 			testCheckID := dummy.LogisticsAPIHealthHTTPCheck.ID.String()
 
 			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
@@ -106,7 +109,10 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 	})
 
 	ginkgo.Describe("Catalog Tools", func() {
-		ginkgo.It("should list catalog types", func() {
+		// TODO: Remove FlakeAttempts once mcp-go v0.43.0+ is released with streamable HTTP fixes
+		// These tests fail intermittently in v0.42.0 due to "unexpected nil response" bug
+		// See: https://github.com/mark3labs/mcp-go/issues/447
+		ginkgo.It("should list catalog types", ginkgo.FlakeAttempts(3), func() {
 			result, err := mcpClient.CallTool(context.Background(), mcp.CallToolRequest{
 				Params: mcp.CallToolParams{
 					Name: "list_catalog_types",
@@ -120,7 +126,10 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 			checkResultInMCPResponse(result.Content, configTypes)
 		})
 
-		ginkgo.It("should search catalog", func() {
+		// TODO: Remove FlakeAttempts once mcp-go v0.43.0+ is released with streamable HTTP fixes
+		// This test fails intermittently in v0.42.0 due to "unexpected nil response" bug
+		// See: https://github.com/mark3labs/mcp-go/issues/447
+		ginkgo.It("should search catalog", ginkgo.FlakeAttempts(3), func() {
 			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
 				Params: mcp.CallToolParams{
 					Name: "search_catalog",
@@ -149,7 +158,7 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 			checkResultInMCPResponse(result.Content, ids)
 		})
 
-		ginkgo.It("should search catalog changes", func() {
+		ginkgo.It("should search catalog changes", ginkgo.FlakeAttempts(3), func() {
 			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
 				Params: mcp.CallToolParams{
 					Name: "search_catalog_changes",
@@ -166,7 +175,7 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 			checkResultInMCPResponse(result.Content, ids)
 		})
 
-		ginkgo.It("should get related configs", func() {
+		ginkgo.It("should get related configs", ginkgo.FlakeAttempts(3), func() {
 			testConfigID := dummy.LogisticsAPIDeployment.ID.String()
 			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
 				Params: mcp.CallToolParams{
