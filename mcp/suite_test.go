@@ -43,11 +43,18 @@ var _ = ginkgo.BeforeSuite(func() {
 	mcpClient, err = client.NewStreamableHttpClient(testServer.URL + "/mcp")
 	Expect(err).NotTo(HaveOccurred())
 
+	// Start the client before initializing (required in v0.42.0+)
+	err = mcpClient.Start(DefaultContext)
+	Expect(err).NotTo(HaveOccurred())
+
 	_, err = mcpClient.Initialize(DefaultContext, mcp.InitializeRequest{})
 	Expect(err).NotTo(HaveOccurred())
 })
 
 var _ = ginkgo.AfterSuite(func() {
+	if mcpClient != nil {
+		mcpClient.Close()
+	}
 	testServer.Close()
 	setup.AfterSuiteFn()
 })
