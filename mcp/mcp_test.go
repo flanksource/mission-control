@@ -40,14 +40,6 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 				},
 			})
 
-			// TODO: Yash figure out why test fails when called once and passes
-			// when called twice
-			result, err = mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
-				Params: mcp.CallToolParams{
-					Name: "list_all_checks",
-				},
-			})
-
 			Expect(err).To(BeNil())
 			ids := []string{
 				dummy.LogisticsAPIHomeHTTPCheck.ID.String(),
@@ -139,17 +131,6 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 				},
 			})
 
-			// TODO: Yash figure out why test fails when called once and passes
-			// when called twice
-			result, err = mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
-				Params: mcp.CallToolParams{
-					Name: "search_catalog",
-					Arguments: map[string]any{
-						"query": "type=Kubernetes::*",
-						"limit": 50,
-					},
-				},
-			})
 			Expect(err).To(BeNil())
 			Expect(result.Content).NotTo(BeEmpty())
 
