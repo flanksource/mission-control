@@ -3,15 +3,14 @@ package playbook
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/postq"
 	"github.com/flanksource/duty/postq/pg"
-	v1 "github.com/flanksource/incident-commander/api/v1"
-	"github.com/flanksource/incident-commander/playbook/actions"
-	"github.com/flanksource/incident-commander/playbook/runner"
+	"github.com/flanksource/duty/shutdown"
 	"github.com/google/uuid"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -19,6 +18,10 @@ import (
 	"github.com/samber/oops"
 	"go.opentelemetry.io/otel/trace"
 	"gorm.io/gorm"
+
+	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/playbook/actions"
+	"github.com/flanksource/incident-commander/playbook/runner"
 )
 
 type playbookRunError struct {
@@ -33,6 +36,7 @@ func (t *playbookRunError) Error() string {
 
 // Pg Notify channels for run and action updates
 const (
+	pgNotifyPlaybookSpecUpdated   = "playbook_spec_updated"
 	pgNotifyPlaybookRunUpdates    = "playbook_run_updates"
 	pgNotifyPlaybookActionUpdates = "playbook_action_updates"
 )
@@ -119,17 +123,37 @@ func StartPlaybookConsumers(ctx context.Context) error {
 		return err
 	}
 
-	runUpdatesPGNotifyChannel := make(chan string)
-	go pg.Listen(ctx, pgNotifyPlaybookRunUpdates, runUpdatesPGNotifyChannel)
-	go runEventConsumer.Listen(ctx, runUpdatesPGNotifyChannel)
+	{
+		// These channels receive notifications from Postgres on pg_notify
+		var (
+			runUpdatesPGNotifyChannel         = make(chan string)
+			actionUpdatesPGNotifyChannel      = make(chan string)
+			actionAgentUpdatesPGNotifyChannel = make(chan string)
+			playbookSpecUpdatedChannel        = make(chan string)
+		)
 
-	actionUpdatesPGNotifyChannel := make(chan string)
-	go pg.Listen(ctx, pgNotifyPlaybookActionUpdates, actionUpdatesPGNotifyChannel)
-	go actionEventConsumer.Listen(ctx, actionUpdatesPGNotifyChannel)
+		go func() {
+			err := pg.ListenMany(ctx,
+				pg.ChannelListener{Channel: pgNotifyPlaybookSpecUpdated, Receiver: playbookSpecUpdatedChannel},
+				pg.ChannelListener{Channel: pgNotifyPlaybookRunUpdates, Receiver: runUpdatesPGNotifyChannel},
+				pg.ChannelListener{Channel: pgNotifyPlaybookActionUpdates, Receiver: actionUpdatesPGNotifyChannel},
+				pg.ChannelListener{Channel: pgNotifyPlaybookActionUpdates, Receiver: actionAgentUpdatesPGNotifyChannel},
+			)
+			if err != nil {
+				shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to listen for postgres notifications: %v", err))
+			}
+		}()
 
-	actionAgentUpdatesPGNotifyChannel := make(chan string)
-	go pg.Listen(ctx, pgNotifyPlaybookActionUpdates, actionAgentUpdatesPGNotifyChannel)
-	go actionAgentEventConsumer.Listen(ctx, actionAgentUpdatesPGNotifyChannel)
+		go func() {
+			for range playbookSpecUpdatedChannel {
+				clearEventPlaybookCache()
+			}
+		}()
+
+		go runEventConsumer.Listen(ctx, runUpdatesPGNotifyChannel)
+		go actionEventConsumer.Listen(ctx, actionUpdatesPGNotifyChannel)
+		go actionAgentEventConsumer.Listen(ctx, actionAgentUpdatesPGNotifyChannel)
+	}
 
 	go runner.ActionNotifyRouter.Run(ctx, pgNotifyPlaybookActionUpdates)
 
