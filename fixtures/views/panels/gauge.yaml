@@ -4,6 +4,9 @@ metadata:
   name: gauge
   namespace: mc
 spec:
+  display:
+    title: Gauge Panel Example
+    sidebar: true
   queries:
     pods:
       configs:
@@ -11,16 +14,20 @@ spec:
           - "Kubernetes::Pod"
   panels:
     - name: Pods
-      description: Number of Pods
+      description: Percentage of Unhealthy Pods
       type: gauge
       gauge:
-        min: 0
-        max: 100
+        unit: " %"
         thresholds:
-          - value: 0
+          - percent: 0
             color: green
-          - value: 60
+          - percent: 60
             color: orange
-          - value: 90
+          - percent: 90
             color: red
-      query: SELECT COUNT(*) AS value FROM pods
+      query: |
+        SELECT
+          COALESCE(
+            (SELECT COUNT(*) FROM pods WHERE health = 'unhealthy') * 100.0 / NULLIF((SELECT COUNT(*) FROM pods), 0),
+            0
+          ) AS value
