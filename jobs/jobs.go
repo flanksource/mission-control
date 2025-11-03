@@ -156,6 +156,11 @@ func Start(ctx context.Context, mcpServer *server.MCPServer) {
 		logger.Errorf("Failed to schedule job for cleaning up stale agent job history: %v", err)
 	}
 
+	cleanupExpiredTokens.Context = ctx
+	if err := cleanupExpiredTokens.AddToScheduler(FuncScheduler); err != nil {
+		logger.Errorf("Failed to schedule job for cleaning up expired tokens: %v", err)
+	}
+
 	startIncidentsJobs(ctx)
 
 	FuncScheduler.Start()

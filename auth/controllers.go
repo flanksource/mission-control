@@ -248,8 +248,9 @@ func DeleteToken(c echo.Context) error {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EUNAUTHORIZED, "only the creator or admins can delete access tokens"))
 	}
 
-	if err := db.DeleteAccessToken(ctx, tokenID); err != nil {
+	if err := DeleteAccessToken(ctx, tokenID); err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "unable to delete token"))
 	}
+
 	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{Message: "success"})
 }
