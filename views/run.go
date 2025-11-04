@@ -146,6 +146,14 @@ func Run(ctx context.Context, view *v1.View, request *requestOpt) (*api.ViewResu
 					}
 					panel.Gauge.Max = value
 				}
+			case api.PanelTypeBargauge:
+				if panel.Bargauge != nil && panel.Bargauge.Max != "" {
+					value, err := types.CelExpression(panel.Bargauge.Max).Eval(env)
+					if err != nil {
+						return nil, fmt.Errorf("failed to evaluate bargauge max expression '%s': %w", panel.Bargauge.Max, err)
+					}
+					panel.Bargauge.Max = value
+				}
 			}
 
 			output.Panels = append(output.Panels, api.PanelResult{
