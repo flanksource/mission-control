@@ -71,6 +71,10 @@ type PanelGaugeConfig struct {
 type PanelBargaugeConfig struct {
 	pkgView.GaugeConfig `json:",inline" yaml:",inline"`
 	Unit                string `json:"unit,omitempty" yaml:"unit,omitempty"`
+	Group               string `json:"group,omitempty" yaml:"group,omitempty"`
+	// Format defines how to display the value (percentage, multiplier)
+	// +kubebuilder:validation:Enum=percentage;multiplier
+	Format string `json:"format,omitempty" yaml:"format,omitempty"`
 }
 
 // PiechartConfig defines configuration for piechart visualization
