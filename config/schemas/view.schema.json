@@ -353,6 +353,12 @@
         },
         "unit": {
           "type": "string"
+        },
+        "group": {
+          "type": "string"
+        },
+        "format": {
+          "type": "string"
         }
       },
       "additionalProperties": false,

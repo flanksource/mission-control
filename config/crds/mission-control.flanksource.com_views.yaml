@@ -296,6 +296,15 @@ spec:
                     bargauge:
                       description: Configuration for bargauge visualization
                       properties:
+                        format:
+                          description: Format defines how to display the value (percentage,
+                            multiplier)
+                          enum:
+                          - percentage
+                          - multiplier
+                          type: string
+                        group:
+                          type: string
                         max:
                           type: string
                         min:
