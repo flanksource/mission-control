@@ -261,20 +261,16 @@ func DeleteAccessToken(ctx context.Context, tokenID string) error {
 		return ctx.Oops().Wrapf(err, "failed to get person type for %s", tokenPersonID)
 	}
 
-	// Delete the access token and soft-delete the person first
-	if err := db.DeleteAccessToken(ctx, tokenID); err != nil {
+	if err := db.DeleteAccessToken(ctx, tokenID, tokenPersonID); err != nil {
 		return ctx.Oops().Wrapf(err, "failed to delete access token %s", tokenID)
 	}
 
-	// Clean up RBAC after successful DB deletion (only for token-type persons)
 	if personType == db.PersonTypeAccessToken {
 		if _, err := rbac.Enforcer().DeleteRolesForUser(tokenPersonID); err != nil {
-			// Log error but don't fail - DB deletion already succeeded
 			ctx.Errorf("failed to delete roles for token person %s: %v", tokenPersonID, err)
 		}
 
 		if _, err := rbac.Enforcer().DeletePermissionsForUser(tokenPersonID); err != nil {
-			// Log error but don't fail - DB deletion already succeeded
 			ctx.Errorf("failed to delete permissions for token person %s: %v", tokenPersonID, err)
 		}
 	}

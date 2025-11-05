@@ -174,12 +174,7 @@ func GetPersonType(ctx context.Context, id string) (string, error) {
 	return person.Type, nil
 }
 
-func DeleteAccessToken(ctx context.Context, id string) error {
-	token, err := GetAccessToken(ctx, id)
-	if err != nil {
-		return ctx.Oops().Wrapf(err, "failed to get access token %s", id)
-	}
-
+func DeleteAccessToken(ctx context.Context, id string, personID string) error {
 	return ctx.DB().Transaction(func(tx *gorm.DB) error {
 		// Delete the access token (hard delete)
 		if err := tx.Where("id = ?", id).Delete(&models.AccessToken{}).Error; err != nil {
@@ -188,16 +183,16 @@ func DeleteAccessToken(ctx context.Context, id string) error {
 
 		// Soft delete the associated person
 		result := tx.Model(&models.Person{}).
-			Where("id = ?", token.PersonID).
+			Where("id = ?", personID).
 			Where("type = ?", PersonTypeAccessToken).
 			UpdateColumn("deleted_at", duty.Now())
 
 		if result.Error != nil {
-			return ctx.Oops().Wrapf(result.Error, "failed to soft delete person %s for token %s", token.PersonID, id)
+			return ctx.Oops().Wrapf(result.Error, "failed to soft delete person %s for token %s", personID, id)
 		}
 
 		if result.RowsAffected == 0 {
-			ctx.Warnf("person %s for token %s was not soft-deleted (type=%s, already deleted, or doesn't exist)", token.PersonID, id, PersonTypeAccessToken)
+			ctx.Warnf("person %s for token %s was not soft-deleted (type=%s, already deleted, or doesn't exist)", personID, id, PersonTypeAccessToken)
 		}
 
 		return nil
