@@ -89,16 +89,8 @@ const (
 	saltLength  = 12
 )
 
-// CreateAccessToken generates a new access token using Argon2id password hashing.
-//
-// Token Format:
-//   - Returned to user: "password.salt.timeCost.memoryCost.parallelism"
-//     Example: "a1b2c3d4...xyz.dGVzdHNhbHQ=.3.65536.4"
-//   - Stored in database: base64(argon2id_hash) of the password
-//     The plaintext password is never stored; only the Argon2id hash is persisted.
-//
-// This design allows verification by recomputing the hash during authentication,
-// but prevents reconstruction of the original token string from the database.
+// CreateAccessToken generates a new access token using Argon2id hashing.
+// Returns: "password.salt.timeCost.memoryCost.parallelism" to user, stores base64(hash) in DB.
 func CreateAccessToken(ctx context.Context, personID uuid.UUID, name, password string, expiry *time.Duration, createdBy *uuid.UUID, autoRenew bool) (string, *models.AccessToken, error) {
 	saltRaw := make([]byte, saltLength)
 	if _, err := crand.Read(saltRaw); err != nil {

@@ -38,6 +38,11 @@ func FlushTokenCache() {
 // - access tokens
 var tokenCache = cache.New(1*time.Hour, 1*time.Hour)
 
+// deletedTokensCache maintains a blacklist of deleted token IDs.
+// Required because tokenCache is keyed by the full token string, not the ID,
+// and we cannot reconstruct the cache key from the hashed value in the database.
+var deletedTokensCache = cache.New(24*time.Hour, 24*time.Hour)
+
 const (
 	// If token is expiring within 15 days we update it's expiry
 	preExpiryWindow = 15 * 24 * time.Hour
@@ -116,8 +121,15 @@ func getJWTKeyFunc(jwksURL string) jwt.Keyfunc {
 }
 
 func getAccessToken(ctx context.Context, token string) (*models.AccessToken, error) {
-	if token, ok := tokenCache.Get(token); ok {
-		return token.(*models.AccessToken), nil
+	if cachedToken, ok := tokenCache.Get(token); ok {
+		accessToken := cachedToken.(*models.AccessToken)
+
+		// Check if this token has been deleted (even if still in cache)
+		if _, deleted := deletedTokensCache.Get(accessToken.ID.String()); deleted {
+			return nil, errTokenExpired
+		}
+
+		return accessToken, nil
 	}
 
 	fields := strings.Split(token, ".")
@@ -156,6 +168,10 @@ func getAccessToken(ctx context.Context, token string) (*models.AccessToken, err
 		}
 
 		return nil, err
+	}
+
+	if _, deleted := deletedTokensCache.Get(accessToken.ID.String()); deleted {
+		return nil, errTokenExpired
 	}
 
 	expiry := accessToken.ExpiresAt
@@ -227,17 +243,17 @@ func CreateAccessTokenForPerson(ctx context.Context, user *models.Person, tokenN
 	}, err
 }
 
-// DeleteAccessToken removes an access token from the cache and database, and soft-deletes
-// the associated person if it's a token-type person. RBAC roles and permissions are removed
-// only for token-type persons (type = "access_token").
-// Cache is cleared via defer to ensure it only happens after successful deletion.
+// DeleteAccessToken deletes an access token and soft-deletes the associated person.
+// Uses deletedTokensCache blacklist for immediate invalidation since direct cache
+// eviction isn't possible (cache key vs token ID mismatch).
 func DeleteAccessToken(ctx context.Context, tokenID string) error {
-	defer tokenCache.Delete(tokenID)
-
 	token, err := db.GetAccessToken(ctx, tokenID)
 	if err != nil {
 		return ctx.Oops().Wrapf(err, "failed to get access token %s", tokenID)
 	}
+
+	// Add to blacklist immediately to prevent any further use
+	deletedTokensCache.Set(tokenID, true, cache.DefaultExpiration)
 
 	tokenPersonID := token.PersonID.String()
 	personType, err := db.GetPersonType(ctx, tokenPersonID)
