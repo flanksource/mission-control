@@ -1,0 +1,21 @@
+name: Auto Approve
+
+on:
+  pull_request:
+    types: [opened, reopened, labeled]
+
+jobs:
+  auto-approve:
+    runs-on: ubuntu-latest
+    if: |
+      (github.actor == 'yashmehrotra' || github.actor == 'adityathebe' || github.actor == 'moshloop') &&
+      contains(github.event.pull_request.labels.*.name, 'ready')
+
+    permissions:
+      pull-requests: write
+
+    steps:
+      - name: Auto approve PR
+        uses: hmarr/auto-approve-action@f0939ea97e9205ef24d872e76833fa908a770363 # v4.0.0
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
