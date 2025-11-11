@@ -23,7 +23,10 @@ import (
 //go:embed k8s_troubleshooting_prompt.txt
 var k8sTroubleshootingPrompt string
 
-var defaultSelectConfigsView = []string{"id", "name", "type", "health", "status", "description", "updated_at", "created_at"}
+var (
+	defaultSelectConfigsView       = []string{"id", "name", "type", "health", "status", "description", "updated_at", "created_at"}
+	defaultSelectConfigChangesView = []string{"id", "config_id", "name", "type", "change_type", "severity", "summary", "created_at", "first_observed", "count"}
+)
 
 func searchCatalogHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	ctx, err := getDutyCtx(goctx)
@@ -100,7 +103,18 @@ func searchConfigChangesHandler(goctx gocontext.Context, req mcp.CallToolRequest
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	cis, err := query.FindConfigChangesByResourceSelector(ctx, limit, types.ResourceSelector{Search: q})
+
+	selectCols := req.GetStringSlice("select", defaultSelectConfigChangesView)
+
+	// NOTE: we're reading QueryTableColumnsWithResourceSelectors into map[string]any instead of []models.CatalogChange
+	// because, with a select clause with few columns, we only want to print those fields as columns in the markdown table.
+	//
+	// If we read into []models.CatalogChange, clicky produces a column for every field in the struct, even if they are not selected.
+	// This is especially important for config_changes as it includes heavy JSON fields like "config" and "details".
+	// https://github.com/flanksource/clicky/issues/40
+	cis, err := query.QueryTableColumnsWithResourceSelectors[map[string]any](
+		ctx, "catalog_changes", selectCols, limit, nil, types.ResourceSelector{Search: q},
+	)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -377,14 +391,31 @@ func registerCatalog(s *server.MCPServer) {
 	Use this single specification to parse requests, generate valid catalog-search queries, and validate existing ones.
 	`
 
+	catalogChangesDescription := `
+	IMPORTANT - Column Selection for Token Efficiency:
+	ALWAYS specify the "select" parameter with only the columns you need to minimize token usage.
+	Default columns (id,config_id,name,type,change_type,severity,summary,created_at,first_observed,count) provide essential change metadata.
+
+	Available columns for CatalogChange:
+	- Lightweight: id, config_id, name, type, change_type, severity, summary, created_at, first_observed, count, external_created_by, created_by, source, deleted_at, agent_id, tags
+	- Heavy (avoid unless needed): config, details - these are large JSON fields containing full configuration data and change details
+
+	Examples:
+	- For basic change listing: "id,config_id,name,type,change_type,severity,created_at"
+	- For change analysis: "id,config_id,change_type,severity,summary,first_observed,count"
+	- For critical changes: "id,config_id,name,change_type,severity,summary,source"
+	- Only when full details needed: "id,config_id,change_type,severity,summary,details"
+	`
+
 	searchCatalogChangesTool := mcp.NewTool("search_catalog_changes",
-		mcp.WithDescription("Search and find configuration change events across catalog items"),
+		mcp.WithDescription("Search and find configuration change events across catalog items"+catalogChangesDescription),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("query",
 			mcp.Required(),
 			mcp.Description("Search query"+configChangeQueryDescription),
 		),
 		mcp.WithNumber("limit", mcp.Description("Number of results to return")),
+		mcp.WithArray("select", mcp.Description("a list of columns to return. Default: id,config_id,name,type,change_type,severity,summary,created_at,first_observed,count. Always specify minimal columns needed for token efficiency. Avoid 'config' and 'details' columns unless absolutely necessary as they contain large JSON data.")),
 	)
 	s.AddTool(searchCatalogChangesTool, searchConfigChangesHandler)
 
