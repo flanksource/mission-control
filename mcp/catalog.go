@@ -23,6 +23,8 @@ import (
 //go:embed k8s_troubleshooting_prompt.txt
 var k8sTroubleshootingPrompt string
 
+const defaultQueryLimit = 30
+
 var (
 	defaultSelectConfigsView       = []string{"id", "name", "type", "health", "status", "description", "updated_at", "created_at"}
 	defaultSelectConfigChangesView = []string{"id", "config_id", "name", "type", "change_type", "severity", "summary", "created_at", "first_observed", "count"}
@@ -38,7 +40,7 @@ func searchCatalogHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mc
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	limit := req.GetInt("limit", 30)
+	limit := req.GetInt("limit", defaultQueryLimit)
 
 	var cis any
 	switch req.Params.Name {
@@ -97,7 +99,7 @@ func searchConfigChangesHandler(goctx gocontext.Context, req mcp.CallToolRequest
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	limit := req.GetInt("limit", 30)
+	limit := req.GetInt("limit", defaultQueryLimit)
 
 	ctx, err := getDutyCtx(goctx)
 	if err != nil {
@@ -305,7 +307,7 @@ func registerCatalog(s *server.MCPServer) {
 			mcp.Required(),
 			mcp.Description("Search query."+queryDescription),
 		),
-		mcp.WithNumber("limit", mcp.Description("Number of items to return")),
+		mcp.WithNumber("limit", mcp.Description(fmt.Sprintf("Number of items to return. Default: %d", defaultQueryLimit))),
 		mcp.WithArray("select", mcp.Description("a list of columns to return. Default: id,name,type,health,status,description,updated_at,created_at. Always specify minimal columns needed for token efficiency.")),
 	)
 	s.AddTool(searchCatalogTool, searchCatalogHandler)
@@ -326,7 +328,7 @@ func registerCatalog(s *server.MCPServer) {
 			mcp.Required(),
 			mcp.Description("Search query."+queryDescription),
 		),
-		mcp.WithNumber("limit", mcp.Description("Number of items to return")),
+		mcp.WithNumber("limit", mcp.Description(fmt.Sprintf("Number of items to return. Default: %d", defaultQueryLimit))),
 	), searchCatalogHandler)
 
 	var configChangeQueryDescription = `
@@ -414,7 +416,7 @@ func registerCatalog(s *server.MCPServer) {
 			mcp.Required(),
 			mcp.Description("Search query"+configChangeQueryDescription),
 		),
-		mcp.WithNumber("limit", mcp.Description("Number of results to return")),
+		mcp.WithNumber("limit", mcp.Description(fmt.Sprintf("Number of results to return. Default: %d", defaultQueryLimit))),
 		mcp.WithArray("select", mcp.Description("a list of columns to return. Default: id,config_id,name,type,change_type,severity,summary,created_at,first_observed,count. Always specify minimal columns needed for token efficiency. Avoid 'config' and 'details' columns unless absolutely necessary as they contain large JSON data.")),
 	)
 	s.AddTool(searchCatalogChangesTool, searchConfigChangesHandler)
