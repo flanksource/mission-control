@@ -11,6 +11,7 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/dataquery"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
 	pkgView "github.com/flanksource/duty/view"
 	"github.com/samber/lo"
@@ -183,8 +184,8 @@ func Run(ctx context.Context, view *v1.View, request *requestOpt) (*api.ViewResu
 		}
 
 		var rows []pkgView.Row
-		for _, result := range mergedData {
-			row, err := applyMapping(ctx, result, view.Spec.Columns, view.Spec.Mapping)
+		for _, row := range mergedData {
+			row, err := applyMapping(ctx, row, view.Spec.Columns, view.Spec.Mapping)
 			if err != nil {
 				return nil, ctx.Oops(dutyAPI.EINVALID).Wrapf(err, "failed to apply view mapping")
 			}
@@ -205,18 +206,18 @@ func Run(ctx context.Context, view *v1.View, request *requestOpt) (*api.ViewResu
 }
 
 // applyMapping applies CEL expression mappings to data
-func applyMapping(ctx context.Context, data map[string]any, columnDefs []pkgView.ColumnDef, mapping map[string]types.CelExpression) (pkgView.Row, error) {
+func applyMapping(ctx context.Context, queryResultRow map[string]any, columnDefs []pkgView.ColumnDef, mapping map[string]types.CelExpression) (pkgView.Row, error) {
 	var row pkgView.Row
 	rowProperties := map[string]any{}
 
 	for _, columnDef := range columnDefs {
 		var rowValue any
-		env := map[string]any{"row": data} // We cannot directly pass result because of identifier collision with the reserved ones in cel.
+		env := map[string]any{"row": queryResultRow} // We cannot directly pass result because of identifier collision with the reserved ones in cel.
 
 		expr, ok := mapping[columnDef.Name]
 		if !ok {
 			// If mapping is not specified, look for the column name in the data row
-			if value, ok := data[columnDef.Name]; ok {
+			if value, ok := queryResultRow[columnDef.Name]; ok {
 				rowValue = value
 			} else {
 				rowValue = nil
@@ -265,7 +266,7 @@ func applyMapping(ctx context.Context, data map[string]any, columnDefs []pkgView
 
 		row = append(row, rowValue)
 
-		if attributes, err := columnAttributes(ctx, columnDef, env); err != nil {
+		if attributes, err := getColumnAttributes(ctx, columnDef, queryResultRow); err != nil {
 			return nil, fmt.Errorf("failed to evaluate attributes for column %s: %w", columnDef.Name, err)
 		} else if len(attributes) > 0 {
 			rowProperties[columnDef.Name] = attributes
@@ -281,8 +282,33 @@ func applyMapping(ctx context.Context, data map[string]any, columnDefs []pkgView
 	return row, nil
 }
 
-func columnAttributes(ctx context.Context, columnDef pkgView.ColumnDef, env map[string]any) (map[string]any, error) {
+// getColumnAttributes evaluates the column attributes for the given row.
+func getColumnAttributes(ctx context.Context, columnDef pkgView.ColumnDef, row map[string]any) (map[string]any, error) {
+	env := map[string]any{"row": row}
 	attributes := map[string]any{}
+
+	if columnDef.Type == pkgView.ColumnTypeConfigItem {
+		idField := "id"
+		if columnDef.ConfigItem != nil && columnDef.ConfigItem.IDField != "" {
+			idField = columnDef.ConfigItem.IDField
+		}
+
+		if configID, ok := row[idField].(string); ok {
+			config, err := query.GetCachedConfig(ctx, configID)
+			if err != nil {
+				return nil, ctx.Oops().Errorf("failed to get config(%s) for config_item column: %w", configID, err)
+			} else if config != nil {
+				attributes["config"] = map[string]string{
+					"id":     config.ID.String(),
+					"health": string(lo.FromPtr(config.Health)),
+					"status": string(lo.FromPtr(config.Status)),
+					"type":   string(lo.FromPtr(config.Type)),
+					"class":  config.ConfigClass,
+				}
+			}
+		}
+	}
+
 	if columnDef.Icon != nil {
 		icon, err := types.CelExpression(*columnDef.Icon).Eval(env)
 		if err != nil {
