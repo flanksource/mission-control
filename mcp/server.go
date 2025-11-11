@@ -32,6 +32,12 @@ func AuthMiddleware(next echov4.HandlerFunc) echov4.HandlerFunc {
 	return func(c echov4.Context) error {
 		ctx := c.Request().Context().(context.Context)
 
+		if roles, err := rbac.RolesForUser(ctx.Subject()); err != nil {
+			return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
+		} else if lo.Contains(roles, policy.RoleAdmin) {
+			return next(c)
+		}
+
 		permissions, err := rbac.PermsForUser(ctx.Subject())
 		if err != nil {
 			return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
