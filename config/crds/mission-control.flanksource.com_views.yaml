@@ -64,6 +64,16 @@ spec:
                 items:
                   description: ColumnDef defines a column in the view
                   properties:
+                    configItem:
+                      description: Configuration for config item columns
+                      properties:
+                        idField:
+                          description: |-
+                            IDField which field, from the merged query result, to use as the config item ID
+
+                            If not specified, defaults to "id"
+                          type: string
+                      type: object
                     description:
                       description: Description of the column
                       type: string
@@ -148,6 +158,7 @@ spec:
                       - millicore
                       - url
                       - badge
+                      - config_item
                       type: string
                     unit:
                       description: Unit of the column

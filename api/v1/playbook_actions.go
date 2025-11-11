@@ -17,8 +17,8 @@ import (
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
-	"math/rand/v2"
 	"k8s.io/client-go/kubernetes"
+	"math/rand/v2"
 
 	"github.com/flanksource/duty/logs"
 	"github.com/flanksource/duty/logs/cloudwatch"

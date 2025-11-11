@@ -1,0 +1,40 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: cronjobs
+  namespace: mc
+spec:
+  display:
+    title: CronJobs
+    icon: cronjob
+    sidebar: true
+  columns:
+    - name: id
+      type: string
+      primaryKey: true
+      hidden: true
+    - name: name
+      type: config_item
+    - name: namespace
+      type: string
+    - name: status
+      type: status
+      icon: row.health
+      filter:
+        type: multiselect
+    - name: health
+      type: health
+      hidden: true
+      filter:
+        type: multiselect
+    - name: created
+      type: datetime
+  queries:
+    cronjobs:
+      configs:
+        search: "@order=name"
+        types:
+          - Kubernetes::CronJob
+  mapping:
+    created: row.created_at
+    namespace: row.tags.namespace
