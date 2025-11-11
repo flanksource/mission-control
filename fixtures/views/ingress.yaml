@@ -1,0 +1,61 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: ingresses
+  namespace: default
+spec:
+  description: Ingress view with card rendering support
+  display:
+    title: Ingresses
+    icon: ingress
+    sidebar: true
+  queries:
+    ingress:
+      configs:
+        search: "@order=name"
+        types:
+          - Kubernetes::Ingress
+  columns:
+    - name: name
+      type: config_item
+      primaryKey: true
+      cardPosition: title
+    - name: namespace
+      type: string
+      cardPosition: subtitle
+    - name: status
+      type: status
+      icon: row.health
+      cardPosition: deck
+      filter:
+        type: multiselect
+    - name: health
+      type: health
+      hidden: true
+      filter:
+        type: multiselect
+    - name: hosts
+      type: string
+      cardPosition: body
+    - name: class
+      type: string
+      cardPosition: body
+    - name: address
+      type: string
+      cardPosition: body
+    - name: created
+      type: datetime
+      cardPosition: footer
+  mapping:
+    namespace: row.tags.namespace
+    hosts: >
+      has(row.config.spec.rules) && size(row.config.spec.rules) > 0
+      ? row.config.spec.rules.map(r, has(r.host) ? r.host : "").join(", ")
+      : "N/A"
+    class: >
+      has(row.config.spec.ingressClassName) ? row.config.spec.ingressClassName : "default"
+    address: >
+      has(row.config.status.loadBalancer.ingress) && size(row.config.status.loadBalancer.ingress) > 0
+      ? row.config.status.loadBalancer.ingress.map(i, has(i.ip) ? i.ip : has(i.hostname) ? i.hostname : "").join(", ")
+      : "N/A"
+    created: row.created_at
