@@ -40,6 +40,9 @@
         },
         "unit": {
           "type": "string"
+        },
+        "cardPosition": {
+          "type": "string"
         }
       },
       "additionalProperties": false,

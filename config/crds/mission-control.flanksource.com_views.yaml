@@ -64,6 +64,16 @@ spec:
                 items:
                   description: ColumnDef defines a column in the view
                   properties:
+                    cardPosition:
+                      description: Position defines the visual presentation style
+                        for the card field
+                      enum:
+                      - title
+                      - subtitle
+                      - deck
+                      - body
+                      - footer
+                      type: string
                     configItem:
                       description: Configuration for config item columns
                       properties:
