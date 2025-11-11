@@ -11,16 +11,19 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
-	"github.com/flanksource/incident-commander/db"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/samber/lo"
+
+	"github.com/flanksource/incident-commander/db"
 )
 
 //go:embed k8s_troubleshooting_prompt.txt
 var k8sTroubleshootingPrompt string
+
+var defaultSelectConfigsView = []string{"id", "name", "type", "health", "status", "description", "updated_at", "created_at"}
 
 func searchCatalogHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	ctx, err := getDutyCtx(goctx)
@@ -39,7 +42,16 @@ func searchCatalogHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mc
 	case "describe_config":
 		cis, err = queryConfigItemDescription(ctx, limit, q)
 	default:
-		cis, err = queryConfigItemSummary(ctx, limit, q)
+		selectCols := req.GetStringSlice("select", defaultSelectConfigsView)
+
+		// NOTE: we're reading QueryTableColumnsWithResourceSelectors into map[string]any instead of []models.ConfigItemSummary
+		// because, with a select clause with few columns, we only want to print those fields as columns in the markdown table.
+		//
+		// If we read into []models.ConfigItemSummary, clicky produces a column for every field in the struct, even if they are not selected.
+		// https://github.com/flanksource/clicky/issues/40
+		cis, err = query.QueryTableColumnsWithResourceSelectors[map[string]any](
+			ctx, "configs", selectCols, limit, nil, types.ResourceSelector{Search: q},
+		)
 	}
 
 	if err != nil {
@@ -52,10 +64,6 @@ func searchCatalogHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mc
 type ConfigDescription struct {
 	models.ConfigItem
 	AvailableTools []string `json:"available_tools"`
-}
-
-func queryConfigItemSummary(ctx context.Context, limit int, q string) ([]models.ConfigItemSummary, error) {
-	return query.FindConfigItemSummaryByResourceSelector(ctx, limit, types.ResourceSelector{Search: q})
 }
 
 func queryConfigItemDescription(ctx context.Context, limit int, q string) ([]ConfigDescription, error) {
@@ -262,6 +270,19 @@ func registerCatalog(s *server.MCPServer) {
 	catalogSearchDescription := `
 	Each catalog item also has more information in its config field which can be queried by calling the tool describe_config(query), the query is the same
 	but that tool should only be called when "describe" is explicitly used
+
+	IMPORTANT - Column Selection for Token Efficiency:
+	ALWAYS specify the "select" parameter with only the columns you need to minimize token usage.
+	Default columns (id,name,type,health,status,description,updated_at,created_at) provide essential metadata.
+
+	Available columns for ConfigItemSummary:
+	- Lightweight: id, name, type, status, health, description, created_at, updated_at, deleted_at, scraper_id, agent_id, external_id, source, path, ready, cost_per_minute, cost_total_1d, cost_total_7d, cost_total_30d, delete_reason, labels, tags, namespace, changes, analysis, created_by
+	- Note: ConfigItemSummary does NOT include config or properties fields. For full config data, use describe_config tool.
+
+	Examples:
+	- For basic listing: "id,name,type,health,status"
+	- For troubleshooting: "id,name,type,health,status,description,changes"
+	- For cost analysis: "id,name,type,cost_per_minute,cost_total_30d"
 	`
 	searchCatalogTool := mcp.NewTool("search_catalog",
 		mcp.WithDescription("Search and find configuration items in the catalog. For detailed config data, use describe_config tool."+catalogSearchDescription),
@@ -271,6 +292,7 @@ func registerCatalog(s *server.MCPServer) {
 			mcp.Description("Search query."+queryDescription),
 		),
 		mcp.WithNumber("limit", mcp.Description("Number of items to return")),
+		mcp.WithArray("select", mcp.Description("a list of columns to return. Default: id,name,type,health,status,description,updated_at,created_at. Always specify minimal columns needed for token efficiency.")),
 	)
 	s.AddTool(searchCatalogTool, searchCatalogHandler)
 
