@@ -5,9 +5,15 @@ import (
 	"net/http"
 
 	"github.com/flanksource/commons/logger"
+	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
-	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/rbac/policy"
+	echov4 "github.com/labstack/echo/v4"
 	"github.com/mark3labs/mcp-go/server"
+	"github.com/samber/lo"
+
+	"github.com/flanksource/incident-commander/api"
 )
 
 type dutyContextType string
@@ -19,6 +25,27 @@ var (
 type MCPServer struct {
 	HTTPHandler http.Handler
 	Server      *server.MCPServer
+}
+
+// AuthMiddleware only allows a person if they have at least one mcp:run permission
+func AuthMiddleware(next echov4.HandlerFunc) echov4.HandlerFunc {
+	return func(c echov4.Context) error {
+		ctx := c.Request().Context().(context.Context)
+
+		permissions, err := rbac.PermsForUser(ctx.Subject())
+		if err != nil {
+			return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
+		}
+
+		_, ok := lo.Find(permissions, func(perm policy.Permission) bool {
+			return perm.Action == policy.ActionMCPRun && !perm.Deny
+		})
+		if !ok {
+			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "forbidden: user %s does not have mcp:run permission", ctx.Subject()))
+		}
+
+		return next(c)
+	}
 }
 
 func Server(ctx context.Context) *MCPServer {
