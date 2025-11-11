@@ -13,9 +13,7 @@ import (
 	"github.com/flanksource/duty/postq/pg"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/rbac"
-	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/shutdown"
-	icrbac "github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/kopper"
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/otel"
@@ -183,7 +181,7 @@ var Serve = &cobra.Command{
 		// Cannot be registered because we need to pass ctx for
 		// context injection middleware
 		mcpServer := mcp.Server(ctx)
-		e.POST("/mcp", echov4.WrapHandler(mcpServer.HTTPHandler), icrbac.Authorization("mcp", policy.ActionAll))
+		e.POST("/mcp", echov4.WrapHandler(mcpServer.HTTPHandler), mcp.AuthMiddleware)
 
 		shutdown.AddHookWithPriority("echo", shutdown.PriorityIngress, func() {
 			echo.Shutdown(e)
