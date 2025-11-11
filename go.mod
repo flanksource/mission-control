@@ -48,7 +48,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.89.0
 	github.com/aws/aws-sdk-go-v2/service/sts v1.38.9
 	github.com/flanksource/artifacts v1.0.18
-	github.com/flanksource/clicky v1.9.0
+	github.com/flanksource/clicky v1.11.0
 	github.com/fluxcd/pkg/gittestserver v0.21.0
 	github.com/go-git/go-billy/v5 v5.6.2
 	github.com/go-git/go-git/v5 v5.16.3
