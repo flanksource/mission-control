@@ -356,8 +356,8 @@ github.com/fergusstrange/embedded-postgres v1.32.0 h1:kh2ozEvAx2A0LoIJZEGNwHmoFT
 github.com/fergusstrange/embedded-postgres v1.32.0/go.mod h1:w0YvnCgf19o6tskInrOOACtnqfVlOvluz3hlNLY7tRk=
 github.com/flanksource/artifacts v1.0.18 h1:A2S9TIwIB6Nd2X4P9+Oe9Pa9lL9od5FQnQ+rf1KSvBI=
 github.com/flanksource/artifacts v1.0.18/go.mod h1:NK64zX1gxYcl7uwcysFtljT1uKIkhH9Kxf7Yco2FNrY=
-github.com/flanksource/clicky v1.9.0 h1:rMFJj1OHvxDswcSMr+XS8Qm3en7021eNJ3XtqGHtYq0=
-github.com/flanksource/clicky v1.9.0/go.mod h1:x1AfaTaIVpztFpByXlv3KNy2S/ua9T6xBSA56HhIgpM=
+github.com/flanksource/clicky v1.11.0 h1:b/gdDOuoAel5MUNMPzw0ZFgsNxPLy1hHOtrW1TeFsa8=
+github.com/flanksource/clicky v1.11.0/go.mod h1:Rfma4dthSRBI30HTRYYS7B6XLL5Me8saLe5lmx220z8=
 github.com/flanksource/commons v1.43.2 h1:1UrE1lcx1iQ90ZL/JHAPLMbWdlO+iRT+xVajx99JiaE=
 github.com/flanksource/commons v1.43.2/go.mod h1:xEBCobwaM0+EHn2SvFpqiCBJCVk1803An1kZleXFR9Y=
 github.com/flanksource/duty v1.0.1090 h1:RWtz5wFb03YmG/mAtehporZCdAn/36M89fFVHUUQnWw=
