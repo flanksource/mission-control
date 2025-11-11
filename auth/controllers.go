@@ -244,12 +244,13 @@ func DeleteToken(c echo.Context) error {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "error fetching existing roles for user"))
 	}
 
-	if lo.FromPtr(token.CreatedBy) != ctx.User().ID || !slices.Contains(roles, policy.RoleAdmin) {
-		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EUNAUTHORIZED, "only the creator or admins can delete access tokens"))
+	if lo.FromPtr(token.CreatedBy) != ctx.User().ID && !slices.Contains(roles, policy.RoleAdmin) {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "only the creator or admins can delete access tokens"))
 	}
 
-	if err := db.DeleteAccessToken(ctx, tokenID); err != nil {
+	if err := DeleteAccessToken(ctx, tokenID); err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "unable to delete token"))
 	}
+
 	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{Message: "success"})
 }

@@ -17,6 +17,7 @@ import (
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/rbac"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/labstack/echo/v4"
 	"github.com/patrickmn/go-cache"
@@ -36,6 +37,11 @@ func FlushTokenCache() {
 // - RLS payloads
 // - access tokens
 var tokenCache = cache.New(1*time.Hour, 1*time.Hour)
+
+// deletedTokensCache maintains a blacklist of deleted token IDs.
+// Required because tokenCache is keyed by the full token string, not the ID,
+// and we cannot reconstruct the cache key from the hashed value in the database.
+var deletedTokensCache = cache.New(24*time.Hour, 24*time.Hour)
 
 const (
 	// If token is expiring within 15 days we update it's expiry
@@ -115,8 +121,15 @@ func getJWTKeyFunc(jwksURL string) jwt.Keyfunc {
 }
 
 func getAccessToken(ctx context.Context, token string) (*models.AccessToken, error) {
-	if token, ok := tokenCache.Get(token); ok {
-		return token.(*models.AccessToken), nil
+	if cachedToken, ok := tokenCache.Get(token); ok {
+		accessToken := cachedToken.(*models.AccessToken)
+
+		// Check if this token has been deleted (even if still in cache)
+		if _, deleted := deletedTokensCache.Get(accessToken.ID.String()); deleted {
+			return nil, errTokenExpired
+		}
+
+		return accessToken, nil
 	}
 
 	fields := strings.Split(token, ".")
@@ -155,6 +168,10 @@ func getAccessToken(ctx context.Context, token string) (*models.AccessToken, err
 		}
 
 		return nil, err
+	}
+
+	if _, deleted := deletedTokensCache.Get(accessToken.ID.String()); deleted {
+		return nil, errTokenExpired
 	}
 
 	expiry := accessToken.ExpiresAt
@@ -224,4 +241,39 @@ func CreateAccessTokenForPerson(ctx context.Context, user *models.Person, tokenN
 		TokenModel: tokenModel,
 		Person:     person,
 	}, err
+}
+
+// DeleteAccessToken deletes an access token and soft-deletes the associated person.
+// Uses deletedTokensCache blacklist for immediate invalidation since direct cache
+// eviction isn't possible (cache key vs token ID mismatch).
+func DeleteAccessToken(ctx context.Context, tokenID string) error {
+	token, err := db.GetAccessToken(ctx, tokenID)
+	if err != nil {
+		return ctx.Oops().Wrapf(err, "failed to get access token %s", tokenID)
+	}
+
+	// Add to blacklist immediately to prevent any further use
+	deletedTokensCache.Set(tokenID, true, cache.DefaultExpiration)
+
+	tokenPersonID := token.PersonID.String()
+	personType, err := db.GetPersonType(ctx, tokenPersonID)
+	if err != nil {
+		return ctx.Oops().Wrapf(err, "failed to get person type for %s", tokenPersonID)
+	}
+
+	if err := db.DeleteAccessToken(ctx, tokenID, tokenPersonID); err != nil {
+		return ctx.Oops().Wrapf(err, "failed to delete access token %s", tokenID)
+	}
+
+	if personType == db.PersonTypeAccessToken {
+		if _, err := rbac.Enforcer().DeleteRolesForUser(tokenPersonID); err != nil {
+			ctx.Errorf("failed to delete roles for token person %s: %v", tokenPersonID, err)
+		}
+
+		if _, err := rbac.Enforcer().DeletePermissionsForUser(tokenPersonID); err != nil {
+			ctx.Errorf("failed to delete permissions for token person %s: %v", tokenPersonID, err)
+		}
+	}
+
+	return nil
 }
