@@ -33,7 +33,7 @@ func getNotificationDetailHandler(goctx gocontext.Context, req mcp.CallToolReque
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	notificationID, err := req.RequireString("notification_id")
+	sendID, err := req.RequireString("send_id")
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -41,7 +41,7 @@ func getNotificationDetailHandler(goctx gocontext.Context, req mcp.CallToolReque
 	var notification models.NotificationSendHistory
 	err = ctx.DB().
 		Table("notification_send_history_summary").
-		Where("id = ?", notificationID).
+		Where("id = ?", sendID).
 		First(&notification).Error
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("failed to get notification: %v", err)), nil
@@ -119,7 +119,7 @@ func registerNotifications(s *server.MCPServer) {
 	getNotificationDetailTool := mcp.NewTool("get_notification_detail",
 		mcp.WithDescription("Get detailed information about a specific notification including status, body, recipients, resource details, and related entities"),
 		mcp.WithReadOnlyHintAnnotation(true),
-		mcp.WithString("notification_id",
+		mcp.WithString("send_id",
 			mcp.Required(),
 			mcp.Description("UUID of the notification send history record"),
 		),
