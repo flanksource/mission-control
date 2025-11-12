@@ -54,7 +54,7 @@ func AuthMiddleware(next echov4.HandlerFunc) echov4.HandlerFunc {
 	}
 }
 
-func Server(ctx context.Context) *MCPServer {
+func Server(ctx context.Context, serverOpts ...server.StreamableHTTPOption) *MCPServer {
 	s := server.NewMCPServer("mission-control", api.BuildVersion,
 		server.WithResourceCapabilities(true, true),
 		server.WithToolCapabilities(true),
@@ -72,17 +72,18 @@ func Server(ctx context.Context) *MCPServer {
 
 	logger.Infof("Registering /mcp routes")
 
-	httpServer := server.NewStreamableHTTPServer(s,
-		server.WithHTTPContextFunc(func(ctx gocontext.Context, r *http.Request) gocontext.Context {
-			dutyctx, ok := r.Context().(context.Context)
-			if ok {
-				return gocontext.WithValue(ctx, dutyContextKey, dutyctx)
-			}
-			// Return recevied context, should fail when controllers try to extract
-			// duty context which is the desired behaviour
-			return ctx
-		}),
+	serverOpts = append(serverOpts, server.WithHTTPContextFunc(func(ctx gocontext.Context, r *http.Request) gocontext.Context {
+		dutyctx, ok := r.Context().(context.Context)
+		if ok {
+			return gocontext.WithValue(ctx, dutyContextKey, dutyctx)
+		}
+		// Return recevied context, should fail when controllers try to extract
+		// duty context which is the desired behaviour
+		return ctx
+	}),
 	)
+
+	httpServer := server.NewStreamableHTTPServer(s, serverOpts...)
 
 	return &MCPServer{
 		Server:      s,
