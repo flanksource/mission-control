@@ -22,12 +22,13 @@ nohup.out
 .envrc
 .creds
 msg.tpl
-.windsurfrules
 test-reports
-.cursor/
 .artifacts/
-.claude/
 __debug_bin*
 
-# AI Agent plans
+# AI
+.mcp.json
 /plans
+.windsurfrules
+.claude/
+.cursor/
