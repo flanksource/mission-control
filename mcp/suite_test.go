@@ -7,6 +7,7 @@ import (
 	echov4 "github.com/labstack/echo/v4"
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/mark3labs/mcp-go/server"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
@@ -34,7 +35,11 @@ var _ = ginkgo.BeforeSuite(func() {
 
 	// Create a test server with the MCP handler
 	e := echoSrv.New(DefaultContext)
-	mcpServer := Server(DefaultContext)
+
+	// stateless=true is set to avoid state management by the
+	// mcp test client. See: https://github.com/mark3labs/mcp-go/pull/615/files
+	mcpServer := Server(DefaultContext, server.WithStateLess(true))
+
 	e.POST("/mcp", echov4.WrapHandler(mcpServer.HTTPHandler))
 	testServer = httptest.NewServer(e)
 
