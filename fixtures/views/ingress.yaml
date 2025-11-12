@@ -16,9 +16,12 @@ spec:
         types:
           - Kubernetes::Ingress
   columns:
+    - name: id
+      type: string
+      primaryKey: true
+      hidden: true
     - name: name
       type: config_item
-      primaryKey: true
       cardPosition: title
     - name: namespace
       type: string
