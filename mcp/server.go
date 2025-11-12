@@ -68,6 +68,7 @@ func Server(ctx context.Context, serverOpts ...server.StreamableHTTPOption) *MCP
 	registerHealthChecks(s)
 	registerPlaybook(s)
 	registerViews(ctx, s)
+	registerNotifications(s)
 
 	registerJobs(ctx, s)
 
