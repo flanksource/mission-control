@@ -93,11 +93,20 @@ func playbookRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.
 }
 
 func playbookListToolHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	jsonData, err := json.Marshal(slices.Collect(maps.Keys(currentPlaybookTools)))
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), err
+	type playbookInfo struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
 	}
-	return mcp.NewToolResultText(string(jsonData)), nil
+
+	playbooks := make([]playbookInfo, 0, len(currentPlaybookTools))
+	for toolName, playbookID := range currentPlaybookTools {
+		playbooks = append(playbooks, playbookInfo{
+			ID:   playbookID,
+			Name: toolName,
+		})
+	}
+
+	return structToMCPResponse(playbooks), nil
 }
 
 // PlaybookRunActionDetail represents the response from get_playbook_run_actions SQL function
