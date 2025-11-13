@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/duration"
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
@@ -225,7 +226,9 @@ func applyMapping(ctx context.Context, queryResultRow map[string]any, columnDefs
 		} else {
 			value, err := expr.Eval(env)
 			if err != nil {
-				return nil, fmt.Errorf("failed to evaluate CEL expression for column %s: %w", columnDef.Name, err)
+				return nil, ctx.Oops().
+					With("keys", collections.MapKeys(queryResultRow), ",").
+					Errorf("failed to evaluate CEL expression for column %s: %w", columnDef.Name, err)
 			}
 
 			switch columnDef.Type {
