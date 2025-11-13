@@ -11,6 +11,8 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
+	"github.com/flanksource/duty/types"
+	"github.com/google/uuid"
 	"github.com/invopop/jsonschema"
 	"github.com/labstack/echo/v4"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -32,7 +34,16 @@ func playbookRecentRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) 
 
 	limit := req.GetInt("limit", 20)
 
-	pbrs, err := db.GetRecentPlaybookRuns(ctx, limit)
+	var playbookID *uuid.UUID
+	if playbookIDStr := req.GetString("playbook_id", ""); playbookIDStr != "" {
+		parsed, err := uuid.Parse(playbookIDStr)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("invalid playbook_id: %v", err)), nil
+		}
+		playbookID = &parsed
+	}
+
+	pbrs, err := db.GetRecentPlaybookRuns(ctx, limit, playbookID)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -47,7 +58,16 @@ func playbookFailedRunsHandler(goctx gocontext.Context, req mcp.CallToolRequest)
 
 	limit := req.GetInt("limit", 20)
 
-	runs, err := db.GetRecentPlaybookRuns(ctx, limit, models.PlaybookRunStatusFailed)
+	var playbookID *uuid.UUID
+	if playbookIDStr := req.GetString("playbook_id", ""); playbookIDStr != "" {
+		parsed, err := uuid.Parse(playbookIDStr)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("invalid playbook_id: %v", err)), nil
+		}
+		playbookID = &parsed
+	}
+
+	runs, err := db.GetRecentPlaybookRuns(ctx, limit, playbookID, models.PlaybookRunStatusFailed)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -113,8 +133,8 @@ func playbookListToolHandler(goctx gocontext.Context, req mcp.CallToolRequest) (
 // It extends the base PlaybookRunAction with additional fields from the SQL query
 type PlaybookRunActionDetail struct {
 	models.PlaybookRunAction
-	Agent     map[string]any   `json:"agent,omitempty"`
-	Artifacts []map[string]any `json:"artifacts,omitempty"`
+	Agent     types.JSONMap `json:"agent,omitempty"`
+	Artifacts types.JSON    `json:"artifacts,omitempty"`
 }
 
 func getPlaybookRunDetailsHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -272,6 +292,9 @@ func registerPlaybook(s *server.MCPServer) {
 		mcp.WithDescription("Get recent playbook execution history as JSON array. Each entry contains run details, status, timing, and results."),
 		mcp.WithNumber("limit",
 			mcp.Description("Maximum number of recent runs to return (default: 20)"),
+		),
+		mcp.WithString("playbook_id",
+			mcp.Description("Optional UUID of the playbook to filter runs by. If not provided, returns runs for all playbooks."),
 		))
 
 	s.AddTool(playbookRecentRunTool, playbookRecentRunHandler)
@@ -280,6 +303,9 @@ func registerPlaybook(s *server.MCPServer) {
 		mcp.WithDescription("Get recent failed playbook runs as JSON array. Each entry contains failure details, error messages, and timing information."),
 		mcp.WithNumber("limit",
 			mcp.Description("Maximum number of failed runs to return (default: 20)"),
+		),
+		mcp.WithString("playbook_id",
+			mcp.Description("Optional UUID of the playbook to filter runs by. If not provided, returns failed runs for all playbooks."),
 		))
 
 	s.AddTool(playbookFailedRunTool, playbookFailedRunsHandler)
