@@ -11,9 +11,6 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
-	v1 "github.com/flanksource/incident-commander/api/v1"
-	"github.com/flanksource/incident-commander/db"
-	"github.com/flanksource/incident-commander/playbook"
 	"github.com/invopop/jsonschema"
 	"github.com/labstack/echo/v4"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -21,6 +18,10 @@ import (
 	"github.com/samber/lo"
 	orderedmap "github.com/wk8/go-ordered-map/v2"
 	"gorm.io/gorm"
+
+	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/playbook"
 )
 
 func playbookRecentRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -38,7 +39,7 @@ func playbookRecentRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) 
 	return structToMCPResponse(pbrs), nil
 }
 
-func playbookFailedRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func playbookFailedRunsHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	ctx, err := getDutyCtx(goctx)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -212,7 +213,7 @@ func generatePlaybookToolName(pb models.Playbook) string {
 	return fixMCPToolNameIfRequired(toolName)
 }
 
-func registerPlaybook(ctx context.Context, s *server.MCPServer) {
+func registerPlaybook(s *server.MCPServer) {
 	s.AddResourceTemplate(
 		mcp.NewResourceTemplate("playbook://{id}", "Playbook",
 			mcp.WithTemplateDescription("Playbook data"), mcp.WithTemplateMIMEType(echo.MIMEApplicationJSON)),
@@ -236,5 +237,5 @@ func registerPlaybook(ctx context.Context, s *server.MCPServer) {
 			mcp.Description("Maximum number of failed runs to return (default: 20)"),
 		))
 
-	s.AddTool(playbookFailedRunTool, playbookFailedRunHandler)
+	s.AddTool(playbookFailedRunTool, playbookFailedRunsHandler)
 }
