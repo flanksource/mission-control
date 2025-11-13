@@ -100,6 +100,42 @@ func playbookListToolHandler(goctx gocontext.Context, req mcp.CallToolRequest) (
 	return mcp.NewToolResultText(string(jsonData)), nil
 }
 
+// PlaybookRunActionDetail represents the response from get_playbook_run_actions SQL function
+// It extends the base PlaybookRunAction with additional fields from the SQL query
+type PlaybookRunActionDetail struct {
+	models.PlaybookRunAction
+	Agent     map[string]any   `json:"agent,omitempty"`
+	Artifacts []map[string]any `json:"artifacts,omitempty"`
+}
+
+func getPlaybookRunDetailsHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	ctx, err := getDutyCtx(goctx)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	runID, err := req.RequireString("run_id")
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	withResult := req.GetBool("withResult", true)
+
+	// Select only the fields we need
+	selectFields := "id, name, playbook_run_id, status, scheduled_time, start_time, end_time, agent_id, retry_count, agent, artifacts"
+	if withResult {
+		selectFields = "id, name, playbook_run_id, status, scheduled_time, start_time, end_time, result, agent_id, retry_count, agent, artifacts"
+	}
+
+	query := fmt.Sprintf("SELECT %s FROM get_playbook_run_actions(?)", selectFields)
+	var actions []PlaybookRunActionDetail
+	if err := ctx.DB().Raw(query, runID).Scan(&actions).Error; err != nil {
+		return mcp.NewToolResultError(fmt.Sprintf("error fetching playbook run details: %v", err)), nil
+	}
+
+	return structToMCPResponse(actions), nil
+}
+
 func playbookResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 	ctx, err := getDutyCtx(goctx)
 	if err != nil {
@@ -215,7 +251,7 @@ func generatePlaybookToolName(pb models.Playbook) string {
 
 func registerPlaybook(s *server.MCPServer) {
 	s.AddResourceTemplate(
-		mcp.NewResourceTemplate("playbook://{id}", "Playbook",
+		mcp.NewResourceTemplate("playbook://{idOrName}", "Playbook",
 			mcp.WithTemplateDescription("Playbook data"), mcp.WithTemplateMIMEType(echo.MIMEApplicationJSON)),
 		playbookResourceHandler,
 	)
@@ -238,4 +274,17 @@ func registerPlaybook(s *server.MCPServer) {
 		))
 
 	s.AddTool(playbookFailedRunTool, playbookFailedRunsHandler)
+
+	playbookRunDetailsTool := mcp.NewTool("get_playbook_run_details",
+		mcp.WithDescription("Get detailed information about a playbook run including all actions. Returns actions from both the run and any child runs. Actions are ordered by start time."),
+		mcp.WithString("run_id",
+			mcp.Required(),
+			mcp.Description("The UUID of the playbook run to get details for"),
+		),
+		mcp.WithBoolean("withResult",
+			mcp.Description("Include the result field from actions. Set to false to reduce response size (default: true)"),
+		),
+		mcp.WithReadOnlyHintAnnotation(true))
+
+	s.AddTool(playbookRunDetailsTool, getPlaybookRunDetailsHandler)
 }
