@@ -26,14 +26,14 @@ require (
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/onsi/ginkgo/v2 v2.27.2
 	github.com/onsi/gomega v1.38.2
-	github.com/ory/client-go v1.22.8
+	github.com/ory/client-go v1.22.9
 	github.com/prometheus/client_golang v1.23.2
 	github.com/spf13/cobra v1.10.1
 	github.com/spf13/pflag v1.0.10
 	gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df
 	gorm.io/gorm v1.31.1
-	k8s.io/apimachinery v0.34.1
-	k8s.io/client-go v0.34.1
+	k8s.io/apimachinery v0.34.2
+	k8s.io/client-go v0.34.2
 	sigs.k8s.io/controller-runtime v0.22.4
 )
 
@@ -42,11 +42,11 @@ require (
 	github.com/RussellLuo/slidingwindow v0.0.0-20200528002341-535bb99d338b
 	github.com/WinterYukky/gorm-extra-clause-plugin v0.4.0
 	github.com/aws/aws-sdk-go-v2 v1.39.6
-	github.com/aws/aws-sdk-go-v2/config v1.31.19
-	github.com/aws/aws-sdk-go-v2/credentials v1.18.23
-	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.58.8
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.90.1
-	github.com/aws/aws-sdk-go-v2/service/sts v1.40.1
+	github.com/aws/aws-sdk-go-v2/config v1.31.20
+	github.com/aws/aws-sdk-go-v2/credentials v1.18.24
+	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.58.9
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.90.2
+	github.com/aws/aws-sdk-go-v2/service/sts v1.40.2
 	github.com/flanksource/artifacts v1.0.18
 	github.com/flanksource/clicky v1.11.1
 	github.com/fluxcd/pkg/gittestserver v0.21.0
@@ -80,9 +80,9 @@ require (
 	go.opentelemetry.io/otel/sdk v1.38.0
 	go.opentelemetry.io/otel/trace v1.38.0
 	golang.org/x/sync v0.18.0
-	google.golang.org/genai v1.34.0
+	google.golang.org/genai v1.35.0
 	gorm.io/hints v1.1.2
-	k8s.io/api v0.34.1
+	k8s.io/api v0.34.2
 )
 
 require (
@@ -130,8 +130,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.13 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.13 // indirect
 	github.com/aws/aws-sdk-go-v2/service/kms v1.46.2 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sso v1.30.2 // indirect
-	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.6 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.30.3 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.7 // indirect
 	github.com/aws/smithy-go v1.23.2 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
