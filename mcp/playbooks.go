@@ -150,10 +150,10 @@ func getPlaybookRunDetailsHandler(goctx gocontext.Context, req mcp.CallToolReque
 
 	withResult := req.GetBool("withResult", true)
 
-	// Select only the fields we need
-	selectFields := "id, name, playbook_run_id, status, scheduled_time, start_time, end_time, agent_id, retry_count, agent, artifacts"
-	if withResult {
-		selectFields = "id, name, playbook_run_id, status, scheduled_time, start_time, end_time, result, agent_id, retry_count, agent, artifacts"
+	selectFields := "*"
+	if !withResult {
+		// Select only the fields we need
+		selectFields = "id, name, playbook_run_id, status, scheduled_time, start_time, end_time, agent_id, retry_count, agent, artifacts"
 	}
 
 	query := fmt.Sprintf("SELECT %s FROM get_playbook_run_actions(?)", selectFields)
