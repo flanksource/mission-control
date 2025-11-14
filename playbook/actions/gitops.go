@@ -233,6 +233,10 @@ func (t *GitOps) generateSpec(ctx context.Context, action v1.GitOpsAction) error
 			Branch: action.Repo.Branch,
 			Title:  action.PullRequest.Title,
 			Tags:   action.PullRequest.Tags,
+			AutoMerge: connectors.AutoMerge{
+				Enabled: action.PullRequest.AutoMerge.Enabled,
+				Rebase:  action.PullRequest.AutoMerge.Rebase,
+			},
 		}
 	}
 

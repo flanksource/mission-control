@@ -155,6 +155,18 @@
         "path"
       ]
     },
+    "AutoMerge": {
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "rebase": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "AzureConnection": {
       "properties": {
         "connection": {
@@ -602,6 +614,9 @@
             "type": "string"
           },
           "type": "array"
+        },
+        "autoMerge": {
+          "$ref": "#/$defs/AutoMerge"
         }
       },
       "additionalProperties": false,
