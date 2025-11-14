@@ -85,7 +85,7 @@ func (t *GitOps) Run(ctx context.Context, action v1.GitOpsAction) (*GitOpsAction
 		return nil, oops.Wrapf(err, "failed to modify files")
 	}
 
-	pushOpts := t.generatePushOptionsAndUpdatePRState(connector, *t.spec.PullRequest)
+	pushOpts := t.generatePushOptionsAndUpdatePRState(connector, t.spec.PullRequest)
 	if hash, err := git.CommitAndPush(ctx, connector, workTree, t.spec, pushOpts); err != nil {
 		return nil, oops.Wrapf(err, "failed to commit and push")
 	} else {
@@ -367,8 +367,12 @@ func (t *GitOps) createPR(ctx context.Context, connector connectors.Connector) (
 	return git.OpenPR(ctx, connector, t.spec)
 }
 
-func (t *GitOps) generatePushOptionsAndUpdatePRState(connector connectors.Connector, prTemplate connectors.PullRequestTemplate) map[string]string {
+func (t *GitOps) generatePushOptionsAndUpdatePRState(connector connectors.Connector, prTemplate *connectors.PullRequestTemplate) map[string]string {
 	pushOpts := make(map[string]string)
+	if t.spec.PullRequest == nil {
+		return pushOpts
+	}
+
 	if t.spec.PullRequest.AutoMerge.Enabled {
 		if connector.Service() == connectors.ServiceGitlab {
 			pushOpts["merge_request.create"] = "true"
