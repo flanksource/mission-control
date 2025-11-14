@@ -28,14 +28,14 @@ func Clone(ctx context.Context, spec *GitopsAPISpec) (connectors.Connector, *git
 	return connector, work, nil
 }
 
-func CommitAndPush(ctx context.Context, connector connectors.Connector, work *gitv5.Worktree, spec *GitopsAPISpec) (string, error) {
+func CommitAndPush(ctx context.Context, connector connectors.Connector, work *gitv5.Worktree, spec *GitopsAPISpec, pushOpts map[string]string) (string, error) {
 	hash, err := createCommit(ctx, work, spec.CommitMsg, spec.CommitAuthor, spec.CommitAuthorEmail)
 	if err != nil {
 		return "", ctx.Oops().Wrap(err)
 	}
 
 	ctx.Tracef("committed %s to local repo", hash)
-	return hash, connector.Push(ctx, spec.Branch)
+	return hash, connector.Push(ctx, spec.Branch, pushOpts)
 }
 
 func OpenPR(ctx context.Context, connector connectors.Connector, spec *GitopsAPISpec) (*connectors.PullRequest, error) {

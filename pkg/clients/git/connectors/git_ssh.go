@@ -32,7 +32,7 @@ func (g *Git) ClosePullRequest(ctx context.Context, id int) error {
 	return fmt.Errorf("close pull request  not implemented for git ssh")
 }
 
-func (g *Git) Push(ctx context.Context, branch string) error {
+func (g *Git) Push(ctx context.Context, branch string, pushOptions map[string]string) error {
 	if g.repo == nil {
 		return errors.New("Need to clone first, before pushing ")
 	}
@@ -40,7 +40,12 @@ func (g *Git) Push(ctx context.Context, branch string) error {
 	return g.repo.Push(&git.PushOptions{
 		Auth:     g.auth,
 		Progress: ctx.Logger.V(3),
+		Options:  pushOptions,
 	})
+}
+
+func (Git) Service() string {
+	return ""
 }
 
 func (g *Git) Clone(ctx context.Context, branch, local string) (billy.Filesystem, *git.Worktree, error) {
