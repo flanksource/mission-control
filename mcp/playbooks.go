@@ -4,8 +4,6 @@ import (
 	gocontext "context"
 	"encoding/json"
 	"fmt"
-	"maps"
-	"slices"
 	"strings"
 
 	"github.com/flanksource/duty/context"
@@ -13,15 +11,12 @@ import (
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
-	"github.com/invopop/jsonschema"
 	"github.com/labstack/echo/v4"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/samber/lo"
-	orderedmap "github.com/wk8/go-ordered-map/v2"
 	"gorm.io/gorm"
 
-	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/playbook"
@@ -91,11 +86,12 @@ func playbookRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	playbookToolName := req.Params.Name
-	playbookID := currentPlaybookTools[playbookToolName]
-	if playbookID == "" {
-		return mcp.NewToolResultError(fmt.Sprintf("tool[%s] is not associated with any playbok", playbookToolName)), nil
+	toolName := req.Params.Name
+	playbookIDRaw, ok := playbookToolNameToID.Load(toolName)
+	if !ok {
+		return mcp.NewToolResultError(fmt.Sprintf("playbook tool %s not found", toolName)), nil
 	}
+	playbookID := playbookIDRaw.(string)
 
 	// For playbook execution, we need RLS to check if user can access the playbook
 	// and ensure the run query is also scoped
@@ -133,19 +129,33 @@ func playbookRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.
 
 func playbookListToolHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	type playbookInfo struct {
-		ID   string `json:"id"`
-		Name string `json:"name"`
+		ID       string `json:"id"`
+		ToolName string `json:"tool_name"`
 	}
 
-	playbooks := make([]playbookInfo, 0, len(currentPlaybookTools))
-	for toolName, playbookID := range currentPlaybookTools {
-		playbooks = append(playbooks, playbookInfo{
-			ID:   playbookID,
-			Name: toolName,
-		})
+	ctx, err := getDutyCtx(goctx)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	return structToMCPResponse(playbooks), nil
+	var playbooks []models.Playbook
+	err = auth.WithRLS(ctx, func(txCtx context.Context) error {
+		var err error
+		playbooks, err = gorm.G[models.Playbook](txCtx.DB()).Select("id", "name", "title", "namespace", "category").Where("deleted_at IS NULL").Find(txCtx)
+		return err
+	})
+	if err != nil {
+		return nil, ctx.Oops().Wrapf(err, "Failed to get playbook tools")
+	}
+
+	response := lo.Map(playbooks, func(pb models.Playbook, _ int) playbookInfo {
+		return playbookInfo{
+			ID:       pb.ID.String(),
+			ToolName: generatePlaybookToolName(pb),
+		}
+	})
+
+	return structToMCPResponse(response), nil
 }
 
 // PlaybookRunActionDetail represents the response from get_playbook_run_actions SQL function
@@ -220,85 +230,6 @@ func playbookResourceHandler(goctx gocontext.Context, req mcp.ReadResourceReques
 			Text:     string(jsonData),
 		},
 	}, nil
-}
-
-// ToolName -> Playbook ID
-var currentPlaybookTools = make(map[string]string)
-
-func syncPlaybooksAsTools(ctx context.Context, s *server.MCPServer) error {
-	playbooks, err := gorm.G[models.Playbook](ctx.DB()).Where("deleted_at IS NULL").Find(ctx)
-	if err != nil {
-		return fmt.Errorf("error fetching playbooks: %w", err)
-	}
-	var newPlaybookTools []string
-	for _, pb := range playbooks {
-		var spec v1.PlaybookSpec
-		if err := json.Unmarshal(pb.Spec, &spec); err != nil {
-			return fmt.Errorf("error unmarshaling playbook[%s] spec: %w", pb.ID, err)
-		}
-
-		root := &jsonschema.Schema{
-			Type:       "object",
-			Required:   []string{"id"},
-			Properties: orderedmap.New[string, *jsonschema.Schema](),
-		}
-
-		root.Properties.Set("agent_id", &jsonschema.Schema{Type: "string", Description: "UUID of agent to run playbook on. Leave empty if not specified"})
-		if len(spec.Checks) > 0 {
-			root.Properties.Set("check_id", &jsonschema.Schema{Type: "string", Description: "UUID of the health check this playbook belongs to"})
-			root.Required = append(root.Required, "check_id")
-		}
-		if len(spec.Configs) > 0 {
-			root.Properties.Set("config_id", &jsonschema.Schema{Type: "string", Description: "UUID of config item (from search_catalog results). Example: f47ac10b-58cc-4372-a567-0e02b2c3d479"})
-			root.Required = append(root.Required, "config_id")
-		}
-		if len(spec.Components) > 0 {
-			root.Properties.Set("component_id", &jsonschema.Schema{Type: "string", Description: "UUID of component this playbook belongs to"})
-			root.Required = append(root.Required, "component_id")
-		}
-
-		paramsSchema := &jsonschema.Schema{
-			Type:       "object",
-			Properties: orderedmap.New[string, *jsonschema.Schema](),
-		}
-		var requiredParams []string
-		for _, param := range spec.Parameters {
-			s := &jsonschema.Schema{Type: "string", Description: param.Description}
-			// RunParams only has support for strings so we use enum in these cases
-			if param.Type == v1.PlaybookParameterTypeCheckbox {
-				s.Enum = []any{"true", "false"}
-				s.Default = "false"
-				s.Description += ". This is a boolean field, either true or false as strings."
-			}
-			paramsSchema.Properties.Set(param.Name, s)
-			if param.Required {
-				requiredParams = append(requiredParams, param.Name)
-			}
-		}
-		paramsSchema.Required = requiredParams
-		root.Properties.Set("params", paramsSchema)
-
-		rj, err := root.MarshalJSON()
-		if err != nil {
-			return fmt.Errorf("error marshaling root json schema: %w", err)
-		}
-
-		toolName := generatePlaybookToolName(pb)
-		s.AddTool(mcp.NewToolWithRawSchema(toolName, pb.Description, rj), playbookRunHandler)
-		newPlaybookTools = append(newPlaybookTools, toolName)
-		currentPlaybookTools[toolName] = pb.GetID()
-	}
-
-	// Delete old playbooks and update currentPlaybookTools list
-	currentToolNames := slices.Collect(maps.Keys(currentPlaybookTools))
-	_, playbookToolsToDelete := lo.Difference(newPlaybookTools, currentToolNames)
-	s.DeleteTools(playbookToolsToDelete...)
-	// Remove from currentPlaybookTools
-	maps.DeleteFunc(currentPlaybookTools, func(k, v string) bool {
-		return slices.Contains(playbookToolsToDelete, k)
-	})
-
-	return nil
 }
 
 func generatePlaybookToolName(pb models.Playbook) string {
