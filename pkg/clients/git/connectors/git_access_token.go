@@ -81,15 +81,16 @@ func NewAccessTokenClient(url, service, accessToken string) (Connector, error) {
 	return client, nil
 }
 
-func (g *GitAccessTokenClient) Push(ctx context.Context, branch string) error {
+func (g *GitAccessTokenClient) Push(ctx context.Context, branch string, pushOptions map[string]string) error {
 	if g.repo == nil {
-		return errors.New("Need to clone first, before pushing ")
+		return errors.New("Need to clone first, before pushing")
 	}
 
 	if err := g.repo.Push(&git.PushOptions{
 		Auth:     g.auth,
 		Force:    true,
 		Progress: ctx.Logger.V(3),
+		Options:  pushOptions,
 	}); err != nil {
 		return oops.Wrapf(err, "failed to push branch %s", branch)
 	}
@@ -186,4 +187,8 @@ func (g *GitAccessTokenClient) Clone(ctx context.Context, branch, local string) 
 	}
 
 	return osfs.New(cloneDir), work, nil
+}
+
+func (g GitAccessTokenClient) Service() string {
+	return g.service
 }
