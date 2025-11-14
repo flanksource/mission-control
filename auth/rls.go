@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/flanksource/commons/collections"
+	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	dutyRBAC "github.com/flanksource/duty/rbac"
@@ -13,6 +14,7 @@ import (
 	"github.com/flanksource/duty/rls"
 	"github.com/flanksource/duty/types"
 	"github.com/samber/lo"
+	"go.opentelemetry.io/otel/trace"
 	"gorm.io/gorm"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -45,6 +47,33 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 
 	tokenCache.SetDefault(cacheKey, payload)
 	return payload, nil
+}
+
+// WithRLS wraps a function with RLS enforcement in a transaction.
+// This ensures that Row Level Security is applied to all database queries
+// within the function for guest users.
+func WithRLS(ctx context.Context, fn func(context.Context) error) error {
+	rlsPayload, err := GetRLSPayload(ctx)
+	if err != nil {
+		return err
+	}
+
+	if ctx.Properties().On(false, "rls.debug") {
+		ctx.Logger.WithValues("user", lo.FromPtr(ctx.User()).ID).Infof("RLS payload: %s", logger.Pretty(rlsPayload))
+	}
+
+	if rlsPayload.Disable {
+		return fn(ctx)
+	}
+
+	return ctx.Transaction(func(txCtx context.Context, _ trace.Span) error {
+		if err := rlsPayload.SetPostgresSessionRLS(txCtx.DB()); err != nil {
+			return err
+		}
+
+		txCtx = txCtx.WithRLSPayload(rlsPayload)
+		return fn(txCtx)
+	})
 }
 
 func buildRLSPayloadFromScopes(ctx context.Context) (*rls.Payload, error) {

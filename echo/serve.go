@@ -31,10 +31,8 @@ import (
 	echov4 "github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	prom "github.com/prometheus/client_golang/prometheus"
-	"github.com/samber/lo"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 
 	"github.com/flanksource/incident-commander/agent"
 	"github.com/flanksource/incident-commander/api"
@@ -380,32 +378,10 @@ func RLSMiddleware(next echov4.HandlerFunc) echov4.HandlerFunc {
 	return func(c echov4.Context) error {
 		ctx := c.Request().Context().(context.Context)
 
-		rlsPayload, err := auth.GetRLSPayload(ctx)
-		if err != nil {
-			return err
-		}
-
-		if ctx.Properties().On(false, "rls.debug") {
-			ctx.Logger.WithValues("user", lo.FromPtr(ctx.User()).ID).Infof("RLS payload: %s", logger.Pretty(rlsPayload))
-		}
-
-		if rlsPayload.Disable {
-			return next(c)
-		}
-
-		err = ctx.Transaction(func(txCtx context.Context, _ trace.Span) error {
-			if err := rlsPayload.SetPostgresSessionRLS(txCtx.DB()); err != nil {
-				return err
-			}
-
-			txCtx = txCtx.WithRLSPayload(rlsPayload)
-
-			// set the context with the tx
-			c.SetRequest(c.Request().WithContext(txCtx))
-
+		return auth.WithRLS(ctx, func(rlsCtx context.Context) error {
+			// Update request context with RLS-enabled transaction context
+			c.SetRequest(c.Request().WithContext(rlsCtx))
 			return next(c)
 		})
-
-		return err
 	}
 }
