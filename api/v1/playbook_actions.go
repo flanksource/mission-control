@@ -131,6 +131,14 @@ type GitOpsActionPR struct {
 	Title string `yaml:"title" json:"title" template:"true"`
 	// Tags to add to the PR
 	Tags []string `yaml:"tags,omitempty" json:"tags,omitempty" template:"true"`
+
+	// AutoMerge pull request when supported
+	AutoMerge AutoMerge `json:"autoMerge,omitempty" yaml:"autoMerge,omitempty"`
+}
+
+type AutoMerge struct {
+	Enabled bool `json:"enabled,omitempty" yaml:"enabled,omitempty"`
+	Rebase  bool `json:"rebase,omitempty" yaml:"rebase,omitempty"`
 }
 
 type GitOpsActionPatch struct {

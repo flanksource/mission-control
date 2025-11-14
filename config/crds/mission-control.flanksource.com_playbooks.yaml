@@ -1394,6 +1394,14 @@ spec:
                             PullRequest specifies the details for the PR to be created.
                             Only if connection type is github or azuredevops then a new PR is created.
                           properties:
+                            autoMerge:
+                              description: AutoMerge pull request when supported
+                              properties:
+                                enabled:
+                                  type: boolean
+                                rebase:
+                                  type: boolean
+                              type: object
                             tags:
                               description: Tags to add to the PR
                               items:
