@@ -22,6 +22,7 @@ import (
 	"gorm.io/gorm"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/playbook"
 )
@@ -43,7 +44,12 @@ func playbookRecentRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) 
 		playbookID = &parsed
 	}
 
-	pbrs, err := db.GetRecentPlaybookRuns(ctx, limit, playbookID)
+	var pbrs []models.PlaybookRun
+	err = auth.WithRLS(ctx, func(rlsCtx context.Context) error {
+		pbrs, err = db.GetRecentPlaybookRuns(rlsCtx, limit, playbookID)
+		return err
+	})
+
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -67,7 +73,12 @@ func playbookFailedRunsHandler(goctx gocontext.Context, req mcp.CallToolRequest)
 		playbookID = &parsed
 	}
 
-	runs, err := db.GetRecentPlaybookRuns(ctx, limit, playbookID, models.PlaybookRunStatusFailed)
+	var runs []models.PlaybookRun
+	err = auth.WithRLS(ctx, func(rlsCtx context.Context) error {
+		runs, err = db.GetRecentPlaybookRuns(rlsCtx, limit, playbookID, models.PlaybookRunStatusFailed)
+		return err
+	})
+
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -86,26 +97,34 @@ func playbookRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.
 		return mcp.NewToolResultError(fmt.Sprintf("tool[%s] is not associated with any playbok", playbookToolName)), nil
 	}
 
-	pb, err := query.FindPlaybook(ctx, playbookID)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-	if pb == nil {
-		return mcp.NewToolResultError(fmt.Sprintf("playbook[%s] not found", playbookID)), nil
-	}
+	// For playbook execution, we need RLS to check if user can access the playbook
+	// and ensure the run query is also scoped
+	var pb *models.Playbook
+	var run *models.PlaybookRun
+	err = auth.WithRLS(ctx, func(rlsCtx context.Context) error {
+		pb, err = query.FindPlaybook(rlsCtx, playbookID)
+		if err != nil {
+			return err
+		}
+		if pb == nil {
+			return fmt.Errorf("playbook[%s] not found", playbookID)
+		}
 
-	params := req.GetArguments()
-	pj, err := json.Marshal(params)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
+		params := req.GetArguments()
+		pj, err := json.Marshal(params)
+		if err != nil {
+			return err
+		}
 
-	var rp playbook.RunParams
-	if err := json.Unmarshal(pj, &rp); err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
+		var rp playbook.RunParams
+		if err := json.Unmarshal(pj, &rp); err != nil {
+			return err
+		}
 
-	run, err := playbook.Run(ctx, pb, rp)
+		run, err = playbook.Run(rlsCtx, pb, rp)
+		return err
+	})
+
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -156,9 +175,13 @@ func getPlaybookRunDetailsHandler(goctx gocontext.Context, req mcp.CallToolReque
 		selectFields = "id, name, playbook_run_id, status, scheduled_time, start_time, end_time, agent_id, retry_count, agent, artifacts"
 	}
 
-	query := fmt.Sprintf("SELECT %s FROM get_playbook_run_actions(?)", selectFields)
 	var actions []PlaybookRunActionDetail
-	if err := ctx.DB().Raw(query, runID).Scan(&actions).Error; err != nil {
+	err = auth.WithRLS(ctx, func(rlsCtx context.Context) error {
+		query := fmt.Sprintf("SELECT %s FROM get_playbook_run_actions(?)", selectFields)
+		return rlsCtx.DB().Raw(query, runID).Scan(&actions).Error
+	})
+
+	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("error fetching playbook run details: %v", err)), nil
 	}
 
@@ -172,7 +195,13 @@ func playbookResourceHandler(goctx gocontext.Context, req mcp.ReadResourceReques
 	}
 
 	id := extractID(req.Params.URI)
-	pb, err := query.FindPlaybook(ctx, id)
+
+	var pb *models.Playbook
+	err = auth.WithRLS(ctx, func(rlsCtx context.Context) error {
+		pb, err = query.FindPlaybook(rlsCtx, id)
+		return err
+	})
+
 	if err != nil {
 		return nil, err
 	}

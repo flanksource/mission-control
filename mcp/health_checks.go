@@ -6,10 +6,12 @@ import (
 	"net/url"
 
 	"github.com/flanksource/commons/http"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/auth"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 )
@@ -26,7 +28,12 @@ func healthCheckSearchHandler(goctx gocontext.Context, req mcp.CallToolRequest) 
 	}
 	limit := req.GetInt("limit", 30)
 
-	checks, err := query.FindChecks(ctx, limit, types.ResourceSelector{Search: q})
+	var checks []models.Check
+	err = auth.WithRLS(ctx, func(rlsCtx context.Context) error {
+		checks, err = query.FindChecks(rlsCtx, limit, types.ResourceSelector{Search: q})
+		return err
+	})
+
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -46,7 +53,10 @@ func checkStatusHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.
 	limit := req.GetInt("limit", 30)
 
 	var checkStatuses []models.CheckStatus
-	err = ctx.DB().Where("check_id = ?", checkID).Order("time DESC").Limit(limit).Find(&checkStatuses).Error
+	err = auth.WithRLS(ctx, func(rlsCtx context.Context) error {
+		return rlsCtx.DB().Where("check_id = ?", checkID).Order("time DESC").Limit(limit).Find(&checkStatuses).Error
+	})
+
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -93,7 +103,12 @@ func listAllChecksHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mc
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	checks, err := query.FindChecks(ctx, -1, types.ResourceSelector{Search: "limit=-1"})
+	var checks []models.Check
+	err = auth.WithRLS(ctx, func(rlsCtx context.Context) error {
+		checks, err = query.FindChecks(rlsCtx, -1, types.ResourceSelector{Search: "limit=-1"})
+		return err
+	})
+
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}

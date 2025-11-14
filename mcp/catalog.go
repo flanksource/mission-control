@@ -17,6 +17,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/samber/lo"
 
+	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
 )
 
@@ -43,21 +44,24 @@ func searchCatalogHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mc
 	limit := req.GetInt("limit", defaultQueryLimit)
 
 	var cis any
-	switch req.Params.Name {
-	case "describe_config":
-		cis, err = queryConfigItemDescription(ctx, limit, q)
-	default:
-		selectCols := req.GetStringSlice("select", defaultSelectConfigsView)
+	err = auth.WithRLS(ctx, func(rlsCtx context.Context) error {
+		switch req.Params.Name {
+		case "describe_config":
+			cis, err = queryConfigItemDescription(rlsCtx, limit, q)
+		default:
+			selectCols := req.GetStringSlice("select", defaultSelectConfigsView)
 
-		// NOTE: we're reading QueryTableColumnsWithResourceSelectors into map[string]any instead of []models.ConfigItemSummary
-		// because, with a select clause with few columns, we only want to print those fields as columns in the markdown table.
-		//
-		// If we read into []models.ConfigItemSummary, clicky produces a column for every field in the struct, even if they are not selected.
-		// https://github.com/flanksource/clicky/issues/40
-		cis, err = query.QueryTableColumnsWithResourceSelectors[map[string]any](
-			ctx, "configs", selectCols, limit, nil, types.ResourceSelector{Search: q},
-		)
-	}
+			// NOTE: we're reading QueryTableColumnsWithResourceSelectors into map[string]any instead of []models.ConfigItemSummary
+			// because, with a select clause with few columns, we only want to print those fields as columns in the markdown table.
+			//
+			// If we read into []models.ConfigItemSummary, clicky produces a column for every field in the struct, even if they are not selected.
+			// https://github.com/flanksource/clicky/issues/40
+			cis, err = query.QueryTableColumnsWithResourceSelectors[map[string]any](
+				rlsCtx, "configs", selectCols, limit, nil, types.ResourceSelector{Search: q},
+			)
+		}
+		return err
+	})
 
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -108,15 +112,20 @@ func searchConfigChangesHandler(goctx gocontext.Context, req mcp.CallToolRequest
 
 	selectCols := req.GetStringSlice("select", defaultSelectConfigChangesView)
 
-	// NOTE: we're reading QueryTableColumnsWithResourceSelectors into map[string]any instead of []models.CatalogChange
-	// because, with a select clause with few columns, we only want to print those fields as columns in the markdown table.
-	//
-	// If we read into []models.CatalogChange, clicky produces a column for every field in the struct, even if they are not selected.
-	// This is especially important for config_changes as it includes heavy JSON fields like "config" and "details".
-	// https://github.com/flanksource/clicky/issues/40
-	cis, err := query.QueryTableColumnsWithResourceSelectors[map[string]any](
-		ctx, "catalog_changes", selectCols, limit, nil, types.ResourceSelector{Search: q},
-	)
+	var cis []map[string]any
+	err = auth.WithRLS(ctx, func(rlsCtx context.Context) error {
+		// NOTE: we're reading QueryTableColumnsWithResourceSelectors into map[string]any instead of []models.CatalogChange
+		// because, with a select clause with few columns, we only want to print those fields as columns in the markdown table.
+		//
+		// If we read into []models.CatalogChange, clicky produces a column for every field in the struct, even if they are not selected.
+		// This is especially important for config_changes as it includes heavy JSON fields like "config" and "details".
+		// https://github.com/flanksource/clicky/issues/40
+		cis, err = query.QueryTableColumnsWithResourceSelectors[map[string]any](
+			rlsCtx, "catalog_changes", selectCols, limit, nil, types.ResourceSelector{Search: q},
+		)
+		return err
+	})
+
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -138,9 +147,14 @@ func relatedCatalogHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*m
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	cis, err := query.GetRelatedConfigs(ctx, query.RelationQuery{
-		ID: id,
+	var cis []query.RelatedConfig
+	err = auth.WithRLS(ctx, func(rlsCtx context.Context) error {
+		cis, err = query.GetRelatedConfigs(rlsCtx, query.RelationQuery{
+			ID: id,
+		})
+		return err
 	})
+
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -154,7 +168,10 @@ func configTypeResourceHandler(goctx gocontext.Context, req mcp.CallToolRequest)
 	}
 
 	var types []string
-	err = ctx.DB().Model(&models.ConfigItem{}).Select("DISTINCT(type)").Find(&types).Error
+	err = auth.WithRLS(ctx, func(rlsCtx context.Context) error {
+		return rlsCtx.DB().Model(&models.ConfigItem{}).Select("DISTINCT(type)").Find(&types).Error
+	})
+
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -168,7 +185,13 @@ func ConfigItemResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequ
 	if err != nil {
 		return nil, err
 	}
-	ci, err := query.GetCachedConfig(ctx, id)
+
+	var ci *models.ConfigItem
+	err = auth.WithRLS(ctx, func(rlsCtx context.Context) error {
+		ci, err = query.GetCachedConfig(rlsCtx, id)
+		return err
+	})
+
 	if err != nil {
 		return nil, err
 	}

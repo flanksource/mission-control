@@ -10,7 +10,9 @@ import (
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/views"
 	"github.com/invopop/jsonschema"
 	"github.com/labstack/echo/v4"
@@ -36,7 +38,12 @@ func getViewHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.Call
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	response, err := views.ReadOrPopulateViewTable(ctx, namespace, name)
+	var response *api.ViewResult
+	err = auth.WithRLS(ctx, func(rlsCtx context.Context) error {
+		response, err = views.ReadOrPopulateViewTable(rlsCtx, namespace, name)
+		return err
+	})
+
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -63,7 +70,12 @@ func viewRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.Call
 		return mcp.NewToolResultError(fmt.Sprintf("tool[%s] is not associated with any view", viewToolName)), nil
 	}
 
-	response, err := views.ReadOrPopulateViewTable(ctx, v.Namespace, v.Name)
+	var response *api.ViewResult
+	err = auth.WithRLS(ctx, func(rlsCtx context.Context) error {
+		response, err = views.ReadOrPopulateViewTable(rlsCtx, v.Namespace, v.Name)
+		return err
+	})
+
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
@@ -89,7 +101,12 @@ func viewResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequest) (
 		return nil, fmt.Errorf("invalid connection format: %s", req.Params.URI)
 	}
 
-	view, err := gorm.G[models.View](ctx.DB()).Where("namespace = ? AND name = ?", namespace, name).First(ctx)
+	var view models.View
+	err = auth.WithRLS(ctx, func(rlsCtx context.Context) error {
+		view, err = gorm.G[models.View](rlsCtx.DB()).Where("namespace = ? AND name = ?", namespace, name).First(rlsCtx)
+		return err
+	})
+
 	if err != nil {
 		return nil, err
 	}
