@@ -55,22 +55,21 @@ func AuthMiddleware(next echov4.HandlerFunc) echov4.HandlerFunc {
 }
 
 func Server(ctx context.Context, serverOpts ...server.StreamableHTTPOption) *MCPServer {
-	var s *server.MCPServer
-
 	hooks := &server.Hooks{}
-	hooks.AddOnRegisterSession(func(goctx gocontext.Context, session server.ClientSession) {
-		if err := addPlaybooksAsTool(goctx, s, session); err != nil {
-			logger.Errorf("error on addPlaybooksAsTool for session %s: %v", session.SessionID(), err)
-		}
-	})
 
-	s = server.NewMCPServer("mission-control", api.BuildVersion,
+	s := server.NewMCPServer("mission-control", api.BuildVersion,
 		server.WithResourceCapabilities(true, true),
 		server.WithToolCapabilities(true),
 		server.WithPromptCapabilities(true),
 		server.WithRecovery(),
 		server.WithHooks(hooks),
 	)
+
+	hooks.AddOnRegisterSession(func(goctx gocontext.Context, session server.ClientSession) {
+		if err := addPlaybooksAsTool(goctx, s, session); err != nil {
+			logger.Errorf("error on addPlaybooksAsTool for session %s: %v", session.SessionID(), err)
+		}
+	})
 
 	registerArtifacts(s)
 	registerCatalog(s)
