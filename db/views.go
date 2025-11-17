@@ -7,6 +7,7 @@ import (
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	dutyTypes "github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"gorm.io/gorm/clause"
@@ -104,6 +105,25 @@ func GetView(ctx context.Context, namespace, name string) (*v1.View, error) {
 	}
 
 	return viewCR, nil
+}
+
+type ViewDisplayPlugins struct {
+	ConfigTab dutyTypes.ResourceSelector `json:"configTab"`
+	Variables dutyTypes.JSONStringMap    `json:"variables,omitempty"`
+}
+
+func GetDisplayPlugins(ctx context.Context, id string) ([]ViewDisplayPlugins, error) {
+	var p string
+	if err := ctx.DB().Model(&models.View{}).Select("spec->'display'->>'plugins'").Where("id = ?", id).Scan(&p).Error; err != nil {
+		return nil, err
+	}
+
+	var plugins []ViewDisplayPlugins
+	if err := json.Unmarshal([]byte(p), &plugins); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal display plugins: %w", err)
+	}
+
+	return plugins, nil
 }
 
 func InsertPanelResults(ctx context.Context, viewID uuid.UUID, panels []api.PanelResult, requestFingerprint string) error {
