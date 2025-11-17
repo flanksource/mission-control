@@ -118,6 +118,10 @@ func GetDisplayPlugins(ctx context.Context, id string) ([]ViewDisplayPlugins, er
 		return nil, err
 	}
 
+	if p == "" || p == "null" {
+		return []ViewDisplayPlugins{}, nil
+	}
+
 	var plugins []ViewDisplayPlugins
 	if err := json.Unmarshal([]byte(p), &plugins); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal display plugins: %w", err)
