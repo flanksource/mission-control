@@ -50,8 +50,8 @@ type ViewConfigUIPlugin struct {
 	//
 	// Example:
 	//   variables:
-	//     namespace: "$(config.tags.namespace)"
-	//     cluster: "$(config.tags.cluster)"
+	//     namespace: "$(.config.tags.namespace)"
+	//     cluster: "$(.config.tags.cluster)"
 	Variables map[string]string `json:"variables,omitempty"`
 }
 

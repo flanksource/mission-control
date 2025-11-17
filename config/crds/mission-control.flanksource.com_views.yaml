@@ -297,8 +297,8 @@ spec:
 
                             Example:
                               variables:
-                                namespace: "$(config.tags.namespace)"
-                                cluster: "$(config.tags.cluster)"
+                                namespace: "$(.config.tags.namespace)"
+                                cluster: "$(.config.tags.cluster)"
                           type: object
                       required:
                       - configTab

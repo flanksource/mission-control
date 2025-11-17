@@ -78,6 +78,8 @@ func GetDisplayPluginsVariables(c echo.Context) error {
 			}
 		}
 
+		// We return on first match.
+		// We expect only one plugin to have config tab matching the config
 		return c.JSON(http.StatusOK, output)
 	}
 
