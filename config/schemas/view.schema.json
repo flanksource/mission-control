@@ -3,6 +3,18 @@
   "$id": "https://github.com/flanksource/incident-commander/api/v1/view",
   "$ref": "#/$defs/View",
   "$defs": {
+    "CardConfig": {
+      "properties": {
+        "position": {
+          "type": "string"
+        },
+        "useForAccent": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "ColumnDef": {
       "properties": {
         "name": {
@@ -40,6 +52,9 @@
         },
         "unit": {
           "type": "string"
+        },
+        "card": {
+          "$ref": "#/$defs/CardConfig"
         },
         "cardPosition": {
           "type": "string"
@@ -99,6 +114,18 @@
       "required": [
         "key"
       ]
+    },
+    "DisplayCard": {
+      "properties": {
+        "columns": {
+          "type": "integer"
+        },
+        "default": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
     },
     "EnvVar": {
       "properties": {
@@ -685,6 +712,9 @@
         },
         "title": {
           "type": "string"
+        },
+        "card": {
+          "$ref": "#/$defs/DisplayCard"
         },
         "plugins": {
           "items": {

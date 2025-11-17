@@ -64,15 +64,37 @@ spec:
                 items:
                   description: ColumnDef defines a column in the view
                   properties:
+                    card:
+                      description: Card defines the card layout configuration for
+                        the field
+                      properties:
+                        position:
+                          description: Position defines where the field is displayed
+                            on the card
+                          enum:
+                          - title
+                          - subtitle
+                          - deck
+                          - body
+                          - footer
+                          - headerRight
+                          type: string
+                        useForAccent:
+                          description: UseForAccent indicates if this column's value
+                            should be used for the accent color
+                          type: boolean
+                      type: object
                     cardPosition:
-                      description: Position defines the visual presentation style
-                        for the card field
+                      description: |-
+                        Deprecated: Use Card instead
+                        CardPosition defines the visual presentation style for the card field
                       enum:
                       - title
                       - subtitle
                       - deck
                       - body
                       - footer
+                      - headerRight
                       type: string
                     configItem:
                       description: Configuration for config item columns
@@ -211,6 +233,18 @@ spec:
               display:
                 description: Display properties for the view
                 properties:
+                  card:
+                    description: Card defines the card layout configuration
+                    properties:
+                      columns:
+                        description: Columns defines the number of columns for the
+                          card body layout
+                        type: integer
+                      default:
+                        description: Default indicates if this is the default card
+                          layout
+                        type: boolean
+                    type: object
                   icon:
                     description: Icon to use for the view
                     type: string

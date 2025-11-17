@@ -9,6 +9,9 @@ spec:
     title: Ingresses
     icon: ingress
     sidebar: true
+    card:
+      columns: 2
+      default: true
   queries:
     ingress:
       configs:
@@ -22,33 +25,42 @@ spec:
       hidden: true
     - name: name
       type: config_item
-      cardPosition: title
+      card:
+        position: title
     - name: namespace
       type: string
-      cardPosition: subtitle
+      card:
+        position: subtitle
     - name: status
       type: status
       icon: row.health
-      cardPosition: deck
+      card:
+        position: subtitle
       filter:
         type: multiselect
     - name: health
       type: health
       hidden: true
+      card:
+        useForAccent: true
       filter:
         type: multiselect
     - name: hosts
       type: string
-      cardPosition: body
+      card:
+        position: body
     - name: class
       type: string
-      cardPosition: body
+      card:
+        position: body
     - name: address
       type: string
-      cardPosition: body
+      card:
+        position: body
     - name: created
       type: datetime
-      cardPosition: footer
+      card:
+        position: body
   mapping:
     namespace: row.tags.namespace
     hosts: >

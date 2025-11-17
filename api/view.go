@@ -8,6 +8,15 @@ import (
 	"github.com/google/uuid"
 )
 
+// DisplayCard defines card layout configuration at the view level
+type DisplayCard struct {
+	// Columns defines the number of columns for the card body layout
+	Columns int `json:"columns,omitempty" yaml:"columns,omitempty"`
+
+	// Default indicates if this is the default card layout
+	Default bool `json:"default,omitempty" yaml:"default,omitempty"`
+}
+
 // ViewListItem is the response to listing views for a config selector.
 type ViewListItem struct {
 	ID        uuid.UUID `json:"id"`
@@ -34,6 +43,9 @@ type ViewResult struct {
 
 	// List of all possible values for each column where filter is enabled.
 	ColumnOptions map[string][]string `json:"columnOptions,omitempty"`
+
+	// Card defines the default card layout configuration
+	Card *DisplayCard `json:"card,omitempty"`
 }
 
 // +kubebuilder:object:generate=true
