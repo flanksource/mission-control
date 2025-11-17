@@ -225,8 +225,10 @@ spec:
                     items:
                       properties:
                         configTab:
-                          description: ConfigTab is the selector for the config to
-                            attach to.
+                          description: |-
+                            ConfigTab is a selector that determines which config pages should display this view as a tab.
+
+                            When a config matches this selector, the view will appear as a tab on that config's detail page.
                           properties:
                             agent:
                               description: |-
@@ -284,12 +286,20 @@ spec:
                                 type: string
                               type: array
                           type: object
-                        filter:
+                        variables:
+                          additionalProperties:
+                            type: string
                           description: |-
-                            Filter to apply to the view.
+                            Variables define template expressions to extract data from the config and pass them as variables to the view.
 
-                            When a filter is specified, the filtered view is displayed.
-                          type: string
+                            The map key is the variable name, and the value is a Go template expression that extracts data from the config.
+                            Templates have access to the config object via the `.config` variable.
+
+                            Example:
+                              variables:
+                                namespace: "$(config.tags.namespace)"
+                                cluster: "$(config.tags.cluster)"
+                          type: object
                       required:
                       - configTab
                       type: object

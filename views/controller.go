@@ -7,8 +7,10 @@ import (
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/query"
 	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
+	"github.com/flanksource/gomplate/v3"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 
@@ -28,6 +30,7 @@ func RegisterRoutes(e *echo.Echo) {
 
 	g := e.Group("/view", rbac.Authorization(policy.ObjectViews, policy.ActionRead))
 	g.GET("/list", HandleViewList)
+	g.GET("/display-plugin-variables/:viewID", GetDisplayPluginsVariables)
 
 	// Deprecated: Use POST request
 	g.GET("/:namespace/:name", GetViewByNamespaceName)
@@ -35,6 +38,50 @@ func RegisterRoutes(e *echo.Echo) {
 
 	g.POST("/:namespace/:name", GetViewByNamespaceName)
 	g.POST("/:id", GetViewByID)
+}
+
+func GetDisplayPluginsVariables(c echo.Context) error {
+	ctx := c.Request().Context().(context.Context)
+
+	viewID := c.Param("viewID")
+	configID := c.QueryParam("config_id")
+	if configID == "" {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "config_id is required"))
+	}
+
+	plugins, err := db.GetDisplayPlugins(ctx, viewID)
+	if err != nil {
+		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
+	}
+
+	config, err := query.GetCachedConfig(ctx, configID)
+	if err != nil {
+		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
+	} else if config == nil {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "config(id=%s) not found", configID))
+	}
+
+	for _, p := range plugins {
+		if p.ConfigTab.IsEmpty() {
+			continue
+		}
+
+		env := map[string]any{
+			"config": config.AsMap(),
+		}
+
+		output := make(map[string]string)
+		for k, v := range p.Variables {
+			output[k], err = ctx.RunTemplate(gomplate.Template{Template: v}, env)
+			if err != nil {
+				return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
+			}
+		}
+
+		return c.JSON(http.StatusOK, output)
+	}
+
+	return c.JSON(http.StatusOK, map[string]string{})
 }
 
 func GetViewByID(c echo.Context) error {

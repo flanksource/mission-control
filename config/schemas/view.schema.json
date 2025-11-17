@@ -659,8 +659,11 @@
         "configTab": {
           "$ref": "#/$defs/ResourceSelector"
         },
-        "filter": {
-          "type": "string"
+        "variables": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
         }
       },
       "additionalProperties": false,

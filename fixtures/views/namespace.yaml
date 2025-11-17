@@ -1,0 +1,210 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: namespace
+  namespace: mc
+spec:
+  columns:
+    - cardPosition: title
+      name: name
+      primaryKey: true
+      type: config_item
+      url:
+        config: row.id
+    - cardPosition: deck
+      filter:
+        type: multiselect
+      icon: row.health
+      name: status
+      type: status
+    - filter:
+        type: multiselect
+      hidden: true
+      name: health
+      type: health
+    - cardPosition: deck
+      description: Memory usage
+      gauge:
+        max: row.memory_limit
+        thresholds:
+          - color: green
+            percent: 0
+          - color: orange
+            percent: 75
+          - color: red
+            percent: 90
+      name: memory
+      type: gauge
+      unit: bytes
+    - cardPosition: deck
+      gauge:
+        max: row.cpu_limit
+        thresholds:
+          - color: "#8BC34A"
+            percent: 0
+          - color: "#F4B23C"
+            percent: 70
+          - color: "#F25C54"
+            percent: 85
+      name: cpu
+      type: gauge
+      unit: millicore
+    - cardPosition: footer
+      name: updated
+      type: datetime
+    - cardPosition: footer
+      name: created
+      type: datetime
+    - cardPosition: body
+      hidden: true
+      name: image
+      type: string
+    - cardPosition: body
+      hidden: true
+      name: node
+      type: string
+  description: View for inspecting a Kubernetes Namespace
+  display:
+    icon: namespace
+    plugins:
+      - configTab:
+          types:
+            - Kubernetes::Namespace
+        variables:
+          cluster: $(.config.tags.cluster)
+          namespace: $(.config.name)
+    sidebar: true
+    title: Namespace
+  mapping:
+    created: row.created_at
+    image: |
+      has(row.config) ? row.config.JSON().spec.containers[0].image : "N/A"
+    node: |
+      has(row.config) ? (has(row.config.JSON().spec.nodeName) ? row.config.JSON().spec.nodeName : "N/A"): "N/A"
+    updated: row.updated_at
+  merge: |
+    "SELECT
+      pod.id,
+      pod.name,
+      json_extract(pod.tags, '$.namespace')
+    AS namespace,
+      pod.status,
+      pod.health,
+      pod.config,
+      pod.created_at,
+    pod.updated_at,
+      memory.value as memory,
+      to_bytes(COALESCE(
+        json_extract(pod.config,
+    '$.spec.containers[0].resources.limits.memory'), 
+        ''
+      )) AS memory_limit,
+    cpu.value as cpu,
+      to_millicores(COALESCE(
+        json_extract(pod.config, '$.spec.containers[0].resources.limits.cpu'),
+    
+    ''
+          )) AS cpu_limit\nFROM pod\nLEFT JOIN memory
+          ON pod.name = memory.pod
+    
+        AND json_extract(pod.tags, '$.namespace') = memory.namespace\nLEFT JOIN cpu
+    ON pod.name = cpu.pod 
+      AND json_extract(pod.tags, '$.namespace') = cpu.namespace\nORDER
+    BY namespace, name
+    "
+  panels:
+    - description: Total Pods in the namespace
+      name: Total Pods
+      query: SELECT COUNT(*) AS value FROM pod
+      type: number
+  queries:
+    cpu:
+      columns:
+        namespace: string
+        pod: string
+        value: decimal
+      prometheus:
+        bearer: {}
+        connection: connection://mc/prometheus
+        oauth:
+          clientID: {}
+          clientSecret: {}
+        password: {}
+        query: |
+          sum by (namespace, pod) (
+            irate(container_cpu_usage_seconds_total{
+              container!="POD", # Skip The pause/infra container
+              image!="" # Skip dead containers
+            }[30s])
+          ) * 1000
+        tls:
+          ca: {}
+          cert: {}
+          key: {}
+        username: {}
+    memory:
+      columns:
+        namespace: string
+        pod: string
+        value: decimal
+      prometheus:
+        bearer: {}
+        connection: connection://mc/prometheus
+        oauth:
+          clientID: {}
+          clientSecret: {}
+        password: {}
+        query: |
+          sum by (namespace, pod) (
+            container_memory_working_set_bytes{
+              container!="POD", # Skip The pause/infra container
+              image!="" # Skip dead containers
+            }
+          )
+        tls:
+          ca: {}
+          cert: {}
+          key: {}
+        username: {}
+    memory_usage:
+      columns:
+        namespace: string
+        pod: string
+        value: decimal
+      prometheus:
+        bearer: {}
+        connection: connection://mc/prometheus
+        oauth:
+          clientID: {}
+          clientSecret: {}
+        password: {}
+        query: |
+          sum(rate(container_memory_working_set_bytes{namespace=~"$(.var.namespace)", image!=""}[5m])) / sum(machine_memory_bytes{})
+        tls:
+          ca: {}
+          cert: {}
+          key: {}
+        username: {}
+    pod:
+      configs:
+        agent: all
+        tagSelector: cluster=$(.var.cluster),namespace=$(.var.namespace)
+        types:
+          - Kubernetes::Pod
+  templating:
+    - key: cluster
+      label: Cluster
+      valueFrom:
+        config:
+          types:
+            - Kubernetes::Cluster
+    - dependsOn:
+        - cluster
+      key: namespace
+      label: Namespace
+      valueFrom:
+        config:
+          tagSelector: cluster=$(.var.cluster)
+          types:
+            - Kubernetes::Namespace
+status: {}

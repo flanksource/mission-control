@@ -38,13 +38,21 @@ type ViewDisplay struct {
 }
 
 type ViewConfigUIPlugin struct {
-	// ConfigTab is the selector for the config to attach to.
+	// ConfigTab is a selector that determines which config pages should display this view as a tab.
+	//
+	// When a config matches this selector, the view will appear as a tab on that config's detail page.
 	ConfigTab types.ResourceSelector `json:"configTab"`
 
-	// Filter to apply to the view.
+	// Variables define template expressions to extract data from the config and pass them as variables to the view.
 	//
-	// When a filter is specified, the filtered view is displayed.
-	Filter string `json:"filter,omitempty"`
+	// The map key is the variable name, and the value is a Go template expression that extracts data from the config.
+	// Templates have access to the config object via the `.config` variable.
+	//
+	// Example:
+	//   variables:
+	//     namespace: "$(config.tags.namespace)"
+	//     cluster: "$(config.tags.cluster)"
+	Variables map[string]string `json:"variables,omitempty"`
 }
 
 // ViewSpec defines the desired state of View
