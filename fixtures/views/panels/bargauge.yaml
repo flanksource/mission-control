@@ -4,6 +4,9 @@ metadata:
   name: bargauge
   namespace: mc
 spec:
+  display:
+    title: Global CPU Usage
+    sidebar: true
   queries:
     cpu_usage:
       configs:
@@ -18,11 +21,11 @@ spec:
         max: "100"
         unit: "%"
         thresholds:
-          - value: "0"
+          - percent: 0
             color: "#10b981"
-          - value: "50"
+          - percent: 50
             color: "#eab308"
-          - value: "80"
+          - percent: 80
             color: "#ef4444"
       query: |
         SELECT 'Real' as name, 9.10 as value
