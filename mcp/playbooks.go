@@ -4,9 +4,8 @@ import (
 	gocontext "context"
 	"encoding/json"
 	"fmt"
-	"maps"
-	"slices"
 	"strings"
+	"sync"
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -26,6 +25,53 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/playbook"
 )
+
+// playbookToolNameToID maps tool names to playbook IDs
+var playbookToolNameToID = sync.Map{}
+
+const (
+	toolGetPlaybookRunSteps   = "get_playbook_run_steps"
+	toolGetFailedPlaybookRuns = "playbook_failed_runs"
+	toolGetRecentPlaybookRuns = "playbook_recent_runs"
+	toolPlaybooksListAll      = "playbooks_list_all"
+)
+
+func addPlaybooksAsTool(goctx gocontext.Context, srv *server.MCPServer, session server.ClientSession) error {
+	sessionID := session.SessionID()
+
+	ctx, err := getDutyCtx(goctx)
+	if err != nil {
+		return ctx.Oops().Wrapf(err, "failed to get duty context for session %s", sessionID)
+	}
+
+	var playbooks []models.Playbook
+	err = auth.WithRLS(ctx, func(txCtx context.Context) error {
+		var err error
+		playbooks, err = gorm.G[models.Playbook](txCtx.DB()).Where("deleted_at IS NULL").Find(txCtx)
+		return err
+	})
+	if err != nil {
+		return ctx.Oops().Wrapf(err, "failed to get playbook tools for session %s", sessionID)
+	}
+
+	tools, err := getPlaybooksAsTools(playbooks)
+	if err != nil {
+		return ctx.Oops().Wrapf(err, "failed to convert playbooks to tools for session %s", sessionID)
+	}
+
+	sessionTools := lo.Map(tools, func(tool mcp.Tool, _ int) server.ServerTool {
+		return server.ServerTool{
+			Tool:    tool,
+			Handler: playbookRunHandler,
+		}
+	})
+	if err := srv.AddSessionTools(sessionID, sessionTools...); err != nil {
+		return ctx.Oops().Wrapf(err, "failed to add tool %d to session %s", len(sessionTools), sessionID)
+	}
+
+	ctx.Logger.Infof("Successfully registered %d playbook tools for session %q", len(tools), sessionID)
+	return nil
+}
 
 func playbookRecentRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	ctx, err := getDutyCtx(goctx)
@@ -91,44 +137,44 @@ func playbookRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	playbookToolName := req.Params.Name
-	playbookID := currentPlaybookTools[playbookToolName]
-	if playbookID == "" {
-		return mcp.NewToolResultError(fmt.Sprintf("tool[%s] is not associated with any playbok", playbookToolName)), nil
+	toolName := req.Params.Name
+	playbookIDRaw, ok := playbookToolNameToID.Load(toolName)
+	if !ok {
+		return mcp.NewToolResultError(fmt.Sprintf("playbook tool %s not found", toolName)), nil
 	}
+	playbookID := playbookIDRaw.(string)
 
-	// For playbook execution, we need RLS to check if user can access the playbook
-	// and ensure the run query is also scoped
 	var pb *models.Playbook
-	var run *models.PlaybookRun
 	err = auth.WithRLS(ctx, func(rlsCtx context.Context) error {
 		pb, err = query.FindPlaybook(rlsCtx, playbookID)
 		if err != nil {
 			return err
-		}
-		if pb == nil {
+		} else if pb == nil {
 			return fmt.Errorf("playbook[%s] not found", playbookID)
 		}
 
-		params := req.GetArguments()
-		pj, err := json.Marshal(params)
-		if err != nil {
-			return err
-		}
-
-		var rp playbook.RunParams
-		if err := json.Unmarshal(pj, &rp); err != nil {
-			return err
-		}
-
-		run, err = playbook.Run(rlsCtx, pb, rp)
-		return err
+		return nil
 	})
 
+	params := req.GetArguments()
+	pj, err := json.Marshal(params)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	return structToMCPResponse(run), nil
+
+	var rp playbook.RunParams
+	if err := json.Unmarshal(pj, &rp); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	run, err := playbook.Run(ctx, pb, rp)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	response := fmt.Sprintf("Started a new run: %s for the playbook: %s/%s\n", run.ID, pb.ID, pb.NamespacedName())
+	response += fmt.Sprintf("Use the %s tool to get the run steps.", toolGetPlaybookRunSteps)
+	return mcp.NewToolResultText(response), nil
 }
 
 func playbookListToolHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -137,15 +183,29 @@ func playbookListToolHandler(goctx gocontext.Context, req mcp.CallToolRequest) (
 		Name string `json:"name"`
 	}
 
-	playbooks := make([]playbookInfo, 0, len(currentPlaybookTools))
-	for toolName, playbookID := range currentPlaybookTools {
-		playbooks = append(playbooks, playbookInfo{
-			ID:   playbookID,
-			Name: toolName,
-		})
+	ctx, err := getDutyCtx(goctx)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	return structToMCPResponse(playbooks), nil
+	var playbooks []models.Playbook
+	err = auth.WithRLS(ctx, func(txCtx context.Context) error {
+		var err error
+		playbooks, err = gorm.G[models.Playbook](txCtx.DB()).Select("id", "name", "title", "namespace", "category").Where("deleted_at IS NULL").Find(txCtx)
+		return err
+	})
+	if err != nil {
+		return mcp.NewToolResultError(ctx.Oops().Wrapf(err, "Failed to get playbook tools").Error()), nil
+	}
+
+	response := lo.Map(playbooks, func(pb models.Playbook, _ int) playbookInfo {
+		return playbookInfo{
+			ID:   pb.ID.String(),
+			Name: generatePlaybookToolName(pb),
+		}
+	})
+
+	return structToMCPResponse(response), nil
 }
 
 // PlaybookRunActionDetail represents the response from get_playbook_run_actions SQL function
@@ -156,7 +216,7 @@ type PlaybookRunActionDetail struct {
 	Artifacts types.JSON    `json:"artifacts,omitempty"`
 }
 
-func getPlaybookRunDetailsHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func getPlaybookRunStepsHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	ctx, err := getDutyCtx(goctx)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -222,24 +282,16 @@ func playbookResourceHandler(goctx gocontext.Context, req mcp.ReadResourceReques
 	}, nil
 }
 
-// ToolName -> Playbook ID
-var currentPlaybookTools = make(map[string]string)
-
-func syncPlaybooksAsTools(ctx context.Context, s *server.MCPServer) error {
-	playbooks, err := gorm.G[models.Playbook](ctx.DB()).Where("deleted_at IS NULL").Find(ctx)
-	if err != nil {
-		return fmt.Errorf("error fetching playbooks: %w", err)
-	}
-	var newPlaybookTools []string
+func getPlaybooksAsTools(playbooks []models.Playbook) ([]mcp.Tool, error) {
+	var newPlaybookTools []mcp.Tool
 	for _, pb := range playbooks {
 		var spec v1.PlaybookSpec
 		if err := json.Unmarshal(pb.Spec, &spec); err != nil {
-			return fmt.Errorf("error unmarshaling playbook[%s] spec: %w", pb.ID, err)
+			return nil, fmt.Errorf("error unmarshaling playbook[%s] spec: %w", pb.ID, err)
 		}
 
 		root := &jsonschema.Schema{
 			Type:       "object",
-			Required:   []string{"id"},
 			Properties: orderedmap.New[string, *jsonschema.Schema](),
 		}
 
@@ -280,25 +332,18 @@ func syncPlaybooksAsTools(ctx context.Context, s *server.MCPServer) error {
 
 		rj, err := root.MarshalJSON()
 		if err != nil {
-			return fmt.Errorf("error marshaling root json schema: %w", err)
+			return nil, fmt.Errorf("error marshaling root json schema: %w", err)
 		}
 
 		toolName := generatePlaybookToolName(pb)
-		s.AddTool(mcp.NewToolWithRawSchema(toolName, pb.Description, rj), playbookRunHandler)
-		newPlaybookTools = append(newPlaybookTools, toolName)
-		currentPlaybookTools[toolName] = pb.GetID()
+		playbookToolNameToID.Store(toolName, pb.ID.String())
+
+		t := mcp.NewToolWithRawSchema(toolName, pb.Description, rj)
+		t.Annotations.Title = pb.Name
+		newPlaybookTools = append(newPlaybookTools, t)
 	}
 
-	// Delete old playbooks and update currentPlaybookTools list
-	currentToolNames := slices.Collect(maps.Keys(currentPlaybookTools))
-	_, playbookToolsToDelete := lo.Difference(newPlaybookTools, currentToolNames)
-	s.DeleteTools(playbookToolsToDelete...)
-	// Remove from currentPlaybookTools
-	maps.DeleteFunc(currentPlaybookTools, func(k, v string) bool {
-		return slices.Contains(playbookToolsToDelete, k)
-	})
-
-	return nil
+	return newPlaybookTools, nil
 }
 
 func generatePlaybookToolName(pb models.Playbook) string {
@@ -314,10 +359,10 @@ func registerPlaybook(s *server.MCPServer) {
 		playbookResourceHandler,
 	)
 
-	s.AddTool(mcp.NewTool("playbooks_list_all",
+	s.AddTool(mcp.NewTool(toolPlaybooksListAll,
 		mcp.WithDescription("List all available playbooks")), playbookListToolHandler)
 
-	playbookRecentRunTool := mcp.NewTool("playbook_recent_runs",
+	playbookRecentRunTool := mcp.NewTool(toolGetRecentPlaybookRuns,
 		mcp.WithDescription("Get recent playbook execution history as JSON array. Each entry contains run details, status, timing, and results."),
 		mcp.WithNumber("limit",
 			mcp.Description("Maximum number of recent runs to return (default: 20)"),
@@ -328,7 +373,7 @@ func registerPlaybook(s *server.MCPServer) {
 
 	s.AddTool(playbookRecentRunTool, playbookRecentRunHandler)
 
-	playbookFailedRunTool := mcp.NewTool("playbook_failed_runs",
+	playbookFailedRunTool := mcp.NewTool(toolGetFailedPlaybookRuns,
 		mcp.WithDescription("Get recent failed playbook runs as JSON array. Each entry contains failure details, error messages, and timing information."),
 		mcp.WithNumber("limit",
 			mcp.Description("Maximum number of failed runs to return (default: 20)"),
@@ -339,7 +384,7 @@ func registerPlaybook(s *server.MCPServer) {
 
 	s.AddTool(playbookFailedRunTool, playbookFailedRunsHandler)
 
-	playbookRunDetailsTool := mcp.NewTool("get_playbook_run_details",
+	playbookRunStepsTool := mcp.NewTool(toolGetPlaybookRunSteps,
 		mcp.WithDescription("Get detailed information about a playbook run including all actions. Returns actions from both the run and any child runs. Actions are ordered by start time."),
 		mcp.WithString("run_id",
 			mcp.Required(),
@@ -350,5 +395,5 @@ func registerPlaybook(s *server.MCPServer) {
 		),
 		mcp.WithReadOnlyHintAnnotation(true))
 
-	s.AddTool(playbookRunDetailsTool, getPlaybookRunDetailsHandler)
+	s.AddTool(playbookRunStepsTool, getPlaybookRunStepsHandler)
 }

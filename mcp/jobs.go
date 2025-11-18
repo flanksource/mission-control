@@ -4,8 +4,9 @@ import (
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/job"
-	"github.com/flanksource/incident-commander/jobs"
 	"github.com/mark3labs/mcp-go/server"
+
+	"github.com/flanksource/incident-commander/jobs"
 )
 
 func SyncViewTools(ctx context.Context, s *server.MCPServer) *job.Job {
@@ -24,22 +25,6 @@ func SyncViewTools(ctx context.Context, s *server.MCPServer) *job.Job {
 	}
 }
 
-func SyncPlaybookTools(ctx context.Context, s *server.MCPServer) *job.Job {
-	return &job.Job{
-		Name:          "SyncMCPPlaybookTools",
-		Context:       ctx,
-		Schedule:      "@every 1h",
-		Singleton:     true,
-		JitterDisable: true,
-		JobHistory:    true,
-		Retention:     job.RetentionFailed,
-		RunNow:        true,
-		Fn: func(jr job.JobRuntime) error {
-			return syncPlaybooksAsTools(ctx, s)
-		},
-	}
-}
-
 func registerJobs(ctx context.Context, s *server.MCPServer) {
 	for _, job := range GetAllJobs(ctx, s) {
 		j := job
@@ -53,6 +38,5 @@ func registerJobs(ctx context.Context, s *server.MCPServer) {
 func GetAllJobs(ctx context.Context, s *server.MCPServer) []*job.Job {
 	return []*job.Job{
 		SyncViewTools(ctx, s),
-		SyncPlaybookTools(ctx, s),
 	}
 }
