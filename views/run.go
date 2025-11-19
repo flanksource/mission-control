@@ -1,6 +1,7 @@
 package views
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"sync"
@@ -60,6 +61,15 @@ func Run(ctx context.Context, view *v1.View, request *requestOpt) (*api.ViewResu
 			}
 			queryDuration := time.Since(queryStart)
 			ctx.Tracef("view=%s query=%s results=%d duration=%s", view.GetNamespacedName(), queryName, len(results), queryDuration)
+
+			// Compute grants for config queries
+			if q.Configs != nil {
+				var err error
+				results, err = computeGrantsForConfigResults(ctx, results)
+				if err != nil {
+					return fmt.Errorf("failed to compute grants for query '%s': %w", queryName, err)
+				}
+			}
 
 			resultSet := dataquery.QueryResultSet{
 				Results:    results,
@@ -202,6 +212,11 @@ func Run(ctx context.Context, view *v1.View, request *requestOpt) (*api.ViewResu
 			Name: pkgView.ReservedColumnAttributes,
 			Type: pkgView.ColumnTypeAttributes,
 		})
+
+		output.Columns = append(output.Columns, pkgView.ColumnDef{
+			Name: pkgView.ReservedColumnGrants,
+			Type: pkgView.ColumnTypeGrants,
+		})
 	}
 
 	return &output, nil
@@ -279,6 +294,13 @@ func applyMapping(ctx context.Context, queryResultRow map[string]any, columnDefs
 
 	if len(rowProperties) > 0 {
 		row = append(row, rowProperties)
+	} else {
+		row = append(row, nil)
+	}
+
+	// Append grants value (from __grants field in query result)
+	if grants, ok := queryResultRow[pkgView.ReservedColumnGrants]; ok {
+		row = append(row, grants)
 	} else {
 		row = append(row, nil)
 	}
@@ -388,6 +410,8 @@ var configQueryResultSchema = map[string]models.ColumnType{
 	"delete_reason":     models.ColumnTypeString,
 	"inserted_at":       models.ColumnTypeString,
 	"properties_values": models.ColumnTypeJSONB,
+
+	pkgView.ReservedColumnGrants: models.ColumnTypeJSONB,
 }
 
 // Represents the catalog_changes view
@@ -410,4 +434,90 @@ var changeQueryResultSchema = map[string]models.ColumnType{
 	"count":               models.ColumnTypeInteger,
 	"first_observed":      models.ColumnTypeString,
 	"agent_id":            models.ColumnTypeString,
+}
+
+// computeGrantsForConfigResults computes scope grants for each row in config query results
+// Grants are determined by matching scope selectors against the config in each row
+func computeGrantsForConfigResults(ctx context.Context, results []dataquery.QueryResultRow) ([]dataquery.QueryResultRow, error) {
+	if len(results) == 0 {
+		return results, nil
+	}
+
+	// Load all scopes with config targets
+	var scopes []models.Scope
+	if err := ctx.DB().
+		Where("deleted_at IS NULL").
+		Find(&scopes).Error; err != nil {
+		return nil, fmt.Errorf("failed to load scopes: %w", err)
+	}
+
+	// Build a list of scopes with config targets and their selectors
+	type scopeConfig struct {
+		scopeID   string
+		selectors []types.ResourceSelector
+	}
+	var scopeConfigs []scopeConfig
+
+	for _, scope := range scopes {
+		if len(scope.Targets) == 0 {
+			continue
+		}
+
+		// Parse targets to find config selectors
+		var targets []v1.ScopeTarget
+		if err := json.Unmarshal(scope.Targets, &targets); err != nil {
+			ctx.Logger.Warnf("failed to unmarshal targets for scope %s: %v", scope.ID, err)
+			continue
+		}
+
+		var selectors []types.ResourceSelector
+		for _, target := range targets {
+			if target.Config != nil {
+				selector := types.ResourceSelector{
+					Agent:       target.Config.Agent,
+					Name:        target.Config.Name,
+					Namespace:   target.Config.Namespace,
+					TagSelector: target.Config.TagSelector,
+				}
+				selectors = append(selectors, selector)
+			}
+		}
+
+		if len(selectors) > 0 {
+			scopeConfigs = append(scopeConfigs, scopeConfig{
+				scopeID:   scope.ID.String(),
+				selectors: selectors,
+			})
+		}
+	}
+
+	// Process results to compute grants
+	for i := range results {
+		row := results[i]
+		grants := make([]string, 0)
+
+		// Cast row to ResourceSelectableMap for matching
+		rowMap := types.ResourceSelectableMap(row)
+
+		// Match each scope against this row
+		for _, sc := range scopeConfigs {
+			for _, selector := range sc.selectors {
+				if selector.Matches(rowMap) {
+					grants = append(grants, sc.scopeID)
+					break
+				}
+			}
+		}
+
+		// Set grants field in result row
+		// NULL if no scopes match
+		var grantsValue any
+		if len(grants) > 0 {
+			grantsValue = grants
+		}
+		row[pkgView.ReservedColumnGrants] = grantsValue
+		results[i] = row
+	}
+
+	return results, nil
 }
