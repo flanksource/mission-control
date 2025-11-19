@@ -185,6 +185,9 @@ func processScopeRefs(ctx context.Context, scopeRefs []dutyRBAC.NamespacedNameID
 			return fmt.Errorf("failed to query scope %s/%s: %w", ref.Namespace, ref.Name, err)
 		}
 
+		// Add scope UUID for view row-level grants
+		payload.Scopes = append(payload.Scopes, scope.ID.String())
+
 		var targets []v1.ScopeTarget
 		if err := json.Unmarshal([]byte(scope.Targets), &targets); err != nil {
 			ctx.Warnf("failed to unmarshal targets for scope %s: %v", scope.ID, err)
