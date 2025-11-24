@@ -423,7 +423,7 @@ func registerCatalog(s *server.MCPServer) {
 
 	Available columns for CatalogChange:
 	- Lightweight: id, config_id, name, type, change_type, severity, summary, created_at, first_observed, count, external_created_by, created_by, source, deleted_at, agent_id, tags
-	- Heavy (avoid unless needed): config, details - these are large JSON fields containing full configuration data and change details
+	- Heavy (avoid unless needed): config, details, diff - these are large JSON fields containing full configuration data, change details, and diffs
 
 	Examples:
 	- For basic change listing: "id,config_id,name,type,change_type,severity,created_at"
@@ -440,7 +440,7 @@ func registerCatalog(s *server.MCPServer) {
 			mcp.Description("Search query"+configChangeQueryDescription),
 		),
 		mcp.WithNumber("limit", mcp.Description(fmt.Sprintf("Number of results to return. Default: %d", defaultQueryLimit))),
-		mcp.WithArray("select", mcp.Description("a list of columns to return. Default: id,config_id,name,type,change_type,severity,summary,created_at,first_observed,count. Always specify minimal columns needed for token efficiency. Avoid 'config' and 'details' columns unless absolutely necessary as they contain large JSON data.")),
+		mcp.WithArray("select", mcp.Description("a list of columns to return. Default: id,config_id,name,type,change_type,severity,summary,created_at,first_observed,count. Always specify minimal columns needed for token efficiency. Avoid 'config', 'details', and 'diff' columns unless absolutely necessary as they contain large JSON data.")),
 	)
 	s.AddTool(searchCatalogChangesTool, searchConfigChangesHandler)
 
