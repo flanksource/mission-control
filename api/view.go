@@ -55,20 +55,20 @@ type ViewResult struct {
 // Modifying the variable's value will update all elements that reference it.
 // Variables appear as interactive controls (dropdown menus or text inputs) at the top of the view interface.
 type ViewVariable struct {
-	// Key is the unique identifier of the filter.
-	// The filter's value is accessible in the dataquery templates as  $(.filter.key)
+	// Key is the unique identifier of the variable.
+	// The variable's value is accessible in the dataquery templates as $(var.<key>)
 	Key string `json:"key" yaml:"key"`
 
-	// Label is the human-readable name of the filter.
+	// Label is the human-readable name of the variable.
 	Label string `json:"label" yaml:"label"`
 
-	// Values is the list of values that the filter can take.
+	// Values is the list of values that the variable can take.
 	Values []string `json:"values,omitempty" yaml:"values,omitempty"`
 
-	// ValueFrom is the source of the filter's values.
+	// ValueFrom is the source of the variable's values.
 	ValueFrom *ViewVariableValueFrom `json:"valueFrom,omitempty" yaml:"valueFrom,omitempty"`
 
-	// Default is the default value of the filter.
+	// Default is the default value of the variable.
 	Default string `json:"default,omitempty" yaml:"default,omitempty"`
 
 	// Variables this variable depends on - must be resolved before this variable can be populated
