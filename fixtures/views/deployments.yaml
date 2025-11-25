@@ -4,70 +4,211 @@ metadata:
   name: deployments
   namespace: mc
 spec:
+  columns:
+    - description: The id of the deployment.
+      hidden: true
+      name: id
+      primaryKey: true
+      type: string
+    - card:
+        position: title
+      description: The deployment name.
+      name: name
+      type: config_item
+    - card:
+        position: subtitle
+      description: The namespace name.
+      filter:
+        type: multiselect
+      name: namespace
+      type: string
+      url:
+        config:
+          f("name=$(.namespace) tags.cluster=$(.cluster) type=Kubernetes::Namespace",
+          row)
+    - card:
+        position: body
+      description: The number of ready replicas.
+      name: readyReplicas
+      type: string
+    - card:
+        position: body
+      description: The desired number of replicas.
+      name: replicas
+      type: string
+    - card:
+        position: subtitle
+      description: The status of the deployment.
+      filter:
+        type: multiselect
+      icon: row.health
+      name: status
+      type: status
+    - card:
+        useForAccent: true
+      description: The health of the deployment.
+      filter:
+        type: multiselect
+      hidden: true
+      name: health
+      type: health
+    - card:
+        position: headerRight
+      description: CPU usage across all pods.
+      gauge:
+        thresholds:
+          - color: "#8BC34A"
+            percent: 0
+          - color: "#F4B23C"
+            percent: 70
+          - color: "#F25C54"
+            percent: 85
+      name: cpu
+      type: gauge
+      unit: millicore
+    - card:
+        position: headerRight
+      description: Memory usage across all pods.
+      gauge:
+        max: row.memory_limit
+        thresholds:
+          - color: green
+            percent: 0
+          - color: orange
+            percent: 75
+          - color: red
+            percent: 90
+      name: memory
+      type: gauge
+      unit: bytes
+    - card:
+        position: body
+      description: The creation timestamp.
+      name: createdAt
+      type: datetime
+    - card:
+        position: body
+      description: The last updated time.
+      name: lastUpdated
+      type: datetime
   display:
-    title: Helm Releases
-    icon: rocket
+    icon: kubernetes::deployment
     sidebar: true
+    title: Deployments
+  mapping:
+    cpu: row.cpu
+    createdAt: row.created_at
+    lastUpdated: row.updated_at
+    memory: row.memory
+    memory_limit: row.memory_limit
+  merge: |
+    SELECT
+      deployments.id,
+      deployments.name,
+      json_extract(deployments.tags, '$.namespace') AS namespace,
+      json_extract(deployments.tags, '$.cluster') AS cluster,
+      deployments.status,
+      deployments.health,
+      deployments.created_at,
+      deployments.updated_at,
+      CAST(CASE
+        WHEN json_extract(deployments.config, '$.status.readyReplicas') IS NULL THEN 0
+        ELSE CAST(json_extract(deployments.config, '$.status.readyReplicas') AS INTEGER)
+      END AS TEXT) AS readyReplicas,
+      CAST(json_extract(deployments.config, '$.spec.replicas') AS TEXT) AS replicas,
+      COALESCE(cpu_usage.value, 0) as cpu,
+      COALESCE(memory_usage.value, 0) as memory,
+      COALESCE(memory_limit.value, 0) as memory_limit
+    FROM deployments
+    LEFT JOIN cpu_usage_by_deployment AS cpu_usage
+      ON deployments.name = cpu_usage.deployment
+      AND json_extract(deployments.tags, '$.namespace') = cpu_usage.namespace
+    LEFT JOIN memory_usage_by_deployment AS memory_usage
+      ON deployments.name = memory_usage.deployment
+      AND json_extract(deployments.tags, '$.namespace') = memory_usage.namespace
+    LEFT JOIN memory_limit_by_deployment AS memory_limit
+      ON deployments.name = memory_limit.deployment
+      AND json_extract(deployments.tags, '$.namespace') = memory_limit.namespace
   panels:
-    - name: Health
-      description: Helm Releases grouped by health
-      type: piechart
+    - description: Deployments grouped by health
+      name: Health
       piechart:
-        showLabels: true
         colors:
           healthy: "#28C19B"
           unhealthy: "#F04E6E"
-      query: SELECT COUNT(*) AS count, health FROM helm_releases GROUP BY health
-    - name: Status
-      description: Helm Releases grouped by status
+          unknown: "#666666"
+          warning: "#F4B23C"
+        showLabels: true
+      query: SELECT COUNT(*) AS count, health FROM deployments GROUP BY health
       type: piechart
-      piechart:
-        colors:
-          InstallSucceeded: "#28C19B"
-          RollbackSucceeded: "#F4B23C"
-          UpgradeFailed: "#F04E6E"
-          UpgradeSucceeded: "#5965F2"
-      query: SELECT COUNT(*) AS count, status FROM helm_releases GROUP BY status
-  columns:
-    - name: id
-      type: string
-      description: The id of the deployment.
-      primaryKey: true
-      hidden: true
-    - name: url
-      type: url
-      for: application
-    - name: application
-      type: string
-      description: The application name.
-    - name: namespace
-      type: string
-      description: The namespace name.
-    - name: chart
-      type: string
-      description: The chart name.
-    - name: version
-      type: string
-      description: The version of the deployment.
-    - name: status
-      type: status
-      description: The status of the deployment.
-    - name: health
-      type: health
-      description: The health of the deployment.
-    - name: lastUpdated
-      type: datetime
-      description: The last updated time.
+    - description: Deployments grouped by status
+      name: Status
+      query: SELECT COUNT(*) AS count, status FROM deployments GROUP BY status
+      type: piechart
   queries:
-    helm_releases:
+    cpu_usage_by_deployment:
+      columns:
+        deployment: string
+        namespace: string
+        value: decimal
+      prometheus:
+        connection: connection://mc/prometheus
+        query: |
+          sum by (namespace, deployment) (
+            label_replace(
+              rate(container_cpu_usage_seconds_total{
+                container!="",
+                container!="POD"
+              }[5m]),
+              "deployment", "$1", "pod", "^(.*)-[0-9a-f]+-[0-9a-z]+$"
+            )
+          ) * 1000
+    deployments:
       configs:
+        agent: all
+        tagSelector: cluster=$(.var.cluster)
         types:
-          - Kubernetes::HelmRelease
-  mapping:
-    application: row.name
-    namespace: row.tags.namespace
-    chart: row.config.status.history[0].chartName
-    version: row.config.status.history[0].chartVersion
-    lastUpdated: row.updated_at
-    url: >
-      "/catalog/" + row.id
+          - Kubernetes::Deployment
+    memory_limit_by_deployment:
+      columns:
+        deployment: string
+        namespace: string
+        value: decimal
+      prometheus:
+        connection: connection://mc/prometheus
+        query: |
+          sum by (namespace, deployment) (
+            label_replace(
+              kube_pod_container_resource_limits{
+                resource="memory",
+                container!="",
+                container!="POD"
+              },
+              "deployment", "$1", "pod", "^(.*)-[0-9a-f]+-[0-9a-z]+$"
+            )
+          )
+    memory_usage_by_deployment:
+      columns:
+        deployment: string
+        namespace: string
+        value: decimal
+      prometheus:
+        connection: connection://mc/prometheus
+        query: |
+          sum by (namespace, deployment) (
+            label_replace(
+              container_memory_working_set_bytes{
+                container!="",
+                container!="POD"
+              },
+              "deployment", "$1", "pod", "^(.*)-[0-9a-f]+-[0-9a-z]+$"
+            )
+          )
+  templating:
+    - key: cluster
+      label: Cluster
+      valueFrom:
+        config:
+          agent: all
+          types:
+            - Kubernetes::Cluster
