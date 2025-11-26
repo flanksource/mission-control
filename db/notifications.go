@@ -22,7 +22,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"go.opentelemetry.io/otel/trace"
-	"gorm.io/gorm"
 )
 
 func DeleteNotificationSilence(ctx context.Context, id string) error {
@@ -437,8 +436,14 @@ func GetGroupedResources(ctx context.Context, groupID uuid.UUID, excludeResource
 }
 
 func GetNotificationSendHistory(ctx context.Context, timeWindowDays int, status []string, limit int, offset int) ([]models.NotificationSendHistory, error) {
-	q := gorm.G[models.NotificationSendHistory](ctx.DB()).
-		Where(fmt.Sprintf("created_at > NOW() - INTERVAL '%d days'", timeWindowDays))
+	q := ctx.DB().Model(&models.NotificationSendHistory{}).
+		Where(fmt.Sprintf("created_at > NOW() - INTERVAL '%d days'", timeWindowDays)).
+		Where(`(
+			(source_event LIKE 'config.%' AND EXISTS (SELECT 1 FROM config_items ci WHERE ci.id = notification_send_history.resource_id AND ci.deleted_at IS NULL))
+			OR (source_event LIKE 'component.%' AND EXISTS (SELECT 1 FROM components c WHERE c.id = notification_send_history.resource_id AND c.deleted_at IS NULL))
+			OR (source_event LIKE 'check.%' AND EXISTS (SELECT 1 FROM checks ch WHERE ch.id = notification_send_history.resource_id AND ch.deleted_at IS NULL))
+			OR (source_event LIKE 'canary.%' AND EXISTS (SELECT 1 FROM canaries ca WHERE ca.id = notification_send_history.resource_id AND ca.deleted_at IS NULL))
+		)`)
 
 	if len(status) > 0 {
 		q = q.Where("status IN ?", status)
@@ -449,5 +454,8 @@ func GetNotificationSendHistory(ctx context.Context, timeWindowDays int, status 
 	if offset > 0 {
 		q = q.Offset(offset)
 	}
-	return q.Find(ctx)
+
+	var results []models.NotificationSendHistory
+	err := q.Find(&results).Error
+	return results, err
 }
