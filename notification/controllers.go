@@ -10,10 +10,11 @@ import (
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/types"
+	"github.com/labstack/echo/v4"
+
 	"github.com/flanksource/incident-commander/db"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/rbac"
-	"github.com/labstack/echo/v4"
 )
 
 func init() {
@@ -29,23 +30,25 @@ func RegisterRoutes(e *echo.Echo) {
 		return c.JSON(http.StatusOK, EventRing.Get())
 	}, rbac.Authorization(policy.ObjectMonitor, policy.ActionRead))
 
-	g.POST("/silence", func(c echo.Context) error {
-		ctx := c.Request().Context().(context.Context)
+	g.POST("/silence", handleCreateSilence, rbac.Authorization(policy.ObjectNotification, policy.ActionCreate))
 
-		var req SilenceSaveRequest
-		if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-			return err
-		}
+	g.GET("/silence_preview", NotificationSilencePreview, rbac.Authorization(policy.ObjectNotification, policy.ActionRead))
+}
 
-		req.Source = models.SourceUI
-		if err := SaveNotificationSilence(ctx, req); err != nil {
-			return api.WriteError(c, err)
-		}
+func handleCreateSilence(c echo.Context) error {
+	ctx := c.Request().Context().(context.Context)
 
-		return nil
-	}, rbac.Authorization(policy.ObjectNotification, policy.ActionCreate))
+	var req SilenceSaveRequest
+	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
+		return api.WriteError(c, api.Errorf(api.EINVALID, "invalid post body: %v", err))
+	}
 
-	g.GET("/silence_preview", NotificationSilencePreview)
+	req.Source = models.SourceUI
+	if err := SaveNotificationSilence(ctx, req); err != nil {
+		return api.WriteError(c, err)
+	}
+
+	return nil
 }
 
 func NotificationSendHistorySummary(c echo.Context) error {
