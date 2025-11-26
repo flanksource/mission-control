@@ -16,6 +16,13 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
+const (
+	toolSearchHealthChecks = "search_health_checks"
+	toolGetCheckStatus     = "get_check_status"
+	toolRunHealthCheck     = "run_health_check"
+	toolListAllChecks      = "list_all_checks"
+)
+
 func healthCheckSearchHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	ctx, err := getDutyCtx(goctx)
 	if err != nil {
@@ -170,7 +177,7 @@ func registerHealthChecks(s *server.MCPServer) {
 	Use this single specification to parse requests, generate valid health check search queries, and validate existing ones.
 `
 
-	healthCheckSearchTool := mcp.NewTool("search_health_checks",
+	healthCheckSearchTool := mcp.NewTool(toolSearchHealthChecks,
 		mcp.WithDescription("Search and find health checks returning JSON array with check metadata"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("query",
@@ -181,7 +188,7 @@ func registerHealthChecks(s *server.MCPServer) {
 	)
 	s.AddTool(healthCheckSearchTool, healthCheckSearchHandler)
 
-	getCheckStatusTool := mcp.NewTool("get_check_status",
+	getCheckStatusTool := mcp.NewTool(toolGetCheckStatus,
 		mcp.WithDescription("Get health check execution history as JSON array. Each entry contains status, time, duration, and error (if any). Ordered by most recent first."),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("id",
@@ -192,7 +199,7 @@ func registerHealthChecks(s *server.MCPServer) {
 	)
 	s.AddTool(getCheckStatusTool, checkStatusHandler)
 
-	healthCheckRunTool := mcp.NewTool("run_health_check",
+	healthCheckRunTool := mcp.NewTool(toolRunHealthCheck,
 		mcp.WithDescription("Execute a health check immediately and return results. Returns execution status and timing information."),
 		mcp.WithString("id",
 			mcp.Required(),
@@ -201,7 +208,7 @@ func registerHealthChecks(s *server.MCPServer) {
 	)
 	s.AddTool(healthCheckRunTool, healthCheckRunHandler)
 
-	listAllChecksTool := mcp.NewTool("list_all_checks",
+	listAllChecksTool := mcp.NewTool(toolListAllChecks,
 		mcp.WithDescription("List all health checks as JSON array with complete metadata including names, IDs, and current status"),
 		mcp.WithReadOnlyHintAnnotation(true),
 	)

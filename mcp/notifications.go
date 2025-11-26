@@ -11,6 +11,11 @@ import (
 	"github.com/timberio/go-datemath"
 )
 
+const (
+	toolGetNotificationDetail       = "get_notification_detail"
+	toolGetNotificationsForResource = "get_notifications_for_resource"
+)
+
 // Default fields returned by get_notifications_for_resource to minimize token usage
 // Body is excluded from the default selection
 var defaultNotificationFields = []string{
@@ -116,7 +121,7 @@ func parseDateMath(val string) (time.Time, error) {
 }
 
 func registerNotifications(s *server.MCPServer) {
-	getNotificationDetailTool := mcp.NewTool("get_notification_detail",
+	getNotificationDetailTool := mcp.NewTool(toolGetNotificationDetail,
 		mcp.WithDescription("Get detailed information about a specific notification including status, body, recipients, resource details, and related entities"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("send_id",
@@ -126,7 +131,7 @@ func registerNotifications(s *server.MCPServer) {
 	)
 	s.AddTool(getNotificationDetailTool, getNotificationDetailHandler)
 
-	getNotificationsForResourceTool := mcp.NewTool("get_notifications_for_resource",
+	getNotificationsForResourceTool := mcp.NewTool(toolGetNotificationsForResource,
 		mcp.WithDescription("Get notification history for a specific resource (config item, component, check, or canary) with optional time and status filtering. Returns minimal fields by default to save tokens. Use get_notification_detail to get full notification details."),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("resource_id",
