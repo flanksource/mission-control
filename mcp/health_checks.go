@@ -10,10 +10,11 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
-	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/auth"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+
+	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/auth"
 )
 
 const (
@@ -189,7 +190,7 @@ func registerHealthChecks(s *server.MCPServer) {
 	s.AddTool(healthCheckSearchTool, healthCheckSearchHandler)
 
 	getCheckStatusTool := mcp.NewTool(toolGetCheckStatus,
-		mcp.WithDescription("Get health check execution history as JSON array. Each entry contains status, time, duration, and error (if any). Ordered by most recent first."),
+		mcp.WithDescription("Get health check execution history. Each entry contains status, time, duration, and error (if any). Ordered by most recent first."),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("id",
 			mcp.Required(),
@@ -209,7 +210,7 @@ func registerHealthChecks(s *server.MCPServer) {
 	s.AddTool(healthCheckRunTool, healthCheckRunHandler)
 
 	listAllChecksTool := mcp.NewTool(toolListAllChecks,
-		mcp.WithDescription("List all health checks as JSON array with complete metadata including names, IDs, and current status"),
+		mcp.WithDescription("List all health checks with complete metadata including names, IDs, and current status"),
 		mcp.WithReadOnlyHintAnnotation(true),
 	)
 	s.AddTool(listAllChecksTool, listAllChecksHandler)

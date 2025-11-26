@@ -56,7 +56,7 @@ func searchCatalogHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mc
 	var cis any
 	err = auth.WithRLS(ctx, func(rlsCtx context.Context) error {
 		switch req.Params.Name {
-		case "describe_config":
+		case toolDescribeConfig:
 			cis, err = queryConfigItemDescription(rlsCtx, limit, q)
 		default:
 			selectCols := req.GetStringSlice("select", defaultSelectConfigsView)
@@ -316,8 +316,8 @@ func registerCatalog(s *server.MCPServer) {
 	Use this single specification to parse requests, generate valid catalog-search queries, and validate existing ones.
 `
 
-	catalogSearchDescription := `
-	Each catalog item also has more information in its config field which can be queried by calling the tool describe_config(query), the query is the same
+	catalogSearchDescription := fmt.Sprintf(`
+	Each catalog item also has more information in its config field which can be queried by calling the tool %s(query), the query is the same
 	but that tool should only be called when "describe" is explicitly used
 
 	IMPORTANT - Column Selection for Token Efficiency:
@@ -326,15 +326,16 @@ func registerCatalog(s *server.MCPServer) {
 
 	Available columns for ConfigItemSummary:
 	- Lightweight: id, name, type, status, health, description, created_at, updated_at, deleted_at, scraper_id, agent_id, external_id, source, path, ready, cost_per_minute, cost_total_1d, cost_total_7d, cost_total_30d, delete_reason, labels, tags, namespace, changes, analysis, created_by
-	- Note: ConfigItemSummary does NOT include config or properties fields. For full config data, use describe_config tool.
+	- Note: ConfigItemSummary does NOT include config or properties fields. For full config data, use %s tool.
 
 	Examples:
 	- For basic listing: "id,name,type,health,status"
 	- For troubleshooting: "id,name,type,health,status,description,changes"
 	- For cost analysis: "id,name,type,cost_per_minute,cost_total_30d"
-	`
+	`, toolDescribeConfig, toolDescribeConfig)
+
 	searchCatalogTool := mcp.NewTool(toolSearchCatalog,
-		mcp.WithDescription("Search and find configuration items in the catalog. For detailed config data, use describe_config tool."+catalogSearchDescription),
+		mcp.WithDescription(fmt.Sprintf("Search and find configuration items (not health checks) in the catalog. For detailed config data, use %s tool. %s", toolDescribeConfig, catalogSearchDescription)),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("query",
 			mcp.Required(),
@@ -353,9 +354,11 @@ func registerCatalog(s *server.MCPServer) {
 	those tools with the param config_id=<id> and ask the user for any other parameters if the input schema requires any.
 
 	Example query: id=f47ac10b-58cc-4372-a567-0e02b2c3d479,6ba7b810-9dad-11d1-80b4-00c04fd430c8,a1b2c3d4-e5f6-7890-abcd-ef1234567890
+
+	NOTE: This tool is explicitly for config items and not for health checks.
 	`
 	s.AddTool(mcp.NewTool(toolDescribeConfig,
-		mcp.WithDescription("Get all data for configs."+describeConfigDescription),
+		mcp.WithDescription(fmt.Sprintf("Get all data for configs. %s", describeConfigDescription)),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("query",
 			mcp.Required(),
