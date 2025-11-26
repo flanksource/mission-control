@@ -12,6 +12,8 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
+const toolListConnections = "list_connections"
+
 func ConnectionListHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	ctx, err := getDutyCtx(goctx)
 	if err != nil {
@@ -65,5 +67,5 @@ func registerConnections(s *server.MCPServer) {
 			mcp.WithTemplateDescription("Config Item Data"), mcp.WithTemplateMIMEType(echo.MIMEApplicationJSON)),
 		ConnectionResourceHandler)
 
-	s.AddTool(mcp.NewTool("list_connections", mcp.WithDescription("List all connection endpoints and credentials. Returns empty array if no connections configured. Use for discovering available data sources.")), ConnectionListHandler)
+	s.AddTool(mcp.NewTool(toolListConnections, mcp.WithDescription("List all connection endpoints and credentials. Returns empty array if no connections configured. Use for discovering available data sources.")), ConnectionListHandler)
 }

@@ -24,7 +24,17 @@ import (
 //go:embed k8s_troubleshooting_prompt.txt
 var k8sTroubleshootingPrompt string
 
-const defaultQueryLimit = 30
+const (
+	defaultQueryLimit = 30
+
+	toolListCatalogTypes = "list_catalog_types"
+	toolSearchCatalog    = "search_catalog"
+	toolDescribeConfig   = "describe_config"
+
+	toolSearchCatalogChanges = "search_catalog_changes"
+
+	toolGetRelatedConfigs = "get_related_configs"
+)
 
 var (
 	defaultSelectConfigsView       = []string{"id", "name", "type", "health", "status", "description", "updated_at", "created_at"}
@@ -243,7 +253,7 @@ func registerCatalog(s *server.MCPServer) {
 			mcp.WithTemplateDescription("Config Item Data"), mcp.WithTemplateMIMEType(echo.MIMEApplicationJSON)),
 		ConfigItemResourceHandler)
 
-	s.AddTool(mcp.NewTool("list_catalog_types",
+	s.AddTool(mcp.NewTool(toolListCatalogTypes,
 		mcp.WithDescription("List all config types")), configTypeResourceHandler)
 
 	var queryDescription = `
@@ -323,7 +333,7 @@ func registerCatalog(s *server.MCPServer) {
 	- For troubleshooting: "id,name,type,health,status,description,changes"
 	- For cost analysis: "id,name,type,cost_per_minute,cost_total_30d"
 	`
-	searchCatalogTool := mcp.NewTool("search_catalog",
+	searchCatalogTool := mcp.NewTool(toolSearchCatalog,
 		mcp.WithDescription("Search and find configuration items in the catalog. For detailed config data, use describe_config tool."+catalogSearchDescription),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("query",
@@ -344,7 +354,7 @@ func registerCatalog(s *server.MCPServer) {
 
 	Example query: id=f47ac10b-58cc-4372-a567-0e02b2c3d479,6ba7b810-9dad-11d1-80b4-00c04fd430c8,a1b2c3d4-e5f6-7890-abcd-ef1234567890
 	`
-	s.AddTool(mcp.NewTool("describe_config",
+	s.AddTool(mcp.NewTool(toolDescribeConfig,
 		mcp.WithDescription("Get all data for configs."+describeConfigDescription),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("query",
@@ -432,7 +442,7 @@ func registerCatalog(s *server.MCPServer) {
 	- Only when full details needed: "id,config_id,change_type,severity,summary,details"
 	`
 
-	searchCatalogChangesTool := mcp.NewTool("search_catalog_changes",
+	searchCatalogChangesTool := mcp.NewTool(toolSearchCatalogChanges,
 		mcp.WithDescription("Search and find configuration change events across catalog items"+catalogChangesDescription),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("query",
@@ -444,7 +454,7 @@ func registerCatalog(s *server.MCPServer) {
 	)
 	s.AddTool(searchCatalogChangesTool, searchConfigChangesHandler)
 
-	relatedCatalogTool := mcp.NewTool("get_related_configs",
+	relatedCatalogTool := mcp.NewTool(toolGetRelatedConfigs,
 		mcp.WithDescription("Find configuration items related to a specific config by relationships and dependencies"),
 		mcp.WithString("id",
 			mcp.Required(),

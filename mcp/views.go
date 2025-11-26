@@ -23,6 +23,11 @@ import (
 	"gorm.io/gorm"
 )
 
+const (
+	toolListAllViews = "list_all_views"
+	toolGetView      = "get_view"
+)
+
 func getViewHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	ctx, err := getDutyCtx(goctx)
 	if err != nil {
@@ -197,10 +202,10 @@ func registerViews(ctx context.Context, s *server.MCPServer) {
 		viewResourceHandler,
 	)
 
-	s.AddTool(mcp.NewTool("list_all_views",
+	s.AddTool(mcp.NewTool(toolListAllViews,
 		mcp.WithDescription("List all available view tools")), viewListToolHandler)
 
-	s.AddTool(mcp.NewTool("get_view",
+	s.AddTool(mcp.NewTool(toolGetView,
 		mcp.WithDescription(`Retrieve dashboard view data containing business metrics and operational data.
 		Views include tabular data (display as markdown tables) and chart panels (show panel data if visualization unavailable).
 		Use list_views first to discover available views by their namespace and name.`),

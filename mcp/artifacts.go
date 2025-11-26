@@ -15,7 +15,12 @@ import (
 	"github.com/flanksource/incident-commander/db"
 )
 
-const defaultMaxLength = 1048576 // 1 MB
+const (
+	defaultMaxLength = 1048576 // 1 MB
+
+	toolReadArtifactMetadata = "read_artifact_metadata"
+	toolReadArtifactContent  = "read_artifact_content"
+)
 
 func readArtifactMetadataHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	ctx, err := getDutyCtx(goctx)
@@ -112,7 +117,7 @@ func readArtifactContentHandler(goctx gocontext.Context, req mcp.CallToolRequest
 }
 
 func registerArtifacts(s *server.MCPServer) {
-	readArtifactMetadataTool := mcp.NewTool("read_artifact_metadata",
+	readArtifactMetadataTool := mcp.NewTool(toolReadArtifactMetadata,
 		mcp.WithDescription("Get artifact metadata by ID including filename, size, content type, path, check/playbook run association, and timestamps"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("id",
@@ -121,7 +126,7 @@ func registerArtifacts(s *server.MCPServer) {
 		),
 	)
 
-	readArtifactContentTool := mcp.NewTool("read_artifact_content",
+	readArtifactContentTool := mcp.NewTool(toolReadArtifactContent,
 		mcp.WithDescription("Read the actual content of an artifact file. Content will be truncated if it exceeds max_length."),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("id",
