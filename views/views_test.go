@@ -443,5 +443,49 @@ var _ = Describe("Views", func() {
 			Expect(result).ToNot(BeNil())
 			Expect(result.Rows).To(HaveLen(2))
 		})
+
+		It("should compute grants for config queries when scopes match", func() {
+			scope := models.Scope{
+				Name:    "test-scope-for-grants",
+				Targets: []byte(`[{"config": {"name": "node-a"}}]`),
+			}
+			err := DefaultContext.DB().Create(&scope).Error
+			Expect(err).ToNot(HaveOccurred())
+
+			defer func() {
+				DefaultContext.DB().Delete(&scope)
+				FlushScopeCache()
+			}()
+
+			FlushScopeCache()
+
+			view := v1.View{
+				Spec: v1.ViewSpec{
+					Columns: []pkgView.ColumnDef{
+						{Name: "name", Type: pkgView.ColumnTypeString, PrimaryKey: true},
+					},
+					Queries: map[string]v1.ViewQueryWithColumnDefs{
+						"nodes": {
+							Query: pkgView.Query{
+								Configs: &types.ResourceSelector{
+									Types:       []string{"Kubernetes::Node"},
+									TagSelector: "account=flanksource",
+								},
+							},
+						},
+					},
+					Mapping: map[string]types.CelExpression{
+						"name": "row.name",
+					},
+				},
+			}
+
+			result, err := Run(DefaultContext, &view, &requestOpt{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.Rows).To(ConsistOf([]pkgView.Row{
+				{"node-a", nil, []any{scope.ID.String()}},
+				{"node-b", nil, nil},
+			}))
+		})
 	})
 })

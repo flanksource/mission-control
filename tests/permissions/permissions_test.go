@@ -199,7 +199,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			Expect(payload).To(Equal(expectedPayload), "RLS payload should match exactly - user should see all configs via wildcard '*'")
 		})
 
-		It("should return RLS ", func() {
+		It("should return RLS payload for homelab default manager with combined agent+tag scope", func() {
 			ctx := DefaultContext.WithUser(homelabDefaultManager)
 
 			payload, err := auth.GetRLSPayload(ctx)

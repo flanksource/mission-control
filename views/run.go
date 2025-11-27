@@ -1,7 +1,6 @@
 package views
 
 import (
-	"encoding/json"
 	"fmt"
 	"strconv"
 	"sync"
@@ -434,105 +433,4 @@ var changeQueryResultSchema = map[string]models.ColumnType{
 	"count":               models.ColumnTypeInteger,
 	"first_observed":      models.ColumnTypeString,
 	"agent_id":            models.ColumnTypeString,
-}
-
-// computeGrantsForConfigResults computes scope grants for each row in config query results
-// Grants are determined by matching scope selectors against the config in each row
-func computeGrantsForConfigResults(ctx context.Context, results []dataquery.QueryResultRow) ([]dataquery.QueryResultRow, error) {
-	if len(results) == 0 {
-		return results, nil
-	}
-
-	// Load all scopes with config targets
-	var scopes []models.Scope
-	if err := ctx.DB().
-		Where("deleted_at IS NULL").
-		Find(&scopes).Error; err != nil {
-		return nil, fmt.Errorf("failed to load scopes: %w", err)
-	}
-
-	// Build a list of scopes with config targets and their selectors
-	type scopeConfig struct {
-		scopeID   string
-		selectors []types.ResourceSelector
-	}
-	var scopeConfigs []scopeConfig
-
-	for _, scope := range scopes {
-		if len(scope.Targets) == 0 {
-			continue
-		}
-
-		// Parse targets to find config selectors
-		var targets []v1.ScopeTarget
-		if err := json.Unmarshal(scope.Targets, &targets); err != nil {
-			return nil, ctx.Oops().Code(dutyAPI.EINVALID).Wrapf(err, "failed to unmarshal targets for scope %s", scope.ID)
-		}
-
-		var selectors []types.ResourceSelector
-		for _, target := range targets {
-			var selector *types.ResourceSelector
-			switch {
-			case target.Config != nil:
-				selector = &types.ResourceSelector{
-					Agent:       target.Config.Agent,
-					Name:        target.Config.Name,
-					Namespace:   target.Config.Namespace,
-					TagSelector: target.Config.TagSelector,
-				}
-			case target.Global != nil:
-				selector = &types.ResourceSelector{
-					Agent:       target.Global.Agent,
-					Name:        target.Global.Name,
-					Namespace:   target.Global.Namespace,
-					TagSelector: target.Global.TagSelector,
-				}
-			}
-
-			if selector != nil {
-				selectors = append(selectors, *selector)
-			}
-		}
-
-		if len(selectors) > 0 {
-			scopeConfigs = append(scopeConfigs, scopeConfig{
-				scopeID:   scope.ID.String(),
-				selectors: selectors,
-			})
-		}
-	}
-
-	// Process results to compute grants
-	for i := range results {
-		row := results[i]
-		grantsSet := make(map[string]struct{})
-
-		// Cast row to ResourceSelectableMap for matching
-		rowMap := types.ResourceSelectableMap(row)
-
-		// Match each scope against this row
-		for _, sc := range scopeConfigs {
-			for _, selector := range sc.selectors {
-				if selector.Matches(rowMap) {
-					grantsSet[sc.scopeID] = struct{}{}
-					break
-				}
-			}
-		}
-
-		// Set grants field in result row
-		// NULL if no scopes match
-		var grantsValue any
-		if len(grantsSet) > 0 {
-			grants := make([]string, 0, len(grantsSet))
-			for scopeID := range grantsSet {
-				grants = append(grants, scopeID)
-			}
-			grantsValue = grants
-		}
-		row[pkgView.ReservedColumnGrants] = grantsValue
-		results[i] = row
-	}
-
-	return results, nil
 }
