@@ -147,6 +147,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 				View: []rls.Scope{
 					{Names: []string{"metrics"}},
 				},
+				Scopes:    []string{"a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"},
 				Component: nil,
 				Canary:    nil,
 			}
@@ -167,6 +168,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 				Config: []rls.Scope{
 					{Agents: []string{dummy.HomelabAgent.ID.String()}},
 				},
+				Scopes:    []string{"3c4e5f6a-7b8c-4d9e-0f1a-2b3c4d5e6f7a"},
 				Playbook:  nil,
 				Component: nil,
 				Canary:    nil,
@@ -188,6 +190,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 				Config: []rls.Scope{
 					{Names: []string{"*"}},
 				},
+				Scopes:    []string{"f1e2d3c4-b5a6-4c7d-8e9f-0a1b2c3d4e5f"},
 				Playbook:  nil,
 				Component: nil,
 				Canary:    nil,
@@ -196,7 +199,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			Expect(payload).To(Equal(expectedPayload), "RLS payload should match exactly - user should see all configs via wildcard '*'")
 		})
 
-		It("should return RLS payload for homelab default manager with combined agent+tag scope", func() {
+		It("should return RLS ", func() {
 			ctx := DefaultContext.WithUser(homelabDefaultManager)
 
 			payload, err := auth.GetRLSPayload(ctx)
@@ -215,6 +218,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 				Playbook:  nil,
 				Component: nil,
 				Canary:    nil,
+				Scopes:    []string{"7a8b9c0d-1e2f-4a3b-5c6d-7e8f9a0b1c2d"},
 			}
 
 			Expect(payload).To(Equal(expectedPayload), "RLS payload should match exactly - user should see homelab agent configs in default namespace")
