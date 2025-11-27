@@ -21,6 +21,7 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/pkg/clients/git"
 	"github.com/flanksource/incident-commander/pkg/clients/git/connectors"
+	"github.com/flanksource/incident-commander/utils"
 )
 
 type GitOps struct {
@@ -86,6 +87,9 @@ func (t *GitOps) Run(ctx context.Context, action v1.GitOpsAction) (*GitOpsAction
 	}
 
 	pushOpts := t.generatePushOptionsAndUpdatePRState(connector, t.spec.PullRequest)
+	if pushOpts != nil {
+		t.log("using push options: %s", utils.StringMapToString(pushOpts))
+	}
 	if hash, err := git.CommitAndPush(ctx, connector, workTree, t.spec, pushOpts); err != nil {
 		return nil, oops.Wrapf(err, "failed to commit and push")
 	} else {
@@ -368,11 +372,11 @@ func (t *GitOps) createPR(ctx context.Context, connector connectors.Connector) (
 }
 
 func (t *GitOps) generatePushOptionsAndUpdatePRState(connector connectors.Connector, prTemplate *connectors.PullRequestTemplate) map[string]string {
-	pushOpts := make(map[string]string)
 	if t.spec.PullRequest == nil {
-		return pushOpts
+		return nil
 	}
 
+	pushOpts := make(map[string]string)
 	if t.spec.PullRequest.AutoMerge.Enabled {
 		if connector.Service() == connectors.ServiceGitlab {
 			pushOpts["merge_request.create"] = "true"
