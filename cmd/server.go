@@ -42,6 +42,7 @@ import (
 	"github.com/flanksource/incident-commander/teams"
 	_ "github.com/flanksource/incident-commander/upstream"
 	"github.com/flanksource/incident-commander/vars"
+	"github.com/flanksource/incident-commander/views"
 )
 
 func launchKopper(ctx context.Context) {
@@ -345,6 +346,9 @@ func tableUpdatesHandler(ctx context.Context) {
 			ctx.Logger.Debugf("flushing RLS token cache due to scopes updates")
 			// TODO: only invalidate tokens for the affected users
 			auth.FlushTokenCache()
+
+			// Invalidate view scope cache
+			views.FlushScopeCache()
 		}
 	}
 }

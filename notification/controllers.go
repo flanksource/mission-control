@@ -80,11 +80,13 @@ func NotificationSilencePreview(c echo.Context) error {
 		Recursive:    c.QueryParam("recursive") == "true",
 		Filter:       c.QueryParam("filter"),
 	}
+
 	if selectorsRaw := c.QueryParam("selectors"); selectorsRaw != "" {
 		var selectors types.ResourceSelectors
 		if err := json.Unmarshal([]byte(selectorsRaw), &selectors); err != nil {
-			return api.WriteError(c, err)
+			return api.WriteError(c, api.Errorf(api.EINVALID, "invalid selectors: %v", err))
 		}
+
 		params.Selectors = selectors
 	}
 
