@@ -135,6 +135,7 @@ var _ = ginkgo.Describe("Views E2E", ginkgo.Ordered, func() {
 				"healthy",
 				"128.0/256Mi",
 				nil,
+				nil,
 			},
 			{
 				*dummy.LogisticsUIPodConfig.Name,
@@ -142,6 +143,7 @@ var _ = ginkgo.Describe("Views E2E", ginkgo.Ordered, func() {
 				"Running",
 				"healthy",
 				"64.0/128Mi",
+				nil,
 				nil,
 			},
 		}
