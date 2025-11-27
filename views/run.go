@@ -472,14 +472,26 @@ func computeGrantsForConfigResults(ctx context.Context, results []dataquery.Quer
 
 		var selectors []types.ResourceSelector
 		for _, target := range targets {
-			if target.Config != nil {
-				selector := types.ResourceSelector{
+			var selector *types.ResourceSelector
+			switch {
+			case target.Config != nil:
+				selector = &types.ResourceSelector{
 					Agent:       target.Config.Agent,
 					Name:        target.Config.Name,
 					Namespace:   target.Config.Namespace,
 					TagSelector: target.Config.TagSelector,
 				}
-				selectors = append(selectors, selector)
+			case target.Global != nil:
+				selector = &types.ResourceSelector{
+					Agent:       target.Global.Agent,
+					Name:        target.Global.Name,
+					Namespace:   target.Global.Namespace,
+					TagSelector: target.Global.TagSelector,
+				}
+			}
+
+			if selector != nil {
+				selectors = append(selectors, *selector)
 			}
 		}
 
