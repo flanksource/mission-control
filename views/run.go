@@ -466,8 +466,7 @@ func computeGrantsForConfigResults(ctx context.Context, results []dataquery.Quer
 		// Parse targets to find config selectors
 		var targets []v1.ScopeTarget
 		if err := json.Unmarshal(scope.Targets, &targets); err != nil {
-			ctx.Logger.Warnf("failed to unmarshal targets for scope %s: %v", scope.ID, err)
-			continue
+			return nil, ctx.Oops().Code(dutyAPI.EINVALID).Wrapf(err, "failed to unmarshal targets for scope %s", scope.ID)
 		}
 
 		var selectors []types.ResourceSelector
