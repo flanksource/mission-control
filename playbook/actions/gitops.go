@@ -381,6 +381,8 @@ func (t *GitOps) generatePushOptionsAndUpdatePRState(connector connectors.Connec
 		if connector.Service() == connectors.ServiceGitlab {
 			pushOpts["merge_request.create"] = "true"
 			pushOpts["merge_request.auto_merge"] = "true"
+			// This option is to support older versions of gitlab (deprecated in newer versions)
+			pushOpts["merge_request.merge_when_pipeline_succeeds"] = "true"
 			if base := t.spec.PullRequest.Base; base != "" {
 				pushOpts["merge_request.target"] = base
 			}
