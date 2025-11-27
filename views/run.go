@@ -494,7 +494,7 @@ func computeGrantsForConfigResults(ctx context.Context, results []dataquery.Quer
 	// Process results to compute grants
 	for i := range results {
 		row := results[i]
-		grants := make([]string, 0)
+		grantsSet := make(map[string]struct{})
 
 		// Cast row to ResourceSelectableMap for matching
 		rowMap := types.ResourceSelectableMap(row)
@@ -503,7 +503,7 @@ func computeGrantsForConfigResults(ctx context.Context, results []dataquery.Quer
 		for _, sc := range scopeConfigs {
 			for _, selector := range sc.selectors {
 				if selector.Matches(rowMap) {
-					grants = append(grants, sc.scopeID)
+					grantsSet[sc.scopeID] = struct{}{}
 					break
 				}
 			}
@@ -512,7 +512,11 @@ func computeGrantsForConfigResults(ctx context.Context, results []dataquery.Quer
 		// Set grants field in result row
 		// NULL if no scopes match
 		var grantsValue any
-		if len(grants) > 0 {
+		if len(grantsSet) > 0 {
+			grants := make([]string, 0, len(grantsSet))
+			for scopeID := range grantsSet {
+				grants = append(grants, scopeID)
+			}
 			grantsValue = grants
 		}
 		row[pkgView.ReservedColumnGrants] = grantsValue
