@@ -49,7 +49,7 @@ func TestApplyMapping(t *testing.T) {
 					Type: pkgView.ColumnTypeString,
 				},
 			},
-			expected: pkgView.Row{"test-pod", "Running", nil},
+			expected: pkgView.Row{"test-pod", "Running", nil, nil},
 		},
 		{
 			name: "should handle empty mapping",
@@ -57,7 +57,7 @@ func TestApplyMapping(t *testing.T) {
 				"name": "test",
 			},
 			mapping:  map[string]types.CelExpression{},
-			expected: pkgView.Row{nil},
+			expected: pkgView.Row{nil, nil},
 		},
 		{
 			name: "helper columns",
@@ -79,7 +79,7 @@ func TestApplyMapping(t *testing.T) {
 				"name": `row.name`,
 				"url":  `"https://example.com/" + row.name`,
 			},
-			expected: pkgView.Row{"test", "https://example.com/test", nil},
+			expected: pkgView.Row{"test", "https://example.com/test", nil, nil},
 		},
 		{
 			name: "no explicit mapping",
@@ -99,7 +99,7 @@ func TestApplyMapping(t *testing.T) {
 				"url":  "https://example.com/test",
 			},
 			mapping:  nil,
-			expected: pkgView.Row{"test", "https://example.com/test", nil},
+			expected: pkgView.Row{"test", "https://example.com/test", nil, nil},
 		},
 		{
 			name: "should handle durations",
@@ -115,7 +115,7 @@ func TestApplyMapping(t *testing.T) {
 					Type: pkgView.ColumnTypeDuration,
 				},
 			},
-			expected: pkgView.Row{1 * time.Minute, nil},
+			expected: pkgView.Row{1 * time.Minute, nil, nil},
 		},
 	}
 
@@ -288,8 +288,8 @@ var _ = Describe("Views", func() {
 					},
 				},
 			}, []pkgView.Row{
-				{"node-a", "healthy", nil},
-				{"node-b", "healthy", nil},
+				{"node-a", "healthy", nil, nil},
+				{"node-b", "healthy", nil, nil},
 			}),
 			Entry("changes queries", v1.View{
 				Spec: v1.ViewSpec{
@@ -319,8 +319,8 @@ var _ = Describe("Views", func() {
 					},
 				},
 			}, []pkgView.Row{
-				{"Production EKS", "EKS::Cluster", nil},
-				{"node-a", "Kubernetes::Node", nil},
+				{"Production EKS", "EKS::Cluster", nil, nil},
+				{"node-a", "Kubernetes::Node", nil, nil},
 			}),
 			XEntry("helm release changes queries", v1.View{
 				Spec: v1.ViewSpec{
@@ -357,12 +357,12 @@ var _ = Describe("Views", func() {
 					},
 				},
 			}, []pkgView.Row{
-				{"nginx-ingress", "4.8.0", "Flux", nil},
-				{"nginx-ingress", "4.7.2", "Flux", nil},
-				{"nginx-ingress", "4.7.1", "Flux", nil},
-				{"redis", "18.1.5", "Flux", nil},
-				{"redis", "18.1.3", "Flux", nil},
-				{"redis", "18.1.0", "Flux", nil},
+				{"nginx-ingress", "4.8.0", "Flux", nil, nil},
+				{"nginx-ingress", "4.7.2", "Flux", nil, nil},
+				{"nginx-ingress", "4.7.1", "Flux", nil, nil},
+				{"redis", "18.1.5", "Flux", nil, nil},
+				{"redis", "18.1.3", "Flux", nil, nil},
+				{"redis", "18.1.0", "Flux", nil, nil},
 			}),
 			PEntry("prometheus query with empty results", v1.View{
 				Spec: v1.ViewSpec{
@@ -442,6 +442,50 @@ var _ = Describe("Views", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result).ToNot(BeNil())
 			Expect(result.Rows).To(HaveLen(2))
+		})
+
+		It("should compute grants for config queries when scopes match", func() {
+			scope := models.Scope{
+				Name:    "test-scope-for-grants",
+				Targets: []byte(`[{"config": {"name": "node-a"}}]`),
+			}
+			err := DefaultContext.DB().Create(&scope).Error
+			Expect(err).ToNot(HaveOccurred())
+
+			defer func() {
+				DefaultContext.DB().Delete(&scope)
+				FlushScopeCache()
+			}()
+
+			FlushScopeCache()
+
+			view := v1.View{
+				Spec: v1.ViewSpec{
+					Columns: []pkgView.ColumnDef{
+						{Name: "name", Type: pkgView.ColumnTypeString, PrimaryKey: true},
+					},
+					Queries: map[string]v1.ViewQueryWithColumnDefs{
+						"nodes": {
+							Query: pkgView.Query{
+								Configs: &types.ResourceSelector{
+									Types:       []string{"Kubernetes::Node"},
+									TagSelector: "account=flanksource",
+								},
+							},
+						},
+					},
+					Mapping: map[string]types.CelExpression{
+						"name": "row.name",
+					},
+				},
+			}
+
+			result, err := Run(DefaultContext, &view, &requestOpt{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.Rows).To(ConsistOf([]pkgView.Row{
+				{"node-a", nil, []any{scope.ID.String()}},
+				{"node-b", nil, nil},
+			}))
 		})
 	})
 })

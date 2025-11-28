@@ -22,6 +22,7 @@ import (
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
 )
 
@@ -119,7 +120,7 @@ func populateViewVariables(ctx context.Context, variables []api.ViewVariable, re
 
 	for _, level := range levels {
 		for _, variable := range level {
-			populatedVar, err := processVariable(ctx, variable, variableValues, requestVariables)
+			populatedVar, err := prepareVariableWithOptions(ctx, variable, variableValues, requestVariables)
 			if err != nil {
 				return nil, nil, fmt.Errorf("failed to process variable %s: %w", variable.Key, err)
 			}
@@ -146,9 +147,9 @@ func populateViewVariables(ctx context.Context, variables []api.ViewVariable, re
 	return result, templatedVariables, nil
 }
 
-// processVariable handles the complete processing of a single variable including
+// prepareVariableWithOptions handles the complete processing of a single variable including
 // population and value selection
-func processVariable(ctx context.Context, variable api.ViewVariable, variableValues, userVariables map[string]string) (api.ViewVariableWithOptions, error) {
+func prepareVariableWithOptions(ctx context.Context, variable api.ViewVariable, variableValues, userVariables map[string]string) (api.ViewVariableWithOptions, error) {
 	variableWithOptions, err := populateVariable(ctx, variable, variableValues)
 	if err != nil {
 		return api.ViewVariableWithOptions{}, err
@@ -351,12 +352,13 @@ func ReadOrPopulateViewTable(ctx context.Context, namespace, name string, opts .
 	}
 
 	// Populate variables with user selections considered
-	variables, templatedVariables, err := populateViewVariables(ctx, view.Spec.Templating, request.variables)
-	if err != nil {
+	var variables []api.ViewVariableWithOptions
+	if err := auth.WithRLS(ctx, func(ctx context.Context) error {
+		variables, view.Spec.Templating, err = populateViewVariables(ctx, view.Spec.Templating, request.variables)
+		return err
+	}); err != nil {
 		return nil, fmt.Errorf("failed to populate view variables: %w", err)
 	}
-
-	view.Spec.Templating = templatedVariables
 
 	// For all the variables, that were not provided in the request,
 	// set them to their default values (or the first value if no default is set)
@@ -398,6 +400,17 @@ func ReadOrPopulateViewTable(ctx context.Context, namespace, name string, opts .
 		if err != nil {
 			return nil, fmt.Errorf("failed to handle view refresh: %w", err)
 		}
+	}
+
+	if err := auth.WithRLS(ctx, func(ctx context.Context) error {
+		columnOptions, err := getColumnOptions(ctx, view)
+		if err != nil {
+			return fmt.Errorf("failed to get column options: %w", err)
+		}
+		result.ColumnOptions = columnOptions
+		return nil
+	}); err != nil {
+		return nil, fmt.Errorf("failed to apply RLS for column options: %w", err)
 	}
 
 	result.Variables = variables
@@ -535,11 +548,6 @@ func readCachedViewData(ctx context.Context, view *v1.View, request *requestOpt)
 		result.LastRefreshedAt = *lastRan
 	}
 
-	columnOptions, err := getColumnOptions(ctx, view)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get column options: %w", err)
-	}
-	result.ColumnOptions = columnOptions
 	result.LastRefreshedAt = lo.FromPtr(lastRan)
 
 	return result, nil
@@ -573,11 +581,6 @@ func populateView(ctx context.Context, view *v1.View, request *requestOpt) (*api
 		result.Rows = nil // don't return rows. UI uses postgREST to get the table rows.
 	}
 
-	columnOptions, err := getColumnOptions(ctx, view)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get column options: %w", err)
-	}
-	result.ColumnOptions = columnOptions
 	result.LastRefreshedAt = time.Now()
 	result.RequestFingerprint = request.Fingerprint()
 

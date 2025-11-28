@@ -61,6 +61,15 @@ func Run(ctx context.Context, view *v1.View, request *requestOpt) (*api.ViewResu
 			queryDuration := time.Since(queryStart)
 			ctx.Tracef("view=%s query=%s results=%d duration=%s", view.GetNamespacedName(), queryName, len(results), queryDuration)
 
+			// Compute grants for config queries
+			if q.Configs != nil {
+				var err error
+				results, err = computeGrantsForConfigResults(ctx, results)
+				if err != nil {
+					return fmt.Errorf("failed to compute grants for query '%s': %w", queryName, err)
+				}
+			}
+
 			resultSet := dataquery.QueryResultSet{
 				Results:    results,
 				Name:       queryName,
@@ -202,6 +211,11 @@ func Run(ctx context.Context, view *v1.View, request *requestOpt) (*api.ViewResu
 			Name: pkgView.ReservedColumnAttributes,
 			Type: pkgView.ColumnTypeAttributes,
 		})
+
+		output.Columns = append(output.Columns, pkgView.ColumnDef{
+			Name: pkgView.ReservedColumnGrants,
+			Type: pkgView.ColumnTypeGrants,
+		})
 	}
 
 	return &output, nil
@@ -279,6 +293,13 @@ func applyMapping(ctx context.Context, queryResultRow map[string]any, columnDefs
 
 	if len(rowProperties) > 0 {
 		row = append(row, rowProperties)
+	} else {
+		row = append(row, nil)
+	}
+
+	// Append grants value (from __grants field in query result)
+	if grants, ok := queryResultRow[pkgView.ReservedColumnGrants]; ok {
+		row = append(row, grants)
 	} else {
 		row = append(row, nil)
 	}
@@ -388,6 +409,8 @@ var configQueryResultSchema = map[string]models.ColumnType{
 	"delete_reason":     models.ColumnTypeString,
 	"inserted_at":       models.ColumnTypeString,
 	"properties_values": models.ColumnTypeJSONB,
+
+	pkgView.ReservedColumnGrants: models.ColumnTypeJSONB,
 }
 
 // Represents the catalog_changes view
