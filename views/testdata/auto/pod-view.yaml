@@ -7,8 +7,8 @@ metadata:
   annotations:
     expected-rows: |
       [
-        ["logistics-api-7df4c7f6b7-x9k2m", "Kubernetes::Pod", "Running", "healthy", "missioncontrol", "5", null],
-        ["logistics-ui-6c8f9b4d5e-m7n8p", "Kubernetes::Pod", "Running", "healthy", "missioncontrol", "10", null]
+        ["logistics-api-7df4c7f6b7-x9k2m", "Kubernetes::Pod", "Running", "healthy", "missioncontrol", "5", null, null],
+        ["logistics-ui-6c8f9b4d5e-m7n8p", "Kubernetes::Pod", "Running", "healthy", "missioncontrol", "10", null, null]
       ]
     expected-panels: |
       [
