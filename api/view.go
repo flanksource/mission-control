@@ -26,6 +26,14 @@ type ViewListItem struct {
 	Icon      string    `json:"icon,omitempty"`
 }
 
+// ColumnFilterOptions holds filter options for a column.
+// For regular columns, List contains distinct values.
+// For labels columns, Labels contains keys mapped to their possible values.
+type ColumnFilterOptions struct {
+	List   []string            `json:"list,omitempty"`
+	Labels map[string][]string `json:"labels,omitempty"`
+}
+
 // ViewResult is the result of a view query
 type ViewResult struct {
 	Namespace string `json:"namespace,omitempty"`
@@ -42,7 +50,7 @@ type ViewResult struct {
 	Variables []ViewVariableWithOptions `json:"variables,omitempty"`
 
 	// List of all possible values for each column where filter is enabled.
-	ColumnOptions map[string][]string `json:"columnOptions,omitempty"`
+	ColumnOptions map[string]ColumnFilterOptions `json:"columnOptions,omitempty"`
 
 	// Card defines the default card layout configuration
 	Card *DisplayCard `json:"card,omitempty"`

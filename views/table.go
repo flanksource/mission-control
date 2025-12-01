@@ -641,42 +641,53 @@ func requestCacheExpired(ctx context.Context, view *v1.View, fingerprint string,
 
 // getColumnOptions retrieves distinct values for columns with multiselect filters
 // The UI uses this to populate the filters.
-func getColumnOptions(ctx context.Context, view *v1.View) (map[string][]string, error) {
+func getColumnOptions(ctx context.Context, view *v1.View) (map[string]api.ColumnFilterOptions, error) {
 	if !view.HasTable() {
 		return nil, nil
 	}
 
-	columnOptions := make(map[string][]string)
+	columnOptions := make(map[string]api.ColumnFilterOptions)
 	tableName := view.TableName()
 
 	for _, column := range view.Spec.Columns {
 		if column.Filter != nil && column.Filter.Type == pkgView.ColumnFilterTypeMultiSelect {
-			var values []string
 			columnName := pq.QuoteIdentifier(column.Name)
 
 			if column.Type == pkgView.ColumnTypeLabels {
-				// For labels (JSONB), extract unique key-value pairs in key____value format
-				// This format matches the config table pattern and enables proper filtering
+				// For labels (JSONB), extract unique key-value pairs grouped by key
+				type labelPair struct {
+					Key   string `gorm:"column:key"`
+					Value string `gorm:"column:value"`
+				}
+				var pairs []labelPair
+
+				quotedTableName := pq.QuoteIdentifier(tableName)
 				query := fmt.Sprintf(`
-					SELECT DISTINCT key || '____' || value AS label
+					SELECT DISTINCT key, value
 					FROM %s, jsonb_each_text(%s)
 					WHERE %s IS NOT NULL
-					ORDER BY 1
-				`, tableName, columnName, columnName)
+					ORDER BY key, value
+				`, quotedTableName, columnName, columnName)
 
-				if err := ctx.DB().Raw(query).Scan(&values).Error; err != nil {
+				if err := ctx.DB().Raw(query).Scan(&pairs).Error; err != nil {
 					return nil, fmt.Errorf("failed to get distinct label values for column %s: %w", columnName, err)
 				}
+
+				labels := make(map[string][]string)
+				for _, p := range pairs {
+					labels[p.Key] = append(labels[p.Key], p.Value)
+				}
+				columnOptions[column.Name] = api.ColumnFilterOptions{Labels: labels}
 			} else {
+				var values []string
 				if err := ctx.DB().Table(tableName).
 					Distinct(columnName).
 					Where(columnName+" IS NOT NULL").
 					Pluck(columnName, &values).Error; err != nil {
 					return nil, fmt.Errorf("failed to get distinct values for column %s: %w", columnName, err)
 				}
+				columnOptions[column.Name] = api.ColumnFilterOptions{List: values}
 			}
-
-			columnOptions[column.Name] = values
 		}
 	}
 
