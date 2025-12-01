@@ -148,3 +148,13 @@ func MarkTimedOutPlaybookRuns(ctx context.Context) error {
 
 	return nil
 }
+
+func CleanupDeletedPlaybooks(ctx context.Context) (int, error) {
+	retention := ctx.Properties().Duration("playbook.retention.age", 30*24*time.Hour)
+	tx := ctx.DB().Exec(`
+		DELETE FROM playbooks
+		WHERE (NOW() - deleted_at) > INTERVAL '1 second' * ?
+		`, int64(retention.Seconds()))
+
+	return int(tx.RowsAffected), tx.Error
+}

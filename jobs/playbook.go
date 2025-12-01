@@ -66,3 +66,19 @@ func MarkTimedOutPlaybookRuns(ctx context.Context) *job.Job {
 		},
 	}
 }
+
+func CleanupDeletedPlaybooks(ctx context.Context) *job.Job {
+	return &job.Job{
+		Name:       "CleanupDeletedPlaybooks",
+		Schedule:   "@every 24h",
+		Context:    ctx,
+		JobHistory: true,
+		Retention:  job.RetentionFailed,
+		Singleton:  true,
+		Fn: func(ctx job.JobRuntime) error {
+			count, err := playbook.CleanupDeletedPlaybooks(ctx.Context)
+			ctx.History.SuccessCount = count
+			return err
+		},
+	}
+}

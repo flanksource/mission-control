@@ -91,6 +91,9 @@ func Start(ctx context.Context, mcpServer *server.MCPServer) {
 	if err := MarkTimedOutPlaybookRuns(ctx).AddToScheduler(FuncScheduler); err != nil {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to schedule job MarkTimedOutPlaybookRuns: %v", err))
 	}
+	if err := CleanupDeletedPlaybooks(ctx).AddToScheduler(FuncScheduler); err != nil {
+		shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to schedule job CleanupDeletedPlaybooks: %v", err))
+	}
 
 	if err := notification.SyncCRDStatusJob(ctx).AddToScheduler(FuncScheduler); err != nil {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to schedule job SyncCRDStatusJob: %v", err))
