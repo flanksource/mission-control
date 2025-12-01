@@ -191,6 +191,7 @@ spec:
                       - url
                       - badge
                       - config_item
+                      - labels
                       type: string
                     unit:
                       description: Unit of the column
@@ -1047,7 +1048,7 @@ spec:
                     Variables appear as interactive controls (dropdown menus or text inputs) at the top of the view interface.
                   properties:
                     default:
-                      description: Default is the default value of the filter.
+                      description: Default is the default value of the variable.
                       type: string
                     dependsOn:
                       description: Variables this variable depends on - must be resolved
@@ -1057,14 +1058,14 @@ spec:
                       type: array
                     key:
                       description: |-
-                        Key is the unique identifier of the filter.
-                        The filter's value is accessible in the dataquery templates as  $(.filter.key)
+                        Key is the unique identifier of the variable.
+                        The variable's value is accessible in the dataquery templates as $(var.<key>)
                       type: string
                     label:
-                      description: Label is the human-readable name of the filter.
+                      description: Label is the human-readable name of the variable.
                       type: string
                     valueFrom:
-                      description: ValueFrom is the source of the filter's values.
+                      description: ValueFrom is the source of the variable's values.
                       properties:
                         config:
                           properties:
@@ -1128,8 +1129,8 @@ spec:
                       - config
                       type: object
                     values:
-                      description: Values is the list of values that the filter can
-                        take.
+                      description: Values is the list of values that the variable
+                        can take.
                       items:
                         type: string
                       type: array
