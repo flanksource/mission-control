@@ -410,7 +410,7 @@ func ReadOrPopulateViewTable(ctx context.Context, namespace, name string, opts .
 		result.ColumnOptions = columnOptions
 		return nil
 	}); err != nil {
-		return nil, fmt.Errorf("failed to apply RLS for column options: %w", err)
+		return nil, err
 	}
 
 	result.Variables = variables
@@ -654,11 +654,26 @@ func getColumnOptions(ctx context.Context, view *v1.View) (map[string][]string, 
 			var values []string
 			columnName := pq.QuoteIdentifier(column.Name)
 
-			if err := ctx.DB().Table(tableName).
-				Distinct(columnName).
-				Where(columnName+" IS NOT NULL").
-				Pluck(columnName, &values).Error; err != nil {
-				return nil, fmt.Errorf("failed to get distinct values for column %s: %w", columnName, err)
+			if column.Type == pkgView.ColumnTypeLabels {
+				// For labels (JSONB), extract unique key-value pairs in key____value format
+				// This format matches the config table pattern and enables proper filtering
+				query := fmt.Sprintf(`
+					SELECT DISTINCT key || '____' || value AS label
+					FROM %s, jsonb_each_text(%s)
+					WHERE %s IS NOT NULL
+					ORDER BY 1
+				`, tableName, columnName, columnName)
+
+				if err := ctx.DB().Raw(query).Scan(&values).Error; err != nil {
+					return nil, fmt.Errorf("failed to get distinct label values for column %s: %w", columnName, err)
+				}
+			} else {
+				if err := ctx.DB().Table(tableName).
+					Distinct(columnName).
+					Where(columnName+" IS NOT NULL").
+					Pluck(columnName, &values).Error; err != nil {
+					return nil, fmt.Errorf("failed to get distinct values for column %s: %w", columnName, err)
+				}
 			}
 
 			columnOptions[column.Name] = values
