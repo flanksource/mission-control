@@ -475,10 +475,16 @@ func handleViewRefresh(ctx context.Context, view *v1.View, cacheOptions *v1.Cach
 func readCachedViewData(ctx context.Context, view *v1.View, request *requestOpt) (*api.ViewResult, error) {
 	columns := view.Spec.Columns
 	if view.HasTable() {
-		columns = append(view.Spec.Columns, pkgView.ColumnDef{
-			Name: pkgView.ReservedColumnAttributes,
-			Type: pkgView.ColumnTypeAttributes,
-		})
+		columns = append(view.Spec.Columns,
+			pkgView.ColumnDef{
+				Name: pkgView.ReservedColumnAttributes,
+				Type: pkgView.ColumnTypeAttributes,
+			},
+			pkgView.ColumnDef{
+				Name: pkgView.ReservedColumnGrants,
+				Type: pkgView.ColumnTypeGrants,
+			},
+		)
 	}
 
 	tableName := view.TableName()
