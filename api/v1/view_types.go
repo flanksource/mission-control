@@ -100,6 +100,9 @@ type ViewSpec struct {
 	//
 	// These vars are available as `var.<key>` in the data queries.
 	Templating []api.ViewVariable `json:"templating,omitempty" yaml:"templating,omitempty"`
+
+	// Include other views in the view
+	Sections []api.ViewSection `json:"sections,omitempty" yaml:"sections,omitempty"`
 }
 
 type ViewQueryWithColumnDefs struct {

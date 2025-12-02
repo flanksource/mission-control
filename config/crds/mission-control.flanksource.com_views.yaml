@@ -1036,6 +1036,31 @@ spec:
                 description: Queries define the queries and mappings to populate the
                   view
                 type: object
+              sections:
+                description: Include other views in the view
+                items:
+                  description: ViewSection is a section rendered in the application
+                    view
+                  properties:
+                    icon:
+                      type: string
+                    title:
+                      type: string
+                    viewRef:
+                      properties:
+                        name:
+                          type: string
+                        namespace:
+                          type: string
+                      required:
+                      - name
+                      - namespace
+                      type: object
+                  required:
+                  - title
+                  - viewRef
+                  type: object
+                type: array
               templating:
                 description: |-
                   Templating parameters for the view data queries.

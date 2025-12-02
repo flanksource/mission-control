@@ -34,6 +34,18 @@ type ColumnFilterOptions struct {
 	Labels map[string][]string `json:"labels,omitempty"`
 }
 
+type ViewRef struct {
+	Namespace string `json:"namespace"`
+	Name      string `json:"name"`
+}
+
+// ViewSection is a section rendered in the application view
+type ViewSection struct {
+	Title   string  `json:"title"`
+	Icon    string  `json:"icon,omitempty"`
+	ViewRef ViewRef `json:"viewRef"`
+}
+
 // ViewResult is the result of a view query
 type ViewResult struct {
 	Namespace string `json:"namespace,omitempty"`
@@ -54,6 +66,8 @@ type ViewResult struct {
 
 	// Card defines the default card layout configuration
 	Card *DisplayCard `json:"card,omitempty"`
+
+	Sections []ViewSection `json:"sections,omitempty"`
 }
 
 // +kubebuilder:object:generate=true

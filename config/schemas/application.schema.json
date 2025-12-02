@@ -177,25 +177,6 @@
         "role"
       ]
     },
-    "ApplicationSection": {
-      "properties": {
-        "title": {
-          "type": "string"
-        },
-        "icon": {
-          "type": "string"
-        },
-        "viewRef": {
-          "$ref": "#/$defs/ViewRef"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object",
-      "required": [
-        "title",
-        "viewRef"
-      ]
-    },
     "ApplicationSpec": {
       "properties": {
         "description": {
@@ -215,7 +196,7 @@
         },
         "sections": {
           "items": {
-            "$ref": "#/$defs/ApplicationSection"
+            "$ref": "#/$defs/ViewSection"
           },
           "type": "array"
         }
@@ -501,6 +482,25 @@
       "required": [
         "namespace",
         "name"
+      ]
+    },
+    "ViewSection": {
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "icon": {
+          "type": "string"
+        },
+        "viewRef": {
+          "$ref": "#/$defs/ViewRef"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "title",
+        "viewRef"
       ]
     }
   }

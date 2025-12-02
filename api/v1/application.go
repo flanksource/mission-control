@@ -12,18 +12,6 @@ import (
 	"github.com/flanksource/incident-commander/api"
 )
 
-type ViewRef struct {
-	Namespace string `json:"namespace"`
-	Name      string `json:"name"`
-}
-
-// ApplicationSection is a section rendered in the application view
-type ApplicationSection struct {
-	Title   string  `json:"title"`
-	Icon    string  `json:"icon,omitempty"`
-	ViewRef ViewRef `json:"viewRef"`
-}
-
 type ApplicationMapping struct {
 	AccessReviews []types.ResourceSelector            `json:"accessReviews,omitempty"`
 	Environments  map[string][]ApplicationEnvironment `json:"environments,omitempty"`
@@ -66,7 +54,7 @@ type ApplicationSpec struct {
 	//+kubebuilder:validation:Optional
 	Mapping ApplicationMapping `json:"mapping,omitempty"`
 
-	Sections []ApplicationSection `json:"sections,omitempty"`
+	Sections []api.ViewSection `json:"sections,omitempty"`
 }
 
 // ApplicationStatus defines the observed state of Application
