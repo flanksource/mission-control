@@ -750,6 +750,41 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "ViewRef": {
+      "properties": {
+        "namespace": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "namespace",
+        "name"
+      ]
+    },
+    "ViewSection": {
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "icon": {
+          "type": "string"
+        },
+        "viewRef": {
+          "$ref": "#/$defs/ViewRef"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "title",
+        "viewRef"
+      ]
+    },
     "ViewSelector": {
       "properties": {
         "name": {
@@ -803,6 +838,12 @@
         "templating": {
           "items": {
             "$ref": "#/$defs/ViewVariable"
+          },
+          "type": "array"
+        },
+        "sections": {
+          "items": {
+            "$ref": "#/$defs/ViewSection"
           },
           "type": "array"
         }

@@ -411,7 +411,7 @@ spec:
                 type: array
               sections:
                 items:
-                  description: ApplicationSection is a section rendered in the application
+                  description: ViewSection is a section rendered in the application
                     view
                   properties:
                     icon:

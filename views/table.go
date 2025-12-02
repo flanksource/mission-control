@@ -168,7 +168,9 @@ func prepareVariableWithOptions(ctx context.Context, variable api.ViewVariable, 
 // user selection, then default, then first option
 func selectVariableValue(key string, variable api.ViewVariableWithOptions, requestVariables map[string]string) string {
 	if suppliedValue, exists := requestVariables[key]; exists && suppliedValue != "" {
-		return suppliedValue
+		if len(variable.Options) == 0 || lo.Contains(variable.Options, suppliedValue) {
+			return suppliedValue
+		}
 	}
 
 	return getDefaultValue(variable)
@@ -413,6 +415,7 @@ func ReadOrPopulateViewTable(ctx context.Context, namespace, name string, opts .
 		return nil, err
 	}
 
+	result.Sections = view.Spec.Sections
 	result.Variables = variables
 	return result, nil
 }

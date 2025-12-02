@@ -59,8 +59,8 @@ type ViewConfigUIPlugin struct {
 }
 
 // ViewSpec defines the desired state of View
-// +kubebuilder:validation:XValidation:rule="size(self.queries) > 0",message="query must be specified"
-// +kubebuilder:validation:XValidation:rule="size(self.panels) > 0 || size(self.columns) > 0",message="view spec must have either panels or columns defined"
+// +kubebuilder:validation:XValidation:rule="size(self.sections) > 0 || size(self.queries) > 0",message="either sections or queries must be specified"
+// +kubebuilder:validation:XValidation:rule="size(self.panels) > 0 || size(self.columns) > 0 || size(self.sections) > 0",message="view spec must have panels, columns, or sections defined"
 // +kubebuilder:validation:XValidation:rule="!(has(self.columns)) || size(self.columns) == 0 || self.columns.exists(c, c.primaryKey == true)",message="if columns is specified, at least one column must have primaryKey set to true"
 type ViewSpec struct {
 	// Description about the view
@@ -100,6 +100,9 @@ type ViewSpec struct {
 	//
 	// These vars are available as `var.<key>` in the data queries.
 	Templating []api.ViewVariable `json:"templating,omitempty" yaml:"templating,omitempty"`
+
+	// Include other views in the view
+	Sections []api.ViewSection `json:"sections,omitempty" yaml:"sections,omitempty"`
 }
 
 type ViewQueryWithColumnDefs struct {
@@ -119,6 +122,13 @@ func (t ViewSpec) Validate() error {
 		if query.IsEmpty() {
 			return fmt.Errorf("query %s is empty", k)
 		}
+	}
+
+	sectionOnlyView := len(t.Columns) == 0 && len(t.Panels) == 0 && len(t.Queries) == 0 && len(t.Sections) > 0
+	if sectionOnlyView {
+		// This is a view that only aggregates other views.
+		// It doesn't have its own panels or table.
+		return nil
 	}
 
 	if len(t.Queries) == 0 {
