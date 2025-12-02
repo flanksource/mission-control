@@ -1171,9 +1171,10 @@ spec:
             type: object
             x-kubernetes-validations:
             - message: query must be specified
-              rule: size(self.queries) > 0
+              rule: size(self.sections) > 0 || size(self.queries) > 0
             - message: view spec must have either panels or columns defined
-              rule: size(self.panels) > 0 || size(self.columns) > 0
+              rule: size(self.panels) > 0 || size(self.columns) > 0 || size(self.sections)
+                > 0
             - message: if columns is specified, at least one column must have primaryKey
                 set to true
               rule: '!(has(self.columns)) || size(self.columns) == 0 || self.columns.exists(c,
