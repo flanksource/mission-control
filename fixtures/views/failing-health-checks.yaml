@@ -1,0 +1,59 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: failing-health-checks
+  namespace: mc
+spec:
+  display:
+    title: Failing Health Checks
+    icon: health
+    sidebar: true
+  cache:
+    maxAge: 5m
+    minAge: 10s
+  columns:
+    - name: id
+      type: string
+      primaryKey: true
+      hidden: true
+    - name: name
+      type: string
+    - name: namespace
+      type: string
+    - name: type
+      type: string
+    - name: status
+      type: status
+    - name: severity
+      type: string
+    - name: last_transition_time
+      type: datetime
+    - name: description
+      type: string
+  queries:
+    failing_checks:
+      columns:
+        id: string
+        name: string
+        namespace: string
+        type: string
+        status: string
+        severity: string
+        last_transition_time: datetime
+        description: string
+      sql:
+        connection: connection://mc/mission-control
+        query: |
+          SELECT
+            id,
+            name,
+            namespace,
+            type,
+            status,
+            severity,
+            last_transition_time,
+            description
+          FROM checks
+          WHERE deleted_at IS NULL
+            AND status <> 'healthy'
+          ORDER BY COALESCE(last_transition_time, created_at) DESC
