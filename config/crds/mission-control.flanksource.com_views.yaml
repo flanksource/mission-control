@@ -206,6 +206,9 @@ spec:
                             - uuid: row.id
                             - search term:  f("name=$(tags.namespace) tags.cluster=$(tags.cluster) type=Kubernetes::Namespace", row)
                           type: string
+                        template:
+                          description: Template a custom URL using Go template.
+                          type: string
                         view:
                           description: Link to a view.
                           properties:

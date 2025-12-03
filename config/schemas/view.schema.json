@@ -84,6 +84,9 @@
         "config": {
           "type": "string"
         },
+        "template": {
+          "type": "string"
+        },
         "view": {
           "$ref": "#/$defs/ViewURLRef"
         }
