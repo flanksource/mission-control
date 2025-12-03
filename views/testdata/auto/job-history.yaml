@@ -1,0 +1,28 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  uid: 317b4d3d-8ddf-4810-b799-2ca25ce5b693
+  name: jobhistory
+  namespace: mc
+  annotations:
+    expected-rows: |
+      [
+        ["node-a", "healthy", null, null],
+        ["node-b", "healthy", null, null],
+        ["aks-pool-1", "healthy", null, null]
+      ]
+spec:
+  columns:
+    - name: name
+      type: string
+      primaryKey: true
+    - name: health
+      type: string
+  queries:
+    job_history:
+      sql:
+        query: >
+          SELECT name, health
+          FROM config_items
+          WHERE type = 'Kubernetes::Node'
+        connection: connection://default/test-db-connection
