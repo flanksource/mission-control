@@ -500,29 +500,6 @@ spec:
                     timeseries:
                       description: Configuration for timeseries visualization
                       properties:
-                        series:
-                          description: Optional series definitions for multi-line
-                            charts.
-                          items:
-                            description: PanelTimeseriesSeriesConfig defines a single
-                              series in a timeseries panel
-                            properties:
-                              color:
-                                description: Color for the line. Falls back to the
-                                  shared color palette in the UI.
-                                type: string
-                              dataKey:
-                                description: Name of the field in each row that contains
-                                  the numeric value.
-                                type: string
-                              name:
-                                description: Optional override for the legend/tooltip
-                                  label. Defaults to the formatted dataKey.
-                                type: string
-                            required:
-                            - dataKey
-                            type: object
-                          type: array
                         style:
                           description: 'Visualization style for the timeseries chart
                             (default: lines)'

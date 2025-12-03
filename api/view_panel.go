@@ -112,19 +112,6 @@ type PanelTimeseriesConfig struct {
 	Style string `json:"style,omitempty" yaml:"style,omitempty"`
 	// Convenience for single-series charts when series is not provided.
 	ValueKey string `json:"valueKey,omitempty" yaml:"valueKey,omitempty"`
-	// Optional series definitions for multi-line charts.
-	Series []PanelTimeseriesSeriesConfig `json:"series,omitempty" yaml:"series,omitempty"`
-}
-
-// PanelTimeseriesSeriesConfig defines a single series in a timeseries panel
-// +kubebuilder:object:generate=true
-type PanelTimeseriesSeriesConfig struct {
-	// Name of the field in each row that contains the numeric value.
-	DataKey string `json:"dataKey" yaml:"dataKey"`
-	// Optional override for the legend/tooltip label. Defaults to the formatted dataKey.
-	Name string `json:"name,omitempty" yaml:"name,omitempty"`
-	// Color for the line. Falls back to the shared color palette in the UI.
-	Color string `json:"color,omitempty" yaml:"color,omitempty"`
 }
 
 type PanelResult struct {
