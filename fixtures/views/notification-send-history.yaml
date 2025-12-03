@@ -1,0 +1,58 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: notification-send-history
+  namespace: mc
+spec:
+  display:
+    title: Notification Send History
+    icon: bell
+    sidebar: true
+  cache:
+    maxAge: 10m
+    minAge: 5s
+  columns:
+    - name: id
+      type: string
+      primaryKey: true
+      hidden: true
+    - name: notification_id
+      type: string
+    - name: status
+      type: status
+    - name: created_at
+      type: datetime
+    - name: duration
+      type: duration
+    - name: retries
+      type: number
+    - name: count
+      type: number
+    - name: error
+      type: string
+  queries:
+    notification_send_history:
+      columns:
+        id: string
+        notification_id: string
+        status: string
+        error: string
+        created_at: datetime
+        duration_millis: integer
+        retries: integer
+        count: integer
+      sql:
+        connection: connection://mc/mission-control
+        query: |
+          SELECT
+            id,
+            notification_id,
+            status,
+            error,
+            created_at,
+            duration_millis AS duration,
+            retries,
+            count
+          FROM notification_send_history
+          ORDER BY created_at DESC
+          LIMIT 100
