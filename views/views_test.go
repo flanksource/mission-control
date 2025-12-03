@@ -130,6 +130,23 @@ func TestApplyMapping(t *testing.T) {
 	}
 }
 
+func TestCustomURLAttribute(t *testing.T) {
+	ctx := context.New()
+	g := NewWithT(t)
+
+	columnDef := pkgView.ColumnDef{
+		Name: "name",
+		Type: pkgView.ColumnTypeString,
+		URL: &pkgView.ColumnURL{
+			Template: "https://example.com/{{ .row.name }}",
+		},
+	}
+
+	attrs, err := getColumnAttributes(ctx, columnDef, map[string]any{"name": "test"})
+	g.Expect(err).ToNot(HaveOccurred())
+	g.Expect(attrs).To(HaveKeyWithValue("url", "https://example.com/test"))
+}
+
 func TestCalculateVariableDepths(t *testing.T) {
 	type testCase struct {
 		name          string
