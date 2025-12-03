@@ -593,6 +593,33 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "SQLQuery": {
+      "properties": {
+        "connection": {
+          "type": "string"
+        },
+        "type": {
+          "type": "string"
+        },
+        "url": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "username": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "password": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "query": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "query"
+      ]
+    },
     "SecretKeySelector": {
       "properties": {
         "name": {
@@ -730,6 +757,9 @@
       "properties": {
         "prometheus": {
           "$ref": "#/$defs/PrometheusQuery"
+        },
+        "sql": {
+          "$ref": "#/$defs/SQLQuery"
         },
         "configs": {
           "$ref": "#/$defs/ResourceSelector"
