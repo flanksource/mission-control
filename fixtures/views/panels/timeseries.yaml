@@ -38,21 +38,17 @@ spec:
       type: timeseries
       timeseries:
         timeKey: timestamp
-        series:
-          - dataKey: success
-            name: Success
-          - dataKey: failure
-            name: Failure
-            color: "#ef4444"
+        valueKey: value
       query: |
-        SELECT '2024-07-01T00:00:00Z' AS timestamp, 120 AS success, 5 AS failure
-        UNION ALL
-        SELECT '2024-07-01T01:00:00Z', 132, 8
-        UNION ALL
-        SELECT '2024-07-01T02:00:00Z', 118, 3
-        UNION ALL
-        SELECT '2024-07-01T03:00:00Z', 140, 6
-        UNION ALL
-        SELECT '2024-07-01T04:00:00Z', 150, 4
-        UNION ALL
-        SELECT '2024-07-01T05:00:00Z', 160, 7
+        SELECT '2024-07-01T00:00:00Z' AS timestamp, 'success' AS result, 120 AS value
+        UNION ALL SELECT '2024-07-01T00:00:00Z', 'failure', 5
+        UNION ALL SELECT '2024-07-01T01:00:00Z', 'success', 132
+        UNION ALL SELECT '2024-07-01T01:00:00Z', 'failure', 8
+        UNION ALL SELECT '2024-07-01T02:00:00Z', 'success', 118
+        UNION ALL SELECT '2024-07-01T02:00:00Z', 'failure', 3
+        UNION ALL SELECT '2024-07-01T03:00:00Z', 'success', 140
+        UNION ALL SELECT '2024-07-01T03:00:00Z', 'failure', 6
+        UNION ALL SELECT '2024-07-01T04:00:00Z', 'success', 150
+        UNION ALL SELECT '2024-07-01T04:00:00Z', 'failure', 4
+        UNION ALL SELECT '2024-07-01T05:00:00Z', 'success', 160
+        UNION ALL SELECT '2024-07-01T05:00:00Z', 'failure', 7
