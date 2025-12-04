@@ -261,6 +261,31 @@ type HTTPConnection struct {
 	types.Authentication `yaml:",inline" json:",inline"`
 }
 
+type LogParams struct {
+	Query string `yaml:"query" json:"query" template:"true"`
+	Limit int    `yaml:"limit" json:"limit" template:"true"`
+}
+
+type Elasticsearch struct {
+	HTTPConnection `yaml:",inline" json:",inline" template:"true"`
+	LogParams      `yaml:",inline" json:",inline" template:"true"`
+}
+
+type Loki struct {
+	HTTPConnection `yaml:",inline" json:",inline" template:"true"`
+	LogParams      `yaml:",inline" json:",inline" template:"true"`
+}
+
+type GoogleCloudLogging struct {
+	connection.GCPConnection `yaml:",inline" json:",inline" template:"true"`
+	LogParams                `yaml:",inline" json:",inline" template:"true"`
+}
+
+type CloudwatchLogs struct {
+	connection.AWSConnection `yaml:",inline" json:",inline" template:"true"`
+	LogParams                `yaml:",inline" json:",inline" template:"true"`
+}
+
 type HTTPAction struct {
 	HTTPConnection `yaml:",inline" json:",inline" template:"true"`
 	// Method to use - defaults to GET

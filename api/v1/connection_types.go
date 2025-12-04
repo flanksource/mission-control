@@ -59,7 +59,7 @@ type ConnectionSMTP struct {
 	InsecureTLS bool `json:"insecureTLS,omitempty"`
 
 	// Encryption Method
-	// 	Defulat: auto
+	// 	Default: auto
 	// 	Possible values: None, ExplicitTLS, ImplicitTLS, Auto
 	Encryption string `json:"encryption,omitempty"`
 
