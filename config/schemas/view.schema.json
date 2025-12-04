@@ -3,6 +3,15 @@
   "$id": "https://github.com/flanksource/incident-commander/api/v1/view",
   "$ref": "#/$defs/View",
   "$defs": {
+    "BadgeConfig": {
+      "properties": {
+        "color": {
+          "$ref": "#/$defs/ColorSource"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "CardConfig": {
       "properties": {
         "position": {
@@ -10,6 +19,21 @@
         },
         "useForAccent": {
           "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ColorSource": {
+      "properties": {
+        "auto": {
+          "type": "boolean"
+        },
+        "map": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
         }
       },
       "additionalProperties": false,
@@ -37,6 +61,9 @@
         },
         "configItem": {
           "$ref": "#/$defs/ConfigItemColumnType"
+        },
+        "badge": {
+          "$ref": "#/$defs/BadgeConfig"
         },
         "icon": {
           "type": "string"

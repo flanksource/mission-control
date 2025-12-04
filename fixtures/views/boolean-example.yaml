@@ -1,0 +1,26 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: readiness-checks
+  namespace: default
+spec:
+  description: Example view that renders a boolean column for readiness
+  display:
+    title: Component Readiness
+    icon: status
+  queries:
+    components:
+      configs:
+        search: "@order=name"
+        types:
+          - Kubernetes::Deployment
+  columns:
+    - name: id
+      type: string
+      primaryKey: true
+      hidden: true
+    - name: name
+      type: string
+    - name: ready
+      type: boolean
+      description: Indicates whether the deployment is reporting ready

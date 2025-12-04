@@ -19,7 +19,9 @@ spec:
       type: string
     - name: status
       type: status
-      icon: row.health
+      badge:
+        color:
+          auto: true
       filter:
         type: multiselect
     - name: health
