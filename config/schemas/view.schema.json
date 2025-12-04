@@ -543,6 +543,21 @@
         },
         "valueKey": {
           "type": "string"
+        },
+        "legend": {
+          "$ref": "#/$defs/PanelTimeseriesLegendConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "PanelTimeseriesLegendConfig": {
+      "properties": {
+        "enable": {
+          "type": "boolean"
+        },
+        "layout": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
@@ -597,12 +612,41 @@
         },
         "query": {
           "type": "string"
+        },
+        "range": {
+          "$ref": "#/$defs/PrometheusRange"
+        },
+        "matchLabels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,
       "type": "object",
       "required": [
         "query"
+      ]
+    },
+    "PrometheusRange": {
+      "properties": {
+        "start": {
+          "type": "string"
+        },
+        "end": {
+          "type": "string"
+        },
+        "step": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "start",
+        "end",
+        "step"
       ]
     },
     "ResourceSelector": {

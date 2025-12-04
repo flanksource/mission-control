@@ -500,6 +500,20 @@ spec:
                     timeseries:
                       description: Configuration for timeseries visualization
                       properties:
+                        legend:
+                          description: Legend configuration for the timeseries chart.
+                          properties:
+                            enable:
+                              description: 'Whether to show the legend (default: true)'
+                              type: boolean
+                            layout:
+                              description: 'Orientation of the legend layout (default:
+                                horizontal)'
+                              enum:
+                              - vertical
+                              - horizontal
+                              type: string
+                          type: object
                         style:
                           description: 'Visualization style for the timeseries chart
                             (default: lines)'
@@ -731,6 +745,18 @@ spec:
                           type: string
                         digest:
                           type: boolean
+                        matchLabels:
+                          description: |-
+                            MatchLabels is a list of labels, when provided, are incldued in the result.
+                            Example:
+                            If a query produces {a:1, b:2, c:3, d:4} value=30.0
+                            then, with matchLabels = [a,b]
+                            The result will only have {a:1, b:2} value=30.0
+
+                            This helps in have a deterministic schema for the query result.
+                          items:
+                            type: string
+                          type: array
                         ntlm:
                           type: boolean
                         ntlmv2:
@@ -882,6 +908,20 @@ spec:
                         query:
                           description: Query is the PromQL query string
                           type: string
+                        range:
+                          description: Range runs a PromQL range query when specified
+                          properties:
+                            end:
+                              type: string
+                            start:
+                              type: string
+                            step:
+                              type: string
+                          required:
+                          - end
+                          - start
+                          - step
+                          type: object
                         tls:
                           properties:
                             ca:
