@@ -1,0 +1,27 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: workload-overview
+  namespace: mc
+spec:
+  description: Overview page that stitches together multiple workload views.
+  display:
+    title: Workload Overview
+    icon: view-details
+    sidebar: true
+  sections:
+    - title: Deployments
+      icon: kubernetes::deployment
+      viewRef:
+        namespace: mc
+        name: deployments
+    - title: Pods
+      icon: kubernetes::pod
+      viewRef:
+        namespace: mc
+        name: pods
+    - title: Pipelines
+      icon: github
+      viewRef:
+        namespace: mc
+        name: pipelines
