@@ -46,6 +46,8 @@ spec:
       type: millicore
     - name: cpu_limit
       type: millicore
+    - name: tags
+      type: labels
     - name: created
       type: datetime
   merge: |
@@ -54,6 +56,7 @@ spec:
       json_extract(pod.tags, '$.namespace') AS namespace,
       pod.status,
       pod.health,
+      pod.tags,
       pod.created_at,
       CAST(memory.value AS TEXT) as memory,
       COALESCE(
