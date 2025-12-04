@@ -1,0 +1,1954 @@
+openapi: 3.1.0
+info:
+  title: Mission Control API
+  description: |
+    Mission Control REST API for managing playbooks, notifications,
+    configurations, views, and system resources.
+  version: 1.0.0
+  contact:
+    name: Flanksource
+    url: https://flanksource.com
+
+servers:
+  - url: /
+    description: Current server
+
+tags:
+  - name: Health
+    description: Health and system status endpoints
+  - name: Authentication
+    description: User authentication and token management
+  - name: RBAC
+    description: Role-based access control
+  - name: Agents
+    description: Agent management and token generation
+  - name: Playbooks
+    description: Playbook execution and management
+  - name: Catalog
+    description: Configuration catalog and changes
+  - name: Notifications
+    description: Notification management and silencing
+  - name: Views
+    description: Custom view management
+  - name: Artifacts
+    description: Artifact storage and retrieval
+  - name: Connections
+    description: Connection testing and management
+  - name: Search
+    description: Resource search
+  - name: People
+    description: Person management
+  - name: Kubernetes
+    description: Kubernetes integration
+  - name: Applications
+    description: Application information
+  - name: Logs
+    description: Log retrieval
+
+security:
+  - BearerAuth: []
+
+paths:
+  /health:
+    get:
+      tags: [Health]
+      summary: Health check
+      description: Returns health status of the service
+      security: []
+      responses:
+        "200":
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+
+  /metrics:
+    get:
+      tags: [Health]
+      summary: Prometheus metrics
+      description: Returns Prometheus-formatted metrics
+      security: []
+      responses:
+        "200":
+          description: Metrics in Prometheus format
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /properties:
+    get:
+      tags: [Health]
+      summary: System properties
+      description: Returns system and database properties
+      responses:
+        "200":
+          description: List of properties
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Property"
+
+  # Authentication endpoints
+  /auth/{id}/update_state:
+    post:
+      tags: [Authentication]
+      summary: Update account state
+      description: Update the state of a user account (active/inactive)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [state]
+              properties:
+                state:
+                  type: string
+                  enum: [active, inactive]
+      responses:
+        "200":
+          $ref: "#/components/responses/HTTPSuccess"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /auth/{id}/properties:
+    post:
+      tags: [Authentication]
+      summary: Update account properties
+      description: Update properties for a user account
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PersonProperties"
+      responses:
+        "200":
+          $ref: "#/components/responses/HTTPSuccess"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /auth/whoami:
+    get:
+      tags: [Authentication]
+      summary: Get current user
+      description: Returns information about the currently authenticated user
+      responses:
+        "200":
+          description: Current user information
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/HTTPSuccess"
+                  - type: object
+                    properties:
+                      payload:
+                        type: object
+                        properties:
+                          user:
+                            $ref: "#/components/schemas/Person"
+                          roles:
+                            type: array
+                            items:
+                              type: string
+                          permissions:
+                            type: array
+                            items:
+                              $ref: "#/components/schemas/Permission"
+                          hostname:
+                            type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/create_token:
+    post:
+      tags: [Authentication]
+      summary: Create access token
+      description: Create a new access token for the current user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTokenRequest"
+      responses:
+        "200":
+          description: Token created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/HTTPSuccess"
+                  - type: object
+                    properties:
+                      payload:
+                        type: object
+                        properties:
+                          token:
+                            type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/tokens:
+    get:
+      tags: [Authentication]
+      summary: List access tokens
+      description: List all access tokens for the current user
+      responses:
+        "200":
+          description: List of tokens
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/HTTPSuccess"
+                  - type: object
+                    properties:
+                      payload:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/AccessToken"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /auth/token/{id}:
+    delete:
+      tags: [Authentication]
+      summary: Delete access token
+      description: Delete an access token
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          $ref: "#/components/responses/HTTPSuccess"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # RBAC endpoints
+  /rbac/{id}/update_role:
+    post:
+      tags: [RBAC]
+      summary: Update roles for user
+      description: Update the roles assigned to a user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [roles]
+              properties:
+                roles:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "200":
+          $ref: "#/components/responses/HTTPSuccess"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /rbac/dump:
+    get:
+      tags: [RBAC]
+      summary: Dump RBAC policies
+      description: Get all RBAC policies
+      responses:
+        "200":
+          description: List of permissions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Permission"
+
+  /rbac/{id}/roles:
+    get:
+      tags: [RBAC]
+      summary: Get roles for user
+      description: Get roles assigned to a user
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: User roles
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/HTTPSuccess"
+                  - type: object
+                    properties:
+                      payload:
+                        type: array
+                        items:
+                          type: string
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /rbac/token/{id}/permissions:
+    get:
+      tags: [RBAC]
+      summary: Get permissions for token
+      description: Get permissions assigned to an access token
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Token permissions
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: "#/components/schemas/HTTPSuccess"
+                  - type: object
+                    properties:
+                      payload:
+                        type: array
+                        items:
+                          $ref: "#/components/schemas/Permission"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # Agent endpoints
+  /agent/generate:
+    post:
+      tags: [Agents]
+      summary: Generate new agent
+      description: Create a new agent with access credentials
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateAgentRequest"
+      responses:
+        "201":
+          description: Agent created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeneratedAgent"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /agent/token:
+    post:
+      tags: [Agents]
+      summary: Generate agent token
+      description: Generate a new token for an existing agent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateTokenRequest"
+      responses:
+        "201":
+          description: Token generated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GeneratedToken"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # Playbook endpoints
+  /playbook/list:
+    get:
+      tags: [Playbooks]
+      summary: List playbooks
+      description: List playbooks available for a config, check, or component
+      parameters:
+        - name: config_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter by config ID
+        - name: check_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter by check ID
+        - name: component_id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Filter by component ID
+      responses:
+        "200":
+          description: List of playbooks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PlaybookListItem"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /playbook/webhook/{webhook_path}:
+    post:
+      tags: [Playbooks]
+      summary: Trigger playbook via webhook
+      description: Trigger a playbook run via webhook
+      security:
+        - {}
+        - BasicAuth: []
+        - BearerAuth: []
+      parameters:
+        - name: webhook_path
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Webhook processed
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /playbook/{id}/params:
+    post:
+      tags: [Playbooks]
+      summary: Get playbook parameters
+      description: Get templated parameters for a playbook run
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RunParams"
+      responses:
+        "200":
+          description: Playbook parameters
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GetParamsResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /playbook/events:
+    get:
+      tags: [Playbooks]
+      summary: Get playbook events
+      description: Get recent playbook events from the event ring
+      responses:
+        "200":
+          description: List of events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Event"
+
+  /playbook/run:
+    post:
+      tags: [Playbooks]
+      summary: Run playbook
+      description: Start a new playbook run
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RunParams"
+      responses:
+        "201":
+          description: Playbook run started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RunResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  /playbook/run/{id}:
+    get:
+      tags: [Playbooks]
+      summary: Get playbook run
+      description: Get details of a playbook run
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Playbook run details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlaybookRun"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /playbook/run/approve/{run_id}:
+    post:
+      tags: [Playbooks]
+      summary: Approve playbook run
+      description: Approve a pending playbook run
+      parameters:
+        - name: run_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          $ref: "#/components/responses/HTTPSuccess"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /playbook/run/cancel/{run_id}:
+    post:
+      tags: [Playbooks]
+      summary: Cancel playbook run
+      description: Cancel a running or pending playbook
+      parameters:
+        - name: run_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          $ref: "#/components/responses/HTTPSuccess"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # Catalog endpoints
+  /catalog/summary:
+    post:
+      tags: [Catalog]
+      summary: Get config summary
+      description: Get summary of configurations with optional filters
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConfigSummaryRequest"
+      responses:
+        "200":
+          description: Config summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConfigSummaryResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /catalog/changes:
+    post:
+      tags: [Catalog]
+      summary: Search catalog changes
+      description: Search for configuration changes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CatalogChangesSearchRequest"
+      responses:
+        "200":
+          description: Catalog changes
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CatalogChangesSearchResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  # Notification endpoints
+  /notification/summary:
+    post:
+      tags: [Notifications]
+      summary: Get notification history summary
+      description: Get summary of notification send history
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotificationSendHistorySummaryRequest"
+      responses:
+        "200":
+          description: Notification summary
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationSendHistorySummaryResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /notification/events:
+    get:
+      tags: [Notifications]
+      summary: Get notification events
+      description: Get recent notification events
+      responses:
+        "200":
+          description: List of events
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Event"
+
+  /notification/silence:
+    post:
+      tags: [Notifications]
+      summary: Create notification silence
+      description: Create a silence rule for notifications
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SilenceSaveRequest"
+      responses:
+        "200":
+          description: Silence created
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /notification/silence_preview:
+    get:
+      tags: [Notifications]
+      summary: Preview notification silence
+      description: Preview what notifications would be silenced
+      parameters:
+        - name: id
+          in: query
+          schema:
+            type: string
+            format: uuid
+          description: Resource ID
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [config, component, check]
+          description: Resource type
+        - name: recursive
+          in: query
+          schema:
+            type: boolean
+          description: Include child resources
+        - name: filter
+          in: query
+          schema:
+            type: string
+          description: CEL filter expression
+        - name: selectors
+          in: query
+          schema:
+            type: string
+          description: JSON-encoded resource selectors
+      responses:
+        "200":
+          description: Preview of silenced notifications
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NotificationSilencePreviewItem"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  # View endpoints
+  /view/list:
+    get:
+      tags: [Views]
+      summary: List views
+      description: List views available for a config
+      parameters:
+        - name: config_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: List of views
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ViewListItem"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /view/display-plugin-variables/{viewID}:
+    get:
+      tags: [Views]
+      summary: Get display plugin variables
+      description: Get templated variables for view display plugins
+      parameters:
+        - name: viewID
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: config_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Plugin variables
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: string
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /view/{namespace}/{name}:
+    get:
+      tags: [Views]
+      summary: Get view by namespace/name
+      description: Get view data by namespace and name
+      parameters:
+        - name: namespace
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: Cache-Control
+          in: header
+          schema:
+            type: string
+          description: Cache control header (max-age, refresh-timeout)
+      responses:
+        "200":
+          description: View result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ViewResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Views]
+      summary: Get view by namespace/name with variables
+      description: Get view data with custom variables
+      parameters:
+        - name: namespace
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ViewRequestBody"
+      responses:
+        "200":
+          description: View result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ViewResult"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /view/{id}:
+    get:
+      tags: [Views]
+      summary: Get view by ID
+      description: Get view data by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: View result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ViewResult"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    post:
+      tags: [Views]
+      summary: Get view by ID with variables
+      description: Get view data with custom variables
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ViewRequestBody"
+      responses:
+        "200":
+          description: View result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ViewResult"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # Artifact endpoints
+  /artifacts/list/check/{id}/{check_time}:
+    get:
+      tags: [Artifacts]
+      summary: List artifacts for check
+      description: List artifacts associated with a check at a specific time
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: check_time
+          in: path
+          required: true
+          schema:
+            type: string
+            format: date-time
+          description: RFC3339 timestamp
+      responses:
+        "200":
+          description: List of artifacts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Artifact"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /artifacts/list/playbook_run/{id}:
+    get:
+      tags: [Artifacts]
+      summary: List artifacts for playbook run
+      description: List artifacts associated with a playbook run
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: List of artifacts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Artifact"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /artifacts/download/{id}:
+    get:
+      tags: [Artifacts]
+      summary: Download artifact
+      description: Download an artifact by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Artifact content
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # Connection endpoints
+  /connection/test/{id}:
+    post:
+      tags: [Connections]
+      summary: Test connection
+      description: Test a connection by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          $ref: "#/components/responses/HTTPSuccess"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # Search endpoints
+  /resources/search:
+    post:
+      tags: [Search]
+      summary: Search resources
+      description: Search across multiple resource types
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SearchResourcesRequest"
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SearchResourcesResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  # People endpoints
+  /people/update:
+    post:
+      tags: [People]
+      summary: Update person
+      description: Update a person's information
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Person"
+      responses:
+        "200":
+          $ref: "#/components/responses/HTTPSuccess"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /people/{id}:
+    delete:
+      tags: [People]
+      summary: Delete person
+      description: Delete a person by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          $ref: "#/components/responses/HTTPSuccess"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # Kubernetes endpoints
+  /kubeconfig:
+    get:
+      tags: [Kubernetes]
+      summary: Download kubeconfig
+      description: Download kubeconfig for cluster access
+      parameters:
+        - name: cluster
+          in: query
+          schema:
+            type: string
+          description: Cluster name
+      responses:
+        "200":
+          description: Kubeconfig file
+          content:
+            application/x-yaml:
+              schema:
+                type: string
+        "500":
+          $ref: "#/components/responses/InternalError"
+
+  # Application endpoints
+  /application/{namespace}/{name}:
+    get:
+      tags: [Applications]
+      summary: Get application
+      description: Get application details by namespace and name
+      parameters:
+        - name: namespace
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Application details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Application"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  # Redirect endpoints
+  /redirect/{path}:
+    get:
+      tags: [Health]
+      summary: Short URL redirect
+      description: Redirect to full URL from short URL
+      parameters:
+        - name: path
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "302":
+          description: Redirect to target URL
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: Bearer token authentication
+    BasicAuth:
+      type: http
+      scheme: basic
+      description: Basic authentication (for webhooks)
+
+  responses:
+    HTTPSuccess:
+      description: Successful operation
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/HTTPSuccess"
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/HTTPError"
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/HTTPError"
+    Forbidden:
+      description: Forbidden
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/HTTPError"
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/HTTPError"
+    InternalError:
+      description: Internal server error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/HTTPError"
+
+  schemas:
+    HTTPSuccess:
+      type: object
+      properties:
+        message:
+          type: string
+        payload: {}
+
+    HTTPError:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        data: {}
+
+    Property:
+      type: object
+      properties:
+        name:
+          type: string
+        value:
+          type: string
+        source:
+          type: string
+        type:
+          type: string
+        description:
+          type: string
+
+    Person:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        avatar:
+          type: string
+        properties:
+          $ref: "#/components/schemas/PersonProperties"
+        external_id:
+          type: string
+
+    PersonProperties:
+      type: object
+      properties:
+        role:
+          type: string
+
+    Permission:
+      type: object
+      properties:
+        subject:
+          type: string
+        object:
+          type: string
+        action:
+          type: string
+        deny:
+          type: boolean
+
+    CreateTokenRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        expiry:
+          type: string
+          description: Duration string (e.g., "24h", "7d")
+        auto_renew:
+          type: boolean
+        scope:
+          type: array
+          items:
+            $ref: "#/components/schemas/Permission"
+
+    AccessToken:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    GenerateAgentRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        auto_renew:
+          type: boolean
+        properties:
+          type: object
+          additionalProperties:
+            type: string
+
+    GeneratedAgent:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        access_token:
+          type: string
+
+    GenerateTokenRequest:
+      type: object
+      required: [agent_name]
+      properties:
+        agent_name:
+          type: string
+        auto_renew:
+          type: boolean
+
+    GeneratedToken:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        access_token:
+          type: string
+
+    PlaybookListItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        title:
+          type: string
+        icon:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+
+    RunParams:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+          format: uuid
+        agent_id:
+          type: string
+          format: uuid
+        config_id:
+          type: string
+          format: uuid
+        check_id:
+          type: string
+          format: uuid
+        component_id:
+          type: string
+          format: uuid
+        params:
+          type: object
+          additionalProperties:
+            type: string
+
+    RunResponse:
+      type: object
+      properties:
+        run_id:
+          type: string
+          format: uuid
+        starts_at:
+          type: string
+          format: date-time
+
+    GetParamsResponse:
+      type: object
+      properties:
+        params:
+          type: array
+          items:
+            $ref: "#/components/schemas/PlaybookParameter"
+
+    PlaybookParameter:
+      type: object
+      properties:
+        name:
+          type: string
+        default:
+          type: string
+        label:
+          type: string
+        required:
+          type: boolean
+        icon:
+          type: string
+        description:
+          type: string
+        type:
+          type: string
+
+    PlaybookRun:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        playbook_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum: [pending, running, completed, failed, cancelled]
+        created_at:
+          type: string
+          format: date-time
+        scheduled_time:
+          type: string
+          format: date-time
+        start_time:
+          type: string
+          format: date-time
+        end_time:
+          type: string
+          format: date-time
+        parameters:
+          type: object
+          additionalProperties:
+            type: string
+
+    Event:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        properties:
+          type: object
+        error:
+          type: string
+        attempts:
+          type: integer
+        last_attempt:
+          type: string
+          format: date-time
+        priority:
+          type: integer
+
+    ConfigSummaryRequest:
+      type: object
+      properties:
+        changes:
+          type: object
+          properties:
+            since:
+              type: string
+        analysis:
+          type: object
+          properties:
+            since:
+              type: string
+        cost:
+          type: string
+        deleted:
+          type: boolean
+        filter:
+          type: object
+          additionalProperties:
+            type: string
+
+    ConfigSummaryResponse:
+      type: object
+      properties:
+        summary:
+          type: array
+          items:
+            type: object
+
+    CatalogChangesSearchRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        config_type:
+          type: string
+        type:
+          type: string
+        severity:
+          type: string
+        include_deleted_configs:
+          type: boolean
+        depth:
+          type: integer
+        created_by:
+          type: string
+        summary:
+          type: string
+        source:
+          type: string
+        tags:
+          type: string
+        agent_id:
+          type: string
+        from:
+          type: string
+        to:
+          type: string
+        page_index:
+          type: integer
+        page_size:
+          type: integer
+        sort_by:
+          type: string
+        sort_order:
+          type: string
+
+    CatalogChangesSearchResponse:
+      type: object
+      properties:
+        summary:
+          type: object
+          additionalProperties:
+            type: integer
+        total:
+          type: integer
+        changes:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConfigChange"
+
+    ConfigChange:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        config_id:
+          type: string
+          format: uuid
+        change_type:
+          type: string
+        severity:
+          type: string
+        summary:
+          type: string
+        source:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+
+    NotificationSendHistorySummaryRequest:
+      type: object
+      properties:
+        groupBy:
+          type: array
+          items:
+            type: string
+        status:
+          type: object
+          properties:
+            match:
+              type: string
+        resourceType:
+          type: string
+        tags:
+          type: string
+        search:
+          type: string
+        from:
+          type: string
+        to:
+          type: string
+        includeDeletedResources:
+          type: boolean
+        pageIndex:
+          type: integer
+        pageSize:
+          type: integer
+
+    NotificationSendHistorySummaryResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+        results: {}
+
+    SilenceSaveRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        config_id:
+          type: string
+          format: uuid
+        canary_id:
+          type: string
+          format: uuid
+        check_id:
+          type: string
+          format: uuid
+        component_id:
+          type: string
+          format: uuid
+        from:
+          type: string
+        until:
+          type: string
+        description:
+          type: string
+        recursive:
+          type: boolean
+        filter:
+          type: string
+        selectors:
+          type: array
+          items:
+            $ref: "#/components/schemas/ResourceSelector"
+
+    NotificationSilencePreviewItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        notification_id:
+          type: string
+          format: uuid
+        source_event:
+          type: string
+        resource_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        resource:
+          type: object
+
+    ViewListItem:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        namespace:
+          type: string
+        title:
+          type: string
+        icon:
+          type: string
+
+    ViewRequestBody:
+      type: object
+      properties:
+        variables:
+          type: object
+          additionalProperties:
+            type: string
+
+    ViewResult:
+      type: object
+      properties:
+        namespace:
+          type: string
+        name:
+          type: string
+        title:
+          type: string
+        icon:
+          type: string
+        last_refreshed_at:
+          type: string
+          format: date-time
+        request_fingerprint:
+          type: string
+        columns:
+          type: array
+          items:
+            type: object
+        rows:
+          type: array
+          items:
+            type: object
+        panels:
+          type: array
+          items:
+            type: object
+        variables:
+          type: array
+          items:
+            type: object
+        column_options:
+          type: object
+        card:
+          type: object
+        sections:
+          type: array
+          items:
+            type: object
+
+    Artifact:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        playbook_run_id:
+          type: string
+          format: uuid
+        check_id:
+          type: string
+          format: uuid
+        check_time:
+          type: string
+          format: date-time
+        path:
+          type: string
+        filename:
+          type: string
+        size:
+          type: integer
+        content_type:
+          type: string
+        is_json:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    SearchResourcesRequest:
+      type: object
+      properties:
+        limit:
+          type: integer
+        canaries:
+          type: array
+          items:
+            $ref: "#/components/schemas/ResourceSelector"
+        checks:
+          type: array
+          items:
+            $ref: "#/components/schemas/ResourceSelector"
+        components:
+          type: array
+          items:
+            $ref: "#/components/schemas/ResourceSelector"
+        configs:
+          type: array
+          items:
+            $ref: "#/components/schemas/ResourceSelector"
+        config_changes:
+          type: array
+          items:
+            $ref: "#/components/schemas/ResourceSelector"
+        playbooks:
+          type: array
+          items:
+            $ref: "#/components/schemas/ResourceSelector"
+        connections:
+          type: array
+          items:
+            $ref: "#/components/schemas/ResourceSelector"
+
+    SearchResourcesResponse:
+      type: object
+      properties:
+        canaries:
+          type: array
+          items:
+            $ref: "#/components/schemas/SelectedResource"
+        checks:
+          type: array
+          items:
+            $ref: "#/components/schemas/SelectedResource"
+        components:
+          type: array
+          items:
+            $ref: "#/components/schemas/SelectedResource"
+        configs:
+          type: array
+          items:
+            $ref: "#/components/schemas/SelectedResource"
+        config_changes:
+          type: array
+          items:
+            $ref: "#/components/schemas/SelectedResource"
+        playbooks:
+          type: array
+          items:
+            $ref: "#/components/schemas/SelectedResource"
+        connections:
+          type: array
+          items:
+            $ref: "#/components/schemas/SelectedResource"
+
+    ResourceSelector:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        namespace:
+          type: string
+        types:
+          type: array
+          items:
+            type: string
+        statuses:
+          type: array
+          items:
+            type: string
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+        field_selector:
+          type: string
+
+    SelectedResource:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        namespace:
+          type: string
+        type:
+          type: string
+
+    Application:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        type:
+          type: string
+        namespace:
+          type: string
+        description:
+          type: string
+        properties:
+          type: array
+          items:
+            type: object
+        access_control:
+          type: object
+        incidents:
+          type: array
+          items:
+            type: object
+        locations:
+          type: array
+          items:
+            type: object
+        backups:
+          type: array
+          items:
+            type: object
+        restores:
+          type: array
+          items:
+            type: object
+        findings:
+          type: array
+          items:
+            type: object
+        sections:
+          type: array
+          items:
+            type: object
+
+    LogsRequest:
+      type: object
+      properties:
+        query:
+          type: string
+        start:
+          type: string
+        end:
+          type: string
+        limit:
+          type: integer
+        component_id:
+          type: string
+          format: uuid
+        config_id:
+          type: string
+          format: uuid
+
+    LogsResponse:
+      type: object
+      properties:
+        logs:
+          type: array
+          items:
+            $ref: "#/components/schemas/LogLine"
+        component_logs:
+          type: array
+          items:
+            type: object
+            properties:
+              component:
+                type: object
+              logs:
+                type: array
+                items:
+                  $ref: "#/components/schemas/LogLine"
+
+    LogLine:
+      type: object
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+        message:
+          type: string

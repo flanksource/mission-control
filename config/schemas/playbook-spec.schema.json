@@ -1574,6 +1574,12 @@
             "type": "string"
           },
           "type": "array"
+        },
+        "selectLabels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,
