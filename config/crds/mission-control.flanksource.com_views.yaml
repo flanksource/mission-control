@@ -64,6 +64,23 @@ spec:
                 items:
                   description: ColumnDef defines a column in the view
                   properties:
+                    badge:
+                      description: Badge configuration for the column
+                      properties:
+                        color:
+                          properties:
+                            auto:
+                              description: Auto indicates UI uses heuristics to determine
+                                color based on value
+                              type: boolean
+                            map:
+                              additionalProperties:
+                                type: string
+                              description: Map defines explicit color mappings for
+                                specific values
+                              type: object
+                          type: object
+                      type: object
                     card:
                       description: Card defines the card layout configuration for
                         the field
@@ -188,8 +205,6 @@ spec:
                       - bytes
                       - decimal
                       - millicore
-                      - url
-                      - badge
                       - config_item
                       - labels
                       type: string
