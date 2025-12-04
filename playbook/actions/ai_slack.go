@@ -16,10 +16,10 @@ import (
 )
 
 const (
-	maxSlackFieldsPerSection = 10  // Slack doesn't support more than 10 fields in a section
-	maxHeaderTextLength      = 150 // Slack doesn't support more than 150 characters in a header
-	maxMarkdownTextLength    = 3000
-	maxSlackURLLength        = 3000 // Maximum URL length before shortening
+	maxHeaderTextLength   = 150 // Slack doesn't support more than 150 characters in a header
+	maxMarkdownTextLength = 3000
+	maxSlackURLLength     = 3000 // Maximum URL length before shortening
+	maxButtonTextLength   = 75   // Slack button text must be <= 75 characters
 )
 
 // Constants for Slack block formatting
@@ -88,7 +88,7 @@ func createPlaybookButtons(ctx context.Context, recommendations llm.PlaybookReco
 			"type": slackBlockTypeButton,
 			"text": map[string]any{
 				"type": slackBlockTypePlainText,
-				"text": fmt.Sprintf("%s %s", playbook.Emoji, playbook.Title),
+				"text": lo.Ellipsis(fmt.Sprintf("%s %s", playbook.Emoji, playbook.Title), maxButtonTextLength),
 			},
 			"url": finalURL,
 		})
