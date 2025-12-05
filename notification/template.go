@@ -64,12 +64,12 @@ var TemplateFuncs = map[string]any{
 		slackFields := CreateSlackFieldsSection(fields)
 
 		if len(slackFields) == 0 {
-			return "{}"
+			return ""
 		}
 
 		out, err := json.Marshal(slackFields)
 		if err != nil {
-			return "{}"
+			return ""
 		}
 
 		return string(out)
@@ -166,6 +166,10 @@ func CreateSlackFieldsSection(labels []models.Label) map[string]any {
 			"verbatim": true,
 		})
 		count++
+	}
+
+	if len(fields) == 0 {
+		return nil
 	}
 
 	section := map[string]any{
