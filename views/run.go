@@ -35,6 +35,7 @@ func Run(ctx context.Context, view *v1.View, request *requestOpt) (*api.ViewResu
 		Title:              view.Spec.Display.Title,
 		RequestFingerprint: request.Fingerprint(),
 		Card:               view.Spec.Display.Card,
+		Table:              view.Spec.Display.Table,
 	}
 
 	if len(request.variables) > 0 {

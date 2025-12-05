@@ -237,6 +237,10 @@ spec:
                               type: string
                           type: object
                       type: object
+                    width:
+                      description: Width defines the display width of the column (e.g.
+                        "2" for weight or "150px")
+                      type: string
                   required:
                   - name
                   - type
@@ -361,6 +365,18 @@ spec:
                     description: Sidebar indicates if the view should be shown in
                       sidebar
                     type: boolean
+                  table:
+                    description: Table defines the table layout configuration
+                    properties:
+                      size:
+                        description: Size defines the default page size for the table
+                        type: integer
+                      sort:
+                        description: Sort defines the default sort column (single
+                          field). Prefix with "-" for descending.
+                        pattern: ^[+-]?[A-Za-z0-9_.]+$
+                        type: string
+                    type: object
                   title:
                     description: Title of the view to be displayed in the UI
                     type: string
