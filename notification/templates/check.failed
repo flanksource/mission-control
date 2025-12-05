@@ -14,7 +14,10 @@
 				{{end}}
 			]
 		},
-		{{ if .check.labels}}{{slackSectionLabels .check}},{{end}}
+		{{- if .check.labels -}}
+			{{- $labelSection := slackSectionLabels .check -}}
+			{{- if $labelSection }}{{$labelSection}},{{end}}
+		{{- end}}
 		{{if .groupedResources}}{{slackSectionTextMD (printf `*Resources grouped with notification:* %s` (join .groupedResources "\n"))}},{{end}}
 		{{ slackURLAction "View Health Check" .permalink "🔕 Silence" .silenceURL}}
 	]

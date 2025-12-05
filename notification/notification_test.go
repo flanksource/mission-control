@@ -9,6 +9,7 @@ import (
 	// register event handlers
 
 	"github.com/flanksource/commons/collections"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
@@ -992,7 +993,7 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 		})
 	})
 
-	var _ = ginkgo.Describe("template vailidity", func() {
+	var _ = ginkgo.Describe("template validity", func() {
 		for _, channel := range []string{"regular", "slack"} {
 			for _, event := range api.EventStatusGroup {
 				ginkgo.It(fmt.Sprintf("channel=%s %s", channel, event), func() {
@@ -1039,6 +1040,49 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 				})
 			}
 		}
+
+		ginkgo.It("renders slack config.health without labels", func() {
+			ctx := context.New()
+			_, body := notification.DefaultTitleAndBody(api.EventConfigUnhealthy)
+
+			agent := models.Agent{Name: "agent-one"}
+			config := models.ConfigItem{
+				ID:          uuid.New(),
+				Name:        lo.ToPtr("RefreshCheckSizeSummary"),
+				ConfigClass: "Job",
+				Type:        lo.ToPtr("MissionControl::Job"),
+				Status:      lo.ToPtr("Failed"),
+				Health:      lo.ToPtr(models.HealthUnhealthy),
+				Labels:      lo.ToPtr(types.JSONStringMap{}),
+			}
+
+			env := map[string]any{
+				"channel":    "slack",
+				"agent":      agent.AsMap(),
+				"config":     config.AsMap("spec"),
+				"permalink":  "https://example.test/configs/refresh",
+				"silenceURL": "https://example.test/notifications/silence",
+			}
+
+			templater := ctx.NewStructTemplater(env, "", notification.TemplateFuncs)
+			msg := notification.NotificationTemplate{Message: body}
+			Expect(templater.Walk(&msg)).To(Succeed())
+
+			var slackBlock map[string]any
+			Expect(json.Unmarshal([]byte(msg.Message), &slackBlock)).To(Succeed())
+
+			blocks, ok := slackBlock["blocks"].([]any)
+			Expect(ok).To(BeTrue())
+			for _, block := range blocks {
+				asMap, ok := block.(map[string]any)
+				Expect(ok).To(BeTrue())
+				if fields, exists := asMap["fields"]; exists {
+					fieldSlice, ok := fields.([]any)
+					Expect(ok).To(BeTrue())
+					Expect(fieldSlice).ToNot(BeEmpty())
+				}
+			}
+		})
 	})
 
 	var _ = ginkgo.Describe("group notifications", func() {
