@@ -50,6 +50,9 @@
         "type": {
           "type": "string"
         },
+        "width": {
+          "type": "string"
+        },
         "description": {
           "type": "string"
         },
@@ -164,12 +167,6 @@
         },
         "size": {
           "type": "integer"
-        },
-        "columnWidth": {
-          "items": {
-            "type": "integer"
-          },
-          "type": "array"
         }
       },
       "additionalProperties": false,
