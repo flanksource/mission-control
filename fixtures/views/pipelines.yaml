@@ -8,6 +8,10 @@ spec:
     title: Pipelines
     icon: github
     sidebar: true
+    table:
+      sort: "-lastRun"
+      size: 5
+      columnWidth: [2, 3, 2, 2, 1, 1]
   cache:
     maxAge: 30m
     minAge: 1m
