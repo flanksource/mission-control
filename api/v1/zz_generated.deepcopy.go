@@ -3328,7 +3328,7 @@ func (in *ViewDisplay) DeepCopyInto(out *ViewDisplay) {
 	if in.Table != nil {
 		in, out := &in.Table, &out.Table
 		*out = new(api.DisplayTable)
-		(*in).DeepCopyInto(*out)
+		**out = **in
 	}
 	if in.Plugins != nil {
 		in, out := &in.Plugins, &out.Plugins

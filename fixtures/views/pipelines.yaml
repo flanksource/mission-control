@@ -11,7 +11,6 @@ spec:
     table:
       sort: "-lastRun"
       size: 5
-      columnWidth: [2, 3, 2, 2, 1, 1]
   cache:
     maxAge: 30m
     minAge: 1m
@@ -35,26 +34,32 @@ spec:
     - name: repository
       type: string
       description: The repository of the pipeline.
+      width: "2"
       filter:
         type: multiselect
     - name: name
       type: string
       description: The name of the pipeline.
+      width: "3"
       filter:
         type: multiselect
     - name: lastRun
       type: datetime
       description: The namespace name.
+      width: "2"
     - name: lastRunBy
       type: string
       description: The chart name.
+      width: "2"
       filter:
         type: multiselect
     - name: duration
       type: duration
+      width: "1"
       description: The duration of the pipeline.
     - name: status
       type: status
+      width: "1"
       description: The status of the pipeline.
       filter:
         type: multiselect

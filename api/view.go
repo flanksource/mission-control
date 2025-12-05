@@ -12,13 +12,11 @@ import (
 // +kubebuilder:object:generate=true
 type DisplayTable struct {
 	// Sort defines the default sort column (single field). Prefix with "-" for descending.
+	// +kubebuilder:validation:Pattern=`^[+-]?[A-Za-z0-9_.]+$`
 	Sort string `json:"sort,omitempty" yaml:"sort,omitempty"`
 
 	// Size defines the default page size for the table
 	Size int `json:"size,omitempty" yaml:"size,omitempty"`
-
-	// ColumnWidth defines the relative widths of the columns
-	ColumnWidth []int `json:"columnWidth,omitempty" yaml:"columnWidth,omitempty"`
 }
 
 // DisplayCard defines card layout configuration at the view level
