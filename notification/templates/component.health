@@ -14,7 +14,10 @@
 				{{end}}
 			]
 		},
-		{{if .component.labels}}{{slackSectionLabels .component}},{{end}}
+		{{- if .component.labels -}}
+			{{- $labelSection := slackSectionLabels .component -}}
+			{{- if $labelSection }}{{$labelSection}},{{end}}
+		{{- end}}
 		{{if .groupedResources}}{{slackSectionTextMD (printf `*Also Failing:* - %s` (join .groupedResources "\n - "))}},{{end}}
 		{{slackURLAction "View Component" .permalink "🔕 Silence" .silenceURL}}
 	]
