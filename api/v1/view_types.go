@@ -34,6 +34,9 @@ type ViewDisplay struct {
 	// Card defines the card layout configuration
 	Card *api.DisplayCard `json:"card,omitempty" yaml:"card,omitempty"`
 
+	// Table defines the table layout configuration
+	Table *api.DisplayTable `json:"table,omitempty" yaml:"table,omitempty"`
+
 	// Plugins tie this view to various pages in the UI.
 	//
 	// When a view is attached to a config, the view shows up as a tab in the config page.

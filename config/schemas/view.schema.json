@@ -157,6 +157,24 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "DisplayTable": {
+      "properties": {
+        "sort": {
+          "type": "string"
+        },
+        "size": {
+          "type": "integer"
+        },
+        "columnWidth": {
+          "items": {
+            "type": "integer"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "EnvVar": {
       "properties": {
         "name": {
@@ -772,6 +790,9 @@
         },
         "card": {
           "$ref": "#/$defs/DisplayCard"
+        },
+        "table": {
+          "$ref": "#/$defs/DisplayTable"
         },
         "plugins": {
           "items": {

@@ -523,6 +523,7 @@ func readCachedViewData(ctx context.Context, view *v1.View, request *requestOpt)
 		Rows:               rows,
 		Panels:             finalPanelResults,
 		Card:               view.Spec.Display.Card,
+		Table:              view.Spec.Display.Table,
 	}
 
 	for _, filter := range view.Spec.Templating {

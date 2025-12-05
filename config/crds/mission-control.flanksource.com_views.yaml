@@ -361,6 +361,23 @@ spec:
                     description: Sidebar indicates if the view should be shown in
                       sidebar
                     type: boolean
+                  table:
+                    description: Table defines the table layout configuration
+                    properties:
+                      columnWidth:
+                        description: ColumnWidth defines the relative widths of the
+                          columns
+                        items:
+                          type: integer
+                        type: array
+                      size:
+                        description: Size defines the default page size for the table
+                        type: integer
+                      sort:
+                        description: Sort defines the default sort column (single
+                          field). Prefix with "-" for descending.
+                        type: string
+                    type: object
                   title:
                     description: Title of the view to be displayed in the UI
                     type: string

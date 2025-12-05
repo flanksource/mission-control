@@ -3325,6 +3325,11 @@ func (in *ViewDisplay) DeepCopyInto(out *ViewDisplay) {
 		*out = new(api.DisplayCard)
 		**out = **in
 	}
+	if in.Table != nil {
+		in, out := &in.Table, &out.Table
+		*out = new(api.DisplayTable)
+		(*in).DeepCopyInto(*out)
+	}
 	if in.Plugins != nil {
 		in, out := &in.Plugins, &out.Plugins
 		*out = make([]ViewConfigUIPlugin, len(*in))
