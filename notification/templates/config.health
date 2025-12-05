@@ -14,7 +14,10 @@
 				{{end}}
 			]
 		},
-		{{if .config.labels}}{{slackSectionLabels .config}},{{end}}
+		{{- if .config.labels -}}
+			{{- $labelSection := slackSectionLabels .config -}}
+			{{- if $labelSection }}{{$labelSection}},{{end}}
+		{{- end}}
 		{{if .recent_events}}{{slackSectionTextMD (printf `*Recent Events:* %v` (join .recent_events ", "))}},{{end}}
 		{{if .groupedResources}}{{slackSectionTextMD (printf `*Also Failing:* - %s` (join .groupedResources "\n - "))}},{{end}}
 		{"type": "divider"},
