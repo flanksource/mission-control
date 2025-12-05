@@ -6,12 +6,14 @@ import (
 
 	pkgConnection "github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
+
 	v1 "github.com/flanksource/incident-commander/api/v1"
 )
 
 type SQLResult struct {
-	Rows  []map[string]interface{} `json:"rows,omitempty"`
-	Count int                      `json:"count,omitempty"`
+	Query string           `json:"query,omitempty"`
+	Rows  []map[string]any `json:"rows,omitempty"`
+	Count int              `json:"count,omitempty"`
 }
 
 type SQL struct{}
@@ -49,7 +51,7 @@ func querySQL(driver string, connection string, query string) (*SQLResult, error
 	defer db.Close()
 
 	rows, err := db.Query(query)
-	result := SQLResult{}
+	result := SQLResult{Query: query}
 	if err != nil || rows.Err() != nil {
 		return nil, fmt.Errorf("failed to query db: %w", err)
 	}
@@ -61,7 +63,7 @@ func querySQL(driver string, connection string, query string) (*SQLResult, error
 	}
 
 	for rows.Next() {
-		var rowValues = make([]interface{}, len(columns))
+		var rowValues = make([]any, len(columns))
 		for i := range rowValues {
 			var s sql.NullString
 			rowValues[i] = &s
@@ -70,7 +72,7 @@ func querySQL(driver string, connection string, query string) (*SQLResult, error
 			return nil, err
 		}
 
-		var row = make(map[string]interface{})
+		var row = make(map[string]any)
 		for i, val := range rowValues {
 			v := *val.(*sql.NullString)
 			if v.Valid {
