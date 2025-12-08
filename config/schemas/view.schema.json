@@ -50,6 +50,9 @@
         "type": {
           "type": "string"
         },
+        "width": {
+          "type": "string"
+        },
         "description": {
           "type": "string"
         },
@@ -152,6 +155,18 @@
         },
         "default": {
           "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "DisplayTable": {
+      "properties": {
+        "sort": {
+          "type": "string"
+        },
+        "size": {
+          "type": "integer"
         }
       },
       "additionalProperties": false,
@@ -772,6 +787,9 @@
         },
         "card": {
           "$ref": "#/$defs/DisplayCard"
+        },
+        "table": {
+          "$ref": "#/$defs/DisplayTable"
         },
         "plugins": {
           "items": {

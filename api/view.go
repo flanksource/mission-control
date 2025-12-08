@@ -8,6 +8,17 @@ import (
 	"github.com/google/uuid"
 )
 
+// DisplayTable defines table specific display options
+// +kubebuilder:object:generate=true
+type DisplayTable struct {
+	// Sort defines the default sort column (single field). Prefix with "-" for descending.
+	// +kubebuilder:validation:Pattern=`^[+-]?[A-Za-z0-9_.]+$`
+	Sort string `json:"sort,omitempty" yaml:"sort,omitempty"`
+
+	// Size defines the default page size for the table
+	Size int `json:"size,omitempty" yaml:"size,omitempty"`
+}
+
 // DisplayCard defines card layout configuration at the view level
 type DisplayCard struct {
 	// Columns defines the number of columns for the card body layout
@@ -66,6 +77,9 @@ type ViewResult struct {
 
 	// Card defines the default card layout configuration
 	Card *DisplayCard `json:"card,omitempty"`
+
+	// Table defines the default table display configuration
+	Table *DisplayTable `json:"table,omitempty"`
 
 	Sections []ViewSection `json:"sections,omitempty"`
 }
