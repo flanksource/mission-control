@@ -1482,7 +1482,8 @@ spec:
             type: object
             x-kubernetes-validations:
             - message: either sections or queries must be specified
-              rule: size(self.sections) > 0 || size(self.queries) > 0
+              rule: size(self.sections) > 0 || size(self.queries) > 0 || self.panels.exists(p,
+                p.type == 'playbooks')
             - message: view spec must have panels, columns, or sections defined
               rule: size(self.panels) > 0 || size(self.columns) > 0 || size(self.sections)
                 > 0
