@@ -499,7 +499,7 @@ spec:
                       type: object
                     type:
                       description: Type of panel visualization (piechart, text, gauge,
-                        number, table, duration, bargauge)
+                        number, table, duration, bargauge, properties)
                       enum:
                       - piechart
                       - text
@@ -508,6 +508,7 @@ spec:
                       - table
                       - duration
                       - bargauge
+                      - properties
                       type: string
                   required:
                   - name

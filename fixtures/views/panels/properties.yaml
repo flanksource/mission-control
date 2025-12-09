@@ -1,0 +1,23 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: properties
+  namespace: mc
+spec:
+  display:
+    title: Properties
+    sidebar: true
+  queries:
+    aws_accounts:
+      configs:
+        types:
+          - "AWS::::Account"
+  panels:
+    - name: AWS Account Details
+      type: properties
+      query: >
+        SELECT 'Name' AS label, name AS value FROM aws_accounts
+        UNION ALL
+        SELECT 'Groups' AS label, json_extract(config, '$.Groups') AS value FROM aws_accounts
+        UNION ALL
+        SELECT 'Roles' AS label, json_extract(config, '$.Roles') AS value FROM aws_accounts
