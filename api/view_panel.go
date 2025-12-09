@@ -9,13 +9,14 @@ import (
 type PanelType string
 
 const (
-	PanelTypePiechart PanelType = "piechart"
-	PanelTypeTable    PanelType = "table"
-	PanelTypeText     PanelType = "text"
-	PanelTypeNumber   PanelType = "number"
-	PanelTypeDuration PanelType = "duration"
-	PanelTypeGauge    PanelType = "gauge"
-	PanelTypeBargauge PanelType = "bargauge"
+	PanelTypePiechart   PanelType = "piechart"
+	PanelTypeTable      PanelType = "table"
+	PanelTypeText       PanelType = "text"
+	PanelTypeNumber     PanelType = "number"
+	PanelTypeDuration   PanelType = "duration"
+	PanelTypeGauge      PanelType = "gauge"
+	PanelTypeBargauge   PanelType = "bargauge"
+	PanelTypeProperties PanelType = "properties"
 )
 
 // PanelDef defines a panel for the view
@@ -40,8 +41,8 @@ type PanelMeta struct {
 	// Description of what this panel represents
 	Description string `json:"description,omitempty" yaml:"description,omitempty"`
 
-	// Type of panel visualization (piechart, text, gauge, number, table, duration, bargauge)
-	// +kubebuilder:validation:Enum=piechart;text;gauge;number;table;duration;bargauge
+	// Type of panel visualization (piechart, text, gauge, number, table, duration, bargauge, properties)
+	// +kubebuilder:validation:Enum=piechart;text;gauge;number;table;duration;bargauge;properties
 	Type PanelType `json:"type" yaml:"type"`
 
 	// Configuration for gauge visualization
