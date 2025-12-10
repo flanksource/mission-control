@@ -477,6 +477,9 @@
         "bargauge": {
           "$ref": "#/$defs/PanelBargaugeConfig"
         },
+        "timeseries": {
+          "$ref": "#/$defs/PanelTimeseriesConfig"
+        },
         "query": {
           "type": "string"
         }
@@ -529,6 +532,45 @@
       "properties": {},
       "additionalProperties": false,
       "type": "object"
+    },
+    "PanelTimeseriesConfig": {
+      "properties": {
+        "timeKey": {
+          "type": "string"
+        },
+        "style": {
+          "type": "string"
+        },
+        "valueKey": {
+          "type": "string"
+        },
+        "series": {
+          "items": {
+            "$ref": "#/$defs/PanelTimeseriesSeriesConfig"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "PanelTimeseriesSeriesConfig": {
+      "properties": {
+        "dataKey": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "color": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "dataKey"
+      ]
     },
     "PiechartConfig": {
       "properties": {

@@ -17,6 +17,7 @@ const (
 	PanelTypeGauge      PanelType = "gauge"
 	PanelTypeBargauge   PanelType = "bargauge"
 	PanelTypeProperties PanelType = "properties"
+	PanelTypeTimeseries PanelType = "timeseries"
 )
 
 // PanelDef defines a panel for the view
@@ -26,6 +27,7 @@ const (
 // +kubebuilder:validation:XValidation:rule="self.type!='number' ? !has(self.number) : true",message="number config not allowed for this type"
 // +kubebuilder:validation:XValidation:rule="self.type!='table' ? !has(self.table) : true",message="table config not allowed for this type"
 // +kubebuilder:validation:XValidation:rule="self.type!='bargauge' ? !has(self.bargauge) : true",message="bargauge config not allowed for this type"
+// +kubebuilder:validation:XValidation:rule="self.type!='timeseries' ? !has(self.timeseries) : true",message="timeseries config not allowed for this type"
 type PanelDef struct {
 	PanelMeta `json:",inline" yaml:",inline"`
 
@@ -41,8 +43,8 @@ type PanelMeta struct {
 	// Description of what this panel represents
 	Description string `json:"description,omitempty" yaml:"description,omitempty"`
 
-	// Type of panel visualization (piechart, text, gauge, number, table, duration, bargauge, properties)
-	// +kubebuilder:validation:Enum=piechart;text;gauge;number;table;duration;bargauge;properties
+	// Type of panel visualization
+	// +kubebuilder:validation:Enum=piechart;text;gauge;number;table;duration;bargauge;properties;timeseries
 	Type PanelType `json:"type" yaml:"type"`
 
 	// Configuration for gauge visualization
@@ -59,6 +61,9 @@ type PanelMeta struct {
 
 	// Configuration for bargauge visualization
 	Bargauge *PanelBargaugeConfig `json:"bargauge,omitempty" yaml:"bargauge,omitempty"`
+
+	// Configuration for timeseries visualization
+	Timeseries *PanelTimeseriesConfig `json:"timeseries,omitempty" yaml:"timeseries,omitempty"`
 }
 
 // +kubebuilder:object:generate=true
@@ -95,6 +100,31 @@ type PanelNumberConfig struct {
 // PanelTableConfig defines configuration for table visualization
 // +kubebuilder:object:generate=true
 type PanelTableConfig struct {
+}
+
+// PanelTimeseriesConfig defines configuration for timeseries visualization
+// +kubebuilder:object:generate=true
+type PanelTimeseriesConfig struct {
+	// Field name that contains the timestamp. If omitted, the panel will try to infer it.
+	TimeKey string `json:"timeKey,omitempty" yaml:"timeKey,omitempty"`
+	// Visualization style for the timeseries chart (default: lines)
+	// +kubebuilder:validation:Enum=lines;area;points
+	Style string `json:"style,omitempty" yaml:"style,omitempty"`
+	// Convenience for single-series charts when series is not provided.
+	ValueKey string `json:"valueKey,omitempty" yaml:"valueKey,omitempty"`
+	// Optional series definitions for multi-line charts.
+	Series []PanelTimeseriesSeriesConfig `json:"series,omitempty" yaml:"series,omitempty"`
+}
+
+// PanelTimeseriesSeriesConfig defines a single series in a timeseries panel
+// +kubebuilder:object:generate=true
+type PanelTimeseriesSeriesConfig struct {
+	// Name of the field in each row that contains the numeric value.
+	DataKey string `json:"dataKey" yaml:"dataKey"`
+	// Optional override for the legend/tooltip label. Defaults to the formatted dataKey.
+	Name string `json:"name,omitempty" yaml:"name,omitempty"`
+	// Color for the line. Falls back to the shared color palette in the UI.
+	Color string `json:"color,omitempty" yaml:"color,omitempty"`
 }
 
 type PanelResult struct {

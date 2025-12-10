@@ -497,9 +497,51 @@ spec:
                     table:
                       description: Configuration for breakdown visualization
                       type: object
+                    timeseries:
+                      description: Configuration for timeseries visualization
+                      properties:
+                        series:
+                          description: Optional series definitions for multi-line
+                            charts.
+                          items:
+                            description: PanelTimeseriesSeriesConfig defines a single
+                              series in a timeseries panel
+                            properties:
+                              color:
+                                description: Color for the line. Falls back to the
+                                  shared color palette in the UI.
+                                type: string
+                              dataKey:
+                                description: Name of the field in each row that contains
+                                  the numeric value.
+                                type: string
+                              name:
+                                description: Optional override for the legend/tooltip
+                                  label. Defaults to the formatted dataKey.
+                                type: string
+                            required:
+                            - dataKey
+                            type: object
+                          type: array
+                        style:
+                          description: 'Visualization style for the timeseries chart
+                            (default: lines)'
+                          enum:
+                          - lines
+                          - area
+                          - points
+                          type: string
+                        timeKey:
+                          description: Field name that contains the timestamp. If
+                            omitted, the panel will try to infer it.
+                          type: string
+                        valueKey:
+                          description: Convenience for single-series charts when series
+                            is not provided.
+                          type: string
+                      type: object
                     type:
-                      description: Type of panel visualization (piechart, text, gauge,
-                        number, table, duration, bargauge, properties)
+                      description: Type of panel visualization
                       enum:
                       - piechart
                       - text
@@ -509,6 +551,7 @@ spec:
                       - duration
                       - bargauge
                       - properties
+                      - timeseries
                       type: string
                   required:
                   - name
@@ -526,6 +569,8 @@ spec:
                     rule: 'self.type!=''table'' ? !has(self.table) : true'
                   - message: bargauge config not allowed for this type
                     rule: 'self.type!=''bargauge'' ? !has(self.bargauge) : true'
+                  - message: timeseries config not allowed for this type
+                    rule: 'self.type!=''timeseries'' ? !has(self.timeseries) : true'
                 type: array
               queries:
                 additionalProperties:
