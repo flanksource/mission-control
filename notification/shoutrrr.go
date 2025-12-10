@@ -3,7 +3,6 @@ package notification
 import (
 	"fmt"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 
@@ -11,18 +10,25 @@ import (
 	"github.com/containrrr/shoutrrr"
 	"github.com/containrrr/shoutrrr/pkg/router"
 	"github.com/containrrr/shoutrrr/pkg/types"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/incident-commander/api"
+	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/mail"
 	mcUtils "github.com/flanksource/incident-commander/utils"
 )
 
 // setSystemSMTPCredential modifies the shoutrrrURL to use the system's SMTP credentials.
-func setSystemSMTPCredential(shoutrrrURL string) (string, error) {
-	prefix := fmt.Sprintf("smtp://%s:%s@%s:%s/",
-		url.QueryEscape(os.Getenv("SMTP_USER")),
-		url.QueryEscape(os.Getenv("SMTP_PASSWORD")),
-		os.Getenv("SMTP_HOST"),
-		os.Getenv("SMTP_PORT"),
+func setSystemSMTPCredential(ctx context.Context, shoutrrrURL string) (string, error) {
+	smtp, err := mail.GetDefaultSMTP(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to get default SMTP config: %w", err)
+	}
+
+	prefix := fmt.Sprintf("smtp://%s:%s@%s:%d/",
+		url.QueryEscape(smtp.Username.ValueStatic),
+		url.QueryEscape(smtp.Password.ValueStatic),
+		smtp.Host,
+		smtp.Port,
 	)
 	shoutrrrURL = strings.ReplaceAll(shoutrrrURL, api.SystemSMTP, prefix)
 
@@ -32,12 +38,11 @@ func setSystemSMTPCredential(shoutrrrURL string) (string, error) {
 	}
 
 	query := parsedURL.Query()
-	query.Set("FromAddress", mail.FromAddress)
-	query.Set("FromName", mail.FromName)
+	query.Set("FromAddress", smtp.FromAddress)
+	query.Set("FromName", smtp.FromName)
 	parsedURL.RawQuery = query.Encode()
 
-	shoutrrrURL = parsedURL.String()
-	return shoutrrrURL, nil
+	return parsedURL.String(), nil
 }
 
 func PrepareShoutrrr(ctx *Context, celEnv map[string]any, shoutrrrURL string, data *NotificationTemplate) (string, string, *router.ServiceRouter, error) {
@@ -51,7 +56,7 @@ func PrepareShoutrrr(ctx *Context, celEnv map[string]any, shoutrrrURL string, da
 
 	if strings.HasPrefix(shoutrrrURL, api.SystemSMTP) {
 		var err error
-		shoutrrrURL, err = setSystemSMTPCredential(shoutrrrURL)
+		shoutrrrURL, err = setSystemSMTPCredential(ctx.Context, shoutrrrURL)
 		if err != nil {
 			return "", "", nil, err
 		}
@@ -130,14 +135,27 @@ func shoutrrrSend(ctx *Context, celEnv map[string]any, shoutrrrURL string, data 
 		var (
 			to           = firstNonEmpty(params, query, "to", "ToAddresses", "ToAddress")
 			from         = firstNonEmpty(params, query, "from", "FromAddress")
-			fromName     = firstNonEmpty(params, query, "fromname")
+			fromName     = firstNonEmpty(params, query, "fromname", "FromName")
 			password, _  = parsedURL.User.Password()
 			port, _      = strconv.Atoi(parsedURL.Port())
 			headerString = (*params)["headers"]
 		)
 
+		// Build ConnectionSMTP from URL
+		var conn v1.ConnectionSMTP
+		if err := conn.FromURL(shoutrrrURL); err != nil {
+			return "", ctx.Oops().Wrapf(err, "error parsing SMTP URL")
+		}
+		// Override with params if present
+		if from != "" {
+			conn.FromAddress = from
+		}
+		if fromName != "" {
+			conn.FromName = fromName
+		}
+
 		m := mail.New(strings.Split(to, ","), data.Title, data.Message, `text/html; charset="UTF-8"`).
-			SetFrom(fromName, from).
+			SetFrom(conn.FromName, conn.FromAddress).
 			SetCredentials(parsedURL.Hostname(), port, parsedURL.User.Username(), password)
 
 		if headerString != "" {
@@ -149,7 +167,7 @@ func shoutrrrSend(ctx *Context, celEnv map[string]any, shoutrrrURL string, data 
 				m.SetHeader(k, v)
 			}
 		}
-		return service, m.Send()
+		return service, m.Send(conn)
 	}
 
 	sendErrors := sender.Send(data.Message, params)
