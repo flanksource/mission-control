@@ -1,0 +1,58 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: timeseries
+  namespace: mc
+spec:
+  display:
+    title: Request Volume
+    sidebar: true
+  queries:
+    request_volume:
+      configs:
+        types:
+          - "Kubernetes::test"
+  panels:
+    - name: Global CPU Usage
+      description: CPU usage showing real, requested, and limits
+      type: bargauge
+      bargauge:
+        min: "0"
+        max: "100"
+        unit: "%"
+        thresholds:
+          - percent: 0
+            color: "#10b981"
+          - percent: 50
+            color: "#eab308"
+          - percent: 80
+            color: "#ef4444"
+      query: |
+        SELECT 'Real' as name, 9.10 as value
+        UNION ALL
+        SELECT 'Requests' as name, 35.7 as value
+        UNION ALL
+        SELECT 'Limits' as name, 189.12 as value
+    - name: Request Volume
+      description: Success vs failure counts over the last 6 intervals
+      type: timeseries
+      timeseries:
+        timeKey: timestamp
+        series:
+          - dataKey: success
+            name: Success
+          - dataKey: failure
+            name: Failure
+            color: "#ef4444"
+      query: |
+        SELECT '2024-07-01T00:00:00Z' AS timestamp, 120 AS success, 5 AS failure
+        UNION ALL
+        SELECT '2024-07-01T01:00:00Z', 132, 8
+        UNION ALL
+        SELECT '2024-07-01T02:00:00Z', 118, 3
+        UNION ALL
+        SELECT '2024-07-01T03:00:00Z', 140, 6
+        UNION ALL
+        SELECT '2024-07-01T04:00:00Z', 150, 4
+        UNION ALL
+        SELECT '2024-07-01T05:00:00Z', 160, 7
