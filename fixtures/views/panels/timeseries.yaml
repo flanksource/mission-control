@@ -5,50 +5,47 @@ metadata:
   namespace: mc
 spec:
   display:
-    title: Request Volume
+    icon: Kubernetes::Node
+    title: K8s Node
     sidebar: true
-  queries:
-    request_volume:
-      configs:
-        types:
-          - "Kubernetes::test"
   panels:
-    - name: Global CPU Usage
-      description: CPU usage showing real, requested, and limits
-      type: bargauge
-      bargauge:
-        min: "0"
-        max: "100"
-        unit: "%"
-        thresholds:
-          - percent: 0
-            color: "#10b981"
-          - percent: 50
-            color: "#eab308"
-          - percent: 80
-            color: "#ef4444"
-      query: |
-        SELECT 'Real' as name, 9.10 as value
-        UNION ALL
-        SELECT 'Requests' as name, 35.7 as value
-        UNION ALL
-        SELECT 'Limits' as name, 189.12 as value
-    - name: Request Volume
-      description: Success vs failure counts over the last 6 intervals
+    - name: Node Memory Usage
+      description: Last 24h
       type: timeseries
       timeseries:
         timeKey: timestamp
         valueKey: value
-      query: |
-        SELECT '2024-07-01T00:00:00Z' AS timestamp, 'success' AS result, 120 AS value
-        UNION ALL SELECT '2024-07-01T00:00:00Z', 'failure', 5
-        UNION ALL SELECT '2024-07-01T01:00:00Z', 'success', 132
-        UNION ALL SELECT '2024-07-01T01:00:00Z', 'failure', 8
-        UNION ALL SELECT '2024-07-01T02:00:00Z', 'success', 118
-        UNION ALL SELECT '2024-07-01T02:00:00Z', 'failure', 3
-        UNION ALL SELECT '2024-07-01T03:00:00Z', 'success', 140
-        UNION ALL SELECT '2024-07-01T03:00:00Z', 'failure', 6
-        UNION ALL SELECT '2024-07-01T04:00:00Z', 'success', 150
-        UNION ALL SELECT '2024-07-01T04:00:00Z', 'failure', 4
-        UNION ALL SELECT '2024-07-01T05:00:00Z', 'success', 160
-        UNION ALL SELECT '2024-07-01T05:00:00Z', 'failure', 7
+      query: SELECT * FROM node_memory_usage
+    - name: Node CPU Usage
+      description: Last 24h
+      type: timeseries
+      timeseries:
+        style: area
+        timeKey: timestamp
+        valueKey: value
+      query: SELECT * FROM node_cpu_usage
+  queries:
+    node_cpu_usage:
+      columns:
+        timestamp: datetime
+        instance: string
+        value: decimal
+      prometheus:
+        connection: connection://mc/prometheus
+        query: avg by (instance) (sum by (instance, cpu) (rate(node_cpu_seconds_total{mode!~"idle|iowait|steal"}[5m]))) * 100
+        range:
+          start: now-12h
+          end: now
+          step: 1m
+    node_memory_usage:
+      columns:
+        timestamp: datetime
+        node: string
+        value: decimal
+      prometheus:
+        connection: connection://mc/prometheus
+        query: sum by (node) (container_memory_rss{}) / 1024/1024/1024
+        range:
+          start: now-12h
+          end: now
+          step: 1m

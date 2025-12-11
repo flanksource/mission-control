@@ -747,7 +747,7 @@ spec:
                           type: boolean
                         matchLabels:
                           description: |-
-                            MatchLabels is a list of labels, when provided, are incldued in the result.
+                            MatchLabels is a list of labels, when provided, are included in the result.
                             Example:
                             If a query produces {a:1, b:2, c:3, d:4} value=30.0
                             then, with matchLabels = [a,b]
