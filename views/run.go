@@ -119,7 +119,7 @@ func Run(ctx context.Context, view *v1.View, request *requestOpt) (*api.ViewResu
 	// If there's no merge query and no panels,
 	// there's no need to create an in-memory SQLite database.
 	// The results from the dataqueries are directly mapped to the table columns.
-	needsSQL := (len(view.Spec.Panels) > 0 && len(view.Spec.Queries) > 0) || view.Spec.Merge != nil
+	needsSQL := (len(view.Spec.Panels) > 0 || view.Spec.Merge != nil) && len(view.Spec.Queries) > 0
 
 	var sqliteCtx context.Context
 	if needsSQL {
@@ -136,7 +136,7 @@ func Run(ctx context.Context, view *v1.View, request *requestOpt) (*api.ViewResu
 		}()
 	}
 
-	if len(view.Spec.Panels) > 0 {
+	if len(view.Spec.Panels) > 0 && len(view.Spec.Queries) > 0 {
 		dataset := map[string]any{}
 		for _, queryResult := range queryResults {
 			dataset[queryResult.Name] = queryResult.Results
