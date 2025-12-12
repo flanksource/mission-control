@@ -235,6 +235,7 @@ func DeleteNotificationSendHistory(ctx context.Context, days int) (int64, error)
 	tx := ctx.DB().
 		Model(&models.NotificationSendHistory{}).
 		Where("playbook_run_id IS NULL").
+		Where("id NOT IN (SELECT notification_send_id FROM playbook_runs WHERE notification_send_id IS NOT NULL)").
 		Where(fmt.Sprintf("created_at < NOW() - INTERVAL '%d DAYS'", days)).
 		Delete(&models.NotificationSendHistory{})
 	return tx.RowsAffected, tx.Error
