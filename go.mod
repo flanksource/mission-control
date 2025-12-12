@@ -167,7 +167,7 @@ require (
 	github.com/f-amaral/go-async v0.3.0 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
-	github.com/flanksource/is-healthy v1.0.80 // indirect
+	github.com/flanksource/is-healthy v1.0.82 // indirect
 	github.com/flanksource/kubectl-neat v1.0.4 // indirect
 	github.com/flanksource/maroto/v2 v2.4.2 // indirect
 	github.com/fluxcd/gitkit v0.6.0 // indirect
