@@ -1,0 +1,51 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: timeseries
+  namespace: mc
+spec:
+  display:
+    icon: Kubernetes::Node
+    title: K8s Node
+    sidebar: true
+  panels:
+    - name: Node Memory Usage
+      description: Last 12h
+      type: timeseries
+      timeseries:
+        timeKey: timestamp
+        valueKey: value
+      query: SELECT * FROM node_memory_usage
+    - name: Node CPU Usage
+      description: Last 12h
+      type: timeseries
+      timeseries:
+        style: area
+        timeKey: timestamp
+        valueKey: value
+      query: SELECT * FROM node_cpu_usage
+  queries:
+    node_cpu_usage:
+      columns:
+        timestamp: datetime
+        instance: string
+        value: decimal
+      prometheus:
+        connection: connection://mc/prometheus
+        query: avg by (instance) (sum by (instance, cpu) (rate(node_cpu_seconds_total{mode!~"idle|iowait|steal"}[5m]))) * 100
+        range:
+          start: now-12h
+          end: now
+          step: 1m
+    node_memory_usage:
+      columns:
+        timestamp: datetime
+        node: string
+        value: decimal
+      prometheus:
+        connection: connection://mc/prometheus
+        query: sum by (node) (container_memory_rss{}) / 1024/1024/1024
+        range:
+          start: now-12h
+          end: now
+          step: 1m
