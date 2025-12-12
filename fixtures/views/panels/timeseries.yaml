@@ -10,14 +10,14 @@ spec:
     sidebar: true
   panels:
     - name: Node Memory Usage
-      description: Last 24h
+      description: Last 12h
       type: timeseries
       timeseries:
         timeKey: timestamp
         valueKey: value
       query: SELECT * FROM node_memory_usage
     - name: Node CPU Usage
-      description: Last 24h
+      description: Last 12h
       type: timeseries
       timeseries:
         style: area
