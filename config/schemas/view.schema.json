@@ -477,6 +477,9 @@
         "bargauge": {
           "$ref": "#/$defs/PanelBargaugeConfig"
         },
+        "playbooks": {
+          "$ref": "#/$defs/PlaybooksPanelConfig"
+        },
         "query": {
           "type": "string"
         }
@@ -485,8 +488,7 @@
       "type": "object",
       "required": [
         "name",
-        "type",
-        "query"
+        "type"
       ]
     },
     "PanelGaugeConfig": {
@@ -544,6 +546,18 @@
       },
       "additionalProperties": false,
       "type": "object"
+    },
+    "PlaybooksPanelConfig": {
+      "properties": {
+        "selector": {
+          "$ref": "#/$defs/ResourceSelector"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "selector"
+      ]
     },
     "PrometheusQuery": {
       "properties": {
