@@ -79,8 +79,13 @@ func (k *KratosHandler) InviteUser(c echo.Context) error {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
 	}
 
+	smtp, err := mail.GetDefaultSMTP(ctx)
+	if err != nil {
+		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "error getting SMTP config"))
+	}
+
 	inviteMail := mail.New([]string{reqData.Email}, "User Invite", body.String(), "text/html")
-	if err = inviteMail.Send(); err != nil {
+	if err = inviteMail.Send(smtp); err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "error sending email"))
 	}
 

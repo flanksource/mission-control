@@ -1556,7 +1556,11 @@
         },
         "approval": {
           "$ref": "#/$defs/PlaybookApproval"
-        }
+        },
+        "jsonSchema": {
+          "type": "string"
+        },
+        "ui": true
       },
       "additionalProperties": false,
       "type": "object",

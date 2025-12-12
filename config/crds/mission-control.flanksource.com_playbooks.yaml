@@ -3187,6 +3187,9 @@ spec:
                 type: array
               icon:
                 type: string
+              jsonSchema:
+                description: JSON Schema or URL to use instead of playbook parameters
+                type: string
               "on":
                 description: |-
                   `On` defines triggers that will automatically trigger the playbook.
@@ -3557,6 +3560,10 @@ spec:
                 type: string
               title:
                 type: string
+              ui:
+                description: Properties that are applied to the UI form
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
             required:
             - actions
             type: object

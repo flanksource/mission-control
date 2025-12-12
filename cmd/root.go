@@ -27,6 +27,8 @@ import (
 )
 
 func PreRun(cmd *cobra.Command, args []string) {
+	mail.SetFallbackSMTP(emailFromAddress, emailFromName)
+
 	if isPartial, err := api.UpstreamConf.IsPartiallyFilled(); isPartial && err != nil {
 		logger.Warnf("Please ensure that all the required flags for upstream is supplied: %v", err)
 	}
@@ -67,6 +69,10 @@ var (
 	// disableKubernetes is used to run mission-control on a non-operator mode.
 	disableKubernetes bool
 	disableOperators  bool
+
+	// Email defaults - used by SetFallbackSMTP in PreRun
+	emailFromAddress string
+	emailFromName    string
 )
 
 func ServerFlags(flags *pflag.FlagSet) {
@@ -87,8 +93,8 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&auth.ClerkOrgID, "clerk-org-id", "", "Clerk Organization ID")
 	flags.StringVar(&vars.AuthMode, "auth", "", "Enable authentication via Kratos or Clerk. Valid values are [kratos, clerk, basic]")
 	flags.StringVar(&auth.HtpasswdFile, "htpasswd-file", "htpasswd", "Path to htpasswd file for basic authentication")
-	flags.StringVar(&mail.FromAddress, "email-from-address", "no-reply@flanksource.com", "Email address of the sender")
-	flags.StringVar(&mail.FromName, "email-from-name", "Mission Control", "Email name of the sender")
+	flags.StringVar(&emailFromAddress, "email-from-address", "no-reply@flanksource.com", "Email address of the sender")
+	flags.StringVar(&emailFromName, "email-from-name", "Mission Control", "Email name of the sender")
 	flags.StringSliceVar(&echo.AllowedCORS, "allowed-cors", []string{"https://app.flanksource.com", "https://beta.flanksource.com"}, "Allowed CORS credential origins")
 	flags.StringVar(&auth.IdentityRoleMapper, "identity-role-mapper", "", "CEL-Go expression to map identity to a role & a team (return: {role: string, teams: []string}). Supports file path (prefixed with 'file://').")
 	flags.StringVar(&api.DefaultArtifactConnection, "artifact-connection", "", "Specify the default connection to use for artifacts (can be the connection string or the connection id)")
