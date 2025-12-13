@@ -4,6 +4,7 @@ import (
 	gocontext "context"
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/flanksource/clicky"
@@ -65,10 +66,128 @@ func extractNamespaceName(uri string) (string, string, error) {
 	return parts[0], parts[1], nil
 }
 
-func structToMCPResponse(s any) *mcp.CallToolResult {
-	md, err := clicky.Format(s, clicky.FormatOptions{Format: "markdown"})
-	if err != nil {
-		return mcp.NewToolResultError(err.Error())
+type ArgParser struct {
+	args map[string]any
+}
+
+func NewArgParser(raw any) ArgParser {
+	if raw == nil {
+		return ArgParser{args: map[string]any{}}
 	}
-	return mcp.NewToolResultText(md)
+
+	if m, ok := raw.(map[string]any); ok {
+		return ArgParser{args: m}
+	}
+
+	return ArgParser{args: map[string]any{}}
+}
+
+func (p ArgParser) Raw() map[string]any {
+	return p.args
+}
+
+func (p ArgParser) Bool(key string, defaultVal bool) bool {
+	return getBoolArg(p.args, key, defaultVal)
+}
+
+func getBoolArg(args map[string]any, key string, defaultVal bool) bool {
+	val, ok := args[key]
+	if !ok {
+		return defaultVal
+	}
+
+	switch v := val.(type) {
+	case bool:
+		return v
+	case string:
+		parsed, err := strconv.ParseBool(v)
+		if err == nil {
+			return parsed
+		}
+	}
+
+	return defaultVal
+}
+
+func (p ArgParser) Int(key string, defaultVal int) int {
+	return getIntArg(p.args, key, defaultVal)
+}
+
+func getIntArg(args map[string]any, key string, defaultVal int) int {
+	val, ok := args[key]
+	if !ok {
+		return defaultVal
+	}
+
+	switch v := val.(type) {
+	case int:
+		return v
+	case int32:
+		return int(v)
+	case int64:
+		return int(v)
+	case float64:
+		return int(v)
+	case string:
+		parsed, err := strconv.Atoi(v)
+		if err == nil {
+			return parsed
+		}
+	}
+
+	return defaultVal
+}
+
+func (p ArgParser) Strings(key string) []string {
+	return getStringSliceArg(p.args, key)
+}
+
+func getStringSliceArg(args map[string]any, key string) []string {
+	val, ok := args[key]
+	if !ok || val == nil {
+		return nil
+	}
+
+	switch v := val.(type) {
+	case string:
+		return splitAndTrim(v)
+	case []string:
+		return v
+	case []any:
+		var result []string
+		for _, item := range v {
+			result = append(result, fmt.Sprint(item))
+		}
+		return result
+	}
+
+	return nil
+}
+
+func splitAndTrim(value string) []string {
+	parts := strings.Split(value, ",")
+	var result []string
+	for _, part := range parts {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			result = append(result, trimmed)
+		}
+	}
+	return result
+}
+
+func structToMCPResponse(s ...any) *mcp.CallToolResult {
+	if len(s) == 0 {
+		return mcp.NewToolResultText("")
+	}
+
+	var parts []string
+	for _, item := range s {
+		md, err := clicky.Format(item, clicky.FormatOptions{Format: "markdown"})
+		if err != nil {
+			return mcp.NewToolResultError(err.Error())
+		}
+		parts = append(parts, md)
+	}
+
+	return mcp.NewToolResultText(strings.Join(parts, "\n\n"))
 }
