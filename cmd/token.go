@@ -1,18 +1,25 @@
 package cmd
 
 import (
+	"bufio"
 	"errors"
 	"fmt"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/flanksource/commons/rand"
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
+	"golang.org/x/crypto/bcrypt"
 
+	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/vars"
 )
 
 var Auth = &cobra.Command{
@@ -51,7 +58,7 @@ var Token = &cobra.Command{
 }
 
 var Check = &cobra.Command{
-	Use:    "check",
+	Use:    "check subject action resource",
 	PreRun: PreRun,
 	Args:   cobra.ExactArgs(3),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -64,12 +71,116 @@ var Check = &cobra.Command{
 	},
 }
 
-var tokenUser string
-var tokenExpiry time.Duration
+var PasswordReset = &cobra.Command{
+	Use:   "password-reset",
+	Short: "Reset a user's password (reads new password from stdin)",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if resetPasswordUser == "" {
+			return errors.New("must specify --user")
+		}
+
+		password, err := readPasswordFromStdin()
+		if err != nil {
+			return err
+		}
+
+		switch vars.AuthMode {
+		case auth.Basic:
+			return resetBasicPassword(resetPasswordUser, password, auth.HtpasswdFile)
+		case auth.Kratos:
+			return resetKratosPassword(resetPasswordUser, password)
+		default:
+			return fmt.Errorf("unsupported auth mode: %s (supported: %s, %s)", vars.AuthMode, auth.Basic, auth.Kratos)
+		}
+	},
+}
+
+var (
+	tokenUser         string
+	tokenExpiry       time.Duration
+	resetPasswordUser string
+)
+
+func readPasswordFromStdin() (string, error) {
+	reader := bufio.NewReader(os.Stdin)
+	password, err := reader.ReadString('\n')
+	if err != nil {
+		return "", fmt.Errorf("failed to read password from stdin: %w", err)
+	}
+	password = strings.TrimSpace(password)
+	if password == "" {
+		return "", errors.New("password cannot be empty")
+	}
+	return password, nil
+}
+
+func resetKratosPassword(user, password string) error {
+	ctx, _, err := duty.Start("mission-control", duty.DisablePostgrest)
+	if err != nil {
+		return err
+	}
+
+	var identity struct {
+		ID     string        `gorm:"column:id"`
+		Traits types.JSONMap `gorm:"column:traits"`
+	}
+	if err := ctx.DB().Table("identities").
+		Select("id, traits").
+		Where("traits->>'email' = ?", user).
+		Scan(&identity).Error; err != nil {
+		return fmt.Errorf("failed to find identity: %w", err)
+	}
+	if identity.ID == "" {
+		return fmt.Errorf("user %s not found", user)
+	}
+
+	kratosHandler := auth.NewKratosHandler()
+	if err := kratosHandler.ResetPassword(ctx, identity.ID, password, identity.Traits); err != nil {
+		return fmt.Errorf("failed to reset password: %w", err)
+	}
+
+	fmt.Printf("Password reset successfully for user: %s\n", user)
+	return nil
+}
+
+func resetBasicPassword(user, password, htpasswdFile string) error {
+	content, err := os.ReadFile(htpasswdFile)
+	if err != nil {
+		return fmt.Errorf("failed to read htpasswd file: %w", err)
+	}
+
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("failed to hash password: %w", err)
+	}
+	newEntry := fmt.Sprintf("%s:%s", user, string(hash))
+
+	lines := strings.Split(string(content), "\n")
+	found := false
+	for i, line := range lines {
+		if strings.HasPrefix(line, user+":") {
+			lines[i] = newEntry
+			found = true
+			break
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("user %s not found in htpasswd file", user)
+	}
+
+	if err := os.WriteFile(htpasswdFile, []byte(strings.Join(lines, "\n")), 0600); err != nil {
+		return fmt.Errorf("failed to write htpasswd file: %w", err)
+	}
+
+	fmt.Printf("Password reset successfully for user: %s\n", user)
+	return nil
+}
 
 func init() {
-	Auth.AddCommand(Token, Check)
+	Auth.AddCommand(Token, Check, PasswordReset)
 	Token.Flags().StringVar(&tokenUser, "user", "", "User to generate a token for")
 	Token.Flags().DurationVar(&tokenExpiry, "expiry", time.Hour*4, "Expiry duration for token")
+	PasswordReset.Flags().StringVar(&resetPasswordUser, "user", "", "User email to reset password for")
 	Root.AddCommand(Auth)
 }

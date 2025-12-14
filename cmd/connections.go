@@ -1,8 +1,8 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
-	"time"
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/properties"
@@ -12,6 +12,7 @@ import (
 	"github.com/flanksource/incident-commander/connection"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
+	"gorm.io/gorm"
 )
 
 var Connections = &cobra.Command{
@@ -164,14 +165,19 @@ func runConnectionsAdd(cmd *cobra.Command, args []string) error {
 	// Check for existing connection
 	var existing models.Connection
 	err = ctx.DB().Where("name = ? AND namespace = ? AND deleted_at IS NULL", connFlags.Name, connFlags.Namespace).First(&existing).Error
-	isUpdate := err == nil
+	isUpdate := false
+	if err == nil {
+		isUpdate = true
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return fmt.Errorf("failed to check existing connection: %w", err)
+	}
 
 	if isUpdate {
 		conn.ID = existing.ID
 		conn.CreatedAt = existing.CreatedAt
 	} else {
 		conn.ID = uuid.New()
-		conn.CreatedAt = time.Now()
+		conn.CreatedAt = duty.Now()
 	}
 
 	// Test connection if requested
@@ -323,7 +329,7 @@ func buildConnectionFromFlags() (models.Connection, error) {
 	case models.ConnectionTypeEmail:
 		port := connFlags.Port
 		if port == 0 {
-			port = 25
+			port = 587
 		}
 		conn.URL = fmt.Sprintf("smtp://$(username):$(password)@%s:%d/", connFlags.Host, port)
 		props["port"] = fmt.Sprintf("%d", port)
