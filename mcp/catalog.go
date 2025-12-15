@@ -29,7 +29,7 @@ const (
 
 	toolListCatalogTypes = "list_catalog_types"
 	toolSearchCatalog    = "search_catalog"
-	toolDescribeConfig   = "describe_config"
+	toolDescribeCatalog  = "describe_catalog"
 
 	toolSearchCatalogChanges = "search_catalog_changes"
 
@@ -55,21 +55,16 @@ func searchCatalogHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mc
 
 	var cis any
 	err = auth.WithRLS(ctx, func(rlsCtx context.Context) error {
-		switch req.Params.Name {
-		case toolDescribeConfig:
-			cis, err = queryConfigItemDescription(rlsCtx, limit, q)
-		default:
-			selectCols := req.GetStringSlice("select", defaultSelectConfigsView)
+		selectCols := req.GetStringSlice("select", defaultSelectConfigsView)
 
-			// NOTE: we're reading QueryTableColumnsWithResourceSelectors into map[string]any instead of []models.ConfigItemSummary
-			// because, with a select clause with few columns, we only want to print those fields as columns in the markdown table.
-			//
-			// If we read into []models.ConfigItemSummary, clicky produces a column for every field in the struct, even if they are not selected.
-			// https://github.com/flanksource/clicky/issues/40
-			cis, err = query.QueryTableColumnsWithResourceSelectors[map[string]any](
-				rlsCtx, "configs", selectCols, limit, nil, types.ResourceSelector{Search: q},
-			)
-		}
+		// NOTE: we're reading QueryTableColumnsWithResourceSelectors into map[string]any instead of []models.ConfigItemSummary
+		// because, with a select clause with few columns, we only want to print those fields as columns in the markdown table.
+		//
+		// If we read into []models.ConfigItemSummary, clicky produces a column for every field in the struct, even if they are not selected.
+		// https://github.com/flanksource/clicky/issues/40
+		cis, err = query.QueryTableColumnsWithResourceSelectors[map[string]any](
+			rlsCtx, "configs", selectCols, limit, nil, types.ResourceSelector{Search: q},
+		)
 		return err
 	})
 
@@ -85,26 +80,52 @@ type ConfigDescription struct {
 	AvailableTools []string `json:"available_tools"`
 }
 
-func queryConfigItemDescription(ctx context.Context, limit int, q string) ([]ConfigDescription, error) {
-	configs, err := query.FindConfigsByResourceSelector(ctx, limit, types.ResourceSelector{Search: q})
+func describeConfigHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	rawID, err := req.RequireString("id")
 	if err != nil {
-		return nil, err
+		return mcp.NewToolResultError(err.Error()), nil
 	}
-	var cds []ConfigDescription
-	for _, c := range configs {
-		_, pbs, err := db.FindPlaybooksForConfig(ctx, c)
-		if err != nil {
-			return nil, err
+	if _, err := uuid.Parse(rawID); err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	ctx, err := getDutyCtx(goctx)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	var config *models.ConfigItem
+	var availableTools []string
+	err = auth.WithRLS(ctx, func(rlsCtx context.Context) error {
+		config, err = query.GetCachedConfig(rlsCtx, rawID)
+		if err != nil || config == nil {
+			return err
 		}
 
-		cds = append(cds, ConfigDescription{
-			ConfigItem: c,
-			AvailableTools: lo.Map(pbs, func(p *models.Playbook, _ int) string {
-				return generatePlaybookToolName(lo.FromPtr(p))
-			}),
+		_, pbs, err := db.FindPlaybooksForConfig(rlsCtx, *config)
+		if err != nil {
+			return err
+		}
+
+		availableTools = lo.Map(pbs, func(p *models.Playbook, _ int) string {
+			return generatePlaybookToolName(lo.FromPtr(p))
 		})
+
+		return nil
+	})
+
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
 	}
-	return cds, nil
+
+	if config == nil {
+		return mcp.NewToolResultError(fmt.Sprintf("config item[%s] not found", rawID)), nil
+	}
+
+	return structToMCPResponse([]ConfigDescription{{
+		ConfigItem:     *config,
+		AvailableTools: availableTools,
+	}}), nil
 }
 
 func searchConfigChangesHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -317,8 +338,8 @@ func registerCatalog(s *server.MCPServer) {
 `
 
 	catalogSearchDescription := fmt.Sprintf(`
-	Each catalog item also has more information in its config field which can be queried by calling a different tool: %s(query).
-	The query is the same but that tool should only be called when "describe" is explicitly used
+	Each catalog item also has more information in its config field which can be retrieved by calling a different tool: %s(id).
+	Use the id from search results; %s only accepts a single config id and should be called when "describe" is explicitly used.
 
 	IMPORTANT - Column Selection for Token Efficiency:
 	ALWAYS specify the "select" parameter with only the columns you need to minimize token usage.
@@ -332,10 +353,10 @@ func registerCatalog(s *server.MCPServer) {
 	- For basic listing: "id,name,type,health,status"
 	- For troubleshooting: "id,name,type,health,status,description,changes"
 	- For cost analysis: "id,name,type,cost_per_minute,cost_total_30d"
-	`, toolDescribeConfig, toolDescribeConfig)
+	`, toolDescribeCatalog, toolDescribeCatalog, toolDescribeCatalog)
 
 	searchCatalogTool := mcp.NewTool(toolSearchCatalog,
-		mcp.WithDescription(fmt.Sprintf("Search and find configuration items (not health checks) in the catalog. For detailed config data, use %s tool. %s", toolDescribeConfig, catalogSearchDescription)),
+		mcp.WithDescription(fmt.Sprintf("Search and find configuration items (not health checks) in the catalog. For detailed config data, use %s tool. %s", toolDescribeCatalog, catalogSearchDescription)),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("query",
 			mcp.Required(),
@@ -347,28 +368,22 @@ func registerCatalog(s *server.MCPServer) {
 	s.AddTool(searchCatalogTool, searchCatalogHandler)
 
 	describeConfigDescription := `
-	Describe Tool returns detailed metadata of the queried config items.
-	A single config item can have a large metadata, so you're advised to build search query that targets as few configs as possible.
-	
-	It's important that you do not query for more than 3 configs in one call.
-	Break your query down into several calls.
-
-	Example query: id=f47ac10b-58cc-4372-a567-0e02b2c3d479,6ba7b810-9dad-11d1-80b4-00c04fd430c8,a1b2c3d4-e5f6-7890-abcd-ef1234567890
+	Describe tool returns detailed metadata of a config item.
+	Provide a single config item id (UUID) from search_catalog results to fetch the full record.
 
 	Each config item returned will have a field "available_tools", which refers to all the existing tools in the current mcp server. 
 	We can call those tools with the param config_id=<id> and ask the user for any other parameters if the input schema requires any.
 
 	NOTE: This tool is explicitly for config items and not for health checks.
 	`
-	s.AddTool(mcp.NewTool(toolDescribeConfig,
+	s.AddTool(mcp.NewTool(toolDescribeCatalog,
 		mcp.WithDescription(fmt.Sprintf("Get all data for configs. %s", describeConfigDescription)),
 		mcp.WithReadOnlyHintAnnotation(true),
-		mcp.WithString("query",
+		mcp.WithString("id",
 			mcp.Required(),
-			mcp.Description("Search query."+queryDescription),
+			mcp.Description("Config item id (UUID)"),
 		),
-		mcp.WithNumber("limit", mcp.Description(fmt.Sprintf("Number of items to return. Default: %d", defaultQueryLimit))),
-	), searchCatalogHandler)
+	), describeConfigHandler)
 
 	var configChangeQueryDescription = `
 	We can search all the catalog changes via query

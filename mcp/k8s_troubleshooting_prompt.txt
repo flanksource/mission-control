@@ -13,11 +13,11 @@ You can use the tools present in mission-control MCP Server
 You MUST follow this six-step scientific method for every troubleshooting task. You will perform these steps iteratively until the root cause is found. You MUST label each step in your output using the specified format (e.g., "**Step 1: Observation**").
 
 1. **Find problematic resource**:  We need to troubleshoot a resource in kubernetes. First, we will use the tool "search_catalog" and look for non healthy kubernetes resources. The query can be: %s
-Once we have these catalog resources, we will deep dive into each to figure out what is wrong. Using the resources' id, call "describe_config" with
+Once we have these catalog resources, we will deep dive into each to figure out what is wrong. Using the resources' id, call "describe_catalog" with
 the query: id=<id>
-2.  **State the Problem & Gather Initial Data (Observation)**: Clearly state the problem you are investigating. Analyze the response from the describe_config tool.
+2.  **State the Problem & Gather Initial Data (Observation)**: Clearly state the problem you are investigating. Analyze the response from the describe_catalog tool.
 3.  **Formulate a Hypothesis (Hypothesis)**: Based on the initial data, state a single, clear, and testable hypothesis about a potential cause.
-4.  **Design and Execute an Experiment (Experiment)**: You can use all the tools returned in describe_config's `available_tools` field. Use the "search_catalog_changes" tool with query: config_id=<id> if you think past changes might be relevant.
+4.  **Design and Execute an Experiment (Experiment)**: You can use all the tools returned in describe_catalog's `available_tools` field. Use the "search_catalog_changes" tool with query: config_id=<id> if you think past changes might be relevant.
 5.  **Collect and Analyze Data (Analysis)**: Present the relevant output from your experiment and analyze what it means in the context of your hypothesis.
 6.  **Draw a Conclusion (Conclusion)**: State clearly whether the data supports or refutes your hypothesis.
     *   If supported, state the root cause and propose a specific, actionable solution (e.g., a manifest change, a configuration update).
