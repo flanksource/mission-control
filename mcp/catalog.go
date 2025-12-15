@@ -317,8 +317,8 @@ func registerCatalog(s *server.MCPServer) {
 `
 
 	catalogSearchDescription := fmt.Sprintf(`
-	Each catalog item also has more information in its config field which can be queried by calling the tool %s(query), the query is the same
-	but that tool should only be called when "describe" is explicitly used
+	Each catalog item also has more information in its config field which can be queried by calling a different tool: %s(query).
+	The query is the same but that tool should only be called when "describe" is explicitly used
 
 	IMPORTANT - Column Selection for Token Efficiency:
 	ALWAYS specify the "select" parameter with only the columns you need to minimize token usage.
@@ -347,13 +347,16 @@ func registerCatalog(s *server.MCPServer) {
 	s.AddTool(searchCatalogTool, searchCatalogHandler)
 
 	describeConfigDescription := `
-	This tool should only be called when "describe" is explicitly used, for all other purposes search_catalog tool should be used.
-	Ideally, when prompted to describe configs use either the previous query or the config ids in the query field in csv format.
-
-	Each config item returned will have a field "available_tools", which refers to all the existing tools in the current mcp server. We can call
-	those tools with the param config_id=<id> and ask the user for any other parameters if the input schema requires any.
+	Describe Tool returns detailed metadata of the queried config items.
+	A single config item can have a large metadata, so you're advised to build search query that targets as few configs as possible.
+	
+	It's important that you do not query for more than 3 configs in one call.
+	Break your query down into several calls.
 
 	Example query: id=f47ac10b-58cc-4372-a567-0e02b2c3d479,6ba7b810-9dad-11d1-80b4-00c04fd430c8,a1b2c3d4-e5f6-7890-abcd-ef1234567890
+
+	Each config item returned will have a field "available_tools", which refers to all the existing tools in the current mcp server. 
+	We can call those tools with the param config_id=<id> and ask the user for any other parameters if the input schema requires any.
 
 	NOTE: This tool is explicitly for config items and not for health checks.
 	`
