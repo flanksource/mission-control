@@ -241,20 +241,6 @@ func postgrestInterceptor(next echov4.HandlerFunc) echov4.HandlerFunc {
 			if err := spec.Validate(); err != nil {
 				return dutyApi.WriteError(c, dutyApi.Errorf(dutyApi.EINVALID, "playbook validation failed: %v", err))
 			}
-		case "team_members":
-			// Any modification should invalidate cache
-			if c.Request().Method == http.MethodGet {
-				return next(c)
-			}
-			requestData, err := readJSONBody(c)
-			if err != nil {
-				return dutyApi.WriteError(c, err)
-			}
-
-			if personID, ok := requestData["person_id"]; ok {
-				// Invalidate cache since user permissions could have changed
-				auth.InvalidateRLSCacheForUser(fmt.Sprint(personID))
-			}
 		}
 
 		return next(c)
