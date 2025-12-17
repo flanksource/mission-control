@@ -242,8 +242,8 @@ func postgrestInterceptor(next echov4.HandlerFunc) echov4.HandlerFunc {
 				return dutyApi.WriteError(c, dutyApi.Errorf(dutyApi.EINVALID, "playbook validation failed: %v", err))
 			}
 		case "team_members":
-			method := c.Request().Method
-			if method != http.MethodPost && method != http.MethodPatch {
+			// Any modification should invalidate cache
+			if c.Request().Method == http.MethodGet {
 				return next(c)
 			}
 			requestData, err := readJSONBody(c)
