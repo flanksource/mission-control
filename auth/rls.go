@@ -21,12 +21,21 @@ import (
 	"github.com/flanksource/incident-commander/vars"
 )
 
+func getRLSCacheKey(userID string) string {
+	return fmt.Sprintf("rls-payload-%s", userID)
+}
+
+func InvalidateRLSCacheForUser(userID string) {
+	cacheKey := getRLSCacheKey(userID)
+	tokenCache.Delete(cacheKey)
+}
+
 func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 	if !ctx.Properties().On(false, vars.FlagRLSEnable) {
 		return &rls.Payload{Disable: true}, nil
 	}
 
-	cacheKey := fmt.Sprintf("rls-payload-%s", ctx.User().ID.String())
+	cacheKey := getRLSCacheKey(ctx.User().ID.String())
 	if cached, ok := tokenCache.Get(cacheKey); ok {
 		return cached.(*rls.Payload), nil
 	}

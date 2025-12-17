@@ -248,6 +248,27 @@ func postgrestInterceptor(next echov4.HandlerFunc) echov4.HandlerFunc {
 			if err := spec.Validate(); err != nil {
 				return dutyApi.WriteError(c, dutyApi.Errorf(dutyApi.EINVALID, "playbook validation failed: %v", err))
 			}
+		case "team_members":
+			method := c.Request().Method
+			if method != http.MethodPost && method != http.MethodPatch {
+				return next(c)
+			}
+
+			bodyBytes, err := io.ReadAll(c.Request().Body)
+			if err != nil {
+				return dutyApi.WriteError(c, dutyApi.Errorf(dutyApi.EINVALID, "failed to read request body: %v", err))
+			}
+			// Restore the body for the next handler
+			c.Request().Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+			var requestData map[string]any
+			if err := json.Unmarshal(bodyBytes, &requestData); err != nil {
+				return dutyApi.WriteError(c, dutyApi.Errorf(dutyApi.EINVALID, "error unmarshaling request body: %v", err))
+			}
+			if personID, ok := requestData["person_id"]; ok {
+				// Invalidate cache since user permissions could have changed
+				auth.InvalidateRLSCacheForUser(fmt.Sprint(personID))
+			}
 		}
 
 		return next(c)
