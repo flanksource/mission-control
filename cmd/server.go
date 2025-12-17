@@ -278,6 +278,7 @@ func tableUpdatesHandler(ctx context.Context) {
 			}
 
 			if tgOperation == TGOPDelete {
+				auth.FlushTokenCache()
 				if ok, err := rbac.DeleteRole(id); err != nil {
 					ctx.Errorf("failed to delete rbac policy for team(%s): %v", id, err)
 				} else if ok {
