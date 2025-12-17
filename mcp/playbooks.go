@@ -162,6 +162,12 @@ func playbookRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
+	if params["agent_id"] == "" {
+		// if the MCP client doesn't care about the agent, we need to delete this field
+		// because unmarshalling to RunParams fail (empty string cannot be unmarshalled to uuid)
+		delete(params, "agent_id")
+	}
+
 	var rp playbook.RunParams
 	if err := json.Unmarshal(pj, &rp); err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
@@ -295,7 +301,13 @@ func getPlaybooksAsTools(playbooks []models.Playbook) ([]mcp.Tool, error) {
 			Properties: orderedmap.New[string, *jsonschema.Schema](),
 		}
 
-		root.Properties.Set("agent_id", &jsonschema.Schema{Type: "string", Description: "UUID of agent to run playbook on. Leave empty if not specified"})
+		root.Properties.Set("agent_id", &jsonschema.Schema{
+			Type:        "string",
+			Format:      "uuid",
+			Description: "UUID of agent to run playbook on. Optional - leave empty if not specified",
+			Extras:      map[string]any{"nullable": true},
+		})
+
 		if len(spec.Checks) > 0 {
 			root.Properties.Set("check_id", &jsonschema.Schema{Type: "string", Description: "UUID of the health check this playbook belongs to"})
 			root.Required = append(root.Required, "check_id")
