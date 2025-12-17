@@ -13,13 +13,15 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/gomplate/v3"
+	"github.com/google/uuid"
+	"github.com/samber/lo"
+	"github.com/samber/oops"
+	"gorm.io/gorm"
+
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/config/schemas"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/playbook/actions"
-	"github.com/samber/lo"
-	"github.com/samber/oops"
-	"gorm.io/gorm"
 )
 
 const (
@@ -298,7 +300,7 @@ func ScheduleRun(ctx context.Context, run models.PlaybookRun) error {
 		return ctx.Oops().Wrap(run.Delay(ctx.DB(), delay))
 	}
 
-	if run.AgentID != nil {
+	if run.AgentID != nil && *run.AgentID != uuid.Nil {
 		ctx.Tracef("action already assigning to %s", run.AgentID.String())
 		return ctx.Oops("db").Wrap(run.Assign(ctx.DB(), &models.Agent{
 			ID: *run.AgentID,
