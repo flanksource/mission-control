@@ -219,18 +219,11 @@ func postgrestInterceptor(next echov4.HandlerFunc) echov4.HandlerFunc {
 			if method != http.MethodPost && method != http.MethodPatch {
 				return next(c)
 			}
-
-			bodyBytes, err := io.ReadAll(c.Request().Body)
+			requestData, err := readJSONBody(c)
 			if err != nil {
-				return dutyApi.WriteError(c, dutyApi.Errorf(dutyApi.EINVALID, "failed to read request body: %v", err))
+				return dutyApi.WriteError(c, err)
 			}
-			// Restore the body for the next handler
-			c.Request().Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
-			var requestData map[string]any
-			if err := json.Unmarshal(bodyBytes, &requestData); err != nil {
-				return dutyApi.WriteError(c, dutyApi.Errorf(dutyApi.EINVALID, "error unmarshaling request body: %v", err))
-			}
 			specValue, hasSpec := requestData["spec"]
 			if !hasSpec {
 				return next(c)
@@ -252,6 +245,25 @@ func postgrestInterceptor(next echov4.HandlerFunc) echov4.HandlerFunc {
 
 		return next(c)
 	}
+}
+
+// readJSONBody reads the request body for POST/PATCH requests and unmarshals it into a map.
+// Returns nil, error if there was an error reading or unmarshaling the body.
+// Returns the map, nil on success.
+func readJSONBody(c echov4.Context) (map[string]any, error) {
+	bodyBytes, err := io.ReadAll(c.Request().Body)
+	if err != nil {
+		return nil, dutyApi.Errorf(dutyApi.EINVALID, "failed to read request body: %v", err)
+	}
+	// Restore the body for the next handler
+	c.Request().Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+	var requestData map[string]any
+	if err := json.Unmarshal(bodyBytes, &requestData); err != nil {
+		return nil, dutyApi.Errorf(dutyApi.EINVALID, "error unmarshaling request body: %v", err)
+	}
+
+	return requestData, nil
 }
 
 // suffixesInItem checks if any of the suffixes are in the item.
