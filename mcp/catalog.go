@@ -363,7 +363,10 @@ func registerCatalog(s *server.MCPServer) {
 			mcp.Description("Search query."+queryDescription),
 		),
 		mcp.WithNumber("limit", mcp.Description(fmt.Sprintf("Number of items to return. Default: %d", defaultQueryLimit))),
-		mcp.WithArray("select", mcp.Description("a list of columns to return. Default: id,name,type,health,status,description,updated_at,created_at. Always specify minimal columns needed for token efficiency.")),
+		mcp.WithArray("select",
+			mcp.WithStringItems(),
+			mcp.Description("a list of columns to return. Default: id,name,type,health,status,description,updated_at,created_at. Always specify minimal columns needed for token efficiency."),
+		),
 	)
 	s.AddTool(searchCatalogTool, searchCatalogHandler)
 
@@ -471,7 +474,10 @@ func registerCatalog(s *server.MCPServer) {
 			mcp.Description("Search query"+configChangeQueryDescription),
 		),
 		mcp.WithNumber("limit", mcp.Description(fmt.Sprintf("Number of results to return. Default: %d", defaultQueryLimit))),
-		mcp.WithArray("select", mcp.Description("a list of columns to return. Default: id,config_id,name,type,change_type,severity,summary,created_at,first_observed,count. Always specify minimal columns needed for token efficiency. Avoid 'config', 'details', and 'diff' columns unless absolutely necessary as they contain large JSON data.")),
+		mcp.WithArray("select",
+			mcp.WithStringItems(),
+			mcp.Description("a list of columns to return. Default: id,config_id,name,type,change_type,severity,summary,created_at,first_observed,count. Always specify minimal columns needed for token efficiency. Avoid 'config', 'details', and 'diff' columns unless absolutely necessary as they contain large JSON data."),
+		),
 	)
 	s.AddTool(searchCatalogChangesTool, searchConfigChangesHandler)
 
