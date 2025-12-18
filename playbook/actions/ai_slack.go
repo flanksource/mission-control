@@ -11,6 +11,7 @@ import (
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/llm"
+	llmContext "github.com/flanksource/incident-commander/llm/context"
 	"github.com/flanksource/incident-commander/notification"
 	"github.com/flanksource/incident-commander/shorturl"
 )
@@ -135,7 +136,7 @@ func createResourceActionButtons(resourceID string) map[string]any {
 
 // formatDiagnosisReportAsSlackBlocks generates a Slack message with blocks for the diagnosis report and recommendations.
 // It returns the JSON string representation of the Slack blocks.
-func formatDiagnosisReportAsSlackBlocks(ctx context.Context, knowledge *KnowledgeGraph, diagnosisReport llm.DiagnosisReport, recommendations llm.PlaybookRecommendations, groupedResources []string) (string, error) {
+func formatDiagnosisReportAsSlackBlocks(ctx context.Context, knowledge *llmContext.Context, diagnosisReport llm.DiagnosisReport, recommendations llm.PlaybookRecommendations, groupedResources []string) (string, error) {
 	var blocks []map[string]any
 	divider := map[string]any{"type": slackBlockTypeDivider}
 	affectedResource := knowledge.Configs[0]

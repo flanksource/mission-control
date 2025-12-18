@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"math/rand/v2"
 	"strings"
 	"time"
 
@@ -11,20 +12,16 @@ import (
 	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/query"
-	"github.com/flanksource/duty/shell"
-	"github.com/flanksource/duty/types"
-	"github.com/google/uuid"
-	"github.com/samber/lo"
-	"k8s.io/client-go/kubernetes"
-	"math/rand/v2"
-
 	"github.com/flanksource/duty/logs"
 	"github.com/flanksource/duty/logs/cloudwatch"
 	"github.com/flanksource/duty/logs/k8s"
 	"github.com/flanksource/duty/logs/loki"
 	"github.com/flanksource/duty/logs/opensearch"
+	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/shell"
+	"github.com/flanksource/duty/types"
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/flanksource/incident-commander/api"
 )
 
@@ -277,39 +274,6 @@ type HTTPAction struct {
 	TemplateBody bool `yaml:"templateBody,omitempty" json:"templateBody,omitempty"`
 }
 
-type TimeMetadata struct {
-	Since string `json:"since" yaml:"since"`
-}
-
-type AIActionRelationship struct {
-	// max depth to traverse the relationship. Defaults to 3
-	Depth *int `json:"depth,omitempty"`
-
-	// use incoming/outgoing/all relationships.
-	Direction query.RelationDirection `json:"direction,omitempty"`
-
-	Changes  TimeMetadata `json:"changes,omitempty"`
-	Analysis TimeMetadata `json:"analysis,omitempty"`
-}
-
-func (t AIActionRelationship) ToRelationshipQuery(configID uuid.UUID) query.RelationQuery {
-	q := query.RelationQuery{
-		ID:       configID,
-		MaxDepth: t.Depth,
-		Relation: t.Direction,
-	}
-
-	if q.MaxDepth == nil {
-		q.MaxDepth = lo.ToPtr(3)
-	}
-
-	if q.Relation == "" {
-		q.Relation = query.All
-	}
-
-	return q
-}
-
 type AIActionClient struct {
 	// Connection to setup the llm backend connection
 	Connection *string `json:"connection,omitempty"`
@@ -384,41 +348,6 @@ func (t *AIActionClient) Populate(ctx context.Context) error {
 	return nil
 }
 
-type AIActionContext struct {
-	// The config id to operate on.
-	// If not provided, the playbook's config is used.
-	Config string `json:"config,omitempty" yaml:"config,omitempty" template:"true"`
-
-	// Select changes for the config to provide as an additional context to the AI model.
-	Changes TimeMetadata `json:"changes,omitempty" yaml:"changes,omitempty"`
-
-	// Select analysis for the config to provide as an additional context to the AI model.
-	Analysis TimeMetadata `json:"analysis,omitempty" yaml:"analysis,omitempty"`
-
-	// Select related configs to provide as an additional context to the AI model.
-	Relationships []AIActionRelationship `json:"relationships,omitempty" yaml:"relationships,omitempty"`
-
-	// List of playbooks that provide additional context to the LLM.
-	Playbooks []AIActionContextProviderPlaybook `json:"playbooks,omitempty" yaml:"playbooks,omitempty" template:"true"`
-}
-
-func (t AIActionContext) ShouldFetchConfigChanges() bool {
-	// if changes are being fetched from relationships, we don't have to query
-	// the changes for just the config alone.
-
-	if t.Changes.Since == "" {
-		return false
-	}
-
-	for _, r := range t.Relationships {
-		if r.Changes.Since != "" {
-			return false
-		}
-	}
-
-	return true
-}
-
 type AIActionFormat string
 
 const (
@@ -427,25 +356,9 @@ const (
 	AIActionFormatRecommendPlaybook AIActionFormat = "recommendPlaybook"
 )
 
-// AIActionContextProviderPlaybook is a playbook that provides additional context to the LLM.
-// This playbook is run before calling the LLM and it's output is added to the context.
-type AIActionContextProviderPlaybook struct {
-	// Namespace of the playbook
-	Namespace string `json:"namespace" yaml:"namespace"`
-
-	// Name of the playbook
-	Name string `json:"name" yaml:"name"`
-
-	// If is a CEL expression that decides if this playbook should be included in the context
-	If string `json:"if,omitempty" yaml:"if,omitempty"`
-
-	// Parameters to pass to the playbook
-	Params map[string]string `json:"params,omitempty" yaml:"params,omitempty" template:"true"`
-}
-
 type AIAction struct {
-	AIActionClient  `json:",inline" yaml:",inline"`
-	AIActionContext `json:",inline" yaml:",inline" template:"true"`
+	AIActionClient        `json:",inline" yaml:",inline"`
+	api.LLMContextRequest `json:",inline" yaml:",inline" template:"true"`
 
 	// When enabled, the prompt is simply saved without passing it on to the LLM.
 	DryRun bool `json:"dryRun,omitempty"`
