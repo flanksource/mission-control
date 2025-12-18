@@ -257,6 +257,10 @@ type PrometheusActionRange struct {
 	Step  string `json:"step" yaml:"step" template:"true"`
 }
 
+func (t PrometheusActionRange) Empty() bool {
+	return t.Start == "" && t.End == "" && t.Step == ""
+}
+
 type PrometheusAction struct {
 	connection.PrometheusConnection `json:",inline" yaml:",inline" template:"true"`
 
@@ -273,7 +277,7 @@ func (p PrometheusAction) ToPrometheusQuery() dataquery.PrometheusQuery {
 		Query:                p.Query,
 	}
 
-	if p.Range != nil {
+	if p.Range != nil && !p.Range.Empty() {
 		query.Range = &dataquery.PrometheusRange{
 			Start: p.Range.Start,
 			End:   p.Range.End,

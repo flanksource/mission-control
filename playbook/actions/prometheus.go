@@ -11,6 +11,7 @@ type Prometheus struct{}
 
 type PrometheusResult struct {
 	Query string                     `json:"query,omitempty"`
+	Range *v1.PrometheusActionRange  `json:"range,omitempty"`
 	Rows  []dataquery.QueryResultRow `json:"rows,omitempty"`
 	Count int                        `json:"count,omitempty"`
 }
@@ -26,6 +27,7 @@ func (p *Prometheus) Run(ctx context.Context, action v1.PrometheusAction) (*Prom
 	return &PrometheusResult{
 		Query: action.Query,
 		Rows:  rows,
+		Range: action.Range,
 		Count: len(rows),
 	}, nil
 }
