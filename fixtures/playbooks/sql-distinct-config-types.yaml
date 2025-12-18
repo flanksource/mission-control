@@ -1,0 +1,20 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: distinct-config-types
+  namespace: mc
+spec:
+  title: Unique Config Types
+  description: Count config items grouped by type
+  configs:
+    - types:
+        - MissionControl::Connection
+  actions:
+    - name: Get the distinct config types
+      sql:
+        connection: connection://mc/mission-control
+        driver: postgres
+        query: |
+          SELECT type, COUNT(*) FROM config_items
+          GROUP BY 1
+          ORDER BY 2;

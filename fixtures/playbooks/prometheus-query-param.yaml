@@ -1,0 +1,24 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: prometheus-query-param
+  namespace: mc
+spec:
+  title: Prometheus Query (Ad-hoc)
+  description: >
+    Run an ad-hoc Prometheus query supplied at runtime.
+  configs:
+    - types:
+        - MissionControl::Connection
+  parameters:
+    - name: promql
+      label: PromQL Query
+      type: text
+      required: true
+      properties:
+        multiline: true
+  actions:
+    - name: run-promql
+      prometheus:
+        connection: connection://mc/prometheus
+        query: $(.params.promql)

@@ -12,6 +12,7 @@ import (
 	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/dataquery"
 	"github.com/flanksource/duty/logs"
 	"github.com/flanksource/duty/logs/cloudwatch"
 	"github.com/flanksource/duty/logs/k8s"
@@ -248,6 +249,39 @@ type SQLAction struct {
 	// Driver is the name of the underlying database to connect to.
 	// Example: postgres, mysql, ...
 	Driver string `yaml:"driver" json:"driver"`
+}
+
+type PrometheusActionRange struct {
+	Start string `json:"start" yaml:"start" template:"true"`
+	End   string `json:"end" yaml:"end" template:"true"`
+	Step  string `json:"step" yaml:"step" template:"true"`
+}
+
+type PrometheusAction struct {
+	connection.PrometheusConnection `json:",inline" yaml:",inline" template:"true"`
+
+	// Query is the PromQL query string
+	Query string `json:"query" yaml:"query" template:"true"`
+
+	// Range runs a PromQL range query when specified
+	Range *PrometheusActionRange `json:"range,omitempty" yaml:"range,omitempty" template:"true"`
+}
+
+func (p PrometheusAction) ToPrometheusQuery() dataquery.PrometheusQuery {
+	query := dataquery.PrometheusQuery{
+		PrometheusConnection: p.PrometheusConnection,
+		Query:                p.Query,
+	}
+
+	if p.Range != nil {
+		query.Range = &dataquery.PrometheusRange{
+			Start: p.Range.Start,
+			End:   p.Range.End,
+			Step:  p.Range.Step,
+		}
+	}
+
+	return query
 }
 
 type HTTPConnection struct {
@@ -601,6 +635,7 @@ type PlaybookAction struct {
 	AzureDevopsPipeline *AzureDevopsPipelineAction `json:"azureDevopsPipeline,omitempty" yaml:"azureDevopsPipeline,omitempty" template:"true"`
 	HTTP                *HTTPAction                `json:"http,omitempty" yaml:"http,omitempty" template:"true"`
 	SQL                 *SQLAction                 `json:"sql,omitempty" yaml:"sql,omitempty" template:"true"`
+	Prometheus          *PrometheusAction          `json:"prometheus,omitempty" yaml:"prometheus,omitempty" template:"true"`
 	Pod                 *PodAction                 `json:"pod,omitempty" yaml:"pod,omitempty" template:"true"`
 	Notification        *NotificationAction        `json:"notification,omitempty" yaml:"notification,omitempty" template:"true"`
 	Logs                *LogsAction                `json:"logs,omitempty" template:"true"`
@@ -624,6 +659,9 @@ func (p *PlaybookAction) Count() int {
 		count++
 	}
 	if p.SQL != nil {
+		count++
+	}
+	if p.Prometheus != nil {
 		count++
 	}
 	if p.Pod != nil {
