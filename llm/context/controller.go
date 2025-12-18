@@ -19,7 +19,7 @@ func init() {
 }
 
 func RegisterRoutes(e *echo.Echo) {
-	logger.Infof("Registering /catalog routes")
+	logger.Infof("Registering /llm routes")
 
 	e.GET("/llm/context/config/:id", GetKnowledgeGraph)
 }

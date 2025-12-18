@@ -28,7 +28,11 @@ type LLMContextRequest struct {
 func (t LLMContextRequest) ShouldFetchConfigChanges() bool {
 	// if changes are being fetched from relationships, we don't have to query
 	// the changes for just the config alone.
-	if t.Changes != nil && t.Changes.Since == "" {
+	if t.Changes == nil {
+		return false
+	}
+
+	if t.Changes.Since == "" {
 		return false
 	}
 
