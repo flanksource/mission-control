@@ -49,6 +49,9 @@ spec:
                             an additional context to the AI model.
                           properties:
                             since:
+                              description: |-
+                                Since is a duration string.
+                                Example: 4h, 30m
                               type: string
                           required:
                           - since
@@ -112,6 +115,9 @@ spec:
                             an additional context to the AI model.
                           properties:
                             since:
+                              description: |-
+                                Since is a duration string.
+                                Example: 4h, 30m
                               type: string
                           required:
                           - since
@@ -145,7 +151,7 @@ spec:
                             to the LLM.
                           items:
                             description: |-
-                              AIActionContextProviderPlaybook is a playbook that provides additional context to the LLM.
+                              LLMContextRequestPlaybook is a playbook that provides additional context to the LLM.
                               This playbook is run before calling the LLM and it's output is added to the context.
                             properties:
                               if:
@@ -242,6 +248,9 @@ spec:
                               analysis:
                                 properties:
                                   since:
+                                    description: |-
+                                      Since is a duration string.
+                                      Example: 4h, 30m
                                     type: string
                                 required:
                                 - since
@@ -249,6 +258,9 @@ spec:
                               changes:
                                 properties:
                                   since:
+                                    description: |-
+                                      Since is a duration string.
+                                      Example: 4h, 30m
                                     type: string
                                 required:
                                 - since

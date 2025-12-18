@@ -31,13 +31,13 @@
         },
         "relationships": {
           "items": {
-            "$ref": "#/$defs/AIActionRelationship"
+            "$ref": "#/$defs/LLMContextRequestRelationship"
           },
           "type": "array"
         },
         "playbooks": {
           "items": {
-            "$ref": "#/$defs/AIActionContextProviderPlaybook"
+            "$ref": "#/$defs/LLMContextRequestPlaybook"
           },
           "type": "array"
         },
@@ -69,49 +69,6 @@
         "systemPrompt",
         "prompt"
       ]
-    },
-    "AIActionContextProviderPlaybook": {
-      "properties": {
-        "namespace": {
-          "type": "string"
-        },
-        "name": {
-          "type": "string"
-        },
-        "if": {
-          "type": "string"
-        },
-        "params": {
-          "additionalProperties": {
-            "type": "string"
-          },
-          "type": "object"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object",
-      "required": [
-        "namespace",
-        "name"
-      ]
-    },
-    "AIActionRelationship": {
-      "properties": {
-        "depth": {
-          "type": "integer"
-        },
-        "direction": {
-          "type": "string"
-        },
-        "changes": {
-          "$ref": "#/$defs/TimeMetadata"
-        },
-        "analysis": {
-          "$ref": "#/$defs/TimeMetadata"
-        }
-      },
-      "additionalProperties": false,
-      "type": "object"
     },
     "AWSConnection": {
       "properties": {
@@ -799,6 +756,49 @@
         },
         "cnrm": {
           "$ref": "#/$defs/CNRMConnection"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "LLMContextRequestPlaybook": {
+      "properties": {
+        "namespace": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "if": {
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "namespace",
+        "name"
+      ]
+    },
+    "LLMContextRequestRelationship": {
+      "properties": {
+        "depth": {
+          "type": "integer"
+        },
+        "direction": {
+          "type": "string"
+        },
+        "changes": {
+          "$ref": "#/$defs/TimeMetadata"
+        },
+        "analysis": {
+          "$ref": "#/$defs/TimeMetadata"
         }
       },
       "additionalProperties": false,
