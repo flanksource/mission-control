@@ -460,7 +460,7 @@ func ListConnections(ctx context.Context) ([]models.Connection, error) {
 
 func FindDefaultLLMProviderConnection(ctx context.Context) (*models.Connection, error) {
 	var c models.Connection
-	if err := ctx.DB().Where("properties->>'defaultLLMProvider' = 'true'").Find(&c).Error; err != nil {
+	if err := ctx.DB().Where("properties->>'defaultLLMProvider' = 'true'").Where("deleted_at IS NULL").Find(&c).Error; err != nil {
 		return nil, err
 	}
 
