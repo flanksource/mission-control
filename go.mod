@@ -12,7 +12,7 @@ require (
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.32.0 // indirect
 	github.com/flanksource/commons v1.43.2
-	github.com/flanksource/duty v1.0.1126
+	github.com/flanksource/duty v1.0.1127
 	github.com/flanksource/gomplate/v3 v3.24.60
 	github.com/flanksource/kopper v1.0.13
 	github.com/gomarkdown/markdown v0.0.0-20250810172220-2e2c11897d1a
@@ -352,7 +352,7 @@ require (
 	modernc.org/libc v1.66.10 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
-	modernc.org/sqlite v1.39.1 // indirect
+	modernc.org/sqlite v1.40.1 // indirect
 	sigs.k8s.io/gateway-api v1.4.0 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
