@@ -10,10 +10,11 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac/policy"
-	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/labstack/echo/v4"
 	"gorm.io/gorm"
 
+	"github.com/flanksource/incident-commander/db"
+	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/rbac"
 )
 
@@ -27,7 +28,26 @@ func RegisterRoutes(e *echo.Echo) {
 	prefix := "connection"
 	connectionGroup := e.Group(fmt.Sprintf("/%s", prefix))
 	connectionGroup.POST("/test/:id", TestConnection, rbac.Authorization(policy.ObjectConnection, policy.ActionUpdate))
+	connectionGroup.GET("/llm", GetDefaultLLMProviderConnection, rbac.Authorization(policy.ObjectConnection, policy.ActionRead))
+}
 
+// GetDefaultLLMProviderConnection returns the hydrated connection for the default LLM Provider connection.
+//
+// It must only be used by the Next Backend for the AI Chat
+func GetDefaultLLMProviderConnection(c echo.Context) error {
+	ctx := c.Request().Context().(context.Context)
+
+	conn, err := db.FindDefaultLLMProviderConnection(ctx)
+	if err != nil {
+		return dutyAPI.WriteError(c, err)
+	}
+
+	hydratedConn, err := ctx.HydrateConnection(conn)
+	if err != nil {
+		return dutyAPI.WriteError(c, err)
+	}
+
+	return c.JSON(http.StatusOK, hydratedConn)
 }
 
 func TestConnection(c echo.Context) error {
