@@ -7,6 +7,7 @@ import (
 	"maps"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -35,6 +36,7 @@ const (
 
 // ToolName -> View ID
 var currentViewTools = make(map[string]viewNamespaceName)
+var currentViewToolsMu sync.RWMutex
 
 type viewNamespaceName struct {
 	Namespace string
@@ -155,7 +157,11 @@ func fetchViewData(ctx context.Context, namespace, name string, args ArgParser) 
 		return nil
 	})
 
-	return response.Panels, rows, err
+	if err != nil || response == nil {
+		return nil, rows, err
+	}
+
+	return response.Panels, rows, nil
 }
 
 func viewRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -165,7 +171,9 @@ func viewRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.Call
 	}
 
 	viewToolName := req.Params.Name
+	currentViewToolsMu.RLock()
 	v := currentViewTools[viewToolName]
+	currentViewToolsMu.RUnlock()
 	if v.Name == "" {
 		return mcp.NewToolResultError(fmt.Sprintf("tool[%s] is not associated with any view", viewToolName)), nil
 	}
@@ -189,7 +197,11 @@ func viewRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.Call
 }
 
 func viewListToolHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	jsonData, err := json.Marshal(slices.Collect(maps.Keys(currentViewTools)))
+	currentViewToolsMu.RLock()
+	keys := slices.Collect(maps.Keys(currentViewTools))
+	currentViewToolsMu.RUnlock()
+
+	jsonData, err := json.Marshal(keys)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), err
 	}
@@ -314,10 +326,14 @@ Without withRows/withPanels set, nothing is returned`,
 		)
 		s.AddTool(mcp.NewToolWithRawSchema(toolName, description, rj), viewRunHandler)
 		newViewTools = append(newViewTools, toolName)
+
+		currentViewToolsMu.Lock()
 		currentViewTools[toolName] = viewNamespaceName{Namespace: view.Namespace, Name: view.Name}
+		currentViewToolsMu.Unlock()
 	}
 
 	// Delete old views and update currentViewTools list
+	currentViewToolsMu.Lock()
 	currentToolNames := slices.Collect(maps.Keys(currentViewTools))
 	_, viewToolsToDelete := lo.Difference(newViewTools, currentToolNames)
 	s.DeleteTools(viewToolsToDelete...)
@@ -325,6 +341,7 @@ Without withRows/withPanels set, nothing is returned`,
 	maps.DeleteFunc(currentViewTools, func(k string, v viewNamespaceName) bool {
 		return slices.Contains(viewToolsToDelete, k)
 	})
+	currentViewToolsMu.Unlock()
 
 	return nil
 }
