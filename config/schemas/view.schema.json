@@ -543,6 +543,21 @@
         },
         "valueKey": {
           "type": "string"
+        },
+        "legend": {
+          "$ref": "#/$defs/PanelTimeseriesLegendConfig"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "PanelTimeseriesLegendConfig": {
+      "properties": {
+        "enable": {
+          "type": "boolean"
+        },
+        "layout": {
+          "type": "string"
         }
       },
       "additionalProperties": false,

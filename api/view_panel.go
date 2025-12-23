@@ -102,6 +102,16 @@ type PanelNumberConfig struct {
 type PanelTableConfig struct {
 }
 
+// PanelTimeseriesLegendConfig defines configuration for the timeseries legend
+// +kubebuilder:object:generate=true
+type PanelTimeseriesLegendConfig struct {
+	// Whether to show the legend (default: true)
+	Enable *bool `json:"enable,omitempty" yaml:"enable,omitempty"`
+	// Orientation of the legend layout (default: horizontal)
+	// +kubebuilder:validation:Enum=vertical;horizontal
+	Layout string `json:"layout,omitempty" yaml:"layout,omitempty"`
+}
+
 // PanelTimeseriesConfig defines configuration for timeseries visualization
 // +kubebuilder:object:generate=true
 type PanelTimeseriesConfig struct {
@@ -112,6 +122,8 @@ type PanelTimeseriesConfig struct {
 	Style string `json:"style,omitempty" yaml:"style,omitempty"`
 	// Convenience for single-series charts when series is not provided.
 	ValueKey string `json:"valueKey,omitempty" yaml:"valueKey,omitempty"`
+	// Legend configuration for the timeseries chart.
+	Legend *PanelTimeseriesLegendConfig `json:"legend,omitempty" yaml:"legend,omitempty"`
 }
 
 type PanelResult struct {

@@ -500,6 +500,20 @@ spec:
                     timeseries:
                       description: Configuration for timeseries visualization
                       properties:
+                        legend:
+                          description: Legend configuration for the timeseries chart.
+                          properties:
+                            enable:
+                              description: 'Whether to show the legend (default: true)'
+                              type: boolean
+                            layout:
+                              description: 'Orientation of the legend layout (default:
+                                horizontal)'
+                              enum:
+                              - vertical
+                              - horizontal
+                              type: string
+                          type: object
                         style:
                           description: 'Visualization style for the timeseries chart
                             (default: lines)'
