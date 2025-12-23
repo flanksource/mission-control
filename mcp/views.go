@@ -184,13 +184,21 @@ func viewRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.Call
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	// We send, the rows and then (panel meta, panel rows) as args to clicky.
-	// which will produce a markdown table for each of them respectively.
-	var contents = []any{rows}
-	for _, panel := range panels {
-		rows := panel.Rows
-		panel.Rows = nil
-		contents = append(contents, []api.PanelResult{panel}, rows)
+	// We send rows, then (panel meta, panel rows) as args to clicky.
+	// It produces a markdown table for each item.
+	contents := make([]any, 0, 1+len(panels)*2)
+	if args.Bool("withRows", false) {
+		contents = append(contents, rows)
+	}
+	if args.Bool("withPanels", false) {
+		for _, panel := range panels {
+			rows := panel.Rows
+			panel.Rows = nil
+			contents = append(contents, []api.PanelResult{panel}, rows)
+		}
+	}
+	if len(contents) == 0 {
+		return mcp.NewToolResultText(""), nil
 	}
 
 	return structToMCPResponse(contents...), nil
