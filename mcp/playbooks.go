@@ -31,9 +31,9 @@ var playbookToolNameToID = sync.Map{}
 
 const (
 	toolGetPlaybookRunSteps   = "get_playbook_run_steps"
-	toolGetFailedPlaybookRuns = "playbook_failed_runs"
-	toolGetRecentPlaybookRuns = "playbook_recent_runs"
-	toolPlaybooksListAll      = "playbooks_list_all"
+	toolGetFailedPlaybookRuns = "get_playbook_failed_runs"
+	toolGetRecentPlaybookRuns = "get_playbook_recent_runs"
+	toolGetAllPlaybooks       = "get_all_playbooks"
 )
 
 func addPlaybooksAsTool(goctx gocontext.Context, srv *server.MCPServer, session server.ClientSession) error {
@@ -371,7 +371,7 @@ func registerPlaybook(s *server.MCPServer) {
 		playbookResourceHandler,
 	)
 
-	s.AddTool(mcp.NewTool(toolPlaybooksListAll,
+	s.AddTool(mcp.NewTool(toolGetAllPlaybooks,
 		mcp.WithDescription("List all available playbooks")), playbookListToolHandler)
 
 	playbookRecentRunTool := mcp.NewTool(toolGetRecentPlaybookRuns,

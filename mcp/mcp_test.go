@@ -190,7 +190,7 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 		ginkgo.It("should list all playbooks", func() {
 			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
 				Params: mcp.CallToolParams{
-					Name: "playbooks_list_all",
+					Name: toolGetAllPlaybooks,
 				},
 			})
 
@@ -203,7 +203,7 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 			// TODO: Add playbook run fixtures
 			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
 				Params: mcp.CallToolParams{
-					Name: "playbook_recent_runs",
+					Name: toolGetRecentPlaybookRuns,
 				},
 			})
 
@@ -215,7 +215,7 @@ var _ = ginkgo.Describe("MCP Tools", func() {
 			// TODO: Add playbook run fixtures
 			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
 				Params: mcp.CallToolParams{
-					Name: "playbook_failed_runs",
+					Name: toolGetFailedPlaybookRuns,
 				},
 			})
 
