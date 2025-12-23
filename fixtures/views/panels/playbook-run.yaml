@@ -1,0 +1,19 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: playbook-run
+  namespace: mc
+spec:
+  display:
+    title: Playbook Run Panel Examples
+    sidebar: true
+
+  # No queries needed for playbook run panels
+  # The panel fetches playbook data directly using the playbookId
+
+  panels:
+    # Example 1: Simple playbook panel with minimal config
+    - name: Restart Service
+      description: Quick action to restart the production service
+      type: playbooks
+      query: ""

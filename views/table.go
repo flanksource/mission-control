@@ -289,7 +289,7 @@ func populateVariable(ctx context.Context, variable api.ViewVariable, variableVa
 			selector = templatedSelector
 		}
 
-		resources, err := query.FindConfigsByResourceSelector(ctx, valueFromMaxResults, selector)
+		resources, err := query.FindConfigsByResourceSelector(ctx, variableMaxResultForValueFrom, selector)
 		if err != nil {
 			return api.ViewVariableWithOptions{}, fmt.Errorf("failed to get resources for filter %s: %w", variable.Key, err)
 		}
@@ -534,7 +534,7 @@ func readCachedViewData(ctx context.Context, view *v1.View, request *requestOpt)
 			})
 		} else if filter.ValueFrom != nil {
 			if !filter.ValueFrom.Config.IsEmpty() {
-				resources, err := query.FindConfigsByResourceSelector(ctx, valueFromMaxResults, filter.ValueFrom.Config)
+				resources, err := query.FindConfigsByResourceSelector(ctx, variableMaxResultForValueFrom, filter.ValueFrom.Config)
 				if err != nil {
 					return nil, fmt.Errorf("failed to get resources for filter %s: %w", filter.Key, err)
 				}
