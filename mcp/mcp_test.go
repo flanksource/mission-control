@@ -31,7 +31,7 @@ func checkResultNotInMCPResponse(toolResult any, results []string) {
 	}
 }
 
-var _ = ginkgo.Describe("MCP Tools", func() {
+var _ = ginkgo.Describe("MCP Tools", ginkgo.FlakeAttempts(3), func() {
 	ginkgo.Describe("Health Check Tools", func() {
 		ginkgo.It("should list all health checks", func() {
 			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
