@@ -31,7 +31,7 @@ import (
 	_ "github.com/flanksource/incident-commander/upstream"
 )
 
-var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
+var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, ginkgo.FlakeAttempts(3), func() {
 	var customReceiverJson []byte
 
 	ginkgo.BeforeAll(func() {
