@@ -14,6 +14,8 @@ import (
 	"github.com/flanksource/duty/secret"
 	"github.com/flanksource/duty/shutdown"
 	"github.com/flanksource/duty/telemetry"
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/flanksource/incident-commander/api"
@@ -22,8 +24,6 @@ import (
 	"github.com/flanksource/incident-commander/jobs"
 	"github.com/flanksource/incident-commander/mail"
 	"github.com/flanksource/incident-commander/vars"
-	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 )
 
 func PreRun(cmd *cobra.Command, args []string) {
@@ -92,6 +92,7 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringSliceVar(&echo.AllowedCORS, "allowed-cors", []string{"https://app.flanksource.com", "https://beta.flanksource.com"}, "Allowed CORS credential origins")
 	flags.StringVar(&auth.IdentityRoleMapper, "identity-role-mapper", "", "CEL-Go expression to map identity to a role & a team (return: {role: string, teams: []string}). Supports file path (prefixed with 'file://').")
 	flags.StringVar(&api.DefaultArtifactConnection, "artifact-connection", "", "Specify the default connection to use for artifacts (can be the connection string or the connection id)")
+	flags.StringVar(&api.DefaultLLMConnection, "llm-connection", "", "Specify the default connection to use for LLM provider (can be the connection string or the connection id)")
 	flags.StringVar(&secret.KMSConnection, "secret-keeper-connection", "", "Specify the connection to use for secret keepers (can be the connection string or the connection id)")
 
 	var upstreamPageSizeDefault = 500
