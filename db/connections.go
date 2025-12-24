@@ -10,11 +10,13 @@ import (
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/api"
+	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 
+	localAPI "github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/utils"
 )
@@ -459,14 +461,9 @@ func ListConnections(ctx context.Context) ([]models.Connection, error) {
 }
 
 func FindDefaultLLMProviderConnection(ctx context.Context) (*models.Connection, error) {
-	var c models.Connection
-	if err := ctx.DB().Where("properties->>'defaultLLMProvider' = 'true'").Where("deleted_at IS NULL").Find(&c).Error; err != nil {
-		return nil, err
+	if localAPI.DefaultLLMConnection == "" {
+		return nil, api.Errorf(api.ENOTFOUND, "no default LLM connection configured. Use --llm-connection flag to specify one")
 	}
 
-	if c.ID == uuid.Nil {
-		return nil, api.Errorf(api.ENOTFOUND, "a default connection was not found")
-	}
-
-	return &c, nil
+	return connection.Get(ctx, localAPI.DefaultLLMConnection)
 }
