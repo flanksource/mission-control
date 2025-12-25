@@ -1171,7 +1171,7 @@
           "$ref": "#/$defs/SQLAction"
         },
         "prometheus": {
-          "$ref": "#/$defs/PrometheusAction"
+          "$ref": "#/$defs/PrometheusQuery"
         },
         "pod": {
           "$ref": "#/$defs/PodAction"
@@ -1531,7 +1531,7 @@
         "spec"
       ]
     },
-    "PrometheusAction": {
+    "PrometheusQuery": {
       "properties": {
         "connection": {
           "type": "string"
@@ -1567,7 +1567,13 @@
           "type": "string"
         },
         "range": {
-          "$ref": "#/$defs/PrometheusActionRange"
+          "$ref": "#/$defs/PrometheusRange"
+        },
+        "matchLabels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,
@@ -1576,7 +1582,7 @@
         "query"
       ]
     },
-    "PrometheusActionRange": {
+    "PrometheusRange": {
       "properties": {
         "start": {
           "type": "string"

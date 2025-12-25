@@ -2861,6 +2861,7 @@ spec:
                       - spec
                       type: object
                     prometheus:
+                      description: PrometheusQuery defines a Prometheus query configuration
                       properties:
                         bearer:
                           properties:
@@ -2909,6 +2910,18 @@ spec:
                           type: string
                         digest:
                           type: boolean
+                        matchLabels:
+                          description: |-
+                            MatchLabels is a list of labels, when provided, are included in the result.
+                            Example:
+                            If a query produces {a:1, b:2, c:3, d:4} value=30.0
+                            then, with matchLabels = [a,b]
+                            The result will only have {a:1, b:2} value=30.0
+
+                            This helps in have a deterministic schema for the query result.
+                          items:
+                            type: string
+                          type: array
                         ntlm:
                           type: boolean
                         ntlmv2:

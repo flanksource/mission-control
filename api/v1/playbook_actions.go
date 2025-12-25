@@ -251,43 +251,6 @@ type SQLAction struct {
 	Driver string `yaml:"driver" json:"driver"`
 }
 
-type PrometheusActionRange struct {
-	Start string `json:"start" yaml:"start" template:"true"`
-	End   string `json:"end" yaml:"end" template:"true"`
-	Step  string `json:"step" yaml:"step" template:"true"`
-}
-
-func (t PrometheusActionRange) Empty() bool {
-	return t.Start == "" && t.End == "" && t.Step == ""
-}
-
-type PrometheusAction struct {
-	connection.PrometheusConnection `json:",inline" yaml:",inline" template:"true"`
-
-	// Query is the PromQL query string
-	Query string `json:"query" yaml:"query" template:"true"`
-
-	// Range runs a PromQL range query when specified
-	Range *PrometheusActionRange `json:"range,omitempty" yaml:"range,omitempty" template:"true"`
-}
-
-func (p PrometheusAction) ToPrometheusQuery() dataquery.PrometheusQuery {
-	query := dataquery.PrometheusQuery{
-		PrometheusConnection: p.PrometheusConnection,
-		Query:                p.Query,
-	}
-
-	if p.Range != nil && !p.Range.Empty() {
-		query.Range = &dataquery.PrometheusRange{
-			Start: p.Range.Start,
-			End:   p.Range.End,
-			Step:  p.Range.Step,
-		}
-	}
-
-	return query
-}
-
 type HTTPConnection struct {
 	// Connection name e.g. connection://http/google
 	Connection string `yaml:"connection,omitempty" json:"connection,omitempty"`
@@ -639,7 +602,7 @@ type PlaybookAction struct {
 	AzureDevopsPipeline *AzureDevopsPipelineAction `json:"azureDevopsPipeline,omitempty" yaml:"azureDevopsPipeline,omitempty" template:"true"`
 	HTTP                *HTTPAction                `json:"http,omitempty" yaml:"http,omitempty" template:"true"`
 	SQL                 *SQLAction                 `json:"sql,omitempty" yaml:"sql,omitempty" template:"true"`
-	Prometheus          *PrometheusAction          `json:"prometheus,omitempty" yaml:"prometheus,omitempty" template:"true"`
+	Prometheus          *dataquery.PrometheusQuery `json:"prometheus,omitempty" yaml:"prometheus,omitempty" template:"true"`
 	Pod                 *PodAction                 `json:"pod,omitempty" yaml:"pod,omitempty" template:"true"`
 	Notification        *NotificationAction        `json:"notification,omitempty" yaml:"notification,omitempty" template:"true"`
 	Logs                *LogsAction                `json:"logs,omitempty" template:"true"`
