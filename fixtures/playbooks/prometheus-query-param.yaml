@@ -1,0 +1,43 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: prometheus-query-param
+  namespace: mc
+spec:
+  title: Prometheus Query (Ad-hoc)
+  description: >
+    Run an ad-hoc Prometheus query supplied at runtime.
+  configs:
+    - types:
+        - MissionControl::Connection
+  parameters:
+    - name: promql
+      label: PromQL Query
+      type: text
+      required: true
+      properties:
+        multiline: true
+    - name: range_start
+      label: Range Start
+      description: Optional. When range params are set, a PromQL range query is executed (e.g. now-15m)
+      default: ""
+      type: text
+    - name: range_end
+      label: Range End
+      description: Optional. When range params are set, a PromQL range query is executed (e.g. now)
+      default: ""
+      type: text
+    - name: range_step
+      label: Range Step
+      description: Optional. When range params are set, a PromQL range query is executed (e.g. 1m)
+      default: ""
+      type: text
+  actions:
+    - name: run-promql
+      prometheus:
+        connection: connection://mc/prometheus
+        query: $(.params.promql)
+        range:
+          start: $(.params.range_start | default "")
+          end: $(.params.range_end | default "")
+          step: $(.params.range_step | default "")

@@ -7,6 +7,7 @@ package v1
 import (
 	"encoding/json"
 	"github.com/flanksource/duty/connection"
+	"github.com/flanksource/duty/dataquery"
 	"github.com/flanksource/duty/logs"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/shell"
@@ -2487,6 +2488,11 @@ func (in *PlaybookAction) DeepCopyInto(out *PlaybookAction) {
 		in, out := &in.SQL, &out.SQL
 		*out = new(SQLAction)
 		**out = **in
+	}
+	if in.Prometheus != nil {
+		in, out := &in.Prometheus, &out.Prometheus
+		*out = new(dataquery.PrometheusQuery)
+		(*in).DeepCopyInto(*out)
 	}
 	if in.Pod != nil {
 		in, out := &in.Pod, &out.Pod

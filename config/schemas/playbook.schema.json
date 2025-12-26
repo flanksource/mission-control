@@ -1128,6 +1128,33 @@
         "message"
       ]
     },
+    "OAuth": {
+      "properties": {
+        "clientID": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "clientSecret": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "scope": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "tokenURL": {
+          "type": "string"
+        },
+        "params": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "ObjectMeta": {
       "properties": {
         "name": {
@@ -1291,6 +1318,9 @@
         },
         "sql": {
           "$ref": "#/$defs/SQLAction"
+        },
+        "prometheus": {
+          "$ref": "#/$defs/PrometheusQuery"
         },
         "pod": {
           "$ref": "#/$defs/PodAction"
@@ -1655,6 +1685,77 @@
         "spec"
       ]
     },
+    "PrometheusQuery": {
+      "properties": {
+        "connection": {
+          "type": "string"
+        },
+        "username": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "password": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "ntlm": {
+          "type": "boolean"
+        },
+        "ntlmv2": {
+          "type": "boolean"
+        },
+        "digest": {
+          "type": "boolean"
+        },
+        "url": {
+          "type": "string"
+        },
+        "bearer": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "oauth": {
+          "$ref": "#/$defs/OAuth"
+        },
+        "tls": {
+          "$ref": "#/$defs/TLSConfig"
+        },
+        "query": {
+          "type": "string"
+        },
+        "range": {
+          "$ref": "#/$defs/PrometheusRange"
+        },
+        "matchLabels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "query"
+      ]
+    },
+    "PrometheusRange": {
+      "properties": {
+        "start": {
+          "type": "string"
+        },
+        "end": {
+          "type": "string"
+        },
+        "step": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "start",
+        "end",
+        "step"
+      ]
+    },
     "ResourceSelector": {
       "properties": {
         "agent": {
@@ -1760,6 +1861,27 @@
       "required": [
         "key"
       ]
+    },
+    "TLSConfig": {
+      "properties": {
+        "insecureSkipVerify": {
+          "type": "boolean"
+        },
+        "handshakeTimeout": {
+          "type": "integer"
+        },
+        "ca": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "cert": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "key": {
+          "$ref": "#/$defs/EnvVar"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
     },
     "Time": {
       "properties": {},

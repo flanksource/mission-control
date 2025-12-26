@@ -12,6 +12,7 @@ import (
 	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/dataquery"
 	"github.com/flanksource/duty/logs"
 	"github.com/flanksource/duty/logs/cloudwatch"
 	"github.com/flanksource/duty/logs/k8s"
@@ -601,6 +602,7 @@ type PlaybookAction struct {
 	AzureDevopsPipeline *AzureDevopsPipelineAction `json:"azureDevopsPipeline,omitempty" yaml:"azureDevopsPipeline,omitempty" template:"true"`
 	HTTP                *HTTPAction                `json:"http,omitempty" yaml:"http,omitempty" template:"true"`
 	SQL                 *SQLAction                 `json:"sql,omitempty" yaml:"sql,omitempty" template:"true"`
+	Prometheus          *dataquery.PrometheusQuery `json:"prometheus,omitempty" yaml:"prometheus,omitempty" template:"true"`
 	Pod                 *PodAction                 `json:"pod,omitempty" yaml:"pod,omitempty" template:"true"`
 	Notification        *NotificationAction        `json:"notification,omitempty" yaml:"notification,omitempty" template:"true"`
 	Logs                *LogsAction                `json:"logs,omitempty" template:"true"`
@@ -624,6 +626,9 @@ func (p *PlaybookAction) Count() int {
 		count++
 	}
 	if p.SQL != nil {
+		count++
+	}
+	if p.Prometheus != nil {
 		count++
 	}
 	if p.Pod != nil {

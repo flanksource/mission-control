@@ -75,6 +75,9 @@ func executeAction(ctx context.Context, playbookID any, runID uuid.UUID, runActi
 	} else if actionSpec.SQL != nil {
 		var e actions.SQL
 		result, err = e.Run(ctx, *actionSpec.SQL)
+	} else if actionSpec.Prometheus != nil {
+		var e actions.Prometheus
+		result, err = e.Run(ctx, *actionSpec.Prometheus)
 	} else if actionSpec.Pod != nil {
 		e := actions.Pod{
 			PlaybookRunID: runID,
