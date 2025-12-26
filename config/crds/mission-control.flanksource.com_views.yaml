@@ -754,6 +754,8 @@ spec:
                             The result will only have {a:1, b:2} value=30.0
 
                             This helps in have a deterministic schema for the query result.
+
+                            Deprecated: use SelectLabels
                           items:
                             type: string
                           type: array
@@ -922,6 +924,18 @@ spec:
                           - start
                           - step
                           type: object
+                        selectLabels:
+                          description: |-
+                            SelectLabels is a list of labels, when provided, are included in the result.
+                            Example:
+                            If a query produces {a:1, b:2, c:3, d:4} value=30.0
+                            then, with matchLabels = [a,b]
+                            The result will only have {a:1, b:2} value=30.0
+
+                            This helps in have a deterministic schema for the query result.
+                          items:
+                            type: string
+                          type: array
                         tls:
                           properties:
                             ca:
