@@ -1,0 +1,18 @@
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: echo-bun-dependency-with-pkgs
+  namespace: mc
+spec:
+  category: Exec
+  actions:
+    - name: foo
+      exec:
+        setup:
+          bun:
+            version: "1.3.5"
+        script: |
+          #!/usr/bin/env bun
+          import isOdd from 'is-odd';
+          console.log(isOdd(3));

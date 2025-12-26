@@ -26,6 +26,10 @@ test-reports
 .artifacts/
 __debug_bin*
 
+exec-checkout
+shell-bin-dir
+shell-tmp
+
 # AI
 .mcp.json
 /plans

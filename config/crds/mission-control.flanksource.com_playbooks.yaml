@@ -445,6 +445,8 @@ spec:
                               description: |-
                                 Destination is the full path to where the contents of the URL should be downloaded to.
                                 If left empty, the sha256 hash of the URL will be used as the dir name.
+
+                                Deprecated: no similar functionality available. This depends on the use case
                               type: string
                             password:
                               properties:
@@ -1273,6 +1275,20 @@ spec:
                             Script can be an inline script or a path to a script that needs to be executed
                             On windows executed via powershell and in darwin and linux executed using bash
                           type: string
+                        setup:
+                          description: Setup binaries
+                          properties:
+                            bun:
+                              properties:
+                                version:
+                                  type: string
+                              type: object
+                            python:
+                              properties:
+                                version:
+                                  type: string
+                              type: object
+                          type: object
                       required:
                       - script
                       type: object
@@ -2919,6 +2935,8 @@ spec:
                             The result will only have {a:1, b:2} value=30.0
 
                             This helps in have a deterministic schema for the query result.
+
+                            Deprecated: use SelectLabels
                           items:
                             type: string
                           type: array
@@ -3087,6 +3105,18 @@ spec:
                           - start
                           - step
                           type: object
+                        selectLabels:
+                          description: |-
+                            SelectLabels is a list of labels, when provided, are included in the result.
+                            Example:
+                            If a query produces {a:1, b:2, c:3, d:4} value=30.0
+                            then, with matchLabels = [a,b]
+                            The result will only have {a:1, b:2} value=30.0
+
+                            This helps in have a deterministic schema for the query result.
+                          items:
+                            type: string
+                          type: array
                         tls:
                           properties:
                             ca:
