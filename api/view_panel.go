@@ -2,6 +2,7 @@ package api
 
 import (
 	"github.com/flanksource/duty/dataquery"
+	"github.com/flanksource/duty/types"
 	pkgView "github.com/flanksource/duty/view"
 )
 
@@ -9,15 +10,16 @@ import (
 type PanelType string
 
 const (
-	PanelTypePiechart   PanelType = "piechart"
-	PanelTypeTable      PanelType = "table"
-	PanelTypeText       PanelType = "text"
-	PanelTypeNumber     PanelType = "number"
+	PanelTypeBargauge   PanelType = "bargauge"
 	PanelTypeDuration   PanelType = "duration"
 	PanelTypeGauge      PanelType = "gauge"
-	PanelTypeBargauge   PanelType = "bargauge"
+	PanelTypeNumber     PanelType = "number"
+	PanelTypePiechart   PanelType = "piechart"
+	PanelTypePlaybooks  PanelType = "playbooks"
 	PanelTypeProperties PanelType = "properties"
 	PanelTypeTimeseries PanelType = "timeseries"
+	PanelTypeTable      PanelType = "table"
+	PanelTypeText       PanelType = "text"
 )
 
 // PanelDef defines a panel for the view
@@ -28,11 +30,19 @@ const (
 // +kubebuilder:validation:XValidation:rule="self.type!='table' ? !has(self.table) : true",message="table config not allowed for this type"
 // +kubebuilder:validation:XValidation:rule="self.type!='bargauge' ? !has(self.bargauge) : true",message="bargauge config not allowed for this type"
 // +kubebuilder:validation:XValidation:rule="self.type!='timeseries' ? !has(self.timeseries) : true",message="timeseries config not allowed for this type"
+// +kubebuilder:validation:XValidation:rule="self.type!='playbooks' ? !has(self.playbooks) : true",message="playbooks config not allowed for this type"
+// +kubebuilder:validation:XValidation:rule="self.type!='playbooks' ? has(self.query) : true",message="query is required for this panel type"
 type PanelDef struct {
 	PanelMeta `json:",inline" yaml:",inline"`
 
 	// Query is a raw SQL query that has access to the queries as tables
-	Query string `json:"query" yaml:"query"`
+	Query string `json:"query,omitempty" yaml:"query,omitempty"`
+}
+
+// +kubebuilder:object:generate=true
+type PlaybooksPanelConfig struct {
+	// Playbooks matching this selector will be displayed in the panel
+	Selector types.ResourceSelector `json:"selector" yaml:"selector"`
 }
 
 // +kubebuilder:object:generate=true
@@ -44,7 +54,7 @@ type PanelMeta struct {
 	Description string `json:"description,omitempty" yaml:"description,omitempty"`
 
 	// Type of panel visualization
-	// +kubebuilder:validation:Enum=piechart;text;gauge;number;table;duration;bargauge;properties;timeseries
+	// +kubebuilder:validation:Enum=piechart;text;gauge;number;table;duration;bargauge;properties;timeseries;playbooks
 	Type PanelType `json:"type" yaml:"type"`
 
 	// Configuration for gauge visualization
@@ -64,6 +74,8 @@ type PanelMeta struct {
 
 	// Configuration for timeseries visualization
 	Timeseries *PanelTimeseriesConfig `json:"timeseries,omitempty" yaml:"timeseries,omitempty"`
+	// Configuration for playbooks panel
+	Playbooks *PlaybooksPanelConfig `json:"playbooks,omitempty" yaml:"playbooks,omitempty"`
 }
 
 // +kubebuilder:object:generate=true

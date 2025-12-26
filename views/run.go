@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	sq "github.com/Masterminds/squirrel"
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/duration"
 	dutyAPI "github.com/flanksource/duty/api"
@@ -15,14 +16,17 @@ import (
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
 	pkgView "github.com/flanksource/duty/view"
+	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/auth"
 )
 
-const valueFromMaxResults = 100
+// The maximum number of results to return for templating variables `valueFrom` query
+const variableMaxResultForValueFrom = 100
 
 // Run executes the view queries and returns the rows with data
 func Run(ctx context.Context, view *v1.View, request *requestOpt) (*api.ViewResult, error) {
@@ -115,7 +119,7 @@ func Run(ctx context.Context, view *v1.View, request *requestOpt) (*api.ViewResu
 	// If there's no merge query and no panels,
 	// there's no need to create an in-memory SQLite database.
 	// The results from the dataqueries are directly mapped to the table columns.
-	needsSQL := len(view.Spec.Panels) > 0 || view.Spec.Merge != nil
+	needsSQL := (len(view.Spec.Panels) > 0 || view.Spec.Merge != nil) && len(view.Spec.Queries) > 0
 
 	var sqliteCtx context.Context
 	if needsSQL {
@@ -132,7 +136,7 @@ func Run(ctx context.Context, view *v1.View, request *requestOpt) (*api.ViewResu
 		}()
 	}
 
-	if len(view.Spec.Panels) > 0 {
+	if len(view.Spec.Panels) > 0 && len(view.Spec.Queries) > 0 {
 		dataset := map[string]any{}
 		for _, queryResult := range queryResults {
 			dataset[queryResult.Name] = queryResult.Results
@@ -143,9 +147,46 @@ func Run(ctx context.Context, view *v1.View, request *requestOpt) (*api.ViewResu
 			panelStart := time.Now()
 			ctx.Logger.V(4).Infof("executing panel=%s type=%s", panel.Name, panel.Type)
 
-			rows, err := dataquery.RunSQL(sqliteCtx, panel.Query)
-			if err != nil {
-				return nil, fmt.Errorf("failed to execute panel '%s': %w", panel.Name, err)
+			var rows []dataquery.QueryResultRow
+			var err error
+			switch panel.Type {
+			case api.PanelTypePlaybooks:
+				columns := []string{"id", "namespace", "name", "title", "icon", "description", "category"}
+				qb := sq.Select(columns...).
+					From("playbooks").
+					Where(sq.Eq{"deleted_at": nil})
+
+				if panel.Playbooks != nil && !panel.Playbooks.Selector.IsEmpty() {
+					ids, err := query.FindPlaybookIDsByResourceSelector(ctx, 200, panel.Playbooks.Selector)
+					if err != nil {
+						return nil, fmt.Errorf("failed to find playbooks by selector: %w", err)
+					}
+
+					// Convert UUIDs to interface{} slice for squirrel
+					idInterfaces := lo.Map(ids, func(v uuid.UUID, _ int) any {
+						return v
+					})
+					qb = qb.Where(sq.Eq{"id": idInterfaces})
+				}
+
+				sql, args, err := qb.PlaceholderFormat(sq.Dollar).ToSql()
+				if err != nil {
+					return nil, fmt.Errorf("failed to build playbooks query: %w", err)
+				}
+
+				if err := auth.WithRLS(ctx, func(ctx context.Context) error {
+					var e error
+					rows, e = dataquery.RunSQL(ctx, sql, args...)
+					return e
+				}); err != nil {
+					return nil, fmt.Errorf("failed to execute panel '%s': %w", panel.Name, err)
+				}
+
+			default:
+				rows, err = dataquery.RunSQL(sqliteCtx, panel.Query)
+				if err != nil {
+					return nil, fmt.Errorf("failed to execute panel '%s': %w", panel.Name, err)
+				}
 			}
 
 			ctx.Logger.V(4).Infof("panel completed panel=%s rows=%d duration=%s", panel.Name, len(rows), time.Since(panelStart))
