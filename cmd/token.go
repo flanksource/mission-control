@@ -188,8 +188,9 @@ func init() {
 	Token.Flags().DurationVar(&tokenExpiry, "expiry", time.Hour*4, "Expiry duration for token")
 
 	PasswordReset.Flags().StringVar(&resetPasswordUser, "user", "", "User email to reset password for")
-	PasswordReset.Flags().StringVar(&vars.AuthMode, "auth", "", "Enable authentication via Kratos or Clerk. Valid values are [kratos, clerk, basic]")
+	PasswordReset.Flags().StringVar(&vars.AuthMode, "auth", "", "Auth type: kratos, basic")
 	PasswordReset.Flags().StringVar(&auth.KratosAdminAPI, "kratos-admin", "http://kratos-admin:80", "Kratos Admin API service")
+	PasswordReset.Flags().StringVar(&auth.HtpasswdFile, "htpasswd-file", "htpasswd", "Path to htpasswd file for basic authentication")
 
 	Root.AddCommand(Auth)
 }
