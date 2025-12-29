@@ -6,6 +6,7 @@ import (
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	client "github.com/ory/client-go"
 )
@@ -119,6 +120,21 @@ func (k *KratosHandler) updateAdminPassword(ctx gocontext.Context, id string) er
 		},
 	)
 	body.SetCredentials(k.getIdentityCredentials(getDefaultAdminPassword()))
+
+	_, _, err := k.adminClient.IdentityAPI.UpdateIdentity(ctx, id).UpdateIdentityBody(body).Execute()
+	return err
+}
+
+func (k *KratosHandler) ResetPassword(ctx gocontext.Context, id, password string, traits types.JSONMap, state, schemaID string) error {
+	if schemaID == "" {
+		schemaID = "default"
+	}
+	if state == "" {
+		state = IdentityStateActive
+	}
+
+	body := *client.NewUpdateIdentityBody(schemaID, state, traits)
+	body.SetCredentials(k.getIdentityCredentials(password))
 
 	_, _, err := k.adminClient.IdentityAPI.UpdateIdentity(ctx, id).UpdateIdentityBody(body).Execute()
 	return err
