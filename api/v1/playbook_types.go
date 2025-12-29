@@ -10,11 +10,12 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	dutyTypes "github.com/flanksource/duty/types"
-	"github.com/flanksource/incident-commander/vars"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+
+	"github.com/flanksource/incident-commander/vars"
 )
 
 type PlaybookPermission struct {
@@ -215,6 +216,15 @@ type PlaybookSpec struct {
 
 	// Approval defines the individuals and teams authorized to approve runs of this playbook.
 	Approval *PlaybookApproval `json:"approval,omitempty" yaml:"approval,omitempty"`
+
+	// JSON Schema or URL to use instead of playbook parameters
+	JSONSchema string `json:"jsonSchema,omitempty" yaml:"jsonSchema,omitempty"`
+
+	// Properties that are applied to the UI form
+	// +kubebuilder:validation:Schemaless
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Type=object
+	UI json.RawMessage `json:"ui,omitempty" yaml:"ui,omitempty"`
 }
 
 func (p *PlaybookSpec) GetTimeout(ctx context.Context) (time.Duration, error) {

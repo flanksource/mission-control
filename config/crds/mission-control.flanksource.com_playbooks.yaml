@@ -2919,6 +2919,8 @@ spec:
                             The result will only have {a:1, b:2} value=30.0
 
                             This helps in have a deterministic schema for the query result.
+
+                            Deprecated: use SelectLabels
                           items:
                             type: string
                           type: array
@@ -3087,6 +3089,18 @@ spec:
                           - start
                           - step
                           type: object
+                        selectLabels:
+                          description: |-
+                            SelectLabels is a list of labels, when provided, are included in the result.
+                            Example:
+                            If a query produces {a:1, b:2, c:3, d:4} value=30.0
+                            then, with matchLabels = [a,b]
+                            The result will only have {a:1, b:2} value=30.0
+
+                            This helps in have a deterministic schema for the query result.
+                          items:
+                            type: string
+                          type: array
                         tls:
                           properties:
                             ca:
@@ -3622,6 +3636,9 @@ spec:
                 type: array
               icon:
                 type: string
+              jsonSchema:
+                description: JSON Schema or URL to use instead of playbook parameters
+                type: string
               "on":
                 description: |-
                   `On` defines triggers that will automatically trigger the playbook.
@@ -3992,6 +4009,10 @@ spec:
                 type: string
               title:
                 type: string
+              ui:
+                description: Properties that are applied to the UI form
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
             required:
             - actions
             type: object

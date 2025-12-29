@@ -1586,7 +1586,11 @@
         },
         "approval": {
           "$ref": "#/$defs/PlaybookApproval"
-        }
+        },
+        "jsonSchema": {
+          "type": "string"
+        },
+        "ui": true
       },
       "additionalProperties": false,
       "type": "object",
@@ -1724,6 +1728,12 @@
           "$ref": "#/$defs/PrometheusRange"
         },
         "matchLabels": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "selectLabels": {
           "items": {
             "type": "string"
           },
