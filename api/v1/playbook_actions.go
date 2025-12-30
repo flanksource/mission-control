@@ -143,6 +143,7 @@ type GitOpsActionPatch struct {
 	Path string `yaml:"path" json:"path" template:"true"`
 	YQ   string `yaml:"yq,omitempty" json:"yq,omitempty" template:"true"`
 	JQ   string `yaml:"jq,omitempty" json:"jq,omitempty" template:"true"`
+	If   string `yaml:"if,omitempty" json:"if,omitempty"`
 }
 
 type GitOpsActionFile struct {

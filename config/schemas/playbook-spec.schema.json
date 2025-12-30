@@ -592,6 +592,9 @@
         },
         "jq": {
           "type": "string"
+        },
+        "if": {
+          "type": "string"
         }
       },
       "additionalProperties": false,

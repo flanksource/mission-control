@@ -1391,6 +1391,8 @@ spec:
                         patches:
                           items:
                             properties:
+                              if:
+                                type: string
                               jq:
                                 type: string
                               path:
