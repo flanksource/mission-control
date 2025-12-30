@@ -86,12 +86,6 @@ func Test(ctx context.Context, c *models.Connection) error {
 			return api.Errorf(api.EINVALID, "server returned status (code %d) (msg: %s)", response.StatusCode, body)
 		}
 
-	case models.ConnectionTypeDiscord:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
-
-	case models.ConnectionTypeDynatrace:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
-
 	case models.ConnectionTypeElasticSearch:
 		client := http.NewClient().BaseURL(c.URL)
 		if c.Username != "" || c.Password != "" {
@@ -155,9 +149,6 @@ func Test(ctx context.Context, c *models.Connection) error {
 			return api.Errorf(api.EINVALID, "%v", err)
 		}
 
-	case models.ConnectionTypeGenericWebhook:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
-
 	case models.ConnectionTypeGit:
 		_, _, err := git.Clone(ctx, &git.GitopsAPISpec{
 			Repository:    c.URL,
@@ -198,9 +189,6 @@ func Test(ctx context.Context, c *models.Connection) error {
 			return api.Errorf(api.EINVALID, "server returned (status code: %d) (msg: %s)", response.StatusCode, body)
 		}
 
-	case models.ConnectionTypeGoogleChat:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
-
 	case models.ConnectionTypeHTTP:
 		client := http.NewClient()
 		if c.Username != "" || c.Password != "" {
@@ -221,12 +209,6 @@ func Test(ctx context.Context, c *models.Connection) error {
 			return api.Errorf(api.EINVALID, "%s", body)
 		}
 
-	case models.ConnectionTypeIFTTT:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
-
-	case models.ConnectionTypeJMeter:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
-
 	case models.ConnectionTypeKubernetes:
 		client, err := k8s.NewClientWithConfig(c.Certificate)
 		if err != nil {
@@ -236,18 +218,6 @@ func Test(ctx context.Context, c *models.Connection) error {
 		if _, err := client.CoreV1().Pods("default").List(ctx, metav1.ListOptions{}); err != nil {
 			return api.Errorf(api.EINVALID, "error listing pods in default namespace: %v", err)
 		}
-
-	case models.ConnectionTypeLDAP:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
-
-	case models.ConnectionTypeMatrix:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
-
-	case models.ConnectionTypeMattermost:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
-
-	case models.ConnectionTypeMongo:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
 
 	case models.ConnectionTypeMySQL:
 		conn, err := sql.Open("mysql", c.URL)
@@ -259,12 +229,6 @@ func Test(ctx context.Context, c *models.Connection) error {
 		if err := conn.Ping(); err != nil {
 			return api.Errorf(api.EINVALID, "error pinging database: %v", err)
 		}
-
-	case models.ConnectionTypeNtfy:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
-
-	case models.ConnectionTypeOpsGenie:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
 
 	case models.ConnectionTypePostgres:
 		pool, err := duty.NewPgxPool(c.URL)
@@ -299,12 +263,6 @@ func Test(ctx context.Context, c *models.Connection) error {
 			return api.Errorf(api.EINVALID, "%s", body)
 		}
 
-	case models.ConnectionTypePushbullet:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
-
-	case models.ConnectionTypePushover:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
-
 	case models.ConnectionTypeRedis:
 		rdb := redis.NewClient(&redis.Options{
 			Addr:     c.URL,
@@ -314,12 +272,6 @@ func Test(ctx context.Context, c *models.Connection) error {
 		if err := rdb.Ping(ctx).Err(); err != nil {
 			return api.Errorf(api.EINVALID, "%v", err)
 		}
-
-	case models.ConnectionTypeRestic:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
-
-	case models.ConnectionTypeRocketchat:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
 
 	case models.ConnectionTypeS3:
 		cc := connection.AWSConnection{
@@ -340,9 +292,6 @@ func Test(ctx context.Context, c *models.Connection) error {
 		if _, err := client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: lo.ToPtr(c.Properties["bucket"])}); err != nil {
 			return err
 		}
-
-	case models.ConnectionTypeSFTP:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
 
 	case models.ConnectionTypeSlack:
 		response, err := http.NewClient().R(ctx).
@@ -395,12 +344,6 @@ func Test(ctx context.Context, c *models.Connection) error {
 			}
 		}
 
-	case models.ConnectionTypeSlackWebhook:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
-
-	case models.ConnectionTypeSMB:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
-
 	case models.ConnectionTypeSQLServer:
 		conn, err := sql.Open("sqlserver", c.URL)
 		if err != nil {
@@ -411,9 +354,6 @@ func Test(ctx context.Context, c *models.Connection) error {
 		if err := conn.Ping(); err != nil {
 			return api.Errorf(api.EINVALID, "error pinging database: %v", err)
 		}
-
-	case models.ConnectionTypeTeams:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
 
 	case models.ConnectionTypeTelegram:
 		response, err := http.NewClient().R(ctx).Get(fmt.Sprintf("https://api.telegram.org/bot%s/getMe", c.Password))
@@ -427,14 +367,8 @@ func Test(ctx context.Context, c *models.Connection) error {
 			return api.Errorf(api.EINVALID, "server returned status (code %d) (msg: %s)", response.StatusCode, body)
 		}
 
-	case models.ConnectionTypeWebhook:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
-
-	case models.ConnectionTypeWindows:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
-
-	case models.ConnectionTypeZulipChat:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
+	default:
+		return api.Errorf(api.ENOTIMPLEMENTED, "Testing %s connection is not available", c.Type)
 	}
 
 	return nil
