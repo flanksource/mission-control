@@ -3942,10 +3942,10 @@ spec:
                   auth:
                     description: |-
                       Auth - SMTP authentication method
-                      Possible values: None, Plain, CRAMMD5, Unknown, OAuth2
+                      Possible values: none, plain, oauth2
                     type: string
                   encryption:
-                    description: "Encryption Method\n\tDefulat: auto\n\tPossible values:
+                    description: "Encryption Method\n\tDefault: auto\n\tPossible values:
                       None, ExplicitTLS, ImplicitTLS, Auto"
                     type: string
                   fromAddress:

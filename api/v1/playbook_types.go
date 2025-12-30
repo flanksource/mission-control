@@ -10,11 +10,12 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	dutyTypes "github.com/flanksource/duty/types"
-	"github.com/flanksource/incident-commander/vars"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+
+	"github.com/flanksource/incident-commander/vars"
 )
 
 type PlaybookPermission struct {

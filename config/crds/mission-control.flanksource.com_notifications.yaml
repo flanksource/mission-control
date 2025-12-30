@@ -143,7 +143,7 @@ spec:
                 type: array
               repeatInterval:
                 description: RepeatInterval is the waiting time to resend a notification
-                  after it has been succefully sent.
+                  after it has been successfully sent.
                 type: string
               template:
                 description: Template is the notification body in markdown

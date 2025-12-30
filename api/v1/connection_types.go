@@ -1,12 +1,21 @@
 package v1
 
 import (
+	"fmt"
+	"net/url"
+	"strconv"
+	"strings"
+
 	"github.com/flanksource/duty/connection"
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/kopper"
+	"github.com/samber/lo"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/flanksource/incident-commander/utils"
 )
 
 type ConnectionTelegram struct {
@@ -50,6 +59,24 @@ type ConnectionDiscord struct {
 	WebhookID string `json:"webhookID"`
 }
 
+type SMTPTLS string
+
+const (
+	EncryptionNone        SMTPTLS = "None"
+	EncryptionExplicitTLS SMTPTLS = "ExplicitTLS"
+	EncryptionImplicitTLS SMTPTLS = "ImplicitTLS"
+	EncryptionAuto        SMTPTLS = "Auto"
+)
+
+type SMTPAuth string
+
+const (
+	SMTPAuthNone  SMTPAuth = "none"
+	SMTPAuthPlain SMTPAuth = "plain"
+	SMTPAuthOAuth2 SMTPAuth = "oauth2"
+	// AuthCRAMMD5 SMTPAuth = "CRAMMD5" # not supported by github.com/emersion/go-smtp
+)
+
 type ConnectionSMTP struct {
 	Host     string       `json:"host"`
 	Username types.EnvVar `json:"username,omitempty"`
@@ -59,9 +86,9 @@ type ConnectionSMTP struct {
 	InsecureTLS bool `json:"insecureTLS,omitempty"`
 
 	// Encryption Method
-	// 	Defulat: auto
+	// 	Default: auto
 	// 	Possible values: None, ExplicitTLS, ImplicitTLS, Auto
-	Encryption string `json:"encryption,omitempty"`
+	Encryption SMTPTLS `json:"encryption,omitempty"`
 
 	// SMTP server port
 	// 	Default: 587
@@ -80,11 +107,160 @@ type ConnectionSMTP struct {
 	Subject string `json:"subject,omitempty"`
 
 	// Auth - SMTP authentication method
-	// Possible values: None, Plain, CRAMMD5, Unknown, OAuth2
-	Auth string `json:"auth,omitempty"`
+	// Possible values: none, plain, oauth2
+	Auth SMTPAuth `json:"auth,omitempty"`
 
 	// Headers for SMTP Server
 	Headers map[string]string `json:"headers,omitempty"`
+}
+
+func (obj ConnectionSMTP) ToModel() models.Connection {
+	dbObj := models.Connection{}
+	obj.Auth, _ = lo.Coalesce(obj.Auth, SMTPAuthPlain)
+	obj.Encryption, _ = lo.Coalesce(obj.Encryption, "Auto")
+	obj.Port, _ = lo.Coalesce(obj.Port, 587)
+	dbObj.URL = fmt.Sprintf("smtp://$(username):$(password)@%s:%d/?UseStartTLS=%s&Encryption=%s&Auth=%s&from=%s&to=%s",
+		obj.Host,
+		obj.Port,
+		strconv.FormatBool(obj.InsecureTLS),
+		obj.Encryption,
+		obj.Auth,
+		obj.FromAddress,
+		strings.Join(obj.ToAddresses, ","),
+	)
+
+	dbObj.Type = models.ConnectionTypeEmail
+	dbObj.InsecureTLS = obj.InsecureTLS
+	dbObj.Username = obj.Username.String()
+	dbObj.Password = obj.Password.String()
+	dbObj.Properties = map[string]string{
+		"port":     strconv.Itoa(obj.Port),
+		"subject":  obj.Subject,
+		"from":     obj.FromAddress,
+		"to":       strings.Join(obj.ToAddresses, ","),
+		"fromname": obj.FromName,
+		"headers":  utils.StringMapToString(obj.Headers),
+	}
+	return dbObj
+}
+
+func SMTPConnectionFromModel(dbObj models.Connection) (ConnectionSMTP, error) {
+	var err error
+	obj := ConnectionSMTP{}
+	url, err := url.Parse(dbObj.URL)
+	if err != nil {
+		return obj, err
+	}
+	obj.Host = url.Hostname()
+	obj.Port, _ = strconv.Atoi(url.Port())
+	query := url.Query()
+	obj.InsecureTLS, _ = strconv.ParseBool(query.Get("UseStartTLS"))
+	obj.Encryption = SMTPTLS(query.Get("Encryption"))
+	obj.Auth = SMTPAuth(query.Get("Auth"))
+
+	if obj.Port == 0 {
+		if i, err := strconv.Atoi(dbObj.Properties["port"]); err == nil {
+			obj.Port = i
+		} else {
+			obj.Port = 587
+		}
+	}
+	obj.InsecureTLS = dbObj.InsecureTLS
+	if err = (&obj.Username).Scan(dbObj.Username); err != nil {
+		return obj, err
+	}
+	if err = (&obj.Password).Scan(dbObj.Password); err != nil {
+		return obj, err
+	}
+	obj.Subject = dbObj.Properties["subject"]
+	obj.FromAddress = dbObj.Properties["from"]
+	obj.FromName = dbObj.Properties["fromname"]
+	obj.ToAddresses = strings.Split(dbObj.Properties["to"], ",")
+	obj.Headers, err = utils.StringToStringMap(dbObj.Properties["headers"])
+	if err != nil {
+		return obj, err
+	}
+	return obj, nil
+}
+
+// FromURL parses an SMTP URL into ConnectionSMTP fields.
+// URL format: smtp://user:pass@host:port/?Encryption=...&Auth=...&UseStartTLS=...&from=...&fromName=...&to=...&subject=...
+func (c *ConnectionSMTP) FromURL(smtpURL string) error {
+	parsed, err := url.Parse(smtpURL)
+	if err != nil {
+		return err
+	}
+	c.Host = parsed.Hostname()
+	c.Port, _ = strconv.Atoi(parsed.Port())
+	if c.Port == 0 {
+		c.Port = 587
+	}
+
+	query := parsed.Query()
+
+	// Encryption and Auth from URL query
+	c.Encryption = SMTPTLS(query.Get("Encryption"))
+	c.Auth = SMTPAuth(query.Get("Auth"))
+	c.InsecureTLS, _ = strconv.ParseBool(query.Get("UseStartTLS"))
+
+	// From/To/Subject from URL query
+	if v := query.Get("from"); v != "" {
+		c.FromAddress = v
+	}
+	if v := query.Get("fromName"); v != "" {
+		c.FromName = v
+	}
+	if v := query.Get("to"); v != "" {
+		c.ToAddresses = strings.Split(v, ",")
+	}
+	if v := query.Get("subject"); v != "" {
+		c.Subject = v
+	}
+
+	// Headers from URL query (JSON string)
+	if v := query.Get("headers"); v != "" {
+		c.Headers, _ = utils.StringToStringMap(v)
+	}
+
+	return nil
+}
+
+// FromProperties populates fields from a properties map.
+// Does not overwrite fields that are already set.
+func (c *ConnectionSMTP) FromProperties(props map[string]string) {
+	if c.Host == "" {
+		c.Host = props["host"]
+	}
+	if c.Port == 0 {
+		if v := props["port"]; v != "" {
+			c.Port, _ = strconv.Atoi(v)
+		}
+	}
+	if c.FromAddress == "" {
+		c.FromAddress = props["from"]
+	}
+	if c.FromName == "" {
+		c.FromName = props["fromname"]
+	}
+	if c.Auth == "" {
+		c.Auth = SMTPAuth(props["auth"])
+	}
+	if c.Encryption == "" {
+		c.Encryption = SMTPTLS(props["encryptionMethod"])
+	}
+	if c.Subject == "" {
+		c.Subject = props["subject"]
+	}
+	if c.Headers == nil {
+		if v := props["headers"]; v != "" {
+			c.Headers, _ = utils.StringToStringMap(v)
+		}
+	}
+	if len(c.ToAddresses) == 0 {
+		if v := props["to"]; v != "" {
+			c.ToAddresses = strings.Split(v, ",")
+		}
+	}
 }
 
 type ConnectionPushbullet struct {

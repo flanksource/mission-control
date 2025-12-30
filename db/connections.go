@@ -366,7 +366,7 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 		dbObj.Properties = map[string]string{
 			"port":     strconv.Itoa(obj.Spec.SMTP.Port),
 			"subject":  obj.Spec.SMTP.Subject,
-			"auth":     obj.Spec.SMTP.Auth,
+			"auth":     string(obj.Spec.SMTP.Auth),
 			"from":     obj.Spec.SMTP.FromAddress,
 			"to":       strings.Join(obj.Spec.SMTP.ToAddresses, ","),
 			"fromname": obj.Spec.SMTP.FromName,
