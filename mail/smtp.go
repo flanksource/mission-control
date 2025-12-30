@@ -58,12 +58,10 @@ func loadSMTPFromDB(ctx context.Context) (*v1.ConnectionSMTP, error) {
 		Where("name = ? AND type = ? AND deleted_at IS NULL", "system", models.ConnectionTypeEmail).
 		Limit(1).
 		Find(&conn).Error
-	if conn.ID == uuid.Nil {
-		return nil, nil
-	}
-
 	if err != nil {
 		return nil, err
+	} else if conn.ID == uuid.Nil {
+		return nil, nil
 	}
 
 	hydrated, err := ctx.HydrateConnection(&conn)
