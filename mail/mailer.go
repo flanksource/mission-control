@@ -127,7 +127,7 @@ func (m *Mail) Send(conn v1.ConnectionSMTP) error {
 			return err
 		}
 
-	case v1.EncryptionExplicitTLS:
+	case v1.EncryptionExplicitTLS, v1.EncryptionAuto:
 		client, err = smtp.DialStartTLS(addr, tlsConfig)
 		if err != nil {
 			return err
