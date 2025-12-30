@@ -168,6 +168,24 @@ func templateActionExpressions(ctx context.Context, actionSpec *v1.PlaybookActio
 		}
 	}
 
+	if actionSpec.GitOps != nil {
+		for i := range actionSpec.GitOps.Patches {
+			if actionSpec.GitOps.Patches[i].If == "" {
+				continue
+			}
+
+			gomplateTemplate := gomplate.Template{
+				Expression: actionSpec.GitOps.Patches[i].If,
+				CelEnvs:    getActionCelEnvs(ctx, env),
+			}
+			val, err := ctx.RunTemplate(gomplateTemplate, env.AsMap(ctx))
+			if err != nil {
+				return err
+			}
+			actionSpec.GitOps.Patches[i].If = val
+		}
+	}
+
 	return nil
 }
 

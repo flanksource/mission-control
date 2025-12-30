@@ -8,15 +8,16 @@ import (
 
 	commons "github.com/flanksource/commons/context"
 	"github.com/flanksource/commons/logger"
-	gitv5 "github.com/go-git/go-git/v5"
-	"k8s.io/apimachinery/pkg/util/yaml"
-
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/types"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/pkg/clients/git"
 	"github.com/flanksource/incident-commander/pkg/clients/git/connectors"
+	"github.com/flanksource/gomplate/v3"
+	gitv5 "github.com/go-git/go-git/v5"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"k8s.io/apimachinery/pkg/util/yaml"
 )
 
 var _ = ginkgo.Describe("Playbook Action Gitops", ginkgo.Label("slow"), ginkgo.Ordered, func() {
@@ -53,6 +54,11 @@ var _ = ginkgo.Describe("Playbook Action Gitops", ginkgo.Label("slow"), ginkgo.O
 					Path: "notification.yaml",
 					YQ:   `.metadata.namespace = "{{.params.namespace}}"`,
 				},
+				{
+					Path: "notification.yaml",
+					YQ:   `.metadata.name = "should-not-apply"`,
+					If:   `request.parameter != ""`,
+				},
 			},
 		}
 
@@ -65,11 +71,23 @@ var _ = ginkgo.Describe("Playbook Action Gitops", ginkgo.Label("slow"), ginkgo.O
 			Params: map[string]any{
 				"namespace": "logging",
 			},
+			Request: types.JSONMap{
+				"parameter": "",
+			},
 		}
 
 		templater := ctx.NewStructTemplater(env.AsMap(ctx), "template", nil)
 		err := templater.Walk(&spec)
 		Expect(err).To(BeNil())
+
+		for i := range spec.Patches {
+			if spec.Patches[i].If == "" {
+				continue
+			}
+			val, err := gomplate.RunTemplate(env.AsMap(ctx), gomplate.Template{Expression: spec.Patches[i].If})
+			Expect(err).To(BeNil())
+			spec.Patches[i].If = val
+		}
 
 		var runner = GitOps{Context: ctx}
 		res, err := runner.Run(ctx, spec)
@@ -117,6 +135,7 @@ var _ = ginkgo.Describe("Playbook Action Gitops", ginkgo.Label("slow"), ginkgo.O
 			Expect(ok).To(BeTrue())
 
 			Expect(metadata["namespace"].(string)).To(Equal(env.Params["namespace"]), "should have applied the patch")
+			Expect(metadata["name"].(string)).To(Equal("http-check-passed"), "should skip patch when request.parameter is empty")
 		}
 
 		// ensure the new file was created

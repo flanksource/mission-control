@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -258,6 +259,19 @@ func (t *GitOps) cloneRepo(ctx context.Context) (connectors.Connector, *gitv5.Wo
 
 func (t *GitOps) applyPatches(ctx context.Context, action v1.GitOpsAction) error {
 	for _, patch := range action.Patches {
+		if strings.TrimSpace(patch.If) != "" {
+			proceed, err := strconv.ParseBool(patch.If)
+			if err != nil {
+				return ctx.Oops().
+					With("path", patch.Path, "if", patch.If).
+					Errorf("invalid patch filter result (%s) must be 'true' or 'false'", patch.If)
+			}
+			if !proceed {
+				t.log("Skipping patch %s", patch.Path)
+				continue
+			}
+		}
+
 		paths, err := files.DoubleStarGlob(t.workTree.Filesystem.Root(), []string{patch.Path})
 		if err != nil {
 			return err
