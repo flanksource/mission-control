@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/commons/properties"
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/shutdown"
@@ -16,9 +15,67 @@ import (
 	"github.com/flanksource/incident-commander/connection"
 )
 
-var Connections = &cobra.Command{
-	Use:   "connections",
+var Connection = &cobra.Command{
+	Use:   "connection",
 	Short: "Manage connections",
+}
+
+var ConnectionAdd = &cobra.Command{
+	Use:   "add",
+	Short: "Add a new connection",
+	Long: `Add a new connection to the database.
+
+Examples:
+  app connection add slack --name test --namespace default --token xoxb-xxx --channel C12345
+  app connection add postgres --name mydb --namespace default --url "postgres://user:pass@localhost:5432/db"
+  app connection add aws --name my-aws --namespace default --access-key AKIA... --secret-key ... --region us-east-1
+  app connection add postgres --name mydb --namespace default --url "..." --test`,
+	PersistentPreRun:  PreRun,
+	DisableAutoGenTag: true,
+}
+
+type connectionTypeSpec struct {
+	Name    string
+	Type    string
+	Aliases []string
+	Short   string
+}
+
+var connectionAddTypeSpecs = []connectionTypeSpec{
+	{Name: "slack", Type: models.ConnectionTypeSlack, Short: "Add a Slack connection"},
+	{Name: "postgres", Type: models.ConnectionTypePostgres, Short: "Add a Postgres connection"},
+	{Name: "mysql", Type: models.ConnectionTypeMySQL, Short: "Add a MySQL connection"},
+	{Name: "mssql", Type: models.ConnectionTypeSQLServer, Aliases: []string{"sqlserver", "sql-server"}, Short: "Add a SQL Server connection"},
+	{Name: "mongo", Type: models.ConnectionTypeMongo, Aliases: []string{"mongodb"}, Short: "Add a MongoDB connection"},
+	{Name: "aws", Type: models.ConnectionTypeAWS, Short: "Add an AWS connection"},
+	{Name: "aws-kms", Type: models.ConnectionTypeAWSKMS, Aliases: []string{"awskms"}, Short: "Add an AWS KMS connection"},
+	{Name: "s3", Type: models.ConnectionTypeS3, Short: "Add an S3 connection"},
+	{Name: "azure", Type: models.ConnectionTypeAzure, Short: "Add an Azure connection"},
+	{Name: "azure-keyvault", Type: models.ConnectionTypeAzureKeyVault, Aliases: []string{"azure-key-vault"}, Short: "Add an Azure Key Vault connection"},
+	{Name: "azure-devops", Type: models.ConnectionTypeAzureDevops, Aliases: []string{"azuredevops"}, Short: "Add an Azure DevOps connection"},
+	{Name: "gcp", Type: models.ConnectionTypeGCP, Short: "Add a GCP connection"},
+	{Name: "gcs", Type: models.ConnectionTypeGCS, Short: "Add a GCS connection"},
+	{Name: "gcp-kms", Type: models.ConnectionTypeGCPKMS, Aliases: []string{"gcpkms"}, Short: "Add a GCP KMS connection"},
+	{Name: "discord", Type: models.ConnectionTypeDiscord, Short: "Add a Discord connection"},
+	{Name: "smtp", Type: models.ConnectionTypeEmail, Aliases: []string{"email"}, Short: "Add an SMTP connection"},
+	{Name: "telegram", Type: models.ConnectionTypeTelegram, Short: "Add a Telegram connection"},
+	{Name: "ntfy", Type: models.ConnectionTypeNtfy, Short: "Add an Ntfy connection"},
+	{Name: "pushbullet", Type: models.ConnectionTypePushbullet, Short: "Add a Pushbullet connection"},
+	{Name: "pushover", Type: models.ConnectionTypePushover, Short: "Add a Pushover connection"},
+	{Name: "http", Type: models.ConnectionTypeHTTP, Short: "Add an HTTP connection"},
+	{Name: "git", Type: models.ConnectionTypeGit, Short: "Add a Git connection"},
+	{Name: "github", Type: models.ConnectionTypeGithub, Short: "Add a GitHub connection"},
+	{Name: "gitlab", Type: models.ConnectionTypeGitlab, Short: "Add a GitLab connection"},
+	{Name: "kubernetes", Type: models.ConnectionTypeKubernetes, Short: "Add a Kubernetes connection"},
+	{Name: "folder", Type: models.ConnectionTypeFolder, Short: "Add a folder connection"},
+	{Name: "sftp", Type: models.ConnectionTypeSFTP, Short: "Add an SFTP connection"},
+	{Name: "smb", Type: models.ConnectionTypeSMB, Short: "Add an SMB connection"},
+	{Name: "prometheus", Type: models.ConnectionTypePrometheus, Short: "Add a Prometheus connection"},
+	{Name: "loki", Type: models.ConnectionTypeLoki, Short: "Add a Loki connection"},
+	{Name: "openai", Type: models.ConnectionTypeOpenAI, Short: "Add an OpenAI connection"},
+	{Name: "anthropic", Type: models.ConnectionTypeAnthropic, Short: "Add an Anthropic connection"},
+	{Name: "ollama", Type: models.ConnectionTypeOllama, Short: "Add an Ollama connection"},
+	{Name: "gemini", Type: models.ConnectionTypeGemini, Short: "Add a Gemini connection"},
 }
 
 type connectionFlags struct {
@@ -113,59 +170,26 @@ type connectionFlags struct {
 	Properties []string
 }
 
-var connFlags connectionFlags
-
-var ConnectionsAdd = &cobra.Command{
-	Use:   "add",
-	Short: "Add a new connection",
-	Long: `Add a new connection to the database.
-
-Examples:
-  # Add a Postgres connection
-  incident-commander connections add --type=postgres --name=mydb --namespace=default --url="postgres://user:pass@localhost:5432/db"
-
-  # Add an AWS connection
-  incident-commander connections add --type=aws --name=my-aws --namespace=default --access-key=AKIA... --secret-key=... --region=us-east-1
-
-  # Add a Slack connection
-  incident-commander connections add --type=slack --name=alerts --namespace=default --token=xoxb-xxx --channel=C12345
-
-  # Add and test connection
-  incident-commander connections add --type=postgres --name=mydb --namespace=default --url="..." --test`,
-	PreRun: PreRun,
-	RunE:   runConnectionsAdd,
-}
-
-func runConnectionsAdd(cmd *cobra.Command, args []string) error {
-	logger.UseSlog()
-	if err := properties.LoadFile("mission-control.properties"); err != nil {
-		logger.Errorf(err.Error())
-	}
-
+func runConnectionAdd(flags *connectionFlags) error {
 	ctx, stop, err := duty.Start("mission-control", duty.ClientOnly)
 	if err != nil {
 		return err
 	}
 	shutdown.AddHookWithPriority("database", shutdown.PriorityCritical, stop)
 
-	if connFlags.Name == "" {
+	if flags.Name == "" {
 		return fmt.Errorf("--name is required")
 	}
-	if connFlags.Namespace == "" {
+	if flags.Namespace == "" {
 		return fmt.Errorf("--namespace is required")
 	}
-	if connFlags.Type == "" {
-		return fmt.Errorf("--type is required")
-	}
-
-	conn, err := buildConnectionFromFlags()
+	conn, err := buildConnectionFromFlags(flags)
 	if err != nil {
 		return fmt.Errorf("failed to build connection: %w", err)
 	}
 
-	// Check for existing connection
 	var existing models.Connection
-	err = ctx.DB().Where("name = ? AND namespace = ? AND deleted_at IS NULL", connFlags.Name, connFlags.Namespace).First(&existing).Error
+	err = ctx.DB().Where("name = ? AND namespace = ? AND deleted_at IS NULL", flags.Name, flags.Namespace).First(&existing).Error
 	isUpdate := false
 	if err == nil {
 		isUpdate = true
@@ -180,229 +204,225 @@ func runConnectionsAdd(cmd *cobra.Command, args []string) error {
 		conn.ID = uuid.New()
 	}
 
-	// Test connection if requested
-	if connFlags.Test {
+	if flags.Test {
 		if err := connection.Test(ctx, &conn); err != nil {
 			return fmt.Errorf("connection test failed: %w", err)
 		}
 		logger.Infof("Connection test passed")
 	}
 
-	// Save connection
 	if err := ctx.DB().Save(&conn).Error; err != nil {
 		return fmt.Errorf("failed to save connection: %w", err)
 	}
 
 	if isUpdate {
-		fmt.Printf("Connection '%s' updated in namespace '%s'\n", connFlags.Name, connFlags.Namespace)
+		fmt.Printf("Connection '%s' updated in namespace '%s'\n", flags.Name, flags.Namespace)
 	} else {
-		fmt.Printf("Connection '%s' created in namespace '%s'\n", connFlags.Name, connFlags.Namespace)
+		fmt.Printf("Connection '%s' created in namespace '%s'\n", flags.Name, flags.Namespace)
 	}
 
 	return nil
 }
 
-func buildConnectionFromFlags() (models.Connection, error) {
+func buildConnectionFromFlags(flags *connectionFlags) (models.Connection, error) {
 	conn := models.Connection{
-		Name:        connFlags.Name,
-		Namespace:   connFlags.Namespace,
-		Type:        connFlags.Type,
-		URL:         connFlags.URL,
-		Username:    connFlags.Username,
-		Password:    connFlags.Password,
-		Certificate: connFlags.Certificate,
-		InsecureTLS: connFlags.InsecureTLS,
+		Name:        flags.Name,
+		Namespace:   flags.Namespace,
+		Type:        flags.Type,
+		URL:         flags.URL,
+		Username:    flags.Username,
+		Password:    flags.Password,
+		Certificate: flags.Certificate,
+		InsecureTLS: flags.InsecureTLS,
 		Source:      models.SourceUI,
 	}
 
 	props := make(map[string]string)
 
-	switch connFlags.Type {
+	switch flags.Type {
 	case models.ConnectionTypeAWS:
-		conn.URL = connFlags.URL
-		conn.Username = connFlags.AccessKey
-		conn.Password = connFlags.SecretKey
-		props["region"] = connFlags.Region
-		props["profile"] = connFlags.Profile
+		conn.URL = flags.URL
+		conn.Username = flags.AccessKey
+		conn.Password = flags.SecretKey
+		props["region"] = flags.Region
+		props["profile"] = flags.Profile
 
 	case models.ConnectionTypeAWSKMS:
-		conn.URL = connFlags.URL
-		conn.Username = connFlags.AccessKey
-		conn.Password = connFlags.SecretKey
-		props["keyID"] = connFlags.KeyID
-		props["region"] = connFlags.Region
-		props["profile"] = connFlags.Profile
+		conn.URL = flags.URL
+		conn.Username = flags.AccessKey
+		conn.Password = flags.SecretKey
+		props["keyID"] = flags.KeyID
+		props["region"] = flags.Region
+		props["profile"] = flags.Profile
 
 	case models.ConnectionTypeS3:
-		conn.URL = connFlags.URL
-		conn.Username = connFlags.AccessKey
-		conn.Password = connFlags.SecretKey
-		props["bucket"] = connFlags.Bucket
-		props["region"] = connFlags.Region
-		props["profile"] = connFlags.Profile
-		props["usePathStyle"] = fmt.Sprintf("%t", connFlags.UsePathStyle)
+		conn.URL = flags.URL
+		conn.Username = flags.AccessKey
+		conn.Password = flags.SecretKey
+		props["bucket"] = flags.Bucket
+		props["region"] = flags.Region
+		props["profile"] = flags.Profile
+		props["usePathStyle"] = fmt.Sprintf("%t", flags.UsePathStyle)
 
 	case models.ConnectionTypeAzure:
-		conn.Username = connFlags.ClientID
-		conn.Password = connFlags.ClientSecret
-		props["tenant"] = connFlags.TenantID
+		conn.Username = flags.ClientID
+		conn.Password = flags.ClientSecret
+		props["tenant"] = flags.TenantID
 
 	case models.ConnectionTypeAzureKeyVault:
-		conn.Username = connFlags.ClientID
-		conn.Password = connFlags.ClientSecret
-		props["tenant"] = connFlags.TenantID
-		props["keyID"] = connFlags.KeyID
+		conn.Username = flags.ClientID
+		conn.Password = flags.ClientSecret
+		props["tenant"] = flags.TenantID
+		props["keyID"] = flags.KeyID
 
 	case models.ConnectionTypeAzureDevops:
-		conn.URL = connFlags.URL
-		conn.Username = connFlags.Organization
-		conn.Password = connFlags.PersonalAccessToken
+		conn.URL = flags.URL
+		conn.Username = flags.Organization
+		conn.Password = flags.PersonalAccessToken
 
 	case models.ConnectionTypeGCP:
-		conn.URL = connFlags.URL
-		conn.Certificate = connFlags.Certificate
+		conn.URL = flags.URL
+		conn.Certificate = flags.Certificate
 
 	case models.ConnectionTypeGCS:
-		conn.URL = connFlags.URL
-		conn.Certificate = connFlags.Certificate
-		props["bucket"] = connFlags.Bucket
+		conn.URL = flags.URL
+		conn.Certificate = flags.Certificate
+		props["bucket"] = flags.Bucket
 
 	case models.ConnectionTypeGCPKMS:
-		conn.URL = connFlags.URL
-		conn.Certificate = connFlags.Certificate
-		props["keyID"] = connFlags.KeyID
+		conn.URL = flags.URL
+		conn.Certificate = flags.Certificate
+		props["keyID"] = flags.KeyID
 
 	case models.ConnectionTypePostgres:
-		if connFlags.URL == "" && connFlags.Host != "" {
-			conn.URL = fmt.Sprintf("postgres://$(username):$(password)@%s/%s", connFlags.Host, connFlags.Database)
-			if connFlags.InsecureTLS {
+		if flags.URL == "" && flags.Host != "" {
+			conn.URL = fmt.Sprintf("postgres://$(username):$(password)@%s/%s", flags.Host, flags.Database)
+			if flags.InsecureTLS {
 				conn.URL += "?sslmode=disable"
 			}
 		}
-		props["host"] = connFlags.Host
-		props["database"] = connFlags.Database
+		props["host"] = flags.Host
+		props["database"] = flags.Database
 
 	case models.ConnectionTypeMySQL:
-		if connFlags.URL == "" && connFlags.Host != "" {
-			conn.URL = fmt.Sprintf("mysql://$(username):$(password)@%s/%s", connFlags.Host, connFlags.Database)
+		if flags.URL == "" && flags.Host != "" {
+			conn.URL = fmt.Sprintf("mysql://$(username):$(password)@%s/%s", flags.Host, flags.Database)
 		}
-		props["host"] = connFlags.Host
-		props["database"] = connFlags.Database
+		props["host"] = flags.Host
+		props["database"] = flags.Database
 
-	case models.ConnectionTypeSQLServer, "mssql":
-		conn.Type = models.ConnectionTypeSQLServer
-		if connFlags.URL == "" && connFlags.Host != "" {
-			conn.URL = fmt.Sprintf("sqlserver://$(username):$(password)@%s?database=%s", connFlags.Host, connFlags.Database)
-			if connFlags.TrustServerCertificate {
+	case models.ConnectionTypeSQLServer:
+		if flags.URL == "" && flags.Host != "" {
+			conn.URL = fmt.Sprintf("sqlserver://$(username):$(password)@%s?database=%s", flags.Host, flags.Database)
+			if flags.TrustServerCertificate {
 				conn.URL += "&TrustServerCertificate=true"
 			}
 		}
-		props["host"] = connFlags.Host
-		props["database"] = connFlags.Database
+		props["host"] = flags.Host
+		props["database"] = flags.Database
 
 	case models.ConnectionTypeMongo:
-		if connFlags.URL == "" && connFlags.Host != "" {
-			conn.URL = fmt.Sprintf("mongodb://$(username):$(password)@%s/%s", connFlags.Host, connFlags.Database)
-			if connFlags.ReplicaSet != "" {
-				conn.URL += "?replicaSet=" + connFlags.ReplicaSet
+		if flags.URL == "" && flags.Host != "" {
+			conn.URL = fmt.Sprintf("mongodb://$(username):$(password)@%s/%s", flags.Host, flags.Database)
+			if flags.ReplicaSet != "" {
+				conn.URL += "?replicaSet=" + flags.ReplicaSet
 			}
 		}
-		props["host"] = connFlags.Host
-		props["database"] = connFlags.Database
-		props["replica_set"] = connFlags.ReplicaSet
+		props["host"] = flags.Host
+		props["database"] = flags.Database
+		props["replica_set"] = flags.ReplicaSet
 
 	case models.ConnectionTypeSlack:
 		conn.URL = "slack://$(password)@$(username)"
-		conn.Username = connFlags.Channel
-		conn.Password = connFlags.Token
-		props["BotName"] = connFlags.BotName
-		props["Color"] = connFlags.Color
-		props["Icon"] = connFlags.Icon
-		props["ThreadTS"] = connFlags.ThreadTS
-		props["Title"] = connFlags.Title
+		conn.Username = flags.Channel
+		conn.Password = flags.Token
+		props["BotName"] = flags.BotName
+		props["Color"] = flags.Color
+		props["Icon"] = flags.Icon
+		props["ThreadTS"] = flags.ThreadTS
+		props["Title"] = flags.Title
 
 	case models.ConnectionTypeDiscord:
 		conn.URL = "discord://$(password)@$(username)"
-		conn.Username = connFlags.WebhookID
-		conn.Password = connFlags.Token
+		conn.Username = flags.WebhookID
+		conn.Password = flags.Token
 
 	case models.ConnectionTypeEmail:
-		port := connFlags.Port
+		port := flags.Port
 		if port == 0 {
 			port = 587
 		}
-		conn.URL = fmt.Sprintf("smtp://$(username):$(password)@%s:%d/", connFlags.Host, port)
+		conn.URL = fmt.Sprintf("smtp://$(username):$(password)@%s:%d/", flags.Host, port)
 		props["port"] = fmt.Sprintf("%d", port)
-		props["from"] = connFlags.FromAddress
-		props["fromname"] = connFlags.FromName
-		props["subject"] = connFlags.Subject
-		props["auth"] = connFlags.Auth
+		props["from"] = flags.FromAddress
+		props["fromname"] = flags.FromName
+		props["subject"] = flags.Subject
+		props["auth"] = flags.Auth
 
 	case models.ConnectionTypeTelegram:
 		conn.URL = "telegram://$(password)@telegram/?Chats=$(username)"
-		conn.Username = connFlags.Chats
-		conn.Password = connFlags.Token
+		conn.Username = flags.Chats
+		conn.Password = flags.Token
 
 	case models.ConnectionTypeNtfy:
-		conn.URL = fmt.Sprintf("ntfy://$(username):$(password)@%s/%s", connFlags.Host, connFlags.Topic)
-		props["topic"] = connFlags.Topic
+		conn.URL = fmt.Sprintf("ntfy://$(username):$(password)@%s/%s", flags.Host, flags.Topic)
+		props["topic"] = flags.Topic
 
 	case models.ConnectionTypePushbullet:
 		conn.URL = "pushbullet://$(password)/"
-		conn.Password = connFlags.Token
+		conn.Password = flags.Token
 
 	case models.ConnectionTypePushover:
 		conn.URL = "pushover://:$(password)@$(username)"
-		conn.Username = connFlags.User
-		conn.Password = connFlags.Token
+		conn.Username = flags.User
+		conn.Password = flags.Token
 
 	case models.ConnectionTypeHTTP:
-		props["insecure_tls"] = fmt.Sprintf("%t", connFlags.InsecureTLS)
+		props["insecure_tls"] = fmt.Sprintf("%t", flags.InsecureTLS)
 
 	case models.ConnectionTypeGit:
-		props["ref"] = connFlags.Ref
+		props["ref"] = flags.Ref
 
 	case models.ConnectionTypeGithub:
-		conn.Password = connFlags.PersonalAccessToken
+		conn.Password = flags.PersonalAccessToken
 
 	case models.ConnectionTypeGitlab:
-		conn.Password = connFlags.PersonalAccessToken
+		conn.Password = flags.PersonalAccessToken
 
 	case models.ConnectionTypeKubernetes:
-		conn.Certificate = connFlags.Certificate
+		conn.Certificate = flags.Certificate
 
 	case models.ConnectionTypeFolder:
-		props["path"] = connFlags.Path
+		props["path"] = flags.Path
 
 	case models.ConnectionTypeSFTP:
-		port := connFlags.Port
+		port := flags.Port
 		if port == 0 {
 			port = 22
 		}
-		props["path"] = connFlags.Path
+		props["path"] = flags.Path
 		props["port"] = fmt.Sprintf("%d", port)
 
 	case models.ConnectionTypeSMB:
-		props["port"] = fmt.Sprintf("%d", connFlags.Port)
-		props["share"] = connFlags.Share
+		props["port"] = fmt.Sprintf("%d", flags.Port)
+		props["share"] = flags.Share
 
 	case models.ConnectionTypePrometheus:
-		props["bearer"] = connFlags.Bearer
+		props["bearer"] = flags.Bearer
 
 	case models.ConnectionTypeLoki:
 		// URL, username, password already set
 
 	case models.ConnectionTypeOpenAI, models.ConnectionTypeAnthropic, models.ConnectionTypeOllama, models.ConnectionTypeGemini:
-		conn.Password = connFlags.ApiKey
-		if connFlags.Model != "" {
-			props["model"] = connFlags.Model
+		conn.Password = flags.ApiKey
+		if flags.Model != "" {
+			props["model"] = flags.Model
 		}
 
 	default:
-		return conn, fmt.Errorf("unsupported connection type: %s", connFlags.Type)
+		return conn, fmt.Errorf("unsupported connection type: %s", flags.Type)
 	}
 
-	// Filter out empty properties
 	filteredProps := make(map[string]string)
 	for k, v := range props {
 		if v != "" && v != "false" && v != "0" {
@@ -416,91 +436,96 @@ func buildConnectionFromFlags() (models.Connection, error) {
 	return conn, nil
 }
 
+func addConnectionFlags(cmd *cobra.Command, flags *connectionFlags) {
+	cmd.Flags().StringVar(&flags.Name, "name", "", "Connection name (required)")
+	cmd.Flags().StringVar(&flags.Namespace, "namespace", "", "Connection namespace (required)")
+	cmd.Flags().BoolVar(&flags.Test, "test", false, "Test connection before saving")
+
+	cmd.Flags().StringVar(&flags.URL, "url", "", "Connection URL")
+	cmd.Flags().StringVar(&flags.Username, "username", "", "Username")
+	cmd.Flags().StringVar(&flags.Password, "password", "", "Password")
+	cmd.Flags().StringVar(&flags.Certificate, "certificate", "", "Certificate/credentials")
+	cmd.Flags().BoolVar(&flags.InsecureTLS, "insecure-tls", false, "Skip TLS verification")
+
+	cmd.Flags().StringVar(&flags.AccessKey, "access-key", "", "AWS access key")
+	cmd.Flags().StringVar(&flags.SecretKey, "secret-key", "", "AWS secret key")
+	cmd.Flags().StringVar(&flags.Region, "region", "", "AWS/cloud region")
+	cmd.Flags().StringVar(&flags.Profile, "profile", "", "AWS profile")
+
+	cmd.Flags().StringVar(&flags.KeyID, "key-id", "", "KMS key ID")
+
+	cmd.Flags().StringVar(&flags.Bucket, "bucket", "", "S3/GCS bucket name")
+	cmd.Flags().BoolVar(&flags.UsePathStyle, "use-path-style", false, "Use path-style S3 URLs")
+
+	cmd.Flags().StringVar(&flags.ClientID, "client-id", "", "Azure client ID")
+	cmd.Flags().StringVar(&flags.ClientSecret, "client-secret", "", "Azure client secret")
+	cmd.Flags().StringVar(&flags.TenantID, "tenant-id", "", "Azure tenant ID")
+
+	cmd.Flags().StringVar(&flags.Organization, "organization", "", "Azure DevOps organization")
+	cmd.Flags().StringVar(&flags.PersonalAccessToken, "personal-access-token", "", "Personal access token")
+
+	cmd.Flags().StringVar(&flags.Ref, "ref", "", "Git reference (branch/tag)")
+
+	cmd.Flags().StringVar(&flags.Channel, "channel", "", "Slack channel ID")
+	cmd.Flags().StringVar(&flags.Token, "token", "", "API token")
+	cmd.Flags().StringVar(&flags.BotName, "bot-name", "", "Slack bot name")
+	cmd.Flags().StringVar(&flags.Color, "color", "", "Slack message color")
+	cmd.Flags().StringVar(&flags.Icon, "icon", "", "Slack icon")
+	cmd.Flags().StringVar(&flags.ThreadTS, "thread-ts", "", "Slack thread timestamp")
+	cmd.Flags().StringVar(&flags.Title, "title", "", "Message title")
+
+	cmd.Flags().StringVar(&flags.Host, "host", "", "Host address")
+	cmd.Flags().IntVar(&flags.Port, "port", 0, "Port number")
+	cmd.Flags().StringVar(&flags.FromAddress, "from-address", "", "From email address")
+	cmd.Flags().StringVar(&flags.FromName, "from-name", "", "From name")
+	cmd.Flags().StringSliceVar(&flags.ToAddresses, "to-addresses", nil, "To email addresses")
+	cmd.Flags().StringVar(&flags.Subject, "subject", "", "Email subject")
+	cmd.Flags().StringVar(&flags.Auth, "auth", "", "SMTP auth method")
+	cmd.Flags().StringVar(&flags.Encryption, "encryption", "", "SMTP encryption")
+
+	cmd.Flags().StringVar(&flags.Chats, "chats", "", "Telegram chat IDs")
+	cmd.Flags().StringVar(&flags.Topic, "topic", "", "Ntfy topic")
+
+	cmd.Flags().StringSliceVar(&flags.Targets, "targets", nil, "Pushbullet targets")
+	cmd.Flags().StringVar(&flags.User, "user", "", "Pushover user key")
+
+	cmd.Flags().StringVar(&flags.WebhookID, "webhook-id", "", "Discord webhook ID")
+
+	cmd.Flags().StringVar(&flags.Path, "path", "", "File path")
+	cmd.Flags().StringVar(&flags.Share, "share", "", "SMB share name")
+
+	cmd.Flags().StringVar(&flags.Database, "database", "", "Database name")
+	cmd.Flags().StringVar(&flags.ReplicaSet, "replica-set", "", "MongoDB replica set")
+	cmd.Flags().BoolVar(&flags.TrustServerCertificate, "trust-server-certificate", false, "MSSQL trust server certificate")
+
+	cmd.Flags().StringVar(&flags.Bearer, "bearer", "", "Bearer token")
+
+	cmd.Flags().StringVar(&flags.Model, "model", "", "AI model name")
+	cmd.Flags().StringVar(&flags.ApiKey, "api-key", "", "API key")
+}
+
+func newConnectionAddTypeCommand(spec connectionTypeSpec) *cobra.Command {
+	flags := &connectionFlags{}
+	cmd := &cobra.Command{
+		Use:               spec.Name,
+		Aliases:           spec.Aliases,
+		Short:             spec.Short,
+		DisableAutoGenTag: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			flags.Type = spec.Type
+			return runConnectionAdd(flags)
+		},
+	}
+	addConnectionFlags(cmd, flags)
+
+	return cmd
+}
+
 func init() {
-	// Common flags
-	ConnectionsAdd.Flags().StringVar(&connFlags.Name, "name", "", "Connection name (required)")
-	ConnectionsAdd.Flags().StringVar(&connFlags.Namespace, "namespace", "", "Connection namespace (required)")
-	ConnectionsAdd.Flags().StringVar(&connFlags.Type, "type", "", "Connection type (required): postgres, mysql, mssql, mongo, aws, azure, gcp, s3, gcs, slack, smtp, http, git, github, gitlab, etc.")
-	ConnectionsAdd.Flags().BoolVar(&connFlags.Test, "test", false, "Test connection before saving")
+	for _, spec := range connectionAddTypeSpecs {
+		ConnectionAdd.AddCommand(newConnectionAddTypeCommand(spec))
+	}
 
-	// Common connection fields
-	ConnectionsAdd.Flags().StringVar(&connFlags.URL, "url", "", "Connection URL")
-	ConnectionsAdd.Flags().StringVar(&connFlags.Username, "username", "", "Username")
-	ConnectionsAdd.Flags().StringVar(&connFlags.Password, "password", "", "Password")
-	ConnectionsAdd.Flags().StringVar(&connFlags.Certificate, "certificate", "", "Certificate/credentials")
-	ConnectionsAdd.Flags().BoolVar(&connFlags.InsecureTLS, "insecure-tls", false, "Skip TLS verification")
-
-	// AWS flags
-	ConnectionsAdd.Flags().StringVar(&connFlags.AccessKey, "access-key", "", "AWS access key")
-	ConnectionsAdd.Flags().StringVar(&connFlags.SecretKey, "secret-key", "", "AWS secret key")
-	ConnectionsAdd.Flags().StringVar(&connFlags.Region, "region", "", "AWS/cloud region")
-	ConnectionsAdd.Flags().StringVar(&connFlags.Profile, "profile", "", "AWS profile")
-
-	// KMS flags
-	ConnectionsAdd.Flags().StringVar(&connFlags.KeyID, "key-id", "", "KMS key ID")
-
-	// S3/GCS flags
-	ConnectionsAdd.Flags().StringVar(&connFlags.Bucket, "bucket", "", "S3/GCS bucket name")
-	ConnectionsAdd.Flags().BoolVar(&connFlags.UsePathStyle, "use-path-style", false, "Use path-style S3 URLs")
-
-	// Azure flags
-	ConnectionsAdd.Flags().StringVar(&connFlags.ClientID, "client-id", "", "Azure client ID")
-	ConnectionsAdd.Flags().StringVar(&connFlags.ClientSecret, "client-secret", "", "Azure client secret")
-	ConnectionsAdd.Flags().StringVar(&connFlags.TenantID, "tenant-id", "", "Azure tenant ID")
-
-	// Azure DevOps / GitHub / GitLab flags
-	ConnectionsAdd.Flags().StringVar(&connFlags.Organization, "organization", "", "Azure DevOps organization")
-	ConnectionsAdd.Flags().StringVar(&connFlags.PersonalAccessToken, "personal-access-token", "", "Personal access token")
-
-	// Git flags
-	ConnectionsAdd.Flags().StringVar(&connFlags.Ref, "ref", "", "Git reference (branch/tag)")
-
-	// Slack flags
-	ConnectionsAdd.Flags().StringVar(&connFlags.Channel, "channel", "", "Slack channel ID")
-	ConnectionsAdd.Flags().StringVar(&connFlags.Token, "token", "", "API token")
-	ConnectionsAdd.Flags().StringVar(&connFlags.BotName, "bot-name", "", "Slack bot name")
-	ConnectionsAdd.Flags().StringVar(&connFlags.Color, "color", "", "Slack message color")
-	ConnectionsAdd.Flags().StringVar(&connFlags.Icon, "icon", "", "Slack icon")
-	ConnectionsAdd.Flags().StringVar(&connFlags.ThreadTS, "thread-ts", "", "Slack thread timestamp")
-	ConnectionsAdd.Flags().StringVar(&connFlags.Title, "title", "", "Message title")
-
-	// SMTP flags
-	ConnectionsAdd.Flags().StringVar(&connFlags.Host, "host", "", "Host address")
-	ConnectionsAdd.Flags().IntVar(&connFlags.Port, "port", 0, "Port number")
-	ConnectionsAdd.Flags().StringVar(&connFlags.FromAddress, "from-address", "", "From email address")
-	ConnectionsAdd.Flags().StringVar(&connFlags.FromName, "from-name", "", "From name")
-	ConnectionsAdd.Flags().StringSliceVar(&connFlags.ToAddresses, "to-addresses", nil, "To email addresses")
-	ConnectionsAdd.Flags().StringVar(&connFlags.Subject, "subject", "", "Email subject")
-	ConnectionsAdd.Flags().StringVar(&connFlags.Auth, "auth", "", "SMTP auth method")
-	ConnectionsAdd.Flags().StringVar(&connFlags.Encryption, "encryption", "", "SMTP encryption")
-
-	// Telegram/Ntfy flags
-	ConnectionsAdd.Flags().StringVar(&connFlags.Chats, "chats", "", "Telegram chat IDs")
-	ConnectionsAdd.Flags().StringVar(&connFlags.Topic, "topic", "", "Ntfy topic")
-
-	// Pushbullet/Pushover flags
-	ConnectionsAdd.Flags().StringSliceVar(&connFlags.Targets, "targets", nil, "Pushbullet targets")
-	ConnectionsAdd.Flags().StringVar(&connFlags.User, "user", "", "Pushover user key")
-
-	// Discord flags
-	ConnectionsAdd.Flags().StringVar(&connFlags.WebhookID, "webhook-id", "", "Discord webhook ID")
-
-	// SFTP/SMB flags
-	ConnectionsAdd.Flags().StringVar(&connFlags.Path, "path", "", "File path")
-	ConnectionsAdd.Flags().StringVar(&connFlags.Share, "share", "", "SMB share name")
-
-	// Database flags
-	ConnectionsAdd.Flags().StringVar(&connFlags.Database, "database", "", "Database name")
-	ConnectionsAdd.Flags().StringVar(&connFlags.ReplicaSet, "replica-set", "", "MongoDB replica set")
-	ConnectionsAdd.Flags().BoolVar(&connFlags.TrustServerCertificate, "trust-server-certificate", false, "MSSQL trust server certificate")
-
-	// Prometheus flags
-	ConnectionsAdd.Flags().StringVar(&connFlags.Bearer, "bearer", "", "Bearer token")
-
-	// AI flags
-	ConnectionsAdd.Flags().StringVar(&connFlags.Model, "model", "", "AI model name")
-	ConnectionsAdd.Flags().StringVar(&connFlags.ApiKey, "api-key", "", "API key")
-
-	Connections.AddCommand(ConnectionsAdd)
-	Root.AddCommand(Connections)
+	Connection.AddCommand(ConnectionAdd)
+	Root.AddCommand(Connection)
 }
