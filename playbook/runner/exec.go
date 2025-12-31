@@ -109,7 +109,7 @@ func executeAction(ctx context.Context, playbookID any, runID uuid.UUID, runActi
 
 	if actionSpec.GitOps != nil {
 		var e = actions.GitOps{Context: ctx}
-		result1, err2 := e.Run(ctx, *actionSpec.GitOps)
+		result1, err2 := e.Run(ctx, *actionSpec.GitOps, templateEnv.GitOps)
 		if result != nil {
 			result = []any{result, result1}
 		} else {
