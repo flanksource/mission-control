@@ -1224,6 +1224,11 @@ func (in *ConnectionSpec) DeepCopyInto(out *ConnectionSpec) {
 		*out = new(ConnectionMySQL)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.OpenSearch != nil {
+		in, out := &in.OpenSearch, &out.OpenSearch
+		*out = new(connection.OpensearchConnection)
+		(*in).DeepCopyInto(*out)
+	}
 	if in.Postgres != nil {
 		in, out := &in.Postgres, &out.Postgres
 		*out = new(ConnectionPostgres)
