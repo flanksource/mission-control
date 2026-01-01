@@ -1852,8 +1852,7 @@
       "additionalProperties": false,
       "type": "object",
       "required": [
-        "query",
-        "driver"
+        "query"
       ]
     },
     "SecretKeySelector": {
