@@ -2,6 +2,7 @@ package mcp
 
 import (
 	gocontext "context"
+	"encoding/json"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/flanksource/clicky"
 	"github.com/flanksource/duty/context"
+	"github.com/labstack/echo/v4"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
@@ -175,9 +177,18 @@ func splitAndTrim(value string) []string {
 	return result
 }
 
-func structToMCPResponse(s ...any) *mcp.CallToolResult {
+func structToMCPResponse(req mcp.CallToolRequest, s ...any) *mcp.CallToolResult {
 	if len(s) == 0 {
 		return mcp.NewToolResultText("")
+	}
+
+	if req.Header.Get(echo.HeaderContentType) == echo.MIMEApplicationJSON {
+		var data any = s
+		if len(s) == 1 {
+			data = s[0]
+		}
+		allJSON, _ := json.Marshal(data)
+		return mcp.NewToolResultText(string(allJSON))
 	}
 
 	var parts []string

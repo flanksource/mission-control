@@ -99,7 +99,7 @@ func playbookRecentRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) 
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	return structToMCPResponse(pbrs), nil
+	return structToMCPResponse(req, pbrs), nil
 }
 
 func playbookFailedRunsHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -128,7 +128,7 @@ func playbookFailedRunsHandler(goctx gocontext.Context, req mcp.CallToolRequest)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	return structToMCPResponse(runs), nil
+	return structToMCPResponse(req, runs), nil
 }
 
 func playbookRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -211,7 +211,7 @@ func playbookListToolHandler(goctx gocontext.Context, req mcp.CallToolRequest) (
 		}
 	})
 
-	return structToMCPResponse(response), nil
+	return structToMCPResponse(req, response), nil
 }
 
 // PlaybookRunActionDetail represents the response from get_playbook_run_actions SQL function
@@ -251,7 +251,7 @@ func getPlaybookRunStepsHandler(goctx gocontext.Context, req mcp.CallToolRequest
 		return mcp.NewToolResultError(fmt.Sprintf("error fetching playbook run details: %v", err)), nil
 	}
 
-	return structToMCPResponse(actions), nil
+	return structToMCPResponse(req, actions), nil
 }
 
 func playbookResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {

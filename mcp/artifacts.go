@@ -45,7 +45,7 @@ func readArtifactMetadataHandler(goctx gocontext.Context, req mcp.CallToolReques
 		return mcp.NewToolResultError(fmt.Sprintf("artifact(%s) was not found", artifactID)), nil
 	}
 
-	return structToMCPResponse([]*models.Artifact{artifact}), nil
+	return structToMCPResponse(req, []*models.Artifact{artifact}), nil
 }
 
 func readArtifactContentHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
