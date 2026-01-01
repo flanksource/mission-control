@@ -71,8 +71,8 @@ const (
 type SMTPAuth string
 
 const (
-	SMTPAuthNone  SMTPAuth = "none"
-	SMTPAuthPlain SMTPAuth = "plain"
+	SMTPAuthNone   SMTPAuth = "none"
+	SMTPAuthPlain  SMTPAuth = "plain"
 	SMTPAuthOAuth2 SMTPAuth = "oauth2"
 	// AuthCRAMMD5 SMTPAuth = "CRAMMD5" # not supported by github.com/emersion/go-smtp
 )
@@ -501,20 +501,21 @@ type ConnectionSpec struct {
 	OpenAI    *ConnectionOpenAI    `json:"openai,omitempty"`
 	Gemini    *ConnectionGemini    `json:"gemini,omitempty"`
 
-	Folder     *ConnectionFolder     `json:"folder,omitempty"`
-	Git        *ConnectionGit        `json:"git,omitempty"`
-	GitHub     *ConnectionGitHub     `json:"github,omitempty"`
-	GitLab     *ConnectionGitLab     `json:"gitlab,omitempty"`
-	HTTP       *ConnectionHTTP       `json:"http,omitempty"`
-	Kubernetes *ConnectionKubernetes `json:"kubernetes,omitempty"`
-	Loki       *ConnectionLoki       `json:"loki,omitempty"`
-	MSSQL      *ConnectionMSSQL      `json:"mssql,omitempty"`
-	Mongo      *ConnectionMongo      `json:"mongo,omitempty"`
-	MySQL      *ConnectionMySQL      `json:"mysql,omitempty"`
-	Postgres   *ConnectionPostgres   `json:"postgres,omitempty"`
-	Prometheus *ConnectionPrometheus `json:"prometheus,omitempty"`
-	SFTP       *ConnectionSFTP       `json:"sftp,omitempty"`
-	SMB        *ConnectionSMB        `json:"smb,omitempty"`
+	Folder     *ConnectionFolder                `json:"folder,omitempty"`
+	Git        *ConnectionGit                   `json:"git,omitempty"`
+	GitHub     *ConnectionGitHub                `json:"github,omitempty"`
+	GitLab     *ConnectionGitLab                `json:"gitlab,omitempty"`
+	HTTP       *ConnectionHTTP                  `json:"http,omitempty"`
+	Kubernetes *ConnectionKubernetes            `json:"kubernetes,omitempty"`
+	Loki       *ConnectionLoki                  `json:"loki,omitempty"`
+	MSSQL      *ConnectionMSSQL                 `json:"mssql,omitempty"`
+	Mongo      *ConnectionMongo                 `json:"mongo,omitempty"`
+	MySQL      *ConnectionMySQL                 `json:"mysql,omitempty"`
+	OpenSearch *connection.OpensearchConnection `json:"opensearch,omitempty"`
+	Postgres   *ConnectionPostgres              `json:"postgres,omitempty"`
+	Prometheus *ConnectionPrometheus            `json:"prometheus,omitempty"`
+	SFTP       *ConnectionSFTP                  `json:"sftp,omitempty"`
+	SMB        *ConnectionSMB                   `json:"smb,omitempty"`
 
 	//////////////////////////////
 	// Notification Connections //

@@ -21,6 +21,24 @@ import (
 	"github.com/flanksource/incident-commander/utils"
 )
 
+func mergeModel(source, override models.Connection) models.Connection {
+	source.ID = lo.CoalesceOrEmpty(override.ID, source.ID)
+	source.Name = lo.CoalesceOrEmpty(override.Name, source.Name)
+	source.Namespace = lo.CoalesceOrEmpty(override.Namespace, source.Namespace)
+	source.Source = lo.CoalesceOrEmpty(override.Source, source.Source)
+	source.Type = lo.CoalesceOrEmpty(override.Type, source.Type)
+	source.URL = lo.CoalesceOrEmpty(override.URL, source.URL)
+	source.Username = lo.CoalesceOrEmpty(override.Username, source.Username)
+	source.Password = lo.CoalesceOrEmpty(override.Password, source.Password)
+	source.Certificate = lo.CoalesceOrEmpty(override.Certificate, source.Certificate)
+	source.InsecureTLS = override.InsecureTLS
+	source.CreatedAt = lo.CoalesceOrEmpty(override.CreatedAt, source.CreatedAt)
+	source.UpdatedAt = lo.CoalesceOrEmpty(override.UpdatedAt, source.UpdatedAt)
+	source.CreatedBy = lo.CoalesceOrEmpty(override.CreatedBy, source.CreatedBy)
+	source.Properties = collections.MergeMap(source.Properties, override.Properties)
+	return source
+}
+
 func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 	dbObj := models.Connection{
 		ID:          uuid.MustParse(string(obj.GetUID())),
@@ -31,7 +49,6 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 		Username:    obj.Spec.Username.String(),
 		Password:    obj.Spec.Password.String(),
 		Certificate: obj.Spec.Certificate.String(),
-		InsecureTLS: obj.Spec.InsecureTLS,
 		Source:      models.SourceCRD,
 		// Gorm.Save does not use defaults when inserting
 		// and the timestamp used is zero time
@@ -202,6 +219,10 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 				"model": *obj.Spec.OpenAI.Model,
 			}
 		}
+	}
+
+	if obj.Spec.OpenSearch != nil {
+		dbObj = mergeModel(dbObj, obj.Spec.OpenSearch.ToModel())
 	}
 
 	if obj.Spec.Ollama != nil {
