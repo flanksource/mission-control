@@ -21,7 +21,7 @@ import (
 	"github.com/flanksource/incident-commander/utils"
 )
 
-func mergeModel(source, override models.Connection) models.Connection {
+func mergeConnectionModels(source, override models.Connection) models.Connection {
 	source.ID = lo.CoalesceOrEmpty(override.ID, source.ID)
 	source.Name = lo.CoalesceOrEmpty(override.Name, source.Name)
 	source.Namespace = lo.CoalesceOrEmpty(override.Namespace, source.Namespace)
@@ -222,7 +222,7 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 	}
 
 	if obj.Spec.OpenSearch != nil {
-		dbObj = mergeModel(dbObj, obj.Spec.OpenSearch.ToModel())
+		dbObj = mergeConnectionModels(dbObj, obj.Spec.OpenSearch.ToModel())
 	}
 
 	if obj.Spec.Ollama != nil {
