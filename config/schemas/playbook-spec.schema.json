@@ -972,6 +972,9 @@
         "mapping": {
           "$ref": "#/$defs/FieldMappingConfig"
         },
+        "connection": {
+          "type": "string"
+        },
         "address": {
           "type": "string"
         },
@@ -994,7 +997,6 @@
       "additionalProperties": false,
       "type": "object",
       "required": [
-        "address",
         "index",
         "query"
       ]

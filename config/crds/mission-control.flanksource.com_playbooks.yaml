@@ -445,6 +445,8 @@ spec:
                               description: |-
                                 Destination is the full path to where the contents of the URL should be downloaded to.
                                 If left empty, the sha256 hash of the URL will be used as the dir name.
+
+                                Deprecated: no similar functionality available. This depends on the use case
                               type: string
                             password:
                               properties:
@@ -2652,6 +2654,8 @@ spec:
                           properties:
                             address:
                               type: string
+                            connection:
+                              type: string
                             dedupe:
                               description: |-
                                 Dedupe is a list of fields to dedupe on.
@@ -2803,7 +2807,6 @@ spec:
                                   type: object
                               type: object
                           required:
-                          - address
                           - index
                           - query
                           type: object
