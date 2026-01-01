@@ -249,7 +249,7 @@ type SQLAction struct {
 	Query string `yaml:"query" json:"query" template:"true"`
 	// Driver is the name of the underlying database to connect to.
 	// Example: postgres, mysql, ...
-	Driver string `yaml:"driver" json:"driver"`
+	Driver string `yaml:"driver,omitempty" json:"driver,omitempty"`
 }
 
 type HTTPConnection struct {
