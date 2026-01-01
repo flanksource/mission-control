@@ -45,7 +45,7 @@ func healthCheckSearchHandler(goctx gocontext.Context, req mcp.CallToolRequest) 
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	return structToMCPResponse(checks), nil
+	return structToMCPResponse(req, checks), nil
 }
 
 func checkStatusHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -68,7 +68,7 @@ func checkStatusHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	return structToMCPResponse(checkStatuses), nil
+	return structToMCPResponse(req, checkStatuses), nil
 }
 
 func healthCheckRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -101,7 +101,7 @@ func healthCheckRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*m
 		return mcp.NewToolResultError(fmt.Sprintf("Failed to call health check URL: %v", err)), nil
 	}
 
-	return structToMCPResponse(body), nil
+	return structToMCPResponse(req, body), nil
 
 }
 
@@ -120,7 +120,7 @@ func listAllChecksHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mc
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	return structToMCPResponse(checks), nil
+	return structToMCPResponse(req, checks), nil
 }
 
 func registerHealthChecks(s *server.MCPServer) {

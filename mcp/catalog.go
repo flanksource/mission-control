@@ -72,7 +72,7 @@ func searchCatalogHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mc
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	return structToMCPResponse(cis), nil
+	return structToMCPResponse(req, cis), nil
 }
 
 type ConfigDescription struct {
@@ -122,7 +122,7 @@ func describeConfigHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*m
 		return mcp.NewToolResultError(fmt.Sprintf("config item[%s] not found", rawID)), nil
 	}
 
-	return structToMCPResponse([]ConfigDescription{{
+	return structToMCPResponse(req, []ConfigDescription{{
 		ConfigItem:     *config,
 		AvailableTools: availableTools,
 	}}), nil
@@ -160,7 +160,7 @@ func searchConfigChangesHandler(goctx gocontext.Context, req mcp.CallToolRequest
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	return structToMCPResponse(cis), nil
+	return structToMCPResponse(req, cis), nil
 }
 
 func relatedCatalogHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -189,7 +189,7 @@ func relatedCatalogHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*m
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	return structToMCPResponse(cis), nil
+	return structToMCPResponse(req, cis), nil
 }
 
 func configTypeResourceHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -374,7 +374,7 @@ func registerCatalog(s *server.MCPServer) {
 	Describe tool returns detailed metadata of a config item.
 	Provide a single config item id (UUID) from search_catalog results to fetch the full record.
 
-	Each config item returned will have a field "available_tools", which refers to all the existing tools in the current mcp server. 
+	Each config item returned will have a field "available_tools", which refers to all the existing tools in the current mcp server.
 	We can call those tools with the param config_id=<id> and ask the user for any other parameters if the input schema requires any.
 
 	NOTE: This tool is explicitly for config items and not for health checks.

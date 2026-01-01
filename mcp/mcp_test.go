@@ -2,18 +2,22 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"slices"
+	"net/http"
 	"strings"
 
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/google/uuid"
+	"github.com/labstack/echo/v4"
 	"github.com/mark3labs/mcp-go/mcp"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/samber/lo"
 )
+
+var jsonHeader = http.Header{echo.HeaderContentType: []string{echo.MIMEApplicationJSON}}
 
 func checkResultInMCPResponse(toolResult any, results []string) {
 	Expect(toolResult).ToNot(BeNil())
@@ -31,10 +35,11 @@ func checkResultNotInMCPResponse(toolResult any, results []string) {
 	}
 }
 
-var _ = ginkgo.Describe("MCP Tools", ginkgo.FlakeAttempts(5), func() {
+var _ = ginkgo.Describe("MCP Tools", ginkgo.FlakeAttempts(3), func() {
 	ginkgo.Describe("Health Check Tools", func() {
 		ginkgo.It("should list all health checks", func() {
 			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
+				Header: jsonHeader,
 				Params: mcp.CallToolParams{
 					Name: "list_all_checks",
 				},
@@ -51,6 +56,7 @@ var _ = ginkgo.Describe("MCP Tools", ginkgo.FlakeAttempts(5), func() {
 
 		ginkgo.It("should search health checks", func() {
 			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
+				Header: jsonHeader,
 				Params: mcp.CallToolParams{
 					Name: "search_health_checks",
 					Arguments: map[string]any{
@@ -73,6 +79,7 @@ var _ = ginkgo.Describe("MCP Tools", ginkgo.FlakeAttempts(5), func() {
 			testCheckID := dummy.LogisticsAPIHealthHTTPCheck.ID.String()
 
 			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
+				Header: jsonHeader,
 				Params: mcp.CallToolParams{
 					Name: "get_check_status",
 					Arguments: map[string]any{
@@ -85,21 +92,21 @@ var _ = ginkgo.Describe("MCP Tools", ginkgo.FlakeAttempts(5), func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			// As per dummy data for last 10 check_status, we should get 8 passing and 2 failing check status
-			contentLines := strings.Split(fmt.Sprint(result.Content), "\n")
-			statusIndex := slices.Index(strings.Split(contentLines[0], " | "), "status")
+			content := lo.FirstOrEmpty(result.Content)
+			jsonTxt, ok := content.(mcp.TextContent)
+			Expect(ok).To(BeTrue())
+			var checkstatus []models.CheckStatus
+			err = json.Unmarshal([]byte(jsonTxt.Text), &checkstatus)
+			Expect(err).NotTo(HaveOccurred())
 			var trueCount, falseCount int
-			for _, line := range contentLines[1:] {
-				checkStatusData := strings.Split(line, " | ")
-				if len(checkStatusData) > statusIndex {
-					status := strings.TrimSpace(checkStatusData[statusIndex-1])
-					if status == "true" {
-						trueCount++
-					}
-					if status == "false" {
-						falseCount++
-					}
+			for _, c := range checkstatus {
+				if c.Status {
+					trueCount++
+				} else {
+					falseCount++
 				}
 			}
+
 			Expect(trueCount).To(Equal(8))
 			Expect(falseCount).To(Equal(2))
 		})
@@ -108,6 +115,7 @@ var _ = ginkgo.Describe("MCP Tools", ginkgo.FlakeAttempts(5), func() {
 	ginkgo.Describe("Catalog Tools", func() {
 		ginkgo.It("should list catalog types", func() {
 			result, err := mcpClient.CallTool(context.Background(), mcp.CallToolRequest{
+				Header: jsonHeader,
 				Params: mcp.CallToolParams{
 					Name: "list_catalog_types",
 				},
@@ -122,6 +130,7 @@ var _ = ginkgo.Describe("MCP Tools", ginkgo.FlakeAttempts(5), func() {
 
 		ginkgo.It("should search catalog", func() {
 			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
+				Header: jsonHeader,
 				Params: mcp.CallToolParams{
 					Name: "search_catalog",
 					Arguments: map[string]any{
@@ -151,6 +160,7 @@ var _ = ginkgo.Describe("MCP Tools", ginkgo.FlakeAttempts(5), func() {
 
 		ginkgo.It("should search catalog changes", func() {
 			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
+				Header: jsonHeader,
 				Params: mcp.CallToolParams{
 					Name: "search_catalog_changes",
 					Arguments: map[string]any{
@@ -169,6 +179,7 @@ var _ = ginkgo.Describe("MCP Tools", ginkgo.FlakeAttempts(5), func() {
 		ginkgo.It("should get related configs", func() {
 			testConfigID := dummy.LogisticsAPIDeployment.ID.String()
 			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
+				Header: jsonHeader,
 				Params: mcp.CallToolParams{
 					Name: "get_related_configs",
 					Arguments: map[string]any{
@@ -189,6 +200,7 @@ var _ = ginkgo.Describe("MCP Tools", ginkgo.FlakeAttempts(5), func() {
 	ginkgo.Describe("Playbook Tools", func() {
 		ginkgo.It("should list all playbooks", func() {
 			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
+				Header: jsonHeader,
 				Params: mcp.CallToolParams{
 					Name: toolGetAllPlaybooks,
 				},
@@ -202,6 +214,7 @@ var _ = ginkgo.Describe("MCP Tools", ginkgo.FlakeAttempts(5), func() {
 		ginkgo.It("should get recent playbook runs", func() {
 			// TODO: Add playbook run fixtures
 			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
+				Header: jsonHeader,
 				Params: mcp.CallToolParams{
 					Name: toolGetRecentPlaybookRuns,
 				},
@@ -214,6 +227,7 @@ var _ = ginkgo.Describe("MCP Tools", ginkgo.FlakeAttempts(5), func() {
 		ginkgo.It("should get failed playbook runs", func() {
 			// TODO: Add playbook run fixtures
 			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
+				Header: jsonHeader,
 				Params: mcp.CallToolParams{
 					Name: toolGetFailedPlaybookRuns,
 				},
@@ -228,6 +242,7 @@ var _ = ginkgo.Describe("MCP Tools", ginkgo.FlakeAttempts(5), func() {
 		ginkgo.It("should list connections", func() {
 			// TODO: Add connection fixtures
 			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
+				Header: jsonHeader,
 				Params: mcp.CallToolParams{
 					Name: "list_connections",
 				},
@@ -241,6 +256,7 @@ var _ = ginkgo.Describe("MCP Tools", ginkgo.FlakeAttempts(5), func() {
 	ginkgo.Describe("View Tools", func() {
 		ginkgo.It("should list views", func() {
 			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
+				Header: jsonHeader,
 				Params: mcp.CallToolParams{
 					Name: "list_all_views",
 				},
@@ -258,6 +274,7 @@ var _ = ginkgo.Describe("MCP Tools", ginkgo.FlakeAttempts(5), func() {
 
 			// Test that viewRunHandler handles missing tools properly
 			_, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
+				Header: jsonHeader,
 				Params: mcp.CallToolParams{
 					Name: "view_mission-control_default",
 				},
@@ -318,6 +335,7 @@ var _ = ginkgo.Describe("MCP Tools", ginkgo.FlakeAttempts(5), func() {
 	ginkgo.Describe("Error Handling", func() {
 		ginkgo.It("should handle invalid tool names gracefully", func() {
 			_, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
+				Header: jsonHeader,
 				Params: mcp.CallToolParams{
 					Name:      "invalid_tool_name",
 					Arguments: map[string]interface{}{},
@@ -329,6 +347,7 @@ var _ = ginkgo.Describe("MCP Tools", ginkgo.FlakeAttempts(5), func() {
 
 		ginkgo.It("should handle invalid parameters gracefully", func() {
 			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
+				Header: jsonHeader,
 				Params: mcp.CallToolParams{
 					Name: "search_health_checks",
 					Arguments: map[string]interface{}{

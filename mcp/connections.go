@@ -24,7 +24,7 @@ func ConnectionListHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*m
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
-	return structToMCPResponse(conns), nil
+	return structToMCPResponse(req, conns), nil
 }
 
 func ConnectionResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {

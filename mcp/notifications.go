@@ -52,7 +52,7 @@ func getNotificationDetailHandler(goctx gocontext.Context, req mcp.CallToolReque
 		return mcp.NewToolResultError(fmt.Sprintf("failed to get notification: %v", err)), nil
 	}
 
-	return structToMCPResponse([]models.NotificationSendHistory{notification}), nil
+	return structToMCPResponse(req, []models.NotificationSendHistory{notification}), nil
 }
 
 func getNotificationsForResourceHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -108,7 +108,7 @@ func getNotificationsForResourceHandler(goctx gocontext.Context, req mcp.CallToo
 		return mcp.NewToolResultError(fmt.Sprintf("failed to get notifications: %v", err)), nil
 	}
 
-	return structToMCPResponse(notifications), nil
+	return structToMCPResponse(req, notifications), nil
 }
 
 // parseDateMath parses a datemath expression and returns the corresponding time

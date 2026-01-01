@@ -201,7 +201,7 @@ func viewRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.Call
 		return mcp.NewToolResultText(""), nil
 	}
 
-	return structToMCPResponse(contents...), nil
+	return structToMCPResponse(req, contents...), nil
 }
 
 func viewListToolHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
