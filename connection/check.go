@@ -230,6 +230,21 @@ func Test(ctx context.Context, c *models.Connection) error {
 			return api.Errorf(api.EINVALID, "error pinging database: %v", err)
 		}
 
+	case models.ConnectionTypeOpenSearch:
+		var conn connection.OpensearchConnection
+		if err := conn.FromModel(*c); err != nil {
+			return api.Errorf(api.EINVALID, "error creating connection: %v", err)
+		}
+		client, err := conn.Client()
+		if err != nil {
+			return api.Errorf(api.EINVALID, "error creating client: %v", err)
+		}
+
+		r, err := client.Ping()
+		if err != nil || r.IsError() {
+			return api.Errorf(api.EINVALID, "error ping opensearch: %v, %v", err, r)
+		}
+
 	case models.ConnectionTypePostgres:
 		pool, err := duty.NewPgxPool(c.URL)
 		if err != nil {
