@@ -170,19 +170,128 @@ type connectionFlags struct {
 	Properties []string
 }
 
+func validateConnectionFlags(flags *connectionFlags) error {
+	switch flags.Type {
+	case models.ConnectionTypeSlack:
+		if flags.Token == "" {
+			return fmt.Errorf("--token is required for Slack connections")
+		}
+		if flags.Channel == "" {
+			return fmt.Errorf("--channel is required for Slack connections")
+		}
+
+	case models.ConnectionTypePostgres, models.ConnectionTypeMySQL, models.ConnectionTypeSQLServer, models.ConnectionTypeMongo:
+		if flags.URL == "" && flags.Host == "" {
+			return fmt.Errorf("--url or --host is required for database connections")
+		}
+
+	case models.ConnectionTypeAWS, models.ConnectionTypeAWSKMS, models.ConnectionTypeS3:
+		// AWS can use instance profiles, so credentials are optional
+
+	case models.ConnectionTypeAzure, models.ConnectionTypeAzureKeyVault:
+		if flags.ClientID == "" || flags.ClientSecret == "" || flags.TenantID == "" {
+			return fmt.Errorf("--client-id, --client-secret, and --tenant-id are required for Azure connections")
+		}
+
+	case models.ConnectionTypeAzureDevops:
+		if flags.PersonalAccessToken == "" {
+			return fmt.Errorf("--personal-access-token is required for Azure DevOps connections")
+		}
+
+	case models.ConnectionTypeGCP, models.ConnectionTypeGCS, models.ConnectionTypeGCPKMS:
+		// GCP can use default credentials, so certificate is optional
+
+	case models.ConnectionTypeDiscord:
+		if flags.WebhookID == "" || flags.Token == "" {
+			return fmt.Errorf("--webhook-id and --token are required for Discord connections")
+		}
+
+	case models.ConnectionTypeEmail:
+		if flags.Host == "" {
+			return fmt.Errorf("--host is required for SMTP connections")
+		}
+
+	case models.ConnectionTypeTelegram:
+		if flags.Token == "" {
+			return fmt.Errorf("--token is required for Telegram connections")
+		}
+
+	case models.ConnectionTypeNtfy:
+		if flags.Host == "" || flags.Topic == "" {
+			return fmt.Errorf("--host and --topic are required for Ntfy connections")
+		}
+
+	case models.ConnectionTypePushbullet:
+		if flags.Token == "" {
+			return fmt.Errorf("--token is required for Pushbullet connections")
+		}
+
+	case models.ConnectionTypePushover:
+		if flags.Token == "" || flags.User == "" {
+			return fmt.Errorf("--token and --user are required for Pushover connections")
+		}
+
+	case models.ConnectionTypeHTTP:
+		if flags.URL == "" {
+			return fmt.Errorf("--url is required for HTTP connections")
+		}
+
+	case models.ConnectionTypeGit:
+		if flags.URL == "" {
+			return fmt.Errorf("--url is required for Git connections")
+		}
+
+	case models.ConnectionTypeGithub, models.ConnectionTypeGitlab:
+		if flags.PersonalAccessToken == "" {
+			return fmt.Errorf("--personal-access-token is required for GitHub/GitLab connections")
+		}
+
+	case models.ConnectionTypeFolder:
+		if flags.Path == "" {
+			return fmt.Errorf("--path is required for folder connections")
+		}
+
+	case models.ConnectionTypeSFTP:
+		if flags.Host == "" {
+			return fmt.Errorf("--host is required for SFTP connections")
+		}
+
+	case models.ConnectionTypeSMB:
+		if flags.Host == "" || flags.Share == "" {
+			return fmt.Errorf("--host and --share are required for SMB connections")
+		}
+
+	case models.ConnectionTypePrometheus, models.ConnectionTypeLoki:
+		if flags.URL == "" {
+			return fmt.Errorf("--url is required for %s connections", flags.Type)
+		}
+
+	case models.ConnectionTypeOpenAI, models.ConnectionTypeAnthropic, models.ConnectionTypeGemini:
+		if flags.ApiKey == "" {
+			return fmt.Errorf("--api-key is required for %s connections", flags.Type)
+		}
+
+	case models.ConnectionTypeOllama:
+		if flags.URL == "" {
+			return fmt.Errorf("--url is required for Ollama connections")
+		}
+	}
+
+	return nil
+}
+
 func runConnectionAdd(flags *connectionFlags) error {
+	if err := validateConnectionFlags(flags); err != nil {
+		return err
+	}
+
 	ctx, stop, err := duty.Start("mission-control", duty.ClientOnly)
 	if err != nil {
 		return err
 	}
 	shutdown.AddHookWithPriority("database", shutdown.PriorityCritical, stop)
+	defer stop()
 
-	if flags.Name == "" {
-		return fmt.Errorf("--name is required")
-	}
-	if flags.Namespace == "" {
-		return fmt.Errorf("--namespace is required")
-	}
 	conn, err := buildConnectionFromFlags(flags)
 	if err != nil {
 		return fmt.Errorf("failed to build connection: %w", err)
@@ -440,6 +549,8 @@ func addCommonFlags(cmd *cobra.Command, flags *connectionFlags) {
 	cmd.Flags().StringVar(&flags.Name, "name", "", "Connection name (required)")
 	cmd.Flags().StringVar(&flags.Namespace, "namespace", "", "Connection namespace (required)")
 	cmd.Flags().BoolVar(&flags.Test, "test", false, "Test connection before saving")
+	_ = cmd.MarkFlagRequired("name")
+	_ = cmd.MarkFlagRequired("namespace")
 }
 
 func addConnectionFlags(cmd *cobra.Command, flags *connectionFlags, connType string) {

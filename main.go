@@ -1,14 +1,12 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"os"
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/cmd"
 	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 )
 
 var (
@@ -34,14 +32,7 @@ func main() {
 	})
 	cmd.Root.SetUsageTemplate(cmd.Root.UsageTemplate() + fmt.Sprintf("\nversion: %s\n ", version))
 
-	cmd.Root.SilenceErrors = true
-	cmd.Root.SilenceUsage = true
-
 	if err := cmd.Root.Execute(); err != nil {
-		if errors.Is(err, pflag.ErrHelp) {
-			return
-		}
-		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
