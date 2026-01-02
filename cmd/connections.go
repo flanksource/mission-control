@@ -436,72 +436,201 @@ func buildConnectionFromFlags(flags *connectionFlags) (models.Connection, error)
 	return conn, nil
 }
 
-func addConnectionFlags(cmd *cobra.Command, flags *connectionFlags) {
+func addCommonFlags(cmd *cobra.Command, flags *connectionFlags) {
 	cmd.Flags().StringVar(&flags.Name, "name", "", "Connection name (required)")
 	cmd.Flags().StringVar(&flags.Namespace, "namespace", "", "Connection namespace (required)")
 	cmd.Flags().BoolVar(&flags.Test, "test", false, "Test connection before saving")
+}
 
-	cmd.Flags().StringVar(&flags.URL, "url", "", "Connection URL")
-	cmd.Flags().StringVar(&flags.Username, "username", "", "Username")
-	cmd.Flags().StringVar(&flags.Password, "password", "", "Password")
-	cmd.Flags().StringVar(&flags.Certificate, "certificate", "", "Certificate/credentials")
-	cmd.Flags().BoolVar(&flags.InsecureTLS, "insecure-tls", false, "Skip TLS verification")
+func addConnectionFlags(cmd *cobra.Command, flags *connectionFlags, connType string) {
+	addCommonFlags(cmd, flags)
 
-	cmd.Flags().StringVar(&flags.AccessKey, "access-key", "", "AWS access key")
-	cmd.Flags().StringVar(&flags.SecretKey, "secret-key", "", "AWS secret key")
-	cmd.Flags().StringVar(&flags.Region, "region", "", "AWS/cloud region")
-	cmd.Flags().StringVar(&flags.Profile, "profile", "", "AWS profile")
+	switch connType {
+	case models.ConnectionTypeSlack:
+		cmd.Flags().StringVar(&flags.Channel, "channel", "", "Slack channel ID (required)")
+		cmd.Flags().StringVar(&flags.Token, "token", "", "Slack bot token (required)")
+		cmd.Flags().StringVar(&flags.BotName, "bot-name", "", "Slack bot name")
+		cmd.Flags().StringVar(&flags.Color, "color", "", "Message color")
+		cmd.Flags().StringVar(&flags.Icon, "icon", "", "Bot icon")
+		cmd.Flags().StringVar(&flags.ThreadTS, "thread-ts", "", "Thread timestamp")
+		cmd.Flags().StringVar(&flags.Title, "title", "", "Message title")
 
-	cmd.Flags().StringVar(&flags.KeyID, "key-id", "", "KMS key ID")
+	case models.ConnectionTypeAWS:
+		cmd.Flags().StringVar(&flags.URL, "url", "", "AWS endpoint URL")
+		cmd.Flags().StringVar(&flags.AccessKey, "access-key", "", "AWS access key")
+		cmd.Flags().StringVar(&flags.SecretKey, "secret-key", "", "AWS secret key")
+		cmd.Flags().StringVar(&flags.Region, "region", "", "AWS region")
+		cmd.Flags().StringVar(&flags.Profile, "profile", "", "AWS profile")
 
-	cmd.Flags().StringVar(&flags.Bucket, "bucket", "", "S3/GCS bucket name")
-	cmd.Flags().BoolVar(&flags.UsePathStyle, "use-path-style", false, "Use path-style S3 URLs")
+	case models.ConnectionTypeAWSKMS:
+		cmd.Flags().StringVar(&flags.URL, "url", "", "AWS endpoint URL")
+		cmd.Flags().StringVar(&flags.AccessKey, "access-key", "", "AWS access key")
+		cmd.Flags().StringVar(&flags.SecretKey, "secret-key", "", "AWS secret key")
+		cmd.Flags().StringVar(&flags.Region, "region", "", "AWS region")
+		cmd.Flags().StringVar(&flags.Profile, "profile", "", "AWS profile")
+		cmd.Flags().StringVar(&flags.KeyID, "key-id", "", "KMS key ID")
 
-	cmd.Flags().StringVar(&flags.ClientID, "client-id", "", "Azure client ID")
-	cmd.Flags().StringVar(&flags.ClientSecret, "client-secret", "", "Azure client secret")
-	cmd.Flags().StringVar(&flags.TenantID, "tenant-id", "", "Azure tenant ID")
+	case models.ConnectionTypeS3:
+		cmd.Flags().StringVar(&flags.URL, "url", "", "S3 endpoint URL")
+		cmd.Flags().StringVar(&flags.AccessKey, "access-key", "", "AWS access key")
+		cmd.Flags().StringVar(&flags.SecretKey, "secret-key", "", "AWS secret key")
+		cmd.Flags().StringVar(&flags.Region, "region", "", "AWS region")
+		cmd.Flags().StringVar(&flags.Profile, "profile", "", "AWS profile")
+		cmd.Flags().StringVar(&flags.Bucket, "bucket", "", "S3 bucket name")
+		cmd.Flags().BoolVar(&flags.UsePathStyle, "use-path-style", false, "Use path-style S3 URLs")
 
-	cmd.Flags().StringVar(&flags.Organization, "organization", "", "Azure DevOps organization")
-	cmd.Flags().StringVar(&flags.PersonalAccessToken, "personal-access-token", "", "Personal access token")
+	case models.ConnectionTypeAzure:
+		cmd.Flags().StringVar(&flags.ClientID, "client-id", "", "Azure client ID")
+		cmd.Flags().StringVar(&flags.ClientSecret, "client-secret", "", "Azure client secret")
+		cmd.Flags().StringVar(&flags.TenantID, "tenant-id", "", "Azure tenant ID")
 
-	cmd.Flags().StringVar(&flags.Ref, "ref", "", "Git reference (branch/tag)")
+	case models.ConnectionTypeAzureKeyVault:
+		cmd.Flags().StringVar(&flags.ClientID, "client-id", "", "Azure client ID")
+		cmd.Flags().StringVar(&flags.ClientSecret, "client-secret", "", "Azure client secret")
+		cmd.Flags().StringVar(&flags.TenantID, "tenant-id", "", "Azure tenant ID")
+		cmd.Flags().StringVar(&flags.KeyID, "key-id", "", "Key Vault key ID")
 
-	cmd.Flags().StringVar(&flags.Channel, "channel", "", "Slack channel ID")
-	cmd.Flags().StringVar(&flags.Token, "token", "", "API token")
-	cmd.Flags().StringVar(&flags.BotName, "bot-name", "", "Slack bot name")
-	cmd.Flags().StringVar(&flags.Color, "color", "", "Slack message color")
-	cmd.Flags().StringVar(&flags.Icon, "icon", "", "Slack icon")
-	cmd.Flags().StringVar(&flags.ThreadTS, "thread-ts", "", "Slack thread timestamp")
-	cmd.Flags().StringVar(&flags.Title, "title", "", "Message title")
+	case models.ConnectionTypeAzureDevops:
+		cmd.Flags().StringVar(&flags.URL, "url", "", "Azure DevOps URL")
+		cmd.Flags().StringVar(&flags.Organization, "organization", "", "Azure DevOps organization")
+		cmd.Flags().StringVar(&flags.PersonalAccessToken, "personal-access-token", "", "Personal access token")
 
-	cmd.Flags().StringVar(&flags.Host, "host", "", "Host address")
-	cmd.Flags().IntVar(&flags.Port, "port", 0, "Port number")
-	cmd.Flags().StringVar(&flags.FromAddress, "from-address", "", "From email address")
-	cmd.Flags().StringVar(&flags.FromName, "from-name", "", "From name")
-	cmd.Flags().StringSliceVar(&flags.ToAddresses, "to-addresses", nil, "To email addresses")
-	cmd.Flags().StringVar(&flags.Subject, "subject", "", "Email subject")
-	cmd.Flags().StringVar(&flags.Auth, "auth", "", "SMTP auth method")
-	cmd.Flags().StringVar(&flags.Encryption, "encryption", "", "SMTP encryption")
+	case models.ConnectionTypeGCP:
+		cmd.Flags().StringVar(&flags.URL, "url", "", "GCP endpoint URL")
+		cmd.Flags().StringVar(&flags.Certificate, "certificate", "", "Service account credentials JSON")
 
-	cmd.Flags().StringVar(&flags.Chats, "chats", "", "Telegram chat IDs")
-	cmd.Flags().StringVar(&flags.Topic, "topic", "", "Ntfy topic")
+	case models.ConnectionTypeGCS:
+		cmd.Flags().StringVar(&flags.URL, "url", "", "GCS endpoint URL")
+		cmd.Flags().StringVar(&flags.Certificate, "certificate", "", "Service account credentials JSON")
+		cmd.Flags().StringVar(&flags.Bucket, "bucket", "", "GCS bucket name")
 
-	cmd.Flags().StringSliceVar(&flags.Targets, "targets", nil, "Pushbullet targets")
-	cmd.Flags().StringVar(&flags.User, "user", "", "Pushover user key")
+	case models.ConnectionTypeGCPKMS:
+		cmd.Flags().StringVar(&flags.URL, "url", "", "GCP endpoint URL")
+		cmd.Flags().StringVar(&flags.Certificate, "certificate", "", "Service account credentials JSON")
+		cmd.Flags().StringVar(&flags.KeyID, "key-id", "", "KMS key ID")
 
-	cmd.Flags().StringVar(&flags.WebhookID, "webhook-id", "", "Discord webhook ID")
+	case models.ConnectionTypePostgres:
+		cmd.Flags().StringVar(&flags.URL, "url", "", "Postgres connection URL")
+		cmd.Flags().StringVar(&flags.Host, "host", "", "Database host")
+		cmd.Flags().StringVar(&flags.Database, "database", "", "Database name")
+		cmd.Flags().StringVar(&flags.Username, "username", "", "Database username")
+		cmd.Flags().StringVar(&flags.Password, "password", "", "Database password")
+		cmd.Flags().BoolVar(&flags.InsecureTLS, "insecure-tls", false, "Skip TLS verification")
 
-	cmd.Flags().StringVar(&flags.Path, "path", "", "File path")
-	cmd.Flags().StringVar(&flags.Share, "share", "", "SMB share name")
+	case models.ConnectionTypeMySQL:
+		cmd.Flags().StringVar(&flags.URL, "url", "", "MySQL connection URL")
+		cmd.Flags().StringVar(&flags.Host, "host", "", "Database host")
+		cmd.Flags().StringVar(&flags.Database, "database", "", "Database name")
+		cmd.Flags().StringVar(&flags.Username, "username", "", "Database username")
+		cmd.Flags().StringVar(&flags.Password, "password", "", "Database password")
 
-	cmd.Flags().StringVar(&flags.Database, "database", "", "Database name")
-	cmd.Flags().StringVar(&flags.ReplicaSet, "replica-set", "", "MongoDB replica set")
-	cmd.Flags().BoolVar(&flags.TrustServerCertificate, "trust-server-certificate", false, "MSSQL trust server certificate")
+	case models.ConnectionTypeSQLServer:
+		cmd.Flags().StringVar(&flags.URL, "url", "", "SQL Server connection URL")
+		cmd.Flags().StringVar(&flags.Host, "host", "", "Database host")
+		cmd.Flags().StringVar(&flags.Database, "database", "", "Database name")
+		cmd.Flags().StringVar(&flags.Username, "username", "", "Database username")
+		cmd.Flags().StringVar(&flags.Password, "password", "", "Database password")
+		cmd.Flags().BoolVar(&flags.TrustServerCertificate, "trust-server-certificate", false, "Trust server certificate")
 
-	cmd.Flags().StringVar(&flags.Bearer, "bearer", "", "Bearer token")
+	case models.ConnectionTypeMongo:
+		cmd.Flags().StringVar(&flags.URL, "url", "", "MongoDB connection URL")
+		cmd.Flags().StringVar(&flags.Host, "host", "", "Database host")
+		cmd.Flags().StringVar(&flags.Database, "database", "", "Database name")
+		cmd.Flags().StringVar(&flags.Username, "username", "", "Database username")
+		cmd.Flags().StringVar(&flags.Password, "password", "", "Database password")
+		cmd.Flags().StringVar(&flags.ReplicaSet, "replica-set", "", "MongoDB replica set")
 
-	cmd.Flags().StringVar(&flags.Model, "model", "", "AI model name")
-	cmd.Flags().StringVar(&flags.ApiKey, "api-key", "", "API key")
+	case models.ConnectionTypeDiscord:
+		cmd.Flags().StringVar(&flags.WebhookID, "webhook-id", "", "Discord webhook ID")
+		cmd.Flags().StringVar(&flags.Token, "token", "", "Discord webhook token")
+
+	case models.ConnectionTypeEmail:
+		cmd.Flags().StringVar(&flags.Host, "host", "", "SMTP host")
+		cmd.Flags().IntVar(&flags.Port, "port", 587, "SMTP port")
+		cmd.Flags().StringVar(&flags.Username, "username", "", "SMTP username")
+		cmd.Flags().StringVar(&flags.Password, "password", "", "SMTP password")
+		cmd.Flags().StringVar(&flags.FromAddress, "from-address", "", "From email address")
+		cmd.Flags().StringVar(&flags.FromName, "from-name", "", "From name")
+		cmd.Flags().StringVar(&flags.Subject, "subject", "", "Email subject")
+		cmd.Flags().StringVar(&flags.Auth, "auth", "", "SMTP auth method")
+		cmd.Flags().BoolVar(&flags.InsecureTLS, "insecure-tls", false, "Skip TLS verification")
+
+	case models.ConnectionTypeTelegram:
+		cmd.Flags().StringVar(&flags.Token, "token", "", "Telegram bot token")
+		cmd.Flags().StringVar(&flags.Chats, "chats", "", "Telegram chat IDs")
+
+	case models.ConnectionTypeNtfy:
+		cmd.Flags().StringVar(&flags.Host, "host", "", "Ntfy server host")
+		cmd.Flags().StringVar(&flags.Topic, "topic", "", "Ntfy topic")
+		cmd.Flags().StringVar(&flags.Username, "username", "", "Ntfy username")
+		cmd.Flags().StringVar(&flags.Password, "password", "", "Ntfy password")
+
+	case models.ConnectionTypePushbullet:
+		cmd.Flags().StringVar(&flags.Token, "token", "", "Pushbullet access token")
+
+	case models.ConnectionTypePushover:
+		cmd.Flags().StringVar(&flags.Token, "token", "", "Pushover API token")
+		cmd.Flags().StringVar(&flags.User, "user", "", "Pushover user key")
+
+	case models.ConnectionTypeHTTP:
+		cmd.Flags().StringVar(&flags.URL, "url", "", "HTTP URL")
+		cmd.Flags().StringVar(&flags.Username, "username", "", "HTTP basic auth username")
+		cmd.Flags().StringVar(&flags.Password, "password", "", "HTTP basic auth password")
+		cmd.Flags().BoolVar(&flags.InsecureTLS, "insecure-tls", false, "Skip TLS verification")
+
+	case models.ConnectionTypeGit:
+		cmd.Flags().StringVar(&flags.URL, "url", "", "Git repository URL")
+		cmd.Flags().StringVar(&flags.Username, "username", "", "Git username")
+		cmd.Flags().StringVar(&flags.Password, "password", "", "Git password/token")
+		cmd.Flags().StringVar(&flags.Ref, "ref", "", "Git reference (branch/tag)")
+		cmd.Flags().StringVar(&flags.Certificate, "certificate", "", "SSH private key")
+
+	case models.ConnectionTypeGithub:
+		cmd.Flags().StringVar(&flags.URL, "url", "", "GitHub URL")
+		cmd.Flags().StringVar(&flags.PersonalAccessToken, "personal-access-token", "", "GitHub personal access token")
+
+	case models.ConnectionTypeGitlab:
+		cmd.Flags().StringVar(&flags.URL, "url", "", "GitLab URL")
+		cmd.Flags().StringVar(&flags.PersonalAccessToken, "personal-access-token", "", "GitLab personal access token")
+
+	case models.ConnectionTypeKubernetes:
+		cmd.Flags().StringVar(&flags.URL, "url", "", "Kubernetes API URL")
+		cmd.Flags().StringVar(&flags.Certificate, "certificate", "", "Kubeconfig content")
+
+	case models.ConnectionTypeFolder:
+		cmd.Flags().StringVar(&flags.Path, "path", "", "Folder path")
+
+	case models.ConnectionTypeSFTP:
+		cmd.Flags().StringVar(&flags.Host, "host", "", "SFTP host")
+		cmd.Flags().IntVar(&flags.Port, "port", 22, "SFTP port")
+		cmd.Flags().StringVar(&flags.Username, "username", "", "SFTP username")
+		cmd.Flags().StringVar(&flags.Password, "password", "", "SFTP password")
+		cmd.Flags().StringVar(&flags.Path, "path", "", "SFTP path")
+		cmd.Flags().StringVar(&flags.Certificate, "certificate", "", "SSH private key")
+
+	case models.ConnectionTypeSMB:
+		cmd.Flags().StringVar(&flags.Host, "host", "", "SMB host")
+		cmd.Flags().IntVar(&flags.Port, "port", 445, "SMB port")
+		cmd.Flags().StringVar(&flags.Username, "username", "", "SMB username")
+		cmd.Flags().StringVar(&flags.Password, "password", "", "SMB password")
+		cmd.Flags().StringVar(&flags.Share, "share", "", "SMB share name")
+
+	case models.ConnectionTypePrometheus:
+		cmd.Flags().StringVar(&flags.URL, "url", "", "Prometheus URL")
+		cmd.Flags().StringVar(&flags.Username, "username", "", "Basic auth username")
+		cmd.Flags().StringVar(&flags.Password, "password", "", "Basic auth password")
+		cmd.Flags().StringVar(&flags.Bearer, "bearer", "", "Bearer token")
+
+	case models.ConnectionTypeLoki:
+		cmd.Flags().StringVar(&flags.URL, "url", "", "Loki URL")
+		cmd.Flags().StringVar(&flags.Username, "username", "", "Basic auth username")
+		cmd.Flags().StringVar(&flags.Password, "password", "", "Basic auth password")
+
+	case models.ConnectionTypeOpenAI, models.ConnectionTypeAnthropic, models.ConnectionTypeOllama, models.ConnectionTypeGemini:
+		cmd.Flags().StringVar(&flags.URL, "url", "", "API base URL")
+		cmd.Flags().StringVar(&flags.ApiKey, "api-key", "", "API key")
+		cmd.Flags().StringVar(&flags.Model, "model", "", "Model name")
+	}
 }
 
 func newConnectionAddTypeCommand(spec connectionTypeSpec) *cobra.Command {
@@ -516,7 +645,7 @@ func newConnectionAddTypeCommand(spec connectionTypeSpec) *cobra.Command {
 			return runConnectionAdd(flags)
 		},
 	}
-	addConnectionFlags(cmd, flags)
+	addConnectionFlags(cmd, flags, spec.Type)
 
 	return cmd
 }
