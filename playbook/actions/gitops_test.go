@@ -9,15 +9,17 @@ import (
 	commons "github.com/flanksource/commons/context"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
-	v1 "github.com/flanksource/incident-commander/api/v1"
-	"github.com/flanksource/incident-commander/pkg/clients/git"
-	"github.com/flanksource/incident-commander/pkg/clients/git/connectors"
 	"github.com/flanksource/gomplate/v3"
 	gitv5 "github.com/go-git/go-git/v5"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/util/yaml"
+
+	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/pkg/clients/git"
+	"github.com/flanksource/incident-commander/pkg/clients/git/connectors"
 )
 
 var _ = ginkgo.Describe("Playbook Action Gitops", ginkgo.Label("slow"), ginkgo.Ordered, func() {
@@ -90,7 +92,7 @@ var _ = ginkgo.Describe("Playbook Action Gitops", ginkgo.Label("slow"), ginkgo.O
 		}
 
 		var runner = GitOps{Context: ctx}
-		res, err := runner.Run(ctx, spec)
+		res, err := runner.Run(ctx, spec, query.GitOpsSource{})
 		Expect(err).To(BeNil())
 		Expect(len(res.Links)).To(BeZero())
 

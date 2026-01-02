@@ -14,6 +14,7 @@ import (
 	pkgConnection "github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/shell"
 	gitv5 "github.com/go-git/go-git/v5"
 	"github.com/samber/lo"
@@ -57,7 +58,7 @@ const DeleteFileDirective = "$delete"
 
 var blacklistedPathSymbols = regexp.MustCompile(`[${}[\]?*:<>|]`)
 
-func (t *GitOps) Run(ctx context.Context, action v1.GitOpsAction) (*GitOpsActionResult, error) {
+func (t *GitOps) Run(ctx context.Context, action v1.GitOpsAction, gitOpsSource query.GitOpsSource) (*GitOpsActionResult, error) {
 	var response GitOpsActionResult
 
 	if len(action.Patches) == 0 && len(action.Files) == 0 {
@@ -79,7 +80,7 @@ func (t *GitOps) Run(ctx context.Context, action v1.GitOpsAction) (*GitOpsAction
 	}
 	t.workTree = workTree
 
-	if err := t.applyPatches(ctx, action); err != nil {
+	if err := t.applyPatches(ctx, action, gitOpsSource.Git.File); err != nil {
 		return nil, oops.Wrapf(err, "failed to apply patches")
 	}
 
@@ -257,7 +258,7 @@ func (t *GitOps) cloneRepo(ctx context.Context) (connectors.Connector, *gitv5.Wo
 	return connector, workTree, nil
 }
 
-func (t *GitOps) applyPatches(ctx context.Context, action v1.GitOpsAction) error {
+func (t *GitOps) applyPatches(ctx context.Context, action v1.GitOpsAction, defaultPatchPath string) error {
 	for _, patch := range action.Patches {
 		if strings.TrimSpace(patch.If) != "" {
 			proceed, err := strconv.ParseBool(patch.If)
@@ -272,7 +273,8 @@ func (t *GitOps) applyPatches(ctx context.Context, action v1.GitOpsAction) error
 			}
 		}
 
-		paths, err := files.DoubleStarGlob(t.workTree.Filesystem.Root(), []string{patch.Path})
+		patchPath := lo.CoalesceOrEmpty(patch.Path, defaultPatchPath)
+		paths, err := files.DoubleStarGlob(t.workTree.Filesystem.Root(), []string{patchPath})
 		if err != nil {
 			return err
 		}

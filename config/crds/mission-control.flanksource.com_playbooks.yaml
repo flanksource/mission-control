@@ -3360,7 +3360,6 @@ spec:
                           description: URL is the database connection url
                           type: string
                       required:
-                      - driver
                       - query
                       type: object
                     templatesOn:
