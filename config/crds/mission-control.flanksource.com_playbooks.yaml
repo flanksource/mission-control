@@ -1277,6 +1277,20 @@ spec:
                             Script can be an inline script or a path to a script that needs to be executed
                             On windows executed via powershell and in darwin and linux executed using bash
                           type: string
+                        setup:
+                          description: Setup binaries
+                          properties:
+                            bun:
+                              properties:
+                                version:
+                                  type: string
+                              type: object
+                            python:
+                              properties:
+                                version:
+                                  type: string
+                              type: object
+                          type: object
                       required:
                       - script
                       type: object
