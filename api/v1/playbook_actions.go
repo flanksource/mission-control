@@ -394,6 +394,8 @@ type ExecAction struct {
 	EnvVars []types.EnvVar `yaml:"env,omitempty" json:"env,omitempty"`
 	// Checkout details the git repository that should be mounted to the process
 	Checkout *connection.GitConnection `yaml:"checkout,omitempty" json:"checkout,omitempty"`
+	// Setup binaries
+	Setup *shell.ExecSetup `json:"setup,omitempty"`
 }
 
 func (e *ExecAction) ToShellExec() shell.Exec {
@@ -403,6 +405,7 @@ func (e *ExecAction) ToShellExec() shell.Exec {
 		EnvVars:     e.EnvVars,
 		Artifacts:   e.Artifacts,
 		Checkout:    e.Checkout,
+		Setup:       e.Setup,
 	}
 }
 

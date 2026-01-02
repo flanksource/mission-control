@@ -4,6 +4,7 @@ kind: Playbook
 metadata:
   name: notify-send
 spec:
+  category: Exec
   parameters:
     - name: message
       label: The message for notification
