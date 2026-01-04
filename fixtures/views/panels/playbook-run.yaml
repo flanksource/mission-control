@@ -1,0 +1,16 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: playbooks
+  namespace: mc
+spec:
+  display:
+    title: Kubernetes Playbooks
+    sidebar: true
+  panels:
+    - name: Restart Service
+      description: Quick action to restart the production service
+      type: playbooks
+      playbooks:
+        selector:
+          name: loki-logs,kubernetes-scale

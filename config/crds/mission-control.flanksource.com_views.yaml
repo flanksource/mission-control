@@ -490,6 +490,72 @@ spec:
                         showLabels:
                           type: boolean
                       type: object
+                    playbooks:
+                      description: Configuration for playbooks panel
+                      properties:
+                        selector:
+                          description: Playbooks matching this selector will be displayed
+                            in the panel
+                          properties:
+                            agent:
+                              description: |-
+                                Agent can be the agent id or the name of the agent.
+                                 Additionally, the special "self" value can be used to select resources without an agent.
+                              type: string
+                            cache:
+                              description: |-
+                                Cache directives
+                                 'no-cache' (should not fetch from cache but can be cached)
+                                 'no-store' (should not cache)
+                                 'max-age=X' (cache for X duration)
+                              type: string
+                            fieldSelector:
+                              type: string
+                            health:
+                              description: |-
+                                Health filters resources by the health.
+                                Multiple healths can be provided separated by comma.
+                              type: string
+                            id:
+                              type: string
+                            includeDeleted:
+                              type: boolean
+                            labelSelector:
+                              type: string
+                            limit:
+                              type: integer
+                            name:
+                              type: string
+                            namespace:
+                              type: string
+                            scope:
+                              description: |-
+                                Scope is the reference for parent of the resource to select.
+                                For config items, the scope is the scraper id
+                                For checks, it's canaries and
+                                For components, it's topology.
+                                It can either be a uuid or namespace/name
+                              type: string
+                            search:
+                              description: Search query that applies to the resource
+                                name, tag & labels.
+                              type: string
+                            statuses:
+                              description: Statuses filter resources by the status
+                              items:
+                                type: string
+                              type: array
+                            tagSelector:
+                              type: string
+                            types:
+                              description: Types filter resources by the type
+                              items:
+                                type: string
+                              type: array
+                          type: object
+                      required:
+                      - selector
+                      type: object
                     query:
                       description: Query is a raw SQL query that has access to the
                         queries as tables
@@ -543,10 +609,10 @@ spec:
                       - bargauge
                       - properties
                       - timeseries
+                      - playbooks
                       type: string
                   required:
                   - name
-                  - query
                   - type
                   type: object
                   x-kubernetes-validations:
@@ -562,6 +628,10 @@ spec:
                     rule: 'self.type!=''bargauge'' ? !has(self.bargauge) : true'
                   - message: timeseries config not allowed for this type
                     rule: 'self.type!=''timeseries'' ? !has(self.timeseries) : true'
+                  - message: playbooks config not allowed for this type
+                    rule: 'self.type!=''playbooks'' ? !has(self.playbooks) : true'
+                  - message: query is required for this panel type
+                    rule: 'self.type!=''playbooks'' ? has(self.query) : true'
                 type: array
               queries:
                 additionalProperties:
@@ -1426,7 +1496,8 @@ spec:
             type: object
             x-kubernetes-validations:
             - message: either sections or queries must be specified
-              rule: size(self.sections) > 0 || size(self.queries) > 0
+              rule: size(self.sections) > 0 || size(self.queries) > 0 || self.panels.exists(p,
+                p.type == 'playbooks')
             - message: view spec must have panels, columns, or sections defined
               rule: size(self.panels) > 0 || size(self.columns) > 0 || size(self.sections)
                 > 0

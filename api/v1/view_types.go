@@ -11,6 +11,7 @@ import (
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/duty/view"
 	"github.com/google/uuid"
+	"github.com/samber/lo"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 
@@ -62,7 +63,7 @@ type ViewConfigUIPlugin struct {
 }
 
 // ViewSpec defines the desired state of View
-// +kubebuilder:validation:XValidation:rule="size(self.sections) > 0 || size(self.queries) > 0",message="either sections or queries must be specified"
+// +kubebuilder:validation:XValidation:rule="size(self.sections) > 0 || size(self.queries) > 0 || self.panels.exists(p, p.type == 'playbooks')",message="either sections or queries must be specified"
 // +kubebuilder:validation:XValidation:rule="size(self.panels) > 0 || size(self.columns) > 0 || size(self.sections) > 0",message="view spec must have panels, columns, or sections defined"
 // +kubebuilder:validation:XValidation:rule="!(has(self.columns)) || size(self.columns) == 0 || self.columns.exists(c, c.primaryKey == true)",message="if columns is specified, at least one column must have primaryKey set to true"
 type ViewSpec struct {
@@ -131,6 +132,15 @@ func (t ViewSpec) Validate() error {
 	if sectionOnlyView {
 		// This is a view that only aggregates other views.
 		// It doesn't have its own panels or table.
+		return nil
+	}
+
+	nonPlaybookPanels := lo.Filter(t.Panels, func(p api.PanelDef, _ int) bool {
+		return p.Type != api.PanelTypePlaybooks
+	})
+	playbooksSectionOnlyView := len(t.Columns) == 0 && len(t.Queries) == 0 && len(t.Sections) == 0 && len(nonPlaybookPanels) == 0
+	if playbooksSectionOnlyView {
+		// If a view only has playbooks panel, then query isn't required
 		return nil
 	}
 
