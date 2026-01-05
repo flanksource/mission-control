@@ -8,7 +8,7 @@ RUN go mod download
 COPY ./ ./
 RUN make build
 
-FROM flanksource/base-image:0.5.20@sha256:5a29745a30b1f316da822b78863fd21ae7a8058c1f475ff912a8e787a9e40562
+FROM flanksource/base-image:0.6.0@sha256:6cae0a4bbba7e7e16674a55751c8161c11d5ebdd23f596f93e669f835ee1e034
 WORKDIR /app
 
 COPY --from=builder /app/.bin/incident-commander /app
