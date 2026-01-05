@@ -190,6 +190,13 @@ func (c *ConnectionSMTP) FromURL(smtpURL string) error {
 	if err != nil {
 		return err
 	}
+
+	c.Username.ValueStatic = parsed.User.Username()
+	c.Password.ValueStatic, _ = parsed.User.Password()
+	if c.Username.ValueStatic != "" || (c.Username.ValueFrom != nil && !c.Username.IsEmpty()) {
+		c.Auth = SMTPAuthPlain
+	}
+
 	c.Host = parsed.Hostname()
 	c.Port, _ = strconv.Atoi(parsed.Port())
 	if c.Port == 0 {
@@ -200,8 +207,10 @@ func (c *ConnectionSMTP) FromURL(smtpURL string) error {
 
 	// Encryption and Auth from URL query
 	c.Encryption = SMTPTLS(query.Get("Encryption"))
-	c.Auth = SMTPAuth(query.Get("Auth"))
 	c.InsecureTLS, _ = strconv.ParseBool(query.Get("UseStartTLS"))
+	if auth := SMTPAuth(query.Get("Auth")); auth != "" {
+		c.Auth = auth
+	}
 
 	// From/To/Subject from URL query
 	if v := query.Get("from"); v != "" {
