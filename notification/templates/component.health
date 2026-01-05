@@ -24,7 +24,11 @@
 }
 
 {{else}}
+Component: {{.component.name}}<br>
+{{if .component.status}}Status: {{.component.status}}<br>{{end}}
+{{if .component.health}}Health: {{.component.health}}<br>{{end}}
+{{if .component.description}}Error: {{.component.description}}<br>{{end}}
 {{labelsFormat .component.labels}}
-
+<br>
 [Reference]({{.permalink}})
 {{end}}

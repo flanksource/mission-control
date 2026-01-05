@@ -26,7 +26,11 @@
 }
 
 {{else}}
+Config: {{.config.name}}<br>
+{{if .config.status}}Status: {{.config.status}}<br>{{end}}
+{{if .config.health}}Health: {{.config.health}}<br>{{end}}
+{{if .config.description}}Error: {{.config.description}}<br>{{end}}
 {{labelsFormat .config.labels}}
-
+<br>
 [Reference]({{.permalink}})
 {{end}}

@@ -23,10 +23,10 @@
 	]
 }
 {{ else }}
-Canary: {{.canary.name}}
-{{if .agent}}Agent: {{.agent.name}}{{end}}
-{{if .check_status.message}}Message: {{.check_status.message}} {{end}}
+Canary: {{.canary.name}}<br>
+{{if .agent}}Agent: {{.agent.name}}<br>{{end}}
+{{if .check_status.message}}Message: {{.check_status.message}}<br>{{end}}
 {{labelsFormat .check.labels}}
-
+<br>
 [Reference]({{.permalink}})
 {{end}}
