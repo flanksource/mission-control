@@ -23,10 +23,10 @@
 	]
 }
 {{ else }}
-Canary: {{.canary.name}}
-{{if .agent}}Agent: {{.agent.name}}{{end}}
-Error: {{.check_status.error}}
+Canary: {{.canary.name}}<br>
+{{if .agent}}Agent: {{.agent.name}}<br>{{end}}
+Error: {{.check_status.error}}<br>
 {{labelsFormat .check.labels}}
-
+<br>
 [Reference]({{.permalink}})
 {{end}}

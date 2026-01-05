@@ -18,7 +18,7 @@ var TemplateFuncs = map[string]any{
 
 		output := "### Labels:\n"
 		for k, v := range labels {
-			output += fmt.Sprintf("**%s**: %s \n", k, v)
+			output += fmt.Sprintf("**%s**: %s<br>", k, v)
 		}
 
 		return output
