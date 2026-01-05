@@ -3,7 +3,6 @@ package connection
 import (
 	"database/sql"
 	"fmt"
-	"net/url"
 	"os"
 
 	gcs "cloud.google.com/go/storage"
@@ -11,7 +10,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
-	"github.com/containrrr/shoutrrr"
 	"github.com/flanksource/commons/http"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty"
@@ -26,7 +24,9 @@ import (
 	"google.golang.org/api/option"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
+	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/k8s"
+	"github.com/flanksource/incident-commander/mail"
 	"github.com/flanksource/incident-commander/pkg/clients/aws"
 	"github.com/flanksource/incident-commander/pkg/clients/git"
 )
@@ -103,18 +103,17 @@ func Test(ctx context.Context, c *models.Connection) error {
 		}
 
 	case models.ConnectionTypeEmail:
-		parsed, err := url.Parse(c.URL)
-		if err != nil {
+		var conn v1.ConnectionSMTP
+		if err := conn.FromURL(c.URL); err != nil {
 			return api.Errorf(api.EINVALID, "bad shoutrrr connection url: %v", err)
 		}
 
-		queryParams := parsed.Query()
-		queryParams.Set("FromAddress", c.Properties["from"])
-		queryParams.Set("Subject", "Test Connection Email")
-		queryParams.Set("ToAddresses", c.Properties["from"]) // Send a message to the sender itself
-		parsed.RawQuery = queryParams.Encode()
+		sender := c.Properties["from"]
 
-		if err := shoutrrr.Send(parsed.String(), "Test Connection Email"); err != nil {
+		m := mail.New([]string{sender}, "Test Connection Email | Flanksource Mission Control", "test", "text/plain")
+		m.SetFrom("Flanksource Test", sender)
+		m.SetCredentials(conn.Host, conn.Port, c.Username, c.Password)
+		if err := m.Send(conn); err != nil {
 			return api.Errorf(api.EINVALID, "%v", err)
 		}
 

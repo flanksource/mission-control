@@ -364,7 +364,7 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 	}
 
 	if obj.Spec.SMTP != nil {
-		obj.Spec.SMTP.Auth, _ = lo.Coalesce(obj.Spec.SMTP.Auth, "Plain")
+		obj.Spec.SMTP.Auth, _ = lo.Coalesce(obj.Spec.SMTP.Auth, v1.SMTPAuthPlain)
 		obj.Spec.SMTP.Encryption, _ = lo.Coalesce(obj.Spec.SMTP.Encryption, "Auto")
 		obj.Spec.SMTP.FromAddress, _ = lo.Coalesce(obj.Spec.SMTP.FromAddress, "no-reply@example.com")
 		obj.Spec.SMTP.Port, _ = lo.Coalesce(obj.Spec.SMTP.Port, 25)
