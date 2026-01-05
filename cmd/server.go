@@ -144,6 +144,15 @@ func launchKopper(ctx context.Context) {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for Scope: %v", err))
 	}
 
+	if _, err := kopper.SetupReconciler(ctx, mgr,
+		db.PersistTeamFromCRD,
+		db.DeleteTeam,
+		db.DeleteStaleTeam,
+		"team.mission-control.flanksource.com",
+	); err != nil {
+		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for Team: %v", err))
+	}
+
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("error running controller manager: %v", err))
 	}
