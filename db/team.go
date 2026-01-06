@@ -6,6 +6,7 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
+	"gorm.io/gorm/clause"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	dbModels "github.com/flanksource/incident-commander/db/models"
@@ -65,9 +66,10 @@ func syncTeamMembers(ctx context.Context, teamID uuid.UUID, members []string) er
 	// Add new members
 	for personID := range newMemberIDs {
 		if _, exists := existingMemberIDs[personID]; !exists {
-			if err := ctx.DB().Create(&dbModels.TeamMember{
+			if err := ctx.DB().Clauses(clause.OnConflict{DoNothing: true}).Create(&dbModels.TeamMember{
 				TeamID:   teamID,
 				PersonID: personID,
+				Source:   models.SourceCRD,
 			}).Error; err != nil {
 				return ctx.Oops().Wrapf(err, "failed to add member %s to team", personID)
 			}

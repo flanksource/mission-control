@@ -310,6 +310,9 @@ func tableUpdatesHandler(ctx context.Context) {
 
 			switch tgOperation {
 			case TGOPDelete:
+				if rbac.Enforcer() == nil {
+					break
+				}
 				auth.InvalidateRLSCacheForUser(personID)
 				if err := rbac.DeleteRoleForUser(personID, teamID); err != nil {
 					ctx.Errorf("failed to delete team(%s)->user(%s) rbac policy: %v", teamID, personID, err)
@@ -318,6 +321,9 @@ func tableUpdatesHandler(ctx context.Context) {
 				}
 
 			case TGOPInsert, TGOPUpdate:
+				if rbac.Enforcer() == nil {
+					break
+				}
 				auth.InvalidateRLSCacheForUser(personID)
 				if err := rbac.AddRoleForUser(personID, teamID); err != nil {
 					ctx.Errorf("failed to add team(%s)->user(%s) rbac policy: %v", teamID, personID, err)
