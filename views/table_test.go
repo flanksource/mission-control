@@ -109,6 +109,33 @@ var _ = Describe("ReadOrPopulateViewTable", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("refresh timeout reached. try again"))
 		})
+
+		It("should return cached data with refresh error status when refresh fails", func() {
+			viewObj, err := loadViewFromYAML("cache-test-view.yaml")
+			Expect(err).ToNot(HaveOccurred())
+
+			viewObj.Spec.Cache.MaxAge = "0s"
+
+			err = db.PersistViewFromCRD(DefaultContext, viewObj)
+			Expect(err).ToNot(HaveOccurred())
+
+			result, err := ReadOrPopulateViewTable(DefaultContext.WithUser(&dummy.JohnDoe), viewObj.Namespace, viewObj.Name, WithIncludeRows(true))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.RefreshStatus).To(Equal(api.ViewRefreshStatusFresh))
+			Expect(result.RefreshError).To(BeEmpty())
+			Expect(result.ResponseSource).To(Equal(api.ViewResponseSourceFresh))
+
+			time.Sleep(2 * time.Millisecond)
+			viewObj.Spec.Queries["pod"].Configs.Search = "name >= test"
+			err = db.PersistViewFromCRD(DefaultContext, viewObj)
+			Expect(err).ToNot(HaveOccurred())
+
+			cachedResult, err := ReadOrPopulateViewTable(DefaultContext.WithUser(&dummy.JohnDoe), viewObj.Namespace, viewObj.Name, WithIncludeRows(true))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(cachedResult.RefreshStatus).To(Equal(api.ViewRefreshStatusError))
+			Expect(cachedResult.RefreshError).ToNot(BeEmpty())
+			Expect(cachedResult.ResponseSource).To(Equal(api.ViewResponseSourceCache))
+		})
 	})
 
 	Describe("Request variables", Ordered, func() {

@@ -37,6 +37,12 @@ var (
 // ViewOption is a functional option for configuring view operations
 type ViewOption func(*requestOpt)
 
+type refreshInfo struct {
+	status    string
+	err       error
+	usedCache bool
+}
+
 // requestOpt holds configuration options for view operations
 type requestOpt struct {
 	maxAge         *time.Duration
@@ -392,15 +398,30 @@ func ReadOrPopulateViewTable(ctx context.Context, namespace, name string, opts .
 	}
 
 	var result *api.ViewResult
+	var refreshInfo *refreshInfo
 	if ((view.HasTable() && tableExists) || !view.HasTable()) && !cacheExpired {
 		result, err = readCachedViewData(ctx, view, request)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read cached view data: %w", err)
 		}
+		result.RefreshStatus = api.ViewRefreshStatusCache
+		result.ResponseSource = api.ViewResponseSourceCache
 	} else {
-		result, err = handleViewRefresh(ctx, view, cacheOptions, tableExists, request)
+		result, refreshInfo, err = handleViewRefresh(ctx, view, cacheOptions, tableExists, request)
 		if err != nil {
 			return nil, fmt.Errorf("failed to handle view refresh: %w", err)
+		}
+
+		if refreshInfo != nil {
+			result.RefreshStatus = refreshInfo.status
+			if refreshInfo.err != nil {
+				result.RefreshError = refreshInfo.err.Error()
+			}
+			if refreshInfo.usedCache {
+				result.ResponseSource = api.ViewResponseSourceCache
+			} else {
+				result.ResponseSource = api.ViewResponseSourceFresh
+			}
 		}
 	}
 
@@ -421,7 +442,7 @@ func ReadOrPopulateViewTable(ctx context.Context, namespace, name string, opts .
 }
 
 // handleViewRefresh deduplicates concurrent view refresh operations using singleflight
-func handleViewRefresh(ctx context.Context, view *v1.View, cacheOptions *v1.CacheOptions, tableExists bool, request *requestOpt) (*api.ViewResult, error) {
+func handleViewRefresh(ctx context.Context, view *v1.View, cacheOptions *v1.CacheOptions, tableExists bool, request *requestOpt) (*api.ViewResult, *refreshInfo, error) {
 	done := make(chan struct{})
 	var result *api.ViewResult
 	var err error
@@ -456,21 +477,30 @@ func handleViewRefresh(ctx context.Context, view *v1.View, cacheOptions *v1.Cach
 		if err != nil {
 			if tableExists {
 				ctx.Logger.Errorf("failed to refresh view %s: %v", view.GetNamespacedName(), err)
-				return readCachedViewData(ctx, view, request)
+				result, cacheErr := readCachedViewData(ctx, view, request)
+				if cacheErr != nil {
+					return nil, nil, cacheErr
+				}
+				return result, &refreshInfo{status: api.ViewRefreshStatusError, err: err, usedCache: true}, nil
 			}
 
-			return nil, fmt.Errorf("failed to refresh view %s: %w", view.GetNamespacedName(), err)
+			return nil, nil, fmt.Errorf("failed to refresh view %s: %w", view.GetNamespacedName(), err)
 		}
 
-		return result, nil
+		return result, &refreshInfo{status: api.ViewRefreshStatusFresh, usedCache: false}, nil
 
 	case <-time.After(cacheOptions.RefreshTimeout):
 		if tableExists {
 			ctx.Logger.Debugf("view %s refresh timeout reached. returning cached data", view.GetNamespacedName())
-			return readCachedViewData(ctx, view, request)
+			result, cacheErr := readCachedViewData(ctx, view, request)
+			if cacheErr != nil {
+				return nil, nil, cacheErr
+			}
+			timeoutErr := fmt.Errorf("view %s refresh timeout reached", view.GetNamespacedName())
+			return result, &refreshInfo{status: api.ViewRefreshStatusError, err: timeoutErr, usedCache: true}, nil
 		}
 
-		return nil, fmt.Errorf("view %s refresh timeout reached. try again", view.GetNamespacedName())
+		return nil, nil, fmt.Errorf("view %s refresh timeout reached. try again", view.GetNamespacedName())
 	}
 }
 
