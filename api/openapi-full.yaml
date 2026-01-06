@@ -2668,6 +2668,12 @@ components:
           type: string
         icon:
           type: string
+        refresh_status:
+          type: string
+        refresh_error:
+          type: string
+        response_source:
+          type: string
         last_refreshed_at:
           type: string
           format: date-time

@@ -64,7 +64,11 @@ type ViewResult struct {
 	Title     string `json:"title"`
 	Icon      string `json:"icon,omitempty"`
 
-	LastRefreshedAt    time.Time        `json:"lastRefreshedAt"`
+	RefreshStatus   string    `json:"refreshStatus,omitempty"`
+	RefreshError    string    `json:"refreshError,omitempty"`
+	ResponseSource  string    `json:"responseSource,omitempty"`
+	LastRefreshedAt time.Time `json:"lastRefreshedAt"`
+
 	RequestFingerprint string           `json:"requestFingerprint,omitempty"`
 	Columns            []view.ColumnDef `json:"columns,omitempty"`
 	Rows               []view.Row       `json:"rows,omitempty"`
@@ -83,6 +87,15 @@ type ViewResult struct {
 
 	Sections []ViewSection `json:"sections,omitempty"`
 }
+
+const (
+	ViewRefreshStatusCache = "cache"
+	ViewRefreshStatusFresh = "fresh"
+	ViewRefreshStatusError = "error"
+
+	ViewResponseSourceCache = "cache"
+	ViewResponseSourceFresh = "fresh"
+)
 
 // +kubebuilder:object:generate=true
 // +kubebuilder:validation:XValidation:rule="(has(self.values) && !has(self.valueFrom)) || (!has(self.values) && has(self.valueFrom))",message="exactly one of values or valueFrom is required"
