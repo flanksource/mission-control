@@ -127,9 +127,21 @@ type ViewVariable struct {
 // +kubebuilder:object:generate=true
 type ViewVariableValueFrom struct {
 	Config types.ResourceSelector `json:"config" yaml:"config"`
+
+	// LabelTemplate controls how option labels are rendered for config-derived variables.
+	LabelTemplate string `json:"labelTemplate,omitempty" yaml:"labelTemplate,omitempty"`
+
+	// ValueTemplate controls how option values are rendered for config-derived variables.
+	ValueTemplate string `json:"valueTemplate,omitempty" yaml:"valueTemplate,omitempty"`
+}
+
+type ViewVariableOption struct {
+	Label string `json:"label" yaml:"label"`
+	Value string `json:"value" yaml:"value"`
 }
 
 type ViewVariableWithOptions struct {
 	ViewVariable `json:",inline" yaml:",inline"`
-	Options      []string `json:"options" yaml:"options"`
+	Options      []string             `json:"options" yaml:"options"`
+	OptionItems  []ViewVariableOption `json:"optionItems,omitempty" yaml:"optionItems,omitempty"`
 }

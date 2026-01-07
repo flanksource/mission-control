@@ -1405,6 +1405,14 @@ spec:
                                 type: string
                               type: array
                           type: object
+                        labelTemplate:
+                          description: LabelTemplate controls how option labels are
+                            rendered for config-derived variables.
+                          type: string
+                        valueTemplate:
+                          description: ValueTemplate controls how option values are
+                            rendered for config-derived variables.
+                          type: string
                       required:
                       - config
                       type: object

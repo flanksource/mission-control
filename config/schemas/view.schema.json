@@ -1067,6 +1067,12 @@
       "properties": {
         "config": {
           "$ref": "#/$defs/ResourceSelector"
+        },
+        "labelTemplate": {
+          "type": "string"
+        },
+        "valueTemplate": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
