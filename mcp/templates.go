@@ -52,12 +52,16 @@ func runTemplateHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.
 	return structToMCPResponse(req, res), nil
 }
 
-const description = `Evaluate a CEL expression or Go template against the provided env map and return the rendered string. 
-Provide exactly one of cel_expression or gotemplate.`
+func templateToolDescription() string {
+	funcs := gomplate.ListAllFuncs()
+	return "Evaluate a CEL expression or Go template against the provided env map and return the rendered string. " +
+		"Provide exactly one of cel_expression or gotemplate.\n\n" +
+		"Available functions (CEL + Go template):\n" + strings.Join(funcs, "\n")
+}
 
 func registerTemplates(s *server.MCPServer) {
 	s.AddTool(mcp.NewTool(toolRunTemplate,
-		mcp.WithDescription(description),
+		mcp.WithDescription(templateToolDescription()),
 		mcp.WithObject("env",
 			mcp.Description("Environment map available to the expression/template."),
 			mcp.AdditionalProperties(true),
