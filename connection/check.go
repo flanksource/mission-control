@@ -267,7 +267,7 @@ func Test(ctx context.Context, c *models.Connection) error {
 			client = client.Auth(c.Username, c.Password)
 		}
 
-		response, err := client.R(ctx).Get("api/v1/status/config")
+		response, err := client.R(ctx).Get("api/v1/query?query=1")
 		if err != nil {
 			return err
 		}
