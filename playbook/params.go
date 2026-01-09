@@ -4,14 +4,16 @@ import (
 	"encoding/json"
 	"strings"
 
+	"github.com/flanksource/commons/duration"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/secret"
-	v1 "github.com/flanksource/incident-commander/api/v1"
-	"github.com/flanksource/incident-commander/playbook/actions"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"github.com/samber/oops"
 	"gopkg.in/yaml.v2"
+
+	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/playbook/actions"
 )
 
 // Parameters supplied to a playbook run
@@ -147,6 +149,51 @@ func (r *RunParams) validateParams(params []v1.PlaybookParameter) error {
 
 	if len(unknownParams) != 0 {
 		return oops.Errorf("unknown parameter(s): %s, valid parameters are: %s", strings.Join(unknownParams, ", "), strings.Join(all, ", "))
+	}
+
+	for _, param := range params {
+		if param.Type != v1.PlaybookParameterTypeDuration {
+			continue
+		}
+
+		value, ok := r.Params[param.Name]
+		if !ok || lo.IsEmpty(value) {
+			continue
+		}
+
+		parsed, err := duration.ParseDuration(value)
+		if err != nil {
+			return oops.Errorf("invalid duration for parameter %s: %v", param.Name, err)
+		}
+
+		if parsed < 0 {
+			return oops.Errorf("duration for parameter %s must be positive", param.Name)
+		}
+
+		var props v1.DurationParamProperties
+		if err := json.Unmarshal(param.Properties, &props); err == nil {
+			return oops.Errorf("invalid duration constraints for parameter %s: %v", param.Name, err)
+		}
+
+		if props.Min != "" {
+			minDuration, err := duration.ParseDuration(props.Min)
+			if err != nil {
+				return oops.Errorf("invalid duration min for parameter %s: %v", param.Name, err)
+			}
+			if parsed < minDuration {
+				return oops.Errorf("duration for parameter %s must be at least %s", param.Name, props.Min)
+			}
+		}
+
+		if props.Max != "" {
+			maxDuration, err := duration.ParseDuration(props.Max)
+			if err != nil {
+				return oops.Errorf("invalid duration max for parameter %s: %v", param.Name, err)
+			}
+			if parsed > maxDuration {
+				return oops.Errorf("duration for parameter %s must be at most %s", param.Name, props.Max)
+			}
+		}
 	}
 
 	return nil

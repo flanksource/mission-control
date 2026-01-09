@@ -2,8 +2,10 @@ package runner
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/flanksource/commons/collections"
+	"github.com/flanksource/commons/duration"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
@@ -83,6 +85,13 @@ func CreateTemplateEnv(ctx context.Context, playbook *models.Playbook, run model
 			}
 
 			templateEnv.Params[p.Name] = sensitive
+
+		case v1.PlaybookParameterTypeDuration:
+			parsed, err := duration.ParseDuration(val)
+			if err != nil {
+				return templateEnv, oops.Wrapf(err, "invalid duration parameter (%s)", p.Name)
+			}
+			templateEnv.Params[p.Name] = time.Duration(parsed)
 
 		default:
 			templateEnv.Params[p.Name] = val
