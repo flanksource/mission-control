@@ -148,7 +148,7 @@ func runTemplateHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.
 func registerTemplates(s *server.MCPServer) {
 	description := "Evaluate a CEL expression or Go template against the provided env map and return the rendered string. " +
 		"Provide exactly one of cel_expression or gotemplate." +
-		"For the list of available cel and tempalte functions: Visit https://flanksource.com/docs/llms.txt"
+		"For the list of available cel and template functions: Visit https://flanksource.com/docs/reference/scripting/cel/llms.txt"
 
 	s.AddTool(mcp.NewTool(toolRunTemplate,
 		mcp.WithDescription(description),
