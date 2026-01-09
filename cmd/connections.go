@@ -314,7 +314,7 @@ func runConnectionAdd(flags *connectionFlags) error {
 	}
 
 	if flags.Test {
-		if err := connection.Test(ctx, &conn); err != nil {
+		if _, err := connection.Test(ctx, &conn); err != nil {
 			return fmt.Errorf("connection test failed: %w", err)
 		}
 		logger.Infof("Connection test passed")
