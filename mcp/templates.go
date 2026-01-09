@@ -2,8 +2,10 @@ package mcp
 
 import (
 	gocontext "context"
+	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -16,7 +18,13 @@ import (
 	"github.com/flanksource/incident-commander/auth"
 )
 
-const toolRunTemplate = "run_template"
+const (
+	toolRunTemplate = "run_template"
+
+	// Safety net from bad actors
+	defaultTemplateTimeout  = 10 * time.Second
+	defaultMaxTemplateBytes = 64 * 1024
+)
 
 type runTemplateArgs struct {
 	Env           map[string]any `json:"env"`
@@ -95,6 +103,17 @@ func runTemplateHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.
 		}
 	}
 
+	maxTemplateBytes := ctx.Properties().Int("mcp.template.max-length", defaultMaxTemplateBytes)
+	if maxTemplateBytes <= 0 {
+		maxTemplateBytes = defaultMaxTemplateBytes
+	}
+	if len(args.CELExpression) > maxTemplateBytes {
+		return mcp.NewToolResultError(fmt.Sprintf("cel_expression exceeds max length (%d bytes)", maxTemplateBytes)), nil
+	}
+	if len(args.GoTemplate) > maxTemplateBytes {
+		return mcp.NewToolResultError(fmt.Sprintf("gotemplate exceeds max length (%d bytes)", maxTemplateBytes)), nil
+	}
+
 	hasCEL := strings.TrimSpace(args.CELExpression) != ""
 	hasGoTemplate := strings.TrimSpace(args.GoTemplate) != ""
 	if hasCEL == hasGoTemplate {
@@ -108,8 +127,18 @@ func runTemplateHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.
 		template.Template = args.GoTemplate
 	}
 
-	res, err := ctx.RunTemplate(template, args.Env)
+	templateTimeout := ctx.Properties().Duration("mcp.template.timeout", defaultTemplateTimeout)
+	if templateTimeout <= 0 {
+		templateTimeout = defaultTemplateTimeout
+	}
+	templateCtx, cancel := ctx.WithTimeout(templateTimeout)
+	defer cancel()
+
+	res, err := templateCtx.RunTemplate(template, args.Env)
 	if err != nil {
+		if errors.Is(err, gocontext.DeadlineExceeded) {
+			return mcp.NewToolResultError(fmt.Sprintf("template execution timed out after %s", templateTimeout)), nil
+		}
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
@@ -118,7 +147,8 @@ func runTemplateHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.
 
 func registerTemplates(s *server.MCPServer) {
 	description := "Evaluate a CEL expression or Go template against the provided env map and return the rendered string. " +
-		"Provide exactly one of cel_expression or gotemplate."
+		"Provide exactly one of cel_expression or gotemplate." +
+		"For the list of available cel and tempalte functions: Visit https://flanksource.com/docs/llms.txt"
 
 	s.AddTool(mcp.NewTool(toolRunTemplate,
 		mcp.WithDescription(description),
