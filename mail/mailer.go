@@ -31,7 +31,6 @@ type Mail struct {
 	port        int
 	user        string
 	password    string
-	debugWriter io.Writer
 }
 
 func New(to []string, subject, body, contentType string) *Mail {
@@ -60,11 +59,6 @@ func (m *Mail) SetCredentials(host string, port int, user, password string) *Mai
 	m.port = port
 	m.user = user
 	m.password = password
-	return m
-}
-
-func (m *Mail) SetDebugWriter(w io.Writer) *Mail {
-	m.debugWriter = w
 	return m
 }
 
@@ -180,13 +174,7 @@ func (m *Mail) Send(conn v1.ConnectionSMTP) error {
 		// do nothing
 	}
 
-	if m.debugWriter != nil {
-		if properties.On(false, "smtp.debug") {
-			client.DebugWriter = io.MultiWriter(os.Stderr, m.debugWriter)
-		} else {
-			client.DebugWriter = m.debugWriter
-		}
-	} else if properties.On(false, "smtp.debug") {
+	if properties.On(false, "smtp.debug") {
 		client.DebugWriter = os.Stderr
 	}
 

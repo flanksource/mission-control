@@ -1,11 +1,9 @@
 package connection
 
 import (
-	"bytes"
 	"database/sql"
 	"fmt"
 	"os"
-	"strings"
 
 	gcs "cloud.google.com/go/storage"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
@@ -13,7 +11,6 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/flanksource/commons/http"
-	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/connection"
@@ -32,8 +29,6 @@ import (
 	"github.com/flanksource/incident-commander/pkg/clients/aws"
 	"github.com/flanksource/incident-commander/pkg/clients/git"
 )
-
-const smtpDebugLimit = 8000
 
 func Test(ctx context.Context, c *models.Connection) (map[string]any, error) {
 	c, err := ctx.HydrateConnection(c)
@@ -85,7 +80,7 @@ func Test(ctx context.Context, c *models.Connection) (map[string]any, error) {
 			return nil, api.Errorf(api.EINVALID, "%v", err)
 		}
 
-		if response.IsOK(200) {
+		if !response.IsOK(200) {
 			body, _ := response.AsString()
 			return nil, api.Errorf(api.EINVALID, "server returned status (code %d) (msg: %s)", response.StatusCode, body)
 		}
@@ -118,9 +113,7 @@ func Test(ctx context.Context, c *models.Connection) (map[string]any, error) {
 		}
 		subject := "Test Connection Email | Flanksource Mission Control"
 
-		var debug bytes.Buffer
-		m := mail.New([]string{sender}, subject, "test", "text/plain").
-			SetDebugWriter(&debug)
+		m := mail.New([]string{sender}, subject, "test", "text/plain")
 		m.SetFrom("Flanksource Test", sender)
 		m.SetCredentials(conn.Host, conn.Port, c.Username, c.Password)
 		if err := m.Send(conn); err != nil {
@@ -136,9 +129,7 @@ func Test(ctx context.Context, c *models.Connection) (map[string]any, error) {
 			"encryption": conn.Encryption,
 			"auth":       conn.Auth,
 		}
-		if debug.Len() > 0 {
-			payload["debug"] = truncateSMTPDebug(scrubSMTPDebug(debug.String()))
-		}
+
 		return payload, nil
 
 	case models.ConnectionTypeFolder:
@@ -218,9 +209,6 @@ func Test(ctx context.Context, c *models.Connection) (map[string]any, error) {
 		if err != nil {
 			return nil, err
 		}
-
-		body, _ := response.AsString()
-		logger.Infof("response: %v", body)
 
 		if !response.IsOK(200) {
 			body, _ := response.AsString()
@@ -384,11 +372,6 @@ func Test(ctx context.Context, c *models.Connection) (map[string]any, error) {
 			return nil, err
 		}
 
-		if responseMsg["ok"] != true {
-			body, _ := response.AsString()
-			return nil, api.Errorf(api.EINVALID, "server returned msg: %s", body)
-		}
-
 		payload := map[string]any{
 			"team":     responseMsg["team"],
 			"team_id":  responseMsg["team_id"],
@@ -459,31 +442,4 @@ func Test(ctx context.Context, c *models.Connection) (map[string]any, error) {
 	}
 
 	return nil, nil
-}
-
-func scrubSMTPDebug(raw string) string {
-	lines := strings.Split(raw, "\n")
-	redactNext := 0
-	for i, line := range lines {
-		upper := strings.ToUpper(line)
-		if strings.Contains(upper, "AUTH ") {
-			lines[i] = "C: AUTH <redacted>"
-			if strings.Contains(upper, "AUTH LOGIN") {
-				redactNext = 2
-			}
-			continue
-		}
-		if redactNext > 0 && strings.HasPrefix(strings.TrimSpace(line), "C:") {
-			lines[i] = "C: <redacted>"
-			redactNext--
-		}
-	}
-	return strings.Join(lines, "\n")
-}
-
-func truncateSMTPDebug(value string) string {
-	if len(value) <= smtpDebugLimit {
-		return value
-	}
-	return value[:smtpDebugLimit] + "\n...truncated..."
 }
