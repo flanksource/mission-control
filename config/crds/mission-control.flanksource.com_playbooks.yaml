@@ -3980,6 +3980,7 @@ spec:
                       - code
                       - component
                       - config
+                      - duration
                       - list
                       - people
                       - team

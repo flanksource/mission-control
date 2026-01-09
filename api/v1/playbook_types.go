@@ -3,6 +3,7 @@ package v1
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/flanksource/commons/duration"
@@ -32,6 +33,7 @@ const (
 	PlaybookParameterTypeCode      PlaybookParameterType = "code"
 	PlaybookParameterTypeComponent PlaybookParameterType = "component"
 	PlaybookParameterTypeConfig    PlaybookParameterType = "config"
+	PlaybookParameterTypeDuration  PlaybookParameterType = "duration"
 	PlaybookParameterTypeList      PlaybookParameterType = "list"
 	PlaybookParameterTypePeople    PlaybookParameterType = "people"
 	PlaybookParameterTypeTeam      PlaybookParameterType = "team"
@@ -56,7 +58,7 @@ type PlaybookParameter struct {
 	Icon        string `json:"icon,omitempty" yaml:"icon,omitempty"`
 	Description string `json:"description,omitempty" yaml:"description,omitempty"`
 
-	// +kubebuilder:validation:Enum=check;checkbox;code;component;config;list;people;team;text;bytes;millicores;secret
+	// +kubebuilder:validation:Enum=check;checkbox;code;component;config;duration;list;people;team;text;bytes;millicores;secret
 	Type PlaybookParameterType `json:"type,omitempty" yaml:"type,omitempty"`
 
 	// +kubebuilder:validation:Schemaless
@@ -305,6 +307,77 @@ func (p PlaybookSpec) Validate() error {
 		}
 		actionNames[n.Name] = struct{}{}
 	}
+
+	for _, param := range p.Parameters {
+		if param.Type != PlaybookParameterTypeDuration {
+			continue
+		}
+
+		if err := validateDurationParameterSpec(param); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateDurationParameterSpec(param PlaybookParameter) error {
+	var props DurationParamProperties
+	if err := json.Unmarshal(param.Properties, &props); err == nil {
+		return fmt.Errorf("parameter %s has invalid duration properties: %w", param.Name, err)
+	}
+
+	var minDuration *duration.Duration
+	if props.Min != "" {
+		parsed, err := duration.ParseDuration(props.Min)
+		if err != nil {
+			return fmt.Errorf("parameter %s has invalid min duration: %w", param.Name, err)
+		}
+		minDuration = &parsed
+	}
+
+	var maxDuration *duration.Duration
+	if props.Max != "" {
+		parsed, err := duration.ParseDuration(props.Max)
+		if err != nil {
+			return fmt.Errorf("parameter %s has invalid max duration: %w", param.Name, err)
+		}
+		maxDuration = &parsed
+	}
+
+	if minDuration != nil && maxDuration != nil && *minDuration > *maxDuration {
+		return fmt.Errorf("parameter %s has min duration greater than max duration", param.Name)
+	}
+
+	defaultValue := strings.TrimSpace(string(param.Default))
+	if defaultValue != "" {
+		parsed, err := duration.ParseDuration(defaultValue)
+		if err != nil {
+			return fmt.Errorf("parameter %s has invalid default duration: %w", param.Name, err)
+		}
+		if minDuration != nil && parsed < *minDuration {
+			return fmt.Errorf("parameter %s default duration must be at least %s", param.Name, props.Min)
+		}
+		if maxDuration != nil && parsed > *maxDuration {
+			return fmt.Errorf("parameter %s default duration must be at most %s", param.Name, props.Max)
+		}
+	}
+
+	for _, value := range props.Options {
+		if strings.TrimSpace(value) == "" {
+			continue
+		}
+		parsed, err := duration.ParseDuration(value)
+		if err != nil {
+			return fmt.Errorf("parameter %s has invalid duration option %q: %w", param.Name, value, err)
+		}
+		if minDuration != nil && parsed < *minDuration {
+			return fmt.Errorf("parameter %s has duration option %q below min %s", param.Name, value, props.Min)
+		}
+		if maxDuration != nil && parsed > *maxDuration {
+			return fmt.Errorf("parameter %s has duration option %q above max %s", param.Name, value, props.Max)
+		}
+	}
+
 	return nil
 }
 
