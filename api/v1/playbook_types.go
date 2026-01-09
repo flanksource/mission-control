@@ -322,7 +322,7 @@ func (p PlaybookSpec) Validate() error {
 
 func validateDurationParameterSpec(param PlaybookParameter) error {
 	var props DurationParamProperties
-	if err := json.Unmarshal(param.Properties, &props); err == nil {
+	if err := json.Unmarshal(param.Properties, &props); err != nil {
 		return fmt.Errorf("parameter %s has invalid duration properties: %w", param.Name, err)
 	}
 

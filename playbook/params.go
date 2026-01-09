@@ -171,7 +171,7 @@ func (r *RunParams) validateParams(params []v1.PlaybookParameter) error {
 		}
 
 		var props v1.DurationParamProperties
-		if err := json.Unmarshal(param.Properties, &props); err == nil {
+		if err := json.Unmarshal(param.Properties, &props); err != nil {
 			return oops.Errorf("invalid duration constraints for parameter %s: %v", param.Name, err)
 		}
 
