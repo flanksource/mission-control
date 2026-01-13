@@ -1405,6 +1405,14 @@ spec:
                                 type: string
                               type: array
                           type: object
+                        label:
+                          description: Label is a cel expression for the dropdown
+                            labels rendered for config-derived variables.
+                          type: string
+                        value:
+                          description: Value is a cel expression for the dropdown
+                            values rendered for config-derived variables.
+                          type: string
                       required:
                       - config
                       type: object

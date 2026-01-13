@@ -170,9 +170,11 @@ var _ = Describe("ReadOrPopulateViewTable", func() {
 				case "cluster":
 					vo.ViewVariable.Default = "demo"
 					vo.Options = []string{"demo"}
+					vo.OptionItems = optionItemsFromValues(vo.Options)
 				case "namespace":
 					vo.ViewVariable.Default = "dummy-namespace"
 					vo.Options = []string{"flux", "missioncontrol"}
+					vo.OptionItems = optionItemsFromValues(vo.Options)
 				}
 
 				return vo
@@ -195,15 +197,42 @@ var _ = Describe("ReadOrPopulateViewTable", func() {
 				case "cluster":
 					vo.ViewVariable.Default = "demo"
 					vo.Options = []string{"demo"}
+					vo.OptionItems = optionItemsFromValues(vo.Options)
 				case "namespace":
 					vo.ViewVariable.Default = "flux"
 					vo.Options = []string{"flux", "missioncontrol"}
+					vo.OptionItems = optionItemsFromValues(vo.Options)
 				}
 
 				return vo
 			})
 
 			Expect(result.Variables).To(Equal(variableWithOptions))
+		})
+
+		It("should evaluate CEL templates for config-derived variable options", func() {
+			variable := api.ViewVariable{
+				Key:   "release",
+				Label: "Release",
+				ValueFrom: &api.ViewVariableValueFrom{
+					Label: "config.name",
+					Value: "config.id",
+					Config: types.ResourceSelector{
+						Types: []string{"Helm::Release"},
+					},
+				},
+			}
+
+			variables, _, err := populateViewVariables(DefaultContext, []api.ViewVariable{variable}, nil)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(variables).To(HaveLen(1))
+
+			expectedItems := []api.ViewVariableOption{
+				{Label: lo.FromPtr(dummy.NginxHelmRelease.Name), Value: dummy.NginxHelmRelease.ID.String()},
+				{Label: lo.FromPtr(dummy.RedisHelmRelease.Name), Value: dummy.RedisHelmRelease.ID.String()},
+			}
+
+			Expect(variables[0].OptionItems).To(ContainElements(expectedItems))
 		})
 	})
 })

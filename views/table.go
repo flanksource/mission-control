@@ -15,6 +15,7 @@ import (
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
 	pkgView "github.com/flanksource/duty/view"
+	"github.com/flanksource/gomplate/v3"
 	"github.com/lib/pq"
 	"github.com/samber/lo"
 	"go.opentelemetry.io/otel/trace"
@@ -174,7 +175,10 @@ func prepareVariableWithOptions(ctx context.Context, variable api.ViewVariable, 
 // user selection, then default, then first option
 func selectVariableValue(key string, variable api.ViewVariableWithOptions, requestVariables map[string]string) string {
 	if suppliedValue, exists := requestVariables[key]; exists && suppliedValue != "" {
-		if len(variable.Options) == 0 || lo.Contains(variable.Options, suppliedValue) {
+		if len(variable.OptionItems) == 0 && len(variable.Options) == 0 {
+			return suppliedValue
+		}
+		if optionContainsValue(variable, suppliedValue) {
 			return suppliedValue
 		}
 	}
@@ -273,6 +277,7 @@ func populateVariable(ctx context.Context, variable api.ViewVariable, variableVa
 		return api.ViewVariableWithOptions{
 			ViewVariable: variable,
 			Options:      variable.Values,
+			OptionItems:  optionItemsFromValues(variable.Values),
 		}, nil
 	}
 
@@ -280,6 +285,7 @@ func populateVariable(ctx context.Context, variable api.ViewVariable, variableVa
 		return api.ViewVariableWithOptions{
 			ViewVariable: variable,
 			Options:      []string{},
+			OptionItems:  []api.ViewVariableOption{},
 		}, nil
 	}
 
@@ -300,20 +306,22 @@ func populateVariable(ctx context.Context, variable api.ViewVariable, variableVa
 			return api.ViewVariableWithOptions{}, fmt.Errorf("failed to get resources for filter %s: %w", variable.Key, err)
 		}
 
-		values := lo.Map(resources, func(r models.ConfigItem, _ int) string {
-			return lo.FromPtr(r.Name)
-		})
-		sort.Strings(values)
+		optionItems, err := buildConfigOptionItems(ctx, variable, resources, variableValues)
+		if err != nil {
+			return api.ViewVariableWithOptions{}, fmt.Errorf("failed to build options for variable %s: %w", variable.Key, err)
+		}
 
 		return api.ViewVariableWithOptions{
 			ViewVariable: variable,
-			Options:      values,
+			Options:      optionValues(optionItems),
+			OptionItems:  optionItems,
 		}, nil
 	}
 
 	return api.ViewVariableWithOptions{
 		ViewVariable: variable,
 		Options:      []string{},
+		OptionItems:  []api.ViewVariableOption{},
 	}, nil
 }
 
@@ -322,10 +330,97 @@ func getDefaultValue(variable api.ViewVariableWithOptions) string {
 	if variable.Default != "" {
 		return variable.Default
 	}
+	if len(variable.OptionItems) > 0 {
+		return variable.OptionItems[0].Value
+	}
 	if len(variable.Options) > 0 {
 		return variable.Options[0]
 	}
 	return ""
+}
+
+func optionContainsValue(variable api.ViewVariableWithOptions, value string) bool {
+	if len(variable.OptionItems) > 0 && lo.ContainsBy(variable.OptionItems, func(item api.ViewVariableOption) bool {
+		return item.Value == value || item.Label == value
+	}) {
+		return true
+	}
+
+	return lo.Contains(variable.Options, value)
+}
+
+func optionItemsFromValues(values []string) []api.ViewVariableOption {
+	return lo.Map(values, func(value string, _ int) api.ViewVariableOption {
+		return api.ViewVariableOption{Label: value, Value: value}
+	})
+}
+
+func optionValues(items []api.ViewVariableOption) []string {
+	return lo.Map(items, func(item api.ViewVariableOption, _ int) string {
+		return item.Value
+	})
+}
+
+func buildConfigOptionItems(ctx context.Context, variable api.ViewVariable, resources []models.ConfigItem, variableValues map[string]string) ([]api.ViewVariableOption, error) {
+	items := make([]api.ViewVariableOption, 0, len(resources))
+	for _, resource := range resources {
+		env := map[string]any{
+			"var": variableValues,
+			"config": map[string]any{
+				"id":         resource.ID.String(),
+				"name":       lo.FromPtr(resource.Name),
+				"namespace":  resource.GetNamespace(),
+				"tags":       resource.Tags,
+				"labels":     lo.FromPtr(resource.Labels),
+				"properties": resource.Properties,
+				"type":       lo.FromPtr(resource.Type),
+				"status":     lo.FromPtr(resource.Status),
+				"path":       resource.Path,
+				"class":      resource.ConfigClass,
+			},
+		}
+
+		label, err := runExpression(ctx, variable.ValueFrom.Label, lo.FromPtr(resource.Name), env)
+		if err != nil {
+			return nil, fmt.Errorf("failed to render label for %s: %w", variable.Key, err)
+		}
+
+		value, err := runExpression(ctx, variable.ValueFrom.Value, label, env)
+		if err != nil {
+			return nil, fmt.Errorf("failed to render value for %s: %w", variable.Key, err)
+		}
+
+		items = append(items, api.ViewVariableOption{
+			Label: label,
+			Value: value,
+		})
+	}
+
+	sort.Slice(items, func(i, j int) bool {
+		return optionSortKey(items[i]) < optionSortKey(items[j])
+	})
+
+	return items, nil
+}
+
+func optionSortKey(item api.ViewVariableOption) string {
+	if item.Label != "" {
+		return item.Label
+	}
+	return item.Value
+}
+
+func runExpression(ctx context.Context, expr types.CelExpression, fallback string, env map[string]any) (string, error) {
+	if expr == "" {
+		return fallback, nil
+	}
+
+	rendered, err := ctx.RunTemplate(gomplate.Template{Expression: string(expr)}, env)
+	if err != nil {
+		return "", err
+	}
+
+	return rendered, nil
 }
 
 // templateResourceSelector applies templating to a resource selector using variable values
@@ -375,10 +470,8 @@ func ReadOrPopulateViewTable(ctx context.Context, namespace, name string, opts .
 	}
 	for _, v := range variables {
 		if _, ok := request.variables[v.Key]; !ok {
-			if v.Default != "" {
-				request.variables[v.Key] = v.Default
-			} else if len(v.Options) > 0 {
-				request.variables[v.Key] = v.Options[0]
+			if defaultValue := getDefaultValue(v); defaultValue != "" {
+				request.variables[v.Key] = defaultValue
 			}
 			// Skip setting if no default and no options (don't add empty string)
 		}
@@ -556,29 +649,12 @@ func readCachedViewData(ctx context.Context, view *v1.View, request *requestOpt)
 		Table:              view.Spec.Display.Table,
 	}
 
-	for _, filter := range view.Spec.Templating {
-		if len(filter.Values) > 0 {
-			result.Variables = append(result.Variables, api.ViewVariableWithOptions{
-				ViewVariable: filter,
-				Options:      filter.Values,
-			})
-		} else if filter.ValueFrom != nil {
-			if !filter.ValueFrom.Config.IsEmpty() {
-				resources, err := query.FindConfigsByResourceSelector(ctx, valueFromMaxResults, filter.ValueFrom.Config)
-				if err != nil {
-					return nil, fmt.Errorf("failed to get resources for filter %s: %w", filter.Key, err)
-				}
-
-				values := lo.Map(resources, func(r models.ConfigItem, _ int) string {
-					return lo.FromPtr(r.Name)
-				})
-				sort.Strings(values)
-				result.Variables = append(result.Variables, api.ViewVariableWithOptions{
-					ViewVariable: filter,
-					Options:      values,
-				})
-			}
-		}
+	if err := auth.WithRLS(ctx, func(ctx context.Context) error {
+		var err error
+		result.Variables, _, err = populateViewVariables(ctx, view.Spec.Templating, request.variables)
+		return err
+	}); err != nil {
+		return nil, fmt.Errorf("failed to populate view variables: %w", err)
 	}
 
 	lastRan, err := getLastRefresh(ctx, string(view.GetUID()), request.Fingerprint())
