@@ -64,9 +64,9 @@ func TestConnection(c echo.Context) error {
 		return dutyAPI.WriteError(c, err)
 	}
 
-	if err := Test(ctx, &connection); err != nil {
+	payload, err := Test(ctx, &connection)
+	if err != nil {
 		return dutyAPI.WriteError(c, err)
 	}
-
-	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{Message: "ok"})
+	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{Message: "ok", Payload: payload})
 }
