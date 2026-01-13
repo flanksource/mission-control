@@ -1068,10 +1068,10 @@
         "config": {
           "$ref": "#/$defs/ResourceSelector"
         },
-        "labelTemplate": {
+        "label": {
           "type": "string"
         },
-        "valueTemplate": {
+        "value": {
           "type": "string"
         }
       },

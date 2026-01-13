@@ -128,11 +128,11 @@ type ViewVariable struct {
 type ViewVariableValueFrom struct {
 	Config types.ResourceSelector `json:"config" yaml:"config"`
 
-	// LabelTemplate controls how option labels are rendered for config-derived variables.
-	LabelTemplate string `json:"labelTemplate,omitempty" yaml:"labelTemplate,omitempty"`
+	// Label is a cel expression for the dropdown labels rendered for config-derived variables.
+	Label types.CelExpression `json:"label,omitempty" yaml:"label,omitempty"`
 
-	// ValueTemplate controls how option values are rendered for config-derived variables.
-	ValueTemplate string `json:"valueTemplate,omitempty" yaml:"valueTemplate,omitempty"`
+	// Value is a cel expression for the dropdown values rendered for config-derived variables.
+	Value types.CelExpression `json:"value,omitempty" yaml:"value,omitempty"`
 }
 
 type ViewVariableOption struct {

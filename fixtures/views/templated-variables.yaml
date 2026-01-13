@@ -23,8 +23,8 @@ spec:
       dependsOn:
         - cluster
       valueFrom:
-        labelTemplate: "$(.config.name)"
-        valueTemplate: "$(.config.id)"
+        label: ".config.name"
+        value: ".config.id"
         config:
           agent: "all"
           tagSelector: "cluster=$(.var.cluster)"

@@ -1405,13 +1405,13 @@ spec:
                                 type: string
                               type: array
                           type: object
-                        labelTemplate:
-                          description: LabelTemplate controls how option labels are
-                            rendered for config-derived variables.
+                        label:
+                          description: Label is a cel expression for the dropdown
+                            labels rendered for config-derived variables.
                           type: string
-                        valueTemplate:
-                          description: ValueTemplate controls how option values are
-                            rendered for config-derived variables.
+                        value:
+                          description: Value is a cel expression for the dropdown
+                            values rendered for config-derived variables.
                           type: string
                       required:
                       - config

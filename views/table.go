@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
-	"strings"
 	"time"
 
 	"github.com/flanksource/commons/collections"
@@ -381,12 +380,12 @@ func buildConfigOptionItems(ctx context.Context, variable api.ViewVariable, reso
 			},
 		}
 
-		label, err := renderTemplate(ctx, variable.ValueFrom.LabelTemplate, lo.FromPtr(resource.Name), env)
+		label, err := runExpression(ctx, variable.ValueFrom.Label, lo.FromPtr(resource.Name), env)
 		if err != nil {
 			return nil, fmt.Errorf("failed to render label for %s: %w", variable.Key, err)
 		}
 
-		value, err := renderTemplate(ctx, variable.ValueFrom.ValueTemplate, label, env)
+		value, err := runExpression(ctx, variable.ValueFrom.Value, label, env)
 		if err != nil {
 			return nil, fmt.Errorf("failed to render value for %s: %w", variable.Key, err)
 		}
@@ -411,60 +410,17 @@ func optionSortKey(item api.ViewVariableOption) string {
 	return item.Value
 }
 
-func renderTemplate(ctx context.Context, template, fallback string, env map[string]any) (string, error) {
-	if template == "" {
+func runExpression(ctx context.Context, expr types.CelExpression, fallback string, env map[string]any) (string, error) {
+	if expr == "" {
 		return fallback, nil
 	}
 
-	if strings.Contains(template, "{{") || strings.Contains(template, "}}") {
-		return "", fmt.Errorf("go template syntax is not supported for view variables; use a CEL expression")
-	}
-
-	expression := normalizeCelExpression(template)
-	if expression == "" {
-		return fallback, nil
-	}
-
-	if !looksLikeCelExpression(expression) {
-		return expression, nil
-	}
-
-	rendered, err := ctx.RunTemplate(gomplate.Template{Expression: expression}, env)
+	rendered, err := ctx.RunTemplate(gomplate.Template{Expression: string(expr)}, env)
 	if err != nil {
 		return "", err
 	}
 
 	return rendered, nil
-}
-
-func normalizeCelExpression(expression string) string {
-	expression = strings.TrimSpace(expression)
-	if strings.HasPrefix(expression, "$(") && strings.HasSuffix(expression, ")") {
-		expression = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(expression, "$("), ")"))
-	}
-
-	return strings.TrimPrefix(expression, ".")
-}
-
-func looksLikeCelExpression(expression string) bool {
-	if expression == "" {
-		return false
-	}
-
-	if strings.HasPrefix(expression, "config.") ||
-		strings.HasPrefix(expression, "var.") ||
-		strings.HasPrefix(expression, "labels.") ||
-		strings.HasPrefix(expression, "tags.") ||
-		strings.HasPrefix(expression, "properties.") ||
-		strings.Contains(expression, "config.") ||
-		strings.Contains(expression, "var.") ||
-		strings.Contains(expression, "labels.") ||
-		strings.Contains(expression, "tags.") ||
-		strings.Contains(expression, "properties.") {
-		return true
-	}
-
-	return strings.ContainsAny(expression, "():?><=!&|[]'\"")
 }
 
 // templateResourceSelector applies templating to a resource selector using variable values

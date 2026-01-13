@@ -215,8 +215,8 @@ var _ = Describe("ReadOrPopulateViewTable", func() {
 				Key:   "release",
 				Label: "Release",
 				ValueFrom: &api.ViewVariableValueFrom{
-					LabelTemplate: "config.name",
-					ValueTemplate: "config.id",
+					Label: "config.name",
+					Value: "config.id",
 					Config: types.ResourceSelector{
 						Types: []string{"Helm::Release"},
 					},
