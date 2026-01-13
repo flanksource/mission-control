@@ -416,19 +416,20 @@ func renderTemplate(ctx context.Context, template, fallback string, env map[stri
 		return fallback, nil
 	}
 
-	if !looksLikeTemplate(template) && !looksLikeTemplatePath(template) {
-		return template, nil
+	if strings.Contains(template, "{{") || strings.Contains(template, "}}") {
+		return "", fmt.Errorf("go template syntax is not supported for view variables; use a CEL expression")
 	}
 
-	if !looksLikeTemplate(template) {
-		if strings.HasPrefix(template, ".") {
-			template = "{{ " + template + " }}"
-		} else {
-			template = "{{ ." + template + " }}"
-		}
+	expression := normalizeCelExpression(template)
+	if expression == "" {
+		return fallback, nil
 	}
 
-	rendered, err := ctx.RunTemplate(gomplate.Template{Template: template}, env)
+	if !looksLikeCelExpression(expression) {
+		return expression, nil
+	}
+
+	rendered, err := ctx.RunTemplate(gomplate.Template{Expression: expression}, env)
 	if err != nil {
 		return "", err
 	}
@@ -436,21 +437,34 @@ func renderTemplate(ctx context.Context, template, fallback string, env map[stri
 	return rendered, nil
 }
 
-func looksLikeTemplate(template string) bool {
-	return strings.Contains(template, "{{") || strings.Contains(template, "$(")
+func normalizeCelExpression(expression string) string {
+	expression = strings.TrimSpace(expression)
+	if strings.HasPrefix(expression, "$(") && strings.HasSuffix(expression, ")") {
+		expression = strings.TrimSpace(strings.TrimSuffix(strings.TrimPrefix(expression, "$("), ")"))
+	}
+
+	return strings.TrimPrefix(expression, ".")
 }
 
-func looksLikeTemplatePath(template string) bool {
-	if strings.ContainsAny(template, " \t\n") {
+func looksLikeCelExpression(expression string) bool {
+	if expression == "" {
 		return false
 	}
 
-	return strings.HasPrefix(template, ".") ||
-		strings.HasPrefix(template, "config.") ||
-		strings.HasPrefix(template, "var.") ||
-		strings.HasPrefix(template, "labels.") ||
-		strings.HasPrefix(template, "tags.") ||
-		strings.HasPrefix(template, "properties.")
+	if strings.HasPrefix(expression, "config.") ||
+		strings.HasPrefix(expression, "var.") ||
+		strings.HasPrefix(expression, "labels.") ||
+		strings.HasPrefix(expression, "tags.") ||
+		strings.HasPrefix(expression, "properties.") ||
+		strings.Contains(expression, "config.") ||
+		strings.Contains(expression, "var.") ||
+		strings.Contains(expression, "labels.") ||
+		strings.Contains(expression, "tags.") ||
+		strings.Contains(expression, "properties.") {
+		return true
+	}
+
+	return strings.ContainsAny(expression, "():?><=!&|[]'\"")
 }
 
 // templateResourceSelector applies templating to a resource selector using variable values

@@ -1,0 +1,86 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: helm-release-resources
+  namespace: mc
+spec:
+  display:
+    title: Helm Release Resources
+    icon: kubernetes
+    table:
+      sort: name
+      size: 10
+  templating:
+    - key: cluster
+      label: Cluster
+      valueFrom:
+        config:
+          agent: "all"
+          types:
+            - Kubernetes::Cluster
+    - key: release
+      label: Helm Release
+      dependsOn:
+        - cluster
+      valueFrom:
+        labelTemplate: "$(.config.name)"
+        valueTemplate: "$(.config.id)"
+        config:
+          agent: "all"
+          tagSelector: "cluster=$(.var.cluster)"
+          types:
+            - Kubernetes::HelmRelease
+  columns:
+    - name: id
+      type: string
+      primaryKey: true
+      hidden: true
+    - name: name
+      type: config_item
+      description: Resource name.
+      card:
+        position: title
+      url:
+        config: row.id
+    - name: type
+      type: string
+      description: Resource kind.
+      card:
+        position: subtitle
+      filter:
+        type: multiselect
+    - name: status
+      type: status
+      icon: row.health
+      card:
+        position: subtitle
+      filter:
+        type: multiselect
+    - name: health
+      type: health
+      hidden: true
+      card:
+        useForAccent: true
+      filter:
+        type: multiselect
+    - name: createdAt
+      type: datetime
+      card:
+        position: body
+    - name: updatedAt
+      type: datetime
+      card:
+        position: body
+  queries:
+    resources:
+      configs:
+        search: related="$(.var.release),direction=outgoing,depth=5"
+  mapping:
+    name: row.name
+    type: >
+      has(row.type) ? row.type.replace("Kubernetes::", "") : "Unknown"
+    namespace: row.tags.namespace
+    status: row.status
+    health: row.health
+    createdAt: row.created_at
+    updatedAt: row.updated_at
