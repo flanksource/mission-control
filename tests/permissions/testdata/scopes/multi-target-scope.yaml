@@ -3,7 +3,7 @@ kind: Scope
 metadata:
   name: multi-target-scope
   namespace: default
-  uid: a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d
+  uid: 6b7c8d9e-0f1a-4b2c-9d3e-4f5a6b7c8d9e
 spec:
   description: Scope with multiple targets - database configs, echo-config playbook, and metrics view
   targets:

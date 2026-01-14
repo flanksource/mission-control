@@ -4,7 +4,7 @@ import (
 	"github.com/flanksource/duty/job"
 	"github.com/flanksource/duty/models"
 
-	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/permission"
 )
 
 const (
@@ -34,7 +34,7 @@ var materializeAllScopesJob = &job.Job{
 		var rebuildCount, errorCount int
 		var failed []string
 		for _, scope := range scopes {
-			jobRun, err := db.GetProcessScopeJob(ctx.Context, db.ScopeQueueSourceScope, scope.ID.String(), db.ScopeQueueActionRebuild)
+			jobRun, err := permission.GetProcessScopeJob(ctx.Context, permission.ScopeQueueSourceScope, scope.ID.String(), permission.ScopeQueueActionRebuild)
 			if err != nil {
 				errorCount++
 				failed = append(failed, scope.ID.String())
@@ -85,7 +85,7 @@ var cleanupDeletedScopesJob = &job.Job{
 		var removeCount, errorCount int
 		var failed []string
 		for _, scope := range scopes {
-			jobRun, err := db.GetProcessScopeJob(ctx.Context, db.ScopeQueueSourceScope, scope.ID.String(), db.ScopeQueueActionRemove)
+			jobRun, err := permission.GetProcessScopeJob(ctx.Context, permission.ScopeQueueSourceScope, scope.ID.String(), permission.ScopeQueueActionRemove)
 			if err != nil {
 				errorCount++
 				failed = append(failed, scope.ID.String())

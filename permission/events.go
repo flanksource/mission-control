@@ -7,7 +7,6 @@ import (
 	"github.com/flanksource/duty/models"
 
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/events"
 )
 
@@ -21,11 +20,11 @@ func registerPermissionEvents(ctx context.Context) {
 }
 
 func handleScopeMaterializationEvents(ctx context.Context, batch models.Events) models.Events {
-	return handleMaterializationEvents(ctx, batch, db.ScopeQueueSourceScope)
+	return handleMaterializationEvents(ctx, batch, ScopeQueueSourceScope)
 }
 
 func handlePermissionMaterializationEvents(ctx context.Context, batch models.Events) models.Events {
-	return handleMaterializationEvents(ctx, batch, db.ScopeQueueSourcePermission)
+	return handleMaterializationEvents(ctx, batch, ScopeQueueSourcePermission)
 }
 
 func handleMaterializationEvents(ctx context.Context, batch models.Events, sourceType string) models.Events {
@@ -34,7 +33,7 @@ func handleMaterializationEvents(ctx context.Context, batch models.Events, sourc
 	for _, event := range batch {
 		action := strings.ToLower(strings.TrimSpace(event.Properties["action"]))
 		if action == "" {
-			action = db.ScopeQueueActionRebuild
+			action = ScopeQueueActionRebuild
 		}
 
 		sourceID := strings.TrimSpace(event.Properties["id"])
@@ -45,7 +44,7 @@ func handleMaterializationEvents(ctx context.Context, batch models.Events, sourc
 		}
 
 		switch action {
-		case db.ScopeQueueActionApply, db.ScopeQueueActionRemove, db.ScopeQueueActionRebuild:
+		case ScopeQueueActionApply, ScopeQueueActionRemove, ScopeQueueActionRebuild:
 			// ok
 		default:
 			event.SetError("invalid materialization action")
@@ -53,7 +52,7 @@ func handleMaterializationEvents(ctx context.Context, batch models.Events, sourc
 			continue
 		}
 
-		jobRun, err := db.GetProcessScopeJob(ctx, sourceType, sourceID, action)
+		jobRun, err := GetProcessScopeJob(ctx, sourceType, sourceID, action)
 		if err != nil {
 			event.SetError(err.Error())
 			failed = append(failed, event)
