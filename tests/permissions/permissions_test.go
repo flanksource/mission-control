@@ -8,7 +8,6 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
-	"github.com/flanksource/duty/rls"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/tests/setup"
 	"github.com/flanksource/duty/types"
@@ -115,7 +114,6 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 				uuid.MustParse("a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d"), // guest-playbook-read permission
 				uuid.MustParse("38c3d4e5-f6a7-4b8c-9d0e-4f5a6b7c8d9e"), // guest-view-pods-read permission
 			}))
-			Expect(payload.WildcardScopes).To(BeEmpty(), "no wildcard scopes expected")
 		})
 
 		It("should return RLS payload for guest user with multi-target scope", func() {
@@ -128,7 +126,6 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			Expect(payload.Disable).To(BeFalse(), "RLS should be enabled for guest users with scopes")
 			Expect(payload.Scopes).To(HaveLen(1))
 			Expect(payload.Scopes).To(ContainElement(uuid.MustParse("6b7c8d9e-0f1a-4b2c-9d3e-4f5a6b7c8d9e")))
-			Expect(payload.WildcardScopes).To(BeEmpty(), "no wildcard scopes expected")
 		})
 
 		It("should return RLS payload for guest user with agent-based scope", func() {
@@ -141,7 +138,6 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			Expect(payload.Disable).To(BeFalse(), "RLS should be enabled for guest users with scopes")
 			Expect(payload.Scopes).To(HaveLen(1))
 			Expect(payload.Scopes).To(ContainElement(uuid.MustParse("3c4e5f6a-7b8c-4d9e-0f1a-2b3c4d5e6f7a")))
-			Expect(payload.WildcardScopes).To(BeEmpty(), "no wildcard scopes expected")
 		})
 
 		It("should return RLS payload for wildcard manager with full wildcard scope", func() {
@@ -154,7 +150,6 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			Expect(payload.Disable).To(BeFalse(), "RLS should be enabled for guest users with scopes")
 			Expect(payload.Scopes).To(HaveLen(1))
 			Expect(payload.Scopes).To(ContainElement(uuid.MustParse("f1e2d3c4-b5a6-4c7d-8e9f-0a1b2c3d4e5f")))
-			Expect(payload.WildcardScopes).To(ConsistOf(rls.WildcardResourceScopeConfig))
 		})
 
 		It("should return RLS payload for homelab default manager with combined agent+tag scope", func() {
@@ -167,7 +162,6 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			Expect(payload.Disable).To(BeFalse(), "RLS should be enabled for guest users with scopes")
 			Expect(payload.Scopes).To(HaveLen(1))
 			Expect(payload.Scopes).To(ContainElement(uuid.MustParse("7a8b9c0d-1e2f-4a3b-5c6d-7e8f9a0b1c2d")))
-			Expect(payload.WildcardScopes).To(BeEmpty(), "no wildcard scopes expected")
 		})
 
 		It("should return RLS payload for multi-scope user with multiple scopes (OR behavior)", func() {
@@ -185,7 +179,6 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 				uuid.MustParse("3c4e5f6a-7b8c-4d9e-0f1a-2b3c4d5e6f7a"),
 			))
 			Expect(payload.Scopes).To(HaveLen(3))
-			Expect(payload.WildcardScopes).To(BeEmpty(), "no wildcard scopes expected")
 		})
 
 		It("should disable RLS for non-guest users", func() {
@@ -211,7 +204,6 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 
 			// All resource scopes should be empty since user has no permissions
 			Expect(payload.Scopes).To(BeEmpty(), "scopes should be empty for guest user with no permissions")
-			Expect(payload.WildcardScopes).To(BeEmpty(), "wildcard scopes should be empty for guest user with no permissions")
 		})
 
 		It("should include direct ID-based permissions in RLS payload", func() {
@@ -238,7 +230,6 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 			Expect(payload.Disable).To(BeFalse(), "RLS should be enabled for guest users with scopes")
 			Expect(payload.Scopes).To(HaveLen(1))
 			Expect(payload.Scopes).To(ContainElement(uuid.MustParse("48d4e5f6-a7b8-4c9d-0e1f-5a6b7c8d9e0f")))
-			Expect(payload.WildcardScopes).To(BeEmpty(), "no wildcard scopes expected")
 		})
 	})
 

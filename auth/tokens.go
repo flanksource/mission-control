@@ -71,16 +71,24 @@ func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId str
 		return token.(string), nil
 	}
 
+	rlsPayload, err := GetRLSPayload(ctx.WithUser(user))
+	if err != nil {
+		return "", ctx.Oops().Wrap(err)
+	}
+
+	role := config.Postgrest.DBRole
+	if rlsPayload.Disable && config.Postgrest.DBRoleBypass != "" {
+		role = config.Postgrest.DBRoleBypass
+	}
+
 	// Postgrest makes this jwt available as a session parameter inside postgres.
 	// We inject the rls payload here and then access it inside postgres using request.jwt.claims parameter.
 	claims := jwt.MapClaims{
-		"role": config.Postgrest.DBRole,
+		"role": role,
 		"id":   user.ID.String(),
 	}
 
-	if rlsPayload, err := GetRLSPayload(ctx.WithUser(user)); err != nil {
-		return "", ctx.Oops().Wrap(err)
-	} else if jwtClaim := rlsPayload.JWTClaims(); jwtClaim != nil {
+	if jwtClaim := rlsPayload.JWTClaims(); jwtClaim != nil {
 		claims = collections.MergeMap(claims, jwtClaim)
 	}
 

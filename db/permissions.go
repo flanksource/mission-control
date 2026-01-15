@@ -44,16 +44,11 @@ func PersistPermissionFromCRD(ctx context.Context, obj *v1.Permission) error {
 		Deny:        obj.Spec.Deny,
 	}
 
-	// Check if the object selectors semantically match a global object.
-	if globalObject, ok := obj.Spec.Object.GlobalObject(); ok {
-		p.Object = globalObject
-	} else {
-		selectors, err := json.Marshal(obj.Spec.Object)
-		if err != nil {
-			return fmt.Errorf("failed to marshal object: %w", err)
-		}
-		p.ObjectSelector = selectors
+	selectors, err := json.Marshal(obj.Spec.Object)
+	if err != nil {
+		return fmt.Errorf("failed to marshal object: %w", err)
 	}
+	p.ObjectSelector = selectors
 
 	return ctx.DB().Save(&p).Error
 }

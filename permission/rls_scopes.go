@@ -9,7 +9,6 @@ import (
 	"github.com/flanksource/duty/job"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
-	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
@@ -28,11 +27,10 @@ const (
 )
 
 type ScopeMaterializationStats struct {
-	Tables           map[string]int64 `json:"tables,omitempty"`
-	TotalRows        int64            `json:"total_rows,omitempty"`
-	SelectorCount    int              `json:"selector_count,omitempty"`
-	IDCount          int              `json:"id_count,omitempty"`
-	WildcardsSkipped int              `json:"wildcards_skipped,omitempty"`
+	Tables        map[string]int64 `json:"tables,omitempty"`
+	TotalRows     int64            `json:"total_rows,omitempty"`
+	SelectorCount int              `json:"selector_count,omitempty"`
+	IDCount       int              `json:"id_count,omitempty"`
 }
 
 func (s *ScopeMaterializationStats) addTableCount(table string, count int64) {
@@ -78,7 +76,6 @@ func GetProcessScopeJob(ctx context.Context, sourceType, sourceID, action string
 		run.History.AddDetails("total_rows", processor.stats.TotalRows)
 		run.History.AddDetails("selector_count", processor.stats.SelectorCount)
 		run.History.AddDetails("id_count", processor.stats.IDCount)
-		run.History.AddDetails("wildcards_skipped", processor.stats.WildcardsSkipped)
 
 		if processor.stats.TotalRows > 0 {
 			run.History.SuccessCount = int(processor.stats.TotalRows)
@@ -192,12 +189,6 @@ func applyScope(ctx context.Context, scopeID uuid.UUID, stats *ScopeMaterializat
 	for _, target := range targets {
 		switch {
 		case target.Config != nil:
-			if isWildcardScopeSelector(target.Config) {
-				if stats != nil {
-					stats.WildcardsSkipped++
-				}
-				continue
-			}
 			if stats != nil {
 				stats.SelectorCount++
 			}
@@ -209,12 +200,6 @@ func applyScope(ctx context.Context, scopeID uuid.UUID, stats *ScopeMaterializat
 				stats.addTableCount("config_items", count)
 			}
 		case target.Component != nil:
-			if isWildcardScopeSelector(target.Component) {
-				if stats != nil {
-					stats.WildcardsSkipped++
-				}
-				continue
-			}
 			if stats != nil {
 				stats.SelectorCount++
 			}
@@ -226,12 +211,6 @@ func applyScope(ctx context.Context, scopeID uuid.UUID, stats *ScopeMaterializat
 				stats.addTableCount("components", count)
 			}
 		case target.Canary != nil:
-			if isWildcardScopeSelector(target.Canary) {
-				if stats != nil {
-					stats.WildcardsSkipped++
-				}
-				continue
-			}
 			if stats != nil {
 				stats.SelectorCount++
 			}
@@ -243,12 +222,6 @@ func applyScope(ctx context.Context, scopeID uuid.UUID, stats *ScopeMaterializat
 				stats.addTableCount("canaries", count)
 			}
 		case target.Playbook != nil:
-			if isWildcardScopeSelector(target.Playbook) {
-				if stats != nil {
-					stats.WildcardsSkipped++
-				}
-				continue
-			}
 			if stats != nil {
 				stats.SelectorCount++
 			}
@@ -260,12 +233,6 @@ func applyScope(ctx context.Context, scopeID uuid.UUID, stats *ScopeMaterializat
 				stats.addTableCount("playbooks", count)
 			}
 		case target.View != nil:
-			if isWildcardScopeSelector(target.View) {
-				if stats != nil {
-					stats.WildcardsSkipped++
-				}
-				continue
-			}
 			if stats != nil {
 				stats.SelectorCount++
 			}
@@ -277,12 +244,6 @@ func applyScope(ctx context.Context, scopeID uuid.UUID, stats *ScopeMaterializat
 				stats.addTableCount("views", count)
 			}
 		case target.Global != nil:
-			if isWildcardScopeSelector(target.Global) {
-				if stats != nil {
-					stats.WildcardsSkipped++
-				}
-				continue
-			}
 			globalSelector := convertScopeResourceSelector(target.Global)
 			for _, table := range rlsScopeTables() {
 				if stats != nil {
@@ -373,7 +334,7 @@ func applyPermissionScope(ctx context.Context, permissionID uuid.UUID, stats *Sc
 		return ctx.Oops().Wrapf(err, "failed to unmarshal permission object_selector")
 	}
 
-	if len(selectors.Configs) > 0 && !hasWildcardSelector(selectors.Configs) {
+	if len(selectors.Configs) > 0 {
 		for _, selector := range selectors.Configs {
 			if stats != nil {
 				stats.SelectorCount++
@@ -386,10 +347,8 @@ func applyPermissionScope(ctx context.Context, permissionID uuid.UUID, stats *Sc
 				stats.addTableCount("config_items", count)
 			}
 		}
-	} else if len(selectors.Configs) > 0 && stats != nil {
-		stats.WildcardsSkipped++
 	}
-	if len(selectors.Components) > 0 && !hasWildcardSelector(selectors.Components) {
+	if len(selectors.Components) > 0 {
 		for _, selector := range selectors.Components {
 			if stats != nil {
 				stats.SelectorCount++
@@ -402,10 +361,8 @@ func applyPermissionScope(ctx context.Context, permissionID uuid.UUID, stats *Sc
 				stats.addTableCount("components", count)
 			}
 		}
-	} else if len(selectors.Components) > 0 && stats != nil {
-		stats.WildcardsSkipped++
 	}
-	if len(selectors.Playbooks) > 0 && !hasWildcardSelector(selectors.Playbooks) {
+	if len(selectors.Playbooks) > 0 {
 		for _, selector := range selectors.Playbooks {
 			if stats != nil {
 				stats.SelectorCount++
@@ -418,10 +375,8 @@ func applyPermissionScope(ctx context.Context, permissionID uuid.UUID, stats *Sc
 				stats.addTableCount("playbooks", count)
 			}
 		}
-	} else if len(selectors.Playbooks) > 0 && stats != nil {
-		stats.WildcardsSkipped++
 	}
-	if len(selectors.Views) > 0 && !hasWildcardViewRef(selectors.Views) {
+	if len(selectors.Views) > 0 {
 		for _, selector := range selectors.Views {
 			viewSelector := types.ResourceSelector{
 				Name:      selector.Name,
@@ -438,15 +393,13 @@ func applyPermissionScope(ctx context.Context, permissionID uuid.UUID, stats *Sc
 				stats.addTableCount("views", count)
 			}
 		}
-	} else if len(selectors.Views) > 0 && stats != nil {
-		stats.WildcardsSkipped++
 	}
 
 	return nil
 }
 
 func applyScopeSelector(ctx context.Context, table string, selector types.ResourceSelector, scopeID string) (int64, error) {
-	if selector.IsEmpty() || selector.Wildcard() {
+	if selector.IsEmpty() {
 		return 0, nil
 	}
 
@@ -524,35 +477,6 @@ func removeScopeFromTable(ctx context.Context, table, scopeID string) (int64, er
 
 func rlsScopeTables() []string {
 	return []string{"config_items", "components", "canaries", "playbooks", "views"}
-}
-
-func isWildcardScopeSelector(selector *v1.ScopeResourceSelector) bool {
-	if selector == nil {
-		return false
-	}
-
-	return selector.Name == "*" &&
-		selector.Namespace == "" &&
-		selector.Agent == "" &&
-		selector.TagSelector == ""
-}
-
-func hasWildcardSelector(selectors []types.ResourceSelector) bool {
-	for _, selector := range selectors {
-		if selector.Wildcard() {
-			return true
-		}
-	}
-	return false
-}
-
-func hasWildcardViewRef(selectors []dutyRBAC.ViewRef) bool {
-	for _, selector := range selectors {
-		if selector.Name == "*" && selector.Namespace == "" && selector.ID == "" {
-			return true
-		}
-	}
-	return false
 }
 
 func convertScopeResourceSelector(selector *v1.ScopeResourceSelector) types.ResourceSelector {
