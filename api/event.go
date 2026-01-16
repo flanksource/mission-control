@@ -67,6 +67,9 @@ const (
 	EventMSPlannerResponderAdded = "incident.responder.msplanner.added"
 
 	EventMSPlannerCommentAdded = "incident.comment.msplanner.added"
+
+	EventScopeMaterialize      = "scope.materialize"
+	EventPermissionMaterialize = "permission.materialize"
 )
 
 var (

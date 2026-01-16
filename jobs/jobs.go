@@ -113,6 +113,16 @@ func Start(ctx context.Context, mcpServer *server.MCPServer) {
 		logger.Errorf("Failed to schedule job for cleaning up short URLs: %v", err)
 	}
 
+	materializeAllScopesJob.Context = ctx
+	if err := materializeAllScopesJob.AddToScheduler(FuncScheduler); err != nil {
+		logger.Errorf("Failed to schedule job for materializing scopes: %v", err)
+	}
+
+	cleanupDeletedScopesJob.Context = ctx
+	if err := cleanupDeletedScopesJob.AddToScheduler(FuncScheduler); err != nil {
+		logger.Errorf("Failed to schedule job for cleaning up deleted scopes: %v", err)
+	}
+
 	for _, job := range query.Jobs {
 		j := job
 		j.Context = ctx
