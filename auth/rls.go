@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
@@ -13,6 +15,7 @@ import (
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/rls"
 	"github.com/flanksource/duty/types"
+	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"go.opentelemetry.io/otel/trace"
 	"gorm.io/gorm"
@@ -106,23 +109,31 @@ func buildRLSPayloadFromScopes(ctx context.Context) (*rls.Payload, error) {
 		return nil, fmt.Errorf("failed to query permissions: %w", err)
 	}
 
-	payload := &rls.Payload{}
+	scopeIDs := map[uuid.UUID]struct{}{}
+	wildcards := map[rls.WildcardResourceScope]struct{}{}
 
 	for _, perm := range permissions {
-		if perm.ConfigID != nil {
-			payload.Config = append(payload.Config, rls.Scope{ID: perm.ConfigID.String()})
+		if !collections.MatchItems(policy.ActionRead, strings.Split(perm.Action, ",")...) {
+			continue
 		}
 
-		if perm.ComponentID != nil {
-			payload.Component = append(payload.Component, rls.Scope{ID: perm.ComponentID.String()})
+		permScopeID := perm.ID
+
+		if perm.ConfigID != nil || perm.ComponentID != nil || perm.PlaybookID != nil || perm.CanaryID != nil {
+			scopeIDs[permScopeID] = struct{}{}
 		}
 
-		if perm.PlaybookID != nil {
-			payload.Playbook = append(payload.Playbook, rls.Scope{ID: perm.PlaybookID.String()})
-		}
-
-		if perm.CanaryID != nil {
-			payload.Canary = append(payload.Canary, rls.Scope{ID: perm.CanaryID.String()})
+		switch perm.Object {
+		case policy.ObjectCatalog:
+			wildcards[rls.WildcardResourceScopeConfig] = struct{}{}
+		case policy.ObjectTopology:
+			wildcards[rls.WildcardResourceScopeComponent] = struct{}{}
+		case policy.ObjectCanary:
+			wildcards[rls.WildcardResourceScopeCanary] = struct{}{}
+		case policy.ObjectPlaybooks:
+			wildcards[rls.WildcardResourceScopePlaybook] = struct{}{}
+		case policy.ObjectViews:
+			wildcards[rls.WildcardResourceScopeView] = struct{}{}
 		}
 
 		if len(perm.ObjectSelector) == 0 {
@@ -137,34 +148,41 @@ func buildRLSPayloadFromScopes(ctx context.Context) (*rls.Payload, error) {
 
 		// Process scope references (indirect permissions)
 		if len(selectors.Scopes) > 0 {
-			if err := processScopeRefs(ctx, selectors.Scopes, payload); err != nil {
+			if err := processScopeRefs(ctx, selectors.Scopes, scopeIDs, wildcards); err != nil {
 				return nil, err
 			}
 		}
 
 		// Process direct resource selectors (configs, components, playbooks, etc.)
-		// Only use tags, name, and agent_id as per requirements
 		if len(selectors.Configs) > 0 {
-			for _, selector := range selectors.Configs {
-				payload.Config = append(payload.Config, convertResourceSelectorToRLSScope(selector))
+			if hasWildcardSelector(selectors.Configs) {
+				wildcards[rls.WildcardResourceScopeConfig] = struct{}{}
+			} else {
+				scopeIDs[permScopeID] = struct{}{}
 			}
 		}
 
 		if len(selectors.Components) > 0 {
-			for _, selector := range selectors.Components {
-				payload.Component = append(payload.Component, convertResourceSelectorToRLSScope(selector))
+			if hasWildcardSelector(selectors.Components) {
+				wildcards[rls.WildcardResourceScopeComponent] = struct{}{}
+			} else {
+				scopeIDs[permScopeID] = struct{}{}
 			}
 		}
 
 		if len(selectors.Playbooks) > 0 {
-			for _, selector := range selectors.Playbooks {
-				payload.Playbook = append(payload.Playbook, convertResourceSelectorToRLSScope(selector))
+			if hasWildcardSelector(selectors.Playbooks) {
+				wildcards[rls.WildcardResourceScopePlaybook] = struct{}{}
+			} else {
+				scopeIDs[permScopeID] = struct{}{}
 			}
 		}
 
 		if len(selectors.Views) > 0 {
-			for _, viewRef := range selectors.Views {
-				payload.View = append(payload.View, convertViewScopeRefToRLSScope(viewRef))
+			if hasWildcardViewRef(selectors.Views) {
+				wildcards[rls.WildcardResourceScopeView] = struct{}{}
+			} else {
+				scopeIDs[permScopeID] = struct{}{}
 			}
 		}
 
@@ -176,11 +194,16 @@ func buildRLSPayloadFromScopes(ctx context.Context) (*rls.Payload, error) {
 		// }
 	}
 
+	payload := &rls.Payload{
+		Scopes:         setToSortedUUIDSlice(scopeIDs),
+		WildcardScopes: setToSortedWildcardSlice(wildcards),
+	}
+
 	return payload, nil
 }
 
-// processScopeRefs fetches scopes from database and adds their targets to the payload
-func processScopeRefs(ctx context.Context, scopeRefs []dutyRBAC.NamespacedNameIDSelector, payload *rls.Payload) error {
+// processScopeRefs fetches scopes from database and adds their IDs and wildcard types
+func processScopeRefs(ctx context.Context, scopeRefs []dutyRBAC.NamespacedNameIDSelector, scopeIDs map[uuid.UUID]struct{}, wildcards map[rls.WildcardResourceScope]struct{}) error {
 	for _, ref := range scopeRefs {
 		var scope models.Scope
 		err := ctx.DB().
@@ -194,8 +217,8 @@ func processScopeRefs(ctx context.Context, scopeRefs []dutyRBAC.NamespacedNameID
 			return fmt.Errorf("failed to query scope %s/%s: %w", ref.Namespace, ref.Name, err)
 		}
 
-		// Add scope UUID for view row-level grants
-		payload.Scopes = append(payload.Scopes, scope.ID.String())
+		// Always include scope UUID for view row-level grants
+		scopeIDs[scope.ID] = struct{}{}
 
 		var targets []v1.ScopeTarget
 		if err := json.Unmarshal([]byte(scope.Targets), &targets); err != nil {
@@ -204,33 +227,35 @@ func processScopeRefs(ctx context.Context, scopeRefs []dutyRBAC.NamespacedNameID
 		}
 
 		for _, target := range targets {
-			if target.Config != nil {
-				rlsScope := convertToRLSScope(target.Config)
-				payload.Config = append(payload.Config, rlsScope)
-			}
-			if target.Component != nil {
-				rlsScope := convertToRLSScope(target.Component)
-				payload.Component = append(payload.Component, rlsScope)
-			}
-			if target.Playbook != nil {
-				rlsScope := convertToRLSScope(target.Playbook)
-				payload.Playbook = append(payload.Playbook, rlsScope)
-			}
-			if target.Canary != nil {
-				rlsScope := convertToRLSScope(target.Canary)
-				payload.Canary = append(payload.Canary, rlsScope)
-			}
-			if target.View != nil {
-				rlsScope := convertToRLSScope(target.View)
-				payload.View = append(payload.View, rlsScope)
-			}
-			if target.Global != nil {
-				rlsScope := convertToRLSScope(target.Global)
-				payload.Config = append(payload.Config, rlsScope)
-				payload.Component = append(payload.Component, rlsScope)
-				payload.Playbook = append(payload.Playbook, rlsScope)
-				payload.Canary = append(payload.Canary, rlsScope)
-				payload.View = append(payload.View, rlsScope)
+			switch {
+			case target.Config != nil:
+				if isWildcardScopeSelector(target.Config) {
+					wildcards[rls.WildcardResourceScopeConfig] = struct{}{}
+				}
+			case target.Component != nil:
+				if isWildcardScopeSelector(target.Component) {
+					wildcards[rls.WildcardResourceScopeComponent] = struct{}{}
+				}
+			case target.Playbook != nil:
+				if isWildcardScopeSelector(target.Playbook) {
+					wildcards[rls.WildcardResourceScopePlaybook] = struct{}{}
+				}
+			case target.Canary != nil:
+				if isWildcardScopeSelector(target.Canary) {
+					wildcards[rls.WildcardResourceScopeCanary] = struct{}{}
+				}
+			case target.View != nil:
+				if isWildcardScopeSelector(target.View) {
+					wildcards[rls.WildcardResourceScopeView] = struct{}{}
+				}
+			case target.Global != nil:
+				if isWildcardScopeSelector(target.Global) {
+					wildcards[rls.WildcardResourceScopeConfig] = struct{}{}
+					wildcards[rls.WildcardResourceScopeComponent] = struct{}{}
+					wildcards[rls.WildcardResourceScopePlaybook] = struct{}{}
+					wildcards[rls.WildcardResourceScopeCanary] = struct{}{}
+					wildcards[rls.WildcardResourceScopeView] = struct{}{}
+				}
 			}
 		}
 	}
@@ -238,59 +263,65 @@ func processScopeRefs(ctx context.Context, scopeRefs []dutyRBAC.NamespacedNameID
 	return nil
 }
 
-func convertToRLSScope(selector *v1.ScopeResourceSelector) rls.Scope {
-	rlsScope := rls.Scope{}
-
-	if selector.Agent != "" {
-		rlsScope.Agents = []string{selector.Agent}
+func isWildcardScopeSelector(selector *v1.ScopeResourceSelector) bool {
+	if selector == nil {
+		return false
 	}
 
-	if selector.Name != "" {
-		rlsScope.Names = []string{selector.Name}
-	}
-
-	if selector.TagSelector != "" {
-		rlsScope.Tags = collections.SelectorToMap(selector.TagSelector)
-	}
-
-	return rlsScope
+	return selector.Name == "*" &&
+		selector.Namespace == "" &&
+		selector.Agent == "" &&
+		selector.TagSelector == ""
 }
 
-// convertResourceSelectorToRLSScope converts a types.ResourceSelector to rls.Scope
-// Only uses tags, name, and agent_id.
-func convertResourceSelectorToRLSScope(selector types.ResourceSelector) rls.Scope {
-	rlsScope := rls.Scope{}
-
-	if selector.Agent != "" {
-		rlsScope.Agents = []string{selector.Agent}
+func hasWildcardSelector(selectors []types.ResourceSelector) bool {
+	for _, selector := range selectors {
+		if selector.Wildcard() {
+			return true
+		}
 	}
-
-	if selector.Name != "" {
-		rlsScope.Names = []string{selector.Name}
-	}
-
-	if selector.TagSelector != "" {
-		rlsScope.Tags = collections.SelectorToMap(selector.TagSelector)
-	}
-
-	return rlsScope
+	return false
 }
 
-// convertViewScopeRefToRLSScope converts a view ViewRef (namespace/name) to rls.Scope
-// Views only support id and name in match_scope (namespace is not supported)
-func convertViewScopeRefToRLSScope(viewRef dutyRBAC.ViewRef) rls.Scope {
-	rlsScope := rls.Scope{}
+func hasWildcardViewRef(selectors []dutyRBAC.ViewRef) bool {
+	for _, selector := range selectors {
+		if selector.Name == "*" && selector.Namespace == "" && selector.ID == "" {
+			return true
+		}
+	}
+	return false
+}
 
-	if viewRef.Name != "" {
-		rlsScope.Names = []string{viewRef.Name}
+func setToSortedUUIDSlice(set map[uuid.UUID]struct{}) []uuid.UUID {
+	if len(set) == 0 {
+		return nil
 	}
 
-	if viewRef.ID != "" {
-		rlsScope.ID = viewRef.ID
+	out := make([]uuid.UUID, 0, len(set))
+	for val := range set {
+		out = append(out, val)
 	}
 
-	// Note: namespace is not supported by match_scope for views
-	// ID would be set if we have a direct ID reference, but ViewRef doesn't have ID field
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].String() < out[j].String()
+	})
 
-	return rlsScope
+	return out
+}
+
+func setToSortedWildcardSlice(set map[rls.WildcardResourceScope]struct{}) []rls.WildcardResourceScope {
+	if len(set) == 0 {
+		return nil
+	}
+
+	out := make([]rls.WildcardResourceScope, 0, len(set))
+	for val := range set {
+		out = append(out, val)
+	}
+
+	sort.Slice(out, func(i, j int) bool {
+		return string(out[i]) < string(out[j])
+	})
+
+	return out
 }
