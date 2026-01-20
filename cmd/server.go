@@ -37,6 +37,7 @@ import (
 	_ "github.com/flanksource/incident-commander/artifacts"
 	_ "github.com/flanksource/incident-commander/catalog"
 	_ "github.com/flanksource/incident-commander/connection"
+	_ "github.com/flanksource/incident-commander/permission"
 	_ "github.com/flanksource/incident-commander/playbook"
 	_ "github.com/flanksource/incident-commander/shorturl"
 	_ "github.com/flanksource/incident-commander/snapshot"

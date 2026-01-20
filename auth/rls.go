@@ -4,15 +4,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
+	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/rls"
-	"github.com/flanksource/duty/types"
+	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/samber/lo"
 	"go.opentelemetry.io/otel/trace"
 	"gorm.io/gorm"
@@ -72,11 +76,26 @@ func WithRLS(ctx context.Context, fn func(context.Context) error) error {
 	}
 
 	if rlsPayload.Disable {
-		return fn(ctx)
+		return ctx.Transaction(func(txCtx context.Context, _ trace.Span) error {
+			role := dutyAPI.DefaultConfig.Postgrest.DBRoleBypass
+			if role == "" {
+				role = dutyAPI.DefaultConfig.Postgrest.DBRole
+				if role != "" {
+					txCtx.Logger.Warnf("RLS bypass role not configured, using role=%s", role)
+				}
+			}
+			if role == "" {
+				return fmt.Errorf("role is required")
+			}
+			if err := txCtx.DB().Exec(fmt.Sprintf("SET LOCAL ROLE %s", pq.QuoteIdentifier(role))).Error; err != nil {
+				return err
+			}
+			return fn(txCtx)
+		})
 	}
 
 	return ctx.Transaction(func(txCtx context.Context, _ trace.Span) error {
-		if err := rlsPayload.SetPostgresSessionRLS(txCtx.DB()); err != nil {
+		if err := rlsPayload.SetPostgresSessionRLSWithRole(txCtx.DB(), dutyAPI.DefaultConfig.Postgrest.DBRole); err != nil {
 			return err
 		}
 
@@ -106,23 +125,17 @@ func buildRLSPayloadFromScopes(ctx context.Context) (*rls.Payload, error) {
 		return nil, fmt.Errorf("failed to query permissions: %w", err)
 	}
 
-	payload := &rls.Payload{}
+	scopeIDs := map[uuid.UUID]struct{}{}
 
 	for _, perm := range permissions {
-		if perm.ConfigID != nil {
-			payload.Config = append(payload.Config, rls.Scope{ID: perm.ConfigID.String()})
+		if !collections.MatchItems(policy.ActionRead, strings.Split(perm.Action, ",")...) {
+			continue
 		}
 
-		if perm.ComponentID != nil {
-			payload.Component = append(payload.Component, rls.Scope{ID: perm.ComponentID.String()})
-		}
+		permScopeID := perm.ID
 
-		if perm.PlaybookID != nil {
-			payload.Playbook = append(payload.Playbook, rls.Scope{ID: perm.PlaybookID.String()})
-		}
-
-		if perm.CanaryID != nil {
-			payload.Canary = append(payload.Canary, rls.Scope{ID: perm.CanaryID.String()})
+		if perm.ConfigID != nil || perm.ComponentID != nil || perm.PlaybookID != nil || perm.CanaryID != nil {
+			scopeIDs[permScopeID] = struct{}{}
 		}
 
 		if len(perm.ObjectSelector) == 0 {
@@ -137,35 +150,26 @@ func buildRLSPayloadFromScopes(ctx context.Context) (*rls.Payload, error) {
 
 		// Process scope references (indirect permissions)
 		if len(selectors.Scopes) > 0 {
-			if err := processScopeRefs(ctx, selectors.Scopes, payload); err != nil {
+			if err := processScopeRefs(ctx, selectors.Scopes, scopeIDs); err != nil {
 				return nil, err
 			}
 		}
 
 		// Process direct resource selectors (configs, components, playbooks, etc.)
-		// Only use tags, name, and agent_id as per requirements
 		if len(selectors.Configs) > 0 {
-			for _, selector := range selectors.Configs {
-				payload.Config = append(payload.Config, convertResourceSelectorToRLSScope(selector))
-			}
+			scopeIDs[permScopeID] = struct{}{}
 		}
 
 		if len(selectors.Components) > 0 {
-			for _, selector := range selectors.Components {
-				payload.Component = append(payload.Component, convertResourceSelectorToRLSScope(selector))
-			}
+			scopeIDs[permScopeID] = struct{}{}
 		}
 
 		if len(selectors.Playbooks) > 0 {
-			for _, selector := range selectors.Playbooks {
-				payload.Playbook = append(payload.Playbook, convertResourceSelectorToRLSScope(selector))
-			}
+			scopeIDs[permScopeID] = struct{}{}
 		}
 
 		if len(selectors.Views) > 0 {
-			for _, viewRef := range selectors.Views {
-				payload.View = append(payload.View, convertViewScopeRefToRLSScope(viewRef))
-			}
+			scopeIDs[permScopeID] = struct{}{}
 		}
 
 		// TODO: No RLS support for connections yet!
@@ -176,11 +180,15 @@ func buildRLSPayloadFromScopes(ctx context.Context) (*rls.Payload, error) {
 		// }
 	}
 
+	payload := &rls.Payload{
+		Scopes: setToSortedUUIDSlice(scopeIDs),
+	}
+
 	return payload, nil
 }
 
-// processScopeRefs fetches scopes from database and adds their targets to the payload
-func processScopeRefs(ctx context.Context, scopeRefs []dutyRBAC.NamespacedNameIDSelector, payload *rls.Payload) error {
+// processScopeRefs fetches scopes from database and adds their IDs
+func processScopeRefs(ctx context.Context, scopeRefs []dutyRBAC.NamespacedNameIDSelector, scopeIDs map[uuid.UUID]struct{}) error {
 	for _, ref := range scopeRefs {
 		var scope models.Scope
 		err := ctx.DB().
@@ -194,103 +202,27 @@ func processScopeRefs(ctx context.Context, scopeRefs []dutyRBAC.NamespacedNameID
 			return fmt.Errorf("failed to query scope %s/%s: %w", ref.Namespace, ref.Name, err)
 		}
 
-		// Add scope UUID for view row-level grants
-		payload.Scopes = append(payload.Scopes, scope.ID.String())
+		// Always include scope UUID for view row-level grants
+		scopeIDs[scope.ID] = struct{}{}
 
-		var targets []v1.ScopeTarget
-		if err := json.Unmarshal([]byte(scope.Targets), &targets); err != nil {
-			ctx.Warnf("failed to unmarshal targets for scope %s: %v", scope.ID, err)
-			continue
-		}
-
-		for _, target := range targets {
-			if target.Config != nil {
-				rlsScope := convertToRLSScope(target.Config)
-				payload.Config = append(payload.Config, rlsScope)
-			}
-			if target.Component != nil {
-				rlsScope := convertToRLSScope(target.Component)
-				payload.Component = append(payload.Component, rlsScope)
-			}
-			if target.Playbook != nil {
-				rlsScope := convertToRLSScope(target.Playbook)
-				payload.Playbook = append(payload.Playbook, rlsScope)
-			}
-			if target.Canary != nil {
-				rlsScope := convertToRLSScope(target.Canary)
-				payload.Canary = append(payload.Canary, rlsScope)
-			}
-			if target.View != nil {
-				rlsScope := convertToRLSScope(target.View)
-				payload.View = append(payload.View, rlsScope)
-			}
-			if target.Global != nil {
-				rlsScope := convertToRLSScope(target.Global)
-				payload.Config = append(payload.Config, rlsScope)
-				payload.Component = append(payload.Component, rlsScope)
-				payload.Playbook = append(payload.Playbook, rlsScope)
-				payload.Canary = append(payload.Canary, rlsScope)
-				payload.View = append(payload.View, rlsScope)
-			}
-		}
 	}
 
 	return nil
 }
 
-func convertToRLSScope(selector *v1.ScopeResourceSelector) rls.Scope {
-	rlsScope := rls.Scope{}
-
-	if selector.Agent != "" {
-		rlsScope.Agents = []string{selector.Agent}
+func setToSortedUUIDSlice(set map[uuid.UUID]struct{}) []uuid.UUID {
+	if len(set) == 0 {
+		return nil
 	}
 
-	if selector.Name != "" {
-		rlsScope.Names = []string{selector.Name}
+	out := make([]uuid.UUID, 0, len(set))
+	for val := range set {
+		out = append(out, val)
 	}
 
-	if selector.TagSelector != "" {
-		rlsScope.Tags = collections.SelectorToMap(selector.TagSelector)
-	}
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].String() < out[j].String()
+	})
 
-	return rlsScope
-}
-
-// convertResourceSelectorToRLSScope converts a types.ResourceSelector to rls.Scope
-// Only uses tags, name, and agent_id.
-func convertResourceSelectorToRLSScope(selector types.ResourceSelector) rls.Scope {
-	rlsScope := rls.Scope{}
-
-	if selector.Agent != "" {
-		rlsScope.Agents = []string{selector.Agent}
-	}
-
-	if selector.Name != "" {
-		rlsScope.Names = []string{selector.Name}
-	}
-
-	if selector.TagSelector != "" {
-		rlsScope.Tags = collections.SelectorToMap(selector.TagSelector)
-	}
-
-	return rlsScope
-}
-
-// convertViewScopeRefToRLSScope converts a view ViewRef (namespace/name) to rls.Scope
-// Views only support id and name in match_scope (namespace is not supported)
-func convertViewScopeRefToRLSScope(viewRef dutyRBAC.ViewRef) rls.Scope {
-	rlsScope := rls.Scope{}
-
-	if viewRef.Name != "" {
-		rlsScope.Names = []string{viewRef.Name}
-	}
-
-	if viewRef.ID != "" {
-		rlsScope.ID = viewRef.ID
-	}
-
-	// Note: namespace is not supported by match_scope for views
-	// ID would be set if we have a direct ID reference, but ViewRef doesn't have ID field
-
-	return rlsScope
+	return out
 }
