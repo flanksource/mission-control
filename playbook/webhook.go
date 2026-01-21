@@ -55,8 +55,11 @@ func HandleWebhook(c echo.Context) error {
 	}
 
 	ctx = ctx.WithNamespace(playbook.Namespace)
-	if err := authenticateWebhook(ctx, c.Request(), spec.On.Webhook.Authentication); err != nil {
-		return dutyAPI.WriteError(c, fmt.Errorf("error authenticating webhook[%s]: %w", path, err))
+
+	if spec.On.Webhook.Authentication != nil {
+		if err := authenticateWebhook(ctx, c.Request(), spec.On.Webhook.Authentication); err != nil {
+			return dutyAPI.WriteError(c, fmt.Errorf("error authenticating webhook[%s]: %w", path, err))
+		}
 	}
 
 	var runRequest RunParams
