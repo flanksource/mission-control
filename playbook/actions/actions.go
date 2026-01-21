@@ -17,6 +17,7 @@ import (
 
 type WebhookRequest struct {
 	URL     string            `json:"url"`
+	Method  string            `json:"method"`
 	Headers map[string]string `json:"headers"`
 	Params  map[string]string `json:"params"`
 	Content string            `json:"content"`
@@ -39,6 +40,7 @@ func NewWebhookRequest(c echo.Context) (*WebhookRequest, error) {
 
 	whr := WebhookRequest{
 		URL:     c.Request().URL.String(),
+		Method:  c.Request().Method,
 		Headers: headers,
 		Params:  params,
 		Content: string(content),

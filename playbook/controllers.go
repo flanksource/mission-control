@@ -40,6 +40,7 @@ func RegisterRoutes(e *echo.Echo) {
 	playbookGroup := e.Group(fmt.Sprintf("/%s", prefix))
 	playbookGroup.GET("/list", HandlePlaybookList, rbac.Playbook(policy.ActionRead))
 	playbookGroup.POST("/webhook/:webhook_path", HandleWebhook)
+	playbookGroup.GET("/webhook/:webhook_path", HandleWebhook)
 
 	playbookGroup.POST("/:id/params", HandleGetPlaybookParams)
 
