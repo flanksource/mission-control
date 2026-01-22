@@ -55,7 +55,7 @@ func newConfigItemsCollector(ctx context.Context, includeInfo, includeHealth boo
 		collector.healthDesc = prometheus.NewDesc(
 			prometheus.BuildFQName("mission_control", "", "config_items_health"),
 			"Config item health status (0=healthy, 1=warning, 2=error).",
-			[]string{"config_id", "agent_id"},
+			[]string{"id", "agent_id"},
 			nil,
 		)
 	}
@@ -95,7 +95,7 @@ func (c *configItemsCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 
 	for _, item := range items {
-		agentID := item.AgentID.String()
+		agentID := formatUUID(item.AgentID)
 		if infoReady {
 			labels := c.infoLabelValues(item, agentID)
 			ch <- prometheus.MustNewConstMetric(
@@ -183,6 +183,14 @@ func ensureUniqueLabel(base string, used map[string]struct{}) string {
 		}
 		label = fmt.Sprintf("%s_%d", base, idx+1)
 	}
+}
+
+func formatUUID(id uuid.UUID) string {
+	if id == uuid.Nil {
+		return ""
+	}
+
+	return id.String()
 }
 
 func sanitizeTagLabel(key string) string {
