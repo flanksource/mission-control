@@ -48,13 +48,10 @@ func newConfigItemsCollector(ctx context.Context, includeInfo, includeHealth boo
 		includeInfo:   includeInfo,
 		includeHealth: includeHealth,
 	}
-	if includeInfo {
-		collector.infoDesc = nil
-	}
 	if includeHealth {
 		collector.healthDesc = prometheus.NewDesc(
 			prometheus.BuildFQName("mission_control", "", "config_items_health"),
-			"Config item health status (0=healthy, 1=warning, 2=error).",
+			"Config item health status (0=healthy, 1=warning, 2=unhealthy, 3=unknown).",
 			[]string{"id", "agent_id"},
 			nil,
 		)
@@ -139,7 +136,8 @@ func (c *configItemsCollector) ensureInfoDescriptor() {
 		return
 	}
 
-	labels := append(append([]string{}, configItemInfoBaseLabels...), c.tagLabelKeys...)
+	labels := append([]string(nil), configItemInfoBaseLabels...)
+	labels = append(labels, c.tagLabelKeys...)
 	c.infoDesc = prometheus.NewDesc(
 		prometheus.BuildFQName("mission_control", "", "config_items_info"),
 		"Config item metadata.",
@@ -231,14 +229,15 @@ func (c *configItemsCollector) getCachedItems() ([]configItemRow, error) {
 	c.mutex.Lock()
 	defer c.mutex.Unlock()
 
-	if len(c.cachedItems) > 0 && cacheTTL > 0 && time.Since(c.cachedAt) < cacheTTL {
+	hasCache := !c.cachedAt.IsZero()
+	if hasCache && cacheTTL > 0 && time.Since(c.cachedAt) < cacheTTL {
 		c.ensureInfoDescriptor()
 		return c.cachedItems, nil
 	}
 
 	items, err := c.fetchConfigItems()
 	if err != nil {
-		if len(c.cachedItems) > 0 {
+		if hasCache {
 			c.ctx.Logger.Errorf("failed to refresh config items cache: %v", err)
 			c.ensureInfoDescriptor()
 			return c.cachedItems, nil
@@ -289,7 +288,7 @@ func (c *configItemsCollector) fetchConfigItems() ([]configItemRow, error) {
 
 func configItemHealthValue(health *models.Health) float64 {
 	if health == nil {
-		return 2
+		return 3
 	}
 
 	switch *health {
@@ -299,7 +298,9 @@ func configItemHealthValue(health *models.Health) float64 {
 		return 1
 	case models.HealthUnhealthy:
 		return 2
+	case models.HealthUnknown:
+		return 3
 	default:
-		return 2
+		return 3
 	}
 }

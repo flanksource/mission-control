@@ -53,38 +53,42 @@ func (c *dbStatsCollector) Describe(ch chan<- *prometheus.Desc) {
 }
 
 func (c *dbStatsCollector) Collect(ch chan<- prometheus.Metric) {
-	var checksCount int64
-	if err := c.ctx.DB().Model(&models.Check{}).Where("deleted_at IS NULL").Count(&checksCount).Error; err != nil {
-		c.ctx.Logger.Errorf("failed to collect checks count: %v", err)
-	} else {
-		ch <- prometheus.MustNewConstMetric(c.checksDesc, prometheus.GaugeValue, float64(checksCount))
+	collectGauge := func(desc *prometheus.Desc, errMsg string, fn func() (float64, error)) {
+		value, err := fn()
+		if err != nil {
+			c.ctx.Logger.Errorf("%s: %v", errMsg, err)
+			return
+		}
+		ch <- prometheus.MustNewConstMetric(desc, prometheus.GaugeValue, value)
 	}
 
-	var configItemsCount int64
-	if err := c.ctx.DB().Model(&models.ConfigItem{}).Where("deleted_at IS NULL").Count(&configItemsCount).Error; err != nil {
-		c.ctx.Logger.Errorf("failed to collect config items count: %v", err)
-	} else {
-		ch <- prometheus.MustNewConstMetric(c.configItemsDesc, prometheus.GaugeValue, float64(configItemsCount))
-	}
+	collectGauge(c.checksDesc, "failed to collect checks count", func() (float64, error) {
+		var checksCount int64
+		err := c.ctx.DB().Model(&models.Check{}).Where("deleted_at IS NULL").Count(&checksCount).Error
+		return float64(checksCount), err
+	})
 
-	var dbSize int64
-	if err := c.ctx.DB().Raw("SELECT pg_database_size(current_database())").Scan(&dbSize).Error; err != nil {
-		c.ctx.Logger.Errorf("failed to collect database size: %v", err)
-	} else {
-		ch <- prometheus.MustNewConstMetric(c.dbSizeDesc, prometheus.GaugeValue, float64(dbSize))
-	}
+	collectGauge(c.configItemsDesc, "failed to collect config items count", func() (float64, error) {
+		var configItemsCount int64
+		err := c.ctx.DB().Model(&models.ConfigItem{}).Where("deleted_at IS NULL").Count(&configItemsCount).Error
+		return float64(configItemsCount), err
+	})
 
-	var lastLoginSeconds float64
-	if err := c.ctx.DB().Raw("SELECT COALESCE(EXTRACT(EPOCH FROM MAX(last_login)), 0) FROM users").Scan(&lastLoginSeconds).Error; err != nil {
-		c.ctx.Logger.Errorf("failed to collect last login timestamp: %v", err)
-	} else {
-		ch <- prometheus.MustNewConstMetric(c.lastLoginDesc, prometheus.GaugeValue, lastLoginSeconds)
-	}
+	collectGauge(c.dbSizeDesc, "failed to collect database size", func() (float64, error) {
+		var dbSize int64
+		err := c.ctx.DB().Raw("SELECT pg_database_size(current_database())").Scan(&dbSize).Error
+		return float64(dbSize), err
+	})
 
-	var loggedInUsers int64
-	if err := c.ctx.DB().Raw("SELECT COUNT(*) FROM users WHERE last_login IS NOT NULL").Scan(&loggedInUsers).Error; err != nil {
-		c.ctx.Logger.Errorf("failed to collect logged in users count: %v", err)
-	} else {
-		ch <- prometheus.MustNewConstMetric(c.loggedInUsersDesc, prometheus.GaugeValue, float64(loggedInUsers))
-	}
+	collectGauge(c.lastLoginDesc, "failed to collect last login timestamp", func() (float64, error) {
+		var lastLoginSeconds float64
+		err := c.ctx.DB().Raw("SELECT COALESCE(EXTRACT(EPOCH FROM MAX(last_login)), 0) FROM users").Scan(&lastLoginSeconds).Error
+		return lastLoginSeconds, err
+	})
+
+	collectGauge(c.loggedInUsersDesc, "failed to collect logged in users count", func() (float64, error) {
+		var loggedInUsers int64
+		err := c.ctx.DB().Raw("SELECT COUNT(*) FROM users WHERE last_login IS NOT NULL").Scan(&loggedInUsers).Error
+		return float64(loggedInUsers), err
+	})
 }
