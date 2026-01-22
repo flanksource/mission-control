@@ -2,7 +2,6 @@ package metrics
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -90,9 +89,14 @@ func (c *configItemsCollector) Collect(ch chan<- prometheus.Metric) {
 		return
 	}
 
+	infoReady := c.includeInfo && c.infoDesc != nil
+	if c.includeInfo && c.infoDesc == nil {
+		c.ctx.Logger.Errorf("config items info metric disabled: label descriptor not available")
+	}
+
 	for _, item := range items {
 		agentID := item.AgentID.String()
-		if c.includeInfo {
+		if infoReady {
 			labels := c.infoLabelValues(item, agentID)
 			ch <- prometheus.MustNewConstMetric(
 				c.infoDesc,
@@ -125,16 +129,17 @@ func (c *configItemsCollector) infoLabelValues(item configItemRow, agentID strin
 	return labels
 }
 
-func (c *configItemsCollector) ensureInfoDescriptor(items []configItemRow) {
+func (c *configItemsCollector) ensureInfoDescriptor() {
 	if !c.includeInfo || c.infoDesc != nil {
 		return
 	}
 
-	tagKeys, tagLabelKeys := buildTagLabels(items)
-	c.tagKeys = tagKeys
-	c.tagLabelKeys = tagLabelKeys
+	if err := c.loadTagLabels(); err != nil {
+		c.ctx.Logger.Errorf("failed to load config tag keys: %v", err)
+		return
+	}
 
-	labels := append(append([]string{}, configItemInfoBaseLabels...), tagLabelKeys...)
+	labels := append(append([]string{}, configItemInfoBaseLabels...), c.tagLabelKeys...)
 	c.infoDesc = prometheus.NewDesc(
 		prometheus.BuildFQName("mission_control", "", "config_items_info"),
 		"Config item metadata.",
@@ -143,22 +148,11 @@ func (c *configItemsCollector) ensureInfoDescriptor(items []configItemRow) {
 	)
 }
 
-func buildTagLabels(items []configItemRow) ([]string, []string) {
-	keysSet := make(map[string]struct{})
-	for _, item := range items {
-		for key := range item.Tags {
-			if key == "" {
-				continue
-			}
-			keysSet[key] = struct{}{}
-		}
+func (c *configItemsCollector) loadTagLabels() error {
+	var tagKeys []string
+	if err := c.ctx.DB().Table("config_tags").Select("key").Distinct().Order("key").Pluck("key", &tagKeys).Error; err != nil {
+		return err
 	}
-
-	tagKeys := make([]string, 0, len(keysSet))
-	for key := range keysSet {
-		tagKeys = append(tagKeys, key)
-	}
-	sort.Strings(tagKeys)
 
 	labelKeys := make([]string, 0, len(tagKeys))
 	labelUseCounts := make(map[string]int)
@@ -174,7 +168,9 @@ func buildTagLabels(items []configItemRow) ([]string, []string) {
 		labelKeys = append(labelKeys, label)
 	}
 
-	return tagKeys, labelKeys
+	c.tagKeys = tagKeys
+	c.tagLabelKeys = labelKeys
+	return nil
 }
 
 func sanitizeTagLabel(key string) string {
@@ -199,7 +195,11 @@ func sanitizeTagLabel(key string) string {
 		sanitized = "tag"
 	}
 
-	return "tag_" + sanitized
+	if sanitized[0] >= '0' && sanitized[0] <= '9' {
+		sanitized = "tag_" + sanitized
+	}
+
+	return sanitized
 }
 
 func (c *configItemsCollector) getCachedItems() ([]configItemRow, error) {
@@ -212,7 +212,7 @@ func (c *configItemsCollector) getCachedItems() ([]configItemRow, error) {
 	defer c.mutex.Unlock()
 
 	if len(c.cachedItems) > 0 && cacheTTL > 0 && time.Since(c.cachedAt) < cacheTTL {
-		c.ensureInfoDescriptor(c.cachedItems)
+		c.ensureInfoDescriptor()
 		return c.cachedItems, nil
 	}
 
@@ -220,15 +220,15 @@ func (c *configItemsCollector) getCachedItems() ([]configItemRow, error) {
 	if err != nil {
 		if len(c.cachedItems) > 0 {
 			c.ctx.Logger.Errorf("failed to refresh config items cache: %v", err)
-			c.ensureInfoDescriptor(c.cachedItems)
+			c.ensureInfoDescriptor()
 			return c.cachedItems, nil
 		}
 		return nil, err
 	}
 
-	c.ensureInfoDescriptor(items)
 	c.cachedItems = items
 	c.cachedAt = time.Now()
+	c.ensureInfoDescriptor()
 	return items, nil
 }
 
