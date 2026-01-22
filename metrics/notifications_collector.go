@@ -5,7 +5,6 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/samber/lo"
 )
 
 type notificationsCollector struct {
@@ -15,10 +14,7 @@ type notificationsCollector struct {
 
 type notificationStatusRow struct {
 	NotificationID uuid.UUID `gorm:"column:notification_id"`
-	ResourceID     uuid.UUID `gorm:"column:resource_id"`
 	Status         string    `gorm:"column:status"`
-	ResourceKind   string    `gorm:"column:resource_kind"`
-	ResourceType   *string   `gorm:"column:resource_type"`
 	AgentID        uuid.UUID `gorm:"column:agent_id"`
 }
 
@@ -28,7 +24,7 @@ func newNotificationsCollector(ctx context.Context) *notificationsCollector {
 		desc: prometheus.NewDesc(
 			prometheus.BuildFQName("mission_control", "", "notifications"),
 			"Notification status (-1=suppressed, 0=firing, 1=sent).",
-			[]string{"notification_id", "id", "resource_kind", "resource_type", "agent_id"},
+			[]string{"notification_id", "agent_id"},
 			nil,
 		),
 	}
@@ -40,17 +36,14 @@ func (c *notificationsCollector) Describe(ch chan<- *prometheus.Desc) {
 
 func (c *notificationsCollector) Collect(ch chan<- prometheus.Metric) {
 	rows, err := c.ctx.DB().Table("notification_send_history_summary AS nsh").
-		Select(`DISTINCT ON (nsh.notification_id, nsh.resource_id) nsh.notification_id,
-			nsh.resource_id,
+		Select(`DISTINCT ON (nsh.notification_id) nsh.notification_id,
 			nsh.status,
-			nsh.resource_kind,
-			nsh.resource_type,
 			COALESCE(ci.agent_id, comp.agent_id, chk.agent_id, can.agent_id, '00000000-0000-0000-0000-000000000000') AS agent_id`).
 		Joins("LEFT JOIN config_items ci ON nsh.resource_kind = 'config' AND ci.id = nsh.resource_id").
 		Joins("LEFT JOIN components comp ON nsh.resource_kind = 'component' AND comp.id = nsh.resource_id").
 		Joins("LEFT JOIN checks chk ON nsh.resource_kind = 'check' AND chk.id = nsh.resource_id").
 		Joins("LEFT JOIN canaries can ON nsh.resource_kind = 'canary' AND can.id = nsh.resource_id").
-		Order("nsh.notification_id, nsh.resource_id, nsh.created_at DESC").
+		Order("nsh.notification_id, nsh.created_at DESC").
 		Rows()
 	if err != nil {
 		c.ctx.Logger.Errorf("failed to collect notifications: %v", err)
@@ -70,9 +63,6 @@ func (c *notificationsCollector) Collect(ch chan<- prometheus.Metric) {
 			prometheus.GaugeValue,
 			notificationStatusValue(row.Status),
 			row.NotificationID.String(),
-			row.ResourceID.String(),
-			row.ResourceKind,
-			lo.FromPtr(row.ResourceType),
 			formatUUID(row.AgentID),
 		)
 	}
