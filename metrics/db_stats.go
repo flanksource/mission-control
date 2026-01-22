@@ -16,6 +16,9 @@ func RegisterDBStats(ctx context.Context) {
 		if metricEnabled(ctx, "config_items_info") {
 			prometheus.MustRegister(newConfigItemsInfoCollector(ctx))
 		}
+		if metricEnabled(ctx, "config_items_health") {
+			prometheus.MustRegister(newConfigItemsHealthCollector(ctx))
+		}
 	})
 }
 
