@@ -24,6 +24,8 @@ type configItemsCollector struct {
 	mutex         sync.Mutex
 	cachedAt      time.Time
 	cachedItems   []configItemRow
+	tagKeys       []string
+	tagLabelKeys  []string
 }
 
 type configItemRow struct {
@@ -39,6 +41,8 @@ const (
 	defaultConfigItemsCacheTTL  = 5 * time.Minute
 )
 
+var configItemInfoBaseLabels = []string{"id", "agent_id", "name", "namespace"}
+
 func newConfigItemsCollector(ctx context.Context, includeInfo, includeHealth bool) *configItemsCollector {
 	collector := &configItemsCollector{
 		ctx:           ctx,
@@ -46,7 +50,7 @@ func newConfigItemsCollector(ctx context.Context, includeInfo, includeHealth boo
 		includeHealth: includeHealth,
 	}
 	if includeInfo {
-		collector.infoDesc = prometheus.NewDesc(prometheus.BuildFQName("mission_control", "", "config_items_info"), "Config item metadata.", []string{"id", "agent_id", "name", "namespace", "tags"}, nil)
+		collector.infoDesc = nil
 	}
 	if includeHealth {
 		collector.healthDesc = prometheus.NewDesc(
@@ -61,7 +65,14 @@ func newConfigItemsCollector(ctx context.Context, includeInfo, includeHealth boo
 
 func (c *configItemsCollector) Describe(ch chan<- *prometheus.Desc) {
 	if c.includeInfo {
-		ch <- c.infoDesc
+		if c.infoDesc == nil {
+			if _, err := c.getCachedItems(); err != nil {
+				c.ctx.Logger.Errorf("failed to load config items for descriptor: %v", err)
+			}
+		}
+		if c.infoDesc != nil {
+			ch <- c.infoDesc
+		}
 	}
 	if c.includeHealth {
 		ch <- c.healthDesc
@@ -80,18 +91,14 @@ func (c *configItemsCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 
 	for _, item := range items {
-		agentID := formatAgentID(item.AgentID)
+		agentID := item.AgentID.String()
 		if c.includeInfo {
-			namespace := item.Tags["namespace"]
+			labels := c.infoLabelValues(item, agentID)
 			ch <- prometheus.MustNewConstMetric(
 				c.infoDesc,
 				prometheus.GaugeValue,
 				1,
-				item.ID.String(),
-				agentID,
-				lo.FromPtr(item.Name),
-				namespace,
-				formatConfigItemTags(item.Tags),
+				labels...,
 			)
 		}
 
@@ -107,31 +114,92 @@ func (c *configItemsCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 }
 
-func formatAgentID(agentID uuid.UUID) string {
-	if agentID == uuid.Nil {
-		return ""
+func (c *configItemsCollector) infoLabelValues(item configItemRow, agentID string) []string {
+	labels := make([]string, 0, len(configItemInfoBaseLabels)+len(c.tagKeys))
+	namespace := item.Tags["namespace"]
+	labels = append(labels, item.ID.String(), agentID, lo.FromPtr(item.Name), namespace)
+	for _, key := range c.tagKeys {
+		labels = append(labels, item.Tags[key])
 	}
 
-	return agentID.String()
+	return labels
 }
 
-func formatConfigItemTags(tags types.JSONStringMap) string {
-	if len(tags) == 0 {
-		return ""
+func (c *configItemsCollector) ensureInfoDescriptor(items []configItemRow) {
+	if !c.includeInfo || c.infoDesc != nil {
+		return
 	}
 
-	keys := make([]string, 0, len(tags))
-	for key := range tags {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
+	tagKeys, tagLabelKeys := buildTagLabels(items)
+	c.tagKeys = tagKeys
+	c.tagLabelKeys = tagLabelKeys
 
-	pairs := make([]string, 0, len(keys))
-	for _, key := range keys {
-		pairs = append(pairs, fmt.Sprintf("%s=%s", key, tags[key]))
+	labels := append(append([]string{}, configItemInfoBaseLabels...), tagLabelKeys...)
+	c.infoDesc = prometheus.NewDesc(
+		prometheus.BuildFQName("mission_control", "", "config_items_info"),
+		"Config item metadata.",
+		labels,
+		nil,
+	)
+}
+
+func buildTagLabels(items []configItemRow) ([]string, []string) {
+	keysSet := make(map[string]struct{})
+	for _, item := range items {
+		for key := range item.Tags {
+			if key == "" {
+				continue
+			}
+			keysSet[key] = struct{}{}
+		}
 	}
 
-	return strings.Join(pairs, ",")
+	tagKeys := make([]string, 0, len(keysSet))
+	for key := range keysSet {
+		tagKeys = append(tagKeys, key)
+	}
+	sort.Strings(tagKeys)
+
+	labelKeys := make([]string, 0, len(tagKeys))
+	labelUseCounts := make(map[string]int)
+	for _, key := range tagKeys {
+		label := sanitizeTagLabel(key)
+		if count, exists := labelUseCounts[label]; exists {
+			count++
+			labelUseCounts[label] = count
+			label = fmt.Sprintf("%s_%d", label, count)
+		} else {
+			labelUseCounts[label] = 0
+		}
+		labelKeys = append(labelKeys, label)
+	}
+
+	return tagKeys, labelKeys
+}
+
+func sanitizeTagLabel(key string) string {
+	var builder strings.Builder
+	for _, char := range key {
+		switch {
+		case char >= 'a' && char <= 'z':
+			builder.WriteRune(char)
+		case char >= 'A' && char <= 'Z':
+			builder.WriteRune(char)
+		case char >= '0' && char <= '9':
+			builder.WriteRune(char)
+		case char == '_':
+			builder.WriteRune(char)
+		default:
+			builder.WriteRune('_')
+		}
+	}
+
+	sanitized := builder.String()
+	if sanitized == "" {
+		sanitized = "tag"
+	}
+
+	return "tag_" + sanitized
 }
 
 func (c *configItemsCollector) getCachedItems() ([]configItemRow, error) {
@@ -144,6 +212,7 @@ func (c *configItemsCollector) getCachedItems() ([]configItemRow, error) {
 	defer c.mutex.Unlock()
 
 	if len(c.cachedItems) > 0 && cacheTTL > 0 && time.Since(c.cachedAt) < cacheTTL {
+		c.ensureInfoDescriptor(c.cachedItems)
 		return c.cachedItems, nil
 	}
 
@@ -151,11 +220,13 @@ func (c *configItemsCollector) getCachedItems() ([]configItemRow, error) {
 	if err != nil {
 		if len(c.cachedItems) > 0 {
 			c.ctx.Logger.Errorf("failed to refresh config items cache: %v", err)
+			c.ensureInfoDescriptor(c.cachedItems)
 			return c.cachedItems, nil
 		}
 		return nil, err
 	}
 
+	c.ensureInfoDescriptor(items)
 	c.cachedItems = items
 	c.cachedAt = time.Now()
 	return items, nil
