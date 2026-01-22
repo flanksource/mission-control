@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -19,6 +21,9 @@ type configItemsCollector struct {
 	includeHealth bool
 	infoDesc      *prometheus.Desc
 	healthDesc    *prometheus.Desc
+	mutex         sync.Mutex
+	cachedAt      time.Time
+	cachedItems   []configItemRow
 }
 
 type configItemRow struct {
@@ -27,6 +32,11 @@ type configItemRow struct {
 	Tags   types.JSONStringMap `gorm:"column:tags"`
 	Health *models.Health      `gorm:"column:health"`
 }
+
+const (
+	configItemsCacheTTLProperty = "metrics.config_items.cache_ttl"
+	defaultConfigItemsCacheTTL  = 5 * time.Minute
+)
 
 func newConfigItemsCollector(ctx context.Context, includeInfo, includeHealth bool) *configItemsCollector {
 	collector := &configItemsCollector{
@@ -62,31 +72,13 @@ func (c *configItemsCollector) Collect(ch chan<- prometheus.Metric) {
 		return
 	}
 
-	columns := []string{"id"}
-	if c.includeInfo {
-		columns = append(columns, "name", "tags")
-	}
-	if c.includeHealth {
-		columns = append(columns, "health")
-	}
-
-	rows, err := c.ctx.DB().Model(&models.ConfigItem{}).
-		Select(columns).
-		Where("deleted_at IS NULL").
-		Rows()
+	items, err := c.getCachedItems()
 	if err != nil {
 		c.ctx.Logger.Errorf("failed to collect config items: %v", err)
 		return
 	}
-	defer rows.Close()
 
-	for rows.Next() {
-		var item configItemRow
-		if err := c.ctx.DB().ScanRows(rows, &item); err != nil {
-			c.ctx.Logger.Errorf("failed to scan config item row: %v", err)
-			continue
-		}
-
+	for _, item := range items {
 		if c.includeInfo {
 			namespace := item.Tags["namespace"]
 			ch <- prometheus.MustNewConstMetric(
@@ -109,10 +101,6 @@ func (c *configItemsCollector) Collect(ch chan<- prometheus.Metric) {
 			)
 		}
 	}
-
-	if err := rows.Err(); err != nil {
-		c.ctx.Logger.Errorf("failed to iterate config items: %v", err)
-	}
 }
 
 func formatConfigItemTags(tags types.JSONStringMap) string {
@@ -132,6 +120,68 @@ func formatConfigItemTags(tags types.JSONStringMap) string {
 	}
 
 	return strings.Join(pairs, ",")
+}
+
+func (c *configItemsCollector) getCachedItems() ([]configItemRow, error) {
+	cacheTTL := c.ctx.Properties().Duration(configItemsCacheTTLProperty, defaultConfigItemsCacheTTL)
+	if cacheTTL < 0 {
+		cacheTTL = 0
+	}
+
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	if len(c.cachedItems) > 0 && cacheTTL > 0 && time.Since(c.cachedAt) < cacheTTL {
+		return c.cachedItems, nil
+	}
+
+	items, err := c.fetchConfigItems()
+	if err != nil {
+		if len(c.cachedItems) > 0 {
+			c.ctx.Logger.Errorf("failed to refresh config items cache: %v", err)
+			return c.cachedItems, nil
+		}
+		return nil, err
+	}
+
+	c.cachedItems = items
+	c.cachedAt = time.Now()
+	return items, nil
+}
+
+func (c *configItemsCollector) fetchConfigItems() ([]configItemRow, error) {
+	columns := []string{"id"}
+	if c.includeInfo {
+		columns = append(columns, "name", "tags")
+	}
+	if c.includeHealth {
+		columns = append(columns, "health")
+	}
+
+	rows, err := c.ctx.DB().Model(&models.ConfigItem{}).
+		Select(columns).
+		Where("deleted_at IS NULL").
+		Rows()
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := make([]configItemRow, 0)
+	for rows.Next() {
+		var item configItemRow
+		if err := c.ctx.DB().ScanRows(rows, &item); err != nil {
+			c.ctx.Logger.Errorf("failed to scan config item row: %v", err)
+			continue
+		}
+		items = append(items, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return items, err
+	}
+
+	return items, nil
 }
 
 func configItemHealthValue(health *models.Health) float64 {
