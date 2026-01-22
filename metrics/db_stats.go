@@ -18,9 +18,6 @@ func RegisterDBStats(ctx context.Context) {
 		if enableConfigInfo || enableConfigHealth {
 			prometheus.MustRegister(newConfigItemsCollector(ctx, enableConfigInfo, enableConfigHealth))
 		}
-		if metricEnabled(ctx, "notifications") {
-			prometheus.MustRegister(newNotificationsCollector(ctx))
-		}
 		if metricEnabled(ctx, "scrapers_info") {
 			prometheus.MustRegister(newScrapersCollector(ctx))
 		}
