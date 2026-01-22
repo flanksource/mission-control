@@ -154,23 +154,35 @@ func (c *configItemsCollector) loadTagLabels() error {
 		return err
 	}
 
+	usedLabels := make(map[string]struct{}, len(configItemInfoBaseLabels)+len(tagKeys))
+	for _, label := range configItemInfoBaseLabels {
+		usedLabels[label] = struct{}{}
+	}
+
 	labelKeys := make([]string, 0, len(tagKeys))
-	labelUseCounts := make(map[string]int)
 	for _, key := range tagKeys {
 		label := sanitizeTagLabel(key)
-		if count, exists := labelUseCounts[label]; exists {
-			count++
-			labelUseCounts[label] = count
-			label = fmt.Sprintf("%s_%d", label, count)
-		} else {
-			labelUseCounts[label] = 0
+		if _, exists := usedLabels[label]; exists {
+			label = "tag_" + label
 		}
+		label = ensureUniqueLabel(label, usedLabels)
 		labelKeys = append(labelKeys, label)
 	}
 
 	c.tagKeys = tagKeys
 	c.tagLabelKeys = labelKeys
 	return nil
+}
+
+func ensureUniqueLabel(base string, used map[string]struct{}) string {
+	label := base
+	for idx := 0; ; idx++ {
+		if _, exists := used[label]; !exists {
+			used[label] = struct{}{}
+			return label
+		}
+		label = fmt.Sprintf("%s_%d", base, idx+1)
+	}
 }
 
 func sanitizeTagLabel(key string) string {
