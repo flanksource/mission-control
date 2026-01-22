@@ -13,11 +13,10 @@ var registerDBStatsOnce sync.Once
 func RegisterDBStats(ctx context.Context) {
 	registerDBStatsOnce.Do(func() {
 		prometheus.MustRegister(newDBStatsCollector(ctx))
-		if metricEnabled(ctx, "config_items_info") {
-			prometheus.MustRegister(newConfigItemsInfoCollector(ctx))
-		}
-		if metricEnabled(ctx, "config_items_health") {
-			prometheus.MustRegister(newConfigItemsHealthCollector(ctx))
+		enableConfigInfo := metricEnabled(ctx, "config_items_info")
+		enableConfigHealth := metricEnabled(ctx, "config_items_health")
+		if enableConfigInfo || enableConfigHealth {
+			prometheus.MustRegister(newConfigItemsCollector(ctx, enableConfigInfo, enableConfigHealth))
 		}
 	})
 }
