@@ -17,18 +17,22 @@ func RegisterDBStats(ctx context.Context) {
 }
 
 type dbStatsCollector struct {
-	ctx             context.Context
-	checksDesc      *prometheus.Desc
-	configItemsDesc *prometheus.Desc
-	dbSizeDesc      *prometheus.Desc
+	ctx               context.Context
+	checksDesc        *prometheus.Desc
+	configItemsDesc   *prometheus.Desc
+	dbSizeDesc        *prometheus.Desc
+	lastLoginDesc     *prometheus.Desc
+	loggedInUsersDesc *prometheus.Desc
 }
 
 func newDBStatsCollector(ctx context.Context) *dbStatsCollector {
 	return &dbStatsCollector{
-		ctx:             ctx,
-		checksDesc:      prometheus.NewDesc(prometheus.BuildFQName("mission_control", "", "checks_total"), "Total number of checks.", nil, nil),
-		configItemsDesc: prometheus.NewDesc(prometheus.BuildFQName("mission_control", "", "config_items_total"), "Total number of config items.", nil, nil),
-		dbSizeDesc:      prometheus.NewDesc(prometheus.BuildFQName("mission_control", "", "db_size_bytes"), "Size of the database in bytes.", nil, nil),
+		ctx:               ctx,
+		checksDesc:        prometheus.NewDesc(prometheus.BuildFQName("mission_control", "", "checks_total"), "Total number of checks.", nil, nil),
+		configItemsDesc:   prometheus.NewDesc(prometheus.BuildFQName("mission_control", "", "config_items_total"), "Total number of config items.", nil, nil),
+		dbSizeDesc:        prometheus.NewDesc(prometheus.BuildFQName("mission_control", "", "db_size_bytes"), "Size of the database in bytes.", nil, nil),
+		lastLoginDesc:     prometheus.NewDesc(prometheus.BuildFQName("mission_control", "", "last_login_timestamp_seconds"), "Latest user login timestamp in seconds since epoch.", nil, nil),
+		loggedInUsersDesc: prometheus.NewDesc(prometheus.BuildFQName("mission_control", "", "logged_in_users_total"), "Total number of distinct users that have logged in.", nil, nil),
 	}
 }
 
@@ -36,6 +40,8 @@ func (c *dbStatsCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.checksDesc
 	ch <- c.configItemsDesc
 	ch <- c.dbSizeDesc
+	ch <- c.lastLoginDesc
+	ch <- c.loggedInUsersDesc
 }
 
 func (c *dbStatsCollector) Collect(ch chan<- prometheus.Metric) {
@@ -58,5 +64,19 @@ func (c *dbStatsCollector) Collect(ch chan<- prometheus.Metric) {
 		c.ctx.Logger.Errorf("failed to collect database size: %v", err)
 	} else {
 		ch <- prometheus.MustNewConstMetric(c.dbSizeDesc, prometheus.GaugeValue, float64(dbSize))
+	}
+
+	var lastLoginSeconds float64
+	if err := c.ctx.DB().Raw("SELECT COALESCE(EXTRACT(EPOCH FROM MAX(last_login)), 0) FROM users").Scan(&lastLoginSeconds).Error; err != nil {
+		c.ctx.Logger.Errorf("failed to collect last login timestamp: %v", err)
+	} else {
+		ch <- prometheus.MustNewConstMetric(c.lastLoginDesc, prometheus.GaugeValue, lastLoginSeconds)
+	}
+
+	var loggedInUsers int64
+	if err := c.ctx.DB().Raw("SELECT COUNT(*) FROM users WHERE last_login IS NOT NULL").Scan(&loggedInUsers).Error; err != nil {
+		c.ctx.Logger.Errorf("failed to collect logged in users count: %v", err)
+	} else {
+		ch <- prometheus.MustNewConstMetric(c.loggedInUsersDesc, prometheus.GaugeValue, float64(loggedInUsers))
 	}
 }
