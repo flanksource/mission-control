@@ -13,6 +13,7 @@ var registerDBStatsOnce sync.Once
 func RegisterDBStats(ctx context.Context) {
 	registerDBStatsOnce.Do(func() {
 		prometheus.MustRegister(newDBStatsCollector(ctx))
+		prometheus.MustRegister(newConfigItemsInfoCollector(ctx))
 	})
 }
 
