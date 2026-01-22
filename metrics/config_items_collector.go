@@ -27,10 +27,11 @@ type configItemsCollector struct {
 }
 
 type configItemRow struct {
-	ID     uuid.UUID           `gorm:"column:id"`
-	Name   *string             `gorm:"column:name"`
-	Tags   types.JSONStringMap `gorm:"column:tags"`
-	Health *models.Health      `gorm:"column:health"`
+	ID      uuid.UUID           `gorm:"column:id"`
+	AgentID uuid.UUID           `gorm:"column:agent_id"`
+	Name    *string             `gorm:"column:name"`
+	Tags    types.JSONStringMap `gorm:"column:tags"`
+	Health  *models.Health      `gorm:"column:health"`
 }
 
 const (
@@ -45,13 +46,13 @@ func newConfigItemsCollector(ctx context.Context, includeInfo, includeHealth boo
 		includeHealth: includeHealth,
 	}
 	if includeInfo {
-		collector.infoDesc = prometheus.NewDesc(prometheus.BuildFQName("mission_control", "", "config_items_info"), "Config item metadata.", []string{"id", "name", "namespace", "tags"}, nil)
+		collector.infoDesc = prometheus.NewDesc(prometheus.BuildFQName("mission_control", "", "config_items_info"), "Config item metadata.", []string{"id", "agent_id", "name", "namespace", "tags"}, nil)
 	}
 	if includeHealth {
 		collector.healthDesc = prometheus.NewDesc(
 			prometheus.BuildFQName("mission_control", "", "config_items_health"),
 			"Config item health status (0=healthy, 1=warning, 2=error).",
-			[]string{"config_id"},
+			[]string{"config_id", "agent_id"},
 			nil,
 		)
 	}
@@ -79,6 +80,7 @@ func (c *configItemsCollector) Collect(ch chan<- prometheus.Metric) {
 	}
 
 	for _, item := range items {
+		agentID := formatAgentID(item.AgentID)
 		if c.includeInfo {
 			namespace := item.Tags["namespace"]
 			ch <- prometheus.MustNewConstMetric(
@@ -86,6 +88,7 @@ func (c *configItemsCollector) Collect(ch chan<- prometheus.Metric) {
 				prometheus.GaugeValue,
 				1,
 				item.ID.String(),
+				agentID,
 				lo.FromPtr(item.Name),
 				namespace,
 				formatConfigItemTags(item.Tags),
@@ -98,9 +101,18 @@ func (c *configItemsCollector) Collect(ch chan<- prometheus.Metric) {
 				prometheus.GaugeValue,
 				configItemHealthValue(item.Health),
 				item.ID.String(),
+				agentID,
 			)
 		}
 	}
+}
+
+func formatAgentID(agentID uuid.UUID) string {
+	if agentID == uuid.Nil {
+		return ""
+	}
+
+	return agentID.String()
 }
 
 func formatConfigItemTags(tags types.JSONStringMap) string {
@@ -150,7 +162,7 @@ func (c *configItemsCollector) getCachedItems() ([]configItemRow, error) {
 }
 
 func (c *configItemsCollector) fetchConfigItems() ([]configItemRow, error) {
-	columns := []string{"id"}
+	columns := []string{"id", "agent_id"}
 	if c.includeInfo {
 		columns = append(columns, "name", "tags")
 	}
