@@ -17,6 +17,13 @@ func RegisterDBStats(ctx context.Context) {
 		if enableConfigInfo || enableConfigHealth {
 			prometheus.MustRegister(newConfigItemsCollector(ctx, enableConfigInfo, enableConfigHealth))
 		}
+
+		enableChecksInfo := metricEnabled(ctx, "checks_info")
+		enableChecksHealth := metricEnabled(ctx, "checks_health")
+		if enableChecksInfo || enableChecksHealth {
+			prometheus.MustRegister(newChecksCollector(ctx, enableChecksInfo, enableChecksHealth))
+		}
+
 		if metricEnabled(ctx, "scrapers_info") {
 			prometheus.MustRegister(newScrapersCollector(ctx))
 		}
