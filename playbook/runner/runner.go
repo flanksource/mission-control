@@ -396,7 +396,19 @@ func ExecuteAndSaveAction(ctx context.Context, playbookID any, action *models.Pl
 	return nil
 }
 
+func skipCancelledAction(ctx context.Context, action *models.PlaybookRunAction) error {
+	return ctx.Oops().Wrap(action.Update(ctx.DB(), map[string]any{
+		"status":     models.PlaybookActionStatusSkipped,
+		"start_time": gorm.Expr("CASE WHEN start_time IS NULL THEN CLOCK_TIMESTAMP() ELSE start_time END"),
+		"end_time":   gorm.Expr("CLOCK_TIMESTAMP()"),
+	}))
+}
+
 func RunAction(ctx context.Context, run *models.PlaybookRun, action *models.PlaybookRunAction) error {
+	if run.Status == models.PlaybookRunStatusCancelled {
+		return skipCancelledAction(ctx, action)
+	}
+
 	playbook, err := action.GetPlaybook(ctx.DB())
 	if err != nil {
 		return err
