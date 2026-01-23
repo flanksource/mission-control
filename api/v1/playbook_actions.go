@@ -84,9 +84,9 @@ type LogsAction struct {
 
 type NotificationAction struct {
 	// URL for the shoutrrr connection string
-	URL string `yaml:"url,omitempty" json:"url,omitempty"`
+	URL string `yaml:"url,omitempty" json:"url,omitempty" template:"true"`
 	// Connection to use to send the notification
-	Connection string `yaml:"connection,omitempty" json:"connection,omitempty"`
+	Connection string `yaml:"connection,omitempty" json:"connection,omitempty" template:"true"`
 	// Title of the notification
 	Title string `yaml:"title" json:"title" template:"true"`
 	// Message is the body of the notification
