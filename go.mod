@@ -50,7 +50,7 @@ require (
 	github.com/emersion/go-sasl v0.0.0-20241020182733-b788ff22d5a6
 	github.com/emersion/go-smtp v0.24.0
 	github.com/flanksource/artifacts v1.0.18
-	github.com/flanksource/clicky v1.12.0
+	github.com/flanksource/clicky v1.14.0
 	github.com/fluxcd/pkg/gittestserver v0.21.0
 	github.com/go-git/go-billy/v5 v5.6.2
 	github.com/go-git/go-git/v5 v5.16.3
@@ -427,6 +427,8 @@ require (
 )
 
 // replace github.com/flanksource/duty => ../duty
+
+// replace github.com/flanksource/clicky => ../clicky
 
 // replace github.com/flanksource/gomplate/v3 => ../gomplate
 

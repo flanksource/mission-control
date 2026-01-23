@@ -20,24 +20,27 @@ type NotificationResult struct {
 
 func (t *Notification) Run(ctx context.Context, action v1.NotificationAction) (*NotificationResult, error) {
 	notifContext := notification.NewContext(ctx, uuid.Nil)
-	template := notification.NotificationTemplate{
-		Title:      action.Title,
-		Message:    action.Message,
-		Properties: action.Properties,
+	payload := notification.NotificationMessagePayload{
+		Title:       action.Title,
+		Description: action.Message,
 	}
 
-	service, err := notification.SendNotification(notifContext, action.Connection, action.URL, nil, template, nil)
+	service, err := notification.SendNotification(notifContext, action.Connection, action.URL, payload, action.Properties)
 	if err != nil {
 		return nil, err
 	}
 
 	output := &NotificationResult{
-		Title:   template.Title,
-		Message: template.Message,
+		Title:   payload.Title,
+		Message: payload.Description,
 	}
 	if service == "slack" {
+		slackMsg, err := notification.FormatNotificationMessage(payload, "slack")
+		if err != nil {
+			return nil, err
+		}
 		output.Message = ""
-		output.Slack = template.Message
+		output.Slack = slackMsg
 	}
 
 	return output, nil
