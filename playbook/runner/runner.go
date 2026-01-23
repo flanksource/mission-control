@@ -47,6 +47,10 @@ func GetNextActionToRun(ctx context.Context, run models.PlaybookRun) (action *v1
 		return nil, nil, ctx.Oops().Wrap(err)
 	}
 
+	if err := playbookSpec.Validate(); err != nil {
+		return nil, nil, ctx.Oops().Wrap(err)
+	}
+
 	var previouslyRanAction models.PlaybookRunAction
 	if err := ctx.DB().Model(&models.PlaybookRunAction{}).
 		Where("playbook_run_id = ?", run.ID).

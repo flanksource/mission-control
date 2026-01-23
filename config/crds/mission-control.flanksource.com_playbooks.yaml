@@ -2829,6 +2829,7 @@ spec:
                       type: object
                     name:
                       description: Name of the action
+                      minLength: 1
                       type: string
                     notification:
                       properties:

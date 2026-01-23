@@ -301,11 +301,16 @@ func (p Playbook) ToModel() (*models.Playbook, error) {
 
 func (p PlaybookSpec) Validate() error {
 	actionNames := make(map[string]struct{})
-	for _, n := range p.Actions {
-		if _, ok := actionNames[n.Name]; ok {
-			return fmt.Errorf("all actions should have unique names. %s is repeated", n.Name)
+	for _, action := range p.Actions {
+		if err := action.Validate(); err != nil {
+			return err
 		}
-		actionNames[n.Name] = struct{}{}
+
+		name := strings.TrimSpace(action.Name)
+		if _, ok := actionNames[name]; ok {
+			return fmt.Errorf("all actions should have unique names. %s is repeated", name)
+		}
+		actionNames[name] = struct{}{}
 	}
 
 	for _, param := range p.Parameters {
