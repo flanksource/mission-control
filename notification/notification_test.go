@@ -3,16 +3,13 @@ package notification_test
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	// register event handlers
 
 	"github.com/flanksource/commons/collections"
-	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
-	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
@@ -154,8 +151,10 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, ginkgo.FlakeAttempts(3)
 			}, "10s", "200ms").Should(BeNumerically(">=", 1))
 
 			Expect(webhookPostdata).To(Not(BeNil()))
-			Expect(webhookPostdata["message"]).To(Equal(fmt.Sprintf("Severity: %s", incident.Severity)))
-			Expect(webhookPostdata["title"]).To(Equal(fmt.Sprintf("New incident: %s", incident.Title)))
+			Expect(webhookPostdata["title"]).To(ContainSubstring(incident.Title))
+			Expect(webhookPostdata["title"]).To(ContainSubstring("created"))
+			Expect(webhookPostdata["message"]).To(ContainSubstring(string(incident.Type)))
+			Expect(webhookPostdata["message"]).To(ContainSubstring(string(incident.Severity)))
 		})
 	})
 
@@ -988,100 +987,26 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, ginkgo.FlakeAttempts(3)
 					Find(&sendHistory).Error
 				Expect(err).To(BeNil())
 
-				return len(sendHistory) == 1 && lo.FromPtr(sendHistory[0].Body) == "[FailedCreate ProgressDeadlineExceeded Unhealthy]"
-			}, "10s", "200ms").Should(BeTrue())
-		})
-	})
-
-	var _ = ginkgo.Describe("template validity", func() {
-		for _, channel := range []string{"regular", "slack"} {
-			for _, event := range api.EventStatusGroup {
-				ginkgo.It(fmt.Sprintf("channel=%s %s", channel, event), func() {
-					title, body := notification.DefaultTitleAndBody(event)
-					msg := notification.NotificationTemplate{
-						Message: body,
-						Title:   title,
-					}
-
-					originalEvent := models.Event{
-						Name:       event,
-						Properties: map[string]string{},
-					}
-
-					switch {
-					case strings.HasPrefix(event, "config"):
-						originalEvent.Properties["id"] = dummy.EKSCluster.ID.String()
-
-					case strings.HasPrefix(event, "check"):
-						var latestCheckStatus models.CheckStatus
-						err := DefaultContext.DB().Where("check_id = ?", dummy.LogisticsAPIHealthHTTPCheck.ID).First(&latestCheckStatus).Error
-						Expect(err).To(BeNil())
-
-						originalEvent.Properties["id"] = dummy.LogisticsAPIHealthHTTPCheck.ID.String()
-						originalEvent.Properties["last_runtime"] = latestCheckStatus.Time
-
-					case strings.HasPrefix(event, "component"):
-						originalEvent.Properties["id"] = dummy.Logistics.ID.String()
-					}
-
-					celEnv, err := notification.GetEnvForEvent(DefaultContext, originalEvent)
-					Expect(err).To(BeNil())
-
-					celEnv.Channel = channel
-					templater := DefaultContext.NewStructTemplater(celEnv.AsMap(DefaultContext), "", notification.TemplateFuncs)
-					err = templater.Walk(&msg)
-					Expect(err).To(BeNil())
-
-					if channel == "slack" {
-						var slackBlock map[string]any
-						err = json.Unmarshal([]byte(msg.Message), &slackBlock)
-						Expect(err).To(BeNil())
-					}
-				})
-			}
-		}
-
-		ginkgo.It("renders slack config.health without labels", func() {
-			ctx := context.New()
-			_, body := notification.DefaultTitleAndBody(api.EventConfigUnhealthy)
-
-			agent := models.Agent{Name: "agent-one"}
-			config := models.ConfigItem{
-				ID:          uuid.New(),
-				Name:        lo.ToPtr("RefreshCheckSizeSummary"),
-				ConfigClass: "Job",
-				Type:        lo.ToPtr("MissionControl::Job"),
-				Status:      lo.ToPtr("Failed"),
-				Health:      lo.ToPtr(models.HealthUnhealthy),
-				Labels:      lo.ToPtr(types.JSONStringMap{}),
-			}
-
-			env := map[string]any{
-				"channel":    "slack",
-				"agent":      agent.AsMap(),
-				"config":     config.AsMap("spec"),
-				"permalink":  "https://example.test/configs/refresh",
-				"silenceURL": "https://example.test/notifications/silence",
-			}
-
-			templater := ctx.NewStructTemplater(env, "", notification.TemplateFuncs)
-			msg := notification.NotificationTemplate{Message: body}
-			Expect(templater.Walk(&msg)).To(Succeed())
-
-			var slackBlock map[string]any
-			Expect(json.Unmarshal([]byte(msg.Message), &slackBlock)).To(Succeed())
-
-			blocks, ok := slackBlock["blocks"].([]any)
-			Expect(ok).To(BeTrue())
-			for _, block := range blocks {
-				asMap, ok := block.(map[string]any)
-				Expect(ok).To(BeTrue())
-				if fields, exists := asMap["fields"]; exists {
-					fieldSlice, ok := fields.([]any)
-					Expect(ok).To(BeTrue())
-					Expect(fieldSlice).ToNot(BeEmpty())
+				if len(sendHistory) != 1 {
+					return false
 				}
-			}
+
+				var payload notification.NotificationMessagePayload
+				if err := json.Unmarshal([]byte(sendHistory[0].BodyPayload), &payload); err != nil {
+					return false
+				}
+
+				expected := []string{"FailedCreate", "ProgressDeadlineExceeded", "Unhealthy"}
+				if len(payload.RecentEvents) != len(expected) {
+					return false
+				}
+				for _, event := range expected {
+					if !lo.Contains(payload.RecentEvents, event) {
+						return false
+					}
+				}
+				return true
+			}, "10s", "200ms").Should(BeTrue())
 		})
 	})
 
@@ -1268,17 +1193,27 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, ginkgo.FlakeAttempts(3)
 			Expect(webhookPostdata).To(Not(BeNil()))
 
 			msg := webhookPostdata["message"]
-			msgBlocks := strings.Split(msg, "Resources grouped with this notification:\n")
-			Expect(len(msgBlocks)).To(Equal(2))
-
-			groupedResources := strings.Split(msgBlocks[1], "\n")
-			Expect(len(groupedResources)).To(Equal(1), "1 additional resource should be added")
-
 			// Only config1 and config4 should be present since config3 is healthy and config2 does not match the filter
 			Expect(msg).To(ContainSubstring(*config1.Name))
 			Expect(msg).To(ContainSubstring(*config4.Name))
 			Expect(msg).ToNot(ContainSubstring(*config2.Name))
 			Expect(msg).ToNot(ContainSubstring(*config3.Name))
+
+			var sendHistory []models.NotificationSendHistory
+			err := DefaultContext.DB().
+				Where("notification_id = ?", n.ID.String()).
+				Where("resource_id = ?", config1.ID.String()).
+				Where("status = ?", models.NotificationStatusSent).
+				Find(&sendHistory).Error
+			Expect(err).To(BeNil())
+			Expect(sendHistory).ToNot(BeEmpty())
+
+			var payload notification.NotificationMessagePayload
+			Expect(json.Unmarshal([]byte(sendHistory[0].BodyPayload), &payload)).To(Succeed())
+			Expect(payload.GroupedResources).To(HaveLen(1))
+			Expect(payload.GroupedResources).To(ContainElement(ContainSubstring(*config4.Name)))
+			Expect(payload.GroupedResources).ToNot(ContainElement(ContainSubstring(*config2.Name)))
+			Expect(payload.GroupedResources).ToNot(ContainElement(ContainSubstring(*config3.Name)))
 		})
 	})
 

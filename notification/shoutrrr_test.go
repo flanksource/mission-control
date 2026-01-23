@@ -62,21 +62,16 @@ var _ = ginkgo.Describe("Notification properties", func() {
 })
 
 var _ = ginkgo.Describe("Shoutrrr", func() {
-	ginkgo.It("should template smtp", func() {
-		env := map[string]any{
-			"config": map[string]any{
-				"name": "My Test Config",
-			},
-		}
-
+	ginkgo.It("should render smtp html", func() {
 		ctx := notification.NewContext(DefaultContext, uuid.Nil)
-		data := notification.NotificationTemplate{
-			Message: `{{if .config.name}}{{.config.name}}{{else}}DefaultConfig{{end}}`,
+		payload := notification.NotificationMessagePayload{
+			Title:       "Test Notification",
+			Description: "My Test Config",
 		}
 		url := "smtp://username:password@host:25/?from=test@flanksource.com&to=receiver@flanksource.com"
 
-		_, _, _, err := notification.PrepareShoutrrr(ctx, env, url, &data)
+		_, _, _, data, err := notification.PrepareShoutrrr(ctx, url, payload, nil)
 		Expect(err).To(BeNil())
-		Expect(data.Message).To(Equal("<p>My Test Config</p>\n"))
+		Expect(data.Message).To(ContainSubstring("My Test Config"))
 	})
 })
