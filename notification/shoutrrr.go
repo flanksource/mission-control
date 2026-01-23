@@ -11,6 +11,7 @@ import (
 	"github.com/containrrr/shoutrrr/pkg/router"
 	"github.com/containrrr/shoutrrr/pkg/types"
 	"github.com/flanksource/duty/context"
+
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/mail"
@@ -45,57 +46,63 @@ func setSystemSMTPCredential(ctx context.Context, shoutrrrURL string) (string, e
 	return parsedURL.String(), nil
 }
 
-func PrepareShoutrrr(ctx *Context, celEnv map[string]any, shoutrrrURL string, data *NotificationTemplate) (string, string, *router.ServiceRouter, error) {
-	if celEnv == nil {
-		celEnv = make(map[string]any)
-	}
-
-	if data.Properties == nil {
-		data.Properties = make(map[string]string)
+func PrepareShoutrrr(ctx *Context, shoutrrrURL string, payload NotificationMessagePayload, properties map[string]string) (string, string, *router.ServiceRouter, NotificationTemplate, error) {
+	if properties == nil {
+		properties = make(map[string]string)
 	}
 
 	if strings.HasPrefix(shoutrrrURL, api.SystemSMTP) {
 		var err error
 		shoutrrrURL, err = setSystemSMTPCredential(ctx.Context, shoutrrrURL)
 		if err != nil {
-			return "", "", nil, err
+			return "", "", nil, NotificationTemplate{}, err
 		}
 	}
 
 	sender, err := shoutrrr.CreateSender(shoutrrrURL)
 	if err != nil {
-		return "", "", nil, fmt.Errorf("failed to create a shoutrrr sender client: %w", err)
+		return "", "", nil, NotificationTemplate{}, fmt.Errorf("failed to create a shoutrrr sender client: %w", err)
 	}
 
 	service, _, err := sender.ExtractServiceName(shoutrrrURL)
 	if err != nil {
-		return "", "", nil, fmt.Errorf("failed to extract service name: %w", err)
+		return "", "", nil, NotificationTemplate{}, fmt.Errorf("failed to extract service name: %w", err)
 	}
 
-	celEnv["channel"] = service
-	templater := ctx.NewStructTemplater(celEnv, "", TemplateFuncs)
-	if err := templater.Walk(data); err != nil {
-		return "", "", nil, fmt.Errorf("error templating notification: %w", err)
-	}
-
+	var message string
 	switch service {
 	case "smtp":
-		data.Message = mcUtils.MarkdownToHTML(data.Message)
-		data.Properties["UseHTML"] = "true" // enforce HTML for smtp
-
+		message, err = FormatNotificationMessage(payload, "email")
+		if err != nil {
+			return "", "", nil, NotificationTemplate{}, fmt.Errorf("failed to format html message: %w", err)
+		}
+		properties["UseHTML"] = "true"
 	case "telegram":
-		data.Properties["ParseMode"] = "MarkdownV2"
-
+		message, err = FormatNotificationMessage(payload, "markdown")
+		if err != nil {
+			return "", "", nil, NotificationTemplate{}, fmt.Errorf("failed to format markdown message: %w", err)
+		}
+		properties["ParseMode"] = "MarkdownV2"
 	default:
-		data.Message = stripmd.StripOptions(data.Message, stripmd.Options{KeepURL: true})
+		message, err = FormatNotificationMessage(payload, "markdown")
+		if err != nil {
+			return "", "", nil, NotificationTemplate{}, fmt.Errorf("failed to format markdown message: %w", err)
+		}
+		message = stripmd.StripOptions(message, stripmd.Options{KeepURL: true})
 	}
 
-	return service, shoutrrrURL, sender, nil
+	data := NotificationTemplate{
+		Title:      payload.Title,
+		Message:    message,
+		Properties: properties,
+	}
+
+	return service, shoutrrrURL, sender, data, nil
 }
 
 // shoutrrrSend sends a notification and returns the service it sent the notification to
-func shoutrrrSend(ctx *Context, celEnv map[string]any, shoutrrrURL string, data NotificationTemplate) (string, error) {
-	service, shoutrrrURL, sender, err := PrepareShoutrrr(ctx, celEnv, shoutrrrURL, &data)
+func shoutrrrSend(ctx *Context, shoutrrrURL string, payload NotificationMessagePayload, properties map[string]string) (string, error) {
+	service, shoutrrrURL, sender, data, err := PrepareShoutrrr(ctx, shoutrrrURL, payload, properties)
 	if err != nil {
 		return "", err
 	}
