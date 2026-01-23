@@ -6,8 +6,30 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/flanksource/duty/context"
 	"github.com/google/uuid"
 )
+
+const metricsDisableProperty = "metrics.disable"
+
+func metricEnabled(ctx context.Context, metric string) bool {
+	disabled := ctx.Properties().String(metricsDisableProperty, "")
+	if disabled == "" {
+		return true
+	}
+
+	for _, entry := range strings.Split(disabled, ",") {
+		value := strings.TrimSpace(entry)
+		if value == "" {
+			continue
+		}
+		if value == "*" || value == metric || value == "mission_control_"+metric {
+			return false
+		}
+	}
+
+	return true
+}
 
 // ensureUniqueLabel ensures that the label name is unique by appending a suffix if needed.
 // Used by checks_collector.go, config_items_collector.go, and scrapers_collector.go.
