@@ -26,6 +26,7 @@ import (
 	"github.com/flanksource/incident-commander/playbook"
 	"github.com/flanksource/incident-commander/playbook/sdk"
 	"github.com/flanksource/incident-commander/playbook/testdata"
+	"github.com/flanksource/incident-commander/metrics"
 	"github.com/flanksource/incident-commander/rbac/adapter"
 	"github.com/flanksource/incident-commander/vars"
 
@@ -90,6 +91,7 @@ var _ = ginkgo.BeforeSuite(func() {
 	})
 
 	vars.AuthMode = ""
+	metrics.RegisterDBStats(DefaultContext)
 	e = echoSrv.New(DefaultContext)
 	e.Use(auth.MockAuthMiddleware)
 
