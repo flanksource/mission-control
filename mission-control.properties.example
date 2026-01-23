@@ -24,3 +24,11 @@ log.level.resourceSelector=trace
 log.db.slowThreshold=100ms
 log.level.http=warn
 log.level.view=trace
+
+# Metrics
+# Disable metrics by name (comma-separated). Use * to disable all.
+# metrics.disable=config_items_info,config_items_health
+# metrics.disable=*
+metrics.agents.cache_ttl=5m
+metrics.checks.cache_ttl=5m
+metrics.config_items.cache_ttl=5m
