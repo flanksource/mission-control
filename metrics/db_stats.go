@@ -24,6 +24,12 @@ func RegisterDBStats(ctx context.Context) {
 			prometheus.MustRegister(newChecksCollector(ctx, enableChecksInfo, enableChecksHealth))
 		}
 
+		enableAgentInfo := metricEnabled(ctx, "agent_info")
+		enableAgentStatus := metricEnabled(ctx, "agent_status")
+		if enableAgentInfo || enableAgentStatus {
+			prometheus.MustRegister(newAgentsCollector(ctx, enableAgentInfo, enableAgentStatus))
+		}
+
 		if metricEnabled(ctx, "scrapers_info") {
 			prometheus.MustRegister(newScrapersCollector(ctx))
 		}
