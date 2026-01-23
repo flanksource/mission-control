@@ -341,6 +341,8 @@ func GetResourceAsMapFromEvent(ctx context.Context, event, id string) (map[strin
 		c = &g
 	case "check":
 		c, err = query.FindCachedCheck(ctx, id)
+	case "canary":
+		c, err = query.FindCachedCanary(ctx, id)
 	}
 	if c == nil || err != nil {
 		return nil, err
