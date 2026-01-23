@@ -107,8 +107,6 @@ func shoutrrrSend(ctx *Context, shoutrrrURL string, payload NotificationMessageP
 		return "", err
 	}
 
-	ctx.WithMessage(data.Message)
-
 	data.Properties = GetPropsForService(service, data.Properties)
 	injectTitleIntoProperties(service, data.Title, data.Properties)
 

@@ -52,10 +52,6 @@ func (t *Context) EndLog() error {
 	return t.DB().Save(t.log.End()).Error
 }
 
-func (t *Context) WithMessage(message string) {
-	t.log.Body = &message
-}
-
 func (t *Context) WithBodyPayload(payload types.JSON) {
 	t.log.BodyPayload = payload
 }

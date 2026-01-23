@@ -41,7 +41,6 @@ type NotificationEventPayload struct {
 	EventCreatedAt time.Time  `json:"event_created_at"`          // Timestamp at which the original event was created
 	Properties     []byte     `json:"properties,omitempty"`      // json encoded properties of the original event
 	GroupID        *uuid.UUID `json:"group_id,omitempty"`        // ID of the group that the notification belongs to
-	Body           *string    `json:"-"`                         // Body of the notification
 
 	// Recipients //
 	CustomService    *api.NotificationConfig `json:"custom_service,omitempty"`    // Send to connection or shoutrrr service
