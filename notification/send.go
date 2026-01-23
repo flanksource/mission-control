@@ -426,21 +426,3 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 	return payloads, nil
 }
 
-func getResourceIDFromCELMap(celEnv map[string]any) string {
-	if c, exists := celEnv["check"]; exists {
-		if cm, ok := c.(map[string]any); ok {
-			return "check/" + fmt.Sprint(cm["id"])
-		}
-	}
-	if c, exists := celEnv["config"]; exists {
-		if cm, ok := c.(map[string]any); ok {
-			return "config/" + fmt.Sprint(cm["id"])
-		}
-	}
-	if c, exists := celEnv["component"]; exists {
-		if cm, ok := c.(map[string]any); ok {
-			return "component/" + fmt.Sprint(cm["id"])
-		}
-	}
-	return ""
-}
