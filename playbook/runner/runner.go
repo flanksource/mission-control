@@ -21,6 +21,7 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/config/schemas"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/notification"
 	"github.com/flanksource/incident-commander/playbook/actions"
 )
 
@@ -231,10 +232,20 @@ func saveAIResultToSendHistory(ctx context.Context, run models.PlaybookRun) erro
 		}
 
 		if lo.Contains(notificationActionNames, action.Name) {
+			var msg string
 			if slackMsg, ok := action.Result["slack"].(string); ok {
-				sendHistoryUpdate.Body = &slackMsg
+				msg = slackMsg
 			} else if body, ok := action.Result["body"].(string); ok {
-				sendHistoryUpdate.Body = &body
+				msg = body
+			}
+
+			if msg != "" {
+				payload := notification.NotificationMessagePayload{
+					Description: msg,
+				}
+				if b, err := json.Marshal(payload); err == nil {
+					sendHistoryUpdate.BodyPayload = b
+				}
 			}
 		}
 	}
