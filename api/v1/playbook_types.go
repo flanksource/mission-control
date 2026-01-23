@@ -211,6 +211,7 @@ type PlaybookSpec struct {
 	Parameters []PlaybookParameter `json:"parameters,omitempty" yaml:"parameters,omitempty"`
 
 	// List of actions that need to be executed by this playbook.
+	// +kubebuilder:validation:MinItems=1
 	Actions []PlaybookAction `json:"actions" yaml:"actions"`
 
 	// CEL Expressions that check if a playbook should be executed
@@ -300,6 +301,10 @@ func (p Playbook) ToModel() (*models.Playbook, error) {
 }
 
 func (p PlaybookSpec) Validate() error {
+	if len(p.Actions) == 0 {
+		return fmt.Errorf("playbook must define at least one action")
+	}
+
 	actionNames := make(map[string]struct{})
 	for _, action := range p.Actions {
 		if err := action.Validate(); err != nil {

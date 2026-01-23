@@ -3392,6 +3392,7 @@ spec:
                   required:
                   - name
                   type: object
+                minItems: 1
                 type: array
               approval:
                 description: Approval defines the individuals and teams authorized
