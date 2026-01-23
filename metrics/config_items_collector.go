@@ -1,8 +1,6 @@
 package metrics
 
 import (
-	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -171,54 +169,6 @@ func (c *configItemsCollector) loadTagLabels() error {
 	c.tagKeys = tagKeys
 	c.tagLabelKeys = labelKeys
 	return nil
-}
-
-func ensureUniqueLabel(base string, used map[string]struct{}) string {
-	label := base
-	for idx := 0; ; idx++ {
-		if _, exists := used[label]; !exists {
-			used[label] = struct{}{}
-			return label
-		}
-		label = fmt.Sprintf("%s_%d", base, idx+1)
-	}
-}
-
-func formatUUID(id uuid.UUID) string {
-	if id == uuid.Nil {
-		return ""
-	}
-
-	return id.String()
-}
-
-func sanitizeTagLabel(key string) string {
-	var builder strings.Builder
-	for _, char := range key {
-		switch {
-		case char >= 'a' && char <= 'z':
-			builder.WriteRune(char)
-		case char >= 'A' && char <= 'Z':
-			builder.WriteRune(char)
-		case char >= '0' && char <= '9':
-			builder.WriteRune(char)
-		case char == '_':
-			builder.WriteRune(char)
-		default:
-			builder.WriteRune('_')
-		}
-	}
-
-	sanitized := builder.String()
-	if sanitized == "" {
-		sanitized = "tag"
-	}
-
-	if sanitized[0] >= '0' && sanitized[0] <= '9' {
-		sanitized = "tag_" + sanitized
-	}
-
-	return sanitized
 }
 
 func (c *configItemsCollector) getCachedItems() ([]configItemRow, error) {
