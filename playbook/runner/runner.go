@@ -421,6 +421,10 @@ func RunAction(ctx context.Context, run *models.PlaybookRun, action *models.Play
 		return ctx.Oops().Wrapf(err, "failed to unmarshal playbook spec")
 	}
 
+	if err := spec.Validate(); err != nil {
+		return ctx.Oops().Wrap(err)
+	}
+
 	ctx = ctx.WithObject(action, run).WithSubject(playbook.ID.String())
 
 	ctx, span := ctx.StartSpan(fmt.Sprintf("playbook.%s", playbook.Name))
