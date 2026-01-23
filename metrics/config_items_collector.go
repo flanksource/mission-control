@@ -31,6 +31,7 @@ type configItemRow struct {
 	ID      uuid.UUID           `gorm:"column:id"`
 	AgentID uuid.UUID           `gorm:"column:agent_id"`
 	Name    *string             `gorm:"column:name"`
+	Type    *string             `gorm:"column:type"`
 	Tags    types.JSONStringMap `gorm:"column:tags"`
 	Health  *models.Health      `gorm:"column:health"`
 }
@@ -40,7 +41,7 @@ const (
 	defaultConfigItemsCacheTTL  = 5 * time.Minute
 )
 
-var configItemInfoBaseLabels = []string{"id", "agent_id", "name", "namespace"}
+var configItemInfoBaseLabels = []string{"id", "agent_id", "name", "type", "namespace"}
 
 func newConfigItemsCollector(ctx context.Context, includeInfo, includeHealth bool) *configItemsCollector {
 	collector := &configItemsCollector{
@@ -118,7 +119,7 @@ func (c *configItemsCollector) Collect(ch chan<- prometheus.Metric) {
 func (c *configItemsCollector) infoLabelValues(item configItemRow, agentID string) []string {
 	labels := make([]string, 0, len(configItemInfoBaseLabels)+len(c.tagKeys))
 	namespace := item.Tags["namespace"]
-	labels = append(labels, item.ID.String(), agentID, lo.FromPtr(item.Name), namespace)
+	labels = append(labels, item.ID.String(), agentID, lo.FromPtr(item.Name), lo.FromPtr(item.Type), namespace)
 	for _, key := range c.tagKeys {
 		labels = append(labels, item.Tags[key])
 	}
@@ -254,7 +255,7 @@ func (c *configItemsCollector) getCachedItems() ([]configItemRow, error) {
 func (c *configItemsCollector) fetchConfigItems() ([]configItemRow, error) {
 	columns := []string{"id", "agent_id"}
 	if c.includeInfo {
-		columns = append(columns, "name", "tags")
+		columns = append(columns, "name", "type", "tags")
 	}
 	if c.includeHealth {
 		columns = append(columns, "health")
