@@ -78,6 +78,15 @@ func (t *NotificationEventPayload) FromMap(m map[string]string) {
 	}
 }
 
+func storeNotificationPayload(ctx *Context, payload NotificationMessagePayload) {
+	b, err := json.Marshal(payload)
+	if err != nil {
+		ctx.Logger.Warnf("failed to marshal notification payload: %v", err)
+		return
+	}
+	ctx.WithBodyPayload(types.JSON(b))
+}
+
 // PrepareAndSendEventNotification generates the notification from the given event and sends it.
 func PrepareAndSendEventNotification(ctx *Context, payload NotificationEventPayload, celEnv *celVariables) error {
 	notification, err := GetNotification(ctx.Context, payload.NotificationID.String())
