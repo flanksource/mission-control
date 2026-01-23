@@ -81,5 +81,9 @@ func sanitizeTagLabel(key string) string {
 		sanitized = "tag_" + sanitized
 	}
 
+	if strings.HasPrefix(sanitized, "__") {
+		sanitized = "tag_" + sanitized
+	}
+
 	return sanitized
 }

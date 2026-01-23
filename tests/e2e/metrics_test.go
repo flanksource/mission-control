@@ -1,7 +1,9 @@
 package e2e
 
 import (
+	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
@@ -13,11 +15,18 @@ import (
 )
 
 func fetchAndParseMetrics(url string) (map[string]*dto.MetricFamily, error) {
-	resp, err := http.Get(url + "/metrics")
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+	}
+	resp, err := client.Get(url + "/metrics")
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
 
 	parser := expfmt.NewTextParser(model.LegacyValidation)
 	return parser.TextToMetricFamilies(resp.Body)
