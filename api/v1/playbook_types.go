@@ -302,6 +302,9 @@ func (p Playbook) ToModel() (*models.Playbook, error) {
 func (p PlaybookSpec) Validate() error {
 	actionNames := make(map[string]struct{})
 	for _, n := range p.Actions {
+		if n.Name == "" {
+			return fmt.Errorf("action can not have an empty name")
+		}
 		if _, ok := actionNames[n.Name]; ok {
 			return fmt.Errorf("all actions should have unique names. %s is repeated", n.Name)
 		}
