@@ -988,7 +988,7 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, ginkgo.FlakeAttempts(3)
 					Find(&sendHistory).Error
 				Expect(err).To(BeNil())
 
-				return len(sendHistory) == 1 && lo.FromPtr(sendHistory[0].Body) == "[FailedCreate ProgressDeadlineExceeded Unhealthy]"
+				return len(sendHistory) == 1 && lo.FromPtr(sendHistory[0].Body) == "[FailedCreate ProgressDeadlineExceeded Unhealthy]" //nolint:staticcheck
 			}, "10s", "200ms").Should(BeTrue())
 		})
 	})

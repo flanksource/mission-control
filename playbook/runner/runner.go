@@ -228,9 +228,9 @@ func saveAIResultToSendHistory(ctx context.Context, run models.PlaybookRun) erro
 
 		if lo.Contains(notificationActionNames, action.Name) {
 			if slackMsg, ok := action.Result["slack"].(string); ok {
-				sendHistoryUpdate.Body = &slackMsg
+				sendHistoryUpdate.Body = &slackMsg //nolint:staticcheck
 			} else if body, ok := action.Result["body"].(string); ok {
-				sendHistoryUpdate.Body = &body
+				sendHistoryUpdate.Body = &body //nolint:staticcheck
 			}
 		}
 	}

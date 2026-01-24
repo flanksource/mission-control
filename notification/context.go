@@ -51,7 +51,7 @@ func (t *Context) EndLog() error {
 }
 
 func (t *Context) WithMessage(message string) {
-	t.log.Body = &message
+	t.log.Body = &message //nolint:staticcheck
 }
 
 func (t *Context) WithRecipient(recipientType RecipientType, id *uuid.UUID) {

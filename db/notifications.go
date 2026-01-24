@@ -323,7 +323,7 @@ func SaveUnsentNotificationToHistory(ctx context.Context, sendHistory models.Not
 		sendHistory.TeamID,
 		sendHistory.ConnectionID,
 		sendHistory.PlaybookRunID,
-		sendHistory.Body,
+		sendHistory.Body, //nolint:staticcheck
 	).Error
 }
 
