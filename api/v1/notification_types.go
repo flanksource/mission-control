@@ -7,6 +7,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/flanksource/incident-commander/api"
 )
 
 type NotificationRecipientSpec struct {
@@ -33,11 +35,14 @@ type NotificationRecipientSpec struct {
 	// Name or <namespace>/<name> of the playbook to run.
 	// When a playbook is set as the recipient, a run is triggered.
 	Playbook *string `json:"playbook,omitempty" yaml:"playbook,omitempty"`
+
+	// Webhook sends a structured JSON payload to an HTTP endpoint.
+	Webhook *api.NotificationWebhookReceiver `json:"webhook,omitempty" yaml:"webhook,omitempty"`
 }
 
 // Empty returns true if none of the receivers are set
 func (t *NotificationRecipientSpec) Empty() bool {
-	return t.Person == "" && t.Team == "" && t.Email == "" && t.Connection == "" && t.URL == "" && t.Playbook == nil
+	return t.Person == "" && t.Team == "" && t.Email == "" && t.Connection == "" && t.URL == "" && t.Playbook == nil && t.Webhook == nil
 }
 
 type NotificationFallback struct {
