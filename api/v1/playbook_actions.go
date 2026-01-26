@@ -562,6 +562,7 @@ type PlaybookAction struct {
 	PlaybookID string `json:"-" yaml:"-"`
 
 	// Name of the action
+	// +kubebuilder:validation:MinLength=1
 	Name string `yaml:"name" json:"name"`
 
 	// Delay is a CEL expression that returns the duration to delay the execution of this action.
@@ -646,6 +647,60 @@ func (p *PlaybookAction) Count() int {
 	}
 
 	return count
+}
+
+func (p *PlaybookAction) primaryActionCount() int {
+	count := 0
+	if p.AI != nil {
+		count++
+	}
+	if p.Exec != nil {
+		count++
+	}
+	if p.Github != nil {
+		count++
+	}
+	if p.AzureDevopsPipeline != nil {
+		count++
+	}
+	if p.HTTP != nil {
+		count++
+	}
+	if p.SQL != nil {
+		count++
+	}
+	if p.Prometheus != nil {
+		count++
+	}
+	if p.Pod != nil {
+		count++
+	}
+	if p.Logs != nil {
+		count++
+	}
+
+	return count
+}
+
+func (p *PlaybookAction) Validate() error {
+	name := strings.TrimSpace(p.Name)
+	if name == "" {
+		return fmt.Errorf("action name is required")
+	}
+	if name != p.Name {
+		return fmt.Errorf("action name must not have leading or trailing whitespace")
+	}
+
+	primaryCount := p.primaryActionCount()
+	if primaryCount > 1 {
+		return fmt.Errorf("action %s has multiple action types configured", name)
+	}
+
+	if primaryCount == 0 && p.GitOps == nil && p.Notification == nil {
+		return fmt.Errorf("action %s has no action configured", name)
+	}
+
+	return nil
 }
 
 func (p *PlaybookAction) Context() map[string]any {

@@ -2829,6 +2829,7 @@ spec:
                       type: object
                     name:
                       description: Name of the action
+                      minLength: 1
                       type: string
                     notification:
                       properties:
@@ -3391,6 +3392,7 @@ spec:
                   required:
                   - name
                   type: object
+                minItems: 1
                 type: array
               approval:
                 description: Approval defines the individuals and teams authorized

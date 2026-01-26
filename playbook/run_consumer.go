@@ -253,6 +253,10 @@ func ActionAgentConsumer(ctx context.Context) (int, error) {
 			return oops.Wrap(err)
 		}
 
+		if err := spec.Validate(); err != nil {
+			return ctx.Oops().Wrap(err)
+		}
+
 		return runner.ExecuteAndSaveAction(ctx, spec.PlaybookID, run, *spec, templateEnv)
 	})
 
