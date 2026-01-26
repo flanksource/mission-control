@@ -32,7 +32,6 @@ type NotificationAction struct {
 type NotificationMessagePayload struct {
 	EventName             string               `json:"event_name,omitempty"`
 	Title                 string               `json:"title,omitempty"`
-	SlackTitle            string               `json:"slack_title,omitempty"`
 	Summary               string               `json:"summary,omitempty"`
 	Description           string               `json:"description,omitempty"`
 	Fields                []NotificationField  `json:"fields,omitempty"`
@@ -56,7 +55,6 @@ func BuildNotificationMessagePayload(payload NotificationEventPayload, env *celV
 	switch payload.EventName {
 	case icapi.EventCheckFailed:
 		msg.Title = fmt.Sprintf("Check %s has failed", safeName(lo.FromPtr(env.Check).Name))
-		msg.SlackTitle = fmt.Sprintf(":red_circle: *%s* is _unhealthy_", safeName(lo.FromPtr(env.Check).Name))
 		msg.Description = lo.FromPtr(env.CheckStatus).Error
 		msg.Fields = append(msg.Fields,
 			field("Canary", safeName(lo.FromPtr(env.Canary).Name)),
@@ -73,7 +71,6 @@ func BuildNotificationMessagePayload(payload NotificationEventPayload, env *celV
 		}
 	case icapi.EventCheckPassed:
 		msg.Title = fmt.Sprintf("Check %s has passed", safeName(lo.FromPtr(env.Check).Name))
-		msg.SlackTitle = fmt.Sprintf(":large_green_circle: *%s* is _healthy_", safeName(lo.FromPtr(env.Canary).Name))
 		msg.Description = lo.FromPtr(env.CheckStatus).Message
 		msg.Fields = append(msg.Fields,
 			field("Canary", safeName(lo.FromPtr(env.Canary).Name)),
@@ -91,7 +88,6 @@ func BuildNotificationMessagePayload(payload NotificationEventPayload, env *celV
 	case icapi.EventConfigHealthy, icapi.EventConfigUnhealthy, icapi.EventConfigWarning, icapi.EventConfigUnknown, icapi.EventConfigDegraded:
 		configHealth := healthValue(lo.FromPtr(env.ConfigItem).Health)
 		msg.Title = fmt.Sprintf("%s %s is %s", safeName(stringPtr(lo.FromPtr(env.ConfigItem).Type)), safeName(stringPtr(lo.FromPtr(env.ConfigItem).Name)), configHealth)
-		msg.SlackTitle = fmt.Sprintf("%s *%s* is _%s_", slackEmojiStatus(configHealth), safeName(stringPtr(lo.FromPtr(env.ConfigItem).Name)), configHealth)
 		msg.Description = coalesceString(stringPtr(lo.FromPtr(env.ConfigItem).Description), payload.ResourceHealthDescription)
 		msg.Fields = append(msg.Fields,
 			field("Type", stringPtr(lo.FromPtr(env.ConfigItem).Type)),
@@ -110,7 +106,6 @@ func BuildNotificationMessagePayload(payload NotificationEventPayload, env *celV
 		}
 	case icapi.EventConfigCreated, icapi.EventConfigUpdated, icapi.EventConfigDeleted, icapi.EventConfigChanged:
 		msg.Title = fmt.Sprintf("%s %s was %s", safeName(stringPtr(lo.FromPtr(env.ConfigItem).Type)), safeName(stringPtr(lo.FromPtr(env.ConfigItem).Name)), env.NewState)
-		msg.SlackTitle = fmt.Sprintf(":information_source: *%s* was _%s_", safeName(stringPtr(lo.FromPtr(env.ConfigItem).Name)), env.NewState)
 		msg.Description = coalesceString(stringPtr(lo.FromPtr(env.ConfigItem).Description), payload.ResourceHealthDescription)
 		msg.Fields = append(msg.Fields,
 			field("Type", stringPtr(lo.FromPtr(env.ConfigItem).Type)),
@@ -128,7 +123,6 @@ func BuildNotificationMessagePayload(payload NotificationEventPayload, env *celV
 	case icapi.EventComponentHealthy, icapi.EventComponentUnhealthy, icapi.EventComponentWarning, icapi.EventComponentUnknown:
 		componentHealth := healthValue(lo.FromPtr(env.Component).Health)
 		msg.Title = fmt.Sprintf("Component %s is %s", safeName(lo.FromPtr(env.Component).Name), componentHealth)
-		msg.SlackTitle = fmt.Sprintf("%s *%s* is _%s_", slackEmojiStatus(componentHealth), safeName(lo.FromPtr(env.Component).Name), componentHealth)
 		msg.Description = coalesceString(lo.FromPtr(env.Component).Description, payload.ResourceHealthDescription)
 		msg.Fields = append(msg.Fields,
 			field("Type", lo.FromPtr(env.Component).Type),
@@ -270,12 +264,8 @@ func (p NotificationMessagePayload) toTextList(includeLabelHeading bool) api.Tex
 func (p NotificationMessagePayload) toSlackTextList() api.TextList {
 	var out api.TextList
 
-	title := p.Title
-	if p.SlackTitle != "" {
-		title = p.SlackTitle
-	}
-	if title != "" {
-		out = append(out, api.Text{Content: title, Style: "slack-section"})
+	if p.Title != "" {
+		out = append(out, api.Text{Content: p.Title, Style: "slack-section"})
 	}
 
 	contentItems := 0
@@ -496,21 +486,6 @@ func coalesceString(values ...string) string {
 		}
 	}
 	return ""
-}
-
-func slackEmojiStatus(health models.Health) string {
-	switch health {
-	case models.HealthHealthy:
-		return ":large_green_circle:"
-	case models.HealthUnhealthy:
-		return ":red_circle:"
-	case models.HealthWarning:
-		return ":large_orange_circle:"
-	case models.HealthUnknown:
-		return ":white_circle:"
-	default:
-		return ":white_circle:"
-	}
 }
 
 func safeName(value string) string {
