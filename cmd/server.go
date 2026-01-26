@@ -30,6 +30,7 @@ import (
 	"github.com/flanksource/incident-commander/jobs"
 	"github.com/flanksource/incident-commander/mail"
 	"github.com/flanksource/incident-commander/mcp"
+	"github.com/flanksource/incident-commander/metrics"
 	"github.com/flanksource/incident-commander/notification"
 	echov4 "github.com/labstack/echo/v4"
 
@@ -186,6 +187,8 @@ var Serve = &cobra.Command{
 		if _, err := db.GetSystemUser(ctx); err != nil {
 			shutdown.ShutdownAndExit(1, fmt.Sprintf("error setting up system user: %v", err))
 		}
+
+		metrics.RegisterDBStats(ctx)
 
 		e := echo.New(ctx)
 		// This is outside echo pkg to prevent import cycle
