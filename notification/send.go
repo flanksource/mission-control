@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/flanksource/commons/collections"
@@ -94,6 +95,7 @@ func PrepareAndSendEventNotification(ctx *Context, payload NotificationEventPayl
 		return err
 	}
 	msgPayload := BuildNotificationMessagePayload(payload, celEnv)
+	applyTemplateOverrides(ctx, &msgPayload, notification, celEnv)
 	storeNotificationPayload(ctx, msgPayload)
 
 	if payload.PersonID != nil {
@@ -104,7 +106,7 @@ func PrepareAndSendEventNotification(ctx *Context, payload NotificationEventPayl
 		}
 
 		smtpURL := fmt.Sprintf("%s?ToAddresses=%s", api.SystemSMTP, url.QueryEscape(emailAddress))
-		return sendEventNotificationWithMetrics(ctx, msgPayload, "", smtpURL, notification, nil)
+		return sendEventNotificationWithMetrics(ctx, msgPayload, celEnv, "", smtpURL, notification, nil)
 	}
 
 	if payload.TeamID != nil {
@@ -124,7 +126,7 @@ func PrepareAndSendEventNotification(ctx *Context, payload NotificationEventPayl
 				return sendWebhookNotification(ctx, celEnv.AsMap(ctx.Context), cn.Webhook, payload.EventName, notification)
 			}
 
-			return sendEventNotificationWithMetrics(ctx, msgPayload, cn.Connection, cn.URL, notification, cn.Properties)
+			return sendEventNotificationWithMetrics(ctx, msgPayload, celEnv, cn.Connection, cn.URL, notification, cn.Properties)
 		}
 	}
 
@@ -135,7 +137,7 @@ func PrepareAndSendEventNotification(ctx *Context, payload NotificationEventPayl
 			return sendWebhookNotification(ctx, celEnv.AsMap(ctx.Context), cn.Webhook, payload.EventName, notification)
 		}
 		ctx.WithRecipient(RecipientTypeURL, nil)
-		return sendEventNotificationWithMetrics(ctx, msgPayload, cn.Connection, cn.URL, notification, cn.Properties)
+		return sendEventNotificationWithMetrics(ctx, msgPayload, celEnv, cn.Connection, cn.URL, notification, cn.Properties)
 	}
 
 	return nil
@@ -184,10 +186,10 @@ func triggerPlaybookRun(ctx *Context, celEnv *celVariables, playbookID uuid.UUID
 }
 
 // SendEventNotification is a wrapper around sendEventNotification() for better error handling & metrics collection purpose.
-func sendEventNotificationWithMetrics(ctx *Context, payload NotificationMessagePayload, connectionName, shoutrrrURL string, notification *NotificationWithSpec, customProperties map[string]string) error {
+func sendEventNotificationWithMetrics(ctx *Context, payload NotificationMessagePayload, celEnv *celVariables, connectionName, shoutrrrURL string, notification *NotificationWithSpec, customProperties map[string]string) error {
 	start := time.Now()
 
-	service, err := sendEventNotification(ctx, payload, connectionName, shoutrrrURL, notification, customProperties)
+	service, err := sendEventNotification(ctx, payload, celEnv, connectionName, shoutrrrURL, notification, customProperties)
 	if err != nil {
 		notificationSendFailureCounter.WithLabelValues(service, string(ctx.recipientType), ctx.notificationID.String()).Inc()
 		return err
@@ -199,9 +201,9 @@ func sendEventNotificationWithMetrics(ctx *Context, payload NotificationMessageP
 	return nil
 }
 
-func sendEventNotification(ctx *Context, payload NotificationMessagePayload, connectionName, shoutrrrURL string, notification *NotificationWithSpec, customProperties map[string]string) (string, error) {
+func sendEventNotification(ctx *Context, payload NotificationMessagePayload, celEnv *celVariables, connectionName, shoutrrrURL string, notification *NotificationWithSpec, customProperties map[string]string) (string, error) {
 	customProperties = collections.MergeMap(notification.Properties, customProperties)
-	service, err := SendNotification(ctx, connectionName, shoutrrrURL, payload, customProperties)
+	service, err := SendNotification(ctx, connectionName, shoutrrrURL, payload, customProperties, celEnv)
 	if err != nil {
 		return service, err
 	}
@@ -211,7 +213,7 @@ func sendEventNotification(ctx *Context, payload NotificationMessagePayload, con
 	return service, nil
 }
 
-func SendNotification(ctx *Context, connectionName, shoutrrrURL string, payload NotificationMessagePayload, properties map[string]string) (string, error) {
+func SendNotification(ctx *Context, connectionName, shoutrrrURL string, payload NotificationMessagePayload, properties map[string]string, celEnv *celVariables) (string, error) {
 	var connection *models.Connection
 	var err error
 	if connectionName != "" {
@@ -224,6 +226,11 @@ func SendNotification(ctx *Context, connectionName, shoutrrrURL string, payload 
 
 		shoutrrrURL = connection.URL
 		properties = collections.MergeMap(connection.Properties, properties)
+	}
+
+	// Template render properties if celEnv is available
+	if celEnv != nil {
+		properties = renderTemplateProperties(ctx, properties, celEnv)
 	}
 
 	if connection != nil && connection.Type == models.ConnectionTypeSlack {
@@ -424,5 +431,65 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 	}
 
 	return payloads, nil
+}
+
+// applyTemplateOverrides replaces the payload title/description with rendered templates when provided.
+func applyTemplateOverrides(ctx *Context, msgPayload *NotificationMessagePayload, notification *NotificationWithSpec, celEnv *celVariables) {
+	if msgPayload == nil || notification == nil || celEnv == nil {
+		return
+	}
+
+	celEnvMap := celEnv.AsMap(ctx.Context)
+	if strings.TrimSpace(notification.Title) != "" {
+		if rendered, err := renderTemplateString(ctx, celEnvMap, notification.Title); err != nil {
+			ctx.Logger.Warnf("failed to render notification title template %q: %v", notification.Title, err)
+		} else {
+			msgPayload.Title = rendered
+		}
+	}
+
+	if strings.TrimSpace(notification.Template) != "" {
+		if rendered, err := renderTemplateString(ctx, celEnvMap, notification.Template); err != nil {
+			ctx.Logger.Warnf("failed to render notification template %q: %v", notification.Template, err)
+		} else {
+			msgPayload.Description = rendered
+		}
+	}
+}
+
+// renderTemplateProperties renders template variables in the properties map using the CEL environment
+func renderTemplateProperties(ctx *Context, properties map[string]string, celEnv *celVariables) map[string]string {
+	if len(properties) == 0 {
+		return properties
+	}
+
+	rendered := make(map[string]string, len(properties))
+	celEnvMap := celEnv.AsMap(ctx.Context)
+
+	for key, value := range properties {
+		// Skip properties that don't contain template syntax
+		if !strings.Contains(value, "{{") || !strings.Contains(value, "}}") {
+			rendered[key] = value
+			continue
+		}
+
+		renderedValue, err := renderTemplateString(ctx, celEnvMap, value)
+		if err != nil {
+			ctx.Logger.Warnf("failed to render template property %s=%s: %v", key, value, err)
+			rendered[key] = value
+			continue
+		}
+		rendered[key] = renderedValue
+	}
+
+	return rendered
+}
+
+func renderTemplateString(ctx *Context, celEnvMap map[string]any, value string) (string, error) {
+	result, err := ctx.RunTemplate(gomplate.Template{Expression: value}, celEnvMap)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%v", result), nil
 }
 
