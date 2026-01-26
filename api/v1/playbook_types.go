@@ -302,6 +302,7 @@ func (p Playbook) ToModel() (*models.Playbook, error) {
 func (p PlaybookSpec) Validate() error {
 	actionNames := make(map[string]struct{})
 	for _, n := range p.Actions {
+		n.Name = strings.TrimSpace(n.Name)
 		if n.Name == "" {
 			return fmt.Errorf("action can not have an empty name")
 		}
