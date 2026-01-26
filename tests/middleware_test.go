@@ -180,7 +180,6 @@ var _ = Describe("Authorization", func() {
 	}
 
 	var anonymous = []string{
-		"GET /metrics",
 		"GET /health",
 		"GET /properties",
 	}
