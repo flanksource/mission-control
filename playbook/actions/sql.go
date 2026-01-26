@@ -11,9 +11,10 @@ import (
 )
 
 type SQLResult struct {
-	Query string           `json:"query,omitempty"`
-	Rows  []map[string]any `json:"rows,omitempty"`
-	Count int              `json:"count,omitempty"`
+	Query   string           `json:"query,omitempty"`
+	Rows    []map[string]any `json:"rows,omitempty"`
+	Count   int              `json:"count"`
+	Columns []string         `json:"columns,omitempty"` // Used for maintaining order in UI
 }
 
 type SQL struct{}
@@ -61,6 +62,7 @@ func querySQL(driver string, connection string, query string) (*SQLResult, error
 	if err != nil {
 		return nil, fmt.Errorf("failed to get columns: %w", err)
 	}
+	result.Columns = columns
 
 	for rows.Next() {
 		var rowValues = make([]any, len(columns))
