@@ -10,6 +10,7 @@ import (
 
 	"github.com/flanksource/commons/hash"
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/commons/properties"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
@@ -51,7 +52,6 @@ var (
 
 var skipAuthPaths = []string{
 	"/health",
-	"/metrics",
 	"/kratos/",
 	"/canary/webhook/",
 	"/playbook/webhook/", // Playbook webhooks handle the authentication themselves
@@ -121,6 +121,12 @@ func canSkipAuth(c echo.Context) bool {
 			return true
 		}
 	}
+
+	// /metrics requires auth by default, unless metrics.auth.disabled is true
+	if c.Path() == "/metrics" && properties.On(false, "metrics.auth.disabled") {
+		return true
+	}
+
 	return false
 }
 
