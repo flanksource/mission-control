@@ -2,20 +2,18 @@ package notification
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/flanksource/clicky"
 	"github.com/flanksource/clicky/api"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/types"
 	"github.com/samber/lo"
 
 	icapi "github.com/flanksource/incident-commander/api"
 )
 
-// NotificationField represents a labeled value shown in a details table.
-type NotificationField struct {
+// NotificationKeyValue represents a labeled value shown in a details table.
+type NotificationKeyValue struct {
 	Label string `json:"label"`
 	Value string `json:"value"`
 }
@@ -30,17 +28,16 @@ type NotificationAction struct {
 // NotificationMessagePayload is the channel-agnostic payload stored in history
 // and formatted via clicky for each delivery channel.
 type NotificationMessagePayload struct {
-	EventName             string               `json:"event_name,omitempty"`
-	Title                 string               `json:"title,omitempty"`
-	Summary               string               `json:"summary,omitempty"`
-	Description           string               `json:"description,omitempty"`
-	Fields                []NotificationField  `json:"fields,omitempty"`
-	Labels                map[string]string    `json:"labels,omitempty"`
-	LabelFields           []NotificationField  `json:"label_fields,omitempty"`
-	RecentEvents          []string             `json:"recent_events,omitempty"`
-	GroupedResources      []string             `json:"grouped_resources,omitempty"`
-	GroupedResourcesTitle string               `json:"grouped_resources_title,omitempty"`
-	Actions               []NotificationAction `json:"actions,omitempty"`
+	EventName             string                 `json:"event_name,omitempty"`
+	Title                 string                 `json:"title,omitempty"`
+	Summary               string                 `json:"summary,omitempty"`
+	Description           string                 `json:"description,omitempty"`
+	Attributes            []NotificationKeyValue `json:"attributes,omitempty"`
+	Labels                []NotificationKeyValue `json:"labels,omitempty"`
+	RecentEvents          []string               `json:"recent_events,omitempty"`
+	GroupedResources      []string               `json:"grouped_resources,omitempty"`
+	GroupedResourcesTitle string                 `json:"grouped_resources_title,omitempty"`
+	Actions               []NotificationAction   `json:"actions,omitempty"`
 }
 
 // BuildNotificationMessagePayload builds a channel-agnostic payload for the given event.
@@ -55,13 +52,12 @@ func BuildNotificationMessagePayload(payload NotificationEventPayload, env *celV
 	case icapi.EventCheckFailed:
 		msg.Title = fmt.Sprintf("Check %s has failed", safeName(lo.FromPtr(env.Check).Name))
 		msg.Description = lo.FromPtr(env.CheckStatus).Error
-		msg.Fields = append(msg.Fields,
-			field("Canary", safeName(lo.FromPtr(env.Canary).Name)),
-			field("Namespace", safeName(lo.FromPtr(env.Canary).Namespace)),
+		msg.Attributes = append(msg.Attributes,
+			keyValue("Canary", safeName(lo.FromPtr(env.Canary).Name)),
+			keyValue("Namespace", safeName(lo.FromPtr(env.Canary).Namespace)),
 		)
-		msg.Fields = addAgentField(msg.Fields, env)
-		msg.Labels = mapLabelsFromJSONStringMap(lo.FromPtr(env.Check).Labels)
-		msg.LabelFields = labelFieldsFromLabels(lo.FromPtr(env.Check).GetTrimmedLabels())
+		msg.Attributes = addAgentAttribute(msg.Attributes, env)
+		msg.Labels = labelKeyValuesFromLabels(lo.FromPtr(env.Check).GetTrimmedLabels())
 		msg.GroupedResources = env.GroupedResources
 		msg.GroupedResourcesTitle = "Resources grouped with notification"
 		msg.Actions = []NotificationAction{
@@ -71,13 +67,12 @@ func BuildNotificationMessagePayload(payload NotificationEventPayload, env *celV
 	case icapi.EventCheckPassed:
 		msg.Title = fmt.Sprintf("Check %s has passed", safeName(lo.FromPtr(env.Check).Name))
 		msg.Description = lo.FromPtr(env.CheckStatus).Message
-		msg.Fields = append(msg.Fields,
-			field("Canary", safeName(lo.FromPtr(env.Canary).Name)),
-			field("Namespace", safeName(lo.FromPtr(env.Canary).Namespace)),
+		msg.Attributes = append(msg.Attributes,
+			keyValue("Canary", safeName(lo.FromPtr(env.Canary).Name)),
+			keyValue("Namespace", safeName(lo.FromPtr(env.Canary).Namespace)),
 		)
-		msg.Fields = addAgentField(msg.Fields, env)
-		msg.Labels = mapLabelsFromJSONStringMap(lo.FromPtr(env.Check).Labels)
-		msg.LabelFields = labelFieldsFromLabels(lo.FromPtr(env.Check).GetTrimmedLabels())
+		msg.Attributes = addAgentAttribute(msg.Attributes, env)
+		msg.Labels = labelKeyValuesFromLabels(lo.FromPtr(env.Check).GetTrimmedLabels())
 		msg.GroupedResources = env.GroupedResources
 		msg.GroupedResourcesTitle = "Resources grouped with notification"
 		msg.Actions = []NotificationAction{
@@ -88,13 +83,12 @@ func BuildNotificationMessagePayload(payload NotificationEventPayload, env *celV
 		configHealth := healthValue(lo.FromPtr(env.ConfigItem).Health)
 		msg.Title = fmt.Sprintf("%s %s is %s", safeName(stringPtr(lo.FromPtr(env.ConfigItem).Type)), safeName(stringPtr(lo.FromPtr(env.ConfigItem).Name)), configHealth)
 		msg.Description = coalesceString(stringPtr(lo.FromPtr(env.ConfigItem).Description), payload.ResourceHealthDescription)
-		msg.Fields = append(msg.Fields,
-			field("Type", stringPtr(lo.FromPtr(env.ConfigItem).Type)),
-			field("Status", stringPtr(lo.FromPtr(env.ConfigItem).Status)),
+		msg.Attributes = append(msg.Attributes,
+			keyValue("Type", stringPtr(lo.FromPtr(env.ConfigItem).Type)),
+			keyValue("Status", stringPtr(lo.FromPtr(env.ConfigItem).Status)),
 		)
-		msg.Fields = addAgentField(msg.Fields, env)
-		msg.Labels = mapLabelsFromJSONStringMapPtr(lo.FromPtr(env.ConfigItem).Labels)
-		msg.LabelFields = labelFieldsFromLabels(lo.FromPtr(env.ConfigItem).GetTrimmedLabels())
+		msg.Attributes = addAgentAttribute(msg.Attributes, env)
+		msg.Labels = labelKeyValuesFromLabels(lo.FromPtr(env.ConfigItem).GetTrimmedLabels())
 		msg.RecentEvents = env.RecentEvents
 		msg.GroupedResources = env.GroupedResources
 		msg.GroupedResourcesTitle = "Also Failing"
@@ -105,13 +99,12 @@ func BuildNotificationMessagePayload(payload NotificationEventPayload, env *celV
 	case icapi.EventConfigCreated, icapi.EventConfigUpdated, icapi.EventConfigDeleted, icapi.EventConfigChanged:
 		msg.Title = fmt.Sprintf("%s %s was %s", safeName(stringPtr(lo.FromPtr(env.ConfigItem).Type)), safeName(stringPtr(lo.FromPtr(env.ConfigItem).Name)), env.NewState)
 		msg.Description = coalesceString(stringPtr(lo.FromPtr(env.ConfigItem).Description), payload.ResourceHealthDescription)
-		msg.Fields = append(msg.Fields,
-			field("Type", stringPtr(lo.FromPtr(env.ConfigItem).Type)),
-			field("Status", stringPtr(lo.FromPtr(env.ConfigItem).Status)),
+		msg.Attributes = append(msg.Attributes,
+			keyValue("Type", stringPtr(lo.FromPtr(env.ConfigItem).Type)),
+			keyValue("Status", stringPtr(lo.FromPtr(env.ConfigItem).Status)),
 		)
-		msg.Fields = addAgentField(msg.Fields, env)
-		msg.Labels = mapLabelsFromJSONStringMapPtr(lo.FromPtr(env.ConfigItem).Labels)
-		msg.LabelFields = labelFieldsFromLabels(lo.FromPtr(env.ConfigItem).GetTrimmedLabels())
+		msg.Attributes = addAgentAttribute(msg.Attributes, env)
+		msg.Labels = labelKeyValuesFromLabels(lo.FromPtr(env.ConfigItem).GetTrimmedLabels())
 		msg.GroupedResources = env.GroupedResources
 		msg.GroupedResourcesTitle = "Also Failing"
 		msg.Actions = []NotificationAction{
@@ -122,13 +115,12 @@ func BuildNotificationMessagePayload(payload NotificationEventPayload, env *celV
 		componentHealth := healthValue(lo.FromPtr(env.Component).Health)
 		msg.Title = fmt.Sprintf("Component %s is %s", safeName(lo.FromPtr(env.Component).Name), componentHealth)
 		msg.Description = coalesceString(lo.FromPtr(env.Component).Description, payload.ResourceHealthDescription)
-		msg.Fields = append(msg.Fields,
-			field("Type", lo.FromPtr(env.Component).Type),
-			field("Status", stringValue(lo.FromPtr(env.Component).Status)),
+		msg.Attributes = append(msg.Attributes,
+			keyValue("Type", lo.FromPtr(env.Component).Type),
+			keyValue("Status", stringValue(lo.FromPtr(env.Component).Status)),
 		)
-		msg.Fields = addAgentField(msg.Fields, env)
-		msg.Labels = mapLabelsFromJSONStringMap(lo.FromPtr(env.Component).Labels)
-		msg.LabelFields = labelFieldsFromLabels(lo.FromPtr(env.Component).GetTrimmedLabels())
+		msg.Attributes = addAgentAttribute(msg.Attributes, env)
+		msg.Labels = labelKeyValuesFromLabels(lo.FromPtr(env.Component).GetTrimmedLabels())
 		msg.GroupedResources = env.GroupedResources
 		msg.GroupedResourcesTitle = "Also Failing"
 		msg.Actions = []NotificationAction{
@@ -141,9 +133,9 @@ func BuildNotificationMessagePayload(payload NotificationEventPayload, env *celV
 		msg.Actions = []NotificationAction{{Label: "Reference", URL: env.Permalink}}
 	case icapi.EventIncidentCreated:
 		msg.Title = fmt.Sprintf("%s: %s (%s) created", lo.FromPtr(env.Incident).IncidentID, lo.FromPtr(env.Incident).Title, lo.FromPtr(env.Incident).Severity)
-		msg.Fields = append(msg.Fields,
-			field("Type", string(lo.FromPtr(env.Incident).Type)),
-			field("Severity", stringValue(lo.FromPtr(env.Incident).Severity)),
+		msg.Attributes = append(msg.Attributes,
+			keyValue("Type", string(lo.FromPtr(env.Incident).Type)),
+			keyValue("Severity", stringValue(lo.FromPtr(env.Incident).Severity)),
 		)
 		msg.Actions = []NotificationAction{{Label: "Reference", URL: env.Permalink}}
 	case icapi.EventIncidentDODAdded:
@@ -153,7 +145,7 @@ func BuildNotificationMessagePayload(payload NotificationEventPayload, env *celV
 	case icapi.EventIncidentDODPassed, icapi.EventIncidentDODRegressed:
 		msg.Title = fmt.Sprintf("Definition of Done %s | %s: %s", dodStatus(payload.EventName), lo.FromPtr(env.Incident).IncidentID, lo.FromPtr(env.Incident).Title)
 		msg.Description = lo.FromPtr(env.Evidence).Description
-		msg.Fields = append(msg.Fields, field("Hypothesis", lo.FromPtr(env.Hypothesis).Title))
+		msg.Attributes = append(msg.Attributes, keyValue("Hypothesis", lo.FromPtr(env.Hypothesis).Title))
 		msg.Actions = []NotificationAction{{Label: "Reference", URL: env.Permalink}}
 	case icapi.EventIncidentResponderAdded:
 		msg.Title = fmt.Sprintf("New responder added to %s: %s", lo.FromPtr(env.Incident).IncidentID, lo.FromPtr(env.Incident).Title)
@@ -171,8 +163,8 @@ func BuildNotificationMessagePayload(payload NotificationEventPayload, env *celV
 		msg.Title = payload.EventName
 	}
 
-	msg.Fields = compactFields(msg.Fields)
-	msg.LabelFields = compactFields(msg.LabelFields)
+	msg.Attributes = compactKeyValues(msg.Attributes)
+	msg.Labels = compactKeyValues(msg.Labels)
 	return msg
 }
 
@@ -206,7 +198,7 @@ func (p NotificationMessagePayload) toTextList(includeLabelHeading bool) api.Tex
 	if p.Description != "" {
 		contentItems++
 	}
-	if len(p.Fields) > 0 {
+	if len(p.Attributes) > 0 {
 		contentItems++
 	}
 	if len(p.Labels) > 0 || len(p.RecentEvents) > 0 || len(p.GroupedResources) > 0 {
@@ -224,19 +216,15 @@ func (p NotificationMessagePayload) toTextList(includeLabelHeading bool) api.Tex
 		out = append(out, api.Text{Content: p.Description})
 	}
 
-	if len(p.Fields) > 0 {
-		out = append(out, fieldsTable(p.Fields))
+	if len(p.Attributes) > 0 {
+		out = append(out, keyValuesTable(p.Attributes))
 	}
 
-	labelFields := p.LabelFields
-	if len(labelFields) == 0 && len(p.Labels) > 0 {
-		labelFields = labelFieldsFromMap(p.Labels)
-	}
-	if len(labelFields) > 0 {
+	if len(p.Labels) > 0 {
 		if includeLabelHeading {
 			out = append(out, api.Text{Content: "Labels", Style: "font-semibold"})
 		}
-		out = append(out, fieldsTable(labelFields))
+		out = append(out, keyValuesTable(p.Labels))
 	}
 
 	if len(p.RecentEvents) > 0 {
@@ -279,10 +267,10 @@ func (p NotificationMessagePayload) toSlackTextList() api.TextList {
 	if p.Description != "" {
 		contentItems++
 	}
-	if len(p.Fields) > 0 {
+	if len(p.Attributes) > 0 {
 		contentItems++
 	}
-	if len(p.Labels) > 0 || len(p.LabelFields) > 0 || len(p.RecentEvents) > 0 || len(p.GroupedResources) > 0 {
+	if len(p.Labels) > 0 || len(p.RecentEvents) > 0 || len(p.GroupedResources) > 0 {
 		contentItems++
 	}
 	if contentItems > 0 {
@@ -297,19 +285,16 @@ func (p NotificationMessagePayload) toSlackTextList() api.TextList {
 		out = append(out, api.Text{Content: p.Description, Style: slackDescriptionStyle(p.EventName)})
 	}
 
-	if len(p.Fields) > 0 {
-		out = append(out, fieldsTable(p.Fields))
+	if len(p.Attributes) > 0 {
+		out = append(out, keyValuesTable(p.Attributes))
 	}
 
-	labelFields := p.LabelFields
-	if len(labelFields) == 0 && len(p.Labels) > 0 {
-		labelFields = labelFieldsFromMap(p.Labels)
-	}
+	labelFields := p.Labels
 	if len(labelFields) > maxSlackFieldsPerSection {
 		labelFields = labelFields[:maxSlackFieldsPerSection]
 	}
 	if len(labelFields) > 0 {
-		out = append(out, fieldsTable(labelFields))
+		out = append(out, keyValuesTable(labelFields))
 	}
 
 	if len(p.RecentEvents) > 0 {
@@ -335,12 +320,12 @@ func FormatNotificationMessage(payload NotificationMessagePayload, format string
 	return clicky.Format(payload.ToTextList(), clicky.FormatOptions{Format: format})
 }
 
-func field(label, value string) NotificationField {
-	return NotificationField{Label: label, Value: strings.TrimSpace(value)}
+func keyValue(label, value string) NotificationKeyValue {
+	return NotificationKeyValue{Label: label, Value: strings.TrimSpace(value)}
 }
 
-func compactFields(fields []NotificationField) []NotificationField {
-	out := make([]NotificationField, 0, len(fields))
+func compactKeyValues(fields []NotificationKeyValue) []NotificationKeyValue {
+	out := make([]NotificationKeyValue, 0, len(fields))
 	for _, f := range fields {
 		if f.Value == "" || f.Label == "" {
 			continue
@@ -350,14 +335,14 @@ func compactFields(fields []NotificationField) []NotificationField {
 	return out
 }
 
-func addAgentField(fields []NotificationField, env *celVariables) []NotificationField {
+func addAgentAttribute(fields []NotificationKeyValue, env *celVariables) []NotificationKeyValue {
 	if env.Agent == nil || env.Agent.Name == "" || env.Agent.Name == "local" {
 		return fields
 	}
-	return append(fields, field("Agent", env.Agent.Name))
+	return append(fields, keyValue("Agent", env.Agent.Name))
 }
 
-func fieldsTable(fields []NotificationField) api.TextTable {
+func keyValuesTable(fields []NotificationKeyValue) api.TextTable {
 	headers := make(api.TextList, 0, len(fields))
 	fieldNames := make([]string, 0, len(fields))
 	row := api.TableRow{}
@@ -412,64 +397,16 @@ func dodStatus(eventName string) string {
 	return "regressed"
 }
 
-func mapLabels(labels map[string]string) map[string]string {
+func labelKeyValuesFromLabels(labels []models.Label) []NotificationKeyValue {
 	if len(labels) == 0 {
 		return nil
 	}
-	out := make(map[string]string, len(labels))
-	for k, v := range labels {
-		if strings.TrimSpace(v) == "" {
-			continue
-		}
-		out[k] = v
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
-}
-
-func mapLabelsFromJSONStringMap(labels types.JSONStringMap) map[string]string {
-	if len(labels) == 0 {
-		return nil
-	}
-	return mapLabels(map[string]string(labels))
-}
-
-func mapLabelsFromJSONStringMapPtr(labels *types.JSONStringMap) map[string]string {
-	if labels == nil {
-		return nil
-	}
-	return mapLabelsFromJSONStringMap(*labels)
-}
-
-func labelFieldsFromLabels(labels []models.Label) []NotificationField {
-	if len(labels) == 0 {
-		return nil
-	}
-	fields := make([]NotificationField, 0, len(labels))
+	fields := make([]NotificationKeyValue, 0, len(labels))
 	for _, label := range labels {
 		if strings.TrimSpace(label.Value) == "" {
 			continue
 		}
-		fields = append(fields, field(label.Key, label.Value))
-	}
-	return fields
-}
-
-func labelFieldsFromMap(labels map[string]string) []NotificationField {
-	if len(labels) == 0 {
-		return nil
-	}
-	keys := make([]string, 0, len(labels))
-	for k := range labels {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
-	fields := make([]NotificationField, 0, len(keys))
-	for _, key := range keys {
-		fields = append(fields, field(key, labels[key]))
+		fields = append(fields, keyValue(label.Key, label.Value))
 	}
 	return fields
 }
