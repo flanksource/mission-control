@@ -31,6 +31,11 @@ type canaryRow struct {
 	Source    string              `gorm:"column:source"`
 }
 
+type canaryStatusRow struct {
+	CanaryID       uuid.UUID `gorm:"column:canary_id"`
+	UnhealthyCount int64     `gorm:"column:unhealthy"`
+}
+
 const (
 	canariesCacheTTLProperty = "metrics.canaries.cache_ttl"
 	defaultCanariesCacheTTL  = 5 * time.Minute
@@ -87,6 +92,18 @@ func (c *canariesCollector) Collect(ch chan<- prometheus.Metric) {
 		c.ctx.Logger.Errorf("canaries info metric disabled: label descriptor not available")
 	}
 
+	var statuses map[uuid.UUID]float64
+	statusReady := false
+	if c.includeStatus {
+		statusMap, err := c.getCanaryStatusMap()
+		if err != nil {
+			c.ctx.Logger.Errorf("failed to load canary statuses: %v", err)
+		} else {
+			statuses = statusMap
+			statusReady = true
+		}
+	}
+
 	for _, item := range items {
 		if infoReady {
 			labels := c.infoLabelValues(item)
@@ -98,11 +115,10 @@ func (c *canariesCollector) Collect(ch chan<- prometheus.Metric) {
 			)
 		}
 
-		if c.includeStatus {
-			status, err := c.getCanaryStatus(item.ID)
-			if err != nil {
-				c.ctx.Logger.Errorf("failed to get canary status for %s: %v", item.ID, err)
-				continue
+		if statusReady {
+			status := float64(1)
+			if statusValue, ok := statuses[item.ID]; ok {
+				status = statusValue
 			}
 			ch <- prometheus.MustNewConstMetric(
 				c.statusDesc,
@@ -191,18 +207,26 @@ func (c *canariesCollector) fetchCanaries() ([]canaryRow, error) {
 	return items, nil
 }
 
-// getCanaryStatus returns 1 if all checks for the canary are healthy, 0 otherwise.
-func (c *canariesCollector) getCanaryStatus(canaryID uuid.UUID) (float64, error) {
-	var unhealthyCount int64
+// getCanaryStatusMap returns 1 if all checks for the canary are healthy, 0 otherwise.
+func (c *canariesCollector) getCanaryStatusMap() (map[uuid.UUID]float64, error) {
+	var rows []canaryStatusRow
 	err := c.ctx.DB().Model(&models.Check{}).
-		Where("canary_id = ? AND deleted_at IS NULL AND status != ?", canaryID, models.CheckStatusHealthy).
-		Count(&unhealthyCount).Error
+		Select("canary_id, COUNT(*) FILTER (WHERE status != ?) AS unhealthy", models.CheckStatusHealthy).
+		Where("deleted_at IS NULL AND canary_id IS NOT NULL").
+		Group("canary_id").
+		Scan(&rows).Error
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 
-	if unhealthyCount > 0 {
-		return 0, nil
+	statuses := make(map[uuid.UUID]float64, len(rows))
+	for _, row := range rows {
+		if row.UnhealthyCount > 0 {
+			statuses[row.CanaryID] = 0
+			continue
+		}
+		statuses[row.CanaryID] = 1
 	}
-	return 1, nil
+
+	return statuses, nil
 }
