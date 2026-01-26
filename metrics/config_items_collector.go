@@ -49,7 +49,7 @@ func newConfigItemsCollector(ctx context.Context, includeInfo, includeHealth boo
 	}
 	if includeHealth {
 		collector.healthDesc = prometheus.NewDesc(
-			prometheus.BuildFQName("mission_control", "", "config_items_health"),
+			getMetricName(ctx, "config_items_health"),
 			"Config item health status (0=healthy, 1=warning, 2=unhealthy, 3=unknown).",
 			[]string{"id", "agent_id"},
 			nil,
@@ -138,7 +138,7 @@ func (c *configItemsCollector) ensureInfoDescriptor() {
 	labels := append([]string(nil), configItemInfoBaseLabels...)
 	labels = append(labels, c.tagLabelKeys...)
 	c.infoDesc = prometheus.NewDesc(
-		prometheus.BuildFQName("mission_control", "", "config_items_info"),
+		getMetricName(c.ctx, "config_items_info"),
 		"Config item metadata.",
 		labels,
 		nil,

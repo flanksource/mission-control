@@ -10,7 +10,18 @@ import (
 	"github.com/google/uuid"
 )
 
-const metricsDisableProperty = "metrics.disable"
+const (
+	metricsDisableProperty = "metrics.disable"
+	metricsPrefixProperty  = "metrics.prefix"
+)
+
+func getMetricName(ctx context.Context, name string) string {
+	prefix := ctx.Properties().String(metricsPrefixProperty, "")
+	if prefix == "" {
+		return name
+	}
+	return prefix + "_" + name
+}
 
 func metricEnabled(ctx context.Context, metric string) bool {
 	disabled := ctx.Properties().String(metricsDisableProperty, "")
@@ -18,12 +29,18 @@ func metricEnabled(ctx context.Context, metric string) bool {
 		return true
 	}
 
+	prefix := ctx.Properties().String(metricsPrefixProperty, "")
+	prefixedMetric := metric
+	if prefix != "" {
+		prefixedMetric = prefix + "_" + metric
+	}
+
 	for _, entry := range strings.Split(disabled, ",") {
 		value := strings.TrimSpace(entry)
 		if value == "" {
 			continue
 		}
-		if value == "*" || value == metric || value == "mission_control_"+metric {
+		if value == "*" || value == metric || value == prefixedMetric {
 			return false
 		}
 	}

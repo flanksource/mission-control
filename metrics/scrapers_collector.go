@@ -25,7 +25,7 @@ func newScrapersCollector(ctx context.Context) *scrapersCollector {
 	return &scrapersCollector{
 		ctx: ctx,
 		desc: prometheus.NewDesc(
-			prometheus.BuildFQName("mission_control", "", "scrapers_info"),
+			getMetricName(ctx, "scrapers_info"),
 			"Config scrapers metadata.",
 			[]string{"id", "agent_id", "name", "namespace", "source"},
 			nil,

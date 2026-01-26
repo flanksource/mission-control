@@ -31,6 +31,10 @@ log.level.view=trace
 # metrics.disable=*
 # Disable authentication requirement for /metrics endpoint
 # metrics.auth.disabled=false
+
+# Metric name prefix (default: empty). Example: "mission_control" produces "mission_control_db_size_mb"
+# metrics.prefix=mission_control
 metrics.agents.cache_ttl=5m
+metrics.canaries.cache_ttl=5m
 metrics.checks.cache_ttl=5m
 metrics.config_items.cache_ttl=5m

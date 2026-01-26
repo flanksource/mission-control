@@ -43,7 +43,7 @@ func newAgentsCollector(ctx context.Context, includeInfo, includeStatus bool) *a
 	}
 	if includeStatus {
 		collector.statusDesc = prometheus.NewDesc(
-			prometheus.BuildFQName("mission_control", "", "agent_status"),
+			getMetricName(ctx, "agent_status"),
 			"Agent status (1=online, 0=offline).",
 			[]string{"id"},
 			nil,
@@ -100,14 +100,14 @@ func (c *agentsCollector) Collect(ch chan<- prometheus.Metric) {
 				c.statusDesc,
 				prometheus.GaugeValue,
 				agentStatusValue(item.LastSeen),
-				item.ID.String(),
+				formatUUID(item.ID),
 			)
 		}
 	}
 }
 
 func (c *agentsCollector) infoLabelValues(item agentRow) []string {
-	return []string{item.ID.String(), item.Name}
+	return []string{formatUUID(item.ID), item.Name}
 }
 
 func (c *agentsCollector) ensureInfoDescriptor() {
@@ -116,7 +116,7 @@ func (c *agentsCollector) ensureInfoDescriptor() {
 	}
 
 	c.infoDesc = prometheus.NewDesc(
-		prometheus.BuildFQName("mission_control", "", "agent_info"),
+		getMetricName(c.ctx, "agent_info"),
 		"Agent metadata.",
 		agentInfoBaseLabels,
 		nil,
