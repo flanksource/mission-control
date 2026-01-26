@@ -12,7 +12,7 @@ require (
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.32.0 // indirect
 	github.com/flanksource/commons v1.44.0
-	github.com/flanksource/duty v1.0.1163
+	github.com/flanksource/duty v1.0.1165
 	github.com/flanksource/gomplate/v3 v3.24.66
 	github.com/flanksource/kopper v1.0.14
 	github.com/gomarkdown/markdown v0.0.0-20250810172220-2e2c11897d1a
@@ -63,6 +63,8 @@ require (
 	github.com/jenkins-x/go-scm v1.15.16
 	github.com/mark3labs/mcp-go v0.43.0
 	github.com/oklog/ulid/v2 v2.1.1
+	github.com/prometheus/client_model v0.6.2
+	github.com/prometheus/common v0.67.4
 	github.com/redis/go-redis/v9 v9.16.0
 	github.com/samber/lo v1.52.0
 	github.com/samber/oops v1.19.4
@@ -275,8 +277,6 @@ require (
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
 	github.com/playwright-community/playwright-go v0.5200.1 // indirect
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
-	github.com/prometheus/client_model v0.6.2 // indirect
-	github.com/prometheus/common v0.67.4 // indirect
 	github.com/prometheus/procfs v0.19.2 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/richardlehane/mscfb v1.0.4 // indirect
