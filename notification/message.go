@@ -41,7 +41,6 @@ type NotificationMessagePayload struct {
 	GroupedResources      []string             `json:"grouped_resources,omitempty"`
 	GroupedResourcesTitle string               `json:"grouped_resources_title,omitempty"`
 	Actions               []NotificationAction `json:"actions,omitempty"`
-	SlackActionsDivider   bool                 `json:"slack_actions_divider,omitempty"`
 }
 
 // BuildNotificationMessagePayload builds a channel-agnostic payload for the given event.
@@ -99,7 +98,6 @@ func BuildNotificationMessagePayload(payload NotificationEventPayload, env *celV
 		msg.RecentEvents = env.RecentEvents
 		msg.GroupedResources = env.GroupedResources
 		msg.GroupedResourcesTitle = "Also Failing"
-		msg.SlackActionsDivider = true
 		msg.Actions = []NotificationAction{
 			{Label: "View Catalog", URL: env.Permalink},
 			{Label: "🔕 Silence", URL: env.SilenceURL},
@@ -323,9 +321,6 @@ func (p NotificationMessagePayload) toSlackTextList() api.TextList {
 	}
 
 	if len(p.Actions) > 0 {
-		if p.SlackActionsDivider {
-			addDivider()
-		}
 		out = append(out, actionsToButtonGroup(p.Actions))
 	}
 
