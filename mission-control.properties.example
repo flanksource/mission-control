@@ -38,3 +38,8 @@ metrics.agents.cache_ttl=5m
 metrics.canaries.cache_ttl=5m
 metrics.checks.cache_ttl=5m
 metrics.config_items.cache_ttl=5m
+
+# Check labels to expose in checks_info metrics. Uses Flanksource match-patterns.
+# See: https://flanksource.com/docs/reference/types#match-pattern
+# Note: loaded once at startup when metric descriptors are built. Not hot-reloadable.
+# metrics.checks.labels=!*uid*,!node_*
