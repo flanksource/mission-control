@@ -179,12 +179,15 @@ func resolveNotificationRecipient(ctx context.Context, recipient v1.Notification
 	default:
 		var customService api.NotificationConfig
 
-		if len(recipient.Email) != 0 {
+		switch {
+		case len(recipient.Email) != 0:
 			customService.URL = fmt.Sprintf("smtp://system/?To=%s", recipient.Email)
-		} else if len(recipient.Connection) != 0 {
+		case len(recipient.Connection) != 0:
 			customService.Connection = recipient.Connection
-		} else if len(recipient.URL) != 0 {
+		case len(recipient.URL) != 0:
 			customService.URL = recipient.URL
+		case recipient.Webhook != nil:
+			customService.Webhook = recipient.Webhook
 		}
 
 		customServices, err := json.Marshal([]api.NotificationConfig{customService})

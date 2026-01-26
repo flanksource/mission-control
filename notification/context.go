@@ -19,6 +19,7 @@ const (
 	RecipientTypeTeam       RecipientType = "team"
 	RecipientTypeConnection RecipientType = "connection"
 	RecipientTypeURL        RecipientType = "url"
+	RecipientTypeWebhook    RecipientType = "webhook"
 )
 
 type Context struct {

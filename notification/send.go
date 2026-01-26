@@ -122,12 +122,21 @@ func PrepareAndSendEventNotification(ctx *Context, payload NotificationEventPayl
 				continue
 			}
 
+			if cn.Webhook != nil {
+				ctx.WithRecipient(RecipientTypeWebhook, nil)
+				return sendWebhookNotification(ctx, celEnv.AsMap(ctx.Context), cn.Webhook, payload.EventName, notification)
+			}
+
 			return sendEventNotificationWithMetrics(ctx, celEnv.AsMap(ctx.Context), cn.Connection, cn.URL, payload.EventName, notification, cn.Properties)
 		}
 	}
 
 	if payload.CustomService != nil {
 		cn := payload.CustomService
+		if cn.Webhook != nil {
+			ctx.WithRecipient(RecipientTypeWebhook, nil)
+			return sendWebhookNotification(ctx, celEnv.AsMap(ctx.Context), cn.Webhook, payload.EventName, notification)
+		}
 		ctx.WithRecipient(RecipientTypeURL, nil)
 		return sendEventNotificationWithMetrics(ctx, celEnv.AsMap(ctx.Context), cn.Connection, cn.URL, payload.EventName, notification, cn.Properties)
 	}
