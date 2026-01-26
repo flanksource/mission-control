@@ -25,7 +25,7 @@ func (t *Notification) Run(ctx context.Context, action v1.NotificationAction) (*
 		Description: action.Message,
 	}
 
-	service, err := notification.SendNotification(notifContext, action.Connection, action.URL, payload, action.Properties)
+	service, err := notification.SendNotification(notifContext, action.Connection, action.URL, payload, action.Properties, nil)
 	if err != nil {
 		return nil, err
 	}
