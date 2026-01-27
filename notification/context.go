@@ -6,6 +6,7 @@ import (
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"github.com/samber/oops"
@@ -50,8 +51,8 @@ func (t *Context) EndLog() error {
 	return t.DB().Save(t.log.End()).Error
 }
 
-func (t *Context) WithMessage(message string) {
-	t.log.Body = &message
+func (t *Context) WithBodyPayload(payload types.JSON) {
+	t.log.BodyPayload = payload
 }
 
 func (t *Context) WithRecipient(recipientType RecipientType, id *uuid.UUID) {
