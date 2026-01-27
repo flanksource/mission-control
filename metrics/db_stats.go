@@ -30,6 +30,12 @@ func RegisterDBStats(ctx context.Context) {
 			prometheus.MustRegister(newAgentsCollector(ctx, enableAgentInfo, enableAgentStatus))
 		}
 
+		enableCanaryInfo := metricEnabled(ctx, "canary_info")
+		enableCanaryStatus := metricEnabled(ctx, "canary_status")
+		if enableCanaryInfo || enableCanaryStatus {
+			prometheus.MustRegister(newCanariesCollector(ctx, enableCanaryInfo, enableCanaryStatus))
+		}
+
 		if metricEnabled(ctx, "scrapers_info") {
 			prometheus.MustRegister(newScrapersCollector(ctx))
 		}
@@ -46,9 +52,9 @@ type dbStatsCollector struct {
 func newDBStatsCollector(ctx context.Context) *dbStatsCollector {
 	return &dbStatsCollector{
 		ctx:               ctx,
-		dbSizeDesc:        prometheus.NewDesc(prometheus.BuildFQName("mission_control", "", "db_size_bytes"), "Size of the database in bytes.", nil, nil),
-		lastLoginDesc:     prometheus.NewDesc(prometheus.BuildFQName("mission_control", "", "last_login_timestamp_seconds"), "Latest user login timestamp in seconds since epoch.", nil, nil),
-		loggedInUsersDesc: prometheus.NewDesc(prometheus.BuildFQName("mission_control", "", "active_sessions"), "Active unexpired sessions/tokens.", nil, nil),
+		dbSizeDesc:        prometheus.NewDesc(getMetricName(ctx, "db_size_mb"), "Size of the database in megabytes (MB, SI unit, 10^6 bytes).", nil, nil),
+		lastLoginDesc:     prometheus.NewDesc(getMetricName(ctx, "last_login_timestamp_seconds"), "Latest user login timestamp in seconds since epoch.", nil, nil),
+		loggedInUsersDesc: prometheus.NewDesc(getMetricName(ctx, "active_sessions"), "Active unexpired sessions/tokens.", nil, nil),
 	}
 }
 
@@ -71,7 +77,7 @@ func (c *dbStatsCollector) Collect(ch chan<- prometheus.Metric) {
 	collectGauge(c.dbSizeDesc, "failed to collect database size", func() (float64, error) {
 		var dbSize int64
 		err := c.ctx.DB().Raw("SELECT pg_database_size(current_database())").Scan(&dbSize).Error
-		return float64(dbSize), err
+		return float64(dbSize) / (1000 * 1000), err
 	})
 
 	collectGauge(c.lastLoginDesc, "failed to collect last login timestamp", func() (float64, error) {
