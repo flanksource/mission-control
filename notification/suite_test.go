@@ -12,10 +12,11 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/tests/setup"
-	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/events"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/events"
 )
 
 func TestNotifications(t *testing.T) {
@@ -86,7 +87,7 @@ func setupWebhookServer() {
 	go func() {
 		defer ginkgo.GinkgoRecover() // Required by ginkgo, if an assertion is made in a goroutine.
 
-		log.Printf("Starting webhookServer on %s", listener.Addr().String())
+		log.Printf("Starting webhook server on %s", listener.Addr().String())
 		if err := webhookServer.Serve(listener); err != nil {
 			if err == http.ErrServerClosed {
 				logger.Infof("Server closed")

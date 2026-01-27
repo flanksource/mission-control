@@ -173,6 +173,11 @@ func (p NotificationMessagePayload) ToTextList() api.TextList {
 	return p.toTextList(true)
 }
 
+// Pretty returns the payload rendered as a clicky Text for formatter consumption.
+func (p NotificationMessagePayload) Pretty() api.Text {
+	return p.ToTextList().JoinNewlines()
+}
+
 // ToSlackTextList converts the payload into clicky primitives optimized for Slack.
 func (p NotificationMessagePayload) ToSlackTextList() api.TextList {
 	return p.toSlackTextList()
