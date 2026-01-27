@@ -65,7 +65,7 @@ func handlePlaybookActionRequest(c echo.Context) error {
 	return c.JSON(http.StatusOK, response)
 }
 
-// PullCanaries returns all canaries for the  agent
+// PullCanaries returns all canaries for the agent
 func PullCanaries(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
 
