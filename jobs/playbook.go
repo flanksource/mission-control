@@ -19,10 +19,6 @@ func PullPlaybookActions(ctx context.Context) *job.Job {
 		Context:    ctx,
 		Singleton:  false,
 		Fn: func(ctx job.JobRuntime) error {
-			if ctx.Properties().Off("upstream.pull_playbook_actions", true) {
-				ctx.History.Details = map[string]any{"details": "upstream playbook action pull is disabled"}
-				return nil
-			}
 			ctx.History.ResourceType = job.ResourceTypePlaybook
 			ctx.History.ResourceID = api.UpstreamConf.Host
 
