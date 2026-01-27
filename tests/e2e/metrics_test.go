@@ -139,13 +139,54 @@ var _ = ginkgo.Describe("Metrics", func() {
 		Expect(healthyCount).To(BeNumerically(">", 0))
 	})
 
+	ginkgo.It("should filter check labels based on metrics.checks.labels property", func() {
+		// test.properties has: metrics.checks.labels=!pod,!pod_*,!instance,!revision
+		// This excludes high-cardinality labels like pod names, instance IDs, and revisions
+		// but includes useful labels like cluster, namespace, env, region
+
+		families, err := fetchAndParseMetrics(server.URL)
+		Expect(err).ToNot(HaveOccurred())
+
+		infoFamily, ok := families["mission_control_checks_info"]
+		Expect(ok).To(BeTrue(), "mission_control_checks_info metric should exist")
+
+		Expect(len(infoFamily.GetMetric())).To(BeNumerically(">", 0))
+
+		// Collect all label keys across all check metrics
+		allLabelKeys := make(map[string]struct{})
+		for _, m := range infoFamily.GetMetric() {
+			for _, l := range m.GetLabel() {
+				allLabelKeys[l.GetName()] = struct{}{}
+			}
+		}
+
+		// Labels that should be included (not filtered)
+		Expect(allLabelKeys).To(HaveKey("app"), "app label should be included")
+		Expect(allLabelKeys).To(HaveKey("cluster"), "cluster label should be included")
+		Expect(allLabelKeys).To(HaveKey("namespace"), "namespace label should be included")
+		Expect(allLabelKeys).To(HaveKey("env"), "env label should be included")
+		Expect(allLabelKeys).To(HaveKey("region"), "region label should be included")
+
+		// Labels that should be excluded by !pod pattern
+		Expect(allLabelKeys).NotTo(HaveKey("pod"), "pod should be filtered by !pod")
+
+		// Labels that should be excluded by !pod_* pattern
+		Expect(allLabelKeys).NotTo(HaveKey("pod_hash"), "pod_hash should be filtered by !pod_*")
+
+		// Labels that should be excluded by !instance pattern
+		Expect(allLabelKeys).NotTo(HaveKey("instance"), "instance should be filtered by !instance")
+
+		// Labels that should be excluded by !revision pattern
+		Expect(allLabelKeys).NotTo(HaveKey("revision"), "revision should be filtered by !revision")
+	})
+
 	ginkgo.It("should expose db stats metrics with correct values", func() {
 		families, err := fetchAndParseMetrics(server.URL)
 		Expect(err).ToNot(HaveOccurred())
 
-		// Verify db_size_bytes
-		dbSizeFamily, ok := families["mission_control_db_size_bytes"]
-		Expect(ok).To(BeTrue(), "mission_control_db_size_bytes metric should exist")
+		// Verify db_size_mb
+		dbSizeFamily, ok := families["mission_control_db_size_mb"]
+		Expect(ok).To(BeTrue(), "mission_control_db_size_mb metric should exist")
 		Expect(dbSizeFamily.GetMetric()).To(HaveLen(1))
 		Expect(dbSizeFamily.GetMetric()[0].GetGauge().GetValue()).To(BeNumerically(">", 0))
 

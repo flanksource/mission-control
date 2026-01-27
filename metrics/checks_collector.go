@@ -1,9 +1,11 @@
 package metrics
 
 import (
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
@@ -36,8 +38,9 @@ type checkRow struct {
 }
 
 const (
-	checksCacheTTLProperty = "metrics.checks.cache_ttl"
-	defaultChecksCacheTTL  = 5 * time.Minute
+	checksCacheTTLProperty    = "metrics.checks.cache_ttl"
+	checksLabelsProperty      = "metrics.checks.labels"
+	defaultChecksCacheTTL     = 5 * time.Minute
 )
 
 var checkInfoBaseLabels = []string{"id", "agent_id", "canary_id", "name", "type", "namespace"}
@@ -50,9 +53,9 @@ func newChecksCollector(ctx context.Context, includeInfo, includeHealth bool) *c
 	}
 	if includeHealth {
 		collector.healthDesc = prometheus.NewDesc(
-			prometheus.BuildFQName("mission_control", "", "checks_health"),
+			getMetricName(ctx, "checks_health"),
 			"Check health status (1=healthy, 0=unhealthy).",
-			[]string{"id", "agent_id"},
+			[]string{"id", "agent_id", "canary_id"},
 			nil,
 		)
 	}
@@ -110,6 +113,7 @@ func (c *checksCollector) Collect(ch chan<- prometheus.Metric) {
 				checkHealthValue(item.Status),
 				item.ID.String(),
 				agentID,
+				formatUUID(item.CanaryID),
 			)
 		}
 	}
@@ -137,7 +141,7 @@ func (c *checksCollector) ensureInfoDescriptor() {
 	labels := append([]string(nil), checkInfoBaseLabels...)
 	labels = append(labels, c.labelLabelKeys...)
 	c.infoDesc = prometheus.NewDesc(
-		prometheus.BuildFQName("mission_control", "", "checks_info"),
+		getMetricName(c.ctx, "checks_info"),
 		"Check metadata.",
 		labels,
 		nil,
@@ -145,14 +149,32 @@ func (c *checksCollector) ensureInfoDescriptor() {
 }
 
 func (c *checksCollector) loadLabelKeys() error {
-	var labelKeys []string
+	var allLabelKeys []string
 	if err := c.ctx.DB().Raw(`
 		SELECT DISTINCT jsonb_object_keys(labels) AS key 
 		FROM checks 
 		WHERE deleted_at IS NULL AND labels IS NOT NULL
 		ORDER BY key
-	`).Pluck("key", &labelKeys).Error; err != nil {
+	`).Pluck("key", &allLabelKeys).Error; err != nil {
 		return err
+	}
+
+	// Filter labels based on configured patterns
+	labelPatterns := c.ctx.Properties().String(checksLabelsProperty, "")
+	var patterns []string
+	if labelPatterns != "" {
+		for _, p := range strings.Split(labelPatterns, ",") {
+			if p = strings.TrimSpace(p); p != "" {
+				patterns = append(patterns, p)
+			}
+		}
+	}
+
+	labelKeys := make([]string, 0, len(allLabelKeys))
+	for _, key := range allLabelKeys {
+		if collections.MatchItems(key, patterns...) {
+			labelKeys = append(labelKeys, key)
+		}
 	}
 
 	usedLabels := make(map[string]struct{}, len(checkInfoBaseLabels)+len(labelKeys))
@@ -207,9 +229,9 @@ func (c *checksCollector) getCachedItems() ([]checkRow, error) {
 }
 
 func (c *checksCollector) fetchChecks() ([]checkRow, error) {
-	columns := []string{"id", "agent_id"}
+	columns := []string{"id", "agent_id", "canary_id"}
 	if c.includeInfo {
-		columns = append(columns, "canary_id", "name", "type", "namespace", "labels")
+		columns = append(columns, "name", "type", "namespace", "labels")
 	}
 	if c.includeHealth {
 		columns = append(columns, "status")
