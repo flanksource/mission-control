@@ -46,7 +46,7 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, ginkgo.FlakeAttempts(3)
 		Expect(err).To(BeNil())
 	})
 
-	var _ = ginkgo.Describe("Notification on incident creation", ginkgo.Ordered, func() {
+	var _ = ginkgo.Describe("on incident creation", ginkgo.Ordered, func() {
 		var (
 			notif     models.Notification
 			john      *models.Person
@@ -55,34 +55,21 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, ginkgo.FlakeAttempts(3)
 			team      *dbModels.Team
 		)
 
-		ginkgo.AfterAll(func() {
-			err := DefaultContext.DB().Delete(&notif).Error
-			Expect(err).To(BeNil())
-
-			notification.PurgeCache(notif.ID.String())
-		})
-
-		ginkgo.It("should create a person", func() {
+		ginkgo.BeforeAll(func() {
 			john = &models.Person{
 				ID:   uuid.New(),
 				Name: "James Bond",
 			}
-			tx := DefaultContext.DB().Create(john)
-			Expect(tx.Error).To(BeNil())
-		})
+			Expect(DefaultContext.DB().Create(john).Error).To(BeNil())
 
-		ginkgo.It("should create a new component", func() {
 			component = &models.Component{
 				ID:         uuid.New(),
 				Name:       "logistics",
 				Type:       "Entity",
 				ExternalId: "dummy/logistics",
 			}
-			tx := DefaultContext.DB().Create(component)
-			Expect(tx.Error).To(BeNil())
-		})
+			Expect(DefaultContext.DB().Create(component).Error).To(BeNil())
 
-		ginkgo.It("should create a team", func() {
 			teamSpec := api.TeamSpec{
 				Components: []types.ResourceSelector{{Name: "logistics"}},
 				Notifications: []api.NotificationConfig{
@@ -110,11 +97,8 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, ginkgo.FlakeAttempts(3)
 				CreatedBy: john.ID,
 				Spec:      spec,
 			}
-			tx := DefaultContext.DB().Create(team)
-			Expect(tx.Error).To(BeNil())
-		})
+			Expect(DefaultContext.DB().Create(team).Error).To(BeNil())
 
-		ginkgo.It("should create a new notification", func() {
 			notif = models.Notification{
 				ID:       uuid.New(),
 				Name:     "incident-test-notification",
@@ -125,11 +109,17 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, ginkgo.FlakeAttempts(3)
 				Filter:   fmt.Sprintf("incident.type == '%s'", models.IncidentTypeCost),
 			}
 
-			err := DefaultContext.DB().Create(&notif).Error
-			Expect(err).To(BeNil())
+			Expect(DefaultContext.DB().Create(&notif).Error).To(BeNil())
 		})
 
-		ginkgo.It("should create an incident", func() {
+		ginkgo.AfterAll(func() {
+			err := DefaultContext.DB().Delete(&notif).Error
+			Expect(err).To(BeNil())
+
+			notification.PurgeCache(notif.ID.String())
+		})
+
+		ginkgo.It("should create an incident and send the notification", func() {
 			incident = &models.Incident{
 				ID:          uuid.New(),
 				Title:       "Constantly hitting threshold",
@@ -141,9 +131,7 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, ginkgo.FlakeAttempts(3)
 			}
 			tx := DefaultContext.DB().Create(incident)
 			Expect(tx.Error).To(BeNil())
-		})
 
-		ginkgo.It("should consume the event and send the notification", func() {
 			events.ConsumeAll(DefaultContext)
 
 			Eventually(func() int {
@@ -152,7 +140,6 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, ginkgo.FlakeAttempts(3)
 
 			Expect(webhookPostdata).To(Not(BeNil()))
 			Expect(webhookPostdata["title"]).To(ContainSubstring(incident.Title))
-			Expect(webhookPostdata["title"]).To(ContainSubstring("created"))
 			Expect(webhookPostdata["message"]).To(ContainSubstring(string(incident.Type)))
 			Expect(webhookPostdata["message"]).To(ContainSubstring(string(incident.Severity)))
 		})

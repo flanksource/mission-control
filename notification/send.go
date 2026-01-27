@@ -486,7 +486,7 @@ func renderTemplateProperties(ctx *Context, properties map[string]string, celEnv
 }
 
 func renderTemplateString(ctx *Context, celEnvMap map[string]any, value string) (string, error) {
-	result, err := ctx.RunTemplate(gomplate.Template{Expression: value}, celEnvMap)
+	result, err := ctx.RunTemplate(gomplate.Template{Template: value}, celEnvMap)
 	if err != nil {
 		return "", err
 	}
