@@ -146,7 +146,10 @@ func Start(ctx context.Context, mcpServer *server.MCPServer) {
 			}
 		}
 
-		go RunPullPlaybookActionsJob(ctx)
+		if ctx.Properties().On(true, "upstream.pull_playbook_actions") {
+			logger.Infof("Scheduling job to pull playbook actions from upstream")
+			go RunPullPlaybookActionsJob(ctx)
+		}
 	}
 
 	cleanupStaleJobHistory.Context = ctx
