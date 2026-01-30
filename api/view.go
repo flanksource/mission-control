@@ -67,27 +67,29 @@ type UIRef struct {
 }
 
 // +kubebuilder:object:generate=true
-// ChangesUIFilters defines filters for the native Changes UI component
-// Uses user-friendly formats that are translated to UI internal format
+// ChangesUIFilters defines filters for the native Changes UI component.
+// Uses standard formats: Kubernetes-style tag selectors, comma-separated values.
+// Frontend is responsible for translating to its internal format.
 type ChangesUIFilters struct {
 	ConfigTypes string `json:"configTypes,omitempty"` // e.g. "AWS::Account,-Kubernetes::Pod"
 	ChangeType  string `json:"changeType,omitempty"`  // e.g. "diff,-BackOff"
 	Severity    string `json:"severity,omitempty"`    // e.g. "high" (single value)
 	From        string `json:"from,omitempty"`        // e.g. "24h", "7d"
 	To          string `json:"to,omitempty"`
-	Tags        string `json:"tags,omitempty"`        // e.g. "env=prod,!env=staging"
+	Tags        string `json:"tags,omitempty"`        // e.g. "env=production,!env=staging" (Kubernetes style)
 	Source      string `json:"source,omitempty"`      // e.g. "kubernetes,-github"
 	Summary     string `json:"summary,omitempty"`     // e.g. "-Failed"
 	CreatedBy   string `json:"createdBy,omitempty"`   // e.g. "user@example.com,-bot"
 }
 
 // +kubebuilder:object:generate=true
-// ConfigsUIFilters defines filters for the native Configs UI component
-// Uses user-friendly formats that are translated to UI internal format
+// ConfigsUIFilters defines filters for the native Configs UI component.
+// Uses standard formats: Kubernetes-style label selectors, comma-separated values.
+// Frontend is responsible for translating to its internal format.
 type ConfigsUIFilters struct {
 	Search     string `json:"search,omitempty"`     // Free text search
 	ConfigType string `json:"configType,omitempty"` // e.g. "AWS::RDS::Instance"
-	Labels     string `json:"labels,omitempty"`     // e.g. "app=nginx,!team=dev"
+	Labels     string `json:"labels,omitempty"`     // e.g. "app=nginx,!team=dev" (Kubernetes style)
 	Status     string `json:"status,omitempty"`     // e.g. "Running,-Stopped"
 	Health     string `json:"health,omitempty"`     // e.g. "-healthy,warning"
 }

@@ -529,7 +529,7 @@ func ReadOrPopulateViewTable(ctx context.Context, namespace, name string, opts .
 		return nil, err
 	}
 
-	result.Sections = translateViewSections(view.Spec.Sections)
+	result.Sections = view.Spec.Sections
 	result.Variables = variables
 	return result, nil
 }
