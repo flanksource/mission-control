@@ -253,7 +253,9 @@ func (in *ApplicationSpec) DeepCopyInto(out *ApplicationSpec) {
 	if in.Sections != nil {
 		in, out := &in.Sections, &out.Sections
 		*out = make([]api.ViewSection, len(*in))
-		copy(*out, *in)
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
 	}
 }
 
@@ -3504,7 +3506,9 @@ func (in *ViewSpec) DeepCopyInto(out *ViewSpec) {
 	if in.Sections != nil {
 		in, out := &in.Sections, &out.Sections
 		*out = make([]api.ViewSection, len(*in))
-		copy(*out, *in)
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
 	}
 }
 

@@ -24,6 +24,39 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "ChangesUIFilters": {
+      "properties": {
+        "configTypes": {
+          "type": "string"
+        },
+        "changeType": {
+          "type": "string"
+        },
+        "severity": {
+          "type": "string"
+        },
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "tags": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "createdBy": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "ColorSource": {
       "properties": {
         "auto": {
@@ -147,6 +180,27 @@
       "required": [
         "key"
       ]
+    },
+    "ConfigsUIFilters": {
+      "properties": {
+        "search": {
+          "type": "string"
+        },
+        "configType": {
+          "type": "string"
+        },
+        "labels": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "health": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
     },
     "DisplayCard": {
       "properties": {
@@ -610,6 +664,12 @@
         "tls": {
           "$ref": "#/$defs/TLSConfig"
         },
+        "headers": {
+          "items": {
+            "$ref": "#/$defs/EnvVar"
+          },
+          "type": "array"
+        },
         "query": {
           "type": "string"
         },
@@ -774,6 +834,18 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "UIRef": {
+      "properties": {
+        "changes": {
+          "$ref": "#/$defs/ChangesUIFilters"
+        },
+        "configs": {
+          "$ref": "#/$defs/ConfigsUIFilters"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "View": {
       "properties": {
         "kind": {
@@ -922,13 +994,15 @@
         },
         "viewRef": {
           "$ref": "#/$defs/ViewRef"
+        },
+        "uiRef": {
+          "$ref": "#/$defs/UIRef"
         }
       },
       "additionalProperties": false,
       "type": "object",
       "required": [
-        "title",
-        "viewRef"
+        "title"
       ]
     },
     "ViewSelector": {

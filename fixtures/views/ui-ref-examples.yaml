@@ -15,80 +15,80 @@ spec:
       icon: activity
       uiRef:
         changes:
-          severity: high
+          changeType: -diff
           from: 24h
 
     # Example 2: Native Changes UI with tag filtering
-    - title: Production Changes
-      icon: activity
-      uiRef:
-        changes:
-          severity: high
-          tags: env=production
-          from: 7d
+    # - title: Production Changes
+    #   icon: activity
+    #   uiRef:
+    #     changes:
+    #       severity: high
+    #       tags: env=production
+    #       from: 7d
 
-    # Example 3: Native Changes UI excluding specific change types
-    - title: Critical Changes (Excluding Noise)
-      icon: alert-circle
-      uiRef:
-        changes:
-          severity: critical
-          changeType: -BackOff,-CrashLoopBackOff
-          from: 24h
+    # # Example 3: Native Changes UI excluding specific change types
+    # - title: Critical Changes (Excluding Noise)
+    #   icon: alert-circle
+    #   uiRef:
+    #     changes:
+    #       severity: critical
+    #       changeType: -BackOff,-CrashLoopBackOff
+    #       from: 24h
 
-    # Example 4: Native Configs UI with health filter
-    - title: Unhealthy Resources
-      icon: server
-      uiRef:
-        configs:
-          health: -healthy
+    # # Example 4: Native Configs UI with health filter
+    # - title: Unhealthy Resources
+    #   icon: server
+    #   uiRef:
+    #     configs:
+    #       health: -healthy
 
-    # Example 5: Native Configs UI with label filtering
-    - title: Platform Team Resources
-      icon: users
-      uiRef:
-        configs:
-          labels: team=platform
-          health: healthy
+    # # Example 5: Native Configs UI with label filtering
+    # - title: Platform Team Resources
+    #   icon: users
+    #   uiRef:
+    #     configs:
+    #       labels: team=platform
+    #       health: healthy
 
-    # Example 6: Native Configs UI with multiple filters
-    - title: Running Production Resources
-      icon: check-circle
-      uiRef:
-        configs:
-          labels: env=production
-          status: Running
-          health: healthy,warning
+    # # Example 6: Native Configs UI with multiple filters
+    # - title: Running Production Resources
+    #   icon: check-circle
+    #   uiRef:
+    #     configs:
+    #       labels: env=production
+    #       status: Running
+    #       health: healthy,warning
 
-    # Example 7: Combined with existing view references
-    - title: Deployment Summary
-      icon: kubernetes::deployment
-      viewRef:
-        namespace: mc
-        name: deployments
+    # # Example 7: Combined with existing view references
+    # - title: Deployment Summary
+    #   icon: kubernetes::deployment
+    #   viewRef:
+    #     namespace: mc
+    #     name: deployments
 
-    # Example 8: Native Changes UI with complex filters
-    - title: Kubernetes Changes
-      icon: kubernetes
-      uiRef:
-        changes:
-          source: kubernetes
-          severity: high,critical
-          tags: env=production,!env=staging
-          from: 24h
+    # # Example 8: Native Changes UI with complex filters
+    # - title: Kubernetes Changes
+    #   icon: kubernetes
+    #   uiRef:
+    #     changes:
+    #       source: kubernetes
+    #       severity: high,critical
+    #       tags: env=production,!env=staging
+    #       from: 24h
 
-    # Example 9: Native Configs UI with search and type filter
-    - title: Database Resources
-      icon: database
-      uiRef:
-        configs:
-          search: database
-          configType: AWS::RDS::Instance
+    # # Example 9: Native Configs UI with search and type filter
+    # - title: Database Resources
+    #   icon: database
+    #   uiRef:
+    #     configs:
+    #       search: database
+    #       configType: AWS::RDS::Instance
 
-    # Example 10: Native Changes UI with created_by filter
-    - title: Manual Changes
-      icon: git-commit
-      uiRef:
-        changes:
-          createdBy: -bot,-system
-          from: 7d
+    # # Example 10: Native Changes UI with created_by filter
+    # - title: Manual Changes
+    #   icon: git-commit
+    #   uiRef:
+    #     changes:
+    #       createdBy: -bot,-system
+    #       from: 7d
