@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	gocontext "context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -200,6 +201,15 @@ var Serve = &cobra.Command{
 		shutdown.AddHookWithPriority("echo", shutdown.PriorityIngress, func() {
 			echo.Shutdown(e)
 		})
+
+		if metricsPort > 0 {
+			metricsServer := echo.StartMetricsServer(metricsPort)
+			shutdown.AddHookWithPriority("metrics-server", shutdown.PriorityIngress, func() {
+				if err := metricsServer.Shutdown(gocontext.Background()); err != nil {
+					logger.Errorf("Metrics server shutdown error: %v", err)
+				}
+			})
+		}
 
 		shutdown.AddHookWithPriority("database", shutdown.PriorityCritical, stop)
 

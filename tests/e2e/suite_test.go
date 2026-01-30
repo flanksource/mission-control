@@ -46,6 +46,7 @@ var (
 	tempPath       string
 	e              *echo.Echo
 	server         *httptest.Server
+	metricsServer  *httptest.Server
 	DefaultContext context.Context
 	client         sdk.PlaybookAPI
 )
@@ -101,11 +102,13 @@ var _ = ginkgo.BeforeSuite(func() {
 	}
 
 	server = httptest.NewServer(e)
+	metricsServer = httptest.NewServer(echoSrv.MetricsHandler())
 	client = sdk.NewPlaybookClient(server.URL)
 	client.Client = client.
 		Auth(dummy.JohnDoe.Name, "admin").
 		Header("X-Trace", "true")
 	logger.Infof("Started test server @ %s", server.URL)
+	logger.Infof("Started metrics server @ %s", metricsServer.URL)
 
 	if err := testdata.LoadConnections(DefaultContext); err != nil {
 		ginkgo.Fail(err.Error())
@@ -118,4 +121,5 @@ var _ = ginkgo.BeforeSuite(func() {
 var _ = ginkgo.AfterSuite(func() {
 	setup.AfterSuiteFn()
 	server.Close()
+	metricsServer.Close()
 })

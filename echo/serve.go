@@ -10,7 +10,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"slices"
 	"strings"
 	"time"
 
@@ -31,6 +30,7 @@ import (
 	echov4 "github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	prom "github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
 	"go.opentelemetry.io/otel/attribute"
 
@@ -335,10 +335,9 @@ func ServerCache(next echov4.HandlerFunc) echov4.HandlerFunc {
 	}
 }
 
-// telemetryURLSkipper ignores metrics route on some middleware
+// telemetryURLSkipper ignores health and metrics routes on some middleware
 func telemetryURLSkipper(c echov4.Context) bool {
-	pathsToSkip := []string{"/health", "/metrics"}
-	return slices.Contains(pathsToSkip, c.Path())
+	return c.Path() == "/health" || c.Path() == "/metrics"
 }
 
 func ModifyKratosRequestHeaders(next echov4.HandlerFunc) echov4.HandlerFunc {
@@ -396,4 +395,29 @@ func RLSMiddleware(next echov4.HandlerFunc) echov4.HandlerFunc {
 			return next(c)
 		})
 	}
+}
+
+// MetricsHandler returns an HTTP handler that serves Prometheus metrics.
+func MetricsHandler() http.Handler {
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.HandlerFor(prom.DefaultGatherer, promhttp.HandlerOpts{}))
+	return mux
+}
+
+// StartMetricsServer starts a dedicated HTTP server for metrics on the specified port.
+// This server has no authentication and is intended to be accessed only from within the cluster.
+func StartMetricsServer(port int) *http.Server {
+	server := &http.Server{
+		Addr:    fmt.Sprintf(":%d", port),
+		Handler: MetricsHandler(),
+	}
+
+	go func() {
+		logger.Infof("Metrics server listening on :%d", port)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Errorf("Metrics server error: %v", err)
+		}
+	}()
+
+	return server
 }
