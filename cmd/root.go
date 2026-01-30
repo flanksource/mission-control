@@ -80,7 +80,7 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.IntVar(&httpPort, "httpPort", 8080, "Server port")
 	flags.StringVar(&api.Namespace, "namespace", utils.Coalesce(os.Getenv("NAMESPACE"), "default"), "Namespace to use for config/secret lookups")
 	flags.IntVar(&devGuiPort, "devGuiPort", 3004, "Port used by a local npm server in development mode")
-	flags.IntVar(&metricsPort, "metricsPort", 8081, "Port to expose a health dashboard ")
+	flags.IntVar(&metricsPort, "metricsPort", 0, "Dedicated unauthenticated metrics port (0 disables). /metrics on main server unchanged")
 	flags.BoolVar(&dev, "dev", false, "Run in development mode")
 	flags.BoolVar(&disableOperators, "disable-operators", false, "Disable Kubernetes Operators")
 	flags.StringVar(&api.FrontendURL, "frontend-url", "http://localhost:3000", "URL of the frontend")

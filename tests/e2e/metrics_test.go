@@ -42,7 +42,7 @@ func getMetricLabels(m *dto.Metric) map[string]string {
 
 var _ = ginkgo.Describe("Metrics", func() {
 	ginkgo.It("should expose config_items metrics with correct labels and values", func() {
-		families, err := fetchAndParseMetrics(server.URL)
+		families, err := fetchAndParseMetrics(metricsServer.URL)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Get expected config count
@@ -91,7 +91,7 @@ var _ = ginkgo.Describe("Metrics", func() {
 	})
 
 	ginkgo.It("should expose checks metrics with correct labels and values", func() {
-		families, err := fetchAndParseMetrics(server.URL)
+		families, err := fetchAndParseMetrics(metricsServer.URL)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Get expected check count
@@ -144,7 +144,7 @@ var _ = ginkgo.Describe("Metrics", func() {
 		// This excludes high-cardinality labels like pod names, instance IDs, and revisions
 		// but includes useful labels like cluster, namespace, env, region
 
-		families, err := fetchAndParseMetrics(server.URL)
+		families, err := fetchAndParseMetrics(metricsServer.URL)
 		Expect(err).ToNot(HaveOccurred())
 
 		infoFamily, ok := families["mission_control_checks_info"]
@@ -181,7 +181,7 @@ var _ = ginkgo.Describe("Metrics", func() {
 	})
 
 	ginkgo.It("should expose db stats metrics with correct values", func() {
-		families, err := fetchAndParseMetrics(server.URL)
+		families, err := fetchAndParseMetrics(metricsServer.URL)
 		Expect(err).ToNot(HaveOccurred())
 
 		// Verify db_size_mb
