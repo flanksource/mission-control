@@ -50,11 +50,46 @@ type ViewRef struct {
 	Name      string `json:"name"`
 }
 
+// +kubebuilder:object:generate=true
 // ViewSection is a section rendered in the application view
 type ViewSection struct {
-	Title   string  `json:"title"`
-	Icon    string  `json:"icon,omitempty"`
-	ViewRef ViewRef `json:"viewRef"`
+	Title   string     `json:"title"`
+	Icon    string     `json:"icon,omitempty"`
+	ViewRef *ViewRef   `json:"viewRef,omitempty"`
+	UIRef   *UIRef     `json:"uiRef,omitempty"`
+}
+
+// +kubebuilder:object:generate=true
+// UIRef references a native Flanksource UI component (changes or configs)
+type UIRef struct {
+	Changes *ChangesUIFilters `json:"changes,omitempty"`
+	Configs *ConfigsUIFilters `json:"configs,omitempty"`
+}
+
+// +kubebuilder:object:generate=true
+// ChangesUIFilters defines filters for the native Changes UI component
+// Uses user-friendly formats that are translated to UI internal format
+type ChangesUIFilters struct {
+	ConfigTypes string `json:"configTypes,omitempty"` // e.g. "AWS::Account,-Kubernetes::Pod"
+	ChangeType  string `json:"changeType,omitempty"`  // e.g. "diff,-BackOff"
+	Severity    string `json:"severity,omitempty"`    // e.g. "high" (single value)
+	From        string `json:"from,omitempty"`        // e.g. "24h", "7d"
+	To          string `json:"to,omitempty"`
+	Tags        string `json:"tags,omitempty"`        // e.g. "env=prod,!env=staging"
+	Source      string `json:"source,omitempty"`      // e.g. "kubernetes,-github"
+	Summary     string `json:"summary,omitempty"`     // e.g. "-Failed"
+	CreatedBy   string `json:"createdBy,omitempty"`   // e.g. "user@example.com,-bot"
+}
+
+// +kubebuilder:object:generate=true
+// ConfigsUIFilters defines filters for the native Configs UI component
+// Uses user-friendly formats that are translated to UI internal format
+type ConfigsUIFilters struct {
+	Search     string `json:"search,omitempty"`     // Free text search
+	ConfigType string `json:"configType,omitempty"` // e.g. "AWS::RDS::Instance"
+	Labels     string `json:"labels,omitempty"`     // e.g. "app=nginx,!team=dev"
+	Status     string `json:"status,omitempty"`     // e.g. "Running,-Stopped"
+	Health     string `json:"health,omitempty"`     // e.g. "-healthy,warning"
 }
 
 // ViewResult is the result of a view query
