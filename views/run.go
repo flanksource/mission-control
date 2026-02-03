@@ -26,7 +26,7 @@ const valueFromMaxResults = 100
 
 // Run executes the view queries and returns the rows with data
 func Run(ctx context.Context, view *v1.View, request *requestOpt) (*api.ViewResult, error) {
-	ctx = ctx.WithName("view")
+	ctx = ctx.WithName("view").WithNamespace(view.GetNamespace())
 
 	output := api.ViewResult{
 		Namespace:          view.Namespace,
