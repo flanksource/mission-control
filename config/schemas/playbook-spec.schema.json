@@ -1586,6 +1586,12 @@
         "tls": {
           "$ref": "#/$defs/TLSConfig"
         },
+        "headers": {
+          "items": {
+            "$ref": "#/$defs/EnvVar"
+          },
+          "type": "array"
+        },
         "query": {
           "type": "string"
         },

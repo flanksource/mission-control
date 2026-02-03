@@ -212,6 +212,60 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "ChangesUIFilters": {
+      "properties": {
+        "configTypes": {
+          "type": "string"
+        },
+        "changeType": {
+          "type": "string"
+        },
+        "severity": {
+          "type": "string"
+        },
+        "from": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        },
+        "tags": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string"
+        },
+        "summary": {
+          "type": "string"
+        },
+        "createdBy": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "ConfigsUIFilters": {
+      "properties": {
+        "search": {
+          "type": "string"
+        },
+        "configType": {
+          "type": "string"
+        },
+        "labels": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "health": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "FieldsV1": {
       "properties": {},
       "additionalProperties": false,
@@ -468,6 +522,18 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "UIRef": {
+      "properties": {
+        "changes": {
+          "$ref": "#/$defs/ChangesUIFilters"
+        },
+        "configs": {
+          "$ref": "#/$defs/ConfigsUIFilters"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "ViewRef": {
       "properties": {
         "namespace": {
@@ -494,13 +560,15 @@
         },
         "viewRef": {
           "$ref": "#/$defs/ViewRef"
+        },
+        "uiRef": {
+          "$ref": "#/$defs/UIRef"
         }
       },
       "additionalProperties": false,
       "type": "object",
       "required": [
-        "title",
-        "viewRef"
+        "title"
       ]
     }
   }

@@ -418,6 +418,51 @@ spec:
                       type: string
                     title:
                       type: string
+                    uiRef:
+                      description: UIRef references a native Flanksource UI component
+                        (changes or configs)
+                      properties:
+                        changes:
+                          description: |-
+                            ChangesUIFilters defines filters for the native Changes UI component
+                            Uses user-friendly formats that are translated to UI internal format
+                          properties:
+                            changeType:
+                              type: string
+                            configTypes:
+                              type: string
+                            createdBy:
+                              type: string
+                            from:
+                              type: string
+                            severity:
+                              type: string
+                            source:
+                              type: string
+                            summary:
+                              type: string
+                            tags:
+                              type: string
+                            to:
+                              type: string
+                          type: object
+                        configs:
+                          description: |-
+                            ConfigsUIFilters defines filters for the native Configs UI component
+                            Uses user-friendly formats that are translated to UI internal format
+                          properties:
+                            configType:
+                              type: string
+                            health:
+                              type: string
+                            labels:
+                              type: string
+                            search:
+                              type: string
+                            status:
+                              type: string
+                          type: object
+                      type: object
                     viewRef:
                       properties:
                         name:
@@ -430,7 +475,6 @@ spec:
                       type: object
                   required:
                   - title
-                  - viewRef
                   type: object
                 type: array
               type:
