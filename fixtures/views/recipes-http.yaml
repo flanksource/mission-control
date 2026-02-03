@@ -1,0 +1,38 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: recipes
+  namespace: mc
+spec:
+  description: Display recipes from DummyJSON API
+  cache:
+    maxAge: 30m
+    minAge: 5s
+  display:
+    title: Recipes
+    icon: book
+    sidebar: true
+  columns:
+    - name: id
+      type: number
+      primaryKey: true
+    - name: name
+      type: string
+    - name: cuisine
+      type: string
+    - name: difficulty
+      type: string
+    - name: rating
+      type: number
+    - name: prepTimeMinutes
+      type: number
+    - name: cookTimeMinutes
+      type: number
+    - name: servings
+      type: number
+  queries:
+    recipes:
+      http:
+        url: https://dummyjson.com/recipes
+        jsonpath: $.recipes[:10]
+ 
