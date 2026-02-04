@@ -1285,6 +1285,11 @@ spec:
                                 version:
                                   type: string
                               type: object
+                            powershell:
+                              properties:
+                                version:
+                                  type: string
+                              type: object
                             python:
                               properties:
                                 version:
