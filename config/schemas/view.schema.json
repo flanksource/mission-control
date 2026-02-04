@@ -304,6 +304,57 @@
         "color"
       ]
     },
+    "HTTPQuery": {
+      "properties": {
+        "connection": {
+          "type": "string"
+        },
+        "username": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "password": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "ntlm": {
+          "type": "boolean"
+        },
+        "ntlmv2": {
+          "type": "boolean"
+        },
+        "digest": {
+          "type": "boolean"
+        },
+        "url": {
+          "type": "string"
+        },
+        "bearer": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "oauth": {
+          "$ref": "#/$defs/OAuth"
+        },
+        "tls": {
+          "$ref": "#/$defs/TLSConfig"
+        },
+        "headers": {
+          "items": {
+            "$ref": "#/$defs/EnvVar"
+          },
+          "type": "array"
+        },
+        "method": {
+          "type": "string"
+        },
+        "body": {
+          "type": "string"
+        },
+        "jsonpath": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "HelmRefKeySelector": {
       "properties": {
         "name": {
@@ -948,6 +999,9 @@
         },
         "sql": {
           "$ref": "#/$defs/SQLQuery"
+        },
+        "http": {
+          "$ref": "#/$defs/HTTPQuery"
         },
         "configs": {
           "$ref": "#/$defs/ResourceSelector"

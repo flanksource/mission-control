@@ -331,6 +331,12 @@
         "tls": {
           "$ref": "#/$defs/TLSConfig"
         },
+        "headers": {
+          "items": {
+            "$ref": "#/$defs/EnvVar"
+          },
+          "type": "array"
+        },
         "method": {
           "type": "string"
         }

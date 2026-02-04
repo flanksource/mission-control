@@ -370,6 +370,9 @@
         },
         "python": {
           "$ref": "#/$defs/RuntimeSetup"
+        },
+        "powershell": {
+          "$ref": "#/$defs/RuntimeSetup"
         }
       },
       "additionalProperties": false,

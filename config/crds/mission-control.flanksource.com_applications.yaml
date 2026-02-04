@@ -424,8 +424,9 @@ spec:
                       properties:
                         changes:
                           description: |-
-                            ChangesUIFilters defines filters for the native Changes UI component
-                            Uses user-friendly formats that are translated to UI internal format
+                            ChangesUIFilters defines filters for the native Changes UI component.
+                            Uses standard formats: Kubernetes-style tag selectors, comma-separated values.
+                            Frontend is responsible for translating to its internal format.
                           properties:
                             changeType:
                               type: string
@@ -448,8 +449,9 @@ spec:
                           type: object
                         configs:
                           description: |-
-                            ConfigsUIFilters defines filters for the native Configs UI component
-                            Uses user-friendly formats that are translated to UI internal format
+                            ConfigsUIFilters defines filters for the native Configs UI component.
+                            Uses standard formats: Kubernetes-style label selectors, comma-separated values.
+                            Frontend is responsible for translating to its internal format.
                           properties:
                             configType:
                               type: string
