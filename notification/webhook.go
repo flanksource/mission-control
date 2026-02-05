@@ -20,7 +20,7 @@ type WebhookPayload struct {
 	Permalink string `json:"permalink"`
 }
 
-func sendWebhookNotification(ctx *Context, celEnv map[string]any, webhook *api.NotificationWebhookReceiver, eventName string, notification *NotificationWithSpec) error {
+func sendWebhookNotification(ctx *Context, celVars *celVariables, payload NotificationEventPayload, webhook *api.NotificationWebhookReceiver, notification *NotificationWithSpec) error {
 	start := time.Now()
 
 	hydrated, err := webhook.HTTPConnection.Hydrate(ctx, ctx.GetNamespace())
@@ -36,8 +36,8 @@ func sendWebhookNotification(ctx *Context, celEnv map[string]any, webhook *api.N
 		return fmt.Errorf("failed to create HTTP client: %w", err)
 	}
 
-	defaultTitle, defaultBody := DefaultTitleAndBody(eventName)
-	templater := ctx.NewStructTemplater(celEnv, "", TemplateFuncs)
+	defaultTitle, defaultBody := DefaultTitleAndBody(payload, celVars)
+	templater := ctx.NewStructTemplater(celVars.AsMap(ctx.Context), "", TemplateFuncs)
 	data := NotificationTemplate{
 		Title:   lo.CoalesceOrEmpty(notification.Title, defaultTitle),
 		Message: lo.CoalesceOrEmpty(notification.Template, defaultBody),
@@ -47,22 +47,22 @@ func sendWebhookNotification(ctx *Context, celEnv map[string]any, webhook *api.N
 		return fmt.Errorf("error templating notification: %w", err)
 	}
 
-	if _, exists := celEnv["groupedResources"]; exists {
+	if len(celVars.GroupedResources) > 0 {
 		data.Message += groupedResourcesMessage
 	}
 
-	permalink, _ := celEnv["permalink"].(string)
+	permalink := celVars.Permalink
 
-	payload := WebhookPayload{
+	webhookPayload := WebhookPayload{
 		Title:     data.Title,
 		Message:   data.Message,
-		Event:     eventName,
+		Event:     payload.EventName,
 		Permalink: permalink,
 	}
 
 	method := lo.CoalesceOrEmpty(strings.ToUpper(webhook.Method), "POST")
 	req := client.R(ctx.Context)
-	if err := req.Body(payload); err != nil {
+	if err := req.Body(webhookPayload); err != nil {
 		notificationSendFailureCounter.WithLabelValues("webhook", string(RecipientTypeWebhook), ctx.notificationID.String()).Inc()
 		return fmt.Errorf("failed to encode webhook payload: %w", err)
 	}
