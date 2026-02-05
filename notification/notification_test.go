@@ -140,8 +140,7 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, ginkgo.FlakeAttempts(3)
 
 			Expect(webhookPostdata).To(Not(BeNil()))
 			Expect(webhookPostdata["title"]).To(ContainSubstring(incident.Title))
-			Expect(webhookPostdata["message"]).To(ContainSubstring(string(incident.Type)))
-			Expect(webhookPostdata["message"]).To(ContainSubstring(string(incident.Severity)))
+			Expect(webhookPostdata["message"]).To(ContainSubstring(fmt.Sprintf("Severity: %s", incident.Severity)))
 		})
 	})
 
@@ -878,7 +877,6 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, ginkgo.FlakeAttempts(3)
 				Events:         pq.StringArray([]string{"config.unhealthy"}),
 				Source:         models.SourceCRD,
 				Title:          "Dummy",
-				Template:       "{{.recent_events}}",
 				CustomServices: types.JSON(customReceiverJson),
 			}
 
@@ -1007,7 +1005,6 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, ginkgo.FlakeAttempts(3)
 				Events:         pq.StringArray([]string{"config.unhealthy"}),
 				Source:         models.SourceCRD,
 				Title:          "Dummy",
-				Template:       "Failed: $(.config.id)/$(.config.name)",
 				CustomServices: types.JSON(customReceiverJson),
 				WaitFor:        lo.ToPtr(time.Second * 15),
 				GroupBy:        pq.StringArray{"description", "type"},

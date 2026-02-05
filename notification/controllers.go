@@ -109,6 +109,8 @@ func GetNotificationSendHistoryDetail(c echo.Context) error {
 		}
 
 		detail.BodyMarkdown = bodyMarkdown
+	} else if detail.Body != nil {
+		detail.BodyMarkdown = *detail.Body
 	}
 
 	return c.JSON(http.StatusOK, detail)
