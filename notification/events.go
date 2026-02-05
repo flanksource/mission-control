@@ -359,7 +359,7 @@ func buildNotificationHistoryPayload(ctx context.Context, payload NotificationEv
 	}
 
 	if strings.TrimSpace(notification.Template) != "" {
-		msg, err := getNotificationMsg(ctx, celEnv.AsMap(ctx), payload, notification)
+		msg, err := getNotificationMsg(ctx, celEnv, payload, notification)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -383,6 +383,34 @@ func buildNotificationHistoryPayload(ctx context.Context, payload NotificationEv
 	}
 
 	return nil, types.JSON(bodyPayload), nil
+}
+
+// getNotificationMsg renders a notification message when a custom template is provided.
+// It uses clicky-generated defaults for the title if no custom title is specified.
+func getNotificationMsg(ctx context.Context, celEnv *celVariables, payload NotificationEventPayload, n *NotificationWithSpec) (*NotificationTemplate, error) {
+	defaultTitle, defaultBody := DefaultTitleAndBody(payload, celEnv)
+	data := NotificationTemplate{
+		Title:      lo.CoalesceOrEmpty(n.Title, defaultTitle),
+		Message:    lo.CoalesceOrEmpty(n.Template, defaultBody),
+		Properties: n.Properties,
+	}
+	templater := ctx.NewStructTemplater(celEnv.AsMap(ctx), "", TemplateFuncs)
+	if err := templater.Walk(&data); err != nil {
+		return nil, fmt.Errorf("error templating notification: %w", err)
+	}
+
+	if strings.Contains(data.Message, `"blocks"`) {
+		var slackMsg SlackMsgTemplate
+		if err := json.Unmarshal([]byte(data.Message), &slackMsg); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal slack template into blocks: %w", err)
+		}
+
+		if b, err := json.Marshal([]any{slackMsg}); err == nil {
+			data.Message = string(b)
+		}
+	}
+
+	return &data, nil
 }
 
 type validateResult struct {
