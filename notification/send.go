@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/collections"
+	"github.com/flanksource/commons/utils"
 	pkgConnection "github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -94,6 +95,11 @@ func PrepareAndSendEventNotification(ctx *Context, payload NotificationEventPayl
 	if err != nil {
 		return err
 	}
+
+	if strings.TrimSpace(notification.Template) != "" {
+		return prepareAndSendRawNotification(ctx, payload, celEnv, notification)
+	}
+
 	msgPayload := BuildNotificationMessagePayload(payload, celEnv)
 	applyTemplateOverrides(ctx, &msgPayload, notification, celEnv)
 	storeNotificationPayload(ctx, msgPayload)
@@ -143,6 +149,52 @@ func PrepareAndSendEventNotification(ctx *Context, payload NotificationEventPayl
 	return nil
 }
 
+func prepareAndSendRawNotification(ctx *Context, payload NotificationEventPayload, celEnv *celVariables, notification *NotificationWithSpec) error {
+	if payload.PersonID != nil {
+		ctx.WithRecipient(RecipientTypePerson, payload.PersonID)
+		var emailAddress string
+		if err := ctx.DB().Model(&models.Person{}).Select("email").Where("id = ?", *payload.PersonID).Find(&emailAddress).Error; err != nil {
+			return fmt.Errorf("failed to get email of person(id=%s); %v", payload.PersonID, err)
+		}
+
+		smtpURL := fmt.Sprintf("%s?ToAddresses=%s", api.SystemSMTP, url.QueryEscape(emailAddress))
+		return sendRawEventNotificationWithMetrics(ctx, celEnv.AsMap(ctx.Context), "", smtpURL, payload.EventName, notification, nil)
+	}
+
+	if payload.TeamID != nil {
+		ctx.WithRecipient(RecipientTypeTeam, payload.TeamID)
+		teamSpec, err := teams.GetTeamSpec(ctx.Context, payload.TeamID.String())
+		if err != nil {
+			return fmt.Errorf("failed to get team(id=%s); %v", payload.TeamID, err)
+		}
+
+		for _, cn := range teamSpec.Notifications {
+			if cn.Name != payload.NotificationName {
+				continue
+			}
+
+			if cn.Webhook != nil {
+				ctx.WithRecipient(RecipientTypeWebhook, nil)
+				return sendWebhookNotification(ctx, celEnv.AsMap(ctx.Context), cn.Webhook, payload.EventName, notification)
+			}
+
+			return sendRawEventNotificationWithMetrics(ctx, celEnv.AsMap(ctx.Context), cn.Connection, cn.URL, payload.EventName, notification, cn.Properties)
+		}
+	}
+
+	if payload.CustomService != nil {
+		cn := payload.CustomService
+		if cn.Webhook != nil {
+			ctx.WithRecipient(RecipientTypeWebhook, nil)
+			return sendWebhookNotification(ctx, celEnv.AsMap(ctx.Context), cn.Webhook, payload.EventName, notification)
+		}
+		ctx.WithRecipient(RecipientTypeURL, nil)
+		return sendRawEventNotificationWithMetrics(ctx, celEnv.AsMap(ctx.Context), cn.Connection, cn.URL, payload.EventName, notification, cn.Properties)
+	}
+
+	return nil
+}
+
 // triggerPlaybookRun creates an event to trigger a playbook run.
 // The notification of the status is then handled entirely by playbook.
 func triggerPlaybookRun(ctx *Context, celEnv *celVariables, playbookID uuid.UUID) error {
@@ -185,6 +237,41 @@ func triggerPlaybookRun(ctx *Context, celEnv *celVariables, playbookID uuid.UUID
 	return nil
 }
 
+// SendRawEventNotification is a wrapper around sendRawEventNotification() for better error handling & metrics collection purpose.
+func sendRawEventNotificationWithMetrics(ctx *Context, celEnv map[string]any, connectionName, shoutrrrURL, eventName string, notification *NotificationWithSpec, customProperties map[string]string) error {
+	start := time.Now()
+
+	service, err := sendRawEventNotification(ctx, celEnv, connectionName, shoutrrrURL, eventName, notification, customProperties)
+	if err != nil {
+		notificationSendFailureCounter.WithLabelValues(service, string(ctx.recipientType), ctx.notificationID.String()).Inc()
+		return err
+	}
+
+	notificationSentCounter.WithLabelValues(service, string(ctx.recipientType), ctx.notificationID.String()).Inc()
+	notificationSendDuration.WithLabelValues(service, string(ctx.recipientType), ctx.notificationID.String()).Observe(time.Since(start).Seconds())
+
+	return nil
+}
+
+func sendRawEventNotification(ctx *Context, celEnv map[string]any, connectionName, shoutrrrURL, eventName string, notification *NotificationWithSpec, customProperties map[string]string) (string, error) {
+	defaultTitle, defaultBody := DefaultTitleAndBody(eventName)
+	customProperties = collections.MergeMap(notification.Properties, customProperties)
+	data := NotificationTemplate{
+		Title:      utils.Coalesce(notification.Title, defaultTitle),
+		Message:    utils.Coalesce(notification.Template, defaultBody),
+		Properties: customProperties,
+	}
+
+	service, err := SendRawNotification(ctx, connectionName, shoutrrrURL, celEnv, data, notification)
+	if err != nil {
+		return service, err
+	}
+	if CRDStatusUpdateQueue != nil && notification != nil && notification.Source == models.SourceCRD {
+		CRDStatusUpdateQueue.EnqueueWithDelay(notification.ID.String(), 30*time.Second)
+	}
+	return service, nil
+}
+
 // SendEventNotification is a wrapper around sendEventNotification() for better error handling & metrics collection purpose.
 func sendEventNotificationWithMetrics(ctx *Context, payload NotificationMessagePayload, celEnv *celVariables, connectionName, shoutrrrURL string, notification *NotificationWithSpec, customProperties map[string]string) error {
 	start := time.Now()
@@ -210,6 +297,62 @@ func sendEventNotification(ctx *Context, payload NotificationMessagePayload, cel
 	if CRDStatusUpdateQueue != nil && notification != nil && notification.Source == models.SourceCRD {
 		CRDStatusUpdateQueue.EnqueueWithDelay(notification.ID.String(), 30*time.Second)
 	}
+	return service, nil
+}
+
+func SendRawNotification(ctx *Context, connectionName, shoutrrrURL string, celEnv map[string]any, data NotificationTemplate, notification *NotificationWithSpec) (string, error) {
+	if celEnv == nil {
+		celEnv = make(map[string]any)
+	}
+
+	var connection *models.Connection
+	var err error
+	if connectionName != "" {
+		connection, err = pkgConnection.Get(ctx.Context, connectionName)
+		if err != nil {
+			return "", err
+		}
+
+		ctx.WithRecipient(RecipientTypeConnection, &connection.ID)
+
+		shoutrrrURL = connection.URL
+		data.Properties = collections.MergeMap(connection.Properties, data.Properties)
+	}
+
+	if connection != nil && connection.Type == models.ConnectionTypeSlack {
+		celEnv["channel"] = "slack"
+		templater := ctx.NewStructTemplater(celEnv, "", TemplateFuncs)
+		if err := templater.Walk(&data); err != nil {
+			return "", fmt.Errorf("error templating notification: %w", err)
+		}
+
+		ctx.WithMessage(data.Message)
+		resourceID := ""
+		if ctx.log != nil && ctx.log.ResourceID != uuid.Nil {
+			resourceID = ctx.log.ResourceID.String()
+		}
+		traceLog("NotificationID=%s Resource=[%s] Sent via slack ...", ctx.notificationID, resourceID)
+		if err := SlackSend(ctx, connection.Password, connection.Username, data); err != nil {
+			return "", err
+		}
+
+		return "slack", nil
+	}
+
+	if _, exists := celEnv["groupedResources"]; exists {
+		data.Message += groupedResourcesMessage
+	}
+
+	service, err := shoutrrrSendRaw(ctx, celEnv, shoutrrrURL, data)
+	if err != nil {
+		return "", fmt.Errorf("failed to send message with Shoutrrr: %w", err)
+	}
+	resourceID := ""
+	if ctx.log != nil && ctx.log.ResourceID != uuid.Nil {
+		resourceID = ctx.log.ResourceID.String()
+	}
+	traceLog("NotificationID=%s Resource=[%s] Sent via Shoutrrr ...", ctx.notificationID, resourceID)
+
 	return service, nil
 }
 
@@ -492,4 +635,3 @@ func renderTemplateString(ctx *Context, celEnvMap map[string]any, value string) 
 	}
 	return fmt.Sprintf("%v", result), nil
 }
-

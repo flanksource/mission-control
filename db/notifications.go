@@ -326,7 +326,7 @@ func SaveUnsentNotificationToHistory(ctx context.Context, sendHistory models.Not
 		sendHistory.TeamID,
 		sendHistory.ConnectionID,
 		sendHistory.PlaybookRunID,
-		nil, // body is deprecated
+		sendHistory.Body,
 		sendHistory.BodyPayload,
 	).Error
 }

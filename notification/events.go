@@ -274,7 +274,7 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 		if blocker, err := processNotificationConstraints(ctx, *n, payload, celEnv, matchingSilences); err != nil {
 			return fmt.Errorf("failed to check all conditions for notification[%s]: %w", n.ID, err)
 		} else if blocker != nil {
-			bodyPayload, err := buildNotificationBodyPayload(ctx, payload, celEnv)
+			body, bodyPayload, err := buildNotificationHistoryPayload(ctx, payload, n, celEnv)
 			if err != nil {
 				return err
 			}
@@ -292,6 +292,7 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 				PersonID:                  payload.PersonID,
 				TeamID:                    payload.TeamID,
 				ConnectionID:              payload.Connection,
+				Body:                      body,
 				BodyPayload:               bodyPayload,
 			}
 
@@ -313,7 +314,7 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 		// Notifications that have waitFor configured go through a waiting stage
 		// while the rest are sent immediately.
 		if n.WaitFor != nil {
-			bodyPayload, err := buildNotificationBodyPayload(ctx, payload, celEnv)
+			body, bodyPayload, err := buildNotificationHistoryPayload(ctx, payload, n, celEnv)
 			if err != nil {
 				return err
 			}
@@ -331,6 +332,7 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 				PersonID:                  payload.PersonID,
 				ConnectionID:              payload.Connection,
 				TeamID:                    payload.TeamID,
+				Body:                      body,
 				BodyPayload:               bodyPayload,
 			}
 
@@ -351,27 +353,36 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 	return nil
 }
 
-func buildNotificationBodyPayload(ctx context.Context, payload NotificationEventPayload, celEnv *celVariables) (types.JSON, error) {
-	if celEnv == nil {
-		return nil, nil
+func buildNotificationHistoryPayload(ctx context.Context, payload NotificationEventPayload, notification *NotificationWithSpec, celEnv *celVariables) (*string, types.JSON, error) {
+	if celEnv == nil || notification == nil {
+		return nil, nil, nil
+	}
+
+	if strings.TrimSpace(notification.Template) != "" {
+		msg, err := getNotificationMsg(ctx, celEnv.AsMap(ctx), payload, notification)
+		if err != nil {
+			return nil, nil, err
+		}
+		return lo.ToPtr(msg.Message), nil, nil
 	}
 
 	env := *celEnv
 	if payload.GroupID != nil {
 		groupedResources, err := db.GetGroupedResources(ctx, *payload.GroupID, payload.ID.String())
 		if err != nil {
-			return nil, fmt.Errorf("failed to get grouped resources for notification[%s]: %w", payload.NotificationID, err)
+			return nil, nil, fmt.Errorf("failed to get grouped resources for notification[%s]: %w", payload.NotificationID, err)
 		}
 		env.GroupedResources = groupedResources
 	}
 
 	msgPayload := BuildNotificationMessagePayload(payload, &env)
+	applyTemplateOverrides(NewContext(ctx, payload.NotificationID), &msgPayload, notification, &env)
 	bodyPayload, err := json.Marshal(msgPayload)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal notification payload: %w", err)
+		return nil, nil, fmt.Errorf("failed to marshal notification payload: %w", err)
 	}
 
-	return types.JSON(bodyPayload), nil
+	return nil, types.JSON(bodyPayload), nil
 }
 
 type validateResult struct {
