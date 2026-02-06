@@ -146,6 +146,8 @@ func resolveRecipientAndSend(ctx *Context, payload NotificationEventPayload, cel
 
 			return sendFn(cn.Connection, cn.URL, cn.Properties)
 		}
+
+		return fmt.Errorf("notification %q not found in team(id=%s) spec", payload.NotificationName, payload.TeamID)
 	}
 
 	if payload.CustomService != nil {
@@ -158,7 +160,7 @@ func resolveRecipientAndSend(ctx *Context, payload NotificationEventPayload, cel
 		return sendFn(cn.Connection, cn.URL, cn.Properties)
 	}
 
-	return nil
+	return fmt.Errorf("no recipient resolved for notification(id=%s) event=%s", payload.NotificationID, payload.EventName)
 }
 
 // PrepareAndSendEventNotification generates the notification from the given event and sends it.
