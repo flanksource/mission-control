@@ -6,10 +6,16 @@ import (
 	"time"
 
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/incident-commander/notification"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/timberio/go-datemath"
 )
+
+type notificationDetailResponse struct {
+	models.NotificationSendHistory `json:",inline"`
+	BodyMarkdown                   string `json:"body_markdown,omitempty"`
+}
 
 const (
 	toolGetNotificationDetail       = "get_notification_detail"
@@ -43,16 +49,21 @@ func getNotificationDetailHandler(goctx gocontext.Context, req mcp.CallToolReque
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	var notification models.NotificationSendHistory
+	var history models.NotificationSendHistory
 	err = ctx.DB().
 		Table("notification_send_history_summary").
 		Where("id = ?", sendID).
-		First(&notification).Error
+		First(&history).Error
 	if err != nil {
 		return mcp.NewToolResultError(fmt.Sprintf("failed to get notification: %v", err)), nil
 	}
 
-	return structToMCPResponse(req, []models.NotificationSendHistory{notification}), nil
+	resp := notificationDetailResponse{
+		NotificationSendHistory: history,
+		BodyMarkdown:            notification.RenderBodyMarkdown(history),
+	}
+
+	return structToMCPResponse(req, []notificationDetailResponse{resp}), nil
 }
 
 func getNotificationsForResourceHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -122,7 +133,7 @@ func parseDateMath(val string) (time.Time, error) {
 
 func registerNotifications(s *server.MCPServer) {
 	getNotificationDetailTool := mcp.NewTool(toolGetNotificationDetail,
-		mcp.WithDescription("Get detailed information about a specific notification including status, body, recipients, resource details, and related entities"),
+		mcp.WithDescription("Get detailed information about a specific notification including status, body_markdown (rendered body), recipients, resource details, and related entities"),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("send_id",
 			mcp.Required(),

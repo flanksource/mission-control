@@ -97,21 +97,7 @@ func GetNotificationSendHistoryDetail(c echo.Context) error {
 		}
 	}
 
-	if len(detail.BodyPayload) > 0 {
-		var payload NotificationMessagePayload
-		if err := json.Unmarshal(detail.BodyPayload, &payload); err != nil {
-			return api.WriteError(c, ctx.Oops().Wrapf(err, "failed to parse body payload"))
-		}
-
-		bodyMarkdown, err := FormatNotificationMessage(payload, "markdown")
-		if err != nil {
-			return api.WriteError(c, ctx.Oops().Wrapf(err, "failed to render body payload"))
-		}
-
-		detail.BodyMarkdown = bodyMarkdown
-	} else if detail.Body != nil {
-		detail.BodyMarkdown = *detail.Body
-	}
+	detail.BodyMarkdown = RenderBodyMarkdown(detail.NotificationSendHistory)
 
 	return c.JSON(http.StatusOK, detail)
 }
@@ -119,6 +105,7 @@ func GetNotificationSendHistoryDetail(c echo.Context) error {
 type NotificationSilencePreviewItem struct {
 	models.NotificationSendHistory `json:",inline"`
 	Resource                       map[string]any `json:"resource"`
+	BodyMarkdown                   string         `json:"body_markdown,omitempty"`
 }
 
 func NotificationSilencePreview(c echo.Context) error {
@@ -154,10 +141,13 @@ func NotificationSilencePreview(c echo.Context) error {
 		if err != nil {
 			return api.WriteError(c, err)
 		}
-		resp = append(resp, NotificationSilencePreviewItem{
+
+		item := NotificationSilencePreviewItem{
 			NotificationSendHistory: s,
 			Resource:                rMap,
-		})
+		}
+		item.BodyMarkdown = RenderBodyMarkdown(s)
+		resp = append(resp, item)
 	}
 
 	return c.JSON(200, resp)
