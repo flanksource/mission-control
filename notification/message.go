@@ -170,7 +170,7 @@ func BuildNotificationMessagePayload(payload NotificationEventPayload, env *celV
 
 // ToTextList converts the payload into clicky primitives for formatting.
 func (p NotificationMessagePayload) ToTextList() api.TextList {
-	return p.toTextList(true)
+	return p.buildTextList(defaultTextListOptions)
 }
 
 // Pretty returns the payload rendered as a clicky Text for formatter consumption.
@@ -180,83 +180,54 @@ func (p NotificationMessagePayload) Pretty() api.Text {
 
 // ToSlackTextList converts the payload into clicky primitives optimized for Slack.
 func (p NotificationMessagePayload) ToSlackTextList() api.TextList {
-	return p.toSlackTextList()
+	return p.buildTextList(slackTextListOptions)
 }
 
-func (p NotificationMessagePayload) toTextList(includeLabelHeading bool) api.TextList {
-	var out api.TextList
+type textListOptions struct {
+	titleStyle           string
+	summaryStyle         string
+	descriptionStyleFn   func(eventName string) string
+	includeLabelHeading  bool
+	maxLabels            int
+	dividerBeforeActions bool
+	renderRecentEvents   func([]string) api.Text
+	renderGroupedRes     func(NotificationMessagePayload) api.Text
+}
 
-	if p.Title != "" {
-		out = append(out, api.Text{Content: p.Title, Style: "header text-xl font-semibold"})
-	}
-
-	contentItems := 0
-	addDivider := func() {
-		if len(out) > 0 {
-			out = append(out, api.HR)
-		}
-	}
-
-	if p.Summary != "" {
-		contentItems++
-	}
-	if p.Description != "" {
-		contentItems++
-	}
-	if len(p.Attributes) > 0 {
-		contentItems++
-	}
-	if len(p.Labels) > 0 || len(p.RecentEvents) > 0 || len(p.GroupedResources) > 0 {
-		contentItems++
-	}
-	if contentItems > 0 {
-		addDivider()
-	}
-
-	if p.Summary != "" {
-		out = append(out, api.Text{Content: p.Summary})
-	}
-
-	if p.Description != "" {
-		out = append(out, api.Text{Content: p.Description})
-	}
-
-	if len(p.Attributes) > 0 {
-		out = append(out, keyValuesTable(p.Attributes))
-	}
-
-	if len(p.Labels) > 0 {
-		if includeLabelHeading {
-			out = append(out, api.Text{Content: "Labels", Style: "font-semibold"})
-		}
-		out = append(out, keyValuesTable(p.Labels))
-	}
-
-	if len(p.RecentEvents) > 0 {
-		out = append(out, labeledInlineList("Recent Events", p.RecentEvents))
-	}
-
-	if len(p.GroupedResources) > 0 {
+var defaultTextListOptions = textListOptions{
+	titleStyle:           "header text-xl font-semibold",
+	includeLabelHeading:  true,
+	dividerBeforeActions: true,
+	renderRecentEvents: func(events []string) api.Text {
+		return labeledInlineList("Recent Events", events)
+	},
+	renderGroupedRes: func(p NotificationMessagePayload) api.Text {
 		title := p.GroupedResourcesTitle
 		if title == "" {
 			title = "Grouped Resources"
 		}
-		out = append(out, labeledList(title, p.GroupedResources))
-	}
-
-	if len(p.Actions) > 0 {
-		addDivider()
-		out = append(out, actionsToButtonGroup(p.Actions))
-	}
-
-	return out
+		return labeledList(title, p.GroupedResources)
+	},
 }
 
-func (p NotificationMessagePayload) toSlackTextList() api.TextList {
+var slackTextListOptions = textListOptions{
+	titleStyle:         "slack-section",
+	summaryStyle:       "slack-section",
+	descriptionStyleFn: slackDescriptionStyle,
+	maxLabels:          maxSlackFieldsPerSection,
+	renderRecentEvents: func(events []string) api.Text {
+		return api.Text{Content: slackRecentEventsText(events), Style: "slack-section"}
+	},
+	renderGroupedRes: func(p NotificationMessagePayload) api.Text {
+		return api.Text{Content: slackGroupedResourcesText(p), Style: "slack-section"}
+	},
+}
+
+func (p NotificationMessagePayload) buildTextList(opts textListOptions) api.TextList {
 	var out api.TextList
 
 	if p.Title != "" {
-		out = append(out, api.Text{Content: p.Title, Style: "slack-section"})
+		out = append(out, api.Text{Content: p.Title, Style: opts.titleStyle})
 	}
 
 	contentItems := 0
@@ -283,11 +254,15 @@ func (p NotificationMessagePayload) toSlackTextList() api.TextList {
 	}
 
 	if p.Summary != "" {
-		out = append(out, api.Text{Content: p.Summary, Style: "slack-section"})
+		out = append(out, api.Text{Content: p.Summary, Style: opts.summaryStyle})
 	}
 
 	if p.Description != "" {
-		out = append(out, api.Text{Content: p.Description, Style: slackDescriptionStyle(p.EventName)})
+		var descStyle string
+		if opts.descriptionStyleFn != nil {
+			descStyle = opts.descriptionStyleFn(p.EventName)
+		}
+		out = append(out, api.Text{Content: p.Description, Style: descStyle})
 	}
 
 	if len(p.Attributes) > 0 {
@@ -295,22 +270,28 @@ func (p NotificationMessagePayload) toSlackTextList() api.TextList {
 	}
 
 	labelFields := p.Labels
-	if len(labelFields) > maxSlackFieldsPerSection {
-		labelFields = labelFields[:maxSlackFieldsPerSection]
+	if opts.maxLabels > 0 && len(labelFields) > opts.maxLabels {
+		labelFields = labelFields[:opts.maxLabels]
 	}
 	if len(labelFields) > 0 {
+		if opts.includeLabelHeading {
+			out = append(out, api.Text{Content: "Labels", Style: "font-semibold"})
+		}
 		out = append(out, keyValuesTable(labelFields))
 	}
 
 	if len(p.RecentEvents) > 0 {
-		out = append(out, api.Text{Content: slackRecentEventsText(p.RecentEvents), Style: "slack-section"})
+		out = append(out, opts.renderRecentEvents(p.RecentEvents))
 	}
 
 	if len(p.GroupedResources) > 0 {
-		out = append(out, api.Text{Content: slackGroupedResourcesText(p), Style: "slack-section"})
+		out = append(out, opts.renderGroupedRes(p))
 	}
 
 	if len(p.Actions) > 0 {
+		if opts.dividerBeforeActions {
+			addDivider()
+		}
 		out = append(out, actionsToButtonGroup(p.Actions))
 	}
 
