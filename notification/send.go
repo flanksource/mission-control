@@ -123,6 +123,10 @@ func resolveRecipientAndSend(ctx *Context, payload NotificationEventPayload, cel
 			return fmt.Errorf("failed to get email of person(id=%s); %v", payload.PersonID, err)
 		}
 
+		if strings.TrimSpace(emailAddress) == "" {
+			return fmt.Errorf("person(id=%s) has no email address", payload.PersonID)
+		}
+
 		smtpURL := fmt.Sprintf("%s?ToAddresses=%s", api.SystemSMTP, url.QueryEscape(emailAddress))
 		return sendFn("", smtpURL, nil)
 	}
