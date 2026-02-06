@@ -113,6 +113,54 @@ func storeNotificationPayload(ctx *Context, payload NotificationMessagePayload) 
 	ctx.WithBodyPayload(types.JSON(b))
 }
 
+type recipientSendFunc func(connectionName, shoutrrrURL string, properties map[string]string) error
+
+func resolveRecipientAndSend(ctx *Context, payload NotificationEventPayload, celEnv *celVariables, notification *NotificationWithSpec, sendFn recipientSendFunc) error {
+	if payload.PersonID != nil {
+		ctx.WithRecipient(RecipientTypePerson, payload.PersonID)
+		var emailAddress string
+		if err := ctx.DB().Model(&models.Person{}).Select("email").Where("id = ?", *payload.PersonID).Find(&emailAddress).Error; err != nil {
+			return fmt.Errorf("failed to get email of person(id=%s); %v", payload.PersonID, err)
+		}
+
+		smtpURL := fmt.Sprintf("%s?ToAddresses=%s", api.SystemSMTP, url.QueryEscape(emailAddress))
+		return sendFn("", smtpURL, nil)
+	}
+
+	if payload.TeamID != nil {
+		ctx.WithRecipient(RecipientTypeTeam, payload.TeamID)
+		teamSpec, err := teams.GetTeamSpec(ctx.Context, payload.TeamID.String())
+		if err != nil {
+			return fmt.Errorf("failed to get team(id=%s); %v", payload.TeamID, err)
+		}
+
+		for _, cn := range teamSpec.Notifications {
+			if cn.Name != payload.NotificationName {
+				continue
+			}
+
+			if cn.Webhook != nil {
+				ctx.WithRecipient(RecipientTypeWebhook, nil)
+				return sendWebhookNotification(ctx, celEnv, payload, cn.Webhook, notification)
+			}
+
+			return sendFn(cn.Connection, cn.URL, cn.Properties)
+		}
+	}
+
+	if payload.CustomService != nil {
+		cn := payload.CustomService
+		if cn.Webhook != nil {
+			ctx.WithRecipient(RecipientTypeWebhook, nil)
+			return sendWebhookNotification(ctx, celEnv, payload, cn.Webhook, notification)
+		}
+		ctx.WithRecipient(RecipientTypeURL, nil)
+		return sendFn(cn.Connection, cn.URL, cn.Properties)
+	}
+
+	return nil
+}
+
 // PrepareAndSendEventNotification generates the notification from the given event and sends it.
 func PrepareAndSendEventNotification(ctx *Context, payload NotificationEventPayload, celEnv *celVariables) error {
 	notification, err := GetNotification(ctx.Context, payload.NotificationID.String())
@@ -128,95 +176,15 @@ func PrepareAndSendEventNotification(ctx *Context, payload NotificationEventPayl
 	applyTemplateOverrides(ctx, &msgPayload, notification, celEnv)
 	storeNotificationPayload(ctx, msgPayload)
 
-	if payload.PersonID != nil {
-		ctx.WithRecipient(RecipientTypePerson, payload.PersonID)
-		var emailAddress string
-		if err := ctx.DB().Model(&models.Person{}).Select("email").Where("id = ?", *payload.PersonID).Find(&emailAddress).Error; err != nil {
-			return fmt.Errorf("failed to get email of person(id=%s); %v", payload.PersonID, err)
-		}
-
-		smtpURL := fmt.Sprintf("%s?ToAddresses=%s", api.SystemSMTP, url.QueryEscape(emailAddress))
-		return sendEventNotificationWithMetrics(ctx, msgPayload, celEnv, "", smtpURL, notification, nil)
-	}
-
-	if payload.TeamID != nil {
-		ctx.WithRecipient(RecipientTypeTeam, payload.TeamID)
-		teamSpec, err := teams.GetTeamSpec(ctx.Context, payload.TeamID.String())
-		if err != nil {
-			return fmt.Errorf("failed to get team(id=%s); %v", payload.TeamID, err)
-		}
-
-		for _, cn := range teamSpec.Notifications {
-			if cn.Name != payload.NotificationName {
-				continue
-			}
-
-			if cn.Webhook != nil {
-				ctx.WithRecipient(RecipientTypeWebhook, nil)
-				return sendWebhookNotification(ctx, celEnv, payload, cn.Webhook, notification)
-			}
-
-			return sendEventNotificationWithMetrics(ctx, msgPayload, celEnv, cn.Connection, cn.URL, notification, cn.Properties)
-		}
-	}
-
-	if payload.CustomService != nil {
-		cn := payload.CustomService
-		if cn.Webhook != nil {
-			ctx.WithRecipient(RecipientTypeWebhook, nil)
-			return sendWebhookNotification(ctx, celEnv, payload, cn.Webhook, notification)
-		}
-		ctx.WithRecipient(RecipientTypeURL, nil)
-		return sendEventNotificationWithMetrics(ctx, msgPayload, celEnv, cn.Connection, cn.URL, notification, cn.Properties)
-	}
-
-	return nil
+	return resolveRecipientAndSend(ctx, payload, celEnv, notification, func(connectionName, shoutrrrURL string, properties map[string]string) error {
+		return sendEventNotificationWithMetrics(ctx, msgPayload, celEnv, connectionName, shoutrrrURL, notification, properties)
+	})
 }
 
 func prepareAndSendRawNotification(ctx *Context, payload NotificationEventPayload, celEnv *celVariables, notification *NotificationWithSpec) error {
-	if payload.PersonID != nil {
-		ctx.WithRecipient(RecipientTypePerson, payload.PersonID)
-		var emailAddress string
-		if err := ctx.DB().Model(&models.Person{}).Select("email").Where("id = ?", *payload.PersonID).Find(&emailAddress).Error; err != nil {
-			return fmt.Errorf("failed to get email of person(id=%s); %v", payload.PersonID, err)
-		}
-
-		smtpURL := fmt.Sprintf("%s?ToAddresses=%s", api.SystemSMTP, url.QueryEscape(emailAddress))
-		return sendRawEventNotificationWithMetrics(ctx, payload, celEnv, "", smtpURL, notification, nil)
-	}
-
-	if payload.TeamID != nil {
-		ctx.WithRecipient(RecipientTypeTeam, payload.TeamID)
-		teamSpec, err := teams.GetTeamSpec(ctx.Context, payload.TeamID.String())
-		if err != nil {
-			return fmt.Errorf("failed to get team(id=%s); %v", payload.TeamID, err)
-		}
-
-		for _, cn := range teamSpec.Notifications {
-			if cn.Name != payload.NotificationName {
-				continue
-			}
-
-			if cn.Webhook != nil {
-				ctx.WithRecipient(RecipientTypeWebhook, nil)
-				return sendWebhookNotification(ctx, celEnv, payload, cn.Webhook, notification)
-			}
-
-			return sendRawEventNotificationWithMetrics(ctx, payload, celEnv, cn.Connection, cn.URL, notification, cn.Properties)
-		}
-	}
-
-	if payload.CustomService != nil {
-		cn := payload.CustomService
-		if cn.Webhook != nil {
-			ctx.WithRecipient(RecipientTypeWebhook, nil)
-			return sendWebhookNotification(ctx, celEnv, payload, cn.Webhook, notification)
-		}
-		ctx.WithRecipient(RecipientTypeURL, nil)
-		return sendRawEventNotificationWithMetrics(ctx, payload, celEnv, cn.Connection, cn.URL, notification, cn.Properties)
-	}
-
-	return nil
+	return resolveRecipientAndSend(ctx, payload, celEnv, notification, func(connectionName, shoutrrrURL string, properties map[string]string) error {
+		return sendRawEventNotificationWithMetrics(ctx, payload, celEnv, connectionName, shoutrrrURL, notification, properties)
+	})
 }
 
 // triggerPlaybookRun creates an event to trigger a playbook run.
