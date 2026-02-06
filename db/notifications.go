@@ -314,7 +314,7 @@ func GetMatchingNotificationSilences(ctx context.Context, resources models.Notif
 func SaveUnsentNotificationToHistory(ctx context.Context, sendHistory models.NotificationSendHistory) error {
 	window := ctx.Properties().Duration("notifications.dedup.window", time.Hour*24)
 
-	return ctx.DB().Exec("SELECT * FROM insert_unsent_notification_to_history(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+	return ctx.DB().Exec("SELECT * FROM insert_unsent_notification_to_history(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		sendHistory.NotificationID,
 		sendHistory.SourceEvent,
 		sendHistory.ResourceID,
@@ -327,6 +327,7 @@ func SaveUnsentNotificationToHistory(ctx context.Context, sendHistory models.Not
 		sendHistory.ConnectionID,
 		sendHistory.PlaybookRunID,
 		sendHistory.Body,
+		sendHistory.BodyPayload,
 	).Error
 }
 
