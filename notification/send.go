@@ -50,7 +50,11 @@ func DefaultTitleAndBody(payload NotificationEventPayload, celEnv *celVariables)
 		bodyFormat = "slack"
 	}
 
-	body, _ = FormatNotificationMessage(msgPayload, bodyFormat)
+	if rendered, err := FormatNotificationMessage(msgPayload, bodyFormat); err == nil {
+		body = rendered
+	} else {
+		body = msgPayload.Description
+	}
 
 	return msgPayload.Title, body
 }
@@ -235,7 +239,7 @@ func triggerPlaybookRun(ctx *Context, celEnv *celVariables, playbookID uuid.UUID
 	return nil
 }
 
-// SendRawEventNotification is a wrapper around sendRawEventNotification() for better error handling & metrics collection purpose.
+// sendRawEventNotificationWithMetrics is a wrapper around sendRawEventNotification() for better error handling & metrics collection purpose.
 func sendRawEventNotificationWithMetrics(ctx *Context, payload NotificationEventPayload, celEnv *celVariables, connectionName, shoutrrrURL string, notification *NotificationWithSpec, customProperties map[string]string) error {
 	start := time.Now()
 
@@ -270,7 +274,7 @@ func sendRawEventNotification(ctx *Context, payload NotificationEventPayload, ce
 	return service, nil
 }
 
-// SendEventNotification is a wrapper around sendEventNotification() for better error handling & metrics collection purpose.
+// sendEventNotificationWithMetrics is a wrapper around sendEventNotification() for better error handling & metrics collection purpose.
 func sendEventNotificationWithMetrics(ctx *Context, payload NotificationMessagePayload, celEnv *celVariables, connectionName, shoutrrrURL string, notification *NotificationWithSpec, customProperties map[string]string) error {
 	start := time.Now()
 
@@ -616,7 +620,7 @@ func renderTemplateProperties(ctx *Context, properties map[string]string, celEnv
 
 		renderedValue, err := renderTemplateString(ctx, celEnvMap, value)
 		if err != nil {
-			ctx.Logger.Warnf("failed to render template property %s=%s: %v", key, value, err)
+			ctx.Logger.Warnf("failed to render template property %q: %v", key, err)
 			rendered[key] = value
 			continue
 		}

@@ -36,11 +36,10 @@ func (t *Notification) Run(ctx context.Context, action v1.NotificationAction) (*
 	}
 	if service == "slack" {
 		slackMsg, err := notification.FormatNotificationMessage(payload, "slack")
-		if err != nil {
-			return nil, err
+		if err == nil {
+			output.Message = ""
+			output.Slack = slackMsg
 		}
-		output.Message = ""
-		output.Slack = slackMsg
 	}
 
 	return output, nil
