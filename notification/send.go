@@ -31,12 +31,6 @@ type NotificationTemplate struct {
 	Properties map[string]string `template:"true"`
 }
 
-const groupedResourcesMessage = `
-Resources grouped with this notification:
-{{- range .groupedResources }}
-- {{ . }}
-{{- end }}`
-
 // DefaultTitleAndBody returns the default title and body for notification
 // based on the given event using clicky-generated content.
 func DefaultTitleAndBody(payload NotificationEventPayload, celEnv *celVariables) (title string, body string) {
@@ -339,10 +333,6 @@ func SendRawNotification(ctx *Context, connectionName, shoutrrrURL string, celEn
 		}
 
 		return "slack", nil
-	}
-
-	if _, exists := celEnv["groupedResources"]; exists {
-		data.Message += groupedResourcesMessage
 	}
 
 	service, err := shoutrrrSendRaw(ctx, celEnv, shoutrrrURL, data)

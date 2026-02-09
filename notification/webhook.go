@@ -47,10 +47,6 @@ func sendWebhookNotification(ctx *Context, celVars *celVariables, payload Notifi
 		return fmt.Errorf("error templating notification: %w", err)
 	}
 
-	if len(celVars.GroupedResources) > 0 {
-		data.Message += groupedResourcesMessage
-	}
-
 	permalink := celVars.Permalink
 
 	webhookPayload := WebhookPayload{
