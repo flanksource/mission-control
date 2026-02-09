@@ -247,6 +247,8 @@ func shoutrrrSend(ctx *Context, shoutrrrURL string, payload NotificationMessageP
 		return "", err
 	}
 
+	ctx.WithMessage(data.Message)
+
 	return service, dispatchNotification(ctx, service, shoutrrrURL, sender, data)
 }
 

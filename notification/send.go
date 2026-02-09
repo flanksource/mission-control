@@ -380,6 +380,8 @@ func SendNotification(ctx *Context, connectionName, shoutrrrURL string, payload 
 			Properties: properties,
 		}
 
+		ctx.WithMessage(data.Message)
+
 		resourceID := ""
 		if ctx.log != nil && ctx.log.ResourceID != uuid.Nil {
 			resourceID = ctx.log.ResourceID.String()
