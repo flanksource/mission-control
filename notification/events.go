@@ -140,7 +140,12 @@ func (t *notificationHandler) addNotificationEvent(ctx context.Context, event mo
 	}
 
 	if lo.Contains(api.ConfigEvents, event.Name) {
-		if err := resolveGroupMembership(ctx, celEnv, event.EventID.String()); err != nil {
+		configID := event.EventID.String()
+		if celEnv.ConfigItem != nil {
+			configID = celEnv.ConfigItem.ID.String()
+		}
+
+		if err := resolveGroupMembership(ctx, celEnv, configID); err != nil {
 			return ctx.Oops().Wrapf(err, "failed to resolve group membership for event")
 		}
 	}

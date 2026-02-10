@@ -451,8 +451,14 @@ func processPendingNotification(ctx context.Context, currentHistory models.Notif
 }
 
 func triggerIncrementalScrape(ctx context.Context, configID string) error {
+	parsedConfigID, err := uuid.Parse(configID)
+	if err != nil {
+		return fmt.Errorf("invalid config id(%s): %w", configID, err)
+	}
+
 	event := models.Event{
-		Name: "config-db.incremental-scrape",
+		Name:    "config-db.incremental-scrape",
+		EventID: parsedConfigID,
 		Properties: map[string]string{
 			"config_id": configID,
 		},

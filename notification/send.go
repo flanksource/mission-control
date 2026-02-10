@@ -238,6 +238,7 @@ func triggerPlaybookRun(ctx *Context, celEnv *celVariables, playbookID uuid.UUID
 	err := ctx.Transaction(func(txCtx context.Context, _ trace.Span) error {
 		eventProp := types.JSONStringMap{
 			"id":                       playbookID.String(),
+			"playbook_id":              playbookID.String(),
 			"notification_id":          ctx.notificationID.String(),
 			"notification_dispatch_id": ctx.log.ID.String(),
 		}
@@ -253,6 +254,7 @@ func triggerPlaybookRun(ctx *Context, celEnv *celVariables, playbookID uuid.UUID
 
 		event := models.Event{
 			Name:       api.EventPlaybookRun,
+			EventID:    ctx.log.ID,
 			Properties: eventProp,
 		}
 		if err := txCtx.DB().Create(&event).Error; err != nil {
@@ -451,7 +453,15 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 
 	var payloads []NotificationEventPayload
 
+	resource := celEnv.SelectableResource()
 	resourceID := event.EventID
+	if resource != nil {
+		parsedResourceID, err := uuid.Parse(resource.GetID())
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse resource id(%s): %w", resource.GetID(), err)
+		}
+		resourceID = parsedResourceID
+	}
 
 	var eventProperties []byte
 	if len(event.Properties) > 0 {
@@ -482,7 +492,6 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 		}
 	}
 
-	resource := celEnv.SelectableResource()
 	var resourceHealth, resourceStatus, resourceHealthDescription string
 	if resource != nil {
 		var err error

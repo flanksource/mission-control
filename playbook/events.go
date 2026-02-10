@@ -217,7 +217,13 @@ const (
 )
 
 func onNewRun(ctx context.Context, event models.Event) error {
-	var playbookID = event.EventID.String()
+	playbookID := event.Properties["playbook_id"]
+	if playbookID == "" {
+		playbookID = event.Properties["id"]
+	}
+	if playbookID == "" {
+		playbookID = event.EventID.String()
+	}
 
 	// What triggered the run?
 	// Must be either a notification, or a playbook run.
