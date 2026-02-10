@@ -23,6 +23,7 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	pkgArtifacts "github.com/flanksource/incident-commander/artifacts"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/llm"
 	llmContext "github.com/flanksource/incident-commander/llm/context"
 	"github.com/flanksource/incident-commander/utils"
@@ -308,7 +309,7 @@ func (t *aiAction) triggerPlaybookRun(ctx context.Context, contextProvider api.L
 		EventID:    uuid.NewSHA1(t.ActionID, []byte(playbook.ID.String())),
 		Properties: eventProp,
 	}
-	if err := ctx.DB().Create(&event).Error; err != nil {
+	if err := ctx.DB().Clauses(events.EventQueueOnConflictClause).Create(&event).Error; err != nil {
 		return fmt.Errorf("failed to create run: %w", err)
 	}
 

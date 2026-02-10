@@ -81,20 +81,29 @@ type NotificationEventPayload struct {
 // Generates an idempotent event id for this notification send.
 func (t NotificationEventPayload) GenerateEventID() uuid.UUID {
 	var recipientSig string
-	if t.Connection != nil {
-		recipientSig = t.Connection.String()
-	} else if t.PersonID != nil {
-		recipientSig = t.PersonID.String()
-	} else if t.TeamID != nil {
-		recipientSig = t.TeamID.String()
+	switch {
+	case t.Connection != nil:
+		recipientSig = "connection:" + t.Connection.String()
+	case t.PersonID != nil:
+		recipientSig = "person:" + t.PersonID.String()
+	case t.TeamID != nil:
+		recipientSig = "team:" + t.TeamID.String()
 		if t.NotificationName != "" {
-			recipientSig += "-" + t.NotificationName
+			recipientSig += ":" + t.NotificationName
 		}
-	} else if t.CustomService != nil {
-		recipientSig = t.CustomService.Name
+	case t.PlaybookID != nil:
+		recipientSig = "playbook:" + t.PlaybookID.String()
+	case t.CustomService != nil:
+		customServiceJSON, _ := json.Marshal(t.CustomService)
+		recipientSig = "custom:" + string(customServiceJSON)
 	}
 
-	sig := fmt.Sprintf("%s-%s-recipient-%s", t.NotificationID.String(), t.ResourceID.String(), recipientSig)
+	groupID := ""
+	if t.GroupID != nil {
+		groupID = t.GroupID.String()
+	}
+
+	sig := fmt.Sprintf("%s-%s-%s-%s-group-%s-recipient-%s", t.NotificationID.String(), t.ResourceID.String(), t.EventName, t.EventID.String(), groupID, recipientSig)
 	generated, _ := hash.DeterministicUUID(sig)
 	return generated
 }
