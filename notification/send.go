@@ -20,6 +20,7 @@ import (
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/logs"
 	"github.com/flanksource/incident-commander/teams"
 )
@@ -257,7 +258,7 @@ func triggerPlaybookRun(ctx *Context, celEnv *celVariables, playbookID uuid.UUID
 			EventID:    ctx.log.ID,
 			Properties: eventProp,
 		}
-		if err := txCtx.DB().Create(&event).Error; err != nil {
+		if err := txCtx.DB().Clauses(events.EventQueueOnConflictClause).Create(&event).Error; err != nil {
 			return fmt.Errorf("failed to create run: %w", err)
 		}
 
