@@ -305,7 +305,7 @@ func (t *aiAction) triggerPlaybookRun(ctx context.Context, contextProvider api.L
 
 	event := models.Event{
 		Name:       api.EventPlaybookRun,
-		EventID:    t.ActionID,
+		EventID:    uuid.NewSHA1(t.ActionID, []byte(playbook.ID.String())),
 		Properties: eventProp,
 	}
 	if err := ctx.DB().Create(&event).Error; err != nil {
