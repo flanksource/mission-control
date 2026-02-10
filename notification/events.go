@@ -274,6 +274,10 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 		if blocker, err := processNotificationConstraints(ctx, *n, payload, celEnv, matchingSilences); err != nil {
 			return fmt.Errorf("failed to check all conditions for notification[%s]: %w", n.ID, err)
 		} else if blocker != nil {
+			body, bodyPayload, err := buildNotificationHistoryPayload(ctx, payload, n, celEnv)
+			if err != nil {
+				return err
+			}
 			history := models.NotificationSendHistory{
 				NotificationID:            n.ID,
 				ResourceID:                payload.ID,
@@ -288,7 +292,8 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 				PersonID:                  payload.PersonID,
 				TeamID:                    payload.TeamID,
 				ConnectionID:              payload.Connection,
-				Body:                      payload.Body,
+				Body:                      body,
+				BodyPayload:               bodyPayload,
 			}
 
 			if err := db.SaveUnsentNotificationToHistory(ctx, history); err != nil {
@@ -309,6 +314,10 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 		// Notifications that have waitFor configured go through a waiting stage
 		// while the rest are sent immediately.
 		if n.WaitFor != nil {
+			body, bodyPayload, err := buildNotificationHistoryPayload(ctx, payload, n, celEnv)
+			if err != nil {
+				return err
+			}
 			pendingHistory := models.NotificationSendHistory{
 				NotificationID:            n.ID,
 				ResourceID:                payload.ID,
@@ -323,7 +332,8 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 				PersonID:                  payload.PersonID,
 				ConnectionID:              payload.Connection,
 				TeamID:                    payload.TeamID,
-				Body:                      payload.Body,
+				Body:                      body,
+				BodyPayload:               bodyPayload,
 			}
 
 			if err := ctx.DB().Create(&pendingHistory).Error; err != nil {
@@ -341,6 +351,66 @@ func addNotificationEvent(ctx context.Context, id string, celEnv *celVariables, 
 	}
 
 	return nil
+}
+
+func buildNotificationHistoryPayload(ctx context.Context, payload NotificationEventPayload, notification *NotificationWithSpec, celEnv *celVariables) (*string, types.JSON, error) {
+	if celEnv == nil || notification == nil {
+		return nil, nil, nil
+	}
+
+	if strings.TrimSpace(notification.Template) != "" {
+		msg, err := getNotificationMsg(ctx, celEnv, payload, notification)
+		if err != nil {
+			return nil, nil, err
+		}
+		return lo.ToPtr(msg.Message), nil, nil
+	}
+
+	env := *celEnv
+	if payload.GroupID != nil {
+		groupedResources, err := db.GetGroupedResources(ctx, *payload.GroupID, payload.ID.String())
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to get grouped resources for notification[%s]: %w", payload.NotificationID, err)
+		}
+		env.GroupedResources = groupedResources
+	}
+
+	msgPayload := BuildNotificationMessagePayload(payload, &env)
+	applyTemplateOverrides(NewContext(ctx, payload.NotificationID), &msgPayload, notification, &env)
+	bodyPayload, err := json.Marshal(msgPayload)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to marshal notification payload: %w", err)
+	}
+
+	return nil, types.JSON(bodyPayload), nil
+}
+
+// getNotificationMsg renders a notification message when a custom template is provided.
+// It uses clicky-generated defaults for the title if no custom title is specified.
+func getNotificationMsg(ctx context.Context, celEnv *celVariables, payload NotificationEventPayload, n *NotificationWithSpec) (*NotificationTemplate, error) {
+	defaultTitle, defaultBody := DefaultTitleAndBody(payload, celEnv)
+	data := NotificationTemplate{
+		Title:      lo.CoalesceOrEmpty(n.Title, defaultTitle),
+		Message:    lo.CoalesceOrEmpty(n.Template, defaultBody),
+		Properties: n.Properties,
+	}
+	templater := ctx.NewStructTemplater(celEnv.AsMap(ctx), "", TemplateFuncs)
+	if err := templater.Walk(&data); err != nil {
+		return nil, fmt.Errorf("error templating notification: %w", err)
+	}
+
+	if strings.Contains(data.Message, `"blocks"`) {
+		var slackMsg SlackMsgTemplate
+		if err := json.Unmarshal([]byte(data.Message), &slackMsg); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal slack template into blocks: %w", err)
+		}
+
+		if b, err := json.Marshal([]any{slackMsg}); err == nil {
+			data.Message = string(b)
+		}
+	}
+
+	return &data, nil
 }
 
 type validateResult struct {
