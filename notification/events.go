@@ -369,7 +369,7 @@ func buildNotificationHistoryPayload(ctx context.Context, payload NotificationEv
 
 	env := *celEnv
 	if payload.GroupID != nil {
-		groupedResources, err := db.GetGroupedResources(ctx, *payload.GroupID, payload.ID.String())
+		groupedResources, err := db.GetGroupedResources(ctx, *payload.GroupID, payload.ResourceID.String())
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to get grouped resources for notification[%s]: %w", payload.NotificationID, err)
 		}
