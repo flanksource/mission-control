@@ -25,6 +25,7 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/events"
 )
 
 var CRDStatusUpdateQueue *collections.Queue[string]
@@ -464,13 +465,7 @@ func triggerIncrementalScrape(ctx context.Context, configID string) error {
 		},
 	}
 
-	onConflictClause := clause.OnConflict{
-		Columns: models.EventQueueUniqueConstraint(),
-		DoUpdates: clause.Assignments(map[string]any{
-			"created_at": gorm.Expr("CURRENT_TIMESTAMP"),
-		}),
-	}
-	return ctx.DB().Clauses(onConflictClause).Create(&event).Error
+	return ctx.DB().Clauses(events.EventQueueOnConflictClause).Create(&event).Error
 }
 
 func isKubernetesConfigItem(ctx context.Context, configID string) (bool, error) {
