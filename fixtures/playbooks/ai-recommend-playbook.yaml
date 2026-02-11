@@ -54,6 +54,6 @@ spec:
               since: 24h
     - name: send recommended playbooks
       notification:
-        connection: "{{.Values.slack.connection}}"
+        connection: connection://mc/flanksource-slack
         title: Recommended playbooks
         message: "$(getLastAction.result.recommendedPlaybooks)"
