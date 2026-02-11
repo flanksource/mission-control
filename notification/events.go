@@ -847,7 +847,7 @@ func GetEnvForEvent(ctx context.Context, event models.Event) (*celVariables, err
 	if strings.HasPrefix(event.Name, "incident.comment.") {
 		var comment models.Comment
 		if err := ctx.DB().Where("id = ?", event.EventID).Find(&comment).Error; err != nil {
-			return nil, fmt.Errorf("error getting comment (id=%s)", event.EventID)
+			return nil, fmt.Errorf("error getting comment (id=%s): %w", event.EventID, err)
 		}
 
 		incident, err := query.GetCachedIncident(ctx, comment.IncidentID.String())
