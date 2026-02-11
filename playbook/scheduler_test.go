@@ -445,7 +445,7 @@ var _ = ginkgo.Describe("Playbook Scheduler EventResource Generation", ginkgo.Or
 		})
 
 		testEvent(TestCase{
-			Name: "should generate correct EventResource for organically triggered config.updated event",
+			Name: "should generate correct EventResource for organically triggered config.changed event",
 			Resources: TestResource{
 				Config: &models.ConfigItem{
 					ID:          uuid.New(),
