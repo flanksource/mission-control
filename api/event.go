@@ -130,6 +130,7 @@ func EventToHealth(event string) models.Health {
 
 type Event struct {
 	ID          uuid.UUID           `gorm:"default:generate_ulid()"`
+	EventID     uuid.UUID           `json:"event_id"`
 	Name        string              `json:"name"`
 	CreatedAt   time.Time           `json:"created_at"`
 	Properties  types.JSONStringMap `json:"properties"`
@@ -142,6 +143,7 @@ type Event struct {
 func (t Event) ToPostQEvent() models.Event {
 	return models.Event{
 		ID:          t.ID,
+		EventID:     t.EventID,
 		Name:        t.Name,
 		Error:       t.Error,
 		Attempts:    t.Attempts,

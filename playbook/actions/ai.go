@@ -23,6 +23,7 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	pkgArtifacts "github.com/flanksource/incident-commander/artifacts"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/llm"
 	llmContext "github.com/flanksource/incident-commander/llm/context"
 	"github.com/flanksource/incident-commander/utils"
@@ -57,13 +58,15 @@ func init() {
 type aiAction struct {
 	PlaybookID  uuid.UUID // ID of the playbook that is executing this action
 	RunID       uuid.UUID // ID of the run that is executing this action
+	ActionID    uuid.UUID // ID of the action that is executing this action
 	TemplateEnv TemplateEnv
 }
 
-func NewAIAction(playbookID, runID uuid.UUID, templateEnv TemplateEnv) *aiAction {
+func NewAIAction(playbookID, runID, actionID uuid.UUID, templateEnv TemplateEnv) *aiAction {
 	return &aiAction{
 		PlaybookID:  playbookID,
 		RunID:       runID,
+		ActionID:    actionID,
 		TemplateEnv: templateEnv,
 	}
 }
@@ -288,6 +291,7 @@ func (t *aiAction) triggerPlaybookRun(ctx context.Context, contextProvider api.L
 
 	eventProp := types.JSONStringMap{
 		"id":            playbook.ID.String(),
+		"playbook_id":   playbook.ID.String(),
 		"parent_run_id": t.RunID.String(),
 		"parameters":    string(parametersJSON),
 	}
@@ -302,9 +306,10 @@ func (t *aiAction) triggerPlaybookRun(ctx context.Context, contextProvider api.L
 
 	event := models.Event{
 		Name:       api.EventPlaybookRun,
+		EventID:    uuid.NewSHA1(t.ActionID, []byte(playbook.ID.String())),
 		Properties: eventProp,
 	}
-	if err := ctx.DB().Create(&event).Error; err != nil {
+	if err := ctx.DB().Clauses(events.EventQueueOnConflictClause).Create(&event).Error; err != nil {
 		return fmt.Errorf("failed to create run: %w", err)
 	}
 

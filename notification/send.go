@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/collections"
+	"github.com/flanksource/commons/hash"
 	"github.com/flanksource/commons/utils"
 	pkgConnection "github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/logs"
 	"github.com/flanksource/incident-commander/teams"
 )
@@ -55,11 +57,12 @@ func DefaultTitleAndBody(payload NotificationEventPayload, celEnv *celVariables)
 
 // NotificationEventPayload holds data to create a notification.
 type NotificationEventPayload struct {
-	ID                        uuid.UUID     `json:"id"` // Resource id. depends what it is based on the original event.
+	ResourceID                uuid.UUID     `json:"resource_id"` // Resource id. depends what it is based on the original event.
 	ResourceHealth            models.Health `json:"resource_health"`
 	ResourceStatus            string        `json:"resource_status"`
 	ResourceHealthDescription string        `json:"resource_health_description"`
 
+	EventID        uuid.UUID  `json:"event_id"`                  // The id of the original event this notification is for.
 	EventName      string     `json:"event_name"`                // The name of the original event this notification is for.
 	NotificationID uuid.UUID  `json:"notification_id,omitempty"` // ID of the notification.
 	EventCreatedAt time.Time  `json:"event_created_at"`          // Timestamp at which the original event was created
@@ -75,7 +78,37 @@ type NotificationEventPayload struct {
 	NotificationName string                  `json:"notification_name,omitempty"` // Name of the notification of a team
 }
 
-func (t *NotificationEventPayload) AsMap() map[string]string {
+// Generates an idempotent event id for this notification send.
+func (t NotificationEventPayload) GenerateEventID() uuid.UUID {
+	var recipientSig string
+	switch {
+	case t.Connection != nil:
+		recipientSig = "connection:" + t.Connection.String()
+	case t.PersonID != nil:
+		recipientSig = "person:" + t.PersonID.String()
+	case t.TeamID != nil:
+		recipientSig = "team:" + t.TeamID.String()
+		if t.NotificationName != "" {
+			recipientSig += ":" + t.NotificationName
+		}
+	case t.PlaybookID != nil:
+		recipientSig = "playbook:" + t.PlaybookID.String()
+	case t.CustomService != nil:
+		customServiceJSON, _ := json.Marshal(t.CustomService)
+		recipientSig = "custom:" + string(customServiceJSON)
+	}
+
+	groupID := ""
+	if t.GroupID != nil {
+		groupID = t.GroupID.String()
+	}
+
+	sig := fmt.Sprintf("%s-%s-%s-%s-group-%s-recipient-%s", t.NotificationID.String(), t.ResourceID.String(), t.EventName, t.EventID.String(), groupID, recipientSig)
+	generated, _ := hash.DeterministicUUID(sig)
+	return generated
+}
+
+func (t NotificationEventPayload) AsMap() map[string]string {
 	// NOTE: Because the payload is marshalled to map[string]string instead of map[string]any
 	// the custom_service field cannot be marshalled.
 	// So, we marshal it separately and add it to the map.
@@ -91,6 +124,22 @@ func (t *NotificationEventPayload) AsMap() map[string]string {
 
 	m["custom_service"] = customService
 	return m
+}
+
+func (t NotificationEventPayload) ParentEvent() models.Event {
+	event := models.Event{
+		Name:      t.EventName,
+		CreatedAt: t.EventCreatedAt,
+		EventID:   t.EventID,
+	}
+
+	if t.EventName == api.EventConfigChanged || t.EventName == api.EventConfigUpdated {
+		event.Properties = map[string]string{
+			"config_id": t.ResourceID.String(),
+		}
+	}
+
+	return event
 }
 
 func (t *NotificationEventPayload) FromMap(m map[string]string) {
@@ -199,6 +248,7 @@ func triggerPlaybookRun(ctx *Context, celEnv *celVariables, playbookID uuid.UUID
 	err := ctx.Transaction(func(txCtx context.Context, _ trace.Span) error {
 		eventProp := types.JSONStringMap{
 			"id":                       playbookID.String(),
+			"playbook_id":              playbookID.String(),
 			"notification_id":          ctx.notificationID.String(),
 			"notification_dispatch_id": ctx.log.ID.String(),
 		}
@@ -214,9 +264,10 @@ func triggerPlaybookRun(ctx *Context, celEnv *celVariables, playbookID uuid.UUID
 
 		event := models.Event{
 			Name:       api.EventPlaybookRun,
+			EventID:    ctx.log.ID,
 			Properties: eventProp,
 		}
-		if err := txCtx.DB().Create(&event).Error; err != nil {
+		if err := txCtx.DB().Clauses(events.EventQueueOnConflictClause).Create(&event).Error; err != nil {
 			return fmt.Errorf("failed to create run: %w", err)
 		}
 
@@ -412,13 +463,19 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 
 	var payloads []NotificationEventPayload
 
-	resourceID, err := uuid.Parse(event.Properties["id"])
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse resource id: %v", err)
+	resource := celEnv.SelectableResource()
+	resourceID := event.EventID
+	if resource != nil {
+		parsedResourceID, err := uuid.Parse(resource.GetID())
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse resource id(%s): %w", resource.GetID(), err)
+		}
+		resourceID = parsedResourceID
 	}
 
 	var eventProperties []byte
 	if len(event.Properties) > 0 {
+		var err error
 		eventProperties, err = json.Marshal(event.Properties)
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal event properties: %v", err)
@@ -445,7 +502,6 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 		}
 	}
 
-	resource := celEnv.SelectableResource()
 	var resourceHealth, resourceStatus, resourceHealthDescription string
 	if resource != nil {
 		var err error
@@ -466,12 +522,13 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 
 	if n.PlaybookID != nil {
 		payload := NotificationEventPayload{
+			EventID:                   event.EventID,
 			EventName:                 event.Name,
 			NotificationID:            n.ID,
 			ResourceHealth:            models.Health(resourceHealth),
 			ResourceStatus:            resourceStatus,
 			ResourceHealthDescription: resourceHealthDescription,
-			ID:                        resourceID,
+			ResourceID:                resourceID,
 			PlaybookID:                n.PlaybookID,
 			EventCreatedAt:            event.CreatedAt,
 			Properties:                eventProperties,
@@ -483,12 +540,13 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 
 	if n.PersonID != nil {
 		payload := NotificationEventPayload{
+			EventID:                   event.EventID,
 			EventName:                 event.Name,
 			NotificationID:            n.ID,
 			ResourceHealth:            models.Health(resourceHealth),
 			ResourceHealthDescription: resourceHealthDescription,
 			ResourceStatus:            resourceStatus,
-			ID:                        resourceID,
+			ResourceID:                resourceID,
 			PersonID:                  n.PersonID,
 			EventCreatedAt:            event.CreatedAt,
 			Properties:                eventProperties,
@@ -515,12 +573,13 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 			}
 
 			payload := NotificationEventPayload{
+				EventID:                   event.EventID,
 				EventName:                 event.Name,
 				NotificationID:            n.ID,
 				ResourceHealth:            models.Health(resourceHealth),
 				ResourceHealthDescription: resourceHealthDescription,
 				ResourceStatus:            resourceStatus,
-				ID:                        resourceID,
+				ResourceID:                resourceID,
 				TeamID:                    n.TeamID,
 				NotificationName:          cn.Name,
 				EventCreatedAt:            event.CreatedAt,
@@ -543,13 +602,14 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 		}
 
 		payload := NotificationEventPayload{
+			EventID:                   event.EventID,
 			EventName:                 event.Name,
 			NotificationID:            n.ID,
 			ResourceHealth:            models.Health(resourceHealth),
 			ResourceHealthDescription: resourceHealthDescription,
 			ResourceStatus:            resourceStatus,
 			CustomService:             cn.DeepCopy(),
-			ID:                        resourceID,
+			ResourceID:                resourceID,
 			EventCreatedAt:            event.CreatedAt,
 			Properties:                eventProperties,
 			GroupID:                   groupID,

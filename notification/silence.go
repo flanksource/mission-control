@@ -310,6 +310,7 @@ func CanSilenceViaFilter(ctx context.Context, n []models.NotificationSendHistory
 
 		event := models.Event{
 			Name:       notif.SourceEvent,
+			EventID:    notif.ResourceID,
 			Properties: properties,
 		}
 		celEnv, err := GetEnvForEvent(ctx, event)

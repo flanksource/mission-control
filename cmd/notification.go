@@ -110,12 +110,16 @@ func triggerExistingNotification(ctx context.Context, flags *sendFlags) error {
 	}
 
 	event := models.Event{
-		Name: flags.Event,
+		Name:    flags.Event,
+		EventID: configID,
 		Properties: map[string]string{
 			"id":          configID.String(),
 			"description": lo.FromPtr(config.Description),
 			"status":      lo.FromPtr(config.Status),
 		},
+	}
+	if flags.Event == api.EventConfigChanged || flags.Event == api.EventConfigUpdated {
+		event.Properties["config_id"] = configID.String()
 	}
 
 	celEnv, err := notification.GetEnvForEvent(ctx, event)
@@ -158,7 +162,8 @@ func triggerExistingNotification(ctx context.Context, flags *sendFlags) error {
 	}
 
 	payload := notification.NotificationEventPayload{
-		ID:             configID,
+		ResourceID:     configID,
+		EventID:        event.EventID,
 		EventName:      flags.Event,
 		NotificationID: notifID,
 		EventCreatedAt: time.Now(),
@@ -195,12 +200,13 @@ func triggerExistingNotification(ctx context.Context, flags *sendFlags) error {
 func enqueueNotification(ctx context.Context, payload notification.NotificationEventPayload) error {
 	event := models.Event{
 		Name:       api.EventNotificationSend,
+		EventID:    payload.GenerateEventID(),
 		Properties: payload.AsMap(),
 	}
 	if err := ctx.DB().Clauses(events.EventQueueOnConflictClause).Create(&event).Error; err != nil {
 		return fmt.Errorf("failed to enqueue notification: %w", err)
 	}
-	fmt.Printf("Notification enqueued (event_id=%s) - will be processed by running instance\n", event.ID)
+	fmt.Printf("Notification enqueued (event_id=%s) - will be processed by running instance\n", event.EventID)
 	return nil
 }
 
