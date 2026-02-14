@@ -53,7 +53,7 @@ require (
 	github.com/flanksource/clicky v1.16.1
 	github.com/fluxcd/pkg/gittestserver v0.21.0
 	github.com/go-git/go-billy/v5 v5.7.0
-	github.com/go-git/go-git/v5 v5.16.4
+	github.com/go-git/go-git/v5 v5.16.5
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/gofrs/uuid/v5 v5.4.0
 	github.com/golang-jwt/jwt/v5 v5.3.0
