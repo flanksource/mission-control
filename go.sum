@@ -395,8 +395,8 @@ github.com/flanksource/gomplate/v3 v3.24.66 h1:fTaN0s9t+YZCau+KlgcLn9pMcLTsSiMjB
 github.com/flanksource/gomplate/v3 v3.24.66/go.mod h1:PiYJOAk971BpG/suhFP9YAZSjfz4KiRaqwYlQZZJp0Q=
 github.com/flanksource/is-healthy v1.0.82 h1:/hjq2hYWVph2Cr6F6qF4v/vTuEqOqgPVnZOh1kfDwvg=
 github.com/flanksource/is-healthy v1.0.82/go.mod h1:AV3S/uXPnjvfaB4X6CV7xojAHjOmATY6Y9emWdnkJuQ=
-github.com/flanksource/kopper v1.0.14 h1:hyEhduITyk1u3h7evp56ipuRK/GpuB3lBl/ZdsrMqck=
-github.com/flanksource/kopper v1.0.14/go.mod h1:jk5JN4raPsIsANlkk7ZOFmsJ8J0yxTxaUD3SEJFLwZE=
+github.com/flanksource/kopper v1.0.15 h1:GlCDoM3Izn5KlDyrsK+Rlzo+UMivSzTC6O6m8jHdVSU=
+github.com/flanksource/kopper v1.0.15/go.mod h1:n1BAjij7zsX2zcwjSC1mvNkFlwPSkk4QHWg7n32eg0E=
 github.com/flanksource/kubectl-neat v1.0.4 h1:t5/9CqgE84oEtB0KitgJ2+WIeLfD+RhXSxYrqb4X8yI=
 github.com/flanksource/kubectl-neat v1.0.4/go.mod h1:Un/Voyh3cmiZNKQrW/TkAl28nAA7vwnwDGVjRErKjOw=
 github.com/fluxcd/gitkit v0.6.0 h1:iNg5LTx6ePo+Pl0ZwqHTAkhbUHxGVSY3YCxCdw7VIFg=
