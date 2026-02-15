@@ -69,6 +69,20 @@ func RegisterRoutes(fn func(e *echov4.Echo)) {
 	handlers = append(handlers, fn)
 }
 
+// stripUpstreamCORS removes CORS headers from an upstream proxy response
+// before they are written to the client.
+func stripUpstreamCORS(resp *http.Response) error {
+	if properties.On(true, "response.strip_upstream_cors") {
+		resp.Header.Del(echov4.HeaderAccessControlAllowOrigin)
+		resp.Header.Del(echov4.HeaderAccessControlAllowCredentials)
+		resp.Header.Del(echov4.HeaderAccessControlAllowMethods)
+		resp.Header.Del(echov4.HeaderAccessControlAllowHeaders)
+		resp.Header.Del(echov4.HeaderAccessControlExposeHeaders)
+		resp.Header.Del(echov4.HeaderAccessControlMaxAge)
+	}
+	return nil
+}
+
 func New(ctx context.Context) *echov4.Echo {
 	ctx.ClearCache()
 	e := echov4.New()
@@ -119,7 +133,9 @@ func New(ctx context.Context) *echov4.Echo {
 	e.Use(ServerCache)
 
 	e.GET("/kubeconfig", DownloadKubeConfig, rbac.Authorization(policy.ObjectKubernetesProxy, policy.ActionCreate))
-	Forward(ctx, e, "/kubeproxy", "https://kubernetes.default.svc", KubeProxyTokenMiddleware)
+	Forward(ctx, e, "/kubeproxy", "https://kubernetes.default.svc", &ForwardOptions{
+		Middlewares: []echov4.MiddlewareFunc{KubeProxyTokenMiddleware},
+	})
 
 	e.GET("/properties", dutyEcho.Properties)
 	e.POST("/resources/search", SearchResources, rbac.Authorization(policy.ObjectCatalog, policy.ActionRead), RLSMiddleware)
@@ -137,12 +153,15 @@ func New(ctx context.Context) *echov4.Echo {
 	e.DELETE("/people/:id", personController.DeletePerson, rbac.Authorization(policy.ObjectPeople, policy.ActionDelete))
 
 	if dutyApi.DefaultConfig.Postgrest.URL != "" {
-		Forward(ctx, e, "/db", dutyApi.DefaultConfig.Postgrest.URL,
-			rbac.DbMiddleware(),
-			db.SearchQueryTransformMiddleware(),
-			postgrestInterceptor,
-			postgrestTraceMiddleware,
-		)
+		Forward(ctx, e, "/db", dutyApi.DefaultConfig.Postgrest.URL, &ForwardOptions{
+			ModifyResponse: stripUpstreamCORS,
+			Middlewares: []echov4.MiddlewareFunc{
+				rbac.DbMiddleware(),
+				db.SearchQueryTransformMiddleware(),
+				postgrestInterceptor,
+				postgrestTraceMiddleware,
+			},
+		})
 	}
 
 	if vars.AuthMode != "" {
@@ -153,11 +172,15 @@ func New(ctx context.Context) *echov4.Echo {
 
 	registerCanaryEndpoints(ctx, e)
 
-	Forward(ctx, e, "/config", api.ConfigDB, rbac.Catalog("*"))
-	Forward(ctx, e, "/apm", api.ApmHubPath, rbac.Authorization(policy.ObjectLogs, "*")) // Deprecated
+	Forward(ctx, e, "/config", api.ConfigDB, &ForwardOptions{
+		Middlewares: []echov4.MiddlewareFunc{rbac.Catalog("*")},
+	})
+	Forward(ctx, e, "/apm", api.ApmHubPath, &ForwardOptions{ // Deprecated
+		Middlewares: []echov4.MiddlewareFunc{rbac.Authorization(policy.ObjectLogs, "*")},
+	})
 
 	// kratos performs its own auth
-	Forward(ctx, e, "/kratos", auth.KratosAPI)
+	Forward(ctx, e, "/kratos", auth.KratosAPI, nil)
 
 	auth.RegisterRoutes(e)
 	rbac.RegisterRoutes(e)
@@ -188,8 +211,10 @@ func registerCanaryEndpoints(ctx context.Context, e *echov4.Echo) {
 	e.GET("/canary/api/summary", canary.SummaryHandler, RLSMiddleware)
 
 	// webhooks perform their own auth
-	Forward(ctx, e, "/canary/webhook", api.CanaryCheckerPath+"/webhook")
-	Forward(ctx, e, "/canary", api.CanaryCheckerPath, rbac.Canary(""))
+	Forward(ctx, e, "/canary/webhook", api.CanaryCheckerPath+"/webhook", nil)
+	Forward(ctx, e, "/canary", api.CanaryCheckerPath, &ForwardOptions{
+		Middlewares: []echov4.MiddlewareFunc{rbac.Canary("")},
+	})
 }
 
 func postgrestTraceMiddleware(next echov4.HandlerFunc) echov4.HandlerFunc {
@@ -276,13 +301,21 @@ func suffixesInItem(item string, suffixes []string) bool {
 	return false
 }
 
-func Forward(ctx context.Context, e *echov4.Echo, prefix string, target string, middlewares ...echov4.MiddlewareFunc) {
-	middlewares = append(middlewares, ModifyKratosRequestHeaders, proxyMiddleware(e, prefix, target))
+type ForwardOptions struct {
+	Middlewares    []echov4.MiddlewareFunc
+	ModifyResponse func(*http.Response) error
+}
+
+func Forward(ctx context.Context, e *echov4.Echo, prefix string, target string, opts *ForwardOptions) {
+	if opts == nil {
+		opts = &ForwardOptions{}
+	}
+	middlewares := append(opts.Middlewares, ModifyKratosRequestHeaders, proxyMiddleware(e, prefix, target, opts))
 	e.Group(prefix).Use(middlewares...)
 }
 
-func proxyMiddleware(e *echov4.Echo, prefix, targetURL string) echov4.MiddlewareFunc {
-	_url, err := url.Parse(targetURL)
+func proxyMiddleware(e *echov4.Echo, prefix, target string, opts *ForwardOptions) echov4.MiddlewareFunc {
+	_url, err := url.Parse(target)
 	if err != nil {
 		e.Logger.Fatal(err)
 	}
@@ -291,7 +324,8 @@ func proxyMiddleware(e *echov4.Echo, prefix, targetURL string) echov4.Middleware
 		Rewrite: map[string]string{
 			fmt.Sprintf("^%s/*", prefix): "/$1",
 		},
-		Balancer: middleware.NewRoundRobinBalancer([]*middleware.ProxyTarget{{URL: _url}}),
+		Balancer:       middleware.NewRoundRobinBalancer([]*middleware.ProxyTarget{{URL: _url}}),
+		ModifyResponse: opts.ModifyResponse,
 	}
 
 	if prefix == "/kubeproxy" {
