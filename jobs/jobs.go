@@ -80,6 +80,10 @@ func Start(ctx context.Context, mcpServer *server.MCPServer) {
 		}
 	}
 
+	if err := SyncPlaybookConfigAccess(ctx).AddToScheduler(FuncScheduler); err != nil {
+		shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to schedule job SyncPlaybookConfigAccess: %v", err))
+	}
+
 	if err := notification.ProcessFallbackNotificationsJob(ctx).AddToScheduler(FuncScheduler); err != nil {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to schedule job ProcessFallbackNotificationsJob: %v", err))
 	}
