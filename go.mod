@@ -436,8 +436,6 @@ require (
 	sigs.k8s.io/yaml v1.6.0
 )
 
-replace github.com/flanksource/duty => ../duty
-
 // replace github.com/flanksource/clicky => ../clicky
 
 // replace github.com/flanksource/gomplate/v3 => ../gomplate
