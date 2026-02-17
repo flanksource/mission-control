@@ -263,13 +263,13 @@ type HTTPConnection struct {
 type HTTPAction struct {
 	HTTPConnection `yaml:",inline" json:",inline" template:"true"`
 	// Method to use - defaults to GET
-	Method string `yaml:"method,omitempty" json:"method,omitempty"`
+	Method string `yaml:"method,omitempty" json:"method,omitempty" template:"true"`
 	// NTLM when set to true will do authentication using NTLM v1 protocol
 	NTLM bool `yaml:"ntlm,omitempty" json:"ntlm,omitempty"`
 	// NTLM when set to true will do authentication using NTLM v2 protocol
 	NTLMv2 bool `yaml:"ntlmv2,omitempty" json:"ntlmv2,omitempty"`
 	// Header fields to be used in the query
-	Headers []types.EnvVar `yaml:"headers,omitempty" json:"headers,omitempty"`
+	Headers []types.EnvVar `yaml:"headers,omitempty" json:"headers,omitempty" template:"true"`
 	// Request Body Contents
 	Body string `yaml:"body,omitempty" json:"body,omitempty" template:"true"`
 	// TemplateBody controls whether the body of the request needs to be templated
