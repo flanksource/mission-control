@@ -1,0 +1,24 @@
+---
+# yaml-language-server: $schema=../../config/schemas/connection.schema.json
+apiVersion: mission-control.flanksource.com/v1
+kind: Connection
+metadata:
+  name: flanksource-azurekeyvault
+spec:
+  azureKeyVault:
+    keyID: https://flanksource-keyvault.vault.azure.net/keys/sops-key
+    tenantID:
+      valueFrom:
+        secretKeyRef:
+          name: azure-flanksource
+          key: AZURE_TENANT_ID
+    clientID:
+      valueFrom:
+        secretKeyRef:
+          name: azure-flanksource
+          key: AZURE_CLIENT_ID
+    clientSecret:
+      valueFrom:
+        secretKeyRef:
+          name: azure-flanksource
+          key: AZURE_CLIENT_SECRET
