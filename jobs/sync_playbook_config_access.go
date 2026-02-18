@@ -212,6 +212,10 @@ func syncPlaybookConfigAccess(ctx context.Context) (configAccessSyncResult, erro
 	result.Inserted = insertTag.RowsAffected()
 	result.Deleted = deleteTag.RowsAffected()
 
+	if err := tx.Commit(ctx); err != nil {
+		return result, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
 	if result.Inserted > 0 {
 		ctx.Infof("config_access: inserted %d new RBAC entries", result.Inserted)
 	}
@@ -219,5 +223,5 @@ func syncPlaybookConfigAccess(ctx context.Context) (configAccessSyncResult, erro
 		ctx.Infof("config_access: soft-deleted %d stale RBAC entries", result.Deleted)
 	}
 
-	return result, tx.Commit(ctx)
+	return result, nil
 }
