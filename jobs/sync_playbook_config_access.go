@@ -23,7 +23,7 @@ func SyncPlaybookConfigAccess(ctx context.Context) *job.Job {
 	return &job.Job{
 		Name:       "SyncPlaybookConfigAccess",
 		Context:    ctx,
-		Schedule:   "@every 15m",
+		Schedule:   "@every 4h",
 		Singleton:  true,
 		JobHistory: true,
 		Retention:  job.RetentionFew,
