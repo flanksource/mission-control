@@ -1,0 +1,26 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: kubectl
+  namespace: mc
+spec:
+  title: Kubectl
+  description: Run a kubectl command against a Kubernetes cluster
+  icon: k8s
+  configs:
+    - types:
+        - Kubernetes::*
+  parameters:
+    - name: command
+      label: Kubectl Command
+      type: code
+      required: true
+      default: get pods
+      properties:
+        language: shell
+  actions:
+    - name: Run kubectl command
+      exec:
+        script: kubectl {{.params.command}}
+        connections:
+          fromConfigItem: "{{.config.id}}" # uses the kubeconfig from the selected config's scrapeconfig.
