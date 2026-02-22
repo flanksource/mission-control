@@ -1,6 +1,6 @@
 module github.com/flanksource/incident-commander
 
-go 1.25.1
+go 1.25.6
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.13.1
@@ -14,7 +14,7 @@ require (
 	github.com/flanksource/commons v1.44.1
 	github.com/flanksource/duty v1.0.1181
 	github.com/flanksource/gomplate/v3 v3.24.66
-	github.com/flanksource/kopper v1.0.14
+	github.com/flanksource/kopper v1.0.15
 	github.com/gomarkdown/markdown v0.0.0-20250810172220-2e2c11897d1a
 	github.com/google/cel-go v0.26.1
 	github.com/google/go-cmp v0.7.0
