@@ -6,19 +6,24 @@
     "AIAction": {
       "properties": {
         "connection": {
-          "type": "string"
+          "type": "string",
+          "description": "Connection to setup the llm backend connection"
         },
         "apiKey": {
-          "$ref": "#/$defs/EnvVar"
+          "$ref": "#/$defs/EnvVar",
+          "description": "API Key"
         },
         "backend": {
-          "type": "string"
+          "type": "string",
+          "description": "Optionally specify the LLM backend.\nSupported: anthropic (default), ollama, openai."
         },
         "model": {
-          "type": "string"
+          "type": "string",
+          "description": "Model name based on the backend chosen.\nExample: gpt-4o for openai, claude-3-5-sonnet-latest for Anthropic, llama3.1:8b for Ollama"
         },
         "apiURL": {
-          "type": "string"
+          "type": "string",
+          "description": "BaseURL or API url.\nExample: server URL for ollama or custom url for Anthropic if using a proxy"
         },
         "config": {
           "type": "string"
@@ -42,25 +47,30 @@
           "type": "array"
         },
         "dryRun": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "When enabled, the prompt is simply saved without passing it on to the LLM."
         },
         "recommendPlaybooks": {
           "items": {
             "$ref": "#/$defs/ResourceSelector"
           },
-          "type": "array"
+          "type": "array",
+          "description": "Specify selectors for playbooks. The LLM will recommend the best suited playbooks\nin response to the prompt."
         },
         "systemPrompt": {
-          "type": "string"
+          "type": "string",
+          "description": "system prompt is a way to provide context, instructions, and guidelines to the LLM before presenting it\nwith a question or task.\nBy using a system prompt, you can set the stage for the conversation, specifying LLM's role, personality,\ntone, or any other relevant information that will help it better understand and respond to the user's input."
         },
         "prompt": {
-          "type": "string"
+          "type": "string",
+          "description": "Prompt is the human prompt"
         },
         "formats": {
           "items": {
             "type": "string"
           },
-          "type": "array"
+          "type": "array",
+          "description": "Output format of the prompt.\nSupported: markdown (default), slack, recommendPlaybook"
         }
       },
       "additionalProperties": false,
@@ -145,10 +155,12 @@
     "AzureDevopsPipeline": {
       "properties": {
         "id": {
-          "type": "string"
+          "type": "string",
+          "description": "ID is the pipeline ID"
         },
         "version": {
-          "type": "string"
+          "type": "string",
+          "description": "Version is the pipeline version"
         }
       },
       "additionalProperties": false,
@@ -160,19 +172,24 @@
     "AzureDevopsPipelineAction": {
       "properties": {
         "org": {
-          "type": "string"
+          "type": "string",
+          "description": "Org is the name of the Azure DevOps organization"
         },
         "project": {
-          "type": "string"
+          "type": "string",
+          "description": "Project ID or project name"
         },
         "token": {
-          "$ref": "#/$defs/EnvVar"
+          "$ref": "#/$defs/EnvVar",
+          "description": "Token is the personal access token"
         },
         "pipeline": {
-          "$ref": "#/$defs/AzureDevopsPipeline"
+          "$ref": "#/$defs/AzureDevopsPipeline",
+          "description": "Pipeline is the azure pipeline to invoke"
         },
         "parameters": {
-          "$ref": "#/$defs/AzureDevopsPipelineParameters"
+          "$ref": "#/$defs/AzureDevopsPipelineParameters",
+          "description": "Parameteres are the settings that influence the pipeline run"
         }
       },
       "additionalProperties": false,
@@ -186,7 +203,9 @@
     },
     "AzureDevopsPipelineParameters": {
       "properties": {
-        "resources": true,
+        "resources": {
+          "description": "The resources the run requires."
+        },
         "templateParameters": true,
         "variables": true,
         "stagesToSkip": {
@@ -197,7 +216,8 @@
         }
       },
       "additionalProperties": false,
-      "type": "object"
+      "type": "object",
+      "description": "Ref: https://learn.microsoft.com/en-us/rest/api/azure/devops/pipelines/runs/run-pipeline?view=azure-devops-rest-7.1#request-body"
     },
     "CNRMConnection": {
       "properties": {
@@ -306,7 +326,8 @@
     "ExecAction": {
       "properties": {
         "script": {
-          "type": "string"
+          "type": "string",
+          "description": "Script can be an inline script or a path to a script that needs to be executed\nOn windows executed via powershell and in darwin and linux executed using bash"
         },
         "connections": {
           "$ref": "#/$defs/ExecConnections"
@@ -315,19 +336,23 @@
           "items": {
             "$ref": "#/$defs/Artifact"
           },
-          "type": "array"
+          "type": "array",
+          "description": "Artifacts to save"
         },
         "env": {
           "items": {
             "$ref": "#/$defs/EnvVar"
           },
-          "type": "array"
+          "type": "array",
+          "description": "EnvVars are the environment variables that are accessible to exec processes"
         },
         "checkout": {
-          "$ref": "#/$defs/GitConnection"
+          "$ref": "#/$defs/GitConnection",
+          "description": "Checkout details the git repository that should be mounted to the process"
         },
         "setup": {
-          "$ref": "#/$defs/ExecSetup"
+          "$ref": "#/$defs/ExecSetup",
+          "description": "Setup binaries"
         }
       },
       "additionalProperties": false,
@@ -524,7 +549,8 @@
           "$ref": "#/$defs/GitOpsActionCommit"
         },
         "pr": {
-          "$ref": "#/$defs/GitOpsActionPR"
+          "$ref": "#/$defs/GitOpsActionPR",
+          "description": "PullRequest specifies the details for the PR to be created.\nOnly if connection type is github or azuredevops then a new PR is created."
         },
         "patches": {
           "items": {
@@ -536,7 +562,8 @@
           "items": {
             "$ref": "#/$defs/GitOpsActionFile"
           },
-          "type": "array"
+          "type": "array",
+          "description": "Files to create/delete.\nUse the special \"$delete\" directive to delete an existing file."
         }
       },
       "additionalProperties": false,
@@ -585,16 +612,19 @@
     "GitOpsActionPR": {
       "properties": {
         "title": {
-          "type": "string"
+          "type": "string",
+          "description": "Title of the Pull request"
         },
         "tags": {
           "items": {
             "type": "string"
           },
-          "type": "array"
+          "type": "array",
+          "description": "Tags to add to the PR"
         },
         "autoMerge": {
-          "$ref": "#/$defs/AutoMerge"
+          "$ref": "#/$defs/AutoMerge",
+          "description": "AutoMerge pull request when supported"
         }
       },
       "additionalProperties": false,
@@ -627,7 +657,8 @@
     "GitOpsActionRepo": {
       "properties": {
         "url": {
-          "type": "string"
+          "type": "string",
+          "description": "URL of the git repository"
         },
         "username": {
           "$ref": "#/$defs/EnvVar"
@@ -636,22 +667,27 @@
           "$ref": "#/$defs/EnvVar"
         },
         "base": {
-          "type": "string"
+          "type": "string",
+          "description": "Branch to clone. Defaults to \"main\"."
         },
         "branch": {
-          "type": "string"
+          "type": "string",
+          "description": "Branch is the new branch to create. Defaults to Base."
         },
         "skipExisting": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Do not push to existing branches"
         },
         "force": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Overwrite history when pushing"
         },
         "connection": {
           "type": "string"
         },
         "type": {
-          "type": "string"
+          "type": "string",
+          "description": "Type specifies the service the repository is hosted on (eg: github, gitlab, etc)\nIt is deduced from the repo URL however for private repository you can\nexplicitly specify the type manually."
         }
       },
       "additionalProperties": false,
@@ -663,19 +699,23 @@
     "GithubAction": {
       "properties": {
         "repo": {
-          "type": "string"
+          "type": "string",
+          "description": "Repo is the name of the repository without the .git extension"
         },
         "username": {
-          "type": "string"
+          "type": "string",
+          "description": "Username is the account owner of the repository. The name is not case sensitive"
         },
         "token": {
-          "$ref": "#/$defs/EnvVar"
+          "$ref": "#/$defs/EnvVar",
+          "description": "Token is the personal access token"
         },
         "workflows": {
           "items": {
             "$ref": "#/$defs/GithubWorkflow"
           },
-          "type": "array"
+          "type": "array",
+          "description": "Workflows is the list of github workflows to invoke"
         }
       },
       "additionalProperties": false,
@@ -689,13 +729,16 @@
     "GithubWorkflow": {
       "properties": {
         "id": {
-          "type": "string"
+          "type": "string",
+          "description": "Id is the workflow id or the workflow file name (eg: main.yaml)"
         },
         "ref": {
-          "type": "string"
+          "type": "string",
+          "description": "Ref is the git reference for the workflow.\nThe reference can be a branch or tag name.\n\tDefaults to \"main\"."
         },
         "input": {
-          "type": "string"
+          "type": "string",
+          "description": "Input is the optional input keys and values, in JSON format, configured in the workflow file."
         }
       },
       "additionalProperties": false,
@@ -707,10 +750,12 @@
     "HTTPAction": {
       "properties": {
         "connection": {
-          "type": "string"
+          "type": "string",
+          "description": "Connection name e.g. connection://http/google"
         },
         "url": {
-          "type": "string"
+          "type": "string",
+          "description": "Connection url, interpolated with username,password"
         },
         "username": {
           "$ref": "#/$defs/EnvVar"
@@ -719,25 +764,31 @@
           "$ref": "#/$defs/EnvVar"
         },
         "method": {
-          "type": "string"
+          "type": "string",
+          "description": "Method to use - defaults to GET"
         },
         "ntlm": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "NTLM when set to true will do authentication using NTLM v1 protocol"
         },
         "ntlmv2": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "NTLM when set to true will do authentication using NTLM v2 protocol"
         },
         "headers": {
           "items": {
             "$ref": "#/$defs/EnvVar"
           },
-          "type": "array"
+          "type": "array",
+          "description": "Header fields to be used in the query"
         },
         "body": {
-          "type": "string"
+          "type": "string",
+          "description": "Request Body Contents"
         },
         "templateBody": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "TemplateBody controls whether the body of the request needs to be templated"
         }
       },
       "additionalProperties": false,
@@ -867,16 +918,19 @@
     "LogsActionCloudWatch": {
       "properties": {
         "dedupe": {
-          "$ref": "#/$defs/LogDedupe"
+          "$ref": "#/$defs/LogDedupe",
+          "description": "Dedupe is a list of fields to dedupe on.\nFor two logs to be deduped, they should match on all the fields.\n\nIf two logs have empty value for the field, they are still deduped."
         },
         "match": {
           "items": {
             "type": "string"
           },
-          "type": "array"
+          "type": "array",
+          "description": "Match is a list of CEL expressions that decide if the log should be included.\nIf even one of the expressions match, the log will be included."
         },
         "mapping": {
-          "$ref": "#/$defs/FieldMappingConfig"
+          "$ref": "#/$defs/FieldMappingConfig",
+          "description": "Map labels to fields"
         },
         "connection": {
           "type": "string"
@@ -928,16 +982,19 @@
     "LogsActionLoki": {
       "properties": {
         "dedupe": {
-          "$ref": "#/$defs/LogDedupe"
+          "$ref": "#/$defs/LogDedupe",
+          "description": "Dedupe is a list of fields to dedupe on.\nFor two logs to be deduped, they should match on all the fields.\n\nIf two logs have empty value for the field, they are still deduped."
         },
         "match": {
           "items": {
             "type": "string"
           },
-          "type": "array"
+          "type": "array",
+          "description": "Match is a list of CEL expressions that decide if the log should be included.\nIf even one of the expressions match, the log will be included."
         },
         "mapping": {
-          "$ref": "#/$defs/FieldMappingConfig"
+          "$ref": "#/$defs/FieldMappingConfig",
+          "description": "Map labels to fields"
         },
         "start": {
           "type": "string"
@@ -982,16 +1039,19 @@
     "LogsActionOpenSearch": {
       "properties": {
         "dedupe": {
-          "$ref": "#/$defs/LogDedupe"
+          "$ref": "#/$defs/LogDedupe",
+          "description": "Dedupe is a list of fields to dedupe on.\nFor two logs to be deduped, they should match on all the fields.\n\nIf two logs have empty value for the field, they are still deduped."
         },
         "match": {
           "items": {
             "type": "string"
           },
-          "type": "array"
+          "type": "array",
+          "description": "Match is a list of CEL expressions that decide if the log should be included.\nIf even one of the expressions match, the log will be included."
         },
         "mapping": {
-          "$ref": "#/$defs/FieldMappingConfig"
+          "$ref": "#/$defs/FieldMappingConfig",
+          "description": "Map labels to fields"
         },
         "connection": {
           "type": "string"
@@ -1025,16 +1085,19 @@
     "LogsKubernetes": {
       "properties": {
         "dedupe": {
-          "$ref": "#/$defs/LogDedupe"
+          "$ref": "#/$defs/LogDedupe",
+          "description": "Dedupe is a list of fields to dedupe on.\nFor two logs to be deduped, they should match on all the fields.\n\nIf two logs have empty value for the field, they are still deduped."
         },
         "match": {
           "items": {
             "type": "string"
           },
-          "type": "array"
+          "type": "array",
+          "description": "Match is a list of CEL expressions that decide if the log should be included.\nIf even one of the expressions match, the log will be included."
         },
         "mapping": {
-          "$ref": "#/$defs/FieldMappingConfig"
+          "$ref": "#/$defs/FieldMappingConfig",
+          "description": "Map labels to fields"
         },
         "connection": {
           "type": "string"
@@ -1097,22 +1160,27 @@
     "NotificationAction": {
       "properties": {
         "url": {
-          "type": "string"
+          "type": "string",
+          "description": "URL for the shoutrrr connection string"
         },
         "connection": {
-          "type": "string"
+          "type": "string",
+          "description": "Connection to use to send the notification"
         },
         "title": {
-          "type": "string"
+          "type": "string",
+          "description": "Title of the notification"
         },
         "message": {
-          "type": "string"
+          "type": "string",
+          "description": "Message is the body of the notification"
         },
         "properties": {
           "additionalProperties": {
             "type": "string"
           },
-          "type": "object"
+          "type": "object",
+          "description": "Properties for shoutrrr"
         }
       },
       "additionalProperties": false,
@@ -1152,28 +1220,35 @@
     "PlaybookAction": {
       "properties": {
         "name": {
-          "type": "string"
+          "type": "string",
+          "description": "Name of the action"
         },
         "delay": {
-          "type": "string"
+          "type": "string",
+          "description": "Delay is a CEL expression that returns the duration to delay the execution of this action.\nValid time units are \"s\", \"m\", \"h\", \"d\", \"w\", \"y\".\nIt's only sensitive to the minute. i.e. if you delay by 20s it can take upto a minute to execute."
         },
         "retry": {
-          "$ref": "#/$defs/PlaybookActionRetry"
+          "$ref": "#/$defs/PlaybookActionRetry",
+          "description": "Retry specifies the retry policy for the action."
         },
         "timeout": {
-          "type": "string"
+          "type": "string",
+          "description": "Timeout is the maximum duration to let an action run before it's cancelled."
         },
         "if": {
-          "type": "string"
+          "type": "string",
+          "description": "Filter is a cel-expression that decides if this action should run or not.\nThe expressions should either return a boolean value ('true' indicating run the action \u0026 vice versa)\nor any of these special functions.\nExamples:\n\t- filter: config.deleted_at ? true: false\n\t- filter: always()\nalways(): run no matter what; even if the playbook is cancelled/fails\nfailure(): run if any of the previous actions failed\nsuccess(): run only if all previous actions succeeded (default)\ntimeout(): run only if any of the previous actions timed out\nskip(): skip running this action"
         },
         "runsOn": {
           "items": {
             "type": "string"
           },
-          "type": "array"
+          "type": "array",
+          "description": "RunsOn specifies the agents that can run this action.\nWhen left empty, the action will run on the main instance itself."
         },
         "templatesOn": {
-          "type": "string"
+          "type": "string",
+          "description": "TemplatesOn specifies where the templating happens.\nAvailable options:\n - host\n - agent\nWhen left empty, the templating is done on the main instance(host) itself."
         },
         "ai": {
           "$ref": "#/$defs/AIAction"
@@ -1218,16 +1293,20 @@
     "PlaybookActionRetry": {
       "properties": {
         "limit": {
-          "type": "integer"
+          "type": "integer",
+          "description": "Limit is the number of times to retry the action.\nWith limit = 3, there will be a max of 4 attempts for the action (initial attempt + 3 retries)."
         },
         "duration": {
-          "type": "string"
+          "type": "string",
+          "description": "Duration is the duration to wait before retrying the action."
         },
         "jitter": {
-          "type": "integer"
+          "type": "integer",
+          "description": "Jitter is the random factor to apply to the duration.\nRanges from 0 to 100."
         },
         "exponent": {
-          "$ref": "#/$defs/RetryExponent"
+          "$ref": "#/$defs/RetryExponent",
+          "description": "Exponent is the exponential backoff configuration."
         }
       },
       "additionalProperties": false,
@@ -1256,13 +1335,15 @@
           "items": {
             "type": "string"
           },
-          "type": "array"
+          "type": "array",
+          "description": "Emails of the approvers"
         },
         "teams": {
           "items": {
             "type": "string"
           },
-          "type": "array"
+          "type": "array",
+          "description": "Names of the teams"
         }
       },
       "additionalProperties": false,
@@ -1305,7 +1386,8 @@
     "PlaybookEventWebhookAuthGithub": {
       "properties": {
         "token": {
-          "$ref": "#/$defs/EnvVar"
+          "$ref": "#/$defs/EnvVar",
+          "description": "Token is the secret token for the webhook.\n Doc: https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries"
         }
       },
       "additionalProperties": false,
@@ -1329,10 +1411,12 @@
     "PlaybookEventWebhookAuthSVIX": {
       "properties": {
         "secret": {
-          "$ref": "#/$defs/EnvVar"
+          "$ref": "#/$defs/EnvVar",
+          "description": "Secret is the webhook signing secret"
         },
         "verifyTimestamp": {
-          "type": "string"
+          "type": "string",
+          "description": "TimestampTolerance specifies the tolerance for the timestamp verification.\nValid time units are \"ns\", \"us\" (or \"µs\"), \"ms\", \"s\", \"m\", \"h\", \"d\", \"w\", \"y\"."
         }
       },
       "additionalProperties": false,
@@ -1344,13 +1428,16 @@
     "PlaybookParameter": {
       "properties": {
         "name": {
-          "type": "string"
+          "type": "string",
+          "description": "Name is the key for this parameter.\nIt's used to address the parameter on templates."
         },
         "default": {
-          "type": "string"
+          "type": "string",
+          "description": "Specify the default value of the parameter."
         },
         "label": {
-          "type": "string"
+          "type": "string",
+          "description": "Label shown on the UI"
         },
         "required": {
           "type": "boolean"
@@ -1369,14 +1456,16 @@
           "items": {
             "type": "string"
           },
-          "type": "array"
+          "type": "array",
+          "description": "DependsOn lists the parameters that influence this parameter's default values."
         }
       },
       "additionalProperties": false,
       "type": "object",
       "required": [
         "name"
-      ]
+      ],
+      "description": "PlaybookParameter defines a parameter that a playbook needs to run."
     },
     "PlaybookPermission": {
       "properties": {
@@ -1399,7 +1488,8 @@
           "type": "string"
         },
         "description": {
-          "type": "string"
+          "type": "string",
+          "description": "Short description of the playbook."
         },
         "category": {
           "type": "string"
@@ -1408,61 +1498,74 @@
           "type": "string"
         },
         "timeout": {
-          "type": "string"
+          "type": "string",
+          "description": "Timeout is the maximum duration to let the playbook run before it's cancelled.\nValid time units are \"s\", \"m\", \"h\", \"d\", \"w\", \"y\"."
         },
         "on": {
-          "$ref": "#/$defs/PlaybookTrigger"
+          "$ref": "#/$defs/PlaybookTrigger",
+          "description": "`On` defines triggers that will automatically trigger the playbook.\nIf multiple events are defined, only one of those events needs to occur to trigger the playbook.\nIf multiple triggering events occur at the same time, multiple playbook runs will be triggered."
         },
         "runsOn": {
           "items": {
             "type": "string"
           },
-          "type": "array"
+          "type": "array",
+          "description": "RunsOn specifies the agents that can run this playbook.\nWhen left empty, the playbook will run on the main instance itself."
         },
         "env": {
           "items": {
             "$ref": "#/$defs/EnvVar"
           },
-          "type": "array"
+          "type": "array",
+          "description": "Env is a list of env vars that are templatable and accessible in templates.\nEnv vars are similar to playbook parameters except they do not get\npersisted and are meant to be used for confidential information."
         },
         "templatesOn": {
-          "type": "string"
+          "type": "string",
+          "description": "TemplatesOn specifies where the templating happens.\nAvailable options:\n - host\n - agent\nWhen left empty, the templating is done on the main instance(host) itself."
         },
         "permissions": {
           "items": {
             "$ref": "#/$defs/PlaybookPermission"
           },
-          "type": "array"
+          "type": "array",
+          "description": "Permissions ..."
         },
         "configs": {
-          "$ref": "#/$defs/ResourceSelectors"
+          "$ref": "#/$defs/ResourceSelectors",
+          "description": "Configs filters what config items can run on this playbook."
         },
         "checks": {
-          "$ref": "#/$defs/ResourceSelectors"
+          "$ref": "#/$defs/ResourceSelectors",
+          "description": "Checks filters what checks can run on this playbook."
         },
         "components": {
-          "$ref": "#/$defs/ResourceSelectors"
+          "$ref": "#/$defs/ResourceSelectors",
+          "description": "Components what components can run on this playbook."
         },
         "parameters": {
           "items": {
             "$ref": "#/$defs/PlaybookParameter"
           },
-          "type": "array"
+          "type": "array",
+          "description": "Define and document what parameters are required to run this playbook."
         },
         "actions": {
           "items": {
             "$ref": "#/$defs/PlaybookAction"
           },
-          "type": "array"
+          "type": "array",
+          "description": "List of actions that need to be executed by this playbook."
         },
         "filters": {
           "items": {
             "type": "string"
           },
-          "type": "array"
+          "type": "array",
+          "description": "CEL Expressions that check if a playbook should be executed"
         },
         "approval": {
-          "$ref": "#/$defs/PlaybookApproval"
+          "$ref": "#/$defs/PlaybookApproval",
+          "description": "Approval defines the individuals and teams authorized to approve runs of this playbook."
         }
       },
       "additionalProperties": false,
@@ -1492,25 +1595,30 @@
           "type": "array"
         },
         "webhook": {
-          "$ref": "#/$defs/PlaybookTriggerWebhook"
+          "$ref": "#/$defs/PlaybookTriggerWebhook",
+          "description": "Webhook creates a new endpoint that triggers this playbook"
         }
       },
       "additionalProperties": false,
-      "type": "object"
+      "type": "object",
+      "description": "PlaybookTrigger defines the list of supported events \u0026 to trigger a playbook."
     },
     "PlaybookTriggerEvent": {
       "properties": {
         "event": {
-          "type": "string"
+          "type": "string",
+          "description": "Event to listen for."
         },
         "labels": {
           "additionalProperties": {
             "type": "string"
           },
-          "type": "object"
+          "type": "object",
+          "description": "Labels specifies the key-value pairs that the associated event's resource must match."
         },
         "filter": {
-          "type": "string"
+          "type": "string",
+          "description": "CEL expression for additional event filtering."
         }
       },
       "additionalProperties": false,
@@ -1537,17 +1645,22 @@
     "PodAction": {
       "properties": {
         "name": {
-          "type": "string"
+          "type": "string",
+          "description": "Name is name of the pod that'll be created"
         },
         "maxLength": {
-          "type": "integer"
+          "type": "integer",
+          "description": "MaxLength is the maximum length of the logs to show\n Default: 3000 characters"
         },
-        "spec": true,
+        "spec": {
+          "description": "Spec is the container spec"
+        },
         "artifacts": {
           "items": {
             "$ref": "#/$defs/Artifact"
           },
-          "type": "array"
+          "type": "array",
+          "description": "Artifacts to save"
         }
       },
       "additionalProperties": false,
@@ -1721,16 +1834,20 @@
     "SQLAction": {
       "properties": {
         "connection": {
-          "type": "string"
+          "type": "string",
+          "description": "Connection identifier e.g. connection://Postgres/flanksource"
         },
         "url": {
-          "type": "string"
+          "type": "string",
+          "description": "URL is the database connection url"
         },
         "query": {
-          "type": "string"
+          "type": "string",
+          "description": "Query is the sql query to run"
         },
         "driver": {
-          "type": "string"
+          "type": "string",
+          "description": "Driver is the name of the underlying database to connect to.\nExample: postgres, mysql, ..."
         }
       },
       "additionalProperties": false,

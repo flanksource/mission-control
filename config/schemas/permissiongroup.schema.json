@@ -150,7 +150,8 @@
         }
       },
       "additionalProperties": false,
-      "type": "object"
+      "type": "object",
+      "description": "PermissionGroup is the Schema for the Mission Control Permission Groups"
     },
     "PermissionGroupSelector": {
       "properties": {
@@ -200,16 +201,19 @@
           "items": {
             "type": "string"
           },
-          "type": "array"
+          "type": "array",
+          "description": "List of ids and email of people.\nTo select all users, use the wildcard selector: [\"*\"]"
         },
         "teams": {
           "items": {
             "type": "string"
           },
-          "type": "array"
+          "type": "array",
+          "description": "Teams is a list of team names"
         },
         "name": {
-          "type": "string"
+          "type": "string",
+          "description": "Name for the group\nDeprecated: Use metadata.name instead"
         }
       },
       "additionalProperties": false,

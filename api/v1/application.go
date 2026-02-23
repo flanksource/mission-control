@@ -13,17 +13,40 @@ import (
 )
 
 type ApplicationMapping struct {
-	AccessReviews []types.ResourceSelector            `json:"accessReviews,omitempty"`
-	Environments  map[string][]ApplicationEnvironment `json:"environments,omitempty"`
+	// AccessReviews selects config items whose config_analysis records (security findings, misconfigurations, etc.)
+	// must be shown in the application's Findings panel.
+	AccessReviews []types.ResourceSelector `json:"accessReviews,omitempty"`
 
-	// Datasources targets config items representing data sources (e.g. databases)
-	// whose backups and restores should be monitored
+	// Environments maps an environment name (e.g. "Production", "Staging") to one or
+	// more selectors that identify the infrastructure config items belonging to that
+	// environment
+	Environments map[string][]ApplicationEnvironment `json:"environments,omitempty"`
+
+	// Datasources selects config items that represent data sources (e.g. databases,
+	// object stores) whose backup and restore activity should be tracked.
+	//
+	// The system queries config_changes on the matched config items for the following
+	// change types and surfaces them in the application's Backups / Restores panels:
+	//   Backups:  BackupCompleted, BackupEnqueued, BackupFailed, BackupRunning,
+	//             BackupStarted, BackupSuccessful
+	//   Restores: BackupRestored, RestoreCompleted
 	Datasources []types.ResourceSelector `json:"datasources,omitempty"`
 
-	// Specifies which applications's users/groups and user-group membership are required
+	// Logins selects config items whose config access and access logs must be tracked by this application.
+	//
+	// This field has two effects:
+	//
+	// 1. Read path — the matched config items' access control are read and displayed.
+	//
+	// 2. Sync path (Azure only) — if the scraper that originally ingested the matched
+	//    config items is an Azure scraper, it is cloned into a new application-scoped
+	//    scraper reconfigured to scrape only Entra AppRoleAssignments (scoped to the
+	//    matched items), keeping role assignment data fresh.
 	Logins []types.ResourceSelector `json:"logins,omitempty"`
 
-	// Defines mappings to automatically generate roles based on specified group associations
+	// Roles maps external config items (e.g. Entra groups, IAM roles) to a named role
+	// within this application, so that group memberships from external systems are
+	// surfaced as human-readable roles in the application's AccessControl view.
 	Roles []ApplicationRoleMapping `json:"roles,omitempty"`
 }
 
@@ -37,7 +60,8 @@ type ApplicationRoleMapping struct {
 type ApplicationEnvironment struct {
 	types.ResourceSelector `json:",inline"`
 
-	// Purpose of the environment
+	// Purpose describes the role of this environment within the application deployment.
+	// e.g. "primary", "backup", "dr" (disaster recovery)
 	Purpose string `json:"purpose"`
 }
 

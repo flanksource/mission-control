@@ -203,7 +203,8 @@
         }
       },
       "additionalProperties": false,
-      "type": "object"
+      "type": "object",
+      "description": "IncidentRule is the Schema for the IncidentRule API"
     },
     "IncidentRuleSpec": {
       "properties": {
@@ -253,7 +254,8 @@
     "IncidentRuleStatus": {
       "properties": {},
       "additionalProperties": false,
-      "type": "object"
+      "type": "object",
+      "description": "IncidentRuleStatus defines the observed state of IncidentRule"
     },
     "IncidentTemplate": {
       "properties": {
