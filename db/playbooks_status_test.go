@@ -33,7 +33,7 @@ var _ = Describe("PersistPlaybookFromCRD", func() {
 		Expect(condition).ToNot(BeNil())
 		Expect(condition.Status).To(Equal(metav1.ConditionFalse))
 		Expect(condition.Reason).To(Equal(v1.PlaybookReasonValidationFailed))
-		Expect(condition.Message).To(ContainSubstring("has no action configured"))
+		Expect(condition.Message).To(Equal(`action "Wait for processing" is empty`))
 
 		var count int64
 		err = DefaultContext.DB().Model(&models.Playbook{}).
