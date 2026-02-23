@@ -106,6 +106,29 @@ func DeleteStaleApplication(ctx context.Context, newer *v1.Application) error {
 	})
 }
 
+// GetDistinctUserRoleFromConfigAccess returns deduplicated users and roles
+// for the given config IDs, aggregating time fields across configs.
+func GetDistinctUserRoleFromConfigAccess(ctx context.Context, configIDs []uuid.UUID) ([]api.UserAndRole, error) {
+	if len(configIDs) == 0 {
+		return nil, nil
+	}
+
+	var users []api.UserAndRole
+	if err := ctx.DB().
+		Table("config_access_summary").
+		Select(`external_user_id::text as id, "user" as name, email, role, user_type as auth_type,
+			MIN(created_at) as created_at,
+			MAX(last_signed_in_at) as last_login,
+			MAX(last_reviewed_at) as last_access_review`).
+		Where("config_id IN (?)", configIDs).
+		Group(`external_user_id, "user", email, role, user_type`).
+		Find(&users).Error; err != nil {
+		return nil, err
+	}
+
+	return users, nil
+}
+
 type ApplicationBackup struct {
 	ID          uuid.UUID `json:"id"`
 	ConfigID    uuid.UUID `json:"config_id"`
