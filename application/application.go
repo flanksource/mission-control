@@ -46,21 +46,12 @@ func buildApplication(ctx context.Context, app *v1.Application) (*api.Applicatio
 			return nil, ctx.Oops().Errorf("failed to find login IDs: %w", err)
 		}
 
-		configAccesses, err := query.FindConfigAccessByConfigIDs(ctx, configs)
+		users, err := db.GetDistinctUserRoleFromConfigAccess(ctx, configs)
 		if err != nil {
 			return nil, ctx.Oops().Errorf("failed to find config accesses: %w", err)
 		}
 
-		for _, ca := range configAccesses {
-			response.AccessControl.Users = append(response.AccessControl.Users, api.UserAndRole{
-				Name:             ca.User,
-				Email:            ca.Email,
-				Role:             ca.Role,
-				CreatedAt:        ca.CreatedAt,
-				LastLogin:        ca.LastSignedInAt,
-				LastAccessReview: ca.LastReviewedAt,
-			})
-		}
+		response.AccessControl.Users = users
 	}
 
 	if len(mapping.Datasources) > 0 {
