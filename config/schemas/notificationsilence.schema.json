@@ -60,7 +60,8 @@
         }
       },
       "additionalProperties": false,
-      "type": "object"
+      "type": "object",
+      "description": "NotificationSilence is the Schema for the managed Notification Silences"
     },
     "NotificationSilenceSpec": {
       "properties": {
@@ -68,22 +69,26 @@
           "type": "string"
         },
         "from": {
-          "type": "string"
+          "type": "string",
+          "description": "From time in RFC3339 format or just datetime"
         },
         "until": {
-          "type": "string"
+          "type": "string",
+          "description": "Until time in RFC3339 format or just datetime"
         },
         "recursive": {
           "type": "boolean"
         },
         "filter": {
-          "type": "string"
+          "type": "string",
+          "description": "Filter evaluates whether to apply the silence. When provided, silence is applied only if filter evaluates to true"
         },
         "selectors": {
           "items": {
             "$ref": "#/$defs/ResourceSelector"
           },
-          "type": "array"
+          "type": "array",
+          "description": "List of resource selectors"
         }
       },
       "additionalProperties": false,
@@ -92,7 +97,8 @@
     "NotificationSilenceStatus": {
       "properties": {},
       "additionalProperties": false,
-      "type": "object"
+      "type": "object",
+      "description": "NotificationStatus defines the observed state of Notification"
     },
     "ObjectMeta": {
       "properties": {

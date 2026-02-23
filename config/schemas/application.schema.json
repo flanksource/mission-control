@@ -22,7 +22,8 @@
         }
       },
       "additionalProperties": false,
-      "type": "object"
+      "type": "object",
+      "description": "Application is the Schema for the applications API"
     },
     "ApplicationEnvironment": {
       "properties": {
@@ -72,7 +73,8 @@
           "$ref": "#/$defs/Items"
         },
         "purpose": {
-          "type": "string"
+          "type": "string",
+          "description": "Purpose describes the role of this environment within the application deployment.\ne.g. \"primary\", \"backup\", \"dr\" (disaster recovery)"
         }
       },
       "additionalProperties": false,
@@ -87,7 +89,8 @@
           "items": {
             "$ref": "#/$defs/ResourceSelector"
           },
-          "type": "array"
+          "type": "array",
+          "description": "AccessReviews selects config items whose config_analysis records (security findings, misconfigurations, etc.)\nmust be shown in the application's Findings panel."
         },
         "environments": {
           "additionalProperties": {
@@ -96,25 +99,29 @@
             },
             "type": "array"
           },
-          "type": "object"
+          "type": "object",
+          "description": "Environments maps an environment name (e.g. \"Production\", \"Staging\") to one or\nmore selectors that identify the infrastructure config items belonging to that\nenvironment"
         },
         "datasources": {
           "items": {
             "$ref": "#/$defs/ResourceSelector"
           },
-          "type": "array"
+          "type": "array",
+          "description": "Datasources selects config items that represent data sources (e.g. databases,\nobject stores) whose backup and restore activity should be tracked.\n\nThe system queries config_changes on the matched config items for the following\nchange types and surfaces them in the application's Backups / Restores panels:\n  Backups:  BackupCompleted, BackupEnqueued, BackupFailed, BackupRunning,\n            BackupStarted, BackupSuccessful\n  Restores: BackupRestored, RestoreCompleted"
         },
         "logins": {
           "items": {
             "$ref": "#/$defs/ResourceSelector"
           },
-          "type": "array"
+          "type": "array",
+          "description": "Logins selects config items whose config access and access logs must be tracked by this application.\n\nThis field has two effects:\n\n1. Read path — the matched config items' access control are read and displayed.\n\n2. Sync path (Azure only) — if the scraper that originally ingested the matched\n   config items is an Azure scraper, it is cloned into a new application-scoped\n   scraper reconfigured to scrape only Entra AppRoleAssignments (scoped to the\n   matched items), keeping role assignment data fresh."
         },
         "roles": {
           "items": {
             "$ref": "#/$defs/ApplicationRoleMapping"
           },
-          "type": "array"
+          "type": "array",
+          "description": "Roles maps external config items (e.g. Entra groups, IAM roles) to a named role\nwithin this application, so that group memberships from external systems are\nsurfaced as human-readable roles in the application's AccessControl view."
         }
       },
       "additionalProperties": false,
@@ -168,7 +175,8 @@
           "$ref": "#/$defs/Items"
         },
         "role": {
-          "type": "string"
+          "type": "string",
+          "description": "Assign a name for the role"
         }
       },
       "additionalProperties": false,
@@ -180,16 +188,19 @@
     "ApplicationSpec": {
       "properties": {
         "description": {
-          "type": "string"
+          "type": "string",
+          "description": "Description of the application"
         },
         "properties": {
           "items": {
             "$ref": "#/$defs/Property"
           },
-          "type": "array"
+          "type": "array",
+          "description": "Properties to be displayed in the application view"
         },
         "type": {
-          "type": "string"
+          "type": "string",
+          "description": "Type of the application"
         },
         "mapping": {
           "$ref": "#/$defs/ApplicationMapping"
@@ -210,7 +221,8 @@
     "ApplicationStatus": {
       "properties": {},
       "additionalProperties": false,
-      "type": "object"
+      "type": "object",
+      "description": "ApplicationStatus defines the observed state of Application"
     },
     "ChangesUIFilters": {
       "properties": {

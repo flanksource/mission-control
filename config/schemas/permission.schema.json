@@ -171,7 +171,8 @@
         }
       },
       "additionalProperties": false,
-      "type": "object"
+      "type": "object",
+      "description": "Permission is the Schema for the Mission Control Permission"
     },
     "PermissionObject": {
       "properties": {
@@ -209,7 +210,8 @@
           "items": {
             "$ref": "#/$defs/NamespacedNameIDSelector"
           },
-          "type": "array"
+          "type": "array",
+          "description": "Scopes that is expanded onto Selectors"
         }
       },
       "additionalProperties": false,
@@ -218,34 +220,41 @@
     "PermissionSpec": {
       "properties": {
         "description": {
-          "type": "string"
+          "type": "string",
+          "description": "Description provides a brief explanation of the permission."
         },
         "actions": {
           "items": {
             "type": "string"
           },
-          "type": "array"
+          "type": "array",
+          "description": "Actions specify the operation that the permission allows or denies."
         },
         "subject": {
-          "$ref": "#/$defs/PermissionSubject"
+          "$ref": "#/$defs/PermissionSubject",
+          "description": "Subject defines the entity (e.g., user, group) to which the permission applies."
         },
         "object": {
-          "$ref": "#/$defs/PermissionObject"
+          "$ref": "#/$defs/PermissionObject",
+          "description": "Object identifies the resource or object that the permission is associated with."
         },
         "deny": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Deny indicates whether the permission should explicitly deny the specified action.\n\nDefault: false"
         },
         "agents": {
           "items": {
             "type": "string"
           },
-          "type": "array"
+          "type": "array",
+          "description": "List of agent ids whose configs/components are accessible to a person when RLS is enabled\nDEPRECATED: Use AccessScope CRD instead. This field is ignored.\n+optional"
         },
         "tags": {
           "additionalProperties": {
             "type": "string"
           },
-          "type": "object"
+          "type": "object",
+          "description": "List of config/component tags a person is allowed to access to when RLS is enabled\nDEPRECATED: Use AccessScope CRD instead. This field is ignored.\n+optional"
         }
       },
       "additionalProperties": false,
@@ -264,28 +273,36 @@
     "PermissionSubject": {
       "properties": {
         "group": {
-          "type": "string"
+          "type": "string",
+          "description": "Group is the group name"
         },
         "person": {
-          "type": "string"
+          "type": "string",
+          "description": "ID or email of the person"
         },
         "team": {
-          "type": "string"
+          "type": "string",
+          "description": "Team is the team name"
         },
         "notification": {
-          "type": "string"
+          "type": "string",
+          "description": "Notification \u003cnamespace\u003e/\u003cname\u003e selector"
         },
         "playbook": {
-          "type": "string"
+          "type": "string",
+          "description": "Playbook \u003cnamespace\u003e/\u003cname\u003e selector"
         },
         "canary": {
-          "type": "string"
+          "type": "string",
+          "description": "Canary \u003cnamespace\u003e/\u003cname\u003e selector"
         },
         "scraper": {
-          "type": "string"
+          "type": "string",
+          "description": "Scraper \u003cnamespace\u003e/\u003cname\u003e selector"
         },
         "topology": {
-          "type": "string"
+          "type": "string",
+          "description": "Topology \u003cnamespace\u003e/\u003cname\u003e selector"
         }
       },
       "additionalProperties": false,

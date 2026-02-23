@@ -117,39 +117,49 @@
         }
       },
       "additionalProperties": false,
-      "type": "object"
+      "type": "object",
+      "description": "Notification is the Schema for the Notification API"
     },
     "NotificationFallback": {
       "properties": {
         "person": {
-          "type": "string"
+          "type": "string",
+          "description": "ID or email of the person"
         },
         "team": {
-          "type": "string"
+          "type": "string",
+          "description": "name or ID of the recipient team"
         },
         "email": {
-          "type": "string"
+          "type": "string",
+          "description": "Email of the recipient"
         },
         "connection": {
-          "type": "string"
+          "type": "string",
+          "description": "Specify connection string for an external service.\nShould be in the format of connection://\u003ctype\u003e/name\nor the id of the connection."
         },
         "url": {
-          "type": "string"
+          "type": "string",
+          "description": "Specify shoutrrr URL"
         },
         "properties": {
           "additionalProperties": {
             "type": "string"
           },
-          "type": "object"
+          "type": "object",
+          "description": "Properties for Shoutrrr"
         },
         "playbook": {
-          "type": "string"
+          "type": "string",
+          "description": "Name or \u003cnamespace\u003e/\u003cname\u003e of the playbook to run.\nWhen a playbook is set as the recipient, a run is triggered."
         },
         "webhook": {
-          "$ref": "#/$defs/NotificationWebhookReceiver"
+          "$ref": "#/$defs/NotificationWebhookReceiver",
+          "description": "Webhook sends a structured JSON payload to an HTTP endpoint."
         },
         "delay": {
-          "type": "string"
+          "type": "string",
+          "description": "wait this long before considering a send a failure"
         }
       },
       "additionalProperties": false,
@@ -158,22 +168,27 @@
     "NotificationInihibition": {
       "properties": {
         "direction": {
-          "type": "string"
+          "type": "string",
+          "description": "Direction specifies the traversal direction in relation to the \"From\" resource.\n- \"outgoing\": Looks for child resources originating from the \"From\" resource.\n  Example: If \"From\" is \"Kubernetes::Deployment\", \"To\" could be [\"Kubernetes::Pod\", \"Kubernetes::ReplicaSet\"].\n- \"incoming\": Looks for parent resources related to the \"From\" resource.\n  Example: If \"From\" is \"Kubernetes::Deployment\", \"To\" could be [\"Kubernetes::HelmRelease\", \"Kubernetes::Namespace\"].\n- \"all\": Considers both incoming and outgoing relationships."
         },
         "soft": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Soft, when true, relates using soft relationships.\nExample: Deployment to Pod is hard relationship, But Node to Pod is soft relationship."
         },
         "depth": {
-          "type": "integer"
+          "type": "integer",
+          "description": "Depth defines how many levels of child or parent resources to traverse."
         },
         "from": {
-          "type": "string"
+          "type": "string",
+          "description": "From specifies the starting resource type (for example, \"Kubernetes::Deployment\")."
         },
         "to": {
           "items": {
             "type": "string"
           },
-          "type": "array"
+          "type": "array",
+          "description": "To specifies the target resource types, which are determined based on the Direction.\nExample:\n  - If Direction is \"outgoing\", these are child resources.\n  - If Direction is \"incoming\", these are parent resources."
         }
       },
       "additionalProperties": false,
@@ -187,31 +202,39 @@
     "NotificationRecipientSpec": {
       "properties": {
         "person": {
-          "type": "string"
+          "type": "string",
+          "description": "ID or email of the person"
         },
         "team": {
-          "type": "string"
+          "type": "string",
+          "description": "name or ID of the recipient team"
         },
         "email": {
-          "type": "string"
+          "type": "string",
+          "description": "Email of the recipient"
         },
         "connection": {
-          "type": "string"
+          "type": "string",
+          "description": "Specify connection string for an external service.\nShould be in the format of connection://\u003ctype\u003e/name\nor the id of the connection."
         },
         "url": {
-          "type": "string"
+          "type": "string",
+          "description": "Specify shoutrrr URL"
         },
         "properties": {
           "additionalProperties": {
             "type": "string"
           },
-          "type": "object"
+          "type": "object",
+          "description": "Properties for Shoutrrr"
         },
         "playbook": {
-          "type": "string"
+          "type": "string",
+          "description": "Name or \u003cnamespace\u003e/\u003cname\u003e of the playbook to run.\nWhen a playbook is set as the recipient, a run is triggered."
         },
         "webhook": {
-          "$ref": "#/$defs/NotificationWebhookReceiver"
+          "$ref": "#/$defs/NotificationWebhookReceiver",
+          "description": "Webhook sends a structured JSON payload to an HTTP endpoint."
         }
       },
       "additionalProperties": false,
@@ -223,46 +246,58 @@
           "items": {
             "type": "string"
           },
-          "type": "array"
+          "type": "array",
+          "description": "List of events that can trigger this notification"
         },
         "title": {
-          "type": "string"
+          "type": "string",
+          "description": "The title for the notification"
         },
         "template": {
-          "type": "string"
+          "type": "string",
+          "description": "Template is the notification body in markdown"
         },
         "filter": {
-          "type": "string"
+          "type": "string",
+          "description": "Cel-expression used to decide whether this notification client should send the notification"
         },
         "repeatInterval": {
-          "type": "string"
+          "type": "string",
+          "description": "RepeatInterval is the waiting time to resend a notification after it has been successfully sent."
         },
         "groupByInterval": {
-          "type": "string"
+          "type": "string",
+          "description": "GroupByInterval is the grouping period."
         },
         "to": {
-          "$ref": "#/$defs/NotificationRecipientSpec"
+          "$ref": "#/$defs/NotificationRecipientSpec",
+          "description": "Specify the recipient"
         },
         "fallback": {
-          "$ref": "#/$defs/NotificationFallback"
+          "$ref": "#/$defs/NotificationFallback",
+          "description": "In case of failure, send the notification to this recipient"
         },
         "waitFor": {
-          "type": "string"
+          "type": "string",
+          "description": "WaitFor defines a duration to delay sending a health-based notification.\nAfter this period, the health status is reassessed to confirm it hasn't\nchanged, helping prevent false alarms from transient issues.\n\nThe delay allows time for self-recovery or temporary fluctuations to\nresolve, reducing unnecessary alerts.\n\nIf specified, it should be a valid duration string (e.g., \"5m\", \"1h\")."
         },
         "waitForEvalPeriod": {
-          "type": "string"
+          "type": "string",
+          "description": "WaitForEvalPeriod defines an additional delay following the waitFor period.\nAfter waitFor completes, the system actively re-scrapes the resource\nand then waits this duration before final evaluation, unlike waitFor which\nsimply delays without re-scraping.\n\nOnly applies to Kubernetes health notifications and cannot be turned off.\nDefaults to 30s.\n\nFormat: duration string (e.g., \"30s\", \"2m\")"
         },
         "groupBy": {
           "items": {
             "type": "string"
           },
-          "type": "array"
+          "type": "array",
+          "description": "GroupBy allows notifications in waiting status to be grouped together\nbased on certain set of keys.\n\nThe group wait period is the waitFor period.\n\nValid keys: type, description, status_reason or\nlabels \u0026 tags in the format `label:\u003ckey\u003e` or `tag:\u003ckey\u003e`"
         },
         "inhibitions": {
           "items": {
             "$ref": "#/$defs/NotificationInihibition"
           },
-          "type": "array"
+          "type": "array",
+          "description": "Inhibit controls notification suppression for related resources.\nIt uses the repeat interval as the window for suppression\nas well as the wait for period."
         }
       },
       "additionalProperties": false,
@@ -297,7 +332,8 @@
         }
       },
       "additionalProperties": false,
-      "type": "object"
+      "type": "object",
+      "description": "NotificationStatus defines the observed state of Notification"
     },
     "NotificationWebhookReceiver": {
       "properties": {

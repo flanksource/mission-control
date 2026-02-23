@@ -921,18 +921,22 @@
         "metadata",
         "spec",
         "status"
-      ]
+      ],
+      "description": "View is the schema for the Views API"
     },
     "ViewCache": {
       "properties": {
         "maxAge": {
-          "type": "string"
+          "type": "string",
+          "description": "MaxAge is the maximum age of a cache before it's deemed stale.\nCan be overridden with cache-control headers.\nDefault: 15m"
         },
         "minAge": {
-          "type": "string"
+          "type": "string",
+          "description": "MinAge is the minimum age of a cache a user can request.\nDefault: 10s"
         },
         "refreshTimeout": {
-          "type": "string"
+          "type": "string",
+          "description": "RefreshTimeout is the duration to wait for a view to process before returning stale data.\nDefault: 5s"
         }
       },
       "additionalProperties": false,
@@ -947,13 +951,15 @@
     "ViewConfigUIPlugin": {
       "properties": {
         "configTab": {
-          "$ref": "#/$defs/ResourceSelector"
+          "$ref": "#/$defs/ResourceSelector",
+          "description": "ConfigTab is a selector that determines which config pages should display this view as a tab.\n\nWhen a config matches this selector, the view will appear as a tab on that config's detail page."
         },
         "variables": {
           "additionalProperties": {
             "type": "string"
           },
-          "type": "object"
+          "type": "object",
+          "description": "Variables define template expressions to extract data from the config and pass them as variables to the view.\n\nThe map key is the variable name, and the value is a Go template expression that extracts data from the config.\nTemplates have access to the config object via the `.config` variable.\n\nExample:\n  variables:\n    namespace: \"$(.config.tags.namespace)\"\n    cluster: \"$(.config.tags.cluster)\""
         }
       },
       "additionalProperties": false,
@@ -965,32 +971,40 @@
     "ViewDisplay": {
       "properties": {
         "ordinal": {
-          "type": "integer"
+          "type": "integer",
+          "description": "Ordinal defines the order of the view"
         },
         "sidebar": {
-          "type": "boolean"
+          "type": "boolean",
+          "description": "Sidebar indicates if the view should be shown in sidebar"
         },
         "icon": {
-          "type": "string"
+          "type": "string",
+          "description": "Icon to use for the view"
         },
         "title": {
-          "type": "string"
+          "type": "string",
+          "description": "Title of the view to be displayed in the UI"
         },
         "card": {
-          "$ref": "#/$defs/DisplayCard"
+          "$ref": "#/$defs/DisplayCard",
+          "description": "Card defines the card layout configuration"
         },
         "table": {
-          "$ref": "#/$defs/DisplayTable"
+          "$ref": "#/$defs/DisplayTable",
+          "description": "Table defines the table layout configuration"
         },
         "plugins": {
           "items": {
             "$ref": "#/$defs/ViewConfigUIPlugin"
           },
-          "type": "array"
+          "type": "array",
+          "description": "Plugins tie this view to various pages in the UI.\n\nWhen a view is attached to a config, the view shows up as a tab in the config page."
         }
       },
       "additionalProperties": false,
-      "type": "object"
+      "type": "object",
+      "description": "ViewDisplay defines display properties for the view"
     },
     "ViewQueryWithColumnDefs": {
       "properties": {
@@ -1016,7 +1030,8 @@
           "additionalProperties": {
             "type": "string"
           },
-          "type": "object"
+          "type": "object",
+          "description": "Define the column types for the results from the query.\nIt's optional for configs and changes.\n\nThis information is used to create the Sqlite table for the query.\nIf not provided, the column types will be inferred from the query results.\nHowever, if this isn't provided and the query results are empty, the query will result in an error."
         }
       },
       "additionalProperties": false,
@@ -1077,49 +1092,59 @@
     "ViewSpec": {
       "properties": {
         "description": {
-          "type": "string"
+          "type": "string",
+          "description": "Description about the view"
         },
         "display": {
-          "$ref": "#/$defs/ViewDisplay"
+          "$ref": "#/$defs/ViewDisplay",
+          "description": "Display properties for the view"
         },
         "panels": {
           "items": {
             "$ref": "#/$defs/PanelDef"
           },
-          "type": "array"
+          "type": "array",
+          "description": "Panels for the view"
         },
         "columns": {
-          "$ref": "#/$defs/ViewColumnDefList"
+          "$ref": "#/$defs/ViewColumnDefList",
+          "description": "Columns define the structure of the view"
         },
         "queries": {
           "additionalProperties": {
             "$ref": "#/$defs/ViewQueryWithColumnDefs"
           },
-          "type": "object"
+          "type": "object",
+          "description": "Queries define the queries and mappings to populate the view"
         },
         "merge": {
-          "type": "string"
+          "type": "string",
+          "description": "Merge defines how to merge/join data from multiple queries"
         },
         "mapping": {
           "additionalProperties": {
             "type": "string"
           },
-          "type": "object"
+          "type": "object",
+          "description": "Mapping defines how to map query results to view columns"
         },
         "cache": {
-          "$ref": "#/$defs/ViewCache"
+          "$ref": "#/$defs/ViewCache",
+          "description": "Cache configuration"
         },
         "templating": {
           "items": {
             "$ref": "#/$defs/ViewVariable"
           },
-          "type": "array"
+          "type": "array",
+          "description": "Templating parameters for the view data queries.\n\nThese vars are available as `var.\u003ckey\u003e` in the data queries."
         },
         "sections": {
           "items": {
             "$ref": "#/$defs/ViewSection"
           },
-          "type": "array"
+          "type": "array",
+          "description": "Include other views in the view"
         }
       },
       "additionalProperties": false,
@@ -1128,7 +1153,8 @@
         "columns",
         "queries",
         "cache"
-      ]
+      ],
+      "description": "ViewSpec defines the desired state of View"
     },
     "ViewStatus": {
       "properties": {
@@ -1137,7 +1163,8 @@
         }
       },
       "additionalProperties": false,
-      "type": "object"
+      "type": "object",
+      "description": "ViewStatus defines the observed state of View"
     },
     "ViewURLRef": {
       "properties": {
