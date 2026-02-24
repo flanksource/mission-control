@@ -693,11 +693,11 @@ func (p *PlaybookAction) Validate() error {
 
 	primaryCount := p.primaryActionCount()
 	if primaryCount > 1 {
-		return fmt.Errorf("action %s has multiple action types configured", name)
+		return fmt.Errorf("action %q has multiple actions configured", name)
 	}
 
 	if primaryCount == 0 && p.GitOps == nil && p.Notification == nil {
-		return fmt.Errorf("action %s has no action configured", name)
+		return fmt.Errorf("action %q is empty", name)
 	}
 
 	return nil

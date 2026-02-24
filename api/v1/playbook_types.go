@@ -11,10 +11,14 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	dutyTypes "github.com/flanksource/duty/types"
+	"github.com/flanksource/kopper"
+	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/flanksource/incident-commander/vars"
 )
@@ -243,8 +247,17 @@ func (p *PlaybookSpec) GetTimeout(ctx context.Context) (time.Duration, error) {
 	return time.Duration(d), nil
 }
 
+const (
+	PlaybookConditionReady         = "Ready"
+	PlaybookReasonSynced           = "Synced"
+	PlaybookReasonValidationFailed = "ValidationFailed"
+)
+
 // PlaybookStatus defines the observed state of Playbook
-type PlaybookStatus struct{}
+type PlaybookStatus struct {
+	ObservedGeneration int64              `json:"observedGeneration,omitempty" yaml:"observedGeneration,omitempty"`
+	Conditions         []metav1.Condition `json:"conditions,omitempty" yaml:"conditions,omitempty"`
+}
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
@@ -256,6 +269,26 @@ type Playbook struct {
 
 	Spec   PlaybookSpec   `json:"spec,omitempty" yaml:"spec,omitempty"`
 	Status PlaybookStatus `json:"status,omitempty" yaml:"status,omitempty"`
+}
+
+var _ kopper.StatusPatchGenerator = (*Playbook)(nil)
+
+func (t *Playbook) GenerateStatusPatch(original runtime.Object) client.Patch {
+	og, ok := original.(*Playbook)
+	if !ok {
+		return nil
+	}
+
+	if cmp.Diff(t.Status, og.Status) == "" {
+		return nil
+	}
+
+	clientObj, ok := original.(client.Object)
+	if !ok {
+		return nil
+	}
+
+	return client.MergeFrom(clientObj)
 }
 
 func PlaybookFromModel(p models.Playbook) (Playbook, error) {

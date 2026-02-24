@@ -13,6 +13,8 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+	"k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -194,8 +196,43 @@ func FindPlaybookByWebhookPath(ctx context.Context, path string) (*models.Playbo
 }
 
 func PersistPlaybookFromCRD(ctx context.Context, obj *v1.Playbook) error {
-	_, err := SavePlaybook(ctx, obj)
-	return err
+	if err := obj.Spec.Validate(); err != nil {
+		setPlaybookValidationStatus(obj, err)
+		return nil
+	}
+
+	if _, err := SavePlaybook(ctx, obj); err != nil {
+		return err
+	}
+
+	setPlaybookReadyStatus(obj)
+	return nil
+}
+
+func setPlaybookValidationStatus(obj *v1.Playbook, err error) {
+	now := metav1.Now()
+	obj.Status.ObservedGeneration = obj.Generation
+	meta.SetStatusCondition(&obj.Status.Conditions, metav1.Condition{
+		Type:               v1.PlaybookConditionReady,
+		Status:             metav1.ConditionFalse,
+		Reason:             v1.PlaybookReasonValidationFailed,
+		Message:            err.Error(),
+		ObservedGeneration: obj.Generation,
+		LastTransitionTime: now,
+	})
+}
+
+func setPlaybookReadyStatus(obj *v1.Playbook) {
+	now := metav1.Now()
+	obj.Status.ObservedGeneration = obj.Generation
+	meta.SetStatusCondition(&obj.Status.Conditions, metav1.Condition{
+		Type:               v1.PlaybookConditionReady,
+		Status:             metav1.ConditionTrue,
+		Reason:             v1.PlaybookReasonSynced,
+		Message:            "Playbook is valid and persisted",
+		ObservedGeneration: obj.Generation,
+		LastTransitionTime: now,
+	})
 }
 
 func SavePlaybook(ctx context.Context, obj *v1.Playbook) (*models.Playbook, error) {
