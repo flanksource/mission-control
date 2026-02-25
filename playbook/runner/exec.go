@@ -25,6 +25,27 @@ type StatusAccessor interface {
 	GetStatus() models.PlaybookActionStatus
 }
 
+// SecretScrubber can scrub secrets from action results.
+type SecretScrubber interface {
+	ScrubSecrets(output string) string
+}
+
+// scrubActionResult scrubs secrets from the action result.
+func scrubActionResult(scrubber SecretScrubber, result any) any {
+	if scrubber == nil || result == nil {
+		return result
+	}
+
+	switch r := result.(type) {
+	case *actions.ExecDetails:
+		if r != nil {
+			r.Stdout = scrubber.ScrubSecrets(r.Stdout)
+			r.Stderr = scrubber.ScrubSecrets(r.Stderr)
+		}
+	}
+	return result
+}
+
 // executeActionResult is the result of executing an action
 type executeActionResult struct {
 	// result of the action as JSON

@@ -20,6 +20,76 @@ func TestSensitiveParametersLeakage(t *testing.T) {
 		},
 	}
 
+	t.Run("AsMap keeps secrets as Sensitive", func(t *testing.T) {
+		g := NewWithT(t)
+		env := templateEnv.AsMap(context.New())
+
+		g.Expect(env).To(HaveKey("params"))
+		params := env["params"].(map[string]any)
+		g.Expect(params).To(HaveKey("apikey"))
+
+		_, isSensitive := params["apikey"].(secret.Sensitive)
+		g.Expect(isSensitive).To(BeTrue(), "params should contain Sensitive type, not plaintext")
+	})
+
+	t.Run("AsMapForTemplating unwraps secrets", func(t *testing.T) {
+		g := NewWithT(t)
+		env := templateEnv.AsMapForTemplating(context.New())
+
+		g.Expect(env).To(HaveKey("params"))
+		params := env["params"].(map[string]any)
+		g.Expect(params).To(HaveKey("apikey"))
+
+		val, isString := params["apikey"].(string)
+		g.Expect(isString).To(BeTrue(), "params should contain plaintext string for templating")
+		g.Expect(val).To(Equal("my_secret"))
+	})
+
+	t.Run("JSON marshaling redacts secrets", func(t *testing.T) {
+		g := NewWithT(t)
+		jsonStr := templateEnv.JSON(context.New())
+
+		g.Expect(jsonStr).ToNot(ContainSubstring("my_secret"), "JSON should not contain plaintext secret")
+		g.Expect(jsonStr).To(ContainSubstring("[REDACTED]"), "JSON should contain redacted placeholder")
+	})
+
+	t.Run("ScrubSecrets replaces plaintext in output", func(t *testing.T) {
+		g := NewWithT(t)
+		output := "Connected with key: my_secret and more my_secret"
+		scrubbed := templateEnv.ScrubSecrets(output)
+
+		g.Expect(scrubbed).ToNot(ContainSubstring("my_secret"))
+		g.Expect(scrubbed).To(Equal("Connected with key: [REDACTED] and more [REDACTED]"))
+	})
+
+	t.Run("ScrubSecrets handles empty string", func(t *testing.T) {
+		g := NewWithT(t)
+		g.Expect(templateEnv.ScrubSecrets("")).To(Equal(""))
+	})
+
+	t.Run("ScrubSecrets preserves non-secret content", func(t *testing.T) {
+		g := NewWithT(t)
+		output := "This is normal output without secrets"
+		g.Expect(templateEnv.ScrubSecrets(output)).To(Equal(output))
+	})
+
+	t.Run("ScrubSecrets handles multiple different secrets", func(t *testing.T) {
+		g := NewWithT(t)
+		multiSecretEnv := TemplateEnv{
+			Params: map[string]any{
+				"password": secret.Sensitive("super_secret_pwd"),
+				"apiKey":   secret.Sensitive("sk-12345"),
+				"normal":   "not_secret",
+			},
+		}
+		output := "Using super_secret_pwd and sk-12345 to connect"
+		scrubbed := multiSecretEnv.ScrubSecrets(output)
+
+		g.Expect(scrubbed).ToNot(ContainSubstring("super_secret_pwd"))
+		g.Expect(scrubbed).ToNot(ContainSubstring("sk-12345"))
+		g.Expect(scrubbed).To(Equal("Using [REDACTED] and [REDACTED] to connect"))
+	})
+
 	type testCase struct {
 		name     string
 		template string
