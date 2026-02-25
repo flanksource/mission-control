@@ -2,12 +2,10 @@ package actions
 
 import (
 	"fmt"
-	"net/url"
 
 	"github.com/flanksource/commons/http"
-	pkgConnection "github.com/flanksource/duty/connection"
+	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/models"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 )
 
@@ -21,31 +19,22 @@ type HTTP struct {
 }
 
 func (c *HTTP) Run(ctx context.Context, action v1.HTTPAction) (*HTTPResult, error) {
-	var connection = &models.Connection{
-		URL: action.URL,
+	hydrated, err := action.HTTPConnection.Hydrate(ctx, ctx.GetNamespace())
+	if err != nil {
+		return nil, fmt.Errorf("failed to hydrate connection: %w", err)
 	}
+	action.HTTPConnection = *hydrated
 
-	if action.HTTPConnection.Connection != "" {
-		var err error
-		connection, err = pkgConnection.Get(ctx, action.HTTPConnection.Connection)
-		if err != nil {
-			return nil, fmt.Errorf("failed to hydrate connection: %w", err)
-		} else if connection != nil {
-			if ntlm, ok := connection.Properties["ntlm"]; ok {
-				action.NTLM = ntlm == "true"
-			} else if ntlm, ok := connection.Properties["ntlmv2"]; ok {
-				action.NTLMv2 = ntlm == "true"
-			}
-		}
-	}
-
-	if connection.URL == "" {
+	if action.URL == "" {
 		return nil, fmt.Errorf("must specify a URL")
-	} else if _, err := url.Parse(connection.URL); err != nil {
-		return nil, fmt.Errorf("failed to parse url(%q): %w", connection.URL, err)
 	}
 
-	resp, err := c.makeRequest(ctx, action, connection)
+	client, err := connection.CreateHTTPClient(ctx, action.HTTPConnection)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create HTTP client: %w", err)
+	}
+
+	resp, err := c.makeRequest(ctx, action, client)
 	if err != nil {
 		return nil, fmt.Errorf("failed to make HTTP request: %w", err)
 	}
@@ -68,27 +57,8 @@ func (c *HTTP) Run(ctx context.Context, action v1.HTTPAction) (*HTTPResult, erro
 	return result, nil
 }
 
-// makeRequest creates a new HTTP request and makes the HTTP call.
-func (c *HTTP) makeRequest(ctx context.Context, action v1.HTTPAction, connection *models.Connection) (*http.Response, error) {
-	client := http.NewClient()
-
-	client.NTLM(action.NTLM)
-	client.NTLMV2(action.NTLMv2)
-
-	if connection.Username != "" || connection.Password != "" {
-		client.Auth(connection.Username, connection.Password)
-	}
-
-	req := http.NewClient().R(ctx)
-
-	for _, header := range action.Headers {
-		value, err := ctx.GetEnvValueFromCache(header, ctx.GetNamespace())
-		if err != nil {
-			return nil, fmt.Errorf("failed getting header (%v): %w", header, err)
-		}
-
-		req.Header(header.Name, value)
-	}
+func (c *HTTP) makeRequest(ctx context.Context, action v1.HTTPAction, client *http.Client) (*http.Response, error) {
+	req := client.R(ctx)
 
 	if action.Method == "" {
 		action.Method = "GET"
@@ -100,10 +70,5 @@ func (c *HTTP) makeRequest(ctx context.Context, action v1.HTTPAction, connection
 		}
 	}
 
-	response, err := req.Do(action.Method, connection.URL)
-	if err != nil {
-		return nil, fmt.Errorf("failed to make HTTP request: %w", err)
-	}
-
-	return response, nil
+	return req.Do(action.Method, action.URL)
 }

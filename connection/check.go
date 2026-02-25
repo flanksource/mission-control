@@ -216,12 +216,22 @@ func Test(ctx context.Context, c *models.Connection) (map[string]any, error) {
 		}
 
 	case models.ConnectionTypeHTTP:
-		client := http.NewClient()
-		if c.Username != "" || c.Password != "" {
-			client = client.Auth(c.Username, c.Password)
+		httpConn, err := connection.NewHTTPConnection(ctx, *c)
+		if err != nil {
+			return nil, api.Errorf(api.EINVALID, "error creating HTTP connection: %v", err)
 		}
 
-		if c.Properties["insecure_tls"] == "true" {
+		hydrated, err := httpConn.Hydrate(ctx, c.Namespace)
+		if err != nil {
+			return nil, api.Errorf(api.EINVALID, "error hydrating HTTP connection: %v", err)
+		}
+
+		client, err := connection.CreateHTTPClient(ctx, *hydrated)
+		if err != nil {
+			return nil, api.Errorf(api.EINVALID, "error creating HTTP client: %v", err)
+		}
+
+		if c.InsecureTLS {
 			client = client.InsecureSkipVerify(true)
 		}
 
