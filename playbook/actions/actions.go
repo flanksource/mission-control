@@ -3,6 +3,7 @@ package actions
 import (
 	"encoding/json"
 	"io"
+	"strings"
 
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/duty"
@@ -75,16 +76,6 @@ type TemplateEnv struct {
 }
 
 func (t *TemplateEnv) AsMap(ctx context.Context) map[string]any {
-	plainTextParams := make(map[string]any)
-	for key, val := range t.Params {
-		switch v := val.(type) {
-		case secret.Sensitive:
-			plainTextParams[key] = v.PlainText()
-		default:
-			plainTextParams[key] = val
-		}
-	}
-
 	output := map[string]any{
 		"check":     lo.FromPtr(t.Check).AsMap(),
 		"component": lo.ToPtr(lo.FromPtr(t.Component)).AsMap(),
@@ -93,7 +84,7 @@ func (t *TemplateEnv) AsMap(ctx context.Context) map[string]any {
 		"agent":     lo.FromPtr(t.Agent).AsMap(),
 		"action":    lo.FromPtr(t.Action).AsMap(),
 		"env":       t.Env,
-		"params":    plainTextParams,
+		"params":    t.Params,
 		"playbook":  t.Playbook.AsMap(),
 		"git":       t.GitOps.AsMap(),
 		"run":       t.Run.AsMap(),
@@ -139,4 +130,37 @@ func (t *TemplateEnv) ABACAttributes() *models.ABACAttribute {
 	}
 
 	return &output
+}
+
+// AsMapForTemplating returns the env map with secret params unwrapped for template execution.
+// This should only be used at the moment of template execution.
+func (t *TemplateEnv) AsMapForTemplating(ctx context.Context) map[string]any {
+	m := t.AsMap(ctx)
+	m["params"] = t.unwrapParams()
+	return m
+}
+
+func (t *TemplateEnv) unwrapParams() map[string]any {
+	unwrapped := make(map[string]any, len(t.Params))
+	for key, val := range t.Params {
+		if s, ok := val.(secret.Sensitive); ok {
+			unwrapped[key] = s.PlainText()
+		} else {
+			unwrapped[key] = val
+		}
+	}
+	return unwrapped
+}
+
+// ScrubSecrets replaces any secret parameter values in the output with [REDACTED].
+func (t *TemplateEnv) ScrubSecrets(output string) string {
+	for _, val := range t.Params {
+		if s, ok := val.(secret.Sensitive); ok {
+			plaintext := s.PlainText()
+			if plaintext != "" {
+				output = strings.ReplaceAll(output, plaintext, "[REDACTED]")
+			}
+		}
+	}
+	return output
 }

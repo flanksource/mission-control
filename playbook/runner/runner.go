@@ -124,7 +124,7 @@ func getActionSpec(run *models.PlaybookRun, name string) (*v1.PlaybookAction, er
 
 func CheckPlaybookFilter(ctx context.Context, playbookSpec v1.PlaybookSpec, templateEnv actions.TemplateEnv) error {
 	for _, f := range playbookSpec.Filters {
-		val, err := ctx.RunTemplate(gomplate.Template{Expression: f}, templateEnv.AsMap(ctx))
+		val, err := ctx.RunTemplate(gomplate.Template{Expression: f}, templateEnv.AsMapForTemplating(ctx))
 		if err != nil {
 			return ctx.Oops().Wrapf(err, "invalid playbook filter: %s", f)
 
@@ -156,7 +156,7 @@ func GetDelay(ctx context.Context, playbook models.Playbook, run models.Playbook
 	}
 
 	oops := ctx.Oops().Hint(templateEnv.JSON(ctx))
-	action.Delay, err = ctx.RunTemplate(gomplate.Template{Expression: action.Delay}, templateEnv.AsMap(ctx))
+	action.Delay, err = ctx.RunTemplate(gomplate.Template{Expression: action.Delay}, templateEnv.AsMapForTemplating(ctx))
 	if err != nil {
 		return 0, oops.Wrapf(err, "failed to template action")
 	}
@@ -368,6 +368,10 @@ func ExecuteAndSaveAction(ctx context.Context, playbookID any, action *models.Pl
 	}
 
 	result, err := executeAction(ctx, playbookID, action.PlaybookRunID, *action, actionSpec, templateEnv)
+
+	// Scrub secrets from action output before saving to DB
+	result.data = scrubActionResult(&templateEnv, result.data)
+
 	if err != nil {
 		ctx.Errorf("action failed %+v", err)
 		if err := action.Fail(db, result.data, err); err != nil {
