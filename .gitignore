@@ -39,9 +39,3 @@ shell-tmp
 .llm-jail/
 .todos/
 hack/
-.db/
-**/.db/
-out.*
-*.temp.html
-.facet/
-specs/

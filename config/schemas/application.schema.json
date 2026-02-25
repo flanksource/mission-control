@@ -74,7 +74,7 @@
         },
         "purpose": {
           "type": "string",
-          "description": "Purpose describes the role of this environment within the application deployment.\ne.g. \"primary\", \"backup\", \"dr\" (disaster recovery)"
+          "description": "Purpose of the environment"
         }
       },
       "additionalProperties": false,
@@ -107,21 +107,21 @@
             "$ref": "#/$defs/ResourceSelector"
           },
           "type": "array",
-          "description": "Datasources selects config items that represent data sources (e.g. databases,\nobject stores) whose backup and restore activity should be tracked.\n\nThe system queries config_changes on the matched config items for the following\nchange types and surfaces them in the application's Backups / Restores panels:\n  Backups:  BackupCompleted, BackupEnqueued, BackupFailed, BackupRunning,\n            BackupStarted, BackupSuccessful\n  Restores: BackupRestored, RestoreCompleted"
+          "description": "Datasources targets config items representing data sources (e.g. databases)\nwhose backups and restores should be monitored"
         },
         "logins": {
           "items": {
             "$ref": "#/$defs/ResourceSelector"
           },
           "type": "array",
-          "description": "Logins selects config items whose config access and access logs must be tracked by this application.\n\nThis field has two effects:\n\n1. Read path — the matched config items' access control are read and displayed.\n\n2. Sync path (Azure only) — if the scraper that originally ingested the matched\n   config items is an Azure scraper, it is cloned into a new application-scoped\n   scraper reconfigured to scrape only Entra AppRoleAssignments (scoped to the\n   matched items), keeping role assignment data fresh."
+          "description": "Specifies which applications's users/groups and user-group membership are required"
         },
         "roles": {
           "items": {
             "$ref": "#/$defs/ApplicationRoleMapping"
           },
           "type": "array",
-          "description": "Roles maps external config items (e.g. Entra groups, IAM roles) to a named role\nwithin this application, so that group memberships from external systems are\nsurfaced as human-readable roles in the application's AccessControl view."
+          "description": "Defines mappings to automatically generate roles based on specified group associations"
         }
       },
       "additionalProperties": false,

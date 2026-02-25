@@ -248,20 +248,18 @@ func Test(ctx context.Context, c *models.Connection) (TestResult, error) {
 	case models.ConnectionTypeHTTP:
 		httpConn, err := connection.NewHTTPConnection(ctx, *c)
 		if err != nil {
-			return TestResult{}, api.Errorf(api.EINVALID, "error creating HTTP connection: %v", err)
+			return nil, api.Errorf(api.EINVALID, "error creating HTTP connection: %v", err)
 		}
 
 		hydrated, err := httpConn.Hydrate(ctx, c.Namespace)
 		if err != nil {
-			return TestResult{}, api.Errorf(api.EINVALID, "error hydrating HTTP connection: %v", err)
+			return nil, api.Errorf(api.EINVALID, "error hydrating HTTP connection: %v", err)
 		}
 
 		client, err := connection.CreateHTTPClient(ctx, *hydrated)
 		if err != nil {
-			return TestResult{}, api.Errorf(api.EINVALID, "error creating HTTP client: %v", err)
+			return nil, api.Errorf(api.EINVALID, "error creating HTTP client: %v", err)
 		}
-
-		client = client.HARCollector(collector)
 
 		if c.InsecureTLS {
 			client = client.InsecureSkipVerify(true)

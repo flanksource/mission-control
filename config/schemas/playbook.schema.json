@@ -819,7 +819,8 @@
     "HTTPAction": {
       "properties": {
         "connection": {
-          "type": "string"
+          "type": "string",
+          "description": "Connection name e.g. connection://http/google"
         },
         "username": {
           "$ref": "#/$defs/EnvVar"
@@ -848,11 +849,33 @@
         "tls": {
           "$ref": "#/$defs/TLSConfig"
         },
+        "digest": {
+          "type": "boolean"
+        },
+        "url": {
+          "type": "string"
+        },
+        "bearer": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "oauth": {
+          "$ref": "#/$defs/OAuth"
+        },
+        "tls": {
+          "$ref": "#/$defs/TLSConfig"
+        },
         "headers": {
           "items": {
             "$ref": "#/$defs/EnvVar"
           },
           "type": "array"
+        },
+        "awsSigV4": {
+          "$ref": "#/$defs/AWSSigV4"
+        },
+        "method": {
+          "type": "string",
+          "description": "Method to use - defaults to GET"
         },
         "awsSigV4": {
           "$ref": "#/$defs/AWSSigV4"

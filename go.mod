@@ -3,15 +3,6 @@ module github.com/flanksource/incident-commander
 go 1.25.6
 
 require (
-	github.com/flanksource/artifacts v1.0.24
-	github.com/flanksource/clicky v1.19.0
-	github.com/flanksource/commons v1.48.1
-	github.com/flanksource/duty v1.0.1222
-	github.com/flanksource/gomplate/v3 v3.24.73
-	github.com/flanksource/kopper v1.0.20
-)
-
-require (
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.13.1
 	github.com/MicahParks/keyfunc v1.9.0
 	github.com/andygrunwald/go-jira v1.17.0
@@ -19,6 +10,10 @@ require (
 	github.com/casbin/gorm-adapter/v3 v3.39.0
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.33.0 // indirect
+	github.com/flanksource/commons v1.46.2
+	github.com/flanksource/duty v1.0.1190
+	github.com/flanksource/gomplate/v3 v3.24.68
+	github.com/flanksource/kopper v1.0.15
 	github.com/gomarkdown/markdown v0.0.0-20250810172220-2e2c11897d1a
 	github.com/google/cel-go v0.27.0
 	github.com/google/go-cmp v0.7.0
@@ -35,8 +30,8 @@ require (
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
 	gorm.io/gorm v1.31.1
-	k8s.io/apimachinery v0.35.2
-	k8s.io/client-go v0.35.2
+	k8s.io/apimachinery v0.35.1
+	k8s.io/client-go v0.35.1
 	sigs.k8s.io/controller-runtime v0.22.4
 )
 
@@ -45,14 +40,16 @@ require (
 	github.com/RussellLuo/slidingwindow v0.0.0-20200528002341-535bb99d338b
 	github.com/WinterYukky/gorm-extra-clause-plugin v0.4.0
 	github.com/adityathebe/go-strip-markdown/v2 v2.0.1
-	github.com/aws/aws-sdk-go-v2 v1.41.3
-	github.com/aws/aws-sdk-go-v2/config v1.32.11
-	github.com/aws/aws-sdk-go-v2/credentials v1.19.11
+	github.com/aws/aws-sdk-go-v2 v1.41.1
+	github.com/aws/aws-sdk-go-v2/config v1.32.9
+	github.com/aws/aws-sdk-go-v2/credentials v1.19.9
 	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.63.1
 	github.com/aws/aws-sdk-go-v2/service/sts v1.41.8
 	github.com/emersion/go-message v0.18.2
 	github.com/emersion/go-sasl v0.0.0-20241020182733-b788ff22d5a6
 	github.com/emersion/go-smtp v0.24.0
+	github.com/flanksource/artifacts v1.0.23
+	github.com/flanksource/clicky v1.18.0
 	github.com/fluxcd/pkg/gittestserver v0.21.0
 	github.com/go-git/go-billy/v5 v5.7.0
 	github.com/go-git/go-git/v5 v5.16.5
@@ -80,15 +77,15 @@ require (
 	github.com/wk8/go-ordered-map/v2 v2.1.8
 	github.com/xeipuuv/gojsonschema v1.2.0
 	go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho v0.63.0
-	go.opentelemetry.io/otel v1.41.0
+	go.opentelemetry.io/otel v1.40.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.39.0
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.39.0
 	go.opentelemetry.io/otel/sdk v1.40.0
-	go.opentelemetry.io/otel/trace v1.41.0
+	go.opentelemetry.io/otel/trace v1.40.0
 	golang.org/x/sync v0.19.0
 	google.golang.org/genai v1.34.0
 	gorm.io/hints v1.1.2
-	k8s.io/api v0.35.2
+	k8s.io/api v0.35.1
 )
 
 require (
@@ -283,7 +280,7 @@ require (
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 // indirect
 	github.com/playwright-community/playwright-go v0.5700.1 // indirect
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
-	github.com/prometheus/procfs v0.20.1 // indirect
+	github.com/prometheus/procfs v0.20.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/richardlehane/mscfb v1.0.6 // indirect
 	github.com/richardlehane/msoleps v1.0.6 // indirect
@@ -330,7 +327,7 @@ require (
 	go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.64.0 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.64.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.39.0 // indirect
-	go.opentelemetry.io/otel/metric v1.41.0 // indirect
+	go.opentelemetry.io/otel/metric v1.40.0 // indirect
 	go.opentelemetry.io/otel/sdk/metric v1.40.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.9.0 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
@@ -343,8 +340,8 @@ require (
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
 	gomodules.xyz/jsonpatch/v2 v2.5.0 // indirect
 	gonum.org/v1/gonum v0.17.0 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20260226221140-a57be14db171 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20260226221140-a57be14db171 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20260223185530-2f722ef697dc // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260223185530-2f722ef697dc // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 	gopkg.in/sourcemap.v1 v1.0.5 // indirect
 	gopkg.in/warnings.v0 v0.1.2 // indirect
@@ -353,16 +350,16 @@ require (
 	gorm.io/driver/sqlserver v1.6.3 // indirect
 	gorm.io/plugin/dbresolver v1.6.2 // indirect
 	gorm.io/plugin/prometheus v0.1.0 // indirect
-	k8s.io/apiextensions-apiserver v0.35.2 // indirect
+	k8s.io/apiextensions-apiserver v0.35.1 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
-	k8s.io/kube-openapi v0.0.0-20260304202019-5b3e3fdb0acf // indirect
+	k8s.io/kube-openapi v0.0.0-20260127142750-a19766b6e2d4 // indirect
 	k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2 // indirect
 	layeh.com/gopher-json v0.0.0-20201124131017-552bb3c4c3bf // indirect
 	modernc.org/libc v1.67.7 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 	modernc.org/sqlite v1.44.3 // indirect
-	sigs.k8s.io/gateway-api v1.5.0 // indirect
+	sigs.k8s.io/gateway-api v1.4.1 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.2 // indirect
@@ -439,8 +436,6 @@ require (
 
 // replace github.com/flanksource/commons => ../commons
 
-// replace github.com/flanksource/duty => ../duty
-
-// replace github.com/flanksource/kopper => ../kopper
+//replace github.com/flanksource/duty => ../duty
 
 replace github.com/glebarez/sqlite => github.com/clarkmcc/gorm-sqlite v0.0.0-20240426202654-00ed082c0311
