@@ -3,6 +3,39 @@
   "$id": "https://github.com/flanksource/incident-commander/api/v1/view",
   "$ref": "#/$defs/View",
   "$defs": {
+    "AWSSigV4": {
+      "properties": {
+        "connection": {
+          "type": "string"
+        },
+        "accessKey": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "secretKey": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "sessionToken": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "assumeRole": {
+          "type": "string"
+        },
+        "region": {
+          "type": "string"
+        },
+        "endpoint": {
+          "type": "string"
+        },
+        "skipTLSVerify": {
+          "type": "boolean"
+        },
+        "service": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "BadgeConfig": {
       "properties": {
         "color": {
@@ -341,6 +374,9 @@
             "$ref": "#/$defs/EnvVar"
           },
           "type": "array"
+        },
+        "awsSigV4": {
+          "$ref": "#/$defs/AWSSigV4"
         },
         "method": {
           "type": "string"
@@ -720,6 +756,9 @@
             "$ref": "#/$defs/EnvVar"
           },
           "type": "array"
+        },
+        "awsSigV4": {
+          "$ref": "#/$defs/AWSSigV4"
         },
         "query": {
           "type": "string"

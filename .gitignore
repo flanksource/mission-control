@@ -36,4 +36,6 @@ shell-tmp
 .windsurfrules
 .claude/
 .cursor/
-.llm-jail
+.llm-jail/
+.todos/
+hack/
