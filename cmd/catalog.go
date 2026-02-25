@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flanksource/clicky"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/properties"
 	"github.com/flanksource/duty"
@@ -16,7 +17,6 @@ import (
 )
 
 var catalogOutfile string
-var catalogOutformat string
 var catalogWaitFor time.Duration
 
 var Catalog = &cobra.Command{
@@ -117,16 +117,28 @@ var Query = &cobra.Command{
 			}
 
 			logger.Infof("Waiting %s for %s", req, catalogWaitFor-time.Since(start))
-			time.Sleep(3 * time.Second)
+			time.Sleep(1 * time.Second)
 		}
 
-		saveOutput(response, catalogOutfile, catalogOutformat)
+		if catalogOutfile != "" {
+			logger.Infof("Writing output to %s", catalogOutfile)
+			if err := clicky.FormatToFile(*response, clicky.FormatOptions{}, catalogOutfile); err != nil {
+				logger.Fatalf(err.Error())
+				os.Exit(1)
+			}
+		} else {
+			out, err := clicky.Format(*response)
+			if err != nil {
+				logger.Fatalf(err.Error())
+				os.Exit(1)
+			}
+			fmt.Println(out)
+		}
 	},
 }
 
 func init() {
 	Query.Flags().StringVarP(&catalogOutfile, "out-file", "o", "", "Write catalog output to a file instead of stdout")
-	Query.Flags().StringVarP(&catalogOutformat, "out-format", "f", "json", "Format of output file or stdout (yaml or json)")
 	Query.Flags().DurationVarP(&catalogWaitFor, "wait", "w", 60*time.Second, "Wait for this long for resources to be discovered")
 	Catalog.AddCommand(Query)
 	Root.AddCommand(Catalog)
