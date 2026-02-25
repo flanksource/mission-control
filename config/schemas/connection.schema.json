@@ -60,6 +60,12 @@
         },
         "secretKey": {
           "$ref": "#/$defs/EnvVar"
+        },
+        "sessionToken": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "assumeRole": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
@@ -85,6 +91,12 @@
         },
         "secretKey": {
           "$ref": "#/$defs/EnvVar"
+        },
+        "sessionToken": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "assumeRole": {
+          "type": "string"
         },
         "keyID": {
           "type": "string",
@@ -118,6 +130,12 @@
         "secretKey": {
           "$ref": "#/$defs/EnvVar"
         },
+        "sessionToken": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "assumeRole": {
+          "type": "string"
+        },
         "bucket": {
           "type": "string"
         },
@@ -131,6 +149,40 @@
       "required": [
         "bucket"
       ]
+    },
+    "ConnectionAWSSigV4": {
+      "properties": {
+        "url": {
+          "$ref": "#/$defs/EnvVar",
+          "description": "AWS Endpoint"
+        },
+        "region": {
+          "type": "string"
+        },
+        "profile": {
+          "type": "string"
+        },
+        "insecureTLS": {
+          "type": "boolean"
+        },
+        "accessKey": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "secretKey": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "sessionToken": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "assumeRole": {
+          "type": "string"
+        },
+        "service": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
     },
     "ConnectionAnthropic": {
       "properties": {
@@ -228,6 +280,27 @@
         "webhookID"
       ]
     },
+    "ConnectionElasticsearch": {
+      "properties": {
+        "url": {
+          "type": "string"
+        },
+        "username": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "password": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "insecureTLS": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "url"
+      ]
+    },
     "ConnectionFolder": {
       "properties": {
         "path": {
@@ -247,6 +320,9 @@
         },
         "certificate": {
           "$ref": "#/$defs/EnvVar"
+        },
+        "project": {
+          "type": "string"
         }
       },
       "additionalProperties": false,
@@ -259,6 +335,9 @@
         },
         "certificate": {
           "$ref": "#/$defs/EnvVar"
+        },
+        "project": {
+          "type": "string"
         },
         "keyID": {
           "type": "string",
@@ -278,6 +357,9 @@
         },
         "certificate": {
           "$ref": "#/$defs/EnvVar"
+        },
+        "project": {
+          "type": "string"
         },
         "bucket": {
           "type": "string"
@@ -372,6 +454,24 @@
         },
         "password": {
           "$ref": "#/$defs/EnvVar"
+        },
+        "bearer": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "oauth": {
+          "$ref": "#/$defs/OAuth"
+        },
+        "tls": {
+          "$ref": "#/$defs/TLSConfig"
+        },
+        "headers": {
+          "items": {
+            "$ref": "#/$defs/EnvVar"
+          },
+          "type": "array"
+        },
+        "awsSigV4": {
+          "$ref": "#/$defs/ConnectionAWSSigV4"
         }
       },
       "additionalProperties": false,
@@ -634,6 +734,24 @@
         "user"
       ]
     },
+    "ConnectionRedis": {
+      "properties": {
+        "url": {
+          "type": "string"
+        },
+        "username": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "password": {
+          "$ref": "#/$defs/EnvVar"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "url"
+      ]
+    },
     "ConnectionSFTP": {
       "properties": {
         "host": {
@@ -828,6 +946,9 @@
         "gemini": {
           "$ref": "#/$defs/ConnectionGemini"
         },
+        "elasticsearch": {
+          "$ref": "#/$defs/ConnectionElasticsearch"
+        },
         "folder": {
           "$ref": "#/$defs/ConnectionFolder"
         },
@@ -866,6 +987,9 @@
         },
         "prometheus": {
           "$ref": "#/$defs/ConnectionPrometheus"
+        },
+        "redis": {
+          "$ref": "#/$defs/ConnectionRedis"
         },
         "sftp": {
           "$ref": "#/$defs/ConnectionSFTP"
