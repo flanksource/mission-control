@@ -3,6 +3,8 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
+	"net/url"
+	"strings"
 	"sync"
 
 	"github.com/samber/lo"
@@ -68,4 +70,22 @@ func StringToStringMap(s string) (map[string]string, error) {
 	}
 
 	return m, nil
+}
+
+func LowercaseMap(input map[string]string) map[string]string {
+	output := make(map[string]string, len(input))
+	for k, v := range input {
+		output[strings.ToLower(k)] = v
+	}
+	return output
+}
+
+func QueryToMap(value url.Values) map[string]string {
+	result := make(map[string]string)
+	for k, v := range value {
+		if len(v) > 0 {
+			result[k] = strings.Join(v, " ")
+		}
+	}
+	return result
 }

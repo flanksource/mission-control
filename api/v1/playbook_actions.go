@@ -252,24 +252,10 @@ type SQLAction struct {
 	Driver string `yaml:"driver,omitempty" json:"driver,omitempty"`
 }
 
-type HTTPConnection struct {
-	// Connection name e.g. connection://http/google
-	Connection string `yaml:"connection,omitempty" json:"connection,omitempty"`
-	// Connection url, interpolated with username,password
-	URL                  string `yaml:"url,omitempty" json:"url,omitempty" template:"true"`
-	types.Authentication `yaml:",inline" json:",inline"`
-}
-
 type HTTPAction struct {
-	HTTPConnection `yaml:",inline" json:",inline" template:"true"`
+	connection.HTTPConnection `yaml:",inline" json:",inline" template:"true"`
 	// Method to use - defaults to GET
 	Method string `yaml:"method,omitempty" json:"method,omitempty" template:"true"`
-	// NTLM when set to true will do authentication using NTLM v1 protocol
-	NTLM bool `yaml:"ntlm,omitempty" json:"ntlm,omitempty"`
-	// NTLM when set to true will do authentication using NTLM v2 protocol
-	NTLMv2 bool `yaml:"ntlmv2,omitempty" json:"ntlmv2,omitempty"`
-	// Header fields to be used in the query
-	Headers []types.EnvVar `yaml:"headers,omitempty" json:"headers,omitempty" template:"true"`
 	// Request Body Contents
 	Body string `yaml:"body,omitempty" json:"body,omitempty" template:"true"`
 	// TemplateBody controls whether the body of the request needs to be templated

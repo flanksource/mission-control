@@ -110,6 +110,39 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "AWSSigV4": {
+      "properties": {
+        "connection": {
+          "type": "string"
+        },
+        "accessKey": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "secretKey": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "sessionToken": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "assumeRole": {
+          "type": "string"
+        },
+        "region": {
+          "type": "string"
+        },
+        "endpoint": {
+          "type": "string"
+        },
+        "skipTLSVerify": {
+          "type": "boolean"
+        },
+        "service": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "Artifact": {
       "properties": {
         "path": {
@@ -758,19 +791,11 @@
           "type": "string",
           "description": "Connection name e.g. connection://http/google"
         },
-        "url": {
-          "type": "string",
-          "description": "Connection url, interpolated with username,password"
-        },
         "username": {
           "$ref": "#/$defs/EnvVar"
         },
         "password": {
           "$ref": "#/$defs/EnvVar"
-        },
-        "method": {
-          "type": "string",
-          "description": "Method to use - defaults to GET"
         },
         "ntlm": {
           "type": "boolean",
@@ -780,12 +805,34 @@
           "type": "boolean",
           "description": "NTLM when set to true will do authentication using NTLM v2 protocol"
         },
+        "digest": {
+          "type": "boolean"
+        },
+        "url": {
+          "type": "string"
+        },
+        "bearer": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "oauth": {
+          "$ref": "#/$defs/OAuth"
+        },
+        "tls": {
+          "$ref": "#/$defs/TLSConfig"
+        },
         "headers": {
           "items": {
             "$ref": "#/$defs/EnvVar"
           },
           "type": "array",
           "description": "Header fields to be used in the query"
+        },
+        "awsSigV4": {
+          "$ref": "#/$defs/AWSSigV4"
+        },
+        "method": {
+          "type": "string",
+          "description": "Method to use - defaults to GET"
         },
         "body": {
           "type": "string",
@@ -1716,6 +1763,13 @@
         "approval": {
           "$ref": "#/$defs/PlaybookApproval",
           "description": "Approval defines the individuals and teams authorized to approve runs of this playbook."
+        },
+        "jsonSchema": {
+          "type": "string",
+          "description": "JSON Schema or URL to use instead of playbook parameters"
+        },
+        "ui": {
+          "description": "Properties that are applied to the UI form"
         }
       },
       "additionalProperties": false,
@@ -1863,6 +1917,9 @@
             "$ref": "#/$defs/EnvVar"
           },
           "type": "array"
+        },
+        "awsSigV4": {
+          "$ref": "#/$defs/AWSSigV4"
         },
         "query": {
           "type": "string"

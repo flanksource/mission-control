@@ -159,8 +159,15 @@ type connectionFlags struct {
 	// Database common
 	Database string
 
-	// Prometheus
-	Bearer string
+	// HTTP / Prometheus auth
+	Bearer           string
+	OAuthClientID    string
+	OAuthClientSecret string
+	OAuthTokenURL    string
+	OAuthScopes      string
+	TLSCA            string
+	TLSCert          string
+	TLSKey           string
 
 	// AI models
 	Model  string
@@ -487,7 +494,16 @@ func buildConnectionFromFlags(flags *connectionFlags) (models.Connection, error)
 		conn.Password = flags.Token
 
 	case models.ConnectionTypeHTTP:
+		conn.InsecureTLS = flags.InsecureTLS
 		props["insecure_tls"] = fmt.Sprintf("%t", flags.InsecureTLS)
+		props["bearer"] = flags.Bearer
+		props["clientID"] = flags.OAuthClientID
+		props["clientSecret"] = flags.OAuthClientSecret
+		props["tokenURL"] = flags.OAuthTokenURL
+		props["scopes"] = flags.OAuthScopes
+		props["ca"] = flags.TLSCA
+		props["cert"] = flags.TLSCert
+		props["key"] = flags.TLSKey
 
 	case models.ConnectionTypeGit:
 		props["ref"] = flags.Ref
@@ -688,6 +704,14 @@ func addConnectionFlags(cmd *cobra.Command, flags *connectionFlags, connType str
 		cmd.Flags().StringVar(&flags.Username, "username", "", "HTTP basic auth username")
 		cmd.Flags().StringVar(&flags.Password, "password", "", "HTTP basic auth password")
 		cmd.Flags().BoolVar(&flags.InsecureTLS, "insecure-tls", false, "Skip TLS verification")
+		cmd.Flags().StringVar(&flags.Bearer, "bearer", "", "Bearer token")
+		cmd.Flags().StringVar(&flags.OAuthClientID, "oauth-client-id", "", "OAuth client ID")
+		cmd.Flags().StringVar(&flags.OAuthClientSecret, "oauth-client-secret", "", "OAuth client secret")
+		cmd.Flags().StringVar(&flags.OAuthTokenURL, "oauth-token-url", "", "OAuth token URL")
+		cmd.Flags().StringVar(&flags.OAuthScopes, "oauth-scopes", "", "OAuth scopes (comma-separated)")
+		cmd.Flags().StringVar(&flags.TLSCA, "tls-ca", "", "PEM encoded CA certificate")
+		cmd.Flags().StringVar(&flags.TLSCert, "tls-cert", "", "PEM encoded client certificate")
+		cmd.Flags().StringVar(&flags.TLSKey, "tls-key", "", "PEM encoded client private key")
 
 	case models.ConnectionTypeGit:
 		cmd.Flags().StringVar(&flags.URL, "url", "", "Git repository URL")
