@@ -1,6 +1,7 @@
 package db
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -64,6 +65,8 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 			"region":       obj.Spec.AWS.Region,
 			"profile":      obj.Spec.AWS.Profile,
 			"insecure_tls": strconv.FormatBool(obj.Spec.AWS.InsecureTLS),
+			"sessionToken": obj.Spec.AWS.SessionToken.String(),
+			"assumeRole":   obj.Spec.AWS.AssumeRole,
 		}
 	}
 
@@ -77,6 +80,8 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 			"region":       obj.Spec.AWSKMS.Region,
 			"profile":      obj.Spec.AWSKMS.Profile,
 			"insecure_tls": strconv.FormatBool(obj.Spec.AWSKMS.InsecureTLS),
+			"sessionToken": obj.Spec.AWSKMS.SessionToken.String(),
+			"assumeRole":   obj.Spec.AWSKMS.AssumeRole,
 		}
 	}
 
@@ -91,6 +96,8 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 			"profile":      obj.Spec.S3.Profile,
 			"insecure_tls": strconv.FormatBool(obj.Spec.S3.InsecureTLS),
 			"usePathStyle": strconv.FormatBool(obj.Spec.S3.UsePathStyle),
+			"sessionToken": obj.Spec.S3.SessionToken.String(),
+			"assumeRole":   obj.Spec.S3.AssumeRole,
 		}
 	}
 
@@ -117,6 +124,9 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 		dbObj.Type = models.ConnectionTypeGCP
 		dbObj.Certificate = obj.Spec.GCP.Certificate.String()
 		dbObj.URL = obj.Spec.GCP.Endpoint.String()
+		dbObj.Properties = map[string]string{
+			"project": obj.Spec.GCP.Project,
+		}
 	}
 
 	if obj.Spec.GCS != nil {
@@ -124,7 +134,8 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 		dbObj.Certificate = obj.Spec.GCS.Certificate.String()
 		dbObj.URL = obj.Spec.GCS.Endpoint.String()
 		dbObj.Properties = map[string]string{
-			"bucket": obj.Spec.GCS.Bucket,
+			"bucket":  obj.Spec.GCS.Bucket,
+			"project": obj.Spec.GCS.Project,
 		}
 	}
 
@@ -133,7 +144,8 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 		dbObj.Certificate = obj.Spec.GCPKMS.Certificate.String()
 		dbObj.URL = obj.Spec.GCPKMS.Endpoint.String()
 		dbObj.Properties = map[string]string{
-			"keyID": obj.Spec.GCPKMS.KeyID,
+			"keyID":   obj.Spec.GCPKMS.KeyID,
+			"project": obj.Spec.GCPKMS.Project,
 		}
 	}
 
@@ -142,6 +154,14 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 		dbObj.Type = models.ConnectionTypeAzureDevops
 		dbObj.Username = obj.Spec.AzureDevops.Organization
 		dbObj.Password = obj.Spec.AzureDevops.PersonalAccessToken.String()
+	}
+
+	if obj.Spec.Elasticsearch != nil {
+		dbObj.Type = models.ConnectionTypeElasticSearch
+		dbObj.URL = obj.Spec.Elasticsearch.URL
+		dbObj.Username = obj.Spec.Elasticsearch.Username.String()
+		dbObj.Password = obj.Spec.Elasticsearch.Password.String()
+		dbObj.InsecureTLS = obj.Spec.Elasticsearch.InsecureTLS
 	}
 
 	if obj.Spec.Folder != nil {
@@ -179,8 +199,32 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 		dbObj.URL = obj.Spec.HTTP.URL
 		dbObj.Username = obj.Spec.HTTP.Username.String()
 		dbObj.Password = obj.Spec.HTTP.Password.String()
-		dbObj.Properties = map[string]string{
-			"insecure_tls": strconv.FormatBool(obj.Spec.HTTP.InsecureTLS),
+		dbObj.InsecureTLS = obj.Spec.HTTP.InsecureTLS
+		dbObj.Properties = collections.MergeMap(
+			obj.Spec.HTTP.OAuth.AsProperties(),
+			map[string]string{
+				"bearer":       obj.Spec.HTTP.Bearer.String(),
+				"insecure_tls": strconv.FormatBool(obj.Spec.HTTP.InsecureTLS),
+			},
+		)
+		if !obj.Spec.HTTP.TLS.CA.IsEmpty() {
+			dbObj.Properties["ca"] = obj.Spec.HTTP.TLS.CA.String()
+		}
+		if !obj.Spec.HTTP.TLS.Cert.IsEmpty() {
+			dbObj.Properties["cert"] = obj.Spec.HTTP.TLS.Cert.String()
+		}
+		if !obj.Spec.HTTP.TLS.Key.IsEmpty() {
+			dbObj.Properties["key"] = obj.Spec.HTTP.TLS.Key.String()
+		}
+		if len(obj.Spec.HTTP.Headers) > 0 {
+			if b, err := json.Marshal(obj.Spec.HTTP.Headers); err == nil {
+				dbObj.Properties["headers"] = string(b)
+			}
+		}
+		if obj.Spec.HTTP.AWSSigV4 != nil {
+			if b, err := json.Marshal(obj.Spec.HTTP.AWSSigV4); err == nil {
+				dbObj.Properties["awsSigV4"] = string(b)
+			}
 		}
 	}
 
@@ -432,6 +476,13 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 			obj.Spec.Prometheus.OAuth.AsProperties(),
 			map[string]string{"bearer": obj.Spec.Prometheus.Bearer.String()},
 		)
+	}
+
+	if obj.Spec.Redis != nil {
+		dbObj.Type = models.ConnectionTypeRedis
+		dbObj.URL = obj.Spec.Redis.URL
+		dbObj.Username = obj.Spec.Redis.Username.String()
+		dbObj.Password = obj.Spec.Redis.Password.String()
 	}
 
 	if obj.Spec.Slack != nil {
