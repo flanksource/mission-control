@@ -11,6 +11,7 @@ import (
 
 	"github.com/flanksource/artifacts"
 	"github.com/flanksource/commons/http"
+	"github.com/flanksource/commons/logger"
 	dutyApi "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/job"
@@ -447,6 +448,11 @@ var _ = Describe("Playbook", Ordered, func() {
 			playbook, spec = createPlaybook("action-last-result")
 		})
 
+		AfterAll(func() {
+			summary, _ := GetPlaybookStatus(DefaultContext, run.ID)
+			DefaultContext.Infof("%s", logger.Pretty(summary))
+		})
+
 		It("should store playbook run via API", func() {
 			run = runPlaybook(DefaultContext.WithUser(&dummy.JohnDoe), playbook, RunParams{
 				ConfigID: lo.ToPtr(dummy.EKSCluster.ID),
@@ -724,6 +730,24 @@ var _ = Describe("Playbook", Ordered, func() {
 		})
 	})
 
+	var _ = Describe("Secret Parameters", Ordered, func() {
+		It("should not leak secrets in action output", func() {
+			run := createAndRunWithSecretParams(DefaultContext.WithUser(&dummy.JohnDoe), "action-secret-params", RunParams{
+				ConfigID: lo.ToPtr(dummy.EKSCluster.ID),
+			}, "super_secret_value", models.PlaybookRunStatusCompleted)
+
+			var actions []models.PlaybookRunAction
+			err := DefaultContext.DB().Where("playbook_run_id = ?", run.ID).Find(&actions).Error
+			Expect(err).To(BeNil())
+			Expect(actions).To(HaveLen(1))
+
+			// Stdout should have secret scrubbed
+			stdout := actions[0].Result["stdout"].(string)
+			Expect(stdout).ToNot(ContainSubstring("super_secret_value"), "stdout should not contain plaintext secret")
+			Expect(stdout).To(ContainSubstring("[REDACTED]"), "stdout should contain redacted placeholder")
+		})
+	})
+
 	var _ = Describe("spec runner", func() {
 		type testData struct {
 			name        string
@@ -811,6 +835,19 @@ func createAndRun(ctx context.Context, name string, params RunParams, statuses .
 func createAndRunNoWait(ctx context.Context, name string, params RunParams) (*models.PlaybookRun, error) {
 	playbook, _ := createPlaybook(name)
 	return Run(ctx, &playbook, params)
+}
+
+func createAndRunWithSecretParams(ctx context.Context, name string, params RunParams, secretValue string, statuses ...models.PlaybookRunStatus) *models.PlaybookRun {
+	playbook, _ := createPlaybook(name)
+	Expect(testdata.LoadPermissions(ctx)).To(BeNil())
+
+	// Set the password param with the secret value (will be encrypted by Run)
+	if params.Params == nil {
+		params.Params = make(PlaybookRuntimeParameters)
+	}
+	params.Params["password"] = secretValue
+
+	return runPlaybook(ctx, playbook, params, statuses...)
 }
 
 func runPlaybook(ctx context.Context, playbook models.Playbook, params RunParams, statuses ...models.PlaybookRunStatus) *models.PlaybookRun {
