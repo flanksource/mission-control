@@ -12,7 +12,7 @@ require (
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.33.0 // indirect
 	github.com/flanksource/commons v1.46.0
-	github.com/flanksource/duty v1.0.1186
+	github.com/flanksource/duty v1.0.1187
 	github.com/flanksource/gomplate/v3 v3.24.66
 	github.com/flanksource/kopper v1.0.14
 	github.com/gomarkdown/markdown v0.0.0-20250810172220-2e2c11897d1a
@@ -53,7 +53,7 @@ require (
 	github.com/flanksource/clicky v1.17.0
 	github.com/fluxcd/pkg/gittestserver v0.21.0
 	github.com/go-git/go-billy/v5 v5.7.0
-	github.com/go-git/go-git/v5 v5.16.4
+	github.com/go-git/go-git/v5 v5.16.5
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/gofrs/uuid/v5 v5.4.0
 	github.com/golang-jwt/jwt/v5 v5.3.0
@@ -147,7 +147,7 @@ require (
 	github.com/buger/jsonparser v1.1.1 // indirect
 	github.com/casbin/govaluate v1.10.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
-	github.com/cert-manager/cert-manager v1.19.1 // indirect
+	github.com/cert-manager/cert-manager v1.19.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/charmbracelet/colorprofile v0.4.1 // indirect
 	github.com/charmbracelet/lipgloss v1.1.0 // indirect
