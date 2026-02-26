@@ -174,9 +174,15 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 	if obj.Spec.Git != nil {
 		dbObj.Type = models.ConnectionTypeGit
 		dbObj.URL = obj.Spec.Git.URL
-		dbObj.Certificate = obj.Spec.Git.Certificate.String()
-		dbObj.Username = obj.Spec.Git.Username.String()
-		dbObj.Password = obj.Spec.Git.Password.String()
+		if obj.Spec.Git.Certificate != nil {
+			dbObj.Certificate = obj.Spec.Git.Certificate.String()
+		}
+		if obj.Spec.Git.Username != nil {
+			dbObj.Username = obj.Spec.Git.Username.String()
+		}
+		if obj.Spec.Git.Password != nil {
+			dbObj.Password = obj.Spec.Git.Password.String()
+		}
 		dbObj.Properties = map[string]string{
 			"ref": obj.Spec.Git.Ref,
 		}
@@ -197,8 +203,12 @@ func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 	if obj.Spec.HTTP != nil {
 		dbObj.Type = models.ConnectionTypeHTTP
 		dbObj.URL = obj.Spec.HTTP.URL
-		dbObj.Username = obj.Spec.HTTP.Username.String()
-		dbObj.Password = obj.Spec.HTTP.Password.String()
+		if obj.Spec.HTTP.Username != nil {
+			dbObj.Username = obj.Spec.HTTP.Username.String()
+		}
+		if obj.Spec.HTTP.Password != nil {
+			dbObj.Password = obj.Spec.HTTP.Password.String()
+		}
 		dbObj.InsecureTLS = obj.Spec.HTTP.InsecureTLS
 		dbObj.Properties = collections.MergeMap(
 			obj.Spec.HTTP.OAuth.AsProperties(),
