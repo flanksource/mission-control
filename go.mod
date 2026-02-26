@@ -51,6 +51,7 @@ require (
 	github.com/emersion/go-smtp v0.24.0
 	github.com/flanksource/artifacts v1.0.21
 	github.com/flanksource/clicky v1.17.0
+	github.com/flanksource/sandbox-runtime v1.0.1
 	github.com/fluxcd/pkg/gittestserver v0.21.0
 	github.com/go-git/go-billy/v5 v5.7.0
 	github.com/go-git/go-git/v5 v5.16.5
@@ -180,7 +181,6 @@ require (
 	github.com/flanksource/deps v1.0.24 // indirect
 	github.com/flanksource/is-healthy v1.0.82 // indirect
 	github.com/flanksource/kubectl-neat v1.0.4 // indirect
-	github.com/flanksource/sandbox-runtime v1.0.1 // indirect
 	github.com/fluxcd/gitkit v0.6.0 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
