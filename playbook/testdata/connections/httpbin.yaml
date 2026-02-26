@@ -5,5 +5,5 @@ metadata:
   namespace: mc
   uid: 7eb7d4c8-faad-4809-9643-e8116eef6e3e
 spec:
-  url: 
-    value: https://httpbin.org/status/200
+  http:
+    url: https://httpbin.org/status/200
