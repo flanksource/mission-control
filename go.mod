@@ -12,7 +12,7 @@ require (
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.33.0 // indirect
 	github.com/flanksource/commons v1.46.0
-	github.com/flanksource/duty v1.0.1188
+	github.com/flanksource/duty v1.0.1189
 	github.com/flanksource/gomplate/v3 v3.24.66
 	github.com/flanksource/kopper v1.0.14
 	github.com/gomarkdown/markdown v0.0.0-20250810172220-2e2c11897d1a
@@ -122,6 +122,7 @@ require (
 	github.com/alecthomas/chroma/v2 v2.23.1 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/apparentlymart/go-textseg/v15 v15.0.0 // indirect
+	github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.4 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.17 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.17 // indirect
@@ -179,6 +180,7 @@ require (
 	github.com/flanksource/deps v1.0.24 // indirect
 	github.com/flanksource/is-healthy v1.0.82 // indirect
 	github.com/flanksource/kubectl-neat v1.0.4 // indirect
+	github.com/flanksource/sandbox-runtime v1.0.1 // indirect
 	github.com/fluxcd/gitkit v0.6.0 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/fxamacker/cbor/v2 v2.9.0 // indirect
@@ -332,7 +334,7 @@ require (
 	gocloud.dev v0.44.0 // indirect
 	golang.org/x/exp v0.0.0-20260112195511-716be5621a96 // indirect
 	golang.org/x/mod v0.32.0 // indirect
-	golang.org/x/term v0.39.0 // indirect
+	golang.org/x/term v0.40.0 // indirect
 	golang.org/x/tools v0.41.0 // indirect
 	golang.org/x/xerrors v0.0.0-20240903120638-7835f813f4da // indirect
 	gomodules.xyz/jsonpatch/v2 v2.5.0 // indirect
@@ -410,11 +412,11 @@ require (
 	github.com/valyala/fasttemplate v1.2.2 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	go.opencensus.io v0.24.0 // indirect
-	golang.org/x/crypto v0.47.0
-	golang.org/x/net v0.49.0 // indirect
+	golang.org/x/crypto v0.48.0
+	golang.org/x/net v0.50.0 // indirect
 	golang.org/x/oauth2 v0.34.0 // indirect
-	golang.org/x/sys v0.40.0 // indirect
-	golang.org/x/text v0.33.0
+	golang.org/x/sys v0.41.0 // indirect
+	golang.org/x/text v0.34.0
 	golang.org/x/time v0.14.0 // indirect
 	google.golang.org/api v0.262.0
 	google.golang.org/genproto v0.0.0-20260126211449-d11affda4bed // indirect
