@@ -11,6 +11,7 @@ import (
 	"github.com/flanksource/artifacts"
 	"github.com/flanksource/commons/duration"
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/logs"
 	"github.com/flanksource/duty/logs/cloudwatch"
@@ -53,6 +54,12 @@ func NewLogsAction() *logsAction {
 
 func (l *logsAction) Run(ctx context.Context, action *v1.LogsAction) (*logsResult, error) {
 	if action.Loki != nil {
+		if action.Loki.ConnectionName != "" {
+			if _, err := connection.Get(ctx, action.Loki.ConnectionName); err != nil {
+				return nil, ctx.Oops().Wrapf(err, "failed to get loki connection")
+			}
+		}
+
 		searcher := loki.New(action.Loki.Loki, action.Loki.Mapping)
 		response, err := searcher.Search(ctx, action.Loki.Request)
 		if err != nil {
@@ -64,6 +71,12 @@ func (l *logsAction) Run(ctx context.Context, action *v1.LogsAction) (*logsResul
 	}
 
 	if action.OpenSearch != nil {
+		if action.OpenSearch.ConnectionName != "" {
+			if _, err := connection.Get(ctx, action.OpenSearch.ConnectionName); err != nil {
+				return nil, ctx.Oops().Wrapf(err, "failed to get opensearch connection")
+			}
+		}
+
 		searcher, err := opensearch.New(ctx, action.OpenSearch.Backend, action.OpenSearch.Mapping)
 		if err != nil {
 			return nil, ctx.Oops().Wrapf(err, "failed to create opensearch searcher")
@@ -103,6 +116,12 @@ func (l *logsAction) Run(ctx context.Context, action *v1.LogsAction) (*logsResul
 	}
 
 	if action.Kubernetes != nil {
+		if action.Kubernetes.ConnectionName != "" {
+			if _, err := connection.Get(ctx, action.Kubernetes.ConnectionName); err != nil {
+				return nil, ctx.Oops().Wrapf(err, "failed to get kubernetes connection")
+			}
+		}
+
 		searcher := k8s.New(action.Kubernetes.KubernetesConnection)
 		response, err := searcher.Search(ctx, action.Kubernetes.Request)
 		if err != nil {
