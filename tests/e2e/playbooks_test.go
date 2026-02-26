@@ -99,7 +99,7 @@ func waitForLokiLogs() {
 }
 
 var _ = ginkgo.Describe("Playbooks", ginkgo.Ordered, func() {
-	var _ = ginkgo.Context("logs", func() {
+	var _ = ginkgo.Context("logs", ginkgo.Label("external"), func() {
 		ginkgo.BeforeAll(func() {
 			// Loki seeding
 			{
