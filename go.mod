@@ -51,10 +51,6 @@ require (
 	github.com/emersion/go-smtp v0.24.0
 	github.com/flanksource/artifacts v1.0.23
 	github.com/flanksource/clicky v1.19.0
-	github.com/flanksource/artifacts v1.0.21
-	github.com/flanksource/clicky v1.17.0
-	github.com/flanksource/artifacts v1.0.21
-	github.com/flanksource/clicky v1.17.0
 	github.com/flanksource/sandbox-runtime v1.0.1
 	github.com/fluxcd/pkg/gittestserver v0.21.0
 	github.com/go-git/go-billy/v5 v5.7.0

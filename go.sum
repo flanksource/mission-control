@@ -385,32 +385,12 @@ github.com/flanksource/commons v1.48.0 h1:ztUu9DuOzaMuJNMgJCQUe6YpJw0CPBX9dyf770
 github.com/flanksource/commons v1.48.0/go.mod h1:MeUQTNCzh5WhSwpbE1mdV1Atri1srMgIufotYRuZn14=
 github.com/flanksource/deps v1.0.24 h1:X23SZb2nxCDsS1wRiuqyvUYpA3KQxcQR9YfB8H/oTgo=
 github.com/flanksource/deps v1.0.24/go.mod h1:emsZRgkplqo9xe2wTAPyFm6XWk8CS6H9cxjp6eYR1Vg=
-<<<<<<< HEAD
-github.com/flanksource/duty v1.0.1209 h1:Zx0FkoLXLOeAvYyUwM6z37Kdb/geEMg//5sC2OrzAQQ=
-github.com/flanksource/duty v1.0.1209/go.mod h1:SAnSSMn69U3x4vBXWe8bMrQ/kNPXS/rnAU3RHc5hH/M=
 github.com/flanksource/gomplate/v3 v3.24.71 h1:c610TQ+YEhA39bJIl5wiG3ynWxyrPlbgu4BoCHxlJfo=
 github.com/flanksource/gomplate/v3 v3.24.71/go.mod h1:PMJGo4K81b0TB0FrC8WJDE9+vW3X/zWHQ8eGpCMYXmo=
 github.com/flanksource/is-healthy v1.0.84 h1:d05/Uri+y3b6AkQAItxwjwLwHq2BZHXER42n9AtRbzo=
 github.com/flanksource/is-healthy v1.0.84/go.mod h1:6/KOjVUeevIbaIaVtSDhy6qsnbqyy5WPZNlRGQCBxcw=
 github.com/flanksource/kopper v1.0.15 h1:GlCDoM3Izn5KlDyrsK+Rlzo+UMivSzTC6O6m8jHdVSU=
 github.com/flanksource/kopper v1.0.15/go.mod h1:n1BAjij7zsX2zcwjSC1mvNkFlwPSkk4QHWg7n32eg0E=
-||||||| parent of ddbbcfdc (feat(playbook): run exec actions inside a sandbox)
-github.com/flanksource/duty v1.0.1189 h1:RcsJzIInWjRe6G+dZGluu4+97gRZYMsNYBavHx/+uZs=
-github.com/flanksource/duty v1.0.1189/go.mod h1:Uqe8R/P9jUyj2l7NE6J2mcbbmpBBOvNznSJBWuKLK7E=
-github.com/flanksource/gomplate/v3 v3.24.66 h1:fTaN0s9t+YZCau+KlgcLn9pMcLTsSiMjBnZUbhGY/oY=
-github.com/flanksource/gomplate/v3 v3.24.66/go.mod h1:PiYJOAk971BpG/suhFP9YAZSjfz4KiRaqwYlQZZJp0Q=
-github.com/flanksource/is-healthy v1.0.82 h1:/hjq2hYWVph2Cr6F6qF4v/vTuEqOqgPVnZOh1kfDwvg=
-github.com/flanksource/is-healthy v1.0.82/go.mod h1:AV3S/uXPnjvfaB4X6CV7xojAHjOmATY6Y9emWdnkJuQ=
-github.com/flanksource/kopper v1.0.14 h1:hyEhduITyk1u3h7evp56ipuRK/GpuB3lBl/ZdsrMqck=
-github.com/flanksource/kopper v1.0.14/go.mod h1:jk5JN4raPsIsANlkk7ZOFmsJ8J0yxTxaUD3SEJFLwZE=
-=======
-github.com/flanksource/gomplate/v3 v3.24.66 h1:fTaN0s9t+YZCau+KlgcLn9pMcLTsSiMjBnZUbhGY/oY=
-github.com/flanksource/gomplate/v3 v3.24.66/go.mod h1:PiYJOAk971BpG/suhFP9YAZSjfz4KiRaqwYlQZZJp0Q=
-github.com/flanksource/is-healthy v1.0.82 h1:/hjq2hYWVph2Cr6F6qF4v/vTuEqOqgPVnZOh1kfDwvg=
-github.com/flanksource/is-healthy v1.0.82/go.mod h1:AV3S/uXPnjvfaB4X6CV7xojAHjOmATY6Y9emWdnkJuQ=
-github.com/flanksource/kopper v1.0.14 h1:hyEhduITyk1u3h7evp56ipuRK/GpuB3lBl/ZdsrMqck=
-github.com/flanksource/kopper v1.0.14/go.mod h1:jk5JN4raPsIsANlkk7ZOFmsJ8J0yxTxaUD3SEJFLwZE=
->>>>>>> ddbbcfdc (feat(playbook): run exec actions inside a sandbox)
 github.com/flanksource/kubectl-neat v1.0.4 h1:t5/9CqgE84oEtB0KitgJ2+WIeLfD+RhXSxYrqb4X8yI=
 github.com/flanksource/kubectl-neat v1.0.4/go.mod h1:Un/Voyh3cmiZNKQrW/TkAl28nAA7vwnwDGVjRErKjOw=
 github.com/flanksource/sandbox-runtime v1.0.1 h1:zBzNx9GoZILo1ot4qI2wd/gqny0vejvex3xnJzsmvgE=
