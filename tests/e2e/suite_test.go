@@ -120,6 +120,10 @@ var _ = ginkgo.BeforeSuite(func() {
 
 var _ = ginkgo.AfterSuite(func() {
 	setup.AfterSuiteFn()
-	server.Close()
-	metricsServer.Close()
+	if server != nil {
+		server.Close()
+	}
+	if metricsServer != nil {
+		metricsServer.Close()
+	}
 })
