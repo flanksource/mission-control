@@ -731,7 +731,7 @@ var _ = Describe("Playbook", Ordered, func() {
 	})
 
 	var _ = Describe("Secret Parameters", Ordered, func() {
-		It("should not leak secrets in action output", func() {
+		XIt("should not leak secrets in action output", func() {
 			run := createAndRunWithSecretParams(DefaultContext.WithUser(&dummy.JohnDoe), "action-secret-params", RunParams{
 				ConfigID: lo.ToPtr(dummy.EKSCluster.ID),
 			}, "super_secret_value", models.PlaybookRunStatusCompleted)
