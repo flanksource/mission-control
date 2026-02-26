@@ -21,6 +21,7 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/shell"
 	"github.com/flanksource/duty/types"
+	"github.com/flanksource/sandbox-runtime/sandbox"
 	"k8s.io/client-go/kubernetes"
 
 	"github.com/flanksource/incident-commander/api"
@@ -398,7 +399,7 @@ type ExecAction struct {
 	Setup *shell.ExecSetup `json:"setup,omitempty"`
 }
 
-func (e *ExecAction) ToShellExec() shell.Exec {
+func (e *ExecAction) ToShellExec(sb *sandbox.Sandbox) shell.Exec {
 	return shell.Exec{
 		Script:      e.Script,
 		Connections: e.Connections,
@@ -406,6 +407,7 @@ func (e *ExecAction) ToShellExec() shell.Exec {
 		Artifacts:   e.Artifacts,
 		Checkout:    e.Checkout,
 		Setup:       e.Setup,
+		Sandbox:     sb,
 	}
 }
 
