@@ -36,7 +36,6 @@ func (t *Notification) Run(ctx context.Context, action v1.NotificationAction) (*
 		Message: data.Message,
 	}
 	if service == "slack" {
-		output.Message = ""
 		if notification.IsSlackBlocksJSON(data.Message) {
 			output.Slack = data.Message
 		} else {
