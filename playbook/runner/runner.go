@@ -21,7 +21,6 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/config/schemas"
 	"github.com/flanksource/incident-commander/db"
-	"github.com/flanksource/incident-commander/notification"
 	"github.com/flanksource/incident-commander/playbook/actions"
 )
 
@@ -233,25 +232,34 @@ func saveAIResultToSendHistory(ctx context.Context, run models.PlaybookRun) erro
 
 		if lo.Contains(notificationActionNames, action.Name) {
 			var msg string
-			if slackMsg, ok := action.Result["slack"].(string); ok {
-				msg = slackMsg
-			} else if body, ok := action.Result["body"].(string); ok {
-				msg = body
+			if message, ok := action.Result["message"].(string); ok && strings.TrimSpace(message) != "" {
+				msg = strings.TrimSpace(message)
+			} else if body, ok := action.Result["body"].(string); ok && strings.TrimSpace(body) != "" {
+				msg = strings.TrimSpace(body)
+			} else if slackMsg, ok := action.Result["slack"].(string); ok && strings.TrimSpace(slackMsg) != "" {
+				msg = strings.TrimSpace(slackMsg)
 			}
 
 			if msg != "" {
-				payload := notification.NotificationMessagePayload{
-					Description: msg,
-				}
-				if b, err := json.Marshal(payload); err == nil {
-					sendHistoryUpdate.BodyPayload = b
-				}
+				sendHistoryUpdate.Body = lo.ToPtr(msg)
 			}
 		}
 	}
 
-	if len(sendHistoryUpdate.ResourceHealthDescription) > 0 {
-		if err := ctx.DB().Updates(sendHistoryUpdate).Error; err != nil {
+	if len(sendHistoryUpdate.ResourceHealthDescription) > 0 || sendHistoryUpdate.Body != nil {
+		updates := map[string]any{}
+		if len(sendHistoryUpdate.ResourceHealthDescription) > 0 {
+			updates["resource_health_description"] = sendHistoryUpdate.ResourceHealthDescription
+		}
+		if sendHistoryUpdate.Body != nil {
+			updates["body"] = lo.FromPtr(sendHistoryUpdate.Body)
+			// For playbook-rendered notifications, `body` is the canonical content.
+			// `body_payload` can still hold the default pre-playbook payload from an earlier phase.
+			// Clear it to keep a single source of truth in history for this notification path.
+			updates["body_payload"] = gorm.Expr("NULL")
+		}
+
+		if err := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", sendHistoryUpdate.ID).UpdateColumns(updates).Error; err != nil {
 			return ctx.Oops().Wrap(err)
 		}
 	}
