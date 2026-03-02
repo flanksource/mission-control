@@ -180,7 +180,7 @@
             "type": "string"
           },
           "type": "object",
-          "description": "Properties for Shoutrrr"
+          "description": "Properties are key-value pairs that override or supplement the connection's own settings at send time.\nThey are merged over the connection's stored properties, so any key specified here takes precedence.\nFor example, overriding the recipient on an SMTP connection (\"to\"), or the channel on a Slack connection.\nThe exact keys depend on the connection type."
         },
         "playbook": {
           "type": "string",
@@ -259,7 +259,7 @@
             "type": "string"
           },
           "type": "object",
-          "description": "Properties for Shoutrrr"
+          "description": "Properties are key-value pairs that override or supplement the connection's own settings at send time.\nThey are merged over the connection's stored properties, so any key specified here takes precedence.\nFor example, overriding the recipient on an SMTP connection (\"to\"), or the channel on a Slack connection.\nThe exact keys depend on the connection type."
         },
         "playbook": {
           "type": "string",

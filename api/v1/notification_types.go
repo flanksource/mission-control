@@ -29,7 +29,10 @@ type NotificationRecipientSpec struct {
 	// Specify shoutrrr URL
 	URL string `json:"url,omitempty" yaml:"url,omitempty"`
 
-	// Properties for Shoutrrr
+	// Properties are key-value pairs that override or supplement the connection's own settings at send time.
+	// They are merged over the connection's stored properties, so any key specified here takes precedence.
+	// For example, overriding the recipient on an SMTP connection ("to"), or the channel on a Slack connection.
+	// The exact keys depend on the connection type.
 	Properties map[string]string `json:"properties,omitempty" yaml:"properties,omitempty"`
 
 	// Name or <namespace>/<name> of the playbook to run.

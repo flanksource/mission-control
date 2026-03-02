@@ -783,8 +783,7 @@
     "HTTPAction": {
       "properties": {
         "connection": {
-          "type": "string",
-          "description": "Connection name e.g. connection://http/google"
+          "type": "string"
         },
         "username": {
           "$ref": "#/$defs/EnvVar"
@@ -793,12 +792,10 @@
           "$ref": "#/$defs/EnvVar"
         },
         "ntlm": {
-          "type": "boolean",
-          "description": "NTLM when set to true will do authentication using NTLM v1 protocol"
+          "type": "boolean"
         },
         "ntlmv2": {
-          "type": "boolean",
-          "description": "NTLM when set to true will do authentication using NTLM v2 protocol"
+          "type": "boolean"
         },
         "digest": {
           "type": "boolean"
@@ -819,8 +816,7 @@
           "items": {
             "$ref": "#/$defs/EnvVar"
           },
-          "type": "array",
-          "description": "Header fields to be used in the query"
+          "type": "array"
         },
         "awsSigV4": {
           "$ref": "#/$defs/AWSSigV4"
