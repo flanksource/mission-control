@@ -212,6 +212,7 @@ type CanSilenceParams struct {
 	Recursive    bool
 	Filter       string
 	Selectors    types.ResourceSelectors
+	Limit        int
 }
 
 func CanSilence(ctx context.Context, h []models.NotificationSendHistory, params CanSilenceParams) ([]models.NotificationSendHistory, error) {

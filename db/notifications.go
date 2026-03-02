@@ -448,7 +448,8 @@ func GetNotificationSendHistory(ctx context.Context, timeWindowDays int, status 
 			OR (source_event LIKE 'component.%' AND EXISTS (SELECT 1 FROM components c WHERE c.id = notification_send_history.resource_id AND c.deleted_at IS NULL))
 			OR (source_event LIKE 'check.%' AND EXISTS (SELECT 1 FROM checks ch WHERE ch.id = notification_send_history.resource_id AND ch.deleted_at IS NULL))
 			OR (source_event LIKE 'canary.%' AND EXISTS (SELECT 1 FROM canaries ca WHERE ca.id = notification_send_history.resource_id AND ca.deleted_at IS NULL))
-		)`)
+		)`).
+		Order("created_at DESC")
 
 	if len(status) > 0 {
 		q = q.Where("status IN ?", status)
