@@ -17,11 +17,6 @@ import (
 	"github.com/flanksource/incident-commander/rbac"
 )
 
-const (
-	defaultFormat      = "html"
-	defaultDisposition = "inline"
-)
-
 func init() {
 	echoSrv.RegisterRoutes(RegisterRoutes)
 }
@@ -40,31 +35,6 @@ func ApplicationSpec(c echo.Context) error {
 	namespace := c.Param("namespace")
 	name := c.Param("name")
 
-	response, err := applicationSpec(ctx, namespace, name)
-	if err != nil {
-		return dutyAPI.WriteError(c, err)
-	}
-
-	return c.JSONBlob(http.StatusOK, response)
-}
-
-// ExportApplication renders the application as HTML or PDF and writes it to the response.
-// Query params: format=(html|pdf), disposition=(inline|attachment)
-func ExportApplication(c echo.Context) error {
-	ctx := c.Request().Context().(context.Context)
-
-	namespace := c.Param("namespace")
-	name := c.Param("name")
-
-	format := c.QueryParam("format")
-	if format == "" {
-		format = defaultFormat
-	}
-	disposition := c.QueryParam("disposition")
-	if disposition == "" {
-		disposition = defaultDisposition
-	}
-
 	application, err := db.FindApplication(ctx, namespace, name)
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Errorf("failed to find application %s/%s: %w", namespace, name, err))
@@ -82,56 +52,47 @@ func ExportApplication(c echo.Context) error {
 		return dutyAPI.WriteError(c, ctx.Oops().Errorf("failed to build application: %w", err))
 	}
 
-	switch format {
-	case "pdf":
-		data, err := RenderPDF(generated)
-		if err != nil {
-			return dutyAPI.WriteError(c, ctx.Oops().Errorf("failed to render PDF: %w", err))
-		}
-		filename := fmt.Sprintf("%s-%s.pdf", name, namespace)
-		if disposition == "attachment" {
-			c.Response().Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
-		} else {
-			c.Response().Header().Set("Content-Disposition", "inline")
-		}
-		return c.Blob(http.StatusOK, "application/pdf", data)
-	default:
-		html, err := RenderHTML(generated)
-		if err != nil {
-			return dutyAPI.WriteError(c, ctx.Oops().Errorf("failed to render HTML: %w", err))
-		}
-		filename := fmt.Sprintf("%s-%s.html", name, namespace)
-		if disposition == "attachment" {
-			c.Response().Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
-		} else {
-			c.Response().Header().Set("Content-Disposition", "inline")
-		}
-		return c.HTMLBlob(http.StatusOK, []byte(html))
-	}
-}
-
-func applicationSpec(ctx context.Context, namespace, name string) ([]byte, error) {
-	application, err := db.FindApplication(ctx, namespace, name)
-	if err != nil {
-		return nil, ctx.Oops().Errorf("failed to find application %s/%s: %w", namespace, name, err)
-	} else if application == nil {
-		return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("application %s/%s not found", namespace, name)
-	}
-
-	app, err := v1.ApplicationFromModel(*application)
-	if err != nil {
-		return nil, ctx.Oops().Errorf("failed to convert application to kubernetes application: %w", err)
-	}
-
-	generated, err := buildApplication(ctx, app)
-	if err != nil {
-		return nil, ctx.Oops().Errorf("failed to generate application: %w", err)
-	}
-
 	specJSON, err := json.Marshal(generated)
 	if err != nil {
-		return nil, ctx.Oops().Errorf("failed to marshal generated application: %w", err)
+		return dutyAPI.WriteError(c, ctx.Oops().Errorf("failed to marshal application: %w", err))
 	}
 
-	return specJSON, nil
+	return c.JSONBlob(http.StatusOK, specJSON)
+}
+
+// ExportApplication renders the application in the requested format.
+// Query params: format=(json|html|pdf|facet-html|facet-pdf), disposition=(inline|attachment)
+func ExportApplication(c echo.Context) error {
+	ctx := c.Request().Context().(context.Context)
+
+	namespace := c.Param("namespace")
+	name := c.Param("name")
+	format := c.QueryParam("format")
+	if format == "" {
+		format = "json"
+	}
+	disposition := c.QueryParam("disposition")
+
+	data, err := Export(ctx, namespace, name, format)
+	if err != nil {
+		return dutyAPI.WriteError(c, err)
+	}
+
+	contentType, ext := formatContentType(format)
+	if disposition == "attachment" {
+		c.Response().Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s-%s.%s"`, name, namespace, ext))
+	}
+
+	return c.Blob(http.StatusOK, contentType, data)
+}
+
+func formatContentType(format string) (contentType, ext string) {
+	switch format {
+	case "pdf", "facet-pdf":
+		return "application/pdf", "pdf"
+	case "html", "facet-html":
+		return "text/html", "html"
+	default:
+		return "application/json", "json"
+	}
 }
