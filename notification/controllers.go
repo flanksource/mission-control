@@ -3,6 +3,7 @@ package notification
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/flanksource/duty/api"
@@ -108,13 +109,20 @@ type NotificationSilencePreviewItem struct {
 	BodyMarkdown                   string         `json:"body_markdown,omitempty"`
 }
 
+const DefaultNotificationSilencePreviewLimit = 30
+
 func NotificationSilencePreview(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
+
 	params := CanSilenceParams{
 		ResourceID:   c.QueryParam("id"),
 		ResourceType: c.QueryParam("type"),
 		Recursive:    c.QueryParam("recursive") == "true",
 		Filter:       c.QueryParam("filter"),
+		Limit:        DefaultNotificationSilencePreviewLimit,
+	}
+	if limit, err := strconv.Atoi(c.QueryParam("limit")); err == nil {
+		params.Limit = limit
 	}
 
 	if selectorsRaw := c.QueryParam("selectors"); selectorsRaw != "" {
@@ -126,7 +134,7 @@ func NotificationSilencePreview(c echo.Context) error {
 		params.Selectors = selectors
 	}
 
-	h, err := db.GetNotificationSendHistory(ctx, 15, []string{models.NotificationStatusSent}, -1, -1)
+	h, err := db.GetNotificationSendHistory(ctx, 15, []string{models.NotificationStatusSent}, params.Limit, -1)
 	if err != nil {
 		return api.WriteError(c, err)
 	}
