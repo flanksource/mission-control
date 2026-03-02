@@ -751,7 +751,10 @@ func isHealthReportable(events []string, previousHealth, currentHealth models.He
 // GetEnvForEvent gets the environment variables for the given event
 // that'll be passed to the cel expression or to the template renderer as a view.
 func GetEnvForEvent(ctx context.Context, event models.Event) (*celVariables, error) {
-	var env celVariables
+	env := celVariables{
+		SourceEvent: event.Name,
+		EventTime:   event.CreatedAt,
+	}
 
 	if strings.HasPrefix(event.Name, "check.") {
 		checkID := event.Properties["id"]
