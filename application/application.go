@@ -127,15 +127,76 @@ func buildApplication(ctx context.Context, app *v1.Application) (*api.Applicatio
 	}
 
 	for _, section := range app.Spec.Sections {
-		viewResult, err := views.ReadOrPopulateViewTable(ctx, section.ViewRef.Namespace, section.ViewRef.Name)
+		appSection, err := buildSection(ctx, section)
 		if err != nil {
-			return nil, ctx.Oops().Errorf("failed to read view table (%s/%s): %w", section.ViewRef.Namespace, section.ViewRef.Name, err)
+			return nil, ctx.Oops().Errorf("failed to build section %q: %w", section.Title, err)
 		}
-
-		response.Sections = append(response.Sections, viewResult)
+		response.Sections = append(response.Sections, appSection)
 	}
 
 	return &response, nil
+}
+
+func buildSection(ctx context.Context, section api.ViewSection) (api.ApplicationSection, error) {
+	appSection := api.ApplicationSection{
+		Title: section.Title,
+		Icon:  section.Icon,
+	}
+
+	if section.ViewRef != nil {
+		appSection.Type = api.SectionTypeView
+		viewResult, err := views.ReadOrPopulateViewTable(ctx, section.ViewRef.Namespace, section.ViewRef.Name)
+		if err != nil {
+			return appSection, ctx.Oops().Errorf("failed to read view table (%s/%s): %w", section.ViewRef.Namespace, section.ViewRef.Name, err)
+		}
+		data := viewResultToSectionData(viewResult)
+		appSection.View = &data
+		return appSection, nil
+	}
+
+	if section.UIRef == nil {
+		return appSection, nil
+	}
+
+	if section.UIRef.Changes != nil {
+		appSection.Type = api.SectionTypeChanges
+		changes, err := db.GetChangesForUIRef(ctx, section.UIRef.Changes)
+		if err != nil {
+			return appSection, ctx.Oops().Errorf("failed to get changes for section %q: %w", section.Title, err)
+		}
+		if changes == nil {
+			changes = []api.ApplicationChange{}
+		}
+		appSection.Changes = changes
+		return appSection, nil
+	}
+
+	if section.UIRef.Configs != nil {
+		appSection.Type = api.SectionTypeConfigs
+		configs, err := db.GetConfigsForUIRef(ctx, section.UIRef.Configs)
+		if err != nil {
+			return appSection, ctx.Oops().Errorf("failed to get configs for section %q: %w", section.Title, err)
+		}
+		if configs == nil {
+			configs = []api.ApplicationConfigItem{}
+		}
+		appSection.Configs = configs
+		return appSection, nil
+	}
+
+	return appSection, nil
+}
+
+func viewResultToSectionData(r *api.ViewResult) api.ApplicationViewData {
+	return api.ApplicationViewData{
+		RefreshStatus:   r.RefreshStatus,
+		LastRefreshedAt: r.LastRefreshedAt,
+		Columns:         r.Columns,
+		Rows:            r.Rows,
+		Panels:          r.Panels,
+		Variables:       r.Variables,
+		ColumnOptions:   r.ColumnOptions,
+	}
 }
 
 func PersistApplication(ctx context.Context, app *v1.Application) error {

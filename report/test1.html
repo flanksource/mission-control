@@ -1,0 +1,2340 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>/* Tailwind directives */
+
+*, ::before, ::after {
+  --tw-border-spacing-x: 0;
+  --tw-border-spacing-y: 0;
+  --tw-translate-x: 0;
+  --tw-translate-y: 0;
+  --tw-rotate: 0;
+  --tw-skew-x: 0;
+  --tw-skew-y: 0;
+  --tw-scale-x: 1;
+  --tw-scale-y: 1;
+  --tw-pan-x:  ;
+  --tw-pan-y:  ;
+  --tw-pinch-zoom:  ;
+  --tw-scroll-snap-strictness: proximity;
+  --tw-gradient-from-position:  ;
+  --tw-gradient-via-position:  ;
+  --tw-gradient-to-position:  ;
+  --tw-ordinal:  ;
+  --tw-slashed-zero:  ;
+  --tw-numeric-figure:  ;
+  --tw-numeric-spacing:  ;
+  --tw-numeric-fraction:  ;
+  --tw-ring-inset:  ;
+  --tw-ring-offset-width: 0px;
+  --tw-ring-offset-color: #fff;
+  --tw-ring-color: rgb(59 130 246 / 0.5);
+  --tw-ring-offset-shadow: 0 0 #0000;
+  --tw-ring-shadow: 0 0 #0000;
+  --tw-shadow: 0 0 #0000;
+  --tw-shadow-colored: 0 0 #0000;
+  --tw-blur:  ;
+  --tw-brightness:  ;
+  --tw-contrast:  ;
+  --tw-grayscale:  ;
+  --tw-hue-rotate:  ;
+  --tw-invert:  ;
+  --tw-saturate:  ;
+  --tw-sepia:  ;
+  --tw-drop-shadow:  ;
+  --tw-backdrop-blur:  ;
+  --tw-backdrop-brightness:  ;
+  --tw-backdrop-contrast:  ;
+  --tw-backdrop-grayscale:  ;
+  --tw-backdrop-hue-rotate:  ;
+  --tw-backdrop-invert:  ;
+  --tw-backdrop-opacity:  ;
+  --tw-backdrop-saturate:  ;
+  --tw-backdrop-sepia:  ;
+  --tw-contain-size:  ;
+  --tw-contain-layout:  ;
+  --tw-contain-paint:  ;
+  --tw-contain-style:  ;
+}
+
+::backdrop {
+  --tw-border-spacing-x: 0;
+  --tw-border-spacing-y: 0;
+  --tw-translate-x: 0;
+  --tw-translate-y: 0;
+  --tw-rotate: 0;
+  --tw-skew-x: 0;
+  --tw-skew-y: 0;
+  --tw-scale-x: 1;
+  --tw-scale-y: 1;
+  --tw-pan-x:  ;
+  --tw-pan-y:  ;
+  --tw-pinch-zoom:  ;
+  --tw-scroll-snap-strictness: proximity;
+  --tw-gradient-from-position:  ;
+  --tw-gradient-via-position:  ;
+  --tw-gradient-to-position:  ;
+  --tw-ordinal:  ;
+  --tw-slashed-zero:  ;
+  --tw-numeric-figure:  ;
+  --tw-numeric-spacing:  ;
+  --tw-numeric-fraction:  ;
+  --tw-ring-inset:  ;
+  --tw-ring-offset-width: 0px;
+  --tw-ring-offset-color: #fff;
+  --tw-ring-color: rgb(59 130 246 / 0.5);
+  --tw-ring-offset-shadow: 0 0 #0000;
+  --tw-ring-shadow: 0 0 #0000;
+  --tw-shadow: 0 0 #0000;
+  --tw-shadow-colored: 0 0 #0000;
+  --tw-blur:  ;
+  --tw-brightness:  ;
+  --tw-contrast:  ;
+  --tw-grayscale:  ;
+  --tw-hue-rotate:  ;
+  --tw-invert:  ;
+  --tw-saturate:  ;
+  --tw-sepia:  ;
+  --tw-drop-shadow:  ;
+  --tw-backdrop-blur:  ;
+  --tw-backdrop-brightness:  ;
+  --tw-backdrop-contrast:  ;
+  --tw-backdrop-grayscale:  ;
+  --tw-backdrop-hue-rotate:  ;
+  --tw-backdrop-invert:  ;
+  --tw-backdrop-opacity:  ;
+  --tw-backdrop-saturate:  ;
+  --tw-backdrop-sepia:  ;
+  --tw-contain-size:  ;
+  --tw-contain-layout:  ;
+  --tw-contain-paint:  ;
+  --tw-contain-style:  ;
+}
+
+/* ! tailwindcss v3.4.19 | MIT License | https://tailwindcss.com */
+
+/*
+1. Prevent padding and border from affecting element width. (https://github.com/mozdevs/cssremedy/issues/4)
+2. Allow adding a border to an element by just adding a border-width. (https://github.com/tailwindcss/tailwindcss/pull/116)
+*/
+
+*,
+::before,
+::after {
+  box-sizing: border-box;
+  /* 1 */
+  border-width: 0;
+  /* 2 */
+  border-style: solid;
+  /* 2 */
+  border-color: #e5e7eb;
+  /* 2 */
+}
+
+::before,
+::after {
+  --tw-content: '';
+}
+
+/*
+1. Use a consistent sensible line-height in all browsers.
+2. Prevent adjustments of font size after orientation changes in iOS.
+3. Use a more readable tab size.
+4. Use the user's configured `sans` font-family by default.
+5. Use the user's configured `sans` font-feature-settings by default.
+6. Use the user's configured `sans` font-variation-settings by default.
+7. Disable tap highlights on iOS
+*/
+
+html,
+:host {
+  line-height: 1.5;
+  /* 1 */
+  -webkit-text-size-adjust: 100%;
+  /* 2 */
+  -moz-tab-size: 4;
+  /* 3 */
+  -o-tab-size: 4;
+     tab-size: 4;
+  /* 3 */
+  font-family: Open Sans, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;
+  /* 4 */
+  font-feature-settings: normal;
+  /* 5 */
+  font-variation-settings: normal;
+  /* 6 */
+  -webkit-tap-highlight-color: transparent;
+  /* 7 */
+}
+
+/*
+1. Remove the margin in all browsers.
+2. Inherit line-height from `html` so users can set them as a class directly on the `html` element.
+*/
+
+body {
+  margin: 0;
+  /* 1 */
+  line-height: inherit;
+  /* 2 */
+}
+
+/*
+1. Add the correct height in Firefox.
+2. Correct the inheritance of border color in Firefox. (https://bugzilla.mozilla.org/show_bug.cgi?id=190655)
+3. Ensure horizontal rules are visible by default.
+*/
+
+hr {
+  height: 0;
+  /* 1 */
+  color: inherit;
+  /* 2 */
+  border-top-width: 1px;
+  /* 3 */
+}
+
+/*
+Add the correct text decoration in Chrome, Edge, and Safari.
+*/
+
+abbr:where([title]) {
+  -webkit-text-decoration: underline dotted;
+          text-decoration: underline dotted;
+}
+
+/*
+Remove the default font size and weight for headings.
+*/
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+/*
+Reset links to optimize for opt-in styling instead of opt-out.
+*/
+
+a {
+  color: inherit;
+  text-decoration: inherit;
+}
+
+/*
+Add the correct font weight in Edge and Safari.
+*/
+
+b,
+strong {
+  font-weight: bolder;
+}
+
+/*
+1. Use the user's configured `mono` font-family by default.
+2. Use the user's configured `mono` font-feature-settings by default.
+3. Use the user's configured `mono` font-variation-settings by default.
+4. Correct the odd `em` font sizing in all browsers.
+*/
+
+code,
+kbd,
+samp,
+pre {
+  font-family: Consolas, Monaco, Courier New, monospace;
+  /* 1 */
+  font-feature-settings: normal;
+  /* 2 */
+  font-variation-settings: normal;
+  /* 3 */
+  font-size: 1em;
+  /* 4 */
+}
+
+/*
+Add the correct font size in all browsers.
+*/
+
+small {
+  font-size: 80%;
+}
+
+/*
+Prevent `sub` and `sup` elements from affecting the line height in all browsers.
+*/
+
+sub,
+sup {
+  font-size: 75%;
+  line-height: 0;
+  position: relative;
+  vertical-align: baseline;
+}
+
+sub {
+  bottom: -0.25em;
+}
+
+sup {
+  top: -0.5em;
+}
+
+/*
+1. Remove text indentation from table contents in Chrome and Safari. (https://bugs.chromium.org/p/chromium/issues/detail?id=999088, https://bugs.webkit.org/show_bug.cgi?id=201297)
+2. Correct table border color inheritance in all Chrome and Safari. (https://bugs.chromium.org/p/chromium/issues/detail?id=935729, https://bugs.webkit.org/show_bug.cgi?id=195016)
+3. Remove gaps between table borders by default.
+*/
+
+table {
+  text-indent: 0;
+  /* 1 */
+  border-color: inherit;
+  /* 2 */
+  border-collapse: collapse;
+  /* 3 */
+}
+
+/*
+1. Change the font styles in all browsers.
+2. Remove the margin in Firefox and Safari.
+3. Remove default padding in all browsers.
+*/
+
+button,
+input,
+optgroup,
+select,
+textarea {
+  font-family: inherit;
+  /* 1 */
+  font-feature-settings: inherit;
+  /* 1 */
+  font-variation-settings: inherit;
+  /* 1 */
+  font-size: 100%;
+  /* 1 */
+  font-weight: inherit;
+  /* 1 */
+  line-height: inherit;
+  /* 1 */
+  letter-spacing: inherit;
+  /* 1 */
+  color: inherit;
+  /* 1 */
+  margin: 0;
+  /* 2 */
+  padding: 0;
+  /* 3 */
+}
+
+/*
+Remove the inheritance of text transform in Edge and Firefox.
+*/
+
+button,
+select {
+  text-transform: none;
+}
+
+/*
+1. Correct the inability to style clickable types in iOS and Safari.
+2. Remove default button styles.
+*/
+
+button,
+input:where([type='button']),
+input:where([type='reset']),
+input:where([type='submit']) {
+  -webkit-appearance: button;
+  /* 1 */
+  background-color: transparent;
+  /* 2 */
+  background-image: none;
+  /* 2 */
+}
+
+/*
+Use the modern Firefox focus style for all focusable elements.
+*/
+
+:-moz-focusring {
+  outline: auto;
+}
+
+/*
+Remove the additional `:invalid` styles in Firefox. (https://github.com/mozilla/gecko-dev/blob/2f9eacd9d3d995c937b4251a5557d95d494c9be1/layout/style/res/forms.css#L728-L737)
+*/
+
+:-moz-ui-invalid {
+  box-shadow: none;
+}
+
+/*
+Add the correct vertical alignment in Chrome and Firefox.
+*/
+
+progress {
+  vertical-align: baseline;
+}
+
+/*
+Correct the cursor style of increment and decrement buttons in Safari.
+*/
+
+::-webkit-inner-spin-button,
+::-webkit-outer-spin-button {
+  height: auto;
+}
+
+/*
+1. Correct the odd appearance in Chrome and Safari.
+2. Correct the outline style in Safari.
+*/
+
+[type='search'] {
+  -webkit-appearance: textfield;
+  /* 1 */
+  outline-offset: -2px;
+  /* 2 */
+}
+
+/*
+Remove the inner padding in Chrome and Safari on macOS.
+*/
+
+::-webkit-search-decoration {
+  -webkit-appearance: none;
+}
+
+/*
+1. Correct the inability to style clickable types in iOS and Safari.
+2. Change font properties to `inherit` in Safari.
+*/
+
+::-webkit-file-upload-button {
+  -webkit-appearance: button;
+  /* 1 */
+  font: inherit;
+  /* 2 */
+}
+
+/*
+Add the correct display in Chrome and Safari.
+*/
+
+summary {
+  display: list-item;
+}
+
+/*
+Removes the default spacing and border for appropriate elements.
+*/
+
+blockquote,
+dl,
+dd,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+hr,
+figure,
+p,
+pre {
+  margin: 0;
+}
+
+fieldset {
+  margin: 0;
+  padding: 0;
+}
+
+legend {
+  padding: 0;
+}
+
+ol,
+ul,
+menu {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/*
+Reset default styling for dialogs.
+*/
+
+dialog {
+  padding: 0;
+}
+
+/*
+Prevent resizing textareas horizontally by default.
+*/
+
+textarea {
+  resize: vertical;
+}
+
+/*
+1. Reset the default placeholder opacity in Firefox. (https://github.com/tailwindlabs/tailwindcss/issues/3300)
+2. Set the default placeholder color to the user's configured gray 400 color.
+*/
+
+input::-moz-placeholder, textarea::-moz-placeholder {
+  opacity: 1;
+  /* 1 */
+  color: #9ca3af;
+  /* 2 */
+}
+
+input::placeholder,
+textarea::placeholder {
+  opacity: 1;
+  /* 1 */
+  color: #9ca3af;
+  /* 2 */
+}
+
+/*
+Set the default cursor for buttons.
+*/
+
+button,
+[role="button"] {
+  cursor: pointer;
+}
+
+/*
+Make sure disabled buttons don't get the pointer cursor.
+*/
+
+:disabled {
+  cursor: default;
+}
+
+/*
+1. Make replaced elements `display: block` by default. (https://github.com/mozdevs/cssremedy/issues/14)
+2. Add `vertical-align: middle` to align replaced elements more sensibly by default. (https://github.com/jensimmons/cssremedy/issues/14#issuecomment-634934210)
+   This can trigger a poorly considered lint error in some tools but is included by design.
+*/
+
+img,
+svg,
+video,
+canvas,
+audio,
+iframe,
+embed,
+object {
+  display: block;
+  /* 1 */
+  vertical-align: middle;
+  /* 2 */
+}
+
+/*
+Constrain images and videos to the parent width and preserve their intrinsic aspect ratio. (https://github.com/mozdevs/cssremedy/issues/14)
+*/
+
+img,
+video {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Make elements with the HTML hidden attribute stay hidden by default */
+
+[hidden]:where(:not([hidden="until-found"])) {
+  display: none;
+}
+
+.container {
+  width: 100%;
+}
+
+@media (min-width: 640px) {
+  .container {
+    max-width: 640px;
+  }
+}
+
+@media (min-width: 768px) {
+  .container {
+    max-width: 768px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .container {
+    max-width: 1024px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .container {
+    max-width: 1280px;
+  }
+}
+
+@media (min-width: 1536px) {
+  .container {
+    max-width: 1536px;
+  }
+}
+
+.m-0 {
+  margin: 0px;
+}
+
+.mx-auto {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.my-4 {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+.my-\[4mm\] {
+  margin-top: 4mm;
+  margin-bottom: 4mm;
+}
+
+.mb-1 {
+  margin-bottom: 0.25rem;
+}
+
+.mb-\[2mm\] {
+  margin-bottom: 2mm;
+}
+
+.mb-\[3mm\] {
+  margin-bottom: 3mm;
+}
+
+.mb-\[4mm\] {
+  margin-bottom: 4mm;
+}
+
+.mb-\[5mm\] {
+  margin-bottom: 5mm;
+}
+
+.mb-\[8mm\] {
+  margin-bottom: 8mm;
+}
+
+.ml-\[2mm\] {
+  margin-left: 2mm;
+}
+
+.mt-\[2mm\] {
+  margin-top: 2mm;
+}
+
+.mt-\[4mm\] {
+  margin-top: 4mm;
+}
+
+.inline-block {
+  display: inline-block;
+}
+
+.flex {
+  display: flex;
+}
+
+.inline-flex {
+  display: inline-flex;
+}
+
+.table {
+  display: table;
+}
+
+.grid {
+  display: grid;
+}
+
+.h-\[1px\] {
+  height: 1px;
+}
+
+.h-\[2mm\] {
+  height: 2mm;
+}
+
+.h-\[3mm\] {
+  height: 3mm;
+}
+
+.h-full {
+  height: 100%;
+}
+
+.min-h-\[10mm\] {
+  min-height: 10mm;
+}
+
+.min-h-\[200mm\] {
+  min-height: 200mm;
+}
+
+.min-h-\[40mm\] {
+  min-height: 40mm;
+}
+
+.w-\[2mm\] {
+  width: 2mm;
+}
+
+.w-\[3mm\] {
+  width: 3mm;
+}
+
+.w-\[40mm\] {
+  width: 40mm;
+}
+
+.w-full {
+  width: 100%;
+}
+
+.min-w-\[25mm\] {
+  min-width: 25mm;
+}
+
+.min-w-\[40mm\] {
+  min-width: 40mm;
+}
+
+.max-w-\[120mm\] {
+  max-width: 120mm;
+}
+
+.border-collapse {
+  border-collapse: collapse;
+}
+
+.grid-cols-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.grid-cols-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.grid-cols-7 {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.flex-col {
+  flex-direction: column;
+}
+
+.items-center {
+  align-items: center;
+}
+
+.justify-center {
+  justify-content: center;
+}
+
+.justify-between {
+  justify-content: space-between;
+}
+
+.gap-1 {
+  gap: 0.25rem;
+}
+
+.gap-\[1mm\] {
+  gap: 1mm;
+}
+
+.gap-\[3mm\] {
+  gap: 3mm;
+}
+
+.gap-\[4mm\] {
+  gap: 4mm;
+}
+
+.gap-\[6px\] {
+  gap: 6px;
+}
+
+.space-y-\[1mm\] > :not([hidden]) ~ :not([hidden]) {
+  --tw-space-y-reverse: 0;
+  margin-top: calc(1mm * calc(1 - var(--tw-space-y-reverse)));
+  margin-bottom: calc(1mm * var(--tw-space-y-reverse));
+}
+
+.whitespace-nowrap {
+  white-space: nowrap;
+}
+
+.rounded {
+  border-radius: 0.25rem;
+}
+
+.rounded-\[0\.5mm\] {
+  border-radius: 0.5mm;
+}
+
+.rounded-\[1mm\] {
+  border-radius: 1mm;
+}
+
+.rounded-\[2mm\] {
+  border-radius: 2mm;
+}
+
+.rounded-full {
+  border-radius: 9999px;
+}
+
+.rounded-md {
+  border-radius: 0.375rem;
+}
+
+.border {
+  border-width: 1px;
+}
+
+.border-b {
+  border-bottom-width: 1px;
+}
+
+.border-t {
+  border-top-width: 1px;
+}
+
+.border-blue-200 {
+  --tw-border-opacity: 1;
+  border-color: rgb(191 219 254 / var(--tw-border-opacity, 1));
+}
+
+.border-gray-200 {
+  --tw-border-opacity: 1;
+  border-color: rgb(229 231 235 / var(--tw-border-opacity, 1));
+}
+
+.border-green-600 {
+  --tw-border-opacity: 1;
+  border-color: rgb(22 163 74 / var(--tw-border-opacity, 1));
+}
+
+.border-orange-200 {
+  --tw-border-opacity: 1;
+  border-color: rgb(254 215 170 / var(--tw-border-opacity, 1));
+}
+
+.border-red-200 {
+  --tw-border-opacity: 1;
+  border-color: rgb(254 202 202 / var(--tw-border-opacity, 1));
+}
+
+.border-red-600 {
+  --tw-border-opacity: 1;
+  border-color: rgb(220 38 38 / var(--tw-border-opacity, 1));
+}
+
+.border-yellow-200 {
+  --tw-border-opacity: 1;
+  border-color: rgb(254 240 138 / var(--tw-border-opacity, 1));
+}
+
+.bg-\[\#1e293b\] {
+  --tw-bg-opacity: 1;
+  background-color: rgb(30 41 59 / var(--tw-bg-opacity, 1));
+}
+
+.bg-blue-100 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(219 234 254 / var(--tw-bg-opacity, 1));
+}
+
+.bg-blue-50 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(239 246 255 / var(--tw-bg-opacity, 1));
+}
+
+.bg-gray-100 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(243 244 246 / var(--tw-bg-opacity, 1));
+}
+
+.bg-green-100 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(220 252 231 / var(--tw-bg-opacity, 1));
+}
+
+.bg-green-50 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(240 253 244 / var(--tw-bg-opacity, 1));
+}
+
+.bg-green-500 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(34 197 94 / var(--tw-bg-opacity, 1));
+}
+
+.bg-orange-50 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(255 247 237 / var(--tw-bg-opacity, 1));
+}
+
+.bg-red-100 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(254 226 226 / var(--tw-bg-opacity, 1));
+}
+
+.bg-red-50 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(254 242 242 / var(--tw-bg-opacity, 1));
+}
+
+.bg-yellow-100 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(254 249 195 / var(--tw-bg-opacity, 1));
+}
+
+.bg-yellow-50 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(254 252 232 / var(--tw-bg-opacity, 1));
+}
+
+.bg-yellow-500 {
+  --tw-bg-opacity: 1;
+  background-color: rgb(234 179 8 / var(--tw-bg-opacity, 1));
+}
+
+.p-2 {
+  padding: 0.5rem;
+}
+
+.p-\[1mm\] {
+  padding: 1mm;
+}
+
+.p-\[3mm\] {
+  padding: 3mm;
+}
+
+.px-1 {
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+}
+
+.px-1\.5 {
+  padding-left: 0.375rem;
+  padding-right: 0.375rem;
+}
+
+.px-\[1\.5mm\] {
+  padding-left: 1.5mm;
+  padding-right: 1.5mm;
+}
+
+.px-\[10mm\] {
+  padding-left: 10mm;
+  padding-right: 10mm;
+}
+
+.px-\[20mm\] {
+  padding-left: 20mm;
+  padding-right: 20mm;
+}
+
+.px-\[2mm\] {
+  padding-left: 2mm;
+  padding-right: 2mm;
+}
+
+.px-\[6px\] {
+  padding-left: 6px;
+  padding-right: 6px;
+}
+
+.py-1 {
+  padding-top: 0.25rem;
+  padding-bottom: 0.25rem;
+}
+
+.py-\[0\.3mm\] {
+  padding-top: 0.3mm;
+  padding-bottom: 0.3mm;
+}
+
+.py-\[0\.5mm\] {
+  padding-top: 0.5mm;
+  padding-bottom: 0.5mm;
+}
+
+.py-\[1\.5mm\] {
+  padding-top: 1.5mm;
+  padding-bottom: 1.5mm;
+}
+
+.py-\[1px\] {
+  padding-top: 1px;
+  padding-bottom: 1px;
+}
+
+.py-\[2mm\] {
+  padding-top: 2mm;
+  padding-bottom: 2mm;
+}
+
+.pb-\[1mm\] {
+  padding-bottom: 1mm;
+}
+
+.text-center {
+  text-align: center;
+}
+
+.align-top {
+  vertical-align: top;
+}
+
+.font-mono {
+  font-family: Consolas, Monaco, Courier New, monospace;
+}
+
+.text-2xl {
+  font-size: 1.5rem;
+  line-height: 2rem;
+}
+
+.text-\[10pt\] {
+  font-size: 10pt;
+}
+
+.text-\[11pt\] {
+  font-size: 11pt;
+}
+
+.text-\[12pt\] {
+  font-size: 12pt;
+}
+
+.text-\[14pt\] {
+  font-size: 14pt;
+}
+
+.text-\[36pt\] {
+  font-size: 36pt;
+}
+
+.text-\[6pt\] {
+  font-size: 6pt;
+}
+
+.text-\[7\.5pt\] {
+  font-size: 7.5pt;
+}
+
+.text-\[7pt\] {
+  font-size: 7pt;
+}
+
+.text-\[8pt\] {
+  font-size: 8pt;
+}
+
+.text-\[9pt\] {
+  font-size: 9pt;
+}
+
+.text-xs {
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
+.font-bold {
+  font-weight: 700;
+}
+
+.font-medium {
+  font-weight: 500;
+}
+
+.font-semibold {
+  font-weight: 600;
+}
+
+.uppercase {
+  text-transform: uppercase;
+}
+
+.capitalize {
+  text-transform: capitalize;
+}
+
+.leading-\[14pt\] {
+  line-height: 14pt;
+}
+
+.leading-\[15pt\] {
+  line-height: 15pt;
+}
+
+.leading-\[18pt\] {
+  line-height: 18pt;
+}
+
+.leading-\[9pt\] {
+  line-height: 9pt;
+}
+
+.leading-tight {
+  line-height: 1.25;
+}
+
+.tracking-widest {
+  letter-spacing: 0.1em;
+}
+
+.text-\[\#6b7280\] {
+  --tw-text-opacity: 1;
+  color: rgb(107 114 128 / var(--tw-text-opacity, 1));
+}
+
+.text-blue-600 {
+  --tw-text-opacity: 1;
+  color: rgb(37 99 235 / var(--tw-text-opacity, 1));
+}
+
+.text-blue-700 {
+  --tw-text-opacity: 1;
+  color: rgb(29 78 216 / var(--tw-text-opacity, 1));
+}
+
+.text-blue-800 {
+  --tw-text-opacity: 1;
+  color: rgb(30 64 175 / var(--tw-text-opacity, 1));
+}
+
+.text-gray-300 {
+  --tw-text-opacity: 1;
+  color: rgb(209 213 219 / var(--tw-text-opacity, 1));
+}
+
+.text-gray-400 {
+  --tw-text-opacity: 1;
+  color: rgb(156 163 175 / var(--tw-text-opacity, 1));
+}
+
+.text-gray-500 {
+  --tw-text-opacity: 1;
+  color: rgb(107 114 128 / var(--tw-text-opacity, 1));
+}
+
+.text-gray-600 {
+  --tw-text-opacity: 1;
+  color: rgb(75 85 99 / var(--tw-text-opacity, 1));
+}
+
+.text-gray-700 {
+  --tw-text-opacity: 1;
+  color: rgb(55 65 81 / var(--tw-text-opacity, 1));
+}
+
+.text-green-700 {
+  --tw-text-opacity: 1;
+  color: rgb(21 128 61 / var(--tw-text-opacity, 1));
+}
+
+.text-green-800 {
+  --tw-text-opacity: 1;
+  color: rgb(22 101 52 / var(--tw-text-opacity, 1));
+}
+
+.text-orange-600 {
+  --tw-text-opacity: 1;
+  color: rgb(234 88 12 / var(--tw-text-opacity, 1));
+}
+
+.text-red-600 {
+  --tw-text-opacity: 1;
+  color: rgb(220 38 38 / var(--tw-text-opacity, 1));
+}
+
+.text-red-700 {
+  --tw-text-opacity: 1;
+  color: rgb(185 28 28 / var(--tw-text-opacity, 1));
+}
+
+.text-red-800 {
+  --tw-text-opacity: 1;
+  color: rgb(153 27 27 / var(--tw-text-opacity, 1));
+}
+
+.text-slate-700 {
+  --tw-text-opacity: 1;
+  color: rgb(51 65 85 / var(--tw-text-opacity, 1));
+}
+
+.text-slate-800 {
+  --tw-text-opacity: 1;
+  color: rgb(30 41 59 / var(--tw-text-opacity, 1));
+}
+
+.text-slate-900 {
+  --tw-text-opacity: 1;
+  color: rgb(15 23 42 / var(--tw-text-opacity, 1));
+}
+
+.text-white {
+  --tw-text-opacity: 1;
+  color: rgb(255 255 255 / var(--tw-text-opacity, 1));
+}
+
+.text-yellow-600 {
+  --tw-text-opacity: 1;
+  color: rgb(202 138 4 / var(--tw-text-opacity, 1));
+}
+
+.text-yellow-700 {
+  --tw-text-opacity: 1;
+  color: rgb(161 98 7 / var(--tw-text-opacity, 1));
+}
+
+.text-yellow-800 {
+  --tw-text-opacity: 1;
+  color: rgb(133 77 14 / var(--tw-text-opacity, 1));
+}
+
+@source '../src/components/'
+
+@plugin "@tailwindcss/typography";
+
+/* Remove max-width from prose class */
+
+.prose {
+  max-width: none !important;
+}
+
+/* Reduce prose font size and line height for PDFs */
+
+@media print {
+  .prose {
+    font-size: 9pt !important;
+    line-height: 1.3 !important;
+  }
+
+  .prose p {
+    font-size: 10pt !important;
+    line-height: 1.3 !important;
+    margin-bottom: 2mm !important;
+  }
+
+  .prose h1, .prose h2, .prose h3, .prose h4 {
+    line-height: 1.2 !important;
+  }
+
+  /* Override typography plugin with higher specificity */
+
+  .prose h1 {
+    font-size: 22pt !important;
+    line-height: 26pt !important;
+    margin-bottom: 4mm !important;
+    font-weight: 700 !important;
+  }
+
+  .prose h2 {
+    font-size: 15pt !important;
+    line-height: 19pt !important;
+    margin-top: 4mm !important;
+    margin-bottom: 3mm !important;
+    font-weight: 600 !important;
+  }
+
+  .prose h3 {
+    font-size: 11pt !important;
+    line-height: 13pt !important;
+    margin-top: 3mm !important;
+    margin-bottom: 2mm !important;
+    font-weight: 500 !important;
+  }
+
+  .prose h4 {
+    font-size: 10pt !important;
+    line-height: 12pt !important;
+    margin-top: 2mm !important;
+    margin-bottom: 2mm !important;
+    font-weight: 600 !important;
+  }
+
+  h1, h2, h3, h4, p {
+    --tw-text-opacity: 1;
+    color: rgb(31 41 55 / var(--tw-text-opacity, 1));
+  }
+
+  h2,h3,h4 {
+    display: inline-flex;
+  }
+
+  .subtitle {
+    font-weight: 300;
+    --tw-text-opacity: 1;
+    color: rgb(55 65 81 / var(--tw-text-opacity, 1));
+  }
+
+  .icon {
+    margin-right: 0.25rem;
+    display: inline-flex;
+    height: 100%;
+    place-content: center;
+    vertical-align: middle;
+    --tw-text-opacity: 1;
+    color: rgb(156 163 175 / var(--tw-text-opacity, 1));
+  }
+
+  /* Reduce all typography sizes for PDFs while maintaining hierarchy */
+
+  h1 {
+    font-size: 22pt !important;
+    line-height: 26pt !important;
+    margin-bottom: 4mm !important;
+    --tw-text-opacity: 1;
+    color: rgb(55 65 81 / var(--tw-text-opacity, 1));
+  }
+
+  h2 {
+    font-size: 15pt !important;
+    line-height: 19pt !important;
+    margin-top: 4mm !important;
+    margin-bottom: 3mm !important;
+    display: inline-flex;
+  }
+
+  h3 {
+    font-size: 13pt !important;
+    line-height: 13pt !important;
+    margin-top: 3mm !important;
+    margin-bottom: 2mm !important;
+  }
+
+  h4 {
+    font-size: 10pt !important;
+    line-height: 12pt !important;
+    margin-top: 2mm !important;
+    margin-bottom: 2mm !important;
+  }
+
+  p {
+    font-size: 9pt !important;
+    line-height: 12pt !important;
+    margin-bottom: 3mm !important;
+  }
+
+  .text-xs {
+    font-size: 9pt !important;
+  }
+
+  .text-sm {
+    font-size: 11pt !important;
+  }
+
+  .text-md {
+    font-size: 13pt !important;
+  }
+
+  .text-lg {
+    font-size: 15pt !important;
+  }
+
+  .text-xl {
+    font-size: 18pt !important;
+  }
+
+  .text-2xl {
+    font-size: 24pt !important;
+  }
+
+  tbody > td {
+    font-size: 10pt;
+    font-weight: 400 !important;
+  }
+}
+
+/* ==========================================
+   PDF Style Guide Implementation
+   Based on: /docs/style-guide/pdf.mdx
+   Two-Page Datasheet Format
+   ========================================== */
+
+/* CSS Reset */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* Page Setup - A4 Format (210mm × 297mm) */
+
+@page {
+  size: a4;
+
+  margin: 0;
+
+  padding: 0;
+}
+
+/* Typography System - Open Sans Primary, Fira Code Monospace */
+
+body {
+  --tw-bg-opacity: 1;
+  background-color: rgb(255 255 255 / var(--tw-bg-opacity, 1));
+  --tw-text-opacity: 1;
+  color: rgb(55 65 81 / var(--tw-text-opacity, 1));
+  font-family: 'Open Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, Helvetica, sans-serif;
+  font-size: 10pt;
+  line-height: 14pt;
+  max-width: 210mm;
+  margin: 0 auto;
+  padding: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Print-specific styles */
+
+@media print {
+  @page :first {
+    size: a4;
+
+    margin: 0;
+
+    padding: 0;
+  }
+
+  @page {
+    size: a4;
+
+    margin: 0;
+
+    padding: 0;
+  }
+
+  body {
+    margin-bottom: 10mm;
+    margin-top: 0;
+    padding: 0;
+  }
+
+  .page-break {
+    page-break-after: always;
+    -moz-column-break-after: page;
+         break-after: page;
+  }
+
+  .no-print {
+    display: none;
+  }
+
+  /* Ensure colors render correctly for electronic PDF distribution (RGB) */
+
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+    color-adjust: exact;
+  }
+
+  /* Table page break handling */
+
+  table {
+    /* margin-top: 8mm !important; */
+    page-break-inside: auto;
+  }
+
+  /* Ensure table wrappers also respect page margins */
+
+  .overflow-x-auto {
+    margin-top: 8mm !important;
+  }
+
+  thead {
+    display: table-header-group;
+    /* Repeat header on each page */
+  }
+
+  tbody {
+    display: table-row-group;
+  }
+
+  /* Prevent breaking inside rows but allow table continuation */
+
+  tr {
+    page-break-inside: avoid;
+    page-break-after: auto;
+  }
+
+  td {
+    page-break-inside: avoid;
+  }
+
+  /* Add top margin to any element that starts a new page */
+
+  * {
+    orphans: 2;
+    widows: 2;
+  }
+
+  /* Target the last page content to create space for footer */
+
+  main:last-of-type {
+    min-height: 240mm;
+    /* Fill most of A4 page (297mm - margins - footer space) */
+    display: flex;
+    flex-direction: column;
+  }
+
+  main:last-of-type article {
+    flex: 1 0 auto;
+  }
+
+  /* Print header and footer adjustments */
+
+  .datasheet-header {
+    margin: 0 0 10mm;
+    padding: 5mm 10mm;
+  }
+
+  .datasheet-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin: 0 0 10mm;
+    padding: 3mm 10mm;
+    page-break-inside: avoid;
+    page-break-before: avoid;
+  }
+
+  .datasheet-footer .footer-left {
+    padding-left: 3mm;
+  }
+
+  .datasheet-footer .footer-right {
+    padding-right: 3mm;
+  }
+
+  .datasheet-footer p {
+    margin: 0 0 2mm;
+    font-size: 8pt;
+    line-height: 10pt;
+  }
+
+  .datasheet-footer--compact {
+    margin: 8mm 0 0;
+    padding: 2mm 10mm;
+  }
+}
+
+/* Typography Scale from Style Guide (DS-10) */
+
+h1 {
+  font-weight: 700;
+  --tw-text-opacity: 1;
+  color: rgb(15 23 42 / var(--tw-text-opacity, 1));
+  font-size: 26pt;
+  /* DS-10: 24-28pt for product name */
+  line-height: 32pt;
+  margin-bottom: 8mm;
+}
+
+h2 {
+  font-weight: 600;
+  --tw-text-opacity: 1;
+  color: rgb(15 23 42 / var(--tw-text-opacity, 1));
+  font-size: 18pt;
+  line-height: 24pt;
+  margin-top: 6mm;
+  margin-bottom: 4mm;
+}
+
+h3 {
+  font-weight: 500;
+  --tw-text-opacity: 1;
+  color: rgb(59 130 246 / var(--tw-text-opacity, 1));
+  font-size: 13pt;
+  line-height: 16pt;
+  margin-top: 5mm;
+  margin-bottom: 4mm;
+}
+
+h4 {
+  font-weight: 600;
+  --tw-text-opacity: 1;
+  color: rgb(75 85 99 / var(--tw-text-opacity, 1));
+  font-size: 12pt;
+  line-height: 16pt;
+  margin-top: 3mm;
+  margin-bottom: 2mm;
+}
+
+p {
+  --tw-text-opacity: 1;
+  color: rgb(55 65 81 / var(--tw-text-opacity, 1));
+  margin-bottom: 4mm;
+}
+
+strong {
+  font-weight: 600;
+  --tw-text-opacity: 1;
+  color: rgb(15 23 42 / var(--tw-text-opacity, 1));
+}
+
+code:not(.shiki *) {
+  border-radius: 0.25rem;
+  border-width: 1px;
+  --tw-border-opacity: 1;
+  border-color: rgb(229 231 235 / var(--tw-border-opacity, 1));
+  --tw-bg-opacity: 1;
+  background-color: rgb(243 244 246 / var(--tw-bg-opacity, 1));
+  font-family: 'Fira Code', Monaco, 'Courier New', monospace;
+  font-size: 9pt;
+  line-height: 12pt;
+  padding: 1pt 2pt;
+  border-radius: 1pt;
+}
+
+/* Blockquote - Light Zinc Aside */
+
+blockquote {
+  border-top-right-radius: 0.25rem;
+  border-bottom-right-radius: 0.25rem;
+  border-left-width: 3pt;
+  --tw-border-opacity: 1;
+  border-color: rgb(212 212 216 / var(--tw-border-opacity, 1));
+  background-color: rgb(250 250 250 / 0.75);
+  margin: 4mm 0;
+  padding: 3mm 4mm;
+  font-size: 10pt;
+  line-height: 12pt;
+  color: #52525b;
+  /* zinc-600 */
+}
+
+blockquote p {
+  margin-bottom: 0;
+  color: #52525b;
+  /* zinc-600 */
+}
+
+blockquote.info {
+  --tw-border-opacity: 1;
+  border-left-color: rgb(59 130 246 / var(--tw-border-opacity, 1));
+  background-color: rgb(239 246 255 / 0.5);
+}
+
+blockquote.info p {
+  --tw-text-opacity: 1;
+  color: rgb(29 78 216 / var(--tw-text-opacity, 1));
+}
+
+/* Lists */
+
+ul {
+  margin: 3mm 0 4mm 8mm;
+  padding: 0;
+  list-style-type: disc;
+}
+
+li {
+  --tw-text-opacity: 1;
+  color: rgb(55 65 81 / var(--tw-text-opacity, 1));
+  margin-bottom: 2mm;
+}
+
+/* Tables - Technical Specifications */
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 5mm 0;
+  font-size: 10pt;
+}
+
+thead {
+  --tw-bg-opacity: 1;
+  background-color: rgb(37 99 235 / var(--tw-bg-opacity, 1));
+  --tw-text-opacity: 1;
+  color: rgb(255 255 255 / var(--tw-text-opacity, 1));
+}
+
+thead th {
+  border-width: 1px;
+  --tw-border-opacity: 1;
+  border-color: rgb(59 130 246 / var(--tw-border-opacity, 1));
+  --tw-bg-opacity: 1;
+  background-color: rgb(37 99 235 / var(--tw-bg-opacity, 1));
+  font-weight: 600;
+  --tw-text-opacity: 1;
+  color: rgb(255 255 255 / var(--tw-text-opacity, 1));
+  padding: 3mm;
+  text-align: left;
+  font-size: 10pt;
+}
+
+tbody tr:nth-child(odd) {
+  --tw-bg-opacity: 1;
+  background-color: rgb(249 250 251 / var(--tw-bg-opacity, 1));
+}
+
+tbody tr:nth-child(even) {
+  --tw-bg-opacity: 1;
+  background-color: rgb(255 255 255 / var(--tw-bg-opacity, 1));
+}
+
+tbody td {
+  border-width: 1px;
+  --tw-border-opacity: 1;
+  border-color: rgb(209 213 219 / var(--tw-border-opacity, 1));
+  --tw-text-opacity: 1;
+  color: rgb(55 65 81 / var(--tw-text-opacity, 1));
+  padding: 3mm 2mm;
+  vertical-align: top;
+}
+
+tbody td:first-child {
+  font-weight: 600;
+}
+
+/* Section Spacing */
+
+section {
+  margin-bottom: 8mm;
+}
+
+article {
+  margin-bottom: 0;
+}
+
+/* Page Break - Utility Class */
+
+.page-break {
+  page-break-after: always;
+  -moz-column-break-after: page;
+       break-after: page;
+  height: 0;
+  margin: 0;
+  padding: 0;
+}
+
+/* Page 1 Header - Hero Section */
+
+.datasheet-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 2pt solid #e5e7eb;
+  /* margin: 0 0 10mm; */
+  /* padding: 5mm 10mm; */
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.logo img {
+  -o-object-fit: contain;
+     object-fit: contain;
+}
+
+.header-meta {
+  --tw-text-opacity: 1;
+  color: rgb(107 114 128 / var(--tw-text-opacity, 1));
+  text-align: right;
+  font-size: 10pt;
+  line-height: 1.2;
+}
+
+.header-meta p {
+  margin: 0;
+}
+
+/* CTA Footer */
+
+.cta-footer {
+  background: linear-gradient(to right, #f3f4f6, #f9fafb);
+  border-top: 1pt solid #e5e7eb;
+  margin: 0;
+  padding: 5mm 10mm;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 3mm;
+}
+
+.cta-footer p {
+  margin: 0;
+}
+
+/* Section Header Bar */
+
+.section-header-bar {
+  background: #3578e5;
+  color: #fff;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 15mm;
+  margin: 0;
+  padding: 0 10mm;
+}
+
+.section-header-bar h2 {
+  font-size: 18pt;
+  font-weight: 600;
+  color: #fff;
+  margin: 0;
+}
+
+.section-header-bar .product-name {
+  font-size: 10pt;
+  color: #fff;
+  font-weight: 400;
+}
+
+/* Page 2 Footer - Legal Footer */
+
+.datasheet-footer {
+  --tw-text-opacity: 1;
+  color: rgb(107 114 128 / var(--tw-text-opacity, 1));
+  border-top: 0.2pt solid #d1d5db;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  font-size: 10pt;
+  line-height: 11pt;
+  margin: auto 0 0;
+  padding: 3mm 10mm;
+}
+
+.datasheet-footer p {
+  margin: 0 0 1mm;
+  font-size: 7pt;
+  line-height: 9pt;
+}
+
+.datasheet-footer .footer-left p:first-child {
+  font-weight: 600;
+  --tw-text-opacity: 1;
+  color: rgb(15 23 42 / var(--tw-text-opacity, 1));
+}
+
+.footer-right {
+  text-align: right;
+}
+
+.footer-icons {
+  display: flex;
+  flex-direction: row;
+  gap: 3mm;
+  justify-content: flex-end;
+  align-items: center;
+  margin-top: 2mm;
+}
+
+.footer-icon-link {
+  --tw-text-opacity: 1;
+  color: rgb(75 85 99 / var(--tw-text-opacity, 1));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.footer-icon-link svg {
+  width: 4mm;
+  height: 4mm;
+}
+
+/* Header Solid Variant */
+
+.datasheet-header--solid {
+  background: #3578e5;
+  border: none;
+  color: #fff;
+  margin: 0 0 10mm;
+  padding: 4mm 10mm;
+}
+
+.datasheet-header--solid .logo {
+  width: 40mm;
+  height: auto;
+}
+
+.datasheet-header--solid .logo h1 {
+  color: #fff;
+}
+
+.datasheet-header--solid .header-meta {
+  color: #fff;
+  text-align: right;
+}
+
+.datasheet-header--solid .header-meta p {
+  color: #fff;
+}
+
+/* Header Minimal Variant */
+
+.datasheet-header--minimal {
+  border: none;
+  margin: 0 0 8mm;
+  padding: 3mm 10mm;
+  background: transparent;
+}
+
+.datasheet-header--minimal .logo {
+  width: 35mm;
+  height: auto;
+}
+
+/* Footer Compact Variant */
+
+.datasheet-footer--compact {
+  border-top: 0.5pt solid #d1d5db;
+  display: flex;
+  align-items: center;
+  font-size: 8pt;
+  line-height: 10pt;
+  color: #6b7280;
+  margin: 8mm 0 0;
+  padding: 2mm 10mm;
+  gap: 8mm;
+}
+
+.datasheet-footer--compact .footer-content {
+  display: flex;
+  align-items: center;
+  gap: 4mm;
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.datasheet-footer--compact .footer-brand {
+  font-weight: 600;
+  color: #131f3b;
+}
+
+.datasheet-footer--compact .footer-copyright {
+  color: #6b7280;
+}
+
+.datasheet-footer--compact .footer-link {
+  color: #3578e5;
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.2s ease;
+}
+
+.datasheet-footer--compact .footer-link:hover {
+  color: #2563eb;
+  text-decoration: underline;
+}
+
+/* Footer Minimal Variant */
+
+.datasheet-footer--minimal {
+  border: none;
+  margin: 8mm 0 0;
+  padding: 1mm 10mm;
+  text-align: center;
+  font-size: 7pt;
+  line-height: 9pt;
+  color: #9ca3af;
+}
+
+.datasheet-footer--minimal p {
+  margin: 0;
+}
+
+/* Project links - Utility Class */
+
+.project-link {
+  --tw-text-opacity: 1;
+  color: rgb(37 99 235 / var(--tw-text-opacity, 1));
+  text-decoration: underline;
+  font-weight: 500;
+}
+
+.project-link:hover {
+  --tw-text-opacity: 1;
+  color: rgb(29 78 216 / var(--tw-text-opacity, 1));
+  text-decoration: underline;
+}
+
+/* ==========================================
+   ELECTRONIC DISPLAY OPTIMIZATION
+   Responsive design for screens
+   ========================================== */
+
+/* Screen-optimized defaults */
+
+@media screen {
+  /* Remove page constraints on screens */
+
+  body {
+    max-width: 100%;
+    background: #f5f5f5;
+    padding: 2rem 0;
+  }
+
+  /* Create card-like effect for content */
+
+  .page {
+    background: #fff;
+    border-radius: 0.5rem;
+    box-shadow: 0 1px 3px rgb(0 0 0 / 10%), 0 1px 2px rgb(0 0 0 / 6%);
+    margin-bottom: 2rem;
+    padding: 2rem;
+  }
+
+  /* Hide print-only elements on screen */
+
+  .page-break {
+    display: none;
+  }
+
+  /* Screen-optimized header variations */
+
+  .datasheet-header--solid {
+    margin: 0 0 2rem;
+    padding: 1rem 2rem;
+    border-radius: 0 0 0.5rem 0.5rem;
+  }
+
+  .datasheet-header--solid .logo {
+    width: auto;
+    height: auto;
+  }
+
+  .datasheet-header--minimal {
+    margin: 0;
+    padding: 1rem 2rem;
+  }
+
+  /* Screen-optimized footer variations */
+
+  .datasheet-footer--compact {
+    margin: 1.5rem 0 -2rem;
+    padding: 0.75rem 2rem;
+    background: #f9fafb;
+    border-top: 1px solid #e5e7eb;
+    border-radius: 0 0 0.5rem 0.5rem;
+  }
+
+  .datasheet-footer--compact .footer-content {
+    justify-content: space-between;
+  }
+
+  .datasheet-footer--minimal {
+    margin: 1.5rem 0 -2rem;
+    padding: 0.5rem 2rem;
+    background: #fafafa;
+  }
+
+  .datasheet-footer--minimal p {
+    color: #d1d5db;
+    font-size: 12px;
+  }
+
+  /* Enhance interactive elements */
+
+  a {
+    transition: color 0.2s ease, -webkit-text-decoration 0.2s ease;
+    transition: color 0.2s ease, text-decoration 0.2s ease;
+    transition: color 0.2s ease, text-decoration 0.2s ease, -webkit-text-decoration 0.2s ease;
+  }
+
+  a:hover {
+    color: #2563eb;
+    text-decoration: underline;
+  }
+
+  a:focus {
+    outline: 2px solid #3578e5;
+    outline-offset: 2px;
+    border-radius: 2px;
+  }
+
+  button {
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .query-response-chat {
+    box-shadow: 0 1px 3px rgb(0 0 0 / 10%);
+  }
+
+  /* Better spacing for screens */
+
+  section {
+    margin-bottom: 3rem;
+  }
+
+  h2 {
+    margin-top: 2rem;
+  }
+}
+
+/* Responsive adjustments for screen viewing - Mobile (max 480px) */
+
+@media screen and (width <= 480px) {
+  body {
+    padding: 0;
+    font-size: 14px;
+    line-height: 20px;
+  }
+
+  .page {
+    padding: 1.5rem;
+    border-radius: 0.375rem;
+  }
+
+  h1 {
+    font-size: clamp(20px, 5vw, 26pt);
+    margin-bottom: 1rem;
+  }
+
+  h2 {
+    font-size: clamp(14px, 4vw, 18pt);
+    margin-bottom: 0.75rem;
+  }
+
+  h3 {
+    font-size: clamp(12px, 3.5vw, 14pt);
+    margin-bottom: 0.5rem;
+  }
+
+  p {
+    margin-bottom: 1rem;
+    line-height: 1.6;
+  }
+
+  .logo {
+    width: 100%;
+  }
+
+  .header-meta {
+    text-align: left;
+    font-size: 12px;
+  }
+
+  .datasheet-header--solid {
+    margin: 0 0 1rem;
+    padding: 0.75rem;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .datasheet-header--solid .header-meta {
+    text-align: left;
+  }
+
+  .datasheet-header--minimal {
+    margin: 0;
+    padding: 0.75rem;
+  }
+
+  /* Mobile footer variations */
+
+  .datasheet-footer {
+    margin: 1rem 0 0;
+    padding: 1rem;
+    flex-direction: column;
+    gap: 1rem;
+    font-size: 11px;
+  }
+
+  .footer-right {
+    text-align: left;
+  }
+
+  .datasheet-footer--compact {
+    flex-direction: column;
+    align-items: flex-start;
+    margin: 1rem 0 -1rem;
+    padding: 0.75rem;
+    gap: 0.5rem;
+  }
+
+  .datasheet-footer--compact .footer-content {
+    flex-direction: column;
+    gap: 0.5rem;
+    width: 100%;
+  }
+
+  .datasheet-footer--minimal {
+    margin: 1rem 0 -1rem;
+    padding: 0.5rem;
+  }
+
+  .cta-footer {
+    flex-direction: column;
+    gap: 1rem;
+    margin: 0;
+    padding: 1rem;
+  }
+
+  .section-header-bar {
+    margin: 0;
+    padding: 0 1rem;
+    height: auto;
+    min-height: 60px;
+    flex-wrap: wrap;
+  }
+
+  /* Larger tap targets */
+
+  button, a[role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Table scrolling on mobile */
+
+  table {
+    font-size: 12px;
+    display: block;
+    overflow-x: auto;
+    border-collapse: collapse;
+  }
+
+  thead, tbody, th, td, tr {
+    display: block;
+  }
+
+  thead tr {
+    position: absolute;
+    top: -9999px;
+    left: -9999px;
+  }
+
+  tr {
+    margin-bottom: 1rem;
+    border: 1px solid #d1d5db;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+
+  td {
+    padding: 0.5rem;
+    position: relative;
+    padding-left: 50%;
+    text-align: right;
+  }
+
+  td::before {
+    content: attr(data-label);
+    position: absolute;
+    left: 0.5rem;
+    font-weight: 600;
+    text-align: left;
+    width: 45%;
+  }
+}
+
+/* Tablet and Medium screens (481px - 800px) */
+
+@media screen and (width >= 481px) and (width <= 800px) {
+  body {
+    padding: 0;
+    font-size: 15px;
+    line-height: 22px;
+  }
+
+  .page {
+    padding: 1.75rem;
+  }
+
+  h1 {
+    font-size: clamp(22px, 4.5vw, 26pt);
+  }
+
+  h2 {
+    font-size: clamp(16px, 3.5vw, 18pt);
+  }
+
+  .cta-footer {
+    margin: 0;
+    padding: 1.5rem;
+  }
+
+  .section-header-bar {
+    margin: 0;
+    padding: 0 1.5rem;
+  }
+
+  .datasheet-footer {
+    margin: 1.5rem 0 0;
+    padding: 1.5rem;
+  }
+}
+
+/* Desktop screens (801px and above) */
+
+@media screen and (width >= 801px) {
+  body {
+    padding: 0;
+    font-size: 10pt;
+    line-height: 14pt;
+    max-width: 1200px;
+  }
+
+  .page {
+    padding: 2rem;
+  }
+
+  .cta-footer {
+    margin: 0;
+    padding: 2rem;
+  }
+
+  .section-header-bar {
+    margin: 0;
+    padding: 0 2rem;
+  }
+
+  .datasheet-footer {
+    margin: 2rem 0 0;
+    padding: 2rem;
+  }
+
+  section {
+    margin-bottom: 8mm;
+  }
+}
+
+.last\:border-b-0:last-child {
+  border-bottom-width: 0px;
+}
+
+
+</style>
+</head>
+<body>
+<div data-page-size="a4"><main style="overflow:hidden;padding-top:10mm;padding-right:20mm;padding-bottom:25mm;padding-left:20mm"><article><div class="flex flex-col justify-center items-center h-full min-h-[200mm] text-center px-[20mm]"><div class="mb-[8mm]"><div class="text-[8pt] font-medium text-blue-600 uppercase tracking-widest mb-[3mm]">Application Report</div><h1 class="text-[36pt] font-bold text-slate-900 leading-tight mb-[4mm]">Mission Control</h1><div class="text-[14pt] text-gray-500 mb-[8mm]">Platform<!-- --> · <span class="font-mono text-[12pt]">mc</span></div><p class="text-[11pt] text-gray-600 max-w-[120mm] mx-auto mb-[8mm]">Flanksource Mission Control — Internal Developer Platform for Kubernetes, AWS, and on-prem infrastructure.</p></div><div class="w-[40mm] h-[1px] mb-[8mm]" style="background-color:#2563EB"></div><div class="text-[10pt] text-gray-400">Generated on <!-- -->March 1, 2026</div></div></article></main></div><div class="page-break"></div><div data-page-size="a4"><div style="position:fixed;top:0;left:0;right:0;height:10mm;z-index:10"><div class="flex items-center justify-between px-[10mm] py-[2mm] bg-[#1e293b] text-white text-[9pt]"><span class="font-semibold">Mission Control</span><span class="text-gray-300">Application Report</span></div></div><main style="overflow:hidden;padding-top:15mm;padding-right:15mm;padding-bottom:15mm;padding-left:15mm"><article><section class="flex flex-col gap-[4mm] my-[4mm] "><h3 class="text-[14pt] leading-[18pt] font-semibold m-0 mb-[2mm]" style="color:#131f3b">Mission Control</h3><h4 class="text-[11pt] leading-[14pt] font-medium text-[#6b7280] m-0 mb-[2mm]">Platform · mc</h4><p class="text-[10pt] text-gray-600 mt-[2mm] mb-[4mm]">Flanksource Mission Control — Internal Developer Platform for Kubernetes, AWS, and on-prem infrastructure.</p><div class="grid grid-cols-4 gap-[3mm] mt-[4mm]"><div class="flex flex-col items-center gap-[1mm] px-[2mm] py-[1.5mm] border border-blue-200 rounded-[2mm] bg-blue-50 min-w-[40mm] min-h-[40mm] justify-center"><div class="flex items-center gap-[1mm]"><div class="text-[12pt] leading-[15pt] font-bold text-center " style="color:#3578e5">v1.4.193</div></div><div class="text-[7pt] leading-[9pt] text-[#6b7280] text-center font-medium">Version</div></div><div class="flex flex-col items-center gap-[1mm] px-[2mm] py-[1.5mm] border border-blue-200 rounded-[2mm] bg-blue-50 min-w-[40mm] min-h-[40mm] justify-center"><div class="flex items-center gap-[1mm]"><div class="text-[12pt] leading-[15pt] font-bold text-center " style="color:#3578e5">Go 1.23 / React 18</div></div><div class="text-[7pt] leading-[9pt] text-[#6b7280] text-center font-medium">Language</div></div><div class="flex flex-col items-center gap-[1mm] px-[2mm] py-[1.5mm] border border-blue-200 rounded-[2mm] bg-blue-50 min-w-[40mm] min-h-[40mm] justify-center"><div class="flex items-center gap-[1mm]"><div class="text-[12pt] leading-[15pt] font-bold text-center " style="color:#3578e5">99.9%</div></div><div class="text-[7pt] leading-[9pt] text-[#6b7280] text-center font-medium">SLA</div></div><div class="flex flex-col items-center gap-[1mm] px-[2mm] py-[1.5mm] border border-blue-200 rounded-[2mm] bg-blue-50 min-w-[40mm] min-h-[40mm] justify-center"><div class="flex items-center gap-[1mm]"><div class="text-[12pt] leading-[15pt] font-bold text-center " style="color:#3578e5">10.0s</div></div><div class="text-[7pt] leading-[9pt] text-[#6b7280] text-center font-medium">Uptime (30d)</div></div><div class="flex flex-col items-center gap-[1mm] px-[2mm] py-[1.5mm] border border-blue-200 rounded-[2mm] bg-blue-50 min-w-[40mm] min-h-[40mm] justify-center"><div class="flex items-center gap-[1mm]"><div class="text-[12pt] leading-[15pt] font-bold text-center " style="color:#3578e5">142ms</div></div><div class="text-[7pt] leading-[9pt] text-[#6b7280] text-center font-medium">Avg Response</div></div><div class="flex flex-col items-center gap-[1mm] px-[2mm] py-[1.5mm] border border-blue-200 rounded-[2mm] bg-blue-50 min-w-[40mm] min-h-[40mm] justify-center"><div class="flex items-center gap-[1mm]"><div class="text-[12pt] leading-[15pt] font-bold text-center " style="color:#3578e5">4.8 GB</div></div><div class="text-[7pt] leading-[9pt] text-[#6b7280] text-center font-medium">DB Size</div></div></div></section></article></main><div style="position:fixed;bottom:0;left:0;right:0;height:10mm;z-index:10"><div class="flex items-center justify-between px-[10mm] py-[2mm] border-t border-gray-200 text-[8pt] text-gray-400"><span>Generated <!-- -->March 1, 2026</span><span>Confidential</span></div></div></div><div class="page-break"></div><div data-page-size="a4"><div style="position:fixed;top:0;left:0;right:0;height:10mm;z-index:10"><div class="flex items-center justify-between px-[10mm] py-[2mm] bg-[#1e293b] text-white text-[9pt]"><span class="font-semibold">Mission Control</span><span class="text-gray-300">Application Report</span></div></div><main style="overflow:hidden;padding-top:15mm;padding-right:15mm;padding-bottom:15mm;padding-left:15mm"><article><section class="flex flex-col gap-[4mm] my-[4mm] "><h3 class="text-[14pt] leading-[18pt] font-semibold m-0 mb-[2mm]" style="color:#131f3b">Access Control</h3><div class="mb-[4mm]"><h3 class="text-[11pt] font-semibold text-slate-800 mb-[2mm]">Users</h3><div class="my-4 "><table class="w-full border-collapse text-[8pt] leading-[9pt]"><thead><tr><th class="p-2 font-medium text-[10pt]">Name</th><th class="p-2 font-medium text-[10pt]">Email</th><th class="p-2 font-medium text-[10pt]">Role</th><th class="p-2 font-medium text-[10pt]">Auth Type</th><th class="p-2 font-medium text-[10pt]">Created</th><th class="p-2 font-medium text-[10pt]">Last Login</th><th class="p-2 font-medium text-[10pt]">Last Access Review</th></tr></thead><tbody><tr class="border-b border-gray-200 last:border-b-0"><td class="py-1 px-1.5 align-top">Alice Chen</td><td class="py-1 px-1.5 align-top">alice@flanksource.com</td><td class="py-1 px-1.5 align-top">admin</td><td class="py-1 px-1.5 align-top">sso</td><td class="py-1 px-1.5 align-top">Jun 1, 2024</td><td class="py-1 px-1.5 align-top">Feb 27, 2026</td><td class="py-1 px-1.5 align-top">Feb 20, 2026</td></tr><tr class="border-b border-gray-200 last:border-b-0"><td class="py-1 px-1.5 align-top">Bob Smith</td><td class="py-1 px-1.5 align-top">bob@flanksource.com</td><td class="py-1 px-1.5 align-top">editor</td><td class="py-1 px-1.5 align-top">sso</td><td class="py-1 px-1.5 align-top">Aug 15, 2024</td><td class="py-1 px-1.5 align-top">Feb 26, 2026</td><td class="py-1 px-1.5 align-top">Never</td></tr><tr class="border-b border-gray-200 last:border-b-0"><td class="py-1 px-1.5 align-top">Carol Davis</td><td class="py-1 px-1.5 align-top">carol@customer.com</td><td class="py-1 px-1.5 align-top">viewer</td><td class="py-1 px-1.5 align-top">api-key</td><td class="py-1 px-1.5 align-top">Jan 10, 2025</td><td class="py-1 px-1.5 align-top">Never</td><td class="py-1 px-1.5 align-top">Never</td></tr></tbody></table></div></div><div><h3 class="text-[11pt] font-semibold text-slate-800 mb-[2mm]">Authentication Methods</h3><div class="my-4 "><table class="w-full border-collapse text-[8pt] leading-[9pt]"><thead><tr><th class="p-2 font-medium text-[10pt]">Name</th><th class="p-2 font-medium text-[10pt]">Type</th><th class="p-2 font-medium text-[10pt]">MFA Type</th><th class="p-2 font-medium text-[10pt]">MFA Status</th></tr></thead><tbody><tr class="border-b border-gray-200 last:border-b-0"><td class="py-1 px-1.5 align-top">GitHub SSO</td><td class="py-1 px-1.5 align-top">oauth2</td><td class="py-1 px-1.5 align-top">totp</td><td class="py-1 px-1.5 align-top">Enforced</td></tr><tr class="border-b border-gray-200 last:border-b-0"><td class="py-1 px-1.5 align-top">AWS IAM</td><td class="py-1 px-1.5 align-top">iam</td><td class="py-1 px-1.5 align-top">-</td><td class="py-1 px-1.5 align-top">Optional</td></tr></tbody></table></div></div></section></article></main><div style="position:fixed;bottom:0;left:0;right:0;height:10mm;z-index:10"><div class="flex items-center justify-between px-[10mm] py-[2mm] border-t border-gray-200 text-[8pt] text-gray-400"><span>Generated <!-- -->March 1, 2026</span><span>Confidential</span></div></div></div><div class="page-break"></div><div data-page-size="a4"><div style="position:fixed;top:0;left:0;right:0;height:10mm;z-index:10"><div class="flex items-center justify-between px-[10mm] py-[2mm] bg-[#1e293b] text-white text-[9pt]"><span class="font-semibold">Mission Control</span><span class="text-gray-300">Application Report</span></div></div><main style="overflow:hidden;padding-top:15mm;padding-right:15mm;padding-bottom:15mm;padding-left:15mm"><article><section class="flex flex-col gap-[4mm] my-[4mm] "><h3 class="text-[14pt] leading-[18pt] font-semibold m-0 mb-[2mm]" style="color:#131f3b">Incidents</h3><div class="grid grid-cols-4 gap-[3mm] mb-[4mm]"><div class="bg-red-50 border border-red-200 rounded p-2 min-w-[25mm] "><div class="flex items-center justify-between mb-1"><div class="text-xs text-gray-600">Critical</div></div><div class="text-2xl font-bold text-red-600">1</div></div><div class="bg-orange-50 border border-orange-200 rounded p-2 min-w-[25mm] "><div class="flex items-center justify-between mb-1"><div class="text-xs text-gray-600">High</div></div><div class="text-2xl font-bold text-orange-600">1</div></div><div class="bg-yellow-50 border border-yellow-200 rounded p-2 min-w-[25mm] "><div class="flex items-center justify-between mb-1"><div class="text-xs text-gray-600">Medium</div></div><div class="text-2xl font-bold text-yellow-600">1</div></div><div class="bg-blue-50 border border-blue-200 rounded p-2 min-w-[25mm] "><div class="flex items-center justify-between mb-1"><div class="text-xs text-gray-600">Low</div></div><div class="text-2xl font-bold text-blue-600">1</div></div></div><div class="my-4 "><table class="w-full border-collapse text-[8pt] leading-[9pt]"><thead><tr><th class="p-2 font-medium text-[10pt]">Date</th><th class="p-2 font-medium text-[10pt]">Severity</th><th class="p-2 font-medium text-[10pt]">Description</th><th class="p-2 font-medium text-[10pt]">Status</th><th class="p-2 font-medium text-[10pt]">Resolved</th></tr></thead><tbody><tr class="border-b border-gray-200 last:border-b-0"><td class="py-1 px-1.5 align-top">Feb 10, 2026</td><td class="py-1 px-1.5 align-top">high</td><td class="py-1 px-1.5 align-top">Database connection pool exhausted causing 503 errors on API</td><td class="py-1 px-1.5 align-top">resolved</td><td class="py-1 px-1.5 align-top">Feb 10, 2026</td></tr><tr class="border-b border-gray-200 last:border-b-0"><td class="py-1 px-1.5 align-top">Jan 28, 2026</td><td class="py-1 px-1.5 align-top">medium</td><td class="py-1 px-1.5 align-top">Elevated latency on catalog scraper due to S3 throttling</td><td class="py-1 px-1.5 align-top">resolved</td><td class="py-1 px-1.5 align-top">Jan 28, 2026</td></tr><tr class="border-b border-gray-200 last:border-b-0"><td class="py-1 px-1.5 align-top">Jan 15, 2026</td><td class="py-1 px-1.5 align-top">low</td><td class="py-1 px-1.5 align-top">Scheduled maintenance window — certificate rotation</td><td class="py-1 px-1.5 align-top">resolved</td><td class="py-1 px-1.5 align-top">Jan 15, 2026</td></tr><tr class="border-b border-gray-200 last:border-b-0"><td class="py-1 px-1.5 align-top">Feb 25, 2026</td><td class="py-1 px-1.5 align-top">critical</td><td class="py-1 px-1.5 align-top">Kubernetes API server unreachable — nodes NotReady after upgrade</td><td class="py-1 px-1.5 align-top">resolved</td><td class="py-1 px-1.5 align-top">Feb 25, 2026</td></tr></tbody></table></div></section></article></main><div style="position:fixed;bottom:0;left:0;right:0;height:10mm;z-index:10"><div class="flex items-center justify-between px-[10mm] py-[2mm] border-t border-gray-200 text-[8pt] text-gray-400"><span>Generated <!-- -->March 1, 2026</span><span>Confidential</span></div></div></div><div class="page-break"></div><div data-page-size="a4"><div style="position:fixed;top:0;left:0;right:0;height:10mm;z-index:10"><div class="flex items-center justify-between px-[10mm] py-[2mm] bg-[#1e293b] text-white text-[9pt]"><span class="font-semibold">Mission Control</span><span class="text-gray-300">Application Report</span></div></div><main style="overflow:hidden;padding-top:15mm;padding-right:15mm;padding-bottom:15mm;padding-left:15mm"><article><section class="flex flex-col gap-[4mm] my-[4mm] "><h3 class="text-[14pt] leading-[18pt] font-semibold m-0 mb-[2mm]" style="color:#131f3b">Backups &amp; Restores</h3><div class="grid grid-cols-3 gap-[3mm] mb-[4mm]"><div class="flex flex-col items-center gap-[1mm] px-[2mm] py-[1.5mm] border border-blue-200 rounded-[2mm] bg-blue-50 min-w-[40mm] min-h-[40mm] justify-center"><div class="flex items-center gap-[1mm]"><div class="text-[12pt] leading-[15pt] font-bold text-center " style="color:#3578e5">5</div></div><div class="text-[7pt] leading-[9pt] text-[#6b7280] text-center font-medium">Total Backups</div></div><div class="flex flex-col items-center gap-[1mm] px-[2mm] py-[1.5mm] border border-blue-200 rounded-[2mm] bg-blue-50 min-w-[40mm] min-h-[40mm] justify-center"><div class="flex items-center gap-[1mm]"><div class="text-[12pt] leading-[15pt] font-bold text-center " style="color:#3578e5">4</div></div><div class="text-[7pt] leading-[9pt] text-[#6b7280] text-center font-medium">Successful</div></div><div class="flex flex-col items-center gap-[1mm] px-[2mm] py-[1.5mm] border border-blue-200 rounded-[2mm] bg-blue-50 min-w-[40mm] min-h-[40mm] justify-center"><div class="flex items-center gap-[1mm]"><div class="text-[12pt] leading-[15pt] font-bold text-center " style="color:#3578e5">1</div></div><div class="text-[7pt] leading-[9pt] text-[#6b7280] text-center font-medium">Failed</div></div></div><div class="mb-[4mm]"><div><p class="text-[9pt] font-semibold text-slate-700 mb-[2mm]">February 2026</p><div class="grid grid-cols-7 gap-[1mm]"><div class="text-center text-[8pt] text-gray-500 pb-[1mm]">Su</div><div class="text-center text-[8pt] text-gray-500 pb-[1mm]">Mo</div><div class="text-center text-[8pt] text-gray-500 pb-[1mm]">Tu</div><div class="text-center text-[8pt] text-gray-500 pb-[1mm]">We</div><div class="text-center text-[8pt] text-gray-500 pb-[1mm]">Th</div><div class="text-center text-[8pt] text-gray-500 pb-[1mm]">Fr</div><div class="text-center text-[8pt] text-gray-500 pb-[1mm]">Sa</div><div class="bg-gray-100 border border-gray-200 rounded-[1mm] p-[1mm] min-h-[10mm] flex flex-col justify-between"><span class="text-[7pt] text-gray-700 font-semibold">1</span></div><div class="bg-gray-100 border border-gray-200 rounded-[1mm] p-[1mm] min-h-[10mm] flex flex-col justify-between"><span class="text-[7pt] text-gray-700 font-semibold">2</span></div><div class="bg-gray-100 border border-gray-200 rounded-[1mm] p-[1mm] min-h-[10mm] flex flex-col justify-between"><span class="text-[7pt] text-gray-700 font-semibold">3</span></div><div class="bg-gray-100 border border-gray-200 rounded-[1mm] p-[1mm] min-h-[10mm] flex flex-col justify-between"><span class="text-[7pt] text-gray-700 font-semibold">4</span></div><div class="bg-gray-100 border border-gray-200 rounded-[1mm] p-[1mm] min-h-[10mm] flex flex-col justify-between"><span class="text-[7pt] text-gray-700 font-semibold">5</span></div><div class="bg-gray-100 border border-gray-200 rounded-[1mm] p-[1mm] min-h-[10mm] flex flex-col justify-between"><span class="text-[7pt] text-gray-700 font-semibold">6</span></div><div class="bg-gray-100 border border-gray-200 rounded-[1mm] p-[1mm] min-h-[10mm] flex flex-col justify-between"><span class="text-[7pt] text-gray-700 font-semibold">7</span></div><div class="bg-gray-100 border border-gray-200 rounded-[1mm] p-[1mm] min-h-[10mm] flex flex-col justify-between"><span class="text-[7pt] text-gray-700 font-semibold">8</span></div><div class="bg-gray-100 border border-gray-200 rounded-[1mm] p-[1mm] min-h-[10mm] flex flex-col justify-between"><span class="text-[7pt] text-gray-700 font-semibold">9</span></div><div class="bg-gray-100 border border-gray-200 rounded-[1mm] p-[1mm] min-h-[10mm] flex flex-col justify-between"><span class="text-[7pt] text-gray-700 font-semibold">10</span></div><div class="bg-gray-100 border border-gray-200 rounded-[1mm] p-[1mm] min-h-[10mm] flex flex-col justify-between"><span class="text-[7pt] text-gray-700 font-semibold">11</span></div><div class="bg-gray-100 border border-gray-200 rounded-[1mm] p-[1mm] min-h-[10mm] flex flex-col justify-between"><span class="text-[7pt] text-gray-700 font-semibold">12</span></div><div class="bg-gray-100 border border-gray-200 rounded-[1mm] p-[1mm] min-h-[10mm] flex flex-col justify-between"><span class="text-[7pt] text-gray-700 font-semibold">13</span></div><div class="bg-gray-100 border border-gray-200 rounded-[1mm] p-[1mm] min-h-[10mm] flex flex-col justify-between"><span class="text-[7pt] text-gray-700 font-semibold">14</span></div><div class="bg-gray-100 border border-gray-200 rounded-[1mm] p-[1mm] min-h-[10mm] flex flex-col justify-between"><span class="text-[7pt] text-gray-700 font-semibold">15</span></div><div class="bg-gray-100 border border-gray-200 rounded-[1mm] p-[1mm] min-h-[10mm] flex flex-col justify-between"><span class="text-[7pt] text-gray-700 font-semibold">16</span></div><div class="bg-gray-100 border border-gray-200 rounded-[1mm] p-[1mm] min-h-[10mm] flex flex-col justify-between"><span class="text-[7pt] text-gray-700 font-semibold">17</span></div><div class="bg-gray-100 border border-gray-200 rounded-[1mm] p-[1mm] min-h-[10mm] flex flex-col justify-between"><span class="text-[7pt] text-gray-700 font-semibold">18</span></div><div class="bg-gray-100 border border-gray-200 rounded-[1mm] p-[1mm] min-h-[10mm] flex flex-col justify-between"><span class="text-[7pt] text-gray-700 font-semibold">19</span></div><div class="bg-gray-100 border border-gray-200 rounded-[1mm] p-[1mm] min-h-[10mm] flex flex-col justify-between"><span class="text-[7pt] text-gray-700 font-semibold">20</span></div><div class="bg-gray-100 border border-gray-200 rounded-[1mm] p-[1mm] min-h-[10mm] flex flex-col justify-between"><span class="text-[7pt] text-gray-700 font-semibold">21</span></div><div class="bg-gray-100 border border-gray-200 rounded-[1mm] p-[1mm] min-h-[10mm] flex flex-col justify-between"><span class="text-[7pt] text-gray-700 font-semibold">22</span></div><div class="bg-green-50 border border-green-600 rounded-[1mm] p-[1mm] min-h-[10mm] flex flex-col justify-between"><span class="text-[7pt] text-gray-700 font-semibold">23</span><span class="text-[6pt] text-green-700">4.4GB</span></div><div class="bg-green-50 border border-green-600 rounded-[1mm] p-[1mm] min-h-[10mm] flex flex-col justify-between"><span class="text-[7pt] text-gray-700 font-semibold">24</span><span class="text-[6pt] text-green-700">4.4GB</span></div><div class="bg-red-50 border border-red-600 rounded-[1mm] p-[1mm] min-h-[10mm] flex flex-col justify-between"><span class="text-[7pt] text-gray-700 font-semibold">25</span><span class="text-[6pt] text-red-600">4.5GB</span></div><div class="bg-green-50 border border-green-600 rounded-[1mm] p-[1mm] min-h-[10mm] flex flex-col justify-between"><span class="text-[7pt] text-gray-700 font-semibold">26</span><span class="text-[6pt] text-green-700">4.5GB</span></div><div class="bg-green-50 border border-green-600 rounded-[1mm] p-[1mm] min-h-[10mm] flex flex-col justify-between"><span class="text-[7pt] text-gray-700 font-semibold">27</span><span class="text-[6pt] text-green-700">4.6GB</span></div><div class="bg-gray-100 border border-gray-200 rounded-[1mm] p-[1mm] min-h-[10mm] flex flex-col justify-between"><span class="text-[7pt] text-gray-700 font-semibold">28</span></div></div><div class="flex gap-[3mm] mt-[2mm] text-[8pt] text-gray-600"><span class="flex items-center gap-1"><span class="inline-block w-[3mm] h-[3mm] bg-green-50 border border-green-600 rounded-[0.5mm]"></span>Success</span><span class="flex items-center gap-1"><span class="inline-block w-[3mm] h-[3mm] bg-red-50 border border-red-600 rounded-[0.5mm]"></span>Failed</span><span class="flex items-center gap-1"><span class="inline-block w-[3mm] h-[3mm] bg-gray-100 border border-gray-200 rounded-[0.5mm]"></span>No backup</span></div></div></div><div class="mb-[4mm]"><h3 class="text-[11pt] font-semibold text-slate-800 mb-[2mm]">Failed Backups</h3><div class="my-4 "><table class="w-full border-collapse text-[8pt] leading-[9pt]"><thead><tr><th class="p-2 font-medium text-[10pt]">Database</th><th class="p-2 font-medium text-[10pt]">Date</th><th class="p-2 font-medium text-[10pt]">Size</th><th class="p-2 font-medium text-[10pt]">Status</th></tr></thead><tbody><tr class="border-b border-gray-200 last:border-b-0"><td class="py-1 px-1.5 align-top">mission-control-db</td><td class="py-1 px-1.5 align-top">Feb 25, 2026, 03:00 AM</td><td class="py-1 px-1.5 align-top">4.5GB</td><td class="py-1 px-1.5 align-top">failed</td></tr></tbody></table></div></div><div><h3 class="text-[11pt] font-semibold text-slate-800 mb-[2mm]">Restore History</h3><div class="my-4 "><table class="w-full border-collapse text-[8pt] leading-[9pt]"><thead><tr><th class="p-2 font-medium text-[10pt]">Database</th><th class="p-2 font-medium text-[10pt]">Started</th><th class="p-2 font-medium text-[10pt]">Status</th><th class="p-2 font-medium text-[10pt]">Completed</th></tr></thead><tbody><tr class="border-b border-gray-200 last:border-b-0"><td class="py-1 px-1.5 align-top">mission-control-db</td><td class="py-1 px-1.5 align-top">Feb 10, 2026, 05:00 PM</td><td class="py-1 px-1.5 align-top">success</td><td class="py-1 px-1.5 align-top">Feb 10, 2026, 05:18 PM</td></tr></tbody></table></div></div></section></article></main><div style="position:fixed;bottom:0;left:0;right:0;height:10mm;z-index:10"><div class="flex items-center justify-between px-[10mm] py-[2mm] border-t border-gray-200 text-[8pt] text-gray-400"><span>Generated <!-- -->March 1, 2026</span><span>Confidential</span></div></div></div><div class="page-break"></div><div data-page-size="a4"><div style="position:fixed;top:0;left:0;right:0;height:10mm;z-index:10"><div class="flex items-center justify-between px-[10mm] py-[2mm] bg-[#1e293b] text-white text-[9pt]"><span class="font-semibold">Mission Control</span><span class="text-gray-300">Application Report</span></div></div><main style="overflow:hidden;padding-top:15mm;padding-right:15mm;padding-bottom:15mm;padding-left:15mm"><article><section class="flex flex-col gap-[4mm] my-[4mm] "><h3 class="text-[14pt] leading-[18pt] font-semibold m-0 mb-[2mm]" style="color:#131f3b">Security Findings</h3><div class="grid grid-cols-4 gap-[3mm] mb-[5mm]"><div class="bg-red-50 border border-red-200 rounded p-2 min-w-[25mm] "><div class="flex items-center justify-between mb-1"><div class="text-xs text-gray-600">Critical</div></div><div class="text-2xl font-bold text-red-600">1</div></div><div class="bg-orange-50 border border-orange-200 rounded p-2 min-w-[25mm] "><div class="flex items-center justify-between mb-1"><div class="text-xs text-gray-600">High</div></div><div class="text-2xl font-bold text-orange-600">2</div></div><div class="bg-yellow-50 border border-yellow-200 rounded p-2 min-w-[25mm] "><div class="flex items-center justify-between mb-1"><div class="text-xs text-gray-600">Medium</div></div><div class="text-2xl font-bold text-yellow-600">1</div></div><div class="bg-blue-50 border border-blue-200 rounded p-2 min-w-[25mm] "><div class="flex items-center justify-between mb-1"><div class="text-xs text-gray-600">Low</div></div><div class="text-2xl font-bold text-blue-600">1</div></div></div><div class="mb-[4mm]"><div class="flex items-center gap-[6px] mb-[2mm]"><span class="text-[9pt] font-semibold text-slate-800 capitalize">security</span><span class="text-[7.5pt] text-gray-500 bg-gray-100 px-[6px] py-[1px] rounded-full">2</span></div><div class="my-4 "><table class="w-full border-collapse text-[8pt] leading-[9pt]"><thead><tr><th class="p-2 font-medium text-[10pt]">Title</th><th class="p-2 font-medium text-[10pt]">Severity</th><th class="p-2 font-medium text-[10pt]">Status</th><th class="p-2 font-medium text-[10pt]">Last Seen</th><th class="p-2 font-medium text-[10pt]">Remediation</th></tr></thead><tbody><tr class="border-b border-gray-200 last:border-b-0"><td class="py-1 px-1.5 align-top">RDS instance has public accessibility enabled</td><td class="py-1 px-1.5 align-top"><span class="inline-flex items-center font-medium whitespace-nowrap border px-1 gap-1 text-xs rounded-md bg-yellow-100 text-yellow-800 border-yellow-200"><span class="">high</span></span></td><td class="py-1 px-1.5 align-top">open</td><td class="py-1 px-1.5 align-top">Feb 27, 2026</td><td class="py-1 px-1.5 align-top">Set PubliclyAccessible=false on the RDS instance and update security group rules.</td></tr><tr class="border-b border-gray-200 last:border-b-0"><td class="py-1 px-1.5 align-top">S3 bucket mission-control-assets has public read ACL</td><td class="py-1 px-1.5 align-top"><span class="inline-flex items-center font-medium whitespace-nowrap border px-1 gap-1 text-xs rounded-md bg-red-100 text-red-800 border-red-200"><span class="">critical</span></span></td><td class="py-1 px-1.5 align-top">in-progress</td><td class="py-1 px-1.5 align-top">Feb 27, 2026</td><td class="py-1 px-1.5 align-top">Remove public ACL and enable S3 Block Public Access settings.</td></tr></tbody></table></div></div><div class="mb-[4mm]"><div class="flex items-center gap-[6px] mb-[2mm]"><span class="text-[9pt] font-semibold text-slate-800 capitalize">compliance</span><span class="text-[7.5pt] text-gray-500 bg-gray-100 px-[6px] py-[1px] rounded-full">2</span></div><div class="my-4 "><table class="w-full border-collapse text-[8pt] leading-[9pt]"><thead><tr><th class="p-2 font-medium text-[10pt]">Title</th><th class="p-2 font-medium text-[10pt]">Severity</th><th class="p-2 font-medium text-[10pt]">Status</th><th class="p-2 font-medium text-[10pt]">Last Seen</th><th class="p-2 font-medium text-[10pt]">Remediation</th></tr></thead><tbody><tr class="border-b border-gray-200 last:border-b-0"><td class="py-1 px-1.5 align-top">Container images not using digest pinning</td><td class="py-1 px-1.5 align-top"><span class="inline-flex items-center font-medium whitespace-nowrap border px-1 gap-1 text-xs rounded-md bg-yellow-100 text-yellow-800 border-yellow-200"><span class="">high</span></span></td><td class="py-1 px-1.5 align-top">open</td><td class="py-1 px-1.5 align-top">Feb 27, 2026</td><td class="py-1 px-1.5 align-top">Pin all container images to specific SHA256 digests in deployment manifests.</td></tr><tr class="border-b border-gray-200 last:border-b-0"><td class="py-1 px-1.5 align-top">RDS backup retention below recommended minimum</td><td class="py-1 px-1.5 align-top"><span class="inline-flex items-center font-medium whitespace-nowrap border px-1 gap-1 text-xs rounded-md bg-yellow-100 text-yellow-800 border-yellow-200"><span class="">medium</span></span></td><td class="py-1 px-1.5 align-top">open</td><td class="py-1 px-1.5 align-top">Feb 27, 2026</td><td class="py-1 px-1.5 align-top">Increase BackupRetentionPeriod to 7 or more days.</td></tr></tbody></table></div></div><div class="mb-[4mm]"><div class="flex items-center gap-[6px] mb-[2mm]"><span class="text-[9pt] font-semibold text-slate-800 capitalize">reliability</span><span class="text-[7.5pt] text-gray-500 bg-gray-100 px-[6px] py-[1px] rounded-full">1</span></div><div class="my-4 "><table class="w-full border-collapse text-[8pt] leading-[9pt]"><thead><tr><th class="p-2 font-medium text-[10pt]">Title</th><th class="p-2 font-medium text-[10pt]">Severity</th><th class="p-2 font-medium text-[10pt]">Status</th><th class="p-2 font-medium text-[10pt]">Last Seen</th></tr></thead><tbody><tr class="border-b border-gray-200 last:border-b-0"><td class="py-1 px-1.5 align-top">No pod disruption budget configured for incident-commander</td><td class="py-1 px-1.5 align-top"><span class="inline-flex items-center font-medium whitespace-nowrap border px-1 gap-1 text-xs rounded-md bg-blue-100 text-blue-800 border-blue-200"><span class="">low</span></span></td><td class="py-1 px-1.5 align-top">resolved</td><td class="py-1 px-1.5 align-top">Feb 27, 2026</td></tr></tbody></table></div></div></section></article></main><div style="position:fixed;bottom:0;left:0;right:0;height:10mm;z-index:10"><div class="flex items-center justify-between px-[10mm] py-[2mm] border-t border-gray-200 text-[8pt] text-gray-400"><span>Generated <!-- -->March 1, 2026</span><span>Confidential</span></div></div></div><div class="page-break"></div><div data-page-size="a4"><div style="position:fixed;top:0;left:0;right:0;height:10mm;z-index:10"><div class="flex items-center justify-between px-[10mm] py-[2mm] bg-[#1e293b] text-white text-[9pt]"><span class="font-semibold">Mission Control</span><span class="text-gray-300">Application Report</span></div></div><main style="overflow:hidden;padding-top:15mm;padding-right:15mm;padding-bottom:15mm;padding-left:15mm"><article><section class="flex flex-col gap-[4mm] my-[4mm] "><h3 class="text-[14pt] leading-[18pt] font-semibold m-0 mb-[2mm]" style="color:#131f3b">Active Deployments</h3><div><div class="flex items-center mb-[2mm]"><span class="text-[7pt] px-[1.5mm] py-[0.5mm] rounded font-medium bg-green-100 text-green-800">fresh</span><span class="text-[8pt] text-gray-400 ml-[2mm]">Updated <!-- -->2d ago</span></div><div class="my-4 "><table class="w-full border-collapse text-[8pt] leading-[9pt]"><thead><tr><th class="p-2 font-medium text-[10pt]">Name</th><th class="p-2 font-medium text-[10pt]">Namespace</th><th class="p-2 font-medium text-[10pt]">Replicas</th><th class="p-2 font-medium text-[10pt]">Health</th><th class="p-2 font-medium text-[10pt]">Age</th></tr></thead><tbody><tr class="border-b border-gray-200 last:border-b-0"><td class="py-1 px-1.5 align-top">incident-commander</td><td class="py-1 px-1.5 align-top">mc</td><td class="py-1 px-1.5 align-top">3</td><td class="py-1 px-1.5 align-top"><span class="inline-flex items-center gap-1"><span class="inline-block w-[2mm] h-[2mm] rounded-full bg-green-500"></span>healthy</span></td><td class="py-1 px-1.5 align-top">Feb 20, 2026</td></tr><tr class="border-b border-gray-200 last:border-b-0"><td class="py-1 px-1.5 align-top">incident-commander-worker</td><td class="py-1 px-1.5 align-top">mc</td><td class="py-1 px-1.5 align-top">2</td><td class="py-1 px-1.5 align-top"><span class="inline-flex items-center gap-1"><span class="inline-block w-[2mm] h-[2mm] rounded-full bg-green-500"></span>healthy</span></td><td class="py-1 px-1.5 align-top">Feb 20, 2026</td></tr><tr class="border-b border-gray-200 last:border-b-0"><td class="py-1 px-1.5 align-top">canary-checker</td><td class="py-1 px-1.5 align-top">mc</td><td class="py-1 px-1.5 align-top">2</td><td class="py-1 px-1.5 align-top"><span class="inline-flex items-center gap-1"><span class="inline-block w-[2mm] h-[2mm] rounded-full bg-green-500"></span>healthy</span></td><td class="py-1 px-1.5 align-top">Feb 20, 2026</td></tr><tr class="border-b border-gray-200 last:border-b-0"><td class="py-1 px-1.5 align-top">config-db</td><td class="py-1 px-1.5 align-top">mc</td><td class="py-1 px-1.5 align-top">1</td><td class="py-1 px-1.5 align-top"><span class="inline-flex items-center gap-1"><span class="inline-block w-[2mm] h-[2mm] rounded-full bg-yellow-500"></span>warning</span></td><td class="py-1 px-1.5 align-top">Feb 20, 2026</td></tr><tr class="border-b border-gray-200 last:border-b-0"><td class="py-1 px-1.5 align-top">apm-hub</td><td class="py-1 px-1.5 align-top">mc</td><td class="py-1 px-1.5 align-top">1</td><td class="py-1 px-1.5 align-top"><span class="inline-flex items-center gap-1"><span class="inline-block w-[2mm] h-[2mm] rounded-full bg-green-500"></span>healthy</span></td><td class="py-1 px-1.5 align-top">Feb 20, 2026</td></tr></tbody></table></div></div></section></article></main><div style="position:fixed;bottom:0;left:0;right:0;height:10mm;z-index:10"><div class="flex items-center justify-between px-[10mm] py-[2mm] border-t border-gray-200 text-[8pt] text-gray-400"><span>Generated <!-- -->March 1, 2026</span><span>Confidential</span></div></div></div><div class="page-break"></div><div data-page-size="a4"><div style="position:fixed;top:0;left:0;right:0;height:10mm;z-index:10"><div class="flex items-center justify-between px-[10mm] py-[2mm] bg-[#1e293b] text-white text-[9pt]"><span class="font-semibold">Mission Control</span><span class="text-gray-300">Application Report</span></div></div><main style="overflow:hidden;padding-top:15mm;padding-right:15mm;padding-bottom:15mm;padding-left:15mm"><article><section class="flex flex-col gap-[4mm] my-[4mm] "><h3 class="text-[14pt] leading-[18pt] font-semibold m-0 mb-[2mm]" style="color:#131f3b">Recent Changes</h3><div class="my-4 "><table class="w-full border-collapse text-[8pt] leading-[9pt]"><thead><tr><th class="p-2 font-medium text-[10pt]">Age</th><th class="p-2 font-medium text-[10pt]">Type</th><th class="p-2 font-medium text-[10pt]">Severity</th><th class="p-2 font-medium text-[10pt]">Source</th><th class="p-2 font-medium text-[10pt]">Description</th></tr></thead><tbody><tr class="border-b border-gray-200 last:border-b-0"><td class="py-1 px-1.5 align-top">2d ago</td><td class="py-1 px-1.5 align-top">-</td><td class="py-1 px-1.5 align-top"><span style="color:#6B7280;background-color:#F3F4F6" class="px-[1.5mm] py-[0.3mm] rounded text-[7pt] font-medium">info</span></td><td class="py-1 px-1.5 align-top">-</td><td class="py-1 px-1.5 align-top">Deployed v1.4.193: improved scraper performance and bug fixes</td></tr><tr class="border-b border-gray-200 last:border-b-0"><td class="py-1 px-1.5 align-top">2d ago</td><td class="py-1 px-1.5 align-top">-</td><td class="py-1 px-1.5 align-top"><span style="color:#6B7280;background-color:#F3F4F6" class="px-[1.5mm] py-[0.3mm] rounded text-[7pt] font-medium">info</span></td><td class="py-1 px-1.5 align-top">-</td><td class="py-1 px-1.5 align-top">incident-commander replicas scaled: 2 → 3</td></tr><tr class="border-b border-gray-200 last:border-b-0"><td class="py-1 px-1.5 align-top">3d ago</td><td class="py-1 px-1.5 align-top">-</td><td class="py-1 px-1.5 align-top"><span style="color:#6B7280;background-color:#F3F4F6" class="px-[1.5mm] py-[0.3mm] rounded text-[7pt] font-medium">info</span></td><td class="py-1 px-1.5 align-top">-</td><td class="py-1 px-1.5 align-top">RDS instance class changed: db.t3.medium → db.t3.large</td></tr><tr class="border-b border-gray-200 last:border-b-0"><td class="py-1 px-1.5 align-top">4d ago</td><td class="py-1 px-1.5 align-top">-</td><td class="py-1 px-1.5 align-top"><span style="color:#2563EB;background-color:#DBEAFE" class="px-[1.5mm] py-[0.3mm] rounded text-[7pt] font-medium">low</span></td><td class="py-1 px-1.5 align-top">-</td><td class="py-1 px-1.5 align-top">Updated Prometheus alert thresholds for latency SLO</td></tr></tbody></table></div></section></article></main><div style="position:fixed;bottom:0;left:0;right:0;height:10mm;z-index:10"><div class="flex items-center justify-between px-[10mm] py-[2mm] border-t border-gray-200 text-[8pt] text-gray-400"><span>Generated <!-- -->March 1, 2026</span><span>Confidential</span></div></div></div><div class="page-break"></div><div data-page-size="a4"><div style="position:fixed;top:0;left:0;right:0;height:10mm;z-index:10"><div class="flex items-center justify-between px-[10mm] py-[2mm] bg-[#1e293b] text-white text-[9pt]"><span class="font-semibold">Mission Control</span><span class="text-gray-300">Application Report</span></div></div><main style="overflow:hidden;padding-top:15mm;padding-right:15mm;padding-bottom:15mm;padding-left:15mm"><article><section class="flex flex-col gap-[4mm] my-[4mm] "><h3 class="text-[14pt] leading-[18pt] font-semibold m-0 mb-[2mm]" style="color:#131f3b">Infrastructure Resources</h3><div class="my-4 "><table class="w-full border-collapse text-[8pt] leading-[9pt]"><thead><tr><th class="p-2 font-medium text-[10pt]">Name</th><th class="p-2 font-medium text-[10pt]">Type</th><th class="p-2 font-medium text-[10pt]">Status</th><th class="p-2 font-medium text-[10pt]">Health</th><th class="p-2 font-medium text-[10pt]">Labels</th></tr></thead><tbody><tr class="border-b border-gray-200 last:border-b-0"><td class="py-1 px-1.5 align-top">mission-control-db</td><td class="py-1 px-1.5 align-top">AWS::RDS::Instance</td><td class="py-1 px-1.5 align-top">available</td><td class="py-1 px-1.5 align-top"><span class="inline-flex items-center gap-1"><span class="inline-block w-[2mm] h-[2mm] rounded-full bg-green-500"></span>healthy</span></td><td class="py-1 px-1.5 align-top">env=production, team=platform</td></tr><tr class="border-b border-gray-200 last:border-b-0"><td class="py-1 px-1.5 align-top">mission-control-assets</td><td class="py-1 px-1.5 align-top">AWS::S3::Bucket</td><td class="py-1 px-1.5 align-top">available</td><td class="py-1 px-1.5 align-top"><span class="inline-flex items-center gap-1"><span class="inline-block w-[2mm] h-[2mm] rounded-full bg-yellow-500"></span>warning</span></td><td class="py-1 px-1.5 align-top">env=production, team=platform</td></tr><tr class="border-b border-gray-200 last:border-b-0"><td class="py-1 px-1.5 align-top">mc-cluster</td><td class="py-1 px-1.5 align-top">Kubernetes::Cluster</td><td class="py-1 px-1.5 align-top">Running</td><td class="py-1 px-1.5 align-top"><span class="inline-flex items-center gap-1"><span class="inline-block w-[2mm] h-[2mm] rounded-full bg-green-500"></span>healthy</span></td><td class="py-1 px-1.5 align-top">env=production, region=us-east-1</td></tr></tbody></table></div></section></article></main><div style="position:fixed;bottom:0;left:0;right:0;height:10mm;z-index:10"><div class="flex items-center justify-between px-[10mm] py-[2mm] border-t border-gray-200 text-[8pt] text-gray-400"><span>Generated <!-- -->March 1, 2026</span><span>Confidential</span></div></div></div><div class="page-break"></div><div data-page-size="a4"><div style="position:fixed;top:0;left:0;right:0;height:10mm;z-index:10"><div class="flex items-center justify-between px-[10mm] py-[2mm] bg-[#1e293b] text-white text-[9pt]"><span class="font-semibold">Mission Control</span><span class="text-gray-300">Application Report</span></div></div><main style="overflow:hidden;padding-top:15mm;padding-right:15mm;padding-bottom:15mm;padding-left:15mm"><article><section class="flex flex-col gap-[4mm] my-[4mm] "><h3 class="text-[14pt] leading-[18pt] font-semibold m-0 mb-[2mm]" style="color:#131f3b">Deployment Locations</h3><div class="grid grid-cols-3 gap-[4mm]"><div class="border border-gray-200 rounded-[2mm] p-[3mm]"><div class="flex items-center justify-between mb-[2mm]"><span class="text-[11pt] font-semibold text-slate-800">Production</span><span class="text-[7pt] font-medium px-[2mm] py-[0.5mm] rounded-full bg-blue-100 text-blue-700">primary</span></div><div class="text-[9pt] text-gray-600 space-y-[1mm]"><div><span class="font-medium">Provider:</span> <!-- -->AWS</div><div><span class="font-medium">Region:</span> <!-- -->us-east-1</div><div><span class="font-medium">Account:</span> <!-- -->flanksource-prod</div><div><span class="font-medium">Type:</span> <!-- -->cloud</div><div><span class="font-medium">Resources:</span> <!-- -->47</div></div></div><div class="border border-gray-200 rounded-[2mm] p-[3mm]"><div class="flex items-center justify-between mb-[2mm]"><span class="text-[11pt] font-semibold text-slate-800">Disaster Recovery</span><span class="text-[7pt] font-medium px-[2mm] py-[0.5mm] rounded-full bg-red-100 text-red-700">dr</span></div><div class="text-[9pt] text-gray-600 space-y-[1mm]"><div><span class="font-medium">Provider:</span> <!-- -->AWS</div><div><span class="font-medium">Region:</span> <!-- -->eu-west-1</div><div><span class="font-medium">Account:</span> <!-- -->flanksource-dr</div><div><span class="font-medium">Type:</span> <!-- -->cloud</div><div><span class="font-medium">Resources:</span> <!-- -->12</div></div></div><div class="border border-gray-200 rounded-[2mm] p-[3mm]"><div class="flex items-center justify-between mb-[2mm]"><span class="text-[11pt] font-semibold text-slate-800">On-Premises HQ</span><span class="text-[7pt] font-medium px-[2mm] py-[0.5mm] rounded-full bg-yellow-100 text-yellow-700">backup</span></div><div class="text-[9pt] text-gray-600 space-y-[1mm]"><div><span class="font-medium">Provider:</span> <!-- -->VMware</div><div><span class="font-medium">Region:</span> <!-- -->local</div><div><span class="font-medium">Account:</span> <!-- -->on-prem-hq</div><div><span class="font-medium">Type:</span> <!-- -->on-prem</div><div><span class="font-medium">Resources:</span> <!-- -->8</div></div></div></div></section></article></main><div style="position:fixed;bottom:0;left:0;right:0;height:10mm;z-index:10"><div class="flex items-center justify-between px-[10mm] py-[2mm] border-t border-gray-200 text-[8pt] text-gray-400"><span>Generated <!-- -->March 1, 2026</span><span>Confidential</span></div></div></div>
+</body>
+</html>

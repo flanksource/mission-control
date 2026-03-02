@@ -1,9 +1,11 @@
 package cmd
 
 import (
+	gocontext "context"
 	"errors"
 	"fmt"
 
+	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/models"
@@ -83,6 +85,7 @@ type connectionFlags struct {
 	Namespace string
 	Type      string
 	Test      bool
+	DryRun    bool
 
 	// Common fields
 	URL         string
@@ -92,10 +95,12 @@ type connectionFlags struct {
 	InsecureTLS bool
 
 	// AWS
-	AccessKey string
-	SecretKey string
-	Region    string
-	Profile   string
+	AccessKey    string
+	SecretKey    string
+	Region       string
+	Profile      string
+	FromProfile  string
+	SessionToken string
 
 	// AWS KMS / GCP KMS / Azure Key Vault
 	KeyID string
@@ -287,7 +292,50 @@ func validateConnectionFlags(flags *connectionFlags) error {
 	return nil
 }
 
+func loadAWSProfile(flags *connectionFlags) error {
+	cfg, err := config.LoadDefaultConfig(gocontext.Background(),
+		config.WithSharedConfigProfile(flags.FromProfile),
+	)
+	if err != nil {
+		return fmt.Errorf("failed to load AWS profile %q: %w", flags.FromProfile, err)
+	}
+
+	creds, err := cfg.Credentials.Retrieve(gocontext.Background())
+	if err != nil {
+		return fmt.Errorf("failed to retrieve credentials from AWS profile %q: %w", flags.FromProfile, err)
+	}
+
+	if flags.AccessKey == "" {
+		flags.AccessKey = creds.AccessKeyID
+	}
+	if flags.SecretKey == "" {
+		flags.SecretKey = creds.SecretAccessKey
+	}
+	if creds.SessionToken != "" && flags.SessionToken == "" {
+		flags.SessionToken = creds.SessionToken
+	}
+	if flags.Region == "" && cfg.Region != "" {
+		flags.Region = cfg.Region
+	}
+	return nil
+}
+
 func runConnectionAdd(flags *connectionFlags) error {
+	if flags.FromProfile != "" {
+		if err := loadAWSProfile(flags); err != nil {
+			return err
+		}
+	}
+
+	if flags.DryRun {
+		out, err := marshalDryRunOutput(flags)
+		if err != nil {
+			return fmt.Errorf("failed to marshal dry-run output: %w", err)
+		}
+		fmt.Print(string(out))
+		return nil
+	}
+
 	if err := validateConnectionFlags(flags); err != nil {
 		return err
 	}
@@ -565,6 +613,7 @@ func addCommonFlags(cmd *cobra.Command, flags *connectionFlags) {
 	cmd.Flags().StringVar(&flags.Name, "name", "", "Connection name (required)")
 	cmd.Flags().StringVar(&flags.Namespace, "namespace", "", "Connection namespace (required)")
 	cmd.Flags().BoolVar(&flags.Test, "test", false, "Test connection before saving")
+	cmd.Flags().BoolVar(&flags.DryRun, "dry-run", false, "Output Kubernetes YAML instead of saving to database")
 	_ = cmd.MarkFlagRequired("name")
 	_ = cmd.MarkFlagRequired("namespace")
 }
@@ -588,6 +637,7 @@ func addConnectionFlags(cmd *cobra.Command, flags *connectionFlags, connType str
 		cmd.Flags().StringVar(&flags.SecretKey, "secret-key", "", "AWS secret key")
 		cmd.Flags().StringVar(&flags.Region, "region", "", "AWS region")
 		cmd.Flags().StringVar(&flags.Profile, "profile", "", "AWS profile")
+		cmd.Flags().StringVar(&flags.FromProfile, "from-profile", "", "Read credentials from AWS profile (~/.aws/credentials)")
 
 	case models.ConnectionTypeAWSKMS:
 		cmd.Flags().StringVar(&flags.URL, "url", "", "AWS endpoint URL")
@@ -595,6 +645,7 @@ func addConnectionFlags(cmd *cobra.Command, flags *connectionFlags, connType str
 		cmd.Flags().StringVar(&flags.SecretKey, "secret-key", "", "AWS secret key")
 		cmd.Flags().StringVar(&flags.Region, "region", "", "AWS region")
 		cmd.Flags().StringVar(&flags.Profile, "profile", "", "AWS profile")
+		cmd.Flags().StringVar(&flags.FromProfile, "from-profile", "", "Read credentials from AWS profile (~/.aws/credentials)")
 		cmd.Flags().StringVar(&flags.KeyID, "key-id", "", "KMS key ID")
 
 	case models.ConnectionTypeS3:
@@ -603,6 +654,7 @@ func addConnectionFlags(cmd *cobra.Command, flags *connectionFlags, connType str
 		cmd.Flags().StringVar(&flags.SecretKey, "secret-key", "", "AWS secret key")
 		cmd.Flags().StringVar(&flags.Region, "region", "", "AWS region")
 		cmd.Flags().StringVar(&flags.Profile, "profile", "", "AWS profile")
+		cmd.Flags().StringVar(&flags.FromProfile, "from-profile", "", "Read credentials from AWS profile (~/.aws/credentials)")
 		cmd.Flags().StringVar(&flags.Bucket, "bucket", "", "S3 bucket name")
 		cmd.Flags().BoolVar(&flags.UsePathStyle, "use-path-style", false, "Use path-style S3 URLs")
 

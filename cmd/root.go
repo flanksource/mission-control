@@ -131,5 +131,5 @@ func init() {
 	telemetry.BindFlags(Root.PersistentFlags(), "mission-control")
 
 	Root.PersistentFlags().StringVar(&api.CanaryCheckerPath, "canary-checker", "http://canary-checker:8080", "Canary Checker URL")
-	Root.AddCommand(Serve, Sync, GoOffline)
+	Root.AddCommand(Serve, Sync, GoOffline, ApplicationCmd)
 }

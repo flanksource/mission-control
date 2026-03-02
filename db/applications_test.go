@@ -8,6 +8,48 @@ import (
 	"github.com/onsi/gomega"
 )
 
+func TestParseIncludeExcludeList(t *testing.T) {
+	g := gomega.NewWithT(t)
+
+	tests := []struct {
+		input    string
+		included []string
+		excluded []string
+	}{
+		{
+			input:    "diff,-BackOff",
+			included: []string{"diff"},
+			excluded: []string{"BackOff"},
+		},
+		{
+			input:    "- foo",
+			included: nil,
+			excluded: []string{"foo"},
+		},
+		{
+			input:    "-",
+			included: nil,
+			excluded: nil,
+		},
+		{
+			input:    "",
+			included: nil,
+			excluded: nil,
+		},
+		{
+			input:    "a,b,-c,-d",
+			included: []string{"a", "b"},
+			excluded: []string{"c", "d"},
+		},
+	}
+
+	for _, tc := range tests {
+		included, excluded := parseIncludeExcludeList(tc.input)
+		g.Expect(included).To(gomega.Equal(tc.included), "included for input %q", tc.input)
+		g.Expect(excluded).To(gomega.Equal(tc.excluded), "excluded for input %q", tc.input)
+	}
+}
+
 func TestDedupBackupChanges(t *testing.T) {
 	g := gomega.NewWithT(t)
 
