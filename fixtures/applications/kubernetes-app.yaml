@@ -1,0 +1,58 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Application
+metadata:
+  uid: a1b2c3d4-e5f6-7890-abcd-000000000000
+  name: frontend
+  namespace: default
+spec:
+  type: Microservice
+  description: Frontend web service running on Kubernetes
+  properties:
+    - name: language
+      label: Language
+      text: "TypeScript"
+      icon: code
+      order: 1
+    - name: version
+      label: Version
+      text: "v2.1.0"
+      icon: tag
+      order: 2
+    - name: sla
+      label: SLA
+      text: "99.95%"
+      icon: shield
+      order: 3
+  mapping:
+    environments:
+      Production:
+        - types:
+            - Kubernetes::Namespace
+          labelSelector: environment=production
+          purpose: primary
+  sections:
+    - title: Recent Changes
+      icon: git-commit
+      uiRef:
+        changes:
+          configTypes: "Kubernetes::Deployment,Kubernetes::Ingress"
+          changeType: "diff"
+          from: "48h"
+    - title: Deployments
+      icon: box
+      uiRef:
+        configs:
+          configType: "Kubernetes::Deployment"
+          labelSelector: "app=frontend"
+    - title: Services
+      icon: network
+      uiRef:
+        configs:
+          configType: "Kubernetes::Service"
+          labelSelector: "app=frontend"
+    - title: Ingress
+      icon: globe
+      uiRef:
+        configs:
+          configType: "Kubernetes::Ingress"
+          labelSelector: "app=frontend"

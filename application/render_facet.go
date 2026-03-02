@@ -23,6 +23,10 @@ func RenderFacetPDF(app *icapi.Application) ([]byte, error) {
 }
 
 func renderWithFacet(app *icapi.Application, format string) ([]byte, error) {
+	if app == nil {
+		return nil, fmt.Errorf("application must not be nil")
+	}
+
 	facetBin, err := exec.LookPath("facet")
 	if err != nil {
 		return nil, fmt.Errorf("facet not found on PATH: install with 'npm install -g @flanksource/facet'")
@@ -53,10 +57,16 @@ func renderWithFacet(app *icapi.Application, format string) ([]byte, error) {
 	if format == "html" {
 		ext = "html"
 	}
-	outFile := filepath.Join(srcDir, "output."+ext)
+
+	outFile, err := os.CreateTemp("", "facet-output-*."+ext)
+	if err != nil {
+		return nil, fmt.Errorf("create output temp file: %w", err)
+	}
+	outFile.Close()
+	defer os.Remove(outFile.Name())
 
 	var stderr bytes.Buffer
-	cmd := exec.Command(facetBin, format, "Application.tsx", "-d", dataFile.Name(), "-o", "output."+ext)
+	cmd := exec.Command(facetBin, format, "Application.tsx", "-d", dataFile.Name(), "-o", outFile.Name())
 	cmd.Dir = srcDir
 	cmd.Stderr = &stderr
 
@@ -64,14 +74,14 @@ func renderWithFacet(app *icapi.Application, format string) ([]byte, error) {
 		return nil, fmt.Errorf("facet %s failed: %w\n%s", format, err, stderr.String())
 	}
 
-	data, err := os.ReadFile(outFile)
+	data, err := os.ReadFile(outFile.Name())
 	if err != nil {
 		entries, _ := os.ReadDir(srcDir)
 		names := make([]string, 0, len(entries))
 		for _, e := range entries {
 			names = append(names, e.Name())
 		}
-		return nil, fmt.Errorf("read facet output %s: %w (srcDir contains: %s)", outFile, err, strings.Join(names, ", "))
+		return nil, fmt.Errorf("read facet output %s: %w (srcDir contains: %s)", outFile.Name(), err, strings.Join(names, ", "))
 	}
 
 	return data, nil

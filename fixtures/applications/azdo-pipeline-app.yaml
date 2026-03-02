@@ -1,0 +1,52 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Application
+metadata:
+  uid: d4e5f6a7-b8c9-0123-defa-000000000000
+  name: order-service
+  namespace: default
+spec:
+  type: Application
+  description: Order service with Azure DevOps CI/CD pipelines
+  properties:
+    - name: language
+      label: Language
+      text: "C#"
+      icon: code
+      order: 1
+    - name: team
+      label: Team
+      text: "Platform"
+      icon: users
+      order: 2
+    - name: project
+      label: ADO Project
+      text: "order-service"
+      icon: box
+      order: 3
+  mapping:
+    environments:
+      Production:
+        - types:
+            - Kubernetes::Deployment
+          labelSelector: "app=order-service"
+          purpose: primary
+  sections:
+    - title: CI/CD Pipelines
+      icon: workflow
+      uiRef:
+        configs:
+          configType: "AzureDevops::Pipeline"
+          labelSelector: "project=order-service"
+    - title: Releases
+      icon: rocket
+      uiRef:
+        configs:
+          configType: "AzureDevops::Release"
+          labelSelector: "project=order-service"
+    - title: Recent Changes
+      icon: git-commit
+      uiRef:
+        changes:
+          configTypes: "AzureDevops::Pipeline,AzureDevops::Release"
+          changeType: "PipelineRunCompleted,PipelineRunFailed,PipelineRunStarted"
+          from: "72h"

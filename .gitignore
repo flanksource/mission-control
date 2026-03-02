@@ -42,5 +42,6 @@ hack/
 .db/
 **/.db/
 out.*
+*.temp.html
 .facet/
 specs/

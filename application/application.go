@@ -188,9 +188,10 @@ func buildSection(ctx context.Context, section api.ViewSection) (api.Application
 }
 
 func viewResultToSectionData(r *api.ViewResult) api.ApplicationViewData {
+	lastRefreshed := r.LastRefreshedAt
 	return api.ApplicationViewData{
 		RefreshStatus:   r.RefreshStatus,
-		LastRefreshedAt: r.LastRefreshedAt,
+		LastRefreshedAt: &lastRefreshed,
 		Columns:         r.Columns,
 		Rows:            r.Rows,
 		Panels:          r.Panels,

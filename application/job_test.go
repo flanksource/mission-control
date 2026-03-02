@@ -105,9 +105,12 @@ var _ = ginkgo.Describe("Application Sections", ginkgo.Ordered, func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(pdfBytes).ToNot(BeEmpty())
 
-		outFile := "/tmp/application-export.pdf"
-		Expect(os.WriteFile(outFile, pdfBytes, 0644)).To(Succeed())
-		ginkgo.GinkgoWriter.Printf("PDF written to %s (%d bytes)\n", outFile, len(pdfBytes))
+		outFile, err := os.CreateTemp("", "application-export-*.pdf")
+		Expect(err).ToNot(HaveOccurred())
+		defer os.Remove(outFile.Name())
+
+		Expect(os.WriteFile(outFile.Name(), pdfBytes, 0644)).To(Succeed())
+		ginkgo.GinkgoWriter.Printf("PDF written to %s (%d bytes)\n", outFile.Name(), len(pdfBytes))
 	})
 })
 
