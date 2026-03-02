@@ -45,9 +45,9 @@ spec:
   sections:
     - title: Backups
       icon: database
-      uiRef:
-        changes:
-          changeType: "BackupCompleted,BackupEnqueued,BackupFailed,BackupRunning,BackupStarted,BackupSuccessful,BackupRestored,RestoreCompleted"
+      viewRef:
+        namespace: mc
+        name: backups
     - title: Recent Changes
       icon: git-commit
       uiRef:
