@@ -160,7 +160,10 @@ var Mock = &cobra.Command{
 			return
 		}
 
-		app := dummy.GetApplicationDummyData()
+		app := dummy.GetAllApplicationDummyData()
+		if err := app.Delete(ctx.DB()); err != nil {
+			logger.Warnf("Failed to delete existing application dummy data: %v", err)
+		}
 		if err := app.Populate(ctx); err != nil {
 			logger.Fatalf("Failed to populate application dummy data: %v", err)
 			return

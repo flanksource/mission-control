@@ -1,0 +1,58 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Application
+metadata:
+  uid: c3d4e5f6-a7b8-9012-cdef-000000000000
+  name: pop-api
+  namespace: default
+spec:
+  type: API
+  description: Open-source PostgreSQL-backed REST API
+  properties:
+    - name: language
+      label: Language
+      text: "Go"
+      icon: code
+      order: 1
+    - name: version
+      label: Version
+      text: "v0.9.3"
+      icon: tag
+      order: 2
+    - name: license
+      label: License
+      text: "MIT"
+      icon: shield
+      order: 3
+  mapping:
+    environments:
+      Production:
+        - types:
+            - PostgreSQL::Database
+          labelSelector: "app=pop-api"
+          purpose: primary
+  sections:
+    - title: Recent Changes
+      icon: git-commit
+      uiRef:
+        changes:
+          configTypes: "GitHub::Repository,PostgreSQL::Database"
+          changeType: "diff"
+          from: "48h"
+    - title: Repositories
+      icon: git-branch
+      uiRef:
+        configs:
+          configType: "GitHub::Repository"
+          labelSelector: "org=flanksource"
+    - title: Database
+      icon: database
+      uiRef:
+        configs:
+          configType: "PostgreSQL::Database"
+          labelSelector: "app=pop-api"
+    - title: Backups
+      icon: archive
+      uiRef:
+        changes:
+          configTypes: "PostgreSQL::Database"
+          changeType: "BackupCompleted"

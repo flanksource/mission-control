@@ -338,6 +338,10 @@ func configTypeToProvider(configType string) string {
 
 // GetChangesForUIRef queries config_changes using the filters from a ChangesUIFilters spec.
 func GetChangesForUIRef(ctx context.Context, filters *api.ChangesUIFilters) ([]api.ApplicationChange, error) {
+	if filters == nil {
+		filters = &api.ChangesUIFilters{}
+	}
+
 	q := ctx.DB().
 		Model(&models.ConfigChange{}).
 		Select("config_changes.id, config_changes.created_at, config_changes.change_type, config_changes.summary, config_changes.source, config_changes.severity, config_changes.created_by").
@@ -403,7 +407,7 @@ func GetChangesForUIRef(ctx context.Context, filters *api.ChangesUIFilters) ([]a
 
 	var rows []changeRow
 	if err := q.Scan(&rows).Error; err != nil {
-		return nil, err
+		return nil, ctx.Oops().Wrapf(err, "failed to scan config changes")
 	}
 
 	changes := make([]api.ApplicationChange, len(rows))
@@ -425,6 +429,10 @@ func GetChangesForUIRef(ctx context.Context, filters *api.ChangesUIFilters) ([]a
 
 // GetConfigsForUIRef queries config_items using the filters from a ConfigsUIFilters spec.
 func GetConfigsForUIRef(ctx context.Context, filters *api.ConfigsUIFilters) ([]api.ApplicationConfigItem, error) {
+	if filters == nil {
+		filters = &api.ConfigsUIFilters{}
+	}
+
 	q := ctx.DB().
 		Model(&models.ConfigItem{}).
 		Select("id, name, type, status, health, labels").
@@ -470,7 +478,7 @@ func GetConfigsForUIRef(ctx context.Context, filters *api.ConfigsUIFilters) ([]a
 
 	var rows []configRow
 	if err := q.Scan(&rows).Error; err != nil {
-		return nil, err
+		return nil, ctx.Oops().Wrapf(err, "failed to scan config items")
 	}
 
 	configs := make([]api.ApplicationConfigItem, len(rows))

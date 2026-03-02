@@ -8,8 +8,6 @@ import (
 )
 
 func TestBuildConnectionCRD(t *testing.T) {
-	g := gomega.NewWithT(t)
-
 	tests := []struct {
 		name     string
 		flags    connectionFlags
@@ -140,6 +138,7 @@ spec:
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			g := gomega.NewWithT(t)
 			crd := buildConnectionCRD(&tt.flags)
 			out, err := marshalConnectionCRD(crd)
 			g.Expect(err).To(gomega.BeNil())
@@ -149,8 +148,6 @@ spec:
 }
 
 func TestMarshalDryRunOutput(t *testing.T) {
-	g := gomega.NewWithT(t)
-
 	tests := []struct {
 		name     string
 		flags    connectionFlags
@@ -313,6 +310,7 @@ spec:
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			g := gomega.NewWithT(t)
 			out, err := marshalDryRunOutput(&tt.flags)
 			g.Expect(err).To(gomega.BeNil())
 			g.Expect(string(out)).To(gomega.Equal(tt.expected))

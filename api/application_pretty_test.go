@@ -158,17 +158,30 @@ func TestRender_EmptyPanelsOmitted(t *testing.T) {
 		Backups:       nil,
 	}
 
-	// Build the document by calling Pretty() on each section directly.
-	// We verify headings are omitted for empty panels.
-	var sections []string
+	// Render the detail section — it must always appear.
+	detailHTML := app.ApplicationDetail.Pretty().HTML()
+	g.Expect(detailHTML).To(gomega.ContainSubstring("test-app"))
+
+	// Build rendered HTML the same way the report pipeline does:
+	// only render Findings / Backups sections when non-empty.
+	var rendered strings.Builder
+	rendered.WriteString(detailHTML)
 	if len(app.Findings) > 0 {
-		sections = append(sections, "Findings")
+		rendered.WriteString("<h3>Security Findings</h3>")
+		for _, f := range app.Findings {
+			rendered.WriteString(f.Pretty().HTML())
+		}
 	}
 	if len(app.Backups) > 0 {
-		sections = append(sections, "Backups")
+		rendered.WriteString("<h3>Backups</h3>")
+		for _, b := range app.Backups {
+			rendered.WriteString(b.Pretty().HTML())
+		}
 	}
-	detailHTML := app.ApplicationDetail.Pretty().HTML()
 
-	g.Expect(detailHTML).To(gomega.ContainSubstring("test-app"))
-	g.Expect(sections).To(gomega.BeEmpty())
+	html := rendered.String()
+
+	// Empty slices must not produce section headings in the output.
+	g.Expect(html).ToNot(gomega.ContainSubstring("Security Findings"))
+	g.Expect(html).ToNot(gomega.ContainSubstring("Backups"))
 }
