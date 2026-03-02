@@ -1139,6 +1139,54 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /application/{namespace}/{name}/export:
+    get:
+      tags: [Applications]
+      summary: Export application
+      description: Export application in the requested format
+      parameters:
+        - name: namespace
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: name
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: format
+          in: query
+          required: false
+          description: "Output format (default: json)"
+          schema:
+            type: string
+            enum: [json, html, pdf, facet-html, facet-pdf]
+            default: json
+        - name: disposition
+          in: query
+          required: false
+          description: "When set to 'attachment', includes a Content-Disposition header for file download"
+          schema:
+            type: string
+            enum: [inline, attachment]
+      responses:
+        "200":
+          description: Exported application
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Application"
+            text/html:
+              schema:
+                type: string
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   # Redirect endpoints
   /redirect/{path}:
     get:
