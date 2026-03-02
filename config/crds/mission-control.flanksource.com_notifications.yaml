@@ -69,7 +69,11 @@ spec:
                   properties:
                     additionalProperties:
                       type: string
-                    description: Properties for Shoutrrr
+                    description: |-
+                      Properties are key-value pairs that override or supplement the connection's own settings at send time.
+                      They are merged over the connection's stored properties, so any key specified here takes precedence.
+                      For example, overriding the recipient on an SMTP connection ("to"), or the channel on a Slack connection.
+                      The exact keys depend on the connection type.
                     type: object
                   team:
                     description: name or ID of the recipient team
@@ -758,7 +762,11 @@ spec:
                   properties:
                     additionalProperties:
                       type: string
-                    description: Properties for Shoutrrr
+                    description: |-
+                      Properties are key-value pairs that override or supplement the connection's own settings at send time.
+                      They are merged over the connection's stored properties, so any key specified here takes precedence.
+                      For example, overriding the recipient on an SMTP connection ("to"), or the channel on a Slack connection.
+                      The exact keys depend on the connection type.
                     type: object
                   team:
                     description: name or ID of the recipient team

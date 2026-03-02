@@ -251,6 +251,10 @@ func sendRawEventNotificationWithMetrics(ctx *Context, payload NotificationEvent
 
 func sendRawEventNotification(ctx *Context, payload NotificationEventPayload, celEnv *celVariables, connectionName, shoutrrrURL string, notification *NotificationWithSpec, customProperties map[string]string) (string, error) {
 	defaultTitle, defaultBody := DefaultTitleAndBody(payload, celEnv)
+
+	// notification.Properties holds spec.to.properties from the CRD, which are user-supplied overrides.
+	// Merging them here (with higher priority than customProperties) ensures they later win over
+	// the connection's own stored properties inside SendRawNotification.
 	customProperties = collections.MergeMap(notification.Properties, customProperties)
 	data := NotificationTemplate{
 		Title:      utils.Coalesce(notification.Title, defaultTitle),
@@ -285,6 +289,9 @@ func sendEventNotificationWithMetrics(ctx *Context, payload NotificationMessageP
 }
 
 func sendEventNotification(ctx *Context, payload NotificationMessagePayload, celEnv *celVariables, connectionName, shoutrrrURL string, notification *NotificationWithSpec, customProperties map[string]string) (string, error) {
+	// notification.Properties holds spec.to.properties from the CRD, which are user-supplied overrides.
+	// Merging them here (with higher priority than customProperties) ensures they later win over
+	// the connection's own stored properties inside SendNotification.
 	customProperties = collections.MergeMap(notification.Properties, customProperties)
 	service, err := SendNotification(ctx, connectionName, shoutrrrURL, payload, customProperties, celEnv)
 	if err != nil {
@@ -312,6 +319,9 @@ func SendRawNotification(ctx *Context, connectionName, shoutrrrURL string, celEn
 		ctx.WithRecipient(RecipientTypeConnection, &connection.ID)
 
 		shoutrrrURL = connection.URL
+		// connection.Properties provides the base settings (host, credentials, default recipients, etc.).
+		// data.Properties (which carry spec.to.properties from the CRD) are merged on top so that
+		// anything the user explicitly specified overrides the connection's defaults.
 		data.Properties = collections.MergeMap(connection.Properties, data.Properties)
 	}
 
@@ -360,6 +370,9 @@ func SendNotification(ctx *Context, connectionName, shoutrrrURL string, payload 
 		ctx.WithRecipient(RecipientTypeConnection, &connection.ID)
 
 		shoutrrrURL = connection.URL
+		// connection.Properties provides the base settings (host, credentials, default recipients, etc.).
+		// properties (which carry spec.to.properties from the CRD) are merged on top so that
+		// anything the user explicitly specified overrides the connection's defaults.
 		properties = collections.MergeMap(connection.Properties, properties)
 	}
 
