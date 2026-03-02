@@ -1,0 +1,61 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Application
+metadata:
+  uid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+  name: incident-commander
+  namespace: mc
+spec:
+  type: Platform
+  description: Flanksource Mission Control incident-commander service
+  properties:
+    - name: version
+      label: Version
+      text: "v1.2.4"
+      icon: tag
+      order: 1
+    - name: language
+      label: Language
+      text: "Go 1.23"
+      icon: code
+      order: 2
+    - name: sla
+      label: SLA
+      text: "99.9%"
+      icon: shield
+      order: 3
+  mapping:
+    datasources:
+      - types:
+          - AWS::RDS::Instance
+        labelSelector: app=incident-commander-db
+    logins:
+      - types:
+          - AWS::RDS::Instance
+        labelSelector: app=incident-commander-db
+    accessReviews:
+      - types:
+          - AWS::RDS::Instance
+        labelSelector: app=incident-commander-db
+    environments:
+      Production:
+        - types:
+            - AWS::RDS::Instance
+          labelSelector: app=incident-commander-db
+          purpose: primary
+  sections:
+    - title: Backups
+      icon: database
+      uiRef:
+        changes:
+          changeType: "BackupCompleted,BackupEnqueued,BackupFailed,BackupRunning,BackupStarted,BackupSuccessful,BackupRestored,RestoreCompleted"
+    - title: Recent Changes
+      icon: git-commit
+      uiRef:
+        changes:
+          changeType: "diff"
+          from: "24h"
+    - title: Deployments
+      icon: box
+      uiRef:
+        configs:
+          configType: "Kubernetes::Deployment"

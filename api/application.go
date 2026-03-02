@@ -4,7 +4,48 @@ import (
 	"time"
 
 	"github.com/flanksource/duty/types"
+	"github.com/flanksource/duty/view"
 )
+
+const (
+	SectionTypeView    = "view"
+	SectionTypeChanges = "changes"
+	SectionTypeConfigs = "configs"
+)
+
+// ApplicationSection is a typed section in an application response.
+// The Type field is one of "view", "changes", or "configs".
+// Only the field matching the type is populated.
+type ApplicationSection struct {
+	Type    string                  `json:"type"`
+	Title   string                  `json:"title"`
+	Icon    string                  `json:"icon,omitempty"`
+	View    *ApplicationViewData    `json:"view,omitempty"`
+	Changes []ApplicationChange     `json:"changes,omitempty"`
+	Configs []ApplicationConfigItem `json:"configs,omitempty"`
+}
+
+// ApplicationViewData holds the data-only fields from a resolved ViewRef section.
+// UI-only metadata (ResponseSource, RefreshError, RequestFingerprint, etc.) is excluded.
+type ApplicationViewData struct {
+	RefreshStatus   string                         `json:"refreshStatus,omitempty"`
+	LastRefreshedAt *time.Time                     `json:"lastRefreshedAt,omitempty"`
+	Columns         []view.ColumnDef               `json:"columns,omitempty"`
+	Rows            []view.Row                     `json:"rows,omitempty"`
+	Panels          []PanelResult                  `json:"panels,omitempty"`
+	Variables       []ViewVariableWithOptions       `json:"variables,omitempty"`
+	ColumnOptions   map[string]ColumnFilterOptions `json:"columnOptions,omitempty"`
+}
+
+// ApplicationConfigItem is a typed config item returned in a configs section.
+type ApplicationConfigItem struct {
+	ID     string            `json:"id"`
+	Name   string            `json:"name"`
+	Type   string            `json:"type,omitempty"`
+	Status string            `json:"status,omitempty"`
+	Health string            `json:"health,omitempty"`
+	Labels map[string]string `json:"labels,omitempty"`
+}
 
 // Application is the schema that UI uses.
 type Application struct {
@@ -15,7 +56,7 @@ type Application struct {
 	Backups           []ApplicationBackup        `json:"backups"`
 	Restores          []ApplicationBackupRestore `json:"restores"`
 	Findings          []ApplicationFinding       `json:"findings"`
-	Sections          []*ViewResult              `json:"sections"`
+	Sections          []ApplicationSection       `json:"sections"`
 }
 
 type ApplicationFinding struct {
@@ -74,7 +115,9 @@ type ApplicationLocation struct {
 type ApplicationChange struct {
 	ID          string    `json:"id"`
 	Date        time.Time `json:"date"`
-	User        string    `json:"user"`
+	ChangeType  string    `json:"changeType,omitempty"`
+	Source      string    `json:"source,omitempty"`
+	CreatedBy   string    `json:"createdBy,omitempty"`
 	Description string    `json:"description"`
 	Status      string    `json:"status"`
 	CreatedAt   time.Time `json:"createdAt"`

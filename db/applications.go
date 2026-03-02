@@ -13,6 +13,7 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
 	"github.com/google/uuid"
+	"github.com/samber/lo"
 	"go.opentelemetry.io/otel/trace"
 	"gorm.io/gorm/clause"
 
@@ -333,4 +334,180 @@ func GetApplicationLocations(ctx context.Context, environments map[string][]v1.A
 func configTypeToProvider(configType string) string {
 	splits := strings.Split(configType, "::")
 	return splits[0]
+}
+
+// GetChangesForUIRef queries config_changes using the filters from a ChangesUIFilters spec.
+func GetChangesForUIRef(ctx context.Context, filters *api.ChangesUIFilters) ([]api.ApplicationChange, error) {
+	q := ctx.DB().
+		Model(&models.ConfigChange{}).
+		Select("config_changes.id, config_changes.created_at, config_changes.change_type, config_changes.summary, config_changes.source, config_changes.severity, config_changes.created_by").
+		Order("config_changes.created_at DESC")
+
+	if filters.ChangeType != "" {
+		included, excluded := parseIncludeExcludeList(filters.ChangeType)
+		if len(included) > 0 {
+			q = q.Where("config_changes.change_type IN (?)", included)
+		}
+		if len(excluded) > 0 {
+			q = q.Where("config_changes.change_type NOT IN (?)", excluded)
+		}
+	}
+
+	if filters.Severity != "" {
+		q = q.Where("config_changes.severity = ?", filters.Severity)
+	}
+
+	if filters.Source != "" {
+		included, excluded := parseIncludeExcludeList(filters.Source)
+		if len(included) > 0 {
+			q = q.Where("config_changes.source IN (?)", included)
+		}
+		if len(excluded) > 0 {
+			q = q.Where("config_changes.source NOT IN (?)", excluded)
+		}
+	}
+
+	if filters.From != "" {
+		if d, err := time.ParseDuration(filters.From); err == nil {
+			q = q.Where("config_changes.created_at >= ?", time.Now().Add(-d))
+		}
+	}
+
+	if filters.To != "" {
+		if d, err := time.ParseDuration(filters.To); err == nil {
+			q = q.Where("config_changes.created_at <= ?", time.Now().Add(-d))
+		}
+	}
+
+	if filters.ConfigTypes != "" {
+		included, excluded := parseIncludeExcludeList(filters.ConfigTypes)
+		q = q.Joins("LEFT JOIN config_items ON config_items.id = config_changes.config_id").
+			Where("(config_items.id IS NULL OR config_items.deleted_at IS NULL)")
+		if len(included) > 0 {
+			q = q.Where("config_items.type IN (?)", included)
+		}
+		if len(excluded) > 0 {
+			q = q.Where("config_items.type NOT IN (?)", excluded)
+		}
+	}
+
+	type changeRow struct {
+		ID        uuid.UUID `gorm:"column:id"`
+		CreatedAt time.Time `gorm:"column:created_at"`
+		ChangeType string   `gorm:"column:change_type"`
+		Summary   string    `gorm:"column:summary"`
+		Source    string    `gorm:"column:source"`
+		Severity  string    `gorm:"column:severity"`
+		CreatedBy *string   `gorm:"column:created_by"`
+	}
+
+	var rows []changeRow
+	if err := q.Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+
+	changes := make([]api.ApplicationChange, len(rows))
+	for i, r := range rows {
+		changes[i] = api.ApplicationChange{
+			ID:          r.ID.String(),
+			Date:        r.CreatedAt,
+			CreatedAt:   r.CreatedAt,
+			ChangeType:  r.ChangeType,
+			Source:      r.Source,
+			CreatedBy:   lo.FromPtr(r.CreatedBy),
+			Description: r.Summary,
+			Status:      r.Severity,
+		}
+	}
+
+	return changes, nil
+}
+
+// GetConfigsForUIRef queries config_items using the filters from a ConfigsUIFilters spec.
+func GetConfigsForUIRef(ctx context.Context, filters *api.ConfigsUIFilters) ([]api.ApplicationConfigItem, error) {
+	q := ctx.DB().
+		Model(&models.ConfigItem{}).
+		Select("id, name, type, status, health, labels").
+		Where("deleted_at IS NULL").
+		Order("name ASC")
+
+	if filters.ConfigType != "" {
+		q = q.Where("type = ?", filters.ConfigType)
+	}
+
+	if filters.Status != "" {
+		included, excluded := parseIncludeExcludeList(filters.Status)
+		if len(included) > 0 {
+			q = q.Where("status IN (?)", included)
+		}
+		if len(excluded) > 0 {
+			q = q.Where("status NOT IN (?)", excluded)
+		}
+	}
+
+	if filters.Health != "" {
+		included, excluded := parseIncludeExcludeList(filters.Health)
+		if len(included) > 0 {
+			q = q.Where("health IN (?)", included)
+		}
+		if len(excluded) > 0 {
+			q = q.Where("health NOT IN (?)", excluded)
+		}
+	}
+
+	if filters.Search != "" {
+		q = q.Where("name ILIKE ?", "%"+filters.Search+"%")
+	}
+
+	type configRow struct {
+		ID     uuid.UUID       `gorm:"column:id"`
+		Name   *string         `gorm:"column:name"`
+		Type   *string         `gorm:"column:type"`
+		Status *string         `gorm:"column:status"`
+		Health *string         `gorm:"column:health"`
+		Labels json.RawMessage `gorm:"column:labels"`
+	}
+
+	var rows []configRow
+	if err := q.Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+
+	configs := make([]api.ApplicationConfigItem, len(rows))
+	for i, r := range rows {
+		var labels map[string]string
+		if len(r.Labels) > 0 {
+			_ = json.Unmarshal(r.Labels, &labels)
+		}
+		configs[i] = api.ApplicationConfigItem{
+			ID:     r.ID.String(),
+			Name:   lo.FromPtr(r.Name),
+			Type:   lo.FromPtr(r.Type),
+			Status: lo.FromPtr(r.Status),
+			Health: lo.FromPtr(r.Health),
+			Labels: labels,
+		}
+	}
+
+	return configs, nil
+}
+
+// parseIncludeExcludeList splits a comma-separated list into included and excluded values.
+// Entries prefixed with "-" are excluded; all others are included.
+func parseIncludeExcludeList(s string) (included, excluded []string) {
+	for part := range strings.SplitSeq(s, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if val, ok := strings.CutPrefix(part, "-"); ok {
+			val = strings.TrimSpace(val)
+			if val != "" {
+				excluded = append(excluded, val)
+			}
+		} else {
+			included = append(included, part)
+		}
+	}
+	return
 }

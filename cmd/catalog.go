@@ -12,6 +12,7 @@ import (
 	"github.com/flanksource/commons/properties"
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/query"
+	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/types"
 	"github.com/spf13/cobra"
 )
@@ -137,9 +138,42 @@ var Query = &cobra.Command{
 	},
 }
 
+var Mock = &cobra.Command{
+	Use:              "mock",
+	Short:            "Load the database with mock data from the duty dummy fixture",
+	PersistentPreRun: PreRun,
+	Run: func(cmd *cobra.Command, args []string) {
+		logger.UseSlog()
+		if err := properties.LoadFile("mission-control.properties"); err != nil {
+			logger.Errorf(err.Error())
+		}
+		ctx, stop, err := duty.Start("mission-control", duty.ClientOnly)
+		if err != nil {
+			logger.Fatalf(err.Error())
+			return
+		}
+		defer stop()
+
+		base := dummy.GetStaticDummyData(ctx.DB())
+		if err := base.Populate(ctx); err != nil {
+			logger.Fatalf("Failed to populate base dummy data: %v", err)
+			return
+		}
+
+		app := dummy.GetApplicationDummyData()
+		if err := app.Populate(ctx); err != nil {
+			logger.Fatalf("Failed to populate application dummy data: %v", err)
+			return
+		}
+
+		logger.Infof("Mock data loaded successfully")
+	},
+}
+
 func init() {
 	Query.Flags().StringVarP(&catalogOutfile, "out-file", "o", "", "Write catalog output to a file instead of stdout")
 	Query.Flags().DurationVarP(&catalogWaitFor, "wait", "w", 60*time.Second, "Wait for this long for resources to be discovered")
 	Catalog.AddCommand(Query)
+	Catalog.AddCommand(Mock)
 	Root.AddCommand(Catalog)
 }
