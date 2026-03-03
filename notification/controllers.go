@@ -109,7 +109,10 @@ type NotificationSilencePreviewItem struct {
 	BodyMarkdown                   string         `json:"body_markdown,omitempty"`
 }
 
-const DefaultNotificationSilencePreviewLimit = 30
+const (
+	DefaultNotificationSilencePreviewLimit = 30
+	MaxNotificationSilencePreviewLimit     = 100
+)
 
 func NotificationSilencePreview(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
@@ -122,7 +125,7 @@ func NotificationSilencePreview(c echo.Context) error {
 		Limit:        DefaultNotificationSilencePreviewLimit,
 	}
 	if limit, err := strconv.Atoi(c.QueryParam("limit")); err == nil {
-		params.Limit = limit
+		params.Limit = max(limit, MaxNotificationSilencePreviewLimit)
 	}
 
 	if selectorsRaw := c.QueryParam("selectors"); selectorsRaw != "" {
