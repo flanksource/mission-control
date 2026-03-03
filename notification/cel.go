@@ -18,6 +18,9 @@ type celVariables struct {
 	Agent   *models.Agent
 	Channel string
 
+	SourceEvent string
+	EventTime   time.Time
+
 	ConfigItem  *models.ConfigItem
 	Component   *models.Component
 	CheckStatus *models.CheckStatus
@@ -94,9 +97,11 @@ var (
 
 func (t *celVariables) AsMap(ctx context.Context, opts ...celAsMapOption) map[string]any {
 	output := map[string]any{
-		"permalink":  t.Permalink,
-		"silenceURL": t.SilenceURL,
-		"channel":    t.Channel,
+		"permalink":    t.Permalink,
+		"silenceURL":   t.SilenceURL,
+		"channel":      t.Channel,
+		"source_event": t.SourceEvent,
+		"event_time":   t.EventTime,
 
 		"agent":        lo.FromPtr(t.Agent).AsMap(),
 		"check_status": lo.FromPtr(t.CheckStatus).AsMap(),

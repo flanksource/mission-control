@@ -1,0 +1,13 @@
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: NotificationSilence
+metadata:
+  name: canary-unhealthy-freeze-window
+  namespace: mc
+spec:
+  description: >
+    Silence check notifications in a planned change freeze date window
+  filter: >
+    source_event == 'config.unhealthy'
+    && config.type == 'MissionControl::Canary'
+    && time.InTimeRange(event_time, "06:00", "07:00")
