@@ -15,7 +15,6 @@ import (
 	"github.com/flanksource/duty/models"
 	pkgPolicy "github.com/flanksource/duty/rbac/policy"
 	gocache "github.com/patrickmn/go-cache"
-	"github.com/samber/lo"
 	"gorm.io/gorm/clause"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -43,6 +42,15 @@ func NewPermissionAdapter(ctx context.Context, main *gormadapter.Adapter) persis
 
 func (a *PermissionAdapter) LoadPolicy(model model.Model) error {
 	if err := a.Adapter.LoadPolicy(model); err != nil {
+		return err
+	}
+
+	// Generate ABAC companion rules for policies loaded from casbin_rules
+	// (which includes default policies from policies.yaml).
+	// Without this, default RBAC rules like "viewer, views, read" only work
+	// for plain RBAC checks (string objects) but fail for HasPermission()
+	// ABAC checks where r.obj is *ABACAttribute.
+	if err := generateABACCompanions(model); err != nil {
 		return err
 	}
 
@@ -158,34 +166,7 @@ func createPolicy(permission models.Permission, action string) []string {
 // rbacToABACObjectSelector returns object selectors (v1.PermissionObject) in JSON
 // for ABAC policies from a global permission.
 func rbacToABACObjectSelector(permission models.Permission, action string) []byte {
-	switch permission.Object {
-	case pkgPolicy.ObjectPlaybooks:
-		if lo.Contains([]string{pkgPolicy.ActionPlaybookRun, pkgPolicy.ActionPlaybookApprove}, action) {
-			return []byte(`{"playbooks": [{"name":"*"}]}`)
-		}
-
-	case pkgPolicy.ObjectCatalog:
-		if pkgPolicy.ActionRead == action {
-			return []byte(`{"configs": [{"name":"*"}]}`)
-		}
-
-	case pkgPolicy.ObjectTopology:
-		if pkgPolicy.ActionRead == action {
-			return []byte(`{"components": [{"name":"*"}]}`)
-		}
-
-	case pkgPolicy.ObjectConnection:
-		if pkgPolicy.ActionRead == action {
-			return []byte(`{"connections": [{"name":"*"}]}`)
-		}
-
-	case pkgPolicy.ObjectViews:
-		if pkgPolicy.ActionRead == action {
-			return []byte(`{"views": [{"name":"*"}]}`)
-		}
-	}
-
-	return nil
+	return pkgPolicy.ABACObjectSelector(permission.Object, action)
 }
 
 // Helper function for finding namespaced resources by selector
@@ -297,4 +278,42 @@ func (a *PermissionAdapter) permissionGroupToCasbinRule(permission models.Permis
 	}
 
 	return policies, nil
+}
+
+// generateABACCompanions scans policies already loaded into the model (from casbin_rules)
+// and generates in-memory ABAC companion rules for any that match an ABAC-eligible
+// object+action pair. This ensures default policies like "viewer, views, read" also
+// work with HasPermission() where r.obj is *ABACAttribute, not a string.
+func generateABACCompanions(m model.Model) error {
+	pModel, ok := m["p"]
+	if !ok {
+		return nil
+	}
+
+	assertion, ok := pModel["p"]
+	if !ok {
+		return nil
+	}
+
+	// Collect first to avoid modifying the slice during iteration
+	var companions [][]string
+	for _, pol := range assertion.Policy {
+		if len(pol) < 6 {
+			continue
+		}
+
+		obj, act := pol[1], pol[2]
+		if selector := pkgPolicy.ABACObjectSelector(obj, act); selector != nil {
+			condition := fmt.Sprintf(`matchResourceSelector(r.obj, %q)`, string(selector))
+			companions = append(companions, []string{"p", pol[0], "*", act, pol[3], condition, pol[5]})
+		}
+	}
+
+	for _, companion := range companions {
+		if err := persist.LoadPolicyArray(companion, m); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
