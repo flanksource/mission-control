@@ -10,6 +10,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
+	"github.com/flanksource/commons/har"
 	"github.com/flanksource/commons/http"
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/api"
@@ -34,6 +35,20 @@ func Test(ctx context.Context, c *models.Connection) (map[string]any, error) {
 	c, err := ctx.HydrateConnection(c)
 	if err != nil {
 		return nil, err
+	}
+
+	collector := har.NewCollector(har.DefaultConfig())
+	newHTTPClient := func() *http.Client {
+		return http.NewClient().HARCollector(collector)
+	}
+	withHAR := func(payload map[string]any) map[string]any {
+		if entries := collector.Entries(); len(entries) > 0 {
+			if payload == nil {
+				payload = make(map[string]any)
+			}
+			payload["har"] = entries
+		}
+		return payload
 	}
 
 	switch c.Type {
@@ -70,7 +85,7 @@ func Test(ctx context.Context, c *models.Connection) (map[string]any, error) {
 		}
 
 	case models.ConnectionTypeAzureDevops:
-		client := http.NewClient().
+		client := newHTTPClient().
 			BaseURL("https://app.vssps.visualstudio.com/_apis/profile/profiles").
 			Header("Accept", "application/json").
 			Auth(c.Username, c.Password)
@@ -86,7 +101,7 @@ func Test(ctx context.Context, c *models.Connection) (map[string]any, error) {
 		}
 
 	case models.ConnectionTypeElasticSearch:
-		client := http.NewClient().BaseURL(c.URL)
+		client := newHTTPClient().BaseURL(c.URL)
 		if c.Username != "" || c.Password != "" {
 			client = client.Auth(c.Username, c.Password)
 		}
@@ -177,7 +192,7 @@ func Test(ctx context.Context, c *models.Connection) (map[string]any, error) {
 		}
 
 	case models.ConnectionTypeGithub:
-		response, err := http.NewClient().Header("Authorization", "Bearer "+c.Password).
+		response, err := newHTTPClient().Header("Authorization", "Bearer "+c.Password).
 			R(ctx).Get("https://api.github.com/user")
 		if err != nil {
 			return nil, err
@@ -193,7 +208,7 @@ func Test(ctx context.Context, c *models.Connection) (map[string]any, error) {
 			return nil, err
 		}
 
-		return map[string]any{
+		return withHAR(map[string]any{
 			"login":   body["login"],
 			"id":      body["id"],
 			"name":    body["name"],
@@ -201,10 +216,10 @@ func Test(ctx context.Context, c *models.Connection) (map[string]any, error) {
 			"scopes":  response.Header.Get("X-OAuth-Scopes"),
 			"rate":    response.Header.Get("X-RateLimit-Limit"),
 			"rateRem": response.Header.Get("X-RateLimit-Remaining"),
-		}, nil
+		}), nil
 
 	case models.ConnectionTypeGitlab:
-		response, err := http.NewClient().Header("Authorization", "Bearer "+c.Password).
+		response, err := newHTTPClient().Header("Authorization", "Bearer "+c.Password).
 			R(ctx).Get("https://gitlab.com/api/v4/user")
 		if err != nil {
 			return nil, err
@@ -231,6 +246,7 @@ func Test(ctx context.Context, c *models.Connection) (map[string]any, error) {
 			return nil, api.Errorf(api.EINVALID, "error creating HTTP client: %v", err)
 		}
 
+		client.HARCollector(collector)
 		if c.InsecureTLS {
 			client = client.InsecureSkipVerify(true)
 		}
@@ -310,7 +326,7 @@ func Test(ctx context.Context, c *models.Connection) (map[string]any, error) {
 		}, nil
 
 	case models.ConnectionTypePrometheus:
-		client := http.NewClient().BaseURL(c.URL)
+		client := newHTTPClient().BaseURL(c.URL)
 		if c.Username != "" || c.Password != "" {
 			client = client.Auth(c.Username, c.Password)
 		}
@@ -330,7 +346,7 @@ func Test(ctx context.Context, c *models.Connection) (map[string]any, error) {
 			return nil, err
 		}
 
-		return payload, nil
+		return withHAR(payload), nil
 
 	case models.ConnectionTypeRedis:
 		rdb := redis.NewClient(&redis.Options{
@@ -363,7 +379,7 @@ func Test(ctx context.Context, c *models.Connection) (map[string]any, error) {
 		}
 
 	case models.ConnectionTypeSlack:
-		response, err := http.NewClient().R(ctx).
+		response, err := newHTTPClient().R(ctx).
 			Header("Authorization", fmt.Sprintf("Bearer %s", c.Password)).
 			Header("Content-Type", "application/json; charset=utf-8").
 			Post("https://slack.com/api/auth.test", map[string]string{"token": c.Password})
@@ -394,7 +410,7 @@ func Test(ctx context.Context, c *models.Connection) (map[string]any, error) {
 
 		if c.Username != "" {
 			// Ensure the bot has permission on the channel
-			postResponse, err := http.NewClient().R(ctx).
+			postResponse, err := newHTTPClient().R(ctx).
 				Header("Authorization", fmt.Sprintf("Bearer %s", c.Password)).
 				Header("Content-Type", "application/json; charset=utf-8").
 				Post("https://slack.com/api/chat.postMessage", map[string]any{
@@ -422,7 +438,7 @@ func Test(ctx context.Context, c *models.Connection) (map[string]any, error) {
 			}
 		}
 
-		return payload, nil
+		return withHAR(payload), nil
 
 	case models.ConnectionTypeSQLServer:
 		conn, err := sql.Open("sqlserver", c.URL)
@@ -436,7 +452,7 @@ func Test(ctx context.Context, c *models.Connection) (map[string]any, error) {
 		}
 
 	case models.ConnectionTypeTelegram:
-		response, err := http.NewClient().R(ctx).Get(fmt.Sprintf("https://api.telegram.org/bot%s/getMe", c.Password))
+		response, err := newHTTPClient().R(ctx).Get(fmt.Sprintf("https://api.telegram.org/bot%s/getMe", c.Password))
 		if err != nil {
 			return nil, err
 		}
@@ -451,5 +467,5 @@ func Test(ctx context.Context, c *models.Connection) (map[string]any, error) {
 		return nil, api.Errorf(api.ENOTIMPLEMENTED, "Testing %s connection is not available", c.Type)
 	}
 
-	return nil, nil
+	return withHAR(nil), nil
 }
