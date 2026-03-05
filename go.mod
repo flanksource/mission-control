@@ -10,8 +10,8 @@ require (
 	github.com/casbin/gorm-adapter/v3 v3.39.0
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.33.0 // indirect
-	github.com/flanksource/commons v1.47.1
-	github.com/flanksource/duty v1.0.1204
+	github.com/flanksource/commons v1.47.3
+	github.com/flanksource/duty v1.0.1205
 	github.com/flanksource/gomplate/v3 v3.24.71
 	github.com/flanksource/kopper v1.0.15
 	github.com/gomarkdown/markdown v0.0.0-20250810172220-2e2c11897d1a
@@ -23,15 +23,15 @@ require (
 	github.com/labstack/echo/v4 v4.15.0
 	github.com/lib/pq v1.10.9
 	github.com/mitchellh/mapstructure v1.5.0
-	github.com/onsi/ginkgo/v2 v2.27.5
-	github.com/onsi/gomega v1.39.0
+	github.com/onsi/ginkgo/v2 v2.28.0
+	github.com/onsi/gomega v1.39.1
 	github.com/ory/client-go v1.22.8
 	github.com/prometheus/client_golang v1.23.2
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
 	gorm.io/gorm v1.31.1
-	k8s.io/apimachinery v0.35.1
-	k8s.io/client-go v0.35.1
+	k8s.io/apimachinery v0.35.2
+	k8s.io/client-go v0.35.2
 	sigs.k8s.io/controller-runtime v0.22.4
 )
 
@@ -66,7 +66,7 @@ require (
 	github.com/prometheus/client_model v0.6.2
 	github.com/prometheus/common v0.67.5
 	github.com/redis/go-redis/v9 v9.16.0
-	github.com/samber/lo v1.52.0
+	github.com/samber/lo v1.53.0
 	github.com/samber/oops v1.21.0
 	github.com/samber/slog-echo v1.18.0
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
@@ -86,7 +86,7 @@ require (
 	golang.org/x/sync v0.19.0
 	google.golang.org/genai v1.34.0
 	gorm.io/hints v1.1.2
-	k8s.io/api v0.35.1
+	k8s.io/api v0.35.2
 )
 
 require (
@@ -178,7 +178,7 @@ require (
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/flanksource/deps v1.0.24 // indirect
-	github.com/flanksource/is-healthy v1.0.82 // indirect
+	github.com/flanksource/is-healthy v1.0.83 // indirect
 	github.com/flanksource/kubectl-neat v1.0.4 // indirect
 	github.com/flanksource/sandbox-runtime v1.0.1 // indirect
 	github.com/fluxcd/gitkit v0.6.0 // indirect
@@ -348,16 +348,16 @@ require (
 	gorm.io/driver/sqlserver v1.6.3 // indirect
 	gorm.io/plugin/dbresolver v1.6.2 // indirect
 	gorm.io/plugin/prometheus v0.1.0 // indirect
-	k8s.io/apiextensions-apiserver v0.35.1 // indirect
+	k8s.io/apiextensions-apiserver v0.35.2 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
-	k8s.io/kube-openapi v0.0.0-20260127142750-a19766b6e2d4 // indirect
+	k8s.io/kube-openapi v0.0.0-20260304202019-5b3e3fdb0acf // indirect
 	k8s.io/utils v0.0.0-20260210185600-b8788abfbbc2 // indirect
 	layeh.com/gopher-json v0.0.0-20201124131017-552bb3c4c3bf // indirect
 	modernc.org/libc v1.67.7 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 	modernc.org/sqlite v1.44.3 // indirect
-	sigs.k8s.io/gateway-api v1.4.1 // indirect
+	sigs.k8s.io/gateway-api v1.5.0 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/randfill v1.0.0 // indirect
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.2 // indirect
