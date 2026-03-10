@@ -40,6 +40,8 @@ func RegisterRoutes(e *echo.Echo) {
 
 	g.POST("/:namespace/:name", GetViewByNamespaceName)
 	g.POST("/:id", GetViewByID)
+
+	e.GET("/dashboard", HandleGetDashboard, rbac.Authorization(policy.ObjectViews, policy.ActionRead))
 }
 
 func GetDisplayPluginsVariables(c echo.Context) error {
