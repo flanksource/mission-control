@@ -36,8 +36,8 @@ func registerDashboardRoutes(e *echo.Echo) {
 }
 
 type DashboardResponse struct {
-	View    *DashboardViewInfo          `json:"view"`
-	Widgets map[string]*api.ViewResult  `json:"widgets"`
+	View     *DashboardViewInfo         `json:"view"`
+	Sections map[string]*api.ViewResult `json:"sections"`
 }
 
 type DashboardViewInfo struct {
@@ -81,17 +81,17 @@ func HandleGetDashboard(c echo.Context) error {
 			Icon:      dashboardResult.Icon,
 			Spec:      view.Spec,
 		},
-		Widgets: make(map[string]*api.ViewResult),
+		Sections: make(map[string]*api.ViewResult),
 	}
 
-	type widgetFetchResult struct {
+	type sectionFetchResult struct {
 		name   string
 		result *api.ViewResult
 	}
 
 	eg := errgroup.Group{}
-	eg.SetLimit(5)
-	results := make(chan widgetFetchResult, len(view.Spec.Sections))
+	eg.SetLimit(10)
+	results := make(chan sectionFetchResult, len(view.Spec.Sections))
 
 	for _, section := range view.Spec.Sections {
 		if section.ViewRef == nil {
@@ -99,13 +99,13 @@ func HandleGetDashboard(c echo.Context) error {
 		}
 
 		eg.Go(func() error {
-			widgetResult, err := fetchWidget(ctx, section.ViewRef.Namespace, section.ViewRef.Name)
+			result, err := fetchSection(ctx, section.ViewRef.Namespace, section.ViewRef.Name)
 			if err != nil {
-				ctx.Logger.Warnf("failed to fetch widget %s/%s: %v", section.ViewRef.Namespace, section.ViewRef.Name, err)
+				ctx.Logger.Warnf("failed to fetch section %s/%s: %v", section.ViewRef.Namespace, section.ViewRef.Name, err)
 				return nil
 			}
-			if widgetResult != nil {
-				results <- widgetFetchResult{name: section.ViewRef.Name, result: widgetResult}
+			if result != nil {
+				results <- sectionFetchResult{name: section.ViewRef.Name, result: result}
 			}
 			return nil
 		})
@@ -116,8 +116,8 @@ func HandleGetDashboard(c echo.Context) error {
 		close(results)
 	}()
 
-	for wr := range results {
-		response.Widgets[wr.name] = wr.result
+	for sr := range results {
+		response.Sections[sr.name] = sr.result
 	}
 
 	return c.JSON(http.StatusOK, response)
@@ -161,15 +161,15 @@ func resolveDashboardView(ctx context.Context) (*models.View, error) {
 	return &view, nil
 }
 
-// fetchWidget fetches a widget view definition (same as POST /view/{namespace}/{name}).
-func fetchWidget(ctx context.Context, namespace, name string) (*api.ViewResult, error) {
+// fetchSection fetches a section's view definition (same as POST /view/{namespace}/{name}).
+func fetchSection(ctx context.Context, namespace, name string) (*api.ViewResult, error) {
 	var viewModel models.View
 	if err := ctx.DB().Select("id, namespace, name").
 		Where("name = ? AND namespace = ? AND deleted_at IS NULL", name, namespace).
 		Find(&viewModel).Error; err != nil {
 		return nil, ctx.Oops().Wrap(err)
 	} else if viewModel.ID == uuid.Nil {
-		return nil, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "widget view %s/%s not found", namespace, name)
+		return nil, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "section view %s/%s not found", namespace, name)
 	}
 
 	attr := &models.ABACAttribute{View: viewModel}
