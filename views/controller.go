@@ -31,6 +31,8 @@ func RegisterRoutes(e *echo.Echo) {
 	g := e.Group("/view", rbac.Authorization(policy.ObjectViews, policy.ActionRead))
 	g.GET("/list", HandleViewList)
 	g.GET("/display-plugin-variables/:viewID", GetDisplayPluginsVariables)
+	g.GET("/metadata/:id", HandleGetViewMetadataByID)
+	g.GET("/metadata/:namespace/:name", HandleGetViewMetadataByNamespaceName)
 
 	// Deprecated: Use POST request
 	g.GET("/:namespace/:name", GetViewByNamespaceName)
@@ -38,6 +40,8 @@ func RegisterRoutes(e *echo.Echo) {
 
 	g.POST("/:namespace/:name", GetViewByNamespaceName)
 	g.POST("/:id", GetViewByID)
+
+	e.GET("/dashboard", HandleGetDashboard, rbac.Authorization(policy.ObjectViews, policy.ActionRead))
 }
 
 func GetDisplayPluginsVariables(c echo.Context) error {
