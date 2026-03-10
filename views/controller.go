@@ -31,6 +31,8 @@ func RegisterRoutes(e *echo.Echo) {
 	g := e.Group("/view", rbac.Authorization(policy.ObjectViews, policy.ActionRead))
 	g.GET("/list", HandleViewList)
 	g.GET("/display-plugin-variables/:viewID", GetDisplayPluginsVariables)
+
+	// Returns the full metadata of a view, including child views in viewRef, except the table rows
 	g.GET("/metadata/:id", HandleGetViewMetadataByID)
 	g.GET("/metadata/:namespace/:name", HandleGetViewMetadataByNamespaceName)
 
@@ -42,6 +44,62 @@ func RegisterRoutes(e *echo.Echo) {
 	g.POST("/:id", GetViewByID)
 
 	e.GET("/dashboard", HandleGetDashboard, rbac.Authorization(policy.ObjectViews, policy.ActionRead))
+}
+
+func HandleGetViewMetadataByID(c echo.Context) error {
+	ctx := c.Request().Context().(context.Context)
+
+	id := c.Param("id")
+
+	var view models.View
+	if err := ctx.DB().Where("id = ? AND deleted_at IS NULL", id).Find(&view).Error; err != nil {
+		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
+	} else if view.ID == uuid.Nil {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "view(id=%s) not found", id))
+	}
+
+	return handleViewMetadata(ctx, c, view)
+}
+
+func HandleGetViewMetadataByNamespaceName(c echo.Context) error {
+	ctx := c.Request().Context().(context.Context)
+
+	namespace := c.Param("namespace")
+	name := c.Param("name")
+
+	var view models.View
+	if err := ctx.DB().Where("namespace = ? AND name = ? AND deleted_at IS NULL", namespace, name).Find(&view).Error; err != nil {
+		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
+	} else if view.ID == uuid.Nil {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "view(namespace=%s, name=%s) not found", namespace, name))
+	}
+
+	return handleViewMetadata(ctx, c, view)
+}
+
+// HandleGetDashboard resolves the dashboard view from properties and
+// delegates to GetViewMetadata.
+func HandleGetDashboard(c echo.Context) error {
+	ctx := c.Request().Context().(context.Context)
+
+	dashboardView, err := resolveDashboardView(ctx)
+	if err != nil {
+		return dutyAPI.WriteError(c, err)
+	} else if dashboardView.ID == uuid.Nil {
+		return c.JSON(http.StatusNotFound, nil)
+	}
+
+	attr := &models.ABACAttribute{View: *dashboardView}
+	if !dutyRBAC.HasPermission(ctx, ctx.Subject(), attr, policy.ActionRead) {
+		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("access denied to dashboard view %s/%s", dashboardView.Namespace, dashboardView.Name))
+	}
+
+	response, err := GetViewMetadata(ctx, dashboardView.ID.String(), dashboardView.Namespace, dashboardView.Name)
+	if err != nil {
+		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
+	}
+
+	return c.JSON(http.StatusOK, response)
 }
 
 func GetDisplayPluginsVariables(c echo.Context) error {
