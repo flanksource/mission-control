@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@flanksource/facet": "^0.1.10",
+    "@flanksource/icons": "^1.0.53",
     "js-yaml": "^4.1.0"
   },
   "devDependencies": {

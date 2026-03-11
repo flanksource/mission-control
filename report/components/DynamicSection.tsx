@@ -27,6 +27,24 @@ const REFRESH_CLASSES: Record<string, string> = {
   cache: 'bg-yellow-100 text-yellow-800',
 };
 
+function TagBadges({ value }: { value: Record<string, string> }) {
+  return (
+    <span className="inline-flex flex-wrap gap-[0.5mm]">
+      {Object.entries(value).map(([k, v]) => (
+        <span key={k} className="inline-flex items-center border border-blue-200 rounded overflow-hidden text-[6pt]" style={{ whiteSpace: 'nowrap' }}>
+          <span className="px-[1.5mm] py-[0.3mm] font-medium" style={{ backgroundColor: '#DBEAFE', color: '#475569' }}>{k}</span>
+          <span className="px-[1.5mm] py-[0.3mm]" style={{ backgroundColor: '#FFFFFF', color: '#0F172A' }}>{v}</span>
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function isTagLike(value: any): value is Record<string, string> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false;
+  return Object.values(value).every((v) => typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean');
+}
+
 function formatCellValue(value: any, type: ViewColumnType): React.ReactNode {
   if (value == null) return '-';
   switch (type) {
@@ -42,17 +60,11 @@ function formatCellValue(value: any, type: ViewColumnType): React.ReactNode {
     case 'config_item':
       return typeof value === 'object' && value !== null ? (value as any).name ?? String(value) : String(value);
     case 'labels':
-      if (typeof value === 'object' && value !== null) {
-        return (
-          <>
-            {Object.entries(value as Record<string, string>).map(([k, v]) => (
-              <span key={k} className="inline-block bg-gray-100 text-gray-700 text-[6.5pt] px-[1.5mm] py-[0.2mm] rounded mr-[1mm]">{k}={v}</span>
-            ))}
-          </>
-        );
-      }
+      if (isTagLike(value)) return <TagBadges value={value} />;
       return String(value);
-    default: return String(value);
+    default:
+      if (isTagLike(value)) return <TagBadges value={value} />;
+      return String(value);
   }
 }
 
@@ -134,7 +146,7 @@ function ConfigsSection({ section }: { section: ApplicationSection }) {
     c.type ?? '-',
     c.status ?? '-',
     c.health ? <HealthDot health={c.health} /> : '-',
-    c.labels ? Object.entries(c.labels).map(([k, v]) => `${k}=${v}`).join(', ') : '-',
+    c.labels ? <TagBadges value={c.labels} /> : '-',
   ]);
   return <CompactTable variant="reference" columns={['Name', 'Type', 'Status', 'Health', 'Labels']} data={rows} />;
 }
