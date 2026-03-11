@@ -130,6 +130,19 @@ type ViewResult struct {
 	Table *DisplayTable `json:"table,omitempty"`
 
 	Sections []ViewSection `json:"sections,omitempty"`
+
+	// SectionResults holds resolved viewRef results inline
+	SectionResults []ViewSectionResult `json:"sectionResults,omitempty"`
+}
+
+type ViewSectionResult struct {
+	Title string      `json:"title"`
+	Icon  string      `json:"icon,omitempty"`
+	View  *ViewResult `json:"view,omitempty"`
+}
+
+type MultiViewResult struct {
+	Views []ViewResult `json:"views"`
 }
 
 const (

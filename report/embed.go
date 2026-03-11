@@ -3,5 +3,5 @@ package report
 
 import "embed"
 
-//go:embed Application.tsx types.ts mission-control.ts package.json tsconfig.json components
+//go:embed *.tsx *.ts  package.json tsconfig.json components
 var FS embed.FS

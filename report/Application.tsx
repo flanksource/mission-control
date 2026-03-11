@@ -25,7 +25,6 @@ function PageFooter() {
   return (
     <div className="flex items-center justify-between px-[10mm] py-[2mm] border-t border-gray-200 text-[8pt] text-gray-400">
       <span>Generated {date}</span>
-      <span>Confidential</span>
     </div>
   );
 }
