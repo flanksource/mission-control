@@ -53,7 +53,7 @@ func getViewMetadata(ctx context.Context, viewModel models.View) (*ViewMetadataR
 	response.Sections = make(map[string]*api.ViewResult, len(viewRefs))
 
 	type sectionFetchResult struct {
-		name   string
+		key    string
 		result *api.ViewResult
 	}
 
@@ -66,22 +66,24 @@ func getViewMetadata(ctx context.Context, viewModel models.View) (*ViewMetadataR
 			result, err := fetchSection(ctx, section.ViewRef.Namespace, section.ViewRef.Name)
 			if err != nil {
 				ctx.Logger.Warnf("failed to fetch section %s/%s: %v", section.ViewRef.Namespace, section.ViewRef.Name, err)
-				return nil
+				return err
 			}
 			if result != nil {
-				results <- sectionFetchResult{name: section.ViewRef.Name, result: result}
+				key := section.ViewRef.Namespace + "/" + section.ViewRef.Name
+				results <- sectionFetchResult{key: key, result: result}
 			}
 			return nil
 		})
 	}
 
-	go func() {
-		_ = eg.Wait()
+	if err := eg.Wait(); err != nil {
 		close(results)
-	}()
+		return nil, err
+	}
+	close(results)
 
 	for sr := range results {
-		response.Sections[sr.name] = sr.result
+		response.Sections[sr.key] = sr.result
 	}
 
 	return response, nil

@@ -53,10 +53,10 @@ type ViewRef struct {
 // +kubebuilder:object:generate=true
 // ViewSection is a section rendered in the application view
 type ViewSection struct {
-	Title   string     `json:"title"`
-	Icon    string     `json:"icon,omitempty"`
-	ViewRef *ViewRef   `json:"viewRef,omitempty"`
-	UIRef   *UIRef     `json:"uiRef,omitempty"`
+	Title   string   `json:"title"`
+	Icon    string   `json:"icon,omitempty"`
+	ViewRef *ViewRef `json:"viewRef,omitempty"`
+	UIRef   *UIRef   `json:"uiRef,omitempty"`
 }
 
 // +kubebuilder:object:generate=true
@@ -76,10 +76,10 @@ type ChangesUIFilters struct {
 	Severity    string `json:"severity,omitempty"`    // e.g. "high" (single value)
 	From        string `json:"from,omitempty"`        // e.g. "24h", "7d"
 	To          string `json:"to,omitempty"`
-	Tags        string `json:"tags,omitempty"`        // e.g. "env=production,!env=staging" (Kubernetes style)
-	Source      string `json:"source,omitempty"`      // e.g. "kubernetes,-github"
-	Summary     string `json:"summary,omitempty"`     // e.g. "-Failed"
-	CreatedBy   string `json:"createdBy,omitempty"`   // e.g. "user@example.com,-bot"
+	Tags        string `json:"tags,omitempty"`      // e.g. "env=production,!env=staging" (Kubernetes style)
+	Source      string `json:"source,omitempty"`    // e.g. "kubernetes,-github"
+	Summary     string `json:"summary,omitempty"`   // e.g. "-Failed"
+	CreatedBy   string `json:"createdBy,omitempty"` // e.g. "user@example.com,-bot"
 }
 
 // +kubebuilder:object:generate=true
@@ -108,8 +108,15 @@ type ViewResult struct {
 
 	RequestFingerprint string           `json:"requestFingerprint,omitempty"`
 	Columns            []view.ColumnDef `json:"columns,omitempty"`
-	Rows               []view.Row       `json:"rows,omitempty"`
-	Panels             []PanelResult    `json:"panels,omitempty"`
+
+	// Rows is internal execution data (positional []any values) used for
+	// persisting to the materialized view table.
+	//
+	// Never serialized in API responses: frontend fetches table rows via
+	// PostgREST using requestFingerprint.
+	Rows []view.Row `json:"-"`
+
+	Panels []PanelResult `json:"panels,omitempty"`
 
 	Variables []ViewVariableWithOptions `json:"variables,omitempty"`
 

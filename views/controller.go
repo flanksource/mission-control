@@ -48,13 +48,17 @@ func RegisterRoutes(e *echo.Echo) {
 func HandleGetViewMetadataByID(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
 
-	id := c.Param("id")
+	idParam := c.Param("id")
+	id, err := uuid.Parse(idParam)
+	if err != nil {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid view id: %s", idParam))
+	}
 
 	var view models.View
 	if err := ctx.DB().Where("id = ? AND deleted_at IS NULL", id).Find(&view).Error; err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
 	} else if view.ID == uuid.Nil {
-		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "view(id=%s) not found", id))
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "view(id=%s) not found", id.String()))
 	}
 
 	response, err := getViewMetadata(ctx, view)
