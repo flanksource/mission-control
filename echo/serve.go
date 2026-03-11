@@ -36,6 +36,7 @@ import (
 
 	"github.com/flanksource/incident-commander/agent"
 	"github.com/flanksource/incident-commander/api"
+	mcMiddleware "github.com/flanksource/incident-commander/middleware"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
@@ -131,6 +132,7 @@ func New(ctx context.Context) *echov4.Echo {
 	dutyEcho.AddDebugHandlers(ctx, e, rbac.Authorization(policy.ObjectMonitor, policy.ActionUpdate))
 
 	e.Use(ServerCache)
+	e.Use(mcMiddleware.ServerTiming)
 
 	e.GET("/kubeconfig", DownloadKubeConfig, rbac.Authorization(policy.ObjectKubernetesProxy, policy.ActionCreate))
 	Forward(ctx, e, "/kubeproxy", "https://kubernetes.default.svc", &ForwardOptions{
