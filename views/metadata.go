@@ -1,9 +1,6 @@
 package views
 
 import (
-	"fmt"
-	"net/http"
-
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -11,7 +8,6 @@ import (
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/incident-commander/api"
 	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -23,30 +19,23 @@ type ViewMetadataResponse struct {
 	Sections        map[string]*api.ViewResult `json:"sectionResults,omitempty"`
 }
 
-func handleViewMetadata(ctx context.Context, c echo.Context, viewModel models.View) error {
+// getViewMetadata fetches a view definition and resolves all its sections
+// in parallel. Each section with a viewRef gets its own ViewResult.
+//
+// Permission checks for the root view happen here.
+func getViewMetadata(ctx context.Context, viewModel models.View) (*ViewMetadataResponse, error) {
 	attr := &models.ABACAttribute{View: viewModel}
 	if !dutyRBAC.HasPermission(ctx, ctx.Subject(), attr, policy.ActionRead) {
-		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("access denied to view %s/%s", viewModel.Namespace, viewModel.Name))
+		return nil, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("access denied to view %s/%s", viewModel.Namespace, viewModel.Name)
 	}
 
-	response, err := GetViewMetadata(ctx, viewModel.ID.String(), viewModel.Namespace, viewModel.Name)
+	viewResult, err := ReadOrPopulateViewTable(ctx, viewModel.Namespace, viewModel.Name)
 	if err != nil {
-		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
-	}
-
-	return c.JSON(http.StatusOK, response)
-}
-
-// GetViewMetadata fetches a view definition and resolves all its sections
-// in parallel. Each section with a viewRef gets its own ViewResult.
-func GetViewMetadata(ctx context.Context, id, namespace, name string) (*ViewMetadataResponse, error) {
-	viewResult, err := ReadOrPopulateViewTable(ctx, namespace, name)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get view %s/%s: %w", namespace, name, err)
+		return nil, ctx.Oops().Wrapf(err, "failed to get view %s/%s", viewModel.Namespace, viewModel.Name)
 	}
 
 	response := &ViewMetadataResponse{
-		ID:         id,
+		ID:         viewModel.ID.String(),
 		ViewResult: viewResult,
 	}
 

@@ -34,7 +34,6 @@ func RegisterRoutes(e *echo.Echo) {
 
 	// Returns the full metadata of a view, including child views in viewRef, except the table rows
 	g.GET("/metadata/:id", HandleGetViewMetadataByID)
-	g.GET("/metadata/:namespace/:name", HandleGetViewMetadataByNamespaceName)
 
 	// Deprecated: Use POST request
 	g.GET("/:namespace/:name", GetViewByNamespaceName)
@@ -58,45 +57,27 @@ func HandleGetViewMetadataByID(c echo.Context) error {
 		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "view(id=%s) not found", id))
 	}
 
-	return handleViewMetadata(ctx, c, view)
-}
-
-func HandleGetViewMetadataByNamespaceName(c echo.Context) error {
-	ctx := c.Request().Context().(context.Context)
-
-	namespace := c.Param("namespace")
-	name := c.Param("name")
-
-	var view models.View
-	if err := ctx.DB().Where("namespace = ? AND name = ? AND deleted_at IS NULL", namespace, name).Find(&view).Error; err != nil {
-		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
-	} else if view.ID == uuid.Nil {
-		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "view(namespace=%s, name=%s) not found", namespace, name))
+	response, err := getViewMetadata(ctx, view)
+	if err != nil {
+		return dutyAPI.WriteError(c, err)
 	}
 
-	return handleViewMetadata(ctx, c, view)
+	return c.JSON(http.StatusOK, response)
 }
 
 // HandleGetDashboard resolves the dashboard view from properties and
-// delegates to GetViewMetadata.
+// delegates to getViewMetadata.
 func HandleGetDashboard(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
 
 	dashboardView, err := resolveDashboardView(ctx)
 	if err != nil {
 		return dutyAPI.WriteError(c, err)
-	} else if dashboardView.ID == uuid.Nil {
-		return c.JSON(http.StatusNotFound, nil)
 	}
 
-	attr := &models.ABACAttribute{View: *dashboardView}
-	if !dutyRBAC.HasPermission(ctx, ctx.Subject(), attr, policy.ActionRead) {
-		return dutyAPI.WriteError(c, ctx.Oops().Code(dutyAPI.EFORBIDDEN).Errorf("access denied to dashboard view %s/%s", dashboardView.Namespace, dashboardView.Name))
-	}
-
-	response, err := GetViewMetadata(ctx, dashboardView.ID.String(), dashboardView.Namespace, dashboardView.Name)
+	response, err := getViewMetadata(ctx, *dashboardView)
 	if err != nil {
-		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
+		return dutyAPI.WriteError(c, err)
 	}
 
 	return c.JSON(http.StatusOK, response)
