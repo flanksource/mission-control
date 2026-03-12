@@ -190,6 +190,37 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "Condition": {
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "observedGeneration": {
+          "type": "integer"
+        },
+        "lastTransitionTime": {
+          "$ref": "#/$defs/Time"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "type",
+        "status",
+        "lastTransitionTime",
+        "reason",
+        "message"
+      ]
+    },
     "ConfigItemColumnType": {
       "properties": {
         "idField": {
@@ -1197,6 +1228,15 @@
     },
     "ViewStatus": {
       "properties": {
+        "observedGeneration": {
+          "type": "integer"
+        },
+        "conditions": {
+          "items": {
+            "$ref": "#/$defs/Condition"
+          },
+          "type": "array"
+        },
         "lastRan": {
           "$ref": "#/$defs/Time"
         }

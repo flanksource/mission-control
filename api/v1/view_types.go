@@ -10,9 +10,12 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/duty/view"
+	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	k8stypes "k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/flanksource/incident-commander/api"
 )
@@ -155,9 +158,22 @@ func (t ViewSpec) Validate() error {
 	return nil
 }
 
+const (
+	ViewConditionReady = "Ready"
+)
+
+const (
+	ViewReadyReasonSynced           = "Synced"
+	ViewReadyReasonValidationFailed = "ValidationFailed"
+	ViewReadyReasonPersistFailed    = "PersistFailed"
+	ViewReadyReasonDeleteFailed     = "DeleteFailed"
+)
+
 // ViewStatus defines the observed state of View
 type ViewStatus struct {
-	LastRan *metav1.Time `json:"lastRan,omitempty" yaml:"lastRan,omitempty"`
+	ObservedGeneration int64              `json:"observedGeneration,omitempty" yaml:"observedGeneration,omitempty"`
+	Conditions         []metav1.Condition `json:"conditions,omitempty" yaml:"conditions,omitempty"`
+	LastRan            *metav1.Time       `json:"lastRan,omitempty" yaml:"lastRan,omitempty"`
 }
 
 //+kubebuilder:object:root=true
@@ -172,6 +188,24 @@ type View struct {
 
 	//+kubebuilder:validation:Optional
 	Status ViewStatus `json:"status" yaml:"status"`
+}
+
+func (v *View) GenerateStatusPatch(original runtime.Object) client.Patch {
+	og, ok := original.(*View)
+	if !ok {
+		return nil
+	}
+
+	if cmp.Diff(v.Status, og.Status) == "" {
+		return nil
+	}
+
+	clientObj, ok := original.(client.Object)
+	if !ok {
+		return nil
+	}
+
+	return client.MergeFrom(clientObj)
 }
 
 func (v *View) GetNamespacedName() string {
