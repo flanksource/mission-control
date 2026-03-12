@@ -379,6 +379,7 @@ func ExecuteAndSaveAction(ctx context.Context, playbookID any, action *models.Pl
 
 	// Scrub secrets from action output before saving to DB
 	result.data = scrubActionResult(&templateEnv, result.data)
+	result.data = extractContentType(result.data, actionSpec.ActionType(), actionSpec.ContentType)
 
 	if err != nil {
 		ctx.Errorf("action failed %+v", err)

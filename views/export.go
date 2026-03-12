@@ -37,10 +37,10 @@ func ExportMulti(ctx context.Context, allViews []v1.View, vars map[string]string
 	}
 
 	if len(multi.Views) == 1 {
-		return formatResult(&multi.Views[0], format)
+		return formatResult(ctx, &multi.Views[0], format)
 	}
 
-	return formatMultiResult(&multi, format)
+	return formatMultiResult(ctx, &multi, format)
 }
 
 func buildReferencedSet(views []v1.View) map[string]bool {
@@ -93,37 +93,33 @@ func runAndNormalize(ctx context.Context, view *v1.View, vars map[string]string)
 	return result, nil
 }
 
-func formatResult(result *api.ViewResult, format string) ([]byte, error) {
+func formatResult(ctx context.Context, result *api.ViewResult, format string) ([]byte, error) {
 	switch format {
 	case "csv":
 		return renderViewCSV(result)
-	case "html":
-		return RenderHTML(result)
-	case "pdf":
-		return RenderPDF(result)
-	case "facet-html":
-		return RenderFacetHTML(result)
-	case "facet-pdf":
-		return RenderFacetPDF(result)
-	default:
+	case "json", "":
 		return json.MarshalIndent(result, "", "  ")
+	case "facet-html":
+		return RenderFacetHTML(ctx, result)
+	case "facet-pdf":
+		return RenderFacetPDF(ctx, result)
+	default:
+		return renderClicky(Render(result), format)
 	}
 }
 
-func formatMultiResult(multi *api.MultiViewResult, format string) ([]byte, error) {
+func formatMultiResult(ctx context.Context, multi *api.MultiViewResult, format string) ([]byte, error) {
 	switch format {
 	case "csv":
 		return renderMultiViewCSV(multi)
-	case "html":
-		return RenderMultiHTML(multi)
-	case "pdf":
-		return RenderMultiPDF(multi)
-	case "facet-html":
-		return RenderMultiFacetHTML(multi)
-	case "facet-pdf":
-		return RenderMultiFacetPDF(multi)
-	default:
+	case "json", "":
 		return json.MarshalIndent(multi, "", "  ")
+	case "facet-html":
+		return RenderMultiFacetHTML(ctx, multi)
+	case "facet-pdf":
+		return RenderMultiFacetPDF(ctx, multi)
+	default:
+		return renderClicky(RenderMulti(multi), format)
 	}
 }
 
@@ -139,21 +135,7 @@ func Export(ctx context.Context, view *v1.View, vars map[string]string, format s
 	}
 
 	normalizeRows(result)
-
-	switch format {
-	case "csv":
-		return renderViewCSV(result)
-	case "html":
-		return RenderHTML(result)
-	case "pdf":
-		return RenderPDF(result)
-	case "facet-html":
-		return RenderFacetHTML(result)
-	case "facet-pdf":
-		return RenderFacetPDF(result)
-	default:
-		return json.MarshalIndent(result, "", "  ")
-	}
+	return formatResult(ctx, result, format)
 }
 
 // normalizeRows converts []byte and JSON-string cell values into proper

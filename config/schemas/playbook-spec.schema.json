@@ -1293,6 +1293,11 @@
           "type": "string",
           "description": "TemplatesOn specifies where the templating happens.\nAvailable options:\n - host\n - agent\nWhen left empty, the templating is done on the main instance(host) itself."
         },
+        "contentType": {
+          "type": "string",
+          "description": "ContentType declares how the primary output should be rendered in the UI.",
+          "enum": ["", "text/plain", "text/markdown", "text/x-shellscript", "application/json", "application/yaml", "application/log+json", "application/sql"]
+        },
         "ai": {
           "$ref": "#/$defs/AIAction"
         },
