@@ -434,4 +434,5 @@ var changeQueryResultSchema = map[string]models.ColumnType{
 	"count":               models.ColumnTypeInteger,
 	"first_observed":      models.ColumnTypeString,
 	"agent_id":            models.ColumnTypeString,
+	"path":                models.ColumnTypeString,
 }
