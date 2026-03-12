@@ -257,9 +257,12 @@ func (p *PlaybookSpec) GetTimeout(ctx context.Context) (time.Duration, error) {
 }
 
 const (
-	PlaybookConditionReady         = "Ready"
-	PlaybookReasonSynced           = "Synced"
-	PlaybookReasonValidationFailed = "ValidationFailed"
+	PlaybookConditionReady = "Ready"
+)
+
+const (
+	PlaybookReadyReasonSynced           = "Synced"
+	PlaybookReadyReasonValidationFailed = "ValidationFailed"
 )
 
 // PlaybookStatus defines the observed state of Playbook
