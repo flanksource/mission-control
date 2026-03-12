@@ -1,0 +1,203 @@
+---
+# Sub-view: resource metrics with gauge, bytes, millicore, duration columns
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: kitchen-sink-resources
+  namespace: mc
+spec:
+  display:
+    title: Resource Metrics
+    icon: cpu
+  columns:
+    - name: name
+      type: string
+      primaryKey: true
+    - name: cpu
+      type: gauge
+      unit: millicore
+      gauge:
+        thresholds:
+          - percent: 0
+            color: "#8BC34A"
+          - percent: 70
+            color: "#F4B23C"
+          - percent: 85
+            color: "#F25C54"
+    - name: memory
+      type: bytes
+    - name: memory_limit
+      type: bytes
+    - name: cost
+      type: decimal
+      unit: $/hr
+    - name: uptime
+      type: duration
+    - name: replicas
+      type: number
+    - name: ready
+      type: boolean
+  queries:
+    metrics:
+      sql:
+        connection: connection://mc/mission-control
+        query: |
+          SELECT 'nginx-deployment' AS name, 62.5 AS cpu, 536870912 AS memory, 1073741824 AS memory_limit, 0.042 AS cost, 86400000000000 AS uptime, 3 AS replicas, TRUE AS ready
+          UNION ALL SELECT 'api-gateway',    78.3, 2147483648, 4294967296, 0.128, 259200000000000, 2, TRUE
+          UNION ALL SELECT 'postgres-primary', 45.1, 8589934592, 17179869184, 0.960, 604800000000000, 1, TRUE
+          UNION ALL SELECT 'redis-cache',    92.7, 4294967296, 4294967296, 0.085, 3600000000000, 1, FALSE
+          UNION ALL SELECT 'cronjob-cleanup', 5.2, 134217728, 268435456, 0.003, 600000000000, 0, FALSE
+          UNION ALL SELECT 'payment-service', 55.0, 1073741824, 2147483648, 0.250, 172800000000000, 4, TRUE
+---
+# Sub-view: recent activity log with datetime, labels, badge columns
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: kitchen-sink-activity
+  namespace: mc
+spec:
+  display:
+    title: Activity Log
+    icon: history
+  columns:
+    - name: event_id
+      type: string
+      primaryKey: true
+      hidden: true
+    - name: timestamp
+      type: datetime
+    - name: resource
+      type: string
+    - name: action
+      type: string
+      badge:
+        color:
+          map:
+            deployed: "#16A34A"
+            scaled: "#2563EB"
+            restarted: "#D97706"
+            failed: "#DC2626"
+            deleted: "#991B1B"
+    - name: severity
+      type: string
+      badge:
+        color:
+          map:
+            critical: "#DC2626"
+            high: "#EA580C"
+            medium: "#D97706"
+            low: "#2563EB"
+            info: "#6B7280"
+    - name: labels
+      type: labels
+  queries:
+    events:
+      sql:
+        connection: connection://mc/mission-control
+        query: |
+          SELECT 'evt-001' AS event_id, '2025-03-10T14:30:00Z' AS timestamp, 'nginx-deployment' AS resource, 'deployed' AS action, 'info' AS severity, '{"version": "1.25.4", "env": "production"}' AS labels
+          UNION ALL SELECT 'evt-002', '2025-03-10T13:15:00Z', 'redis-cache', 'restarted', 'high', '{"reason": "OOMKilled", "env": "staging"}'
+          UNION ALL SELECT 'evt-003', '2025-03-10T12:00:00Z', 'api-gateway', 'scaled', 'medium', '{"from": "2", "to": "4", "trigger": "HPA"}'
+          UNION ALL SELECT 'evt-004', '2025-03-10T10:45:00Z', 'payment-service', 'failed', 'critical', '{"error": "ImagePullBackOff", "image": "payments:v2.1"}'
+          UNION ALL SELECT 'evt-005', '2025-03-10T09:00:00Z', 'cronjob-cleanup', 'deleted', 'low', '{"reason": "TTL expired"}'
+          UNION ALL SELECT 'evt-006', '2025-03-09T22:30:00Z', 'postgres-primary', 'deployed', 'info', '{"version": "16.2", "method": "rolling"}'
+---
+# Main view: workload overview with health, status, config_item + sections + panels
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: kitchen-sink
+  namespace: mc
+spec:
+  display:
+    title: Kitchen Sink
+    icon: kubernetes::deployment
+    sidebar: true
+  columns:
+    - name: name
+      type: config_item
+      primaryKey: true
+      configItem:
+        idField: id
+    - name: id
+      type: string
+      hidden: true
+    - name: namespace
+      type: string
+      filter:
+        type: multiselect
+      url:
+        config: f("name=$(.namespace) type=Kubernetes::Namespace", row)
+    - name: health
+      type: health
+      filter:
+        type: multiselect
+    - name: status
+      type: status
+      filter:
+        type: multiselect
+      icon: row.health
+    - name: millicore_usage
+      type: millicore
+    - name: created
+      type: datetime
+  queries:
+    workloads:
+      sql:
+        connection: connection://mc/mission-control
+        query: |
+          SELECT 'nginx-deployment' AS name, '550e8400-e29b-41d4-a716-446655440001' AS id, 'default' AS namespace, 'healthy' AS health, 'Running' AS status, 625 AS millicore_usage, '2025-01-15T08:30:00Z' AS created
+          UNION ALL SELECT 'api-gateway',      '550e8400-e29b-41d4-a716-446655440002', 'ingress',  'warning',   'Degraded',         783, '2025-02-20T14:00:00Z'
+          UNION ALL SELECT 'postgres-primary', '550e8400-e29b-41d4-a716-446655440003', 'database', 'healthy',   'Running',          451, '2024-11-01T00:00:00Z'
+          UNION ALL SELECT 'redis-cache',      '550e8400-e29b-41d4-a716-446655440004', 'cache',    'unhealthy', 'CrashLoopBackOff', 927, '2025-03-01T09:15:00Z'
+          UNION ALL SELECT 'cronjob-cleanup',  '550e8400-e29b-41d4-a716-446655440005', 'default',  'unknown',   'Completed',         52, '2025-03-10T02:00:00Z'
+          UNION ALL SELECT 'payment-service',  '550e8400-e29b-41d4-a716-446655440006', 'payments', 'warning',   'Running',          550, '2025-03-08T16:45:00Z'
+  panels:
+    - name: Health Distribution
+      description: Workloads grouped by health status
+      type: piechart
+      piechart:
+        showLabels: true
+        colors:
+          healthy: "#28C19B"
+          warning: "#F4B23C"
+          unhealthy: "#F04E6E"
+          unknown: "#666666"
+      query: SELECT COUNT(*) AS count, health FROM workloads GROUP BY health
+    - name: Total Workloads
+      type: number
+      number:
+        unit: " workloads"
+      query: SELECT COUNT(*) AS value FROM workloads
+    - name: CPU Health
+      description: Average CPU utilisation
+      type: gauge
+      gauge:
+        unit: " %"
+        thresholds:
+          - percent: 0
+            color: green
+          - percent: 70
+            color: orange
+          - percent: 90
+            color: red
+      query: SELECT AVG(millicore_usage) / 10.0 AS value FROM workloads
+    - name: Cluster Info
+      type: properties
+      query: |
+        SELECT 'Total Workloads' AS label, CAST(COUNT(*) AS TEXT) AS value FROM workloads
+        UNION ALL
+        SELECT 'Healthy', CAST(COUNT(*) AS TEXT) FROM workloads WHERE health = 'healthy'
+        UNION ALL
+        SELECT 'Namespaces', CAST(COUNT(DISTINCT namespace) AS TEXT) FROM workloads
+  sections:
+    - title: Resource Metrics
+      icon: cpu
+      viewRef:
+        namespace: mc
+        name: kitchen-sink-resources
+    - title: Activity Log
+      icon: history
+      viewRef:
+        namespace: mc
+        name: kitchen-sink-activity

@@ -730,6 +730,33 @@ var _ = Describe("Playbook", Ordered, func() {
 		})
 	})
 
+	var _ = Describe("ContentType", Ordered, func() {
+		It("should extract contentType from action results", func() {
+			run := createAndRun(DefaultContext.WithUser(&dummy.JohnDoe), "action-content-type", RunParams{
+				ConfigID: lo.ToPtr(dummy.KubernetesCluster.ID),
+			}, models.PlaybookRunStatusCompleted)
+
+			var actions []models.PlaybookRunAction
+			err := DefaultContext.DB().Where("playbook_run_id = ?", run.ID).Order("start_time ASC").Find(&actions).Error
+			Expect(err).To(BeNil())
+			Expect(actions).To(HaveLen(4))
+
+			// Action 1: exec with JSON envelope — stdout should be unwrapped, contentType set
+			Expect(actions[0].Result["stdout"]).To(Equal("# My Report"))
+			Expect(actions[0].Result["contentType"]).To(Equal("text/markdown"))
+
+			// Action 2: spec-level contentType override on plain output
+			Expect(actions[1].Result["contentType"]).To(Equal("application/json"))
+
+			// Action 3: plain stdout — no contentType key
+			Expect(actions[2].Result).NotTo(HaveKey("contentType"))
+
+			// Action 4: envelope overridden by spec contentType
+			Expect(actions[3].Result["stdout"]).To(Equal("overridden"))
+			Expect(actions[3].Result["contentType"]).To(Equal("text/plain"))
+		})
+	})
+
 	var _ = Describe("Secret Parameters", Ordered, func() {
 		XIt("should not leak secrets in action output", func() {
 			run := createAndRunWithSecretParams(DefaultContext.WithUser(&dummy.JohnDoe), "action-secret-params", RunParams{
