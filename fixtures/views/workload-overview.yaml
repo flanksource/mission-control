@@ -25,3 +25,118 @@ spec:
       viewRef:
         namespace: mc
         name: pipelines
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: pods
+  namespace: mc
+spec:
+  templating:
+    - key: cluster
+      label: Cluster
+      valueFrom:
+        config:
+          types:
+            - Kubernetes::Cluster
+    - key: namespace
+      label: Namespace
+      dependsOn:
+        - cluster
+      valueFrom:
+        config:
+          tagSelector: "cluster=$(.var.cluster)"
+          types:
+            - Kubernetes::Namespace
+  cache:
+    maxAge: 1m
+    minAge: 5s
+  display:
+    title: Pods
+    icon: pod
+    sidebar: true
+  columns:
+    - name: name
+      type: string
+      primaryKey: true
+    - name: namespace
+      type: string
+      primaryKey: true
+    - name: status
+      type: status
+    - name: health
+      type: health
+    - name: memory
+      type: bytes
+    - name: memory_limit
+      type: bytes
+    - name: cpu
+      type: millicore
+    - name: cpu_limit
+      type: millicore
+    - name: tags
+      type: labels
+    - name: created
+      type: datetime
+  merge: |
+    SELECT
+      pod.name,
+      json_extract(pod.tags, '$.namespace') AS namespace,
+      pod.status,
+      pod.health,
+      pod.tags,
+      pod.created_at,
+      CAST(memory.value AS TEXT) as memory,
+      COALESCE(
+        json_extract(pod.config, '$.spec.containers[0].resources.limits.memory'),
+        ''
+      ) AS memory_limit,
+      COALESCE(CAST(cpu.value AS TEXT), '0') as cpu,
+      COALESCE(
+        json_extract(pod.config, '$.spec.containers[0].resources.limits.cpu'),
+        ''
+      ) AS cpu_limit
+    FROM pod
+    LEFT JOIN memory
+      ON pod.name = memory.pod
+      AND json_extract(pod.tags, '$.namespace') = memory.namespace
+    LEFT JOIN cpu
+      ON pod.name = cpu.pod
+      AND json_extract(pod.tags, '$.namespace') = cpu.namespace
+  queries:
+    memory:
+      columns:
+        namespace: string
+        pod: string
+        value: decimal
+      prometheus:
+        connection: connection://mc/prometheus
+        query: |
+          sum by (namespace, pod) (
+            container_memory_working_set_bytes{
+              container!="POD", # Skip The pause/infra container
+              image!="" # Skip dead containers
+            }
+          )
+    cpu:
+      columns:
+        namespace: string
+        pod: string
+        value: decimal
+      prometheus:
+        connection: connection://mc/prometheus
+        query: |
+          sum by (namespace, pod) (
+            irate(container_cpu_usage_seconds_total{
+              container!="POD", # Skip The pause/infra container
+              image!="" # Skip dead containers
+            }[30s])
+          ) * 1000
+    pod:
+      configs:
+        search: "@order=name"
+        tagSelector: namespace in (default)
+        types:
+          - Kubernetes::Pod
+  mapping:
+    created: row.created_at

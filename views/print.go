@@ -91,32 +91,8 @@ func RenderMulti(multi *api.MultiViewResult) clickyAPI.TextList {
 	return out
 }
 
-func RenderMultiHTML(multi *api.MultiViewResult) ([]byte, error) {
-	s, err := clicky.Format(RenderMulti(multi), clicky.FormatOptions{Format: "html"})
-	if err != nil {
-		return nil, err
-	}
-	return []byte(s), nil
-}
-
-func RenderMultiPDF(multi *api.MultiViewResult) ([]byte, error) {
-	s, err := clicky.Format(RenderMulti(multi), clicky.FormatOptions{Format: "pdf"})
-	if err != nil {
-		return nil, err
-	}
-	return []byte(s), nil
-}
-
-func RenderHTML(result *api.ViewResult) ([]byte, error) {
-	s, err := clicky.Format(Render(result), clicky.FormatOptions{Format: "html"})
-	if err != nil {
-		return nil, err
-	}
-	return []byte(s), nil
-}
-
-func RenderPDF(result *api.ViewResult) ([]byte, error) {
-	s, err := clicky.Format(Render(result), clicky.FormatOptions{Format: "pdf"})
+func renderClicky(list clickyAPI.TextList, format string) ([]byte, error) {
+	s, err := clicky.Format(list, clicky.FormatOptions{Format: format})
 	if err != nil {
 		return nil, err
 	}

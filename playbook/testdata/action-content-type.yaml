@@ -1,0 +1,27 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: content-type-test
+spec:
+  description: Test contentType extraction from action results
+  configs:
+    - types:
+        - Kubernetes::Cluster
+  actions:
+    - name: "exec with json envelope"
+      exec:
+        script: 'echo ''{"content": "# My Report", "contentType": "text/markdown"}'''
+
+    - name: "exec with spec content type"
+      contentType: application/json
+      exec:
+        script: 'echo ''{"key": "value"}'''
+
+    - name: "exec with plain stdout"
+      exec:
+        script: echo "hello world"
+
+    - name: "exec envelope overridden by spec"
+      contentType: text/plain
+      exec:
+        script: 'echo ''{"content": "overridden", "contentType": "text/markdown"}'''

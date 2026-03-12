@@ -586,6 +586,10 @@ type PlaybookAction struct {
 	// When left empty, the templating is done on the main instance(host) itself.
 	TemplatesOn string `json:"templatesOn,omitempty" yaml:"templatesOn,omitempty"`
 
+	// ContentType declares how the primary output should be rendered in the UI.
+	// +kubebuilder:validation:Enum="";text/plain;text/markdown;text/x-shellscript;application/json;application/yaml;"application/log+json";application/sql
+	ContentType string `yaml:"contentType,omitempty" json:"contentType,omitempty"`
+
 	AI                  *AIAction                  `json:"ai,omitempty" yaml:"ai,omitempty" template:"true"`
 	Exec                *ExecAction                `json:"exec,omitempty" yaml:"exec,omitempty" template:"true"`
 	GitOps              *GitOpsAction              `json:"gitops,omitempty" yaml:"gitops,omitempty" template:"true"`
@@ -597,6 +601,35 @@ type PlaybookAction struct {
 	Pod                 *PodAction                 `json:"pod,omitempty" yaml:"pod,omitempty" template:"true"`
 	Notification        *NotificationAction        `json:"notification,omitempty" yaml:"notification,omitempty" template:"true"`
 	Logs                *LogsAction                `json:"logs,omitempty" template:"true"`
+}
+
+func (p *PlaybookAction) ActionType() string {
+	switch {
+	case p.Exec != nil:
+		return "exec"
+	case p.HTTP != nil:
+		return "http"
+	case p.SQL != nil:
+		return "sql"
+	case p.AI != nil:
+		return "ai"
+	case p.Pod != nil:
+		return "pod"
+	case p.Logs != nil:
+		return "logs"
+	case p.Notification != nil:
+		return "notification"
+	case p.GitOps != nil:
+		return "gitops"
+	case p.Github != nil:
+		return "github"
+	case p.AzureDevopsPipeline != nil:
+		return "azureDevopsPipeline"
+	case p.Prometheus != nil:
+		return "prometheus"
+	default:
+		return ""
+	}
 }
 
 func (p *PlaybookAction) Count() int {
