@@ -3,77 +3,88 @@ package connection
 import (
 	"database/sql"
 	"fmt"
-	"os"
+	nethttp "net/http"
+	"strings"
 
-	gcs "cloud.google.com/go/storage"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
+	"github.com/flanksource/artifacts"
 	"github.com/flanksource/commons/har"
 	"github.com/flanksource/commons/http"
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
+	dutyKubernetes "github.com/flanksource/duty/kubernetes"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/types"
 	_ "github.com/go-sql-driver/mysql"
 	redis "github.com/redis/go-redis/v9"
-	"github.com/samber/lo"
 	"google.golang.org/api/cloudresourcemanager/v1"
 	"google.golang.org/api/option"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
-	"github.com/flanksource/incident-commander/k8s"
 	"github.com/flanksource/incident-commander/mail"
-	"github.com/flanksource/incident-commander/pkg/clients/aws"
 	"github.com/flanksource/incident-commander/pkg/clients/git"
 )
 
-func Test(ctx context.Context, c *models.Connection) (map[string]any, error) {
-	c, err := ctx.HydrateConnection(c)
-	if err != nil {
-		return nil, err
-	}
+type TestResult struct {
+	Payload map[string]any `json:"payload,omitempty"`
+	Entries []har.Entry    `json:"entries,omitempty"`
+}
 
+// azureHARTransport adapts net/http.RoundTripper to Azure's policy.Transporter interface.
+type azureHARTransport struct {
+	rt nethttp.RoundTripper
+}
+
+func (a *azureHARTransport) Do(req *nethttp.Request) (*nethttp.Response, error) {
+	return a.rt.RoundTrip(req)
+}
+
+func Test(ctx context.Context, c *models.Connection) (TestResult, error) {
 	collector := har.NewCollector(har.DefaultConfig())
+	harOpt := types.WithHARCollector(collector)
 	newHTTPClient := func() *http.Client {
 		return http.NewClient().HARCollector(collector)
 	}
-	withHAR := func(payload map[string]any) map[string]any {
-		if entries := collector.Entries(); len(entries) > 0 {
-			if payload == nil {
-				payload = make(map[string]any)
-			}
-			payload["har"] = entries
-		}
-		return payload
-	}
+	harTransport := collector.Middleware()(nethttp.DefaultTransport)
 
 	switch c.Type {
 	case models.ConnectionTypeAWS:
-		cc := connection.AWSConnection{
-			ConnectionName: c.ID.String(),
-		}
-		if err := cc.Populate(ctx); err != nil {
-			return nil, api.Errorf(api.EINVALID, "%v", err)
-		}
+		cc := connection.AWSConnection{}
+		cc.FromModel(*c)
 
-		sess, err := aws.GetAWSConfig(&ctx, cc)
+		sess, err := cc.Client(ctx, harOpt)
 		if err != nil {
-			return nil, api.Errorf(api.EINVALID, "%v", err)
+			return TestResult{}, api.Errorf(api.EINVALID, "%v", err)
 		}
 
 		svc := sts.NewFromConfig(sess)
-		if _, err := svc.GetCallerIdentity(ctx, nil); err != nil {
-			return nil, api.Errorf(api.EINVALID, "%v", err)
+		identity, err := svc.GetCallerIdentity(ctx, nil)
+		if err != nil {
+			return TestResult{Entries: collector.Entries()}, api.Errorf(api.EINVALID, "%v", err)
 		}
 
+		return TestResult{
+			Payload: map[string]any{
+				"Account": ptrVal(identity.Account),
+				"Arn":     ptrVal(identity.Arn),
+				"UserId":  ptrVal(identity.UserId),
+			},
+			Entries: collector.Entries(),
+		}, nil
+
 	case models.ConnectionTypeAzure:
-		cred, err := azidentity.NewClientSecretCredential(c.Properties["tenant"], c.Username, c.Password, nil)
+		cred, err := azidentity.NewClientSecretCredential(c.Properties["tenant"], c.Username, c.Password, &azidentity.ClientSecretCredentialOptions{
+			ClientOptions: azcore.ClientOptions{
+				Transport: &azureHARTransport{rt: harTransport},
+			},
+		})
 		if err != nil {
-			return nil, api.Errorf(api.EINVALID, "%v", err)
+			return TestResult{}, api.Errorf(api.EINVALID, "%v", err)
 		}
 
 		tokenPolicy := policy.TokenRequestOptions{
@@ -81,8 +92,10 @@ func Test(ctx context.Context, c *models.Connection) (map[string]any, error) {
 			TenantID: c.Properties["tenant"],
 		}
 		if _, err := cred.GetToken(ctx, tokenPolicy); err != nil {
-			return nil, api.Errorf(api.EINVALID, "%v", err)
+			return TestResult{Entries: collector.Entries()}, api.Errorf(api.EINVALID, "%v", err)
 		}
+
+		return TestResult{Entries: collector.Entries()}, nil
 
 	case models.ConnectionTypeAzureDevops:
 		client := newHTTPClient().
@@ -92,13 +105,15 @@ func Test(ctx context.Context, c *models.Connection) (map[string]any, error) {
 
 		response, err := client.R(ctx).Get("me?api-version=7.2-preview.3")
 		if err != nil {
-			return nil, api.Errorf(api.EINVALID, "%v", err)
+			return TestResult{Entries: collector.Entries()}, api.Errorf(api.EINVALID, "%v", err)
 		}
 
 		if !response.IsOK(200) {
 			body, _ := response.AsString()
-			return nil, api.Errorf(api.EINVALID, "server returned status (code %d) (msg: %s)", response.StatusCode, body)
+			return TestResult{Entries: collector.Entries()}, api.Errorf(api.EINVALID, "server returned status (code %d) (msg: %s)", response.StatusCode, body)
 		}
+
+		return TestResult{Entries: collector.Entries()}, nil
 
 	case models.ConnectionTypeElasticSearch:
 		client := newHTTPClient().BaseURL(c.URL)
@@ -108,18 +123,20 @@ func Test(ctx context.Context, c *models.Connection) (map[string]any, error) {
 
 		response, err := client.R(ctx).Get("_cluster/health")
 		if err != nil {
-			return nil, err
+			return TestResult{Entries: collector.Entries()}, err
 		}
 
 		if !response.IsOK(200) {
 			body, _ := response.AsString()
-			return nil, api.Errorf(api.EINVALID, "%s", body)
+			return TestResult{Entries: collector.Entries()}, api.Errorf(api.EINVALID, "%s", body)
 		}
+
+		return TestResult{Entries: collector.Entries()}, nil
 
 	case models.ConnectionTypeEmail:
 		var conn v1.ConnectionSMTP
 		if err := conn.FromURL(c.URL); err != nil {
-			return nil, api.Errorf(api.EINVALID, "bad shoutrrr connection url: %v", err)
+			return TestResult{}, api.Errorf(api.EINVALID, "bad shoutrrr connection url: %v", err)
 		}
 
 		sender := c.Properties["from"]
@@ -132,10 +149,10 @@ func Test(ctx context.Context, c *models.Connection) (map[string]any, error) {
 		m.SetFrom("Flanksource Test", sender)
 		m.SetCredentials(conn.Host, conn.Port, c.Username, c.Password)
 		if err := m.Send(conn); err != nil {
-			return nil, api.Errorf(api.EINVALID, "%v", err)
+			return TestResult{}, api.Errorf(api.EINVALID, "%v", err)
 		}
 
-		payload := map[string]any{
+		return TestResult{Payload: map[string]any{
 			"subject":    subject,
 			"from":       sender,
 			"to":         []string{sender},
@@ -143,40 +160,33 @@ func Test(ctx context.Context, c *models.Connection) (map[string]any, error) {
 			"port":       conn.Port,
 			"encryption": conn.Encryption,
 			"auth":       conn.Auth,
-		}
-
-		return payload, nil
+		}}, nil
 
 	case models.ConnectionTypeFolder:
-		if _, err := os.Stat(c.Properties["path"]); err != nil {
-			return nil, api.Errorf(api.EINVALID, "%v", err)
-		}
+		return testArtifactConnection(ctx, c)
 
 	case models.ConnectionTypeGCP:
-		opts := []option.ClientOption{option.WithCredentialsJSON([]byte(c.Certificate))}
+		opts := []option.ClientOption{
+			option.WithCredentialsJSON([]byte(c.Certificate)),
+			option.WithHTTPClient(&nethttp.Client{Transport: harTransport}),
+		}
 		if endpoint, ok := c.Properties["endpoint"]; ok && endpoint != "" {
 			opts = append(opts, option.WithEndpoint(endpoint))
 		}
 
 		client, err := cloudresourcemanager.NewService(ctx, opts...)
 		if err != nil {
-			return nil, api.Errorf(api.EINVALID, "error creating service from credentials: %v", err)
+			return TestResult{}, api.Errorf(api.EINVALID, "error creating service from credentials: %v", err)
 		}
 
 		if _, err := client.Projects.List().Do(); err != nil {
-			return nil, api.Errorf(api.EINVALID, "error listing projects: %v", err)
+			return TestResult{Entries: collector.Entries()}, api.Errorf(api.EINVALID, "error listing projects: %v", err)
 		}
+
+		return TestResult{Entries: collector.Entries()}, nil
 
 	case models.ConnectionTypeGCS:
-		session, err := gcs.NewClient(ctx.Context, option.WithEndpoint(c.Properties["endpoint"]), option.WithCredentialsJSON([]byte(c.Certificate)))
-		if err != nil {
-			return nil, err
-		}
-		defer session.Close()
-
-		if _, err := session.Bucket(c.Properties["bucket"]).Attrs(ctx); err != nil {
-			return nil, api.Errorf(api.EINVALID, "%v", err)
-		}
+		return testArtifactConnection(ctx, c)
 
 	case models.ConnectionTypeGit:
 		_, _, err := git.Clone(ctx, &git.GitopsAPISpec{
@@ -188,142 +198,152 @@ func Test(ctx context.Context, c *models.Connection) (map[string]any, error) {
 			SSHPrivateKey: c.Certificate,
 		})
 		if err != nil {
-			return nil, api.Errorf(api.EINVALID, "%v", err)
+			return TestResult{}, api.Errorf(api.EINVALID, "%v", err)
 		}
 
 	case models.ConnectionTypeGithub:
 		response, err := newHTTPClient().Header("Authorization", "Bearer "+c.Password).
 			R(ctx).Get("https://api.github.com/user")
 		if err != nil {
-			return nil, err
+			return TestResult{Entries: collector.Entries()}, err
 		}
 
 		if !response.IsOK(200) {
 			body, _ := response.AsString()
-			return nil, api.Errorf(api.EINVALID, "%s", body)
+			return TestResult{Entries: collector.Entries()}, api.Errorf(api.EINVALID, "%s", body)
 		}
 
 		body, err := response.AsJSON()
 		if err != nil {
-			return nil, err
+			return TestResult{Entries: collector.Entries()}, err
 		}
 
-		return withHAR(map[string]any{
-			"login":   body["login"],
-			"id":      body["id"],
-			"name":    body["name"],
-			"email":   body["email"],
-			"scopes":  response.Header.Get("X-OAuth-Scopes"),
-			"rate":    response.Header.Get("X-RateLimit-Limit"),
-			"rateRem": response.Header.Get("X-RateLimit-Remaining"),
-		}), nil
+		return TestResult{
+			Payload: map[string]any{
+				"login":   body["login"],
+				"id":      body["id"],
+				"name":    body["name"],
+				"email":   body["email"],
+				"scopes":  response.Header.Get("X-OAuth-Scopes"),
+				"rate":    response.Header.Get("X-RateLimit-Limit"),
+				"rateRem": response.Header.Get("X-RateLimit-Remaining"),
+			},
+			Entries: collector.Entries(),
+		}, nil
 
 	case models.ConnectionTypeGitlab:
 		response, err := newHTTPClient().Header("Authorization", "Bearer "+c.Password).
 			R(ctx).Get("https://gitlab.com/api/v4/user")
 		if err != nil {
-			return nil, err
+			return TestResult{Entries: collector.Entries()}, err
 		}
 
 		if !response.IsOK(200) {
 			body, _ := response.AsString()
-			return nil, api.Errorf(api.EINVALID, "server returned (status code: %d) (msg: %s)", response.StatusCode, body)
+			return TestResult{Entries: collector.Entries()}, api.Errorf(api.EINVALID, "server returned (status code: %d) (msg: %s)", response.StatusCode, body)
 		}
+
+		return TestResult{Entries: collector.Entries()}, nil
 
 	case models.ConnectionTypeHTTP:
 		httpConn, err := connection.NewHTTPConnection(ctx, *c)
 		if err != nil {
-			return nil, api.Errorf(api.EINVALID, "error creating HTTP connection: %v", err)
+			return TestResult{}, api.Errorf(api.EINVALID, "error creating HTTP connection: %v", err)
 		}
 
 		hydrated, err := httpConn.Hydrate(ctx, c.Namespace)
 		if err != nil {
-			return nil, api.Errorf(api.EINVALID, "error hydrating HTTP connection: %v", err)
+			return TestResult{}, api.Errorf(api.EINVALID, "error hydrating HTTP connection: %v", err)
 		}
 
 		client, err := connection.CreateHTTPClient(ctx, *hydrated)
 		if err != nil {
-			return nil, api.Errorf(api.EINVALID, "error creating HTTP client: %v", err)
+			return TestResult{}, api.Errorf(api.EINVALID, "error creating HTTP client: %v", err)
 		}
 
-		client.HARCollector(collector)
+		client = client.HARCollector(collector)
+
 		if c.InsecureTLS {
 			client = client.InsecureSkipVerify(true)
 		}
 
 		response, err := client.R(ctx).Get(c.URL)
 		if err != nil {
-			return nil, err
+			return TestResult{Entries: collector.Entries()}, err
 		}
 
 		if !response.IsOK() {
 			body, _ := response.AsString()
-			return nil, api.Errorf(api.EINVALID, "%s", body)
+			return TestResult{Entries: collector.Entries()}, api.Errorf(api.EINVALID, "%s", body)
 		}
+
+		return TestResult{Entries: collector.Entries()}, nil
 
 	case models.ConnectionTypeKubernetes:
-		client, err := k8s.NewClientWithConfig(c.Certificate)
+		client, _, err := dutyKubernetes.NewClientFromPathOrConfig(ctx.Logger, c.Certificate, collector)
 		if err != nil {
-			return nil, err
+			return TestResult{}, err
 		}
 
-		if _, err := client.CoreV1().Pods("default").List(ctx, metav1.ListOptions{}); err != nil {
-			return nil, api.Errorf(api.EINVALID, "error listing pods in default namespace: %v", err)
+		if _, err := client.Discovery().ServerVersion(); err != nil {
+			return TestResult{Entries: collector.Entries()}, api.Errorf(api.EINVALID, "failed to reach kubernetes API server: %v", err)
 		}
+
+		return TestResult{Entries: collector.Entries()}, nil
 
 	case models.ConnectionTypeMySQL:
 		conn, err := sql.Open("mysql", c.URL)
 		if err != nil {
-			return nil, api.Errorf(api.EINVALID, "error creating connection: %v", err)
+			return TestResult{}, api.Errorf(api.EINVALID, "error creating connection: %v", err)
 		}
 		defer conn.Close()
 
 		if err := conn.Ping(); err != nil {
-			return nil, api.Errorf(api.EINVALID, "error pinging database: %v", err)
+			return TestResult{}, api.Errorf(api.EINVALID, "error pinging database: %v", err)
 		}
 
 	case models.ConnectionTypeOpenSearch:
 		var conn connection.OpensearchConnection
 		if err := conn.FromModel(*c); err != nil {
-			return nil, api.Errorf(api.EINVALID, "error creating connection: %v", err)
+			return TestResult{}, api.Errorf(api.EINVALID, "error creating connection: %v", err)
 		}
 		client, err := conn.Client()
 		if err != nil {
-			return nil, api.Errorf(api.EINVALID, "error creating client: %v", err)
+			return TestResult{}, api.Errorf(api.EINVALID, "error creating client: %v", err)
 		}
 
 		r, err := client.Ping()
 		if err != nil || r.IsError() {
-			return nil, api.Errorf(api.EINVALID, "error ping opensearch: %v, %v", err, r)
+			return TestResult{}, api.Errorf(api.EINVALID, "error ping opensearch: %v, %v", err, r)
 		}
 
 	case models.ConnectionTypePostgres:
 		pool, err := duty.NewPgxPool(c.URL)
 		if err != nil {
-			return nil, api.Errorf(api.EINVALID, "error creating pgx pool: %v", err)
+			return TestResult{}, api.Errorf(api.EINVALID, "error creating pgx pool: %v", err)
 		}
 		defer pool.Close()
 
 		conn, err := pool.Acquire(ctx)
 		if err != nil {
-			return nil, api.Errorf(api.EINVALID, "error acquiring connection: %v", err)
+			return TestResult{}, api.Errorf(api.EINVALID, "error acquiring connection: %v", err)
 		}
 		defer conn.Release()
 
 		if err := conn.Ping(ctx); err != nil {
-			return nil, api.Errorf(api.EINVALID, "error pinging database: %v", err)
+			return TestResult{}, api.Errorf(api.EINVALID, "error pinging database: %v", err)
 		}
 
 		var version, database, user string
 		if err := conn.QueryRow(ctx, "select version(), current_database(), current_user").Scan(&version, &database, &user); err != nil {
-			return nil, api.Errorf(api.EINVALID, "error querying connection: %v", err)
+			return TestResult{}, api.Errorf(api.EINVALID, "error querying connection: %v", err)
 		}
 
-		return map[string]any{
+		return TestResult{Payload: map[string]any{
 			"version":  version,
 			"database": database,
 			"user":     user,
-		}, nil
+		}}, nil
 
 	case models.ConnectionTypePrometheus:
 		client := newHTTPClient().BaseURL(c.URL)
@@ -333,20 +353,20 @@ func Test(ctx context.Context, c *models.Connection) (map[string]any, error) {
 
 		response, err := client.R(ctx).Get("api/v1/query?query=sum(up)")
 		if err != nil {
-			return nil, err
+			return TestResult{Entries: collector.Entries()}, err
 		}
 
 		if !response.IsOK() {
 			body, _ := response.AsString()
-			return nil, api.Errorf(api.EINVALID, "%s", body)
+			return TestResult{Entries: collector.Entries()}, api.Errorf(api.EINVALID, "%s", body)
 		}
 
 		payload, err := response.AsJSON()
 		if err != nil {
-			return nil, err
+			return TestResult{Entries: collector.Entries()}, err
 		}
 
-		return withHAR(payload), nil
+		return TestResult{Payload: payload, Entries: collector.Entries()}, nil
 
 	case models.ConnectionTypeRedis:
 		rdb := redis.NewClient(&redis.Options{
@@ -355,28 +375,11 @@ func Test(ctx context.Context, c *models.Connection) (map[string]any, error) {
 			Password: c.Password,
 		})
 		if err := rdb.Ping(ctx).Err(); err != nil {
-			return nil, api.Errorf(api.EINVALID, "%v", err)
+			return TestResult{}, api.Errorf(api.EINVALID, "%v", err)
 		}
 
 	case models.ConnectionTypeS3:
-		cc := connection.AWSConnection{
-			ConnectionName: c.ID.String(),
-		}
-		if err := cc.Populate(ctx); err != nil {
-			return nil, err
-		}
-
-		awsSession, err := aws.GetAWSConfig(&ctx, cc)
-		if err != nil {
-			return nil, err
-		}
-
-		client := s3.NewFromConfig(awsSession, func(o *s3.Options) {
-			o.UsePathStyle = c.Properties["use_path_style"] == "true"
-		})
-		if _, err := client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: lo.ToPtr(c.Properties["bucket"])}); err != nil {
-			return nil, err
-		}
+		return testArtifactConnection(ctx, c)
 
 	case models.ConnectionTypeSlack:
 		response, err := newHTTPClient().R(ctx).
@@ -384,18 +387,18 @@ func Test(ctx context.Context, c *models.Connection) (map[string]any, error) {
 			Header("Content-Type", "application/json; charset=utf-8").
 			Post("https://slack.com/api/auth.test", map[string]string{"token": c.Password})
 		if err != nil {
-			return nil, err
+			return TestResult{Entries: collector.Entries()}, err
 		}
 		defer response.Body.Close()
 
 		if !response.IsOK(200) {
 			body, _ := response.AsString()
-			return nil, api.Errorf(api.EINVALID, "server returned status (code %d) (msg: %s)", response.StatusCode, body)
+			return TestResult{Entries: collector.Entries()}, api.Errorf(api.EINVALID, "server returned status (code %d) (msg: %s)", response.StatusCode, body)
 		}
 
 		responseMsg, err := response.AsJSON()
 		if err != nil {
-			return nil, err
+			return TestResult{Entries: collector.Entries()}, err
 		}
 
 		payload := map[string]any{
@@ -409,7 +412,6 @@ func Test(ctx context.Context, c *models.Connection) (map[string]any, error) {
 		}
 
 		if c.Username != "" {
-			// Ensure the bot has permission on the channel
 			postResponse, err := newHTTPClient().R(ctx).
 				Header("Authorization", fmt.Sprintf("Bearer %s", c.Password)).
 				Header("Content-Type", "application/json; charset=utf-8").
@@ -418,19 +420,19 @@ func Test(ctx context.Context, c *models.Connection) (map[string]any, error) {
 					"channel": c.Username,
 				})
 			if err != nil {
-				return nil, err
+				return TestResult{Payload: payload, Entries: collector.Entries()}, err
 			}
 			defer postResponse.Body.Close()
 
 			if !postResponse.IsOK(200) {
 				body, _ := postResponse.AsString()
-				return nil, api.Errorf(api.EINVALID, "failed to check channel access (code %d) (msg: %s)", postResponse.StatusCode, body)
+				return TestResult{Payload: payload, Entries: collector.Entries()}, api.Errorf(api.EINVALID, "failed to check channel access (code %d) (msg: %s)", postResponse.StatusCode, body)
 			}
 
 			if response, err := postResponse.AsJSON(); err != nil {
-				return nil, err
+				return TestResult{Payload: payload, Entries: collector.Entries()}, err
 			} else if response["ok"] != true {
-				return nil, api.Errorf(api.EINVALID, "bot does not have access to channel %s: %v", c.Username, response["error"])
+				return TestResult{Payload: payload, Entries: collector.Entries()}, api.Errorf(api.EINVALID, "bot does not have access to channel %s: %v", c.Username, response["error"])
 			} else {
 				payload["channel"] = c.Username
 				payload["post_ts"] = response["ts"]
@@ -438,34 +440,70 @@ func Test(ctx context.Context, c *models.Connection) (map[string]any, error) {
 			}
 		}
 
-		return withHAR(payload), nil
+		return TestResult{Payload: payload, Entries: collector.Entries()}, nil
 
 	case models.ConnectionTypeSQLServer:
 		conn, err := sql.Open("sqlserver", c.URL)
 		if err != nil {
-			return nil, api.Errorf(api.EINVALID, "error creating connection: %v", err)
+			return TestResult{}, api.Errorf(api.EINVALID, "error creating connection: %v", err)
 		}
 		defer conn.Close()
 
 		if err := conn.Ping(); err != nil {
-			return nil, api.Errorf(api.EINVALID, "error pinging database: %v", err)
+			return TestResult{}, api.Errorf(api.EINVALID, "error pinging database: %v", err)
 		}
 
 	case models.ConnectionTypeTelegram:
 		response, err := newHTTPClient().R(ctx).Get(fmt.Sprintf("https://api.telegram.org/bot%s/getMe", c.Password))
 		if err != nil {
-			return nil, err
+			return TestResult{Entries: collector.Entries()}, err
 		}
 		defer response.Body.Close()
 
 		if !response.IsOK(200) {
 			body, _ := response.AsString()
-			return nil, api.Errorf(api.EINVALID, "server returned status (code %d) (msg: %s)", response.StatusCode, body)
+			return TestResult{Entries: collector.Entries()}, api.Errorf(api.EINVALID, "server returned status (code %d) (msg: %s)", response.StatusCode, body)
 		}
 
+		return TestResult{Entries: collector.Entries()}, nil
+
 	default:
-		return nil, api.Errorf(api.ENOTIMPLEMENTED, "Testing %s connection is not available", c.Type)
+		return TestResult{}, api.Errorf(api.ENOTIMPLEMENTED, "Testing %s connection is not available", c.Type)
 	}
 
-	return withHAR(nil), nil
+	return TestResult{Entries: collector.Entries()}, nil
+}
+
+func testArtifactConnection(ctx context.Context, c *models.Connection) (TestResult, error) {
+	store, err := artifacts.GetFSForConnection(ctx, *c)
+	if err != nil {
+		return TestResult{}, api.Errorf(api.EINVALID, "error creating filesystem: %v", err)
+	}
+	defer store.Close()
+
+	testPath := ".mission-control-test"
+	info, err := store.Write(ctx, testPath, strings.NewReader("connection test"))
+	if err != nil {
+		return TestResult{}, api.Errorf(api.EINVALID, "error writing test file: %v", err)
+	}
+
+	payload := map[string]any{
+		"path": testPath,
+		"size": info.Size(),
+	}
+
+	reader, err := store.Read(ctx, testPath)
+	if err != nil {
+		return TestResult{Payload: payload}, api.Errorf(api.EINVALID, "error reading test file: %v", err)
+	}
+	reader.Close()
+
+	return TestResult{Payload: payload}, nil
+}
+
+func ptrVal(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }
