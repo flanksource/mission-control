@@ -446,7 +446,7 @@ func processPendingNotification(ctx context.Context, currentHistory models.Notif
 	}
 
 	if err := sendPendingNotification(ctx, currentHistory, payload); err != nil {
-		return fmt.Errorf("failed to send notification: %w", err)
+		return fmt.Errorf("failed to send pending notification: %w", err)
 	} else if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", currentHistory.ID).UpdateColumns(map[string]any{
 		"status": models.NotificationStatusSent,
 	}).Error; dberr != nil {

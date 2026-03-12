@@ -585,7 +585,7 @@ func sendFallbackNotification(ctx context.Context, sendHistory models.Notificati
 	payload.CustomService = notif.FallbackCustomNotification
 
 	if err := sendPendingNotification(ctx, sendHistory, payload); err != nil {
-		return fmt.Errorf("failed to send notification: %w", err)
+		return fmt.Errorf("failed to send fallback notification: %w", err)
 	} else if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", sendHistory.ID).UpdateColumns(map[string]any{
 		"status": models.NotificationStatusSent,
 	}).Error; dberr != nil {
