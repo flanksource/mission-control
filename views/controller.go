@@ -32,12 +32,59 @@ func RegisterRoutes(e *echo.Echo) {
 	g.GET("/list", HandleViewList)
 	g.GET("/display-plugin-variables/:viewID", GetDisplayPluginsVariables)
 
+	// Returns the full metadata of a view, including child views in viewRef, except the table rows
+	g.GET("/metadata/:id", HandleGetViewMetadataByID)
+
 	// Deprecated: Use POST request
 	g.GET("/:namespace/:name", GetViewByNamespaceName)
 	g.GET("/:id", GetViewByID)
 
 	g.POST("/:namespace/:name", GetViewByNamespaceName)
 	g.POST("/:id", GetViewByID)
+
+	e.GET("/dashboard", HandleGetDashboard, rbac.Authorization(policy.ObjectViews, policy.ActionRead))
+}
+
+func HandleGetViewMetadataByID(c echo.Context) error {
+	ctx := c.Request().Context().(context.Context)
+
+	idParam := c.Param("id")
+	id, err := uuid.Parse(idParam)
+	if err != nil {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid view id: %s", idParam))
+	}
+
+	var view models.View
+	if err := ctx.DB().Where("id = ? AND deleted_at IS NULL", id).Find(&view).Error; err != nil {
+		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
+	} else if view.ID == uuid.Nil {
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "view(id=%s) not found", id.String()))
+	}
+
+	response, err := getViewMetadata(ctx, view)
+	if err != nil {
+		return dutyAPI.WriteError(c, err)
+	}
+
+	return c.JSON(http.StatusOK, response)
+}
+
+// HandleGetDashboard resolves the dashboard view from properties and
+// delegates to getViewMetadata.
+func HandleGetDashboard(c echo.Context) error {
+	ctx := c.Request().Context().(context.Context)
+
+	dashboardView, err := resolveDashboardView(ctx)
+	if err != nil {
+		return dutyAPI.WriteError(c, err)
+	}
+
+	response, err := getViewMetadata(ctx, *dashboardView)
+	if err != nil {
+		return dutyAPI.WriteError(c, err)
+	}
+
+	return c.JSON(http.StatusOK, response)
 }
 
 func GetDisplayPluginsVariables(c echo.Context) error {
