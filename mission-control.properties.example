@@ -1,4 +1,8 @@
 
+## Dashboard
+# Default dashboard view to display. Accepts "namespace/name" or just "name".
+# dashboard.default.view=mission-control-dashboard
+
 ## Notification
 notifications.max.count=5
 notifications.max.window=1h
