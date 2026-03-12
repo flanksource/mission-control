@@ -219,6 +219,7 @@ func Run(ctx context.Context, view *v1.View, request *requestOpt) (*api.ViewResu
 		})
 	}
 
+	output.Sections = view.Spec.Sections
 	return &output, nil
 }
 

@@ -1,12 +1,16 @@
 import React from 'react';
 import { Page, PageBreak } from '@flanksource/facet';
+import { Icon } from '@flanksource/icons/icon';
 import type { ViewReportData, MultiViewReportData } from './view-types.ts';
 import ViewResultSection from './components/ViewResultSection.tsx';
 
-function PageHeader({ title }: { title: string }) {
+function PageHeader({ title, icon }: { title: string; icon?: string }) {
   return (
     <div className="flex items-center justify-between px-[10mm] py-[2mm] bg-[#1e293b] text-white text-[9pt]">
-      <span className="font-semibold">{title}</span>
+      <span className="font-semibold inline-flex items-center gap-[1mm]">
+        {icon && <Icon name={icon} className="w-[3mm] h-[3mm]" />}
+        {title}
+      </span>
       <span className="text-gray-300">View Report</span>
     </div>
   );
@@ -30,7 +34,11 @@ function CoverPage({ data }: { data: ViewReportData }) {
   return (
     <div className="flex flex-col justify-center items-center h-full min-h-[200mm] text-center px-[20mm]">
       <div className="mb-[8mm]">
-
+        {data.icon && (
+          <div className="mb-[4mm] flex justify-center">
+            <Icon name={data.icon} className="w-[16mm] h-[16mm]" />
+          </div>
+        )}
         <h1 className="text-[36pt] font-bold text-slate-900 leading-tight mb-[4mm]">
           {data.title || data.name}
         </h1>
@@ -68,7 +76,7 @@ export default function ViewReportPage({ data }: ViewReportProps) {
   const viewsList = isMultiView(data) ? data.views : [data];
   const firstView = viewsList[0];
 
-  const header = <PageHeader title={firstView.title || firstView.name} />;
+  const header = <PageHeader title={firstView.title || firstView.name} icon={firstView.icon} />;
   const footer = <PageFooter />;
   const pageProps = {
     pageSize: 'a4' as const,

@@ -76,6 +76,12 @@ var ViewRun = &cobra.Command{
 			return err
 		}
 
+		out := viewOutFile
+		if out == "" {
+			out = "stdout"
+		}
+		logger.Infof("Rendering %d view(s) to %s (%s) %dKB", len(allViews), out, viewFormat, len(data)/1024)
+
 		if viewOutFile != "" {
 			if err := os.WriteFile(viewOutFile, data, 0600); err != nil {
 				return fmt.Errorf("failed to write output file: %w", err)

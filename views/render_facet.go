@@ -9,27 +9,29 @@ import (
 	"os/exec"
 	"path/filepath"
 
+	"github.com/flanksource/duty/context"
+
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/report"
 )
 
-func RenderFacetHTML(result *api.ViewResult) ([]byte, error) {
-	return renderViewWithFacet(result, "html")
+func RenderFacetHTML(ctx context.Context, result *api.ViewResult) ([]byte, error) {
+	return renderViewWithFacet(ctx, result, "html")
 }
 
-func RenderFacetPDF(result *api.ViewResult) ([]byte, error) {
-	return renderViewWithFacet(result, "pdf")
+func RenderFacetPDF(ctx context.Context, result *api.ViewResult) ([]byte, error) {
+	return renderViewWithFacet(ctx, result, "pdf")
 }
 
-func RenderMultiFacetHTML(multi *api.MultiViewResult) ([]byte, error) {
-	return renderFacetWithData(multi, "html")
+func RenderMultiFacetHTML(ctx context.Context, multi *api.MultiViewResult) ([]byte, error) {
+	return renderFacetWithData(ctx, multi, "html")
 }
 
-func RenderMultiFacetPDF(multi *api.MultiViewResult) ([]byte, error) {
-	return renderFacetWithData(multi, "pdf")
+func RenderMultiFacetPDF(ctx context.Context, multi *api.MultiViewResult) ([]byte, error) {
+	return renderFacetWithData(ctx, multi, "pdf")
 }
 
-func renderFacetWithData(data any, format string) ([]byte, error) {
+func renderFacetWithData(ctx context.Context, data any, format string) ([]byte, error) {
 	if data == nil {
 		return nil, fmt.Errorf("data must not be nil")
 	}
@@ -67,6 +69,8 @@ func renderFacetWithData(data any, format string) ([]byte, error) {
 	outFile.Close()
 	defer os.Remove(outFile.Name())
 
+	ctx.Logger.V(3).Infof("facet binary: %s, data size: %dKB", facetBin, len(dataJSON)/1024)
+
 	var stderr bytes.Buffer
 	cmd := exec.Command(facetBin, format, "ViewReport.tsx", "-d", dataFile.Name(), "-o", outFile.Name())
 	cmd.Dir = srcDir
@@ -76,10 +80,16 @@ func renderFacetWithData(data any, format string) ([]byte, error) {
 		return nil, fmt.Errorf("facet %s failed: %w\n%s", format, err, stderr.String())
 	}
 
-	return os.ReadFile(outFile.Name())
+	result, err := os.ReadFile(outFile.Name())
+	if err != nil {
+		return nil, fmt.Errorf("read facet output: %w", err)
+	}
+
+	ctx.Logger.V(3).Infof("Facet rendered %dKB of %s", len(result)/1024, format)
+	return result, nil
 }
 
-func renderViewWithFacet(result *api.ViewResult, format string) ([]byte, error) {
+func renderViewWithFacet(ctx context.Context, result *api.ViewResult, format string) ([]byte, error) {
 	if result == nil {
 		return nil, fmt.Errorf("view result must not be nil")
 	}
@@ -98,6 +108,8 @@ func renderViewWithFacet(result *api.ViewResult, format string) ([]byte, error) 
 	if err != nil {
 		return nil, fmt.Errorf("marshal view result: %w", err)
 	}
+
+	ctx.Logger.V(3).Infof("facet binary: %s, data size: %dKB", facetBin, len(dataJSON)/1024)
 
 	dataFile, err := os.CreateTemp("", "facet-view-data-*.json")
 	if err != nil {
@@ -126,7 +138,13 @@ func renderViewWithFacet(result *api.ViewResult, format string) ([]byte, error) 
 		return nil, fmt.Errorf("facet %s failed: %w\n%s", format, err, stderr.String())
 	}
 
-	return os.ReadFile(outFile.Name())
+	output, err := os.ReadFile(outFile.Name())
+	if err != nil {
+		return nil, fmt.Errorf("read facet output: %w", err)
+	}
+
+	ctx.Logger.V(3).Infof("Facet rendered %dKB of %s", len(output)/1024, format)
+	return output, nil
 }
 
 func viewFacetSrcDir() (string, error) {
