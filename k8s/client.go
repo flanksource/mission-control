@@ -36,7 +36,7 @@ func NewClient() (kubernetes.Interface, error) {
 	return kubernetes.NewForConfig(restConfig)
 }
 
-func NewClientWithConfig(kubeConfig string) (kubernetes.Interface, error) {
+func RESTConfigFromKubeConfig(kubeConfig string) (*rest.Config, error) {
 	getter := func() (*clientcmdapi.Config, error) {
 		clientCfg, err := clientcmd.NewClientConfigFromBytes([]byte(kubeConfig))
 		if err != nil {
@@ -54,6 +54,15 @@ func NewClientWithConfig(kubeConfig string) (kubernetes.Interface, error) {
 	config, err := clientcmd.BuildConfigFromKubeconfigGetter("", getter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate rest config: %w", err)
+	}
+
+	return config, nil
+}
+
+func NewClientWithConfig(kubeConfig string) (kubernetes.Interface, error) {
+	config, err := RESTConfigFromKubeConfig(kubeConfig)
+	if err != nil {
+		return nil, err
 	}
 
 	return kubernetes.NewForConfig(config)

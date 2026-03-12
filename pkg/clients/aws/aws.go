@@ -12,8 +12,9 @@ import (
 	"github.com/henvic/httpretty"
 )
 
-func GetAWSConfig(ctx *context.Context, conn connection.AWSConnection) (cfg aws.Config, err error) {
+func GetAWSConfig(ctx *context.Context, conn connection.AWSConnection, extraOpts ...func(*config.LoadOptions) error) (cfg aws.Config, err error) {
 	var options []func(*config.LoadOptions) error
+	options = append(options, extraOpts...)
 
 	if conn.Region != "" {
 		options = append(options, config.WithRegion(conn.Region))

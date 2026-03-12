@@ -4,9 +4,11 @@ import (
 	gocontext "context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/aws/aws-sdk-go-v2/config"
-	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/clicky"
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/shutdown"
@@ -18,8 +20,9 @@ import (
 )
 
 var Connection = &cobra.Command{
-	Use:   "connection",
-	Short: "Manage connections",
+	Use:          "connection",
+	Short:        "Manage connections",
+	SilenceUsage: true,
 }
 
 var ConnectionAdd = &cobra.Command{
@@ -33,6 +36,7 @@ Examples:
   app connection add aws --name my-aws --namespace default --access-key AKIA... --secret-key ... --region us-east-1
   app connection add postgres --name mydb --namespace default --url "..." --test`,
 	PersistentPreRun:  PreRun,
+	SilenceUsage:      true,
 	DisableAutoGenTag: true,
 }
 
@@ -93,6 +97,9 @@ type connectionFlags struct {
 	Password    string
 	Certificate string
 	InsecureTLS bool
+
+	// Kubernetes
+	Kubeconfig string
 
 	// AWS
 	AccessKey    string
@@ -180,6 +187,16 @@ type connectionFlags struct {
 
 	// Properties (generic key=value pairs)
 	Properties []string
+}
+
+func kubeconfigDefault() string {
+	if v := os.Getenv("KUBECONFIG"); v != "" {
+		return v
+	}
+	if home, err := os.UserHomeDir(); err == nil {
+		return filepath.Join(home, ".kube", "config")
+	}
+	return ""
 }
 
 func validateConnectionFlags(flags *connectionFlags) error {
@@ -369,10 +386,17 @@ func runConnectionAdd(flags *connectionFlags) error {
 	}
 
 	if flags.Test {
-		if _, err := connection.Test(ctx, &conn); err != nil {
+		hydrated, err := ctx.HydrateConnection(&conn)
+		if err != nil {
+			return fmt.Errorf("failed to hydrate connection: %w", err)
+		}
+		result, err := connection.Test(ctx, hydrated)
+		if err != nil {
+			clicky.MustPrint(result, clicky.Flags.FormatOptions)
 			return fmt.Errorf("connection test failed: %w", err)
 		}
-		logger.Infof("Connection test passed")
+		clicky.MustPrint(result, clicky.Flags.FormatOptions)
+		fmt.Println("\nConnection test passed")
 	}
 
 	if err := ctx.DB().Save(&conn).Error; err != nil {
@@ -563,7 +587,7 @@ func buildConnectionFromFlags(flags *connectionFlags) (models.Connection, error)
 		conn.Password = flags.PersonalAccessToken
 
 	case models.ConnectionTypeKubernetes:
-		conn.Certificate = flags.Certificate
+		conn.Certificate = flags.Kubeconfig
 
 	case models.ConnectionTypeFolder:
 		props["path"] = flags.Path
@@ -618,9 +642,7 @@ func addCommonFlags(cmd *cobra.Command, flags *connectionFlags) {
 	_ = cmd.MarkFlagRequired("namespace")
 }
 
-func addConnectionFlags(cmd *cobra.Command, flags *connectionFlags, connType string) {
-	addCommonFlags(cmd, flags)
-
+func addTypeSpecificFlags(cmd *cobra.Command, flags *connectionFlags, connType string) {
 	switch connType {
 	case models.ConnectionTypeSlack:
 		cmd.Flags().StringVar(&flags.Channel, "channel", "", "Slack channel ID (required)")
@@ -782,7 +804,7 @@ func addConnectionFlags(cmd *cobra.Command, flags *connectionFlags, connType str
 
 	case models.ConnectionTypeKubernetes:
 		cmd.Flags().StringVar(&flags.URL, "url", "", "Kubernetes API URL")
-		cmd.Flags().StringVar(&flags.Certificate, "certificate", "", "Kubeconfig content")
+		cmd.Flags().StringVar(&flags.Kubeconfig, "kubeconfig", kubeconfigDefault(), "Path to kubeconfig file or raw kubeconfig content")
 
 	case models.ConnectionTypeFolder:
 		cmd.Flags().StringVar(&flags.Path, "path", "", "Folder path")
@@ -818,6 +840,11 @@ func addConnectionFlags(cmd *cobra.Command, flags *connectionFlags, connType str
 		cmd.Flags().StringVar(&flags.ApiKey, "api-key", "", "API key")
 		cmd.Flags().StringVar(&flags.Model, "model", "", "Model name")
 	}
+}
+
+func addConnectionFlags(cmd *cobra.Command, flags *connectionFlags, connType string) {
+	addCommonFlags(cmd, flags)
+	addTypeSpecificFlags(cmd, flags, connType)
 }
 
 func newConnectionAddTypeCommand(spec connectionTypeSpec) *cobra.Command {
