@@ -132,7 +132,7 @@ func StartConsumers(ctx context.Context) {
 
 // on conflict clause when inserting new events to the `event_queue` table
 var EventQueueOnConflictClause = clause.OnConflict{
-	Columns: []clause.Column{{Name: "name"}, {Name: "properties"}},
+	Columns: models.EventQueueUniqueConstraint(),
 	DoUpdates: clause.Assignments(map[string]any{
 		"attempts":     0,
 		"last_attempt": nil,
