@@ -69,5 +69,4 @@ spec:
   panels:
     - name: "Pod Health Summary"
       type: number
-      source: configs
       query: SELECT count(*) as total FROM pod
