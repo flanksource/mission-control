@@ -2,19 +2,19 @@ package actions
 
 import (
 	"fmt"
-	"testing"
 	"time"
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/types"
-	"github.com/onsi/gomega"
 
 	"github.com/flanksource/duty/logs"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	ginkgo "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	"github.com/samber/lo"
 )
 
-func Test_matchLogs(t *testing.T) {
+var _ = ginkgo.Describe("matchLogs", func() {
 	referenceTime := time.Now()
 	ctx := context.New()
 
@@ -65,21 +65,20 @@ func Test_matchLogs(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			gg := gomega.NewWithT(t)
+		ginkgo.It(tt.name, func() {
 			result := postProcessLogs(ctx, tt.got, tt.postProcess)
-			gg.Expect(len(result)).To(gomega.Equal(len(tt.want)))
+			Expect(len(result)).To(Equal(len(tt.want)))
 			for i, log := range result {
-				gg.Expect(log.Message).To(gomega.Equal(tt.want[i].Message))
-				gg.Expect(log.FirstObserved).To(gomega.Equal(tt.want[i].FirstObserved), "first observed")
-				gg.Expect(log.LastObserved).To(gomega.Equal(tt.want[i].LastObserved), "last observed")
-				gg.Expect(log.Count).To(gomega.Equal(tt.want[i].Count), "count")
+				Expect(log.Message).To(Equal(tt.want[i].Message))
+				Expect(log.FirstObserved).To(Equal(tt.want[i].FirstObserved), "first observed")
+				Expect(log.LastObserved).To(Equal(tt.want[i].LastObserved), "last observed")
+				Expect(log.Count).To(Equal(tt.want[i].Count), "count")
 			}
 		})
 	}
-}
+})
 
-func Test_dedupLogs(t *testing.T) {
+var _ = ginkgo.Describe("dedupLogs", func() {
 	referenceTime := time.Date(2025, 5, 8, 12, 0, 0, 0, time.UTC)
 	ctx := context.New()
 
@@ -322,20 +321,19 @@ func Test_dedupLogs(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			gg := gomega.NewWithT(t)
+		ginkgo.It(tt.name, func() {
 			result := postProcessLogs(ctx, tt.got, tt.postProcess)
-			gg.Expect(len(result)).To(gomega.Equal(len(tt.want)), "total logs")
+			Expect(len(result)).To(Equal(len(tt.want)), "total logs")
 
 			for i, log := range result {
 				want := tt.want[i]
 
-				gg.Expect(log.Message).To(gomega.Equal(want.Message))
-				gg.Expect(log.Count).To(gomega.Equal(want.Count), "count")
-				gg.Expect(log.FirstObserved).To(gomega.Equal(want.FirstObserved), "first observed")
-				gg.Expect(log.LastObserved).To(gomega.Equal(want.LastObserved), "last observed")
-				gg.Expect(log.Host).To(gomega.Equal(want.Host), "host")
+				Expect(log.Message).To(Equal(want.Message))
+				Expect(log.Count).To(Equal(want.Count), "count")
+				Expect(log.FirstObserved).To(Equal(want.FirstObserved), "first observed")
+				Expect(log.LastObserved).To(Equal(want.LastObserved), "last observed")
+				Expect(log.Host).To(Equal(want.Host), "host")
 			}
 		})
 	}
-}
+})

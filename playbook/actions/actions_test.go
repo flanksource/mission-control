@@ -1,18 +1,17 @@
 package actions
 
 import (
-	"testing"
-
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/secret"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/gomplate/v3"
+	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/samber/lo"
 )
 
-func TestSensitiveParametersLeakage(t *testing.T) {
+var _ = ginkgo.Describe("SensitiveParametersLeakage", func() {
 	apiKey := secret.Sensitive("my_secret")
 	templateEnv := TemplateEnv{
 		Params: map[string]any{
@@ -20,61 +19,54 @@ func TestSensitiveParametersLeakage(t *testing.T) {
 		},
 	}
 
-	t.Run("AsMap keeps secrets as Sensitive", func(t *testing.T) {
-		g := NewWithT(t)
+	ginkgo.It("AsMap keeps secrets as Sensitive", func() {
 		env := templateEnv.AsMap(context.New())
 
-		g.Expect(env).To(HaveKey("params"))
+		Expect(env).To(HaveKey("params"))
 		params := env["params"].(map[string]any)
-		g.Expect(params).To(HaveKey("apikey"))
+		Expect(params).To(HaveKey("apikey"))
 
 		_, isSensitive := params["apikey"].(secret.Sensitive)
-		g.Expect(isSensitive).To(BeTrue(), "params should contain Sensitive type, not plaintext")
+		Expect(isSensitive).To(BeTrue(), "params should contain Sensitive type, not plaintext")
 	})
 
-	t.Run("AsMapForTemplating unwraps secrets", func(t *testing.T) {
-		g := NewWithT(t)
+	ginkgo.It("AsMapForTemplating unwraps secrets", func() {
 		env := templateEnv.AsMapForTemplating(context.New())
 
-		g.Expect(env).To(HaveKey("params"))
+		Expect(env).To(HaveKey("params"))
 		params := env["params"].(map[string]any)
-		g.Expect(params).To(HaveKey("apikey"))
+		Expect(params).To(HaveKey("apikey"))
 
 		val, isString := params["apikey"].(string)
-		g.Expect(isString).To(BeTrue(), "params should contain plaintext string for templating")
-		g.Expect(val).To(Equal("my_secret"))
+		Expect(isString).To(BeTrue(), "params should contain plaintext string for templating")
+		Expect(val).To(Equal("my_secret"))
 	})
 
-	t.Run("JSON marshaling redacts secrets", func(t *testing.T) {
-		g := NewWithT(t)
+	ginkgo.It("JSON marshaling redacts secrets", func() {
 		jsonStr := templateEnv.JSON(context.New())
 
-		g.Expect(jsonStr).ToNot(ContainSubstring("my_secret"), "JSON should not contain plaintext secret")
-		g.Expect(jsonStr).To(ContainSubstring("[REDACTED]"), "JSON should contain redacted placeholder")
+		Expect(jsonStr).ToNot(ContainSubstring("my_secret"), "JSON should not contain plaintext secret")
+		Expect(jsonStr).To(ContainSubstring("[REDACTED]"), "JSON should contain redacted placeholder")
 	})
 
-	t.Run("ScrubSecrets replaces plaintext in output", func(t *testing.T) {
-		g := NewWithT(t)
+	ginkgo.It("ScrubSecrets replaces plaintext in output", func() {
 		output := "Connected with key: my_secret and more my_secret"
 		scrubbed := templateEnv.ScrubSecrets(output)
 
-		g.Expect(scrubbed).ToNot(ContainSubstring("my_secret"))
-		g.Expect(scrubbed).To(Equal("Connected with key: [REDACTED] and more [REDACTED]"))
+		Expect(scrubbed).ToNot(ContainSubstring("my_secret"))
+		Expect(scrubbed).To(Equal("Connected with key: [REDACTED] and more [REDACTED]"))
 	})
 
-	t.Run("ScrubSecrets handles empty string", func(t *testing.T) {
-		g := NewWithT(t)
-		g.Expect(templateEnv.ScrubSecrets("")).To(Equal(""))
+	ginkgo.It("ScrubSecrets handles empty string", func() {
+		Expect(templateEnv.ScrubSecrets("")).To(Equal(""))
 	})
 
-	t.Run("ScrubSecrets preserves non-secret content", func(t *testing.T) {
-		g := NewWithT(t)
+	ginkgo.It("ScrubSecrets preserves non-secret content", func() {
 		output := "This is normal output without secrets"
-		g.Expect(templateEnv.ScrubSecrets(output)).To(Equal(output))
+		Expect(templateEnv.ScrubSecrets(output)).To(Equal(output))
 	})
 
-	t.Run("ScrubSecrets handles multiple different secrets", func(t *testing.T) {
-		g := NewWithT(t)
+	ginkgo.It("ScrubSecrets handles multiple different secrets", func() {
 		multiSecretEnv := TemplateEnv{
 			Params: map[string]any{
 				"password": secret.Sensitive("super_secret_pwd"),
@@ -85,9 +77,9 @@ func TestSensitiveParametersLeakage(t *testing.T) {
 		output := "Using super_secret_pwd and sk-12345 to connect"
 		scrubbed := multiSecretEnv.ScrubSecrets(output)
 
-		g.Expect(scrubbed).ToNot(ContainSubstring("super_secret_pwd"))
-		g.Expect(scrubbed).ToNot(ContainSubstring("sk-12345"))
-		g.Expect(scrubbed).To(Equal("Using [REDACTED] and [REDACTED] to connect"))
+		Expect(scrubbed).ToNot(ContainSubstring("super_secret_pwd"))
+		Expect(scrubbed).ToNot(ContainSubstring("sk-12345"))
+		Expect(scrubbed).To(Equal("Using [REDACTED] and [REDACTED] to connect"))
 	})
 
 	type testCase struct {
@@ -95,7 +87,7 @@ func TestSensitiveParametersLeakage(t *testing.T) {
 		template string
 	}
 
-	t.Run("go template", func(t *testing.T) {
+	ginkgo.Describe("go template", func() {
 		gotemplateTestCases := []testCase{
 			{name: "non existing func", template: "{{.params.apikey}} {{nonExistingFunc .}}"},
 			{name: "panic in template", template: `{{panic "error"}}`},
@@ -110,40 +102,36 @@ func TestSensitiveParametersLeakage(t *testing.T) {
 			{name: "invalid conditional", template: "{{if .params.apikey ==}}"},
 		}
 
-		t.Run("gomplate", func(t *testing.T) {
+		ginkgo.Describe("gomplate", func() {
 			for _, td := range gotemplateTestCases {
-				t.Run(td.name, func(t *testing.T) {
-					g := NewWithT(t)
-
+				ginkgo.It(td.name, func() {
 					env := templateEnv.AsMap(context.New())
 					_, err := gomplate.RunTemplate(env, gomplate.Template{Template: td.template})
-					g.Expect(err).ToNot(BeNil())
-					g.Expect(err.Error()).To(Not(ContainSubstring(apiKey.PlainText())))
+					Expect(err).ToNot(BeNil())
+					Expect(err.Error()).To(Not(ContainSubstring(apiKey.PlainText())))
 				})
 			}
 		})
 
-		t.Run("struct templater", func(t *testing.T) {
+		ginkgo.Describe("struct templater", func() {
 			ctx := context.New()
 			type structToTemplate struct {
 				Field string `json:"field" template:"true"`
 			}
 
 			for _, td := range gotemplateTestCases {
-				t.Run(td.name, func(t *testing.T) {
-					g := NewWithT(t)
-
+				ginkgo.It(td.name, func() {
 					templater := ctx.NewStructTemplater(templateEnv.AsMap(ctx), "template", nil)
 					data := structToTemplate{Field: td.template}
 					err := templater.Walk(&data)
-					g.Expect(err).ToNot(BeNil())
-					g.Expect(err.Error()).To(Not(ContainSubstring(apiKey.PlainText())))
+					Expect(err).ToNot(BeNil())
+					Expect(err.Error()).To(Not(ContainSubstring(apiKey.PlainText())))
 				})
 			}
 		})
 	})
 
-	t.Run("cel expression", func(t *testing.T) {
+	ginkgo.Describe("cel expression", func() {
 		celTestCases := []testCase{
 			{name: "non existing func", template: "params.apikey && nonExisting"},
 			{name: "non existing var", template: "params.apikey  && nonExisting"},
@@ -159,19 +147,17 @@ func TestSensitiveParametersLeakage(t *testing.T) {
 		}
 
 		for _, td := range celTestCases {
-			t.Run(td.name, func(t *testing.T) {
-				g := NewWithT(t)
+			ginkgo.It(td.name, func() {
 				env := templateEnv.AsMap(context.New())
 				_, err := gomplate.RunTemplate(env, gomplate.Template{Expression: td.template})
-				g.Expect(err).ToNot(BeNil())
-				g.Expect(err.Error()).To(Not(ContainSubstring(apiKey.PlainText())))
+				Expect(err).ToNot(BeNil())
+				Expect(err.Error()).To(Not(ContainSubstring(apiKey.PlainText())))
 			})
 		}
 	})
+})
 
-}
-
-func TestTemplateEnv(t *testing.T) {
+var _ = ginkgo.Describe("TemplateEnv", func() {
 	templateEnv := TemplateEnv{
 		Config: &models.ConfigItem{
 			Name:   lo.ToPtr("podinfo"),
@@ -189,9 +175,7 @@ func TestTemplateEnv(t *testing.T) {
 		},
 	}
 
-	t.Run("tags as root level variables", func(t *testing.T) {
-		g := NewWithT(t)
-
+	ginkgo.It("tags as root level variables", func() {
 		env := templateEnv.AsMap(context.New())
 		tests := []struct {
 			expr     string
@@ -206,36 +190,32 @@ func TestTemplateEnv(t *testing.T) {
 
 		for _, tt := range tests {
 			result, err := gomplate.RunTemplate(env, gomplate.Template{Expression: tt.expr})
-			g.Expect(err).To(BeNil())
-			g.Expect(result).To(Equal(tt.expected))
+			Expect(err).To(BeNil())
+			Expect(result).To(Equal(tt.expected))
 		}
 	})
 
-	t.Run("no null variables", func(t *testing.T) {
-		g := NewWithT(t)
-
+	ginkgo.It("no null variables", func() {
 		env := templateEnv.AsMap(context.New())
-		g.Expect(env).To(HaveKey("component"))
-		g.Expect(env).To(HaveKey("config"))
-		g.Expect(env).To(HaveKey("check"))
+		Expect(env).To(HaveKey("component"))
+		Expect(env).To(HaveKey("config"))
+		Expect(env).To(HaveKey("check"))
 
-		g.Expect(env["check"]).To(HaveKeyWithValue("name", ""))
-		g.Expect(env["component"]).To(HaveKeyWithValue("name", ""))
-		g.Expect(env["config"]).To(HaveKeyWithValue("name", "podinfo"))
+		Expect(env["check"]).To(HaveKeyWithValue("name", ""))
+		Expect(env["component"]).To(HaveKeyWithValue("name", ""))
+		Expect(env["config"]).To(HaveKeyWithValue("name", "podinfo"))
 	})
 
-	t.Run("resource field aliases", func(t *testing.T) {
-		g := NewWithT(t)
-
+	ginkgo.It("resource field aliases", func() {
 		env := templateEnv.AsMap(context.New())
-		g.Expect(env).To(HaveKeyWithValue("name", "podinfo"))
-		g.Expect(env).To(HaveKeyWithValue("health", string(models.HealthHealthy)))
-		g.Expect(env).To(HaveKeyWithValue("status", "Running"))
+		Expect(env).To(HaveKeyWithValue("name", "podinfo"))
+		Expect(env).To(HaveKeyWithValue("health", string(models.HealthHealthy)))
+		Expect(env).To(HaveKeyWithValue("status", "Running"))
 
-		g.Expect(env).To(HaveKey("labels"))
-		g.Expect(env).To(HaveKey("tags"))
+		Expect(env).To(HaveKey("labels"))
+		Expect(env).To(HaveKey("tags"))
 
-		g.Expect(env["labels"]).To(HaveKeyWithValue("app", "podinfo"))
-		g.Expect(env["tags"]).To(HaveKeyWithValue("namespace", "default"))
+		Expect(env["labels"]).To(HaveKeyWithValue("app", "podinfo"))
+		Expect(env["tags"]).To(HaveKeyWithValue("namespace", "default"))
 	})
-}
+})
