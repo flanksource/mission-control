@@ -167,9 +167,14 @@ var _ = ginkgo.Describe("Playbook Scheduler EventResource Generation", ginkgo.Or
 				},
 			},
 			DatabaseChange: func(ctx context.Context, res TestResource) error {
-				res.Check.CanaryID = res.Canary.ID
-				Expect(ctx.DB().Save(res.Check).Error).NotTo(HaveOccurred())
-				return ctx.DB().Model(res.Check).UpdateColumn("status", models.CheckStatusHealthy).Error
+				Expect(ctx.DB().Create(&models.ChecksUnlogged{
+					CheckID:  res.Check.ID,
+					CanaryID: res.Canary.ID,
+					Status:   models.CheckStatusUnhealthy,
+				}).Error).NotTo(HaveOccurred())
+				return ctx.DB().Model(&models.ChecksUnlogged{}).
+					Where("check_id = ?", res.Check.ID).
+					UpdateColumn("status", models.CheckStatusHealthy).Error
 			},
 			ExpectedEvents: []string{api.EventCheckPassed},
 			ExpectedEventResource: func(res TestResource) pkgEvents.EventResource {
@@ -196,7 +201,14 @@ var _ = ginkgo.Describe("Playbook Scheduler EventResource Generation", ginkgo.Or
 				},
 			},
 			DatabaseChange: func(ctx context.Context, res TestResource) error {
-				return ctx.DB().Model(res.Check).UpdateColumn("status", models.CheckStatusUnhealthy).Error
+				Expect(ctx.DB().Create(&models.ChecksUnlogged{
+					CheckID:  res.Check.ID,
+					CanaryID: res.Canary.ID,
+					Status:   models.CheckStatusHealthy,
+				}).Error).NotTo(HaveOccurred())
+				return ctx.DB().Model(&models.ChecksUnlogged{}).
+					Where("check_id = ?", res.Check.ID).
+					UpdateColumn("status", models.CheckStatusUnhealthy).Error
 			},
 			ExpectedEvents: []string{api.EventCheckFailed},
 			ExpectedEventResource: func(res TestResource) pkgEvents.EventResource {
