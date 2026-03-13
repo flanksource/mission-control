@@ -1,13 +1,12 @@
 package cmd
 
 import (
-	"testing"
-
 	"github.com/flanksource/duty/models"
-	"github.com/onsi/gomega"
+	ginkgo "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
-func TestBuildConnectionCRD(t *testing.T) {
+var _ = ginkgo.Describe("BuildConnectionCRD", func() {
 	tests := []struct {
 		name     string
 		flags    connectionFlags
@@ -137,17 +136,16 @@ spec:
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			g := gomega.NewWithT(t)
+		ginkgo.It("should build CRD for "+tt.name, func() {
 			crd := buildConnectionCRD(&tt.flags)
 			out, err := marshalConnectionCRD(crd)
-			g.Expect(err).To(gomega.BeNil())
-			g.Expect(string(out)).To(gomega.Equal(tt.expected))
+			Expect(err).To(BeNil())
+			Expect(string(out)).To(Equal(tt.expected))
 		})
 	}
-}
+})
 
-func TestMarshalDryRunOutput(t *testing.T) {
+var _ = ginkgo.Describe("MarshalDryRunOutput", func() {
 	tests := []struct {
 		name     string
 		flags    connectionFlags
@@ -309,11 +307,10 @@ spec:
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			g := gomega.NewWithT(t)
+		ginkgo.It("should marshal dry-run output for "+tt.name, func() {
 			out, err := marshalDryRunOutput(&tt.flags)
-			g.Expect(err).To(gomega.BeNil())
-			g.Expect(string(out)).To(gomega.Equal(tt.expected))
+			Expect(err).To(BeNil())
+			Expect(string(out)).To(Equal(tt.expected))
 		})
 	}
-}
+})

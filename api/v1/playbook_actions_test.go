@@ -1,10 +1,11 @@
 package v1
 
 import (
-	"testing"
+	ginkgo "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
-func TestNextRetryWait(t *testing.T) {
+var _ = ginkgo.Describe("NextRetryWait", func() {
 	tests := []struct {
 		name          string
 		RetryCount    int
@@ -54,15 +55,18 @@ func TestNextRetryWait(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		ginkgo.It(tt.name, func() {
 			nextTime, err := tt.Retry.NextRetryWait(tt.RetryCount)
-			if (err != nil) != tt.ExpectedErr {
-				t.Errorf("expected error: %v, got error: %v", tt.ExpectedErr, err)
+			if tt.ExpectedErr {
+				Expect(err).To(HaveOccurred())
+			} else {
+				Expect(err).ToNot(HaveOccurred())
 			}
 
-			if nextTime.Seconds() < tt.ExpectedRange[0] || nextTime.Seconds() > tt.ExpectedRange[1] {
-				t.Errorf("expected next time to be between %f and %f, got %v", tt.ExpectedRange[0], tt.ExpectedRange[1], nextTime)
-			}
+			Expect(nextTime.Seconds()).To(And(
+				BeNumerically(">=", tt.ExpectedRange[0]),
+				BeNumerically("<=", tt.ExpectedRange[1]),
+			))
 		})
 	}
-}
+})

@@ -1,7 +1,6 @@
 package views
 
 import (
-	"testing"
 	"time"
 
 	"github.com/flanksource/duty/connection"
@@ -18,7 +17,7 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 )
 
-func TestApplyMapping(t *testing.T) {
+var _ = Describe("ApplyMapping", func() {
 	type applyMappingTestCase struct {
 		name     string
 		data     map[string]any
@@ -120,34 +119,34 @@ func TestApplyMapping(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		ctx := context.New()
-		t.Run(tc.name, func(t *testing.T) {
-			g := NewWithT(t)
+		It(tc.name, func() {
+			ctx := context.New()
 			row, err := applyMapping(ctx, tc.data, tc.columns, tc.mapping)
-			g.Expect(err).ToNot(HaveOccurred())
-			g.Expect(pkgView.Row(row)).To(Equal(tc.expected))
+			Expect(err).ToNot(HaveOccurred())
+			Expect(pkgView.Row(row)).To(Equal(tc.expected))
 		})
 	}
-}
+})
 
-func TestCustomURLAttribute(t *testing.T) {
-	ctx := context.New()
-	g := NewWithT(t)
+var _ = Describe("CustomURLAttribute", func() {
+	It("should template URL from row data", func() {
+		ctx := context.New()
 
-	columnDef := pkgView.ColumnDef{
-		Name: "name",
-		Type: pkgView.ColumnTypeString,
-		URL: &pkgView.ColumnURL{
-			Template: "https://example.com/{{ .row.name }}",
-		},
-	}
+		columnDef := pkgView.ColumnDef{
+			Name: "name",
+			Type: pkgView.ColumnTypeString,
+			URL: &pkgView.ColumnURL{
+				Template: "https://example.com/{{ .row.name }}",
+			},
+		}
 
-	attrs, err := getColumnAttributes(ctx, columnDef, map[string]any{"name": "test"})
-	g.Expect(err).ToNot(HaveOccurred())
-	g.Expect(attrs).To(HaveKeyWithValue("url", "https://example.com/test"))
-}
+		attrs, err := getColumnAttributes(ctx, columnDef, map[string]any{"name": "test"})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(attrs).To(HaveKeyWithValue("url", "https://example.com/test"))
+	})
+})
 
-func TestCalculateVariableDepths(t *testing.T) {
+var _ = Describe("CalculateVariableDepths", func() {
 	type testCase struct {
 		name          string
 		variables     []api.ViewVariable
@@ -247,8 +246,7 @@ func TestCalculateVariableDepths(t *testing.T) {
 	}
 
 	for _, tc := range testCases {
-		t.Run(tc.name, func(t *testing.T) {
-			g := NewWithT(t)
+		It(tc.name, func() {
 			varMap := make(map[string]api.ViewVariable)
 			for _, v := range tc.variables {
 				varMap[v.Key] = v
@@ -256,16 +254,16 @@ func TestCalculateVariableDepths(t *testing.T) {
 			depths, err := calculateVariableDepths(varMap, tc.variables)
 
 			if tc.expectedError != "" {
-				g.Expect(err).To(HaveOccurred())
-				g.Expect(err.Error()).To(ContainSubstring(tc.expectedError))
-				g.Expect(depths).To(BeNil())
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring(tc.expectedError))
+				Expect(depths).To(BeNil())
 			} else {
-				g.Expect(err).ToNot(HaveOccurred())
-				g.Expect(depths).To(Equal(tc.expectedMap))
+				Expect(err).ToNot(HaveOccurred())
+				Expect(depths).To(Equal(tc.expectedMap))
 			}
 		})
 	}
-}
+})
 
 var _ = Describe("Views", func() {
 	Describe("Run", func() {

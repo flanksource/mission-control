@@ -1,11 +1,13 @@
 package utils
 
 import (
-	"testing"
 	"time"
+
+	ginkgo "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
-func TestParseCacheControlHeader(t *testing.T) {
+var _ = ginkgo.Describe("ParseCacheControlHeader", func() {
 	tests := []struct {
 		name                   string
 		cacheControl           string
@@ -44,7 +46,7 @@ func TestParseCacheControlHeader(t *testing.T) {
 		{
 			name:                   "with spaces around values",
 			cacheControl:           "max-age = 450 , refresh-timeout = 90",
-			expectedMaxAge:         0, // regex expects no spaces around =
+			expectedMaxAge:         0,
 			expectedRefreshTimeout: 0,
 			expectError:            false,
 		},
@@ -107,28 +109,17 @@ func TestParseCacheControlHeader(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		ginkgo.It(tt.name, func() {
 			maxAge, refreshTimeout, err := ParseCacheControlHeader(tt.cacheControl)
 
 			if tt.expectError {
-				if err == nil {
-					t.Errorf("expected error but got none")
-				}
+				Expect(err).To(HaveOccurred())
 				return
 			}
 
-			if err != nil {
-				t.Errorf("unexpected error: %v", err)
-				return
-			}
-
-			if maxAge != tt.expectedMaxAge {
-				t.Errorf("maxAge = %v, expected %v", maxAge, tt.expectedMaxAge)
-			}
-
-			if refreshTimeout != tt.expectedRefreshTimeout {
-				t.Errorf("refreshTimeout = %v, expected %v", refreshTimeout, tt.expectedRefreshTimeout)
-			}
+			Expect(err).ToNot(HaveOccurred())
+			Expect(maxAge).To(Equal(tt.expectedMaxAge))
+			Expect(refreshTimeout).To(Equal(tt.expectedRefreshTimeout))
 		})
 	}
-}
+})

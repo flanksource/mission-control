@@ -3,7 +3,6 @@ package notification_test
 import (
 	"encoding/base64"
 	"encoding/json"
-	"testing"
 	"time"
 
 	"github.com/flanksource/duty/models"
@@ -21,7 +20,7 @@ func mapToBase64Str(m map[string]any) string {
 	return base64.StdEncoding.EncodeToString(b)
 }
 
-func TestSilenceSaveRequest_Validate(t *testing.T) {
+var _ = ginkgo.Describe("SilenceSaveRequest Validate", func() {
 	type fields struct {
 		NotificationSilenceResource models.NotificationSilenceResource
 		From                        string
@@ -84,19 +83,21 @@ func TestSilenceSaveRequest_Validate(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		ginkgo.It(tt.name, func() {
 			tr := &notification.SilenceSaveRequest{
 				NotificationSilenceResource: tt.fields.NotificationSilenceResource,
 				From:                        &tt.fields.From,
 				Until:                       &tt.fields.Until,
 				Description:                 &tt.fields.Description,
 			}
-			if err := tr.Validate(); (err != nil) != tt.wantErr {
-				t.Fatalf("SilenceSaveRequest.Validate() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.wantErr {
+				Expect(tr.Validate()).ToNot(Succeed())
+			} else {
+				Expect(tr.Validate()).To(Succeed())
 			}
 		})
 	}
-}
+})
 
 func createTestNotificationSendHistories() []models.NotificationSendHistory {
 	config1ID := dummy.LogisticsAPIDeployment.ID
@@ -294,7 +295,6 @@ var _ = ginkgo.Describe("Notification silence preview", func() {
 		ctx := DefaultContext
 		ctx.DB().Create([]*models.ConfigItem{testConfig1, testConfig2})
 
-		// Create test data with base64 encoded properties
 		props1 := map[string]any{
 			"id": testConfig1.ID.String(),
 		}

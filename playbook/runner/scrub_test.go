@@ -1,14 +1,13 @@
 package runner
 
 import (
-	"testing"
-
 	"github.com/flanksource/duty/secret"
 	"github.com/flanksource/incident-commander/playbook/actions"
+	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
-func TestScrubActionResult(t *testing.T) {
+var _ = ginkgo.Describe("ScrubActionResult", func() {
 	templateEnv := actions.TemplateEnv{
 		Params: map[string]any{
 			"password": secret.Sensitive("super_secret_password"),
@@ -17,9 +16,7 @@ func TestScrubActionResult(t *testing.T) {
 		},
 	}
 
-	t.Run("scrubs ExecDetails stdout and stderr", func(t *testing.T) {
-		g := NewWithT(t)
-
+	ginkgo.It("scrubs ExecDetails stdout and stderr", func() {
 		result := &actions.ExecDetails{
 			Stdout:   "Connected with password: super_secret_password",
 			Stderr:   "Error: invalid key sk-12345",
@@ -29,33 +26,28 @@ func TestScrubActionResult(t *testing.T) {
 		scrubbed := scrubActionResult(&templateEnv, result)
 		scrubbedExec := scrubbed.(*actions.ExecDetails)
 
-		g.Expect(scrubbedExec.Stdout).ToNot(ContainSubstring("super_secret_password"))
-		g.Expect(scrubbedExec.Stdout).To(Equal("Connected with password: [REDACTED]"))
+		Expect(scrubbedExec.Stdout).ToNot(ContainSubstring("super_secret_password"))
+		Expect(scrubbedExec.Stdout).To(Equal("Connected with password: [REDACTED]"))
 
-		g.Expect(scrubbedExec.Stderr).ToNot(ContainSubstring("sk-12345"))
-		g.Expect(scrubbedExec.Stderr).To(Equal("Error: invalid key [REDACTED]"))
+		Expect(scrubbedExec.Stderr).ToNot(ContainSubstring("sk-12345"))
+		Expect(scrubbedExec.Stderr).To(Equal("Error: invalid key [REDACTED]"))
 	})
 
-	t.Run("handles nil result", func(t *testing.T) {
-		g := NewWithT(t)
-		g.Expect(scrubActionResult(&templateEnv, nil)).To(BeNil())
+	ginkgo.It("handles nil result", func() {
+		Expect(scrubActionResult(&templateEnv, nil)).To(BeNil())
 	})
 
-	t.Run("handles nil scrubber", func(t *testing.T) {
-		g := NewWithT(t)
+	ginkgo.It("handles nil scrubber", func() {
 		result := &actions.ExecDetails{Stdout: "test"}
-		g.Expect(scrubActionResult(nil, result)).To(Equal(result))
+		Expect(scrubActionResult(nil, result)).To(Equal(result))
 	})
 
-	t.Run("handles nil ExecDetails", func(t *testing.T) {
-		g := NewWithT(t)
+	ginkgo.It("handles nil ExecDetails", func() {
 		var result *actions.ExecDetails
-		g.Expect(scrubActionResult(&templateEnv, result)).To(BeNil())
+		Expect(scrubActionResult(&templateEnv, result)).To(BeNil())
 	})
 
-	t.Run("preserves non-secret content", func(t *testing.T) {
-		g := NewWithT(t)
-
+	ginkgo.It("preserves non-secret content", func() {
 		result := &actions.ExecDetails{
 			Stdout: "Normal output with not_secret value",
 			Stderr: "",
@@ -64,12 +56,10 @@ func TestScrubActionResult(t *testing.T) {
 		scrubbed := scrubActionResult(&templateEnv, result)
 		scrubbedExec := scrubbed.(*actions.ExecDetails)
 
-		g.Expect(scrubbedExec.Stdout).To(Equal("Normal output with not_secret value"))
+		Expect(scrubbedExec.Stdout).To(Equal("Normal output with not_secret value"))
 	})
 
-	t.Run("scrubs secrets appearing multiple times", func(t *testing.T) {
-		g := NewWithT(t)
-
+	ginkgo.It("scrubs secrets appearing multiple times", func() {
 		result := &actions.ExecDetails{
 			Stdout: "sk-12345 and again sk-12345",
 		}
@@ -77,6 +67,6 @@ func TestScrubActionResult(t *testing.T) {
 		scrubbed := scrubActionResult(&templateEnv, result)
 		scrubbedExec := scrubbed.(*actions.ExecDetails)
 
-		g.Expect(scrubbedExec.Stdout).To(Equal("[REDACTED] and again [REDACTED]"))
+		Expect(scrubbedExec.Stdout).To(Equal("[REDACTED] and again [REDACTED]"))
 	})
-}
+})
