@@ -131,8 +131,11 @@ func createTestNotificationSendHistories() []models.NotificationSendHistory {
 			NotificationID: dummy.NoMatchNotification.ID,
 			Status:         models.NotificationStatusSent,
 			Payload: types.JSONStringMap{
-				"properties": getProps(config2ID),
-				"id":         config2ID.String(),
+				"properties": mapToBase64Str(map[string]any{
+					"id":        config2ID.String(),
+					"config_id": config2ID.String(),
+				}),
+				"id": config2ID.String(),
 			},
 			CreatedAt: time.Now().Add(-30 * time.Minute),
 		},
@@ -296,7 +299,8 @@ var _ = ginkgo.Describe("Notification silence preview", func() {
 			"id": testConfig1.ID.String(),
 		}
 		props2 := map[string]any{
-			"id": testConfig2.ID.String(),
+			"id":        testConfig2.ID.String(),
+			"config_id": testConfig2.ID.String(),
 		}
 		testHistories := []models.NotificationSendHistory{
 			{

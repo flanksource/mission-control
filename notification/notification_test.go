@@ -218,8 +218,12 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, ginkgo.FlakeAttempts(3)
 
 		ginkgo.It("should have created a notification with a pending playbook run status for a config update", func() {
 			event := models.Event{
-				Name:       "config.updated",
-				Properties: types.JSONStringMap{"id": config.ID.String()},
+				Name:    "config.updated",
+				EventID: config.ID,
+				Properties: types.JSONStringMap{
+					"id":        config.ID.String(),
+					"config_id": config.ID.String(),
+				},
 			}
 			err := DefaultContext.DB().Create(&event).Error
 			Expect(err).To(BeNil())
@@ -309,8 +313,12 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, ginkgo.FlakeAttempts(3)
 
 		ginkgo.It("should have sent a notification for a config update", func() {
 			event := models.Event{
-				Name:       "config.updated",
-				Properties: types.JSONStringMap{"id": config.ID.String()},
+				Name:    "config.updated",
+				EventID: config.ID,
+				Properties: types.JSONStringMap{
+					"id":        config.ID.String(),
+					"config_id": config.ID.String(),
+				},
 			}
 			err := DefaultContext.DB().Create(&event).Error
 			Expect(err).To(BeNil())
@@ -333,8 +341,12 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, ginkgo.FlakeAttempts(3)
 
 		ginkgo.It("should NOT have sent a notification for a subsequent config update", func() {
 			event := models.Event{
-				Name:       "config.updated",
-				Properties: types.JSONStringMap{"id": config.ID.String()},
+				Name:    "config.updated",
+				EventID: config.ID,
+				Properties: types.JSONStringMap{
+					"id":        config.ID.String(),
+					"config_id": config.ID.String(),
+				},
 			}
 			err := DefaultContext.DB().Create(&event).Error
 			Expect(err).To(BeNil())
@@ -454,8 +466,8 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, ginkgo.FlakeAttempts(3)
 
 		ginkgo.It("should have sent a notification for a config update", func() {
 			event := models.Event{
-				Name:       "config.unhealthy",
-				Properties: types.JSONStringMap{"id": pod.ID.String()},
+				Name:    "config.unhealthy",
+				EventID: pod.ID,
 			}
 			err := DefaultContext.DB().Create(&event).Error
 			Expect(err).To(BeNil())
@@ -478,8 +490,8 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, ginkgo.FlakeAttempts(3)
 
 		ginkgo.It("should NOT have sent a notification for a subsequent replica set unhealthy", func() {
 			event := models.Event{
-				Name:       "config.unhealthy",
-				Properties: types.JSONStringMap{"id": replicaSet.ID.String()},
+				Name:    "config.unhealthy",
+				EventID: replicaSet.ID,
 			}
 			err := DefaultContext.DB().Create(&event).Error
 			Expect(err).To(BeNil())
@@ -512,8 +524,8 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, ginkgo.FlakeAttempts(3)
 
 		ginkgo.It("should NOT have sent a notification for a subsequent deployment update", func() {
 			event := models.Event{
-				Name:       "config.unhealthy",
-				Properties: types.JSONStringMap{"id": deployment.ID.String()},
+				Name:    "config.unhealthy",
+				EventID: deployment.ID,
 			}
 			err := DefaultContext.DB().Create(&event).Error
 			Expect(err).To(BeNil())
@@ -550,8 +562,8 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, ginkgo.FlakeAttempts(3)
 
 		ginkgo.It("should NOT have sent a notification for a another replica set unhealthy", func() {
 			event := models.Event{
-				Name:       "config.unhealthy",
-				Properties: types.JSONStringMap{"id": replicaSet.ID.String()},
+				Name:    "config.unhealthy",
+				EventID: replicaSet.ID,
 			}
 			err := DefaultContext.DB().Create(&event).Error
 			Expect(err).To(BeNil())
@@ -683,11 +695,19 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, ginkgo.FlakeAttempts(3)
 		ginkgo.It("should have consumed all events", func() {
 			testEvents := []models.Event{
 				{
-					Name:       "config.updated",
-					Properties: types.JSONStringMap{"id": deployment1.ID.String()},
+					Name:    "config.updated",
+					EventID: deployment1.ID,
+					Properties: types.JSONStringMap{
+						"id":        deployment1.ID.String(),
+						"config_id": deployment1.ID.String(),
+					},
 				}, {
-					Name:       "config.updated",
-					Properties: types.JSONStringMap{"id": pod1.ID.String()},
+					Name:    "config.updated",
+					EventID: pod1.ID,
+					Properties: types.JSONStringMap{
+						"id":        pod1.ID.String(),
+						"config_id": pod1.ID.String(),
+					},
 				},
 			}
 			err := DefaultContext.DB().Create(&testEvents).Error

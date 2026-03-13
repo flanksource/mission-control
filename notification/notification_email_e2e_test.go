@@ -77,9 +77,9 @@ var _ = ginkgo.Describe("Notification email end-to-end", ginkgo.Ordered, func() 
 
 		ginkgo.It("sends default template email", func() {
 			event := models.Event{
-				Name: api.EventConfigUnhealthy,
+				Name:    api.EventConfigUnhealthy,
+				EventID: config.ID,
 				Properties: types.JSONStringMap{
-					"id":          config.ID.String(),
 					"description": "Readiness probe failed",
 					"status":      "CrashLoopBackOff",
 				},
@@ -200,9 +200,9 @@ var _ = ginkgo.Describe("Notification email end-to-end", ginkgo.Ordered, func() 
 			Expect(DefaultContext.DB().Create(&checkRun).Error).To(BeNil())
 
 			event := models.Event{
-				Name: api.EventCheckPassed,
+				Name:    api.EventCheckPassed,
+				EventID: check.ID,
 				Properties: types.JSONStringMap{
-					"id":           check.ID.String(),
 					"last_runtime": lastRuntime,
 				},
 			}
@@ -296,9 +296,9 @@ var _ = ginkgo.Describe("Notification email end-to-end", ginkgo.Ordered, func() 
 			Expect(DefaultContext.DB().Create(&checkRun).Error).To(BeNil())
 
 			event := models.Event{
-				Name: api.EventCheckFailed,
+				Name:    api.EventCheckFailed,
+				EventID: check.ID,
 				Properties: types.JSONStringMap{
-					"id":           check.ID.String(),
 					"last_runtime": lastRuntime,
 				},
 			}
