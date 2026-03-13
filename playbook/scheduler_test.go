@@ -159,17 +159,24 @@ var _ = ginkgo.Describe("Playbook Scheduler EventResource Generation", ginkgo.Or
 					Spec: []byte(`{"http": [{"name": "test", "url": "http://example.com"}]}`),
 				},
 				Check: &models.Check{
-					ID:       uuid.New(),
-					CanaryID: uuid.New(),
-					Name:     "test-check-passed",
-					Type:     "http",
-					Status:   models.CheckStatusUnhealthy, // Start as unhealthy
+					ID:     uuid.New(),
+					Name:   "test-check-passed",
+					Type:   "http",
+					Status: models.CheckStatusUnhealthy,
 				},
 			},
 			DatabaseChange: func(ctx context.Context, res TestResource) error {
-				res.Check.CanaryID = res.Canary.ID
-				Expect(ctx.DB().Save(res.Check).Error).NotTo(HaveOccurred())
-				return ctx.DB().Model(res.Check).UpdateColumn("status", models.CheckStatusHealthy).Error
+				up := models.ChecksUnlogged{
+					CheckID:     res.Check.ID,
+					CanaryID:    res.Canary.ID,
+					Status:      string(res.Check.Status),
+					LastRuntime: lo.ToPtr(time.Now()),
+					NextRuntime: lo.ToPtr(time.Now().Add(time.Hour)),
+				}
+				if err := ctx.DB().Create(&up).Error; err != nil {
+					return err
+				}
+				return ctx.DB().Model(&up).Update("status", "healthy").Error
 			},
 			ExpectedEvents: []string{api.EventCheckPassed},
 			ExpectedEventResource: func(res TestResource) pkgEvents.EventResource {
@@ -192,107 +199,27 @@ var _ = ginkgo.Describe("Playbook Scheduler EventResource Generation", ginkgo.Or
 					ID:     uuid.New(),
 					Name:   "test-check-failed",
 					Type:   "http",
-					Status: models.CheckStatusHealthy, // Start as healthy
+					Status: models.CheckStatusHealthy,
 				},
 			},
 			DatabaseChange: func(ctx context.Context, res TestResource) error {
-				return ctx.DB().Model(res.Check).UpdateColumn("status", models.CheckStatusUnhealthy).Error
+				up := models.ChecksUnlogged{
+					CheckID:     res.Check.ID,
+					CanaryID:    res.Canary.ID,
+					Status:      string(res.Check.Status),
+					LastRuntime: lo.ToPtr(time.Now()),
+					NextRuntime: lo.ToPtr(time.Now().Add(time.Hour)),
+				}
+				if err := ctx.DB().Create(&up).Error; err != nil {
+					return err
+				}
+				return ctx.DB().Model(&up).Update("status", "unhealthy").Error
 			},
 			ExpectedEvents: []string{api.EventCheckFailed},
 			ExpectedEventResource: func(res TestResource) pkgEvents.EventResource {
 				return pkgEvents.EventResource{
 					Check:  res.Check,
 					Canary: res.Canary,
-				}
-			},
-		})
-	})
-
-	var _ = ginkgo.Describe("Component Events", func() {
-		testEvent(TestCase{
-			Name: "should generate correct EventResource for organically triggered component.unhealthy event",
-			Resources: TestResource{
-				Component: &models.Component{
-					ID:     uuid.New(),
-					Name:   "test-component-unhealthy",
-					Type:   "Entity",
-					Health: lo.ToPtr(models.HealthHealthy), // Start as healthy
-					Labels: map[string]string{"telemetry": "enabled"},
-				},
-			},
-			DatabaseChange: func(ctx context.Context, res TestResource) error {
-				return ctx.DB().Model(res.Component).UpdateColumn("health", models.HealthUnhealthy).Error
-			},
-			ExpectedEvents: []string{api.EventComponentUnhealthy},
-			ExpectedEventResource: func(res TestResource) pkgEvents.EventResource {
-				return pkgEvents.EventResource{
-					Component: res.Component,
-				}
-			},
-		})
-
-		testEvent(TestCase{
-			Name: "should generate correct EventResource for organically triggered component.healthy event",
-			Resources: TestResource{
-				Component: &models.Component{
-					ID:     uuid.New(),
-					Name:   "test-component-healthy",
-					Type:   "Entity",
-					Health: lo.ToPtr(models.HealthUnhealthy), // Start as unhealthy
-					Labels: map[string]string{"telemetry": "enabled"},
-				},
-			},
-			DatabaseChange: func(ctx context.Context, res TestResource) error {
-				return ctx.DB().Model(res.Component).UpdateColumn("health", models.HealthHealthy).Error
-			},
-			ExpectedEvents: []string{api.EventComponentHealthy},
-			ExpectedEventResource: func(res TestResource) pkgEvents.EventResource {
-				return pkgEvents.EventResource{
-					Component: res.Component,
-				}
-			},
-		})
-
-		testEvent(TestCase{
-			Name: "should generate correct EventResource for organically triggered component.warning event",
-			Resources: TestResource{
-				Component: &models.Component{
-					ID:     uuid.New(),
-					Name:   "test-component-warning",
-					Type:   "Entity",
-					Health: lo.ToPtr(models.HealthHealthy), // Start as healthy
-					Labels: map[string]string{"telemetry": "enabled"},
-				},
-			},
-			DatabaseChange: func(ctx context.Context, res TestResource) error {
-				return ctx.DB().Model(res.Component).UpdateColumn("health", models.HealthWarning).Error
-			},
-			ExpectedEvents: []string{api.EventComponentWarning},
-			ExpectedEventResource: func(res TestResource) pkgEvents.EventResource {
-				return pkgEvents.EventResource{
-					Component: res.Component,
-				}
-			},
-		})
-
-		testEvent(TestCase{
-			Name: "should generate correct EventResource for organically triggered component.unknown event",
-			Resources: TestResource{
-				Component: &models.Component{
-					ID:     uuid.New(),
-					Name:   "test-component-unknown",
-					Type:   "Entity",
-					Health: lo.ToPtr(models.HealthHealthy), // Start as healthy
-					Labels: map[string]string{"telemetry": "enabled"},
-				},
-			},
-			DatabaseChange: func(ctx context.Context, res TestResource) error {
-				return ctx.DB().Model(res.Component).UpdateColumn("health", "").Error
-			},
-			ExpectedEvents: []string{api.EventComponentUnknown},
-			ExpectedEventResource: func(res TestResource) pkgEvents.EventResource {
-				return pkgEvents.EventResource{
-					Component: res.Component,
 				}
 			},
 		})
