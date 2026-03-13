@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/duration"
-	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/dataquery"
@@ -539,12 +538,6 @@ func (t PlaybookActionRetry) NextRetryWait(retryNumber int) (time.Duration, erro
 }
 
 type PlaybookAction struct {
-	// delay is the parsed Delay
-	delay *time.Duration `json:"-" yaml:"-"`
-
-	// timeout is the parsed Timeout
-	timeout *time.Duration `json:"-" yaml:"-"`
-
 	PlaybookID string `json:"-" yaml:"-"`
 
 	// Name of the action
@@ -729,10 +722,6 @@ func (p *PlaybookAction) Context() map[string]any {
 }
 
 func (p *PlaybookAction) DelayDuration() (time.Duration, error) {
-	if p.delay != nil {
-		return *p.delay, nil
-	}
-
 	if p.Delay == "" {
 		return 0, nil
 	}
@@ -742,7 +731,6 @@ func (p *PlaybookAction) DelayDuration() (time.Duration, error) {
 		return 0, err
 	}
 
-	p.delay = utils.Ptr(time.Duration(d))
 	return time.Duration(d), nil
 }
 
@@ -760,15 +748,10 @@ func (p *PlaybookAction) EnforceTimeoutLimit(ctx context.Context, spec PlaybookS
 	actionTimeout, _ := p.TimeoutDuration()
 	if runTimeout < actionTimeout || actionTimeout == 0 {
 		p.Timeout = fmt.Sprintf("%0fm", runTimeout.Minutes())
-		p.timeout = &runTimeout
 	}
 }
 
 func (p *PlaybookAction) TimeoutDuration() (time.Duration, error) {
-	if p.timeout != nil {
-		return *p.timeout, nil
-	}
-
 	if p.Timeout == "" {
 		return 0, nil
 	}
@@ -778,6 +761,5 @@ func (p *PlaybookAction) TimeoutDuration() (time.Duration, error) {
 		return 0, err
 	}
 
-	p.timeout = utils.Ptr(time.Duration(d))
 	return time.Duration(d), nil
 }
