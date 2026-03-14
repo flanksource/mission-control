@@ -45,7 +45,6 @@ func RegisterDBStats(ctx context.Context) {
 type dbStatsCollector struct {
 	ctx               context.Context
 	dbSizeDesc        *prometheus.Desc
-	lastLoginDesc     *prometheus.Desc
 	loggedInUsersDesc *prometheus.Desc
 }
 
@@ -53,14 +52,12 @@ func newDBStatsCollector(ctx context.Context) *dbStatsCollector {
 	return &dbStatsCollector{
 		ctx:               ctx,
 		dbSizeDesc:        prometheus.NewDesc(getMetricName(ctx, "db_size_mb"), "Size of the database in megabytes (MB, SI unit, 10^6 bytes).", nil, nil),
-		lastLoginDesc:     prometheus.NewDesc(getMetricName(ctx, "last_login_timestamp_seconds"), "Latest user login timestamp in seconds since epoch.", nil, nil),
 		loggedInUsersDesc: prometheus.NewDesc(getMetricName(ctx, "active_sessions"), "Active unexpired sessions/tokens.", nil, nil),
 	}
 }
 
 func (c *dbStatsCollector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.dbSizeDesc
-	ch <- c.lastLoginDesc
 	ch <- c.loggedInUsersDesc
 }
 
@@ -78,12 +75,6 @@ func (c *dbStatsCollector) Collect(ch chan<- prometheus.Metric) {
 		var dbSize int64
 		err := c.ctx.DB().Raw("SELECT pg_database_size(current_database())").Scan(&dbSize).Error
 		return float64(dbSize) / (1000 * 1000), err
-	})
-
-	collectGauge(c.lastLoginDesc, "failed to collect last login timestamp", func() (float64, error) {
-		var lastLoginSeconds float64
-		err := c.ctx.DB().Raw("SELECT COALESCE(EXTRACT(EPOCH FROM MAX(last_login)), 0) FROM users").Scan(&lastLoginSeconds).Error
-		return lastLoginSeconds, err
 	})
 
 	collectGauge(c.loggedInUsersDesc, "failed to collect active sessions count", func() (float64, error) {
