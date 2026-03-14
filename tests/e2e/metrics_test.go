@@ -196,6 +196,5 @@ var _ = ginkgo.Describe("Metrics", func() {
 		Expect(sessionsFamily.GetMetric()).To(HaveLen(1))
 		Expect(sessionsFamily.GetMetric()[0].GetGauge().GetValue()).To(BeNumerically(">=", 0))
 
-		// Note: last_login_timestamp_seconds not tested as it requires the users view which depends on Kratos
 	})
 })
