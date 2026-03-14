@@ -3,6 +3,37 @@
   "$id": "https://github.com/flanksource/incident-commander/api/v1/connection",
   "$ref": "#/$defs/Connection",
   "$defs": {
+    "Condition": {
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "observedGeneration": {
+          "type": "integer"
+        },
+        "lastTransitionTime": {
+          "$ref": "#/$defs/Time"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "type",
+        "status",
+        "lastTransitionTime",
+        "reason",
+        "message"
+      ]
+    },
     "ConfigMapKeySelector": {
       "properties": {
         "name": {
@@ -1053,6 +1084,15 @@
     },
     "ConnectionStatus": {
       "properties": {
+        "observedGeneration": {
+          "type": "integer"
+        },
+        "conditions": {
+          "items": {
+            "$ref": "#/$defs/Condition"
+          },
+          "type": "array"
+        },
         "ref": {
           "type": "string",
           "description": "Ref is the connection string"

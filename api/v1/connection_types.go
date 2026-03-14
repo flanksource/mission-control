@@ -4,6 +4,7 @@ import (
 	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/kopper"
+	"github.com/google/go-cmp/cmp"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -314,7 +315,7 @@ type ConnectionSpec struct {
 	OpenAI    *ConnectionOpenAI    `json:"openai,omitempty"`
 	Gemini    *ConnectionGemini    `json:"gemini,omitempty"`
 
-	Elasticsearch *ConnectionElasticsearch          `json:"elasticsearch,omitempty"`
+	Elasticsearch *ConnectionElasticsearch         `json:"elasticsearch,omitempty"`
 	Folder        *ConnectionFolder                `json:"folder,omitempty"`
 	Git           *ConnectionGit                   `json:"git,omitempty"`
 	GitHub        *ConnectionGitHub                `json:"github,omitempty"`
@@ -362,6 +363,9 @@ type ConnectionSpec struct {
 
 // ConnectionStatus defines the observed state of Connection
 type ConnectionStatus struct {
+	ObservedGeneration int64              `json:"observedGeneration,omitempty" yaml:"observedGeneration,omitempty"`
+	Conditions         []metav1.Condition `json:"conditions,omitempty" yaml:"conditions,omitempty"`
+
 	// Ref is the connection string
 	Ref string `json:"ref"`
 }
@@ -386,7 +390,7 @@ func (t *Connection) GenerateStatusPatch(original runtime.Object) client.Patch {
 		return nil
 	}
 
-	if t.Status.Ref == og.Status.Ref {
+	if cmp.Diff(t.Status, og.Status) == "" {
 		return nil
 	}
 

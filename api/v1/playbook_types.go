@@ -243,15 +243,6 @@ func (p *PlaybookSpec) GetTimeout(ctx context.Context) (time.Duration, error) {
 	return time.Duration(d), nil
 }
 
-const (
-	PlaybookConditionReady = "Ready"
-)
-
-const (
-	PlaybookReadyReasonSynced           = "Synced"
-	PlaybookReadyReasonValidationFailed = "ValidationFailed"
-)
-
 // PlaybookStatus defines the observed state of Playbook
 type PlaybookStatus struct {
 	ObservedGeneration int64              `json:"observedGeneration,omitempty" yaml:"observedGeneration,omitempty"`

@@ -28,10 +28,10 @@ var _ = Describe("PersistViewFromCRD", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(view.Status.ObservedGeneration).To(Equal(int64(7)))
 
-		condition := k8smeta.FindStatusCondition(view.Status.Conditions, v1.ViewConditionReady)
+		condition := k8smeta.FindStatusCondition(view.Status.Conditions, v1.ConditionReady)
 		Expect(condition).ToNot(BeNil())
 		Expect(condition.Status).To(Equal(metav1.ConditionFalse))
-		Expect(condition.Reason).To(Equal(v1.ViewReadyReasonValidationFailed))
+		Expect(condition.Reason).To(Equal(v1.ReadyReasonValidationFailed))
 		Expect(condition.Message).To(Equal("view must have at least one query"))
 
 		var count int64
@@ -56,10 +56,10 @@ var _ = Describe("PersistViewFromCRD", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(view.Status.ObservedGeneration).To(Equal(int64(3)))
 
-		condition := k8smeta.FindStatusCondition(view.Status.Conditions, v1.ViewConditionReady)
+		condition := k8smeta.FindStatusCondition(view.Status.Conditions, v1.ConditionReady)
 		Expect(condition).ToNot(BeNil())
 		Expect(condition.Status).To(Equal(metav1.ConditionFalse))
-		Expect(condition.Reason).To(Equal(v1.ViewReadyReasonPersistFailed))
+		Expect(condition.Reason).To(Equal(v1.ReadyReasonPersistFailed))
 		Expect(condition.Message).To(ContainSubstring("failed to parse uid"))
 
 		var count int64

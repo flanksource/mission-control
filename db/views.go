@@ -25,7 +25,7 @@ func setViewStatusCondition(obj *v1.View, status metav1.ConditionStatus, reason,
 	now := metav1.Now()
 	obj.Status.ObservedGeneration = obj.Generation
 	k8smeta.SetStatusCondition(&obj.Status.Conditions, metav1.Condition{
-		Type:               v1.ViewConditionReady,
+		Type:               v1.ConditionReady,
 		Status:             status,
 		Reason:             reason,
 		Message:            message,
@@ -38,25 +38,25 @@ func setViewValidationFailedStatus(obj *v1.View, err error) {
 	if err == nil {
 		return
 	}
-	setViewStatusCondition(obj, metav1.ConditionFalse, v1.ViewReadyReasonValidationFailed, err.Error())
+	setViewStatusCondition(obj, metav1.ConditionFalse, v1.ReadyReasonValidationFailed, err.Error())
 }
 
 func setViewPersistFailedStatus(obj *v1.View, err error) {
 	if err == nil {
 		return
 	}
-	setViewStatusCondition(obj, metav1.ConditionFalse, v1.ViewReadyReasonPersistFailed, err.Error())
+	setViewStatusCondition(obj, metav1.ConditionFalse, v1.ReadyReasonPersistFailed, err.Error())
 }
 
 func setViewDeleteFailedStatus(obj *v1.View, err error) {
 	if err == nil {
 		return
 	}
-	setViewStatusCondition(obj, metav1.ConditionFalse, v1.ViewReadyReasonDeleteFailed, err.Error())
+	setViewStatusCondition(obj, metav1.ConditionFalse, v1.ReadyReasonDeleteFailed, err.Error())
 }
 
 func setViewReadyStatus(obj *v1.View) {
-	setViewStatusCondition(obj, metav1.ConditionTrue, v1.ViewReadyReasonSynced, "View is valid and persisted")
+	setViewStatusCondition(obj, metav1.ConditionTrue, v1.ReadyReasonSynced, "View is valid and persisted")
 }
 
 func persistViewStatus(ctx context.Context, obj *v1.View) {
@@ -83,9 +83,16 @@ func persistViewStatus(ctx context.Context, obj *v1.View) {
 	}
 
 	var mergedStatus v1.ViewStatus
-	if existingStatusMap, found, err := unstructured.NestedMap(resource.Object, "status"); err == nil && found {
+	existingStatusMap, found, err := unstructured.NestedMap(resource.Object, "status")
+	if err != nil {
+		ctx.Tracef("failed to read existing view status for %s/%s: %v", obj.Namespace, obj.Name, err)
+		return
+	}
+
+	if found {
 		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(existingStatusMap, &mergedStatus); err != nil {
 			ctx.Tracef("failed to decode existing view status for %s/%s: %v", obj.Namespace, obj.Name, err)
+			return
 		}
 	}
 
@@ -93,8 +100,8 @@ func persistViewStatus(ctx context.Context, obj *v1.View) {
 		mergedStatus.ObservedGeneration = obj.Status.ObservedGeneration
 	}
 
-	if len(obj.Status.Conditions) > 0 {
-		mergedStatus.Conditions = obj.Status.Conditions
+	for _, c := range obj.Status.Conditions {
+		k8smeta.SetStatusCondition(&mergedStatus.Conditions, c)
 	}
 
 	if obj.Status.LastRan != nil {

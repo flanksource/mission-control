@@ -158,17 +158,6 @@ func (t ViewSpec) Validate() error {
 	return nil
 }
 
-const (
-	ViewConditionReady = "Ready"
-)
-
-const (
-	ViewReadyReasonSynced           = "Synced"
-	ViewReadyReasonValidationFailed = "ValidationFailed"
-	ViewReadyReasonPersistFailed    = "PersistFailed"
-	ViewReadyReasonDeleteFailed     = "DeleteFailed"
-)
-
 // ViewStatus defines the observed state of View
 type ViewStatus struct {
 	ObservedGeneration int64              `json:"observedGeneration,omitempty" yaml:"observedGeneration,omitempty"`
