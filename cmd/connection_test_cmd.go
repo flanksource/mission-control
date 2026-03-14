@@ -79,7 +79,11 @@ func runConnectionTestFromFile(filename string) (any, error) {
 		return nil, fmt.Errorf("expected Kind=Connection, got %s", crd.Kind)
 	}
 
-	conn := db.ConnectionFromCRD(&crd)
+	conn, err := db.ConnectionFromCRD(&crd)
+	if err != nil {
+		return nil, err
+	}
+
 	return hydrateAndTest(&conn)
 }
 

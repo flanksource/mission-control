@@ -7,7 +7,6 @@ import (
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	k8smeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 
@@ -15,7 +14,7 @@ import (
 )
 
 var _ = Describe("PersistConnectionFromCRD", func() {
-	It("records uid parse errors in status", func() {
+	It("returns error on invalid uid", func() {
 		conn := &v1.Connection{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:       "invalid-connection-uid-" + uuid.NewString(),
@@ -29,15 +28,8 @@ var _ = Describe("PersistConnectionFromCRD", func() {
 		}
 
 		err := PersistConnectionFromCRD(DefaultContext, conn)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(conn.Status.Ref).To(Equal(fmt.Sprintf("connection://%s/%s", conn.Namespace, conn.Name)))
-		Expect(conn.Status.ObservedGeneration).To(Equal(int64(3)))
-
-		condition := k8smeta.FindStatusCondition(conn.Status.Conditions, v1.ConditionReady)
-		Expect(condition).ToNot(BeNil())
-		Expect(condition.Status).To(Equal(metav1.ConditionFalse))
-		Expect(condition.Reason).To(Equal(v1.ReadyReasonPersistFailed))
-		Expect(condition.Message).To(ContainSubstring("failed to parse uid"))
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("failed to parse uid"))
 
 		var count int64
 		err = DefaultContext.DB().Model(&models.Connection{}).
@@ -47,7 +39,7 @@ var _ = Describe("PersistConnectionFromCRD", func() {
 		Expect(count).To(Equal(int64(0)))
 	})
 
-	It("records ready condition and preserves status ref on success", func() {
+	It("persists connection and preserves status ref on success", func() {
 		uid := uuid.New()
 		conn := &v1.Connection{
 			ObjectMeta: metav1.ObjectMeta{
@@ -64,13 +56,6 @@ var _ = Describe("PersistConnectionFromCRD", func() {
 		err := PersistConnectionFromCRD(DefaultContext, conn)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(conn.Status.Ref).To(Equal(fmt.Sprintf("connection://%s/%s", conn.Namespace, conn.Name)))
-		Expect(conn.Status.ObservedGeneration).To(Equal(int64(9)))
-
-		condition := k8smeta.FindStatusCondition(conn.Status.Conditions, v1.ConditionReady)
-		Expect(condition).ToNot(BeNil())
-		Expect(condition.Status).To(Equal(metav1.ConditionTrue))
-		Expect(condition.Reason).To(Equal(v1.ReadyReasonSynced))
-		Expect(condition.Message).To(Equal("Connection is valid and persisted"))
 
 		var count int64
 		err = DefaultContext.DB().Model(&models.Connection{}).

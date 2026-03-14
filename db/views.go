@@ -11,151 +11,27 @@ import (
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 	"gorm.io/gorm/clause"
-	k8smeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 )
 
-func setViewStatusCondition(obj *v1.View, status metav1.ConditionStatus, reason, message string) {
-	now := metav1.Now()
-	obj.Status.ObservedGeneration = obj.Generation
-	k8smeta.SetStatusCondition(&obj.Status.Conditions, metav1.Condition{
-		Type:               v1.ConditionReady,
-		Status:             status,
-		Reason:             reason,
-		Message:            message,
-		ObservedGeneration: obj.Generation,
-		LastTransitionTime: now,
-	})
-}
-
-func setViewValidationFailedStatus(obj *v1.View, err error) {
-	if err == nil {
-		return
-	}
-	setViewStatusCondition(obj, metav1.ConditionFalse, v1.ReadyReasonValidationFailed, err.Error())
-}
-
-func setViewPersistFailedStatus(obj *v1.View, err error) {
-	if err == nil {
-		return
-	}
-	setViewStatusCondition(obj, metav1.ConditionFalse, v1.ReadyReasonPersistFailed, err.Error())
-}
-
-func setViewDeleteFailedStatus(obj *v1.View, err error) {
-	if err == nil {
-		return
-	}
-	setViewStatusCondition(obj, metav1.ConditionFalse, v1.ReadyReasonDeleteFailed, err.Error())
-}
-
-func setViewReadyStatus(obj *v1.View) {
-	setViewStatusCondition(obj, metav1.ConditionTrue, v1.ReadyReasonSynced, "View is valid and persisted")
-}
-
-func persistViewStatus(ctx context.Context, obj *v1.View) {
-	if obj == nil || obj.Namespace == "" || obj.Name == "" {
-		return
-	}
-
-	k8s, err := ctx.LocalKubernetes()
-	if err != nil {
-		ctx.Tracef("failed to initialize kubernetes client for view status update %s/%s: %v", obj.Namespace, obj.Name, err)
-		return
-	}
-
-	resourceClient, err := k8s.GetClientByGroupVersionKind(ctx, v1.GroupVersion.Group, v1.GroupVersion.Version, "View")
-	if err != nil {
-		ctx.Tracef("failed to load view resource client for status update %s/%s: %v", obj.Namespace, obj.Name, err)
-		return
-	}
-
-	resource, err := resourceClient.Namespace(obj.Namespace).Get(ctx, obj.Name, metav1.GetOptions{})
-	if err != nil {
-		ctx.Tracef("failed to fetch view %s/%s while updating status: %v", obj.Namespace, obj.Name, err)
-		return
-	}
-
-	var mergedStatus v1.ViewStatus
-	existingStatusMap, found, err := unstructured.NestedMap(resource.Object, "status")
-	if err != nil {
-		ctx.Tracef("failed to read existing view status for %s/%s: %v", obj.Namespace, obj.Name, err)
-		return
-	}
-
-	if found {
-		if err := runtime.DefaultUnstructuredConverter.FromUnstructured(existingStatusMap, &mergedStatus); err != nil {
-			ctx.Tracef("failed to decode existing view status for %s/%s: %v", obj.Namespace, obj.Name, err)
-			return
-		}
-	}
-
-	if obj.Status.ObservedGeneration != 0 {
-		mergedStatus.ObservedGeneration = obj.Status.ObservedGeneration
-	}
-
-	for _, c := range obj.Status.Conditions {
-		k8smeta.SetStatusCondition(&mergedStatus.Conditions, c)
-	}
-
-	if obj.Status.LastRan != nil {
-		mergedStatus.LastRan = obj.Status.LastRan
-	}
-
-	statusMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(&mergedStatus)
-	if err != nil {
-		ctx.Tracef("failed to convert view status for %s/%s: %v", obj.Namespace, obj.Name, err)
-		return
-	}
-
-	if err := unstructured.SetNestedMap(resource.Object, statusMap, "status"); err != nil {
-		ctx.Tracef("failed to set view status for %s/%s: %v", obj.Namespace, obj.Name, err)
-		return
-	}
-
-	if _, err := resourceClient.Namespace(obj.Namespace).UpdateStatus(ctx, resource, metav1.UpdateOptions{}); err != nil {
-		ctx.Tracef("failed to persist view status for %s/%s: %v", obj.Namespace, obj.Name, err)
-	}
-}
-
-func persistViewDeleteFailedStatus(ctx context.Context, view models.View, err error) {
-	if err == nil {
-		return
-	}
-
-	obj := &v1.View{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      view.Name,
-			Namespace: view.Namespace,
-		},
-	}
-	setViewDeleteFailedStatus(obj, err)
-	persistViewStatus(ctx, obj)
-}
-
 // PersistViewFromCRD persists a View CRD to the database
 func PersistViewFromCRD(ctx context.Context, obj *v1.View) error {
 	uid, err := uuid.Parse(string(obj.GetUID()))
 	if err != nil {
-		setViewPersistFailedStatus(obj, fmt.Errorf("failed to parse uid: %w", err))
-		return nil
+		return fmt.Errorf("failed to parse uid: %w", err)
 	}
 
 	if err := obj.Spec.Validate(); err != nil {
-		setViewValidationFailedStatus(obj, err)
-		return nil
+		return err
 	}
 
 	specJSON, err := json.Marshal(obj.Spec)
 	if err != nil {
-		setViewPersistFailedStatus(obj, fmt.Errorf("failed to marshal view spec: %w", err))
-		return nil
+		return fmt.Errorf("failed to marshal view spec: %w", err)
 	}
 
 	view := models.View{
@@ -171,13 +47,9 @@ func PersistViewFromCRD(ctx context.Context, obj *v1.View) error {
 		Columns:   []clause.Column{{Name: "id"}},
 		DoUpdates: clause.AssignmentColumns([]string{"spec", "source", "labels"}), // only these values can be updated. (otherwise last_ran, error fields would reset)
 	}).Create(&view).Error; err != nil {
-		wrappedErr := fmt.Errorf("failed to persist view %s/%s: %w", obj.Namespace, obj.Name, err)
-		setViewPersistFailedStatus(obj, wrappedErr)
-		persistViewStatus(ctx, obj)
-		return wrappedErr
+		return fmt.Errorf("failed to persist view %s/%s: %w", obj.Namespace, obj.Name, err)
 	}
 
-	setViewReadyStatus(obj)
 	return nil
 }
 
@@ -194,21 +66,15 @@ func DeleteView(ctx context.Context, id string) error {
 
 	generatedTableName := view.GeneratedTableName()
 	if err := ctx.DB().Exec("DROP TABLE IF EXISTS " + pq.QuoteIdentifier(generatedTableName)).Error; err != nil {
-		wrappedErr := fmt.Errorf("failed to drop generated table %s: %w", generatedTableName, err)
-		persistViewDeleteFailedStatus(ctx, view, wrappedErr)
-		return wrappedErr
+		return fmt.Errorf("failed to drop generated table %s: %w", generatedTableName, err)
 	}
 
 	if err := ctx.DB().Where("view_id = ?", id).Delete(&models.ViewPanel{}).Error; err != nil {
-		wrappedErr := fmt.Errorf("failed to delete view panels: %w", err)
-		persistViewDeleteFailedStatus(ctx, view, wrappedErr)
-		return wrappedErr
+		return fmt.Errorf("failed to delete view panels: %w", err)
 	}
 
 	if err := ctx.DB().Model(&models.View{}).Where("id = ?", id).Update("deleted_at", duty.Now()).Error; err != nil {
-		wrappedErr := fmt.Errorf("failed to soft-delete view: %w", err)
-		persistViewDeleteFailedStatus(ctx, view, wrappedErr)
-		return wrappedErr
+		return fmt.Errorf("failed to soft-delete view: %w", err)
 	}
 
 	return nil
@@ -216,18 +82,10 @@ func DeleteView(ctx context.Context, id string) error {
 
 // DeleteStaleView soft deletes stale Views that match name and namespace
 func DeleteStaleView(ctx context.Context, newer *v1.View) error {
-	err := ctx.DB().Model(&models.View{}).
+	return ctx.DB().Model(&models.View{}).
 		Where("name = ? AND namespace = ?", newer.Name, newer.Namespace).
 		Where("deleted_at IS NULL").
 		Update("deleted_at", duty.Now()).Error
-	if err != nil {
-		wrappedErr := fmt.Errorf("failed to soft-delete stale views for %s/%s: %w", newer.Namespace, newer.Name, err)
-		setViewDeleteFailedStatus(newer, wrappedErr)
-		persistViewStatus(ctx, newer)
-		return wrappedErr
-	}
-
-	return nil
 }
 
 // GetView retrieves a view by name and namespace

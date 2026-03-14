@@ -35,7 +35,7 @@ func mergeConnectionModels(source, override models.Connection) models.Connection
 	return source
 }
 
-func ConnectionFromCRD(obj *v1.Connection) models.Connection {
+func ConnectionFromCRD(obj *v1.Connection) (models.Connection, error) {
 	dbObj := models.Connection{
 		Name:        obj.Name,
 		Namespace:   obj.Namespace,
@@ -48,7 +48,11 @@ func ConnectionFromCRD(obj *v1.Connection) models.Connection {
 	}
 
 	if obj.GetUID() != "" {
-		dbObj.ID = uuid.MustParse(string(obj.GetUID()))
+		uid, err := uuid.Parse(string(obj.GetUID()))
+		if err != nil {
+			return dbObj, fmt.Errorf("failed to parse uid: %w", err)
+		}
+		dbObj.ID = uid
 	}
 
 	connectionFromCRDSpec(obj, &dbObj)
@@ -57,57 +61,38 @@ func ConnectionFromCRD(obj *v1.Connection) models.Connection {
 		dbObj.Properties = collections.MergeMap(obj.Spec.Properties, dbObj.Properties)
 	}
 
-	return dbObj
+	return dbObj, nil
 }
 
 func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
-	dbObj := ConnectionFromCRD(obj)
+	dbObj, err := ConnectionFromCRD(obj)
+	if err != nil {
+		return err
+	}
 	dbObj.CreatedAt = time.Now()
-	setConnectionRef(obj)
 
-	if err := ctx.DB().Save(&dbObj).Error; err != nil {
-		wrappedErr := fmt.Errorf("failed to persist connection %s/%s: %w", obj.Namespace, obj.Name, err)
-		setConnectionPersistFailedStatus(obj, wrappedErr)
-		persistConnectionStatus(ctx, obj)
-		return wrappedErr
+	if obj.Status.Ref == "" {
+		obj.Status.Ref = fmt.Sprintf("connection://%s/%s", obj.Namespace, obj.Name)
 	}
 
-	setConnectionReadyStatus(obj)
+	if err := ctx.DB().Save(&dbObj).Error; err != nil {
+		return fmt.Errorf("failed to persist connection %s/%s: %w", obj.Namespace, obj.Name, err)
+	}
+
 	return nil
 }
 
 func DeleteConnection(ctx context.Context, id string) error {
-	var conn models.Connection
-	if err := ctx.DB().Where("id = ? AND deleted_at IS NULL", id).Find(&conn).Error; err != nil {
-		return fmt.Errorf("failed to find connection: %w", err)
-	}
-
-	if conn.ID == uuid.Nil {
-		return nil
-	}
-
-	if err := ctx.DB().Model(&models.Connection{}).Where("id = ?", id).Update("deleted_at", duty.Now()).Error; err != nil {
-		wrappedErr := fmt.Errorf("failed to soft-delete connection: %w", err)
-		persistConnectionDeleteFailedStatus(ctx, conn, wrappedErr)
-		return wrappedErr
-	}
-
-	return nil
+	return ctx.DB().Model(&models.Connection{}).
+		Where("id = ? AND deleted_at IS NULL", id).
+		Update("deleted_at", duty.Now()).Error
 }
 
 func DeleteStaleConnection(ctx context.Context, newer *v1.Connection) error {
-	err := ctx.DB().Model(&models.Connection{}).
+	return ctx.DB().Model(&models.Connection{}).
 		Where("name = ? AND namespace = ?", newer.Name, newer.Namespace).
 		Where("deleted_at IS NULL").
 		Update("deleted_at", duty.Now()).Error
-	if err != nil {
-		wrappedErr := fmt.Errorf("failed to soft-delete stale connections for %s/%s: %w", newer.Namespace, newer.Name, err)
-		setConnectionDeleteFailedStatus(newer, wrappedErr)
-		persistConnectionStatus(ctx, newer)
-		return wrappedErr
-	}
-
-	return nil
 }
 
 func ListConnections(ctx context.Context) ([]models.Connection, error) {
