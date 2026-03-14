@@ -262,6 +262,11 @@ type Playbook struct {
 }
 
 var _ kopper.StatusPatchGenerator = (*Playbook)(nil)
+var _ kopper.StatusConditioner = (*Playbook)(nil)
+
+func (t *Playbook) GetStatusConditions() *[]metav1.Condition {
+	return &t.Status.Conditions
+}
 
 func (t *Playbook) GenerateStatusPatch(original runtime.Object) client.Patch {
 	og, ok := original.(*Playbook)

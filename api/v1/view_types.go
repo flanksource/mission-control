@@ -10,6 +10,7 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/duty/view"
+	"github.com/flanksource/kopper"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -177,6 +178,12 @@ type View struct {
 
 	//+kubebuilder:validation:Optional
 	Status ViewStatus `json:"status" yaml:"status"`
+}
+
+var _ kopper.StatusConditioner = (*View)(nil)
+
+func (v *View) GetStatusConditions() *[]metav1.Condition {
+	return &v.Status.Conditions
 }
 
 func (v *View) GenerateStatusPatch(original runtime.Object) client.Patch {

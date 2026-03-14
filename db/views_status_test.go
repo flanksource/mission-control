@@ -5,7 +5,6 @@ import (
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	k8smeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 
@@ -13,7 +12,7 @@ import (
 )
 
 var _ = Describe("PersistViewFromCRD", func() {
-	It("records validation errors in status", func() {
+	It("returns validation errors", func() {
 		view := &v1.View{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:       "invalid-view",
@@ -25,14 +24,8 @@ var _ = Describe("PersistViewFromCRD", func() {
 		}
 
 		err := PersistViewFromCRD(DefaultContext, view)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(view.Status.ObservedGeneration).To(Equal(int64(7)))
-
-		condition := k8smeta.FindStatusCondition(view.Status.Conditions, v1.ConditionReady)
-		Expect(condition).ToNot(BeNil())
-		Expect(condition.Status).To(Equal(metav1.ConditionFalse))
-		Expect(condition.Reason).To(Equal(v1.ReadyReasonValidationFailed))
-		Expect(condition.Message).To(Equal("view must have at least one query"))
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(Equal("view must have at least one query"))
 
 		var count int64
 		err = DefaultContext.DB().Model(&models.View{}).
@@ -42,7 +35,7 @@ var _ = Describe("PersistViewFromCRD", func() {
 		Expect(count).To(Equal(int64(0)))
 	})
 
-	It("records uid parse errors in status", func() {
+	It("returns error on invalid uid", func() {
 		view := &v1.View{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:       "invalid-view-uid",
@@ -53,14 +46,8 @@ var _ = Describe("PersistViewFromCRD", func() {
 		}
 
 		err := PersistViewFromCRD(DefaultContext, view)
-		Expect(err).ToNot(HaveOccurred())
-		Expect(view.Status.ObservedGeneration).To(Equal(int64(3)))
-
-		condition := k8smeta.FindStatusCondition(view.Status.Conditions, v1.ConditionReady)
-		Expect(condition).ToNot(BeNil())
-		Expect(condition.Status).To(Equal(metav1.ConditionFalse))
-		Expect(condition.Reason).To(Equal(v1.ReadyReasonPersistFailed))
-		Expect(condition.Message).To(ContainSubstring("failed to parse uid"))
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("failed to parse uid"))
 
 		var count int64
 		err = DefaultContext.DB().Model(&models.View{}).

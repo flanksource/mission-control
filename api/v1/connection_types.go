@@ -383,6 +383,11 @@ type Connection struct {
 }
 
 var _ kopper.StatusPatchGenerator = (*Connection)(nil)
+var _ kopper.StatusConditioner = (*Connection)(nil)
+
+func (t *Connection) GetStatusConditions() *[]metav1.Condition {
+	return &t.Status.Conditions
+}
 
 func (t *Connection) GenerateStatusPatch(original runtime.Object) client.Patch {
 	og, ok := original.(*Connection)
