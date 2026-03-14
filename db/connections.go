@@ -63,19 +63,51 @@ func ConnectionFromCRD(obj *v1.Connection) models.Connection {
 func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
 	dbObj := ConnectionFromCRD(obj)
 	dbObj.CreatedAt = time.Now()
-	obj.Status.Ref = fmt.Sprintf("connection://%s/%s", obj.Namespace, obj.Name)
-	return ctx.DB().Save(&dbObj).Error
+	setConnectionRef(obj)
+
+	if err := ctx.DB().Save(&dbObj).Error; err != nil {
+		wrappedErr := fmt.Errorf("failed to persist connection %s/%s: %w", obj.Namespace, obj.Name, err)
+		setConnectionPersistFailedStatus(obj, wrappedErr)
+		persistConnectionStatus(ctx, obj)
+		return wrappedErr
+	}
+
+	setConnectionReadyStatus(obj)
+	return nil
 }
 
 func DeleteConnection(ctx context.Context, id string) error {
-	return ctx.DB().Model(&models.Connection{}).Where("id = ?", id).Update("deleted_at", duty.Now()).Error
+	var conn models.Connection
+	if err := ctx.DB().Where("id = ? AND deleted_at IS NULL", id).Find(&conn).Error; err != nil {
+		return fmt.Errorf("failed to find connection: %w", err)
+	}
+
+	if conn.ID == uuid.Nil {
+		return nil
+	}
+
+	if err := ctx.DB().Model(&models.Connection{}).Where("id = ?", id).Update("deleted_at", duty.Now()).Error; err != nil {
+		wrappedErr := fmt.Errorf("failed to soft-delete connection: %w", err)
+		persistConnectionDeleteFailedStatus(ctx, conn, wrappedErr)
+		return wrappedErr
+	}
+
+	return nil
 }
 
 func DeleteStaleConnection(ctx context.Context, newer *v1.Connection) error {
-	return ctx.DB().Model(&models.Connection{}).
+	err := ctx.DB().Model(&models.Connection{}).
 		Where("name = ? AND namespace = ?", newer.Name, newer.Namespace).
 		Where("deleted_at IS NULL").
 		Update("deleted_at", duty.Now()).Error
+	if err != nil {
+		wrappedErr := fmt.Errorf("failed to soft-delete stale connections for %s/%s: %w", newer.Namespace, newer.Name, err)
+		setConnectionDeleteFailedStatus(newer, wrappedErr)
+		persistConnectionStatus(ctx, newer)
+		return wrappedErr
+	}
+
+	return nil
 }
 
 func ListConnections(ctx context.Context) ([]models.Connection, error) {

@@ -29,10 +29,10 @@ var _ = Describe("PersistPlaybookFromCRD", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(playbook.Status.ObservedGeneration).To(Equal(int64(7)))
 
-		condition := k8smeta.FindStatusCondition(playbook.Status.Conditions, v1.PlaybookConditionReady)
+		condition := k8smeta.FindStatusCondition(playbook.Status.Conditions, v1.ConditionReady)
 		Expect(condition).ToNot(BeNil())
 		Expect(condition.Status).To(Equal(metav1.ConditionFalse))
-		Expect(condition.Reason).To(Equal(v1.PlaybookReadyReasonValidationFailed))
+		Expect(condition.Reason).To(Equal(v1.ReadyReasonValidationFailed))
 		Expect(condition.Message).To(Equal(`action "Wait for processing" is empty`))
 
 		var count int64

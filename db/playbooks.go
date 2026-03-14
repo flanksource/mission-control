@@ -213,9 +213,9 @@ func setPlaybookValidationStatus(obj *v1.Playbook, err error) {
 	now := metav1.Now()
 	obj.Status.ObservedGeneration = obj.Generation
 	meta.SetStatusCondition(&obj.Status.Conditions, metav1.Condition{
-		Type:               v1.PlaybookConditionReady,
+		Type:               v1.ConditionReady,
 		Status:             metav1.ConditionFalse,
-		Reason:             v1.PlaybookReadyReasonValidationFailed,
+		Reason:             v1.ReadyReasonValidationFailed,
 		Message:            err.Error(),
 		ObservedGeneration: obj.Generation,
 		LastTransitionTime: now,
@@ -226,9 +226,9 @@ func setPlaybookReadyStatus(obj *v1.Playbook) {
 	now := metav1.Now()
 	obj.Status.ObservedGeneration = obj.Generation
 	meta.SetStatusCondition(&obj.Status.Conditions, metav1.Condition{
-		Type:               v1.PlaybookConditionReady,
+		Type:               v1.ConditionReady,
 		Status:             metav1.ConditionTrue,
-		Reason:             v1.PlaybookReadyReasonSynced,
+		Reason:             v1.ReadyReasonSynced,
 		Message:            "Playbook is valid and persisted",
 		ObservedGeneration: obj.Generation,
 		LastTransitionTime: now,
