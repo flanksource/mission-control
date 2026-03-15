@@ -1,7 +1,11 @@
 package v1
 
 import (
+	"github.com/flanksource/kopper"
+	"github.com/google/go-cmp/cmp"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // +kubebuilder:object:root=true
@@ -26,6 +30,33 @@ type PermissionGroupSpec struct {
 }
 
 type PermissionGroupStatus struct {
+	ObservedGeneration int64              `json:"observedGeneration,omitempty" yaml:"observedGeneration,omitempty"`
+	Conditions         []metav1.Condition `json:"conditions,omitempty" yaml:"conditions,omitempty"`
+}
+
+var _ kopper.StatusPatchGenerator = (*PermissionGroup)(nil)
+var _ kopper.StatusConditioner = (*PermissionGroup)(nil)
+
+func (t *PermissionGroup) GetStatusConditions() *[]metav1.Condition {
+	return &t.Status.Conditions
+}
+
+func (t *PermissionGroup) GenerateStatusPatch(original runtime.Object) client.Patch {
+	og, ok := original.(*PermissionGroup)
+	if !ok {
+		return nil
+	}
+
+	if cmp.Diff(t.Status, og.Status) == "" {
+		return nil
+	}
+
+	clientObj, ok := original.(client.Object)
+	if !ok {
+		return nil
+	}
+
+	return client.MergeFrom(clientObj)
 }
 
 // +kubebuilder:object:generate=true
