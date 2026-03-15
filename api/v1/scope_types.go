@@ -1,7 +1,11 @@
 package v1
 
 import (
+	"github.com/flanksource/kopper"
+	"github.com/google/go-cmp/cmp"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // ScopeResourceSelector is a subset of ResourceSelector used for defining scope targets
@@ -80,6 +84,31 @@ type Scope struct {
 
 	Spec   ScopeSpec   `json:"spec,omitempty" yaml:"spec,omitempty"`
 	Status ScopeStatus `json:"status,omitempty" yaml:"status,omitempty"`
+}
+
+var _ kopper.StatusPatchGenerator = (*Scope)(nil)
+var _ kopper.StatusConditioner = (*Scope)(nil)
+
+func (t *Scope) GetStatusConditions() *[]metav1.Condition {
+	return &t.Status.Conditions
+}
+
+func (t *Scope) GenerateStatusPatch(original runtime.Object) client.Patch {
+	og, ok := original.(*Scope)
+	if !ok {
+		return nil
+	}
+
+	if cmp.Diff(t.Status, og.Status) == "" {
+		return nil
+	}
+
+	clientObj, ok := original.(client.Object)
+	if !ok {
+		return nil
+	}
+
+	return client.MergeFrom(clientObj)
 }
 
 // +kubebuilder:object:root=true
