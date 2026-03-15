@@ -35,7 +35,7 @@ func mergeConnectionModels(source, override models.Connection) models.Connection
 	return source
 }
 
-func ConnectionFromCRD(obj *v1.Connection) models.Connection {
+func ConnectionFromCRD(obj *v1.Connection) (models.Connection, error) {
 	dbObj := models.Connection{
 		Name:        obj.Name,
 		Namespace:   obj.Namespace,
@@ -48,7 +48,11 @@ func ConnectionFromCRD(obj *v1.Connection) models.Connection {
 	}
 
 	if obj.GetUID() != "" {
-		dbObj.ID = uuid.MustParse(string(obj.GetUID()))
+		uid, err := uuid.Parse(string(obj.GetUID()))
+		if err != nil {
+			return dbObj, fmt.Errorf("failed to parse uid: %w", err)
+		}
+		dbObj.ID = uid
 	}
 
 	connectionFromCRDSpec(obj, &dbObj)
@@ -57,18 +61,31 @@ func ConnectionFromCRD(obj *v1.Connection) models.Connection {
 		dbObj.Properties = collections.MergeMap(obj.Spec.Properties, dbObj.Properties)
 	}
 
-	return dbObj
+	return dbObj, nil
 }
 
 func PersistConnectionFromCRD(ctx context.Context, obj *v1.Connection) error {
-	dbObj := ConnectionFromCRD(obj)
+	dbObj, err := ConnectionFromCRD(obj)
+	if err != nil {
+		return err
+	}
 	dbObj.CreatedAt = time.Now()
-	obj.Status.Ref = fmt.Sprintf("connection://%s/%s", obj.Namespace, obj.Name)
-	return ctx.DB().Save(&dbObj).Error
+
+	if obj.Status.Ref == "" {
+		obj.Status.Ref = fmt.Sprintf("connection://%s/%s", obj.Namespace, obj.Name)
+	}
+
+	if err := ctx.DB().Save(&dbObj).Error; err != nil {
+		return fmt.Errorf("failed to persist connection %s/%s: %w", obj.Namespace, obj.Name, err)
+	}
+
+	return nil
 }
 
 func DeleteConnection(ctx context.Context, id string) error {
-	return ctx.DB().Model(&models.Connection{}).Where("id = ?", id).Update("deleted_at", duty.Now()).Error
+	return ctx.DB().Model(&models.Connection{}).
+		Where("id = ? AND deleted_at IS NULL", id).
+		Update("deleted_at", duty.Now()).Error
 }
 
 func DeleteStaleConnection(ctx context.Context, newer *v1.Connection) error {
