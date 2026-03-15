@@ -147,13 +147,15 @@ var NotificationReconciler kopper.Reconciler[Notification, *Notification]
 
 // NotificationStatus defines the observed state of Notification
 type NotificationStatus struct {
-	Sent       int         `json:"sent,omitempty"`
-	Failed     int         `json:"failed,omitempty"`
-	Pending    int         `json:"pending,omitempty"`
-	Status     string      `json:"status,omitempty"`
-	Error      string      `json:"error,omitempty"`
-	LastSent   metav1.Time `json:"lastSent,omitempty"`
-	LastFailed metav1.Time `json:"lastFailed,omitempty"`
+	ObservedGeneration int64              `json:"observedGeneration,omitempty" yaml:"observedGeneration,omitempty"`
+	Conditions         []metav1.Condition `json:"conditions,omitempty" yaml:"conditions,omitempty"`
+	Sent               int                `json:"sent,omitempty"`
+	Failed             int                `json:"failed,omitempty"`
+	Pending            int                `json:"pending,omitempty"`
+	Status             string             `json:"status,omitempty"`
+	Error              string             `json:"error,omitempty"`
+	LastSent           metav1.Time        `json:"lastSent,omitempty"`
+	LastFailed         metav1.Time        `json:"lastFailed,omitempty"`
 }
 
 //+kubebuilder:object:root=true
@@ -169,6 +171,11 @@ type Notification struct {
 }
 
 var _ kopper.StatusPatchGenerator = (*Notification)(nil)
+var _ kopper.StatusConditioner = (*Notification)(nil)
+
+func (t *Notification) GetStatusConditions() *[]metav1.Condition {
+	return &t.Status.Conditions
+}
 
 func (t *Notification) GenerateStatusPatch(original runtime.Object) client.Patch {
 	og, ok := original.(*Notification)

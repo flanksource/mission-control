@@ -2,7 +2,11 @@ package v1
 
 import (
 	"github.com/flanksource/duty/types"
+	"github.com/flanksource/kopper"
+	"github.com/google/go-cmp/cmp"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // +kubebuilder:object:generate=true
@@ -24,8 +28,35 @@ type NotificationSilenceSpec struct {
 	Selectors []types.ResourceSelector `json:"selectors,omitempty"`
 }
 
-// NotificationStatus defines the observed state of Notification
+// NotificationSilenceStatus defines the observed state of NotificationSilence
 type NotificationSilenceStatus struct {
+	ObservedGeneration int64              `json:"observedGeneration,omitempty" yaml:"observedGeneration,omitempty"`
+	Conditions         []metav1.Condition `json:"conditions,omitempty" yaml:"conditions,omitempty"`
+}
+
+var _ kopper.StatusPatchGenerator = (*NotificationSilence)(nil)
+var _ kopper.StatusConditioner = (*NotificationSilence)(nil)
+
+func (t *NotificationSilence) GetStatusConditions() *[]metav1.Condition {
+	return &t.Status.Conditions
+}
+
+func (t *NotificationSilence) GenerateStatusPatch(original runtime.Object) client.Patch {
+	og, ok := original.(*NotificationSilence)
+	if !ok {
+		return nil
+	}
+
+	if cmp.Diff(t.Status, og.Status) == "" {
+		return nil
+	}
+
+	clientObj, ok := original.(client.Object)
+	if !ok {
+		return nil
+	}
+
+	return client.MergeFrom(clientObj)
 }
 
 // +kubebuilder:object:root=true
