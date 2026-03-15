@@ -1,7 +1,11 @@
 package v1
 
 import (
+	"github.com/flanksource/kopper"
+	"github.com/google/go-cmp/cmp"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // +kubebuilder:object:generate=true
@@ -22,6 +26,31 @@ type TeamStatus struct {
 
 	// Conditions represent the latest available observations of the Team's state
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
+}
+
+var _ kopper.StatusPatchGenerator = (*Team)(nil)
+var _ kopper.StatusConditioner = (*Team)(nil)
+
+func (t *Team) GetStatusConditions() *[]metav1.Condition {
+	return &t.Status.Conditions
+}
+
+func (t *Team) GenerateStatusPatch(original runtime.Object) client.Patch {
+	og, ok := original.(*Team)
+	if !ok {
+		return nil
+	}
+
+	if cmp.Diff(t.Status, og.Status) == "" {
+		return nil
+	}
+
+	clientObj, ok := original.(client.Object)
+	if !ok {
+		return nil
+	}
+
+	return client.MergeFrom(clientObj)
 }
 
 // +kubebuilder:object:root=true
