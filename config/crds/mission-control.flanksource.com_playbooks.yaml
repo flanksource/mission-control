@@ -371,6 +371,19 @@ spec:
                       - project
                       - token
                       type: object
+                    contentType:
+                      description: ContentType declares how the primary output should
+                        be rendered in the UI.
+                      enum:
+                      - ""
+                      - text/plain
+                      - text/markdown
+                      - text/x-shellscript
+                      - application/json
+                      - application/yaml
+                      - application/log+json
+                      - application/sql
+                      type: string
                     delay:
                       description: |-
                         Delay is a CEL expression that returns the duration to delay the execution of this action.

@@ -1295,8 +1295,7 @@
         },
         "contentType": {
           "type": "string",
-          "description": "ContentType declares how the primary output should be rendered in the UI.",
-          "enum": ["", "text/plain", "text/markdown", "text/x-shellscript", "application/json", "application/yaml", "application/log+json", "application/sql"]
+          "description": "ContentType declares how the primary output should be rendered in the UI."
         },
         "ai": {
           "$ref": "#/$defs/AIAction"
