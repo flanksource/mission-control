@@ -10,8 +10,12 @@ import (
 	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/types"
+	"github.com/flanksource/kopper"
+	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // +kubebuilder:object:root=true
@@ -24,6 +28,31 @@ type Permission struct {
 
 	Spec   PermissionSpec   `json:"spec,omitempty" yaml:"spec,omitempty"`
 	Status PermissionStatus `json:"status,omitempty" yaml:"status,omitempty"`
+}
+
+var _ kopper.StatusPatchGenerator = (*Permission)(nil)
+var _ kopper.StatusConditioner = (*Permission)(nil)
+
+func (t *Permission) GetStatusConditions() *[]metav1.Condition {
+	return &t.Status.Conditions
+}
+
+func (t *Permission) GenerateStatusPatch(original runtime.Object) client.Patch {
+	og, ok := original.(*Permission)
+	if !ok {
+		return nil
+	}
+
+	if cmp.Diff(t.Status, og.Status) == "" {
+		return nil
+	}
+
+	clientObj, ok := original.(client.Object)
+	if !ok {
+		return nil
+	}
+
+	return client.MergeFrom(clientObj)
 }
 
 func findSubject(ctx context.Context, table string, selector string, subjectType models.PermissionSubjectType) (string, models.PermissionSubjectType, error) {
@@ -226,6 +255,8 @@ type PermissionSpec struct {
 }
 
 type PermissionStatus struct {
+	ObservedGeneration int64              `json:"observedGeneration,omitempty" yaml:"observedGeneration,omitempty"`
+	Conditions         []metav1.Condition `json:"conditions,omitempty" yaml:"conditions,omitempty"`
 }
 
 // +kubebuilder:object:root=true
