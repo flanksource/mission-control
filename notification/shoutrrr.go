@@ -161,7 +161,12 @@ func dispatchNotification(ctx *Context, service, shoutrrrURL string, sender *rou
 				m.SetHeader(k, v)
 			}
 		}
-		return m.Send(conn)
+		if err := m.Send(conn); err != nil {
+			return ctx.Oops().
+				With("to", to, "from", from, "host", parsedURL.Hostname()).
+				Wrap(err)
+		}
+		return nil
 	}
 
 	sendErrors := sender.Send(data.Message, params)
