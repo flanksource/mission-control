@@ -19,6 +19,7 @@ import (
 	"github.com/flanksource/incident-commander/application"
 	"github.com/flanksource/incident-commander/incidents"
 	"github.com/flanksource/incident-commander/notification"
+	"github.com/flanksource/incident-commander/playbook"
 	"github.com/flanksource/incident-commander/shorturl"
 )
 
@@ -97,6 +98,10 @@ func Start(ctx context.Context, mcpServer *server.MCPServer) {
 	}
 	if err := CleanupDeletedPlaybooks(ctx).AddToScheduler(FuncScheduler); err != nil {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to schedule job CleanupDeletedPlaybooks: %v", err))
+	}
+
+	if err := playbook.SchedulePlaybooks(ctx, FuncScheduler).AddToScheduler(FuncScheduler); err != nil {
+		shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to schedule job SchedulePlaybooks: %v", err))
 	}
 
 	if err := notification.SyncCRDStatusJob(ctx).AddToScheduler(FuncScheduler); err != nil {
