@@ -263,6 +263,11 @@ type Playbook struct {
 
 var _ kopper.StatusPatchGenerator = (*Playbook)(nil)
 var _ kopper.StatusConditioner = (*Playbook)(nil)
+var _ kopper.ObservedGenerationSetter = (*Playbook)(nil)
+
+func (t *Playbook) SetObservedGeneration(generation int64) {
+	t.Status.ObservedGeneration = generation
+}
 
 func (t *Playbook) GetStatusConditions() *[]metav1.Condition {
 	return &t.Status.Conditions

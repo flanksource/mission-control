@@ -181,6 +181,11 @@ type View struct {
 }
 
 var _ kopper.StatusConditioner = (*View)(nil)
+var _ kopper.ObservedGenerationSetter = (*View)(nil)
+
+func (v *View) SetObservedGeneration(generation int64) {
+	v.Status.ObservedGeneration = generation
+}
 
 func (v *View) GetStatusConditions() *[]metav1.Condition {
 	return &v.Status.Conditions

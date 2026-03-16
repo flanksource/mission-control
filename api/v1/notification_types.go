@@ -172,6 +172,11 @@ type Notification struct {
 
 var _ kopper.StatusPatchGenerator = (*Notification)(nil)
 var _ kopper.StatusConditioner = (*Notification)(nil)
+var _ kopper.ObservedGenerationSetter = (*Notification)(nil)
+
+func (t *Notification) SetObservedGeneration(generation int64) {
+	t.Status.ObservedGeneration = generation
+}
 
 func (t *Notification) GetStatusConditions() *[]metav1.Condition {
 	return &t.Status.Conditions

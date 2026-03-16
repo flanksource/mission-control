@@ -32,6 +32,11 @@ type Permission struct {
 
 var _ kopper.StatusPatchGenerator = (*Permission)(nil)
 var _ kopper.StatusConditioner = (*Permission)(nil)
+var _ kopper.ObservedGenerationSetter = (*Permission)(nil)
+
+func (t *Permission) SetObservedGeneration(generation int64) {
+	t.Status.ObservedGeneration = generation
+}
 
 func (t *Permission) GetStatusConditions() *[]metav1.Condition {
 	return &t.Status.Conditions

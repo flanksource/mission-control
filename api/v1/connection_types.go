@@ -384,6 +384,11 @@ type Connection struct {
 
 var _ kopper.StatusPatchGenerator = (*Connection)(nil)
 var _ kopper.StatusConditioner = (*Connection)(nil)
+var _ kopper.ObservedGenerationSetter = (*Connection)(nil)
+
+func (t *Connection) SetObservedGeneration(generation int64) {
+	t.Status.ObservedGeneration = generation
+}
 
 func (t *Connection) GetStatusConditions() *[]metav1.Condition {
 	return &t.Status.Conditions

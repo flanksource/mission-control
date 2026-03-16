@@ -105,6 +105,11 @@ type Application struct {
 
 var _ kopper.StatusPatchGenerator = (*Application)(nil)
 var _ kopper.StatusConditioner = (*Application)(nil)
+var _ kopper.ObservedGenerationSetter = (*Application)(nil)
+
+func (a *Application) SetObservedGeneration(generation int64) {
+	a.Status.ObservedGeneration = generation
+}
 
 func (a *Application) GetStatusConditions() *[]metav1.Condition {
 	return &a.Status.Conditions

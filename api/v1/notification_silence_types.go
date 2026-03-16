@@ -36,6 +36,11 @@ type NotificationSilenceStatus struct {
 
 var _ kopper.StatusPatchGenerator = (*NotificationSilence)(nil)
 var _ kopper.StatusConditioner = (*NotificationSilence)(nil)
+var _ kopper.ObservedGenerationSetter = (*NotificationSilence)(nil)
+
+func (t *NotificationSilence) SetObservedGeneration(generation int64) {
+	t.Status.ObservedGeneration = generation
+}
 
 func (t *NotificationSilence) GetStatusConditions() *[]metav1.Condition {
 	return &t.Status.Conditions
