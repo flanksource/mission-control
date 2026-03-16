@@ -398,9 +398,7 @@ func SendRawNotification(ctx *Context, connectionName, shoutrrrURL string, celEn
 
 	service, err := shoutrrrSendRaw(ctx, celEnv, shoutrrrURL, data)
 	if err != nil {
-		return "", ctx.Oops().
-			With("notification", ctx.notificationID, "connection", connectionName, "properties", data.Properties).
-			Wrapf(err, "failed to send message with Shoutrrr")
+		return "", fmt.Errorf("failed to send message with Shoutrrr: %w", err)
 	}
 	resourceID := ""
 	if ctx.log != nil && ctx.log.ResourceID != uuid.Nil {
@@ -462,9 +460,7 @@ func SendNotification(ctx *Context, connectionName, shoutrrrURL string, payload 
 
 	service, err := shoutrrrSend(ctx, shoutrrrURL, payload, properties)
 	if err != nil {
-		return "", ctx.Oops().
-			With("notification", ctx.notificationID, "connection", connectionName, "properties", properties).
-			Wrapf(err, "failed to send message with Shoutrrr")
+		return "", fmt.Errorf("failed to send message with Shoutrrr: %w", err)
 	}
 	resourceID := ""
 	if ctx.log != nil && ctx.log.ResourceID != uuid.Nil {
