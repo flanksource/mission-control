@@ -35,15 +35,15 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 		return &rls.Payload{Disable: true}, nil
 	}
 
-	cacheKey := getRLSCacheKey(ctx.User().ID.String())
-
-	// When impersonation is active, skip the cache so the header-provided
-	// payload is evaluated against the user's real permissions every time.
 	impersonated := getImpersonatedPayload(ctx)
-	if impersonated == nil {
-		if cached, ok := tokenCache.Get(cacheKey); ok {
-			return cached.(*rls.Payload), nil
-		}
+
+	cacheKey := getRLSCacheKey(ctx.User().ID.String())
+	if impersonated != nil {
+		cacheKey = fmt.Sprintf("%s:%s", cacheKey, impersonated.Fingerprint())
+	}
+
+	if cached, ok := tokenCache.Get(cacheKey); ok {
+		return cached.(*rls.Payload), nil
 	}
 
 	if roles, err := dutyRBAC.RolesForUser(ctx.User().ID.String()); err != nil {
@@ -51,7 +51,12 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 	} else if !lo.Contains(roles, policy.RoleGuest) {
 		payload := &rls.Payload{Disable: true}
 		if impersonated != nil {
-			return applyImpersonation(payload, impersonated)
+			result, err := applyImpersonation(payload, impersonated)
+			if err != nil {
+				return nil, err
+			}
+			tokenCache.SetDefault(cacheKey, result)
+			return result, nil
 		}
 		tokenCache.SetDefault(cacheKey, payload)
 		return payload, nil
@@ -64,7 +69,12 @@ func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
 	}
 
 	if impersonated != nil {
-		return applyImpersonation(payload, impersonated)
+		result, err := applyImpersonation(payload, impersonated)
+		if err != nil {
+			return nil, err
+		}
+		tokenCache.SetDefault(cacheKey, result)
+		return result, nil
 	}
 
 	tokenCache.SetDefault(cacheKey, payload)

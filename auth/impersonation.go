@@ -1,5 +1,3 @@
-// ABOUTME: Scope impersonation allows users to simulate RLS restrictions
-// ABOUTME: via the X-Flanksource-Scope header for testing and debugging.
 package auth
 
 import (
@@ -140,7 +138,7 @@ func ScopeImpersonation(next echov4.HandlerFunc) echov4.HandlerFunc {
 	return func(c echov4.Context) error {
 		ctx := c.Request().Context().(context.Context)
 
-		if !ctx.Properties().On(false, "auth.impersonation") {
+		if ctx.Properties().Off("auth.impersonation", false) {
 			return next(c)
 		}
 

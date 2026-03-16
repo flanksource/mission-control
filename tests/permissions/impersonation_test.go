@@ -62,8 +62,6 @@ var _ = Describe("Scope Impersonation E2E", Ordered, func() {
 
 		Expect(rbac.ReloadPolicy()).ToNot(HaveOccurred())
 
-		// Enable impersonation
-		properties.Set("auth.impersonation", "true")
 		vars.AuthMode = ""
 
 		e := echoSrv.New(DefaultContext)
@@ -77,8 +75,6 @@ var _ = Describe("Scope Impersonation E2E", Ordered, func() {
 		if server != nil {
 			server.Close()
 		}
-
-		properties.Set("auth.impersonation", "false")
 
 		// Clean up
 		DefaultContext.DB().Where("name = ?", "impersonation-test-perm").Delete(&models.Permission{})
@@ -176,7 +172,7 @@ var _ = Describe("Scope Impersonation E2E", Ordered, func() {
 	Context("feature flag disabled", func() {
 		It("should ignore the header when auth.impersonation is off", func() {
 			properties.Set("auth.impersonation", "false")
-			defer properties.Set("auth.impersonation", "true")
+			defer properties.Set("auth.impersonation", "")
 
 			scope := `{"config":[{"tags":{"team":"platform"}}]}`
 			payload, status := getRLSPayload(adminUser.Email, scope)
