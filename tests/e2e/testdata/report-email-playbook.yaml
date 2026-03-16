@@ -1,0 +1,32 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: report-email-test
+  namespace: default
+spec:
+  title: Report Email Test
+  configs:
+    - types:
+        - Kubernetes::Pod
+  parameters:
+    - name: view
+      label: View reference
+    - name: smtp_url
+      label: SMTP URL
+  actions:
+    - name: generate-report
+      report:
+        view: $(.params.view)
+        format: html
+    - name: generate-pdf
+      report:
+        view: $(.params.view)
+        format: pdf
+    - name: send-email
+      notification:
+        url: $(.params.smtp_url)
+        title: Pod Report
+        message: '{{(getAction "generate-report").result.format}}'
+        attachments:
+          - content: artifact://generate-pdf/*.pdf
+            filename: report.pdf

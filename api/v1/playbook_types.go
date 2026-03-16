@@ -152,12 +152,23 @@ type PlaybookTriggerEvents struct {
 	Component []PlaybookTriggerEvent `json:"component,omitempty" yaml:"component,omitempty"`
 }
 
+type PlaybookTriggerSchedule struct {
+	// Cron expression: "0 9 * * MON", "@every 1h", etc.
+	// Evaluated in UTC by default. Use the CRON_TZ prefix to override, e.g. "CRON_TZ=America/New_York 0 9 * * MON".
+	Schedule string `json:"schedule" yaml:"schedule"`
+	// Parameters passed to each run (supports template expressions evaluated at run time)
+	Parameters map[string]string `json:"parameters,omitempty" yaml:"parameters,omitempty" template:"true"`
+}
+
 // PlaybookTrigger defines the list of supported events & to trigger a playbook.
 type PlaybookTrigger struct {
 	PlaybookTriggerEvents `json:",inline" yaml:",inline"`
 
 	// Webhook creates a new endpoint that triggers this playbook
 	Webhook *PlaybookTriggerWebhook `json:"webhook,omitempty" yaml:"webhook,omitempty"`
+
+	// Schedule triggers the playbook on a recurring cron schedule
+	Schedule []PlaybookTriggerSchedule `json:"schedule,omitempty" yaml:"schedule,omitempty"`
 }
 
 type PlaybookSpec struct {

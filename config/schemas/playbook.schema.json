@@ -1287,6 +1287,13 @@
           },
           "type": "object",
           "description": "Properties for shoutrrr"
+        },
+        "attachments": {
+          "items": {
+            "$ref": "#/$defs/NotificationAttachment"
+          },
+          "type": "array",
+          "description": "Attachments for the notification (only supported for SMTP)"
         }
       },
       "additionalProperties": false,
@@ -1294,6 +1301,28 @@
       "required": [
         "title",
         "message"
+      ]
+    },
+    "NotificationAttachment": {
+      "properties": {
+        "filename": {
+          "type": "string",
+          "description": "Filename for the attachment"
+        },
+        "content": {
+          "type": "string",
+          "description": "Content is the body of the attachment (supports template expressions)"
+        },
+        "contentType": {
+          "type": "string",
+          "description": "ContentType is the MIME type of the attachment (e.g. application/pdf)"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "filename",
+        "content"
       ]
     },
     "OAuth": {
@@ -1510,6 +1539,9 @@
         },
         "logs": {
           "$ref": "#/$defs/LogsAction"
+        },
+        "report": {
+          "$ref": "#/$defs/ReportAction"
         }
       },
       "additionalProperties": false,
@@ -1848,6 +1880,13 @@
         "webhook": {
           "$ref": "#/$defs/PlaybookTriggerWebhook",
           "description": "Webhook creates a new endpoint that triggers this playbook"
+        },
+        "schedule": {
+          "items": {
+            "$ref": "#/$defs/PlaybookTriggerSchedule"
+          },
+          "type": "array",
+          "description": "Schedule triggers the playbook on a recurring cron schedule"
         }
       },
       "additionalProperties": false,
@@ -1876,6 +1915,26 @@
       "type": "object",
       "required": [
         "event"
+      ]
+    },
+    "PlaybookTriggerSchedule": {
+      "properties": {
+        "schedule": {
+          "type": "string",
+          "description": "Cron expression: \"0 9 * * MON\", \"@every 1h\", etc.\nEvaluated in UTC by default. Use the CRON_TZ prefix to override, e.g. \"CRON_TZ=America/New_York 0 9 * * MON\"."
+        },
+        "parameters": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object",
+          "description": "Parameters passed to each run (supports template expressions evaluated at run time)"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "schedule"
       ]
     },
     "PlaybookTriggerWebhook": {
@@ -2006,6 +2065,31 @@
         "end",
         "step"
       ]
+    },
+    "ReportAction": {
+      "properties": {
+        "view": {
+          "type": "string",
+          "description": "Reference an existing View by namespace/name or just name"
+        },
+        "configs": {
+          "$ref": "#/$defs/ResourceSelector",
+          "description": "Inline catalog query (alternative to View)"
+        },
+        "format": {
+          "type": "string",
+          "description": "Output format: json, csv, facet-html, facet-pdf, markdown, slack, html, pdf"
+        },
+        "variables": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object",
+          "description": "Variables passed to the view queries"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
     },
     "ResourceSelector": {
       "properties": {

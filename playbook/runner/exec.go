@@ -116,6 +116,9 @@ func executeAction(ctx context.Context, playbookID any, runID uuid.UUID, runActi
 
 		e := actions.NewLogsAction()
 		result, err = e.Run(ctx, actionSpec.Logs)
+	} else if actionSpec.Report != nil {
+		var e actions.Report
+		result, err = e.Run(ctx, *actionSpec.Report)
 	}
 
 	// NOTE: v is never nil, it holds in nil values.
@@ -146,7 +149,7 @@ func executeAction(ctx context.Context, playbookID any, runID uuid.UUID, runActi
 
 	// notifications can run standalone or as part of another step
 	if actionSpec.Notification != nil {
-		var e actions.Notification
+		e := actions.Notification{RunID: runID}
 		var err2 error
 		if result, err2 = e.Run(ctx, *actionSpec.Notification); err != nil && err2 != nil {
 			err = oops.Join(err, err2)
