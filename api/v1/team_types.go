@@ -30,6 +30,11 @@ type TeamStatus struct {
 
 var _ kopper.StatusPatchGenerator = (*Team)(nil)
 var _ kopper.StatusConditioner = (*Team)(nil)
+var _ kopper.ObservedGenerationSetter = (*Team)(nil)
+
+func (t *Team) SetObservedGeneration(generation int64) {
+	t.Status.ObservedGeneration = generation
+}
 
 func (t *Team) GetStatusConditions() *[]metav1.Condition {
 	return &t.Status.Conditions

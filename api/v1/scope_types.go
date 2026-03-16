@@ -88,6 +88,11 @@ type Scope struct {
 
 var _ kopper.StatusPatchGenerator = (*Scope)(nil)
 var _ kopper.StatusConditioner = (*Scope)(nil)
+var _ kopper.ObservedGenerationSetter = (*Scope)(nil)
+
+func (t *Scope) SetObservedGeneration(generation int64) {
+	t.Status.ObservedGeneration = generation
+}
 
 func (t *Scope) GetStatusConditions() *[]metav1.Condition {
 	return &t.Status.Conditions

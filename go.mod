@@ -8,7 +8,7 @@ require (
 	github.com/flanksource/commons v1.48.1
 	github.com/flanksource/duty v1.0.1222
 	github.com/flanksource/gomplate/v3 v3.24.73
-	github.com/flanksource/kopper v1.0.19
+	github.com/flanksource/kopper v1.0.20
 )
 
 require (
@@ -440,5 +440,7 @@ require (
 // replace github.com/flanksource/commons => ../commons
 
 // replace github.com/flanksource/duty => ../duty
+
+// replace github.com/flanksource/kopper => ../kopper
 
 replace github.com/glebarez/sqlite => github.com/clarkmcc/gorm-sqlite v0.0.0-20240426202654-00ed082c0311

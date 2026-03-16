@@ -17,6 +17,11 @@ type IncidentRuleStatus struct {
 
 var _ kopper.StatusPatchGenerator = (*IncidentRule)(nil)
 var _ kopper.StatusConditioner = (*IncidentRule)(nil)
+var _ kopper.ObservedGenerationSetter = (*IncidentRule)(nil)
+
+func (t *IncidentRule) SetObservedGeneration(generation int64) {
+	t.Status.ObservedGeneration = generation
+}
 
 func (t *IncidentRule) GetStatusConditions() *[]metav1.Condition {
 	return &t.Status.Conditions
