@@ -2,9 +2,8 @@ package auth
 
 import (
 	"encoding/json"
-	"fmt"
-	"net/http"
 
+	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/rls"
 	echov4 "github.com/labstack/echo/v4"
@@ -149,9 +148,7 @@ func ScopeImpersonation(next echov4.HandlerFunc) echov4.HandlerFunc {
 
 		var payload rls.Payload
 		if err := json.Unmarshal([]byte(header), &payload); err != nil {
-			return c.JSON(http.StatusBadRequest, map[string]string{
-				"error": fmt.Sprintf("invalid %s header: %v", HeaderFlanksourceScope, err),
-			})
+			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid %s header: %v", HeaderFlanksourceScope, err))
 		}
 
 		ctx = ctx.WithValue(impersonatedRLSCtxKey, &payload)

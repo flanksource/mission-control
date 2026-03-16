@@ -36,12 +36,14 @@ func rlsPayloadHandler(c echo.Context) error {
 
 var _ = Describe("Scope Impersonation E2E", Ordered, func() {
 	var (
-		server    *httptest.Server
-		adminUser *models.Person
-		guestUser *models.Person
+		server      *httptest.Server
+		adminUser   *models.Person
+		guestUser   *models.Person
+		oldAuthMode string
 	)
 
 	BeforeAll(func() {
+		oldAuthMode = vars.AuthMode
 		err := rbac.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter)
 		Expect(err).ToNot(HaveOccurred())
 
@@ -75,6 +77,8 @@ var _ = Describe("Scope Impersonation E2E", Ordered, func() {
 		if server != nil {
 			server.Close()
 		}
+
+		vars.AuthMode = oldAuthMode
 
 		// Clean up
 		DefaultContext.DB().Where("name = ?", "impersonation-test-perm").Delete(&models.Permission{})
