@@ -152,6 +152,10 @@ func dispatchNotification(ctx *Context, service, shoutrrrURL string, sender *rou
 			SetFrom(conn.FromName, conn.FromAddress).
 			SetCredentials(parsedURL.Hostname(), port, parsedURL.User.Username(), password)
 
+		for _, a := range data.Attachments {
+			m.AddAttachment(a)
+		}
+
 		if headerString != "" {
 			headers, err := mcUtils.StringToStringMap(headerString)
 			if err != nil {

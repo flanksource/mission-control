@@ -19,6 +19,12 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 )
 
+type Attachment struct {
+	Filename    string
+	ContentType string
+	Content     []byte
+}
+
 type Mail struct {
 	to          []string
 	from        string
@@ -27,6 +33,7 @@ type Mail struct {
 	body        string
 	contentType string
 	headers     map[string]string
+	attachments []Attachment
 	host        string
 	port        int
 	user        string
@@ -59,6 +66,11 @@ func (m *Mail) SetCredentials(host string, port int, user, password string) *Mai
 	m.port = port
 	m.user = user
 	m.password = password
+	return m
+}
+
+func (m *Mail) AddAttachment(a Attachment) *Mail {
+	m.attachments = append(m.attachments, a)
 	return m
 }
 
@@ -99,6 +111,25 @@ func (m *Mail) buildMessage() ([]byte, error) {
 
 	if err := w.Close(); err != nil {
 		return nil, err
+	}
+
+	for _, a := range m.attachments {
+		var ah mail.AttachmentHeader
+		ah.SetFilename(a.Filename)
+		if a.ContentType != "" {
+			ah.Set("Content-Type", a.ContentType)
+		}
+
+		aw, err := mw.CreateAttachment(ah)
+		if err != nil {
+			return nil, fmt.Errorf("create attachment %s: %w", a.Filename, err)
+		}
+		if _, err := aw.Write(a.Content); err != nil {
+			return nil, fmt.Errorf("write attachment %s: %w", a.Filename, err)
+		}
+		if err := aw.Close(); err != nil {
+			return nil, fmt.Errorf("close attachment %s: %w", a.Filename, err)
+		}
 	}
 
 	if err := mw.Close(); err != nil {

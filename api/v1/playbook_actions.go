@@ -81,6 +81,15 @@ type LogsAction struct {
 	Kubernetes *LogsKubernetes       `json:"kubernetes,omitempty" template:"true"`
 }
 
+type NotificationAttachment struct {
+	// Filename for the attachment
+	Filename string `yaml:"filename" json:"filename" template:"true"`
+	// Content is the body of the attachment (supports template expressions)
+	Content string `yaml:"content" json:"content" template:"true"`
+	// ContentType is the MIME type of the attachment (e.g. application/pdf)
+	ContentType string `yaml:"contentType,omitempty" json:"contentType,omitempty" template:"true"`
+}
+
 type NotificationAction struct {
 	// URL for the shoutrrr connection string
 	URL string `yaml:"url,omitempty" json:"url,omitempty" template:"true"`
@@ -92,6 +101,8 @@ type NotificationAction struct {
 	Message string `yaml:"message" json:"message" template:"true"`
 	// Properties for shoutrrr
 	Properties map[string]string `yaml:"properties,omitempty" json:"properties,omitempty" template:"true"`
+	// Attachments for the notification (only supported for SMTP)
+	Attachments []NotificationAttachment `yaml:"attachments,omitempty" json:"attachments,omitempty" template:"true"`
 }
 
 type GitOpsActionRepo struct {
@@ -594,6 +605,19 @@ type PlaybookAction struct {
 	Pod                 *PodAction                 `json:"pod,omitempty" yaml:"pod,omitempty" template:"true"`
 	Notification        *NotificationAction        `json:"notification,omitempty" yaml:"notification,omitempty" template:"true"`
 	Logs                *LogsAction                `json:"logs,omitempty" template:"true"`
+	Report              *ReportAction              `json:"report,omitempty" yaml:"report,omitempty" template:"true"`
+}
+
+// +kubebuilder:validation:XValidation:rule="!(has(self.view) && self.view != '' && has(self.configs))",message="view and configs are mutually exclusive"
+type ReportAction struct {
+	// Reference an existing View by namespace/name or just name
+	View string `json:"view,omitempty" yaml:"view,omitempty" template:"true"`
+	// Inline catalog query (alternative to View)
+	Configs *types.ResourceSelector `json:"configs,omitempty" yaml:"configs,omitempty" template:"true"`
+	// Output format: json, csv, facet-html, facet-pdf, markdown, slack, html, pdf
+	Format string `json:"format,omitempty" yaml:"format,omitempty" template:"true"`
+	// Variables passed to the view queries
+	Variables map[string]string `json:"variables,omitempty" yaml:"variables,omitempty" template:"true"`
 }
 
 func (p *PlaybookAction) ActionType() string {
@@ -620,6 +644,8 @@ func (p *PlaybookAction) ActionType() string {
 		return "azureDevopsPipeline"
 	case p.Prometheus != nil:
 		return "prometheus"
+	case p.Report != nil:
+		return "report"
 	default:
 		return ""
 	}
@@ -657,6 +683,9 @@ func (p *PlaybookAction) Count() int {
 	if p.Logs != nil {
 		count++
 	}
+	if p.Report != nil {
+		count++
+	}
 
 	return count
 }
@@ -688,6 +717,9 @@ func (p *PlaybookAction) primaryActionCount() int {
 		count++
 	}
 	if p.Logs != nil {
+		count++
+	}
+	if p.Report != nil {
 		count++
 	}
 

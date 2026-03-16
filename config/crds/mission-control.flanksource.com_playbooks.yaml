@@ -3288,6 +3288,27 @@ spec:
                       type: string
                     notification:
                       properties:
+                        attachments:
+                          description: Attachments for the notification (only supported
+                            for SMTP)
+                          items:
+                            properties:
+                              content:
+                                description: Content is the body of the attachment
+                                  (supports template expressions)
+                                type: string
+                              contentType:
+                                description: ContentType is the MIME type of the attachment
+                                  (e.g. application/pdf)
+                                type: string
+                              filename:
+                                description: Filename for the attachment
+                                type: string
+                            required:
+                            - content
+                            - filename
+                            type: object
+                          type: array
                         connection:
                           description: Connection to use to send the notification
                           type: string
@@ -3969,6 +3990,84 @@ spec:
                       required:
                       - query
                       type: object
+                    report:
+                      properties:
+                        configs:
+                          description: Inline catalog query (alternative to View)
+                          properties:
+                            agent:
+                              description: |-
+                                Agent can be the agent id or the name of the agent.
+                                 Additionally, the special "self" value can be used to select resources without an agent.
+                              type: string
+                            cache:
+                              description: |-
+                                Cache directives
+                                 'no-cache' (should not fetch from cache but can be cached)
+                                 'no-store' (should not cache)
+                                 'max-age=X' (cache for X duration)
+                              type: string
+                            fieldSelector:
+                              type: string
+                            health:
+                              description: |-
+                                Health filters resources by the health.
+                                Multiple healths can be provided separated by comma.
+                              type: string
+                            id:
+                              type: string
+                            includeDeleted:
+                              type: boolean
+                            labelSelector:
+                              type: string
+                            limit:
+                              type: integer
+                            name:
+                              type: string
+                            namespace:
+                              type: string
+                            scope:
+                              description: |-
+                                Scope is the reference for parent of the resource to select.
+                                For config items, the scope is the scraper id
+                                For checks, it's canaries and
+                                For components, it's topology.
+                                It can either be a uuid or namespace/name
+                              type: string
+                            search:
+                              description: Search query that applies to the resource
+                                name, tag & labels.
+                              type: string
+                            statuses:
+                              description: Statuses filter resources by the status
+                              items:
+                                type: string
+                              type: array
+                            tagSelector:
+                              type: string
+                            types:
+                              description: Types filter resources by the type
+                              items:
+                                type: string
+                              type: array
+                          type: object
+                        format:
+                          description: 'Output format: json, csv, facet-html, facet-pdf,
+                            markdown, slack, html, pdf'
+                          type: string
+                        variables:
+                          additionalProperties:
+                            type: string
+                          description: Variables passed to the view queries
+                          type: object
+                        view:
+                          description: Reference an existing View by namespace/name
+                            or just name
+                          type: string
+                      type: object
+                      x-kubernetes-validations:
+                      - message: view and configs are mutually exclusive
+                        rule: '!(has(self.view) && self.view != '''' && has(self.configs))'
                     retry:
                       description: Retry specifies the retry policy for the action.
                       properties:
@@ -4372,6 +4471,26 @@ spec:
                           type: object
                       required:
                       - event
+                      type: object
+                    type: array
+                  schedule:
+                    description: Schedule triggers the playbook on a recurring cron
+                      schedule
+                    items:
+                      properties:
+                        parameters:
+                          additionalProperties:
+                            type: string
+                          description: Parameters passed to each run (supports template
+                            expressions evaluated at run time)
+                          type: object
+                        schedule:
+                          description: |-
+                            Cron expression: "0 9 * * MON", "@every 1h", etc.
+                            Evaluated in UTC by default. Use the CRON_TZ prefix to override, e.g. "CRON_TZ=America/New_York 0 9 * * MON".
+                          type: string
+                      required:
+                      - schedule
                       type: object
                     type: array
                   webhook:

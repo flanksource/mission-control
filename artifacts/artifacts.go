@@ -24,6 +24,7 @@ const defaultMaxReadSize = 50 * 1024 * 1024 // 50 MB
 
 type ArtifactContent struct {
 	ActionID string `json:"action_id"`
+	Path     string `json:"path"`
 	Content  []byte `json:"content"`
 }
 
@@ -120,6 +121,7 @@ func GetArtifactContents(ctx context.Context, actionIDs ...string) ([]ArtifactCo
 
 		contents = append(contents, ArtifactContent{
 			ActionID: a.PlaybookRunActionID.String(),
+			Path:     a.Path,
 			Content:  content,
 		})
 	}

@@ -22,16 +22,21 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/logs"
+	"github.com/flanksource/incident-commander/mail"
 	"github.com/flanksource/incident-commander/teams"
 )
 
 // NotificationTemplate holds in data for notification
 // that'll be used by struct templater.
 type NotificationTemplate struct {
-	Title      string            `template:"true"`
-	Message    string            `template:"true"`
-	Properties map[string]string `template:"true"`
+	Title       string            `template:"true"`
+	Message     string            `template:"true"`
+	Properties  map[string]string `template:"true"`
+	Attachments []Attachment      `template:"-"`
 }
+
+// Attachment is an alias for mail.Attachment to avoid duplicating the type definition.
+type Attachment = mail.Attachment
 
 // DefaultTitleAndBody returns the default title and body for notification
 // based on the given event using clicky-generated content.
