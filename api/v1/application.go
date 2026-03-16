@@ -5,9 +5,13 @@ import (
 
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
+	"github.com/flanksource/kopper"
+	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	k8sTypes "k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/flanksource/incident-commander/api"
 )
@@ -83,6 +87,8 @@ type ApplicationSpec struct {
 
 // ApplicationStatus defines the observed state of Application
 type ApplicationStatus struct {
+	ObservedGeneration int64              `json:"observedGeneration,omitempty"`
+	Conditions         []metav1.Condition `json:"conditions,omitempty"`
 }
 
 //+kubebuilder:object:root=true
@@ -95,6 +101,31 @@ type Application struct {
 
 	Spec   ApplicationSpec   `json:"spec,omitempty"`
 	Status ApplicationStatus `json:"status,omitempty"`
+}
+
+var _ kopper.StatusPatchGenerator = (*Application)(nil)
+var _ kopper.StatusConditioner = (*Application)(nil)
+
+func (a *Application) GetStatusConditions() *[]metav1.Condition {
+	return &a.Status.Conditions
+}
+
+func (a *Application) GenerateStatusPatch(original runtime.Object) client.Patch {
+	og, ok := original.(*Application)
+	if !ok {
+		return nil
+	}
+
+	if cmp.Diff(a.Status, og.Status) == "" {
+		return nil
+	}
+
+	clientObj, ok := original.(client.Object)
+	if !ok {
+		return nil
+	}
+
+	return client.MergeFrom(clientObj)
 }
 
 func (a *Application) GetID() uuid.UUID {
