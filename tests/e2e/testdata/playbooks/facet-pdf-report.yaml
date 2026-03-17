@@ -1,0 +1,38 @@
+# yaml-language-server: $schema=../playbook-fixture.schema.json
+config: LogisticsAPIPodConfig
+setup:
+  facet: true
+  permissions:
+    - ../fixtures/allow-artifacts.yaml
+params:
+  view: "{{viewRef}}"
+  facet_url: "{{facetURL}}"
+
+playbook:
+  title: Facet PDF Test
+  configs:
+    - types:
+        - Kubernetes::Pod
+  parameters:
+    - name: view
+      label: View reference
+    - name: facet_url
+      label: Facet server URL
+  actions:
+    - name: generate-facet-pdf
+      report:
+        view: $(.params.view)
+        format: facet-pdf
+        facet:
+          url: $(.params.facet_url)
+
+output:
+  run:
+    status: completed
+  actions:
+    - name: generate-facet-pdf
+      status: completed
+      result:
+        format: facet-pdf
+      artifacts:
+        - content_type: application/pdf

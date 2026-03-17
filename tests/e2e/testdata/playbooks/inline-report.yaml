@@ -1,0 +1,29 @@
+# yaml-language-server: $schema=../playbook-fixture.schema.json
+config: LogisticsAPIPodConfig
+setup:
+  permissions:
+    - ../fixtures/allow-artifacts.yaml
+
+playbook:
+  title: Inline Report Test
+  configs:
+    - types:
+        - Kubernetes::Pod
+  actions:
+    - name: generate-inline-report
+      report:
+        configs:
+          types:
+            - Kubernetes::Pod
+        format: json
+
+output:
+  run:
+    status: completed
+  actions:
+    - name: generate-inline-report
+      status: completed
+      result:
+        format: json
+      artifacts:
+        - content_type: application/json

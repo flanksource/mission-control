@@ -1,0 +1,15 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: allow-artifacts
+  namespace: default
+spec:
+  description: allow playbook to read artifacts connection
+  subject:
+    playbook: "{{playbookRef}}"
+  actions: ["read"]
+  object:
+    selectors:
+      connections:
+        - name: artifacts
+          namespace: default

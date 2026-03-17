@@ -1,18 +1,11 @@
-apiVersion: mission-control.flanksource.com/v1
-kind: Playbook
-metadata:
-  name: loki-logs
-  namespace: default
-  annotations:
-    expected-payment-processor: |
-      ERROR Credit card validation failed: invalid card number
-      ERROR Failed to process payment for order: order-456789
-      ERROR Payment gateway timeout for transaction: txn-abc123
-    expected-api-gateway: |
-      INFO Health check completed successfully
-      INFO Received GET request for /api/health
-      INFO Starting API Gateway server on port 8080
-spec:
+# yaml-language-server: $schema=../playbook-fixture.schema.json
+config: EKSCluster
+setup:
+  loki: true
+  permissions:
+    - ../fixtures/allow-artifacts.yaml
+
+playbook:
   title: Loki Logs
   icon: logs
   category: Logs
@@ -45,3 +38,19 @@ spec:
           limit: $(.params.limit)
           start: now-2h
 
+output:
+  run:
+    status: completed
+  actions:
+    - name: payment-processor
+      status: completed
+      artifact_logs: |
+        ERROR Credit card validation failed: invalid card number
+        ERROR Failed to process payment for order: order-456789
+        ERROR Payment gateway timeout for transaction: txn-abc123
+    - name: api-gateway
+      status: completed
+      artifact_logs: |
+        INFO Health check completed successfully
+        INFO Received GET request for /api/health
+        INFO Starting API Gateway server on port 8080
