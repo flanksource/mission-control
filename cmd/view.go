@@ -70,7 +70,7 @@ var ViewRun = &cobra.Command{
 
 		vars := parseVarFlags(viewVars)
 
-		data, err := views.ExportMulti(ctx, allViews, vars, viewFormat)
+		data, err := views.ExportMulti(ctx, allViews, vars, viewFormat, nil)
 		if err != nil {
 			shutdown.ShutdownAndExit(1, err.Error())
 			return err

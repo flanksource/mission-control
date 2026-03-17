@@ -467,6 +467,63 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "FacetOptions": {
+      "properties": {
+        "connection": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        },
+        "pdfOptions": {
+          "$ref": "#/$defs/FacetPDFOptions"
+        },
+        "header": {
+          "type": "string"
+        },
+        "footer": {
+          "type": "string"
+        },
+        "timestampUrl": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "FacetPDFMargins": {
+      "properties": {
+        "top": {
+          "type": "integer"
+        },
+        "bottom": {
+          "type": "integer"
+        },
+        "left": {
+          "type": "integer"
+        },
+        "right": {
+          "type": "integer"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "FacetPDFOptions": {
+      "properties": {
+        "pageSize": {
+          "type": "string"
+        },
+        "landscape": {
+          "type": "boolean"
+        },
+        "margins": {
+          "$ref": "#/$defs/FacetPDFMargins"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
     "FieldMappingConfig": {
       "properties": {
         "id": {
@@ -2086,6 +2143,10 @@
           },
           "type": "object",
           "description": "Variables passed to the view queries"
+        },
+        "facet": {
+          "$ref": "#/$defs/FacetOptions",
+          "description": "Facet rendering options for facet-html and facet-pdf formats"
         }
       },
       "additionalProperties": false,

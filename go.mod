@@ -6,7 +6,7 @@ require (
 	github.com/flanksource/artifacts v1.0.24
 	github.com/flanksource/clicky v1.19.0
 	github.com/flanksource/commons v1.48.1
-	github.com/flanksource/duty v1.0.1222
+	github.com/flanksource/duty v1.0.1223
 	github.com/flanksource/gomplate/v3 v3.24.73
 	github.com/flanksource/kopper v1.0.20
 )
@@ -431,7 +431,7 @@ require (
 	sigs.k8s.io/yaml v1.6.0
 )
 
-// replace github.com/flanksource/duty => ../duty
+//replace github.com/flanksource/duty => /Users/moshe/go/src/github.com/flanksource/duty
 
 // replace github.com/flanksource/clicky => ../clicky
 

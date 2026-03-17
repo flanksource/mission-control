@@ -67,7 +67,7 @@ func (l *logsAction) Run(ctx context.Context, action *v1.LogsAction) (*logsResul
 		}
 
 		response.Logs = postProcessLogs(ctx, response.Logs, action.Loki.LogsPostProcess)
-		return (*logsResult)(response), nil
+		return &logsResult{Metadata: response.Metadata, Logs: response.Logs}, nil
 	}
 
 	if action.OpenSearch != nil {
@@ -88,7 +88,7 @@ func (l *logsAction) Run(ctx context.Context, action *v1.LogsAction) (*logsResul
 		}
 
 		response.Logs = postProcessLogs(ctx, response.Logs, action.OpenSearch.LogsPostProcess)
-		return (*logsResult)(response), nil
+		return &logsResult{Metadata: response.Metadata, Logs: response.Logs}, nil
 	}
 
 	if action.CloudWatch != nil {
@@ -112,7 +112,7 @@ func (l *logsAction) Run(ctx context.Context, action *v1.LogsAction) (*logsResul
 		}
 
 		response.Logs = postProcessLogs(ctx, response.Logs, action.CloudWatch.LogsPostProcess)
-		return (*logsResult)(response), nil
+		return &logsResult{Metadata: response.Metadata, Logs: response.Logs}, nil
 	}
 
 	if action.Kubernetes != nil {
@@ -221,7 +221,7 @@ func dedupeWindow(logLines []*logs.LogLine, fields []string) []*logs.LogLine {
 	seen := make(map[string]*logs.LogLine)
 
 	for _, logLine := range logLines {
-		key := logLine.GetDedupKey(fields...)
+		key := logLine.GetFieldKey(fields)
 
 		previous, found := seen[key]
 		if !found {

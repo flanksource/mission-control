@@ -115,6 +115,53 @@ func Test(ctx context.Context, c *models.Connection) (TestResult, error) {
 
 		return TestResult{Entries: collector.Entries()}, nil
 
+	case models.ConnectionTypeFacet:
+		reqBody := map[string]any{
+			"code":   `export default function Test() { return <div>Connection Test</div> }`,
+			"format": "pdf",
+		}
+		if timestampURL := c.Properties["timestampUrl"]; timestampURL != "" {
+			reqBody["signature"] = map[string]string{
+				"selfSigned":   "true",
+				"timestampUrl": timestampURL,
+			}
+		}
+		client := newHTTPClient().BaseURL(c.URL)
+		if c.Password != "" {
+			client = client.Header("X-API-Key", c.Password)
+		}
+		response, err := client.R(ctx).Post("/render", reqBody)
+		if err != nil {
+			return TestResult{Entries: collector.Entries()}, api.Errorf(api.EINVALID, "facet render request failed: %v", err)
+		}
+		if !response.IsOK() {
+			body, _ := response.AsString()
+			return TestResult{Entries: collector.Entries()}, api.Errorf(api.EINVALID, "facet render failed (status %d): %s", response.StatusCode, body)
+		}
+
+		renderResult, err := response.AsJSON()
+		if err != nil {
+			return TestResult{Entries: collector.Entries()}, api.Errorf(api.EINVALID, "failed to parse render response: %v", err)
+		}
+		resultURL, _ := renderResult["url"].(string)
+		if resultURL == "" {
+			return TestResult{Entries: collector.Entries()}, api.Errorf(api.EINVALID, "render response missing 'url' field")
+		}
+
+		pdfResponse, err := client.R(ctx).Get(resultURL)
+		if err != nil {
+			return TestResult{Entries: collector.Entries()}, api.Errorf(api.EINVALID, "failed to fetch rendered PDF: %v", err)
+		}
+		if !pdfResponse.IsOK() {
+			body, _ := pdfResponse.AsString()
+			return TestResult{Entries: collector.Entries()}, api.Errorf(api.EINVALID, "PDF fetch failed (status %d): %s", pdfResponse.StatusCode, body)
+		}
+
+		return TestResult{
+			Payload: map[string]any{"resultUrl": resultURL},
+			Entries: collector.Entries(),
+		}, nil
+
 	case models.ConnectionTypeElasticSearch:
 		client := newHTTPClient().BaseURL(c.URL)
 		if c.Username != "" || c.Password != "" {

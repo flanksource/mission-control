@@ -116,6 +116,17 @@ func connectionFromCRDSpec(obj *v1.Connection, dbObj *models.Connection) {
 		dbObj.Password = obj.Spec.AzureDevops.PersonalAccessToken.String()
 	}
 
+	if obj.Spec.Facet != nil {
+		dbObj.Type = models.ConnectionTypeFacet
+		dbObj.URL = obj.Spec.Facet.URL
+		dbObj.Password = obj.Spec.Facet.Token.String()
+		if obj.Spec.Facet.TimestampURL != "" {
+			dbObj.Properties = map[string]string{
+				"timestampUrl": obj.Spec.Facet.TimestampURL,
+			}
+		}
+	}
+
 	if obj.Spec.Elasticsearch != nil {
 		dbObj.Type = models.ConnectionTypeElasticSearch
 		dbObj.URL = obj.Spec.Elasticsearch.URL
