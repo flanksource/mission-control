@@ -8,7 +8,7 @@ require (
 	github.com/flanksource/commons v1.48.1
 	github.com/flanksource/duty v1.0.1222
 	github.com/flanksource/gomplate/v3 v3.24.73
-	github.com/flanksource/kopper v1.0.20
+	github.com/flanksource/kopper v1.0.21
 )
 
 require (
