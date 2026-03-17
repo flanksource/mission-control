@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "playbook-fixture",
+  "title": "Playbook E2E Test Fixture",
+  "type": "object",
+  "required": ["playbook", "config", "output"],
+  "additionalProperties": false,
+  "properties": {
+    "config": {
+      "type": "string",
+      "description": "Name of the dummy config fixture to use as the run target",
+      "enum": ["LogisticsAPIPodConfig", "EKSCluster"]
+    },
+    "setup": {
+      "type": "object",
+      "description": "Infrastructure and resource setup for this test",
+      "additionalProperties": false,
+      "properties": {
+        "loki": {
+          "type": "boolean",
+          "description": "Whether this test requires the Loki service",
+          "default": false
+        },
+        "opensearch": {
+          "type": "boolean",
+          "description": "Whether this test requires the OpenSearch service",
+          "default": false
+        },
+        "smtp": {
+          "type": "boolean",
+          "description": "Whether this test requires the SMTP backend",
+          "default": false
+        },
+        "facet": {
+          "type": "boolean",
+          "description": "Whether this test requires the facet container",
+          "default": false
+        },
+        "connections": {
+          "type": "array",
+          "description": "Connections to persist before the test runs",
+          "items": {
+            "oneOf": [
+              {"type": "string", "description": "$ref path to a YAML file relative to the fixture"},
+              {"type": "object", "description": "Inline connection definition"}
+            ]
+          }
+        },
+        "permissions": {
+          "type": "array",
+          "description": "Permissions to persist before the test runs",
+          "items": {
+            "oneOf": [
+              {"type": "string", "description": "$ref path to a YAML file relative to the fixture"},
+              {"type": "object", "description": "Inline permission definition"}
+            ]
+          }
+        }
+      }
+    },
+    "params": {
+      "type": "object",
+      "description": "Parameters passed to the playbook run. Use {{varName}} for template variables resolved at runtime (e.g. {{viewRef}}, {{smtpURL}}, {{facetURL}})",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "playbook": {
+      "$ref": "https://raw.githubusercontent.com/flanksource/incident-commander/main/config/schemas/playbook-spec.schema.json",
+      "description": "Inline PlaybookSpec — the spec portion of a Playbook CRD"
+    },
+    "output": {
+      "$ref": "#/$defs/expectedOutput",
+      "description": "Expected output for structural deep-equal comparison"
+    },
+    "assertions": {
+      "type": "array",
+      "description": "Optional CEL expressions evaluated after the run completes. Available variables: emails (list of {body: string})",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "$defs": {
+    "expectedOutput": {
+      "type": "object",
+      "required": ["run", "actions"],
+      "additionalProperties": false,
+      "properties": {
+        "run": {
+          "type": "object",
+          "required": ["status"],
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "type": "string",
+              "description": "Expected run status",
+              "enum": ["completed", "failed", "cancelled"]
+            }
+          }
+        },
+        "actions": {
+          "type": "array",
+          "description": "Expected actions in execution order",
+          "items": {
+            "$ref": "#/$defs/expectedAction"
+          }
+        }
+      }
+    },
+    "expectedAction": {
+      "type": "object",
+      "required": ["name", "status"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Action name — must match the playbook action name"
+        },
+        "status": {
+          "type": "string",
+          "description": "Expected action status",
+          "enum": ["completed", "failed", "skipped"]
+        },
+        "result": {
+          "type": "object",
+          "description": "Expected key-value pairs in the action result map",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "artifacts": {
+          "type": "array",
+          "description": "Expected artifacts produced by this action",
+          "items": {
+            "$ref": "#/$defs/expectedArtifact"
+          }
+        },
+        "artifact_logs": {
+          "type": "string",
+          "description": "Expected log output from the artifact content (newline-separated log messages)"
+        }
+      }
+    },
+    "expectedArtifact": {
+      "type": "object",
+      "required": ["content_type"],
+      "additionalProperties": false,
+      "properties": {
+        "content_type": {
+          "type": "string",
+          "description": "Expected MIME content type of the artifact",
+          "examples": ["text/html", "application/pdf", "application/json"]
+        }
+      }
+    }
+  }
+}

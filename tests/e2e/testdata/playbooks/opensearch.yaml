@@ -1,13 +1,11 @@
-apiVersion: mission-control.flanksource.com/v1
-kind: Playbook
-metadata:
-  name: opensearch-logs
-  namespace: default
-  annotations:
-    expected-frontend-logs: |
-      React app started successfully
-      User authentication successful for user: john.doe@example.com
-spec:
+# yaml-language-server: $schema=../playbook-fixture.schema.json
+config: EKSCluster
+setup:
+  opensearch: true
+  permissions:
+    - ../fixtures/allow-artifacts.yaml
+
+playbook:
   title: OpenSearch Logs
   icon: elasticsearch
   category: Logs
@@ -39,3 +37,13 @@ spec:
             }
           index: k8s-logs
           limit: $(.params.limit)
+
+output:
+  run:
+    status: completed
+  actions:
+    - name: frontend-logs
+      status: completed
+      artifact_logs: |
+        React app started successfully
+        User authentication successful for user: john.doe@example.com

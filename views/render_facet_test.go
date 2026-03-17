@@ -1,7 +1,9 @@
 package views
 
 import (
+	"encoding/base64"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 
@@ -22,11 +24,21 @@ var _ = ginkgo.Describe("renderFacetHTTP", func() {
 		mux.HandleFunc("/render", func(w http.ResponseWriter, r *http.Request) {
 			Expect(r.Method).To(Equal("POST"))
 			Expect(r.Header.Get("X-API-Key")).To(Equal("test-token"))
+			Expect(r.Header.Get("Content-Type")).To(Equal("application/gzip"))
+			Expect(r.URL.Query().Get("format")).To(Equal("pdf"))
+			Expect(r.URL.Query().Get("entryFile")).To(Equal("ViewReport.tsx"))
 
-			var body map[string]any
-			Expect(json.NewDecoder(r.Body).Decode(&body)).To(Succeed())
-			Expect(body["template"]).To(Equal("ViewReport.tsx"))
-			Expect(body["format"]).To(Equal("pdf"))
+			dataHeader := r.Header.Get("X-Facet-Data")
+			Expect(dataHeader).ToNot(BeEmpty())
+			decoded, err := base64.StdEncoding.DecodeString(dataHeader)
+			Expect(err).ToNot(HaveOccurred())
+			var data map[string]any
+			Expect(json.Unmarshal(decoded, &data)).To(Succeed())
+			Expect(data).To(HaveKey("key"))
+
+			body, err := io.ReadAll(r.Body)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(body)).To(BeNumerically(">", 0))
 
 			w.Header().Set("Content-Type", "application/json")
 			Expect(json.NewEncoder(w).Encode(map[string]string{"url": "/results/abc123"})).To(Succeed())
@@ -60,6 +72,7 @@ var _ = ginkgo.Describe("renderFacetHTTP", func() {
 	ginkgo.It("returns HTML directly without two-step fetch", func() {
 		htmlBytes := []byte("<html><body>Report</body></html>")
 		htmlServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			Expect(r.URL.Query().Get("format")).To(Equal("html"))
 			w.Header().Set("Content-Type", "text/html")
 			_, err := w.Write(htmlBytes)
 			Expect(err).ToNot(HaveOccurred())
@@ -69,31 +82,5 @@ var _ = ginkgo.Describe("renderFacetHTTP", func() {
 		result, err := renderFacetHTTP(DefaultContext, htmlServer.URL, "", map[string]string{"key": "value"}, "html", nil)
 		Expect(err).ToNot(HaveOccurred())
 		Expect(result).To(Equal(htmlBytes))
-	})
-
-	ginkgo.It("sends timestamp URL in signature when configured", func() {
-		var receivedBody map[string]any
-		tsServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if r.URL.Path == "/render" {
-				Expect(json.NewDecoder(r.Body).Decode(&receivedBody)).To(Succeed())
-				w.Header().Set("Content-Type", "application/json")
-				Expect(json.NewEncoder(w).Encode(map[string]string{"url": "/results/ts123"})).To(Succeed())
-				return
-			}
-			_, err := w.Write(pdfBytes)
-			Expect(err).ToNot(HaveOccurred())
-		}))
-		defer tsServer.Close()
-
-		opts := &v1.FacetOptions{
-			TimestampURL: "http://timestamp.example.com",
-		}
-
-		_, err := renderFacetHTTP(DefaultContext, tsServer.URL, "", map[string]string{}, "pdf", opts)
-		Expect(err).ToNot(HaveOccurred())
-
-		sig, ok := receivedBody["signature"].(map[string]any)
-		Expect(ok).To(BeTrue())
-		Expect(sig["timestampUrl"]).To(Equal("http://timestamp.example.com"))
 	})
 })

@@ -1,10 +1,15 @@
 package e2e
 
 import (
+	gocontext "context"
 	"fmt"
 	"net/http/httptest"
+	"os"
+	"sync"
 	"testing"
+	"time"
 
+	"github.com/flanksource/commons-test/container"
 	"github.com/labstack/echo/v4"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -23,10 +28,10 @@ import (
 	"github.com/flanksource/incident-commander/auth"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/events"
+	"github.com/flanksource/incident-commander/metrics"
 	"github.com/flanksource/incident-commander/playbook"
 	"github.com/flanksource/incident-commander/playbook/sdk"
 	"github.com/flanksource/incident-commander/playbook/testdata"
-	"github.com/flanksource/incident-commander/metrics"
 	"github.com/flanksource/incident-commander/rbac/adapter"
 	"github.com/flanksource/incident-commander/vars"
 
@@ -49,9 +54,116 @@ var (
 	metricsServer  *httptest.Server
 	DefaultContext context.Context
 	client         sdk.PlaybookAPI
+
+	lokiEndpoint        string
+	openSearchEndpoint  string
+	facetContainer      *container.Container
+	lokiContainer       *container.Container
+	opensearchContainer *container.Container
 )
 
+func startContainers() {
+	ctx := gocontext.Background()
+	var wg sync.WaitGroup
+	var errs [3]error
+
+	wg.Add(3)
+
+	go func() {
+		defer wg.Done()
+		defer ginkgo.GinkgoRecover()
+		var err error
+		lokiContainer, err = container.New(container.Config{
+			Image: "grafana/loki:3.0.0",
+			Name:  "e2e-loki",
+			Ports: map[string]string{"3100": "3100"},
+			Reuse: true,
+			HealthCheck: &container.HealthCheck{
+				Cmd:      "wget --no-verbose --tries=1 --spider http://localhost:3100/ready || exit 1",
+				Interval: 10 * time.Second,
+				Timeout:  5 * time.Second,
+				Retries:  3,
+			},
+		})
+		if err == nil {
+			err = lokiContainer.Start(ctx)
+		}
+		errs[0] = err
+	}()
+
+	go func() {
+		defer wg.Done()
+		defer ginkgo.GinkgoRecover()
+		var err error
+		opensearchContainer, err = container.New(container.Config{
+			Image: "opensearchproject/opensearch:3",
+			Name:  "e2e-opensearch",
+			Ports: map[string]string{"9200": "9200"},
+			Env: []string{
+				"discovery.type=single-node",
+				"DISABLE_INSTALL_DEMO_CONFIG=true",
+				"DISABLE_SECURITY_PLUGIN=true",
+			},
+			Reuse: true,
+			HealthCheck: &container.HealthCheck{
+				Cmd:      "curl -sf http://localhost:9200/_cluster/health || exit 1",
+				Interval: 10 * time.Second,
+				Timeout:  5 * time.Second,
+				Retries:  3,
+			},
+		})
+		if err == nil {
+			err = opensearchContainer.Start(ctx)
+		}
+		errs[1] = err
+	}()
+
+	go func() {
+		defer wg.Done()
+		defer ginkgo.GinkgoRecover()
+		var err error
+		facetContainer, err = container.New(container.Config{
+			Image: "ghcr.io/flanksource/facet:latest",
+			Name:  "e2e-facet",
+			Ports: map[string]string{"3010": "0"},
+			HealthCheck: &container.HealthCheck{
+				Cmd:      "curl -sf http://localhost:3010/healthz || exit 1",
+				Interval: 10 * time.Second,
+				Timeout:  5 * time.Second,
+				Retries:  3,
+			},
+			Reuse: true,
+		})
+		if err == nil {
+			err = facetContainer.Start(ctx)
+		}
+		errs[2] = err
+	}()
+
+	wg.Wait()
+
+	for _, err := range errs {
+		Expect(err).ToNot(HaveOccurred())
+	}
+
+	lokiEndpoint = "http://localhost:3100"
+	openSearchEndpoint = "http://localhost:9200"
+}
+
+func stopContainers() {
+	ctx := gocontext.Background()
+	if os.Getenv("KEEP") != "true" {
+		for _, c := range []*container.Container{facetContainer, lokiContainer, opensearchContainer} {
+			if c != nil {
+				_ = c.Cleanup(ctx)
+			}
+		}
+	}
+}
+
 var _ = ginkgo.BeforeSuite(func() {
+	startContainers()
+
 	format.RegisterCustomFormatter(func(value interface{}) (string, bool) {
 		switch v := value.(type) {
 		case error:
@@ -126,4 +238,5 @@ var _ = ginkgo.AfterSuite(func() {
 	if metricsServer != nil {
 		metricsServer.Close()
 	}
+	stopContainers()
 })

@@ -1,11 +1,15 @@
 package views
 
 import (
+	"archive/tar"
 	"bytes"
+	"compress/gzip"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"io/fs"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -68,31 +72,56 @@ func resolveFacetConnection(ctx context.Context, opts *v1.FacetOptions) (baseURL
 	return baseURL, token, timestampURL, nil
 }
 
-func renderFacetHTTP(ctx context.Context, baseURL, token string, data any, format string, opts *v1.FacetOptions) ([]byte, error) {
-	body := map[string]any{
-		"template": "ViewReport.tsx",
-		"data":     data,
-		"format":   format,
-	}
+func buildReportArchive() ([]byte, error) {
+	var buf bytes.Buffer
+	gw := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gw)
 
-	if opts != nil {
-		if opts.PDFOptions != nil {
-			body["pdfOptions"] = opts.PDFOptions
+	err := fs.WalkDir(report.FS, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
 		}
-		if opts.Header != "" {
-			body["headerCode"] = opts.Header
+		data, err := report.FS.ReadFile(path)
+		if err != nil {
+			return err
 		}
-		if opts.Footer != "" {
-			body["footerCode"] = opts.Footer
+		if err := tw.WriteHeader(&tar.Header{
+			Name: path,
+			Size: int64(len(data)),
+			Mode: 0600,
+		}); err != nil {
+			return err
 		}
-	}
-
-	_, _, timestampURL, err := resolveFacetConnection(ctx, opts)
+		_, err = tw.Write(data)
+		return err
+	})
 	if err != nil {
 		return nil, err
 	}
-	if timestampURL != "" {
-		body["signature"] = map[string]string{"timestampUrl": timestampURL}
+
+	if err := tw.Close(); err != nil {
+		return nil, err
+	}
+	if err := gw.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func renderFacetHTTP(ctx context.Context, baseURL, token string, data any, format string, opts *v1.FacetOptions) ([]byte, error) {
+	archive, err := buildReportArchive()
+	if err != nil {
+		return nil, fmt.Errorf("build report archive: %w", err)
+	}
+
+	dataJSON, err := json.Marshal(data)
+	if err != nil {
+		return nil, fmt.Errorf("marshal data: %w", err)
+	}
+
+	params := url.Values{
+		"format":    {format},
+		"entryFile": {"ViewReport.tsx"},
 	}
 
 	client := http.NewClient().BaseURL(baseURL)
@@ -100,7 +129,10 @@ func renderFacetHTTP(ctx context.Context, baseURL, token string, data any, forma
 		client = client.Header("X-API-Key", token)
 	}
 
-	response, err := client.R(ctx).Post("/render", body)
+	response, err := client.R(ctx).
+		Header("Content-Type", "application/gzip").
+		Header("X-Facet-Data", base64.StdEncoding.EncodeToString(dataJSON)).
+		Post("/render?"+params.Encode(), archive)
 	if err != nil {
 		return nil, fmt.Errorf("facet render request failed: %w", err)
 	}

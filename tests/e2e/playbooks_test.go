@@ -1,9 +1,7 @@
 package e2e
 
 import (
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -12,28 +10,25 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/http"
+	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/logs"
 	"github.com/flanksource/duty/models"
+	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
+	dutyTypes "github.com/flanksource/duty/types"
+	"github.com/google/uuid"
+	ginkgo "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/robfig/cron/v3"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/yaml"
+
 	v1 "github.com/flanksource/incident-commander/api/v1"
-	"github.com/flanksource/incident-commander/artifacts"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/playbook"
 	"github.com/flanksource/incident-commander/playbook/sdk"
-	"github.com/flanksource/incident-commander/playbook/testdata"
-	"github.com/google/uuid"
-	"github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-	"github.com/samber/lo"
-	"k8s.io/apimachinery/pkg/types"
-	"sigs.k8s.io/yaml"
-)
-
-var (
-	lokiEndpoint       = lo.CoalesceOrEmpty(os.Getenv("LOKI_ENDPOINT"), "http://localhost:3100")
-	openSearchEndpoint = lo.CoalesceOrEmpty(os.Getenv("OPENSEARCH_ENDPOINT"), "http://localhost:9200")
 )
 
 func waitFor(ctx context.Context, run *models.PlaybookRun, statuses ...models.PlaybookRunStatus) *models.PlaybookRun {
@@ -58,7 +53,7 @@ func waitFor(ctx context.Context, run *models.PlaybookRun, statuses ...models.Pl
 		}
 
 		return models.PlaybookRunStatus("Unknown")
-	}).WithTimeout(30 * time.Second).WithPolling(time.Second).Should(BeElementOf(s))
+	}).WithTimeout(2 * time.Minute).WithPolling(time.Second).Should(BeElementOf(s))
 
 	return savedRun
 }
@@ -70,17 +65,13 @@ func waitForLokiLogs() {
 		endpoint, err := url.JoinPath(lokiEndpoint, "loki/api/v1/query_range")
 		g.Expect(err).To(BeNil())
 
-		// Query parameters
-		lokiQuery := `{environment="production"}`
-
 		params := url.Values{}
-		params.Set("query", lokiQuery)
-		params.Set("start", time.Now().Add(time.Hour*-24).Format(time.RFC3339)) // Before our test timestamps
-		params.Set("end", time.Now().Format(time.RFC3339))                      // After our test timestamps
+		params.Set("query", `{environment="production"}`)
+		params.Set("start", time.Now().Add(time.Hour*-24).Format(time.RFC3339))
+		params.Set("end", time.Now().Format(time.RFC3339))
 		params.Set("limit", "100")
 
-		queryURL := endpoint + "?" + params.Encode()
-		resp, err := client.R(DefaultContext).Get(queryURL)
+		resp, err := client.R(DefaultContext).Get(endpoint + "?" + params.Encode())
 		g.Expect(err).To(BeNil())
 		g.Expect(resp.IsOK()).To(BeTrue())
 
@@ -88,142 +79,148 @@ func waitForLokiLogs() {
 		err = resp.Into(&result)
 		g.Expect(err).To(BeNil())
 
-		// Check that we got results
 		data, exists := result["data"].(map[string]any)
 		g.Expect(exists).To(BeTrue(), "Expected 'data' field in Loki response")
 
 		results, exists := data["result"].([]any)
 		g.Expect(exists).To(BeTrue(), "Expected 'result' field in Loki data")
-		g.Expect(len(results)).To(BeNumerically(">", 0), "Expected at least one log entry for query: %s", lokiQuery)
+		g.Expect(len(results)).To(BeNumerically(">", 0))
 	}).WithTimeout(30 * time.Second).WithPolling(1 * time.Second).Should(Succeed())
 }
 
 var _ = ginkgo.Describe("Playbooks", ginkgo.Ordered, func() {
-	var _ = ginkgo.Context("logs", ginkgo.Label("external"), func() {
-		ginkgo.BeforeAll(func() {
-			// Loki seeding
-			{
-				lokiContent, err := os.ReadFile("setup/seed-loki.json")
-				Expect(err).To(BeNil())
+	var viewRef string
 
-				baseTimeLoki := time.Now().Add(-5 * time.Minute)
-				timestamp1Loki := fmt.Sprintf("%d", baseTimeLoki.UnixNano())
-				timestamp2Loki := fmt.Sprintf("%d", baseTimeLoki.Add(1*time.Second).UnixNano())
-				timestamp3Loki := fmt.Sprintf("%d", baseTimeLoki.Add(2*time.Second).UnixNano())
+	ginkgo.BeforeAll(func() {
+		viewRef = fmt.Sprintf("%s/%s", dummy.PodView.Namespace, dummy.PodView.Name)
+	})
 
-				updatedLokiContent := string(lokiContent)
-				updatedLokiContent = strings.ReplaceAll(updatedLokiContent, "{{TIMESTAMP_1}}", timestamp1Loki)
-				updatedLokiContent = strings.ReplaceAll(updatedLokiContent, "{{TIMESTAMP_2}}", timestamp2Loki)
-				updatedLokiContent = strings.ReplaceAll(updatedLokiContent, "{{TIMESTAMP_3}}", timestamp3Loki)
+	ginkgo.AfterAll(func() {
+		for _, h := range allSetupHandlers {
+			h.Cleanup()
+		}
+	})
 
-				lokiPushEndpoint, err := url.JoinPath(lokiEndpoint, "loki/api/v1/push")
-				Expect(err).To(BeNil())
+	fixtures, err := filepath.Glob("testdata/playbooks/*.yaml")
+	if err != nil {
+		panic(fmt.Sprintf("failed to glob playbook fixtures: %v", err))
+	}
 
-				responseLoki, err := http.NewClient().R(DefaultContext).Header("Content-Type", "application/json").Post(lokiPushEndpoint, updatedLokiContent)
-				Expect(err).To(BeNil())
-				Expect(responseLoki.IsOK()).To(BeTrue())
+	for _, fixturePath := range fixtures {
+		setup := peekFixtureSetup(fixturePath)
+		name := strings.TrimSuffix(filepath.Base(fixturePath), ".yaml")
 
-				waitForLokiLogs()
+		var decorators []any
+		for _, h := range allSetupHandlers {
+			for _, l := range h.Labels(setup) {
+				decorators = append(decorators, ginkgo.Label(l))
+			}
+		}
+
+		decorators = append(decorators, func() {
+			f := loadPlaybookFixture(fixturePath)
+
+			pb := fixtureToPlaybook(f)
+			Expect(db.PersistPlaybookFromCRD(DefaultContext, &pb)).To(Succeed())
+
+			fctx := &fixtureContext{
+				Fixture:  &f,
+				Path:     fixturePath,
+				Vars:     map[string]string{"viewRef": viewRef},
+				CelEnv:   map[string]any{},
+				Playbook: &pb,
 			}
 
-			// OpenSearch seeding
-			{
-				opensearchContent, err := os.ReadFile("setup/seed-opensearch.json")
-				Expect(err).To(BeNil())
-
-				opensearchBulkEndpoint, err := url.JoinPath(openSearchEndpoint, "_bulk")
-				Expect(err).To(BeNil())
-
-				responseOpenSearch, err := http.NewClient().R(DefaultContext).Header("Content-Type", "application/json").Post(opensearchBulkEndpoint, opensearchContent)
-				Expect(err).To(BeNil())
-
-				opensearchBodyBytes, err := io.ReadAll(responseOpenSearch.Body)
-				Expect(err).To(BeNil())
-				responseOpenSearch.Body.Close()
-
-				Expect(responseOpenSearch.IsOK()).To(BeTrue(), "OpenSearch bulk insert failed with status: %s and body: %s", responseOpenSearch.Response.Status, string(opensearchBodyBytes))
-
-				// Check for errors in the bulk response
-				var bulkResponse map[string]any
-				err = json.Unmarshal(opensearchBodyBytes, &bulkResponse)
-				Expect(err).To(BeNil())
-				Expect(bulkResponse["errors"]).To(Equal(false), "OpenSearch bulk insert had errors: %+v", bulkResponse)
+			for _, h := range allSetupHandlers {
+				h.Handle(fctx)
 			}
+
+			params := resolveParams(f.Params, fctx.Vars)
+			run, err := client.Run(sdk.RunParams{
+				ID:       pb.UID,
+				ConfigID: resolveConfigID(f.Config),
+				Params:   params,
+			})
+			Expect(err).ToNot(HaveOccurred())
+
+			var pbRun models.PlaybookRun
+			Expect(DefaultContext.DB().Where("id = ?", run.RunID).First(&pbRun).Error).To(Succeed())
+
+			completedRun := waitFor(DefaultContext, &pbRun)
+
+			var actions []models.PlaybookRunAction
+			Expect(DefaultContext.DB().Where("playbook_run_id = ?", pbRun.ID).Order("start_time").Find(&actions).Error).To(Succeed())
+
+			compareOutput(f.Output, completedRun, actions)
+
+			if collect, ok := fctx.CelEnv["_smtpCollect"].(func()); ok {
+				collect()
+			}
+			evalAssertions(f.Assertions, fctx.CelEnv)
 		})
 
-		base := "../../playbook/testdata/e2e/"
+		ginkgo.It(name, decorators...)
+	}
 
-		entries, err := os.ReadDir(base)
-		Expect(err).To(BeNil())
+	ginkgo.It("runs a scheduled playbook", ginkgo.Label("slow"), func() {
+		content, err := os.ReadFile("testdata/scheduled-report-playbook.yaml")
+		Expect(err).ToNot(HaveOccurred())
 
-		for _, entry := range entries {
-			if !strings.HasSuffix(entry.Name(), "yaml") {
-				continue
-			}
-
-			ginkgo.It(fmt.Sprintf("should save & schedule a run for the fixture: %s", entry.Name()), func() {
-				fullpath := filepath.Join(base, entry.Name())
-				content, err := os.ReadFile(fullpath)
-				Expect(err).To(BeNil())
-
-				var customResource v1.Playbook
-				err = yaml.Unmarshal(content, &customResource)
-				Expect(err).To(BeNil())
-
-				if customResource.UID == "" {
-					customResource.UID = types.UID(uuid.New().String())
-				}
-
-				err = db.PersistPlaybookFromCRD(DefaultContext, &customResource)
-				Expect(err).To(BeNil())
-
-				Expect(testdata.LoadPermissions(DefaultContext)).To(BeNil())
-
-				runParam := sdk.RunParams{
-					ID:       customResource.UID,
-					ConfigID: dummy.EKSCluster.ID,
-					Params:   map[string]string{},
-				}
-				response, err := client.Run(runParam)
-				Expect(err).To(BeNil())
-
-				var run models.PlaybookRun
-				err = DefaultContext.DB().Where("id = ?", response.RunID).Find(&run).Error
-				Expect(err).To(BeNil())
-
-				completedRun := waitFor(DefaultContext, &run, models.PlaybookRunStatusCompleted, models.PlaybookRunStatusFailed)
-				Expect(completedRun.Status).To(Equal(models.PlaybookRunStatusCompleted))
-
-				var actions []models.PlaybookRunAction
-				err = DefaultContext.DB().Where("playbook_run_id = ?", run.ID).Find(&actions).Error
-				Expect(err).To(BeNil())
-
-				Expect(actions).To(HaveLen(len(customResource.Spec.Actions)))
-
-				actionIDs := lo.Map(actions, func(item models.PlaybookRunAction, _ int) string {
-					return item.ID.String()
-				})
-				allArtifacts, err := artifacts.GetArtifactContents(DefaultContext, actionIDs...)
-				Expect(err).To(BeNil())
-
-				for _, artif := range allArtifacts {
-					var output strings.Builder
-					var lines []logs.LogLine
-					err := json.Unmarshal(artif.Content, &lines)
-					Expect(err).To(BeNil())
-					for _, line := range lines {
-						output.WriteString(line.Message)
-						output.WriteString("\n")
-					}
-
-					actionDetails, found := lo.Find(actions, func(a models.PlaybookRunAction) bool {
-						return a.ID.String() == artif.ActionID
-					})
-					Expect(found).To(BeTrue())
-					expected := customResource.Annotations[fmt.Sprintf("expected-%s", actionDetails.Name)]
-					Expect(output.String()).To(Equal(expected), fmt.Sprintf("action result: %s", actionDetails.Name))
-				}
-			})
+		var pb v1.Playbook
+		Expect(yaml.Unmarshal(content, &pb)).To(Succeed())
+		if pb.UID == "" {
+			pb.UID = types.UID(uuid.NewString())
 		}
+
+		Expect(db.PersistPlaybookFromCRD(DefaultContext, &pb)).To(Succeed())
+
+		// Grant artifact access for the scheduled playbook
+		playbookRef := fmt.Sprintf("%s/%s", pb.Namespace, pb.Name)
+		perm := &v1.Permission{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      fmt.Sprintf("allow-%s-artifacts", pb.Name),
+				Namespace: pb.Namespace,
+				UID:       types.UID(uuid.NewString()),
+			},
+			Spec: v1.PermissionSpec{
+				Description: fmt.Sprintf("allow %s to read artifacts connection", playbookRef),
+				Subject:     v1.PermissionSubject{Playbook: playbookRef},
+				Actions:     []string{"read"},
+				Object: v1.PermissionObject{
+					Selectors: dutyRBAC.Selectors{
+						Connections: []dutyTypes.ResourceSelector{{Name: "artifacts", Namespace: "default"}},
+					},
+				},
+			},
+		}
+		Expect(db.PersistPermissionFromCRD(DefaultContext, perm)).To(Succeed())
+		Expect(dutyRBAC.ReloadPolicy()).To(Succeed())
+
+		playbookModel, err := pb.ToModel()
+		Expect(err).ToNot(HaveOccurred())
+
+		viewRef := fmt.Sprintf("%s/%s", dummy.PodView.Namespace, dummy.PodView.Name)
+		Expect(DefaultContext.DB().Exec(
+			`UPDATE playbooks SET spec = jsonb_set(spec, '{on,schedule,0,parameters,view}', to_jsonb(?::text)) WHERE id = ?`,
+			viewRef, playbookModel.ID,
+		).Error).To(Succeed())
+
+		testScheduler := cron.New()
+		testScheduler.Start()
+		defer testScheduler.Stop()
+
+		Expect(playbook.SyncPlaybookSchedulesForTest(DefaultContext, testScheduler)).To(Succeed())
+		Expect(testScheduler.Entries()).ToNot(BeEmpty(), "expected cron entries to be registered")
+
+		Eventually(func() int64 {
+			var count int64
+			DefaultContext.DB().Model(&models.PlaybookRun{}).Where("playbook_id = ?", playbookModel.ID).Count(&count)
+			return count
+		}, 30*time.Second, time.Second).Should(BeNumerically(">=", 1))
+
+		_ = DefaultContext.DB().Model(&models.Playbook{}).
+			Where("id = ?", playbookModel.ID).
+			Update("deleted_at", duty.Now()).Error
+		_ = playbook.SyncPlaybookSchedulesForTest(DefaultContext, testScheduler)
 	})
 })
