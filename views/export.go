@@ -12,7 +12,7 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 )
 
-func ExportMulti(ctx context.Context, allViews []v1.View, vars map[string]string, format string) ([]byte, error) {
+func ExportMulti(ctx context.Context, allViews []v1.View, vars map[string]string, format string, facetOpts *v1.FacetOptions) ([]byte, error) {
 	referencedSet := buildReferencedSet(allViews)
 
 	viewsByName := make(map[string]*v1.View, len(allViews))
@@ -37,10 +37,10 @@ func ExportMulti(ctx context.Context, allViews []v1.View, vars map[string]string
 	}
 
 	if len(multi.Views) == 1 {
-		return formatResult(ctx, &multi.Views[0], format)
+		return formatResult(ctx, &multi.Views[0], format, facetOpts)
 	}
 
-	return formatMultiResult(ctx, &multi, format)
+	return formatMultiResult(ctx, &multi, format, facetOpts)
 }
 
 func buildReferencedSet(views []v1.View) map[string]bool {
@@ -93,37 +93,37 @@ func runAndNormalize(ctx context.Context, view *v1.View, vars map[string]string)
 	return result, nil
 }
 
-func formatResult(ctx context.Context, result *api.ViewResult, format string) ([]byte, error) {
+func formatResult(ctx context.Context, result *api.ViewResult, format string, facetOpts *v1.FacetOptions) ([]byte, error) {
 	switch format {
 	case "csv":
 		return renderViewCSV(result)
 	case "json", "":
 		return json.MarshalIndent(result, "", "  ")
 	case "facet-html":
-		return RenderFacetHTML(ctx, result)
+		return RenderFacetHTML(ctx, result, facetOpts)
 	case "facet-pdf":
-		return RenderFacetPDF(ctx, result)
+		return RenderFacetPDF(ctx, result, facetOpts)
 	default:
 		return renderClicky(Render(result), format)
 	}
 }
 
-func formatMultiResult(ctx context.Context, multi *api.MultiViewResult, format string) ([]byte, error) {
+func formatMultiResult(ctx context.Context, multi *api.MultiViewResult, format string, facetOpts *v1.FacetOptions) ([]byte, error) {
 	switch format {
 	case "csv":
 		return renderMultiViewCSV(multi)
 	case "json", "":
 		return json.MarshalIndent(multi, "", "  ")
 	case "facet-html":
-		return RenderMultiFacetHTML(ctx, multi)
+		return RenderMultiFacetHTML(ctx, multi, facetOpts)
 	case "facet-pdf":
-		return RenderMultiFacetPDF(ctx, multi)
+		return RenderMultiFacetPDF(ctx, multi, facetOpts)
 	default:
 		return renderClicky(RenderMulti(multi), format)
 	}
 }
 
-func Export(ctx context.Context, view *v1.View, vars map[string]string, format string) ([]byte, error) {
+func Export(ctx context.Context, view *v1.View, vars map[string]string, format string, facetOpts *v1.FacetOptions) ([]byte, error) {
 	request := &requestOpt{
 		variables:   vars,
 		includeRows: true,
@@ -135,7 +135,7 @@ func Export(ctx context.Context, view *v1.View, vars map[string]string, format s
 	}
 
 	normalizeRows(result)
-	return formatResult(ctx, result, format)
+	return formatResult(ctx, result, format, facetOpts)
 }
 
 // normalizeRows converts []byte and JSON-string cell values into proper

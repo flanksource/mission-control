@@ -59,7 +59,7 @@ func (r *Report) Run(ctx context.Context, action v1.ReportAction) (*ReportResult
 		}
 	}
 
-	rendered, err := views.Export(ctx, v, action.Variables, format)
+	rendered, err := views.Export(ctx, v, action.Variables, format, action.Facet)
 	if err != nil {
 		return nil, fmt.Errorf("failed to export view: %w", err)
 	}

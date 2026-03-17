@@ -281,6 +281,12 @@ type ConnectionGemini struct {
 	ApiKey types.EnvVar `json:"apiKey"`
 }
 
+type ConnectionFacet struct {
+	URL          string       `json:"url"`
+	Token        types.EnvVar `json:"token,omitempty"`
+	TimestampURL string       `json:"timestampUrl,omitempty"`
+}
+
 type ConnectionElasticsearch struct {
 	URL         string       `json:"url"`
 	Username    types.EnvVar `json:"username,omitempty"`
@@ -316,6 +322,7 @@ type ConnectionSpec struct {
 	Gemini    *ConnectionGemini    `json:"gemini,omitempty"`
 
 	Elasticsearch *ConnectionElasticsearch         `json:"elasticsearch,omitempty"`
+	Facet         *ConnectionFacet                 `json:"facet,omitempty"`
 	Folder        *ConnectionFolder                `json:"folder,omitempty"`
 	Git           *ConnectionGit                   `json:"git,omitempty"`
 	GitHub        *ConnectionGitHub                `json:"github,omitempty"`

@@ -608,6 +608,28 @@ type PlaybookAction struct {
 	Report              *ReportAction              `json:"report,omitempty" yaml:"report,omitempty" template:"true"`
 }
 
+type FacetPDFMargins struct {
+	Top    *int `json:"top,omitempty" yaml:"top,omitempty"`
+	Bottom *int `json:"bottom,omitempty" yaml:"bottom,omitempty"`
+	Left   *int `json:"left,omitempty" yaml:"left,omitempty"`
+	Right  *int `json:"right,omitempty" yaml:"right,omitempty"`
+}
+
+type FacetPDFOptions struct {
+	PageSize  string           `json:"pageSize,omitempty" yaml:"pageSize,omitempty"`
+	Landscape bool             `json:"landscape,omitempty" yaml:"landscape,omitempty"`
+	Margins   *FacetPDFMargins `json:"margins,omitempty" yaml:"margins,omitempty"`
+}
+
+type FacetOptions struct {
+	Connection   string           `json:"connection,omitempty" yaml:"connection,omitempty" template:"true"`
+	URL          string           `json:"url,omitempty" yaml:"url,omitempty" template:"true"`
+	PDFOptions   *FacetPDFOptions `json:"pdfOptions,omitempty" yaml:"pdfOptions,omitempty"`
+	Header       string           `json:"header,omitempty" yaml:"header,omitempty" template:"true"`
+	Footer       string           `json:"footer,omitempty" yaml:"footer,omitempty" template:"true"`
+	TimestampURL string           `json:"timestampUrl,omitempty" yaml:"timestampUrl,omitempty" template:"true"`
+}
+
 // +kubebuilder:validation:XValidation:rule="!(has(self.view) && self.view != '' && has(self.configs))",message="view and configs are mutually exclusive"
 type ReportAction struct {
 	// Reference an existing View by namespace/name or just name
@@ -618,6 +640,8 @@ type ReportAction struct {
 	Format string `json:"format,omitempty" yaml:"format,omitempty" template:"true"`
 	// Variables passed to the view queries
 	Variables map[string]string `json:"variables,omitempty" yaml:"variables,omitempty" template:"true"`
+	// Facet rendering options for facet-html and facet-pdf formats
+	Facet *FacetOptions `json:"facet,omitempty" yaml:"facet,omitempty" template:"true"`
 }
 
 func (p *PlaybookAction) ActionType() string {

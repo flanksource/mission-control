@@ -62,6 +62,7 @@ var connectionAddTypeSpecs = []connectionTypeSpec{
 	{Name: "gcp", Type: models.ConnectionTypeGCP, Short: "Add a GCP connection"},
 	{Name: "gcs", Type: models.ConnectionTypeGCS, Short: "Add a GCS connection"},
 	{Name: "gcp-kms", Type: models.ConnectionTypeGCPKMS, Aliases: []string{"gcpkms"}, Short: "Add a GCP KMS connection"},
+	{Name: "facet", Type: models.ConnectionTypeFacet, Short: "Add a Facet connection"},
 	{Name: "discord", Type: models.ConnectionTypeDiscord, Short: "Add a Discord connection"},
 	{Name: "smtp", Type: models.ConnectionTypeEmail, Aliases: []string{"email"}, Short: "Add an SMTP connection"},
 	{Name: "telegram", Type: models.ConnectionTypeTelegram, Short: "Add a Telegram connection"},
@@ -180,6 +181,9 @@ type connectionFlags struct {
 	TLSCA            string
 	TLSCert          string
 	TLSKey           string
+
+	// Facet
+	TimestampURL string
 
 	// AI models
 	Model  string
@@ -303,6 +307,11 @@ func validateConnectionFlags(flags *connectionFlags) error {
 	case models.ConnectionTypeOllama:
 		if flags.URL == "" {
 			return fmt.Errorf("--url is required for Ollama connections")
+		}
+
+	case models.ConnectionTypeFacet:
+		if flags.URL == "" {
+			return fmt.Errorf("--url is required for Facet connections")
 		}
 	}
 
@@ -610,6 +619,12 @@ func buildConnectionFromFlags(flags *connectionFlags) (models.Connection, error)
 	case models.ConnectionTypeLoki:
 		// URL, username, password already set
 
+	case models.ConnectionTypeFacet:
+		conn.Password = flags.Token
+		if flags.TimestampURL != "" {
+			props["timestampUrl"] = flags.TimestampURL
+		}
+
 	case models.ConnectionTypeOpenAI, models.ConnectionTypeAnthropic, models.ConnectionTypeOllama, models.ConnectionTypeGemini:
 		conn.Password = flags.ApiKey
 		if flags.Model != "" {
@@ -834,6 +849,11 @@ func addTypeSpecificFlags(cmd *cobra.Command, flags *connectionFlags, connType s
 		cmd.Flags().StringVar(&flags.URL, "url", "", "Loki URL")
 		cmd.Flags().StringVar(&flags.Username, "username", "", "Basic auth username")
 		cmd.Flags().StringVar(&flags.Password, "password", "", "Basic auth password")
+
+	case models.ConnectionTypeFacet:
+		cmd.Flags().StringVar(&flags.URL, "url", "", "Facet service URL (required)")
+		cmd.Flags().StringVar(&flags.Token, "token", "", "API key for facet service")
+		cmd.Flags().StringVar(&flags.TimestampURL, "timestamp-url", "", "RFC 3161 timestamp authority URL")
 
 	case models.ConnectionTypeOpenAI, models.ConnectionTypeAnthropic, models.ConnectionTypeOllama, models.ConnectionTypeGemini:
 		cmd.Flags().StringVar(&flags.URL, "url", "", "API base URL")

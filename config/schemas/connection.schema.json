@@ -332,6 +332,24 @@
         "url"
       ]
     },
+    "ConnectionFacet": {
+      "properties": {
+        "url": {
+          "type": "string"
+        },
+        "token": {
+          "$ref": "#/$defs/EnvVar"
+        },
+        "timestampUrl": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "url"
+      ]
+    },
     "ConnectionFolder": {
       "properties": {
         "path": {
@@ -979,6 +997,9 @@
         },
         "elasticsearch": {
           "$ref": "#/$defs/ConnectionElasticsearch"
+        },
+        "facet": {
+          "$ref": "#/$defs/ConnectionFacet"
         },
         "folder": {
           "$ref": "#/$defs/ConnectionFolder"
