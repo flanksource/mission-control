@@ -18,6 +18,7 @@ import (
 	"github.com/google/uuid"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/samber/lo"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/yaml"
@@ -280,6 +281,41 @@ var _ = ginkgo.Describe("Report action with email delivery", ginkgo.Ordered, fun
 		Expect(DefaultContext.DB().Where("playbook_run_action_id = ?", actions[0].ID).Find(&inlineArtifacts).Error).To(Succeed())
 		Expect(inlineArtifacts).To(HaveLen(1))
 		Expect(inlineArtifacts[0].ContentType).To(Equal("application/json"))
+	})
+
+	ginkgo.It("generates a facet-pdf report", func() {
+		facetEndpoint := lo.CoalesceOrEmpty(os.Getenv("FACET_ENDPOINT"), "http://localhost:3010")
+
+		pb := loadPlaybookFixture("testdata/facet-pdf-playbook.yaml")
+		Expect(db.PersistPlaybookFromCRD(DefaultContext, &pb)).To(Succeed())
+		grantArtifactAccess(&pb)
+
+		run, err := client.Run(sdk.RunParams{
+			ID:       pb.UID,
+			ConfigID: dummy.LogisticsAPIPodConfig.ID,
+			Params: map[string]string{
+				"view":      fmt.Sprintf("%s/%s", dummy.PodView.Namespace, dummy.PodView.Name),
+				"facet_url": facetEndpoint,
+			},
+		})
+		Expect(err).ToNot(HaveOccurred())
+
+		var pbRun models.PlaybookRun
+		Expect(DefaultContext.DB().Where("id = ?", run.RunID).First(&pbRun).Error).To(Succeed())
+
+		completedRun := waitFor(DefaultContext, &pbRun)
+		Expect(completedRun.Status).To(Equal(models.PlaybookRunStatusCompleted), "%v", completedRun)
+
+		var actions []models.PlaybookRunAction
+		Expect(DefaultContext.DB().Where("playbook_run_id = ?", pbRun.ID).Find(&actions).Error).To(Succeed())
+		Expect(actions).To(HaveLen(1))
+		Expect(actions[0].Status).To(Equal(models.PlaybookActionStatusCompleted))
+		Expect(actions[0].Result["format"]).To(Equal("facet-pdf"))
+
+		var artifacts []models.Artifact
+		Expect(DefaultContext.DB().Where("playbook_run_action_id = ?", actions[0].ID).Find(&artifacts).Error).To(Succeed())
+		Expect(artifacts).To(HaveLen(1))
+		Expect(artifacts[0].ContentType).To(Equal("application/pdf"))
 	})
 
 	ginkgo.It("runs a scheduled playbook", ginkgo.Label("slow"), func() {

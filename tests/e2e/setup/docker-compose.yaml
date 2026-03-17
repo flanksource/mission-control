@@ -19,6 +19,10 @@ services:
   #     - SERVICES=cloudwatch,logs
   #   ports: ["4566:4566"]
 
+  facet:
+    image: ghcr.io/flanksource/facet:latest
+    ports: ["3010:3010"]
+
   # kindctl:  # optional helper; KinD cluster spins up in the job step
   #   image: docker
   #   command: ["true"]  # placeholder, no container running during tests
