@@ -1,5 +1,9 @@
 package msplanner
 
+/*
+
+Commenting out because msgraph-sdk-go takes A LOT of disk space
+
 import (
 	gocontext "context"
 	"encoding/json"
@@ -271,3 +275,4 @@ func openDataError(err error) error {
 
 	return errors.New(errorStr)
 }
+*/

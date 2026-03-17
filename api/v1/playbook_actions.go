@@ -4,27 +4,24 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"math/rand/v2"
 	"strings"
 	"time"
 
 	"github.com/flanksource/commons/duration"
-	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/models"
-	"github.com/flanksource/duty/query"
-	"github.com/flanksource/duty/shell"
-	"github.com/flanksource/duty/types"
-	"github.com/google/uuid"
-	"github.com/samber/lo"
-	"golang.org/x/exp/rand"
-	"k8s.io/client-go/kubernetes"
-
+	"github.com/flanksource/duty/dataquery"
 	"github.com/flanksource/duty/logs"
 	"github.com/flanksource/duty/logs/cloudwatch"
 	"github.com/flanksource/duty/logs/k8s"
 	"github.com/flanksource/duty/logs/loki"
 	"github.com/flanksource/duty/logs/opensearch"
+	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/shell"
+	"github.com/flanksource/duty/types"
+	"k8s.io/client-go/kubernetes"
+
 	"github.com/flanksource/incident-commander/api"
 )
 
@@ -84,17 +81,28 @@ type LogsAction struct {
 	Kubernetes *LogsKubernetes       `json:"kubernetes,omitempty" template:"true"`
 }
 
+type NotificationAttachment struct {
+	// Filename for the attachment
+	Filename string `yaml:"filename" json:"filename" template:"true"`
+	// Content is the body of the attachment (supports template expressions)
+	Content string `yaml:"content" json:"content" template:"true"`
+	// ContentType is the MIME type of the attachment (e.g. application/pdf)
+	ContentType string `yaml:"contentType,omitempty" json:"contentType,omitempty" template:"true"`
+}
+
 type NotificationAction struct {
 	// URL for the shoutrrr connection string
-	URL string `yaml:"url,omitempty" json:"url,omitempty"`
+	URL string `yaml:"url,omitempty" json:"url,omitempty" template:"true"`
 	// Connection to use to send the notification
-	Connection string `yaml:"connection,omitempty" json:"connection,omitempty"`
+	Connection string `yaml:"connection,omitempty" json:"connection,omitempty" template:"true"`
 	// Title of the notification
 	Title string `yaml:"title" json:"title" template:"true"`
 	// Message is the body of the notification
 	Message string `yaml:"message" json:"message" template:"true"`
 	// Properties for shoutrrr
 	Properties map[string]string `yaml:"properties,omitempty" json:"properties,omitempty" template:"true"`
+	// Attachments for the notification (only supported for SMTP)
+	Attachments []NotificationAttachment `yaml:"attachments,omitempty" json:"attachments,omitempty" template:"true"`
 }
 
 type GitOpsActionRepo struct {
@@ -131,12 +139,21 @@ type GitOpsActionPR struct {
 	Title string `yaml:"title" json:"title" template:"true"`
 	// Tags to add to the PR
 	Tags []string `yaml:"tags,omitempty" json:"tags,omitempty" template:"true"`
+
+	// AutoMerge pull request when supported
+	AutoMerge AutoMerge `json:"autoMerge,omitempty" yaml:"autoMerge,omitempty"`
+}
+
+type AutoMerge struct {
+	Enabled bool `json:"enabled,omitempty" yaml:"enabled,omitempty"`
+	Rebase  bool `json:"rebase,omitempty" yaml:"rebase,omitempty"`
 }
 
 type GitOpsActionPatch struct {
 	Path string `yaml:"path" json:"path" template:"true"`
 	YQ   string `yaml:"yq,omitempty" json:"yq,omitempty" template:"true"`
 	JQ   string `yaml:"jq,omitempty" json:"jq,omitempty" template:"true"`
+	If   string `yaml:"if,omitempty" json:"if,omitempty"`
 }
 
 type GitOpsActionFile struct {
@@ -242,64 +259,17 @@ type SQLAction struct {
 	Query string `yaml:"query" json:"query" template:"true"`
 	// Driver is the name of the underlying database to connect to.
 	// Example: postgres, mysql, ...
-	Driver string `yaml:"driver" json:"driver"`
-}
-
-type HTTPConnection struct {
-	// Connection name e.g. connection://http/google
-	Connection string `yaml:"connection,omitempty" json:"connection,omitempty"`
-	// Connection url, interpolated with username,password
-	URL                  string `yaml:"url,omitempty" json:"url,omitempty" template:"true"`
-	types.Authentication `yaml:",inline" json:",inline"`
+	Driver string `yaml:"driver,omitempty" json:"driver,omitempty"`
 }
 
 type HTTPAction struct {
-	HTTPConnection `yaml:",inline" json:",inline" template:"true"`
+	connection.HTTPConnection `yaml:",inline" json:",inline" template:"true"`
 	// Method to use - defaults to GET
-	Method string `yaml:"method,omitempty" json:"method,omitempty"`
-	// NTLM when set to true will do authentication using NTLM v1 protocol
-	NTLM bool `yaml:"ntlm,omitempty" json:"ntlm,omitempty"`
-	// NTLM when set to true will do authentication using NTLM v2 protocol
-	NTLMv2 bool `yaml:"ntlmv2,omitempty" json:"ntlmv2,omitempty"`
-	// Header fields to be used in the query
-	Headers []types.EnvVar `yaml:"headers,omitempty" json:"headers,omitempty"`
+	Method string `yaml:"method,omitempty" json:"method,omitempty" template:"true"`
 	// Request Body Contents
 	Body string `yaml:"body,omitempty" json:"body,omitempty" template:"true"`
 	// TemplateBody controls whether the body of the request needs to be templated
 	TemplateBody bool `yaml:"templateBody,omitempty" json:"templateBody,omitempty"`
-}
-
-type TimeMetadata struct {
-	Since string `json:"since" yaml:"since"`
-}
-
-type AIActionRelationship struct {
-	// max depth to traverse the relationship. Defaults to 3
-	Depth *int `json:"depth,omitempty"`
-
-	// use incoming/outgoing/all relationships.
-	Direction query.RelationDirection `json:"direction,omitempty"`
-
-	Changes  TimeMetadata `json:"changes,omitempty"`
-	Analysis TimeMetadata `json:"analysis,omitempty"`
-}
-
-func (t AIActionRelationship) ToRelationshipQuery(configID uuid.UUID) query.RelationQuery {
-	q := query.RelationQuery{
-		ID:       configID,
-		MaxDepth: t.Depth,
-		Relation: t.Direction,
-	}
-
-	if q.MaxDepth == nil {
-		q.MaxDepth = lo.ToPtr(3)
-	}
-
-	if q.Relation == "" {
-		q.Relation = query.All
-	}
-
-	return q
 }
 
 type AIActionClient struct {
@@ -393,41 +363,6 @@ func (t *AIActionClient) Populate(ctx context.Context) error {
 	return nil
 }
 
-type AIActionContext struct {
-	// The config id to operate on.
-	// If not provided, the playbook's config is used.
-	Config string `json:"config,omitempty" yaml:"config,omitempty" template:"true"`
-
-	// Select changes for the config to provide as an additional context to the AI model.
-	Changes TimeMetadata `json:"changes,omitempty" yaml:"changes,omitempty"`
-
-	// Select analysis for the config to provide as an additional context to the AI model.
-	Analysis TimeMetadata `json:"analysis,omitempty" yaml:"analysis,omitempty"`
-
-	// Select related configs to provide as an additional context to the AI model.
-	Relationships []AIActionRelationship `json:"relationships,omitempty" yaml:"relationships,omitempty"`
-
-	// List of playbooks that provide additional context to the LLM.
-	Playbooks []AIActionContextProviderPlaybook `json:"playbooks,omitempty" yaml:"playbooks,omitempty" template:"true"`
-}
-
-func (t AIActionContext) ShouldFetchConfigChanges() bool {
-	// if changes are being fetched from relationships, we don't have to query
-	// the changes for just the config alone.
-
-	if t.Changes.Since == "" {
-		return false
-	}
-
-	for _, r := range t.Relationships {
-		if r.Changes.Since != "" {
-			return false
-		}
-	}
-
-	return true
-}
-
 type AIActionFormat string
 
 const (
@@ -436,25 +371,9 @@ const (
 	AIActionFormatRecommendPlaybook AIActionFormat = "recommendPlaybook"
 )
 
-// AIActionContextProviderPlaybook is a playbook that provides additional context to the LLM.
-// This playbook is run before calling the LLM and it's output is added to the context.
-type AIActionContextProviderPlaybook struct {
-	// Namespace of the playbook
-	Namespace string `json:"namespace" yaml:"namespace"`
-
-	// Name of the playbook
-	Name string `json:"name" yaml:"name"`
-
-	// If is a CEL expression that decides if this playbook should be included in the context
-	If string `json:"if,omitempty" yaml:"if,omitempty"`
-
-	// Parameters to pass to the playbook
-	Params map[string]string `json:"params,omitempty" yaml:"params,omitempty" template:"true"`
-}
-
 type AIAction struct {
-	AIActionClient  `json:",inline" yaml:",inline"`
-	AIActionContext `json:",inline" yaml:",inline" template:"true"`
+	AIActionClient        `json:",inline" yaml:",inline"`
+	api.LLMContextRequest `json:",inline" yaml:",inline" template:"true"`
 
 	// When enabled, the prompt is simply saved without passing it on to the LLM.
 	DryRun bool `json:"dryRun,omitempty"`
@@ -488,6 +407,8 @@ type ExecAction struct {
 	EnvVars []types.EnvVar `yaml:"env,omitempty" json:"env,omitempty"`
 	// Checkout details the git repository that should be mounted to the process
 	Checkout *connection.GitConnection `yaml:"checkout,omitempty" json:"checkout,omitempty"`
+	// Setup binaries
+	Setup *shell.ExecSetup `json:"setup,omitempty"`
 }
 
 func (e *ExecAction) ToShellExec() shell.Exec {
@@ -497,6 +418,7 @@ func (e *ExecAction) ToShellExec() shell.Exec {
 		EnvVars:     e.EnvVars,
 		Artifacts:   e.Artifacts,
 		Checkout:    e.Checkout,
+		Setup:       e.Setup,
 	}
 }
 
@@ -644,15 +566,10 @@ func (t PlaybookActionRetry) NextRetryWait(retryNumber int) (time.Duration, erro
 }
 
 type PlaybookAction struct {
-	// delay is the parsed Delay
-	delay *time.Duration `json:"-" yaml:"-"`
-
-	// timeout is the parsed Timeout
-	timeout *time.Duration `json:"-" yaml:"-"`
-
 	PlaybookID string `json:"-" yaml:"-"`
 
 	// Name of the action
+	// +kubebuilder:validation:MinLength=1
 	Name string `yaml:"name" json:"name"`
 
 	// Delay is a CEL expression that returns the duration to delay the execution of this action.
@@ -690,6 +607,10 @@ type PlaybookAction struct {
 	// When left empty, the templating is done on the main instance(host) itself.
 	TemplatesOn string `json:"templatesOn,omitempty" yaml:"templatesOn,omitempty"`
 
+	// ContentType declares how the primary output should be rendered in the UI.
+	// +kubebuilder:validation:Enum="";text/plain;text/markdown;text/x-shellscript;application/json;application/yaml;"application/log+json";application/sql
+	ContentType string `yaml:"contentType,omitempty" json:"contentType,omitempty"`
+
 	AI                  *AIAction                  `json:"ai,omitempty" yaml:"ai,omitempty" template:"true"`
 	Exec                *ExecAction                `json:"exec,omitempty" yaml:"exec,omitempty" template:"true"`
 	GitOps              *GitOpsAction              `json:"gitops,omitempty" yaml:"gitops,omitempty" template:"true"`
@@ -697,9 +618,78 @@ type PlaybookAction struct {
 	AzureDevopsPipeline *AzureDevopsPipelineAction `json:"azureDevopsPipeline,omitempty" yaml:"azureDevopsPipeline,omitempty" template:"true"`
 	HTTP                *HTTPAction                `json:"http,omitempty" yaml:"http,omitempty" template:"true"`
 	SQL                 *SQLAction                 `json:"sql,omitempty" yaml:"sql,omitempty" template:"true"`
+	Prometheus          *dataquery.PrometheusQuery `json:"prometheus,omitempty" yaml:"prometheus,omitempty" template:"true"`
 	Pod                 *PodAction                 `json:"pod,omitempty" yaml:"pod,omitempty" template:"true"`
 	Notification        *NotificationAction        `json:"notification,omitempty" yaml:"notification,omitempty" template:"true"`
 	Logs                *LogsAction                `json:"logs,omitempty" template:"true"`
+	Report              *ReportAction              `json:"report,omitempty" yaml:"report,omitempty" template:"true"`
+}
+
+type FacetPDFMargins struct {
+	Top    *int `json:"top,omitempty" yaml:"top,omitempty"`
+	Bottom *int `json:"bottom,omitempty" yaml:"bottom,omitempty"`
+	Left   *int `json:"left,omitempty" yaml:"left,omitempty"`
+	Right  *int `json:"right,omitempty" yaml:"right,omitempty"`
+}
+
+type FacetPDFOptions struct {
+	PageSize  string           `json:"pageSize,omitempty" yaml:"pageSize,omitempty"`
+	Landscape bool             `json:"landscape,omitempty" yaml:"landscape,omitempty"`
+	Margins   *FacetPDFMargins `json:"margins,omitempty" yaml:"margins,omitempty"`
+}
+
+type FacetOptions struct {
+	Connection   string           `json:"connection,omitempty" yaml:"connection,omitempty" template:"true"`
+	URL          string           `json:"url,omitempty" yaml:"url,omitempty" template:"true"`
+	PDFOptions   *FacetPDFOptions `json:"pdfOptions,omitempty" yaml:"pdfOptions,omitempty"`
+	Header       string           `json:"header,omitempty" yaml:"header,omitempty" template:"true"`
+	Footer       string           `json:"footer,omitempty" yaml:"footer,omitempty" template:"true"`
+	TimestampURL string           `json:"timestampUrl,omitempty" yaml:"timestampUrl,omitempty" template:"true"`
+}
+
+// +kubebuilder:validation:XValidation:rule="!(has(self.view) && self.view != '' && has(self.configs))",message="view and configs are mutually exclusive"
+type ReportAction struct {
+	// Reference an existing View by namespace/name or just name
+	View string `json:"view,omitempty" yaml:"view,omitempty" template:"true"`
+	// Inline catalog query (alternative to View)
+	Configs *types.ResourceSelector `json:"configs,omitempty" yaml:"configs,omitempty" template:"true"`
+	// Output format: json, csv, facet-html, facet-pdf, markdown, slack, html, pdf
+	Format string `json:"format,omitempty" yaml:"format,omitempty" template:"true"`
+	// Variables passed to the view queries
+	Variables map[string]string `json:"variables,omitempty" yaml:"variables,omitempty" template:"true"`
+	// Facet rendering options for facet-html and facet-pdf formats
+	Facet *FacetOptions `json:"facet,omitempty" yaml:"facet,omitempty" template:"true"`
+}
+
+func (p *PlaybookAction) ActionType() string {
+	switch {
+	case p.Exec != nil:
+		return "exec"
+	case p.HTTP != nil:
+		return "http"
+	case p.SQL != nil:
+		return "sql"
+	case p.AI != nil:
+		return "ai"
+	case p.Pod != nil:
+		return "pod"
+	case p.Logs != nil:
+		return "logs"
+	case p.Notification != nil:
+		return "notification"
+	case p.GitOps != nil:
+		return "gitops"
+	case p.Github != nil:
+		return "github"
+	case p.AzureDevopsPipeline != nil:
+		return "azureDevopsPipeline"
+	case p.Prometheus != nil:
+		return "prometheus"
+	case p.Report != nil:
+		return "report"
+	default:
+		return ""
+	}
 }
 
 func (p *PlaybookAction) Count() int {
@@ -722,6 +712,9 @@ func (p *PlaybookAction) Count() int {
 	if p.SQL != nil {
 		count++
 	}
+	if p.Prometheus != nil {
+		count++
+	}
 	if p.Pod != nil {
 		count++
 	}
@@ -731,8 +724,68 @@ func (p *PlaybookAction) Count() int {
 	if p.Logs != nil {
 		count++
 	}
+	if p.Report != nil {
+		count++
+	}
 
 	return count
+}
+
+func (p *PlaybookAction) primaryActionCount() int {
+	count := 0
+	if p.AI != nil {
+		count++
+	}
+	if p.Exec != nil {
+		count++
+	}
+	if p.Github != nil {
+		count++
+	}
+	if p.AzureDevopsPipeline != nil {
+		count++
+	}
+	if p.HTTP != nil {
+		count++
+	}
+	if p.SQL != nil {
+		count++
+	}
+	if p.Prometheus != nil {
+		count++
+	}
+	if p.Pod != nil {
+		count++
+	}
+	if p.Logs != nil {
+		count++
+	}
+	if p.Report != nil {
+		count++
+	}
+
+	return count
+}
+
+func (p *PlaybookAction) Validate() error {
+	name := strings.TrimSpace(p.Name)
+	if name == "" {
+		return fmt.Errorf("action name is required")
+	}
+	if name != p.Name {
+		return fmt.Errorf("action name must not have leading or trailing whitespace")
+	}
+
+	primaryCount := p.primaryActionCount()
+	if primaryCount > 1 {
+		return fmt.Errorf("action %q has multiple actions configured", name)
+	}
+
+	if primaryCount == 0 && p.GitOps == nil && p.Notification == nil {
+		return fmt.Errorf("action %q is empty", name)
+	}
+
+	return nil
 }
 
 func (p *PlaybookAction) Context() map[string]any {
@@ -742,10 +795,6 @@ func (p *PlaybookAction) Context() map[string]any {
 }
 
 func (p *PlaybookAction) DelayDuration() (time.Duration, error) {
-	if p.delay != nil {
-		return *p.delay, nil
-	}
-
 	if p.Delay == "" {
 		return 0, nil
 	}
@@ -755,7 +804,6 @@ func (p *PlaybookAction) DelayDuration() (time.Duration, error) {
 		return 0, err
 	}
 
-	p.delay = utils.Ptr(time.Duration(d))
 	return time.Duration(d), nil
 }
 
@@ -773,15 +821,10 @@ func (p *PlaybookAction) EnforceTimeoutLimit(ctx context.Context, spec PlaybookS
 	actionTimeout, _ := p.TimeoutDuration()
 	if runTimeout < actionTimeout || actionTimeout == 0 {
 		p.Timeout = fmt.Sprintf("%0fm", runTimeout.Minutes())
-		p.timeout = &runTimeout
 	}
 }
 
 func (p *PlaybookAction) TimeoutDuration() (time.Duration, error) {
-	if p.timeout != nil {
-		return *p.timeout, nil
-	}
-
 	if p.Timeout == "" {
 		return 0, nil
 	}
@@ -791,6 +834,5 @@ func (p *PlaybookAction) TimeoutDuration() (time.Duration, error) {
 		return 0, err
 	}
 
-	p.timeout = utils.Ptr(time.Duration(d))
 	return time.Duration(d), nil
 }

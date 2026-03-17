@@ -1,0 +1,16 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: user-view-metrics-read
+  namespace: default
+  uid: 48d4e5f6-a7b8-4c9d-0e1f-5a6b7c8d9e0f
+spec:
+  description: Grant read access to metrics view for user
+  subject:
+    person: user-metrics@test.com
+  actions:
+    - read
+  object:
+    views:
+      - namespace: mc
+        name: metrics

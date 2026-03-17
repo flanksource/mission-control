@@ -1,0 +1,15 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: test-guest-playbook-by-name
+  namespace: test
+spec:
+  description: Test guest playbook read by name
+  subject:
+    person: guest@test.com
+  actions:
+    - read
+  object:
+    playbooks:
+      - name: backup-postgres
+      - name: loki-logs

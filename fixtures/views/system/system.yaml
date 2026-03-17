@@ -1,0 +1,26 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: system
+  namespace: mc
+spec:
+  display:
+    title: Failed Jobs
+    icon: cronjob
+    sidebar: true
+  panels:
+    - name: scraper summary
+      type: table
+      description: Summary of job scrapes by status
+      query: ""
+  queries:
+    scrape_summary:
+      sql:
+        connection: connection://mc/mission-control
+        query: SELECT status, COUNT(*) as count FROM job_scrapes GROUP BY status;
+  sections:
+    - title: Job History
+      icon: job
+      viewRef:
+        namespace: mc
+        name: jobhistory

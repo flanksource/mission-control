@@ -10,9 +10,12 @@ import (
 	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/types"
-
+	"github.com/flanksource/kopper"
+	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // +kubebuilder:object:root=true
@@ -25,6 +28,36 @@ type Permission struct {
 
 	Spec   PermissionSpec   `json:"spec,omitempty" yaml:"spec,omitempty"`
 	Status PermissionStatus `json:"status,omitempty" yaml:"status,omitempty"`
+}
+
+var _ kopper.StatusPatchGenerator = (*Permission)(nil)
+var _ kopper.StatusConditioner = (*Permission)(nil)
+var _ kopper.ObservedGenerationSetter = (*Permission)(nil)
+
+func (t *Permission) SetObservedGeneration(generation int64) {
+	t.Status.ObservedGeneration = generation
+}
+
+func (t *Permission) GetStatusConditions() *[]metav1.Condition {
+	return &t.Status.Conditions
+}
+
+func (t *Permission) GenerateStatusPatch(original runtime.Object) client.Patch {
+	og, ok := original.(*Permission)
+	if !ok {
+		return nil
+	}
+
+	if cmp.Diff(t.Status, og.Status) == "" {
+		return nil
+	}
+
+	clientObj, ok := original.(client.Object)
+	if !ok {
+		return nil
+	}
+
+	return client.MergeFrom(clientObj)
 }
 
 func findSubject(ctx context.Context, table string, selector string, subjectType models.PermissionSubjectType) (string, models.PermissionSubjectType, error) {
@@ -139,7 +172,13 @@ func (t *PermissionSubject) Populate(ctx context.Context) (string, models.Permis
 	return "", "", errors.New("permission subject not specified")
 }
 
-type PermissionObject dutyRBAC.Selectors
+// +kubebuilder:object:generate=false
+type PermissionObject struct {
+	dutyRBAC.Selectors `json:",inline"`
+
+	// Scopes that is expanded onto Selectors
+	Scopes []dutyRBAC.NamespacedNameIDSelector `json:"scopes,omitempty"`
+}
 
 // GlobalObject checks if the object selector semantically maps to a global object
 // and returns the corresponding global object if applicable.
@@ -151,14 +190,16 @@ type PermissionObject dutyRBAC.Selectors
 // is interpreted as the object: catalog.
 func (t *PermissionObject) GlobalObject() (string, bool) {
 	switch {
-	case t.isWildcardOnly(t.Playbooks, t.Configs, t.Components, t.Connections):
+	case t.isWildcardOnly(t.Playbooks, t.Configs, t.Components, t.Connections) && len(t.Views) == 0:
 		return policy.ObjectPlaybooks, true
-	case t.isWildcardOnly(t.Configs, t.Playbooks, t.Components, t.Connections):
+	case t.isWildcardOnly(t.Configs, t.Playbooks, t.Components, t.Connections) && len(t.Views) == 0:
 		return policy.ObjectCatalog, true
-	case t.isWildcardOnly(t.Components, t.Playbooks, t.Configs, t.Connections):
+	case t.isWildcardOnly(t.Components, t.Playbooks, t.Configs, t.Connections) && len(t.Views) == 0:
 		return policy.ObjectTopology, true
-	case t.isWildcardOnly(t.Connections, t.Playbooks, t.Configs, t.Components):
+	case t.isWildcardOnly(t.Connections, t.Playbooks, t.Configs, t.Components) && len(t.Views) == 0:
 		return policy.ObjectConnection, true
+	case t.isViewWildcardOnly():
+		return policy.ObjectViews, true
 	default:
 		return "", false
 	}
@@ -172,6 +213,19 @@ func (t *PermissionObject) isWildcardOnly(primary []types.ResourceSelector, othe
 	}
 
 	return len(primary) == 1 && primary[0].Wildcard()
+}
+
+// isViewWildcardOnly checks if the permission object has only a wildcard view selector
+// and no other resource selectors
+func (t *PermissionObject) isViewWildcardOnly() bool {
+	// Check that all other selectors are empty
+	if len(t.Configs) != 0 || len(t.Components) != 0 ||
+		len(t.Playbooks) != 0 || len(t.Connections) != 0 {
+		return false
+	}
+
+	// Check that we have exactly one view with wildcard name
+	return len(t.Views) == 1 && t.Views[0].Name == "*"
 }
 
 // +kubebuilder:object:generate=true
@@ -195,13 +249,19 @@ type PermissionSpec struct {
 	Deny bool `json:"deny,omitempty"`
 
 	// List of agent ids whose configs/components are accessible to a person when RLS is enabled
+	// DEPRECATED: Use AccessScope CRD instead. This field is ignored.
+	// +optional
 	Agents []string `json:"agents,omitempty"`
 
 	// List of config/component tags a person is allowed to access to when RLS is enabled
+	// DEPRECATED: Use AccessScope CRD instead. This field is ignored.
+	// +optional
 	Tags map[string]string `json:"tags,omitempty"`
 }
 
 type PermissionStatus struct {
+	ObservedGeneration int64              `json:"observedGeneration,omitempty" yaml:"observedGeneration,omitempty"`
+	Conditions         []metav1.Condition `json:"conditions,omitempty" yaml:"conditions,omitempty"`
 }
 
 // +kubebuilder:object:root=true

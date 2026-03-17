@@ -73,6 +73,25 @@ func GetPlaybookRun(ctx context.Context, id string) (*models.PlaybookRun, error)
 	return &p, nil
 }
 
+func GetRecentPlaybookRuns(ctx context.Context, limit int, playbookID *uuid.UUID, statuses ...models.PlaybookRunStatus) ([]models.PlaybookRun, error) {
+	query := ctx.DB().Order("created_at DESC").Limit(limit)
+
+	if playbookID != nil {
+		query = query.Where("playbook_id = ?", *playbookID)
+	}
+
+	if len(statuses) > 0 {
+		query = query.Where("status IN ?", statuses)
+	}
+
+	var p []models.PlaybookRun
+	if err := query.Find(&p).Error; err != nil {
+		return nil, dutyAPI.Errorf(dutyAPI.EINTERNAL, "something went wrong").WithDebugInfo("db.GetRecentPlaybookRuns(limit=%d, playbookID=%v): %v", limit, playbookID, err)
+	}
+
+	return p, nil
+}
+
 func findPlaybooksForResourceSelectable(ctx context.Context, selectable types.ResourceSelectable, selectorField string) (
 	[]api.PlaybookListItem,
 	[]*models.Playbook,
@@ -163,7 +182,7 @@ func FindPlaybooksForEvent(ctx context.Context, eventClass, event string) ([]mod
 
 func FindPlaybookByWebhookPath(ctx context.Context, path string) (*models.Playbook, error) {
 	var p models.Playbook
-	if err := ctx.DB().Debug().Where("deleted_at IS NULL").Where("spec->'on'->'webhook'->>'path' = ?", path).First(&p).Error; err != nil {
+	if err := ctx.DB().Where("deleted_at IS NULL").Where("spec->'on'->'webhook'->>'path' = ?", path).First(&p).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, nil
 		}
@@ -175,11 +194,19 @@ func FindPlaybookByWebhookPath(ctx context.Context, path string) (*models.Playbo
 }
 
 func PersistPlaybookFromCRD(ctx context.Context, obj *v1.Playbook) error {
+	if err := obj.Spec.Validate(); err != nil {
+		return err
+	}
+
 	_, err := SavePlaybook(ctx, obj)
 	return err
 }
 
 func SavePlaybook(ctx context.Context, obj *v1.Playbook) (*models.Playbook, error) {
+	if err := obj.Spec.Validate(); err != nil {
+		return nil, err
+	}
+
 	playbook, err := obj.ToModel()
 	if err != nil {
 		return nil, err

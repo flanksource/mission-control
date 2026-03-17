@@ -30,6 +30,37 @@
       "additionalProperties": false,
       "type": "object"
     },
+    "Condition": {
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "observedGeneration": {
+          "type": "integer"
+        },
+        "lastTransitionTime": {
+          "$ref": "#/$defs/Time"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "type",
+        "status",
+        "lastTransitionTime",
+        "reason",
+        "message"
+      ]
+    },
     "Email": {
       "properties": {
         "to": {
@@ -203,7 +234,8 @@
         }
       },
       "additionalProperties": false,
-      "type": "object"
+      "type": "object",
+      "description": "IncidentRule is the Schema for the IncidentRule API"
     },
     "IncidentRuleSpec": {
       "properties": {
@@ -251,9 +283,20 @@
       "type": "object"
     },
     "IncidentRuleStatus": {
-      "properties": {},
+      "properties": {
+        "observedGeneration": {
+          "type": "integer"
+        },
+        "conditions": {
+          "items": {
+            "$ref": "#/$defs/Condition"
+          },
+          "type": "array"
+        }
+      },
       "additionalProperties": false,
-      "type": "object"
+      "type": "object",
+      "description": "IncidentRuleStatus defines the observed state of IncidentRule"
     },
     "IncidentTemplate": {
       "properties": {

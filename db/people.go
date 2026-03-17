@@ -7,15 +7,20 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/collections"
+	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/flanksource/incident-commander/api"
-	dbModels "github.com/flanksource/incident-commander/db/models"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"golang.org/x/crypto/argon2"
+	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
+
+	"github.com/flanksource/incident-commander/api"
+	dbModels "github.com/flanksource/incident-commander/db/models"
 )
+
+const PersonTypeAccessToken = "access_token"
 
 func UpdateUserProperties(ctx context.Context, userID string, newProps api.PersonProperties) error {
 	var current api.Person
@@ -84,31 +89,41 @@ const (
 	saltLength  = 12
 )
 
-func CreateAccessToken(ctx context.Context, personID uuid.UUID, name, password string, expiry *time.Duration) (string, error) {
+// CreateAccessToken generates a new access token using Argon2id hashing.
+// Returns: "password.salt.timeCost.memoryCost.parallelism" to user, stores base64(hash) in DB.
+func CreateAccessToken(ctx context.Context, personID uuid.UUID, name, password string, expiry *time.Duration, createdBy *uuid.UUID, autoRenew bool) (string, *models.AccessToken, error) {
 	saltRaw := make([]byte, saltLength)
 	if _, err := crand.Read(saltRaw); err != nil {
-		return "", err
+		return "", nil, err
 	}
 	salt := base64.URLEncoding.EncodeToString(saltRaw)
 
 	hash := argon2.IDKey([]byte(password), []byte(salt), timeCost, memoryCost, parallelism, keyLength)
 	encodedHash := base64.URLEncoding.EncodeToString(hash)
 
+	if name == "default" {
+		name = fmt.Sprintf("agent-%d", time.Now().Unix())
+	}
+
 	accessToken := &models.AccessToken{
-		Name:     fmt.Sprintf("agent-%d", time.Now().Unix()),
-		Value:    encodedHash,
-		PersonID: personID,
+		Name:      name,
+		Value:     encodedHash,
+		PersonID:  personID,
+		AutoRenew: autoRenew,
 	}
 	if expiry != nil {
 		accessToken.ExpiresAt = lo.ToPtr(time.Now().Add(*expiry))
 	}
+	if createdBy != nil {
+		accessToken.CreatedBy = createdBy
+	}
 
 	if err := ctx.DB().Create(&accessToken).Error; err != nil {
-		return "", err
+		return "", nil, err
 	}
 
 	formattedHash := fmt.Sprintf("%s.%s.%d.%d.%d", password, salt, timeCost, memoryCost, parallelism)
-	return formattedHash, nil
+	return formattedHash, accessToken, nil
 }
 
 func UpdateAccessTokenExpiry(ctx context.Context, tokenID uuid.UUID, newExpiry time.Time) error {
@@ -116,6 +131,72 @@ func UpdateAccessTokenExpiry(ctx context.Context, tokenID uuid.UUID, newExpiry t
 		Where("id = ?", tokenID).
 		Update("expires_at", newExpiry).
 		Error
+}
+
+type AccessTokenWithUser struct {
+	models.AccessToken
+	Person models.Person `json:"person" gorm:"foreignKey:PersonID"`
+}
+
+func ListAccessTokens(ctx context.Context) ([]AccessTokenWithUser, error) {
+	return gorm.G[AccessTokenWithUser](ctx.DB()).
+		Select("id", "name", "person_id", "created_at").
+		Preload("Person", nil).
+		Find(ctx)
+}
+
+func GetAccessToken(ctx context.Context, id string) (models.AccessToken, error) {
+	return gorm.G[models.AccessToken](ctx.DB()).
+		Select("id", "name", "person_id", "created_at", "created_by").
+		Where("id = ?", id).
+		First(ctx)
+}
+
+// GetExpiredAccessTokens returns all access tokens whose expiry time has passed.
+// Tokens with NULL expires_at (non-expiring tokens) are not included.
+func GetExpiredAccessTokens(ctx context.Context) ([]models.AccessToken, error) {
+	tokens, err := gorm.G[models.AccessToken](ctx.DB()).
+		Where("expires_at < NOW()").
+		Find(ctx)
+	if err != nil {
+		return nil, ctx.Oops().Wrapf(err, "failed to query expired access tokens")
+	}
+	return tokens, nil
+}
+
+// GetPersonType returns the type field of a person record by their ID.
+// Returns an error if the person is not found.
+func GetPersonType(ctx context.Context, id string) (string, error) {
+	var person models.Person
+	if err := ctx.DB().Table("people").Select("type").Where("id = ?", id).First(&person).Error; err != nil {
+		return "", ctx.Oops().Wrapf(err, "failed to get person type for person %s", id)
+	}
+	return person.Type, nil
+}
+
+func DeleteAccessToken(ctx context.Context, id string, personID string) error {
+	return ctx.DB().Transaction(func(tx *gorm.DB) error {
+		// Delete the access token (hard delete)
+		if err := tx.Where("id = ?", id).Delete(&models.AccessToken{}).Error; err != nil {
+			return ctx.Oops().Wrapf(err, "failed to hard delete access token %s", id)
+		}
+
+		// Soft delete the associated person
+		result := tx.Model(&models.Person{}).
+			Where("id = ?", personID).
+			Where("type = ?", PersonTypeAccessToken).
+			UpdateColumn("deleted_at", duty.Now())
+
+		if result.Error != nil {
+			return ctx.Oops().Wrapf(result.Error, "failed to soft delete person %s for token %s", personID, id)
+		}
+
+		if result.RowsAffected == 0 {
+			ctx.Warnf("person %s for token %s was not soft-deleted (type=%s, already deleted, or doesn't exist)", personID, id, PersonTypeAccessToken)
+		}
+
+		return nil
+	})
 }
 
 func AddPersonToTeam(ctx context.Context, personID uuid.UUID, teamID uuid.UUID) error {

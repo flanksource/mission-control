@@ -17,13 +17,13 @@ func GenerateAgent(c echo.Context) error {
 
 	var body api.GenerateAgentRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&body); err != nil {
-		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{Err: err.Error()})
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid request body: %v", err))
 	}
 
 	agent, err := generateAgent(ctx, body)
 	if err != nil {
 		logger.Errorf("failed to generate a new agent: %v", err)
-		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Err: err.Error(), Message: "error generating agent"})
+		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
 	}
 
 	return c.JSON(http.StatusCreated, agent)
@@ -35,13 +35,13 @@ func GenerateToken(c echo.Context) error {
 
 	var body api.GenerateTokenRequest
 	if err := json.NewDecoder(c.Request().Body).Decode(&body); err != nil {
-		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{Err: err.Error()})
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid request body: %v", err))
 	}
 
 	token, err := generateToken(ctx, body)
 	if err != nil {
 		logger.Errorf("failed to generate a new token: %v", err)
-		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{Err: err.Error(), Message: "error generating token"})
+		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
 	}
 
 	return c.JSON(http.StatusCreated, token)

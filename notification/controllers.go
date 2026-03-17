@@ -3,15 +3,22 @@ package notification
 import (
 	"encoding/json"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/rbac/policy"
+	"github.com/flanksource/duty/types"
+	"github.com/google/uuid"
+	"github.com/labstack/echo/v4"
+	"gorm.io/gorm"
+
+	"github.com/flanksource/incident-commander/db"
 	echoSrv "github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/rbac"
-	"github.com/labstack/echo/v4"
 )
 
 func init() {
@@ -22,26 +29,31 @@ func RegisterRoutes(e *echo.Echo) {
 	g := e.Group("/notification")
 
 	g.POST("/summary", NotificationSendHistorySummary, echoSrv.RLSMiddleware)
+	g.GET("/send_history/:id", GetNotificationSendHistoryDetail, echoSrv.RLSMiddleware)
 
 	g.GET("/events", func(c echo.Context) error {
 		return c.JSON(http.StatusOK, EventRing.Get())
 	}, rbac.Authorization(policy.ObjectMonitor, policy.ActionRead))
 
-	g.POST("/silence", func(c echo.Context) error {
-		ctx := c.Request().Context().(context.Context)
+	g.POST("/silence", handleCreateSilence, rbac.Authorization(policy.ObjectNotification, policy.ActionCreate))
 
-		var req SilenceSaveRequest
-		if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
-			return err
-		}
+	g.GET("/silence_preview", NotificationSilencePreview, rbac.Authorization(policy.ObjectNotification, policy.ActionRead))
+}
 
-		req.Source = models.SourceUI
-		if err := SaveNotificationSilence(ctx, req); err != nil {
-			return api.WriteError(c, err)
-		}
+func handleCreateSilence(c echo.Context) error {
+	ctx := c.Request().Context().(context.Context)
 
-		return nil
-	}, rbac.Authorization(policy.ObjectNotification, policy.ActionCreate))
+	var req SilenceSaveRequest
+	if err := json.NewDecoder(c.Request().Body).Decode(&req); err != nil {
+		return api.WriteError(c, api.Errorf(api.EINVALID, "invalid post body: %v", err))
+	}
+
+	req.Source = models.SourceUI
+	if err := SaveNotificationSilence(ctx, req); err != nil {
+		return api.WriteError(c, err)
+	}
+
+	return nil
 }
 
 func NotificationSendHistorySummary(c echo.Context) error {
@@ -58,4 +70,96 @@ func NotificationSendHistorySummary(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, response)
+}
+
+func GetNotificationSendHistoryDetail(c echo.Context) error {
+	ctx := c.Request().Context().(context.Context)
+	id := c.Param("id")
+	if _, err := uuid.Parse(id); err != nil {
+		return api.WriteError(c, api.Errorf(api.EINVALID, "invalid notification history id: %s", id))
+	}
+
+	var detail NotificationSendHistoryDetail
+	if err := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", id).First(&detail.NotificationSendHistory).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return api.WriteError(c, api.Errorf(api.ENOTFOUND, "notification history %s not found", id))
+		}
+		return api.WriteError(c, ctx.Oops().Wrap(err))
+	}
+
+	resourceKind := strings.Split(detail.SourceEvent, ".")[0]
+	detail.ResourceKind = resourceKind
+	if resourceMap, err := GetResourceAsMapFromEvent(ctx, detail.SourceEvent, detail.ResourceID.String()); err == nil && resourceMap != nil {
+		if b, err := json.Marshal(resourceMap); err == nil {
+			detail.Resource = types.JSON(b)
+		}
+		if resourceType, ok := resourceMap["type"].(string); ok && resourceType != "" {
+			detail.ResourceType = &resourceType
+		}
+	}
+
+	detail.BodyMarkdown = RenderBodyMarkdown(detail.NotificationSendHistory)
+
+	return c.JSON(http.StatusOK, detail)
+}
+
+type NotificationSilencePreviewItem struct {
+	models.NotificationSendHistory `json:",inline"`
+	Resource                       map[string]any `json:"resource"`
+	BodyMarkdown                   string         `json:"body_markdown,omitempty"`
+}
+
+const (
+	DefaultNotificationSilencePreviewLimit = 30
+	MaxNotificationSilencePreviewLimit     = 100
+)
+
+func NotificationSilencePreview(c echo.Context) error {
+	ctx := c.Request().Context().(context.Context)
+
+	params := CanSilenceParams{
+		ResourceID:   c.QueryParam("id"),
+		ResourceType: c.QueryParam("type"),
+		Recursive:    c.QueryParam("recursive") == "true",
+		Filter:       c.QueryParam("filter"),
+		Limit:        DefaultNotificationSilencePreviewLimit,
+	}
+	if limit, err := strconv.Atoi(c.QueryParam("limit")); err == nil {
+		params.Limit = max(limit, MaxNotificationSilencePreviewLimit)
+	}
+
+	if selectorsRaw := c.QueryParam("selectors"); selectorsRaw != "" {
+		var selectors types.ResourceSelectors
+		if err := json.Unmarshal([]byte(selectorsRaw), &selectors); err != nil {
+			return api.WriteError(c, api.Errorf(api.EINVALID, "invalid selectors: %v", err))
+		}
+
+		params.Selectors = selectors
+	}
+
+	h, err := db.GetNotificationSendHistory(ctx, 15, []string{models.NotificationStatusSent}, params.Limit, -1)
+	if err != nil {
+		return api.WriteError(c, err)
+	}
+	silenced, err := CanSilence(ctx, h, params)
+	if err != nil {
+		return api.WriteError(c, err)
+	}
+
+	var resp []NotificationSilencePreviewItem
+	for _, s := range silenced {
+		rMap, err := GetResourceAsMapFromEvent(ctx, s.SourceEvent, s.ResourceID.String())
+		if err != nil {
+			return api.WriteError(c, err)
+		}
+
+		item := NotificationSilencePreviewItem{
+			NotificationSendHistory: s,
+			Resource:                rMap,
+		}
+		item.BodyMarkdown = RenderBodyMarkdown(s)
+		resp = append(resp, item)
+	}
+
+	return c.JSON(200, resp)
 }

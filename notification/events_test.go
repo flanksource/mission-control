@@ -1,12 +1,12 @@
 package notification
 
 import (
-	"testing"
-
 	"github.com/flanksource/duty/models"
+	ginkgo "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
-func TestIsHealthReportable(t *testing.T) {
+var _ = ginkgo.Describe("IsHealthReportable", func() {
 	tests := []struct {
 		name           string
 		events         []string
@@ -45,12 +45,9 @@ func TestIsHealthReportable(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
+		ginkgo.It(tt.name, func() {
 			result := isHealthReportable(tt.events, tt.previousHealth, tt.currentHealth)
-			if result != tt.expected {
-				t.Errorf("isHealthReportable(%v, %v, %v) = %v; want %v",
-					tt.events, tt.previousHealth, tt.currentHealth, result, tt.expected)
-			}
+			Expect(result).To(Equal(tt.expected))
 		})
 	}
-}
+})

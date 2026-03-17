@@ -10,23 +10,22 @@ import (
 	"time"
 
 	"github.com/MicahParks/keyfunc"
+	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/commons/properties"
+	"github.com/flanksource/commons/rand"
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
-	"github.com/flanksource/duty/rbac/policy"
-	"github.com/flanksource/duty/rls"
-	"github.com/google/uuid"
-	"github.com/labstack/echo/v4"
-	"github.com/samber/lo"
-
-	"github.com/flanksource/incident-commander/db"
-	"github.com/flanksource/incident-commander/vars"
 	"github.com/golang-jwt/jwt/v4"
+	"github.com/labstack/echo/v4"
 	"github.com/patrickmn/go-cache"
+	"github.com/samber/lo"
 	"golang.org/x/crypto/argon2"
 	"gorm.io/gorm"
+
+	"github.com/flanksource/incident-commander/db"
 )
 
 func FlushTokenCache() {
@@ -38,6 +37,11 @@ func FlushTokenCache() {
 // - RLS payloads
 // - access tokens
 var tokenCache = cache.New(1*time.Hour, 1*time.Hour)
+
+// deletedTokensCache maintains a blacklist of deleted token IDs.
+// Required because tokenCache is keyed by the full token string, not the ID,
+// and we cannot reconstruct the cache key from the hashed value in the database.
+var deletedTokensCache = cache.New(24*time.Hour, 24*time.Hour)
 
 const (
 	// If token is expiring within 15 days we update it's expiry
@@ -59,70 +63,6 @@ func InjectToken(ctx context.Context, c echo.Context, user *models.Person, sessI
 	return nil
 }
 
-func GetRLSPayload(ctx context.Context) (*rls.Payload, error) {
-	if !ctx.Properties().On(false, vars.FlagRLSEnable) {
-		return &rls.Payload{Disable: true}, nil
-	}
-
-	cacheKey := fmt.Sprintf("rls-payload-%s", ctx.User().ID.String())
-	if cached, ok := tokenCache.Get(cacheKey); ok {
-		return cached.(*rls.Payload), nil
-	}
-
-	if roles, err := rbac.RolesForUser(ctx.User().ID.String()); err != nil {
-		return nil, err
-	} else if !lo.Contains(roles, policy.RoleGuest) {
-		payload := &rls.Payload{Disable: true}
-		tokenCache.SetDefault(cacheKey, payload)
-		return payload, nil
-	}
-
-	permissions, err := rbac.PermsForUser(ctx.User().ID.String())
-	if err != nil {
-		return nil, err
-	}
-
-	var permissionWithIDs []string
-	for _, p := range permissions {
-		if p.Action != policy.ActionRead && p.Action != "*" {
-			continue
-		}
-
-		// TODO: support deny
-		if p.Deny {
-			continue
-		}
-
-		if uuid.Validate(p.ID) == nil {
-			permissionWithIDs = append(permissionWithIDs, p.ID)
-		}
-	}
-
-	var permModels []models.Permission
-	if err := ctx.DB().Where("id IN ?", permissionWithIDs).Find(&permModels).Error; err != nil {
-		return nil, fmt.Errorf("failed to get permission for ids: %w", err)
-	}
-
-	var (
-		agentIDs []string
-		tags     = []map[string]string{}
-	)
-	for _, p := range permModels {
-		agentIDs = append(agentIDs, p.Agents...)
-		if len(p.Tags) > 0 {
-			tags = append(tags, p.Tags)
-		}
-	}
-
-	payload := &rls.Payload{
-		Agents: agentIDs,
-		Tags:   tags,
-	}
-	tokenCache.SetDefault(cacheKey, payload)
-
-	return payload, nil
-}
-
 func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId string) (string, error) {
 	config := api.DefaultConfig
 	key := sessionId + user.ID.String()
@@ -131,6 +71,8 @@ func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId str
 		return token.(string), nil
 	}
 
+	// Postgrest makes this jwt available as a session parameter inside postgres.
+	// We inject the rls payload here and then access it inside postgres using request.jwt.claims parameter.
 	claims := jwt.MapClaims{
 		"role": config.Postgrest.DBRole,
 		"id":   user.ID.String(),
@@ -138,16 +80,8 @@ func GetOrCreateJWTToken(ctx context.Context, user *models.Person, sessionId str
 
 	if rlsPayload, err := GetRLSPayload(ctx.WithUser(user)); err != nil {
 		return "", ctx.Oops().Wrap(err)
-	} else if rlsPayload.Disable {
-		claims["disable_rls"] = true
-	} else {
-		if len(rlsPayload.Agents) > 0 {
-			claims["agents"] = rlsPayload.Agents
-		}
-
-		if len(rlsPayload.Tags) > 0 {
-			claims["tags"] = rlsPayload.Tags
-		}
+	} else if jwtClaim := rlsPayload.JWTClaims(); jwtClaim != nil {
+		claims = collections.MergeMap(claims, jwtClaim)
 	}
 
 	token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(config.Postgrest.JWTSecret))
@@ -187,8 +121,15 @@ func getJWTKeyFunc(jwksURL string) jwt.Keyfunc {
 }
 
 func getAccessToken(ctx context.Context, token string) (*models.AccessToken, error) {
-	if token, ok := tokenCache.Get(token); ok {
-		return token.(*models.AccessToken), nil
+	if cachedToken, ok := tokenCache.Get(token); ok {
+		accessToken := cachedToken.(*models.AccessToken)
+
+		// Check if this token has been deleted (even if still in cache)
+		if _, deleted := deletedTokensCache.Get(accessToken.ID.String()); deleted {
+			return nil, errTokenExpired
+		}
+
+		return accessToken, nil
 	}
 
 	fields := strings.Split(token, ".")
@@ -229,6 +170,10 @@ func getAccessToken(ctx context.Context, token string) (*models.AccessToken, err
 		return nil, err
 	}
 
+	if _, deleted := deletedTokensCache.Get(accessToken.ID.String()); deleted {
+		return nil, errTokenExpired
+	}
+
 	expiry := accessToken.ExpiresAt
 	if expiry == nil {
 		tokenCache.Set(token, &accessToken, -1)
@@ -237,7 +182,7 @@ func getAccessToken(ctx context.Context, token string) (*models.AccessToken, err
 			return nil, errTokenExpired
 		}
 
-		if time.Until(*expiry) < preExpiryWindow {
+		if time.Until(*expiry) < preExpiryWindow && accessToken.AutoRenew {
 			if err := db.UpdateAccessTokenExpiry(ctx, accessToken.ID, time.Now().Add(expiryExtension)); err != nil {
 				return nil, err
 			}
@@ -247,4 +192,88 @@ func getAccessToken(ctx context.Context, token string) (*models.AccessToken, err
 	}
 
 	return &accessToken, nil
+}
+
+func extractBearerAuthToken(header http.Header) (string, bool) {
+	auth := header.Get(echo.HeaderAuthorization)
+	if auth == "" {
+		return "", false
+	}
+	if !strings.HasPrefix(auth, "Bearer ") {
+		return "", false
+	}
+	return strings.TrimPrefix(auth, "Bearer "), true
+}
+
+type CreateAccessTokenForPersonResult struct {
+	Token      string
+	TokenModel *models.AccessToken
+	Person     *models.Person
+}
+
+func CreateAccessTokenForPerson(ctx context.Context, user *models.Person, tokenName string, expiry time.Duration, autoRenew bool) (CreateAccessTokenForPersonResult, error) {
+	name := user.Name + " (Token)"
+	emailParts := strings.Split(user.Email, "@")
+	if len(emailParts) != 2 {
+		return CreateAccessTokenForPersonResult{}, fmt.Errorf("unable to split email into 2 parts")
+
+	}
+	email := emailParts[0] + "+" + "token:" + tokenName + "@" + emailParts[1]
+
+	person, err := db.CreatePerson(ctx, name, email, db.PersonTypeAccessToken)
+	if err != nil {
+		return CreateAccessTokenForPersonResult{}, fmt.Errorf("failed to create a new person: %w", err)
+	}
+
+	password, err := rand.GenerateRandHex(32)
+	if err != nil {
+		return CreateAccessTokenForPersonResult{}, fmt.Errorf("unable to generate random password for token: %w", err)
+	}
+
+	// 0 expiry means default
+	if expiry == 0 {
+		expiry = properties.Duration(90*24*time.Hour, "access_token.default_expiry")
+	}
+
+	token, tokenModel, err := db.CreateAccessToken(ctx, person.ID, tokenName, password, &expiry, lo.ToPtr(user.ID), autoRenew)
+	return CreateAccessTokenForPersonResult{
+		Token:      token,
+		TokenModel: tokenModel,
+		Person:     person,
+	}, err
+}
+
+// DeleteAccessToken deletes an access token and soft-deletes the associated person.
+// Uses deletedTokensCache blacklist for immediate invalidation since direct cache
+// eviction isn't possible (cache key vs token ID mismatch).
+func DeleteAccessToken(ctx context.Context, tokenID string) error {
+	token, err := db.GetAccessToken(ctx, tokenID)
+	if err != nil {
+		return ctx.Oops().Wrapf(err, "failed to get access token %s", tokenID)
+	}
+
+	// Add to blacklist immediately to prevent any further use
+	deletedTokensCache.Set(tokenID, true, cache.DefaultExpiration)
+
+	tokenPersonID := token.PersonID.String()
+	personType, err := db.GetPersonType(ctx, tokenPersonID)
+	if err != nil {
+		return ctx.Oops().Wrapf(err, "failed to get person type for %s", tokenPersonID)
+	}
+
+	if err := db.DeleteAccessToken(ctx, tokenID, tokenPersonID); err != nil {
+		return ctx.Oops().Wrapf(err, "failed to delete access token %s", tokenID)
+	}
+
+	if personType == db.PersonTypeAccessToken {
+		if _, err := rbac.Enforcer().DeleteRolesForUser(tokenPersonID); err != nil {
+			ctx.Errorf("failed to delete roles for token person %s: %v", tokenPersonID, err)
+		}
+
+		if _, err := rbac.Enforcer().DeletePermissionsForUser(tokenPersonID); err != nil {
+			ctx.Errorf("failed to delete permissions for token person %s: %v", tokenPersonID, err)
+		}
+	}
+
+	return nil
 }

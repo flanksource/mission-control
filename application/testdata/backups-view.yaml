@@ -1,0 +1,34 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  uid: b2c3d4e5-f6a7-8901-bcde-f01234567890
+  name: backups
+  namespace: mc
+spec:
+  display:
+    title: Backups
+    icon: database
+  cache:
+    maxAge: 1h
+    minAge: 1m
+    refreshTimeout: 10s
+  columns:
+    - name: id
+      type: string
+      primaryKey: true
+      hidden: true
+    - name: database
+      type: string
+    - name: date
+      type: datetime
+    - name: status
+      type: status
+  queries:
+    backups:
+      changes:
+        search: change_type=BackupSuccessful
+        limit: 10
+  mapping:
+    database: row.name
+    date: row.created_at
+    status: row.details.status

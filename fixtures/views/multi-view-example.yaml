@@ -1,0 +1,146 @@
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: resource-health-detail
+  namespace: mc
+spec:
+  description: Detailed health check info, used as a section in the overview.
+  display:
+    title: Health Check Details
+    icon: heart
+  columns:
+    - name: id
+      type: string
+      primaryKey: true
+      hidden: true
+    - name: name
+      type: string
+    - name: type
+      type: string
+    - name: status
+      type: status
+    - name: last_transition_time
+      type: datetime
+  queries:
+    checks:
+      columns:
+        id: string
+        name: string
+        type: string
+        status: string
+        last_transition_time: datetime
+      sql:
+        connection: connection://mc/mission-control
+        query: |
+          SELECT id, name, type, status, last_transition_time
+          FROM checks
+          WHERE deleted_at IS NULL
+          ORDER BY last_transition_time DESC
+          LIMIT 10
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: resource-overview
+  namespace: mc
+spec:
+  description: >
+    Aggregates a config summary table with an inline health-check
+    section via viewRef. When exported, resource-health-detail does
+    NOT appear as a separate top-level view — it is embedded here.
+  display:
+    title: Resource Overview
+    icon: layout-dashboard
+  columns:
+    - name: id
+      type: string
+      primaryKey: true
+      hidden: true
+    - name: type
+      type: string
+    - name: total
+      type: number
+    - name: healthy
+      type: number
+    - name: unhealthy
+      type: number
+    - name: warning
+      type: number
+  queries:
+    config_summary:
+      columns:
+        id: string
+        type: string
+        total: number
+        healthy: number
+        unhealthy: number
+        warning: number
+      sql:
+        connection: connection://mc/mission-control
+        query: |
+          SELECT
+            config_class AS id,
+            config_class AS type,
+            COUNT(*)::int AS total,
+            COUNT(*) FILTER (WHERE health = 'healthy')::int AS healthy,
+            COUNT(*) FILTER (WHERE health = 'unhealthy')::int AS unhealthy,
+            COUNT(*) FILTER (WHERE health = 'warning')::int AS warning
+          FROM config_items
+          WHERE deleted_at IS NULL
+            AND config_class IS NOT NULL
+          GROUP BY config_class
+          ORDER BY total DESC
+          LIMIT 10
+  sections:
+    - title: Health Checks
+      icon: heart
+      viewRef:
+        namespace: mc
+        name: resource-health-detail
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: recent-changes
+  namespace: mc
+spec:
+  description: Standalone view in the same file — appears as its own top-level result.
+  display:
+    title: Recent Changes
+    icon: history
+  columns:
+    - name: id
+      type: string
+      primaryKey: true
+      hidden: true
+    - name: config_type
+      type: string
+    - name: change_type
+      type: string
+    - name: summary
+      type: string
+    - name: created_at
+      type: datetime
+  queries:
+    changes:
+      columns:
+        id: string
+        config_type: string
+        change_type: string
+        summary: string
+        created_at: datetime
+      sql:
+        connection: connection://mc/mission-control
+        query: |
+          SELECT
+            ch.id::text,
+            ci.type AS config_type,
+            ch.change_type,
+            ch.summary,
+            ch.created_at
+          FROM config_changes ch
+          JOIN config_items ci ON ci.id = ch.config_id
+          WHERE ch.created_at > NOW() - INTERVAL '7 days'
+          ORDER BY ch.created_at DESC
+          LIMIT 20

@@ -2,12 +2,47 @@ package v1
 
 import (
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/kopper"
+	"github.com/google/go-cmp/cmp"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 // IncidentRuleStatus defines the observed state of IncidentRule
 type IncidentRuleStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
+	ObservedGeneration int64              `json:"observedGeneration,omitempty" yaml:"observedGeneration,omitempty"`
+	Conditions         []metav1.Condition `json:"conditions,omitempty" yaml:"conditions,omitempty"`
+}
+
+var _ kopper.StatusPatchGenerator = (*IncidentRule)(nil)
+var _ kopper.StatusConditioner = (*IncidentRule)(nil)
+var _ kopper.ObservedGenerationSetter = (*IncidentRule)(nil)
+
+func (t *IncidentRule) SetObservedGeneration(generation int64) {
+	t.Status.ObservedGeneration = generation
+}
+
+func (t *IncidentRule) GetStatusConditions() *[]metav1.Condition {
+	return &t.Status.Conditions
+}
+
+func (t *IncidentRule) GenerateStatusPatch(original runtime.Object) client.Patch {
+	og, ok := original.(*IncidentRule)
+	if !ok {
+		return nil
+	}
+
+	if cmp.Diff(t.Status, og.Status) == "" {
+		return nil
+	}
+
+	clientObj, ok := original.(client.Object)
+	if !ok {
+		return nil
+	}
+
+	return client.MergeFrom(clientObj)
 }
 
 //+kubebuilder:object:root=true

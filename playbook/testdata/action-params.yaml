@@ -17,6 +17,6 @@ spec:
     - name: write config name to the file
       exec:
         script: echo {{.params.my_config.config_class}} > {{.params.path}}
-    - name: "append component name to the same file "
+    - name: "append component name to the same file"
       exec:
         script: echo {{.params.my_component.name}} >> {{.params.path}}

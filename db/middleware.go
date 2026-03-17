@@ -104,21 +104,25 @@ func transformQuery(now time.Time, queryParam url.Values) (url.Values, error) {
 		} else if !timestamp.IsZero() {
 			queryParam.Add(key, fmt.Sprintf("%s.%s", operator, timestamp.Format(time.RFC3339)))
 		} else {
-			in, notIN, prefixes, suffixes, _ := query.ParseFilteringQuery(val, false)
-			if len(in) > 0 {
-				queryParam.Add(key, fmt.Sprintf("in.(%s)", postgrestValues(in)))
+			fq, _ := query.ParseFilteringQuery(val, false)
+			if len(fq.In) > 0 {
+				queryParam.Add(key, fmt.Sprintf("in.(%s)", postgrestValues(fq.In)))
 			}
 
-			if len(notIN) > 0 {
-				queryParam.Add(key, fmt.Sprintf("not.in.(%s)", postgrestValues(notIN)))
+			if len(fq.Not.In) > 0 {
+				queryParam.Add(key, fmt.Sprintf("not.in.(%s)", postgrestValues(fq.Not.In)))
 			}
 
-			for _, p := range prefixes {
+			for _, g := range fq.Glob {
+				queryParam.Add(key, fmt.Sprintf("like.*%s*", g))
+			}
+
+			for _, p := range fq.Prefix {
 				queryParam.Add(key, fmt.Sprintf("like.%s*", p))
 			}
 
-			for _, p := range suffixes {
-				queryParam.Add(key, fmt.Sprintf("like.*%s", p))
+			for _, s := range fq.Suffix {
+				queryParam.Add(key, fmt.Sprintf("like.*%s", s))
 			}
 		}
 	}

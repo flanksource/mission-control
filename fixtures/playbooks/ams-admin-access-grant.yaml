@@ -1,0 +1,103 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: ams-admin-access-grant
+spec:
+  description: Grant stack admin access via AWS Managed Services RFC
+  configs:
+    - types:
+        - AWS::CloudFormation::Stack
+  approval:
+    approvers:
+      people:
+        - admin@local
+    type: any
+  parameters:
+    - name: domain_fqdn
+      label: Domain FQDN
+      required: true
+      type: text
+    - name: stack_ids
+      label: Stack IDs (comma-separated)
+      required: true
+      type: text
+    - name: usernames
+      label: Usernames (comma-separated)
+      required: true
+      type: text
+    - name: vpc_id
+      label: VPC ID
+      required: true
+      type: text
+    - name: hours
+      label: Access duration (hours)
+      default: "1"
+      type: text
+  actions:
+    - name: Create RFC
+      http:
+        url: https://amscm.us-east-1.amazonaws.com/
+        method: POST
+        awsSigV4:
+          connection: connection://aws/ams
+          service: amscm
+          region: us-east-1
+        headers:
+          - name: Content-Type
+            value: application/x-amz-json-1.1
+          - name: X-Amz-Target
+            value: AWSIe.CreateRfc
+        body: |
+          {
+            "ChangeTypeId": "ct-1dmlg9g1l91h6",
+            "ChangeTypeVersion": "1.0",
+            "Title": "Grant admin access - $(.params.domain_fqdn)",
+            "ExecutionParameters": {
+              "DomainFQDN": "$(.params.domain_fqdn)",
+              "StackIds": "$(range $i, $e := (.params.stack_ids | split ","))$(if $i),$(end)$(. | trim)$(end)",
+              "Usernames": "$(range $i, $e := (.params.usernames | split ","))$(if $i),$(end)$(. | trim)$(end)",
+              "VPCID": "$(.params.vpc_id)",
+              "Hours": $(int .params.hours)
+            }
+          }
+        templateBody: true
+
+    - name: Submit RFC
+      if: 'getLastAction().result.code == 200'
+      http:
+        url: https://amscm.us-east-1.amazonaws.com/
+        method: POST
+        awsSigV4:
+          connection: connection://aws/ams
+          service: amscm
+          region: us-east-1
+        headers:
+          - name: Content-Type
+            value: application/x-amz-json-1.1
+          - name: X-Amz-Target
+            value: AWSIe.SubmitRfc
+        body: |
+          $(with $create := (getAction "Create RFC").result.content | json)
+          {"RfcId": "$($create.RfcId)"}
+          $(end)
+        templateBody: true
+
+    - name: Get RFC Status
+      if: 'getLastAction().result.code == 200'
+      http:
+        url: https://amscm.us-east-1.amazonaws.com/
+        method: POST
+        awsSigV4:
+          connection: connection://aws/ams
+          service: amscm
+          region: us-east-1
+        headers:
+          - name: Content-Type
+            value: application/x-amz-json-1.1
+          - name: X-Amz-Target
+            value: AWSIe.GetRfc
+        body: |
+          $(with $create := (getAction "Create RFC").result.content | json)
+          {"RfcId": "$($create.RfcId)"}
+          $(end)
+        templateBody: true

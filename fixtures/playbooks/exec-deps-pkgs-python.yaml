@@ -1,0 +1,33 @@
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: echo-python-dependency-with-pkgs
+  namespace: mc
+spec:
+  category: Exec
+  actions:
+    - name: yaml
+      exec:
+        setup:
+          python:
+            version: "3.10.19"
+        script: |
+          #!/usr/bin/python3           
+          # /// script
+          # dependencies = [
+          #   "pyyaml",
+          # ]
+          # ///
+
+          # Declare dependencies inline with `Inline script metadata`
+          # See: https://packaging.python.org/en/latest/specifications/inline-script-metadata/#inline-script-metadata
+
+          import yaml
+          document = """
+            a: 1
+            b:
+              c: 3
+              d: 4
+          """
+          print(yaml.dump(yaml.safe_load(document)))

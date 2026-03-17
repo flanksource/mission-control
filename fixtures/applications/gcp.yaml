@@ -41,3 +41,14 @@ spec:
         - search: type=GCP::*
           tagSelector: project=flanksource-sandbox
           purpose: backup
+    sections:
+      - title: Deployments
+        icon: git-pull-request-arrow
+        viewRef:
+          namespace: mc
+          name: deployments
+      - title: Pipelines
+        icon: rocket
+        viewRef:
+          namespace: mc
+          name: pipelines

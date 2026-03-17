@@ -1,0 +1,18 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: user-multi-views-read
+  namespace: default
+  uid: 58e5f6a7-b8c9-4d0e-1f2a-6b7c8d9e0f1a
+spec:
+  description: Grant read access to both pods and metrics views for user B
+  subject:
+    person: user-b@test.com
+  actions:
+    - read
+  object:
+    views:
+      - namespace: mc
+        name: pods
+      - namespace: mc
+        name: metrics

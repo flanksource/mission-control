@@ -1,13 +1,15 @@
 package echo
 
 import (
+	"bytes"
 	gocontext "context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
-	"slices"
 	"strings"
 	"time"
 
@@ -16,27 +18,32 @@ import (
 	"github.com/flanksource/commons/properties"
 	cutils "github.com/flanksource/commons/utils"
 	dutyApi "github.com/flanksource/duty/api"
+	"github.com/flanksource/duty/canary"
 	"github.com/flanksource/duty/context"
 	dutyEcho "github.com/flanksource/duty/echo"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/schema/openapi"
 	"github.com/flanksource/duty/shutdown"
 	"github.com/flanksource/duty/telemetry"
+	"github.com/flanksource/duty/topology"
+	"github.com/labstack/echo-contrib/echoprometheus"
+	echov4 "github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v4/middleware"
+	prom "github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
+	"go.opentelemetry.io/otel/attribute"
+
 	"github.com/flanksource/incident-commander/agent"
 	"github.com/flanksource/incident-commander/api"
+	mcMiddleware "github.com/flanksource/incident-commander/middleware"
+	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/logs"
 	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/utils"
 	"github.com/flanksource/incident-commander/vars"
-	"github.com/labstack/echo-contrib/echoprometheus"
-	echov4 "github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
-	prom "github.com/prometheus/client_golang/prometheus"
-	"go.opentelemetry.io/contrib/instrumentation/github.com/labstack/echo/otelecho"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -61,6 +68,20 @@ var handlers []func(e *echov4.Echo)
 
 func RegisterRoutes(fn func(e *echov4.Echo)) {
 	handlers = append(handlers, fn)
+}
+
+// stripUpstreamCORS removes CORS headers from an upstream proxy response
+// before they are written to the client.
+func stripUpstreamCORS(resp *http.Response) error {
+	if properties.On(true, "response.strip_upstream_cors") {
+		resp.Header.Del(echov4.HeaderAccessControlAllowOrigin)
+		resp.Header.Del(echov4.HeaderAccessControlAllowCredentials)
+		resp.Header.Del(echov4.HeaderAccessControlAllowMethods)
+		resp.Header.Del(echov4.HeaderAccessControlAllowHeaders)
+		resp.Header.Del(echov4.HeaderAccessControlExposeHeaders)
+		resp.Header.Del(echov4.HeaderAccessControlMaxAge)
+	}
+	return nil
 }
 
 func New(ctx context.Context) *echov4.Echo {
@@ -111,9 +132,13 @@ func New(ctx context.Context) *echov4.Echo {
 	dutyEcho.AddDebugHandlers(ctx, e, rbac.Authorization(policy.ObjectMonitor, policy.ActionUpdate))
 
 	e.Use(ServerCache)
+	e.Use(mcMiddleware.ServerTiming)
+	e.Use(auth.ScopeImpersonation)
 
 	e.GET("/kubeconfig", DownloadKubeConfig, rbac.Authorization(policy.ObjectKubernetesProxy, policy.ActionCreate))
-	Forward(ctx, e, "/kubeproxy", "https://kubernetes.default.svc", KubeProxyTokenMiddleware)
+	Forward(ctx, e, "/kubeproxy", "https://kubernetes.default.svc", &ForwardOptions{
+		Middlewares: []echov4.MiddlewareFunc{KubeProxyTokenMiddleware},
+	})
 
 	e.GET("/properties", dutyEcho.Properties)
 	e.POST("/resources/search", SearchResources, rbac.Authorization(policy.ObjectCatalog, policy.ActionRead), RLSMiddleware)
@@ -131,11 +156,15 @@ func New(ctx context.Context) *echov4.Echo {
 	e.DELETE("/people/:id", personController.DeletePerson, rbac.Authorization(policy.ObjectPeople, policy.ActionDelete))
 
 	if dutyApi.DefaultConfig.Postgrest.URL != "" {
-		Forward(ctx, e, "/db", dutyApi.DefaultConfig.Postgrest.URL,
-			rbac.DbMiddleware(),
-			db.SearchQueryTransformMiddleware(),
-			postgrestTraceMiddleware,
-		)
+		Forward(ctx, e, "/db", dutyApi.DefaultConfig.Postgrest.URL, &ForwardOptions{
+			ModifyResponse: stripUpstreamCORS,
+			Middlewares: []echov4.MiddlewareFunc{
+				rbac.DbMiddleware(),
+				db.SearchQueryTransformMiddleware(),
+				postgrestInterceptor,
+				postgrestTraceMiddleware,
+			},
+		})
 	}
 
 	if vars.AuthMode != "" {
@@ -144,18 +173,20 @@ func New(ctx context.Context) *echov4.Echo {
 		}
 	}
 
-	Forward(ctx, e, "/config", api.ConfigDB, rbac.Catalog("*"))
-	Forward(ctx, e, "/apm", api.ApmHubPath, rbac.Authorization(policy.ObjectLogs, "*")) // Deprecated
-	// webhooks perform their own auth
-	Forward(ctx, e, "/canary/webhook", api.CanaryCheckerPath+"/webhook")
-	Forward(ctx, e, "/canary", api.CanaryCheckerPath, rbac.Canary(""))
+	registerCanaryEndpoints(ctx, e)
+
+	Forward(ctx, e, "/config", api.ConfigDB, &ForwardOptions{
+		Middlewares: []echov4.MiddlewareFunc{rbac.Catalog("*")},
+	})
+	Forward(ctx, e, "/apm", api.ApmHubPath, &ForwardOptions{ // Deprecated
+		Middlewares: []echov4.MiddlewareFunc{rbac.Authorization(policy.ObjectLogs, "*")},
+	})
+
 	// kratos performs its own auth
-	Forward(ctx, e, "/kratos", auth.KratosAPI)
+	Forward(ctx, e, "/kratos", auth.KratosAPI, nil)
 
 	auth.RegisterRoutes(e)
-
-	e.POST("/rbac/:id/update_role", rbac.UpdateRoleForUser, rbac.Authorization(policy.ObjectRBAC, policy.ActionUpdate))
-	e.GET("/rbac/dump", rbac.Dump, rbac.Authorization(policy.ObjectRBAC, policy.ActionRead))
+	rbac.RegisterRoutes(e)
 
 	// Serve openapi schemas
 	schemaServer, err := utils.HTTPFileserver(openapi.Schemas)
@@ -175,6 +206,20 @@ func New(ctx context.Context) *echov4.Echo {
 	return e
 }
 
+func registerCanaryEndpoints(ctx context.Context, e *echov4.Echo) {
+	// NOTE: Some canary endpoints are handled here for RLS reasons.
+	// Rest are forwarded to canary-checker
+	e.GET("/canary/api/topology", topology.QueryHandler, RLSMiddleware)
+	e.POST("/canary/api/summary", canary.SummaryHandler, RLSMiddleware)
+	e.GET("/canary/api/summary", canary.SummaryHandler, RLSMiddleware)
+
+	// webhooks perform their own auth
+	Forward(ctx, e, "/canary/webhook", api.CanaryCheckerPath+"/webhook", nil)
+	Forward(ctx, e, "/canary", api.CanaryCheckerPath, &ForwardOptions{
+		Middlewares: []echov4.MiddlewareFunc{rbac.Canary("")},
+	})
+}
+
 func postgrestTraceMiddleware(next echov4.HandlerFunc) echov4.HandlerFunc {
 	return func(c echov4.Context) error {
 		ctx := c.Request().Context().(context.Context)
@@ -190,6 +235,65 @@ func postgrestTraceMiddleware(next echov4.HandlerFunc) echov4.HandlerFunc {
 	}
 }
 
+func postgrestInterceptor(next echov4.HandlerFunc) echov4.HandlerFunc {
+	return func(c echov4.Context) error {
+		path := strings.TrimPrefix(c.Request().URL.Path, "/db/")
+		table := strings.Split(path, "?")[0] // Remove query parameters
+
+		switch table {
+		// For playbooks we need to validate the spec for create/update requests
+		case "playbooks":
+			method := c.Request().Method
+			if method != http.MethodPost && method != http.MethodPatch {
+				return next(c)
+			}
+			requestData, err := readJSONBody(c)
+			if err != nil {
+				return dutyApi.WriteError(c, err)
+			}
+
+			specValue, hasSpec := requestData["spec"]
+			if !hasSpec {
+				return next(c)
+			}
+
+			specBytes, err := json.Marshal(specValue)
+			if err != nil {
+				return dutyApi.WriteError(c, dutyApi.Errorf(dutyApi.EINVALID, "error marshaling json: %v", err))
+			}
+			var spec v1.PlaybookSpec
+			if err := json.Unmarshal(specBytes, &spec); err != nil {
+				return dutyApi.WriteError(c, dutyApi.Errorf(dutyApi.EINVALID, "invalid playbook spec: %v", err))
+			}
+
+			if err := spec.Validate(); err != nil {
+				return dutyApi.WriteError(c, dutyApi.Errorf(dutyApi.EINVALID, "playbook validation failed: %v", err))
+			}
+		}
+
+		return next(c)
+	}
+}
+
+// readJSONBody reads the request body for POST/PATCH requests and unmarshals it into a map.
+// Returns nil, error if there was an error reading or unmarshaling the body.
+// Returns the map, nil on success.
+func readJSONBody(c echov4.Context) (map[string]any, error) {
+	bodyBytes, err := io.ReadAll(c.Request().Body)
+	if err != nil {
+		return nil, dutyApi.Errorf(dutyApi.EINVALID, "failed to read request body: %v", err)
+	}
+	// Restore the body for the next handler
+	c.Request().Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+	var requestData map[string]any
+	if err := json.Unmarshal(bodyBytes, &requestData); err != nil {
+		return nil, dutyApi.Errorf(dutyApi.EINVALID, "error unmarshaling request body: %v", err)
+	}
+
+	return requestData, nil
+}
+
 // suffixesInItem checks if any of the suffixes are in the item.
 func suffixesInItem(item string, suffixes []string) bool {
 	for _, suffix := range suffixes {
@@ -200,13 +304,21 @@ func suffixesInItem(item string, suffixes []string) bool {
 	return false
 }
 
-func Forward(ctx context.Context, e *echov4.Echo, prefix string, target string, middlewares ...echov4.MiddlewareFunc) {
-	middlewares = append(middlewares, ModifyKratosRequestHeaders, proxyMiddleware(e, prefix, target))
+type ForwardOptions struct {
+	Middlewares    []echov4.MiddlewareFunc
+	ModifyResponse func(*http.Response) error
+}
+
+func Forward(ctx context.Context, e *echov4.Echo, prefix string, target string, opts *ForwardOptions) {
+	if opts == nil {
+		opts = &ForwardOptions{}
+	}
+	middlewares := append(opts.Middlewares, ModifyKratosRequestHeaders, proxyMiddleware(e, prefix, target, opts))
 	e.Group(prefix).Use(middlewares...)
 }
 
-func proxyMiddleware(e *echov4.Echo, prefix, targetURL string) echov4.MiddlewareFunc {
-	_url, err := url.Parse(targetURL)
+func proxyMiddleware(e *echov4.Echo, prefix, target string, opts *ForwardOptions) echov4.MiddlewareFunc {
+	_url, err := url.Parse(target)
 	if err != nil {
 		e.Logger.Fatal(err)
 	}
@@ -215,7 +327,8 @@ func proxyMiddleware(e *echov4.Echo, prefix, targetURL string) echov4.Middleware
 		Rewrite: map[string]string{
 			fmt.Sprintf("^%s/*", prefix): "/$1",
 		},
-		Balancer: middleware.NewRoundRobinBalancer([]*middleware.ProxyTarget{{URL: _url}}),
+		Balancer:       middleware.NewRoundRobinBalancer([]*middleware.ProxyTarget{{URL: _url}}),
+		ModifyResponse: opts.ModifyResponse,
 	}
 
 	if prefix == "/kubeproxy" {
@@ -259,10 +372,9 @@ func ServerCache(next echov4.HandlerFunc) echov4.HandlerFunc {
 	}
 }
 
-// telemetryURLSkipper ignores metrics route on some middleware
+// telemetryURLSkipper ignores health and metrics routes on some middleware
 func telemetryURLSkipper(c echov4.Context) bool {
-	pathsToSkip := []string{"/health", "/metrics"}
-	return slices.Contains(pathsToSkip, c.Path())
+	return c.Path() == "/health" || c.Path() == "/metrics"
 }
 
 func ModifyKratosRequestHeaders(next echov4.HandlerFunc) echov4.HandlerFunc {
@@ -314,28 +426,35 @@ func RLSMiddleware(next echov4.HandlerFunc) echov4.HandlerFunc {
 	return func(c echov4.Context) error {
 		ctx := c.Request().Context().(context.Context)
 
-		rlsPayload, err := auth.GetRLSPayload(ctx)
-		if err != nil {
-			return err
-		}
-
-		if rlsPayload.Disable {
-			return next(c)
-		}
-
-		err = ctx.Transaction(func(txCtx context.Context, _ trace.Span) error {
-			if err := rlsPayload.SetPostgresSessionRLS(txCtx.DB()); err != nil {
-				return err
-			}
-
-			txCtx = txCtx.WithRLSPayload(rlsPayload)
-
-			// set the context with the tx
-			c.SetRequest(c.Request().WithContext(txCtx))
-
+		return auth.WithRLS(ctx, func(rlsCtx context.Context) error {
+			// Update request context with RLS-enabled transaction context
+			c.SetRequest(c.Request().WithContext(rlsCtx))
 			return next(c)
 		})
-
-		return err
 	}
+}
+
+// MetricsHandler returns an HTTP handler that serves Prometheus metrics.
+func MetricsHandler() http.Handler {
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.HandlerFor(prom.DefaultGatherer, promhttp.HandlerOpts{}))
+	return mux
+}
+
+// StartMetricsServer starts a dedicated HTTP server for metrics on the specified port.
+// This server has no authentication and is intended to be accessed only from within the cluster.
+func StartMetricsServer(port int) *http.Server {
+	server := &http.Server{
+		Addr:    fmt.Sprintf(":%d", port),
+		Handler: MetricsHandler(),
+	}
+
+	go func() {
+		logger.Infof("Metrics server listening on :%d", port)
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Errorf("Metrics server error: %v", err)
+		}
+	}()
+
+	return server
 }

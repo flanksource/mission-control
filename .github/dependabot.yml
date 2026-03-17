@@ -4,13 +4,25 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
+    groups:
+      go-dependencies:
+        patterns:
+          - "*"
 
   - package-ecosystem: "gomod"
     directory: "/hack/generate-schemas"
     schedule:
       interval: "daily"
+    groups:
+      go-gen-schema-dependencies:
+        patterns:
+          - "*"
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: monthly
+    groups:
+      github-action-dependencies:
+        patterns:
+          - "*"

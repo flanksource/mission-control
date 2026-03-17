@@ -25,41 +25,26 @@ func LogsHandler(c echo.Context) error {
 		Labels map[string]string `json:"labels"`
 	}
 	if err := c.Bind(&reqData); err != nil {
-		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{
-			Err:     err.Error(),
-			Message: "Invalid request body",
-		})
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "invalid request body: %v", err))
 	}
 
 	if reqData.ID == "" {
-		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{
-			Err:     "ID field is required",
-			Message: "Component ID is required",
-		})
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "component ID is required"))
 	}
 
 	component, err := query.GetComponent(ctx, reqData.ID)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
-			Err:     err.Error(),
-			Message: fmt.Sprintf("Failed to get component[id=%s]", reqData.ID),
-		})
+		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "failed to get component[id=%s]", reqData.ID))
 	}
 
 	logSelector := getLogSelectorByName(component.LogSelectors, reqData.Name)
 	if logSelector == nil {
-		return c.JSON(http.StatusBadRequest, dutyAPI.HTTPError{
-			Err:     "Log selector was not found",
-			Message: fmt.Sprintf("Log selector with the name '%s' was not found. Available names: [%s]", reqData.Name, strings.Join(getSelectorNames(component.LogSelectors), ", ")),
-		})
+		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "log selector with the name '%s' was not found. Available names: [%s]", reqData.Name, strings.Join(getSelectorNames(component.LogSelectors), ", ")))
 	}
 
 	templater := ctx.NewStructTemplater(component.GetAsEnvironment(), "", nil)
 	if err := templater.Walk(logSelector); err != nil {
-		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
-			Err:     err.Error(),
-			Message: "failed to parse log selector templates.",
-		})
+		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "failed to parse log selector templates"))
 	}
 
 	apmHubPayload := map[string]any{
@@ -70,17 +55,11 @@ func LogsHandler(c echo.Context) error {
 	}
 	resp, err := makePostRequest(fmt.Sprintf("%s/%s", api.ApmHubPath, "search"), apmHubPayload)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
-			Err:     err.Error(),
-			Message: "Failed to query apm-hub.",
-		})
+		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "failed to query apm-hub"))
 	}
 
 	if err := c.Stream(resp.StatusCode, resp.Header.Get("Content-Type"), resp.Body); err != nil {
-		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
-			Err:     err.Error(),
-			Message: "Failed to stream response.",
-		})
+		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "failed to stream response"))
 	}
 
 	return nil

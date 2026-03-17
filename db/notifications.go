@@ -179,12 +179,15 @@ func resolveNotificationRecipient(ctx context.Context, recipient v1.Notification
 	default:
 		var customService api.NotificationConfig
 
-		if len(recipient.Email) != 0 {
+		switch {
+		case len(recipient.Email) != 0:
 			customService.URL = fmt.Sprintf("smtp://system/?To=%s", recipient.Email)
-		} else if len(recipient.Connection) != 0 {
+		case len(recipient.Connection) != 0:
 			customService.Connection = recipient.Connection
-		} else if len(recipient.URL) != 0 {
+		case len(recipient.URL) != 0:
 			customService.URL = recipient.URL
+		case recipient.Webhook != nil:
+			customService.Webhook = recipient.Webhook
 		}
 
 		customServices, err := json.Marshal([]api.NotificationConfig{customService})
@@ -209,8 +212,22 @@ func DeleteStaleNotification(ctx context.Context, newer *v1.Notification) error 
 		Update("deleted_at", duty.Now()).Error
 }
 
-func UpdateNotificationError(ctx context.Context, id string, err string) error {
-	return ctx.DB().Model(&models.Notification{}).Where("id = ?", id).Update("error", err).Error
+func SetNotificationError(ctx context.Context, id string, err string) error {
+	return ctx.DB().Model(&models.Notification{}).Where("id = ?", id).
+		Updates(map[string]any{
+			"error":    err,
+			"error_at": duty.Now(),
+		}).
+		Error
+}
+
+func ResetNotificationError(ctx context.Context, id string) error {
+	return ctx.DB().Model(&models.Notification{}).Where("id = ?", id).
+		Updates(map[string]any{
+			"error":    "",
+			"error_at": nil,
+		}).
+		Error
 }
 
 func UpdateNotificationSilenceError(ctx context.Context, id string, err string) error {
@@ -221,6 +238,7 @@ func DeleteNotificationSendHistory(ctx context.Context, days int) (int64, error)
 	tx := ctx.DB().
 		Model(&models.NotificationSendHistory{}).
 		Where("playbook_run_id IS NULL").
+		Where("id NOT IN (SELECT notification_send_id FROM playbook_runs WHERE notification_send_id IS NOT NULL)").
 		Where(fmt.Sprintf("created_at < NOW() - INTERVAL '%d DAYS'", days)).
 		Delete(&models.NotificationSendHistory{})
 	return tx.RowsAffected, tx.Error
@@ -296,7 +314,7 @@ func GetMatchingNotificationSilences(ctx context.Context, resources models.Notif
 func SaveUnsentNotificationToHistory(ctx context.Context, sendHistory models.NotificationSendHistory) error {
 	window := ctx.Properties().Duration("notifications.dedup.window", time.Hour*24)
 
-	return ctx.DB().Exec("SELECT * FROM insert_unsent_notification_to_history(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+	return ctx.DB().Exec("SELECT * FROM insert_unsent_notification_to_history(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
 		sendHistory.NotificationID,
 		sendHistory.SourceEvent,
 		sendHistory.ResourceID,
@@ -309,6 +327,7 @@ func SaveUnsentNotificationToHistory(ctx context.Context, sendHistory models.Not
 		sendHistory.ConnectionID,
 		sendHistory.PlaybookRunID,
 		sendHistory.Body,
+		sendHistory.BodyPayload,
 	).Error
 }
 
@@ -419,4 +438,30 @@ func GetGroupedResources(ctx context.Context, groupID uuid.UUID, excludeResource
 	}
 
 	return resourceNames, nil
+}
+
+func GetNotificationSendHistory(ctx context.Context, timeWindowDays int, status []string, limit int, offset int) ([]models.NotificationSendHistory, error) {
+	q := ctx.DB().Model(&models.NotificationSendHistory{}).
+		Where(fmt.Sprintf("created_at > NOW() - INTERVAL '%d days'", timeWindowDays)).
+		Where(`(
+			(source_event LIKE 'config.%' AND EXISTS (SELECT 1 FROM config_items ci WHERE ci.id = notification_send_history.resource_id AND ci.deleted_at IS NULL))
+			OR (source_event LIKE 'component.%' AND EXISTS (SELECT 1 FROM components c WHERE c.id = notification_send_history.resource_id AND c.deleted_at IS NULL))
+			OR (source_event LIKE 'check.%' AND EXISTS (SELECT 1 FROM checks ch WHERE ch.id = notification_send_history.resource_id AND ch.deleted_at IS NULL))
+			OR (source_event LIKE 'canary.%' AND EXISTS (SELECT 1 FROM canaries ca WHERE ca.id = notification_send_history.resource_id AND ca.deleted_at IS NULL))
+		)`).
+		Order("created_at DESC")
+
+	if len(status) > 0 {
+		q = q.Where("status IN ?", status)
+	}
+	if limit > 0 {
+		q = q.Limit(limit)
+	}
+	if offset > 0 {
+		q = q.Offset(offset)
+	}
+
+	var results []models.NotificationSendHistory
+	err := q.Find(&results).Error
+	return results, err
 }

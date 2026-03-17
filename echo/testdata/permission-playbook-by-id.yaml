@@ -1,0 +1,15 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: test-guest-playbook-by-id
+  namespace: test
+spec:
+  description: Test guest playbook read by ID
+  subject:
+    person: guest@test.com
+  actions:
+    - read
+  object:
+    playbooks:
+      - id: 018c3071-d8d7-7f62-86c0-f80e202c03dd
+      - id: 018c3071-d8d7-7f62-86c0-f80e202c03ee

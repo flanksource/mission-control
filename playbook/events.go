@@ -9,22 +9,21 @@ import (
 
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/duty"
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/gomplate/v3"
-	"github.com/flanksource/incident-commander/db"
-	"github.com/flanksource/incident-commander/events"
-	"github.com/flanksource/incident-commander/logs"
-	"github.com/flanksource/incident-commander/notification"
-	"github.com/flanksource/incident-commander/utils"
 	"github.com/google/uuid"
 	"github.com/patrickmn/go-cache"
 	"github.com/samber/lo"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/events"
+	"github.com/flanksource/incident-commander/logs"
+	"github.com/flanksource/incident-commander/notification"
+	"github.com/flanksource/incident-commander/utils"
 )
 
 type PlaybookSpecEvent struct {
@@ -44,6 +43,7 @@ var eventToSpecEvent = map[string]PlaybookSpecEvent{
 	api.EventConfigHealthy:   {"config", "healthy"},
 	api.EventConfigUnhealthy: {"config", "unhealthy"},
 	api.EventConfigWarning:   {"config", "warning"},
+	api.EventConfigDegraded:  {"config", "degraded"},
 	api.EventConfigUnknown:   {"config", "unknown"},
 
 	api.EventComponentHealthy:   {"component", "healthy"},
@@ -68,48 +68,16 @@ func init() {
 
 func RegisterEvents(ctx context.Context) {
 	EventRing = events.NewEventRing(ctx.Properties().Int("events.audit.size", events.DefaultEventLogSize))
-	nh := playbookScheduler{Ring: EventRing}
-	events.RegisterSyncHandler(nh.Handle, api.EventStatusGroup...)
+	ps := playbookScheduler{Ring: EventRing}
+	events.RegisterSyncHandler(ps.Handle, api.EventStatusGroup...)
 
 	events.RegisterSyncHandler(onNewRun, api.EventPlaybookRun)
 	events.RegisterSyncHandler(onApprovalUpdated, api.EventPlaybookSpecApprovalUpdated)
 	events.RegisterSyncHandler(onPlaybookRunNewApproval, api.EventPlaybookApprovalInserted)
 
 	go func() {
-		logs.IfError(StartPlaybookConsumers(ctx), "error starting playbook run consumer")
+		logs.IfError(StartPlaybookConsumers(ctx), "error starting playbook consumers")
 	}()
-
-	go ListenPlaybookPGNotify(ctx)
-}
-
-type EventResource struct {
-	Component    *models.Component    `json:"component,omitempty"`
-	Config       *models.ConfigItem   `json:"config,omitempty"`
-	Check        *models.Check        `json:"check,omitempty"`
-	CheckSummary *models.CheckSummary `json:"check_summary,omitempty"`
-	Canary       *models.Canary       `json:"canary,omitempty"`
-}
-
-func (t *EventResource) AsMap() map[string]any {
-	output := map[string]any{}
-
-	if t.Component != nil {
-		output["component"] = t.Component.AsMap()
-	}
-	if t.Config != nil {
-		output["config"] = t.Config.AsMap()
-	}
-	if t.Check != nil {
-		output["check"] = t.Check.AsMap()
-	}
-	if t.Canary != nil {
-		output["canary"] = t.Canary.AsMap()
-	}
-	if t.CheckSummary != nil {
-		output["check_summary"] = t.CheckSummary.AsMap()
-	}
-
-	return output
 }
 
 type playbookScheduler struct {
@@ -131,38 +99,9 @@ func (t *playbookScheduler) Handle(ctx context.Context, event models.Event) erro
 		return nil
 	}
 
-	var eventResource EventResource
-	switch event.Name {
-	case api.EventCheckFailed, api.EventCheckPassed:
-		checkID := event.Properties["id"]
-		if err := ctx.DB().Where("id = ?", checkID).First(&eventResource.Check).Error; err != nil {
-			return dutyAPI.Errorf(dutyAPI.ENOTFOUND, "check(id=%s) not found", checkID)
-		}
-
-		if summary, err := duty.CheckSummary(ctx, checkID); err != nil {
-			return err
-		} else if summary != nil {
-			eventResource.CheckSummary = summary
-		}
-
-		if err := ctx.DB().Where("id = ?", eventResource.Check.CanaryID).First(&eventResource.Canary).Error; err != nil {
-			return dutyAPI.Errorf(dutyAPI.ENOTFOUND, "canary(id=%s) not found", eventResource.Check.CanaryID)
-		}
-
-	case api.EventComponentHealthy, api.EventComponentUnhealthy, api.EventComponentWarning, api.EventComponentUnknown:
-		if err := ctx.DB().Model(&models.Component{}).Where("id = ?", event.Properties["id"]).First(&eventResource.Component).Error; err != nil {
-			return dutyAPI.Errorf(dutyAPI.ENOTFOUND, "component(id=%s) not found", event.Properties["id"])
-		}
-
-	case api.EventConfigHealthy, api.EventConfigUnhealthy, api.EventConfigWarning, api.EventConfigUnknown:
-		if err := ctx.DB().Model(&models.ConfigItem{}).Where("id = ?", event.Properties["id"]).First(&eventResource.Config).Error; err != nil {
-			return dutyAPI.Errorf(dutyAPI.ENOTFOUND, "config(id=%s) not found", event.Properties["id"])
-		}
-
-	case api.EventConfigCreated, api.EventConfigUpdated, api.EventConfigDeleted, api.EventConfigChanged:
-		if err := ctx.DB().Model(&models.ConfigItem{}).Where("id = ?", event.Properties["id"]).First(&eventResource.Config).Error; err != nil {
-			return dutyAPI.Errorf(dutyAPI.ENOTFOUND, "config(id=%s) not found", event.Properties["id"])
-		}
+	eventResource, err := events.BuildEventResource(ctx, event)
+	if err != nil {
+		return err
 	}
 
 	for _, p := range playbooks {
@@ -278,7 +217,13 @@ const (
 )
 
 func onNewRun(ctx context.Context, event models.Event) error {
-	var playbookID = event.Properties["id"]
+	playbookID := event.Properties["playbook_id"]
+	if playbookID == "" {
+		playbookID = event.Properties["id"]
+	}
+	if playbookID == "" {
+		playbookID = event.EventID.String()
+	}
 
 	// What triggered the run?
 	// Must be either a notification, or a playbook run.
@@ -429,7 +374,7 @@ func onNewRun(ctx context.Context, event models.Event) error {
 }
 
 func onApprovalUpdated(ctx context.Context, event models.Event) error {
-	playbookID := event.Properties["id"]
+	playbookID := event.EventID.String()
 
 	var playbook models.Playbook
 	if err := ctx.DB().Where("id = ?", playbookID).First(&playbook).Error; err != nil {

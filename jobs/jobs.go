@@ -11,12 +11,16 @@ import (
 	"github.com/flanksource/duty/job"
 	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/shutdown"
+	"github.com/mark3labs/mcp-go/server"
+	"github.com/robfig/cron/v3"
+	"github.com/sethvargo/go-retry"
+
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/application"
 	"github.com/flanksource/incident-commander/incidents"
 	"github.com/flanksource/incident-commander/notification"
-	"github.com/robfig/cron/v3"
-	"github.com/sethvargo/go-retry"
+	"github.com/flanksource/incident-commander/playbook"
+	"github.com/flanksource/incident-commander/shorturl"
 )
 
 const (
@@ -24,6 +28,7 @@ const (
 	CleanupJobHistoryTableSchedule         = "@every 24h"
 	CleanupEventQueueTableSchedule         = "@every 24h"
 	CleanupNotificationSendHistorySchedule = "@every 24h"
+	CleanupExpiredShortURLsSchedule        = "@every 24h"
 )
 
 var FuncScheduler = cron.New()
@@ -31,8 +36,9 @@ var FuncScheduler = cron.New()
 func agentJobs(ctx context.Context) []*job.Job {
 	return []*job.Job{
 		PingUpstream,
-		ReconcileAll,
+		ReconcileAllJob(api.UpstreamConf),
 		SyncArtifactData,
+		ResetIsPushed,
 		PushPlaybookActions(ctx),
 	}
 }
@@ -58,7 +64,7 @@ func RunPullPlaybookActionsJob(ctx context.Context) {
 	}
 }
 
-func Start(ctx context.Context) {
+func Start(ctx context.Context, mcpServer *server.MCPServer) {
 	if err := job.NewJob(ctx, "Team Component Ownership", "@every 15m", TeamComponentOwnershipRun).
 		RunOnStart().AddToScheduler(FuncScheduler); err != nil {
 		logger.Errorf("Failed to schedule sync jobs for team component: %v", err)
@@ -75,6 +81,10 @@ func Start(ctx context.Context) {
 		}
 	}
 
+	if err := SyncPlaybookConfigAccess(ctx).AddToScheduler(FuncScheduler); err != nil {
+		shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to schedule job SyncPlaybookConfigAccess: %v", err))
+	}
+
 	if err := notification.ProcessFallbackNotificationsJob(ctx).AddToScheduler(FuncScheduler); err != nil {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to schedule job ProcessFallbackNotificationsJob: %v", err))
 	}
@@ -85,6 +95,13 @@ func Start(ctx context.Context) {
 
 	if err := MarkTimedOutPlaybookRuns(ctx).AddToScheduler(FuncScheduler); err != nil {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to schedule job MarkTimedOutPlaybookRuns: %v", err))
+	}
+	if err := CleanupDeletedPlaybooks(ctx).AddToScheduler(FuncScheduler); err != nil {
+		shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to schedule job CleanupDeletedPlaybooks: %v", err))
+	}
+
+	if err := playbook.SchedulePlaybooks(ctx, FuncScheduler).AddToScheduler(FuncScheduler); err != nil {
+		shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to schedule job SchedulePlaybooks: %v", err))
 	}
 
 	if err := notification.SyncCRDStatusJob(ctx).AddToScheduler(FuncScheduler); err != nil {
@@ -98,6 +115,11 @@ func Start(ctx context.Context) {
 	if err := job.NewJob(ctx, "Cleanup NotificationSend History", CleanupNotificationSendHistorySchedule, CleanupNotificationSendHistory).
 		AddToScheduler(FuncScheduler); err != nil {
 		logger.Errorf("Failed to schedule job for cleaning up notification send history table: %v", err)
+	}
+
+	if err := job.NewJob(ctx, "Cleanup Short URLs", CleanupExpiredShortURLsSchedule, shorturl.CleanupExpired).
+		AddToScheduler(FuncScheduler); err != nil {
+		logger.Errorf("Failed to schedule job for cleaning up short URLs: %v", err)
 	}
 
 	for _, job := range query.Jobs {
@@ -116,6 +138,14 @@ func Start(ctx context.Context) {
 		}
 	}
 
+	for _, job := range []*job.Job{VacuumTables} {
+		j := job
+		j.Context = ctx
+		if err := j.AddToScheduler(FuncScheduler); err != nil {
+			logger.Errorf("Failed to schedule %s: %v", j, err)
+		}
+	}
+
 	if api.UpstreamConf.Valid() {
 		for _, job := range agentJobs(ctx) {
 			j := job
@@ -125,7 +155,10 @@ func Start(ctx context.Context) {
 			}
 		}
 
-		go RunPullPlaybookActionsJob(ctx)
+		if ctx.Properties().On(true, "upstream.pull_playbook_actions") {
+			logger.Infof("Scheduling job to pull playbook actions from upstream")
+			go RunPullPlaybookActionsJob(ctx)
+		}
 	}
 
 	cleanupStaleJobHistory.Context = ctx
@@ -136,6 +169,11 @@ func Start(ctx context.Context) {
 	cleanupStaleAgentJobHistory.Context = ctx
 	if err := cleanupStaleAgentJobHistory.AddToScheduler(FuncScheduler); err != nil {
 		logger.Errorf("Failed to schedule job for cleaning up stale agent job history: %v", err)
+	}
+
+	cleanupExpiredTokens.Context = ctx
+	if err := cleanupExpiredTokens.AddToScheduler(FuncScheduler); err != nil {
+		logger.Errorf("Failed to schedule job for cleaning up expired tokens: %v", err)
 	}
 
 	startIncidentsJobs(ctx)

@@ -11,6 +11,7 @@ import (
 
 	"github.com/flanksource/artifacts"
 	"github.com/flanksource/commons/http"
+	"github.com/flanksource/commons/logger"
 	dutyApi "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/job"
@@ -19,19 +20,18 @@ import (
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/tests/setup"
 	"github.com/flanksource/duty/upstream"
+	"github.com/google/uuid"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/samber/lo"
+	"github.com/samber/oops"
+	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/playbook/sdk"
 	"github.com/flanksource/incident-commander/playbook/testdata"
-	"github.com/google/uuid"
-	. "github.com/onsi/ginkgo/v2"
-	. "github.com/onsi/gomega"
-	"github.com/samber/lo"
-	"github.com/samber/oops"
-
-	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
 )
 
 var _ = Describe("Playbook", Ordered, func() {
@@ -57,7 +57,7 @@ var _ = Describe("Playbook", Ordered, func() {
 		})
 	})
 
-	var _ = Describe("AI", Ordered, func() {
+	var _ = Describe("AI", Ordered, Label("ignore_local"), func() {
 		Context("should run AI action and save artifacts", func() {
 			var actions []models.PlaybookRunAction
 			var artifactList []models.Artifact
@@ -141,6 +141,7 @@ var _ = Describe("Playbook", Ordered, func() {
 			configPlaybook    models.Playbook
 			checkPlaybook     models.Playbook
 			componentPlaybook models.Playbook
+			agentAllPlaybook  models.Playbook
 			savedRun          models.PlaybookRun
 		)
 
@@ -148,6 +149,7 @@ var _ = Describe("Playbook", Ordered, func() {
 			configPlaybook, _ = createPlaybook("action-approvals")
 			checkPlaybook, _ = createPlaybook("action-check")
 			componentPlaybook, _ = createPlaybook("action-component")
+			agentAllPlaybook, _ = createPlaybook("action-agent-all")
 		})
 
 		Context("api | list playbooks ", func() {
@@ -169,10 +171,21 @@ var _ = Describe("Playbook", Ordered, func() {
 
 			It("Should fetch the suitable playbook for configs", func() {
 				playbooks, err := ListPlaybooksForConfig(DefaultContext, dummy.EKSCluster.ID.String())
-				ExpectPlaybook(playbooks, err, configPlaybook)
+				ExpectPlaybook(playbooks, err, configPlaybook, dummy.EchoConfig)
 
 				playbooks, err = ListPlaybooksForConfig(DefaultContext, dummy.KubernetesCluster.ID.String())
-				ExpectPlaybook(playbooks, err)
+				ExpectPlaybook(playbooks, err, dummy.EchoConfig)
+			})
+
+			It("Should fetch playbook with agent=all for configs with any agent", func() {
+				// Test with KubernetesNodeA which has an agent
+				// Both agentAllPlaybook (with agent=all) and EchoConfig (with name=*) should match
+				playbooks, err := ListPlaybooksForConfig(DefaultContext, dummy.KubernetesNodeA.ID.String())
+				ExpectPlaybook(playbooks, err, agentAllPlaybook, dummy.EchoConfig)
+
+				// Test with KubernetesNodeB which also has an agent
+				playbooks, err = ListPlaybooksForConfig(DefaultContext, dummy.KubernetesNodeB.ID.String())
+				ExpectPlaybook(playbooks, err, agentAllPlaybook, dummy.EchoConfig)
 			})
 		})
 
@@ -433,6 +446,11 @@ var _ = Describe("Playbook", Ordered, func() {
 
 		BeforeAll(func() {
 			playbook, spec = createPlaybook("action-last-result")
+		})
+
+		AfterAll(func() {
+			summary, _ := GetPlaybookStatus(DefaultContext, run.ID)
+			DefaultContext.Infof("%s", logger.Pretty(summary))
 		})
 
 		It("should store playbook run via API", func() {
@@ -712,6 +730,51 @@ var _ = Describe("Playbook", Ordered, func() {
 		})
 	})
 
+	var _ = Describe("ContentType", Ordered, func() {
+		It("should extract contentType from action results", func() {
+			run := createAndRun(DefaultContext.WithUser(&dummy.JohnDoe), "action-content-type", RunParams{
+				ConfigID: lo.ToPtr(dummy.KubernetesCluster.ID),
+			}, models.PlaybookRunStatusCompleted)
+
+			var actions []models.PlaybookRunAction
+			err := DefaultContext.DB().Where("playbook_run_id = ?", run.ID).Order("start_time ASC").Find(&actions).Error
+			Expect(err).To(BeNil())
+			Expect(actions).To(HaveLen(4))
+
+			// Action 1: exec with JSON envelope — stdout should be unwrapped, contentType set
+			Expect(actions[0].Result["stdout"]).To(Equal("# My Report"))
+			Expect(actions[0].Result["contentType"]).To(Equal("text/markdown"))
+
+			// Action 2: spec-level contentType override on plain output
+			Expect(actions[1].Result["contentType"]).To(Equal("application/json"))
+
+			// Action 3: plain stdout — no contentType key
+			Expect(actions[2].Result).NotTo(HaveKey("contentType"))
+
+			// Action 4: envelope overridden by spec contentType
+			Expect(actions[3].Result["stdout"]).To(Equal("overridden"))
+			Expect(actions[3].Result["contentType"]).To(Equal("text/plain"))
+		})
+	})
+
+	var _ = Describe("Secret Parameters", Ordered, func() {
+		XIt("should not leak secrets in action output", func() {
+			run := createAndRunWithSecretParams(DefaultContext.WithUser(&dummy.JohnDoe), "action-secret-params", RunParams{
+				ConfigID: lo.ToPtr(dummy.EKSCluster.ID),
+			}, "super_secret_value", models.PlaybookRunStatusCompleted)
+
+			var actions []models.PlaybookRunAction
+			err := DefaultContext.DB().Where("playbook_run_id = ?", run.ID).Find(&actions).Error
+			Expect(err).To(BeNil())
+			Expect(actions).To(HaveLen(1))
+
+			// Stdout should have secret scrubbed
+			stdout := actions[0].Result["stdout"].(string)
+			Expect(stdout).ToNot(ContainSubstring("super_secret_value"), "stdout should not contain plaintext secret")
+			Expect(stdout).To(ContainSubstring("[REDACTED]"), "stdout should contain redacted placeholder")
+		})
+	})
+
 	var _ = Describe("spec runner", func() {
 		type testData struct {
 			name        string
@@ -799,6 +862,19 @@ func createAndRun(ctx context.Context, name string, params RunParams, statuses .
 func createAndRunNoWait(ctx context.Context, name string, params RunParams) (*models.PlaybookRun, error) {
 	playbook, _ := createPlaybook(name)
 	return Run(ctx, &playbook, params)
+}
+
+func createAndRunWithSecretParams(ctx context.Context, name string, params RunParams, secretValue string, statuses ...models.PlaybookRunStatus) *models.PlaybookRun {
+	playbook, _ := createPlaybook(name)
+	Expect(testdata.LoadPermissions(ctx)).To(BeNil())
+
+	// Set the password param with the secret value (will be encrypted by Run)
+	if params.Params == nil {
+		params.Params = make(PlaybookRuntimeParameters)
+	}
+	params.Params["password"] = secretValue
+
+	return runPlaybook(ctx, playbook, params, statuses...)
 }
 
 func runPlaybook(ctx context.Context, playbook models.Playbook, params RunParams, statuses ...models.PlaybookRunStatus) *models.PlaybookRun {

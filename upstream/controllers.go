@@ -1,7 +1,6 @@
 package upstream
 
 import (
-	"fmt"
 	"net/http"
 	"time"
 
@@ -9,12 +8,12 @@ import (
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/job"
+	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/upstream"
 	"github.com/labstack/echo/v4"
 	"github.com/patrickmn/go-cache"
 	"go.opentelemetry.io/otel/attribute"
 
-	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/incident-commander/artifacts"
 	"github.com/flanksource/incident-commander/db"
 	echoSrv "github.com/flanksource/incident-commander/echo"
@@ -40,6 +39,7 @@ func RegisterRoutes(e *echo.Echo) {
 		upstream.AgentAuthMiddleware(agentCache),
 	)
 	upstreamGroup.GET("/ping", upstream.PingHandler)
+	upstreamGroup.POST("/list-views", upstream.ListViewsHandler)
 	upstreamGroup.POST("/push", upstream.NewPushHandler(upstream.NewStatusRingStore(job.EvictedJobs)))
 	upstreamGroup.DELETE("/push", upstream.DeleteHandler)
 
@@ -65,7 +65,7 @@ func handlePlaybookActionRequest(c echo.Context) error {
 	return c.JSON(http.StatusOK, response)
 }
 
-// PullCanaries returns all canaries for the  agent
+// PullCanaries returns all canaries for the agent
 func PullCanaries(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
 
@@ -76,10 +76,7 @@ func PullCanaries(c echo.Context) error {
 	if sinceRaw := c.QueryParam("since"); sinceRaw != "" {
 		since, err = time.Parse(time.RFC3339, sinceRaw)
 		if err != nil {
-			return c.JSON(
-				http.StatusBadRequest,
-				dutyAPI.HTTPError{Err: fmt.Sprintf("'since' param needs to be a valid RFC3339 timestamp: %v", err)},
-			)
+			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "'since' param needs to be a valid RFC3339 timestamp: %v", err))
 		}
 
 		ctx.GetSpan().SetAttributes(attribute.String("upstream.pull.canaries.since", sinceRaw))
@@ -87,9 +84,7 @@ func PullCanaries(c echo.Context) error {
 
 	canaries, err := db.GetCanariesOfAgent(ctx, agent.ID, since)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
-			Err: fmt.Sprintf("error fetching canaries for agent(name=%s)", agent.Name),
-		})
+		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "error fetching canaries for agent(name=%s)", agent.Name))
 	}
 
 	return c.JSON(http.StatusOK, canaries)
@@ -105,10 +100,7 @@ func PullScrapeConfigs(c echo.Context) error {
 	if sinceRaw := c.QueryParam("since"); sinceRaw != "" {
 		since, err = time.Parse(time.RFC3339Nano, sinceRaw)
 		if err != nil {
-			return c.JSON(
-				http.StatusBadRequest,
-				dutyAPI.HTTPError{Err: fmt.Sprintf("'since' param needs to be a valid RFC3339Nano timestamp: %v", err)},
-			)
+			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EINVALID, "'since' param needs to be a valid RFC3339Nano timestamp: %v", err))
 		}
 
 		ctx.GetSpan().SetAttributes(attribute.String("upstream.pull.configs.since", sinceRaw))
@@ -116,9 +108,7 @@ func PullScrapeConfigs(c echo.Context) error {
 
 	scrapeConfigs, err := db.GetScrapeConfigsOfAgent(ctx, agent.ID, since)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, dutyAPI.HTTPError{
-			Err: fmt.Sprintf("error fetching scrape configs for agent(name=%s)", agent.Name),
-		})
+		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "error fetching scrape configs for agent(name=%s)", agent.Name))
 	}
 
 	return c.JSON(http.StatusOK, scrapeConfigs)

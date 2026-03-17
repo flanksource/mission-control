@@ -1,0 +1,27 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: resource-usage
+  namespace: mc
+spec:
+  queries:
+    cpu:
+      prometheus:
+        url: https://prometheus.demo.prometheus.io
+        query: container_cpu_usage_seconds_total{id="/", job="cadvisor"}
+    memory:
+      prometheus:
+        url: https://prometheus.demo.prometheus.io
+        query: container_memory_working_set_bytes{id="/", job="cadvisor"}
+  panels:
+    - name: cpu
+      type: number
+      query: SELECT SUM(value) as value FROM cpu
+      number:
+        unit: seconds
+        precision: 2
+    - name: memory
+      type: number
+      query: SELECT SUM(value) as value FROM memory
+      number:
+        unit: bytes

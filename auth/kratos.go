@@ -56,13 +56,13 @@ func (k *kratosMiddleware) kratosLoginWithCache(ctx gocontext.Context, username,
 
 // kratosLogin performs login with password
 func (k *kratosMiddleware) kratosLogin(ctx gocontext.Context, username, password string) (*client.Session, error) {
-	loginFlow, _, err := k.client.FrontendApi.CreateNativeLoginFlow(ctx).Execute()
+	loginFlow, _, err := k.client.FrontendAPI.CreateNativeLoginFlow(ctx).Execute()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create native login flow: %w", err)
 	}
 
 	updateLoginFlowBody := client.UpdateLoginFlowBody{UpdateLoginFlowWithPasswordMethod: client.NewUpdateLoginFlowWithPasswordMethod(username, "password", password)}
-	login, _, err := k.client.FrontendApi.UpdateLoginFlow(ctx).Flow(loginFlow.Id).UpdateLoginFlowBody(updateLoginFlowBody).Execute()
+	login, _, err := k.client.FrontendAPI.UpdateLoginFlow(ctx).Flow(loginFlow.Id).UpdateLoginFlowBody(updateLoginFlowBody).Execute()
 	if err != nil {
 		return nil, fmt.Errorf("failed to update native login flow: %w", err)
 	}
@@ -78,46 +78,11 @@ func (k *kratosMiddleware) validateSession(ctx context.Context, r *http.Request)
 	}
 
 	if username, password, ok := r.BasicAuth(); ok {
-		// logger.V(4).Infof("Logging in with Basic %s %s%s%s", username, password[0:1], strings.Repeat("*", len(password)-2), password[len(password)-1:])
-		if strings.ToLower(username) == "token" {
-			accessToken, err := getAccessToken(ctx, password)
-			if err != nil {
-				return nil, err
-			} else if accessToken == nil {
-				return &client.Session{Active: lo.ToPtr(false)}, nil
-			}
+		return k.basicAuthLogin(ctx, username, password)
+	}
 
-			var agent models.Agent
-			if err := ctx.DB().Where("person_id = ?", accessToken.PersonID.String()).Find(&agent).Error; err != nil {
-				return nil, err
-			}
-
-			s := &client.Session{
-				Id:        uuid.NewString(),
-				Active:    lo.ToPtr(true),
-				ExpiresAt: accessToken.ExpiresAt,
-				Identity: client.Identity{
-					Id: accessToken.PersonID.String(),
-					Traits: map[string]any{
-						"agent": agent,
-						"name": map[string]string{
-							"first": accessToken.Name,
-							"last":  "",
-						},
-					},
-				},
-			}
-
-			return s, nil
-		}
-
-		sess, err := k.kratosLoginWithCache(r.Context(), username, password)
-		if err != nil {
-			logger.V(4).Infof("Login failed: %v", err)
-			return nil, fmt.Errorf("failed to login: %w", err)
-		}
-
-		return sess, nil
+	if bearerToken, ok := extractBearerAuthToken(r.Header); ok {
+		return k.basicAuthLogin(ctx, "token", bearerToken)
 	}
 
 	cookie, err := r.Cookie("ory_kratos_session")
@@ -129,12 +94,59 @@ func (k *kratosMiddleware) validateSession(ctx context.Context, r *http.Request)
 		return nil, errors.New("no session found in cookie")
 	}
 
-	session, _, err := k.client.FrontendApi.ToSession(r.Context()).Cookie(cookie.String()).Execute()
+	session, _, err := k.client.FrontendAPI.ToSession(r.Context()).Cookie(cookie.String()).Execute()
 	if err != nil {
 		return nil, err
 	}
 
 	return session, nil
+}
+
+func (k *kratosMiddleware) basicAuthLogin(ctx context.Context, username, password string) (*client.Session, error) {
+	if strings.ToLower(username) == "token" {
+		accessToken, err := getAccessToken(ctx, password)
+		if err != nil {
+			return nil, err
+		} else if accessToken == nil {
+			return &client.Session{Active: lo.ToPtr(false)}, nil
+		}
+
+		traits := map[string]any{
+			"name": map[string]string{
+				"first": accessToken.Name,
+				"last":  "",
+			},
+		}
+
+		var agent models.Agent
+		if err := ctx.DB().Where("person_id = ?", accessToken.PersonID.String()).Find(&agent).Error; err != nil {
+			return nil, err
+		}
+		if agent.ID != uuid.Nil {
+			traits["agent"] = agent
+		}
+
+		s := &client.Session{
+			Id:        uuid.NewString(),
+			Active:    lo.ToPtr(true),
+			ExpiresAt: accessToken.ExpiresAt,
+			Identity: &client.Identity{
+				Id:     accessToken.PersonID.String(),
+				Traits: traits,
+			},
+		}
+
+		return s, nil
+	}
+
+	sess, err := k.kratosLoginWithCache(ctx, username, password)
+	if err != nil {
+		logger.V(4).Infof("Login failed: %v", err)
+		return nil, fmt.Errorf("failed to login: %w", err)
+	}
+
+	return sess, nil
+
 }
 
 func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {

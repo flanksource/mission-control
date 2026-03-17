@@ -98,13 +98,21 @@ type PullRequestTemplate struct {
 	Base string `json:"base,omitempty"`
 	// The branch to push updates back to, defaults to master
 	Branch string `json:"branch,omitempty"`
+
+	AutoMerge AutoMerge `json:"autoMerge,omitempty"`
+}
+
+type AutoMerge struct {
+	Enabled bool `json:"enabled,omitempty"`
+	Rebase  bool `json:"rebase,omitempty"`
 }
 
 type Connector interface {
 	Clone(ctx context.Context, branch, local string) (billy.Filesystem, *git.Worktree, error)
-	Push(ctx context.Context, branch string) error
+	Push(ctx context.Context, branch string, pushOptions map[string]string) error
 	OpenPullRequest(ctx context.Context, spec PullRequestTemplate) (*PullRequest, error)
 	ClosePullRequest(ctx context.Context, id int) error
+	Service() string
 }
 
 func inferServiceType(gitConfig *GitopsAPISpec) string {

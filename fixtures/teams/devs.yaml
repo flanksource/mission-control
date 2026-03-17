@@ -1,0 +1,10 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Team
+metadata:
+  name: devs
+  namespace: default
+spec:
+  displayName: Developers
+  icon: server
+  members:
+    - yash@yash.com

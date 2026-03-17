@@ -1,7 +1,6 @@
 package notification
 
 import (
-	"embed"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -9,6 +8,7 @@ import (
 	"time"
 
 	"github.com/flanksource/commons/collections"
+	"github.com/flanksource/commons/hash"
 	"github.com/flanksource/commons/utils"
 	pkgConnection "github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
@@ -16,45 +16,63 @@ import (
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/gomplate/v3"
 	"github.com/google/uuid"
-	"github.com/samber/lo"
 	"go.opentelemetry.io/otel/trace"
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/logs"
+	"github.com/flanksource/incident-commander/mail"
 	"github.com/flanksource/incident-commander/teams"
 )
-
-//go:embed templates/*
-var templates embed.FS
-
-const groupedResourcesMessage = `
-Resources grouped with this notification:
-{{- range .groupedResources }}
-- {{ . }}
-{{- end }}`
 
 // NotificationTemplate holds in data for notification
 // that'll be used by struct templater.
 type NotificationTemplate struct {
-	Title      string            `template:"true"`
-	Message    string            `template:"true"`
-	Properties map[string]string `template:"true"`
+	Title       string            `template:"true"`
+	Message     string            `template:"true"`
+	Properties  map[string]string `template:"true"`
+	Attachments []Attachment      `template:"-"`
+}
+
+// Attachment is an alias for mail.Attachment to avoid duplicating the type definition.
+type Attachment = mail.Attachment
+
+// DefaultTitleAndBody returns the default title and body for notification
+// based on the given event using clicky-generated content.
+func DefaultTitleAndBody(payload NotificationEventPayload, celEnv *celVariables) (title string, body string) {
+	msgPayload := BuildNotificationMessagePayload(payload, celEnv)
+
+	// For body, we generate both slack and non-slack versions via clicky
+	// but since users with custom templates provide their own body,
+	// we just return the plain text version as default
+	bodyFormat := "markdown"
+	if celEnv != nil && celEnv.Channel == "slack" {
+		bodyFormat = "slack"
+	}
+
+	if rendered, err := FormatNotificationMessage(msgPayload, bodyFormat); err == nil {
+		body = rendered
+	} else {
+		body = msgPayload.Description
+	}
+
+	return msgPayload.Title, body
 }
 
 // NotificationEventPayload holds data to create a notification.
 type NotificationEventPayload struct {
-	ID                        uuid.UUID     `json:"id"` // Resource id. depends what it is based on the original event.
+	ResourceID                uuid.UUID     `json:"resource_id"` // Resource id. depends what it is based on the original event.
 	ResourceHealth            models.Health `json:"resource_health"`
 	ResourceStatus            string        `json:"resource_status"`
 	ResourceHealthDescription string        `json:"resource_health_description"`
 
+	EventID        uuid.UUID  `json:"event_id"`                  // The id of the original event this notification is for.
 	EventName      string     `json:"event_name"`                // The name of the original event this notification is for.
 	NotificationID uuid.UUID  `json:"notification_id,omitempty"` // ID of the notification.
 	EventCreatedAt time.Time  `json:"event_created_at"`          // Timestamp at which the original event was created
 	Properties     []byte     `json:"properties,omitempty"`      // json encoded properties of the original event
 	GroupID        *uuid.UUID `json:"group_id,omitempty"`        // ID of the group that the notification belongs to
-	Body           *string    `json:"-"`                         // Body of the notification
 
 	// Recipients //
 	CustomService    *api.NotificationConfig `json:"custom_service,omitempty"`    // Send to connection or shoutrrr service
@@ -65,7 +83,37 @@ type NotificationEventPayload struct {
 	NotificationName string                  `json:"notification_name,omitempty"` // Name of the notification of a team
 }
 
-func (t *NotificationEventPayload) AsMap() map[string]string {
+// Generates an idempotent event id for this notification send.
+func (t NotificationEventPayload) GenerateEventID() uuid.UUID {
+	var recipientSig string
+	switch {
+	case t.Connection != nil:
+		recipientSig = "connection:" + t.Connection.String()
+	case t.PersonID != nil:
+		recipientSig = "person:" + t.PersonID.String()
+	case t.TeamID != nil:
+		recipientSig = "team:" + t.TeamID.String()
+		if t.NotificationName != "" {
+			recipientSig += ":" + t.NotificationName
+		}
+	case t.PlaybookID != nil:
+		recipientSig = "playbook:" + t.PlaybookID.String()
+	case t.CustomService != nil:
+		customServiceJSON, _ := json.Marshal(t.CustomService)
+		recipientSig = "custom:" + string(customServiceJSON)
+	}
+
+	groupID := ""
+	if t.GroupID != nil {
+		groupID = t.GroupID.String()
+	}
+
+	sig := fmt.Sprintf("%s-%s-%s-%s-group-%s-recipient-%s", t.NotificationID.String(), t.ResourceID.String(), t.EventName, t.EventID.String(), groupID, recipientSig)
+	generated, _ := hash.DeterministicUUID(sig)
+	return generated
+}
+
+func (t NotificationEventPayload) AsMap() map[string]string {
 	// NOTE: Because the payload is marshalled to map[string]string instead of map[string]any
 	// the custom_service field cannot be marshalled.
 	// So, we marshal it separately and add it to the map.
@@ -83,6 +131,22 @@ func (t *NotificationEventPayload) AsMap() map[string]string {
 	return m
 }
 
+func (t NotificationEventPayload) ParentEvent() models.Event {
+	event := models.Event{
+		Name:      t.EventName,
+		CreatedAt: t.EventCreatedAt,
+		EventID:   t.EventID,
+	}
+
+	if t.EventName == api.EventConfigChanged || t.EventName == api.EventConfigUpdated {
+		event.Properties = map[string]string{
+			"config_id": t.ResourceID.String(),
+		}
+	}
+
+	return event
+}
+
 func (t *NotificationEventPayload) FromMap(m map[string]string) {
 	b, _ := json.Marshal(m)
 	_ = json.Unmarshal(b, &t)
@@ -92,13 +156,18 @@ func (t *NotificationEventPayload) FromMap(m map[string]string) {
 	}
 }
 
-// PrepareAndSendEventNotification generates the notification from the given event and sends it.
-func PrepareAndSendEventNotification(ctx *Context, payload NotificationEventPayload, celEnv *celVariables) error {
-	notification, err := GetNotification(ctx.Context, payload.NotificationID.String())
+func storeNotificationPayload(ctx *Context, payload NotificationMessagePayload) {
+	b, err := json.Marshal(payload)
 	if err != nil {
-		return err
+		ctx.Logger.Warnf("failed to marshal notification payload: %v", err)
+		return
 	}
+	ctx.WithBodyPayload(types.JSON(b))
+}
 
+type recipientSendFunc func(connectionName, shoutrrrURL string, properties map[string]string) error
+
+func resolveRecipientAndSend(ctx *Context, payload NotificationEventPayload, celEnv *celVariables, notification *NotificationWithSpec, sendFn recipientSendFunc) error {
 	if payload.PersonID != nil {
 		ctx.WithRecipient(RecipientTypePerson, payload.PersonID)
 		var emailAddress string
@@ -106,8 +175,12 @@ func PrepareAndSendEventNotification(ctx *Context, payload NotificationEventPayl
 			return fmt.Errorf("failed to get email of person(id=%s); %v", payload.PersonID, err)
 		}
 
+		if strings.TrimSpace(emailAddress) == "" {
+			return fmt.Errorf("person(id=%s) has no email address", payload.PersonID)
+		}
+
 		smtpURL := fmt.Sprintf("%s?ToAddresses=%s", api.SystemSMTP, url.QueryEscape(emailAddress))
-		return sendEventNotificationWithMetrics(ctx, celEnv.AsMap(ctx.Context), "", smtpURL, payload.EventName, notification, nil)
+		return sendFn("", smtpURL, nil)
 	}
 
 	if payload.TeamID != nil {
@@ -122,17 +195,54 @@ func PrepareAndSendEventNotification(ctx *Context, payload NotificationEventPayl
 				continue
 			}
 
-			return sendEventNotificationWithMetrics(ctx, celEnv.AsMap(ctx.Context), cn.Connection, cn.URL, payload.EventName, notification, cn.Properties)
+			if cn.Webhook != nil {
+				ctx.WithRecipient(RecipientTypeWebhook, nil)
+				return sendWebhookNotification(ctx, celEnv, payload, cn.Webhook, notification)
+			}
+
+			return sendFn(cn.Connection, cn.URL, cn.Properties)
 		}
+
+		return fmt.Errorf("notification %q not found in team(id=%s) spec", payload.NotificationName, payload.TeamID)
 	}
 
 	if payload.CustomService != nil {
 		cn := payload.CustomService
+		if cn.Webhook != nil {
+			ctx.WithRecipient(RecipientTypeWebhook, nil)
+			return sendWebhookNotification(ctx, celEnv, payload, cn.Webhook, notification)
+		}
 		ctx.WithRecipient(RecipientTypeURL, nil)
-		return sendEventNotificationWithMetrics(ctx, celEnv.AsMap(ctx.Context), cn.Connection, cn.URL, payload.EventName, notification, cn.Properties)
+		return sendFn(cn.Connection, cn.URL, cn.Properties)
 	}
 
-	return nil
+	return fmt.Errorf("no recipient resolved for notification(id=%s) event=%s", payload.NotificationID, payload.EventName)
+}
+
+// PrepareAndSendEventNotification generates the notification from the given event and sends it.
+func PrepareAndSendEventNotification(ctx *Context, payload NotificationEventPayload, celEnv *celVariables) error {
+	notification, err := GetNotification(ctx.Context, payload.NotificationID.String())
+	if err != nil {
+		return err
+	}
+
+	if strings.TrimSpace(notification.Template) != "" {
+		return prepareAndSendRawNotification(ctx, payload, celEnv, notification)
+	}
+
+	msgPayload := BuildNotificationMessagePayload(payload, celEnv)
+	applyTemplateOverrides(ctx, &msgPayload, notification, celEnv)
+	storeNotificationPayload(ctx, msgPayload)
+
+	return resolveRecipientAndSend(ctx, payload, celEnv, notification, func(connectionName, shoutrrrURL string, properties map[string]string) error {
+		return sendEventNotificationWithMetrics(ctx, msgPayload, celEnv, connectionName, shoutrrrURL, notification, properties)
+	})
+}
+
+func prepareAndSendRawNotification(ctx *Context, payload NotificationEventPayload, celEnv *celVariables, notification *NotificationWithSpec) error {
+	return resolveRecipientAndSend(ctx, payload, celEnv, notification, func(connectionName, shoutrrrURL string, properties map[string]string) error {
+		return sendRawEventNotificationWithMetrics(ctx, payload, celEnv, connectionName, shoutrrrURL, notification, properties)
+	})
 }
 
 // triggerPlaybookRun creates an event to trigger a playbook run.
@@ -143,6 +253,7 @@ func triggerPlaybookRun(ctx *Context, celEnv *celVariables, playbookID uuid.UUID
 	err := ctx.Transaction(func(txCtx context.Context, _ trace.Span) error {
 		eventProp := types.JSONStringMap{
 			"id":                       playbookID.String(),
+			"playbook_id":              playbookID.String(),
 			"notification_id":          ctx.notificationID.String(),
 			"notification_dispatch_id": ctx.log.ID.String(),
 		}
@@ -158,9 +269,10 @@ func triggerPlaybookRun(ctx *Context, celEnv *celVariables, playbookID uuid.UUID
 
 		event := models.Event{
 			Name:       api.EventPlaybookRun,
+			EventID:    ctx.log.ID,
 			Properties: eventProp,
 		}
-		if err := txCtx.DB().Create(&event).Error; err != nil {
+		if err := txCtx.DB().Clauses(events.EventQueueOnConflictClause).Create(&event).Error; err != nil {
 			return fmt.Errorf("failed to create run: %w", err)
 		}
 
@@ -177,11 +289,11 @@ func triggerPlaybookRun(ctx *Context, celEnv *celVariables, playbookID uuid.UUID
 	return nil
 }
 
-// SendEventNotification is a wrapper around sendEventNotification() for better error handling & metrics collection purpose.
-func sendEventNotificationWithMetrics(ctx *Context, celEnv map[string]any, connectionName, shoutrrrURL, eventName string, notification *NotificationWithSpec, customProperties map[string]string) error {
+// sendRawEventNotificationWithMetrics is a wrapper around sendRawEventNotification() for better error handling & metrics collection purpose.
+func sendRawEventNotificationWithMetrics(ctx *Context, payload NotificationEventPayload, celEnv *celVariables, connectionName, shoutrrrURL string, notification *NotificationWithSpec, customProperties map[string]string) error {
 	start := time.Now()
 
-	service, err := sendEventNotification(ctx, celEnv, connectionName, shoutrrrURL, eventName, notification, customProperties)
+	service, err := sendRawEventNotification(ctx, payload, celEnv, connectionName, shoutrrrURL, notification, customProperties)
 	if err != nil {
 		notificationSendFailureCounter.WithLabelValues(service, string(ctx.recipientType), ctx.notificationID.String()).Inc()
 		return err
@@ -193,8 +305,12 @@ func sendEventNotificationWithMetrics(ctx *Context, celEnv map[string]any, conne
 	return nil
 }
 
-func sendEventNotification(ctx *Context, celEnv map[string]any, connectionName, shoutrrrURL, eventName string, notification *NotificationWithSpec, customProperties map[string]string) (string, error) {
-	defaultTitle, defaultBody := DefaultTitleAndBody(eventName)
+func sendRawEventNotification(ctx *Context, payload NotificationEventPayload, celEnv *celVariables, connectionName, shoutrrrURL string, notification *NotificationWithSpec, customProperties map[string]string) (string, error) {
+	defaultTitle, defaultBody := DefaultTitleAndBody(payload, celEnv)
+
+	// notification.Properties holds spec.to.properties from the CRD, which are user-supplied overrides.
+	// Merging them here (with higher priority than customProperties) ensures they later win over
+	// the connection's own stored properties inside SendRawNotification.
 	customProperties = collections.MergeMap(notification.Properties, customProperties)
 	data := NotificationTemplate{
 		Title:      utils.Coalesce(notification.Title, defaultTitle),
@@ -202,10 +318,48 @@ func sendEventNotification(ctx *Context, celEnv map[string]any, connectionName, 
 		Properties: customProperties,
 	}
 
-	return SendNotification(ctx, connectionName, shoutrrrURL, celEnv, data, notification)
+	service, err := SendRawNotification(ctx, connectionName, shoutrrrURL, celEnv.AsMap(ctx.Context), data, notification)
+	if err != nil {
+		return service, err
+	}
+	if CRDStatusUpdateQueue != nil && notification != nil && notification.Source == models.SourceCRD {
+		CRDStatusUpdateQueue.EnqueueWithDelay(notification.ID.String(), 30*time.Second)
+	}
+	return service, nil
 }
 
-func SendNotification(ctx *Context, connectionName, shoutrrrURL string, celEnv map[string]any, data NotificationTemplate, notification *NotificationWithSpec) (string, error) {
+// sendEventNotificationWithMetrics is a wrapper around sendEventNotification() for better error handling & metrics collection purpose.
+func sendEventNotificationWithMetrics(ctx *Context, payload NotificationMessagePayload, celEnv *celVariables, connectionName, shoutrrrURL string, notification *NotificationWithSpec, customProperties map[string]string) error {
+	start := time.Now()
+
+	service, err := sendEventNotification(ctx, payload, celEnv, connectionName, shoutrrrURL, notification, customProperties)
+	if err != nil {
+		notificationSendFailureCounter.WithLabelValues(service, string(ctx.recipientType), ctx.notificationID.String()).Inc()
+		return err
+	}
+
+	notificationSentCounter.WithLabelValues(service, string(ctx.recipientType), ctx.notificationID.String()).Inc()
+	notificationSendDuration.WithLabelValues(service, string(ctx.recipientType), ctx.notificationID.String()).Observe(time.Since(start).Seconds())
+
+	return nil
+}
+
+func sendEventNotification(ctx *Context, payload NotificationMessagePayload, celEnv *celVariables, connectionName, shoutrrrURL string, notification *NotificationWithSpec, customProperties map[string]string) (string, error) {
+	// notification.Properties holds spec.to.properties from the CRD, which are user-supplied overrides.
+	// Merging them here (with higher priority than customProperties) ensures they later win over
+	// the connection's own stored properties inside SendNotification.
+	customProperties = collections.MergeMap(notification.Properties, customProperties)
+	service, err := SendNotification(ctx, connectionName, shoutrrrURL, payload, customProperties, celEnv)
+	if err != nil {
+		return service, err
+	}
+	if CRDStatusUpdateQueue != nil && notification != nil && notification.Source == models.SourceCRD {
+		CRDStatusUpdateQueue.EnqueueWithDelay(notification.ID.String(), 30*time.Second)
+	}
+	return service, nil
+}
+
+func SendRawNotification(ctx *Context, connectionName, shoutrrrURL string, celEnv map[string]any, data NotificationTemplate, notification *NotificationWithSpec) (string, error) {
 	if celEnv == nil {
 		celEnv = make(map[string]any)
 	}
@@ -221,19 +375,25 @@ func SendNotification(ctx *Context, connectionName, shoutrrrURL string, celEnv m
 		ctx.WithRecipient(RecipientTypeConnection, &connection.ID)
 
 		shoutrrrURL = connection.URL
+		// connection.Properties provides the base settings (host, credentials, default recipients, etc.).
+		// data.Properties (which carry spec.to.properties from the CRD) are merged on top so that
+		// anything the user explicitly specified overrides the connection's defaults.
 		data.Properties = collections.MergeMap(connection.Properties, data.Properties)
 	}
 
 	if connection != nil && connection.Type == models.ConnectionTypeSlack {
-		// We know we are sending to slack.
-		// Send the notification with slack-api and don't go through Shoutrrr.
 		celEnv["channel"] = "slack"
 		templater := ctx.NewStructTemplater(celEnv, "", TemplateFuncs)
 		if err := templater.Walk(&data); err != nil {
 			return "", fmt.Errorf("error templating notification: %w", err)
 		}
 
-		traceLog("NotificationID=%s Resource=[%s] Sent via slack ...", lo.FromPtr(notification).ID, getResourceIDFromCELMap(celEnv))
+		ctx.WithMessage(data.Message)
+		resourceID := ""
+		if ctx.log != nil && ctx.log.ResourceID != uuid.Nil {
+			resourceID = ctx.log.ResourceID.String()
+		}
+		traceLog("NotificationID=%s Resource=[%s] Sent via slack ...", ctx.notificationID, resourceID)
 		if err := SlackSend(ctx, connection.Password, connection.Username, data); err != nil {
 			return "", err
 		}
@@ -241,112 +401,79 @@ func SendNotification(ctx *Context, connectionName, shoutrrrURL string, celEnv m
 		return "slack", nil
 	}
 
-	if _, exists := celEnv["groupedResources"]; exists {
-		data.Message += groupedResourcesMessage
-	}
-
-	service, err := shoutrrrSend(ctx, celEnv, shoutrrrURL, data)
+	service, err := shoutrrrSendRaw(ctx, celEnv, shoutrrrURL, data)
 	if err != nil {
 		return "", fmt.Errorf("failed to send message with Shoutrrr: %w", err)
 	}
-	traceLog("NotificationID=%s Resource=[%s] Sent via Shoutrrr ...", lo.FromPtr(notification).ID, getResourceIDFromCELMap(celEnv))
-
-	// Update CRD Status
-	if CRDStatusUpdateQueue != nil && notification != nil && notification.Source == models.SourceCRD {
-		CRDStatusUpdateQueue.EnqueueWithDelay(notification.ID.String(), 30*time.Second)
+	resourceID := ""
+	if ctx.log != nil && ctx.log.ResourceID != uuid.Nil {
+		resourceID = ctx.log.ResourceID.String()
 	}
+	traceLog("NotificationID=%s Resource=[%s] Sent via Shoutrrr ...", ctx.notificationID, resourceID)
 
 	return service, nil
 }
 
-// DefaultTitleAndBody returns the default title and body for notification
-// based on the given event.
-func DefaultTitleAndBody(event string) (title string, body string) {
-	switch event {
-	case api.EventCheckPassed:
-		title = `{{ if ne channel "slack"}}Check {{.check.name}} has passed{{end}}`
-		content, _ := templates.ReadFile(fmt.Sprintf("templates/%s", event))
-		body = string(content)
-
-	case api.EventCheckFailed:
-		title = `{{ if ne channel "slack"}}Check {{.check.name}} has failed{{end}}`
-		content, _ := templates.ReadFile(fmt.Sprintf("templates/%s", event))
-		body = string(content)
-
-	case api.EventConfigHealthy, api.EventConfigUnhealthy, api.EventConfigWarning, api.EventConfigUnknown:
-		title = `{{ if ne channel "slack"}}{{.config.type}} {{.config.name}} is {{.config.health}}{{end}}`
-		content, _ := templates.ReadFile("templates/config.health")
-		body = string(content)
-
-	case api.EventConfigCreated, api.EventConfigUpdated, api.EventConfigDeleted, api.EventConfigChanged:
-		title = fmt.Sprintf(`{{ if ne channel "slack"}}{{.config.type}} {{.config.name}} was %s{{end}}`, strings.TrimPrefix(event, "config."))
-		content, _ := templates.ReadFile("templates/config.db.update")
-		body = string(content)
-
-	case api.EventComponentHealthy, api.EventComponentUnhealthy, api.EventComponentWarning, api.EventComponentUnknown:
-		title = `{{ if ne channel "slack"}}Component {{.component.name}} is {{.component.health}}{{end}}`
-		content, _ := templates.ReadFile("templates/component.health")
-		body = string(content)
-
-	case api.EventIncidentCommentAdded:
-		title = "{{.author.name}} left a comment on {{.incident.incident_id}}: {{.incident.title}}"
-		body = "{{.comment.comment}}\n\n[Reference]({{.permalink}})"
-
-	case api.EventIncidentCreated:
-		title = "{{.incident.incident_id}}: {{.incident.title}} ({{.incident.severity}}) created"
-		body = "Type: {{.incident.type}}\n\n[Reference]({{.permalink}})"
-
-	case api.EventIncidentDODAdded:
-		title = "Definition of Done added | {{.incident.incident_id}}: {{.incident.title}}"
-		body = "Evidence: {{.evidence.description}}\n\n[Reference]({{.permalink}})"
-
-	case api.EventIncidentDODPassed, api.EventIncidentDODRegressed:
-		title = "Definition of Done {{if .evidence.done}}passed{{else}}regressed{{end}} | {{.incident.incident_id}}: {{.incident.title}}"
-		body = `Evidence: {{.evidence.description}}
-Hypothesis: {{.hypothesis.title}}
-
-[Reference]({{.permalink}})`
-
-	case api.EventIncidentResponderAdded:
-		title = "New responder added to {{.incident.incident_id}}: {{.incident.title}}"
-		body = "Responder {{.responder.name}}\n\n[Reference]({{.permalink}})"
-
-	case api.EventIncidentResponderRemoved:
-		title = "Responder removed from {{.incident.incident_id}}: {{.incident.title}}"
-		body = "Responder {{.responder.name}}\n\n[Reference]({{.permalink}})"
-
-	case api.EventIncidentStatusCancelled, api.EventIncidentStatusClosed, api.EventIncidentStatusInvestigating, api.EventIncidentStatusMitigated, api.EventIncidentStatusOpen, api.EventIncidentStatusResolved:
-		title = "{{.incident.title}} status updated"
-		body = "New Status: {{.incident.status}}\n\n[Reference]({{.permalink}})"
-	}
-
-	return title, body
-}
-
-func getNotificationMsg(ctx context.Context, celEnv map[string]any, payload NotificationEventPayload, n *NotificationWithSpec) (*NotificationTemplate, error) {
-	defaultTitle, defaultBody := DefaultTitleAndBody(payload.EventName)
-	data := NotificationTemplate{
-		Title:      utils.Coalesce(n.Title, defaultTitle),
-		Message:    utils.Coalesce(n.Template, defaultBody),
-		Properties: n.Properties,
-	}
-	templater := ctx.NewStructTemplater(celEnv, "", TemplateFuncs)
-	if err := templater.Walk(&data); err != nil {
-		return nil, fmt.Errorf("error templating notification: %w", err)
-	}
-
-	if strings.Contains(data.Message, `"blocks"`) {
-		var slackMsg SlackMsgTemplate
-		if err := json.Unmarshal([]byte(data.Message), &slackMsg); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal slack template into blocks: %w", err)
+func SendNotification(ctx *Context, connectionName, shoutrrrURL string, payload NotificationMessagePayload, properties map[string]string, celEnv *celVariables) (string, error) {
+	var connection *models.Connection
+	var err error
+	if connectionName != "" {
+		connection, err = pkgConnection.Get(ctx.Context, connectionName)
+		if err != nil {
+			return "", err
 		}
 
-		if b, err := json.Marshal([]any{slackMsg}); err == nil {
-			data.Message = string(b)
-		}
+		ctx.WithRecipient(RecipientTypeConnection, &connection.ID)
+
+		shoutrrrURL = connection.URL
+		// connection.Properties provides the base settings (host, credentials, default recipients, etc.).
+		// properties (which carry spec.to.properties from the CRD) are merged on top so that
+		// anything the user explicitly specified overrides the connection's defaults.
+		properties = collections.MergeMap(connection.Properties, properties)
 	}
 
-	return &data, nil
+	// Template render properties if celEnv is available
+	if celEnv != nil {
+		properties = renderTemplateProperties(ctx, properties, celEnv)
+	}
+
+	if connection != nil && connection.Type == models.ConnectionTypeSlack {
+		slackMsg, err := FormatNotificationMessage(payload, "slack")
+		if err != nil {
+			return "", fmt.Errorf("failed to format slack message: %w", err)
+		}
+
+		data := NotificationTemplate{
+			Title:      payload.Title,
+			Message:    slackMsg,
+			Properties: properties,
+		}
+
+		ctx.WithMessage(data.Message)
+
+		resourceID := ""
+		if ctx.log != nil && ctx.log.ResourceID != uuid.Nil {
+			resourceID = ctx.log.ResourceID.String()
+		}
+		traceLog("NotificationID=%s Resource=[%s] Sent via slack ...", ctx.notificationID, resourceID)
+		if err := SlackSend(ctx, connection.Password, connection.Username, data); err != nil {
+			return "", err
+		}
+
+		return "slack", nil
+	}
+
+	service, err := shoutrrrSend(ctx, shoutrrrURL, payload, properties)
+	if err != nil {
+		return "", fmt.Errorf("failed to send message with Shoutrrr: %w", err)
+	}
+	resourceID := ""
+	if ctx.log != nil && ctx.log.ResourceID != uuid.Nil {
+		resourceID = ctx.log.ResourceID.String()
+	}
+	traceLog("NotificationID=%s Resource=[%s] Sent via Shoutrrr ...", ctx.notificationID, resourceID)
+
+	return service, nil
 }
 
 func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *NotificationWithSpec, celEnv *celVariables) ([]NotificationEventPayload, error) {
@@ -354,13 +481,19 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 
 	var payloads []NotificationEventPayload
 
-	resourceID, err := uuid.Parse(event.Properties["id"])
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse resource id: %v", err)
+	resource := celEnv.SelectableResource()
+	resourceID := event.EventID
+	if resource != nil {
+		parsedResourceID, err := uuid.Parse(resource.GetID())
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse resource id(%s): %w", resource.GetID(), err)
+		}
+		resourceID = parsedResourceID
 	}
 
 	var eventProperties []byte
 	if len(event.Properties) > 0 {
+		var err error
 		eventProperties, err = json.Marshal(event.Properties)
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal event properties: %v", err)
@@ -387,7 +520,6 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 		}
 	}
 
-	resource := celEnv.SelectableResource()
 	var resourceHealth, resourceStatus, resourceHealthDescription string
 	if resource != nil {
 		var err error
@@ -408,12 +540,13 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 
 	if n.PlaybookID != nil {
 		payload := NotificationEventPayload{
+			EventID:                   event.EventID,
 			EventName:                 event.Name,
 			NotificationID:            n.ID,
 			ResourceHealth:            models.Health(resourceHealth),
 			ResourceStatus:            resourceStatus,
 			ResourceHealthDescription: resourceHealthDescription,
-			ID:                        resourceID,
+			ResourceID:                resourceID,
 			PlaybookID:                n.PlaybookID,
 			EventCreatedAt:            event.CreatedAt,
 			Properties:                eventProperties,
@@ -425,24 +558,18 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 
 	if n.PersonID != nil {
 		payload := NotificationEventPayload{
+			EventID:                   event.EventID,
 			EventName:                 event.Name,
 			NotificationID:            n.ID,
 			ResourceHealth:            models.Health(resourceHealth),
 			ResourceHealthDescription: resourceHealthDescription,
 			ResourceStatus:            resourceStatus,
-			ID:                        resourceID,
+			ResourceID:                resourceID,
 			PersonID:                  n.PersonID,
 			EventCreatedAt:            event.CreatedAt,
 			Properties:                eventProperties,
 			GroupID:                   groupID,
 		}
-
-		msg, err := getNotificationMsg(ctx, celEnvMap, payload, n)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get notification body: %w", err)
-		}
-
-		payload.Body = &msg.Message
 
 		payloads = append(payloads, payload)
 	}
@@ -456,7 +583,7 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 		for _, cn := range teamSpec.Notifications {
 			if cn.Filter != "" {
 				if valid, err := ctx.RunTemplateBool(gomplate.Template{Expression: cn.Filter}, celEnvMap); err != nil {
-					logs.IfError(db.UpdateNotificationError(ctx, n.ID.String(), err.Error()), "failed to update notification")
+					logs.IfError(db.SetNotificationError(ctx, n.ID.String(), err.Error()), "failed to update notification")
 					continue
 				} else if !valid {
 					continue
@@ -464,12 +591,13 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 			}
 
 			payload := NotificationEventPayload{
+				EventID:                   event.EventID,
 				EventName:                 event.Name,
 				NotificationID:            n.ID,
 				ResourceHealth:            models.Health(resourceHealth),
 				ResourceHealthDescription: resourceHealthDescription,
 				ResourceStatus:            resourceStatus,
-				ID:                        resourceID,
+				ResourceID:                resourceID,
 				TeamID:                    n.TeamID,
 				NotificationName:          cn.Name,
 				EventCreatedAt:            event.CreatedAt,
@@ -484,7 +612,7 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 	for _, cn := range n.CustomNotifications {
 		if cn.Filter != "" {
 			if valid, err := ctx.RunTemplateBool(gomplate.Template{Expression: cn.Filter}, celEnvMap); err != nil {
-				logs.IfError(db.UpdateNotificationError(ctx, n.ID.String(), err.Error()), "failed to update notification")
+				logs.IfError(db.SetNotificationError(ctx, n.ID.String(), err.Error()), "failed to update notification")
 				continue
 			} else if !valid {
 				continue
@@ -492,13 +620,14 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 		}
 
 		payload := NotificationEventPayload{
+			EventID:                   event.EventID,
 			EventName:                 event.Name,
 			NotificationID:            n.ID,
 			ResourceHealth:            models.Health(resourceHealth),
 			ResourceHealthDescription: resourceHealthDescription,
 			ResourceStatus:            resourceStatus,
 			CustomService:             cn.DeepCopy(),
-			ID:                        resourceID,
+			ResourceID:                resourceID,
 			EventCreatedAt:            event.CreatedAt,
 			Properties:                eventProperties,
 			GroupID:                   groupID,
@@ -513,33 +642,68 @@ func CreateNotificationSendPayloads(ctx context.Context, event models.Event, n *
 			payload.Connection = &c.ID
 		}
 
-		msg, err := getNotificationMsg(ctx, celEnvMap, payload, n)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get notification body: %w", err)
-		}
-		payload.Body = &msg.Message
-
 		payloads = append(payloads, payload)
 	}
 
 	return payloads, nil
 }
 
-func getResourceIDFromCELMap(celEnv map[string]any) string {
-	if c, exists := celEnv["check"]; exists {
-		if cm, ok := c.(map[string]any); ok {
-			return "check/" + fmt.Sprint(cm["id"])
+// applyTemplateOverrides replaces the payload title/description with rendered templates when provided.
+func applyTemplateOverrides(ctx *Context, msgPayload *NotificationMessagePayload, notification *NotificationWithSpec, celEnv *celVariables) {
+	if msgPayload == nil || notification == nil || celEnv == nil {
+		return
+	}
+
+	celEnvMap := celEnv.AsMap(ctx.Context)
+	if strings.TrimSpace(notification.Title) != "" {
+		if rendered, err := renderTemplateString(ctx, celEnvMap, notification.Title); err != nil {
+			ctx.Logger.Warnf("failed to render notification title template %q: %v", notification.Title, err)
+		} else {
+			msgPayload.Title = rendered
 		}
 	}
-	if c, exists := celEnv["config"]; exists {
-		if cm, ok := c.(map[string]any); ok {
-			return "config/" + fmt.Sprint(cm["id"])
+
+	if strings.TrimSpace(notification.Template) != "" {
+		if rendered, err := renderTemplateString(ctx, celEnvMap, notification.Template); err != nil {
+			ctx.Logger.Warnf("failed to render notification template %q: %v", notification.Template, err)
+		} else {
+			msgPayload.Description = rendered
 		}
 	}
-	if c, exists := celEnv["component"]; exists {
-		if cm, ok := c.(map[string]any); ok {
-			return "component/" + fmt.Sprint(cm["id"])
-		}
+}
+
+// renderTemplateProperties renders template variables in the properties map using the CEL environment
+func renderTemplateProperties(ctx *Context, properties map[string]string, celEnv *celVariables) map[string]string {
+	if len(properties) == 0 {
+		return properties
 	}
-	return ""
+
+	rendered := make(map[string]string, len(properties))
+	celEnvMap := celEnv.AsMap(ctx.Context)
+
+	for key, value := range properties {
+		// Skip properties that don't contain template syntax
+		if !strings.Contains(value, "{{") || !strings.Contains(value, "}}") {
+			rendered[key] = value
+			continue
+		}
+
+		renderedValue, err := renderTemplateString(ctx, celEnvMap, value)
+		if err != nil {
+			ctx.Logger.Warnf("failed to render template property %q: %v", key, err)
+			rendered[key] = value
+			continue
+		}
+		rendered[key] = renderedValue
+	}
+
+	return rendered
+}
+
+func renderTemplateString(ctx *Context, celEnvMap map[string]any, value string) (string, error) {
+	result, err := ctx.RunTemplate(gomplate.Template{Template: value}, celEnvMap)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%v", result), nil
 }

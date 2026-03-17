@@ -1,0 +1,27 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: text-panel
+  namespace: mc
+spec:
+  description: Example view with a text panel for contextual notes.
+  display:
+    title: Text Panel Example
+    icon: info-circle
+    sidebar: true
+  queries:
+    deployments:
+      configs:
+        types:
+          - Kubernetes::Deployment
+        tagSelector: namespace=default
+  panels:
+    - name: Deployment Notes
+      description: Guidance shown alongside the deployment table
+      type: text
+      query: |
+        SELECT 'Showing deployments from the default namespace.' AS value
+        UNION ALL
+        SELECT printf('Cached deployments: %d', COUNT(*)) AS value FROM deployments
+        UNION ALL
+        SELECT 'Use filters to narrow by status or cluster.' AS value

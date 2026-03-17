@@ -1,0 +1,11 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: missioncontrol-configs
+  namespace: default
+  uid: db80e7f5-b6af-4896-8431-8d6e5430c6f2
+spec:
+  description: Scope for configs in the missioncontrol namespace
+  targets:
+    - config:
+        tagSelector: "namespace=missioncontrol"

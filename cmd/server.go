@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	gocontext "context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -8,8 +9,6 @@ import (
 
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty"
-	"go.opentelemetry.io/otel"
-
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/postq/pg"
@@ -17,8 +16,8 @@ import (
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/shutdown"
 	"github.com/flanksource/kopper"
-
 	"github.com/spf13/cobra"
+	"go.opentelemetry.io/otel"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	"github.com/flanksource/incident-commander/api"
@@ -30,17 +29,23 @@ import (
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/incidents/responder"
 	"github.com/flanksource/incident-commander/jobs"
+	"github.com/flanksource/incident-commander/mail"
+	"github.com/flanksource/incident-commander/mcp"
+	"github.com/flanksource/incident-commander/metrics"
 	"github.com/flanksource/incident-commander/notification"
-	"github.com/flanksource/incident-commander/teams"
-	"github.com/flanksource/incident-commander/vars"
+	echov4 "github.com/labstack/echo/v4"
 
 	// register event handlers & echo routers
 	_ "github.com/flanksource/incident-commander/artifacts"
 	_ "github.com/flanksource/incident-commander/catalog"
 	_ "github.com/flanksource/incident-commander/connection"
 	_ "github.com/flanksource/incident-commander/playbook"
+	_ "github.com/flanksource/incident-commander/shorturl"
 	_ "github.com/flanksource/incident-commander/snapshot"
+	"github.com/flanksource/incident-commander/teams"
 	_ "github.com/flanksource/incident-commander/upstream"
+	"github.com/flanksource/incident-commander/vars"
+	"github.com/flanksource/incident-commander/views"
 )
 
 func launchKopper(ctx context.Context) {
@@ -123,6 +128,33 @@ func launchKopper(ctx context.Context) {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for Application: %v", err))
 	}
 
+	if _, err := kopper.SetupReconciler(ctx, mgr,
+		db.PersistViewFromCRD,
+		db.DeleteView,
+		db.DeleteStaleView,
+		"view.mission-control.flanksource.com",
+	); err != nil {
+		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for View: %v", err))
+	}
+
+	if _, err := kopper.SetupReconciler(ctx, mgr,
+		db.PersistScopeFromCRD,
+		db.DeleteScope,
+		db.DeleteStaleScope,
+		"scope.mission-control.flanksource.com",
+	); err != nil {
+		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for Scope: %v", err))
+	}
+
+	if _, err := kopper.SetupReconciler(ctx, mgr,
+		db.PersistTeamFromCRD,
+		db.DeleteTeam,
+		db.DeleteStaleTeam,
+		"team.mission-control.flanksource.com",
+	); err != nil {
+		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for Team: %v", err))
+	}
+
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("error running controller manager: %v", err))
 	}
@@ -157,11 +189,27 @@ var Serve = &cobra.Command{
 			shutdown.ShutdownAndExit(1, fmt.Sprintf("error setting up system user: %v", err))
 		}
 
+		metrics.RegisterDBStats(ctx)
+
 		e := echo.New(ctx)
+		// This is outside echo pkg to prevent import cycle
+		// Cannot be registered because we need to pass ctx for
+		// context injection middleware
+		mcpServer := mcp.Server(ctx)
+		e.POST("/mcp", echov4.WrapHandler(mcpServer.HTTPHandler), mcp.AuthMiddleware)
 
 		shutdown.AddHookWithPriority("echo", shutdown.PriorityIngress, func() {
 			echo.Shutdown(e)
 		})
+
+		if metricsPort > 0 {
+			metricsServer := echo.StartMetricsServer(metricsPort)
+			shutdown.AddHookWithPriority("metrics-server", shutdown.PriorityIngress, func() {
+				if err := metricsServer.Shutdown(gocontext.Background()); err != nil {
+					logger.Errorf("Metrics server shutdown error: %v", err)
+				}
+			})
+		}
 
 		shutdown.AddHookWithPriority("database", shutdown.PriorityCritical, stop)
 
@@ -170,7 +218,7 @@ var Serve = &cobra.Command{
 		ctx.WithTracer(otel.GetTracerProvider().Tracer("mission-control"))
 		ctx = ctx.WithNamespace(api.Namespace)
 
-		go jobs.Start(ctx)
+		go jobs.Start(ctx, mcpServer.Server)
 
 		events.StartConsumers(ctx)
 
@@ -203,7 +251,9 @@ func tableUpdatesHandler(ctx context.Context) {
 	playbooksActionUpdateChan := notifyRouter.GetOrCreateChannel("playbook_run_actions")
 	permissionUpdateChan := notifyRouter.GetOrCreateChannel("permissions")
 	permissionGroupUpdateChan := notifyRouter.GetOrCreateChannel("permission_groups")
+	scopeUpdateChan := notifyRouter.GetOrCreateChannel("scopes")
 	teamMembersUpdateChan := notifyRouter.GetOrCreateChannel("team_members")
+	connectionsUpdateChan := notifyRouter.GetOrCreateChannel("connections")
 
 	// use a single job instance to maintain retention
 	pushPlaybookActionsJob := jobs.PushPlaybookActions(ctx)
@@ -252,6 +302,7 @@ func tableUpdatesHandler(ctx context.Context) {
 			}
 
 			if tgOperation == TGOPDelete {
+				auth.FlushTokenCache()
 				if ok, err := rbac.DeleteRole(id); err != nil {
 					ctx.Errorf("failed to delete rbac policy for team(%s): %v", id, err)
 				} else if ok {
@@ -272,6 +323,10 @@ func tableUpdatesHandler(ctx context.Context) {
 
 			switch tgOperation {
 			case TGOPDelete:
+				if rbac.Enforcer() == nil {
+					break
+				}
+				auth.InvalidateRLSCacheForUser(personID)
 				if err := rbac.DeleteRoleForUser(personID, teamID); err != nil {
 					ctx.Errorf("failed to delete team(%s)->user(%s) rbac policy: %v", teamID, personID, err)
 				} else if err := rbac.ReloadPolicy(); err != nil {
@@ -279,6 +334,10 @@ func tableUpdatesHandler(ctx context.Context) {
 				}
 
 			case TGOPInsert, TGOPUpdate:
+				if rbac.Enforcer() == nil {
+					break
+				}
+				auth.InvalidateRLSCacheForUser(personID)
 				if err := rbac.AddRoleForUser(personID, teamID); err != nil {
 					ctx.Errorf("failed to add team(%s)->user(%s) rbac policy: %v", teamID, personID, err)
 				} else if err := rbac.ReloadPolicy(); err != nil {
@@ -307,6 +366,25 @@ func tableUpdatesHandler(ctx context.Context) {
 			// permissions affect RLS so we need to invalidate the postgrest JWT
 			// TODO: only invalidate tokens for the affect users
 			auth.FlushTokenCache()
+
+		case <-scopeUpdateChan:
+			if err := rbac.ReloadPolicy(); err != nil {
+				ctx.Logger.Errorf("error reloading rbac policy due to permission group updates: %v", err)
+			} else {
+				ctx.Logger.Debugf("reloading rbac policy due to permission group updates")
+			}
+
+			// Scope changes affect RLS payload (tags/agents in JWT)
+			// We need to invalidate the cache so users get updated visibility immediately
+			ctx.Logger.Debugf("flushing RLS token cache due to scopes updates")
+			// TODO: only invalidate tokens for the affected users
+			auth.FlushTokenCache()
+
+			// Invalidate view scope cache
+			views.FlushScopeCache()
+
+		case <-connectionsUpdateChan:
+			mail.FlushSMTPCache()
 		}
 	}
 }

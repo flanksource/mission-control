@@ -1,0 +1,506 @@
+package views
+
+import (
+	"time"
+
+	"github.com/flanksource/duty/connection"
+	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/dataquery"
+	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/types"
+	pkgView "github.com/flanksource/duty/view"
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
+	"github.com/samber/lo"
+
+	"github.com/flanksource/incident-commander/api"
+	v1 "github.com/flanksource/incident-commander/api/v1"
+)
+
+var _ = Describe("ApplyMapping", func() {
+	type applyMappingTestCase struct {
+		name     string
+		data     map[string]any
+		columns  []pkgView.ColumnDef
+		mapping  map[string]types.CelExpression
+		expected pkgView.Row
+	}
+
+	testCases := []applyMappingTestCase{
+		{
+			name: "should apply CEL expressions to data",
+			data: map[string]any{
+				"name":   "test-pod",
+				"status": "Running",
+				"ready":  true,
+			},
+			mapping: map[string]types.CelExpression{
+				"pod_name":   "row.name",
+				"pod_status": "row.status",
+			},
+			columns: []pkgView.ColumnDef{
+				{
+					Name: "pod_name",
+					Type: pkgView.ColumnTypeString,
+				},
+				{
+					Name: "pod_status",
+					Type: pkgView.ColumnTypeString,
+				},
+			},
+			expected: pkgView.Row{"test-pod", "Running", nil, nil},
+		},
+		{
+			name: "should handle empty mapping",
+			data: map[string]any{
+				"name": "test",
+			},
+			mapping:  map[string]types.CelExpression{},
+			expected: pkgView.Row{nil, nil},
+		},
+		{
+			name: "helper columns",
+			columns: []pkgView.ColumnDef{
+				{
+					Name: "name",
+					Type: pkgView.ColumnTypeString,
+				},
+				{
+					Name: "url",
+					Type: pkgView.ColumnTypeString,
+					For:  lo.ToPtr("name"),
+				},
+			},
+			data: map[string]any{
+				"name": "test",
+			},
+			mapping: map[string]types.CelExpression{
+				"name": `row.name`,
+				"url":  `"https://example.com/" + row.name`,
+			},
+			expected: pkgView.Row{"test", "https://example.com/test", nil, nil},
+		},
+		{
+			name: "no explicit mapping",
+			columns: []pkgView.ColumnDef{
+				{
+					Name: "name",
+					Type: pkgView.ColumnTypeString,
+				},
+				{
+					Name: "url",
+					Type: pkgView.ColumnTypeString,
+					For:  lo.ToPtr("name"),
+				},
+			},
+			data: map[string]any{
+				"name": "test",
+				"url":  "https://example.com/test",
+			},
+			mapping:  nil,
+			expected: pkgView.Row{"test", "https://example.com/test", nil, nil},
+		},
+		{
+			name: "should handle durations",
+			data: map[string]any{
+				"duration": "does not matter. the value is hardcoded in the mapping.",
+			},
+			mapping: map[string]types.CelExpression{
+				"duration": "duration('1m')",
+			},
+			columns: []pkgView.ColumnDef{
+				{
+					Name: "duration",
+					Type: pkgView.ColumnTypeDuration,
+				},
+			},
+			expected: pkgView.Row{1 * time.Minute, nil, nil},
+		},
+	}
+
+	for _, tc := range testCases {
+		It(tc.name, func() {
+			ctx := context.New()
+			row, err := applyMapping(ctx, tc.data, tc.columns, tc.mapping)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(pkgView.Row(row)).To(Equal(tc.expected))
+		})
+	}
+})
+
+var _ = Describe("CustomURLAttribute", func() {
+	It("should template URL from row data", func() {
+		ctx := context.New()
+
+		columnDef := pkgView.ColumnDef{
+			Name: "name",
+			Type: pkgView.ColumnTypeString,
+			URL: &pkgView.ColumnURL{
+				Template: "https://example.com/{{ .row.name }}",
+			},
+		}
+
+		attrs, err := getColumnAttributes(ctx, columnDef, map[string]any{"name": "test"})
+		Expect(err).ToNot(HaveOccurred())
+		Expect(attrs).To(HaveKeyWithValue("url", "https://example.com/test"))
+	})
+})
+
+var _ = Describe("CalculateVariableDepths", func() {
+	type testCase struct {
+		name          string
+		variables     []api.ViewVariable
+		expectedError string
+		expectedMap   map[string]int
+	}
+
+	testCases := []testCase{
+		{
+			name: "no dependencies",
+			variables: []api.ViewVariable{
+				{Key: "var1"},
+				{Key: "var2"},
+				{Key: "var3"},
+			},
+			expectedMap: map[string]int{
+				"var1": 0,
+				"var2": 0,
+				"var3": 0,
+			},
+		},
+		{
+			name: "simple linear dependency",
+			variables: []api.ViewVariable{
+				{Key: "var1"},
+				{Key: "var2", DependsOn: []string{"var1"}},
+				{Key: "var3", DependsOn: []string{"var2"}},
+			},
+			expectedMap: map[string]int{
+				"var1": 0,
+				"var2": 1,
+				"var3": 2,
+			},
+		},
+		{
+			name: "multiple dependencies same level",
+			variables: []api.ViewVariable{
+				{Key: "var1"},
+				{Key: "var2"},
+				{Key: "var3", DependsOn: []string{"var1", "var2"}},
+			},
+			expectedMap: map[string]int{
+				"var1": 0,
+				"var2": 0,
+				"var3": 1,
+			},
+		},
+		{
+			name: "complex dependency tree",
+			variables: []api.ViewVariable{
+				{Key: "base1"},
+				{Key: "base2"},
+				{Key: "level1a", DependsOn: []string{"base1"}},
+				{Key: "level1b", DependsOn: []string{"base2"}},
+				{Key: "level2", DependsOn: []string{"level1a", "level1b"}},
+				{Key: "top", DependsOn: []string{"level2"}},
+			},
+			expectedMap: map[string]int{
+				"base1":   0,
+				"base2":   0,
+				"level1a": 1,
+				"level1b": 1,
+				"level2":  2,
+				"top":     3,
+			},
+		},
+		{
+			name: "circular dependency",
+			variables: []api.ViewVariable{
+				{Key: "var1", DependsOn: []string{"var2"}},
+				{Key: "var2", DependsOn: []string{"var1"}},
+			},
+			expectedError: "circular dependency detected involving variable: var1",
+		},
+		{
+			name: "self dependency",
+			variables: []api.ViewVariable{
+				{Key: "var1", DependsOn: []string{"var1"}},
+			},
+			expectedError: "circular dependency detected involving variable: var1",
+		},
+		{
+			name: "undefined variable reference",
+			variables: []api.ViewVariable{
+				{Key: "var1", DependsOn: []string{"nonexistent"}},
+			},
+			expectedError: "undefined variable referenced: nonexistent",
+		},
+		{
+			name: "mixed valid and invalid dependencies",
+			variables: []api.ViewVariable{
+				{Key: "var1"},
+				{Key: "var2", DependsOn: []string{"var1", "missing"}},
+			},
+			expectedError: "undefined variable referenced: missing",
+		},
+	}
+
+	for _, tc := range testCases {
+		It(tc.name, func() {
+			varMap := make(map[string]api.ViewVariable)
+			for _, v := range tc.variables {
+				varMap[v.Key] = v
+			}
+			depths, err := calculateVariableDepths(varMap, tc.variables)
+
+			if tc.expectedError != "" {
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring(tc.expectedError))
+				Expect(depths).To(BeNil())
+			} else {
+				Expect(err).ToNot(HaveOccurred())
+				Expect(depths).To(Equal(tc.expectedMap))
+			}
+		})
+	}
+})
+
+var _ = Describe("Views", func() {
+	Describe("Run", func() {
+		DescribeTable("queries",
+			func(view v1.View, expectedRows []pkgView.Row) {
+				request := &requestOpt{}
+				result, err := Run(DefaultContext, &view, request)
+				Expect(err).ToNot(HaveOccurred())
+				Expect(result.Rows).To(Equal(expectedRows))
+			},
+			Entry("config queries", v1.View{
+				Spec: v1.ViewSpec{
+					Columns: []pkgView.ColumnDef{
+						{
+							Name:       "name",
+							Type:       pkgView.ColumnTypeString,
+							PrimaryKey: true,
+						},
+						{
+							Name: "status",
+							Type: pkgView.ColumnTypeString,
+						},
+					},
+					Queries: map[string]v1.ViewQueryWithColumnDefs{
+						"nodes": {
+							Query: pkgView.Query{
+								Configs: &types.ResourceSelector{
+									Types:       []string{"Kubernetes::Node"},
+									TagSelector: "account=flanksource",
+								},
+							},
+						},
+					},
+					Mapping: map[string]types.CelExpression{
+						"name":   "row.name",
+						"status": "row.status",
+					},
+				},
+			}, []pkgView.Row{
+				{"node-a", "healthy", nil, nil},
+				{"node-b", "healthy", nil, nil},
+			}),
+			Entry("changes queries", v1.View{
+				Spec: v1.ViewSpec{
+					Columns: []pkgView.ColumnDef{
+						{
+							Name:       "name",
+							Type:       pkgView.ColumnTypeString,
+							PrimaryKey: true,
+						},
+						{
+							Name: "status",
+							Type: pkgView.ColumnTypeString,
+						},
+					},
+					Queries: map[string]v1.ViewQueryWithColumnDefs{
+						"items": {
+							Query: pkgView.Query{
+								Changes: &types.ResourceSelector{
+									Search: "change_type=CREATE",
+								},
+							},
+						},
+					},
+					Mapping: map[string]types.CelExpression{
+						"name":   "row.name",
+						"status": "row.type",
+					},
+				},
+			}, []pkgView.Row{
+				{"Production EKS", "EKS::Cluster", nil, nil},
+				{"node-a", "Kubernetes::Node", nil, nil},
+			}),
+			XEntry("helm release changes queries", v1.View{
+				Spec: v1.ViewSpec{
+					Columns: []pkgView.ColumnDef{
+						{
+							Name:       "chart",
+							Type:       pkgView.ColumnTypeString,
+							PrimaryKey: true,
+						},
+						{
+							Name:       "version",
+							Type:       pkgView.ColumnTypeString,
+							PrimaryKey: true,
+						},
+						{
+							Name: "source",
+							Type: pkgView.ColumnTypeString,
+						},
+					},
+					Queries: map[string]v1.ViewQueryWithColumnDefs{
+						"releases": {
+							Query: pkgView.Query{
+								Changes: &types.ResourceSelector{
+									Types:  []string{"Helm::Release"},
+									Search: "change_type=UPDATE",
+								},
+							},
+						},
+					},
+					Mapping: map[string]types.CelExpression{
+						"chart":   "row.name",
+						"version": "row.summary.split(' to ')[1]",
+						"source":  "row.source",
+					},
+				},
+			}, []pkgView.Row{
+				{"nginx-ingress", "4.8.0", "Flux", nil, nil},
+				{"nginx-ingress", "4.7.2", "Flux", nil, nil},
+				{"nginx-ingress", "4.7.1", "Flux", nil, nil},
+				{"redis", "18.1.5", "Flux", nil, nil},
+				{"redis", "18.1.3", "Flux", nil, nil},
+				{"redis", "18.1.0", "Flux", nil, nil},
+			}),
+			PEntry("prometheus query with empty results", v1.View{
+				Spec: v1.ViewSpec{
+					Columns: []pkgView.ColumnDef{
+						{
+							Name:       "pod",
+							Type:       pkgView.ColumnTypeString,
+							PrimaryKey: true,
+						},
+						{
+							Name: "memory_usage",
+							Type: pkgView.ColumnTypeNumber,
+						},
+					},
+					Queries: map[string]v1.ViewQueryWithColumnDefs{
+						"metrics": {
+							Columns: map[string]models.ColumnType{
+								"pod":   models.ColumnTypeString,
+								"value": models.ColumnTypeDecimal,
+							},
+							Query: pkgView.Query{
+								Query: dataquery.Query{
+									Prometheus: &dataquery.PrometheusQuery{
+										PrometheusConnection: connection.PrometheusConnection{
+											HTTPConnection: connection.HTTPConnection{
+												URL: "https://prometheus.demo.prometheus.io/",
+											},
+										},
+										Query: `up{nonexistent_label="value"}`, // This should return no results
+									},
+								},
+							},
+						},
+					},
+					Mapping: map[string]types.CelExpression{
+						"pod":          "row.pod || 'unknown'",
+						"memory_usage": "row.value || 0",
+					},
+				},
+			}, nil), // Empty results expected but should not error
+		)
+
+		It("should work without SQLite database when no panels or merge query", func() {
+			view := v1.View{
+				Spec: v1.ViewSpec{
+					Columns: []pkgView.ColumnDef{
+						{
+							Name:       "name",
+							Type:       pkgView.ColumnTypeString,
+							PrimaryKey: true,
+						},
+						{
+							Name: "status",
+							Type: pkgView.ColumnTypeString,
+						},
+					},
+					Queries: map[string]v1.ViewQueryWithColumnDefs{
+						"nodes": {
+							Query: pkgView.Query{
+								Configs: &types.ResourceSelector{
+									Types:       []string{"Kubernetes::Node"},
+									TagSelector: "account=flanksource",
+								},
+							},
+						},
+					},
+					Mapping: map[string]types.CelExpression{
+						"name":   "row.name",
+						"status": "row.status",
+					},
+					// No panels and no merge query - should not create SQLite database
+				},
+			}
+
+			request := &requestOpt{}
+			result, err := Run(DefaultContext, &view, request)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).ToNot(BeNil())
+			Expect(result.Rows).To(HaveLen(2))
+		})
+
+		It("should compute grants for config queries when scopes match", func() {
+			scope := models.Scope{
+				Name:    "test-scope-for-grants",
+				Targets: []byte(`[{"config": {"name": "node-a"}}]`),
+			}
+			err := DefaultContext.DB().Create(&scope).Error
+			Expect(err).ToNot(HaveOccurred())
+
+			defer func() {
+				DefaultContext.DB().Delete(&scope)
+				FlushScopeCache()
+			}()
+
+			FlushScopeCache()
+
+			view := v1.View{
+				Spec: v1.ViewSpec{
+					Columns: []pkgView.ColumnDef{
+						{Name: "name", Type: pkgView.ColumnTypeString, PrimaryKey: true},
+					},
+					Queries: map[string]v1.ViewQueryWithColumnDefs{
+						"nodes": {
+							Query: pkgView.Query{
+								Configs: &types.ResourceSelector{
+									Types:       []string{"Kubernetes::Node"},
+									TagSelector: "account=flanksource",
+								},
+							},
+						},
+					},
+					Mapping: map[string]types.CelExpression{
+						"name": "row.name",
+					},
+				},
+			}
+
+			result, err := Run(DefaultContext, &view, &requestOpt{})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.Rows).To(ConsistOf([]pkgView.Row{
+				{"node-a", nil, []any{scope.ID.String()}},
+				{"node-b", nil, nil},
+			}))
+		})
+	})
+})

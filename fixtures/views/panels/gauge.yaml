@@ -1,0 +1,33 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: gauge
+  namespace: mc
+spec:
+  display:
+    title: Gauge Panel Example
+    sidebar: true
+  queries:
+    pods:
+      configs:
+        types:
+          - "Kubernetes::Pod"
+  panels:
+    - name: Pods
+      description: Percentage of Unhealthy Pods
+      type: gauge
+      gauge:
+        unit: " %"
+        thresholds:
+          - percent: 0
+            color: green
+          - percent: 60
+            color: orange
+          - percent: 90
+            color: red
+      query: |
+        SELECT
+          COALESCE(
+            (SELECT COUNT(*) FROM pods WHERE health = 'unhealthy') * 100.0 / NULLIF((SELECT COUNT(*) FROM pods), 0),
+            0
+          ) AS value

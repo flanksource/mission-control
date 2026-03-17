@@ -1,0 +1,50 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: jobhistory
+  namespace: mc
+spec:
+  display:
+    title: Failed Jobs
+    icon: cronjob
+    sidebar: true
+  columns:
+    - name: id
+      type: string
+      primaryKey: true
+      hidden: true
+    - name: timestamp
+      type: datetime
+    - name: name
+      type: config_item
+    - name: resource
+      type: string
+    - name: status
+      type: status
+    - name: duration
+      type: duration
+    - name: success
+      type: number
+    - name: error
+      type: number
+  mapping:
+    duration: string(row.duration) + "ms"
+  queries:
+    job_history:
+      sql:
+        query: >
+          SELECT 
+            id, 
+            name, 
+            LOWER(status) as status,
+            duration_millis AS duration,
+            resource_id,
+            resource_name AS resource,
+            resource_type,
+            success_count AS success, 
+            error_count AS error,
+            created_at AS timestamp
+          FROM job_histories
+          WHERE status NOT IN ('SUCCESS', 'SKIPPED', 'STALE')
+          ORDER BY created_at DESC
+        connection: connection://mc/mission-control

@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=../../config/schemas/playbook.schema.json
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: action-agent-all
+spec:
+  description: playbook that matches configs on any agent
+  configs:
+    - types:
+        - Kubernetes::Node
+      agent: all
+  actions:
+    - name: write config name to a file
+      exec:
+        script: printf "{{.config.name}}" > /tmp/agent-all-test.txt

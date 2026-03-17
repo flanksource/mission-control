@@ -20,6 +20,7 @@ type Team struct {
 }
 
 type TeamMember struct {
-	TeamID   uuid.UUID `gorm:"not null"`
-	PersonID uuid.UUID `gorm:"not null"`
+	TeamID   uuid.UUID `gorm:"primaryKey;not null"`
+	PersonID uuid.UUID `gorm:"primaryKey;not null"`
+	Source   string
 }

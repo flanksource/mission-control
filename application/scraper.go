@@ -79,17 +79,19 @@ func generateConfigScraper(ctx context.Context, app *v1.Application) error {
 			return ctx.Oops().Wrapf(err, "failed to unmarshal scrape config %s", scraperID)
 		}
 
-		if len(spec.Azure) > 0 {
-			appRoleSelectors := lo.Map(selectors, func(selector types.ResourceSelector, _ int) types.ResourceSelector {
-				selector.Scope = scraperID.String()
-				return selector
-			})
+		if len(spec.Azure) == 0 {
+			continue
+		}
 
-			// Keep the remaining fields the same. Just modify the Entra config.
-			spec.Azure[0].Include = []string{"entra"}
-			spec.Azure[0].Entra = &Entra{
-				AppRoleAssignments: appRoleSelectors,
-			}
+		appRoleSelectors := lo.Map(selectors, func(selector types.ResourceSelector, _ int) types.ResourceSelector {
+			selector.Scope = scraperID.String()
+			return selector
+		})
+
+		// Keep the remaining fields the same. Just modify the Entra config.
+		spec.Azure[0].Include = []string{"entra"}
+		spec.Azure[0].Entra = &Entra{
+			AppRoleAssignments: appRoleSelectors,
 		}
 
 		specJSON, err := json.Marshal(spec)

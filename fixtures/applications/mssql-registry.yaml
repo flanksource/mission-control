@@ -1,0 +1,66 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Application
+metadata:
+  uid: b2c3d4e5-f6a7-8901-bcde-000000000000
+  name: mssql
+  namespace: default
+spec:
+  type: Database
+  description: SQL Server instance deployed via mssql Helm chart
+  properties:
+    - name: engine
+      label: Engine
+      text: "SQL Server 2022"
+      icon: database
+      order: 1
+    - name: edition
+      label: Edition
+      text: "Developer"
+      icon: tag
+      order: 2
+    - name: hadr
+      label: HADR
+      text: "Enabled"
+      icon: shield
+      order: 3
+  mapping:
+    logins:
+      - types:
+          - MSSQL::Logon
+    accessReviews:
+      - types:
+          - MSSQL::Logon
+    environments:
+      Production:
+        - types:
+            - MSSQL::Server
+          purpose: primary
+  sections:
+    - title: Backups
+      icon: database
+      uiRef:
+        changes:
+          configTypes: "MSSQL::Database"
+          changeType: "BackupCompleted,BackupFailed"
+    - title: Recent Changes
+      icon: git-commit
+      uiRef:
+        changes:
+          configTypes: "MSSQL::Database,MSSQL::Server"
+          changeType: "diff"
+          from: "72h"
+    - title: Databases
+      icon: table
+      uiRef:
+        configs:
+          configType: "MSSQL::Database"
+    - title: Logins
+      icon: users
+      uiRef:
+        configs:
+          configType: "MSSQL::Logon"
+    - title: Agent Jobs
+      icon: cog
+      uiRef:
+        configs:
+          configType: "MSSQL::AgentJob"

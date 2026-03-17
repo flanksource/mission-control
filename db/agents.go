@@ -29,14 +29,14 @@ func FindFirstAgent(ctx context.Context, names ...string) (*models.Agent, error)
 func FindAgent(ctx context.Context, name string) (*models.Agent, error) {
 	var t []models.Agent
 	if id, err := uuid.Parse(name); err == nil {
-		if err := ctx.DB().Where("id = ?", id).Find(&t).Error; err != nil {
+		if err := ctx.DB().Where("id = ?", id).Where("deleted_at IS NULL").Find(&t).Error; err != nil {
 			return nil, err
 		}
 		if len(t) > 0 {
 			return &t[0], nil
 		}
 	}
-	err := ctx.DB().Where("name = ?", name).Find(&t).Error
+	err := ctx.DB().Where("name = ?", name).Where("deleted_at IS NULL").Find(&t).Error
 	if len(t) > 0 {
 		return &t[0], nil
 	}

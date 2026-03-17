@@ -1,0 +1,56 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Application
+metadata:
+  name: incident-commander
+  namespace: mc
+spec:
+  type: Platform
+  description: Flanksource Mission Control incident-commander service
+  properties:
+    - label: Classification
+      order: 1
+      text: Internal
+      icon: shield
+    - label: Criticality
+      order: 2
+      text: High
+      icon: alert-triangle
+    - label: Language
+      order: 3
+      text: Go
+      icon: code
+  mapping:
+    logins:
+      - types:
+          - Kubernetes::Deployment
+        labelSelector: app=incident-commander
+    accessReviews:
+      - types:
+          - Kubernetes::Deployment
+        labelSelector: app=incident-commander
+    environments:
+      Production:
+        - types:
+            - Kubernetes::Namespace
+          labelSelector: environment=production
+          purpose: primary
+  sections:
+    - title: Backups
+      icon: database
+      viewRef:
+        namespace: mc
+        name: backups
+    - title: Recent Changes
+      icon: git-commit
+      uiRef:
+        changes:
+          configTypes: "Kubernetes::Deployment,Kubernetes::StatefulSet"
+          changeType: "diff"
+          from: "24h"
+    - title: Deployments
+      icon: box
+      uiRef:
+        configs:
+          configType: "Kubernetes::Deployment"
+          labelSelector: "app=incident-commander"
+          health: "-healthy"

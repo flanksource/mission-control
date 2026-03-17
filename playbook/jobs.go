@@ -148,3 +148,26 @@ func MarkTimedOutPlaybookRuns(ctx context.Context) error {
 
 	return nil
 }
+
+func CleanupDeletedPlaybooks(ctx context.Context) (int, error) {
+	retention := ctx.Properties().Duration("playbook.retention.age", 30*24*time.Hour)
+	tx := ctx.DB().Exec(`
+		WITH playbooks_with_notification_history AS (
+			SELECT DISTINCT pr.playbook_id
+			FROM playbook_runs pr
+			INNER JOIN notification_send_history nsh ON nsh.playbook_run_id = pr.id
+		),
+		playbooks_with_artifact AS (
+			SELECT DISTINCT pr.playbook_id
+			FROM playbook_runs pr
+			INNER JOIN playbook_run_actions pra ON pra.playbook_run_id = pr.id
+			INNER JOIN artifacts a ON a.playbook_run_action_id = pra.id
+		)
+		DELETE FROM playbooks
+		WHERE (NOW() - deleted_at) > INTERVAL '1 second' * ?
+		AND id NOT IN (SELECT playbook_id FROM playbooks_with_notification_history)
+		AND id NOT IN (SELECT playbook_id FROM playbooks_with_artifact)
+		`, int64(retention.Seconds()))
+
+	return int(tx.RowsAffected), tx.Error
+}

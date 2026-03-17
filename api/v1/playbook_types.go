@@ -2,18 +2,24 @@ package v1
 
 import (
 	"encoding/json"
+	"fmt"
+	"strings"
 	"time"
 
 	"github.com/flanksource/commons/duration"
-	"github.com/flanksource/commons/utils"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	dutyTypes "github.com/flanksource/duty/types"
-	"github.com/flanksource/incident-commander/vars"
+	"github.com/flanksource/kopper"
+	"github.com/google/go-cmp/cmp"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/flanksource/incident-commander/vars"
 )
 
 type PlaybookPermission struct {
@@ -30,6 +36,7 @@ const (
 	PlaybookParameterTypeCode      PlaybookParameterType = "code"
 	PlaybookParameterTypeComponent PlaybookParameterType = "component"
 	PlaybookParameterTypeConfig    PlaybookParameterType = "config"
+	PlaybookParameterTypeDuration  PlaybookParameterType = "duration"
 	PlaybookParameterTypeList      PlaybookParameterType = "list"
 	PlaybookParameterTypePeople    PlaybookParameterType = "people"
 	PlaybookParameterTypeTeam      PlaybookParameterType = "team"
@@ -54,7 +61,7 @@ type PlaybookParameter struct {
 	Icon        string `json:"icon,omitempty" yaml:"icon,omitempty"`
 	Description string `json:"description,omitempty" yaml:"description,omitempty"`
 
-	// +kubebuilder:validation:Enum=check;checkbox;code;component;config;list;people;team;text;bytes;millicores;secret
+	// +kubebuilder:validation:Enum=check;checkbox;code;component;config;duration;list;people;team;text;bytes;millicores;secret
 	Type PlaybookParameterType `json:"type,omitempty" yaml:"type,omitempty"`
 
 	// +kubebuilder:validation:Schemaless
@@ -145,18 +152,26 @@ type PlaybookTriggerEvents struct {
 	Component []PlaybookTriggerEvent `json:"component,omitempty" yaml:"component,omitempty"`
 }
 
+type PlaybookTriggerSchedule struct {
+	// Cron expression: "0 9 * * MON", "@every 1h", etc.
+	// Evaluated in UTC by default. Use the CRON_TZ prefix to override, e.g. "CRON_TZ=America/New_York 0 9 * * MON".
+	Schedule string `json:"schedule" yaml:"schedule"`
+	// Parameters passed to each run (supports template expressions evaluated at run time)
+	Parameters map[string]string `json:"parameters,omitempty" yaml:"parameters,omitempty" template:"true"`
+}
+
 // PlaybookTrigger defines the list of supported events & to trigger a playbook.
 type PlaybookTrigger struct {
 	PlaybookTriggerEvents `json:",inline" yaml:",inline"`
 
 	// Webhook creates a new endpoint that triggers this playbook
 	Webhook *PlaybookTriggerWebhook `json:"webhook,omitempty" yaml:"webhook,omitempty"`
+
+	// Schedule triggers the playbook on a recurring cron schedule
+	Schedule []PlaybookTriggerSchedule `json:"schedule,omitempty" yaml:"schedule,omitempty"`
 }
 
 type PlaybookSpec struct {
-	// timeout is the parsed Timeout
-	timeout *time.Duration `json:"-" yaml:"-"`
-
 	Title string `json:"title,omitempty" yaml:"title,omitempty"`
 
 	// Short description of the playbook.
@@ -207,6 +222,7 @@ type PlaybookSpec struct {
 	Parameters []PlaybookParameter `json:"parameters,omitempty" yaml:"parameters,omitempty"`
 
 	// List of actions that need to be executed by this playbook.
+	// +kubebuilder:validation:MinItems=1
 	Actions []PlaybookAction `json:"actions" yaml:"actions"`
 
 	// CEL Expressions that check if a playbook should be executed
@@ -214,19 +230,20 @@ type PlaybookSpec struct {
 
 	// Approval defines the individuals and teams authorized to approve runs of this playbook.
 	Approval *PlaybookApproval `json:"approval,omitempty" yaml:"approval,omitempty"`
+
+	// JSON Schema or URL to use instead of playbook parameters
+	JSONSchema string `json:"jsonSchema,omitempty" yaml:"jsonSchema,omitempty"`
+
+	// Properties that are applied to the UI form
+	// +kubebuilder:validation:Schemaless
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Type=object
+	UI json.RawMessage `json:"ui,omitempty" yaml:"ui,omitempty"`
 }
 
 func (p *PlaybookSpec) GetTimeout(ctx context.Context) (time.Duration, error) {
-	if p.timeout != nil {
-		return *p.timeout, nil
-	}
-
 	if p.Timeout == "" {
 		return ctx.Properties().Duration("playbook.run.timeout", vars.PlaybookRunTimeout), nil
-	}
-
-	if p.Timeout == "" {
-		return 0, nil
 	}
 
 	d, err := duration.ParseDuration(p.Timeout)
@@ -234,12 +251,14 @@ func (p *PlaybookSpec) GetTimeout(ctx context.Context) (time.Duration, error) {
 		return 0, err
 	}
 
-	p.timeout = utils.Ptr(time.Duration(d))
 	return time.Duration(d), nil
 }
 
 // PlaybookStatus defines the observed state of Playbook
-type PlaybookStatus struct{}
+type PlaybookStatus struct {
+	ObservedGeneration int64              `json:"observedGeneration,omitempty" yaml:"observedGeneration,omitempty"`
+	Conditions         []metav1.Condition `json:"conditions,omitempty" yaml:"conditions,omitempty"`
+}
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
@@ -251,6 +270,36 @@ type Playbook struct {
 
 	Spec   PlaybookSpec   `json:"spec,omitempty" yaml:"spec,omitempty"`
 	Status PlaybookStatus `json:"status,omitempty" yaml:"status,omitempty"`
+}
+
+var _ kopper.StatusPatchGenerator = (*Playbook)(nil)
+var _ kopper.StatusConditioner = (*Playbook)(nil)
+var _ kopper.ObservedGenerationSetter = (*Playbook)(nil)
+
+func (t *Playbook) SetObservedGeneration(generation int64) {
+	t.Status.ObservedGeneration = generation
+}
+
+func (t *Playbook) GetStatusConditions() *[]metav1.Condition {
+	return &t.Status.Conditions
+}
+
+func (t *Playbook) GenerateStatusPatch(original runtime.Object) client.Patch {
+	og, ok := original.(*Playbook)
+	if !ok {
+		return nil
+	}
+
+	if cmp.Diff(t.Status, og.Status) == "" {
+		return nil
+	}
+
+	clientObj, ok := original.(client.Object)
+	if !ok {
+		return nil
+	}
+
+	return client.MergeFrom(clientObj)
 }
 
 func PlaybookFromModel(p models.Playbook) (Playbook, error) {
@@ -293,6 +342,97 @@ func (p Playbook) ToModel() (*models.Playbook, error) {
 		Spec:        specJSON,
 		Category:    p.Spec.Category,
 	}, nil
+}
+
+func (p PlaybookSpec) Validate() error {
+	if len(p.Actions) == 0 {
+		return fmt.Errorf("playbook must define at least one action")
+	}
+
+	actionNames := make(map[string]struct{})
+	for _, action := range p.Actions {
+		if err := action.Validate(); err != nil {
+			return err
+		}
+
+		name := strings.TrimSpace(action.Name)
+		if _, ok := actionNames[name]; ok {
+			return fmt.Errorf("all actions should have unique names. %s is repeated", name)
+		}
+		actionNames[name] = struct{}{}
+	}
+
+	for _, param := range p.Parameters {
+		if param.Type != PlaybookParameterTypeDuration {
+			continue
+		}
+
+		if err := validateDurationParameterSpec(param); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateDurationParameterSpec(param PlaybookParameter) error {
+	var props DurationParamProperties
+	if err := json.Unmarshal(param.Properties, &props); err != nil {
+		return fmt.Errorf("parameter %s has invalid duration properties: %w", param.Name, err)
+	}
+
+	var minDuration *duration.Duration
+	if props.Min != "" {
+		parsed, err := duration.ParseDuration(props.Min)
+		if err != nil {
+			return fmt.Errorf("parameter %s has invalid min duration: %w", param.Name, err)
+		}
+		minDuration = &parsed
+	}
+
+	var maxDuration *duration.Duration
+	if props.Max != "" {
+		parsed, err := duration.ParseDuration(props.Max)
+		if err != nil {
+			return fmt.Errorf("parameter %s has invalid max duration: %w", param.Name, err)
+		}
+		maxDuration = &parsed
+	}
+
+	if minDuration != nil && maxDuration != nil && *minDuration > *maxDuration {
+		return fmt.Errorf("parameter %s has min duration greater than max duration", param.Name)
+	}
+
+	defaultValue := strings.TrimSpace(string(param.Default))
+	if defaultValue != "" {
+		parsed, err := duration.ParseDuration(defaultValue)
+		if err != nil {
+			return fmt.Errorf("parameter %s has invalid default duration: %w", param.Name, err)
+		}
+		if minDuration != nil && parsed < *minDuration {
+			return fmt.Errorf("parameter %s default duration must be at least %s", param.Name, props.Min)
+		}
+		if maxDuration != nil && parsed > *maxDuration {
+			return fmt.Errorf("parameter %s default duration must be at most %s", param.Name, props.Max)
+		}
+	}
+
+	for _, value := range props.Options {
+		if strings.TrimSpace(value) == "" {
+			continue
+		}
+		parsed, err := duration.ParseDuration(value)
+		if err != nil {
+			return fmt.Errorf("parameter %s has invalid duration option %q: %w", param.Name, value, err)
+		}
+		if minDuration != nil && parsed < *minDuration {
+			return fmt.Errorf("parameter %s has duration option %q below min %s", param.Name, value, props.Min)
+		}
+		if maxDuration != nil && parsed > *maxDuration {
+			return fmt.Errorf("parameter %s has duration option %q above max %s", param.Name, value, props.Max)
+		}
+	}
+
+	return nil
 }
 
 // +kubebuilder:object:root=true

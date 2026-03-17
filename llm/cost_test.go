@@ -2,13 +2,13 @@ package llm
 
 import (
 	"fmt"
-	"testing"
 
 	"github.com/flanksource/incident-commander/api"
-	"github.com/onsi/gomega"
+	ginkgo "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
-func TestCalculateCost(t *testing.T) {
+var _ = ginkgo.Describe("CalculateCost", func() {
 	type testCase struct {
 		provider     api.LLMBackend
 		model        string
@@ -50,14 +50,13 @@ func TestCalculateCost(t *testing.T) {
 	}
 
 	for _, test := range tests {
-		t.Run(fmt.Sprintf("%s %s", test.provider, test.model), func(t *testing.T) {
-			g := gomega.NewGomegaWithT(t)
+		ginkgo.It(fmt.Sprintf("%s %s", test.provider, test.model), func() {
 			cost, err := CalculateCost(test.provider, test.model, GenerationInfo{
 				InputTokens:  test.inputTokens,
 				OutputTokens: test.outputTokens,
 			})
-			g.Expect(err).To(gomega.BeNil())
-			g.Expect(cost).To(gomega.BeNumerically("~", test.expectedCost, 0.0001), "expected to be equal to 4 decimal places")
+			Expect(err).To(BeNil())
+			Expect(cost).To(BeNumerically("~", test.expectedCost, 0.0001), "expected to be equal to 4 decimal places")
 		})
 	}
-}
+})

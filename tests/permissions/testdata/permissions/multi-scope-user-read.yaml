@@ -1,0 +1,20 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: multi-scope-user-read
+  namespace: default
+  uid: 9c0d1e2f-3a4b-5c6d-7e8f-9a0b1c2d3e4f
+spec:
+  description: Grant read access to multiple scopes to test OR behavior
+  subject:
+    person: multi-scope@test.com
+  actions:
+    - read
+  object:
+    scopes:
+      - namespace: default
+        name: missioncontrol-configs
+      - namespace: default
+        name: monitoring-configs
+      - namespace: default
+        name: homelab-configs

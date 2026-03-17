@@ -1,0 +1,44 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: http-post-body-example
+  namespace: default
+spec:
+  description: Example of POST request with templated body using httpbin
+  display:
+    title: HTTP POST Echo
+    icon: web
+  columns:
+    - name: url
+      type: string
+      primaryKey: true
+    - name: origin
+      type: string
+    - name: content_type
+      type: string
+    - name: sent_message
+      type: string
+      description: The message sent in the POST body (echoed back by httpbin)
+  templating:
+    - key: message
+      label: Message
+      values:
+        - "Hello from Mission Control"
+        - "Test message"
+        - "API call"
+      default: "Hello from Mission Control"
+  queries:
+    echo:
+      http:
+        url: https://httpbin.org/post
+        method: POST
+        body: |
+          {"message": "$(var.message)", "timestamp": "2024-01-15T10:30:00Z"}
+        headers:
+          - name: Content-Type
+            value: application/json
+  mapping:
+    url: row.url
+    origin: row.origin
+    content_type: row.headers["Content-Type"]
+    sent_message: row.json.message

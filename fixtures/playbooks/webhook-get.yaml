@@ -1,0 +1,14 @@
+# curl http://localhost:8080/playbook/webhook/my-webhook?name=world
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: webhook-get-hello
+spec:
+  description: Echo a query parameter from a webhook GET request
+  "on":
+    webhook:
+      path: hello-webhook
+  actions:
+    - name: Echo name
+      exec:
+        script: 'echo "Hello {{.request.params.name}}"'

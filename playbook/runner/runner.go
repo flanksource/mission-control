@@ -13,13 +13,15 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/gomplate/v3"
+	"github.com/google/uuid"
+	"github.com/samber/lo"
+	"github.com/samber/oops"
+	"gorm.io/gorm"
+
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/config/schemas"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/playbook/actions"
-	"github.com/samber/lo"
-	"github.com/samber/oops"
-	"gorm.io/gorm"
 )
 
 const (
@@ -42,6 +44,10 @@ func GetNextActionToRun(ctx context.Context, run models.PlaybookRun) (action *v1
 
 	var playbookSpec v1.PlaybookSpec
 	if err := json.Unmarshal(run.Spec, &playbookSpec); err != nil {
+		return nil, nil, ctx.Oops().Wrap(err)
+	}
+
+	if err := playbookSpec.Validate(); err != nil {
 		return nil, nil, ctx.Oops().Wrap(err)
 	}
 
@@ -117,7 +123,7 @@ func getActionSpec(run *models.PlaybookRun, name string) (*v1.PlaybookAction, er
 
 func CheckPlaybookFilter(ctx context.Context, playbookSpec v1.PlaybookSpec, templateEnv actions.TemplateEnv) error {
 	for _, f := range playbookSpec.Filters {
-		val, err := ctx.RunTemplate(gomplate.Template{Expression: f}, templateEnv.AsMap(ctx))
+		val, err := ctx.RunTemplate(gomplate.Template{Expression: f}, templateEnv.AsMapForTemplating(ctx))
 		if err != nil {
 			return ctx.Oops().Wrapf(err, "invalid playbook filter: %s", f)
 
@@ -149,7 +155,7 @@ func GetDelay(ctx context.Context, playbook models.Playbook, run models.Playbook
 	}
 
 	oops := ctx.Oops().Hint(templateEnv.JSON(ctx))
-	action.Delay, err = ctx.RunTemplate(gomplate.Template{Expression: action.Delay}, templateEnv.AsMap(ctx))
+	action.Delay, err = ctx.RunTemplate(gomplate.Template{Expression: action.Delay}, templateEnv.AsMapForTemplating(ctx))
 	if err != nil {
 		return 0, oops.Wrapf(err, "failed to template action")
 	}
@@ -225,16 +231,35 @@ func saveAIResultToSendHistory(ctx context.Context, run models.PlaybookRun) erro
 		}
 
 		if lo.Contains(notificationActionNames, action.Name) {
-			if slackMsg, ok := action.Result["slack"].(string); ok {
-				sendHistoryUpdate.Body = &slackMsg
-			} else if body, ok := action.Result["body"].(string); ok {
-				sendHistoryUpdate.Body = &body
+			var msg string
+			if message, ok := action.Result["message"].(string); ok && strings.TrimSpace(message) != "" {
+				msg = strings.TrimSpace(message)
+			} else if body, ok := action.Result["body"].(string); ok && strings.TrimSpace(body) != "" {
+				msg = strings.TrimSpace(body)
+			} else if slackMsg, ok := action.Result["slack"].(string); ok && strings.TrimSpace(slackMsg) != "" {
+				msg = strings.TrimSpace(slackMsg)
+			}
+
+			if msg != "" {
+				sendHistoryUpdate.Body = lo.ToPtr(msg)
 			}
 		}
 	}
 
-	if len(sendHistoryUpdate.ResourceHealthDescription) > 0 {
-		if err := ctx.DB().Updates(sendHistoryUpdate).Error; err != nil {
+	if len(sendHistoryUpdate.ResourceHealthDescription) > 0 || sendHistoryUpdate.Body != nil {
+		updates := map[string]any{}
+		if len(sendHistoryUpdate.ResourceHealthDescription) > 0 {
+			updates["resource_health_description"] = sendHistoryUpdate.ResourceHealthDescription
+		}
+		if sendHistoryUpdate.Body != nil {
+			updates["body"] = lo.FromPtr(sendHistoryUpdate.Body)
+			// For playbook-rendered notifications, `body` is the canonical content.
+			// `body_payload` can still hold the default pre-playbook payload from an earlier phase.
+			// Clear it to keep a single source of truth in history for this notification path.
+			updates["body_payload"] = gorm.Expr("NULL")
+		}
+
+		if err := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", sendHistoryUpdate.ID).UpdateColumns(updates).Error; err != nil {
 			return ctx.Oops().Wrap(err)
 		}
 	}
@@ -298,7 +323,7 @@ func ScheduleRun(ctx context.Context, run models.PlaybookRun) error {
 		return ctx.Oops().Wrap(run.Delay(ctx.DB(), delay))
 	}
 
-	if run.AgentID != nil {
+	if run.AgentID != nil && *run.AgentID != uuid.Nil {
 		ctx.Tracef("action already assigning to %s", run.AgentID.String())
 		return ctx.Oops("db").Wrap(run.Assign(ctx.DB(), &models.Agent{
 			ID: *run.AgentID,
@@ -351,6 +376,11 @@ func ExecuteAndSaveAction(ctx context.Context, playbookID any, action *models.Pl
 	}
 
 	result, err := executeAction(ctx, playbookID, action.PlaybookRunID, *action, actionSpec, templateEnv)
+
+	// Scrub secrets from action output before saving to DB
+	result.data = scrubActionResult(&templateEnv, result.data)
+	result.data = extractContentType(result.data, actionSpec.ActionType(), actionSpec.ContentType)
+
 	if err != nil {
 		ctx.Errorf("action failed %+v", err)
 		if err := action.Fail(db, result.data, err); err != nil {
@@ -390,7 +420,19 @@ func ExecuteAndSaveAction(ctx context.Context, playbookID any, action *models.Pl
 	return nil
 }
 
+func skipCancelledAction(ctx context.Context, action *models.PlaybookRunAction) error {
+	return ctx.Oops().Wrap(action.Update(ctx.DB(), map[string]any{
+		"status":     models.PlaybookActionStatusSkipped,
+		"start_time": gorm.Expr("CASE WHEN start_time IS NULL THEN CLOCK_TIMESTAMP() ELSE start_time END"),
+		"end_time":   gorm.Expr("CLOCK_TIMESTAMP()"),
+	}))
+}
+
 func RunAction(ctx context.Context, run *models.PlaybookRun, action *models.PlaybookRunAction) error {
+	if run.Status == models.PlaybookRunStatusCancelled {
+		return skipCancelledAction(ctx, action)
+	}
+
 	playbook, err := action.GetPlaybook(ctx.DB())
 	if err != nil {
 		return err
@@ -401,6 +443,10 @@ func RunAction(ctx context.Context, run *models.PlaybookRun, action *models.Play
 	var spec v1.PlaybookSpec
 	if err := json.Unmarshal([]byte(run.Spec), &spec); err != nil {
 		return ctx.Oops().Wrapf(err, "failed to unmarshal playbook spec")
+	}
+
+	if err := spec.Validate(); err != nil {
+		return ctx.Oops().Wrap(err)
 	}
 
 	ctx = ctx.WithObject(action, run).WithSubject(playbook.ID.String())

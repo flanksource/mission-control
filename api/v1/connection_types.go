@@ -4,6 +4,7 @@ import (
 	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/kopper"
+	"github.com/google/go-cmp/cmp"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -48,43 +49,6 @@ type ConnectionNtfy struct {
 type ConnectionDiscord struct {
 	Token     string `json:"token"`
 	WebhookID string `json:"webhookID"`
-}
-
-type ConnectionSMTP struct {
-	Host     string       `json:"host"`
-	Username types.EnvVar `json:"username,omitempty"`
-	Password types.EnvVar `json:"password,omitempty"`
-
-	// Default: false
-	InsecureTLS bool `json:"insecureTLS,omitempty"`
-
-	// Encryption Method
-	// 	Defulat: auto
-	// 	Possible values: None, ExplicitTLS, ImplicitTLS, Auto
-	Encryption string `json:"encryption,omitempty"`
-
-	// SMTP server port
-	// 	Default: 587
-	Port int `json:"port,omitempty"`
-
-	// Email address that the mail are sent from
-	FromAddress string `json:"fromAddress"`
-
-	// Name that the mail are sent from
-	FromName string `json:"fromName"`
-
-	// List of recipient e-mails
-	ToAddresses []string `json:"toAddresses,omitempty"`
-
-	// The subject of the sent mail
-	Subject string `json:"subject,omitempty"`
-
-	// Auth - SMTP authentication method
-	// Possible values: None, Plain, CRAMMD5, Unknown, OAuth2
-	Auth string `json:"auth,omitempty"`
-
-	// Headers for SMTP Server
-	Headers map[string]string `json:"headers,omitempty"`
 }
 
 type ConnectionPushbullet struct {
@@ -157,12 +121,14 @@ type ConnectionAWSS3 struct {
 
 type ConnectionAWS struct {
 	// AWS Endpoint
-	URL         types.EnvVar `json:"url,omitempty"`
-	Region      string       `json:"region,omitempty"`
-	Profile     string       `json:"profile,omitempty"`
-	InsecureTLS bool         `json:"insecureTLS,omitempty"`
-	AccessKey   types.EnvVar `json:"accessKey,omitempty"`
-	SecretKey   types.EnvVar `json:"secretKey,omitempty"`
+	URL          types.EnvVar `json:"url,omitempty"`
+	Region       string       `json:"region,omitempty"`
+	Profile      string       `json:"profile,omitempty"`
+	InsecureTLS  bool         `json:"insecureTLS,omitempty"`
+	AccessKey    types.EnvVar `json:"accessKey,omitempty"`
+	SecretKey    types.EnvVar `json:"secretKey,omitempty"`
+	SessionToken types.EnvVar `json:"sessionToken,omitempty"`
+	AssumeRole   string       `json:"assumeRole,omitempty"`
 }
 
 type ConnectionAWSKMS struct {
@@ -195,6 +161,7 @@ type ConnectionAzureDevops struct {
 type ConnectionGCP struct {
 	Endpoint    types.EnvVar `json:"endpoint,omitempty"`
 	Certificate types.EnvVar `json:"certificate,omitempty"`
+	Project     string       `json:"project,omitempty"`
 }
 
 type ConnectionGCS struct {
@@ -250,11 +217,21 @@ type ConnectionGit struct {
 	Password    *types.EnvVar `json:"password,omitempty"`
 }
 
+type ConnectionAWSSigV4 struct {
+	ConnectionAWS `json:",inline"`
+	Service       string `json:"service,omitempty"`
+}
+
 type ConnectionHTTP struct {
-	URL         string        `json:"url"`
-	InsecureTLS bool          `json:"insecureTLS,omitempty"`
-	Username    *types.EnvVar `json:"username,omitempty"`
-	Password    *types.EnvVar `json:"password,omitempty"`
+	URL         string               `json:"url"`
+	InsecureTLS bool                 `json:"insecureTLS,omitempty"`
+	Username    *types.EnvVar        `json:"username,omitempty"`
+	Password    *types.EnvVar        `json:"password,omitempty"`
+	Bearer      types.EnvVar         `json:"bearer,omitempty" yaml:"bearer,omitempty"`
+	OAuth       types.OAuth          `json:"oauth,omitempty" yaml:"oauth,omitempty"`
+	TLS         connection.TLSConfig `json:"tls,omitempty" yaml:"tls,omitempty"`
+	Headers     []types.EnvVar       `json:"headers,omitempty"`
+	AWSSigV4    *ConnectionAWSSigV4  `json:"awsSigV4,omitempty"`
 }
 
 type ConnectionSFTP struct {
@@ -304,6 +281,25 @@ type ConnectionGemini struct {
 	ApiKey types.EnvVar `json:"apiKey"`
 }
 
+type ConnectionFacet struct {
+	URL          string       `json:"url"`
+	Token        types.EnvVar `json:"token,omitempty"`
+	TimestampURL string       `json:"timestampUrl,omitempty"`
+}
+
+type ConnectionElasticsearch struct {
+	URL         string       `json:"url"`
+	Username    types.EnvVar `json:"username,omitempty"`
+	Password    types.EnvVar `json:"password,omitempty"`
+	InsecureTLS bool         `json:"insecureTLS,omitempty"`
+}
+
+type ConnectionRedis struct {
+	URL      string       `json:"url"`
+	Username types.EnvVar `json:"username,omitempty"`
+	Password types.EnvVar `json:"password,omitempty"`
+}
+
 // ConnectionSpec defines the desired state of Connection
 type ConnectionSpec struct {
 	Properties types.JSONStringMap `json:"properties,omitempty"`
@@ -325,20 +321,24 @@ type ConnectionSpec struct {
 	OpenAI    *ConnectionOpenAI    `json:"openai,omitempty"`
 	Gemini    *ConnectionGemini    `json:"gemini,omitempty"`
 
-	Folder     *ConnectionFolder     `json:"folder,omitempty"`
-	Git        *ConnectionGit        `json:"git,omitempty"`
-	GitHub     *ConnectionGitHub     `json:"github,omitempty"`
-	GitLab     *ConnectionGitLab     `json:"gitlab,omitempty"`
-	HTTP       *ConnectionHTTP       `json:"http,omitempty"`
-	Kubernetes *ConnectionKubernetes `json:"kubernetes,omitempty"`
-	Loki       *ConnectionLoki       `json:"loki,omitempty"`
-	MSSQL      *ConnectionMSSQL      `json:"mssql,omitempty"`
-	Mongo      *ConnectionMongo      `json:"mongo,omitempty"`
-	MySQL      *ConnectionMySQL      `json:"mysql,omitempty"`
-	Postgres   *ConnectionPostgres   `json:"postgres,omitempty"`
-	Prometheus *ConnectionPrometheus `json:"prometheus,omitempty"`
-	SFTP       *ConnectionSFTP       `json:"sftp,omitempty"`
-	SMB        *ConnectionSMB        `json:"smb,omitempty"`
+	Elasticsearch *ConnectionElasticsearch         `json:"elasticsearch,omitempty"`
+	Facet         *ConnectionFacet                 `json:"facet,omitempty"`
+	Folder        *ConnectionFolder                `json:"folder,omitempty"`
+	Git           *ConnectionGit                   `json:"git,omitempty"`
+	GitHub        *ConnectionGitHub                `json:"github,omitempty"`
+	GitLab        *ConnectionGitLab                `json:"gitlab,omitempty"`
+	HTTP          *ConnectionHTTP                  `json:"http,omitempty"`
+	Kubernetes    *ConnectionKubernetes            `json:"kubernetes,omitempty"`
+	Loki          *ConnectionLoki                  `json:"loki,omitempty"`
+	MSSQL         *ConnectionMSSQL                 `json:"mssql,omitempty"`
+	Mongo         *ConnectionMongo                 `json:"mongo,omitempty"`
+	MySQL         *ConnectionMySQL                 `json:"mysql,omitempty"`
+	OpenSearch    *connection.OpensearchConnection `json:"opensearch,omitempty"`
+	Postgres      *ConnectionPostgres              `json:"postgres,omitempty"`
+	Prometheus    *ConnectionPrometheus            `json:"prometheus,omitempty"`
+	Redis         *ConnectionRedis                 `json:"redis,omitempty"`
+	SFTP          *ConnectionSFTP                  `json:"sftp,omitempty"`
+	SMB           *ConnectionSMB                   `json:"smb,omitempty"`
 
 	//////////////////////////////
 	// Notification Connections //
@@ -370,6 +370,9 @@ type ConnectionSpec struct {
 
 // ConnectionStatus defines the observed state of Connection
 type ConnectionStatus struct {
+	ObservedGeneration int64              `json:"observedGeneration,omitempty" yaml:"observedGeneration,omitempty"`
+	Conditions         []metav1.Condition `json:"conditions,omitempty" yaml:"conditions,omitempty"`
+
 	// Ref is the connection string
 	Ref string `json:"ref"`
 }
@@ -387,6 +390,16 @@ type Connection struct {
 }
 
 var _ kopper.StatusPatchGenerator = (*Connection)(nil)
+var _ kopper.StatusConditioner = (*Connection)(nil)
+var _ kopper.ObservedGenerationSetter = (*Connection)(nil)
+
+func (t *Connection) SetObservedGeneration(generation int64) {
+	t.Status.ObservedGeneration = generation
+}
+
+func (t *Connection) GetStatusConditions() *[]metav1.Condition {
+	return &t.Status.Conditions
+}
 
 func (t *Connection) GenerateStatusPatch(original runtime.Object) client.Patch {
 	og, ok := original.(*Connection)
@@ -394,7 +407,7 @@ func (t *Connection) GenerateStatusPatch(original runtime.Object) client.Patch {
 		return nil
 	}
 
-	if t.Status.Ref == og.Status.Ref {
+	if cmp.Diff(t.Status, og.Status) == "" {
 		return nil
 	}
 

@@ -25,6 +25,27 @@ type StatusAccessor interface {
 	GetStatus() models.PlaybookActionStatus
 }
 
+// SecretScrubber can scrub secrets from action results.
+type SecretScrubber interface {
+	ScrubSecrets(output string) string
+}
+
+// scrubActionResult scrubs secrets from the action result.
+func scrubActionResult(scrubber SecretScrubber, result any) any {
+	if scrubber == nil || result == nil {
+		return result
+	}
+
+	switch r := result.(type) {
+	case *actions.ExecDetails:
+		if r != nil {
+			r.Stdout = scrubber.ScrubSecrets(r.Stdout)
+			r.Stderr = scrubber.ScrubSecrets(r.Stderr)
+		}
+	}
+	return result
+}
+
 // executeActionResult is the result of executing an action
 type executeActionResult struct {
 	// result of the action as JSON
@@ -67,7 +88,7 @@ func executeAction(ctx context.Context, playbookID any, runID uuid.UUID, runActi
 		var e actions.ExecAction
 		result, err = e.Run(ctx, *actionSpec.Exec)
 	} else if actionSpec.AI != nil {
-		e := actions.NewAIAction(stringOrUuid(playbookID), runID, templateEnv)
+		e := actions.NewAIAction(stringOrUuid(playbookID), runID, runAction.ID, templateEnv)
 		result, err = e.Run(ctx, *actionSpec.AI)
 	} else if actionSpec.HTTP != nil {
 		var e actions.HTTP
@@ -75,6 +96,9 @@ func executeAction(ctx context.Context, playbookID any, runID uuid.UUID, runActi
 	} else if actionSpec.SQL != nil {
 		var e actions.SQL
 		result, err = e.Run(ctx, *actionSpec.SQL)
+	} else if actionSpec.Prometheus != nil {
+		var e actions.Prometheus
+		result, err = e.Run(ctx, *actionSpec.Prometheus)
 	} else if actionSpec.Pod != nil {
 		e := actions.Pod{
 			PlaybookRunID: runID,
@@ -92,6 +116,9 @@ func executeAction(ctx context.Context, playbookID any, runID uuid.UUID, runActi
 
 		e := actions.NewLogsAction()
 		result, err = e.Run(ctx, actionSpec.Logs)
+	} else if actionSpec.Report != nil {
+		var e actions.Report
+		result, err = e.Run(ctx, *actionSpec.Report)
 	}
 
 	// NOTE: v is never nil, it holds in nil values.
@@ -106,7 +133,7 @@ func executeAction(ctx context.Context, playbookID any, runID uuid.UUID, runActi
 
 	if actionSpec.GitOps != nil {
 		var e = actions.GitOps{Context: ctx}
-		result1, err2 := e.Run(ctx, *actionSpec.GitOps)
+		result1, err2 := e.Run(ctx, *actionSpec.GitOps, templateEnv.GitOps)
 		if result != nil {
 			result = []any{result, result1}
 		} else {
@@ -122,7 +149,7 @@ func executeAction(ctx context.Context, playbookID any, runID uuid.UUID, runActi
 
 	// notifications can run standalone or as part of another step
 	if actionSpec.Notification != nil {
-		var e actions.Notification
+		e := actions.Notification{RunID: runID}
 		var err2 error
 		if result, err2 = e.Run(ctx, *actionSpec.Notification); err != nil && err2 != nil {
 			err = oops.Join(err, err2)

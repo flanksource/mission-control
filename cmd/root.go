@@ -14,6 +14,8 @@ import (
 	"github.com/flanksource/duty/secret"
 	"github.com/flanksource/duty/shutdown"
 	"github.com/flanksource/duty/telemetry"
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"go.opentelemetry.io/otel/attribute"
 
 	"github.com/flanksource/incident-commander/api"
@@ -22,11 +24,11 @@ import (
 	"github.com/flanksource/incident-commander/jobs"
 	"github.com/flanksource/incident-commander/mail"
 	"github.com/flanksource/incident-commander/vars"
-	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 )
 
 func PreRun(cmd *cobra.Command, args []string) {
+	mail.SetFallbackSMTP(emailFromAddress, emailFromName)
+
 	if isPartial, err := api.UpstreamConf.IsPartiallyFilled(); isPartial && err != nil {
 		logger.Warnf("Please ensure that all the required flags for upstream is supplied: %v", err)
 	}
@@ -67,6 +69,10 @@ var (
 	// disableKubernetes is used to run mission-control on a non-operator mode.
 	disableKubernetes bool
 	disableOperators  bool
+
+	// Email defaults - used by SetFallbackSMTP in PreRun
+	emailFromAddress string
+	emailFromName    string
 )
 
 func ServerFlags(flags *pflag.FlagSet) {
@@ -74,7 +80,7 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.IntVar(&httpPort, "httpPort", 8080, "Server port")
 	flags.StringVar(&api.Namespace, "namespace", utils.Coalesce(os.Getenv("NAMESPACE"), "default"), "Namespace to use for config/secret lookups")
 	flags.IntVar(&devGuiPort, "devGuiPort", 3004, "Port used by a local npm server in development mode")
-	flags.IntVar(&metricsPort, "metricsPort", 8081, "Port to expose a health dashboard ")
+	flags.IntVar(&metricsPort, "metricsPort", 0, "Dedicated unauthenticated metrics port (0 disables). /metrics on main server unchanged")
 	flags.BoolVar(&dev, "dev", false, "Run in development mode")
 	flags.BoolVar(&disableOperators, "disable-operators", false, "Disable Kubernetes Operators")
 	flags.StringVar(&api.FrontendURL, "frontend-url", "http://localhost:3000", "URL of the frontend")
@@ -87,11 +93,12 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&auth.ClerkOrgID, "clerk-org-id", "", "Clerk Organization ID")
 	flags.StringVar(&vars.AuthMode, "auth", "", "Enable authentication via Kratos or Clerk. Valid values are [kratos, clerk, basic]")
 	flags.StringVar(&auth.HtpasswdFile, "htpasswd-file", "htpasswd", "Path to htpasswd file for basic authentication")
-	flags.StringVar(&mail.FromAddress, "email-from-address", "no-reply@flanksource.com", "Email address of the sender")
-	flags.StringVar(&mail.FromName, "email-from-name", "Mission Control", "Email name of the sender")
+	flags.StringVar(&emailFromAddress, "email-from-address", "no-reply@flanksource.com", "Email address of the sender")
+	flags.StringVar(&emailFromName, "email-from-name", "Mission Control", "Email name of the sender")
 	flags.StringSliceVar(&echo.AllowedCORS, "allowed-cors", []string{"https://app.flanksource.com", "https://beta.flanksource.com"}, "Allowed CORS credential origins")
 	flags.StringVar(&auth.IdentityRoleMapper, "identity-role-mapper", "", "CEL-Go expression to map identity to a role & a team (return: {role: string, teams: []string}). Supports file path (prefixed with 'file://').")
 	flags.StringVar(&api.DefaultArtifactConnection, "artifact-connection", "", "Specify the default connection to use for artifacts (can be the connection string or the connection id)")
+	flags.StringVar(&api.DefaultLLMConnection, "llm-connection", "", "Specify the default connection to use for LLM provider (can be the connection string or the connection id)")
 	flags.StringVar(&secret.KMSConnection, "secret-keeper-connection", "", "Specify the connection to use for secret keepers (can be the connection string or the connection id)")
 
 	var upstreamPageSizeDefault = 500
@@ -124,5 +131,5 @@ func init() {
 	telemetry.BindFlags(Root.PersistentFlags(), "mission-control")
 
 	Root.PersistentFlags().StringVar(&api.CanaryCheckerPath, "canary-checker", "http://canary-checker:8080", "Canary Checker URL")
-	Root.AddCommand(Serve, Sync, GoOffline)
+	Root.AddCommand(Serve, Sync, GoOffline, ApplicationCmd, RBACCmd, ViewCmd)
 }

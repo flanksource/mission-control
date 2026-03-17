@@ -1,0 +1,14 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: allow-playbook-run
+  namespace: mc
+spec:
+  description: allow this user to run loki-logs playbook on any config
+  subject:
+    playbook: mc/loki-logs
+  actions:
+    - read
+  object:
+    connections:
+      - type: aws-s3

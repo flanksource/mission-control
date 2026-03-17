@@ -1,0 +1,23 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: piechart
+  namespace: mc
+spec:
+  queries:
+    pods:
+      configs:
+        types:
+          - "Kubernetes::Pod"
+  panels:
+    - name: Health Status
+      description: Pods grouped by health
+      type: piechart
+      piechart:
+        showLabels: true
+        colors:
+          healthy: "#28C19B"
+          unhealthy: "#F04E6E"
+          warning: "#F4B23C"
+          unknown: "#666666"
+      query: SELECT COUNT(*) AS count, health FROM pods GROUP BY health

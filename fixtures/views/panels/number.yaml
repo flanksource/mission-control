@@ -1,0 +1,17 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: number
+  namespace: mc
+spec:
+  queries:
+    services:
+      configs:
+        types:
+          - 'Kubernetes::Service'
+        tagSelector: namespace=default
+  panels:
+    - name: Total Services
+      description: Total number of services in the default namespace
+      type: number
+      query: SELECT COUNT(*) AS value FROM services

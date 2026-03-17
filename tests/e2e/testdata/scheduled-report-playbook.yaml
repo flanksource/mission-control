@@ -1,0 +1,22 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: scheduled-report-test
+  namespace: default
+spec:
+  title: Scheduled Report Test
+  "on":
+    schedule:
+      - schedule: "@every 2s"
+        parameters:
+          format: json
+  parameters:
+    - name: view
+      label: View reference
+    - name: format
+      default: json
+  actions:
+    - name: generate-report
+      report:
+        view: $(.params.view)
+        format: $(.params.format)

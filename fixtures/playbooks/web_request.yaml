@@ -1,0 +1,54 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: web-request
+  namespace: mc
+spec:
+  title: Web Request
+  description: Make an HTTP request to any URL
+  icon: http
+  parameters:
+    - name: url
+      label: URL
+      type: text
+      required: true
+    - name: method
+      label: HTTP Method
+      type: list
+      default: GET
+      properties:
+        options:
+          - label: GET
+            value: GET
+          - label: POST
+            value: POST
+          - label: PUT
+            value: PUT
+          - label: PATCH
+            value: PATCH
+          - label: DELETE
+            value: DELETE
+    - name: content_type
+      label: Content Type
+      type: text
+      default: application/json
+    - name: accept
+      label: Accept
+      type: text
+    - name: body
+      label: Request Body
+      type: code
+      properties:
+        language: json
+  actions:
+    - name: Make HTTP request
+      http:
+        url: "{{.params.url}}"
+        method: "{{.params.method}}"
+        body: "{{.params.body}}"
+        templateBody: true
+        headers:
+          - name: Content-Type
+            value: "{{.params.content_type}}"
+          - name: Accept
+            value: "{{.params.accept}}"

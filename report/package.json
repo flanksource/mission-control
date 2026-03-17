@@ -1,0 +1,22 @@
+{
+  "name": "application-report",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "data": "tsx mission-control.ts > dist/mission-control.json",
+    "html": "npm run data && facet html Application.tsx -d dist/mission-control.json -o dist",
+    "pdf": "npm run data && facet pdf Application.tsx -d dist/mission-control.json -o dist",
+    "mission-control": "npm run pdf"
+  },
+  "dependencies": {
+    "@flanksource/facet": "^0.1.10",
+    "@flanksource/icons": "^1.0.53",
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}

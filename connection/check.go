@@ -3,63 +3,88 @@ package connection
 import (
 	"database/sql"
 	"fmt"
-	"net/url"
-	"os"
+	nethttp "net/http"
+	"strings"
 
-	gcs "cloud.google.com/go/storage"
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
-	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
-	"github.com/containrrr/shoutrrr"
+	"github.com/flanksource/artifacts"
+	"github.com/flanksource/commons/har"
 	"github.com/flanksource/commons/http"
-	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
+	dutyKubernetes "github.com/flanksource/duty/kubernetes"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/types"
 	_ "github.com/go-sql-driver/mysql"
 	redis "github.com/redis/go-redis/v9"
-	"github.com/samber/lo"
 	"google.golang.org/api/cloudresourcemanager/v1"
 	"google.golang.org/api/option"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/flanksource/incident-commander/k8s"
-	"github.com/flanksource/incident-commander/pkg/clients/aws"
+	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/mail"
 	"github.com/flanksource/incident-commander/pkg/clients/git"
 )
 
-func Test(ctx context.Context, c *models.Connection) error {
-	c, err := ctx.HydrateConnection(c)
-	if err != nil {
-		return err
+type TestResult struct {
+	Payload map[string]any `json:"payload,omitempty"`
+	Entries []har.Entry    `json:"entries,omitempty"`
+}
+
+// azureHARTransport adapts net/http.RoundTripper to Azure's policy.Transporter interface.
+type azureHARTransport struct {
+	rt nethttp.RoundTripper
+}
+
+func (a *azureHARTransport) Do(req *nethttp.Request) (*nethttp.Response, error) {
+	return a.rt.RoundTrip(req)
+}
+
+func Test(ctx context.Context, c *models.Connection) (TestResult, error) {
+	collector := har.NewCollector(har.DefaultConfig())
+	harOpt := types.WithHARCollector(collector)
+	newHTTPClient := func() *http.Client {
+		return http.NewClient().HARCollector(collector)
 	}
+	harTransport := collector.Middleware()(nethttp.DefaultTransport)
 
 	switch c.Type {
 	case models.ConnectionTypeAWS:
-		cc := connection.AWSConnection{
-			ConnectionName: c.ID.String(),
-		}
-		if err := cc.Populate(ctx); err != nil {
-			return api.Errorf(api.EINVALID, err.Error())
-		}
+		cc := connection.AWSConnection{}
+		cc.FromModel(*c)
 
-		sess, err := aws.GetAWSConfig(&ctx, cc)
+		sess, err := cc.Client(ctx, harOpt)
 		if err != nil {
-			return api.Errorf(api.EINVALID, err.Error())
+			return TestResult{}, api.Errorf(api.EINVALID, "%v", err)
 		}
 
 		svc := sts.NewFromConfig(sess)
-		if _, err := svc.GetCallerIdentity(ctx, nil); err != nil {
-			return api.Errorf(api.EINVALID, err.Error())
+		identity, err := svc.GetCallerIdentity(ctx, nil)
+		if err != nil {
+			return TestResult{Entries: collector.Entries()}, api.Errorf(api.EINVALID, "%v", err)
 		}
 
+		return TestResult{
+			Payload: map[string]any{
+				"Account": ptrVal(identity.Account),
+				"Arn":     ptrVal(identity.Arn),
+				"UserId":  ptrVal(identity.UserId),
+			},
+			Entries: collector.Entries(),
+		}, nil
+
 	case models.ConnectionTypeAzure:
-		cred, err := azidentity.NewClientSecretCredential(c.Properties["tenant"], c.Username, c.Password, nil)
+		cred, err := azidentity.NewClientSecretCredential(c.Properties["tenant"], c.Username, c.Password, &azidentity.ClientSecretCredentialOptions{
+			ClientOptions: azcore.ClientOptions{
+				Transport: &azureHARTransport{rt: harTransport},
+			},
+		})
 		if err != nil {
-			return api.Errorf(api.EINVALID, err.Error())
+			return TestResult{}, api.Errorf(api.EINVALID, "%v", err)
 		}
 
 		tokenPolicy := policy.TokenRequestOptions{
@@ -67,96 +92,148 @@ func Test(ctx context.Context, c *models.Connection) error {
 			TenantID: c.Properties["tenant"],
 		}
 		if _, err := cred.GetToken(ctx, tokenPolicy); err != nil {
-			return api.Errorf(api.EINVALID, err.Error())
+			return TestResult{Entries: collector.Entries()}, api.Errorf(api.EINVALID, "%v", err)
 		}
 
+		return TestResult{Entries: collector.Entries()}, nil
+
 	case models.ConnectionTypeAzureDevops:
-		client := http.NewClient().
+		client := newHTTPClient().
 			BaseURL("https://app.vssps.visualstudio.com/_apis/profile/profiles").
 			Header("Accept", "application/json").
 			Auth(c.Username, c.Password)
 
 		response, err := client.R(ctx).Get("me?api-version=7.2-preview.3")
 		if err != nil {
-			return api.Errorf(api.EINVALID, err.Error())
+			return TestResult{Entries: collector.Entries()}, api.Errorf(api.EINVALID, "%v", err)
 		}
 
-		if response.IsOK(200) {
+		if !response.IsOK(200) {
 			body, _ := response.AsString()
-			return api.Errorf(api.EINVALID, "server returned status (code %d) (msg: %s)", response.StatusCode, body)
+			return TestResult{Entries: collector.Entries()}, api.Errorf(api.EINVALID, "server returned status (code %d) (msg: %s)", response.StatusCode, body)
 		}
 
-	case models.ConnectionTypeDiscord:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
+		return TestResult{Entries: collector.Entries()}, nil
 
-	case models.ConnectionTypeDynatrace:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
+	case models.ConnectionTypeFacet:
+		reqBody := map[string]any{
+			"code":   `export default function Test() { return <div>Connection Test</div> }`,
+			"format": "pdf",
+		}
+		if timestampURL := c.Properties["timestampUrl"]; timestampURL != "" {
+			reqBody["signature"] = map[string]string{
+				"selfSigned":   "true",
+				"timestampUrl": timestampURL,
+			}
+		}
+		client := newHTTPClient().BaseURL(c.URL)
+		if c.Password != "" {
+			client = client.Header("X-API-Key", c.Password)
+		}
+		response, err := client.R(ctx).Post("/render", reqBody)
+		if err != nil {
+			return TestResult{Entries: collector.Entries()}, api.Errorf(api.EINVALID, "facet render request failed: %v", err)
+		}
+		if !response.IsOK() {
+			body, _ := response.AsString()
+			return TestResult{Entries: collector.Entries()}, api.Errorf(api.EINVALID, "facet render failed (status %d): %s", response.StatusCode, body)
+		}
+
+		renderResult, err := response.AsJSON()
+		if err != nil {
+			return TestResult{Entries: collector.Entries()}, api.Errorf(api.EINVALID, "failed to parse render response: %v", err)
+		}
+		resultURL, _ := renderResult["url"].(string)
+		if resultURL == "" {
+			return TestResult{Entries: collector.Entries()}, api.Errorf(api.EINVALID, "render response missing 'url' field")
+		}
+
+		pdfResponse, err := client.R(ctx).Get(resultURL)
+		if err != nil {
+			return TestResult{Entries: collector.Entries()}, api.Errorf(api.EINVALID, "failed to fetch rendered PDF: %v", err)
+		}
+		if !pdfResponse.IsOK() {
+			body, _ := pdfResponse.AsString()
+			return TestResult{Entries: collector.Entries()}, api.Errorf(api.EINVALID, "PDF fetch failed (status %d): %s", pdfResponse.StatusCode, body)
+		}
+
+		return TestResult{
+			Payload: map[string]any{"resultUrl": resultURL},
+			Entries: collector.Entries(),
+		}, nil
 
 	case models.ConnectionTypeElasticSearch:
-		client := http.NewClient().BaseURL(c.URL)
+		client := newHTTPClient().BaseURL(c.URL)
 		if c.Username != "" || c.Password != "" {
 			client = client.Auth(c.Username, c.Password)
 		}
 
 		response, err := client.R(ctx).Get("_cluster/health")
 		if err != nil {
-			return err
+			return TestResult{Entries: collector.Entries()}, err
 		}
 
 		if !response.IsOK(200) {
 			body, _ := response.AsString()
-			return api.Errorf(api.EINVALID, body)
+			return TestResult{Entries: collector.Entries()}, api.Errorf(api.EINVALID, "%s", body)
 		}
+
+		return TestResult{Entries: collector.Entries()}, nil
 
 	case models.ConnectionTypeEmail:
-		parsed, err := url.Parse(c.URL)
-		if err != nil {
-			return api.Errorf(api.EINVALID, "bad shoutrrr connection url: %v", err)
+		var conn v1.ConnectionSMTP
+		if err := conn.FromURL(c.URL); err != nil {
+			return TestResult{}, api.Errorf(api.EINVALID, "bad shoutrrr connection url: %v", err)
 		}
 
-		queryParams := parsed.Query()
-		queryParams.Set("FromAddress", c.Properties["from"])
-		queryParams.Set("Subject", "Test Connection Email")
-		queryParams.Set("ToAddresses", c.Properties["from"]) // Send a message to the sender itself
-		parsed.RawQuery = queryParams.Encode()
-
-		if err := shoutrrr.Send(parsed.String(), "Test Connection Email"); err != nil {
-			return api.Errorf(api.EINVALID, err.Error())
+		sender := c.Properties["from"]
+		if sender == "" {
+			sender = conn.FromAddress
 		}
+		subject := "Test Connection Email | Flanksource Mission Control"
+
+		m := mail.New([]string{sender}, subject, "test", "text/plain")
+		m.SetFrom("Flanksource Test", sender)
+		m.SetCredentials(conn.Host, conn.Port, c.Username, c.Password)
+		if err := m.Send(conn); err != nil {
+			return TestResult{}, api.Errorf(api.EINVALID, "%v", err)
+		}
+
+		return TestResult{Payload: map[string]any{
+			"subject":    subject,
+			"from":       sender,
+			"to":         []string{sender},
+			"host":       conn.Host,
+			"port":       conn.Port,
+			"encryption": conn.Encryption,
+			"auth":       conn.Auth,
+		}}, nil
 
 	case models.ConnectionTypeFolder:
-		if _, err := os.Stat(c.Properties["path"]); err != nil {
-			return api.Errorf(api.EINVALID, err.Error())
-		}
+		return testArtifactConnection(ctx, c)
 
 	case models.ConnectionTypeGCP:
-		opts := []option.ClientOption{option.WithCredentialsJSON([]byte(c.Certificate))}
+		opts := []option.ClientOption{
+			option.WithCredentialsJSON([]byte(c.Certificate)),
+			option.WithHTTPClient(&nethttp.Client{Transport: harTransport}),
+		}
 		if endpoint, ok := c.Properties["endpoint"]; ok && endpoint != "" {
 			opts = append(opts, option.WithEndpoint(endpoint))
 		}
 
 		client, err := cloudresourcemanager.NewService(ctx, opts...)
 		if err != nil {
-			return api.Errorf(api.EINVALID, "error creating service from credentials: %v", err)
+			return TestResult{}, api.Errorf(api.EINVALID, "error creating service from credentials: %v", err)
 		}
 
 		if _, err := client.Projects.List().Do(); err != nil {
-			return api.Errorf(api.EINVALID, "error listing projects: %v", err)
+			return TestResult{Entries: collector.Entries()}, api.Errorf(api.EINVALID, "error listing projects: %v", err)
 		}
+
+		return TestResult{Entries: collector.Entries()}, nil
 
 	case models.ConnectionTypeGCS:
-		session, err := gcs.NewClient(ctx.Context, option.WithEndpoint(c.Properties["endpoint"]), option.WithCredentialsJSON([]byte(c.Certificate)))
-		if err != nil {
-			return err
-		}
-		defer session.Close()
-
-		if _, err := session.Bucket(c.Properties["bucket"]).Attrs(ctx); err != nil {
-			return api.Errorf(api.EINVALID, err.Error())
-		}
-
-	case models.ConnectionTypeGenericWebhook:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
+		return testArtifactConnection(ctx, c)
 
 	case models.ConnectionTypeGit:
 		_, _, err := git.Clone(ctx, &git.GitopsAPISpec{
@@ -168,142 +245,175 @@ func Test(ctx context.Context, c *models.Connection) error {
 			SSHPrivateKey: c.Certificate,
 		})
 		if err != nil {
-			return api.Errorf(api.EINVALID, err.Error())
+			return TestResult{}, api.Errorf(api.EINVALID, "%v", err)
 		}
 
 	case models.ConnectionTypeGithub:
-		response, err := http.NewClient().Header("Authorization", "Bearer "+c.Password).
+		response, err := newHTTPClient().Header("Authorization", "Bearer "+c.Password).
 			R(ctx).Get("https://api.github.com/user")
 		if err != nil {
-			return err
+			return TestResult{Entries: collector.Entries()}, err
 		}
 
 		if !response.IsOK(200) {
 			body, _ := response.AsString()
-			return api.Errorf(api.EINVALID, body)
+			return TestResult{Entries: collector.Entries()}, api.Errorf(api.EINVALID, "%s", body)
 		}
+
+		body, err := response.AsJSON()
+		if err != nil {
+			return TestResult{Entries: collector.Entries()}, err
+		}
+
+		return TestResult{
+			Payload: map[string]any{
+				"login":   body["login"],
+				"id":      body["id"],
+				"name":    body["name"],
+				"email":   body["email"],
+				"scopes":  response.Header.Get("X-OAuth-Scopes"),
+				"rate":    response.Header.Get("X-RateLimit-Limit"),
+				"rateRem": response.Header.Get("X-RateLimit-Remaining"),
+			},
+			Entries: collector.Entries(),
+		}, nil
 
 	case models.ConnectionTypeGitlab:
-		response, err := http.NewClient().Header("Authorization", "Bearer "+c.Password).
+		response, err := newHTTPClient().Header("Authorization", "Bearer "+c.Password).
 			R(ctx).Get("https://gitlab.com/api/v4/user")
 		if err != nil {
-			return err
+			return TestResult{Entries: collector.Entries()}, err
 		}
-
-		body, _ := response.AsString()
-		logger.Infof("response: %v", body)
 
 		if !response.IsOK(200) {
 			body, _ := response.AsString()
-			return api.Errorf(api.EINVALID, "server returned (status code: %d) (msg: %s)", response.StatusCode, body)
+			return TestResult{Entries: collector.Entries()}, api.Errorf(api.EINVALID, "server returned (status code: %d) (msg: %s)", response.StatusCode, body)
 		}
 
-	case models.ConnectionTypeGoogleChat:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
+		return TestResult{Entries: collector.Entries()}, nil
 
 	case models.ConnectionTypeHTTP:
-		client := http.NewClient()
-		if c.Username != "" || c.Password != "" {
-			client = client.Auth(c.Username, c.Password)
+		httpConn, err := connection.NewHTTPConnection(ctx, *c)
+		if err != nil {
+			return TestResult{}, api.Errorf(api.EINVALID, "error creating HTTP connection: %v", err)
 		}
 
-		if c.Properties["insecure_tls"] == "true" {
+		hydrated, err := httpConn.Hydrate(ctx, c.Namespace)
+		if err != nil {
+			return TestResult{}, api.Errorf(api.EINVALID, "error hydrating HTTP connection: %v", err)
+		}
+
+		client, err := connection.CreateHTTPClient(ctx, *hydrated)
+		if err != nil {
+			return TestResult{}, api.Errorf(api.EINVALID, "error creating HTTP client: %v", err)
+		}
+
+		client = client.HARCollector(collector)
+
+		if c.InsecureTLS {
 			client = client.InsecureSkipVerify(true)
 		}
 
 		response, err := client.R(ctx).Get(c.URL)
 		if err != nil {
-			return err
+			return TestResult{Entries: collector.Entries()}, err
 		}
 
 		if !response.IsOK() {
 			body, _ := response.AsString()
-			return api.Errorf(api.EINVALID, body)
+			return TestResult{Entries: collector.Entries()}, api.Errorf(api.EINVALID, "%s", body)
 		}
 
-	case models.ConnectionTypeIFTTT:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
-
-	case models.ConnectionTypeJMeter:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
+		return TestResult{Entries: collector.Entries()}, nil
 
 	case models.ConnectionTypeKubernetes:
-		client, err := k8s.NewClientWithConfig(c.Certificate)
+		client, _, err := dutyKubernetes.NewClientFromPathOrConfig(ctx.Logger, c.Certificate, collector)
 		if err != nil {
-			return err
+			return TestResult{}, err
 		}
 
-		if _, err := client.CoreV1().Pods("default").List(ctx, metav1.ListOptions{}); err != nil {
-			return api.Errorf(api.EINVALID, "error listing pods in default namespace: %v", err)
+		if _, err := client.Discovery().ServerVersion(); err != nil {
+			return TestResult{Entries: collector.Entries()}, api.Errorf(api.EINVALID, "failed to reach kubernetes API server: %v", err)
 		}
 
-	case models.ConnectionTypeLDAP:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
-
-	case models.ConnectionTypeMatrix:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
-
-	case models.ConnectionTypeMattermost:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
-
-	case models.ConnectionTypeMongo:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
+		return TestResult{Entries: collector.Entries()}, nil
 
 	case models.ConnectionTypeMySQL:
 		conn, err := sql.Open("mysql", c.URL)
 		if err != nil {
-			return api.Errorf(api.EINVALID, "error creating connection: %v", err)
+			return TestResult{}, api.Errorf(api.EINVALID, "error creating connection: %v", err)
 		}
 		defer conn.Close()
 
 		if err := conn.Ping(); err != nil {
-			return api.Errorf(api.EINVALID, "error pinging database: %v", err)
+			return TestResult{}, api.Errorf(api.EINVALID, "error pinging database: %v", err)
 		}
 
-	case models.ConnectionTypeNtfy:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
+	case models.ConnectionTypeOpenSearch:
+		var conn connection.OpensearchConnection
+		if err := conn.FromModel(*c); err != nil {
+			return TestResult{}, api.Errorf(api.EINVALID, "error creating connection: %v", err)
+		}
+		client, err := conn.Client()
+		if err != nil {
+			return TestResult{}, api.Errorf(api.EINVALID, "error creating client: %v", err)
+		}
 
-	case models.ConnectionTypeOpsGenie:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
+		r, err := client.Ping()
+		if err != nil || r.IsError() {
+			return TestResult{}, api.Errorf(api.EINVALID, "error ping opensearch: %v, %v", err, r)
+		}
 
 	case models.ConnectionTypePostgres:
 		pool, err := duty.NewPgxPool(c.URL)
 		if err != nil {
-			return api.Errorf(api.EINVALID, "error creating pgx pool: %v", err)
+			return TestResult{}, api.Errorf(api.EINVALID, "error creating pgx pool: %v", err)
 		}
 		defer pool.Close()
 
 		conn, err := pool.Acquire(ctx)
 		if err != nil {
-			return api.Errorf(api.EINVALID, "error acquiring connection: %v", err)
+			return TestResult{}, api.Errorf(api.EINVALID, "error acquiring connection: %v", err)
 		}
 		defer conn.Release()
 
 		if err := conn.Ping(ctx); err != nil {
-			return api.Errorf(api.EINVALID, "error pinging database: %v", err)
+			return TestResult{}, api.Errorf(api.EINVALID, "error pinging database: %v", err)
 		}
 
+		var version, database, user string
+		if err := conn.QueryRow(ctx, "select version(), current_database(), current_user").Scan(&version, &database, &user); err != nil {
+			return TestResult{}, api.Errorf(api.EINVALID, "error querying connection: %v", err)
+		}
+
+		return TestResult{Payload: map[string]any{
+			"version":  version,
+			"database": database,
+			"user":     user,
+		}}, nil
+
 	case models.ConnectionTypePrometheus:
-		client := http.NewClient().BaseURL(c.URL)
+		client := newHTTPClient().BaseURL(c.URL)
 		if c.Username != "" || c.Password != "" {
 			client = client.Auth(c.Username, c.Password)
 		}
 
-		response, err := client.R(ctx).Get("api/v1/status/config")
+		response, err := client.R(ctx).Get("api/v1/query?query=sum(up)")
 		if err != nil {
-			return err
+			return TestResult{Entries: collector.Entries()}, err
 		}
 
 		if !response.IsOK() {
 			body, _ := response.AsString()
-			return api.Errorf(api.EINVALID, body)
+			return TestResult{Entries: collector.Entries()}, api.Errorf(api.EINVALID, "%s", body)
 		}
 
-	case models.ConnectionTypePushbullet:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
+		payload, err := response.AsJSON()
+		if err != nil {
+			return TestResult{Entries: collector.Entries()}, err
+		}
 
-	case models.ConnectionTypePushover:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
+		return TestResult{Payload: payload, Entries: collector.Entries()}, nil
 
 	case models.ConnectionTypeRedis:
 		rdb := redis.NewClient(&redis.Options{
@@ -312,66 +422,44 @@ func Test(ctx context.Context, c *models.Connection) error {
 			Password: c.Password,
 		})
 		if err := rdb.Ping(ctx).Err(); err != nil {
-			return api.Errorf(api.EINVALID, err.Error())
+			return TestResult{}, api.Errorf(api.EINVALID, "%v", err)
 		}
-
-	case models.ConnectionTypeRestic:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
-
-	case models.ConnectionTypeRocketchat:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
 
 	case models.ConnectionTypeS3:
-		cc := connection.AWSConnection{
-			ConnectionName: c.ID.String(),
-		}
-		if err := cc.Populate(ctx); err != nil {
-			return err
-		}
-
-		awsSession, err := aws.GetAWSConfig(&ctx, cc)
-		if err != nil {
-			return err
-		}
-
-		client := s3.NewFromConfig(awsSession, func(o *s3.Options) {
-			o.UsePathStyle = c.Properties["use_path_style"] == "true"
-		})
-		if _, err := client.HeadBucket(ctx, &s3.HeadBucketInput{Bucket: lo.ToPtr(c.Properties["bucket"])}); err != nil {
-			return err
-		}
-
-	case models.ConnectionTypeSFTP:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
+		return testArtifactConnection(ctx, c)
 
 	case models.ConnectionTypeSlack:
-		response, err := http.NewClient().R(ctx).
+		response, err := newHTTPClient().R(ctx).
 			Header("Authorization", fmt.Sprintf("Bearer %s", c.Password)).
 			Header("Content-Type", "application/json; charset=utf-8").
 			Post("https://slack.com/api/auth.test", map[string]string{"token": c.Password})
 		if err != nil {
-			return err
+			return TestResult{Entries: collector.Entries()}, err
 		}
 		defer response.Body.Close()
 
 		if !response.IsOK(200) {
 			body, _ := response.AsString()
-			return api.Errorf(api.EINVALID, "server returned status (code %d) (msg: %s)", response.StatusCode, body)
+			return TestResult{Entries: collector.Entries()}, api.Errorf(api.EINVALID, "server returned status (code %d) (msg: %s)", response.StatusCode, body)
 		}
 
 		responseMsg, err := response.AsJSON()
 		if err != nil {
-			return err
+			return TestResult{Entries: collector.Entries()}, err
 		}
 
-		if responseMsg["ok"] != true {
-			body, _ := response.AsString()
-			return api.Errorf(api.EINVALID, "server returned msg: %s", body)
+		payload := map[string]any{
+			"team":     responseMsg["team"],
+			"team_id":  responseMsg["team_id"],
+			"user":     responseMsg["user"],
+			"user_id":  responseMsg["user_id"],
+			"url":      responseMsg["url"],
+			"bot_id":   responseMsg["bot_id"],
+			"bot_user": responseMsg["bot_user_id"],
 		}
 
 		if c.Username != "" {
-			// Ensure the bot has permission on the channel
-			postResponse, err := http.NewClient().R(ctx).
+			postResponse, err := newHTTPClient().R(ctx).
 				Header("Authorization", fmt.Sprintf("Bearer %s", c.Password)).
 				Header("Content-Type", "application/json; charset=utf-8").
 				Post("https://slack.com/api/chat.postMessage", map[string]any{
@@ -379,63 +467,90 @@ func Test(ctx context.Context, c *models.Connection) error {
 					"channel": c.Username,
 				})
 			if err != nil {
-				return err
+				return TestResult{Payload: payload, Entries: collector.Entries()}, err
 			}
 			defer postResponse.Body.Close()
 
 			if !postResponse.IsOK(200) {
 				body, _ := postResponse.AsString()
-				return api.Errorf(api.EINVALID, "failed to check channel access (code %d) (msg: %s)", postResponse.StatusCode, body)
+				return TestResult{Payload: payload, Entries: collector.Entries()}, api.Errorf(api.EINVALID, "failed to check channel access (code %d) (msg: %s)", postResponse.StatusCode, body)
 			}
 
 			if response, err := postResponse.AsJSON(); err != nil {
-				return err
+				return TestResult{Payload: payload, Entries: collector.Entries()}, err
 			} else if response["ok"] != true {
-				return api.Errorf(api.EINVALID, "bot does not have access to channel %s: %v", c.Username, response["error"])
+				return TestResult{Payload: payload, Entries: collector.Entries()}, api.Errorf(api.EINVALID, "bot does not have access to channel %s: %v", c.Username, response["error"])
+			} else {
+				payload["channel"] = c.Username
+				payload["post_ts"] = response["ts"]
+				payload["post_channel"] = response["channel"]
 			}
 		}
 
-	case models.ConnectionTypeSlackWebhook:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
-
-	case models.ConnectionTypeSMB:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
+		return TestResult{Payload: payload, Entries: collector.Entries()}, nil
 
 	case models.ConnectionTypeSQLServer:
 		conn, err := sql.Open("sqlserver", c.URL)
 		if err != nil {
-			return api.Errorf(api.EINVALID, "error creating connection: %v", err)
+			return TestResult{}, api.Errorf(api.EINVALID, "error creating connection: %v", err)
 		}
 		defer conn.Close()
 
 		if err := conn.Ping(); err != nil {
-			return api.Errorf(api.EINVALID, "error pinging database: %v", err)
+			return TestResult{}, api.Errorf(api.EINVALID, "error pinging database: %v", err)
 		}
 
-	case models.ConnectionTypeTeams:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
-
 	case models.ConnectionTypeTelegram:
-		response, err := http.NewClient().R(ctx).Get(fmt.Sprintf("https://api.telegram.org/bot%s/getMe", c.Password))
+		response, err := newHTTPClient().R(ctx).Get(fmt.Sprintf("https://api.telegram.org/bot%s/getMe", c.Password))
 		if err != nil {
-			return err
+			return TestResult{Entries: collector.Entries()}, err
 		}
 		defer response.Body.Close()
 
 		if !response.IsOK(200) {
 			body, _ := response.AsString()
-			return api.Errorf(api.EINVALID, "server returned status (code %d) (msg: %s)", response.StatusCode, body)
+			return TestResult{Entries: collector.Entries()}, api.Errorf(api.EINVALID, "server returned status (code %d) (msg: %s)", response.StatusCode, body)
 		}
 
-	case models.ConnectionTypeWebhook:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
+		return TestResult{Entries: collector.Entries()}, nil
 
-	case models.ConnectionTypeWindows:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
-
-	case models.ConnectionTypeZulipChat:
-		return api.Errorf(api.ENOTIMPLEMENTED, "not implemented")
+	default:
+		return TestResult{}, api.Errorf(api.ENOTIMPLEMENTED, "Testing %s connection is not available", c.Type)
 	}
 
-	return nil
+	return TestResult{Entries: collector.Entries()}, nil
+}
+
+func testArtifactConnection(ctx context.Context, c *models.Connection) (TestResult, error) {
+	store, err := artifacts.GetFSForConnection(ctx, *c)
+	if err != nil {
+		return TestResult{}, api.Errorf(api.EINVALID, "error creating filesystem: %v", err)
+	}
+	defer store.Close()
+
+	testPath := ".mission-control-test"
+	info, err := store.Write(ctx, testPath, strings.NewReader("connection test"))
+	if err != nil {
+		return TestResult{}, api.Errorf(api.EINVALID, "error writing test file: %v", err)
+	}
+
+	payload := map[string]any{
+		"path": testPath,
+		"size": info.Size(),
+	}
+
+	reader, err := store.Read(ctx, testPath)
+	if err != nil {
+		return TestResult{Payload: payload}, api.Errorf(api.EINVALID, "error reading test file: %v", err)
+	}
+	reader.Close()
+
+	return TestResult{Payload: payload}, nil
+}
+
+func ptrVal(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
 }

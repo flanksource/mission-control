@@ -7,16 +7,17 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flanksource/clicky"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/properties"
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/query"
+	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/types"
 	"github.com/spf13/cobra"
 )
 
 var catalogOutfile string
-var catalogOutformat string
 var catalogWaitFor time.Duration
 
 var Catalog = &cobra.Command{
@@ -117,17 +118,65 @@ var Query = &cobra.Command{
 			}
 
 			logger.Infof("Waiting %s for %s", req, catalogWaitFor-time.Since(start))
-			time.Sleep(3 * time.Second)
+			time.Sleep(1 * time.Second)
 		}
 
-		saveOutput(response, catalogOutfile, catalogOutformat)
+		if catalogOutfile != "" {
+			logger.Infof("Writing output to %s", catalogOutfile)
+			if err := clicky.FormatToFile(*response, clicky.FormatOptions{}, catalogOutfile); err != nil {
+				logger.Fatalf(err.Error())
+				os.Exit(1)
+			}
+		} else {
+			out, err := clicky.Format(*response)
+			if err != nil {
+				logger.Fatalf(err.Error())
+				os.Exit(1)
+			}
+			fmt.Println(out)
+		}
+	},
+}
+
+var Mock = &cobra.Command{
+	Use:              "mock",
+	Short:            "Load the database with mock data from the duty dummy fixture",
+	PersistentPreRun: PreRun,
+	Run: func(cmd *cobra.Command, args []string) {
+		logger.UseSlog()
+		if err := properties.LoadFile("mission-control.properties"); err != nil {
+			logger.Errorf(err.Error())
+		}
+		ctx, stop, err := duty.Start("mission-control", duty.ClientOnly)
+		if err != nil {
+			logger.Fatalf(err.Error())
+			return
+		}
+		defer stop()
+
+		base := dummy.GetStaticDummyData(ctx.DB())
+		if err := base.Populate(ctx); err != nil {
+			logger.Fatalf("Failed to populate base dummy data: %v", err)
+			return
+		}
+
+		app := dummy.GetAllApplicationDummyData()
+		if err := app.Delete(ctx.DB()); err != nil {
+			logger.Warnf("Failed to delete existing application dummy data: %v", err)
+		}
+		if err := app.Populate(ctx); err != nil {
+			logger.Fatalf("Failed to populate application dummy data: %v", err)
+			return
+		}
+
+		logger.Infof("Mock data loaded successfully")
 	},
 }
 
 func init() {
 	Query.Flags().StringVarP(&catalogOutfile, "out-file", "o", "", "Write catalog output to a file instead of stdout")
-	Query.Flags().StringVarP(&catalogOutformat, "out-format", "f", "json", "Format of output file or stdout (yaml or json)")
 	Query.Flags().DurationVarP(&catalogWaitFor, "wait", "w", 60*time.Second, "Wait for this long for resources to be discovered")
 	Catalog.AddCommand(Query)
+	Catalog.AddCommand(Mock)
 	Root.AddCommand(Catalog)
 }

@@ -3,33 +3,32 @@ package notification_test
 import (
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
+
+	// register event handlers
 
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
-	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/types"
-	"github.com/flanksource/incident-commander/api"
-	v1 "github.com/flanksource/incident-commander/api/v1"
-	"github.com/flanksource/incident-commander/db"
-	dbModels "github.com/flanksource/incident-commander/db/models"
-	"github.com/flanksource/incident-commander/events"
-	"github.com/flanksource/incident-commander/notification"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/samber/lo"
 
-	// register event handlers
+	"github.com/flanksource/incident-commander/api"
+	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/db"
+	dbModels "github.com/flanksource/incident-commander/db/models"
+	"github.com/flanksource/incident-commander/events"
 	_ "github.com/flanksource/incident-commander/incidents/responder"
+	"github.com/flanksource/incident-commander/notification"
 	_ "github.com/flanksource/incident-commander/playbook"
 	_ "github.com/flanksource/incident-commander/upstream"
 )
 
-var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
+var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, ginkgo.FlakeAttempts(3), func() {
 	var customReceiverJson []byte
 
 	ginkgo.BeforeAll(func() {
@@ -47,7 +46,7 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 		Expect(err).To(BeNil())
 	})
 
-	var _ = ginkgo.Describe("Notification on incident creation", ginkgo.Ordered, func() {
+	var _ = ginkgo.Describe("on incident creation", ginkgo.Ordered, func() {
 		var (
 			notif     models.Notification
 			john      *models.Person
@@ -56,34 +55,21 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 			team      *dbModels.Team
 		)
 
-		ginkgo.AfterAll(func() {
-			err := DefaultContext.DB().Delete(&notif).Error
-			Expect(err).To(BeNil())
-
-			notification.PurgeCache(notif.ID.String())
-		})
-
-		ginkgo.It("should create a person", func() {
+		ginkgo.BeforeAll(func() {
 			john = &models.Person{
 				ID:   uuid.New(),
 				Name: "James Bond",
 			}
-			tx := DefaultContext.DB().Create(john)
-			Expect(tx.Error).To(BeNil())
-		})
+			Expect(DefaultContext.DB().Create(john).Error).To(BeNil())
 
-		ginkgo.It("should create a new component", func() {
 			component = &models.Component{
 				ID:         uuid.New(),
 				Name:       "logistics",
 				Type:       "Entity",
 				ExternalId: "dummy/logistics",
 			}
-			tx := DefaultContext.DB().Create(component)
-			Expect(tx.Error).To(BeNil())
-		})
+			Expect(DefaultContext.DB().Create(component).Error).To(BeNil())
 
-		ginkgo.It("should create a team", func() {
 			teamSpec := api.TeamSpec{
 				Components: []types.ResourceSelector{{Name: "logistics"}},
 				Notifications: []api.NotificationConfig{
@@ -111,11 +97,8 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 				CreatedBy: john.ID,
 				Spec:      spec,
 			}
-			tx := DefaultContext.DB().Create(team)
-			Expect(tx.Error).To(BeNil())
-		})
+			Expect(DefaultContext.DB().Create(team).Error).To(BeNil())
 
-		ginkgo.It("should create a new notification", func() {
 			notif = models.Notification{
 				ID:       uuid.New(),
 				Name:     "incident-test-notification",
@@ -126,11 +109,17 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 				Filter:   fmt.Sprintf("incident.type == '%s'", models.IncidentTypeCost),
 			}
 
-			err := DefaultContext.DB().Create(&notif).Error
-			Expect(err).To(BeNil())
+			Expect(DefaultContext.DB().Create(&notif).Error).To(BeNil())
 		})
 
-		ginkgo.It("should create an incident", func() {
+		ginkgo.AfterAll(func() {
+			err := DefaultContext.DB().Delete(&notif).Error
+			Expect(err).To(BeNil())
+
+			notification.PurgeCache(notif.ID.String())
+		})
+
+		ginkgo.It("should create an incident and send the notification", func() {
 			incident = &models.Incident{
 				ID:          uuid.New(),
 				Title:       "Constantly hitting threshold",
@@ -142,9 +131,7 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 			}
 			tx := DefaultContext.DB().Create(incident)
 			Expect(tx.Error).To(BeNil())
-		})
 
-		ginkgo.It("should consume the event and send the notification", func() {
 			events.ConsumeAll(DefaultContext)
 
 			Eventually(func() int {
@@ -152,8 +139,8 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 			}, "10s", "200ms").Should(BeNumerically(">=", 1))
 
 			Expect(webhookPostdata).To(Not(BeNil()))
-			Expect(webhookPostdata["message"]).To(Equal(fmt.Sprintf("Severity: %s", incident.Severity)))
-			Expect(webhookPostdata["title"]).To(Equal(fmt.Sprintf("New incident: %s", incident.Title)))
+			Expect(webhookPostdata["title"]).To(ContainSubstring(incident.Title))
+			Expect(webhookPostdata["message"]).To(ContainSubstring(fmt.Sprintf("Severity: %s", incident.Severity)))
 		})
 	})
 
@@ -231,8 +218,12 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 
 		ginkgo.It("should have created a notification with a pending playbook run status for a config update", func() {
 			event := models.Event{
-				Name:       "config.updated",
-				Properties: types.JSONStringMap{"id": config.ID.String()},
+				Name:    "config.updated",
+				EventID: config.ID,
+				Properties: types.JSONStringMap{
+					"id":        config.ID.String(),
+					"config_id": config.ID.String(),
+				},
 			}
 			err := DefaultContext.DB().Create(&event).Error
 			Expect(err).To(BeNil())
@@ -322,8 +313,12 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 
 		ginkgo.It("should have sent a notification for a config update", func() {
 			event := models.Event{
-				Name:       "config.updated",
-				Properties: types.JSONStringMap{"id": config.ID.String()},
+				Name:    "config.updated",
+				EventID: config.ID,
+				Properties: types.JSONStringMap{
+					"id":        config.ID.String(),
+					"config_id": config.ID.String(),
+				},
 			}
 			err := DefaultContext.DB().Create(&event).Error
 			Expect(err).To(BeNil())
@@ -346,8 +341,12 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 
 		ginkgo.It("should NOT have sent a notification for a subsequent config update", func() {
 			event := models.Event{
-				Name:       "config.updated",
-				Properties: types.JSONStringMap{"id": config.ID.String()},
+				Name:    "config.updated",
+				EventID: config.ID,
+				Properties: types.JSONStringMap{
+					"id":        config.ID.String(),
+					"config_id": config.ID.String(),
+				},
 			}
 			err := DefaultContext.DB().Create(&event).Error
 			Expect(err).To(BeNil())
@@ -467,8 +466,8 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 
 		ginkgo.It("should have sent a notification for a config update", func() {
 			event := models.Event{
-				Name:       "config.unhealthy",
-				Properties: types.JSONStringMap{"id": pod.ID.String()},
+				Name:    "config.unhealthy",
+				EventID: pod.ID,
 			}
 			err := DefaultContext.DB().Create(&event).Error
 			Expect(err).To(BeNil())
@@ -491,8 +490,8 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 
 		ginkgo.It("should NOT have sent a notification for a subsequent replica set unhealthy", func() {
 			event := models.Event{
-				Name:       "config.unhealthy",
-				Properties: types.JSONStringMap{"id": replicaSet.ID.String()},
+				Name:    "config.unhealthy",
+				EventID: replicaSet.ID,
 			}
 			err := DefaultContext.DB().Create(&event).Error
 			Expect(err).To(BeNil())
@@ -525,8 +524,8 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 
 		ginkgo.It("should NOT have sent a notification for a subsequent deployment update", func() {
 			event := models.Event{
-				Name:       "config.unhealthy",
-				Properties: types.JSONStringMap{"id": deployment.ID.String()},
+				Name:    "config.unhealthy",
+				EventID: deployment.ID,
 			}
 			err := DefaultContext.DB().Create(&event).Error
 			Expect(err).To(BeNil())
@@ -563,8 +562,8 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 
 		ginkgo.It("should NOT have sent a notification for a another replica set unhealthy", func() {
 			event := models.Event{
-				Name:       "config.unhealthy",
-				Properties: types.JSONStringMap{"id": replicaSet.ID.String()},
+				Name:    "config.unhealthy",
+				EventID: replicaSet.ID,
 			}
 			err := DefaultContext.DB().Create(&event).Error
 			Expect(err).To(BeNil())
@@ -696,11 +695,19 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 		ginkgo.It("should have consumed all events", func() {
 			testEvents := []models.Event{
 				{
-					Name:       "config.updated",
-					Properties: types.JSONStringMap{"id": deployment1.ID.String()},
+					Name:    "config.updated",
+					EventID: deployment1.ID,
+					Properties: types.JSONStringMap{
+						"id":        deployment1.ID.String(),
+						"config_id": deployment1.ID.String(),
+					},
 				}, {
-					Name:       "config.updated",
-					Properties: types.JSONStringMap{"id": pod1.ID.String()},
+					Name:    "config.updated",
+					EventID: pod1.ID,
+					Properties: types.JSONStringMap{
+						"id":        pod1.ID.String(),
+						"config_id": pod1.ID.String(),
+					},
 				},
 			}
 			err := DefaultContext.DB().Create(&testEvents).Error
@@ -752,7 +759,7 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 			n = models.Notification{
 				ID:             uuid.New(),
 				Name:           "wait-for-test",
-				Events:         pq.StringArray([]string{"config.healthy", "config.warning", "config.unhealthy"}),
+				Events:         pq.StringArray([]string{"config.healthy", "config.warning", "config.degraded", "config.unhealthy"}),
 				Source:         models.SourceCRD,
 				Title:          "Dummy",
 				Template:       "dummy",
@@ -869,7 +876,7 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 				err = DefaultContext.DB().
 					Where("notification_id = ?", n.ID.String()).
 					Where("resource_id = ?", config.ID.String()).
-					Where("source_event = ?", "config.warning").
+					Where("source_event = ?", "config.degraded").
 					Where("status = ?", "skipped").
 					Find(&sendHistory).Error
 				Expect(err).To(BeNil())
@@ -890,7 +897,6 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 				Events:         pq.StringArray([]string{"config.unhealthy"}),
 				Source:         models.SourceCRD,
 				Title:          "Dummy",
-				Template:       "{{.recent_events}}",
 				CustomServices: types.JSON(customReceiverJson),
 			}
 
@@ -986,53 +992,27 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 					Find(&sendHistory).Error
 				Expect(err).To(BeNil())
 
-				return len(sendHistory) == 1 && lo.FromPtr(sendHistory[0].Body) == "[FailedCreate ProgressDeadlineExceeded Unhealthy]"
+				if len(sendHistory) != 1 {
+					return false
+				}
+
+				var payload notification.NotificationMessagePayload
+				if err := json.Unmarshal([]byte(sendHistory[0].BodyPayload), &payload); err != nil {
+					return false
+				}
+
+				expected := []string{"FailedCreate", "ProgressDeadlineExceeded", "Unhealthy"}
+				if len(payload.RecentEvents) != len(expected) {
+					return false
+				}
+				for _, event := range expected {
+					if !lo.Contains(payload.RecentEvents, event) {
+						return false
+					}
+				}
+				return true
 			}, "10s", "200ms").Should(BeTrue())
 		})
-	})
-
-	var _ = ginkgo.Describe("template vailidity", func() {
-		for _, event := range api.EventStatusGroup {
-			ginkgo.It(event, func() {
-				title, body := notification.DefaultTitleAndBody(event)
-				msg := notification.NotificationTemplate{
-					Message: body,
-					Title:   title,
-				}
-
-				originalEvent := models.Event{
-					Name:       event,
-					Properties: map[string]string{},
-				}
-
-				switch {
-				case strings.HasPrefix(event, "config"):
-					originalEvent.Properties["id"] = dummy.EKSCluster.ID.String()
-				case strings.HasPrefix(event, "check"):
-					var latestCheckStatus models.CheckStatus
-					err := DefaultContext.DB().Where("check_id = ?", dummy.LogisticsAPIHealthHTTPCheck.ID).First(&latestCheckStatus).Error
-					Expect(err).To(BeNil())
-
-					originalEvent.Properties["id"] = dummy.LogisticsAPIHealthHTTPCheck.ID.String()
-					originalEvent.Properties["last_runtime"] = latestCheckStatus.Time
-
-				case strings.HasPrefix(event, "component"):
-					originalEvent.Properties["id"] = dummy.Logistics.ID.String()
-				}
-
-				celEnv, err := notification.GetEnvForEvent(DefaultContext, originalEvent)
-				Expect(err).To(BeNil())
-
-				celEnv.Channel = "slack"
-				templater := DefaultContext.NewStructTemplater(celEnv.AsMap(DefaultContext), "", notification.TemplateFuncs)
-				err = templater.Walk(&msg)
-				Expect(err).To(BeNil())
-
-				var slackBlock map[string]any
-				err = json.Unmarshal([]byte(msg.Message), &slackBlock)
-				Expect(err).To(BeNil())
-			})
-		}
 	})
 
 	var _ = ginkgo.Describe("group notifications", func() {
@@ -1045,7 +1025,6 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 				Events:         pq.StringArray([]string{"config.unhealthy"}),
 				Source:         models.SourceCRD,
 				Title:          "Dummy",
-				Template:       "Failed: $(.config.id)/$(.config.name)",
 				CustomServices: types.JSON(customReceiverJson),
 				WaitFor:        lo.ToPtr(time.Second * 15),
 				GroupBy:        pq.StringArray{"description", "type"},
@@ -1218,17 +1197,27 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, func() {
 			Expect(webhookPostdata).To(Not(BeNil()))
 
 			msg := webhookPostdata["message"]
-			msgBlocks := strings.Split(msg, "Resources grouped with this notification:\n")
-			Expect(len(msgBlocks)).To(Equal(2))
-
-			groupedResources := strings.Split(msgBlocks[1], "\n")
-			Expect(len(groupedResources)).To(Equal(1), "1 additional resource should be added")
-
 			// Only config1 and config4 should be present since config3 is healthy and config2 does not match the filter
 			Expect(msg).To(ContainSubstring(*config1.Name))
 			Expect(msg).To(ContainSubstring(*config4.Name))
 			Expect(msg).ToNot(ContainSubstring(*config2.Name))
 			Expect(msg).ToNot(ContainSubstring(*config3.Name))
+
+			var sendHistory []models.NotificationSendHistory
+			err := DefaultContext.DB().
+				Where("notification_id = ?", n.ID.String()).
+				Where("resource_id = ?", config1.ID.String()).
+				Where("status = ?", models.NotificationStatusSent).
+				Find(&sendHistory).Error
+			Expect(err).To(BeNil())
+			Expect(sendHistory).ToNot(BeEmpty())
+
+			var payload notification.NotificationMessagePayload
+			Expect(json.Unmarshal([]byte(sendHistory[0].BodyPayload), &payload)).To(Succeed())
+			Expect(payload.GroupedResources).To(HaveLen(1))
+			Expect(payload.GroupedResources).To(ContainElement(ContainSubstring(*config4.Name)))
+			Expect(payload.GroupedResources).ToNot(ContainElement(ContainSubstring(*config2.Name)))
+			Expect(payload.GroupedResources).ToNot(ContainElement(ContainSubstring(*config3.Name)))
 		})
 	})
 

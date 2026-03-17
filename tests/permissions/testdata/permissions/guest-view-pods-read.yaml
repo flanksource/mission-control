@@ -1,0 +1,16 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: guest-view-pods-read
+  namespace: default
+  uid: 38c3d4e5-f6a7-4b8c-9d0e-4f5a6b7c8d9e
+spec:
+  description: Grant read access to pods view for guest users
+  subject:
+    person: guest@test.com
+  actions:
+    - read
+  object:
+    views:
+      - namespace: mc
+        name: pods

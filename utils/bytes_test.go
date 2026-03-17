@@ -1,12 +1,11 @@
 package utils
 
 import (
-	"testing"
-
+	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
-func TestTail(t *testing.T) {
+var _ = ginkgo.Describe("Tail", func() {
 	tests := []struct {
 		name     string
 		data     []byte
@@ -46,10 +45,9 @@ func TestTail(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			g := NewGomegaWithT(t)
+		ginkgo.It(tt.name, func() {
 			result := Tail(tt.data, tt.size)
-			g.Expect(result).To(Equal(tt.expected))
+			Expect(result).To(Equal(tt.expected))
 		})
 	}
-}
+})

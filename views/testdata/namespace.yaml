@@ -1,0 +1,81 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  annotations:
+    meta.helm.sh/release-name: kubernetes-view
+    meta.helm.sh/release-namespace: mc
+  creationTimestamp: "2025-08-28T04:03:55Z"
+  finalizers:
+  - view.mission-control.flanksource.com
+  generation: 22
+  labels:
+    app.kubernetes.io/instance: kubernetes-view
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/name: mission-control-kubernetes-view
+    app.kubernetes.io/version: 1.0.0
+    helm.sh/chart: mission-control-kubernetes-view-0.1.12
+  name: namespace
+  namespace: mc
+  resourceVersion: "954408"
+  uid: 4e270b09-4c8d-4107-a368-568282fee122
+spec:
+  cache: {}
+  columns:
+  - name: name
+    primaryKey: true
+    type: string
+    url:
+      config: row.id
+  - filter:
+      type: multiselect
+    icon: row.health
+    name: status
+    type: status
+  - filter:
+      type: multiselect
+    hidden: true
+    name: health
+    type: health
+  - name: updated_at
+    type: datetime
+  display:
+    icon: namespace
+    sidebar: true
+    title: Namespace
+  mapping:
+    created: row.created_at
+  merge: |
+    SELECT
+      pod.id,
+      pod.name,
+      json_extract(pod.tags, '$.namespace') AS namespace,
+      pod.status,
+      pod.health,
+      pod.updated_at
+    FROM pod
+    ORDER BY namespace, name
+  panels:
+  - description: Total Pods in the namespace
+    name: Total Pods
+    query: SELECT COUNT(*) AS value FROM pod
+    type: number
+  queries:
+    pod:
+      configs:
+        agent: all
+        tagSelector: cluster=$(.var.cluster),namespace=$(.var.namespace)
+        types:
+        - Kubernetes::Pod
+  templating:
+  - key: namespace
+    label: Namespace
+    valueFrom:
+      config:
+        types:
+        - Kubernetes::Namespace
+  - key: cluster
+    label: Cluster
+    valueFrom:
+      config:
+        types:
+        - Kubernetes::Cluster

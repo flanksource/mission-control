@@ -3,6 +3,37 @@
   "$id": "https://github.com/flanksource/incident-commander/api/v1/permission-group",
   "$ref": "#/$defs/PermissionGroup",
   "$defs": {
+    "Condition": {
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "observedGeneration": {
+          "type": "integer"
+        },
+        "lastTransitionTime": {
+          "$ref": "#/$defs/Time"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "type",
+        "status",
+        "lastTransitionTime",
+        "reason",
+        "message"
+      ]
+    },
     "FieldsV1": {
       "properties": {},
       "additionalProperties": false,
@@ -150,7 +181,8 @@
         }
       },
       "additionalProperties": false,
-      "type": "object"
+      "type": "object",
+      "description": "PermissionGroup is the Schema for the Mission Control Permission Groups"
     },
     "PermissionGroupSelector": {
       "properties": {
@@ -200,23 +232,36 @@
           "items": {
             "type": "string"
           },
-          "type": "array"
+          "type": "array",
+          "description": "List of ids and email of people.\nTo select all users, use the wildcard selector: [\"*\"]"
         },
         "teams": {
           "items": {
             "type": "string"
           },
-          "type": "array"
+          "type": "array",
+          "description": "Teams is a list of team names"
         },
         "name": {
-          "type": "string"
+          "type": "string",
+          "description": "Name for the group\nDeprecated: Use metadata.name instead"
         }
       },
       "additionalProperties": false,
       "type": "object"
     },
     "PermissionGroupStatus": {
-      "properties": {},
+      "properties": {
+        "observedGeneration": {
+          "type": "integer"
+        },
+        "conditions": {
+          "items": {
+            "$ref": "#/$defs/Condition"
+          },
+          "type": "array"
+        }
+      },
       "additionalProperties": false,
       "type": "object"
     },

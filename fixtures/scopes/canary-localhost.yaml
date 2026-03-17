@@ -1,0 +1,11 @@
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: canary-localhost
+  namespace: mc
+spec:
+  description: All canaries named localhost
+  targets:
+    - canary:
+        name: localhost

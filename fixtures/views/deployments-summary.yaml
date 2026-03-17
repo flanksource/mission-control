@@ -1,0 +1,41 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: deployments-summary
+  namespace: mc
+spec:
+  description: Summarize cached deployment health by namespace using a view table selector.
+  display:
+    title: Deployment Health Summary
+    icon: view-details
+    sidebar: true
+  queries:
+    deployments:
+      viewTableSelector:
+        name: deployments
+        namespace: mc
+  merge: |
+    SELECT
+      namespace,
+      SUM(CASE WHEN health = 'healthy' THEN 1 ELSE 0 END) AS healthy,
+      SUM(CASE WHEN health IN ('unhealthy', 'warning') THEN 1 ELSE 0 END) AS unhealthy,
+      COUNT(*) AS total
+    FROM deployments
+    GROUP BY namespace
+  columns:
+    - name: namespace
+      type: string
+      primaryKey: true
+      filter:
+        type: multiselect
+    - name: healthy
+      type: number
+    - name: unhealthy
+      type: number
+    - name: total
+      type: number
+  panels:
+    - name: Health Mix
+      description: Health distribution across all deployments
+      type: piechart
+      query: SELECT COUNT(*) AS count, health FROM deployments GROUP BY health

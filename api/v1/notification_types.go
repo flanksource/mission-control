@@ -7,6 +7,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/flanksource/incident-commander/api"
 )
 
 type NotificationRecipientSpec struct {
@@ -27,17 +29,23 @@ type NotificationRecipientSpec struct {
 	// Specify shoutrrr URL
 	URL string `json:"url,omitempty" yaml:"url,omitempty"`
 
-	// Properties for Shoutrrr
+	// Properties are key-value pairs that override or supplement the connection's own settings at send time.
+	// They are merged over the connection's stored properties, so any key specified here takes precedence.
+	// For example, overriding the recipient on an SMTP connection ("to"), or the channel on a Slack connection.
+	// The exact keys depend on the connection type.
 	Properties map[string]string `json:"properties,omitempty" yaml:"properties,omitempty"`
 
 	// Name or <namespace>/<name> of the playbook to run.
 	// When a playbook is set as the recipient, a run is triggered.
 	Playbook *string `json:"playbook,omitempty" yaml:"playbook,omitempty"`
+
+	// Webhook sends a structured JSON payload to an HTTP endpoint.
+	Webhook *api.NotificationWebhookReceiver `json:"webhook,omitempty" yaml:"webhook,omitempty"`
 }
 
 // Empty returns true if none of the receivers are set
 func (t *NotificationRecipientSpec) Empty() bool {
-	return t.Person == "" && t.Team == "" && t.Email == "" && t.Connection == "" && t.URL == "" && t.Playbook == nil
+	return t.Person == "" && t.Team == "" && t.Email == "" && t.Connection == "" && t.URL == "" && t.Playbook == nil && t.Webhook == nil
 }
 
 type NotificationFallback struct {
@@ -61,7 +69,7 @@ type NotificationSpec struct {
 	// Cel-expression used to decide whether this notification client should send the notification
 	Filter string `json:"filter,omitempty" yaml:"filter,omitempty"`
 
-	// RepeatInterval is the waiting time to resend a notification after it has been succefully sent.
+	// RepeatInterval is the waiting time to resend a notification after it has been successfully sent.
 	RepeatInterval string `json:"repeatInterval,omitempty" yaml:"repeatInterval,omitempty"`
 
 	// GroupByInterval is the grouping period.
@@ -139,13 +147,15 @@ var NotificationReconciler kopper.Reconciler[Notification, *Notification]
 
 // NotificationStatus defines the observed state of Notification
 type NotificationStatus struct {
-	Sent       int         `json:"sent,omitempty"`
-	Failed     int         `json:"failed,omitempty"`
-	Pending    int         `json:"pending,omitempty"`
-	Status     string      `json:"status,omitempty"`
-	Error      string      `json:"error,omitempty"`
-	LastSent   metav1.Time `json:"lastSent,omitempty"`
-	LastFailed metav1.Time `json:"lastFailed,omitempty"`
+	ObservedGeneration int64              `json:"observedGeneration,omitempty" yaml:"observedGeneration,omitempty"`
+	Conditions         []metav1.Condition `json:"conditions,omitempty" yaml:"conditions,omitempty"`
+	Sent               int                `json:"sent,omitempty"`
+	Failed             int                `json:"failed,omitempty"`
+	Pending            int                `json:"pending,omitempty"`
+	Status             string             `json:"status,omitempty"`
+	Error              string             `json:"error,omitempty"`
+	LastSent           metav1.Time        `json:"lastSent,omitempty"`
+	LastFailed         metav1.Time        `json:"lastFailed,omitempty"`
 }
 
 //+kubebuilder:object:root=true
@@ -161,6 +171,16 @@ type Notification struct {
 }
 
 var _ kopper.StatusPatchGenerator = (*Notification)(nil)
+var _ kopper.StatusConditioner = (*Notification)(nil)
+var _ kopper.ObservedGenerationSetter = (*Notification)(nil)
+
+func (t *Notification) SetObservedGeneration(generation int64) {
+	t.Status.ObservedGeneration = generation
+}
+
+func (t *Notification) GetStatusConditions() *[]metav1.Condition {
+	return &t.Status.Conditions
+}
 
 func (t *Notification) GenerateStatusPatch(original runtime.Object) client.Patch {
 	og, ok := original.(*Notification)

@@ -1,0 +1,13 @@
+---
+apiVersion: mission-control.flanksource.com/v1
+kind: Scope
+metadata:
+  name: echo-playbooks
+  namespace: mc
+spec:
+  description: Echo playbooks in guest1-ns namespace
+  targets:
+    - playbook:
+        name: echo-secret-parameter
+    - playbook:
+        name: loki-logs

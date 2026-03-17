@@ -1,0 +1,17 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: prometheus-cpu-usage
+spec:
+  title: Prometheus CPU Usage (Range)
+  description: Query Prometheus for recent CPU usage across instances
+  actions:
+    - name: scrape-prometheus
+      prometheus:
+        connection: connection://mc/prometheus
+        query: |
+          sum by (instance, job) (rate(node_cpu_seconds_total{mode!="idle"}[5m]))
+        range:
+          start: now-15m
+          end: now
+          step: 1m

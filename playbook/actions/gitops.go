@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	pkgConnection "github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/shell"
 	gitv5 "github.com/go-git/go-git/v5"
 	"github.com/samber/lo"
@@ -21,6 +23,7 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/pkg/clients/git"
 	"github.com/flanksource/incident-commander/pkg/clients/git/connectors"
+	"github.com/flanksource/incident-commander/utils"
 )
 
 type GitOps struct {
@@ -55,7 +58,7 @@ const DeleteFileDirective = "$delete"
 
 var blacklistedPathSymbols = regexp.MustCompile(`[${}[\]?*:<>|]`)
 
-func (t *GitOps) Run(ctx context.Context, action v1.GitOpsAction) (*GitOpsActionResult, error) {
+func (t *GitOps) Run(ctx context.Context, action v1.GitOpsAction, gitOpsSource query.GitOpsSource) (*GitOpsActionResult, error) {
 	var response GitOpsActionResult
 
 	if len(action.Patches) == 0 && len(action.Files) == 0 {
@@ -77,7 +80,7 @@ func (t *GitOps) Run(ctx context.Context, action v1.GitOpsAction) (*GitOpsAction
 	}
 	t.workTree = workTree
 
-	if err := t.applyPatches(ctx, action); err != nil {
+	if err := t.applyPatches(ctx, action, gitOpsSource.Git.File); err != nil {
 		return nil, oops.Wrapf(err, "failed to apply patches")
 	}
 
@@ -85,7 +88,11 @@ func (t *GitOps) Run(ctx context.Context, action v1.GitOpsAction) (*GitOpsAction
 		return nil, oops.Wrapf(err, "failed to modify files")
 	}
 
-	if hash, err := git.CommitAndPush(ctx, connector, workTree, t.spec); err != nil {
+	pushOpts := t.generatePushOptionsAndUpdatePRState(connector, t.spec.PullRequest)
+	if pushOpts != nil {
+		t.log("using push options: %s", utils.StringMapToString(pushOpts))
+	}
+	if hash, err := git.CommitAndPush(ctx, connector, workTree, t.spec, pushOpts); err != nil {
 		return nil, oops.Wrapf(err, "failed to commit and push")
 	} else {
 		t.log("committed(%s) and pushed changes", hash)
@@ -226,13 +233,16 @@ func (t *GitOps) generateSpec(ctx context.Context, action v1.GitOpsAction) error
 	}
 
 	if t.shouldCreatePR {
-
 		ctx.Logger.V(3).Infof("Will create a PR from %s -> %s", action.Repo.Branch, action.Repo.Base)
 		t.spec.PullRequest = &connectors.PullRequestTemplate{
 			Base:   action.Repo.Base,
 			Branch: action.Repo.Branch,
 			Title:  action.PullRequest.Title,
 			Tags:   action.PullRequest.Tags,
+			AutoMerge: connectors.AutoMerge{
+				Enabled: action.PullRequest.AutoMerge.Enabled,
+				Rebase:  action.PullRequest.AutoMerge.Rebase,
+			},
 		}
 	}
 
@@ -248,9 +258,23 @@ func (t *GitOps) cloneRepo(ctx context.Context) (connectors.Connector, *gitv5.Wo
 	return connector, workTree, nil
 }
 
-func (t *GitOps) applyPatches(ctx context.Context, action v1.GitOpsAction) error {
+func (t *GitOps) applyPatches(ctx context.Context, action v1.GitOpsAction, defaultPatchPath string) error {
 	for _, patch := range action.Patches {
-		paths, err := files.DoubleStarGlob(t.workTree.Filesystem.Root(), []string{patch.Path})
+		if strings.TrimSpace(patch.If) != "" {
+			proceed, err := strconv.ParseBool(patch.If)
+			if err != nil {
+				return ctx.Oops().
+					With("path", patch.Path, "if", patch.If).
+					Errorf("invalid patch filter result (%s) must be 'true' or 'false'", patch.If)
+			}
+			if !proceed {
+				t.log("Skipping patch %s", patch.Path)
+				continue
+			}
+		}
+
+		patchPath := lo.CoalesceOrEmpty(patch.Path, defaultPatchPath)
+		paths, err := files.DoubleStarGlob(t.workTree.Filesystem.Root(), []string{patchPath})
 		if err != nil {
 			return err
 		}
@@ -361,4 +385,26 @@ func (t *GitOps) modifyFiles(ctx context.Context, action v1.GitOpsAction) error 
 
 func (t *GitOps) createPR(ctx context.Context, connector connectors.Connector) (*connectors.PullRequest, error) {
 	return git.OpenPR(ctx, connector, t.spec)
+}
+
+func (t *GitOps) generatePushOptionsAndUpdatePRState(connector connectors.Connector, prTemplate *connectors.PullRequestTemplate) map[string]string {
+	if t.spec.PullRequest == nil {
+		return nil
+	}
+
+	pushOpts := make(map[string]string)
+	if t.spec.PullRequest.AutoMerge.Enabled {
+		if connector.Service() == connectors.ServiceGitlab {
+			pushOpts["merge_request.create"] = "true"
+			pushOpts["merge_request.auto_merge"] = "true"
+			// This option is to support older versions of gitlab (deprecated in newer versions)
+			pushOpts["merge_request.merge_when_pipeline_succeeds"] = "true"
+			if base := t.spec.PullRequest.Base; base != "" {
+				pushOpts["merge_request.target"] = base
+			}
+			// In this case merge request will be created automatically
+			t.shouldCreatePR = false
+		}
+	}
+	return pushOpts
 }

@@ -1,5 +1,6 @@
 package msplanner
 
+/*
 import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/incident-commander/api"
@@ -20,3 +21,4 @@ func (client *MSPlannerClient) SyncConfig(ctx context.Context, team api.Team) (c
 	configName = teamSpec.ResponderClients.MSPlanner.Values["plan"]
 	return
 }
+*/

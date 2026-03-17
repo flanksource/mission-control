@@ -1,0 +1,30 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: http-connection-example
+  namespace: default
+spec:
+  description: Example of using a stored connection for HTTP queries
+  display:
+    title: GitHub Repos
+    icon: github
+    sidebar: true
+  columns:
+    - name: name
+      type: string
+      primaryKey: true
+    - name: stars
+      type: number
+    - name: language
+      type: string
+  queries:
+    repos:
+      http:
+        url: https://api.github.com/users/flanksource/repos
+        headers:
+          - name: Accept
+            value: application/vnd.github.v3+json
+  mapping:
+    name: row.name
+    stars: row.stargazers_count
+    language: row.language

@@ -1,0 +1,41 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: backups
+  namespace: mc
+spec:
+  display:
+    title: Backups
+    icon: database
+    sidebar: true
+  cache:
+    maxAge: 1h
+    minAge: 1m
+    refreshTimeout: 10s
+  columns:
+    - name: id
+      type: string
+      description: The id of the database.
+      primaryKey: true
+      hidden: true
+    - name: database
+      type: string
+      description: The name of the helm release.
+    - name: date
+      type: datetime
+      description: The namespace name.
+    - name: status
+      type: status
+      description: The status of the backup.
+    - name: source
+      type: badge
+      description: The source of the backup.
+  queries:
+    backups:
+      changes:
+        search: change_type=BackupSuccessful
+        limit: 10
+  mapping:
+    database: row.name
+    date: row.created_at
+    status: row.details.status

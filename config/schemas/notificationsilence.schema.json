@@ -3,6 +3,37 @@
   "$id": "https://github.com/flanksource/incident-commander/api/v1/notification-silence",
   "$ref": "#/$defs/NotificationSilence",
   "$defs": {
+    "Condition": {
+      "properties": {
+        "type": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "observedGeneration": {
+          "type": "integer"
+        },
+        "lastTransitionTime": {
+          "$ref": "#/$defs/Time"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "type",
+        "status",
+        "lastTransitionTime",
+        "reason",
+        "message"
+      ]
+    },
     "FieldsV1": {
       "properties": {},
       "additionalProperties": false,
@@ -60,7 +91,8 @@
         }
       },
       "additionalProperties": false,
-      "type": "object"
+      "type": "object",
+      "description": "NotificationSilence is the Schema for the managed Notification Silences"
     },
     "NotificationSilenceSpec": {
       "properties": {
@@ -68,31 +100,46 @@
           "type": "string"
         },
         "from": {
-          "type": "string"
+          "type": "string",
+          "description": "From time in RFC3339 format or just datetime"
         },
         "until": {
-          "type": "string"
+          "type": "string",
+          "description": "Until time in RFC3339 format or just datetime"
         },
         "recursive": {
           "type": "boolean"
         },
         "filter": {
-          "type": "string"
+          "type": "string",
+          "description": "Filter evaluates whether to apply the silence. When provided, silence is applied only if filter evaluates to true"
         },
         "selectors": {
           "items": {
             "$ref": "#/$defs/ResourceSelector"
           },
-          "type": "array"
+          "type": "array",
+          "description": "List of resource selectors"
         }
       },
       "additionalProperties": false,
       "type": "object"
     },
     "NotificationSilenceStatus": {
-      "properties": {},
+      "properties": {
+        "observedGeneration": {
+          "type": "integer"
+        },
+        "conditions": {
+          "items": {
+            "$ref": "#/$defs/Condition"
+          },
+          "type": "array"
+        }
+      },
       "additionalProperties": false,
-      "type": "object"
+      "type": "object",
+      "description": "NotificationSilenceStatus defines the observed state of NotificationSilence"
     },
     "ObjectMeta": {
       "properties": {

@@ -1,0 +1,15 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: allow-guest-homelab-monitoring
+  namespace: mc
+spec:
+  description: allow this user to run loki-logs playbook on any config
+  subject:
+    person: aditya+guest@flanksource.com
+  actions:
+    - read
+  object:
+    scopes:
+      - namespace: mc
+        name: homelab-monitoring

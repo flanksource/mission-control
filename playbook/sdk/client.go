@@ -47,7 +47,7 @@ func (api *PlaybookAPI) Run(params RunParams) (*RunResponse, error) {
 		if err != nil {
 			return nil, oops.Wrap(err)
 		}
-		return nil, oops.Errorf(json["error"].(string))
+		return nil, oops.Errorf("%s", json["error"].(string))
 	}
 
 	return &response, oops.Wrap(r.Into(&response))

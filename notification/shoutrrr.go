@@ -3,7 +3,6 @@ package notification
 import (
 	"fmt"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 
@@ -11,18 +10,26 @@ import (
 	"github.com/containrrr/shoutrrr"
 	"github.com/containrrr/shoutrrr/pkg/router"
 	"github.com/containrrr/shoutrrr/pkg/types"
+	"github.com/flanksource/duty/context"
+
 	"github.com/flanksource/incident-commander/api"
+	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/mail"
 	mcUtils "github.com/flanksource/incident-commander/utils"
 )
 
 // setSystemSMTPCredential modifies the shoutrrrURL to use the system's SMTP credentials.
-func setSystemSMTPCredential(shoutrrrURL string) (string, error) {
-	prefix := fmt.Sprintf("smtp://%s:%s@%s:%s/",
-		url.QueryEscape(os.Getenv("SMTP_USER")),
-		url.QueryEscape(os.Getenv("SMTP_PASSWORD")),
-		os.Getenv("SMTP_HOST"),
-		os.Getenv("SMTP_PORT"),
+func setSystemSMTPCredential(ctx context.Context, shoutrrrURL string) (string, error) {
+	smtp, err := mail.GetDefaultSMTP(ctx)
+	if err != nil {
+		return "", fmt.Errorf("failed to get default SMTP config: %w", err)
+	}
+
+	prefix := fmt.Sprintf("smtp://%s:%s@%s:%d/",
+		url.QueryEscape(smtp.Username.ValueStatic),
+		url.QueryEscape(smtp.Password.ValueStatic),
+		smtp.Host,
+		smtp.Port,
 	)
 	shoutrrrURL = strings.ReplaceAll(shoutrrrURL, api.SystemSMTP, prefix)
 
@@ -32,15 +39,14 @@ func setSystemSMTPCredential(shoutrrrURL string) (string, error) {
 	}
 
 	query := parsedURL.Query()
-	query.Set("FromAddress", mail.FromAddress)
-	query.Set("FromName", mail.FromName)
+	query.Set("FromAddress", smtp.FromAddress)
+	query.Set("FromName", smtp.FromName)
 	parsedURL.RawQuery = query.Encode()
 
-	shoutrrrURL = parsedURL.String()
-	return shoutrrrURL, nil
+	return parsedURL.String(), nil
 }
 
-func PrepareShoutrrr(ctx *Context, celEnv map[string]any, shoutrrrURL string, data *NotificationTemplate) (string, string, *router.ServiceRouter, error) {
+func PrepareShoutrrrRaw(ctx *Context, celEnv map[string]any, shoutrrrURL string, data *NotificationTemplate) (string, string, *router.ServiceRouter, error) {
 	if celEnv == nil {
 		celEnv = make(map[string]any)
 	}
@@ -51,7 +57,7 @@ func PrepareShoutrrr(ctx *Context, celEnv map[string]any, shoutrrrURL string, da
 
 	if strings.HasPrefix(shoutrrrURL, api.SystemSMTP) {
 		var err error
-		shoutrrrURL, err = setSystemSMTPCredential(shoutrrrURL)
+		shoutrrrURL, err = setSystemSMTPCredential(ctx.Context, shoutrrrURL)
 		if err != nil {
 			return "", "", nil, err
 		}
@@ -88,15 +94,24 @@ func PrepareShoutrrr(ctx *Context, celEnv map[string]any, shoutrrrURL string, da
 	return service, shoutrrrURL, sender, nil
 }
 
-// shoutrrrSend sends a notification and returns the service it sent the notification to
-func shoutrrrSend(ctx *Context, celEnv map[string]any, shoutrrrURL string, data NotificationTemplate) (string, error) {
-	service, shoutrrrURL, sender, err := PrepareShoutrrr(ctx, celEnv, shoutrrrURL, &data)
-	if err != nil {
-		return "", err
+// firstNonEmpty looks up keys (case-insensitive) first in params then in query values.
+func firstNonEmpty(params *types.Params, q url.Values, keys ...string) string {
+	for _, k := range keys {
+		for p := range *params {
+			if strings.EqualFold(k, p) {
+				return (*params)[p]
+			}
+		}
+		if v := q.Get(k); v != "" {
+			return v
+		}
 	}
+	return ""
+}
 
-	ctx.WithMessage(data.Message)
-
+// dispatchNotification dispatches a prepared notification via SMTP (using the mail package)
+// or via the shoutrrr router for all other services.
+func dispatchNotification(ctx *Context, service, shoutrrrURL string, sender *router.ServiceRouter, data NotificationTemplate) error {
 	data.Properties = GetPropsForService(service, data.Properties)
 	injectTitleIntoProperties(service, data.Title, data.Properties)
 
@@ -109,57 +124,141 @@ func shoutrrrSend(ctx *Context, celEnv map[string]any, shoutrrrURL string, data 
 	if service == "smtp" {
 		parsedURL, err := url.Parse(shoutrrrURL)
 		if err != nil {
-			return "", fmt.Errorf("failed to parse shoutrrr URL: %w", err)
-		}
-
-		firstNonEmpty := func(params *types.Params, q url.Values, keys ...string) string {
-			for _, k := range keys {
-				for p := range *params {
-					if strings.EqualFold(k, p) {
-						return (*params)[p]
-					}
-				}
-				if v := q.Get(k); v != "" {
-					return v
-				}
-			}
-			return ""
+			return fmt.Errorf("failed to parse shoutrrr URL: %w", err)
 		}
 
 		query := parsedURL.Query()
 		var (
 			to           = firstNonEmpty(params, query, "to", "ToAddresses", "ToAddress")
 			from         = firstNonEmpty(params, query, "from", "FromAddress")
-			fromName     = firstNonEmpty(params, query, "fromname")
+			fromName     = firstNonEmpty(params, query, "fromname", "FromName")
 			password, _  = parsedURL.User.Password()
 			port, _      = strconv.Atoi(parsedURL.Port())
 			headerString = (*params)["headers"]
 		)
 
-		m := mail.New(to, data.Title, data.Message, `text/html; charset="UTF-8"`).
-			SetFrom(fromName, from).
+		var conn v1.ConnectionSMTP
+		if err := conn.FromURL(shoutrrrURL); err != nil {
+			return ctx.Oops().Wrapf(err, "error parsing SMTP URL")
+		}
+		if from != "" {
+			conn.FromAddress = from
+		}
+		if fromName != "" {
+			conn.FromName = fromName
+		}
+
+		m := mail.New(strings.Split(to, ","), data.Title, data.Message, `text/html; charset="UTF-8"`).
+			SetFrom(conn.FromName, conn.FromAddress).
 			SetCredentials(parsedURL.Hostname(), port, parsedURL.User.Username(), password)
+
+		for _, a := range data.Attachments {
+			m.AddAttachment(a)
+		}
 
 		if headerString != "" {
 			headers, err := mcUtils.StringToStringMap(headerString)
 			if err != nil {
-				return "", ctx.Oops().Wrapf(err, "error converting headerString[%s] to map", headerString)
+				return ctx.Oops().Wrapf(err, "error converting headerString[%s] to map", headerString)
 			}
 			for k, v := range headers {
 				m.SetHeader(k, v)
 			}
 		}
-		return service, m.Send()
+		if err := m.Send(conn); err != nil {
+			return ctx.Oops().
+				With("to", to, "from", from, "host", parsedURL.Hostname()).
+				Wrap(err)
+		}
+		return nil
 	}
 
 	sendErrors := sender.Send(data.Message, params)
 	for _, err := range sendErrors {
 		if err != nil {
-			return "", ctx.Oops().Hint(data.Message).Wrapf(err, "error publishing notification (service=%s)", service)
+			return ctx.Oops().Hint(data.Message).Wrapf(err, "error publishing notification (service=%s)", service)
 		}
 	}
 
-	return service, nil
+	return nil
+}
+
+// shoutrrrSendRaw sends a notification and returns the service it sent the notification to
+func shoutrrrSendRaw(ctx *Context, celEnv map[string]any, shoutrrrURL string, data NotificationTemplate) (string, error) {
+	service, shoutrrrURL, sender, err := PrepareShoutrrrRaw(ctx, celEnv, shoutrrrURL, &data)
+	if err != nil {
+		return "", err
+	}
+
+	ctx.WithMessage(data.Message)
+
+	return service, dispatchNotification(ctx, service, shoutrrrURL, sender, data)
+}
+
+func PrepareShoutrrr(ctx *Context, shoutrrrURL string, payload NotificationMessagePayload, properties map[string]string) (string, string, *router.ServiceRouter, NotificationTemplate, error) {
+	if properties == nil {
+		properties = make(map[string]string)
+	}
+
+	if strings.HasPrefix(shoutrrrURL, api.SystemSMTP) {
+		var err error
+		shoutrrrURL, err = setSystemSMTPCredential(ctx.Context, shoutrrrURL)
+		if err != nil {
+			return "", "", nil, NotificationTemplate{}, err
+		}
+	}
+
+	sender, err := shoutrrr.CreateSender(shoutrrrURL)
+	if err != nil {
+		return "", "", nil, NotificationTemplate{}, fmt.Errorf("failed to create a shoutrrr sender client: %w", err)
+	}
+
+	service, _, err := sender.ExtractServiceName(shoutrrrURL)
+	if err != nil {
+		return "", "", nil, NotificationTemplate{}, fmt.Errorf("failed to extract service name: %w", err)
+	}
+
+	var message string
+	switch service {
+	case "smtp":
+		message, err = FormatNotificationMessage(payload, "email")
+		if err != nil {
+			return "", "", nil, NotificationTemplate{}, fmt.Errorf("failed to format html message: %w", err)
+		}
+		properties["UseHTML"] = "true"
+	case "telegram":
+		message, err = FormatNotificationMessage(payload, "markdown")
+		if err != nil {
+			return "", "", nil, NotificationTemplate{}, fmt.Errorf("failed to format markdown message: %w", err)
+		}
+		properties["ParseMode"] = "MarkdownV2"
+	default:
+		message, err = FormatNotificationMessage(payload, "markdown")
+		if err != nil {
+			return "", "", nil, NotificationTemplate{}, fmt.Errorf("failed to format markdown message: %w", err)
+		}
+		message = stripmd.StripOptions(message, stripmd.Options{KeepURL: true})
+	}
+
+	data := NotificationTemplate{
+		Title:      payload.Title,
+		Message:    message,
+		Properties: properties,
+	}
+
+	return service, shoutrrrURL, sender, data, nil
+}
+
+// shoutrrrSend sends a notification and returns the service it sent the notification to
+func shoutrrrSend(ctx *Context, shoutrrrURL string, payload NotificationMessagePayload, properties map[string]string) (string, error) {
+	service, shoutrrrURL, sender, data, err := PrepareShoutrrr(ctx, shoutrrrURL, payload, properties)
+	if err != nil {
+		return "", err
+	}
+
+	ctx.WithMessage(data.Message)
+
+	return service, dispatchNotification(ctx, service, shoutrrrURL, sender, data)
 }
 
 // injectTitleIntoProperties adds the given title to the shoutrrr properties if it's not already set.

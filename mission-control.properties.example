@@ -1,0 +1,49 @@
+
+## Dashboard
+# Default dashboard view to display. Accepts "namespace/name" or just "name".
+# dashboard.default.view=mission-control-dashboard
+
+## Notification
+notifications.max.count=5
+notifications.max.window=1h
+notification.tracing=true
+
+secretkeeper.cache.ttl=1m
+
+events.audit.size=2
+
+jobs.ReconcileAll.retention.success=100
+jobs.ReconcileAll.failed.success=100
+
+# Log the matching policy that was used to make the authorization decision
+# casbin.explain=true
+
+rls.enable=true
+# rls.debug=true
+
+# Logs
+log.kubeproxy=true
+log.level.db=warn
+log.level.resourceSelector=trace
+log.db.slowThreshold=100ms
+log.level.http=warn
+log.level.view=trace
+
+# Metrics
+# Disable metrics by name (comma-separated). Use * to disable all.
+# metrics.disable=config_items_info,config_items_health
+# metrics.disable=*
+# Disable authentication requirement for /metrics endpoint
+# metrics.auth.disabled=false
+
+# Metric name prefix (default: empty). Example: "mission_control" produces "mission_control_db_size_mb"
+# metrics.prefix=mission_control
+metrics.agents.cache_ttl=5m
+metrics.canaries.cache_ttl=5m
+metrics.checks.cache_ttl=5m
+metrics.config_items.cache_ttl=5m
+
+# Check labels to expose in checks_info metrics. Uses Flanksource match-patterns.
+# See: https://flanksource.com/docs/reference/types#match-pattern
+# Note: loaded once at startup when metric descriptors are built. Not hot-reloadable.
+# metrics.checks.labels=!*uid*,!node_*

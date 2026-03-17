@@ -1,0 +1,16 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: guest-monitoring-configs
+  namespace: default
+  uid: 9312ba24-7cf0-432b-b0ef-191f67c4dc3f
+spec:
+  description: Grant read access to monitoring configs scope for guest users
+  subject:
+    person: guest@test.com
+  actions:
+    - read
+  object:
+    scopes:
+      - namespace: default
+        name: monitoring-configs

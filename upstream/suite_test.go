@@ -8,13 +8,13 @@ import (
 	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/tests/setup"
 	"github.com/flanksource/duty/upstream"
-	"github.com/flanksource/incident-commander/auth"
 	"github.com/google/uuid"
 	echov4 "github.com/labstack/echo/v4"
-
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"gorm.io/gorm"
+
+	"github.com/flanksource/incident-commander/auth"
 )
 
 var (
@@ -44,6 +44,7 @@ type agentWrapper struct {
 	id   uuid.UUID // agent's id in the upstream db
 	name string
 	context.Context
+	client      *upstream.UpstreamClient
 	datasetFunc func(*gorm.DB) dummy.DummyData
 	dataset     dummy.DummyData
 	port        int
@@ -59,22 +60,25 @@ func (t *agentWrapper) setup(context context.Context) {
 
 	if t.datasetFunc != nil {
 		t.dataset = t.datasetFunc(t.DB())
-		if err := t.dataset.Populate(t.WithDBLogLevel("info").DB()); err != nil {
+		if err := t.dataset.Populate(t.WithDBLogLevel("info")); err != nil {
 			ginkgo.Fail(err.Error())
 		}
 	}
 }
 
 func (t *agentWrapper) Reconcile(upstreamPort int) error {
-	upstreamConfig := upstream.UpstreamConfig{
-		AgentName: t.name,
-		Host:      fmt.Sprintf("http://localhost:%d", upstreamPort),
-		Username:  "System",
-		Password:  "admin",
-		Labels:    []string{"test"},
+	if t.client == nil {
+		upstreamConfig := upstream.UpstreamConfig{
+			AgentName: t.name,
+			Host:      fmt.Sprintf("http://localhost:%d", upstreamPort),
+			Username:  "System",
+			Password:  "admin",
+			Labels:    []string{"test"},
+		}
+		t.client = upstream.NewUpstreamClient(upstreamConfig)
 	}
 
-	summary := upstream.ReconcileAll(t.Context, upstreamConfig, 100)
+	summary := upstream.ReconcileAll(t.Context, t.client, 100)
 	return summary.Error()
 }
 

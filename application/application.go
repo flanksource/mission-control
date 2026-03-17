@@ -9,6 +9,7 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/views"
 )
 
 var (
@@ -45,21 +46,12 @@ func buildApplication(ctx context.Context, app *v1.Application) (*api.Applicatio
 			return nil, ctx.Oops().Errorf("failed to find login IDs: %w", err)
 		}
 
-		configAccesses, err := query.FindConfigAccessByConfigIDs(ctx, configs)
+		users, err := db.GetDistinctUserRoleFromConfigAccess(ctx, configs)
 		if err != nil {
 			return nil, ctx.Oops().Errorf("failed to find config accesses: %w", err)
 		}
 
-		for _, ca := range configAccesses {
-			response.AccessControl.Users = append(response.AccessControl.Users, api.UserAndRole{
-				Name:             ca.User,
-				Email:            ca.Email,
-				Role:             ca.Role,
-				CreatedAt:        ca.CreatedAt,
-				LastLogin:        ca.LastSignedInAt,
-				LastAccessReview: ca.LastReviewedAt,
-			})
-		}
+		response.AccessControl.Users = users
 	}
 
 	if len(mapping.Datasources) > 0 {
@@ -134,7 +126,78 @@ func buildApplication(ctx context.Context, app *v1.Application) (*api.Applicatio
 		}
 	}
 
+	for _, section := range app.Spec.Sections {
+		appSection, err := buildSection(ctx, section)
+		if err != nil {
+			return nil, ctx.Oops().Errorf("failed to build section %q: %w", section.Title, err)
+		}
+		response.Sections = append(response.Sections, appSection)
+	}
+
 	return &response, nil
+}
+
+func buildSection(ctx context.Context, section api.ViewSection) (api.ApplicationSection, error) {
+	appSection := api.ApplicationSection{
+		Title: section.Title,
+		Icon:  section.Icon,
+	}
+
+	if section.ViewRef != nil {
+		appSection.Type = api.SectionTypeView
+		viewResult, err := views.ReadOrPopulateViewTable(ctx, section.ViewRef.Namespace, section.ViewRef.Name)
+		if err != nil {
+			return appSection, ctx.Oops().Errorf("failed to read view table (%s/%s): %w", section.ViewRef.Namespace, section.ViewRef.Name, err)
+		}
+		data := viewResultToSectionData(viewResult)
+		appSection.View = &data
+		return appSection, nil
+	}
+
+	if section.UIRef == nil {
+		return appSection, nil
+	}
+
+	if section.UIRef.Changes != nil {
+		appSection.Type = api.SectionTypeChanges
+		changes, err := db.GetChangesForUIRef(ctx, section.UIRef.Changes)
+		if err != nil {
+			return appSection, ctx.Oops().Errorf("failed to get changes for section %q: %w", section.Title, err)
+		}
+		if changes == nil {
+			changes = []api.ApplicationChange{}
+		}
+		appSection.Changes = changes
+		return appSection, nil
+	}
+
+	if section.UIRef.Configs != nil {
+		appSection.Type = api.SectionTypeConfigs
+		configs, err := db.GetConfigsForUIRef(ctx, section.UIRef.Configs)
+		if err != nil {
+			return appSection, ctx.Oops().Errorf("failed to get configs for section %q: %w", section.Title, err)
+		}
+		if configs == nil {
+			configs = []api.ApplicationConfigItem{}
+		}
+		appSection.Configs = configs
+		return appSection, nil
+	}
+
+	return appSection, nil
+}
+
+func viewResultToSectionData(r *api.ViewResult) api.ApplicationViewData {
+	lastRefreshed := r.LastRefreshedAt
+	return api.ApplicationViewData{
+		RefreshStatus:   r.RefreshStatus,
+		LastRefreshedAt: &lastRefreshed,
+		Columns:         r.Columns,
+		Rows:            r.Rows,
+		Panels:          r.Panels,
+		Variables:       r.Variables,
+		ColumnOptions:   r.ColumnOptions,
+	}
 }
 
 func PersistApplication(ctx context.Context, app *v1.Application) error {

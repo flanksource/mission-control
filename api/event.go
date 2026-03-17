@@ -21,6 +21,7 @@ const (
 	EventConfigDeleted   = "config.deleted"
 	EventConfigHealthy   = "config.healthy"
 	EventConfigUnhealthy = "config.unhealthy"
+	EventConfigDegraded  = "config.degraded"
 	EventConfigWarning   = "config.warning"
 	EventConfigUnknown   = "config.unknown"
 
@@ -77,6 +78,7 @@ var (
 		EventConfigHealthy,
 		EventConfigUnhealthy,
 		EventConfigWarning,
+		EventConfigDegraded,
 		EventConfigUnknown,
 	}
 	EventStatusGroup = []string{
@@ -88,6 +90,7 @@ var (
 		EventConfigDeleted,
 		EventConfigHealthy,
 		EventConfigUnhealthy,
+		EventConfigDegraded,
 		EventConfigWarning,
 		EventConfigUnknown,
 		EventComponentHealthy,
@@ -116,7 +119,7 @@ func EventToHealth(event string) models.Health {
 		return models.HealthHealthy
 	case EventCheckFailed, EventConfigUnhealthy, EventComponentUnhealthy:
 		return models.HealthUnhealthy
-	case EventConfigWarning, EventComponentWarning:
+	case EventConfigWarning, EventComponentWarning, EventConfigDegraded:
 		return models.HealthWarning
 	case EventConfigUnknown, EventComponentUnknown:
 		return models.HealthUnknown
@@ -127,6 +130,7 @@ func EventToHealth(event string) models.Health {
 
 type Event struct {
 	ID          uuid.UUID           `gorm:"default:generate_ulid()"`
+	EventID     uuid.UUID           `json:"event_id"`
 	Name        string              `json:"name"`
 	CreatedAt   time.Time           `json:"created_at"`
 	Properties  types.JSONStringMap `json:"properties"`
@@ -139,6 +143,7 @@ type Event struct {
 func (t Event) ToPostQEvent() models.Event {
 	return models.Event{
 		ID:          t.ID,
+		EventID:     t.EventID,
 		Name:        t.Name,
 		Error:       t.Error,
 		Attempts:    t.Attempts,

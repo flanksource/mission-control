@@ -2,33 +2,41 @@ package adapter
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/casbin/casbin/v2/model"
 	"github.com/casbin/casbin/v2/persist"
 	gormadapter "github.com/casbin/gorm-adapter/v3"
 	"github.com/flanksource/commons/collections"
+	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	pkgPolicy "github.com/flanksource/duty/rbac/policy"
-	v1 "github.com/flanksource/incident-commander/api/v1"
-	"github.com/samber/lo"
-	"gorm.io/gorm"
+	gocache "github.com/patrickmn/go-cache"
 	"gorm.io/gorm/clause"
+
+	v1 "github.com/flanksource/incident-commander/api/v1"
 )
 
 type PermissionAdapter struct {
 	*gormadapter.Adapter // gorm adapter for `casbin_rules` table
 
-	db *gorm.DB
+	ctx   context.Context
+	cache *gocache.Cache
 }
 
 var _ persist.BatchAdapter = &PermissionAdapter{}
 
-func NewPermissionAdapter(db *gorm.DB, main *gormadapter.Adapter) persist.Adapter {
+const defaultScopeCacheTTL = 1 * time.Minute
+
+func NewPermissionAdapter(ctx context.Context, main *gormadapter.Adapter) persist.Adapter {
+	ttl := ctx.Properties().Duration("scope.cache.ttl", defaultScopeCacheTTL)
 	return &PermissionAdapter{
-		db:      db,
+		ctx:     ctx,
 		Adapter: main,
+		cache:   gocache.New(ttl, ttl*2),
 	}
 }
 
@@ -37,22 +45,69 @@ func (a *PermissionAdapter) LoadPolicy(model model.Model) error {
 		return err
 	}
 
+	// Generate ABAC companion rules for policies loaded from casbin_rules
+	// (which includes default policies from policies.yaml).
+	// Without this, default RBAC rules like "viewer, views, read" only work
+	// for plain RBAC checks (string objects) but fail for HasPermission()
+	// ABAC checks where r.obj is *ABACAttribute.
+	if err := generateABACCompanions(model); err != nil {
+		return err
+	}
+
 	var permissions []models.Permission
-	if err := a.db.Where("deleted_at IS NULL").Find(&permissions).Error; err != nil {
+	if err := a.ctx.DB().Where("deleted_at IS NULL AND error IS NULL").Find(&permissions).Error; err != nil {
 		return fmt.Errorf("failed to load permissions: %w", err)
 	}
 
 	for _, permission := range permissions {
-		policies := PermissionToCasbinRule(permission)
-		for _, policy := range policies {
-			if err := persist.LoadPolicyArray(policy, model); err != nil {
-				return err
+		// Expand scope references in object_selector before converting to Casbin rules
+		expandedPerms, err := ExpandPermissionScopes(a.ctx, a.cache, permission)
+		if err != nil {
+			var validationErr *scopeExpansionValidationError
+			if errors.As(err, &validationErr) {
+				// Persist validation error to database
+				if updateErr := a.ctx.DB().Model(&permission).Update("error", err.Error()).Error; updateErr != nil {
+					return fmt.Errorf("failed to update permission error: %w", updateErr)
+				}
+
+				continue // Skip this permission
+			}
+
+			return err
+		}
+
+		if len(expandedPerms) == 0 {
+			policies := PermissionToCasbinRule(permission)
+			for _, policy := range policies {
+				if err := persist.LoadPolicyArray(policy, model); err != nil {
+					return err
+				}
+			}
+		} else {
+			// A permission that targets a scope will generate multiple expanded permissions
+			// If the targeted scope as N scopes, then this will generate N permissions
+			// everything about the permission remains the same apart from the object_selector
+
+			for _, expandedPerm := range expandedPerms {
+				marshalled, err := json.Marshal(expandedPerm)
+				if err != nil {
+					return err
+				}
+
+				newPerm := permission
+				newPerm.ObjectSelector = marshalled
+				policies := PermissionToCasbinRule(newPerm)
+				for _, policy := range policies {
+					if err := persist.LoadPolicyArray(policy, model); err != nil {
+						return err
+					}
+				}
 			}
 		}
 	}
 
 	var permissionGroups []models.PermissionGroup
-	if err := a.db.Where("deleted_at IS NULL").Find(&permissionGroups).Error; err != nil {
+	if err := a.ctx.DB().Where("deleted_at IS NULL").Find(&permissionGroups).Error; err != nil {
 		return fmt.Errorf("failed to load permissions: %w", err)
 	}
 
@@ -96,7 +151,7 @@ func PermissionToCasbinRule(permission models.Permission) [][]string {
 
 // createPolicy generates a Casbin policy rule from a permission.
 func createPolicy(permission models.Permission, action string) []string {
-	return []string{
+	policy := []string{
 		"p",
 		permission.Principal(),
 		permission.GetObject(),
@@ -105,34 +160,13 @@ func createPolicy(permission models.Permission, action string) []string {
 		permission.Condition(),
 		permission.ID.String(),
 	}
+	return policy
 }
 
 // rbacToABACObjectSelector returns object selectors (v1.PermissionObject) in JSON
 // for ABAC policies from a global permission.
 func rbacToABACObjectSelector(permission models.Permission, action string) []byte {
-	switch permission.Object {
-	case pkgPolicy.ObjectPlaybooks:
-		if lo.Contains([]string{pkgPolicy.ActionPlaybookRun, pkgPolicy.ActionPlaybookApprove}, action) {
-			return []byte(`{"playbooks": [{"name":"*"}]}`)
-		}
-
-	case pkgPolicy.ObjectCatalog:
-		if pkgPolicy.ActionRead == action {
-			return []byte(`{"configs": [{"name":"*"}]}`)
-		}
-
-	case pkgPolicy.ObjectTopology:
-		if pkgPolicy.ActionRead == action {
-			return []byte(`{"components": [{"name":"*"}]}`)
-		}
-
-	case pkgPolicy.ObjectConnection:
-		if pkgPolicy.ActionRead == action {
-			return []byte(`{"connections": [{"name":"*"}]}`)
-		}
-	}
-
-	return nil
+	return pkgPolicy.ABACObjectSelector(permission.Object, action)
 }
 
 // Helper function for finding namespaced resources by selector
@@ -164,7 +198,7 @@ func (a *PermissionAdapter) findNamespacedResources(tableName string, selectors 
 	}
 
 	var ids []string
-	if err := a.db.Select("id").Table(tableName).Clauses(clause.Or(clauses...)).Find(&ids).Error; err != nil {
+	if err := a.ctx.DB().Select("id").Table(tableName).Clauses(clause.Or(clauses...)).Find(&ids).Error; err != nil {
 		return nil, err
 	}
 
@@ -207,7 +241,7 @@ func (a *PermissionAdapter) permissionGroupToCasbinRule(permission models.Permis
 			allSubjects = append(allSubjects, "everyone")
 		} else {
 			var personIDs []string
-			query := a.db.Select("id").Model(&models.Person{}).
+			query := a.ctx.DB().Select("id").Model(&models.Person{}).
 				Where("deleted_at IS NULL").
 				Where("type IS DISTINCT FROM 'agent'").
 				Where("email IS NOT NULL"). // Excludes system user
@@ -222,7 +256,7 @@ func (a *PermissionAdapter) permissionGroupToCasbinRule(permission models.Permis
 
 	if len(subject.Teams) > 0 {
 		var teamIDs []string
-		if err := a.db.Select("id").Model(&models.Team{}).Where("name = ?", subject.Teams).Find(&teamIDs).Error; err != nil {
+		if err := a.ctx.DB().Select("id").Model(&models.Team{}).Where("name = ?", subject.Teams).Find(&teamIDs).Error; err != nil {
 			return nil, err
 		}
 
@@ -244,4 +278,42 @@ func (a *PermissionAdapter) permissionGroupToCasbinRule(permission models.Permis
 	}
 
 	return policies, nil
+}
+
+// generateABACCompanions scans policies already loaded into the model (from casbin_rules)
+// and generates in-memory ABAC companion rules for any that match an ABAC-eligible
+// object+action pair. This ensures default policies like "viewer, views, read" also
+// work with HasPermission() where r.obj is *ABACAttribute, not a string.
+func generateABACCompanions(m model.Model) error {
+	pModel, ok := m["p"]
+	if !ok {
+		return nil
+	}
+
+	assertion, ok := pModel["p"]
+	if !ok {
+		return nil
+	}
+
+	// Collect first to avoid modifying the slice during iteration
+	var companions [][]string
+	for _, pol := range assertion.Policy {
+		if len(pol) < 6 {
+			continue
+		}
+
+		obj, act := pol[1], pol[2]
+		if selector := pkgPolicy.ABACObjectSelector(obj, act); selector != nil {
+			condition := fmt.Sprintf(`matchResourceSelector(r.obj, %q)`, string(selector))
+			companions = append(companions, []string{"p", pol[0], "*", act, pol[3], condition, pol[5]})
+		}
+	}
+
+	for _, companion := range companions {
+		if err := persist.LoadPolicyArray(companion, m); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

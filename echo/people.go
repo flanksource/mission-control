@@ -56,7 +56,7 @@ func (t *UpdatePersonRequest) ToUpdateIdentityBody(traits map[string]any) client
 	}
 
 	if t.Active != nil {
-		out.State = lo.Ternary(*t.Active, client.IDENTITYSTATE_ACTIVE, client.IDENTITYSTATE_INACTIVE)
+		out.State = lo.Ternary[string](*t.Active, auth.IdentityStateActive, auth.IdentityStateInactive)
 	}
 
 	return out
@@ -86,7 +86,7 @@ func (t *PersonController) UpdatePerson(c echov4.Context) error {
 		return api.WriteError(c, api.Errorf(api.ENOTFOUND, "person %s not found", req.ID))
 	}
 
-	updateRequest := t.kratos.IdentityApi.UpdateIdentity(ctx, req.ID).UpdateIdentityBody(req.ToUpdateIdentityBody(traits))
+	updateRequest := t.kratos.IdentityAPI.UpdateIdentity(ctx, req.ID).UpdateIdentityBody(req.ToUpdateIdentityBody(traits))
 	identity, _, err := updateRequest.Execute()
 	if err != nil {
 		var clientErr *client.GenericOpenAPIError
@@ -118,7 +118,7 @@ func (t *PersonController) DeletePerson(c echov4.Context) error {
 	}
 
 	id := c.Param("id")
-	response, err := t.kratos.IdentityApi.DeleteIdentity(ctx, id).Execute()
+	response, err := t.kratos.IdentityAPI.DeleteIdentity(ctx, id).Execute()
 	if err != nil {
 		var clientErr *client.GenericOpenAPIError
 		if errors.As(err, &clientErr) {

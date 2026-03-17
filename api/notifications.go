@@ -4,6 +4,7 @@ import (
 	gocontext "context"
 	"database/sql/driver"
 
+	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/types"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -14,13 +15,23 @@ import (
 // the system's SMTP credentials.
 const SystemSMTP = "smtp://system/"
 
+// NotificationWebhookReceiver defines a webhook destination for notifications.
+// +kubebuilder:object:generate=true
+type NotificationWebhookReceiver struct {
+	connection.HTTPConnection `json:",inline" yaml:",inline"`
+
+	// Method is the HTTP method to use. Defaults to POST.
+	Method string `json:"method,omitempty" yaml:"method,omitempty"`
+}
+
 // +kubebuilder:object:generate=true
 type NotificationConfig struct {
-	Name       string            `json:"name,omitempty"`                       // A unique name to identify this notification configuration.
-	Filter     string            `json:"filter,omitempty"`                     // Filter is a CEL-expression used to decide whether this notification client should send the notification
-	URL        string            `json:"url,omitempty"`                        // URL in the form of Shoutrrr notification service URL schema
-	Connection string            `json:"connection,omitempty"`                 // Connection is the name of the connection
-	Properties map[string]string `json:"properties,omitempty" template:"true"` // Configuration properties for Shoutrrr. It's Templatable.
+	Name       string                       `json:"name,omitempty"`                       // A unique name to identify this notification configuration.
+	Filter     string                       `json:"filter,omitempty"`                     // Filter is a CEL-expression used to decide whether this notification client should send the notification
+	URL        string                       `json:"url,omitempty"`                        // URL in the form of Shoutrrr notification service URL schema
+	Connection string                       `json:"connection,omitempty"`                 // Connection is the name of the connection
+	Webhook    *NotificationWebhookReceiver `json:"webhook,omitempty"`                    // Webhook is the HTTP endpoint for sending structured notification payloads.
+	Properties map[string]string            `json:"properties,omitempty" template:"true"` // Configuration properties for Shoutrrr. It's Templatable.
 }
 
 func (t NotificationConfig) Value() (driver.Value, error) {

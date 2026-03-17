@@ -1,10 +1,11 @@
 package connectors
 
 import (
-	"testing"
+	ginkgo "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 )
 
-func TestParseAzureDevopsRepo(t *testing.T) {
+var _ = ginkgo.Describe("ParseAzureDevopsRepo", func() {
 	tests := []struct {
 		url             string
 		expectedOrg     string
@@ -17,20 +18,18 @@ func TestParseAzureDevopsRepo(t *testing.T) {
 		{"https://invalid-url.com", "", "", "", false},
 	}
 
-	for _, test := range tests {
-		org, project, repo, ok := parseAzureDevopsRepo(test.url)
-		if ok != test.expectedOk {
-			t.Errorf("For URL %s, expected ok: %t, but got ok: %t", test.url, test.expectedOk, ok)
-		}
-
-		if org != test.expectedOrg || project != test.expectedProject || repo != test.expectedRepo {
-			t.Errorf("For URL %s, expected org: %s, project: %s, repo: %s, but got org: %s, project: %s, ok: %s",
-				test.url, test.expectedOrg, test.expectedProject, test.expectedRepo, org, project, repo)
-		}
+	for _, tt := range tests {
+		ginkgo.It("parses "+tt.url, func() {
+			org, project, repo, ok := parseAzureDevopsRepo(tt.url)
+			Expect(ok).To(Equal(tt.expectedOk))
+			Expect(org).To(Equal(tt.expectedOrg))
+			Expect(project).To(Equal(tt.expectedProject))
+			Expect(repo).To(Equal(tt.expectedRepo))
+		})
 	}
-}
+})
 
-func TestParseGitlabRepo(t *testing.T) {
+var _ = ginkgo.Describe("ParseRepoURL", func() {
 	tests := []struct {
 		repoURL       string
 		host          string
@@ -46,11 +45,17 @@ func TestParseGitlabRepo(t *testing.T) {
 		{"https://github.com/adityathebe/homelab", "https://github.com", false, "adityathebe", "homelab", true},
 	}
 
-	for _, tc := range tests {
-		hostURL, owner, repo, err := parseRepoURL(tc.repoURL)
-		if owner != tc.expectedOwner || repo != tc.expectedRepo || (err != nil) == tc.expectedOk || hostURL != tc.host {
-			t.Errorf("parseGitlabRepo(%q, %t, %q) = %q, %q, %q, %v; want %q, %q, %v",
-				tc.repoURL, tc.custom, tc.host, owner, repo, hostURL, err, tc.expectedOwner, tc.expectedRepo, tc.expectedOk)
-		}
+	for _, tt := range tests {
+		ginkgo.It("parses "+tt.repoURL, func() {
+			hostURL, owner, repo, err := parseRepoURL(tt.repoURL)
+			if tt.expectedOk {
+				Expect(err).ToNot(HaveOccurred())
+			} else {
+				Expect(err).To(HaveOccurred())
+			}
+			Expect(owner).To(Equal(tt.expectedOwner))
+			Expect(repo).To(Equal(tt.expectedRepo))
+			Expect(hostURL).To(Equal(tt.host))
+		})
 	}
-}
+})
