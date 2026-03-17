@@ -286,6 +286,12 @@ func (h *opensearchHandler) Handle(fctx *fixtureContext) {
 		var bulkResponse map[string]any
 		Expect(json.Unmarshal(bodyBytes, &bulkResponse)).To(BeNil())
 		Expect(bulkResponse["errors"]).To(Equal(false), "OpenSearch bulk insert had errors: %+v", bulkResponse)
+
+		refreshEndpoint, err := url.JoinPath(openSearchEndpoint, "k8s-logs/_refresh")
+		Expect(err).To(BeNil())
+		refreshResp, err := http.NewClient().R(DefaultContext).Post(refreshEndpoint, "")
+		Expect(err).To(BeNil())
+		Expect(refreshResp.IsOK()).To(BeTrue(), "OpenSearch refresh failed")
 	})
 }
 
