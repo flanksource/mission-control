@@ -3,22 +3,16 @@ module github.com/flanksource/incident-commander
 go 1.25.6
 
 require (
-	github.com/flanksource/artifacts v1.0.24
-	github.com/flanksource/clicky v1.19.0
-	github.com/flanksource/commons v1.48.3
-	github.com/flanksource/duty v1.0.1229
-	github.com/flanksource/gomplate/v3 v3.24.74
-	github.com/flanksource/kopper v1.0.20
-)
-
-require (
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.13.1
 	github.com/MicahParks/keyfunc v1.9.0
-	github.com/andygrunwald/go-jira v1.17.0
 	github.com/casbin/casbin/v2 v2.135.0
 	github.com/casbin/gorm-adapter/v3 v3.39.0
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.33.0 // indirect
+	github.com/flanksource/commons v1.48.3
+	github.com/flanksource/duty v1.0.1230
+	github.com/flanksource/gomplate/v3 v3.24.74
+	github.com/flanksource/kopper v1.0.21
 	github.com/gomarkdown/markdown v0.0.0-20250810172220-2e2c11897d1a
 	github.com/google/cel-go v0.27.0
 	github.com/google/go-cmp v0.7.0
@@ -27,7 +21,6 @@ require (
 	github.com/labstack/echo-contrib v0.17.4
 	github.com/labstack/echo/v4 v4.15.0
 	github.com/lib/pq v1.10.9
-	github.com/mitchellh/mapstructure v1.5.0
 	github.com/onsi/ginkgo/v2 v2.28.0
 	github.com/onsi/gomega v1.39.1
 	github.com/ory/client-go v1.22.8
@@ -53,6 +46,8 @@ require (
 	github.com/emersion/go-message v0.18.2
 	github.com/emersion/go-sasl v0.0.0-20241020182733-b788ff22d5a6
 	github.com/emersion/go-smtp v0.24.0
+	github.com/flanksource/artifacts v1.0.24
+	github.com/flanksource/clicky v1.19.0
 	github.com/flanksource/commons-test v0.1.13
 	github.com/fluxcd/pkg/gittestserver v0.21.0
 	github.com/go-git/go-billy/v5 v5.7.0
@@ -377,7 +372,6 @@ require (
 	github.com/Masterminds/goutils v1.1.1 // indirect
 	github.com/TomOnTime/utfutil v1.0.0
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
-	github.com/fatih/structs v1.1.0 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
 	github.com/golang-jwt/jwt/v4 v4.5.2
 	github.com/golang/groupcache v0.0.0-20241129210726-2c02b8208cf8 // indirect
@@ -408,7 +402,6 @@ require (
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/robfig/cron/v3 v3.0.1
 	github.com/stretchr/testify v1.11.1 // indirect
-	github.com/trivago/tgo v1.0.7 // indirect
 	github.com/ugorji/go/codec v1.3.1 // indirect
 	github.com/ulikunitz/xz v0.5.15 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
@@ -439,8 +432,6 @@ require (
 
 // replace github.com/flanksource/commons => ../commons
 
-// replace github.com/flanksource/duty => ../duty
-
-// replace github.com/flanksource/kopper => ../kopper
+//replace github.com/flanksource/duty => ../duty
 
 replace github.com/glebarez/sqlite => github.com/clarkmcc/gorm-sqlite v0.0.0-20240426202654-00ed082c0311

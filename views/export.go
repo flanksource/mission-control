@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/flanksource/duty/context"
+	"gopkg.in/yaml.v3"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -63,12 +64,22 @@ func resolveViewRefs(ctx context.Context, result *api.ViewResult, viewsByName ma
 		key := fmt.Sprintf("%s/%s", section.ViewRef.Namespace, section.ViewRef.Name)
 		refView, ok := viewsByName[key]
 		if !ok {
+			result.SectionResults = append(result.SectionResults, api.ViewSectionResult{
+				Title: section.Title,
+				Icon:  section.Icon,
+				Error: fmt.Sprintf("view %s not found", key),
+			})
 			continue
 		}
 
 		refResult, err := runAndNormalize(ctx, refView, vars)
 		if err != nil {
 			ctx.Logger.Warnf("failed to resolve viewRef %s: %v", key, err)
+			result.SectionResults = append(result.SectionResults, api.ViewSectionResult{
+				Title: section.Title,
+				Icon:  section.Icon,
+				Error: err.Error(),
+			})
 			continue
 		}
 
@@ -98,7 +109,9 @@ func formatResult(ctx context.Context, result *api.ViewResult, format string, fa
 	case "csv":
 		return renderViewCSV(result)
 	case "json", "":
-		return json.MarshalIndent(result, "", "  ")
+		return json.MarshalIndent(result.Serialized(), "", "  ")
+	case "yaml":
+		return yaml.Marshal(result.Serialized())
 	case "facet-html":
 		return RenderFacetHTML(ctx, result, facetOpts)
 	case "facet-pdf":
@@ -113,7 +126,17 @@ func formatMultiResult(ctx context.Context, multi *api.MultiViewResult, format s
 	case "csv":
 		return renderMultiViewCSV(multi)
 	case "json", "":
-		return json.MarshalIndent(multi, "", "  ")
+		serialized := make([]api.SerializedView, len(multi.Views))
+		for i := range multi.Views {
+			serialized[i] = multi.Views[i].Serialized()
+		}
+		return json.MarshalIndent(serialized, "", "  ")
+	case "yaml":
+		serialized := make([]api.SerializedView, len(multi.Views))
+		for i := range multi.Views {
+			serialized[i] = multi.Views[i].Serialized()
+		}
+		return yaml.Marshal(serialized)
 	case "facet-html":
 		return RenderMultiFacetHTML(ctx, multi, facetOpts)
 	case "facet-pdf":

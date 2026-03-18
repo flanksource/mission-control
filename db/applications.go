@@ -396,13 +396,13 @@ func GetChangesForUIRef(ctx context.Context, filters *api.ChangesUIFilters) ([]a
 	}
 
 	type changeRow struct {
-		ID        uuid.UUID `gorm:"column:id"`
-		CreatedAt time.Time `gorm:"column:created_at"`
-		ChangeType string   `gorm:"column:change_type"`
-		Summary   string    `gorm:"column:summary"`
-		Source    string    `gorm:"column:source"`
-		Severity  string    `gorm:"column:severity"`
-		CreatedBy *string   `gorm:"column:created_by"`
+		ID         uuid.UUID `gorm:"column:id"`
+		CreatedAt  time.Time `gorm:"column:created_at"`
+		ChangeType string    `gorm:"column:change_type"`
+		Summary    string    `gorm:"column:summary"`
+		Source     string    `gorm:"column:source"`
+		Severity   string    `gorm:"column:severity"`
+		CreatedBy  *string   `gorm:"column:created_by"`
 	}
 
 	var rows []changeRow

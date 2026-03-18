@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/flanksource/commons/collections"
@@ -162,8 +163,17 @@ func prepareVariableWithOptions(ctx context.Context, variable api.ViewVariable, 
 		return api.ViewVariableWithOptions{}, err
 	}
 
-	selectedValue := selectVariableValue(variable.Key, variableWithOptions, userVariables)
+	suppliedValue := userVariables[variable.Key]
+	if suppliedValue != "" && variable.ValueFrom != nil && !variable.ValueFrom.Config.IsEmpty() && !optionContainsValue(variableWithOptions, suppliedValue) {
+		resolved, err := resolveConfigVarValue(ctx, variableWithOptions, suppliedValue)
+		if err != nil {
+			ctx.Logger.Warnf("failed to resolve variable %s value %q: %v", variable.Key, suppliedValue, err)
+		} else if resolved != "" {
+			userVariables[variable.Key] = resolved
+		}
+	}
 
+	selectedValue := selectVariableValue(variable.Key, variableWithOptions, userVariables)
 	if selectedValue != "" {
 		variableWithOptions.Default = selectedValue
 	}
@@ -337,6 +347,39 @@ func getDefaultValue(variable api.ViewVariableWithOptions) string {
 		return variable.Options[0]
 	}
 	return ""
+}
+
+// resolveConfigVarValue resolves a user-supplied variable value to a matching option value.
+// - Values with operators (=, !, >, <) are treated as peg FieldSelector queries.
+// - Plain strings (no operators) are treated as external_id lookups.
+// In both cases the first matching config is found and its option value is returned.
+func resolveConfigVarValue(ctx context.Context, variable api.ViewVariableWithOptions, suppliedValue string) (string, error) {
+	hasOperator := strings.ContainsAny(suppliedValue, "=!><")
+
+	var fieldSelector string
+	if hasOperator {
+		fieldSelector = suppliedValue
+	} else {
+		fieldSelector = "external_id=" + suppliedValue
+	}
+
+	configs, err := query.FindConfigsByResourceSelector(ctx, 1, types.ResourceSelector{FieldSelector: fieldSelector})
+	if err != nil {
+		return "", fmt.Errorf("config lookup: %w", err)
+	}
+	if len(configs) == 0 {
+		return "", nil
+	}
+
+	config := configs[0]
+	configID := config.ID.String()
+	configName := lo.FromPtr(config.Name)
+	for _, item := range variable.OptionItems {
+		if item.Value == configID || item.Label == configID || item.Value == configName || item.Label == configName {
+			return item.Value, nil
+		}
+	}
+	return "", nil
 }
 
 func optionContainsValue(variable api.ViewVariableWithOptions, value string) bool {

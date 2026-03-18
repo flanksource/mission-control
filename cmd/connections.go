@@ -173,14 +173,14 @@ type connectionFlags struct {
 	Database string
 
 	// HTTP / Prometheus auth
-	Bearer           string
-	OAuthClientID    string
+	Bearer            string
+	OAuthClientID     string
 	OAuthClientSecret string
-	OAuthTokenURL    string
-	OAuthScopes      string
-	TLSCA            string
-	TLSCert          string
-	TLSKey           string
+	OAuthTokenURL     string
+	OAuthScopes       string
+	TLSCA             string
+	TLSCert           string
+	TLSKey            string
 
 	// Facet
 	TimestampURL string

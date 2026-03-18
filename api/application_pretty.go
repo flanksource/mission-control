@@ -180,7 +180,7 @@ func (f ApplicationFinding) Pretty() api.Text {
 // Pretty returns a row text with provider badge.
 func (l ApplicationLocation) Pretty() api.Text {
 	return api.Text{Content: l.Name}.
-		AddText(" ("+l.Account+") ").
+		AddText(" (" + l.Account + ") ").
 		Add(api.Badge(l.Provider, "text-indigo-700", "bg-indigo-100")).
 		Add(api.DescriptionList{Items: []api.KeyValuePair{
 			api.KeyValue("Region", l.Region),
