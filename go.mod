@@ -28,16 +28,18 @@ require (
 	github.com/labstack/echo/v4 v4.15.0
 	github.com/lib/pq v1.10.9
 	github.com/mitchellh/mapstructure v1.5.0
-	github.com/onsi/ginkgo/v2 v2.28.0
-	github.com/onsi/gomega v1.39.1
-	github.com/ory/client-go v1.22.8
-	github.com/prometheus/client_golang v1.23.2
-	github.com/spf13/cobra v1.10.2
-	github.com/spf13/pflag v1.0.10
-	gorm.io/gorm v1.31.1
-	k8s.io/apimachinery v0.35.2
-	k8s.io/client-go v0.35.2
-	sigs.k8s.io/controller-runtime v0.22.4
+	github.com/onsi/ginkgo/v2 v2.22.2
+	github.com/onsi/gomega v1.36.2
+	github.com/ory/client-go v1.1.41
+	github.com/prometheus/client_golang v1.20.5
+	github.com/spf13/cobra v1.9.1
+	github.com/spf13/pflag v1.0.6
+	github.com/aws/aws-sdk-go-v2/service/bedrockruntime v1.25.0
+	gopkg.in/gomail.v2 v2.0.0-20160411212932-81ebce5c23df
+	gorm.io/gorm v1.25.12
+	k8s.io/apimachinery v0.31.1
+	k8s.io/client-go v0.31.1
+	sigs.k8s.io/controller-runtime v0.19.0
 )
 
 require (

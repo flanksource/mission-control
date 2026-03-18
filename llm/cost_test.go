@@ -40,6 +40,13 @@ var _ = ginkgo.Describe("CalculateCost", func() {
 			outputTokens: 20000,
 			expectedCost: 0.3450,
 		},
+		{
+			provider:     api.LLMBackendBedrock,
+			model:        "anthropic.claude-v2",
+			inputTokens:  1000,
+			outputTokens: 1000,
+			expectedCost: 0, // no cost logic yet, just included for compilation
+		},
 	}
 
 	for _, test := range tests {
