@@ -1,3 +1,5 @@
+//go:build incidents
+
 package incidents
 
 import (

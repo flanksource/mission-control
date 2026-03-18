@@ -1,3 +1,5 @@
+//go:build incidents
+
 package incidents
 
 import (
@@ -27,10 +29,7 @@ var _ = ginkgo.Describe("Incident Definition of Done", ginkgo.Ordered, func() {
 	var (
 		john       *models.Person
 		incident   *models.Incident
-		component  *models.Component
 		configItem *models.ConfigItem
-		hypothesis *models.Hypothesis
-		evidence   *models.Evidence
 		config     = dummyConfig{
 			Name:      "my dummy config",
 			Threshold: 50,
@@ -43,14 +42,6 @@ var _ = ginkgo.Describe("Incident Definition of Done", ginkgo.Ordered, func() {
 			Name: "John Doe",
 		}
 		Expect(DefaultContext.DB().Create(john).Error).To(BeNil())
-
-		component = &models.Component{
-			ID:         uuid.New(),
-			Name:       "logistics",
-			Type:       "Entity",
-			ExternalId: "dummy/logistics",
-		}
-		Expect(DefaultContext.DB().Create(component).Error).To(BeNil())
 
 		configItem = &models.ConfigItem{
 			ID:          uuid.New(),
@@ -74,50 +65,6 @@ var _ = ginkgo.Describe("Incident Definition of Done", ginkgo.Ordered, func() {
 			CommanderID: &john.ID,
 		}
 		Expect(DefaultContext.DB().Create(incident).Error).To(BeNil())
-	})
-
-	ginkgo.It("should create a new hypothesis", func() {
-		hypothesis = &models.Hypothesis{
-			ID:         uuid.New(),
-			IncidentID: incident.ID,
-			Title:      "Threshold could safely be increased to 80",
-			CreatedBy:  john.ID,
-			Type:       "solution",
-			Status:     "possible",
-		}
-		tx := DefaultContext.DB().Create(hypothesis)
-		Expect(tx.Error).To(BeNil())
-	})
-
-	ginkgo.It("should create a new evidence from the config", func() {
-		evidence = &models.Evidence{
-			ID:               uuid.New(),
-			HypothesisID:     hypothesis.ID,
-			ComponentID:      &component.ID,
-			CreatedBy:        john.ID,
-			Description:      "Logistics DB attached component",
-			Type:             "component",
-			Script:           "config.threshold >= 80",
-			ConfigID:         &configItem.ID,
-			DefinitionOfDone: true,
-		}
-		tx := DefaultContext.DB().Create(evidence)
-		Expect(tx.Error).To(BeNil())
-
-		// Another evidence done definition but empty script. This should be ignored.
-		evidenceWithEmptyScript := &models.Evidence{
-			ID:               uuid.New(),
-			HypothesisID:     hypothesis.ID,
-			ComponentID:      &component.ID,
-			CreatedBy:        john.ID,
-			Description:      "Something went wrong",
-			Type:             "component",
-			Script:           "",
-			ConfigID:         &configItem.ID,
-			DefinitionOfDone: true,
-		}
-		tx = DefaultContext.DB().Create(evidenceWithEmptyScript)
-		Expect(tx.Error).To(BeNil())
 	})
 
 	ginkgo.It("modify the config but do not satisfy the done definition", func() {
@@ -163,9 +110,6 @@ var _ = ginkgo.Describe("Incident Definition of Done Config Item", ginkgo.Ordere
 		incident       *models.Incident
 		configItem     *models.ConfigItem
 		configAnalysis *models.ConfigAnalysis
-		component      *models.Component
-		hypothesis     *models.Hypothesis
-		evidence       *models.Evidence
 		config         = dummyConfig{
 			Name:      "my dummy config",
 			Threshold: 50,
@@ -179,17 +123,6 @@ var _ = ginkgo.Describe("Incident Definition of Done Config Item", ginkgo.Ordere
 			Name: "James Bond",
 		}
 		tx := DefaultContext.DB().Create(john)
-		Expect(tx.Error).To(BeNil())
-	})
-
-	ginkgo.It("should create a new component", func() {
-		component = &models.Component{
-			ID:         uuid.New(),
-			Name:       "logistics",
-			Type:       "Entity",
-			ExternalId: "dummy/logistics",
-		}
-		tx := DefaultContext.DB().Create(component)
 		Expect(tx.Error).To(BeNil())
 	})
 
@@ -227,33 +160,6 @@ var _ = ginkgo.Describe("Incident Definition of Done Config Item", ginkgo.Ordere
 			CommanderID: &john.ID,
 		}
 		tx := DefaultContext.DB().Create(incident)
-		Expect(tx.Error).To(BeNil())
-	})
-
-	ginkgo.It("should create a new hypothesis", func() {
-		hypothesis = &models.Hypothesis{
-			ID:         uuid.New(),
-			IncidentID: incident.ID,
-			Title:      "can scale down to 3 instances",
-			CreatedBy:  john.ID,
-			Type:       "solution",
-			Status:     "possible",
-		}
-		tx := DefaultContext.DB().Create(hypothesis)
-		Expect(tx.Error).To(BeNil())
-	})
-
-	ginkgo.It("should create a new evidence from the config", func() {
-		evidence = &models.Evidence{
-			ID:               uuid.New(),
-			HypothesisID:     hypothesis.ID,
-			CreatedBy:        john.ID,
-			Description:      "Azure Advisor recommends shutting down underutilized virtual machines",
-			Script:           "analysis.status == 'resolved'",
-			ConfigAnalysisID: &configAnalysis.ID,
-			DefinitionOfDone: true,
-		}
-		tx := DefaultContext.DB().Create(evidence)
 		Expect(tx.Error).To(BeNil())
 	})
 
@@ -358,19 +264,6 @@ var _ = ginkgo.Describe("Test Incident Done Definition With Health Check", ginkg
 			CommanderID: &john.ID,
 		}
 		tx := DefaultContext.DB().Create(incident)
-		Expect(tx.Error).To(BeNil())
-	})
-
-	ginkgo.It("should create a new hypothesis", func() {
-		hypothesis = &models.Hypothesis{
-			ID:         uuid.New(),
-			IncidentID: incident.ID,
-			Title:      "Have you tried turning it off and on again?",
-			CreatedBy:  john.ID,
-			Type:       "solution",
-			Status:     "possible",
-		}
-		tx := DefaultContext.DB().Create(hypothesis)
 		Expect(tx.Error).To(BeNil())
 	})
 

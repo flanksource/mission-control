@@ -22,7 +22,6 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	dbModels "github.com/flanksource/incident-commander/db/models"
 	"github.com/flanksource/incident-commander/events"
-	_ "github.com/flanksource/incident-commander/incidents/responder"
 	"github.com/flanksource/incident-commander/notification"
 	_ "github.com/flanksource/incident-commander/playbook"
 	_ "github.com/flanksource/incident-commander/upstream"

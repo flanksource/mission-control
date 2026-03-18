@@ -29,7 +29,6 @@ import (
 	"github.com/flanksource/incident-commander/vars"
 
 	// register event handlers
-	_ "github.com/flanksource/incident-commander/incidents/responder"
 	_ "github.com/flanksource/incident-commander/notification"
 )
 

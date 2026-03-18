@@ -36,11 +36,11 @@ import (
 
 	"github.com/flanksource/incident-commander/agent"
 	"github.com/flanksource/incident-commander/api"
-	mcMiddleware "github.com/flanksource/incident-commander/middleware"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/auth"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/logs"
+	mcMiddleware "github.com/flanksource/incident-commander/middleware"
 	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/utils"
 	"github.com/flanksource/incident-commander/vars"

@@ -33,7 +33,7 @@ type ApplicationViewData struct {
 	Columns         []view.ColumnDef               `json:"columns,omitempty"`
 	Rows            []view.Row                     `json:"rows,omitempty"`
 	Panels          []PanelResult                  `json:"panels,omitempty"`
-	Variables       []ViewVariableWithOptions       `json:"variables,omitempty"`
+	Variables       []ViewVariableWithOptions      `json:"variables,omitempty"`
 	ColumnOptions   map[string]ColumnFilterOptions `json:"columnOptions,omitempty"`
 }
 

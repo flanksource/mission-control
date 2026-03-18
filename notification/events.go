@@ -24,7 +24,6 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/events"
-	"github.com/flanksource/incident-commander/incidents/responder"
 	"github.com/flanksource/incident-commander/logs"
 )
 
@@ -823,27 +822,6 @@ func GetEnvForEvent(ctx context.Context, event models.Event) (*celVariables, err
 		}
 
 		env.Incident = incident
-		env.Permalink = fmt.Sprintf("%s/incidents/%s", api.FrontendURL, incident.ID)
-	}
-
-	if strings.HasPrefix(event.Name, "incident.responder.") {
-		responderID := event.EventID.String()
-		responder, err := responder.FindResponderByID(ctx, responderID)
-		if err != nil {
-			return nil, fmt.Errorf("error finding responder(id=%s): %v", responderID, err)
-		} else if responder == nil {
-			return nil, fmt.Errorf("responder(id=%s) not found", responderID)
-		}
-
-		incident, err := query.GetCachedIncident(ctx, responder.IncidentID.String())
-		if err != nil {
-			return nil, fmt.Errorf("error finding incident(id=%s): %v", responder.IncidentID, err)
-		} else if incident == nil {
-			return nil, fmt.Errorf("incident(id=%s) not found", responder.IncidentID)
-		}
-
-		env.Incident = incident
-		env.Responder = responder
 		env.Permalink = fmt.Sprintf("%s/incidents/%s", api.FrontendURL, incident.ID)
 	}
 

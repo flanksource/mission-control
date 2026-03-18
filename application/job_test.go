@@ -10,9 +10,9 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/google/uuid"
-	"github.com/samber/lo"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/samber/lo"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"sigs.k8s.io/yaml"
 )
@@ -193,7 +193,6 @@ func readView(path string) v1.View {
 
 	return view
 }
-
 
 func readScrapeConfig(path string) models.ConfigScraper {
 	content, err := os.ReadFile(path)
