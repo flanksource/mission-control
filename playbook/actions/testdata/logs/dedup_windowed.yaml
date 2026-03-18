@@ -1,0 +1,30 @@
+postProcess:
+  dedupe:
+    fields: ["message"]
+    window: "5m"
+
+input:
+  - message: "new request"
+    firstObserved: "2025-05-08T11:40:00Z"
+    count: 1
+  - message: "new request"
+    firstObserved: "2025-05-08T11:43:00Z"
+    count: 1
+  - message: "new request"
+    firstObserved: "2025-05-08T11:46:00Z"
+    count: 1
+  - message: "new request"
+    firstObserved: "2025-05-08T11:47:00Z"
+    count: 1
+  - message: "new request"
+    firstObserved: "2025-05-08T11:49:00Z"
+    count: 1
+  - message: "new request"
+    firstObserved: "2025-05-08T12:00:00Z"
+    count: 1
+
+expectations:
+  - "results.size() == 3"
+  - "results[0].count == 2"
+  - "results[1].count == 3"
+  - "results[2].count == 1"

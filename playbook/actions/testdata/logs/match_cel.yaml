@@ -1,0 +1,18 @@
+postProcess:
+  match:
+    - "message == 'user saved'"
+
+input:
+  - message: "new request"
+    firstObserved: "2025-05-08T11:40:00Z"
+    count: 1
+  - message: "user saved"
+    firstObserved: "2025-05-08T11:50:00Z"
+    count: 1
+  - message: "new request"
+    firstObserved: "2025-05-08T11:55:00Z"
+    count: 1
+
+expectations:
+  - "results.size() == 1"
+  - "results[0].message == 'user saved'"

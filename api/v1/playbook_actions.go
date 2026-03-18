@@ -44,10 +44,14 @@ type LogsPostProcess struct {
 
 	// Map labels to fields
 	Mapping *logs.FieldMappingConfig `yaml:"mapping,omitempty" json:"mapping,omitempty"`
+
+	// Parse specifies the log format to parse.
+	// Supported: "logfmt", "klogfmt", "json", "syslog", "autodetect"
+	Parse string `json:"parse,omitempty" yaml:"parse,omitempty"`
 }
 
 func (t LogsPostProcess) Empty() bool {
-	return len(t.Match) == 0 && t.Dedupe == nil
+	return len(t.Match) == 0 && t.Dedupe == nil && t.Parse == ""
 }
 
 type LogsActionLoki struct {
@@ -630,7 +634,7 @@ type FacetOptions struct {
 	TimestampURL string           `json:"timestampUrl,omitempty" yaml:"timestampUrl,omitempty" template:"true"`
 }
 
-// +kubebuilder:validation:XValidation:rule="!(has(self.view) && self.view != '' && has(self.configs))",message="view and configs are mutually exclusive"
+// +kubebuilder:validation:XValidation:rule="!(has(self.view) && self.view != ” && has(self.configs))",message="view and configs are mutually exclusive"
 type ReportAction struct {
 	// Reference an existing View by namespace/name or just name
 	View string `json:"view,omitempty" yaml:"view,omitempty" template:"true"`

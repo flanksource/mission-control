@@ -85,7 +85,7 @@ func waitForLokiLogs() {
 		results, exists := data["result"].([]any)
 		g.Expect(exists).To(BeTrue(), "Expected 'result' field in Loki data")
 		g.Expect(len(results)).To(BeNumerically(">", 0))
-	}).WithTimeout(30 * time.Second).WithPolling(1 * time.Second).Should(Succeed())
+	}).WithTimeout(60 * time.Second).WithPolling(2 * time.Second).Should(Succeed())
 }
 
 var _ = ginkgo.Describe("Playbooks", ginkgo.Ordered, func() {

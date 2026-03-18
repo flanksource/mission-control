@@ -1,338 +1,101 @@
 package actions
 
 import (
-	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/types"
-
 	"github.com/flanksource/duty/logs"
+	"github.com/flanksource/gomplate/v3"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"github.com/samber/lo"
+	"gopkg.in/yaml.v3"
 )
 
-var _ = ginkgo.Describe("matchLogs", func() {
-	referenceTime := time.Now()
+type logLineYAML struct {
+	Message       string            `yaml:"message"`
+	FirstObserved string            `yaml:"firstObserved"`
+	Count         int               `yaml:"count"`
+	Severity      string            `yaml:"severity,omitempty"`
+	Source        string            `yaml:"source,omitempty"`
+	Host          string            `yaml:"host,omitempty"`
+	Labels        map[string]string `yaml:"labels,omitempty"`
+}
+
+type logFixture struct {
+	PostProcess  v1.LogsPostProcess `yaml:"postProcess"`
+	Input        []logLineYAML      `yaml:"input"`
+	Expectations []string           `yaml:"expectations"`
+}
+
+func loadLogFixture(path string) logFixture {
+	data, err := os.ReadFile(path)
+	Expect(err).ToNot(HaveOccurred(), "reading fixture %s", path)
+
+	var fixture logFixture
+	Expect(yaml.Unmarshal(data, &fixture)).To(Succeed(), "parsing fixture %s", path)
+	return fixture
+}
+
+func fixtureToLogLines(input []logLineYAML) []*logs.LogLine {
+	lines := make([]*logs.LogLine, len(input))
+	for i, in := range input {
+		t, err := time.Parse(time.RFC3339, in.FirstObserved)
+		Expect(err).ToNot(HaveOccurred())
+		lines[i] = &logs.LogLine{
+			Message:       in.Message,
+			FirstObserved: t,
+			Count:         in.Count,
+			Severity:      in.Severity,
+			Source:        in.Source,
+			Host:          in.Host,
+			Labels:        in.Labels,
+		}
+		lines[i].SetHash()
+	}
+	return lines
+}
+
+func logLinesToCELContext(results []*logs.LogLine, messageFields []string) map[string]any {
+	var items []map[string]any
+	for _, r := range results {
+		items = append(items, r.TemplateContext(messageFields...))
+	}
+	return map[string]any{"results": items}
+}
+
+var _ = ginkgo.Describe("fixture-based postProcessLogs", func() {
 	ctx := context.New()
 
-	tests := []struct {
-		name        string
-		postProcess v1.LogsPostProcess
-		got         []*logs.LogLine
-		want        []*logs.LogLine
-	}{
-		{
-			name: "dedupe on message",
-			postProcess: v1.LogsPostProcess{
-				Match: []types.MatchExpression{
-					"msg != 'new request'", // faulty expression
-					"message == 'user saved'",
-				},
-			},
-			got: []*logs.LogLine{
-				{
-					Message:       "new request",
-					FirstObserved: referenceTime.Add(-time.Minute * 20),
-					Count:         1,
-				},
-				{
-					Message:       "user saved",
-					FirstObserved: referenceTime.Add(-time.Minute * 10),
-					Count:         1,
-				},
-				{
-					Message:       "new request",
-					FirstObserved: referenceTime.Add(-time.Minute * 5),
-					Count:         1,
-				},
-				{
-					Message:       "new request",
-					FirstObserved: referenceTime.Add(-time.Minute * 1),
-					Count:         1,
-				},
-			},
-			want: []*logs.LogLine{
-				{
-					Message:       "user saved",
-					FirstObserved: referenceTime.Add(-time.Minute * 10),
-					Count:         1,
-				},
-			},
-		},
+	files, err := os.ReadDir("testdata/logs")
+	if err != nil {
+		return
 	}
 
-	for _, tt := range tests {
-		ginkgo.It(tt.name, func() {
-			result := postProcessLogs(ctx, tt.got, tt.postProcess)
-			Expect(len(result)).To(Equal(len(tt.want)))
-			for i, log := range result {
-				Expect(log.Message).To(Equal(tt.want[i].Message))
-				Expect(log.FirstObserved).To(Equal(tt.want[i].FirstObserved), "first observed")
-				Expect(log.LastObserved).To(Equal(tt.want[i].LastObserved), "last observed")
-				Expect(log.Count).To(Equal(tt.want[i].Count), "count")
+	for _, f := range files {
+		if !strings.HasSuffix(f.Name(), ".yaml") {
+			continue
+		}
+
+		name := f.Name()
+		ginkgo.It(name, func() {
+			fixture := loadLogFixture(filepath.Join("testdata/logs", name))
+			input := fixtureToLogLines(fixture.Input)
+			result := postProcessLogs(ctx, input, fixture.PostProcess)
+
+			var messageFields []string
+			if fixture.PostProcess.Mapping != nil {
+				messageFields = fixture.PostProcess.Mapping.Message
 			}
-		})
-	}
-})
+			env := logLinesToCELContext(result, messageFields)
 
-var _ = ginkgo.Describe("dedupLogs", func() {
-	referenceTime := time.Date(2025, 5, 8, 12, 0, 0, 0, time.UTC)
-	ctx := context.New()
-
-	tests := []struct {
-		name        string
-		postProcess v1.LogsPostProcess
-		got         []*logs.LogLine
-		want        []*logs.LogLine
-	}{
-		{
-			name: "dedupe on message",
-			postProcess: v1.LogsPostProcess{
-				Dedupe: &v1.LogDedupe{
-					Fields: []string{"message"},
-				},
-			},
-			got: []*logs.LogLine{
-				{
-					Message:       "new request",
-					FirstObserved: referenceTime.Add(-time.Minute * 20),
-					Count:         1,
-				},
-				{
-					Message:       "user saved",
-					FirstObserved: referenceTime.Add(-time.Minute * 10),
-					Count:         1,
-				},
-				{
-					Message:       "new request",
-					FirstObserved: referenceTime.Add(-time.Minute * 5),
-					Count:         1,
-				},
-				{
-					Message:       "new request",
-					FirstObserved: referenceTime.Add(-time.Minute * 1),
-					Count:         1,
-				},
-			},
-			want: []*logs.LogLine{
-				{
-					Message:       "new request",
-					FirstObserved: referenceTime.Add(-time.Minute * 20),
-					LastObserved:  lo.ToPtr(referenceTime.Add(-time.Minute * 1)),
-					Count:         3,
-				},
-				{
-					Message:       "user saved",
-					FirstObserved: referenceTime.Add(-time.Minute * 10),
-					Count:         1,
-				},
-			},
-		},
-		{
-			name: "dedupe on labels",
-			postProcess: v1.LogsPostProcess{
-				Dedupe: &v1.LogDedupe{
-					Fields: []string{"label.namespace"},
-				},
-			},
-			got: []*logs.LogLine{
-				{
-					Message: "new request",
-					Labels: map[string]string{
-						"namespace": "monitoring",
-					},
-					FirstObserved: referenceTime.Add(-time.Minute * 20),
-					Count:         1,
-				},
-				{
-					Message: "user saved",
-					Labels: map[string]string{
-						"namespace": "monitoring",
-					},
-					FirstObserved: referenceTime.Add(-time.Minute * 10),
-					Count:         1,
-				},
-			},
-			want: []*logs.LogLine{
-				{
-					Message:       "user saved",
-					FirstObserved: referenceTime.Add(-time.Minute * 20),
-					LastObserved:  lo.ToPtr(referenceTime.Add(-time.Minute * 10)),
-					Count:         2,
-				},
-			},
-		},
-		{
-			name: "dedupe on multiple fields",
-			postProcess: v1.LogsPostProcess{
-				Dedupe: &v1.LogDedupe{
-					Fields: []string{"host", "message"},
-				},
-			},
-			got: []*logs.LogLine{
-				{
-					Message:       "new request",
-					Host:          "pod-a",
-					FirstObserved: referenceTime.Add(-time.Minute * 20),
-					Count:         1,
-				},
-				{
-					Message:       "user saved",
-					Host:          "pod-a",
-					FirstObserved: referenceTime.Add(-time.Minute * 10),
-					Count:         1,
-				},
-				{
-					Message:       "new request",
-					Host:          "pod-b",
-					FirstObserved: referenceTime.Add(-time.Minute * 5),
-					Count:         1,
-				},
-				{
-					Message:       "new request",
-					Host:          "pod-b",
-					FirstObserved: referenceTime.Add(-time.Minute * 1),
-					Count:         1,
-				},
-			},
-			want: []*logs.LogLine{
-				{
-					Message:       "new request",
-					Host:          "pod-a",
-					FirstObserved: referenceTime.Add(-time.Minute * 20),
-					Count:         1,
-				},
-				{
-					Message:       "user saved",
-					Host:          "pod-a",
-					FirstObserved: referenceTime.Add(-time.Minute * 10),
-					Count:         1,
-				},
-				{
-					Message:       "new request",
-					Host:          "pod-b",
-					FirstObserved: referenceTime.Add(-time.Minute * 5),
-					LastObserved:  lo.ToPtr(referenceTime.Add(-time.Minute * 1)),
-					Count:         2,
-				},
-			},
-		},
-		{
-			name: "dedupe on hash",
-			postProcess: v1.LogsPostProcess{
-				Dedupe: &v1.LogDedupe{
-					Fields: []string{"hash"},
-				},
-			},
-			got: []*logs.LogLine{
-				{
-					Message:       fmt.Sprintf("new request received: %s", referenceTime.Add(-time.Minute*20).Format(time.RFC3339)),
-					FirstObserved: referenceTime.Add(-time.Minute * 20),
-					Count:         1,
-				},
-				{
-					Message:       fmt.Sprintf("new request received: %s", referenceTime.Add(-time.Minute*10).Format(time.RFC3339)),
-					FirstObserved: referenceTime.Add(-time.Minute * 10),
-					Count:         1,
-				},
-				{
-					Message:       fmt.Sprintf("new request received: %s", referenceTime.Add(-time.Minute*5).Format(time.RFC3339)),
-					FirstObserved: referenceTime.Add(-time.Minute * 5),
-					Count:         1,
-				},
-				{
-					Message:       fmt.Sprintf("new request received: %s", referenceTime.Add(-time.Minute*1).Format(time.RFC3339)),
-					FirstObserved: referenceTime.Add(-time.Minute * 1),
-					Count:         1,
-				},
-			},
-			want: []*logs.LogLine{
-				{
-					Message:       fmt.Sprintf("new request received: %s", referenceTime.Add(-time.Minute*1).Format(time.RFC3339)),
-					FirstObserved: referenceTime.Add(-time.Minute * 20),
-					LastObserved:  lo.ToPtr(referenceTime.Add(-time.Minute * 1)),
-					Count:         4,
-				},
-			},
-		},
-		{
-			name: "dedupe on message with a window",
-			postProcess: v1.LogsPostProcess{
-				Dedupe: &v1.LogDedupe{
-					Fields: []string{"message"},
-					Window: "5m",
-				},
-			},
-			got: []*logs.LogLine{
-				{
-					Message:       "new request",
-					FirstObserved: referenceTime.Add(-time.Minute * 20),
-					Count:         1,
-				},
-				{
-					Message:       "new request",
-					FirstObserved: referenceTime.Add(-time.Minute * 17),
-					Count:         1,
-				},
-				{
-					Message:       "new request",
-					FirstObserved: referenceTime.Add(-time.Minute * 14),
-					Count:         1,
-				},
-				{
-					Message:       "new request",
-					FirstObserved: referenceTime.Add(-time.Minute * 13),
-					Count:         1,
-				},
-				{
-					Message:       "new request",
-					FirstObserved: referenceTime.Add(-time.Minute * 11),
-					Count:         1,
-				},
-				{
-					Message:       "new request",
-					FirstObserved: referenceTime,
-					Count:         1,
-				},
-			},
-			want: []*logs.LogLine{
-				{
-					Message:       "new request",
-					FirstObserved: referenceTime.Add(-time.Minute * 20),
-					LastObserved:  lo.ToPtr(referenceTime.Add(-time.Minute * 17)),
-					Count:         2,
-				},
-				{
-					Message:       "new request",
-					FirstObserved: referenceTime.Add(-time.Minute * 14),
-					LastObserved:  lo.ToPtr(referenceTime.Add(-time.Minute * 11)),
-					Count:         3,
-				},
-				{
-					Message:       "new request",
-					FirstObserved: referenceTime,
-					Count:         1,
-				},
-			},
-		},
-	}
-
-	for _, tt := range tests {
-		ginkgo.It(tt.name, func() {
-			result := postProcessLogs(ctx, tt.got, tt.postProcess)
-			Expect(len(result)).To(Equal(len(tt.want)), "total logs")
-
-			for i, log := range result {
-				want := tt.want[i]
-
-				Expect(log.Message).To(Equal(want.Message))
-				Expect(log.Count).To(Equal(want.Count), "count")
-				Expect(log.FirstObserved).To(Equal(want.FirstObserved), "first observed")
-				Expect(log.LastObserved).To(Equal(want.LastObserved), "last observed")
-				Expect(log.Host).To(Equal(want.Host), "host")
+			for _, expr := range fixture.Expectations {
+				ok, err := gomplate.RunTemplateBool(env, gomplate.Template{Expression: expr})
+				Expect(err).ToNot(HaveOccurred(), "CEL expression: %s", expr)
+				Expect(ok).To(BeTrue(), "CEL failed: %s (results=%v)", expr, env["results"])
 			}
 		})
 	}

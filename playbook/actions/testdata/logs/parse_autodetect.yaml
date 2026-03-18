@@ -1,0 +1,27 @@
+postProcess:
+  parse: autodetect
+
+input:
+  - message: '{"level":"error","msg":"connection refused","duration":"1.5s"}'
+    firstObserved: "2026-03-13T09:02:52Z"
+    count: 1
+  - message: 'I0313 09:05:25.073865       1 request.go:752] "Waited before sending" delay="1.2s"'
+    firstObserved: "2026-03-13T09:05:25Z"
+    count: 1
+  - message: 'level=info msg="request handled" status=200'
+    firstObserved: "2026-03-13T09:06:00Z"
+    count: 1
+  - message: "plain text log line"
+    firstObserved: "2026-03-13T09:07:00Z"
+    count: 1
+
+expectations:
+  - "results.size() == 4"
+  - "results[0].message == 'connection refused'"
+  - "results[0].severity == 'error'"
+  - "results[1].message == 'Waited before sending'"
+  - "results[1].severity == 'info'"
+  - "results[1].source == 'request.go:752'"
+  - "results[2].message == 'request handled'"
+  - "results[2].severity == 'info'"
+  - "results[3].message == 'plain text log line'"

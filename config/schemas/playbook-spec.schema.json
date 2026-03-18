@@ -536,6 +536,18 @@
             "type": "string"
           },
           "type": "array"
+        },
+        "groupBy": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "dedupBy": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
         }
       },
       "additionalProperties": false,
@@ -1032,6 +1044,10 @@
           "$ref": "#/$defs/FieldMappingConfig",
           "description": "Map labels to fields"
         },
+        "parse": {
+          "type": "string",
+          "description": "Parse specifies the log format to parse.\nSupported: \"logfmt\", \"klogfmt\", \"json\", \"syslog\", \"autodetect\""
+        },
         "connection": {
           "type": "string"
         },
@@ -1096,6 +1112,10 @@
           "$ref": "#/$defs/FieldMappingConfig",
           "description": "Map labels to fields"
         },
+        "parse": {
+          "type": "string",
+          "description": "Parse specifies the log format to parse.\nSupported: \"logfmt\", \"klogfmt\", \"json\", \"syslog\", \"autodetect\""
+        },
         "start": {
           "type": "string"
         },
@@ -1153,6 +1173,10 @@
           "$ref": "#/$defs/FieldMappingConfig",
           "description": "Map labels to fields"
         },
+        "parse": {
+          "type": "string",
+          "description": "Parse specifies the log format to parse.\nSupported: \"logfmt\", \"klogfmt\", \"json\", \"syslog\", \"autodetect\""
+        },
         "connection": {
           "type": "string"
         },
@@ -1198,6 +1222,10 @@
         "mapping": {
           "$ref": "#/$defs/FieldMappingConfig",
           "description": "Map labels to fields"
+        },
+        "parse": {
+          "type": "string",
+          "description": "Parse specifies the log format to parse.\nSupported: \"logfmt\", \"klogfmt\", \"json\", \"syslog\", \"autodetect\""
         },
         "connection": {
           "type": "string"

@@ -1,0 +1,27 @@
+postProcess:
+  dedupe:
+    fields: [message]
+  mapping:
+    message: ["msg"]
+
+input:
+  - message: ""
+    labels:
+      msg: "ERROR >= expected healthy targets"
+    firstObserved: "2026-03-13T09:02:52Z"
+    count: 1
+  - message: ""
+    labels:
+      msg: "ERROR >= expected healthy targets"
+    firstObserved: "2026-03-13T09:05:25Z"
+    count: 1
+  - message: ""
+    labels:
+      msg: "WARNING: disk usage high"
+    firstObserved: "2026-03-13T09:06:00Z"
+    count: 1
+
+expectations:
+  - "results.size() == 2"
+  - "results[0].count == 2"
+  - "results[1].count == 1"

@@ -1,0 +1,25 @@
+postProcess:
+  parse: klogfmt
+  dedupe:
+    fields: [message]
+
+input:
+  - message: 'I0313 09:02:52.532517       1 request.go:752] "Waited before sending" delay="3.39s" reason="throttling"'
+    firstObserved: "2026-03-13T09:02:52Z"
+    count: 1
+  - message: 'I0313 09:05:25.073865       1 request.go:752] "Waited before sending" delay="1.2s" reason="throttling"'
+    firstObserved: "2026-03-13T09:05:25Z"
+    count: 1
+  - message: 'E0313 09:06:00.000000       1 handler.go:100] "Failed to process" err="timeout"'
+    firstObserved: "2026-03-13T09:06:00Z"
+    count: 1
+
+expectations:
+  - "results.size() == 2"
+  - "results[0].message == 'Waited before sending'"
+  - "results[0].severity == 'info'"
+  - "results[0].source == 'request.go:752'"
+  - "results[0].count == 2"
+  - "results[1].message == 'Failed to process'"
+  - "results[1].severity == 'error'"
+  - "results[1].source == 'handler.go:100'"

@@ -1,16 +1,11 @@
 package actions
 
 import (
-	"bytes"
-	"encoding/json"
-	"io"
 	"sort"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs"
-	"github.com/flanksource/artifacts"
 	"github.com/flanksource/commons/duration"
-	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/logs"
@@ -27,32 +22,11 @@ import (
 type logsAction struct {
 }
 
-type logsResult struct {
-	Metadata map[string]any  `json:"metadata,omitempty"`
-	Logs     []*logs.LogLine `json:"-"`
-}
-
-func (t *logsResult) GetArtifacts() []artifacts.Artifact {
-	var b bytes.Buffer
-	if err := json.NewEncoder(&b).Encode(t.Logs); err != nil {
-		logger.Errorf("failed to json marshal logs: %v", err)
-		return nil
-	}
-
-	return []artifacts.Artifact{
-		{
-			ContentType: "application/log+json", // so UI can distinguish between json and logs in JSON
-			Content:     io.NopCloser(&b),
-			Path:        "logs.json",
-		},
-	}
-}
-
 func NewLogsAction() *logsAction {
 	return &logsAction{}
 }
 
-func (l *logsAction) Run(ctx context.Context, action *v1.LogsAction) (*logsResult, error) {
+func (l *logsAction) Run(ctx context.Context, action *v1.LogsAction) (*logs.LogResult, error) {
 	if action.Loki != nil {
 		if action.Loki.ConnectionName != "" {
 			if _, err := connection.Get(ctx, action.Loki.ConnectionName); err != nil {
@@ -67,7 +41,7 @@ func (l *logsAction) Run(ctx context.Context, action *v1.LogsAction) (*logsResul
 		}
 
 		response.Logs = postProcessLogs(ctx, response.Logs, action.Loki.LogsPostProcess)
-		return &logsResult{Metadata: response.Metadata, Logs: response.Logs}, nil
+		return response, nil
 	}
 
 	if action.OpenSearch != nil {
@@ -88,7 +62,7 @@ func (l *logsAction) Run(ctx context.Context, action *v1.LogsAction) (*logsResul
 		}
 
 		response.Logs = postProcessLogs(ctx, response.Logs, action.OpenSearch.LogsPostProcess)
-		return &logsResult{Metadata: response.Metadata, Logs: response.Logs}, nil
+		return response, nil
 	}
 
 	if action.CloudWatch != nil {
@@ -112,7 +86,7 @@ func (l *logsAction) Run(ctx context.Context, action *v1.LogsAction) (*logsResul
 		}
 
 		response.Logs = postProcessLogs(ctx, response.Logs, action.CloudWatch.LogsPostProcess)
-		return &logsResult{Metadata: response.Metadata, Logs: response.Logs}, nil
+		return response, nil
 	}
 
 	if action.Kubernetes != nil {
@@ -123,18 +97,24 @@ func (l *logsAction) Run(ctx context.Context, action *v1.LogsAction) (*logsResul
 		}
 
 		searcher := k8s.New(action.Kubernetes.KubernetesConnection)
-		response, err := searcher.Search(ctx, action.Kubernetes.Request)
+		logGroups, err := searcher.Search(ctx, action.Kubernetes.Request)
 		if err != nil {
 			return nil, ctx.Oops().Wrapf(err, "failed to fetch logs from kubernetes")
 		}
 
-		result := &logsResult{
+		result := &logs.LogResult{
 			Metadata: map[string]any{},
-			Logs:     []*logs.LogLine{},
 		}
 
-		for _, logGroup := range response {
+		var sources []map[string]any
+		for _, logGroup := range logGroups {
 			result.Logs = append(result.Logs, postProcessLogs(ctx, logGroup.Logs, action.Kubernetes.LogsPostProcess)...)
+			if logGroup.Metadata != nil {
+				sources = append(sources, logGroup.Metadata)
+			}
+		}
+		if len(sources) > 0 {
+			result.Metadata["sources"] = sources
 		}
 
 		return result, nil
@@ -148,13 +128,24 @@ func postProcessLogs(ctx context.Context, logLines []*logs.LogLine, postProcess 
 		return logLines
 	}
 
-	matchedLogs := matchLogs(ctx, logLines, postProcess.Match)
-	filteredLogs := dedupLogs(matchedLogs, postProcess.Dedupe)
+	var messageFields []string
+	if postProcess.Mapping != nil {
+		messageFields = postProcess.Mapping.Message
+	}
+
+	if postProcess.Parse != "" {
+		for _, line := range logLines {
+			logs.ParseMessage(line, postProcess.Parse)
+		}
+	}
+
+	matchedLogs := matchLogs(ctx, logLines, postProcess.Match, messageFields)
+	filteredLogs := dedupLogs(matchedLogs, postProcess.Dedupe, messageFields)
 	return filteredLogs
 }
 
 // dedupLogs consolidates log lines by matching all specified fields together.
-func dedupLogs(logLines []*logs.LogLine, dedupe *v1.LogDedupe) []*logs.LogLine {
+func dedupLogs(logLines []*logs.LogLine, dedupe *v1.LogDedupe, messageFields []string) []*logs.LogLine {
 	if dedupe == nil {
 		return logLines
 	}
@@ -173,13 +164,13 @@ func dedupLogs(logLines []*logs.LogLine, dedupe *v1.LogDedupe) []*logs.LogLine {
 
 		dedupedLogs := make([]*logs.LogLine, 0, len(logLines))
 		for _, windowedLogs := range windowedLogs {
-			dedupedLogs = append(dedupedLogs, dedupeWindow(windowedLogs, dedupe.Fields)...)
+			dedupedLogs = append(dedupedLogs, dedupeWindow(windowedLogs, dedupe.Fields, messageFields)...)
 		}
 
 		return dedupedLogs
 	}
 
-	return dedupeWindow(logLines, dedupe.Fields)
+	return dedupeWindow(logLines, dedupe.Fields, messageFields)
 }
 
 func divideLogsByWindow(logLines []*logs.LogLine, window time.Duration) [][]*logs.LogLine {
@@ -215,13 +206,12 @@ func divideLogsByWindow(logLines []*logs.LogLine, window time.Duration) [][]*log
 }
 
 // dedupeWindow deduplicates log lines in a given time window.
-// all logs provided are expected to be in the same time window.
-func dedupeWindow(logLines []*logs.LogLine, fields []string) []*logs.LogLine {
+func dedupeWindow(logLines []*logs.LogLine, fields []string, messageFields []string) []*logs.LogLine {
 	dedupedLogs := make([]*logs.LogLine, 0, len(logLines))
 	seen := make(map[string]*logs.LogLine)
 
 	for _, logLine := range logLines {
-		key := logLine.GetFieldKey(fields)
+		key := logLine.GetFieldKey(fields, messageFields...)
 
 		previous, found := seen[key]
 		if !found {
@@ -253,7 +243,7 @@ func dedupeWindow(logLines []*logs.LogLine, fields []string) []*logs.LogLine {
 	return dedupedLogs
 }
 
-func matchLogs(ctx context.Context, logLines []*logs.LogLine, matchExprs []types.MatchExpression) []*logs.LogLine {
+func matchLogs(ctx context.Context, logLines []*logs.LogLine, matchExprs []types.MatchExpression, messageFields []string) []*logs.LogLine {
 	if len(matchExprs) == 0 {
 		return logLines
 	}
@@ -263,7 +253,7 @@ func matchLogs(ctx context.Context, logLines []*logs.LogLine, matchExprs []types
 
 outer:
 	for _, logLine := range logLines {
-		env := logLine.TemplateContext()
+		env := logLine.TemplateContext(messageFields...)
 
 		for _, matchExpr := range matchExprs {
 			if _, ok := faultyExpressions[string(matchExpr)]; ok {

@@ -1,0 +1,19 @@
+postProcess:
+  parse: logfmt
+
+input:
+  - message: 'level=error msg="failed to process" duration=1.5s component=handler'
+    firstObserved: "2026-03-13T09:02:52Z"
+    count: 1
+  - message: 'level=info msg="request handled" duration=0.2s component=handler'
+    firstObserved: "2026-03-13T09:03:00Z"
+    count: 1
+
+expectations:
+  - "results.size() == 2"
+  - "results[0].message == 'failed to process'"
+  - "results[0].severity == 'error'"
+  - "results[0].labels.duration == '1.5s'"
+  - "results[0].labels.component == 'handler'"
+  - "results[1].message == 'request handled'"
+  - "results[1].severity == 'info'"

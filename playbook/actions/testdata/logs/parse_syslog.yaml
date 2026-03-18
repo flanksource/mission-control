@@ -1,0 +1,19 @@
+postProcess:
+  parse: syslog
+
+input:
+  - message: "<13>Mar 15 10:30:45 web-01 nginx[1234]: GET /api/health 200"
+    firstObserved: "2026-03-15T10:30:45Z"
+    count: 1
+  - message: "<11>Mar 15 10:31:00 web-01 nginx[1234]: POST /api/data 500"
+    firstObserved: "2026-03-15T10:31:00Z"
+    count: 1
+
+expectations:
+  - "results.size() == 2"
+  - "results[0].message == 'GET /api/health 200'"
+  - "results[0].severity == 'notice'"
+  - "results[0].host == 'web-01'"
+  - "results[0].source == 'nginx'"
+  - "results[1].message == 'POST /api/data 500'"
+  - "results[1].severity == 'error'"
