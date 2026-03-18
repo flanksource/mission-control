@@ -87,4 +87,3 @@ func isInterestingHeader(name string) bool {
 	}
 	return false
 }
-

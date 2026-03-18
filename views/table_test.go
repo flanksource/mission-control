@@ -234,6 +234,44 @@ var _ = Describe("ReadOrPopulateViewTable", func() {
 
 			Expect(variables[0].OptionItems).To(ContainElements(expectedItems))
 		})
+
+		It("should resolve external_id to option value when var is not a UUID", func() {
+			variable := api.ViewVariable{
+				Key:   "release",
+				Label: "Release",
+				ValueFrom: &api.ViewVariableValueFrom{
+					Label:  "config.name",
+					Value:  "config.id",
+					Config: types.ResourceSelector{Types: []string{"Helm::Release"}},
+				},
+			}
+
+			// "helm/nginx" is one of NginxHelmRelease's external IDs
+			variables, _, err := populateViewVariables(DefaultContext, []api.ViewVariable{variable}, map[string]string{
+				"release": "helm/nginx",
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(variables[0].Default).To(Equal(dummy.NginxHelmRelease.ID.String()))
+		})
+
+		It("should resolve peg field selector to option value when var contains operators", func() {
+			variable := api.ViewVariable{
+				Key:   "release",
+				Label: "Release",
+				ValueFrom: &api.ViewVariableValueFrom{
+					Label:  "config.name",
+					Value:  "config.id",
+					Config: types.ResourceSelector{Types: []string{"Helm::Release"}},
+				},
+			}
+
+			// peg query matching by name
+			variables, _, err := populateViewVariables(DefaultContext, []api.ViewVariable{variable}, map[string]string{
+				"release": "name=" + lo.FromPtr(dummy.NginxHelmRelease.Name),
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(variables[0].Default).To(Equal(dummy.NginxHelmRelease.ID.String()))
+		})
 	})
 })
 

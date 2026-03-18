@@ -80,6 +80,16 @@ func Render(result *api.ViewResult) clickyAPI.TextList {
 	}
 
 	out = append(out, buildTable(result))
+
+	for _, sr := range result.SectionResults {
+		out = append(out, clickyAPI.Text{Content: sr.Title, Style: "font-semibold"})
+		if sr.Error != "" {
+			out = append(out, clickyAPI.Badge("Error: "+sr.Error, "text-red-700", "bg-red-100"))
+		} else if sr.View != nil {
+			out = append(out, buildTable(sr.View))
+		}
+	}
+
 	return out
 }
 

@@ -14,15 +14,15 @@ import (
 )
 
 type checksCollector struct {
-	ctx           context.Context
-	includeInfo   bool
-	includeHealth bool
-	infoDesc      *prometheus.Desc
-	healthDesc    *prometheus.Desc
-	mutex         sync.Mutex
-	cachedAt      time.Time
-	cachedItems   []checkRow
-	labelKeys     []string
+	ctx            context.Context
+	includeInfo    bool
+	includeHealth  bool
+	infoDesc       *prometheus.Desc
+	healthDesc     *prometheus.Desc
+	mutex          sync.Mutex
+	cachedAt       time.Time
+	cachedItems    []checkRow
+	labelKeys      []string
 	labelLabelKeys []string
 }
 
@@ -38,9 +38,9 @@ type checkRow struct {
 }
 
 const (
-	checksCacheTTLProperty    = "metrics.checks.cache_ttl"
-	checksLabelsProperty      = "metrics.checks.labels"
-	defaultChecksCacheTTL     = 5 * time.Minute
+	checksCacheTTLProperty = "metrics.checks.cache_ttl"
+	checksLabelsProperty   = "metrics.checks.labels"
+	defaultChecksCacheTTL  = 5 * time.Minute
 )
 
 var checkInfoBaseLabels = []string{"id", "agent_id", "canary_id", "name", "type", "namespace"}

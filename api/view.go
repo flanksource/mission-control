@@ -1,8 +1,12 @@
 package api
 
 import (
+	"encoding/json"
+	"sort"
+	"strings"
 	"time"
 
+	"github.com/flanksource/clicky/api"
 	"github.com/flanksource/duty/types"
 	"github.com/flanksource/duty/view"
 	"github.com/google/uuid"
@@ -94,6 +98,195 @@ type ConfigsUIFilters struct {
 	Health     string `json:"health,omitempty"`     // e.g. "-healthy,warning"
 }
 
+type SerializedView struct {
+	SerializedSection `json:",inline"`
+	Namespace         string `json:"namespace,omitempty"`
+	Name              string `json:"name"`
+
+	RefreshStatus   string    `json:"refreshStatus,omitempty"`
+	RefreshError    string    `json:"refreshError,omitempty"`
+	ResponseSource  string    `json:"responseSource,omitempty"`
+	LastRefreshedAt time.Time `json:"lastRefreshedAt"`
+
+	RequestFingerprint string              `json:"requestFingerprint,omitempty"`
+	Section            []SerializedSection `json:"sections,omitempty"`
+}
+
+type SerializedSection struct {
+	Title string           `json:"title,omitempty"`
+	Icon  string           `json:"icon,omitempty"`
+	Data  []map[string]any `json:"data,omitempty"`
+	Body  api.Text         `json:"body,omitempty"`
+	//Variables used to queries in this section
+	Variables map[string]string              `json:"variables,omitempty"`
+	Filters   map[string]ColumnFilterOptions `json:"filters,omitempty"`
+}
+
+type serializedRow struct {
+	cols []string
+	data map[string]any
+}
+
+func (r serializedRow) Columns() []api.ColumnDef {
+	cols := make([]api.ColumnDef, len(r.cols))
+	for i, name := range r.cols {
+		cols[i] = api.ColumnDef{Name: name}
+	}
+	return cols
+}
+
+func (r serializedRow) Row() map[string]any {
+	return r.data
+}
+
+func sectionRows(data []map[string]any) []serializedRow {
+	seen := map[string]struct{}{}
+	var cols []string
+	for _, row := range data {
+		keys := make([]string, 0, len(row))
+		for k := range row {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		for _, k := range keys {
+			if _, ok := seen[k]; !ok {
+				seen[k] = struct{}{}
+				cols = append(cols, k)
+			}
+		}
+	}
+	rows := make([]serializedRow, len(data))
+	for i, d := range data {
+		rows[i] = serializedRow{cols: cols, data: d}
+	}
+	return rows
+}
+
+func (s SerializedSection) Pretty() api.Text {
+	t := api.Text{}
+	if s.Title != "" {
+		t = t.AddText(s.Title, "font-semibold").NewLine()
+	}
+	if !s.Body.IsEmpty() {
+		t = t.Add(s.Body).NewLine()
+	}
+	if len(s.Variables) > 0 {
+		items := make([]api.KeyValuePair, 0, len(s.Variables))
+		for k, v := range s.Variables {
+			items = append(items, api.KeyValue(k, v))
+		}
+		t = t.Add(api.DescriptionList{Items: items})
+	}
+	if len(s.Data) > 0 {
+		t = t.Add(api.NewTableFrom(sectionRows(s.Data)))
+	}
+	return t
+}
+
+func (s SerializedSection) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Title string           `json:"title,omitempty"`
+		Icon  string           `json:"icon,omitempty"`
+		Data  []map[string]any `json:"data,omitempty"`
+		Body  api.Text         `json:"body,omitempty"`
+	}{Title: s.Title, Icon: s.Icon, Data: s.Data, Body: s.Body})
+}
+
+func (s SerializedSection) MarshalYAML() (any, error) {
+	return struct {
+		Title string           `yaml:"title,omitempty"`
+		Icon  string           `yaml:"icon,omitempty"`
+		Data  []map[string]any `yaml:"data,omitempty"`
+		Body  string           `yaml:"body,omitempty"`
+	}{Title: s.Title, Icon: s.Icon, Data: s.Data, Body: s.Body.String()}, nil
+}
+
+func sectionMap(sections []SerializedSection) map[string]SerializedSection {
+	if len(sections) == 0 {
+		return nil
+	}
+	m := make(map[string]SerializedSection, len(sections))
+	for _, s := range sections {
+		m[strings.ToLower(strings.ReplaceAll(s.Title, " ", "_"))] = s
+	}
+	return m
+}
+
+func (v SerializedView) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Title     string           `json:"title,omitempty"`
+		Icon      string           `json:"icon,omitempty"`
+		Data      []map[string]any `json:"data,omitempty"`
+		Body      api.Text         `json:"body,omitempty"`
+		Namespace string           `json:"namespace,omitempty"`
+		Name      string           `json:"name"`
+
+		RefreshStatus   string    `json:"refreshStatus,omitempty"`
+		RefreshError    string    `json:"refreshError,omitempty"`
+		ResponseSource  string    `json:"responseSource,omitempty"`
+		LastRefreshedAt time.Time `json:"lastRefreshedAt"`
+
+		RequestFingerprint string                       `json:"requestFingerprint,omitempty"`
+		Section            map[string]SerializedSection `json:"sections,omitempty"`
+	}{
+		Title:              v.Title,
+		Icon:               v.Icon,
+		Data:               v.Data,
+		Body:               v.Body,
+		Namespace:          v.Namespace,
+		Name:               v.Name,
+		RefreshStatus:      v.RefreshStatus,
+		RefreshError:       v.RefreshError,
+		ResponseSource:     v.ResponseSource,
+		LastRefreshedAt:    v.LastRefreshedAt,
+		RequestFingerprint: v.RequestFingerprint,
+		Section:            sectionMap(v.Section),
+	})
+}
+
+func (v SerializedView) MarshalYAML() (any, error) {
+	return struct {
+		Title     string           `yaml:"title,omitempty"`
+		Icon      string           `yaml:"icon,omitempty"`
+		Data      []map[string]any `yaml:"data,omitempty"`
+		Body      string           `yaml:"body,omitempty"`
+		Namespace string           `yaml:"namespace,omitempty"`
+		Name      string           `yaml:"name"`
+
+		RefreshStatus   string    `yaml:"refreshStatus,omitempty"`
+		RefreshError    string    `yaml:"refreshError,omitempty"`
+		LastRefreshedAt time.Time `yaml:"lastRefreshedAt"`
+
+		Section map[string]SerializedSection `yaml:"sections,omitempty"`
+	}{
+		Title:           v.Title,
+		Icon:            v.Icon,
+		Data:            v.Data,
+		Body:            v.Body.String(),
+		Namespace:       v.Namespace,
+		Name:            v.Name,
+		RefreshStatus:   v.RefreshStatus,
+		RefreshError:    v.RefreshError,
+		LastRefreshedAt: v.LastRefreshedAt,
+		Section:         sectionMap(v.Section),
+	}, nil
+}
+
+func (v SerializedView) Pretty() api.Text {
+	title := v.Name
+	if v.Namespace != "" {
+		title = v.Namespace + "/" + v.Name
+	}
+	t := api.Text{Content: title, Style: "text-xl font-semibold"}.
+		NewLine().
+		Add(v.SerializedSection.Pretty()).
+		NewLine()
+	for _, sub := range v.Section {
+		t = t.Add(sub.Pretty()).NewLine()
+	}
+	return t
+}
+
 // ViewResult is the result of a view query
 type ViewResult struct {
 	Namespace string `json:"namespace,omitempty"`
@@ -138,11 +331,65 @@ type ViewResult struct {
 type ViewSectionResult struct {
 	Title string      `json:"title"`
 	Icon  string      `json:"icon,omitempty"`
+	Error string      `json:"error,omitempty"`
 	View  *ViewResult `json:"view,omitempty"`
 }
 
 type MultiViewResult struct {
 	Views []ViewResult `json:"views"`
+}
+
+func (r *ViewResult) Serialized() SerializedView {
+	sv := SerializedView{
+		Name:      r.Name,
+		Namespace: r.Namespace,
+		SerializedSection: SerializedSection{
+			Title: r.Title,
+			Icon:  r.Icon,
+			Data:  r.rowsToData(),
+		},
+		RefreshStatus:   r.RefreshStatus,
+		RefreshError:    r.RefreshError,
+		LastRefreshedAt: r.LastRefreshedAt,
+	}
+	for _, sr := range r.SectionResults {
+		if sr.View != nil {
+			sub := sr.View.Serialized()
+			sv.Section = append(sv.Section, SerializedSection{
+				Title: sr.Title,
+				Icon:  sr.Icon,
+				Data:  sub.SerializedSection.Data,
+				Body:  sub.SerializedSection.Body,
+			})
+		} else if sr.Error != "" {
+			sv.Section = append(sv.Section, SerializedSection{
+				Title: sr.Title,
+				Icon:  sr.Icon,
+				Body:  api.Text{}.Add(api.Badge("Error: "+sr.Error, "text-red-700", "bg-red-100")),
+			})
+		}
+	}
+	return sv
+}
+
+func (r *ViewResult) rowsToData() []map[string]any {
+	if len(r.Rows) == 0 {
+		return nil
+	}
+	data := make([]map[string]any, len(r.Rows))
+	for i, row := range r.Rows {
+		m := make(map[string]any, len(r.Columns))
+		for j, col := range r.Columns {
+			if col.Hidden || col.Type == "row_attributes" || col.Type == "grants" {
+				continue
+			}
+			if j < len(row) {
+				m[col.Name] = row[j]
+			}
+		}
+		data[i] = m
+	}
+	return data
 }
 
 const (

@@ -40,8 +40,6 @@ shell-tmp
 .todos/
 hack/
 .db/
-**/.db/
-out.*
-*.temp.html
 .facet/
 specs/
+.htpasswd
