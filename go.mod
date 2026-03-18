@@ -7,7 +7,7 @@ require (
 	github.com/flanksource/clicky v1.19.0
 	github.com/flanksource/commons v1.48.2
 	github.com/flanksource/duty v1.0.1227
-	github.com/flanksource/gomplate/v3 v3.24.74
+	github.com/flanksource/gomplate/v3 v3.24.75
 	github.com/flanksource/kopper v1.0.20
 )
 
@@ -181,7 +181,7 @@ require (
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/flanksource/deps v1.0.24 // indirect
-	github.com/flanksource/is-healthy v1.0.85 // indirect
+	github.com/flanksource/is-healthy v1.0.86 // indirect
 	github.com/flanksource/kubectl-neat v1.0.4 // indirect
 	github.com/flanksource/sandbox-runtime v1.0.1 // indirect
 	github.com/fluxcd/gitkit v0.6.0 // indirect
