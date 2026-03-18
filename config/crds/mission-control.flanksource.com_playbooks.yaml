@@ -2279,6 +2279,14 @@ spec:
                             mapping:
                               description: Map labels to fields
                               properties:
+                                dedupBy:
+                                  items:
+                                    type: string
+                                  type: array
+                                groupBy:
+                                  items:
+                                    type: string
+                                  type: array
                                 host:
                                   items:
                                     type: string
@@ -2316,6 +2324,11 @@ spec:
                                 description: MatchExpression uses MatchItems
                                 type: string
                               type: array
+                            parse:
+                              description: |-
+                                Parse specifies the log format to parse.
+                                Supported: "logfmt", "klogfmt", "json", "syslog", "autodetect"
+                              type: string
                             query:
                               description: The query to perform on the log group.
                               type: string
@@ -2816,6 +2829,14 @@ spec:
                             mapping:
                               description: Map labels to fields
                               properties:
+                                dedupBy:
+                                  items:
+                                    type: string
+                                  type: array
+                                groupBy:
+                                  items:
+                                    type: string
+                                  type: array
                                 host:
                                   items:
                                     type: string
@@ -2856,6 +2877,11 @@ spec:
                             name:
                               type: string
                             namespace:
+                              type: string
+                            parse:
+                              description: |-
+                                Parse specifies the log format to parse.
+                                Supported: "logfmt", "klogfmt", "json", "syslog", "autodetect"
                               type: string
                             pods:
                               description: |-
@@ -2975,6 +3001,14 @@ spec:
                             mapping:
                               description: Map labels to fields
                               properties:
+                                dedupBy:
+                                  items:
+                                    type: string
+                                  type: array
+                                groupBy:
+                                  items:
+                                    type: string
+                                  type: array
                                 host:
                                   items:
                                     type: string
@@ -3012,6 +3046,11 @@ spec:
                                 description: MatchExpression uses MatchItems
                                 type: string
                               type: array
+                            parse:
+                              description: |-
+                                Parse specifies the log format to parse.
+                                Supported: "logfmt", "klogfmt", "json", "syslog", "autodetect"
+                              type: string
                             password:
                               properties:
                                 name:
@@ -3150,6 +3189,14 @@ spec:
                             mapping:
                               description: Map labels to fields
                               properties:
+                                dedupBy:
+                                  items:
+                                    type: string
+                                  type: array
+                                groupBy:
+                                  items:
+                                    type: string
+                                  type: array
                                 host:
                                   items:
                                     type: string
@@ -3187,6 +3234,11 @@ spec:
                                 description: MatchExpression uses MatchItems
                                 type: string
                               type: array
+                            parse:
+                              description: |-
+                                Parse specifies the log format to parse.
+                                Supported: "logfmt", "klogfmt", "json", "syslog", "autodetect"
+                              type: string
                             password:
                               properties:
                                 name:

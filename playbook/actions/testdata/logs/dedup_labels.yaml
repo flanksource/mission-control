@@ -1,0 +1,20 @@
+postProcess:
+  dedupe:
+    fields: ["label.namespace"]
+
+input:
+  - message: "new request"
+    labels:
+      namespace: "monitoring"
+    firstObserved: "2025-05-08T11:40:00Z"
+    count: 1
+  - message: "user saved"
+    labels:
+      namespace: "monitoring"
+    firstObserved: "2025-05-08T11:50:00Z"
+    count: 1
+
+expectations:
+  - "results.size() == 1"
+  - "results[0].count == 2"
+  - "results[0].message == 'user saved'"

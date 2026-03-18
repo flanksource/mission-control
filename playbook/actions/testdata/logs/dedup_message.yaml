@@ -1,0 +1,24 @@
+postProcess:
+  dedupe:
+    fields: [message]
+
+input:
+  - message: "new request"
+    firstObserved: "2025-05-08T11:40:00Z"
+    count: 1
+  - message: "user saved"
+    firstObserved: "2025-05-08T11:50:00Z"
+    count: 1
+  - message: "new request"
+    firstObserved: "2025-05-08T11:55:00Z"
+    count: 1
+  - message: "new request"
+    firstObserved: "2025-05-08T11:59:00Z"
+    count: 1
+
+expectations:
+  - "results.size() == 2"
+  - "results[0].message == 'new request'"
+  - "results[0].count == 3"
+  - "results[1].message == 'user saved'"
+  - "results[1].count == 1"
