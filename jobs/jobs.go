@@ -17,7 +17,6 @@ import (
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/application"
-	"github.com/flanksource/incident-commander/incidents"
 	"github.com/flanksource/incident-commander/notification"
 	"github.com/flanksource/incident-commander/playbook"
 	"github.com/flanksource/incident-commander/shorturl"
@@ -176,23 +175,5 @@ func Start(ctx context.Context, mcpServer *server.MCPServer) {
 		logger.Errorf("Failed to schedule job for cleaning up expired tokens: %v", err)
 	}
 
-	startIncidentsJobs(ctx)
-
 	FuncScheduler.Start()
-}
-
-func startIncidentsJobs(ctx context.Context) {
-	if disabled := ctx.Properties()[api.PropertyIncidentsDisabled]; disabled == "true" {
-		logger.Debugf("Skipping incidents jobs")
-		return
-	}
-
-	for _, job := range incidents.IncidentJobs {
-		j := job
-		j.Context = ctx
-		if err := j.AddToScheduler(FuncScheduler); err != nil {
-			logger.Errorf("Failed to schedule job %s: %v", j, err)
-		}
-	}
-
 }

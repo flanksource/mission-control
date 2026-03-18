@@ -27,7 +27,6 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/echo"
 	"github.com/flanksource/incident-commander/events"
-	"github.com/flanksource/incident-commander/incidents/responder"
 	"github.com/flanksource/incident-commander/jobs"
 	"github.com/flanksource/incident-commander/mail"
 	"github.com/flanksource/incident-commander/mcp"
@@ -297,7 +296,6 @@ func tableUpdatesHandler(ctx context.Context) {
 			tgOperation, id := tableActivityPayload(v)
 
 			if tgOperation != TGOPInsert {
-				responder.PurgeCache(id)
 				teams.PurgeCache(id)
 			}
 

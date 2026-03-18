@@ -60,7 +60,6 @@ func findUnexportedFields(t reflect.Type, prefix string, visited map[reflect.Typ
 		return nil
 	}
 
-
 	var result []string
 	for i := range t.NumField() {
 		field := t.Field(i)

@@ -36,7 +36,6 @@ import (
 	"github.com/flanksource/incident-commander/vars"
 
 	// register event handlers
-	_ "github.com/flanksource/incident-commander/incidents/responder"
 	_ "github.com/flanksource/incident-commander/notification"
 )
 
@@ -79,10 +78,11 @@ func startContainers() {
 			Ports: map[string]string{"3100": "3100"},
 			Reuse: true,
 			HealthCheck: &container.HealthCheck{
-				Cmd:      "wget --no-verbose --tries=1 --spider http://localhost:3100/ready || exit 1",
-				Interval: 10 * time.Second,
-				Timeout:  5 * time.Second,
-				Retries:  3,
+				Cmd:         "wget --no-verbose --tries=1 --spider http://localhost:3100/ready || exit 1",
+				Interval:    10 * time.Second,
+				Timeout:     10 * time.Second,
+				Retries:     5,
+				StartPeriod: 15 * time.Second,
 			},
 		})
 		if err == nil {
@@ -106,10 +106,11 @@ func startContainers() {
 			},
 			Reuse: true,
 			HealthCheck: &container.HealthCheck{
-				Cmd:      "curl -sf http://localhost:9200/_cluster/health || exit 1",
-				Interval: 10 * time.Second,
-				Timeout:  5 * time.Second,
-				Retries:  3,
+				Cmd:         "curl -sf http://localhost:9200/_cluster/health || exit 1",
+				Interval:    10 * time.Second,
+				Timeout:     10 * time.Second,
+				Retries:     5,
+				StartPeriod: 15 * time.Second,
 			},
 		})
 		if err == nil {
@@ -127,10 +128,11 @@ func startContainers() {
 			Name:  "e2e-facet",
 			Ports: map[string]string{"3010": "0"},
 			HealthCheck: &container.HealthCheck{
-				Cmd:      "curl -sf http://localhost:3010/healthz || exit 1",
-				Interval: 10 * time.Second,
-				Timeout:  5 * time.Second,
-				Retries:  3,
+				Cmd:         "curl -sf http://localhost:3010/healthz || exit 1",
+				Interval:    10 * time.Second,
+				Timeout:     10 * time.Second,
+				Retries:     5,
+				StartPeriod: 15 * time.Second,
 			},
 			Reuse: true,
 		})

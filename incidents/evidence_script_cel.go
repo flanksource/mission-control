@@ -69,11 +69,10 @@ func evaluate(evidence db.EvidenceScriptInput) (string, error) {
 	}
 
 	out, _, err := (*prg).Eval(map[string]any{
-		"analysis":  evidence.ConfigAnalysis.AsMap(),
-		"check":     evidence.Check.AsMap(),
-		"config":    evidence.ConfigItem.Config,
-		"component": evidence.Component.AsMap(),
-		"incident":  evidence.Hypothesis.Incident.AsMap(),
+		"analysis": evidence.ConfigAnalysis.AsMap(),
+		"check":    evidence.Check.AsMap(),
+		"config":   evidence.ConfigItem.Config,
+		"incident": evidence.Hypothesis.Incident.AsMap(),
 	})
 	if err != nil {
 		return "", err
@@ -92,7 +91,6 @@ func getOrCompileCELProgram(evidence db.EvidenceScriptInput) (*cel.Program, erro
 		cel.Variable("analysis", cel.AnyType),
 		cel.Variable("check", cel.AnyType),
 		cel.Variable("config", cel.AnyType),
-		cel.Variable("component", cel.AnyType),
 		cel.Variable("incident", cel.AnyType),
 	)
 	if err != nil {

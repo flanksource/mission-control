@@ -13,7 +13,6 @@ import (
 	"github.com/flanksource/duty/tests/setup"
 
 	// register event handlers
-	_ "github.com/flanksource/incident-commander/incidents/responder"
 	_ "github.com/flanksource/incident-commander/notification"
 )
 
