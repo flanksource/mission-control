@@ -55,9 +55,14 @@ var skipAuthPaths = []string{
 	"/kratos/",
 	"/canary/webhook/",
 	"/playbook/webhook/", // Playbook webhooks handle the authentication themselves
+	"/auth/basic/",
 }
 
 func Middleware(ctx context.Context, e *echo.Echo) error {
+	if vars.AuthMode == "" && HtpasswdFile != "" {
+		logger.Warnf("Htpasswd file is provided but auth mode is not set to 'basic'. Falling back to basic auth.")
+		vars.AuthMode = Basic
+	}
 	if vars.AuthMode == "" {
 		logger.Errorf("authentication is disabled")
 		return nil

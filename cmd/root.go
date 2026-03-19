@@ -68,7 +68,6 @@ var (
 
 	// disableKubernetes is used to run mission-control on a non-operator mode.
 	disableKubernetes bool
-	disableOperators  bool
 
 	// Email defaults - used by SetFallbackSMTP in PreRun
 	emailFromAddress string
@@ -82,7 +81,7 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.IntVar(&devGuiPort, "devGuiPort", 3004, "Port used by a local npm server in development mode")
 	flags.IntVar(&metricsPort, "metricsPort", 0, "Dedicated unauthenticated metrics port (0 disables). /metrics on main server unchanged")
 	flags.BoolVar(&dev, "dev", false, "Run in development mode")
-	flags.BoolVar(&disableOperators, "disable-operators", false, "Disable Kubernetes Operators")
+	flags.BoolVar(&api.DisableOperators, "disable-operators", false, "Disable Kubernetes Operators")
 	flags.StringVar(&api.FrontendURL, "frontend-url", "http://localhost:3000", "URL of the frontend")
 	flags.StringVar(&api.PublicURL, "public-endpoint", "http://localhost:8080", "Public endpoint this instance is exposed under")
 	flags.StringVar(&api.ApmHubPath, "apm-hub", "http://apm-hub:8080", "APM Hub URL")

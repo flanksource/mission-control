@@ -223,7 +223,7 @@ var Serve = &cobra.Command{
 
 		go tableUpdatesHandler(ctx)
 
-		if !disableKubernetes && !disableOperators {
+		if !disableKubernetes && !api.DisableOperators {
 			go launchKopper(ctx)
 		}
 
