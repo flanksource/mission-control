@@ -239,6 +239,10 @@ type PlaybookSpec struct {
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +kubebuilder:validation:Type=object
 	UI json.RawMessage `json:"ui,omitempty" yaml:"ui,omitempty"`
+
+	// MCP defines metadata for MCP tool registration, controlling how
+	// this playbook appears to LLM clients (Claude, Gemini, Codex).
+	MCP MCPMetadata `json:"mcp,omitempty" yaml:"mcp,omitempty"`
 }
 
 func (p *PlaybookSpec) GetTimeout(ctx context.Context) (time.Duration, error) {
