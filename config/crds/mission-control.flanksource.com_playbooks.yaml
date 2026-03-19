@@ -4152,7 +4152,7 @@ spec:
                       type: object
                       x-kubernetes-validations:
                       - message: view and configs are mutually exclusive
-                        rule: '!(has(self.view) && self.view != '''' && has(self.configs))'
+                        rule: '!(has(self.view) && self.view != ” && has(self.configs))'
                     retry:
                       description: Retry specifies the retry policy for the action.
                       properties:

@@ -469,6 +469,16 @@ spec:
                         unit:
                           type: string
                       type: object
+                    heatmap:
+                      description: Configuration for heatmap visualization
+                      properties:
+                        mode:
+                          description: Visual style for heatmap rendering.
+                          enum:
+                          - calendar
+                          - compact
+                          type: string
+                      type: object
                     name:
                       description: Name of the panel
                       type: string
@@ -543,6 +553,7 @@ spec:
                       - bargauge
                       - properties
                       - timeseries
+                      - heatmap
                       type: string
                   required:
                   - name
@@ -562,6 +573,8 @@ spec:
                     rule: 'self.type!=''bargauge'' ? !has(self.bargauge) : true'
                   - message: timeseries config not allowed for this type
                     rule: 'self.type!=''timeseries'' ? !has(self.timeseries) : true'
+                  - message: heatmap config not allowed for this type
+                    rule: 'self.type!=''heatmap'' ? !has(self.heatmap) : true'
                 type: array
               queries:
                 additionalProperties:
