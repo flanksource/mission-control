@@ -634,7 +634,7 @@ type FacetOptions struct {
 	TimestampURL string           `json:"timestampUrl,omitempty" yaml:"timestampUrl,omitempty" template:"true"`
 }
 
-// +kubebuilder:validation:XValidation:rule="!(has(self.view) && self.view != ” && has(self.configs))",message="view and configs are mutually exclusive"
+// +kubebuilder:validation:XValidation:rule="!(has(self.view) && self.view != \"\" && has(self.configs))",message="view and configs are mutually exclusive"
 type ReportAction struct {
 	// Reference an existing View by namespace/name or just name
 	View string `json:"view,omitempty" yaml:"view,omitempty" template:"true"`
