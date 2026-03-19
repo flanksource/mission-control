@@ -385,6 +385,41 @@ spec:
                 description: Mapping defines how to map query results to view columns
                 type: object
                 x-kubernetes-preserve-unknown-fields: true
+              mcp:
+                description: |-
+                  MCP defines metadata for MCP tool registration, controlling how
+                  this view appears to LLM clients (Claude, Gemini, Codex).
+                properties:
+                  description:
+                    description: Description provides additional context for LLMs
+                      beyond the spec description.
+                    type: string
+                  destructiveHint:
+                    description: DestructiveHint indicates the tool may perform destructive
+                      operations.
+                    type: boolean
+                  idempotentHint:
+                    description: IdempotentHint indicates repeated calls with same
+                      args have no additional effect.
+                    type: boolean
+                  openWorldHint:
+                    description: OpenWorldHint indicates the tool interacts with external
+                      entities.
+                    type: boolean
+                  readOnlyHint:
+                    description: ReadOnlyHint indicates the tool does not modify any
+                      state.
+                    type: boolean
+                  tags:
+                    description: Tags are keywords for categorizing the tool for LLM
+                      discovery.
+                    items:
+                      type: string
+                    type: array
+                  title:
+                    description: Title overrides the default tool title shown to LLMs.
+                    type: string
+                type: object
               merge:
                 description: Merge defines how to merge/join data from multiple queries
                 type: string

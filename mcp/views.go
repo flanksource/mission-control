@@ -205,15 +205,55 @@ func viewRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.Call
 }
 
 func viewListToolHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	type viewInfo struct {
+		Name        string   `json:"name"`
+		Title       string   `json:"title,omitempty"`
+		Namespace   string   `json:"namespace,omitempty"`
+		Description string   `json:"description,omitempty"`
+		Icon        string   `json:"icon,omitempty"`
+		Tags        []string `json:"tags,omitempty"`
+	}
+
+	ctx, err := getDutyCtx(goctx)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	var dbViews []models.View
+	err = auth.WithRLS(ctx, func(rlsCtx context.Context) error {
+		dbViews, err = gorm.G[models.View](rlsCtx.DB()).Where("deleted_at IS NULL").Find(rlsCtx)
+		return err
+	})
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	var response []viewInfo
 	currentViewToolsMu.RLock()
-	keys := slices.Collect(maps.Keys(currentViewTools))
+	for _, v := range dbViews {
+		toolName := generateViewToolName(v)
+		if _, ok := currentViewTools[toolName]; !ok {
+			continue
+		}
+
+		info := viewInfo{
+			Name:      toolName,
+			Namespace: v.Namespace,
+		}
+
+		var spec v1.ViewSpec
+		if err := json.Unmarshal(v.Spec, &spec); err == nil {
+			info.Title = spec.Display.Title
+			info.Description = spec.Description
+			info.Icon = spec.Display.Icon
+			info.Tags = spec.MCP.Tags
+		}
+
+		response = append(response, info)
+	}
 	currentViewToolsMu.RUnlock()
 
-	jsonData, err := json.Marshal(keys)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), err
-	}
-	return mcp.NewToolResultText(string(jsonData)), nil
+	return structToMCPResponse(req, response), nil
 }
 
 func viewResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
@@ -323,16 +363,26 @@ func syncViewsAsTools(ctx context.Context, s *server.MCPServer) error {
 
 		toolName := generateViewToolName(view)
 		columnSummary := strings.TrimPrefix(columnDesc, "Select columns to include in the result. ")
-		description := fmt.Sprintf(
+		description := lo.CoalesceOrEmpty(spec.MCP.Description, spec.Description)
+		if len(spec.MCP.Tags) > 0 {
+			description = fmt.Sprintf("%s [tags: %s]", description, strings.Join(spec.MCP.Tags, ", "))
+		}
+		description = fmt.Sprintf(
 			`Execute view %s [%s/%s]. %s %s.
 Panels are excluded unless withPanels=true. .
 To retrieve table rows use withRows=true; select/page/limit apply only when withRows is enabled.
 Use the select array to request only the columns you truly need to minimize response tokens.
 
 Without withRows/withPanels set, nothing is returned`,
-			spec.Display.Title, view.Namespace, view.Name, spec.Description, columnSummary,
+			spec.Display.Title, view.Namespace, view.Name, description, columnSummary,
 		)
-		s.AddTool(mcp.NewToolWithRawSchema(toolName, description, rj), viewRunHandler)
+		t := mcp.NewToolWithRawSchema(toolName, description, rj)
+		t.Annotations.Title = lo.CoalesceOrEmpty(spec.MCP.Title, spec.Display.Title)
+		t.Annotations.ReadOnlyHint = spec.MCP.ReadOnlyHint
+		t.Annotations.DestructiveHint = spec.MCP.DestructiveHint
+		t.Annotations.IdempotentHint = spec.MCP.IdempotentHint
+		t.Annotations.OpenWorldHint = spec.MCP.OpenWorldHint
+		s.AddTool(t, viewRunHandler)
 		newViewTools = append(newViewTools, toolName)
 
 		currentViewToolsMu.Lock()

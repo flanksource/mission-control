@@ -185,8 +185,14 @@ func playbookRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.
 
 func playbookListToolHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	type playbookInfo struct {
-		ID   string `json:"id"`
-		Name string `json:"name"`
+		ID          string   `json:"id"`
+		Name        string   `json:"name"`
+		Title       string   `json:"title,omitempty"`
+		Namespace   string   `json:"namespace,omitempty"`
+		Description string   `json:"description,omitempty"`
+		Category    string   `json:"category,omitempty"`
+		Icon        string   `json:"icon,omitempty"`
+		Tags        []string `json:"tags,omitempty"`
 	}
 
 	ctx, err := getDutyCtx(goctx)
@@ -197,7 +203,7 @@ func playbookListToolHandler(goctx gocontext.Context, req mcp.CallToolRequest) (
 	var playbooks []models.Playbook
 	err = auth.WithRLS(ctx, func(txCtx context.Context) error {
 		var err error
-		playbooks, err = gorm.G[models.Playbook](txCtx.DB()).Select("id", "name", "title", "namespace", "category").Where("deleted_at IS NULL").Find(txCtx)
+		playbooks, err = gorm.G[models.Playbook](txCtx.DB()).Select("id", "name", "title", "namespace", "description", "category", "icon", "spec").Where("deleted_at IS NULL").Find(txCtx)
 		return err
 	})
 	if err != nil {
@@ -205,10 +211,22 @@ func playbookListToolHandler(goctx gocontext.Context, req mcp.CallToolRequest) (
 	}
 
 	response := lo.Map(playbooks, func(pb models.Playbook, _ int) playbookInfo {
-		return playbookInfo{
-			ID:   pb.ID.String(),
-			Name: generatePlaybookToolName(pb),
+		info := playbookInfo{
+			ID:          pb.ID.String(),
+			Name:        generatePlaybookToolName(pb),
+			Title:       pb.Title,
+			Namespace:   pb.Namespace,
+			Description: pb.Description,
+			Category:    pb.Category,
+			Icon:        pb.Icon,
 		}
+
+		var spec v1.PlaybookSpec
+		if err := json.Unmarshal(pb.Spec, &spec); err == nil && len(spec.MCP.Tags) > 0 {
+			info.Tags = spec.MCP.Tags
+		}
+
+		return info
 	})
 
 	return structToMCPResponse(req, response), nil
@@ -350,8 +368,20 @@ func getPlaybooksAsTools(playbooks []models.Playbook) ([]mcp.Tool, error) {
 		toolName := generatePlaybookToolName(pb)
 		playbookToolNameToID.Store(toolName, pb.ID.String())
 
-		t := mcp.NewToolWithRawSchema(toolName, pb.Description, rj)
-		t.Annotations.Title = pb.Name
+		description := lo.CoalesceOrEmpty(spec.MCP.Description, pb.Description)
+		if pb.Category != "" {
+			description = fmt.Sprintf("[category: %s] %s", pb.Category, description)
+		}
+		if len(spec.MCP.Tags) > 0 {
+			description = fmt.Sprintf("%s [tags: %s]", description, strings.Join(spec.MCP.Tags, ", "))
+		}
+
+		t := mcp.NewToolWithRawSchema(toolName, description, rj)
+		t.Annotations.Title = lo.CoalesceOrEmpty(spec.MCP.Title, pb.Name)
+		t.Annotations.ReadOnlyHint = spec.MCP.ReadOnlyHint
+		t.Annotations.DestructiveHint = spec.MCP.DestructiveHint
+		t.Annotations.IdempotentHint = spec.MCP.IdempotentHint
+		t.Annotations.OpenWorldHint = spec.MCP.OpenWorldHint
 		newPlaybookTools = append(newPlaybookTools, t)
 	}
 
