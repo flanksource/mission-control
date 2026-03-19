@@ -39,7 +39,7 @@ shell-tmp
 .llm-jail/
 .todos/
 hack/
+.htpasswd
+specs/
 .db/
 .facet/
-specs/
-.htpasswd

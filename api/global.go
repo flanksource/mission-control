@@ -24,6 +24,8 @@ var (
 
 	// DefaultLLMConnection is the connection that's used as the default LLM provider.
 	DefaultLLMConnection string
+
+	DisableOperators bool
 )
 
 const (

@@ -1,14 +1,17 @@
 package auth
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/flanksource/commons/logger"
+	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/golang-jwt/jwt/v4"
 	"github.com/labstack/echo/v4"
-	"github.com/labstack/echo/v4/middleware"
 	"github.com/tg123/go-htpasswd"
 )
 
@@ -16,38 +19,176 @@ var HtpasswdFile string
 
 var checker *htpasswd.File
 
+const basicAuthCookieName = "authorization"
+
 func UseBasic(e *echo.Echo) {
+	logger.Infof("Using basic authentication with htpasswd file: %s", HtpasswdFile)
 	var err error
 	checker, err = htpasswd.New(HtpasswdFile, htpasswd.DefaultSystems, nil)
 	if err != nil {
 		panic(err)
 	}
 
-	e.Use(middleware.BasicAuthWithConfig(middleware.BasicAuthConfig{
-		Skipper: canSkipAuth,
-		Realm:   "Mission Control",
-		Validator: func(user, pass string, c echo.Context) (bool, error) {
-			if !checker.Match(user, pass) {
-				return false, nil
+	e.POST("/auth/login", BasicLogin)
+
+	e.Use(basicAuthMiddleware)
+}
+
+func authenticateFromCookie(c echo.Context) bool {
+	cookie, err := c.Request().Cookie(basicAuthCookieName)
+	if err != nil || cookie.Value == "" {
+		return false
+	}
+
+	config := api.DefaultConfig
+	token, err := jwt.Parse(cookie.Value, func(token *jwt.Token) (any, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
+		return []byte(config.Postgrest.JWTSecret), nil
+	})
+	if err != nil || !token.Valid {
+		return false
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		return false
+	}
+
+	userID, ok := claims["id"].(string)
+	if !ok || userID == "" {
+		return false
+	}
+
+	ctx := c.Request().Context().(context.Context)
+	var person models.Person
+	if err := ctx.DB().Where("id = ?", userID).First(&person).Error; err != nil {
+		return false
+	}
+
+	if err := InjectToken(ctx, c, &person, ""); err != nil {
+		return false
+	}
+
+	ctx = ctx.WithUser(&person)
+	c.SetRequest(c.Request().WithContext(ctx))
+	return true
+}
+
+func validateBasicAuth(c echo.Context, user, pass string) (bool, error) {
+	logger.Tracef("authenticating user %s:%s via htpasswd", user, logger.PrintableSecret(pass))
+	if !checker.Match(user, pass) {
+		return false, nil
+	}
+
+	ctx := c.Request().Context().(context.Context)
+	person, err := lookupPerson(ctx, user)
+	if err != nil {
+		return false, nil
+	}
+
+	if err := InjectToken(ctx, c, person, ""); err != nil {
+		return false, err
+	}
+
+	ctx = ctx.WithUser(person)
+	c.SetRequest(c.Request().WithContext(ctx))
+	return true, nil
+}
+
+func basicAuthMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		if canSkipAuth(c) || authenticateFromCookie(c) {
+			return next(c)
+		}
+
+		user, pass, ok := c.Request().BasicAuth()
+		if !ok {
+			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		}
+
+		if valid, err := validateBasicAuth(c, user, pass); err != nil {
+			return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal error"})
+		} else if !valid {
+			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid credentials"})
+		}
+
+		return next(c)
+	}
+}
+
+func lookupPerson(ctx context.Context, user string) (*models.Person, error) {
+	user = strings.ToLower(user)
+	var person models.Person
+	if err := ctx.DB().Where("LOWER(name) = ? or LOWER(email) = ?", user, user).First(&person).Error; err != nil {
+		logger.Warnf("user authenticated via htpasswd, but not found in the db: %s", user)
+		return nil, err
+	}
+	return &person, nil
+}
+
+type basicLoginRequest struct {
+	Username string `json:"username" form:"username"`
+	Password string `json:"password" form:"password"`
+}
+
+func BasicLogin(c echo.Context) error {
+	ctx := c.Request().Context().(context.Context)
+
+	username, password, ok := extractBasicLoginCredentials(c)
+	if !ok {
+		return c.JSON(http.StatusBadRequest, map[string]string{"error": "credentials required"})
+	}
+
+	if !checker.Match(username, password) {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "invalid credentials"})
+	}
+
+	person, err := lookupPerson(ctx, username)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "user not found in database"})
+	}
+
+	token, err := GetOrCreateJWTToken(ctx, person, "")
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, map[string]string{"error": "failed to generate token"})
+	}
+
+	c.SetCookie(&http.Cookie{
+		Name:     basicAuthCookieName,
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteStrictMode,
+	})
+
+	AddLoginContext(c, person)
+	return c.JSON(http.StatusOK, map[string]string{"message": "logged in"})
+}
+
+func extractBasicLoginCredentials(c echo.Context) (string, string, bool) {
+	if user, pass, ok := c.Request().BasicAuth(); ok {
+		return user, pass, true
+	}
+
+	contentType := c.Request().Header.Get("Content-Type")
+	if strings.Contains(contentType, "application/json") {
+		var req basicLoginRequest
+		if err := json.NewDecoder(c.Request().Body).Decode(&req); err == nil && req.Username != "" && req.Password != "" {
+			return req.Username, req.Password, true
+		}
+	}
+
+	if strings.Contains(contentType, "application/x-www-form-urlencoded") {
+		if err := c.Request().ParseForm(); err == nil {
+			user := c.Request().FormValue("username")
+			pass := c.Request().FormValue("password")
+			if user != "" && pass != "" {
+				return user, pass, true
 			}
+		}
+	}
 
-			ctx := c.Request().Context().(context.Context)
-			user = strings.ToLower(user)
-			var person models.Person
-			if err := ctx.DB().Where("LOWER(name) = ? or LOWER(email) = ?", user, user).First(&person).Error; err != nil {
-				logger.Warnf("user authenticated via htpasswd, but not found in the db: %s", user)
-				return false, c.String(http.StatusUnauthorized, "User not found")
-			}
-
-			if err := InjectToken(ctx, c, &person, ""); err != nil {
-				return false, err
-			}
-
-			ctx = ctx.WithUser(&person)
-
-			c.SetRequest(c.Request().WithContext(ctx))
-
-			return true, nil
-		},
-	}))
+	return "", "", false
 }

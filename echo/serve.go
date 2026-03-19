@@ -43,7 +43,6 @@ import (
 	mcMiddleware "github.com/flanksource/incident-commander/middleware"
 	"github.com/flanksource/incident-commander/rbac"
 	"github.com/flanksource/incident-commander/utils"
-	"github.com/flanksource/incident-commander/vars"
 )
 
 const (
@@ -167,10 +166,8 @@ func New(ctx context.Context) *echov4.Echo {
 		})
 	}
 
-	if vars.AuthMode != "" {
-		if err := auth.Middleware(ctx, e); err != nil {
-			shutdown.ShutdownAndExit(1, fmt.Sprintf("error setting up auth middleware: %v", err))
-		}
+	if err := auth.Middleware(ctx, e); err != nil {
+		shutdown.ShutdownAndExit(1, fmt.Sprintf("error setting up auth middleware: %v", err))
 	}
 
 	registerCanaryEndpoints(ctx, e)
