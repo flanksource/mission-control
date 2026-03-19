@@ -18,11 +18,77 @@ import (
 	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/view"
 
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/report"
 )
+
+type facetViewSectionResult struct {
+	Title string            `json:"title"`
+	Icon  string            `json:"icon,omitempty"`
+	Error string            `json:"error,omitempty"`
+	View  *facetViewPayload `json:"view,omitempty"`
+}
+
+// facetViewPayload is used only for facet-html/facet-pdf rendering.
+// api.ViewResult keeps Rows as json:"-" for regular API responses, but the facet
+// report TSX reads table data from `rows`, so we inject Rows here without changing
+// the public API shape. SectionResults is also wrapped so nested viewRef tables keep rows.
+type facetViewPayload struct {
+	*api.ViewResult
+	Rows           []view.Row               `json:"rows,omitempty"`
+	SectionResults []facetViewSectionResult `json:"sectionResults,omitempty"`
+}
+
+type facetMultiViewPayload struct {
+	Views []facetViewPayload `json:"views"`
+}
+
+func newFacetViewPayload(result *api.ViewResult) *facetViewPayload {
+	if result == nil {
+		return nil
+	}
+
+	payload := &facetViewPayload{
+		ViewResult: result,
+		Rows:       result.Rows,
+	}
+
+	if len(result.SectionResults) > 0 {
+		payload.SectionResults = make([]facetViewSectionResult, 0, len(result.SectionResults))
+		for _, sr := range result.SectionResults {
+			payload.SectionResults = append(payload.SectionResults, facetViewSectionResult{
+				Title: sr.Title,
+				Icon:  sr.Icon,
+				Error: sr.Error,
+				View:  newFacetViewPayload(sr.View),
+			})
+		}
+	}
+
+	return payload
+}
+
+func newFacetMultiViewPayload(result *api.MultiViewResult) *facetMultiViewPayload {
+	if result == nil {
+		return nil
+	}
+
+	payload := &facetMultiViewPayload{
+		Views: make([]facetViewPayload, 0, len(result.Views)),
+	}
+
+	for i := range result.Views {
+		viewPayload := newFacetViewPayload(&result.Views[i])
+		if viewPayload != nil {
+			payload.Views = append(payload.Views, *viewPayload)
+		}
+	}
+
+	return payload
+}
 
 func RenderFacetHTML(ctx context.Context, result *api.ViewResult, opts *v1.FacetOptions) ([]byte, error) {
 	return renderViewWithFacet(ctx, result, "html", opts)
@@ -33,11 +99,11 @@ func RenderFacetPDF(ctx context.Context, result *api.ViewResult, opts *v1.FacetO
 }
 
 func RenderMultiFacetHTML(ctx context.Context, multi *api.MultiViewResult, opts *v1.FacetOptions) ([]byte, error) {
-	return renderFacetWithData(ctx, multi, "html", opts)
+	return renderFacetWithData(ctx, newFacetMultiViewPayload(multi), "html", opts)
 }
 
 func RenderMultiFacetPDF(ctx context.Context, multi *api.MultiViewResult, opts *v1.FacetOptions) ([]byte, error) {
-	return renderFacetWithData(ctx, multi, "pdf", opts)
+	return renderFacetWithData(ctx, newFacetMultiViewPayload(multi), "pdf", opts)
 }
 
 func resolveFacetConnection(ctx context.Context, opts *v1.FacetOptions) (baseURL, token, timestampURL string, err error) {
@@ -187,15 +253,17 @@ func renderViewWithFacet(ctx context.Context, result *api.ViewResult, format str
 		return nil, fmt.Errorf("view result must not be nil")
 	}
 
+	payload := newFacetViewPayload(result)
+
 	baseURL, token, _, err := resolveFacetConnection(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
 	if baseURL != "" {
-		return renderFacetHTTP(ctx, baseURL, token, result, format, opts)
+		return renderFacetHTTP(ctx, baseURL, token, payload, format, opts)
 	}
 
-	return renderFacetCLI(ctx, result, format)
+	return renderFacetCLI(ctx, payload, format)
 }
 
 func renderFacetCLI(ctx context.Context, data any, format string) ([]byte, error) {
