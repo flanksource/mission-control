@@ -1,7 +1,6 @@
 package views
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -12,6 +11,9 @@ import (
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
 )
+
+// maxMultipartMemory is the max memory used when parsing multipart form data in tests (32MB).
+const maxMultipartMemory = 32 << 20
 
 var _ = ginkgo.Describe("renderFacetHTTP", func() {
 	var (
@@ -24,21 +26,28 @@ var _ = ginkgo.Describe("renderFacetHTTP", func() {
 		mux.HandleFunc("/render", func(w http.ResponseWriter, r *http.Request) {
 			Expect(r.Method).To(Equal("POST"))
 			Expect(r.Header.Get("X-API-Key")).To(Equal("test-token"))
-			Expect(r.Header.Get("Content-Type")).To(Equal("application/gzip"))
-			Expect(r.URL.Query().Get("format")).To(Equal("pdf"))
-			Expect(r.URL.Query().Get("entryFile")).To(Equal("ViewReport.tsx"))
+			Expect(r.Header.Get("Content-Type")).To(ContainSubstring("multipart/form-data"))
 
-			dataHeader := r.Header.Get("X-Facet-Data")
-			Expect(dataHeader).ToNot(BeEmpty())
-			decoded, err := base64.StdEncoding.DecodeString(dataHeader)
+			Expect(r.ParseMultipartForm(maxMultipartMemory)).To(Succeed())
+
+			archiveFile, _, err := r.FormFile("archive")
 			Expect(err).ToNot(HaveOccurred())
+			archiveBytes, err := io.ReadAll(archiveFile)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(len(archiveBytes)).To(BeNumerically(">", 0))
+
+			dataStr := r.FormValue("data")
+			Expect(dataStr).ToNot(BeEmpty())
 			var data map[string]any
-			Expect(json.Unmarshal(decoded, &data)).To(Succeed())
+			Expect(json.Unmarshal([]byte(dataStr), &data)).To(Succeed())
 			Expect(data).To(HaveKey("key"))
 
-			body, err := io.ReadAll(r.Body)
-			Expect(err).ToNot(HaveOccurred())
-			Expect(len(body)).To(BeNumerically(">", 0))
+			optionsStr := r.FormValue("options")
+			Expect(optionsStr).ToNot(BeEmpty())
+			var options map[string]any
+			Expect(json.Unmarshal([]byte(optionsStr), &options)).To(Succeed())
+			Expect(options["format"]).To(Equal("pdf"))
+			Expect(options["entryFile"]).To(Equal("ViewReport.tsx"))
 
 			w.Header().Set("Content-Type", "application/json")
 			Expect(json.NewEncoder(w).Encode(map[string]string{"url": "/results/abc123"})).To(Succeed())
@@ -72,7 +81,11 @@ var _ = ginkgo.Describe("renderFacetHTTP", func() {
 	ginkgo.It("returns HTML directly without two-step fetch", func() {
 		htmlBytes := []byte("<html><body>Report</body></html>")
 		htmlServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			Expect(r.URL.Query().Get("format")).To(Equal("html"))
+			Expect(r.ParseMultipartForm(maxMultipartMemory)).To(Succeed())
+			optionsStr := r.FormValue("options")
+			var options map[string]any
+			Expect(json.Unmarshal([]byte(optionsStr), &options)).To(Succeed())
+			Expect(options["format"]).To(Equal("html"))
 			w.Header().Set("Content-Type", "text/html")
 			_, err := w.Write(htmlBytes)
 			Expect(err).ToNot(HaveOccurred())

@@ -4,17 +4,16 @@ import (
 	"archive/tar"
 	"bytes"
 	"compress/gzip"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"io/fs"
-	"net/url"
+	"mime/multipart"
 	"os"
 	"os/exec"
 	"path/filepath"
 
-	"github.com/flanksource/commons/http"
+	commonshttp "github.com/flanksource/commons/http"
 	"github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -185,20 +184,45 @@ func renderFacetHTTP(ctx context.Context, baseURL, token string, data any, forma
 		return nil, fmt.Errorf("marshal data: %w", err)
 	}
 
-	params := url.Values{
-		"format":    {format},
-		"entryFile": {"ViewReport.tsx"},
+	optionsJSON, err := json.Marshal(map[string]any{
+		"format":    format,
+		"entryFile": "ViewReport.tsx",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("marshal options: %w", err)
 	}
 
-	client := http.NewClient().BaseURL(baseURL)
+	var body bytes.Buffer
+	mw := multipart.NewWriter(&body)
+
+	fw, err := mw.CreateFormFile("archive", "report.tar.gz")
+	if err != nil {
+		return nil, fmt.Errorf("create archive form field: %w", err)
+	}
+	if _, err := fw.Write(archive); err != nil {
+		return nil, fmt.Errorf("write archive field: %w", err)
+	}
+
+	if err := mw.WriteField("data", string(dataJSON)); err != nil {
+		return nil, fmt.Errorf("write data field: %w", err)
+	}
+
+	if err := mw.WriteField("options", string(optionsJSON)); err != nil {
+		return nil, fmt.Errorf("write options field: %w", err)
+	}
+
+	if err := mw.Close(); err != nil {
+		return nil, fmt.Errorf("close multipart writer: %w", err)
+	}
+
+	client := commonshttp.NewClient().BaseURL(baseURL)
 	if token != "" {
 		client = client.Header("X-API-Key", token)
 	}
 
 	response, err := client.R(ctx).
-		Header("Content-Type", "application/gzip").
-		Header("X-Facet-Data", base64.StdEncoding.EncodeToString(dataJSON)).
-		Post("/render?"+params.Encode(), archive)
+		Header("Content-Type", mw.FormDataContentType()).
+		Post("/render", &body)
 	if err != nil {
 		return nil, fmt.Errorf("facet render request failed: %w", err)
 	}
