@@ -66,7 +66,7 @@ func authenticateOIDCToken(c echo.Context, tokenStr string) (bool, error) {
 			if auds, ok := claims["aud"].([]any); ok {
 				found := false
 				for _, a := range auds {
-					if a.(string) == oidcmodels.ClientID {
+					if audStr, ok := a.(string); ok && audStr == oidcmodels.ClientID {
 						found = true
 						break
 					}

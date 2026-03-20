@@ -3,6 +3,7 @@ package oidc
 import (
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
@@ -131,7 +132,5 @@ func writeRSAPrivateKey(path string, key *rsa.PrivateKey) error {
 
 // aesKeyFromIssuer derives a 32-byte AES key from the issuer URL for OIDC internal encryption.
 func aesKeyFromIssuer(issuer string) [32]byte {
-	var key [32]byte
-	copy(key[:], []byte(issuer))
-	return key
+	return sha256.Sum256([]byte(issuer))
 }
