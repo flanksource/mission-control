@@ -77,9 +77,6 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 
 	switch vars.AuthMode {
 	case Basic:
-		if OIDCEnabled && (vars.AuthMode == Kratos || vars.AuthMode == Clerk) {
-			return fmt.Errorf("--oidc is only supported with --auth basic")
-		}
 		UseBasic(e)
 		if admin, err := GetOrCreateAdminUser(ctx); err != nil {
 			return fmt.Errorf("failed to created admin user: %v", err)
@@ -116,10 +113,10 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 
 		if OIDCEnabled {
 			kratosChecker := NewKratosCredentialChecker(kratosMiddleware)
-			if err := oidc.MountRoutes(e, ctx, api.FrontendURL, OIDCSigningKeyPath, kratosChecker, LookupKratosPersonByUsername); err != nil {
+			if err := oidc.MountRoutes(e, ctx, api.PublicURL, OIDCSigningKeyPath, kratosChecker, LookupKratosPersonByUsername); err != nil {
 				return fmt.Errorf("failed to mount OIDC routes: %w", err)
 			}
-			logger.Infof("OIDC provider enabled at %s (Kratos auth)", api.FrontendURL)
+			logger.Infof("OIDC provider enabled at %s (Kratos auth)", api.PublicURL)
 		}
 
 	case Clerk:
