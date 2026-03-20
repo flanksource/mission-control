@@ -27,7 +27,7 @@ type signingKey struct {
 
 func (s *signingKey) SignatureAlgorithm() jose.SignatureAlgorithm { return s.algorithm }
 func (s *signingKey) Key() any                                    { return s.privateKey }
-func (s *signingKey) ID() string                                   { return s.id }
+func (s *signingKey) ID() string                                  { return s.id }
 
 type publicKey struct {
 	id        string
@@ -35,10 +35,10 @@ type publicKey struct {
 	key       *rsa.PublicKey
 }
 
-func (p *publicKey) ID() string                                    { return p.id }
-func (p *publicKey) Algorithm() jose.SignatureAlgorithm            { return p.algorithm }
-func (p *publicKey) Use() string                                   { return "sig" }
-func (p *publicKey) Key() any                                      { return p.key }
+func (p *publicKey) ID() string                         { return p.id }
+func (p *publicKey) Algorithm() jose.SignatureAlgorithm { return p.algorithm }
+func (p *publicKey) Use() string                        { return "sig" }
+func (p *publicKey) Key() any                           { return p.key }
 
 // Storage implements op.Storage backed by Postgres.
 type Storage struct {
@@ -73,7 +73,6 @@ func (s *Storage) CreateAuthRequest(_ gocontext.Context, req *oidc.AuthRequest, 
 	}
 	return ar, nil
 }
-
 
 func (s *Storage) AuthRequestByID(_ gocontext.Context, id string) (op.AuthRequest, error) {
 	var ar AuthRequest
@@ -300,4 +299,3 @@ func generateKeyID(pub *rsa.PublicKey) (string, error) {
 	h.Write(b)
 	return fmt.Sprintf("%x", h.Sum(nil))[:16], nil
 }
-
