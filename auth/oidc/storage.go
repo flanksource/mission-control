@@ -261,6 +261,7 @@ func (s *Storage) SetAuthRequestSubject(id, subject string) error {
 		Updates(map[string]any{
 			"subject":   subject,
 			"auth_time": now,
+			"done":      true,
 		}).Error
 }
 
