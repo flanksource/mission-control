@@ -2,6 +2,7 @@ package oidc
 
 import (
 	"fmt"
+	"html"
 	"net/http"
 
 	"github.com/flanksource/duty/context"
@@ -55,7 +56,7 @@ func (h *LoginHandler) ShowForm(c echo.Context) error {
 	if id == "" {
 		return c.String(http.StatusBadRequest, "missing auth_request_id")
 	}
-	return c.HTML(http.StatusOK, fmt.Sprintf(loginFormHTML, id, ""))
+	return c.HTML(http.StatusOK, fmt.Sprintf(loginFormHTML, html.EscapeString(id), ""))
 }
 
 func (h *LoginHandler) HandleSubmit(c echo.Context) error {
@@ -66,7 +67,7 @@ func (h *LoginHandler) HandleSubmit(c echo.Context) error {
 	password := c.FormValue("password")
 
 	renderForm := func(msg string) error {
-		return c.HTML(http.StatusOK, fmt.Sprintf(loginFormHTML, id, "<p style='color:red'>"+msg+"</p>"))
+		return c.HTML(http.StatusOK, fmt.Sprintf(loginFormHTML, html.EscapeString(id), "<p style='color:red'>"+msg+"</p>"))
 	}
 
 	if id == "" || username == "" || password == "" {

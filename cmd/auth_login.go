@@ -20,11 +20,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var AuthCmd = &cobra.Command{
-	Use:   "auth",
-	Short: "Authentication commands",
-}
-
 var authLoginCmd = &cobra.Command{
 	Use:   "login",
 	Short: "Log in via OIDC browser flow",
@@ -36,8 +31,7 @@ var loginServer string
 func init() {
 	authLoginCmd.Flags().StringVar(&loginServer, "server", "", "Mission Control server URL (required)")
 	_ = authLoginCmd.MarkFlagRequired("server")
-	AuthCmd.AddCommand(authLoginCmd)
-	Root.AddCommand(AuthCmd)
+	Auth.AddCommand(authLoginCmd)
 }
 
 type oidcTokens struct {
@@ -161,8 +155,10 @@ type oidcDiscovery struct {
 	UserinfoEndpoint      string `json:"userinfo_endpoint"`
 }
 
+var httpClient = &http.Client{Timeout: 30 * time.Second}
+
 func discoverOIDC(discoveryURL string) (*oidcDiscovery, error) {
-	resp, err := http.Get(discoveryURL)
+	resp, err := httpClient.Get(discoveryURL)
 	if err != nil {
 		return nil, err
 	}
@@ -201,7 +197,7 @@ func exchangeCode(tokenEndpoint, code, redirectURI, verifier string) (*oidcToken
 		"code_verifier": {verifier},
 	}
 
-	resp, err := http.PostForm(tokenEndpoint, form)
+	resp, err := httpClient.PostForm(tokenEndpoint, form)
 	if err != nil {
 		return nil, err
 	}
