@@ -27,9 +27,9 @@ const loginFormHTML = `<!DOCTYPE html>
 // LoginHandler handles the OIDC login form, delegating credential validation
 // to the Basic auth checker and person lookup.
 type LoginHandler struct {
-	storage     *Storage
-	provider    op.OpenIDProvider
-	checker     credentialChecker
+	storage      *Storage
+	provider     op.OpenIDProvider
+	checker      credentialChecker
 	personLookup personLookup
 }
 
