@@ -160,10 +160,10 @@ func (c *cliClient) AccessTokenType() op.AccessTokenType {
 func (c *cliClient) IDTokenLifetime() time.Duration { return time.Hour }
 func (c *cliClient) DevMode() bool                  { return false }
 func (c *cliClient) RestrictAdditionalIdTokenScopes() func(scopes []string) []string {
-	return nil
+	return func(scopes []string) []string { return scopes }
 }
 func (c *cliClient) RestrictAdditionalAccessTokenScopes() func(scopes []string) []string {
-	return nil
+	return func(scopes []string) []string { return scopes }
 }
 func (c *cliClient) IsScopeAllowed(scope string) bool     { return true }
 func (c *cliClient) IDTokenUserinfoClaimsAssertion() bool { return false }
