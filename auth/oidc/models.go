@@ -134,7 +134,7 @@ type cliClient struct{}
 var _ op.Client = (*cliClient)(nil)
 
 func (c *cliClient) GetID() string                    { return ClientID }
-func (c *cliClient) RedirectURIs() []string           { return nil }
+func (c *cliClient) RedirectURIs() []string           { return []string{"http://127.0.0.1/callback"} }
 func (c *cliClient) PostLogoutRedirectURIs() []string { return nil }
 func (c *cliClient) ApplicationType() op.ApplicationType {
 	return op.ApplicationTypeNative
