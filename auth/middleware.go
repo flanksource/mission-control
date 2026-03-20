@@ -67,6 +67,7 @@ var skipAuthPathsExact = []string{
 
 	// --start:: Standard OIDC protocol endpoints (mounted at root to match the issuer URL).
 	"/authorize",
+	"/authorize/callback",
 	"/userinfo",
 	"/keys",
 	"/revoke",
@@ -160,7 +161,9 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 
 // TODO: Use regex supported path matching
 func canSkipAuth(c echo.Context) bool {
-	if slices.Contains(skipAuthPathsExact, c.Path()) {
+	// use c.Request().URL.Path for exact matches instead of c.Path() which may contain path parameters (e.g. /playbook/webhook/:id)
+	// Example: URL.PATH = /authorize/callback whereas c.Path() = /authorize/*
+	if slices.Contains(skipAuthPathsExact, c.Request().URL.Path) {
 		return true
 	}
 
