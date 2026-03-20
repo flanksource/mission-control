@@ -235,9 +235,9 @@ func NewKratosCredentialChecker(m *kratosMiddleware) *KratosCredentialChecker {
 	return &KratosCredentialChecker{middleware: m}
 }
 
-func (k *KratosCredentialChecker) Match(user, pass string) bool {
-	_, err := k.middleware.kratosLoginWithCache(gocontext.Background(), user, pass)
-	return err == nil
+func (k *KratosCredentialChecker) Match(ctx context.Context, user, pass string) error {
+	_, err := k.middleware.kratosLoginWithCache(ctx, user, pass)
+	return err
 }
 
 // LookupKratosPersonByUsername finds a person by email in the Kratos identities table.

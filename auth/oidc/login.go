@@ -36,7 +36,7 @@ type LoginHandler struct {
 
 // CredentialChecker validates username/password credentials.
 type CredentialChecker interface {
-	Match(user, pass string) bool
+	Match(ctx context.Context, user, pass string) error
 }
 
 // PersonLookup finds a person by username/email, returning the person UUID.
@@ -74,8 +74,8 @@ func (h *LoginHandler) HandleSubmit(c echo.Context) error {
 		return renderForm("All fields required")
 	}
 
-	if !h.checker.Match(username, password) {
-		return renderForm("Invalid credentials")
+	if err := h.checker.Match(ctx, username, password); err != nil {
+		return renderForm(fmt.Sprintf("Invalid credentials: %v", err))
 	}
 
 	personID, err := h.PersonLookup(ctx, username)

@@ -25,6 +25,7 @@ msg.tpl
 test-reports
 .artifacts/
 __debug_bin*
+oidc-signing-key.pem
 
 exec-checkout
 shell-bin-dir

@@ -166,8 +166,12 @@ func NewHtpasswdChecker(path string) (*HtpasswdChecker, error) {
 	return &HtpasswdChecker{file: f}, nil
 }
 
-func (h *HtpasswdChecker) Match(user, pass string) bool {
-	return h.file.Match(user, pass)
+func (h *HtpasswdChecker) Match(ctx context.Context, user, pass string) error {
+	match := h.file.Match(user, pass)
+	if !match {
+		return fmt.Errorf("invalid credentials")
+	}
+	return nil
 }
 
 func lookupPerson(ctx context.Context, user string) (*models.Person, error) {
