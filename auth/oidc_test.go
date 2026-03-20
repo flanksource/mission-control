@@ -52,6 +52,8 @@ var _ = ginkgo.Describe("OIDC", func() {
 
 	ginkgo.AfterEach(func() {
 		DefaultContext.DB().Where("id = ?", person.ID).Delete(&models.Person{})
+		DefaultContext.DB().Exec("DELETE FROM oidc_auth_requests")
+		DefaultContext.DB().Exec("DELETE FROM oidc_refresh_tokens")
 	})
 
 	ginkgo.It("creates signing key file on first start", func() {

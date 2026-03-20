@@ -153,6 +153,23 @@ func LookupPersonByUsername(ctx context.Context, username string) (string, error
 	return person.ID.String(), nil
 }
 
+// HtpasswdChecker wraps htpasswd.File to implement oidc.CredentialChecker.
+type HtpasswdChecker struct {
+	file *htpasswd.File
+}
+
+func NewHtpasswdChecker(path string) (*HtpasswdChecker, error) {
+	f, err := htpasswd.New(path, htpasswd.DefaultSystems, nil)
+	if err != nil {
+		return nil, err
+	}
+	return &HtpasswdChecker{file: f}, nil
+}
+
+func (h *HtpasswdChecker) Match(user, pass string) bool {
+	return h.file.Match(user, pass)
+}
+
 func lookupPerson(ctx context.Context, user string) (*models.Person, error) {
 	user = strings.ToLower(user)
 	var person models.Person
