@@ -19,8 +19,8 @@ import (
 )
 
 var (
-	HtpasswdFile     string
-	OIDCEnabled      bool
+	HtpasswdFile       string
+	OIDCEnabled        bool
 	OIDCSigningKeyPath string
 
 	checker       *htpasswd.File

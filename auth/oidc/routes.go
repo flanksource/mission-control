@@ -16,7 +16,6 @@ func MountRoutes(e *echo.Echo, ctx context.Context, issuerURL, signingKeyPath, h
 		return err
 	}
 
-
 	checker, err := htpasswd.New(htpasswdFile, htpasswd.DefaultSystems, nil)
 	if err != nil {
 		return err

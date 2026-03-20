@@ -62,16 +62,16 @@ type AuthRequest struct {
 func (AuthRequest) TableName() string { return "oidc_auth_requests" }
 
 func (a *AuthRequest) GetID() string         { return a.ID }
-func (a *AuthRequest) GetACR() string         { return "" }
-func (a *AuthRequest) GetAMR() []string       { return nil }
-func (a *AuthRequest) GetAudience() []string  { return []string{a.ClientID} }
+func (a *AuthRequest) GetACR() string        { return "" }
+func (a *AuthRequest) GetAMR() []string      { return nil }
+func (a *AuthRequest) GetAudience() []string { return []string{a.ClientID} }
 func (a *AuthRequest) GetAuthTime() time.Time {
 	if a.AuthTime != nil {
 		return *a.AuthTime
 	}
 	return time.Time{}
 }
-func (a *AuthRequest) GetClientID() string    { return a.ClientID }
+func (a *AuthRequest) GetClientID() string { return a.ClientID }
 func (a *AuthRequest) GetCodeChallenge() *oidc.CodeChallenge {
 	if a.CodeChallenge == "" {
 		return nil
@@ -87,10 +87,10 @@ func (a *AuthRequest) GetResponseType() oidc.ResponseType {
 	return oidc.ResponseType(a.ResponseType)
 }
 func (a *AuthRequest) GetResponseMode() oidc.ResponseMode { return "" }
-func (a *AuthRequest) GetScopes() []string { return []string(a.Scopes) }
-func (a *AuthRequest) GetState() string    { return a.State }
-func (a *AuthRequest) GetSubject() string  { return a.Subject }
-func (a *AuthRequest) Done() bool          { return a.IsDone }
+func (a *AuthRequest) GetScopes() []string                { return []string(a.Scopes) }
+func (a *AuthRequest) GetState() string                   { return a.State }
+func (a *AuthRequest) GetSubject() string                 { return a.Subject }
+func (a *AuthRequest) Done() bool                         { return a.IsDone }
 
 // RefreshToken is backed by the oidc_refresh_tokens table.
 type RefreshToken struct {
@@ -165,7 +165,6 @@ func (c *cliClient) RestrictAdditionalIdTokenScopes() func(scopes []string) []st
 func (c *cliClient) RestrictAdditionalAccessTokenScopes() func(scopes []string) []string {
 	return nil
 }
-func (c *cliClient) IsScopeAllowed(scope string) bool    { return true }
+func (c *cliClient) IsScopeAllowed(scope string) bool     { return true }
 func (c *cliClient) IDTokenUserinfoClaimsAssertion() bool { return false }
 func (c *cliClient) ClockSkew() time.Duration             { return 0 }
-
