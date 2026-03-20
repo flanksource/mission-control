@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"time"
 
@@ -51,14 +52,27 @@ var (
 	Basic                 = "basic"
 )
 
-var skipAuthPaths = []string{
-	"/health",
+var skipAuthPathPrefixes = []string{
 	"/kratos/",
 	"/canary/webhook/",
 	"/playbook/webhook/", // Playbook webhooks handle the authentication themselves
 	"/auth/basic/",
 	"/oidc/",
 	"/.well-known/",
+	"/oauth/", // Standard OIDC protocol endpoints (mounted at root to match the issuer URL).
+}
+
+var skipAuthPathsExact = []string{
+	"/health",
+
+	// --start:: Standard OIDC protocol endpoints (mounted at root to match the issuer URL).
+	"/authorize",
+	"/userinfo",
+	"/keys",
+	"/revoke",
+	"/device_authorization",
+	"/end_session",
+	// --end:: Standard OIDC endpoints
 }
 
 func Middleware(ctx context.Context, e *echo.Echo) error {
@@ -142,7 +156,11 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 
 // TODO: Use regex supported path matching
 func canSkipAuth(c echo.Context) bool {
-	for _, p := range skipAuthPaths {
+	if slices.Contains(skipAuthPathsExact, c.Path()) {
+		return true
+	}
+
+	for _, p := range skipAuthPathPrefixes {
 		if strings.HasPrefix(c.Path(), p) {
 			return true
 		}
