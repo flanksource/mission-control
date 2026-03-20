@@ -548,7 +548,12 @@ type mockChecker struct {
 	valid bool
 }
 
-func (m *mockChecker) Match(_, _ string) bool { return m.valid }
+func (m *mockChecker) Match(_ dutyContext.Context, _, _ string) error {
+	if m.valid {
+		return nil
+	}
+	return fmt.Errorf("invalid credentials")
+}
 
 var mockLookup = func(ctx dutyContext.Context, user string) (string, error) {
 	return uuid.New().String(), nil
