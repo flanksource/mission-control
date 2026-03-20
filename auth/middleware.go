@@ -18,6 +18,7 @@ import (
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/gomplate/v3"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/auth/oidc"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/rbac/adapter"
 	"github.com/labstack/echo/v4"
@@ -56,6 +57,8 @@ var skipAuthPaths = []string{
 	"/canary/webhook/",
 	"/playbook/webhook/", // Playbook webhooks handle the authentication themselves
 	"/auth/basic/",
+	"/oidc/",
+	"/.well-known/",
 }
 
 func Middleware(ctx context.Context, e *echo.Echo) error {
@@ -74,11 +77,20 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 
 	switch vars.AuthMode {
 	case Basic:
+		if OIDCEnabled && (vars.AuthMode == Kratos || vars.AuthMode == Clerk) {
+			return fmt.Errorf("--oidc is only supported with --auth basic")
+		}
 		UseBasic(e)
 		if admin, err := GetOrCreateAdminUser(ctx); err != nil {
 			return fmt.Errorf("failed to created admin user: %v", err)
 		} else if admin != nil {
 			adminUserID = admin.ID.String()
+		}
+		if OIDCEnabled {
+			if err := oidc.MountRoutes(e, ctx, api.PublicURL, OIDCSigningKeyPath, HtpasswdFile, LookupPersonByUsername); err != nil {
+				return fmt.Errorf("failed to mount OIDC routes: %w", err)
+			}
+			logger.Infof("OIDC provider enabled at %s", api.PublicURL)
 		}
 	case Kratos:
 		kratosHandler := NewKratosHandler()
