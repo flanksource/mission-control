@@ -77,9 +77,6 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 
 	switch vars.AuthMode {
 	case Basic:
-		if OIDCEnabled && (vars.AuthMode == Kratos || vars.AuthMode == Clerk) {
-			return fmt.Errorf("--oidc is only supported with --auth basic")
-		}
 		UseBasic(e)
 		if admin, err := GetOrCreateAdminUser(ctx); err != nil {
 			return fmt.Errorf("failed to created admin user: %v", err)
@@ -87,7 +84,11 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 			adminUserID = admin.ID.String()
 		}
 		if OIDCEnabled {
-			if err := oidc.MountRoutes(e, ctx, api.PublicURL, OIDCSigningKeyPath, HtpasswdFile, LookupPersonByUsername); err != nil {
+			htpasswdChecker, err := NewHtpasswdChecker(HtpasswdFile)
+			if err != nil {
+				return fmt.Errorf("failed to load htpasswd file: %w", err)
+			}
+			if err := oidc.MountRoutes(e, ctx, api.PublicURL, OIDCSigningKeyPath, htpasswdChecker, LookupPersonByUsername); err != nil {
 				return fmt.Errorf("failed to mount OIDC routes: %w", err)
 			}
 			logger.Infof("OIDC provider enabled at %s", api.PublicURL)
@@ -99,12 +100,20 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 			return fmt.Errorf("failed to created admin user: %v", err)
 		}
 
-		middleware, err := kratosHandler.KratosMiddleware(ctx)
+		kratosMiddleware, err := kratosHandler.KratosMiddleware(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to initialize kratos middleware: %v", err)
 		}
-		e.Use(middleware.Session)
+		e.Use(kratosMiddleware.Session)
 		e.POST("/auth/invite_user", kratosHandler.InviteUser, rbac.Authorization(policy.ObjectAuth, policy.ActionUpdate))
+
+		if OIDCEnabled {
+			kratosChecker := NewKratosCredentialChecker(kratosMiddleware)
+			if err := oidc.MountRoutes(e, ctx, api.PublicURL, OIDCSigningKeyPath, kratosChecker, LookupKratosPersonByUsername); err != nil {
+				return fmt.Errorf("failed to mount OIDC routes: %w", err)
+			}
+			logger.Infof("OIDC provider enabled at %s (Kratos auth)", api.PublicURL)
+		}
 
 	case Clerk:
 		clerkHandler, err := NewClerkHandler()

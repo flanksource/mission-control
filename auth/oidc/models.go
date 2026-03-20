@@ -53,7 +53,7 @@ type AuthRequest struct {
 	CodeChallengeMethod string     `gorm:"column:code_challenge_method"`
 	Subject             string     `gorm:"column:subject"`
 	AuthTime            *time.Time `gorm:"column:auth_time"`
-	Code                string     `gorm:"column:code"`
+	Code                *string    `gorm:"column:code"`
 	IsDone              bool       `gorm:"column:done;default:false"`
 	CreatedAt           time.Time  `gorm:"column:created_at"`
 	ExpiresAt           time.Time  `gorm:"column:expires_at"`

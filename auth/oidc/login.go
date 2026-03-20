@@ -29,24 +29,24 @@ const loginFormHTML = `<!DOCTYPE html>
 type LoginHandler struct {
 	storage      *Storage
 	provider     op.OpenIDProvider
-	checker      credentialChecker
-	personLookup personLookup
+	checker      CredentialChecker
+	PersonLookup PersonLookup
 }
 
-// credentialChecker validates username/password via htpasswd.
-type credentialChecker interface {
+// CredentialChecker validates username/password credentials.
+type CredentialChecker interface {
 	Match(user, pass string) bool
 }
 
-// personLookup finds a person by username/email, returning the person UUID.
-type personLookup func(ctx context.Context, user string) (personID string, err error)
+// PersonLookup finds a person by username/email, returning the person UUID.
+type PersonLookup func(ctx context.Context, user string) (personID string, err error)
 
-func NewLoginHandler(storage *Storage, provider op.OpenIDProvider, checker credentialChecker, lookup personLookup) *LoginHandler {
+func NewLoginHandler(storage *Storage, provider op.OpenIDProvider, checker CredentialChecker, lookup PersonLookup) *LoginHandler {
 	return &LoginHandler{
 		storage:      storage,
 		provider:     provider,
 		checker:      checker,
-		personLookup: lookup,
+		PersonLookup: lookup,
 	}
 }
 
@@ -77,7 +77,7 @@ func (h *LoginHandler) HandleSubmit(c echo.Context) error {
 		return renderForm("Invalid credentials")
 	}
 
-	personID, err := h.personLookup(ctx, username)
+	personID, err := h.PersonLookup(ctx, username)
 	if err != nil {
 		return renderForm("User not found")
 	}
