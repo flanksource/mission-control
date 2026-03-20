@@ -52,8 +52,6 @@ var _ = ginkgo.Describe("OIDC", func() {
 
 	ginkgo.AfterEach(func() {
 		DefaultContext.DB().Where("id = ?", person.ID).Delete(&models.Person{})
-		DefaultContext.DB().Exec("DELETE FROM oidc_auth_requests")
-		DefaultContext.DB().Exec("DELETE FROM oidc_refresh_tokens")
 	})
 
 	ginkgo.It("creates signing key file on first start", func() {
@@ -270,12 +268,13 @@ var _ = ginkgo.Describe("OIDC", func() {
 			// Clear the cache so it reloads from DB
 			oidcPublicKeyCache.Flush()
 
-			savedPublicURL := api.FrontendURL
-			api.FrontendURL = "http://localhost:8080"
-			defer func() { api.FrontendURL = savedPublicURL }()
+			issuer := "http://localhost:8080"
+			savedPublicURL := api.PublicURL
+			api.PublicURL = issuer
+			defer func() { api.PublicURL = savedPublicURL }()
 
 			claims := jwt.MapClaims{
-				"iss": "http://localhost:8080",
+				"iss": issuer,
 				"aud": oidc.ClientID,
 				"sub": person.ID.String(),
 				"exp": time.Now().Add(time.Hour).Unix(),
@@ -296,9 +295,9 @@ var _ = ginkgo.Describe("OIDC", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			oidcPublicKeyCache.Flush()
-			savedPublicURL := api.FrontendURL
-			api.FrontendURL = "http://localhost:8080"
-			defer func() { api.FrontendURL = savedPublicURL }()
+			savedPublicURL := api.PublicURL
+			api.PublicURL = "http://localhost:8080"
+			defer func() { api.PublicURL = savedPublicURL }()
 
 			claims := jwt.MapClaims{
 				"iss": "http://localhost:8080",
@@ -323,9 +322,9 @@ var _ = ginkgo.Describe("OIDC", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			oidcPublicKeyCache.Flush()
-			savedPublicURL := api.FrontendURL
-			api.FrontendURL = "http://localhost:8080"
-			defer func() { api.FrontendURL = savedPublicURL }()
+			savedPublicURL := api.PublicURL
+			api.PublicURL = "http://localhost:8080"
+			defer func() { api.PublicURL = savedPublicURL }()
 
 			claims := jwt.MapClaims{
 				"iss": "http://localhost:8080",
@@ -350,9 +349,9 @@ var _ = ginkgo.Describe("OIDC", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			oidcPublicKeyCache.Flush()
-			savedPublicURL := api.FrontendURL
-			api.FrontendURL = "http://localhost:8080"
-			defer func() { api.FrontendURL = savedPublicURL }()
+			savedPublicURL := api.PublicURL
+			api.PublicURL = "http://localhost:8080"
+			defer func() { api.PublicURL = savedPublicURL }()
 
 			claims := jwt.MapClaims{
 				"iss": "http://localhost:8080",
@@ -377,9 +376,9 @@ var _ = ginkgo.Describe("OIDC", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			oidcPublicKeyCache.Flush()
-			savedPublicURL := api.FrontendURL
-			api.FrontendURL = "http://localhost:8080"
-			defer func() { api.FrontendURL = savedPublicURL }()
+			savedPublicURL := api.PublicURL
+			api.PublicURL = "http://localhost:8080"
+			defer func() { api.PublicURL = savedPublicURL }()
 
 			claims := jwt.MapClaims{
 				"iss": "http://localhost:8080",
@@ -400,7 +399,7 @@ var _ = ginkgo.Describe("OIDC", func() {
 
 	ginkgo.Describe("LoginHandler", func() {
 		ginkgo.It("renders login form with auth_request_id", func() {
-			login := oidc.NewLoginHandler(provider.Storage, provider.OpenIDProvider, &mockChecker{}, mockLookup, "http://localhost:8080")
+			login := oidc.NewLoginHandler(provider.Storage, provider.OpenIDProvider, &mockChecker{}, mockLookup)
 			e := newEchoInstance(DefaultContext)
 			req := httptest.NewRequest(http.MethodGet, "/oidc/login?auth_request_id=test-123", nil)
 			req = req.WithContext(DefaultContext.Wrap(req.Context()))
@@ -414,7 +413,7 @@ var _ = ginkgo.Describe("OIDC", func() {
 		})
 
 		ginkgo.It("returns 400 when auth_request_id is missing", func() {
-			login := oidc.NewLoginHandler(provider.Storage, provider.OpenIDProvider, &mockChecker{}, mockLookup, "http://localhost:8080")
+			login := oidc.NewLoginHandler(provider.Storage, provider.OpenIDProvider, &mockChecker{}, mockLookup)
 			e := newEchoInstance(DefaultContext)
 			req := httptest.NewRequest(http.MethodGet, "/oidc/login", nil)
 			req = req.WithContext(DefaultContext.Wrap(req.Context()))
@@ -425,47 +424,8 @@ var _ = ginkgo.Describe("OIDC", func() {
 			Expect(rec.Code).To(Equal(http.StatusBadRequest))
 		})
 
-		ginkgo.It("redirects to external login when checker supports login redirect", func() {
-			login := oidc.NewLoginHandler(provider.Storage, provider.OpenIDProvider, &redirectChecker{}, mockLookup, "http://localhost:8080")
-			e := newEchoInstance(DefaultContext)
-			req := httptest.NewRequest(http.MethodGet, "/oidc/login?auth_request_id=req-123", nil)
-			req = req.WithContext(DefaultContext.Wrap(req.Context()))
-			rec := httptest.NewRecorder()
-			c := e.NewContext(req, rec)
-
-			Expect(login.ShowForm(c)).To(Succeed())
-			Expect(rec.Code).To(Equal(http.StatusFound))
-			Expect(rec.Header().Get("Location")).To(Equal("http://localhost:3000/login?return_to=%2Foidc%2Fkratos%2Fcallback%3Fauth_request_id%3Dreq-123"))
-		})
-
-		ginkgo.It("completes auth request from external callback", func() {
-			req := &oidclib.AuthRequest{
-				ClientID:     oidc.ClientID,
-				RedirectURI:  "http://localhost:9999/callback",
-				Scopes:       []string{"openid"},
-				ResponseType: "code",
-			}
-			ar, err := provider.Storage.CreateAuthRequest(gocontext.TODO(), req, "")
-			Expect(err).ToNot(HaveOccurred())
-
-			login := oidc.NewLoginHandler(provider.Storage, provider.OpenIDProvider, &callbackChecker{subjectID: person.ID.String()}, mockLookup, "http://localhost:8080")
-			e := newEchoInstance(DefaultContext)
-			httpReq := httptest.NewRequest(http.MethodGet, "/oidc/kratos/callback?auth_request_id="+ar.GetID(), nil)
-			httpReq = httpReq.WithContext(DefaultContext.Wrap(httpReq.Context()))
-			rec := httptest.NewRecorder()
-			c := e.NewContext(httpReq, rec)
-
-			Expect(login.HandleExternalCallback(c)).To(Succeed())
-			Expect(rec.Code).To(Equal(http.StatusFound))
-			Expect(rec.Header().Get("Location")).To(ContainSubstring("id=" + ar.GetID()))
-
-			updated, err := provider.Storage.AuthRequestByID(gocontext.TODO(), ar.GetID())
-			Expect(err).ToNot(HaveOccurred())
-			Expect(updated.GetSubject()).To(Equal(person.ID.String()))
-		})
-
 		ginkgo.It("rejects invalid credentials", func() {
-			login := oidc.NewLoginHandler(provider.Storage, provider.OpenIDProvider, &mockChecker{valid: false}, mockLookup, "http://localhost:8080")
+			login := oidc.NewLoginHandler(provider.Storage, provider.OpenIDProvider, &mockChecker{valid: false}, mockLookup)
 			e := newEchoInstance(DefaultContext)
 
 			form := url.Values{
@@ -586,34 +546,7 @@ type mockChecker struct {
 	valid bool
 }
 
-func (m *mockChecker) Match(_ dutyContext.Context, _, _ string) error {
-	if m.valid {
-		return nil
-	}
-	return fmt.Errorf("invalid credentials")
-}
-
-type redirectChecker struct{}
-
-func (r *redirectChecker) Match(_ dutyContext.Context, _, _ string) error {
-	return nil
-}
-
-func (r *redirectChecker) LoginRedirectURL(authRequestID string) (string, error) {
-	return "http://localhost:3000/login?return_to=%2Foidc%2Fkratos%2Fcallback%3Fauth_request_id%3D" + authRequestID, nil
-}
-
-type callbackChecker struct {
-	subjectID string
-}
-
-func (r *callbackChecker) Match(_ dutyContext.Context, _, _ string) error {
-	return nil
-}
-
-func (r *callbackChecker) CallbackSubject(_ echo.Context) (string, error) {
-	return r.subjectID, nil
-}
+func (m *mockChecker) Match(_, _ string) bool { return m.valid }
 
 var mockLookup = func(ctx dutyContext.Context, user string) (string, error) {
 	return uuid.New().String(), nil

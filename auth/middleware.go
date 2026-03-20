@@ -59,21 +59,6 @@ var skipAuthPathPrefixes = []string{
 	"/auth/basic/",
 	"/oidc/",
 	"/.well-known/",
-	"/oauth/", // Standard OIDC protocol endpoints (mounted at root to match the issuer URL).
-}
-
-var skipAuthPathsExact = []string{
-	"/health",
-
-	// --start:: Standard OIDC protocol endpoints (mounted at root to match the issuer URL).
-	"/authorize",
-	"/authorize/callback",
-	"/userinfo",
-	"/keys",
-	"/revoke",
-	"/device_authorization",
-	"/endsession",
-	// --end:: Standard OIDC endpoints
 }
 
 func Middleware(ctx context.Context, e *echo.Echo) error {
@@ -92,6 +77,9 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 
 	switch vars.AuthMode {
 	case Basic:
+		if OIDCEnabled && (vars.AuthMode == Kratos || vars.AuthMode == Clerk) {
+			return fmt.Errorf("--oidc is only supported with --auth basic")
+		}
 		UseBasic(e)
 		if admin, err := GetOrCreateAdminUser(ctx); err != nil {
 			return fmt.Errorf("failed to created admin user: %v", err)

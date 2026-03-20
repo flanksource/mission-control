@@ -111,7 +111,7 @@ func Start(ctx context.Context, mcpServer *server.MCPServer) {
 		}
 
 		if err := notification.InitCRDStatusUpdates(ctx); err != nil {
-			logger.Errorf("failed to start notification status update queue: %v", err)
+			logger.Errorf("failed to start notificatino status update queue: %v", err)
 		}
 	}
 

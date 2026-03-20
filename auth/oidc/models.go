@@ -2,9 +2,10 @@ package oidc
 
 import (
 	"database/sql/driver"
+	"fmt"
+	"strings"
 	"time"
 
-	"github.com/lib/pq"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
 	"github.com/zitadel/oidc/v3/pkg/op"
 )
@@ -12,14 +13,31 @@ import (
 const ClientID = "mc-cli"
 
 // StringList is a PostgreSQL text[] compatible type.
-type StringList pq.StringArray
+type StringList []string
 
 func (s StringList) Value() (driver.Value, error) {
-	return pq.StringArray(s).Value()
+	if len(s) == 0 {
+		return "{}", nil
+	}
+	return "{" + strings.Join(s, ",") + "}", nil
 }
 
 func (s *StringList) Scan(src any) error {
-	return (*pq.StringArray)(s).Scan(src)
+	if src == nil {
+		*s = nil
+		return nil
+	}
+	str, ok := src.(string)
+	if !ok {
+		return fmt.Errorf("unsupported type: %T", src)
+	}
+	str = strings.Trim(str, "{}")
+	if str == "" {
+		*s = nil
+		return nil
+	}
+	*s = strings.Split(str, ",")
+	return nil
 }
 
 // AuthRequest implements op.AuthRequest backed by the oidc_auth_requests table.
@@ -35,7 +53,7 @@ type AuthRequest struct {
 	CodeChallengeMethod string     `gorm:"column:code_challenge_method"`
 	Subject             string     `gorm:"column:subject"`
 	AuthTime            *time.Time `gorm:"column:auth_time"`
-	Code                *string    `gorm:"column:code"`
+	Code                string     `gorm:"column:code"`
 	IsDone              bool       `gorm:"column:done;default:false"`
 	CreatedAt           time.Time  `gorm:"column:created_at"`
 	ExpiresAt           time.Time  `gorm:"column:expires_at"`
@@ -44,16 +62,16 @@ type AuthRequest struct {
 func (AuthRequest) TableName() string { return "oidc_auth_requests" }
 
 func (a *AuthRequest) GetID() string         { return a.ID }
-func (a *AuthRequest) GetACR() string        { return "" }
-func (a *AuthRequest) GetAMR() []string      { return nil }
-func (a *AuthRequest) GetAudience() []string { return []string{a.ClientID} }
+func (a *AuthRequest) GetACR() string         { return "" }
+func (a *AuthRequest) GetAMR() []string       { return nil }
+func (a *AuthRequest) GetAudience() []string  { return []string{a.ClientID} }
 func (a *AuthRequest) GetAuthTime() time.Time {
 	if a.AuthTime != nil {
 		return *a.AuthTime
 	}
 	return time.Time{}
 }
-func (a *AuthRequest) GetClientID() string { return a.ClientID }
+func (a *AuthRequest) GetClientID() string    { return a.ClientID }
 func (a *AuthRequest) GetCodeChallenge() *oidc.CodeChallenge {
 	if a.CodeChallenge == "" {
 		return nil
@@ -69,10 +87,10 @@ func (a *AuthRequest) GetResponseType() oidc.ResponseType {
 	return oidc.ResponseType(a.ResponseType)
 }
 func (a *AuthRequest) GetResponseMode() oidc.ResponseMode { return "" }
-func (a *AuthRequest) GetScopes() []string                { return []string(a.Scopes) }
-func (a *AuthRequest) GetState() string                   { return a.State }
-func (a *AuthRequest) GetSubject() string                 { return a.Subject }
-func (a *AuthRequest) Done() bool                         { return a.IsDone }
+func (a *AuthRequest) GetScopes() []string { return []string(a.Scopes) }
+func (a *AuthRequest) GetState() string    { return a.State }
+func (a *AuthRequest) GetSubject() string  { return a.Subject }
+func (a *AuthRequest) Done() bool          { return a.IsDone }
 
 // RefreshToken is backed by the oidc_refresh_tokens table.
 type RefreshToken struct {
@@ -142,11 +160,12 @@ func (c *cliClient) AccessTokenType() op.AccessTokenType {
 func (c *cliClient) IDTokenLifetime() time.Duration { return time.Hour }
 func (c *cliClient) DevMode() bool                  { return false }
 func (c *cliClient) RestrictAdditionalIdTokenScopes() func(scopes []string) []string {
-	return func(scopes []string) []string { return scopes }
+	return nil
 }
 func (c *cliClient) RestrictAdditionalAccessTokenScopes() func(scopes []string) []string {
-	return func(scopes []string) []string { return scopes }
+	return nil
 }
-func (c *cliClient) IsScopeAllowed(scope string) bool     { return true }
+func (c *cliClient) IsScopeAllowed(scope string) bool    { return true }
 func (c *cliClient) IDTokenUserinfoClaimsAssertion() bool { return false }
 func (c *cliClient) ClockSkew() time.Duration             { return 0 }
+

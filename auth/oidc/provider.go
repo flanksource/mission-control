@@ -31,11 +31,6 @@ func NewProvider(ctx context.Context, issuerURL, signingKeyPath string) (*Provid
 		return nil, fmt.Errorf("oidc signing key: %w", err)
 	}
 
-	cryptoKey, err := loadOrGenerateCryptoKey(signingKeyPath)
-	if err != nil {
-		return nil, fmt.Errorf("oidc crypto key: %w", err)
-	}
-
 	signer := &signingKey{
 		id:         keyID,
 		algorithm:  "RS256",
@@ -44,8 +39,7 @@ func NewProvider(ctx context.Context, issuerURL, signingKeyPath string) (*Provid
 	storage := NewStorage(ctx, signer)
 
 	config := &op.Config{
-		CryptoKey:             cryptoKey,
-		GrantTypeRefreshToken: true,
+		CryptoKey: aesKeyFromIssuer(issuerURL),
 	}
 
 	oidcProvider, err := op.NewProvider(config, storage,
@@ -135,37 +129,9 @@ func writeRSAPrivateKey(path string, key *rsa.PrivateKey) error {
 	return os.WriteFile(path, data, 0600)
 }
 
-func loadOrGenerateCryptoKey(keyPath string) ([32]byte, error) {
-	if keyPath == "" {
-		keyPath = "oidc-crypto-key.key"
-	} else {
-		keyPath = keyPath + ".crypto"
-	}
-
+// aesKeyFromIssuer derives a 32-byte AES key from the issuer URL for OIDC internal encryption.
+func aesKeyFromIssuer(issuer string) [32]byte {
 	var key [32]byte
-	data, err := os.ReadFile(keyPath)
-	if err == nil {
-		if len(data) == 32 {
-			copy(key[:], data)
-			logger.Infof("OIDC: loaded crypto key from %s", keyPath)
-			return key, nil
-		}
-		return key, fmt.Errorf("crypto key at %s has invalid length %d (expected 32)", keyPath, len(data))
-	}
-
-	if !os.IsNotExist(err) {
-		return key, fmt.Errorf("read crypto key file %s: %w", keyPath, err)
-	}
-
-	// Generate new key
-	if _, err := rand.Read(key[:]); err != nil {
-		return key, fmt.Errorf("generate crypto key: %w", err)
-	}
-
-	if err := os.WriteFile(keyPath, key[:], 0600); err != nil {
-		return key, fmt.Errorf("write crypto key: %w", err)
-	}
-	logger.Infof("OIDC: generated new crypto key at %s", keyPath)
-
-	return key, nil
+	copy(key[:], []byte(issuer))
+	return key
 }

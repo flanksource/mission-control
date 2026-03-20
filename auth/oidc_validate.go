@@ -35,7 +35,7 @@ func authenticateOIDCToken(c echo.Context, tokenStr string) (bool, error) {
 		return false, nil
 	}
 
-	issuer := strings.TrimRight(api.FrontendURL, "/")
+	issuer := api.PublicURL
 
 	var lastErr error
 	for _, pub := range keys {
@@ -66,7 +66,7 @@ func authenticateOIDCToken(c echo.Context, tokenStr string) (bool, error) {
 			if auds, ok := claims["aud"].([]any); ok {
 				found := false
 				for _, a := range auds {
-					if audStr, ok := a.(string); ok && audStr == oidcmodels.ClientID {
+					if a.(string) == oidcmodels.ClientID {
 						found = true
 						break
 					}

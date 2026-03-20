@@ -4,9 +4,7 @@ import (
 	gocontext "context"
 	"crypto"
 	"crypto/rsa"
-	"crypto/sha256"
 	"crypto/x509"
-	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
@@ -29,7 +27,7 @@ type signingKey struct {
 
 func (s *signingKey) SignatureAlgorithm() jose.SignatureAlgorithm { return s.algorithm }
 func (s *signingKey) Key() any                                    { return s.privateKey }
-func (s *signingKey) ID() string                                  { return s.id }
+func (s *signingKey) ID() string                                   { return s.id }
 
 type publicKey struct {
 	id        string
@@ -37,10 +35,10 @@ type publicKey struct {
 	key       *rsa.PublicKey
 }
 
-func (p *publicKey) ID() string                         { return p.id }
-func (p *publicKey) Algorithm() jose.SignatureAlgorithm { return p.algorithm }
-func (p *publicKey) Use() string                        { return "sig" }
-func (p *publicKey) Key() any                           { return p.key }
+func (p *publicKey) ID() string                                    { return p.id }
+func (p *publicKey) Algorithm() jose.SignatureAlgorithm            { return p.algorithm }
+func (p *publicKey) Use() string                                   { return "sig" }
+func (p *publicKey) Key() any                                      { return p.key }
 
 // Storage implements op.Storage backed by Postgres.
 type Storage struct {
@@ -76,6 +74,7 @@ func (s *Storage) CreateAuthRequest(_ gocontext.Context, req *oidc.AuthRequest, 
 	return ar, nil
 }
 
+
 func (s *Storage) AuthRequestByID(_ gocontext.Context, id string) (op.AuthRequest, error) {
 	var ar AuthRequest
 	if err := s.ctx.DB().Where("id = ? AND expires_at > NOW()", id).First(&ar).Error; err != nil {
@@ -86,7 +85,7 @@ func (s *Storage) AuthRequestByID(_ gocontext.Context, id string) (op.AuthReques
 
 func (s *Storage) AuthRequestByCode(_ gocontext.Context, code string) (op.AuthRequest, error) {
 	var ar AuthRequest
-	if err := s.ctx.DB().Where("code = ? AND expires_at > NOW()", hashToken(code)).First(&ar).Error; err != nil {
+	if err := s.ctx.DB().Where("code = ? AND expires_at > NOW()", code).First(&ar).Error; err != nil {
 		return nil, fmt.Errorf("auth request not found: %w", err)
 	}
 	return &ar, nil
@@ -94,7 +93,7 @@ func (s *Storage) AuthRequestByCode(_ gocontext.Context, code string) (op.AuthRe
 
 func (s *Storage) SaveAuthCode(_ gocontext.Context, id, code string) error {
 	return s.ctx.DB().Model(&AuthRequest{}).Where("id = ?", id).
-		Updates(map[string]any{"code": hashToken(code), "done": true}).Error
+		Updates(map[string]any{"code": code, "done": true}).Error
 }
 
 func (s *Storage) DeleteAuthRequest(_ gocontext.Context, id string) error {
@@ -114,28 +113,26 @@ func (s *Storage) CreateAccessAndRefreshTokens(_ gocontext.Context, req op.Token
 	if currentRefreshToken != "" {
 		// find existing rotation family
 		var existing RefreshToken
-		if err := s.ctx.DB().Where("token = ?", hashToken(currentRefreshToken)).First(&existing).Error; err == nil {
+		if err := s.ctx.DB().Where("token = ?", currentRefreshToken).First(&existing).Error; err == nil {
 			rotationID = existing.RotationID
 			// rotate: mark old token expired
-			s.ctx.DB().Model(&RefreshToken{}).Where("token = ?", hashToken(currentRefreshToken)).
+			s.ctx.DB().Model(&RefreshToken{}).Where("token = ?", currentRefreshToken).
 				Update("expires_at", time.Now())
 		}
 	}
 
-	now := time.Now()
-	clientID := ClientID
-	if aud := req.GetAudience(); len(aud) > 0 {
-		clientID = aud[0]
+	ar, ok := req.(*AuthRequest)
+	if !ok {
+		return "", "", time.Time{}, fmt.Errorf("unexpected request type %T", req)
 	}
 
-	rawRefreshToken := uuid.New().String()
-
+	now := time.Now()
 	rt := &RefreshToken{
 		ID:         uuid.New().String(),
-		Token:      hashToken(rawRefreshToken),
-		ClientID:   clientID,
-		Subject:    req.GetSubject(),
-		Scopes:     StringList(req.GetScopes()),
+		Token:      uuid.New().String(),
+		ClientID:   ar.ClientID,
+		Subject:    ar.Subject,
+		Scopes:     ar.Scopes,
 		AuthTime:   now,
 		RotationID: rotationID,
 		CreatedAt:  now,
@@ -145,12 +142,12 @@ func (s *Storage) CreateAccessAndRefreshTokens(_ gocontext.Context, req op.Token
 		return "", "", time.Time{}, fmt.Errorf("create refresh token: %w", err)
 	}
 
-	return accessTokenID, rawRefreshToken, expiry, nil
+	return accessTokenID, rt.Token, expiry, nil
 }
 
 func (s *Storage) TokenRequestByRefreshToken(_ gocontext.Context, refreshToken string) (op.RefreshTokenRequest, error) {
 	var rt RefreshToken
-	if err := s.ctx.DB().Where("token = ? AND expires_at > NOW()", hashToken(refreshToken)).First(&rt).Error; err != nil {
+	if err := s.ctx.DB().Where("token = ? AND expires_at > NOW()", refreshToken).First(&rt).Error; err != nil {
 		return nil, op.ErrInvalidRefreshToken
 	}
 	return &rt, nil
@@ -165,7 +162,7 @@ func (s *Storage) RevokeToken(_ gocontext.Context, tokenOrID, userID, _ string) 
 	if userID != "" {
 		query = s.ctx.DB().Where("id = ? AND subject = ?", tokenOrID, userID)
 	} else {
-		query = s.ctx.DB().Where("id = ? OR token = ?", tokenOrID, hashToken(tokenOrID))
+		query = s.ctx.DB().Where("token = ?", tokenOrID)
 	}
 	if err := query.Delete(&RefreshToken{}).Error; err != nil {
 		return oidc.ErrServerError()
@@ -175,7 +172,7 @@ func (s *Storage) RevokeToken(_ gocontext.Context, tokenOrID, userID, _ string) 
 
 func (s *Storage) GetRefreshTokenInfo(_ gocontext.Context, _, token string) (string, string, error) {
 	var rt RefreshToken
-	if err := s.ctx.DB().Where("token = ?", hashToken(token)).First(&rt).Error; err != nil {
+	if err := s.ctx.DB().Where("token = ?", token).First(&rt).Error; err != nil {
 		return "", "", op.ErrInvalidRefreshToken
 	}
 	return rt.Subject, rt.ID, nil
@@ -265,7 +262,6 @@ func (s *Storage) SetAuthRequestSubject(id, subject string) error {
 		Updates(map[string]any{
 			"subject":   subject,
 			"auth_time": now,
-			"done":      true,
 		}).Error
 }
 
@@ -305,7 +301,3 @@ func generateKeyID(pub *rsa.PublicKey) (string, error) {
 	return fmt.Sprintf("%x", h.Sum(nil))[:16], nil
 }
 
-func hashToken(token string) string {
-	h := sha256.Sum256([]byte(token))
-	return base64.RawURLEncoding.EncodeToString(h[:])
-}

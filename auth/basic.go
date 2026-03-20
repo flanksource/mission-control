@@ -19,8 +19,8 @@ import (
 )
 
 var (
-	HtpasswdFile       string
-	OIDCEnabled        bool
+	HtpasswdFile     string
+	OIDCEnabled      bool
 	OIDCSigningKeyPath string
 
 	checker       *htpasswd.File
@@ -165,7 +165,6 @@ func basicAuthMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 					}
 				}
 			}
-			setWWWAuthenticate(c)
 			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		}
 
@@ -193,27 +192,6 @@ func LookupPersonByUsername(ctx context.Context, username string) (string, error
 		return "", err
 	}
 	return person.ID.String(), nil
-}
-
-// HtpasswdChecker wraps htpasswd.File to implement oidc.CredentialChecker.
-type HtpasswdChecker struct {
-	file *htpasswd.File
-}
-
-func NewHtpasswdChecker(path string) (*HtpasswdChecker, error) {
-	f, err := htpasswd.New(path, htpasswd.DefaultSystems, nil)
-	if err != nil {
-		return nil, err
-	}
-	return &HtpasswdChecker{file: f}, nil
-}
-
-func (h *HtpasswdChecker) Match(ctx context.Context, user, pass string) error {
-	match := h.file.Match(user, pass)
-	if !match {
-		return fmt.Errorf("invalid credentials")
-	}
-	return nil
 }
 
 func lookupPerson(ctx context.Context, user string) (*models.Person, error) {
