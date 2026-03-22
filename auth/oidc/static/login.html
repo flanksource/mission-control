@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in — Mission Control</title>
+  <script src="/oidc/static/tailwind.min.js"></script>
+</head>
+<body class="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+  <div class="w-full max-w-sm">
+    <div class="text-center mb-8">
+      <img src="/oidc/static/logo.svg" alt="Mission Control" class="mx-auto h-10">
+      <p class="mt-4 text-sm text-gray-500">Sign in to your account</p>
+    </div>
+
+    <div class="bg-white rounded-xl shadow-sm ring-1 ring-gray-900/5 p-6">
+      <form method="POST" action="/oidc/login" class="space-y-4">
+        <input type="hidden" name="auth_request_id" value="%s">
+        <div>
+          <label for="username" class="block text-sm font-medium text-gray-700 mb-1">Username</label>
+          <input id="username" name="username" type="text" autocomplete="username" required
+            class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm placeholder-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
+        </div>
+        <div>
+          <label for="password" class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+          <input id="password" name="password" type="password" autocomplete="current-password" required
+            class="block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm placeholder-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none">
+        </div>
+        <button type="submit"
+          class="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors">
+          Sign in
+        </button>
+      </form>
+      %s
+    </div>
+  </div>
+</body>
+</html>
