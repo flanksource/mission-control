@@ -155,6 +155,17 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 			return next(c)
 		}
 
+		// Try OIDC Bearer token first when enabled
+		if OIDCEnabled {
+			if token, ok := extractBearerAuthToken(c.Request().Header); ok {
+				if authenticated, err := authenticateOIDCToken(c, token); err != nil {
+					return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal error"})
+				} else if authenticated {
+					return next(c)
+				}
+			}
+		}
+
 		ctx := c.Request().Context().(context.Context)
 		session, err := k.validateSession(ctx, c.Request())
 		if err != nil {
@@ -212,6 +223,34 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 
 		return next(c)
 	}
+}
+
+// KratosCredentialChecker validates credentials via Kratos API,
+// implementing oidc.CredentialChecker for the OIDC login flow.
+type KratosCredentialChecker struct {
+	middleware *kratosMiddleware
+}
+
+func NewKratosCredentialChecker(m *kratosMiddleware) *KratosCredentialChecker {
+	return &KratosCredentialChecker{middleware: m}
+}
+
+func (k *KratosCredentialChecker) Match(ctx context.Context, user, pass string) error {
+	_, err := k.middleware.kratosLoginWithCache(ctx, user, pass)
+	return err
+}
+
+// LookupKratosPersonByUsername finds a person by email in the Kratos identities table.
+func LookupKratosPersonByUsername(ctx context.Context, username string) (string, error) {
+	var id string
+	err := ctx.DB().Raw(`SELECT id FROM identities WHERE traits->>'email' = ?`, strings.ToLower(username)).Scan(&id).Error
+	if err != nil {
+		return "", fmt.Errorf("identity not found: %w", err)
+	}
+	if id == "" {
+		return "", fmt.Errorf("identity not found for %s", username)
+	}
+	return id, nil
 }
 
 type kratosMiddleware struct {
