@@ -136,12 +136,21 @@ manifests: generate gen-schemas ## Generate WebhookConfiguration, ClusterRole an
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	$(CONTROLLER_GEN) object paths="./api/..." paths="./logs/..."
 
+TAILWIND_VERSION ?= 3.4.17
+TAILWIND_JS = auth/oidc/static/tailwind.min.js
+
+$(TAILWIND_JS):
+	curl -sL "https://cdn.tailwindcss.com/$(TAILWIND_VERSION)" -o $(TAILWIND_JS)
+
+.PHONY: static
+static: $(TAILWIND_JS)
+
 .PHONY: build
-build:
+build: static
 	go build -o ./.bin/$(NAME) -ldflags "-X \"main.version=$(VERSION_TAG) built at $(DATE)\""  main.go
 
 .PHONY: dev
-dev:
+dev: static
  	# Disabling CGO because of slow build times in apple silicon (just experimenting)
 	CGO_ENABLED=0 go build -v -o ./.bin/$(NAME) -gcflags="all=-N -l" main.go
 
