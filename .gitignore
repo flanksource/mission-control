@@ -45,3 +45,5 @@ specs/
 .db/
 .facet/
 auth/oidc/static/tailwind.min.js
+**/*.pem
+**/*.key
