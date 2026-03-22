@@ -106,7 +106,7 @@ var _ = ginkgo.Describe("OIDC Browser Login Flow", ginkgo.Label("slow"), ginkgo.
 
 		Expect(oidcclient.ValidateNonce(tokens.IDToken, nonce)).To(Succeed())
 
-		req, err := http.NewRequest("GET", serverURL+"/oidc/userinfo", nil)
+		req, err := http.NewRequest("GET", serverURL+"/userinfo", nil)
 		Expect(err).ToNot(HaveOccurred())
 		req.Header.Set("Authorization", "Bearer "+tokens.AccessToken)
 
@@ -130,7 +130,7 @@ var _ = ginkgo.Describe("OIDC Browser Login Flow", ginkgo.Label("slow"), ginkgo.
 		Expect(refreshed.AccessToken).ToNot(Equal(originalAccess))
 
 		// Verify new access token works
-		req, err := http.NewRequest("GET", serverURL+"/oidc/userinfo", nil)
+		req, err := http.NewRequest("GET", serverURL+"/userinfo", nil)
 		Expect(err).ToNot(HaveOccurred())
 		req.Header.Set("Authorization", "Bearer "+refreshed.AccessToken)
 
