@@ -1,6 +1,10 @@
 package oidc
 
 import (
+	"io/fs"
+	"net/http"
+	"strings"
+
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/incident-commander/auth/oidc/static"
 	"github.com/labstack/echo/v4"
@@ -11,7 +15,7 @@ import (
 // so that discovery at /oidc/.well-known/openid-configuration returns correct endpoint URLs.
 // A convenience redirect from /.well-known/openid-configuration is provided for standard discovery.
 func MountRoutes(e *echo.Echo, ctx context.Context, issuerURL, signingKeyPath string, checker CredentialChecker, lookup PersonLookup) error {
-	oidcIssuer := strings.TrimRight(issuerURL, "/") + "/oidc"
+	oidcIssuer := strings.TrimRight(issuerURL, "/")
 	provider, err := NewProvider(ctx, oidcIssuer, signingKeyPath)
 	if err != nil {
 		return err
@@ -35,6 +39,11 @@ func MountRoutes(e *echo.Echo, ctx context.Context, issuerURL, signingKeyPath st
 	e.Any("/keys", h)
 	e.Any("/endsession", h)
 	e.Any("/.well-known/*", h)
+
+	// Serve embedded static assets (logo, tailwind)
+	staticFS, _ := fs.Sub(static.FS, ".")
+	staticHandler := http.StripPrefix("/oidc/static/", http.FileServer(http.FS(staticFS)))
+	e.GET("/oidc/static/*", echo.WrapHandler(staticHandler))
 
 	return nil
 }

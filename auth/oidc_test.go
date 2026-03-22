@@ -275,7 +275,7 @@ var _ = ginkgo.Describe("OIDC", func() {
 			defer func() { api.PublicURL = savedPublicURL }()
 
 			claims := jwt.MapClaims{
-				"iss": "http://localhost:8080/oidc",
+				"iss": "http://localhost:8080",
 				"aud": oidc.ClientID,
 				"sub": person.ID.String(),
 				"exp": time.Now().Add(time.Hour).Unix(),
@@ -301,7 +301,7 @@ var _ = ginkgo.Describe("OIDC", func() {
 			defer func() { api.PublicURL = savedPublicURL }()
 
 			claims := jwt.MapClaims{
-				"iss": "http://localhost:8080/oidc",
+				"iss": "http://localhost:8080",
 				"aud": oidc.ClientID,
 				"sub": person.ID.String(),
 				"exp": time.Now().Add(time.Hour).Unix(),
@@ -328,7 +328,7 @@ var _ = ginkgo.Describe("OIDC", func() {
 			defer func() { api.PublicURL = savedPublicURL }()
 
 			claims := jwt.MapClaims{
-				"iss": "http://localhost:8080/oidc",
+				"iss": "http://localhost:8080",
 				"aud": oidc.ClientID,
 				"sub": person.ID.String(),
 				"exp": time.Now().Add(-1 * time.Hour).Unix(),
@@ -355,7 +355,7 @@ var _ = ginkgo.Describe("OIDC", func() {
 			defer func() { api.PublicURL = savedPublicURL }()
 
 			claims := jwt.MapClaims{
-				"iss": "http://localhost:8080/oidc",
+				"iss": "http://localhost:8080",
 				"aud": "wrong-client",
 				"sub": person.ID.String(),
 				"exp": time.Now().Add(time.Hour).Unix(),
@@ -382,7 +382,7 @@ var _ = ginkgo.Describe("OIDC", func() {
 			defer func() { api.PublicURL = savedPublicURL }()
 
 			claims := jwt.MapClaims{
-				"iss": "http://localhost:8080/oidc",
+				"iss": "http://localhost:8080",
 				"aud": oidc.ClientID,
 				"sub": uuid.New().String(), // non-existent person
 				"exp": time.Now().Add(time.Hour).Unix(),
@@ -400,7 +400,7 @@ var _ = ginkgo.Describe("OIDC", func() {
 
 	ginkgo.Describe("LoginHandler", func() {
 		ginkgo.It("renders login form with auth_request_id", func() {
-			login := oidc.NewLoginHandler(provider.Storage, provider.OpenIDProvider, &mockChecker{}, mockLookup, "http://localhost:8080/oidc")
+			login := oidc.NewLoginHandler(provider.Storage, provider.OpenIDProvider, &mockChecker{}, mockLookup, "http://localhost:8080")
 			e := newEchoInstance(DefaultContext)
 			req := httptest.NewRequest(http.MethodGet, "/oidc/login?auth_request_id=test-123", nil)
 			req = req.WithContext(DefaultContext.Wrap(req.Context()))
@@ -414,7 +414,7 @@ var _ = ginkgo.Describe("OIDC", func() {
 		})
 
 		ginkgo.It("returns 400 when auth_request_id is missing", func() {
-			login := oidc.NewLoginHandler(provider.Storage, provider.OpenIDProvider, &mockChecker{}, mockLookup, "http://localhost:8080/oidc")
+			login := oidc.NewLoginHandler(provider.Storage, provider.OpenIDProvider, &mockChecker{}, mockLookup, "http://localhost:8080")
 			e := newEchoInstance(DefaultContext)
 			req := httptest.NewRequest(http.MethodGet, "/oidc/login", nil)
 			req = req.WithContext(DefaultContext.Wrap(req.Context()))
@@ -426,7 +426,7 @@ var _ = ginkgo.Describe("OIDC", func() {
 		})
 
 		ginkgo.It("rejects invalid credentials", func() {
-			login := oidc.NewLoginHandler(provider.Storage, provider.OpenIDProvider, &mockChecker{valid: false}, mockLookup, "http://localhost:8080/oidc")
+			login := oidc.NewLoginHandler(provider.Storage, provider.OpenIDProvider, &mockChecker{valid: false}, mockLookup, "http://localhost:8080")
 			e := newEchoInstance(DefaultContext)
 
 			form := url.Values{
