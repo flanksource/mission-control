@@ -61,15 +61,28 @@ export interface ViewVariable {
   options: string[];
 }
 
+export type HeatmapVariant = 'calendar' | 'compact';
+
 export interface PanelResult {
   name: string;
   description?: string;
-  type: 'piechart' | 'number' | 'gauge' | 'properties' | 'bargauge';
+  type:
+    | 'piechart'
+    | 'number'
+    | 'gauge'
+    | 'properties'
+    | 'bargauge'
+    | 'text'
+    | 'table'
+    | 'duration'
+    | 'timeseries'
+    | 'heatmap';
   piechart?: { showLabels?: boolean; colors?: Record<string, string> };
   number?: { unit?: string };
   gauge?: GaugeConfig & { unit?: string };
   bargauge?: { unit?: string };
-  rows: Record<string, any>[];
+  heatmap?: { mode?: HeatmapVariant };
+  rows?: Record<string, any>[];
 }
 
 export interface ViewSectionResult {
