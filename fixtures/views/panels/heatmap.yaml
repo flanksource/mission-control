@@ -1,0 +1,36 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: View
+metadata:
+  name: check-runs-heatmap
+  namespace: mc
+spec:
+  display:
+    title: Check Runs Heatmap
+    icon: activity
+    sidebar: true
+  queries:
+    daily_runs:
+      sql:
+        connection: connection://mc/mission-control
+        query: |
+          SELECT
+            DATE(time) AS date,
+            COUNT(*) AS count
+          FROM check_statuses
+          WHERE time >= NOW() - INTERVAL '2 months'
+          GROUP BY DATE(time)
+          ORDER BY DATE(time)
+  panels:
+    - name: Daily Run Status (Calendar)
+      description: Calendar heatmap of daily run outcomes
+      type: heatmap
+      heatmap:
+        mode: calendar
+      query: SELECT date, count FROM daily_runs
+
+    - name: Daily Run Status (Compact)
+      description: Compact heatmap of daily run outcomes
+      type: heatmap
+      heatmap:
+        mode: compact
+      query: SELECT date, count FROM daily_runs

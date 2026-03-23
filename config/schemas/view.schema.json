@@ -652,6 +652,9 @@
         "timeseries": {
           "$ref": "#/$defs/PanelTimeseriesConfig"
         },
+        "heatmap": {
+          "$ref": "#/$defs/PanelHeatmapConfig"
+        },
         "query": {
           "type": "string"
         }
@@ -682,6 +685,15 @@
           "type": "array"
         },
         "unit": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object"
+    },
+    "PanelHeatmapConfig": {
+      "properties": {
+        "mode": {
           "type": "string"
         }
       },
