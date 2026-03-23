@@ -70,6 +70,7 @@ ci-test: $(TAILWIND_JS)
 
 .PHONY: e2e
 e2e: $(TAILWIND_JS)
+	go build -o ./.bin/$(NAME) main.go
 	ginkgo -r --keep-going  ./tests/e2e/...
 
 fmt:
