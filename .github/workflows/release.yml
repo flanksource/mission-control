@@ -30,7 +30,7 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6
         with:
-          go-version: v1.25.x
+          go-version: v1.26.x
           cache: false
 
       - uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4
@@ -39,9 +39,9 @@ jobs:
             ~/go/pkg/mod
             ~/.cache/go-build
             .bin
-          key: cache-go-1.25-${{ hashFiles('**/go.sum') }}-${{ hashFiles('.bin/*') }}
+          key: cache-go-1.26-${{ hashFiles('**/go.sum') }}-${{ hashFiles('.bin/*') }}
           restore-keys: |
-            cache-go-1.25-
+            cache-go-1.26-
       - run: make release
         env:
           VERSION: v${{ needs.semantic-release.outputs.release-version }}
