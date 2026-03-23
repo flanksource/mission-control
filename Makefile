@@ -35,13 +35,19 @@ KUSTOMIZE_VERSION ?= v3.8.7
 CONTROLLER_TOOLS_VERSION ?= v0.19.0
 GOLANGCI_LINT_VERSION ?= v2.7.2
 
+TAILWIND_VERSION ?= 3.4.17
+TAILWIND_JS = auth/oidc/static/tailwind.min.js
+
+$(TAILWIND_JS):
+	curl -sL "https://cdn.tailwindcss.com/$(TAILWIND_VERSION)" -o $(TAILWIND_JS)
+
 .PHONY: help
 help: ## Display this help.
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
 
 
 .PHONY: static
-static: manifests generate fmt ginkgo
+static: $(TAILWIND_JS) manifests generate fmt ginkgo
 
 .PHONY: test
 test:
@@ -135,15 +141,6 @@ manifests: generate gen-schemas ## Generate WebhookConfiguration, ClusterRole an
 .PHONY: generate
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	$(CONTROLLER_GEN) object paths="./api/..." paths="./logs/..."
-
-TAILWIND_VERSION ?= 3.4.17
-TAILWIND_JS = auth/oidc/static/tailwind.min.js
-
-$(TAILWIND_JS):
-	curl -sL "https://cdn.tailwindcss.com/$(TAILWIND_VERSION)" -o $(TAILWIND_JS)
-
-.PHONY: static
-static: $(TAILWIND_JS)
 
 .PHONY: build
 build: static
