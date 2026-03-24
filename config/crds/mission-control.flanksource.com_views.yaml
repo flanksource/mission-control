@@ -470,7 +470,9 @@ spec:
                           type: string
                       type: object
                     heatmap:
-                      description: Configuration for heatmap visualization
+                      description: |-
+                        Configuration for heatmap visualization.
+                        See PanelHeatmapConfig for the expected query column contract.
                       properties:
                         mode:
                           description: Visual style for heatmap rendering.

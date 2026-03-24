@@ -67,7 +67,8 @@ type PanelMeta struct {
 	// Configuration for timeseries visualization
 	Timeseries *PanelTimeseriesConfig `json:"timeseries,omitempty" yaml:"timeseries,omitempty"`
 
-	// Configuration for heatmap visualization
+	// Configuration for heatmap visualization.
+	// See PanelHeatmapConfig for the expected query column contract.
 	Heatmap *PanelHeatmapConfig `json:"heatmap,omitempty" yaml:"heatmap,omitempty"`
 }
 
@@ -138,7 +139,16 @@ const (
 	HeatmapVariantCompact  HeatmapVariant = "compact"
 )
 
-// PanelHeatmapConfig defines configuration for heatmap visualization
+// PanelHeatmapConfig defines configuration for heatmap visualization.
+//
+// Expected query columns:
+//   - date (required) — date in YYYY-MM-DD format. Aliases: day, timestamp. Full timestamps are
+//     truncated to the date portion.
+//   - successful (optional) — number of successful occurrences.
+//   - failed (optional) — number of failed occurrences.
+//   - count (optional) — total occurrences. Used as a fallback when both successful and failed are
+//     absent; the entire count is treated as successful.
+//
 // +kubebuilder:object:generate=true
 type PanelHeatmapConfig struct {
 	// Visual style for heatmap rendering.
