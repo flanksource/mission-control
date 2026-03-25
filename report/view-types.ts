@@ -61,8 +61,6 @@ export interface ViewVariable {
   options: string[];
 }
 
-export type HeatmapVariant = 'calendar' | 'compact';
-
 export interface BarGaugeConfig {
   min?: number;
   max?: number;
@@ -103,7 +101,6 @@ export interface PanelResult {
   gauge?: GaugeConfig & { unit?: string };
   bargauge?: BarGaugeConfig;
   timeseries?: TimeseriesConfig;
-  heatmap?: { mode?: HeatmapVariant };
   rows?: Record<string, any>[];
 }
 
