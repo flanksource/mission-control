@@ -18,6 +18,7 @@ const (
 	PanelTypeBargauge   PanelType = "bargauge"
 	PanelTypeProperties PanelType = "properties"
 	PanelTypeTimeseries PanelType = "timeseries"
+	PanelTypeHeatmap    PanelType = "heatmap"
 )
 
 // PanelDef defines a panel for the view
@@ -28,6 +29,7 @@ const (
 // +kubebuilder:validation:XValidation:rule="self.type!='table' ? !has(self.table) : true",message="table config not allowed for this type"
 // +kubebuilder:validation:XValidation:rule="self.type!='bargauge' ? !has(self.bargauge) : true",message="bargauge config not allowed for this type"
 // +kubebuilder:validation:XValidation:rule="self.type!='timeseries' ? !has(self.timeseries) : true",message="timeseries config not allowed for this type"
+// +kubebuilder:validation:XValidation:rule="self.type!='heatmap' ? !has(self.heatmap) : true",message="heatmap config not allowed for this type"
 type PanelDef struct {
 	PanelMeta `json:",inline" yaml:",inline"`
 
@@ -44,7 +46,7 @@ type PanelMeta struct {
 	Description string `json:"description,omitempty" yaml:"description,omitempty"`
 
 	// Type of panel visualization
-	// +kubebuilder:validation:Enum=piechart;text;gauge;number;table;duration;bargauge;properties;timeseries
+	// +kubebuilder:validation:Enum=piechart;text;gauge;number;table;duration;bargauge;properties;timeseries;heatmap
 	Type PanelType `json:"type" yaml:"type"`
 
 	// Configuration for gauge visualization
@@ -64,6 +66,10 @@ type PanelMeta struct {
 
 	// Configuration for timeseries visualization
 	Timeseries *PanelTimeseriesConfig `json:"timeseries,omitempty" yaml:"timeseries,omitempty"`
+
+	// Configuration for heatmap visualization.
+	// See PanelHeatmapConfig for the expected query column contract.
+	Heatmap *PanelHeatmapConfig `json:"heatmap,omitempty" yaml:"heatmap,omitempty"`
 }
 
 // +kubebuilder:object:generate=true
@@ -124,6 +130,30 @@ type PanelTimeseriesConfig struct {
 	ValueKey string `json:"valueKey,omitempty" yaml:"valueKey,omitempty"`
 	// Legend configuration for the timeseries chart.
 	Legend *PanelTimeseriesLegendConfig `json:"legend,omitempty" yaml:"legend,omitempty"`
+}
+
+type HeatmapVariant string
+
+const (
+	HeatmapVariantCalendar HeatmapVariant = "calendar"
+	HeatmapVariantCompact  HeatmapVariant = "compact"
+)
+
+// PanelHeatmapConfig defines configuration for heatmap visualization.
+//
+// Expected query columns:
+//   - date (required) — date in YYYY-MM-DD format. Aliases: day, timestamp. Full timestamps are
+//     truncated to the date portion.
+//   - successful (optional) — number of successful occurrences.
+//   - failed (optional) — number of failed occurrences.
+//   - count (optional) — total occurrences. Used as a fallback when both successful and failed are
+//     absent; the entire count is treated as successful.
+//
+// +kubebuilder:object:generate=true
+type PanelHeatmapConfig struct {
+	// Visual style for heatmap rendering.
+	// +kubebuilder:validation:Enum=calendar;compact
+	Mode HeatmapVariant `json:"mode,omitempty" yaml:"mode,omitempty"`
 }
 
 type PanelResult struct {
