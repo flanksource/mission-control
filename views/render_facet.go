@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 
 	commonshttp "github.com/flanksource/commons/http"
 	"github.com/flanksource/duty/connection"
@@ -344,7 +345,7 @@ func renderFacetCLI(ctx context.Context, data any, format string) ([]byte, error
 	return result, nil
 }
 
-func viewFacetSrcDir() (string, error) {
+var viewFacetSrcDir = sync.OnceValues(func() (string, error) {
 	cacheDir, err := os.UserCacheDir()
 	if err != nil {
 		cacheDir = os.TempDir()
@@ -360,7 +361,7 @@ func viewFacetSrcDir() (string, error) {
 	}
 
 	return dir, nil
-}
+})
 
 func viewExtractReportFiles(destDir string) error {
 	return fs.WalkDir(report.FS, ".", func(path string, d fs.DirEntry, err error) error {
