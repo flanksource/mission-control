@@ -63,6 +63,9 @@ jobs:
           echo "Cache directories size:"
           du -sh ~/go/pkg/mod ~/.cache/go-build .bin 2>/dev/null || echo "Some cache directories not found yet"
 
+      - name: Install facet
+        run: npm install -g @flanksource/facet
+
       - name: Test
         run: make static ci-test
 
