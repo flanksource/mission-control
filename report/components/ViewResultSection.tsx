@@ -789,11 +789,12 @@ function TablePanel({ panel }: { panel: PanelResult }) {
   if (rows.length === 0) {
     return <span className="text-[7pt] text-gray-400">No data</span>;
   }
-  const headers = Object.keys(rows[0]).map((k) =>
+  const headerKeys = Object.keys(rows[0]);
+  const headers = headerKeys.map((k) =>
     k.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
   );
   const tableRows = rows.map((row) =>
-    Object.values(row).map((v) => (v != null ? String(v) : '-')),
+    headerKeys.map((k) => (row[k] != null ? String(row[k]) : '-')),
   );
   return <CompactTable variant="reference" columns={headers} data={tableRows} />;
 }
@@ -839,7 +840,7 @@ function BarGaugePanel({ panel }: { panel: PanelResult }) {
         // Per-row config override (from grouping)
         const rowBargauge = (row._bargauge as Partial<BarGaugeConfig> | undefined) ?? {};
         const max = rowBargauge.max ?? (row.max as number | undefined) ?? globalConfig.max ?? 100;
-        const min = globalConfig.min;
+        const min = rowBargauge.min ?? (row.min as number | undefined) ?? globalConfig.min ?? 0;
         const unit = rowBargauge.unit ?? globalConfig.unit ?? '';
         const thresholds = rowBargauge.thresholds ?? globalConfig.thresholds;
         const format = rowBargauge.format ?? globalConfig.format;
@@ -902,7 +903,7 @@ function TimeseriesPanel({ panel }: { panel: PanelResult }) {
   }
 
   const timeKey = inferTimeKey(rows, panel.timeseries?.timeKey);
-  const valueKey = inferValueKey(rows, timeKey) ?? panel.timeseries?.valueKey;
+  const valueKey = panel.timeseries?.valueKey ?? inferValueKey(rows, timeKey);
 
   // Collect series label keys (keys that aren't time or value)
   const sample = rows[0] ?? {};

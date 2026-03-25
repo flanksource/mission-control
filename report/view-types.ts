@@ -101,7 +101,7 @@ export interface PanelResult {
   gauge?: GaugeConfig & { unit?: string };
   bargauge?: BarGaugeConfig;
   timeseries?: TimeseriesConfig;
-  rows?: Record<string, any>[];
+  rows: Record<string, any>[];
 }
 
 export interface ViewSectionResult {
