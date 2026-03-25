@@ -63,6 +63,27 @@ export interface ViewVariable {
 
 export type HeatmapVariant = 'calendar' | 'compact';
 
+export interface BarGaugeConfig {
+  min?: number;
+  max?: number;
+  unit?: string;
+  thresholds?: GaugeThreshold[];
+  precision?: number;
+  format?: 'percentage' | 'multiplier';
+  group?: string;
+}
+
+export interface TimeseriesConfig {
+  timeKey?: string;
+  style?: 'lines' | 'area' | 'points';
+  valueKey?: string;
+  legend?: { enable?: boolean; layout?: 'vertical' | 'horizontal' };
+}
+
+export interface NumberConfig {
+  unit?: string;
+  precision?: number;
+}
 export interface PanelResult {
   name: string;
   description?: string;
@@ -78,9 +99,10 @@ export interface PanelResult {
     | 'timeseries'
     | 'heatmap';
   piechart?: { showLabels?: boolean; colors?: Record<string, string> };
-  number?: { unit?: string };
+  number?: NumberConfig;
   gauge?: GaugeConfig & { unit?: string };
-  bargauge?: { unit?: string };
+  bargauge?: BarGaugeConfig;
+  timeseries?: TimeseriesConfig;
   heatmap?: { mode?: HeatmapVariant };
   rows?: Record<string, any>[];
 }

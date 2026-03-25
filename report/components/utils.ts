@@ -78,3 +78,50 @@ export const PURPOSE_COLORS: Record<string, string> = {
   backup: '#D97706',
   dr: '#DC2626',
 };
+
+/**
+ * Formats a numeric value for display with optional unit and precision handling.
+ */
+export function formatDisplayValue(
+  value: number,
+  unit?: string,
+  precision?: number,
+): string {
+  if (!unit) {
+    return Number(value.toFixed(precision ?? 0)).toString();
+  }
+  switch (unit) {
+    case 'percent':
+      return `${Number(value.toFixed(precision ?? 0))}%`;
+    case 'bytes':
+      return formatBytes(value);
+    case 'millicores':
+    case 'millicore':
+      if (value === 0) return '0';
+      if (value > 0 && value < 1) return '1m';
+      if (value >= 1000) {
+        const cores = value / 1000;
+        return cores === Math.round(cores) ? `${Math.round(cores)}` : `${cores.toFixed(1)}`;
+      }
+      return `${Math.round(value)}m`;
+    default: {
+      const rounded = Number(value.toFixed(precision ?? 0));
+      return `${rounded} ${unit}`;
+    }
+  }
+}
+
+/**
+ * Determines the color for a gauge based on percentage and defined thresholds.
+ */
+export function getGaugeColor(
+  percentage: number,
+  thresholds: Array<{ percent: number; color: string }>,
+): string {
+  const sorted = [...thresholds].sort((a, b) => a.percent - b.percent);
+  let color = '#3B82F6';
+  for (const t of sorted) {
+    if (percentage >= t.percent) color = t.color;
+  }
+  return color;
+}
