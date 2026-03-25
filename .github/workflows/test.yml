@@ -63,6 +63,9 @@ jobs:
           echo "Cache directories size:"
           du -sh ~/go/pkg/mod ~/.cache/go-build .bin 2>/dev/null || echo "Some cache directories not found yet"
 
+      - name: Install bun
+        uses: oven-sh/setup-bun@v2
+
       - name: Install facet
         run: |
           curl -sL $(curl -s https://api.github.com/repos/flanksource/facet/releases/latest | jq -r '.assets[] | select(.name == "facet-linux-x64") | .browser_download_url') -o /usr/local/bin/facet
