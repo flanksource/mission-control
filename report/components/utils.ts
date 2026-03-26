@@ -27,10 +27,33 @@ export function formatBytes(bytes: number): string {
   return `${bytes} B`;
 }
 
+/**
+ * Formats a millicore value for display, accepting both numeric and string inputs.
+ *
+ * Rules:
+ * - 0 → "0" (no unit)
+ * - sub-millicore (0 < v < 1) → "1m" (rounded up)
+ * - millicores (1–999) → rounded integer with "m" suffix (e.g. "500m")
+ * - cores (≥ 1000) → converted to cores, no unit (e.g. "2", "1.5")
+ */
 export function formatMillicores(value: number | string): string {
-  const mc = typeof value === 'string' ? parseInt(value.replace(/m$/, ''), 10) : value;
-  if (isNaN(mc)) return String(value);
-  return mc >= 1000 ? `${(mc / 1000).toFixed(2)} cores` : `${mc}m`;
+  let mc: number;
+  if (typeof value === 'string') {
+    mc = parseInt(value.replace(/m$/, ''), 10);
+    if (isNaN(mc)) return String(value);
+  } else if (typeof value === 'number') {
+    mc = value;
+  } else {
+    return String(value);
+  }
+
+  if (mc === 0) return '0';
+  if (mc > 0 && mc < 1) return '1m';
+  if (mc >= 1000) {
+    const cores = mc / 1000;
+    return cores === Math.round(cores) ? `${Math.round(cores)}` : `${cores.toFixed(1)}`;
+  }
+  return `${Math.round(mc)}m`;
 }
 
 export function formatDurationMs(ms: number): string {
@@ -78,3 +101,44 @@ export const PURPOSE_COLORS: Record<string, string> = {
   backup: '#D97706',
   dr: '#DC2626',
 };
+
+/**
+ * Formats a numeric value for display with optional unit and precision handling.
+ */
+export function formatDisplayValue(
+  value: number,
+  unit?: string,
+  precision?: number,
+): string {
+  if (!unit) {
+    return Number(value.toFixed(precision ?? 0)).toString();
+  }
+  switch (unit) {
+    case 'percent':
+      return `${Number(value.toFixed(precision ?? 0))}%`;
+    case 'bytes':
+      return formatBytes(value);
+    case 'millicores':
+    case 'millicore':
+      return formatMillicores(value);
+    default: {
+      const rounded = Number(value.toFixed(precision ?? 0));
+      return `${rounded} ${unit}`;
+    }
+  }
+}
+
+/**
+ * Determines the color for a gauge based on percentage and defined thresholds.
+ */
+export function getGaugeColor(
+  percentage: number,
+  thresholds: Array<{ percent: number; color: string }>,
+): string {
+  const sorted = [...thresholds].sort((a, b) => a.percent - b.percent);
+  let color = '#3B82F6';
+  for (const t of sorted) {
+    if (percentage >= t.percent) color = t.color;
+  }
+  return color;
+}

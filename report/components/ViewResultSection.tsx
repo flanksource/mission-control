@@ -4,12 +4,16 @@ import { Icon } from '@flanksource/icons/icon';
 import type {
   ViewReportData, ViewColumnDef,
   RowAttributes, CellAttributes, GaugeConfig, BadgeConfig, PanelResult, HeatmapVariant,
+  BarGaugeConfig,
 } from '../view-types';
 import {
   formatDate,
+  formatDateTime,
   formatBytes,
   formatMillicores,
   formatDurationMs,
+  formatDisplayValue,
+  getGaugeColor,
   HEALTH_COLORS,
 } from './utils';
 
@@ -689,36 +693,63 @@ function PieChartPanel({ panel }: { panel: PanelResult }) {
 }
 
 function NumberPanel({ panel }: { panel: PanelResult }) {
-  const value = panel.rows?.[0]?.value ?? 0;
-  const unit = panel.number?.unit ?? '';
+  const rows = panel.rows ?? [];
+  if (rows.length === 0) {
+    return <span className="text-[7pt] text-gray-400">No data</span>;
+  }
   return (
-    <div className="flex items-baseline gap-[1mm]">
-      <span className="text-[18pt] font-bold text-slate-900">{value}</span>
-      {unit && <span className="text-[8pt] text-gray-500">{unit}</span>}
+    <div className="flex flex-col gap-[1.5mm]">
+      {rows.map((row, i) => {
+        const rawValue = row.value ?? row.count ?? 0;
+        const numericValue = Number(rawValue);
+        const displayValue = panel.number
+          ? formatDisplayValue(
+              Number.isFinite(numericValue) ? numericValue : 0,
+              panel.number.unit,
+              panel.number.precision,
+            )
+          : String(rawValue);
+        return (
+          <div key={i}>
+            {row.label && (
+              <div className="text-[6pt] text-gray-500 mb-[0.3mm]">{row.label}</div>
+            )}
+            <span className="text-[18pt] font-bold text-slate-900">{displayValue}</span>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
 function GaugePanel({ panel }: { panel: PanelResult }) {
   const value = Number(panel.rows?.[0]?.value ?? 0);
-  const unit = panel.gauge?.unit ?? '';
-  const thresholds = panel.gauge?.thresholds;
-  let color = '#3B82F6';
-  if (thresholds) {
-    const sorted = [...thresholds].sort((a, b) => a.percent - b.percent);
-    for (const t of sorted) {
-      if (value >= t.percent) color = t.color;
-    }
+  const safeValue = Number.isFinite(value) ? value : 0;
+  const min = Number(panel.gauge?.min ?? 0);
+  const max = Number(panel.gauge?.max ?? 100);
+  const hasMax = panel.gauge?.max != null;
+
+  let percentage = 0;
+  if (hasMax && max !== min) {
+    percentage = ((safeValue - min) / (max - min)) * 100;
+  } else if (!hasMax) {
+    // Fall back to treating value as percentage directly
+    percentage = safeValue;
   }
-  const pct = Math.min(100, Math.max(0, value));
+  const clampedPct = Math.min(100, Math.max(0, percentage));
+
+  const thresholds = panel.gauge?.thresholds;
+  const color = thresholds ? getGaugeColor(clampedPct, thresholds) : '#3B82F6';
+
+  const displayValue = formatDisplayValue(safeValue, panel.gauge?.unit, panel.gauge?.precision);
 
   return (
     <div>
       <div className="flex items-baseline gap-[1mm] mb-[1mm]">
-        <span className="text-[14pt] font-bold text-slate-900">{value.toFixed(1)}{unit}</span>
+        <span className="text-[14pt] font-bold text-slate-900">{displayValue}</span>
       </div>
       <span className="block w-full h-[2mm] rounded-full overflow-hidden" style={{ backgroundColor: '#E5E7EB' }}>
-        <span className="block h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: color }} />
+        <span className="block h-full rounded-full" style={{ width: `${clampedPct}%`, backgroundColor: color }} />
       </span>
     </div>
   );
@@ -727,12 +758,200 @@ function GaugePanel({ panel }: { panel: PanelResult }) {
 function PropertiesPanel({ panel }: { panel: PanelResult }) {
   return (
     <div className="flex flex-col gap-[0.5mm]">
-      {(panel.rows ?? []).map((r, i) => (
-        <div key={i} className="flex justify-between border-b border-gray-100 py-[0.5mm]">
-          <span className="text-[7pt] text-gray-600">{r.label}</span>
-          <span className="text-[7pt] font-medium text-slate-900">{r.value}</span>
-        </div>
+      {(panel.rows ?? []).map((r, i) => {
+        // Support both explicit `label` key and first non-`value` key as label
+        const { value, ...rest } = r;
+        const labelKey = Object.keys(rest)[0];
+        const label = r.label ?? (labelKey ? rest[labelKey] : undefined) ?? '-';
+        return (
+          <div key={i} className="flex justify-between border-b border-gray-100 py-[0.5mm]">
+            <span className="text-[7pt] text-gray-600">{String(label)}</span>
+            <span className="text-[7pt] font-medium text-slate-900">{value != null ? String(value) : '-'}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function TextPanel({ panel }: { panel: PanelResult }) {
+  return (
+    <div className="flex flex-col gap-[1mm]">
+      {(panel.rows ?? []).map((row, i) => (
+        <div key={i} className="text-[7pt] text-gray-800">{row.value}</div>
       ))}
+    </div>
+  );
+}
+
+function TablePanel({ panel }: { panel: PanelResult }) {
+  const rows = panel.rows ?? [];
+  if (rows.length === 0) {
+    return <span className="text-[7pt] text-gray-400">No data</span>;
+  }
+  const headerKeys = Object.keys(rows[0]);
+  const headers = headerKeys.map((k) =>
+    k.replace(/_/g, ' ').replace(/\b\w/g, (l) => l.toUpperCase()),
+  );
+  const tableRows = rows.map((row) =>
+    headerKeys.map((k) => (row[k] != null ? String(row[k]) : '-')),
+  );
+  return <CompactTable variant="reference" columns={headers} data={tableRows} />;
+}
+
+function DurationPanel({ panel }: { panel: PanelResult }) {
+  return (
+    <div className="flex flex-col gap-[1.5mm]">
+      {(panel.rows ?? []).map((row, i) => {
+        const ns = Number(row.value);
+        const ms = Number.isFinite(ns) ? ns / 1_000_000 : 0;
+        return (
+          <div key={i}>
+            {row.label && (
+              <div className="text-[6pt] text-gray-500 mb-[0.5mm]">{row.label}</div>
+            )}
+            <span className="text-[14pt] font-bold text-slate-900">
+              {formatDurationMs(ms)}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function BarGaugePanel({ panel }: { panel: PanelResult }) {
+  const rows = panel.rows ?? [];
+  if (rows.length === 0) {
+    return <span className="text-[7pt] text-gray-400">No data</span>;
+  }
+  const globalConfig: Required<Pick<BarGaugeConfig, 'min' | 'max'>> & BarGaugeConfig = {
+    min: panel.bargauge?.min ?? 0,
+    max: panel.bargauge?.max ?? 100,
+    unit: panel.bargauge?.unit ?? '',
+    thresholds: panel.bargauge?.thresholds,
+    format: panel.bargauge?.format,
+    precision: panel.bargauge?.precision ?? 0,
+  };
+
+  return (
+    <div className="flex flex-col gap-[1.5mm]">
+      {rows.map((row, i) => {
+        // Per-row config override (from grouping)
+        const rowBargauge = (row._bargauge as Partial<BarGaugeConfig> | undefined) ?? {};
+        const max = rowBargauge.max ?? (row.max as number | undefined) ?? globalConfig.max ?? 100;
+        const min = rowBargauge.min ?? (row.min as number | undefined) ?? globalConfig.min ?? 0;
+        const unit = rowBargauge.unit ?? globalConfig.unit ?? '';
+        const thresholds = rowBargauge.thresholds ?? globalConfig.thresholds;
+        const format = rowBargauge.format ?? globalConfig.format;
+        const precision = rowBargauge.precision ?? globalConfig.precision ?? 0;
+
+        // Label from row.name or first non-value key
+        const { value: _val, ...rest } = row;
+        const label = row.name ?? (Object.keys(rest)[0] ? rest[Object.keys(rest)[0]] : 'Value');
+
+        const numericValue = Number.isFinite(Number(row.value)) ? Number(row.value) : 0;
+        const percentage = max !== min ? ((numericValue - min) / (max - min)) * 100 : 0;
+        const clampedPct = Math.min(100, Math.max(0, percentage));
+        const color = thresholds ? getGaugeColor(percentage, thresholds) : '#10B981';
+
+        let displayValue: string;
+        if (format === 'percentage') {
+          displayValue = `${Math.round(percentage)}%`;
+        } else if (format === 'multiplier') {
+          displayValue = `x${(percentage / 100).toFixed(Math.max(precision, 1))}`;
+        } else {
+          displayValue = formatDisplayValue(numericValue, unit || undefined, precision);
+        }
+
+        return (
+          <div key={i}>
+            <div className="flex justify-between text-[7pt] mb-[0.5mm]">
+              <span className="text-gray-700">{String(label)}</span>
+              <span className="font-semibold" style={{ color }}>{displayValue}</span>
+            </div>
+            <span className="block w-full h-[1.5mm] rounded-full overflow-hidden" style={{ backgroundColor: '#E5E7EB' }}>
+              <span className="block h-full rounded-full" style={{ width: `${clampedPct}%`, backgroundColor: color }} />
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+const TIME_CANDIDATE_KEYS = ['timestamp', 'time', 'date', 'ts'];
+
+function inferTimeKey(rows: Record<string, any>[], preferred?: string): string | undefined {
+  if (preferred) return preferred;
+  const sample = rows[0] ?? {};
+  return TIME_CANDIDATE_KEYS.find((k) => sample[k] !== undefined);
+}
+
+function inferValueKey(rows: Record<string, any>[], timeKey?: string): string | undefined {
+  const sample = rows[0] ?? {};
+  const numericKeys = Object.keys(sample).filter(
+    (k) => k !== timeKey && Number.isFinite(Number(sample[k])),
+  );
+  return numericKeys[0] ?? ['value', 'count'].find((k) => rows.some((r) => Number.isFinite(Number(r[k]))));
+}
+
+function TimeseriesPanel({ panel }: { panel: PanelResult }) {
+  const rows = panel.rows ?? [];
+  if (rows.length === 0) {
+    return <span className="text-[7pt] text-gray-400">No data</span>;
+  }
+
+  const timeKey = inferTimeKey(rows, panel.timeseries?.timeKey);
+  const valueKey = panel.timeseries?.valueKey ?? inferValueKey(rows, timeKey);
+
+  // Collect series label keys (keys that aren't time or value)
+  const sample = rows[0] ?? {};
+  const seriesKeys = Object.keys(sample).filter(
+    (k) => k !== timeKey && k !== valueKey,
+  );
+
+  // Sort rows by time
+  const sorted = timeKey
+    ? [...rows].sort((a, b) => {
+        const ta = new Date(a[timeKey]).getTime();
+        const tb = new Date(b[timeKey]).getTime();
+        return Number.isNaN(ta) || Number.isNaN(tb) ? 0 : ta - tb;
+      })
+    : rows;
+
+  const TRUNCATE_AT = 50;
+  const display = sorted.slice(0, TRUNCATE_AT);
+
+  const headers = [
+    timeKey ? 'Time' : null,
+    ...seriesKeys,
+    valueKey ? 'Value' : null,
+  ].filter(Boolean) as string[];
+
+  const tableRows = display.map((row) => {
+    const cols: string[] = [];
+    if (timeKey) {
+      const d = new Date(row[timeKey]);
+      cols.push(Number.isNaN(d.getTime()) ? String(row[timeKey] ?? '-') : formatDateTime(String(row[timeKey])));
+    }
+    for (const sk of seriesKeys) {
+      cols.push(row[sk] != null ? String(row[sk]) : '-');
+    }
+    if (valueKey) {
+      cols.push(row[valueKey] != null ? String(row[valueKey]) : '-');
+    }
+    return cols;
+  });
+
+  return (
+    <div>
+      <CompactTable variant="reference" columns={headers} data={tableRows} />
+      {rows.length > TRUNCATE_AT && (
+        <div className="text-[6pt] text-gray-400 mt-[1mm]">
+          Showing {TRUNCATE_AT} of {rows.length} data points
+        </div>
+      )}
     </div>
   );
 }
@@ -745,6 +964,11 @@ function PanelCard({ panel }: { panel: PanelResult }) {
     case 'gauge': content = <GaugePanel panel={panel} />; break;
     case 'properties': content = <PropertiesPanel panel={panel} />; break;
     case 'heatmap': content = <HeatmapPanel panel={panel} />; break;
+    case 'text': content = <TextPanel panel={panel} />; break;
+    case 'table': content = <TablePanel panel={panel} />; break;
+    case 'duration': content = <DurationPanel panel={panel} />; break;
+    case 'bargauge': content = <BarGaugePanel panel={panel} />; break;
+    case 'timeseries': content = <TimeseriesPanel panel={panel} />; break;
     default: content = <span className="text-[7pt] text-gray-400">Unsupported panel type: {panel.type}</span>;
   }
 
