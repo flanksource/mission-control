@@ -9,8 +9,8 @@ require (
 	github.com/casbin/gorm-adapter/v3 v3.39.0
 	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.33.0 // indirect
-	github.com/flanksource/commons v1.49.0
-	github.com/flanksource/duty v1.0.1235
+	github.com/flanksource/commons v1.50.0
+	github.com/flanksource/duty v1.0.1236
 	github.com/flanksource/gomplate/v3 v3.24.74
 	github.com/flanksource/kopper v1.0.21
 	github.com/gomarkdown/markdown v0.0.0-20250810172220-2e2c11897d1a
@@ -47,7 +47,7 @@ require (
 	github.com/emersion/go-sasl v0.0.0-20241020182733-b788ff22d5a6
 	github.com/emersion/go-smtp v0.24.0
 	github.com/flanksource/artifacts v1.0.24
-	github.com/flanksource/clicky v1.19.0
+	github.com/flanksource/clicky v1.21.1
 	github.com/flanksource/commons-test v0.1.13
 	github.com/fluxcd/pkg/gittestserver v0.21.0
 	github.com/go-git/go-billy/v5 v5.7.0
