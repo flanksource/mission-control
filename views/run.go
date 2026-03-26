@@ -393,6 +393,7 @@ var configQueryResultSchema = map[string]models.ColumnType{
 	"cost_total_7d":     models.ColumnTypeDecimal,
 	"cost_total_30d":    models.ColumnTypeDecimal,
 	"name":              models.ColumnTypeString,
+	"namespace":         models.ColumnTypeString,
 	"description":       models.ColumnTypeString,
 	"config":            models.ColumnTypeJSONB,
 	"source":            models.ColumnTypeString,
@@ -409,8 +410,9 @@ var configQueryResultSchema = map[string]models.ColumnType{
 	"updated_at":        models.ColumnTypeString,
 	"deleted_at":        models.ColumnTypeString,
 	"delete_reason":     models.ColumnTypeString,
-	"inserted_at":       models.ColumnTypeString,
 	"properties_values": models.ColumnTypeJSONB,
+	"changes":           models.ColumnTypeInteger,
+	"analysis":          models.ColumnTypeJSONB,
 
 	pkgView.ReservedColumnGrants: models.ColumnTypeJSONB,
 }
@@ -431,9 +433,11 @@ var changeQueryResultSchema = map[string]models.ColumnType{
 	"source":              models.ColumnTypeString,
 	"summary":             models.ColumnTypeString,
 	"details":             models.ColumnTypeJSONB,
+	"diff":                models.ColumnTypeString,
 	"created_by":          models.ColumnTypeString,
 	"count":               models.ColumnTypeInteger,
 	"first_observed":      models.ColumnTypeString,
 	"agent_id":            models.ColumnTypeString,
 	"path":                models.ColumnTypeString,
+	"inserted_at":         models.ColumnTypeString,
 }
