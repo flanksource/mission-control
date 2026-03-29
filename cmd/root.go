@@ -92,6 +92,8 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&auth.ClerkOrgID, "clerk-org-id", "", "Clerk Organization ID")
 	flags.StringVar(&vars.AuthMode, "auth", "", "Enable authentication via Kratos or Clerk. Valid values are [kratos, clerk, basic]")
 	flags.StringVar(&auth.HtpasswdFile, "htpasswd-file", "htpasswd", "Path to htpasswd file for basic authentication")
+	flags.BoolVar(&auth.OIDCEnabled, "oidc", false, "Enable embedded OIDC provider (requires --auth basic)")
+	flags.StringVar(&auth.OIDCSigningKeyPath, "oidc-signing-key", "", "Path to RSA private key PEM for OIDC token signing (auto-generated if not provided)")
 	flags.StringVar(&emailFromAddress, "email-from-address", "no-reply@flanksource.com", "Email address of the sender")
 	flags.StringVar(&emailFromName, "email-from-name", "Mission Control", "Email name of the sender")
 	flags.StringSliceVar(&echo.AllowedCORS, "allowed-cors", []string{"https://app.flanksource.com", "https://beta.flanksource.com"}, "Allowed CORS credential origins")

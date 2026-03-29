@@ -17,6 +17,8 @@ import (
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/application"
+	"github.com/flanksource/incident-commander/auth"
+	"github.com/flanksource/incident-commander/auth/oidc"
 	"github.com/flanksource/incident-commander/notification"
 	"github.com/flanksource/incident-commander/playbook"
 	"github.com/flanksource/incident-commander/shorturl"
@@ -103,12 +105,14 @@ func Start(ctx context.Context, mcpServer *server.MCPServer) {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to schedule job SchedulePlaybooks: %v", err))
 	}
 
-	if err := notification.SyncCRDStatusJob(ctx).AddToScheduler(FuncScheduler); err != nil {
-		shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to schedule job SyncCRDStatusJob: %v", err))
-	}
+	if !api.DisableOperators {
+		if err := notification.SyncCRDStatusJob(ctx).AddToScheduler(FuncScheduler); err != nil {
+			shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to schedule job SyncCRDStatusJob: %v", err))
+		}
 
-	if err := notification.InitCRDStatusUpdates(ctx); err != nil {
-		logger.Errorf("failed to start notificatino status update queue: %v", err)
+		if err := notification.InitCRDStatusUpdates(ctx); err != nil {
+			logger.Errorf("failed to start notification status update queue: %v", err)
+		}
 	}
 
 	if err := job.NewJob(ctx, "Cleanup NotificationSend History", CleanupNotificationSendHistorySchedule, CleanupNotificationSendHistory).
@@ -173,6 +177,12 @@ func Start(ctx context.Context, mcpServer *server.MCPServer) {
 	cleanupExpiredTokens.Context = ctx
 	if err := cleanupExpiredTokens.AddToScheduler(FuncScheduler); err != nil {
 		logger.Errorf("Failed to schedule job for cleaning up expired tokens: %v", err)
+	}
+
+	if auth.OIDCEnabled {
+		if err := oidc.CleanupJob(ctx).AddToScheduler(FuncScheduler); err != nil {
+			logger.Errorf("Failed to schedule OIDC cleanup job: %v", err)
+		}
 	}
 
 	FuncScheduler.Start()
