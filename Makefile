@@ -55,7 +55,7 @@ ci-test:
 	ginkgo -r -p --skip-package=tests/e2e --keep-going --junit-report junit-report.xml --github-output --output-dir test-reports --succinct
 
 .PHONY: e2e
-e2e:
+e2e: $(TAILWIND_JS)
 	ginkgo -r --keep-going  ./tests/e2e/...
 
 fmt:
@@ -93,7 +93,7 @@ compress: .bin/upx
 	upx -5 ./.bin/$(NAME)_linux_amd64 ./.bin/$(NAME)_linux_arm64
 
 .PHONY: linux
-linux:
+linux: $(TAILWIND_JS)
 	GOOS=linux GOARCH=amd64 go build  -o ./.bin/$(NAME)_linux_amd64 -ldflags "-X \"main.version=$(VERSION_TAG)\""  main.go
 	GOOS=linux GOARCH=arm64 go build  -o ./.bin/$(NAME)_linux_arm64 -ldflags "-X \"main.version=$(VERSION_TAG)\""  main.go
 
