@@ -1,4 +1,4 @@
-package oidc_e2e
+package oidc
 
 import (
 	"context"
@@ -63,7 +63,7 @@ var _ = ginkgo.BeforeSuite(func() {
 	}
 	if _, err := os.Stat(binPath); os.IsNotExist(err) {
 		// Try from project root
-		binPath, _ = filepath.Abs("../../.bin/incident-commander")
+		binPath, _ = filepath.Abs("../../../.bin/incident-commander")
 	}
 	Expect(binPath).To(BeAnExistingFile(), "binary not found — run 'make dev' first")
 
@@ -96,7 +96,12 @@ var _ = ginkgo.BeforeSuite(func() {
 		return nil
 	}).WithTimeout(90 * time.Second).WithPolling(time.Second).Should(Succeed())
 
-	chromectx, chromeCanc = chromedp.NewContext(context.Background())
+	allocCtx, _ := chromedp.NewExecAllocator(context.Background(),
+		append(chromedp.DefaultExecAllocatorOptions[:],
+			chromedp.NoSandbox,
+		)...,
+	)
+	chromectx, chromeCanc = chromedp.NewContext(allocCtx)
 })
 
 var _ = ginkgo.AfterSuite(func() {
