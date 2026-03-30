@@ -27,8 +27,7 @@ func MountRoutes(e *echo.Echo, ctx context.Context, issuerURL, signingKeyPath st
 	e.GET("/oidc/login", loginHandler.ShowForm)
 	e.POST("/oidc/login", loginHandler.HandleSubmit)
 
-	// MCP Clients need OAuth well-known discovery endpoints (not just OIDC discovery)
-	// Can move it out of oidc pkg and move to oauth pkg
+	// MCP Clients need OAuth well-known discovery endpoints (not just OIDC discovery).
 	mountOAuthRoutes(e, oidcIssuer)
 
 	// Standard OIDC protocol endpoints — mounted at the root so that the issuer URL

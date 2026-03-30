@@ -2,6 +2,7 @@ package oidc
 
 import (
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/labstack/echo/v4"
@@ -16,26 +17,51 @@ type oauthProtectedResourceMetadata struct {
 	BearerMethods        []string `json:"bearer_methods_supported,omitempty"`
 }
 
-type oauthAuthorizationServerMetadata struct {
-	Issuer                        string   `json:"issuer"`
-	AuthorizationEndpoint         string   `json:"authorization_endpoint"`
-	TokenEndpoint                 string   `json:"token_endpoint"`
-	RegistrationEndpoint          string   `json:"registration_endpoint,omitempty"`
-	ResponseTypesSupported        []string `json:"response_types_supported"`
-	GrantTypesSupported           []string `json:"grant_types_supported,omitempty"`
-	TokenEndpointAuthMethods      []string `json:"token_endpoint_auth_methods_supported,omitempty"`
-	CodeChallengeMethodsSupported []string `json:"code_challenge_methods_supported,omitempty"`
-	ScopesSupported               []string `json:"scopes_supported,omitempty"`
-}
-
 func mountOAuthRoutes(e *echo.Echo, oidcIssuer string) {
-	// OAuth 2.0 Authorization Server Metadata (RFC 8414).
-	e.GET("/.well-known/oauth-authorization-server", oauthAuthorizationServerMetadataHandler(oidcIssuer))
-
 	// RFC 9728 OAuth 2.0 Protected Resource Metadata for MCP/OAuth clients.
 	prmHandler := oauthProtectedResourceMetadataHandler(oidcIssuer)
 	e.GET("/.well-known/oauth-protected-resource", prmHandler)
 	e.GET("/.well-known/oauth-protected-resource/*", prmHandler)
+}
+
+func oauthProtectedResourceMetadataHandler(issuerURL string) echo.HandlerFunc {
+	fallbackIssuer := strings.TrimRight(issuerURL, "/")
+
+	return func(c echo.Context) error {
+		origin := detectRequestOrigin(c, fallbackIssuer)
+		requestedPath := c.Request().URL.Path
+
+		resourcePath := ""
+		if requestedPath != oauthProtectedResourcePrefix {
+			resourcePath = strings.TrimPrefix(requestedPath, oauthProtectedResourcePrefix)
+		}
+
+		if resourcePath == "" || resourcePath == "/" {
+			resourcePath = "/mcp"
+		}
+		if !strings.HasPrefix(resourcePath, "/") {
+			resourcePath = "/" + resourcePath
+		}
+
+		metadata := oauthProtectedResourceMetadata{
+			Resource:             origin + resourcePath,
+			AuthorizationServers: []string{issuerWithOrigin(fallbackIssuer, origin)},
+			ScopesSupported:      []string{"openid", "profile", "email"},
+			BearerMethods:        []string{"header"},
+		}
+
+		return c.JSON(http.StatusOK, metadata)
+	}
+}
+
+// issuerWithOrigin replaces the scheme+host of issuerURL with the detected origin,
+// preserving any path component (e.g. "/oidc") required for RFC 9728 authorization_servers.
+func issuerWithOrigin(issuerURL, origin string) string {
+	u, err := url.Parse(issuerURL)
+	if err != nil || u.Path == "" || u.Path == "/" {
+		return origin
+	}
+	return origin + u.Path
 }
 
 func detectRequestOrigin(c echo.Context, fallbackIssuer string) string {
@@ -63,54 +89,4 @@ func detectRequestOrigin(c echo.Context, fallbackIssuer string) string {
 	}
 
 	return strings.TrimRight(proto+"://"+host, "/")
-}
-
-func oauthProtectedResourceMetadataHandler(issuerURL string) echo.HandlerFunc {
-	fallbackIssuer := strings.TrimRight(issuerURL, "/")
-
-	return func(c echo.Context) error {
-		origin := detectRequestOrigin(c, fallbackIssuer)
-		requestedPath := c.Request().URL.Path
-
-		resourcePath := ""
-		if requestedPath != oauthProtectedResourcePrefix {
-			resourcePath = strings.TrimPrefix(requestedPath, oauthProtectedResourcePrefix)
-		}
-
-		if resourcePath == "" {
-			resourcePath = "/mcp"
-		}
-		if !strings.HasPrefix(resourcePath, "/") {
-			resourcePath = "/" + resourcePath
-		}
-
-		metadata := oauthProtectedResourceMetadata{
-			Resource:             origin + resourcePath,
-			AuthorizationServers: []string{origin},
-			ScopesSupported:      []string{"openid", "profile", "email", "offline_access"},
-			BearerMethods:        []string{"header"},
-		}
-
-		return c.JSON(http.StatusOK, metadata)
-	}
-}
-
-func oauthAuthorizationServerMetadataHandler(issuerURL string) echo.HandlerFunc {
-	fallbackIssuer := strings.TrimRight(issuerURL, "/")
-
-	return func(c echo.Context) error {
-		issuer := detectRequestOrigin(c, fallbackIssuer)
-		metadata := oauthAuthorizationServerMetadata{
-			Issuer:                        issuer,
-			AuthorizationEndpoint:         issuer + "/authorize",
-			TokenEndpoint:                 issuer + "/oauth/token",
-			ResponseTypesSupported:        []string{"code"},
-			GrantTypesSupported:           []string{"authorization_code", "refresh_token"},
-			TokenEndpointAuthMethods:      []string{"none"},
-			CodeChallengeMethodsSupported: []string{"S256"},
-			ScopesSupported:               []string{"openid", "profile", "email", "offline_access"},
-		}
-
-		return c.JSON(http.StatusOK, metadata)
-	}
 }
