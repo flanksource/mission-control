@@ -26,6 +26,7 @@ func MountRoutes(e *echo.Echo, ctx context.Context, issuerURL, signingKeyPath st
 	// Custom login form (not part of the standard OIDC protocol paths).
 	e.GET("/oidc/login", loginHandler.ShowForm)
 	e.POST("/oidc/login", loginHandler.HandleSubmit)
+	e.GET("/oidc/kratos/callback", loginHandler.HandleExternalCallback)
 
 	// MCP Clients need OAuth well-known discovery endpoints (not just OIDC discovery).
 	mountOAuthRoutes(e, oidcIssuer)

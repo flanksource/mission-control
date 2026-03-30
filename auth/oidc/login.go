@@ -23,6 +23,14 @@ type CredentialChecker interface {
 	Match(ctx context.Context, user, pass string) error
 }
 
+type LoginRedirector interface {
+	LoginRedirectURL(authRequestID string) (string, error)
+}
+
+type CallbackSubjectResolver interface {
+	CallbackSubject(c echo.Context) (string, error)
+}
+
 type PersonLookup func(ctx context.Context, user string) (personID string, err error)
 
 func NewLoginHandler(storage *Storage, provider op.OpenIDProvider, checker CredentialChecker, lookup PersonLookup, issuerURL string) *LoginHandler {
@@ -40,6 +48,15 @@ func (h *LoginHandler) ShowForm(c echo.Context) error {
 	if id == "" {
 		return c.String(http.StatusBadRequest, "missing auth_request_id")
 	}
+
+	if redirector, ok := h.checker.(LoginRedirector); ok {
+		redirectURL, err := redirector.LoginRedirectURL(id)
+		if err != nil {
+			return c.String(http.StatusInternalServerError, "failed to build login redirect")
+		}
+		return c.Redirect(http.StatusFound, redirectURL)
+	}
+
 	return c.HTML(http.StatusOK, fmt.Sprintf(static.LoginHTML, html.EscapeString(id), ""))
 }
 
@@ -70,6 +87,31 @@ func (h *LoginHandler) HandleSubmit(c echo.Context) error {
 
 	if err := h.storage.SetAuthRequestSubject(id, personID); err != nil {
 		return renderForm("Internal error")
+	}
+
+	issuerCtx := op.ContextWithIssuer(c.Request().Context(), h.issuerURL)
+	callbackURL := op.AuthCallbackURL(h.provider)(issuerCtx, id)
+	return c.Redirect(http.StatusFound, callbackURL)
+}
+
+func (h *LoginHandler) HandleExternalCallback(c echo.Context) error {
+	id := c.QueryParam("auth_request_id")
+	if id == "" {
+		return c.String(http.StatusBadRequest, "missing auth_request_id")
+	}
+
+	resolver, ok := h.checker.(CallbackSubjectResolver)
+	if !ok {
+		return c.String(http.StatusNotFound, "external callback is not configured")
+	}
+
+	personID, err := resolver.CallbackSubject(c)
+	if err != nil {
+		return c.String(http.StatusUnauthorized, "authorization failed")
+	}
+
+	if err := h.storage.SetAuthRequestSubject(id, personID); err != nil {
+		return c.String(http.StatusInternalServerError, "internal error")
 	}
 
 	issuerCtx := op.ContextWithIssuer(c.Request().Context(), h.issuerURL)
