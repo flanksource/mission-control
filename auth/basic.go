@@ -10,6 +10,7 @@ import (
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	incAPI "github.com/flanksource/incident-commander/api"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/labstack/echo/v4"
 	"github.com/tg123/go-htpasswd"
@@ -101,6 +102,16 @@ func validateBasicAuth(c echo.Context, user, pass string) (bool, error) {
 	return true, nil
 }
 
+// setWWWAuthenticate adds the WWW-Authenticate header pointing to the OAuth
+// Protected Resource Metadata endpoint so that MCP clients can discover the
+// OIDC provider and initiate the authorization flow.
+func setWWWAuthenticate(c echo.Context) {
+	if OIDCEnabled {
+		resourceMetadataURL := strings.TrimRight(incAPI.PublicURL, "/") + "/.well-known/oauth-protected-resource"
+		c.Response().Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer resource_metadata="%s"`, resourceMetadataURL))
+	}
+}
+
 func basicAuthMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		if canSkipAuth(c) || authenticateFromCookie(c) {
@@ -125,11 +136,13 @@ func basicAuthMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 					}
 				}
 			}
+			setWWWAuthenticate(c)
 			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		}
 
 		user, pass, ok := c.Request().BasicAuth()
 		if !ok {
+			setWWWAuthenticate(c)
 			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		}
 

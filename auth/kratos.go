@@ -173,18 +173,22 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 			if errors.Is(err, errInvalidTokenFormat) {
 				return c.String(http.StatusBadRequest, "invalid access token")
 			} else if errors.Is(err, errTokenExpired) {
+				setWWWAuthenticate(c)
 				return c.String(http.StatusUnauthorized, "access token has expired")
 			}
+			setWWWAuthenticate(c)
 			return c.String(http.StatusUnauthorized, "Authorization Error")
 		}
 
 		if !*session.Active {
+			setWWWAuthenticate(c)
 			return c.String(http.StatusUnauthorized, "Session Expired")
 		}
 
 		uid, err := uuid.Parse(session.Identity.GetId())
 		if err != nil {
 			ctx.GetSpan().RecordError(err)
+			setWWWAuthenticate(c)
 			return c.String(http.StatusUnauthorized, "Authorization Error")
 		}
 
