@@ -72,7 +72,7 @@ var skipAuthPathsExact = []string{
 	"/keys",
 	"/revoke",
 	"/device_authorization",
-	"/end_session",
+	"/endsession",
 	// --end:: Standard OIDC endpoints
 }
 

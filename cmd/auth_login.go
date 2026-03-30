@@ -25,10 +25,14 @@ var authLoginCmd = &cobra.Command{
 	RunE:  runAuthLogin,
 }
 
-var loginServer string
+var (
+	loginServer     string
+	loginPrintToken bool
+)
 
 func init() {
 	authLoginCmd.Flags().StringVar(&loginServer, "server", "", "Mission Control server URL (required)")
+	authLoginCmd.Flags().BoolVar(&loginPrintToken, "print-token", false, "Print access and refresh tokens to stdout")
 	_ = authLoginCmd.MarkFlagRequired("server")
 	Auth.AddCommand(authLoginCmd)
 }
@@ -45,8 +49,14 @@ func runAuthLogin(cmd *cobra.Command, _ []string) error {
 	if err != nil {
 		return fmt.Errorf("PKCE generation failed: %w", err)
 	}
-	state := oidcclient.RandomBase64(16)
-	nonce := oidcclient.RandomBase64(16)
+	state, err := oidcclient.RandomBase64(16)
+	if err != nil {
+		return fmt.Errorf("state generation failed: %w", err)
+	}
+	nonce, err := oidcclient.RandomBase64(16)
+	if err != nil {
+		return fmt.Errorf("nonce generation failed: %w", err)
+	}
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -132,8 +142,15 @@ func runAuthLogin(cmd *cobra.Command, _ []string) error {
 
 	fmt.Fprintf(cmd.OutOrStdout(), "\nLogin successful!\n\n")
 	fmt.Fprintf(cmd.OutOrStdout(), "Tokens saved to: %s\n\n", tokenPath)
-	fmt.Fprintf(cmd.OutOrStdout(), "Access token (expires %s):\n%s\n\n", tokens.ExpiresAt.Format("15:04:05"), tokens.AccessToken)
-	fmt.Fprintf(cmd.OutOrStdout(), "Refresh token:\n%s\n\n", tokens.RefreshToken)
+
+	if loginPrintToken {
+		fmt.Fprintf(cmd.OutOrStdout(), "Access token (expires %s):\n%s\n\n", tokens.ExpiresAt.Format("15:04:05"), tokens.AccessToken)
+		fmt.Fprintf(cmd.OutOrStdout(), "Refresh token:\n%s\n\n", tokens.RefreshToken)
+		fmt.Fprintf(cmd.OutOrStdout(), "curl -H 'Authorization: Bearer %s' %s/whoami\n\n", tokens.AccessToken, serverURL)
+	} else {
+		fmt.Fprintf(cmd.OutOrStdout(), "Use --print-token to print tokens to stdout.\n")
+		fmt.Fprintf(cmd.OutOrStdout(), "curl -H 'Authorization: Bearer <ACCESS_TOKEN>' %s/whoami\n\n", serverURL)
+	}
 
 	return nil
 }
@@ -160,11 +177,17 @@ func storeTokens(serverURL string, tokens *oidcclient.Tokens) (string, error) {
 
 func openBrowser(url string) {
 	var cmd string
+	var args []string
 	switch runtime.GOOS {
 	case "darwin":
 		cmd = "open"
+		args = []string{url}
+	case "windows":
+		cmd = "cmd"
+		args = []string{"/c", "start", url}
 	default:
 		cmd = "xdg-open"
+		args = []string{url}
 	}
-	_ = exec.Command(cmd, url).Start()
+	_ = exec.Command(cmd, args...).Start()
 }

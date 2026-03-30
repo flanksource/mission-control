@@ -2,10 +2,9 @@ package oidc
 
 import (
 	"database/sql/driver"
-	"fmt"
-	"strings"
 	"time"
 
+	"github.com/lib/pq"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
 	"github.com/zitadel/oidc/v3/pkg/op"
 )
@@ -13,31 +12,14 @@ import (
 const ClientID = "mc-cli"
 
 // StringList is a PostgreSQL text[] compatible type.
-type StringList []string
+type StringList pq.StringArray
 
 func (s StringList) Value() (driver.Value, error) {
-	if len(s) == 0 {
-		return "{}", nil
-	}
-	return "{" + strings.Join(s, ",") + "}", nil
+	return pq.StringArray(s).Value()
 }
 
 func (s *StringList) Scan(src any) error {
-	if src == nil {
-		*s = nil
-		return nil
-	}
-	str, ok := src.(string)
-	if !ok {
-		return fmt.Errorf("unsupported type: %T", src)
-	}
-	str = strings.Trim(str, "{}")
-	if str == "" {
-		*s = nil
-		return nil
-	}
-	*s = strings.Split(str, ",")
-	return nil
+	return (*pq.StringArray)(s).Scan(src)
 }
 
 // AuthRequest implements op.AuthRequest backed by the oidc_auth_requests table.

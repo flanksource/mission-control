@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
@@ -34,6 +35,15 @@ func Discover(discoveryURL string) (*Discovery, error) {
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 256))
+		msg := strings.TrimSpace(string(body))
+		if msg == "" {
+			return nil, fmt.Errorf("discovery endpoint returned %s", resp.Status)
+		}
+		return nil, fmt.Errorf("discovery endpoint returned %s: %s", resp.Status, msg)
+	}
+
 	var d Discovery
 	if err := json.NewDecoder(resp.Body).Decode(&d); err != nil {
 		return nil, err
@@ -52,10 +62,12 @@ func GeneratePKCE() (verifier, challenge string, err error) {
 	return
 }
 
-func RandomBase64(n int) string {
+func RandomBase64(n int) (string, error) {
 	b := make([]byte, n)
-	_, _ = rand.Read(b)
-	return base64.RawURLEncoding.EncodeToString(b)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
 }
 
 func ExchangeCode(tokenEndpoint, code, redirectURI, verifier string) (*Tokens, error) {

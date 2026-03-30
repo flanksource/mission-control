@@ -6,18 +6,18 @@
 
 ## Key Libraries & Imports
 
-| Import | Purpose |
-|--------|---------|
-| `github.com/flanksource/duty/context` | Primary context — DB, logger, properties |
-| `github.com/flanksource/duty/models` | Database models (configs, connections, etc.) |
-| `github.com/flanksource/duty/api` | Error codes (`EINVALID`, `ENOTFOUND`, etc.) |
-| `github.com/labstack/echo/v4` | HTTP framework |
-| `github.com/spf13/cobra` | CLI framework |
-| `github.com/onsi/ginkgo/v2` | Test framework |
-| `github.com/onsi/gomega` | Test matchers |
-| `github.com/flanksource/duty/job` | Background job scheduling |
-| `github.com/flanksource/postq` | PostgreSQL event queue |
-| `github.com/flanksource/kopper` | Kubernetes CRD reconcilers |
+| Import                                | Purpose                                      |
+| ------------------------------------- | -------------------------------------------- |
+| `github.com/flanksource/duty/context` | Primary context — DB, logger, properties     |
+| `github.com/flanksource/duty/models`  | Database models (configs, connections, etc.) |
+| `github.com/flanksource/duty/api`     | Error codes (`EINVALID`, `ENOTFOUND`, etc.)  |
+| `github.com/labstack/echo/v4`         | HTTP framework                               |
+| `github.com/spf13/cobra`              | CLI framework                                |
+| `github.com/onsi/ginkgo/v2`           | Test framework                               |
+| `github.com/onsi/gomega`              | Test matchers                                |
+| `github.com/flanksource/duty/job`     | Background job scheduling                    |
+| `github.com/flanksource/postq`        | PostgreSQL event queue                       |
+| `github.com/flanksource/kopper`       | Kubernetes CRD reconcilers                   |
 
 ## The Context Object
 
@@ -26,6 +26,7 @@ There are three context types in this codebase. Getting them confused is the mos
 ### `duty/context.Context` (primary)
 
 Used everywhere. Provides:
+
 - `ctx.DB()` — returns `*gorm.DB`
 - `ctx.Logger` — structured logger (e.g. `ctx.Logger.Infof("msg")`)
 - `ctx.Properties()` — runtime configuration
@@ -34,6 +35,7 @@ Used everywhere. Provides:
 ### `echo.Context` (HTTP handlers only)
 
 The argument to Echo handler functions. Extract the duty context:
+
 ```go
 ctx := c.Request().Context().(context.Context)
 ```
@@ -41,6 +43,7 @@ ctx := c.Request().Context().(context.Context)
 ### Standard `context.Context`
 
 When a file needs both `duty/context` and the standard library `context`, alias the standard one:
+
 ```go
 import (
     gocontext "context"
@@ -89,6 +92,7 @@ func GetHandler(c echo.Context) error {
 ```
 
 **Rules:**
+
 - Always return errors via `dutyAPI.WriteError(c, err)`.
 - Never return errors directly (`return ctx.Oops().Wrap(err)`) or manually construct HTTP error responses.
 - For validation errors with no underlying error: `dutyAPI.Errorf(dutyAPI.EINVALID, "message")`
@@ -97,14 +101,14 @@ func GetHandler(c echo.Context) error {
 
 **Error code → HTTP status mappings:**
 
-| Code | HTTP Status |
-|------|-------------|
-| `dutyAPI.EINVALID` | 400 Bad Request |
-| `dutyAPI.EUNAUTHORIZED` | 401 Unauthorized |
-| `dutyAPI.EFORBIDDEN` | 403 Forbidden |
-| `dutyAPI.ENOTFOUND` | 404 Not Found |
-| `dutyAPI.ECONFLICT` | 409 Conflict |
-| `dutyAPI.EINTERNAL` | 500 Internal Server Error |
+| Code                    | HTTP Status               |
+| ----------------------- | ------------------------- |
+| `dutyAPI.EINVALID`      | 400 Bad Request           |
+| `dutyAPI.EUNAUTHORIZED` | 401 Unauthorized          |
+| `dutyAPI.EFORBIDDEN`    | 403 Forbidden             |
+| `dutyAPI.ENOTFOUND`     | 404 Not Found             |
+| `dutyAPI.ECONFLICT`     | 409 Conflict              |
+| `dutyAPI.EINTERNAL`     | 500 Internal Server Error |
 
 ### RBAC
 
@@ -115,6 +119,7 @@ group.POST("/test/:id", TestConnection, rbac.Authorization(policy.ObjectConnecti
 ```
 
 For proxied route groups, use `rbac.DbMiddleware()`:
+
 ```go
 Forward(ctx, e, "/db", url, &ForwardOptions{
     Middlewares: []echo.MiddlewareFunc{rbac.DbMiddleware()},
@@ -146,7 +151,8 @@ See `cmd/root.go` for the root command definition and flag binding.
 - `ctx.DB()` returns a `*gorm.DB` instance.
 - Core models live in `github.com/flanksource/duty/models`.
 - Migrations are handled by `github.com/flanksource/duty` using Atlas-go.
-- Use `duty.Now()` instead of `time.Now()` for database timestamps and soft deletes.
+- Use `duty.Now() time.Time` instead of `time.Now() gorm.Expr` for database timestamps and soft deletes.
+  This only applies when the parameters are map<> because they are different types.
 
 ```go
 // Query
@@ -239,6 +245,7 @@ Full checklist for adding or modifying a CRD:
 
 1. **Define the spec** in `api/v1/` (e.g. `api/v1/myresource_types.go`).
 2. **Write persist/delete functions** in `db/`:
+
    ```go
    func PersistMyResourceFromCRD(ctx context.Context, obj *v1.MyResource) error {
        dbObj := MyResourceFromCRD(obj)
@@ -256,6 +263,7 @@ Full checklist for adding or modifying a CRD:
            Update("deleted_at", duty.Now()).Error
    }
    ```
+
 3. **Register the reconciler** in `cmd/server.go` → `launchKopper()`:
    ```go
    kopper.SetupReconciler(ctx, mgr,
@@ -287,6 +295,7 @@ Full checklist for adding or modifying a CRD:
 - Use dot-import for gomega (`. "github.com/onsi/gomega"`) so you can write `Expect(...)` directly.
 - Use qualified import for ginkgo (`ginkgo "github.com/onsi/ginkgo/v2"`) to avoid name collisions (e.g. `Context` type).
 - For table-driven tests, use a `for` loop with `ginkgo.It` per case:
+
 ```go
 for _, tt := range tests {
     ginkgo.It(tt.name, func() {
@@ -294,11 +303,13 @@ for _, tt := range tests {
     })
 }
 ```
+
 - Do NOT copy loop variables (`tt := tt`) — Go 1.22+ captures them correctly.
 
 ### Suite structure
 
 Every package with tests must have a `suite_test.go` with a Ginkgo bootstrap:
+
 ```go
 package mypkg
 

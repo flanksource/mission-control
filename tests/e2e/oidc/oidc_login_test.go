@@ -22,8 +22,10 @@ var _ = ginkgo.Describe("OIDC Browser Login Flow", ginkgo.Label("slow"), ginkgo.
 		verifier, challenge, err := oidcclient.GeneratePKCE()
 		Expect(err).ToNot(HaveOccurred())
 
-		state := oidcclient.RandomBase64(16)
-		nonce := oidcclient.RandomBase64(16)
+		state, err := oidcclient.RandomBase64(16)
+		Expect(err).ToNot(HaveOccurred())
+		nonce, err := oidcclient.RandomBase64(16)
+		Expect(err).ToNot(HaveOccurred())
 
 		endpoints, err = oidcclient.Discover(serverURL + "/.well-known/openid-configuration")
 		Expect(err).ToNot(HaveOccurred())
