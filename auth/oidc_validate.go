@@ -35,7 +35,7 @@ func authenticateOIDCToken(c echo.Context, tokenStr string) (bool, error) {
 		return false, nil
 	}
 
-	issuer := strings.TrimRight(api.PublicURL, "/")
+	issuer := strings.TrimRight(api.FrontendURL, "/")
 
 	var lastErr error
 	for _, pub := range keys {

@@ -72,7 +72,7 @@ var _ = ginkgo.BeforeSuite(func() {
 		"--auth", "basic",
 		"--htpasswd-file", htpasswdPath,
 		"--oidc",
-		"--public-endpoint", serverURL,
+		"--frontend-url", serverURL,
 		"--httpPort", strconv.Itoa(serverPort),
 		"--disable-postgrest",
 		"--postgrest-uri", "",

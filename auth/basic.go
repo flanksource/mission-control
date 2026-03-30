@@ -107,7 +107,7 @@ func validateBasicAuth(c echo.Context, user, pass string) (bool, error) {
 // OIDC provider and initiate the authorization flow.
 func setWWWAuthenticate(c echo.Context) {
 	if OIDCEnabled {
-		resourceMetadataURL := strings.TrimRight(incAPI.PublicURL, "/") + "/.well-known/oauth-protected-resource"
+		resourceMetadataURL := strings.TrimRight(incAPI.FrontendURL, "/") + "/.well-known/oauth-protected-resource"
 		c.Response().Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer resource_metadata="%s"`, resourceMetadataURL))
 	}
 }

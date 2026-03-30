@@ -270,9 +270,9 @@ var _ = ginkgo.Describe("OIDC", func() {
 			// Clear the cache so it reloads from DB
 			oidcPublicKeyCache.Flush()
 
-			savedPublicURL := api.PublicURL
-			api.PublicURL = "http://localhost:8080"
-			defer func() { api.PublicURL = savedPublicURL }()
+			savedPublicURL := api.FrontendURL
+			api.FrontendURL = "http://localhost:8080"
+			defer func() { api.FrontendURL = savedPublicURL }()
 
 			claims := jwt.MapClaims{
 				"iss": "http://localhost:8080",
@@ -296,9 +296,9 @@ var _ = ginkgo.Describe("OIDC", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			oidcPublicKeyCache.Flush()
-			savedPublicURL := api.PublicURL
-			api.PublicURL = "http://localhost:8080"
-			defer func() { api.PublicURL = savedPublicURL }()
+			savedPublicURL := api.FrontendURL
+			api.FrontendURL = "http://localhost:8080"
+			defer func() { api.FrontendURL = savedPublicURL }()
 
 			claims := jwt.MapClaims{
 				"iss": "http://localhost:8080",
@@ -323,9 +323,9 @@ var _ = ginkgo.Describe("OIDC", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			oidcPublicKeyCache.Flush()
-			savedPublicURL := api.PublicURL
-			api.PublicURL = "http://localhost:8080"
-			defer func() { api.PublicURL = savedPublicURL }()
+			savedPublicURL := api.FrontendURL
+			api.FrontendURL = "http://localhost:8080"
+			defer func() { api.FrontendURL = savedPublicURL }()
 
 			claims := jwt.MapClaims{
 				"iss": "http://localhost:8080",
@@ -350,9 +350,9 @@ var _ = ginkgo.Describe("OIDC", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			oidcPublicKeyCache.Flush()
-			savedPublicURL := api.PublicURL
-			api.PublicURL = "http://localhost:8080"
-			defer func() { api.PublicURL = savedPublicURL }()
+			savedPublicURL := api.FrontendURL
+			api.FrontendURL = "http://localhost:8080"
+			defer func() { api.FrontendURL = savedPublicURL }()
 
 			claims := jwt.MapClaims{
 				"iss": "http://localhost:8080",
@@ -377,9 +377,9 @@ var _ = ginkgo.Describe("OIDC", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			oidcPublicKeyCache.Flush()
-			savedPublicURL := api.PublicURL
-			api.PublicURL = "http://localhost:8080"
-			defer func() { api.PublicURL = savedPublicURL }()
+			savedPublicURL := api.FrontendURL
+			api.FrontendURL = "http://localhost:8080"
+			defer func() { api.FrontendURL = savedPublicURL }()
 
 			claims := jwt.MapClaims{
 				"iss": "http://localhost:8080",
