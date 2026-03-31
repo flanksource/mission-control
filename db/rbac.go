@@ -5,9 +5,10 @@ import (
 	"time"
 
 	"github.com/flanksource/duty/context"
+	dutyQuery "github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
-	"gorm.io/gorm"
+	"github.com/samber/lo"
 
 	"github.com/flanksource/incident-commander/api"
 )
@@ -34,8 +35,8 @@ func (r RBACAccessRow) RoleSource() string {
 	return "direct"
 }
 
-func GetRBACAccess(ctx context.Context, selectors []types.ResourceSelector) ([]RBACAccessRow, error) {
-	query := ctx.DB().
+func GetRBACAccess(ctx context.Context, selectors []types.ResourceSelector, recursive bool) ([]RBACAccessRow, error) {
+	q := ctx.DB().
 		Table("config_access_summary").
 		Select(`config_access_summary.config_id,
 			config_access_summary.config_name,
@@ -51,10 +52,25 @@ func GetRBACAccess(ctx context.Context, selectors []types.ResourceSelector) ([]R
 			config_access_summary.last_reviewed_at`).
 		Joins("LEFT JOIN external_groups ON config_access_summary.external_group_id = external_groups.id")
 
-	query = applyAccessSelectors(query, selectors)
+	if len(selectors) > 0 {
+		configIDs, err := dutyQuery.FindConfigIDsByResourceSelector(ctx, 0, selectors...)
+		if err != nil {
+			return nil, ctx.Oops().Wrapf(err, "failed to resolve config selectors")
+		}
+		if len(configIDs) == 0 {
+			return nil, nil
+		}
+		if recursive {
+			configIDs, err = expandConfigChildren(ctx, configIDs)
+			if err != nil {
+				return nil, ctx.Oops().Wrapf(err, "failed to expand children")
+			}
+		}
+		q = q.Where("config_access_summary.config_id IN (?)", configIDs)
+	}
 
 	var rows []RBACAccessRow
-	if err := query.
+	if err := q.
 		Order("config_access_summary.config_name, config_access_summary.\"user\"").
 		Find(&rows).Error; err != nil {
 		return nil, ctx.Oops().Wrapf(err, "failed to query RBAC access")
@@ -63,28 +79,24 @@ func GetRBACAccess(ctx context.Context, selectors []types.ResourceSelector) ([]R
 	return rows, nil
 }
 
-func applyAccessSelectors(query *gorm.DB, selectors []types.ResourceSelector) *gorm.DB {
-	if len(selectors) == 0 {
-		return query
+func expandConfigChildren(ctx context.Context, ids []uuid.UUID) ([]uuid.UUID, error) {
+	allIDs := make(map[uuid.UUID]struct{}, len(ids))
+	for _, id := range ids {
+		allIDs[id] = struct{}{}
 	}
 
-	for _, s := range selectors {
-		if s.ID != "" {
-			query = query.Where("config_access_summary.config_id = ?", s.ID)
+	for _, id := range ids {
+		var children []uuid.UUID
+		if err := ctx.DB().Raw("SELECT child_id FROM lookup_config_children(?, -1)", id.String()).
+			Scan(&children).Error; err != nil {
+			return nil, err
 		}
-		if len(s.Types) > 0 {
-			query = query.Where("config_access_summary.config_type IN (?)", s.Types)
-		}
-		if s.Name != "" {
-			query = query.Where("config_access_summary.config_name ILIKE ?", s.Name)
-		}
-		if s.Search != "" {
-			pattern := "%" + s.Search + "%"
-			query = query.Where("(config_access_summary.config_name ILIKE ? OR config_access_summary.config_type ILIKE ?)", pattern, pattern)
+		for _, child := range children {
+			allIDs[child] = struct{}{}
 		}
 	}
 
-	return query
+	return lo.Keys(allIDs), nil
 }
 
 func GetRBACChangelog(ctx context.Context, configIDs []uuid.UUID, since time.Time) ([]api.RBACChangeEntry, error) {

@@ -12,6 +12,7 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
+	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 	"go.opentelemetry.io/otel/trace"
@@ -518,4 +519,203 @@ func parseIncludeExcludeList(s string) (included, excluded []string) {
 		}
 	}
 	return
+}
+
+func GetAccessForUIRef(ctx context.Context, filters *api.AccessUIFilters) ([]api.AccessItem, error) {
+	if filters == nil {
+		filters = &api.AccessUIFilters{}
+	}
+
+	q := ctx.DB().
+		Table("config_access_summary").
+		Select(`config_access_summary.config_id,
+			config_access_summary.config_name,
+			config_access_summary.config_type,
+			config_access_summary.external_user_id,
+			config_access_summary."user",
+			config_access_summary.email,
+			config_access_summary.role,
+			config_access_summary.user_type,
+			config_access_summary.created_at,
+			config_access_summary.last_signed_in_at,
+			config_access_summary.last_reviewed_at`).
+		Order(`config_access_summary.config_name, config_access_summary."user"`)
+
+	if filters.Search != "" {
+		configIDs, err := query.FindConfigIDsByResourceSelector(ctx, 0, types.ResourceSelector{Search: filters.Search})
+		if err != nil {
+			return nil, ctx.Oops().Wrapf(err, "failed to resolve config selector")
+		}
+		if len(configIDs) == 0 {
+			return nil, nil
+		}
+		q = q.Where("config_access_summary.config_id IN (?)", configIDs)
+	}
+
+	if filters.ConfigTypes != "" {
+		included, excluded := parseIncludeExcludeList(filters.ConfigTypes)
+		if len(included) > 0 {
+			q = q.Where("config_access_summary.config_type IN (?)", included)
+		}
+		if len(excluded) > 0 {
+			q = q.Where("config_access_summary.config_type NOT IN (?)", excluded)
+		}
+	}
+
+	if filters.Role != "" {
+		included, excluded := parseIncludeExcludeList(filters.Role)
+		if len(included) > 0 {
+			q = q.Where("config_access_summary.role IN (?)", included)
+		}
+		if len(excluded) > 0 {
+			q = q.Where("config_access_summary.role NOT IN (?)", excluded)
+		}
+	}
+
+	if filters.UserType != "" {
+		included, excluded := parseIncludeExcludeList(filters.UserType)
+		if len(included) > 0 {
+			q = q.Where("config_access_summary.user_type IN (?)", included)
+		}
+		if len(excluded) > 0 {
+			q = q.Where("config_access_summary.user_type NOT IN (?)", excluded)
+		}
+	}
+
+	var rows []RBACAccessRow
+	if err := q.Find(&rows).Error; err != nil {
+		return nil, ctx.Oops().Wrapf(err, "failed to query access")
+	}
+
+	var staleCutoff time.Time
+	if filters.Stale != "" {
+		if d, err := time.ParseDuration(filters.Stale); err == nil {
+			staleCutoff = time.Now().Add(-d)
+		}
+	}
+
+	items := make([]api.AccessItem, 0, len(rows))
+	for _, r := range rows {
+		isStale := !staleCutoff.IsZero() && (r.LastSignedInAt == nil || r.LastSignedInAt.Before(staleCutoff))
+		if !staleCutoff.IsZero() && !isStale {
+			continue
+		}
+		items = append(items, api.AccessItem{
+			ConfigID:       r.ConfigID.String(),
+			ConfigName:     r.ConfigName,
+			ConfigType:     r.ConfigType,
+			UserID:         r.UserID.String(),
+			UserName:       r.UserName,
+			Email:          r.Email,
+			Role:           r.Role,
+			UserType:       r.UserType,
+			CreatedAt:      r.CreatedAt,
+			LastSignedInAt: r.LastSignedInAt,
+			LastReviewedAt: r.LastReviewedAt,
+			IsStale:        isStale,
+		})
+	}
+
+	return items, nil
+}
+
+func GetAccessLogsForUIRef(ctx context.Context, filters *api.AccessLogsUIFilters) ([]api.AccessLogItem, error) {
+	if filters == nil {
+		filters = &api.AccessLogsUIFilters{}
+	}
+
+	q := ctx.DB().
+		Table("config_access_logs").
+		Select(`config_access_logs.config_id,
+			config_items.name AS config_name,
+			config_items.type AS config_type,
+			config_access_logs.external_user_id,
+			external_users.name AS user_name,
+			config_access_logs.created_at,
+			config_access_logs.mfa,
+			config_access_logs.count,
+			config_access_logs.properties`).
+		Joins("JOIN config_items ON config_items.id = config_access_logs.config_id").
+		Joins("JOIN external_users ON external_users.id = config_access_logs.external_user_id").
+		Order("config_access_logs.created_at DESC")
+
+	if filters.Search != "" {
+		configIDs, err := query.FindConfigIDsByResourceSelector(ctx, 0, types.ResourceSelector{Search: filters.Search})
+		if err != nil {
+			return nil, ctx.Oops().Wrapf(err, "failed to resolve config selector")
+		}
+		if len(configIDs) == 0 {
+			return nil, nil
+		}
+		q = q.Where("config_access_logs.config_id IN (?)", configIDs)
+	}
+
+	if filters.ConfigTypes != "" {
+		included, excluded := parseIncludeExcludeList(filters.ConfigTypes)
+		if len(included) > 0 {
+			q = q.Where("config_items.type IN (?)", included)
+		}
+		if len(excluded) > 0 {
+			q = q.Where("config_items.type NOT IN (?)", excluded)
+		}
+	}
+
+	if filters.From != "" {
+		if d, err := time.ParseDuration(filters.From); err == nil {
+			q = q.Where("config_access_logs.created_at >= ?", time.Now().Add(-d))
+		}
+	}
+
+	if filters.To != "" {
+		if d, err := time.ParseDuration(filters.To); err == nil {
+			q = q.Where("config_access_logs.created_at <= ?", time.Now().Add(-d))
+		}
+	}
+
+	if filters.MFA == "true" {
+		q = q.Where("config_access_logs.mfa = true")
+	} else if filters.MFA == "false" {
+		q = q.Where("config_access_logs.mfa = false")
+	}
+
+	type accessLogRow struct {
+		ConfigID       uuid.UUID     `gorm:"column:config_id"`
+		ConfigName     string        `gorm:"column:config_name"`
+		ConfigType     string        `gorm:"column:config_type"`
+		ExternalUserID uuid.UUID     `gorm:"column:external_user_id"`
+		UserName       string        `gorm:"column:user_name"`
+		CreatedAt      time.Time     `gorm:"column:created_at"`
+		MFA            bool          `gorm:"column:mfa"`
+		Count          *int          `gorm:"column:count"`
+		Properties     types.JSONMap `gorm:"column:properties"`
+	}
+
+	var rows []accessLogRow
+	if err := q.Scan(&rows).Error; err != nil {
+		return nil, ctx.Oops().Wrapf(err, "failed to query access logs")
+	}
+
+	items := make([]api.AccessLogItem, len(rows))
+	for i, r := range rows {
+		var props map[string]string
+		if r.Properties != nil {
+			props = make(map[string]string, len(r.Properties))
+			for k, v := range r.Properties {
+				props[k] = fmt.Sprintf("%v", v)
+			}
+		}
+		items[i] = api.AccessLogItem{
+			ConfigID:   r.ConfigID.String(),
+			ConfigName: r.ConfigName,
+			ConfigType: r.ConfigType,
+			UserID:     r.ExternalUserID.String(),
+			UserName:   r.UserName,
+			CreatedAt:  r.CreatedAt,
+			MFA:        r.MFA,
+			Count:      lo.FromPtr(r.Count),
+			Properties: props,
+		}
+	}
+
+	return items, nil
 }
