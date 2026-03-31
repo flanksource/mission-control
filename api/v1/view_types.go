@@ -111,9 +111,7 @@ type ViewSpec struct {
 	// Include other views in the view
 	Sections []api.ViewSection `json:"sections,omitempty" yaml:"sections,omitempty"`
 
-	// MCP defines metadata for MCP tool registration, controlling how
-	// this view appears to LLM clients (Claude, Gemini, Codex).
-	MCP MCPMetadata `json:"mcp,omitempty" yaml:"mcp,omitempty"`
+	PDF *FacetOptions `json:"pdf,omitempty" yaml:"pdf,omitempty"`
 }
 
 type ViewQueryWithColumnDefs struct {

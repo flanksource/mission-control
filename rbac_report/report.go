@@ -19,6 +19,7 @@ import (
 type Options struct {
 	Title             string
 	Selectors         []types.ResourceSelector
+	Recursive         bool
 	StaleDays         int
 	ReviewOverdueDays int
 	ChangelogSince    time.Duration
@@ -44,7 +45,7 @@ func (o Options) WithDefaults() Options {
 func BuildReport(ctx context.Context, opts Options) (*api.RBACReport, error) {
 	opts = opts.WithDefaults()
 
-	rows, err := db.GetRBACAccess(ctx, opts.Selectors)
+	rows, err := db.GetRBACAccess(ctx, opts.Selectors, opts.Recursive)
 	if err != nil {
 		return nil, ctx.Oops().Wrapf(err, "failed to query RBAC access")
 	}
