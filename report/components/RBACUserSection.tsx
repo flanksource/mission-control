@@ -4,6 +4,11 @@ import { Icon } from '@flanksource/icons/icon';
 import type { RBACUserReport, RBACUserResource } from '../rbac-types.ts';
 import { ConfigTypeIcon } from './configTypeIcon.tsx';
 
+const ROLE_SOURCE_COLORS: Record<string, { bg: string; fg: string }> = {
+  direct: { bg: '#DBEAFE', fg: '#1E40AF' },
+  group:  { bg: '#F3E8FF', fg: '#6B21A8' },
+};
+
 function fmtDate(iso: string): string {
   const d = new Date(iso);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -29,12 +34,26 @@ function ReviewAge({ r }: { r: RBACUserResource }) {
   return <>{text}</>;
 }
 
-function roleColumn(r: RBACUserResource): string {
-  const parts = [r.role];
-  if (r.roleSource && r.roleSource !== 'direct') {
-    parts.push(`via ${r.roleSource}`);
-  }
-  return parts.join(' ');
+function RoleSourceBadge({ source }: { source: string }) {
+  const key = source.startsWith('group:') ? 'group' : source;
+  const colors = ROLE_SOURCE_COLORS[key] || ROLE_SOURCE_COLORS.direct;
+  return (
+    <span
+      className="inline-flex px-[1.5mm] py-[0.3mm] rounded text-[5pt] font-semibold"
+      style={{ backgroundColor: colors.bg, color: colors.fg, whiteSpace: 'nowrap' }}
+    >
+      {source}
+    </span>
+  );
+}
+
+function roleColumn(r: RBACUserResource): React.ReactNode {
+  return (
+    <span className="inline-flex items-center gap-[1mm]">
+      {r.role}
+      <RoleSourceBadge source={r.roleSource} />
+    </span>
+  );
 }
 
 interface Props {
@@ -59,7 +78,7 @@ export default function RBACUserSection({ user }: Props) {
     <span className="inline-flex items-center gap-[1mm]">
       <Icon name="person" size={14} />
       {user.userName}
-      <span className="text-[7pt] font-normal text-gray-500 ml-[0.5mm]">
+      <span className="text-[6pt] font-normal text-gray-500 ml-[0.5mm]">
         ({user.email})
       </span>
     </span>
@@ -67,10 +86,10 @@ export default function RBACUserSection({ user }: Props) {
 
   return (
     <div>
-      <div className="text-[10pt] font-bold text-slate-800 border-b border-gray-300 pb-[0.5mm] mb-[0.5mm]">
+      <div className="text-[8pt] font-bold text-slate-800 border-b border-gray-300 pb-[0.5mm] mb-[0.5mm]">
         {title}
       </div>
-      <div className="flex flex-wrap items-baseline gap-x-[3mm] text-[7pt] text-gray-500 mb-[0.5mm]">
+      <div className="flex flex-wrap items-baseline gap-x-[3mm] text-[6pt] text-gray-500 mb-[0.5mm]">
         <span>
           <span className="font-medium text-gray-400">Source: </span>
           {user.sourceSystem}
@@ -97,7 +116,7 @@ export default function RBACUserSection({ user }: Props) {
         ]);
         return (
           <div key={configType} className="mt-[0.5mm]">
-            <div className="text-[7pt] font-semibold text-gray-600">
+            <div className="text-[6pt] font-semibold text-gray-600">
               <span className="inline-flex items-center gap-[0.5mm]">
                 <ConfigTypeIcon configType={configType} size={10} />
                 {configType}
@@ -105,6 +124,7 @@ export default function RBACUserSection({ user }: Props) {
               </span>
             </div>
             <CompactTable
+              size="xs"
               variant="reference"
               columns={['Resource', 'Role', 'Created', 'Last Sign In', 'Last Review']}
               data={rows}

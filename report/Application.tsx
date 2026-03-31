@@ -71,7 +71,7 @@ export default function ApplicationReport({ data }: ApplicationReportProps) {
   const footer = <PageFooter />;
   const pageProps = {
     pageSize: 'a4' as const,
-    margins: { top: 5, bottom: 5, left: 5, right: 5 },
+    margins: { top: 5, bottom: 5, left: 10, right: 10 },
     header,
     headerHeight: 10,
     footer,

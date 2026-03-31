@@ -7,7 +7,7 @@ import RBACChangelogSection from './components/RBACChangelogSection.tsx';
 
 function PageHeader({ title }: { title: string }) {
   return (
-    <div className="flex items-center justify-between px-[10mm] py-[2mm] bg-[#1e293b] text-white text-[9pt]">
+    <div className="flex items-center justify-between px-[5mm] py-[1mm] bg-[#1e293b] text-white text-[7pt]">
       <span className="font-semibold">{title}</span>
       <span className="text-gray-300">RBAC Report</span>
     </div>
@@ -15,22 +15,18 @@ function PageHeader({ title }: { title: string }) {
 }
 
 function PageFooter() {
-  const date = new Date().toLocaleDateString('en-US', {
-    year: 'numeric', month: 'long', day: 'numeric',
-  });
+  const now = new Date().toISOString().replace('T', ' ').replace(/\.\d+Z$/, ' UTC');
   return (
-    <div className="flex items-center justify-between px-[10mm] py-[2mm] border-t border-gray-200 text-[8pt] text-gray-400">
-      <span>Generated {date}</span>
+    <div className="flex items-center justify-between px-[5mm] py-[1mm] border-t border-gray-200 text-[6pt] text-gray-400">
+      <span>Generated {now}</span>
     </div>
   );
 }
 
 function CoverPage({ title, query }: { title: string; query?: string }) {
-  const date = new Date().toLocaleDateString('en-US', {
-    year: 'numeric', month: 'long', day: 'numeric',
-  });
+  const now = new Date().toISOString().replace('T', ' ').replace(/\.\d+Z$/, ' UTC');
   return (
-    <div className="flex flex-col justify-center items-center h-full min-h-[200mm] text-center px-[20mm]">
+    <div className="flex flex-col justify-center items-center h-full min-h-[140mm] text-center px-[20mm]">
       <div className="mb-[8mm]">
         <div className="text-[8pt] font-medium text-blue-600 uppercase tracking-widest mb-[3mm]">
           RBAC Report
@@ -45,7 +41,7 @@ function CoverPage({ title, query }: { title: string; query?: string }) {
         )}
       </div>
       <div className="w-[40mm] h-[1px] mb-[8mm]" style={{ backgroundColor: '#2563EB' }} />
-      <div className="text-[10pt] text-gray-400">Generated on {date}</div>
+      <div className="text-[10pt] text-gray-400">Generated {now}</div>
     </div>
   );
 }
@@ -58,17 +54,18 @@ export default function RBACReportPage({ data }: RBACReportProps) {
   const header = <PageHeader title={data.title} />;
   const footer = <PageFooter />;
   const pageProps = {
-    pageSize: 'a4' as const,
-    margins: { top: 3, bottom: 3, left: 3, right: 3 },
+    pageSize: 'a4-landscape' as const,
+    margins: { top: 1, bottom: 1, left: 0, right: 0 },
     header,
-    headerHeight: 10,
+    headerHeight: 8,
     footer,
-    footerHeight: 10,
+    footerHeight: 8,
   };
 
   return (
     <>
-      <Page pageSize="a4" margins={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+      <style>{`@page { size: 297mm 210mm; }`}</style>
+      <Page pageSize="a4-landscape" margins={{ top: 10, bottom: 10, left: 0, right: 0 }}>
         <CoverPage title={data.title} query={data.query} />
       </Page>
 
@@ -82,9 +79,7 @@ export default function RBACReportPage({ data }: RBACReportProps) {
         <React.Fragment key={idx}>
           <PageBreak />
           <Page {...pageProps}>
-            <div className="text-[7pt]">
-              <RBACResourceSection resource={resource} />
-            </div>
+            <RBACResourceSection resource={resource} />
           </Page>
         </React.Fragment>
       ))}

@@ -80,7 +80,7 @@ export default function ViewReportPage({ data }: ViewReportProps) {
   const footer = <PageFooter />;
   const pageProps = {
     pageSize: 'a4' as const,
-    margins: { top: 3, bottom: 3, left: 3, right: 3 },
+    margins: { top: 3, bottom: 3, left: 10, right: 10 },
     header,
     headerHeight: 10,
     footer,
