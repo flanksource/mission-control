@@ -17,6 +17,7 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/application"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/report"
 )
 
 var ApplicationCmd = &cobra.Command{
@@ -90,5 +91,6 @@ var ExportApplication = &cobra.Command{
 func init() {
 	ExportApplication.Flags().StringVarP(&exportFormat, "format", "f", "json", "Output format: json, html, pdf, facet-html, facet-pdf")
 	ExportApplication.Flags().StringVarP(&exportOutfile, "out-file", "o", "", "Write output to file instead of stdout")
+	ExportApplication.Flags().StringVar(&report.SourceDir, "report-source", "", "Local directory with TSX report files (overrides embedded reports)")
 	ApplicationCmd.AddCommand(ExportApplication)
 }

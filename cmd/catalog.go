@@ -1,9 +1,7 @@
 package cmd
 
 import (
-	"fmt"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -26,53 +24,10 @@ var Catalog = &cobra.Command{
 
 func parseQuery(args []string) query.SearchResourcesRequest {
 	logger.Infof("Search query %v", args)
-	request := query.SearchResourcesRequest{
-		Limit: 5,
+	return query.SearchResourcesRequest{
+		Limit:   100,
+		Configs: []types.ResourceSelector{{Cache: "no-cache", Search: strings.Join(args, " ")}},
 	}
-	tags := make(map[string]string)
-	selector := types.ResourceSelector{
-		Cache: "no-cache",
-	}
-	for _, arg := range args {
-		parts := strings.Split(arg, "=")
-		if len(parts) != 2 {
-			logger.Warnf("Invalid param: %s", arg)
-			continue
-		}
-
-		switch parts[0] {
-		case "limit":
-			l, _ := strconv.Atoi(parts[1])
-			request.Limit = l
-		case "search":
-			selector.Search = parts[1]
-		case "scope":
-			selector.Scope = parts[1]
-		case "type":
-			selector.Types = append(selector.Types, parts[1])
-		case "name":
-			selector.Name = parts[1]
-		case "namespace":
-			selector.Namespace = parts[1]
-		case "id":
-			selector.ID = parts[1]
-		case "status":
-			selector.Statuses = append(selector.Statuses, parts[1])
-		default:
-			tags[parts[0]] = parts[1]
-		}
-	}
-
-	for k, v := range tags {
-		if strings.HasPrefix(k, "@") {
-			selector.TagSelector += fmt.Sprintf(" %s=%s", k[1:], v)
-		} else {
-			selector.LabelSelector += fmt.Sprintf(" %s=%s", k, v)
-		}
-	}
-	request.Configs = []types.ResourceSelector{selector}
-
-	return request
 }
 
 var Query = &cobra.Command{
@@ -123,17 +78,12 @@ var Query = &cobra.Command{
 
 		if catalogOutfile != "" {
 			logger.Infof("Writing output to %s", catalogOutfile)
-			if err := clicky.FormatToFile(*response, clicky.FormatOptions{}, catalogOutfile); err != nil {
+			if err := clicky.FormatToFile(*response, clicky.Flags.FormatOptions, catalogOutfile); err != nil {
 				logger.Fatalf(err.Error())
 				os.Exit(1)
 			}
 		} else {
-			out, err := clicky.Format(*response)
-			if err != nil {
-				logger.Fatalf(err.Error())
-				os.Exit(1)
-			}
-			fmt.Println(out)
+			clicky.MustPrint(*response, clicky.Flags.FormatOptions)
 		}
 	},
 }
@@ -176,7 +126,13 @@ var Mock = &cobra.Command{
 func init() {
 	Query.Flags().StringVarP(&catalogOutfile, "out-file", "o", "", "Write catalog output to a file instead of stdout")
 	Query.Flags().DurationVarP(&catalogWaitFor, "wait", "w", 60*time.Second, "Wait for this long for resources to be discovered")
+	clicky.BindAllFlags(Query.PersistentFlags(), "format")
+
+	Get.Flags().DurationVar(&catalogGetSince, "since", 7*24*time.Hour, "Show changes and playbook runs since this duration ago")
+	clicky.BindAllFlags(Get.PersistentFlags(), "format")
+
 	Catalog.AddCommand(Query)
 	Catalog.AddCommand(Mock)
+	Catalog.AddCommand(Get)
 	Root.AddCommand(Catalog)
 }

@@ -16,6 +16,7 @@ import (
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/rbac_report"
+	"github.com/flanksource/incident-commander/report"
 )
 
 var RBACCmd = &cobra.Command{
@@ -165,5 +166,6 @@ func init() {
 	ExportRBAC.Flags().StringVar(&rbacSince, "since", "2160h", "Changelog time range (Go duration, default 90 days)")
 	ExportRBAC.Flags().StringVar(&rbacTitle, "title", "", "Report title (default auto-generated)")
 	ExportRBAC.Flags().BoolVar(&rbacByUser, "by-user", false, "Group report by user instead of resource")
+	ExportRBAC.Flags().StringVar(&report.SourceDir, "report-source", "", "Local directory with TSX report files (overrides embedded reports)")
 	RBACCmd.AddCommand(ExportRBAC)
 }
