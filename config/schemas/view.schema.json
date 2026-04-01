@@ -443,6 +443,44 @@
       },
       "type": "array"
     },
+    "MCPMetadata": {
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Title overrides the default tool title shown to LLMs."
+        },
+        "description": {
+          "type": "string",
+          "description": "Description provides additional context for LLMs beyond the spec description."
+        },
+        "readOnlyHint": {
+          "type": "boolean",
+          "description": "ReadOnlyHint indicates the tool does not modify any state."
+        },
+        "destructiveHint": {
+          "type": "boolean",
+          "description": "DestructiveHint indicates the tool may perform destructive operations."
+        },
+        "idempotentHint": {
+          "type": "boolean",
+          "description": "IdempotentHint indicates repeated calls with same args have no additional effect."
+        },
+        "openWorldHint": {
+          "type": "boolean",
+          "description": "OpenWorldHint indicates the tool interacts with external entities."
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array",
+          "description": "Tags are keywords for categorizing the tool for LLM discovery."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "MCPMetadata defines metadata for MCP (Model Context Protocol) tool registration.\nThese fields control how the playbook or view appears to LLM clients\nsuch as Claude, Gemini, and Codex."
+    },
     "ManagedFieldsEntry": {
       "properties": {
         "manager": {
@@ -1227,6 +1265,10 @@
           },
           "type": "array",
           "description": "Include other views in the view"
+        },
+        "mcp": {
+          "$ref": "#/$defs/MCPMetadata",
+          "description": "MCP defines metadata for MCP tool registration, controlling how\nthis view appears to LLM clients (Claude, Gemini, Codex)."
         }
       },
       "additionalProperties": false,
