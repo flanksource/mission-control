@@ -198,19 +198,6 @@ var _ = ginkgo.Describe("MCP Tools", ginkgo.FlakeAttempts(3), func() {
 	})
 
 	ginkgo.Describe("Playbook Tools", func() {
-		ginkgo.It("should list all playbooks", func() {
-			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
-				Header: jsonHeader,
-				Params: mcp.CallToolParams{
-					Name: toolGetAllPlaybooks,
-				},
-			})
-
-			Expect(err).NotTo(HaveOccurred())
-			checkResultInMCPResponse(result.Content, []string{dummy.EchoConfig.Name})
-
-		})
-
 		ginkgo.It("should get recent playbook runs", func() {
 			// TODO: Add playbook run fixtures
 			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
@@ -254,21 +241,6 @@ var _ = ginkgo.Describe("MCP Tools", ginkgo.FlakeAttempts(3), func() {
 	})
 
 	ginkgo.Describe("View Tools", func() {
-		ginkgo.It("should list views", func() {
-			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
-				Header: jsonHeader,
-				Params: mcp.CallToolParams{
-					Name: "list_all_views",
-				},
-			})
-
-			Expect(err).NotTo(HaveOccurred())
-			checkResultInMCPResponse(result.Content, []string{
-				generateViewToolName(dummy.PodView),
-				generateViewToolName(dummy.ViewDev),
-			})
-		})
-
 		ginkgo.It("should handle view run handler correctly", func() {
 			ginkgo.By("Testing view run handler by checking if it handles tool name correctly")
 

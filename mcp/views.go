@@ -27,8 +27,6 @@ import (
 )
 
 const (
-	toolListAllViews = "list_all_views"
-
 	viewDefaultLimit = 50
 	viewDefaultPage  = 1
 	viewMaxLimit     = 500
@@ -54,7 +52,7 @@ type viewRequest struct {
 func parseViewOptions(args ArgParser) viewRequest {
 	return viewRequest{
 		withPanels:    args.Bool("withPanels", false),
-		withRows:      args.Bool("withRows", false),
+		withRows:      args.Bool("withRows", true),
 		selectColumns: args.Strings("select"),
 		page:          args.Int("page", viewDefaultPage),
 		limit:         args.Int("limit", 0),
@@ -204,18 +202,6 @@ func viewRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.Call
 	return structToMCPResponse(req, contents...), nil
 }
 
-func viewListToolHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	currentViewToolsMu.RLock()
-	keys := slices.Collect(maps.Keys(currentViewTools))
-	currentViewToolsMu.RUnlock()
-
-	jsonData, err := json.Marshal(keys)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), err
-	}
-	return mcp.NewToolResultText(string(jsonData)), nil
-}
-
 func viewResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
 	ctx, err := getDutyCtx(goctx)
 	if err != nil {
@@ -277,8 +263,8 @@ func syncViewsAsTools(ctx context.Context, s *server.MCPServer) error {
 		})
 		root.Properties.Set("withRows", &jsonschema.Schema{
 			Type:        "boolean",
-			Default:     false,
-			Description: "Include table rows for this view (paginated).",
+			Default:     true,
+			Description: "Include table rows for this view (paginated). Enabled by default.",
 		})
 		root.Properties.Set("select", &jsonschema.Schema{
 			Type:        "array",
@@ -325,14 +311,14 @@ func syncViewsAsTools(ctx context.Context, s *server.MCPServer) error {
 		columnSummary := strings.TrimPrefix(columnDesc, "Select columns to include in the result. ")
 		description := fmt.Sprintf(
 			`Execute view %s [%s/%s]. %s %s.
-Panels are excluded unless withPanels=true. .
-To retrieve table rows use withRows=true; select/page/limit apply only when withRows is enabled.
-Use the select array to request only the columns you truly need to minimize response tokens.
-
-Without withRows/withPanels set, nothing is returned`,
+Table rows are returned by default (withRows=true); use select/page/limit to control output.
+Panels are excluded unless withPanels=true.
+Use the select array to request only the columns you truly need to minimize response tokens.`,
 			spec.Display.Title, view.Namespace, view.Name, spec.Description, columnSummary,
 		)
-		s.AddTool(mcp.NewToolWithRawSchema(toolName, description, rj), viewRunHandler)
+		viewTool := mcp.NewToolWithRawSchema(toolName, description, rj)
+		viewTool.Annotations.ReadOnlyHint = lo.ToPtr(true)
+		s.AddTool(viewTool, viewRunHandler)
 		newViewTools = append(newViewTools, toolName)
 
 		currentViewToolsMu.Lock()
@@ -367,5 +353,4 @@ func registerViews(s *server.MCPServer) {
 		viewResourceHandler,
 	)
 
-	s.AddTool(mcp.NewTool(toolListAllViews, mcp.WithDescription("List all available view tools")), viewListToolHandler)
 }

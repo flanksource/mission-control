@@ -33,7 +33,6 @@ const (
 	toolGetPlaybookRunSteps   = "get_playbook_run_steps"
 	toolGetFailedPlaybookRuns = "get_playbook_failed_runs"
 	toolGetRecentPlaybookRuns = "get_playbook_recent_runs"
-	toolGetAllPlaybooks       = "get_all_playbooks"
 )
 
 func addPlaybooksAsTool(goctx gocontext.Context, srv *server.MCPServer, session server.ClientSession) error {
@@ -181,37 +180,6 @@ func playbookRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.
 	response := fmt.Sprintf("Started a new run: %s for the playbook: %s/%s\n", run.ID, pb.ID, pb.NamespacedName())
 	response += fmt.Sprintf("Use the %s tool to get the run steps.", toolGetPlaybookRunSteps)
 	return mcp.NewToolResultText(response), nil
-}
-
-func playbookListToolHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-	type playbookInfo struct {
-		ID   string `json:"id"`
-		Name string `json:"name"`
-	}
-
-	ctx, err := getDutyCtx(goctx)
-	if err != nil {
-		return mcp.NewToolResultError(err.Error()), nil
-	}
-
-	var playbooks []models.Playbook
-	err = auth.WithRLS(ctx, func(txCtx context.Context) error {
-		var err error
-		playbooks, err = gorm.G[models.Playbook](txCtx.DB()).Select("id", "name", "title", "namespace", "category").Where("deleted_at IS NULL").Find(txCtx)
-		return err
-	})
-	if err != nil {
-		return mcp.NewToolResultError(ctx.Oops().Wrapf(err, "Failed to get playbook tools").Error()), nil
-	}
-
-	response := lo.Map(playbooks, func(pb models.Playbook, _ int) playbookInfo {
-		return playbookInfo{
-			ID:   pb.ID.String(),
-			Name: generatePlaybookToolName(pb),
-		}
-	})
-
-	return structToMCPResponse(req, response), nil
 }
 
 // PlaybookRunActionDetail represents the response from get_playbook_run_actions SQL function
@@ -371,11 +339,9 @@ func registerPlaybook(s *server.MCPServer) {
 		playbookResourceHandler,
 	)
 
-	s.AddTool(mcp.NewTool(toolGetAllPlaybooks,
-		mcp.WithDescription("List all available playbooks")), playbookListToolHandler)
-
 	playbookRecentRunTool := mcp.NewTool(toolGetRecentPlaybookRuns,
 		mcp.WithDescription("Get recent playbook execution history as JSON array. Each entry contains run details, status, timing, and results."),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithNumber("limit",
 			mcp.Description("Maximum number of recent runs to return (default: 20)"),
 		),
@@ -387,6 +353,7 @@ func registerPlaybook(s *server.MCPServer) {
 
 	playbookFailedRunTool := mcp.NewTool(toolGetFailedPlaybookRuns,
 		mcp.WithDescription("Get recent failed playbook runs as JSON array. Each entry contains failure details, error messages, and timing information."),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithNumber("limit",
 			mcp.Description("Maximum number of failed runs to return (default: 20)"),
 		),

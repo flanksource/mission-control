@@ -54,6 +54,18 @@ func AuthMiddleware(next echov4.HandlerFunc) echov4.HandlerFunc {
 	}
 }
 
+func RegisterStaticTools(s *server.MCPServer) {
+	registerArtifacts(s)
+	registerCatalog(s)
+	registerConnections(s)
+	registerHealthChecks(s)
+	registerPlaybook(s)
+	registerViews(s)
+	registerNotifications(s)
+	registerTemplates(s)
+	registerAccess(s)
+}
+
 func Server(ctx context.Context, serverOpts ...server.StreamableHTTPOption) *MCPServer {
 	hooks := &server.Hooks{}
 
@@ -71,16 +83,7 @@ func Server(ctx context.Context, serverOpts ...server.StreamableHTTPOption) *MCP
 		}
 	})
 
-	registerArtifacts(s)
-	registerCatalog(s)
-	registerConnections(s)
-	registerHealthChecks(s)
-	registerPlaybook(s)
-	registerViews(s)
-	registerNotifications(s)
-	registerTemplates(s)
-
-	registerAccess(s)
+	RegisterStaticTools(s)
 	registerJobs(ctx, s)
 
 	logger.Infof("Registering /mcp routes")

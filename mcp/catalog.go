@@ -275,7 +275,8 @@ func registerCatalog(s *server.MCPServer) {
 		ConfigItemResourceHandler)
 
 	s.AddTool(mcp.NewTool(toolListCatalogTypes,
-		mcp.WithDescription("List all config types")), configTypeResourceHandler)
+		mcp.WithDescription("List all config types"),
+		mcp.WithReadOnlyHintAnnotation(true)), configTypeResourceHandler)
 
 	var queryDescription = `
 	We can search our entire catalog via query
@@ -467,7 +468,7 @@ func registerCatalog(s *server.MCPServer) {
 	`
 
 	searchCatalogChangesTool := mcp.NewTool(toolSearchCatalogChanges,
-		mcp.WithDescription("Search and find configuration change events across catalog items"+catalogChangesDescription),
+		mcp.WithDescription("Search and find configuration change events across catalog items."+catalogChangesDescription),
 		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("query",
 			mcp.Required(),
@@ -483,6 +484,7 @@ func registerCatalog(s *server.MCPServer) {
 
 	relatedCatalogTool := mcp.NewTool(toolGetRelatedConfigs,
 		mcp.WithDescription("Find configuration items related to a specific config by relationships and dependencies"),
+		mcp.WithReadOnlyHintAnnotation(true),
 		mcp.WithString("id",
 			mcp.Required(),
 			mcp.Description("Config ID"),
