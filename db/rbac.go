@@ -221,17 +221,21 @@ type AccessLogRow struct {
 	CreatedAt time.Time  `json:"created_at" gorm:"column:created_at"`
 }
 
-func GetAccessLogs(ctx context.Context, configID uuid.UUID, limit int) ([]AccessLogRow, error) {
+func GetAccessLogs(ctx context.Context, configID uuid.UUID, userID *uuid.UUID, limit int) ([]AccessLogRow, error) {
+	q := ctx.DB().Table("config_access_logs cal").
+		Select(`cal.config_id, eu.name AS user_name, eu.email AS user_email,
+			cal.mfa, cal.count, cal.created_at`).
+		Joins("JOIN external_users eu ON cal.external_user_id = eu.id").
+		Where("cal.config_id = ?", configID).
+		Order("cal.created_at DESC").
+		Limit(limit)
+
+	if userID != nil {
+		q = q.Where("cal.external_user_id = ?", *userID)
+	}
+
 	var rows []AccessLogRow
-	err := ctx.DB().Raw(`
-		SELECT cal.config_id, eu.name AS user_name, eu.email AS user_email,
-			cal.mfa, cal.count, cal.created_at
-		FROM config_access_logs cal
-		JOIN external_users eu ON cal.external_user_id = eu.id
-		WHERE cal.config_id = ?
-		ORDER BY cal.created_at DESC
-		LIMIT ?`, configID, limit).Scan(&rows).Error
-	if err != nil {
+	if err := q.Scan(&rows).Error; err != nil {
 		return nil, ctx.Oops().Wrapf(err, "failed to query access logs")
 	}
 	return rows, nil

@@ -69,11 +69,20 @@ func searchCatalogAccessLogHandler(goctx gocontext.Context, req mcp.CallToolRequ
 		return mcp.NewToolResultError(fmt.Sprintf("invalid config_id: %v", err)), nil
 	}
 
+	var userID *uuid.UUID
+	if rawUserID := req.GetString("user_id", ""); rawUserID != "" {
+		id, err := uuid.Parse(rawUserID)
+		if err != nil {
+			return mcp.NewToolResultError(fmt.Sprintf("invalid user_id: %v", err)), nil
+		}
+		userID = &id
+	}
+
 	limit := req.GetInt("limit", 50)
 
 	var rows []db.AccessLogRow
 	err = auth.WithRLS(ctx, func(rlsCtx context.Context) error {
-		rows, err = db.GetAccessLogs(rlsCtx, configID, limit)
+		rows, err = db.GetAccessLogs(rlsCtx, configID, userID, limit)
 		return err
 	})
 	if err != nil {
@@ -169,6 +178,9 @@ func registerAccess(s *server.MCPServer) {
 		mcp.WithString("config_id",
 			mcp.Required(),
 			mcp.Description("Config item ID (UUID)"),
+		),
+		mcp.WithString("user_id",
+			mcp.Description("External user ID (UUID) to filter logs by. Use resolve_external_user to find user IDs by name or email."),
 		),
 		mcp.WithNumber("limit",
 			mcp.Description("Max results to return (default: 50)"),

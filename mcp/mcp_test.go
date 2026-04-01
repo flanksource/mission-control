@@ -317,6 +317,40 @@ var _ = ginkgo.Describe("MCP Tools", ginkgo.FlakeAttempts(3), func() {
 			Expect(result.IsError).To(BeTrue())
 		})
 
+		ginkgo.It("should search catalog access log with user_id filter", func() {
+			testConfigID := dummy.EKSCluster.ID.String()
+			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
+				Header: jsonHeader,
+				Params: mcp.CallToolParams{
+					Name: toolSearchCatalogAccessLog,
+					Arguments: map[string]any{
+						"config_id": testConfigID,
+						"user_id":   uuid.New().String(),
+					},
+				},
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.IsError).To(BeFalse())
+		})
+
+		ginkgo.It("should return error for invalid user_id in access log", func() {
+			testConfigID := dummy.EKSCluster.ID.String()
+			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
+				Header: jsonHeader,
+				Params: mcp.CallToolParams{
+					Name: toolSearchCatalogAccessLog,
+					Arguments: map[string]any{
+						"config_id": testConfigID,
+						"user_id":   "not-a-uuid",
+					},
+				},
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.IsError).To(BeTrue())
+		})
+
 		ginkgo.It("should return error when config_id is missing for access log", func() {
 			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
 				Header: jsonHeader,
@@ -370,6 +404,139 @@ var _ = ginkgo.Describe("MCP Tools", ginkgo.FlakeAttempts(3), func() {
 					Arguments: map[string]any{
 						"since": "invalid",
 					},
+				},
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.IsError).To(BeTrue())
+		})
+	})
+
+	ginkgo.Describe("Resolve Tools", func() {
+		ginkgo.It("should resolve config by name", func() {
+			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
+				Header: jsonHeader,
+				Params: mcp.CallToolParams{
+					Name: toolResolveConfig,
+					Arguments: map[string]any{
+						"query": "Production EKS",
+					},
+				},
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.IsError).To(BeFalse())
+			checkResultInMCPResponse(result.Content, []string{dummy.EKSCluster.ID.String()})
+		})
+
+		ginkgo.It("should resolve config by partial name", func() {
+			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
+				Header: jsonHeader,
+				Params: mcp.CallToolParams{
+					Name: toolResolveConfig,
+					Arguments: map[string]any{
+						"query": "Production",
+					},
+				},
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.IsError).To(BeFalse())
+			checkResultInMCPResponse(result.Content, []string{dummy.EKSCluster.ID.String()})
+		})
+
+		ginkgo.It("should resolve config by ID", func() {
+			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
+				Header: jsonHeader,
+				Params: mcp.CallToolParams{
+					Name: toolResolveConfig,
+					Arguments: map[string]any{
+						"query": dummy.EKSCluster.ID.String(),
+					},
+				},
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.IsError).To(BeFalse())
+			checkResultInMCPResponse(result.Content, []string{dummy.EKSCluster.ID.String()})
+		})
+
+		ginkgo.It("should resolve config with type filter", func() {
+			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
+				Header: jsonHeader,
+				Params: mcp.CallToolParams{
+					Name: toolResolveConfig,
+					Arguments: map[string]any{
+						"query": "Production",
+						"type":  "EKS::Cluster",
+					},
+				},
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.IsError).To(BeFalse())
+			checkResultInMCPResponse(result.Content, []string{dummy.EKSCluster.ID.String()})
+		})
+
+		ginkgo.It("should return error when query is missing for resolve config", func() {
+			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
+				Header: jsonHeader,
+				Params: mcp.CallToolParams{
+					Name: toolResolveConfig,
+				},
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.IsError).To(BeTrue())
+		})
+
+		ginkgo.It("should resolve external user without error", func() {
+			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
+				Header: jsonHeader,
+				Params: mcp.CallToolParams{
+					Name: toolResolveExternalUser,
+					Arguments: map[string]any{
+						"query": "nonexistent-user",
+					},
+				},
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.IsError).To(BeFalse())
+		})
+
+		ginkgo.It("should return error when query is missing for resolve external user", func() {
+			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
+				Header: jsonHeader,
+				Params: mcp.CallToolParams{
+					Name: toolResolveExternalUser,
+				},
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.IsError).To(BeTrue())
+		})
+
+		ginkgo.It("should resolve external group without error", func() {
+			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
+				Header: jsonHeader,
+				Params: mcp.CallToolParams{
+					Name: toolResolveExternalGroup,
+					Arguments: map[string]any{
+						"query": "nonexistent-group",
+					},
+				},
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.IsError).To(BeFalse())
+		})
+
+		ginkgo.It("should return error when query is missing for resolve external group", func() {
+			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
+				Header: jsonHeader,
+				Params: mcp.CallToolParams{
+					Name: toolResolveExternalGroup,
 				},
 			})
 
