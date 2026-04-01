@@ -80,6 +80,7 @@ func Server(ctx context.Context, serverOpts ...server.StreamableHTTPOption) *MCP
 	registerNotifications(s)
 	registerTemplates(s)
 
+	registerAccess(s)
 	registerJobs(ctx, s)
 
 	logger.Infof("Registering /mcp routes")
