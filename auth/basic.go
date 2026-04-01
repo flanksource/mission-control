@@ -10,14 +10,19 @@ import (
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	incAPI "github.com/flanksource/incident-commander/api"
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/labstack/echo/v4"
 	"github.com/tg123/go-htpasswd"
 )
 
-var HtpasswdFile string
+var (
+	HtpasswdFile       string
+	OIDCEnabled        bool
+	OIDCSigningKeyPath string
 
-var checker *htpasswd.File
+	checker *htpasswd.File
+)
 
 const basicAuthCookieName = "authorization"
 
@@ -97,14 +102,47 @@ func validateBasicAuth(c echo.Context, user, pass string) (bool, error) {
 	return true, nil
 }
 
+// setWWWAuthenticate adds the WWW-Authenticate header pointing to the OAuth
+// Protected Resource Metadata endpoint so that MCP clients can discover the
+// OIDC provider and initiate the authorization flow.
+func setWWWAuthenticate(c echo.Context) {
+	if OIDCEnabled {
+		resourceMetadataURL := strings.TrimRight(incAPI.FrontendURL, "/") + "/.well-known/oauth-protected-resource"
+		c.Response().Header().Set("WWW-Authenticate", fmt.Sprintf(`Bearer resource_metadata="%s"`, resourceMetadataURL))
+	}
+}
+
 func basicAuthMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		if canSkipAuth(c) || authenticateFromCookie(c) {
 			return next(c)
 		}
 
+		if token, ok := extractBearerAuthToken(c.Request().Header); ok {
+			if authenticated, err := authenticateOIDCToken(c, token); err != nil {
+				return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			} else if authenticated {
+				return next(c)
+			}
+			// fall through to access token check
+			if accessToken, err := getAccessToken(c.Request().Context().(context.Context), token); err == nil && accessToken != nil {
+				ctx := c.Request().Context().(context.Context)
+				var person models.Person
+				if err := ctx.DB().Where("id = ?", accessToken.PersonID).First(&person).Error; err == nil {
+					if err := InjectToken(ctx, c, &person, ""); err == nil {
+						ctx = ctx.WithUser(&person)
+						c.SetRequest(c.Request().WithContext(ctx))
+						return next(c)
+					}
+				}
+			}
+			setWWWAuthenticate(c)
+			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		}
+
 		user, pass, ok := c.Request().BasicAuth()
 		if !ok {
+			setWWWAuthenticate(c)
 			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		}
 
@@ -116,6 +154,37 @@ func basicAuthMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 
 		return next(c)
 	}
+}
+
+// LookupPersonByUsername finds a person by username or email, returning the person ID.
+// Used by the OIDC login handler to map authenticated users to persons.
+func LookupPersonByUsername(ctx context.Context, username string) (string, error) {
+	person, err := lookupPerson(ctx, username)
+	if err != nil {
+		return "", err
+	}
+	return person.ID.String(), nil
+}
+
+// HtpasswdChecker wraps htpasswd.File to implement oidc.CredentialChecker.
+type HtpasswdChecker struct {
+	file *htpasswd.File
+}
+
+func NewHtpasswdChecker(path string) (*HtpasswdChecker, error) {
+	f, err := htpasswd.New(path, htpasswd.DefaultSystems, nil)
+	if err != nil {
+		return nil, err
+	}
+	return &HtpasswdChecker{file: f}, nil
+}
+
+func (h *HtpasswdChecker) Match(ctx context.Context, user, pass string) error {
+	match := h.file.Match(user, pass)
+	if !match {
+		return fmt.Errorf("invalid credentials")
+	}
+	return nil
 }
 
 func lookupPerson(ctx context.Context, user string) (*models.Person, error) {

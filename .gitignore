@@ -25,6 +25,7 @@ msg.tpl
 test-reports
 .artifacts/
 __debug_bin*
+oidc-signing-key.pem
 
 exec-checkout
 shell-bin-dir
@@ -43,3 +44,6 @@ hack/
 specs/
 .db/
 .facet/
+**/*.pem
+**/*.key
+auth/oidc/static/tailwind.min.js

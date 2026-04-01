@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/flanksource/commons/rand"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	incAPI "github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -155,6 +157,17 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 			return next(c)
 		}
 
+		// Try OIDC Bearer token first when enabled
+		if OIDCEnabled {
+			if token, ok := extractBearerAuthToken(c.Request().Header); ok {
+				if authenticated, err := authenticateOIDCToken(c, token); err != nil {
+					return c.JSON(http.StatusInternalServerError, map[string]string{"error": "internal error"})
+				} else if authenticated {
+					return next(c)
+				}
+			}
+		}
+
 		ctx := c.Request().Context().(context.Context)
 		session, err := k.validateSession(ctx, c.Request())
 		if err != nil {
@@ -162,18 +175,22 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 			if errors.Is(err, errInvalidTokenFormat) {
 				return c.String(http.StatusBadRequest, "invalid access token")
 			} else if errors.Is(err, errTokenExpired) {
+				setWWWAuthenticate(c)
 				return c.String(http.StatusUnauthorized, "access token has expired")
 			}
+			setWWWAuthenticate(c)
 			return c.String(http.StatusUnauthorized, "Authorization Error")
 		}
 
 		if !*session.Active {
+			setWWWAuthenticate(c)
 			return c.String(http.StatusUnauthorized, "Session Expired")
 		}
 
 		uid, err := uuid.Parse(session.Identity.GetId())
 		if err != nil {
 			ctx.GetSpan().RecordError(err)
+			setWWWAuthenticate(c)
 			return c.String(http.StatusUnauthorized, "Authorization Error")
 		}
 
@@ -212,6 +229,68 @@ func (k *kratosMiddleware) Session(next echo.HandlerFunc) echo.HandlerFunc {
 
 		return next(c)
 	}
+}
+
+// KratosCredentialChecker validates credentials via Kratos API,
+// implementing oidc.CredentialChecker for the OIDC login flow.
+type KratosCredentialChecker struct {
+	middleware *kratosMiddleware
+}
+
+func NewKratosCredentialChecker(m *kratosMiddleware) *KratosCredentialChecker {
+	return &KratosCredentialChecker{middleware: m}
+}
+
+func (k *KratosCredentialChecker) Match(ctx context.Context, user, pass string) error {
+	_, err := k.middleware.kratosLoginWithCache(ctx, user, pass)
+	return err
+}
+
+func (k *KratosCredentialChecker) LoginRedirectURL(authRequestID string) (string, error) {
+	frontendURL := strings.TrimRight(incAPI.FrontendURL, "/")
+	if frontendURL == "" {
+		return "", fmt.Errorf("frontend URL is not configured")
+	}
+
+	q := url.Values{}
+	q.Set("return_to", "/oidc/kratos/callback?auth_request_id="+authRequestID)
+	return frontendURL + "/login?" + q.Encode(), nil
+}
+
+func (k *KratosCredentialChecker) CallbackSubject(c echo.Context) (string, error) {
+	ctx := c.Request().Context().(context.Context)
+
+	session, err := k.middleware.validateSession(ctx, c.Request())
+	if err != nil {
+		return "", err
+	}
+	if session.Active == nil || !*session.Active {
+		return "", fmt.Errorf("session is not active")
+	}
+
+	subject := session.Identity.GetId()
+	if subject == "" {
+		return "", fmt.Errorf("session identity is missing")
+	}
+
+	if _, err := db.GetUserByID(ctx, subject); err != nil {
+		return "", fmt.Errorf("failed to resolve user: %w", err)
+	}
+
+	return subject, nil
+}
+
+// LookupKratosPersonByUsername finds a person by email in the Kratos identities table.
+func LookupKratosPersonByUsername(ctx context.Context, username string) (string, error) {
+	var id string
+	err := ctx.DB().Raw(`SELECT id FROM identities WHERE traits->>'email' = ?`, strings.ToLower(username)).Scan(&id).Error
+	if err != nil {
+		return "", fmt.Errorf("identity not found: %w", err)
+	}
+	if id == "" {
+		return "", fmt.Errorf("identity not found for %s", username)
+	}
+	return id, nil
 }
 
 type kratosMiddleware struct {

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"slices"
 	"strings"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/gomplate/v3"
 	"github.com/flanksource/incident-commander/api"
+	"github.com/flanksource/incident-commander/auth/oidc"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/flanksource/incident-commander/rbac/adapter"
 	"github.com/labstack/echo/v4"
@@ -50,12 +52,28 @@ var (
 	Basic                 = "basic"
 )
 
-var skipAuthPaths = []string{
-	"/health",
+var skipAuthPathPrefixes = []string{
 	"/kratos/",
 	"/canary/webhook/",
 	"/playbook/webhook/", // Playbook webhooks handle the authentication themselves
 	"/auth/basic/",
+	"/oidc/",
+	"/.well-known/",
+	"/oauth/", // Standard OIDC protocol endpoints (mounted at root to match the issuer URL).
+}
+
+var skipAuthPathsExact = []string{
+	"/health",
+
+	// --start:: Standard OIDC protocol endpoints (mounted at root to match the issuer URL).
+	"/authorize",
+	"/authorize/callback",
+	"/userinfo",
+	"/keys",
+	"/revoke",
+	"/device_authorization",
+	"/endsession",
+	// --end:: Standard OIDC endpoints
 }
 
 func Middleware(ctx context.Context, e *echo.Echo) error {
@@ -80,6 +98,16 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 		} else if admin != nil {
 			adminUserID = admin.ID.String()
 		}
+		if OIDCEnabled {
+			htpasswdChecker, err := NewHtpasswdChecker(HtpasswdFile)
+			if err != nil {
+				return fmt.Errorf("failed to load htpasswd file: %w", err)
+			}
+			if err := oidc.MountRoutes(e, ctx, api.FrontendURL, OIDCSigningKeyPath, htpasswdChecker, LookupPersonByUsername); err != nil {
+				return fmt.Errorf("failed to mount OIDC routes: %w", err)
+			}
+			logger.Infof("OIDC provider enabled at %s", api.FrontendURL)
+		}
 	case Kratos:
 		kratosHandler := NewKratosHandler()
 		adminUserID, err = kratosHandler.CreateAdminUser(ctx)
@@ -87,12 +115,20 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 			return fmt.Errorf("failed to created admin user: %v", err)
 		}
 
-		middleware, err := kratosHandler.KratosMiddleware(ctx)
+		kratosMiddleware, err := kratosHandler.KratosMiddleware(ctx)
 		if err != nil {
 			return fmt.Errorf("failed to initialize kratos middleware: %v", err)
 		}
-		e.Use(middleware.Session)
+		e.Use(kratosMiddleware.Session)
 		e.POST("/auth/invite_user", kratosHandler.InviteUser, rbac.Authorization(policy.ObjectAuth, policy.ActionUpdate))
+
+		if OIDCEnabled {
+			kratosChecker := NewKratosCredentialChecker(kratosMiddleware)
+			if err := oidc.MountRoutes(e, ctx, api.FrontendURL, OIDCSigningKeyPath, kratosChecker, LookupKratosPersonByUsername); err != nil {
+				return fmt.Errorf("failed to mount OIDC routes: %w", err)
+			}
+			logger.Infof("OIDC provider enabled at %s (Kratos auth)", api.FrontendURL)
+		}
 
 	case Clerk:
 		clerkHandler, err := NewClerkHandler()
@@ -121,7 +157,13 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 
 // TODO: Use regex supported path matching
 func canSkipAuth(c echo.Context) bool {
-	for _, p := range skipAuthPaths {
+	// use c.Request().URL.Path for exact matches instead of c.Path() which may contain path parameters (e.g. /playbook/webhook/:id)
+	// Example: URL.PATH = /authorize/callback whereas c.Path() = /authorize/*
+	if slices.Contains(skipAuthPathsExact, c.Request().URL.Path) {
+		return true
+	}
+
+	for _, p := range skipAuthPathPrefixes {
 		if strings.HasPrefix(c.Path(), p) {
 			return true
 		}

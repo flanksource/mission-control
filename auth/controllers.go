@@ -145,9 +145,15 @@ func WhoAmI(c echo.Context) error {
 	if err != nil {
 		ctx.Warnf("Error getting roles: %v", err)
 	}
+	if roles == nil {
+		roles = []string{}
+	}
 	permissions, err := rbac.PermsForUser(user.ID.String())
 	if err != nil {
 		ctx.Warnf("Error getting permissions: %v", err)
+	}
+	if permissions == nil {
+		permissions = []policy.Permission{}
 	}
 
 	return c.JSON(http.StatusOK, dutyAPI.HTTPSuccess{

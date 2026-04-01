@@ -195,7 +195,7 @@ var Serve = &cobra.Command{
 		// Cannot be registered because we need to pass ctx for
 		// context injection middleware
 		mcpServer := mcp.Server(ctx)
-		e.POST("/mcp", echov4.WrapHandler(mcpServer.HTTPHandler), mcp.AuthMiddleware)
+		e.Any("/mcp", echov4.WrapHandler(mcpServer.HTTPHandler), mcp.AuthMiddleware)
 
 		shutdown.AddHookWithPriority("echo", shutdown.PriorityIngress, func() {
 			echo.Shutdown(e)
