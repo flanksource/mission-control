@@ -154,7 +154,7 @@ func GetDelay(ctx context.Context, playbook models.Playbook, run models.Playbook
 		return 0, ctx.Oops().Wrapf(err, "failed to template action")
 	}
 
-	oops := ctx.Oops().Hint(templateEnv.JSON(ctx))
+	oops := oopsWithTemplateEnv(ctx, templateEnv)
 	action.Delay, err = ctx.RunTemplate(gomplate.Template{Expression: action.Delay}, templateEnv.AsMapForTemplating(ctx))
 	if err != nil {
 		return 0, oops.Wrapf(err, "failed to template action")
@@ -491,7 +491,7 @@ func TemplateAndExecuteAction(ctx context.Context, spec v1.PlaybookSpec, playboo
 		return err
 	}
 
-	oops := ctx.Oops().Hint(templateEnv.JSON(ctx))
+	oops := oopsWithTemplateEnv(ctx, templateEnv)
 
 	ctx.Logger.V(7).Infof("Using env: %s", logger.Pretty(templateEnv.Env))
 
@@ -531,4 +531,12 @@ func filterAction(ctx context.Context, filter string) (bool, error) {
 	}
 
 	return false, nil
+}
+
+func oopsWithTemplateEnv(ctx context.Context, env actions.TemplateEnv) oops.OopsErrorBuilder {
+	builder := ctx.Oops()
+	for k, v := range env.AsMap(ctx) {
+		builder = builder.With(k, v)
+	}
+	return builder
 }
