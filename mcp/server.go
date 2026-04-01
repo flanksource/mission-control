@@ -2,6 +2,7 @@ package mcp
 
 import (
 	gocontext "context"
+	"fmt"
 	"net/http"
 
 	"github.com/flanksource/commons/logger"
@@ -38,11 +39,12 @@ func AuthMiddleware(next echov4.HandlerFunc) echov4.HandlerFunc {
 		ctx := c.Request().Context().(context.Context)
 
 		owner := ctx.Subject()
+
 		var accessToken models.AccessToken
-		if err := ctx.DB().Where("person_id = ?", ctx.Subject()).First(&accessToken).Error; err == nil {
-			if accessToken.CreatedBy != nil {
-				owner = accessToken.CreatedBy.String()
-			}
+		if err := ctx.DB().Where("person_id = ?", ctx.Subject()).Find(&accessToken).Error; err != nil {
+			return dutyAPI.WriteError(c, fmt.Errorf("failed to lookup access token for subject %s: %w", ctx.Subject(), err))
+		} else if accessToken.CreatedBy != nil {
+			owner = accessToken.CreatedBy.String()
 		}
 
 		if roles, err := rbac.RolesForUser(owner); err != nil {
@@ -56,14 +58,20 @@ func AuthMiddleware(next echov4.HandlerFunc) echov4.HandlerFunc {
 			return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
 		}
 
-		_, ok := lo.Find(permissions, func(perm policy.Permission) bool {
-			if perm.Deny {
-				return false
+		hasAllow := false
+		for _, perm := range permissions {
+			if perm.Action != policy.ActionMCPUse || (perm.Object != policy.ObjectMCP && perm.Object != "*") {
+				continue
 			}
 
-			return perm.Action == policy.ActionMCPUse && (perm.Object == policy.ObjectMCP || perm.Object == "*")
-		})
-		if !ok {
+			if perm.Deny {
+				return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "forbidden: user %s is explicitly denied mcp:use permission", owner))
+			}
+
+			hasAllow = true
+		}
+
+		if !hasAllow {
 			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "forbidden: user %s does not have mcp:use permission", owner))
 		}
 

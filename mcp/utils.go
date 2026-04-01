@@ -15,13 +15,18 @@ import (
 )
 
 func getDutyCtx(ctx gocontext.Context) (context.Context, error) {
+	if dutyCtx, ok := ctx.(context.Context); ok {
+		return dutyCtx, nil
+	}
+
 	if v := ctx.Value(dutyContextKey); v != nil {
 		dutyCtx, ok := v.(context.Context)
 		if ok {
 			return dutyCtx, nil
 		}
 	}
-	return context.Context{}, fmt.Errorf("no duty ctx")
+
+	return context.New(), fmt.Errorf("no duty ctx")
 }
 
 // fixMCPToolNameIfRequired removes invalid chars that do not
