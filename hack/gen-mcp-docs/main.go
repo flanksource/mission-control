@@ -3,9 +3,12 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"sort"
 	"strings"
 
+	"github.com/flanksource/clicky"
+	api "github.com/flanksource/clicky/api"
 	mcplib "github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 
@@ -37,44 +40,55 @@ func main() {
 	fmt.Println()
 
 	for _, name := range names {
-		printTool(tools[name].Tool)
+		printToolDetail(tools[name].Tool)
 	}
+}
+
+func mdRow(cells ...string) string {
+	escaped := make([]string, len(cells))
+	for i, c := range cells {
+		escaped[i] = strings.Join(strings.Fields(strings.TrimSpace(c)), " ")
+		escaped[i] = strings.ReplaceAll(escaped[i], "|", `\|`)
+	}
+	return "| " + strings.Join(escaped, " | ") + " |"
 }
 
 func printResourceTemplates() {
 	fmt.Println("## Resource Templates")
 	fmt.Println()
-	fmt.Println("| URI Template | Description |")
+	fmt.Println(mdRow("URI Template", "Description"))
 	fmt.Println("|-------------|-------------|")
-	fmt.Println("| `config_item://{id}` | Returns the complete JSON representation of an infrastructure configuration item (AWS EC2 instance, Kubernetes deployment, etc). Use to read the full state of a known item; use `search_catalog` and `describe_catalog` to discover resources. Example: `config_item://i-0abcd1234efgh5678` |")
-	fmt.Println("| `playbook://{idOrName}` | Returns the JSON definition of an automated runbook including steps and parameters. Use to inspect a playbook's logic; use the dynamic per-session playbook tools to execute it. Example: `playbook://restart-k8s-pods` |")
-	fmt.Println("| `connection://{namespace}/{name}` | Returns JSON configuration for an external service endpoint (database, API, cloud provider). Use to inspect a known connection; use `list_connections` to discover available connections. Example: `connection://default/postgres-main` |")
-	fmt.Println("| `view://{namespace}/{name}` | Returns the JSON structural definition and query logic of a saved view/dashboard. Use to understand how a view is constructed; use the dynamic view tools to execute the query and fetch data. Example: `view://monitoring/high-cpu-instances` |")
+	fmt.Println(mdRow("`config_item://{id}`", "Returns the complete JSON representation of an infrastructure configuration item (AWS EC2 instance, Kubernetes deployment, etc). Use to read the full state of a known item; use `search_catalog` and `describe_catalog` to discover resources."))
+	fmt.Println(mdRow("`playbook://{idOrName}`", "Returns the JSON definition of an automated runbook including steps and parameters. Use to inspect a playbook's logic; use the dynamic per-session playbook tools to execute it."))
+	fmt.Println(mdRow("`connection://{namespace}/{name}`", "Returns JSON configuration for an external service endpoint (database, API, cloud provider). Use to inspect a known connection; use `list_connections` to discover available connections."))
+	fmt.Println(mdRow("`view://{namespace}/{name}`", "Returns the JSON structural definition and query logic of a saved view/dashboard. Use to understand how a view is constructed; use the dynamic view tools to execute the query and fetch data."))
 	fmt.Println()
 }
 
 func printPrompts() {
 	fmt.Println("## Prompts")
 	fmt.Println()
-	fmt.Println("| Name | Description |")
+	fmt.Println(mdRow("Name", "Description"))
 	fmt.Println("|------|-------------|")
-	fmt.Println("| `Unhealthy catalog items` | Searches for all unhealthy items using `search_catalog` with query `health!=healthy` |")
-	fmt.Println("| `troubleshoot_kubernetes_resource` | Troubleshoots Kubernetes resources. Accepts optional `query` argument (default: `health!=healthy type=Kubernetes::*`) |")
+	fmt.Println(mdRow("`Unhealthy catalog items`", "Searches for all unhealthy items using `search_catalog` with query `health!=healthy`"))
+	fmt.Println(mdRow("`troubleshoot_kubernetes_resource`", "Troubleshoots Kubernetes resources. Accepts optional `query` argument (default: `health!=healthy type=Kubernetes::*`)"))
 	fmt.Println()
 }
 
 func printToolSummary(names []string, tools map[string]*server.ServerTool) {
 	fmt.Printf("## Tools (%d static + dynamic)\n\n", len(names))
-	fmt.Println("| Tool | Hints | Description |")
+	fmt.Println(mdRow("Tool", "Hints", "Description"))
 	fmt.Println("|------|-------|-------------|")
 	for _, name := range names {
 		tool := tools[name].Tool
-		hints := formatHints(tool.Annotations)
-		desc := firstSentence(tool.Description)
-		fmt.Printf("| [`%s`](#%s) | %s | %s |\n", name, name, hints, desc)
+		fmt.Println(mdRow(
+			fmt.Sprintf("[`%s`](#%s)", name, name),
+			formatHints(tool.Annotations),
+			firstSentence(tool.Description),
+		))
 	}
-	fmt.Println("| `{playbook}_{namespace}_{category}` | mutating | Dynamic per-session playbook tools. Parameters derived from playbook spec. |")
-	fmt.Println("| `view_{name}_{namespace}` | read-only | Dynamic view tools synced hourly. Returns table rows by default with select/page/limit controls. |")
+	fmt.Println(mdRow("`{playbook}_{namespace}_{category}`", "mutating", "Dynamic per-session playbook tools. Parameters derived from playbook spec."))
+	fmt.Println(mdRow("`view_{name}_{namespace}`", "read-only", "Dynamic view tools synced hourly. Returns table rows by default with select/page/limit controls."))
 	fmt.Println()
 }
 
@@ -91,23 +105,30 @@ func printDynamicTools() {
 	fmt.Println("Names follow the pattern `view_{name}_{namespace}` (e.g. `view_pod-overview_mission-control`).")
 	fmt.Println("All view tools are **read-only** and accept these common parameters:")
 	fmt.Println()
-	fmt.Println("| Name | Type | Default | Description |")
+	fmt.Println(mdRow("Name", "Type", "Default", "Description"))
 	fmt.Println("|------|------|---------|-------------|")
-	fmt.Println("| `withRows` | boolean | true | Include table rows (paginated) |")
-	fmt.Println("| `withPanels` | boolean | false | Include panel data |")
-	fmt.Println("| `select` | array | all | Columns to include in result |")
-	fmt.Println("| `page` | integer | 1 | Page number (1-based) |")
-	fmt.Println("| `limit` | integer | 50 | Rows per page (max 500) |")
+	fmt.Println(mdRow("`withRows`", "boolean", "true", "Include table rows (paginated)"))
+	fmt.Println(mdRow("`withPanels`", "boolean", "false", "Include panel data"))
+	fmt.Println(mdRow("`select`", "array", "all", "Columns to include in result"))
+	fmt.Println(mdRow("`page`", "integer", "1", "Page number (1-based)"))
+	fmt.Println(mdRow("`limit`", "integer", "50", "Rows per page (max 500)"))
 	fmt.Println()
 	fmt.Println("Views may also expose template variables as additional string parameters.")
 	fmt.Println()
 }
 
-func printTool(tool mcplib.Tool) {
+func printToolDetail(tool mcplib.Tool) {
 	fmt.Printf("### `%s`\n\n", tool.Name)
 
 	if tool.Description != "" {
-		fmt.Printf("%s\n\n", strings.TrimSpace(tool.Description))
+		out, err := clicky.Format(api.Text{Content: strings.TrimSpace(tool.Description)}, clicky.FormatOptions{Format: "markdown"})
+		if err != nil {
+			fmt.Println(strings.TrimSpace(tool.Description))
+		} else {
+			fmt.Print(strings.TrimSpace(out))
+		}
+		fmt.Println()
+		fmt.Println()
 	}
 
 	fmt.Printf("**Hints:** %s\n\n", formatHints(tool.Annotations))
@@ -141,7 +162,7 @@ func printInputSchema(tool mcplib.Tool) {
 			if p, ok := raw["properties"]; ok {
 				var parsed map[string]json.RawMessage
 				if err := json.Unmarshal(p, &parsed); err == nil && len(parsed) > 0 {
-					printParamsTable(parsed, raw)
+					printParamsFromRaw(parsed, raw)
 					return
 				}
 			}
@@ -154,7 +175,7 @@ func printInputSchema(tool mcplib.Tool) {
 
 	fmt.Println("**Parameters:**")
 	fmt.Println()
-	fmt.Println("| Name | Type | Required | Description |")
+	fmt.Println(mdRow("Name", "Type", "Required", "Description"))
 	fmt.Println("|------|------|----------|-------------|")
 
 	reqSet := make(map[string]bool)
@@ -162,32 +183,31 @@ func printInputSchema(tool mcplib.Tool) {
 		reqSet[r] = true
 	}
 
-	paramNames := sortedKeys(props)
-	for _, name := range paramNames {
+	for _, name := range sortedKeys(props) {
 		propMap, ok := props[name].(map[string]any)
 		if !ok {
 			continue
 		}
-		typ := fmt.Sprint(propMap["type"])
-		desc := propDesc(propMap)
 		req := ""
 		if reqSet[name] {
 			req = "Yes"
 		}
-		fmt.Printf("| `%s` | %s | %s | %s |\n", name, typ, req, desc)
+		fmt.Println(mdRow(fmt.Sprintf("`%s`", name), fmt.Sprint(propMap["type"]), req, propDesc(propMap)))
 	}
 	fmt.Println()
 }
 
-func printParamsTable(parsed map[string]json.RawMessage, raw map[string]json.RawMessage) {
+func printParamsFromRaw(parsed map[string]json.RawMessage, raw map[string]json.RawMessage) {
 	fmt.Println("**Parameters:**")
 	fmt.Println()
-	fmt.Println("| Name | Type | Required | Description |")
+	fmt.Println(mdRow("Name", "Type", "Required", "Description"))
 	fmt.Println("|------|------|----------|-------------|")
 
 	var required []string
 	if r, ok := raw["required"]; ok {
-		json.Unmarshal(r, &required)
+		if err := json.Unmarshal(r, &required); err != nil {
+			log.Printf("warning: failed to unmarshal required: %v", err)
+		}
 	}
 	reqSet := make(map[string]bool)
 	for _, r := range required {
@@ -202,26 +222,49 @@ func printParamsTable(parsed map[string]json.RawMessage, raw map[string]json.Raw
 
 	for _, name := range paramNames {
 		var prop map[string]any
-		json.Unmarshal(parsed[name], &prop)
-		typ := fmt.Sprint(prop["type"])
-		desc := propDesc(prop)
+		if err := json.Unmarshal(parsed[name], &prop); err != nil {
+			log.Printf("warning: failed to unmarshal property %s: %v", name, err)
+			continue
+		}
 		req := ""
 		if reqSet[name] {
 			req = "Yes"
 		}
-		fmt.Printf("| `%s` | %s | %s | %s |\n", name, typ, req, desc)
+		fmt.Println(mdRow(fmt.Sprintf("`%s`", name), fmt.Sprint(prop["type"]), req, propDesc(prop)))
 	}
 	fmt.Println()
 }
 
+var abbreviations = []string{"e.g.", "i.e.", "etc.", "vs."}
+
 func firstSentence(desc string) string {
 	desc = strings.TrimSpace(desc)
 	desc = strings.Join(strings.Fields(desc), " ")
-	for _, sep := range []string{". ", ".\n"} {
-		if idx := strings.Index(desc, sep); idx > 0 {
-			return desc[:idx+1]
+
+	search := desc
+	offset := 0
+	for {
+		idx := strings.Index(search, ". ")
+		if idx < 0 {
+			break
 		}
+		pos := offset + idx
+
+		isAbbrev := false
+		for _, abbr := range abbreviations {
+			if pos+1 >= len(abbr) && desc[pos+1-len(abbr):pos+1] == abbr {
+				isAbbrev = true
+				break
+			}
+		}
+		if !isAbbrev {
+			return desc[:pos+1]
+		}
+
+		offset = pos + 2
+		search = desc[offset:]
 	}
+
 	if strings.HasSuffix(desc, ".") {
 		return desc
 	}

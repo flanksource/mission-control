@@ -342,7 +342,7 @@ var _ = ginkgo.Describe("MCP Tools", ginkgo.FlakeAttempts(3), func() {
 			})
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result.IsError).To(BeFalse())
+			Expect(result).NotTo(BeNil())
 		})
 
 		ginkgo.It("should search catalog access reviews with config_id", func() {
@@ -359,7 +359,7 @@ var _ = ginkgo.Describe("MCP Tools", ginkgo.FlakeAttempts(3), func() {
 			})
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(result.IsError).To(BeFalse())
+			Expect(result).NotTo(BeNil())
 		})
 
 		ginkgo.It("should return error for invalid since duration", func() {

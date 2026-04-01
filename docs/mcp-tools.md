@@ -4,10 +4,10 @@
 
 | URI Template | Description |
 |-------------|-------------|
-| `config_item://{id}` | Returns the complete JSON representation of an infrastructure configuration item (AWS EC2 instance, Kubernetes deployment, etc). Use to read the full state of a known item; use `search_catalog` and `describe_catalog` to discover resources. Example: `config_item://i-0abcd1234efgh5678` |
-| `playbook://{idOrName}` | Returns the JSON definition of an automated runbook including steps and parameters. Use to inspect a playbook's logic; use the dynamic per-session playbook tools to execute it. Example: `playbook://restart-k8s-pods` |
-| `connection://{namespace}/{name}` | Returns JSON configuration for an external service endpoint (database, API, cloud provider). Use to inspect a known connection; use `list_connections` to discover available connections. Example: `connection://default/postgres-main` |
-| `view://{namespace}/{name}` | Returns the JSON structural definition and query logic of a saved view/dashboard. Use to understand how a view is constructed; use the dynamic view tools to execute the query and fetch data. Example: `view://monitoring/high-cpu-instances` |
+| `config_item://{id}` | Returns the complete JSON representation of an infrastructure configuration item (AWS EC2 instance, Kubernetes deployment, etc). Use to read the full state of a known item; use `search_catalog` and `describe_catalog` to discover resources. |
+| `playbook://{idOrName}` | Returns the JSON definition of an automated runbook including steps and parameters. Use to inspect a playbook's logic; use the dynamic per-session playbook tools to execute it. |
+| `connection://{namespace}/{name}` | Returns JSON configuration for an external service endpoint (database, API, cloud provider). Use to inspect a known connection; use `list_connections` to discover available connections. |
+| `view://{namespace}/{name}` | Returns the JSON structural definition and query logic of a saved view/dashboard. Use to understand how a view is constructed; use the dynamic view tools to execute the query and fetch data. |
 
 ## Prompts
 
@@ -305,7 +305,7 @@ Search the current access state and RBAC mappings for infrastructure resources t
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `limit` | number |  | Max results to return (default: 30) |
-| `query` | string | Yes | Search query to filter config items by name or type (e.g. |
+| `query` | string | Yes | Search query to filter config items by name or type (e.g. 'type=Kubernetes::*', 'name=my-app') |
 
 ### `search_catalog_access_reviews`
 
@@ -345,7 +345,7 @@ Search and find configuration change events across catalog items.
 | Name | Type | Required | Description |
 |------|------|----------|-------------|
 | `limit` | number |  | Number of results to return. |
-| `query` | string | Yes | Search query We can search all the catalog changes via query Use the tool: list_catalog_types to get all the types first to make inference is better (cache them for 15m) FORMAL PEG GRAMMAR: Query = AndQuery _ OrQuery* OrQuery = _ '|' _ AndQuery AndQuery = _ FieldQuery _ FieldQuery* FieldQuery = _ '(' _ Query _ ')' _ / _ Field _ / _ '-' Word _ / _ (Word / Identifier) _ Field = Source _ Operator _ Value Source = Identifier ('.' Identifier)* Operator = "<=" / ">=" / "=" / ":" / "!=" / "<" / ">" Value = DateTime / ISODate / Time / Measure / Float / Integer / Identifier / String String = '"' [^"]* '"' ISODate = [0-9]{4} '-' [0-9]{2} '-' [0-9]{2} Time = [0-2][0-9] ':' [0-5][0-9] ':' [0-5][0-9] DateTime = "now" (("+" / "-") Integer DurationUnit)? / ISODate ? Time? DurationUnit = "s" / "m" / "h" / "d" / "w" / "mo" / "y" Word = String / '-'? [@a-zA-Z0-9-]+ Integer = [+-]?[0-9]+ ![a-zA-Z0-9_-] Float = [+-]? [0-9] '.' [0-9]+ Measure = (Integer / Float) Identifier Identifier = [@a-zA-Z0-9_\,-:\[\]]+ _ = [ \t] EOF = !. |
+| `query` | string | Yes | Search query We can search all the catalog changes via query Use the tool: list_catalog_types to get all the types first to make inference is better (cache them for 15m) FORMAL PEG GRAMMAR: Query = AndQuery _ OrQuery* OrQuery = _ '\|' _ AndQuery AndQuery = _ FieldQuery _ FieldQuery* FieldQuery = _ '(' _ Query _ ')' _ / _ Field _ / _ '-' Word _ / _ (Word / Identifier) _ Field = Source _ Operator _ Value Source = Identifier ('.' Identifier)* Operator = "<=" / ">=" / "=" / ":" / "!=" / "<" / ">" Value = DateTime / ISODate / Time / Measure / Float / Integer / Identifier / String String = '"' [^"]* '"' ISODate = [0-9]{4} '-' [0-9]{2} '-' [0-9]{2} Time = [0-2][0-9] ':' [0-5][0-9] ':' [0-5][0-9] DateTime = "now" (("+" / "-") Integer DurationUnit)? / ISODate ? Time? DurationUnit = "s" / "m" / "h" / "d" / "w" / "mo" / "y" Word = String / '-'? [@a-zA-Z0-9-]+ Integer = [+-]?[0-9]+ ![a-zA-Z0-9_-] Float = [+-]? [0-9] '.' [0-9]+ Measure = (Integer / Float) Identifier Identifier = [@a-zA-Z0-9_\,-:\[\]]+ _ = [ \t] EOF = !. |
 | `select` | array |  | a list of columns to return. |
 
 ### `search_health_checks`

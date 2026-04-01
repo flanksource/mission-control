@@ -249,18 +249,20 @@ type AccessReviewRow struct {
 
 func GetAccessReviews(ctx context.Context, configID *uuid.UUID, since time.Time, limit int) ([]AccessReviewRow, error) {
 	var rows []AccessReviewRow
-	err := ctx.DB().Raw(`
-		SELECT ar.config_id, ci.name AS config_name, ci.type AS config_type,
+	q := ctx.DB().Table("access_reviews ar").
+		Select(`ar.config_id, ci.name AS config_name, ci.type AS config_type,
 			COALESCE(eu.name, '') AS "user", COALESCE(er.name, '') AS role,
-			COALESCE(ar.source, '') AS source, ar.created_at
-		FROM access_reviews ar
-		JOIN config_items ci ON ar.config_id = ci.id
-		LEFT JOIN external_users eu ON ar.external_user_id = eu.id
-		LEFT JOIN external_roles er ON ar.external_role_id = er.id
-		WHERE (ar.config_id = ? OR ? IS NULL) AND ar.created_at >= ?
-		ORDER BY ar.created_at DESC
-		LIMIT ?`, configID, configID, since, limit).Scan(&rows).Error
-	if err != nil {
+			COALESCE(ar.source, '') AS source, ar.created_at`).
+		Joins("JOIN config_items ci ON ar.config_id = ci.id").
+		Joins("LEFT JOIN external_users eu ON ar.external_user_id = eu.id").
+		Joins("LEFT JOIN external_roles er ON ar.external_role_id = er.id").
+		Where("ar.created_at >= ?", since).
+		Order("ar.created_at DESC").
+		Limit(limit)
+	if configID != nil {
+		q = q.Where("ar.config_id = ?", *configID)
+	}
+	if err := q.Scan(&rows).Error; err != nil {
 		return nil, ctx.Oops().Wrapf(err, "failed to query access reviews")
 	}
 	return rows, nil
