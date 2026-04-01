@@ -318,8 +318,20 @@ func getPlaybooksAsTools(playbooks []models.Playbook) ([]mcp.Tool, error) {
 		toolName := generatePlaybookToolName(pb)
 		playbookToolNameToID.Store(toolName, pb.ID.String())
 
-		t := mcp.NewToolWithRawSchema(toolName, pb.Description, rj)
-		t.Annotations.Title = pb.Name
+		description := lo.CoalesceOrEmpty(spec.MCP.Description, pb.Description)
+		if pb.Category != "" {
+			description = fmt.Sprintf("[category: %s] %s", pb.Category, description)
+		}
+		if len(spec.MCP.Tags) > 0 {
+			description = fmt.Sprintf("%s [tags: %s]", description, strings.Join(spec.MCP.Tags, ", "))
+		}
+
+		t := mcp.NewToolWithRawSchema(toolName, description, rj)
+		t.Annotations.Title = lo.CoalesceOrEmpty(spec.MCP.Title, pb.Name)
+		t.Annotations.ReadOnlyHint = spec.MCP.ReadOnlyHint
+		t.Annotations.DestructiveHint = spec.MCP.DestructiveHint
+		t.Annotations.IdempotentHint = spec.MCP.IdempotentHint
+		t.Annotations.OpenWorldHint = spec.MCP.OpenWorldHint
 		newPlaybookTools = append(newPlaybookTools, t)
 	}
 

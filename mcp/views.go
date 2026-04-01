@@ -309,15 +309,23 @@ func syncViewsAsTools(ctx context.Context, s *server.MCPServer) error {
 
 		toolName := generateViewToolName(view)
 		columnSummary := strings.TrimPrefix(columnDesc, "Select columns to include in the result. ")
+		baseDesc := lo.CoalesceOrEmpty(spec.MCP.Description, spec.Description)
+		if len(spec.MCP.Tags) > 0 {
+			baseDesc = fmt.Sprintf("%s [tags: %s]", baseDesc, strings.Join(spec.MCP.Tags, ", "))
+		}
 		description := fmt.Sprintf(
 			`Execute view %s [%s/%s]. %s %s.
 Table rows are returned by default (withRows=true); use select/page/limit to control output.
 Panels are excluded unless withPanels=true.
 Use the select array to request only the columns you truly need to minimize response tokens.`,
-			spec.Display.Title, view.Namespace, view.Name, spec.Description, columnSummary,
+			spec.Display.Title, view.Namespace, view.Name, baseDesc, columnSummary,
 		)
 		viewTool := mcp.NewToolWithRawSchema(toolName, description, rj)
-		viewTool.Annotations.ReadOnlyHint = lo.ToPtr(true)
+		viewTool.Annotations.Title = lo.CoalesceOrEmpty(spec.MCP.Title, spec.Display.Title)
+		viewTool.Annotations.ReadOnlyHint = lo.CoalesceOrEmpty(spec.MCP.ReadOnlyHint, lo.ToPtr(true))
+		viewTool.Annotations.DestructiveHint = spec.MCP.DestructiveHint
+		viewTool.Annotations.IdempotentHint = spec.MCP.IdempotentHint
+		viewTool.Annotations.OpenWorldHint = spec.MCP.OpenWorldHint
 		s.AddTool(viewTool, viewRunHandler)
 		newViewTools = append(newViewTools, toolName)
 
