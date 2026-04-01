@@ -20,6 +20,7 @@ endif
 
 ## Location to install dependencies to
 LOCALBIN ?= $(shell pwd)/.bin
+export PATH := $(LOCALBIN):$(PATH)
 $(LOCALBIN):
 	mkdir -p $(LOCALBIN)
 
@@ -172,7 +173,7 @@ test-e2e: bin
 
 .PHONY: install-deps
 install-deps: $(LOCALBIN) ## Install the deps CLI if not present
-	which deps || curl -sSL https://github.com/flanksource/deps/releases/latest/download/deps-$(OS)-$(ARCH).tar.gz | tar -xz -C $(LOCALBIN)
+	which deps 2>/dev/null || test -x $(LOCALBIN)/deps || curl -sSL https://github.com/flanksource/deps/releases/latest/download/deps-$(OS)-$(ARCH).tar.gz | tar -xz -C $(LOCALBIN)
 
 .PHONY: deps
 deps: install-deps ginkgo controller-gen golangci-lint kustomize $(TAILWIND_JS) ## Install all tool dependencies
@@ -191,7 +192,7 @@ golangci-lint: install-deps $(LOCALBIN)
 
 .PHONY: kustomize
 kustomize: install-deps $(LOCALBIN)
-	deps install kustomize@$(KUSTOMIZE_VERSION) --bin-dir $(LOCALBIN)
+	deps install kubernetes-sigs/kustomize@$(KUSTOMIZE_VERSION) --bin-dir $(LOCALBIN)
 
 .PHONY: docs\:mcp
 docs\:mcp: ## Generate MCP tools reference documentation
