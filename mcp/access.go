@@ -44,7 +44,10 @@ func searchCatalogAccessMappingHandler(goctx gocontext.Context, req mcp.CallTool
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	if limit > 0 && len(rows) > limit {
+	if limit <= 0 {
+		limit = defaultQueryLimit
+	}
+	if len(rows) > limit {
 		rows = rows[:limit]
 	}
 

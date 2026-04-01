@@ -31,9 +31,9 @@ MODERNIZE ?= $(LOCALBIN)/modernize
 GOLANGCI_LINT ?= $(LOCALBIN)/golangci-lint
 
 ## Tool Versions
-KUSTOMIZE_VERSION ?= v3.8.7
+KUSTOMIZE_VERSION ?= any
 CONTROLLER_TOOLS_VERSION ?= v0.19.0
-GOLANGCI_LINT_VERSION ?= v2.7.2
+GOLANGCI_LINT_VERSION ?= 2.11.4
 
 TAILWIND_VERSION ?= 3.4.17
 TAILWIND_JS = auth/oidc/static/tailwind.min.js
@@ -69,7 +69,7 @@ fmt:
 	go fmt ./...
 
 .PHONY: modernize
-modernize: modernize-tool ## Run modernize against code.
+modernize: ## Run modernize against code.
 	$(MODERNIZE) ./...
 
 docker:
@@ -170,40 +170,28 @@ test-e2e: bin
 	mkdir -p .bin
 
 
+.PHONY: install-deps
+install-deps: $(LOCALBIN) ## Install the deps CLI if not present
+	which deps || curl -sSL https://github.com/flanksource/deps/releases/latest/download/deps-$(OS)-$(ARCH).tar.gz | tar -xz -C $(LOCALBIN)
+
+.PHONY: deps
+deps: install-deps ginkgo controller-gen golangci-lint kustomize $(TAILWIND_JS) ## Install all tool dependencies
+
 .PHONY: ginkgo
 ginkgo:
 	go install github.com/onsi/ginkgo/v2/ginkgo
 
-KUSTOMIZE_INSTALL_SCRIPT ?= "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"
-.PHONY: kustomize
-kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary. If wrong version is installed, it will be removed before downloading.
-$(KUSTOMIZE): $(LOCALBIN)
-	@if test -x $(LOCALBIN)/kustomize && ! $(LOCALBIN)/kustomize version | grep -q $(KUSTOMIZE_VERSION); then \
-		echo "$(LOCALBIN)/kustomize version is not expected $(KUSTOMIZE_VERSION). Removing it before installing."; \
-		rm -rf $(LOCALBIN)/kustomize; \
-	fi
-	test -s $(LOCALBIN)/kustomize || { curl -Ss $(KUSTOMIZE_INSTALL_SCRIPT) | bash -s -- $(subst v,,$(KUSTOMIZE_VERSION)) $(LOCALBIN); }
-
 .PHONY: controller-gen
-controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary. If wrong version is installed, it will be overwritten.
-$(CONTROLLER_GEN): $(LOCALBIN)
-	test -s $(LOCALBIN)/controller-gen && $(LOCALBIN)/controller-gen --version | grep -q $(CONTROLLER_TOOLS_VERSION) || \
-	GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_TOOLS_VERSION)
-
-.PHONY: envtest
-envtest: $(ENVTEST) ## Download envtest-setup locally if necessary.
-$(ENVTEST): $(LOCALBIN)
-	test -s $(LOCALBIN)/setup-envtest || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
-
-.PHONY: modernize-tool
-modernize-tool: $(MODERNIZE) ## Download modernize locally if necessary.
-$(MODERNIZE): $(LOCALBIN)
-	test -s $(LOCALBIN)/modernize || GOBIN=$(LOCALBIN) go install golang.org/x/tools/gopls/internal/analysis/modernize/cmd/modernize@latest
+controller-gen: install-deps $(LOCALBIN)
+	deps install controller-gen@$(CONTROLLER_TOOLS_VERSION) --bin-dir $(LOCALBIN)
 
 .PHONY: golangci-lint
-golangci-lint: $(GOLANGCI_LINT)
-$(GOLANGCI_LINT): $(LOCALBIN)
-	test -s $(LOCALBIN)/golangci-lint || curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b $(LOCALBIN) $(GOLANGCI_LINT_VERSION)
+golangci-lint: install-deps $(LOCALBIN)
+	deps install golangci/golangci-lint@v$(GOLANGCI_LINT_VERSION) --bin-dir $(LOCALBIN)
+
+.PHONY: kustomize
+kustomize: install-deps $(LOCALBIN)
+	deps install kustomize@$(KUSTOMIZE_VERSION) --bin-dir $(LOCALBIN)
 
 .PHONY: docs\:mcp
 docs\:mcp: ## Generate MCP tools reference documentation
