@@ -40,7 +40,7 @@ func addPlaybooksAsTool(goctx gocontext.Context, srv *server.MCPServer, session 
 
 	ctx, err := getDutyCtx(goctx)
 	if err != nil {
-		return ctx.Oops().Wrapf(err, "failed to get duty context for session %s", sessionID)
+		return fmt.Errorf("failed to get duty context for session %s: %w", sessionID, err)
 	}
 
 	var playbooks []models.Playbook
