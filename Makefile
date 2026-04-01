@@ -205,6 +205,12 @@ golangci-lint: $(GOLANGCI_LINT)
 $(GOLANGCI_LINT): $(LOCALBIN)
 	test -s $(LOCALBIN)/golangci-lint || curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b $(LOCALBIN) $(GOLANGCI_LINT_VERSION)
 
+.PHONY: docs\:mcp
+docs\:mcp: ## Generate MCP tools reference documentation
+	@mkdir -p docs
+	go run ./hack/gen-mcp-docs > docs/mcp-tools.md
+	@echo "Generated docs/mcp-tools.md"
+
 .PHONY: lint
 lint: golangci-lint
 	$(GOLANGCI_LINT) run ./...
