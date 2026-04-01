@@ -69,6 +69,9 @@ func applyAccessSelectors(query *gorm.DB, selectors []types.ResourceSelector) *g
 	}
 
 	for _, s := range selectors {
+		if s.ID != "" {
+			query = query.Where("config_access_summary.config_id = ?", s.ID)
+		}
 		if len(s.Types) > 0 {
 			query = query.Where("config_access_summary.config_type IN (?)", s.Types)
 		}
@@ -207,6 +210,60 @@ func GetRBACTemporaryAccess(ctx context.Context, configIDs []uuid.UUID, since ti
 		}
 	}
 	return results, nil
+}
+
+type AccessLogRow struct {
+	ConfigID  uuid.UUID  `json:"config_id" gorm:"column:config_id"`
+	UserName  string     `json:"user_name" gorm:"column:user_name"`
+	UserEmail *string    `json:"user_email,omitempty" gorm:"column:user_email"`
+	MFA       bool       `json:"mfa" gorm:"column:mfa"`
+	Count     *int       `json:"count,omitempty" gorm:"column:count"`
+	CreatedAt time.Time  `json:"created_at" gorm:"column:created_at"`
+}
+
+func GetAccessLogs(ctx context.Context, configID uuid.UUID, limit int) ([]AccessLogRow, error) {
+	var rows []AccessLogRow
+	err := ctx.DB().Raw(`
+		SELECT cal.config_id, eu.name AS user_name, eu.email AS user_email,
+			cal.mfa, cal.count, cal.created_at
+		FROM config_access_logs cal
+		JOIN external_users eu ON cal.external_user_id = eu.id
+		WHERE cal.config_id = ?
+		ORDER BY cal.created_at DESC
+		LIMIT ?`, configID, limit).Scan(&rows).Error
+	if err != nil {
+		return nil, ctx.Oops().Wrapf(err, "failed to query access logs")
+	}
+	return rows, nil
+}
+
+type AccessReviewRow struct {
+	ConfigID   uuid.UUID `json:"config_id" gorm:"column:config_id"`
+	ConfigName string    `json:"config_name" gorm:"column:config_name"`
+	ConfigType string    `json:"config_type" gorm:"column:config_type"`
+	User       string    `json:"user" gorm:"column:user"`
+	Role       string    `json:"role" gorm:"column:role"`
+	Source     string    `json:"source" gorm:"column:source"`
+	CreatedAt  time.Time `json:"created_at" gorm:"column:created_at"`
+}
+
+func GetAccessReviews(ctx context.Context, configID *uuid.UUID, since time.Time, limit int) ([]AccessReviewRow, error) {
+	var rows []AccessReviewRow
+	err := ctx.DB().Raw(`
+		SELECT ar.config_id, ci.name AS config_name, ci.type AS config_type,
+			COALESCE(eu.name, '') AS "user", COALESCE(er.name, '') AS role,
+			COALESCE(ar.source, '') AS source, ar.created_at
+		FROM access_reviews ar
+		JOIN config_items ci ON ar.config_id = ci.id
+		LEFT JOIN external_users eu ON ar.external_user_id = eu.id
+		LEFT JOIN external_roles er ON ar.external_role_id = er.id
+		WHERE (ar.config_id = ? OR ? IS NULL) AND ar.created_at >= ?
+		ORDER BY ar.created_at DESC
+		LIMIT ?`, configID, configID, since, limit).Scan(&rows).Error
+	if err != nil {
+		return nil, ctx.Oops().Wrapf(err, "failed to query access reviews")
+	}
+	return rows, nil
 }
 
 func formatDuration(d time.Duration) string {

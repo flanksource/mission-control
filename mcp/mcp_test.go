@@ -285,6 +285,127 @@ var _ = ginkgo.Describe("MCP Tools", ginkgo.FlakeAttempts(3), func() {
 		})
 	})
 
+	ginkgo.Describe("Access Tools", func() {
+		ginkgo.It("should search catalog access mapping", func() {
+			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
+				Header: jsonHeader,
+				Params: mcp.CallToolParams{
+					Name: toolSearchCatalogAccessMapping,
+					Arguments: map[string]any{
+						"query": "type=Kubernetes::*",
+						"limit": 10,
+					},
+				},
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.IsError).To(BeFalse())
+		})
+
+		ginkgo.It("should return error when query is missing for access mapping", func() {
+			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
+				Header: jsonHeader,
+				Params: mcp.CallToolParams{
+					Name: toolSearchCatalogAccessMapping,
+				},
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.IsError).To(BeTrue())
+		})
+
+		ginkgo.It("should search catalog access log", func() {
+			testConfigID := dummy.EKSCluster.ID.String()
+			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
+				Header: jsonHeader,
+				Params: mcp.CallToolParams{
+					Name: toolSearchCatalogAccessLog,
+					Arguments: map[string]any{
+						"config_id": testConfigID,
+					},
+				},
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.IsError).To(BeFalse())
+		})
+
+		ginkgo.It("should return error for invalid config_id in access log", func() {
+			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
+				Header: jsonHeader,
+				Params: mcp.CallToolParams{
+					Name: toolSearchCatalogAccessLog,
+					Arguments: map[string]any{
+						"config_id": "not-a-uuid",
+					},
+				},
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.IsError).To(BeTrue())
+		})
+
+		ginkgo.It("should return error when config_id is missing for access log", func() {
+			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
+				Header: jsonHeader,
+				Params: mcp.CallToolParams{
+					Name: toolSearchCatalogAccessLog,
+				},
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.IsError).To(BeTrue())
+		})
+
+		ginkgo.It("should search catalog access reviews", func() {
+			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
+				Header: jsonHeader,
+				Params: mcp.CallToolParams{
+					Name: toolSearchCatalogAccessReviews,
+					Arguments: map[string]any{
+						"since": "30d",
+						"limit": 10,
+					},
+				},
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.IsError).To(BeFalse())
+		})
+
+		ginkgo.It("should search catalog access reviews with config_id", func() {
+			testConfigID := dummy.EKSCluster.ID.String()
+			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
+				Header: jsonHeader,
+				Params: mcp.CallToolParams{
+					Name: toolSearchCatalogAccessReviews,
+					Arguments: map[string]any{
+						"config_id": testConfigID,
+						"since":     "7d",
+					},
+				},
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.IsError).To(BeFalse())
+		})
+
+		ginkgo.It("should return error for invalid since duration", func() {
+			result, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
+				Header: jsonHeader,
+				Params: mcp.CallToolParams{
+					Name: toolSearchCatalogAccessReviews,
+					Arguments: map[string]any{
+						"since": "invalid",
+					},
+				},
+			})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.IsError).To(BeTrue())
+		})
+	})
+
 	ginkgo.Describe("Resource Reading", func() {
 		ginkgo.It("should read config item resource", func() {
 			testConfigID := dummy.EKSCluster.ID.String()
