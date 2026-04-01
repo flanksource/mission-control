@@ -7,6 +7,7 @@ import (
 	"github.com/flanksource/commons/logger"
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	echov4 "github.com/labstack/echo/v4"
@@ -27,27 +28,43 @@ type MCPServer struct {
 	Server      *server.MCPServer
 }
 
-// AuthMiddleware only allows a person if they have at least one mcp:run permission
+// AuthMiddleware allows MCP only when the owner user has MCP channel access.
+//
+// Owner resolution:
+//   - direct user auth (e.g. OIDC): owner = subject
+//   - delegated access token auth: owner = access_token.created_by
 func AuthMiddleware(next echov4.HandlerFunc) echov4.HandlerFunc {
 	return func(c echov4.Context) error {
 		ctx := c.Request().Context().(context.Context)
 
-		if roles, err := rbac.RolesForUser(ctx.Subject()); err != nil {
+		owner := ctx.Subject()
+		var accessToken models.AccessToken
+		if err := ctx.DB().Where("person_id = ?", ctx.Subject()).First(&accessToken).Error; err == nil {
+			if accessToken.CreatedBy != nil {
+				owner = accessToken.CreatedBy.String()
+			}
+		}
+
+		if roles, err := rbac.RolesForUser(owner); err != nil {
 			return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
 		} else if lo.Contains(roles, policy.RoleAdmin) {
 			return next(c)
 		}
 
-		permissions, err := rbac.PermsForUser(ctx.Subject())
+		permissions, err := rbac.PermsForUser(owner)
 		if err != nil {
 			return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
 		}
 
 		_, ok := lo.Find(permissions, func(perm policy.Permission) bool {
-			return perm.Action == policy.ActionMCPRun && !perm.Deny
+			if perm.Deny {
+				return false
+			}
+
+			return perm.Action == policy.ActionMCPUse && (perm.Object == policy.ObjectMCP || perm.Object == "*")
 		})
 		if !ok {
-			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "forbidden: user %s does not have mcp:run permission", ctx.Subject()))
+			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "forbidden: user %s does not have mcp:use permission", owner))
 		}
 
 		return next(c)
