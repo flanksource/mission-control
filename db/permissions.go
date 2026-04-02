@@ -2,10 +2,10 @@ package db
 
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
 
 	"github.com/flanksource/duty"
+	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
@@ -21,7 +21,7 @@ func PersistPermissionFromCRD(ctx context.Context, obj *v1.Permission) error {
 
 	subject, subjectType, err := obj.Spec.Subject.Populate(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to populate subject: %w", err)
+		return ctx.Oops(api.EINVALID).Wrapf(err, "failed to populate subject")
 	}
 
 	// Check for deprecated fields and emit warning
@@ -31,7 +31,7 @@ func PersistPermissionFromCRD(ctx context.Context, obj *v1.Permission) error {
 	}
 
 	if err := obj.Spec.Object.Validate(); err != nil {
-		return fmt.Errorf("invalid permission object: %w", err)
+		return ctx.Oops(api.EINVALID).Wrapf(err, "invalid permission object")
 	}
 
 	action := strings.Join(obj.Spec.Actions, ",")
@@ -54,7 +54,7 @@ func PersistPermissionFromCRD(ctx context.Context, obj *v1.Permission) error {
 	} else {
 		selectors, err := json.Marshal(obj.Spec.Object)
 		if err != nil {
-			return fmt.Errorf("failed to marshal object: %w", err)
+			return ctx.Oops(api.EINTERNAL).Wrapf(err, "failed to marshal object")
 		}
 		p.ObjectSelector = selectors
 	}

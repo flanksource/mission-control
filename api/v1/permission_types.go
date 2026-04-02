@@ -2,6 +2,7 @@ package v1
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
 	dutyAPI "github.com/flanksource/duty/api"
@@ -235,7 +236,7 @@ type PermissionObject struct {
 //
 // is interpreted as the object: catalog.
 func (t *PermissionObject) GlobalObject() (string, bool) {
-	if t.MCP {
+	if t.MCP && !t.HasSelectors() {
 		return policy.ObjectMCP, true
 	}
 
@@ -260,11 +261,7 @@ func (t *PermissionObject) HasSelectors() bool {
 }
 
 func (t *PermissionObject) Validate() error {
-	if !t.MCP {
-		return nil
-	}
-
-	if t.HasSelectors() {
+	if t.MCP && t.HasSelectors() {
 		return fmt.Errorf("permission object.mcp cannot be combined with selectors or scopes")
 	}
 

@@ -3,6 +3,7 @@ package db
 import (
 	"github.com/flanksource/duty/models"
 	dutyRBAC "github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/tests/fixtures/dummy"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
@@ -50,7 +51,7 @@ var _ = Describe("PersistPermissionFromCRD", func() {
 			},
 			Spec: v1.PermissionSpec{
 				Actions: []string{"read"},
-				Subject: v1.PermissionSubject{Person: "john@doe.com"},
+				Subject: v1.PermissionSubject{Person: dummy.JohnDoe.Email},
 				Object:  v1.PermissionObject{},
 			},
 		}
@@ -77,7 +78,7 @@ var _ = Describe("PersistPermissionFromCRD", func() {
 			},
 			Spec: v1.PermissionSpec{
 				Actions: []string{"mcp:use"},
-				Subject: v1.PermissionSubject{Person: "admin@local"},
+				Subject: v1.PermissionSubject{Person: dummy.JohnDoe.Email},
 				Object: v1.PermissionObject{
 					MCP: true,
 				},
@@ -105,7 +106,7 @@ var _ = Describe("PersistPermissionFromCRD", func() {
 			},
 			Spec: v1.PermissionSpec{
 				Actions: []string{"mcp:use"},
-				Subject: v1.PermissionSubject{Person: "admin@local"},
+				Subject: v1.PermissionSubject{Person: dummy.JohnDoe.Email},
 				Object: v1.PermissionObject{
 					MCP: true,
 					Selectors: dutyRBAC.Selectors{
