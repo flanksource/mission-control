@@ -6,7 +6,7 @@ spec:
   description: Test contentType extraction from action results
   configs:
     - types:
-        - Kubernetes::Cluster
+        - Kubernetes::ConfigMap
   actions:
     - name: "exec with json envelope"
       exec:
