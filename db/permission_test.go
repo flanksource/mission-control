@@ -66,11 +66,11 @@ var _ = Describe("PersistPermissionFromCRD", func() {
 		Expect(count).To(Equal(int64(1)))
 	})
 
-	It("persists explicit global object permission", func() {
+	It("persists object.mcp permission", func() {
 		uid := uuid.New()
 		perm := &v1.Permission{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:       "global-permission-" + uid.String(),
+				Name:       "mcp-permission-" + uid.String(),
 				Namespace:  "default",
 				UID:        k8stypes.UID(uid.String()),
 				Generation: 1,
@@ -79,7 +79,7 @@ var _ = Describe("PersistPermissionFromCRD", func() {
 				Actions: []string{"mcp:use"},
 				Subject: v1.PermissionSubject{Person: "admin@local"},
 				Object: v1.PermissionObject{
-					Global: "mcp",
+					MCP: true,
 				},
 			},
 		}
@@ -94,29 +94,7 @@ var _ = Describe("PersistPermissionFromCRD", func() {
 		Expect(persisted.ObjectSelector).To(BeEmpty())
 	})
 
-	It("returns error on invalid explicit global object", func() {
-		uid := uuid.New()
-		perm := &v1.Permission{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:       "invalid-global-permission-" + uid.String(),
-				Namespace:  "default",
-				UID:        k8stypes.UID(uid.String()),
-				Generation: 1,
-			},
-			Spec: v1.PermissionSpec{
-				Actions: []string{"read"},
-				Subject: v1.PermissionSubject{Person: "admin@local"},
-				Object: v1.PermissionObject{
-					Global: "invalid-global",
-				},
-			},
-		}
-
-		err := PersistPermissionFromCRD(DefaultContext, perm)
-		Expect(err).To(HaveOccurred())
-	})
-
-	It("returns error when explicit global object is combined with selectors", func() {
+	It("returns error when object.mcp is combined with selectors", func() {
 		uid := uuid.New()
 		perm := &v1.Permission{
 			ObjectMeta: metav1.ObjectMeta{
@@ -126,10 +104,10 @@ var _ = Describe("PersistPermissionFromCRD", func() {
 				Generation: 1,
 			},
 			Spec: v1.PermissionSpec{
-				Actions: []string{"read"},
+				Actions: []string{"mcp:use"},
 				Subject: v1.PermissionSubject{Person: "admin@local"},
 				Object: v1.PermissionObject{
-					Global: "catalog",
+					MCP: true,
 					Selectors: dutyRBAC.Selectors{
 						Configs: []types.ResourceSelector{{Name: "*"}},
 					},

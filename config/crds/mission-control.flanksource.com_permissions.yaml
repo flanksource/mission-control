@@ -245,23 +245,11 @@ spec:
                           type: array
                       type: object
                     type: array
-                  global:
+                  mcp:
                     description: |-
-                      Global explicitly sets a global RBAC object (e.g. catalog, topology, mcp).
-                      When set, no resource selectors or scopes may be specified.
-                    enum:
-                    - canaries
-                    - catalog
-                    - topology
-                    - playbooks
-                    - connection
-                    - agent-push
-                    - kubernetes-proxy
-                    - notification
-                    - rbac
-                    - artifact
-                    - mcp
-                    type: string
+                      MCP sets the global MCP object permission.
+                      When true, no resource selectors or scopes may be specified.
+                    type: boolean
                   playbooks:
                     items:
                       properties:
@@ -347,8 +335,8 @@ spec:
                     type: array
                 type: object
                 x-kubernetes-validations:
-                - message: object.global cannot be combined with selectors or scopes
-                  rule: '!(has(self.global) && (has(self.configs) || has(self.components)
+                - message: object.mcp cannot be combined with selectors or scopes
+                  rule: '!(has(self.mcp) && self.mcp && (has(self.configs) || has(self.components)
                     || has(self.playbooks) || has(self.connections) || has(self.views)
                     || has(self.scopes)))'
               subject:

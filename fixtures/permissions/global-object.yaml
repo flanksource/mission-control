@@ -11,4 +11,4 @@ spec:
   actions:
     - mcp:use
   object:
-    global: mcp
+    mcp: true

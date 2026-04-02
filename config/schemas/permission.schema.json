@@ -237,9 +237,9 @@
           },
           "type": "array"
         },
-        "global": {
-          "type": "string",
-          "description": "Global explicitly sets a global RBAC object (e.g. catalog, topology, mcp).\nWhen set, no resource selectors or scopes may be specified."
+        "mcp": {
+          "type": "boolean",
+          "description": "MCP sets the global MCP object permission.\nWhen true, no resource selectors or scopes may be specified."
         },
         "scopes": {
           "items": {

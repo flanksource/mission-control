@@ -213,31 +213,14 @@ func (t *PermissionSubject) Populate(ctx context.Context) (string, models.Permis
 	return "", "", errors.New("permission subject not specified")
 }
 
-type PermissionGlobalObject string
-
-const (
-	PermissionGlobalObjectCanaries        PermissionGlobalObject = "canaries"
-	PermissionGlobalObjectCatalog         PermissionGlobalObject = "catalog"
-	PermissionGlobalObjectTopology        PermissionGlobalObject = "topology"
-	PermissionGlobalObjectPlaybooks       PermissionGlobalObject = "playbooks"
-	PermissionGlobalObjectConnection      PermissionGlobalObject = "connection"
-	PermissionGlobalObjectAgentPush       PermissionGlobalObject = "agent-push"
-	PermissionGlobalObjectKubernetesProxy PermissionGlobalObject = "kubernetes-proxy"
-	PermissionGlobalObjectNotification    PermissionGlobalObject = "notification"
-	PermissionGlobalObjectRBAC            PermissionGlobalObject = "rbac"
-	PermissionGlobalObjectArtifact        PermissionGlobalObject = "artifact"
-	PermissionGlobalObjectMCP             PermissionGlobalObject = "mcp"
-)
-
 // +kubebuilder:object:generate=false
-// +kubebuilder:validation:XValidation:rule="!(has(self.global) && (has(self.configs) || has(self.components) || has(self.playbooks) || has(self.connections) || has(self.views) || has(self.scopes)))",message="object.global cannot be combined with selectors or scopes"
+// +kubebuilder:validation:XValidation:rule="!(has(self.mcp) && self.mcp && (has(self.configs) || has(self.components) || has(self.playbooks) || has(self.connections) || has(self.views) || has(self.scopes)))",message="object.mcp cannot be combined with selectors or scopes"
 type PermissionObject struct {
 	dutyRBAC.Selectors `json:",inline"`
 
-	// Global explicitly sets a global RBAC object (e.g. catalog, topology, mcp).
-	// When set, no resource selectors or scopes may be specified.
-	// +kubebuilder:validation:Enum=canaries;catalog;topology;playbooks;connection;agent-push;kubernetes-proxy;notification;rbac;artifact;mcp
-	Global PermissionGlobalObject `json:"global,omitempty"`
+	// MCP sets the global MCP object permission.
+	// When true, no resource selectors or scopes may be specified.
+	MCP bool `json:"mcp,omitempty"`
 
 	// Scopes that is expanded onto Selectors
 	Scopes []dutyRBAC.NamespacedNameIDSelector `json:"scopes,omitempty"`
@@ -252,8 +235,8 @@ type PermissionObject struct {
 //
 // is interpreted as the object: catalog.
 func (t *PermissionObject) GlobalObject() (string, bool) {
-	if t.Global != "" {
-		return string(t.Global), true
+	if t.MCP {
+		return policy.ObjectMCP, true
 	}
 
 	switch {
@@ -277,30 +260,15 @@ func (t *PermissionObject) HasSelectors() bool {
 }
 
 func (t *PermissionObject) Validate() error {
-	if t.Global == "" {
+	if !t.MCP {
 		return nil
 	}
 
 	if t.HasSelectors() {
-		return fmt.Errorf("permission object.global cannot be combined with selectors or scopes")
+		return fmt.Errorf("permission object.mcp cannot be combined with selectors or scopes")
 	}
 
-	switch t.Global {
-	case PermissionGlobalObjectCanaries,
-		PermissionGlobalObjectCatalog,
-		PermissionGlobalObjectTopology,
-		PermissionGlobalObjectPlaybooks,
-		PermissionGlobalObjectConnection,
-		PermissionGlobalObjectAgentPush,
-		PermissionGlobalObjectKubernetesProxy,
-		PermissionGlobalObjectNotification,
-		PermissionGlobalObjectRBAC,
-		PermissionGlobalObjectArtifact,
-		PermissionGlobalObjectMCP:
-		return nil
-	}
-
-	return fmt.Errorf("invalid permission object.global %q", t.Global)
+	return nil
 }
 
 func (t *PermissionObject) isWildcardOnly(primary []types.ResourceSelector, others ...[]types.ResourceSelector) bool {
