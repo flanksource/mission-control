@@ -38,6 +38,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 		multiScopeUser        *models.Person
 		homelabDefaultManager *models.Person
 		userMetrics           *models.Person
+		userMultiViews        *models.Person
 	)
 
 	var directPermissions []*models.Permission
@@ -55,6 +56,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 		multiScopeUser = setup.CreateUserWithRole(DefaultContext, "Multi Scope User", "multi-scope@test.com", policy.RoleGuest)
 		wildcardManager = setup.CreateUserWithRole(DefaultContext, "Wildcard Manager", "wildcard@manager.com", policy.RoleGuest)
 		userMetrics = setup.CreateUserWithRole(DefaultContext, "User Metrics", "user-metrics@test.com", policy.RoleGuest)
+		userMultiViews = setup.CreateUserWithRole(DefaultContext, "User Multi Views", "user-b@test.com", policy.RoleGuest)
 		adminUser = setup.CreateUserWithRole(DefaultContext, "Admin User", "admin@test.com", policy.RoleAdmin)
 
 		// Load fixtures
@@ -83,7 +85,7 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 		}
 
 		// Clean up users
-		users := []*models.Person{guestUser, guestUserNoPerms, guestUserDirectPerms, guestUserMultiTarget, homelabManager, homelabDefaultManager, multiScopeUser, wildcardManager, userMetrics, adminUser}
+		users := []*models.Person{guestUser, guestUserNoPerms, guestUserDirectPerms, guestUserMultiTarget, homelabManager, homelabDefaultManager, multiScopeUser, wildcardManager, userMetrics, userMultiViews, adminUser}
 		for _, user := range users {
 			if user != nil {
 				err := DefaultContext.DB().Delete(user).Error
