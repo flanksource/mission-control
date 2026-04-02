@@ -11,7 +11,6 @@ import (
 	"github.com/flanksource/duty/rbac/policy"
 	echov4 "github.com/labstack/echo/v4"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/samber/lo"
 
 	"github.com/flanksource/incident-commander/api"
 )
@@ -41,31 +40,12 @@ func AuthMiddleware(next echov4.HandlerFunc) echov4.HandlerFunc {
 			return dutyAPI.WriteError(c, err)
 		}
 
-		if roles, err := rbac.RolesForUser(owner); err != nil {
-			return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
-		} else if lo.Contains(roles, policy.RoleAdmin) {
-			return next(c)
-		}
-
-		permissions, err := rbac.PermsForUser(owner)
+		allowed, err := rbac.Enforcer().Enforce(owner, policy.ObjectMCP, policy.ActionMCPUse)
 		if err != nil {
 			return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
 		}
 
-		hasAllow := false
-		for _, perm := range permissions {
-			if perm.Action != policy.ActionMCPUse || (perm.Object != policy.ObjectMCP && perm.Object != "*") {
-				continue
-			}
-
-			if perm.Deny {
-				return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "forbidden: user %s is explicitly denied mcp:use permission", owner))
-			}
-
-			hasAllow = true
-		}
-
-		if !hasAllow {
+		if !allowed {
 			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.EFORBIDDEN, "forbidden: user %s does not have mcp:use permission", owner))
 		}
 
