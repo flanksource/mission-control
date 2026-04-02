@@ -63,7 +63,7 @@ func (t *Permission) GenerateStatusPatch(original runtime.Object) client.Patch {
 func findSubject(ctx context.Context, table string, selector string, subjectType models.PermissionSubjectType) (string, models.PermissionSubjectType, error) {
 	if uuid.Validate(selector) == nil {
 		var id string
-		err := ctx.DB().Select("id").Table(table).Where("id = ?", selector).Find(&id).Error
+		err := ctx.DB().Select("id").Table(table).Where("deleted_at IS NULL").Where("id = ?", selector).Find(&id).Error
 		return id, subjectType, err
 	}
 
@@ -71,9 +71,9 @@ func findSubject(ctx context.Context, table string, selector string, subjectType
 	var id string
 	var err error
 	if table == "people" {
-		err = ctx.DB().Select("id").Table(table).Where("name = ? OR email = ?", selector, selector).Find(&id).Error
+		err = ctx.DB().Select("id").Table(table).Where("deleted_at IS NULL").Where("name = ? OR email = ?", selector, selector).Find(&id).Error
 	} else {
-		err = ctx.DB().Select("id").Table(table).Where("name = ?", selector).Find(&id).Error
+		err = ctx.DB().Select("id").Table(table).Where("deleted_at IS NULL").Where("name = ?", selector).Find(&id).Error
 	}
 	return id, subjectType, err
 }
@@ -81,7 +81,7 @@ func findSubject(ctx context.Context, table string, selector string, subjectType
 func findNamespacedResource(ctx context.Context, table string, selector string, subjectType models.PermissionSubjectType) (string, models.PermissionSubjectType, error) {
 	if uuid.Validate(selector) == nil {
 		var id string
-		err := ctx.DB().Select("id").Table(table).Where("id = ?", selector).Find(&id).Error
+		err := ctx.DB().Select("id").Table(table).Where("deleted_at IS NULL").Where("id = ?", selector).Find(&id).Error
 		return id, subjectType, err
 	}
 
