@@ -83,6 +83,8 @@ func buildFallbackSMTP() v1.ConnectionSMTP {
 		Port:        587,
 		FromAddress: fallbackSMTP.FromAddress,
 		FromName:    fallbackSMTP.FromName,
+		Auth:        v1.SMTPAuthPlain,
+		Encryption:  v1.EncryptionExplicitTLS,
 	}
 
 	if portStr := os.Getenv("SMTP_PORT"); portStr != "" {
