@@ -245,6 +245,23 @@ spec:
                           type: array
                       type: object
                     type: array
+                  global:
+                    description: |-
+                      Global explicitly sets a global RBAC object (e.g. catalog, topology, mcp).
+                      When set, no resource selectors or scopes may be specified.
+                    enum:
+                    - canaries
+                    - catalog
+                    - topology
+                    - playbooks
+                    - connection
+                    - agent-push
+                    - kubernetes-proxy
+                    - notification
+                    - rbac
+                    - artifact
+                    - mcp
+                    type: string
                   playbooks:
                     items:
                       properties:
@@ -329,6 +346,11 @@ spec:
                       type: object
                     type: array
                 type: object
+                x-kubernetes-validations:
+                - message: object.global cannot be combined with selectors or scopes
+                  rule: '!(has(self.global) && (has(self.configs) || has(self.components)
+                    || has(self.playbooks) || has(self.connections) || has(self.views)
+                    || has(self.scopes)))'
               subject:
                 description: Subject defines the entity (e.g., user, group) to which
                   the permission applies.

@@ -237,6 +237,10 @@
           },
           "type": "array"
         },
+        "global": {
+          "type": "string",
+          "description": "Global explicitly sets a global RBAC object (e.g. catalog, topology, mcp).\nWhen set, no resource selectors or scopes may be specified."
+        },
         "scopes": {
           "items": {
             "$ref": "#/$defs/NamespacedNameIDSelector"

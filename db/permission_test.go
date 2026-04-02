@@ -2,6 +2,8 @@ package db
 
 import (
 	"github.com/flanksource/duty/models"
+	dutyRBAC "github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -62,5 +64,80 @@ var _ = Describe("PersistPermissionFromCRD", func() {
 			Count(&count).Error
 		Expect(err).ToNot(HaveOccurred())
 		Expect(count).To(Equal(int64(1)))
+	})
+
+	It("persists explicit global object permission", func() {
+		uid := uuid.New()
+		perm := &v1.Permission{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       "global-permission-" + uid.String(),
+				Namespace:  "default",
+				UID:        k8stypes.UID(uid.String()),
+				Generation: 1,
+			},
+			Spec: v1.PermissionSpec{
+				Actions: []string{"mcp:use"},
+				Subject: v1.PermissionSubject{Person: "admin@local"},
+				Object: v1.PermissionObject{
+					Global: "mcp",
+				},
+			},
+		}
+
+		err := PersistPermissionFromCRD(DefaultContext, perm)
+		Expect(err).ToNot(HaveOccurred())
+
+		var persisted models.Permission
+		err = DefaultContext.DB().Where("id = ? AND deleted_at IS NULL", uid).First(&persisted).Error
+		Expect(err).ToNot(HaveOccurred())
+		Expect(persisted.Object).To(Equal("mcp"))
+		Expect(persisted.ObjectSelector).To(BeEmpty())
+	})
+
+	It("returns error on invalid explicit global object", func() {
+		uid := uuid.New()
+		perm := &v1.Permission{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       "invalid-global-permission-" + uid.String(),
+				Namespace:  "default",
+				UID:        k8stypes.UID(uid.String()),
+				Generation: 1,
+			},
+			Spec: v1.PermissionSpec{
+				Actions: []string{"read"},
+				Subject: v1.PermissionSubject{Person: "admin@local"},
+				Object: v1.PermissionObject{
+					Global: "invalid-global",
+				},
+			},
+		}
+
+		err := PersistPermissionFromCRD(DefaultContext, perm)
+		Expect(err).To(HaveOccurred())
+	})
+
+	It("returns error when explicit global object is combined with selectors", func() {
+		uid := uuid.New()
+		perm := &v1.Permission{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       "invalid-mixed-global-permission-" + uid.String(),
+				Namespace:  "default",
+				UID:        k8stypes.UID(uid.String()),
+				Generation: 1,
+			},
+			Spec: v1.PermissionSpec{
+				Actions: []string{"read"},
+				Subject: v1.PermissionSubject{Person: "admin@local"},
+				Object: v1.PermissionObject{
+					Global: "catalog",
+					Selectors: dutyRBAC.Selectors{
+						Configs: []types.ResourceSelector{{Name: "*"}},
+					},
+				},
+			},
+		}
+
+		err := PersistPermissionFromCRD(DefaultContext, perm)
+		Expect(err).To(HaveOccurred())
 	})
 })

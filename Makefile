@@ -184,15 +184,15 @@ ginkgo:
 
 .PHONY: controller-gen
 controller-gen: install-deps $(LOCALBIN)
-	deps install controller-gen@$(CONTROLLER_TOOLS_VERSION) --bin-dir $(LOCALBIN)
+	$(LOCALBIN)/deps install controller-gen@$(CONTROLLER_TOOLS_VERSION) --bin-dir $(LOCALBIN)
 
 .PHONY: golangci-lint
 golangci-lint: install-deps $(LOCALBIN)
-	deps install golangci/golangci-lint@v$(GOLANGCI_LINT_VERSION) --bin-dir $(LOCALBIN)
+	$(LOCALBIN)/deps install golangci/golangci-lint@v$(GOLANGCI_LINT_VERSION) --bin-dir $(LOCALBIN)
 
 .PHONY: kustomize
 kustomize: install-deps $(LOCALBIN)
-	deps install kubernetes-sigs/kustomize@$(KUSTOMIZE_VERSION) --bin-dir $(LOCALBIN)
+	$(LOCALBIN)/deps install kubernetes-sigs/kustomize@$(KUSTOMIZE_VERSION) --bin-dir $(LOCALBIN)
 
 .PHONY: docs\:mcp
 docs\:mcp: ## Generate MCP tools reference documentation

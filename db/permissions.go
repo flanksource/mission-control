@@ -30,6 +30,10 @@ func PersistPermissionFromCRD(ctx context.Context, obj *v1.Permission) error {
 			obj.Namespace, obj.Name)
 	}
 
+	if err := obj.Spec.Object.Validate(); err != nil {
+		return fmt.Errorf("invalid permission object: %w", err)
+	}
+
 	action := strings.Join(obj.Spec.Actions, ",")
 
 	p := models.Permission{

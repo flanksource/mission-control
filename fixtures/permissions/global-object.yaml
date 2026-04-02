@@ -1,0 +1,14 @@
+---
+# yaml-language-server: $schema=../../config/schemas/permission.schema.json
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: allow-user-mcp-access
+spec:
+  description: allow user John to connect to mcp server
+  subject:
+    person: john@doe.com
+  actions:
+    - mcp:use
+  object:
+    global: mcp
