@@ -2,9 +2,9 @@ package v1
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 
+	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	dutyRBAC "github.com/flanksource/duty/rbac"
@@ -66,18 +66,18 @@ func findUser(ctx context.Context, selector string) (string, models.PermissionSu
 	if uuid.Validate(selector) == nil {
 		var id string
 		if err := query.Where("id = ?", selector).Find(&id).Error; err != nil {
-			return "", "", err
+			return "", "", ctx.Oops().Wrap(err)
 		} else if id == "" {
-			return "", "", fmt.Errorf("%s %q not found", models.PermissionSubjectTypePerson, selector)
+			return "", "", dutyAPI.Errorf(dutyAPI.ENOTFOUND, "%s %q not found", models.PermissionSubjectTypePerson, selector)
 		}
 		return id, models.PermissionSubjectTypePerson, nil
 	}
 
 	var id string
-	if err := query.Where("name = ? OR email = ?", selector, selector).Find(&id).Error; err != nil {
-		return "", "", err
+	if err := query.Where("email = ?", selector).Find(&id).Error; err != nil {
+		return "", "", ctx.Oops().Wrap(err)
 	} else if id == "" {
-		return "", "", fmt.Errorf("%s %q not found", models.PermissionSubjectTypePerson, selector)
+		return "", "", dutyAPI.Errorf(dutyAPI.ENOTFOUND, "%s %q not found", models.PermissionSubjectTypePerson, selector)
 	}
 
 	return id, models.PermissionSubjectTypePerson, nil
@@ -89,18 +89,18 @@ func findTeam(ctx context.Context, selector string) (string, models.PermissionSu
 	if uuid.Validate(selector) == nil {
 		var id string
 		if err := query.Where("id = ?", selector).Find(&id).Error; err != nil {
-			return "", "", err
+			return "", "", ctx.Oops().Wrap(err)
 		} else if id == "" {
-			return "", "", fmt.Errorf("%s %q not found", models.PermissionSubjectTypeTeam, selector)
+			return "", "", dutyAPI.Errorf(dutyAPI.ENOTFOUND, "%s %q not found", models.PermissionSubjectTypeTeam, selector)
 		}
 		return id, models.PermissionSubjectTypeTeam, nil
 	}
 
 	var id string
 	if err := query.Where("name = ?", selector).Find(&id).Error; err != nil {
-		return "", "", err
+		return "", "", ctx.Oops().Wrap(err)
 	} else if id == "" {
-		return "", "", fmt.Errorf("%s %q not found", models.PermissionSubjectTypeTeam, selector)
+		return "", "", dutyAPI.Errorf(dutyAPI.ENOTFOUND, "%s %q not found", models.PermissionSubjectTypeTeam, selector)
 	}
 
 	return id, models.PermissionSubjectTypeTeam, nil
@@ -112,9 +112,9 @@ func findNamespacedResource(ctx context.Context, table string, selector string, 
 	if uuid.Validate(selector) == nil {
 		var id string
 		if err := query.Where("id = ?", selector).Find(&id).Error; err != nil {
-			return "", "", err
+			return "", "", ctx.Oops().Wrap(err)
 		} else if id == "" {
-			return "", "", fmt.Errorf("%s %q not found", subjectType, selector)
+			return "", "", dutyAPI.Errorf(dutyAPI.ENOTFOUND, "%s %q not found", subjectType, selector)
 		}
 		return id, subjectType, nil
 	}
@@ -122,7 +122,7 @@ func findNamespacedResource(ctx context.Context, table string, selector string, 
 	// Parse namespace/name format
 	splits := strings.Split(selector, "/")
 	if len(splits) != 2 {
-		return "", "", fmt.Errorf("%s is not a valid subject. Must be <namespace>/<name>", selector)
+		return "", "", dutyAPI.Errorf(dutyAPI.EINVALID, "%s is not a valid subject. Must be <namespace>/<name>", selector)
 	}
 
 	namespace, name := splits[0], splits[1]
@@ -132,9 +132,9 @@ func findNamespacedResource(ctx context.Context, table string, selector string, 
 		Where("name = ?", name).
 		Find(&id).Error
 	if err != nil {
-		return "", "", err
+		return "", "", ctx.Oops().Wrap(err)
 	} else if id == "" {
-		return "", "", fmt.Errorf("%s %q not found", subjectType, selector)
+		return "", "", dutyAPI.Errorf(dutyAPI.ENOTFOUND, "%s %q not found", subjectType, selector)
 	}
 	return id, subjectType, nil
 }

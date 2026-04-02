@@ -73,16 +73,24 @@ var _ = ginkgo.BeforeSuite(func() {
 	}
 
 	format.RegisterCustomFormatter(func(value interface{}) (string, bool) {
-		switch value.(type) {
-
-		case *models.PlaybookRun, models.PlaybookRun:
+		switch v := value.(type) {
+		case *models.PlaybookRun:
+			if v == nil {
+				return "", false
+			}
 			var s strings.Builder
-			actions, _ := value.(models.PlaybookRun).GetActions(DefaultContext.DB())
+			actions, _ := v.GetActions(DefaultContext.DB())
 			for _, action := range actions {
 				fmt.Fprintf(&s, "\t\t%s: %s %s\n", action.Name, action.Status, lo.FromPtrOr(action.Error, ""))
 			}
 			return s.String(), true
-
+		case models.PlaybookRun:
+			var s strings.Builder
+			actions, _ := v.GetActions(DefaultContext.DB())
+			for _, action := range actions {
+				fmt.Fprintf(&s, "\t\t%s: %s %s\n", action.Name, action.Status, lo.FromPtrOr(action.Error, ""))
+			}
+			return s.String(), true
 		}
 
 		return "", false
