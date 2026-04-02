@@ -2,13 +2,11 @@ package mcp
 
 import (
 	gocontext "context"
-	"fmt"
 	"net/http"
 
 	"github.com/flanksource/commons/logger"
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
-	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	echov4 "github.com/labstack/echo/v4"
@@ -38,13 +36,9 @@ func AuthMiddleware(next echov4.HandlerFunc) echov4.HandlerFunc {
 	return func(c echov4.Context) error {
 		ctx := c.Request().Context().(context.Context)
 
-		owner := ctx.Subject()
-
-		var accessToken models.AccessToken
-		if err := ctx.DB().Where("person_id = ?", ctx.Subject()).Find(&accessToken).Error; err != nil {
-			return dutyAPI.WriteError(c, fmt.Errorf("failed to lookup access token for subject %s: %w", ctx.Subject(), err))
-		} else if accessToken.CreatedBy != nil {
-			owner = accessToken.CreatedBy.String()
+		owner, err := resolveOwner(ctx)
+		if err != nil {
+			return dutyAPI.WriteError(c, err)
 		}
 
 		if roles, err := rbac.RolesForUser(owner); err != nil {
