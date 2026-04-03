@@ -71,6 +71,14 @@
           },
           "type": "array",
           "description": "Output format of the prompt.\nSupported: markdown (default), slack, recommendPlaybook"
+        },
+        "skill": {
+          "$ref": "#/$defs/AISkill",
+          "description": "Skill references a reusable skill file from a git repository.\nThe skill file content is prepended to the system prompt."
+        },
+        "outputSchema": {
+          "$ref": "#/$defs/EnvVar",
+          "description": "OutputSchema is a JSON schema that the AI response must conform to.\nCan be inline (value) or from a configMap/secret (valueFrom)."
         }
       },
       "additionalProperties": false,
@@ -79,6 +87,29 @@
         "systemPrompt",
         "prompt"
       ]
+    },
+    "AISkill": {
+      "properties": {
+        "connection": {
+          "type": "string",
+          "description": "Git connection reference (e.g., \"connection://github/my-org\")"
+        },
+        "path": {
+          "type": "string",
+          "description": "Path to the skill file within the repo (e.g., \"skills/access-auditor.md\")"
+        },
+        "branch": {
+          "type": "string",
+          "description": "Branch or tag to checkout (optional, defaults to the repo's default branch)"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "connection",
+        "path"
+      ],
+      "description": "AISkill references a skill file in a git repository.\nThe repo is cloned at execution time and the skill file content is\nprepended to the system prompt."
     },
     "AWSConnection": {
       "properties": {
@@ -271,6 +302,61 @@
         "clusterResource",
         "clusterResourceNamespace"
       ]
+    },
+    "CatalogAction": {
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Name of the config item"
+        },
+        "scraper": {
+          "type": "string",
+          "description": "Scraper reference — ID or namespace/name of the config scraper to link to"
+        },
+        "type": {
+          "type": "string",
+          "description": "Type of the config item (e.g., \"SecurityAudit::Report\")"
+        },
+        "configClass": {
+          "type": "string",
+          "description": "ConfigClass (e.g., \"Report\")"
+        },
+        "config": {
+          "type": "string",
+          "description": "Config is the JSON body of the config item"
+        },
+        "health": {
+          "type": "string",
+          "description": "Health status"
+        },
+        "status": {
+          "type": "string",
+          "description": "Status"
+        },
+        "tags": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object",
+          "description": "Tags"
+        },
+        "labels": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object",
+          "description": "Labels"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "scraper",
+        "type",
+        "configClass"
+      ],
+      "description": "CatalogAction creates a config item in the catalog."
     },
     "ConfigMapKeySelector": {
       "properties": {
@@ -1487,6 +1573,9 @@
         },
         "report": {
           "$ref": "#/$defs/ReportAction"
+        },
+        "catalog": {
+          "$ref": "#/$defs/CatalogAction"
         }
       },
       "additionalProperties": false,

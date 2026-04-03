@@ -358,6 +358,18 @@ const (
 	AIActionFormatRecommendPlaybook AIActionFormat = "recommendPlaybook"
 )
 
+// AISkill references a skill file in a git repository.
+// The repo is cloned at execution time and the skill file content is
+// prepended to the system prompt.
+type AISkill struct {
+	// Git connection reference (e.g., "connection://github/my-org")
+	Connection string `json:"connection" yaml:"connection"`
+	// Path to the skill file within the repo (e.g., "skills/access-auditor.md")
+	Path string `json:"path" yaml:"path"`
+	// Branch or tag to checkout (optional, defaults to the repo's default branch)
+	Branch string `json:"branch,omitempty" yaml:"branch,omitempty"`
+}
+
 type AIAction struct {
 	AIActionClient        `json:",inline" yaml:",inline"`
 	api.LLMContextRequest `json:",inline" yaml:",inline" template:"true"`
@@ -381,6 +393,14 @@ type AIAction struct {
 	// Output format of the prompt.
 	// Supported: markdown (default), slack, recommendPlaybook
 	Formats []AIActionFormat `json:"formats,omitempty"`
+
+	// Skill references a reusable skill file from a git repository.
+	// The skill file content is prepended to the system prompt.
+	Skill *AISkill `json:"skill,omitempty" yaml:"skill,omitempty"`
+
+	// OutputSchema is a JSON schema that the AI response must conform to.
+	// Can be inline (value) or from a configMap/secret (valueFrom).
+	OutputSchema *types.EnvVar `json:"outputSchema,omitempty" yaml:"outputSchema,omitempty"`
 }
 
 type ExecAction struct {
@@ -610,6 +630,7 @@ type PlaybookAction struct {
 	Notification        *NotificationAction        `json:"notification,omitempty" yaml:"notification,omitempty" template:"true"`
 	Logs                *LogsAction                `json:"logs,omitempty" template:"true"`
 	Report              *ReportAction              `json:"report,omitempty" yaml:"report,omitempty" template:"true"`
+	Catalog             *CatalogAction             `json:"catalog,omitempty" yaml:"catalog,omitempty" template:"true"`
 }
 
 type FacetPDFMargins struct {
@@ -632,6 +653,28 @@ type FacetOptions struct {
 	Header       string           `json:"header,omitempty" yaml:"header,omitempty" template:"true"`
 	Footer       string           `json:"footer,omitempty" yaml:"footer,omitempty" template:"true"`
 	TimestampURL string           `json:"timestampUrl,omitempty" yaml:"timestampUrl,omitempty" template:"true"`
+}
+
+// CatalogAction creates a config item in the catalog.
+type CatalogAction struct {
+	// Name of the config item
+	Name string `json:"name" yaml:"name" template:"true"`
+	// Scraper reference — ID or namespace/name of the config scraper to link to
+	Scraper string `json:"scraper" yaml:"scraper" template:"true"`
+	// Type of the config item (e.g., "SecurityAudit::Report")
+	Type string `json:"type" yaml:"type" template:"true"`
+	// ConfigClass (e.g., "Report")
+	ConfigClass string `json:"configClass" yaml:"configClass" template:"true"`
+	// Config is the JSON body of the config item
+	Config string `json:"config,omitempty" yaml:"config,omitempty" template:"true"`
+	// Health status
+	Health string `json:"health,omitempty" yaml:"health,omitempty" template:"true"`
+	// Status
+	Status string `json:"status,omitempty" yaml:"status,omitempty" template:"true"`
+	// Tags
+	Tags map[string]string `json:"tags,omitempty" yaml:"tags,omitempty" template:"true"`
+	// Labels
+	Labels map[string]string `json:"labels,omitempty" yaml:"labels,omitempty" template:"true"`
 }
 
 // +kubebuilder:validation:XValidation:rule="!(has(self.view) && self.view != \"\" && has(self.configs))",message="view and configs are mutually exclusive"
@@ -674,6 +717,8 @@ func (p *PlaybookAction) ActionType() string {
 		return "prometheus"
 	case p.Report != nil:
 		return "report"
+	case p.Catalog != nil:
+		return "catalog"
 	default:
 		return ""
 	}
@@ -714,6 +759,9 @@ func (p *PlaybookAction) Count() int {
 	if p.Report != nil {
 		count++
 	}
+	if p.Catalog != nil {
+		count++
+	}
 
 	return count
 }
@@ -748,6 +796,9 @@ func (p *PlaybookAction) primaryActionCount() int {
 		count++
 	}
 	if p.Report != nil {
+		count++
+	}
+	if p.Catalog != nil {
 		count++
 	}
 

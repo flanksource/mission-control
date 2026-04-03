@@ -1,6 +1,7 @@
 package llm
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -22,12 +23,15 @@ type ResponseFormat int
 const (
 	ResponseFormatDiagnosis ResponseFormat = iota + 1
 	ResponseFormatPlaybookRecommendations
+	ResponseFormatCustomSchema
 )
 
 type Config struct {
 	v1.AIActionClient
 	UseAgent       bool
 	ResponseFormat ResponseFormat
+	// CustomSchema is the raw JSON schema string when ResponseFormat == ResponseFormatCustomSchema
+	CustomSchema string
 }
 
 type GenerationInfo struct {
@@ -91,6 +95,13 @@ func PromptWithHistory(ctx dutyctx.Context, config Config, history []llms.Messag
 		case ResponseFormatPlaybookRecommendations:
 			options = append(options, llms.WithTools([]llms.Tool{tools.RecommendPlaybook}))
 			messages = append(messages, llms.TextParts(llms.ChatMessageTypeHuman, fmt.Sprintf(forceToolUsePrompt, tools.ToolPlaybookRecommendations)))
+		case ResponseFormatCustomSchema:
+			tool, err := tools.CustomSchemaTool(config.CustomSchema)
+			if err != nil {
+				return "", nil, nil, fmt.Errorf("failed to create custom schema tool: %w", err)
+			}
+			options = append(options, llms.WithTools([]llms.Tool{tool}))
+			messages = append(messages, llms.TextParts(llms.ChatMessageTypeHuman, fmt.Sprintf(forceToolUsePrompt, tools.ToolCustomSchema)))
 		}
 		// NOTE: Anthropic has forced tool use, but it's not supported in LangChainGo.
 		// So, we force that with prompts for now.
@@ -216,6 +227,21 @@ func getLLMModel(ctx dutyctx.Context, config Config) (llms.Model, error) {
 					Schema: schemaObj,
 				},
 			}))
+
+		case ResponseFormatCustomSchema:
+			var schemaObj openai.ResponseFormatJSONSchemaProperty
+			if err := json.Unmarshal([]byte(config.CustomSchema), &schemaObj); err != nil {
+				return nil, fmt.Errorf("failed to parse custom output schema: %w", err)
+			}
+
+			opts = append(opts, openai.WithResponseFormat(&openai.ResponseFormat{
+				Type: "json_schema",
+				JSONSchema: &openai.ResponseFormatJSONSchema{
+					Name:   "custom_schema",
+					Strict: true,
+					Schema: &schemaObj,
+				},
+			}))
 		}
 
 		openaiLLM, err := openai.New(opts...)
@@ -272,6 +298,7 @@ func getLLMModel(ctx dutyctx.Context, config Config) (llms.Model, error) {
 			model:          config.Model,
 			client:         client,
 			ResponseFormat: config.ResponseFormat,
+			CustomSchema:   config.CustomSchema,
 		}
 
 		return wrapper, nil

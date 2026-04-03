@@ -6,10 +6,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"text/template"
 
 	"github.com/flanksource/artifacts"
+	pkgConnection "github.com/flanksource/duty/connection"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
@@ -26,6 +29,8 @@ import (
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/llm"
 	llmContext "github.com/flanksource/incident-commander/llm/context"
+	"github.com/flanksource/incident-commander/pkg/clients/git"
+	"github.com/flanksource/incident-commander/pkg/clients/git/connectors"
 	"github.com/flanksource/incident-commander/utils"
 )
 
@@ -121,6 +126,16 @@ type childRunResultContext struct {
 // and processes the response into the requested formats.
 func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, error) {
 	var result AIActionResult
+
+	// Load skill file content and prepend to system prompt
+	if spec.Skill != nil {
+		skillContent, err := loadSkill(ctx, *spec.Skill)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load skill: %w", err)
+		}
+		spec.SystemPrompt = skillContent + "\n\n" + spec.SystemPrompt
+	}
+
 	knowledgebase, prompt, err := buildPrompt(ctx, spec.Prompt, spec.LLMContextRequest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to form prompt: %w", err)
@@ -183,6 +198,19 @@ func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 	}
 
 	llmConf := llm.Config{AIActionClient: spec.AIActionClient, ResponseFormat: llm.ResponseFormatDiagnosis}
+
+	// Resolve custom output schema if provided
+	customSchema := false
+	if spec.OutputSchema != nil && !spec.OutputSchema.IsEmpty() {
+		schemaValue, err := ctx.GetEnvValueFromCache(*spec.OutputSchema, ctx.GetNamespace())
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve output schema: %w", err)
+		}
+		llmConf.ResponseFormat = llm.ResponseFormatCustomSchema
+		llmConf.CustomSchema = schemaValue
+		customSchema = true
+	}
+
 	response, conversation, genInfo, err := llm.Prompt(ctx, llmConf, spec.SystemPrompt, prompt...)
 	if err != nil {
 		return nil, ctx.Oops().Wrapf(err, "failed to generate response")
@@ -191,14 +219,23 @@ func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 	result.JSON = response
 	result.GenerationInfo = append(result.GenerationInfo, genInfo...)
 
+	// When using a custom schema, skip DiagnosisReport unmarshaling
 	var diagnosisReport llm.DiagnosisReport
-	if err := json.Unmarshal([]byte(response), &diagnosisReport); err != nil {
-		return nil, ctx.Oops().With("response", response).Wrapf(err, "failed to unmarshal diagnosis report")
+	if !customSchema {
+		if err := json.Unmarshal([]byte(response), &diagnosisReport); err != nil {
+			return nil, ctx.Oops().With("response", response).Wrapf(err, "failed to unmarshal diagnosis report")
+		}
 	}
 
 	for _, format := range lo.Uniq(spec.Formats) {
 		switch format {
 		case v1.AIActionFormatSlack:
+			if customSchema {
+				// With custom schema, structured slack blocks aren't applicable
+				result.Slack = response
+				continue
+			}
+
 			groupedResources, err := getGroupedResources(ctx, t.RunID)
 			if err != nil {
 				return nil, fmt.Errorf("failed to get grouped resources: %w", err)
@@ -425,4 +462,52 @@ func getChildRunsResults(ctx context.Context, childRuns []models.PlaybookRun) ([
 	}
 
 	return childRunResults, nil
+}
+
+// loadSkill clones a git repository using the provided connection and reads the skill file.
+func loadSkill(ctx context.Context, skill v1.AISkill) (string, error) {
+	conn, err := pkgConnection.Get(ctx, skill.Connection)
+	if err != nil {
+		return "", fmt.Errorf("failed to get git connection %q: %w", skill.Connection, err)
+	} else if conn == nil {
+		return "", fmt.Errorf("git connection %q not found", skill.Connection)
+	}
+
+	spec := &connectors.GitopsAPISpec{
+		Repository: conn.URL,
+		Base:       "main",
+		Branch:     "main",
+	}
+
+	if skill.Branch != "" {
+		spec.Base = skill.Branch
+		spec.Branch = skill.Branch
+	}
+
+	switch conn.Type {
+	case models.ConnectionTypeGithub, models.ConnectionTypeGitlab, models.ConnectionTypeAzureDevops:
+		spec.AccessToken = conn.Password
+	case models.ConnectionTypeHTTP:
+		spec.User = conn.Username
+		spec.Password = conn.Password
+	case models.ConnectionTypeGit:
+		spec.User = conn.Username
+		spec.Password = conn.Password
+		spec.SSHPrivateKey = conn.Certificate
+		spec.SSHPrivateKeyPassword = conn.Password
+	default:
+		return "", fmt.Errorf("unsupported connection type %q for skill", conn.Type)
+	}
+
+	_, workTree, err := git.Clone(ctx, spec)
+	if err != nil {
+		return "", fmt.Errorf("failed to clone skill repository: %w", err)
+	}
+
+	content, err := os.ReadFile(filepath.Join(workTree.Filesystem.Root(), skill.Path))
+	if err != nil {
+		return "", fmt.Errorf("failed to read skill file %q: %w", skill.Path, err)
+	}
+
+	return string(content), nil
 }

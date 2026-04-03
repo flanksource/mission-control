@@ -81,6 +81,7 @@ type GeminiModelWrapper struct {
 	model          string
 	client         *genai.Client
 	ResponseFormat ResponseFormat
+	CustomSchema   string
 }
 
 // Call implements the langchaingo Model interface for GeminiModelWrapper
@@ -138,15 +139,20 @@ func (g *GeminiModelWrapper) GenerateContent(ctx context.Context, messages []llm
 		genOptions.Temperature = lo.ToPtr(float32(opts.Temperature))
 	}
 
-	if g.ResponseFormat == ResponseFormatDiagnosis || g.ResponseFormat == ResponseFormatPlaybookRecommendations {
-		switch g.ResponseFormat {
-		case ResponseFormatDiagnosis:
-			genOptions.ResponseSchema = &DiagnosisSchema
-			genOptions.ResponseMIMEType = "application/json"
-		case ResponseFormatPlaybookRecommendations:
-			genOptions.ResponseSchema = &PlaybookRecommendationSchema
-			genOptions.ResponseMIMEType = "application/json"
+	switch g.ResponseFormat {
+	case ResponseFormatDiagnosis:
+		genOptions.ResponseSchema = &DiagnosisSchema
+		genOptions.ResponseMIMEType = "application/json"
+	case ResponseFormatPlaybookRecommendations:
+		genOptions.ResponseSchema = &PlaybookRecommendationSchema
+		genOptions.ResponseMIMEType = "application/json"
+	case ResponseFormatCustomSchema:
+		var schema genai.Schema
+		if err := json.Unmarshal([]byte(g.CustomSchema), &schema); err != nil {
+			return nil, fmt.Errorf("failed to parse custom schema for Gemini: %w", err)
 		}
+		genOptions.ResponseSchema = &schema
+		genOptions.ResponseMIMEType = "application/json"
 	}
 
 	resp, err := g.client.Models.GenerateContent(ctx, g.model, contents, &genOptions)

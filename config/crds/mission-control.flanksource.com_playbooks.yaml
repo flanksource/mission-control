@@ -146,6 +146,52 @@ spec:
                             Model name based on the backend chosen.
                             Example: gpt-4o for openai, claude-3-5-sonnet-latest for Anthropic, llama3.1:8b for Ollama
                           type: string
+                        outputSchema:
+                          description: |-
+                            OutputSchema is a JSON schema that the AI response must conform to.
+                            Can be inline (value) or from a configMap/secret (valueFrom).
+                          properties:
+                            name:
+                              type: string
+                            value:
+                              type: string
+                            valueFrom:
+                              properties:
+                                configMapKeyRef:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      type: string
+                                  required:
+                                  - key
+                                  type: object
+                                helmRef:
+                                  properties:
+                                    key:
+                                      description: Key is a JSONPath expression used
+                                        to fetch the key from the merged JSON.
+                                      type: string
+                                    name:
+                                      type: string
+                                  required:
+                                  - key
+                                  type: object
+                                secretKeyRef:
+                                  properties:
+                                    key:
+                                      type: string
+                                    name:
+                                      type: string
+                                  required:
+                                  - key
+                                  type: object
+                                serviceAccount:
+                                  description: ServiceAccount specifies the service
+                                    account whose token should be fetched
+                                  type: string
+                              type: object
+                          type: object
                         playbooks:
                           description: List of playbooks that provide additional context
                             to the LLM.
@@ -274,6 +320,26 @@ spec:
                                 type: string
                             type: object
                           type: array
+                        skill:
+                          description: |-
+                            Skill references a reusable skill file from a git repository.
+                            The skill file content is prepended to the system prompt.
+                          properties:
+                            branch:
+                              description: Branch or tag to checkout (optional, defaults
+                                to the repo's default branch)
+                              type: string
+                            connection:
+                              description: Git connection reference (e.g., "connection://github/my-org")
+                              type: string
+                            path:
+                              description: Path to the skill file within the repo
+                                (e.g., "skills/access-auditor.md")
+                              type: string
+                          required:
+                          - connection
+                          - path
+                          type: object
                         systemPrompt:
                           description: |-
                             system prompt is a way to provide context, instructions, and guidelines to the LLM before presenting it
@@ -370,6 +436,47 @@ spec:
                       - pipeline
                       - project
                       - token
+                      type: object
+                    catalog:
+                      description: CatalogAction creates a config item in the catalog.
+                      properties:
+                        config:
+                          description: Config is the JSON body of the config item
+                          type: string
+                        configClass:
+                          description: ConfigClass (e.g., "Report")
+                          type: string
+                        health:
+                          description: Health status
+                          type: string
+                        labels:
+                          additionalProperties:
+                            type: string
+                          description: Labels
+                          type: object
+                        name:
+                          description: Name of the config item
+                          type: string
+                        scraper:
+                          description: Scraper reference — ID or namespace/name of
+                            the config scraper to link to
+                          type: string
+                        status:
+                          description: Status
+                          type: string
+                        tags:
+                          additionalProperties:
+                            type: string
+                          description: Tags
+                          type: object
+                        type:
+                          description: Type of the config item (e.g., "SecurityAudit::Report")
+                          type: string
+                      required:
+                      - configClass
+                      - name
+                      - scraper
+                      - type
                       type: object
                     contentType:
                       description: ContentType declares how the primary output should
