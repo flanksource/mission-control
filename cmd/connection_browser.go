@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -162,16 +161,8 @@ func runBrowserLogin(cmd *cobra.Command, args []string) error {
 	return saveConnection(cmd, browserFlags, data)
 }
 
-func profileDir(namespace, name string) string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		home = "."
-	}
-	return filepath.Join(home, ".mission-control-cli", "profiles", namespace+"_"+name)
-}
-
 func launchBrowserAndCapture(ctx gocontext.Context, flags browserLoginFlags) (*browserSessionData, error) {
-	userDataDir := profileDir(flags.Namespace, flags.Name)
+	userDataDir := ProfileDir(flags.Namespace, flags.Name)
 
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
 		chromedp.Flag("headless", false),
