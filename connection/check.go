@@ -32,7 +32,8 @@ import (
 
 type TestResult struct {
 	Payload map[string]any `json:"payload,omitempty"`
-	Entries []har.Entry    `json:"entries,omitempty"`
+	Token   *JWT           `json:"token,omitempty"`
+	Entries []har.Entry    `json:"entries,omitempty" pretty:"table"`
 }
 
 // azureHARTransport adapts net/http.RoundTripper to Azure's policy.Transporter interface.
@@ -45,7 +46,11 @@ func (a *azureHARTransport) Do(req *nethttp.Request) (*nethttp.Response, error) 
 }
 
 func Test(ctx context.Context, c *models.Connection) (TestResult, error) {
-	collector := har.NewCollector(har.DefaultConfig())
+	collector := har.NewCollector(har.HARConfig{
+		MaxBodySize:         64 * 1024,
+		CaptureContentTypes: []string{""},
+	})
+	ctx = ctx.WithHARCollector(collector)
 	harOpt := types.WithHARCollector(collector)
 	newHTTPClient := func() *http.Client {
 		return http.NewClient().HARCollector(collector)
@@ -303,9 +308,11 @@ func Test(ctx context.Context, c *models.Connection) (TestResult, error) {
 			return TestResult{}, api.Errorf(api.EINVALID, "error hydrating HTTP connection: %v", err)
 		}
 
+		token := DecodeJWT(c.Properties["bearer"])
+
 		client, err := connection.CreateHTTPClient(ctx, *hydrated)
 		if err != nil {
-			return TestResult{}, api.Errorf(api.EINVALID, "error creating HTTP client: %v", err)
+			return TestResult{Token: token}, api.Errorf(api.EINVALID, "error creating HTTP client: %v", err)
 		}
 
 		client = client.HARCollector(collector)
@@ -316,15 +323,15 @@ func Test(ctx context.Context, c *models.Connection) (TestResult, error) {
 
 		response, err := client.R(ctx).Get(c.URL)
 		if err != nil {
-			return TestResult{Entries: collector.Entries()}, err
+			return TestResult{Token: token, Entries: collector.Entries()}, err
 		}
 
 		if !response.IsOK() {
 			body, _ := response.AsString()
-			return TestResult{Entries: collector.Entries()}, api.Errorf(api.EINVALID, "%s", body)
+			return TestResult{Token: token, Entries: collector.Entries()}, api.Errorf(api.EINVALID, "%s", body)
 		}
 
-		return TestResult{Entries: collector.Entries()}, nil
+		return TestResult{Token: token, Entries: collector.Entries()}, nil
 
 	case models.ConnectionTypeKubernetes:
 		client, _, err := dutyKubernetes.NewClientFromPathOrConfig(ctx.Logger, c.Certificate, collector)
@@ -354,7 +361,7 @@ func Test(ctx context.Context, c *models.Connection) (TestResult, error) {
 		if err := conn.FromModel(*c); err != nil {
 			return TestResult{}, api.Errorf(api.EINVALID, "error creating connection: %v", err)
 		}
-		client, err := conn.Client()
+		client, err := conn.Client(ctx)
 		if err != nil {
 			return TestResult{}, api.Errorf(api.EINVALID, "error creating client: %v", err)
 		}
@@ -554,3 +561,4 @@ func ptrVal(s *string) string {
 	}
 	return *s
 }
+

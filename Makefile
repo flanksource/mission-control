@@ -153,6 +153,10 @@ dev:
  	# Disabling CGO because of slow build times in apple silicon (just experimenting)
 	CGO_ENABLED=0 go build -v -o ./.bin/$(NAME) -gcflags="all=-N -l" main.go
 
+.PHONY: build-slim
+build-slim: $(TAILWIND_JS) ## Fast go build only (no codegen or fmt)
+	CGO_ENABLED=0 go build -o ./.bin/$(NAME) main.go
+
 .PHONY: install
 install:
 	cp ./.bin/$(NAME) /usr/local/bin/
