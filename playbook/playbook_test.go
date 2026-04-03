@@ -171,21 +171,21 @@ var _ = Describe("Playbook", Ordered, func() {
 
 			It("Should fetch the suitable playbook for configs", func() {
 				playbooks, err := ListPlaybooksForConfig(DefaultContext, dummy.EKSCluster.ID.String())
-				ExpectPlaybook(playbooks, err, configPlaybook, dummy.EchoConfig)
+				ExpectPlaybookDesc(playbooks, "playbooks for EKS cluster config", err, configPlaybook, dummy.EchoConfig)
 
 				playbooks, err = ListPlaybooksForConfig(DefaultContext, dummy.KubernetesCluster.ID.String())
-				ExpectPlaybook(playbooks, err, dummy.EchoConfig)
+				ExpectPlaybookDesc(playbooks, "playbooks for K8s cluster config", err, dummy.EchoConfig)
 			})
 
 			It("Should fetch playbook with agent=all for configs with any agent", func() {
 				// Test with KubernetesNodeA which has an agent
 				// Both agentAllPlaybook (with agent=all) and EchoConfig (with name=*) should match
 				playbooks, err := ListPlaybooksForConfig(DefaultContext, dummy.KubernetesNodeA.ID.String())
-				ExpectPlaybook(playbooks, err, agentAllPlaybook, dummy.EchoConfig)
+				ExpectPlaybookDesc(playbooks, "playbooks for kubernetes node A", err, agentAllPlaybook, dummy.EchoConfig)
 
 				// Test with KubernetesNodeB which also has an agent
 				playbooks, err = ListPlaybooksForConfig(DefaultContext, dummy.KubernetesNodeB.ID.String())
-				ExpectPlaybook(playbooks, err, agentAllPlaybook, dummy.EchoConfig)
+				ExpectPlaybookDesc(playbooks, "playbooks for kubernetes node B", err, agentAllPlaybook, dummy.EchoConfig)
 			})
 		})
 
@@ -937,10 +937,20 @@ func createPlaybook(name string) (models.Playbook, v1.PlaybookSpec) {
 	return *playbook, spec.Spec
 }
 
+func ExpectPlaybookDesc(list []api.PlaybookListItem, desc string, err error, playbooks ...models.Playbook) {
+	Expect(err).To(BeNil())
+	Expect(lo.Map(list, func(l api.PlaybookListItem, _ int) string {
+		return l.ID.String() + "/" + l.Name
+	})).
+		To(ConsistOf(lo.Map(playbooks, func(p models.Playbook, _ int) string { return p.ID.String() + "/" + p.Name })), desc)
+}
+
 func ExpectPlaybook(list []api.PlaybookListItem, err error, playbooks ...models.Playbook) {
 	Expect(err).To(BeNil())
-	Expect(lo.Map(list, func(l api.PlaybookListItem, _ int) string { return l.ID.String() })).
-		To(ConsistOf(lo.Map(playbooks, func(p models.Playbook, _ int) string { return p.ID.String() })))
+	Expect(lo.Map(list, func(l api.PlaybookListItem, _ int) string {
+		return l.ID.String() + "/" + l.Name
+	})).
+		To(ConsistOf(lo.Map(playbooks, func(p models.Playbook, _ int) string { return p.ID.String() + "/" + p.Name })))
 }
 
 func ExpectOKResponse(response *http.Response) {

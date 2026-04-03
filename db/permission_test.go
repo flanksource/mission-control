@@ -48,7 +48,7 @@ var _ = Describe("PersistPermissionFromCRD", func() {
 			},
 			Spec: v1.PermissionSpec{
 				Actions: []string{"read"},
-				Subject: v1.PermissionSubject{Person: "admin@local"},
+				Subject: v1.PermissionSubject{Person: "john@doe.com"},
 				Object:  v1.PermissionObject{},
 			},
 		}

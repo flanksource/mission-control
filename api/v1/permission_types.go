@@ -2,9 +2,9 @@ package v1
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 
+	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	dutyRBAC "github.com/flanksource/duty/rbac"
@@ -60,45 +60,86 @@ func (t *Permission) GenerateStatusPatch(original runtime.Object) client.Patch {
 	return client.MergeFrom(clientObj)
 }
 
-func findSubject(ctx context.Context, table string, selector string, subjectType models.PermissionSubjectType) (string, models.PermissionSubjectType, error) {
+func findUser(ctx context.Context, selector string) (string, models.PermissionSubjectType, error) {
+	query := ctx.DB().Select("id").Table("people").Where("deleted_at IS NULL")
+
 	if uuid.Validate(selector) == nil {
 		var id string
-		err := ctx.DB().Select("id").Table(table).Where("deleted_at IS NULL").Where("id = ?", selector).Find(&id).Error
-		return id, subjectType, err
+		if err := query.Where("id = ?", selector).Find(&id).Error; err != nil {
+			return "", "", ctx.Oops().Wrap(err)
+		} else if id == "" {
+			return "", "", dutyAPI.Errorf(dutyAPI.ENOTFOUND, "%s %q not found", models.PermissionSubjectTypePerson, selector)
+		}
+		return id, models.PermissionSubjectTypePerson, nil
 	}
 
-	// Otherwise look up by name or email
 	var id string
-	var err error
-	if table == "people" {
-		err = ctx.DB().Select("id").Table(table).Where("deleted_at IS NULL").Where("name = ? OR email = ?", selector, selector).Find(&id).Error
-	} else {
-		err = ctx.DB().Select("id").Table(table).Where("deleted_at IS NULL").Where("name = ?", selector).Find(&id).Error
+	if err := query.Where("email = ?", selector).Find(&id).Error; err != nil {
+		return "", "", ctx.Oops().Wrap(err)
+	} else if id == "" {
+		return "", "", dutyAPI.Errorf(dutyAPI.ENOTFOUND, "%s %q not found", models.PermissionSubjectTypePerson, selector)
 	}
-	return id, subjectType, err
+
+	return id, models.PermissionSubjectTypePerson, nil
+}
+
+func findTeam(ctx context.Context, selector string) (string, models.PermissionSubjectType, error) {
+	query := ctx.DB().Select("id").Table("teams").Where("deleted_at IS NULL")
+
+	if uuid.Validate(selector) == nil {
+		var id string
+		if err := query.Where("id = ?", selector).Find(&id).Error; err != nil {
+			return "", "", ctx.Oops().Wrap(err)
+		} else if id == "" {
+			return "", "", dutyAPI.Errorf(dutyAPI.ENOTFOUND, "%s %q not found", models.PermissionSubjectTypeTeam, selector)
+		}
+		return id, models.PermissionSubjectTypeTeam, nil
+	}
+
+	var id string
+	if err := query.Where("name = ?", selector).Find(&id).Error; err != nil {
+		return "", "", ctx.Oops().Wrap(err)
+	} else if id == "" {
+		return "", "", dutyAPI.Errorf(dutyAPI.ENOTFOUND, "%s %q not found", models.PermissionSubjectTypeTeam, selector)
+	}
+
+	return id, models.PermissionSubjectTypeTeam, nil
 }
 
 func findNamespacedResource(ctx context.Context, table string, selector string, subjectType models.PermissionSubjectType) (string, models.PermissionSubjectType, error) {
+	query := ctx.DB().Select("id").Table(table).Where("deleted_at IS NULL")
+
 	if uuid.Validate(selector) == nil {
 		var id string
-		err := ctx.DB().Select("id").Table(table).Where("deleted_at IS NULL").Where("id = ?", selector).Find(&id).Error
-		return id, subjectType, err
+		if err := query.Where("id = ?", selector).Find(&id).Error; err != nil {
+			return "", "", ctx.Oops().Wrap(err)
+		} else if id == "" {
+			return "", "", dutyAPI.Errorf(dutyAPI.ENOTFOUND, "%s %q not found", subjectType, selector)
+		}
+		return id, subjectType, nil
 	}
 
 	// Parse namespace/name format
 	splits := strings.Split(selector, "/")
 	if len(splits) != 2 {
-		return "", "", fmt.Errorf("%s is not a valid subject. Must be <namespace>/<name>", selector)
+		return "", "", dutyAPI.Errorf(dutyAPI.EINVALID, "%s is not a valid subject. Must be <namespace>/<name>", selector)
 	}
 
-	namespace, name := splits[0], splits[1]
+	namespace, name := strings.TrimSpace(splits[0]), strings.TrimSpace(splits[1])
+	if namespace == "" || name == "" {
+		return "", "", dutyAPI.Errorf(dutyAPI.EINVALID, "%s is not a valid subject. Must be <namespace>/<name>", selector)
+	}
 	var id string
-	err := ctx.DB().Select("id").Table(table).
+	err := query.
 		Where("namespace = ?", namespace).
 		Where("name = ?", name).
-		Where("deleted_at IS NULL").
 		Find(&id).Error
-	return id, subjectType, err
+	if err != nil {
+		return "", "", ctx.Oops().Wrap(err)
+	} else if id == "" {
+		return "", "", dutyAPI.Errorf(dutyAPI.ENOTFOUND, "%s %q not found", subjectType, selector)
+	}
+	return id, subjectType, nil
 }
 
 type PermissionSubject struct {
@@ -142,11 +183,11 @@ func (t *PermissionSubject) Populate(ctx context.Context) (string, models.Permis
 	}
 
 	if t.Person != "" {
-		return findSubject(ctx, "people", string(t.Person), models.PermissionSubjectTypePerson)
+		return findUser(ctx, string(t.Person))
 	}
 
 	if t.Team != "" {
-		return findSubject(ctx, "teams", string(t.Team), models.PermissionSubjectTypeTeam)
+		return findTeam(ctx, string(t.Team))
 	}
 
 	if t.Notification != "" {

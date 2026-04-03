@@ -3,6 +3,7 @@ package playbook
 import (
 	"fmt"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/labstack/echo/v4"
@@ -72,16 +73,24 @@ var _ = ginkgo.BeforeSuite(func() {
 	}
 
 	format.RegisterCustomFormatter(func(value interface{}) (string, bool) {
-		switch value.(type) {
-
-		case *models.PlaybookRun, models.PlaybookRun:
-			s := ""
-			actions, _ := value.(models.PlaybookRun).GetActions(DefaultContext.DB())
-			for _, action := range actions {
-				s += fmt.Sprintf("\t\t%s: %s %s\n", action.Name, action.Status, lo.FromPtrOr(action.Error, ""))
+		switch v := value.(type) {
+		case *models.PlaybookRun:
+			if v == nil {
+				return "", false
 			}
-			return s, true
-
+			var s strings.Builder
+			actions, _ := v.GetActions(DefaultContext.DB())
+			for _, action := range actions {
+				fmt.Fprintf(&s, "\t\t%s: %s %s\n", action.Name, action.Status, lo.FromPtrOr(action.Error, ""))
+			}
+			return s.String(), true
+		case models.PlaybookRun:
+			var s strings.Builder
+			actions, _ := v.GetActions(DefaultContext.DB())
+			for _, action := range actions {
+				fmt.Fprintf(&s, "\t\t%s: %s %s\n", action.Name, action.Status, lo.FromPtrOr(action.Error, ""))
+			}
+			return s.String(), true
 		}
 
 		return "", false
@@ -104,6 +113,9 @@ var _ = ginkgo.BeforeSuite(func() {
 	logger.Infof("Started test server @ %s", server.URL)
 
 	if err := testdata.LoadConnections(DefaultContext); err != nil {
+		ginkgo.Fail(err.Error())
+	}
+	if err := testdata.LoadPlaybooks(DefaultContext); err != nil {
 		ginkgo.Fail(err.Error())
 	}
 	if err := testdata.LoadPermissions(DefaultContext); err != nil {

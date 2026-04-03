@@ -201,7 +201,7 @@ func compareOutput(expected expectedOutput, run *models.PlaybookRun, actions []m
 		}
 
 		if ea.ArtifactLogs != "" {
-			contents, err := artifacts.GetArtifactContents(DefaultContext, actual.ID.String())
+			contents, err := artifacts.GetArtifactContents(DefaultContext.WithSubject("admin"), actual.ID.String())
 			Expect(err).ToNot(HaveOccurred(), "action[%d] artifact contents", i)
 			Expect(contents).To(HaveLen(1), "action[%d] expected 1 artifact for log comparison", i)
 
