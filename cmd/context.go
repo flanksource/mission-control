@@ -107,6 +107,15 @@ func ServerToContextName(serverURL string) string {
 	return u.Hostname()
 }
 
+func contextHasAPI() (*MCContext, bool) {
+	cfg, _ := LoadConfig()
+	if cfg == nil {
+		return nil, false
+	}
+	ctx := cfg.CurrentMCContext()
+	return ctx, ctx != nil && ctx.Server != "" && ctx.Token != ""
+}
+
 var ContextCmd = &cobra.Command{
 	Use:   "context",
 	Short: "Manage Mission Control contexts",

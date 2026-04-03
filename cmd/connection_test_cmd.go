@@ -16,6 +16,7 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/connection"
 	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/sdk"
 )
 
 var ConnectionTest = &cobra.Command{
@@ -62,6 +63,10 @@ func hydrateAndTest(conn *models.Connection) (any, error) {
 }
 
 func runConnectionTestFromDB(name, namespace string, overrides *connectionFlags) (any, error) {
+	if mcCtx, ok := contextHasAPI(); ok {
+		return runConnectionTestViaAPI(mcCtx, name, namespace)
+	}
+
 	ctx, stop, err := duty.Start("mission-control", duty.ClientOnly)
 	if err != nil {
 		return nil, err
@@ -93,6 +98,21 @@ func runConnectionTestFromDB(name, namespace string, overrides *connectionFlags)
 	}
 
 	return result, nil
+}
+
+func runConnectionTestViaAPI(mcCtx *MCContext, name, namespace string) (any, error) {
+	client := sdk.New(mcCtx.Server, mcCtx.Token)
+
+	conn, err := client.GetConnection(name, namespace)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := client.TestConnection(conn.ID.String())
+	if err != nil {
+		return nil, err
+	}
+	return result.Payload, nil
 }
 
 func applyConnectionOverrides(conn *models.Connection, flags *connectionFlags) {

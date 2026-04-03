@@ -17,6 +17,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/flanksource/incident-commander/connection"
+	"github.com/flanksource/incident-commander/sdk"
 )
 
 var Connection = &cobra.Command{
@@ -366,17 +367,60 @@ func runConnectionAdd(flags *connectionFlags) error {
 		return err
 	}
 
+	conn, err := buildConnectionFromFlags(flags)
+	if err != nil {
+		return fmt.Errorf("failed to build connection: %w", err)
+	}
+
+	if mcCtx, ok := contextHasAPI(); ok {
+		return runConnectionAddViaAPI(mcCtx, flags, &conn)
+	}
+	return runConnectionAddViaDB(flags, &conn)
+}
+
+func runConnectionAddViaAPI(mcCtx *MCContext, flags *connectionFlags, conn *models.Connection) error {
+	client := sdk.New(mcCtx.Server, mcCtx.Token)
+
+	existing, _ := client.GetConnection(flags.Name, flags.Namespace)
+	if existing != nil {
+		conn.ID = existing.ID
+		conn.CreatedAt = existing.CreatedAt
+	} else {
+		conn.ID = uuid.New()
+	}
+
+	if flags.Test {
+		if err := client.SaveConnection(conn); err != nil {
+			return fmt.Errorf("failed to save connection: %w", err)
+		}
+		result, err := client.TestConnection(conn.ID.String())
+		if err != nil {
+			return fmt.Errorf("connection test failed: %w", err)
+		}
+		clicky.MustPrint(result, clicky.Flags.FormatOptions)
+		fmt.Println("\nConnection test passed")
+		return nil
+	}
+
+	if err := client.SaveConnection(conn); err != nil {
+		return fmt.Errorf("failed to save connection: %w", err)
+	}
+
+	action := "created"
+	if existing != nil {
+		action = "updated"
+	}
+	fmt.Printf("Connection '%s' %s in namespace '%s'\n", flags.Name, action, flags.Namespace)
+	return nil
+}
+
+func runConnectionAddViaDB(flags *connectionFlags, conn *models.Connection) error {
 	ctx, stop, err := duty.Start("mission-control", duty.ClientOnly)
 	if err != nil {
 		return err
 	}
 	shutdown.AddHookWithPriority("database", shutdown.PriorityCritical, stop)
 	defer stop()
-
-	conn, err := buildConnectionFromFlags(flags)
-	if err != nil {
-		return fmt.Errorf("failed to build connection: %w", err)
-	}
 
 	var existing models.Connection
 	err = ctx.DB().Where("name = ? AND namespace = ? AND deleted_at IS NULL", flags.Name, flags.Namespace).First(&existing).Error
@@ -395,7 +439,7 @@ func runConnectionAdd(flags *connectionFlags) error {
 	}
 
 	if flags.Test {
-		hydrated, err := ctx.HydrateConnection(&conn)
+		hydrated, err := ctx.HydrateConnection(conn)
 		if err != nil {
 			return fmt.Errorf("failed to hydrate connection: %w", err)
 		}
@@ -408,7 +452,7 @@ func runConnectionAdd(flags *connectionFlags) error {
 		fmt.Println("\nConnection test passed")
 	}
 
-	if err := ctx.DB().Save(&conn).Error; err != nil {
+	if err := ctx.DB().Save(conn).Error; err != nil {
 		return fmt.Errorf("failed to save connection: %w", err)
 	}
 
