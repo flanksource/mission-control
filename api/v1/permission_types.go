@@ -125,7 +125,10 @@ func findNamespacedResource(ctx context.Context, table string, selector string, 
 		return "", "", dutyAPI.Errorf(dutyAPI.EINVALID, "%s is not a valid subject. Must be <namespace>/<name>", selector)
 	}
 
-	namespace, name := splits[0], splits[1]
+	namespace, name := strings.TrimSpace(splits[0]), strings.TrimSpace(splits[1])
+	if namespace == "" || name == "" {
+		return "", "", dutyAPI.Errorf(dutyAPI.EINVALID, "%s is not a valid subject. Must be <namespace>/<name>", selector)
+	}
 	var id string
 	err := query.
 		Where("namespace = ?", namespace).

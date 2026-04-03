@@ -29,7 +29,6 @@ import (
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/playbook"
 	"github.com/flanksource/incident-commander/playbook/sdk"
-	"github.com/flanksource/incident-commander/playbook/testdata"
 )
 
 func waitFor(ctx context.Context, run *models.PlaybookRun, statuses ...models.PlaybookRunStatus) *models.PlaybookRun {
@@ -123,8 +122,6 @@ var _ = ginkgo.Describe("Playbooks", ginkgo.Ordered, func() {
 
 			pb := fixtureToPlaybook(f)
 			Expect(db.PersistPlaybookFromCRD(DefaultContext, &pb)).To(Succeed())
-
-			Expect(testdata.LoadPermissions(DefaultContext))
 
 			fctx := &fixtureContext{
 				Fixture:  &f,
