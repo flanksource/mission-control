@@ -245,6 +245,11 @@ spec:
                           type: array
                       type: object
                     type: array
+                  mcp:
+                    description: |-
+                      MCP sets the global MCP object permission.
+                      When true, no resource selectors or scopes may be specified.
+                    type: boolean
                   playbooks:
                     items:
                       properties:
@@ -329,6 +334,11 @@ spec:
                       type: object
                     type: array
                 type: object
+                x-kubernetes-validations:
+                - message: object.mcp cannot be combined with selectors or scopes
+                  rule: '!(has(self.mcp) && self.mcp && (has(self.configs) || has(self.components)
+                    || has(self.playbooks) || has(self.connections) || has(self.views)
+                    || has(self.scopes)))'
               subject:
                 description: Subject defines the entity (e.g., user, group) to which
                   the permission applies.

@@ -2,6 +2,7 @@ package v1
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 
 	dutyAPI "github.com/flanksource/duty/api"
@@ -214,8 +215,13 @@ func (t *PermissionSubject) Populate(ctx context.Context) (string, models.Permis
 }
 
 // +kubebuilder:object:generate=false
+// +kubebuilder:validation:XValidation:rule="!(has(self.mcp) && self.mcp && (has(self.configs) || has(self.components) || has(self.playbooks) || has(self.connections) || has(self.views) || has(self.scopes)))",message="object.mcp cannot be combined with selectors or scopes"
 type PermissionObject struct {
 	dutyRBAC.Selectors `json:",inline"`
+
+	// MCP sets the global MCP object permission.
+	// When true, no resource selectors or scopes may be specified.
+	MCP bool `json:"mcp,omitempty"`
 
 	// Scopes that is expanded onto Selectors
 	Scopes []dutyRBAC.NamespacedNameIDSelector `json:"scopes,omitempty"`
@@ -230,6 +236,10 @@ type PermissionObject struct {
 //
 // is interpreted as the object: catalog.
 func (t *PermissionObject) GlobalObject() (string, bool) {
+	if t.MCP && !t.HasSelectors() {
+		return policy.ObjectMCP, true
+	}
+
 	switch {
 	case t.isWildcardOnly(t.Playbooks, t.Configs, t.Components, t.Connections) && len(t.Views) == 0:
 		return policy.ObjectPlaybooks, true
@@ -244,6 +254,18 @@ func (t *PermissionObject) GlobalObject() (string, bool) {
 	default:
 		return "", false
 	}
+}
+
+func (t *PermissionObject) HasSelectors() bool {
+	return len(t.Playbooks) > 0 || len(t.Configs) > 0 || len(t.Components) > 0 || len(t.Connections) > 0 || len(t.Views) > 0 || len(t.Scopes) > 0
+}
+
+func (t *PermissionObject) Validate() error {
+	if t.MCP && t.HasSelectors() {
+		return fmt.Errorf("permission object.mcp cannot be combined with selectors or scopes")
+	}
+
+	return nil
 }
 
 func (t *PermissionObject) isWildcardOnly(primary []types.ResourceSelector, others ...[]types.ResourceSelector) bool {

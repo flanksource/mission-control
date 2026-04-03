@@ -2,10 +2,10 @@ package db
 
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
 
 	"github.com/flanksource/duty"
+	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
@@ -21,13 +21,17 @@ func PersistPermissionFromCRD(ctx context.Context, obj *v1.Permission) error {
 
 	subject, subjectType, err := obj.Spec.Subject.Populate(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to populate subject: %w", err)
+		return ctx.Oops(api.EINVALID).Wrapf(err, "failed to populate subject")
 	}
 
 	// Check for deprecated fields and emit warning
 	if len(obj.Spec.Tags) > 0 || len(obj.Spec.Agents) > 0 {
 		ctx.Warnf("Permission %s/%s uses deprecated fields (tags or agents). These fields are ignored. Use Scope CRD instead.",
 			obj.Namespace, obj.Name)
+	}
+
+	if err := obj.Spec.Object.Validate(); err != nil {
+		return ctx.Oops(api.EINVALID).Wrapf(err, "invalid permission object")
 	}
 
 	action := strings.Join(obj.Spec.Actions, ",")
@@ -50,7 +54,7 @@ func PersistPermissionFromCRD(ctx context.Context, obj *v1.Permission) error {
 	} else {
 		selectors, err := json.Marshal(obj.Spec.Object)
 		if err != nil {
-			return fmt.Errorf("failed to marshal object: %w", err)
+			return ctx.Oops(api.EINTERNAL).Wrapf(err, "failed to marshal object")
 		}
 		p.ObjectSelector = selectors
 	}

@@ -237,6 +237,10 @@
           },
           "type": "array"
         },
+        "mcp": {
+          "type": "boolean",
+          "description": "MCP sets the global MCP object permission.\nWhen true, no resource selectors or scopes may be specified."
+        },
         "scopes": {
           "items": {
             "$ref": "#/$defs/NamespacedNameIDSelector"
