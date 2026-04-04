@@ -317,7 +317,7 @@
           "type": "string",
           "description": "Type of the config item (e.g., \"SecurityAudit::Report\")"
         },
-        "configClass": {
+        "config_class": {
           "type": "string",
           "description": "ConfigClass (e.g., \"Report\")"
         },
@@ -353,8 +353,7 @@
       "required": [
         "name",
         "scraper",
-        "type",
-        "configClass"
+        "type"
       ],
       "description": "CatalogAction creates a config item in the catalog."
     },

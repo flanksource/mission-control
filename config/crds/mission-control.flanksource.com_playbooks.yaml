@@ -443,7 +443,7 @@ spec:
                         config:
                           description: Config is the JSON body of the config item
                           type: string
-                        configClass:
+                        config_class:
                           description: ConfigClass (e.g., "Report")
                           type: string
                         health:
@@ -473,7 +473,6 @@ spec:
                           description: Type of the config item (e.g., "SecurityAudit::Report")
                           type: string
                       required:
-                      - configClass
                       - name
                       - scraper
                       - type

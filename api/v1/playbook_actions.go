@@ -664,7 +664,7 @@ type CatalogAction struct {
 	// Type of the config item (e.g., "SecurityAudit::Report")
 	Type string `json:"type" yaml:"type" template:"true"`
 	// ConfigClass (e.g., "Report")
-	ConfigClass string `json:"configClass" yaml:"configClass" template:"true"`
+	ConfigClass string `json:"config_class,omitempty" yaml:"config_class,omitempty" template:"true"`
 	// Config is the JSON body of the config item
 	Config string `json:"config,omitempty" yaml:"config,omitempty" template:"true"`
 	// Health status
