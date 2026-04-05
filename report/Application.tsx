@@ -29,7 +29,7 @@ function PageFooter() {
   );
 }
 
-function CoverPage({ app }: { app: Application }) {
+function CoverContent({ app }: { app: Application }) {
   const date = new Date().toLocaleDateString('en-US', {
     year: 'numeric', month: 'long', day: 'numeric'
   });
@@ -82,7 +82,7 @@ export default function ApplicationReport({ data }: ApplicationReportProps) {
     <>
       {/* Cover page — no header/footer */}
       <Page pageSize="a4" margins={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-        <CoverPage app={data} />
+        <CoverContent app={data} />
       </Page>
 
       <PageBreak />

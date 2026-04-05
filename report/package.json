@@ -9,7 +9,7 @@
     "mission-control": "npm run pdf"
   },
   "dependencies": {
-    "@flanksource/facet": "^0.1.30",
+    "@flanksource/facet": "file:/Users/moshe/go/src/github.com/flanksource/facet",
     "@flanksource/icons": "^1.0.53",
     "js-yaml": "^4.1.0"
   },

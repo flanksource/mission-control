@@ -27,7 +27,7 @@ function PageFooter() {
   );
 }
 
-function CoverPage({ data }: { data: ViewReportData }) {
+function CoverContent({ data }: { data: ViewReportData }) {
   const date = new Date().toLocaleDateString('en-US', {
     year: 'numeric', month: 'long', day: 'numeric',
   });
@@ -90,7 +90,7 @@ export default function ViewReportPage({ data }: ViewReportProps) {
   return (
     <>
       <Page pageSize="a4" margins={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-        <CoverPage data={firstView} />
+        <CoverContent data={firstView} />
       </Page>
 
       {viewsList.map((view, idx) => (
