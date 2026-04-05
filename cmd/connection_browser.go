@@ -243,12 +243,15 @@ func launchBrowserAndCapture(ctx gocontext.Context, flags browserLoginFlags) (*b
 }
 
 func waitForLoginComplete(browserCtx gocontext.Context, flags browserLoginFlags) {
-	doneCh := make(chan struct{}, 1)
+	doneCh := make(chan struct{}, 3)
 
 	go func() {
 		reader := bufio.NewReader(os.Stdin)
 		_, _ = reader.ReadString('\n')
-		doneCh <- struct{}{}
+		select {
+		case doneCh <- struct{}{}:
+		default:
+		}
 	}()
 
 	if flags.WaitForURL != "" {
@@ -375,7 +378,6 @@ func saveConnection(cmd *cobra.Command, flags browserLoginFlags, data *browserSe
 		return err
 	}
 	shutdown.AddHookWithPriority("database", shutdown.PriorityCritical, stop)
-	defer stop()
 
 	props := make(map[string]string)
 
@@ -401,6 +403,13 @@ func saveConnection(cmd *cobra.Command, flags browserLoginFlags, data *browserSe
 		return fmt.Errorf("failed to marshal storage state: %w", err)
 	}
 	props["storageState"] = string(storageJSON)
+
+	if len(data.SessionStorage) > 0 {
+		sessionJSON, err := json.Marshal(data.SessionStorage)
+		if err == nil {
+			props["sessionStorage"] = string(sessionJSON)
+		}
+	}
 
 	// Also store cookies as headers for HTTP connection compatibility
 	if len(data.Cookies) > 0 {
@@ -492,7 +501,6 @@ func runBrowserTest(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	shutdown.AddHookWithPriority("database", shutdown.PriorityCritical, stop)
-	defer stop()
 
 	verbose := clicky.Flags.LevelCount
 

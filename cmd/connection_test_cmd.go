@@ -72,7 +72,6 @@ func runConnectionTestFromDB(name, namespace string, overrides *connectionFlags)
 		return nil, err
 	}
 	shutdown.AddHookWithPriority("database", shutdown.PriorityCritical, stop)
-	defer stop()
 
 	var conn models.Connection
 	if err := ctx.DB().Where("name = ? AND namespace = ? AND deleted_at IS NULL", name, namespace).First(&conn).Error; err != nil {

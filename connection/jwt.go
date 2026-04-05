@@ -85,6 +85,10 @@ func DecodeJWT(token string) *JWT {
 	j := &JWT{Raw: token}
 	if v, ok := claims["aud"].(string); ok {
 		j.Audience = v
+	} else if arr, ok := claims["aud"].([]any); ok && len(arr) > 0 {
+		if s, ok := arr[0].(string); ok {
+			j.Audience = s
+		}
 	}
 	if v, ok := claims["sub"].(string); ok {
 		j.Subject = v
