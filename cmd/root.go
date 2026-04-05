@@ -59,6 +59,7 @@ var Root = &cobra.Command{
 		}
 		dutyApi.DefaultConfig.SkipMigrationFiles = []string{"012_changelog.sql"}
 		dutyApi.DefaultConfig = dutyApi.DefaultConfig.ReadEnv()
+		applyContext()
 	},
 }
 
@@ -123,6 +124,20 @@ func ServerFlags(flags *pflag.FlagSet) {
 	flags.StringVar(&api.UpstreamConf.AgentName, "upstream-agent-name", os.Getenv("AGENT_NAME"), "name of the cluster")
 	flags.StringSliceVar(&api.UpstreamConf.Labels, "upstream-labels", strings.Split(os.Getenv("UPSTREAM_LABELS"), ","), `labels in the format: "key1=value1,key2=value2"`)
 	flags.IntVar(&jobs.ReconcilePageSize, "upstream-page-size", upstreamPageSizeDefault, "upstream reconciliation page size")
+}
+
+func applyContext() {
+	cfg, err := LoadConfig()
+	if err != nil {
+		return
+	}
+	ctx := cfg.CurrentMCContext()
+	if ctx == nil {
+		return
+	}
+	if ctx.DB != "" && dutyApi.DefaultConfig.ConnectionString == "" {
+		dutyApi.DefaultConfig.ConnectionString = ctx.DB
+	}
 }
 
 func init() {

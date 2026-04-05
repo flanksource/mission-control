@@ -140,6 +140,10 @@ func runAuthLogin(cmd *cobra.Command, _ []string) error {
 		return fmt.Errorf("failed to save tokens: %w", err)
 	}
 
+	if err := saveContextFromLogin(serverURL, tokens.AccessToken); err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Warning: failed to save context: %v\n", err)
+	}
+
 	fmt.Fprintf(cmd.OutOrStdout(), "\nLogin successful!\n\n")
 	fmt.Fprintf(cmd.OutOrStdout(), "Tokens saved to: %s\n\n", tokenPath)
 
@@ -153,6 +157,27 @@ func runAuthLogin(cmd *cobra.Command, _ []string) error {
 	}
 
 	return nil
+}
+
+func saveContextFromLogin(serverURL, accessToken string) error {
+	cfg, err := LoadConfig()
+	if err != nil {
+		return err
+	}
+	name := ServerToContextName(serverURL)
+	existing := cfg.GetContext(name)
+	ctx := MCContext{
+		Name:   name,
+		Server: serverURL,
+		Token:  accessToken,
+	}
+	if existing != nil {
+		ctx.DB = existing.DB
+		ctx.Properties = existing.Properties
+	}
+	cfg.SetContext(ctx)
+	cfg.CurrentContext = name
+	return SaveConfig(cfg)
 }
 
 func storeTokens(serverURL string, tokens *oidcclient.Tokens) (string, error) {
