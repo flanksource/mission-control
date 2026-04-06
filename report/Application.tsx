@@ -8,10 +8,11 @@ import BackupsSection from './components/BackupsSection.tsx';
 import FindingsSection from './components/FindingsSection.tsx';
 import LocationsSection from './components/LocationsSection.tsx';
 import DynamicSection from './components/DynamicSection.tsx';
+import CoverPage from './components/CoverPage.tsx';
 
 function PageHeader({ app }: { app: Application }) {
   return (
-    <div className="flex items-center justify-between px-[10mm] py-[2mm] bg-[#1e293b] text-white text-[9pt]">
+    <div className="flex items-center justify-between px-[10mm] py-[2mm] bg-[#1e293b] text-white text-sm">
       <span className="font-semibold">{app.name}</span>
       <span className="text-gray-300">Application Report</span>
     </div>
@@ -23,42 +24,20 @@ function PageFooter() {
     year: 'numeric', month: 'long', day: 'numeric'
   });
   return (
-    <div className="flex items-center justify-between px-[10mm] py-[2mm] border-t border-gray-200 text-[8pt] text-gray-400">
+    <div className="flex items-center justify-between px-[10mm] py-[2mm] border-t border-gray-200 text-sm text-gray-400">
       <span>Generated {date}</span>
     </div>
   );
 }
 
-function CoverContent({ app }: { app: Application }) {
-  const date = new Date().toLocaleDateString('en-US', {
-    year: 'numeric', month: 'long', day: 'numeric'
-  });
+function AppCoverPage({ app }: { app: Application }) {
   return (
-    <div className="flex flex-col justify-center items-center h-full min-h-[200mm] text-center px-[20mm]">
-      <div className="mb-[8mm]">
-        <div className="text-[8pt] font-medium text-blue-600 uppercase tracking-widest mb-[3mm]">
-          Application Report
-        </div>
-        <h1 className="text-[36pt] font-bold text-slate-900 leading-tight mb-[4mm]">
-          {app.name}
-        </h1>
-        <div className="text-[14pt] text-gray-500 mb-[8mm]">
-          {app.type} · <span className="font-mono text-[12pt]">{app.namespace}</span>
-        </div>
-        {app.description && (
-          <p className="text-[11pt] text-gray-600 max-w-[120mm] mx-auto mb-[8mm]">
-            {app.description}
-          </p>
-        )}
-      </div>
-      <div
-        className="w-[40mm] h-[1px] mb-[8mm]"
-        style={{ backgroundColor: '#2563EB' }}
-      />
-      <div className="text-[10pt] text-gray-400">
-        Generated on {date}
-      </div>
-    </div>
+    <CoverPage
+      title={app.name}
+      subtitle="Application Report"
+      query={app.namespace ? `${app.type} · ${app.namespace}` : undefined}
+      subjects={app.description ? [{ name: app.name, description: app.description }] : undefined}
+    />
   );
 }
 
@@ -82,7 +61,7 @@ export default function ApplicationReport({ data }: ApplicationReportProps) {
     <>
       {/* Cover page — no header/footer */}
       <Page pageSize="a4" margins={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-        <CoverContent app={data} />
+        <AppCoverPage app={data} />
       </Page>
 
       <PageBreak />
