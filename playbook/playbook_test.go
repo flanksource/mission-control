@@ -18,8 +18,8 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
-	"github.com/flanksource/duty/types"
 	"github.com/flanksource/duty/tests/setup"
+	"github.com/flanksource/duty/types"
 	"github.com/flanksource/duty/upstream"
 	"github.com/google/uuid"
 	. "github.com/onsi/ginkgo/v2"
@@ -127,6 +127,9 @@ var _ = Describe("Playbook", Ordered, func() {
 				ConfigClass: "IAMPolicy",
 				Type:        lo.ToPtr("AWS::IAM::Policy"),
 				Config:      lo.ToPtr(`{"PolicyName":"AdminAccess","Effect":"Allow","Action":"*","Resource":"*"}`),
+				// cluster=aws tag is required to match the RBAC permission in allow-playbook.yaml
+				// that grants JohnDoe playbook:run access on configs with tagSelector cluster=aws
+				Tags: types.JSONStringMap{"cluster": "aws"},
 			}
 			err := DefaultContext.DB().Create(&configItem).Error
 			Expect(err).To(BeNil())
