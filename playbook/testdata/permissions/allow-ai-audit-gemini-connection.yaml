@@ -1,0 +1,14 @@
+apiVersion: mission-control.flanksource.com/v1
+kind: Permission
+metadata:
+  name: allow-ai-audit-gemini
+spec:
+  description: allow playbook default/ai-audit-catalog to read connection default/gemini
+  subject:
+    playbook: default/ai-audit-catalog
+  actions:
+    - read
+  object:
+    connections:
+      - name: gemini
+        namespace: default

@@ -203,6 +203,8 @@ var _ = Describe("Playbook", Ordered, func() {
 		})
 
 		AfterAll(func() {
+			// Delete in FK-safe order: runs referencing config_id → changes → config items
+			DefaultContext.DB().Where("config_id = ?", testConfigID).Delete(&models.PlaybookRun{})
 			DefaultContext.DB().Delete(&models.ConfigChange{}, "config_id = ?", testConfigID.String())
 			DefaultContext.DB().Delete(&models.ConfigItem{}, "id = ?", testConfigID)
 			DefaultContext.DB().Where("type = ? AND tags->>'generated-by' = ?", "SecurityAudit::Finding", "ai-audit-test").Delete(&models.ConfigItem{})
