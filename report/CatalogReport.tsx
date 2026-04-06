@@ -75,7 +75,7 @@ function CoverPage({ data }: { data: CatalogReportData }) {
 
       {(data.from || data.to) && (
         <div className="text-xs text-gray-500 mt-[2mm]">
-          Period: {data.from ? formatDate(data.from) : '...'} – {data.to ? formatDate(data.to) : 'now'}
+          Period: {formatDate(data.from || data.generatedAt)} – {formatDate(data.to || data.generatedAt)}
         </div>
       )}
 
