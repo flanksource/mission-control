@@ -72,13 +72,16 @@
           "type": "array",
           "description": "Output format of the prompt.\nSupported: markdown (default), slack, recommendPlaybook"
         },
-        "skill": {
-          "$ref": "#/$defs/AISkill",
-          "description": "Skill references a reusable skill file from a git repository.\nThe skill file content is prepended to the system prompt."
+        "skills": {
+          "items": {
+            "$ref": "#/$defs/AISkill"
+          },
+          "type": "array",
+          "description": "Skills references reusable skill files from git repositories.\nEach skill file's content is prepended to the system prompt.\nIf any skill has JsonSchemaPath set, that schema is used for output validation."
         },
         "outputSchema": {
-          "$ref": "#/$defs/EnvVar",
-          "description": "OutputSchema is a JSON schema that the AI response must conform to.\nCan be inline (value) or from a configMap/secret (valueFrom)."
+          "$ref": "#/$defs/AIOutputSchema",
+          "description": "OutputSchema is a JSON schema that the AI response must conform to.\nCan be inline (value), from a configMap/secret (valueFrom), or from a git repo (git)."
         }
       },
       "additionalProperties": false,
@@ -87,6 +90,49 @@
         "systemPrompt",
         "prompt"
       ]
+    },
+    "AIOutputSchema": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        },
+        "valueFrom": {
+          "$ref": "#/$defs/EnvVarSource"
+        },
+        "git": {
+          "$ref": "#/$defs/AIOutputSchemaGit",
+          "description": "Git connection reference for fetching the schema from a repository"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "AIOutputSchema specifies a JSON schema for structured AI output.\nSupports inline value, configMap/secret reference, or a git repository path."
+    },
+    "AIOutputSchemaGit": {
+      "properties": {
+        "connection": {
+          "type": "string",
+          "description": "Git connection reference (e.g., \"connection://github/my-org\")"
+        },
+        "path": {
+          "type": "string",
+          "description": "Path to the JSON schema file in the repo"
+        },
+        "branch": {
+          "type": "string",
+          "description": "Branch or tag to checkout (optional, defaults to the repo's default branch)"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "connection",
+        "path"
+      ],
+      "description": "AIOutputSchemaGit references a JSON schema file in a git repository."
     },
     "AISkill": {
       "properties": {
@@ -101,6 +147,10 @@
         "branch": {
           "type": "string",
           "description": "Branch or tag to checkout (optional, defaults to the repo's default branch)"
+        },
+        "jsonSchemaPath": {
+          "type": "string",
+          "description": "JsonSchemaPath is the path to a JSON schema file in the repo.\nIf set, the AI response must conform to this schema (takes precedence over inline OutputSchema)."
         }
       },
       "additionalProperties": false,

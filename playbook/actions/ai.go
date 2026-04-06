@@ -127,13 +127,20 @@ type childRunResultContext struct {
 func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, error) {
 	var result AIActionResult
 
-	// Load skill file content and prepend to system prompt
-	if spec.Skill != nil {
-		skillContent, err := loadSkill(ctx, *spec.Skill)
+	// Load skill files and prepend to system prompt.
+	// If any skill has a JsonSchemaPath, use it as the output schema.
+	for i, skill := range spec.Skills {
+		skillContent, schemaContent, err := loadSkill(ctx, skill)
 		if err != nil {
-			return nil, fmt.Errorf("failed to load skill: %w", err)
+			return nil, fmt.Errorf("failed to load skill[%d]: %w", i, err)
 		}
 		spec.SystemPrompt = skillContent + "\n\n" + spec.SystemPrompt
+
+		if schemaContent != "" {
+			spec.OutputSchema = &v1.AIOutputSchema{
+				EnvVar: types.EnvVar{ValueStatic: schemaContent},
+			}
+		}
 	}
 
 	knowledgebase, prompt, err := buildPrompt(ctx, spec.Prompt, spec.LLMContextRequest)
@@ -201,14 +208,16 @@ func (t *aiAction) Run(ctx context.Context, spec v1.AIAction) (*AIActionResult, 
 
 	// Resolve custom output schema if provided
 	customSchema := false
-	if spec.OutputSchema != nil && !spec.OutputSchema.IsEmpty() {
-		schemaValue, err := ctx.GetEnvValueFromCache(*spec.OutputSchema, ctx.GetNamespace())
+	if spec.OutputSchema != nil {
+		schemaValue, err := resolveOutputSchema(ctx, *spec.OutputSchema)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve output schema: %w", err)
 		}
-		llmConf.ResponseFormat = llm.ResponseFormatCustomSchema
-		llmConf.CustomSchema = schemaValue
-		customSchema = true
+		if schemaValue != "" {
+			llmConf.ResponseFormat = llm.ResponseFormatCustomSchema
+			llmConf.CustomSchema = schemaValue
+			customSchema = true
+		}
 	}
 
 	response, conversation, genInfo, err := llm.Prompt(ctx, llmConf, spec.SystemPrompt, prompt...)
@@ -464,13 +473,36 @@ func getChildRunsResults(ctx context.Context, childRuns []models.PlaybookRun) ([
 	return childRunResults, nil
 }
 
-// loadSkill clones a git repository using the provided connection and reads the skill file.
-func loadSkill(ctx context.Context, skill v1.AISkill) (string, error) {
-	conn, err := pkgConnection.Get(ctx, skill.Connection)
+// resolveOutputSchema resolves the JSON schema from either an inline EnvVar or a git repo.
+func resolveOutputSchema(ctx context.Context, schema v1.AIOutputSchema) (string, error) {
+	// Git connection takes precedence
+	if schema.Git != nil {
+		content, err := loadFileFromGit(ctx, schema.Git.Connection, schema.Git.Path, schema.Git.Branch)
+		if err != nil {
+			return "", fmt.Errorf("failed to load output schema from git: %w", err)
+		}
+		return content, nil
+	}
+
+	// Fall back to inline EnvVar (static value, configMapKeyRef, secretKeyRef)
+	if !schema.EnvVar.IsEmpty() {
+		value, err := ctx.GetEnvValueFromCache(schema.EnvVar, ctx.GetNamespace())
+		if err != nil {
+			return "", err
+		}
+		return value, nil
+	}
+
+	return "", nil
+}
+
+// cloneGitRepo resolves a git connection and clones the repo, returning the worktree root path.
+func cloneGitRepo(ctx context.Context, connectionRef, branch string) (string, error) {
+	conn, err := pkgConnection.Get(ctx, connectionRef)
 	if err != nil {
-		return "", fmt.Errorf("failed to get git connection %q: %w", skill.Connection, err)
+		return "", fmt.Errorf("failed to get git connection %q: %w", connectionRef, err)
 	} else if conn == nil {
-		return "", fmt.Errorf("git connection %q not found", skill.Connection)
+		return "", fmt.Errorf("git connection %q not found", connectionRef)
 	}
 
 	spec := &connectors.GitopsAPISpec{
@@ -479,9 +511,9 @@ func loadSkill(ctx context.Context, skill v1.AISkill) (string, error) {
 		Branch:     "main",
 	}
 
-	if skill.Branch != "" {
-		spec.Base = skill.Branch
-		spec.Branch = skill.Branch
+	if branch != "" {
+		spec.Base = branch
+		spec.Branch = branch
 	}
 
 	switch conn.Type {
@@ -496,18 +528,54 @@ func loadSkill(ctx context.Context, skill v1.AISkill) (string, error) {
 		spec.SSHPrivateKey = conn.Certificate
 		spec.SSHPrivateKeyPassword = conn.Password
 	default:
-		return "", fmt.Errorf("unsupported connection type %q for skill", conn.Type)
+		return "", fmt.Errorf("unsupported connection type %q", conn.Type)
 	}
 
 	_, workTree, err := git.Clone(ctx, spec)
 	if err != nil {
-		return "", fmt.Errorf("failed to clone skill repository: %w", err)
+		return "", fmt.Errorf("failed to clone repository: %w", err)
 	}
 
-	content, err := os.ReadFile(filepath.Join(workTree.Filesystem.Root(), skill.Path))
+	return workTree.Filesystem.Root(), nil
+}
+
+// loadFileFromGit clones a git repo and reads a file at the given path.
+func loadFileFromGit(ctx context.Context, connectionRef, filePath, branch string) (string, error) {
+	root, err := cloneGitRepo(ctx, connectionRef, branch)
 	if err != nil {
-		return "", fmt.Errorf("failed to read skill file %q: %w", skill.Path, err)
+		return "", err
+	}
+
+	content, err := os.ReadFile(filepath.Join(root, filePath))
+	if err != nil {
+		return "", fmt.Errorf("failed to read file %q: %w", filePath, err)
 	}
 
 	return string(content), nil
+}
+
+// loadSkill clones a git repository using the provided connection, reads the skill file,
+// and optionally reads the JSON schema file if JsonSchemaPath is set.
+// Returns (skillContent, schemaContent, error).
+func loadSkill(ctx context.Context, skill v1.AISkill) (string, string, error) {
+	root, err := cloneGitRepo(ctx, skill.Connection, skill.Branch)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to clone skill repository: %w", err)
+	}
+
+	content, err := os.ReadFile(filepath.Join(root, skill.Path))
+	if err != nil {
+		return "", "", fmt.Errorf("failed to read skill file %q: %w", skill.Path, err)
+	}
+
+	var schemaContent string
+	if skill.JsonSchemaPath != "" {
+		schema, err := os.ReadFile(filepath.Join(root, skill.JsonSchemaPath))
+		if err != nil {
+			return "", "", fmt.Errorf("failed to read json schema file %q: %w", skill.JsonSchemaPath, err)
+		}
+		schemaContent = string(schema)
+	}
+
+	return string(content), schemaContent, nil
 }

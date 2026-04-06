@@ -358,6 +358,25 @@ const (
 	AIActionFormatRecommendPlaybook AIActionFormat = "recommendPlaybook"
 )
 
+// AIOutputSchema specifies a JSON schema for structured AI output.
+// Supports inline value, configMap/secret reference, or a git repository path.
+type AIOutputSchema struct {
+	// Inline schema or reference to a configMap/secret containing the schema
+	types.EnvVar `json:",inline" yaml:",inline"`
+	// Git connection reference for fetching the schema from a repository
+	Git *AIOutputSchemaGit `json:"git,omitempty" yaml:"git,omitempty"`
+}
+
+// AIOutputSchemaGit references a JSON schema file in a git repository.
+type AIOutputSchemaGit struct {
+	// Git connection reference (e.g., "connection://github/my-org")
+	Connection string `json:"connection" yaml:"connection"`
+	// Path to the JSON schema file in the repo
+	Path string `json:"path" yaml:"path"`
+	// Branch or tag to checkout (optional, defaults to the repo's default branch)
+	Branch string `json:"branch,omitempty" yaml:"branch,omitempty"`
+}
+
 // AISkill references a skill file in a git repository.
 // The repo is cloned at execution time and the skill file content is
 // prepended to the system prompt.
@@ -368,6 +387,9 @@ type AISkill struct {
 	Path string `json:"path" yaml:"path"`
 	// Branch or tag to checkout (optional, defaults to the repo's default branch)
 	Branch string `json:"branch,omitempty" yaml:"branch,omitempty"`
+	// JsonSchemaPath is the path to a JSON schema file in the repo.
+	// If set, the AI response must conform to this schema (takes precedence over inline OutputSchema).
+	JsonSchemaPath string `json:"jsonSchemaPath,omitempty" yaml:"jsonSchemaPath,omitempty"`
 }
 
 type AIAction struct {
@@ -394,13 +416,14 @@ type AIAction struct {
 	// Supported: markdown (default), slack, recommendPlaybook
 	Formats []AIActionFormat `json:"formats,omitempty"`
 
-	// Skill references a reusable skill file from a git repository.
-	// The skill file content is prepended to the system prompt.
-	Skill *AISkill `json:"skill,omitempty" yaml:"skill,omitempty"`
+	// Skills references reusable skill files from git repositories.
+	// Each skill file's content is prepended to the system prompt.
+	// If any skill has JsonSchemaPath set, that schema is used for output validation.
+	Skills []AISkill `json:"skills,omitempty" yaml:"skills,omitempty"`
 
 	// OutputSchema is a JSON schema that the AI response must conform to.
-	// Can be inline (value) or from a configMap/secret (valueFrom).
-	OutputSchema *types.EnvVar `json:"outputSchema,omitempty" yaml:"outputSchema,omitempty"`
+	// Can be inline (value), from a configMap/secret (valueFrom), or from a git repo (git).
+	OutputSchema *AIOutputSchema `json:"outputSchema,omitempty" yaml:"outputSchema,omitempty"`
 }
 
 type ExecAction struct {
