@@ -18,6 +18,7 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
+	"github.com/flanksource/duty/types"
 	"github.com/flanksource/duty/tests/setup"
 	"github.com/flanksource/duty/upstream"
 	"github.com/google/uuid"
@@ -111,6 +112,164 @@ var _ = Describe("Playbook", Ordered, func() {
 				Expect(jsonResult).To(HaveKey("summary"))
 				Expect(jsonResult).To(HaveKey("recommended_fix"))
 			})
+		})
+	})
+
+	var _ = Describe("AI Catalog", Ordered, Label("ignore_local"), func() {
+		var testConfigID uuid.UUID
+
+		BeforeAll(func() {
+			// Create a config item representing an IAM policy
+			testConfigID = uuid.New()
+			configItem := models.ConfigItem{
+				ID:          testConfigID,
+				Name:        lo.ToPtr("production-admin-policy"),
+				ConfigClass: "IAMPolicy",
+				Type:        lo.ToPtr("AWS::IAM::Policy"),
+				Config:      lo.ToPtr(`{"PolicyName":"AdminAccess","Effect":"Allow","Action":"*","Resource":"*"}`),
+			}
+			err := DefaultContext.DB().Create(&configItem).Error
+			Expect(err).To(BeNil())
+
+			// Create config changes with varying severities simulating security-related access events
+			now := time.Now()
+			changes := []models.ConfigChange{
+				{
+					ConfigID:   testConfigID.String(),
+					ChangeType: "PolicyAttached",
+					Severity:   models.SeverityCritical,
+					Source:     "Cloudtrail",
+					Summary:    "Wildcard admin policy attached to new IAM role developer-temp",
+					Details:    types.JSON(`{"principal":"arn:aws:iam::123456:role/developer-temp","action":"iam:AttachRolePolicy"}`),
+					CreatedAt:  lo.ToPtr(now.Add(-time.Hour * 2)),
+					Count:      1,
+				},
+				{
+					ConfigID:   testConfigID.String(),
+					ChangeType: "PermissionEscalation",
+					Severity:   models.SeverityHigh,
+					Source:     "Cloudtrail",
+					Summary:    "IAM user escalated own permissions by attaching AdministratorAccess policy",
+					Details:    types.JSON(`{"principal":"arn:aws:iam::123456:user/jsmith","action":"iam:AttachUserPolicy"}`),
+					CreatedAt:  lo.ToPtr(now.Add(-time.Hour * 6)),
+					Count:      1,
+				},
+				{
+					ConfigID:   testConfigID.String(),
+					ChangeType: "UnusedAccess",
+					Severity:   models.SeverityMedium,
+					Source:     "AccessAnalyzer",
+					Summary:    "Service role has not been used in 90 days but retains admin privileges",
+					Details:    types.JSON(`{"principal":"arn:aws:iam::123456:role/legacy-service","lastUsed":"2025-01-01T00:00:00Z"}`),
+					CreatedAt:  lo.ToPtr(now.Add(-time.Hour * 12)),
+					Count:      1,
+				},
+				{
+					ConfigID:   testConfigID.String(),
+					ChangeType: "MFADisabled",
+					Severity:   models.SeverityHigh,
+					Source:     "Cloudtrail",
+					Summary:    "MFA device deactivated for root account",
+					Details:    types.JSON(`{"principal":"arn:aws:iam::123456:root","action":"iam:DeactivateMFADevice"}`),
+					CreatedAt:  lo.ToPtr(now.Add(-time.Hour * 1)),
+					Count:      1,
+				},
+				{
+					ConfigID:   testConfigID.String(),
+					ChangeType: "AccessKeyRotation",
+					Severity:   models.SeverityLow,
+					Source:     "AccessAnalyzer",
+					Summary:    "Access key older than 90 days detected for service account",
+					Details:    types.JSON(`{"principal":"arn:aws:iam::123456:user/ci-deploy","keyAge":"127d"}`),
+					CreatedAt:  lo.ToPtr(now.Add(-time.Hour * 24)),
+					Count:      1,
+				},
+				{
+					ConfigID:   testConfigID.String(),
+					ChangeType: "PublicAccess",
+					Severity:   models.SeverityCritical,
+					Source:     "Cloudtrail",
+					Summary:    "S3 bucket policy changed to allow public access",
+					Details:    types.JSON(`{"resource":"arn:aws:s3:::prod-data-bucket","action":"s3:PutBucketPolicy","effect":"Allow","principal":"*"}`),
+					CreatedAt:  lo.ToPtr(now.Add(-time.Hour * 3)),
+					Count:      1,
+				},
+			}
+			err = DefaultContext.DB().Create(&changes).Error
+			Expect(err).To(BeNil())
+		})
+
+		AfterAll(func() {
+			DefaultContext.DB().Delete(&models.ConfigChange{}, "config_id = ?", testConfigID.String())
+			DefaultContext.DB().Delete(&models.ConfigItem{}, "id = ?", testConfigID)
+			DefaultContext.DB().Where("type = ? AND tags->>'generated-by' = ?", "SecurityAudit::Finding", "ai-audit-test").Delete(&models.ConfigItem{})
+		})
+
+		It("should run AI audit and create catalog item with valid schema", func() {
+			run := createAndRun(DefaultContext.WithUser(&dummy.JohnDoe), "action-ai-catalog", RunParams{
+				ConfigID: lo.ToPtr(testConfigID),
+			}, models.PlaybookRunStatusCompleted)
+
+			var runActions []models.PlaybookRunAction
+			err := DefaultContext.DB().Where("playbook_run_id = ?", run.ID).Order("start_time").Find(&runActions).Error
+			Expect(err).To(BeNil())
+			Expect(runActions).To(HaveLen(2))
+
+			// Verify AI action completed
+			Expect(runActions[0].Name).To(Equal("audit"))
+			Expect(runActions[0].Status).To(Equal(models.PlaybookActionStatusCompleted))
+			Expect(runActions[0].Result).To(HaveKey("json"))
+
+			// Verify the AI response matches the output schema
+			aiJSON := runActions[0].Result["json"].(string)
+			var findings map[string]any
+			err = json.Unmarshal([]byte(aiJSON), &findings)
+			Expect(err).To(BeNil(), "AI response should be valid JSON")
+			Expect(findings).To(HaveKey("title"))
+			Expect(findings).To(HaveKey("summary"))
+			Expect(findings).To(HaveKey("findings"))
+			Expect(findings).To(HaveKey("totalFindings"))
+
+			findingsArr, ok := findings["findings"].([]any)
+			Expect(ok).To(BeTrue(), "findings should be an array")
+			Expect(len(findingsArr)).To(BeNumerically(">", 0), "should have at least one finding")
+
+			// Verify each finding has required fields
+			for i, f := range findingsArr {
+				finding, ok := f.(map[string]any)
+				Expect(ok).To(BeTrue(), "finding[%d] should be an object", i)
+				Expect(finding).To(HaveKey("severity"), "finding[%d] missing severity", i)
+				Expect(finding).To(HaveKey("title"), "finding[%d] missing title", i)
+				Expect(finding).To(HaveKey("description"), "finding[%d] missing description", i)
+				Expect(finding).To(HaveKey("resource"), "finding[%d] missing resource", i)
+				Expect(finding).To(HaveKey("recommendation"), "finding[%d] missing recommendation", i)
+			}
+
+			// Verify catalog action completed and created the config item
+			Expect(runActions[1].Name).To(Equal("save"))
+			Expect(runActions[1].Status).To(Equal(models.PlaybookActionStatusCompleted))
+
+			// Verify the catalog config item was created in the DB
+			var catalogItem models.ConfigItem
+			err = DefaultContext.DB().
+				Where("type = ? AND tags->>'generated-by' = ?", "SecurityAudit::Finding", "ai-audit-test").
+				First(&catalogItem).Error
+			Expect(err).To(BeNil(), "catalog config item should exist")
+			Expect(*catalogItem.Type).To(Equal("SecurityAudit::Finding"))
+			Expect(catalogItem.ConfigClass).To(Equal("SecurityAudit"))
+
+			// Verify the config item's config field matches the AI output schema
+			Expect(catalogItem.Config).ToNot(BeNil())
+			var catalogConfig map[string]any
+			err = json.Unmarshal([]byte(*catalogItem.Config), &catalogConfig)
+			Expect(err).To(BeNil(), "catalog config should be valid JSON")
+			Expect(catalogConfig).To(HaveKey("title"))
+			Expect(catalogConfig).To(HaveKey("summary"))
+			Expect(catalogConfig).To(HaveKey("findings"))
+			Expect(catalogConfig).To(HaveKey("totalFindings"))
+
+			// Verify the catalog config matches the AI output
+			Expect(*catalogItem.Config).To(Equal(aiJSON))
 		})
 	})
 
