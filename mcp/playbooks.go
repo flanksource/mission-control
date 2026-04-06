@@ -10,6 +10,8 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
+	"github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	"github.com/invopop/jsonschema"
@@ -40,7 +42,7 @@ func addPlaybooksAsTool(goctx gocontext.Context, srv *server.MCPServer, session 
 
 	ctx, err := getDutyCtx(goctx)
 	if err != nil {
-		return ctx.Oops().Wrapf(err, "failed to get duty context for session %s", sessionID)
+		return fmt.Errorf("failed to get duty context for session %s: %w", sessionID, err)
 	}
 
 	var playbooks []models.Playbook
@@ -52,6 +54,16 @@ func addPlaybooksAsTool(goctx gocontext.Context, srv *server.MCPServer, session 
 	if err != nil {
 		return ctx.Oops().Wrapf(err, "failed to get playbook tools for session %s", sessionID)
 	}
+
+	owner, err := resolveOwner(ctx)
+	if err != nil {
+		return ctx.Oops().Wrap(err)
+	}
+
+	playbooks = lo.Filter(playbooks, func(pb models.Playbook, _ int) bool {
+		attr := &models.ABACAttribute{Playbook: pb}
+		return rbac.HasPermission(ctx, owner, attr, policy.ActionMCPRun)
+	})
 
 	tools, err := getPlaybooksAsTools(playbooks)
 	if err != nil {
@@ -154,6 +166,19 @@ func playbookRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.
 
 		return nil
 	})
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	owner, err := resolveOwner(ctx)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	attr := &models.ABACAttribute{Playbook: *pb}
+	if !rbac.HasPermission(ctx, owner, attr, policy.ActionMCPRun) {
+		return mcp.NewToolResultError(fmt.Sprintf("forbidden: mcp:run not permitted on playbook %s", pb.NamespacedName())), nil
+	}
 
 	params := req.GetArguments()
 	pj, err := json.Marshal(params)
