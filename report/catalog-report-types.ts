@@ -1,4 +1,5 @@
 import type { ConfigChange, ConfigAnalysis, ConfigRelationship, ConfigItem } from './config-types.ts';
+import type { RBACResource } from './rbac-types.ts';
 
 export interface CatalogReportSections {
   changes: boolean;
@@ -10,6 +11,10 @@ export interface CatalogReportSections {
 }
 
 export interface CatalogReportAccess {
+  configId?: string;
+  configName?: string;
+  configType?: string;
+  permalink?: string;
   userId: string;
   userName: string;
   email: string;
@@ -21,6 +26,8 @@ export interface CatalogReportAccess {
 }
 
 export interface CatalogReportAccessLog {
+  configId?: string;
+  permalink?: string;
   userId: string;
   userName: string;
   configName: string;
@@ -31,9 +38,28 @@ export interface CatalogReportAccessLog {
   properties?: Record<string, string>;
 }
 
+export interface CatalogReportTreeNode extends ConfigItem {
+  edgeType?: 'parent' | 'child' | 'related' | 'target';
+  relation?: string;
+  permalink?: string;
+  children?: CatalogReportTreeNode[];
+}
+
+export interface CatalogReportConfigGroup {
+  configItem: ConfigItem;
+  changes: ConfigChange[];
+  analyses: ConfigAnalysis[];
+  access: CatalogReportAccess[];
+  accessLogs: CatalogReportAccessLog[];
+}
+
 export interface CatalogReportData {
   title: string;
   generatedAt: string;
+  from?: string;
+  to?: string;
+  recursive?: boolean;
+  groupBy?: string;
   configItem: ConfigItem & {
     config?: string;
     name: string;
@@ -58,4 +84,21 @@ export interface CatalogReportData {
   access: CatalogReportAccess[];
   accessLogs: CatalogReportAccessLog[];
   configJSON?: string;
+  configGroups?: CatalogReportConfigGroup[];
+  relationshipTree?: CatalogReportTreeNode;
+  entries?: CatalogReportEntry[];
+}
+
+export interface CatalogReportEntry {
+  configItem: ConfigItem & { permalink?: string };
+  parents?: Array<ConfigItem & { permalink?: string }>;
+  relationshipTree?: CatalogReportTreeNode;
+  changeCount: number;
+  insightCount: number;
+  accessCount: number;
+  rbacResources?: RBACResource[];
+  changes: ConfigChange[];
+  analyses: ConfigAnalysis[];
+  access: CatalogReportAccess[];
+  accessLogs: CatalogReportAccessLog[];
 }
