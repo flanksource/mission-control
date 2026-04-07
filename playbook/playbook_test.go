@@ -203,7 +203,9 @@ var _ = Describe("Playbook", Ordered, func() {
 		})
 
 		AfterAll(func() {
-			// Delete in FK-safe order: runs referencing config_id → changes → config items
+			// Delete in FK-safe order: artifacts → run_actions → runs → changes → config items
+			DefaultContext.DB().Exec("DELETE FROM artifacts WHERE playbook_run_action_id IN (SELECT id FROM playbook_run_actions WHERE playbook_run_id IN (SELECT id FROM playbook_runs WHERE config_id = ?))", testConfigID)
+			DefaultContext.DB().Exec("DELETE FROM playbook_run_actions WHERE playbook_run_id IN (SELECT id FROM playbook_runs WHERE config_id = ?)", testConfigID)
 			DefaultContext.DB().Where("config_id = ?", testConfigID).Delete(&models.PlaybookRun{})
 			DefaultContext.DB().Delete(&models.ConfigChange{}, "config_id = ?", testConfigID.String())
 			DefaultContext.DB().Delete(&models.ConfigItem{}, "id = ?", testConfigID)
@@ -273,8 +275,11 @@ var _ = Describe("Playbook", Ordered, func() {
 			Expect(catalogConfig).To(HaveKey("findings"))
 			Expect(catalogConfig).To(HaveKey("totalFindings"))
 
-			// Verify the catalog config matches the AI output
-			Expect(*catalogItem.Config).To(Equal(aiJSON))
+			// Verify the catalog config matches the AI output (compare parsed JSON to avoid whitespace differences)
+			var aiParsed, catalogParsed any
+			Expect(json.Unmarshal([]byte(aiJSON), &aiParsed)).To(BeNil())
+			Expect(json.Unmarshal([]byte(*catalogItem.Config), &catalogParsed)).To(BeNil())
+			Expect(catalogParsed).To(Equal(aiParsed))
 		})
 	})
 
