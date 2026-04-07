@@ -15,11 +15,11 @@ import (
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/cdproto/page"
 	"github.com/chromedp/chromedp"
+	"github.com/flanksource/clicky"
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/shutdown"
 	"github.com/flanksource/duty/types"
-	"github.com/flanksource/clicky"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 	"gorm.io/gorm"
@@ -677,5 +677,3 @@ func printConnectionState(conn models.Connection, verbose int) {
 		}
 	}
 }
-
-
