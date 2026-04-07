@@ -118,9 +118,10 @@ var _ op.Client = (*cliClient)(nil)
 func (c *cliClient) GetID() string { return ClientID }
 func (c *cliClient) RedirectURIs() []string {
 	return []string{
-		"https://127.0.0.1/callback", // CLI
-		"http://127.0.0.1/callback",  // CLI
-		"http://127.0.0.1:33418/",    // vscode
+		"https://127.0.0.1/callback",           // CLI
+		"http://127.0.0.1/callback",            // CLI
+		"http://localhost:6274/oauth/callback", // MCP inspector
+		"http://127.0.0.1:33418/",              // vscode
 	}
 }
 func (c *cliClient) PostLogoutRedirectURIs() []string { return nil }
