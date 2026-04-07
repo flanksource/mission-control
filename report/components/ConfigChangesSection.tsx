@@ -43,7 +43,7 @@ function ChangeEntry({ change, dateFormat, hideConfigName }: { change: ConfigCha
       )}
       <span className="text-gray-600 leading-tight flex-1 truncate">{change.summary ?? '-'}</span>
       {sev !== 'info' && (
-        <span className={`text-xs leading-none px-[0.5mm] py-[0.15mm] rounded border font-semibold whitespace-nowrap shrink-0 ${SEVERITY_TEXT[sev] ?? SEVERITY_TEXT.info}`}>
+        <span className={`text-xs leading-none px-[0.5mm] py-[0.15mm] rounded border whitespace-nowrap shrink-0 ${SEVERITY_TEXT[sev] ?? SEVERITY_TEXT.info}`}>
           {sev}
         </span>
       )}

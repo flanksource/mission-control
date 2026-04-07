@@ -14,6 +14,41 @@ func ConfigPermalink(configID string) string {
 	return fmt.Sprintf("%s/catalog/%s", FrontendURL, configID)
 }
 
+type CatalogReportThresholds struct {
+	StaleDays         int `json:"staleDays"`
+	ReviewOverdueDays int `json:"reviewOverdueDays"`
+}
+
+type CatalogReportOptions struct {
+	Title            string                   `json:"title"`
+	Since            string                   `json:"since"`
+	Sections         CatalogReportSections    `json:"sections"`
+	Recursive        bool                     `json:"recursive"`
+	GroupBy          string                   `json:"groupBy"`
+	ChangeArtifacts  bool                     `json:"changeArtifacts"`
+	Filters          []string                 `json:"filters,omitempty"`
+	Thresholds       *CatalogReportThresholds `json:"thresholds,omitempty"`
+	CategoryMappings map[string][]string      `json:"categoryMappings,omitempty"`
+}
+
+type CatalogReportAudit struct {
+	BuildCommit  string               `json:"buildCommit"`
+	BuildVersion string               `json:"buildVersion"`
+	GitStatus    string               `json:"gitStatus,omitempty"`
+	Options      CatalogReportOptions `json:"options"`
+	Scrapers     []ScraperInfo        `json:"scrapers"`
+	Queries      []CatalogReportQuery `json:"queries"`
+}
+
+type CatalogReportQuery struct {
+	Name     string `json:"name"`
+	Args     string `json:"args,omitempty"`
+	Count    int    `json:"count"`
+	Duration int64  `json:"duration"`
+	Error    string `json:"error,omitempty"`
+	Summary  string `json:"summary,omitempty"`
+}
+
 type CatalogReport struct {
 	Title       string                `json:"title"`
 	GeneratedAt time.Time             `json:"generatedAt"`
@@ -24,6 +59,10 @@ type CatalogReport struct {
 	Recursive   bool                  `json:"recursive,omitempty"`
 	GroupBy     string                `json:"groupBy,omitempty"`
 	Entries     []CatalogReportEntry  `json:"entries"`
+
+	CategoryMappings map[string][]string      `json:"categoryMappings,omitempty"`
+	Thresholds       *CatalogReportThresholds `json:"thresholds,omitempty"`
+	Audit            *CatalogReportAudit      `json:"audit,omitempty"`
 
 	// Deprecated: use Entries[0] for single-config reports
 	ConfigItem models.ConfigItem   `json:"configItem"`
@@ -91,6 +130,7 @@ type CatalogReportChange struct {
 	Severity          string                  `json:"severity,omitempty"`
 	Source            string                  `json:"source,omitempty"`
 	Summary           string                  `json:"summary,omitempty"`
+	Details           map[string]any          `json:"details,omitempty"`
 	CreatedBy         string                  `json:"createdBy,omitempty"`
 	ExternalCreatedBy string                  `json:"externalCreatedBy,omitempty"`
 	CreatedAt         string                  `json:"createdAt,omitempty"`

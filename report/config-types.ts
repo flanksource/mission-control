@@ -38,6 +38,7 @@ export interface ConfigChange {
   severity?: ConfigSeverity;
   source?: string;
   summary?: string;
+  details?: Record<string, any>;
   createdBy?: string;
   externalCreatedBy?: string;
   createdAt?: string;

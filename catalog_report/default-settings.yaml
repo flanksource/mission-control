@@ -1,0 +1,42 @@
+filters:
+  - "type!=Kubernetes::ConfigMap"
+  - "type!=Kubernetes::Secret"
+  - "type!=Kubernetes::Event"
+
+thresholds:
+  staleDays: 90
+  reviewOverdueDays: 90
+
+categoryMappings:
+  rbac.granted:
+    - PermissionGranted
+    - PermissionAdded
+    - IAMRoleAdded
+  rbac.revoked:
+    - PermissionRevoked
+    - PermissionRemoved
+    - IAMRoleRemoved
+  backup.success:
+    - BackupCompleted
+    - BackupSuccessful
+    - BACKUP_DB@low
+  backup.failed:
+    - BackupFailed
+    - BACKUP_DB@high
+  backup.progress:
+    - BackupStarted
+    - BackupRunning
+    - BackupEnqueued
+  backup.restore:
+    - BackupRestored
+    - RestoreCompleted
+  deployment.spec:
+    - diff
+  deployment.success:
+    - CodeDeployment@info
+  deployment.failed:
+    - CodeDeployment@failed
+  deployment.scale:
+    - ScalingReplicaSet
+  deployment.policy:
+    - PolicyUpdate

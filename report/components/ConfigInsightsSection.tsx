@@ -46,11 +46,11 @@ function InsightEntry({ analysis }: { analysis: ConfigAnalysis }) {
         <span className="text-xs text-blue-600 bg-blue-50 px-[0.5mm] rounded whitespace-nowrap shrink-0">{analysis.configName}</span>
       )}
       <span className="text-gray-600 leading-tight flex-1 truncate">{analysis.message || analysis.summary || '-'}</span>
-      <span className={`text-xs leading-none px-[0.5mm] py-[0.15mm] rounded border font-semibold whitespace-nowrap shrink-0 ${SEVERITY_TEXT[sev] ?? SEVERITY_TEXT.info}`}>
+      <span className={`text-xs leading-none px-[0.5mm] py-[0.15mm] rounded border whitespace-nowrap shrink-0 ${SEVERITY_TEXT[sev] ?? SEVERITY_TEXT.info}`}>
         {sev}
       </span>
       {analysis.status && (
-        <span className={`text-xs leading-none px-[0.5mm] py-[0.15mm] rounded border font-semibold whitespace-nowrap shrink-0 ${STATUS_TEXT[analysis.status] ?? STATUS_TEXT.resolved}`}>
+        <span className={`text-xs leading-none px-[0.5mm] py-[0.15mm] rounded border whitespace-nowrap shrink-0 ${STATUS_TEXT[analysis.status] ?? STATUS_TEXT.resolved}`}>
           {analysis.status}
         </span>
       )}

@@ -92,7 +92,7 @@ function SeverityBadge({ severity }: { severity: string }) {
   const color = SEVERITY_COLORS[key] ?? '#6B7280';
   const bg = SEVERITY_BG[key] ?? '#F3F4F6';
   return (
-    <span style={{ color, backgroundColor: bg }} className="px-[1.5mm] py-[0.3mm] rounded text-[7pt] font-medium">
+    <span style={{ color, backgroundColor: bg }} className="px-[1.5mm] py-[0.3mm] rounded text-[7pt]">
       {severity}
     </span>
   );

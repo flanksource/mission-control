@@ -12,14 +12,29 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	commonshttp "github.com/flanksource/commons/http"
+	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/duty/context"
 )
 
+// RenderResult contains the rendered output and metadata about the render.
+type RenderResult struct {
+	Data     []byte
+	SrcDir   string
+	Entry    string
+	DataFile string
+}
+
 // RenderCLI renders data to the given format using the local facet CLI binary.
-func RenderCLI(data any, format, entryFile string) ([]byte, error) {
+// With -v (log level 1): prints the facet command and tees stdout/stderr.
+// With -vv (log level 2): also keeps the data file and report dir for re-rendering.
+func RenderCLI(data any, format, entryFile string) (*RenderResult, error) {
+	verbose := logger.IsLevelEnabled(1)
+	keepFiles := logger.IsLevelEnabled(2)
+
 	facetBin, err := exec.LookPath("facet")
 	if err != nil {
 		return nil, fmt.Errorf("facet not found on PATH: install with 'npm install -g @flanksource/facet'")
@@ -42,7 +57,9 @@ func RenderCLI(data any, format, entryFile string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create data temp file: %w", err)
 	}
-	defer os.Remove(dataFile.Name())
+	if !keepFiles {
+		defer os.Remove(dataFile.Name())
+	}
 
 	if _, err := dataFile.Write(dataJSON); err != nil {
 		return nil, fmt.Errorf("write data file: %w", err)
@@ -59,13 +76,34 @@ func RenderCLI(data any, format, entryFile string) ([]byte, error) {
 	var stderr bytes.Buffer
 	cmd := exec.Command(facetBin, format, entryFile, "-d", dataFile.Name(), "-o", outFile.Name())
 	cmd.Dir = srcDir
-	cmd.Stderr = &stderr
 
-	if err := cmd.Run(); err != nil {
-		return nil, fmt.Errorf("facet %s failed: %w\n%s", format, err, stderr.String())
+	if verbose {
+		fmt.Fprintf(os.Stderr, "$ cd %s\n", srcDir)
+		fmt.Fprintf(os.Stderr, "$ %s\n", strings.Join(cmd.Args, " "))
+		cmd.Stdout = os.Stderr
+		cmd.Stderr = os.Stderr
+	} else {
+		cmd.Stderr = &stderr
 	}
 
-	return os.ReadFile(outFile.Name())
+	if err = cmd.Run(); err != nil {
+		if stderr.Len() > 0 {
+			return nil, fmt.Errorf("facet %s failed: %w\n%s", format, err, stderr.String())
+		}
+		return nil, fmt.Errorf("facet %s failed: %w", format, err)
+	}
+
+	result, err := os.ReadFile(outFile.Name())
+	if err != nil {
+		return nil, err
+	}
+
+	return &RenderResult{
+		Data:     result,
+		SrcDir:   srcDir,
+		Entry:    entryFile,
+		DataFile: dataFile.Name(),
+	}, nil
 }
 
 // RenderHTTP renders data via a remote facet rendering service.

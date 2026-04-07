@@ -1,5 +1,6 @@
 import type { ConfigChange, ConfigAnalysis, ConfigRelationship, ConfigItem } from './config-types.ts';
 import type { RBACResource } from './rbac-types.ts';
+import type { ScraperInfo } from './scraper-types.ts';
 
 export interface CatalogReportSections {
   changes: boolean;
@@ -53,6 +54,37 @@ export interface CatalogReportConfigGroup {
   accessLogs: CatalogReportAccessLog[];
 }
 
+export interface QueryLogEntry {
+  name: string;
+  args?: string;
+  count: number;
+  duration: number;
+  error?: string;
+  summary?: string;
+  pretty: string;
+}
+
+export interface CatalogReportOptions {
+  title: string;
+  since: string;
+  sections: CatalogReportSections;
+  recursive: boolean;
+  groupBy: string;
+  changeArtifacts: boolean;
+  filters?: string[];
+  thresholds?: { staleDays: number; reviewOverdueDays: number };
+  categoryMappings?: Record<string, string[]>;
+}
+
+export interface CatalogReportAudit {
+  buildCommit: string;
+  buildVersion: string;
+  gitStatus?: string;
+  options: CatalogReportOptions;
+  scrapers: ScraperInfo[];
+  queries: QueryLogEntry[];
+}
+
 export interface CatalogReportData {
   title: string;
   generatedAt: string;
@@ -61,6 +93,8 @@ export interface CatalogReportData {
   to?: string;
   recursive?: boolean;
   groupBy?: string;
+  categoryMappings?: Record<string, string[]>;
+  thresholds?: { staleDays?: number; reviewOverdueDays?: number };
   configItem: ConfigItem & {
     config?: string;
     name: string;
@@ -88,6 +122,7 @@ export interface CatalogReportData {
   configGroups?: CatalogReportConfigGroup[];
   relationshipTree?: CatalogReportTreeNode;
   entries?: CatalogReportEntry[];
+  audit?: CatalogReportAudit;
 }
 
 export interface CatalogReportEntry {

@@ -1,4 +1,5 @@
 import type { ApplicationChange, ApplicationPermissionChange } from '../types.ts';
+import type { ConfigChange } from '../config-types.ts';
 
 export type ChangeSectionVariant = 'generic' | 'rbac' | 'backup' | 'deployment';
 export type BackupCalendarStatus = 'success' | 'failed' | 'warning';
@@ -13,6 +14,9 @@ export interface BackupCalendarEntry {
 export interface RBACChangeRow {
   id: string;
   date: string;
+  configId?: string;
+  configName: string;
+  configType?: string;
   action: 'Granted' | 'Revoked';
   subject: string;
   subjectKind: 'user' | 'group';
@@ -38,7 +42,7 @@ const BACKUP_SUCCESS_TYPES = new Set(['BackupCompleted', 'BackupSuccessful']);
 const BACKUP_FAILED_TYPES = new Set(['BackupFailed']);
 const BACKUP_PROGRESS_TYPES = new Set(['BackupStarted', 'BackupRunning', 'BackupEnqueued']);
 const RESTORE_CHANGE_TYPES = new Set(['BackupRestored', 'RestoreCompleted']);
-const DEPLOYMENT_CHANGE_TYPES = new Set(['ScalingReplicaSet', 'PolicyUpdate']);
+const DEPLOYMENT_CHANGE_TYPES = new Set(['ScalingReplicaSet', 'PolicyUpdate', 'CodeDeployment', 'diff']);
 
 function normalizedType(change: ApplicationChange): string {
   return change.changeType ?? '';
@@ -48,7 +52,54 @@ export function getChangeActor(change: ApplicationChange): string {
   return change.createdBy || change.source || '-';
 }
 
+function getCategoryKey(change: ApplicationChange): string {
+  return change.category ?? '';
+}
+
+type ChangeMappingInput = {
+  changeType?: string;
+  severity?: string;
+  status?: string;
+};
+
+function getRuleSeverity(rule: string): string | undefined {
+  const parts = rule.split('@');
+  if (parts.length !== 2) {
+    return undefined;
+  }
+  return cleanField(parts[1])?.toLowerCase();
+}
+
+function getRuleType(rule: string): string {
+  return rule.split('@', 2)[0]?.trim() ?? '';
+}
+
+function getChangeSeverity(change: ChangeMappingInput): string {
+  return (change.status ?? change.severity ?? '').trim().toLowerCase();
+}
+
+function matchesCategoryRule(change: ChangeMappingInput, rule: string): boolean {
+  if ((change.changeType ?? '') !== getRuleType(rule)) {
+    return false;
+  }
+
+  const ruleSeverity = getRuleSeverity(rule);
+  if (!ruleSeverity) {
+    return true;
+  }
+
+  return getChangeSeverity(change) === ruleSeverity;
+}
+
 function normalizeRBACAction(change: ApplicationChange): RBACChangeAction | null {
+  const category = getCategoryKey(change);
+  if (category === 'rbac.granted') {
+    return 'added';
+  }
+  if (category === 'rbac.revoked') {
+    return 'removed';
+  }
+
   const type = normalizedType(change);
   if (RBAC_ADDED_TYPES.has(type)) {
     return 'added';
@@ -64,38 +115,50 @@ export function isRBACChange(change: ApplicationChange): boolean {
 }
 
 export function isBackupChange(change: ApplicationChange): boolean {
+  if (getCategoryKey(change).startsWith('backup.')) {
+    return true;
+  }
+
   const type = normalizedType(change);
   return BACKUP_SUCCESS_TYPES.has(type) || BACKUP_FAILED_TYPES.has(type) || BACKUP_PROGRESS_TYPES.has(type) || RESTORE_CHANGE_TYPES.has(type);
 }
 
 export function isRestoreChange(change: ApplicationChange): boolean {
+  if (getCategoryKey(change) === 'backup.restore') {
+    return true;
+  }
+
   return RESTORE_CHANGE_TYPES.has(normalizedType(change));
 }
 
 export function classifyDeploymentChange(change: ApplicationChange): 'scale' | 'policy' | 'spec' | null {
+  const category = getCategoryKey(change);
+  if (category.startsWith('deployment.')) {
+    const suffix = category.slice('deployment.'.length);
+    if (suffix === 'scale' || suffix === 'scaling') {
+      return 'scale';
+    }
+    if (suffix === 'policy') {
+      return 'policy';
+    }
+    return 'spec';
+  }
+  if (category === 'deployment') {
+    return 'spec';
+  }
+
   const type = normalizedType(change);
-  const description = change.description.toLowerCase();
   const lowerType = type.toLowerCase();
 
-  if (type === 'ScalingReplicaSet' || lowerType.includes('replicaset') || /scaled|scaling|replica/.test(description)) {
+  if (type === 'ScalingReplicaSet' || lowerType.includes('replicaset')) {
     return 'scale';
   }
 
-  if (type === 'PolicyUpdate' || description.includes('policy')) {
+  if (type === 'PolicyUpdate') {
     return 'policy';
   }
 
-  if (
-    DEPLOYMENT_CHANGE_TYPES.has(type) ||
-    (type === 'diff' && (
-      description.includes('deployment') ||
-      description.includes('rollout') ||
-      description.includes('image updated')
-    )) ||
-    description.includes('deployment') ||
-    description.includes('rollout') ||
-    description.includes('image updated')
-  ) {
+  if (DEPLOYMENT_CHANGE_TYPES.has(type)) {
     return 'spec';
   }
 
@@ -118,7 +181,39 @@ export function filterDeploymentChanges(changes: ApplicationChange[]): Applicati
   return changes.filter(isDeploymentChange);
 }
 
-export function inferChangeSectionVariant(title: string, changes: ApplicationChange[]): ChangeSectionVariant {
+function resolveCategoryMappings(categoryMappings?: Record<string, string[]>): Record<string, string[]> | undefined {
+  if (!categoryMappings || Object.keys(categoryMappings).length === 0) {
+    return undefined;
+  }
+  return categoryMappings;
+}
+
+function findCategoryForChange(change: ChangeMappingInput, categoryMappings?: Record<string, string[]>): string | undefined {
+  const mappings = resolveCategoryMappings(categoryMappings);
+  if (!mappings) {
+    return undefined;
+  }
+
+  for (const [category, rules] of Object.entries(mappings)) {
+    if (rules.some((rule) => getRuleSeverity(rule) && matchesCategoryRule(change, rule))) {
+      return category;
+    }
+  }
+
+  for (const [category, types] of Object.entries(mappings)) {
+    if (types.some((rule) => !getRuleSeverity(rule) && matchesCategoryRule(change, rule))) {
+      return category;
+    }
+  }
+
+  return undefined;
+}
+
+export function inferChangeSectionVariant(
+  title: string,
+  changes: ApplicationChange[],
+  categoryMappings?: Record<string, string[]>,
+): ChangeSectionVariant {
   const lowerTitle = title.toLowerCase();
 
   if (/\brbac\b|\bpermission/.test(lowerTitle)) {
@@ -133,26 +228,51 @@ export function inferChangeSectionVariant(title: string, changes: ApplicationCha
     return 'deployment';
   }
 
-  const rbacCount = filterRBACChanges(changes).length;
-  const backupCount = filterBackupChanges(changes).length;
-  const deploymentCount = filterDeploymentChanges(changes).length;
+  const mappings = resolveCategoryMappings(categoryMappings);
+  if (mappings) {
+    let rbacCount = 0;
+    let backupCount = 0;
+    let deploymentCount = 0;
+    for (const change of changes) {
+      const category = findCategoryForChange(change, mappings);
+      if (!category) {
+        continue;
+      }
+      if (category === 'rbac' || category.startsWith('rbac.')) {
+        rbacCount += 1;
+      } else if (category === 'backup' || category.startsWith('backup.')) {
+        backupCount += 1;
+      } else if (category === 'deployment' || category.startsWith('deployment.')) {
+        deploymentCount += 1;
+      }
+    }
 
-  if (rbacCount > 0 && rbacCount === changes.length) {
-    return 'rbac';
-  }
-
-  if (backupCount > 0 && backupCount === changes.length) {
-    return 'backup';
-  }
-
-  if (deploymentCount > 0 && deploymentCount >= Math.ceil(changes.length / 2)) {
-    return 'deployment';
+    if (rbacCount > 0 && rbacCount === changes.length) {
+      return 'rbac';
+    }
+    if (backupCount > 0 && backupCount === changes.length) {
+      return 'backup';
+    }
+    if (deploymentCount > 0 && deploymentCount >= Math.ceil(changes.length / 2)) {
+      return 'deployment';
+    }
   }
 
   return 'generic';
 }
 
 export function getBackupCalendarStatus(change: ApplicationChange): BackupCalendarStatus | null {
+  const category = getCategoryKey(change);
+  if (category === 'backup.success') {
+    return 'success';
+  }
+  if (category === 'backup.failed') {
+    return 'failed';
+  }
+  if (category === 'backup.progress') {
+    return 'warning';
+  }
+
   const type = normalizedType(change);
   if (BACKUP_SUCCESS_TYPES.has(type)) {
     return 'success';
@@ -346,6 +466,9 @@ export function groupRBACChanges(changes: ApplicationChange[]): RBACChangeGroup[
     group.rows.push({
       id: change.id,
       date: change.date,
+      configId,
+      configName,
+      configType: cleanField(change.configType),
       action: action === 'added' ? 'Granted' : 'Revoked',
       subject,
       subjectKind,
@@ -363,4 +486,56 @@ export function groupRBACChanges(changes: ApplicationChange[]): RBACChangeGroup[
       rows: group.rows.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
     }))
     .sort((a, b) => new Date(b.latestDate).getTime() - new Date(a.latestDate).getTime());
+}
+
+export interface CategorizedChanges {
+  rbac: Array<{ change: ConfigChange; category: string }>;
+  backup: Array<{ change: ConfigChange; category: string }>;
+  deployment: Array<{ change: ConfigChange; category: string }>;
+  uncategorized: ConfigChange[];
+}
+
+export function categorizeChanges(
+  changes: ConfigChange[],
+  categoryMappings?: Record<string, string[]>,
+): CategorizedChanges {
+  const result: CategorizedChanges = { rbac: [], backup: [], deployment: [], uncategorized: [] };
+  const mappings = resolveCategoryMappings(categoryMappings);
+  if (!mappings) {
+    result.uncategorized = changes;
+    return result;
+  }
+
+  for (const change of changes) {
+    const category = findCategoryForChange(change, mappings);
+    if (!category) {
+      result.uncategorized.push(change);
+      continue;
+    }
+
+    if (category === 'rbac' || category.startsWith('rbac.')) result.rbac.push({ change, category });
+    else if (category === 'backup' || category.startsWith('backup.')) result.backup.push({ change, category });
+    else if (category === 'deployment' || category.startsWith('deployment.')) result.deployment.push({ change, category });
+    else result.uncategorized.push(change);
+  }
+  return result;
+}
+
+export function configChangeToApplicationChange(c: ConfigChange, category?: string): ApplicationChange {
+  const permission = c.details?.permission as ApplicationPermissionChange | undefined;
+  return {
+    id: c.id ?? '',
+    date: c.createdAt ?? '',
+    changeType: c.changeType,
+    category,
+    source: c.source,
+    createdBy: c.createdBy ?? c.externalCreatedBy,
+    configId: c.configID,
+    configName: c.configName,
+    configType: c.configType,
+    permission,
+    description: c.summary ?? '',
+    status: c.severity ?? 'info',
+    createdAt: c.createdAt ?? '',
+  };
 }

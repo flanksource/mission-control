@@ -137,6 +137,7 @@ export interface ApplicationChange {
   id: string;
   date: string;
   changeType?: string;
+  category?: string;
   source?: string;
   createdBy?: string;
   configId?: string;

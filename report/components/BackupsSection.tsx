@@ -1,5 +1,5 @@
 import React from 'react';
-import { Section, StatCard, CompactTable } from '@flanksource/facet';
+import { Section, StatCard, ListTable } from '@flanksource/facet';
 import type { ApplicationBackup, ApplicationBackupRestore } from '../types.ts';
 import { formatDateTime } from './utils.ts';
 import BackupActivityCalendar from './BackupActivityCalendar.tsx';
@@ -10,6 +10,24 @@ interface Props {
   restores: ApplicationBackupRestore[];
 }
 
+const BACKUP_TAG_MAPPING = (key: string, value: unknown): string => {
+  if (key !== 'status') {
+    return '';
+  }
+
+  const normalized = String(value).toLowerCase();
+  if (normalized.includes('fail')) {
+    return 'text-red-700 bg-red-50 border-red-200';
+  }
+  if (normalized.includes('success')) {
+    return 'text-green-700 bg-green-50 border-green-200';
+  }
+  if (normalized.includes('running') || normalized.includes('progress') || normalized.includes('started') || normalized.includes('queued')) {
+    return 'text-orange-700 bg-orange-50 border-orange-200';
+  }
+  return 'text-gray-600 bg-gray-50 border-gray-200';
+};
+
 export default function BackupsSection({ backups, restores }: Props) {
   const successCount = backups.filter((b) => b.status === 'success').length;
   const failedCount = backups.filter((b) => b.status !== 'success').length;
@@ -19,16 +37,7 @@ export default function BackupsSection({ backups, restores }: Props) {
     label: backup.size || undefined,
   }));
 
-  const failedRows = backups
-    .filter((b) => b.status !== 'success')
-    .map((b) => [b.database, formatDateTime(b.date), b.size, b.status]);
-
-  const restoreRows = restores.map((r) => [
-    r.database,
-    formatDateTime(r.date),
-    r.status,
-    formatDateTime(r.completedAt),
-  ]);
+  const failedRows = backups.filter((b) => b.status !== 'success');
 
   return (
     <Section variant="hero" title="Backups & Restores" size="md">
@@ -43,13 +52,51 @@ export default function BackupsSection({ backups, restores }: Props) {
       {failedRows.length > 0 && (
         <div className="mb-[4mm]">
           <h3 className="text-[11pt] font-semibold text-slate-800 mb-[2mm]">Failed Backups</h3>
-          <CompactTable variant="reference" columns={['Database', 'Date', 'Size', 'Status']} data={failedRows} />
+          <ListTable
+            rows={failedRows.map((backup) => ({
+              subject: backup.database,
+              subtitle: backup.size || 'Size unavailable',
+              date: backup.date,
+              status: backup.status,
+              sourceLabel: `Source: ${backup.source || '-'}`,
+            }))}
+            subject="subject"
+            subtitle="subtitle"
+            date="date"
+            dateFormat="long"
+            primaryTags={['status']}
+            keys={['sourceLabel']}
+            tagMapping={BACKUP_TAG_MAPPING}
+            size="xs"
+            density="compact"
+            wrap
+            cellClassName="text-[8pt]"
+          />
         </div>
       )}
-      {restoreRows.length > 0 && (
+      {restores.length > 0 && (
         <div>
-          <h3 className="text-[11pt] font-semibold text-slate-800 mb-[2mm]">Restore History</h3>
-          <CompactTable variant="reference" columns={['Database', 'Started', 'Status', 'Completed']} data={restoreRows} />
+          <h3 className="text-[11pt] font-semibold text-slate-800 mb-[2mm]">Restore Jobs</h3>
+          <ListTable
+            rows={restores.map((restore) => ({
+              subject: restore.database,
+              subtitle: `Completed ${formatDateTime(restore.completedAt)}`,
+              date: restore.date,
+              status: restore.status,
+              sourceLabel: `Source: ${restore.source || '-'}`,
+            }))}
+            subject="subject"
+            subtitle="subtitle"
+            date="date"
+            dateFormat="long"
+            primaryTags={['status']}
+            keys={['sourceLabel']}
+            tagMapping={BACKUP_TAG_MAPPING}
+            size="xs"
+            density="compact"
+            wrap
+            cellClassName="text-[8pt]"
+          />
         </div>
       )}
     </Section>

@@ -2,14 +2,20 @@ import React from 'react';
 import { Document, Page, Header, Footer, Section } from '@flanksource/facet';
 import { Icon } from '@flanksource/icons/icon';
 import type { CatalogReportData, CatalogReportConfigGroup } from './catalog-report-types.ts';
+import type { ConfigChange } from './config-types.ts';
 import ConfigChangesSection from './components/ConfigChangesSection.tsx';
 import ConfigInsightsSection from './components/ConfigInsightsSection.tsx';
+import RBACChanges from './components/RBACChanges.tsx';
+import BackupChanges from './components/BackupChanges.tsx';
+import DeploymentChanges from './components/DeploymentChanges.tsx';
+import { categorizeChanges, configChangeToApplicationChange } from './components/change-section-utils.ts';
 import ConfigRelationshipGraph from './components/ConfigRelationshipGraph.tsx';
 import ConfigTreeSection from './components/ConfigTreeSection.tsx';
 import CatalogAccessSection from './components/CatalogAccessSection.tsx';
 import CatalogAccessLogsSection from './components/CatalogAccessLogsSection.tsx';
 import RBACMatrixSection from './components/RBACMatrixSection.tsx';
 import ArtifactAppendix from './components/ArtifactAppendix.tsx';
+import AuditPage from './components/AuditPage.tsx';
 import CoverPage from './components/CoverPage.tsx';
 import CatalogList from './components/CatalogList.tsx';
 import PageHeader from './components/PageHeader.tsx';
@@ -40,6 +46,12 @@ function CatalogCoverPage({ data }: { data: CatalogReportData }) {
           {data.groupBy === 'config' && ` · Grouped by config (${(data.configGroups || []).length} items)`}
         </div>
       )}
+      {data.thresholds && (
+        <div className="flex gap-[4mm] text-xs text-gray-400 mt-[2mm]">
+          <span>Stale access: {data.thresholds.staleDays}d</span>
+          <span>Review overdue: {data.thresholds.reviewOverdueDays}d</span>
+        </div>
+      )}
     </CoverPage>
   );
 }
@@ -56,6 +68,37 @@ function ConfigJSONSection({ json }: { json: string }) {
         {formatted}
       </pre>
     </Section>
+  );
+}
+
+function CategorizedChangesSection({ changes, categoryMappings, hideConfigName }: {
+  changes?: ConfigChange[];
+  categoryMappings?: Record<string, string[]>;
+  hideConfigName?: boolean;
+}) {
+  if (!changes?.length) return null;
+  const { rbac, backup, deployment, uncategorized } = categorizeChanges(changes, categoryMappings);
+  return (
+    <>
+      {rbac.length > 0 && (
+        <Section variant="hero" title="Permission Changes" size="md">
+          <RBACChanges changes={rbac.map(({ change, category }) => configChangeToApplicationChange(change, category))} />
+        </Section>
+      )}
+      {backup.length > 0 && (
+        <Section variant="hero" title="Backup Activity" size="md">
+          <BackupChanges changes={backup.map(({ change, category }) => configChangeToApplicationChange(change, category))} />
+        </Section>
+      )}
+      {deployment.length > 0 && (
+        <Section variant="hero" title="Deployment Changes" size="md">
+          <DeploymentChanges changes={deployment.map(({ change, category }) => configChangeToApplicationChange(change, category))} />
+        </Section>
+      )}
+      {uncategorized.length > 0 && (
+        <ConfigChangesSection changes={uncategorized} hideConfigName={hideConfigName} />
+      )}
+    </>
   );
 }
 
@@ -111,7 +154,7 @@ export default function CatalogReportPage({ data }: CatalogReportProps) {
         {data.groupBy === 'config' && (data.entries || []).map((entry, idx) => (
           <React.Fragment key={entry.configItem?.id || idx}>
             <ConfigGroupHeader group={{ configItem: entry.configItem as any, changes: entry.changes, analyses: entry.analyses, access: entry.access, accessLogs: entry.accessLogs }} />
-            <ConfigChangesSection changes={entry.changes} hideConfigName />
+            <CategorizedChangesSection changes={entry.changes} categoryMappings={data.categoryMappings} hideConfigName />
             <ConfigInsightsSection analyses={entry.analyses} />
             {(entry.rbacResources || []).map((resource, rIdx) => (
               <RBACMatrixSection key={resource.configId || rIdx} resource={resource} />
@@ -121,7 +164,7 @@ export default function CatalogReportPage({ data }: CatalogReportProps) {
 
         {data.groupBy !== 'config' && (
           <>
-            <ConfigChangesSection changes={data.changes} />
+            <CategorizedChangesSection changes={data.changes} categoryMappings={data.categoryMappings} />
             <ConfigInsightsSection analyses={data.analyses} />
           </>
         )}
@@ -141,7 +184,7 @@ export default function CatalogReportPage({ data }: CatalogReportProps) {
         {data.groupBy === 'config' && (data.configGroups || []).map((group, idx) => (
           <React.Fragment key={group.configItem.id || idx}>
             <ConfigGroupHeader group={group} />
-            <ConfigChangesSection changes={group.changes} hideConfigName />
+            <CategorizedChangesSection changes={group.changes} categoryMappings={data.categoryMappings} hideConfigName />
             <ConfigInsightsSection analyses={group.analyses} />
             <CatalogAccessSection access={group.access} />
             <CatalogAccessLogsSection logs={group.accessLogs} />
@@ -152,6 +195,12 @@ export default function CatalogReportPage({ data }: CatalogReportProps) {
 
         <ArtifactAppendix changes={(data.entries || []).flatMap((e) => e.changes || [])} />
       </Page>
+
+      {data.audit && (
+        <Page>
+          <AuditPage audit={data.audit} />
+        </Page>
+      )}
     </Document>
   );
 }

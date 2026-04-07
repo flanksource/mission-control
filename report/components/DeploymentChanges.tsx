@@ -1,7 +1,6 @@
 import React from 'react';
-import { StatCard } from '@flanksource/facet';
+import { ListTable, StatCard } from '@flanksource/facet';
 import type { ApplicationChange } from '../types.ts';
-import { formatEntryDate, getTimeBucket, type TimeBucketFormat } from './utils.ts';
 import {
   classifyDeploymentChange,
   filterDeploymentChanges,
@@ -12,36 +11,31 @@ interface Props {
   changes: ApplicationChange[];
 }
 
+const COUNT_VALUE_CLASS = 'text-[16pt] leading-[18pt]';
 const CATEGORY_STYLES: Record<'scale' | 'policy' | 'spec', string> = {
   scale: 'bg-blue-50 text-blue-700 border-blue-200',
   policy: 'bg-orange-50 text-orange-700 border-orange-200',
   spec: 'bg-slate-50 text-slate-700 border-slate-200',
 };
-
-interface BucketGroup {
-  key: string;
-  label: string;
-  dateFormat: TimeBucketFormat;
-  changes: ApplicationChange[];
-}
-
-function groupByTimeBucket(changes: ApplicationChange[]): BucketGroup[] {
-  const groups: BucketGroup[] = [];
-  const groupMap = new Map<string, BucketGroup>();
-
-  for (const change of changes) {
-    const bucket = getTimeBucket(change.date);
-    let group = groupMap.get(bucket.key);
-    if (!group) {
-      group = { key: bucket.key, label: bucket.label, dateFormat: bucket.dateFormat, changes: [] };
-      groupMap.set(bucket.key, group);
-      groups.push(group);
-    }
-    group.changes.push(change);
+const CATEGORY_LABELS: Record<'scale' | 'policy' | 'spec', string> = {
+  scale: 'Scale',
+  policy: 'Policy',
+  spec: 'Spec',
+};
+const CATEGORY_TAG_MAPPING = (key: string, value: unknown): string => {
+  if (key !== 'category') {
+    return '';
   }
 
-  return groups;
-}
+  const normalized = String(value).toLowerCase();
+  if (normalized === 'scale') {
+    return CATEGORY_STYLES.scale;
+  }
+  if (normalized === 'policy') {
+    return CATEGORY_STYLES.policy;
+  }
+  return CATEGORY_STYLES.spec;
+};
 
 export default function DeploymentChanges({ changes }: Props) {
   const relevant = filterDeploymentChanges(changes).sort((a, b) => (
@@ -58,43 +52,78 @@ export default function DeploymentChanges({ changes }: Props) {
     spec: relevant.filter((change) => classifyDeploymentChange(change) === 'spec').length,
   };
 
-  const groups = groupByTimeBucket(relevant);
-
   return (
     <>
-      <div className="grid grid-cols-4 gap-[3mm] mb-[4mm]">
-        <StatCard label="Relevant Changes" value={String(relevant.length)} variant="bordered" size="sm" />
-        <StatCard label="Spec Updates" value={String(counts.spec)} variant="bordered" size="sm" />
-        <StatCard label="Scaling Events" value={String(counts.scale)} variant="bordered" size="sm" />
-        <StatCard label="Policy Updates" value={String(counts.policy)} variant="bordered" size="sm" />
-      </div>
-
-      {groups.map((group) => (
-        <div key={group.key} className="mb-[3mm]">
-          <div className="text-[8pt] font-semibold text-gray-500 border-b border-gray-200 pb-[0.8mm] mb-[1mm]">
-            {group.label}
-            <span className="font-normal text-gray-400 ml-[1mm]">({group.changes.length})</span>
-          </div>
-          <div className="flex flex-col">
-            {group.changes.map((change) => {
-              const category = classifyDeploymentChange(change) ?? 'spec';
-              return (
-                <div key={change.id} className="flex items-center gap-[1.5mm] py-[0.6mm] border-b border-gray-50 last:border-b-0 text-[8pt]">
-                  <span className="text-gray-400 font-mono whitespace-nowrap w-[14mm] text-right shrink-0">
-                    {formatEntryDate(change.date, group.dateFormat)}
-                  </span>
-                  <span className={`leading-none px-[1mm] py-[0.35mm] rounded border font-semibold whitespace-nowrap shrink-0 ${CATEGORY_STYLES[category]}`}>
-                    {category}
-                  </span>
-                  <span className="text-slate-800 font-medium whitespace-nowrap shrink-0">{change.changeType ?? '-'}</span>
-                  <span className="text-gray-400 whitespace-nowrap shrink-0">{getChangeActor(change)}</span>
-                  <span className="text-gray-600 leading-tight flex-1">{change.description}</span>
-                </div>
-              );
-            })}
-          </div>
+      <div className="flex flex-wrap items-stretch gap-[3mm] mb-[4mm]">
+        <div className="flex-1 min-w-[28mm]">
+          <StatCard
+            label="Relevant Changes"
+            value={String(relevant.length)}
+            variant="summary"
+            size="sm"
+            color="gray"
+            shrink
+            valueClassName={COUNT_VALUE_CLASS}
+          />
         </div>
-      ))}
+        <div className="flex-1 min-w-[28mm]">
+          <StatCard
+            label="Spec Updates"
+            value={String(counts.spec)}
+            variant="summary"
+            size="sm"
+            color="gray"
+            shrink
+            valueClassName={COUNT_VALUE_CLASS}
+          />
+        </div>
+        <div className="flex-1 min-w-[28mm]">
+          <StatCard
+            label="Scaling Events"
+            value={String(counts.scale)}
+            variant="summary"
+            size="sm"
+            color="blue"
+            shrink
+            valueClassName={COUNT_VALUE_CLASS}
+          />
+        </div>
+        <div className="flex-1 min-w-[28mm]">
+          <StatCard
+            label="Policy Updates"
+            value={String(counts.policy)}
+            variant="summary"
+            size="sm"
+            color="orange"
+            shrink
+            valueClassName={COUNT_VALUE_CLASS}
+          />
+        </div>
+      </div>
+      <ListTable
+        rows={relevant.map((change) => {
+          const category = classifyDeploymentChange(change) ?? 'spec';
+          return {
+            id: change.id,
+            date: change.date,
+            subject: change.description,
+            subtitle: change.changeType ?? '-',
+            category: CATEGORY_LABELS[category],
+            actor: getChangeActor(change),
+          };
+        })}
+        subject="subject"
+        subtitle="subtitle"
+        date="date"
+        primaryTags={['category']}
+        keys={['actor']}
+        tagMapping={CATEGORY_TAG_MAPPING}
+        groups={[{ by: 'date' }]}
+        size="xs"
+        density="compact"
+        wrap
+        cellClassName="text-[8pt]"
+      />
     </>
   );
 }

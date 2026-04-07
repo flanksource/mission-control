@@ -24,6 +24,23 @@ type Options struct {
 	Recursive       bool
 	GroupBy         string // "merged" (default) or "config"
 	ChangeArtifacts bool
+	Audit           bool
+	Settings        *Settings
+	SettingsPath    string
+}
+
+func (o Options) StaleDays() int {
+	if o.Settings != nil && o.Settings.Thresholds.StaleDays > 0 {
+		return o.Settings.Thresholds.StaleDays
+	}
+	return 90
+}
+
+func (o Options) ReviewOverdueDays() int {
+	if o.Settings != nil && o.Settings.Thresholds.ReviewOverdueDays > 0 {
+		return o.Settings.Thresholds.ReviewOverdueDays
+	}
+	return 90
 }
 
 func (o Options) WithDefaults() Options {
@@ -39,9 +56,9 @@ func (o Options) WithDefaults() Options {
 	return o
 }
 
-func BuildReport(ctx context.Context, configs []models.ConfigItem, opts Options) (*api.CatalogReport, error) {
+func BuildReport(ctx context.Context, configs []models.ConfigItem, opts Options) (*api.CatalogReport, []string, error) {
 	if len(configs) == 0 {
-		return nil, fmt.Errorf("no config items provided")
+		return nil, nil, fmt.Errorf("no config items provided")
 	}
 	opts = opts.WithDefaults()
 	sinceTime := time.Now().Add(-opts.Since)
@@ -59,10 +76,17 @@ func BuildReport(ctx context.Context, configs []models.ConfigItem, opts Options)
 
 	report.Parents = resolveParents(ctx, &configs[0])
 
+	scraperIDSet := make(map[string]bool)
 	for _, config := range configs {
-		entry, err := buildEntry(ctx, &config, opts, sinceTime)
+		if config.ScraperID != nil && *config.ScraperID != "" {
+			scraperIDSet[*config.ScraperID] = true
+		}
+	}
+
+	for _, config := range configs {
+		entry, entryScraperIDs, err := buildEntry(ctx, &config, opts, sinceTime)
 		if err != nil {
-			return nil, fmt.Errorf("failed to build entry for %s: %w", config.GetName(), err)
+			return nil, nil, fmt.Errorf("failed to build entry for %s: %w", config.GetName(), err)
 		}
 		report.Entries = append(report.Entries, *entry)
 
@@ -70,6 +94,10 @@ func BuildReport(ctx context.Context, configs []models.ConfigItem, opts Options)
 		report.Analyses = append(report.Analyses, entry.Analyses...)
 		report.Access = append(report.Access, entry.Access...)
 		report.AccessLogs = append(report.AccessLogs, entry.AccessLogs...)
+
+		for _, id := range entryScraperIDs {
+			scraperIDSet[id] = true
+		}
 	}
 
 	if opts.Sections.ConfigJSON && configs[0].Config != nil {
@@ -83,10 +111,25 @@ func BuildReport(ctx context.Context, configs []models.ConfigItem, opts Options)
 		report.AccessLogs = nil
 	}
 
-	return report, nil
+	if opts.Settings != nil {
+		if len(opts.Settings.CategoryMappings) > 0 {
+			report.CategoryMappings = opts.Settings.CategoryMappings
+		}
+		report.Thresholds = &api.CatalogReportThresholds{
+			StaleDays:         opts.StaleDays(),
+			ReviewOverdueDays: opts.ReviewOverdueDays(),
+		}
+	}
+
+	var scraperIDs []string
+	for id := range scraperIDSet {
+		scraperIDs = append(scraperIDs, id)
+	}
+
+	return report, scraperIDs, nil
 }
 
-func buildEntry(ctx context.Context, config *models.ConfigItem, opts Options, sinceTime time.Time) (*api.CatalogReportEntry, error) {
+func buildEntry(ctx context.Context, config *models.ConfigItem, opts Options, sinceTime time.Time) (*api.CatalogReportEntry, []string, error) {
 	entry := &api.CatalogReportEntry{
 		ConfigItem: api.NewCatalogReportConfigItem(*config),
 	}
@@ -98,17 +141,21 @@ func buildEntry(ctx context.Context, config *models.ConfigItem, opts Options, si
 
 	tree, err := query.ConfigTree(ctx, config.ID, query.ConfigTreeOptions{})
 	if err != nil {
-		return nil, fmt.Errorf("failed to build config tree: %w", err)
+		return nil, nil, fmt.Errorf("failed to build config tree: %w", err)
 	}
 
 	targetIDs := tree.OutgoingIDs()
 	configMap := make(map[uuid.UUID]models.ConfigItem)
 	items, err := query.GetConfigsByIDs(ctx, targetIDs)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load config items: %w", err)
+		return nil, nil, fmt.Errorf("failed to load config items: %w", err)
 	}
+	var scraperIDs []string
 	for _, ci := range items {
 		configMap[ci.ID] = ci
+		if ci.ScraperID != nil && *ci.ScraperID != "" {
+			scraperIDs = append(scraperIDs, *ci.ScraperID)
+		}
 	}
 
 	configMeta := func(configID string) (string, string) {
@@ -135,7 +182,7 @@ func buildEntry(ctx context.Context, config *models.ConfigItem, opts Options, si
 			},
 		})
 		if err != nil {
-			return nil, fmt.Errorf("failed to get changes: %w", err)
+			return nil, nil, fmt.Errorf("failed to get changes: %w", err)
 		}
 		entry.Changes = lo.Map(resp.Changes, func(c query.ConfigChangeRow, _ int) api.CatalogReportChange {
 			name, typ := configMeta(c.ConfigID)
@@ -175,7 +222,7 @@ func buildEntry(ctx context.Context, config *models.ConfigItem, opts Options, si
 			},
 		})
 		if err != nil {
-			return nil, fmt.Errorf("failed to get insights: %w", err)
+			return nil, nil, fmt.Errorf("failed to get insights: %w", err)
 		}
 		entry.Analyses = lo.Map(resp.Insights, func(a models.ConfigAnalysis, _ int) api.CatalogReportAnalysis {
 			name, typ := configMeta(a.ConfigID.String())
@@ -187,7 +234,7 @@ func buildEntry(ctx context.Context, config *models.ConfigItem, opts Options, si
 	if opts.Sections.Access {
 		rbacRows, err := db.GetRBACAccessByConfigIDs(ctx, targetIDs)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get access: %w", err)
+			return nil, nil, fmt.Errorf("failed to get access: %w", err)
 		}
 		entry.RBACResources = groupRBACByConfig(rbacRows, configMap, opts)
 		for _, r := range entry.RBACResources {
@@ -198,7 +245,7 @@ func buildEntry(ctx context.Context, config *models.ConfigItem, opts Options, si
 	if opts.Sections.AccessLogs {
 		logs, err := getAccessLogs(ctx, targetIDs, sinceTime)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get access logs: %w", err)
+			return nil, nil, fmt.Errorf("failed to get access logs: %w", err)
 		}
 		entry.AccessLogs = lo.Map(logs, func(l accessLogRow, _ int) api.CatalogReportAccessLog {
 			return newAccessLogEntry(l)
@@ -209,7 +256,7 @@ func buildEntry(ctx context.Context, config *models.ConfigItem, opts Options, si
 		entry.RelationshipTree = configTreeNodeToReport(tree)
 	}
 
-	return entry, nil
+	return entry, scraperIDs, nil
 }
 
 func buildConfigGroups(report *api.CatalogReport, configMap map[uuid.UUID]models.ConfigItem) []api.CatalogReportConfigGroup {
@@ -398,8 +445,8 @@ func isEmbeddableContentType(ct string) bool {
 }
 
 func groupRBACByConfig(rows []db.RBACAccessRow, configMap map[uuid.UUID]models.ConfigItem, opts Options) []api.RBACResource {
-	staleThreshold := time.Now().AddDate(0, 0, -90)
-	reviewThreshold := time.Now().AddDate(0, 0, -90)
+	staleThreshold := time.Now().AddDate(0, 0, -opts.StaleDays())
+	reviewThreshold := time.Now().AddDate(0, 0, -opts.ReviewOverdueDays())
 
 	grouped := make(map[uuid.UUID]*api.RBACResource)
 	var order []uuid.UUID

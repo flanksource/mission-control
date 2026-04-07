@@ -14,6 +14,34 @@ configItem:
   createdAt: "2025-03-15T09:00:00Z"
   updatedAt: "2026-03-28T12:00:00Z"
 
+categoryMappings:
+  rbac.granted:
+    - PermissionGranted
+    - PermissionAdded
+    - IAMRoleAdded
+  rbac.revoked:
+    - PermissionRevoked
+    - PermissionRemoved
+    - IAMRoleRemoved
+  backup.success:
+    - BackupCompleted
+    - BackupSuccessful
+  backup.failed:
+    - BackupFailed
+  backup.progress:
+    - BackupStarted
+    - BackupRunning
+    - BackupEnqueued
+  backup.restore:
+    - BackupRestored
+    - RestoreCompleted
+  deployment.spec:
+    - diff
+  deployment.scale:
+    - ScalingReplicaSet
+  deployment.policy:
+    - PolicyUpdate
+
 changes:
   - id: "chg-001"
     configID: "cfg-eks-001"
@@ -132,6 +160,56 @@ changes:
     summary: "PodDisruptionBudget added for incident-commander (minAvailable: 2)"
     createdBy: "bob@flanksource.com"
     createdAt: "2026-03-24T14:00:00Z"
+
+  - id: "chg-014"
+    configID: "cfg-eks-001"
+    changeType: "PermissionGranted"
+    severity: "info"
+    source: "okta"
+    summary: "Granted db_owner to alice@flanksource.com on prod-rds-01"
+    createdBy: "admin@flanksource.com"
+    createdAt: "2026-03-28T09:00:00Z"
+    details:
+      permission:
+        user: "alice@flanksource.com"
+        role: "db_owner"
+
+  - id: "chg-015"
+    configID: "cfg-eks-001"
+    changeType: "PermissionRevoked"
+    severity: "info"
+    source: "okta"
+    summary: "Revoked Secrets Reader access for bob@flanksource.com on prod-eks-cluster"
+    createdBy: "admin@flanksource.com"
+    createdAt: "2026-03-27T15:00:00Z"
+    details:
+      permission:
+        user: "bob@flanksource.com"
+        role: "Secrets Reader"
+
+  - id: "chg-016"
+    configID: "cfg-eks-001"
+    changeType: "BackupCompleted"
+    severity: "info"
+    source: "velero"
+    summary: "Full cluster backup completed successfully (2.4 GiB)"
+    createdAt: "2026-03-29T03:00:00Z"
+
+  - id: "chg-017"
+    configID: "cfg-eks-001"
+    changeType: "BackupFailed"
+    severity: "high"
+    source: "velero"
+    summary: "Incremental backup failed: PVC snapshot timeout after 300s"
+    createdAt: "2026-03-28T03:00:00Z"
+
+  - id: "chg-018"
+    configID: "cfg-eks-001"
+    changeType: "BackupStarted"
+    severity: "info"
+    source: "velero"
+    summary: "Scheduled backup initiated for prod-eks-cluster"
+    createdAt: "2026-03-30T03:00:00Z"
 
 analyses:
   - id: "ana-001"
@@ -423,6 +501,21 @@ rbacChanges:
     description: "PermissionRemoved: user contractor-temp, role db_datareader"
     status: "info"
     createdAt: "2026-03-29T18:40:00Z"
+
+  - id: "rbac-006"
+    date: "2026-03-29T11:15:00Z"
+    changeType: "PermissionAdded"
+    source: "okta"
+    createdBy: "governance-bot"
+    configId: "cfg-keyvault-001"
+    configName: "prod-keyvault"
+    configType: "Azure::KeyVault"
+    permission:
+      user: "ops-auditor"
+      role: "Secrets Reader"
+    description: "PermissionAdded: user ops-auditor, role Secrets Reader"
+    status: "info"
+    createdAt: "2026-03-29T11:15:00Z"
 
   - id: "rbac-003"
     date: "2026-03-29T16:00:00Z"
@@ -1538,6 +1631,20 @@ dynamicSections:
         description: "PermissionRemoved: user contractor-temp, role db_datareader"
         status: "info"
         createdAt: "2026-03-29T18:40:00Z"
+      - id: "rbac-006"
+        date: "2026-03-29T11:15:00Z"
+        changeType: "PermissionAdded"
+        source: "okta"
+        createdBy: "governance-bot"
+        configId: "cfg-keyvault-001"
+        configName: "prod-keyvault"
+        configType: "Azure::KeyVault"
+        permission:
+          user: "ops-auditor"
+          role: "Secrets Reader"
+        description: "PermissionAdded: user ops-auditor, role Secrets Reader"
+        status: "info"
+        createdAt: "2026-03-29T11:15:00Z"
       - id: "rbac-004"
         date: "2026-03-28T13:05:00Z"
         changeType: "PermissionGranted"

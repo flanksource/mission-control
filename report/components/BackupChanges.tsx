@@ -60,6 +60,7 @@ export default function BackupChanges({ changes }: Props) {
   const completed = backupEvents.filter((change) => getBackupCalendarStatus(change) === 'success');
   const failed = backupEvents.filter((change) => getBackupCalendarStatus(change) === 'failed');
   const inProgress = backupEvents.filter((change) => getBackupCalendarStatus(change) === 'warning');
+  const attentionEvents = [...failed, ...inProgress];
   const latestSuccessful = completed.reduce<ApplicationChange | null>((latest, change) => {
     if (!latest) return change;
     return new Date(change.date).getTime() > new Date(latest.date).getTime() ? change : latest;
@@ -73,44 +74,56 @@ export default function BackupChanges({ changes }: Props) {
 
   return (
     <>
-      <div className={`grid ${restoreEvents.length > 0 ? 'grid-cols-4' : 'grid-cols-3'} gap-[3mm] mb-[4mm]`}>
-        <StatCard
-          label="Failed Backups"
-          value={String(failed.length)}
-          sublabel={failed.length > 0 ? 'Needs attention' : 'No failures'}
-          variant="summary"
-          size="sm"
-          color={failed.length > 0 ? 'red' : 'gray'}
-          valueClassName={COUNT_VALUE_CLASS}
-        />
-        <StatCard
-          label="Running Backups"
-          value={String(inProgress.length)}
-          sublabel="Started, running, or queued"
-          variant="summary"
-          size="sm"
-          color={inProgress.length > 0 ? 'orange' : 'gray'}
-          valueClassName={COUNT_VALUE_CLASS}
-        />
-        <StatCard
-          label="Latest Successful Backup"
-          value={latestSuccessfulValue}
-          sublabel={`${completed.length} completed`}
-          variant="summary"
-          size="sm"
-          color={latestSuccessfulColor}
-          valueClassName={TIMESTAMP_VALUE_CLASS}
-        />
-        {restoreEvents.length > 0 && (
+      <div className="flex flex-wrap items-stretch gap-[3mm] mb-[4mm]">
+        <div className="flex-1 min-w-[28mm]">
           <StatCard
-            label="Restore Events"
-            value={String(restoreEvents.length)}
-            sublabel="Recovery activity"
+            label="Failed Backups"
+            value={String(failed.length)}
+            sublabel={failed.length > 0 ? 'Needs attention' : 'No failures'}
             variant="summary"
             size="sm"
-            color="blue"
+            color={failed.length > 0 ? 'red' : 'gray'}
+            shrink
             valueClassName={COUNT_VALUE_CLASS}
           />
+        </div>
+        <div className="flex-1 min-w-[28mm]">
+          <StatCard
+            label="Running Backups"
+            value={String(inProgress.length)}
+            sublabel="Started, running, or queued"
+            variant="summary"
+            size="sm"
+            color={inProgress.length > 0 ? 'orange' : 'gray'}
+            shrink
+            valueClassName={COUNT_VALUE_CLASS}
+          />
+        </div>
+        <div className="flex-1 min-w-[28mm]">
+          <StatCard
+            label="Latest Successful Backup"
+            value={latestSuccessfulValue}
+            sublabel={`${completed.length} completed`}
+            variant="summary"
+            size="sm"
+            color={latestSuccessfulColor}
+            shrink
+            valueClassName={TIMESTAMP_VALUE_CLASS}
+          />
+        </div>
+        {restoreEvents.length > 0 && (
+          <div className="flex-1 min-w-[28mm]">
+            <StatCard
+              label="Restore Events"
+              value={String(restoreEvents.length)}
+              sublabel="Recovery activity"
+              variant="summary"
+              size="sm"
+              color="blue"
+              shrink
+              valueClassName={COUNT_VALUE_CLASS}
+            />
+          </div>
         )}
       </div>
 
@@ -120,11 +133,11 @@ export default function BackupChanges({ changes }: Props) {
         </div>
       )}
 
-      {attentionRows.length > 0 && (
+      {attentionEvents.length > 0 && (
         <div className="mb-[4mm]">
           <h3 className="text-[11pt] font-semibold text-slate-800 mb-[2mm]">Exceptions & Running Jobs</h3>
           <ListTable
-            rows={[...failed, ...inProgress].map((change) => ({
+            rows={attentionEvents.map((change) => ({
               date: change.date,
               subject: change.description,
               subtitle: `Changed by ${getChangeActor(change)}`,
@@ -176,6 +189,7 @@ export default function BackupChanges({ changes }: Props) {
         <h3 className="text-[11pt] font-semibold text-slate-800 mb-[2mm]">Event Stream</h3>
         <ListTable
           rows={relevant.map((change) => ({
+            id: change.id,
             date: change.date,
             subject: change.description,
             subtitle: `Changed by ${getChangeActor(change)}`,
@@ -189,6 +203,7 @@ export default function BackupChanges({ changes }: Props) {
           primaryTags={['type']}
           keys={['sourceLabel']}
           tagMapping={BACKUP_TAG_MAPPING}
+          groups={[{ by: 'date' }]}
           size="xs"
           density="compact"
           wrap

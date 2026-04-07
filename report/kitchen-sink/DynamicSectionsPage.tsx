@@ -15,7 +15,7 @@ export default function DynamicSectionsPage({ data, pageProps }: Props) {
     <Page {...pageProps}>
       <Section variant="hero" title="DynamicSection Auto-routing" size="md">
         <div className="text-xs text-gray-500">
-          DynamicSection chooses the specialized renderer from the section title and change type mix.
+          DynamicSection chooses the specialized renderer from the section title and change type mix, including grouped RBAC sections with date buckets and resource icons.
         </div>
       </Section>
 

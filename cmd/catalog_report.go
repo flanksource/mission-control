@@ -18,10 +18,11 @@ import (
 )
 
 var (
-	catalogReportFormat  string
-	catalogReportOutFile string
-	catalogReportSince   string
-	catalogReportTitle   string
+	catalogReportFormat   string
+	catalogReportOutFile  string
+	catalogReportSince    string
+	catalogReportTitle    string
+	catalogReportSettings string
 
 	catalogReportChanges         bool
 	catalogReportInsights        bool
@@ -32,6 +33,7 @@ var (
 	catalogReportRecursive       bool
 	catalogReportGroupBy         string
 	catalogReportChangeArtifacts bool
+	catalogReportAudit           bool
 )
 
 var CatalogReportCmd = &cobra.Command{
@@ -67,14 +69,21 @@ Examples:
 		shutdown.AddHookWithPriority("database", shutdown.PriorityCritical, stop)
 		shutdown.WaitForSignal()
 
-		configs, err := resolveConfigs(ctx, args, 0)
+		opts := buildCatalogReportOptions()
+
+		queryArgs := args
+		if opts.Settings != nil {
+			if fq := opts.Settings.FilterQuery(); fq != "" {
+				queryArgs = append(queryArgs, fq)
+			}
+		}
+
+		configs, err := resolveConfigs(ctx, queryArgs, 0)
 		if err != nil {
 			return err
 		}
 
-		opts := buildCatalogReportOptions()
-
-		data, err := catalog_report.Export(ctx, configs, opts, catalogReportFormat)
+		result, err := catalog_report.Export(ctx, configs, opts, catalogReportFormat)
 		if err != nil {
 			shutdown.ShutdownAndExit(1, err.Error())
 			return err
@@ -84,14 +93,28 @@ Examples:
 		if out == "" {
 			out = "stdout"
 		}
-		logger.Infof("Rendering catalog report to %s (%s) %dKB", out, catalogReportFormat, len(data)/1024)
+
+		details := fmt.Sprintf("Rendering catalog report to %s (%s) %dKB", out, catalogReportFormat, len(result.Data)/1024)
+		if opts.Settings != nil {
+			details += fmt.Sprintf(" settings=%s\n%s", result.Settings, opts.Settings.Pretty().ANSI())
+		}
+		if result.SrcDir != "" {
+			details += fmt.Sprintf(" dir=%s", result.SrcDir)
+		}
+		if result.Entry != "" {
+			details += fmt.Sprintf(" entry=%s", result.Entry)
+		}
+		if result.DataFile != "" {
+			details += fmt.Sprintf(" data=%s", result.DataFile)
+		}
+		logger.Infof(details)
 
 		if catalogReportOutFile != "" {
-			if err := os.WriteFile(catalogReportOutFile, data, 0600); err != nil {
+			if err := os.WriteFile(catalogReportOutFile, result.Data, 0600); err != nil {
 				return fmt.Errorf("failed to write output file: %w", err)
 			}
 		} else {
-			fmt.Print(string(data))
+			fmt.Print(string(result.Data))
 		}
 
 		return nil
@@ -104,6 +127,7 @@ func buildCatalogReportOptions() catalog_report.Options {
 		Recursive:       catalogReportRecursive,
 		GroupBy:         catalogReportGroupBy,
 		ChangeArtifacts: catalogReportChangeArtifacts,
+		Audit:           catalogReportAudit,
 		Sections: api.CatalogReportSections{
 			Changes:       catalogReportChanges,
 			Insights:      catalogReportInsights,
@@ -118,6 +142,15 @@ func buildCatalogReportOptions() catalog_report.Options {
 		if d, err := duration.ParseDuration(catalogReportSince); err == nil {
 			opts.Since = time.Duration(d)
 		}
+	}
+
+	if catalogReportSettings != "" {
+		settings, err := catalog_report.LoadSettings(catalogReportSettings)
+		if err != nil {
+			logger.Fatalf("failed to load settings: %v", err)
+		}
+		opts.Settings = settings
+		opts.SettingsPath = catalogReportSettings
 	}
 
 	return opts
@@ -139,6 +172,8 @@ func init() {
 	CatalogReportCmd.Flags().BoolVar(&catalogReportAccess, "access", true, "Include RBAC access section")
 	CatalogReportCmd.Flags().BoolVar(&catalogReportAccessLogs, "access-logs", true, "Include access logs section")
 	CatalogReportCmd.Flags().BoolVar(&catalogReportConfigJSON, "config-json", false, "Include raw config JSON")
+	CatalogReportCmd.Flags().StringVar(&catalogReportSettings, "settings", "", "Path to report settings YAML file")
+	CatalogReportCmd.Flags().BoolVar(&catalogReportAudit, "audit", false, "Append an audit page with settings, build info, queries, and scraper provenance")
 
 	Catalog.AddCommand(CatalogReportCmd)
 }
