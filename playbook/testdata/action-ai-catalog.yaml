@@ -1,0 +1,67 @@
+---
+# yaml-language-server: $schema=../../config/schemas/playbook.schema.json
+apiVersion: mission-control.flanksource.com/v1
+kind: Playbook
+metadata:
+  name: ai-audit-catalog
+spec:
+  description: AI access audit that saves findings as a catalog config item
+  configs:
+    - types:
+        - AWS::IAM::Policy
+  actions:
+    - name: audit
+      ai:
+        connection: connection://default/gemini
+        outputSchema:
+          value: |
+            {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string",
+                  "description": "Title of the audit report"
+                },
+                "summary": {
+                  "type": "string",
+                  "description": "Executive summary of the access audit findings"
+                },
+                "findings": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "severity": { "type": "string", "description": "critical, high, medium, low, or info" },
+                      "title": { "type": "string", "description": "Short title of the finding" },
+                      "description": { "type": "string", "description": "Detailed description of the finding" },
+                      "resource": { "type": "string", "description": "Affected resource name" },
+                      "recommendation": { "type": "string", "description": "Recommended remediation action" }
+                    },
+                    "required": ["severity", "title", "description", "resource", "recommendation"]
+                  }
+                },
+                "totalFindings": { "type": "integer", "description": "Total number of findings" }
+              },
+              "required": ["title", "summary", "findings", "totalFindings"]
+            }
+        systemPrompt: |
+          You are an access security auditor. Analyze the provided configuration and its
+          recent changes to identify security risks such as overly broad permissions,
+          privilege escalations, stale access, or policy misconfigurations.
+          Return findings with appropriate severity levels.
+        prompt: |
+          Review the access configuration and its recent changes.
+          Identify security findings and provide recommendations.
+        changes:
+          since: 7000d
+        analysis:
+          since: 7000d
+
+    - name: save
+      catalog:
+        name: "audit-{{.run.id}}"
+        type: "SecurityAudit::Finding"
+        config_class: SecurityAudit
+        config: "$(getLastAction.result.json)"
+        tags:
+          generated-by: ai-audit-test

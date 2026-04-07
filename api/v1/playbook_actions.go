@@ -358,6 +358,40 @@ const (
 	AIActionFormatRecommendPlaybook AIActionFormat = "recommendPlaybook"
 )
 
+// AIOutputSchema specifies a JSON schema for structured AI output.
+// Supports inline value, configMap/secret reference, or a git repository path.
+type AIOutputSchema struct {
+	// Inline schema or reference to a configMap/secret containing the schema
+	types.EnvVar `json:",inline" yaml:",inline"`
+	// Git connection reference for fetching the schema from a repository
+	Git *AIOutputSchemaGit `json:"checkout,omitempty" yaml:"checkout,omitempty"`
+}
+
+// AIOutputSchemaGit references a JSON schema file in a git repository.
+type AIOutputSchemaGit struct {
+	// Git connection reference (e.g., "connection://github/my-org")
+	Connection string `json:"connection" yaml:"connection"`
+	// Path to the JSON schema file in the repo
+	Path string `json:"path" yaml:"path"`
+	// Branch or tag to checkout (optional, defaults to the repo's default branch)
+	Branch string `json:"branch,omitempty" yaml:"branch,omitempty"`
+}
+
+// AISkill references a skill file in a git repository.
+// The repo is cloned at execution time and the skill file content is
+// prepended to the system prompt.
+type AISkill struct {
+	// Git connection reference (e.g., "connection://github/my-org")
+	Connection string `json:"connection" yaml:"connection"`
+	// Path to the skill file within the repo (e.g., "skills/access-auditor.md")
+	Path string `json:"path" yaml:"path"`
+	// Branch or tag to checkout (optional, defaults to the repo's default branch)
+	Branch string `json:"branch,omitempty" yaml:"branch,omitempty"`
+	// JsonSchemaPath is the path to a JSON schema file in the repo.
+	// If set, the AI response must conform to this schema (takes precedence over inline OutputSchema).
+	JsonSchemaPath string `json:"jsonSchemaPath,omitempty" yaml:"jsonSchemaPath,omitempty"`
+}
+
 type AIAction struct {
 	AIActionClient        `json:",inline" yaml:",inline"`
 	api.LLMContextRequest `json:",inline" yaml:",inline" template:"true"`
@@ -381,6 +415,15 @@ type AIAction struct {
 	// Output format of the prompt.
 	// Supported: markdown (default), slack, recommendPlaybook
 	Formats []AIActionFormat `json:"formats,omitempty"`
+
+	// Skills references reusable skill files from git repositories.
+	// Each skill file's content is prepended to the system prompt.
+	// If any skill has JsonSchemaPath set, that schema is used for output validation.
+	Skills []AISkill `json:"skills,omitempty" yaml:"skills,omitempty"`
+
+	// OutputSchema is a JSON schema that the AI response must conform to.
+	// Can be inline (value), from a configMap/secret (valueFrom), or from a git repo (git).
+	OutputSchema *AIOutputSchema `json:"outputSchema,omitempty" yaml:"outputSchema,omitempty"`
 }
 
 type ExecAction struct {
@@ -610,6 +653,7 @@ type PlaybookAction struct {
 	Notification        *NotificationAction        `json:"notification,omitempty" yaml:"notification,omitempty" template:"true"`
 	Logs                *LogsAction                `json:"logs,omitempty" template:"true"`
 	Report              *ReportAction              `json:"report,omitempty" yaml:"report,omitempty" template:"true"`
+	Catalog             *CatalogAction             `json:"catalog,omitempty" yaml:"catalog,omitempty" template:"true"`
 }
 
 type FacetPDFMargins struct {
@@ -632,6 +676,28 @@ type FacetOptions struct {
 	Header       string           `json:"header,omitempty" yaml:"header,omitempty" template:"true"`
 	Footer       string           `json:"footer,omitempty" yaml:"footer,omitempty" template:"true"`
 	TimestampURL string           `json:"timestampUrl,omitempty" yaml:"timestampUrl,omitempty" template:"true"`
+}
+
+// CatalogAction creates a config item in the catalog.
+type CatalogAction struct {
+	// Name of the config item
+	Name string `json:"name" yaml:"name" template:"true"`
+	// Scraper reference — ID or namespace/name of the config scraper to link to
+	Scraper string `json:"scraper" yaml:"scraper" template:"true"`
+	// Type of the config item (e.g., "SecurityAudit::Report")
+	Type string `json:"type" yaml:"type" template:"true"`
+	// ConfigClass (e.g., "Report")
+	ConfigClass string `json:"config_class,omitempty" yaml:"config_class,omitempty" template:"true"`
+	// Config is the JSON body of the config item
+	Config string `json:"config,omitempty" yaml:"config,omitempty" template:"true"`
+	// Health status
+	Health string `json:"health,omitempty" yaml:"health,omitempty" template:"true"`
+	// Status
+	Status string `json:"status,omitempty" yaml:"status,omitempty" template:"true"`
+	// Tags
+	Tags map[string]string `json:"tags,omitempty" yaml:"tags,omitempty" template:"true"`
+	// Labels
+	Labels map[string]string `json:"labels,omitempty" yaml:"labels,omitempty" template:"true"`
 }
 
 // +kubebuilder:validation:XValidation:rule="!(has(self.view) && self.view != \"\" && has(self.configs))",message="view and configs are mutually exclusive"
@@ -674,6 +740,8 @@ func (p *PlaybookAction) ActionType() string {
 		return "prometheus"
 	case p.Report != nil:
 		return "report"
+	case p.Catalog != nil:
+		return "catalog"
 	default:
 		return ""
 	}
@@ -714,6 +782,9 @@ func (p *PlaybookAction) Count() int {
 	if p.Report != nil {
 		count++
 	}
+	if p.Catalog != nil {
+		count++
+	}
 
 	return count
 }
@@ -748,6 +819,9 @@ func (p *PlaybookAction) primaryActionCount() int {
 		count++
 	}
 	if p.Report != nil {
+		count++
+	}
+	if p.Catalog != nil {
 		count++
 	}
 

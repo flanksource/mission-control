@@ -119,6 +119,9 @@ func executeAction(ctx context.Context, playbookID any, runID uuid.UUID, runActi
 	} else if actionSpec.Report != nil {
 		var e actions.Report
 		result, err = e.Run(ctx, *actionSpec.Report)
+	} else if actionSpec.Catalog != nil {
+		var e actions.Catalog
+		result, err = e.Run(ctx, *actionSpec.Catalog)
 	}
 
 	// NOTE: v is never nil, it holds in nil values.

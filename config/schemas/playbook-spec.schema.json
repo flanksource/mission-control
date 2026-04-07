@@ -71,6 +71,17 @@
           },
           "type": "array",
           "description": "Output format of the prompt.\nSupported: markdown (default), slack, recommendPlaybook"
+        },
+        "skills": {
+          "items": {
+            "$ref": "#/$defs/AISkill"
+          },
+          "type": "array",
+          "description": "Skills references reusable skill files from git repositories.\nEach skill file's content is prepended to the system prompt.\nIf any skill has JsonSchemaPath set, that schema is used for output validation."
+        },
+        "outputSchema": {
+          "$ref": "#/$defs/AIOutputSchema",
+          "description": "OutputSchema is a JSON schema that the AI response must conform to.\nCan be inline (value), from a configMap/secret (valueFrom), or from a git repo (git)."
         }
       },
       "additionalProperties": false,
@@ -79,6 +90,76 @@
         "systemPrompt",
         "prompt"
       ]
+    },
+    "AIOutputSchema": {
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        },
+        "valueFrom": {
+          "$ref": "#/$defs/EnvVarSource"
+        },
+        "checkout": {
+          "$ref": "#/$defs/AIOutputSchemaGit",
+          "description": "Git connection reference for fetching the schema from a repository"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "AIOutputSchema specifies a JSON schema for structured AI output.\nSupports inline value, configMap/secret reference, or a git repository path."
+    },
+    "AIOutputSchemaGit": {
+      "properties": {
+        "connection": {
+          "type": "string",
+          "description": "Git connection reference (e.g., \"connection://github/my-org\")"
+        },
+        "path": {
+          "type": "string",
+          "description": "Path to the JSON schema file in the repo"
+        },
+        "branch": {
+          "type": "string",
+          "description": "Branch or tag to checkout (optional, defaults to the repo's default branch)"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "connection",
+        "path"
+      ],
+      "description": "AIOutputSchemaGit references a JSON schema file in a git repository."
+    },
+    "AISkill": {
+      "properties": {
+        "connection": {
+          "type": "string",
+          "description": "Git connection reference (e.g., \"connection://github/my-org\")"
+        },
+        "path": {
+          "type": "string",
+          "description": "Path to the skill file within the repo (e.g., \"skills/access-auditor.md\")"
+        },
+        "branch": {
+          "type": "string",
+          "description": "Branch or tag to checkout (optional, defaults to the repo's default branch)"
+        },
+        "jsonSchemaPath": {
+          "type": "string",
+          "description": "JsonSchemaPath is the path to a JSON schema file in the repo.\nIf set, the AI response must conform to this schema (takes precedence over inline OutputSchema)."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "connection",
+        "path"
+      ],
+      "description": "AISkill references a skill file in a git repository.\nThe repo is cloned at execution time and the skill file content is\nprepended to the system prompt."
     },
     "AWSConnection": {
       "properties": {
@@ -271,6 +352,60 @@
         "clusterResource",
         "clusterResourceNamespace"
       ]
+    },
+    "CatalogAction": {
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Name of the config item"
+        },
+        "scraper": {
+          "type": "string",
+          "description": "Scraper reference — ID or namespace/name of the config scraper to link to"
+        },
+        "type": {
+          "type": "string",
+          "description": "Type of the config item (e.g., \"SecurityAudit::Report\")"
+        },
+        "config_class": {
+          "type": "string",
+          "description": "ConfigClass (e.g., \"Report\")"
+        },
+        "config": {
+          "type": "string",
+          "description": "Config is the JSON body of the config item"
+        },
+        "health": {
+          "type": "string",
+          "description": "Health status"
+        },
+        "status": {
+          "type": "string",
+          "description": "Status"
+        },
+        "tags": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object",
+          "description": "Tags"
+        },
+        "labels": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object",
+          "description": "Labels"
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "required": [
+        "name",
+        "scraper",
+        "type"
+      ],
+      "description": "CatalogAction creates a config item in the catalog."
     },
     "ConfigMapKeySelector": {
       "properties": {
@@ -1487,6 +1622,9 @@
         },
         "report": {
           "$ref": "#/$defs/ReportAction"
+        },
+        "catalog": {
+          "$ref": "#/$defs/CatalogAction"
         }
       },
       "additionalProperties": false,
