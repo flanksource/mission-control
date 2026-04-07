@@ -213,12 +213,12 @@ func GetRBACTemporaryAccess(ctx context.Context, configIDs []uuid.UUID, since ti
 }
 
 type AccessLogRow struct {
-	ConfigID  uuid.UUID  `json:"config_id" gorm:"column:config_id"`
-	UserName  string     `json:"user_name" gorm:"column:user_name"`
-	UserEmail *string    `json:"user_email,omitempty" gorm:"column:user_email"`
-	MFA       bool       `json:"mfa" gorm:"column:mfa"`
-	Count     *int       `json:"count,omitempty" gorm:"column:count"`
-	CreatedAt time.Time  `json:"created_at" gorm:"column:created_at"`
+	ConfigID  uuid.UUID `json:"config_id" gorm:"column:config_id"`
+	UserName  string    `json:"user_name" gorm:"column:user_name"`
+	UserEmail *string   `json:"user_email,omitempty" gorm:"column:user_email"`
+	MFA       bool      `json:"mfa" gorm:"column:mfa"`
+	Count     *int      `json:"count,omitempty" gorm:"column:count"`
+	CreatedAt time.Time `json:"created_at" gorm:"column:created_at"`
 }
 
 func GetAccessLogs(ctx context.Context, configID uuid.UUID, userID *uuid.UUID, limit int) ([]AccessLogRow, error) {
@@ -270,6 +270,21 @@ func GetAccessReviews(ctx context.Context, configID *uuid.UUID, since time.Time,
 		return nil, ctx.Oops().Wrapf(err, "failed to query access reviews")
 	}
 	return rows, nil
+}
+
+func GetPermissionSubjects(ctx context.Context) ([]string, error) {
+	var subjects []string
+	if err := ctx.DB().
+		Table("permission_subjects").
+		Distinct("id").
+		Where("id IS NOT NULL").
+		Where("id != ''").
+		Order("id").
+		Pluck("id", &subjects).Error; err != nil {
+		return nil, ctx.Oops().Wrapf(err, "failed to query permission subjects")
+	}
+
+	return subjects, nil
 }
 
 func formatDuration(d time.Duration) string {
