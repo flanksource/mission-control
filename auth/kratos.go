@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
@@ -13,7 +12,6 @@ import (
 	"github.com/flanksource/commons/rand"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	incAPI "github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
