@@ -97,7 +97,9 @@ type SubjectAccessReviewResource struct {
 type SubjectAccessReviewRequest struct {
 	Resource SubjectAccessReviewResource `json:"resource"`
 	Action   string                      `json:"action"`
-	Subjects []string                    `json:"subjects"`
+
+	// Supports ["*"], in which case we iterate over all permission subjects in the database
+	Subjects []string `json:"subjects"`
 }
 
 type SubjectAccessReviewResult struct {
@@ -145,7 +147,12 @@ func SubjectAccessReviews(c echo.Context) error {
 		return api.WriteError(c, api.Errorf(api.EINVALID, "at least one subject is required"))
 	}
 
-	if len(req.Subjects) > maxSubjectAccessReviewSubjects {
+	subjects, err := resolveAccessReviewSubjects(ctx, req.Subjects)
+	if err != nil {
+		return api.WriteError(c, err)
+	}
+
+	if len(subjects) > maxSubjectAccessReviewSubjects {
 		return api.WriteError(c, api.Errorf(api.EINVALID, "subjects exceeds maximum of %d", maxSubjectAccessReviewSubjects))
 	}
 
@@ -154,8 +161,8 @@ func SubjectAccessReviews(c echo.Context) error {
 		return api.WriteError(c, err)
 	}
 
-	results := make([]SubjectAccessReviewResult, 0, len(req.Subjects))
-	for _, subject := range req.Subjects {
+	results := make([]SubjectAccessReviewResult, 0, len(subjects))
+	for _, subject := range subjects {
 		subject = strings.TrimSpace(subject)
 		if subject == "" {
 			results = append(results, SubjectAccessReviewResult{Subject: subject, Error: "subject is required"})
@@ -171,6 +178,14 @@ func SubjectAccessReviews(c echo.Context) error {
 		Action:   req.Action,
 		Results:  results,
 	})
+}
+
+func resolveAccessReviewSubjects(ctx context.Context, subjects []string) ([]string, error) {
+	if len(subjects) != 1 || strings.TrimSpace(subjects[0]) != "*" {
+		return subjects, nil
+	}
+
+	return db.GetPermissionSubjects(ctx)
 }
 
 func resolveAccessReviewResource(ctx context.Context, resource SubjectAccessReviewResource) (*models.ABACAttribute, error) {
