@@ -1,6 +1,7 @@
 package actions
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/flanksource/duty/context"
@@ -9,6 +10,7 @@ import (
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
+	"gorm.io/gorm"
 )
 
 type Catalog struct{}
@@ -42,6 +44,8 @@ func (c *Catalog) Run(ctx context.Context, action v1.CatalogAction) (*CatalogRes
 	}
 	if err := query.First(&existing).Error; err == nil {
 		return nil, fmt.Errorf("config item with name=%q, scraper_id=%s, type=%q already exists (id=%s)", action.Name, scraperID, action.Type, existing.ID)
+	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, fmt.Errorf("failed to check for existing config item (name=%q, scraper_id=%s, type=%q): %w", action.Name, scraperID, action.Type, err)
 	}
 
 	item := models.ConfigItem{
