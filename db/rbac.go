@@ -213,12 +213,12 @@ func GetRBACTemporaryAccess(ctx context.Context, configIDs []uuid.UUID, since ti
 }
 
 type AccessLogRow struct {
-	ConfigID  uuid.UUID  `json:"config_id" gorm:"column:config_id"`
-	UserName  string     `json:"user_name" gorm:"column:user_name"`
-	UserEmail *string    `json:"user_email,omitempty" gorm:"column:user_email"`
-	MFA       bool       `json:"mfa" gorm:"column:mfa"`
-	Count     *int       `json:"count,omitempty" gorm:"column:count"`
-	CreatedAt time.Time  `json:"created_at" gorm:"column:created_at"`
+	ConfigID  uuid.UUID `json:"config_id" gorm:"column:config_id"`
+	UserName  string    `json:"user_name" gorm:"column:user_name"`
+	UserEmail *string   `json:"user_email,omitempty" gorm:"column:user_email"`
+	MFA       bool      `json:"mfa" gorm:"column:mfa"`
+	Count     *int      `json:"count,omitempty" gorm:"column:count"`
+	CreatedAt time.Time `json:"created_at" gorm:"column:created_at"`
 }
 
 func GetAccessLogs(ctx context.Context, configID uuid.UUID, userID *uuid.UUID, limit int) ([]AccessLogRow, error) {

@@ -561,4 +561,3 @@ func ptrVal(s *string) string {
 	}
 	return *s
 }
-

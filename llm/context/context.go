@@ -91,9 +91,11 @@ func Create(ctx context.Context, spec api.LLMContextRequest) (*Context, error) {
 
 	if spec.ShouldFetchConfigChanges() {
 		changes, err := query.FindCatalogChanges(ctx, query.CatalogChangesSearchRequest{
-			CatalogID: config.ID.String(),
-			Recursive: query.CatalogChangeRecursiveNone,
-			From:      fmt.Sprintf("now-%s", spec.Changes.Since),
+			BaseCatalogSearch: query.BaseCatalogSearch{
+				CatalogID: config.ID.String(),
+				Recursive: query.CatalogChangeRecursiveNone,
+				From:      fmt.Sprintf("now-%s", spec.Changes.Since),
+			},
 		})
 		if err != nil {
 			return nil, fmt.Errorf("failed to get config changes (%s): %w", config.ID, err)
@@ -151,10 +153,12 @@ func (t *Context) processRelationship(ctx context.Context, configID uuid.UUID, r
 
 	if relationship.Changes.Since != "" {
 		changes, err := query.FindCatalogChanges(ctx, query.CatalogChangesSearchRequest{
-			CatalogID: configID.String(),
-			Depth:     lo.FromPtr(relationship.Depth),
-			Recursive: relationship.Direction.ToChangeDirection(),
-			From:      fmt.Sprintf("now-%s", relationship.Changes.Since),
+			BaseCatalogSearch: query.BaseCatalogSearch{
+				CatalogID: configID.String(),
+				Depth:     lo.FromPtr(relationship.Depth),
+				Recursive: relationship.Direction.ToChangeDirection(),
+				From:      fmt.Sprintf("now-%s", relationship.Changes.Since),
+			},
 		})
 		if err != nil {
 			return fmt.Errorf("failed to get config changes (%s): %w", configID, err)
