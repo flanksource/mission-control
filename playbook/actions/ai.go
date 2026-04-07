@@ -539,6 +539,28 @@ func cloneGitRepo(ctx context.Context, connectionRef, branch string) (string, er
 	return workTree.Filesystem.Root(), nil
 }
 
+// safeReadFile validates that filePath does not escape root via traversal,
+// then reads and returns the file content.
+func safeReadFile(root, filePath string) ([]byte, error) {
+	if filepath.IsAbs(filePath) {
+		return nil, fmt.Errorf("absolute paths are not allowed: %q", filePath)
+	}
+
+	joined := filepath.Join(root, filepath.Clean(filePath))
+
+	resolved, err := filepath.EvalSymlinks(joined)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve path %q: %w", filePath, err)
+	}
+
+	rel, err := filepath.Rel(root, resolved)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		return nil, fmt.Errorf("path %q resolves outside the repository root", filePath)
+	}
+
+	return os.ReadFile(resolved)
+}
+
 // loadFileFromGit clones a git repo and reads a file at the given path.
 func loadFileFromGit(ctx context.Context, connectionRef, filePath, branch string) (string, error) {
 	root, err := cloneGitRepo(ctx, connectionRef, branch)
@@ -546,7 +568,7 @@ func loadFileFromGit(ctx context.Context, connectionRef, filePath, branch string
 		return "", err
 	}
 
-	content, err := os.ReadFile(filepath.Join(root, filePath))
+	content, err := safeReadFile(root, filePath)
 	if err != nil {
 		return "", fmt.Errorf("failed to read file %q: %w", filePath, err)
 	}
@@ -563,14 +585,14 @@ func loadSkill(ctx context.Context, skill v1.AISkill) (string, string, error) {
 		return "", "", fmt.Errorf("failed to clone skill repository: %w", err)
 	}
 
-	content, err := os.ReadFile(filepath.Join(root, skill.Path))
+	content, err := safeReadFile(root, skill.Path)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to read skill file %q: %w", skill.Path, err)
 	}
 
 	var schemaContent string
 	if skill.JsonSchemaPath != "" {
-		schema, err := os.ReadFile(filepath.Join(root, skill.JsonSchemaPath))
+		schema, err := safeReadFile(root, skill.JsonSchemaPath)
 		if err != nil {
 			return "", "", fmt.Errorf("failed to read json schema file %q: %w", skill.JsonSchemaPath, err)
 		}
