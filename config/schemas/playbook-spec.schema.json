@@ -102,7 +102,7 @@
         "valueFrom": {
           "$ref": "#/$defs/EnvVarSource"
         },
-        "git": {
+        "checkout": {
           "$ref": "#/$defs/AIOutputSchemaGit",
           "description": "Git connection reference for fetching the schema from a repository"
         }

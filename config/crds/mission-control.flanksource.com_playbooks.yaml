@@ -151,7 +151,7 @@ spec:
                             OutputSchema is a JSON schema that the AI response must conform to.
                             Can be inline (value), from a configMap/secret (valueFrom), or from a git repo (git).
                           properties:
-                            git:
+                            checkout:
                               description: Git connection reference for fetching the
                                 schema from a repository
                               properties:

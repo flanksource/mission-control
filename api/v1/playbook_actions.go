@@ -364,7 +364,7 @@ type AIOutputSchema struct {
 	// Inline schema or reference to a configMap/secret containing the schema
 	types.EnvVar `json:",inline" yaml:",inline"`
 	// Git connection reference for fetching the schema from a repository
-	Git *AIOutputSchemaGit `json:"git,omitempty" yaml:"git,omitempty"`
+	Git *AIOutputSchemaGit `json:"checkout,omitempty" yaml:"checkout,omitempty"`
 }
 
 // AIOutputSchemaGit references a JSON schema file in a git repository.
