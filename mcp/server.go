@@ -53,6 +53,22 @@ func AuthMiddleware(next echov4.HandlerFunc) echov4.HandlerFunc {
 	}
 }
 
+func registerPlaybookTools(s *server.MCPServer, hooks *server.Hooks) {
+	hooks.AddOnRegisterSession(func(goctx gocontext.Context, session server.ClientSession) {
+		if err := addPlaybooksAsTool(goctx, s, session); err != nil {
+			logger.Errorf("error on addPlaybooksAsTool for session %s: %v", session.SessionID(), err)
+		}
+	})
+}
+
+func registerViewTools(s *server.MCPServer, hooks *server.Hooks) {
+	hooks.AddOnRegisterSession(func(goctx gocontext.Context, session server.ClientSession) {
+		if err := addViewsAsTool(goctx, s, session); err != nil {
+			logger.Errorf("error on addViewsAsTool for session %s: %v", session.SessionID(), err)
+		}
+	})
+}
+
 func RegisterStaticTools(s *server.MCPServer) {
 	registerArtifacts(s)
 	registerCatalog(s)
@@ -77,14 +93,9 @@ func Server(ctx context.Context, serverOpts ...server.StreamableHTTPOption) *MCP
 		server.WithHooks(hooks),
 	)
 
-	hooks.AddOnRegisterSession(func(goctx gocontext.Context, session server.ClientSession) {
-		if err := addPlaybooksAsTool(goctx, s, session); err != nil {
-			logger.Errorf("error on addPlaybooksAsTool for session %s: %v", session.SessionID(), err)
-		}
-	})
-
 	RegisterStaticTools(s)
-	registerJobs(ctx, s)
+	registerPlaybookTools(s, hooks)
+	registerViewTools(s, hooks)
 
 	logger.Infof("Registering /mcp routes")
 

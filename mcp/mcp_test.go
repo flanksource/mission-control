@@ -8,13 +8,20 @@ import (
 	"strings"
 
 	"github.com/flanksource/duty/models"
+	dutyRBAC "github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/duty/tests/fixtures/dummy"
+	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/rbac/adapter"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
 	"github.com/mark3labs/mcp-go/mcp"
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/samber/lo"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	k8sTypes "k8s.io/apimachinery/pkg/types"
 )
 
 var jsonHeader = http.Header{echo.HeaderContentType: []string{echo.MIMEApplicationJSON}}
@@ -241,10 +248,7 @@ var _ = ginkgo.Describe("MCP Tools", ginkgo.FlakeAttempts(3), func() {
 	})
 
 	ginkgo.Describe("View Tools", func() {
-		ginkgo.It("should handle view run handler correctly", func() {
-			ginkgo.By("Testing view run handler by checking if it handles tool name correctly")
-
-			// Test that viewRunHandler handles missing tools properly
+		ginkgo.It("should return error for non-existent view tool", func() {
 			_, err := mcpClient.CallTool(DefaultContext, mcp.CallToolRequest{
 				Header: jsonHeader,
 				Params: mcp.CallToolParams{
@@ -252,8 +256,116 @@ var _ = ginkgo.Describe("MCP Tools", ginkgo.FlakeAttempts(3), func() {
 				},
 			})
 
-			// Should get an error for non-existent view tool
 			Expect(err).To(Not(BeNil()))
+		})
+
+		ginkgo.It("should allow running only permitted view tools for an authenticated user", func() {
+			Expect(dutyRBAC.Init(DefaultContext, []string{"admin"}, adapter.NewPermissionAdapter)).To(Succeed())
+
+			var allowedView models.View
+			Expect(DefaultContext.DB().Where("namespace = ? AND name = ? AND deleted_at IS NULL", dummy.PodView.Namespace, dummy.PodView.Name).First(&allowedView).Error).To(Succeed())
+			allowedToolName := generateViewToolName(allowedView)
+
+			var deniedView models.View
+			Expect(DefaultContext.DB().Where("deleted_at IS NULL").Where("NOT (namespace = ? AND name = ?)", allowedView.Namespace, allowedView.Name).Order("name asc").First(&deniedView).Error).To(Succeed())
+
+			userEmail := fmt.Sprintf("mcp-view-runner-%s@test.com", uuid.NewString())
+			testUser, err := db.CreatePerson(DefaultContext, "MCP View Runner", userEmail, "")
+			Expect(err).NotTo(HaveOccurred())
+			ginkgo.DeferCleanup(func() {
+				if testUser != nil {
+					Expect(DefaultContext.DB().Delete(testUser).Error).To(Succeed())
+				}
+			})
+
+			perm := &v1.Permission{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "mcp-view-runner-" + uuid.NewString(),
+					Namespace: "default",
+					UID:       k8sTypes.UID(uuid.NewString()),
+				},
+				Spec: v1.PermissionSpec{
+					Subject: v1.PermissionSubject{Person: testUser.Email},
+					Actions: []string{policy.ActionRead, policy.ActionMCPRun},
+					Object: v1.PermissionObject{
+						Selectors: dutyRBAC.Selectors{
+							Views: []dutyRBAC.ViewRef{{
+								Namespace: allowedView.Namespace,
+								Name:      allowedView.Name,
+							}},
+						},
+					},
+				},
+			}
+			Expect(db.PersistPermissionFromCRD(DefaultContext, perm)).To(Succeed())
+			ginkgo.DeferCleanup(func() {
+				Expect(DefaultContext.DB().Delete(&models.Permission{}, "id = ?", string(perm.GetUID())).Error).To(Succeed())
+			})
+
+			denyPerm := &v1.Permission{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "mcp-view-runner-deny-" + uuid.NewString(),
+					Namespace: "default",
+					UID:       k8sTypes.UID(uuid.NewString()),
+				},
+				Spec: v1.PermissionSpec{
+					Subject: v1.PermissionSubject{Person: testUser.Email},
+					Actions: []string{policy.ActionMCPRun},
+					Deny:    true,
+					Object: v1.PermissionObject{
+						Selectors: dutyRBAC.Selectors{
+							Views: []dutyRBAC.ViewRef{{
+								Namespace: deniedView.Namespace,
+								Name:      deniedView.Name,
+							}},
+						},
+					},
+				},
+			}
+			Expect(db.PersistPermissionFromCRD(DefaultContext, denyPerm)).To(Succeed())
+			ginkgo.DeferCleanup(func() {
+				Expect(DefaultContext.DB().Delete(&models.Permission{}, "id = ?", string(denyPerm.GetUID())).Error).To(Succeed())
+			})
+
+			Expect(dutyRBAC.ReloadPolicy()).To(Succeed())
+			ginkgo.DeferCleanup(func() {
+				Expect(dutyRBAC.ReloadPolicy()).To(Succeed())
+			})
+
+			userCtx := DefaultContext.WithUser(testUser).WithSubject(testUser.ID.String())
+			deniedToolName := generateViewToolName(deniedView)
+
+			currentViewToolsMu.Lock()
+			currentViewTools[allowedToolName] = viewNamespaceName{Namespace: allowedView.Namespace, Name: allowedView.Name}
+			currentViewTools[deniedToolName] = viewNamespaceName{Namespace: deniedView.Namespace, Name: deniedView.Name}
+			currentViewToolsMu.Unlock()
+
+			allowedResult, err := viewRunHandler(userCtx, mcp.CallToolRequest{
+				Header: jsonHeader,
+				Params: mcp.CallToolParams{
+					Name: allowedToolName,
+					Arguments: map[string]any{
+						"withRows": true,
+						"limit":    5,
+					},
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(allowedResult.IsError).To(BeFalse())
+
+			deniedResult, err := viewRunHandler(userCtx, mcp.CallToolRequest{
+				Header: jsonHeader,
+				Params: mcp.CallToolParams{
+					Name: deniedToolName,
+					Arguments: map[string]any{
+						"withRows": true,
+						"limit":    5,
+					},
+				},
+			})
+			Expect(err).NotTo(HaveOccurred())
+			Expect(deniedResult.IsError).To(BeTrue())
+			checkResultInMCPResponse(deniedResult.Content, []string{"forbidden: mcp:run not permitted"})
 		})
 	})
 

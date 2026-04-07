@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"maps"
-	"slices"
 	"strings"
 	"sync"
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
+	"github.com/flanksource/duty/rbac"
+	"github.com/flanksource/duty/rbac/policy"
 	pkgView "github.com/flanksource/duty/view"
 	"github.com/invopop/jsonschema"
 	"github.com/labstack/echo/v4"
@@ -176,6 +177,25 @@ func viewRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.Call
 		return mcp.NewToolResultError(fmt.Sprintf("tool[%s] is not associated with any view", viewToolName)), nil
 	}
 
+	owner, err := resolveOwner(ctx)
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	var view models.View
+	err = auth.WithRLS(ctx, func(rlsCtx context.Context) error {
+		view, err = gorm.G[models.View](rlsCtx.DB()).Where("namespace = ? AND name = ? AND deleted_at IS NULL", v.Namespace, v.Name).First(rlsCtx)
+		return err
+	})
+	if err != nil {
+		return mcp.NewToolResultError(err.Error()), nil
+	}
+
+	attr := &models.ABACAttribute{View: view}
+	if !rbac.HasPermission(ctx, owner, attr, policy.ActionMCPRun) {
+		return mcp.NewToolResultError(fmt.Sprintf("forbidden: mcp:run not permitted on view %s/%s", view.Namespace, view.Name)), nil
+	}
+
 	args := NewArgParser(req.Params.Arguments)
 	panels, rows, err := fetchViewData(ctx, v.Namespace, v.Name, args)
 	if err != nil {
@@ -237,16 +257,66 @@ func viewResourceHandler(goctx gocontext.Context, req mcp.ReadResourceRequest) (
 	}, nil
 }
 
-func syncViewsAsTools(ctx context.Context, s *server.MCPServer) error {
-	views, err := gorm.G[models.View](ctx.DB()).Where("deleted_at IS NULL").Find(ctx)
+func addViewsAsTool(goctx gocontext.Context, srv *server.MCPServer, session server.ClientSession) error {
+	sessionID := session.SessionID()
+
+	ctx, err := getDutyCtx(goctx)
 	if err != nil {
-		return fmt.Errorf("error fetching views: %w", err)
+		return fmt.Errorf("failed to get duty context for session %s: %w", sessionID, err)
 	}
-	var newViewTools []string
+
+	var allViews []models.View
+	err = auth.WithRLS(ctx, func(txCtx context.Context) error {
+		var err error
+		allViews, err = gorm.G[models.View](txCtx.DB()).Where("deleted_at IS NULL").Find(txCtx)
+		return err
+	})
+	if err != nil {
+		return ctx.Oops().Wrapf(err, "failed to get view tools for session %s", sessionID)
+	}
+
+	owner, err := resolveOwner(ctx)
+	if err != nil {
+		return ctx.Oops().Wrap(err)
+	}
+
+	permittedViews := lo.Filter(allViews, func(view models.View, _ int) bool {
+		attr := &models.ABACAttribute{View: view}
+		return rbac.HasPermission(ctx, owner, attr, policy.ActionMCPRun)
+	})
+
+	tools, toolsMap, err := getViewsAsTools(ctx, permittedViews)
+	if err != nil {
+		return ctx.Oops().Wrapf(err, "failed to convert views to tools for session %s", sessionID)
+	}
+
+	currentViewToolsMu.Lock()
+	maps.Copy(currentViewTools, toolsMap)
+	currentViewToolsMu.Unlock()
+
+	sessionTools := lo.Map(tools, func(tool mcp.Tool, _ int) server.ServerTool {
+		return server.ServerTool{
+			Tool:    tool,
+			Handler: viewRunHandler,
+		}
+	})
+	if err := srv.AddSessionTools(sessionID, sessionTools...); err != nil {
+		return ctx.Oops().Wrapf(err, "failed to add tool %d to session %s", len(sessionTools), sessionID)
+	}
+
+	ctx.Logger.Infof("Successfully registered %d view tools for session %q", len(tools), sessionID)
+	return nil
+}
+
+func getViewsAsTools(ctx context.Context, views []models.View) ([]mcp.Tool, map[string]viewNamespaceName, error) {
+	newViewTools := make([]mcp.Tool, 0, len(views))
+	newViewToolsMap := make(map[string]viewNamespaceName, len(views))
+
 	for _, view := range views {
 		var spec v1.ViewSpec
 		if err := json.Unmarshal(view.Spec, &spec); err != nil {
-			return fmt.Errorf("error unmarshaling view[%s] spec: %w", view.ID, err)
+			ctx.Logger.Warnf("skipping view[%s]: error unmarshaling spec: %v", view.ID, err)
+			continue
 		}
 
 		root := &jsonschema.Schema{
@@ -285,7 +355,6 @@ func syncViewsAsTools(ctx context.Context, s *server.MCPServer) error {
 			Description: fmt.Sprintf("Rows per page (max %d).", viewMaxLimit),
 		})
 
-		// Views can have template variables that we need to expose as parameters
 		if len(spec.Templating) > 0 {
 			for _, template := range spec.Templating {
 				s := &jsonschema.Schema{Type: "string", Description: template.Label}
@@ -304,7 +373,8 @@ func syncViewsAsTools(ctx context.Context, s *server.MCPServer) error {
 
 		rj, err := root.MarshalJSON()
 		if err != nil {
-			return fmt.Errorf("error marshaling root json schema: %w", err)
+			ctx.Logger.Warnf("skipping view[%s]: error marshaling json schema: %v", view.ID, err)
+			continue
 		}
 
 		toolName := generateViewToolName(view)
@@ -326,26 +396,11 @@ Use the select array to request only the columns you truly need to minimize resp
 		viewTool.Annotations.DestructiveHint = spec.MCP.DestructiveHint
 		viewTool.Annotations.IdempotentHint = spec.MCP.IdempotentHint
 		viewTool.Annotations.OpenWorldHint = spec.MCP.OpenWorldHint
-		s.AddTool(viewTool, viewRunHandler)
-		newViewTools = append(newViewTools, toolName)
-
-		currentViewToolsMu.Lock()
-		currentViewTools[toolName] = viewNamespaceName{Namespace: view.Namespace, Name: view.Name}
-		currentViewToolsMu.Unlock()
+		newViewTools = append(newViewTools, viewTool)
+		newViewToolsMap[toolName] = viewNamespaceName{Namespace: view.Namespace, Name: view.Name}
 	}
 
-	// Delete old views and update currentViewTools list
-	currentViewToolsMu.Lock()
-	currentToolNames := slices.Collect(maps.Keys(currentViewTools))
-	_, viewToolsToDelete := lo.Difference(newViewTools, currentToolNames)
-	s.DeleteTools(viewToolsToDelete...)
-	// Remove from currentViewTools
-	maps.DeleteFunc(currentViewTools, func(k string, v viewNamespaceName) bool {
-		return slices.Contains(viewToolsToDelete, k)
-	})
-	currentViewToolsMu.Unlock()
-
-	return nil
+	return newViewTools, newViewToolsMap, nil
 }
 
 func generateViewToolName(view models.View) string {
