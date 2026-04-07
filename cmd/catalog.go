@@ -128,7 +128,7 @@ func init() {
 	Query.Flags().DurationVarP(&catalogWaitFor, "wait", "w", 60*time.Second, "Wait for this long for resources to be discovered")
 	clicky.BindAllFlags(Query.PersistentFlags(), "format")
 
-	Get.Flags().DurationVar(&catalogGetSince, "since", 7*24*time.Hour, "Show changes and playbook runs since this duration ago")
+	Get.Flags().StringVar(&catalogGetSince, "since", "7d", "Time range for changes (supports d/w/y e.g. 7d, 2w, 30d)")
 	clicky.BindAllFlags(Get.PersistentFlags(), "format")
 
 	Catalog.AddCommand(Query)

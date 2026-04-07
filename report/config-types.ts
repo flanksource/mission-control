@@ -12,6 +12,7 @@ export interface ConfigItem {
   status?: string;
   health?: ConfigHealth;
   description?: string;
+  permalink?: string;
   labels?: Record<string, string>;
   tags?: Record<string, string>;
   costTotal30d?: number;
@@ -19,9 +20,20 @@ export interface ConfigItem {
   updatedAt?: string;
 }
 
+export interface ConfigChangeArtifact {
+  id: string;
+  filename: string;
+  contentType: string;
+  size: number;
+  dataUri?: string;
+}
+
 export interface ConfigChange {
   id?: string;
   configID?: string;
+  configName?: string;
+  configType?: string;
+  permalink?: string;
   changeType: string;
   severity?: ConfigSeverity;
   source?: string;
@@ -31,11 +43,15 @@ export interface ConfigChange {
   createdAt?: string;
   firstObserved?: string;
   count?: number;
+  artifacts?: ConfigChangeArtifact[];
 }
 
 export interface ConfigAnalysis {
   id?: string;
   configID?: string;
+  configName?: string;
+  configType?: string;
+  permalink?: string;
   analyzer: string;
   message?: string;
   summary?: string;

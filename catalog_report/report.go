@@ -49,6 +49,7 @@ func BuildReport(ctx context.Context, configs []models.ConfigItem, opts Options)
 	report := &api.CatalogReport{
 		Title:       opts.Title,
 		GeneratedAt: time.Now(),
+		PublicURL:   api.FrontendURL,
 		From:        sinceTime.Format(time.RFC3339),
 		ConfigItem:  configs[0],
 		Sections:    opts.Sections,

@@ -56,6 +56,7 @@ export interface CatalogReportConfigGroup {
 export interface CatalogReportData {
   title: string;
   generatedAt: string;
+  publicURL?: string;
   from?: string;
   to?: string;
   recursive?: boolean;

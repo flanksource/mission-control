@@ -8,6 +8,7 @@ import (
 
 	"github.com/flanksource/clicky"
 	"github.com/flanksource/clicky/api"
+	"github.com/flanksource/commons/duration"
 	"github.com/flanksource/commons/logger"
 	"github.com/flanksource/commons/properties"
 	"github.com/flanksource/duty"
@@ -19,7 +20,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var catalogGetSince time.Duration
+var catalogGetSince string
 
 var Get = &cobra.Command{
 	Use:              "get <ID|QUERY>",
@@ -48,6 +49,17 @@ var Get = &cobra.Command{
 }
 
 func resolveConfigID(ctx context.Context, args []string) (*models.ConfigItem, error) {
+	configs, err := resolveConfigs(ctx, args, 2)
+	if err != nil {
+		return nil, err
+	}
+	if len(configs) > 1 {
+		return nil, fmt.Errorf("query matched multiple configs, expected exactly one")
+	}
+	return &configs[0], nil
+}
+
+func resolveConfigs(ctx context.Context, args []string, limit int) ([]models.ConfigItem, error) {
 	if id, err := uuid.Parse(args[0]); err == nil {
 		config, err := query.GetCachedConfig(ctx, id.String())
 		if err != nil {
@@ -56,11 +68,13 @@ func resolveConfigID(ctx context.Context, args []string) (*models.ConfigItem, er
 		if config == nil {
 			return nil, fmt.Errorf("config item %s not found", id)
 		}
-		return config, nil
+		return []models.ConfigItem{*config}, nil
 	}
 
 	req := parseQuery(args)
-	req.Limit = 2
+	if limit > 0 {
+		req.Limit = limit
+	}
 	response, err := query.SearchResources(ctx, req)
 	if err != nil {
 		return nil, fmt.Errorf("search failed: %w", err)
@@ -68,18 +82,21 @@ func resolveConfigID(ctx context.Context, args []string) (*models.ConfigItem, er
 	if len(response.Configs) == 0 {
 		return nil, fmt.Errorf("no config found matching query")
 	}
-	if len(response.Configs) > 1 {
-		return nil, fmt.Errorf("query matched multiple configs, expected exactly one")
-	}
 
-	config, err := query.GetCachedConfig(ctx, response.Configs[0].ID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get config: %w", err)
+	var configs []models.ConfigItem
+	for _, c := range response.Configs {
+		config, err := query.GetCachedConfig(ctx, c.ID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get config %s: %w", c.ID, err)
+		}
+		if config != nil {
+			configs = append(configs, *config)
+		}
 	}
-	if config == nil {
-		return nil, fmt.Errorf("config item not found")
+	if len(configs) == 0 {
+		return nil, fmt.Errorf("no config found matching query")
 	}
-	return config, nil
+	return configs, nil
 }
 
 type CatalogGetResult struct {
@@ -91,19 +108,23 @@ type CatalogGetResult struct {
 	Access            []models.ConfigAccessSummary `json:"access,omitempty"`
 	PlaybookRuns      []models.PlaybookRun         `json:"playbook_runs,omitempty"`
 
-	since time.Duration
+	since string
 }
 
-func runCatalogGet(ctx context.Context, args []string, since time.Duration) (*CatalogGetResult, error) {
+func runCatalogGet(ctx context.Context, args []string, sinceStr string) (*CatalogGetResult, error) {
 	config, err := resolveConfigID(ctx, args)
 	if err != nil {
 		return nil, err
 	}
 
-	sinceTime := time.Now().Add(-since)
+	since, err := duration.ParseDuration(sinceStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid --since value %q: %w", sinceStr, err)
+	}
+	sinceTime := time.Now().Add(-time.Duration(since))
 	id := config.ID
 
-	result := &CatalogGetResult{ConfigItem: *config, since: since}
+	result := &CatalogGetResult{ConfigItem: *config, since: sinceStr}
 
 	var lastScraped models.ConfigItemLastScrapedTime
 	if err := ctx.DB().Where("config_id = ?", id).First(&lastScraped).Error; err == nil {
@@ -115,16 +136,41 @@ func runCatalogGet(ctx context.Context, args []string, since time.Duration) (*Ca
 		return nil, fmt.Errorf("failed to get related configs: %w", err)
 	}
 
-	if err := ctx.DB().Where("config_id = ? AND status = 'open'", id).
-		Find(&result.Insights).Error; err != nil {
-		return nil, fmt.Errorf("failed to get insights: %w", err)
-	}
-
-	if err := ctx.DB().Where("config_id = ? AND created_at >= ?", id, sinceTime).
-		Order("created_at DESC").Limit(50).
-		Find(&result.Changes).Error; err != nil {
+	changesResp, err := query.FindCatalogChanges(ctx, query.CatalogChangesSearchRequest{
+		BaseCatalogSearch: query.BaseCatalogSearch{
+			CatalogID: id.String(),
+			FromTime:  &sinceTime,
+			PageSize:  50,
+		},
+	})
+	if err != nil {
 		return nil, fmt.Errorf("failed to get changes: %w", err)
 	}
+	result.Changes = make([]models.ConfigChange, len(changesResp.Changes))
+	for i, c := range changesResp.Changes {
+		result.Changes[i] = models.ConfigChange{
+			ID:         c.ID,
+			ConfigID:   c.ConfigID,
+			ChangeType: c.ChangeType,
+			Severity:   models.Severity(c.Severity),
+			Source:     c.Source,
+			Summary:    c.Summary,
+			Count:      c.Count,
+			CreatedAt:  c.CreatedAt,
+			CreatedBy:  c.CreatedBy,
+		}
+	}
+
+	insightsResp, err := query.FindCatalogInsights(ctx, query.CatalogInsightsSearchRequest{
+		BaseCatalogSearch: query.BaseCatalogSearch{
+			CatalogID: id.String(),
+			PageSize:  50,
+		},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get insights: %w", err)
+	}
+	result.Insights = insightsResp.Insights
 
 	result.Access, err = query.FindConfigAccessByConfigIDs(ctx, []uuid.UUID{id})
 	if err != nil {
@@ -156,7 +202,7 @@ func (r CatalogGetResult) Pretty() api.Text {
 		))
 	}
 
-	sinceLabel := formatDuration(r.since)
+	sinceLabel := r.since
 
 	if len(r.Insights) > 0 {
 		rows := lo.Map(r.Insights, func(a models.ConfigAnalysis, _ int) analysisRow {

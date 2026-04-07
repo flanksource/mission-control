@@ -5,7 +5,7 @@ import type { ConfigAnalysis, ConfigSeverity, AnalysisType } from '../config-typ
 import { formatDate } from './utils.ts';
 
 interface Props {
-  analyses: ConfigAnalysis[];
+  analyses?: ConfigAnalysis[];
 }
 
 const SEVERITY_ORDER: ConfigSeverity[] = ['critical', 'high', 'medium', 'low', 'info'];
@@ -37,22 +37,25 @@ const ANALYSIS_TYPES: AnalysisType[] = [
 function InsightEntry({ analysis }: { analysis: ConfigAnalysis }) {
   const sev = analysis.severity ?? 'info';
   return (
-    <div className="flex items-center gap-[1.5mm] py-[0.3mm] border-b border-gray-50 last:border-b-0 text-[6pt]">
+    <div className="flex items-center gap-[1.5mm] py-[0.3mm] border-b border-gray-50 last:border-b-0 text-xs">
       <span className="w-[3.5mm] h-[3.5mm] shrink-0 flex items-center justify-center">
         <Icon name={analysis.analysisType || analysis.analyzer} size={10} />
       </span>
       <span className="font-medium text-slate-800 whitespace-nowrap">{analysis.analyzer}</span>
+      {analysis.configName && (
+        <span className="text-xs text-blue-600 bg-blue-50 px-[0.5mm] rounded whitespace-nowrap shrink-0">{analysis.configName}</span>
+      )}
       <span className="text-gray-600 leading-tight flex-1 truncate">{analysis.message || analysis.summary || '-'}</span>
-      <span className={`text-[4.5pt] leading-none px-[0.5mm] py-[0.15mm] rounded border font-semibold whitespace-nowrap shrink-0 ${SEVERITY_TEXT[sev] ?? SEVERITY_TEXT.info}`}>
+      <span className={`text-xs leading-none px-[0.5mm] py-[0.15mm] rounded border font-semibold whitespace-nowrap shrink-0 ${SEVERITY_TEXT[sev] ?? SEVERITY_TEXT.info}`}>
         {sev}
       </span>
       {analysis.status && (
-        <span className={`text-[4.5pt] leading-none px-[0.5mm] py-[0.15mm] rounded border font-semibold whitespace-nowrap shrink-0 ${STATUS_TEXT[analysis.status] ?? STATUS_TEXT.resolved}`}>
+        <span className={`text-xs leading-none px-[0.5mm] py-[0.15mm] rounded border font-semibold whitespace-nowrap shrink-0 ${STATUS_TEXT[analysis.status] ?? STATUS_TEXT.resolved}`}>
           {analysis.status}
         </span>
       )}
       {analysis.lastObserved && (
-        <span className="text-[5pt] text-gray-400 whitespace-nowrap shrink-0">{formatDate(analysis.lastObserved)}</span>
+        <span className="text-xs text-gray-400 whitespace-nowrap shrink-0">{formatDate(analysis.lastObserved)}</span>
       )}
     </div>
   );
@@ -71,8 +74,8 @@ function AnalysisTypeGroup({ type, analyses }: { type: string; analyses: ConfigA
   return (
     <div className="mb-[2mm]">
       <div className="flex items-center gap-[1.5mm] mb-[0.5mm]">
-        <span className="text-[7pt] font-semibold text-slate-800 capitalize">{type}</span>
-        <span className="text-[5pt] text-gray-500 bg-gray-100 px-[1mm] rounded-full">
+        <span className="text-xs font-semibold text-slate-800 capitalize">{type}</span>
+        <span className="text-xs text-gray-500 bg-gray-100 px-[1mm] rounded-full">
           {analyses.length}
         </span>
       </div>
@@ -84,6 +87,7 @@ function AnalysisTypeGroup({ type, analyses }: { type: string; analyses: ConfigA
 }
 
 export default function ConfigInsightsSection({ analyses }: Props) {
+  if (!analyses?.length) return null;
   const bySeverity = Object.fromEntries(
     SEVERITY_ORDER.map((sev) => [sev, analyses.filter((a) => (a.severity ?? 'info') === sev).length])
   );
@@ -100,17 +104,12 @@ export default function ConfigInsightsSection({ analyses }: Props) {
             color={SEVERITY_COLOR[sev]}
             value={bySeverity[sev]}
             label={sev.charAt(0).toUpperCase() + sev.slice(1)}
-            size="xs"
           />
         ))}
       </div>
-      {analyses.length === 0 ? (
-        <p className="text-[8pt] text-gray-500 italic">No analysis results.</p>
-      ) : (
-        ANALYSIS_TYPES.map((type) => (
-          <AnalysisTypeGroup key={type} type={type} analyses={byType[type]} />
-        ))
-      )}
+      {ANALYSIS_TYPES.map((type) => (
+        <AnalysisTypeGroup key={type} type={type} analyses={byType[type]} />
+      ))}
     </Section>
   );
 }

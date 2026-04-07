@@ -12,12 +12,60 @@ export function formatDateTime(iso: string): string {
 }
 
 export function formatRelative(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
+  return formatMonthDay(iso);
+}
+
+export function formatTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+export function formatMonthDay(iso: string): string {
+  const d = new Date(iso);
+  const now = new Date();
+  if (d.getFullYear() !== now.getFullYear()) {
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+export type TimeBucketFormat = 'time' | 'monthDay';
+
+export interface TimeBucket {
+  key: string;
+  label: string;
+  dateFormat: TimeBucketFormat;
+}
+
+export function getTimeBucket(iso: string): TimeBucket {
+  const d = new Date(iso);
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diffDays = Math.floor((startOfToday.getTime() - new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()) / 86400000);
+
+  if (diffDays <= 0) {
+    return { key: 'today', label: formatDayLabel(d), dateFormat: 'time' };
+  }
+  if (diffDays <= 6) {
+    return { key: `day-${diffDays}`, label: formatDayLabel(d), dateFormat: 'time' };
+  }
+  if (diffDays <= 30) {
+    const weekStart = new Date(d);
+    weekStart.setDate(d.getDate() - d.getDay() + 1);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 4);
+    const fmt = (dt: Date) => dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    return { key: `week-${fmt(weekStart)}`, label: `${fmt(weekStart)} – ${fmt(weekEnd)}`, dateFormat: 'monthDay' };
+  }
+  const monthLabel = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+  return { key: `month-${d.getFullYear()}-${d.getMonth()}`, label: monthLabel, dateFormat: 'monthDay' };
+}
+
+function formatDayLabel(d: Date): string {
+  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+}
+
+export function formatEntryDate(iso: string, fmt: TimeBucketFormat): string {
+  return fmt === 'time' ? formatTime(iso) : formatMonthDay(iso);
 }
 
 export function formatBytes(bytes: number): string {

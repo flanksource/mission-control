@@ -72,7 +72,7 @@ function groupByConfigType(resources: RBACUserResource[]): Map<string, RBACUserR
 
 export default function RBACUserSection({ user }: Props) {
   const lastSignIn = user.lastSignedInAt ? age(user.lastSignedInAt) : 'Never';
-  const grouped = groupByConfigType(user.resources);
+  const grouped = groupByConfigType(user.resources || []);
 
   const title = (
     <span className="inline-flex items-center gap-[1mm]">
@@ -100,7 +100,7 @@ export default function RBACUserSection({ user }: Props) {
         </span>
         <span className="border-l border-gray-300 pl-[3mm]">
           <span className="font-medium text-gray-400">Resources: </span>
-          {user.resources.length}
+          {(user.resources || []).length}
         </span>
       </div>
       {[...grouped.entries()].map(([configType, resources]) => {

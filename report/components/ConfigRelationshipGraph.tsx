@@ -6,8 +6,8 @@ import ConfigLink from './ConfigLink.tsx';
 
 interface Props {
   centralConfig: ConfigItem;
-  relationships: ConfigRelationship[];
-  relatedConfigs: ConfigItem[];
+  relationships?: ConfigRelationship[];
+  relatedConfigs?: ConfigItem[];
 }
 
 function HealthDot({ health }: { health: string }) {
@@ -54,10 +54,12 @@ function RelationshipGroup({ title, relationships, configLookup }: {
 }
 
 export default function ConfigRelationshipGraph({ centralConfig, relationships, relatedConfigs }: Props) {
+  if (!relatedConfigs?.length) return null;
   const configLookup = new Map(relatedConfigs.map((c) => [c.id, c]));
 
-  const incoming = relationships.filter((r) => r.direction === 'incoming');
-  const outgoing = relationships.filter((r) => r.direction === 'outgoing');
+  const rels = relationships || [];
+  const incoming = rels.filter((r) => r.direction === 'incoming');
+  const outgoing = rels.filter((r) => r.direction === 'outgoing');
 
   return (
     <Section variant="hero" title="Config Relationships" size="md">
@@ -70,15 +72,8 @@ export default function ConfigRelationshipGraph({ centralConfig, relationships, 
           <span className="text-[7pt] text-gray-500 ml-[2mm]">({centralConfig.status})</span>
         )}
       </div>
-
-      {relationships.length === 0 ? (
-        <p className="text-[9pt] text-gray-500 italic">No relationships found.</p>
-      ) : (
-        <>
-          <RelationshipGroup title="Depends On" relationships={outgoing} configLookup={configLookup} />
-          <RelationshipGroup title="Depended On By" relationships={incoming} configLookup={configLookup} />
-        </>
-      )}
+      <RelationshipGroup title="Depends On" relationships={outgoing} configLookup={configLookup} />
+      <RelationshipGroup title="Depended On By" relationships={incoming} configLookup={configLookup} />
     </Section>
   );
 }

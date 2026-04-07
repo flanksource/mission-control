@@ -22,11 +22,11 @@ function ChangeTypeBadge({ type }: { type: string }) {
 }
 
 interface Props {
-  changelog: RBACChangeEntry[];
+  changelog?: RBACChangeEntry[];
 }
 
 export default function RBACChangelogSection({ changelog }: Props) {
-  if (changelog.length === 0) return null;
+  if (!changelog?.length) return null;
 
   return (
     <Section variant="hero" title="Permission Changelog" size="md">

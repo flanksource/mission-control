@@ -39,10 +39,11 @@ function EntryDetail({ entry }: { entry: CatalogReportEntry }) {
 }
 
 interface CatalogListProps {
-  entries: CatalogReportEntry[];
+  entries?: CatalogReportEntry[];
 }
 
 export default function CatalogList({ entries }: CatalogListProps) {
+  if (!entries?.length) return null;
   return (
     <Section variant="hero" title={`Config Items (${entries.length})`} size="md">
       <ListTable

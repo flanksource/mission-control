@@ -29,6 +29,9 @@ func RenderCLI(data any, format, entryFile string) ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("prepare facet src dir: %w", err)
 	}
+	if _, override := ResolveSource(); override != "" {
+		entryFile = override
+	}
 
 	dataJSON, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
@@ -152,8 +155,8 @@ func RenderHTTP(ctx context.Context, baseURL, token string, data any, format, en
 // SrcDir returns a stable directory containing the embedded report TSX files.
 // On first call it extracts the files; subsequent calls reuse the directory.
 var SrcDir = sync.OnceValues(func() (string, error) {
-	if SourceDir != "" {
-		return SourceDir, nil
+	if dir, _ := ResolveSource(); dir != "" {
+		return dir, nil
 	}
 
 	cacheDir, err := os.UserCacheDir()

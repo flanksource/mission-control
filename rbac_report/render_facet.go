@@ -4,26 +4,28 @@ import (
 	"fmt"
 
 	"github.com/flanksource/duty/context"
+	"github.com/flanksource/duty/models"
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/report"
 )
 
-func RenderFacetHTML(ctx context.Context, r *api.RBACReport, byUser bool) ([]byte, error) {
-	return renderWithFacet(ctx, r, "html", byUser)
+func RenderFacetHTML(ctx context.Context, r *api.RBACReport, view string) ([]byte, error) {
+	return renderWithFacet(ctx, r, "html", view)
 }
 
-func RenderFacetPDF(ctx context.Context, r *api.RBACReport, byUser bool) ([]byte, error) {
-	return renderWithFacet(ctx, r, "pdf", byUser)
+func RenderFacetPDF(ctx context.Context, r *api.RBACReport, view string) ([]byte, error) {
+	return renderWithFacet(ctx, r, "pdf", view)
 }
 
-func renderWithFacet(ctx context.Context, r *api.RBACReport, format string, byUser bool) ([]byte, error) {
+func renderWithFacet(ctx context.Context, r *api.RBACReport, format string, view string) ([]byte, error) {
 	if r == nil {
 		return nil, fmt.Errorf("RBAC report must not be nil")
 	}
 
-	entryFile := "RBACReport.tsx"
-	if byUser {
+	entryFile := "RBACMatrixReport.tsx"
+	switch view {
+	case "user":
 		entryFile = "RBACByUserReport.tsx"
 	}
 
@@ -40,6 +42,9 @@ func renderWithFacet(ctx context.Context, r *api.RBACReport, format string, byUs
 
 func initSlices(r *api.RBACReport) api.RBACReport {
 	out := *r
+	if out.Parents == nil {
+		out.Parents = []models.ConfigItem{}
+	}
 	if out.Resources == nil {
 		out.Resources = []api.RBACResource{}
 	}

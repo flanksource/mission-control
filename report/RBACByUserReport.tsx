@@ -1,80 +1,43 @@
 import React from 'react';
-import { Page, PageBreak } from '@flanksource/facet';
+import { Document, Page, Header, Footer } from '@flanksource/facet';
 import type { RBACReport } from './rbac-types.ts';
 import RBACSummarySection from './components/RBACSummarySection.tsx';
 import RBACUserSection from './components/RBACUserSection.tsx';
 import RBACChangelogSection from './components/RBACChangelogSection.tsx';
 import RBACCoverContent from './components/RBACCoverContent.tsx';
 import { MatrixLegend } from './components/RBACMatrixSection.tsx';
-
-function PageHeader({ title }: { title: string }) {
-  return (
-    <div className="flex items-center justify-between px-[5mm] py-[1mm] bg-[#1e293b] text-white text-[7pt]">
-      <span className="font-semibold">{title}</span>
-      <span className="text-gray-300">RBAC Report (By User)</span>
-    </div>
-  );
-}
-
-function PageFooter() {
-  const now = new Date().toISOString().replace('T', ' ').replace(/\.\d+Z$/, ' UTC');
-  return (
-    <div className="px-[5mm] py-[1mm] border-t border-gray-200 text-[6pt] text-gray-400">
-      <MatrixLegend />
-      <div className="flex items-center justify-between mt-[1mm]">
-        <span>Generated {now}</span>
-      </div>
-    </div>
-  );
-}
+import PageHeader from './components/PageHeader.tsx';
+import PageFooter from './components/PageFooter.tsx';
 
 interface Props {
   data: RBACReport;
 }
 
 export default function RBACByUserReportPage({ data }: Props) {
-  const header = <PageHeader title={data.title} />;
-  const footer = <PageFooter />;
-  const pageProps = {
-    pageSize: 'a4-landscape' as const,
-    margins: { top: 1, bottom: 1, left: 5, right: 5 },
-    header,
-    headerHeight: 8,
-    footer,
-    footerHeight: 14,
-  };
-
   const users = data.users || [];
 
   return (
-    <>
-      <Page pageSize="a4-landscape" margins={{ top: 10, bottom: 10, left: 5, right: 5 }}>
+    <Document pageSize="a4-landscape" margins={{ top: 1, bottom: 1, left: 5, right: 5 }}>
+      <Header height={8}>
+        <PageHeader subtitle="RBAC Report (By User)" />
+      </Header>
+      <Footer height={14}>
+        <PageFooter generatedAt={data.generatedAt}><MatrixLegend /></PageFooter>
+      </Footer>
+
+      <Page type="first" margins={{ top: 10, bottom: 10, left: 5, right: 5 }}>
         <RBACCoverContent report={data} subtitle="RBAC Report - By User" />
       </Page>
 
-      <PageBreak />
-
-      <Page {...pageProps}>
+      <Page>
         <RBACSummarySection summary={data.summary} />
+
+        {users.map((user, idx) => (
+          <RBACUserSection key={idx} user={user} />
+        ))}
+
+        <RBACChangelogSection changelog={data.changelog} />
       </Page>
-
-      {users.map((user, idx) => (
-        <React.Fragment key={idx}>
-          <PageBreak />
-          <Page {...pageProps}>
-            <RBACUserSection user={user} />
-          </Page>
-        </React.Fragment>
-      ))}
-
-      {data.changelog.length > 0 && (
-        <>
-          <PageBreak />
-          <Page {...pageProps}>
-            <RBACChangelogSection changelog={data.changelog} />
-          </Page>
-        </>
-      )}
-    </>
+    </Document>
   );
 }

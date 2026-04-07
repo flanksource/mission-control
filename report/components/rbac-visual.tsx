@@ -1,5 +1,5 @@
 import React from 'react';
-import { LuUser, LuUsers, LuServer, LuBot } from 'react-icons/lu';
+import { Icon } from '@flanksource/icons/icon';
 
 // --- Identity Types ---
 
@@ -14,11 +14,11 @@ export interface IdentityInfo {
 
 const IDENTITY_COLOR = '#64748B';
 
-const IDENTITY_ICONS: Record<IdentityType, React.ComponentType<{ size?: number; color?: string; style?: React.CSSProperties }>> = {
-  user: LuUser,
-  group: LuUsers,
-  service: LuServer,
-  bot: LuBot,
+const IDENTITY_ICON_NAMES: Record<IdentityType, string> = {
+  user: 'user',
+  group: 'group',
+  service: 'server',
+  bot: 'bot',
 };
 
 const IDENTITY_LABELS: Record<IdentityType, string> = {
@@ -103,8 +103,7 @@ export function ReviewOverdueLegendSwatch() {
 
 export function IdentityIcon({ userId, roleSource, size = 14 }: { userId: string; roleSource?: string; size?: number }) {
   const info = identityType(userId, roleSource);
-  const IconComponent = IDENTITY_ICONS[info.type];
-  return <IconComponent size={size} color={IDENTITY_COLOR} style={{ display: 'inline-block', verticalAlign: 'middle' }} />;
+  return <Icon name={IDENTITY_ICON_NAMES[info.type]} size={size} />;
 }
 
 export function AccessIndicator({ direct, color, size = 2.5 }: { direct: boolean; color: string; size?: number }) {

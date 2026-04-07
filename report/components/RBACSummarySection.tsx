@@ -17,12 +17,12 @@ export default function RBACSummarySection({ summary }: Props) {
         <StatCard
           label="Stale Access"
           value={summary.staleAccessCount}
-          variant={summary.staleAccessCount > 0 ? 'warning' : 'default'}
+          color={summary.staleAccessCount > 0 ? 'orange' : undefined}
         />
         <StatCard
           label="Overdue Reviews"
           value={summary.overdueReviews}
-          variant={summary.overdueReviews > 0 ? 'warning' : 'default'}
+          color={summary.overdueReviews > 0 ? 'red' : undefined}
         />
       </div>
     </Section>

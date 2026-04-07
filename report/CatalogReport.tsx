@@ -1,5 +1,5 @@
 import React from 'react';
-import { Page, PageBreak, Section } from '@flanksource/facet';
+import { Document, Page, Header, Footer, Section } from '@flanksource/facet';
 import { Icon } from '@flanksource/icons/icon';
 import type { CatalogReportData, CatalogReportConfigGroup } from './catalog-report-types.ts';
 import ConfigChangesSection from './components/ConfigChangesSection.tsx';
@@ -12,24 +12,8 @@ import RBACMatrixSection from './components/RBACMatrixSection.tsx';
 import ArtifactAppendix from './components/ArtifactAppendix.tsx';
 import CoverPage from './components/CoverPage.tsx';
 import CatalogList from './components/CatalogList.tsx';
-
-function PageHeader({ title }: { title: string }) {
-  return (
-    <div className="flex items-center justify-between px-[5mm] py-[1mm] bg-[#1e293b] text-white text-xs">
-      <span className="font-semibold">{title}</span>
-      <span className="text-gray-300">Catalog Report</span>
-    </div>
-  );
-}
-
-function PageFooter() {
-  const now = new Date().toISOString().replace('T', ' ').replace(/\.\d+Z$/, ' UTC');
-  return (
-    <div className="px-[5mm] py-[1mm] border-t border-gray-200 text-xs text-gray-400 flex items-center justify-between">
-      <span>Generated {now}</span>
-    </div>
-  );
-}
+import PageHeader from './components/PageHeader.tsx';
+import PageFooter from './components/PageFooter.tsx';
 
 function CatalogCoverPage({ data }: { data: CatalogReportData }) {
   const ci = data.configItem || {};
@@ -94,17 +78,6 @@ interface CatalogReportProps {
 }
 
 export default function CatalogReportPage({ data }: CatalogReportProps) {
-  const header = <PageHeader title={data.title || 'Catalog Report'} />;
-  const footer = <PageFooter />;
-  const pageProps = {
-    pageSize: 'a4' as const,
-    margins: { top: 1, bottom: 1, left: 5, right: 5 },
-    header,
-    headerHeight: 8,
-    footer,
-    footerHeight: 8,
-  };
-
   const configItem = {
     id: data.configItem.id,
     name: data.configItem.name,
@@ -120,154 +93,65 @@ export default function CatalogReportPage({ data }: CatalogReportProps) {
   };
 
   return (
-    <>
-      <Page pageSize="a4" margins={{ top: 10, bottom: 10, left: 5, right: 5 }}>
+    <Document pageSize="a4" margins={{ top: 1, bottom: 1, left: 5, right: 5 }}>
+      <Header height={8}>
+        <PageHeader subtitle="Catalog Report" />
+      </Header>
+      <Footer height={8}>
+        <PageFooter publicURL={data.publicURL} generatedAt={data.generatedAt} />
+      </Footer>
+
+      <Page type="first" margins={{ top: 10, bottom: 10, left: 5, right: 5 }}>
         <CatalogCoverPage data={data} />
       </Page>
 
-      {(data.entries || []).length > 0 && (
-        <>
-          <PageBreak />
-          <Page {...pageProps}>
-            <CatalogList entries={data.entries!} />
-          </Page>
-        </>
-      )}
+      <Page>
+        <CatalogList entries={data.entries} />
 
-      {data.groupBy === 'config' && (data.entries || []).map((entry, idx) => (
-        <React.Fragment key={entry.configItem?.id || idx}>
-          {(entry.changes || []).length > 0 && (
-            <>
-              <PageBreak />
-              <Page {...pageProps}>
-                <ConfigGroupHeader group={{ configItem: entry.configItem as any, changes: entry.changes, analyses: entry.analyses, access: entry.access, accessLogs: entry.accessLogs }} />
-                <ConfigChangesSection changes={entry.changes} hideConfigName />
-              </Page>
-            </>
-          )}
-          {(entry.analyses || []).length > 0 && (
-            <>
-              <PageBreak />
-              <Page {...pageProps}>
-                <ConfigGroupHeader group={{ configItem: entry.configItem as any, changes: entry.changes, analyses: entry.analyses, access: entry.access, accessLogs: entry.accessLogs }} />
-                <ConfigInsightsSection analyses={entry.analyses} />
-              </Page>
-            </>
-          )}
-          {(entry.rbacResources || []).length > 0 && (
-            <>
-              <PageBreak />
-              <Page {...pageProps}>
-                <ConfigGroupHeader group={{ configItem: entry.configItem as any, changes: entry.changes, analyses: entry.analyses, access: entry.access, accessLogs: entry.accessLogs }} />
-                {entry.rbacResources!.map((resource, rIdx) => (
-                  <RBACMatrixSection key={resource.configId || rIdx} resource={resource} />
-                ))}
-              </Page>
-            </>
-          )}
-        </React.Fragment>
-      ))}
+        {data.groupBy === 'config' && (data.entries || []).map((entry, idx) => (
+          <React.Fragment key={entry.configItem?.id || idx}>
+            <ConfigGroupHeader group={{ configItem: entry.configItem as any, changes: entry.changes, analyses: entry.analyses, access: entry.access, accessLogs: entry.accessLogs }} />
+            <ConfigChangesSection changes={entry.changes} hideConfigName />
+            <ConfigInsightsSection analyses={entry.analyses} />
+            {(entry.rbacResources || []).map((resource, rIdx) => (
+              <RBACMatrixSection key={resource.configId || rIdx} resource={resource} />
+            ))}
+          </React.Fragment>
+        ))}
 
-      {data.groupBy !== 'config' && data.sections?.changes && (data.changes || []).length > 0 && (
-        <>
-          <PageBreak />
-          <Page {...pageProps}>
-            <ConfigChangesSection changes={data.changes} />
-          </Page>
-        </>
-      )}
-
-      {data.groupBy !== 'config' && data.sections?.insights && (data.analyses || []).length > 0 && (
-        <>
-          <PageBreak />
-          <Page {...pageProps}>
-            <ConfigInsightsSection analyses={data.analyses} />
-          </Page>
-        </>
-      )}
-
-      {data.sections?.relationships && data.relationshipTree && (
-        <>
-          <PageBreak />
-          <Page {...pageProps}>
-            <ConfigTreeSection tree={data.relationshipTree} />
-          </Page>
-        </>
-      )}
-
-      {data.sections?.relationships && !data.relationshipTree && (data.relatedConfigs || []).length > 0 && (
-        <>
-          <PageBreak />
-          <Page {...pageProps}>
-            <ConfigRelationshipGraph
-              centralConfig={configItem}
-              relationships={data.relationships}
-              relatedConfigs={data.relatedConfigs}
-            />
-          </Page>
-        </>
-      )}
-
-      {data.groupBy !== 'config' && data.sections?.access && (data.access || []).length > 0 && (
-        <>
-          <PageBreak />
-          <Page {...pageProps}>
-            <CatalogAccessSection access={data.access} />
-          </Page>
-        </>
-      )}
-
-      {data.groupBy !== 'config' && data.sections?.accessLogs && (data.accessLogs || []).length > 0 && (
-        <>
-          <PageBreak />
-          <Page {...pageProps}>
-            <CatalogAccessLogsSection logs={data.accessLogs} />
-          </Page>
-        </>
-      )}
-
-      {data.groupBy === 'config' && (data.configGroups || []).map((group, idx) => (
-        <React.Fragment key={group.configItem.id || idx}>
-          <Page {...pageProps}>
-            <ConfigGroupHeader group={group} />
-            {(group.changes || []).length > 0 && (
-              <ConfigChangesSection changes={group.changes} hideConfigName />
-            )}
-            {(group.analyses || []).length > 0 && (
-              <ConfigInsightsSection analyses={group.analyses} />
-            )}
-            {(group.access || []).length > 0 && (
-              <CatalogAccessSection access={group.access} />
-            )}
-            {(group.accessLogs || []).length > 0 && (
-              <CatalogAccessLogsSection logs={group.accessLogs} />
-            )}
-          </Page>
-        </React.Fragment>
-      ))}
-
-      {data.sections?.configJSON && data.configJSON && (
-        <>
-          <PageBreak />
-          <Page {...pageProps}>
-            <ConfigJSONSection json={data.configJSON} />
-          </Page>
-        </>
-      )}
-
-      {(() => {
-        const allChanges = (data.entries || []).flatMap((e) => e.changes || []);
-        const withArtifacts = allChanges.filter((c) => (c.artifacts || []).length > 0);
-        if (withArtifacts.length === 0) return null;
-        return (
+        {data.groupBy !== 'config' && (
           <>
-            <PageBreak />
-            <Page {...pageProps}>
-              <ArtifactAppendix changes={allChanges} />
-            </Page>
+            <ConfigChangesSection changes={data.changes} />
+            <ConfigInsightsSection analyses={data.analyses} />
           </>
-        );
-      })()}
-    </>
+        )}
+
+        {data.relationshipTree
+          ? <ConfigTreeSection tree={data.relationshipTree} />
+          : <ConfigRelationshipGraph centralConfig={configItem} relationships={data.relationships} relatedConfigs={data.relatedConfigs} />
+        }
+
+        {data.groupBy !== 'config' && (
+          <>
+            <CatalogAccessSection access={data.access} />
+            <CatalogAccessLogsSection logs={data.accessLogs} />
+          </>
+        )}
+
+        {data.groupBy === 'config' && (data.configGroups || []).map((group, idx) => (
+          <React.Fragment key={group.configItem.id || idx}>
+            <ConfigGroupHeader group={group} />
+            <ConfigChangesSection changes={group.changes} hideConfigName />
+            <ConfigInsightsSection analyses={group.analyses} />
+            <CatalogAccessSection access={group.access} />
+            <CatalogAccessLogsSection logs={group.accessLogs} />
+          </React.Fragment>
+        ))}
+
+        {data.configJSON && <ConfigJSONSection json={data.configJSON} />}
+
+        <ArtifactAppendix changes={(data.entries || []).flatMap((e) => e.changes || [])} />
+      </Page>
+    </Document>
   );
 }

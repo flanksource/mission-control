@@ -19,7 +19,7 @@ function buildMatrix(resource: RBACResource) {
   const roleSet = new Set<string>();
   const userMap = new Map<string, UserRow>();
 
-  for (const u of resource.users) {
+  for (const u of resource.users || []) {
     roleSet.add(u.role);
     let row = userMap.get(u.userId);
     if (!row) {
@@ -111,7 +111,7 @@ export default function RBACMatrixSection({ resource }: Props) {
     };
   });
 
-  const tags = { ...resource.tags, ...resource.labels };
+  const tags = { ...(resource.tags || {}), ...(resource.labels || {}) };
   const pathParts = resource.path?.split('.').filter(Boolean) ?? [];
   const corner = (
     <div>

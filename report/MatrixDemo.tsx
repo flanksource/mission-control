@@ -36,16 +36,16 @@ export default function MatrixDemo() {
 
   return (
     <Page pageSize="a4" margins={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-      <h2 className="text-[14pt] font-bold mb-[4mm] text-slate-900">
+      <h2 className="text-lg font-bold mb-[4mm] text-slate-900">
         RBAC Matrix - Visual System Demo
       </h2>
 
       {/* --- Reference Section --- */}
       <div className="mb-[6mm]">
-        <div className="text-[9pt] font-semibold text-slate-700 mb-[2mm]">
+        <div className="text-sm font-semibold text-slate-700 mb-[2mm]">
           Identity Types
         </div>
-        <div className="flex gap-[6mm] text-[7pt] text-slate-600">
+        <div className="flex gap-[6mm] text-xs text-slate-600">
           {(['user', 'group', 'service', 'bot'] as const).map((type) => (
             <span key={type} className="inline-flex items-center gap-[1mm]">
               <IdentityIcon
@@ -63,10 +63,10 @@ export default function MatrixDemo() {
       </div>
 
       <div className="mb-[6mm]">
-        <div className="text-[9pt] font-semibold text-slate-700 mb-[2mm]">
+        <div className="text-sm font-semibold text-slate-700 mb-[2mm]">
           Access Pattern - Filled vs Unfilled
         </div>
-        <div className="flex gap-[6mm] text-[7pt] text-slate-600 items-center">
+        <div className="flex gap-[6mm] text-xs text-slate-600 items-center">
           <span className="inline-flex items-center gap-[1mm]">
             <AccessIndicator direct={true} color={ACCESS_COLORS.direct} /> Direct (filled)
           </span>
@@ -77,7 +77,7 @@ export default function MatrixDemo() {
       </div>
 
       {/* --- Matrix 1: Simple Permissions --- */}
-      <div className="text-[9pt] font-semibold text-slate-700 mb-[2mm]">
+      <div className="text-sm font-semibold text-slate-700 mb-[2mm]">
         Simple Permissions
       </div>
       <MatrixTable
@@ -149,7 +149,7 @@ export default function MatrixDemo() {
       />
 
       {/* --- Matrix 2: Database Roles --- */}
-      <div className="mt-[8mm] text-[9pt] font-semibold text-slate-700 mb-[2mm]">
+      <div className="mt-[8mm] text-sm font-semibold text-slate-700 mb-[2mm]">
         Database Roles
       </div>
       {(() => {
@@ -189,7 +189,7 @@ export default function MatrixDemo() {
       })()}
 
       {/* --- Legend --- */}
-      <div className="mt-[6mm] pt-[2mm] border-t border-gray-200 flex flex-wrap gap-[4mm] text-[6pt] text-gray-500 items-center">
+      <div className="mt-[6mm] pt-[2mm] border-t border-gray-200 flex flex-wrap gap-[4mm] text-xs text-gray-500 items-center">
         <span className="font-semibold">Access:</span>
         <span className="inline-flex items-center gap-[1mm]">
           <Dot color={ACCESS_COLORS.direct} /> Direct

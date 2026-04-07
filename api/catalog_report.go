@@ -17,6 +17,7 @@ func ConfigPermalink(configID string) string {
 type CatalogReport struct {
 	Title       string                `json:"title"`
 	GeneratedAt time.Time             `json:"generatedAt"`
+	PublicURL   string                `json:"publicURL,omitempty"`
 	From        string                `json:"from,omitempty"`
 	To          string                `json:"to,omitempty"`
 	Sections    CatalogReportSections `json:"sections"`
