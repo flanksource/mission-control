@@ -197,7 +197,7 @@ func playbookRunHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.
 		return mcp.NewToolResultError(err.Error()), nil
 	}
 
-	run, err := playbook.Run(ctx, pb, rp)
+	run, err := playbook.Run(ctx.WithSubject(owner), pb, rp)
 	if err != nil {
 		return mcp.NewToolResultError(err.Error()), nil
 	}
