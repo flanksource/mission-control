@@ -1,6 +1,9 @@
 import React from 'react';
 import { Section, CompactTable } from '@flanksource/facet';
 import type { ApplicationSection, ViewColumnType } from '../types.ts';
+import RBACChanges from './RBACChanges.tsx';
+import BackupChanges from './BackupChanges.tsx';
+import DeploymentChanges from './DeploymentChanges.tsx';
 import {
   formatDate,
   formatRelative,
@@ -10,6 +13,12 @@ import {
   SEVERITY_COLORS,
   SEVERITY_BG,
 } from './utils.ts';
+import {
+  filterBackupChanges,
+  filterDeploymentChanges,
+  filterRBACChanges,
+  inferChangeSectionVariant,
+} from './change-section-utils.ts';
 
 interface Props {
   section: ApplicationSection;
@@ -129,7 +138,7 @@ function ViewSection({ section }: { section: ApplicationSection }) {
   );
 }
 
-function ChangesSection({ section }: { section: ApplicationSection }) {
+function GenericChangesSection({ section }: { section: ApplicationSection }) {
   const rows = (section.changes ?? []).map((c) => [
     formatRelative(c.date),
     c.changeType ?? '-',
@@ -138,6 +147,22 @@ function ChangesSection({ section }: { section: ApplicationSection }) {
     c.description,
   ]);
   return <CompactTable variant="reference" columns={['Age', 'Type', 'Severity', 'Source', 'Description']} data={rows} />;
+}
+
+function ChangesSection({ section }: { section: ApplicationSection }) {
+  const changes = section.changes ?? [];
+  if (!changes.length) return null;
+
+  switch (inferChangeSectionVariant(section.title, changes)) {
+    case 'rbac':
+      return <RBACChanges changes={changes} />;
+    case 'backup':
+      return <BackupChanges changes={changes} />;
+    case 'deployment':
+      return <DeploymentChanges changes={changes} />;
+    default:
+      return <GenericChangesSection section={section} />;
+  }
 }
 
 function ConfigsSection({ section }: { section: ApplicationSection }) {
@@ -152,11 +177,39 @@ function ConfigsSection({ section }: { section: ApplicationSection }) {
 }
 
 export default function DynamicSection({ section }: Props) {
+  if (section.type === 'changes') {
+    const changes = section.changes ?? [];
+    const variant = inferChangeSectionVariant(section.title, changes);
+    const renderable = variant === 'rbac'
+      ? filterRBACChanges(changes).length > 0
+      : variant === 'backup'
+        ? filterBackupChanges(changes).length > 0
+        : variant === 'deployment'
+          ? filterDeploymentChanges(changes).length > 0
+          : changes.length > 0;
+
+    if (!renderable) {
+      return null;
+    }
+  }
+
+  let content: React.ReactNode = null;
+
+  if (section.type === 'view') {
+    content = <ViewSection section={section} />;
+  } else if (section.type === 'changes') {
+    content = <ChangesSection section={section} />;
+  } else if (section.type === 'configs') {
+    content = <ConfigsSection section={section} />;
+  }
+
+  if (!content) {
+    return null;
+  }
+
   return (
     <Section variant="hero" title={section.title} size="md">
-      {section.type === 'view' && <ViewSection section={section} />}
-      {section.type === 'changes' && <ChangesSection section={section} />}
-      {section.type === 'configs' && <ConfigsSection section={section} />}
+      {content}
     </Section>
   );
 }

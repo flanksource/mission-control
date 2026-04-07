@@ -127,12 +127,22 @@ export interface ApplicationViewData {
   columnOptions?: Record<string, ColumnFilterOptions>;
 }
 
+export interface ApplicationPermissionChange {
+  user?: string;
+  role?: string;
+  group?: string;
+}
+
 export interface ApplicationChange {
   id: string;
   date: string;
   changeType?: string;
   source?: string;
   createdBy?: string;
+  configId?: string;
+  configName?: string;
+  configType?: string;
+  permission?: ApplicationPermissionChange;
   description: string;
   status: string;
   createdAt: string;
