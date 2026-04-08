@@ -272,6 +272,21 @@ func GetAccessReviews(ctx context.Context, configID *uuid.UUID, since time.Time,
 	return rows, nil
 }
 
+func GetPermissionSubjects(ctx context.Context) ([]string, error) {
+	var subjects []string
+	if err := ctx.DB().
+		Table("permission_subjects").
+		Distinct("id").
+		Where("id IS NOT NULL").
+		Where("id != ''").
+		Order("id").
+		Pluck("id", &subjects).Error; err != nil {
+		return nil, ctx.Oops().Wrapf(err, "failed to query permission subjects")
+	}
+
+	return subjects, nil
+}
+
 func formatDuration(d time.Duration) string {
 	hours := int(d.Hours())
 	mins := int(d.Minutes()) % 60
