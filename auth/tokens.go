@@ -12,8 +12,6 @@ import (
 	"github.com/MicahParks/keyfunc"
 	"github.com/flanksource/commons/collections"
 	"github.com/flanksource/commons/logger"
-	"github.com/flanksource/commons/properties"
-	"github.com/flanksource/commons/rand"
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -21,7 +19,6 @@ import (
 	"github.com/golang-jwt/jwt/v4"
 	"github.com/labstack/echo/v4"
 	"github.com/patrickmn/go-cache"
-	"github.com/samber/lo"
 	"golang.org/x/crypto/argon2"
 	"gorm.io/gorm"
 
@@ -203,44 +200,6 @@ func extractBearerAuthToken(header http.Header) (string, bool) {
 		return "", false
 	}
 	return strings.TrimPrefix(auth, "Bearer "), true
-}
-
-type CreateAccessTokenForPersonResult struct {
-	Token      string
-	TokenModel *models.AccessToken
-	Person     *models.Person
-}
-
-func CreateAccessTokenForPerson(ctx context.Context, user *models.Person, tokenName string, expiry time.Duration, autoRenew bool) (CreateAccessTokenForPersonResult, error) {
-	name := user.Name + " (Token)"
-	emailParts := strings.Split(user.Email, "@")
-	if len(emailParts) != 2 {
-		return CreateAccessTokenForPersonResult{}, fmt.Errorf("unable to split email into 2 parts")
-
-	}
-	email := emailParts[0] + "+" + "token:" + tokenName + "@" + emailParts[1]
-
-	person, err := db.CreatePerson(ctx, name, email, db.PersonTypeAccessToken)
-	if err != nil {
-		return CreateAccessTokenForPersonResult{}, fmt.Errorf("failed to create a new person: %w", err)
-	}
-
-	password, err := rand.GenerateRandHex(32)
-	if err != nil {
-		return CreateAccessTokenForPersonResult{}, fmt.Errorf("unable to generate random password for token: %w", err)
-	}
-
-	// 0 expiry means default
-	if expiry == 0 {
-		expiry = properties.Duration(90*24*time.Hour, "access_token.default_expiry")
-	}
-
-	token, tokenModel, err := db.CreateAccessToken(ctx, person.ID, tokenName, password, &expiry, lo.ToPtr(user.ID), autoRenew)
-	return CreateAccessTokenForPersonResult{
-		Token:      token,
-		TokenModel: tokenModel,
-		Person:     person,
-	}, err
 }
 
 // DeleteAccessToken deletes an access token and soft-deletes the associated person.
