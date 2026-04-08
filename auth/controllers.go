@@ -197,14 +197,13 @@ func CreateToken(c echo.Context) error {
 		}
 	}
 
-	tokenResult, err := CreateAccessTokenForPerson(ctx, ctx.User(), reqData.Name, time.Duration(expiry), reqData.AutoRenew)
+	tokenResult, err := db.CreateAccessTokenForPerson(ctx, ctx.User(), reqData.Name, time.Duration(expiry), reqData.AutoRenew)
 	if err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "error creating access token"))
 	}
 
 	if _, err := rbac.Enforcer().AddGroupingPolicy(tokenResult.Person.ID.String(), user.ID.String()); err != nil {
 		return dutyAPI.WriteError(c, ctx.Oops().Wrapf(err, "error grouping token with user"))
-
 	}
 
 	if len(reqData.Scope) > 0 {

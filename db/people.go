@@ -1,8 +1,6 @@
 package db
 
 import (
-	crand "crypto/rand"
-	"encoding/base64"
 	"fmt"
 	"time"
 
@@ -12,7 +10,6 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
-	"golang.org/x/crypto/argon2"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
@@ -73,7 +70,7 @@ type CreateUserRequest struct {
 func CreatePerson(ctx context.Context, name, email, personType string) (*models.Person, error) {
 	person := models.Person{Name: name, Email: email, Type: personType}
 	if err := ctx.DB().Clauses(clause.Returning{}).Create(&person).Error; err != nil {
-		return nil, err
+		return nil, ctx.Oops().Wrapf(err, "failed to create person %q", email)
 	}
 
 	return &person, nil
@@ -88,43 +85,6 @@ const (
 	keyLength   = 20
 	saltLength  = 12
 )
-
-// CreateAccessToken generates a new access token using Argon2id hashing.
-// Returns: "password.salt.timeCost.memoryCost.parallelism" to user, stores base64(hash) in DB.
-func CreateAccessToken(ctx context.Context, personID uuid.UUID, name, password string, expiry *time.Duration, createdBy *uuid.UUID, autoRenew bool) (string, *models.AccessToken, error) {
-	saltRaw := make([]byte, saltLength)
-	if _, err := crand.Read(saltRaw); err != nil {
-		return "", nil, err
-	}
-	salt := base64.URLEncoding.EncodeToString(saltRaw)
-
-	hash := argon2.IDKey([]byte(password), []byte(salt), timeCost, memoryCost, parallelism, keyLength)
-	encodedHash := base64.URLEncoding.EncodeToString(hash)
-
-	if name == "default" {
-		name = fmt.Sprintf("agent-%d", time.Now().Unix())
-	}
-
-	accessToken := &models.AccessToken{
-		Name:      name,
-		Value:     encodedHash,
-		PersonID:  personID,
-		AutoRenew: autoRenew,
-	}
-	if expiry != nil {
-		accessToken.ExpiresAt = lo.ToPtr(time.Now().Add(*expiry))
-	}
-	if createdBy != nil {
-		accessToken.CreatedBy = createdBy
-	}
-
-	if err := ctx.DB().Create(&accessToken).Error; err != nil {
-		return "", nil, err
-	}
-
-	formattedHash := fmt.Sprintf("%s.%s.%d.%d.%d", password, salt, timeCost, memoryCost, parallelism)
-	return formattedHash, accessToken, nil
-}
 
 func UpdateAccessTokenExpiry(ctx context.Context, tokenID uuid.UUID, newExpiry time.Time) error {
 	return ctx.DB().Model(&models.AccessToken{}).
