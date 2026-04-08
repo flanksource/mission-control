@@ -26,6 +26,7 @@ test-reports
 .artifacts/
 __debug_bin*
 oidc-signing-key.pem
+htpasswd
 
 exec-checkout
 shell-bin-dir
