@@ -249,14 +249,14 @@ func unhealthyCatalogItemsPromptHandler(ctx gocontext.Context, req mcp.GetPrompt
 		Messages: []mcp.PromptMessage{
 			{
 				Role:    "user",
-				Content: mcp.NewTextContent("Query the catalog using search_catalog tool for all unhealthy items with the query: health!=healthy"),
+				Content: mcp.NewTextContent("Query the catalog using search_catalog tool for all unhealthy items with the query: health!=healthy agent=all"),
 			},
 		},
 	}, nil
 }
 
 func troubleshootKubernetesErrorPrompt(ctx gocontext.Context, req mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
-	q := lo.CoalesceOrEmpty(req.Params.Arguments["query"], "health!=healthy type=Kubernetes::*")
+	q := lo.CoalesceOrEmpty(req.Params.Arguments["query"], "health!=healthy type=Kubernetes::* agent=all")
 	return &mcp.GetPromptResult{
 		Description: "Troubleshoot kubernetes resources",
 		Messages: []mcp.PromptMessage{
@@ -315,6 +315,7 @@ func registerCatalog(s *server.MCPServer) {
 	Fields:  type | id | agent | name | namespace | labelSelector | tagSelector | status | health | limit | created_at | updated_at | deleted_at | label.* | tag.*
 	• label.* and tag.* accept any key after the dot, following Kubernetes label grammar.
 	• labelSelector and tagSelector accept full Kubernetes selector expressions (e.g. env in (prod,stage), !deprecated).
+	• IMPORTANT: To search across all agents, explicitly add agent=all.
 	type: <Provider>::<ConfigClass> or <Provider>::* (Providers: AWS, Azure, GCP, Kubernetes)
 	health: healthy | unhealthy | warning | unknown
 	status free text (wildcards allowed)
@@ -331,6 +332,7 @@ func registerCatalog(s *server.MCPServer) {
 	type=AWS::EC2::Instance health=unhealthy
 	type=Kubernetes::Deployment name=nginx*
 	type=Kubernetes::* health=unhealthy
+	type=Kubernetes::NodeClaim agent=all tag.cluster=ifs-prod-cluster
 	created_at>now-24h
 	updated_at>2025-01-01 updated_at<2025-01-31
 	type=Kubernetes::Pod labelSelector="team in (payments,orders)"
@@ -341,6 +343,7 @@ func registerCatalog(s *server.MCPServer) {
 	catalogSearchDescription := fmt.Sprintf(`
 	Each catalog item also has more information in its config field which can be retrieved by calling a different tool: %s(id).
 	Use the id from search results; %s only accepts a single config id and should be called when "describe" is explicitly used.
+	For cross-agent searches, explicitly include agent=all in the query.
 
 	IMPORTANT - Column Selection for Token Efficiency:
 	ALWAYS specify the "select" parameter with only the columns you need to minimize token usage.
