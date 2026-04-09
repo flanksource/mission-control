@@ -87,7 +87,7 @@ func GetPermissionsForToken(c echo.Context) error {
 
 const maxSubjectAccessReviewSubjects = 500
 
-var supportedReviewActions = []string{
+var abacActions = []string{
 	policy.ActionMCPRun,
 	policy.ActionPlaybookApprove,
 	policy.ActionPlaybookRun,
@@ -96,6 +96,8 @@ var supportedReviewActions = []string{
 
 type SubjectAccessReviewResource struct {
 	Playbook string `json:"playbook,omitempty"`
+	Config   string `json:"config,omitempty"`
+	Check    string `json:"check,omitempty"`
 	View     string `json:"view,omitempty"`
 }
 
@@ -122,14 +124,20 @@ func (req SubjectAccessReviewRequest) Validate(ctx context.Context) error {
 	if req.Resource.Playbook != "" {
 		resourceFields++
 	}
+	if req.Resource.Config != "" {
+		resourceFields++
+	}
+	if req.Resource.Check != "" {
+		resourceFields++
+	}
 	if req.Resource.View != "" {
 		resourceFields++
 	}
-	if resourceFields != 1 {
-		return api.Errorf(api.EINVALID, "exactly one of resource.playbook or resource.view is required")
+	if resourceFields == 0 {
+		return api.Errorf(api.EINVALID, "at least one of resource.playbook, resource.config, resource.check or resource.view is required")
 	}
-	if !lo.Contains(supportedReviewActions, req.Action) {
-		return api.Errorf(api.EINVALID, "unsupported action %q, only %s are supported", req.Action, supportedReviewActions)
+	if !lo.Contains(policy.AllActions, req.Action) {
+		return api.Errorf(api.EINVALID, "unsupported action %q, only %s are supported", req.Action, strings.Join(policy.AllActions, ", "))
 	}
 	if len(req.Subjects) == 0 {
 		return api.Errorf(api.EINVALID, "at least one subject is required")
@@ -168,6 +176,8 @@ func SubjectAccessReviews(c echo.Context) error {
 		return api.WriteError(c, err)
 	}
 
+	isAbacCheck := lo.Contains(abacActions, req.Action)
+
 	results := make([]SubjectAccessReviewResult, 0, len(subjects))
 	for _, subject := range subjects {
 		subject = strings.TrimSpace(subject)
@@ -176,8 +186,13 @@ func SubjectAccessReviews(c echo.Context) error {
 			continue
 		}
 
-		allowed := rbac.HasPermission(ctx, subject, resourceAttr, req.Action)
-		results = append(results, SubjectAccessReviewResult{Subject: subject, Allowed: allowed})
+		if isAbacCheck {
+			allowed := rbac.HasPermission(ctx, subject, resourceAttr, req.Action)
+			results = append(results, SubjectAccessReviewResult{Subject: subject, Allowed: allowed})
+		} else {
+			allowed := rbac.Check(ctx, subject, req.Resource.Playbook, req.Action)
+			results = append(results, SubjectAccessReviewResult{Subject: subject, Allowed: allowed})
+		}
 	}
 
 	return c.JSON(http.StatusOK, SubjectAccessReviewResponse{
@@ -196,6 +211,8 @@ func resolveAccessReviewSubjects(ctx context.Context, subjects []string) ([]stri
 }
 
 func resolveAccessReviewResource(ctx context.Context, resource SubjectAccessReviewResource) (*models.ABACAttribute, error) {
+	attr := &models.ABACAttribute{}
+
 	if resource.Playbook != "" {
 		playbookID, err := uuid.Parse(resource.Playbook)
 		if err != nil {
@@ -210,7 +227,41 @@ func resolveAccessReviewResource(ctx context.Context, resource SubjectAccessRevi
 			return nil, ctx.Oops().Wrapf(err, "failed to resolve playbook %q", resource.Playbook)
 		}
 
-		return &models.ABACAttribute{Playbook: playbook}, nil
+		attr.Playbook = playbook
+	}
+
+	if resource.Config != "" {
+		configID, err := uuid.Parse(resource.Config)
+		if err != nil {
+			return nil, api.Errorf(api.EINVALID, "resource.config must be a valid UUID")
+		}
+
+		var config models.ConfigItem
+		if err := ctx.DB().Where("id = ? AND deleted_at IS NULL", configID).First(&config).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				return nil, api.Errorf(api.ENOTFOUND, "config %q not found", resource.Config)
+			}
+			return nil, ctx.Oops().Wrapf(err, "failed to resolve config %q", resource.Config)
+		}
+
+		attr.Config = config
+	}
+
+	if resource.Check != "" {
+		checkID, err := uuid.Parse(resource.Check)
+		if err != nil {
+			return nil, api.Errorf(api.EINVALID, "resource.check must be a valid UUID")
+		}
+
+		var check models.Check
+		if err := ctx.DB().Where("id = ? AND deleted_at IS NULL", checkID).First(&check).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				return nil, api.Errorf(api.ENOTFOUND, "check %q not found", resource.Check)
+			}
+			return nil, ctx.Oops().Wrapf(err, "failed to resolve check %q", resource.Check)
+		}
+
+		attr.Check = check
 	}
 
 	if resource.View != "" {
@@ -227,10 +278,10 @@ func resolveAccessReviewResource(ctx context.Context, resource SubjectAccessRevi
 			return nil, ctx.Oops().Wrapf(err, "failed to resolve view %q", resource.View)
 		}
 
-		return &models.ABACAttribute{View: view}, nil
+		attr.View = view
 	}
 
-	return nil, api.Errorf(api.EINVALID, "resource is required")
+	return attr, nil
 }
 
 func Dump(c echo.Context) error {
