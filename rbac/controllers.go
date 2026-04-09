@@ -12,6 +12,7 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+	"github.com/samber/lo"
 	"gorm.io/gorm"
 )
 
@@ -84,10 +85,14 @@ func GetPermissionsForToken(c echo.Context) error {
 	})
 }
 
-const (
-	maxSubjectAccessReviewSubjects = 500
-	supportedReviewAction          = policy.ActionMCPRun
-)
+const maxSubjectAccessReviewSubjects = 500
+
+var supportedReviewActions = []string{
+	policy.ActionMCPRun,
+	policy.ActionPlaybookApprove,
+	policy.ActionPlaybookRun,
+	policy.ActionPlaybookCancel,
+}
 
 type SubjectAccessReviewResource struct {
 	Playbook string `json:"playbook,omitempty"`
@@ -108,6 +113,31 @@ type SubjectAccessReviewResult struct {
 	Error   string `json:"error,omitempty"`
 }
 
+func (req SubjectAccessReviewRequest) Validate(ctx context.Context) error {
+	if req.Action == "" {
+		return api.Errorf(api.EINVALID, "action is required")
+	}
+
+	resourceFields := 0
+	if req.Resource.Playbook != "" {
+		resourceFields++
+	}
+	if req.Resource.View != "" {
+		resourceFields++
+	}
+	if resourceFields != 1 {
+		return api.Errorf(api.EINVALID, "exactly one of resource.playbook or resource.view is required")
+	}
+	if !lo.Contains(supportedReviewActions, req.Action) {
+		return api.Errorf(api.EINVALID, "unsupported action %q, only %s are supported", req.Action, supportedReviewActions)
+	}
+	if len(req.Subjects) == 0 {
+		return api.Errorf(api.EINVALID, "at least one subject is required")
+	}
+
+	return nil
+}
+
 type SubjectAccessReviewResponse struct {
 	Resource SubjectAccessReviewResource `json:"resource"`
 	Action   string                      `json:"action"`
@@ -122,38 +152,15 @@ func SubjectAccessReviews(c echo.Context) error {
 		return api.WriteError(c, api.Errorf(api.EINVALID, "invalid request body: %v", err))
 	}
 
-	req.Resource.Playbook = strings.TrimSpace(req.Resource.Playbook)
-	req.Resource.View = strings.TrimSpace(req.Resource.View)
-	req.Action = strings.TrimSpace(req.Action)
-	if req.Action == "" {
-		return api.WriteError(c, api.Errorf(api.EINVALID, "action is required"))
-	}
-
-	resourceFields := 0
-	if req.Resource.Playbook != "" {
-		resourceFields++
-	}
-	if req.Resource.View != "" {
-		resourceFields++
-	}
-	if resourceFields != 1 {
-		return api.WriteError(c, api.Errorf(api.EINVALID, "exactly one of resource.playbook or resource.view is required"))
-	}
-	if req.Action != supportedReviewAction {
-		return api.WriteError(c, api.Errorf(api.EINVALID, "unsupported action %q, only %q is supported", req.Action, supportedReviewAction))
-	}
-
-	if len(req.Subjects) == 0 {
-		return api.WriteError(c, api.Errorf(api.EINVALID, "at least one subject is required"))
+	if err := req.Validate(ctx); err != nil {
+		return api.WriteError(c, err)
 	}
 
 	subjects, err := resolveAccessReviewSubjects(ctx, req.Subjects)
 	if err != nil {
-		return api.WriteError(c, err)
-	}
-
-	if len(subjects) > maxSubjectAccessReviewSubjects {
-		return api.WriteError(c, api.Errorf(api.EINVALID, "subjects exceeds maximum of %d", maxSubjectAccessReviewSubjects))
+		return err
+	} else if len(subjects) > maxSubjectAccessReviewSubjects {
+		return api.Errorf(api.EINVALID, "subjects exceeds maximum of %d", maxSubjectAccessReviewSubjects)
 	}
 
 	resourceAttr, err := resolveAccessReviewResource(ctx, req.Resource)
