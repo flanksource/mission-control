@@ -11,7 +11,7 @@ require (
 	github.com/fergusstrange/embedded-postgres v1.33.0 // indirect
 	github.com/flanksource/commons v1.50.1
 	github.com/flanksource/duty v1.0.1254
-	github.com/flanksource/gomplate/v3 v3.24.74
+	github.com/flanksource/gomplate/v3 v3.24.76
 	github.com/flanksource/kopper v1.0.21
 	github.com/gomarkdown/markdown v0.0.0-20250810172220-2e2c11897d1a
 	github.com/google/cel-go v0.27.0
@@ -123,6 +123,8 @@ require (
 	github.com/agnivade/levenshtein v1.2.1 // indirect
 	github.com/ajstarks/svgo v0.0.0-20211024235047-1546f124cd8b // indirect
 	github.com/alecthomas/chroma/v2 v2.23.1 // indirect
+	github.com/antchfx/xmlquery v1.5.1 // indirect
+	github.com/antchfx/xpath v1.3.6 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/apparentlymart/go-textseg/v15 v15.0.0 // indirect
 	github.com/armon/go-socks5 v0.0.0-20160902184237-e75332964ef5 // indirect
