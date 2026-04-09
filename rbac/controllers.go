@@ -87,13 +87,12 @@ func GetPermissionsForToken(c echo.Context) error {
 
 const maxSubjectAccessReviewSubjects = 500
 
-
-
 type SubjectAccessReviewResource struct {
 	Playbook string `json:"playbook,omitempty"`
 	Config   string `json:"config,omitempty"`
 	Check    string `json:"check,omitempty"`
 	View     string `json:"view,omitempty"`
+	Global   string `json:"global,omitempty"`
 }
 
 type SubjectAccessReviewRequest struct {
@@ -116,6 +115,9 @@ func (req SubjectAccessReviewRequest) Validate(ctx context.Context) error {
 	}
 
 	resourceFields := 0
+	if req.Resource.Global != "" {
+		resourceFields++
+	}
 	if req.Resource.Playbook != "" {
 		resourceFields++
 	}
@@ -129,11 +131,13 @@ func (req SubjectAccessReviewRequest) Validate(ctx context.Context) error {
 		resourceFields++
 	}
 	if resourceFields == 0 {
-		return api.Errorf(api.EINVALID, "at least one of resource.playbook, resource.config, resource.check or resource.view is required")
+		return api.Errorf(api.EINVALID, "at least one of resource.global, resource.playbook, resource.config, resource.check or resource.view is required")
 	}
+
 	if !lo.Contains(policy.AllActions, req.Action) {
 		return api.Errorf(api.EINVALID, "unsupported action %q, only %s are supported", req.Action, strings.Join(policy.AllActions, ", "))
 	}
+
 	if len(req.Subjects) == 0 {
 		return api.Errorf(api.EINVALID, "at least one subject is required")
 	}
@@ -180,6 +184,10 @@ func SubjectAccessReviews(c echo.Context) error {
 		}
 
 		allowed := rbac.HasPermission(ctx, subject, resourceAttr, req.Action)
+		if req.Resource.Global != "" {
+			allowed = rbac.Check(ctx, subject, req.Resource.Global, req.Action)
+		}
+
 		results = append(results, SubjectAccessReviewResult{Subject: subject, Allowed: allowed})
 	}
 
