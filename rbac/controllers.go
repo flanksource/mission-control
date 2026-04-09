@@ -12,6 +12,7 @@ import (
 	"github.com/flanksource/incident-commander/db"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+	"github.com/samber/lo"
 	"gorm.io/gorm"
 )
 
@@ -84,13 +85,14 @@ func GetPermissionsForToken(c echo.Context) error {
 	})
 }
 
-const (
-	maxSubjectAccessReviewSubjects = 500
-	supportedReviewAction          = policy.ActionMCPRun
-)
+const maxSubjectAccessReviewSubjects = 500
+
+
 
 type SubjectAccessReviewResource struct {
 	Playbook string `json:"playbook,omitempty"`
+	Config   string `json:"config,omitempty"`
+	Check    string `json:"check,omitempty"`
 	View     string `json:"view,omitempty"`
 }
 
@@ -108,6 +110,37 @@ type SubjectAccessReviewResult struct {
 	Error   string `json:"error,omitempty"`
 }
 
+func (req SubjectAccessReviewRequest) Validate(ctx context.Context) error {
+	if req.Action == "" {
+		return api.Errorf(api.EINVALID, "action is required")
+	}
+
+	resourceFields := 0
+	if req.Resource.Playbook != "" {
+		resourceFields++
+	}
+	if req.Resource.Config != "" {
+		resourceFields++
+	}
+	if req.Resource.Check != "" {
+		resourceFields++
+	}
+	if req.Resource.View != "" {
+		resourceFields++
+	}
+	if resourceFields == 0 {
+		return api.Errorf(api.EINVALID, "at least one of resource.playbook, resource.config, resource.check or resource.view is required")
+	}
+	if !lo.Contains(policy.AllActions, req.Action) {
+		return api.Errorf(api.EINVALID, "unsupported action %q, only %s are supported", req.Action, strings.Join(policy.AllActions, ", "))
+	}
+	if len(req.Subjects) == 0 {
+		return api.Errorf(api.EINVALID, "at least one subject is required")
+	}
+
+	return nil
+}
+
 type SubjectAccessReviewResponse struct {
 	Resource SubjectAccessReviewResource `json:"resource"`
 	Action   string                      `json:"action"`
@@ -122,38 +155,15 @@ func SubjectAccessReviews(c echo.Context) error {
 		return api.WriteError(c, api.Errorf(api.EINVALID, "invalid request body: %v", err))
 	}
 
-	req.Resource.Playbook = strings.TrimSpace(req.Resource.Playbook)
-	req.Resource.View = strings.TrimSpace(req.Resource.View)
-	req.Action = strings.TrimSpace(req.Action)
-	if req.Action == "" {
-		return api.WriteError(c, api.Errorf(api.EINVALID, "action is required"))
-	}
-
-	resourceFields := 0
-	if req.Resource.Playbook != "" {
-		resourceFields++
-	}
-	if req.Resource.View != "" {
-		resourceFields++
-	}
-	if resourceFields != 1 {
-		return api.WriteError(c, api.Errorf(api.EINVALID, "exactly one of resource.playbook or resource.view is required"))
-	}
-	if req.Action != supportedReviewAction {
-		return api.WriteError(c, api.Errorf(api.EINVALID, "unsupported action %q, only %q is supported", req.Action, supportedReviewAction))
-	}
-
-	if len(req.Subjects) == 0 {
-		return api.WriteError(c, api.Errorf(api.EINVALID, "at least one subject is required"))
+	if err := req.Validate(ctx); err != nil {
+		return api.WriteError(c, err)
 	}
 
 	subjects, err := resolveAccessReviewSubjects(ctx, req.Subjects)
 	if err != nil {
-		return api.WriteError(c, err)
-	}
-
-	if len(subjects) > maxSubjectAccessReviewSubjects {
-		return api.WriteError(c, api.Errorf(api.EINVALID, "subjects exceeds maximum of %d", maxSubjectAccessReviewSubjects))
+		return err
+	} else if len(subjects) > maxSubjectAccessReviewSubjects {
+		return api.Errorf(api.EINVALID, "subjects exceeds maximum of %d", maxSubjectAccessReviewSubjects)
 	}
 
 	resourceAttr, err := resolveAccessReviewResource(ctx, req.Resource)
@@ -189,6 +199,8 @@ func resolveAccessReviewSubjects(ctx context.Context, subjects []string) ([]stri
 }
 
 func resolveAccessReviewResource(ctx context.Context, resource SubjectAccessReviewResource) (*models.ABACAttribute, error) {
+	attr := &models.ABACAttribute{}
+
 	if resource.Playbook != "" {
 		playbookID, err := uuid.Parse(resource.Playbook)
 		if err != nil {
@@ -203,7 +215,41 @@ func resolveAccessReviewResource(ctx context.Context, resource SubjectAccessRevi
 			return nil, ctx.Oops().Wrapf(err, "failed to resolve playbook %q", resource.Playbook)
 		}
 
-		return &models.ABACAttribute{Playbook: playbook}, nil
+		attr.Playbook = playbook
+	}
+
+	if resource.Config != "" {
+		configID, err := uuid.Parse(resource.Config)
+		if err != nil {
+			return nil, api.Errorf(api.EINVALID, "resource.config must be a valid UUID")
+		}
+
+		var config models.ConfigItem
+		if err := ctx.DB().Where("id = ? AND deleted_at IS NULL", configID).First(&config).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				return nil, api.Errorf(api.ENOTFOUND, "config %q not found", resource.Config)
+			}
+			return nil, ctx.Oops().Wrapf(err, "failed to resolve config %q", resource.Config)
+		}
+
+		attr.Config = config
+	}
+
+	if resource.Check != "" {
+		checkID, err := uuid.Parse(resource.Check)
+		if err != nil {
+			return nil, api.Errorf(api.EINVALID, "resource.check must be a valid UUID")
+		}
+
+		var check models.Check
+		if err := ctx.DB().Where("id = ? AND deleted_at IS NULL", checkID).First(&check).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				return nil, api.Errorf(api.ENOTFOUND, "check %q not found", resource.Check)
+			}
+			return nil, ctx.Oops().Wrapf(err, "failed to resolve check %q", resource.Check)
+		}
+
+		attr.Check = check
 	}
 
 	if resource.View != "" {
@@ -220,10 +266,10 @@ func resolveAccessReviewResource(ctx context.Context, resource SubjectAccessRevi
 			return nil, ctx.Oops().Wrapf(err, "failed to resolve view %q", resource.View)
 		}
 
-		return &models.ABACAttribute{View: view}, nil
+		attr.View = view
 	}
 
-	return nil, api.Errorf(api.EINVALID, "resource is required")
+	return attr, nil
 }
 
 func Dump(c echo.Context) error {

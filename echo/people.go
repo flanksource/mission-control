@@ -56,7 +56,7 @@ func (t *UpdatePersonRequest) ToUpdateIdentityBody(traits map[string]any) client
 	}
 
 	if t.Active != nil {
-		out.State = lo.Ternary[string](*t.Active, auth.IdentityStateActive, auth.IdentityStateInactive)
+		out.State = lo.Ternary(*t.Active, auth.IdentityStateActive, auth.IdentityStateInactive)
 	}
 
 	return out
