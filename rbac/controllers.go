@@ -87,12 +87,7 @@ func GetPermissionsForToken(c echo.Context) error {
 
 const maxSubjectAccessReviewSubjects = 500
 
-var abacActions = []string{
-	policy.ActionMCPRun,
-	policy.ActionPlaybookApprove,
-	policy.ActionPlaybookRun,
-	policy.ActionPlaybookCancel,
-}
+
 
 type SubjectAccessReviewResource struct {
 	Playbook string `json:"playbook,omitempty"`
@@ -176,8 +171,6 @@ func SubjectAccessReviews(c echo.Context) error {
 		return api.WriteError(c, err)
 	}
 
-	isAbacCheck := lo.Contains(abacActions, req.Action)
-
 	results := make([]SubjectAccessReviewResult, 0, len(subjects))
 	for _, subject := range subjects {
 		subject = strings.TrimSpace(subject)
@@ -186,13 +179,8 @@ func SubjectAccessReviews(c echo.Context) error {
 			continue
 		}
 
-		if isAbacCheck {
-			allowed := rbac.HasPermission(ctx, subject, resourceAttr, req.Action)
-			results = append(results, SubjectAccessReviewResult{Subject: subject, Allowed: allowed})
-		} else {
-			allowed := rbac.Check(ctx, subject, req.Resource.Playbook, req.Action)
-			results = append(results, SubjectAccessReviewResult{Subject: subject, Allowed: allowed})
-		}
+		allowed := rbac.HasPermission(ctx, subject, resourceAttr, req.Action)
+		results = append(results, SubjectAccessReviewResult{Subject: subject, Allowed: allowed})
 	}
 
 	return c.JSON(http.StatusOK, SubjectAccessReviewResponse{
