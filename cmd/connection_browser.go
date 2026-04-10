@@ -7,13 +7,18 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	gocontext "context"
 
+	"github.com/chromedp/cdproto/cdp"
+	"github.com/chromedp/cdproto/domstorage"
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/cdproto/page"
+	"github.com/chromedp/cdproto/storage"
 	"github.com/chromedp/chromedp"
 	"github.com/flanksource/clicky"
 	"github.com/flanksource/duty"
@@ -43,6 +48,7 @@ type browserSessionData struct {
 	Cookies        []*network.Cookie
 	SessionStorage map[string]string
 	BearerTokens   map[string]string // audience -> token
+	Origins        []connection.SessionOrigin
 }
 
 var connectionLoginCmd = &cobra.Command{
@@ -115,7 +121,7 @@ func init() {
 	connectionLoginAzureCmd.PreRun = func(cmd *cobra.Command, args []string) {
 		browserFlags.URL = azureLoginURL
 		if len(browserFlags.Domains) == 0 {
-			browserFlags.Domains = []string{".azure.com", ".microsoft.com", ".live.com"}
+			browserFlags.Domains = []string{".azure.com", ".microsoft.com", ".microsoftonline.com", ".windows.net", ".live.com"}
 		}
 		if !browserFlags.Cookies && !browserFlags.Session && !browserFlags.Bearer {
 			browserFlags.Cookies = true
@@ -176,6 +182,23 @@ func launchBrowserAndCapture(ctx gocontext.Context, flags browserLoginFlags) (*b
 	browserCtx, browserCancel := chromedp.NewContext(allocCtx)
 	defer browserCancel()
 
+	visitedOrigins := make(map[string]struct{})
+	var visitedMu sync.Mutex
+	chromedp.ListenTarget(browserCtx, func(ev any) {
+		e, ok := ev.(*network.EventResponseReceived)
+		if !ok || e.Response == nil {
+			return
+		}
+		u, err := url.Parse(e.Response.URL)
+		if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+			return
+		}
+		origin := u.Scheme + "://" + u.Host
+		visitedMu.Lock()
+		visitedOrigins[origin] = struct{}{}
+		visitedMu.Unlock()
+	})
+
 	if err := chromedp.Run(browserCtx, chromedp.Navigate(flags.URL)); err != nil {
 		return nil, fmt.Errorf("failed to navigate to %s: %w", flags.URL, err)
 	}
@@ -213,6 +236,20 @@ func launchBrowserAndCapture(ctx gocontext.Context, flags browserLoginFlags) (*b
 		}
 	}
 
+	visitedMu.Lock()
+	candidateOrigins := make([]string, 0, len(visitedOrigins))
+	for o := range visitedOrigins {
+		candidateOrigins = append(candidateOrigins, o)
+	}
+	visitedMu.Unlock()
+	sort.Strings(candidateOrigins)
+
+	storageOrigins, err := extractLocalStorageForOrigins(browserCtx, candidateOrigins, flags.Domains)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to extract localStorage: %v\n", err)
+	}
+	data.Origins = storageOrigins
+
 	// Build and display session state summary
 	var cookies connection.Cookies
 	for _, c := range data.Cookies {
@@ -223,7 +260,7 @@ func launchBrowserAndCapture(ctx gocontext.Context, flags browserLoginFlags) (*b
 			SameSite: string(c.SameSite),
 		})
 	}
-	state := connection.NewPlaywrightSessionState(cookies, data.SessionStorage, flags.URL)
+	state := connection.NewPlaywrightSessionState(cookies, data.SessionStorage, data.Origins, flags.URL)
 	if verbose >= 2 {
 		fmt.Fprintln(os.Stderr, state.PrettyFull().ANSI())
 	} else if verbose >= 1 {
@@ -308,11 +345,13 @@ func extractCookies(browserCtx gocontext.Context, domains []string) ([]*network.
 	var allCookies []*network.Cookie
 	if err := chromedp.Run(browserCtx, chromedp.ActionFunc(func(ctx gocontext.Context) error {
 		var err error
-		allCookies, err = network.GetCookies().Do(ctx)
+		allCookies, err = storage.GetCookies().Do(ctx)
 		return err
 	})); err != nil {
 		return nil, fmt.Errorf("failed to extract cookies: %w", err)
 	}
+
+	fmt.Fprintf(os.Stderr, "Captured %d cookies from full jar before domain filter\n", len(allCookies))
 
 	var filtered []*network.Cookie
 	for _, c := range allCookies {
@@ -323,6 +362,7 @@ func extractCookies(browserCtx gocontext.Context, domains []string) ([]*network.
 			}
 		}
 	}
+	fmt.Fprintf(os.Stderr, "After domain filter (%v): %d cookies\n", domains, len(filtered))
 	return filtered, nil
 }
 
@@ -342,6 +382,75 @@ func extractSessionStorage(browserCtx gocontext.Context) (map[string]string, err
 		return nil, fmt.Errorf("failed to parse sessionStorage: %w", err)
 	}
 	return result, nil
+}
+
+// extractLocalStorageForOrigins reads localStorage for each origin actually
+// visited during the browser session, via the CDP DOMStorage domain. This
+// avoids needing to navigate the page to each origin (which would race against
+// MSAL/SSO redirects). Origins are filtered against the user-specified
+// --domains list so we don't capture unrelated third-party storage.
+func extractLocalStorageForOrigins(browserCtx gocontext.Context, candidates, domainFilters []string) ([]connection.SessionOrigin, error) {
+	if len(candidates) == 0 {
+		return nil, nil
+	}
+
+	if err := chromedp.Run(browserCtx, chromedp.ActionFunc(func(ctx gocontext.Context) error {
+		return domstorage.Enable().Do(ctx)
+	})); err != nil {
+		return nil, fmt.Errorf("enable DOMStorage: %w", err)
+	}
+
+	var origins []connection.SessionOrigin
+	for _, origin := range candidates {
+		if !originMatchesDomains(origin, domainFilters) {
+			continue
+		}
+
+		var entries []domstorage.Item
+		err := chromedp.Run(browserCtx, chromedp.ActionFunc(func(ctx gocontext.Context) error {
+			var inner error
+			entries, inner = domstorage.GetDOMStorageItems(&domstorage.StorageID{
+				SecurityOrigin: origin,
+				IsLocalStorage: true,
+			}).Do(ctx)
+			return inner
+		}))
+		if err != nil || len(entries) == 0 {
+			continue
+		}
+
+		items := make([]connection.LocalStorageItem, 0, len(entries))
+		for _, e := range entries {
+			if len(e) >= 2 {
+				items = append(items, connection.LocalStorageItem{Name: e[0], Value: e[1]})
+			}
+		}
+		if len(items) > 0 {
+			origins = append(origins, connection.SessionOrigin{Origin: origin, LocalStorage: items})
+		}
+	}
+	return origins, nil
+}
+
+func originMatchesDomains(origin string, domains []string) bool {
+	if len(domains) == 0 {
+		return true
+	}
+	u, err := url.Parse(origin)
+	if err != nil || u.Hostname() == "" {
+		return false
+	}
+	host := u.Hostname()
+	for _, d := range domains {
+		d = strings.TrimPrefix(d, ".")
+		if d == "" {
+			continue
+		}
+		if host == d || strings.HasSuffix(host, "."+d) {
+			return true
+		}
+	}
+	return false
 }
 
 func extractBearerTokens(session map[string]string) map[string]string {
@@ -393,7 +502,7 @@ func saveConnection(cmd *cobra.Command, flags browserLoginFlags, data *browserSe
 	}
 
 	// Build Playwright-compatible storage state
-	sessionState := connection.NewPlaywrightSessionState(cookies, data.SessionStorage, flags.URL)
+	sessionState := connection.NewPlaywrightSessionState(cookies, data.SessionStorage, data.Origins, flags.URL)
 	storageJSON, err := json.Marshal(sessionState)
 	if err != nil {
 		return fmt.Errorf("failed to marshal storage state: %w", err)
@@ -411,6 +520,21 @@ func saveConnection(cmd *cobra.Command, flags browserLoginFlags, data *browserSe
 			return fmt.Errorf("failed to marshal headers: %w", err)
 		}
 		props["headers"] = string(headersJSON)
+	}
+
+	// Persist sessionStorage so MSAL-style SPAs (e.g. Azure portal) can be
+	// rehydrated by Playwright via addInitScript. Tied to the captured origin
+	// so the receiver knows which page to inject into.
+	if len(data.SessionStorage) > 0 {
+		if u, err := url.Parse(flags.URL); err == nil && u.Host != "" {
+			payload := map[string]any{
+				"origin": u.Scheme + "://" + u.Host,
+				"items":  data.SessionStorage,
+			}
+			if sessionJSON, err := json.Marshal(payload); err == nil {
+				props["sessionStorage"] = string(sessionJSON)
+			}
+		}
 	}
 
 	// Store bearer tokens
@@ -532,6 +656,19 @@ func runBrowserTest(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Inject the full Playwright storage state (cookies + per-origin localStorage).
+	// This is what makes MSAL-backed sites like portal.azure.com skip the
+	// re-authentication redirect: the cookie header alone is not enough because
+	// MSAL keeps its access tokens in localStorage of login.microsoftonline.com.
+	if storageJSON := conn.Properties["storageState"]; storageJSON != "" {
+		var state connection.PlaywrightSessionState
+		if err := json.Unmarshal([]byte(storageJSON), &state); err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "Warning: failed to parse storageState: %v\n", err)
+		} else if err := injectStorageState(browserCtx, state); err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "Warning: failed to inject storageState: %v\n", err)
+		}
+	}
+
 	fmt.Fprintf(cmd.OutOrStdout(), "Navigating to %s\n", screenshotURL)
 
 	if err := chromedp.Run(browserCtx, chromedp.Navigate(screenshotURL)); err != nil {
@@ -650,6 +787,74 @@ func injectSessionStorage(browserCtx gocontext.Context, targetURL string, sessio
 			sessionStorage.setItem(k, v);
 		}
 	`, string(sessionJSON))
+	return chromedp.Run(browserCtx, chromedp.Evaluate(js, nil))
+}
+
+// injectStorageState replays a Playwright-shaped storage state into the
+// current browser context: full cookies (with domain/path/secure/expires) and
+// per-origin localStorage. localStorage is restored by navigating to a
+// same-origin static asset (favicon.ico) and writing each item via JS — we
+// can't use DOMStorage.SetItem because Chrome won't initialise a storage area
+// for an origin we haven't loaded a document from.
+func injectStorageState(browserCtx gocontext.Context, state connection.PlaywrightSessionState) error {
+	if len(state.Cookies) > 0 {
+		params := make([]*network.CookieParam, 0, len(state.Cookies))
+		for _, c := range state.Cookies {
+			cp := &network.CookieParam{
+				Name:     c.Name,
+				Value:    c.Value,
+				Domain:   c.Domain,
+				Path:     c.Path,
+				Secure:   c.Secure,
+				HTTPOnly: c.HTTPOnly,
+			}
+			if c.Expires > 0 {
+				t := cdp.TimeSinceEpoch(time.Unix(int64(c.Expires), 0))
+				cp.Expires = &t
+			}
+			switch c.SameSite {
+			case "Strict":
+				cp.SameSite = network.CookieSameSiteStrict
+			case "Lax":
+				cp.SameSite = network.CookieSameSiteLax
+			case "None":
+				cp.SameSite = network.CookieSameSiteNone
+			}
+			params = append(params, cp)
+		}
+		if err := chromedp.Run(browserCtx, chromedp.ActionFunc(func(ctx gocontext.Context) error {
+			return network.SetCookies(params).Do(ctx)
+		})); err != nil {
+			return fmt.Errorf("set cookies: %w", err)
+		}
+	}
+
+	for _, origin := range state.Origins {
+		if len(origin.LocalStorage) == 0 {
+			continue
+		}
+		if err := injectLocalStorageForOrigin(browserCtx, origin); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: localStorage for %s: %v\n", origin.Origin, err)
+		}
+	}
+	return nil
+}
+
+func injectLocalStorageForOrigin(browserCtx gocontext.Context, origin connection.SessionOrigin) error {
+	target := strings.TrimRight(origin.Origin, "/") + "/favicon.ico"
+	if err := chromedp.Run(browserCtx, chromedp.Navigate(target)); err != nil {
+		return fmt.Errorf("navigate %s: %w", target, err)
+	}
+	payload, err := json.Marshal(origin.LocalStorage)
+	if err != nil {
+		return err
+	}
+	js := fmt.Sprintf(`(function(){
+		const items = %s;
+		for (const it of items) {
+			try { localStorage.setItem(it.name, it.value); } catch (e) {}
+		}
+	})();`, string(payload))
 	return chromedp.Run(browserCtx, chromedp.Evaluate(js, nil))
 }
 
