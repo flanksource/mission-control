@@ -750,6 +750,46 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, ginkgo.FlakeAttempts(3)
 		})
 	})
 
+	var _ = ginkgo.Describe("missing resource", ginkgo.Ordered, func() {
+		var n models.Notification
+
+		ginkgo.BeforeAll(func() {
+			n = models.Notification{
+				ID:             uuid.New(),
+				Name:           "missing-resource-test",
+				Events:         pq.StringArray([]string{"config.unhealthy"}),
+				Source:         models.SourceCRD,
+				Title:          "Dummy",
+				Template:       "dummy",
+				CustomServices: types.JSON(customReceiverJson),
+			}
+			Expect(DefaultContext.DB().Create(&n).Error).To(BeNil())
+		})
+
+		ginkgo.AfterAll(func() {
+			Expect(DefaultContext.DB().Delete(&n).Error).To(BeNil())
+			notification.PurgeCache(n.ID.String())
+		})
+
+		ginkgo.It("should mark the notification as skipped when the resource no longer exists", func() {
+			sendHistory := models.NotificationSendHistory{
+				NotificationID: n.ID,
+				ResourceID:     uuid.New(),
+				SourceEvent:    "config.unhealthy",
+				Status:         models.NotificationStatusPending,
+			}
+			Expect(DefaultContext.DB().Create(&sendHistory).Error).To(BeNil())
+
+			_, err := notification.ProcessPendingNotifications(DefaultContext)
+			Expect(err).To(BeNil())
+
+			var got models.NotificationSendHistory
+			Expect(DefaultContext.DB().Where("id = ?", sendHistory.ID).First(&got).Error).To(BeNil())
+			Expect(got.Status).To(Equal(models.NotificationStatusSkipped))
+			Expect(lo.FromPtr(got.Error)).To(Equal("resource no longer exists"))
+		})
+	})
+
 	var _ = ginkgo.Describe("notification wait for", ginkgo.Ordered, func() {
 		var n models.Notification
 		var config models.ConfigItem
