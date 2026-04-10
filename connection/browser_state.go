@@ -10,6 +10,12 @@ import (
 	"github.com/flanksource/clicky/api"
 )
 
+// LocalStorageItem mirrors Playwright's per-origin localStorage entry.
+type LocalStorageItem struct {
+	Name  string `json:"name"`
+	Value string `json:"value"`
+}
+
 type Cookie struct {
 	Name     string  `json:"name"`
 	Value    string  `json:"value"`
@@ -105,8 +111,8 @@ func truncateStr(s string, maxLen int) string {
 }
 
 type SessionOrigin struct {
-	Origin       string            `json:"origin"`
-	LocalStorage []json.RawMessage `json:"localStorage,omitempty"`
+	Origin       string             `json:"origin"`
+	LocalStorage []LocalStorageItem `json:"localStorage,omitempty"`
 }
 
 type PlaywrightSessionState struct {
@@ -120,8 +126,18 @@ func (p PlaywrightSessionState) Pretty() api.Text {
 	if len(p.Cookies) > 0 {
 		t = t.Add(p.Cookies.Pretty())
 	}
-	if len(p.Tokens) > 0 {
+	if len(p.Origins) > 0 {
 		if len(p.Cookies) > 0 {
+			t = t.NewLine()
+		}
+		t = t.AddText(fmt.Sprintf("%d origins", len(p.Origins)), "font-bold")
+		for _, o := range p.Origins {
+			t = t.NewLine().AddText("  "+o.Origin, "font-bold").
+				AddText(fmt.Sprintf(" (%d localStorage items)", len(o.LocalStorage)), "text-muted")
+		}
+	}
+	if len(p.Tokens) > 0 {
+		if len(p.Cookies) > 0 || len(p.Origins) > 0 {
 			t = t.NewLine()
 		}
 		t = t.AddText(fmt.Sprintf("%d tokens", len(p.Tokens)), "font-bold")
@@ -137,8 +153,22 @@ func (p PlaywrightSessionState) PrettyFull() api.Text {
 	if len(p.Cookies) > 0 {
 		t = t.Add(p.Cookies.PrettyFull())
 	}
-	if len(p.Tokens) > 0 {
+	if len(p.Origins) > 0 {
 		if len(p.Cookies) > 0 {
+			t = t.NewLine()
+		}
+		t = t.AddText(fmt.Sprintf("%d origins", len(p.Origins)), "font-bold")
+		for _, o := range p.Origins {
+			t = t.NewLine().AddText("  "+o.Origin, "font-bold").
+				AddText(fmt.Sprintf(" (%d items)", len(o.LocalStorage)), "text-muted")
+			for _, item := range o.LocalStorage {
+				t = t.NewLine().AddText("    "+item.Name, "font-bold").
+					AddText("="+truncateStr(item.Value, 80), "text-muted")
+			}
+		}
+	}
+	if len(p.Tokens) > 0 {
+		if len(p.Cookies) > 0 || len(p.Origins) > 0 {
 			t = t.NewLine()
 		}
 		t = t.AddText(fmt.Sprintf("%d tokens", len(p.Tokens)), "font-bold")
@@ -149,9 +179,10 @@ func (p PlaywrightSessionState) PrettyFull() api.Text {
 	return t
 }
 
-func NewPlaywrightSessionState(cookies Cookies, sessionStorage map[string]string, connURL string) PlaywrightSessionState {
+func NewPlaywrightSessionState(cookies Cookies, sessionStorage map[string]string, origins []SessionOrigin, connURL string) PlaywrightSessionState {
 	state := PlaywrightSessionState{
 		Cookies: cookies,
+		Origins: origins,
 	}
 
 	var tokens []JWT
@@ -170,8 +201,18 @@ func NewPlaywrightSessionState(cookies Cookies, sessionStorage map[string]string
 	state.Tokens = tokens
 
 	if connURL != "" {
-		if u, err := url.Parse(connURL); err == nil {
-			state.Origins = []SessionOrigin{{Origin: fmt.Sprintf("%s://%s", u.Scheme, u.Host)}}
+		if u, err := url.Parse(connURL); err == nil && u.Host != "" {
+			connOrigin := fmt.Sprintf("%s://%s", u.Scheme, u.Host)
+			has := false
+			for _, o := range state.Origins {
+				if o.Origin == connOrigin {
+					has = true
+					break
+				}
+			}
+			if !has {
+				state.Origins = append(state.Origins, SessionOrigin{Origin: connOrigin})
+			}
 		}
 	}
 
