@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -30,15 +31,16 @@ import (
 )
 
 type browserLoginFlags struct {
-	Name       string
-	Namespace  string
-	URL        string
-	Domains    []string
-	WaitForURL string
-	Timeout    time.Duration
-	Cookies    bool
-	Session    bool
-	Bearer     bool
+	Name             string
+	Namespace        string
+	URL              string
+	Domains          []string
+	WaitForURL       string
+	Timeout          time.Duration
+	Cookies          bool
+	Session          bool
+	Bearer           bool
+	RequireBearerAud string
 }
 
 type browserSessionData struct {
@@ -124,6 +126,7 @@ func init() {
 			browserFlags.Session = true
 			browserFlags.Bearer = true
 		}
+		browserFlags.RequireBearerAud = "graph.microsoft.com"
 	}
 
 	connectionLoginCmd.AddCommand(connectionLoginAzureCmd)
@@ -280,6 +283,7 @@ func waitForLoginComplete(browserCtx gocontext.Context, flags browserLoginFlags)
 		go func() {
 			ticker := time.NewTicker(2 * time.Second)
 			defer ticker.Stop()
+			lastReported := ""
 			for {
 				select {
 				case <-ticker.C:
@@ -287,12 +291,34 @@ func waitForLoginComplete(browserCtx gocontext.Context, flags browserLoginFlags)
 					if err != nil {
 						continue
 					}
+					validAuds := make([]string, 0)
+					var matched string
+					var matchedJWT *connection.JWT
 					for aud, token := range extractBearerTokens(session) {
 						jwt := connection.DecodeJWT(token)
-						if jwt != nil && time.Until(jwt.ExpiresAt) > 0 {
-							fmt.Fprintf(os.Stderr, "Found valid token for %s (expires in %s)\n", aud, time.Until(jwt.ExpiresAt).Round(time.Second))
-							doneCh <- struct{}{}
-							return
+						if jwt == nil || time.Until(jwt.ExpiresAt) <= 0 {
+							continue
+						}
+						validAuds = append(validAuds, aud)
+						if matched != "" {
+							continue
+						}
+						if flags.RequireBearerAud == "" || strings.Contains(aud, flags.RequireBearerAud) {
+							matched = aud
+							matchedJWT = jwt
+						}
+					}
+					if matched != "" {
+						fmt.Fprintf(os.Stderr, "Found valid token for %s (expires in %s)\n", matched, time.Until(matchedJWT.ExpiresAt).Round(time.Second))
+						doneCh <- struct{}{}
+						return
+					}
+					if flags.RequireBearerAud != "" && len(validAuds) > 0 {
+						sort.Strings(validAuds)
+						summary := strings.Join(validAuds, ", ")
+						if summary != lastReported {
+							fmt.Fprintf(os.Stderr, "Waiting for %s token (have: %s)\n", flags.RequireBearerAud, summary)
+							lastReported = summary
 						}
 					}
 				case <-browserCtx.Done():

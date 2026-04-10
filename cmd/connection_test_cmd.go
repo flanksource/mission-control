@@ -2,6 +2,7 @@ package cmd
 
 import (
 	gocontext "context"
+	"errors"
 	"fmt"
 	"os"
 
@@ -100,6 +101,23 @@ func runConnectionTestFromDB(name, namespace string, overrides *connectionFlags)
 }
 
 func runConnectionTestViaAPI(mcCtx *MCContext, name, namespace string) (any, error) {
+	result, err := callConnectionTestAPI(mcCtx, name, namespace)
+	if !errors.Is(err, sdk.ErrHTMLResponse) {
+		return result, err
+	}
+
+	upgraded, upErr := ensureAPIBase(mcCtx)
+	if upErr != nil {
+		return nil, fmt.Errorf("%w (probe failed: %v)", err, upErr)
+	}
+	if !upgraded {
+		return nil, err
+	}
+	fmt.Fprintf(os.Stderr, "Upgraded context %q server to %s\n", mcCtx.Name, mcCtx.Server)
+	return callConnectionTestAPI(mcCtx, name, namespace)
+}
+
+func callConnectionTestAPI(mcCtx *MCContext, name, namespace string) (any, error) {
 	client := sdk.New(mcCtx.Server, mcCtx.Token)
 
 	conn, err := client.GetConnection(name, namespace)
