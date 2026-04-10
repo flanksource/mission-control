@@ -17,6 +17,7 @@ interface Props {
 
 const COUNT_VALUE_CLASS = 'text-[16pt] leading-[18pt]';
 const TIMESTAMP_VALUE_CLASS = 'text-[8pt] leading-[10pt]';
+const NO_BREAK_STYLE = { pageBreakInside: 'avoid' as const, breakInside: 'avoid' as const };
 const BACKUP_TAG_MAPPING = (key: string, value: unknown): string => {
   if (key !== 'state' && key !== 'type') {
     return '';
@@ -74,8 +75,8 @@ export default function BackupChanges({ changes }: Props) {
 
   return (
     <>
-      <div className="flex flex-wrap items-stretch gap-[3mm] mb-[4mm]">
-        <div className="flex-1 min-w-[28mm]">
+      <div className="flex flex-wrap items-stretch gap-[3mm] mb-[4mm]" style={NO_BREAK_STYLE}>
+        <div className="flex-1 min-w-[28mm]" style={NO_BREAK_STYLE}>
           <StatCard
             label="Failed Backups"
             value={String(failed.length)}
@@ -87,7 +88,7 @@ export default function BackupChanges({ changes }: Props) {
             valueClassName={COUNT_VALUE_CLASS}
           />
         </div>
-        <div className="flex-1 min-w-[28mm]">
+        <div className="flex-1 min-w-[28mm]" style={NO_BREAK_STYLE}>
           <StatCard
             label="Running Backups"
             value={String(inProgress.length)}
@@ -99,7 +100,7 @@ export default function BackupChanges({ changes }: Props) {
             valueClassName={COUNT_VALUE_CLASS}
           />
         </div>
-        <div className="flex-1 min-w-[28mm]">
+        <div className="flex-1 min-w-[28mm]" style={NO_BREAK_STYLE}>
           <StatCard
             label="Latest Successful Backup"
             value={latestSuccessfulValue}
@@ -112,7 +113,7 @@ export default function BackupChanges({ changes }: Props) {
           />
         </div>
         {restoreEvents.length > 0 && (
-          <div className="flex-1 min-w-[28mm]">
+          <div className="flex-1 min-w-[28mm]" style={NO_BREAK_STYLE}>
             <StatCard
               label="Restore Events"
               value={String(restoreEvents.length)}
@@ -128,14 +129,14 @@ export default function BackupChanges({ changes }: Props) {
       </div>
 
       {backupEvents.length > 0 && (
-        <div className="mb-[4mm]">
+        <div className="mb-[4mm]" style={NO_BREAK_STYLE}>
           <BackupActivityCalendar entries={toBackupCalendarEntries(backupEvents)} />
         </div>
       )}
 
       {attentionEvents.length > 0 && (
         <div className="mb-[4mm]">
-          <h3 className="text-[11pt] font-semibold text-slate-800 mb-[2mm]">Exceptions & Running Jobs</h3>
+          <h3 className="text-[11pt] font-normal text-slate-800 mb-[2mm]">Exceptions & Running Jobs</h3>
           <ListTable
             rows={attentionEvents.map((change) => ({
               date: change.date,
@@ -161,7 +162,7 @@ export default function BackupChanges({ changes }: Props) {
 
       {restoreEvents.length > 0 && (
         <div className="mb-[4mm]">
-          <h3 className="text-[11pt] font-semibold text-slate-800 mb-[2mm]">Restore Jobs</h3>
+          <h3 className="text-[11pt] font-normal text-slate-800 mb-[2mm]">Restore Jobs</h3>
           <ListTable
             rows={restoreEvents.map((change) => ({
               date: change.date,
@@ -186,7 +187,7 @@ export default function BackupChanges({ changes }: Props) {
       )}
 
       <div>
-        <h3 className="text-[11pt] font-semibold text-slate-800 mb-[2mm]">Event Stream</h3>
+        <h3 className="text-[11pt] font-normal text-slate-800 mb-[2mm]">Event Stream</h3>
         <ListTable
           rows={relevant.map((change) => ({
             id: change.id,

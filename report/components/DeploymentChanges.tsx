@@ -12,6 +12,7 @@ interface Props {
 }
 
 const COUNT_VALUE_CLASS = 'text-[16pt] leading-[18pt]';
+const NO_BREAK_STYLE = { pageBreakInside: 'avoid' as const, breakInside: 'avoid' as const };
 const CATEGORY_STYLES: Record<'scale' | 'policy' | 'spec', string> = {
   scale: 'bg-blue-50 text-blue-700 border-blue-200',
   policy: 'bg-orange-50 text-orange-700 border-orange-200',
@@ -54,8 +55,8 @@ export default function DeploymentChanges({ changes }: Props) {
 
   return (
     <>
-      <div className="flex flex-wrap items-stretch gap-[3mm] mb-[4mm]">
-        <div className="flex-1 min-w-[28mm]">
+      <div className="flex flex-wrap items-stretch gap-[3mm] mb-[4mm]" style={NO_BREAK_STYLE}>
+        <div className="flex-1 min-w-[28mm]" style={NO_BREAK_STYLE}>
           <StatCard
             label="Relevant Changes"
             value={String(relevant.length)}
@@ -66,7 +67,7 @@ export default function DeploymentChanges({ changes }: Props) {
             valueClassName={COUNT_VALUE_CLASS}
           />
         </div>
-        <div className="flex-1 min-w-[28mm]">
+        <div className="flex-1 min-w-[28mm]" style={NO_BREAK_STYLE}>
           <StatCard
             label="Spec Updates"
             value={String(counts.spec)}
@@ -77,7 +78,7 @@ export default function DeploymentChanges({ changes }: Props) {
             valueClassName={COUNT_VALUE_CLASS}
           />
         </div>
-        <div className="flex-1 min-w-[28mm]">
+        <div className="flex-1 min-w-[28mm]" style={NO_BREAK_STYLE}>
           <StatCard
             label="Scaling Events"
             value={String(counts.scale)}
@@ -88,7 +89,7 @@ export default function DeploymentChanges({ changes }: Props) {
             valueClassName={COUNT_VALUE_CLASS}
           />
         </div>
-        <div className="flex-1 min-w-[28mm]">
+        <div className="flex-1 min-w-[28mm]" style={NO_BREAK_STYLE}>
           <StatCard
             label="Policy Updates"
             value={String(counts.policy)}

@@ -15,37 +15,30 @@ configItem:
   updatedAt: "2026-03-28T12:00:00Z"
 
 categoryMappings:
-  rbac.granted:
-    - PermissionGranted
-    - PermissionAdded
-    - IAMRoleAdded
-  rbac.revoked:
-    - PermissionRevoked
-    - PermissionRemoved
-    - IAMRoleRemoved
-  backup.success:
-    - BackupCompleted
-    - BackupSuccessful
-  backup.failed:
-    - BackupFailed
-  backup.progress:
-    - BackupStarted
-    - BackupRunning
-    - BackupEnqueued
-  backup.restore:
-    - BackupRestored
-    - RestoreCompleted
-  deployment.spec:
-    - diff
-  deployment.scale:
-    - ScalingReplicaSet
-  deployment.policy:
-    - PolicyUpdate
+  - category: rbac.granted
+    filter: 'changeType == "PermissionGranted" || changeType == "PermissionAdded" || changeType == "IAMRoleAdded"'
+  - category: rbac.revoked
+    filter: 'changeType == "PermissionRevoked" || changeType == "PermissionRemoved" || changeType == "IAMRoleRemoved"'
+  - category: backup.success
+    filter: 'changeType == "BackupCompleted" || changeType == "BackupSuccessful"'
+  - category: backup.failed
+    filter: 'changeType == "BackupFailed"'
+  - category: backup.progress
+    filter: 'changeType == "BackupStarted" || changeType == "BackupRunning" || changeType == "BackupEnqueued"'
+  - category: backup.restore
+    filter: 'changeType == "BackupRestored" || changeType == "RestoreCompleted"'
+  - category: deployment.spec
+    filter: 'changeType == "diff"'
+  - category: deployment.scale
+    filter: 'changeType == "ScalingReplicaSet"'
+  - category: deployment.policy
+    filter: 'changeType == "PolicyUpdate"'
 
 changes:
   - id: "chg-001"
     configID: "cfg-eks-001"
     changeType: "diff"
+    category: "deployment.spec"
     severity: "info"
     source: "kubernetes"
     summary: "Node pool autoscaler adjusted desired count from 3 to 5"
@@ -65,6 +58,7 @@ changes:
   - id: "chg-003"
     configID: "cfg-eks-001"
     changeType: "ScalingReplicaSet"
+    category: "deployment.scale"
     severity: "low"
     source: "kubernetes"
     summary: "Deployment incident-commander scaled from 2 to 3 replicas"
@@ -74,6 +68,7 @@ changes:
   - id: "chg-004"
     configID: "cfg-eks-001"
     changeType: "diff"
+    category: "deployment.spec"
     severity: "medium"
     source: "terraform"
     summary: "EKS cluster version upgraded from 1.28 to 1.29"
@@ -83,6 +78,7 @@ changes:
   - id: "chg-005"
     configID: "cfg-eks-001"
     changeType: "PolicyUpdate"
+    category: "deployment.policy"
     severity: "high"
     source: "argocd"
     summary: "Network policy updated: restricted egress to 10.0.0.0/8 for namespace mc"
@@ -92,6 +88,7 @@ changes:
   - id: "chg-006"
     configID: "cfg-eks-001"
     changeType: "diff"
+    category: "deployment.spec"
     severity: "critical"
     source: "aws-config"
     summary: "IAM role policy detached: eks-admin-access removed from cluster role"
@@ -119,6 +116,7 @@ changes:
   - id: "chg-009"
     configID: "cfg-eks-001"
     changeType: "ScalingReplicaSet"
+    category: "deployment.scale"
     severity: "info"
     source: "kubernetes"
     summary: "Deployment canary-checker scaled from 1 to 2 replicas"
@@ -128,6 +126,7 @@ changes:
   - id: "chg-010"
     configID: "cfg-eks-001"
     changeType: "diff"
+    category: "deployment.spec"
     severity: "medium"
     source: "argocd"
     summary: "Helm release cert-manager upgraded from v1.13.3 to v1.14.1"
@@ -146,6 +145,7 @@ changes:
   - id: "chg-012"
     configID: "cfg-eks-001"
     changeType: "PolicyUpdate"
+    category: "deployment.policy"
     severity: "high"
     source: "aws-config"
     summary: "Security group sg-0abc123 ingress rule added: allow 443 from 0.0.0.0/0"
@@ -155,6 +155,7 @@ changes:
   - id: "chg-013"
     configID: "cfg-eks-001"
     changeType: "diff"
+    category: "deployment.spec"
     severity: "low"
     source: "kubernetes"
     summary: "PodDisruptionBudget added for incident-commander (minAvailable: 2)"
@@ -164,6 +165,7 @@ changes:
   - id: "chg-014"
     configID: "cfg-eks-001"
     changeType: "PermissionGranted"
+    category: "rbac.granted"
     severity: "info"
     source: "okta"
     summary: "Granted db_owner to alice@flanksource.com on prod-rds-01"
@@ -177,6 +179,7 @@ changes:
   - id: "chg-015"
     configID: "cfg-eks-001"
     changeType: "PermissionRevoked"
+    category: "rbac.revoked"
     severity: "info"
     source: "okta"
     summary: "Revoked Secrets Reader access for bob@flanksource.com on prod-eks-cluster"
@@ -190,6 +193,7 @@ changes:
   - id: "chg-016"
     configID: "cfg-eks-001"
     changeType: "BackupCompleted"
+    category: "backup.success"
     severity: "info"
     source: "velero"
     summary: "Full cluster backup completed successfully (2.4 GiB)"
@@ -198,6 +202,7 @@ changes:
   - id: "chg-017"
     configID: "cfg-eks-001"
     changeType: "BackupFailed"
+    category: "backup.failed"
     severity: "high"
     source: "velero"
     summary: "Incremental backup failed: PVC snapshot timeout after 300s"
@@ -206,10 +211,187 @@ changes:
   - id: "chg-018"
     configID: "cfg-eks-001"
     changeType: "BackupStarted"
+    category: "backup.progress"
     severity: "info"
     source: "velero"
     summary: "Scheduled backup initiated for prod-eks-cluster"
     createdAt: "2026-03-30T03:00:00Z"
+
+  - id: "chg-019"
+    configID: "cfg-eks-001"
+    changeType: "UserCreated"
+    severity: "info"
+    source: "okta"
+    createdAt: "2026-03-24T11:30:00Z"
+    typedChange:
+      kind: "UserChange/v1"
+      user_name: "alice"
+      user_email: "alice@flanksource.com"
+      user_type: "human"
+      group_name: "platform-admins"
+      tenant: "production"
+
+  - id: "chg-020"
+    configID: "cfg-eks-001"
+    changeType: "Screenshot"
+    severity: "info"
+    source: "synthetics"
+    createdAt: "2026-03-24T10:15:00Z"
+    typedChange:
+      kind: "Screenshot/v1"
+      artifact_id: "art-001"
+      content_type: "image/png"
+      width: 1440
+      height: 900
+      url: "https://prod-eks-cluster.example.com/login"
+
+  - id: "chg-021"
+    configID: "cfg-eks-001"
+    changeType: "PermissionSync"
+    severity: "low"
+    source: "iam-reconciler"
+    createdAt: "2026-03-24T09:45:00Z"
+    typedChange:
+      kind: "PermissionChange/v1"
+      user_name: "jane@flanksource.com"
+      role_name: "cluster-admin"
+      scope: "namespace/mc"
+
+  - id: "chg-022"
+    configID: "cfg-eks-001"
+    changeType: "Deployment"
+    severity: "info"
+    source: "argocd"
+    createdAt: "2026-03-24T09:00:00Z"
+    typedChange:
+      kind: "Deployment/v1"
+      previous_image: "flanksource/incident-commander:v1.4.190"
+      new_image: "flanksource/incident-commander:v1.4.200"
+      container: "incident-commander"
+      namespace: "mc"
+      strategy: "rolling"
+
+  - id: "chg-023"
+    configID: "cfg-eks-001"
+    changeType: "Promotion"
+    severity: "info"
+    source: "release-bot"
+    createdAt: "2026-03-24T08:30:00Z"
+    typedChange:
+      kind: "Promotion/v1"
+      from_environment: "staging"
+      to_environment: "production"
+      version: "v1.4.200"
+      artifact: "incident-commander"
+
+  - id: "chg-024"
+    configID: "cfg-eks-001"
+    changeType: "Approved"
+    severity: "info"
+    source: "playbooks"
+    createdAt: "2026-03-24T08:00:00Z"
+    typedChange:
+      kind: "Approval/v1"
+      playbook_id: "pb-001"
+      run_id: "run-approve-001"
+      approved_by: "ops-lead@flanksource.com"
+      reason: "Change window approved"
+
+  - id: "chg-025"
+    configID: "cfg-eks-001"
+    changeType: "Rollback"
+    severity: "high"
+    source: "argocd"
+    createdAt: "2026-03-24T07:30:00Z"
+    typedChange:
+      kind: "Rollback/v1"
+      from_version: "v1.4.200"
+      to_version: "v1.4.190"
+      trigger: "health-check"
+      reason: "Elevated error rate"
+
+  - id: "chg-026"
+    configID: "cfg-eks-001"
+    changeType: "BackupArchived"
+    severity: "info"
+    source: "velero"
+    createdAt: "2026-03-24T07:00:00Z"
+    typedChange:
+      kind: "Backup/v1"
+      status: "completed"
+      backup_type: "full"
+      size: "2.4 GiB"
+      duration: "4m12s"
+      target: "s3://velero-prod"
+      snapshot_id: "snap-019"
+
+  - id: "chg-027"
+    configID: "cfg-eks-001"
+    changeType: "PlaybookCompleted"
+    severity: "info"
+    source: "playbooks"
+    createdAt: "2026-03-24T06:30:00Z"
+    typedChange:
+      kind: "PlaybookExecution/v1"
+      playbook_name: "Restart Incident Commander"
+      run_id: "pb-run-019"
+      status: "completed"
+      duration: "2m11s"
+
+  - id: "chg-028"
+    configID: "cfg-eks-001"
+    changeType: "Scaling"
+    severity: "low"
+    source: "keda"
+    createdAt: "2026-03-24T06:00:00Z"
+    typedChange:
+      kind: "Scaling/v1"
+      from_replicas: 2
+      to_replicas: 4
+      resource_type: "Deployment"
+      trigger: "queue-depth"
+
+  - id: "chg-029"
+    configID: "cfg-eks-001"
+    changeType: "CertificateRenewed"
+    severity: "info"
+    source: "cert-manager"
+    createdAt: "2026-03-24T05:30:00Z"
+    typedChange:
+      kind: "Certificate/v1"
+      subject: "prod-eks-cluster.internal"
+      issuer: "letsencrypt-prod"
+      not_after: "2026-06-22T00:00:00Z"
+      serial: "09AF23"
+      dns_names: "prod-eks-cluster.internal,api.prod.example.com"
+
+  - id: "chg-030"
+    configID: "cfg-eks-001"
+    changeType: "CostChange"
+    severity: "medium"
+    source: "cost-analyzer"
+    createdAt: "2026-03-24T05:00:00Z"
+    typedChange:
+      kind: "CostChange/v1"
+      previous_cost: 4280.5
+      new_cost: 4631.25
+      currency: "USD"
+      period: "30d"
+      reason: "Node group scale-out"
+
+  - id: "chg-031"
+    configID: "cfg-eks-001"
+    changeType: "PipelineRunCompleted"
+    severity: "info"
+    source: "github-actions"
+    createdAt: "2026-03-24T04:30:00Z"
+    typedChange:
+      kind: "PipelineRun/v1"
+      pipeline_name: "deploy-incident-commander"
+      run_number: 841
+      branch: "main"
+      status: "completed"
+      duration: "9m31s"
 
 analyses:
   - id: "ana-001"

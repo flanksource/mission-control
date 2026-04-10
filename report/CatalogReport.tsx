@@ -1,7 +1,7 @@
 import React from 'react';
 import { Document, Page, Header, Footer, Section } from '@flanksource/facet';
 import { Icon } from '@flanksource/icons/icon';
-import type { CatalogReportData, CatalogReportConfigGroup } from './catalog-report-types.ts';
+import type { CatalogReportData, CatalogReportConfigGroup, CatalogReportCategoryMapping } from './catalog-report-types.ts';
 import type { ConfigChange } from './config-types.ts';
 import ConfigChangesSection from './components/ConfigChangesSection.tsx';
 import ConfigInsightsSection from './components/ConfigInsightsSection.tsx';
@@ -73,7 +73,7 @@ function ConfigJSONSection({ json }: { json: string }) {
 
 function CategorizedChangesSection({ changes, categoryMappings, hideConfigName }: {
   changes?: ConfigChange[];
-  categoryMappings?: Record<string, string[]>;
+  categoryMappings?: CatalogReportCategoryMapping[];
   hideConfigName?: boolean;
 }) {
   if (!changes?.length) return null;
@@ -82,17 +82,17 @@ function CategorizedChangesSection({ changes, categoryMappings, hideConfigName }
     <>
       {rbac.length > 0 && (
         <Section variant="hero" title="Permission Changes" size="md">
-          <RBACChanges changes={rbac.map(({ change, category }) => configChangeToApplicationChange(change, category))} />
+          <RBACChanges changes={rbac.map((change) => configChangeToApplicationChange(change))} />
         </Section>
       )}
       {backup.length > 0 && (
         <Section variant="hero" title="Backup Activity" size="md">
-          <BackupChanges changes={backup.map(({ change, category }) => configChangeToApplicationChange(change, category))} />
+          <BackupChanges changes={backup.map((change) => configChangeToApplicationChange(change))} />
         </Section>
       )}
       {deployment.length > 0 && (
         <Section variant="hero" title="Deployment Changes" size="md">
-          <DeploymentChanges changes={deployment.map(({ change, category }) => configChangeToApplicationChange(change, category))} />
+          <DeploymentChanges changes={deployment.map((change) => configChangeToApplicationChange(change))} />
         </Section>
       )}
       {uncategorized.length > 0 && (

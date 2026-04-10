@@ -10,6 +10,7 @@ interface Props {
 }
 
 const COUNT_VALUE_CLASS = 'text-[16pt] leading-[18pt]';
+const NO_BREAK_STYLE = { pageBreakInside: 'avoid' as const, breakInside: 'avoid' as const };
 const ACTION_BADGE_COLORS: Record<'Granted' | 'Revoked', { color: string; textColor: string; borderColor: string }> = {
   Granted: {
     color: 'bg-green-50',
@@ -40,8 +41,8 @@ export default function RBACChanges({ changes }: Props) {
 
   return (
     <>
-      <div className="flex flex-wrap items-stretch gap-[3mm] mb-[3mm]">
-        <div className="flex-1 min-w-[28mm]">
+      <div className="flex flex-wrap items-stretch gap-[3mm] mb-[3mm]" style={NO_BREAK_STYLE}>
+        <div className="flex-1 min-w-[28mm]" style={NO_BREAK_STYLE}>
           <StatCard
             label="Granted"
             value={String(grantedCount)}
@@ -53,7 +54,7 @@ export default function RBACChanges({ changes }: Props) {
             valueClassName={COUNT_VALUE_CLASS}
           />
         </div>
-        <div className="flex-1 min-w-[28mm]">
+        <div className="flex-1 min-w-[28mm]" style={NO_BREAK_STYLE}>
           <StatCard
             label="Revoked"
             value={String(revokedCount)}
@@ -65,7 +66,7 @@ export default function RBACChanges({ changes }: Props) {
             valueClassName={COUNT_VALUE_CLASS}
           />
         </div>
-        <div className="flex-1 min-w-[28mm]">
+        <div className="flex-1 min-w-[28mm]" style={NO_BREAK_STYLE}>
           <StatCard
             label="Net"
             value={netCount > 0 ? `+${netCount}` : String(netCount)}

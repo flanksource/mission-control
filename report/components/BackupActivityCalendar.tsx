@@ -90,7 +90,7 @@ export default function BackupActivityCalendar({ entries }: Props) {
   ];
 
   return (
-    <div>
+    <div style={{ pageBreakInside: 'avoid', breakInside: 'avoid' }}>
       <p className="text-[9pt] font-semibold text-slate-700 mb-[2mm]">{monthLabel}</p>
       <div className="grid grid-cols-7 gap-[1mm]">
         {DAY_HEADERS.map((day) => (

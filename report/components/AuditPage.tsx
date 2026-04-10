@@ -68,12 +68,15 @@ export default function AuditPage({ audit }: Props) {
           </div>
         )}
 
-        {opts.categoryMappings && Object.keys(opts.categoryMappings).length > 0 && (
+        {opts.categoryMappings && opts.categoryMappings.length > 0 && (
           <div className="mt-[2mm]">
             <div className="text-xs text-gray-500 mb-[0.5mm]">Category Mappings</div>
-            {Object.entries(opts.categoryMappings).map(([key, values]) => (
-              <div key={key} className="text-xs font-mono text-slate-700">
-                <span className="text-blue-600">{key}</span>: {values.join(', ')}
+            {opts.categoryMappings.map((mapping, index) => (
+              <div key={`${mapping.category || 'typed'}-${index}`} className="text-xs font-mono text-slate-700">
+                {mapping.category && <span className="text-blue-600">{mapping.category}</span>}
+                {mapping.category && <span>: </span>}
+                <span>{mapping.filter}</span>
+                {mapping.transform && <span className="text-slate-500"> =&gt; {mapping.transform}</span>}
               </div>
             ))}
           </div>

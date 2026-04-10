@@ -1,7 +1,9 @@
 import React from 'react';
 import { Page, Section } from '@flanksource/facet';
 import type { KitchenSinkData } from './KitchenSinkTypes.ts';
+import type { CatalogReportCategoryMapping } from '../catalog-report-types.ts';
 import ConfigChangesSection from '../components/ConfigChangesSection.tsx';
+import ConfigChangesExamples from '../components/ConfigChangesExamples.tsx';
 import RBACChanges from '../components/RBACChanges.tsx';
 import BackupChanges from '../components/BackupChanges.tsx';
 import DeploymentChanges from '../components/DeploymentChanges.tsx';
@@ -16,28 +18,30 @@ export default function ChangesPage({ data, pageProps }: Props) {
   const rbacChanges = data.rbacChanges ?? [];
   const backupChanges = data.backupChanges ?? [];
   const deploymentChanges = data.deploymentChanges ?? [];
-  const categoryMappings = (data as any).categoryMappings as Record<string, string[]> | undefined;
+  const categoryMappings = (data as any).categoryMappings as CatalogReportCategoryMapping[] | undefined;
   const categorized = categorizeChanges(data.changes ?? [], categoryMappings);
 
   return (
     <Page {...pageProps}>
+      <ConfigChangesExamples changes={data.changes} />
+
       <Section variant="hero" title="Auto-Categorized Changes" size="md">
         <div className="text-xs text-gray-500 mb-[2mm]">
           A single changes array auto-split into specialized sections using categoryMappings. RBAC, backup, and deployment changes get their own renderers; the rest falls through to ConfigChangesSection.
         </div>
         {categorized.rbac.length > 0 && (
           <Section variant="hero" title="Permission Changes" size="md">
-            <RBACChanges changes={categorized.rbac.map(({ change, category }) => configChangeToApplicationChange(change, category))} />
+            <RBACChanges changes={categorized.rbac.map((change) => configChangeToApplicationChange(change))} />
           </Section>
         )}
         {categorized.backup.length > 0 && (
           <Section variant="hero" title="Backup Activity" size="md">
-            <BackupChanges changes={categorized.backup.map(({ change, category }) => configChangeToApplicationChange(change, category))} />
+            <BackupChanges changes={categorized.backup.map((change) => configChangeToApplicationChange(change))} />
           </Section>
         )}
         {categorized.deployment.length > 0 && (
           <Section variant="hero" title="Deployment Changes" size="md">
-            <DeploymentChanges changes={categorized.deployment.map(({ change, category }) => configChangeToApplicationChange(change, category))} />
+            <DeploymentChanges changes={categorized.deployment.map((change) => configChangeToApplicationChange(change))} />
           </Section>
         )}
         {categorized.uncategorized.length > 0 && (

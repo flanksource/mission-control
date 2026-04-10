@@ -28,6 +28,11 @@ export interface ConfigChangeArtifact {
   dataUri?: string;
 }
 
+export interface ConfigTypedChange {
+  kind: string;
+  [key: string]: any;
+}
+
 export interface ConfigChange {
   id?: string;
   configID?: string;
@@ -35,10 +40,12 @@ export interface ConfigChange {
   configType?: string;
   permalink?: string;
   changeType: string;
+  category?: string;
   severity?: ConfigSeverity;
   source?: string;
   summary?: string;
   details?: Record<string, any>;
+  typedChange?: ConfigTypedChange;
   createdBy?: string;
   externalCreatedBy?: string;
   createdAt?: string;

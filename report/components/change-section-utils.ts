@@ -1,5 +1,6 @@
 import type { ApplicationChange, ApplicationPermissionChange } from '../types.ts';
-import type { ConfigChange } from '../config-types.ts';
+import type { ConfigChange, ConfigTypedChange } from '../config-types.ts';
+import type { CatalogReportCategoryMapping } from '../catalog-report-types.ts';
 
 export type ChangeSectionVariant = 'generic' | 'rbac' | 'backup' | 'deployment';
 export type BackupCalendarStatus = 'success' | 'failed' | 'warning';
@@ -36,6 +37,26 @@ export interface RBACChangeGroup {
   rows: RBACChangeRow[];
 }
 
+export interface CategorizedChanges {
+  rbac: ConfigChange[];
+  backup: ConfigChange[];
+  deployment: ConfigChange[];
+  uncategorized: ConfigChange[];
+}
+
+export interface TypedChangeDisplay {
+  label?: string;
+  summary?: string;
+  meta: string[];
+  diff?: TypedChangeDiff;
+}
+
+export interface TypedChangeDiff {
+  label?: string;
+  from: string;
+  to: string;
+}
+
 const RBAC_ADDED_TYPES = new Set(['PermissionGranted', 'PermissionAdded']);
 const RBAC_REMOVED_TYPES = new Set(['PermissionRevoked', 'PermissionRemoved']);
 const BACKUP_SUCCESS_TYPES = new Set(['BackupCompleted', 'BackupSuccessful']);
@@ -54,41 +75,6 @@ export function getChangeActor(change: ApplicationChange): string {
 
 function getCategoryKey(change: ApplicationChange): string {
   return change.category ?? '';
-}
-
-type ChangeMappingInput = {
-  changeType?: string;
-  severity?: string;
-  status?: string;
-};
-
-function getRuleSeverity(rule: string): string | undefined {
-  const parts = rule.split('@');
-  if (parts.length !== 2) {
-    return undefined;
-  }
-  return cleanField(parts[1])?.toLowerCase();
-}
-
-function getRuleType(rule: string): string {
-  return rule.split('@', 2)[0]?.trim() ?? '';
-}
-
-function getChangeSeverity(change: ChangeMappingInput): string {
-  return (change.status ?? change.severity ?? '').trim().toLowerCase();
-}
-
-function matchesCategoryRule(change: ChangeMappingInput, rule: string): boolean {
-  if ((change.changeType ?? '') !== getRuleType(rule)) {
-    return false;
-  }
-
-  const ruleSeverity = getRuleSeverity(rule);
-  if (!ruleSeverity) {
-    return true;
-  }
-
-  return getChangeSeverity(change) === ruleSeverity;
 }
 
 function normalizeRBACAction(change: ApplicationChange): RBACChangeAction | null {
@@ -181,38 +167,10 @@ export function filterDeploymentChanges(changes: ApplicationChange[]): Applicati
   return changes.filter(isDeploymentChange);
 }
 
-function resolveCategoryMappings(categoryMappings?: Record<string, string[]>): Record<string, string[]> | undefined {
-  if (!categoryMappings || Object.keys(categoryMappings).length === 0) {
-    return undefined;
-  }
-  return categoryMappings;
-}
-
-function findCategoryForChange(change: ChangeMappingInput, categoryMappings?: Record<string, string[]>): string | undefined {
-  const mappings = resolveCategoryMappings(categoryMappings);
-  if (!mappings) {
-    return undefined;
-  }
-
-  for (const [category, rules] of Object.entries(mappings)) {
-    if (rules.some((rule) => getRuleSeverity(rule) && matchesCategoryRule(change, rule))) {
-      return category;
-    }
-  }
-
-  for (const [category, types] of Object.entries(mappings)) {
-    if (types.some((rule) => !getRuleSeverity(rule) && matchesCategoryRule(change, rule))) {
-      return category;
-    }
-  }
-
-  return undefined;
-}
-
 export function inferChangeSectionVariant(
   title: string,
   changes: ApplicationChange[],
-  categoryMappings?: Record<string, string[]>,
+  _categoryMappings?: CatalogReportCategoryMapping[],
 ): ChangeSectionVariant {
   const lowerTitle = title.toLowerCase();
 
@@ -228,34 +186,32 @@ export function inferChangeSectionVariant(
     return 'deployment';
   }
 
-  const mappings = resolveCategoryMappings(categoryMappings);
-  if (mappings) {
-    let rbacCount = 0;
-    let backupCount = 0;
-    let deploymentCount = 0;
-    for (const change of changes) {
-      const category = findCategoryForChange(change, mappings);
-      if (!category) {
-        continue;
-      }
-      if (category === 'rbac' || category.startsWith('rbac.')) {
-        rbacCount += 1;
-      } else if (category === 'backup' || category.startsWith('backup.')) {
-        backupCount += 1;
-      } else if (category === 'deployment' || category.startsWith('deployment.')) {
-        deploymentCount += 1;
-      }
+  let rbacCount = 0;
+  let backupCount = 0;
+  let deploymentCount = 0;
+  for (const change of changes) {
+    const category = getCategoryKey(change);
+    if (!category) {
+      continue;
     }
 
-    if (rbacCount > 0 && rbacCount === changes.length) {
-      return 'rbac';
+    if (category === 'rbac' || category.startsWith('rbac.')) {
+      rbacCount += 1;
+    } else if (category === 'backup' || category.startsWith('backup.')) {
+      backupCount += 1;
+    } else if (category === 'deployment' || category.startsWith('deployment.')) {
+      deploymentCount += 1;
     }
-    if (backupCount > 0 && backupCount === changes.length) {
-      return 'backup';
-    }
-    if (deploymentCount > 0 && deploymentCount >= Math.ceil(changes.length / 2)) {
-      return 'deployment';
-    }
+  }
+
+  if (rbacCount > 0 && rbacCount === changes.length) {
+    return 'rbac';
+  }
+  if (backupCount > 0 && backupCount === changes.length) {
+    return 'backup';
+  }
+  if (deploymentCount > 0 && deploymentCount >= Math.ceil(changes.length / 2)) {
+    return 'deployment';
   }
 
   return 'generic';
@@ -488,46 +444,304 @@ export function groupRBACChanges(changes: ApplicationChange[]): RBACChangeGroup[
     .sort((a, b) => new Date(b.latestDate).getTime() - new Date(a.latestDate).getTime());
 }
 
-export interface CategorizedChanges {
-  rbac: Array<{ change: ConfigChange; category: string }>;
-  backup: Array<{ change: ConfigChange; category: string }>;
-  deployment: Array<{ change: ConfigChange; category: string }>;
-  uncategorized: ConfigChange[];
-}
-
 export function categorizeChanges(
   changes: ConfigChange[],
-  categoryMappings?: Record<string, string[]>,
+  _categoryMappings?: CatalogReportCategoryMapping[],
 ): CategorizedChanges {
   const result: CategorizedChanges = { rbac: [], backup: [], deployment: [], uncategorized: [] };
-  const mappings = resolveCategoryMappings(categoryMappings);
-  if (!mappings) {
-    result.uncategorized = changes;
-    return result;
-  }
 
   for (const change of changes) {
-    const category = findCategoryForChange(change, mappings);
+    const category = change.category ?? '';
     if (!category) {
       result.uncategorized.push(change);
       continue;
     }
 
-    if (category === 'rbac' || category.startsWith('rbac.')) result.rbac.push({ change, category });
-    else if (category === 'backup' || category.startsWith('backup.')) result.backup.push({ change, category });
-    else if (category === 'deployment' || category.startsWith('deployment.')) result.deployment.push({ change, category });
+    if (category === 'rbac' || category.startsWith('rbac.')) result.rbac.push(change);
+    else if (category === 'backup' || category.startsWith('backup.')) result.backup.push(change);
+    else if (category === 'deployment' || category.startsWith('deployment.')) result.deployment.push(change);
     else result.uncategorized.push(change);
   }
+
   return result;
 }
 
+function asText(value: unknown): string | undefined {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (typeof value === 'string') {
+    return cleanField(value);
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+  return undefined;
+}
+
+function compactMeta(values: Array<string | undefined>): string[] {
+  return values.filter((value): value is string => Boolean(value));
+}
+
+function labelValue(label: string, value: unknown): string | undefined {
+  const text = asText(value);
+  return text ? `${label}: ${text}` : undefined;
+}
+
+function transition(label: string, from: unknown, to: unknown): string | undefined {
+  const fromText = asText(from);
+  const toText = asText(to);
+  if (!fromText && !toText) {
+    return undefined;
+  }
+  if (!fromText) {
+    return `${label}: ${toText}`;
+  }
+  if (!toText) {
+    return `${label}: ${fromText}`;
+  }
+  return `${label}: ${fromText} -> ${toText}`;
+}
+
+function toDiff(label: string, from: unknown, to: unknown): TypedChangeDiff | undefined {
+  const fromText = asText(from);
+  const toText = asText(to);
+  if (!fromText || !toText || fromText === toText) {
+    return undefined;
+  }
+
+  return { label, from: fromText, to: toText };
+}
+
+function formatDimensions(width: unknown, height: unknown): string | undefined {
+  const widthText = asText(width);
+  const heightText = asText(height);
+  if (!widthText || !heightText) {
+    return undefined;
+  }
+  return `${widthText}x${heightText}`;
+}
+
+function formatCurrencyAmount(value: unknown, currency: unknown): string | undefined {
+  if (typeof value !== 'number') {
+    return asText(value);
+  }
+
+  const code = asText(currency)?.toUpperCase();
+  if (code && code.length === 3) {
+    try {
+      return new Intl.NumberFormat('en-US', { style: 'currency', currency: code }).format(value);
+    } catch {
+      return `${code} ${value}`;
+    }
+  }
+
+  return String(value);
+}
+
+function humanizeLabel(value: string): string {
+  return value
+    .replace(/[_-]+/g, ' ')
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^./, (char) => char.toUpperCase());
+}
+
+function humanizeKind(kind: string): string {
+  const base = kind.split('/')[0] ?? kind;
+  return humanizeLabel(base);
+}
+
+export function getChangeTypeLabel(change: ConfigChange, typedDisplay?: TypedChangeDisplay): string {
+  const typeLabel = humanizeLabel(change.changeType || 'Change');
+  const normalizedType = (change.changeType || '').trim().toLowerCase();
+
+  if (typedDisplay?.label && ['diff', 'change', 'changed', 'update', 'updated'].includes(normalizedType)) {
+    return typedDisplay.label;
+  }
+
+  return typeLabel;
+}
+
+function permissionFromTypedChange(typedChange?: ConfigTypedChange): ApplicationPermissionChange | undefined {
+  if (typedChange?.kind !== 'PermissionChange/v1') {
+    return undefined;
+  }
+
+  const user = asText(typedChange.user_name);
+  const group = asText(typedChange.group_name);
+  const role = asText(typedChange.role_name);
+  if (!user && !group && !role) {
+    return undefined;
+  }
+
+  return { user, group, role };
+}
+
+const TYPED_CHANGE_RENDERERS: Record<string, (typedChange: ConfigTypedChange) => Omit<TypedChangeDisplay, 'label'>> = {
+  'UserChange/v1': (typedChange) => ({
+    meta: compactMeta([
+      asText(typedChange.user_name) || asText(typedChange.user_id),
+      asText(typedChange.user_email),
+      labelValue('Group', typedChange.group_name || typedChange.group_id),
+      labelValue('Type', typedChange.user_type),
+      labelValue('Tenant', typedChange.tenant),
+    ]),
+  }),
+  'Screenshot/v1': (typedChange) => ({
+    meta: compactMeta([
+      labelValue('Artifact', typedChange.artifact_id),
+      labelValue('Type', typedChange.content_type),
+      labelValue('Size', formatDimensions(typedChange.width, typedChange.height)),
+      labelValue('URL', typedChange.url),
+    ]),
+  }),
+  'PermissionChange/v1': (typedChange) => ({
+    meta: compactMeta([
+      asText(typedChange.user_name) || asText(typedChange.group_name) || asText(typedChange.user_id) || asText(typedChange.group_id),
+      labelValue('Role', typedChange.role_name || typedChange.role_id),
+      labelValue('Role Type', typedChange.role_type),
+      labelValue('Scope', typedChange.scope),
+    ]),
+  }),
+  'Deployment/v1': (typedChange) => {
+    const imageDiff = toDiff('Image', typedChange.previous_image, typedChange.new_image);
+    return {
+      meta: compactMeta([
+        labelValue('Container', typedChange.container),
+        imageDiff ? undefined : transition('Image', typedChange.previous_image, typedChange.new_image),
+        labelValue('Namespace', typedChange.namespace),
+        labelValue('Strategy', typedChange.strategy),
+      ]),
+      diff: imageDiff,
+    };
+  },
+  'Promotion/v1': (typedChange) => {
+    const environmentDiff = toDiff('Environment', typedChange.from_environment, typedChange.to_environment);
+    return {
+      meta: compactMeta([
+        environmentDiff ? undefined : transition('Environment', typedChange.from_environment, typedChange.to_environment),
+        labelValue('Version', typedChange.version),
+        labelValue('Artifact', typedChange.artifact),
+      ]),
+      diff: environmentDiff,
+    };
+  },
+  'Approval/v1': (typedChange) => ({
+    summary: asText(typedChange.approved_by) ? `Approved by ${typedChange.approved_by}` : asText(typedChange.rejected_by) ? `Rejected by ${typedChange.rejected_by}` : 'Approval decision',
+    meta: compactMeta([
+      labelValue('Playbook', typedChange.playbook_id),
+      labelValue('Run', typedChange.run_id),
+      labelValue('Reason', typedChange.reason),
+    ]),
+  }),
+  'Rollback/v1': (typedChange) => {
+    const versionDiff = toDiff('Version', typedChange.from_version, typedChange.to_version);
+    return {
+      summary: labelValue('Reason', typedChange.reason),
+      meta: compactMeta([
+        versionDiff ? undefined : transition('Version', typedChange.from_version, typedChange.to_version),
+        labelValue('Trigger', typedChange.trigger),
+      ]),
+      diff: versionDiff,
+    };
+  },
+  'Backup/v1': (typedChange) => ({
+    meta: compactMeta([
+      labelValue('Status', typedChange.status),
+      labelValue('Type', typedChange.backup_type),
+      labelValue('Target', typedChange.target),
+      labelValue('Size', typedChange.size),
+      labelValue('Duration', typedChange.duration),
+      labelValue('Snapshot', typedChange.snapshot_id),
+    ]),
+  }),
+  'PlaybookExecution/v1': (typedChange) => {
+    const playbook = asText(typedChange.playbook_name) || asText(typedChange.playbook_id);
+    return {
+      summary: playbook,
+      meta: compactMeta([
+        labelValue('Run', typedChange.run_id),
+        labelValue('Status', typedChange.status),
+        labelValue('Duration', typedChange.duration),
+        labelValue('Error', typedChange.error),
+      ]),
+    };
+  },
+  'Scaling/v1': (typedChange) => {
+    const replicaDiff = toDiff('Replicas', typedChange.from_replicas, typedChange.to_replicas);
+    return {
+      meta: compactMeta([
+        labelValue('Resource', typedChange.resource_type),
+        replicaDiff ? undefined : transition('Replicas', typedChange.from_replicas, typedChange.to_replicas),
+        labelValue('Trigger', typedChange.trigger),
+      ]),
+      diff: replicaDiff,
+    };
+  },
+  'Certificate/v1': (typedChange) => ({
+    summary: labelValue('Subject', typedChange.subject),
+    meta: compactMeta([
+      labelValue('Issuer', typedChange.issuer),
+      labelValue('Valid To', typedChange.not_after),
+      labelValue('Serial', typedChange.serial),
+      labelValue('DNS', typedChange.dns_names),
+    ]),
+  }),
+  'CostChange/v1': (typedChange) => {
+    const costDiff = toDiff(
+      'Cost',
+      formatCurrencyAmount(typedChange.previous_cost, typedChange.currency),
+      formatCurrencyAmount(typedChange.new_cost, typedChange.currency),
+    );
+    return {
+      summary: labelValue('Reason', typedChange.reason),
+      meta: compactMeta([
+        costDiff ? undefined : transition('Cost', formatCurrencyAmount(typedChange.previous_cost, typedChange.currency), formatCurrencyAmount(typedChange.new_cost, typedChange.currency)),
+        labelValue('Period', typedChange.period),
+      ]),
+      diff: costDiff,
+    };
+  },
+  'PipelineRun/v1': (typedChange) => {
+    const pipeline = asText(typedChange.pipeline_name) || asText(typedChange.pipeline_id);
+    return {
+      summary: pipeline,
+      meta: compactMeta([
+        labelValue('Run', typedChange.run_number ?? typedChange.run_id),
+        labelValue('Branch', typedChange.branch),
+        labelValue('Status', typedChange.status),
+        labelValue('Duration', typedChange.duration),
+        labelValue('Error', typedChange.error),
+      ]),
+    };
+  },
+};
+
+export function getTypedChangeDisplay(change: ConfigChange): TypedChangeDisplay | undefined {
+  const typedChange = change.typedChange;
+  if (!typedChange?.kind) {
+    return undefined;
+  }
+
+  const renderer = TYPED_CHANGE_RENDERERS[typedChange.kind];
+  const display = renderer ? renderer(typedChange) : { meta: [] };
+  return {
+    label: humanizeKind(typedChange.kind),
+    summary: display.summary,
+    meta: display.meta ?? [],
+    diff: display.diff,
+  };
+}
+
 export function configChangeToApplicationChange(c: ConfigChange, category?: string): ApplicationChange {
-  const permission = c.details?.permission as ApplicationPermissionChange | undefined;
+  const permission = (c.details?.permission as ApplicationPermissionChange | undefined) ?? permissionFromTypedChange(c.typedChange);
   return {
     id: c.id ?? '',
     date: c.createdAt ?? '',
     changeType: c.changeType,
-    category,
+    category: category ?? c.category,
     source: c.source,
     createdBy: c.createdBy ?? c.externalCreatedBy,
     configId: c.configID,

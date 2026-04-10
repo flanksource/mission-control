@@ -10,6 +10,7 @@ interface Props {
   restores: ApplicationBackupRestore[];
 }
 
+const NO_BREAK_STYLE = { pageBreakInside: 'avoid' as const, breakInside: 'avoid' as const };
 const BACKUP_TAG_MAPPING = (key: string, value: unknown): string => {
   if (key !== 'status') {
     return '';
@@ -41,10 +42,16 @@ export default function BackupsSection({ backups, restores }: Props) {
 
   return (
     <Section variant="hero" title="Backups & Restores" size="md">
-      <div className="grid grid-cols-3 gap-[3mm] mb-[4mm]">
-        <StatCard label="Total Backups" value={String(backups.length)} variant="bordered" size="sm" />
-        <StatCard label="Successful" value={String(successCount)} variant="bordered" size="sm" />
-        <StatCard label="Failed" value={String(failedCount)} variant="bordered" size="sm" />
+      <div className="grid grid-cols-3 gap-[3mm] mb-[4mm]" style={NO_BREAK_STYLE}>
+        <div style={NO_BREAK_STYLE}>
+          <StatCard label="Total Backups" value={String(backups.length)} variant="bordered" size="sm" />
+        </div>
+        <div style={NO_BREAK_STYLE}>
+          <StatCard label="Successful" value={String(successCount)} variant="bordered" size="sm" />
+        </div>
+        <div style={NO_BREAK_STYLE}>
+          <StatCard label="Failed" value={String(failedCount)} variant="bordered" size="sm" />
+        </div>
       </div>
       <div className="mb-[4mm]">
         <BackupActivityCalendar entries={calendarEntries} />

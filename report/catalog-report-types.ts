@@ -2,6 +2,12 @@ import type { ConfigChange, ConfigAnalysis, ConfigRelationship, ConfigItem } fro
 import type { RBACResource } from './rbac-types.ts';
 import type { ScraperInfo } from './scraper-types.ts';
 
+export interface CatalogReportCategoryMapping {
+  category?: string;
+  filter: string;
+  transform?: string;
+}
+
 export interface CatalogReportSections {
   changes: boolean;
   insights: boolean;
@@ -73,7 +79,7 @@ export interface CatalogReportOptions {
   changeArtifacts: boolean;
   filters?: string[];
   thresholds?: { staleDays: number; reviewOverdueDays: number };
-  categoryMappings?: Record<string, string[]>;
+  categoryMappings?: CatalogReportCategoryMapping[];
 }
 
 export interface CatalogReportAudit {
@@ -93,7 +99,7 @@ export interface CatalogReportData {
   to?: string;
   recursive?: boolean;
   groupBy?: string;
-  categoryMappings?: Record<string, string[]>;
+  categoryMappings?: CatalogReportCategoryMapping[];
   thresholds?: { staleDays?: number; reviewOverdueDays?: number };
   configItem: ConfigItem & {
     config?: string;
