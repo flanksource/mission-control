@@ -498,6 +498,8 @@ func resourceExists(ctx context.Context, sourceEvent string, resourceID uuid.UUI
 		table = (&models.Component{}).TableName()
 	case strings.HasPrefix(sourceEvent, "check."):
 		table = (&models.Check{}).TableName()
+	case strings.HasPrefix(sourceEvent, "canary."):
+		table = (&models.Canary{}).TableName()
 	default:
 		return true, nil
 	}

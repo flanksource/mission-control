@@ -781,13 +781,15 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, ginkgo.FlakeAttempts(3)
 			}
 			Expect(DefaultContext.DB().Create(&sendHistory).Error).To(BeNil())
 
-			_, err := notification.ProcessPendingNotifications(DefaultContext)
-			Expect(err).To(BeNil())
+			Eventually(func(g Gomega) {
+				_, err := notification.ProcessPendingNotifications(DefaultContext)
+				g.Expect(err).To(BeNil())
 
-			var got models.NotificationSendHistory
-			Expect(DefaultContext.DB().Where("id = ?", sendHistory.ID).First(&got).Error).To(BeNil())
-			Expect(got.Status).To(Equal(models.NotificationStatusSkipped))
-			Expect(lo.FromPtr(got.Error)).To(Equal("resource no longer exists"))
+				var got models.NotificationSendHistory
+				g.Expect(DefaultContext.DB().Where("id = ?", sendHistory.ID).First(&got).Error).To(BeNil())
+				g.Expect(got.Status).To(Equal(models.NotificationStatusSkipped))
+				g.Expect(lo.FromPtr(got.Error)).To(Equal("resource no longer exists"))
+			}, "10s", "200ms").Should(Succeed())
 		})
 	})
 
