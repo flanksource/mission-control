@@ -15,17 +15,7 @@ plugins:
           - MAJOR RELEASE
   - "@semantic-release/release-notes-generator"
   - - "@semantic-release/github"
-    - assets:
-        - path: ./.bin/incident-commander-amd64
-          name: incident-commander-amd64
-        - path: ./.bin/incident-commander.exe
-          name: incident-commander.exe
-        - path: ./.bin/incident-commander_osx-amd64
-          name: incident-commander_osx-amd64
-        - path: ./.bin/incident-commander_osx-arm64
-          name: incident-commander_osx-arm64
-      # - path: ./.bin/release.yaml
-      #   name: release.yaml
-      # From: https://github.com/semantic-release/github/pull/487#issuecomment-1486298997  
+    - draftRelease: true
+      # From: https://github.com/semantic-release/github/pull/487#issuecomment-1486298997
       successComment: false
       failTitle: false
