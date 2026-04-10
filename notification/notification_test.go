@@ -777,6 +777,7 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, ginkgo.FlakeAttempts(3)
 				ResourceID:     uuid.New(),
 				SourceEvent:    "config.unhealthy",
 				Status:         models.NotificationStatusPending,
+				NotBefore:      lo.ToPtr(time.Now().Add(-time.Minute)),
 			}
 			Expect(DefaultContext.DB().Create(&sendHistory).Error).To(BeNil())
 
