@@ -1,13 +1,13 @@
-package catalog_report
+package catalog
 
 import (
 	_ "embed"
 	"fmt"
 	"os"
-	"sort"
 	"strings"
 
-	"github.com/flanksource/clicky/api"
+	clickyAPI "github.com/flanksource/clicky/api"
+	reportAPI "github.com/flanksource/incident-commander/api"
 	"sigs.k8s.io/yaml"
 )
 
@@ -17,9 +17,9 @@ const EmbeddedSettingsSource = "embedded defaults"
 var defaultSettingsYAML []byte
 
 type Settings struct {
-	Filters          []string            `json:"filters,omitempty" yaml:"filters,omitempty"`
-	Thresholds       SettingsThresholds  `json:"thresholds,omitempty" yaml:"thresholds,omitempty"`
-	CategoryMappings map[string][]string `json:"categoryMappings,omitempty" yaml:"categoryMappings,omitempty"`
+	Filters          []string                                 `json:"filters,omitempty" yaml:"filters,omitempty"`
+	Thresholds       SettingsThresholds                       `json:"thresholds,omitempty" yaml:"thresholds,omitempty"`
+	CategoryMappings []reportAPI.CatalogReportCategoryMapping `json:"categoryMappings,omitempty" yaml:"categoryMappings,omitempty"`
 }
 
 type SettingsThresholds struct {
@@ -41,10 +41,7 @@ func (s *Settings) Clone() *Settings {
 	}
 
 	if len(s.CategoryMappings) > 0 {
-		out.CategoryMappings = make(map[string][]string, len(s.CategoryMappings))
-		for key, values := range s.CategoryMappings {
-			out.CategoryMappings[key] = append([]string(nil), values...)
-		}
+		out.CategoryMappings = append([]reportAPI.CatalogReportCategoryMapping(nil), s.CategoryMappings...)
 	}
 
 	return out
@@ -93,31 +90,33 @@ func ResolveSettings(path string) (*Settings, string, error) {
 	return settings, fmt.Sprintf("%s + %s", EmbeddedSettingsSource, path), nil
 }
 
-func (s *Settings) Pretty() api.Text {
+func (s *Settings) Pretty() clickyAPI.Text {
 	if s == nil {
-		return api.Text{Content: "<none>", Style: "text-gray-500"}
+		return clickyAPI.Text{Content: "<none>", Style: "text-gray-500"}
 	}
-	items := []api.KeyValuePair{}
+	items := []clickyAPI.KeyValuePair{}
 	if len(s.Filters) > 0 {
-		items = append(items, api.KeyValue("Filters", strings.Join(s.Filters, ", ")))
+		items = append(items, clickyAPI.KeyValue("Filters", strings.Join(s.Filters, ", ")))
 	}
 	if s.Thresholds.StaleDays > 0 || s.Thresholds.ReviewOverdueDays > 0 {
-		items = append(items, api.KeyValue("Stale", fmt.Sprintf("%dd", s.Thresholds.StaleDays)))
-		items = append(items, api.KeyValue("Review Overdue", fmt.Sprintf("%dd", s.Thresholds.ReviewOverdueDays)))
+		items = append(items, clickyAPI.KeyValue("Stale", fmt.Sprintf("%dd", s.Thresholds.StaleDays)))
+		items = append(items, clickyAPI.KeyValue("Review Overdue", fmt.Sprintf("%dd", s.Thresholds.ReviewOverdueDays)))
 	}
 	if len(s.CategoryMappings) > 0 {
-		keys := make([]string, 0, len(s.CategoryMappings))
-		for k := range s.CategoryMappings {
-			keys = append(keys, k)
+		var mappings []string
+		for _, mapping := range s.CategoryMappings {
+			summary := fmt.Sprintf("filter=%s", mapping.Filter)
+			if mapping.Category != "" {
+				summary = fmt.Sprintf("category=%s %s", mapping.Category, summary)
+			}
+			if mapping.Transform != "" {
+				summary += fmt.Sprintf(" transform=%s", mapping.Transform)
+			}
+			mappings = append(mappings, summary)
 		}
-		sort.Strings(keys)
-		var cats []string
-		for _, k := range keys {
-			cats = append(cats, fmt.Sprintf("%s: %s", k, strings.Join(s.CategoryMappings[k], ", ")))
-		}
-		items = append(items, api.KeyValue("Categories", strings.Join(cats, " | ")))
+		items = append(items, clickyAPI.KeyValue("Categories", strings.Join(mappings, " | ")))
 	}
-	return api.Text{}.Add(api.DescriptionList{Items: items})
+	return clickyAPI.Text{}.Add(clickyAPI.DescriptionList{Items: items})
 }
 
 // FilterQuery returns the filters as a single search query string

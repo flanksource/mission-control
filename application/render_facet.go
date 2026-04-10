@@ -11,14 +11,22 @@ func RenderFacetHTML(app *icapi.Application) ([]byte, error) {
 	if app == nil {
 		return nil, fmt.Errorf("application must not be nil")
 	}
-	return report.RenderCLI(initSlices(app), "html", "Application.tsx")
+	result, err := report.RenderCLI(initSlices(app), "html", "Application.tsx")
+	if err != nil {
+		return nil, err
+	}
+	return result.Data, nil
 }
 
 func RenderFacetPDF(app *icapi.Application) ([]byte, error) {
 	if app == nil {
 		return nil, fmt.Errorf("application must not be nil")
 	}
-	return report.RenderCLI(initSlices(app), "pdf", "Application.tsx")
+	result, err := report.RenderCLI(initSlices(app), "pdf", "Application.tsx")
+	if err != nil {
+		return nil, err
+	}
+	return result.Data, nil
 }
 
 func initSlices(app *icapi.Application) icapi.Application {

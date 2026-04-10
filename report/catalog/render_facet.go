@@ -1,4 +1,4 @@
-package catalog_report
+package catalog
 
 import (
 	"fmt"

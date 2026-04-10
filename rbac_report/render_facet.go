@@ -36,8 +36,8 @@ func renderWithFacet(ctx context.Context, r *api.RBACReport, format string, view
 		return nil, err
 	}
 
-	ctx.Logger.V(3).Infof("Facet rendered %dKB of %s", len(result)/1024, format)
-	return result, nil
+	ctx.Logger.V(3).Infof("Facet rendered %dKB of %s", len(result.Data)/1024, format)
+	return result.Data, nil
 }
 
 func initSlices(r *api.RBACReport) api.RBACReport {

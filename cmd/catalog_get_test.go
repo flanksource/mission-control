@@ -32,7 +32,7 @@ var _ = ginkgo.Describe("buildCatalogGetOutput", func() {
 		c.Config = &configJSON
 		r := CatalogGetResult{
 			ConfigItem: *c,
-			since:      since,
+			since:      since.String(),
 			Related: []query.RelatedConfig{
 				{ID: uuid.New(), Name: "my-pod", Type: "Kubernetes::Pod", Relation: "outgoing", Health: lo.ToPtr(models.HealthHealthy)},
 			},
@@ -60,7 +60,7 @@ var _ = ginkgo.Describe("buildCatalogGetOutput", func() {
 	})
 
 	ginkgo.It("omits empty sections but always includes header and details", func() {
-		r := CatalogGetResult{ConfigItem: *makeConfig(), since: since}
+		r := CatalogGetResult{ConfigItem: *makeConfig(), since: since.String()}
 		out := r.Pretty().String()
 		Expect(out).To(ContainSubstring("my-deployment"))
 		Expect(out).NotTo(ContainSubstring("Relationships"))
@@ -71,7 +71,7 @@ var _ = ginkgo.Describe("buildCatalogGetOutput", func() {
 		configJSON := `{"foo":"bar"}`
 		c := makeConfig()
 		c.Config = &configJSON
-		r := CatalogGetResult{ConfigItem: *c, since: since}
+		r := CatalogGetResult{ConfigItem: *c, since: since.String()}
 		out := r.Pretty().String()
 		Expect(out).To(ContainSubstring("Config"))
 		Expect(out).To(ContainSubstring("foo"))

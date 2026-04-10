@@ -1,4 +1,4 @@
-package catalog_report
+package catalog
 
 import (
 	"os"
@@ -20,11 +20,10 @@ thresholds:
   staleDays: 60
   reviewOverdueDays: 30
 categoryMappings:
-  rbac.granted:
-    - PermissionGranted
-    - PermissionAdded
-  backup.failed:
-    - BackupFailed
+  - category: rbac.granted
+    filter: 'changeType == "PermissionGranted" || changeType == "PermissionAdded"'
+  - category: backup.failed
+    filter: 'changeType == "BackupFailed"'
 `
 			path := filepath.Join(os.TempDir(), "test-settings.yaml")
 			Expect(os.WriteFile(path, []byte(content), 0600)).To(Succeed())
@@ -35,13 +34,29 @@ categoryMappings:
 			Expect(s.Filters).To(Equal([]string{"type!=Kubernetes::ConfigMap", "type!=Kubernetes::Secret"}))
 			Expect(s.Thresholds.StaleDays).To(Equal(60))
 			Expect(s.Thresholds.ReviewOverdueDays).To(Equal(30))
-			Expect(s.CategoryMappings).To(HaveKey("rbac.granted"))
-			Expect(s.CategoryMappings["rbac.granted"]).To(Equal([]string{"PermissionGranted", "PermissionAdded"}))
-			Expect(s.CategoryMappings["backup.failed"]).To(Equal([]string{"BackupFailed"}))
+			Expect(s.CategoryMappings).To(HaveLen(2))
+			Expect(s.CategoryMappings[0].Category).To(Equal("rbac.granted"))
+			Expect(s.CategoryMappings[0].Filter).To(Equal(`changeType == "PermissionGranted" || changeType == "PermissionAdded"`))
+			Expect(s.CategoryMappings[1].Category).To(Equal("backup.failed"))
+			Expect(s.CategoryMappings[1].Filter).To(Equal(`changeType == "BackupFailed"`))
 		})
 
 		ginkgo.It("returns error for missing file", func() {
 			_, err := LoadSettings("/nonexistent/path.yaml")
+			Expect(err).To(HaveOccurred())
+		})
+
+		ginkgo.It("rejects the old category mapping shape", func() {
+			content := `
+categoryMappings:
+  backup.failed:
+    - BackupFailed
+`
+			path := filepath.Join(os.TempDir(), "legacy-settings.yaml")
+			Expect(os.WriteFile(path, []byte(content), 0600)).To(Succeed())
+			defer os.Remove(path)
+
+			_, err := LoadSettings(path)
 			Expect(err).To(HaveOccurred())
 		})
 	})
@@ -53,10 +68,10 @@ categoryMappings:
 			Expect(s.Filters).To(ContainElement("type!=Kubernetes::ConfigMap"))
 			Expect(s.Thresholds.StaleDays).To(Equal(90))
 			Expect(s.Thresholds.ReviewOverdueDays).To(Equal(90))
-			Expect(s.CategoryMappings).To(HaveKey("rbac.granted"))
-			Expect(s.CategoryMappings["rbac.granted"]).To(ContainElement("PermissionAdded"))
-			Expect(s.CategoryMappings["backup.failed"]).To(ContainElement("BACKUP_DB@high"))
-			Expect(s.CategoryMappings["deployment.failed"]).To(ContainElement("CodeDeployment@failed"))
+			Expect(s.CategoryMappings).ToNot(BeEmpty())
+			Expect(s.CategoryMappings[0].Category).To(Equal("rbac.granted"))
+			Expect(s.CategoryMappings[0].Filter).To(ContainSubstring("PermissionGranted"))
+			Expect(s.CategoryMappings).To(ContainElement(HaveField("Category", "deployment.failed")))
 		})
 	})
 
@@ -66,7 +81,7 @@ categoryMappings:
 			Expect(err).ToNot(HaveOccurred())
 			Expect(source).To(Equal(EmbeddedSettingsSource))
 			Expect(s.Filters).To(ContainElement("type!=Kubernetes::Secret"))
-			Expect(s.CategoryMappings).To(HaveKey("backup.failed"))
+			Expect(s.CategoryMappings).To(ContainElement(HaveField("Category", "backup.failed")))
 		})
 
 		ginkgo.It("overlays file settings on top of embedded defaults", func() {
@@ -76,10 +91,10 @@ filters:
 thresholds:
   staleDays: 60
 categoryMappings:
-  backup.failed:
-    - BACKUP_DB@high
-  deployment.failed:
-    - CodeDeployment@failed
+  - category: backup.failed
+    filter: 'changeType == "BACKUP_DB" && severity == "high"'
+  - category: deployment.failed
+    filter: 'changeType == "CodeDeployment" && severity == "failed"'
 `
 			path := filepath.Join(os.TempDir(), "overlay-settings.yaml")
 			Expect(os.WriteFile(path, []byte(content), 0600)).To(Succeed())
@@ -92,9 +107,11 @@ categoryMappings:
 			Expect(s.Filters).To(Equal([]string{"name=test"}))
 			Expect(s.Thresholds.StaleDays).To(Equal(60))
 			Expect(s.Thresholds.ReviewOverdueDays).To(Equal(90))
-			Expect(s.CategoryMappings["backup.failed"]).To(Equal([]string{"BACKUP_DB@high"}))
-			Expect(s.CategoryMappings["deployment.failed"]).To(Equal([]string{"CodeDeployment@failed"}))
-			Expect(s.CategoryMappings).To(HaveKey("rbac.granted"))
+			Expect(s.CategoryMappings).To(HaveLen(2))
+			Expect(s.CategoryMappings[0].Category).To(Equal("backup.failed"))
+			Expect(s.CategoryMappings[0].Filter).To(Equal(`changeType == "BACKUP_DB" && severity == "high"`))
+			Expect(s.CategoryMappings[1].Category).To(Equal("deployment.failed"))
+			Expect(s.CategoryMappings[1].Filter).To(Equal(`changeType == "CodeDeployment" && severity == "failed"`))
 		})
 	})
 

@@ -1,8 +1,10 @@
-package catalog_report
+package catalog
 
 import (
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"math"
 	"slices"
 	"strings"
 	"time"
@@ -10,6 +12,7 @@ import (
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
+	dutyTypes "github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
 
@@ -27,6 +30,42 @@ type Options struct {
 	Audit           bool
 	Settings        *Settings
 	SettingsPath    string
+
+	// Limit caps the number of config items (including recursive descendants)
+	// included in the report. 0 = unlimited.
+	Limit int
+	// MaxItems caps each per-entry section (changes, analyses, access,
+	// access-logs). Section-specific overrides take precedence. 0 = unlimited.
+	MaxItems int
+	// MaxChanges overrides MaxItems for the changes section. 0 = unlimited.
+	MaxChanges int
+}
+
+// effectiveMax resolves the cap for a section, taking the tighter of an
+// optional section-specific override and the generic MaxItems floor. A return
+// of 0 means "no cap".
+func (o Options) effectiveMax(override int) int {
+	switch {
+	case override > 0 && o.MaxItems > 0:
+		if override < o.MaxItems {
+			return override
+		}
+		return o.MaxItems
+	case override > 0:
+		return override
+	default:
+		return o.MaxItems
+	}
+}
+
+// pageSizeFor converts an effectiveMax result into a duty PageSize value.
+// duty's BaseCatalogSearch.SetDefaults forces PageSize<=0 to 50, so "unlimited"
+// must be expressed as a large sentinel.
+func (o Options) pageSizeFor(override int) int {
+	if n := o.effectiveMax(override); n > 0 {
+		return n
+	}
+	return math.MaxInt32
 }
 
 func (o Options) StaleDays() int {
@@ -62,6 +101,14 @@ func BuildReport(ctx context.Context, configs []models.ConfigItem, opts Options)
 	}
 	opts = opts.WithDefaults()
 	sinceTime := time.Now().Add(-opts.Since)
+	var mappings []api.CatalogReportCategoryMapping
+	if opts.Settings != nil {
+		mappings = opts.Settings.CategoryMappings
+	}
+	mapper, err := newChangeMapper(ctx, mappings)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to initialize change mappings: %w", err)
+	}
 
 	report := &api.CatalogReport{
 		Title:       opts.Title,
@@ -76,6 +123,10 @@ func BuildReport(ctx context.Context, configs []models.ConfigItem, opts Options)
 
 	report.Parents = resolveParents(ctx, &configs[0])
 
+	if opts.Limit > 0 && len(configs) > opts.Limit {
+		configs = configs[:opts.Limit]
+	}
+
 	scraperIDSet := make(map[string]bool)
 	for _, config := range configs {
 		if config.ScraperID != nil && *config.ScraperID != "" {
@@ -84,7 +135,7 @@ func BuildReport(ctx context.Context, configs []models.ConfigItem, opts Options)
 	}
 
 	for _, config := range configs {
-		entry, entryScraperIDs, err := buildEntry(ctx, &config, opts, sinceTime)
+		entry, entryScraperIDs, err := buildEntryWithMapper(ctx, &config, opts, sinceTime, mapper)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to build entry for %s: %w", config.GetName(), err)
 		}
@@ -130,6 +181,10 @@ func BuildReport(ctx context.Context, configs []models.ConfigItem, opts Options)
 }
 
 func buildEntry(ctx context.Context, config *models.ConfigItem, opts Options, sinceTime time.Time) (*api.CatalogReportEntry, []string, error) {
+	return buildEntryWithMapper(ctx, config, opts, sinceTime, nil)
+}
+
+func buildEntryWithMapper(ctx context.Context, config *models.ConfigItem, opts Options, sinceTime time.Time, mapper *changeMapper) (*api.CatalogReportEntry, []string, error) {
 	entry := &api.CatalogReportEntry{
 		ConfigItem: api.NewCatalogReportConfigItem(*config),
 	}
@@ -178,35 +233,25 @@ func buildEntry(ctx context.Context, config *models.ConfigItem, opts Options, si
 			BaseCatalogSearch: query.BaseCatalogSearch{
 				CatalogID: catalogIDsCSV,
 				FromTime:  &sinceTime,
-				PageSize:  500,
+				PageSize:  opts.pageSizeFor(opts.MaxChanges),
 			},
 		})
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to get changes: %w", err)
 		}
-		entry.Changes = lo.Map(resp.Changes, func(c query.ConfigChangeRow, _ int) api.CatalogReportChange {
+		detailsByID, err := loadCatalogChangeDetails(ctx, resp.Changes)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to load change details: %w", err)
+		}
+		entry.Changes = make([]api.CatalogReportChange, 0, len(resp.Changes))
+		for _, c := range resp.Changes {
 			name, typ := configMeta(c.ConfigID)
-			r := api.CatalogReportChange{
-				ID:                c.ID,
-				ConfigID:          c.ConfigID,
-				ConfigName:        name,
-				ConfigType:        typ,
-				Permalink:         api.ConfigPermalink(c.ConfigID),
-				ChangeType:        c.ChangeType,
-				Severity:          c.Severity,
-				Source:            c.Source,
-				Summary:           c.Summary,
-				ExternalCreatedBy: c.ExternalCreatedBy,
-				Count:             c.Count,
+			r := newCatalogReportChangeFromRow(c, name, typ, detailsByID[c.ID])
+			if err := mapper.Apply(&r); err != nil {
+				return nil, nil, fmt.Errorf("failed to apply change mappings for %s: %w", c.ID, err)
 			}
-			if c.CreatedAt != nil {
-				r.CreatedAt = c.CreatedAt.Format(time.RFC3339)
-			}
-			if c.CreatedBy != nil {
-				r.CreatedBy = c.CreatedBy.String()
-			}
-			return r
-		})
+			entry.Changes = append(entry.Changes, r)
+		}
 		entry.ChangeCount = len(entry.Changes)
 
 		if opts.ChangeArtifacts && len(entry.Changes) > 0 {
@@ -218,7 +263,7 @@ func buildEntry(ctx context.Context, config *models.ConfigItem, opts Options, si
 		resp, err := query.FindCatalogInsights(ctx, query.CatalogInsightsSearchRequest{
 			BaseCatalogSearch: query.BaseCatalogSearch{
 				CatalogID: catalogIDsCSV,
-				PageSize:  500,
+				PageSize:  opts.pageSizeFor(0),
 			},
 		})
 		if err != nil {
@@ -236,6 +281,9 @@ func buildEntry(ctx context.Context, config *models.ConfigItem, opts Options, si
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to get access: %w", err)
 		}
+		if limit := opts.effectiveMax(0); limit > 0 && len(rbacRows) > limit {
+			rbacRows = rbacRows[:limit]
+		}
 		entry.RBACResources = groupRBACByConfig(rbacRows, configMap, opts)
 		for _, r := range entry.RBACResources {
 			entry.AccessCount += len(r.Users)
@@ -247,6 +295,9 @@ func buildEntry(ctx context.Context, config *models.ConfigItem, opts Options, si
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to get access logs: %w", err)
 		}
+		if limit := opts.effectiveMax(0); limit > 0 && len(logs) > limit {
+			logs = logs[:limit]
+		}
 		entry.AccessLogs = lo.Map(logs, func(l accessLogRow, _ int) api.CatalogReportAccessLog {
 			return newAccessLogEntry(l)
 		})
@@ -257,6 +308,74 @@ func buildEntry(ctx context.Context, config *models.ConfigItem, opts Options, si
 	}
 
 	return entry, scraperIDs, nil
+}
+
+func newCatalogReportChangeFromRow(c query.ConfigChangeRow, configName, configType string, details map[string]any) api.CatalogReportChange {
+	r := api.CatalogReportChange{
+		ID:                c.ID,
+		ConfigID:          c.ConfigID,
+		ConfigName:        configName,
+		ConfigType:        configType,
+		Permalink:         api.ConfigPermalink(c.ConfigID),
+		ChangeType:        c.ChangeType,
+		Severity:          c.Severity,
+		Source:            c.Source,
+		Summary:           c.Summary,
+		Details:           details,
+		ExternalCreatedBy: c.ExternalCreatedBy,
+		Count:             c.Count,
+	}
+	if c.CreatedAt != nil {
+		r.CreatedAt = c.CreatedAt.Format(time.RFC3339)
+	}
+	if c.CreatedBy != nil {
+		r.CreatedBy = c.CreatedBy.String()
+	}
+	return r
+}
+
+func loadCatalogChangeDetails(ctx context.Context, rows []query.ConfigChangeRow) (map[string]map[string]any, error) {
+	if len(rows) == 0 {
+		return map[string]map[string]any{}, nil
+	}
+
+	ids := make([]uuid.UUID, 0, len(rows))
+	for _, row := range rows {
+		id, err := uuid.Parse(row.ID)
+		if err != nil {
+			continue
+		}
+		ids = append(ids, id)
+	}
+
+	if len(ids) == 0 {
+		return map[string]map[string]any{}, nil
+	}
+
+	changes, err := query.GetCatalogChangesByIDs(ctx, ids)
+	if err != nil {
+		return nil, err
+	}
+
+	detailsByID := make(map[string]map[string]any, len(changes))
+	for _, change := range changes {
+		detailsByID[change.ID.String()] = decodeJSONMap(change.Details)
+	}
+
+	return detailsByID, nil
+}
+
+func decodeJSONMap(raw dutyTypes.JSON) map[string]any {
+	if len(raw) == 0 {
+		return nil
+	}
+
+	var decoded map[string]any
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		return nil
+	}
+
+	return decoded
 }
 
 func buildConfigGroups(report *api.CatalogReport, configMap map[uuid.UUID]models.ConfigItem) []api.CatalogReportConfigGroup {
@@ -304,21 +423,50 @@ func sortedConfigIDs(m map[uuid.UUID]models.ConfigItem) []uuid.UUID {
 	return ids
 }
 
+// resolveParents derives report ancestry from config.Path to avoid recursive
+// ParentID walks that can loop forever on cyclic catalog data.
 func resolveParents(ctx context.Context, config *models.ConfigItem) []models.ConfigItem {
-	var parents []models.ConfigItem
-	current := config
-	for current.ParentID != nil {
-		loaded, err := query.GetConfigsByIDs(ctx, []uuid.UUID{*current.ParentID})
-		if err != nil || len(loaded) == 0 {
-			break
+	parentIDs := parentIDsFromPath(config)
+	if len(parentIDs) == 0 {
+		return nil
+	}
+
+	loaded, err := query.GetConfigsByIDs(ctx, parentIDs)
+	if err != nil || len(loaded) == 0 {
+		return nil
+	}
+
+	byID := make(map[uuid.UUID]models.ConfigItem, len(loaded))
+	for _, ci := range loaded {
+		byID[ci.ID] = ci
+	}
+
+	parents := make([]models.ConfigItem, 0, len(parentIDs))
+	for _, id := range parentIDs {
+		if ci, ok := byID[id]; ok {
+			parents = append(parents, ci)
 		}
-		parents = append(parents, loaded[0])
-		current = &loaded[0]
 	}
-	for i, j := 0, len(parents)-1; i < j; i, j = i+1, j-1 {
-		parents[i], parents[j] = parents[j], parents[i]
-	}
+
 	return parents
+}
+
+func parentIDsFromPath(config *models.ConfigItem) []uuid.UUID {
+	if config == nil || config.Path == "" {
+		return nil
+	}
+
+	segments := strings.Split(config.Path, ".")
+	parentIDs := make([]uuid.UUID, 0, len(segments))
+	for _, seg := range segments {
+		id, err := uuid.Parse(seg)
+		if err != nil || id == config.ID {
+			continue
+		}
+		parentIDs = append(parentIDs, id)
+	}
+
+	return parentIDs
 }
 
 type accessLogRow struct {
@@ -498,13 +646,21 @@ func groupRBACByConfig(rows []db.RBACAccessRow, configMap map[uuid.UUID]models.C
 }
 
 func configTreeNodeToReport(n *query.ConfigTreeNode) *api.CatalogReportTreeNode {
+	return buildReportTreeNode(n, make(map[uuid.UUID]bool))
+}
+
+func buildReportTreeNode(n *query.ConfigTreeNode, visited map[uuid.UUID]bool) *api.CatalogReportTreeNode {
 	result := &api.CatalogReportTreeNode{
 		CatalogReportConfigItem: api.NewCatalogReportConfigItem(n.ConfigItem),
 		EdgeType:                n.EdgeType,
 		Relation:                n.Relation,
 	}
+	if visited[n.ID] {
+		return result
+	}
+	visited[n.ID] = true
 	for _, c := range n.Children {
-		result.Children = append(result.Children, *configTreeNodeToReport(c))
+		result.Children = append(result.Children, *buildReportTreeNode(c, visited))
 	}
 	return result
 }

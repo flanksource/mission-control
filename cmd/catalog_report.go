@@ -13,8 +13,8 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/catalog_report"
 	"github.com/flanksource/incident-commander/report"
+	"github.com/flanksource/incident-commander/report/catalog"
 )
 
 var (
@@ -34,6 +34,9 @@ var (
 	catalogReportGroupBy         string
 	catalogReportChangeArtifacts bool
 	catalogReportAudit           bool
+	catalogReportLimit           int
+	catalogReportMaxItems        int
+	catalogReportMaxChanges      int
 )
 
 var CatalogReportCmd = &cobra.Command{
@@ -78,12 +81,12 @@ Examples:
 			}
 		}
 
-		configs, err := resolveConfigs(ctx, queryArgs, 0)
+		configs, err := resolveConfigs(ctx, queryArgs, catalogReportLimit)
 		if err != nil {
 			return err
 		}
 
-		result, err := catalog_report.Export(ctx, configs, opts, catalogReportFormat)
+		result, err := catalog.Export(ctx, configs, opts, catalogReportFormat)
 		if err != nil {
 			shutdown.ShutdownAndExit(1, err.Error())
 			return err
@@ -121,13 +124,16 @@ Examples:
 	},
 }
 
-func buildCatalogReportOptions() catalog_report.Options {
-	opts := catalog_report.Options{
+func buildCatalogReportOptions() catalog.Options {
+	opts := catalog.Options{
 		Title:           catalogReportTitle,
 		Recursive:       catalogReportRecursive,
 		GroupBy:         catalogReportGroupBy,
 		ChangeArtifacts: catalogReportChangeArtifacts,
 		Audit:           catalogReportAudit,
+		Limit:           catalogReportLimit,
+		MaxItems:        catalogReportMaxItems,
+		MaxChanges:      catalogReportMaxChanges,
 		Sections: api.CatalogReportSections{
 			Changes:       catalogReportChanges,
 			Insights:      catalogReportInsights,
@@ -144,14 +150,12 @@ func buildCatalogReportOptions() catalog_report.Options {
 		}
 	}
 
-	if catalogReportSettings != "" {
-		settings, err := catalog_report.LoadSettings(catalogReportSettings)
-		if err != nil {
-			logger.Fatalf("failed to load settings: %v", err)
-		}
-		opts.Settings = settings
-		opts.SettingsPath = catalogReportSettings
+	settings, settingsSource, err := catalog.ResolveSettings(catalogReportSettings)
+	if err != nil {
+		logger.Fatalf("failed to load settings: %v", err)
 	}
+	opts.Settings = settings
+	opts.SettingsPath = settingsSource
 
 	return opts
 }
@@ -166,6 +170,9 @@ func init() {
 	CatalogReportCmd.Flags().BoolVar(&catalogReportRecursive, "recursive", false, "Include all descendant config items")
 	CatalogReportCmd.Flags().StringVar(&catalogReportGroupBy, "group-by", "merged", "Group descendant data: 'merged' or 'config'")
 	CatalogReportCmd.Flags().BoolVar(&catalogReportChangeArtifacts, "change-artifacts", false, "Embed change artifacts (images/screenshots) in the report")
+	CatalogReportCmd.Flags().IntVar(&catalogReportLimit, "limit", 50, "Maximum number of config items to report on, including recursive descendants (0 = unlimited)")
+	CatalogReportCmd.Flags().IntVar(&catalogReportMaxItems, "max-items", 50, "Maximum items per section (changes, analyses, access, access-logs). Section-specific flags override this. (0 = unlimited)")
+	CatalogReportCmd.Flags().IntVar(&catalogReportMaxChanges, "max-changes", 100, "Maximum changes per entry, overrides --max-items for the changes section (0 = unlimited)")
 	CatalogReportCmd.Flags().BoolVar(&catalogReportChanges, "changes", true, "Include config changes section")
 	CatalogReportCmd.Flags().BoolVar(&catalogReportInsights, "insights", true, "Include config insights section")
 	CatalogReportCmd.Flags().BoolVar(&catalogReportRelationships, "relationships", true, "Include relationships section")

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -19,16 +20,22 @@ type CatalogReportThresholds struct {
 	ReviewOverdueDays int `json:"reviewOverdueDays"`
 }
 
+type CatalogReportCategoryMapping struct {
+	Category  string `json:"category,omitempty"`
+	Filter    string `json:"filter"`
+	Transform string `json:"transform,omitempty"`
+}
+
 type CatalogReportOptions struct {
-	Title            string                   `json:"title"`
-	Since            string                   `json:"since"`
-	Sections         CatalogReportSections    `json:"sections"`
-	Recursive        bool                     `json:"recursive"`
-	GroupBy          string                   `json:"groupBy"`
-	ChangeArtifacts  bool                     `json:"changeArtifacts"`
-	Filters          []string                 `json:"filters,omitempty"`
-	Thresholds       *CatalogReportThresholds `json:"thresholds,omitempty"`
-	CategoryMappings map[string][]string      `json:"categoryMappings,omitempty"`
+	Title            string                         `json:"title"`
+	Since            string                         `json:"since"`
+	Sections         CatalogReportSections          `json:"sections"`
+	Recursive        bool                           `json:"recursive"`
+	GroupBy          string                         `json:"groupBy"`
+	ChangeArtifacts  bool                           `json:"changeArtifacts"`
+	Filters          []string                       `json:"filters,omitempty"`
+	Thresholds       *CatalogReportThresholds       `json:"thresholds,omitempty"`
+	CategoryMappings []CatalogReportCategoryMapping `json:"categoryMappings,omitempty"`
 }
 
 type CatalogReportAudit struct {
@@ -38,6 +45,24 @@ type CatalogReportAudit struct {
 	Options      CatalogReportOptions `json:"options"`
 	Scrapers     []ScraperInfo        `json:"scrapers"`
 	Queries      []CatalogReportQuery `json:"queries"`
+	Groups       []CatalogReportGroup `json:"groups"`
+}
+
+type CatalogReportGroup struct {
+	ID        string                     `json:"id"`
+	Name      string                     `json:"name"`
+	GroupType string                     `json:"groupType,omitempty"`
+	Members   []CatalogReportGroupMember `json:"members"`
+}
+
+type CatalogReportGroupMember struct {
+	UserID              string  `json:"userId"`
+	Name                string  `json:"name"`
+	Email               string  `json:"email,omitempty"`
+	UserType            string  `json:"userType,omitempty"`
+	LastSignedInAt      *string `json:"lastSignedInAt,omitempty"`
+	MembershipAddedAt   string  `json:"membershipAddedAt"`
+	MembershipDeletedAt *string `json:"membershipDeletedAt,omitempty"`
 }
 
 type CatalogReportQuery struct {
@@ -47,6 +72,7 @@ type CatalogReportQuery struct {
 	Duration int64  `json:"duration"`
 	Error    string `json:"error,omitempty"`
 	Summary  string `json:"summary,omitempty"`
+	Pretty   string `json:"pretty"`
 }
 
 type CatalogReport struct {
@@ -60,9 +86,9 @@ type CatalogReport struct {
 	GroupBy     string                `json:"groupBy,omitempty"`
 	Entries     []CatalogReportEntry  `json:"entries"`
 
-	CategoryMappings map[string][]string      `json:"categoryMappings,omitempty"`
-	Thresholds       *CatalogReportThresholds `json:"thresholds,omitempty"`
-	Audit            *CatalogReportAudit      `json:"audit,omitempty"`
+	CategoryMappings []CatalogReportCategoryMapping `json:"categoryMappings,omitempty"`
+	Thresholds       *CatalogReportThresholds       `json:"thresholds,omitempty"`
+	Audit            *CatalogReportAudit            `json:"audit,omitempty"`
 
 	// Deprecated: use Entries[0] for single-config reports
 	ConfigItem models.ConfigItem   `json:"configItem"`
@@ -127,10 +153,12 @@ type CatalogReportChange struct {
 	ConfigType        string                  `json:"configType,omitempty"`
 	Permalink         string                  `json:"permalink,omitempty"`
 	ChangeType        string                  `json:"changeType"`
+	Category          string                  `json:"category,omitempty"`
 	Severity          string                  `json:"severity,omitempty"`
 	Source            string                  `json:"source,omitempty"`
 	Summary           string                  `json:"summary,omitempty"`
 	Details           map[string]any          `json:"details,omitempty"`
+	TypedChange       map[string]any          `json:"typedChange,omitempty"`
 	CreatedBy         string                  `json:"createdBy,omitempty"`
 	ExternalCreatedBy string                  `json:"externalCreatedBy,omitempty"`
 	CreatedAt         string                  `json:"createdAt,omitempty"`
@@ -157,6 +185,12 @@ func NewCatalogReportChange(c models.ConfigChange, configName, configType string
 	}
 	if c.ExternalCreatedBy != nil {
 		r.ExternalCreatedBy = *c.ExternalCreatedBy
+	}
+	if len(c.Details) > 0 {
+		var details map[string]any
+		if err := json.Unmarshal(c.Details, &details); err == nil {
+			r.Details = details
+		}
 	}
 	return r
 }

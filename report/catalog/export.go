@@ -1,10 +1,11 @@
-package catalog_report
+package catalog
 
 import (
 	"encoding/json"
 	"os/exec"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -12,7 +13,8 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/flanksource/incident-commander/api"
-	"github.com/flanksource/incident-commander/scraper_report"
+	"github.com/flanksource/incident-commander/db"
+	"github.com/flanksource/incident-commander/report/scraper"
 )
 
 type ExportResult struct {
@@ -38,7 +40,7 @@ func Export(ctx context.Context, configs []models.ConfigItem, opts Options, form
 		len(r.Entries), len(r.Changes), len(r.Analyses))
 
 	if opts.Audit {
-		r.Audit = buildAudit(ctx, opts, scraperIDs, queryLog)
+		r.Audit = buildAudit(ctx, opts, configs, scraperIDs, queryLog)
 	}
 
 	result := &ExportResult{}
@@ -58,7 +60,7 @@ func Export(ctx context.Context, configs []models.ConfigItem, opts Options, form
 	return result, err
 }
 
-func buildAudit(ctx context.Context, opts Options, scraperIDs []string, queryLog *query.QueryLog) *api.CatalogReportAudit {
+func buildAudit(ctx context.Context, opts Options, configs []models.ConfigItem, scraperIDs []string, queryLog *query.QueryLog) *api.CatalogReportAudit {
 	audit := &api.CatalogReportAudit{
 		BuildCommit:  api.BuildCommit,
 		BuildVersion: api.BuildVersion,
@@ -72,6 +74,7 @@ func buildAudit(ctx context.Context, opts Options, scraperIDs []string, queryLog
 		},
 		Scrapers: []api.ScraperInfo{},
 		Queries:  []api.CatalogReportQuery{},
+		Groups:   []api.CatalogReportGroup{},
 	}
 
 	if opts.Settings != nil {
@@ -107,7 +110,7 @@ func buildAudit(ctx context.Context, opts Options, scraperIDs []string, queryLog
 		if err != nil {
 			continue
 		}
-		info, err := scraper_report.BuildScraperInfo(ctx, id)
+		info, err := scraper.BuildScraperInfo(ctx, id)
 		if err != nil {
 			ctx.Logger.V(2).Infof("failed to build scraper info for %s: %v", sid, err)
 			continue
@@ -115,7 +118,67 @@ func buildAudit(ctx context.Context, opts Options, scraperIDs []string, queryLog
 		audit.Scrapers = append(audit.Scrapers, *info)
 	}
 
+	audit.Groups = buildAuditGroups(ctx, configs)
+
 	return audit
+}
+
+func buildAuditGroups(ctx context.Context, configs []models.ConfigItem) []api.CatalogReportGroup {
+	if len(configs) == 0 {
+		return []api.CatalogReportGroup{}
+	}
+
+	configIDs := make([]uuid.UUID, 0, len(configs))
+	for _, c := range configs {
+		configIDs = append(configIDs, c.ID)
+	}
+
+	rows, err := db.GetGroupMembersForConfigs(ctx, configIDs)
+	if err != nil {
+		ctx.Logger.V(2).Infof("failed to load group members for audit: %v", err)
+		return []api.CatalogReportGroup{}
+	}
+
+	// Preserve the SQL ORDER BY (group_name, then deleted-last, then user_name)
+	// by accumulating in first-seen order.
+	byID := map[uuid.UUID]*api.CatalogReportGroup{}
+	order := []uuid.UUID{}
+	for _, r := range rows {
+		g, ok := byID[r.GroupID]
+		if !ok {
+			g = &api.CatalogReportGroup{
+				ID:        r.GroupID.String(),
+				Name:      r.GroupName,
+				GroupType: r.GroupType,
+				Members:   []api.CatalogReportGroupMember{},
+			}
+			byID[r.GroupID] = g
+			order = append(order, r.GroupID)
+		}
+
+		member := api.CatalogReportGroupMember{
+			UserID:            r.UserID.String(),
+			Name:              r.UserName,
+			Email:             r.Email,
+			UserType:          r.UserType,
+			MembershipAddedAt: r.MembershipAddedAt.Format(time.RFC3339),
+		}
+		if r.LastSignedInAt != nil {
+			s := r.LastSignedInAt.Format(time.RFC3339)
+			member.LastSignedInAt = &s
+		}
+		if r.MembershipDeletedAt != nil {
+			s := r.MembershipDeletedAt.Format(time.RFC3339)
+			member.MembershipDeletedAt = &s
+		}
+		g.Members = append(g.Members, member)
+	}
+
+	out := make([]api.CatalogReportGroup, 0, len(order))
+	for _, id := range order {
+		out = append(out, *byID[id])
+	}
+	return out
 }
 
 func gitStatus() string {
@@ -192,6 +255,9 @@ func initSlices(r *api.CatalogReport) api.CatalogReport {
 		}
 		if out.Audit.Queries == nil {
 			out.Audit.Queries = []api.CatalogReportQuery{}
+		}
+		if out.Audit.Groups == nil {
+			out.Audit.Groups = []api.CatalogReportGroup{}
 		}
 	}
 	return out

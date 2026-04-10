@@ -1664,7 +1664,7 @@ catalogReport:
   audit:
     buildCommit: "3b3a1a0f"
     buildVersion: "v1.47.0"
-    gitStatus: " M catalog_report/report.go\n M db/rbac.go"
+    gitStatus: " M report/catalog/report.go\n M db/rbac.go"
     options:
       title: "Production EKS Cluster Report"
       since: "720h"

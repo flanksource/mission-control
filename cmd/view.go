@@ -110,6 +110,6 @@ func init() {
 	ViewRun.Flags().StringVarP(&viewFormat, "format", "f", "json", "Output format: json, csv, html, pdf, facet-html, facet-pdf")
 	ViewRun.Flags().StringVarP(&viewOutFile, "out-file", "o", "", "Write output to file instead of stdout")
 	ViewRun.Flags().StringSliceVar(&viewVars, "var", nil, "Template variables as key=value pairs")
-	ViewRun.Flags().StringVar(&report.SourceDir, "report-source", "", "Local directory with TSX report files (overrides embedded reports)")
+	ViewRun.Flags().StringVar(&report.SourceDir, "report-source", "", "Local directory or TSX file for report rendering (overrides embedded reports)")
 	ViewCmd.AddCommand(ViewRun)
 }

@@ -115,7 +115,11 @@ func renderFacetWithData(ctx context.Context, data any, format string, opts *v1.
 		return report.RenderHTTP(ctx, baseURL, token, data, format, viewEntryFile)
 	}
 
-	return report.RenderCLI(data, format, viewEntryFile)
+	result, err := report.RenderCLI(data, format, viewEntryFile)
+	if err != nil {
+		return nil, err
+	}
+	return result.Data, nil
 }
 
 func resolveFacetConnection(ctx context.Context, opts *v1.FacetOptions) (baseURL, token, timestampURL string, err error) {
