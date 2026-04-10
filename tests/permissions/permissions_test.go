@@ -504,6 +504,12 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 				models.ABACAttribute{Playbook: models.Playbook{ID: uuid.New(), Name: "other-playbook"}},
 				policy.ActionPlaybookRun, false,
 				"guest user should NOT have playbook:run access to other playbooks"),
+
+			// Canary read access - denied (guest user has no canary permissions)
+			Entry("should deny read access to canaries",
+				models.ABACAttribute{Canary: models.Canary{ID: dummy.LogisticsAPICanary.ID}},
+				policy.ActionRead, false,
+				"guest user should NOT have read access to canaries"),
 		)
 
 		DescribeTable("guest user with no permissions at all",
@@ -535,6 +541,24 @@ var _ = Describe("Permissions", Ordered, ContinueOnFailure, func() {
 				models.ABACAttribute{Playbook: models.Playbook{ID: uuid.New(), Name: "other-playbook"}},
 				policy.ActionRead,
 				"guest user should NOT have read access to other playbooks"),
+		)
+
+		DescribeTable("guest user with direct canary permissions",
+			func(attr models.ABACAttribute, action string, expectedAllowed bool, description string) {
+				allowed := rbac.HasPermission(DefaultContext, guestUserDirectPerms.ID.String(), &attr, action)
+				Expect(allowed).To(Equal(expectedAllowed), description)
+			},
+			// Canary read access - allowed via direct permission
+			Entry("should allow read access to LogisticsAPICanary via direct permission",
+				models.ABACAttribute{Canary: models.Canary{ID: dummy.LogisticsAPICanary.ID}},
+				policy.ActionRead, true,
+				"guest user with direct permissions should have read access to LogisticsAPICanary"),
+
+			// Canary read access - denied for other canaries
+			Entry("should deny read access to other canaries",
+				models.ABACAttribute{Canary: models.Canary{ID: uuid.New()}},
+				policy.ActionRead, false,
+				"guest user with direct permissions should NOT have read access to other canaries"),
 		)
 
 		DescribeTable("guest user with multi-target scope",
