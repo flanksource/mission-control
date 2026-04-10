@@ -1,4 +1,5 @@
 import React from 'react';
+import { Badge } from '@flanksource/facet';
 import { Icon } from '@flanksource/icons/icon';
 import type { ScraperInfo } from '../scraper-types.ts';
 import { formatDate } from './utils.ts';
@@ -21,9 +22,16 @@ const TYPE_ICONS: Record<string, string> = {
 
 function Tag({ children }: { children: React.ReactNode }) {
   return (
-    <span className="inline-flex items-center px-[1mm] py-[0.2mm] rounded bg-gray-100 text-gray-500 text-[5pt] font-mono border border-gray-200 leading-none">
-      {children}
-    </span>
+    <Badge
+      variant="custom"
+      size="xs"
+      shape="rounded"
+      label={String(children)}
+      color="bg-gray-100"
+      textColor="text-gray-500"
+      borderColor="border-gray-200"
+      className="font-mono"
+    />
   );
 }
 
@@ -39,9 +47,16 @@ export default function ScraperCard({ scraper }: Props) {
       ))}
       <span className="text-xs font-semibold text-slate-900">{scraper.name}</span>
       {scraper.source && (
-        <span className="inline-flex items-center px-[1mm] py-[0.2mm] rounded text-[5pt] font-medium bg-blue-50 text-blue-700 border border-blue-200 leading-none">
-          {scraper.source}
-        </span>
+        <Badge
+          variant="custom"
+          size="xs"
+          shape="rounded"
+          label={scraper.source}
+          color="bg-blue-50"
+          textColor="text-blue-700"
+          borderColor="border-blue-200"
+          className="font-medium"
+        />
       )}
       <Tag>{scraper.id.slice(0, 8)}</Tag>
       {scraper.createdBy && <Tag>{scraper.createdBy}</Tag>}

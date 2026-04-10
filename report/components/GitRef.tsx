@@ -1,4 +1,5 @@
 import React from 'react';
+import { Badge } from '@flanksource/facet';
 import { Icon } from '@flanksource/icons/icon';
 
 interface GitRefProps {
@@ -17,9 +18,16 @@ const SIZE_CLASSES = {
 
 function Tag({ children, className = '' }: { children: React.ReactNode; className?: string }) {
   return (
-    <span className={`inline-flex items-center px-[1mm] py-[0.2mm] rounded bg-gray-100 text-gray-600 font-mono border border-gray-200 leading-none ${className}`}>
-      {children}
-    </span>
+    <Badge
+      variant="custom"
+      size="xs"
+      shape="rounded"
+      label={String(children)}
+      color="bg-gray-100"
+      textColor="text-gray-600"
+      borderColor="border-gray-200"
+      className={`font-mono ${className}`}
+    />
   );
 }
 

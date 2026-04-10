@@ -1,4 +1,5 @@
 import React from 'react';
+import { Badge } from '@flanksource/facet';
 import { Icon } from '@flanksource/icons/icon';
 import { formatDate, formatDateTime } from './utils.ts';
 
@@ -33,9 +34,7 @@ function SubjectBadge({ subject }: { subject: CoverPageSubject }) {
       <span className="font-semibold">{subject.name}</span>
       <span className="text-gray-400 text-xs">{subject.type}</span>
       {subject.status && (
-        <span className="ml-[1mm] px-[1.5mm] py-[0.3mm] rounded text-xs font-medium bg-gray-100 text-gray-600">
-          {subject.status}
-        </span>
+        <Badge variant="custom" size="xs" shape="rounded" label={subject.status} color="bg-gray-100" textColor="text-gray-600" borderColor="border-gray-200" className="ml-[1mm] font-medium" />
       )}
     </div>
   );
@@ -46,10 +45,17 @@ function TagBadges({ tags }: { tags: Record<string, string> }) {
   return (
     <div className="flex flex-wrap justify-center gap-[1mm] mt-[2mm]">
       {Object.entries(tags).map(([k, v]) => (
-        <span key={k} className="inline-flex items-center border border-blue-300 rounded overflow-hidden text-xs leading-none">
-          <span className="px-[0.7mm] py-[0.2mm] font-medium bg-blue-100 text-slate-700">{k}</span>
-          <span className="px-[0.7mm] py-[0.2mm] bg-white text-slate-800">{v || '-'}</span>
-        </span>
+        <Badge
+          key={k}
+          variant="label"
+          size="xs"
+          shape="rounded"
+          label={k}
+          value={v || '-'}
+          color="bg-blue-100"
+          textColor="text-slate-700"
+          className="bg-white"
+        />
       ))}
     </div>
   );

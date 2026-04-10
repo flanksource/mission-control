@@ -1,7 +1,7 @@
 import React from 'react';
 import { Icon } from '@flanksource/icons/icon';
 import type { RBACResource, RBACUserRole } from '../rbac-types.ts';
-import { MatrixTable, Dot } from '@flanksource/facet';
+import { Badge, MatrixTable, Dot } from '@flanksource/facet';
 import { ACCESS_COLORS, STALE_COLORS, ReviewOverdueBadge, ReviewOverdueLegendSwatch, IdentityIcon } from './rbac-visual.tsx';
 
 interface Props {
@@ -132,10 +132,17 @@ export default function RBACMatrixSection({ resource }: Props) {
       {Object.keys(tags).length > 0 && (
         <div className="flex flex-wrap gap-[0.5mm] mt-[1mm]">
           {Object.entries(tags).map(([k, v]) => (
-            <span key={k} className="inline-flex items-center border border-blue-200 rounded overflow-hidden text-[4.5pt]" style={{ whiteSpace: 'nowrap' }}>
-              <span className="px-[0.5mm] font-medium bg-blue-50 text-slate-600">{k}</span>
-              <span className="px-[0.5mm] bg-white text-slate-900">{v || '-'}</span>
-            </span>
+            <Badge
+              key={k}
+              variant="label"
+              size="xs"
+              shape="rounded"
+              label={k}
+              value={v || '-'}
+              color="bg-blue-50"
+              textColor="text-slate-600"
+              className="bg-white"
+            />
           ))}
         </div>
       )}

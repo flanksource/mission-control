@@ -1,5 +1,5 @@
 import React from 'react';
-import { Section } from '@flanksource/facet';
+import { Badge, Section } from '@flanksource/facet';
 import type { RBACChangeEntry } from '../rbac-types.ts';
 import { formatDate } from './utils.ts';
 
@@ -12,12 +12,16 @@ const CHANGELOG_TYPE_COLORS: Record<string, { bg: string; fg: string }> = {
 function ChangeTypeBadge({ type }: { type: string }) {
   const colors = CHANGELOG_TYPE_COLORS[type] || { bg: '#E2E8F0', fg: '#334155' };
   return (
-    <span
-      className="inline-flex px-[1.5mm] py-[0.3mm] rounded text-[5pt] font-semibold"
-      style={{ backgroundColor: colors.bg, color: colors.fg, whiteSpace: 'nowrap' }}
-    >
-      {type}
-    </span>
+    <Badge
+      variant="custom"
+      size="xs"
+      shape="rounded"
+      label={type}
+      color={colors.bg}
+      textColor={colors.fg}
+      borderColor={colors.bg}
+      className="font-semibold"
+    />
   );
 }
 

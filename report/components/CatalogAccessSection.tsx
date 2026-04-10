@@ -1,5 +1,5 @@
 import React from 'react';
-import { Section, CompactTable } from '@flanksource/facet';
+import { Badge, Section, CompactTable } from '@flanksource/facet';
 import type { CatalogReportAccess } from '../catalog-report-types.ts';
 import { formatMonthDay } from './utils.ts';
 
@@ -9,14 +9,14 @@ interface Props {
 
 function StaleBadge({ lastSignedInAt }: { lastSignedInAt?: string }) {
   if (!lastSignedInAt) {
-    return <span className="text-xs text-red-600 bg-red-50 border border-red-200 px-[0.5mm] py-[0.15mm] rounded font-semibold">never</span>;
+    return <Badge variant="custom" size="xs" shape="rounded" label="never" color="bg-red-50" textColor="text-red-600" borderColor="border-red-200" className="font-semibold" />;
   }
   const days = Math.floor((Date.now() - new Date(lastSignedInAt).getTime()) / 86400000);
   if (days > 90) {
-    return <span className="text-xs text-red-600 bg-red-50 border border-red-200 px-[0.5mm] py-[0.15mm] rounded font-semibold">stale</span>;
+    return <Badge variant="custom" size="xs" shape="rounded" label="stale" color="bg-red-50" textColor="text-red-600" borderColor="border-red-200" className="font-semibold" />;
   }
   if (days > 30) {
-    return <span className="text-xs text-yellow-600 bg-yellow-50 border border-yellow-200 px-[0.5mm] py-[0.15mm] rounded font-semibold">aging</span>;
+    return <Badge variant="custom" size="xs" shape="rounded" label="aging" color="bg-yellow-50" textColor="text-yellow-600" borderColor="border-yellow-200" className="font-semibold" />;
   }
   return null;
 }

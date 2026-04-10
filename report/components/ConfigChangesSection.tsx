@@ -2,7 +2,7 @@ import React from 'react';
 import { Badge, Section, SeverityStatCard } from '@flanksource/facet';
 import { Icon } from '@flanksource/icons/icon';
 import type { ConfigChange, ConfigSeverity } from '../config-types.ts';
-import { getChangeTypeLabel, getTypedChangeDisplay } from './change-section-utils.ts';
+import { getChangeTypeLabel, getTypedChangeDisplay, type TypedChangeDiff } from './change-section-utils.ts';
 import { getTimeBucket, formatEntryDate, type TimeBucketFormat } from './utils.ts';
 
 interface Props {
@@ -76,7 +76,7 @@ function ChangeIcon({ change }: { change: ConfigChange }) {
   );
 }
 
-function ChangeTypeBadge({ change, label }: { change: ConfigChange; label: string }) {
+function ChangeTypeBadge({ change, label, className }: { change: ConfigChange; label: string; className?: string }) {
   const accent = getChangeAccent(change, label);
 
   return (
@@ -88,7 +88,7 @@ function ChangeTypeBadge({ change, label }: { change: ConfigChange; label: strin
       color={accent.color}
       textColor={accent.textColor}
       borderColor={accent.borderColor}
-      className="shrink-0"
+      className={className ?? 'shrink-0'}
     />
   );
 }
@@ -101,6 +101,46 @@ function SecondaryMeta({ label, className = 'text-gray-500' }: { label: string; 
   );
 }
 
+function TypedDiffBadges({ diff }: { diff: TypedChangeDiff }) {
+  return (
+    <>
+      {diff.label && (
+        <Badge
+          variant="custom"
+          size="xs"
+          shape="rounded"
+          label={diff.label}
+          color="bg-slate-50"
+          textColor="text-slate-500"
+          borderColor="border-slate-200"
+          className="align-middle uppercase tracking-[0.03em]"
+        />
+      )}
+      <Badge
+        variant="custom"
+        size="xs"
+        shape="rounded"
+        label={diff.from}
+        color="bg-red-50"
+        textColor="text-red-700"
+        borderColor="border-red-200"
+        className="align-middle max-w-full whitespace-normal break-all font-mono"
+      />
+      <span className="text-[9px] text-slate-400 align-middle">→</span>
+      <Badge
+        variant="custom"
+        size="xs"
+        shape="rounded"
+        label={diff.to}
+        color="bg-green-50"
+        textColor="text-green-700"
+        borderColor="border-green-200"
+        className="align-middle max-w-full whitespace-normal break-all font-mono"
+      />
+    </>
+  );
+}
+
 function ChangeEntry({ change, dateFormat, hideConfigName }: { change: ConfigChange; dateFormat: TimeBucketFormat; hideConfigName?: boolean }) {
   const sev = change.severity ?? 'info';
   const author = change.createdBy || change.externalCreatedBy || change.source || '';
@@ -109,13 +149,8 @@ function ChangeEntry({ change, dateFormat, hideConfigName }: { change: ConfigCha
   const summary = change.summary || typedDisplay?.summary;
   const changeTypeLabel = getChangeTypeLabel(change, typedDisplay);
   const hasSecondaryMeta = sev !== 'info' || Boolean(author);
-  const hasPrimaryMeta = Boolean(
-    typedDisplay?.diff
-    || (typedDisplay?.meta && typedDisplay.meta.length > 0)
-    || (!hideConfigName && change.configName)
-    || (change.count ?? 0) > 1
-    || artifactCount > 0,
-  );
+  const inlineMetaBadgeClass = 'align-middle mb-[0.35mm] max-w-full whitespace-normal break-all';
+  const inlineTypeBadgeClass = 'align-middle mr-[0.8mm] mb-[0.35mm]';
   return (
     <div className="flex items-start gap-[1.5mm] py-[0.45mm] border-b border-gray-50 last:border-b-0 text-xs">
       <span className="text-gray-400 font-mono whitespace-nowrap w-[12mm] text-right shrink-0">
@@ -123,85 +158,76 @@ function ChangeEntry({ change, dateFormat, hideConfigName }: { change: ConfigCha
       </span>
       <ChangeIcon change={change} />
       <div className="flex-1 min-w-0 flex items-start gap-[1.5mm]">
-        <div className="flex-1 min-w-0">
-          <div className="flex flex-wrap items-start gap-[0.8mm] min-w-0">
-            <ChangeTypeBadge change={change} label={changeTypeLabel} />
-            {summary && (
-              <div className="min-w-0 flex-1 text-slate-700 leading-tight break-words">
-                {summary}
-              </div>
-            )}
-          </div>
-          {hasPrimaryMeta && (
-            <div className="flex flex-wrap items-center gap-[0.8mm] min-w-0 mt-[0.35mm]">
-              {typedDisplay?.diff && (
-                <span className="inline-flex items-center flex-wrap gap-[0.5mm] min-w-0">
-                  {typedDisplay.diff.label && (
-                    <span className="text-[9px] font-medium text-slate-500 uppercase tracking-[0.03em]">
-                      {typedDisplay.diff.label}
-                    </span>
-                  )}
-                  <span className="text-[9px] font-mono text-red-700 bg-red-50 border border-red-200 px-[0.6mm] rounded break-all">
-                    {typedDisplay.diff.from}
-                  </span>
-                  <span className="text-[9px] text-slate-400">→</span>
-                  <span className="text-[9px] font-mono text-green-700 bg-green-50 border border-green-200 px-[0.6mm] rounded break-all">
-                    {typedDisplay.diff.to}
-                  </span>
-                </span>
-              )}
-              {!hideConfigName && change.configName && (
+        <div className="flex-1 min-w-0 text-slate-700 leading-tight break-words">
+          <ChangeTypeBadge change={change} label={changeTypeLabel} className={inlineTypeBadgeClass} />
+          {summary && <span>{summary}</span>}
+          {typedDisplay?.diff && (
+            <>
+              {' '}
+              <TypedDiffBadges diff={typedDisplay.diff} />
+            </>
+          )}
+          {!hideConfigName && change.configName && (
+            <>
+              {' '}
+              <Badge
+                variant="custom"
+                size="xs"
+                shape="rounded"
+                label={change.configName}
+                color="bg-blue-50"
+                textColor="text-blue-700"
+                borderColor="border-blue-200"
+                className={inlineMetaBadgeClass}
+              />
+            </>
+          )}
+          {typedDisplay?.meta?.map((meta) => (
+            <React.Fragment key={meta}>
+              {' '}
+              <Badge
+                variant="custom"
+                size="xs"
+                shape="rounded"
+                label={meta}
+                color="bg-slate-50"
+                textColor="text-slate-600"
+                borderColor="border-slate-200"
+                className={inlineMetaBadgeClass}
+              />
+            </React.Fragment>
+          ))}
+          {(change.count ?? 0) > 1 && (
+            <>
+              {' '}
+              <Badge
+                variant="custom"
+                size="xs"
+                shape="rounded"
+                label={`×${change.count}`}
+                color="bg-gray-100"
+                textColor="text-gray-600"
+                borderColor="border-gray-200"
+                className={inlineMetaBadgeClass}
+              />
+            </>
+          )}
+          {artifactCount > 0 && (
+            <>
+              {' '}
+              <a href={`#artifact-${change.id}`} style={{ textDecoration: 'none' }}>
                 <Badge
                   variant="custom"
                   size="xs"
                   shape="rounded"
-                  label={change.configName}
-                  color="bg-blue-50"
-                  textColor="text-blue-700"
-                  borderColor="border-blue-200"
-                  className="shrink-0"
+                  label={`${artifactCount} screenshot${artifactCount > 1 ? 's' : ''}`}
+                  color="bg-purple-50"
+                  textColor="text-purple-700"
+                  borderColor="border-purple-200"
+                  className={inlineMetaBadgeClass}
                 />
-              )}
-              {typedDisplay?.meta?.map((meta) => (
-                <Badge
-                  key={meta}
-                  variant="custom"
-                  size="xs"
-                  shape="rounded"
-                  label={meta}
-                  color="bg-slate-50"
-                  textColor="text-slate-600"
-                  borderColor="border-slate-200"
-                  className="shrink-0"
-                />
-              ))}
-              {(change.count ?? 0) > 1 && (
-                <Badge
-                  variant="custom"
-                  size="xs"
-                  shape="rounded"
-                  label={`×${change.count}`}
-                  color="bg-gray-100"
-                  textColor="text-gray-600"
-                  borderColor="border-gray-200"
-                  className="shrink-0"
-                />
-              )}
-              {artifactCount > 0 && (
-                <a href={`#artifact-${change.id}`} style={{ textDecoration: 'none' }}>
-                  <Badge
-                    variant="custom"
-                    size="xs"
-                    shape="rounded"
-                    label={`${artifactCount} screenshot${artifactCount > 1 ? 's' : ''}`}
-                    color="bg-purple-50"
-                    textColor="text-purple-700"
-                    borderColor="border-purple-200"
-                    className="shrink-0"
-                  />
-                </a>
-              )}
-            </div>
+              </a>
+            </>
           )}
         </div>
         {hasSecondaryMeta && (

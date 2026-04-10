@@ -1,5 +1,5 @@
 import React from 'react';
-import { Section, ListTable } from '@flanksource/facet';
+import { Badge, Section, ListTable } from '@flanksource/facet';
 import type { CatalogReportAudit } from '../catalog-report-types.ts';
 import ScraperCard from './ScraperCard.tsx';
 
@@ -19,9 +19,16 @@ function MetadataRow({ label, value }: { label: string; value?: string }) {
 
 function SectionBadge({ label, enabled }: { label: string; enabled: boolean }) {
   return (
-    <span className={`inline-flex items-center px-[1.5mm] py-[0.3mm] rounded text-[5.5pt] font-medium border ${enabled ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-gray-50 text-gray-400 border-gray-200'}`}>
-      {label}
-    </span>
+    <Badge
+      variant="custom"
+      size="xs"
+      shape="rounded"
+      label={label}
+      color={enabled ? 'bg-blue-50' : 'bg-gray-50'}
+      textColor={enabled ? 'text-blue-700' : 'text-gray-400'}
+      borderColor={enabled ? 'border-blue-200' : 'border-gray-200'}
+      className="font-medium"
+    />
   );
 }
 
@@ -114,6 +121,39 @@ export default function AuditPage({ audit }: Props) {
           <div className="flex flex-col gap-[2mm]">
             {audit.scrapers.map((s) => (
               <ScraperCard key={s.id} scraper={s} />
+            ))}
+          </div>
+        </Section>
+      )}
+
+      {audit.groups.length > 0 && (
+        <Section variant="hero" title="Group Membership" size="md">
+          <div className="flex flex-col gap-[3mm]">
+            {audit.groups.map((g) => (
+              <div key={g.id}>
+                <div className="text-sm font-semibold mb-[0.5mm]">
+                  {g.name}
+                  {g.groupType && (
+                    <span className="text-xs text-gray-500 font-normal"> ({g.groupType})</span>
+                  )}
+                  <span className="text-xs text-gray-500 font-normal"> — {g.members.length} member(s)</span>
+                </div>
+                <ListTable
+                  rows={g.members.map((m) => ({
+                    id: m.userId,
+                    subject: m.email ? `${m.name} <${m.email}>` : m.name,
+                    type: m.userType ?? '',
+                    lastSignedIn: m.lastSignedInAt ?? '—',
+                    added: m.membershipAddedAt,
+                    removed: m.membershipDeletedAt ?? '',
+                  }))}
+                  subject="subject"
+                  keys={['type', 'lastSignedIn', 'added', 'removed']}
+                  size="xs"
+                  density="compact"
+                  cellClassName="text-xs font-mono"
+                />
+              </div>
             ))}
           </div>
         </Section>

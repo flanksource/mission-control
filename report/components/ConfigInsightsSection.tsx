@@ -1,5 +1,5 @@
 import React from 'react';
-import { Section, SeverityStatCard } from '@flanksource/facet';
+import { Badge, Section, SeverityStatCard } from '@flanksource/facet';
 import { Icon } from '@flanksource/icons/icon';
 import type { ConfigAnalysis, ConfigSeverity, AnalysisType } from '../config-types.ts';
 import { formatDate } from './utils.ts';
@@ -44,16 +44,12 @@ function InsightEntry({ analysis }: { analysis: ConfigAnalysis }) {
       </span>
       <span className="font-medium text-slate-800 whitespace-nowrap">{analysis.analyzer}</span>
       {analysis.configName && (
-        <span className="text-xs text-blue-600 bg-blue-50 px-[0.5mm] rounded whitespace-nowrap shrink-0">{analysis.configName}</span>
+        <Badge variant="custom" size="xs" shape="rounded" label={analysis.configName} color="bg-blue-50" textColor="text-blue-600" borderColor="border-blue-200" />
       )}
       <span className="text-gray-600 leading-tight flex-1 truncate">{analysis.message || analysis.summary || '-'}</span>
-      <span className={`text-xs leading-none px-[0.5mm] py-[0.15mm] rounded border whitespace-nowrap shrink-0 ${SEVERITY_TEXT[sev] ?? SEVERITY_TEXT.info}`}>
-        {sev}
-      </span>
+      <Badge variant="custom" size="xs" shape="rounded" label={sev} className={SEVERITY_TEXT[sev] ?? SEVERITY_TEXT.info} />
       {analysis.status && (
-        <span className={`text-xs leading-none px-[0.5mm] py-[0.15mm] rounded border whitespace-nowrap shrink-0 ${STATUS_TEXT[analysis.status] ?? STATUS_TEXT.resolved}`}>
-          {analysis.status}
-        </span>
+        <Badge variant="custom" size="xs" shape="rounded" label={analysis.status} className={STATUS_TEXT[analysis.status] ?? STATUS_TEXT.resolved} />
       )}
       {analysis.lastObserved && (
         <span className="text-xs text-gray-400 whitespace-nowrap shrink-0">{formatDate(analysis.lastObserved)}</span>
@@ -76,9 +72,7 @@ function AnalysisTypeGroup({ type, analyses }: { type: string; analyses: ConfigA
     <div className="mb-[2mm]">
       <div className="flex items-center gap-[1.5mm] mb-[0.5mm]">
         <span className="text-xs font-semibold text-slate-800 capitalize">{type}</span>
-        <span className="text-xs text-gray-500 bg-gray-100 px-[1mm] rounded-full">
-          {analyses.length}
-        </span>
+        <Badge variant="custom" size="xs" shape="pill" label={String(analyses.length)} color="bg-gray-100" textColor="text-gray-500" borderColor="border-gray-200" />
       </div>
       <div className="flex flex-col">
         {sorted.map((a) => <InsightEntry key={a.id} analysis={a} />)}

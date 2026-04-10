@@ -82,6 +82,23 @@ export interface CatalogReportOptions {
   categoryMappings?: CatalogReportCategoryMapping[];
 }
 
+export interface CatalogReportGroupMember {
+  userId: string;
+  name: string;
+  email?: string;
+  userType?: string;
+  lastSignedInAt?: string;
+  membershipAddedAt: string;
+  membershipDeletedAt?: string;
+}
+
+export interface CatalogReportGroup {
+  id: string;
+  name: string;
+  groupType?: string;
+  members: CatalogReportGroupMember[];
+}
+
 export interface CatalogReportAudit {
   buildCommit: string;
   buildVersion: string;
@@ -89,6 +106,7 @@ export interface CatalogReportAudit {
   options: CatalogReportOptions;
   scrapers: ScraperInfo[];
   queries: QueryLogEntry[];
+  groups: CatalogReportGroup[];
 }
 
 export interface CatalogReportData {

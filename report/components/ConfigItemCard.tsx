@@ -1,4 +1,5 @@
 import React from 'react';
+import { Badge } from '@flanksource/facet';
 import { Icon } from '@flanksource/icons/icon';
 import type { ConfigItem } from '../rbac-types.ts';
 import { formatDate } from './utils.ts';
@@ -16,10 +17,17 @@ export default function ConfigItemCard({ config }: Props) {
         {config.type && <Icon name={config.type} size={14} />}
         <span className="text-[8pt] font-semibold text-slate-900">{config.name}</span>
         {Object.entries(tags).map(([k, v]) => (
-          <span key={k} className="inline-flex items-center self-center border border-blue-300 rounded overflow-hidden text-[5pt] leading-none" style={{ whiteSpace: 'nowrap' }}>
-            <span className="px-[0.7mm] py-[0.2mm] font-medium bg-blue-100 text-slate-700">{k}</span>
-            <span className="px-[0.7mm] py-[0.2mm] bg-white text-slate-800">{v || '-'}</span>
-          </span>
+          <Badge
+            key={k}
+            variant="label"
+            size="xs"
+            shape="rounded"
+            label={k}
+            value={v || '-'}
+            color="bg-blue-100"
+            textColor="text-slate-700"
+            className="bg-white"
+          />
         ))}
       </div>
       <div className="flex items-center gap-[3mm] text-[4.5pt] text-gray-500 mt-[1mm] ml-[5mm]">

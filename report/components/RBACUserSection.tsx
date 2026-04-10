@@ -1,5 +1,5 @@
 import React from 'react';
-import { CompactTable } from '@flanksource/facet';
+import { Badge, CompactTable } from '@flanksource/facet';
 import { Icon } from '@flanksource/icons/icon';
 import type { RBACUserReport, RBACUserResource } from '../rbac-types.ts';
 import { ConfigTypeIcon } from './configTypeIcon.tsx';
@@ -38,12 +38,16 @@ function RoleSourceBadge({ source }: { source: string }) {
   const key = source.startsWith('group:') ? 'group' : source;
   const colors = ROLE_SOURCE_COLORS[key] || ROLE_SOURCE_COLORS.direct;
   return (
-    <span
-      className="inline-flex px-[1.5mm] py-[0.3mm] rounded text-[5pt] font-semibold"
-      style={{ backgroundColor: colors.bg, color: colors.fg, whiteSpace: 'nowrap' }}
-    >
-      {source}
-    </span>
+    <Badge
+      variant="custom"
+      size="xs"
+      shape="rounded"
+      label={source}
+      color={colors.bg}
+      textColor={colors.fg}
+      borderColor={colors.bg}
+      className="font-semibold"
+    />
   );
 }
 

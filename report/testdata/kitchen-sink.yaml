@@ -1661,6 +1661,80 @@ catalogReport:
           filename: "policy-diff.yaml"
           contentType: "text/yaml"
           size: 1200
+  audit:
+    buildCommit: "3b3a1a0f"
+    buildVersion: "v1.47.0"
+    gitStatus: " M catalog_report/report.go\n M db/rbac.go"
+    options:
+      title: "Production EKS Cluster Report"
+      since: "720h"
+      sections:
+        changes: true
+        insights: true
+        relationships: true
+        access: true
+        accessLogs: true
+        configJSON: false
+      recursive: true
+      groupBy: "type"
+      changeArtifacts: true
+      thresholds:
+        staleDays: 90
+        reviewOverdueDays: 180
+      filters:
+        - "type=AWS::EKS::Cluster"
+        - "namespace=mc"
+    scrapers: []
+    queries:
+      - name: "RBACAccess"
+        args: "configIDs=1 selectors=0"
+        count: 42
+        duration: 128
+        pretty: "SELECT ... FROM config_access_summary WHERE config_id IN (?)"
+      - name: "GroupMembers"
+        args: "configIDs=1"
+        count: 5
+        duration: 34
+        pretty: "SELECT ... FROM external_user_groups eug JOIN external_groups eg ..."
+    groups:
+      - id: "grp-admins"
+        name: "mission-control-admins"
+        groupType: "group"
+        members:
+          - userId: "u-alice"
+            name: "Alice Johnson"
+            email: "alice@flanksource.com"
+            userType: "user"
+            lastSignedInAt: "2026-03-30T08:00:00Z"
+            membershipAddedAt: "2025-01-10T09:00:00Z"
+          - userId: "u-bob"
+            name: "Bob Smith"
+            email: "bob@flanksource.com"
+            userType: "user"
+            lastSignedInAt: "2026-03-28T14:00:00Z"
+            membershipAddedAt: "2025-06-01T09:00:00Z"
+          - userId: "u-stale"
+            name: "Former Employee"
+            email: "former@flanksource.com"
+            userType: "user"
+            lastSignedInAt: "2025-06-15T10:00:00Z"
+            membershipAddedAt: "2024-06-01T09:00:00Z"
+            membershipDeletedAt: "2025-07-01T09:00:00Z"
+      - id: "grp-readers"
+        name: "mission-control-readers"
+        groupType: "group"
+        members:
+          - userId: "u-carol"
+            name: "Carol Davis"
+            email: "carol@flanksource.com"
+            userType: "user"
+            membershipAddedAt: "2026-01-10T09:00:00Z"
+          - userId: "u-deploy-bot"
+            name: "deploy-bot"
+            email: "deploy-bot@flanksource.com"
+            userType: "service_account"
+            lastSignedInAt: "2026-03-30T06:00:00Z"
+            membershipAddedAt: "2025-08-01T09:00:00Z"
 
 viewReport:
   name: "cluster-overview"
