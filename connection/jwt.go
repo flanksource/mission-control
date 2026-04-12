@@ -53,6 +53,13 @@ func (j JWT) Pretty() api.Text {
 	return t
 }
 
+func (j JWT) ScopeCount() int {
+	if j.Scopes == "" {
+		return 0
+	}
+	return len(strings.Fields(j.Scopes))
+}
+
 func (j JWT) PrettyFull() api.Text {
 	t := j.Pretty()
 	if j.Raw != "" {

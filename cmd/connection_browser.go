@@ -19,6 +19,8 @@ import (
 	"github.com/chromedp/cdproto/storage"
 	"github.com/chromedp/chromedp"
 	"github.com/flanksource/clicky"
+	"github.com/flanksource/clicky/api"
+	"github.com/flanksource/clicky/api/icons"
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/shutdown"
@@ -31,16 +33,17 @@ import (
 )
 
 type browserLoginFlags struct {
-	Name             string
-	Namespace        string
-	URL              string
-	Domains          []string
-	WaitForURL       string
-	Timeout          time.Duration
-	Cookies          bool
-	Session          bool
-	Bearer           bool
-	RequireBearerAud string
+	Name               string
+	Namespace          string
+	URL                string
+	Domains            []string
+	WaitForURL         string
+	Timeout            time.Duration
+	Cookies            bool
+	Session            bool
+	Bearer             bool
+	RequireBearerAud   string
+	RequireBearerScope string
 }
 
 type browserSessionData struct {
@@ -64,6 +67,8 @@ Examples:
 
 var browserFlags browserLoginFlags
 var azureLoginURL string
+var azurePageURL string
+var azureRequiredScope string
 
 var (
 	browserTestName          string
@@ -115,9 +120,11 @@ func init() {
 	connectionLoginCmd.RunE = runBrowserLogin
 
 	connectionLoginAzureCmd.PersistentFlags().StringVar(&azureLoginURL, "login-url", "https://portal.azure.com", "URL to open for browser login")
+	connectionLoginAzureCmd.PersistentFlags().StringVar(&azurePageURL, "page", "https://portal.azure.com/#view/Microsoft_AAD_IAM/ActiveDirectoryMenuBlade/~/Overview", "Portal page to navigate to after login")
+	connectionLoginAzureCmd.PersistentFlags().StringVar(&azureRequiredScope, "required-scope", "AuditLog.Read.All", "Required scope substring in the captured msgraph token")
 
 	connectionLoginAzureCmd.PreRun = func(cmd *cobra.Command, args []string) {
-		browserFlags.URL = azureLoginURL
+		browserFlags.URL = azurePageURL
 		if len(browserFlags.Domains) == 0 {
 			browserFlags.Domains = []string{".azure.com", ".microsoft.com", ".microsoftonline.com", ".windows.net", ".live.com"}
 		}
@@ -127,6 +134,7 @@ func init() {
 			browserFlags.Bearer = true
 		}
 		browserFlags.RequireBearerAud = "graph.microsoft.com"
+		browserFlags.RequireBearerScope = azureRequiredScope
 	}
 
 	connectionLoginCmd.AddCommand(connectionLoginAzureCmd)
@@ -163,6 +171,12 @@ func runBrowserLogin(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	if browserFlags.RequireBearerAud != "" || browserFlags.RequireBearerScope != "" {
+		if !hasRequiredToken(data.BearerTokens, browserFlags) {
+			return fmt.Errorf("no valid token found matching audience=%q scope=%q", browserFlags.RequireBearerAud, browserFlags.RequireBearerScope)
+		}
+	}
+
 	return saveConnection(cmd, browserFlags, data)
 }
 
@@ -192,6 +206,7 @@ func launchBrowserAndCapture(ctx gocontext.Context, flags browserLoginFlags) (*b
 		fmt.Fprintln(os.Stderr, "Please log in. Press Enter when done.")
 	}
 
+	autoSelectAccountPicker(browserCtx)
 	waitForLoginComplete(browserCtx, flags)
 
 	data := &browserSessionData{}
@@ -234,15 +249,43 @@ func launchBrowserAndCapture(ctx gocontext.Context, flags browserLoginFlags) (*b
 	} else if verbose >= 1 {
 		fmt.Fprintln(os.Stderr, state.Pretty().ANSI())
 	} else {
-		// Default: just show bearer tokens
-		for _, token := range data.BearerTokens {
-			if jwt := connection.DecodeJWT(token); jwt != nil {
-				fmt.Fprintln(os.Stderr, jwt.Pretty().ANSI())
+		selectedAud, _ := selectBearerToken(data.BearerTokens, flags.RequireBearerAud)
+		for _, aud := range sortedAudiences(data.BearerTokens) {
+			if jwt := connection.DecodeJWT(data.BearerTokens[aud]); jwt != nil {
+				t := jwt.Pretty()
+				if aud == selectedAud {
+					t = api.Text{}.Add(icons.Check.WithStyle("text-green-500")).Append(" bearer ").Add(t)
+				}
+				fmt.Fprintln(os.Stderr, t.ANSI())
 			}
 		}
 	}
 
 	return data, nil
+}
+
+func autoSelectAccountPicker(browserCtx gocontext.Context) {
+	go func() {
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				var nodes int
+				err := chromedp.Run(browserCtx, chromedp.Evaluate(
+					`document.querySelectorAll('#tilesHolder .tile-container .table[role="button"]').length`, &nodes))
+				if err != nil || nodes == 0 {
+					continue
+				}
+				fmt.Fprintf(os.Stderr, "Account picker detected, selecting first account\n")
+				_ = chromedp.Run(browserCtx, chromedp.Click(
+					`#tilesHolder .tile-container:first-child .table[role="button"]`, chromedp.ByQuery))
+				return
+			case <-browserCtx.Done():
+				return
+			}
+		}
+	}()
 }
 
 func waitForLoginComplete(browserCtx gocontext.Context, flags browserLoginFlags) {
@@ -303,21 +346,27 @@ func waitForLoginComplete(browserCtx gocontext.Context, flags browserLoginFlags)
 						if matched != "" {
 							continue
 						}
-						if flags.RequireBearerAud == "" || strings.Contains(aud, flags.RequireBearerAud) {
+						audMatches := flags.RequireBearerAud == "" || strings.Contains(aud, flags.RequireBearerAud)
+						scopeMatches := flags.RequireBearerScope == "" || strings.Contains(jwt.Scopes, flags.RequireBearerScope)
+						if audMatches && scopeMatches {
 							matched = aud
 							matchedJWT = jwt
 						}
 					}
 					if matched != "" {
-						fmt.Fprintf(os.Stderr, "Found valid token for %s (expires in %s)\n", matched, time.Until(matchedJWT.ExpiresAt).Round(time.Second))
+						fmt.Fprintf(os.Stderr, "Found valid token for %s (scopes=%d, expires in %s)\n", matched, matchedJWT.ScopeCount(), time.Until(matchedJWT.ExpiresAt).Round(time.Second))
 						doneCh <- struct{}{}
 						return
 					}
-					if flags.RequireBearerAud != "" && len(validAuds) > 0 {
+					if (flags.RequireBearerAud != "" || flags.RequireBearerScope != "") && len(validAuds) > 0 {
 						sort.Strings(validAuds)
 						summary := strings.Join(validAuds, ", ")
 						if summary != lastReported {
-							fmt.Fprintf(os.Stderr, "Waiting for %s token (have: %s)\n", flags.RequireBearerAud, summary)
+							waiting := flags.RequireBearerAud
+							if flags.RequireBearerScope != "" {
+								waiting += " with scope " + flags.RequireBearerScope
+							}
+							fmt.Fprintf(os.Stderr, "Waiting for %s token (have: %s)\n", waiting, summary)
 							lastReported = summary
 						}
 					}
@@ -375,8 +424,26 @@ func extractSessionStorage(browserCtx gocontext.Context) (map[string]string, err
 	return result, nil
 }
 
+func hasRequiredToken(tokens map[string]string, flags browserLoginFlags) bool {
+	for aud, token := range tokens {
+		if flags.RequireBearerAud != "" && !strings.Contains(aud, flags.RequireBearerAud) {
+			continue
+		}
+		jwt := connection.DecodeJWT(token)
+		if jwt == nil || time.Until(jwt.ExpiresAt) <= 0 {
+			continue
+		}
+		if flags.RequireBearerScope != "" && !strings.Contains(jwt.Scopes, flags.RequireBearerScope) {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
 func extractBearerTokens(session map[string]string) map[string]string {
 	tokens := make(map[string]string)
+	scopeCounts := make(map[string]int)
 	for key, value := range session {
 		if !strings.Contains(key, "accesstoken") {
 			continue
@@ -393,9 +460,39 @@ func extractBearerTokens(session map[string]string) map[string]string {
 		if jwt == nil || jwt.Audience == "" {
 			continue
 		}
-		tokens[jwt.Audience] = secret
+		if jwt.ScopeCount() > scopeCounts[jwt.Audience] {
+			tokens[jwt.Audience] = secret
+			scopeCounts[jwt.Audience] = jwt.ScopeCount()
+		}
 	}
 	return tokens
+}
+
+func selectBearerToken(tokens map[string]string, requiredAud string) (string, error) {
+	var bestAud string
+	var bestScopes int
+	for aud, token := range tokens {
+		if !strings.Contains(aud, requiredAud) {
+			continue
+		}
+		if jwt := connection.DecodeJWT(token); jwt != nil && jwt.ScopeCount() > bestScopes {
+			bestAud = aud
+			bestScopes = jwt.ScopeCount()
+		}
+	}
+	if bestAud != "" {
+		return bestAud, nil
+	}
+	return "", fmt.Errorf("no token found for required audience %q (have: %s)", requiredAud, strings.Join(sortedAudiences(tokens), ", "))
+}
+
+func sortedAudiences(tokens map[string]string) []string {
+	auds := make([]string, 0, len(tokens))
+	for aud := range tokens {
+		auds = append(auds, aud)
+	}
+	sort.Strings(auds)
+	return auds
 }
 
 func saveConnection(cmd *cobra.Command, flags browserLoginFlags, data *browserSessionData) error {
@@ -470,23 +567,16 @@ func saveConnection(cmd *cobra.Command, flags browserLoginFlags, data *browserSe
 		for aud, token := range data.BearerTokens {
 			props["bearer_"+aud] = token
 		}
-		for aud, token := range data.BearerTokens {
-			if strings.Contains(aud, "graph.microsoft.com") {
-				props["bearer"] = token
-				break
-			}
-			props["bearer"] = token
+		selectedAud, err := selectBearerToken(data.BearerTokens, flags.RequireBearerAud)
+		if err != nil {
+			return err
 		}
+		props["bearer"] = data.BearerTokens[selectedAud]
 	}
 
 	connURL := flags.URL
-	if props["bearer"] != "" {
-		for aud := range data.BearerTokens {
-			if strings.Contains(aud, "graph.microsoft.com") {
-				connURL = "https://graph.microsoft.com/v1.0/me"
-				break
-			}
-		}
+	if props["bearer"] != "" && strings.Contains(flags.RequireBearerAud, "graph.microsoft.com") {
+		connURL = "https://graph.microsoft.com/v1.0/me"
 	}
 
 	conn := models.Connection{
@@ -518,6 +608,33 @@ func saveConnection(cmd *cobra.Command, flags browserLoginFlags, data *browserSe
 		action = "updated"
 	}
 	fmt.Fprintf(cmd.OutOrStdout(), "Connection '%s' %s in namespace '%s'\n", flags.Name, action, flags.Namespace)
+
+	if len(data.Cookies) > 0 {
+		fmt.Fprintf(cmd.OutOrStdout(), "  Cookies: %d\n", len(data.Cookies))
+	}
+	if len(data.SessionStorage) > 0 {
+		fmt.Fprintf(cmd.OutOrStdout(), "  Session storage: %d keys\n", len(data.SessionStorage))
+	}
+	if len(data.BearerTokens) > 0 {
+		selectedAud, _ := selectBearerToken(data.BearerTokens, flags.RequireBearerAud)
+		for _, aud := range sortedAudiences(data.BearerTokens) {
+			jwt := connection.DecodeJWT(data.BearerTokens[aud])
+			if jwt == nil {
+				continue
+			}
+			t := api.Text{}
+			if aud == selectedAud {
+				t = t.Add(icons.Check.WithStyle("text-green-500")).Append(" bearer", "font-bold")
+			} else {
+				t = t.Append("  bearer_"+aud, "text-muted")
+			}
+			t = t.Appendf(" aud=%s", jwt.Audience).
+				Appendf(" scopes=%d", jwt.ScopeCount()).
+				Appendf(" expires=%s", time.Until(jwt.ExpiresAt).Round(time.Second))
+			fmt.Fprintln(cmd.OutOrStdout(), t.ANSI())
+		}
+	}
+
 	return nil
 }
 
