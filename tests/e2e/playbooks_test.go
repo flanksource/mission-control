@@ -20,7 +20,6 @@ import (
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/robfig/cron/v3"
-	"github.com/samber/lo"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/yaml"
@@ -107,12 +106,10 @@ var _ = ginkgo.Describe("Playbooks", ginkgo.Ordered, func() {
 		panic(fmt.Sprintf("failed to glob playbook fixtures: %v", err))
 	}
 
-	// FIXME: Disable email playbooks for now
-	// Fails most of the time in CI
-	skipped := []string{"email-report"}
-	fixtures = lo.Filter(fixtures, func(f string, _ int) bool {
-		return !lo.Contains(skipped, f)
-	})
+	// Fixtures that are flaky in CI and need multiple attempts.
+	flakyFixtures := map[string]int{
+		"email-report": 5,
+	}
 
 	for _, fixturePath := range fixtures {
 		setup := peekFixtureSetup(fixturePath)
@@ -123,6 +120,10 @@ var _ = ginkgo.Describe("Playbooks", ginkgo.Ordered, func() {
 			for _, l := range h.Labels(setup) {
 				decorators = append(decorators, ginkgo.Label(l))
 			}
+		}
+
+		if attempts, ok := flakyFixtures[name]; ok {
+			decorators = append(decorators, ginkgo.FlakeAttempts(attempts))
 		}
 
 		decorators = append(decorators, func() {
