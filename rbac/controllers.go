@@ -2,7 +2,6 @@ package rbac
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
@@ -10,10 +9,7 @@ import (
 	"github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/incident-commander/db"
-	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
-	"github.com/samber/lo"
-	"gorm.io/gorm"
 )
 
 func RegisterRoutes(e *echo.Echo) {
@@ -22,6 +18,7 @@ func RegisterRoutes(e *echo.Echo) {
 	e.GET("/rbac/:id/roles", GetRolesForUser, Authorization(policy.ObjectRBAC, policy.ActionRead))
 	e.GET("/rbac/token/:id/permissions", GetPermissionsForToken, Authorization(policy.ObjectRBAC, policy.ActionRead))
 	e.POST("/rbac/subject-access-reviews", SubjectAccessReviews, Authorization(policy.ObjectRBAC, policy.ActionRead))
+	e.POST("/rbac/subject-access-search", SubjectAccessSearch, Authorization(policy.ObjectRBAC, policy.ActionRead))
 }
 
 func UpdateRoleForUser(c echo.Context) error {
@@ -87,64 +84,6 @@ func GetPermissionsForToken(c echo.Context) error {
 
 const maxSubjectAccessReviewSubjects = 500
 
-type SubjectAccessReviewResource struct {
-	Playbook string `json:"playbook,omitempty"`
-	Config   string `json:"config,omitempty"`
-	Check    string `json:"check,omitempty"`
-	View     string `json:"view,omitempty"`
-	Global   string `json:"global,omitempty"`
-}
-
-type SubjectAccessReviewRequest struct {
-	Resource SubjectAccessReviewResource `json:"resource"`
-	Action   string                      `json:"action"`
-
-	// Supports ["*"], in which case we iterate over all permission subjects in the database
-	Subjects []string `json:"subjects"`
-}
-
-type SubjectAccessReviewResult struct {
-	Subject string `json:"subject"`
-	Allowed bool   `json:"allowed"`
-	Error   string `json:"error,omitempty"`
-}
-
-func (req SubjectAccessReviewRequest) Validate(ctx context.Context) error {
-	if req.Action == "" {
-		return api.Errorf(api.EINVALID, "action is required")
-	}
-
-	resourceFields := 0
-	if req.Resource.Global != "" {
-		resourceFields++
-	}
-	if req.Resource.Playbook != "" {
-		resourceFields++
-	}
-	if req.Resource.Config != "" {
-		resourceFields++
-	}
-	if req.Resource.Check != "" {
-		resourceFields++
-	}
-	if req.Resource.View != "" {
-		resourceFields++
-	}
-	if resourceFields == 0 {
-		return api.Errorf(api.EINVALID, "at least one of resource.global, resource.playbook, resource.config, resource.check or resource.view is required")
-	}
-
-	if !lo.Contains(policy.AllActions, req.Action) {
-		return api.Errorf(api.EINVALID, "unsupported action %q, only %s are supported", req.Action, strings.Join(policy.AllActions, ", "))
-	}
-
-	if len(req.Subjects) == 0 {
-		return api.Errorf(api.EINVALID, "at least one subject is required")
-	}
-
-	return nil
-}
-
 type SubjectAccessReviewResponse struct {
 	Resource SubjectAccessReviewResource `json:"resource"`
 	Action   string                      `json:"action"`
@@ -163,32 +102,9 @@ func SubjectAccessReviews(c echo.Context) error {
 		return api.WriteError(c, err)
 	}
 
-	subjects, err := resolveAccessReviewSubjects(ctx, req.Subjects)
-	if err != nil {
-		return err
-	} else if len(subjects) > maxSubjectAccessReviewSubjects {
-		return api.Errorf(api.EINVALID, "subjects exceeds maximum of %d", maxSubjectAccessReviewSubjects)
-	}
-
-	resourceAttr, err := resolveAccessReviewResource(ctx, req.Resource)
+	results, err := runSubjectAccessReview(ctx, req)
 	if err != nil {
 		return api.WriteError(c, err)
-	}
-
-	results := make([]SubjectAccessReviewResult, 0, len(subjects))
-	for _, subject := range subjects {
-		subject = strings.TrimSpace(subject)
-		if subject == "" {
-			results = append(results, SubjectAccessReviewResult{Subject: subject, Error: "subject is required"})
-			continue
-		}
-
-		allowed := rbac.HasPermission(ctx, subject, resourceAttr, req.Action)
-		if req.Resource.Global != "" {
-			allowed = rbac.Check(ctx, subject, req.Resource.Global, req.Action)
-		}
-
-		results = append(results, SubjectAccessReviewResult{Subject: subject, Allowed: allowed})
 	}
 
 	return c.JSON(http.StatusOK, SubjectAccessReviewResponse{
@@ -198,86 +114,89 @@ func SubjectAccessReviews(c echo.Context) error {
 	})
 }
 
-func resolveAccessReviewSubjects(ctx context.Context, subjects []string) ([]string, error) {
-	if len(subjects) != 1 || strings.TrimSpace(subjects[0]) != "*" {
-		return subjects, nil
+func SubjectAccessSearch(c echo.Context) error {
+	ctx := c.Request().Context().(context.Context)
+
+	var req SubjectAccessSearchRequest
+	if err := c.Bind(&req); err != nil {
+		return api.WriteError(c, api.Errorf(api.EINVALID, "invalid request body: %v", err))
 	}
 
-	return db.GetPermissionSubjects(ctx)
-}
+	if err := req.Validate(); err != nil {
+		return api.WriteError(c, err)
+	}
 
-func resolveAccessReviewResource(ctx context.Context, resource SubjectAccessReviewResource) (*models.ABACAttribute, error) {
-	attr := &models.ABACAttribute{}
+	results := make([]SubjectAccessSearchResult, 0)
 
-	if resource.Playbook != "" {
-		playbookID, err := uuid.Parse(resource.Playbook)
-		if err != nil {
-			return nil, api.Errorf(api.EINVALID, "resource.playbook must be a valid UUID")
-		}
-
-		var playbook models.Playbook
-		if err := ctx.DB().Where("id = ? AND deleted_at IS NULL", playbookID).First(&playbook).Error; err != nil {
-			if err == gorm.ErrRecordNotFound {
-				return nil, api.Errorf(api.ENOTFOUND, "playbook %q not found", resource.Playbook)
+	for _, resourceType := range req.ResourceTypes {
+		switch resourceType {
+		case "playbook":
+			var playbooks []models.Playbook
+			query := ctx.DB().Select("id").Model(&models.Playbook{}).Where("deleted_at IS NULL")
+			if err := query.Order("COALESCE(title, name) ASC").Find(&playbooks).Error; err != nil {
+				return api.WriteError(c, ctx.Oops().Wrapf(err, "failed to list playbooks for subject access search"))
 			}
-			return nil, ctx.Oops().Wrapf(err, "failed to resolve playbook %q", resource.Playbook)
-		}
 
-		attr.Playbook = playbook
-	}
+			for _, playbook := range playbooks {
+				r, err := runSubjectAccessReview(ctx, SubjectAccessReviewRequest{
+					Subjects: []string{req.Subject},
+					Action:   req.Action,
+					Resource: SubjectAccessReviewResource{
+						Playbook: playbook.ID.String(),
+					},
+				})
+				if err != nil {
+					return api.WriteError(c, err)
+				}
 
-	if resource.Config != "" {
-		configID, err := uuid.Parse(resource.Config)
-		if err != nil {
-			return nil, api.Errorf(api.EINVALID, "resource.config must be a valid UUID")
-		}
-
-		var config models.ConfigItem
-		if err := ctx.DB().Where("id = ? AND deleted_at IS NULL", configID).First(&config).Error; err != nil {
-			if err == gorm.ErrRecordNotFound {
-				return nil, api.Errorf(api.ENOTFOUND, "config %q not found", resource.Config)
+				for _, x := range r {
+					if x.Allowed {
+						results = append(results, SubjectAccessSearchResult{
+							ResourceType: "playbook",
+							ID:           playbook.ID.String(),
+						})
+					}
+				}
 			}
-			return nil, ctx.Oops().Wrapf(err, "failed to resolve config %q", resource.Config)
-		}
 
-		attr.Config = config
-	}
-
-	if resource.Check != "" {
-		checkID, err := uuid.Parse(resource.Check)
-		if err != nil {
-			return nil, api.Errorf(api.EINVALID, "resource.check must be a valid UUID")
-		}
-
-		var check models.Check
-		if err := ctx.DB().Where("id = ? AND deleted_at IS NULL", checkID).First(&check).Error; err != nil {
-			if err == gorm.ErrRecordNotFound {
-				return nil, api.Errorf(api.ENOTFOUND, "check %q not found", resource.Check)
+		case "view":
+			var views []models.View
+			query := ctx.DB().Select("id").Model(&models.View{}).Where("deleted_at IS NULL")
+			if err := query.Order("name ASC").Find(&views).Error; err != nil {
+				return api.WriteError(c, ctx.Oops().Wrapf(err, "failed to list views for subject access search"))
 			}
-			return nil, ctx.Oops().Wrapf(err, "failed to resolve check %q", resource.Check)
-		}
 
-		attr.Check = check
-	}
+			for _, view := range views {
+				r, err := runSubjectAccessReview(ctx, SubjectAccessReviewRequest{
+					Subjects: []string{req.Subject},
+					Action:   req.Action,
+					Resource: SubjectAccessReviewResource{
+						View: view.ID.String(),
+					},
+				})
+				if err != nil {
+					return api.WriteError(c, err)
+				}
 
-	if resource.View != "" {
-		viewID, err := uuid.Parse(resource.View)
-		if err != nil {
-			return nil, api.Errorf(api.EINVALID, "resource.view must be a valid UUID")
-		}
-
-		var view models.View
-		if err := ctx.DB().Where("id = ? AND deleted_at IS NULL", viewID).First(&view).Error; err != nil {
-			if err == gorm.ErrRecordNotFound {
-				return nil, api.Errorf(api.ENOTFOUND, "view %q not found", resource.View)
+				for _, x := range r {
+					if x.Allowed {
+						results = append(results, SubjectAccessSearchResult{
+							ResourceType: "view",
+							ID:           view.ID.String(),
+						})
+					}
+				}
 			}
-			return nil, ctx.Oops().Wrapf(err, "failed to resolve view %q", resource.View)
 		}
-
-		attr.View = view
 	}
 
-	return attr, nil
+	return c.JSON(http.StatusOK, SubjectAccessSearchResponse{
+		Subject:       req.Subject,
+		Action:        req.Action,
+		ResourceTypes: req.ResourceTypes,
+		Total:         len(results),
+		Results:       results,
+	})
 }
 
 func Dump(c echo.Context) error {
