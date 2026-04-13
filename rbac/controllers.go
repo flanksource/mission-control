@@ -161,8 +161,6 @@ type SubjectAccessSearchRequest struct {
 	Subject       string   `json:"subject"`
 	Action        string   `json:"action"`
 	ResourceTypes []string `json:"resource_types,omitempty"`
-	Search        string   `json:"search,omitempty"`
-	Namespace     string   `json:"namespace,omitempty"`
 	Limit         int      `json:"limit,omitempty"`
 	Offset        int      `json:"offset,omitempty"`
 }
@@ -186,8 +184,6 @@ type SubjectAccessSearchResponse struct {
 
 func (req *SubjectAccessSearchRequest) Validate() error {
 	req.Subject = strings.TrimSpace(req.Subject)
-	req.Search = strings.TrimSpace(req.Search)
-	req.Namespace = strings.TrimSpace(req.Namespace)
 
 	if req.Subject == "" {
 		return api.Errorf(api.EINVALID, "subject is required")
@@ -249,19 +245,12 @@ func SubjectAccessSearch(c echo.Context) error {
 	}
 
 	results := make([]SubjectAccessSearchResult, 0)
-	searchPattern := "%" + strings.ToLower(req.Search) + "%"
 
 	for _, resourceType := range req.ResourceTypes {
 		switch resourceType {
 		case "playbook":
 			var playbooks []models.Playbook
 			query := ctx.DB().Model(&models.Playbook{}).Where("deleted_at IS NULL")
-			if req.Namespace != "" {
-				query = query.Where("namespace = ?", req.Namespace)
-			}
-			if req.Search != "" {
-				query = query.Where("LOWER(name) LIKE ? OR LOWER(COALESCE(title, '')) LIKE ?", searchPattern, searchPattern)
-			}
 			if err := query.Order("COALESCE(title, name) ASC").Find(&playbooks).Error; err != nil {
 				return api.WriteError(c, ctx.Oops().Wrapf(err, "failed to list playbooks for subject access search"))
 			}
@@ -282,12 +271,6 @@ func SubjectAccessSearch(c echo.Context) error {
 		case "view":
 			var views []models.View
 			query := ctx.DB().Model(&models.View{}).Where("deleted_at IS NULL")
-			if req.Namespace != "" {
-				query = query.Where("namespace = ?", req.Namespace)
-			}
-			if req.Search != "" {
-				query = query.Where("LOWER(name) LIKE ?", searchPattern)
-			}
 			if err := query.Order("name ASC").Find(&views).Error; err != nil {
 				return api.WriteError(c, ctx.Oops().Wrapf(err, "failed to list views for subject access search"))
 			}
