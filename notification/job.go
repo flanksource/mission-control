@@ -207,9 +207,9 @@ func ProcessPendingNotifications(parentCtx context.Context) (bool, error) {
 
 		if err := processPendingNotification(ctx, currentHistory); err != nil {
 			if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", currentHistory.ID).UpdateColumns(map[string]any{
-				"status":  gorm.Expr("CASE WHEN retries >= ? THEN ? ELSE ? END", ctx.Properties().Int("notification.max-retries", 4)-1, models.NotificationStatusError, models.NotificationStatusPending),
+				"status":  gorm.Expr("CASE WHEN COALESCE(retries, 0) + 1 >= ? THEN ? ELSE ? END", maxRetries, models.NotificationStatusError, models.NotificationStatusPending),
 				"error":   err.Error(),
-				"retries": gorm.Expr("retries + 1"),
+				"retries": gorm.Expr("COALESCE(retries, 0) + 1"),
 			}).Error; dberr != nil {
 				return ctx.Oops().Join(dberr, err)
 			}
@@ -219,7 +219,7 @@ func ProcessPendingNotifications(parentCtx context.Context) (bool, error) {
 				return fmt.Errorf("failed to get notification: %w", notifErr)
 			}
 
-			if notif.HasFallbackSet() {
+			if notif.HasFallbackSet() && (currentHistory.Retries+1 >= maxRetries) {
 				// If the notification has fallback, we send to it after exhausting retries
 				if err := models.GenerateFallbackAttempt(ctx.DB(), notif.Notification, currentHistory); err != nil {
 					return fmt.Errorf("failed to generate fallback attempt: %w", err)
@@ -298,10 +298,11 @@ func ProcessFallbackNotifications(parentCtx context.Context) (bool, error) {
 		)
 
 		if err := sendFallbackNotification(ctx, currentHistory); err != nil {
+			maxRetries := ctx.Properties().Int("notification.max-retries", 4) - 1
 			if dberr := ctx.DB().Debug().Model(&models.NotificationSendHistory{}).Where("id = ?", currentHistory.ID).UpdateColumns(map[string]any{
-				"status":  gorm.Expr("CASE WHEN retries >= ? THEN ? ELSE ? END", ctx.Properties().Int("notification.max-retries", 4)-1, models.NotificationStatusError, models.NotificationStatusAttemptingFallback),
+				"status":  gorm.Expr("CASE WHEN COALESCE(retries, 0) + 1 >= ? THEN ? ELSE ? END", maxRetries, models.NotificationStatusError, models.NotificationStatusAttemptingFallback),
 				"error":   err.Error(),
-				"retries": gorm.Expr("retries + 1"),
+				"retries": gorm.Expr("COALESCE(retries, 0) + 1"),
 			}).Error; dberr != nil {
 				return ctx.Oops().Join(dberr, err)
 			}
