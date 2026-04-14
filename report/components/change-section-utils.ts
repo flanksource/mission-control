@@ -479,8 +479,20 @@ function asText(value: unknown): string | undefined {
   return undefined;
 }
 
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+  return undefined;
+}
+
 function compactMeta(values: Array<string | undefined>): string[] {
   return values.filter((value): value is string => Boolean(value));
+}
+
+function joinText(values: Array<string | undefined>, separator = ', '): string | undefined {
+  const filtered = compactMeta(values);
+  return filtered.length > 0 ? filtered.join(separator) : undefined;
 }
 
 function labelValue(label: string, value: unknown): string | undefined {
@@ -539,6 +551,131 @@ function formatCurrencyAmount(value: unknown, currency: unknown): string | undef
   return String(value);
 }
 
+function identityLabel(value: unknown): string | undefined {
+  const record = asRecord(value);
+  if (!record) {
+    return undefined;
+  }
+  return asText(record.name) || asText(record.id) || asText(record.type);
+}
+
+function environmentLabel(value: unknown): string | undefined {
+  const record = asRecord(value);
+  if (!record) {
+    return undefined;
+  }
+  return asText(record.name) || asText(record.identifier);
+}
+
+function dimensionLabel(value: unknown): string | undefined {
+  const record = asRecord(value);
+  if (!record) {
+    return asText(value);
+  }
+
+  const desired = asText(record.desired);
+  if (desired) {
+    return desired;
+  }
+
+  const min = asText(record.min);
+  const max = asText(record.max);
+  if (min || max) {
+    return joinText([min, max], '..');
+  }
+
+  return undefined;
+}
+
+function formatObjectPreview(value: unknown): string | undefined {
+  const record = asRecord(value);
+  if (record) {
+    const entries = Object.entries(record);
+    if (entries.length === 1) {
+      const [key, nested] = entries[0];
+      const nestedText = asText(nested) || formatObjectPreview(nested);
+      return nestedText ? `${key}: ${nestedText}` : key;
+    }
+
+    try {
+      return JSON.stringify(record);
+    } catch {
+      return undefined;
+    }
+  }
+
+  if (Array.isArray(value)) {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return undefined;
+    }
+  }
+
+  return asText(value);
+}
+
+function arrayCountLabel(label: string, value: unknown): string | undefined {
+  return Array.isArray(value) && value.length > 0 ? `${label}: ${value.length}` : undefined;
+}
+
+function objectCountLabel(label: string, value: unknown): string | undefined {
+  const record = asRecord(value);
+  return record && Object.keys(record).length > 0 ? `${label}: ${Object.keys(record).length}` : undefined;
+}
+
+function sourceSummary(value: unknown): string | undefined {
+  const source = asRecord(value);
+  if (!source) {
+    return undefined;
+  }
+
+  const git = asRecord(source.git) ?? asRecord(source.kustomization) ?? asRecord(source.argocd);
+  if (git) {
+    return joinText(['Git', asText(git.url) || asText(git.branch) || asText(git.commit_sha)], ': ');
+  }
+
+  const helm = asRecord(source.helm);
+  if (helm) {
+    return joinText(['Helm', asText(helm.chart_name) || asText(helm.repo_url)], ': ');
+  }
+
+  const image = asRecord(source.image);
+  if (image) {
+    const imageRef = joinText([asText(image.registry), asText(image.image)], '/');
+    return joinText(['Image', imageRef || asText(image.version)], ': ');
+  }
+
+  const database = asRecord(source.database);
+  if (database) {
+    return joinText(['Database', asText(database.name) || asText(database.endpoint)], ': ');
+  }
+
+  const other = asText(source.other);
+  if (other) {
+    return joinText(['Other', other], ': ');
+  }
+
+  return undefined;
+}
+
+function changePathsLabel(value: unknown): string | undefined {
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
+
+  const paths = value
+    .map((item) => asText(asRecord(item)?.path))
+    .filter((item): item is string => Boolean(item));
+
+  if (!paths.length) {
+    return undefined;
+  }
+
+  const preview = paths.slice(0, 2).join(', ');
+  return `Paths: ${preview}${paths.length > 2 ? ` +${paths.length - 2} more` : ''}`;
+}
+
 function humanizeLabel(value: string): string {
   return value
     .replace(/[_-]+/g, ' ')
@@ -581,8 +718,8 @@ function permissionFromTypedChange(typedChange?: ConfigTypedChange): Application
 
 const TYPED_CHANGE_RENDERERS: Record<string, (typedChange: ConfigTypedChange) => Omit<TypedChangeDisplay, 'label'>> = {
   'UserChange/v1': (typedChange) => ({
+    summary: asText(typedChange.user_name) || asText(typedChange.user_id),
     meta: compactMeta([
-      asText(typedChange.user_name) || asText(typedChange.user_id),
       asText(typedChange.user_email),
       labelValue('Group', typedChange.group_name || typedChange.group_id),
       labelValue('Type', typedChange.user_type),
@@ -590,6 +727,7 @@ const TYPED_CHANGE_RENDERERS: Record<string, (typedChange: ConfigTypedChange) =>
     ]),
   }),
   'Screenshot/v1': (typedChange) => ({
+    summary: asText(typedChange.url) || asText(typedChange.artifact_id),
     meta: compactMeta([
       labelValue('Artifact', typedChange.artifact_id),
       labelValue('Type', typedChange.content_type),
@@ -598,16 +736,81 @@ const TYPED_CHANGE_RENDERERS: Record<string, (typedChange: ConfigTypedChange) =>
     ]),
   }),
   'PermissionChange/v1': (typedChange) => ({
+    summary: asText(typedChange.user_name) || asText(typedChange.group_name) || asText(typedChange.user_id) || asText(typedChange.group_id),
     meta: compactMeta([
-      asText(typedChange.user_name) || asText(typedChange.group_name) || asText(typedChange.user_id) || asText(typedChange.group_id),
       labelValue('Role', typedChange.role_name || typedChange.role_id),
       labelValue('Role Type', typedChange.role_type),
       labelValue('Scope', typedChange.scope),
     ]),
   }),
+  'Identity/v1': (typedChange) => ({
+    summary: identityLabel(typedChange),
+    meta: compactMeta([
+      labelValue('Type', typedChange.type),
+      labelValue('Comment', typedChange.comment),
+    ]),
+  }),
+  'GitSource/v1': (typedChange) => ({
+    summary: asText(typedChange.url),
+    meta: compactMeta([
+      labelValue('Branch', typedChange.branch),
+      labelValue('Commit', typedChange.commit_sha),
+      labelValue('Version', typedChange.version),
+      labelValue('Tags', typedChange.tags),
+    ]),
+  }),
+  'HelmSource/v1': (typedChange) => ({
+    summary: asText(typedChange.chart_name),
+    meta: compactMeta([
+      labelValue('Version', typedChange.chart_version),
+      labelValue('Repo', typedChange.repo_url),
+    ]),
+  }),
+  'ImageSource/v1': (typedChange) => ({
+    summary: joinText([asText(typedChange.registry), asText(typedChange.image)], '/'),
+    meta: compactMeta([
+      labelValue('Version', typedChange.version),
+      labelValue('SHA', typedChange.sha),
+    ]),
+  }),
+  'DatabaseSource/v1': (typedChange) => ({
+    summary: asText(typedChange.name) || asText(typedChange.endpoint),
+    meta: compactMeta([
+      labelValue('Type', typedChange.type),
+      labelValue('Schema', typedChange.schema),
+      labelValue('Version', typedChange.version),
+      labelValue('Endpoint', typedChange.endpoint),
+    ]),
+  }),
+  'Source/v1': (typedChange) => ({
+    summary: sourceSummary(typedChange),
+    meta: compactMeta([
+      labelValue('Path', typedChange.path),
+      labelValue('Other', typedChange.other),
+    ]),
+  }),
+  'Environment/v1': (typedChange) => ({
+    summary: environmentLabel(typedChange),
+    meta: compactMeta([
+      labelValue('Type', typedChange.type),
+      labelValue('Stage', typedChange.stage),
+      labelValue('Identifier', typedChange.identifier),
+      objectCountLabel('Tags', typedChange.tags),
+    ]),
+  }),
+  'Event/v1': (typedChange) => ({
+    summary: asText(typedChange.id),
+    meta: compactMeta([
+      labelValue('URL', typedChange.url),
+      labelValue('Timestamp', typedChange.timestamp),
+      objectCountLabel('Tags', typedChange.tags),
+      objectCountLabel('Properties', typedChange.properties),
+    ]),
+  }),
   'Deployment/v1': (typedChange) => {
     const imageDiff = toDiff('Image', typedChange.previous_image, typedChange.new_image);
     return {
+      summary: asText(typedChange.container),
       meta: compactMeta([
         labelValue('Container', typedChange.container),
         imageDiff ? undefined : transition('Image', typedChange.previous_image, typedChange.new_image),
@@ -618,24 +821,47 @@ const TYPED_CHANGE_RENDERERS: Record<string, (typedChange: ConfigTypedChange) =>
     };
   },
   'Promotion/v1': (typedChange) => {
-    const environmentDiff = toDiff('Environment', typedChange.from_environment, typedChange.to_environment);
+    const fromEnvironment = environmentLabel(typedChange.from) || asText(typedChange.from_environment);
+    const toEnvironment = environmentLabel(typedChange.to) || asText(typedChange.to_environment);
+    const environmentDiff = toDiff('Environment', fromEnvironment, toEnvironment);
     return {
+      summary: asText(typedChange.artifact) || asText(typedChange.version),
       meta: compactMeta([
-        environmentDiff ? undefined : transition('Environment', typedChange.from_environment, typedChange.to_environment),
+        environmentDiff ? undefined : transition('Environment', fromEnvironment, toEnvironment),
         labelValue('Version', typedChange.version),
         labelValue('Artifact', typedChange.artifact),
+        labelValue('Source', sourceSummary(typedChange.source)),
+        arrayCountLabel('Approvals', typedChange.approvals),
       ]),
       diff: environmentDiff,
     };
   },
-  'Approval/v1': (typedChange) => ({
-    summary: asText(typedChange.approved_by) ? `Approved by ${typedChange.approved_by}` : asText(typedChange.rejected_by) ? `Rejected by ${typedChange.rejected_by}` : 'Approval decision',
-    meta: compactMeta([
-      labelValue('Playbook', typedChange.playbook_id),
-      labelValue('Run', typedChange.run_id),
-      labelValue('Reason', typedChange.reason),
-    ]),
-  }),
+  'Approval/v1': (typedChange) => {
+    const submittedBy = identityLabel(typedChange.submitted_by) || asText(typedChange.submitted_by);
+    const approver = identityLabel(typedChange.approver) || asText(typedChange.approved_by) || asText(typedChange.rejected_by);
+    const status = asText(typedChange.status)
+      || (asText(typedChange.approved_by) ? 'Approved' : undefined)
+      || (asText(typedChange.rejected_by) ? 'Rejected' : undefined);
+    const summary = approver && status
+      ? `${status} by ${approver}`
+      : submittedBy
+        ? `Submitted by ${submittedBy}`
+        : status
+          ? `${status} approval`
+          : 'Approval decision';
+    return {
+      summary,
+      meta: compactMeta([
+        labelValue('Submitted By', submittedBy),
+        labelValue('Approver', approver),
+        labelValue('Stage', typedChange.stage),
+        labelValue('Status', status),
+        labelValue('Playbook', typedChange.playbook_id),
+        labelValue('Run', typedChange.run_id),
+        labelValue('Reason', typedChange.reason),
+      ]),
+    };
+  },
   'Rollback/v1': (typedChange) => {
     const versionDiff = toDiff('Version', typedChange.from_version, typedChange.to_version);
     return {
@@ -648,12 +874,17 @@ const TYPED_CHANGE_RENDERERS: Record<string, (typedChange: ConfigTypedChange) =>
     };
   },
   'Backup/v1': (typedChange) => ({
+    summary: environmentLabel(typedChange.environment) || asText(typedChange.target) || asText(typedChange.backup_type),
     meta: compactMeta([
       labelValue('Status', typedChange.status),
       labelValue('Type', typedChange.backup_type),
+      labelValue('Created By', identityLabel(typedChange.created_by)),
+      labelValue('Environment', environmentLabel(typedChange.environment)),
       labelValue('Target', typedChange.target),
       labelValue('Size', typedChange.size),
+      labelValue('Delta', typedChange.delta),
       labelValue('Duration', typedChange.duration),
+      labelValue('End', typedChange.end),
       labelValue('Snapshot', typedChange.snapshot_id),
     ]),
   }),
@@ -672,12 +903,26 @@ const TYPED_CHANGE_RENDERERS: Record<string, (typedChange: ConfigTypedChange) =>
   'Scaling/v1': (typedChange) => {
     const replicaDiff = toDiff('Replicas', typedChange.from_replicas, typedChange.to_replicas);
     return {
+      summary: asText(typedChange.resource_type),
       meta: compactMeta([
         labelValue('Resource', typedChange.resource_type),
         replicaDiff ? undefined : transition('Replicas', typedChange.from_replicas, typedChange.to_replicas),
         labelValue('Trigger', typedChange.trigger),
       ]),
       diff: replicaDiff,
+    };
+  },
+  'Scale/v1': (typedChange) => {
+    const previousValue = dimensionLabel(typedChange.previous_value);
+    const currentValue = dimensionLabel(typedChange.value);
+    const label = asText(typedChange.dimension) || 'Value';
+    const scaleDiff = toDiff(label, previousValue, currentValue);
+    return {
+      summary: typedChange.dimension ? `${typedChange.dimension} scaling` : 'Scale change',
+      meta: compactMeta([
+        scaleDiff ? undefined : transition(label, previousValue, currentValue),
+      ]),
+      diff: scaleDiff,
     };
   },
   'Certificate/v1': (typedChange) => ({
@@ -705,18 +950,73 @@ const TYPED_CHANGE_RENDERERS: Record<string, (typedChange: ConfigTypedChange) =>
     };
   },
   'PipelineRun/v1': (typedChange) => {
-    const pipeline = asText(typedChange.pipeline_name) || asText(typedChange.pipeline_id);
+    const pipeline = asText(typedChange.pipeline_name) || asText(typedChange.pipeline_id) || environmentLabel(typedChange.environment);
     return {
       summary: pipeline,
       meta: compactMeta([
         labelValue('Run', typedChange.run_number ?? typedChange.run_id),
         labelValue('Branch', typedChange.branch),
+        labelValue('Environment', environmentLabel(typedChange.environment)),
         labelValue('Status', typedChange.status),
         labelValue('Duration', typedChange.duration),
         labelValue('Error', typedChange.error),
       ]),
     };
   },
+  'Change/v1': (typedChange) => {
+    const changeDiff = toDiff('Value', formatObjectPreview(typedChange.from), formatObjectPreview(typedChange.to));
+    return {
+      summary: asText(typedChange.path) || 'Field change',
+      meta: compactMeta([
+        labelValue('Type', typedChange.type),
+        changeDiff ? undefined : transition('Value', formatObjectPreview(typedChange.from), formatObjectPreview(typedChange.to)),
+      ]),
+      diff: changeDiff,
+    };
+  },
+  'ConfigChange/v1': (typedChange) => {
+    const changeCount = Array.isArray(typedChange.changes) ? typedChange.changes.length : 0;
+    return {
+      summary: changeCount > 0 ? `${changeCount} field change${changeCount === 1 ? '' : 's'}` : 'Config change',
+      meta: compactMeta([
+        labelValue('Author', identityLabel(typedChange.author)),
+        labelValue('Environment', environmentLabel(typedChange.environment)),
+        labelValue('Source', sourceSummary(typedChange.source)),
+        changePathsLabel(typedChange.changes),
+      ]),
+    };
+  },
+  'Restore/v1': (typedChange) => {
+    const fromEnvironment = environmentLabel(typedChange.from);
+    const toEnvironment = environmentLabel(typedChange.to);
+    const environmentDiff = toDiff('Environment', fromEnvironment, toEnvironment);
+    return {
+      summary: sourceSummary(typedChange.source) || asText(typedChange.status) || 'Restore job',
+      meta: compactMeta([
+        environmentDiff ? undefined : transition('Environment', fromEnvironment, toEnvironment),
+        labelValue('Source', sourceSummary(typedChange.source)),
+        labelValue('Status', typedChange.status),
+      ]),
+      diff: environmentDiff,
+    };
+  },
+  'Test/v1': (typedChange) => ({
+    summary: asText(typedChange.name) || asText(typedChange.id),
+    meta: compactMeta([
+      labelValue('Type', typedChange.type),
+      labelValue('Status', typedChange.status),
+      labelValue('Result', typedChange.result),
+      labelValue('Description', typedChange.description),
+    ]),
+  }),
+  'Dimension/v1': (typedChange) => ({
+    summary: dimensionLabel(typedChange),
+    meta: compactMeta([
+      labelValue('Min', typedChange.min),
+      labelValue('Max', typedChange.max),
+      labelValue('Desired', typedChange.desired),
+    ]),
+  }),
 };
 
 export function getTypedChangeDisplay(change: ConfigChange): TypedChangeDisplay | undefined {

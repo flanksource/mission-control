@@ -55,11 +55,11 @@ function getChangeAccent(change: ConfigChange, label: string): ChangeBadgeStyle 
 
   if (kind === 'Screenshot/v1' || type.includes('screenshot')) return CHANGE_BADGE_STYLES.artifact;
   if (kind === 'PermissionChange/v1' || category.startsWith('rbac') || type.includes('permission')) return CHANGE_BADGE_STYLES.permission;
-  if (kind === 'Backup/v1' || category.startsWith('backup') || type.includes('backup') || type.includes('restore')) return CHANGE_BADGE_STYLES.backup;
+  if (kind === 'Backup/v1' || kind === 'Restore/v1' || category.startsWith('backup') || type.includes('backup') || type.includes('restore')) return CHANGE_BADGE_STYLES.backup;
   if (kind === 'CostChange/v1' || type.includes('cost')) return CHANGE_BADGE_STYLES.cost;
-  if (kind === 'Promotion/v1' || kind === 'Rollback/v1' || kind === 'PipelineRun/v1' || kind === 'PlaybookExecution/v1') return CHANGE_BADGE_STYLES.release;
-  if (kind === 'Scaling/v1' || type.includes('replica') || type.includes('scaling')) return CHANGE_BADGE_STYLES.scale;
-  if (kind === 'Deployment/v1' || type === 'diff' || category.startsWith('deployment')) return CHANGE_BADGE_STYLES.diff;
+  if (kind === 'Promotion/v1' || kind === 'Approval/v1' || kind === 'Rollback/v1' || kind === 'PipelineRun/v1' || kind === 'PlaybookExecution/v1') return CHANGE_BADGE_STYLES.release;
+  if (kind === 'Scale/v1' || kind === 'Scaling/v1' || type.includes('replica') || type.includes('scaling')) return CHANGE_BADGE_STYLES.scale;
+  if (kind === 'ConfigChange/v1' || kind === 'Change/v1' || kind === 'Deployment/v1' || type === 'diff' || category.startsWith('deployment')) return CHANGE_BADGE_STYLES.diff;
   if (type.includes('policy') || normalizedLabel.includes('policy')) return CHANGE_BADGE_STYLES.policy;
   return CHANGE_BADGE_STYLES.default;
 }

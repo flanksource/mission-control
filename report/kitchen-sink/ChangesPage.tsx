@@ -15,15 +15,27 @@ interface Props {
 }
 
 export default function ChangesPage({ data, pageProps }: Props) {
+  const allChanges = data.changes ?? [];
+  const schemaExampleChanges = allChanges.filter((change) => change.source === 'schema-examples');
+  const demoChanges = allChanges.filter((change) => change.source !== 'schema-examples');
   const rbacChanges = data.rbacChanges ?? [];
   const backupChanges = data.backupChanges ?? [];
   const deploymentChanges = data.deploymentChanges ?? [];
   const categoryMappings = (data as any).categoryMappings as CatalogReportCategoryMapping[] | undefined;
-  const categorized = categorizeChanges(data.changes ?? [], categoryMappings);
+  const categorized = categorizeChanges(demoChanges, categoryMappings);
 
   return (
     <Page {...pageProps}>
-      <ConfigChangesExamples changes={data.changes} />
+      <ConfigChangesExamples changes={demoChanges} />
+
+      {schemaExampleChanges.length > 0 && (
+        <Section variant="hero" title="Schema Example Coverage" size="md">
+          <div className="text-xs text-gray-500 mb-[2mm]">
+            Full coverage for every standalone example in the duty handwritten change-types schema. Generated via <code>make report/kitchen-sink.json</code> and rendered once here in schema order.
+          </div>
+          <ConfigChangesSection changes={schemaExampleChanges} hideConfigName />
+        </Section>
+      )}
 
       <Section variant="hero" title="Auto-Categorized Changes" size="md">
         <div className="text-xs text-gray-500 mb-[2mm]">
@@ -49,7 +61,7 @@ export default function ChangesPage({ data, pageProps }: Props) {
         )}
       </Section>
 
-      <ConfigChangesSection changes={data.changes} />
+      <ConfigChangesSection changes={demoChanges} />
 
       <Section variant="hero" title="RBACChanges" size="md">
         <div className="text-xs text-gray-500 mb-[2mm]">

@@ -195,21 +195,24 @@ ginkgo:
 
 .PHONY: controller-gen
 controller-gen: install-deps $(LOCALBIN)
-	$(LOCALBIN)/deps install controller-gen@$(CONTROLLER_TOOLS_VERSION) --bin-dir $(LOCALBIN)
+	deps install controller-gen@$(CONTROLLER_TOOLS_VERSION) --bin-dir $(LOCALBIN)
 
 .PHONY: golangci-lint
 golangci-lint: install-deps $(LOCALBIN)
-	$(LOCALBIN)/deps install golangci/golangci-lint@v$(GOLANGCI_LINT_VERSION) --bin-dir $(LOCALBIN)
+	deps install golangci/golangci-lint@v$(GOLANGCI_LINT_VERSION) --bin-dir $(LOCALBIN)
 
 .PHONY: kustomize
 kustomize: install-deps $(LOCALBIN)
-	$(LOCALBIN)/deps install kubernetes-sigs/kustomize@$(KUSTOMIZE_VERSION) --bin-dir $(LOCALBIN)
+	deps install kubernetes-sigs/kustomize@$(KUSTOMIZE_VERSION) --bin-dir $(LOCALBIN)
 
 .PHONY: docs\:mcp
 docs\:mcp: ## Generate MCP tools reference documentation
 	@mkdir -p docs
 	go run ./hack/gen-mcp-docs > docs/mcp-tools.md
 	@echo "Generated docs/mcp-tools.md"
+
+report/kitchen-sink.json: report/build-kitchen-sink.ts report/testdata/kitchen-sink.yaml
+	cd report && ./node_modules/.bin/tsx build-kitchen-sink.ts
 
 .PHONY: lint
 lint: golangci-lint

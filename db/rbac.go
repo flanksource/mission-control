@@ -8,7 +8,6 @@ import (
 	dutyQuery "github.com/flanksource/duty/query"
 	"github.com/flanksource/duty/types"
 	"github.com/google/uuid"
-	"github.com/samber/lo"
 
 	"github.com/flanksource/incident-commander/api"
 )
@@ -28,6 +27,10 @@ type RBACAccessRow struct {
 	LastReviewedAt *time.Time `gorm:"column:last_reviewed_at"`
 }
 
+func (r RBACAccessRow) QueryLogSummary() string {
+	return r.ConfigType
+}
+
 func (r RBACAccessRow) RoleSource() string {
 	if r.GroupName != nil && *r.GroupName != "" {
 		return fmt.Sprintf("group:%s", *r.GroupName)
@@ -35,7 +38,14 @@ func (r RBACAccessRow) RoleSource() string {
 	return "direct"
 }
 
-func GetRBACAccess(ctx context.Context, selectors []types.ResourceSelector, recursive bool) ([]RBACAccessRow, error) {
+func GetRBACAccessByConfigIDs(ctx context.Context, configIDs []uuid.UUID) ([]RBACAccessRow, error) {
+	return GetRBACAccess(ctx, nil, false, configIDs...)
+}
+
+func GetRBACAccess(ctx context.Context, selectors []types.ResourceSelector, recursive bool, configIDs ...uuid.UUID) (results []RBACAccessRow, err error) {
+	timer := dutyQuery.NewQueryLogger(ctx).Start("RBACAccess").Arg("configIDs", len(configIDs)).Arg("selectors", len(selectors))
+	defer timer.End(&err)
+
 	q := ctx.DB().
 		Table("config_access_summary").
 		Select(`config_access_summary.config_id,
@@ -53,50 +63,107 @@ func GetRBACAccess(ctx context.Context, selectors []types.ResourceSelector, recu
 		Joins("LEFT JOIN external_groups ON config_access_summary.external_group_id = external_groups.id")
 
 	if len(selectors) > 0 {
-		configIDs, err := dutyQuery.FindConfigIDsByResourceSelector(ctx, 0, selectors...)
+		resolved, err := dutyQuery.FindConfigIDsByResourceSelector(ctx, 0, selectors...)
 		if err != nil {
 			return nil, ctx.Oops().Wrapf(err, "failed to resolve config selectors")
 		}
-		if len(configIDs) == 0 {
+		if len(resolved) == 0 {
 			return nil, nil
 		}
 		if recursive {
-			configIDs, err = expandConfigChildren(ctx, configIDs)
+			resolved, err = ExpandConfigChildren(ctx, resolved)
 			if err != nil {
 				return nil, ctx.Oops().Wrapf(err, "failed to expand children")
 			}
 		}
+		configIDs = append(configIDs, resolved...)
+	}
+
+	if len(configIDs) > 0 {
 		q = q.Where("config_access_summary.config_id IN (?)", configIDs)
 	}
 
-	var rows []RBACAccessRow
-	if err := q.
+	if err = q.
 		Order("config_access_summary.config_name, config_access_summary.\"user\"").
-		Find(&rows).Error; err != nil {
+		Find(&results).Error; err != nil {
 		return nil, ctx.Oops().Wrapf(err, "failed to query RBAC access")
 	}
-
-	return rows, nil
+	timer.Results(results)
+	return results, nil
 }
 
-func expandConfigChildren(ctx context.Context, ids []uuid.UUID) ([]uuid.UUID, error) {
-	allIDs := make(map[uuid.UUID]struct{}, len(ids))
-	for _, id := range ids {
-		allIDs[id] = struct{}{}
+func ExpandConfigChildren(ctx context.Context, ids []uuid.UUID) ([]uuid.UUID, error) {
+	return dutyQuery.ExpandConfigChildren(ctx, ids)
+}
+
+// GroupMemberRow represents one (group, user) pair — the membership of an
+// external user in an external group. Used by the catalog report audit page
+// to enumerate who is in each group that grants access to reported configs.
+type GroupMemberRow struct {
+	GroupID             uuid.UUID  `gorm:"column:external_group_id"`
+	GroupName           string     `gorm:"column:group_name"`
+	GroupType           string     `gorm:"column:group_type"`
+	UserID              uuid.UUID  `gorm:"column:external_user_id"`
+	UserName            string     `gorm:"column:user_name"`
+	Email               string     `gorm:"column:email"`
+	UserType            string     `gorm:"column:user_type"`
+	LastSignedInAt      *time.Time `gorm:"column:last_signed_in_at"`
+	MembershipAddedAt   time.Time  `gorm:"column:membership_created_at"`
+	MembershipDeletedAt *time.Time `gorm:"column:membership_deleted_at"`
+}
+
+func (r GroupMemberRow) QueryLogSummary() string {
+	return r.GroupName
+}
+
+// GetGroupMembersForConfigs returns the members of every external group that
+// is referenced by an active config_access row on any of the given configs.
+// Both active and soft-deleted group memberships are returned so that audit
+// reviewers can see users who were recently removed from a group.
+func GetGroupMembersForConfigs(ctx context.Context, configIDs []uuid.UUID) (results []GroupMemberRow, err error) {
+	timer := dutyQuery.NewQueryLogger(ctx).Start("GroupMembers").Arg("configIDs", len(configIDs))
+	defer timer.End(&err)
+
+	if len(configIDs) == 0 {
+		return nil, nil
 	}
 
-	for _, id := range ids {
-		var children []uuid.UUID
-		if err := ctx.DB().Raw("SELECT child_id FROM lookup_config_children(?, -1)", id.String()).
-			Scan(&children).Error; err != nil {
-			return nil, err
-		}
-		for _, child := range children {
-			allIDs[child] = struct{}{}
-		}
-	}
+	sql := `
+		SELECT
+			eg.id AS external_group_id,
+			eg.name AS group_name,
+			eg.group_type AS group_type,
+			eu.id AS external_user_id,
+			eu.name AS user_name,
+			COALESCE(eu.email, '') AS email,
+			eu.user_type AS user_type,
+			last_sign_in.last_signed_in_at AS last_signed_in_at,
+			eug.created_at AS membership_created_at,
+			eug.deleted_at AS membership_deleted_at
+		FROM external_user_groups eug
+		JOIN external_groups eg ON eug.external_group_id = eg.id
+		JOIN external_users eu ON eug.external_user_id = eu.id
+		LEFT JOIN (
+			SELECT external_user_id, MAX(created_at) AS last_signed_in_at
+			FROM config_access_logs
+			GROUP BY external_user_id
+		) last_sign_in ON last_sign_in.external_user_id = eu.id
+		WHERE eug.external_group_id IN (
+			SELECT DISTINCT external_group_id
+			FROM config_access
+			WHERE config_id IN (?)
+				AND external_group_id IS NOT NULL
+				AND deleted_at IS NULL
+		)
+		ORDER BY eg.name ASC,
+			(eug.deleted_at IS NOT NULL) ASC,
+			eu.name ASC`
 
-	return lo.Keys(allIDs), nil
+	if err = ctx.DB().Raw(sql, configIDs).Scan(&results).Error; err != nil {
+		return nil, ctx.Oops().Wrapf(err, "failed to query group members for configs")
+	}
+	timer.Results(results)
+	return results, nil
 }
 
 func GetRBACChangelog(ctx context.Context, configIDs []uuid.UUID, since time.Time) ([]api.RBACChangeEntry, error) {

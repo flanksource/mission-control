@@ -12,22 +12,32 @@ function pickMatching(changes: ConfigChange[], predicate: (change: ConfigChange)
 }
 
 export default function ConfigChangesExamples({ changes }: Props) {
-  if (!changes?.length) {
+  const available = (changes ?? []).filter((change) => change.source !== 'schema-examples');
+  if (!available.length) {
     return null;
   }
 
   const singleLine = pickMatching(
-    changes,
+    available,
     (change) => !change.summary || change.summary.length <= 72 || Boolean(change.typedChange?.kind),
     6,
   );
   const typedDiffs = pickMatching(
-    changes,
-    (change) => ['Deployment/v1', 'Promotion/v1', 'Rollback/v1', 'Scaling/v1', 'CostChange/v1'].includes(change.typedChange?.kind ?? ''),
+    available,
+    (change) => [
+      'ConfigChange/v1',
+      'Promotion/v1',
+      'Scale/v1',
+      'Restore/v1',
+      'Deployment/v1',
+      'Rollback/v1',
+      'Scaling/v1',
+      'CostChange/v1',
+    ].includes(change.typedChange?.kind ?? ''),
     5,
   );
   const visualStates = pickMatching(
-    changes,
+    available,
     (change) => (
       (change.severity && change.severity !== 'info')
       || Boolean(change.artifacts?.length)
@@ -52,7 +62,7 @@ export default function ConfigChangesExamples({ changes }: Props) {
       {typedDiffs.length > 0 && (
         <Section variant="hero" title="Typed Diff Variations" size="md">
           <div className="text-xs text-gray-500 mb-[2mm]">
-            Typed changes show richer before/after chips for images, environments, versions, replicas, and costs instead of a generic diff label.
+            Typed changes show richer before/after chips for nested config diffs, promotions, restores, replicas, and legacy deployment/version transitions instead of a generic diff label.
           </div>
           <ConfigChangesSection changes={typedDiffs} />
         </Section>

@@ -91,6 +91,6 @@ var ExportApplication = &cobra.Command{
 func init() {
 	ExportApplication.Flags().StringVarP(&exportFormat, "format", "f", "json", "Output format: json, html, pdf, facet-html, facet-pdf")
 	ExportApplication.Flags().StringVarP(&exportOutfile, "out-file", "o", "", "Write output to file instead of stdout")
-	ExportApplication.Flags().StringVar(&report.SourceDir, "report-source", "", "Local directory with TSX report files (overrides embedded reports)")
+	ExportApplication.Flags().StringVar(&report.SourceDir, "report-source", "", "Local directory or TSX file for report rendering (overrides embedded reports)")
 	ApplicationCmd.AddCommand(ExportApplication)
 }
