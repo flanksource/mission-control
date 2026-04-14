@@ -187,7 +187,7 @@ func ProcessPendingNotifications(parentCtx context.Context) (bool, error) {
 		FROM notification_send_history
 		WHERE status IN ?
 			AND not_before <= NOW()
-			AND (retries IS NULL OR retries < ?)
+			AND retries < ?
 		ORDER BY not_before ASC
 		LIMIT 1
 		FOR UPDATE SKIP LOCKED`
@@ -277,9 +277,12 @@ func ProcessFallbackNotifications(parentCtx context.Context) (bool, error) {
 		ctx := parentCtx.WithDB(tx, parentCtx.Pool())
 
 		var pending []models.NotificationSendHistory
+		maxRetries := ctx.Properties().Int("notification.max-retries", 4) - 1
 		if err := ctx.DB().Clauses(clause.Locking{Strength: clause.LockingStrengthUpdate, Options: clause.LockingOptionsSkipLocked}).
 			Where("status = ?", models.NotificationStatusAttemptingFallback).
 			Where("not_before <= NOW()").
+			Where("retries < ?", maxRetries).
+			Order("not_before ASC").
 			Limit(1). // one at a time; as one notification failure shouldn't affect a previous successful one
 			Find(&pending).Error; err != nil {
 			return fmt.Errorf("failed to get notifications to send to fallback: %w", err)
@@ -298,8 +301,8 @@ func ProcessFallbackNotifications(parentCtx context.Context) (bool, error) {
 		)
 
 		if err := sendFallbackNotification(ctx, currentHistory); err != nil {
-			if dberr := ctx.DB().Debug().Model(&models.NotificationSendHistory{}).Where("id = ?", currentHistory.ID).UpdateColumns(map[string]any{
-				"status":  gorm.Expr("CASE WHEN retries >= ? THEN ? ELSE ? END", ctx.Properties().Int("notification.max-retries", 4)-1, models.NotificationStatusError, models.NotificationStatusAttemptingFallback),
+			if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", currentHistory.ID).UpdateColumns(map[string]any{
+				"status":  gorm.Expr("CASE WHEN retries >= ? THEN ? ELSE ? END", maxRetries, models.NotificationStatusError, models.NotificationStatusAttemptingFallback),
 				"error":   err.Error(),
 				"retries": gorm.Expr("retries + 1"),
 			}).Error; dberr != nil {
