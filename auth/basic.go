@@ -3,7 +3,9 @@ package auth
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/flanksource/commons/logger"
@@ -21,7 +23,8 @@ var (
 	OIDCEnabled        bool
 	OIDCSigningKeyPath string
 
-	checker *htpasswd.File
+	checker       *htpasswd.File
+	localhostOnly bool
 )
 
 const basicAuthCookieName = "authorization"
@@ -31,12 +34,28 @@ func UseBasic(e *echo.Echo) {
 	var err error
 	checker, err = htpasswd.New(HtpasswdFile, htpasswd.DefaultSystems, nil)
 	if err != nil {
-		panic(err)
+		if os.IsNotExist(err) {
+			logger.Warnf("htpasswd file %s not found, only localhost requests will be allowed", HtpasswdFile)
+			localhostOnly = true
+		} else {
+			panic(err)
+		}
 	}
 
 	e.POST("/auth/login", BasicLogin)
 
 	e.Use(basicAuthMiddleware)
+}
+
+func isLocalhostRequest(c echo.Context) bool {
+	// Use RemoteAddr to avoid spoofing via X-Forwarded-For headers
+	host, _, err := net.SplitHostPort(c.Request().RemoteAddr)
+	if err != nil {
+		return false
+	}
+	ip := host
+	parsed := net.ParseIP(ip)
+	return parsed != nil && parsed.IsLoopback()
 }
 
 func authenticateFromCookie(c echo.Context) bool {
@@ -82,6 +101,9 @@ func authenticateFromCookie(c echo.Context) bool {
 }
 
 func validateBasicAuth(c echo.Context, user, pass string) (bool, error) {
+	if localhostOnly || checker == nil {
+		return false, nil
+	}
 	logger.Tracef("authenticating user %s:%s via htpasswd", user, logger.PrintableSecret(pass))
 	if !checker.Match(user, pass) {
 		return false, nil
@@ -116,6 +138,13 @@ func basicAuthMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {
 		if canSkipAuth(c) || authenticateFromCookie(c) {
 			return next(c)
+		}
+
+		if localhostOnly {
+			if isLocalhostRequest(c) {
+				return next(c)
+			}
+			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "only localhost requests are allowed when htpasswd file is not configured"})
 		}
 
 		if token, ok := extractBearerAuthToken(c.Request().Header); ok {
@@ -204,6 +233,10 @@ type basicLoginRequest struct {
 
 func BasicLogin(c echo.Context) error {
 	ctx := c.Request().Context().(context.Context)
+
+	if localhostOnly {
+		return c.JSON(http.StatusServiceUnavailable, map[string]string{"error": "basic login is unavailable when htpasswd file is not configured"})
+	}
 
 	username, password, ok := extractBasicLoginCredentials(c)
 	if !ok {

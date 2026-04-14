@@ -99,14 +99,18 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 			adminUserID = admin.ID.String()
 		}
 		if OIDCEnabled {
-			htpasswdChecker, err := NewHtpasswdChecker(HtpasswdFile)
-			if err != nil {
-				return fmt.Errorf("failed to load htpasswd file: %w", err)
+			if localhostOnly {
+				logger.Warnf("OIDC provider disabled because htpasswd file is not available")
+			} else {
+				htpasswdChecker, err := NewHtpasswdChecker(HtpasswdFile)
+				if err != nil {
+					return fmt.Errorf("failed to load htpasswd file: %w", err)
+				}
+				if err := oidc.MountRoutes(e, ctx, api.FrontendURL, OIDCSigningKeyPath, htpasswdChecker, LookupPersonByUsername); err != nil {
+					return fmt.Errorf("failed to mount OIDC routes: %w", err)
+				}
+				logger.Infof("OIDC provider enabled at %s", api.FrontendURL)
 			}
-			if err := oidc.MountRoutes(e, ctx, api.FrontendURL, OIDCSigningKeyPath, htpasswdChecker, LookupPersonByUsername); err != nil {
-				return fmt.Errorf("failed to mount OIDC routes: %w", err)
-			}
-			logger.Infof("OIDC provider enabled at %s", api.FrontendURL)
 		}
 	case Kratos:
 		kratosHandler := NewKratosHandler()
