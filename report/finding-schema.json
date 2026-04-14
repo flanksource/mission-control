@@ -1,0 +1,438 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "audit-finding.schema.json",
+  "title": "Audit Log Finding",
+  "type": "object",
+  "required": ["title", "severity", "platform", "category", "outcome", "detection", "evidence", "recommendation"],
+  "additionalProperties": false,
+  "properties": {
+    "title": {
+      "type": "string",
+      "maxLength": 120,
+      "description": "Human-readable finding title"
+    },
+    "severity": {
+      "enum": ["critical", "high", "medium", "low", "info"],
+      "description": "Impact severity level"
+    },
+    "platform": {
+      "enum": ["sql-server", "kubernetes", "aws", "azure", "mission-control"],
+      "description": "Source platform where the finding was detected"
+    },
+    "outcome": {
+      "enum": ["safety-switch", "page-oncall", "high-ticket", "low-ticket", "informational"],
+      "description": "Recommended response action: safety-switch (breach confirmed, auto-contain), page-oncall (breach suspected, page team), high-ticket (open high-severity ticket), low-ticket (open low-severity ticket), informational (log for awareness)"
+    },
+    "category": {
+      "enum": [
+        "credential-attack",
+        "privilege-escalation",
+        "privilege-accumulation",
+        "data-exfiltration",
+        "lateral-movement",
+        "persistence",
+        "audit-tampering",
+        "after-hours",
+        "break-glass",
+        "shared-account",
+        "service-account-misuse",
+        "network-exposure",
+        "destructive-action",
+        "coverage-gap"
+      ],
+      "description": "Attack pattern or finding category from the kill chain"
+    },
+    "detection": {
+      "type": "object",
+      "required": ["pattern"],
+      "additionalProperties": false,
+      "properties": {
+        "pattern": {
+          "type": "string",
+          "description": "Name of the detection pattern that triggered this finding, e.g. 'brute-force', 'credential-spraying'"
+        },
+        "threshold": {
+          "type": "string",
+          "description": "Threshold that was exceeded, e.g. '>= 50 failures from single IP in < 1 hour'"
+        }
+      }
+    },
+    "dataSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "type": "string",
+          "description": "Source type: s3-parquet, cloudtrail-athena, k8s-audit-log, azure-log-analytics, mission-control, file, etc."
+        },
+        "categories": {
+          "type": "array",
+          "items": {
+            "enum": ["ai", "users", "groups", "roles", "access-logs", "flow-logs", "audit-logs", "configuration"]
+          },
+          "description": "Data categories this source provides (e.g. audit-logs, access-logs, roles)"
+        },
+        "connection": {
+          "type": "string",
+          "description": "Connection name or identifier (e.g. connection://monitoring/sql-server, AWS account ID)"
+        },
+        "path": {
+          "type": "string",
+          "description": "Data path: S3 URI, Athena table, log file path, API endpoint"
+        },
+        "query": {
+          "type": "string",
+          "description": "Query or filter used to extract the data"
+        },
+        "timeRange": {
+          "$ref": "#/$defs/timeRange",
+          "description": "Time range of the data queried"
+        },
+        "git": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "repo": { "type": "string", "description": "Git repository URL or name" },
+            "file": { "type": "string", "description": "File path within the repository" },
+            "lineNo": { "type": "integer", "description": "Line number in the file" },
+            "sha": { "type": "string", "description": "Git commit SHA" },
+            "branch": { "type": "string", "description": "Git branch name" },
+            "tag": { "type": "string", "description": "Git tag (e.g. v1.2.0)" }
+          }
+        },
+        "contentSha": {
+          "type": "string",
+          "description": "SHA-256 hash of the data content for integrity verification"
+        },
+        "app": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "name": { "type": "string", "description": "Application or scraper name (e.g. config-db, mission-control-agent)" },
+            "version": { "type": "string", "description": "Application version" },
+            "icon": { "type": "string", "description": "Icon name for display" }
+          }
+        },
+        "file": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "File metadata for local/remote file data sources",
+          "properties": {
+            "name": { "type": "string", "description": "File name" },
+            "size": { "type": "string", "description": "File size (e.g. 2.4MB, 156KB)" },
+            "created": { "type": "string", "format": "date-time", "description": "File creation timestamp" },
+            "modified": { "type": "string", "format": "date-time", "description": "File last modified timestamp" },
+            "location": { "type": "string", "description": "Storage location type: local, sharepoint, google-drive, onedrive, network-share" },
+            "host": { "type": "string", "description": "Host machine, SharePoint site, or drive name" }
+          }
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "required": ["summary"],
+      "additionalProperties": false,
+      "properties": {
+        "summary": {
+          "type": "string",
+          "description": "Human-readable description of what was observed"
+        },
+        "timeRange": {
+          "$ref": "#/$defs/timeRange",
+          "description": "Time window of the observed activity"
+        },
+        "metrics": {
+          "$ref": "#/$defs/metrics",
+          "description": "Quantitative measurements supporting the finding"
+        },
+        "samples": {
+          "type": "array",
+          "maxItems": 10,
+          "items": { "$ref": "#/$defs/eventSample" },
+          "description": "Representative event samples (max 10)"
+        }
+      }
+    },
+    "recommendation": {
+      "type": "object",
+      "required": ["action"],
+      "additionalProperties": false,
+      "properties": {
+        "action": {
+          "type": "string",
+          "description": "Primary remediation action"
+        },
+        "mitigations": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Additional mitigating steps"
+        },
+        "references": {
+          "type": "array",
+          "items": { "type": "string", "format": "uri" },
+          "description": "Links to relevant documentation, CIS benchmarks, etc."
+        }
+      }
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "killChainPhase": {
+          "enum": [
+            "reconnaissance",
+            "initial-access",
+            "persistence",
+            "privilege-escalation",
+            "lateral-movement",
+            "collection",
+            "exfiltration",
+            "impact"
+          ],
+          "description": "MITRE ATT&CK kill chain phase"
+        },
+        "mitreTechnique": {
+          "type": "string",
+          "pattern": "^T[0-9]{4}(\\.[0-9]{3})?$",
+          "description": "MITRE ATT&CK technique ID, e.g. T1078 or T1078.004"
+        },
+        "compliance": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "description": "Compliance framework reference, e.g. 'PCI-DSS 10.2.4', 'SOX 404', 'CIS AWS 3.1'"
+          }
+        },
+        "relatedFindings": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "IDs of related findings that may form a larger attack chain"
+        },
+        "baseline": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "normalValue": {
+              "type": "number",
+              "description": "Expected baseline value (e.g. avg events/day)"
+            },
+            "observedValue": {
+              "type": "number",
+              "description": "Observed value during this finding"
+            },
+            "deviationFactor": {
+              "type": "number",
+              "description": "Ratio of observed/normal (e.g. 5.2 means 5.2x the baseline)"
+            },
+            "baselinePeriod": {
+              "type": "string",
+              "description": "Period used for baseline calculation, e.g. 'previous 4 weeks'"
+            }
+          }
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "generatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When this finding was generated (ISO 8601 UTC)"
+        },
+        "generatedBy": {
+          "type": "string",
+          "description": "Tool or agent that produced the finding (e.g. 'audit-log-analyzer', 'mission-control-scraper')"
+        },
+        "version": {
+          "type": "string",
+          "description": "Version of the detection rules or tool"
+        },
+        "runId": {
+          "type": "string",
+          "description": "Unique identifier for the analysis run that produced this finding"
+        },
+        "model": {
+          "type": "string",
+          "description": "AI model used if finding was AI-generated (e.g. 'claude-opus-4-6')"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "identity": {
+      "type": "object",
+      "required": ["name", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Identity name (UPN, ARN, service account name, SQL principal)"
+        },
+        "type": {
+          "enum": ["human", "service-account", "break-glass", "admin", "machine", "root", "unknown"],
+          "description": "Identity classification"
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Resolved human-readable display name"
+        },
+        "id": {
+          "type": "string",
+          "description": "Unique identifier (e.g. SID, ARN, UUID)"
+        }
+      }
+    },
+    "resource": {
+      "type": "object",
+      "required": ["name", "type"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Resource identifier (database name, bucket ARN, namespace, etc.)"
+        },
+        "type": {
+          "type": "string",
+          "description": "Resource type (database, s3-bucket, namespace, role, secret, etc.)"
+        },
+        "id": {
+          "type": "string",
+          "description": "Unique resource ID if available (ARN, UUID, etc.)"
+        },
+        "scope": {
+          "type": "string",
+          "description": "Scope or container (server instance, subscription, cluster, etc.), multiple resources may share the same scope"
+        },
+        "tags": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "timeRange": {
+      "type": "object",
+      "required": ["start", "end"],
+      "additionalProperties": false,
+      "properties": {
+        "start": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Start of the observed activity (ISO 8601 UTC)"
+        },
+        "end": {
+          "type": "string",
+          "format": "date-time",
+          "description": "End of the observed activity (ISO 8601 UTC)"
+        },
+        "durationSeconds": {
+          "type": "integer",
+          "description": "Duration of the activity window in seconds"
+        }
+      }
+    },
+    "metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "eventCount": {
+          "type": "integer",
+          "description": "Total number of events matching the detection"
+        },
+        "failedCount": {
+          "type": "integer",
+          "description": "Number of failed attempts (logins, API calls)"
+        },
+        "successCount": {
+          "type": "integer",
+          "description": "Number of successful events"
+        },
+        "uniqueIdentities": {
+          "type": "integer",
+          "description": "Distinct identity count involved"
+        },
+        "uniqueIPs": {
+          "type": "integer",
+          "description": "Distinct source IP count"
+        },
+        "uniqueResources": {
+          "type": "integer",
+          "description": "Distinct resource count affected"
+        },
+        "rowsAccessed": {
+          "type": "integer",
+          "description": "Total rows read or modified (SQL Server specific)"
+        },
+        "permissionChanges": {
+          "type": "integer",
+          "description": "Number of grant/revoke/role-change operations"
+        }
+      }
+    },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "identity": { "$ref": "#/$defs/identity" },
+        "endpoint": { "$ref": "#/$defs/endpoint" },
+        "app": { "$ref": "#/$defs/appRef" },
+        "resource": { "$ref": "#/$defs/resource" }
+      }
+    },
+    "endpoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ip": { "type": "string", "description": "IP address" },
+        "hostname": { "type": "string", "description": "Hostname or FQDN" },
+        "type": { "type": "string", "description": "Endpoint type (e.g. workstation, server, vpn)" },
+        "network": { "type": "string", "description": "Network segment or VPC" },
+        "tags": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "appRef": {
+      "type": "object",
+      "required": ["name"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "description": "Application name (e.g. SSMS, kubectl, aws-cli)" },
+        "type": { "type": "string", "description": "Application type (e.g. database-client, cli, sdk)" },
+        "tags": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "eventSample": {
+      "type": "object",
+      "required": ["timestamp", "action"],
+      "additionalProperties": false,
+      "properties": {
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Event timestamp (ISO 8601 UTC)"
+        },
+        "action": {
+          "type": "string",
+          "description": "Action name or API call"
+        },
+        "detail": {
+          "type": "string",
+          "maxLength": 500,
+          "description": "Statement text, request parameters, or other detail (truncated)"
+        },
+        "succeeded": {
+          "type": "boolean",
+          "description": "Whether the action succeeded"
+        },
+        "src": {
+          "$ref": "#/$defs/actor",
+          "description": "Source actor (who/what initiated the action)"
+        },
+        "dst": {
+          "$ref": "#/$defs/actor",
+          "description": "Destination actor (target of the action)"
+        }
+      }
+    }
+  }
+}

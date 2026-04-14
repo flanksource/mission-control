@@ -1,4 +1,4 @@
-7.bin/
+.bin/
 .kube
 .vscode/
 .idea/
@@ -50,3 +50,9 @@ specs/
 auth/oidc/static/tailwind.min.js
 **/*.pem
 **/*.key
+report/*.png
+report/*.pdf
+*.pdf
+*.png
+.playwright-mcp/
+out.*
