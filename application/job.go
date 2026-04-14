@@ -1,6 +1,7 @@
 package application
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/flanksource/duty"
@@ -11,6 +12,7 @@ import (
 	uuidV5 "github.com/gofrs/uuid/v5"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
+	"gorm.io/gorm"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/flanksource/incident-commander/db"
@@ -19,10 +21,11 @@ import (
 func linkToConfigs(ctx context.Context, app *v1.Application) error {
 	// Ensure the application config item exists before we form the relationships
 	var application models.ConfigItem
-	if err := ctx.DB().Where("id = ?", app.GetID()).Find(&application).Error; err != nil {
+	if err := ctx.DB().Where("id = ?", app.GetID()).First(&application).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
 		return err
-	} else if application.ID == uuid.Nil {
-		return nil
 	}
 
 	configIDs, err := query.FindConfigIDsByResourceSelector(ctx, -1, app.Spec.Mapping.Logins...)

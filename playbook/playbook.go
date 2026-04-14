@@ -2,6 +2,7 @@ package playbook
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -21,6 +22,7 @@ import (
 	"github.com/samber/oops"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
+	"gorm.io/gorm"
 	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
 
 	"github.com/flanksource/incident-commander/api"
@@ -343,10 +345,11 @@ func savePlaybookRun(ctx context.Context, run *models.PlaybookRun) error {
 
 func ListPlaybooksForConfig(ctx context.Context, id string) ([]api.PlaybookListItem, error) {
 	var config models.ConfigItem
-	if err := ctx.DB().Where("id = ?", id).Find(&config).Error; err != nil {
+	if err := ctx.DB().Where("id = ?", id).First(&config).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("config(id=%s) not found", id)
+		}
 		return nil, ctx.Oops("db").Wrap(err)
-	} else if config.ID == uuid.Nil {
-		return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("config(id=%s) not found", id)
 	}
 
 	list, _, err := db.FindPlaybooksForConfig(ctx, config)

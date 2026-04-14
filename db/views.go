@@ -2,6 +2,7 @@ package db
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/flanksource/duty"
@@ -10,6 +11,7 @@ import (
 	dutyTypes "github.com/flanksource/duty/types"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
+	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -56,12 +58,11 @@ func PersistViewFromCRD(ctx context.Context, obj *v1.View) error {
 // DeleteView soft deletes a View by setting deleted_at timestamp and cleans up associated tables
 func DeleteView(ctx context.Context, id string) error {
 	var view models.View
-	if err := ctx.DB().Where("id = ? AND deleted_at IS NULL", id).Find(&view).Error; err != nil {
+	if err := ctx.DB().Where("id = ? AND deleted_at IS NULL", id).First(&view).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil
+		}
 		return fmt.Errorf("failed to find view: %w", err)
-	}
-
-	if view.ID == uuid.Nil {
-		return nil
 	}
 
 	generatedTableName := view.GeneratedTableName()
@@ -91,10 +92,11 @@ func DeleteStaleView(ctx context.Context, newer *v1.View) error {
 // GetView retrieves a view by name and namespace
 func GetView(ctx context.Context, namespace, name string) (*v1.View, error) {
 	var view models.View
-	if err := ctx.DB().Where("name = ? AND namespace = ? AND deleted_at IS NULL", name, namespace).Find(&view).Error; err != nil {
+	if err := ctx.DB().Where("name = ? AND namespace = ? AND deleted_at IS NULL", name, namespace).First(&view).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
 		return nil, err
-	} else if view.ID == uuid.Nil {
-		return nil, nil
 	}
 
 	var spec v1.ViewSpec

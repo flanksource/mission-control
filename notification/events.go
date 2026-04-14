@@ -2,6 +2,7 @@ package notification
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -19,6 +20,7 @@ import (
 	"github.com/flanksource/gomplate/v3"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
+	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
 	"github.com/flanksource/incident-commander/api"
@@ -206,10 +208,11 @@ func resolveGroupMembershipForNotification(ctx context.Context, celEnv *celVaria
 	}
 
 	var config models.ConfigItem
-	if err := ctx.DB().Where("id = ?", configID).Find(&config).Error; err != nil {
+	if err := ctx.DB().Where("id = ?", configID).First(&config).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return false, ctx.Oops().Errorf("config not found %s", configID)
+		}
 		return false, ctx.Oops().Wrapf(err, "failed to get config %s", configID)
-	} else if config.ID == uuid.Nil {
-		return false, ctx.Oops().Wrapf(err, "config not found %s", configID)
 	}
 
 	if !lo.Contains(notification.Events, fmt.Sprintf("config.%s", lo.FromPtr(config.Health))) {

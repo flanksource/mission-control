@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"gorm.io/gorm"
 
 	"github.com/flanksource/incident-commander/auth"
 )
@@ -59,11 +60,11 @@ func runTemplateHandler(goctx gocontext.Context, req mcp.CallToolRequest) (*mcp.
 					return err
 				}
 				var change models.CatalogChange
-				if err := rlsCtx.DB().Where("id = ?", changeID).Find(&change).Error; err != nil {
+				if err := rlsCtx.DB().Where("id = ?", changeID).First(&change).Error; err != nil {
+					if errors.Is(err, gorm.ErrRecordNotFound) {
+						return fmt.Errorf("change[%s] not found", changeID)
+					}
 					return err
-				}
-				if change.ID == uuid.Nil {
-					return fmt.Errorf("change[%s] not found", changeID)
 				}
 				args.Env["change"] = change.AsMap()
 			}

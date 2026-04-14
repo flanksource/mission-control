@@ -2,6 +2,7 @@ package context
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/flanksource/duty/query"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
+	"gorm.io/gorm"
 
 	"github.com/flanksource/incident-commander/api"
 )
@@ -51,10 +53,11 @@ func Create(ctx context.Context, spec api.LLMContextRequest) (*Context, error) {
 	var kg Context
 
 	var config models.ConfigItem
-	if err := ctx.DB().Where("id = ?", spec.Config).Find(&config).Error; err != nil {
+	if err := ctx.DB().Where("id = ?", spec.Config).First(&config).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("config doesn't exist (%s)", spec.Config)
+		}
 		return nil, fmt.Errorf("failed to get config (%s): %w", spec.Config, err)
-	} else if config.ID == uuid.Nil {
-		return nil, fmt.Errorf("config doesn't exist (%s)", spec.Config)
 	} else {
 		ci := Config{
 			ID:          config.ID.String(),

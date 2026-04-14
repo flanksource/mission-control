@@ -2,13 +2,14 @@ package auth
 
 import (
 	gocontext "context"
+	"errors"
 	"fmt"
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/types"
-	"github.com/google/uuid"
 	client "github.com/ory/client-go"
+	"gorm.io/gorm"
 )
 
 var (
@@ -159,9 +160,10 @@ func (k *KratosHandler) CreateAdminUser(ctx context.Context) (string, error) {
 	{
 		// If in case the admin identity wasn't synced with the people table, we sync it now.
 		var admin models.Person
-		if err := ctx.DB().Where("id = ?", id).Find(&admin).Error; err != nil {
-			return "", err
-		} else if admin.ID == uuid.Nil {
+		if err := ctx.DB().Where("id = ?", id).First(&admin).Error; err != nil {
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return "", err
+			}
 			// Do a dummy update so the postgres tirgger syncs the admin person.
 			// This way we have the sync logic in one place.
 			if err := ctx.DB().Raw(`UPDATE identities SET traits = traits WHERE id = ?`, id).Error; err != nil {
