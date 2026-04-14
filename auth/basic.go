@@ -48,7 +48,12 @@ func UseBasic(e *echo.Echo) {
 }
 
 func isLocalhostRequest(c echo.Context) bool {
-	ip := c.RealIP()
+	// Use RemoteAddr to avoid spoofing via X-Forwarded-For headers
+	host, _, err := net.SplitHostPort(c.Request().RemoteAddr)
+	if err != nil {
+		return false
+	}
+	ip := host
 	parsed := net.ParseIP(ip)
 	return parsed != nil && parsed.IsLoopback()
 }
