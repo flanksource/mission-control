@@ -1,11 +1,13 @@
 package events
 
 import (
+	"errors"
+
 	"github.com/flanksource/duty"
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/google/uuid"
+	"gorm.io/gorm"
 
 	"github.com/flanksource/incident-commander/api"
 )
@@ -47,11 +49,11 @@ func BuildEventResource(ctx context.Context, event models.Event) (EventResource,
 	case api.EventCheckFailed, api.EventCheckPassed:
 		checkID := event.EventID
 		var check models.Check
-		if err := ctx.DB().Where("id = ?", checkID).Limit(1).Find(&check).Error; err != nil {
+		if err := ctx.DB().Where("id = ?", checkID).First(&check).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return eventResource, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "check(id=%s) not found", checkID)
+			}
 			return eventResource, err
-		}
-		if check.ID == uuid.Nil {
-			return eventResource, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "check(id=%s) not found", checkID)
 		}
 		eventResource.Check = &check
 
@@ -62,51 +64,51 @@ func BuildEventResource(ctx context.Context, event models.Event) (EventResource,
 		}
 
 		var canary models.Canary
-		if err := ctx.DB().Where("id = ?", eventResource.Check.CanaryID).Limit(1).Find(&canary).Error; err != nil {
+		if err := ctx.DB().Where("id = ?", eventResource.Check.CanaryID).First(&canary).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return eventResource, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "canary(id=%s) not found", eventResource.Check.CanaryID)
+			}
 			return eventResource, err
-		}
-		if canary.ID == uuid.Nil {
-			return eventResource, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "canary(id=%s) not found", eventResource.Check.CanaryID)
 		}
 		eventResource.Canary = &canary
 
 	case api.EventComponentHealthy, api.EventComponentUnhealthy, api.EventComponentWarning, api.EventComponentUnknown:
 		var component models.Component
-		if err := ctx.DB().Model(&models.Component{}).Where("id = ?", event.EventID).Limit(1).Find(&component).Error; err != nil {
+		if err := ctx.DB().Model(&models.Component{}).Where("id = ?", event.EventID).First(&component).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return eventResource, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "component(id=%s) not found", event.EventID)
+			}
 			return eventResource, err
-		}
-		if component.ID == uuid.Nil {
-			return eventResource, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "component(id=%s) not found", event.EventID)
 		}
 		eventResource.Component = &component
 
 	case api.EventConfigHealthy, api.EventConfigUnhealthy, api.EventConfigWarning, api.EventConfigUnknown, api.EventConfigDegraded:
 		var config models.ConfigItem
-		if err := ctx.DB().Model(&models.ConfigItem{}).Where("id = ?", event.EventID).Limit(1).Find(&config).Error; err != nil {
+		if err := ctx.DB().Model(&models.ConfigItem{}).Where("id = ?", event.EventID).First(&config).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return eventResource, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "config(id=%s) not found", event.EventID)
+			}
 			return eventResource, err
-		}
-		if config.ID == uuid.Nil {
-			return eventResource, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "config(id=%s) not found", event.EventID)
 		}
 		eventResource.Config = &config
 
 	case api.EventConfigCreated, api.EventConfigDeleted:
 		var config models.ConfigItem
-		if err := ctx.DB().Model(&models.ConfigItem{}).Where("id = ?", event.EventID).Limit(1).Find(&config).Error; err != nil {
+		if err := ctx.DB().Model(&models.ConfigItem{}).Where("id = ?", event.EventID).First(&config).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return eventResource, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "config(id=%s) not found", event.EventID)
+			}
 			return eventResource, err
-		}
-		if config.ID == uuid.Nil {
-			return eventResource, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "config(id=%s) not found", event.EventID)
 		}
 		eventResource.Config = &config
 
 	case api.EventConfigChanged, api.EventConfigUpdated:
 		var config models.ConfigItem
-		if err := ctx.DB().Model(&models.ConfigItem{}).Where("id = ?", event.Properties["config_id"]).Limit(1).Find(&config).Error; err != nil {
+		if err := ctx.DB().Model(&models.ConfigItem{}).Where("id = ?", event.Properties["config_id"]).First(&config).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return eventResource, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "config(id=%s) not found", event.Properties["config_id"])
+			}
 			return eventResource, err
-		}
-		if config.ID == uuid.Nil {
-			return eventResource, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "config(id=%s) not found", event.Properties["config_id"])
 		}
 		eventResource.Config = &config
 	}
