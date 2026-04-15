@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/flanksource/commons/collections"
@@ -393,12 +392,12 @@ func traceLog(format string, args ...any) {
 }
 
 func processPendingNotification(ctx context.Context, currentHistory models.NotificationSendHistory) error {
-	if exists, err := resourceExists(ctx, currentHistory.SourceEvent, currentHistory.ResourceID); err != nil {
+	if exists, err := ResourceExists(ctx, currentHistory.SourceEvent, currentHistory.ResourceID); err != nil {
 		return fmt.Errorf("failed to check resource existence: %w", err)
 	} else if !exists {
 		if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", currentHistory.ID).UpdateColumns(map[string]any{
 			"status": models.NotificationStatusSkipped,
-			"error":  "resource no longer exists",
+			"error":  ResourceNoLongerExistsReason,
 		}).Error; dberr != nil {
 			return fmt.Errorf("failed to mark notification as skipped: %w", dberr)
 		}
@@ -482,36 +481,6 @@ func triggerIncrementalScrape(ctx context.Context, configID string) error {
 	}
 
 	return ctx.DB().Clauses(events.EventQueueOnConflictClause).Create(&event).Error
-}
-
-// resourceExists reports whether the resource referenced by a pending notification
-// still exists in the database. Only configs, components and checks are checked —
-// other event types either don't reference a tracked resource or can't FK-violate
-// downstream consumers, so they're treated as existing.
-func resourceExists(ctx context.Context, sourceEvent string, resourceID uuid.UUID) (bool, error) {
-	if resourceID == uuid.Nil {
-		return true, nil
-	}
-
-	var table string
-	switch {
-	case strings.HasPrefix(sourceEvent, "config."):
-		table = (&models.ConfigItem{}).TableName()
-	case strings.HasPrefix(sourceEvent, "component."):
-		table = (&models.Component{}).TableName()
-	case strings.HasPrefix(sourceEvent, "check."):
-		table = (&models.Check{}).TableName()
-	case strings.HasPrefix(sourceEvent, "canary."):
-		table = (&models.Canary{}).TableName()
-	default:
-		return true, nil
-	}
-
-	var count int64
-	if err := ctx.DB().Table(table).Where("id = ?", resourceID).Count(&count).Error; err != nil {
-		return false, err
-	}
-	return count > 0, nil
 }
 
 func isKubernetesConfigItem(ctx context.Context, configID string) (bool, error) {
