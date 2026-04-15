@@ -832,6 +832,53 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, ginkgo.FlakeAttempts(3)
 				g.Expect(fallbackCount).To(BeZero())
 			}, "10s", "200ms").Should(Succeed())
 		})
+
+		ginkgo.It("should skip immediate notification.send when the resource is soft deleted", func() {
+			config := models.ConfigItem{
+				ID:          uuid.New(),
+				Name:        lo.ToPtr("soft-deleted-config"),
+				ConfigClass: models.ConfigClassDeployment,
+				Health:      lo.ToPtr(models.HealthUnhealthy),
+				Config:      lo.ToPtr(`{"ready":false}`),
+				Type:        lo.ToPtr("Kubernetes::Deployment"),
+			}
+			Expect(DefaultContext.DB().Create(&config).Error).To(BeNil())
+			Expect(DefaultContext.DB().Model(&models.ConfigItem{}).Where("id = ?", config.ID).Update("deleted_at", time.Now()).Error).To(BeNil())
+			query.FlushGettersCache()
+
+			payload := notification.NotificationEventPayload{
+				ResourceID:     config.ID,
+				EventID:        config.ID,
+				EventName:      api.EventConfigUnhealthy,
+				NotificationID: n.ID,
+				EventCreatedAt: time.Now(),
+				CustomService:  &api.NotificationConfig{URL: "http://example.com"},
+			}
+
+			event := models.Event{
+				Name:       api.EventNotificationSend,
+				EventID:    payload.GenerateEventID(),
+				Properties: payload.AsMap(),
+			}
+			Expect(DefaultContext.DB().Create(&event).Error).To(BeNil())
+
+			events.ConsumeAll(DefaultContext)
+
+			Eventually(func(g Gomega) {
+				var got models.NotificationSendHistory
+				g.Expect(DefaultContext.DB().Where("notification_id = ?", n.ID).
+					Where("resource_id = ?", config.ID).
+					Where("source_event = ?", api.EventConfigUnhealthy).
+					Order("created_at DESC").
+					First(&got).Error).To(BeNil())
+				g.Expect(got.Status).To(Equal(models.NotificationStatusSkipped))
+				g.Expect(lo.FromPtr(got.Error)).To(Equal(notification.ResourceNoLongerExistsReason))
+
+				var fallbackCount int64
+				g.Expect(DefaultContext.DB().Model(&models.NotificationSendHistory{}).Where("parent_id = ?", got.ID).Count(&fallbackCount).Error).To(BeNil())
+				g.Expect(fallbackCount).To(BeZero())
+			}, "10s", "200ms").Should(Succeed())
+		})
 	})
 
 	var _ = ginkgo.Describe("notification wait for", ginkgo.Ordered, func() {

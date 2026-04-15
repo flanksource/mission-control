@@ -242,6 +242,16 @@ func onNewRun(ctx context.Context, event models.Event) error {
 
 	initiatorType := lo.Ternary(parentRunID != "", RunInitiatorTypePlaybook, RunInitiatorTypeNotification)
 
+	if initiatorType == RunInitiatorTypeNotification {
+		stale, err := skipNotificationForStaleResource(ctx, notificationDispatchID)
+		if err != nil {
+			return err
+		}
+		if stale {
+			return nil
+		}
+	}
+
 	var runParam RunParams
 	if v, ok := event.Properties["config_id"]; ok {
 		runParam.ConfigID = lo.ToPtr(uuid.MustParse(v))
@@ -371,6 +381,30 @@ func onNewRun(ctx context.Context, event models.Event) error {
 	}
 
 	return nil
+}
+
+func skipNotificationForStaleResource(ctx context.Context, notificationDispatchID string) (bool, error) {
+	var sendHistory models.NotificationSendHistory
+	if err := ctx.DB().Select("id", "source_event", "resource_id").Where("id = ?", notificationDispatchID).First(&sendHistory).Error; err != nil {
+		return false, fmt.Errorf("failed to get notification send history: %w", err)
+	}
+
+	exists, err := notification.ResourceExists(ctx, sendHistory.SourceEvent, sendHistory.ResourceID)
+	if err != nil {
+		return false, fmt.Errorf("failed to check resource existence: %w", err)
+	}
+	if exists {
+		return false, nil
+	}
+
+	if err := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", sendHistory.ID).UpdateColumns(map[string]any{
+		"status": models.NotificationStatusSkipped,
+		"error":  notification.ResourceNoLongerExistsReason,
+	}).Error; err != nil {
+		return false, fmt.Errorf("failed to mark notification as skipped: %w", err)
+	}
+
+	return true, nil
 }
 
 func onApprovalUpdated(ctx context.Context, event models.Event) error {

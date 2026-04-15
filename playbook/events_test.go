@@ -195,6 +195,77 @@ var _ = ginkgo.Describe("Playbook Events", ginkgo.Ordered, func() {
 	})
 })
 
+var _ = ginkgo.Describe("onNewRun stale resource handling", func() {
+	ginkgo.It("should mark notification history as skipped and not create a run", func() {
+		playbookSpec := v1.PlaybookSpec{
+			Description: "stale resource test",
+			Actions: []v1.PlaybookAction{{
+				Name: "noop",
+				Exec: &v1.ExecAction{Script: "echo ok"},
+			}},
+		}
+
+		spec, err := json.Marshal(playbookSpec)
+		Expect(err).ToNot(HaveOccurred())
+
+		fallback, err := json.Marshal([]api.NotificationConfig{{URL: "http://example.com"}})
+		Expect(err).ToNot(HaveOccurred())
+
+		pb := models.Playbook{
+			ID:     uuid.New(),
+			Name:   "stale-resource-playbook",
+			Spec:   spec,
+			Source: models.SourceConfigFile,
+		}
+		Expect(DefaultContext.DB().Create(&pb).Error).To(BeNil())
+
+		notificationID := uuid.New()
+		notif := models.Notification{
+			ID:                     notificationID,
+			Name:                   "stale-resource-notification",
+			Events:                 pq.StringArray([]string{api.EventConfigUnhealthy}),
+			Source:                 models.SourceCRD,
+			FallbackCustomServices: types.JSON(fallback),
+		}
+		Expect(DefaultContext.DB().Create(&notif).Error).To(BeNil())
+
+		history := models.NotificationSendHistory{
+			ID:             uuid.New(),
+			NotificationID: notificationID,
+			SourceEvent:    api.EventConfigUnhealthy,
+			ResourceID:     uuid.New(),
+			Status:         models.NotificationStatusPendingPlaybookRun,
+		}
+		Expect(DefaultContext.DB().Create(&history).Error).To(BeNil())
+
+		event := models.Event{
+			Name:    api.EventPlaybookRun,
+			EventID: uuid.New(),
+			Properties: map[string]string{
+				"playbook_id":              pb.ID.String(),
+				"notification_id":          history.NotificationID.String(),
+				"notification_dispatch_id": history.ID.String(),
+				"config_id":                history.ResourceID.String(),
+			},
+		}
+
+		Expect(onNewRun(DefaultContext, event)).To(Succeed())
+
+		var got models.NotificationSendHistory
+		Expect(DefaultContext.DB().Where("id = ?", history.ID).First(&got).Error).To(BeNil())
+		Expect(got.Status).To(Equal(models.NotificationStatusSkipped))
+		Expect(lo.FromPtr(got.Error)).To(Equal(notification.ResourceNoLongerExistsReason))
+
+		var count int64
+		Expect(DefaultContext.DB().Model(&models.PlaybookRun{}).Where("notification_send_id = ?", history.ID).Count(&count).Error).To(BeNil())
+		Expect(count).To(Equal(int64(0)))
+
+		var fallbackCount int64
+		Expect(DefaultContext.DB().Model(&models.NotificationSendHistory{}).Where("parent_id = ?", history.ID).Count(&fallbackCount).Error).To(BeNil())
+		Expect(fallbackCount).To(BeZero())
+	})
+})
+
 var _ = ginkgo.Describe("Match Resource", func() {
 	ginkgo.It("should match resources", func() {
 		type args struct {

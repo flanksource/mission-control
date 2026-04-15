@@ -39,7 +39,10 @@ func ResourceExists(ctx context.Context, sourceEvent string, resourceID uuid.UUI
 	}
 
 	var count int64
-	if err := ctx.DB().Table(table).Where("id = ?", resourceID).Count(&count).Error; err != nil {
+	if err := ctx.DB().Table(table).
+		Where("id = ?", resourceID).
+		Where("deleted_at IS NULL").
+		Count(&count).Error; err != nil {
 		return false, err
 	}
 	return count > 0, nil
