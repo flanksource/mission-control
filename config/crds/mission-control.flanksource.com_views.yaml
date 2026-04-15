@@ -386,9 +386,7 @@ spec:
                 type: object
                 x-kubernetes-preserve-unknown-fields: true
               mcp:
-                description: |-
-                  MCP defines metadata for MCP tool registration, controlling how
-                  this view appears to LLM clients (Claude, Gemini, Codex).
+                description: MCP metadata for tool registration with LLM clients.
                 properties:
                   description:
                     description: Description provides additional context for LLMs

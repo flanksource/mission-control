@@ -112,6 +112,10 @@ type ViewSpec struct {
 	Sections []api.ViewSection `json:"sections,omitempty" yaml:"sections,omitempty"`
 
 	PDF *FacetOptions `json:"pdf,omitempty" yaml:"pdf,omitempty"`
+
+	// MCP metadata for tool registration with LLM clients.
+	//+kubebuilder:validation:Optional
+	MCP MCPMetadata `json:"mcp,omitempty" yaml:"mcp,omitempty"`
 }
 
 type ViewQueryWithColumnDefs struct {

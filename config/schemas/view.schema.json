@@ -1364,6 +1364,10 @@
         },
         "pdf": {
           "$ref": "#/$defs/FacetOptions"
+        },
+        "mcp": {
+          "$ref": "#/$defs/MCPMetadata",
+          "description": "MCP metadata for tool registration with LLM clients."
         }
       },
       "additionalProperties": false,
