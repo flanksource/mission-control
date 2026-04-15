@@ -27,6 +27,10 @@ func MountRoutes(e *echo.Echo, ctx context.Context, issuerURL, signingKeyPath st
 	e.GET("/oidc/login", loginHandler.ShowForm)
 	e.POST("/oidc/login", loginHandler.HandleSubmit)
 
+	// RFC 9728 OAuth 2.0 Protected Resource Metadata endpoints — registered before
+	// the OIDC provider catch-all so they take precedence over /.well-known/*.
+	mountOAuthRoutes(e, oidcIssuer)
+
 	// Standard OIDC protocol endpoints — mounted at the root so that the issuer URL
 	// and the authorization_endpoint/token_endpoint values in the discovery document
 	// resolve to real routes on this server.

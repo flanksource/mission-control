@@ -672,9 +672,10 @@ func GetAccessLogsForUIRef(ctx context.Context, filters *api.AccessLogsUIFilters
 		}
 	}
 
-	if filters.MFA == "true" {
+	switch filters.MFA {
+	case "true":
 		q = q.Where("config_access_logs.mfa = true")
-	} else if filters.MFA == "false" {
+	case "false":
 		q = q.Where("config_access_logs.mfa = false")
 	}
 
