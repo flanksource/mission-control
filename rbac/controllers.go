@@ -187,6 +187,36 @@ func SubjectAccessSearch(c echo.Context) error {
 					}
 				}
 			}
+
+		case "connection":
+			var connections []models.Connection
+			query := ctx.DB().Select("id").Model(&models.Connection{}).Where("deleted_at IS NULL")
+			if err := query.Order("name ASC").Find(&connections).Error; err != nil {
+				return api.WriteError(c, ctx.Oops().Wrapf(err, "failed to list connections for subject access search"))
+			}
+
+			for _, connection := range connections {
+				r, err := runSubjectAccessReview(ctx, SubjectAccessReviewRequest{
+					Subjects: []string{req.Subject},
+					Action:   req.Action,
+					Resource: SubjectAccessReviewResource{
+						Connection: connection.ID.String(),
+					},
+				})
+				if err != nil {
+					return api.WriteError(c, err)
+				}
+
+				for _, x := range r {
+					if x.Allowed {
+						results = append(results, SubjectAccessSearchResult{
+							ResourceType: "connection",
+							ID:           connection.ID.String(),
+						})
+					}
+				}
+			}
+
 		}
 	}
 

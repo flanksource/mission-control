@@ -57,13 +57,13 @@ func (req *SubjectAccessSearchRequest) Validate() error {
 	for _, resourceType := range req.ResourceTypes {
 		resourceType = strings.ToLower(strings.TrimSpace(resourceType))
 		switch resourceType {
-		case "playbook", "view":
+		case "playbook", "view", "connection":
 			if _, ok := seen[resourceType]; !ok {
 				normalized = append(normalized, resourceType)
 				seen[resourceType] = struct{}{}
 			}
 		default:
-			return api.Errorf(api.EINVALID, "unsupported resource_type %q, only playbook and view are supported", resourceType)
+			return api.Errorf(api.EINVALID, "unsupported resource_type %q, only playbook, view and connection are supported", resourceType)
 		}
 	}
 
@@ -72,11 +72,12 @@ func (req *SubjectAccessSearchRequest) Validate() error {
 }
 
 type SubjectAccessReviewResource struct {
-	Playbook string `json:"playbook,omitempty"`
-	Config   string `json:"config,omitempty"`
-	Check    string `json:"check,omitempty"`
-	View     string `json:"view,omitempty"`
-	Global   string `json:"global,omitempty"`
+	Playbook   string `json:"playbook,omitempty"`
+	Config     string `json:"config,omitempty"`
+	Check      string `json:"check,omitempty"`
+	View       string `json:"view,omitempty"`
+	Connection string `json:"connection,omitempty"`
+	Global     string `json:"global,omitempty"`
 }
 
 type SubjectAccessReviewRequest struct {
@@ -114,8 +115,11 @@ func (req SubjectAccessReviewRequest) Validate(ctx context.Context) error {
 	if req.Resource.View != "" {
 		resourceFields++
 	}
+	if req.Resource.Connection != "" {
+		resourceFields++
+	}
 	if resourceFields == 0 {
-		return api.Errorf(api.EINVALID, "at least one of resource.global, resource.playbook, resource.config, resource.check or resource.view is required")
+		return api.Errorf(api.EINVALID, "at least one of resource.global, resource.playbook, resource.config, resource.check, resource.view or resource.connection is required")
 	}
 
 	if !lo.Contains(policy.AllActions, req.Action) {
@@ -240,6 +244,23 @@ func resolveAccessReviewResource(ctx context.Context, resource SubjectAccessRevi
 		}
 
 		attr.View = view
+	}
+
+	if resource.Connection != "" {
+		connectionID, err := uuid.Parse(resource.Connection)
+		if err != nil {
+			return nil, api.Errorf(api.EINVALID, "resource.connection must be a valid UUID")
+		}
+
+		var connection models.Connection
+		if err := ctx.DB().Where("id = ? AND deleted_at IS NULL", connectionID).First(&connection).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				return nil, api.Errorf(api.ENOTFOUND, "connection %q not found", resource.Connection)
+			}
+			return nil, ctx.Oops().Wrapf(err, "failed to resolve connection %q", resource.Connection)
+		}
+
+		attr.Connection = connection
 	}
 
 	return attr, nil
