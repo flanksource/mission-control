@@ -608,10 +608,18 @@ func sendPendingNotification(ctx context.Context, history models.NotificationSen
 
 	err := _sendNotification(notificationContext, payload)
 	if err != nil {
-		notificationContext.WithError(err)
+		if IsStaleResourceEventError(err) {
+			notificationContext.log.Status = models.NotificationStatusSkipped
+			notificationContext.log.Error = lo.ToPtr(ResourceNoLongerExistsReason)
+		} else {
+			notificationContext.WithError(err)
+		}
 	}
 
 	logs.IfError(notificationContext.EndLog(), "error persisting end of notification send history")
+	if IsStaleResourceEventError(err) {
+		return nil
+	}
 	return err
 }
 
@@ -687,14 +695,28 @@ func sendNotification(ctx context.Context, payload NotificationEventPayload) err
 
 	err := _sendNotification(notificationContext, payload)
 	if err != nil {
-		notificationContext.WithError(err)
+		if IsStaleResourceEventError(err) {
+			notificationContext.log.Status = models.NotificationStatusSkipped
+			notificationContext.log.Error = lo.ToPtr(ResourceNoLongerExistsReason)
+		} else {
+			notificationContext.WithError(err)
+		}
 	}
 
 	logs.IfError(notificationContext.EndLog(), "error persisting end of notification send history")
+	if IsStaleResourceEventError(err) {
+		return nil
+	}
 	return err
 }
 
 func _sendNotification(ctx *Context, payload NotificationEventPayload) error {
+	if exists, err := ResourceExists(ctx.Context, payload.EventName, payload.ResourceID); err != nil {
+		return fmt.Errorf("failed to check resource existence: %w", err)
+	} else if !exists {
+		return ErrStaleResourceEvent
+	}
+
 	originalEvent := payload.ParentEvent()
 	if len(payload.Properties) > 0 {
 		if err := json.Unmarshal(payload.Properties, &originalEvent.Properties); err != nil {

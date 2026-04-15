@@ -755,13 +755,14 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, ginkgo.FlakeAttempts(3)
 
 		ginkgo.BeforeAll(func() {
 			n = models.Notification{
-				ID:             uuid.New(),
-				Name:           "missing-resource-test",
-				Events:         pq.StringArray([]string{"config.unhealthy"}),
-				Source:         models.SourceCRD,
-				Title:          "Dummy",
-				Template:       "dummy",
-				CustomServices: types.JSON(customReceiverJson),
+				ID:                     uuid.New(),
+				Name:                   "missing-resource-test",
+				Events:                 pq.StringArray([]string{"config.unhealthy"}),
+				Source:                 models.SourceCRD,
+				Title:                  "Dummy",
+				Template:               "dummy",
+				CustomServices:         types.JSON(customReceiverJson),
+				FallbackCustomServices: types.JSON(customReceiverJson),
 			}
 			Expect(DefaultContext.DB().Create(&n).Error).To(BeNil())
 		})
@@ -788,7 +789,47 @@ var _ = ginkgo.Describe("Notifications", ginkgo.Ordered, ginkgo.FlakeAttempts(3)
 				var got models.NotificationSendHistory
 				g.Expect(DefaultContext.DB().Where("id = ?", sendHistory.ID).First(&got).Error).To(BeNil())
 				g.Expect(got.Status).To(Equal(models.NotificationStatusSkipped))
-				g.Expect(lo.FromPtr(got.Error)).To(Equal("resource no longer exists"))
+				g.Expect(lo.FromPtr(got.Error)).To(Equal(notification.ResourceNoLongerExistsReason))
+
+				var fallbackCount int64
+				g.Expect(DefaultContext.DB().Model(&models.NotificationSendHistory{}).Where("parent_id = ?", got.ID).Count(&fallbackCount).Error).To(BeNil())
+				g.Expect(fallbackCount).To(BeZero())
+			}, "10s", "200ms").Should(Succeed())
+		})
+
+		ginkgo.It("should skip immediate notification.send when the resource no longer exists", func() {
+			resourceID := uuid.New()
+			payload := notification.NotificationEventPayload{
+				ResourceID:     resourceID,
+				EventID:        uuid.New(),
+				EventName:      api.EventConfigUnhealthy,
+				NotificationID: n.ID,
+				EventCreatedAt: time.Now(),
+				CustomService:  &api.NotificationConfig{URL: "http://example.com"},
+			}
+
+			event := models.Event{
+				Name:       api.EventNotificationSend,
+				EventID:    payload.GenerateEventID(),
+				Properties: payload.AsMap(),
+			}
+			Expect(DefaultContext.DB().Create(&event).Error).To(BeNil())
+
+			events.ConsumeAll(DefaultContext)
+
+			Eventually(func(g Gomega) {
+				var got models.NotificationSendHistory
+				g.Expect(DefaultContext.DB().Where("notification_id = ?", n.ID).
+					Where("resource_id = ?", resourceID).
+					Where("source_event = ?", api.EventConfigUnhealthy).
+					Order("created_at DESC").
+					First(&got).Error).To(BeNil())
+				g.Expect(got.Status).To(Equal(models.NotificationStatusSkipped))
+				g.Expect(lo.FromPtr(got.Error)).To(Equal(notification.ResourceNoLongerExistsReason))
+
+				var fallbackCount int64
+				g.Expect(DefaultContext.DB().Model(&models.NotificationSendHistory{}).Where("parent_id = ?", got.ID).Count(&fallbackCount).Error).To(BeNil())
+				g.Expect(fallbackCount).To(BeZero())
 			}, "10s", "200ms").Should(Succeed())
 		})
 	})
