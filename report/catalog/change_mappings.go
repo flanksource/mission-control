@@ -89,7 +89,7 @@ func newChangeMapper(ctx dutyContext.Context, mappings []reportAPI.CatalogReport
 
 func compileChangeMappingProgram(env *cel.Env, expression string) (cel.Program, error) {
 	ast, issues := env.Compile(expression)
-	if issues.Err() != nil {
+	if issues != nil && issues.Err() != nil {
 		return nil, issues.Err()
 	}
 

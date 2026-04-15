@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"slices"
 	"strings"
 	"time"
 
@@ -178,10 +177,6 @@ func BuildReport(ctx context.Context, configs []models.ConfigItem, opts Options)
 	}
 
 	return report, scraperIDs, nil
-}
-
-func buildEntry(ctx context.Context, config *models.ConfigItem, opts Options, sinceTime time.Time) (*api.CatalogReportEntry, []string, error) {
-	return buildEntryWithMapper(ctx, config, opts, sinceTime, nil)
 }
 
 func buildEntryWithMapper(ctx context.Context, config *models.ConfigItem, opts Options, sinceTime time.Time, mapper *changeMapper) (*api.CatalogReportEntry, []string, error) {
@@ -376,51 +371,6 @@ func decodeJSONMap(raw dutyTypes.JSON) map[string]any {
 	}
 
 	return decoded
-}
-
-func buildConfigGroups(report *api.CatalogReport, configMap map[uuid.UUID]models.ConfigItem) []api.CatalogReportConfigGroup {
-	changesByConfig := lo.GroupBy(report.Changes, func(c api.CatalogReportChange) string { return c.ConfigID })
-	analysesByConfig := lo.GroupBy(report.Analyses, func(a api.CatalogReportAnalysis) string { return a.ConfigID })
-	accessByConfig := lo.GroupBy(report.Access, func(a api.CatalogReportAccess) string { return a.ConfigID })
-	logsByConfig := lo.GroupBy(report.AccessLogs, func(l api.CatalogReportAccessLog) string { return l.ConfigID })
-
-	seen := make(map[string]bool)
-	var groups []api.CatalogReportConfigGroup
-
-	for _, id := range sortedConfigIDs(configMap) {
-		idStr := id.String()
-		if seen[idStr] {
-			continue
-		}
-		seen[idStr] = true
-
-		changes := changesByConfig[idStr]
-		analyses := analysesByConfig[idStr]
-		access := accessByConfig[idStr]
-		logs := logsByConfig[idStr]
-
-		if len(changes) == 0 && len(analyses) == 0 && len(access) == 0 && len(logs) == 0 {
-			continue
-		}
-
-		ci := configMap[id]
-		groups = append(groups, api.CatalogReportConfigGroup{
-			ConfigItem: api.NewCatalogReportConfigItem(ci),
-			Changes:    changes,
-			Analyses:   analyses,
-			Access:     access,
-			AccessLogs: logs,
-		})
-	}
-	return groups
-}
-
-func sortedConfigIDs(m map[uuid.UUID]models.ConfigItem) []uuid.UUID {
-	ids := lo.Keys(m)
-	slices.SortFunc(ids, func(a, b uuid.UUID) int {
-		return strings.Compare(m[a].GetName(), m[b].GetName())
-	})
-	return ids
 }
 
 // resolveParents derives report ancestry from config.Path to avoid recursive
