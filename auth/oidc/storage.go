@@ -16,6 +16,7 @@ import (
 	"github.com/flanksource/duty/models"
 	"github.com/go-jose/go-jose/v4"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
 	"github.com/zitadel/oidc/v3/pkg/op"
 	"gorm.io/gorm"
@@ -61,7 +62,7 @@ func (s *Storage) CreateAuthRequest(_ gocontext.Context, req *oidc.AuthRequest, 
 		ID:                  uuid.New().String(),
 		ClientID:            req.ClientID,
 		RedirectURI:         req.RedirectURI,
-		Scopes:              StringList(req.Scopes),
+		Scopes:              pq.StringArray(req.Scopes),
 		State:               req.State,
 		Nonce:               req.Nonce,
 		ResponseType:        string(req.ResponseType),
@@ -135,7 +136,7 @@ func (s *Storage) CreateAccessAndRefreshTokens(_ gocontext.Context, req op.Token
 		Token:      hashToken(rawRefreshToken),
 		ClientID:   clientID,
 		Subject:    req.GetSubject(),
-		Scopes:     StringList(req.GetScopes()),
+		Scopes:     pq.StringArray(req.GetScopes()),
 		AuthTime:   now,
 		RotationID: rotationID,
 		CreatedAt:  now,

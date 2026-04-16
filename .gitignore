@@ -48,3 +48,11 @@ specs/
 **/*.pem
 **/*.key
 auth/oidc/static/tailwind.min.js
+**/*.pem
+**/*.key
+report/*.png
+report/*.pdf
+*.pdf
+*.png
+.playwright-mcp/
+out.*

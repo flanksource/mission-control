@@ -165,7 +165,6 @@ func basicAuthMiddleware(next echo.HandlerFunc) echo.HandlerFunc {
 					}
 				}
 			}
-			setWWWAuthenticate(c)
 			return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		}
 

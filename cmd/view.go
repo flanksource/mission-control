@@ -13,6 +13,7 @@ import (
 	yamlutil "k8s.io/apimachinery/pkg/util/yaml"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/report"
 	"github.com/flanksource/incident-commander/views"
 )
 
@@ -109,5 +110,6 @@ func init() {
 	ViewRun.Flags().StringVarP(&viewFormat, "format", "f", "json", "Output format: json, csv, html, pdf, facet-html, facet-pdf")
 	ViewRun.Flags().StringVarP(&viewOutFile, "out-file", "o", "", "Write output to file instead of stdout")
 	ViewRun.Flags().StringSliceVar(&viewVars, "var", nil, "Template variables as key=value pairs")
+	ViewRun.Flags().StringVar(&report.SourceDir, "report-source", "", "Local directory or TSX file for report rendering (overrides embedded reports)")
 	ViewCmd.AddCommand(ViewRun)
 }

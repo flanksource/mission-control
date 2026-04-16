@@ -1,0 +1,806 @@
+{
+  "findings": [
+    {
+      "title": "Brute force attack against sa account from 203.0.113.42",
+      "severity": "critical",
+      "platform": "sql-server",
+      "category": "credential-attack",
+      "outcome": "page-oncall",
+      "detection": {
+        "pattern": "brute-force",
+        "threshold": ">= 50 failures from single IP in < 1 hour"
+      },
+      "evidence": {
+        "summary": "203.0.113.42 made 847 failed login attempts against 'sa' in a 23-minute window between 02:14 and 02:37 UTC",
+        "timeRange": {
+          "start": "2026-03-15T02:14:00Z",
+          "end": "2026-03-15T02:37:00Z",
+          "durationSeconds": 1380
+        },
+        "metrics": { "eventCount": 847, "failedCount": 847, "successCount": 0, "uniqueIPs": 1 },
+        "samples": [
+          {
+            "timestamp": "2026-03-15T02:14:03Z",
+            "action": "FAILED_LOGIN_GROUP",
+            "detail": "Login failed for user 'sa'. Reason: Password did not match.",
+            "succeeded": false,
+            "src": {
+              "identity": { "name": "sa", "type": "break-glass" },
+              "endpoint": { "ip": "203.0.113.42" }
+            },
+            "dst": {
+              "resource": { "name": "acme_KEN_app_PROD", "type": "database", "scope": "acmer-prod-mssql" }
+            }
+          },
+          {
+            "timestamp": "2026-03-15T02:36:58Z",
+            "action": "FAILED_LOGIN_GROUP",
+            "detail": "Login failed for user 'sa'. Reason: Password did not match.",
+            "succeeded": false,
+            "src": {
+              "identity": { "name": "sa", "type": "break-glass" },
+              "endpoint": { "ip": "203.0.113.42" }
+            },
+            "dst": {
+              "resource": { "name": "acme_KEN_app_PROD", "type": "database", "scope": "acmer-prod-mssql" }
+            }
+          }
+        ]
+      },
+      "recommendation": {
+        "action": "Block 203.0.113.42 at the network level and verify sa account is disabled for remote login",
+        "mitigations": [
+          "Ensure sa account has a strong password and is disabled for network auth",
+          "Implement account lockout policy after 5 consecutive failures",
+          "Add IP-based rate limiting at the network/WAF layer"
+        ]
+      },
+      "context": {
+        "killChainPhase": "initial-access",
+        "mitreTechnique": "T1110",
+        "compliance": ["PCI-DSS 10.2.4", "SOX 404"],
+        "baseline": { "normalValue": 2, "observedValue": 847, "deviationFactor": 423.5, "baselinePeriod": "previous 4 weeks" }
+      },
+      "dataSource": {
+        "type": "s3-parquet",
+        "categories": ["access-logs"],
+        "path": "s3://acme-app-audit/sql/parquet/AuditLogins/2026/03/*/*.parquet",
+        "query": "SELECT server_principal_name, client_ip, count(*) AS failed_count FROM AuditLogins WHERE succeeded = false GROUP BY server_principal_name, client_ip HAVING failed_count >= 50",
+        "connection": "connection://monitoring/sql-server",
+        "app": { "name": "config-db", "version": "1.4.2", "icon": "config-db" },
+        "contentSha": "a3f8e2d1b4c6a9e0f7d5b3c1a8e6f4d2b0c7a5e3f1d9b7c5a3e1f0d8b6c4a2"
+      },
+      "provenance": {
+        "generatedAt": "2026-04-01T10:00:00Z",
+        "generatedBy": "audit-log-analyzer",
+        "version": "1.0.0",
+        "runId": "run-2026-04-01-001",
+        "model": "claude-opus-4-6"
+      }
+    },
+    {
+      "title": "Credential spraying from 198.51.100.17 targeting 12 accounts",
+      "severity": "high",
+      "platform": "sql-server",
+      "category": "credential-attack",
+      "outcome": "high-ticket",
+      "detection": {
+        "pattern": "credential-spraying",
+        "threshold": ">= 10 distinct accounts from 1 IP"
+      },
+      "evidence": {
+        "summary": "198.51.100.17 attempted login to 12 distinct accounts over 45 minutes with 1-2 attempts each, consistent with password spray pattern",
+        "timeRange": {
+          "start": "2026-03-18T14:22:00Z",
+          "end": "2026-03-18T15:07:00Z",
+          "durationSeconds": 2700
+        },
+        "metrics": { "eventCount": 18, "failedCount": 18, "successCount": 0, "uniqueIdentities": 12, "uniqueIPs": 1 },
+        "samples": [
+          {
+            "timestamp": "2026-03-18T14:22:00Z",
+            "action": "credential-spraying",
+            "succeeded": false,
+            "src": {
+              "identity": { "name": "jsmith", "type": "human" },
+              "endpoint": { "ip": "198.51.100.17" }
+            }
+          },
+          {
+            "timestamp": "2026-03-18T14:22:00Z",
+            "action": "credential-spraying",
+            "succeeded": false,
+            "src": {
+              "identity": { "name": "admin_dba", "type": "admin" },
+              "endpoint": { "ip": "198.51.100.17" }
+            }
+          },
+          {
+            "timestamp": "2026-03-18T14:22:00Z",
+            "action": "credential-spraying",
+            "succeeded": false,
+            "src": {
+              "identity": { "name": "svc_app_app", "type": "service-account" },
+              "endpoint": { "ip": "198.51.100.17" }
+            }
+          }
+        ]
+      },
+      "recommendation": {
+        "action": "Investigate source IP 198.51.100.17 and force password reset for all targeted accounts",
+        "mitigations": [
+          "Enable multi-factor authentication for all database accounts",
+          "Review VPN/network access logs for 198.51.100.17"
+        ]
+      },
+      "context": {
+        "killChainPhase": "initial-access",
+        "mitreTechnique": "T1110.003",
+        "compliance": ["PCI-DSS 10.2.4"]
+      },
+      "dataSource": {
+        "type": "s3-parquet",
+        "categories": ["access-logs"],
+        "path": "s3://acmer-app-audit/sql/parquet/AuditLogins/2026/03/*/*.parquet",
+        "query": "SELECT client_ip, count(DISTINCT server_principal_name) AS targeted FROM AuditLogins WHERE succeeded = false GROUP BY client_ip HAVING targeted >= 3",
+        "connection": "connection://monitoring/sql-server"
+      },
+      "provenance": {
+        "generatedAt": "2026-04-01T10:00:00Z",
+        "generatedBy": "audit-log-analyzer",
+        "version": "1.0.0",
+        "runId": "run-2026-04-01-001",
+        "model": "claude-opus-4-6"
+      }
+    },
+    {
+      "title": "sysadmin role granted to jdoe outside change window",
+      "severity": "critical",
+      "platform": "sql-server",
+      "category": "privilege-escalation",
+      "outcome": "safety-switch",
+      "detection": {
+        "pattern": "role-membership-change",
+        "threshold": "Any sysadmin role grant"
+      },
+      "evidence": {
+        "summary": "User admin_dba granted sysadmin role to jdoe at 22:41 UTC on a Tuesday, outside the approved change window (Wed 06:00-10:00 UTC)",
+        "timeRange": {
+          "start": "2026-03-11T22:41:00Z",
+          "end": "2026-03-11T22:41:00Z",
+          "durationSeconds": 0
+        },
+        "metrics": { "eventCount": 1, "permissionChanges": 1 },
+        "samples": [
+          {
+            "timestamp": "2026-03-11T22:41:12Z",
+            "action": "SERVER_ROLE_MEMBER_CHANGE_GROUP",
+            "detail": "ALTER SERVER ROLE [sysadmin] ADD MEMBER [jdoe]",
+            "succeeded": true,
+            "src": {
+              "identity": { "name": "admin_dba", "type": "admin", "displayName": "Database Administrator" },
+              "endpoint": { "ip": "10.0.5.23" }
+            },
+            "dst": {
+              "identity": { "name": "jdoe", "type": "human", "displayName": "John Doe" },
+              "resource": { "name": "sysadmin", "type": "role", "scope": "acme-prod-mssql" }
+            }
+          }
+        ]
+      },
+      "recommendation": {
+        "action": "Immediately revoke jdoe's sysadmin membership and investigate why it was granted outside change window",
+        "mitigations": [
+          "Require dual-approval for sysadmin role grants",
+          "Implement change window enforcement via audit alerts"
+        ]
+      },
+      "context": {
+        "killChainPhase": "privilege-escalation",
+        "mitreTechnique": "T1078.004",
+        "compliance": ["SOX 404", "PCI-DSS 10.2.5", "POPI Act"],
+        "relatedFindings": ["HOURS-2026-001"]
+      },
+      "dataSource": {
+        "type": "s3-parquet",
+        "categories": ["audit-logs", "roles"],
+        "path": "s3://acmer-app-audit/sql/parquet/AuditServer/2026/03/*/*.parquet",
+        "query": "SELECT * FROM AuditServer WHERE containing_group_name = 'SERVER_ROLE_MEMBER_CHANGE_GROUP' AND statement LIKE '%sysadmin%'",
+        "connection": "connection://monitoring/sql-server"
+      },
+      "provenance": {
+        "generatedAt": "2026-04-01T10:00:00Z",
+        "generatedBy": "audit-log-analyzer",
+        "version": "1.0.0",
+        "runId": "run-2026-04-01-001",
+        "model": "claude-opus-4-6"
+      }
+    },
+    {
+      "title": "Bulk data extraction by svc_reporting \u2014 2.4M rows in single query",
+      "severity": "high",
+      "platform": "sql-server",
+      "category": "data-exfiltration",
+      "outcome": "page-oncall",
+      "detection": {
+        "pattern": "bulk-data-read",
+        "threshold": "response_rows > 10x user baseline"
+      },
+      "evidence": {
+        "summary": "Service account svc_reporting executed SELECT * FROM PolicyHolder returning 2.4M rows at 03:12 UTC. Normal daily volume is ~15K rows.",
+        "timeRange": {
+          "start": "2026-03-20T03:12:00Z",
+          "end": "2026-03-20T03:14:32Z",
+          "durationSeconds": 152
+        },
+        "metrics": { "eventCount": 1, "rowsAccessed": 2400000 },
+        "samples": [
+          {
+            "timestamp": "2026-03-20T03:12:05Z",
+            "action": "SELECT",
+            "detail": "SELECT [PolicyHolderID], [FirstName], [LastName], [IDNumber], [DateOfBirth], [Email], [Phone], [BankAccountNo], [BankBranchCode], [PolicyNumber], [PremiumAmount], [BeneficiaryName], [BeneficiaryID], [MedicalHistory], [ClaimStatus] FROM [dbo].[PolicyHolder] WITH (NOLOCK) WHERE [Status] = 'Active' ORDER BY [PolicyHolderID]",
+            "succeeded": true,
+            "src": {
+              "identity": { "name": "svc_reporting", "type": "service-account" },
+              "endpoint": { "ip": "10.0.12.88" },
+              "app": { "name": "ReportingETL.exe", "type": "etl-tool" }
+            },
+            "dst": {
+              "resource": { "name": "PolicyHolder", "type": "database", "scope": "OMA_ZIM_app_PROD" }
+            }
+          }
+        ]
+      },
+      "recommendation": {
+        "action": "Investigate svc_reporting activity \u2014 verify this query was from an authorized report job, not compromised credentials",
+        "mitigations": [
+          "Restrict svc_reporting to specific columns via views instead of SELECT *",
+          "Implement row-level security on PolicyHolder table",
+          "Add query result size limits to the application connection"
+        ]
+      },
+      "context": {
+        "killChainPhase": "collection",
+        "mitreTechnique": "T1530",
+        "compliance": ["POPI Act", "PCI-DSS 10.2.1"],
+        "baseline": { "normalValue": 15000, "observedValue": 2400000, "deviationFactor": 160.0, "baselinePeriod": "previous 4 weeks" }
+      },
+      "dataSource": {
+        "type": "s3-parquet",
+        "categories": ["audit-logs"],
+        "path": "s3://acme-app-audit/sql/parquet/AuditUserActivity/2026/03/*/*.parquet",
+        "query": "SELECT server_principal_name, response_rows, statement FROM AuditUserActivity WHERE response_rows > 10000 ORDER BY response_rows DESC",
+        "connection": "connection://monitoring/sql-server"
+      },
+      "provenance": {
+        "generatedAt": "2026-04-01T10:00:00Z",
+        "generatedBy": "audit-log-analyzer",
+        "version": "1.0.0",
+        "runId": "run-2026-04-01-001",
+        "model": "claude-opus-4-6"
+      }
+    },
+    {
+      "title": "Break-glass account acmedmin used without incident ticket",
+      "severity": "critical",
+      "platform": "sql-server",
+      "category": "break-glass",
+      "outcome": "page-oncall",
+      "detection": {
+        "pattern": "break-glass-usage",
+        "threshold": "Any usage of break-glass account"
+      },
+      "evidence": {
+        "summary": "Break-glass account 'acmedmin' logged in 3 times from 10.0.5.23 on March 22. No corresponding incident ticket found in ServiceNow.",
+        "timeRange": {
+          "start": "2026-03-22T09:15:00Z",
+          "end": "2026-03-22T11:42:00Z",
+          "durationSeconds": 8820
+        },
+        "metrics": { "eventCount": 3, "successCount": 3 },
+        "samples": [
+          {
+            "timestamp": "2026-03-22T09:15:00Z",
+            "action": "break-glass-usage",
+            "succeeded": true,
+            "src": {
+              "identity": { "name": "acmedmin", "type": "break-glass" },
+              "endpoint": { "ip": "10.0.5.23" }
+            },
+            "dst": {
+              "resource": { "name": "OMA_KEN_app_PROD", "type": "database", "scope": "acme-prod-mssql" }
+            }
+          }
+        ]
+      },
+      "recommendation": {
+        "action": "Investigate who used the acmedmin account and for what purpose. Create retroactive incident ticket.",
+        "mitigations": [
+          "Rotate acmedmin password immediately",
+          "Require ServiceNow ticket ID before break-glass credentials are issued",
+          "Implement just-in-time access provisioning"
+        ]
+      },
+      "context": {
+        "killChainPhase": "initial-access",
+        "mitreTechnique": "T1078",
+        "compliance": ["SOX 404", "King IV"]
+      },
+      "dataSource": {
+        "type": "s3-parquet",
+        "categories": ["access-logs", "audit-logs"],
+        "path": "s3://acme-app-audit/sql/parquet/AuditLogins/2026/03/*/*.parquet",
+        "query": "SELECT * FROM AuditLogins WHERE server_principal_name IN ('sa', 'acmedmin')",
+        "connection": "connection://monitoring/sql-server"
+      },
+      "provenance": {
+        "generatedAt": "2026-04-01T10:00:00Z",
+        "generatedBy": "audit-log-analyzer",
+        "version": "1.0.0",
+        "runId": "run-2026-04-01-001",
+        "model": "claude-opus-4-6"
+      }
+    },
+    {
+      "title": "SQL Server audit configuration modified by admin_dba",
+      "severity": "critical",
+      "platform": "sql-server",
+      "category": "audit-tampering",
+      "outcome": "safety-switch",
+      "detection": {
+        "pattern": "audit-config-change",
+        "threshold": "Any audit configuration change"
+      },
+      "evidence": {
+        "summary": "admin_dba modified the AuditUserActivity server audit at 01:33 UTC, changing the WHERE clause to exclude client_ip LIKE '192.168.%'",
+        "timeRange": {
+          "start": "2026-03-25T01:33:00Z",
+          "end": "2026-03-25T01:33:00Z",
+          "durationSeconds": 0
+        },
+        "metrics": { "eventCount": 1 },
+        "samples": [
+          {
+            "timestamp": "2026-03-25T01:33:45Z",
+            "action": "AUDIT_CHANGE_GROUP",
+            "detail": "ALTER SERVER AUDIT [AuditUserActivity] WITH (STATE = ON, QUEUE_DELAY = 1000, ON_FAILURE = CONTINUE) WHERE ([client_ip] NOT LIKE '192.168.%' AND [server_principal_name] NOT IN ('svc_monitoring', 'svc_backup', 'svc_replication'))",
+            "succeeded": true,
+            "src": {
+              "identity": { "name": "admin_dba", "type": "admin" },
+              "endpoint": { "ip": "10.0.5.23" },
+              "app": { "name": "sqlcmd", "type": "database-client" }
+            },
+            "dst": {
+              "resource": { "name": "AuditUserActivity", "type": "audit-type", "scope": "acme-prod-mssql" }
+            }
+          }
+        ]
+      },
+      "recommendation": {
+        "action": "Revert the audit configuration change immediately and investigate admin_dba's intent",
+        "mitigations": [
+          "Restrict ALTER SERVER AUDIT permissions to break-glass accounts only",
+          "Alert on any AUDIT_CHANGE_GROUP event in real-time"
+        ]
+      },
+      "context": {
+        "killChainPhase": "persistence",
+        "mitreTechnique": "T1562.002",
+        "compliance": ["SOX 404", "PCI-DSS 10.5"]
+      },
+      "dataSource": {
+        "type": "s3-parquet",
+        "categories": ["audit-logs", "configuration"],
+        "path": "s3://acme-app-audit/sql/parquet/AuditServer/2026/03/*/*.parquet",
+        "query": "SELECT * FROM AuditServer WHERE containing_group_name IN ('AUDIT_CHANGE_GROUP', 'TRACE_CHANGE_GROUP')",
+        "connection": "connection://monitoring/sql-server"
+      },
+      "provenance": {
+        "generatedAt": "2026-04-01T10:00:00Z",
+        "generatedBy": "audit-log-analyzer",
+        "version": "1.0.0",
+        "runId": "run-2026-04-01-001",
+        "model": "claude-opus-4-6"
+      }
+    },
+    {
+      "title": "After-hours DDL activity by admin_dba \u2014 14 schema changes at 22:30 UTC",
+      "severity": "high",
+      "platform": "sql-server",
+      "category": "after-hours",
+      "outcome": "high-ticket",
+      "detection": {
+        "pattern": "after-hours-ddl",
+        "threshold": "DDL outside business hours (06:00-16:00 UTC)"
+      },
+      "evidence": {
+        "summary": "admin_dba executed 14 DDL statements between 22:30 and 23:15 UTC on March 11, including ALTER TABLE and CREATE INDEX operations on production tables",
+        "timeRange": {
+          "start": "2026-03-11T22:30:00Z",
+          "end": "2026-03-11T23:15:00Z",
+          "durationSeconds": 2700
+        },
+        "metrics": { "eventCount": 14 },
+        "samples": [
+          {
+            "timestamp": "2026-03-11T22:30:00Z",
+            "action": "after-hours-ddl",
+            "succeeded": true,
+            "src": {
+              "identity": { "name": "admin_dba", "type": "admin", "displayName": "Database Administrator" },
+              "endpoint": { "ip": "10.0.5.23" }
+            },
+            "dst": {
+              "resource": { "name": "acme_KEN_app_PROD", "type": "database", "scope": "acme-prod-mssql" }
+            }
+          }
+        ]
+      },
+      "recommendation": {
+        "action": "Verify DDL changes were authorized through change management process",
+        "mitigations": ["Enforce change windows via database triggers or alerts"]
+      },
+      "context": {
+        "killChainPhase": "impact",
+        "compliance": ["SOX 404"],
+        "relatedFindings": ["PRIV-2026-001"]
+      },
+      "dataSource": {
+        "type": "s3-parquet",
+        "categories": ["audit-logs"],
+        "path": "s3://acme-app-audit/sql/parquet/AuditServer/2026/03/*/*.parquet",
+        "query": "SELECT * FROM AuditServer WHERE toHour(event_time) NOT BETWEEN 6 AND 16",
+        "connection": "connection://monitoring/sql-server"
+      },
+      "provenance": {
+        "generatedAt": "2026-04-01T10:00:00Z",
+        "generatedBy": "audit-log-analyzer",
+        "version": "1.0.0",
+        "runId": "run-2026-04-01-001",
+        "model": "claude-opus-4-6"
+      }
+    },
+    {
+      "title": "ClusterRoleBinding granting cluster-admin created in production",
+      "severity": "critical",
+      "platform": "kubernetes",
+      "category": "privilege-escalation",
+      "outcome": "safety-switch",
+      "detection": {
+        "pattern": "cluster-admin-binding",
+        "threshold": "Any cluster-admin ClusterRoleBinding creation"
+      },
+      "evidence": {
+        "summary": "User devops@acme.com created ClusterRoleBinding 'emergency-access' granting cluster-admin to service account 'debug-sa' in namespace 'default'",
+        "timeRange": {
+          "start": "2026-03-19T16:22:00Z",
+          "end": "2026-03-19T16:22:00Z",
+          "durationSeconds": 0
+        },
+        "metrics": { "eventCount": 1, "permissionChanges": 1 },
+        "samples": [
+          {
+            "timestamp": "2026-03-19T16:22:00Z",
+            "action": "create",
+            "detail": "kubectl create clusterrolebinding emergency-access --clusterrole=cluster-admin --serviceaccount=default:debug-sa",
+            "succeeded": true,
+            "src": {
+              "identity": { "name": "devops@acme.com", "type": "human" },
+              "endpoint": { "ip": "10.0.3.45" },
+              "app": { "name": "kubectl", "type": "cli" }
+            },
+            "dst": {
+              "identity": { "name": "system:serviceaccount:default:debug-sa", "type": "service-account" },
+              "resource": { "name": "emergency-access", "type": "clusterrolebinding", "scope": "acme-prod" }
+            }
+          }
+        ]
+      },
+      "recommendation": {
+        "action": "Delete the emergency-access ClusterRoleBinding and investigate why cluster-admin access was needed",
+        "mitigations": [
+          "Use namespace-scoped RoleBindings instead of ClusterRoleBindings",
+          "Implement OPA/Gatekeeper policy to block cluster-admin bindings"
+        ]
+      },
+      "context": {
+        "killChainPhase": "privilege-escalation",
+        "mitreTechnique": "T1078.004",
+        "compliance": ["CIS Kubernetes 5.1.1"]
+      },
+      "dataSource": {
+        "type": "k8s-audit-log",
+        "categories": ["audit-logs", "roles", "configuration"],
+        "path": "kubernetes audit log (acme-prod cluster)",
+        "query": "cat audit.log | jq 'select(.verb==\"create\" and .objectRef.resource==\"clusterrolebindings\")'",
+        "connection": "omar-prod",
+        "git": {
+          "repo": "github.com/acme/infra-k8s",
+          "file": "clusters/prod/audit-policy.yaml",
+          "lineNo": 42,
+          "sha": "e7f3a2b1c9d8e6f4a0b5c3d1",
+          "branch": "main",
+          "tag": "v2.1.0"
+        },
+        "app": { "name": "mission-control", "version": "2.3.1", "icon": "mission-control" }
+      },
+      "provenance": {
+        "generatedAt": "2026-04-01T10:00:00Z",
+        "generatedBy": "audit-log-analyzer",
+        "version": "1.0.0",
+        "runId": "run-2026-04-01-001",
+        "model": "claude-opus-4-6"
+      }
+    },
+    {
+      "title": "Security group opened to 0.0.0.0/0 on port 1433",
+      "severity": "critical",
+      "platform": "aws",
+      "category": "network-exposure",
+      "outcome": "safety-switch",
+      "detection": {
+        "pattern": "security-group-exposure",
+        "threshold": "Inbound 0.0.0.0/0 on ports 22, 1433, 3306, 3389"
+      },
+      "evidence": {
+        "summary": "IAM user infra-deploy added inbound rule to sg-0a1b2c3d allowing 0.0.0.0/0 on TCP/1433 (SQL Server), exposing the RDS instance to the internet",
+        "timeRange": {
+          "start": "2026-03-28T08:45:00Z",
+          "end": "2026-03-28T08:45:00Z",
+          "durationSeconds": 0
+        },
+        "metrics": { "eventCount": 1 },
+        "samples": [
+          {
+            "timestamp": "2026-03-28T08:45:00Z",
+            "action": "AuthorizeSecurityGroupIngress",
+            "detail": "IpPermissions: [{IpProtocol: tcp, FromPort: 1433, ToPort: 1433, IpRanges: [{CidrIp: 0.0.0.0/0}]}]",
+            "succeeded": true,
+            "src": {
+              "identity": { "name": "arn:aws:iam::123456789012:user/infra-deploy", "type": "service-account" },
+              "endpoint": { "ip": "10.0.1.100" },
+              "app": { "name": "terraform", "type": "iac-tool" }
+            },
+            "dst": {
+              "resource": { "name": "sg-0a1b2c3d", "type": "security-group", "scope": "vpc-abc123 (eu-west-1)" }
+            }
+          }
+        ]
+      },
+      "recommendation": {
+        "action": "Immediately remove the 0.0.0.0/0 ingress rule on port 1433 and restrict to VPC CIDR only",
+        "mitigations": [
+          "Enable AWS Config rule to detect public security group rules",
+          "Use VPC endpoints or PrivateLink for database access"
+        ]
+      },
+      "context": {
+        "killChainPhase": "initial-access",
+        "mitreTechnique": "T1190",
+        "compliance": ["CIS AWS 5.2", "PCI-DSS 1.3.1"]
+      },
+      "dataSource": {
+        "type": "cloudtrail-athena",
+        "categories": ["audit-logs", "configuration"],
+        "path": "CloudTrail (eu-west-1)",
+        "query": "SELECT * FROM cloudtrail_logs WHERE eventName = 'AuthorizeSecurityGroupIngress'",
+        "connection": "123456789012",
+        "app": { "name": "aws-scraper", "version": "3.0.1", "icon": "aws" },
+        "contentSha": "b7c4d2e0f8a6b3c1d9e5f2a0c8d4e1b6a3f7c0d5e9b2a4f6c8d1e3b5a7f0c2"
+      },
+      "provenance": {
+        "generatedAt": "2026-04-01T10:00:00Z",
+        "generatedBy": "audit-log-analyzer",
+        "version": "1.0.0",
+        "runId": "run-2026-04-01-001",
+        "model": "claude-opus-4-6"
+      }
+    },
+    {
+      "title": "Privilege accumulation \u2014 23 grants with 0 revokes over 4 weeks",
+      "severity": "medium",
+      "platform": "sql-server",
+      "category": "privilege-accumulation",
+      "outcome": "low-ticket",
+      "detection": {
+        "pattern": "grant-revoke-imbalance",
+        "threshold": "Net positive accumulation > 4 consecutive weeks"
+      },
+      "evidence": {
+        "summary": "Over the past 4 weeks, 23 GRANT operations and 0 REVOKE operations were recorded across 3 databases, indicating unchecked privilege creep",
+        "timeRange": {
+          "start": "2026-03-01T00:00:00Z",
+          "end": "2026-03-31T23:59:59Z",
+          "durationSeconds": 2678399
+        },
+        "metrics": { "eventCount": 23, "permissionChanges": 23, "uniqueResources": 3 },
+        "samples": [
+          {
+            "timestamp": "2026-03-01T00:00:00Z",
+            "action": "grant-revoke-imbalance",
+            "src": {
+              "identity": { "name": "admin_dba", "type": "admin" }
+            },
+            "dst": {
+              "resource": { "name": "acme_KEN_app_PROD", "type": "database", "scope": "acme-prod-mssql" }
+            }
+          },
+          {
+            "timestamp": "2026-03-01T00:00:00Z",
+            "action": "grant-revoke-imbalance",
+            "src": {
+              "identity": { "name": "lead_dev", "type": "human" }
+            },
+            "dst": {
+              "resource": { "name": "acme_ZIM_app_PROD", "type": "database", "scope": "acme-prod-mssql" }
+            }
+          }
+        ]
+      },
+      "recommendation": {
+        "action": "Conduct a privilege review across all three databases \u2014 identify and revoke unnecessary grants",
+        "mitigations": [
+          "Schedule quarterly access reviews",
+          "Implement role-based access with defined permission sets"
+        ]
+      },
+      "context": {
+        "killChainPhase": "privilege-escalation",
+        "compliance": ["SOX 404", "King IV"]
+      },
+      "dataSource": {
+        "type": "file",
+        "categories": ["roles", "users"],
+        "path": "Audit Reports/Q1-2026/Q1-2026-Access-Review.xlsx",
+        "app": { "name": "access-reviewer", "version": "1.0.0", "icon": "file" },
+        "contentSha": "d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2c3d4",
+        "file": {
+          "name": "Q1-2026-Access-Review.xlsx",
+          "size": "2.4 MB",
+          "created": "2026-03-01T08:00:00Z",
+          "modified": "2026-03-31T16:45:00Z",
+          "location": "sharepoint",
+          "host": "acme.sharepoint.com/sites/SecurityTeam"
+        }
+      },
+      "provenance": {
+        "generatedAt": "2026-04-01T10:00:00Z",
+        "generatedBy": "audit-log-analyzer",
+        "version": "1.0.0",
+        "runId": "run-2026-04-01-001",
+        "model": "claude-opus-4-6"
+      }
+    },
+    {
+      "title": "Service account svc_app_app connected via SSMS from developer workstation",
+      "severity": "high",
+      "platform": "sql-server",
+      "category": "service-account-misuse",
+      "outcome": "high-ticket",
+      "detection": {
+        "pattern": "interactive-service-account",
+        "threshold": "Service account used with interactive tool"
+      },
+      "evidence": {
+        "summary": "svc_app_app connected using SQL Server Management Studio from IP 10.0.8.77 (developer subnet) 7 times over 2 hours",
+        "timeRange": {
+          "start": "2026-03-26T13:10:00Z",
+          "end": "2026-03-26T15:22:00Z",
+          "durationSeconds": 7920
+        },
+        "metrics": { "eventCount": 7, "successCount": 7, "uniqueIPs": 1 },
+        "samples": [
+          {
+            "timestamp": "2026-03-26T13:10:00Z",
+            "action": "LOGIN",
+            "succeeded": true,
+            "src": {
+              "identity": { "name": "svc_app_app", "type": "service-account" },
+              "endpoint": { "ip": "10.0.8.77", "type": "workstation", "network": "developer-subnet" },
+              "app": { "name": "SQL Server Management Studio", "type": "database-client" }
+            },
+            "dst": {
+              "endpoint": { "ip": "10.0.2.15", "type": "server", "hostname": "acme-prod-mssql" },
+              "resource": { "name": "acme_KEN_app_PROD", "type": "database", "scope": "acme-prod-mssql" }
+            }
+          },
+          {
+            "timestamp": "2026-03-26T14:05:00Z",
+            "action": "SELECT",
+            "detail": "SELECT TOP 100 * FROM [dbo].[Claims] ORDER BY ClaimDate DESC",
+            "succeeded": true,
+            "src": {
+              "identity": { "name": "svc_app_app", "type": "service-account" },
+              "endpoint": { "ip": "10.0.8.77", "type": "workstation" },
+              "app": { "name": "SQL Server Management Studio", "type": "database-client" }
+            },
+            "dst": {
+              "resource": { "name": "Claims", "type": "database", "scope": "acme_KEN_app_PROD" }
+            }
+          }
+        ]
+      },
+      "recommendation": {
+        "action": "Rotate svc_app_app credentials and investigate who on the developer subnet has access to this service account password",
+        "mitigations": [
+          "Store service account credentials in a vault with audit trail",
+          "Restrict service accounts to connect only from application server IPs"
+        ]
+      },
+      "context": {
+        "killChainPhase": "lateral-movement",
+        "mitreTechnique": "T1078.001",
+        "compliance": ["PCI-DSS 10.2.5"]
+      },
+      "dataSource": {
+        "type": "s3-parquet",
+        "categories": ["access-logs"],
+        "path": "s3://acme-app-audit/sql/parquet/AuditLogins/2026/03/*/*.parquet",
+        "query": "SELECT * FROM AuditLogins WHERE server_principal_name LIKE '%svc%' AND application_name LIKE '%Management Studio%'",
+        "connection": "connection://monitoring/sql-server"
+      },
+      "provenance": {
+        "generatedAt": "2026-04-01T10:00:00Z",
+        "generatedBy": "audit-log-analyzer",
+        "version": "1.0.0",
+        "runId": "run-2026-04-01-001",
+        "model": "claude-opus-4-6"
+      }
+    },
+    {
+      "title": "3-day gap in AuditUserActivity coverage \u2014 March 8-10",
+      "severity": "high",
+      "platform": "sql-server",
+      "category": "coverage-gap",
+      "outcome": "high-ticket",
+      "detection": {
+        "pattern": "audit-coverage-gap",
+        "threshold": "Any day with zero events"
+      },
+      "evidence": {
+        "summary": "No AuditUserActivity parquet files exist for March 8, 9, and 10. AuditLogins and AuditServer have normal coverage for these dates, suggesting a selective audit failure.",
+        "timeRange": {
+          "start": "2026-03-08T00:00:00Z",
+          "end": "2026-03-10T23:59:59Z",
+          "durationSeconds": 259199
+        },
+        "metrics": { "eventCount": 0 },
+        "samples": [
+          {
+            "timestamp": "2026-03-08T00:00:00Z",
+            "action": "audit-coverage-gap",
+            "dst": {
+              "resource": { "name": "AuditUserActivity", "type": "audit-type", "scope": "acme-prod-mssql" }
+            }
+          }
+        ]
+      },
+      "recommendation": {
+        "action": "Investigate why AuditUserActivity stopped collecting for 3 days \u2014 check SQL Server error logs and audit status",
+        "mitigations": [
+          "Add monitoring canary for audit file freshness (existing s3-audit canary covers this)",
+          "Set up alerting when daily audit file count drops below threshold"
+        ]
+      },
+      "context": {
+        "killChainPhase": "persistence",
+        "mitreTechnique": "T1562.002",
+        "compliance": ["SOX 404", "PCI-DSS 10.5"]
+      },
+      "dataSource": {
+        "type": "s3-parquet",
+        "categories": ["audit-logs"],
+        "path": "s3://acme-app-audit/sql/parquet/AuditUserActivity/2026/03/*/*.parquet",
+        "query": "SELECT toDate(event_time) AS day, count(*) AS events FROM AuditUserActivity GROUP BY day ORDER BY day",
+        "connection": "connection://monitoring/sql-server"
+      },
+      "provenance": {
+        "generatedAt": "2026-04-01T10:00:00Z",
+        "generatedBy": "audit-log-analyzer",
+        "version": "1.0.0",
+        "runId": "run-2026-04-01-001",
+        "model": "claude-opus-4-6"
+      }
+    }
+  ]
+}

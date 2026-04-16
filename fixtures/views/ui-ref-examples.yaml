@@ -22,3 +22,16 @@ spec:
       uiRef:
         configs:
           health: -healthy
+
+    - title: Stale Access
+      icon: shield
+      uiRef:
+        access:
+          stale: "2160h"
+
+    - title: Recent Sign-ins (No MFA)
+      icon: key
+      uiRef:
+        accessLogs:
+          from: "720h"
+          mfa: "false"

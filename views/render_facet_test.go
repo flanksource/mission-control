@@ -9,13 +9,13 @@ import (
 	ginkgo "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
-	v1 "github.com/flanksource/incident-commander/api/v1"
+	"github.com/flanksource/incident-commander/report"
 )
 
 // maxMultipartMemory is the max memory used when parsing multipart form data in tests (32MB).
 const maxMultipartMemory = 32 << 20
 
-var _ = ginkgo.Describe("renderFacetHTTP", func() {
+var _ = ginkgo.Describe("RenderHTTP", func() {
 	var (
 		server   *httptest.Server
 		pdfBytes = []byte("%PDF-1.4 test content")
@@ -66,14 +66,7 @@ var _ = ginkgo.Describe("renderFacetHTTP", func() {
 	})
 
 	ginkgo.It("fetches PDF via two-step render+download", func() {
-		opts := &v1.FacetOptions{
-			URL: server.URL,
-			PDFOptions: &v1.FacetPDFOptions{
-				PageSize: "A4",
-			},
-		}
-
-		result, err := renderFacetHTTP(DefaultContext, server.URL, "test-token", map[string]string{"key": "value"}, "pdf", opts)
+		result, err := report.RenderHTTP(DefaultContext, server.URL, "test-token", map[string]string{"key": "value"}, "pdf", "ViewReport.tsx")
 		Expect(err).ToNot(HaveOccurred())
 		Expect(result).To(Equal(pdfBytes))
 	})
@@ -92,7 +85,7 @@ var _ = ginkgo.Describe("renderFacetHTTP", func() {
 		}))
 		defer htmlServer.Close()
 
-		result, err := renderFacetHTTP(DefaultContext, htmlServer.URL, "", map[string]string{"key": "value"}, "html", nil)
+		result, err := report.RenderHTTP(DefaultContext, htmlServer.URL, "", map[string]string{"key": "value"}, "html", "ViewReport.tsx")
 		Expect(err).ToNot(HaveOccurred())
 		Expect(result).To(Equal(htmlBytes))
 	})

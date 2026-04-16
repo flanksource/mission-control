@@ -72,7 +72,7 @@ var skipAuthPathsExact = []string{
 	"/keys",
 	"/revoke",
 	"/device_authorization",
-	"/endsession",
+	"/end_session",
 	// --end:: Standard OIDC endpoints
 }
 
@@ -128,10 +128,10 @@ func Middleware(ctx context.Context, e *echo.Echo) error {
 
 		if OIDCEnabled {
 			kratosChecker := NewKratosCredentialChecker(kratosMiddleware)
-			if err := oidc.MountRoutes(e, ctx, api.FrontendURL, OIDCSigningKeyPath, kratosChecker, LookupKratosPersonByUsername); err != nil {
+			if err := oidc.MountRoutes(e, ctx, api.PublicURL, OIDCSigningKeyPath, kratosChecker, LookupKratosPersonByUsername); err != nil {
 				return fmt.Errorf("failed to mount OIDC routes: %w", err)
 			}
-			logger.Infof("OIDC provider enabled at %s (Kratos auth)", api.FrontendURL)
+			logger.Infof("OIDC provider enabled at %s (Kratos auth)", api.PublicURL)
 		}
 
 	case Clerk:

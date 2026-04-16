@@ -9,8 +9,18 @@
     "mission-control": "npm run pdf"
   },
   "dependencies": {
-    "@flanksource/facet": "^0.1.10",
+    "@flanksource/facet": "^0.1.38",
     "@flanksource/icons": "^1.0.53",
+    "@iconify-json/carbon": "^1.2.0",
+    "@iconify-json/fluent": "^1.2.0",
+    "@iconify-json/iconoir": "^1.2.0",
+    "@iconify-json/lucide": "^1.2.0",
+    "@iconify-json/mdi": "^1.2.0",
+    "@iconify-json/ph": "^1.2.0",
+    "@iconify-json/ri": "^1.2.0",
+    "@iconify-json/tabler": "^1.2.0",
+    "@iconify-json/vscode-icons": "^1.2.45",
+    "@iconify/react": "^5.1.0",
     "js-yaml": "^4.1.0"
   },
   "devDependencies": {

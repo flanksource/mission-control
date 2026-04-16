@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"strings"
 	"time"
 
@@ -13,7 +12,6 @@ import (
 	"github.com/flanksource/commons/rand"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	incAPI "github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
@@ -244,40 +242,6 @@ func NewKratosCredentialChecker(m *kratosMiddleware) *KratosCredentialChecker {
 func (k *KratosCredentialChecker) Match(ctx context.Context, user, pass string) error {
 	_, err := k.middleware.kratosLoginWithCache(ctx, user, pass)
 	return err
-}
-
-func (k *KratosCredentialChecker) LoginRedirectURL(authRequestID string) (string, error) {
-	frontendURL := strings.TrimRight(incAPI.FrontendURL, "/")
-	if frontendURL == "" {
-		return "", fmt.Errorf("frontend URL is not configured")
-	}
-
-	q := url.Values{}
-	q.Set("return_to", "/oidc/kratos/callback?auth_request_id="+authRequestID)
-	return frontendURL + "/login?" + q.Encode(), nil
-}
-
-func (k *KratosCredentialChecker) CallbackSubject(c echo.Context) (string, error) {
-	ctx := c.Request().Context().(context.Context)
-
-	session, err := k.middleware.validateSession(ctx, c.Request())
-	if err != nil {
-		return "", err
-	}
-	if session.Active == nil || !*session.Active {
-		return "", fmt.Errorf("session is not active")
-	}
-
-	subject := session.Identity.GetId()
-	if subject == "" {
-		return "", fmt.Errorf("session identity is missing")
-	}
-
-	if _, err := db.GetUserByID(ctx, subject); err != nil {
-		return "", fmt.Errorf("failed to resolve user: %w", err)
-	}
-
-	return subject, nil
 }
 
 // LookupKratosPersonByUsername finds a person by email in the Kratos identities table.
