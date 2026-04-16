@@ -414,9 +414,9 @@
     },
     "NotificationWatchdog": {
       "properties": {
-        "interval": {
+        "schedule": {
           "type": "string",
-          "description": "Interval, if set, will send a periodic watchdog notification at this interval.\nA watchdog notification contains the statistics of this notification.\n\nFormat: duration string (e.g., \"30s\", \"2m\")"
+          "description": "Schedule, if set, will send a periodic watchdog notification on this cron schedule.\nA watchdog notification contains the statistics of this notification.\n\nFormat: standard cron expression (e.g., \"0 * * * *\")."
         }
       },
       "additionalProperties": false,

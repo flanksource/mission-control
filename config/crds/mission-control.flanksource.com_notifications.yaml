@@ -1385,12 +1385,12 @@ spec:
               watchdog:
                 description: Watchdog config for periodic watchdog notifications.
                 properties:
-                  interval:
+                  schedule:
                     description: |-
-                      Interval, if set, will send a periodic watchdog notification at this interval.
+                      Schedule, if set, will send a periodic watchdog notification on this cron schedule.
                       A watchdog notification contains the statistics of this notification.
 
-                      Format: duration string (e.g., "30s", "2m")
+                      Format: standard cron expression (e.g., "0 * * * *").
                     type: string
                 type: object
             required:

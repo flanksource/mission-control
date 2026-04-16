@@ -53,23 +53,23 @@ var _ = ginkgo.Describe("Notification watchdog", func() {
 		})
 
 		notificationID := uuid.New().String()
-		interval := "1m"
-		Expect(notification.SyncWatchdogJob(DefaultContext, scheduler, notificationID, &interval)).To(BeNil())
+		schedule := "*/1 * * * *"
+		Expect(notification.SyncWatchdogJob(DefaultContext, scheduler, notificationID, &schedule)).To(BeNil())
 		Expect(scheduler.Entries()).To(HaveLen(1))
 
 		Expect(notification.SyncWatchdogJob(DefaultContext, scheduler, notificationID, nil)).To(BeNil())
 		Expect(scheduler.Entries()).To(BeEmpty())
 	})
 
-	ginkgo.It("should treat an empty watchdog interval as disabled", func() {
+	ginkgo.It("should treat an empty watchdog schedule as disabled", func() {
 		scheduler := cron.New()
 		ginkgo.DeferCleanup(func() {
 			scheduler.Stop()
 		})
 
 		notificationID := uuid.New().String()
-		interval := "1m"
-		Expect(notification.SyncWatchdogJob(DefaultContext, scheduler, notificationID, &interval)).To(BeNil())
+		schedule := "*/1 * * * *"
+		Expect(notification.SyncWatchdogJob(DefaultContext, scheduler, notificationID, &schedule)).To(BeNil())
 		Expect(scheduler.Entries()).To(HaveLen(1))
 
 		disabled := "   "

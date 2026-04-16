@@ -502,20 +502,19 @@ func isKubernetesConfigItem(ctx context.Context, configID string) (bool, error) 
 func InitWatchdogNotifications(ctx context.Context, scheduler *cron.Cron) error {
 	var notifications []models.Notification
 	if err := ctx.DB().
-		Where("watchdog_interval IS NOT NULL AND watchdog_interval != 0").
+		Where("watchdog_schedule IS NOT NULL AND watchdog_schedule != ''").
 		Where("deleted_at IS NULL").
 		Find(&notifications).Error; err != nil {
-		return fmt.Errorf("failed to get notifications with watchdog interval: %w", err)
+		return fmt.Errorf("failed to get notifications with watchdog schedule: %w", err)
 	}
 
 	ctx.Debugf("initializing watchdog jobs for %d notifications", len(notifications))
 	for _, n := range notifications {
-		if n.WatchdogInterval == nil {
+		if n.WatchdogSchedule == nil {
 			continue
 		}
 
-		interval := n.WatchdogInterval.String()
-		if err := SyncWatchdogJob(ctx, scheduler, n.ID.String(), &interval); err != nil {
+		if err := SyncWatchdogJob(ctx, scheduler, n.ID.String(), n.WatchdogSchedule); err != nil {
 			return fmt.Errorf("failed to schedule watchdog job for notification(%s): %w", n.ID, err)
 		}
 	}
@@ -523,12 +522,12 @@ func InitWatchdogNotifications(ctx context.Context, scheduler *cron.Cron) error 
 	return nil
 }
 
-func normalizeWatchdogInterval(interval *string) *string {
-	if interval == nil {
+func normalizeWatchdogSchedule(schedule *string) *string {
+	if schedule == nil {
 		return nil
 	}
 
-	trimmed := strings.TrimSpace(*interval)
+	trimmed := strings.TrimSpace(*schedule)
 	if trimmed == "" {
 		return nil
 	}
@@ -536,35 +535,35 @@ func normalizeWatchdogInterval(interval *string) *string {
 	return lo.ToPtr(trimmed)
 }
 
-func SyncWatchdogJob(ctx context.Context, scheduler *cron.Cron, notificationID string, interval *string) error {
-	interval = normalizeWatchdogInterval(interval)
+func SyncWatchdogJob(ctx context.Context, scheduler *cron.Cron, notificationID string, schedule *string) error {
+	schedule = normalizeWatchdogSchedule(schedule)
 
 	var scheduleChanged bool
 	var existingJob *job.Job
 
 	if j, ok := watchdogJobs.Load(notificationID); ok {
 		existingJob = j.(*job.Job)
-		if interval != nil {
-			scheduleChanged = existingJob.Schedule != fmt.Sprintf("@every %s", *interval)
+		if schedule != nil {
+			scheduleChanged = existingJob.Schedule != *schedule
 		}
 
-		if interval == nil || scheduleChanged {
+		if schedule == nil || scheduleChanged {
 			ctx.Debugf("deleting existing watchdog job for %s", notificationID)
 			existingJob.Unschedule()
 			watchdogJobs.Delete(notificationID)
 		}
 	}
 
-	if interval != nil && (scheduleChanged || existingJob == nil) {
-		return scheduleWatchdogJob(ctx, scheduler, notificationID, *interval)
+	if schedule != nil && (scheduleChanged || existingJob == nil) {
+		return scheduleWatchdogJob(ctx, scheduler, notificationID, *schedule)
 	}
 
 	return nil
 }
 
-func scheduleWatchdogJob(ctx context.Context, scheduler *cron.Cron, notificationID string, interval string) error {
-	ctx.Debugf("scheduling watchdog job for %s with interval %s", notificationID, interval)
-	job := WatchdogNotificationJob(ctx, notificationID, interval)
+func scheduleWatchdogJob(ctx context.Context, scheduler *cron.Cron, notificationID string, schedule string) error {
+	ctx.Debugf("scheduling watchdog job for %s with schedule %s", notificationID, schedule)
+	job := WatchdogNotificationJob(ctx, notificationID, schedule)
 	if err := job.AddToScheduler(scheduler); err != nil {
 		return fmt.Errorf("failed to add watchdog job to scheduler: %w", err)
 	}
@@ -572,8 +571,7 @@ func scheduleWatchdogJob(ctx context.Context, scheduler *cron.Cron, notification
 	return nil
 }
 
-func WatchdogNotificationJob(ctx context.Context, notificationID string, interval string) *job.Job {
-	schedule := fmt.Sprintf("@every %s", interval)
+func WatchdogNotificationJob(ctx context.Context, notificationID string, schedule string) *job.Job {
 	return &job.Job{
 		Name:          "NotificationWatchdog",
 		Retention:     job.RetentionFailed,

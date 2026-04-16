@@ -56,11 +56,11 @@ type NotificationFallback struct {
 }
 
 type NotificationWatchdog struct {
-	// Interval, if set, will send a periodic watchdog notification at this interval.
+	// Schedule, if set, will send a periodic watchdog notification on this cron schedule.
 	// A watchdog notification contains the statistics of this notification.
 	//
-	// Format: duration string (e.g., "30s", "2m")
-	Interval *string `json:"interval,omitempty" yaml:"interval,omitempty"`
+	// Format: standard cron expression (e.g., "0 * * * *").
+	Schedule *string `json:"schedule,omitempty" yaml:"schedule,omitempty"`
 }
 
 // +kubebuilder:object:generate=true

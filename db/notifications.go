@@ -20,6 +20,7 @@ import (
 	"github.com/flanksource/incident-commander/api"
 	v1 "github.com/flanksource/incident-commander/api/v1"
 	"github.com/google/uuid"
+	"github.com/robfig/cron/v3"
 	"github.com/samber/lo"
 	"go.opentelemetry.io/otel/trace"
 )
@@ -76,13 +77,13 @@ func PersistNotificationFromCRD(ctx context.Context, obj *v1.Notification) error
 		}
 	}
 
-	if obj.Spec.Watchdog != nil && obj.Spec.Watchdog.Interval != nil && *obj.Spec.Watchdog.Interval != "" {
-		if parsed, err := text.ParseDuration(*obj.Spec.Watchdog.Interval); err != nil {
-			return err
-		} else if lo.FromPtr(parsed) <= 0 {
-			return fmt.Errorf("invalid watchdog.interval: must be > 0")
-		} else {
-			dbObj.WatchdogInterval = parsed
+	if obj.Spec.Watchdog != nil && obj.Spec.Watchdog.Schedule != nil {
+		schedule := strings.TrimSpace(*obj.Spec.Watchdog.Schedule)
+		if schedule != "" {
+			if _, err := cron.ParseStandard(schedule); err != nil {
+				return fmt.Errorf("invalid watchdog.schedule: %w", err)
+			}
+			dbObj.WatchdogSchedule = lo.ToPtr(schedule)
 		}
 	}
 
