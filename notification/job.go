@@ -618,6 +618,7 @@ func SendWatchdogNotification(ctx context.Context, notificationID string) error 
 	}
 
 	eventTime := time.Now()
+	var sendErrs []error
 
 	if notification.HasRecipients() && notification.PlaybookID == nil {
 		// NOTE: Watchdog notifications aren't sent to playbook receivers.
@@ -638,7 +639,7 @@ func SendWatchdogNotification(ctx context.Context, notificationID string) error 
 		}
 
 		if err := sendNotification(ctx, payload); err != nil {
-			return fmt.Errorf("failed to send watchdog notification to primary recipient: %w", err)
+			sendErrs = append(sendErrs, fmt.Errorf("failed to send watchdog notification to primary recipient: %w", err))
 		}
 	}
 
@@ -655,9 +656,9 @@ func SendWatchdogNotification(ctx context.Context, notificationID string) error 
 		}
 
 		if err := sendNotification(ctx, payload); err != nil {
-			return fmt.Errorf("failed to send watchdog notification to fallback recipient: %w", err)
+			sendErrs = append(sendErrs, fmt.Errorf("failed to send watchdog notification to fallback recipient: %w", err))
 		}
 	}
 
-	return nil
+	return errors.Join(sendErrs...)
 }

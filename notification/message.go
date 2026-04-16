@@ -52,7 +52,7 @@ func BuildNotificationMessagePayload(payload NotificationEventPayload, env *celV
 	switch payload.EventName {
 	case icapi.EventWatchdog:
 		msg.Title = fmt.Sprintf("Summary for notification: %s/%s", safeName(env.Summary.Namespace), safeName(env.Summary.Name))
-		msg.Summary = "Sent/failed stats are cumulative across all history (no time window), excluding watchdog-generated sends. Pending is the current queued count."
+		msg.Summary = "Sent/failed stats are cumulative across the full notification history, excluding watchdog-generated sends. Pending is the current queued count."
 		msg.Attributes = append(msg.Attributes,
 			keyValue("Sent", fmt.Sprintf("%d", env.Summary.Sent)),
 			keyValue("Failed", fmt.Sprintf("%d", env.Summary.Failed)),
