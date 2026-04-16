@@ -249,7 +249,7 @@ func launchBrowserAndCapture(ctx gocontext.Context, flags browserLoginFlags) (*b
 	} else if verbose >= 1 {
 		fmt.Fprintln(os.Stderr, state.Pretty().ANSI())
 	} else {
-		selectedAud, _ := selectBearerToken(data.BearerTokens, flags.RequireBearerAud)
+		selectedAud, _ := selectBearerToken(data.BearerTokens, flags.RequireBearerAud, flags.RequireBearerScope)
 		for _, aud := range sortedAudiences(data.BearerTokens) {
 			if jwt := connection.DecodeJWT(data.BearerTokens[aud]); jwt != nil {
 				t := jwt.Pretty()
@@ -471,14 +471,21 @@ func extractBearerTokens(session map[string]string) map[string]string {
 	return tokens
 }
 
-func selectBearerToken(tokens map[string]string, requiredAud string) (string, error) {
+func selectBearerToken(tokens map[string]string, requiredAud, requiredScope string) (string, error) {
 	var bestAud string
 	var bestScopes int
 	for aud, token := range tokens {
 		if !strings.Contains(aud, requiredAud) {
 			continue
 		}
-		if jwt := connection.DecodeJWT(token); jwt != nil && jwt.ScopeCount() > bestScopes {
+		jwt := connection.DecodeJWT(token)
+		if jwt == nil {
+			continue
+		}
+		if requiredScope != "" && !strings.Contains(jwt.Scopes, requiredScope) {
+			continue
+		}
+		if jwt.ScopeCount() > bestScopes {
 			bestAud = aud
 			bestScopes = jwt.ScopeCount()
 		}
@@ -563,7 +570,7 @@ func saveConnection(cmd *cobra.Command, flags browserLoginFlags, data *browserSe
 		for aud, token := range data.BearerTokens {
 			props["bearer_"+aud] = token
 		}
-		selectedAud, err := selectBearerToken(data.BearerTokens, flags.RequireBearerAud)
+		selectedAud, err := selectBearerToken(data.BearerTokens, flags.RequireBearerAud, flags.RequireBearerScope)
 		if err != nil {
 			return err
 		}
@@ -612,7 +619,7 @@ func saveConnection(cmd *cobra.Command, flags browserLoginFlags, data *browserSe
 		fmt.Fprintf(cmd.OutOrStdout(), "  Session storage: %d keys\n", len(data.SessionStorage))
 	}
 	if len(data.BearerTokens) > 0 {
-		selectedAud, _ := selectBearerToken(data.BearerTokens, flags.RequireBearerAud)
+		selectedAud, _ := selectBearerToken(data.BearerTokens, flags.RequireBearerAud, flags.RequireBearerScope)
 		for _, aud := range sortedAudiences(data.BearerTokens) {
 			jwt := connection.DecodeJWT(data.BearerTokens[aud])
 			if jwt == nil {

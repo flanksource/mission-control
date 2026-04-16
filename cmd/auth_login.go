@@ -105,7 +105,9 @@ func runAuthLogin(cmd *cobra.Command, _ []string) error {
 	)
 
 	fmt.Fprintf(cmd.OutOrStdout(), "Opening browser for login...\n%s\n\n", authURL)
-	openBrowser(authURL)
+	if err := openBrowser(authURL); err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Failed to open browser: %v\nOpen the URL manually.\n\n", err)
+	}
 
 	var code string
 	select {
@@ -131,9 +133,8 @@ func runAuthLogin(cmd *cobra.Command, _ []string) error {
 	}
 
 	fmt.Fprintf(cmd.OutOrStdout(), "\nLogin successful!\n\n")
-	fmt.Fprintf(cmd.OutOrStdout(), "Tokens saved to: %s\n\n", tokenPath)
-	fmt.Fprintf(cmd.OutOrStdout(), "Access token (expires %s):\n%s\n\n", tokens.ExpiresAt.Format("15:04:05"), tokens.AccessToken)
-	fmt.Fprintf(cmd.OutOrStdout(), "Refresh token:\n%s\n\n", tokens.RefreshToken)
+	fmt.Fprintf(cmd.OutOrStdout(), "Tokens saved to: %s\n", tokenPath)
+	fmt.Fprintf(cmd.OutOrStdout(), "Access token expires: %s\n", tokens.ExpiresAt.Format(time.RFC3339))
 
 	return nil
 }
@@ -158,13 +159,13 @@ func storeTokens(serverURL string, tokens *oidcclient.Tokens) (string, error) {
 	return path, os.WriteFile(path, data, 0600)
 }
 
-func openBrowser(url string) {
-	var cmd string
+func openBrowser(url string) error {
 	switch runtime.GOOS {
 	case "darwin":
-		cmd = "open"
+		return exec.Command("open", url).Start()
+	case "windows":
+		return exec.Command("cmd", "/c", "start", "", url).Start()
 	default:
-		cmd = "xdg-open"
+		return exec.Command("xdg-open", url).Start()
 	}
-	_ = exec.Command(cmd, url).Start()
 }

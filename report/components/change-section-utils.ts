@@ -452,15 +452,19 @@ export function categorizeChanges(
 
   for (const change of changes) {
     const category = change.category ?? '';
+
+    if (category === 'rbac' || category.startsWith('rbac.')) { result.rbac.push(change); continue; }
+    if (category === 'backup' || category.startsWith('backup.')) { result.backup.push(change); continue; }
+    if (category === 'deployment' || category.startsWith('deployment.')) { result.deployment.push(change); continue; }
+
     if (!category) {
-      result.uncategorized.push(change);
-      continue;
+      const asApp = configChangeToApplicationChange(change);
+      if (isRBACChange(asApp)) { result.rbac.push(change); continue; }
+      if (isBackupChange(asApp)) { result.backup.push(change); continue; }
+      if (isDeploymentChange(asApp)) { result.deployment.push(change); continue; }
     }
 
-    if (category === 'rbac' || category.startsWith('rbac.')) result.rbac.push(change);
-    else if (category === 'backup' || category.startsWith('backup.')) result.backup.push(change);
-    else if (category === 'deployment' || category.startsWith('deployment.')) result.deployment.push(change);
-    else result.uncategorized.push(change);
+    result.uncategorized.push(change);
   }
 
   return result;

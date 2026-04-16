@@ -638,8 +638,8 @@ func GetAccessLogsForUIRef(ctx context.Context, filters *api.AccessLogsUIFilters
 			config_access_logs.mfa,
 			config_access_logs.count,
 			config_access_logs.properties`).
-		Joins("JOIN config_items ON config_items.id = config_access_logs.config_id").
-		Joins("JOIN external_users ON external_users.id = config_access_logs.external_user_id").
+		Joins("LEFT JOIN config_items ON config_items.id = config_access_logs.config_id").
+		Joins("LEFT JOIN external_users ON external_users.id = config_access_logs.external_user_id").
 		Order("config_access_logs.created_at DESC")
 
 	if filters.Search != "" {

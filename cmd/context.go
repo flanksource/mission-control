@@ -248,13 +248,21 @@ Examples:
 			return err
 		}
 
-		ctx := MCContext{
-			Name:   contextAddName,
-			Server: strings.TrimRight(contextAddServer, "/"),
-			DB:     contextAddDB,
-			Token:  contextAddToken,
+		existingCtx := cfg.GetContext(contextAddName)
+		existing := existingCtx != nil
+		ctx := MCContext{Name: contextAddName}
+		if existingCtx != nil {
+			ctx = *existingCtx
 		}
-		existing := cfg.GetContext(contextAddName) != nil
+		if cmd.Flags().Changed("server") {
+			ctx.Server = strings.TrimRight(contextAddServer, "/")
+		}
+		if cmd.Flags().Changed("db-url") {
+			ctx.DB = contextAddDB
+		}
+		if cmd.Flags().Changed("token") {
+			ctx.Token = contextAddToken
+		}
 		cfg.SetContext(ctx)
 
 		if contextAddUse || cfg.CurrentContext == "" {
@@ -308,6 +316,11 @@ func ensureAPIBase(ctx *MCContext) (bool, error) {
 	buf := make([]byte, 512)
 	n, _ := resp.Body.Read(buf)
 	body := strings.TrimLeft(string(buf[:n]), " \t\r\n")
+	switch resp.StatusCode {
+	case nethttp.StatusOK, nethttp.StatusUnauthorized, nethttp.StatusForbidden:
+	default:
+		return false, nil
+	}
 	ct := strings.ToLower(resp.Header.Get("Content-Type"))
 	if strings.Contains(ct, "text/html") || strings.HasPrefix(body, "<") {
 		return false, nil

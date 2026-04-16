@@ -144,6 +144,9 @@ func BuildReport(ctx context.Context, configs []models.ConfigItem, opts Options)
 		report.Analyses = append(report.Analyses, entry.Analyses...)
 		report.Access = append(report.Access, entry.Access...)
 		report.AccessLogs = append(report.AccessLogs, entry.AccessLogs...)
+		if report.RelationshipTree == nil && entry.RelationshipTree != nil {
+			report.RelationshipTree = entry.RelationshipTree
+		}
 
 		for _, id := range entryScraperIDs {
 			scraperIDSet[id] = true
@@ -283,15 +286,16 @@ func buildEntryWithMapper(ctx context.Context, config *models.ConfigItem, opts O
 		for _, r := range entry.RBACResources {
 			entry.AccessCount += len(r.Users)
 		}
+		entry.Access = make([]api.CatalogReportAccess, 0, len(rbacRows))
+		for _, row := range rbacRows {
+			entry.Access = append(entry.Access, rbacRowToAccess(row))
+		}
 	}
 
 	if opts.Sections.AccessLogs {
-		logs, err := getAccessLogs(ctx, targetIDs, sinceTime)
+		logs, err := getAccessLogs(ctx, targetIDs, sinceTime, opts.effectiveMax(0))
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to get access logs: %w", err)
-		}
-		if limit := opts.effectiveMax(0); limit > 0 && len(logs) > limit {
-			logs = logs[:limit]
 		}
 		entry.AccessLogs = lo.Map(logs, func(l accessLogRow, _ int) api.CatalogReportAccessLog {
 			return newAccessLogEntry(l)
@@ -435,11 +439,11 @@ func (r accessLogRow) QueryLogSummary() string {
 	return r.ConfigType
 }
 
-func getAccessLogs(ctx context.Context, configIDs []uuid.UUID, since time.Time) (results []accessLogRow, err error) {
+func getAccessLogs(ctx context.Context, configIDs []uuid.UUID, since time.Time, limit int) (results []accessLogRow, err error) {
 	timer := query.NewQueryLogger(ctx).Start("AccessLogs").Arg("configIDs", len(configIDs))
 	defer timer.End(&err)
 
-	if err = ctx.DB().
+	q := ctx.DB().
 		Table("config_access_logs").
 		Select(`config_access_logs.config_id,
 			config_items.name AS config_name,
@@ -454,12 +458,39 @@ func getAccessLogs(ctx context.Context, configIDs []uuid.UUID, since time.Time) 
 		Joins("JOIN external_users ON external_users.id = config_access_logs.external_user_id").
 		Where("config_access_logs.config_id IN ?", configIDs).
 		Where("config_access_logs.created_at >= ?", since).
-		Order("config_access_logs.created_at DESC").
-		Scan(&results).Error; err != nil {
+		Order("config_access_logs.created_at DESC")
+	if limit > 0 {
+		q = q.Limit(limit)
+	}
+	if err = q.Scan(&results).Error; err != nil {
 		return nil, err
 	}
 	timer.Results(results)
 	return results, nil
+}
+
+func rbacRowToAccess(r db.RBACAccessRow) api.CatalogReportAccess {
+	a := api.CatalogReportAccess{
+		ConfigID:   r.ConfigID.String(),
+		ConfigName: r.ConfigName,
+		ConfigType: r.ConfigType,
+		Permalink:  api.ConfigPermalink(r.ConfigID.String()),
+		UserID:     r.UserID.String(),
+		UserName:   r.UserName,
+		Email:      r.Email,
+		Role:       r.Role,
+		UserType:   r.UserType,
+		CreatedAt:  r.CreatedAt.Format(time.RFC3339),
+	}
+	if r.LastSignedInAt != nil {
+		s := r.LastSignedInAt.Format(time.RFC3339)
+		a.LastSignedInAt = &s
+	}
+	if r.LastReviewedAt != nil {
+		s := r.LastReviewedAt.Format(time.RFC3339)
+		a.LastReviewedAt = &s
+	}
+	return a
 }
 
 func newAccessLogEntry(r accessLogRow) api.CatalogReportAccessLog {
