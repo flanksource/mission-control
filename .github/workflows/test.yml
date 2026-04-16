@@ -33,12 +33,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
-      - name: Inject GEMINI_API_KEY
-        run: |
-          sed -i "s/GEMINI_API_KEY_PLACEHOLDER/${GEMINI_API_KEY}/" playbook/testdata/connections/gemini.yaml
-        env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-
       - name: Check disk space before cache
         run: |
           echo "Disk space before cache restore:"
@@ -72,6 +66,12 @@ jobs:
           chmod +x /usr/local/bin/facet
           facet --help
           facet --version
+
+      - name: Inject GEMINI_API_KEY
+        run: |
+          sed -i "s/GEMINI_API_KEY_PLACEHOLDER/${GEMINI_API_KEY}/" playbook/testdata/connections/gemini.yaml
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 
       - name: Test
         run: make static ci-test
