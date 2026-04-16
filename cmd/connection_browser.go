@@ -460,6 +460,9 @@ func extractBearerTokens(session map[string]string) map[string]string {
 		if jwt == nil || jwt.Audience == "" {
 			continue
 		}
+		if !jwt.ExpiresAt.IsZero() && time.Until(jwt.ExpiresAt) <= 0 {
+			continue
+		}
 		if jwt.ScopeCount() > scopeCounts[jwt.Audience] {
 			tokens[jwt.Audience] = secret
 			scopeCounts[jwt.Audience] = jwt.ScopeCount()
@@ -526,13 +529,6 @@ func saveConnection(cmd *cobra.Command, flags browserLoginFlags, data *browserSe
 		return fmt.Errorf("failed to marshal storage state: %w", err)
 	}
 	props["storageState"] = string(storageJSON)
-
-	if len(data.SessionStorage) > 0 {
-		sessionJSON, err := json.Marshal(data.SessionStorage)
-		if err == nil {
-			props["sessionStorage"] = string(sessionJSON)
-		}
-	}
 
 	// Also store cookies as headers for HTTP connection compatibility
 	if len(data.Cookies) > 0 {

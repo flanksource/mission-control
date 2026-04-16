@@ -54,7 +54,9 @@ func GeneratePKCE() (verifier, challenge string, err error) {
 
 func RandomBase64(n int) string {
 	b := make([]byte, n)
-	_, _ = rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		panic("crypto/rand failed: " + err.Error())
+	}
 	return base64.RawURLEncoding.EncodeToString(b)
 }
 
