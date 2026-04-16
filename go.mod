@@ -7,7 +7,6 @@ require (
 	github.com/MicahParks/keyfunc v1.9.0
 	github.com/casbin/casbin/v2 v2.135.0
 	github.com/casbin/gorm-adapter/v3 v3.39.0
-	github.com/containrrr/shoutrrr v0.8.0
 	github.com/fergusstrange/embedded-postgres v1.33.0 // indirect
 	github.com/flanksource/commons v1.50.2
 	github.com/flanksource/duty v1.0.1263
@@ -37,7 +36,6 @@ require (
 	github.com/MicahParks/keyfunc/v2 v2.1.0
 	github.com/RussellLuo/slidingwindow v0.0.0-20200528002341-535bb99d338b
 	github.com/WinterYukky/gorm-extra-clause-plugin v0.4.0
-	github.com/adityathebe/go-strip-markdown/v2 v2.0.1
 	github.com/aws/aws-sdk-go-v2 v1.41.5
 	github.com/aws/aws-sdk-go-v2/config v1.32.11
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.11

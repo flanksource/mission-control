@@ -59,7 +59,57 @@ func ConsumeAll(ctx context.Context) {
 	for _, consumer := range consumers {
 		consumer.ConsumeUntilEmpty(ctx)
 	}
+}
 
+// InitConsumers registers event handlers and creates consumers without starting
+// background listeners. Use ConsumeAll to process events explicitly.
+// This is useful in tests to avoid races between background consumers and test data setup.
+func InitConsumers(ctx context.Context) {
+	log := ctx.Logger.Named("events")
+	for _, fn := range registers {
+		fn(ctx)
+	}
+
+	SyncHandlers.Each(func(event string, handlers []postq.SyncEventHandlerFunc) {
+		consumer := postq.SyncEventConsumer{
+			WatchEvents: []string{event},
+			Consumers:   handlers,
+			ConsumerOption: &postq.ConsumerOption{
+				ErrorHandler: defaultLoggerErrorHandler,
+			},
+		}
+		if ec, err := consumer.EventConsumer(); err != nil {
+			log.Fatalf("failed to create event consumer: %s", err)
+		} else {
+			consumers = append(consumers, ec)
+		}
+	})
+
+	AsyncHandlers.Each(func(event string, handlers []asyncHandlerData) {
+		for _, handler := range handlers {
+			h := handler.fn
+			batchSize := ctx.Properties().Int(event+".batchSize", handler.batchSize)
+			consumer := postq.AsyncEventConsumer{
+				WatchEvents: []string{event},
+				BatchSize:   batchSize,
+				Consumer: func(_ctx context.Context, e models.Events) models.Events {
+					return h(ctx, e)
+				},
+				ConsumerOption: &postq.ConsumerOption{
+					NumConsumers: handler.numConsumers,
+					ErrorHandler: func(ctx context.Context, err error) bool {
+						log.Errorf("error consuming event(%s): %v", event, err)
+						return false
+					},
+				},
+			}
+			if ec, err := consumer.EventConsumer(); err != nil {
+				log.Fatalf("failed to create event consumer: %s", err)
+			} else {
+				consumers = append(consumers, ec)
+			}
+		}
+	})
 }
 
 func StartConsumers(ctx context.Context) {

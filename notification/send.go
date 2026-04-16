@@ -23,6 +23,7 @@ import (
 	"github.com/flanksource/incident-commander/events"
 	"github.com/flanksource/incident-commander/logs"
 	"github.com/flanksource/incident-commander/mail"
+	"github.com/flanksource/incident-commander/notification/senders"
 	"github.com/flanksource/incident-commander/teams"
 )
 
@@ -373,45 +374,89 @@ func SendRawNotification(ctx *Context, connectionName, shoutrrrURL string, celEn
 		}
 
 		ctx.WithRecipient(RecipientTypeConnection, &connection.ID)
-
 		shoutrrrURL = connection.URL
-		// connection.Properties provides the base settings (host, credentials, default recipients, etc.).
-		// data.Properties (which carry spec.to.properties from the CRD) are merged on top so that
-		// anything the user explicitly specified overrides the connection's defaults.
-		data.Properties = collections.MergeMap(connection.Properties, data.Properties)
 	}
 
-	if connection != nil && connection.Type == models.ConnectionTypeSlack {
-		celEnv["channel"] = "slack"
-		templater := ctx.NewStructTemplater(celEnv, "", TemplateFuncs)
-		if err := templater.Walk(&data); err != nil {
-			return "", fmt.Errorf("error templating notification: %w", err)
-		}
+	// Template the notification data (title, message) using the CRD/playbook environment.
+	// Connection properties are NOT merged — each sender reads what it needs from the connection.
+	celEnv["channel"] = resolveServiceName(connection, shoutrrrURL)
+	templater := ctx.NewStructTemplater(celEnv, "template", TemplateFuncs)
+	if err := templater.Walk(&data); err != nil {
+		return "", fmt.Errorf("error templating notification: %w", err)
+	}
+	ctx.WithMessage(data.Message)
 
-		ctx.WithMessage(data.Message)
-		resourceID := ""
-		if ctx.log != nil && ctx.log.ResourceID != uuid.Nil {
-			resourceID = ctx.log.ResourceID.String()
-		}
-		traceLog("NotificationID=%s Resource=[%s] Sent via slack ...", ctx.notificationID, resourceID)
+	// Slack: existing native path
+	if connection != nil && connection.Type == models.ConnectionTypeSlack {
 		if err := SlackSend(ctx, connection.Password, connection.Username, data); err != nil {
 			return "", err
 		}
-
+		traceLogSend(ctx, "slack")
 		return "slack", nil
 	}
 
+	// Native senders for known connection types
+	if connection != nil {
+		if sender, err := senders.ForConnection(connection); err == nil {
+			senderData := senders.Data{
+				Title:       data.Title,
+				Message:     data.Message,
+				Attachments: data.Attachments,
+			}
+			if err := sender.Send(ctx.Context, connection, senderData); err != nil {
+				return "", fmt.Errorf("failed to send via %s: %w", connection.Type, err)
+			}
+			traceLogSend(ctx, connection.Type)
+			return connection.Type, nil
+		}
+	}
+
+	// Fallback: Shoutrrr for SMTP and unknown connection types
+	data.Properties = collections.MergeMap(connectionProperties(connection), data.Properties)
 	service, err := shoutrrrSendRaw(ctx, celEnv, shoutrrrURL, data)
 	if err != nil {
-		return "", fmt.Errorf("failed to send message with Shoutrrr: %w", err)
+		return "", fmt.Errorf("failed to send notification: %w", err)
 	}
+	traceLogSend(ctx, service)
+	return service, nil
+}
+
+func traceLogSend(ctx *Context, service string) {
 	resourceID := ""
 	if ctx.log != nil && ctx.log.ResourceID != uuid.Nil {
 		resourceID = ctx.log.ResourceID.String()
 	}
-	traceLog("NotificationID=%s Resource=[%s] Sent via Shoutrrr ...", ctx.notificationID, resourceID)
+	traceLog("NotificationID=%s Resource=[%s] Sent via %s", ctx.notificationID, resourceID, service)
+}
 
-	return service, nil
+func resolveServiceName(conn *models.Connection, shoutrrrURL string) string {
+	if conn != nil {
+		switch conn.Type {
+		case models.ConnectionTypeSlack:
+			return "slack"
+		case models.ConnectionTypeEmail:
+			return "smtp"
+		default:
+			return conn.Type
+		}
+	}
+	if strings.HasPrefix(shoutrrrURL, "smtp://") {
+		return "smtp"
+	}
+	if strings.HasPrefix(shoutrrrURL, "slack://") {
+		return "slack"
+	}
+	if idx := strings.Index(shoutrrrURL, "://"); idx > 0 {
+		return shoutrrrURL[:idx]
+	}
+	return ""
+}
+
+func connectionProperties(conn *models.Connection) map[string]string {
+	if conn == nil {
+		return nil
+	}
+	return conn.Properties
 }
 
 func SendNotification(ctx *Context, connectionName, shoutrrrURL string, payload NotificationMessagePayload, properties map[string]string, celEnv *celVariables) (string, error) {
@@ -424,19 +469,15 @@ func SendNotification(ctx *Context, connectionName, shoutrrrURL string, payload 
 		}
 
 		ctx.WithRecipient(RecipientTypeConnection, &connection.ID)
-
 		shoutrrrURL = connection.URL
-		// connection.Properties provides the base settings (host, credentials, default recipients, etc.).
-		// properties (which carry spec.to.properties from the CRD) are merged on top so that
-		// anything the user explicitly specified overrides the connection's defaults.
-		properties = collections.MergeMap(connection.Properties, properties)
 	}
 
-	// Template render properties if celEnv is available
+	// Template render user-specified properties (not connection properties)
 	if celEnv != nil {
 		properties = renderTemplateProperties(ctx, properties, celEnv)
 	}
 
+	// Slack: existing native path
 	if connection != nil && connection.Type == models.ConnectionTypeSlack {
 		slackMsg, err := FormatNotificationMessage(payload, "slack")
 		if err != nil {
@@ -450,29 +491,43 @@ func SendNotification(ctx *Context, connectionName, shoutrrrURL string, payload 
 		}
 
 		ctx.WithMessage(data.Message)
-
-		resourceID := ""
-		if ctx.log != nil && ctx.log.ResourceID != uuid.Nil {
-			resourceID = ctx.log.ResourceID.String()
-		}
-		traceLog("NotificationID=%s Resource=[%s] Sent via slack ...", ctx.notificationID, resourceID)
 		if err := SlackSend(ctx, connection.Password, connection.Username, data); err != nil {
 			return "", err
 		}
-
+		traceLogSend(ctx, "slack")
 		return "slack", nil
 	}
 
+	// Native senders for known connection types
+	if connection != nil {
+		if sender, senderErr := senders.ForConnection(connection); senderErr == nil {
+			format := "markdown"
+			if connection.Type == models.ConnectionTypeEmail {
+				format = "email"
+			}
+			message, err := FormatNotificationMessage(payload, format)
+			if err != nil {
+				return "", fmt.Errorf("failed to format message: %w", err)
+			}
+			senderData := senders.Data{
+				Title:   payload.Title,
+				Message: message,
+			}
+			if err := sender.Send(ctx.Context, connection, senderData); err != nil {
+				return "", fmt.Errorf("failed to send via %s: %w", connection.Type, err)
+			}
+			traceLogSend(ctx, connection.Type)
+			return connection.Type, nil
+		}
+	}
+
+	// Fallback: Shoutrrr for SMTP and unknown types
+	properties = collections.MergeMap(connectionProperties(connection), properties)
 	service, err := shoutrrrSend(ctx, shoutrrrURL, payload, properties)
 	if err != nil {
-		return "", fmt.Errorf("failed to send message with Shoutrrr: %w", err)
+		return "", fmt.Errorf("failed to send notification: %w", err)
 	}
-	resourceID := ""
-	if ctx.log != nil && ctx.log.ResourceID != uuid.Nil {
-		resourceID = ctx.log.ResourceID.String()
-	}
-	traceLog("NotificationID=%s Resource=[%s] Sent via Shoutrrr ...", ctx.notificationID, resourceID)
-
+	traceLogSend(ctx, service)
 	return service, nil
 }
 

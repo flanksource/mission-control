@@ -46,7 +46,7 @@ var _ = ginkgo.BeforeSuite(func() {
 
 	_ = context.UpdateProperty(DefaultContext, api.PropertyIncidentsDisabled, "true")
 	_ = context.UpdateProperty(DefaultContext, "notification.send.trace", "true")
-	events.StartConsumers(DefaultContext)
+	events.InitConsumers(DefaultContext)
 	setupWebhookServer()
 	setupSMTPServer()
 	setupSystemSMTPConnection()
