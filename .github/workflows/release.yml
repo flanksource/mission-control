@@ -10,8 +10,8 @@ jobs:
       release-version: ${{ steps.semantic.outputs.release-version }}
       new-release-published: ${{ steps.semantic.outputs.new-release-published }}
     steps:
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
-      - uses: codfish/semantic-release-action@6c65402abb31a48c3f7396d7d099da015be67c2b # v4.0.1
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: codfish/semantic-release-action@6abd188d2458e2fd6c99073454f6cc49196362e8 # v5.0.0
         id: semantic
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -26,14 +26,14 @@ jobs:
           rm -rf /usr/local/share/boost
           rm -rf $AGENT_TOOLSDIRECTORY
           rm -rf /opt/hostedtoolcache
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Install Go
-        uses: actions/setup-go@44694675825211faa026b3c33043df3e48a5fa00 # v6
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6
         with:
           go-version: v1.26.x
           cache: false
 
-      - uses: actions/cache@1bd1e32a3bdc45362d1e726936510720a7c30a57 # v4
+      - uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v4
         with:
           path: |
             ~/go/pkg/mod
@@ -54,7 +54,7 @@ jobs:
     needs: semantic-release
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
 
       - name: Set version
         # Always use git tags as semantic release can fail due to rate limit
@@ -63,7 +63,7 @@ jobs:
           echo "RELEASE_VERSION=$(git describe --abbrev=0 --tags | sed -e 's/^v//')" >> $GITHUB_ENV
 
       - name: Publish to Registry
-        uses: elgohr/Publish-Docker-Github-Action@1d95820b6952cab6e48a2454ff6ca9804bf65f31 # v5
+        uses: elgohr/Publish-Docker-Github-Action@bd5abbb5b131e78b0790675b767a367fcd6e71e2 # v5
         with:
           name: flanksource/incident-commander
           username: ${{ secrets.DOCKER_USERNAME }}
@@ -73,7 +73,7 @@ jobs:
           cache: true
 
       - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@e3dd6a429d7300a6a4c196c26e071d42e0343502 # v5
+        uses: aws-actions/configure-aws-credentials@ec61189d14ec14c8efccab744f656cffd0e33f37 # v5
         with:
           aws-access-key-id: ${{ secrets.ECR_AWS_ACCESS_KEY }}
           aws-secret-access-key: ${{ secrets.ECR_AWS_SECRET_ACCESS_KEY }}
@@ -81,7 +81,7 @@ jobs:
 
       - name: Login to Amazon ECR Public
         id: login-ecr-public
-        uses: aws-actions/amazon-ecr-login@062b18b96a7aff071d4dc91bc00c4c1a7945b076 # v2
+        uses: aws-actions/amazon-ecr-login@376925c9d111252e87ae59691e5a442dd100ef6a # v2
         with:
           registry-type: public
 
@@ -100,23 +100,23 @@ jobs:
     runs-on: ubuntu-latest
     needs: [semantic-release, docker]
     steps:
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - name: Set version
         # Always use git tags as semantic release can fail due to rate limit
         run: |
           git fetch --prune --unshallow
           echo "RELEASE_VERSION=$(git describe --abbrev=0 --tags | sed -e 's/^v//')" >> $GITHUB_ENV
-      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           repository: "${{ github.repository_owner }}/mission-control-chart"
           token: ${{ secrets.FLANKBOT }}
           path: ./incident-commander-chart
       - name: Update image tags in chart
-        uses: mikefarah/yq@7f72595a12fbc7bc2870804fd5e502a63a85bdbf # master
+        uses: mikefarah/yq@602586d8fdb5b93f92b7e374a2e3086a4e8625df # master
         with:
           cmd: yq -i e '.image.tag = "v${{ env.RELEASE_VERSION }}"' incident-commander-chart/chart/values.yaml
       - name: Update image tags in agent chart
-        uses: mikefarah/yq@7f72595a12fbc7bc2870804fd5e502a63a85bdbf # master
+        uses: mikefarah/yq@602586d8fdb5b93f92b7e374a2e3086a4e8625df # master
         with:
           cmd: yq -i e '.image.tag = "v${{ env.RELEASE_VERSION }}"' incident-commander-chart/agent-chart/values.yaml
       - name: Update CRDs
@@ -124,7 +124,7 @@ jobs:
           cp config/crds/* incident-commander-chart/chart/crds/
           cp config/crds/* incident-commander-chart/crd-chart/templates/
       - name: Push changes to chart repo
-        uses: stefanzweifel/git-auto-commit-action@28e16e81777b558cc906c8750092100bbb34c5e3 # v7.0.0
+        uses: stefanzweifel/git-auto-commit-action@04702edda442b2e678b25b537cec683a1493fcb9 # v7.1.0
         with:
           commit_message: "chore: update incident-commander image version to ${{ env.RELEASE_VERSION }}"
           repository: ./incident-commander-chart
