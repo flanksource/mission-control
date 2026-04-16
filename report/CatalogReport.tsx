@@ -164,36 +164,41 @@ export default function CatalogReportPage({ data }: CatalogReportProps) {
 
         {data.groupBy !== 'config' && (
           <>
-            <CategorizedChangesSection changes={data.changes} categoryMappings={data.categoryMappings} />
-            <ConfigInsightsSection analyses={data.analyses} />
+            {data.sections?.changes && <CategorizedChangesSection changes={data.changes} categoryMappings={data.categoryMappings} />}
+            {data.sections?.insights && <ConfigInsightsSection analyses={data.analyses} />}
           </>
         )}
 
-        {data.relationshipTree
-          ? <ConfigTreeSection tree={data.relationshipTree} />
-          : <ConfigRelationshipGraph centralConfig={configItem} relationships={data.relationships} relatedConfigs={data.relatedConfigs} />
-        }
+        {data.sections?.relationships && (
+          data.relationshipTree
+            ? <ConfigTreeSection tree={data.relationshipTree} />
+            : <ConfigRelationshipGraph centralConfig={configItem} relationships={data.relationships} relatedConfigs={data.relatedConfigs} />
+        )}
 
         {data.groupBy !== 'config' && (
           <>
-            <CatalogAccessSection access={data.access} />
-            <CatalogAccessLogsSection logs={data.accessLogs} />
+            {data.sections?.access && <CatalogAccessSection access={data.access} />}
+            {data.sections?.accessLogs && <CatalogAccessLogsSection logs={data.accessLogs} />}
           </>
         )}
 
         {data.groupBy === 'config' && (data.configGroups || []).map((group, idx) => (
           <React.Fragment key={group.configItem.id || idx}>
             <ConfigGroupHeader group={group} />
-            <CategorizedChangesSection changes={group.changes} categoryMappings={data.categoryMappings} hideConfigName />
-            <ConfigInsightsSection analyses={group.analyses} />
-            <CatalogAccessSection access={group.access} />
-            <CatalogAccessLogsSection logs={group.accessLogs} />
+            {data.sections?.changes && <CategorizedChangesSection changes={group.changes} categoryMappings={data.categoryMappings} hideConfigName />}
+            {data.sections?.insights && <ConfigInsightsSection analyses={group.analyses} />}
+            {data.sections?.access && <CatalogAccessSection access={group.access} />}
+            {data.sections?.accessLogs && <CatalogAccessLogsSection logs={group.accessLogs} />}
           </React.Fragment>
         ))}
 
-        {data.configJSON && <ConfigJSONSection json={data.configJSON} />}
+        {data.sections?.configJSON && data.configJSON && <ConfigJSONSection json={data.configJSON} />}
 
-        <ArtifactAppendix changes={(data.entries || []).flatMap((e) => e.changes || [])} />
+        <ArtifactAppendix changes={[
+          ...(data.changes ?? []),
+          ...(data.entries ?? []).flatMap((e) => e.changes ?? []),
+          ...(data.configGroups ?? []).flatMap((g) => g.changes ?? []),
+        ]} />
       </Page>
 
       {data.audit && (

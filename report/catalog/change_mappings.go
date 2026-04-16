@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 
+	dutyAPI "github.com/flanksource/duty/api"
 	dutyContext "github.com/flanksource/duty/context"
 	reportAPI "github.com/flanksource/incident-commander/api"
 	"github.com/google/cel-go/cel"
@@ -52,28 +53,28 @@ func newChangeMapper(ctx dutyContext.Context, mappings []reportAPI.CatalogReport
 
 	env, err := cel.NewEnv(envOptions...)
 	if err != nil {
-		return nil, err
+		return nil, ctx.Oops().Wrap(err)
 	}
 
 	compiled := make([]compiledCategoryMapping, 0, len(mappings))
 	for i, mapping := range mappings {
 		if mapping.Filter == "" {
-			return nil, fmt.Errorf("categoryMappings[%d] filter is required", i)
+			return nil, dutyAPI.Errorf(dutyAPI.EINVALID, "categoryMappings[%d] filter is required", i)
 		}
 		if mapping.Category == "" && mapping.Transform == "" {
-			return nil, fmt.Errorf("categoryMappings[%d] must define category or transform", i)
+			return nil, dutyAPI.Errorf(dutyAPI.EINVALID, "categoryMappings[%d] must define category or transform", i)
 		}
 
 		filter, err := compileChangeMappingProgram(env, mapping.Filter)
 		if err != nil {
-			return nil, fmt.Errorf("failed to compile categoryMappings[%d] filter: %w", i, err)
+			return nil, ctx.Oops().Wrapf(err, "failed to compile categoryMappings[%d] filter", i)
 		}
 
 		var transform cel.Program
 		if mapping.Transform != "" {
 			transform, err = compileChangeMappingProgram(env, mapping.Transform)
 			if err != nil {
-				return nil, fmt.Errorf("failed to compile categoryMappings[%d] transform: %w", i, err)
+				return nil, ctx.Oops().Wrapf(err, "failed to compile categoryMappings[%d] transform", i)
 			}
 		}
 

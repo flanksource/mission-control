@@ -3,13 +3,16 @@ package scraper
 import (
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	"github.com/flanksource/duty/query"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 
 	"github.com/flanksource/incident-commander/api"
 )
@@ -32,7 +35,10 @@ var knownBackendKeys = map[string]bool{
 func BuildScraperInfo(ctx context.Context, scraperID uuid.UUID) (*api.ScraperInfo, error) {
 	var scraper models.ConfigScraper
 	if err := ctx.DB().Where("id = ?", scraperID).First(&scraper).Error; err != nil {
-		return nil, ctx.Oops().Wrapf(err, "scraper %s not found", scraperID)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ctx.Oops().Wrapf(err, "scraper %s not found", scraperID)
+		}
+		return nil, ctx.Oops().Wrapf(err, "failed to query scraper %s", scraperID)
 	}
 
 	types := parseSpecTypes(scraper.Spec)
@@ -45,7 +51,7 @@ func BuildScraperInfo(ctx context.Context, scraperID uuid.UUID) (*api.ScraperInf
 		Name:      scraper.Name,
 		Namespace: scraper.Namespace,
 		Source:    scraper.Source,
-		CreatedAt: scraper.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		CreatedAt: scraper.CreatedAt.Format(time.RFC3339),
 		SpecHash:  specSHA256(scraper.Spec),
 		Types:     types,
 	}
@@ -55,7 +61,7 @@ func BuildScraperInfo(ctx context.Context, scraperID uuid.UUID) (*api.ScraperInf
 	}
 
 	if scraper.UpdatedAt != nil {
-		info.UpdatedAt = scraper.UpdatedAt.Format("2006-01-02T15:04:05Z")
+		info.UpdatedAt = scraper.UpdatedAt.Format(time.RFC3339)
 	}
 
 	if scraper.CreatedBy != nil {

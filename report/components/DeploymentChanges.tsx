@@ -47,11 +47,15 @@ export default function DeploymentChanges({ changes }: Props) {
     return null;
   }
 
-  const counts = {
-    scale: relevant.filter((change) => classifyDeploymentChange(change) === 'scale').length,
-    policy: relevant.filter((change) => classifyDeploymentChange(change) === 'policy').length,
-    spec: relevant.filter((change) => classifyDeploymentChange(change) === 'spec').length,
-  };
+  const categorized = relevant.map((change) => ({
+    change,
+    category: classifyDeploymentChange(change) ?? 'spec',
+  }));
+
+  const counts = categorized.reduce(
+    (acc, { category }) => { acc[category] += 1; return acc; },
+    { scale: 0, policy: 0, spec: 0 } as Record<string, number>,
+  );
 
   return (
     <>
@@ -102,17 +106,14 @@ export default function DeploymentChanges({ changes }: Props) {
         </div>
       </div>
       <ListTable
-        rows={relevant.map((change) => {
-          const category = classifyDeploymentChange(change) ?? 'spec';
-          return {
-            id: change.id,
-            date: change.date,
-            subject: change.description,
-            subtitle: change.changeType ?? '-',
-            category: CATEGORY_LABELS[category],
-            actor: getChangeActor(change),
-          };
-        })}
+        rows={categorized.map(({ change, category }) => ({
+          id: change.id,
+          date: change.date,
+          subject: change.description,
+          subtitle: change.changeType ?? '-',
+          category: CATEGORY_LABELS[category],
+          actor: getChangeActor(change),
+        }))}
         subject="subject"
         subtitle="subtitle"
         date="date"

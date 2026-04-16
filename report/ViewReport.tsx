@@ -32,6 +32,7 @@ interface ViewReportProps {
 
 export default function ViewReportPage({ data }: ViewReportProps) {
   const viewsList = isMultiView(data) ? data.views : [data];
+  if (!viewsList.length) return null;
   const firstView = viewsList[0];
 
   return (

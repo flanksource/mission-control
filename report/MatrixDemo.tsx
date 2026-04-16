@@ -1,5 +1,5 @@
 import React from 'react';
-import { Page } from '@flanksource/facet';
+import { Document, Page } from '@flanksource/facet';
 import { MatrixTable, Dot } from '@flanksource/facet';
 import {
   AccessIndicator,
@@ -35,7 +35,8 @@ export default function MatrixDemo() {
   const roles = ['Read', 'Write', 'Execute', 'Admin', 'Delete', 'Audit'];
 
   return (
-    <Page pageSize="a4" margins={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+    <Document pageSize="a4" margins={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+    <Page>
       <h2 className="text-lg font-bold mb-[4mm] text-slate-900">
         RBAC Matrix - Visual System Demo
       </h2>
@@ -212,5 +213,6 @@ export default function MatrixDemo() {
         <ReviewOverdueLegendSwatch />
       </div>
     </Page>
+    </Document>
   );
 }

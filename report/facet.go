@@ -106,8 +106,12 @@ func RenderCLI(data any, format, entryFile string) (*RenderResult, error) {
 	}, nil
 }
 
+type RenderHTTPOptions struct {
+	TimestampURL string
+}
+
 // RenderHTTP renders data via a remote facet rendering service.
-func RenderHTTP(ctx context.Context, baseURL, token string, data any, format, entryFile string) ([]byte, error) {
+func RenderHTTP(ctx context.Context, baseURL, token string, data any, format, entryFile string, opts ...RenderHTTPOptions) ([]byte, error) {
 	archive, err := BuildArchive()
 	if err != nil {
 		return nil, fmt.Errorf("build report archive: %w", err)
@@ -118,10 +122,14 @@ func RenderHTTP(ctx context.Context, baseURL, token string, data any, format, en
 		return nil, fmt.Errorf("marshal data: %w", err)
 	}
 
-	optionsJSON, err := json.Marshal(map[string]any{
+	renderOpts := map[string]any{
 		"format":    format,
 		"entryFile": entryFile,
-	})
+	}
+	if len(opts) > 0 && opts[0].TimestampURL != "" {
+		renderOpts["timestampUrl"] = opts[0].TimestampURL
+	}
+	optionsJSON, err := json.Marshal(renderOpts)
 	if err != nil {
 		return nil, fmt.Errorf("marshal options: %w", err)
 	}

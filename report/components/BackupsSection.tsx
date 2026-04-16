@@ -30,15 +30,16 @@ const BACKUP_TAG_MAPPING = (key: string, value: unknown): string => {
 };
 
 export default function BackupsSection({ backups, restores }: Props) {
+  const isFailed = (status: string) => String(status).toLowerCase().includes('fail');
   const successCount = backups.filter((b) => b.status === 'success').length;
-  const failedCount = backups.filter((b) => b.status !== 'success').length;
+  const failedCount = backups.filter((b) => isFailed(b.status)).length;
   const calendarEntries = backups.map((backup) => ({
     date: backup.date,
-    status: (backup.status === 'success' ? 'success' : backup.status === 'failed' ? 'failed' : 'warning') as BackupCalendarStatus,
+    status: (backup.status === 'success' ? 'success' : isFailed(backup.status) ? 'failed' : 'warning') as BackupCalendarStatus,
     label: backup.size || undefined,
   }));
 
-  const failedRows = backups.filter((b) => b.status !== 'success');
+  const failedRows = backups.filter((b) => isFailed(b.status));
 
   return (
     <Section variant="hero" title="Backups & Restores" size="md">

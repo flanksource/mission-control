@@ -51,7 +51,7 @@ export default function ConfigChangesExamples({ changes }: Props) {
   return (
     <>
       {singleLine.length > 0 && (
-        <Section variant="hero" title="ConfigChangesExamples" size="md">
+        <Section variant="hero" title="Config Changes Examples" size="md">
           <div className="text-xs text-gray-500 mb-[2mm]">
             Compact rows optimized for one-line scanning. Change type, diff chips, config, actor, counters, and severity stay inline whenever the summary is short enough.
           </div>

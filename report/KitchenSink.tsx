@@ -19,9 +19,10 @@ interface KitchenSinkProps {
 }
 
 export default function KitchenSink({ data }: KitchenSinkProps) {
+  const generatedAt = new Date().toISOString();
 
   const header = <PageHeaderComponent subtitle="Kitchen Sink" />;
-  const footer = <PageFooterComponent generatedAt={new Date().toISOString()} />;
+  const footer = <PageFooterComponent generatedAt={generatedAt} />;
   const pageProps = {
     pageSize: 'a4' as const,
     margins: { top: 5, bottom: 5, left: 5, right: 5 },
@@ -42,7 +43,7 @@ export default function KitchenSink({ data }: KitchenSinkProps) {
             { label: 'insights', value: data.analyses.length },
             { label: 'relationships', value: data.relationships.length },
           ]}
-          generatedAt={new Date().toISOString()}
+          generatedAt={generatedAt}
         >
           <p className="text-sm text-gray-600 max-w-[120mm] mx-auto mt-[4mm]">
             PDF-compatible components for rendering config items, changes, insights, and relationships.

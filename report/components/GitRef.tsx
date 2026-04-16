@@ -35,7 +35,7 @@ export default function GitRef({ url, branch, file, dir, link, size = 'xs' }: Gi
   if (!url && !file) return null;
   const textClass = SIZE_CLASSES[size];
 
-  return (
+  const content = (
     <span className={`inline-flex items-center gap-[1mm] flex-wrap ${textClass}`}>
       <Icon name="Git" size={size === 'xs' ? 10 : 12} />
       {url && <Tag className={textClass}>{url}{branch ? ` @ ${branch}` : ''}</Tag>}
@@ -43,6 +43,11 @@ export default function GitRef({ url, branch, file, dir, link, size = 'xs' }: Gi
       {file && <Tag className={`text-gray-400 ${textClass}`}>{file}</Tag>}
     </span>
   );
+
+  if (link) {
+    return <a href={link} target="_blank" rel="noopener noreferrer">{content}</a>;
+  }
+  return content;
 }
 
 export function GitRefFromSource({ gitops, size }: { gitops?: { git: { url: string; branch: string; file: string; dir: string; link: string } }; size?: 'xs' | 'sm' }) {

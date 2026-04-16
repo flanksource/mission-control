@@ -41,7 +41,8 @@ function loginAgeDays(lastSignedInAt?: string | null): number | null {
 
 function staleColor(lastSignedInAt?: string | null): string | null {
   const days = loginAgeDays(lastSignedInAt);
-  if (days === null || days > 30) return STALE_COLORS.stale30d;
+  if (days === null) return null;
+  if (days > 30) return STALE_COLORS.stale30d;
   if (days > 7) return STALE_COLORS.stale7d;
   return null;
 }

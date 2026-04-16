@@ -69,12 +69,14 @@ export default function BackupActivityCalendar({ entries }: Props) {
   }
 
   const aggregated = aggregateEntries(entries);
-  const referenceDate = new Date(aggregated.reduce((latest, entry) => (
-    new Date(entry.date).getTime() > new Date(latest.date).getTime() ? entry : latest
-  )).date);
+  const referenceKey = aggregated.reduce((latest, entry) => {
+    const key = entry.date.slice(0, 10);
+    return key > latest ? key : latest;
+  }, aggregated[0].date.slice(0, 10));
 
-  const year = referenceDate.getFullYear();
-  const month = referenceDate.getMonth();
+  const [yearStr, monthStr] = referenceKey.split('-');
+  const year = Number(yearStr);
+  const month = Number(monthStr) - 1;
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDow = new Date(year, month, 1).getDay();
 
@@ -83,7 +85,9 @@ export default function BackupActivityCalendar({ entries }: Props) {
     dateMap[entry.date.slice(0, 10)] = entry;
   }
 
-  const monthLabel = referenceDate.toLocaleString('default', { month: 'long', year: 'numeric' });
+  const monthLabel = new Date(Date.UTC(year, month, 1)).toLocaleString('en-US', {
+    month: 'long', year: 'numeric', timeZone: 'UTC',
+  });
   const cells: (number | null)[] = [
     ...Array(firstDow).fill(null),
     ...Array.from({ length: daysInMonth }, (_, index) => index + 1),

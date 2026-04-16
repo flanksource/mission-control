@@ -86,9 +86,12 @@ export default function ConfigInsightsSection({ analyses }: Props) {
   const bySeverity = Object.fromEntries(
     SEVERITY_ORDER.map((sev) => [sev, analyses.filter((a) => (a.severity ?? 'info') === sev).length])
   );
-  const byType = Object.fromEntries(
-    ANALYSIS_TYPES.map((t) => [t, analyses.filter((a) => a.analysisType === t)])
-  );
+  const byType: Record<string, ConfigAnalysis[]> = {};
+  for (const a of analyses) {
+    const t = a.analysisType && ANALYSIS_TYPES.includes(a.analysisType as AnalysisType) ? a.analysisType : 'other';
+    (byType[t] ??= []).push(a);
+  }
+  const typeOrder = [...ANALYSIS_TYPES.filter((t) => byType[t]?.length), ...(byType['other']?.length ? ['other' as const] : [])];
 
   return (
     <Section variant="hero" title="Config Insights" size="md">
@@ -103,7 +106,7 @@ export default function ConfigInsightsSection({ analyses }: Props) {
           </div>
         ))}
       </div>
-      {ANALYSIS_TYPES.map((type) => (
+      {typeOrder.map((type) => (
         <AnalysisTypeGroup key={type} type={type} analyses={byType[type]} />
       ))}
     </Section>
