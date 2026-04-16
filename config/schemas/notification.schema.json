@@ -362,6 +362,10 @@
           },
           "type": "array",
           "description": "Inhibit controls notification suppression for related resources.\nIt uses the repeat interval as the window for suppression\nas well as the wait for period."
+        },
+        "watchdogInterval": {
+          "type": "string",
+          "description": "WatchdogInterval, if set, will send a periodic watchdog notification at the interval\nA watchdog notification contains the statistics of this notification.\n\nFormat: duration string (e.g., \"30s\", \"2m\")"
         }
       },
       "additionalProperties": false,

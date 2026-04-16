@@ -115,6 +115,12 @@ type NotificationSpec struct {
 	// It uses the repeat interval as the window for suppression
 	// as well as the wait for period.
 	Inhibitions []NotificationInihibition `json:"inhibitions,omitempty"`
+
+	// WatchdogInterval, if set, will send a periodic watchdog notification at the interval
+	// A watchdog notification contains the statistics of this notification.
+	//
+	// Format: duration string (e.g., "30s", "2m")
+	WatchdogInterval *string `json:"watchdogInterval,omitempty"`
 }
 
 type NotificationInihibition struct {

@@ -786,6 +786,22 @@ func GetEnvForEvent(ctx context.Context, event models.Event) (*celVariables, err
 		EventTime:   event.CreatedAt,
 	}
 
+	if event.Name == api.EventWatchdog {
+		if event.EventID == uuid.Nil {
+			return nil, fmt.Errorf("watchdog event is missing notification id")
+		}
+
+		notificationID := event.EventID.String()
+		stats, err := query.GetNotificationStats(ctx, notificationID)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get notification statistics: %w", err)
+		} else if len(stats) == 0 {
+			return nil, fmt.Errorf("notification(%s) not found", notificationID)
+		}
+
+		env.Summary = stats[0]
+	}
+
 	if strings.HasPrefix(event.Name, "check.") {
 		checkID := event.EventID.String()
 		lastRuntime := event.Properties["last_runtime"]

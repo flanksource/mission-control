@@ -83,9 +83,9 @@ func launchKopper(ctx context.Context) {
 	}
 
 	if v1.NotificationReconciler, err = kopper.SetupReconciler(ctx, mgr,
-		db.PersistNotificationFromCRD,
-		db.DeleteNotification,
-		db.DeleteStaleNotification,
+		persistNotificationFromCRD,
+		deleteNotificationFromCRD,
+		deleteStaleNotificationFromCRD,
 		"notification.mission-control.flanksource.com",
 	); err != nil {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("Unable to create controller for Notification: %v", err))
@@ -157,6 +157,46 @@ func launchKopper(ctx context.Context) {
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("error running controller manager: %v", err))
 	}
+}
+
+func persistNotificationFromCRD(ctx context.Context, obj *v1.Notification) error {
+	if err := db.PersistNotificationFromCRD(ctx, obj); err != nil {
+		return err
+	}
+
+	return notification.SyncWatchdogJob(ctx, jobs.FuncScheduler, string(obj.GetUID()), obj.Spec.WatchdogInterval)
+}
+
+func deleteNotificationFromCRD(ctx context.Context, id string) error {
+	if err := db.DeleteNotification(ctx, id); err != nil {
+		return err
+	}
+
+	notification.PurgeCache(id)
+	return notification.SyncWatchdogJob(ctx, jobs.FuncScheduler, id, nil)
+}
+
+func deleteStaleNotificationFromCRD(ctx context.Context, obj *v1.Notification) error {
+	var ids []string
+	if err := ctx.DB().Model(&models.Notification{}).
+		Where("name = ? AND namespace = ?", obj.Name, obj.Namespace).
+		Where("deleted_at IS NULL").
+		Pluck("id", &ids).Error; err != nil {
+		return err
+	}
+
+	if err := db.DeleteStaleNotification(ctx, obj); err != nil {
+		return err
+	}
+
+	for _, id := range ids {
+		notification.PurgeCache(id)
+		if err := notification.SyncWatchdogJob(ctx, jobs.FuncScheduler, id, nil); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 var Serve = &cobra.Command{

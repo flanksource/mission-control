@@ -3,6 +3,7 @@ package notification
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/flanksource/clicky"
 	"github.com/flanksource/clicky/api"
@@ -49,6 +50,19 @@ func BuildNotificationMessagePayload(payload NotificationEventPayload, env *celV
 	}
 
 	switch payload.EventName {
+	case icapi.EventWatchdog:
+		msg.Title = fmt.Sprintf("Summary for notification: %s/%s", safeName(env.Summary.Namespace), safeName(env.Summary.Name))
+		msg.Attributes = append(msg.Attributes,
+			keyValue("Sent", fmt.Sprintf("%d", env.Summary.Sent)),
+			keyValue("Failed", fmt.Sprintf("%d", env.Summary.Failed)),
+			keyValue("Pending", fmt.Sprintf("%d", env.Summary.Pending)),
+		)
+		if env.Summary.Error != "" {
+			msg.Description = fmt.Sprintf("Error: %s", env.Summary.Error)
+		}
+		if !env.Summary.LastFailedAt.IsZero() {
+			msg.Attributes = append(msg.Attributes, keyValue("Last Failed At", env.Summary.LastFailedAt.Format(time.RFC3339)))
+		}
 	case icapi.EventCheckFailed:
 		msg.Title = fmt.Sprintf("Check %s has failed", safeName(lo.FromPtr(env.Check).Name))
 		msg.Description = lo.FromPtr(env.CheckStatus).Error

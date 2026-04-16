@@ -105,6 +105,10 @@ func Start(ctx context.Context, mcpServer *server.MCPServer) {
 		shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to schedule job SchedulePlaybooks: %v", err))
 	}
 
+	if err := notification.InitWatchdogNotifications(ctx, FuncScheduler); err != nil {
+		shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to schedule job InitWatchdogNotifications: %v", err))
+	}
+
 	if !api.DisableOperators {
 		if err := notification.SyncCRDStatusJob(ctx).AddToScheduler(FuncScheduler); err != nil {
 			shutdown.ShutdownAndExit(1, fmt.Sprintf("failed to schedule job SyncCRDStatusJob: %v", err))

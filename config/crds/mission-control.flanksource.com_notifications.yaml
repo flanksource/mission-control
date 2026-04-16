@@ -1382,6 +1382,13 @@ spec:
 
                   Format: duration string (e.g., "30s", "2m")
                 type: string
+              watchdogInterval:
+                description: |-
+                  WatchdogInterval, if set, will send a periodic watchdog notification at the interval
+                  A watchdog notification contains the statistics of this notification.
+
+                  Format: duration string (e.g., "30s", "2m")
+                type: string
             required:
             - events
             - to

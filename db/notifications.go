@@ -76,6 +76,16 @@ func PersistNotificationFromCRD(ctx context.Context, obj *v1.Notification) error
 		}
 	}
 
+	if obj.Spec.WatchdogInterval != nil && *obj.Spec.WatchdogInterval != "" {
+		if parsed, err := text.ParseDuration(*obj.Spec.WatchdogInterval); err != nil {
+			return err
+		} else if lo.FromPtr(parsed) <= 0 {
+			return api.Errorf("invalid watchdogInterval: must be > 0")
+		} else {
+			dbObj.WatchdogInterval = parsed
+		}
+	}
+
 	if len(obj.Spec.GroupBy) > 0 && obj.Spec.WaitFor != nil && *obj.Spec.WaitFor == "" {
 		return fmt.Errorf("groupBy provided with an empty waitFor. either remove the groupBy or set a waitFor period")
 	}
