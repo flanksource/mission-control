@@ -164,7 +164,12 @@ func persistNotificationFromCRD(ctx context.Context, obj *v1.Notification) error
 		return err
 	}
 
-	return notification.SyncWatchdogJob(ctx, jobs.FuncScheduler, string(obj.GetUID()), obj.Spec.WatchdogInterval)
+	var interval *string
+	if obj.Spec.Watchdog != nil {
+		interval = obj.Spec.Watchdog.Interval
+	}
+
+	return notification.SyncWatchdogJob(ctx, jobs.FuncScheduler, string(obj.GetUID()), interval)
 }
 
 func deleteNotificationFromCRD(ctx context.Context, id string) error {

@@ -55,6 +55,14 @@ type NotificationFallback struct {
 	Delay string `json:"delay,omitempty" yaml:"delay,omitempty"`
 }
 
+type NotificationWatchdog struct {
+	// Interval, if set, will send a periodic watchdog notification at this interval.
+	// A watchdog notification contains the statistics of this notification.
+	//
+	// Format: duration string (e.g., "30s", "2m")
+	Interval *string `json:"interval,omitempty" yaml:"interval,omitempty"`
+}
+
 // +kubebuilder:object:generate=true
 type NotificationSpec struct {
 	// List of events that can trigger this notification
@@ -116,11 +124,8 @@ type NotificationSpec struct {
 	// as well as the wait for period.
 	Inhibitions []NotificationInihibition `json:"inhibitions,omitempty"`
 
-	// WatchdogInterval, if set, will send a periodic watchdog notification at the interval
-	// A watchdog notification contains the statistics of this notification.
-	//
-	// Format: duration string (e.g., "30s", "2m")
-	WatchdogInterval *string `json:"watchdogInterval,omitempty"`
+	// Watchdog config for periodic watchdog notifications.
+	Watchdog *NotificationWatchdog `json:"watchdog,omitempty" yaml:"watchdog,omitempty"`
 }
 
 type NotificationInihibition struct {

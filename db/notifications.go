@@ -76,11 +76,11 @@ func PersistNotificationFromCRD(ctx context.Context, obj *v1.Notification) error
 		}
 	}
 
-	if obj.Spec.WatchdogInterval != nil && *obj.Spec.WatchdogInterval != "" {
-		if parsed, err := text.ParseDuration(*obj.Spec.WatchdogInterval); err != nil {
+	if obj.Spec.Watchdog != nil && obj.Spec.Watchdog.Interval != nil && *obj.Spec.Watchdog.Interval != "" {
+		if parsed, err := text.ParseDuration(*obj.Spec.Watchdog.Interval); err != nil {
 			return err
 		} else if lo.FromPtr(parsed) <= 0 {
-			return api.Errorf("invalid watchdogInterval: must be > 0")
+			return fmt.Errorf("invalid watchdog.interval: must be > 0")
 		} else {
 			dbObj.WatchdogInterval = parsed
 		}
