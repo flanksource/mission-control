@@ -72,7 +72,10 @@ Examples:
 		shutdown.AddHookWithPriority("database", shutdown.PriorityCritical, stop)
 		shutdown.WaitForSignal()
 
-		opts := buildCatalogReportOptions()
+		opts, err := buildCatalogReportOptions()
+		if err != nil {
+			return err
+		}
 
 		queryArgs := args
 		if opts.Settings != nil {
@@ -124,7 +127,7 @@ Examples:
 	},
 }
 
-func buildCatalogReportOptions() catalog.Options {
+func buildCatalogReportOptions() (catalog.Options, error) {
 	opts := catalog.Options{
 		Title:           catalogReportTitle,
 		Recursive:       catalogReportRecursive,
@@ -145,19 +148,21 @@ func buildCatalogReportOptions() catalog.Options {
 	}
 
 	if catalogReportSince != "" {
-		if d, err := duration.ParseDuration(catalogReportSince); err == nil {
-			opts.Since = time.Duration(d)
+		d, err := duration.ParseDuration(catalogReportSince)
+		if err != nil {
+			return catalog.Options{}, fmt.Errorf("invalid --since: %w", err)
 		}
+		opts.Since = time.Duration(d)
 	}
 
 	settings, settingsSource, err := catalog.ResolveSettings(catalogReportSettings)
 	if err != nil {
-		logger.Fatalf("failed to load settings: %v", err)
+		return catalog.Options{}, fmt.Errorf("failed to load settings: %w", err)
 	}
 	opts.Settings = settings
 	opts.SettingsPath = settingsSource
 
-	return opts
+	return opts, nil
 }
 
 func init() {

@@ -106,13 +106,15 @@ func renderFacetWithData(ctx context.Context, data any, format string, opts *v1.
 		return nil, fmt.Errorf("data must not be nil")
 	}
 
-	baseURL, token, _, err := resolveFacetConnection(ctx, opts)
+	baseURL, token, timestampURL, err := resolveFacetConnection(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
 
 	if baseURL != "" {
-		return report.RenderHTTP(ctx, baseURL, token, data, format, viewEntryFile)
+		return report.RenderHTTP(ctx, baseURL, token, data, format, viewEntryFile, report.RenderHTTPOptions{
+			TimestampURL: timestampURL,
+		})
 	}
 
 	result, err := report.RenderCLI(data, format, viewEntryFile)

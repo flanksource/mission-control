@@ -50,23 +50,18 @@ var Query = &cobra.Command{
 		start := time.Now()
 		var response *query.SearchResourcesResponse
 
-		ctx.DB().Begin()
 		response, err = query.SearchResources(ctx, req)
 		if err != nil {
 			logger.Fatalf(err.Error())
 			os.Exit(1)
 		}
-		ctx.DB().Commit()
 
 		for time.Since(start) < catalogWaitFor {
 			if len(response.Configs) > 0 || len(response.Components) > 0 || len(response.Checks) > 0 {
 				break
 			}
 
-			ctx.DB().Begin()
 			response, err = query.SearchResources(ctx, req)
-			ctx.DB().Commit()
-
 			if err != nil {
 				logger.Fatalf(err.Error())
 				os.Exit(1)

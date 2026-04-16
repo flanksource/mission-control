@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/flanksource/commons/duration"
 	"github.com/flanksource/duty"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
@@ -589,9 +590,11 @@ func GetAccessForUIRef(ctx context.Context, filters *api.AccessUIFilters) ([]api
 
 	var staleCutoff time.Time
 	if filters.Stale != "" {
-		if d, err := time.ParseDuration(filters.Stale); err == nil {
-			staleCutoff = time.Now().Add(-d)
+		d, err := duration.ParseDuration(filters.Stale)
+		if err != nil {
+			return nil, ctx.Oops().Wrapf(err, "invalid stale filter %q", filters.Stale)
 		}
+		staleCutoff = time.Now().Add(-time.Duration(d))
 	}
 
 	items := make([]api.AccessItem, 0, len(rows))
@@ -661,15 +664,19 @@ func GetAccessLogsForUIRef(ctx context.Context, filters *api.AccessLogsUIFilters
 	}
 
 	if filters.From != "" {
-		if d, err := time.ParseDuration(filters.From); err == nil {
-			q = q.Where("config_access_logs.created_at >= ?", time.Now().Add(-d))
+		d, err := duration.ParseDuration(filters.From)
+		if err != nil {
+			return nil, ctx.Oops().Wrapf(err, "invalid from filter %q", filters.From)
 		}
+		q = q.Where("config_access_logs.created_at >= ?", time.Now().Add(-time.Duration(d)))
 	}
 
 	if filters.To != "" {
-		if d, err := time.ParseDuration(filters.To); err == nil {
-			q = q.Where("config_access_logs.created_at <= ?", time.Now().Add(-d))
+		d, err := duration.ParseDuration(filters.To)
+		if err != nil {
+			return nil, ctx.Oops().Wrapf(err, "invalid to filter %q", filters.To)
 		}
+		q = q.Where("config_access_logs.created_at <= ?", time.Now().Add(-time.Duration(d)))
 	}
 
 	switch filters.MFA {

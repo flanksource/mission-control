@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"fmt"
+
 	"github.com/flanksource/clicky"
 	"github.com/flanksource/clicky/api"
 	"github.com/flanksource/commons/logger"
@@ -126,6 +128,12 @@ func runCatalogTree(ctx context.Context, args []string) (*CatalogTreeResult, err
 	config, err := resolveConfigID(ctx, args)
 	if err != nil {
 		return nil, err
+	}
+
+	switch treeDirection {
+	case "all", "incoming", "outgoing":
+	default:
+		return nil, fmt.Errorf("invalid --direction %q: must be all, incoming, or outgoing", treeDirection)
 	}
 
 	relType := query.Hard

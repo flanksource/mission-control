@@ -33,7 +33,7 @@ func renderWithFacet(ctx context.Context, r *api.RBACReport, format string, view
 
 	result, err := report.RenderCLI(initSlices(r), format, entryFile)
 	if err != nil {
-		return nil, err
+		return nil, ctx.Oops().Wrapf(err, "failed to render RBAC %s report", format)
 	}
 
 	ctx.Logger.V(3).Infof("Facet rendered %dKB of %s", len(result.Data)/1024, format)

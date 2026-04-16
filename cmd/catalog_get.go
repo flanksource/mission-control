@@ -283,7 +283,7 @@ func buildDetailsSection(r CatalogGetResult) api.DescriptionList {
 		items = append(items, api.KeyValuePair{Key: "Parent", Value: c.ParentID.String()})
 	}
 	if len(c.ExternalID) > 0 {
-		items = append(items, api.KeyValuePair{Key: "External ID", Value: c.ExternalID[0]})
+		items = append(items, api.KeyValuePair{Key: "External ID", Value: strings.Join(c.ExternalID, ", ")})
 	}
 
 	if c.CostTotal30d > 0 {

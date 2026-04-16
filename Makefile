@@ -42,12 +42,6 @@ TAILWIND_JS = auth/oidc/static/tailwind.min.js
 $(TAILWIND_JS):
 	curl -sL "https://cdn.tailwindcss.com/$(TAILWIND_VERSION)" -o $(TAILWIND_JS)
 
-TAILWIND_VERSION ?= 3.4.17
-TAILWIND_JS = auth/oidc/static/tailwind.min.js
-
-$(TAILWIND_JS):
-	curl -sL "https://cdn.tailwindcss.com/$(TAILWIND_VERSION)" -o $(TAILWIND_JS)
-
 .PHONY: help
 help: ## Display this help.
 	@awk 'BEGIN {FS = ":.*##"; printf "\nUsage:\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z_0-9-]+:.*?##/ { printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2 } /^##@/ { printf "\n\033[1m%s\033[0m\n", substr($$0, 5) } ' $(MAKEFILE_LIST)
@@ -64,7 +58,7 @@ test:
 		--succinct --label-filter='!ignore_local'
 
 .PHONY: ci-test
-ci-test: $(TAILWIND_JS)
+ci-test: $(TAILWIND_JS) $(LOCALBIN)
 	go build -o ./.bin/$(NAME) main.go
 	ginkgo -r --skip-package=tests/e2e --keep-going --junit-report junit-report.xml --github-output --output-dir test-reports --succinct
 
