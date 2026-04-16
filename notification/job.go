@@ -35,7 +35,15 @@ var (
 
 	// Keeps track of all watchdog jobs
 	watchdogJobs sync.Map
+
+	// Per-notification locks to serialize watchdog job upserts.
+	watchdogJobLocks sync.Map
 )
+
+func getWatchdogJobLock(notificationID string) *sync.Mutex {
+	mu, _ := watchdogJobLocks.LoadOrStore(notificationID, &sync.Mutex{})
+	return mu.(*sync.Mutex)
+}
 
 func InitCRDStatusUpdates(ctx context.Context) error {
 	var err error
@@ -536,6 +544,10 @@ func normalizeWatchdogSchedule(schedule *string) *string {
 }
 
 func SyncWatchdogJob(ctx context.Context, scheduler *cron.Cron, notificationID string, schedule *string) error {
+	mu := getWatchdogJobLock(notificationID)
+	mu.Lock()
+	defer mu.Unlock()
+
 	schedule = normalizeWatchdogSchedule(schedule)
 
 	var scheduleChanged bool
