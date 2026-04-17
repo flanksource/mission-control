@@ -4,6 +4,9 @@ on:
   pull_request:
     types: [opened, reopened, labeled]
 
+permissions:
+  contents: read
+
 jobs:
   auto-approve:
     runs-on: ubuntu-latest

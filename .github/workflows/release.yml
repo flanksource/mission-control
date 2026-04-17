@@ -3,8 +3,16 @@ on:
   push:
     branches:
       - main
+
+permissions:
+  contents: read
+
 jobs:
   semantic-release:
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
     runs-on: ubuntu-latest
     outputs:
       release-version: ${{ steps.semantic.outputs.release-version }}
@@ -16,6 +24,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   binary:
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     needs: semantic-release
     steps:
@@ -52,6 +62,8 @@ jobs:
 
   docker:
     needs: semantic-release
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -97,6 +109,8 @@ jobs:
 
   update-incident-commander-chart:
     if: needs.semantic-release.outputs.new-release-published == 'true'
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     needs: [semantic-release, docker]
     steps:
@@ -132,6 +146,8 @@ jobs:
 
   publish-release:
     if: needs.semantic-release.outputs.new-release-published == 'true'
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     needs: [semantic-release, binary, docker, update-incident-commander-chart]
     steps:

@@ -6,6 +6,13 @@ import (
 	"path/filepath"
 )
 
+// SafeJoin joins pathPrefix with name after stripping any directory
+// components from name. This prevents path traversal when name is derived
+// from user-controlled input.
+func SafeJoin(pathPrefix, name string) string {
+	return filepath.Join(pathPrefix, filepath.Base(name))
+}
+
 // CreateTempSubdir creates a temporary directory in the current working directory.
 //
 // It's helpful when we need to create a temp dir in a relative path
