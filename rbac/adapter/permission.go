@@ -15,6 +15,7 @@ import (
 	"github.com/flanksource/duty/models"
 	pkgPolicy "github.com/flanksource/duty/rbac/policy"
 	gocache "github.com/patrickmn/go-cache"
+	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
 	v1 "github.com/flanksource/incident-commander/api/v1"
@@ -41,7 +42,7 @@ func NewPermissionAdapter(ctx context.Context, main *gormadapter.Adapter) persis
 }
 
 func (a *PermissionAdapter) LoadPolicy(model model.Model) error {
-	if err := a.Adapter.LoadPolicy(model); err != nil {
+	if err := a.loadBasePolicy(model); err != nil {
 		return err
 	}
 
@@ -125,6 +126,87 @@ func (a *PermissionAdapter) LoadPolicy(model model.Model) error {
 	}
 
 	return nil
+}
+
+func (a *PermissionAdapter) SavePolicy(m model.Model) error {
+	tx := a.ctx.DB().Begin()
+	if tx.Error != nil {
+		return tx.Error
+	}
+
+	if err := tx.Session(&gorm.Session{AllowGlobalUpdate: true}).Delete(&gormadapter.CasbinRule{}).Error; err != nil {
+		tx.Rollback()
+		return err
+	}
+
+	var lines []gormadapter.CasbinRule
+	for ptype, ast := range m["p"] {
+		for _, rule := range ast.Policy {
+			lines = append(lines, casbinRuleFromPolicy(ptype, rule))
+		}
+	}
+	for ptype, ast := range m["g"] {
+		for _, rule := range ast.Policy {
+			lines = append(lines, casbinRuleFromPolicy(ptype, rule))
+		}
+	}
+
+	if len(lines) > 0 {
+		if err := tx.Clauses(clause.OnConflict{DoNothing: true}).Create(&lines).Error; err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+
+	return tx.Commit().Error
+}
+
+func (a *PermissionAdapter) loadBasePolicy(m model.Model) error {
+	var lines []gormadapter.CasbinRule
+	if err := a.ctx.DB().Order("id").Find(&lines).Error; err != nil {
+		return err
+	}
+
+	for _, line := range lines {
+		if err := loadCasbinRule(line, m); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func loadCasbinRule(line gormadapter.CasbinRule, m model.Model) error {
+	policy := []string{line.Ptype, line.V0, line.V1, line.V2, line.V3, line.V4, line.V5}
+	index := len(policy) - 1
+	for index > 0 && policy[index] == "" {
+		index--
+	}
+	policy = policy[:index+1]
+	return persist.LoadPolicyArray(policy, m)
+}
+
+func casbinRuleFromPolicy(ptype string, rule []string) gormadapter.CasbinRule {
+	line := gormadapter.CasbinRule{Ptype: ptype}
+	if len(rule) > 0 {
+		line.V0 = rule[0]
+	}
+	if len(rule) > 1 {
+		line.V1 = rule[1]
+	}
+	if len(rule) > 2 {
+		line.V2 = rule[2]
+	}
+	if len(rule) > 3 {
+		line.V3 = rule[3]
+	}
+	if len(rule) > 4 {
+		line.V4 = rule[4]
+	}
+	if len(rule) > 5 {
+		line.V5 = rule[5]
+	}
+	return line
 }
 
 func PermissionToCasbinRule(permission models.Permission) [][]string {

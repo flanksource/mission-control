@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	dutyContext "github.com/flanksource/duty/context"
@@ -10,6 +11,7 @@ import (
 	"github.com/flanksource/duty/query"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
+	"gorm.io/gorm"
 )
 
 const CatalogToolName = "getCatalogByNameOrID"
@@ -60,10 +62,11 @@ func (t *CatalogTool) Call(ctx context.Context, input string) (string, error) {
 		}
 	} else if data.Name != "" {
 		// TODO: add scraper id and cluster id
-		if err := t.dutyCtx.DB().Where("tags->>'namespace' = ?", data.Namespace).Where("name = ?", data.Name).Find(&config).Error; err != nil {
+		if err := t.dutyCtx.DB().Where("tags->>'namespace' = ?", data.Namespace).Where("name = ?", data.Name).First(&config).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return "config was not found", nil
+			}
 			return "", err
-		} else if config.ID == uuid.Nil {
-			return "config was not found", nil
 		}
 	}
 

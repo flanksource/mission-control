@@ -1,14 +1,16 @@
 package views
 
 import (
+	"errors"
+
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
 	dutyRBAC "github.com/flanksource/duty/rbac"
 	"github.com/flanksource/duty/rbac/policy"
 	"github.com/flanksource/incident-commander/api"
-	"github.com/google/uuid"
 	"golang.org/x/sync/errgroup"
+	"gorm.io/gorm"
 )
 
 // ViewMetadataResponse is the response for the view metadata endpoint.
@@ -94,10 +96,11 @@ func fetchSection(ctx context.Context, namespace, name string) (*api.ViewResult,
 	var viewModel models.View
 	if err := ctx.DB().Select("id, namespace, name").
 		Where("name = ? AND namespace = ? AND deleted_at IS NULL", name, namespace).
-		Find(&viewModel).Error; err != nil {
+		First(&viewModel).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "section view %s/%s not found", namespace, name)
+		}
 		return nil, ctx.Oops().Wrap(err)
-	} else if viewModel.ID == uuid.Nil {
-		return nil, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "section view %s/%s not found", namespace, name)
 	}
 
 	attr := &models.ABACAttribute{View: viewModel}

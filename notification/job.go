@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/flanksource/commons/collections"
@@ -187,7 +186,7 @@ func ProcessPendingNotifications(parentCtx context.Context) (bool, error) {
 		FROM notification_send_history
 		WHERE status IN ?
 			AND not_before <= NOW()
-			AND (retries IS NULL OR retries < ?)
+			AND retries < ?
 		ORDER BY not_before ASC
 		LIMIT 1
 		FOR UPDATE SKIP LOCKED`
@@ -277,9 +276,12 @@ func ProcessFallbackNotifications(parentCtx context.Context) (bool, error) {
 		ctx := parentCtx.WithDB(tx, parentCtx.Pool())
 
 		var pending []models.NotificationSendHistory
+		maxRetries := ctx.Properties().Int("notification.max-retries", 4) - 1
 		if err := ctx.DB().Clauses(clause.Locking{Strength: clause.LockingStrengthUpdate, Options: clause.LockingOptionsSkipLocked}).
 			Where("status = ?", models.NotificationStatusAttemptingFallback).
 			Where("not_before <= NOW()").
+			Where("retries < ?", maxRetries).
+			Order("not_before ASC").
 			Limit(1). // one at a time; as one notification failure shouldn't affect a previous successful one
 			Find(&pending).Error; err != nil {
 			return fmt.Errorf("failed to get notifications to send to fallback: %w", err)
@@ -298,8 +300,8 @@ func ProcessFallbackNotifications(parentCtx context.Context) (bool, error) {
 		)
 
 		if err := sendFallbackNotification(ctx, currentHistory); err != nil {
-			if dberr := ctx.DB().Debug().Model(&models.NotificationSendHistory{}).Where("id = ?", currentHistory.ID).UpdateColumns(map[string]any{
-				"status":  gorm.Expr("CASE WHEN retries >= ? THEN ? ELSE ? END", ctx.Properties().Int("notification.max-retries", 4)-1, models.NotificationStatusError, models.NotificationStatusAttemptingFallback),
+			if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", currentHistory.ID).UpdateColumns(map[string]any{
+				"status":  gorm.Expr("CASE WHEN retries >= ? THEN ? ELSE ? END", maxRetries, models.NotificationStatusError, models.NotificationStatusAttemptingFallback),
 				"error":   err.Error(),
 				"retries": gorm.Expr("retries + 1"),
 			}).Error; dberr != nil {
@@ -390,12 +392,12 @@ func traceLog(format string, args ...any) {
 }
 
 func processPendingNotification(ctx context.Context, currentHistory models.NotificationSendHistory) error {
-	if exists, err := resourceExists(ctx, currentHistory.SourceEvent, currentHistory.ResourceID); err != nil {
+	if exists, err := ResourceExists(ctx, currentHistory.SourceEvent, currentHistory.ResourceID); err != nil {
 		return fmt.Errorf("failed to check resource existence: %w", err)
 	} else if !exists {
 		if dberr := ctx.DB().Model(&models.NotificationSendHistory{}).Where("id = ?", currentHistory.ID).UpdateColumns(map[string]any{
 			"status": models.NotificationStatusSkipped,
-			"error":  "resource no longer exists",
+			"error":  ResourceNoLongerExistsReason,
 		}).Error; dberr != nil {
 			return fmt.Errorf("failed to mark notification as skipped: %w", dberr)
 		}
@@ -479,36 +481,6 @@ func triggerIncrementalScrape(ctx context.Context, configID string) error {
 	}
 
 	return ctx.DB().Clauses(events.EventQueueOnConflictClause).Create(&event).Error
-}
-
-// resourceExists reports whether the resource referenced by a pending notification
-// still exists in the database. Only configs, components and checks are checked —
-// other event types either don't reference a tracked resource or can't FK-violate
-// downstream consumers, so they're treated as existing.
-func resourceExists(ctx context.Context, sourceEvent string, resourceID uuid.UUID) (bool, error) {
-	if resourceID == uuid.Nil {
-		return true, nil
-	}
-
-	var table string
-	switch {
-	case strings.HasPrefix(sourceEvent, "config."):
-		table = (&models.ConfigItem{}).TableName()
-	case strings.HasPrefix(sourceEvent, "component."):
-		table = (&models.Component{}).TableName()
-	case strings.HasPrefix(sourceEvent, "check."):
-		table = (&models.Check{}).TableName()
-	case strings.HasPrefix(sourceEvent, "canary."):
-		table = (&models.Canary{}).TableName()
-	default:
-		return true, nil
-	}
-
-	var count int64
-	if err := ctx.DB().Table(table).Where("id = ?", resourceID).Count(&count).Error; err != nil {
-		return false, err
-	}
-	return count > 0, nil
 }
 
 func isKubernetesConfigItem(ctx context.Context, configID string) (bool, error) {

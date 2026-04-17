@@ -1,12 +1,13 @@
 package views
 
 import (
+	"errors"
 	"strings"
 
 	dutyAPI "github.com/flanksource/duty/api"
 	"github.com/flanksource/duty/context"
 	"github.com/flanksource/duty/models"
-	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 const (
@@ -28,10 +29,11 @@ func resolveDashboardView(ctx context.Context) (*models.View, error) {
 		query = query.Where("name = ?", viewRef)
 	}
 
-	if err := query.Find(&view).Error; err != nil {
+	if err := query.First(&view).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "dashboard view %s not found", viewRef)
+		}
 		return nil, ctx.Oops().Wrap(err)
-	} else if view.ID == uuid.Nil {
-		return nil, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "dashboard view %s not found", viewRef)
 	}
 
 	return &view, nil

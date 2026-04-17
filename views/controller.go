@@ -1,6 +1,7 @@
 package views
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/flanksource/commons/logger"
@@ -13,6 +14,7 @@ import (
 	"github.com/flanksource/gomplate/v3"
 	"github.com/google/uuid"
 	"github.com/labstack/echo/v4"
+	"gorm.io/gorm"
 
 	"github.com/flanksource/incident-commander/api"
 	"github.com/flanksource/incident-commander/db"
@@ -55,10 +57,11 @@ func HandleGetViewMetadataByID(c echo.Context) error {
 	}
 
 	var view models.View
-	if err := ctx.DB().Where("id = ? AND deleted_at IS NULL", id).Find(&view).Error; err != nil {
+	if err := ctx.DB().Where("id = ? AND deleted_at IS NULL", id).First(&view).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "view(id=%s) not found", id.String()))
+		}
 		return dutyAPI.WriteError(c, ctx.Oops().Wrap(err))
-	} else if view.ID == uuid.Nil {
-		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "view(id=%s) not found", id.String()))
 	}
 
 	response, err := getViewMetadata(ctx, view)
@@ -139,10 +142,11 @@ func GetViewByID(c echo.Context) error {
 	id := c.Param("id")
 
 	var view models.View
-	if err := ctx.DB().Select("id, namespace, name").Where("id = ?", id).Where("deleted_at IS NULL").Find(&view).Error; err != nil {
+	if err := ctx.DB().Select("id, namespace, name").Where("id = ?", id).Where("deleted_at IS NULL").First(&view).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "view(id=%s) not found", id))
+		}
 		return dutyAPI.WriteError(c, err)
-	} else if view.ID == uuid.Nil {
-		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "view(id=%s) not found", id))
 	}
 
 	// Check ABAC permissions for this specific view
@@ -164,10 +168,11 @@ func GetViewByNamespaceName(c echo.Context) error {
 
 	// Fetch the view to check ABAC permissions
 	var view models.View
-	if err := ctx.DB().Select("id, namespace, name").Where("namespace = ? AND name = ?", namespace, name).Where("deleted_at IS NULL").Find(&view).Error; err != nil {
+	if err := ctx.DB().Select("id, namespace, name").Where("namespace = ? AND name = ?", namespace, name).Where("deleted_at IS NULL").First(&view).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "view(namespace=%s, name=%s) not found", namespace, name))
+		}
 		return dutyAPI.WriteError(c, err)
-	} else if view.ID == uuid.Nil {
-		return dutyAPI.WriteError(c, dutyAPI.Errorf(dutyAPI.ENOTFOUND, "view(namespace=%s, name=%s) not found", namespace, name))
 	}
 
 	// Check ABAC permissions for this specific view
@@ -239,10 +244,11 @@ func HandleViewList(c echo.Context) error {
 
 func listViewsForConfig(ctx context.Context, id string) ([]api.ViewListItem, error) {
 	var config models.ConfigItem
-	if err := ctx.DB().Where("id = ?", id).Find(&config).Error; err != nil {
+	if err := ctx.DB().Where("id = ?", id).First(&config).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("config(id=%s) not found", id)
+		}
 		return nil, ctx.Oops("db").Wrap(err)
-	} else if config.ID == uuid.Nil {
-		return nil, ctx.Oops().Code(dutyAPI.ENOTFOUND).Errorf("config(id=%s) not found", id)
 	}
 
 	list, err := db.FindViewsForConfig(ctx, config)

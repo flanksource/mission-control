@@ -2,6 +2,7 @@ package notification
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"slices"
 	"strconv"
@@ -19,6 +20,7 @@ import (
 	"github.com/flanksource/gomplate/v3"
 	"github.com/google/uuid"
 	"github.com/samber/lo"
+	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
 	"github.com/flanksource/incident-commander/api"
@@ -206,10 +208,11 @@ func resolveGroupMembershipForNotification(ctx context.Context, celEnv *celVaria
 	}
 
 	var config models.ConfigItem
-	if err := ctx.DB().Where("id = ?", configID).Find(&config).Error; err != nil {
+	if err := ctx.DB().Where("id = ?", configID).First(&config).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return false, ctx.Oops().Errorf("config not found %s", configID)
+		}
 		return false, ctx.Oops().Wrapf(err, "failed to get config %s", configID)
-	} else if config.ID == uuid.Nil {
-		return false, ctx.Oops().Wrapf(err, "config not found %s", configID)
 	}
 
 	if !lo.Contains(notification.Events, fmt.Sprintf("config.%s", lo.FromPtr(config.Health))) {
@@ -608,10 +611,18 @@ func sendPendingNotification(ctx context.Context, history models.NotificationSen
 
 	err := _sendNotification(notificationContext, payload)
 	if err != nil {
-		notificationContext.WithError(err)
+		if IsStaleResourceEventError(err) {
+			notificationContext.log.Status = models.NotificationStatusSkipped
+			notificationContext.log.Error = lo.ToPtr(ResourceNoLongerExistsReason)
+		} else {
+			notificationContext.WithError(err)
+		}
 	}
 
 	logs.IfError(notificationContext.EndLog(), "error persisting end of notification send history")
+	if IsStaleResourceEventError(err) {
+		return nil
+	}
 	return err
 }
 
@@ -687,14 +698,28 @@ func sendNotification(ctx context.Context, payload NotificationEventPayload) err
 
 	err := _sendNotification(notificationContext, payload)
 	if err != nil {
-		notificationContext.WithError(err)
+		if IsStaleResourceEventError(err) {
+			notificationContext.log.Status = models.NotificationStatusSkipped
+			notificationContext.log.Error = lo.ToPtr(ResourceNoLongerExistsReason)
+		} else {
+			notificationContext.WithError(err)
+		}
 	}
 
 	logs.IfError(notificationContext.EndLog(), "error persisting end of notification send history")
+	if IsStaleResourceEventError(err) {
+		return nil
+	}
 	return err
 }
 
 func _sendNotification(ctx *Context, payload NotificationEventPayload) error {
+	if exists, err := ResourceExists(ctx.Context, payload.EventName, payload.ResourceID); err != nil {
+		return fmt.Errorf("failed to check resource existence: %w", err)
+	} else if !exists {
+		return ErrStaleResourceEvent
+	}
+
 	originalEvent := payload.ParentEvent()
 	if len(payload.Properties) > 0 {
 		if err := json.Unmarshal(payload.Properties, &originalEvent.Properties); err != nil {
