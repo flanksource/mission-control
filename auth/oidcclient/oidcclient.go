@@ -62,12 +62,12 @@ func GeneratePKCE() (verifier, challenge string, err error) {
 	return
 }
 
-func RandomBase64(n int) (string, error) {
+func RandomBase64(n int) string {
 	b := make([]byte, n)
 	if _, err := rand.Read(b); err != nil {
-		return "", err
+		panic("crypto/rand failed: " + err.Error())
 	}
-	return base64.RawURLEncoding.EncodeToString(b), nil
+	return base64.RawURLEncoding.EncodeToString(b)
 }
 
 func ExchangeCode(tokenEndpoint, code, redirectURI, verifier string) (*Tokens, error) {

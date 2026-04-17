@@ -7,12 +7,14 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"os/signal"
 	"sort"
 	"strings"
 	"time"
 
 	gocontext "context"
 
+	"github.com/charmbracelet/huh"
 	"github.com/chromedp/cdproto/cdp"
 	"github.com/chromedp/cdproto/network"
 	"github.com/chromedp/cdproto/page"
@@ -32,6 +34,13 @@ import (
 	"github.com/flanksource/incident-commander/connection"
 )
 
+type loginWaitResult struct {
+	AutoDetected bool
+	Interrupted  bool
+	TimedOut     bool
+	Tokens       map[string]string
+}
+
 type browserLoginFlags struct {
 	Name               string
 	Namespace          string
@@ -39,6 +48,7 @@ type browserLoginFlags struct {
 	Domains            []string
 	WaitForURL         string
 	Timeout            time.Duration
+	Wait               time.Duration
 	Cookies            bool
 	Session            bool
 	Bearer             bool
@@ -112,6 +122,7 @@ func init() {
 	connectionLoginCmd.PersistentFlags().StringSliceVar(&browserFlags.Domains, "domains", nil, "Domains to capture cookies from")
 	connectionLoginCmd.PersistentFlags().StringVar(&browserFlags.WaitForURL, "wait-for-url", "", "Auto-detect login completion when URL matches this pattern")
 	connectionLoginCmd.PersistentFlags().DurationVar(&browserFlags.Timeout, "timeout", 5*time.Minute, "Timeout for browser login")
+	connectionLoginCmd.PersistentFlags().DurationVar(&browserFlags.Wait, "wait", 5*time.Minute, "How long to auto-detect a valid bearer token before prompting. Use 0 to disable auto-detect and prompt immediately.")
 	connectionLoginCmd.PersistentFlags().BoolVar(&browserFlags.Cookies, "cookies", false, "Capture cookies")
 	connectionLoginCmd.PersistentFlags().BoolVar(&browserFlags.Session, "session", false, "Capture sessionStorage (MSAL token cache)")
 	connectionLoginCmd.PersistentFlags().BoolVar(&browserFlags.Bearer, "bearer", false, "Extract bearer tokens from MSAL session cache")
@@ -166,9 +177,15 @@ func runBrowserLogin(cmd *cobra.Command, args []string) error {
 		browserFlags.Cookies = true
 	}
 
-	data, err := launchBrowserAndCapture(cmd.Context(), browserFlags)
+	data, cleanup, err := launchBrowserAndCapture(cmd.Context(), browserFlags)
+	if cleanup != nil {
+		defer cleanup()
+	}
 	if err != nil {
 		return err
+	}
+	if data == nil {
+		return nil
 	}
 
 	if browserFlags.RequireBearerAud != "" || browserFlags.RequireBearerScope != "" {
@@ -180,7 +197,7 @@ func runBrowserLogin(cmd *cobra.Command, args []string) error {
 	return saveConnection(cmd, browserFlags, data)
 }
 
-func launchBrowserAndCapture(ctx gocontext.Context, flags browserLoginFlags) (*browserSessionData, error) {
+func launchBrowserAndCapture(ctx gocontext.Context, flags browserLoginFlags) (*browserSessionData, func(), error) {
 	userDataDir := ProfileDir(flags.Namespace, flags.Name)
 
 	opts := append(chromedp.DefaultExecAllocatorOptions[:],
@@ -190,33 +207,49 @@ func launchBrowserAndCapture(ctx gocontext.Context, flags browserLoginFlags) (*b
 	)
 
 	allocCtx, allocCancel := chromedp.NewExecAllocator(ctx, opts...)
-	defer allocCancel()
-
 	browserCtx, browserCancel := chromedp.NewContext(allocCtx)
-	defer browserCancel()
+
+	cleanup := func() {
+		done := make(chan struct{})
+		go func() {
+			browserCancel()
+			allocCancel()
+			close(done)
+		}()
+		select {
+		case <-done:
+		case <-time.After(10 * time.Second):
+			fmt.Fprintln(os.Stderr, "Warning: browser teardown timed out after 10s")
+		}
+	}
 
 	if err := chromedp.Run(browserCtx, chromedp.Navigate(flags.URL)); err != nil {
-		return nil, fmt.Errorf("failed to navigate to %s: %w", flags.URL, err)
+		return nil, cleanup, fmt.Errorf("failed to navigate to %s: %w", flags.URL, err)
 	}
 
 	fmt.Fprintf(os.Stderr, "Browser opened at %s\n", flags.URL)
-	if flags.Bearer {
-		fmt.Fprintln(os.Stderr, "Please log in. Will auto-detect when a valid token is available (or press Enter to skip).")
-	} else {
+	strict := flags.RequireBearerAud != "" || flags.RequireBearerScope != ""
+	switch {
+	case strict:
+		waiting := requiredTokenLabel(flags)
+		fmt.Fprintf(os.Stderr, "Please log in. Waiting for %s token. Enter/Ctrl+C will not exit — press twice to quit.\n", waiting)
+	case flags.Bearer && flags.Wait > 0:
+		fmt.Fprintln(os.Stderr, "Please log in. Will auto-detect when a valid token is available. Press Enter or Ctrl+C to pick a token manually.")
+	case flags.Bearer:
+		fmt.Fprintln(os.Stderr, "Please log in. Press Enter or Ctrl+C when done to pick a token.")
+	default:
 		fmt.Fprintln(os.Stderr, "Please log in. Press Enter when done.")
 	}
 
 	autoSelectAccountPicker(browserCtx)
-	waitForLoginComplete(browserCtx, flags)
+	result := waitForLoginComplete(browserCtx, flags)
 
 	data := &browserSessionData{}
-
-	verbose := clicky.Flags.LevelCount
 
 	if flags.Cookies {
 		cookies, err := extractCookies(browserCtx, flags.Domains)
 		if err != nil {
-			return nil, err
+			return nil, cleanup, err
 		}
 		data.Cookies = cookies
 	}
@@ -224,16 +257,42 @@ func launchBrowserAndCapture(ctx gocontext.Context, flags browserLoginFlags) (*b
 	if flags.Session || flags.Bearer {
 		session, err := extractSessionStorage(browserCtx)
 		if err != nil {
-			return nil, err
+			return nil, cleanup, err
 		}
 		data.SessionStorage = session
 
 		if flags.Bearer {
-			data.BearerTokens = extractBearerTokens(session)
+			tokens := extractBearerTokens(session)
+			switch {
+			case result.AutoDetected, strict:
+				data.BearerTokens = tokens
+			default:
+				if result.Tokens == nil {
+					result.Tokens = map[string]string{}
+				}
+				for aud, tok := range tokens {
+					result.Tokens[aud] = tok
+				}
+				picked, abort, err := pickBearerToken(result)
+				if err != nil {
+					return nil, cleanup, err
+				}
+				if abort {
+					fmt.Fprintln(os.Stderr, "Aborted by user.")
+					return nil, cleanup, nil
+				}
+				data.BearerTokens = picked
+			}
 		}
 	}
 
-	// Build and display session state summary
+	displayCapturedState(data, flags)
+
+	return data, cleanup, nil
+}
+
+func displayCapturedState(data *browserSessionData, flags browserLoginFlags) {
+	verbose := clicky.Flags.LevelCount
 	var cookies connection.Cookies
 	for _, c := range data.Cookies {
 		cookies = append(cookies, connection.Cookie{
@@ -244,11 +303,12 @@ func launchBrowserAndCapture(ctx gocontext.Context, flags browserLoginFlags) (*b
 		})
 	}
 	state := connection.NewPlaywrightSessionState(cookies, data.SessionStorage, nil, flags.URL)
-	if verbose >= 2 {
+	switch {
+	case verbose >= 2:
 		fmt.Fprintln(os.Stderr, state.PrettyFull().ANSI())
-	} else if verbose >= 1 {
+	case verbose >= 1:
 		fmt.Fprintln(os.Stderr, state.Pretty().ANSI())
-	} else {
+	default:
 		selectedAud, _ := selectBearerToken(data.BearerTokens, flags.RequireBearerAud, flags.RequireBearerScope)
 		for _, aud := range sortedAudiences(data.BearerTokens) {
 			if jwt := connection.DecodeJWT(data.BearerTokens[aud]); jwt != nil {
@@ -260,8 +320,61 @@ func launchBrowserAndCapture(ctx gocontext.Context, flags browserLoginFlags) (*b
 			}
 		}
 	}
+}
 
-	return data, nil
+func pickBearerToken(result loginWaitResult) (map[string]string, bool, error) {
+	if len(result.Tokens) == 0 {
+		var saveAnyway bool
+		prompt := huh.NewConfirm().
+			Title("No bearer tokens detected").
+			Description("Save the connection with cookies and session only?").
+			Affirmative("Save").
+			Negative("Abort").
+			Value(&saveAnyway)
+		if err := prompt.Run(); err != nil {
+			return nil, false, err
+		}
+		if !saveAnyway {
+			return nil, true, nil
+		}
+		return nil, false, nil
+	}
+
+	auds := make([]string, 0, len(result.Tokens))
+	for aud := range result.Tokens {
+		auds = append(auds, aud)
+	}
+	sort.Strings(auds)
+
+	const abortValue = ""
+	options := make([]huh.Option[string], 0, len(auds)+1)
+	for _, aud := range auds {
+		label := aud
+		if jwt := connection.DecodeJWT(result.Tokens[aud]); jwt != nil {
+			remaining := time.Until(jwt.ExpiresAt).Round(time.Second)
+			if remaining > 0 {
+				label = fmt.Sprintf("%s  (expires in %s)", aud, remaining)
+			} else {
+				label = fmt.Sprintf("%s  (expired %s ago)", aud, (-remaining).Round(time.Second))
+			}
+		}
+		options = append(options, huh.NewOption(label, aud))
+	}
+	options = append(options, huh.NewOption("Abort", abortValue))
+
+	var chosen string
+	if err := huh.NewSelect[string]().
+		Title("Select bearer token to save").
+		Options(options...).
+		Value(&chosen).
+		Run(); err != nil {
+		return nil, false, err
+	}
+	if chosen == abortValue {
+		return nil, true, nil
+	}
+
+	return map[string]string{chosen: result.Tokens[chosen]}, false, nil
 }
 
 func autoSelectAccountPicker(browserCtx gocontext.Context) {
@@ -288,17 +401,71 @@ func autoSelectAccountPicker(browserCtx gocontext.Context) {
 	}()
 }
 
-func waitForLoginComplete(browserCtx gocontext.Context, flags browserLoginFlags) {
+func waitForLoginComplete(browserCtx gocontext.Context, flags browserLoginFlags) loginWaitResult {
+	result := loginWaitResult{Tokens: map[string]string{}}
+	strict := flags.RequireBearerAud != "" || flags.RequireBearerScope != ""
+
+	waitCtx, cancelWait := gocontext.WithCancel(browserCtx)
+	defer cancelWait()
+
 	doneCh := make(chan struct{}, 3)
+	stdinCh := make(chan struct{}, 1)
+	bearerCh := make(chan map[string]string, 1)
+
+	trySend := func(ch chan<- struct{}) {
+		select {
+		case ch <- struct{}{}:
+		default:
+		}
+	}
+
+	reminder := func() {
+		auds := sortedAudiences(extractBearerTokens(currentSession(browserCtx)))
+		have := "none"
+		if len(auds) > 0 {
+			have = strings.Join(auds, ", ")
+		}
+		fmt.Fprintf(os.Stderr, "Still waiting for %s token (have: %s)\n", requiredTokenLabel(flags), have)
+	}
 
 	go func() {
 		reader := bufio.NewReader(os.Stdin)
-		_, _ = reader.ReadString('\n')
-		select {
-		case doneCh <- struct{}{}:
-		default:
+		for {
+			if _, err := reader.ReadString('\n'); err != nil {
+				return
+			}
+			if strict {
+				reminder()
+				continue
+			}
+			trySend(stdinCh)
+			trySend(doneCh)
+			return
 		}
 	}()
+
+	if strict {
+		sigCh := make(chan os.Signal, 1)
+		signal.Notify(sigCh, os.Interrupt)
+		defer signal.Stop(sigCh)
+		go func() {
+			select {
+			case <-sigCh:
+				reminder()
+				fmt.Fprintln(os.Stderr, "Press Ctrl+C again to quit.")
+				signal.Stop(sigCh)
+			case <-waitCtx.Done():
+				return
+			}
+		}()
+	}
+
+	var sigCtx gocontext.Context
+	if !strict {
+		var stopSignal gocontext.CancelFunc
+		sigCtx, stopSignal = signal.NotifyContext(waitCtx, os.Interrupt)
+		defer stopSignal()
+	}
 
 	if flags.WaitForURL != "" {
 		go func() {
@@ -311,18 +478,18 @@ func waitForLoginComplete(browserCtx gocontext.Context, flags browserLoginFlags)
 					if err := chromedp.Run(browserCtx, chromedp.Location(&currentURL)); err == nil {
 						if strings.Contains(currentURL, flags.WaitForURL) {
 							time.Sleep(2 * time.Second)
-							doneCh <- struct{}{}
+							trySend(doneCh)
 							return
 						}
 					}
-				case <-browserCtx.Done():
+				case <-waitCtx.Done():
 					return
 				}
 			}
 		}()
 	}
 
-	if flags.Bearer {
+	if flags.Bearer && (strict || flags.Wait > 0) {
 		go func() {
 			ticker := time.NewTicker(2 * time.Second)
 			defer ticker.Stop()
@@ -334,10 +501,11 @@ func waitForLoginComplete(browserCtx gocontext.Context, flags browserLoginFlags)
 					if err != nil {
 						continue
 					}
+					tokens := extractBearerTokens(session)
 					validAuds := make([]string, 0)
 					var matched string
 					var matchedJWT *connection.JWT
-					for aud, token := range extractBearerTokens(session) {
+					for aud, token := range tokens {
 						jwt := connection.DecodeJWT(token)
 						if jwt == nil || time.Until(jwt.ExpiresAt) <= 0 {
 							continue
@@ -355,33 +523,94 @@ func waitForLoginComplete(browserCtx gocontext.Context, flags browserLoginFlags)
 					}
 					if matched != "" {
 						fmt.Fprintf(os.Stderr, "Found valid token for %s (scopes=%d, expires in %s)\n", matched, matchedJWT.ScopeCount(), time.Until(matchedJWT.ExpiresAt).Round(time.Second))
-						doneCh <- struct{}{}
+						select {
+						case bearerCh <- tokens:
+						default:
+						}
+						trySend(doneCh)
 						return
 					}
 					if (flags.RequireBearerAud != "" || flags.RequireBearerScope != "") && len(validAuds) > 0 {
 						sort.Strings(validAuds)
 						summary := strings.Join(validAuds, ", ")
 						if summary != lastReported {
-							waiting := flags.RequireBearerAud
-							if flags.RequireBearerScope != "" {
-								waiting += " with scope " + flags.RequireBearerScope
-							}
-							fmt.Fprintf(os.Stderr, "Waiting for %s token (have: %s)\n", waiting, summary)
+							fmt.Fprintf(os.Stderr, "Waiting for %s token (have: %s)\n", requiredTokenLabel(flags), summary)
 							lastReported = summary
 						}
 					}
-				case <-browserCtx.Done():
+				case <-waitCtx.Done():
 					return
 				}
 			}
 		}()
 	}
 
+	waitTimeout := maybeTimeout(flags.Wait)
+
+	if strict {
+		select {
+		case <-doneCh:
+			result.AutoDetected = true
+			select {
+			case tokens := <-bearerCh:
+				result.Tokens = tokens
+			default:
+			}
+		case <-waitTimeout:
+			result.TimedOut = true
+			fmt.Fprintf(os.Stderr, "Timed out waiting for %s token.\n", requiredTokenLabel(flags))
+		}
+		return result
+	}
+
 	select {
 	case <-doneCh:
-	case <-time.After(flags.Timeout):
-		fmt.Fprintln(os.Stderr, "Login timed out")
+		select {
+		case tokens := <-bearerCh:
+			result.AutoDetected = true
+			result.Tokens = tokens
+		case <-stdinCh:
+			result.Interrupted = true
+		default:
+			result.AutoDetected = true
+		}
+	case <-sigCtx.Done():
+		if waitCtx.Err() == nil {
+			result.Interrupted = true
+			fmt.Fprintln(os.Stderr, "\nInterrupted — switching to manual token selection.")
+		}
+	case <-waitTimeout:
+		result.TimedOut = true
+		fmt.Fprintln(os.Stderr, "Auto-detect timed out — switching to manual token selection.")
 	}
+
+	return result
+}
+
+func requiredTokenLabel(flags browserLoginFlags) string {
+	label := flags.RequireBearerAud
+	if label == "" {
+		label = "bearer"
+	}
+	if flags.RequireBearerScope != "" {
+		label += " with scope " + flags.RequireBearerScope
+	}
+	return label
+}
+
+func currentSession(browserCtx gocontext.Context) map[string]string {
+	session, err := extractSessionStorage(browserCtx)
+	if err != nil {
+		return nil
+	}
+	return session
+}
+
+func maybeTimeout(d time.Duration) <-chan time.Time {
+	if d <= 0 {
+		return nil
+	}
+	return time.After(d)
 }
 
 func extractCookies(browserCtx gocontext.Context, domains []string) ([]*network.Cookie, error) {

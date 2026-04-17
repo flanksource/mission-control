@@ -21,6 +21,7 @@ func main() {
 	}
 
 	api.BuildVersion = version
+	api.BuildCommit = commit
 
 	cmd.Root.AddCommand(&cobra.Command{
 		Use:   "version",
